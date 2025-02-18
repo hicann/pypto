@@ -1,0 +1,73 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+/*!
+ * \file cost_model.cpp
+ * \brief
+ */
+
+#include "pybind_common.h"
+
+#include <utility>
+#include <vector>
+#include "interface/interpreter/raw_tensor_data.h"
+#include "machine/runtime/device_launcher_binding.h"
+#include "cost_model/simulation/cost_model_launcher.h"
+
+using namespace npu::tile_fwk;
+using namespace npu::tile_fwk::dynamic;
+
+namespace pypto {
+
+std::string InitInputOutputData(
+    const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
+    Function *func = Program::GetInstance().GetLastFunction();
+    if (!func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH)) {
+        return "Invalid function format";
+    }
+
+    auto attr = func->GetDyndevAttribute();
+    if (attr == nullptr) {
+        return "Invalid function format";
+    }
+
+    auto inputSize = attr->startArgsInputLogicalTensorList.size();
+    auto outputSize = attr->startArgsOutputLogicalTensorList.size();
+    if (inputSize != inputs.size() || outputSize != outputs.size()) {
+        return "mismatch input/output";
+    }
+
+    for (size_t i = 0; i < inputs.size(); i++) {
+        auto rawData = RawTensorData::CreateTensor(inputs[i].GetDataType(), inputs[i].GetShape(), (uint8_t *)inputs[i].GetAddr());
+        ProgramData::GetInstance().AppendInput(rawData);
+    }
+    for (size_t i = 0; i < outputs.size(); i++) {
+        auto rawData = std::make_shared<RawTensorData>(outputs[i].GetDataType(), outputs[i].GetShape());
+        ProgramData::GetInstance().AppendOutput(rawData);
+    }
+    return "";
+}
+
+std::string CostModelRunOnceDataFromHost(
+    const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
+    std::string initResult = InitInputOutputData(inputs, outputs);
+    if (!initResult.empty()) {
+        return initResult;
+    }
+
+    Function *func = Program::GetInstance().GetLastFunction();
+    CostModelLauncher::CostModelRunOnce(func);
+    return "";
+}
+
+void BindCostModelRuntime(py::module &m) {
+    m.def("CostModelRunOnceDataFromHost", &CostModelRunOnceDataFromHost);
+}
+} // namespace pypto

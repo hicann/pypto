@@ -1,0 +1,26 @@
+[Worker]
+
+sessionNum = 320
+moeNum = 9
+layerNum = 61
+expertNum = 20         # == Model.workerMachineNumber
+attnBatch = 4
+ffnBatch = 8
+
+attnLatencyAvg = 100
+attnLatencySdv = 90
+attnLatencyMax = 320
+attnLatencyMin = 20
+ffnLatencyAvg = 20
+ffnLatencySdv = 0
+commLatencyAvg = 0
+commLatencySdv = 0
+layerWaitTime = 5
+
+isBsp = false
+attnPolling = true
+ffnPolling = true
+layerStartVariation = 0
+
+useFixedRandomSeed = false
+randomSeed = 16

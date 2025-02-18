@@ -1,0 +1,93 @@
+# pypto.clip
+
+## 产品支持情况
+
+| 产品             | 是否支持 |
+|:-----------------|:--------:|
+| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
+| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+
+## 功能说明
+
+对输入 Tensor进行数据裁剪，裁剪到指定的最小值到最大值范围内，小于最小值的位置替换为最小值，大于最大值的位置替换为最大值，其余值维持不变。该接口非原地操作，不改变输入Tensor，而是返回一个新的Tensor作为输出。
+
+## 函数原型
+
+```python
+clip(
+    input: Tensor,
+    min: Optional[Union[Tensor, Element, float, int]] = None,
+    max: Optional[Union[Tensor, Element, float, int]] = None
+)-> Tensor
+```
+
+## 参数说明
+
+
+| 参数名 | 输入/输出 | 说明                                                                 |
+|--------|-----------|----------------------------------------------------------------------|
+| input  | 输入      | 源操作数。 <br> 支持的类型为Tensor类型。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持2-4维，元素个数不超过 UINT32_MAX。 |
+| min    | 输入      | 源操作数。 <br> 支持的类型为int\float\Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT_32\DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持2-4维，元素个数不超过 UINT32_MAX。 <br> 可缺省，默认值为-INF。 <br> NaN，INF，-INF 仅在浮点数运算时有定义，即只在数据类型为 DT_FP16/DT_FP32 时生效；当数据类型为 DT_INT16 和 DT_INT32 时，会跳过默认值的比较逻辑。 |
+| max    | 输入      | 源操作数。 <br> 支持的类型为int\float\Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT_32\DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_INT16。 <br> 不支持空Tensor，数据维度大小仅支持2-4维，元素个数不超过 UINT32_MAX。 <br> 可缺省，默认值为INF。 <br> NaN，INF，-INF 仅在浮点数运算时有定义，即只在数据类型为 DT_FP16/DT_FP32 时生效；当数据类型为 DT_INT16 和 DT_INT32 时，会跳过默认值的比较逻辑。 |
+
+
+## 返回值说明
+
+当输入为标量时，输出为：
+
+$$
+Y_{i} = \text{MIN}\left( \text{MAX}\left(X_{i}, \text{min\_value}\right), \text{max\_value} \right)
+$$
+
+当输入为Tensor时，输出为：
+
+$$
+Y_{i} = MIN\left( MAX(X_{i}, min\_value_{i}), max\_value_{i} \right)
+$$
+
+输出Tensor的数据类型和输入 input 相同。
+
+当 min / max 其中一者为 NAN 时，输出结果为 NAN。
+
+当 min \> max 时，输出结果对应位置均为 max 的值。
+
+## 约束说明
+
+1.  min / max 的类型必须一致，同时为 Element 或同时为 Tensor。
+2.  min / max 为Tensor类型时，其Shape大小必须满足可以广播到输入的Shape。
+3.  min 和 max 支持同时缺省，返回原值。
+
+## 调用示例
+
+```python
+x = pypto.tensor([2,3], pypto.DT_INT32)
+min = pypto.tensor([2,3], pypto.DT_INT32)
+max = pypto.tensor([2,3], pypto.DT_INT32)
+out = pypto.clip(x,min,max)
+```
+
+结果示例如下：
+
+```python
+输入数据 self: [[-2 1 2], [3 4 5]]
+输入数据 min: [[-1 0 2], [0 3 5]] 
+输入数据 max: [[1 2  1], [4 4 4]]
+输出数据 out: [[-1 1 1], [3 4 4]]
+```
+
+示例 2：
+
+```python
+x = pypto.tensor([2,3], pypto.DT_INT32)
+min = 1
+max = 3
+out = pypto.clip(x,min,max)
+```
+
+结果示例如下：
+
+```python
+输入数据 x: [[0 2 4], [3 4 6]] 
+输出数据 out: [[1 2 3], [3 3 3]]
+```
+

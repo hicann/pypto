@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+# coding: utf-8
+# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+
+
+import json
+import re
+from itertools import product
+import shutil
+import os 
+import subprocess
+import csv
+import argparse
+import datetime
+from scipy.stats import gmean
+
+#region generate_tiles
+L1_SIZE = 524288
+L0A_SIZE = 65536
+L0B_SIZE = 65536
+L0C_SIZE = 131072
+OUTPUT_DT_BYTES = 4
+
+
+def is_good_tiling(tile, input_dt_bytes):
+    m, M, k, K, n, N = tile
+    r1 = K % k == 0 and N >= n
+    r2 = m * n * OUTPUT_DT_BYTES <= L0C_SIZE
+    r3 = n * k * input_dt_bytes <= L0B_SIZE
+    r4 = m * k * input_dt_bytes <= L0A_SIZE
+    return r1 and r2 and r3 and r4
+
+
+def greatest_bit(x):
+    n = 0
+    power = 1 
+    while power <= x:
+        power *= 2 
+        n += 1
+    return n - 1
+
+
+def generate_tiles(shape, input_dt_bytes):
+    shape_M, shape_K, shape_N = shape
+    num_of_variants = 0
+
+    min_M = min(3, max(greatest_bit(shape_M), 4))
+    min_K = min(3, max(greatest_bit(shape_K), 4))
+    min_N = min(3, max(greatest_bit(shape_N), 4))
+
+    values_m = [2**i for i in range(min_M, greatest_bit(shape_M) + 1)]
+    values_k = [2**i for i in range(min_K, greatest_bit(shape_K) + 1)]
+    values_n = [2**i for i in range(min_N, greatest_bit(shape_N) + 1)]
+
+    for m, k, n in product(values_m, values_k, values_n):
+        M = m
+        K = k
+        N = n
+
+        if is_good_tiling([m, M, k, K, n, N], input_dt_bytes):
+            num_of_variants += 1
+            yield [m, M, k, K, n, N]
+
+        if is_good_tiling([m, M, k, 2 * K, n, N], input_dt_bytes):
+            num_of_variants += 1
+            yield [m, M, k, 2 * K, n, N]
+        
+        if is_good_tiling([m, M, k, K, n, 2 * N], input_dt_bytes):
+            num_of_variants += 1
+            yield [m, M, k, K, n, 2 * N]
+#endregion
+
+
+def get_score_for_tiling(tile, mx_shape, input_type_size):
+    """
+    Estimate score for tiling. The higher the score, the better it is.
+    """
+    M_DIM = 0
+    K_DIM = 2
+    N_DIM = 4
+    
+    m = tile[M_DIM]
+    k = tile[K_DIM]
+    n = tile[N_DIM]
+
+    MIN_TILE = 16
+    WEIGHT_L0 = 200
+
+    BALANCE_WEIGHT = 1
+
+    WHOLE_M_SCORE = 2
+    WHOLE_K_SCORE = 2
+    WHOLE_N_SCORE = 2
+
+    score = 0
+    
+    #If the tiling size = shape size -> the preferred option
+    score = (score + WHOLE_M_SCORE) if tile[M_DIM] == max(m, MIN_TILE) else score
+    score = (score + WHOLE_K_SCORE) if tile[K_DIM] == max(k, MIN_TILE) else score
+    score = (score + WHOLE_N_SCORE) if tile[N_DIM] == max(n, MIN_TILE) else score
+
+    #The more filled L0A, L0B, L0C is better
+    utilization_l0a = (tile[M_DIM] * tile[K_DIM] * input_type_size) / L0A_SIZE
+    utilization_l0b = (tile[K_DIM] * tile[N_DIM] * input_type_size) / L0B_SIZE 
+    utilization_l0c = (tile[M_DIM] * tile[N_DIM] * OUTPUT_DT_BYTES) / L0C_SIZE
+    score += WEIGHT_L0 * gmean([utilization_l0a, utilization_l0b, utilization_l0c])
+
+    #The closer the ratio's is to 1, the better
+    ratio_mk = (m / k) if (m > k) else (k / m)
+    ratio_kn = (k / n) if (k > n) else (n / k)
+    ratio_mn = (m / n) if (m > n) else (n / m)
+
+    #Penalty for bad balance
+    score -= BALANCE_WEIGHT * gmean([ratio_mk, ratio_kn, ratio_mn])
+    return score
+
+
+def get_best_k_tiles(tiles, shape, dt_bytes, best_k_tiles):
+    tiles.sort(key=lambda tile: -get_score_for_tiling(tile, shape, dt_bytes))
+
+    best_tiles = []
+    d = set()
+    i = 0
+
+    while len(d) < best_k_tiles:
+        shape = tiles[i]
+        if (shape[0], shape[2], shape[4]) not in d:
+            d.add((shape[0], shape[2], shape[4]))
+            best_tiles.append(shape)
+        i += 1
+
+    return best_tiles
+
+
+def preproc_line_conf(line_conf):
+    for key in line_conf.keys():
+        if key != "string" and isinstance(line_conf[key], str):
+            #param set like Matmul_int08_32_1536_783
+            operation, datatype, m, k, n = line_conf[key].split("_")
+            m = int(m)
+            k = int(k)
+            n = int(n)
+ 
+            dt_bytes = int(re.search(r"\d+", datatype).group(0)) // 8
+            tiles = list(generate_tiles([m, k, n], input_dt_bytes=dt_bytes))
+            best_tiles = get_best_k_tiles(tiles, [m, k, n], dt_bytes, best_k_tiles=5)
+
+            print(f"Autogenerated shape for {line_conf[key]}")
+            for tile in best_tiles:
+                print(tile)
+            print("--------------------------")
+
+            line_conf[key] = best_tiles
+
+
+def check_json(json_config):
+    param_names = dict()
+    for file_conf in json_config["files"]:
+        path_to_file, lines_conf = list(file_conf.items())[0]
+        for line_conf in lines_conf:
+            line_param_names = list(line_conf.keys())[2:] # except params "string" and "line"
+            for name in line_param_names:
+                if name in param_names:
+                    raise NameError(f"Name \"{name}\" in json config are same " \
+                                    f"for lines {param_names[name]} and {line_conf["line"]}")
+                param_names[name] = line_conf["line"] 
+
+
+def preproc_json(json_config):
+    """
+    Replaces parameters that are set using strings  
+    """
+    check_json(json_config)
+    for file_conf in json_config["files"]:
+        path_to_file, lines_conf = list(file_conf.items())[0]
+        for line_conf in lines_conf:
+            preproc_line_conf(line_conf)
+
+
+def parse_file_conf(lines_conf):
+    """
+    Generates permutations for single line of code
+    """
+    lines_comb = []
+    for line_conf in lines_conf:
+        params = line_conf.copy()
+
+        del params["line"]
+        del params["string"]
+
+        string_param_comb = []
+        for e in product(*params.values()):
+            param_comb = dict(zip(params.keys(), e))
+            result = line_conf["string"].format(**param_comb)
+            string_param_comb.append([(line_conf["line"], result), param_comb])
+        lines_comb.append(string_param_comb)
+    
+    return list(product(*lines_comb))
+
+
+def generate_combinations(json_config):
+    """
+    Generates combinations for test
+    """       
+    comb_inside_file = dict()
+    for file_conf in json_config["files"]:
+        path_to_file, lines_conf = list(file_conf.items())[0]
+        comb_inside_file[path_to_file] = parse_file_conf(lines_conf)
+    
+    for e in product(*comb_inside_file.values()):
+        single_run_params = []
+        single_param_values = []
+
+        for cpp_file, line_params in zip(comb_inside_file.keys(), e):
+            d = dict()
+            d["file"] = cpp_file
+            num_lines = dict()
+
+            for line_param in line_params:
+                line, string = line_param[0]
+                names = line_param[1]
+                single_param_values.append(names)
+                num_lines[line] = string
+
+            d["lines"] = num_lines   
+            single_run_params.append(d)
+
+        yield single_run_params, single_param_values
+
+
+def save_run_params(name, run_params, file_name):
+    run_params = run_params.copy()
+    with open(file_name, 'w') as run_file:
+        run_params.append({"name": name})
+        json_txt = json.dumps(run_params, indent=4)
+        run_file.write(json_txt)
+
+
+def replace_line(file_path, line_num, new_content):
+    result_line = ""
+    with open(file_path, 'r') as file:
+       lines = file.readlines()
+       lines.insert(line_num + 1, new_content + "\n")
+        
+    with open(file_path, "w") as file:
+        file.writelines(lines)
+
+
+def run_test(json_config, result_folder):
+    test = json_config["test_name"]
+
+    device_number = json_config["device_number"]  
+    
+    run_command = f"python build_ci.py -j=32 -s={test} -d={device_number} tools profiling" \
+                f" --prof_try_cnt={json_config['prof_try_cnt']} --prof_max_cnt={json_config['max_cnt']}" \
+                f" --prof_warn_up_cnt={json_config['warn_up_cnt']}"
+
+    print(f"{result_folder}/result.log")
+    env = dict(os.environ)
+
+    with open(f"{result_folder}/result.log", "w") as f:
+        test = subprocess.run(run_command.split(), stdout=f, stderr=subprocess.STDOUT, env=env)
+    return test.returncode
+    
+
+def make_backup(original_file_path):
+    shutil.copy(original_file_path, original_file_path + ".backup")
+
+
+def restore_backup(original_file_path):
+    if not os.path.exists(original_file_path + ".backup"):
+        raise FileNotFoundError
+    os.remove(original_file_path)
+    os.rename(original_file_path + ".backup", original_file_path)
+
+
+def get_newest_folder(root_dir):
+    dirs = list(filter(os.path.isdir, [os.path.join(root_dir, f) for f in os.listdir(root_dir)]))
+    newest_folder = max(dirs, key=os.path.getmtime)
+    return newest_folder
+
+
+def get_oldest_folder(root_dir):
+    dirs = list(filter(os.path.isdir, [os.path.join(root_dir, f) for f in os.listdir(root_dir)]))
+    oldest_folder = min(dirs, key=os.path.getmtime)
+    return oldest_folder
+
+
+def get_execution_time(build_folder):
+    output_tools = build_folder + "/output_tools"
+    newest_folder = get_newest_folder(output_tools)
+    path_to_csv = f"{newest_folder}/profiling/prof_statistic_result.csv"
+    with open(path_to_csv) as f:
+        reader = csv.DictReader(f)
+        time = None
+        for row in reader:
+            time = float(row["Us"])
+            return time
+
+
+def measure_perf(json_config, run_params, result_folder):
+    for item in run_params:
+        make_backup(item["file"])
+
+        sorted_by_lines = dict(sorted(item["lines"].items(), reverse = True))
+        for line_num, text in sorted_by_lines.items():
+            replace_line(item["file"], line_num - 1, text)
+
+    test_result = run_test(json_config, result_folder)
+
+    for item in run_params:
+        restore_backup(item["file"])
+
+    if test_result != 0:
+        return None
+    
+    time = get_execution_time(json_config["build_folder"])
+    return time
+
+
+def sort_results(results):
+    def compare_function(x): return 1e6 if x[1] == "Error"  else x[1] # set configs of error will be at the end
+    results_sorted_by_time = dict(sorted(results.items(), key=compare_function))
+    return results_sorted_by_time
+
+
+def display_results(results):
+    results_sorted_by_time = sort_results(results)
+    table_width = 100
+    print("-"*(table_width))
+    print(f"{'combination_name':<20} | {'time(us)':<10}")
+    print("-"*(table_width))
+
+    for name, time in results_sorted_by_time.items():
+        print(f"{name:<20} | {time:<10}")
+        print("-" * (table_width))
+
+
+def save_to_csv(path_to_file, res_params):
+    with open(path_to_file, "w", newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=res_params[0].keys())
+        writer.writeheader()
+        for p in res_params:
+            writer.writerow(p)
+
+
+def save_kernel_meta(build_folder, result_folder, pattern=".*"): 
+    root_dir = build_folder + "/build/output/bin/output"
+    src = get_newest_folder(root_dir) + "/kernel_aicore"
+    dst = result_folder + "/kernel_aicore"
+    shutil.copytree(src, dst)
+    shutil.rmtree(root_dir, ignore_errors=True)
+
+
+def copy_prof_logs(build_folder, test, save_folder):
+    output_tools = build_folder + "/output_tools"
+    newest_folder = get_newest_folder(output_tools)
+    res = f"{newest_folder}/profiling/{test}/l1/result"
+    shutil.copytree(res, save_folder + "/result")
+
+
+def remove_worst_combination(result_folder_path, results):
+    sorted_results = sort_results(results)
+    worst_comb = list(sorted_results.items())[-1]
+    worst_comb_name = worst_comb[0]
+    del results[worst_comb_name]
+    shutil.rmtree(result_folder_path + f"/{worst_comb_name}", ignore_errors=True)
+
+
+def generate_coverage(json_config, pattern="TileShape::Current().SetCubeTile("):
+    test = json_config["test_name"]
+    device_number = json_config["device_number"]
+    build_folder = json_config["build_folder"]
+
+    run_command = f"python build_ci.py -j=32 -s={test} -d={device_number} --clean --gcov"
+    env = dict(os.environ)
+
+    print("Run build for coverage...")
+    test = subprocess.run(run_command.split(), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("Build finished!")
+
+    cmd = ['find', build_folder, '-name', '*.gcda']
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    number_of_parameters = 0 
+    print("Start processing coverage files...")
+
+    answer = set()
+    for gcda_file in result.stdout.splitlines():
+        coverage = subprocess.run(["gcov", gcda_file, "-t"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        path_to_source = ""
+        for line in coverage.stdout.splitlines():
+            gcov_line = line.split(":")
+            if len(gcov_line) >= 3: # is not a system string in coverage file
+                if gcov_line[2] == "Source":
+                    path_to_source = gcov_line[3]
+                if pattern in line and gcov_line[0].strip().isnumeric():
+                    answer.add((gcov_line[1], path_to_source.strip()))
+                    number_of_parameters += 1
+
+    for line, file in answer:
+        print(f"line: {line} file: {file}")
+    print("Number of parameters:", len(answer))    
+
+
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("json_path", 
+                        help="path to config.json where described tiling configs", 
+                        type=str)
+    
+    parser.add_argument("--coverage",
+                        action="store_true",
+                        help="display lines in the files that match SetCubeTile, and were executed when the test was run")
+    args = parser.parse_args()
+
+    with open(args.json_path) as f:
+        json_config = json.load(f)
+
+        if args.coverage:
+            generate_coverage(json_config)
+            quit()
+
+        preproc_json(json_config)
+
+        comb_id = 0
+        results = dict()
+        res_params = []
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today_folder_name = now.strftime("%d_%b_%H_%M_%S")
+
+        os.makedirs(json_config["results_folder"], exist_ok=True)  
+        result_folder_path = json_config["results_folder"] + "/" + today_folder_name
+        os.makedirs(result_folder_path, exist_ok=True)
+        shutil.copy(args.json_path, result_folder_path) # copy config.json to folder with results 
+
+        for run_params, param_values in generate_combinations(json_config):
+            name = f"combination_{comb_id}"
+            combination_folder = result_folder_path + f"/{name}"
+
+            os.makedirs(combination_folder)
+            save_run_params(name, run_params, combination_folder + "/combination_params.json")
+    
+            run_result = measure_perf(json_config, run_params, combination_folder)
+
+            run_result = "Error" if run_result is None else run_result
+            results[f"combination_{comb_id}"] = run_result
+            param_values.append({"time(us)": run_result})
+            
+            param_val_flat = {"combination": f"combination_{comb_id}"}
+            for d in param_values:
+                param_val_flat.update(d)
+            res_params.append(param_val_flat)
+
+            if run_result != "Error":
+                copy_prof_logs(json_config["build_folder"], json_config["test_name"], combination_folder)
+                save_kernel_meta(json_config["build_folder"], combination_folder)
+          
+            if comb_id >= json_config["save_best_k"]:
+                remove_worst_combination(result_folder_path, results)
+
+            display_results(results)
+            res_params.sort(key=lambda x: 1e6 if x["time(us)"] == "Error" else x["time(us)"])
+            save_to_csv(result_folder_path + "/config_perf.csv", res_params)
+
+            comb_id += 1
+
+
+
+main()

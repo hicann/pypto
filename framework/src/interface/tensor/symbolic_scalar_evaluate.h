@@ -1,0 +1,103 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+/*!
+ * \file symbolic_scalar_evaluate.h
+ * \brief
+ */
+/*for flow Verify Tool */
+
+#pragma once
+
+#include "interface/operation/attribute.h"
+#include "interface/tensor/symbolic_scalar.h"
+#include "interface/interpreter/raw_tensor_data.h"
+#include "interface/function/function.h"
+
+namespace npu::tile_fwk {
+
+constexpr int SIZE_TWO = 2;
+constexpr int SIZE_THREE = 3;
+constexpr int SIZE_FOUR = 4;
+
+struct FunctionIODataPair;
+struct FunctionFrame;
+class EvaluateSymbol {
+public:
+    EvaluateSymbol() {}
+
+    void EvaluateDynParam(
+        const std::map<std::string, DynParamInfo> &dynParamTable, const std::vector<SymbolicScalar> &linearArgList) {
+        for (auto &paramInfo : dynParamTable) {
+            std::string symbolName = paramInfo.first;
+            int n = paramInfo.second.tensorIndex;
+            (void)n;
+            int base = paramInfo.second.tensorBaseAddrCoaIndex;
+            int dim = paramInfo.second.dimSize;
+            int idx = paramInfo.second.dimIndex;
+            int argIndex = ((base) + 1) + 3 * (dim) + idx;
+
+            symbolDict_[symbolName] = EvaluateSymbolicScalar(linearArgList[argIndex]);
+        }
+    }
+
+    std::vector<int64_t> EvaluateValidShape(const std::vector<SymbolicScalar> &dynValidShape) {
+        std::vector<int64_t> result;
+        for (auto &shape : dynValidShape) {
+            result.push_back(EvaluateSymbolicScalar(shape));
+        }
+        return result;
+    }
+
+    std::vector<int64_t> EvaluateOffset(const std::vector<int64_t> &offset, const std::vector<SymbolicScalar> &dynOffset) {
+        std::vector<int64_t> resultOffset;
+        if (dynOffset.size() != 0) {
+            for (auto &off : dynOffset) {
+                resultOffset.push_back(EvaluateSymbolicScalar(off));
+            }
+        } else {
+            for (auto &off : offset) {
+                resultOffset.push_back(off);
+            }
+        }
+        return resultOffset;
+    }
+
+    bool RuntimeIsLoopBegin(ScalarImmediateType idx, ScalarImmediateType begin) { return idx == begin; }
+    bool RuntimeIsLoopEnd(ScalarImmediateType idx, ScalarImmediateType end) { return idx >= end; }
+
+    ScalarImmediateType EvaluateSymbolicCall(const std::string &name, const std::vector<ScalarImmediateType> &dataList);
+    ScalarImmediateType EvaluateSymbolicScalar(const RawSymbolicScalarPtr &ss);
+    ScalarImmediateType EvaluateSymbolicScalar(const SymbolicScalar &ss) { return EvaluateSymbolicScalar(ss.Raw()); }
+
+    const std::unordered_map<std::string, ScalarImmediateType> &GetSymbolDict() const { return symbolDict_; }
+    void UpdateSymbolDict(const std::string key, const ScalarImmediateType value) { symbolDict_[key] = value; }
+    void SetSymbolDict(const std::unordered_map<std::string, ScalarImmediateType> &symbolDict) { symbolDict_ = symbolDict; }
+
+    std::vector<std::shared_ptr<LogicalTensorData>> &GetInputDataViewList() { return inputDataViewList_; }
+    void UpdateInputDataViewList(size_t index, const std::shared_ptr<LogicalTensorData> &inputDataView) {
+        inputDataViewList_[index] = inputDataView;
+    }
+    void InitInputDataViewList(const std::vector<std::shared_ptr<LogicalTensorData>> &inputDataViewList) {
+        inputDataViewList_ = inputDataViewList;
+    }
+
+    std::shared_ptr<FunctionIODataPair> &GetInoutDataPair() { return inoutDataPair_; }
+    void UpdateIODataPair(std::shared_ptr<FunctionIODataPair> &inoutDataPair) {
+        inoutDataPair_ = inoutDataPair;
+    }
+
+private:
+    std::unordered_map<std::string, ScalarImmediateType> symbolDict_;
+    std::vector<std::shared_ptr<LogicalTensorData>> inputDataViewList_;
+    std::shared_ptr<FunctionIODataPair> inoutDataPair_;
+};
+
+} // namespace npu::tile_fwk

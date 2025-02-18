@@ -1,0 +1,194 @@
+{
+    "additionalProperties": false,
+
+    "type": "object",
+    "properties": {
+        "pass": {
+            "type": "object",
+            "properties": {
+                "pg_parallel_lower_bound": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                },
+                "pg_upper_bound": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                },
+                "pg_lower_bound": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                },
+                "cube_l1_reuse_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                },
+                "cube_l1_reuse_setting": {
+                    "type": "object",
+                    "typeHints": "intmap",
+                    "key_minimum": 0,
+                    "key_maximum": 2147483647,
+                    "value_minimum": 0,
+                    "value_maximum": 2147483647
+                },
+                "cube_nbuffer_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2
+                },
+                "cube_nbuffer_setting": {
+                    "type": "object",
+                    "typeHints": "intmap",
+                    "key_minimum": -1,
+                    "key_maximum": 2147483647,
+                    "value_minimum": 1,
+                    "value_maximum": 2147483647
+                },
+                "mg_copyin_upper_bound": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                },
+                "vec_nbuffer_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2
+                },
+                "vec_nbuffer_setting": {
+                    "type": "object",
+                    "typeHints": "intmap",
+                    "key_minimum": -1,
+                    "key_maximum": 2147483647,
+                    "value_minimum": 1,
+                    "value_maximum": 2147483647
+                },
+                "mg_vec_parallel_lb": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 48
+                },
+                "sg_cube_parallel_num": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24
+                },
+                "pg_skip_partition": {"type": "boolean"},
+                "copyout_resolve_coalescing": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                },
+                "sg_set_scope": {
+                    "type": "integer",
+                    "minimum": -1,
+                    "maximum": 2147483647
+                }
+            }
+        },
+        "runtime": {
+            "type": "object",
+            "properties": {
+                "device_sched_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3
+                },
+                "stitch_function_inner_memory": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                },
+                "stitch_function_outcast_memory": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2147483647
+                },
+                "stitch_function_num_initial": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 128
+                },
+                "stitch_function_num_step": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 128
+                },
+                "cfgcache_device_task_num": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                },
+                "cfgcache_root_task_num": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                },
+                "cfgcache_leaf_task_num": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                },
+                "stitch_function_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                },
+                "run_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1
+                }
+            }
+        },
+        "host": {
+            "type": "object",
+            "properties": {
+                "only_codegen": {"type": "boolean"}
+            }
+        },
+        "codegen": {
+            "type": "object",
+            "properties": {
+                "codegen_expression_fusion": {"type": "boolean"}
+            }
+        },
+        "verify": {
+            "type": "object",
+            "properties": {
+                "enable_pass_verify": {"type": "boolean"},
+                "pass_verify_save_tensor": {"type": "boolean"},
+                "pass_verify_save_tensor_dir": {"type": "string"},
+                "pass_verify_pass_filter": {"type": "array", "items": {"type": "string"}}
+            }
+        },
+        "debug": {
+            "type": "object",
+            "properties": {
+                "profile_enable": {"type": "boolean"},
+                "print": {
+                    "type": "object",
+                    "properties": {
+                        "edgeitems": {"type": "integer"},
+                        "precision": {"type": "integer"},
+                        "threshold": {"type": "integer"},
+                        "linewidth": {"type": "integer"}
+                    }
+                },
+                "compile_debug_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "runtime_debug_mode": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2
+                }
+            }
+        }
+    }
+}
+

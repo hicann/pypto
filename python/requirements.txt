@@ -1,0 +1,22 @@
+# 基础编译, 如 pip install . / -e .
+setuptools>=77.0.3
+pybind11>=2.13.6
+
+# build_ci.py
+pip
+build
+packaging
+
+# UTest/STest 依赖 pytest 相关包
+pytest
+pytest-forked
+pytest-xdist
+
+# pypto 依赖
+sympy
+PyYAML
+
+# 绘制泳道图
+matplotlib
+pandas
+plotly

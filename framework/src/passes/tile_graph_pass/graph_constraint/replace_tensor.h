@@ -1,0 +1,156 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+/*!
+ * \file replace_tensor.h
+ * \brief
+ */
+
+#ifndef REPLACE_TENSOR_H
+#define REPLACE_TENSOR_H
+#include <vector>
+#include <climits>
+#include <queue>
+
+#include "tilefwk/data_type.h"
+#include "interface/operation/opcode.h"
+#include "passes/pass_interface/pass.h"
+#include "tilefwk/tilefwk.h"
+#include "interface/function/function.h"
+#include "passes/pass_utils/pass_utils.h"
+#include "interface/configs/config_manager.h"
+
+namespace npu {
+namespace tile_fwk {
+/*
+key: Opcode类型
+vaule: vector of pair, 每个pair记录了第几个输入和第几个输出存在inplace关系
+*/
+const std::unordered_map<Opcode, std::vector<std::pair<size_t, size_t>>> inplaceOpMap = {
+    {   Opcode::OP_A_MULACC_B, {std::pair<size_t, size_t>{2, 0}}},
+    {Opcode::OP_INDEX_OUTCAST, {std::pair<size_t, size_t>{2, 0}}},
+    {Opcode::OP_REMOTE_REDUCE, {std::pair<size_t, size_t>{0, 0}}},
+};
+
+const std::unordered_set<Opcode> inplaceOpSet = {Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_A_MULACC_B,
+                                                 Opcode::OP_INDEX_OUTCAST, Opcode::OP_REMOTE_REDUCE, Opcode::OP_VIEW_TYPE};
+
+class UnionFind {
+public:
+    explicit UnionFind(const LogicalTensors &objects) {
+        for (const auto &obj : objects) {
+            parentMap[obj] = obj;
+            rankMap[obj] = 1;
+        }
+    }
+
+    void Unite(const LogicalTensorPtr x, const LogicalTensorPtr y) {
+        LogicalTensorPtr xRoot = Find(x);
+        LogicalTensorPtr yRoot = Find(y);
+        if (xRoot == yRoot) {
+            return;
+        }
+        if (rankMap[xRoot] < rankMap[yRoot]) {
+            parentMap[xRoot] = yRoot;
+        } else if (rankMap[xRoot] > rankMap[yRoot]) {
+            parentMap[yRoot] = xRoot;
+        } else {
+            parentMap[yRoot] = xRoot;
+            rankMap[xRoot]++;
+        }
+    }
+
+    std::vector<LogicalTensors> GetGroups() const {
+        std::unordered_map<LogicalTensorPtr, LogicalTensors> rootToGroup;
+        for (const auto &pair : parentMap) {
+            LogicalTensorPtr obj = pair.first;
+            LogicalTensorPtr root = Find(obj);
+            rootToGroup[root].push_back(obj);
+        }
+        std::vector<LogicalTensors> groups;
+        for (const auto& pair : rootToGroup) {
+            groups.push_back(pair.second);
+        }
+        return groups;
+    }
+private:
+    LogicalTensorPtr Find(const LogicalTensorPtr &x) const {
+        if (parentMap[x] != x) {
+            parentMap[x] = Find(parentMap[x]);
+        }
+        return parentMap[x];
+    }
+    mutable std::unordered_map<LogicalTensorPtr, LogicalTensorPtr> parentMap;
+    std::unordered_map<LogicalTensorPtr, int> rankMap;
+};
+
+class ReplaceTensor : public Pass {
+public:
+    ReplaceTensor() : Pass("ReplaceTensor") {}
+    ~ReplaceTensor() override = default;
+
+private:
+    /*
+    补齐: Status PreCheck(Function &function) override;
+    补齐: Status PostCheck(Function &function) override;
+    */
+    Status PreCheck(Function &function) override;
+    Status PostCheck(Function &function) override;
+    Status RunOnFunction(Function &function) override;
+    bool HasSameConsecutive(Operation &op);
+    bool CheckAddrConflict(const Operation& op);
+    bool CheckIndexProducer(const Operation& op);
+    bool CheckAssembleConflict(const Operation& op);
+    bool CheckIndexOutcastConflict(const Operation& op);
+    bool CheckReshapeConflict(const Operation& op);
+    bool CheckAMulAccBConflict(const Operation& op);
+    bool CheckRemoteReduceConflict(const Operation& op);
+    Status InplaceCheck(Function &function);
+    bool CheckInplace(const Operation &op);
+
+    Status FindBaseTensor(Function &function, LogicalTensorPtr &baseTensor, LogicalTensors &group);
+    Status ProcessHubOp(Function &function);
+    void ProcessHubAssembleOp(Function &function, Operation &hubOp, Operation &assembleOp, 
+                             std::shared_ptr<LogicalTensor> hubInput, std::shared_ptr<LogicalTensor> hubOutput);
+    LogicalTensorPtr FindReplaceSource(Function &function, Operation &op, std::unordered_map<Operation *, LogicalTensorPtr> &visited);
+    Status RefactorViewConnectForReplace(Function &function);
+    void UniteTensor(Function &function, UnionFind &uf);
+    
+    Status AlignCopyInConsumer(std::shared_ptr<LogicalTensor> tensorGm) const;
+    Status AlignCopyOutProducer(std::shared_ptr<LogicalTensor> tensorGm) const;
+    Status AdjustOffsetAndRawShape(LogicalTensorPtr &fromView, LogicalTensorPtr &toView) const;
+
+    Status ForwardProcess(Function &function);
+    Status BackwardProcess();
+
+    Status ForwardView(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
+    Status ForwardAssemble(Operation *op, LogicalTensorPtr &rootTensor);
+    Status ForwardReshape(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
+    Status ForwardInplaceOp(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
+    Status ForwardViewType(Operation *op, LogicalTensorPtr &rootTensor);
+    Status ForwardCopyOut(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
+
+    Status BackwardAssemble(Operation *op, LogicalTensorPtr &rootTensor);
+    Status BackwardReshape(Operation *op, LogicalTensorPtr &rootTensor);
+    Status BackwardView(Operation *op, LogicalTensorPtr &rootTensor);
+    Status BackwardInplaceOp(Operation *op, LogicalTensorPtr &rootTensor);
+    Status BackwardViewType(Operation *op, LogicalTensorPtr &rootTensor);
+
+    Status ForUpdateView(Operation *op);
+    Status BackUpdateAssemble(Operation *op);
+
+    std::unordered_map<DataType, int> viewTypeTable = {{DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4}};
+    std::queue<LogicalTensorPtr> backRoots;
+    std::queue<LogicalTensorPtr> forRoots;
+    std::unordered_set<int> processedOp;
+};
+} // namespace tile_fwk
+} // namespace npu
+#endif // REPLACE_TENSOR_H

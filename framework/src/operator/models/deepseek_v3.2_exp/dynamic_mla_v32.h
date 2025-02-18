@@ -1,0 +1,108 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+/*!
+ * \file dynamic_mla_v32.h
+ * \brief
+ */
+ 
+#pragma once
+#ifndef MLA_DYNAMIC_V32_H
+#define MLA_DYNAMIC_V32_H
+ 
+#include "dsia_common.h"
+ 
+namespace npu::tile_fwk {
+ 
+struct MlaQuantInputs {
+    Tensor dequantScaleX;
+    Tensor dequantScaleWDq;
+    Tensor dequantScaleWUqQr;
+    Tensor dequantScaleWDkvKr;
+    Tensor quantScaleCkv;
+    Tensor quantScaleCkr;
+    Tensor smoothScalesCq;
+};
+ 
+struct SimpleParams {
+    int b;
+    int s;
+    int s2;
+    int d;
+    int m;
+    int k;
+    int n;
+    int n2;
+    int right;
+    int h;
+    int q_lora_rank;
+    int kv_lora_rank;
+    int qk_rope_head_dim;
+    int qk_nope_head_dim;
+    int q_head_dim;
+    std::string cacheMode;
+    int blockSize;
+    std::vector<int> vecTile;
+    std::vector<int> cubeMTile;
+    std::vector<int> cubeKTile;
+    std::vector<int> cubeNTile;
+    int tileB;
+    static SimpleParams getCommonParams() {
+        SimpleParams params;
+        params.n2 = 1;
+        params.s = 1;
+        params.h = 7168; // 7168
+        params.q_lora_rank = 1536; // 1536
+        params.kv_lora_rank = 512; // 512
+        params.qk_rope_head_dim = 64; // 64
+        params.qk_nope_head_dim = 128; // 128
+        params.q_head_dim = params.qk_rope_head_dim + params.qk_nope_head_dim;
+        params.cacheMode = "BNSD";
+        params.blockSize = 128; // 128
+        return params;
+    }
+ 
+    static SimpleParams getLowParams() {
+        SimpleParams params = getCommonParams();
+        params.b = 4; // 4
+        params.n = 32; // 32
+        params.s2 = 256; // 256
+        return params;
+    }
+ 
+    static SimpleParams getHighParams() {
+        SimpleParams params = getCommonParams();
+        params.b = 32; // 32
+        params.n = 128; // 128
+        params.s2 = 4096; // 4096
+        return params;
+    }
+};
+
+std::vector<Tensor> PreCompute2D(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, const Tensor &wDkvKr,
+    const Tensor &gammaCq, float epsilonCq, const MlaQuantInputs &quantInputs);
+Tensor RopeV2(const Tensor &x, const Tensor &cos, const Tensor &sin, const RopeTileShapeConfig &tileConfig);
+Tensor Rope3DV2(const Tensor &x, const Tensor &cos, const Tensor &sin, const RopeTileShapeConfig &tileConfig);
+
+void MlaPrologComputeV32(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, const Tensor &wUk,
+    const Tensor &wDkvKr, const Tensor &gammaCq, const Tensor &gammaCkv, const Tensor &sin, const Tensor &cos,
+    const Tensor &cacheIndex, Tensor &kvCache, Tensor &krCache, const MlaQuantInputs &quantInputs,
+    const MlaTileConfig &tileConfig, Tensor &queryOut, Tensor &queryRopeOut, Tensor &kvCacheOut, Tensor &krCacheOut,
+    Tensor &rmsRes, float epsilonCq, float epsilonCkv, std::string cacheMode);
+ 
+void MlaPrologV32(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, const Tensor &wUk,
+    const Tensor &wDkvKr, const Tensor &gammaCq, const Tensor &gammaCkv, const Tensor &sin, const Tensor &cos,
+    const Tensor &cacheIndex, Tensor &kvCache, Tensor &krCache, const MlaQuantInputs &quantInputs,
+    const MlaTileConfig &tileConfig, Tensor &queryOut, Tensor &queryRopeOut, Tensor &kvCacheOut, Tensor &krCacheOut,
+    float epsilonCq = 1e-5f, float epsilonCkv = 1e-5f, std::string cacheMode = "PA_NZ");
+ 
+} // namespace npu::tile_fwk
+ 
+#endif // MLA_DYNAMIC_V32_H

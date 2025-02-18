@@ -1,0 +1,322 @@
+# Copyright (c) Huawei Technologies Co., Ltd. 2025. All rights reserved.
+# This file is a part of the CANN Open Software.
+# Licensed under CANN Open Software License Agreement Version 1.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# ======================================================================================================================
+
+# 说明:
+#   本文件用于 Tests 用例分类分组定义
+# 格式:
+#   tests_type        [required]   --- 任务类型, 当前支持 [stest, utest]
+#     group_name      [required]   --- 任务分组, 如 operator, operation, interface, codegen, operation_moe 等
+#       write_list    [optional]   --- 任务分组下的白名单, 即修改文件若仅涉及对应白名单路径, 则本任务不需执行
+#       cases         [required]   --- 测试用例, 对应 GTestFilter
+
+stest:
+
+  operation_cube:
+    cases:
+      # - TestMatmul/MatmulOperationTest.TestMatmul/0
+      - TestMatmul/MatmulOperationTest.TestMatmul/1
+      - TestMatmul/MatmulOperationTest.TestMatmul/2
+      - TestMatmul/MatmulOperationTest.TestMatmul/3
+      - TestMatmul/MatmulOperationTest.TestMatmul/4
+      - TestMatmul/MatmulOperationTest.TestMatmul/5
+      - TestMatmul/MatmulOperationTest.TestMatmul/6
+      - TestMatmul/MatmulOperationTest.TestMatmul/7
+      - TestMatmul/MatmulOperationTest.TestMatmul/8
+      - TestMatmul/MatmulOperationTest.TestMatmul/9
+      - TestMatmul/MatmulOperationTest.TestMatmul/10
+      - TestMatmul/MatmulOperationTest.TestMatmul/11
+      - TestMatmul/MatmulOperationTest.TestMatmul/12
+      - TestMatmul/MatmulOperationTest.TestMatmul/13
+      - TestMatmul/MatmulOperationTest.TestMatmul/14
+      - TestMatmul/MatmulOperationTest.TestMatmul/15
+      - TestMatmul/MatmulOperationTest.TestMatmul/16
+      - TestMatmul/MatmulOperationTest.TestMatmul/17
+      - TestMatmul/MatmulOperationTest.TestMatmul/18
+      - TestMatmul/MatmulOperationTest.TestMatmul/19
+      - TestMatmul/MatmulOperationTest.TestMatmul/20
+      - TestMatmul/MatmulOperationTest.TestMatmul/21
+      - TestMatmul/MatmulOperationTest.TestMatmul/22
+      - TestMatmul/MatmulOperationTest.TestMatmul/23
+      - TestMatmul/MatmulOperationTest.TestMatmul/24
+      - TestMatmul/MatmulOperationTest.TestMatmul/25
+      - TestMatmul/MatmulOperationTest.TestMatmul/26
+      - TestMatmul/MatmulOperationTest.TestMatmul/27
+      - TestMatmul/MatmulOperationTest.TestMatmul/28
+      - TestMatmul/MatmulOperationTest.TestMatmul/29
+      - TestMatmul/MatmulOperationTest.TestMatmul/30
+      - TestMatmul/MatmulOperationTest.TestMatmul/31
+      # - TestMatmul/MatmulOperationTest.TestMatmul/32
+      - TestMatmul/MatmulOperationTest.TestMatmul/33
+      - TestMatmul/MatmulOperationTest.TestMatmul/34
+      - TestMatmul/MatmulOperationTest.TestMatmul/35
+      - TestMatmul/MatmulOperationTest.TestMatmul/36
+      - TestMatmul/MatmulOperationTest.TestMatmul/37
+      - TestMatmul/MatmulOperationTest.TestMatmul/38
+      - TestMatmul/MatmulOperationTest.TestMatmul/39
+      - TestMatmul/MatmulOperationTest.TestMatmul/40
+      - TestMatmul/MatmulOperationTest.TestMatmul/41
+      - TestMatmul/MatmulOperationTest.TestMatmul/42
+      - TestMatmul/MatmulOperationTest.TestMatmul/43
+      - TestMatmul/MatmulOperationTest.TestMatmul/44
+      - TestMatmul/MatmulOperationTest.TestMatmul/45
+      - TestMatmul/MatmulOperationTest.TestMatmul/46
+      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/0
+      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/1
+      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/2
+      - TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul/3
+      # - GatherInL1Test.gather_in_a_unalign
+      # - GatherInL1Test.gather_in_bt_with_valid_shape
+      # - MatmulOnBoardTest.test_mm_float32_32_512_576
+      # - MatmulOnBoardTest.test_mm_bfloat16_64_128_128
+      # - MatmulOnBoardTest.test_mm_bfloat16_f32_64_128_128
+      # - MatmulOnBoardTest.test_mm_float32_128_128_128
+      # - MatmulOnBoardTest.test_mm_float32_32_128_128
+      # - MatmulOnBoardTest.test_mm_unalign_float32_2_128_128
+      # - MatmulOnBoardTest.test_mm_unalign_float32_16_35_32
+      # - OnBoardTest.test_BMM_Simple
+      # - OnBoardTest.test_BMM_3D_Brc
+      # - OnBoardTest.test_BMM_3D_Brc_Transpose
+      # - OnBoardTest.test_BMM_4D_Brc_Transpose
+      # - OnBoardTest.test_BMM_UNALIGN_2_1024_32
+      # - OnBoardTest.test_BMM_post
+      # - OnBoardTest.test_BMM_NZ_1_32_32_32
+      # - OnBoardTest.test_BMM_NZ_1_32_32_320
+      # - OnBoardTest.test_BMM_NZ_1_64_32_16
+      # - MatmulOnBoardTest.test_mm_float32_32_128_64
+      # - MatmulOnBoardTest.test_mm_float32_32_192_64
+      # - MatmulOnBoardTest.test_mm_int8_32_128_64
+
+  operation_vector:
+    cases:
+      - TestRange/RangeOperationTest.TestRange/0
+      - TestRange/RangeOperationTest.TestRange/1
+      - TestAdd/AddOperationTest.TestAdd/10
+      - TestAdd/AddOperationTest.TestAdd/11
+      - TestConcat/ConcatOperationTest.TestConcat/0
+      - TestConcat/ConcatOperationTest.TestConcat/1
+      - TestCumSum/CumSumOperationTest.TestCumSum/0
+      - TestCumSum/CumSumOperationTest.TestCumSum/1
+      - TestGatherElement/GatherElementOperationTest.TestGatherElement/0
+      - TestGatherElement/GatherElementOperationTest.TestGatherElement/4
+      - TestGatherElement/GatherElementOperationTest.TestGatherElement/14
+      - TestAdds/AddsOperationTest.TestAdds/20
+      - TestAdds/AddsOperationTest.TestAdds/21
+      - TestAdds/AddsOperationTest.TestAdds/22
+      - TestCast/CastOperationTest.TestCast/10
+      - TestCast/CastOperationTest.TestCast/11
+      - TestCast/CastOperationTest.TestCast/12
+      - TestDiv/DivOperationTest.TestDiv/13
+      - TestDiv/DivOperationTest.TestDiv/14
+      - TestDivs/DivsOperationTest.TestDivs/0
+      - TestDivs/DivsOperationTest.TestDivs/1
+      - TestDivs/DivsOperationTest.TestDivs/2
+      - TestExp/ExpOperationTest.TestExp/18
+      - TestExp/ExpOperationTest.TestExp/19
+      - TestMul/MulOperationTest.TestMul/21
+      - TestMul/MulOperationTest.TestMul/22
+      - TestMul/MulOperationTest.TestMul/25
+      - TestMul/MulOperationTest.TestMul/26
+      - TestMul/MulOperationTest.TestMul/27
+      - TestMuls/MulsOperationTest.TestMuls/13
+      - TestMuls/MulsOperationTest.TestMuls/14
+      - TestMuls/MulsOperationTest.TestMuls/15
+      - TestAmin/AminOperationTest.TestAmin/0
+      - TestAmin/AminOperationTest.TestAmin/1
+      - TestSum/SumOperationTest.TestSum/61
+      - TestSum/SumOperationTest.TestSum/62
+      - TestAmax/AmaxOperationTest.TestAmax/65
+      - TestAmax/AmaxOperationTest.TestAmax/64
+      - TestAmax/AmaxOperationTest.TestAmax/63
+      - TestScatter_/Scatter_OperationTest.TestScatter_/0
+      - TestScatter_/Scatter_OperationTest.TestScatter_/1
+      - TestScatter/ScatterOperationTest.TestScatter/0
+      - TestScatter/ScatterOperationTest.TestScatter/2
+      - TestScatterUpdate/ScatterUpdateOperationTest.TestScatterUpdate/0
+      - TestScatterUpdate/ScatterUpdateOperationTest.TestScatterUpdate/1
+      - TestRsqrt/RsqrtOperationTest.TestRsqrt/0
+      - TestRsqrt/RsqrtOperationTest.TestRsqrt/2
+      - TestRsqrt/RsqrtOperationTest.TestRsqrt/3
+      - TestPows/PowsOperationTest.TestPows/12
+      - TestPows/PowsOperationTest.TestPows/13
+      - TestPows/PowsOperationTest.TestPows/14
+      - TestPows/PowsOperationTest.TestPows/15
+      - TestOneHot/OneHotOperationTest.TestOneHot/7
+      - TestOneHot/OneHotOperationTest.TestOneHot/14
+      - TestOneHot/OneHotOperationTest.TestOneHot/16
+      - TestSqrt/SqrtOperationTest.TestSqrt/0
+      - TestLog/LogOperationTest.TestLog/2
+      - TestLog/LogOperationTest.TestLog/5
+      - TestSub/SubOperationTest.TestSub/2
+      - TestSub/SubOperationTest.TestSub/3
+      - TestSubs/SubsOperationTest.TestSubs/0
+      - TestSubs/SubsOperationTest.TestSubs/1
+      - TestTopK/TopKOperationTest.TestTopK/0
+      - TestTopK/TopKOperationTest.TestTopK/4
+      - TestTopK/TopKOperationTest.TestTopK/6
+      - TestGather/GatherOperationTest.TestGather/6
+      - TestGather/GatherOperationTest.TestGather/0
+      - TestGather/GatherOperationTest.TestGather/22
+      - TestTranspose/TransposeOperationTest.TestTranspose/0
+      - TestTranspose/TransposeOperationTest.TestTranspose/2
+      - TestTranspose/TransposeOperationTest.TestTranspose/13
+      - TestTranspose/TransposeOperationTest.TestTranspose/15
+      - TestTranspose/TransposeOperationTest.TestTranspose/18
+      - TestWhere/WhereOperationTest.TestWhere/0
+      - TestWhere/WhereOperationTest.TestWhere/8
+      - TestWhere/WhereOperationTest.TestWhere/15
+      - TestWhere/WhereOperationTest.TestWhere/22
+      - TestWhere/WhereOperationTest.TestWhere/31
+      - TestFull/FullOperationTest.TestFull/0
+      - TestFull/FullOperationTest.TestFull/5
+      - TestFull/FullOperationTest.TestFull/9
+      - TestLogicalNot/LogicalNotOperationTest.TestLogicalNot/1
+      - TestLogicalNot/LogicalNotOperationTest.TestLogicalNot/4
+      - TestCompare/CompareOperationTest.TestCompare/1
+      - TestCompare/CompareOperationTest.TestCompare/13
+      - TestExpand/ExpandOperationTest.TestExpand/4
+      - TestExpand/ExpandOperationTest.TestExpand/20
+      - TestMinimum/MinimumOperationTest.TestMinimum/12
+      - TestMaximum/MaximumOperationTest.TestMaximum/12
+      - TestMinimum/MinimumOperationTest.TestMinimum/19
+      - TestMaximum/MaximumOperationTest.TestMaximum/19
+      - TestClip/ClipOperationTest.TestClip/29
+      - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/1
+      - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/7
+      - TestLogicalAnd/LogicalAndOperationTest.TestLogicalAnd/0
+      # - GatherInL1Test.gather_in_a_unalign
+      # - GatherInL1Test.gather_in_bt_with_valid_shape
+      - GatherInUBTest.gather_in_a_
+      # - GatherOnBoardTest.test_gather_float_64_256_1_64
+      # - GatherOnBoardTest.test_gather_float_1_64_32_1
+      # - GatherOnBoardTest.test_gather_float_32_64_1_32
+      # - GatherOnBoardTest.test_gather_float_32_65_1_33
+      # - GatherOnBoardTest.test_gather_float_64_512_16_64
+      # - GatherOnBoardTest.test_gather_float_8_7168_64
+      # - GatherOnBoardTest.test_gather_float_8_7169_64
+      # - GatherElementOnBoardTest.test_gather_element_float_16_64_8_32_1
+      # - GatherElementOnBoardTest.test_gather_element_float_16_70_8_40_1
+      # - TensorIndexOnBoardTest.test_tensorindex_float_64_256_1_64
+      # - TensorIndexOnBoardTest.test_tensorindex_float_64_512_16_64
+      # - TensorIndexOnBoardTest.test_tensorindex_float_8_7168_64_moe
+      # - ConcatOnBoardTest.test_concat_dim4_float32
+      # - ConcatOnBoardTest.test_concat_dim2_float32_moe
+      # - ConcatOnBoardTest.test_concat_exp_dim4_float32
+      # - ConcatOnBoardTest.test_concat_100_inputs_float32
+      # - ExpandOnBoardTest.test_expand_32_1_to_32_32
+      # - ExpandOnBoardTest.test_expand_32_8_1_to_32_8_32
+      # - ExpandOnBoardTest.test_expand_32_1_to_32_23
+      # - ExpandOnBoardTest.test_expand_32_8_1_to_32_8_23
+      # - ExpandOnBoardTest.test_expand_for_4_dim
+      # - ExpandOnBoardTest.test_expand_1_1_to_1_16384
+      # - AbsOnBoardTest.test_abs_8_4608
+      # - AbsOnBoardTest.test_abs_8_4609
+      # - AbsOnBoardTest.test_abs_1_16384
+      # - OnBoardTest.test_operation_tensor_16_16_64_65_tileop_add_unalign
+      # - OnBoardTest.test_operation_tensor_16_16_39_65_tileop_add_unalign
+      # - OnBoardTest.test_operation_tensor_32_1_tileop_sub_unalign
+      # - OnBoardTest.test_operation_tensor_32_1_tileop_mul_unalign
+      # - OnBoardTest.test_operation_tensor_32_1_tileop_add_unalign
+      # - OnBoardTest.test_operation_add_vs_dim2_unalign
+      # - OnBoardTest.test_operation_mul_vs_dim3_unalign
+      # - OnBoardTest.test_operation_sub_vs_dim4_unalign
+      # - OnBoardTest.test_operation_div_vs_dim1_unalign
+      # - OnBoardIFATest.test_32_1_sub_32_1
+      # - OnBoardIFATest.test_32_1_mul_32_1
+      # - OnBoardIFATest.test_32_1_maximum
+      # - OnBoardIFATest.test_32_1_tileop_exp
+      # - OnBoardIFATest.test_32_1_reciprocal
+      # - OnBoardIFATest.test_page_attention_static_low_latency
+      #
+      # - OnBoardTest.test_operation_tensor_dim2_add
+      # - OnBoardTest.test_operation_scalar_dim2_add_FP16
+      # - OnBoardTest.test_operation_tensor_dim4_add
+      # - OnBoardTest.test_operation_tensor_16_16_64_64_tileop_add
+      # - OnBoardTest.test_operation_tensor_16_16_64_64_tileop_sub
+      # - OnBoardTest.test_operation_tensor_16_16_64_64_tileop_mul
+      # - OnBoardTest.test_operation_tensor_16_16_64_64_tileop_div
+      # - OnBoardTest.test_operation_tensor_8_80_80_tileop_add
+      # - OnBoardTest.test_operation_tensor_8_80_80_tileop_sub
+      # - OnBoardTest.test_operation_tensor_8_80_80_tileop_mul
+      # - OnBoardTest.test_operation_tensor_8_80_80_tileop_div
+      # - OnBoardTest.test_operation_tensor_64_128_tileop_add
+      # - OnBoardTest.test_operation_tensor_1_n_to_m_n_mul
+      # - OnBoardTest.test_operation_tensor_64_128_tileop_sub
+      # - OnBoardTest.test_operation_tensor_64_128_tileop_mul
+      # - OnBoardTest.test_operation_tensor_64_128_tileop_div
+      # - OnBoardTest.test_operation_scalar_dim2_add
+      # - OnBoardTest.test_operation_scalar_dim3_add
+      # - OnBoardTest.test_operation_scalar_dim4_add
+      # - OnBoardTest.test_operation_scalar_dim2_sub
+      # - OnBoardTest.test_operation_scalar_dim3_sub
+      # - OnBoardTest.test_operation_scalar_dim4_sub
+      # - OnBoardTest.test_operation_scalar_dim2_mul
+      # - OnBoardTest.test_operation_scalar_dim3_mul
+      # - OnBoardTest.test_operation_scalar_dim4_mul
+      # - OnBoardTest.test_operation_scalar_dim2_div
+      # - OnBoardTest.test_operation_scalar_dim1_div
+      # - OnBoardTest.test_operation_scalar_dim3_div
+      # - OnBoardTest.test_operation_scalar_dim4_div
+      # - OnBoardTest.test_operation_scalar_dim1_div
+      # - OnBoardTest.test_operation_scalar_32_32_1_256_mul
+      # - OnBoardTest.test_operation_tensor_2_2_8_8_expand_add
+      # - OnBoardTest.test_operation_tensor_4_4_16_16_expand_add
+      # - OnBoardTest.test_operation_tensor_1_1_32_to_16_32_32_expand_add
+      # - OnBoardTest.test_operation_tensor_8_16_1_to_8_16_16_expand_add
+      # - OnBoardTest.test_operation_tensor_8_8_1_to_8_8_7168_expand_Mul_moe
+      # - OnBoardTest.test_operation_tensor_8_1_16_to_8_16_16_expand_add
+      # - OnBoardTest.test_operation_tensor_1_16_16_to_8_16_16_expand_add
+      # - OnBoardTest.test_operation_tensor_8_1_1_to_8_16_16_expand_add
+      # - OnBoardTest.test_operation_tensor_16_32_32_to_16_32_1_tileop_mul
+      # - OnBoardTest.test_operation_tensor_8_8_1_1_to_8_8_1_256_tileop_sub
+      # - OnBoardTest.test_operation_tensor_1_1_1_64_to_1_128_1_64_tileop_mul01
+      # - OnBoardTest.test_operation_tensor_32_32_1_1_to_32_32_1_256_tileop_add
+      # - OnBoardTest.test_operation_tensor_32_32_1_1_to_32_32_1_256_tileop_div
+      # - OnBoardTest.test_operation_tensor_8_8_1_to_8_8_7168_expand_mul
+      # - OnBoardTest.test_operation_tensor_8_8_1_to_8_8_7168_expand_sub
+      # - OnBoardTest.test_mul_large_row
+      # - CastOnBoard.test_cast_fp32toint32rint_1_4608
+      # - CastOnBoard.test_cast_int32tofp16none_1_4608
+      # - CastOnBoard.test_cast_fp16toint8trunc_1_4608
+      # - CastOnBoard.test_cast_fp16tofp32_unalign
+      # - CastOnBoard.test_cast_fp32toint32rint_1_16384
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single_3dim
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_3dim_mla_rmsNorm
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single_4dim_softmax
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_max_single_4dim_softmax_unalign
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_4dim_softmax
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_3dim_moe
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_2dim_moe
+      # - RowMaxSumSingleOnBoardTest.test_operation_row_sum_single_3dim_big_moe
+      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_4dim_axis0_unalign
+      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_4dim_axis1_unalign
+      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_4dim_axis2_unalign
+      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_unalign
+      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_unalign_4_93
+      # - RowMaxSumSingleOnBoardTest.test_row_sum_single_unalign_4d
+      # - RowMaxSumSingleOnBoardTest.test_row_max_single_unalign
+      # - RowMaxSumSingleOnBoardTest.test_row_max_single_unalign_4_93
+      # - RowMaxSumSingleOnBoardTest.test_row_max_single_unalign_4d
+      # - LLamaLayerTest.llama_1_1_128_128
+      # - LLamaLayerTest.llama_1_1_256_128
+      # - LLamaLayerTest.llama_1_1_512_128
+      # - LLamaLayerTest.llama_1_1_1024_128
+      # - LLamaLayerTest.llama_1_1_4096_128
+      # - TopkOnBoardTest.test_operation_tensor_128_32_32_topk
+      # - TopkOnBoardTest.test_operation_tensor_4_32_8_topk
+      # - TopkOnBoardTest.test_operation_tensor_2_288_15_topk
+      # - TopkOnBoardTest.test_operation_tensor_2_288_15_topk_reverse
+      # - MlpTest.test_256_512_tileop
+      # - ArgsortOnBoardTest.test_operation_tensor_128_32_argsort
+      # - ArgsortOnBoardTest.test_operation_tensor_4_32_argsort
+      # - ArgsortOnBoardTest.test_operation_tensor_2_16_argsort
+      # - ArgsortOnBoardTest.test_operation_tensor_64_argsort
+      # - ArgsortOnBoardTest.test_operation_tensor_4_32__argsort
+      # - VecdupTest.TestVecDup

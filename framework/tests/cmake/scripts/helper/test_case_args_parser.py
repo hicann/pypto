@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+# coding: utf-8
+# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+
+import argparse
+import logging
+import os
+
+
+class TestCaseArgsParser:
+    def __init__(self):
+        self._parser = argparse.ArgumentParser(
+            description=f"Run operation st test case.", epilog="Best Regards!"
+        )
+
+    @staticmethod
+    def dump_test_case_args(args):
+        logging.info(f"Run vector operation test case args :")
+        logging.info(f"Op : {args.op}")
+        logging.info(f"Input data : {args.input_file}")
+        logging.info(f"Start index : {args.start_index}")
+        logging.info(f"End index : {args.end_index}")
+        logging.info(f"Device : {args.device}")
+        logging.info(f"Clean : {args.clean}")
+        logging.info(f"Is python case : {args.python}")
+        logging.info(f"Save data : {args.save_data}")
+        logging.info(f"Is json only : {args.json_only}")
+        logging.info(f"Report : {args.report}")
+
+    @staticmethod
+    def update_default_value(args):
+        op_path = f"{os.getcwd()}/framework/tests/st/operation"
+        if args.input_file is None:
+            args.input_file = f"{op_path}/test_case/{args.op}_st_test_cases.csv"
+        if not os.path.exists(args.input_file):
+            raise ValueError(args.input_file + " is not exists.")
+        if args.golden_script is None:
+            args.golden_script = f"{op_path}/python/vector_operator_golden.py"
+
+    def add_test_case_args(self):
+        # 参数注册
+        self._parser.add_argument("op", type=str, help="The operation will be test.")
+        self._parser.add_argument(
+            "-i",
+            "--input_file",
+            type=str,
+            default=None,
+            help="The input test case data file.",
+        )
+        self._parser.add_argument(
+            "-s",
+            "--start_index",
+            nargs="?",
+            type=int,
+            default=0,
+            help="The start index of test case, it will be row id sub 2 for csv or excel.",
+        )
+        self._parser.add_argument(
+            "-e",
+            "--end_index",
+            nargs="?",
+            type=int,
+            default=-1,
+            help="The end index of test case,"
+            " it will be reset to the max index when it is less than 0 or greater than the max.",
+        )
+        self._parser.add_argument(
+            "--report",
+            nargs="?",
+            type=str,
+            default="test_result_report.xlsx",
+            help="The report of test case result.",
+        )
+        self._parser.add_argument(
+            "--golden_script",
+            nargs="?",
+            type=str,
+            default=None,
+            help="The report of test case result.",
+        )
+
+    def add_build_args(self):
+        self._parser.add_argument(
+            "-c",
+            "--clean",
+            action="store_true",
+            help="clean the compile result.",
+        )
+
+    def add_run_args(self):
+        self._parser.add_argument(
+            "-d",
+            "--device",
+            nargs="?",
+            type=int,
+            default=0,
+            choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+            help="Select npu id.",
+        )
+
+        self._parser.add_argument(
+            "--python", action="store_true", help="Test python test case."
+        )
+        self._parser.add_argument(
+            "--model", action="store_true", help="Run test case with model."
+        )
+        self._parser.add_argument(
+            "--json_only",
+            action="store_true",
+            help="Convert csv to json only, not run.",
+        )
+        self._parser.add_argument(
+            "--save_data", action="store_true", help="Save golden and plog etc."
+        )
+
+    def run(self):
+        """主处理流程"""
+        self.add_test_case_args()
+        self.add_build_args()
+        self.add_run_args()
+
+        args = self._parser.parse_args()
+        TestCaseArgsParser.update_default_value(args)
+        TestCaseArgsParser.dump_test_case_args(args)
+        return args

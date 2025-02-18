@@ -1,0 +1,214 @@
+# -----------------------------------------------------------------------------------------------------------
+# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+# CANN Open Software License Agreement Version 2.0 (the "License").
+# Please refer to the License for details. You may not use this file except in compliance with the License.
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+# See LICENSE in the root of the software repository for the full text of the License.
+# -----------------------------------------------------------------------------------------------------------
+
+# 说明:
+#   本文件用于 Tests 用例分类分组定义
+# 格式:
+#   tests_type        [required]   --- 任务类型, 当前支持 [stest, utest]
+#     group_name      [required]   --- 任务分组, 如 operator, operation, interface, codegen, operation_moe 等
+#       write_list    [optional]   --- 任务分组下的白名单, 即修改文件若仅涉及对应白名单路径, 则本任务不需执行
+#       cases         [required]   --- 测试用例, 对应 GTestFilter
+
+stest:
+  operator_nsa:
+    cases:
+      # - DynamicNSATest.nsa_b_16_s1_1_s2_8192_h_7168_fp16
+      # - DynamicSATest.slc_attn_fp16
+      # - DynamicNSATest.mini
+      - DynamicSATest.slc_attn_mtp_s1_2_fp16
+      # - DynamicSATest.slc_attn_bf16_b48_s1_perf
+      # - DynamicKvSATest.kv_slc_attn_b48_s1_fp16_perf
+      # - DynamicKvSATest.kv_slc_attn_b32_s2_bf16_perf
+      # - DynamicKvSATest.kv_slc_attn_b2_s1_fp16
+
+  operator_nsa_MlaProlog:
+    cases:
+      # - MlaPrologSTest.b32_s1_pa_nz_bf16_quant
+      # - MlaPrologSTest.b32_s2_pa_nz_bf16_quant
+      - MlaPrologSTest.b32_s2_pa_nd_fp16_quant
+
+  operator_nsa_AttentionPost:
+    cases:
+      # - AttentionPostSTest.b32_s1_nz_bf16_quant
+      # - AttentionPostSTest.b32_s2_nz_bf16_quant
+
+  # operator_op_qkvPre:
+  #   cases:
+  #     # - QkvPreOnBoardTest.test_qkvPre_bfloat16_32_2_1_256_256_512
+  #     # - QkvPreOnBoardTest.test_qkvPre_float16_32_32_1_256_256_1536
+  #     # - QkvPreOnBoardTest.test_qkvPre_bfloat16_32_32_1_256_7168_1536
+
+  # operator_op_prolog:
+  #   cases:
+  #     # - MlaPrologAbOnBoardTest.test_MlaPrologAb_float16_32_32_1_256_1024_1536
+  #     # - MlaPrologAbOnBoardTest.test_MlaPrologAb_float16_32_32_1_256_7168_1536_quant
+  #     # - MlaPrologAbOnBoardTest.test_MlaPrologAb_bfloat16_32_32_1_256_7168_1536
+  #     # - MlaPrologOnBoardTest.test_MlaProlog_float16_32_2_1_256_256_512
+  #     # - MlaPrologOnBoardTest.test_MlaProlog_bfloat16_4_32_1_256_7168_1536_quant
+  #     # - MlaPrologOnBoardTest.test_MlaProlog_float16_32_128_1_4096_7168_1536_quant
+  #     # - MlaPrologOnBoardTest.test_MlaProlog_bfloat16_32_32_1_256_7168_1536
+
+  # operator_op_mla_prolog_new:
+  #   cases:
+  #     # - MlaPrologV2OnBoardTest.test_MlaPrologV2_bfloat16_4_32_1_256_7168_1536
+  #     # - MlaPrologV2OnBoardTest.test_MlaPrologV2_bfloat16_32_128_1_4096_7168_1536
+  #     # - MlaPrologV2OnBoardTest.test_MlaPrologV2_bfloat16_32_32_1_256_7168_1536
+  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_low_quant_smooth
+  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_high_quant_smooth
+
+  # operator_op_mla_prolog_PA_BSND:
+  #   cases:
+  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_high_quant_smooth_nz_pa_bsnd
+  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_high48_quant_smooth_nz_pa_bsnd
+  #     # - MlaPrologV2OnBoardTest.attentionV2_bf16_low
+
+  # operator_op_attention:
+  #   cases:
+  #     # - MlaPrologOnBoardTest.attention_bf16_4_1024_1024_32_256
+
+  operator_op_Softmax:
+    cases:
+      # - SoftmaxOnBoard.test_softmax_max_single
+      # - SoftmaxOnBoard.test_softmax_div
+      # - SoftmaxOnBoard.test_softmax_sum_all
+      # - SoftmaxOnBoard.test_softmax_full_inference
+      - SoftmaxOnBoard.test_softmax_deepseek
+      # - SoftmaxOnBoard.test_softmax_flash_attention
+
+  operator_op_Sin_Cos:
+    cases:
+      - OnBoardTest.test_cos_dim4_float16
+      - OnBoardTest.test_sin_dim2_float32
+
+  # operator_op_attention_post:
+  #   cases:
+  #     # - OnBoardTest.test_attention_post_bf16_real_batch4
+  #     # - OnBoardTest.test_attention_post_bf16_real_n128
+
+  operator_op_rope_sub_graph:
+    cases:
+      # - RoPEOnBoardTest.test_operation_rope_reshape_transpose_reshape_muls
+      # - RoPEOnBoardTest.test_operation_rope_tensorIndex_unsqueeze_mul
+      # - RoPEOnBoardTest.test_operation_rope_reshape_view_muls
+      # - RoPEOnBoardTest.test_operation_rope_reshape_view_muls_concat
+      - RoPEOnBoardTest.test_operation_rope_deepseekv3
+      - RoPEOnBoardTest.test_operation_rope_v2_deepseekv3_b32
+      # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3
+      # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_fp16
+      # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_fp16_2batch
+      - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16
+      - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16_2batch
+      - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16_32batch
+      - RoPESubGraphOnBoardTest.test_CD_bf16_32batch
+      - RoPESubGraphOnBoardTest.test_CD_bf16_32batch_4k
+      #
+      - OnBoardTest.test_unary_operation_32_32_tileop_exp
+      - OnBoardTest.test_unary_operation_16_32_32_tileop_exp
+      - OnBoardTest.test_unary_operation_16_16_64_64_tileop_exp
+      - OnBoardTest.test_unary_operation_32_32_tileop_sqrt
+      - OnBoardTest.test_unary_operation_16_32_32_tileop_sqrt
+      - OnBoardTest.test_unary_operation_16_16_64_64_tileop_sqrt
+      - OnBoardTest.test_unary_operation_16_16_64_70_tileop_sqrt
+      - OnBoardTest.test_unary_operation_32_32_tileop_reciprocal
+      - OnBoardTest.test_unary_operation_16_32_32_tileop_reciprocal
+      - OnBoardTest.test_unary_operation_16_16_64_64_tileop_reciprocal
+      # - LogicalNotOnBoardTest.test_logicalnot_16_32_fp32
+      # - LogicalNotOnBoardTest.test_logicalnot_16_32_32_fp16
+      #
+      - TransposeTest.TestTranspose_ROPE_5D
+      - TransposeTest.TestTranspose_MLA_3D_0
+      - TransposeTest.TestTranspose_MLA_3D_1
+      - TransposeTest.TestTranspose_MLA_4D_0
+      - TransposeTest.TestTranspose_MLA_4D_1
+      - TransposeTest.TestTranspose_MLA_4D_3
+      - TransposeTest.TestTranspose_MLA_4D_4
+      - TransposeTest.TestTranspose_MLA_4D_5
+      - TransposeTest.TestTranspose_MLA_4D_50
+      - TransposeTest.TestTranspose_MLA_4D_6
+      - TransposeTest.TestTranspose_MLA_3D_2
+      - TransposeTest.Test_Datamove_Nonalign_Dim4
+      - TransposeTest.Test_Datamove_Nonalign_Dim3
+
+  operator_op_QuantST:
+    cases:
+      # - QuantTest.Test_ScalarDivS
+      # - QuantTest.Test_ScalarAddS
+      # - QuantTest.Test_ScalarSubS
+      # - QuantTest.Test_ScalarMulS
+      # - QuantTest.Test_ScalarMaxS
+      - QuantTest.Test_ScalarOp
+      - QuantOnBoardTest.test_Quant_32_1_7168
+      - QuantOnBoardTest.test_Quant_32_7168
+      # - QuantOnBoardTest.test_Quant_Smooth_32_4_128
+      - QuantOnBoardTest.test_Quant_Smooth_32_7168
+      - QuantMMOnBoardTest.test_QuantMM_32_16384_times_16384_7168_np
+      - QuantMMOnBoardTest.test_QuantMM_128_32_512_times_128_512_128_torch
+      #
+      - OnBoardTest.test_operation_ub_reshape
+      - OnBoardTest.test_operation_gm_reshape
+      - OnBoardTest.test_reshape_matmul_mul
+      - OnBoardTest.test_operation_ub_reshape_3dimto2dim
+      # - OnBoardTest.test_operation_gm_reshape_2dimto3dim
+      - ArgsortOnBoardTest.test_operation_tensor_64__argsort_moe
+
+  operator_DeepSeekV3_MLA:
+    cases:
+      # - OnBoardTest.test_query_states_fp16_b32_n2
+      # - OnBoardTest.test_query_states_fp16_b32_n32
+      # - OnBoardTest.test_query_states_bf16_b32_n2
+      - OnBoardTest.test_query_states_bf16_b32_n32
+
+  operator_DeepSeekV3_MOE:
+    cases:
+      # - MoEGatePart1OnBoardTest.test_moe_gate_part1
+      # - MoEGatePart2OnBoardTest.test_operation_b_2
+      # - MoEGatePart2OnBoardTest.test_operation_b_1024
+      # - MoEPart4OnBoardTest.test_operation_b_2
+      # - MoeInferOnbroadTest.test_deepseekMoEInfer
+      # - MoeInferOnbroadTest.test_deepseekMoEInfer_singleout
+      - DynamicFFNTest.TestOnbroadDynamicFFN
+      # - MoeInferOnbroadTest.test_deepseekMoEInfer_singleout_singlemlp_withquant
+
+  operator_lightning_indexer_prolog:
+    cases:
+      # - LightningIndexerPrologSTest.bf16_indexer_prolog
+      - LightningIndexerPrologSTest.b48_s1_1_s2_8k
+      # - LightningIndexerPrologSTest.b2_s1_2_s2_2k
+      # - LightningIndexerPrologSTest.b35_s1_2_s2_8k
+      # - LightningIndexerPrologSTest.b40_s1_4_s2_8k
+      - LightningIndexerPrologSTest.b4_s1_1_s2_64k
+
+  operator_lightning_indexer:
+    cases:
+      - DynamicIndexerTopk.indexer_topk_quant_4_b_1_s1_64k_s2
+
+  operator_decode_sparse_attention:
+    cases:
+      # - DecodeIndexerAttentionSTest.mini
+      - DeepSeekIndexerAttentionQuantSTest.4B_mtp_perf
+      - MlaPrologQuantV32STest.b8_s64k2_pa_nd_fp16_quantB # mla prolog quant version for deepseek-v3.2-exp
+
+  operator_dsa_gather_slc_attn:
+    cases:
+      - DynamicGatherSlcFlashAttnDSASTest.dsa_gather_slc_attn_bf16_b32_s1_seq511_int8
+      - DynamicGatherSlcFlashAttnDSASTest.dsa_gather_slc_attn_bf16_b8_s1_seq128k_int8
+
+  operator_rmsnorm:
+    cases:
+      - RmsNormTest.test_32_32_tileop_rmsnorm
+      - RmsNormTest.test_2_32_32_tileop_rmsnorm
+      - RmsNormTest.test_2_2_32_32_tileop_rmsnorm
+      - RmsNormTest.test_32_1536_tileop_rmsnorm_fp16_realCase
+      - RmsNormTest.test_32_1536_tileop_rmsnorm_gamma_fp16_realCase
+
+  operator_sigmoid:
+    cases:
+      - SigmoidTest.test_32_32_tileop_sigmoid
+      - SigmoidTest.test_32_256_tileop_sigmoid_realcase

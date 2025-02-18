@@ -1,0 +1,50 @@
+{
+    "pass": {
+        "pg_parallel_lower_bound": 20,
+        "pg_upper_bound": 10000,
+        "pg_lower_bound": 512,
+        "cube_l1_reuse_mode": 0,
+        "cube_nbuffer_mode": 0,
+        "mg_copyin_upper_bound": 1048576,
+        "vec_nbuffer_mode": 1,
+        "mg_vec_parallel_lb": 48,
+        "sg_cube_parallel_num": 24,
+        "pg_skip_partition": false,
+        "copyout_resolve_coalescing": 0,
+        "sg_set_scope": -1
+    },
+    "runtime": {
+        "device_sched_mode": 0,
+        "stitch_function_inner_memory": 10,
+        "stitch_function_outcast_memory": 50,
+        "stitch_function_num_initial": 30,
+        "stitch_function_num_step": 30,
+        "cfgcache_device_task_num": 0,
+        "cfgcache_root_task_num": 0,
+        "cfgcache_leaf_task_num": 0,
+        "stitch_function_size": 20000
+    },
+    "host": {
+        "only_codegen": false
+    },
+    "codegen": {
+        "codegen_expression_fusion": false
+    },
+    "verify": {
+        "enable_pass_verify": false,
+        "pass_verify_save_tensor": false,
+        "pass_verify_save_tensor_dir": "",
+        "pass_verify_pass_filter": []
+    },
+    "debug": {
+        "profile_enable": false,
+        "print": {
+            "edgeitems": 3,
+            "precision": 4,
+            "threshold": 1000,
+            "linewidth": 80
+        },
+        "compile_debug_mode": 0,
+        "runtime_debug_mode": 0
+    }
+}
