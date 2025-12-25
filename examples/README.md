@@ -17,7 +17,7 @@
 1. **初次使用？** 请从 [初级样例 (01_beginner)](01_beginner/README.md) 开始。
 2. **构建神经网络？** 参考 [中级样例 (02_intermediate)](02_intermediate/README.md)。
 3. **探索高级模式？** 查阅 [高级样例 (03_advanced)](03_advanced/README.md)。
-4. **大模型算子实现？** 探索 [模型样例 (models)](models/README.md)。
+4. **大模型算子实现？** 探索 [模型样例 (models)](models/)。
 
 ### 环境准备
 请参考[环境准备](../docs/context/prepare_environment.md)，完成基础环境搭建

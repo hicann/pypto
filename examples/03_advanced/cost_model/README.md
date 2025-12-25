@@ -27,7 +27,7 @@
 python3 cost_model.py
 ```
 
-执行后，结果通常会保存在 `./output` 目录下的 JSON 文件中，可以使用 PyPTO Toolset 工具打开查看。
+执行后，结果通常会保存在 `./output` 目录下的 JSON 文件中，可以使用 PyPTO ToolKit 工具打开查看。
 
 ## 注意事项
 
