@@ -15,7 +15,7 @@
 - **内容**: 详尽展示了各种计算算子的用法。
   - `elementwise_ops.py`: 逐元素算子（Add, Sub, Mul, Div, Exp, Log, Abs, Sqrt, Rsqrt, Clip 等），包含广播机制和标量运算。
   - `matmul_ops.py`: 矩阵乘法（Matmul）的各种配置。
-  - `reduce_ops.py`: 规约算子（Sum, Max, Min 等）。
+  - `reduce_ops.py`: 归约算子（Sum, Max, Min 等）。
 - **核心特性**: 各类数学计算 API。
 
 ### 4. Tiling (分块) 策略 ([tiling](tiling/))

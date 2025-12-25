@@ -150,3 +150,14 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
 | --download-path       | str  | 否    | 指定 CANN 包以及三方依赖包下载路径                     |
 | --with-install-driver | bool | 否    | 指定是否下载 NPU 驱动和固件包, 默认为 false             |
 | --help                | -    | 否    | 查看命令参数帮助信息                               |
+  
+## 安装PyPTO Toolkit插件（可选）
+
+ 如需体验计算图和泳道图的查看能力，请安装PyPTO Toolkit插件：
+
+ 1. 单击[Link](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/pypto-toolkit-1.1.0.vsix)，下载.vsix插件文件。
+
+ 2. 打开Visual Studio Code，进入“扩展”选项卡界面，单击右上角的“...”，选择“从VSIX安装...”。
+  ![vscode_install](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/devkit/images/vscode_install.png)
+
+ 3. 选择已下载的.vsix插件文件，完成安装。

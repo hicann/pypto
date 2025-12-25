@@ -20,7 +20,7 @@
     - 展示如何组合基础算子来构建复杂的激活函数，如 SiLU (Swish), GELU, SwiGLU 和 GeGLU。
 - **Softmax ([softmax](operators/softmax/))**:
     - 深入展示 Softmax 算子的手动分步实现。
-    - 涉及 `exp` 计算和跨维度的 `sum` 规约。
+    - 涉及 `exp` 计算和跨维度的 `sum` 归约。
 
 ### 3. 运行时特性 ([controflow](controflow/))
 - **Dynamic Shapes ([dynamic.py](controflow/others/dynamic.py))**:
@@ -53,5 +53,5 @@ export TILE_FWK_DEVICE_ID=0
 ## 学习建议
 
 1. 首先学习 `operators/activation`，了解如何通过基础算子组合出新算子。
-2. 学习 `nn/layer_normalization`，掌握涉及规约运算的规范化层实现。
+2. 学习 `nn/layer_normalization`，掌握涉及归约运算的规范化层实现。
 3. 深入 `controflow` 目录，理解 PyPTO 在处理真实世界复杂逻辑时的强大能力。

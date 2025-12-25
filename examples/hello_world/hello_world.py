@@ -35,7 +35,6 @@ def get_device_id():
         print("Please set it before running this example:")
         print("  export TILE_FWK_DEVICE_ID=0")
         return None
-        return None
 
     try:
         device_id = int(os.environ['TILE_FWK_DEVICE_ID'])
