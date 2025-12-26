@@ -39,10 +39,10 @@ def assemble(
         The larger output tensor that will contain the assembled input tensor
     Examples
     ---------
-    x = pto.tensor([2, 2], pto.data_type.DT_FP32)
-    out = pto.tensor([4, 4], pto.data_type.DT_FP32)
+    x = pypto.tensor([2, 2], pypto.data_type.DT_FP32)
+    out = pypto.tensor([4, 4], pypto.data_type.DT_FP32)
     offsets = [0, 0]
-    pto.assemble(x, offsets, out)
+    pypto.assemble(x, offsets, out)
 
     Input x:[[1 1],
             [1,1]]

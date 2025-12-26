@@ -37,7 +37,7 @@ def _pto_to_tensor_data(tensors: List[pypto.Tensor]) -> List[pypto_impl.DeviceTe
     return datas
 
 
-def _cost_model_run_once_data_from_host(inputs: List[torch.Tensor], outputs: List[torch.Tensor]):
+def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: List[pypto.Tensor]):
     isDevice = False
     for t in inputs:
         if t.device != torch.device("cpu"):

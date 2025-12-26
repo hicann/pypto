@@ -323,13 +323,17 @@ def function(name: str, *args):
         del func
 
 
-def cond(scalar: SymInt):
+def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = None):
     """ set up a conditional computation. Use as "if" condition in python.
 
     Parameters
     ----------
     scalar: Union[int, SymbolicScalar]
         expression to determine if condition is true or not
+    file: Optional[str]
+        source file of the condition; must be provided with lineno
+    lineno: Optional[int]
+        source line of the condition; must be provided with file
 
     Returns
     -------
@@ -347,9 +351,17 @@ def cond(scalar: SymInt):
         else:
             pass
     """
-    # implementation
-    stack = inspect.stack()[1]
-    return pypto_impl.RecordIfBranch(to_sym(scalar), stack.filename, stack.lineno)
+    # allow caller to override source location; enforce both or none
+    if (file is None) ^ (lineno is None):
+        raise ValueError("file and lineno must be provided together or omitted")
+
+    if file is None:
+        stack = inspect.stack()[1]
+        filename, line = stack.filename, stack.lineno
+    else:
+        filename, line = file, lineno
+
+    return pypto_impl.RecordIfBranch(to_sym(scalar), filename, line)
 
 
 class _LoopFunction:
