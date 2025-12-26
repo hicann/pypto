@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-This test case verifies that the swimlane diagram generation for the costmodel works correctly 
+This test case verifies that the swimlane diagram generation for the costmodel works correctly
 regardless of whether the CANN is installed in the environment or not.
 """
 
@@ -26,7 +26,7 @@ from numpy.testing import assert_allclose
 PyPTO Cost Model Simulation Example
 
 This example demonstrates how to enable swimlane diagram generation in PyPTO's cost model mode.
-The test validates that the cost analysis and swimlane visualization work correctly in 
+The test validates that the cost analysis and swimlane visualization work correctly in
 simulation environment, independent of actual NPU hardware availability.
 """
 
@@ -48,15 +48,15 @@ def safe_json_load(file_path):
 def get_out_put_path():
     out_path = "./output"
     if os.path.exists(out_path):
-        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path) 
-                if os.path.isdir(os.path.join(out_path, d))]   
+        subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path)
+                if os.path.isdir(os.path.join(out_path, d))]
         if subdirs:
             latest_dir = max(subdirs, key=os.path.getctime)
             return latest_dir
     return None
 
 
-def softmax_core(input_tensor: pypto.tensor) -> pypto.tensor:
+def softmax_core(input_tensor: pypto.Tensor) -> pypto.Tensor:
     row_max = pypto.amax(input_tensor, dim=-1, keepdim=True)
     sub = pypto.sub(input_tensor, row_max)
     exp = pypto.exp(sub)
@@ -83,13 +83,13 @@ def softmax(input_tensor, output_tensor, cost_model_enable):
     for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
         b_offset = idx * tile_b
         b_offset_end = (idx + 1) * tile_b
-        
+
         # Extract batch slice
         input_view = input_tensor[b_offset:b_offset_end, :n1, :n2, :dim]
-        
+
         # Apply softmax to batch slice
         softmax_out = softmax_core(input_view)
-        
+
         # Assemble result back to output tensor
         pypto.assemble(softmax_out, [b_offset, 0, 0, 0], output_tensor)
 
@@ -100,9 +100,9 @@ def test_softmax(cost_model_enable=True):
 
     When cost_model_enable=True, PyPTO generates simulated execution
     outputs (e.g. swimlane JSON) for analysis.
-    """ 
+    """
     cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
-    
+
     # Shape for verification: NCHW format, N can be any integer number as it is defined as dynamic axis
     shape = (32, 32, 1, 256)
 
@@ -130,10 +130,10 @@ def test_softmax(cost_model_enable=True):
     torch_data = torch_softmax.cpu()
 
     max_diff = np.abs(npu_data.numpy() - torch_data.numpy()).max()
-    
+
     output_path = get_out_put_path()
     assert output_path
-    
+
     if cost_model_enable:
         merged_swimlane, error = safe_json_load(os.path.join(output_path, 'CostModelSimulationOutput/merged_swimlane.json'))
         assert not error
@@ -142,13 +142,13 @@ def test_softmax(cost_model_enable=True):
     print(f"Output shape: {output_data.shape}")
     print("✓ Cost model test passed\n")
     print()
-    
+
 
 if __name__ == "__main__":
     # Always execute through build_ci.py
     script_path = os.path.abspath(__file__)
     cmd = f"python3 build_ci.py -s={script_path}"
-    
+
     # Execute and Exit
     os.system(cmd)
     sys.exit(0)

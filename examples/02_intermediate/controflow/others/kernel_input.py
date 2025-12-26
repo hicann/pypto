@@ -29,7 +29,7 @@ from typing import Optional, Tuple
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
-    
+
     Returns:
         int: The device ID if valid, None otherwise.
     """
@@ -39,7 +39,7 @@ def get_device_id():
         print("Please set it before running this example:")
         print("  export TILE_FWK_DEVICE_ID=0")
         return None
-    
+
     try:
         device_id = int(os.environ['TILE_FWK_DEVICE_ID'])
         return device_id
@@ -89,10 +89,10 @@ def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto
 @pypto.jit(
     host_options={"only_codegen": True},
 )
-def scaled_dot_product_attention_kernel_npu(q: torch.Tensor, y: torch.Tensor, k: torch.Tensor, 
-                                 v: torch.Tensor, params: torch.Size, 
+def scaled_dot_product_attention_kernel_npu(q: pypto.Tensor, y: pypto.Tensor, k: pypto.Tensor,
+                                 v: pypto.Tensor, params: torch.Size,
                                  config: AttentionConfig) -> None:
-    """Scaled dot-product attention with dynamic batch and sequence lengths."""       
+    """Scaled dot-product attention with dynamic batch and sequence lengths."""
     batch_size, num_heads, seq_len, head_dim = params
 
     # Calculate scale
@@ -107,7 +107,7 @@ def scaled_dot_product_attention_kernel_npu(q: torch.Tensor, y: torch.Tensor, k:
         q_view = q[bs_idx * view_shape[0]:(bs_idx+1) * view_shape[0], ...]
         k_view = k[bs_idx * view_shape[0]:(bs_idx+1) * view_shape[0], ...]
         v_view = v[bs_idx * view_shape[0]:(bs_idx+1) * view_shape[0], ...]
-        pypto.set_vec_tile_shapes(1, 8, 16, 64) 
+        pypto.set_vec_tile_shapes(1, 8, 16, 64)
         res = scaled_dot_product_attention_core(q_view, k_view, v_view)
         y[bs_idx * view_shape[0]:, ...] = res
 
@@ -116,10 +116,10 @@ def scaled_dot_product_attention_kernel_npu(q: torch.Tensor, y: torch.Tensor, k:
     host_options={"only_codegen": True},
     runtime_options={"run_mode": 1}
 )
-def scaled_dot_product_attention_kernel_sim(q: torch.Tensor, y: torch.Tensor, k: torch.Tensor, 
-                                 v: torch.Tensor, params: torch.Size, 
+def scaled_dot_product_attention_kernel_sim(q: pypto.Tensor, y: pypto.Tensor, k: pypto.Tensor,
+                                 v: pypto.Tensor, params: torch.Size,
                                  config: AttentionConfig) -> None:
-    """Scaled dot-product attention with dynamic batch and sequence lengths."""       
+    """Scaled dot-product attention with dynamic batch and sequence lengths."""
     batch_size, num_heads, seq_len, head_dim = params
 
     # Calculate scale
@@ -134,13 +134,13 @@ def scaled_dot_product_attention_kernel_sim(q: torch.Tensor, y: torch.Tensor, k:
         q_view = q[bs_idx * view_shape[0]:(bs_idx+1) * view_shape[0], ...]
         k_view = k[bs_idx * view_shape[0]:(bs_idx+1) * view_shape[0], ...]
         v_view = v[bs_idx * view_shape[0]:(bs_idx+1) * view_shape[0], ...]
-        pypto.set_vec_tile_shapes(1, 8, 16, 64) 
+        pypto.set_vec_tile_shapes(1, 8, 16, 64)
         res = scaled_dot_product_attention_core(q_view, k_view, v_view)
         y[bs_idx * view_shape[0]:, ...] = res
 
 
-def scaled_dot_product_attention(q: torch.Tensor, k: torch.Tensor, 
-                                 v: torch.Tensor, params: torch.Size, 
+def scaled_dot_product_attention(q: torch.Tensor, k: torch.Tensor,
+                                 v: torch.Tensor, params: torch.Size,
                                  config: AttentionConfig, run_mode: str = "npu",
                                  dynamic: bool = True) -> torch.Tensor:
     y = torch.empty_like(q)
@@ -170,48 +170,48 @@ def test_unordered_input_attention(device_id = None, run_mode: str = "npu", dyna
     print("=" * 60)
     print("Test: kenel_unordered_input Scaled Dot-Product Attention")
     print("=" * 60)
-    
+
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
-    
+
     num_heads, head_dim = 8, 64
-    
+
     batch_size, seq_len_q, seq_len_kv = 8, 64, 64
     dtype = torch.float32
-    q_torch = torch.randn(batch_size, num_heads, seq_len_q, head_dim, 
+    q_torch = torch.randn(batch_size, num_heads, seq_len_q, head_dim,
                             dtype=dtype, device=device)
-    k_torch = torch.randn(batch_size, num_heads, seq_len_kv, head_dim, 
+    k_torch = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
                             dtype=dtype, device=device)
-    v_torch = torch.randn(batch_size, num_heads, seq_len_kv, head_dim, 
+    v_torch = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
                             dtype=dtype, device=device)
-    config = AttentionConfig(num_heads=num_heads, head_dim=head_dim, 
+    config = AttentionConfig(num_heads=num_heads, head_dim=head_dim,
                             dtype=pypto.DT_FP32, use_dynamic_shape=True)
     params = q_torch.shape
     # Execute
     out_torch = scaled_dot_product_attention(q_torch, k_torch, v_torch, params, config, run_mode, dynamic).cpu()
-    
+
     # Verify
     scale = 1.0 / (head_dim ** 0.5)
     golden = scaled_dot_product_attention_golden(q_torch, k_torch, v_torch, scale).cpu()
-    
+
     print(f"Batch={batch_size}, SeqQ={seq_len_q}, SeqKV={seq_len_kv}")
     print(f"Input shape: {q_torch.shape}")
     print(f"Output shape: {out_torch.shape}")
     if run_mode == "npu":
         assert_allclose(np.array(out_torch), np.array(golden), rtol=3e-3, atol=3e-3)
-    
+
     print("✓ Attention (kenel_unordered_input) passed for the test case")
     print()
 
 
 @pypto.jit
-def op_unordered_input_kernel_npu(a: torch.Tensor, y1: torch.Tensor, y2: torch.Tensor,  b: torch.Tensor) -> None:
+def op_unordered_input_kernel_npu(a: pypto.Tensor, y1: pypto.Tensor, y2: pypto.Tensor, b: pypto.Tensor) -> None:
     pypto.set_vec_tile_shapes(16, 16)
     y1[:] = a + b
     y2[:] = a * b
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def op_unordered_input_kernel_sim(a: torch.Tensor, y1: torch.Tensor, y2: torch.Tensor,  b: torch.Tensor) -> None:
+def op_unordered_input_kernel_sim(a: pypto.Tensor, y1: pypto.Tensor, y2: pypto.Tensor, b: pypto.Tensor) -> None:
     pypto.set_vec_tile_shapes(16, 16)
     y1[:] = a + b
     y2[:] = a * b
@@ -246,9 +246,9 @@ def test_unordered_input_op(device_id = None, run_mode: str = "npu", dynamic: bo
     print("=" * 60)
     print("Test: OP with kenel_unordered_input")
     print("=" * 60)
-    
+
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
-    
+
     shape = (3, 2)
     dtype = torch.float
     a = torch.rand(shape, dtype=dtype, device=device)
@@ -259,22 +259,22 @@ def test_unordered_input_op(device_id = None, run_mode: str = "npu", dynamic: bo
     # Verify
     golden1 = torch.add(a, b).cpu()
     golden2 = torch.mul(a, b).cpu()
-    
+
     if run_mode == "npu":
         assert_allclose(np.array(y1), np.array(golden1), rtol=1e-3, atol=1e-3)
         assert_allclose(np.array(y2), np.array(golden2), rtol=1e-3, atol=1e-3)
         print(f"Output1: {y1}")
         print(f"Expected1: {golden1}")
         print(f"Output2: {y2}")
-        print(f"Expected2: {golden2}")  
-    
+        print(f"Expected2: {golden2}")
+
     print("✓ OP with kenel_unordered_input passed for the test case")
     print()
 
 
 def main():
     """Run dynamic examples.
-    
+
     Usage:
         python dynamic.py          # Run all examples
         python dynamic.py 1         # Run example 1 only
@@ -310,9 +310,9 @@ Examples:
         choices=["npu", "sim"],
         help='Run mode, such as npu/sim etc.'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Define available examples
     examples = {
         'unordered_input_attention::test_unordered_input_attention': {
@@ -328,7 +328,7 @@ Examples:
             'requires_npu': True
         }
     }
-    
+
     # List examples if requested
     if args.list:
         print("\n" + "=" * 60)
@@ -339,7 +339,7 @@ Examples:
             print(f"     name: {ex_info['name']}")
             print(f"     description: {ex_info['description']}\n")
         return
-    
+
     # Validate example ID if provided
     if args.example_id is not None:
         if args.example_id not in examples:
@@ -347,22 +347,22 @@ Examples:
             print(f"Valid example IDs are: {', '.join(map(str, sorted(examples.keys())))}")
             print("\nUse --list to see all available examples.")
             sys.exit(1)
-    
+
     print("\n" + "=" * 60)
     print("PyPTO Dynamic Function Examples")
     print("=" * 60 + "\n")
-    
+
     # Get and validate device ID (needed for NPU examples)
     device_id = None
     examples_to_run = []
-    
+
     if args.example_id is not None:
         # Run single example
         examples_to_run = [(args.example_id, examples[args.example_id])]
     else:
         # Run all examples
         examples_to_run = list(examples.items())
-    
+
     if args.run_mode == "npu":
         device_id = get_device_id()
         if device_id is None:
@@ -371,17 +371,17 @@ Examples:
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")
-    
+
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
             ex_info['function'](device_id, args.run_mode)
-        
+
         if len(examples_to_run) > 1:
             print("=" * 60)
             print("All kenel_unordered_input tests passed!")
             print("=" * 60)
-        
+
     except Exception as e:
         print(f"\nError: {e}")
         raise

@@ -34,7 +34,7 @@ from torch._subclasses.fake_tensor import FakeTensor
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
-    
+
     Returns:
         int: The device ID if valid, None otherwise.
     """
@@ -44,7 +44,7 @@ def get_device_id():
         print("Please set it before running this example:")
         print("  export TILE_FWK_DEVICE_ID=0")
         return None
-    
+
     try:
         device_id = int(os.environ['TILE_FWK_DEVICE_ID'])
         return device_id
@@ -56,12 +56,12 @@ def get_device_id():
 def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
     """
     Core softmax computation: exp(x - max(x)) / sum(exp(x - max(x))).
-    
+
     Parameters
     ----------
-    input_tensor : pypto.tensor
+    input_tensor : pypto.Tensor
         Input tensor to apply softmax to
-        
+
     Returns
     -------
     pypto.tensor
@@ -134,7 +134,7 @@ def test_softmax_capture(device_id=None, dynamic: bool = True) -> None:
     g = torch.npu.NPUGraph()
     with torch.npu.graph(g):
         y = model(x, dynamic)
-    
+
     #execute graph
     g.replay()
     torch.npu.synchronize()
@@ -149,7 +149,7 @@ def test_softmax_capture(device_id=None, dynamic: bool = True) -> None:
 
 def main():
     """Run softmax example.
-    
+
     Usage:
         python softmax.py          # Run example
         python softmax.py --list   # List available examples
@@ -174,9 +174,9 @@ Examples:
         action='store_true',
         help='List all available examples and exit'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Define available examples
     examples = {
         "aclgraph::test_aclgraph": {
@@ -186,7 +186,7 @@ Examples:
             'requires_npu': True
         }
     }
-    
+
     # List examples if requested
     if args.list:
         print("\n" + "=" * 60)
@@ -197,7 +197,7 @@ Examples:
             print(f"  {ex_id}. {ex_info['name']}{npu_req}")
             print(f"     {ex_info['description']}\n")
         return
-    
+
     # Validate example ID if provided
     if args.example_id is not None:
         if args.example_id not in examples:
@@ -205,46 +205,46 @@ Examples:
             print(f"Valid example IDs are: {', '.join(map(str, sorted(examples.keys())))}")
             print("\nUse --list to see all available examples.")
             sys.exit(1)
-    
+
     print("\n" + "=" * 60)
     print("PyPTO Softmax Example")
     print("=" * 60 + "\n")
-    
+
     # Get and validate device ID (needed for NPU examples)
     device_id = None
     examples_to_run = []
-    
+
     if args.example_id is not None:
         # Run single example
         examples_to_run = [(args.example_id, examples[args.example_id])]
     else:
         # Run all examples
         examples_to_run = list(examples.items())
-    
+
     # Check if any example requires NPU
     requires_npu = any(ex_info['requires_npu'] for _, ex_info in examples_to_run)
-    
+
     if requires_npu:
         device_id = get_device_id()
         if device_id is None:
             return
         # Set the device once for all examples
         torch.npu.set_device(device_id)
-    
+
     try:
         for ex_id, ex_info in examples_to_run:
             if ex_info['requires_npu'] and device_id is None:
                 print(f"Skipping example {ex_id} ({ex_info['name']}): NPU device not configured")
                 continue
-            
+
             print(f"Running Example {ex_id}: {ex_info['name']}")
             ex_info['function']()
-        
+
         if len(examples_to_run) > 1:
             print("=" * 60)
             print("All softmax tests passed!")
             print("=" * 60)
-        
+
     except Exception as e:
         print(f"\nError: {e}")
         raise

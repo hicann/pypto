@@ -31,7 +31,7 @@ from numpy.testing import assert_allclose
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
-    
+
     Returns:
         int: The device ID if valid, None otherwise.
     """
@@ -41,7 +41,7 @@ def get_device_id():
         print("Please set it before running this example:")
         print("  export TILE_FWK_DEVICE_ID=0")
         return None
-    
+
     try:
         device_id = int(os.environ['TILE_FWK_DEVICE_ID'])
         return device_id
@@ -53,12 +53,12 @@ def get_device_id():
 def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
     """
     Core softmax computation: exp(x - max(x)) / sum(exp(x - max(x))).
-    
+
     Parameters
     ----------
-    input_tensor : pypto.tensor
+    input_tensor : pypto.Tensor
         Input tensor to apply softmax to
-        
+
     Returns
     -------
     pypto.tensor
@@ -151,7 +151,7 @@ def test_softmax(device_id = None, run_mode: str = "npu", dynamic: bool = True) 
 
 def main():
     """Run softmax example.
-    
+
     Usage:
         python softmax.py          # Run example
         python softmax.py --list   # List available examples
@@ -185,9 +185,9 @@ Examples:
         choices=["npu", "sim"],
         help='Run mode, such as npu/sim etc.'
     )
-    
+
     args = parser.parse_args()
-    
+
     # Define available examples
     examples = {
         "softmax::test_softmax": {
@@ -196,7 +196,7 @@ Examples:
             'function': test_softmax
         }
     }
-    
+
     # List examples if requested
     if args.list:
         print("\n" + "=" * 60)
@@ -207,7 +207,7 @@ Examples:
             print(f"     name: {ex_info['name']}")
             print(f"     description: {ex_info['description']}\n")
         return
-    
+
     # Validate example ID if provided
     if args.example_id is not None:
         if args.example_id not in examples:
@@ -215,7 +215,7 @@ Examples:
             print(f"Valid example IDs are: {', '.join(map(str, sorted(examples.keys())))}")
             print("\nUse --list to see all available examples.")
             sys.exit(1)
-    
+
     print("\n" + "=" * 60)
     print("PyPTO Softmax Example")
     print("=" * 60 + "\n")
@@ -239,17 +239,17 @@ Examples:
         torch.npu.set_device(device_id)
         print("Running examples that require NPU hardware...")
         print("(Make sure CANN environment is configured and NPU is available)\n")
-    
+
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
             ex_info['function'](device_id, args.run_mode)
-        
+
         if len(examples_to_run) > 1:
             print("=" * 60)
             print("All softmax tests passed!")
             print("=" * 60)
-        
+
     except Exception as e:
         print(f"\nError: {e}")
         raise

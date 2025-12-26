@@ -45,13 +45,13 @@ def get_device_id():
 
 
 @pypto.jit
-def add_direct_kernel_npu(x: torch.Tensor, y: torch.Tensor, z: torch.Tensor) -> None:
+def add_direct_kernel_npu(x: pypto.Tensor, y: pypto.Tensor, z: pypto.Tensor) -> None:
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     z[:] = x + y
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def add_direct_kernel_sim(x: torch.Tensor, y: torch.Tensor, z: torch.Tensor) -> None:
+def add_direct_kernel_sim(x: pypto.Tensor, y: pypto.Tensor, z: pypto.Tensor) -> None:
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     z[:] = x + y
 

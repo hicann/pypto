@@ -112,7 +112,7 @@ def layer_norm_kernel_sim(x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tens
     pypto.set_vec_tile_shapes(64, 128)
 
     out[:] = layernorm_core(x, gamma, beta)
-        
+
 
 def layer_norm(x: torch.Tensor, gamma: torch.Tensor, beta: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     y = torch.empty_like(x)
@@ -186,7 +186,7 @@ def linear_projection(x: pypto.Tensor, weight: pypto.Tensor, run_mode: str = "np
 
 # Function 3: GELU Activation
 @pypto.jit
-def gelu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
+def gelu_activation_kernel_npu(x: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
@@ -195,12 +195,12 @@ def gelu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
 
     Parameters
     ----------
-    x : pypto.tensor
+    x : pypto.Tensor
         Input tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         GELU activated tensor
     """
     # Configure tiling
@@ -220,7 +220,7 @@ def gelu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def gelu_activation_kernel_sim(x: pypto.tensor, y: pypto.tensor) -> None:
+def gelu_activation_kernel_sim(x: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
@@ -229,12 +229,12 @@ def gelu_activation_kernel_sim(x: pypto.tensor, y: pypto.tensor) -> None:
 
     Parameters
     ----------
-    x : pypto.tensor
+    x : pypto.Tensor
         Input tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         GELU activated tensor
     """
     # Configure tiling
@@ -274,7 +274,7 @@ def gelu_activation(x: torch.Tensor, run_mode: str = "npu", dynamic: bool = Fals
 
 # Function 4: Residual Connection
 @pypto.jit
-def residual_add_kernel_npu(x: pypto.tensor, residual: pypto.tensor, out: pypto.tensor) -> None:
+def residual_add_kernel_npu(x: pypto.Tensor, residual: pypto.Tensor, out: pypto.Tensor) -> None:
     """Add residual connection: out = x + residual"""
     pypto.set_vec_tile_shapes(64, 128)
 
@@ -282,7 +282,7 @@ def residual_add_kernel_npu(x: pypto.tensor, residual: pypto.tensor, out: pypto.
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def residual_add_kernel_sim(x: pypto.tensor, residual: pypto.tensor, out: pypto.tensor) -> None:
+def residual_add_kernel_sim(x: pypto.Tensor, residual: pypto.Tensor, out: pypto.Tensor) -> None:
     """Add residual connection: out = x + residual"""
     pypto.set_vec_tile_shapes(64, 128)
 
@@ -312,7 +312,7 @@ def residual_add(x: pypto.Tensor, residual: pypto.Tensor, run_mode: str = "npu",
 
 # Function 5: Attention (simplified)
 @pypto.jit
-def attention_kernel_npu(q: pypto.tensor, k: pypto.tensor, v: pypto.tensor, out: pypto.tensor, scale: float) -> None:
+def attention_kernel_npu(q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor, out: pypto.Tensor, scale: float) -> None:
     """Simplified attention mechanism."""
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
 
@@ -331,7 +331,7 @@ def attention_kernel_npu(q: pypto.tensor, k: pypto.tensor, v: pypto.tensor, out:
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def attention_kernel_sim(q: pypto.tensor, k: pypto.tensor, v: pypto.tensor, out: pypto.tensor, scale: float) -> None:
+def attention_kernel_sim(q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor, out: pypto.Tensor, scale: float) -> None:
     """Simplified attention mechanism."""
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
 
@@ -349,7 +349,7 @@ def attention_kernel_sim(q: pypto.tensor, k: pypto.tensor, v: pypto.tensor, out:
     out[:] = pypto.matmul(attn_weights, v, out_dtype=out.dtype)
 
 
-def attention(q: torch.Tensor, k: torch.Tensor, 
+def attention(q: torch.Tensor, k: torch.Tensor,
                                  v: torch.Tensor, scale: float,
                                  run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     y = torch.empty_like(q)
@@ -546,7 +546,7 @@ def test_function_reuse(device_id = None, run_mode: str = "npu", dynamic: bool =
     out3 = layer_norm(x3, gamma, beta, run_mode, dynamic)
     if run_mode == "npu":
         torch.npu.synchronize()
-    
+
 
     # Verify
     expected1 = layer_norm_golden(x1, gamma, beta, 1e-6)

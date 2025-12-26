@@ -81,7 +81,7 @@ def geglu_golden(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
 
 
 @pypto.jit
-def silu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
+def silu_activation_kernel_npu(x: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     SiLU (Swish) activation function: x * sigmoid(x)
 
@@ -92,12 +92,12 @@ def silu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
 
     Parameters
     ----------
-    x : pypto.tensor
+    x : pypto.Tensor
         Input tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         SiLU activated tensor
     """
     # Configure tiling based on input shape
@@ -114,7 +114,7 @@ def silu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def silu_activation_kernel_sim(x: pypto.tensor, y: pypto.tensor) -> None:
+def silu_activation_kernel_sim(x: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     SiLU (Swish) activation function: x * sigmoid(x)
 
@@ -125,12 +125,12 @@ def silu_activation_kernel_sim(x: pypto.tensor, y: pypto.tensor) -> None:
 
     Parameters
     ----------
-    x : pypto.tensor
+    x : pypto.Tensor
         Input tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         SiLU activated tensor
     """
     # Configure tiling based on input shape
@@ -192,7 +192,7 @@ def test_silu(device_id = None, run_mode: str = "npu", dynamic: bool = False) ->
 
 
 @pypto.jit
-def gelu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
+def gelu_activation_kernel_npu(x: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
@@ -201,12 +201,12 @@ def gelu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
 
     Parameters
     ----------
-    x : pypto.tensor
+    x : pypto.Tensor
         Input tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         GELU activated tensor
     """
     # Configure tiling
@@ -226,7 +226,7 @@ def gelu_activation_kernel_npu(x: pypto.tensor, y: pypto.tensor) -> None:
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def gelu_activation_kernel_sim(x: pypto.tensor, y: pypto.tensor) -> None:
+def gelu_activation_kernel_sim(x: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     GELU (Gaussian Error Linear Unit) activation function.
 
@@ -235,12 +235,12 @@ def gelu_activation_kernel_sim(x: pypto.tensor, y: pypto.tensor) -> None:
 
     Parameters
     ----------
-    x : pypto.tensor
+    x : pypto.Tensor
         Input tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         GELU activated tensor
     """
     # Configure tiling
@@ -303,10 +303,10 @@ def test_gelu(device_id = None, run_mode: str = "npu", dynamic: bool = False) ->
         assert max_diff < 1e-1, "Result mismatch!"
     print("✓ GELU passed")
     print()
-    
+
 
 @pypto.jit
-def swiglu_activation_kernel_npu(gate: pypto.tensor, up: pypto.tensor, y: pypto.tensor) -> None:
+def swiglu_activation_kernel_npu(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     SwiGLU activation function: Swish(gate) * up
 
@@ -317,14 +317,14 @@ def swiglu_activation_kernel_npu(gate: pypto.tensor, up: pypto.tensor, y: pypto.
 
     Parameters
     ----------
-    gate : pypto.tensor
+    gate : pypto.Tensor
         Gate tensor
-    up : pypto.tensor
+    up : pypto.Tensor
         Up projection tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         SwiGLU activated tensor
     """
     # Configure tiling
@@ -344,7 +344,7 @@ def swiglu_activation_kernel_npu(gate: pypto.tensor, up: pypto.tensor, y: pypto.
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def swiglu_activation_kernel_sim(gate: pypto.tensor, up: pypto.tensor, y: pypto.tensor) -> None:
+def swiglu_activation_kernel_sim(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     SwiGLU activation function: Swish(gate) * up
 
@@ -355,9 +355,9 @@ def swiglu_activation_kernel_sim(gate: pypto.tensor, up: pypto.tensor, y: pypto.
 
     Parameters
     ----------
-    gate : pypto.tensor
+    gate : pypto.Tensor
         Gate tensor
-    up : pypto.tensor
+    up : pypto.Tensor
         Up projection tensor
 
     Returns
@@ -381,7 +381,8 @@ def swiglu_activation_kernel_sim(gate: pypto.tensor, up: pypto.tensor, y: pypto.
     y[:] =  swish * up
 
 
-def swiglu_activation(gate: pypto.tensor, up: pypto.tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def swiglu_activation(gate: torch.Tensor, up: torch.Tensor,
+                      run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     y = torch.empty_like(gate)
 
     if dynamic:
@@ -432,7 +433,7 @@ def test_swiglu(device_id = None, run_mode: str = "npu", dynamic: bool = False) 
 
 
 @pypto.jit
-def geglu_activation_kernel_npu(gate: pypto.tensor, up: pypto.tensor, y: pypto.tensor) -> None:
+def geglu_activation_kernel_npu(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     GeGLU activation function: GELU(gate) * up
 
@@ -443,14 +444,14 @@ def geglu_activation_kernel_npu(gate: pypto.tensor, up: pypto.tensor, y: pypto.t
 
     Parameters
     ----------
-    gate : pypto.tensor
+    gate : pypto.Tensor
         Gate tensor
-    up : pypto.tensor
+    up : pypto.Tensor
         Up projection tensor
 
     Returns
     -------
-    pypto.tensor
+    pypto.Tensor
         GeGLU activated tensor
     """
     # Configure tiling
@@ -473,7 +474,7 @@ def geglu_activation_kernel_npu(gate: pypto.tensor, up: pypto.tensor, y: pypto.t
 
 
 @pypto.jit(runtime_options={"run_mode": 1})
-def geglu_activation_kernel_sim(gate: pypto.tensor, up: pypto.tensor, y: pypto.tensor) -> None:
+def geglu_activation_kernel_sim(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
     """
     GeGLU activation function: GELU(gate) * up
 
@@ -484,9 +485,9 @@ def geglu_activation_kernel_sim(gate: pypto.tensor, up: pypto.tensor, y: pypto.t
 
     Parameters
     ----------
-    gate : pypto.tensor
+    gate : pypto.Tensor
         Gate tensor
-    up : pypto.tensor
+    up : pypto.Tensor
         Up projection tensor
 
     Returns
@@ -513,7 +514,8 @@ def geglu_activation_kernel_sim(gate: pypto.tensor, up: pypto.tensor, y: pypto.t
     y[:] =  gelu_gate * up
 
 
-def geglu_activation(gate: pypto.tensor, up: pypto.tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def geglu_activation(gate: torch.Tensor, up: torch.Tensor,
+                     run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     y = torch.empty_like(gate)
 
     if dynamic:

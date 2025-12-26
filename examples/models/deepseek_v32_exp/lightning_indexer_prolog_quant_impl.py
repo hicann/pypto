@@ -119,7 +119,7 @@ class IndexerPrologQuantConfigs:
     vec_nbuffer_mode: int
 
 
-def quant_layer_norm(x: pypto.tensor, gamma: pypto.tensor, beta: pypto.tensor, dim: int, epsilon: float):
+def quant_layer_norm(x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tensor, dim: int, epsilon: float):
     """Compute quantized LayerNorm operation.
 
     Applies Layer Normalization with quantization support. The function normalizes
@@ -165,7 +165,7 @@ def quant_layer_norm(x: pypto.tensor, gamma: pypto.tensor, beta: pypto.tensor, d
     return pypto.cast((res32 * gamma32) + beta32, x_dtype)
 
 
-def quant_rope_2d(x: pypto.tensor, cos: pypto.tensor, sin: pypto.tensor):
+def quant_rope_2d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor):
     """Apply 2D Rotary Position Embedding (RoPE) to input tensor.
 
     Implements RoPE transformation for 2D tensors. RoPE encodes positional
@@ -202,7 +202,7 @@ def quant_rope_2d(x: pypto.tensor, cos: pypto.tensor, sin: pypto.tensor):
     return res
 
 
-def prolog_quant(input: pypto.tensor):
+def prolog_quant(x: pypto.Tensor):
     """Perform per-token quantization to INT8.
 
     Quantizes the input tensor to INT8 format using dynamic quantization.
@@ -229,7 +229,7 @@ def prolog_quant(input: pypto.tensor):
     pypto.set_semantic_label("Prolog-Quant")
     s8_max_value = 127.0
     s8_one_value = 1.0
-    input_fp32 = pypto.cast(input, pypto.DT_FP32, pypto.CastMode.CAST_NONE)
+    input_fp32 = pypto.cast(x, pypto.DT_FP32, pypto.CastMode.CAST_NONE)
 
     abs_res = pypto.abs(input_fp32)
     max_value = pypto.amax(abs_res, dim=-1, keepdim=True)
@@ -245,7 +245,7 @@ def prolog_quant(input: pypto.tensor):
     return (out_int8, scale_dequant)
 
 
-def rotate_half(input_tensor: pypto.tensor) -> pypto.tensor:
+def rotate_half(input_tensor: pypto.Tensor) -> pypto.Tensor:
     """Rotate half of the tensor dimensions for RoPE computation.
 
     Splits the last dimension in half and applies rotation transformation:
@@ -279,7 +279,7 @@ def rotate_half(input_tensor: pypto.tensor) -> pypto.tensor:
     return pypto.concat([x2 * (-1.0), x1 + 0.0], -1)
 
 
-def rope_3d(x: pypto.tensor, cos: pypto.tensor, sin: pypto.tensor, configs: IndexerPrologQuantConfigs) -> pypto.tensor:
+def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor, configs: IndexerPrologQuantConfigs) -> pypto.Tensor:
     """Apply 3D Rotary Position Embedding (RoPE) to input tensor.
 
     Implements RoPE transformation for 3D tensors with shape (t_tile, head_num, rope_dim).
