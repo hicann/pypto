@@ -186,7 +186,7 @@ def test_reshape():
     b = 3
     n1 = 64
     d = 64
-    device_id = os.environ.get('TILE_FWK_STEST_DEVICE_ID', 0)
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
     torch.manual_seed(42)
 

@@ -428,7 +428,7 @@ def ifa_func(q, k, v, block_table, kv_act_seqs, atten_out):
                             pypto.assemble(oi_final_3d, oi_ofs, atten_out)
 
 def IFA(atten_cfg):
-    device_id = os.environ.get('TILE_FWK_STEST_DEVICE_ID', 0)
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch_dtype = torch.float16
     torch.npu.set_device(int(device_id))
     b = atten_cfg.b
@@ -511,7 +511,7 @@ def IFA(atten_cfg):
 @pytest.mark.skip(reason="large test case")
 def test_ifa():
     # 1. 设置参数
-    device_id = os.environ.get('TILE_FWK_STEST_DEVICE_ID', 0)
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     device = f'npu:{device_id}'
     atten_cfg, _ = get_qwen_common_config(device=device)
 

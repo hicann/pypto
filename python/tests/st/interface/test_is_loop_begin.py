@@ -42,7 +42,7 @@ def dyn_loop_with_loop_begin(in_tensor, out_tensor):
 
 
 def test_is_loop_begin():
-    device_id = os.environ.get('TILE_FWK_STEST_DEVICE_ID', 0)
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
     torch.manual_seed(42)
 
@@ -89,7 +89,7 @@ def dyn_loop_with_loop_end(in_tensor, out_tensor):
 
 
 def test_is_loop_end():
-    device_id = os.environ.get('TILE_FWK_STEST_DEVICE_ID', 0)
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
     torch.manual_seed(42)
 

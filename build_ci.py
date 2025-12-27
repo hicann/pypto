@@ -1171,9 +1171,20 @@ class BuildCtrl(CMakeParam):
         # 执行用例, STest
         self.py_tests_run_pytest(dist=dist, tests=self.tests.stest,
                                  def_filter=str(Path(self.src_root, "python/tests/st")), ext="--forked")
+
+        pyst_n_workers = 1
+        if self.tests.example.enable:
+            try:
+                import torch
+                import torch_npu
+                pyst_n_workers = torch.npu.device_count()
+                logging.info("NPU device count %d", pyst_n_workers)
+            except ImportError:
+                pass
+
         # 执行用例, Example
         self.py_tests_run_pytest(dist=dist, tests=self.tests.example,
-                                 def_filter=str(Path(self.src_root, "examples")), ext="--forked")
+                                 def_filter=str(Path(self.src_root, "examples")), ext=f"-n {pyst_n_workers} --forked")
 
     def py_tests_run_pytest(self, dist: Optional[Path], tests: TestsFilterParam, def_filter: str, ext: str = ""):
         if not tests.enable or not self.tests.exec.auto_execute:

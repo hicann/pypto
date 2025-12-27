@@ -468,7 +468,7 @@ def test_quant_attention_pre():
     half_rotary_dim = rotary_dim // 2
     eps = 1e-05
 
-    device_id = int(os.environ.get('TILE_FWK_STEST_DEVICE_ID', 0))
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
     # 2. 构造多种shape，测试动态case
