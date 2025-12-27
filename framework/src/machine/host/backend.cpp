@@ -121,7 +121,8 @@ extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache) {
         deviceAgentTask->compileInfo.PrintDistributed();
         deviceAgentTask->compileInfo.workSpaceStackSize = function->GetStackWorkespaceSize();
 
-        if (config::GetCodeGenOption<bool>(CODEGEN_EXPRESSION_FUSION)) {
+        if (function->IsFunctionType({FunctionType::DYNAMIC, FunctionType::DYNAMIC_LOOP, 
+            FunctionType::DYNAMIC_LOOP_PATH}) && config::GetCodeGenOption<bool>(CODEGEN_EXPRESSION_FUSION)) {
             if (function->GetGraphType() == GraphType::TILE_GRAPH) {
                 // When expression fusion, don't need tile graph codegen.
                 return 0;
@@ -985,7 +986,7 @@ MachineTask *GenCode(
      * the filepath of the object file is updated to the binPath_ member.
      */
     if (function->GetGraphType() == GraphType::TILE_GRAPH) {
-        if (!config::GetCodeGenOption<bool>(CODEGEN_EXPRESSION_FUSION)) {
+        if (config::GetCodeGenOption<bool>(CODEGEN_EXPRESSION_FUSION)) {
             codeGen.GenCode(*function, invokeParaOffset);
         }
     } else {

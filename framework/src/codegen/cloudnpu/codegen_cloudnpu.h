@@ -116,7 +116,7 @@ public:
 private:
     std::string GenFuncBodyBefore(
         const std::pair<uint64_t, Function *> &subFuncPair, Function &topFunc, CompileInfo &compileInfo) const;
-    std::string GenInclude() const;
+    std::string GenInclude(const Function &topFunc) const;
     static std::string GenCommentBeforeFuncHeader(Function &subFunc);
     std::string GenFuncHeader(uint64_t programId, Function &topFunc, CompileInfo &compileInfo) const;
     std::string GenFuncBody(Function &subFunc, Function &topFunc) const;

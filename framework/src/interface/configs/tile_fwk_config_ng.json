@@ -28,7 +28,7 @@
         "only_codegen": false
     },
     "codegen": {
-        "codegen_expression_fusion": false
+        "codegen_expression_fusion": true
     },
     "verify": {
         "enable_pass_verify": false,

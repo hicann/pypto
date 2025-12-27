@@ -144,7 +144,8 @@ TEST_F(TestCodegenDynIndexOutCast, DynIndexOutUnaligned) {
         }
     }
 #if ENABLE_HIDDENLOOP
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
 #else
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX);
 #endif
@@ -197,7 +198,7 @@ TileOp::DynTIndexoutcast<int32_t, int32_t, 1, 32, 32, 32, 0, 1>((__gm__ int32_t*
 }
 )!!!";
 #else
-std::string expect = R"!!!(#include "TileOpImpl.h"
+    std::string expect = R"!!!(#include "TileOpImpl.h"
 
 // funcHash: 12544314081076844009
 

@@ -14,35 +14,34 @@
  */
 
 #include <unistd.h>
-#include <sys/stat.h>
 
 #include "codegen_cce.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
+#include "interface/configs/config_manager.h"
 #include "interface/program/program.h"
+#include "interface/utils/file_utils.h"
 
 namespace npu::tile_fwk {
-void CodeGenCCE::PrepareDefaultOutputPath() {
-    constexpr size_t size = 1024;
-    char cwdbuf[size] = {};
-    std::string cwd = getcwd(cwdbuf, size);
-    if (cwd.empty()) {
-        ALOG_INFO_F("failed to call getcwd()!");
-        return;
-    }
-
-    std::string outputPath = cwd + "/kernel_aicore";
-
-    struct stat st = {};
-    bool outPathExist = stat(outputPath.c_str(), &st) == 0;
-    if (outPathExist) {
-        ASSERT(S_ISDIR(st.st_mode)) << outputPath << " is not a directory!";
+std::string CodeGenCCE::GetEmitPath(const std::string &name) {
+    std::string dirPath;
+    if (npu::tile_fwk::ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
+        dirPath = name;
     } else {
-        ASSERT(mkdir(outputPath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == 0)
-            << "failed to call mkdir to create " << outputPath;
+        dirPath = config::LogTopFolder() + "/" + name;
     }
+    return dirPath;
+}
 
-    ctx.cceDir = outputPath;
+void CodeGenCCE::PrepareOutputPath() {
+    if (ctx.IsCCEPathEmpty() || !IsPathExist(ctx.cceDir)) {
+        PrepareDefaultOutputPath();
+    }
+}
+
+void CodeGenCCE::PrepareDefaultOutputPath() {
+    if (ctx.IsCCEPathEmpty()) {
+        ctx.cceDir = GetEmitPath("kernel_aicore");
+    };
+    CreateMultiLevelDir(ctx.cceDir);
 }
 
 std::map<int, int> GenRealizeIdMap(const SubfuncParam &subFuncParam) {
