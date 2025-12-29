@@ -87,23 +87,23 @@ public:
             return true;
         }
         bool isValid = true;
-DEV_IF_DEVICE {
-        if (aicoreHal_.GetRegSprDataMainBase() == DAV_3510::REG_SPR_DATA_MAIN_BASE) {
-            return true;
-        }
-        auto regAddrs = aicoreHal_.GetRegAddrs();
-        uint32_t regNum = aicoreHal_.GetregNum();
-        for (uint32_t coreIdx = 0; coreIdx < regNum; ++coreIdx) {
-            if (regAddrs[coreIdx] == 0){ 
-                continue;
+        DEV_IF_DEVICE {
+            if (aicoreHal_.GetRegSprDataMainBase() == DAV_3510::REG_SPR_DATA_MAIN_BASE) {
+                return true;
             }
-            uint32_t currentStatus = *(reinterpret_cast<volatile uint32_t*>(regAddrs[coreIdx] + REG_SPR_FAST_PATH_ENABLE));
-            if (currentStatus != REG_SPR_FAST_PATH_CLOSE) {
-                isValid = false;
-                *(reinterpret_cast<volatile uint32_t*>(regAddrs[coreIdx] + REG_SPR_FAST_PATH_ENABLE)) = REG_SPR_FAST_PATH_CLOSE;
+            auto regAddrs = aicoreHal_.GetRegAddrs();
+            uint32_t regNum = aicoreHal_.GetregNum();
+            for (uint32_t coreIdx = 0; coreIdx < regNum; ++coreIdx) {
+                if (regAddrs[coreIdx] == 0) { 
+                    continue;
+                }
+                uint32_t currentStatus = *(reinterpret_cast<volatile uint32_t*>(regAddrs[coreIdx] + REG_SPR_FAST_PATH_ENABLE));
+                if (currentStatus != REG_SPR_FAST_PATH_CLOSE) {
+                    isValid = false;
+                    *(reinterpret_cast<volatile uint32_t*>(regAddrs[coreIdx] + REG_SPR_FAST_PATH_ENABLE)) = REG_SPR_FAST_PATH_CLOSE;
+                }
             }
         }
-}
         return isValid;
     }
     inline void InitDevTask(DeviceTaskCtrl *taskCtrl) {

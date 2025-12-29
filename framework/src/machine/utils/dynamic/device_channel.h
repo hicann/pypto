@@ -159,9 +159,6 @@ public:
         size -= naddr - addr + CACHE_LINE_SIZE;
         nrSlot_ = size / sizeof(struct Slot);
         slots_ = reinterpret_cast<Slot*>(naddr + CACHE_LINE_SIZE);
-        if(nrSlot_ <= 0){
-            ALOG_ERROR_F("size too small, nrSlot_ is %ld, expected >0 \n", nrSlot_);
-        }
         ASSERT(nrSlot_ > 0 && "size too small")<<", nrSlot_="<<nrSlot_<<", expected >0";
         DEV_DEBUG("nrSlot addr %p %ld\n", nextSlot_, nrSlot_);
     }

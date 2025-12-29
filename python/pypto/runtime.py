@@ -170,7 +170,8 @@ class _JIT:
     def set_runtime_debug_mode(self):
         if self.debug_options is None:
             self.debug_options = {}
-        if self.debug_options.get("runtime_debug_mode", 0) or pypto.get_debug_options().get("runtime_debug_mode", 0):
+        if self.debug_options.get("runtime_debug_mode") == 1 \
+             or pypto.get_debug_options().get("runtime_debug_mode") == 1:
             pypto.set_option("profile_enable", True)
 
     def dispatch_with_run_mode(self, in_tensor_data, out_tensor_data, device):
