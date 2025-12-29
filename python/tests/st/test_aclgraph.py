@@ -63,7 +63,7 @@ def test_select_experts():
     # run golden
     golden_out = compute_golden(input0, input1)
     # run npu
-    torch_npu.npu.set_device(int(0))
+    torch_npu.npu.set_device(int(os.environ.get('TILE_FWK_DEVICE_ID', 0)))
     input0 = input0.npu()
     input1 = input1.npu()
     npu_mode = Network().npu()

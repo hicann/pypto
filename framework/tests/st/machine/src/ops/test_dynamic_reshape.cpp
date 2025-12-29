@@ -784,7 +784,7 @@ TEST_F(DynamicReshapeTest, test_merge_and_split) {
     }
 
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000, true));
+    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000));
 }
 
 TEST_F(DynamicReshapeTest, test_split_and_merge) {
@@ -844,7 +844,7 @@ TEST_F(DynamicReshapeTest, test_split_and_merge) {
     }
 
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000, true));
+    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000));
 }
 
 TEST_F(DynamicReshapeTest, test_exchange_dim) {
@@ -900,7 +900,7 @@ TEST_F(DynamicReshapeTest, test_exchange_dim) {
     }
 
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000, true));
+    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000));
 }
 
 TEST_F(DynamicReshapeTest, test_special_reshape) {
@@ -956,5 +956,5 @@ TEST_F(DynamicReshapeTest, test_special_reshape) {
     }
 
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000, true));
+    EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::float16 *)outs->data(), 0.001f, 0, 1000));
 }

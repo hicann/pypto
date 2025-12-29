@@ -35,6 +35,7 @@ from python.utils.table import Table
 class GoldenCtrl:
     """STest Golden 生成逻辑控制.
     """
+    _MAX_JOB_NUM: int = 16  # 16 控制 Golden 产生时多进程最大并行度
 
     def __init__(self, args):
         self.sys_paths: List[Path] = []
@@ -45,7 +46,7 @@ class GoldenCtrl:
         self.impl_dirs = list(set(self.impl_dirs))
         self.impl_dirs.sort()
         self.clean: bool = args.clean
-        self.job_num: int = min(min(min(max(args.job_num, 0), multiprocessing.cpu_count()), 4), len(self.cases))
+        self.job_num: int = min(max(args.job_num, 1), multiprocessing.cpu_count(), self._MAX_JOB_NUM, len(self.cases))
         #
         self.json_file_name: str = "golden_desc.json"
         logging.info("\n\nGolden Ctrl Args:\n%s", Table.table(datas=self.brief))
@@ -179,14 +180,17 @@ class GoldenCtrl:
         if not need_gen:
             logging.info("Generate golden skip Idx[%s/%s] Case(%s).", idx, len(self.cases), c)
             return True
-        if reg_info.version == 0:
-            if case_idx is None:
-                ret: bool = bool(reg_info.func(case_name=c, output=case_output))
+        try:
+            if reg_info.version == 0:
+                if case_idx is None:
+                    ret: bool = bool(reg_info.func(case_name=c, output=case_output))
+                else:
+                    ret: bool = bool(reg_info.func(case_name=c, output=case_output, case_index=case_idx))
             else:
-                ret: bool = bool(reg_info.func(case_name=c, output=case_output, case_index=case_idx))
-        else:
-            param: GoldenParam = GoldenParam(name=c, idx=case_idx, output=case_output)
-            ret: bool = bool(reg_info.func(case_param=param))
+                param: GoldenParam = GoldenParam(name=c, idx=case_idx, output=case_output)
+                ret: bool = bool(reg_info.func(case_param=param))
+        except Exception as e:
+            raise RuntimeError(f"Error in Case[{c}]") from e
         if ret:
             self._dump_golden_desc(case_output=case_output, reg_info=reg_info)
 

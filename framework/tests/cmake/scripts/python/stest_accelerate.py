@@ -44,16 +44,16 @@ class STestAccelerate(GTestAccelerate):
         if args.device is not None:
             device_list = [int(d) for d in list(set(args.device)) if d is not None and str(d) != ""]
         for _id in device_list:
-            p = GTestAccelerate.ExecParam(envs_func=STestAccelerate.set_device_id_envs, custom=_id)
+            p = GTestAccelerate.ExecParam(cntr_id=_id, envs_func=STestAccelerate.set_device_id_envs)
             params.append(p)
-        ctrl = STestAccelerate(args=args, params=params)
+        ctrl = STestAccelerate(args=args, params=params, cntr_name="Device")
         ctrl.process()
         return ctrl.post()
 
     @staticmethod
     def set_device_id_envs(p: Any) -> Optional[Dict[str, str]]:
         self: GTestAccelerate.ExecParam = p
-        return {"TILE_FWK_DEVICE_ID": f"{self.custom}"}
+        return {"TILE_FWK_DEVICE_ID": f"{self.cntr_id}"}
 
 
 if __name__ == "__main__":

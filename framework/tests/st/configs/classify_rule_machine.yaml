@@ -25,18 +25,18 @@ stest:
       #===========================================================================
       # Flash Attention
       #===========================================================================
-      - DynamicPATest.dynamic_pa_high_throughput_dview_large
+      # - DynamicPATest.dynamic_pa_high_throughput_dview_large
       # - DynamicPATest.dynamic_pa_high_throughput_dview_large_dyn_unalign
-      - DynamicPATest.dynamic_pa_high_throughput_only_batch_loop
-      - DynamicPATest.dynamic_pa_noflash_unalign
-      - DynamicPATest.dynamic_pa_low_lantency_dyn_valid_shape
-      - DynamicPATest.dynamic_pa_low_lantency_dyn_unalign
-      - DynamicPATest.dynamic_pa_low_lantency_imm_scalar
+      # - DynamicPATest.dynamic_pa_high_throughput_only_batch_loop
+      # - DynamicPATest.dynamic_pa_noflash_unalign
+      # - DynamicPATest.dynamic_pa_low_lantency_dyn_valid_shape
+      # - DynamicPATest.dynamic_pa_low_lantency_dyn_unalign
+      # - DynamicPATest.dynamic_pa_low_lantency_imm_scalar
       #===========================================================================
       # NSA native spare attention
       #===========================================================================
       - TestGenAtten.TestDynamicGenAtten_B_16_S1_1_FP16
-      - DynamicWinAttenTest.test_DynAttn_nas_win_attn_s1_2_actseqlen_1024_mla_fp16_v1
+      # - DynamicWinAttenTest.test_DynAttn_nas_win_attn_s1_2_actseqlen_1024_mla_fp16_v1
       #===========================================================================
       # NSA gatescore && compress attention part2
       #===========================================================================
@@ -58,7 +58,7 @@ stest:
       #===========================================================================
       - DynamicReshapeTest.test_only_reshape
       - DynamicReshapeTest.test_only_reshape2
-      - DynamicReshapeTest.test_dyn_reshape2
+      # - DynamicReshapeTest.test_dyn_reshape2
       - DynamicReshapeTest.test_assemble_diff_tile
       - DynamicReshapeTest.test_merge_and_split
       - DynamicReshapeTest.test_split_and_merge

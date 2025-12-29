@@ -55,8 +55,8 @@ class UTestAccelerate(GTestAccelerate):
                 job_num = int(math.ceil(float(cpu_count()) * 0.8))    # use 0.8 cpu
         job_num: int = min(min(min(max(int(job_num), 1), cpu_count()), 16), len(args.cases))
 
-        for _ in range(job_num):
-            params.append(GTestAccelerate.ExecParam())
+        for job_idx in range(job_num):
+            params.append(GTestAccelerate.ExecParam(cntr_id=job_idx))
         ctrl = UTestAccelerate(args=args, params=params)
         ctrl.process()
         return ctrl.post()

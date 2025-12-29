@@ -45,8 +45,8 @@ class TestBuilder(abc.ABC):
 
         self.device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
 
-    def __call__(self, on_board: bool = True, jit: bool = False, device_id: int = 0):
-        self.device_id = device_id
+    def __call__(self, on_board: bool = True, jit: bool = False):
+        self.device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
         self.run(on_board, jit)
 
     def set_tol(self, rtol=1e-3, atol=1e-3):

@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
+import os
 import pytest
 import torch
 import torch_npu
@@ -28,14 +29,15 @@ def add(a, b, c):
 
 
 def test_verify_full_options():
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
+
     a = torch.ones((64, 64))
     b = torch.ones((64, 64))
     c = torch.zeros((64, 64))
 
     golden = a + b
-    
-    device_id = 0
-    torch.npu.set_device(device_id)
+
     inputs = [a, b]
     outputs = [c]
 

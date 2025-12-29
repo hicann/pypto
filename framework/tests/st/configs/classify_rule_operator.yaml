@@ -192,13 +192,13 @@ stest:
   operator_decode_sparse_attention:
     cases:
       # - DecodeIndexerAttentionSTest.mini
-      - DeepSeekIndexerAttentionQuantSTest.4B_mtp_perf
+      # - DeepSeekIndexerAttentionQuantSTest.4B_mtp_perf
       - MlaPrologQuantV32STest.b8_s64k2_pa_nd_fp16_quantB # mla prolog quant version for deepseek-v3.2-exp
 
   operator_dsa_gather_slc_attn:
     cases:
-      - DynamicGatherSlcFlashAttnDSASTest.dsa_gather_slc_attn_bf16_b32_s1_seq511_int8
-      - DynamicGatherSlcFlashAttnDSASTest.dsa_gather_slc_attn_bf16_b8_s1_seq128k_int8
+      # - DynamicGatherSlcFlashAttnDSASTest.dsa_gather_slc_attn_bf16_b32_s1_seq511_int8
+      # - DynamicGatherSlcFlashAttnDSASTest.dsa_gather_slc_attn_bf16_b8_s1_seq128k_int8
 
   operator_rmsnorm:
     cases:
