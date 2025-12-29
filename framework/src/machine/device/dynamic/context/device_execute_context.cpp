@@ -401,7 +401,6 @@ void *DeviceExecuteContext::CallRootFunctionAlloc(uint64_t rootKey) {
         DEV_INFO("[Stitch Finish]Stitch Limit Exceeded. #task=%zu+1 (limit=%u), #callop=%u+%zu (limit=%u).",
             stitchContext.Size(), stitchTaskLoopNumThreshold,
             stitchContext.stitchedCallOpSize(), devRoot->GetOperationSize(), devProg->stitchFunctionsize);
-        SubmitToAicoreAndRecycleMemory(false);
         stitchTaskLoopNumThreshold = nextThreshold;
     }
     DEV_TRACE_DEBUG(REvent(GetRuid(rootKey), RActDup(devRoot->GetRawName())));

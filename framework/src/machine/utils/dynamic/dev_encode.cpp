@@ -352,17 +352,6 @@ void DevAscendFunction::InitRawTensorAndMemoryRequirement(
 
         for (size_t i = 0; i < rawList.size(); i++) {
             const auto &rawTensor = rawList[i];
-            if (rawTensor->actualRawmagic == -1 || rawTensor->actualRawmagic == rawTensor->rawmagic) {
-                continue;
-            }
-            auto &encoded = *GetRawTensor(i);
-            EncodeRawShape(expressionTable, &encoded, rawTensor, false, param.devRoot->GetRawName());
-            HandleActualRaw(incastRawList, outcastRawList, rawMagicToRawTensor, rawTensor, encoded);
-            UpdateRawTensorDesc(rawTensor, i, incastRawList.size(), encoded);
-        }
-
-        for (size_t i = 0; i < rawList.size(); i++) {
-            const auto &rawTensor = rawList[i];
             std::unordered_map<DataType, int> viewTypeTable = {{DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4}};
             if (rawTensor->actualRawmagic != -1 && rawTensor->actualRawmagic != rawTensor->rawmagic) {
                 auto it = rawMagicToRawTensor.find(rawTensor->actualRawmagic);
