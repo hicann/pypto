@@ -20,9 +20,6 @@ if (ENABLE_UTEST)
         add_subdirectory(machine)
         add_subdirectory(codegen)
     endif ()
-    if (NOT BUILD_OPEN_PROJECT)
-        add_subdirectory(execute)
-    endif ()
 
     execute_process(
             COMMAND ${Python3_EXECUTABLE} "validate.py" "tile_fwk_config_ng.json" "tile_fwk_config_schema.json"

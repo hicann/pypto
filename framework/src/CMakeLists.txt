@@ -17,7 +17,3 @@ add_subdirectory(passes)
 add_subdirectory(codegen)
 add_subdirectory(machine)
 add_subdirectory(cost_model)
-
-if (NOT BUILD_OPEN_PROJECT)
-    add_subdirectory(execute)
-endif()
