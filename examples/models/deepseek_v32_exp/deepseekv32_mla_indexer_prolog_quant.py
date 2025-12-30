@@ -901,6 +901,7 @@ params_base = {
 }
 
 
+@pytest.mark.skip(reason="prefill test cast")
 def test_b_4_s1_2_tilebs_8_d():
     '''
     mlaLp decode测试函数

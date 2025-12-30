@@ -1268,4 +1268,7 @@ class SubCommandMgr:
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
+    ts = datetime.now(tz=timezone.utc)
     BuildCtrl.main()
+    duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
+    logging.info("Build[CI] Success, duration %s secs.", duration)

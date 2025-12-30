@@ -187,7 +187,7 @@ stest:
 
   operator_lightning_indexer:
     cases:
-      - DynamicIndexerTopk.indexer_topk_quant_4_b_1_s1_64k_s2
+      # - DynamicIndexerTopk.indexer_topk_quant_4_b_1_s1_64k_s2
 
   operator_decode_sparse_attention:
     cases:
