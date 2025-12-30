@@ -257,7 +257,7 @@ OpcodeManager::OpcodeManager() {
     registerInfo(Opcode::OP_COPY_UB_TO_UB, OpCoreType::AIV, "UB_TO_UB", {MemoryType::MEM_UB}, {MemoryType::MEM_UB}, {"TileOp::Tvcopy", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::MOVE_LOCAL, {OpAttributeKey::excludeBufferReuse});
     registerInfo(Opcode::OP_L0C_TO_L1, OpCoreType::AIC, "L0C_COPY_L1", {MemoryType::MEM_L0C}, {MemoryType::MEM_L1}, {"TileOp::L0CToL1", PIPE_FIX, PIPE_FIX, CoreType::AIC}, OpCalcType::MOVE_OUT);
     registerInfo(Opcode::OP_L1_TO_BT, OpCoreType::AIC, "L1_TO_BT", {MemoryType::MEM_L1}, {MemoryType::MEM_BT}, {"TileOp::L1ToBT", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL);
-
+    registerInfo(Opcode::OP_UB_COPY_ND2NZ, OpCoreType::AIV, "UB_COPY_ND2NZ", {MemoryType::MEM_UB}, {MemoryType::MEM_UB}, {"TileOp::UBCopyUB", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::MOVE_LOCAL);
     // ANY
     registerInfo(Opcode::OP_DUPLICATE, OpCoreType::ANY, "DUPLICATE", {}, {MemoryType::MEM_DEVICE_DDR}, {},
                  OpCalcType::MOVE_LOCAL);

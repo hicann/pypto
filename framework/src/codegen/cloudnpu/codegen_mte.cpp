@@ -362,7 +362,43 @@ std::string CodeGenOpCloudNPU::GenIndexOutCastOp() const {
         {s0Var, s1Var, addrExpr, gms, s0os, s0rs, src1OriginShape, s1rs, dataTypeExpr, cacheMode, blockSizeStr});
 }
 
+std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const {
+    std::vector<int64_t> dstOffset = this->offset[ID0];
+    std::string coordCp = PrintParams({"(", ")"}, dstOffset, ", ");
+    // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
+    int dim = static_cast<int>(rawShape[ID0].size());
+    std::string coord = "Coord" + std::to_string(dim) + DIM + coordCp;
+    bool vquantFlag = false;
+    GetAttr(OpAttributeKey::quantFlag, vquantFlag);
+    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string srcTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    std::string src1Tensor = srcTensor;
+    if (vquantFlag) {
+        src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
+    }
+    int64_t isAcc = 0;
+    int64_t reluMode = 0;
+
+    GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
+    std::string nzVar = "true";
+    std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
+    std::string storeConfig = PrintParams({"<", ">"}, storeConfigList, ", ");
+    npu::tile_fwk::Element scaleValue = npu::tile_fwk::Element(DataType::DT_UINT64, 0);
+    GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
+    std::vector<std::string> tileOpParamList = {
+        dstTensor, srcTensor, src1Tensor, coord, std::to_string(scaleValue.GetUnsignedData())};
+
+    std::ostringstream oss;
+    oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
+    oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
+    oss << ";\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::GenMemL0CToL1() const {
+    if(isSupportLayout){
+        return PrintL0CToL1TileTensor();
+    }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
     std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
 
@@ -401,6 +437,42 @@ std::string CodeGenOpCloudNPU::GenMemL0CToL1() const {
     std::string tileOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName << "<" << templateParam << ">" << "(" << tileOpCallParam << ");\n";
     return os.str();
+}
+
+std::string CodeGenOpCloudNPU::GenUBToL1TileTensor() const {
+    if (!isSupportLayout) {
+        return "";
+    }
+    std::vector<int64_t> dstOffset = this->offset[ID0];
+    std::string coordCp = PrintParams({"(", ")"}, dstOffset, ", ");
+    // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
+    int dim = static_cast<int>(rawShape[ID0].size());
+    std::string coord = "Coord" + std::to_string(dim) + DIM + coordCp;
+    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string srcTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord};
+
+    std::ostringstream oss;
+    oss << tileOpName;
+    oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
+    oss << ";\n";
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenUBToUBND2NZTileTensor() const {
+    if (!isSupportLayout) {
+        return "";
+    }
+
+    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string srcTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor};
+
+    std::ostringstream oss;
+    oss << tileOpName;
+    oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
+    oss << ";\n";
+    return oss.str();
 }
 
 std::string CodeGenOpCloudNPU::PrintIndexOutCast(const PrintIndexOutCastParam &param) const {
@@ -637,6 +709,12 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::string srcTensor = ToUnderlying(MISOIdx::SRC0_IDX) == static_cast<int>(param.gmIdx) ?
                                 sm->QueryTileTensorByBufVarName(GenGmParamVar(param.gmIdx)) :
                                 sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    bool vquantFlag = false;
+    GetAttr(OpAttributeKey::quantFlag, vquantFlag);
+    std::string src1Tensor = srcTensor;
+    if (vquantFlag) {
+        src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
+    }
     int64_t nzValue = 0;
     int64_t isAcc = 0;
     int64_t reluMode = 0;
@@ -646,7 +724,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::string nzVar = nzValue ? "false" : "true";
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
     std::string storeConfig = PrintParams({"<", ">"}, storeConfigList, ", ");
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord};
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord};
 
     std::ostringstream oss;
     oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";

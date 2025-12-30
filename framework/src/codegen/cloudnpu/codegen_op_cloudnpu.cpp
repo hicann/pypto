@@ -27,41 +27,44 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
     : CodeGenOp(symbolManager, funcType, locToOffset, isUnderDynamicFunc),
       mteFixPipeOps_({
           // UB <-> GM
-          {         Opcode::OP_UB_COPY_IN,          [this]() { return GenUBCopyIn(); }},
-          {        Opcode::OP_UB_COPY_OUT,         [this]() { return GenUBCopyOut(); }},
-          {    Opcode::OP_RESHAPE_COPY_IN,     [this]() { return GenReshapeCopyIn(); }},
-          {   Opcode::OP_RESHAPE_COPY_OUT,    [this]() { return GenReshapeCopyOut(); }},
-          {Opcode::OP_L1_TO_FIX_QUANT_PRE,         [this]() { return GenMemL1ToFB(); }},
-          {       Opcode::OP_GATHER_IN_UB,        [this]() { return GenGatherInUB(); }},
+          {         Opcode::OP_UB_COPY_IN,              [this]() { return GenUBCopyIn(); }},
+          {        Opcode::OP_UB_COPY_OUT,             [this]() { return GenUBCopyOut(); }},
+          {    Opcode::OP_RESHAPE_COPY_IN,         [this]() { return GenReshapeCopyIn(); }},
+          {   Opcode::OP_RESHAPE_COPY_OUT,        [this]() { return GenReshapeCopyOut(); }},
+          {Opcode::OP_L1_TO_FIX_QUANT_PRE,             [this]() { return GenMemL1ToFB(); }},
+          {       Opcode::OP_GATHER_IN_UB,            [this]() { return GenGatherInUB(); }},
 
           // L1 <-> GM/BT/L1
-          {         Opcode::OP_L1_COPY_IN,       [this]() { return GenMemL1CopyIn(); }},
-          {        Opcode::OP_L1_COPY_OUT,      [this]() { return GenMemL1CopyOut(); }},
-          {       Opcode::OP_GATHER_IN_L1,        [this]() { return GenGatherInL1(); }},
+          {         Opcode::OP_L1_COPY_IN,           [this]() { return GenMemL1CopyIn(); }},
+          {        Opcode::OP_L1_COPY_OUT,          [this]() { return GenMemL1CopyOut(); }},
+          {       Opcode::OP_GATHER_IN_L1,            [this]() { return GenGatherInL1(); }},
 
           // L0C <-> GM
-          {       Opcode::OP_L0C_COPY_OUT,     [this]() { return GenMemL0CCopyOut(); }},
+          {       Opcode::OP_L0C_COPY_OUT,         [this]() { return GenMemL0CCopyOut(); }},
 
-          {          Opcode::OP_L0C_TO_L1,        [this]() { return GenMemL0CToL1(); }},
+          {          Opcode::OP_L0C_TO_L1,            [this]() { return GenMemL0CToL1(); }},
 
           // L1 <-> L0
-          {          Opcode::OP_L1_TO_L0A,         [this]() { return GenMemL1ToL0(); }},
-          {          Opcode::OP_L1_TO_L0B,         [this]() { return GenMemL1ToL0(); }},
-          {        Opcode::OP_L1_TO_L0_BT,         [this]() { return GenMemL1ToL0(); }},
-          {        Opcode::OP_L1_TO_L0_AT,         [this]() { return GenMemL1ToL0(); }},
-          {           Opcode::OP_L1_TO_BT,         [this]() { return GenMemL1ToBt(); }},
+          {          Opcode::OP_L1_TO_L0A,             [this]() { return GenMemL1ToL0(); }},
+          {          Opcode::OP_L1_TO_L0B,             [this]() { return GenMemL1ToL0(); }},
+          {        Opcode::OP_L1_TO_L0_BT,             [this]() { return GenMemL1ToL0(); }},
+          {        Opcode::OP_L1_TO_L0_AT,             [this]() { return GenMemL1ToL0(); }},
+          {           Opcode::OP_L1_TO_BT,             [this]() { return GenMemL1ToBt(); }},
 
           // load op
-          {               Opcode::OP_LOAD,            [this]() { return GenLoadOp(); }},
+          {               Opcode::OP_LOAD,                [this]() { return GenLoadOp(); }},
 
           // transpose with gm
-          {  Opcode::OP_TRANSPOSE_MOVEOUT, [this]() { return GenTransposeDataMove(); }},
-          {   Opcode::OP_TRANSPOSE_MOVEIN, [this]() { return GenTransposeDataMove(); }},
+          {  Opcode::OP_TRANSPOSE_MOVEOUT,     [this]() { return GenTransposeDataMove(); }},
+          {   Opcode::OP_TRANSPOSE_MOVEIN,     [this]() { return GenTransposeDataMove(); }},
 
           // index outcast
-          {      Opcode::OP_INDEX_OUTCAST,    [this]() { return GenIndexOutCastOp(); }},
+          {      Opcode::OP_INDEX_OUTCAST,        [this]() { return GenIndexOutCastOp(); }},
           // lOC -> UB
-          {        Opcode::OP_L0C_COPY_UB, [this]() { return GenL0CToUBTileTensor(); }},
+          {        Opcode::OP_L0C_COPY_UB,     [this]() { return GenL0CToUBTileTensor(); }},
+
+          {      Opcode::OP_UB_COPY_L1,      [this]() { return GenUBToL1TileTensor(); }},
+          {      Opcode::OP_UB_COPY_ND2NZ, [this]() { return GenUBToUBND2NZTileTensor(); }},
 }),
       unaryOps_({
           // cast op
@@ -554,7 +557,7 @@ std::string CodeGenOpCloudNPU::GenCVSyncSetOp() const {
 }
 
 std::string CodeGenOpCloudNPU::GenCVSyncWaitOp() const {
-    auto pipeId = GetPipeId(syncQueue.pipeId_);
+    auto pipeId = GetPipeId(syncQueue.trigPipeId_);
     std::ostringstream oss;
     oss << "wait_intra_block(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ");\n";
     return oss.str();

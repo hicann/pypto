@@ -191,6 +191,7 @@ enum class Opcode {
     OP_L1_TO_L1,
     OP_COPY_UB_TO_UB,
     OP_L0C_TO_L1,
+    OP_UB_COPY_ND2NZ,
 
     // Scala
     OP_SYNC_SRC,

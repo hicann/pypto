@@ -59,6 +59,8 @@ public:
 
     std::string GenUBCopyIn() const;
     std::string GenUBCopyOut() const;
+    std::string GenUBToL1TileTensor() const;
+    std::string GenUBToUBND2NZTileTensor() const;
     std::string GenReshapeCopyIn() const;
     std::string GenReshapeCopyOut() const;
 
@@ -335,6 +337,7 @@ private:
     std::string PrintMemL1ToL0TileTensor() const;
     std::string PrintMatmulTileTensor(bool isAcc) const;
     std::string PrintTmove() const;
+    std::string PrintL0CToL1TileTensor() const;
 
     std::string PrintScatterElementSOpStatic(const PrintScatterElemParam &param) const;
     std::string PrintScatterElementSOpDynamicUnaligned(const PrintScatterElemParam &param) const;

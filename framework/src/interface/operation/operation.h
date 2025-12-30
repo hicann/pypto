@@ -84,6 +84,7 @@ public:
     static const std::string distOpAttr;
     static const std::string subBlockIdx;
     static const std::string brcbIdx;
+    static const std::string quantFlag;
 };
 
 
