@@ -40,7 +40,7 @@ void TestShmemWaitUntil(const uint32_t tileOpCount) {
     }
     constexpr size_t codeSize = 12;
     auto data = std::make_unique<int32_t[]>(codeSize);
-    int32_t initData[codeSize] = {153, 2, 2, 44, 4, 2, 18, 4, 0, 2, 0, 1};
+    int32_t initData[codeSize] = {153, 2, 2, 44, 4, 2, 18, 4, 0, 2, 1, 0};
     std::copy(initData, initData + codeSize, data.get());
     npu::tile_fwk::dynamic::DevRelocVector<int32_t> aicpuCode(codeSize, data.get());
 

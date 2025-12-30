@@ -319,14 +319,9 @@ OpcodeManager::OpcodeManager() {
     registerInfo(Opcode::OP_FFN_BATCHING, OpCoreType::ANY, "FFN_BATCHING", {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB}, {"TileOp::Distributed::FFNBatching", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED, {OpAttributeKey::requiresBoundaryCopy});
     registerInfo(Opcode::OP_FFN_COMBINEINFO, OpCoreType::ANY, "FFN_COMBINEINFO", {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB}, {"TileOp::Distributed::FFNCombineInfo", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED, {OpAttributeKey::requiresBoundaryCopy});
     registerInfo(Opcode::OP_FFN_VALIDCNT, OpCoreType::ANY, "FFN_VALIDCNT", {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB}, {"TileOp::Distributed::FFNValidCnt", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED, {OpAttributeKey::requiresBoundaryCopy});
-    /*
-     * 1. TileOp 的说明：清零本卡的 Signal 区
-     * 2. buffer 的使用说明：根据需要初始化一个一维的 LogicalTensor，类型为 int32_t、大小为 Signal 区的 Signal 个数，256B 对齐，因为底层使用 vector_dup，vector_dup 每次处理的数据要求 256B 对齐
-     */
-    registerInfo(Opcode::OP_SHMEM_CLEAR_SIGNAL, OpCoreType::AIV, "SHMEM_CLEAR_SIGNAL",
-        {MemoryType::MEM_DEVICE_DDR /* shmemSignalRaw */, MemoryType::MEM_DEVICE_DDR /* in */},
-        {MemoryType::MEM_DEVICE_DDR /* dummy */, MemoryType::MEM_UB /* buffer */},
-        {"TileOp::Distributed::ShmemClearSignal", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED);
+    registerInfo(Opcode::OP_SHMEM_SET, OpCoreType::AIV, "SHMEM_SET",
+        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB},
+        {"TileOp::Distributed::ShmemSet", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::DISTRIBUTED);
     /*
      * 1. TileOp 的说明：把非 SHMEM 的数据传输到 SHMEM
      * 2. 支持的属性：

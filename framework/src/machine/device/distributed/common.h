@@ -28,6 +28,7 @@ struct TensorInfo {
     uint32_t dim;
     uint64_t rawIndex;
     int32_t expectedSum;
+    bool resetSignal;
     std::vector<uint32_t> offset;
     std::vector<uint32_t> shape;
     std::vector<uint32_t> rawShape;

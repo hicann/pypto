@@ -160,7 +160,8 @@ void TiledShmemSignal(Function& function, const TileShape& tileShape,
             (void)colShape;
 
             auto dummyTile = dummy->View(function, {1, 1}, {tileIndex, 0});
-            auto shmSignalTile = shmSignal->View(function, {1, 1, 1, tileLen}, {0, 0, tileIndex, 0});
+            auto shmSignalTile = shmSignal->View(function, {shmSignal->shape[0], shmSignal->shape[1], 1, tileLen},
+                {shmSignal->offset[0], shmSignal->offset[1], tileIndex, 0});
             auto dummyOutTile = dummyOut->View(function, {1, 1}, {tileIndex, 0});
             auto ubTensor = std::make_shared<LogicalTensor>(function, shmSignal->Datatype(), Shape{tileLen});
 
@@ -252,28 +253,27 @@ void TiledShmemGetGM2UB(Function& function, const TileShape& tileShape,
     tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
 }
 
-void TiledShmemClearSignal(Function& function, const TileShape& tileShape,
+void TiledShmemSet(Function& function, const TileShape& tileShape,
     const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
     (void)op;
+    (void)tileShape;
 
-    ASSERT(iOperand.size() == 2UL) << "TiledShmemClearSignal iOperand size is not equal to 2";
-    ASSERT(oOperand.size() == 1UL) << "TiledShmemClearSignal oOperand size is not equal to 1";
-    auto in = iOperand[0];
-    auto signal = iOperand[1];
-    auto dummy = oOperand[0];
+    ASSERT(iOperand.size() == 2UL) << "TiledShmemSet iOperand size is not equal to 2";
+    ASSERT(oOperand.size() == 1UL) << "TiledShmemSet oOperand size is not equal to 1";
+    auto predToken = iOperand[0];
+    auto shmemTensor = iOperand[1];
+    auto out = oOperand[0];
 
-    ASSERT(signal->shape.size() == 4UL);
-    int64_t tileLen = signal->shape[3];
-
-    CreateTileOp(tileShape,
-        [&](int32_t tileIndex, int32_t rowOffset, int32_t colOffset, int32_t rowShape, int32_t colShape) {
-            auto signalTile = signal->View(function, {1, 1, 1, tileLen}, {0, 0, tileIndex, 0});
-            auto inTile = in->View(function, {rowShape, colShape}, {rowOffset, colOffset});
-            auto ubTensor = std::make_shared<LogicalTensor>(function, signal->Datatype(), Shape{tileLen});
-            function.AddOperation(Opcode::OP_SHMEM_CLEAR_SIGNAL, {signalTile, inTile}, {dummy, ubTensor});
-        });
+    ASSERT(UB_BUFFER_BYTE_SIZE % REPEAT_BYTE == 0) << "UB_BUFFER_BYTE_SIZE must be a multiple of 256, but got "
+        << UB_BUFFER_BYTE_SIZE;
+    Shape bufferShape{static_cast<int64_t>(UB_BUFFER_BYTE_SIZE / BytesOf(shmemTensor->Datatype()))};
+    auto buffer = std::make_shared<LogicalTensor>(function, shmemTensor->Datatype(), bufferShape);
+    auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_SET, {predToken, shmemTensor}, {out, buffer});
+    DistOpAttr distOpAttr;
+    distOpAttr.setBufferShape = bufferShape;
+    tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
 }
 
 Shape GetReduceUbShape(int64_t rowSize, int64_t colSize, DataType dType, bool fp32Mode)
@@ -349,8 +349,7 @@ void TiledShmemMoeCombineSend(Function& function, const TileShape& tileShape,
     int64_t paddedColShape = AlignUp(dataByteSize * hiddenSize, COPY_BLOCK_BYTE_SIZE) / dataByteSize;
     Shape combineInfoShape = Shape{
         static_cast<int64_t>(COPY_BLOCK_BYTE_SIZE) / static_cast<int64_t>(BytesOf(DT_INT32))};
-    Shape signalShape = Shape{
-        static_cast<int64_t>(VECTOR_INSTRUCTION_BYTE_SIZE) / static_cast<int64_t>(BytesOf(DT_INT32))};
+    Shape signalShape = Shape{static_cast<int64_t>(REPEAT_BYTE) / static_cast<int64_t>(BytesOf(DT_INT32))};
 
     DistOpAttr distOpAttr;
     op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
@@ -392,7 +391,7 @@ void TiledShmemMoeCombineReceive(Function& function, const TileShape& tileShape,
     int64_t dataByteSize = BytesOf(out->Datatype());
     int64_t paddedColShape = AlignUp(dataByteSize * hiddenSize, COPY_BLOCK_BYTE_SIZE) / dataByteSize;
     int64_t floatByteSize = BytesOf(DataType::DT_FP32);
-    int64_t floatEleNum = AlignUp(floatByteSize * paddedColShape, VECTOR_INSTRUCTION_BYTE_SIZE) / floatByteSize;
+    int64_t floatEleNum = AlignUp(floatByteSize * paddedColShape, REPEAT_BYTE) / floatByteSize;
 
     DistOpAttr distOpAttr;
     distOpAttr.topK = topK;

@@ -1579,8 +1579,8 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
             npu::tile_fwk::Distributed::TiledShmemBindTensor(function, tileShape, iOperand, oOperand, op);
             break;
         }
-        case Opcode::OP_SHMEM_CLEAR_SIGNAL: {
-            npu::tile_fwk::Distributed::TiledShmemClearSignal(function, tileShape, iOperand, oOperand, op);
+        case Opcode::OP_SHMEM_SET: {
+            npu::tile_fwk::Distributed::TiledShmemSet(function, tileShape, iOperand, oOperand, op);
             break;
         }
         case Opcode::OP_SHMEM_MOE_COMBINE_SEND: {

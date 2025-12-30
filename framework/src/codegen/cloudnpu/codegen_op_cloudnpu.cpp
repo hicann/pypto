@@ -205,7 +205,7 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           {Opcode::OP_SEND_TO_SHARED_EXPERT, [this]() { return GenDistOp(); }},
           {Opcode::OP_DISPATCH_SET_FLAG, [this]() { return GenDistOp(); }},
           {Opcode::OP_COPY_TO_LOCAL_EXPERT, [this]() { return GenDistOp(); }},
-          {Opcode::OP_SHMEM_CLEAR_SIGNAL, [this]() { return GenDistOp(); }},
+          {Opcode::OP_SHMEM_SET, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_PUT, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_PUT_UB2GM, [this]() { return GenDistOp(); }},
           {Opcode::OP_SHMEM_SIGNAL, [this]() { return GenDistOp(); }},

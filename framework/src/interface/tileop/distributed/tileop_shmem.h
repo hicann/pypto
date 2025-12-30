@@ -217,40 +217,29 @@ TILEOP void CopyGmToUb(__ubuf__ TargetType* target, __gm__ SourceType* source)
     }
 }
 
-template<typename T>
-TILEOP void ShmemClearSignal(__gm__ int32_t* shmemSignalRawBaseAddr, __ubuf__ int32_t* buffer, __gm__ int32_t* shmemSignalBaseAddr, __gm__ T* in,
-    uint32_t shmemSignalOffset0, uint32_t shmemSignalOffset1, uint32_t shmemSignalOffset2, uint32_t shmemSignalOffset3,
-    uint32_t shmemSignalRawShape0, uint32_t shmemSignalRawShape1, uint32_t shmemSignalRawShape2, uint32_t shmemSignalRawShape3, __gm__ int64_t *hcclContext)
+template<typename T, uint32_t shmemTensorRawShape1, uint32_t shmemTensorRawShape2, uint32_t shmemTensorRawShape3,
+    uint32_t bufferEleNum>
+TILEOP void ShmemSet(__ubuf__ T* buffer, __gm__ T* shmemTensorBaseAddr, uint32_t shmemTensorOffset0,
+    uint32_t shmemTensorOffset1, uint32_t shmemTensorOffset2, uint32_t shmemTensorOffset3, __gm__ int64_t *hcclContext)
 {
-    (void)shmemSignalRawBaseAddr;
-    (void)hcclContext;
-    (void)in;
+    constexpr uint8_t repeat = sizeof(T) * bufferEleNum / VECTOR_INSTRUCTION_BYTE_SIZE;
+    vector_dup(buffer, static_cast<T>(0), repeat, 1, 0, 8, 0);
 
-    uint32_t byteSize = sizeof(int32_t) * shmemSignalRawShape3 * shmemSignalRawShape2 * shmemSignalRawShape1;
+    set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+    wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 
-    constexpr int32_t src = 0;
-    uint8_t repeat = byteSize / VECTOR_INSTRUCTION_BYTE_SIZE;
-    constexpr uint16_t dstBlockStride = 1;
-    constexpr uint16_t srcBlockStride = 0; // src 是个 scalar，srcBlockStride 不起作用，设置为 0 即可
-    constexpr uint8_t dstRepeatStride = 8; // 每个 block 32B，每次拷贝 256B，dst 地址连续的话设置为 8
-    constexpr uint8_t srcRepeatStride = 0; // src 是个 scalar，srcRepeatStride 不起作用，设置为 0 即可
-    vector_dup(buffer, src, repeat, dstBlockStride, srcBlockStride, dstRepeatStride, srcRepeatStride);
-
-    set_flag(PIPE_V, PIPE_S, EVENT_ID0);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID0);
-
-    __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t>(hcclContext, shmemSignalBaseAddr, shmemSignalOffset0) + 
-            shmemSignalOffset1 * shmemSignalRawShape2 * shmemSignalRawShape3 + shmemSignalOffset2 * shmemSignalRawShape3 + shmemSignalOffset3;
-    constexpr uint16_t sid = 0;
-    constexpr uint16_t nBurst = 1;
-    uint16_t lenBurst = byteSize / COPY_BLOCK_BYTE_SIZE;
-    constexpr uint16_t srcStride = 0;
-    constexpr uint16_t dstStride = 0;
-
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-
-    copy_ubuf_to_gm(shmemSignalAddr, buffer, sid, nBurst, lenBurst, dstStride, srcStride);
+    __gm__ T* shmemTensorAddr = MapVirtualAddr<T>(hcclContext, shmemTensorBaseAddr, shmemTensorOffset0) + 
+        shmemTensorRawShape3 * shmemTensorRawShape2 * shmemTensorOffset1 + shmemTensorRawShape3 * shmemTensorOffset2 +
+        shmemTensorOffset3;
+    constexpr uint32_t shmemTensorEleNum = shmemTensorRawShape3 * shmemTensorRawShape2 * shmemTensorRawShape1;
+    constexpr uint32_t fullChunkCount = shmemTensorEleNum / bufferEleNum;
+    for (int32_t i = 0; i < fullChunkCount; i++) {
+        UBCopyOut<T, 1, bufferEleNum, bufferEleNum, bufferEleNum>(shmemTensorAddr + bufferEleNum * i, buffer);
+    }
+    constexpr uint32_t tailEleNum = shmemTensorEleNum % bufferEleNum;
+    if constexpr (tailEleNum != 0) {
+        UBCopyOut<T, 1, tailEleNum, tailEleNum, tailEleNum>(shmemTensorAddr + bufferEleNum * fullChunkCount, buffer);
+    }
 }
 
 template<typename NonShmemType, typename ShmemType, uint32_t tileRowShape, uint32_t tileColShape, uint32_t bufferRowShape,
@@ -299,29 +288,32 @@ TILEOP void ShmemPutUb2Gm(__ubuf__ UBType* UBDataBaseAddr, __gm__ ShmemType* shm
     CopyUbToGm<ShmemType, UBType, tileRowShape, tileColShape, bufferRowShape, bufferColShape, srcStride, dstStride, atomicType>(shmemDataAddr, UBDataAddr);
 }
 
-template<int64_t value, AtomicType atomicType>
-TILEOP void ShmemSignal(__ubuf__ int32_t* buffer, __gm__ int32_t* shmemSignalBaseAddr,
-    uint32_t shmemSignalOffset0, uint32_t shmemSignalOffset1, uint32_t shmemSignalOffset2, uint32_t shmemSignalOffset3,
-    uint32_t shmemSignalRawShape0, uint32_t shmemSignalRawShape1, uint32_t shmemSignalRawShape2, uint32_t shmemSignalRawShape3, __gm__ int64_t *hcclContext)
+template<int64_t value, AtomicType atomicType, uint32_t rankShape>
+TILEOP void ShmemSignal(__ubuf__ int32_t* buffer, __gm__ int32_t* shmemSignalBaseAddr, uint32_t shmemSignalOffset0,
+    uint32_t shmemSignalOffset1, uint32_t shmemSignalOffset2, uint32_t shmemSignalOffset3,
+    uint32_t shmemSignalRawShape0, uint32_t shmemSignalRawShape1, uint32_t shmemSignalRawShape2,
+    uint32_t shmemSignalRawShape3, __gm__ int64_t *hcclContext)
 {
-    (void)shmemSignalRawShape0;
-    __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t>(hcclContext, shmemSignalBaseAddr, shmemSignalOffset0) +
-     shmemSignalOffset1 * shmemSignalRawShape2 * shmemSignalRawShape3 + shmemSignalOffset2 * shmemSignalRawShape3 + shmemSignalOffset3;
-    const uint16_t sid = 0;
-    const uint16_t nBurst = 1;
-    const uint16_t lenBurst = 1;
-    const uint16_t srcStride = 0;
-    const uint16_t dstStride = 0;
-    buffer[0] = value;
-    if constexpr (atomicType == AtomicType::ADD) {
-        set_atomic_s32();
-        set_atomic_add();
-    }
-    set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-    wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
-    copy_ubuf_to_gm(shmemSignalAddr, buffer, sid, nBurst, lenBurst, dstStride, srcStride);
-    if constexpr (atomicType == AtomicType::ADD) {
-        set_atomic_none();
+    for (uint32_t rank = shmemSignalOffset0; rank < shmemSignalOffset0 + rankShape; rank++) {
+        __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t>(hcclContext, shmemSignalBaseAddr, rank) +
+            shmemSignalRawShape3 * shmemSignalRawShape2 * shmemSignalOffset1 + shmemSignalRawShape3 *
+            shmemSignalOffset2 + shmemSignalOffset3;
+        const uint16_t sid = 0;
+        const uint16_t nBurst = 1;
+        const uint16_t lenBurst = 1;
+        const uint16_t srcStride = 0;
+        const uint16_t dstStride = 0;
+        buffer[0] = value;
+        if constexpr (atomicType == AtomicType::ADD) {
+            set_atomic_s32();
+            set_atomic_add();
+        }
+        set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+        wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
+        copy_ubuf_to_gm(shmemSignalAddr, buffer, sid, nBurst, lenBurst, dstStride, srcStride);
+        if constexpr (atomicType == AtomicType::ADD) {
+            set_atomic_none();
+        }
     }
 }
 

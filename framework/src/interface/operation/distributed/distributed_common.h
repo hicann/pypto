@@ -44,7 +44,6 @@ constexpr int32_t DIST_INDEX_ONE = 1;
 constexpr int32_t DIST_INDEX_TWO = 2;
 constexpr int32_t DIST_INDEX_THREE = 3;
 constexpr uint16_t COPY_BLOCK_BYTE_SIZE = 32;
-constexpr uint16_t VECTOR_INSTRUCTION_BYTE_SIZE = 256;
 constexpr uint16_t SAME_ADDR_BYTE_SIZE = 512;
 constexpr int32_t ROUTED_EXPET_NUM = 160;
 constexpr int32_t AIV_MAX_NUM = 8;
@@ -60,6 +59,11 @@ enum class TileIndex : size_t {
 enum class AtomicType {
     SET,
     ADD
+};
+
+enum class AllReduceType {
+    ONE_SHOT,
+    TWO_SHOT,
 };
 
 inline std::string AtomicTypeToString(AtomicType type)
@@ -82,6 +86,7 @@ public:
     bool fp32Mode;
     int64_t topK;
     Shape copyBufferShape;
+    Shape setBufferShape;
     std::string extraTemplateParam{};
     int64_t paddedColShape;
 };

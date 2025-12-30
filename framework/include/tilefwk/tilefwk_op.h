@@ -404,15 +404,20 @@ struct MoeConfig {
     int32_t expertNumPerRank{0};
     int32_t rankNum{0};
 };
-void MoeDispatch(const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tensor& expandX, Tensor& validCnt, Tensor& combineInfo, const char *group, const MoeConfig& moeConfig);
-Tensor MoeCombine(const Tensor &in, const Tensor &scale, const Tensor &combineInfo, const char *group);
-// SHMEM
+
+void MoeDispatch(const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tensor& expandX, Tensor& validCnt,
+    Tensor& combineInfo, const char *group, const MoeConfig& moeConfig);
 void ShmemAllGather(const Tensor &in, const Tensor &dummy, const char *group, Tensor &out);
-Tensor Barrier(const Tensor &in, const char *group);
+void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, Tensor& out);
+Tensor ShmemSet(const Tensor& predToken, const Tensor& shmemTensor);
 void ShmemReduceScatter(const Tensor& in, const char* group, DistReduceType reduceType, Tensor& out);
 void OneShotShmemAllReduce(const Tensor& in, const char* group, Tensor& out);
+void OneShotShmemAllReduce(const Tensor& predToken, const Tensor& in, Tensor& shmemData, Tensor& shmemSignal,
+    const char* group, Tensor& out);
 void TwoShotShmemAllReduce(const Tensor& in, const char* group, Tensor& out);
 void ShmemMoeCombine(const Tensor& in, const Tensor& combineInfo, const Tensor& scale, const char* group,
     int32_t rankSize, int32_t totalExpertNum, Tensor& out);
+void CreateShmemTensor(Tensor& shmemTensor, int32_t rankSize, int32_t hcclGroupIndex, DataType dataType,
+    const Shape& shape, uint64_t memType = 0);
 } // namespace Distributed
 } // namespace npu::tile_fwk

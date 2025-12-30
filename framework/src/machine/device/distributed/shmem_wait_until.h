@@ -25,7 +25,8 @@
 namespace npu::tile_fwk::Distributed {
 class SignalTileOp {
 public:
-    void Init(uint64_t taskId, int32_t* addr, uint32_t endOffset, uint32_t stride, int32_t expectedSum);
+    void Init(uint64_t taskId, int32_t* addr, uint32_t endOffset, uint32_t stride, int32_t expectedSum,
+        bool resetSignal);
     bool PollCompleted(std::vector<uint64_t> &completed);
 
 private:
@@ -34,6 +35,7 @@ private:
     uint32_t endOffset_;
     uint32_t stride_;
     int32_t expectedSum_;
+    bool resetSignal_;
 };
 
 class ShmemWaitUntil {

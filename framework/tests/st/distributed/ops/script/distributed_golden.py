@@ -170,6 +170,16 @@ def reduce_scatter_and_save(
     return outputs
 
 
+def all_reduce_and_save(
+    inputs: List[torch.Tensor], rank_size: int, save_dir: pathlib.Path, filename_prefix: str,
+) -> torch.Tensor:
+    stacked_output = torch.stack(inputs, dim=0)
+    reduced_output = torch.sum(stacked_output, dim=0).to(inputs[0].dtype)
+    outputs = [reduced_output for _ in range(rank_size)]
+    save_tensor_list(outputs, save_dir, filename_prefix)
+    return outputs
+
+
 def generate_all_gather_golden(case_name: str, save_dir: pathlib.Path):
     dim = 2
     case = parse_base_case(case_name, dim)
@@ -220,10 +230,7 @@ def generate_all_reduce_golden(case_name: str, save_dir: pathlib.Path):
     params = (row, col, get_dtype_num(dtype))
     save_params(params, save_dir)
     inputs = generate_random_tensor_list_and_save((row, col), dtype, rank_size, save_dir, 'input')
-    stacked_output = torch.stack(inputs, dim=0)
-    reduced_output = torch.sum(stacked_output, dim=0).to(inputs[0].dtype)
-    outputs = [reduced_output for rank in range(rank_size)]
-    save_tensor_list(outputs, save_dir, 'output')
+    all_reduce_and_save(inputs, rank_size, save_dir, 'output')
 
 
 def parse_moe_case(case_name: str) -> MoeCase:
@@ -581,6 +588,24 @@ def generate_allgather_attn_post_reducescatter_golden(case_name: str, save_dir: 
     gen_allgather_attnpost_reducescatter_case(case, save_dir)
 
 
+def generate_allreduce_add_allreduce_golden(case_name: str, save_dir: pathlib.Path) -> None:
+    dim = 2
+    case = parse_base_case(case_name, dim)
+    row, col = case.shape
+    rank_size, dtype = case.rank_size, case.dtype
+
+    validate_rank_size(rank_size)
+
+    params = (row, col, get_dtype_num(dtype))
+    save_params(params, save_dir)
+    
+    inputs = generate_random_tensor_list_and_save((row, col), dtype, rank_size, save_dir, 'input')
+    all_reduce_outs = all_reduce_and_save(inputs, rank_size, save_dir, 'all_reduce_out')
+    add_outs = [all_reduce_outs[0] + all_reduce_outs[0] for _ in range(rank_size)]
+    save_tensor_list(add_outs, save_dir, 'add_out')
+    all_reduce_and_save(add_outs, rank_size, save_dir, 'out')
+
+
 OPERATOR_DISPATCHERS = [
     ('all_gather', generate_all_gather_golden),
     ('reduce_scatter', generate_reduce_scatter_golden),
@@ -589,6 +614,7 @@ OPERATOR_DISPATCHERS = [
     ('allgather_matmul_reducescatter', generate_allgather_matmul_reducescatter_golden),
     ('allgather_attn_post_reducescatter', generate_allgather_attn_post_reducescatter_golden),
     ('all_reduce', generate_all_reduce_golden),
+    ('allreduce_add_allreduce', generate_allreduce_add_allreduce_golden),
 ]
 
 
@@ -597,7 +623,6 @@ OPERATOR_DISPATCHERS = [
         'DistributedTest.shmem_all_gather_int32_128_256_4',
         'DistributedTest.shmem_reduce_scatter_int32_128_256_4',
         'DistributedTest.shmem_allgather_attn_post_reducescatter_bfloat16_64_1_32_256_128_128_4',
-        'DistributedTest.shmem_allgather_matmul_reducescatter_int32_128_256_4',
         'DistributedTest.shmem_reduce_scatter_float16_128_256_4',
         'DistributedTest.shmem_reduce_scatter_bfloat16_32_32_4',
         'DistributedTest.shmem_all_reduce_int32_64_256_4',
@@ -608,6 +633,7 @@ OPERATOR_DISPATCHERS = [
         'DistributedTest.shmem_moe_combine_bfloat16_256_5120_0_160_8_8',
         'DistributedTest.shmem_moe_dispatch_bfloat16_8_5120_0_160_8_4',
         'DistributedTest.shmem_moe_dispatch_bfloat16_8_5120_0_160_8_8',
+        'DistributedTest.shmem_allreduce_add_allreduce_bfloat16_256_102400_4',
     ]
 )
 def generate_golden_case(case_name: str, output: pathlib.Path) -> bool:
