@@ -211,7 +211,6 @@ void TestDeepSeekIndexerAttentionQuantUTest(DSIASimpleParams &params) {
 }
 
 void test_common_ut(DSIASimpleParams params) {
-    ConfigManager::Instance().SetCodeGenConfig(npu::tile_fwk::CODEGEN_EXPRESSION_FUSION, true);
     params.topk = 2048;
     params.cacheMode = "PA_BSND";
 

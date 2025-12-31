@@ -569,7 +569,6 @@ TEST_F(DynamicNSATest, nsa_b_16_s1_1_s2_8192_h_7168_fp16_quant) {
 template <bool ci = false, bool debug = false>
 void test_common(NSAV1SimpleParams params) {
     int paramsSize = 7;
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetPassConfig("PVC2_OOO", "SplitReshape", "DISABLE_PASS", true);
     std::vector<int> inputParams(paramsSize);
     readInput<int>(GetGoldenDir() + "/input_params.bin", inputParams); // 在golden中保存了变化的参数，便于调试

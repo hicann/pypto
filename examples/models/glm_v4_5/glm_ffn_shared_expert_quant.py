@@ -224,7 +224,6 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
 
 @pypto.jit(
     host_options={"only_codegen": True},
-    codegen_options={"codegen_expression_fusion": True},
     runtime_options={"device_sched_mode": 1,
                      "cfgcache_device_task_num": 100,
                      "cfgcache_root_task_num": 1000,

@@ -79,8 +79,8 @@ struct CoaInfo {
                 return FAILED;
             }
         } else if (coaExpr.find(MAYBE_CONST_POSTFIX) != std::string::npos) {
-            APASS_LOG_ERROR_F(Elements::Function, "This function has already been processed. %s only supportsd be turned on or off using %s, "
-                "don't register it in custom strategy.", MODULE_NAME, CODEGEN_EXPRESSION_FUSION);
+            APASS_LOG_ERROR_F(Elements::Function,
+                "This function has already been processed. %s, don't register it in custom strategy.", MODULE_NAME);
             return FAILED;
         } else {
             APASS_LOG_ERROR_F(Elements::Operation, "ParseCoaString input coaExpr %s is not recognized.", coaExpr.c_str());

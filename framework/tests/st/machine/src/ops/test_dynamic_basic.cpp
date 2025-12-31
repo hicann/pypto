@@ -270,7 +270,6 @@ TEST_F(DynamicBasicTest, HiddenLoopConditionMixedMulLoops) {
 
 TEST_F(DynamicBasicTest, TestDD) {
     SetInterpreterConfig();
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     int s = 32;
     int n = 8;
     Tensor t0(DT_FP32, {n * s, s}, "t0");  // [32*8, 32]
@@ -1034,7 +1033,6 @@ TEST_F(DynamicBasicTest, TestGetTensorData) {
 
 TEST_F(DynamicBasicTest, TestGetTensorDataCrossFunction) {
     SetInterpreterConfig();
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling);
     TileShape::Current().SetCubeTile({tiling, tiling}, {tiling, tiling}, {tiling, tiling});
@@ -1118,7 +1116,6 @@ TEST_F(DynamicBasicTest, TestGetTensorDataCrossFunction) {
 
 TEST_F(DynamicBasicTest, TestGetTensorDataUnalign) {
     SetInterpreterConfig();
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling);
     TileShape::Current().SetCubeTile({tiling, tiling}, {tiling, tiling}, {tiling, tiling});
@@ -1199,7 +1196,6 @@ TEST_F(DynamicBasicTest, TestGetTensorDataUnalign) {
 TEST_F(DynamicBasicTest, TestGetTensorDataExpr) {
     SetInterpreterConfig();
     int tiling = 32;
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, true);
     TileShape::Current().SetVecTile(tiling, tiling);
     TileShape::Current().SetCubeTile({tiling, tiling}, {tiling, tiling}, {tiling, tiling});
@@ -1355,7 +1351,6 @@ TEST_F(DynamicBasicTest, TestSetTensorData) {
 
 TEST_F(DynamicBasicTest, TestSetTensorDataExpr) {
     SetInterpreterConfig();
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
 
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling, tiling);
@@ -1438,7 +1433,6 @@ TEST_F(DynamicBasicTest, TestGetTensorDataAndDup) {
 
 TEST_F(DynamicBasicTest, TestGetAndSetTensorDataExpr) {
     SetInterpreterConfig();
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
 
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling, tiling);
@@ -1482,8 +1476,6 @@ TEST_F(DynamicBasicTest, TestGetAndSetTensorDataExpr) {
 }
 
 TEST_F(DynamicBasicTest, TestSelectAttention) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
-
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling, tiling);
 
@@ -1591,7 +1583,6 @@ TEST_F(DynamicBasicTest, TestSelectAttention) {
 
 TEST_F(DynamicBasicTest, TestGetTensorDataSymbolicValue) {
     config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, true);
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     int n = 4;
     int loopCount = 4;
     int NUM_2 = 2;

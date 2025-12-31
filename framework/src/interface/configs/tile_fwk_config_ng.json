@@ -28,7 +28,7 @@
         "only_codegen": false
     },
     "codegen": {
-        "codegen_expression_fusion": true
+        "support_dynamic_aligned": false
     },
     "verify": {
         "enable_pass_verify": false,

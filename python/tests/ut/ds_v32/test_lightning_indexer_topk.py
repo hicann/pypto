@@ -867,8 +867,6 @@ class LightningIndexerBuildConfig:
 
 
 def setup_lightning_indexer_topk_config():
-    pypto.set_codegen_options(codegen_expression_fusion=True)
-
     pypto.set_pass_options(mg_copyin_upper_bound=NUM_100 * NUM_1024 * NUM_1024,
                          pg_lower_bound=NUM_1024,
                          pg_upper_bound=NUM_1024 * NUM_1024,

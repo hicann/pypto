@@ -347,7 +347,6 @@ TEST_F(NSAUtest, nsa_b_16_fp16) {
 
 TEST_F(NSAUtest, nsa_b_16_fp16_debug) {
     NSAV1SimpleParams params = NSAV1SimpleParams::getDecodeParams();
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     std::vector<int> inputParams = {16, 1, 8192, 128, 1, 0, 0};
 
     params.b = inputParams[0]; // 16

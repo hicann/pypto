@@ -48,7 +48,6 @@
             "support_dynamic_aligned": false,
             "fixed_output_path": false,
             "force_overwrite": true,
-            "codegen_expression_fusion": true,
             "CODEGEN_SUPPORT_TILE_TENSOR": true,
             "CODEGEN_NEED_COMPILE": true
         },

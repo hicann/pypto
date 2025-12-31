@@ -246,7 +246,6 @@ void TestDecodeIndexerAttentionSTest(DSIASimpleParams &params) {
 template <typename T = npu::tile_fwk::float16>
 void test_common(DSIASimpleParams params) {
     int paramsSize = 7;
-    ConfigManager::Instance().SetCodeGenConfig(npu::tile_fwk::CODEGEN_EXPRESSION_FUSION, true);
     std::vector<int> inputParams(paramsSize);
     readInput<int>(GetGoldenDir() + "/input_params.bin", inputParams); // 在golden中保存了变化的参数，便于调试
     params.b = inputParams[0];                                         // 16

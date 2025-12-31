@@ -45,7 +45,6 @@ public:
 namespace {
 
 TEST_F(DynamicControlFlowCacheTest, KernelReuse) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetRuntimeOption<int64_t>(CFGCACHE_DEVICE_TASK_NUM, 100);
     config::SetRuntimeOption<int64_t>(CFGCACHE_ROOT_TASK_NUM, 100);
     config::SetRuntimeOption<int64_t>(CFGCACHE_LEAF_TASK_NUM, 10000);
@@ -103,7 +102,6 @@ TEST_F(DynamicControlFlowCacheTest, KernelReuse) {
 }
 
 TEST_F(DynamicControlFlowCacheTest, CheckShape) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetRuntimeOption<int64_t>(CFGCACHE_DEVICE_TASK_NUM, 100);
     config::SetRuntimeOption<int64_t>(CFGCACHE_ROOT_TASK_NUM, 100);
     config::SetRuntimeOption<int64_t>(CFGCACHE_LEAF_TASK_NUM, 10000);
@@ -209,7 +207,6 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape) {
 }
 
 TEST_F(DynamicControlFlowCacheTest, CheckLackMemory) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetRuntimeOption<int64_t>(CFGCACHE_DEVICE_TASK_NUM, 1);
     config::SetRuntimeOption<int64_t>(CFGCACHE_ROOT_TASK_NUM, 1);
     config::SetRuntimeOption<int64_t>(CFGCACHE_LEAF_TASK_NUM, 1);
@@ -267,7 +264,6 @@ TEST_F(DynamicControlFlowCacheTest, CheckLackMemory) {
 }
 
 TEST_F(DynamicControlFlowCacheTest, CheckGetTensorData) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetRuntimeOption<int64_t>(CFGCACHE_DEVICE_TASK_NUM, 10000);
     config::SetRuntimeOption<int64_t>(CFGCACHE_ROOT_TASK_NUM, 100);
     config::SetRuntimeOption<int64_t>(CFGCACHE_LEAF_TASK_NUM, 100);
@@ -308,7 +304,6 @@ static DeviceTensorData toTensorData(const std::shared_ptr<LogicalTensor> &t) {
 }
 
 TEST_F(DynamicControlFlowCacheTest, PartialCache) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     // cache at most 3 task
     config::SetRuntimeOption<int64_t>(CFGCACHE_DEVICE_TASK_NUM, 0x3);
     config::SetRuntimeOption<int64_t>(CFGCACHE_ROOT_TASK_NUM, 0x20);
@@ -392,7 +387,6 @@ TEST_F(DynamicControlFlowCacheTest, PartialCache) {
 }
 
 TEST_F(DynamicControlFlowCacheTest, PartialCacheChangeWorkspaceAddress) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 100 * 1024 * 1024);
     config::SetPassOption(SG_PG_LOWER_BOUND, 1024);
     config::SetPassOption(SG_PG_UPPER_BOUND, 1024);

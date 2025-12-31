@@ -43,7 +43,6 @@ public:
 namespace {
 
 TEST_F(DynamicResolveTest, TestResolve) {
-    config::SetCodeGenOption(CODEGEN_EXPRESSION_FUSION, true);
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 100 * 1024 * 1024);
     config::SetPassOption(SG_PG_LOWER_BOUND, 1024);
     config::SetPassOption(SG_PG_UPPER_BOUND, 1024);

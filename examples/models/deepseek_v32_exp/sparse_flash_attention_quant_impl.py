@@ -427,7 +427,6 @@ def sparse_flash_attention_quant_compute_flash(query_nope, query_rope, key_nope_
     "stitch_function_inner_memory": 128,
     "stitch_function_outcast_memory": 128
     },
-    codegen_options={"codegen_expression_fusion": True},
     host_options={"only_codegen": True}
 )
 def sparse_flash_attention_quant_d(query_nope, query_rope, key_nope_2d, key_rope_2d,
@@ -484,7 +483,6 @@ def sparse_flash_attention_quant_d(query_nope, query_rope, key_nope_2d, key_rope
     "stitch_function_inner_memory": 128,
     "stitch_function_outcast_memory": 128
     },
-    codegen_options={"codegen_expression_fusion": True},
     host_options={"only_codegen": True}
 )
 def sparse_flash_attention_quant_p(query_nope, query_rope, key_nope_2d, key_rope_2d,

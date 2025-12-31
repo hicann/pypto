@@ -196,7 +196,6 @@ void TestDecodeIndexerAttentionSTest(DSIASimpleParams &params) {
 
 TEST_F(DecodeIndexerAttentionUtest, utest_decode_indexer_attention) {
     int paramsSize = 7;
-    ConfigManager::Instance().SetCodeGenConfig(npu::tile_fwk::CODEGEN_EXPRESSION_FUSION, true);
     std::vector<int> inputParams(paramsSize);
     auto params = DSIASimpleParams::getDecodeParams();
     params.b = NUM_1;

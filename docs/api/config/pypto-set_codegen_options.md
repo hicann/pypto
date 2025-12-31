@@ -14,7 +14,7 @@
 ## 函数原型
 
 ```python
-set_codegen_options(*, support_dynamic_aligned: bool = None, codegen_expression_fusion: bool = None) -> None
+set_codegen_options(*, support_dynamic_aligned: bool = None) -> None
 ```
 
 ## 参数说明
@@ -23,7 +23,7 @@ set_codegen_options(*, support_dynamic_aligned: bool = None, codegen_expression_
 | 参数名                      | 输入/输出 | 说明                                                                 |
 |-----------------------------|-----------|----------------------------------------------------------------------|
 | support_dynamic_aligned     | 输入      | 含义：是否支持动态Shape。 <br> 说明： <br> 当值为True，算子生成的设备侧二进制可支持动态Shape对齐场景。 <br> 当值为False，算子生成的设备侧二进制仅支持处理动态Shape非对齐场景。 <br> 类型：bool <br> 取值范围：{True, False} <br> 默认值：False（当算子确认动态Shape，且Shape尾轴均为对齐时，可尝试打开确认是否有性能收益） <br> 影响Pass范围：无，仅影响CodeGen模块生成设备侧目标代码 |
-| codegen_expression_fusion   | 输入      | 含义：是否支持在设备侧执行动态表达式计算。 <br> 说明： <br> 当值为True，算子生成的设备侧CCE二进制可支持动态表达式计算 <br> 当值为False，算子生成的设备侧CCE二进制不支持动态表达式计算 <br> 类型：bool <br> 取值范围: {True, False} <br> 默认值：False <br> 影响Pass范围：无，仅影响Codegen模块生成设备侧CCE二进制代码 |
+
 
 ## 返回值说明
 
@@ -36,6 +36,6 @@ support\_dynamic\_aligned选项效果后续会通过Pass推导机制进行优化
 ## 调用示例
 
 ```python
-pypto.set_codegen_options(support_dynamic_aligned=True, codegen_expression_fusion=True)
+pypto.set_codegen_options(support_dynamic_aligned=True)
 ```
 

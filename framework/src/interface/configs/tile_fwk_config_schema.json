@@ -152,7 +152,7 @@
         "codegen": {
             "type": "object",
             "properties": {
-                "codegen_expression_fusion": {"type": "boolean"}
+                "support_dynamic_aligned": {"type": "boolean"}
             }
         },
         "verify": {
