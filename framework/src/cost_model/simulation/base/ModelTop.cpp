@@ -627,7 +627,7 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     MLOG_INFO("topo_txt_path: ", topo_txt_path);
     std::string program_json_path = outdir + "/../" + "program.json";
     MLOG_INFO("program_json_path: ", program_json_path);
-    std::string label_type = "--label_type=1 --time_convert_denominator=50";
+    std::string label_type = "--label_type=1 --time_convert_denominator=1800"; // default 1.8GHz
     MLOG_INFO("label_type: ", label_type);
     if (devicePtr->config.submitTopo) {
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topo_txt_path + " " + program_json_path + " " + label_type;
