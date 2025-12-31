@@ -23,8 +23,8 @@
 
 namespace npu::tile_fwk {
 CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbolManager, FunctionType funcType,
-    const std::map<int, int> &locToOffset, bool isUnderDynamicFunc)
-    : CodeGenOp(symbolManager, funcType, locToOffset, isUnderDynamicFunc),
+    const std::map<int, int> &locToOffset, bool isUnderDynamicFunc, bool isMainBlk)
+    : CodeGenOp(symbolManager, funcType, locToOffset, isUnderDynamicFunc, isMainBlk),
       mteFixPipeOps_({
           // UB <-> GM
           {         Opcode::OP_UB_COPY_IN,              [this]() { return GenUBCopyIn(); }},
@@ -243,8 +243,8 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
 }
 
 CodeGenOpCloudNPU::CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx)
-    : CodeGenOpCloudNPU(
-          ctx.symbolManager, ctx.topFunc.GetFunctionType(), ctx.locToOffset, ctx.topFunc.IsUnderDynamicFunction()) {
+    : CodeGenOpCloudNPU(ctx.symbolManager, ctx.topFunc.GetFunctionType(), ctx.locToOffset,
+          ctx.topFunc.IsUnderDynamicFunction(), ctx.isMainBlock) {
     CodeGenOp::Init(ctx.ops);
     UpdateTileTensorInfo();
 }

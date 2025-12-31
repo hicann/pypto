@@ -89,6 +89,7 @@ TEST_F(TestCodegenDynUna, TestAbsDynamic) {
     }
 
     npu::tile_fwk::CodeGenCtx ctx;
+    ctx.isMainBlock = true;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
 }

@@ -30,12 +30,13 @@
 namespace npu::tile_fwk {
 class CompileInfo {
 public:
-    CompileInfo(Function &topFunc, std::string cceDir, const std::pair<uint64_t, Function *> &subFuncPair, bool isCube,
-        bool isUnderDyn)
-        : userSpecCCEDir_(std::move(cceDir)),
+    CompileInfo(Function &topFunc, const CodeGenCtx &ctx, const std::pair<uint64_t, Function *> &subFuncPair,
+        bool isCube, bool isUnderDyn)
+        : userSpecCCEDir_(ctx.cceDir),
           isCube_(isCube),
           isUnderDyn_(isUnderDyn),
-          attr_(subFuncPair.second->GetLeafFuncAttribute()) {
+          attr_(subFuncPair.second->GetLeafFuncAttribute()),
+          isMainBlock_(ctx.isMainBlock) {
         Init(topFunc, subFuncPair.first);
     };
     std::string GetCCEAbsPath() const { return cceAbsPath_; }
@@ -74,6 +75,11 @@ private:
         } else {
             tailStr << coreType;
         }
+
+        if (isMainBlock_) {
+            tailStr << "_main";
+        }
+
         ss << topFunc.GetMagicName() << "_" << topFunc.GetFunctionHash() << "_" << subProgramId << "_" << tailStr.str();
         cceFileName_ = ss.str();
         ss.str("");
@@ -97,6 +103,7 @@ private:
     std::string kernelName_;
     std::string funcDeclare_;
     std::shared_ptr<LeafFuncAttribute> attr_{nullptr};
+    bool isMainBlock_{false};
 };
 
 class CodeGenCloudNPU : public CodeGenCCE {

@@ -149,8 +149,7 @@ std::string CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc) c
 
         std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
 
-        CodeGenOpCloudNPU cop({symbolMgr, topFunc, subFunc, op, locToOffsetMap});
-
+        CodeGenOpCloudNPU cop({symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock});
         // update fs
         cop.UpdateSaturateStatus(fs);
         std::string tileOpSourceCode = cop.GenOpCode();
@@ -264,7 +263,7 @@ void CodeGenCloudNPU::GenCode(
                 return;
             }
             bool isCube = subFunc->IsCube();
-            CompileInfo compileInfo(topFunc, ctx.cceDir, subFuncPair, isCube, subFunc->IsUnderDynamicFunction());
+            CompileInfo compileInfo(topFunc, ctx, subFuncPair, isCube, subFunc->IsUnderDynamicFunction());
             std::ostringstream leafKernelFunc;
             leafKernelFunc << GenFuncBodyBefore(subFuncPair, topFunc, compileInfo);
             leafKernelFunc << GenFuncBody(*subFunc, topFunc);
@@ -289,9 +288,16 @@ void CodeGenCloudNPU::UpdateSubFunc(std::pair<uint64_t, Function *> subFuncPair,
     if (attr == nullptr) {
         attr = std::make_shared<LeafFuncAttribute>();
     }
-    attr->kernelName = compileInfo.GetKernelName();
-    attr->binPath = compileInfo.GetBinAbsPath();
-    attr->kernelDeclare = compileInfo.GetFuncDeclare();
+
+    if (ctx.isMainBlock) {
+        attr->kernelNameMainBlock = compileInfo.GetKernelName();
+        attr->binPathMainBlock = compileInfo.GetBinAbsPath();
+        attr->kernelDeclareMainBlock = compileInfo.GetFuncDeclare();
+    } else {
+        attr->kernelName = compileInfo.GetKernelName();
+        attr->binPath = compileInfo.GetBinAbsPath();
+        attr->kernelDeclare = compileInfo.GetFuncDeclare();
+    }
     CoreType coreType = compileInfo.IsCube() ? CoreType::AIC : CoreType::AIV;
     attr->coreType = coreType;
     leafFunc->SetLeafFuncAttribute(attr);

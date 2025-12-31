@@ -80,9 +80,10 @@ void CodeGenOp::UpdateShape(
 
     rawShape[operandIdx] = logicalTensor.tensor->rawshape;
     // need adapt unaligned scene after
-    originShape[operandIdx] = logicalTensor.oriShape;
+    originShape[operandIdx] = isMainBlock ? logicalTensor.shape : logicalTensor.oriShape;
     if (isDynamicFunction) {
-        dynamicValidShape[operandIdx] = logicalTensor.GetDynValidShape();
+        dynamicValidShape[operandIdx] =
+            isMainBlock ? SymbolicScalar::FromConcrete(logicalTensor.shape) : logicalTensor.GetDynValidShape();
     }
 
     ASSERT(logicalTensor.shape.size() <= MAX_DIM) << "only support max dim: " << MAX_DIM;

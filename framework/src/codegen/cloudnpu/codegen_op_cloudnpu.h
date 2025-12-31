@@ -37,11 +37,12 @@ struct CodeGenOpCloudNPUCtx {
     Function &subFunc;
     const Operation &ops;
     const std::map<int, int> &locToOffset = {};
+    bool isMainBlock{false};
 };
 class CodeGenOpCloudNPU : public CodeGenOp {
 public:
     CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbolManager, FunctionType funcType,
-        const std::map<int, int> &locToOffset = {}, bool isUnderDynamicFunc = false);
+        const std::map<int, int> &locToOffset = {}, bool isUnderDynamicFunc = false, bool isMainBlk = false);
 
     explicit CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx);
     ~CodeGenOpCloudNPU() override = default;

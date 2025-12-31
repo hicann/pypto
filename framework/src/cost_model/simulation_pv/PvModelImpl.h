@@ -324,7 +324,7 @@ public:
                 auto coreType = leafFuncAttr == nullptr ? npu::tile_fwk::CoreType::INVALID : leafFuncAttr->coreType;
                 bool isCube = coreType == npu::tile_fwk::CoreType::AIC;
                 npu::tile_fwk::CompileInfo compileInfo(
-                    *func, ctx.cceDir, {leaf->GetProgramId(), leaf}, isCube, leaf->IsUnderDynamicFunction());
+                    *func, ctx, {leaf->GetProgramId(), leaf}, isCube, leaf->IsUnderDynamicFunction());
                 compileInfo.SetCCEAbsPath(srcPath);
                 compileInfo.SetBinAbsPath(objPath);
                 cga.CompileCCE(compileInfo, "");

@@ -267,7 +267,7 @@ void PvModelImpl<SystemConfig, CaseConfig>::CodeGen(npu::tile_fwk::Function *fun
         auto coreType = leafFuncAttr == nullptr ? npu::tile_fwk::CoreType::INVALID : leafFuncAttr->coreType;
         bool isCube = coreType == npu::tile_fwk::CoreType::AIC;
         npu::tile_fwk::CompileInfo compileInfo(
-            *func, ctx.cceDir, subFuncPair, isCube, subFuncPair.second->IsUnderDynamicFunction());
+            *func, ctx, subFuncPair, isCube, subFuncPair.second->IsUnderDynamicFunction());
         compileInfo.SetCCEAbsPath(srcPath);
         compileInfo.SetBinAbsPath(binPath);
         cga.CompileCCE(compileInfo, "");

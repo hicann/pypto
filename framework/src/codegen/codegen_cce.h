@@ -27,7 +27,11 @@ namespace npu::tile_fwk {
 
 class CodeGenCCE {
 public:
-    explicit CodeGenCCE(const CodeGenCtx &cctx) : ctx(cctx.includePath, cctx.cceDir) { PrepareOutputPath(); }
+    explicit CodeGenCCE(CodeGenCtx cctx) : ctx(std::move(cctx)) {
+        if (ctx.IsCCEPathEmpty()) {
+            PrepareDefaultOutputPath();
+        }
+    }
     virtual ~CodeGenCCE() = default;
 
     virtual void GenCode(
