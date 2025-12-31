@@ -22,7 +22,6 @@
 #include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
-#include "machine/utils/dynamic/dev_encode.h"
 #include "machine/runtime/runtime.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"

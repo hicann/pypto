@@ -35,4 +35,7 @@ namespace npu::tile_fwk::dynamic {
         SeqWsAllocator devTaskInnerExclusiveOutcasts;
         WsSlotAllocator devTaskBoundaryOutcasts;
     };
+    struct RuntimeReuseInfo {
+        uint32_t poolResetTimes;
+    };
 }

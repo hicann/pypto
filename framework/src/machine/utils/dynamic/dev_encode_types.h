@@ -23,6 +23,7 @@
 
 #include "tilefwk/error.h"
 #include "tilefwk/data_type.h"
+#include "tilefwk/aicpu_common.h"
 #include "tilefwk/aicore_data.h"
 #include "tilefwk/core_func_data.h"
 #include "interface/utils/common.h"
@@ -37,6 +38,10 @@ using  uint32v8 = uint32_t __attribute__((vector_size(32)));
 using  uint32v4 = uint32_t __attribute__((vector_size(16)));
 using  uint16v4 = uint16_t __attribute__((vector_size(8)));
 using  uint16v8 = uint16_t __attribute__((vector_size(16)));
+
+constexpr uint32_t IDENT_SIZE = 2;
+constexpr uint32_t IDENT2_SIZE = 4;
+constexpr uint32_t IDENT_SIZE_THREE = 3;
 
 /* please modify macros in aicore.cpp at the same time !!! */
 constexpr uint32_t TASKID_FUNC_BITS = 11;

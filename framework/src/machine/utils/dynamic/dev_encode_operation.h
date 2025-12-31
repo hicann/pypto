@@ -16,6 +16,7 @@
 #pragma once
 
 #include "machine/utils/dynamic/dev_encode_types.h"
+#include "interface/tensor/runtime_slot.h"
 
 namespace npu::tile_fwk::dynamic {
 struct DevAscendOperationOperandInfo {

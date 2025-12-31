@@ -36,6 +36,11 @@ using namespace npu::tile_fwk;
 namespace npu::tile_fwk {
 namespace dynamic {
 #define ONFILLCONTENT if (fillContent)
+#define DYN_DEVICE_TASK_EXT_SIZE 0x300
+#ifndef PAGE_SIZE
+#define PAGE_SIZE       4096
+#endif
+
 constexpr int32_t CALLOP_ARG_ATTR_BASE_INDEX = 1;
 constexpr int32_t MINI_TILE_LIST_SIZE_THRESHOLD = 16;
 constexpr int32_t DEFAULT_CORE_NUM = 75;
@@ -43,6 +48,7 @@ constexpr int32_t SLOTS_NEED_ALLOC_SIZE = 2;
 constexpr int64_t MAX_SHAPE_WARN_THRESHOLE = 512 * 512;
 constexpr int32_t ALLOC_NUM_ONE_SLAB = 4;
 static constexpr uint64_t GENERAL_METADATA_SIZE_MIN = 4 * MEBI;
+constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
 
 void DevAscendFunction::InitIncastOutcastAttr(
         uintdevptr_t &initOffset,
@@ -791,7 +797,7 @@ void DevAscendFunction::InitIncastOutcast(
                 auto consumerList = &At(incast.consumerList, 0);
                 auto tableData = &At(incast.cellMatchStaticIncastTable, 0);
                 bool stitchByAllFullMatch = CellMatchFillIncastOutcast<true>(
-                        consumerList, incast.consumerList.size(), nullptr, true, incast.cellMatchTableDesc, tableData);
+                        this, consumerList, incast.consumerList.size(), nullptr, true, incast.cellMatchTableDesc, tableData);
                 incast.stitchByAllFullMatch = stitchByAllFullMatch;
             };
             cellMatchSizeIncastTotal += inAttr.cellMatchSize;
@@ -809,7 +815,7 @@ void DevAscendFunction::InitIncastOutcast(
                 auto producerList = &At(outcast.producerList, 0);
                 auto tableData = &At(outcast.cellMatchStaticOutcastTable, 0);
                 bool stitchByAllFullMatch = CellMatchFillIncastOutcast<true>(
-                        producerList, outcast.producerList.size(), nullptr, false, outcast.cellMatchTableDesc, tableData);
+                        this, producerList, outcast.producerList.size(), nullptr, false, outcast.cellMatchTableDesc, tableData);
                 outcast.stitchByAllFullMatch = stitchByAllFullMatch;
             }
             cellMatchSizeOutcastTotal += outAttr.cellMatchSize;

@@ -16,12 +16,12 @@
 #include "machine/dump/kernel_dump_utils.h"
 #include <climits>
 #include <dlfcn.h>
+#include <nlohmann/json.hpp>
 #include "tilefwk/function.h"
 #include "interface/utils/file_utils.h"
 #include "interface/program/program.h"
 #include "machine/platform/platform_manager.h"
-#include "machine/utils/dynamic/dev_encode.h"
-#include <nlohmann/json.hpp>
+#include "machine/utils/dynamic/dev_encode_program.h"
 
 namespace npu::tile_fwk {
 namespace {

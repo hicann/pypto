@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <vector>
 #include "tilefwk/aicore_data.h"
-#include "machine/utils/dynamic/dev_encode.h"
+#include "machine/utils/dynamic/dev_encode_types.h"
 
 namespace npu::tile_fwk::Distributed {
 constexpr uint64_t VECTOR_PRE_SIZE = 1024;

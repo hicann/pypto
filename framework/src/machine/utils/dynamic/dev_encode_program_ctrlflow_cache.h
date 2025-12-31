@@ -1,0 +1,832 @@
+/**
+ * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
+
+/*!
+ * \file dev_encode_program_ctrlflow_cache.h
+ * \brief
+ */
+
+#pragma once
+
+#include "machine/utils/dynamic/dev_encode_types.h"
+#include "machine/utils/dynamic/dev_encode_function.h"
+#include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
+#include "machine/utils/machine_ws_intf.h"
+#include "machine/utils/dynamic/item_pool.h"
+
+namespace npu::tile_fwk::dynamic {
+#define ADDRESS_CACHE_KIND_WORKSPACE         0
+#define ADDRESS_CACHE_KIND_INPUT             1
+#define ADDRESS_CACHE_KIND_OUTPUT            2
+#define INVALID_STITCH_IDX      (static_cast<uint32_t>(-1))
+
+constexpr size_t READY_QUEUE_SIZE = 3UL;
+inline constexpr size_t MAX_CACHED_FUNC_NUM = 128;
+
+struct ReadyQueueCache {
+    uint32_t coreFunctionCnt;
+    struct Queue {
+        uint32_t head;
+        uint32_t tail;
+        uint32_t capacity;
+        uint32_t *elem;
+    } queueList[READY_QUEUE_SIZE];
+    uint32_t readyTaskNum;
+};
+
+struct DynFuncDataCache {
+    DevAscendFunction *devFunc;
+    predcount_t *predCount;
+    int *calleeList;
+    DevAscendFunctionDuppedData *duppedData;
+
+    const DynFuncDataCache &At(size_t index) const { return this[index]; }
+    DynFuncDataCache &At(size_t index) { return this[index]; }
+};
+
+struct DynFuncDataWorkspaceAddressBackup {
+    uint64_t runtimeWorkspace;
+    uint64_t runtimeOutcastWorkspace;
+    uint64_t workspaceAddr;
+    uint64_t stackWorkspaceAddr;
+};
+
+struct DynFuncDataBackup {
+    predcount_t *predCountBackup;
+    uint64_t *rawTensorAddrBackup;
+
+    DynFuncDataWorkspaceAddressBackup workspaceAddressBackup;
+
+    const DynFuncDataBackup &At(size_t index) const { return this[index]; }
+    DynFuncDataBackup &At(size_t index) { return this[index]; }
+};
+
+struct DynDeviceTaskBase {
+    DeviceTask devTask;
+    DynFuncHeader* dynFuncDataList{nullptr};
+
+    ReadyCoreFunctionQueue *readyQueue[READY_QUEUE_SIZE];
+    DynFuncDataCache dynFuncDataCacheList[MAX_CACHED_FUNC_NUM];
+    uint64_t dynFuncDataCacheListSize;
+
+    const DevCceBinary *cceBinary;
+    const DevAicpuLeafBinary *aicpuLeafBinary;
+
+    ReadyQueueCache *readyQueueBackup;
+    DynFuncDataBackup dynFuncDataBackupList[MAX_CACHED_FUNC_NUM];
+    bool isLastTask{false};
+
+    DynFuncHeader *GetDynFuncDataList() const { return dynFuncDataList; }
+    DynFuncHeader *GetDynFuncDataList() { return dynFuncDataList; }
+    const DynFuncDataCache *GetDynFuncDataCacheList() const { return dynFuncDataCacheList; }
+    DynFuncDataCache *GetDynFuncDataCacheList() { return dynFuncDataCacheList; }
+
+    uint64_t GetIndex() { return GetDynFuncDataList()->GetIndex(); }
+    inline bool IsLastTask() const { return isLastTask;}
+    void SetLastTask(bool b) { isLastTask = b;}
+};
+
+struct DeviceTaskCache {
+    DynDeviceTaskBase *dynTaskBase;
+};
+
+struct DeviceExecuteSlot {
+    AddressDescriptor desc;
+    bool isOutputSlot{false};
+    bool isAssembleSlot{false};
+    bool isAssembleSlotNeedAlloc{false};
+    bool isPartialUpdateStitch{false};
+    bool isPartialUpdateDirty{false};
+    int64_t refCntIndex{itemPoolInvalidIndex}; // refCnt to stored tensor
+    uint32_t stitchDupIdx{INVALID_STITCH_IDX};
+    uint32_t stitchOutcastIdx;
+
+    DevAscendProgramPartialUpdate *partialUpdate{nullptr};
+
+    bool IsOutputAddress() const {
+        return isOutputSlot;
+    }
+    bool IsAssembleAddress() const {
+        return isAssembleSlot;
+    }
+
+    bool RefCntIsNull() {
+        return refCntIndex == itemPoolInvalidIndex;
+    }
+
+    void RefCntReset() {
+        refCntIndex = itemPoolInvalidIndex;
+    }
+
+    template<typename T>
+    void RefCntCopyFrom(T &info) {
+        refCntIndex = info.refCntIndex;
+    }
+
+    template <WsMemCategory category>
+    bool RefCntDec(ItemPool<uint32_t, category> &pool) {
+        if (refCntIndex == itemPoolInvalidIndex) {
+            DEV_ERROR("RefCntDec failed: refCntIndex is invalid.");
+        }
+        DEV_DEBUG_ASSERT(refCntIndex != itemPoolInvalidIndex);
+        --pool.At(refCntIndex);
+        if (pool.At(refCntIndex) == 0) {
+            pool.DestroyAt(refCntIndex);
+            RefCntReset();
+            return true;
+        }
+        return false;
+    }
+
+    template <WsMemCategory category>
+    void RefCntInc(ItemPool<uint32_t, category> &pool, uint32_t count) {
+        pool.At(refCntIndex) += count;
+    }
+};
+
+struct DevProgramControlFlowCacheRuntime {
+    struct DeviceWorkspaceAllocator {
+        struct {
+            SeqWsAllocator dassembleDests;
+            SeqWsAllocator rootInner;
+            SeqWsAllocator devTaskInnerExclusiveOutcasts;
+            WsSlotAllocator devTaskBoundaryOutcasts;
+            DevRelocVector<WsSlotAllocator::BlockHeader> slottedOutcastsBlockList;
+        } tensorAllocators;
+    } workspace;
+    struct DeviceSlotContext {
+        DevRelocVector<DeviceExecuteSlot> slotList;
+        DevRelocVector<ItemPool<uint32_t>::ItemBlock> slotRefCntList;
+    } slotContext;
+};
+
+template<typename T>
+inline T *RelocControlFlowCachePointer(T *&ptrRef, const RelocRange &relocProgram) {
+    T *result = nullptr;
+    if (relocProgram.GetDst() == 0) {
+        result = ptrRef;
+        relocProgram.Reloc(ptrRef);
+    } else {
+        relocProgram.Reloc(ptrRef);
+        result = ptrRef;
+    }
+    return result;
+}
+
+struct DevProgramControlFlowCache {
+    /* Filled by user, true means try to allocate in cache. */
+    bool isRecording;
+    /* Filled by user, true means activate in cache. */
+    bool isActivated;
+
+    /* Filled in caching */
+    DevRelocVector<DevTensorData> inputTensorDataList;
+    /* Filled in caching */
+    DevRelocVector<DevTensorData> outputTensorDataList;
+    /* Filled in caching for runtime */
+    DevProgramControlFlowCacheRuntime runtimeBackup;
+
+    /* Filled in caching, true means some metadata is not cached. */
+    bool isRecordingStopped;
+    /* Filled in caching */
+    uint64_t deviceTaskCount;
+    /* Filled in caching */
+    uint64_t rootTaskCount;
+    /* Filled in caching */
+    uint64_t cacheDataOffset;
+    /* Filled in caching */
+    uint64_t deviceTaskSkippedCount;
+    /* Filled in caching */
+    uint64_t contextWorkspaceAddr;
+    /* Filled in caching */
+    DevRelocVector<DeviceTaskCache> deviceTaskCacheList;
+    /* Filled in caching */
+    DevRelocVector<uint8_t> cacheData;
+
+    uint64_t workspaceAddr;
+
+    bool inline IsRecording() const {
+        if (IsDeviceMode()) {
+            return false;
+        }
+        return isRecording;
+    }
+
+    bool inline IsRecordingStopped() const {
+        return isRecordingStopped;
+    }
+
+    void inline StopRecording() {
+        isRecordingStopped = true;
+    }
+
+#define CFGCACHE_ALIGN      8
+    void *AllocateCache(uint64_t size) {
+        void *result = nullptr;
+        if (cacheDataOffset + size < cacheData.size()) {
+            result = &cacheData[cacheDataOffset];
+            /* make cache 8 byte aligned */
+            cacheDataOffset += (size + CFGCACHE_ALIGN - 1) / CFGCACHE_ALIGN * CFGCACHE_ALIGN;
+        } else {
+            isRecordingStopped = true;
+        }
+        return result;
+    }
+
+    bool AppendDeviceTask(DynDeviceTaskBase *base) {
+        if (!isRecordingStopped && (deviceTaskCount < deviceTaskCacheList.size())) {
+            deviceTaskCacheList[deviceTaskCount].dynTaskBase = base;
+            deviceTaskCount += 1;
+            rootTaskCount += base->dynFuncDataList->Size();
+            return true;
+        } else {
+            deviceTaskSkippedCount += 1;
+            return false;
+        }
+    }
+
+    void InitInputOutput(DevStartArgsBase *startArgs) {
+        for (size_t i = 0; i < inputTensorDataList.size(); i++) {
+            inputTensorDataList[i] = startArgs->GetInputTensor(i);
+        }
+        for (size_t i = 0; i < outputTensorDataList.size(); i++) {
+            outputTensorDataList[i] = startArgs->GetOutputTensor(i);
+        }
+    }
+
+    void MatchInputOutputDump(DevStartArgsBase *startArgs) const {
+        DEV_VERBOSE_DEBUG("matchio cache input size: %d", (int)inputTensorDataList.size());
+        for (size_t k = 0; k < inputTensorDataList.size(); k++) {
+            DEV_VERBOSE_DEBUG("matchio cache input %d: %s", (int)k, DevAscendFunction::DumpShape(inputTensorDataList[k].shape).c_str());
+        }
+
+        DEV_VERBOSE_DEBUG("matchio cache output size: %d", (int)outputTensorDataList.size());
+        for (size_t k = 0; k < outputTensorDataList.size(); k++) {
+            DEV_VERBOSE_DEBUG("matchio cache output %d: %s", (int)k, DevAscendFunction::DumpShape(outputTensorDataList[k].shape).c_str());
+        }
+
+        DEV_VERBOSE_DEBUG("matchio real input size: %d", (int)startArgs->inputTensorSize);
+        for (size_t k = 0; k < startArgs->inputTensorSize; k++) {
+            DEV_VERBOSE_DEBUG("matchio real input %d: %s", (int)k, DevAscendFunction::DumpShape(startArgs->GetInputTensor(k).shape).c_str());
+        }
+
+        DEV_VERBOSE_DEBUG("matchio real output size: %d", (int)startArgs->outputTensorSize);
+        for (size_t k = 0; k < startArgs->outputTensorSize; k++) {
+            DEV_VERBOSE_DEBUG("matchio real output %d: %s", (int)k, DevAscendFunction::DumpShape(startArgs->GetOutputTensor(k).shape).c_str());
+        }
+    }
+
+    inline bool MatchInputOutput(DevStartArgsBase *startArgs) const {
+        MatchInputOutputDump(startArgs);
+
+        if (inputTensorDataList.size() != startArgs->inputTensorSize) {
+            return false;
+        }
+        if (outputTensorDataList.size() != startArgs->outputTensorSize) {
+            return false;
+        }
+        for (size_t k = 0; k < inputTensorDataList.size(); k++) {
+            if (!inputTensorDataList[k].shape.Equal(startArgs->GetInputTensor(k).shape)) {
+                return false;
+            }
+        }
+        for (size_t k = 0; k < outputTensorDataList.size(); k++) {
+            if (!outputTensorDataList[k].shape.Equal(startArgs->GetOutputTensor(k).shape)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    inline bool IsActivatedFullCache(DevStartArgsBase *startArgs) const {
+        if (!isActivated) {
+            return false;
+        }
+        if (deviceTaskSkippedCount != 0) {
+            return false;
+        }
+        if (!MatchInputOutput(startArgs)) {
+            return false;
+        }
+        return true;
+    }
+
+    inline bool IsActivatedPartialCache(DevStartArgsBase *startArgs) const {
+        if (!isActivated) {
+            return false;
+        }
+        if (deviceTaskCount == 0) {
+            return false;
+        }
+        if (!MatchInputOutput(startArgs)) {
+            return false;
+        }
+        return true;
+    }
+
+    void PredCountDataBackup(DynDeviceTaskBase *base) {
+        DynFuncHeader *dynFuncDataList = base->GetDynFuncDataList();
+        DynFuncDataCache *dynFuncDataCacheList = base->dynFuncDataCacheList;
+        DynFuncDataBackup *dynFuncDataBackupList = base->dynFuncDataBackupList;
+        for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+            DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+            DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+            size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
+
+            predcount_t *predCountBackup = reinterpret_cast<predcount_t *>(AllocateCache(backupSize));
+            if (predCountBackup == nullptr) {
+                return;
+            }
+            dynDataBackup->predCountBackup = predCountBackup;
+
+            memcpy_s(dynDataBackup->predCountBackup, backupSize, &duppedData->GetOperationCurrPredCount(0), backupSize);
+        }
+    }
+
+    void PredCountDataRestore(DynDeviceTaskBase *base) {
+        DynFuncHeader *dynFuncDataList = base->GetDynFuncDataList();
+        DynFuncDataCache *dynFuncDataCacheList = base->dynFuncDataCacheList;
+        DynFuncDataBackup *dynFuncDataBackupList = base->dynFuncDataBackupList;
+        for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+            DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+            DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+            size_t backupSize = sizeof(predcount_t) * duppedData->GetOperationSize();
+
+            memcpy_s(&duppedData->GetOperationCurrPredCount(0), backupSize, dynDataBackup->predCountBackup, backupSize);
+        }
+    }
+
+    void ReadyQueueDataBackup(DynDeviceTaskBase *base) {
+        ReadyQueueCache *readyQueueBackup = reinterpret_cast<ReadyQueueCache *>(AllocateCache(sizeof(ReadyQueueCache)));
+        if (readyQueueBackup == nullptr) {
+            return;
+        }
+        readyQueueBackup->coreFunctionCnt = base->devTask.coreFunctionCnt;
+        uint32_t readyTaskNum = 0;
+        for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+            size_t backupSize = sizeof(uint32_t) * base->readyQueue[i]->capacity;
+            uint32_t *readyQueueBackupElem = reinterpret_cast<uint32_t *>(AllocateCache(backupSize));
+            if (readyQueueBackupElem == nullptr) {
+                return;
+            }
+
+            readyQueueBackup->queueList[i].head = base->readyQueue[i]->head;
+            readyQueueBackup->queueList[i].tail = base->readyQueue[i]->tail;
+            readyQueueBackup->queueList[i].capacity = base->readyQueue[i]->capacity;
+            readyQueueBackup->queueList[i].elem = readyQueueBackupElem;
+            memcpy_s(readyQueueBackup->queueList[i].elem, backupSize, base->readyQueue[i]->elem, backupSize);
+
+            readyTaskNum += base->readyQueue[i]->tail - base->readyQueue[i]->head;
+        }
+        readyQueueBackup->readyTaskNum = readyTaskNum;
+        base->readyQueueBackup = readyQueueBackup;
+    }
+
+    void ReadyQueueDataRestore(DynDeviceTaskBase *base) {
+        ReadyQueueCache *readyQueueBackup = base->readyQueueBackup;
+        base->devTask.coreFunctionCnt = readyQueueBackup->coreFunctionCnt;
+        for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+            size_t backupSize = sizeof(uint32_t) * base->readyQueue[i]->capacity;
+
+            base->readyQueue[i]->head = readyQueueBackup->queueList[i].head;
+            base->readyQueue[i]->tail = readyQueueBackup->queueList[i].tail;
+            memcpy_s(base->readyQueue[i]->elem, backupSize, readyQueueBackup->queueList[i].elem, backupSize);
+        }
+    }
+
+    static void RelocBuildInputOutputDesc(
+            std::unordered_map<uint64_t, AddressDescriptor> &cacheInputOutputDict,
+            DevStartArgsBase *devStartArgs) {
+        for (uint64_t i = 0; i < devStartArgs->inputTensorSize; i++) {
+            uint64_t addr = devStartArgs->GetInputTensor(i).address;
+            cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_INPUT, i);
+        }
+        for (uint64_t i = 0; i < devStartArgs->outputTensorSize; i++) {
+            uint64_t addr = devStartArgs->GetOutputTensor(i).address;
+            cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_OUTPUT, i);
+        }
+    }
+
+    static void RelocBuildInputOutputDesc(
+            std::unordered_map<uint64_t, AddressDescriptor> &cacheInputOutputDict,
+            DevRelocVector<DevTensorData> inputTensorDataList,
+            DevRelocVector<DevTensorData> outputTensorDataList) {
+        for (uint64_t i = 0; i < inputTensorDataList.size(); i++) {
+            uint64_t addr = inputTensorDataList[i].address;
+            cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_INPUT, i);
+        }
+        for (uint64_t i = 0; i < outputTensorDataList.size(); i++) {
+            uint64_t addr = outputTensorDataList[i].address;
+            cacheInputOutputDict[addr] = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_OUTPUT, i);
+        }
+    }
+
+    static void RelocDescToCache(
+            AddressDescriptor &desc,
+            const RelocRange &relocWorkspace,
+            std::unordered_map<uint64_t, AddressDescriptor> &cacheInputOutputDict) {
+        AddressDescriptor resultDesc;
+        uint64_t addr = desc.GetAddressValue();
+        if (cacheInputOutputDict.count(addr)) {
+            resultDesc = cacheInputOutputDict[addr];
+        } else {
+            relocWorkspace.Reloc(addr);
+            resultDesc = AddressDescriptor::MakeCache(ADDRESS_CACHE_KIND_WORKSPACE, addr);
+        }
+        desc = resultDesc;
+    }
+
+    static void RelocDescFromCache(
+            AddressDescriptor &desc,
+            const RelocRange &relocWorkspace,
+            DevStartArgsBase *devStartArgs) {
+        uint64_t resultAddr = 0;
+        switch (desc.cacheKind) {
+            case ADDRESS_CACHE_KIND_WORKSPACE:
+                resultAddr = desc.cacheValue;
+                relocWorkspace.Reloc(resultAddr);
+                break;
+            case ADDRESS_CACHE_KIND_INPUT:
+                resultAddr = devStartArgs->GetInputTensor(desc.cacheValue).address;
+                break;
+            case ADDRESS_CACHE_KIND_OUTPUT:
+                resultAddr = devStartArgs->GetOutputTensor(desc.cacheValue).address;
+                break;
+            default:
+                DEV_ERROR("[RelocDescFromCache] Invalid kind: %lu\n", (unsigned long)desc.cacheKind);
+                break;
+        }
+        AddressDescriptor resultDesc = AddressDescriptor::MakeAddress(resultAddr);
+        desc = resultDesc;
+    }
+
+    void IncastOutcastAddrBackup(DynDeviceTaskBase *base) {
+        DynFuncHeader *dynFuncDataList = base->GetDynFuncDataList();
+        DynFuncDataCache *dynFuncDataCacheList = base->dynFuncDataCacheList;
+        DynFuncDataBackup *dynFuncDataBackupList = base->dynFuncDataBackupList;
+        for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+            DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+            DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+            DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+            size_t backupSize = sizeof(uint64_t) * (duppedData->GetIncastSize() + duppedData->GetOutcastSize());
+
+            uint64_t *rawTensorAddrBackup = reinterpret_cast<uint64_t *>(AllocateCache(backupSize));
+            if (rawTensorAddrBackup == nullptr) {
+                return;
+            }
+            dynDataBackup->rawTensorAddrBackup = rawTensorAddrBackup;
+            memcpy_s(dynDataBackup->rawTensorAddrBackup, backupSize, dynData->rawTensorAddr, backupSize);
+        }
+    }
+
+    void IncastOutcastAddrRestore(DynDeviceTaskBase *base) {
+        DynFuncHeader *dynFuncDataList = base->GetDynFuncDataList();
+        DynFuncDataCache *dynFuncDataCacheList = base->dynFuncDataCacheList;
+        DynFuncDataBackup *dynFuncDataBackupList = base->dynFuncDataBackupList;
+        for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+            DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+            DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+            DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+            size_t backupSize = sizeof(uint64_t) * (duppedData->GetIncastSize() + duppedData->GetOutcastSize());
+
+            memcpy_s(dynData->rawTensorAddr, backupSize, dynDataBackup->rawTensorAddrBackup, backupSize);
+        }
+    }
+
+    void IncastOutcastAddrRestore() {
+        for (size_t i = 0; i < deviceTaskCount; i++) {
+            DynDeviceTaskBase *dynTaskBase = deviceTaskCacheList[i].dynTaskBase;
+            IncastOutcastAddrRestore(dynTaskBase);
+        }
+    }
+
+    void TaskAddrBackupWorkspace(DynDeviceTaskBase * base) {
+        DynFuncHeader *dynFuncDataList = base->GetDynFuncDataList();
+        DynFuncDataCache *dynFuncDataCacheList = base->dynFuncDataCacheList;
+        DynFuncDataBackup *dynFuncDataBackupList = base->dynFuncDataBackupList;
+        for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+            DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+            DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+            DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+
+            dynDataBackup->workspaceAddressBackup.runtimeWorkspace = duppedData->runtimeWorkspace_;
+            dynDataBackup->workspaceAddressBackup.runtimeOutcastWorkspace = duppedData->runtimeOutcastWorkspace_;
+            dynDataBackup->workspaceAddressBackup.workspaceAddr = dynData->workspaceAddr;
+            dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr = dynData->stackWorkSpaceAddr;
+        }
+    }
+
+    void TaskAddrRestoreWorkspace(DynDeviceTaskBase *base) {
+        DynFuncHeader *dynFuncDataList = base->GetDynFuncDataList();
+        DynFuncDataCache *dynFuncDataCacheList = base->dynFuncDataCacheList;
+        DynFuncDataBackup *dynFuncDataBackupList = base->dynFuncDataBackupList;
+        for (size_t dupIndex = 0; dupIndex < dynFuncDataList->Size(); ++dupIndex) {
+            DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+            DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+            DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+            DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+
+            duppedData->runtimeWorkspace_ = dynDataBackup->workspaceAddressBackup.runtimeWorkspace;
+            duppedData->runtimeOutcastWorkspace_ = dynDataBackup->workspaceAddressBackup.runtimeOutcastWorkspace;
+            dynData->workspaceAddr = dynDataBackup->workspaceAddressBackup.workspaceAddr;
+            dynData->stackWorkSpaceAddr = dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr;
+        }
+    }
+
+    void TaskAddrRestoreWorkspace() {
+        for (size_t i = 0; i < deviceTaskCount; i++) {
+            DynDeviceTaskBase *dynTaskBase = deviceTaskCacheList[i].dynTaskBase;
+            TaskAddrRestoreWorkspace(dynTaskBase);
+        }
+    }
+
+    void TaskAddrRelocWorkspace(
+            uint64_t srcWorkspace, uint64_t dstWorkspace,
+            DevStartArgsBase *devStartArgs) {
+        RelocRange relocWorkspace(srcWorkspace, dstWorkspace);
+        for (uint64_t deviceIndex = 0; deviceIndex < deviceTaskCount; deviceIndex++) {
+            DynDeviceTaskBase *dynTaskBase = deviceTaskCacheList[deviceIndex].dynTaskBase;
+
+            DynFuncHeader *dynFuncDataList = dynTaskBase->dynFuncDataList;
+            DynFuncDataCache *dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
+            DynFuncDataBackup *dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
+            for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
+                DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+                DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+                DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+                DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+
+                if (devStartArgs == nullptr) {
+                    // Host: addr uses backup
+
+                    // Reloc Dupped
+                    relocWorkspace.RelocNullable(dynDataBackup->workspaceAddressBackup.runtimeWorkspace);
+                    relocWorkspace.RelocNullable(dynDataBackup->workspaceAddressBackup.runtimeOutcastWorkspace);
+
+                    // Reloc DynFuncData
+                    relocWorkspace.Reloc(dynDataBackup->workspaceAddressBackup.workspaceAddr);
+                    relocWorkspace.Reloc(dynDataBackup->workspaceAddressBackup.stackWorkspaceAddr);
+                } else {
+                    // Device: addr uses actual
+
+                    // Reloc Dupped
+                    relocWorkspace.RelocNullable(duppedData->runtimeWorkspace_);
+                    relocWorkspace.RelocNullable(duppedData->runtimeOutcastWorkspace_);
+
+                    // Reloc DynFuncData
+                    relocWorkspace.Reloc(dynData->workspaceAddr);
+                    relocWorkspace.Reloc(dynData->stackWorkSpaceAddr);
+                }
+            }
+        }
+    }
+
+    void IncastOutcastAddrReloc(
+            uint64_t srcWorkspace, uint64_t dstWorkspace,
+            DevStartArgsBase *devStartArgs) {
+        RelocRange relocWorkspace(srcWorkspace, dstWorkspace);
+        /* empty constructor's overhead should be negligible */
+        std::unordered_map<uint64_t, AddressDescriptor> cacheInputOutputDict;
+        if (devStartArgs == nullptr) {
+            /* only run on host */
+            RelocBuildInputOutputDesc(cacheInputOutputDict, inputTensorDataList, outputTensorDataList);
+        }
+        for (uint64_t deviceIndex = 0; deviceIndex < deviceTaskCount; deviceIndex++) {
+            DynDeviceTaskBase *dynTaskBase = deviceTaskCacheList[deviceIndex].dynTaskBase;
+            DynFuncHeader *dynFuncDataList = dynTaskBase->dynFuncDataList;
+            DynFuncDataCache *dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
+            DynFuncDataBackup *dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
+            for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
+                DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+                DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+                DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+
+                DevAscendFunctionDuppedData *duppedData = dynDataCache->duppedData;
+                if (devStartArgs == nullptr) {
+                    // Host: addr uses backup
+                    for (uint64_t i = 0; i < duppedData->GetIncastSize(); i++) {
+                        AddressDescriptor *addr = reinterpret_cast<AddressDescriptor *>(dynDataBackup->rawTensorAddrBackup + i);
+                        RelocDescToCache(*addr, relocWorkspace, cacheInputOutputDict);
+                    }
+                    for (uint64_t i = 0; i < duppedData->GetOutcastSize(); i++) {
+                        AddressDescriptor *addr = reinterpret_cast<AddressDescriptor *>(dynDataBackup->rawTensorAddrBackup + duppedData->GetIncastSize() + i);
+                        RelocDescToCache(*addr, relocWorkspace, cacheInputOutputDict);
+                    }
+                } else {
+                    // Device: addr uses actual
+                    for (uint64_t i = 0; i < duppedData->GetIncastSize(); i++) {
+                        AddressDescriptor *addr = &duppedData->GetIncastAddress(i);
+                        RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
+                    }
+                    for (uint64_t i = 0; i < duppedData->GetOutcastSize(); i++) {
+                        AddressDescriptor *addr = &duppedData->GetOutcastAddress(i);
+                        RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
+                    }
+                }
+
+                dynData->startArgs = devStartArgs;
+            }
+        }
+    }
+
+    void RuntimeAddrBackup(DeviceExecuteSlot *runtimeSlotList, uint32_t *runtimeSlotRefCntList, uint32_t slotSize, TensorAllocator &allocator) {
+        uint32_t slotDataSize = sizeof(DeviceExecuteSlot) * slotSize;
+        uint32_t slotRefCntDataSize = sizeof(ItemPool<uint32_t>::ItemBlock) * slotSize;
+        (void)memcpy_s(runtimeBackup.slotContext.slotList.Data(), slotDataSize, runtimeSlotList, slotDataSize);
+        (void)memcpy_s(runtimeBackup.slotContext.slotRefCntList.Data(), slotRefCntDataSize, runtimeSlotRefCntList, slotRefCntDataSize);
+
+        struct Backup {
+            static void BackupBlockHeader(WsSlotAllocator::BlockHeader *&ptr, WsSlotAllocator::BlockHeader *base) {
+                ptr = reinterpret_cast<WsSlotAllocator::BlockHeader *>(static_cast<uintptr_t>(ptr - base));
+            }
+        };
+        runtimeBackup.workspace.tensorAllocators.dassembleDests = allocator.dassembleDests;
+        runtimeBackup.workspace.tensorAllocators.rootInner = allocator.rootInner;
+        runtimeBackup.workspace.tensorAllocators.devTaskInnerExclusiveOutcasts = allocator.devTaskInnerExclusiveOutcasts;
+        runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts = allocator.devTaskBoundaryOutcasts;
+
+        uint64_t backupSize = sizeof(WsSlotAllocator::BlockHeader) * allocator.devTaskBoundaryOutcasts.slotNum_;
+        (void)memcpy_s(runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList.Data(), backupSize, allocator.devTaskBoundaryOutcasts.GetBlockHeaderBase(), backupSize);
+
+        WsSlotAllocator::BlockHeader *base = allocator.devTaskBoundaryOutcasts.GetBlockHeaderBase();
+        Backup::BackupBlockHeader(runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts.freeListHeader_, base);
+        Backup::BackupBlockHeader(runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts.notInUseHeaders_, base);
+        WsSlotAllocator::BlockHeader *checkpointBase = runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList.Data();
+        for (uint64_t k = 0; k < allocator.devTaskBoundaryOutcasts.slotNum_; k++) {
+            Backup::BackupBlockHeader(checkpointBase[k].listNext, base);
+        }
+    }
+
+    void RuntimeAddrRestore(DeviceExecuteSlot *runtimeSlotList, uint32_t *runtimeSlotRefCntList, uint32_t slotSize, TensorAllocator &allocator) {
+        uint32_t slotDataSize = sizeof(DeviceExecuteSlot) * slotSize;
+        uint32_t slotRefCntDataSize = sizeof(ItemPool<uint32_t>::ItemBlock) * slotSize;
+        (void)memcpy_s(runtimeSlotList, slotDataSize, runtimeBackup.slotContext.slotList.Data(), slotDataSize);
+        (void)memcpy_s(runtimeSlotRefCntList, slotRefCntDataSize, runtimeBackup.slotContext.slotRefCntList.Data(), slotRefCntDataSize);
+
+        struct Restore {
+            static void RestoreBlockHeader(WsSlotAllocator::BlockHeader *&ptr, WsSlotAllocator::BlockHeader *base, WsSlotAllocator::BlockHeader *index) {
+                ptr = base + (uintptr_t)index;
+            }
+            static void RestoreSeqAllocator(SeqWsAllocator &dst, SeqWsAllocator &src) {
+                dst.allocated_ = src.allocated_;
+                dst.resetTimes_ = src.resetTimes_;
+            }
+        };
+        Restore::RestoreSeqAllocator(allocator.dassembleDests, runtimeBackup.workspace.tensorAllocators.dassembleDests);
+        Restore::RestoreSeqAllocator(allocator.rootInner, runtimeBackup.workspace.tensorAllocators.rootInner);
+        Restore::RestoreSeqAllocator(allocator.devTaskInnerExclusiveOutcasts, runtimeBackup.workspace.tensorAllocators.devTaskInnerExclusiveOutcasts);
+        allocator.devTaskBoundaryOutcasts.availableSlots_ = runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts.availableSlots_;
+
+        WsSlotAllocator::BlockHeader *base = allocator.devTaskBoundaryOutcasts.GetBlockHeaderBase();
+        Restore::RestoreBlockHeader(allocator.devTaskBoundaryOutcasts.freeListHeader_, base, runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts.freeListHeader_);
+        Restore::RestoreBlockHeader(allocator.devTaskBoundaryOutcasts.notInUseHeaders_, base, runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts.notInUseHeaders_);
+        WsSlotAllocator::BlockHeader *checkpointBase = runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList.Data();
+        for (uint64_t k = 0; k < allocator.devTaskBoundaryOutcasts.slotNum_; k++) {
+            Restore::RestoreBlockHeader(base[k].listNext, base, checkpointBase[k].listNext);
+        }
+    }
+
+    void RuntimeAddrRelocProgram(uint64_t srcProgram, uint64_t dstProgram) {
+        RelocRange relocProgram(srcProgram, dstProgram);
+        {
+            auto &slotList = runtimeBackup.slotContext.slotList;
+            DeviceExecuteSlot *base = slotList.Data();
+            uint64_t size = slotList.size();
+            for (uint64_t k = 0; k < size; k++) {
+                relocProgram.RelocNullable(base[k].partialUpdate);
+            }
+        }
+    }
+
+    void RuntimeAddrRelocWorkspace(
+            uint64_t srcWorkspace, uint64_t dstWorkspace,
+            DevStartArgsBase *devStartArgs, DeviceExecuteSlot *runtimeSlotList) {
+        RelocRange relocWorkspace(srcWorkspace, dstWorkspace);
+        /* empty constructor's overhead should be negligible */
+        std::unordered_map<uint64_t, AddressDescriptor> cacheInputOutputDict;
+        if (devStartArgs == nullptr) {
+            /* only run on host */
+            RelocBuildInputOutputDesc(cacheInputOutputDict, inputTensorDataList, outputTensorDataList);
+        }
+        {
+            auto &slottedOutcastsBlockList = runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList;
+            WsSlotAllocator::BlockHeader *base = slottedOutcastsBlockList.Data();
+            uint64_t size = slottedOutcastsBlockList.size();
+            for (uint64_t k = 0; k < size; k++) {
+                relocWorkspace.RelocNullable(base[k].ptr);
+            }
+        }
+        {
+            auto &slotList = runtimeBackup.slotContext.slotList;
+            DeviceExecuteSlot *base = slotList.Data();
+            uint64_t size = slotList.size();
+            for (uint64_t k = 0; k < size; k++) {
+                if (devStartArgs == nullptr) {
+                    // Host: addr uses backup
+                    AddressDescriptor *addr = &base[k].desc;
+                    RelocDescToCache(*addr, relocWorkspace, cacheInputOutputDict);
+                } else {
+                    // Device: addr uses actual
+                    AddressDescriptor *addr = &runtimeSlotList[k].desc;
+                    RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
+                }
+            }
+        }
+    }
+
+    /* Host-to-cache: devStartArgs should be nullptr. Cache-to-Device: devStartArgs should be filled */
+    void TaskAddrRelocProgram(uint64_t srcProgram, uint64_t dstProgram) {
+        RelocRange relocProgram(srcProgram, dstProgram);
+        for (uint64_t deviceIndex = 0; deviceIndex < deviceTaskCount; deviceIndex++) {
+            /* When cached, the pointer is always legal */
+            DynDeviceTaskBase *&dynTaskBaseRef = deviceTaskCacheList[deviceIndex].dynTaskBase;
+            DynDeviceTaskBase *dynTaskBase = RelocControlFlowCachePointer(dynTaskBaseRef, relocProgram);
+            relocProgram.Reloc(dynTaskBase->devTask.readyAivCoreFunctionQue);
+            relocProgram.Reloc(dynTaskBase->devTask.readyAicCoreFunctionQue);
+            relocProgram.Reloc(dynTaskBase->devTask.readyAicpuFunctionQue);
+            for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+                ReadyCoreFunctionQueue *&readyQueueRef = dynTaskBase->readyQueue[i];
+                ReadyCoreFunctionQueue *readyQueue = RelocControlFlowCachePointer(readyQueueRef, relocProgram);
+                relocProgram.Reloc(readyQueue->elem);
+            }
+            relocProgram.Reloc(dynTaskBase->cceBinary);
+            relocProgram.Reloc(dynTaskBase->aicpuLeafBinary);
+
+            ReadyQueueCache *&readyQueueBackupRef = dynTaskBase->readyQueueBackup;
+            ReadyQueueCache *readyQueueBackup = RelocControlFlowCachePointer(readyQueueBackupRef, relocProgram);
+            for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
+                relocProgram.Reloc(readyQueueBackup->queueList[i].elem);
+            }
+
+            DynFuncHeader *&dynFuncDataListRef = dynTaskBase->dynFuncDataList;
+            DynFuncHeader *dynFuncDataList = RelocControlFlowCachePointer(dynFuncDataListRef, relocProgram);
+            DynFuncDataCache *dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
+            DynFuncDataBackup *dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
+
+            for (uint32_t dupIndex = 0; dupIndex < dynFuncDataList->funcNum; dupIndex++) {
+                DynFuncData *dynData = &dynFuncDataList->At(dupIndex);
+                DynFuncDataCache *dynDataCache = &dynFuncDataCacheList->At(dupIndex);
+                DynFuncDataBackup *dynDataBackup = &dynFuncDataBackupList->At(dupIndex);
+
+                DevAscendFunctionDuppedData *&duppedDataRef = dynDataCache->duppedData;
+                DevAscendFunctionDuppedData *duppedData = RelocControlFlowCachePointer(duppedDataRef, relocProgram);
+
+                // Reloc Stitch
+                for (uint32_t i = 0; i < duppedData->GetStitchSize(); i++) {
+                    DevAscendFunctionDuppedStitchList &stitchList = duppedData->GetStitch(i);
+                    DevAscendFunctionDuppedStitch *&stitchRef = stitchList.Head();
+                    for (DevAscendFunctionDuppedStitch **nodePtr = &stitchRef; *nodePtr != nullptr; ) {
+                        DevAscendFunctionDuppedStitch *node = RelocControlFlowCachePointer(*nodePtr, relocProgram);
+                        nodePtr = &node->Next();
+                    }
+                }
+
+                // Reloc Dupped
+                relocProgram.Reloc(duppedData->source_);
+
+                // Reloc DynFuncData
+                relocProgram.Reloc(dynData->opAttrs);
+                relocProgram.Reloc(dynData->opAtrrOffsets);
+                relocProgram.Reloc(dynData->exprTbl);
+                relocProgram.Reloc(dynData->rawTensorDesc);
+                relocProgram.Reloc(dynData->rawTensorAddr);
+
+                relocProgram.Reloc(dynDataCache->devFunc);
+                relocProgram.Reloc(dynDataCache->predCount);
+                relocProgram.Reloc(dynDataCache->calleeList);
+                relocProgram.RelocNullable(dynDataBackup->predCountBackup);
+                relocProgram.RelocNullable(dynDataBackup->rawTensorAddrBackup);
+            }
+        }
+    }
+};
+
+#define ControlFlowAllocateSlab(devProg, size, expr) \
+    ({ \
+        WsAllocation ws; \
+        DevProgramControlFlowCache *c = (devProg)->GetControlFlowCache(); \
+        if (c->IsRecording()) { \
+            void *ptr = c->AllocateCache(size); \
+            if (ptr != nullptr) { \
+                ws.ptr = reinterpret_cast<uintdevptr_t>(ptr); \
+            } else { \
+                ws = (expr); \
+            } \
+        } else { \
+            ws = (expr); \
+        } \
+        ws; \
+    })
+}

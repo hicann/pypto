@@ -16,7 +16,6 @@
 #pragma once
 
 #include "vector.h"
-#include "dev_encode.h"
 #include "allocator/allocators.h"
 #include "tilefwk/core_func_data.h"
 #ifndef __DEVICE__
@@ -111,5 +110,6 @@ struct DynDeviceTask : DynDeviceTaskBase {
 #endif
 };
 
+#define DYN_DEVICE_TASK_EXT_SIZE 0x300
 static_assert(sizeof(DynDeviceTask) < sizeof(DynDeviceTaskBase) + DYN_DEVICE_TASK_EXT_SIZE, "Invalid dyn device task extension");
 }

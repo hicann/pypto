@@ -23,7 +23,6 @@
 
 #include "securec.h"
 
-#include "machine/utils/dynamic/dev_encode.h"
 #include "tileop/distributed/hccl_context.h"
 #include "machine/utils/device_log.h"
 #include "machine/utils/dynamic/dev_workspace.h"

@@ -324,8 +324,8 @@ uint64_t DeviceStitchContext::PartialUpdateStitch(DevAscendFunctionDupped &nextD
         auto &consumer = nextSrc->At(incast.consumerList, n);
         uint64_t consumerOffset[DEV_SHAPE_DIM_MAX];
         uint64_t consumerShape[DEV_SHAPE_DIM_MAX];
-        nextSrc->GetTensorOffsetAndShape<false>(
-                consumerOffset, consumerShape, expressionList, incast.dim, consumer.operationIdx, consumer.operandIdx, true);
+        GetTensorOffsetAndShape<false>(
+                nextSrc, consumerOffset, consumerShape, expressionList, incast.dim, consumer.operationIdx, consumer.operandIdx, true);
 
         DEV_IF_VERBOSE_DEBUG {
             for (int j = 0; j < cellMatchTableDesc.GetDimensionSize(); j++) {
@@ -334,7 +334,7 @@ uint64_t DeviceStitchContext::PartialUpdateStitch(DevAscendFunctionDupped &nextD
             }
         }
 
-        nextSrc->CellMatchHandle<HandleCellMatchPartial>(
+        CellMatchHandle<HandleCellMatchPartial>(
                 consumerOffset, consumerShape, cellMatchTableDesc,
                 partialUpdateTableData, &matchCount, stitchedList_.data(), stitchedList_.size(), &nextDup,
                 devTaskId, devNextIdx, consumer.operationIdx, workspace_, slotIdx);
@@ -377,9 +377,9 @@ uint64_t DeviceStitchContext::FullCoverDefaultUpdateStitch(DevAscendFunctionDupp
         auto &consumer = nextSrc->At(incast.consumerList, n);
         uint64_t consumerOffset[DEV_SHAPE_DIM_MAX];
         uint64_t consumerShape[DEV_SHAPE_DIM_MAX];
-        nextSrc->GetTensorOffsetAndShape<false>(
-                consumerOffset, consumerShape, expressionList, incast.dim, consumer.operationIdx, consumer.operandIdx, true);
-        nextSrc->CellMatchHandle<HandleCellMatchFull>(
+        GetTensorOffsetAndShape<false>(
+                nextSrc, consumerOffset, consumerShape, expressionList, incast.dim, consumer.operationIdx, consumer.operandIdx, true);
+        CellMatchHandle<HandleCellMatchFull>(
                 consumerOffset, consumerShape, cellMatchTableDesc,
                 fullUpdateTableData,
                 &matchCount,

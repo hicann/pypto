@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "machine/utils/dynamic/dev_encode.h"
+#include "machine/utils/dynamic/dev_encode_program.h"
 
 namespace npu::tile_fwk::dynamic {
 const uint32_t DUMP_INDEX_SIZE_2 = 2;

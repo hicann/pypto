@@ -20,7 +20,6 @@
 #include "securec.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/dynamic/device_perf.h"
-#include "machine/utils/dynamic/dev_encode.h"
 #include "tilefwk/aicpu_runtime.h"
 #include "tilefwk/aicore_data.h"
 

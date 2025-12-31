@@ -41,12 +41,12 @@ static void UpdateSlotsForStitch(int slotIdx, DeviceExecuteSlot &slot, DevAscend
         auto tableData = &slot.partialUpdate->cellMatchRuntimePartialUpdateTable[0];
         auto producerSize = outcast.producerList.size();
         if (producerSize != 0) {
-            devRootSrc->CellMatchFillIncastOutcast<false>(
-                    producerList, producerSize, expressionList, false, cellMatchTableDesc, tableData, devTaskId, devNextIdx);
+            CellMatchFillIncastOutcast<false>(
+                    devRootSrc, producerList, producerSize, expressionList, false, cellMatchTableDesc, tableData, devTaskId, devNextIdx);
         } else {
             // maybe is fullcover producer, dassemble full shape
-            devRootSrc->CellMatchFillIncastOutcast<false>(
-                    &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0), outcast.stitchPolicyFullCoverProducerList.size(),
+            CellMatchFillIncastOutcast<false>(
+                    devRootSrc, &devRootSrc->At(outcast.stitchPolicyFullCoverProducerList, 0), outcast.stitchPolicyFullCoverProducerList.size(),
                     expressionList, false, cellMatchTableDesc, tableData, devTaskId, devNextIdx);
         }
 
@@ -56,8 +56,8 @@ static void UpdateSlotsForStitch(int slotIdx, DeviceExecuteSlot &slot, DevAscend
     } else {
         auto &cellMatchTableDesc = outcast.cellMatchTableDesc;
         auto tableData = &devRootSrc->At(outcast.cellMatchRuntimeFullUpdateTable, 0);
-        devRootSrc->CellMatchFillIncastOutcast<false>(
-                producerList, outcast.producerList.size(), expressionList, false, cellMatchTableDesc, tableData);
+        CellMatchFillIncastOutcast<false>(
+                devRootSrc, producerList, outcast.producerList.size(), expressionList, false, cellMatchTableDesc, tableData);
         DEV_VERBOSE_DEBUG("[UpdateSlots] slot %d  CellMatchFull=%s\n", slotIdx,
             DevAscendFunctionDuppedStitchList::DumpTask(tableData, outcast.cellMatchRuntimeFullUpdateTable.size()).c_str());
     }

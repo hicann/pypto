@@ -21,7 +21,6 @@
 #include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
-#include "machine/utils/dynamic/dev_encode.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
 #include "machine/device/dynamic/device_common.h"
 #include "machine/runtime/device_memory_utils.h"

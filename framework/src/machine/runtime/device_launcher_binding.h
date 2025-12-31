@@ -21,10 +21,9 @@
 
 #include "interface/function/function.h"
 #include "interface/program/program.h"
-#include "machine/utils/dynamic/dev_encode.h"
+#include "machine/utils/dynamic/dev_encode_program.h"
 
 namespace npu::tile_fwk::dynamic {
-
 using DeviceStream = unsigned long long;
 DeviceStream DeviceGetAicpuStream();
 DeviceStream DeviceGetAicoreStream();
