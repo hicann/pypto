@@ -17,8 +17,8 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-template <int axis, typename T0, typename T1, typename T2>
-TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1) {
+template <int axis, typename T0, typename T1, typename T2, typename T3>
+TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp) {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr size_t expectSize = 5;
     const auto srcLayout = src0.GetLayout();
@@ -44,18 +44,25 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1) {
     auto n2DstStride = dstLayout.template GetStrideDim<2, expectSize>();
     auto n3DstStride = dstLayout.template GetStrideDim<3, expectSize>();
 
-    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
-    constexpr auto idxTileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
     constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
 
     constexpr bool scalarFlag = (sizeof(typename T2::Type) == 8) ? true : false;
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+    constexpr auto srcTileShape1 = TileOp::GetOutterAxisMergeResult<shapeSize, typename T1::TileShape>();
+    using srcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileShape1, srcTileW, pto::BLayout::RowMajor>;
+    using idxTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, idxTileW, pto::BLayout::RowMajor, -1, -1>;
+    using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+    srcTileDefine srcTile;
+    idxTileDefine idxTile(1, n4IdxShape);
+    dstTileDefine dstTile(1, n4IdxShape);
     set_flag(PIPE_V, PIPE_S, EVENT_ID7);
     wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
     auto srcAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
     auto idxAddr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
+    auto tmpAddr = (__ubuf__ typename T2::Type*)((uint64_t)(tmp.GetAddr()));
     auto newIdxValue = 0;
     for (int i = 0; i < n0IdxShape; ++i) {
         for (int j = 0; j < n1IdxShape; ++j) {
@@ -68,13 +75,13 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1) {
                         if constexpr (axis == 0) {
                             newIdxValue =
                                 orgIdxValue * n0SrcStride  + j * n1SrcStride + k * n2SrcStride + l * n3SrcStride + m;
-                        } else if (axis == 1) {
+                        } else if constexpr (axis == 1) {
                             newIdxValue =
                                 i * n0SrcStride  + orgIdxValue * n1SrcStride + k * n2SrcStride + l * n3SrcStride + m;
-                        } else if (axis == 2) {
+                        } else if constexpr (axis == 2) {
                             newIdxValue =
                                 i * n0SrcStride  + j * n1SrcStride + orgIdxValue * n2SrcStride + l * n3SrcStride + m;
-                        } else if (axis == 3) {
+                        } else if constexpr (axis == 3) {
                             newIdxValue =
                                 i * n0SrcStride  + j * n1SrcStride + k * n2SrcStride + orgIdxValue * n3SrcStride + m;
                         } else {
@@ -84,39 +91,25 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1) {
                         if constexpr (scalarFlag) {
                             dstAddr[dstOffset] = srcAddr[newIdxValue];
                         } else {
-                            *(idxAddr + i * n0IdxStride + j * n1IdxStride + k * n2IdxStride + l * n3IdxStride + m) =
-                                newIdxValue;
+                            *(tmpAddr + m) = newIdxValue;
                         }
+                    }
+                    if constexpr (scalarFlag == false) {
+                        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        auto dstAddrOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride;
+                        pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstAddrOffset * dstTypeSize));
+                        pto::TASSIGN(srcTile, (uint64_t)(src0.GetAddr()));
+                        pto::TASSIGN(idxTile, (uint64_t)(tmp.GetAddr()));
+                        pto::TGATHER(dstTile, srcTile, idxTile);
                     }
                 }
             }
         }
     }
-    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
-    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
-
-    if constexpr (scalarFlag == false) {
-        constexpr auto dstTypeSize = sizeof(typename T0::Type);
-        constexpr auto idxTypeSize = sizeof(typename T2::Type);
-        constexpr auto srcTileShape1 = TileOp::GetOutterAxisMergeResult<shapeSize, typename T1::TileShape>();
-        using srcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileShape1, srcTileW, pto::BLayout::RowMajor>;
-        using idxTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, idxTileH, idxTileW, pto::BLayout::RowMajor, -1, -1>;
-        using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-        srcTileDefine srcTile;
-        idxTileDefine idxTile(n3IdxShape, n4IdxShape);
-        dstTileDefine dstTile(n3IdxShape, n4IdxShape);
-        for (int i = 0; i < n0IdxShape; ++i) {
-            for (int j = 0; j < n1IdxShape; ++j) {
-                for (int k = 0; k < n2IdxShape; ++k) {
-                    auto idxOffset = i * n0IdxStride + j * n1IdxStride + k * n2IdxStride;
-                    auto dstOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride;
-                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
-                    pto::TASSIGN(srcTile, (uint64_t)(src0.GetAddr()));
-                    pto::TASSIGN(idxTile, (uint64_t)(src1.GetAddr() + idxOffset * idxTypeSize));
-                    pto::TGATHER(dstTile, srcTile, idxTile);
-                }
-            }
-        }
+    if constexpr (scalarFlag) {
+        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
     }
 }
 

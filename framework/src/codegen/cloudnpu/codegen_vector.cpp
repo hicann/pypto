@@ -507,8 +507,7 @@ std::string CodeGenOpCloudNPU::PrintGatherElementDynamicUnaligned(const PrintGat
     // template param
     std::ostringstream oss;
     std::vector<std::string> paramList;
-    paramList.insert(paramList.end(),
-        {dataTypeExpr[ToUnderlying(MISOIdx::SRC0_IDX)], dataTypeExpr[ToUnderlying(MISOIdx::SRC1_IDX)]});
+    paramList.insert(paramList.end(), {dataTypeExpr[ID1], dataTypeExpr[ID2]});
     for (size_t i = 1; i < src0RawShape.size(); ++i) {
         paramList.emplace_back(std::to_string(src0RawShape[i]));
     }
@@ -523,11 +522,11 @@ std::string CodeGenOpCloudNPU::PrintGatherElementDynamicUnaligned(const PrintGat
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     // func actual param
     paramList.clear();
-    std::string dst = "(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::DST_IDX)] + "*)" + dVar;
-    std::string src0 = "(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC0_IDX)] + "*)" + s0Var;
-    std::string src1 = "(__ubuf__ " + dataTypeExpr[ToUnderlying(MISOIdx::SRC1_IDX)] + "*)" + s1Var;
+    std::string dst = "(__ubuf__ " + dataTypeExpr[ID0] + "*)" + dVar;
+    std::string src0 = "(__ubuf__ " + dataTypeExpr[ID1] + "*)" + s0Var;
+    std::string src1 = "(__ubuf__ " + dataTypeExpr[ID2] + "*)" + s1Var;
     paramList.insert(paramList.end(), {dst, src0, src1});
-    auto dstValidShape = dynamicValidShape[ToUnderlying(MISOIdx::DST_IDX)];
+    auto dstValidShape = dynamicValidShape[ID0];
     FillIntVecWithDummyInHead<SymbolicScalar>(dstValidShape, SHAPE_DIM4 - dstValidShape.size(), 1);
     for (int i = 0; i < SHAPE_DIM4; i++) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstValidShape[i]));
@@ -539,30 +538,31 @@ std::string CodeGenOpCloudNPU::PrintGatherElementDynamicUnaligned(const PrintGat
 }
 
 std::string CodeGenOpCloudNPU::PrintGatherElementTileTensor(const PrintGatherEleParam &param) const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
-    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
-    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
+    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ID0]);
+    std::string tmpTensor = sm->QueryTileTensorByMagic(operandWithMagic[ID1]);
+    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID2]);
+    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID3]);
     std::vector<std::string> paramList;
     int axis = param.axis + SHAPE_DIM5 - param.src1RawShape.size();
     paramList.emplace_back(std::to_string(axis));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     std::ostringstream oss;
     oss << tileOpName << "<" << templateParam << ">"
-        << "(" << dstTensor << ", " << src0Tensor << ", " << src1Tensor << ");\n";
+        << "(" << dstTensor << ", " << src0Tensor << ", " << src1Tensor << ", " << tmpTensor << ");\n";
     return oss.str();
 }
 
 std::string CodeGenOpCloudNPU::GenGatherElementOp() const {
-    std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
-    std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
-    std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
+    std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
+    std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
-    std::vector dstShape = this->rawShape[ToUnderlying(MISOIdx::DST_IDX)];
-    std::vector src0Shape = this->rawShape[ToUnderlying(MISOIdx::SRC0_IDX)];
-    std::vector src1Shape = this->rawShape[ToUnderlying(MISOIdx::SRC1_IDX)];
-    std::string dstDtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(MISOIdx::DST_IDX)]);
-    std::string src0DtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(MISOIdx::SRC0_IDX)]);
-    std::string src1DtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(MISOIdx::SRC1_IDX)]);
+    std::vector dstShape = this->rawShape[ID0];
+    std::vector src0Shape = this->rawShape[ID2];
+    std::vector src1Shape = this->rawShape[ID3];
+    std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
+    std::string src0DtypeStr = DataType2CCEStr(operandDtype[ID2]);
+    std::string src1DtypeStr = DataType2CCEStr(operandDtype[ID3]);
     AppendLocalBufVarOffsetInOrder(dVar, s0Var, s1Var);
 
     // [case1] src0: [S2,D], src1: [B,S], axis: 0, dst: [B,S]

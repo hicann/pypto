@@ -232,7 +232,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
     std::string res = GetResultFromCpp(*function);
     std::string expect = R"!!!(#include "TileOpImpl.h"
 
-// funcHash: 4406265521673542194
+// funcHash: 5182520263222270487
 
 extern "C" [aicore] void TENSOR_GATHER_ELEMET_TILETENSOR_Unroll1_PATH0_hiddenfunc0_7_0_4503599627370496(CoreFuncParam* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ GMTensorInfo* oriAddrParam) {
 float __ubuf__ *UB_S0_E2048 = (float __ubuf__ *)get_imm(0x0); // size: 0x800
@@ -241,18 +241,22 @@ int32_t __ubuf__ *UB_S2048_E2112 = (int32_t __ubuf__ *)get_imm(0x800); // size: 
 int32_t *UB_S2048_E2112_T = (int32_t *)get_imm(0x800); // size: 0x40
 float __ubuf__ *UB_S2112_E2176 = (float __ubuf__ *)get_imm(0x840); // size: 0x40
 float *UB_S2112_E2176_T = (float *)get_imm(0x840); // size: 0x40
+int32_t __ubuf__ *UB_S2176_E2208 = (int32_t __ubuf__ *)get_imm(0x880); // size: 0x20
+int32_t *UB_S2176_E2208_T = (int32_t *)get_imm(0x880); // size: 0x20
 uint64_t sym_10_dim_0 = GET_PARAM_VALID_SHAPE_BY_IDX(param, 2, 19, 2, 0);
 uint64_t sym_10_dim_1 = GET_PARAM_VALID_SHAPE_BY_IDX(param, 2, 19, 2, 1);
 uint64_t sym_6_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 0);
 uint64_t sym_6_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 10, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 1, 10, 2, 1);
 uint64_t sym_9_dim_0 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 1, 0)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, 1, 2, 0);
 uint64_t sym_9_dim_1 = (RUNTIME_COA_GET_PARAM_VALID_SHAPE(2, 1, 1)); //GET_PARAM_VALID_SHAPE_BY_IDX(param, 0, 1, 2, 1);
+using GMTileTensorFP32Dim2_7 = TileTensor<__gm__ float, DynLayout2Dim, Hardware::GM>;
 using UBTileTensorFP32Dim2_5 = TileTensor<float, LocalLayout2Dim<2, 8>, Hardware::UB>;
+using UBTileTensorINT32Dim1_6 = TileTensor<int32_t, LocalLayout1Dim<8>, Hardware::UB>;
 using GMTileTensorINT32Dim2_4 = TileTensor<__gm__ int32_t, DynLayout2Dim, Hardware::GM>;
-using GMTileTensorFP32Dim2_6 = TileTensor<__gm__ float, DynLayout2Dim, Hardware::GM>;
 using UBTileTensorINT32Dim2_3 = TileTensor<int32_t, LocalLayout2Dim<2, 8>, Hardware::UB>;
 using GMTileTensorFP32Dim2_2 = TileTensor<__gm__ float, DynLayout2Dim, Hardware::GM>;
 using UBTileTensorFP32Dim2_1 = TileTensor<float, LocalLayout2Dim<2, 256>, Hardware::UB>;
+UBTileTensorINT32Dim1_6 ubTensor_6((uint64_t)UB_S2176_E2208_T, (Shape2Dim(sym_9_dim_0, sym_9_dim_1)));
 UBTileTensorFP32Dim2_5 ubTensor_5((uint64_t)UB_S2112_E2176_T, (Shape2Dim(sym_9_dim_0, sym_9_dim_1)));
 GMTileTensorINT32Dim2_4 gmTensor_4((__gm__ int32_t*)GET_PARAM_ADDR(param, 0, 0), DynLayout2Dim(Shape2Dim(GET_PARAM_RAWSHAPE_2(param, 0, 0)), Stride2Dim(GET_PARAM_STRIDE_2(param, 0, 0))));
 UBTileTensorINT32Dim2_3 ubTensor_3((uint64_t)UB_S2048_E2112_T, (Shape2Dim(sym_9_dim_0, sym_9_dim_1)));
@@ -264,7 +268,7 @@ TLoad(ubTensor_3, gmTensor_4, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 1, 0)),
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TgatherElement<4>(ubTensor_5, ubTensor_1, ubTensor_3);
+TgatherElement<4>(ubTensor_5, ubTensor_1, ubTensor_3, ubTensor_6);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 TStore(gmTensor_4, ubTensor_5, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));
