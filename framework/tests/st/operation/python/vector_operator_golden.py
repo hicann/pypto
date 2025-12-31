@@ -1244,15 +1244,14 @@ def gen_numpy_op_golden(case_name: str, output: Path, case_index: int = None) ->
         step = params["step"]
         output_tensors_type = config["output_tensors"][0]["dtype"]
         inputdata_type = get_dtype_by_name(output_tensors_type)
-        if isinstance(start, float) or isinstance(end, float) or isinstance(step, float):
-            if inputdata_type == bfloat16:
-                result = torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float32)
-                return [result.numpy().astype(bfloat16)]
-            elif inputdata_type == np.float16:
-                return [torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float16).numpy()]
-            else:
-                return [torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float32).numpy()]
-        return [torch.arange(start, end, step).numpy()]
+        if inputdata_type == bfloat16:
+            result = torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float32)
+            return [result.numpy().astype(bfloat16)]
+        elif inputdata_type == np.float16:
+            return [torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float16).numpy()]
+        elif inputdata_type == np.float32:
+            return [torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float32).numpy()]
+        return [torch.arange(np.int32(start), np.int32(end), np.int32(step)).numpy()]
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Range", golden_func, output, case_index)

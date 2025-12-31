@@ -56,6 +56,7 @@ TEST_F(TestCodegenDynRange, TestDynOpRange) {
     Element start(DataType::DT_FP32, 1.0);
     Element step(DataType::DT_FP32, 2.0);
     Element size(DataType::DT_FP32, 3.0);
+    int64_t idx = 0;
 
     std::string funcName = "TestDynOpRange";
     FUNCTION(funcName, {inputA, inputB, output}) {
@@ -76,6 +77,8 @@ TEST_F(TestCodegenDynRange, TestDynOpRange) {
     op.SetAttribute(OP_ATTR_PREFIX + "START", start);
     op.SetAttribute(OP_ATTR_PREFIX + "STEP", step);
     op.SetAttribute(OP_ATTR_PREFIX + "SIZE", size);
+    SymbolicScalar tileIdx(idx);
+ 	op.SetAttribute(OpAttributeKey::dynScalar, tileIdx); 
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -87,7 +90,7 @@ TEST_F(TestCodegenDynRange, TestDynOpRange) {
     cop.Init(op);
     std::string res = cop.GenOpCode();
     std::string expect =
-        R"!!!(TileOp::DynRange<float, 64>((__ubuf__ float*)UB_S0_E0, 64, 1.000000, 2.000000);
+        R"!!!(TileOp::DynRange<float, 64>((__ubuf__ float*)UB_S0_E0, 64, 1.000000, 2.000000, ((int64_t)(0)));
 )!!!";
     EXPECT_EQ(res, expect);
 }

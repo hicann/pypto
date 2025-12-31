@@ -1073,27 +1073,20 @@ void TiledRange(Function &function, const TileShape &tileShape, const Element st
     const LogicalTensorPtr &result) {
     TileInfo resultTileInfo(result->shape.size(), result->offset.size());
     auto &vecTile = tileShape.GetVecTile();
-    for (int i = 0; i < result->shape[0]; i += vecTile[0]) {
+    for (int64_t i = 0; i < result->shape[0]; i += vecTile[0]) {
         resultTileInfo.offset[0] = i;
         resultTileInfo.shape[0] = std::min(result->shape[0] - resultTileInfo.offset[0], vecTile[0]);
         int64_t curSizeValue = resultTileInfo.shape[0];
         Element curSize(DT_INT64, curSizeValue);
-        Element curStart;
-        if (start.GetDataType() == DT_INT32) {
-            curStart = GetCurStartElement<int32_t, DT_INT32>(start, step, i);
-        } else if (start.GetDataType() == DT_INT64) {
-            curStart = GetCurStartElement<int64_t, DT_INT64>(start, step, i);
-        } else if (start.GetDataType() == DT_FP32) {
-            curStart = GetCurStartElement<float, DT_FP32>(start, step, i);
-        } else {
-            std::string errorMessage = "Unsupported DataType " + DataType2String(start.GetDataType());
-            throw std::invalid_argument(errorMessage.c_str());
-        }
+        Element curStart = start;
+
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
         auto &op = function.AddOperation(Opcode::OP_RANGE, {}, {resultTile});
         op.SetAttribute(OP_ATTR_PREFIX + "START", curStart);
         op.SetAttribute(OP_ATTR_PREFIX + "SIZE", curSize);
         op.SetAttribute(OP_ATTR_PREFIX + "STEP", step);
+        SymbolicScalar tileIdx(i);
+ 	    op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);         
     }
     return;
 }

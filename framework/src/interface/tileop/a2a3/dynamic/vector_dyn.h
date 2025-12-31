@@ -2990,77 +2990,73 @@ TILEOP void DynTSmaxs(__ubuf__ T *dst, __ubuf__ T *src, float scalar, unsigned T
 const int32_t DEFAULT_REPEAT_STRIDE = 8;
 const int32_t NUM_EIGHT = 8;
 const int32_t ONE_BLK_SIZE = 32;
+template <typename T, int32_t StrideElems>
+TILEOP void TRangePropagate(__ubuf__ T *dst, int32_t loopN, int32_t tailSize, T addVal) {
+    if (loopN > 0) {
+        set_mask_count();
+        set_vector_mask(0, StrideElems);
+        for (int32_t i = 0; i < loopN; ++i) {
+            vadds(dst + (i + 1) * StrideElems, dst + i * StrideElems, addVal,
+                  1, 1, 1, NUM_EIGHT, NUM_EIGHT);
+            pipe_barrier(PIPE_V);
+        }
+        set_mask_norm();
+        set_vector_mask(-1, -1);
+    }
+
+    if (tailSize > 0) {
+        set_mask_count();
+        set_vector_mask(0, tailSize);
+        vadds(dst + (loopN + 1) * StrideElems, dst + loopN * StrideElems, addVal,
+              1, 1, 1, NUM_EIGHT, NUM_EIGHT);
+        pipe_barrier(PIPE_V);
+        set_mask_norm();
+        set_vector_mask(-1, -1);
+    }
+}
+
 template <typename T, unsigned dstShape0>
-TILEOP void DynRange(__ubuf__ T *dst, unsigned oriShape0, T start, T step) {
-    int32_t eleCntOfOneBlock = ONE_BLK_SIZE / sizeof(T);
-    // block One
-    if (oriShape0 <= eleCntOfOneBlock) {
-        for (int32_t j = 0; j < oriShape0; j++) {
-            *(dst + j) = start + step * (T)j;
+TILEOP void DynRange(__ubuf__ T *dst, unsigned oriShape0, T baseStart, T step, int64_t tileIdx) {
+    constexpr int32_t kBlkElems = ONE_BLK_SIZE / sizeof(T);
+    constexpr int32_t kRepElems = (ONE_BLK_SIZE * DEFAULT_REPEAT_STRIDE) / sizeof(T);
+
+    const unsigned N = oriShape0;
+    const T start = baseStart + step * (T)tileIdx;
+
+    if (N <= kBlkElems) {
+        for (int32_t j = 0; j < static_cast<int32_t>(N); ++j) {
+            dst[j] = start + step * (T)j;
         }
         set_flag(PIPE_S, PIPE_V, EVENT_ID7);
         wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
         return;
     }
-    for (int32_t j = 0; j < eleCntOfOneBlock; j++) {
-        *(dst + j) = start + step * (T)j;
+
+    for (int32_t j = 0; j < kBlkElems; ++j) {
+        dst[j] = start + step * (T)j;
     }
-    // block 2~8
+
     int32_t loopN = 0;
     int32_t tailSize = 0;
-    int32_t eleCntOfOneRep = ONE_BLK_SIZE * DEFAULT_REPEAT_STRIDE / sizeof(T);
-    if (oriShape0 >= eleCntOfOneRep) {
+    if (N >= kRepElems) {
         loopN = DEFAULT_REPEAT_STRIDE - 1;
     } else {
-        loopN = oriShape0 / eleCntOfOneBlock - 1;
-        tailSize = oriShape0 % eleCntOfOneBlock;
+        loopN = static_cast<int32_t>(N) / kBlkElems - 1;
+        tailSize = static_cast<int32_t>(N) % kBlkElems;
     }
+
     set_flag(PIPE_S, PIPE_V, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
 
-    for (int i = 0; i < loopN; i++) {
-        set_mask_count();
-        set_vector_mask(0, eleCntOfOneBlock);
-        vadds(dst + (i + 1) * eleCntOfOneBlock, dst + i * eleCntOfOneBlock, step * (T)eleCntOfOneBlock, 1, 1, 1,
-            NUM_EIGHT, NUM_EIGHT);
-        pipe_barrier(PIPE_V);
-        set_mask_norm();
-        set_vector_mask(-1, -1);
-    }
+    TRangePropagate<T, kBlkElems>(dst, loopN, tailSize, step * (T)kBlkElems);
 
-    if (tailSize > 0) {
-        set_mask_count();
-        set_vector_mask(0, tailSize);
-        vadds(dst + (loopN + 1) * eleCntOfOneBlock, dst + loopN * eleCntOfOneBlock, step * (T)eleCntOfOneBlock, 1, 1, 1,
-            NUM_EIGHT, NUM_EIGHT);
-        pipe_barrier(PIPE_V);
-        set_mask_norm();
-        set_vector_mask(-1, -1);
-    }
-
-    if (oriShape0 <= eleCntOfOneRep) {
+    if (N <= kRepElems) {
         return;
     }
-    // Repeat
-    loopN = oriShape0 / eleCntOfOneRep - 1;
-    tailSize = oriShape0 % eleCntOfOneRep;
 
-    for (int i = 0; i < loopN; i++) {
-        vadds(dst + (i + 1) * eleCntOfOneRep, dst + i * eleCntOfOneRep, step * (T)eleCntOfOneRep, 1, 1, 1, NUM_EIGHT,
-            NUM_EIGHT);
-        pipe_barrier(PIPE_V);
-    }
-
-    if (tailSize > 0) {
-        set_mask_count();
-        set_vector_mask(0, tailSize);
-        vadds(dst + (loopN + 1) * eleCntOfOneRep, dst + loopN * eleCntOfOneRep, step * (T)eleCntOfOneRep, 1, 1, 1,
-            NUM_EIGHT, NUM_EIGHT);
-        pipe_barrier(PIPE_V);
-        set_mask_norm();
-        set_vector_mask(-1, -1);
-    }
-    return;
+    loopN = static_cast<int32_t>(N) / kRepElems - 1;
+    tailSize = static_cast<int32_t>(N) % kRepElems;
+    TRangePropagate<T, kRepElems>(dst, loopN, tailSize, step * (T)kRepElems);
 }
 
 template <typename T, unsigned dstShape0, unsigned dstShape1, unsigned srcShape0, unsigned srcShape1, int axis, int offset, int isLargest>

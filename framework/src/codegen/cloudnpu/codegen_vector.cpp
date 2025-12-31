@@ -614,13 +614,21 @@ std::string CodeGenOpCloudNPU::GenRangeOp() const {
             break;
         default: ALOG_ERROR_F("GenRangeOp: Unsupport type: DataType=%d", operandDtype[ID0]); return "CG_ERROR";
     }
+    std::string tileIdxExpr;
+    if (opAttrs.count(OpAttributeKey::dynScalar)) {
+        auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
+        ASSERT((scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
+            << npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny).IsValid()
+            << "SCALAR attribute has to have symbolic value.";
+        auto scalarExpr = npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny);
+        tileIdxExpr = "((int64_t)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + "))"; 
+    }   
+
     std::ostringstream oss;
     std::vector<std::string> paramList;
     paramList.emplace_back(dstDtypeStr);
     paramList.emplace_back(std::to_string(dstShape[ID0]));
-
     std::string templateParam = JoinString(paramList, CONN_COMMA);
-    // func actual param
     paramList.clear();
     std::string dst = "(" + GetAddrTypeByOperandType(BUF_UB) + " " + dstDtypeStr + "*)" + dVar;
     paramList.emplace_back(dst);
@@ -628,6 +636,7 @@ std::string CodeGenOpCloudNPU::GenRangeOp() const {
     paramList.emplace_back(dstValidShape[ID0].Dump());
     paramList.emplace_back(startVal);
     paramList.emplace_back(stepVal);
+    paramList.emplace_back(tileIdxExpr);
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "<" << templateParam << ">" << "(" << tiloOpCallParam << ");\n";
     return oss.str();
