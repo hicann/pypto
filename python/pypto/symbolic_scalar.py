@@ -33,7 +33,7 @@ def _expr_preprocess(s: str) -> str:
 class SymbolicScalar:
 
     def __init__(self, arg0: Union[int, str, 'SymbolicScalar'],
-                 arg1: Union[int, None] = None):
+                 arg1: Union[int, None] = None) -> None:
         """
         Construct a SymbolicScalar.
 
@@ -42,9 +42,9 @@ class SymbolicScalar:
             arg1 Union[int, None]: The value of the symbolic scalar. Defaults to None.
 
         Examples:
-            >>> b = SymbolicScalar(10)
-            >>> c = SymbolicScalar("x")
-            >>> d = SymbolicScalar("x", 10)
+            >>> a = SymbolicScalar(10)
+            >>> b = SymbolicScalar("x")
+            >>> c = SymbolicScalar("x", 10)
         """
         if isinstance(arg0, int):
             self._base = pypto_impl.SymbolicScalar(arg0)

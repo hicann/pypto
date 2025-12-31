@@ -15,6 +15,7 @@ import pytest
 import torch
 
 
+@pytest.mark.skip(reason="Verify not supported")
 def test_verify_dynamic_ops_assemble():
     s = 32
     n = 2

@@ -180,7 +180,7 @@ void ExecutePrint(ExecuteOperationContext *ctx) {
         ts = (uint64_t)tv.tv_sec * 1000000 + tv.tv_usec;
         auto baseName = FormatString(fname, ctx->opInter, nullptr, scalars);
         auto basePath = config::LogTopFolder() + "/tensor/" + baseName + "_" + std::to_string(ts);
-        auto binPath = basePath + ".bin";
+        auto binPath = basePath + ".data";
         auto csvPath = basePath + ".csv";
         auto &iop = ctx->ioperandDataViewList->at(0);
         auto shape = iop->GetValidShape();
