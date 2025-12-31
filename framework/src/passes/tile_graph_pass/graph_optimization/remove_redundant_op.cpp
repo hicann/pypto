@@ -20,224 +20,75 @@
 
 #define MODULE_NAME "RemoveRedundantOp"
 
-using namespace npu::tile_fwk;
-namespace npu::tile_fwk {
-namespace {
-bool EqualShapeInOut(const Operation &op) {
+namespace npu {
+namespace tile_fwk {
+bool EqualInOutShape(const Operation &op) {
     auto in = op.GetIOperands().front();
     auto out = op.GetOOperands().front();
+    // 比较memtype
+    bool equalMemType = (in->GetMemoryTypeOriginal() == out->GetMemoryTypeOriginal());
     // 比较静态shape
     bool equalShape = (in->GetShape() == out->GetShape());
-    // 比较动态dynValidShape_
+    return (equalMemType && equalShape);
+}
+
+bool EqualInOut(const Operation &op) {
+    auto in = op.GetIOperands().front();
+    auto out = op.GetOOperands().front();
+    bool equalShape = EqualInOutShape(op);
     bool equalDynValidShape = true;
     if (!in->GetDynValidShape().empty() && !out->GetDynValidShape().empty()) {
         auto inDynValidShape = in->GetDynValidShape();
         auto outDynValidShape = out->GetDynValidShape();
         for (size_t i = 0; i < inDynValidShape.size(); i++) {
-            // 比较SymbolicScalar dump后的string是否相等
-            // 可能是 1.concrete value; 2.symbol; 3.expression
-            if (inDynValidShape[i].Dump() == outDynValidShape[i].Dump()) {
-                continue;
-            } else {
+            if (inDynValidShape[i].Dump() != outDynValidShape[i].Dump()) {
                 equalDynValidShape = false;
                 break;
             }
         }
     } else if (in->GetDynValidShape().empty() && out->GetDynValidShape().empty()) {
-        // 输入和输出同时没有 dynamic valid shape
         equalDynValidShape = true;
     } else {
-        // 输入和输出必须同时有 dynamic valid shape
         equalDynValidShape = false;
     }
     return (equalShape && equalDynValidShape);
 }
 
-bool AllValidProdView(const Operation &op, const Function &function) {
-    bool allProdView = true;
-    for (const auto &prod : function.FindProducers(op)) {
-        if (prod->GetOpcode() != Opcode::OP_VIEW) {
-            allProdView = false;
-        }
+Status RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation &op, Function &function) const {
+    if (!EqualInOut(op)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.opmagic);
+        return SUCCESS;
     }
-    if (allProdView) {
-        allProdView = false;
-        for (const auto &prod : function.FindProducers(op)) {
-            auto in = prod->iOperand.front();
-            auto out = prod->oOperand.front();
-            // 只要存在无法被删除的就表明allprodview为true(标记为无法删除)
-            if (!EqualShapeInOut(*prod) || in->GetMemoryTypeOriginal() != out->GetMemoryTypeOriginal()) {
-                allProdView = true;
+    function.UpdateOperandBeforeRemoveOp(op, false);
+    return SUCCESS;
+}
+
+Status RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation &op, Function &function) const {
+    if (!EqualInOutShape(op)) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s input and output has unequal shape, skip removing.", op.opmagic);
+        return SUCCESS;
+    }
+    function.UpdateOperandBeforeRemoveOp(op, false);
+    return SUCCESS;
+}
+
+Status RemoveRedundantOp::RemoveDummyOp(Function &function) const {
+    for (auto &op: function.Operations()) {
+        if (matchOpcodeWithDynshape.find(op.GetOpcode()) != matchOpcodeWithDynshape.end()) {
+            if (ProcessRedundantOpWithDynShape(op, function) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "ProcessRedundantOp failed.%s", GetFormatBacktrace(op).c_str());
+                return FAILED;
+            }
+        }
+        if (matchOpcodeWithoutDynshape.find(op.GetOpcode()) != matchOpcodeWithoutDynshape.end()) {
+            if (ProcessRedundantOpWithoutDynShape(op, function) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "ProcessRedundantOpWithoutDynShape failed.%s", GetFormatBacktrace(op).c_str());
+                return FAILED;
             }
         }
     }
-    return allProdView;
-}
-
-Status ProcessRegCopy(const Operation &op, const Function &function, bool &needToDelete) {
-    auto regCopyIn = op.iOperand.front();
-    auto regCopyOut= op.oOperand.front();
-    if (regCopyIn->shape == regCopyOut->shape && regCopyIn->GetMemoryTypeOriginal() == regCopyOut->GetMemoryTypeOriginal()) {
-        /*
-        register copy 输入和输出且memtype相同，无拷贝意义
-        view -> ub -> register copy -> ub -> op
-        view -> ub  -> op
-        */
-        auto consumerOps = function.FindConsumers(op);
-        /* register copy 一定有后继op*/
-        if (consumerOps.empty()) {
-            APASS_LOG_ERROR_F(Elements::Operation, 
-            "OP_REG_COPY[%d]'s output has no consumer; OP_REG_COPY[%d]'s output must have consumer.%s", op.opmagic, op.opmagic, GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
-        for (auto &consumerOp : consumerOps) {
-            consumerOp->ReplaceInput(regCopyIn, regCopyOut);
-        }
-        needToDelete = true;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Delete Redundant OP_REGISTER_COPY opmagic: %d.", op.opmagic);
-    }
+    DeadOperationEliminator::EliminateDeadOperation(function);
     return SUCCESS;
-}
-
-Status ProcessAssembleDDR(const Operation &op, const LogicalTensorPtr &assembleIn, const LogicalTensorPtr &assembleOut,
-    Function &function, bool &needToDelete) {
-    if (AllValidProdView(op, function)) {
-        return SUCCESS;
-    }
-    auto consumerOps = function.FindConsumers(op);
-    if (!consumerOps.empty()) {
-        for (auto &consumerOp : consumerOps) {
-            consumerOp->ReplaceInput(assembleOut, assembleIn);
-        }
-        needToDelete = true;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Delete Redundant OP_ASSEMBLE on DDR opmagic: %d.", op.opmagic);
-        return SUCCESS;
-    }
-    /* DDR --> Assemble --> OUTCAST */
-    if (assembleOut->nodetype != NodeType::OUTCAST || !function.IsFromOutCast(assembleOut)) {
-        APASS_LOG_ERROR_F(Elements::Operation, 
-        "OP_ASSEMBLE[%d]'s output has no consumer but is not outcast; Please check if the OP_ASSEMBLE[%d]'s output is outcast.%s", 
-        op.opmagic, op.opmagic, GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
-    APASS_LOG_DEBUG_F(Elements::Operation, "OP_ASSEMBLE has no consumers, opmagic: %d.", op.opmagic);
-    auto childOpsBackup = assembleIn->GetConsumers();
-    for (auto &childOp : childOpsBackup) {
-        if (childOp->GetOpMagic() == op.GetOpMagic()) {
-            continue;
-        }
-        childOp->ReplaceInput(assembleOut, assembleIn);
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Repalce input of %s opmagic: %d, tensor %d --> tensor %d.", 
-        childOp->GetOpcodeStr().c_str(), childOp->GetOpMagic(), assembleIn->magic, assembleOut->magic);
-    }
-    auto producerOps = op.ProducerOps();
-    for (auto &producerOp : producerOps) {
-        producerOp->ReplaceOutput(assembleOut, assembleIn);
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Repalce output of %s opmagic: %d, tensor %d --> tensor %d",
-            producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic(), assembleIn->magic, assembleOut->magic);
-    }
-    needToDelete = true;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Delete Redundant OP_ASSEMBLE on DDR opmagic: %d.", op.opmagic);
-    return SUCCESS;
-}
-
-Status ProcessAssembleUB(const Operation &op, const LogicalTensorPtr &ASSEMBLE_in, const LogicalTensorPtr &ASSEMBLE_out,
-    Function &function, bool &needToDelete) {
-    // 如果输出存在多个producer则意味着是多assemble场景，则assemble不能消除。
-    if (ASSEMBLE_out->GetProducers().size() > 1) {
-        return SUCCESS;
-    }
-    /*
-    assemble 输入和输出相同，无意义
-    */
-    auto consumerOps = function.FindConsumers(op);
-    /* UB 上的 ASSEMBLE 一定有后继op*/
-    if (consumerOps.empty()) {
-        APASS_LOG_ERROR_F(Elements::Operation, 
-        "OP_ASSEMBLE[%d]'s output is empty; OP_ASSEMBLE[%d]'s output for ub must have consumer.%s", op.opmagic, op.opmagic, GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
-    for (auto &consumerOp : consumerOps) {
-        consumerOp->ReplaceInput(ASSEMBLE_in, ASSEMBLE_out);
-    }
-    needToDelete = true;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Delete Redundant OP_ASSEMBLE on UB opmagic: %d", op.opmagic);
-    return SUCCESS;
-}
-
-Status ProcessAssemble(const Operation &op, Function &function, bool &needToDelete) {
-    auto ASSEMBLE_in = op.iOperand.front();
-    auto ASSEMBLE_out = op.oOperand.front();
-    if (ASSEMBLE_in->shape != ASSEMBLE_out->shape) {
-        return SUCCESS;
-    }
-    if (ASSEMBLE_in->GetMemoryTypeOriginal() != ASSEMBLE_out->GetMemoryTypeOriginal()) {
-        return SUCCESS;
-    }
-    if (ASSEMBLE_in->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
-        ProcessAssembleDDR(op, ASSEMBLE_in, ASSEMBLE_out, function, needToDelete)) {
-        APASS_LOG_ERROR_F(Elements::Operation, "ProcessAssembleDDR failed.%s", GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
-    if (ASSEMBLE_in->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
-        ProcessAssembleUB(op, ASSEMBLE_in, ASSEMBLE_out, function, needToDelete)) {
-        APASS_LOG_ERROR_F(Elements::Operation, "ProcessAssembleUB failed.%s", GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
-    return SUCCESS;
-}
-
-Status ProcessView(const Operation &op, Function &function, bool &needToDelete) {
-    auto in = op.iOperand.front();
-    auto out = op.oOperand.front();
-    if (EqualShapeInOut(op) && in->GetMemoryTypeOriginal() == out->GetMemoryTypeOriginal()) {
-        auto consumerOps = function.FindConsumers(op);
-        if (!consumerOps.empty()) {
-            for (auto &consumerOp : consumerOps) {
-                consumerOp->ReplaceInput(in, out);
-            }
-        }
-        needToDelete = true;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Delete Redundant OP_VIEW opmagic: %d", op.opmagic);
-    }
-    if (out->GetConsumers().size() == 1) {
-        auto childOp = *(out->GetConsumers().begin());
-        if (childOp->GetOpcode() == Opcode::OP_COMM_WAIT_FLAG) {
-            childOp->ReplaceInput(in, out);
-            needToDelete = true;
-        }
-    }
-    return SUCCESS;
-}
-
-/*
-before:
-                                            / --> child1
-                                            /
-inputTensor -> op (OP_EXPAND) -> outputTensor  --> child2
-                                            \
-                                            \ --> child3
-
-after:
-            / --> child1
-            /
-inputTensor    --> child2
-            \
-            \ --> child3
-*/
-Status ProcessExpand(const Operation &op, bool &needToDelete) {
-    if (op.GetIOperands().size() != 1 || op.GetOOperands().size() != 1) {
-        APASS_LOG_ERROR_F(Elements::Operation, 
-        "Expand[%d] has incorrect input or output num; Please check the Expand[%d]'s input/output num.%s", 
-        op.opmagic, op.opmagic, GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
-    needToDelete = false;
-    if (EqualShapeInOut(op)) {
-        needToDelete = true;
-    }
-    return SUCCESS;
-}
 }
 
 Status RemoveRedundantOp::RunOnFunction(Function &function) {
@@ -246,11 +97,7 @@ Status RemoveRedundantOp::RunOnFunction(Function &function) {
         APASS_LOG_ERROR_F(Elements::Function, "RemoveDummyExpand failed.");
         return FAILED;
     }
-    if (DeleteRedundantOps(function) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "DeleteRedundantOps failed.");
-        return FAILED;
-    }
-    if (RemoveDummyExpand(function) != SUCCESS) {
+    if (RemoveDummyOp(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "RemoveDummyExpand failed.");
         return FAILED;
     }
@@ -266,95 +113,6 @@ Status RemoveRedundantOp::PreCheck(Function &function) {
 Status RemoveRedundantOp::PostCheck(Function &function) {
     RemoveRedundantOpChecker checker;
     return checker.DoPostCheck(function);
-}
-
-Status RemoveRedundantOp::RemoveDummyExpand(Function &function) const {
-    std::vector<Operation *> dummyOp;
-    bool needToDelete;
-    for (auto &op: function.Operations()) {
-        if (op.GetOpcode() == Opcode::OP_EXPAND) {
-            if (ProcessExpand(op, needToDelete) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "ProcessExpand failed.%s", GetFormatBacktrace(op).c_str());
-                return FAILED;
-            }
-            if (needToDelete) {
-                dummyOp.push_back(&op);
-                APASS_LOG_INFO_F(Elements::Operation, "Delete OP_EXPAND opmagic: %d.", op.opmagic);
-            }
-        }
-    }
-    for (const auto &op : dummyOp) {
-        function.UpdateOperandBeforeRemoveOp(*op, false);
-    }
-    for (auto op : dummyOp) {
-        if (op->IsDeleted()) {
-            APASS_LOG_ERROR_F(Elements::Operation, 
-            "Found invalid op[%d]; Please check the op[%d] is not deleted (RemoveDummyExpand).", op->opmagic, op->opmagic);
-            return FAILED;
-        }
-        op->SetAsDeleted();
-    }
-    function.EraseOperations(true);
-    return SUCCESS;
-}
-
-Status RemoveRedundantOp::NeedToDelete(const Operation &op, Function &function, bool &needToDelete) const {
-    needToDelete = false;
-    auto opcode = op.GetOpcode();
-    switch (opcode) {
-        case Opcode::OP_REGISTER_COPY: {
-            if (ProcessRegCopy(op, function, needToDelete)) {
-                APASS_LOG_ERROR_F(Elements::Operation, "ProcessView failed.%s", GetFormatBacktrace(op).c_str());
-                return FAILED;
-            }
-            break;
-        }
-        case Opcode::OP_ASSEMBLE: {
-            if (ProcessAssemble(op, function, needToDelete)) {
-                APASS_LOG_ERROR_F(Elements::Operation, "ProcessView failed.%s", GetFormatBacktrace(op).c_str());
-                return FAILED;
-            }
-            break;
-        }
-        case Opcode::OP_VIEW: {
-            if (ProcessView(op, function, needToDelete)) {
-                APASS_LOG_ERROR_F(Elements::Operation, "ProcessView failed.%s", GetFormatBacktrace(op).c_str());
-                return FAILED;
-            }
-            break;
-        }
-        default:
-            break;
-    }
-    return SUCCESS;
-}
-
-Status RemoveRedundantOp::DeleteRedundantOps(Function &function) const {
-    std::vector<Operation *> redundantOp;
-    bool needToDelete;
-    for (auto &op : function.Operations()) {
-        if (NeedToDelete(op, function, needToDelete) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "NeedToDelete failed.%s", GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
-        if (needToDelete) {
-            redundantOp.push_back(&op);
-        }
-    }
-    for (const auto &op : redundantOp) {
-        function.HandleControlOps(*op, redundantOp);
-        function.UpdateOperandBeforeRemoveOp(*op, false);
-    }
-    for (auto op : redundantOp) {
-        if (op->IsDeleted()) {
-            APASS_LOG_ERROR_F(Elements::Operation, 
-            "Found invalid op[%d]; Please check the op[%d] is not deleted (DeleteRedundantOps).", op->opmagic, op->opmagic);
-            return FAILED;
-        }
-        op->SetAsDeleted();
-    }
-    function.EraseOperations(true);
-    return SUCCESS;
 }
 
 Status RemoveRedundantOp::RemoveViewAssemble(Function &function) const {
@@ -385,26 +143,44 @@ Status RemoveRedundantOp::RemoveViewAssemble(Function &function) const {
                 //                           ---> view2  ---> tempTensor2  --->  assemble2 
                 APASS_LOG_DEBUG_F(Elements::Operation, 
                     "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.", op.opmagic, consumer->GetOpMagic());
-                ProcessPerfectMatch(function,startTensor,endTensor);
-            }else {
+                ProcessPerfectMatch(function, startTensor, endTensor);
+            } else {
                 //case2：assemble的输出tensor是view输入tensor的一部分
                 //       startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape < inshape)
                 //                            ---> view2  ---> tempTensor2  --->  assemble2 
-                GenerateNewView(function,op,startTensor,endTensor);  
+                APASS_LOG_DEBUG_F(Elements::Operation, 
+                    "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.", op.opmagic, consumer->GetOpMagic());
+                GenerateNewView(function, op, startTensor, endTensor);  
             }   
         }    
     }
-    EraseRedundantAssemble(function);
     DeadOperationEliminator::EliminateDeadOperation(function);
     return SUCCESS;
 }
 
-//处理view输入和assemble输出完美匹配场景
-void RemoveRedundantOp::ProcessPerfectMatch (Function &function,LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const{
-    // Skip the CopyOut of OCAST
-    if (endTensor->GetConsumers().size() == 0) {
-        return;
+void RemoveRedundantOp::RemoveViewAssembleForOutcast(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const{
+    bool canRemove;
+    for (auto &startConsumer: startTensor->GetConsumers()) {
+        if (startConsumer->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
+        canRemove = true;
+        for (auto &endProducer: startConsumer->ProducerOps()) {
+            if (endProducer->GetOOperands().front() != endTensor || endProducer->GetOpcode() != Opcode::OP_ASSEMBLE) {
+                canRemove = false;
+            } else {
+                function.UpdateOperandBeforeRemoveOp(*endProducer, false);
+            }
+        }
+        if (canRemove) {
+            function.UpdateOperandBeforeRemoveOp(*startConsumer, false);
+        }
     }
+}
+    
+
+//处理view输入和assemble输出完美匹配场景
+void RemoveRedundantOp::ProcessPerfectMatch(Function &function, LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const{
     //step1：排除view输入非同源场景
     bool isNotSameViewInput = IsNotSameViewInput(startTensor,endTensor); //true表示view的输入非同源
     if (isNotSameViewInput) {
@@ -420,16 +196,20 @@ void RemoveRedundantOp::ProcessPerfectMatch (Function &function,LogicalTensorPtr
         return; 
     }
     //图重连逻辑
-    for (auto &assembleConsumer : endTensor->GetConsumers()) {
-        assembleConsumer->iOperand = {startTensor};
-        startTensor->AddConsumer(assembleConsumer);
+    if (endTensor->GetConsumers().size() == 0) {
+        RemoveViewAssembleForOutcast(function, startTensor, endTensor);
+    } else {
+        for (auto &assembleConsumer : endTensor->GetConsumers()) {
+            assembleConsumer->iOperand = {startTensor};
+            startTensor->AddConsumer(assembleConsumer);
+        }
+        endTensor->GetConsumers().clear();
+        function.GetTensorMap().Erase(endTensor);
     }
-    endTensor->GetConsumers().clear();
-    function.GetTensorMap().Erase(endTensor);
 }
 
 //判断view输入是否非同源
-bool RemoveRedundantOp::IsNotSameViewInput (LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const{
+bool RemoveRedundantOp::IsNotSameViewInput(LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const{
     for (auto &assembleOp : endTensor->GetProducers()) {
         if (assembleOp->GetIOperands().empty()) { 
             continue;
@@ -438,7 +218,7 @@ bool RemoveRedundantOp::IsNotSameViewInput (LogicalTensorPtr &startTensor,Logica
         auto producers = tempTensor->GetProducers();
         if (producers.empty()) {
             return true;
-        }else {
+        } else {
             auto &viewOps = tempTensor->GetProducers(); 
             for (auto &viewOp : viewOps) {
                 if (viewOp->GetIOperands().empty()) {
@@ -456,8 +236,9 @@ bool RemoveRedundantOp::IsNotSameViewInput (LogicalTensorPtr &startTensor,Logica
     }
     return false;
 }
+
 //判断assemble数据是否是重排场景
-bool RemoveRedundantOp::IsDataReplace (LogicalTensorPtr &endTensor) const{
+bool RemoveRedundantOp::IsDataReplace(LogicalTensorPtr &endTensor) const{
     for (auto &assembleOp : endTensor->GetProducers()) {
         if (assembleOp->GetIOperands().empty()) {
             continue;
@@ -466,7 +247,7 @@ bool RemoveRedundantOp::IsDataReplace (LogicalTensorPtr &endTensor) const{
         auto producers = tempTensor->GetProducers();
         if (producers.empty()) {
             return true;
-        }else {
+        } else {
             auto &viewOps = tempTensor->GetProducers(); 
             for (auto &viewOp : viewOps) {
                 if (viewOp->GetIOperands().empty()) {
@@ -488,35 +269,28 @@ bool RemoveRedundantOp::IsDataReplace (LogicalTensorPtr &endTensor) const{
     return false;
 }
 
-void RemoveRedundantOp::GenerateNewView(Function &function,Operation &op,LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const {
+void RemoveRedundantOp::GenerateNewView(Function &function, Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const {
     //查找最小的offset
     std::vector<long> newoffset(op.iOperand[0]->offset.size(),INT_MAX);
-
     for (size_t m = 0; m < op.iOperand[0]->offset.size(); m++) {
         for (auto &comsumerView : startTensor->GetConsumers()) {
             auto opcode = comsumerView->GetOpcode();
-            if (opcode != Opcode::OP_VIEW) {
-                continue;
-            }
-            if (comsumerView->GetOOperands().empty()) { 
+            if (opcode != Opcode::OP_VIEW || comsumerView->GetOOperands().empty()) {
                 continue;
             }
             auto &tempTensor = comsumerView->GetOOperands().front();
-
             //检查view输出的消费者，寻找assemble操作
             bool leadsToCurrentEndTesnor = false;
             for (auto &consumerAssemble : tempTensor->GetConsumers()) {
                 if (consumerAssemble->GetOpcode() != Opcode::OP_ASSEMBLE) {
                     continue;
                 }
-
                 //检查assemble的输出是否是当前的endTensor
                 if (!consumerAssemble->GetOOperands().empty() && consumerAssemble->GetOOperands().front() == endTensor) {
                     leadsToCurrentEndTesnor = true;
                     break;
                 }
             }
-
             //如果当前view不经过assemble连接到当前endTensor,跳过不处理
             if (!leadsToCurrentEndTesnor) {
                 continue;
@@ -531,8 +305,7 @@ void RemoveRedundantOp::GenerateNewView(Function &function,Operation &op,Logical
     std::shared_ptr<LogicalTensor> input = startTensor;
     std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(input->Datatype(), input->GetShape(), input->Format());;
     std::shared_ptr<LogicalTensor> newViewTensor = std::make_shared<LogicalTensor>(function, newRawTensor, newoffset, endTensor->shape);
-    MemoryType newTenosrMem = endTensor->GetMemoryTypeOriginal();
-    newViewTensor ->SetMemoryTypeBoth(newTenosrMem );
+    newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
     //新建一个view op
     auto &newViewOp = function.AddOperation(Opcode::OP_VIEW, {startTensor}, {newViewTensor});
     auto viewAttribute = std::make_shared<ViewOpAttribute>(
@@ -546,26 +319,5 @@ void RemoveRedundantOp::GenerateNewView(Function &function,Operation &op,Logical
     endTensor->GetConsumers().clear();
     function.GetTensorMap().Erase(endTensor);
 }
-// 将输入tensor的producers为空的assemble节点删除
-void RemoveRedundantOp::EraseRedundantAssemble(Function &function) const {
-    std::vector<Operation *> redundantAssembles;
-    for (auto &op : function.Operations()) {
-        if (op.GetOpcode() !=  Opcode::OP_ASSEMBLE) {
-            continue;
-        }
-
-        if (op.iOperand.front()->GetProducers().empty()) {
-            redundantAssembles.push_back(&op);
-        }
-    }
-    for (const auto &op : redundantAssembles) {
-        function.HandleControlOps(*op, redundantAssembles);
-        function.UpdateOperandBeforeRemoveOp(*op, false);
-    }
-    for (auto op : redundantAssembles) {
-        ASSERT(!op->IsDeleted());
-        op->SetAsDeleted();
-    }
-    function.EraseOperations(false);
-}
-} // namespace npu::tile_fwk
+} // namespace tile_fwk
+} // namespace npu

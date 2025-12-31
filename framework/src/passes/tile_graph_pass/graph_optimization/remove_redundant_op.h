@@ -29,12 +29,10 @@
 #include "interface/operation/operation.h"
 #include "interface/tensor/logical_tensor.h"
 
-namespace npu::tile_fwk {
-
-/*
-    RemoveRedundantOp: 如果op的类型为VIEW且op的输入tensor和输出tensor相同，则认为该VIEW op为冗余op，将其删除，
-    并改变图中的连接关系.
-*/
+namespace npu {
+namespace tile_fwk {
+const std::unordered_set<Opcode> matchOpcodeWithDynshape = {Opcode::OP_VIEW, Opcode::OP_EXPAND};
+const std::unordered_set<Opcode> matchOpcodeWithoutDynshape = {Opcode::OP_REGISTER_COPY, Opcode::OP_ASSEMBLE};
 class RemoveRedundantOp : public Pass {
 public:
     RemoveRedundantOp() : Pass("RemoveRedundantOp") {}
@@ -43,15 +41,16 @@ private:
     Status PreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
     Status RunOnFunction(Function &function) override;
-    Status NeedToDelete(const Operation &op, Function &function, bool &needToDelete) const;
-    Status RemoveDummyExpand(Function &function) const;
-    Status DeleteRedundantOps(Function &function) const;
+    Status ProcessRedundantOpWithDynShape(Operation &op, Function &function) const;
+    Status ProcessRedundantOpWithoutDynShape(Operation &op, Function &function) const;
+    Status RemoveDummyOp(Function &function) const;
     Status RemoveViewAssemble(Function &function) const;
-    void ProcessPerfectMatch (Function &function,LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const;
-    bool IsNotSameViewInput (LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const;
-    bool IsDataReplace (LogicalTensorPtr &endTensor) const;
-    void GenerateNewView(Function &function,Operation &op,LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) const;
-    void EraseRedundantAssemble(Function &function) const;
+    void ProcessPerfectMatch(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
+    void RemoveViewAssembleForOutcast(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
+    void GenerateNewView(Function &function, Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
+    bool IsNotSameViewInput(LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
+    bool IsDataReplace(LogicalTensorPtr &endTensor) const;
 };
-} // namespace npu::tile_fwk
+} // namespace tile_fwk
+} // namespace npu
 #endif  // REMOVE_REDUNDANT_OP_H

@@ -20,7 +20,7 @@
 
 namespace npu{
 namespace tile_fwk {
-Status RemoveRedundantOpChecker::PreCheckAssemble(const Operation &op, const LogicalTensorPtr &in) {
+Status RemoveRedundantOpChecker::PreCheckAssemble(Function &function, const Operation &op, const LogicalTensorPtr &in) {
     uint32_t assembleRemoveNum = 0;
     uint32_t otherOpNum = 0;
     for (const auto &childOp : in->GetConsumers()) {
@@ -45,6 +45,21 @@ Status RemoveRedundantOpChecker::PreCheckAssemble(const Operation &op, const Log
         "More than one assemble ddr op without consumer; Please check the num of assemble ddr op without consumer.");
         return FAILED;
     }
+    auto consumerOps = function.FindConsumers(op);
+    if (consumerOps.empty()) {
+        auto assembleOut = op.oOperand.front();
+        if (assembleOut->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+            if (assembleOut->nodetype != NodeType::OUTCAST || !function.IsFromOutCast(assembleOut)) {
+                APASS_LOG_ERROR_F(Elements::Operation, 
+                "Op assembleDDR[%d] has no consumer but is not outcast, please check.", op.GetOpMagic());
+                return FAILED;
+            }
+        } else {
+            APASS_LOG_ERROR_F(Elements::Operation, 
+            "Op assembleUB[%d] has no consumer, please check.", op.GetOpMagic());
+            return FAILED;
+        }
+    }
     return SUCCESS;
 }
 
@@ -65,19 +80,39 @@ Status RemoveRedundantOpChecker::PreCheckView(Function &function, const Operatio
     return SUCCESS;
 }
 
+// 要求regcopy一定有后继op
+Status RemoveRedundantOpChecker::PreCheckRegCopy(Function &function, const Operation &op) {
+    auto consumerOps = function.FindConsumers(op);
+    if (consumerOps.empty()) {
+        APASS_LOG_ERROR_F(Elements::Operation, 
+        "PreCheck for regcopy op[%d] failed: The output of regcopy has no consumer. Please check regcopy op[%d].%s", 
+        op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+
 Status RemoveRedundantOpChecker::ProcessPreCheck(Function &function, const Operation &op) {
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Process preCheck for assemble op[%d].", op.GetOpMagic());
         auto assemble_in = op.iOperand.front();
-        if (PreCheckAssemble(op, assemble_in) != SUCCESS) {
+        if (PreCheckAssemble(function, op, assemble_in) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for assemble op[%d] failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         return SUCCESS;
-    }
-    if (op.GetOpcode() == Opcode::OP_VIEW) {
+    } else if (op.GetOpcode() == Opcode::OP_VIEW) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Process preCheck for view op[%d].", op.GetOpMagic());
         auto view_in = op.iOperand.front();
         if (PreCheckView(function, op, view_in) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for view op[%d] failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            return FAILED;
+        }  
+    } else if (op.GetOpcode() == Opcode::OP_REGISTER_COPY) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Process preCheck for regcopy op[%d].", op.GetOpMagic());
+        if (PreCheckRegCopy(function, op) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for regcopy op[%d] failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }  
     }
@@ -173,42 +208,6 @@ Status RemoveRedundantOpChecker::PostCheckCopyIn(const Operation &op) {
     return SUCCESS;
 }
 
-Status RemoveRedundantOpChecker::PostCheckExpand(const Operation &op) {
-    auto in = op.GetIOperands().front();
-    auto out = op.GetOOperands().front();
-    // 比较静态shape
-    bool equalShape = (in->GetShape() == out->GetShape());
-    // 比较动态dynValidShape_
-    bool equalDynValidShape = true;
-    if (!in->GetDynValidShape().empty() && !out->GetDynValidShape().empty()) {
-        auto inDynValidShape = in->GetDynValidShape();
-        auto outDynValidShape = out->GetDynValidShape();
-        for (size_t i = 0; i < inDynValidShape.size(); i++) {
-            // 比较SymbolicScalar dump后的string是否相等
-            // 可能是 1.concrete value; 2.symbol; 3.expression
-            if (inDynValidShape[i].Dump() == outDynValidShape[i].Dump()) {
-                continue;
-            } else {
-                equalDynValidShape = false;
-                break;
-            }
-        }
-    } else if (in->GetDynValidShape().empty() && out->GetDynValidShape().empty()) {
-        // 输入和输出同时没有 dynamic valid shape
-        equalDynValidShape = true;
-    } else {
-        // 输入和输出必须同时有 dynamic valid shape
-        equalDynValidShape = false;
-    }
-    if (equalShape && equalDynValidShape) {
-        APASS_LOG_ERROR_F(Elements::Operation, 
-        "PostCheck for expand op[%d] failed: the shape of input equals to the output; Please check expand op[%d].%s", 
-        op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
-    return SUCCESS;
-}
-
 Status RemoveRedundantOpChecker::ProcessPostCheck(const Operation &op) {
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
         if (PostCheckAssemble(op) != SUCCESS) {
@@ -237,12 +236,6 @@ Status RemoveRedundantOpChecker::ProcessPostCheck(const Operation &op) {
             return FAILED;
         }
         return SUCCESS;
-    }
-    if (op.GetOpcode() == Opcode::OP_EXPAND) {
-        if (PostCheckExpand(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "PostCheck for Expand failed.%s", GetFormatBacktrace(op).c_str());
-            return FAILED;
-        }
     }
     return SUCCESS;
 }
