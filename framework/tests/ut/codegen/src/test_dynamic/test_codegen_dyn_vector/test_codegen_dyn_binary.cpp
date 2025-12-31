@@ -34,7 +34,7 @@ class TestCodegenDynBinary : public ::testing::Test {
 public:
     static void SetUpTestCase() {}
 
-    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
+    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 
     void SetUp() override {
         Program::GetInstance().Reset();
@@ -188,6 +188,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle) {
 }
 TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    InsertTileTensorOp(Opcode::OP_GATHER_ELEMENT, "TgatherElement");
     config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
 
     constexpr const int32_t nRoutedExperts = 256;

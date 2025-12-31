@@ -446,7 +446,6 @@ OpcodeManager::OpcodeManager() {
         {                Opcode::OP_SUB,           "TSub"},
         {                Opcode::OP_DIV,           "TDiv"},
         {                Opcode::OP_MUL,           "TMul"},
-        {     Opcode::OP_GATHER_ELEMENT, "TgatherElement"},
         {             Opcode::OP_EXPAND,        "TExpand"},
         {            Opcode::OP_BITSORT,       "TBitSort"},
         {            Opcode::OP_MRGSORT,       "TMrgSort"},

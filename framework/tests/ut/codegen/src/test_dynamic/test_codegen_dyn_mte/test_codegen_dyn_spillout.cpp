@@ -29,9 +29,13 @@ namespace npu::tile_fwk {
 
 class TestCodegenDynSpillOut : public ::testing::Test {
 public:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase() {
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+    }
 
-    static void TearDownTestCase() {}
+    static void TearDownTestCase() {
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    }
 
     void SetUp() override {
         Program::GetInstance().Reset();

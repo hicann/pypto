@@ -8,8 +8,7 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""
-"""
+""" """
 import pypto
 from test_base import BaseTest
 
@@ -21,29 +20,33 @@ tiles = (32, 32)
 class TestOperator(BaseTest):
 
     def test_sin(self):
-        A = pypto.tensor(shape, dtype, 'A')
-        C = pypto.tensor(shape, dtype, 'C')
-        with pypto.function("sign", A, C):
-            pypto.set_vec_tile_shapes(*tiles)
-            C[:] = pypto.sin(A)
+        a = pypto.tensor(shape, dtype, "a")
+        c = pypto.tensor(shape, dtype, "c")
+        with pypto.function("sign", a, c):
+            for _ in pypto.loop(1, name="signLoop"):
+                pypto.set_vec_tile_shapes(*tiles)
+                c[:] = pypto.sin(a)
 
     def test_cos(self):
-        A = pypto.tensor(shape, dtype, 'A')
-        C = pypto.tensor(shape, dtype, 'C')
-        with pypto.function("cos", A, C):
-            pypto.set_vec_tile_shapes(*tiles)
-            C[:] = pypto.cos(A)
+        a = pypto.tensor(shape, dtype, "a")
+        c = pypto.tensor(shape, dtype, "c")
+        with pypto.function("cos", a, c):
+            for _ in pypto.loop(1, name="cosLoop"):
+                pypto.set_vec_tile_shapes(*tiles)
+                c[:] = pypto.cos(a)
 
     def test_sigmoid(self):
-        A = pypto.tensor(shape, dtype, 'A')
-        C = pypto.tensor(shape, dtype, 'C')
-        with pypto.function("sigmoid", A, C):
-            pypto.set_vec_tile_shapes(*tiles)
-            C[:] = pypto.sigmoid(A)
+        a = pypto.tensor(shape, dtype, "a")
+        c = pypto.tensor(shape, dtype, "c")
+        with pypto.function("sigmoid", a, c):
+            for _ in pypto.loop(1, name="sigmoidLoop"):
+                pypto.set_vec_tile_shapes(*tiles)
+                c[:] = pypto.sigmoid(a)
 
     def test_softmax(self):
-        A = pypto.tensor(shape, dtype, 'A')
-        C = pypto.tensor(shape, dtype, 'C')
-        with pypto.function("softmax", A, C):
-            pypto.set_vec_tile_shapes(*tiles)
-            C[:] = pypto.softmax(A, dim=-1)
+        a = pypto.tensor(shape, dtype, "a")
+        c = pypto.tensor(shape, dtype, "c")
+        with pypto.function("softmax", a, c):
+            for _ in pypto.loop(1, name="softmaxLoop"):
+                pypto.set_vec_tile_shapes(*tiles)
+                c[:] = pypto.softmax(a, dim=-1)

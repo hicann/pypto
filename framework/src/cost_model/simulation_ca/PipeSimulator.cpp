@@ -44,11 +44,25 @@ namespace CostModel
         auto locToOffsetMap = GenRealizeIdMap(tileOp->funcPtr->parentFunction->GetParameter());
         CodeGenCtx ctx;
         CodeGenCloudNPU cga(ctx);
-        cga.GenAllocForLocalBuffer(*(tileOp->operation), memoryAllocator);
+        auto genExtraAllocForTensor = [&cga, &memoryAllocator](
+                                        const std::shared_ptr<LogicalTensor> &operand) -> std::string {
+            std::optional<std::string> allocCodeMaybe = cga.GenExtraAlloc(memoryAllocator, operand);
+            if (allocCodeMaybe.has_value()) {
+                return allocCodeMaybe.value();
+            }
+            return "";
+        };
+        for (const std::shared_ptr<LogicalTensor> &operand : (tileOp->operation)->GetIOperands()) {
+            memoryAllocator->AddToTensorMap(operand->GetMagic(), operand);
+            genExtraAllocForTensor(operand);
+        }
+        for (const std::shared_ptr<LogicalTensor> &operand : (tileOp->operation)->GetOOperands()) {
+            memoryAllocator->AddToTensorMap(operand->GetMagic(), operand);
+            genExtraAllocForTensor(operand);
+        }
         tileOp->funcPtr->parentFunction->SetFunctionType(npu::tile_fwk::FunctionType::DYNAMIC_LOOP_PATH);
-        CodeGenOpCloudNPU cop(memoryAllocator, tileOp->funcPtr->parentFunction->GetFunctionType(), locToOffsetMap,
-            tileOp->funcPtr->parentFunction->IsUnderDynamicFunction());
-        cop.Init(*tileOp->operation);
+        CodeGenOpCloudNPU cop({memoryAllocator, *tileOp->funcPtr->parentFunction, *tileOp->funcPtr->parentFunction,
+            *(tileOp->operation), locToOffsetMap});
         return cop.GenOpCode();
     }
 

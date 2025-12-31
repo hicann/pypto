@@ -49,7 +49,7 @@
             "fixed_output_path": false,
             "force_overwrite": true,
             "codegen_expression_fusion": true,
-            "CODEGEN_SUPPORT_TILE_TENSOR": false,
+            "CODEGEN_SUPPORT_TILE_TENSOR": true,
             "CODEGEN_NEED_COMPILE": true
         },
         "operation_configs": {
