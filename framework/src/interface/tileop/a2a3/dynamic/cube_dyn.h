@@ -48,13 +48,6 @@ TILEOP void DynL1CopyIn(__cbuf__ L1T *dst, __gm__ GMT *src, unsigned TShape0, un
         return;
     }
 
-    if constexpr (mode == CopyInMode::ND2ND){
-        src += GmOffset1;
-        uint16_t lenBurst = CeilDiv<uint16_t>(TShape1 * sizeof(GMT), BLOCK_SIZE);
-        copy_gm_to_cbuf((__cbuf__ L1T *)dst, (__gm__ GMT *)src, 0, 1, lenBurst, 0, 0, PAD_NONE);
-        return;
-    }
-
     src += CalcLinearOffset(GmShape1, GmOffset0, GmOffset1);
     uint16_t nValue = TShape0;
     uint16_t dValue = TShape1;
@@ -65,6 +58,20 @@ TILEOP void DynL1CopyIn(__cbuf__ L1T *dst, __gm__ GMT *src, unsigned TShape0, un
     constexpr uint16_t srcNdMatrixStride = 0;
     constexpr uint16_t dstNzNStride = 1;
     constexpr uint16_t dstNzMatrixStride = 1;
+
+    if constexpr (mode == CopyInMode::ND2ND) {
+        constexpr bool is_valid_type = std::is_same_v<GMT, half> || std::is_same_v<GMT, float> ||
+                                       std::is_same_v<GMT, std::int32_t> || std::is_same_v<GMT, std::uint64_t>;
+        static_assert(is_valid_type, "parameter must be one of: fp16, float (fp32), int32_t, uint64_t");
+        dstNzC0Stride = 1;
+        if constexpr (std::is_same<GMT, uint64_t>::value) {
+            // The value 8 means that the input is of type scale_tensor with uint64_t data type, and it needs to be
+            // copied in 8 chunks, each 1 byte in size.
+            copy_gm_to_cbuf_multi_nd2nz_b8((__cbuf__ int8_t *)dst, (__gm__ int8_t *)src, 0, ndNum, nValue, dValue * 8,
+                srcNdMatrixStride, srcDValue * 8, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
+            return;
+        }
+    }
 
     if constexpr (std::is_same<GMT, int8_t>::value) {
         constexpr uint16_t c0Size = BLOCK_ALIGN_BYTE / sizeof(GMT);
@@ -78,7 +85,7 @@ TILEOP void DynL1CopyIn(__cbuf__ L1T *dst, __gm__ GMT *src, unsigned TShape0, un
             srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }
 
-    if constexpr (std::is_same<GMT, float>::value) {
+    if constexpr (std::is_same<GMT, float>::value || std::is_same<GMT, int32_t>::value) {
         copy_gm_to_cbuf_multi_nd2nz_b32s((__cbuf__ L1T *)dst, (__gm__ GMT *)src, 0, ndNum, nValue, dValue,
             srcNdMatrixStride, srcDValue, dstNzC0Stride, dstNzNStride, dstNzMatrixStride);
     }

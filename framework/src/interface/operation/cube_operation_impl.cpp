@@ -843,6 +843,13 @@ void CheckFixpipeParam(DataType inDtype, DataType outDtype, const MatmulExtendPa
         });
 
         OP_CHECK(true, {
+            ASSERT(param.scaleTensor.GetDataType() == DataType::DT_INT64 ||
+                   param.scaleTensor.GetDataType() == DataType::DT_UINT64)
+                << "scaleTensor dataType: " << DataType2String(param.scaleTensor.GetDataType())
+                << ". scaleTensor only support int64 and uint64 dtype currently." << std::endl;
+        });
+
+        OP_CHECK(true, {
             ASSERT(outDtype == DataType::DT_FP16 && inDtype == DataType::DT_INT8)
                 << "Data type mismatch in fixpipe scenario. "
                 << "Expected inDtype to be DT_INT8 and outDtype to be DT_FP16." << std::endl;
@@ -867,7 +874,7 @@ void CheckFixpipeParam(DataType inDtype, DataType outDtype, const MatmulExtendPa
         OP_CHECK(true, {
             ASSERT(fabs(param.scaleValue - 0) > EPSILON || param.scaleTensor.GetStorage() != nullptr)
                 << "Quantization error in INT8→FP16 path: scaleValue must not be 0.0f, OR scaleTensor must not be null."
-                << std::endl; ;
+                << std::endl;
         });
     }
 }
@@ -919,6 +926,12 @@ void CheckMatmulOperands(
         ASSERT(outType == DataType::DT_FP32 || outType == DataType::DT_FP16 || outType == DataType::DT_BF16 ||
                outType == DataType::DT_INT32)
             << "Unsupported output data type. Only DT_FP32, DT_FP16, DT_BF16, DT_INT32 are supported.";
+    });
+    OP_CHECK(true, {
+        ASSERT(operand1.GetDataType() == operand2.GetDataType())
+            << "input dataType must be consistent. "
+            << "operand1 dataType: " << DataType2String(operand1.GetDataType())
+            << ", operand2 dataType: " << DataType2String(operand2.GetDataType()) << std::endl;
     });
     // GM Acc valid check
     CheckGmAccumulationParam<isTransA, isTransB, isCMatrixNZ>(outType, operand1, operand2, param);

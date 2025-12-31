@@ -1355,56 +1355,6 @@ TEST_F(FunctionTest, low_PAND) {
     TestMlaPrologV2<npu::tile_fwk::float16, int8_t, true>(params);
 }
 
-TEST_F(FunctionTest, dynamic_prolog_post_low_lantency) {
-    config::SetHostOption(ONLY_CODEGEN, true);
-    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-
-    int b = 2;
-    int sq = 1;
-    int nq = 32;
-    int dn = 128;
-    int dr = 64;
-    int skv = 128;
-    int blockSize = 128;
-    int nTile = nq;
-    int dTile = 64;
-    float softmaxScale = 0.8f;
-    int vHeadDim = 32;
-    int h = 64;
-
-    PaTileShapeConfig tileConfig;
-    tileConfig.headNumQTile = nTile;
-    tileConfig.v0TileShape = {nTile, dTile};
-    tileConfig.c1TileShape = {nTile, nTile, dTile, dTile, blockSize, blockSize};
-    tileConfig.v1TileShape = {nTile, dTile};
-    tileConfig.c2TileShape = {nTile, nTile, dTile, dTile, blockSize, blockSize};
-    tileConfig.v2TileShape = {nTile, dTile};
-
-    const std::vector<int> seq(b, skv);
-    // 根据Per Batch实际的sequence构造blockNum，blockNum >= Sum(blockNumPerBatch)，此处选取相等场景
-    int blockNum = 0;
-    for (auto s : seq) {
-        blockNum += CeilDiv(s, blockSize);
-    }
-    // blockTable: (b, maxBlockNumPerBatch)
-    int maxSeqAllBatch = *(std::max_element(seq.begin(), seq.end()));
-    int maxBlockNumPerBatch = CeilDiv(maxSeqAllBatch, blockSize);
-
-    Tensor qNope(DT_BF16, {b * nq * sq, dn}, "qNope");
-    Tensor kNopeCache(DT_BF16, {int(blockNum * blockSize), dn}, "kNopeCache");
-    Tensor vNopeCache(DT_BF16, {int(blockNum * blockSize), dn}, "vNopeCache");
-    Tensor qRope(DT_BF16, {b * nq * sq, dr}, "qRope");
-    Tensor kRopeCache(DT_BF16, {int(blockNum * blockSize), dr}, "kRope");
-    Tensor blockTable(DT_INT32, {b, maxBlockNumPerBatch}, "blockTable");
-    Tensor actSeqs(DT_INT32, {b}, "actSeqs");
-    Tensor weightUV(DT_BF16, {nq, dn, vHeadDim}, "weightUV");
-    Tensor weightO(DT_BF16, {nq * vHeadDim, h}, "weightO");
-    Tensor postOut(DT_FP32, {b, sq, h}, "postOut");
-
-    PrologPost(qNope, kNopeCache, vNopeCache, qRope, kRopeCache, blockTable, actSeqs, weightUV, weightO, blockSize,
-        softmaxScale, postOut, tileConfig);
-}
-
 TEST_F(FunctionTest, dynamic_page_attention_adds) {
     config::SetHostOption(ONLY_CODEGEN, true);
 

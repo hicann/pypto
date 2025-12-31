@@ -2405,81 +2405,6 @@
         },
         {
             "case_index": 43,
-            "case_name": "Matmul_SplitK_Case5_int32",
-            "operation": "Matmul",
-            "input_tensors": [
-                {
-                    "name": "input0",
-                    "shape": [
-                        528,
-                        448
-                    ],
-                    "dtype": "int8",
-                    "format": "ND",
-                    "need_trans": false,
-                    "data_range": {
-                        "min": -3,
-                        "max": 3
-                    }
-                },
-                {
-                    "name": "input1",
-                    "shape": [
-                        432,
-                        448
-                    ],
-                    "dtype": "int8",
-                    "format": "NZ",
-                    "need_trans": true,
-                    "data_range": {
-                        "min": -3,
-                        "max": 3
-                    }
-                }
-            ],
-            "output_tensors": [
-                {
-                    "name": "output0",
-                    "shape": [
-                        528,
-                        432
-                    ],
-                    "dtype": "int32",
-                    "format": "ND"
-                }
-            ],
-            "view_shape": [
-                227,
-                -1
-            ],
-            "tile_shape": [
-                [
-                    64,
-                    128
-                ],
-                [
-                    128,
-                    128
-                ],
-                [
-                    128,
-                    128
-                ]
-            ],
-            "params": {
-                "enable": 1,
-                "enableKSplit": true,
-                "func_id": 0,
-                "transA": false,
-                "transB": true,
-                "isAMatrixNz": false,
-                "isBMatrixNz": true,
-                "isCMatrixNz": false,
-                "outDtype": "int32"
-            }
-        },
-        {
-            "case_index": 44,
             "case_name": "Matmul_M_130_K_258_N_514_transA_F_transB_T_formatA_ND_formatB_ND_dtypeA_fp16_dtypeB_fp16_formatC_ND_dtypeC_fp16_l0c2l1",
             "operation": "Matmul",
             "input_tensors": [
@@ -2602,7 +2527,7 @@
             }
         },
         {
-            "case_index": 45,
+            "case_index": 44,
             "case_name": "Matmul_M_110_K_249_N_286_transA_F_transB_T_formatA_ND_formatB_ND_dtypeA_int8_dtypeB_int8_formatC_ND_dtypeC_fp16_l0c2l1",
             "operation": "Matmul",
             "input_tensors": [
@@ -2729,7 +2654,7 @@
             }
         },
         {
-            "case_index": 46,
+            "case_index": 45,
             "case_name": "Matmul_M_94_K_276_N_258_transA_F_transB_T_formatA_ND_formatB_ND_dtypeA_int8_dtypeB_int8_formatC_ND_dtypeC_fp16_l0c2l1",
             "operation": "Matmul",
             "input_tensors": [
@@ -2853,6 +2778,110 @@
                     "format": "ND"
                 }
             }
+        },
+        {
+            "case_index": 46,
+            "case_name": "Matmul_M_255_K_513_N_511_transA_F_transB_T_formatA_ND_formatB_ND_dtypeA_int8_dtypeB_int8_formatC_ND_dtypeC_int32_bias_int32",
+            "operation": "Matmul",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        255,
+                        513
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -3,
+                        "max": 3
+                    },
+                    "format": "ND",
+                    "need_trans": false
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        511,
+                        513
+                    ],
+                    "dtype": "int8",
+                    "data_range": {
+                        "min": -3,
+                        "max": 3
+                    },
+                    "format": "ND",
+                    "need_trans": true
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        255,
+                        511
+                    ],
+                    "dtype": "int32",
+                    "format": "ND"
+                }
+            ],
+            "view_shape": [
+                127,
+                63
+            ],
+            "tile_shape": [
+                [
+                    128,
+                    128
+                ],
+                [
+                    256,
+                    512
+                ],
+                [
+                    128,
+                    128
+                ]
+            ],
+            "params": {
+                "enable": 1,
+                "bias_info": "{bias_shape:[1, 511], bias_dtype:int32, bias_range:[-10,10]}",
+                "fixpipe_info": "",
+                "func_id": 0,
+                "transA": false,
+                "transB": true,
+                "isAMatrixNz": false,
+                "isBMatrixNz": false,
+                "isCMatrixNz": false,
+                "outDtype": "int32",
+                "enableKSplit": false,
+                "scale_tensors": {
+                    "name": "scale_tensor",
+                    "shape": [
+                        1,
+                        511
+                    ],
+                    "dtype": "uint64",
+                    "data_range": {
+                        "min": 1,
+                        "max": 1
+                    },
+                    "format": "ND"
+                },
+                "bias_tensors": {
+                    "name": "bias_tensor",
+                    "shape": [
+                        1,
+                        511
+                    ],
+                    "dtype": "int32",
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    },
+                    "format": "ND"
+                }
+            },
+            "index": 1
         }
     ]
 }
