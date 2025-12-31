@@ -20,7 +20,7 @@ import torch_npu
 
 
 def test_cos_shape_dim():
-    """Test whether the ouput shape is correct"""
+    """Test whether the output shape is correct"""
 
     x_shape = [4, 4]
     dtype = pypto.DT_FP32
@@ -34,7 +34,7 @@ def test_cos_shape_dim():
         assert res.shape == list(torch_case_res.shape)
 
 def test_cos_FP32():
-    """Test whether the ouput of FP32 is correct"""
+    """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     x_shape = [4, 4]
@@ -58,7 +58,7 @@ def test_cos_FP32():
     pypto.runtime._device_fini()
 
 def test_cos_FP16():
-    """Test whether the ouput of FP16 shape is correct"""
+    """Test whether the output of FP16 shape is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     x_shape = [4, 4]
@@ -84,7 +84,7 @@ def test_cos_FP16():
     pypto.runtime._device_fini()
 
 def test_tensor_cos_FP32():
-    """Test whether the ouput of FP32 is correct"""
+    """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     x_shape = [4, 4]

@@ -54,19 +54,19 @@ class ClipMode(int, enum.Enum):
 class ClipArgs:
     tile_shape = None
     view_shape = None
-    min_ = None
-    max_ = None
+    min = None
+    max = None
     is_element = False
 
     def __init__(
         self, tile_shape: List[int], view_shape: List[int], mode: ClipMode,
-        min_=None, max_=None, is_element: bool = False,
+        min=None, max=None, is_element: bool = False,
     ) -> None:
         self.tile_shape = tile_shape
         self.view_shape = view_shape
         self.mode = mode
-        self.min_ = min_
-        self.max_ = max_
+        self.min = min
+        self.max = max
         self.is_element = is_element
 
 
@@ -143,30 +143,30 @@ def broadcast_view(
 def process_element_mode(tile_tensor_0, args):
     result = tensor()
     if args.mode in [ClipMode.NotDefault2D, ClipMode.NotDefault3D, ClipMode.NotDefault4D]:
-        result = pypto.clip(tile_tensor_0, args.min_, args.max_)
+        result = pypto.clip(tile_tensor_0, args.min, args.max)
     elif args.mode == ClipMode.ElementDefaultMinDefaultMax:
         result = pypto.clip(tile_tensor_0)
     elif args.mode == ClipMode.ElementDefaultMinNotDefaultMax:
-        result = pypto.clip(tile_tensor_0, max_=args.max_)
+        result = pypto.clip(tile_tensor_0, max=args.max)
     elif args.mode == ClipMode.ElementNotDefaultMinDefaultMax:
-        result = pypto.clip(tile_tensor_0, min_=args.min_)
+        result = pypto.clip(tile_tensor_0, min=args.min)
     return result
 
 
 def process_tensor_mode(tile_tensor_0, inputs, args, loop_vars):
     result = tensor()
     if args.mode in [ClipMode.NotDefault2D, ClipMode.NotDefault3D, ClipMode.NotDefault4D]:
-        min_ = broadcast_view(inputs[1], inputs[0], args.view_shape, loop_vars)
-        max_ = broadcast_view(inputs[2], inputs[0], args.view_shape, loop_vars)
-        result = pypto.clip(tile_tensor_0, min_, max_)
+        min = broadcast_view(inputs[1], inputs[0], args.view_shape, loop_vars)
+        max = broadcast_view(inputs[2], inputs[0], args.view_shape, loop_vars)
+        result = pypto.clip(tile_tensor_0, min, max)
     elif args.mode == ClipMode.TensorDefaultMinDefaultMax:
         result = pypto.clip(tile_tensor_0)
     elif args.mode == ClipMode.TensorDefaultMinNotDefaultMax:
-        max_ = broadcast_view(inputs[2], inputs[0], args.view_shape, loop_vars)
-        result = pypto.clip(tile_tensor_0, max_=max_)
+        max = broadcast_view(inputs[2], inputs[0], args.view_shape, loop_vars)
+        result = pypto.clip(tile_tensor_0, max=max)
     elif args.mode == ClipMode.TensorNotDefaultMinDefaultMax:
-        min_ = broadcast_view(inputs[1], inputs[0], args.view_shape, loop_vars)
-        result = pypto.clip(tile_tensor_0, min_=min_)
+        min = broadcast_view(inputs[1], inputs[0], args.view_shape, loop_vars)
+        result = pypto.clip(tile_tensor_0, min=min)
     return result
 
 

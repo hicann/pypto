@@ -349,7 +349,7 @@ def logical_not(input: Tensor) -> Tensor:
     """
     Computes the element-wise logical NOT of 'input'
 
-    This funtion calculates the formula: 'out = input == 0? True : False'.
+    This function calculates the formula: 'out = input == 0? True : False'.
 
     Parameters
     ----------
@@ -542,56 +542,56 @@ def log(input: Tensor) -> Tensor:
 @op_wrapper
 def clip(
     input: Tensor,
-    min_: Optional[Union[Tensor, Element, float, int]] = None,
-    max_: Optional[Union[Tensor, Element, float, int]] = None
+    min: Optional[Union[Tensor, Element, float, int]] = None,
+    max: Optional[Union[Tensor, Element, float, int]] = None
 ):
     """
-    Make the values in `input` greater than `min_` and less than `max_`.
+    Make the values in `input` greater than `min` and less than `max`.
 
     Parameters
     ----------
     input : Tensor
         The first input tensor.
-    min_ : Tensor or Element
+    min : Tensor or Element
         The minimum value.
-    max_: Tensor or Element
+    max: Tensor or Element
         The maximum value
 
     Returns
     -------
     Tensor
-        A new tensor containing the values greater than `min_` and less than `max_`.
+        A new tensor containing the values greater than `min` and less than `max`.
 
     Examples
     --------
     x = pypto.tensor([2, 3], pypto.DT_INT32)
-    min_ = 1
-    max_ = 3
-    out = pypto.clip(x, min_, max_)
+    min = 1
+    max = 3
+    out = pypto.clip(x, min, max)
 
     Input x:    [[0 2 4], [3, 4, 6]]
     Output out: [[1 2 3], [3, 3, 3]]
     """
-    if min_ is None and max_ is None:
+    if min is None and max is None:
         return input
 
     element_types = (pypto_impl.Element, int, float)
-    is_element_mode = isinstance(min_, element_types) or isinstance(max_, element_types)
+    is_element_mode = isinstance(min, element_types) or isinstance(max, element_types)
     default = (
         pypto_impl.Tensor()
         if not is_element_mode
         else pypto_impl.Element(pypto_impl.DataType.DT_BOTTOM, 0)
     )
-    min_ = min_ or default
-    max_ = max_ or default
+    min = min or default
+    max = max or default
 
-    if not isinstance(min_, pypto_impl.Element) and isinstance(min_, element_types):
-        min_ = pypto_impl.Element(input.GetDataType(), min_)
+    if not isinstance(min, pypto_impl.Element) and isinstance(min, element_types):
+        min = pypto_impl.Element(input.GetDataType(), min)
 
-    if not isinstance(max_, pypto_impl.Element) and isinstance(min_, element_types):
-        max_ = pypto_impl.Element(input.GetDataType(), max_)
+    if not isinstance(max, pypto_impl.Element) and isinstance(min, element_types):
+        max = pypto_impl.Element(input.GetDataType(), max)
 
-    return pypto_impl.Clip(input, min_, max_)
+    return pypto_impl.Clip(input, min, max)
 
 
 @op_wrapper

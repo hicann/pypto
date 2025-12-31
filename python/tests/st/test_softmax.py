@@ -21,7 +21,7 @@ import torch_npu
 
 
 def test_softmax_shape_dim():
-    """Test whether the ouput shape is correct"""
+    """Test whether the output shape is correct"""
 
     x_shape = [4, 4]
     dtype = pypto.DT_FP32
@@ -36,7 +36,7 @@ def test_softmax_shape_dim():
         assert res.shape == list(torch_case_res.shape)
 
 def test_softmax_FP32():
-    """Test whether the ouput of FP32 is correct"""
+    """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     x_shape = [4, 4]
@@ -61,7 +61,7 @@ def test_softmax_FP32():
     pypto.runtime._device_fini()
 
 def test_tensor_softmax_FP32():
-    """Test whether the ouput of FP32 is correct"""
+    """Test whether the output of FP32 is correct"""
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     x_shape = [4, 4]

@@ -20,7 +20,7 @@ import torch_npu
 
 
 def test_view_basic_shape():
-    """Test whether the ouput shape is correct"""
+    """Test whether the output shape is correct"""
 
     x_shape = [32, 64]
     dtype = pypto.DT_FP32

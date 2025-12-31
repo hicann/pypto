@@ -19,7 +19,7 @@ import torch_npu
 
 
 def test_unsqueeze_shape_dim():
-    """Test whether the ouput shape is correct"""
+    """Test whether the output shape is correct"""
 
     shape = [8, 16, 16]
     dtype = pypto.DT_FP32
@@ -63,7 +63,7 @@ def test_unsqueeze_content_equal():
     pypto.runtime._device_fini()
 
 def test_tensor_unsqueeze_shape_dim():
-    """Test whether the ouput shape is correct"""
+    """Test whether the output shape is correct"""
 
     shape = [8, 16, 16]
     dtype = pypto.DT_FP32
