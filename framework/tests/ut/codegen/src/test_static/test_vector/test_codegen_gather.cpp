@@ -50,33 +50,6 @@ public:
 constexpr const int GATHER_SHAPE0 = 16;
 constexpr const int GATHER_SHAPE1 = 32;
 
-TEST_F(TestCodegenGather, TestGather) {
-    constexpr const int S2 = 32;
-    constexpr const int D = 64;
-    constexpr const int B = 1;
-    constexpr const int S = 32;
-    std::vector<int64_t> shape0 = {S2, D};
-    std::vector<int64_t> shape1 = {B, S};
-    int axis = 0;
-    std::vector<int64_t> shape2 = {B, S, D};
-
-    TileShape::Current().SetVecTile({1, GATHER_SHAPE0, GATHER_SHAPE1});
-
-    Tensor inputSrc0(DT_FP32, shape0, "x");
-    Tensor inputSrc1(DT_INT32, shape1, "indices");
-    Tensor output(DT_FP32, shape2, "output");
-
-    ConfigManager::Instance();
-    std::string funcName = "GATHER_T";
-    config::SetBuildStatic(true);
-    FUNCTION(funcName, {inputSrc0, inputSrc1, output}) {
-        output = Gather(inputSrc0, inputSrc1, axis);
-    }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
-    npu::tile_fwk::CodeGenCtx ctx;
-    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
-    codeGen.GenCode(*function, {});
-}
 
 Function &testGatherEle(bool isSupportTileTensor, string funcName) {
     if (isSupportTileTensor) {

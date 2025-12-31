@@ -247,6 +247,12 @@ void bind_operation(py::module &m) {
         [](const Tensor &params, const Tensor &indices) { return npu::tile_fwk::TensorIndex(params, indices); },
         "Tensor index.");
     m.def(
+        "index_select",
+        [](const Tensor &params, int dim, const Tensor &indices) {
+            return npu::tile_fwk::Gather(params, indices, dim);
+        },
+        "Tensor index_select.");
+    m.def(
         "ScatterUpdate",
         [](const Tensor &dst, const Tensor &index, const Tensor &src, int axis, std::string cacheMode, int chunkSize) {
             return npu::tile_fwk::ScatterUpdate(dst, index, src, axis, cacheMode, chunkSize);

@@ -437,6 +437,12 @@ void CodeGenOp::GetGmParamIdx(const npu::tile_fwk::Operation &oper) {
         GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
         return;
     }
+    if (oper.GetOpcode() == Opcode::OP_GATHER) {
+        paramLocation[0] = oper.GetIOpAttrOffset(0);
+        paramLocation[1] = oper.GetIOpAttrOffset(1);
+        GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
+        return;
+    }
 
     if (OpcodeManager::Inst().IsCopyIn(oper.GetOpcode())) {
         const std::shared_ptr<OpAttribute> &attr = oper.GetOpAttribute();

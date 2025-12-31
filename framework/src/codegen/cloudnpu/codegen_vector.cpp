@@ -440,7 +440,7 @@ std::string CodeGenOpCloudNPU::PrintGather(const PrintGatherParam &param) const 
     return PrintGatherStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::GenGatherOp() const {
+std::string CodeGenOpCloudNPU::GenGatherFromUBOp() const {
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
     std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);

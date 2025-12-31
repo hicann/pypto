@@ -221,8 +221,13 @@ void TiledGatherOperation(Function &function, const TileShape &tileShape, size_t
         auto indicesTile =
             indicesInput.tensor.GetStorage()->View(function, indicesInput.tileInfo.shape, indicesInput.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
-        auto &op = function.AddOperation(Opcode::OP_GATHER, {paramsTile, indicesTile}, {resultTile});
-        op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        if (function.IsStatic()) {
+            auto &op = function.AddOperation(Opcode::OP_GATHER_FROM_UB, {paramsTile, indicesTile}, {resultTile});
+            op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        } else {
+            auto &op = function.AddOperation(Opcode::OP_GATHER, {paramsTile, indicesTile}, {resultTile});
+            op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        }
 
         return;
     }

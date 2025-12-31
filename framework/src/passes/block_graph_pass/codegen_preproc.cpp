@@ -57,6 +57,10 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function &func) const {
                 gmParamInCallFunc[op.GetIOpAttrOffset(1)].emplace_back(&op);
                 gmParamInCallFunc[op.GetIOpAttrOffset(2)].emplace_back(&op);
             }
+            if (op.GetOpcode() == Opcode::OP_GATHER) {
+                gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
+                gmParamInCallFunc[op.GetIOpAttrOffset(1)].emplace_back(&op);
+            }
             if (op.GetOpcode() == Opcode::OP_LOAD) {
                 int addrPos = op.GetIOpAttrOffset(0);
                 gmParamInCallFunc[addrPos].emplace_back(&op);

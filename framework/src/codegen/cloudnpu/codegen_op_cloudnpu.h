@@ -99,8 +99,9 @@ public:
     std::string GenIndexOutCastOp() const;
 
     std::string GenCumSumOp() const;
-
+    std::string PrintGatherDynamicUnaligned() const;
     std::string GenGatherOp() const;
+    std::string GenGatherFromUBOp() const;
 
     std::string GenMemCopyCube(bool isLocalToGM, unsigned uf = 0) const;
     std::string GenMemL1SpillIntoGM(bool isLocalToGM, unsigned uf) const;

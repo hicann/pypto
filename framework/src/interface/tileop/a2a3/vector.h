@@ -2341,7 +2341,7 @@ TILEOP void Trowmaxsingle_(__ubuf__ T *dst, __ubuf__ T *src, __ubuf__ T *tmp) {
 // [case2] params: [src0Shape0,src0Shape1], indices: [TShape0,TShape1], axis: 0, output: [TShape0,TShape1,TShape2]
 template <typename T, typename T2, unsigned TShape0, unsigned TShape1, unsigned TShape2, unsigned src0Shape2, 
 unsigned dst0Shape2>
-TILEOP void Tgather_(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *src1) {
+TILEOP void TgatherFromUB_(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *src1) {
     constexpr uint16_t lenBurst = (TShape2 * sizeof(T) + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
     for (int i = 0; i < TShape0; ++i) {

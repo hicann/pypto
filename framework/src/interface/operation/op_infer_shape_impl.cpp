@@ -372,6 +372,7 @@ void InferFunc4Gather(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
         outValidShapes.push_back(outValidShape);
     }
 }
+REGISTER_INFER_SHAPE_FUNC(OP_GATHER_FROM_UB, Opcode::OP_GATHER_FROM_UB, InferFunc4Gather);
 REGISTER_INFER_SHAPE_FUNC(OP_GATHER, Opcode::OP_GATHER, InferFunc4Gather);
 
 void InferFuncGatherInL1(Operation *op, std::vector<std::vector<SymbolicScalar>> &outValidShapes) {

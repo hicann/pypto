@@ -161,6 +161,52 @@ def gather(input: Tensor, dim: int, index: Tensor) -> Tensor:
 
 
 @op_wrapper
+def index_select(input: Tensor, dim: int, index: Tensor) -> Tensor:
+    """
+    Gathers slices from `param` along a single axis `dim` using `indices`.
+    param ∈ {S₀xS₁x…xS_{n-1}}, indices ∈ {I₀xI₁x…xI_{m-1}}.
+
+    Output shape
+    out.shape = (S₀,…,S_{dim-1}, I₀,…,I_{m-1}, S_{dim+1},…,S_{n-1}).
+    That is, the dimension `S_dim` in `param` is replaced by the full shape of `indices`, 
+    while all other dimensions of `param` are preserved.
+
+    For any multi-indices
+    i = (i₀,…,i_{m-1}), t = (t₀,…,t_{n-2}),
+    out[i, t] = param[t₀,…,t_{dim-1}, indices[i], t_{dim},…,t_{n-2}].
+    Parameters
+    ----------
+    input : Tensor
+    2-4-D tensor of shape (S0, S1, …, Sn-1) that provides the source values to gather from.
+
+    index : Tensor (integer type)
+    1-2-D integer tensor of shape (I0, I1); every entry must satisfy 0 ≤ value < S_dim.
+
+    dim : int
+    int axis in the range -n ≤ dim < n along which to gather; negative values are interpreted as dim + n.
+
+    Examples
+    --------
+    x = pypto.tensor([3, 4], pypto.DT_FP32)
+    indices = pypto.tensor([2,], pypto.DT_INT32)
+    out0 = pypto.index_select(x, 0, indices)
+    out1 = pypto.index_select(x, 1, indices)
+
+    Input x:       [[ 0.1427,  0.0231, -0.5414, -1.0009],
+                    [-0.4664,  0.2647, -0.1228, -1.1068],
+                    [-1.1734, -0.6571,  0.7230, -0.6004]]
+    Input indices:  [0, 2]
+    Output out1 :  [[ 0.1427,  0.0231, -0.5414, -1.0009],
+                    [-1.1734, -0.6571,  0.7230, -0.6004]]
+    Output out2 :  [[ 0.1427, -0.5414],
+                    [-0.4664, -0.1228],
+                    [-1.1734,  0.7230]]
+    """
+
+    return pypto_impl.index_select(input, dim, index)
+
+
+@op_wrapper
 def scatter_update(input: Tensor, dim: int, index: Tensor, src: Tensor) -> Tensor:
     """Write all values from the tensor 'src' into 'input' at the indices specified in the 'index' tensor.
 

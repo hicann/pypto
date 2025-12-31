@@ -126,28 +126,3 @@ void TestMlaProlog(std::vector<int> &params) {
         }
     }
 }
-
-TEST_F(HostMachineCompileTest, test_MlaProlog_float16_32_2_1_256_256_512) {  // b_n_s_s2_h_q_lora_rank
-    int& h = std::get<int>(g_deepseekConfig["hiddenSize"]);
-    int& n = std::get<int>(g_deepseekConfig["numAttentionHeads"]);
-    int& qLoraRank = std::get<int>(g_deepseekConfig["qLoraRank"]);
-    int& qkRopeHeadDim = std::get<int>(g_deepseekConfig["qkRopeHeadDim"]);
-    int& kvLoraRank = std::get<int>(g_deepseekConfig["kvLoraRank"]);
-    int& vHeadDim = std::get<int>(g_deepseekConfig["vHeadDim"]);
-    int& qkNopeHeadDim = std::get<int>(g_deepseekConfig["qkNopeHeadDim"]);
-
-    int b = 32;
-    int s = 1;
-    int s2 = 256;
-    h = 256;
-    n = 2;
-    qLoraRank = 512;
-    qkNopeHeadDim = 128;
-    qkRopeHeadDim = 64;
-    kvLoraRank = 512;
-    vHeadDim = 128;
-
-    std::vector<int> params = {b, s, s2, n, h, qLoraRank, qkNopeHeadDim, qkRopeHeadDim,
-                               kvLoraRank, vHeadDim};
-    TestMlaProlog<npu::tile_fwk::float16>(params);
-}

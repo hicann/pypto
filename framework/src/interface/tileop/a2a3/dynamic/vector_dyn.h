@@ -2843,7 +2843,7 @@ TILEOP void DynTtranspose_vnchwconv_(__ubuf__ T *dst, __ubuf__ T *src, __ubuf__ 
  */
 template <typename T, typename T2, unsigned before, unsigned after, unsigned axis_shape, unsigned UBIndexS0,
     unsigned UBIndexS1, unsigned UBIndexS2, unsigned UBIndexS3, unsigned UBOutputS>
-TILEOP void DynTgather_(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *src1, unsigned TShape0, unsigned TShape1,
+TILEOP void DynTgatherFromUB_(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *src1, unsigned TShape0, unsigned TShape1,
     unsigned TShape2, unsigned TShape3) {
     const uint16_t lenBurst = (after * sizeof(T) + BLOCK_SIZE - 1) / BLOCK_SIZE; // 一次拷贝的长度
     constexpr uint32_t indexStride34 = UBIndexS3 * UBIndexS2;
@@ -4094,6 +4094,153 @@ TILEOP void DynTbrcb_(__ubuf__ T *dst, __ubuf__ T *src, unsigned T0, unsigned T1
         }
         dst += DS1 * DS2 * DS3;
         src += SS1 * SS2 * SS3;
+    }
+}
+/**
+ * T param 类型
+ * T2 indices 类型
+ * axis 轴，归一化的轴
+ * UBOutputS* result ub 步长
+ * UBResultShape* ，result 中的 valid shape，指导循环
+ * GMParamStride* ，param 中 每个维度的步长
+ * GMParamOffset*， param 中 offset ，用于确认本次处理的块的地址
+ */
+template <typename T, typename T2, unsigned axis, unsigned UBOutputS1, unsigned UBOutputS2, unsigned UBOutputS3,
+    unsigned UBOutputS4>
+TILEOP void DynTgather(__ubuf__ T *dst, __gm__ T *param, __gm__ T2 *indices, unsigned UBResultShape0,
+    unsigned UBResultShape1, unsigned UBResultShape2, unsigned UBResultShape3, unsigned UBResultShape4,
+    unsigned GMParamStride1, unsigned GMParamStride2, unsigned GMParamStride3, unsigned GMParamOffset0,
+    unsigned GMParamOffset1, unsigned GMParamOffset2, unsigned GMParamOffset3, unsigned GMIndicesStride1,
+    unsigned GMIndicesOffset0, unsigned GMIndicesOffset1) {
+    param += GMParamOffset3 + GMParamOffset2 * GMParamStride3 + GMParamOffset1 * (GMParamStride2 * GMParamStride3) +
+             GMParamOffset0 * (GMParamStride1 * GMParamStride2 * GMParamStride3);
+    indices += GMIndicesOffset0 * GMIndicesStride1 + GMIndicesOffset1;
+    if constexpr (axis == 0) {
+        /**
+         * [a,b,c,d]
+         * [e,f]
+         * [e,f,b,c,d]
+         */
+        __gm__ T2 *indices0 = indices;
+        for (int i = 0; i < UBResultShape0; ++i) { // e
+            __gm__ T *param0 = param;
+            __ubuf__ T *dst0 = dst;
+            for (int j = 0; j < UBResultShape1; ++j) { // f
+                __ubuf__ T *dst1 = dst0;
+                uint64_t index = indices0[j];
+                //[e,f,b,c,d]
+                param0 = param + index * GMParamStride1 * GMParamStride2 * GMParamStride3;
+                for (int k = 0; k < UBResultShape2; ++k) { // b
+                    UBCopyInBase<T, UBOutputS4>(dst1, param0, UBResultShape3, UBResultShape4, GMParamStride3);
+                    dst1 += UBOutputS3 * UBOutputS4;
+                    param0 += GMParamStride2 * GMParamStride3;
+                }
+                dst0 += UBOutputS2 * UBOutputS3 * UBOutputS4;
+            }
+            dst += UBOutputS1 * UBOutputS2 * UBOutputS3 * UBOutputS4;
+            indices0 += GMIndicesStride1;
+        }
+    } else if constexpr (axis == 1) {
+        /**
+         * [a,b,c,d]
+         * [e,f]
+         * [a,e,f,c,d]
+         */
+        for (int i = 0; i < UBResultShape0; ++i) { // a
+            __gm__ T *param0 = param;
+            __ubuf__ T *dst0 = dst;
+            __gm__ T2 *indices0 = indices;
+            for (int j = 0; j < UBResultShape1; ++j) { // e
+                __ubuf__ T *dst1 = dst0;
+                for (int k = 0; k < UBResultShape2; ++k) { // f
+                    uint64_t index = indices0[k];
+                    param0 = param + index * GMParamStride2 * GMParamStride3;
+                    UBCopyInBase<T, UBOutputS4>(dst1, param0, UBResultShape3, UBResultShape4, GMParamStride3);
+                    dst1 += UBOutputS3 * UBOutputS4;
+                }
+                dst0 += UBOutputS2 * UBOutputS3 * UBOutputS4;
+                indices0 += GMIndicesStride1;
+            }
+            dst += UBOutputS1 * UBOutputS2 * UBOutputS3 * UBOutputS4;
+            param += GMParamStride1 * GMParamStride2 * GMParamStride3;
+        }
+    } else if constexpr (axis == 2) {
+        /**
+         * [a,b,c,d]
+         * [e,f]
+         * [a,b,e,f,d]
+         */
+        for (int i = 0; i < UBResultShape0; ++i) { // a
+            __gm__ T *param0 = param;
+            __ubuf__ T *dst0 = dst;
+            for (int j = 0; j < UBResultShape1; ++j) { // b
+                __gm__ T *param1 = param0;
+                __ubuf__ T *dst1 = dst0;
+                __gm__ T2 *indices0 = indices;
+                for (int k = 0; k < UBResultShape2; ++k) { // e
+                    __ubuf__ T *dst2 = dst1;
+                    for (int l = 0; l < UBResultShape3; l++) { // f
+                        uint64_t index = indices0[l];
+                        param1 = param0 + index * GMParamStride3;
+                        UBCopyInBase<T, UBOutputS4>(dst2, param1, 1, UBResultShape4, GMParamStride3);
+                        dst2 += UBOutputS4;
+                    }
+                    dst1 += UBOutputS3 * UBOutputS4;
+                    indices0 += GMIndicesStride1;
+                }
+                param0 += GMParamStride2 * GMParamStride3;
+                dst0 += UBOutputS2 * UBOutputS3 * UBOutputS4;
+            }
+            dst += UBOutputS1 * UBOutputS2 * UBOutputS3 * UBOutputS4;
+            param += GMParamStride1 * GMParamStride2 * GMParamStride3;
+        }
+    } else if constexpr (axis == 3) {
+        /**
+         * [a,b,c,d]
+         * [e,f]
+         * [a,b,c,e,f]
+         */
+        /**
+         * MOV_OUT_TO_UB_ALIGN 要求 UB 32 字节对齐，尾轴情况一次只搬运一个数据，无法满足 32 字节对齐
+         * 只能使用标量流水
+         *
+         * 由于在 registerInfo 注册为 PIPE_MTE2 操作，框架会自动为 gatherinub 添加 PIPE_MTE2 同步指令，但是尾轴情况
+         * gatherinub 是一个 S 操作。 方案： 根据同步指令的传递性，建立 PIPE_MTE2 到 PIPE_S 的屏障
+         */
+        for (int i = 0; i < UBResultShape0; ++i) { // a
+            __gm__ T *param0 = param;
+            __ubuf__ T *dst0 = dst;
+            for (int j = 0; j < UBResultShape1; ++j) { // b
+                __gm__ T *param1 = param0;
+                __ubuf__ T *dst1 = dst0;
+                for (int k = 0; k < UBResultShape2; ++k) { // c
+                    __gm__ T *param2 = param1;
+                    __ubuf__ T *dst2 = dst1;
+                    __gm__ T2 *indices0 = indices;
+                    for (int l = 0; l < UBResultShape3; ++l) { // e
+                        __ubuf__ T *dst3 = dst2;
+                        __gm__ T2 *indices1 = indices0;
+                        for (int p = 0; p < UBResultShape4; ++p) { // f
+                            uint64_t index = indices1[p];
+                            param2 = param1 + index;
+                            // UBCopyInBase<T, UBOutputS4>(dst3, param2, 1, 1, GMParamStride3);
+                            *dst3 = *param2;
+                            dst3++;
+                        }
+                        indices0 += GMIndicesStride1;
+                        dst2 += UBOutputS4;
+                    }
+                    dst1 += UBOutputS3 * UBOutputS4;
+                    param1 += GMParamStride3;
+                }
+                param0 += GMParamStride2 * GMParamStride3;
+                dst0 += UBOutputS2 * UBOutputS3 * UBOutputS4;
+            }
+            dst += UBOutputS1 * UBOutputS2 * UBOutputS3 * UBOutputS4;
+            param += GMParamStride1 * GMParamStride2 * GMParamStride3;
+        }
+        set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+        wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
     }
 }
 } // namespace TileOp

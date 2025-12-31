@@ -40,7 +40,7 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
 
 Status InferParamIndex::ResetOutputDynValidShape(const Operation &op) {
     std::vector<SymbolicScalar> validShape;
-    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
+    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,Opcode::OP_GATHER,
         Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1, Opcode::OP_LOAD};
     for (auto outOperand : op.GetOOperands()) {
         if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || specifiedOps.count(op.GetOpcode())) {
