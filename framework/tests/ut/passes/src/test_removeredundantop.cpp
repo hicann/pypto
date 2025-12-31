@@ -523,7 +523,7 @@ exp(end assemble)->view(end assemble)->expand(end assemble) ->exp(end assemble)
 TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpSTest2) {
     //Define the shape of the Tensors
     std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};
-    std::vector<int64_t> shape2 = {kNumExpFive, kNumExpSeven};
+    std::vector<int64_t> shape2 = {kNumExpFour, 1};
     std::vector<int64_t> shape3 = {kNumExpFour, kNumExpEight};
 
     PassManager &passManager = PassManager::Instance();

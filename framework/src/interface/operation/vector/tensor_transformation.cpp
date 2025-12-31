@@ -40,6 +40,14 @@ void CheckExpandTensorVaild(const LogicalTensorPtr &operand, const LogicalTensor
             ASSERT(0 && "shape not match");
         }
     }
+    
+    int numExpandAxis = 0;
+    for (size_t i = 0; i < result->shape.size(); ++i) {
+        if (operand->shape[i] != result->shape[i]) {
+            numExpandAxis++;
+        }
+    }
+    ASSERT(numExpandAxis <= 1) << "Only allow to expand one axis";
 }
 
 void ExpandTile(Function &function, const struct ExpandInfo &expandInfo) {
@@ -169,7 +177,13 @@ Tensor Expand(const Tensor &self, const std::vector<int64_t> &dstShape, std::vec
     DECLARE_TRACER();
 
     ASSERT(self.GetShape().size() == dstShape.size()) << "The shape size of self and dst should be equal";
-
+    int numExpandAxis = 0;
+    for (size_t i = 0; i < dstShape.size(); ++i) {
+        if (self.GetShape()[i] != dstShape[i]) {
+            numExpandAxis++;
+        }
+    }
+    ASSERT(numExpandAxis <= 1) << "Only allow to expand one axis";
     if (validShape.empty()) {
         for (size_t i = 0; i < dstShape.size(); ++i) {
             if (self.GetShape()[i] != dstShape[i]) {
