@@ -384,6 +384,12 @@ Status ReplaceTensor::ForwardAssemble(Operation *op, LogicalTensorPtr &rootTenso
             return SUCCESS;
         }
         assembleOut->tensor = assembleIn->tensor;
+        for (auto prodOp : assembleOut->GetProducers()) {
+            if (prodOp->GetOpMagic() != op->GetOpMagic()) {
+                backRoots.push(assembleOut);
+                return SUCCESS;
+            }
+        }
         return SUCCESS;
     } else {
         backRoots.push(assembleOut);
