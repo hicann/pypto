@@ -93,11 +93,4 @@ struct CompletedPacket {
     TaskCycleInfo cycleInfo;
 };
 
-struct CommunicationPacket {
-    size_t machineIdFrom = 0;
-    size_t machineIdTo = 0;
-    uint64_t taskId = 0;
-    uint64_t latency = 0;
-};
-
 }  // namespace CostModel

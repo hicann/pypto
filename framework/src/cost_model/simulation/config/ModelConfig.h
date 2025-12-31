@@ -47,6 +47,5 @@ struct ModelConfig : public Config {
     uint64_t pipeBoardVibration = 0;
     uint64_t calendarMode = 0;
     std::string calendarFile = "";
-    uint64_t workerMachineNumber = 20;
 };
 }

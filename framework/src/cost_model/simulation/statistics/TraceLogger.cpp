@@ -1005,53 +1005,5 @@ void TraceLogger::ToCalendarGlobalJson(std::ofstream &osCalendar, std::map<int, 
     osCalendar << calendarJson.dump(1) << std::endl;
 }
 
-void TraceLogger::ToCommJson(std::ofstream &os)
-{
-    std::map<int, std::pair<std::string, std::vector<Json>>> coreTasks;
-    for (auto it : mProcesses) {
-        auto machineType = GetMachineType(it.first);
-        if (machineType == int(MachineType::MIXED)) {
-            coreTasks[it.second.coreIdx] = {it.second.name, {}};
-        }
-    }
 
-    for (auto &duration : mDurations) {
-        if (duration.second.start.tid != 1) {
-            continue;
-        }
-        auto &start = duration.second.start;
-        auto &end = duration.second.end;
-        int coreId = mProcesses[start.pid].coreIdx;
-
-        std::regex pattern(R"((ATTN|FFN) BS(\d+)-L(\d+))");  // "ATTN BS4-L0 Task120 Task110 Task100 Task90"
-        std::smatch match;
-        if (!std::regex_search(start.name, match, pattern)) {
-            continue;
-        }
-        std::string type = match[1];
-        int batchSize = std::stoi(match[2]);
-        int layer = std::stoi(match[3]);
-        uint64_t sTime = start.timestamp;
-        uint64_t eTime = end.timestamp;
-
-        Json taskJson;
-        taskJson["type"] = type;
-        taskJson["batchSize"] = batchSize;
-        taskJson["layer"] = layer;
-        taskJson["execStart"] = sTime;
-        taskJson["execEnd"] = eTime;
-
-        coreTasks[coreId].second.push_back(taskJson);
-    }
-
-    Json printJson;
-    for (auto &it : coreTasks) {
-        Json coreJson;
-        coreJson["blockIdx"] = it.first;
-        coreJson["coreType"] = it.second.first;
-        coreJson["tasks"] = it.second.second;
-        printJson.push_back(coreJson);
-    }
-    os << printJson.dump(1) << std::endl;
-}
 }  // CostModel

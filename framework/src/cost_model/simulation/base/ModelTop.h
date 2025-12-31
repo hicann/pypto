@@ -33,8 +33,6 @@
 #include "cost_model/simulation/machine/AICPUMachine.h"
 #include "cost_model/simulation/machine/CoreMachine.h"
 #include "cost_model/simulation/machine/PipeMachine.h"
-#include "cost_model/simulation/machine/WorkerMachine.h"
-#include "cost_model/simulation/machine/SwitchFabricMachine.h"
 #include "cost_model/simulation/arch/GenCalendar/GenCalendar.h"
 #include "cost_model/simulation/pv/PvModel.h"
 
@@ -149,7 +147,6 @@ public:
     void BuildSystemStat();
     void BuildSystem();
 
-    void BuildCommSystem();
     void InitCoreTask();   // Init CoreMachine Task
     void Reset();
     void AddMachine(std::shared_ptr<Machine> m);
@@ -173,7 +170,6 @@ public:
     void OutputConfig(std::string prefix = "");
     void OutputLogForSwimLane(std::string prefix = "");
     void OutputLogForPipeSwimLane(std::string prefix = "");
-    void OutputLogForCommSwimLane(std::string prefix = "");
     void OutputCalendarScheduleCpp(std::string prefix = "");
     void ProcessTaskMap(TaskMap &taskMap, std::string prefix = "");
     void DrawTasks(const TaskMap &taskMap, std::string prefix = "");

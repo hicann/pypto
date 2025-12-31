@@ -46,7 +46,6 @@ ModelConfig::ModelConfig()
         {"pipeBoardVibration", [&](string v){ pipeBoardVibration = ParseInteger(v); }},
         {"calendarMode", [&](string v){ calendarMode = ParseInteger(v); }},
         {"calendarFile", [&](string v){ calendarFile = ParseString(v); }},
-        {"workerMachineNumber", [&](string v){ workerMachineNumber = ParseInteger(v); }},
     };
 
     Config::recorder = {
@@ -74,7 +73,6 @@ ModelConfig::ModelConfig()
         {"pipeBoardVibration", [&](){ return "pipeBoardVibration = " + ParameterToStr(pipeBoardVibration); }},
         {"calendarMode", [&](){ return "calendarMode = " + ParameterToStr(calendarMode); }},
         {"calendarFile", [&](){ return "calendarFile = " + calendarFile; }},
-        {"workerMachineNumber", [&](){ return "workerMachineNumber = " + ParameterToStr(workerMachineNumber); }},
     };
 }
 }

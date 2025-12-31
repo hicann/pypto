@@ -39,7 +39,7 @@ int CostModelInterface::BuildCostModel(std::vector<std::string> &inputConfigs)
     int executeCycleLimit = -1;
     vector<string> configs;
     vector<string> configFilePath;
-    argParser.RegisterParam("-m", mode, "Mode. 0: Common Simulation; 1: Communication Simulation; 2: Function Mode; 3: LeafFunction Simulation");
+    argParser.RegisterParam("-m", mode, "Mode. 0: Common Simulation; 1: Function Mode; 2: LeafFunction Simulation");
     argParser.RegisterParam("-f", filename, "Input File to load");
     argParser.RegisterParam("-t", logLevel, "MLOG_LEVEL. 1: DEBUG; 2: INFO; 3: WARN; 4: ERROR, 5: FATAL");
     argParser.RegisterParam("-o", outdir, "Output Directory. Default: ./ASCPPModelOut");
@@ -91,9 +91,7 @@ int CostModelInterface::BuildCostModel(std::vector<std::string> &inputConfigs)
 
     if (sim->mode == SimMode::NORMAL) {
         sim->BuildSystem();
-    } else if (sim->mode == SimMode::COMMUNICATION) {
-        sim->BuildCommSystem();
-    }  else if (sim->mode == SimMode::LEAF_FUNCTION) {
+    } else if (sim->mode == SimMode::LEAF_FUNCTION) {
         sim->dynamicWorkflow = true;
         sim->config.aicpuMachineNumber = 1;
         sim->config.cubeMachineNumberPerAICPU = 1;
@@ -190,9 +188,6 @@ void CostModelInterface::Report()
         sim->OutputPerfettoTrace();
         sim->OutputLogForSwimLane();
         sim->OutputCalendarScheduleCpp();
-    } else if (sim->mode == SimMode::COMMUNICATION) {
-        sim->OutputTrace("attn-ffn");
-        sim->OutputLogForCommSwimLane();
     }  else if (sim->mode == SimMode::LEAF_FUNCTION) {
         sim->OutputTrace();
         sim->OutputPerfettoTrace();

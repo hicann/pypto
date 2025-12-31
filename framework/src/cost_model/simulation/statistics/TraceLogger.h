@@ -214,7 +214,6 @@ public:
     void ToTrace(std::ofstream &os);
     void ToFilterTrace(std::ofstream &os, std::map<int, std::pair<std::string, std::vector<Json>>> &coreTasks);
     void ToPipeTrace(std::ofstream &os);
-    void ToCommJson(std::ofstream &os);
     void ToCalendarGlobalJson(std::ofstream &osCalendar,
                               std::map<int, std::pair<std::string, std::vector<Json>>> coreTasks);
 };
