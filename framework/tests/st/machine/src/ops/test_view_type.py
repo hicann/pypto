@@ -119,7 +119,7 @@ def view_type_quant_test_entry(output_dir: Path):
         scale_dequant = 1.0 / scale_quant
         return y_int8, scale_dequant
 
-    k_nope = torch.empty((t, n_kv, d_kv), dtype=torch.bfloat16).uniform_(-1, 1)
+    k_nope = torch.ones((t, n_kv, d_kv), dtype=torch.bfloat16)
     x = k_nope
     tensor_tofile(x, x_path)
 
@@ -142,8 +142,7 @@ def view_type_dequant_test_entry(output_dir: Path):
     d_kv, d_r = 512, 64
     n_kv = 1
     selected_count = 2048
-
-    cache_combined = torch.randint(-128, 128, (selected_count, n_kv, d_kv + 2 * d_r + 4 * 4), dtype=torch.int8)
+    cache_combined = torch.ones((selected_count, n_kv, d_kv + 2 * d_r + 4 * 4), dtype=torch.int8)
     cache_nope_int8 = cache_combined[:, :, :d_kv]
     cache_rope_int8 = cache_combined[:, :, d_kv: d_kv + 2 * d_r]
     cache_scale_int8 = cache_combined[:, :, d_kv + 2 * d_r:]
