@@ -91,7 +91,7 @@ const std::map<OperandType, std::string> BUFFER_TYPE_TO_PREFIX = {
     {OperandType::BUF_L0A,  "L0A"},
     {OperandType::BUF_L0B,  "L0B"},
     {OperandType::BUF_L0C,  "L0C"},
-    {OperandType::BUF_FIX, "FBUF"},
+    {OperandType::BUF_FIX, "FIXBUF"},
     { OperandType::BUF_BT, "BIAS"},
     {OperandType::BUF_DDR,   "GM"},
 };

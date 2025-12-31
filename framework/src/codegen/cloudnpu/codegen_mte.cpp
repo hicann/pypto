@@ -158,10 +158,11 @@ std::string CodeGenOpCloudNPU::GenL0CToUBTileTensor() const {
     if (opAttrs.count(OP_ATTR_PREFIX + "is_nz")) {
         copyInMode = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "is_nz"));
     }
+    std::string nzVar = copyInMode ? "CopyOutMode::NZ2ND" : "CopyOutMode::NZ2NZ";
     std::ostringstream oss;
     int64_t aivId = 0;
     GetAttr(OpAttributeKey::subBlockIdx, aivId);
-    oss << tileOpName << "<" << std::to_string(copyInMode) << ">" << "(" << dstTensor << ", " << src0Tensor << ", "
+    oss << tileOpName << "<" << nzVar << ">" << "(" << dstTensor << ", " << src0Tensor << ", "
         << coord << ", " << aivId << ");\n";
     return oss.str();
 }
@@ -174,8 +175,18 @@ std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const {
     std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
     std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
 
+    unsigned srcOffset0 = 0;
+    unsigned srcOffset1 = 0;
+    auto dynoffset = offsetGmSymbolic[ToUnderlying(MISOIdx::SRC0_IDX)];
+    if (!dynoffset.empty()) {
+        ASSERT(dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToL0 only support 2-dim!";
+        srcOffset0 = dynoffset[ID0];
+        srcOffset1 = dynoffset[ID1];
+    }
+    std::vector<std::string> l0Offset = {
+        SymbolicExpressionTable::BuildExpression(srcOffset0), SymbolicExpressionTable::BuildExpression(srcOffset1)};
     // constructor call parameter ((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
-    std::string coordCp = PrintParams({"(", ")"}, offset[ToUnderlying(MISOIdx::SRC0_IDX)], ", ");
+    std::string coordCp = PrintParams({"(", ")"}, l0Offset, ", ");
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = "Coord" + std::to_string(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size()) + DIM + coordCp;
     std::ostringstream oss;
@@ -233,9 +244,14 @@ std::string CodeGenOpCloudNPU::GenMemL1ToL0() const {
 
 std::string CodeGenOpCloudNPU::PrintTmove() const {
     std::ostringstream oss;
+    std::vector<int64_t> tmpoffset(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), 0);
+    std::string coordCp = PrintParams({"(", ")"}, tmpoffset, ", ");
+    //e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
+    std::string coord = "Coord" + std::to_string(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size()) + DIM + coordCp;
     std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
     std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
-    oss << tileOpName << "(" << dstTensor << ", " << src0Tensor << ");\n";
+
+    oss << tileOpName << "<" << 0 << ">" << "(" << dstTensor << ", " << src0Tensor << ", " << coord << ");\n";
     return oss.str();
 }
 
@@ -380,7 +396,7 @@ std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const {
     int64_t reluMode = 0;
 
     GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
-    std::string nzVar = "true";
+    std::string nzVar = "CopyOutMode::NZ2NZ";
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
     std::string storeConfig = PrintParams({"<", ">"}, storeConfigList, ", ");
     npu::tile_fwk::Element scaleValue = npu::tile_fwk::Element(DataType::DT_UINT64, 0);
@@ -721,11 +737,16 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     GetAttr(OP_ATTR_PREFIX + "atomic_add", isAcc);
     GetAttr("op_attr_is_nz", nzValue);
     GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
-    std::string nzVar = nzValue ? "false" : "true";
-    std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
+    std::string nzVar = nzValue ? "CopyOutMode::NZ2NZ" : "CopyOutMode::NZ2ND";
+    std::vector<std::string> storeConfigList = {
+        nzVar, std::to_string(isAcc), std::to_string(reluMode)};
     std::string storeConfig = PrintParams({"<", ">"}, storeConfigList, ", ");
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord};
-
+    npu::tile_fwk::Element scaleValue = npu::tile_fwk::Element(DataType::DT_UINT64, 0);
+    if (!isAcc) {
+        GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
+    }
+    std::vector<std::string> tileOpParamList = {
+        dstTensor, srcTensor, src1Tensor, coord, std::to_string(scaleValue.GetUnsignedData())};
     std::ostringstream oss;
     oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");

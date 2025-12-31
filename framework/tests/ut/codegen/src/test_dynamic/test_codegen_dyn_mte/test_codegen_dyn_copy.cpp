@@ -163,7 +163,7 @@ TEST_F(TestCodegenDynCopy, L1ToFB) {
     cop.Init(op);
     std::string res = cop.GenOpCode();
     std::string expect =
-        R"!!!(TileOp::DynL1ToFB<float, 0>((__fbuf__ float*)FBUF_S0_E0, (__cbuf__ float*)L1_S0_E0, 64);
+        R"!!!(TileOp::DynL1ToFB<float, 0>((__fbuf__ float*)FIXBUF_S0_E0, (__cbuf__ float*)L1_S0_E0, 64);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -325,6 +325,8 @@ TEST_F(TestCodegenDynCopy, L1ToBt) {
 void TestMatmulMteBody(Opcode opcode, MemoryType inType, MemoryType outType, bool isTileTensor = false) {
     if (isTileTensor) {
         InsertTileTensorOp(Opcode::OP_L0C_COPY_OUT, "TStore");
+        InsertTileTensorOp(Opcode::OP_L1_TO_BT, "TExtract");
+        InsertTileTensorOp(Opcode::OP_L1_TO_L0A, "TExtract");
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
         config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
     }
@@ -393,13 +395,13 @@ TEST_F(TestCodegenDynCopy, L1CopyInTensor) {
     TestMatmulMteBody(Opcode::OP_L1_COPY_IN, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1);
 }
 TEST_F(TestCodegenDynCopy, L1CopyL0Tensor) {
-    TestMatmulMteBody(Opcode::OP_L1_TO_L0A, MemoryType::MEM_L1, MemoryType::MEM_L0A);
+    TestMatmulMteBody(Opcode::OP_L1_TO_L0A, MemoryType::MEM_L1, MemoryType::MEM_L0A, true);
 }
 TEST_F(TestCodegenDynCopy, L1CopyFBTensor) {
     TestMatmulMteBody(Opcode::OP_L1_TO_FIX_QUANT_PRE, MemoryType::MEM_L1, MemoryType::MEM_FIX);
 }
 TEST_F(TestCodegenDynCopy, L1CopyBTTensor) {
-    TestMatmulMteBody(Opcode::OP_L1_TO_BT, MemoryType::MEM_L1, MemoryType::MEM_BT);
+    TestMatmulMteBody(Opcode::OP_L1_TO_BT, MemoryType::MEM_L1, MemoryType::MEM_BT, true);
 }
 TEST_F(TestCodegenDynCopy, L0CopyOutTensor) {
     TestMatmulMteBody(Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR);

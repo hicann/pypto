@@ -164,6 +164,7 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE { // Unary Vector
     {"L1_TO_L0B", CorePipeType::PIPE_MTE1},
     {"L1_TO_L0Bt", CorePipeType::PIPE_MTE1},
     {"L1_TO_BT", CorePipeType::PIPE_MTE1},
+    {"FIX_COPY_IN_QUANT_PRE", CorePipeType::PIPE_FIX},
     {"FIX_COPY_IN", CorePipeType::PIPE_MTE_IN},
     {"L1_COPY_UB", CorePipeType::PIPE_MTE_IN},
     {"L0C_COPY_UB", CorePipeType::PIPE_MTE_IN},

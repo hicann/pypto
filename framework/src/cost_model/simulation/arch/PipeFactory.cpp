@@ -45,48 +45,30 @@ namespace CostModel
         return createFunc();
     }
 
-    UnifiedPipeMachinePtr PipeFactory::Create(CorePipeType pipeType, std::string archType, int accLevel)
-    {
-        if (IsTileAlloc(pipeType)) {
-            return CreateTileAllocPipeImpl();
-        } else if (pipeType == CorePipeType::PIPE_CALL) {
-            return CreateCallPipeImpl();
-        } else if (pipeType == CorePipeType::PIPE_MTE_IN || pipeType == CorePipeType::PIPE_MTE1 ||
-                   pipeType == CorePipeType::PIPE_MTE_OUT) {
-            if (archType == "A2A3") {
-                if (accLevel == 1) {
-                    return CreatePipeSimulatorFast<PostSimulatorA2A3>();
-                }
-                else {
-                    return CreatePipeSimulator("SimulatorA2A3");
-                }
+    UnifiedPipeMachinePtr CreateSimulator(const std::string &archType, int accLevel) {
+        if (archType == "A2A3") {
+            if (accLevel == 1) {
+                return CreatePipeSimulatorFast<PostSimulatorA2A3>();
             } else {
-                throw std::invalid_argument("unknown arch type " + archType);
-            }
-        } else if (pipeType == CorePipeType::PIPE_VECTOR_ALU || pipeType == CorePipeType::PIPE_S) {
-            if (archType == "A2A3") {
-                if (accLevel == 1) {
-                    return CreatePipeSimulatorFast<PostSimulatorA2A3>();
-                }
-                else {
-                    return CreatePipeSimulator("SimulatorA2A3");
-                }
-            } else {
-                throw std::invalid_argument("unknown arch type " + archType);
-            }
-        } else if (pipeType == CorePipeType::PIPE_CUBE) {
-            if (archType == "A2A3") {
-                if (accLevel == 1) {
-                    return CreatePipeSimulatorFast<PostSimulatorA2A3>();
-                }
-                else {
-                    return CreatePipeSimulator("SimulatorA2A3");
-                }
-            } else {
-                throw std::invalid_argument("unknown arch type " + archType);
+                return CreatePipeSimulator("SimulatorA2A3");
             }
         } else {
-            throw std::invalid_argument("unknown pipe type " + CorePipeName(pipeType));
+            throw std::invalid_argument("unknown arch type " + archType);
+        }
+    }
+
+    UnifiedPipeMachinePtr PipeFactory::Create(CorePipeType pipeType, std::string archType, int accLevel) {
+        switch (pipeType) {
+            case CorePipeType::PIPE_TILE_ALLOC: return CreateTileAllocPipeImpl();
+            case CorePipeType::PIPE_CALL: return CreateCallPipeImpl();
+            case CorePipeType::PIPE_MTE_IN:
+            case CorePipeType::PIPE_MTE1:
+            case CorePipeType::PIPE_MTE_OUT:
+            case CorePipeType::PIPE_FIX: return CreateSimulator(archType, accLevel);
+            case CorePipeType::PIPE_VECTOR_ALU:
+            case CorePipeType::PIPE_S:
+            case CorePipeType::PIPE_CUBE: return CreateSimulator(archType, accLevel);
+            default: throw std::invalid_argument("unknown pipe type " + CorePipeName(pipeType));
         }
         return nullptr;
     }
