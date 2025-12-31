@@ -20,6 +20,7 @@
 #include <atomic>
 #include "interface/inner/pre_def.h"
 #include "interface/configs/config_manager.h"
+#include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
 
@@ -37,6 +38,12 @@ public:
     void SetPassConfigs(const PassConfigs &config) {
         passDfxconfigs_ = config;
     }
+    std::vector<NPUArch> &GetSupportedArches() {
+ 	    return supportedArches_;
+ 	}
+ 	void SetSupportedArches(const std::vector<NPUArch> &supportedArches) {
+ 	    supportedArches_ = supportedArches;
+ 	}
 
 protected:
     virtual Status RunOnFunction(Function &function) = 0;
@@ -66,6 +73,7 @@ private:
     mutable std::string passFolder_{"."};
     std::string name_;
     std::string graphFolder_;
+    std::vector<NPUArch> supportedArches_;
 };
 } // namespace npu::tile_fwk
 #endif  // PASSES_PASS_H_

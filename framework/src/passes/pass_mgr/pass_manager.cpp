@@ -189,7 +189,22 @@ std::vector<PassManager::PassEntry> PassManager::GetStrategyPasses(const std::st
         auto emptyPass = std::vector<PassManager::PassEntry>();
         return emptyPass;
     }
-    return it->second;
+    NPUArch currArch = Platform::Instance().GetSoc().GetNPUArch();
+ 	auto selectedPass = std::vector<PassManager::PassEntry>();
+ 	for (auto &currPassEntry : it->second) {
+ 	    const auto &passName = currPassEntry.passName;
+ 	    auto pass = PassRegistry::GetInstance().CreatePass(passName);
+ 	    if (pass == nullptr) {
+            ALOG_WARN_F("Pass %s does not exist.", passName.c_str());
+ 	        continue;
+ 	    }
+ 	    std::vector<NPUArch> &arches = pass->GetSupportedArches();
+ 	    if ((!arches.empty()) && (std::find(arches.begin(), arches.end(), currArch) == arches.end())) {
+ 	        continue;
+ 	    }
+ 	    selectedPass.push_back(currPassEntry);
+ 	}
+ 	return selectedPass;
 }
 
 std::string PassManager::GetResumePath(const std::string &strategy) {

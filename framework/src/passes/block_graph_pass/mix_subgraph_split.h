@@ -105,7 +105,9 @@ struct CallOpCreationInfo {
 
 class MixSubgraphSplit : public Pass {
 public:
-    MixSubgraphSplit() : Pass("MixSubgraphSplit"), nextWrapId_(0), nextMixId_(0) {}
+    MixSubgraphSplit() : Pass("MixSubgraphSplit"), nextWrapId_(0), nextMixId_(0) {
+        SetSupportedArches({NPUArch::DAV_3510});
+    }
     ~MixSubgraphSplit() override = default;
 
     Status RunOnFunction(Function &function) override;

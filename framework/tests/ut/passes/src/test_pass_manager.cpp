@@ -94,8 +94,8 @@ TEST_F(PassManagerTest, TestPassManager) {
     auto errPasses = PassManager::Instance().GetStrategyPasses("PM_TEST1");
     EXPECT_TRUE(errPasses.empty());
     auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestPassManager", "TestPassManager", nullptr);
-    EXPECT_TRUE(PassManager::Instance().RunPass(Program::GetInstance(), *currFunctionPtr, "PM_TEST") == FAILED);
-    EXPECT_TRUE(PassManager::Instance().RunPass(Program::GetInstance(), *currFunctionPtr, "PM_TEST2") == FAILED);
+    EXPECT_TRUE(PassManager::Instance().RunPass(Program::GetInstance(), *currFunctionPtr, "PM_TEST") == SUCCESS);
+    EXPECT_TRUE(PassManager::Instance().RunPass(Program::GetInstance(), *currFunctionPtr, "PM_TEST2") == SUCCESS);
 }
 
 TEST_F(PassManagerTest, TestPassBase) {

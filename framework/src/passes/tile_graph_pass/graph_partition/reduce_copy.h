@@ -68,7 +68,9 @@ public:
 
 class ReduceCopyMerge : public Pass {
 public:
-    ReduceCopyMerge() : Pass("ReduceCopyMerge") {}
+    ReduceCopyMerge() : Pass("ReduceCopyMerge") {
+        SetSupportedArches({NPUArch::DAV_3510});
+    }
     ~ReduceCopyMerge() override = default;
 private:
     Status RunOnFunction(Function &function) override;
