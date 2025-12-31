@@ -165,6 +165,7 @@ private:
     std::map<IssueEntryPtr, std::map<MemoryType, int64_t>> backTraceBufferAllocate;
     std::map<IssueEntryPtr, std::pair<size_t, std::vector<IssueEntryPtr>>> backTraceIssueEntries;
     std::map<IssueEntryPtr, std::unordered_map<int, int>> backTraceBufRefCount;
+    std::unordered_map<IssueEntryPtr, int> depthCache_;
     // 回退点,防止死循环
     IssueEntryPtr rollBackNodeIssue{nullptr};
     int GetMaxDepthSimple(IssueEntryPtr issue);
@@ -215,6 +216,7 @@ private:
     // sort ops
     Status SortOps();
     Status PriorDFS(std::unordered_map<Opcode, int> preNodePriority);
+    int GetDepth(IssueEntryPtr issue);
     Status DFSFromOutNode(std::vector<IssueEntryPtr> outNodeQueue, 
     std::unordered_map<Opcode, int> preNodePriority, std::map<IssueEntryPtr, bool> &visited);
     void DFSFromSingleNode(IssueEntryPtr issue, std::map<IssueEntryPtr, bool>& visited,

@@ -874,6 +874,7 @@ Status OoOScheduler::CheckOpBufferSize(Operation *op) {
 Status OoOScheduler::Init(const std::vector<Operation *> &operations) {
     issueEntries.clear();
     localBufferMap.clear();
+    depthCache_.clear();
 
     // 初始化芯片各buffer大小
     InitMemorySize();

@@ -136,8 +136,11 @@ Status BufferPool::MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice)
     return SUCCESS;
 }
 
-void BufferPool::SelectHeadAndTail(bool &head, bool &tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals) {
+void BufferPool::SelectHeadAndTail(LocalBufferPtr tensor, bool &head, bool &tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals) {
     for (auto &interval : freeIntervals) {
+        if (interval.first < tensor->size) {
+            continue;
+        }
         for (auto &freeSpace : interval.second) {
             if (freeSpace.first == 0) {
                 head = true;
@@ -157,7 +160,7 @@ Status BufferPool::Allocate(LocalBufferPtr tensor) {
     if (tensor->memType == MemoryType::MEM_L0A || tensor->memType == MemoryType::MEM_L0B || tensor->memType == MemoryType::MEM_L0C) {
         bool headFree = false;
         bool tailFree = false;
-        SelectHeadAndTail(headFree, tailFree, freeIntervals);
+        SelectHeadAndTail(tensor, headFree, tailFree, freeIntervals);
         BufferSlice newSlice;
         if (headFree) {
             newSlice.offset = 0;
