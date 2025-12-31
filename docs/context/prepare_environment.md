@@ -93,8 +93,8 @@ PyPTO 支持在具备 Ascend-NPU 硬件的**真实环境**和仅有 CPU 硬件�
 2. **安装CANN toolkit包**
 
     根据实际环境下载对应的安装包, 下载链接如下:
-    - x86: [Ascend-cann-toolkit_8.5.0_linux-x86_64.run](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20251216_newest/Ascend-cann-toolkit_8.5.0_linux-x86_64.run)
-    - aarch64: [Ascend-cann-toolkit_8.5.0_linux-aarch64.run](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20251216_newest/Ascend-cann-toolkit_8.5.0_linux-aarch64.run)
+    - x86: [Ascend-cann-toolkit_8.5.0_linux-x86_64.run](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-toolkit_8.5.0_linux-x86_64.run)
+    - aarch64: [Ascend-cann-toolkit_8.5.0_linux-aarch64.run](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/aarch64/Ascend-cann-toolkit_8.5.0_linux-aarch64.run)
 
     ```bash
     # 确保安装包有可执行权限
@@ -111,10 +111,10 @@ PyPTO 支持在具备 Ascend-NPU 硬件的**真实环境**和仅有 CPU 硬件�
 3. **安装CANN ops包**
 
     根据实际环境和硬件类型(支持A2/A3), 下载对应的安装包, 下载链接如下:
-    - A2、x86: [CANN_A2-OPS-8.5.0_RC1.x86](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20251216_newest/Ascend-cann-910b-ops_8.5.0_linux-x86_64.run)
-    - A2、aarch64: [CANN_A2-OPS-8.5.0.RC1.aarch64](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20251216_newest/Ascend-cann-910b-ops_8.5.0_linux-aarch64.run)
-    - A3、x86: [CANN_A3-OPS-8.5.0_RC1.x86](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20251213_newest/Ascend-cann-910_93-ops_8.5.0_linux-x86_64.run)
-    - A3、aarch64: [CANN_A3-OPS-8.5.0.RC1.aarch64](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/CANN/20251213_newest/Ascend-cann-910_93-ops_8.5.0_linux-aarch64.run)
+    - A2、x86: [CANN_A2-OPS-8.5.0.x86](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-910b-ops_8.5.0_linux-x86_64.run)
+    - A2、aarch64: [CANN_A2-OPS-8.5.0.aarch64](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/aarch64/Ascend-cann-910b-ops_8.5.0_linux-aarch64.run)
+    - A3、x86: [CANN_A3-OPS-8.5.0.x86](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-A3-ops_8.5.0_linux-x86_64.run)
+    - A3、aarch64: [CANN_A3-OPS-8.5.0.aarch64](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/aarch64/Ascend-cann-A3-ops_8.5.0_linux-aarch64.run)
     ```
     # 确保安装包有可执行权限
     chmod +x Ascend-cann-${device_type}-ops_8.5.0_linux-${arch}.run
