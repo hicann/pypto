@@ -55,40 +55,30 @@ def get_device_id():
 # MATMUL Examples
 # ============================================================================
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
-def matmul_kernel(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype)
 
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def matmul_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype)
-
-
-def matmul_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[0], b.shape[1], dtype=a.dtype, device=a.device)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-
+def matmul_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
+    a_shape, b_shape = a.shape, b.shape
+    out_shape = (a_shape[0], b_shape[1])
+    
     if run_mode == "npu":
-        matmul_kernel(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        matmul_kernel_sim(a_pto, b_pto, out_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(
+    host_options={"only_codegen": True}, runtime_options={"run_mode": mode}
+    )
+    def matmul_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(out_shape, pypto.DT_FP32):
+        pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
+        out = pypto.matmul(a, b, a.dtype)
+        return out
 
+    out = matmul_kernel(a, b)
     return out
 
 
@@ -113,40 +103,26 @@ def test_matmul_basic(device_id: int = None, run_mode: str = "npu"):
     print("✓ Basic matrix multiplication completed successfully")
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
-def matmul_batch_kernel(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype)
-
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def matmul_batch_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype)
-
-
 def matmul_batch_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(a)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-
+    a_shape, b_shape = a.shape, b.shape
     if run_mode == "npu":
-        matmul_batch_kernel(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        matmul_batch_kernel_sim(a_pto, b_pto, out_pto)
-
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+        
+    @pypto.frontend.jit(
+    host_options={"only_codegen": True}, runtime_options={"run_mode": mode}
+    )
+    def matmul_batch_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(a_shape, pypto.DT_FP32):
+        pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
+        out = pypto.matmul(a, b, a.dtype)
+        return out
+    out = matmul_batch_kernel(a, b)
     return out
 
 
@@ -171,40 +147,28 @@ def test_matmul_batch(device_id: int = None, run_mode: str = "npu"):
     print("✓ Batch matrix multiplication completed successfully")
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
-def matmul_broadcast_kernel(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype)
-
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def matmul_broadcast_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype)
-
 
 def matmul_broadcast_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(b)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
+    a_shape, b_shape = a.shape, b.shape
 
     if run_mode == "npu":
-        matmul_broadcast_kernel(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        matmul_broadcast_kernel_sim(a_pto, b_pto, out_pto)
-
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(
+    host_options={"only_codegen": True}, runtime_options={"run_mode": mode}
+    )
+    def matmul_broadcast_kernel(
+        a: pypto.Tensor(a.shape, pypto.DT_FP32),
+        b: pypto.Tensor(b.shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(b.shape, pypto.DT_FP32):
+        pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
+        out = pypto.matmul(a, b, pypto.DT_FP32)
+        return out
+    out = matmul_broadcast_kernel(a, b)
     return out
 
 
@@ -229,76 +193,53 @@ def test_matmul_broadcast(device_id: int = None, run_mode: str = "npu"):
     print("✓ Batch matrix multiplication with broadcasting completed successfully")
 
 
-@pypto.jit(
-        host_options={"only_codegen": True},
-    )
-def matmul_trans_right_kernel(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype, b_trans=True)
-
-
-@pypto.jit(
-        host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-    )
-def matmul_trans_right_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype, b_trans=True)
-
-
 def matmul_trans_right_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[0], b.shape[0], dtype=a.dtype, device=a.device)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-
+    a_shape, b_shape = a.shape, b.shape
+    out_shape = (a_shape[0], b_shape[0])
     if run_mode == "npu":
-        matmul_trans_right_kernel(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        matmul_trans_right_kernel_sim(a_pto, b_pto, out_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
+    @pypto.frontend.jit(
+    host_options={"only_codegen": True}, runtime_options={"run_mode": mode}
+    )
+    def matmul_trans_right_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+    ) -> (pypto.Tensor(out_shape, pypto.DT_FP32),):
+        pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
+        out = pypto.matmul(a, b, a.dtype, b_trans=True)
+        return out
+
+    out = matmul_trans_right_kernel(a, b)
     return out
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
-def matmul_trans_left_kernel(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype, a_trans=True)
-
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def matmul_trans_left_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype, a_trans=True)
-
-
 def matmul_trans_left_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[1], b.shape[1], dtype=a.dtype, device=a.device)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-
+    a_shape, b_shape = a.shape, b.shape
+    out_shape = (a_shape[1], b_shape[1])
     if run_mode == "npu":
-        matmul_trans_left_kernel(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        matmul_trans_left_kernel_sim(a_pto, b_pto, out_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(
+    host_options={"only_codegen": True}, runtime_options={"run_mode": mode}
+    )
+    def matmul_trans_left_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(out_shape, pypto.DT_FP32):
+        pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
+        out = pypto.matmul(a, b, a.dtype, a_trans=True)
+        return out
+    
+    out = matmul_trans_left_kernel(a, b)
 
     return out
 
@@ -362,44 +303,32 @@ def test_matmul_trans(device_id: int = None, run_mode: str = "npu"):
     print("✓ Matrix multiplication with transposition completed successfully")
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
-def matmul_bias_kernel(a: pypto.Tensor, b: pypto.Tensor, bias: pypto.Tensor, out: pypto.Tensor) -> None:
-    extend_params = {'bias_tensor': bias}
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype, extend_params=extend_params)
-
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def matmul_bias_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, bias: pypto.Tensor, out: pypto.Tensor) -> None:
-    extend_params = {'bias_tensor': bias}
-    pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
-    out[:] = pypto.matmul(a, b, out.dtype, extend_params=extend_params)
-
 
 def matmul_bias_op(a: torch.Tensor, b: torch.Tensor, bias: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[0], b.shape[1], dtype=a.dtype, device=a.device)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        bias_pto = pypto.from_torch(bias, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        bias_pto = pypto.from_torch(bias)
-        out_pto = pypto.from_torch(out)
+    a_shape, b_shape, bias_shape = a.shape, b.shape, bias.shape
 
     if run_mode == "npu":
-        matmul_bias_kernel(a_pto, b_pto, bias_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        matmul_bias_kernel_sim(a_pto, b_pto, bias_pto, out_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(
+        host_options={"only_codegen": True}, runtime_options={"run_mode": mode}
+    )
+    def matmul_bias_kernel(
+        a: pypto.Tensor(a_shape, pypto.DT_FP32),
+        b: pypto.Tensor(b_shape, pypto.DT_FP32),
+        bias: pypto.Tensor(bias_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(b_shape, pypto.DT_FP32):
+        
+        extend_params = {"bias_tensor": bias}
+        pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
+        out = pypto.matmul(a, b, a.dtype, extend_params=extend_params)
+        return out
 
+    out = matmul_bias_kernel(a, b, bias)
     return out
 
 

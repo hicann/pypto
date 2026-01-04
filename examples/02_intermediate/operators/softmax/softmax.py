@@ -71,71 +71,49 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
     return exp / esum
 
 
-@pypto.jit
-def softmax_kernel_npu(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    # after the dynamic axis of tensor is marked, get the tensor shape accordingly
-    tensor_shape = x.shape
-    b = tensor_shape[0] # dynamic: symbolic_scalar; static: immediate number
-    n1, n2, dim = tensor_shape[1:]
-    tile_b = 1
-    b_loop = b / tile_b
+def softmax(shape: tuple, run_mode: str = "npu", dynamic: bool = True) -> torch.Tensor:
 
-    # tiling shape setting
-    pypto.set_vec_tile_shapes(1, 4, 1, 64)
-
-    for idx in pypto.loop(b_loop):
-        b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        x_view = x[b_offset:b_offset_end, :n1, :n2, :dim]
-        softmax_out = softmax_core(x_view)
-        y[b_offset:, ...] = softmax_out
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def softmax_kernel_sim(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    # after the dynamic axis of tensor is marked, get the tensor shape accordingly
-    tensor_shape = x.shape
-    b = tensor_shape[0] # dynamic: symbolic_scalar; static: immediate number
-    n1, n2, dim = tensor_shape[1:]
-    tile_b = 1
-    b_loop = b / tile_b
-
-    # tiling shape setting
-    pypto.set_vec_tile_shapes(1, 4, 1, 64)
-
-    for idx in pypto.loop(b_loop):
-        b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        x_view = x[b_offset:b_offset_end, :n1, :n2, :dim]
-        softmax_out = softmax_core(x_view)
-        y[b_offset:, ...] = softmax_out
-
-
-def softmax(x: torch.Tensor, run_mode: str = "npu", dynamic: bool = True) -> torch.Tensor:
-    y = torch.empty_like(x)
-
+    bs, seqlen, head, dim = shape
     if dynamic:
-        x_pto = pypto.from_torch(x, dynamic_axis=[0])
-        y_pto = pypto.from_torch(y, dynamic_axis=[0])
-    else:
-        x_pto = pypto.from_torch(x)
-        y_pto = pypto.from_torch(y)
-
-    # launch the kernel
+        bs = pypto.frontend.dynamic("bs")
+    
     if run_mode == "npu":
-        softmax_kernel_npu(x_pto, y_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        softmax_kernel_sim(x_pto, y_pto)
-    return y
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    # launch the kernel
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def softmax_kernel(
+        input_tensor: pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32),
+    ) -> pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32):
+        output_tensor = pypto.tensor((bs, seqlen, head, dim), pypto.DT_FP32)
+        tile_b = 1  # Process one batch at a time
+        b_loop = bs // tile_b
+
+        # Tiling shape setting for efficient execution
+        pypto.set_vec_tile_shapes(1, 4, 1, 64)
+
+        for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
+            b_offset = idx * tile_b
+            b_offset_end = (idx + 1) * tile_b
+            input_view = input_tensor[b_offset:b_offset_end, :seqlen, :head, :dim]
+            softmax_out = softmax_core(input_view)
+            output_tensor[b_offset:, ...] = softmax_out
+        return output_tensor
+
+    return softmax_kernel
 
 
-def test_softmax(device_id = None, run_mode: str = "npu", dynamic: bool = True) -> None:
+def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = True) -> None:
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
 
     shape = (32, 32, 1, 256)
     x = torch.rand(shape, dtype=torch.float, device=device)
 
-    y = softmax(x, run_mode, dynamic).cpu() # default dim: -1
+    y = softmax(x.shape, run_mode, dynamic)(x).cpu() # default dim: -1
     golden = torch.softmax(x, dim=-1).cpu()
 
     max_diff = np.abs(y.numpy() - golden.numpy()).max()

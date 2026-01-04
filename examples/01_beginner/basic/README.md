@@ -15,7 +15,7 @@
 ## 样例代码特性
 
 本样例突出了 PyPTO 的以下特性：
-- **JIT 编译**: 使用 `@pypto.jit` 装饰器定义可以在 NPU 上执行的内核函数。
+- **JIT 编译**: 使用 `@pypto.frontend.jit` 装饰器定义可以在 NPU 上执行的内核函数。
 - **PyTorch 集成**: 能够直接接受 PyTorch NPU 张量作为输入输出，无缝衔接现有深度学习工作流。
 - **显式 Tiling 控制**: 通过 `set_vec_tile_shapes` 和 `set_cube_tile_shapes` 手动优化硬件执行效率。
 - **符号化张量**: 即使在内核函数之外，也可以定义张量的形状和类型。
@@ -62,23 +62,24 @@ python3 basic_ops.py --list
 ### 1. JIT 函数定义与 Tiling 配置
 
 ```python
-@pypto.jit
-def element_wise_ops_kernel(a: pypto.Tensor, b: pypto.Tensor, result: pypto.Tensor) -> None:
+@pypto.frontend.jit()
+def element_wise_ops_kernel( # 设置输入张量及其属性
+    a: pypto.Tensor(shape, pypto.DT_FP16),
+    b: pypto.Tensor(shape, pypto.DT_FP16),
+) -> pypto.Tensor(shape, pypto.DT_FP16): # 设置输出张量属性
     # 设置向量计算的分块形状
     pypto.set_vec_tile_shapes(8, 8)
     # 算子组合
     add_result = pypto.add(a, b)
     mul_result = pypto.mul(add_result, 2.0)
-    result[:] = mul_result
+    return mul_result
 ```
 
-### 2. 与 PyTorch 张量的转换
+### 2. 执行JIT函数
 
 ```python
-# 将 PyTorch 张量转换为 PyPTO 张量
-a_pto = pypto.from_torch(a_torch)
 # 执行 JIT 函数
-element_wise_ops_kernel(a_pto, b_pto, result_pto)
+result = element_wise_ops_kernel(a, b)
 ```
 
 ## 注意事项

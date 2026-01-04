@@ -73,44 +73,42 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
     esum = pypto.sum(exp, dim=-1, keepdim=True)
     return exp / esum
 
+B = pypto.frontend.dynamic("B")
+N1, N2, DIM = 32, 1, 256
 
-@pypto.jit
-def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    # after the dynamic axis of tensor is marked, get the tensor shape accordingly
-    tensor_shape = x.shape
-    b = tensor_shape[0] # dynamic: symbolic_scalar; static: immediate number
-    n1, n2, dim = tensor_shape[1:]
-    tile_b = 1
-    b_loop = b / tile_b
 
-    # tiling shape setting
+@pypto.frontend.jit()
+def softmax_kernel(
+    input_tensor: pypto.Tensor((B, N1, N2, DIM), pypto.DT_FP32),
+) -> pypto.Tensor((B, N1, N2, DIM), pypto.DT_FP32):
+    output_tensor = pypto.tensor((B, N1, N2, DIM), pypto.DT_FP32)
+    tile_b = 1  # Process one batch at a time
+    b_loop = B // tile_b
+
+    # Tiling shape setting for efficient execution
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
-    for idx in pypto.loop(b_loop):
+    for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
         b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        x_view = x[b_offset:b_offset_end, :n1, :n2, :dim]
-        softmax_out = softmax_core(x_view)
-        y[b_offset:, ...] = softmax_out
+        b_offset_end = pypto.min((idx + 1) * tile_b, B)
+        input_view = pypto.view(input_tensor, 
+                                [tile_b, N1, N2, DIM], 
+                                [b_offset, 0, 0, 0], 
+                                valid_shape=[b_offset_end - b_offset, N1, N2, DIM])
+        softmax_out = softmax_core(input_view)
+        output_tensor[b_offset:, ...] = softmax_out
+    return output_tensor
 
 
 @allow_in_graph
 def softmax(x: torch.Tensor, dynamic: bool = True) -> torch.Tensor:
-    y = torch.zeros(x.shape, dtype=x.dtype, device=f'{x.device}')
     if isinstance(x, FakeTensor):
-        return y
-
-    if dynamic:
-        x_pto = pypto.from_torch(x, dynamic_axis=[0])
-        y_pto = pypto.from_torch(y, dynamic_axis=[0])
-    else:
-        x_pto = pypto.from_torch(x)
-        y_pto = pypto.from_torch(y)
+        return torch.zeros(x.shape, dtype=x.dtype, device=f'{x.device}')
 
     # launch the kernel
-    softmax_kernel(x_pto, y_pto)
+    out = softmax_kernel(x)
 
-    return y
+    return out
 
 
 class MM(torch.nn.Module):
@@ -125,7 +123,7 @@ def test_softmax_capture(device_id=None, dynamic: bool = True) -> None:
     else:
         torch.npu.set_device(device_id)
 
-    shape = (32, 32, 1, 256)
+    shape = (32, N1, N2, DIM)
     x = torch.rand(shape, dtype=torch.float, device=f'npu:{device_id}')
 
     model = torch.compile(MM(), backend="eager", dynamic=True)

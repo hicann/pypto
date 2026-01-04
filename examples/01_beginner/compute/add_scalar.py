@@ -49,30 +49,27 @@ def get_device_id():
         print(f"ERROR: TILE_FWK_DEVICE_ID must be an integer, got: {os.environ['TILE_FWK_DEVICE_ID']}")
         return None
 
-@pypto.jit
-def add_kernel_npu(x: pypto.Tensor, y: pypto.Tensor, z: pypto.Tensor, val: int) -> None:
-    pypto.set_vec_tile_shapes(1, 4, 1, 64)
-    t3 = x + y
-    z[:] = t3 + val
 
-@pypto.jit(runtime_options={"run_mode": 1})
-def add_kernel_sim(x: pypto.Tensor, y: pypto.Tensor, z: pypto.Tensor, val: int) -> None:
-    pypto.set_vec_tile_shapes(1, 4, 1, 64)
-    t3 = x + y
-    z[:] = t3 + val
-
-def add_scalar(x: torch.Tensor, y: torch.Tensor, z: torch.Tensor, val: int, run_mode: str = "npu") -> None:
-    x_pto = pypto.from_torch(x, "IN_0")
-    y_pto = pypto.from_torch(y, "IN_1")
-    z_pto = pypto.from_torch(z, "OUT_0")
-
-    # launch the kernel
+def create_add_scalar_kernel(shape: tuple, val, run_mode: str = "npu") -> torch.Tensor:
     if run_mode == "npu":
-        add_kernel_npu(x_pto, y_pto, z_pto, val)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        add_kernel_sim(x_pto, y_pto, z_pto, val)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def add_scalar_kernel(
+        x: pypto.Tensor(shape, pypto.DT_FP32),
+        y: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(1, 4, 1, 64)
+        z = pypto.add(x, y) + val
+        return z
+    return add_scalar_kernel
 
-def test_add_scalar(device_id = None, run_mode: str = "npu") -> None:
+
+def test_add_scalar(device_id=None, run_mode: str = "npu") -> None:
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
 
     shape = (1, 4, 1, 64)
@@ -80,9 +77,8 @@ def test_add_scalar(device_id = None, run_mode: str = "npu") -> None:
     val = 1
     x = torch.rand(shape, dtype=torch.float, device=device)
     y = torch.rand(shape, dtype=torch.float, device=device)
-    z = torch.zeros(shape, dtype=torch.float, device=device)
+    z = create_add_scalar_kernel(shape, val, run_mode)(x, y)
 
-    add_scalar(x, y, z, val, run_mode)
     golden = torch.add(x, y) + val
 
     max_diff = np.abs(z.cpu().numpy() - golden.cpu().numpy()).max()
@@ -174,7 +170,10 @@ Examples:
     
     if args.example_id is not None:
         # Run single example
-        examples_to_run = [(args.example_id, examples[args.example_id])]
+        example = examples.get(args.example_id)
+        if example is None:
+            raise ValueError(f"Invalid example ID: {args.example_id}")
+        examples_to_run = [(args.example_id, example)]
     else:
         # Run all examples
         examples_to_run = list(examples.items())

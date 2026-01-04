@@ -55,78 +55,45 @@ def get_device_id():
 # ARANGE Examples
 # ============================================================================
 
-@pypto.jit(
-    host_options={"only_codegen": True}
-)
-def arange_end_kernel_npu(out: pypto.Tensor, end: float) -> None:
-    pypto.set_vec_tile_shapes(8)
-    out[:] = pypto.arange(end)
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def arange_end_kernel_sim(out: pypto.Tensor, end: float) -> None:
-    pypto.set_vec_tile_shapes(8)
-    out[:] = pypto.arange(end)
-
-
-@pypto.jit(
-    host_options={"only_codegen": True}
-)
-def arange_start_end_kernel_npu(out: pypto.Tensor, start: float, end: float) -> None:
-    pypto.set_vec_tile_shapes(8)
-    out[:] = pypto.arange(start, end)
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def arange_start_end_kernel_sim(out: pypto.Tensor, start: float, end: float) -> None:
-    pypto.set_vec_tile_shapes(8)
-    out[:] = pypto.arange(start, end)
-
-
-@pypto.jit(
-    host_options={"only_codegen": True}
-)
-def arange_start_end_step_kernel_npu(out: pypto.Tensor, start: float, end: float, step: float) -> None:
-    pypto.set_vec_tile_shapes(8)
-    out[:] = pypto.arange(start, end, step)
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def arange_start_end_step_kernel_sim(out: pypto.Tensor, start: float, end: float, step: float) -> None:
-    pypto.set_vec_tile_shapes(8)
-    out[:] = pypto.arange(start, end, step)
-
-
-def arange_op(shape: tuple, dtype: torch.dtype, device: str, end: float = None, run_mode: str= "npu", start: float = None, step: float = None, dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(shape, dtype=dtype, device=device)
-
-    if dynamic:
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
+def create_arange_op_kernel(shape: tuple, start=None, end=None, step=None, run_mode: str = "npu") -> torch.Tensor:
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        out_pto = pypto.from_torch(out)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def arange_start_end_step_kernel(
+        dummy_input: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(8)
+        output = pypto.arange(start, end, step)
+        return output
+    
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def arange_start_end_kernel(
+        dummy_input: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(8)
+        output = pypto.arange(start, end)
+        return output
+    
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def arange_end_kernel(
+        dummy_input: pypto.Tensor(shape, pypto.DT_INT32),
+    ) -> pypto.Tensor(shape, pypto.DT_INT32):
+        pypto.set_vec_tile_shapes(8)
+        output = pypto.arange(end)
+        return output
+    
     if step is not None:
-        if run_mode == "npu":
-            arange_start_end_step_kernel_npu(out_pto, start, end, step)
-        else:
-            arange_start_end_step_kernel_sim(out_pto, start, end, step)
+        return arange_start_end_step_kernel
     elif start is not None:
-        if run_mode == "npu":
-            arange_start_end_kernel_npu(out_pto, start, end)
-        else:
-            arange_start_end_kernel_sim(out_pto, start, end)
+        return arange_start_end_kernel
     else:
-        if run_mode == "npu":
-            arange_end_kernel_npu(out_pto, end)
-        else:
-            arange_end_kernel_sim(out_pto, end)
-    return out
+        return arange_end_kernel
 
 
 def test_arange_basic(device_id = None, run_mode: str = "npu"):
@@ -142,7 +109,7 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.int32
     expected_a = torch.tensor([0, 1, 2, 3], dtype=dtype, device=device)
 
-    out_torch = arange_op(shape, dtype, device, end=4, run_mode=run_mode)
+    out_torch = create_arange_op_kernel(shape, end=4, run_mode=run_mode)(torch.tensor([0], dtype=dtype, device=device))
     print(f"Output a: {out_torch}")
     print(f"Expected a: {expected_a}")
     if run_mode == "npu":
@@ -153,7 +120,8 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.float32
     expected_b = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32, device=device)
 
-    out_torch = arange_op(shape, dtype, device, start=1.0, end=4.0, run_mode=run_mode)
+    out_torch = create_arange_op_kernel(shape, start=1.0, end=4.0, 
+                                        run_mode=run_mode)(torch.tensor([0], dtype=dtype, device=device))
     print(f"Output b: {out_torch}")
     print(f"Expected b: {expected_b}")
     if run_mode == "npu":
@@ -164,7 +132,8 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.float32
     expected_c = torch.tensor([1.0, 1.5, 2.0, 2.5, 3.0, 3.5], dtype=torch.float32, device=device)
 
-    out_torch = arange_op(shape, dtype, device, start=1.0, end=4.0, step=0.5, run_mode=run_mode)
+    out_torch = create_arange_op_kernel(shape, start=1.0, end=4.0, step=0.5, 
+                                        run_mode=run_mode)(torch.tensor([0], dtype=dtype, device=device))
     print(f"Output c: {out_torch}")
     print(f"Expected c: {expected_c}")
     if run_mode == "npu":
@@ -219,54 +188,36 @@ def test_tensor_creation_with_datatypes(device_id = None, run_mode: str = "npu")
 # FULL Examples
 # ============================================================================
 
-def test_full_basic(device_id = None, run_mode: str = "npu"):
-    """Test basic usage of full function"""
-    print("=" * 60)
-    print("Test: Basic Usage of full Function")
-    print("=" * 60)
 
-    
-@pypto.jit
-def full_kernel_npu(out: pypto.Tensor, fill_value: float) -> None:
-    pypto.set_vec_tile_shapes(2, 8)
-    out[:] = pypto.full(out.shape, fill_value, out.dtype)
+def create_full_op_kernel(shape: tuple, fill_value: float, run_mode: str = "npu") -> torch.Tensor:
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def full_kernel_sim(out: pypto.Tensor, fill_value: float) -> None:
-    pypto.set_vec_tile_shapes(2, 8)
-    out[:] = pypto.full(out.shape, fill_value, out.dtype)
-
-
-@pypto.jit
-def full_symbolic_scalar_kernel_npu(out: pypto.Tensor, fill_value: pypto.SymbolicScalar) -> None:
-    pypto.set_vec_tile_shapes(2, 8)
-    out[:] = pypto.full(out.shape, fill_value, out.dtype)
-
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def full_symbolic_scalar_kernel_sim(out: pypto.Tensor, fill_value: pypto.SymbolicScalar) -> None:
-    pypto.set_vec_tile_shapes(2, 8)
-    out[:] = pypto.full(out.shape, fill_value, out.dtype)
-
-
-def full_op(shape: list, dtype: torch.dtype, device: str, fill_value, run_mode: str= "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(shape, dtype=dtype, device=device)
-
-    if dynamic:
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        out_pto = pypto.from_torch(out)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def full_kernel(
+        dummy_input: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(2, 8)
+        output = pypto.full(shape, fill_value, pypto.DT_FP32)
+        return output
+
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def full_symbolic_scalar_kernel(
+        dummy_input: pypto.Tensor(shape, pypto.DT_INT32),
+    ) -> pypto.Tensor(shape, pypto.DT_INT32):
+        pypto.set_vec_tile_shapes(2, 8)
+        output = pypto.full(shape, fill_value, pypto.DT_INT32)
+        return output
 
     if isinstance(fill_value, pypto.SymbolicScalar):
-        if run_mode == "npu":
-            full_symbolic_scalar_kernel_npu(out_pto, fill_value)
-        else:
-            full_symbolic_scalar_kernel_sim(out_pto, fill_value)
+        return full_symbolic_scalar_kernel
     else:
-        if run_mode == "npu":
-            full_kernel_npu(out_pto, fill_value)
-        else:
-            full_kernel_sim(out_pto, fill_value)
-    return out
+        return full_kernel
 
 
 def test_full_basic(device_id = None, run_mode: str = "npu"):
@@ -283,7 +234,7 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.float32
     expected_a = torch.tensor([[1.0, 1.0], [1.0, 1.0]], dtype=dtype, device=device)
 
-    out_torch = full_op(shape, dtype, device, fill_value, run_mode)
+    out_torch = create_full_op_kernel(shape, fill_value, run_mode)(torch.tensor([0], dtype=dtype, device=device))
     print(f"Output a: {out_torch}")
     print(f"Expected a: {expected_a}")
     if run_mode == "npu":
@@ -295,7 +246,7 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.int32
     expected_b = torch.tensor([[1, 1], [1, 1]], dtype=dtype, device=device)
 
-    out_torch = full_op(shape, dtype, device, fill_value, run_mode)
+    out_torch = create_full_op_kernel(shape, fill_value, run_mode)(torch.tensor([0], dtype=dtype, device=device))
     print(f"Output b: {out_torch}")
     print(f"Expected b: {expected_b}")
     if run_mode == "npu":

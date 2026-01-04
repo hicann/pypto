@@ -8,7 +8,7 @@
 
 ### 1. 基础操作 ([basic](basic/))
 - **内容**: 展示了最基础的张量创建、逐元素运算、矩阵乘法、View 操作以及简单算子组合。包含张量创建操作和符号标量（Symbolic Scalar）的使用。
-- **核心特性**: `pypto.tensor`, `@pypto.jit`, `pypto.from_torch`, `pypto.view`, `pypto.assemble`, `pypto.scalar`。
+- **核心特性**: `pypto.tensor`, `@pypto.frontend.jit`, `pypto.from_torch`, `pypto.view`, `pypto.assemble`, `pypto.scalar`。
 - **推荐人群**: 初次接触 PyPTO 的开发者。
 
 ### 3. 计算算子 ([compute](compute/))

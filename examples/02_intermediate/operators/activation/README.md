@@ -53,7 +53,7 @@ def silu_activation(x: pypto.Tensor) -> pypto.Tensor:
 
 ## 关键技术点
 
-- **无缝集成**: 自定义激活函数可以像内置算子一样在 `@pypto.jit` 内核中使用。
+- **无缝集成**: 自定义激活函数可以像内置算子一样在 `@pypto.frontend.jit` 内核中使用。
 - **门控机制 (Gating)**: 展示了处理双输入（Gate 和 Up）算子的典型模式，这在现代大模型中非常常见。
 - **精度验证**: 所有算子均通过 `assert_allclose` 与 PyTorch 的标准实现进行比对。
 

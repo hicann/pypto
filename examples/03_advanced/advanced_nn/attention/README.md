@@ -41,8 +41,12 @@ python3 attention.py --list
 
 ### 缩放点积注意力
 ```python
-@pypto.jit
-def scaled_dot_product_attention(q, k, v, scale):
+@pypto.frontend.jit
+def scaled_dot_product_attention(
+    q: pypto.tensor((S1, DQK), pypto.DT_FP32), 
+    k: pypto.tensor((S2, DQK), pypto.DT_FP32), 
+    v: pypto.tensor((S2, DV), pypto.DT_FP32)
+) -> pypto.tensor((S1, DV), pypto.DT_FP32):
     # 1. 计算 Q @ K^T
     k_t = pypto.transpose(k, [0, 1, 3, 2])
     scores = pypto.matmul(q, k_t)
@@ -52,7 +56,8 @@ def scaled_dot_product_attention(q, k, v, scale):
     attn_weights = pypto.softmax(scores_scaled, dim=-1)
     
     # 3. 施加到 V 上
-    return pypto.matmul(attn_weights, v)
+    output = pypto.matmul(attn_weights, v)
+    return output
 ```
 
 ## 关键技术点

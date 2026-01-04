@@ -30,8 +30,10 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
 ### 2. JIT 内核封装 (`softmax_kernel`)
 内核函数负责管理 Tiling 和循环：
 ```python
-@pypto.jit
-def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
+@pypto.frontend.jit
+def softmax_kernel(
+    x: pypto.Tensor(x_shape, pypto.DT_FP32)
+) -> pypto.Tensor(x_shape, pypto.DT_FP32):
     # 设置 Tiling 形状
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     # 使用 pypto.loop 处理数据分块

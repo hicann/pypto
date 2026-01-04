@@ -5,7 +5,7 @@
 ## 总览介绍
 
 随着算子逻辑复杂度的增加，保持代码的可读性、可维护性和执行效率变得至关重要。本目录主要展示：
-- **多函数协作 (Multi-Function Modules)**: 如何通过组合多个独立的 `pypto.jit` 函数来构建复杂的计算流水线，如完整的 Transformer Block。
+- **多函数协作 (Multi-Function Modules)**: 如何通过组合多个独立的 `pypto.frontend.jit` 函数来构建复杂的计算流水线，如完整的 Transformer Block。
 
 ## 样例代码特性
 

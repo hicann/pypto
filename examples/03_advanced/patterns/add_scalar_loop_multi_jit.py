@@ -9,9 +9,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-add_scalar_loop_dyn_axis_static_cond Example for PyPTO
+add_scalar_loop_multi_jit Example for PyPTO
 
-This example demonstrates how to implement a add_scalar_loop_dyn_axis_static_cond operation using PyPTO, including:
+This example demonstrates how to implement a add_scalar_loop_multi_jit operation using PyPTO, including:
 """
 import os
 import sys
@@ -42,127 +42,87 @@ def get_device_id():
         print(f"ERROR: TILE_FWK_DEVICE_ID must be an integer, got: {os.environ['TILE_FWK_DEVICE_ID']}")
         return None
 
+SHAPE = (32, 32, 1, 256)
+VAL = 1
 
-def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int, add1_flag: bool = False):
-    tensor_shape = input0.shape
+
+def add_core(input0: pypto.Tensor, input1: pypto.Tensor, add1_flag: bool = False):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
-
-    #calculate the loop parameters
-    b = tensor_shape[0]
-    tile_b = 1
-    b_loop = b // tile_b
-
-    for idx in pypto.loop(b_loop):
-        b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        t0_sub = input0[b_offset:b_offset_end, ...]
-        t1_sub = input1[b_offset:b_offset_end, ...]
-        t3_sub = t0_sub + t1_sub
-        if add1_flag:
-            output[b_offset:b_offset_end, ...] = t3_sub + val
-        else:
-            output[b_offset:b_offset_end, ...] = t3_sub
-
-
-@pypto.jit
-def add_kernel_npu(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    add_core(input0, input1, output, val)
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def add_kernel_sim(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    add_core(input0, input1, output, val)
-
-
-@pypto.jit
-def add_kernel_true_npu(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    add_core(input0, input1, output, val, True)
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def add_kernel_true_sim(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    add_core(input0, input1, output, val, True)
-
-
-def add_add1flag(input0: torch.Tensor, input1: torch.Tensor, output: torch.Tensor, val: int, dynamic_axis: bool, run_mode: str = "npu") -> None:
-    if dynamic_axis == True:
-        pto_input0 = pypto.from_torch(input0, "IN_0", dynamic_axis=[0])
-        pto_input1 = pypto.from_torch(input1, "IN_1", dynamic_axis=[0])
-        pto_output = pypto.from_torch(output, "OUT_0", dynamic_axis=[0])
+    out = pypto.tensor(SHAPE, pypto.DT_FP32)
+    if add1_flag:
+        t3 = input0 + input1
+        out[:] = t3 + VAL
     else:
-        pto_input0 = pypto.from_torch(input0, "IN_0")
-        pto_input1 = pypto.from_torch(input1, "IN_1")
-        pto_output = pypto.from_torch(output, "OUT_0")
-    # launch the kernel
+        out[:] = input0 + input1
+    return out
+
+
+def create_add_kernel(run_mode: str = "npu", add1_flag: bool = True):
+    
     if run_mode == "npu":
-        add_kernel_npu(pto_input0, pto_input1, pto_output, val)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        add_kernel_sim(pto_input0, pto_input1, pto_output, val)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def add_kernel(
+        input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
+        input1: pypto.Tensor(SHAPE, pypto.DT_FP32),
+    ) -> pypto.Tensor(SHAPE, pypto.DT_FP32):
+        out = add_core(input0, input1, add1_flag)
+        return out
+    
+    return add_kernel
 
 
-def add_add1flag_true(input0: torch.Tensor, input1: torch.Tensor, output: torch.Tensor, val: int, dynamic_axis: bool, run_mode: str = "npu") -> None:
-    if dynamic_axis == True:
-        pto_input0 = pypto.from_torch(input0, "IN_0", dynamic_axis=[0])
-        pto_input1 = pypto.from_torch(input1, "IN_1", dynamic_axis=[0])
-        pto_output = pypto.from_torch(output, "OUT_0", dynamic_axis=[0])
-    else:
-        pto_input0 = pypto.from_torch(input0, "IN_0")
-        pto_input1 = pypto.from_torch(input1, "IN_1")
-        pto_output = pypto.from_torch(output, "OUT_0")
-    # launch the kernel
-    if run_mode == "npu":
-        add_kernel_true_npu(pto_input0, pto_input1, pto_output, val)
-    else:
-        add_kernel_true_sim(pto_input0, pto_input1, pto_output, val)
-
-
-def test_add_scalar_loop_dyn_axis_static_cond(device_id = None, run_mode: str = "npu") -> None:
+def test_add_scalar_loop_multi_jit(device_id=None, run_mode: str = "npu") -> None:
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
 
-    shape = (32, 32, 1, 256)
+    shape = SHAPE
     #prepare data
-    val = 1
+    val = VAL
+    
     input_data0 = torch.rand(shape, dtype=torch.float, device=device)
     input_data1 = torch.rand(shape, dtype=torch.float, device=device)
     print(f"Input0 shape: {input_data0.shape}")
     print(f"Input1 shape: {input_data1.shape}")
-    output_data = torch.zeros(shape, dtype=torch.float, device=device)
-    add_add1flag(input_data0, input_data1, output_data, val, True, run_mode)
     golden = torch.add(input_data0, input_data1)
 
+    output_data = create_add_kernel(run_mode, False)(input_data0, input_data1)
     max_diff = np.abs(output_data.cpu().numpy() - golden.cpu().numpy()).max()
     print(f"Output shape: {output_data.shape}")
     print(f"Max difference: {max_diff:.6f}")
     if run_mode == "npu":
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
 
-    output_data2 = torch.zeros(shape, dtype=torch.float, device=device)
-    add_add1flag_true(input_data0, input_data1, output_data2, val, True, run_mode)
     golden2 = torch.add(input_data0, input_data1) + val
-
+    output_data2 = create_add_kernel(run_mode, True)(input_data0, input_data1)
     max_diff = np.abs(output_data2.cpu().numpy() - golden2.cpu().numpy()).max()
-    print(f"Output shape: {output_data.shape}")
+    print(f"Output shape: {output_data2.shape}")
     print(f"Max difference: {max_diff:.6f}")
     if run_mode == "npu":
         assert_allclose(np.array(output_data2.cpu()), np.array(golden2.cpu()), rtol=3e-3, atol=3e-3)
-    print("✓ add_scalar_loop_dyn_axis_static_cond test passed")
+
+    print("✓ add_scalar_loop_multi_jit test passed")
     print()
 
 
 def main():
-    """Run add_scalar_loop_dyn_axis_static_cond example.
+    """Run add_scalar_loop_multi_jit example.
     
     Usage:
-        python add_scalar_loop_dyn_axis_static_cond.py          # Run example
-        python add_scalar_loop_dyn_axis_static_cond.py --list   # List available examples
+        python add_scalar_loop_multi_jit.py          # Run example
+        python add_scalar_loop_multi_jit.py --list   # List available examples
     """
     parser = argparse.ArgumentParser(
-        description="PyPTO add_scalar_loop_dyn_axis_static_cond Example",
+        description="PyPTO add_scalar_loop_multi_jit Example",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s add_scalar_loop_dyn_axis_static_cond::test_add_scalar_loop_dyn_axis_static_cond
-            Run the add_scalar_loop_dyn_axis_static_cond::test_add_scalar_loop_dyn_axis_static_cond example
+  %(prog)s add_scalar_loop_multi_jit::test_add_scalar_loop_multi_jit
+            Run the add_scalar_loop_multi_jit::test_add_scalar_loop_multi_jit example
   %(prog)s --list       List all available examples
         """
     )
@@ -190,10 +150,10 @@ Examples:
     
     # Define available examples
     examples = {
-        "add_scalar_loop_dyn_axis_static_cond::test_add_scalar_loop_dyn_axis_static_cond": {
-            'name': 'add_scalar_loop_dyn_axis_static_cond',
-            'description': 'add_scalar_loop_dyn_axis_static_cond implementation',
-            'function': test_add_scalar_loop_dyn_axis_static_cond
+        "add_scalar_loop_multi_jit::test_add_scalar_loop_multi_jit": {
+            'name': 'add_scalar_loop_multi_jit',
+            'description': 'add_scalar_loop_multi_jit implementation',
+            'function': test_add_scalar_loop_multi_jit
         }
     }
     
@@ -217,7 +177,7 @@ Examples:
             sys.exit(1)
     
     print("\n" + "=" * 60)
-    print("PyPTO add_scalar_loop_dyn_axis_static_cond Example")
+    print("PyPTO add_scalar_loop_multi_jit Example")
     print("=" * 60 + "\n")
     
     # Get and validate device ID (needed for NPU examples)
@@ -226,7 +186,10 @@ Examples:
     
     if args.example_id is not None:
         # Run single example
-        examples_to_run = [(args.example_id, examples[args.example_id])]
+        example = examples.get(args.example_id)
+        if example is None:
+            raise ValueError(f"Invalid example ID: {args.example_id}")
+        examples_to_run = [(args.example_id, example)]
     else:
         # Run all examples
         examples_to_run = list(examples.items())
@@ -247,7 +210,7 @@ Examples:
         
         if len(examples_to_run) > 1:
             print("=" * 60)
-            print("All add_scalar_loop_dyn_axis_static_cond tests passed!")
+            print("All add_scalar_loop_multi_jit tests passed!")
             print("=" * 60)
         
     except Exception as e:

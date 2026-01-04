@@ -9,9 +9,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-add_scalar_loop_dyn_axis Example for PyPTO
+add_scalar_loop_dyn_axis_dyn_cond Example for PyPTO
 
-This example demonstrates how to implement a add_scalar_loop_dyn_axis operation using PyPTO, including:
+This example demonstrates how to implement a add_scalar_loop_dyn_axis_dyn_cond operation using PyPTO, including:
 """
 import os
 import sys
@@ -30,7 +30,8 @@ def get_device_id():
         int: The device ID if valid, None otherwise.
     """
     if 'TILE_FWK_DEVICE_ID' not in os.environ:
-        print("ERROR: Environment variable TILE_FWK_DEVICE_ID is not set.")
+        print("If no NPU environment is available, set --run_mode sim to run in simulation mode;")
+        print("otherwise, set the environment variable TILE_FWK_DEVICE_ID.")
         print("Please set it before running this example:")
         print("  export TILE_FWK_DEVICE_ID=0")
         return None
@@ -43,61 +44,49 @@ def get_device_id():
         return None
 
 
-@pypto.jit
-def add_scalar_loop_dynamic_axis_kernel_npu(input0: pypto.Tensor,
-                                            input1: pypto.Tensor,
-                                            output: pypto.Tensor, val: int) -> None:
-    tensor_shape = input0.shape
-    pypto.set_vec_tile_shapes(1, 4, 1, 64)
-
-    #calculate the loop parameters
-    b = tensor_shape[0]
-    tile_b = 1
-    b_loop = b // tile_b
-
-    for idx in pypto.loop(b_loop):
-        b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        t0_sub = input0[b_offset:b_offset_end, ...]
-        t1_sub = input1[b_offset:b_offset_end, ...]
-        t3_sub = t0_sub + t1_sub
-        output[b_offset:b_offset_end, ...] = t3_sub + val
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def add_scalar_loop_dynamic_axis_kernel_sim(input0: pypto.Tensor,
-                                            input1: pypto.Tensor,
-                                            output: pypto.Tensor, val: int) -> None:
-    tensor_shape = input0.shape
-    pypto.set_vec_tile_shapes(1, 4, 1, 64)
-
-    #calculate the loop parameters
-    b = tensor_shape[0]
-    tile_b = 1
-    b_loop = b // tile_b
-
-    for idx in pypto.loop(b_loop):
-        b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        t0_sub = input0[b_offset:b_offset_end, ...]
-        t1_sub = input1[b_offset:b_offset_end, ...]
-        t3_sub = t0_sub + t1_sub
-        output[b_offset:b_offset_end, ...] = t3_sub + val
-
-
-def add_scalar_loop_dynamic_axis(input0: torch.Tensor, input1: torch.Tensor, output: torch.Tensor, val: int, run_mode: str = "npu") -> None:
-    pto_input0 = pypto.from_torch(input0, "IN_0", dynamic_axis=[0])
-    pto_input1 = pypto.from_torch(input1, "IN_1", dynamic_axis=[0])
-    pto_output = pypto.from_torch(output, "OUT_0", dynamic_axis=[0])
-
-    # launch the kernel
-    if run_mode == "npu":
-        add_scalar_loop_dynamic_axis_kernel_npu(pto_input0, pto_input1, pto_output, val)
+def create_add_scalar_loop_dyn_axis_dyn_cond_kernel(
+    shape: tuple, val: int, dynamic_axis: bool = False, run_mode: str = "npu"):
+    if dynamic_axis == True:
+        w = pypto.frontend.dynamic("w")
+        h, c, n = shape[1:]
     else:
-        add_scalar_loop_dynamic_axis_kernel_sim(pto_input0, pto_input1, pto_output, val)
+        w, h, c, n = shape
+    
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def add_scalar_loop_dyn_axis_dyn_cond_kernel(
+        input0: pypto.Tensor((w, h, c, n), pypto.DT_FP32),
+        input1: pypto.Tensor((w, h, c, n), pypto.DT_FP32),
+    ) -> pypto.Tensor((w, h, c, n), pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(1, 4, 1, 64)
+        output = pypto.tensor((w, h, c, n), pypto.DT_FP32)
+        #calculate the loop parameters
+        b = w
+        tile_b = 1
+        b_loop = b // tile_b
+
+        for idx in pypto.loop(b_loop):
+            b_offset = idx * tile_b
+            b_offset_end = (idx + 1) * tile_b
+            t0_sub = input0[b_offset:b_offset_end, ...]
+            t1_sub = input1[b_offset:b_offset_end, ...]
+            t3_sub = t0_sub + t1_sub
+            if idx < 2:
+                output[b_offset:b_offset_end, ...] = t3_sub + val
+            else:
+                output[b_offset:b_offset_end, ...] = t3_sub
+        return output
+
+    return add_scalar_loop_dyn_axis_dyn_cond_kernel
 
 
-def test_add_scalar_loop_dyn_axis(device_id = None, run_mode: str = "npu") -> None:
+def test_add_scalar_loop_dynamic_axis_dynamic_cond(device_id=None, run_mode: str = "npu") -> None:
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
 
     shape = (32, 32, 1, 256)
@@ -105,9 +94,10 @@ def test_add_scalar_loop_dyn_axis(device_id = None, run_mode: str = "npu") -> No
     val = 1
     input_data0 = torch.rand(shape, dtype=torch.float, device=device)
     input_data1 = torch.rand(shape, dtype=torch.float, device=device)
-    output_data = torch.zeros(shape, dtype=torch.float, device=device)
-    add_scalar_loop_dynamic_axis(input_data0, input_data1, output_data, val, run_mode)
-    golden = torch.add(input_data0, input_data1) + val
+    output_data = create_add_scalar_loop_dyn_axis_dyn_cond_kernel(shape, val, True, run_mode)(input_data0, input_data1)
+
+    golden = torch.add(input_data0, input_data1)
+    golden[0:2, ...] = golden[0:2, ...] + val
 
     max_diff = np.abs(output_data.cpu().numpy() - golden.cpu().numpy()).max()
     print(f"Input0 shape: {input_data0.shape}")
@@ -117,24 +107,24 @@ def test_add_scalar_loop_dyn_axis(device_id = None, run_mode: str = "npu") -> No
 
     if run_mode == "npu":
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
-    print("✓ add_scalar_loop_dyn_axis test passed")
+    print("✓ add_scalar_loop_dyn_axis_dyn_cond test passed")
     print()
 
 
 def main():
-    """Run add_scalar_loop_dyn_axis example.
+    """Run add_scalar_loop_dyn_axis_dyn_cond example.
 
     Usage:
-        python add_scalar_loop_dyn_axis.py          # Run example
-        python add_scalar_loop_dyn_axis.py --list   # List available examples
+        python add_scalar_loop_dyn_axis_dyn_cond.py          # Run example
+        python add_scalar_loop_dyn_axis_dyn_cond.py --list   # List available examples
     """
     parser = argparse.ArgumentParser(
-        description="PyPTO add_scalar_loop_dyn_axis Example",
+        description="PyPTO add_scalar_loop_dyn_axis_dyn_cond Example",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s add_scalar_loop_dyn_axis::test_add_scalar_loop_dyn_axis
-            Run the add_scalar_loop_dyn_axis::test_add_scalar_loop_dyn_axis example
+  %(prog)s add_scalar_loop_dyn_axis_dyn_cond::test_add_scalar_loop_dynamic_axis_dynamic_cond
+            Run the add_scalar_loop_dyn_axis_dyn_cond::test_add_scalar_loop_dynamic_axis_dynamic_cond example
   %(prog)s --list       List all available examples
         """
     )
@@ -162,10 +152,10 @@ Examples:
 
     # Define available examples
     examples = {
-        "add_scalar_loop_dyn_axis::test_add_scalar_loop_dyn_axis": {
-            'name': 'add_scalar_loop_dyn_axis',
-            'description': 'add_scalar_loop_dyn_axis implementation',
-            'function': test_add_scalar_loop_dyn_axis
+        "add_scalar_loop_dyn_axis_dyn_cond::test_add_scalar_loop_dynamic_axis_dynamic_cond": {
+            'name': 'add_scalar_loop_dyn_axis_dyn_cond',
+            'description': 'add_scalar_loop_dyn_axis_dyn_cond implementation',
+            'function': test_add_scalar_loop_dynamic_axis_dynamic_cond
         }
     }
 
@@ -189,7 +179,7 @@ Examples:
             sys.exit(1)
 
     print("\n" + "=" * 60)
-    print("PyPTO add_scalar_loop_dyn_axis Example")
+    print("PyPTO add_scalar_loop_dyn_axis_dyn_cond Example")
     print("=" * 60 + "\n")
 
     # Get and validate device ID (needed for NPU examples)
@@ -198,7 +188,10 @@ Examples:
 
     if args.example_id is not None:
         # Run single example
-        examples_to_run = [(args.example_id, examples[args.example_id])]
+        example = examples.get(args.example_id)
+        if example is None:
+            raise ValueError(f"Invalid example ID: {args.example_id}")
+        examples_to_run = [(args.example_id, example)]
     else:
         # Run all examples
         examples_to_run = list(examples.items())
@@ -219,7 +212,7 @@ Examples:
 
         if len(examples_to_run) > 1:
             print("=" * 60)
-            print("All add_scalar_loop_dyn_axis tests passed!")
+            print("All add_scalar_loop_dyn_axis_dyn_cond tests passed!")
             print("=" * 60)
 
     except Exception as e:

@@ -59,6 +59,15 @@ def get_device_id():
 F_1 = 1.0
 F_NEGA_1 = -1.0
 
+
+def configure_tiling(x):
+    if len(x.shape) >= 2:
+        tile_list = [32 for _ in range(len(x.shape))]
+        pypto.set_vec_tile_shapes(*tile_list)
+    else:
+        pypto.set_vec_tile_shapes(32, 128)
+        
+        
 # Reference implementations for verification
 def silu_golden(x: torch.Tensor) -> torch.Tensor:
     """PyTorch reference implementation of SiLU."""
@@ -80,92 +89,43 @@ def geglu_golden(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.gelu(gate) * up
 
 
-@pypto.jit
-def silu_activation_kernel_npu(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    SiLU (Swish) activation function: x * sigmoid(x)
-
-    SiLU is a smooth, non-monotonic activation function that has been shown
-    to work well in deep networks.
-
-    Formula: SiLU(x) = x * sigmoid(x) = x / (1 + exp(-x))
-
-    Parameters
-    ----------
-    x : pypto.Tensor
-        Input tensor
-
-    Returns
-    -------
-    pypto.Tensor
-        SiLU activated tensor
-    """
-    # Configure tiling based on input shape
-    if len(x.shape) >= 2:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(x.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-    else:
-        pypto.set_vec_tile_shapes(32, 128)
-
-    # Compute sigmoid(x) = 1 / (1 + exp(-x))
-    # SiLU(x) = x * sigmoid(x)
-    y[:] =  x * pypto.sigmoid(x)
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def silu_activation_kernel_sim(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    SiLU (Swish) activation function: x * sigmoid(x)
-
-    SiLU is a smooth, non-monotonic activation function that has been shown
-    to work well in deep networks.
-
-    Formula: SiLU(x) = x * sigmoid(x) = x / (1 + exp(-x))
-
-    Parameters
-    ----------
-    x : pypto.Tensor
-        Input tensor
-
-    Returns
-    -------
-    pypto.Tensor
-        SiLU activated tensor
-    """
-    # Configure tiling based on input shape
-    if len(x.shape) >= 2:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(x.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-    else:
-        pypto.set_vec_tile_shapes(32, 128)
-
-    # Compute sigmoid(x) = 1 / (1 + exp(-x))
-    # SiLU(x) = x * sigmoid(x)
-    y[:] =  x * pypto.sigmoid(x)
-
-
-def silu_activation(x: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    y = torch.empty_like(x)
-
+def silu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     if dynamic:
-        x_pto = pypto.from_torch(x, dynamic_axis=[0])
-        y_pto = pypto.from_torch(y, dynamic_axis=[0])
+        _, n = shape
+        m = pypto.frontend.dynamic("M")
     else:
-        x_pto = pypto.from_torch(x)
-        y_pto = pypto.from_torch(y)
-
-    # launch the kernel
+        m, n = shape
+    
     if run_mode == "npu":
-        silu_activation_kernel_npu(x_pto, y_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        silu_activation_kernel_sim(x_pto, y_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+         
+    # launch the kernel
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def silu_activation_kernel(
+        x: pypto.Tensor((m, n), pypto.DT_BF16),
+    ) -> pypto.Tensor((m, n), pypto.DT_BF16):
+        """
+        SiLU (Swish) activation function: x * sigmoid(x)
 
-    return y
+        SiLU is a smooth, non-monotonic activation function that has been shown
+        to work well in deep networks.
+
+        Formula: SiLU(x) = x * sigmoid(x) = x / (1 + exp(-x))
+        """
+        out = pypto.tensor((m, n), pypto.DT_BF16)
+        configure_tiling(x)
+
+        out[:] = x * pypto.sigmoid(x)
+        return out
+
+    return silu_activation_kernel
 
 
-def test_silu(device_id = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_silu(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
     """Test SiLU activation."""
     print("=" * 60)
     print("Test: SiLU Activation")
@@ -177,7 +137,7 @@ def test_silu(device_id = None, run_mode: str = "npu", dynamic: bool = False) ->
     x_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
 
     # Execute
-    out_torch = silu_activation(x_torch, run_mode, dynamic)
+    out_torch = silu_activation(x_torch.shape, run_mode, dynamic)(x_torch)
 
     # Verify
     expected = silu_golden(x_torch)
@@ -191,94 +151,44 @@ def test_silu(device_id = None, run_mode: str = "npu", dynamic: bool = False) ->
     print()
 
 
-@pypto.jit
-def gelu_activation_kernel_npu(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    GELU (Gaussian Error Linear Unit) activation function.
-
-    Uses approximation: x * sigmoid(1.702 * x)
-    This is a fast approximation of the full GELU formula.
-
-    Parameters
-    ----------
-    x : pypto.Tensor
-        Input tensor
-
-    Returns
-    -------
-    pypto.Tensor
-        GELU activated tensor
-    """
-    # Configure tiling
-    if len(x.shape) >= 2:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(x.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-    else:
-        pypto.set_vec_tile_shapes(32, 128)
-
-    # GELU approximation: x * sigmoid(1.702 * x)
-    coeff = float(1.702)
-    x_scaled = x * coeff
-
-    # GELU(x) = x * sigmoid(1.702 * x)
-    y[:] =  x * pypto.sigmoid(x_scaled)
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def gelu_activation_kernel_sim(x: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    GELU (Gaussian Error Linear Unit) activation function.
-
-    Uses approximation: x * sigmoid(1.702 * x)
-    This is a fast approximation of the full GELU formula.
-
-    Parameters
-    ----------
-    x : pypto.Tensor
-        Input tensor
-
-    Returns
-    -------
-    pypto.Tensor
-        GELU activated tensor
-    """
-    # Configure tiling
-    if len(x.shape) >= 2:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(x.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-    else:
-        pypto.set_vec_tile_shapes(32, 128)
-
-    # GELU approximation: x * sigmoid(1.702 * x)
-    coeff = float(1.702)
-    x_scaled = x * coeff
-
-    # GELU(x) = x * sigmoid(1.702 * x)
-    y[:] =  x * pypto.sigmoid(x_scaled)
-
-
-def gelu_activation(x: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    y = torch.empty_like(x)
-
+def gelu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     if dynamic:
-        x_pto = pypto.from_torch(x, dynamic_axis=[0])
-        y_pto = pypto.from_torch(y, dynamic_axis=[0])
+        _, n = shape
+        m = pypto.frontend.dynamic("m")
     else:
-        x_pto = pypto.from_torch(x)
-        y_pto = pypto.from_torch(y)
-
-    # launch the kernel
+        m, n = shape
+        
     if run_mode == "npu":
-        gelu_activation_kernel_npu(x_pto, y_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        gelu_activation_kernel_sim(x_pto, y_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+         
+    # launch the kernel
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def gelu_activation_kernel(
+        x: pypto.Tensor((m, n), pypto.DT_BF16),
+    ) -> pypto.Tensor((m, n), pypto.DT_BF16):
+        """
+        GELU (Gaussian Error Linear Unit) activation function.
 
-    return y
+        Uses approximation: x * sigmoid(1.702 * x)
+        This is a fast approximation of the full GELU formula.
+        """
+        out = pypto.tensor((m, n), pypto.DT_BF16)
+        configure_tiling(x)
+
+        # GELU approximation: x * sigmoid(1.702 * x)
+        x_scaled = x * 1.702
+        # NOTE: `1.702 * x` leads to `TypeError: unsupported operand type(s) for *: 'float' and 'Tensor'`
+        out[:] = x * pypto.sigmoid(x_scaled)
+        return out
+
+    return gelu_activation_kernel
 
 
-def test_gelu(device_id = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_gelu(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
     """Test GELU activation."""
     print("=" * 60)
     print("Test: GELU Activation")
@@ -290,7 +200,7 @@ def test_gelu(device_id = None, run_mode: str = "npu", dynamic: bool = False) ->
     x_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
 
     # Execute
-    out_torch = gelu_activation(x_torch, run_mode, dynamic)
+    out_torch = gelu_activation(x_torch.shape, run_mode, dynamic)(x_torch)
 
     # Verify
     expected = gelu_golden(x_torch)
@@ -305,105 +215,46 @@ def test_gelu(device_id = None, run_mode: str = "npu", dynamic: bool = False) ->
     print()
 
 
-@pypto.jit
-def swiglu_activation_kernel_npu(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    SwiGLU activation function: Swish(gate) * up
-
-    SwiGLU is a gated linear unit that uses Swish (SiLU) as the gating function.
-    It's commonly used in modern LLMs like PaLM and LLaMA.
-
-    Formula: SwiGLU(gate, up) = Swish(gate) * up = (gate * sigmoid(gate)) * up
-
-    Parameters
-    ----------
-    gate : pypto.Tensor
-        Gate tensor
-    up : pypto.Tensor
-        Up projection tensor
-
-    Returns
-    -------
-    pypto.Tensor
-        SwiGLU activated tensor
-    """
-    # Configure tiling
-    if len(gate.shape) >= 2:
-        pypto.set_vec_tile_shapes(gate.shape[0], gate.shape[1])
-    else:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(gate.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-
-    # Swish(gate) = gate * sigmoid(gate)
-    sigmoid = pypto.sigmoid(gate)
-    swish = gate * sigmoid
-
-    # Multiply with up projection
-    y[:] =  swish * up
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def swiglu_activation_kernel_sim(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    SwiGLU activation function: Swish(gate) * up
-
-    SwiGLU is a gated linear unit that uses Swish (SiLU) as the gating function.
-    It's commonly used in modern LLMs like PaLM and LLaMA.
-
-    Formula: SwiGLU(gate, up) = Swish(gate) * up = (gate * sigmoid(gate)) * up
-
-    Parameters
-    ----------
-    gate : pypto.Tensor
-        Gate tensor
-    up : pypto.Tensor
-        Up projection tensor
-
-    Returns
-    -------
-    pypto.tensor
-        SwiGLU activated tensor
-    """
-    # Configure tiling
-    if len(gate.shape) >= 2:
-        pypto.set_vec_tile_shapes(gate.shape[0], gate.shape[1])
-    else:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(gate.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-
-    # Swish(gate) = gate * sigmoid(gate)
-    sigmoid = pypto.sigmoid(gate)
-    swish = gate * sigmoid
-
-    # Multiply with up projection
-    y[:] =  swish * up
-
-
-def swiglu_activation(gate: torch.Tensor, up: torch.Tensor,
-                      run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    y = torch.empty_like(gate)
-
+def swiglu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     if dynamic:
-        gate_pto = pypto.from_torch(gate, dynamic_axis=[0])
-        up_pto = pypto.from_torch(up, dynamic_axis=[0])
-        y_pto = pypto.from_torch(y, dynamic_axis=[0])
+        _, n = shape
+        m = pypto.frontend.dynamic("m")
     else:
-        gate_pto = pypto.from_torch(gate)
-        up_pto = pypto.from_torch(up)
-        y_pto = pypto.from_torch(y)
+        m, n = shape
 
-    # launch the kernel
     if run_mode == "npu":
-        swiglu_activation_kernel_npu(gate_pto, up_pto, y_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        swiglu_activation_kernel_sim(gate_pto, up_pto, y_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+         
+    # launch the kernel
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def swiglu_activation_kernel(
+        gate: pypto.Tensor((m, n), pypto.DT_BF16),
+        up: pypto.Tensor((m, n), pypto.DT_BF16),
+    ) -> pypto.Tensor((m, n), pypto.DT_BF16):
+        """
+        SwiGLU activation function: Swish(gate) * up
 
-    return y
+        SwiGLU is a gated linear unit that uses Swish (SiLU) as the gating function.
+        It's commonly used in modern LLMs like PaLM and LLaMA.
+
+        Formula: SwiGLU(gate, up) = Swish(gate) * up = (gate * sigmoid(gate)) * up
+        """
+        out = pypto.tensor((m, n), pypto.DT_BF16)
+        configure_tiling(gate)
+
+        sigmoid = pypto.sigmoid(gate)
+        swish = gate * sigmoid
+        out[:] = swish * up
+        return out
+    
+    return swiglu_activation_kernel
 
 
-def test_swiglu(device_id = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_swiglu(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
     """Test SwiGLU activation."""
     print("=" * 60)
     print("Test: SwiGLU Activation")
@@ -416,7 +267,7 @@ def test_swiglu(device_id = None, run_mode: str = "npu", dynamic: bool = False) 
     up_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
 
     # Execute
-    out_torch = swiglu_activation(gate_torch, up_torch, run_mode, dynamic)
+    out_torch = swiglu_activation(gate_torch.shape, run_mode, dynamic)(gate_torch, up_torch)
 
     # Verify
     expected = swiglu_golden(gate_torch, up_torch)
@@ -432,110 +283,46 @@ def test_swiglu(device_id = None, run_mode: str = "npu", dynamic: bool = False) 
     print()
 
 
-@pypto.jit
-def geglu_activation_kernel_npu(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    GeGLU activation function: GELU(gate) * up
-
-    GeGLU is a gated linear unit that uses GELU as the gating function.
-    It's an alternative to SwiGLU.
-
-    Formula: GeGLU(gate, up) = GELU(gate) * up
-
-    Parameters
-    ----------
-    gate : pypto.Tensor
-        Gate tensor
-    up : pypto.Tensor
-        Up projection tensor
-
-    Returns
-    -------
-    pypto.Tensor
-        GeGLU activated tensor
-    """
-    # Configure tiling
-    if len(gate.shape) >= 2:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(gate.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-    else:
-        pypto.set_vec_tile_shapes(32, 128)
-
-    # GELU approximation: x * sigmoid(1.702 * x)
-    coeff = float(1.702)
-    x_scaled = gate * coeff
-
-    # GELU(x) = x * sigmoid(1.702 * x)
-    gelu_gate =  gate * pypto.sigmoid(x_scaled)
-
-    # Multiply with up projection
-    y[:] =  gelu_gate * up
-
-
-@pypto.jit(runtime_options={"run_mode": 1})
-def geglu_activation_kernel_sim(gate: pypto.Tensor, up: pypto.Tensor, y: pypto.Tensor) -> None:
-    """
-    GeGLU activation function: GELU(gate) * up
-
-    GeGLU is a gated linear unit that uses GELU as the gating function.
-    It's an alternative to SwiGLU.
-
-    Formula: GeGLU(gate, up) = GELU(gate) * up
-
-    Parameters
-    ----------
-    gate : pypto.Tensor
-        Gate tensor
-    up : pypto.Tensor
-        Up projection tensor
-
-    Returns
-    -------
-    pypto.tensor
-        GeGLU activated tensor
-    """
-    # Configure tiling
-    if len(gate.shape) >= 2:
-        n_tile = 32
-        tile_shapes = [n_tile for _ in range(len(gate.shape))]
-        pypto.set_vec_tile_shapes(*tile_shapes)
-    else:
-        pypto.set_vec_tile_shapes(32, 128)
-
-    # GELU approximation: x * sigmoid(1.702 * x)
-    coeff = float(1.702)
-    x_scaled = gate * coeff
-
-    # GELU(x) = x * sigmoid(1.702 * x)
-    gelu_gate =  gate * pypto.sigmoid(x_scaled)
-
-    # Multiply with up projection
-    y[:] =  gelu_gate * up
-
-
-def geglu_activation(gate: torch.Tensor, up: torch.Tensor,
-                     run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    y = torch.empty_like(gate)
-
+def geglu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
     if dynamic:
-        gate_pto = pypto.from_torch(gate, dynamic_axis=[0])
-        up_pto = pypto.from_torch(up, dynamic_axis=[0])
-        y_pto = pypto.from_torch(y, dynamic_axis=[0])
+        _, n = shape
+        m = pypto.frontend.dynamic("m")
     else:
-        gate_pto = pypto.from_torch(gate)
-        up_pto = pypto.from_torch(up)
-        y_pto = pypto.from_torch(y)
+        m, n = shape
 
-    # launch the kernel
     if run_mode == "npu":
-        geglu_activation_kernel_npu(gate_pto, up_pto, y_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        geglu_activation_kernel_sim(gate_pto, up_pto, y_pto)
-    return y
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    
+    # launch the kernel
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def geglu_activation_kernel(
+        gate: pypto.Tensor((m, n), pypto.DT_BF16),
+        up: pypto.Tensor((m, n), pypto.DT_BF16),
+    ) -> pypto.Tensor((m, n), pypto.DT_BF16):
+        """
+        GELU (Gaussian Error Linear Unit) activation function.
+
+        Uses approximation: x * sigmoid(1.702 * x)
+        This is a fast approximation of the full GELU formula.
+        """
+        out = pypto.tensor((m, n), pypto.DT_BF16)
+        configure_tiling(gate)
+
+        # GELU approximation: x * sigmoid(1.702 * x)
+        # Need to design a function to reuse GeLU function in a nested function call
+        gate_scaled = gate * 1.702
+        gelu_gate = gate * pypto.sigmoid(gate_scaled)
+        out[:] = gelu_gate * up
+        return out
+
+    return geglu_activation_kernel
 
 
-def test_geglu(device_id = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_geglu(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
     """Test GeGLU activation."""
     print("=" * 60)
     print("Test: GeGLU Activation")
@@ -548,7 +335,7 @@ def test_geglu(device_id = None, run_mode: str = "npu", dynamic: bool = False) -
     up_torch = torch.randn(shape, dtype=torch.bfloat16, device=device)
 
     # Execute
-    out_torch = geglu_activation(gate_torch, up_torch, run_mode, dynamic)
+    out_torch = geglu_activation(gate_torch.shape, run_mode, dynamic)(gate_torch, up_torch)
 
     # Verify
     expected = geglu_golden(gate_torch, up_torch)

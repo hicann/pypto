@@ -54,41 +54,39 @@ def get_device_id():
 # ============================================================================
 # SUM Examples
 # ============================================================================
-@pypto.jit
-def sum_kernel_npu(a: pypto.Tensor, out: pypto.Tensor, dim: int, keepdim: bool) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.sum(a, dim=dim, keepdim=keepdim)
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def sum_kernel_sim(a: pypto.Tensor, out: pypto.Tensor, dim: int, keepdim: bool) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.sum(a, dim=dim, keepdim=keepdim)
 
-def sum_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = False, dynamic: bool = False) -> torch.Tensor:
+def sum_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = False) -> torch.Tensor:
+    dtype = pypto.DT_FP32
+    shape = a.shape
+
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+        
     if keepdim:
         out_shape = list(a.shape)
         out_shape[dim] = 1
+        out_shape = tuple(out_shape)
     else:
         out_shape = list(a.shape)
         out_shape.pop(dim)
-    out = torch.zeros(out_shape, dtype=a.dtype, device=a.device)
+        out_shape = tuple(out_shape)
 
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        out_pto = pypto.from_torch(out)
-    if run_mode == "npu":
-        sum_kernel_npu(a_pto, out_pto, dim, keepdim)
-    else:
-        sum_kernel_sim(a_pto, out_pto, dim, keepdim)
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def sum_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
+        tile_shapes = [8 for _ in range(len(a.shape))]
+        pypto.set_vec_tile_shapes(*tile_shapes)
+        out = pypto.sum(a, dim=dim, keepdim=keepdim)
+        return out
+    out = sum_kernel(a)
     return out
     
     
-def test_sum_basic(device_id = None, run_mode: str = "npu"):
+def test_sum_basic(device_id: int = None, run_mode: str = "npu"):
     """Test basic usage of sum function"""
     print("=" * 60)
     print("Test: Basic Usage of sum Function")
@@ -121,7 +119,7 @@ def test_sum_basic(device_id = None, run_mode: str = "npu"):
     print("✓ Basic usage of sum function completed successfully")
 
 
-def test_sum_different_dimensions(device_id = None, run_mode: str = "npu"):
+def test_sum_different_dimensions(device_id: int = None, run_mode: str = "npu"):
     """Test reducing along different dimensions"""
     print("=" * 60)
     print("Test: Reducing Along Different Dimensions")
@@ -181,48 +179,40 @@ def test_sum_different_dimensions(device_id = None, run_mode: str = "npu"):
 # ============================================================================
 # AMAX Examples
 # ============================================================================
-
-@pypto.jit(
-    host_options={"only_codegen": True}
-)
-def amax_kernel_npu(a: pypto.Tensor, out: pypto.Tensor, dim: int, keepdim: bool) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.amax(a, dim=dim, keepdim=keepdim)
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def amax_kernel_sim(a: pypto.Tensor, out: pypto.Tensor, dim: int, keepdim: bool) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.amax(a, dim=dim, keepdim=keepdim)
-
-
-def amax_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = False, dynamic: bool = False) -> torch.Tensor:
+def amax_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = False) -> torch.Tensor:
+    dtype = pypto.DT_FP32
+    shape = a.shape
     if keepdim:
         out_shape = list(a.shape)
         out_shape[dim] = 1
+        out_shape = tuple(out_shape)
     else:
         out_shape = list(a.shape)
         out_shape.pop(dim)
-    out = torch.zeros(out_shape, dtype=a.dtype, device=a.device)
+        out_shape = tuple(out_shape)
 
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        out_pto = pypto.from_torch(out)
     if run_mode == "npu":
-        amax_kernel_npu(a_pto, out_pto, dim, keepdim)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        amax_kernel_sim(a_pto, out_pto, dim, keepdim)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(
+        host_options={"only_codegen": True},
+        runtime_options={"run_mode": mode}
+        )
+    def amax_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
+        tile_shapes = [8 for _ in range(len(a.shape))]
+        pypto.set_vec_tile_shapes(*tile_shapes)
+        out = pypto.amax(a, dim=dim, keepdim=keepdim)
+        return out
+    out = amax_kernel(a)
+    
     return out
 
 
-def test_amax_basic(device_id = None, run_mode: str = "npu"):
+def test_amax_basic(device_id: int = None, run_mode: str = "npu"):
     """Test basic usage of amax function"""
     print("=" * 60)
     print("Test: Basic Usage of amax Function")
@@ -259,7 +249,7 @@ def test_amax_basic(device_id = None, run_mode: str = "npu"):
     print("✓ Basic usage of amax function completed successfully")
 
 
-def test_amax_different_dimensions(device_id = None, run_mode: str = "npu"):
+def test_amax_different_dimensions(device_id: int = None, run_mode: str = "npu"):
     """Test reducing along different dimensions"""
     print("=" * 60)
     print("Test: Reducing Along Different Dimensions")
@@ -319,48 +309,40 @@ def test_amax_different_dimensions(device_id = None, run_mode: str = "npu"):
 # ============================================================================
 # AMIN Examples
 # ============================================================================
-
-@pypto.jit(
-    host_options={"only_codegen": True}
-)
-def amin_kernel_npu(a: pypto.Tensor, out: pypto.Tensor, dim: int, keepdim: bool) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.amin(a, dim=dim, keepdim=keepdim)
-
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def amin_kernel_sim(a: pypto.Tensor, out: pypto.Tensor, dim: int, keepdim: bool) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.amin(a, dim=dim, keepdim=keepdim)
-
-
-def amin_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = False, dynamic: bool = False) -> torch.Tensor:
+def amin_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = False) -> torch.Tensor:
+    dtype = pypto.DT_FP32
+    shape = a.shape
     if keepdim:
         out_shape = list(a.shape)
         out_shape[dim] = 1
+        out_shape = tuple(out_shape)
     else:
         out_shape = list(a.shape)
         out_shape.pop(dim)
-    out = torch.zeros(out_shape, dtype=a.dtype, device=a.device)
+        out_shape = tuple(out_shape)
 
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        out_pto = pypto.from_torch(out)
     if run_mode == "npu":
-        amin_kernel_npu(a_pto, out_pto, dim, keepdim)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        amin_kernel_sim(a_pto, out_pto, dim, keepdim)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+        
+    @pypto.frontend.jit(
+        host_options={"only_codegen": True},
+        runtime_options={"run_mode": mode}
+    )
+    def amin_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
+        tile_shapes = [8 for _ in range(len(a.shape))]
+        pypto.set_vec_tile_shapes(*tile_shapes)
+        out = pypto.amin(a, dim=dim, keepdim=keepdim)
+        return out
+    out = amin_kernel(a)
+
     return out
 
 
-def test_amin_basic(device_id = None, run_mode: str = "npu"):
+def test_amin_basic(device_id: int = None, run_mode: str = "npu"):
     """Test basic usage of amin function"""
     print("=" * 60)
     print("Test: Basic Usage of amin Function")
@@ -398,7 +380,7 @@ def test_amin_basic(device_id = None, run_mode: str = "npu"):
     print("✓ Basic usage of amin function completed successfully")
 
 
-def test_amin_different_dimensions(device_id = None, run_mode: str = "npu"):
+def test_amin_different_dimensions(device_id: int = None, run_mode: str = "npu"):
     """Test reducing along different dimensions"""
     print("=" * 60)
     print("Test: Reducing Along Different Dimensions")
@@ -463,38 +445,29 @@ def test_amin_different_dimensions(device_id = None, run_mode: str = "npu"):
 # MAXIMUM Examples
 # ============================================================================
 
-@pypto.jit
-def maximum_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.maximum(a, b)
+def maximum_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
+    dtype = pypto.DT_FP32
+    shape1 = a.shape
+    shape2 = b.shape
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def maximum_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.maximum(a, b)
-
-
-def maximum_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(a)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
     if run_mode == "npu":
-        maximum_kernel_npu(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        maximum_kernel_sim(a_pto, b_pto, out_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+        
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def maximum_kernel(a: pypto.Tensor(shape1, dtype), b: pypto.Tensor(shape2, dtype)) -> pypto.Tensor(shape1, dtype):
+        tile_shapes = [8 for _ in range(len(a.shape))]
+        pypto.set_vec_tile_shapes(*tile_shapes)
+        out = pypto.maximum(a, b)
+        return out
+    out = maximum_kernel(a, b)
     return out
 
 
-def test_maximum_basic(device_id = None, run_mode: str = "npu"):
+def test_maximum_basic(device_id: int = None, run_mode: str = "npu"):
     """Test basic usage of maximum function"""
     print("=" * 60)
     print("Test: Basic Usage of maximum Function")
@@ -512,8 +485,8 @@ def test_maximum_basic(device_id = None, run_mode: str = "npu"):
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
-    print(f"Max difference: {max_diff:.6f}")
     if run_mode == "npu":
+        print(f"Max difference: {max_diff:.6f}")
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
     
     # Test 2: Basic Usage of maximum Function with different shapes
@@ -526,8 +499,8 @@ def test_maximum_basic(device_id = None, run_mode: str = "npu"):
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
-    print(f"Max difference: {max_diff:.6f}")
     if run_mode == "npu":
+        print(f"Max difference: {max_diff:.6f}")
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
     
     print("✓ Basic usage of maximum function completed successfully")
@@ -537,37 +510,28 @@ def test_maximum_basic(device_id = None, run_mode: str = "npu"):
 # MINIMUM Examples
 # ============================================================================
 
-@pypto.jit
-def minimum_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.minimum(a, b)
-
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def minimum_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    tile_shapes = [8 for _ in range(len(a.shape))]
-    pypto.set_vec_tile_shapes(*tile_shapes)
-    out[:] = pypto.minimum(a, b)
-
-def minimum_op(a: torch.Tensor, b: torch.Tensor,  run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(a)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
+def minimum_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
+    shape = a.shape
+    dtype = pypto.DT_FP32
+    
     if run_mode == "npu":
-        minimum_kernel_npu(a_pto, b_pto, out_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        minimum_kernel_sim(a_pto, b_pto, out_pto)
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+        
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def minimum_kernel(a: pypto.Tensor(shape, dtype), b: pypto.Tensor(shape, dtype)) -> pypto.Tensor(shape, dtype):
+        tile_shapes = [8 for _ in range(len(a.shape))]
+        pypto.set_vec_tile_shapes(*tile_shapes)
+        out = pypto.minimum(a, b)
+        return out
+    out = minimum_kernel(a, b)
     return out
 
 
-def test_minimum_basic(device_id = None, run_mode: str = "npu"):
+def test_minimum_basic(device_id: int = None, run_mode: str = "npu"):
     """Test basic usage of minimum function"""
     print("=" * 60)
     print("Test: Basic Usage of minimum Function")
@@ -585,8 +549,8 @@ def test_minimum_basic(device_id = None, run_mode: str = "npu"):
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
-    print(f"Max difference: {max_diff:.6f}")
     if run_mode == "npu":
+        print(f"Max difference: {max_diff:.6f}")
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
     
     # Test 2: Basic Usage of minimum Function with different shapes
@@ -599,8 +563,8 @@ def test_minimum_basic(device_id = None, run_mode: str = "npu"):
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
-    print(f"Max difference: {max_diff:.6f}")
     if run_mode == "npu":
+        print(f"Max difference: {max_diff:.6f}")
         assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
     
     print("✓ Basic usage of minimum function completed successfully")

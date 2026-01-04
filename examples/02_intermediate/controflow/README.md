@@ -6,13 +6,13 @@
 
 除了基础的算子计算，实际应用中常需要处理动态形状、条件判断和循环控制。本目录涵盖了以下内容：
 - **动态形状 (Dynamic Shapes)**: 演示如何处理推理过程中波动的 Batch Size 或序列长度。
-- **控制流 (Control Flow)**: 包含算子内部的条件分支 (`pypto.cond`) 和复杂的循环结构 (`pypto.loop`)。
+- **控制流 (Control Flow)**: 包含算子内部的条件分支和复杂的循环结构 (`pypto.loop`)。
 - **输入顺序灵活性**: 演示 JIT 内核对输入参数顺序的容错能力。
 
 ## 样例代码特性
 
 - **`others/dynamic.py`**: 展示 `dynamic_axis` 的标记方法以及在 JIT 配置中开启对非对齐动态形状的支持。
-- **`condition/condition.py`**: 展示如何在内核函数中使用 `if_else` 和 `pypto.cond` 构建复杂的逻辑分支。
+- **`condition/condition.py`**: 展示如何在内核函数中使用 `if_else` 构建复杂的逻辑分支。
 - **`loop/`**: 深入介绍 `pypto.loop` 的高级用法，如循环展开（Unroll）和编译期打印调试。
 - **`others/kernel_input.py`**: 展示 JIT 内核对输入参数顺序的容错能力。
 

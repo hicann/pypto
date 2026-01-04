@@ -56,33 +56,30 @@ def get_device_id():
 # Cube Tile Examples
 # ============================================================================
     
-@pypto.jit
-def compute_with_cube_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor, set_shapes: list) -> None:
-    pypto.set_cube_tile_shapes(*set_shapes)
-    out[:] = pypto.matmul(a, b, out.dtype)
+def create_cube_tile_kernel(m, k, n, run_mode, set_shapes: list):
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_cube_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor, set_shapes: list) -> None:
-    pypto.set_cube_tile_shapes(*set_shapes)
-    out[:] = pypto.matmul(a, b, out.dtype)
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_cube_tile_shapes(
+        a: pypto.Tensor((m, k), pypto.DT_FP32),
+        b: pypto.Tensor((k, n), pypto.DT_FP32),
+    ) -> pypto.Tensor((m, n), pypto.DT_FP32):
+        pypto.set_cube_tile_shapes(*set_shapes)
+        out = pypto.matmul(a, b, a.dtype)
+        return out
+
+    return compute_with_cube_tile_shapes
 
 
-def compute_with_cube_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, set_shapes: list, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[0], b.shape[1], dtype=a.dtype, device=a.device)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
+def compute_with_cube_tile_shapes_op(
+    a: torch.Tensor, b: torch.Tensor, set_shapes: list, run_mode: str = "npu"
+):
     if run_mode == "npu":
-        compute_with_cube_tile_shapes_kernel_npu(a_pto, b_pto, out_pto, set_shapes)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        compute_with_cube_tile_shapes_kernel_sim(a_pto, b_pto, out_pto, set_shapes)
-    return out
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    return create_cube_tile_kernel(a.shape[0], a.shape[1], b.shape[1], mode, set_shapes)(a, b)
 
 
 def test_set_cube_tile_shapes_basic(device_id: int = None, run_mode: str = "npu"):
@@ -124,58 +121,51 @@ def test_set_cube_tile_shapes_basic(device_id: int = None, run_mode: str = "npu"
     print("✓ Basic usage of set_cube_tile_shapes function completed successfully")
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
-def compute_with_different_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out1: pypto.Tensor, out2: pypto.Tensor, out3: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [16, 16], [32, 32])
-    print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
-    out1[:] = pypto.matmul(a, b, out1.dtype)
-    pypto.set_cube_tile_shapes([32, 32], [8, 64], [32, 128])
-    print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
-    out2[:] = pypto.matmul(a, b, out2.dtype)
-    pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
-    print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
-    out3[:] = pypto.matmul(a, b, out3.dtype)
+def create_different_tile_shapes_kernel(run_mode):
+    b, m_batch, k_batch, n_batch = 2, 2, 2, 2
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"run_mode": pypto.RunMode.SIM}
-)
-def compute_with_different_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out1: pypto.Tensor, out2: pypto.Tensor, out3: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [16, 16], [32, 32])
-    print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
-    out1[:] = pypto.matmul(a, b, out1.dtype)
-    pypto.set_cube_tile_shapes([32, 32], [8, 64], [32, 128])
-    print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
-    out2[:] = pypto.matmul(a, b, out2.dtype)
-    pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
-    print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
-    out3[:] = pypto.matmul(a, b, out3.dtype)
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_different_tile_shapes(
+        x: pypto.Tensor((b, m_batch, k_batch), pypto.DT_FP32),
+        y: pypto.Tensor((b, k_batch, n_batch), pypto.DT_FP32),
+    ) -> (
+        pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32),
+        pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32),
+        pypto.Tensor((b, m_batch, n_batch), pypto.DT_FP32),
+    ):
+        """Compute matmul with three different tile shapes and return all results"""
+        print(f"b: {b}, m_batch: {m_batch}, k_batch: {k_batch}, n_batch: {n_batch}")
+        out1 = pypto.tensor((b, m_batch, n_batch), pypto.DT_FP32)
+        out2 = pypto.tensor((b, m_batch, n_batch), pypto.DT_FP32)
+        out3 = pypto.tensor((b, m_batch, n_batch), pypto.DT_FP32)
+
+        pypto.set_cube_tile_shapes([32, 32], [16, 16], [32, 32])
+        print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
+        out1[:] = pypto.matmul(x, y, x.dtype)
+
+        pypto.set_cube_tile_shapes([32, 32], [8, 64], [32, 128])
+        print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
+        out2[:] = pypto.matmul(x, y, x.dtype)
+
+        pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
+        print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
+        out3[:] = pypto.matmul(x, y, x.dtype)
+
+        return out1, out2, out3
+
+    return compute_with_different_tile_shapes
 
 
 def compute_with_different_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> tuple:
-    out1 = torch.zeros_like(a)
-    out2 = torch.zeros_like(a)
-    out3 = torch.zeros_like(a)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out1_pto = pypto.from_torch(out1, dynamic_axis=[0])
-        out2_pto = pypto.from_torch(out2, dynamic_axis=[0])
-        out3_pto = pypto.from_torch(out3, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out1_pto = pypto.from_torch(out1)
-        out2_pto = pypto.from_torch(out2)
-        out3_pto = pypto.from_torch(out3)
+    
     if run_mode == "npu":
-        compute_with_different_tile_shapes_kernel_npu(a_pto, b_pto, out1_pto, out2_pto, out3_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        compute_with_different_tile_shapes_kernel_sim(a_pto, b_pto, out1_pto, out2_pto, out3_pto)
-    return out1, out2, out3
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    return create_different_tile_shapes_kernel(mode)(a, b)
+
 
 
 def test_set_different_tile_shapes_result(device_id: int = None, run_mode: str = "npu"):
@@ -203,62 +193,36 @@ def test_set_different_tile_shapes_result(device_id: int = None, run_mode: str =
     print("✓ Impact of different tile shape settings on results completed successfully")
 
 
-@pypto.jit
-def compute_with_specific_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
-    out[:] = pypto.matmul(a, b, out.dtype, b_trans=True)
+def create_tile_32_kernel(run_mode):
+    b_rt, m_rt, k_rt, n_rt = 4, 64, 512, 128
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_specific_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
-    out[:] = pypto.matmul(a, b, out.dtype, b_trans=True)
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_tile_32(
+        a: pypto.Tensor((b_rt, m_rt, k_rt), pypto.DT_FP32),
+        b: pypto.Tensor((b_rt, n_rt, k_rt), pypto.DT_FP32),
+    ) -> pypto.Tensor((b_rt, m_rt, n_rt), pypto.DT_FP32):
+        print(f"b_rt: {b_rt}, m_rt: {m_rt}, k_rt: {k_rt}, n_rt: {n_rt}")
+        pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
+        output = pypto.matmul(a, b, a.dtype, b_trans=True)
+        return output
 
-
-@pypto.jit
-def compute_with_another_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
-    out[:] = pypto.matmul(a, b, out.dtype, b_trans=True)
-
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_another_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
-    out[:] = pypto.matmul(a, b, out.dtype, b_trans=True)
+    return compute_with_tile_32
 
 
-def compute_with_specific_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[0], b.shape[1], dtype=a.dtype, device=a.device)
+def create_tile_64_kernel(run_mode):
+    b_rt, m_rt, k_rt, n_rt = 4, 64, 512, 128
 
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-    if run_mode == "npu":
-        compute_with_specific_tile_shapes_kernel_npu(a_pto, b_pto, out_pto)
-    else:
-        compute_with_specific_tile_shapes_kernel_sim(a_pto, b_pto, out_pto)
-    return out
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_tile_64(
+        a: pypto.Tensor((b_rt, m_rt, k_rt), pypto.DT_FP32),
+        b: pypto.Tensor((b_rt, n_rt, k_rt), pypto.DT_FP32),
+    ) -> pypto.Tensor((b_rt, m_rt, n_rt), pypto.DT_FP32):
+        print(f"b_rt: {b_rt}, m_rt: {m_rt}, k_rt: {k_rt}, n_rt: {n_rt}")
+        pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])
+        output = pypto.matmul(a, b, a.dtype, b_trans=True)
+        return output
 
-
-def compute_with_another_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros(a.shape[0], b.shape[1], dtype=a.dtype, device=a.device)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-    if run_mode == "npu":
-        compute_with_another_tile_shapes_kernel_npu(a_pto, b_pto, out_pto)
-    else:
-        compute_with_another_tile_shapes_kernel_sim(a_pto, b_pto, out_pto)
-    return out
+    return compute_with_tile_64
 
 
 def test_set_different_tile_shapes_runtime(device_id: int = None, run_mode: str = "npu"):
@@ -269,19 +233,32 @@ def test_set_different_tile_shapes_runtime(device_id: int = None, run_mode: str 
     
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
     
+    if run_mode == "npu":
+        import torch_npu
+
+        device = f"npu:{device_id}"
+        mode = pypto.RunMode.NPU
+    else:
+        device = "cpu"
+        mode = pypto.RunMode.SIM
+        
     # Test 1: Different Tile Shape Settings on Runtime
+    b_rt, m_rt, k_rt, n_rt = 4, 64, 512, 128
     dtype = torch.float32
-    a = torch.randn((4, 64, 512), dtype=dtype, device=device)
-    b = torch.randn((4, 128, 512), dtype=dtype, device=device)
+    a = torch.randn((b_rt, m_rt, k_rt), dtype=dtype, device=device)
+    b = torch.randn((b_rt, n_rt, k_rt), dtype=dtype, device=device)
+
+    compute_tile_32 = create_tile_32_kernel(mode)
+    compute_tile_64 = create_tile_64_kernel(mode)
 
     TEST_TIME = 1
     start = time.perf_counter()
     for _ in range(TEST_TIME):
-        out1 = compute_with_specific_tile_shapes_op(a, b, run_mode)
+        out1 = compute_tile_32(a, b)
     runtime_1 = time.perf_counter() - start
     start = time.perf_counter()
     for _ in range(TEST_TIME):
-        out2 = compute_with_another_tile_shapes_op(a, b, run_mode)
+        out2 = compute_tile_64(a, b)
     runtime_2 = time.perf_counter() - start
     print(f"runtime_1(pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])): {runtime_1}")
     print(f"runtime_2(pypto.set_cube_tile_shapes([64, 64], [128, 128], [128, 128])): {runtime_2}")
@@ -292,33 +269,30 @@ def test_set_different_tile_shapes_runtime(device_id: int = None, run_mode: str 
 # Vector Tile Examples
 # ============================================================================
     
-@pypto.jit
-def compute_with_vec_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor, set_shapes: tuple) -> None:
-    pypto.set_vec_tile_shapes(*set_shapes)
-    out[:] = pypto.add(a, b)
+def create_vec_tile_kernel(shape, run_mode, set_shapes: tuple):
+    """Factory function to create vector tile kernel with specific shapes"""
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_vec_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor, set_shapes: tuple) -> None:
-    pypto.set_vec_tile_shapes(*set_shapes)
-    out[:] = pypto.add(a, b)
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_vec_tile_shapes(
+        a: pypto.Tensor(shape, pypto.DT_FP32),
+        b: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        print(f"shape: {shape}")
+        pypto.set_vec_tile_shapes(*set_shapes)
+        output = pypto.add(a, b)
+        return output
+
+    return compute_with_vec_tile_shapes
 
 
 def compute_with_vec_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, set_shapes: tuple, run_mode:str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(a)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
     if run_mode == "npu":
-        compute_with_vec_tile_shapes_kernel_npu(a_pto, b_pto, out_pto, set_shapes)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        compute_with_vec_tile_shapes_kernel_sim(a_pto, b_pto, out_pto, set_shapes)
-    return out
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    return create_vec_tile_kernel(tuple(a.shape), mode, set_shapes)(a, b)
 
 
 def test_set_vec_tile_shapes_basic(device_id: int = None, run_mode: str = "npu"):
@@ -369,54 +343,45 @@ def test_set_vec_tile_shapes_basic(device_id: int = None, run_mode: str = "npu")
     print("✓ Basic usage of set_vec_tile_shapes function completed successfully")
 
 
-@pypto.jit
-def compute_with_vec_different_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out1: pypto.Tensor, out2: pypto.Tensor, out3: pypto.Tensor) -> None:
-    pypto.set_vec_tile_shapes(1, 2, 8)
-    print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
-    out1[:] = pypto.add(a, b)
-    pypto.set_vec_tile_shapes(2, 6, 32)
-    print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
-    out2[:] = pypto.add(a, b)
-    pypto.set_vec_tile_shapes(5, 3, 16)
-    print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
-    out3[:] = pypto.add(a, b)
+def create_vec_different_tile_shapes_kernel(shape, run_mode):
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_vec_different_tile_shapes(
+        a: pypto.Tensor(shape, pypto.DT_FP32),
+        b: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> (
+        pypto.Tensor(shape, pypto.DT_FP32),
+        pypto.Tensor(shape, pypto.DT_FP32),
+        pypto.Tensor(shape, pypto.DT_FP32),
+    ):
+        """Compute add with three different vec tile shapes and return all results"""
+        print(f"shape: {shape}")
+        pypto.set_vec_tile_shapes(1, 2, 8)
+        print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
+        out1 = pypto.add(a, b)
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_vec_different_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out1: pypto.Tensor, out2: pypto.Tensor, out3: pypto.Tensor) -> None:
-    pypto.set_vec_tile_shapes(1, 2, 8)
-    print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
-    out1[:] = pypto.add(a, b)
-    pypto.set_vec_tile_shapes(2, 6, 32)
-    print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
-    out2[:] = pypto.add(a, b)
-    pypto.set_vec_tile_shapes(5, 3, 16)
-    print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
-    out3[:] = pypto.add(a, b)
+        pypto.set_vec_tile_shapes(2, 6, 32)
+        print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
+        out2 = pypto.add(a, b)
+
+        pypto.set_vec_tile_shapes(5, 3, 16)
+        print(f"pypto.get_vec_tile_shapes(): {pypto.get_vec_tile_shapes()}")
+        out3 = pypto.add(a, b)
+
+        return out1, out2, out3
+
+    return compute_with_vec_different_tile_shapes
 
 
 
 def compute_with_vec_different_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, run_mode:str = "npu", dynamic: bool = False) -> tuple:
-    out1 = torch.zeros_like(a)
-    out2 = torch.zeros_like(a)
-    out3 = torch.zeros_like(a)
 
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out1_pto = pypto.from_torch(out1, dynamic_axis=[0])
-        out2_pto = pypto.from_torch(out2, dynamic_axis=[0])
-        out3_pto = pypto.from_torch(out3, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out1_pto = pypto.from_torch(out1)
-        out2_pto = pypto.from_torch(out2)
-        out3_pto = pypto.from_torch(out3)
     if run_mode == "npu":
-        compute_with_vec_different_tile_shapes_kernel_npu(a_pto, b_pto, out1_pto, out2_pto, out3_pto)
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
     else:
-        compute_with_vec_different_tile_shapes_kernel_sim(a_pto, b_pto, out1_pto, out2_pto, out3_pto)
-    return out1, out2, out3
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+    return create_vec_different_tile_shapes_kernel(tuple(a.shape), mode)(a, b)
 
 
 def test_set_vec_different_tile_shapes_result(device_id: int = None, run_mode: str = "npu"):
@@ -447,61 +412,36 @@ def test_set_vec_different_tile_shapes_result(device_id: int = None, run_mode: s
     print("✓ Impact of different tile shape settings on results completed successfully")
 
 
-@pypto.jit
-def compute_with_vec_specific_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_vec_tile_shapes(1, 2, 4, 128)
-    out[:] = pypto.add(a, b)
+def create_vec_tile_small_kernel(run_mode):
+    vec_rt_shape = (4, 32, 64, 256)
 
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_vec_specific_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_vec_tile_shapes(1, 2, 4, 128)
-    out[:] = pypto.add(a, b)
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_vec_tile_small(
+        a: pypto.Tensor(vec_rt_shape, pypto.DT_FP32),
+        b: pypto.Tensor(vec_rt_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(vec_rt_shape, pypto.DT_FP32):
+        print(f"vec_rt_shape: {vec_rt_shape}")
+        pypto.set_vec_tile_shapes(1, 2, 4, 128)
+        output = pypto.add(a, b)
+        return output
 
-@pypto.jit
-def compute_with_vec_another_tile_shapes_kernel_npu(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_vec_tile_shapes(2, 4, 8, 256)
-    out[:] = pypto.add(a, b)
-    
-@pypto.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def compute_with_vec_another_tile_shapes_kernel_sim(a: pypto.Tensor, b: pypto.Tensor, out: pypto.Tensor) -> None:
-    pypto.set_vec_tile_shapes(2, 4, 8, 256)
-    out[:] = pypto.add(a, b)
+    return compute_with_vec_tile_small
 
 
-def compute_with_vec_specific_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(a)
+def create_vec_tile_large_kernel(run_mode):
+    vec_rt_shape = (4, 32, 64, 256)
 
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-    if run_mode == "npu":
-        compute_with_vec_specific_tile_shapes_kernel_npu(a_pto, b_pto, out_pto)
-    else:
-        compute_with_vec_specific_tile_shapes_kernel_sim(a_pto, b_pto, out_pto)
-    return out
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    def compute_with_vec_tile_large(
+        a: pypto.Tensor(vec_rt_shape, pypto.DT_FP32),
+        b: pypto.Tensor(vec_rt_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(vec_rt_shape, pypto.DT_FP32):
+        print(f"vec_rt_shape: {vec_rt_shape}")
+        pypto.set_vec_tile_shapes(2, 4, 8, 256)
+        output = pypto.add(a, b)
+        return output
 
-
-def compute_with_vec_another_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
-    out = torch.zeros_like(a)
-
-    if dynamic:
-        a_pto = pypto.from_torch(a, dynamic_axis=[0])
-        b_pto = pypto.from_torch(b, dynamic_axis=[0])
-        out_pto = pypto.from_torch(out, dynamic_axis=[0])
-    else:
-        a_pto = pypto.from_torch(a)
-        b_pto = pypto.from_torch(b)
-        out_pto = pypto.from_torch(out)
-    if run_mode == "npu":
-        compute_with_vec_another_tile_shapes_kernel_npu(a_pto, b_pto, out_pto)
-    else:
-        compute_with_vec_another_tile_shapes_kernel_sim(a_pto, b_pto, out_pto)
-    return out
+    return compute_with_vec_tile_large
 
 
 def test_set_vec_different_tile_shapes_runtime(device_id: int = None, run_mode: str = "npu"):
@@ -512,19 +452,33 @@ def test_set_vec_different_tile_shapes_runtime(device_id: int = None, run_mode: 
     
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
     
+    if run_mode == "npu":
+        import torch_npu
+
+        device = f"npu:{device_id}"
+        mode = pypto.RunMode.NPU
+    else:
+        device = "cpu"
+        mode = pypto.RunMode.SIM
+        
     # Test 1: Different Tile Shape Settings on Runtime
+    vec_rt_shape = (4, 32, 64, 256)
     dtype = torch.float32
-    a = torch.randn((4, 32, 64, 256), dtype=dtype, device=device)
-    b = torch.randn((4, 32, 64, 256), dtype=dtype, device=device)
+    a = torch.randn(vec_rt_shape, dtype=dtype, device=device)
+    b = torch.randn(vec_rt_shape, dtype=dtype, device=device)
+
+    compute_vec_small = create_vec_tile_small_kernel(mode)
+    compute_vec_large = create_vec_tile_large_kernel(mode)
+
 
     TEST_TIME = 1
     start = time.perf_counter()
     for _ in range(TEST_TIME):
-        out1 = compute_with_vec_specific_tile_shapes_op(a, b, run_mode)
+        out1 = compute_vec_small(a, b)
     runtime_1 = time.perf_counter() - start
     start = time.perf_counter()
     for _ in range(TEST_TIME):
-        out2 = compute_with_vec_another_tile_shapes_op(a, b, run_mode)
+        out2 = compute_vec_large(a, b)
     runtime_2 = time.perf_counter() - start
     print(f"runtime_1(pypto.set_vec_tile_shapes(1, 2, 4, 128)): {runtime_1}")
     print(f"runtime_2(pypto.set_vec_tile_shapes(2, 4, 8, 256)): {runtime_2}")
