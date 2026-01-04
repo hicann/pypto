@@ -14,6 +14,7 @@ from .. import pypto_impl
 from ..enum import ScatterMode
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
+from .._element import Element
 
 
 @op_wrapper
@@ -348,7 +349,7 @@ def get_scatter_mode(reduce: str):
 
 
 @op_wrapper
-def scatter_(input: Tensor, dim: int, index: Tensor, src: float, *, reduce: str = None) -> Tensor:
+def scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element], *, reduce: str = None) -> Tensor:
     """Write all values from the value 'src' into 'input' at the indices specified in the 'index' tensor.
 
     This function calculates the formula:
@@ -401,11 +402,15 @@ def scatter_(input: Tensor, dim: int, index: Tensor, src: float, *, reduce: str 
                 [0   2.0 0 0 0]]
     """
     scatter_mode = get_scatter_mode(reduce)
-    return pypto_impl.Scatter_(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
+    if isinstance(src, float):
+        return pypto_impl.Scatter_(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
+    return pypto_impl.Scatter_(input, index, src, dim, scatter_mode)
 
 
 @op_wrapper
-def scatter(input: Tensor, dim: int, index: Tensor, src: float, *, reduce: str = None) -> Tensor:
+def scatter(input: Tensor, dim: int, index: Tensor, src: Union[float, Element], *, reduce: str = None) -> Tensor:
     """Out-of-place version of 'scatter_'."""
     scatter_mode = get_scatter_mode(reduce)
-    return pypto_impl.Scatter(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
+    if isinstance(src, float):
+        return pypto_impl.Scatter(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
+    return pypto_impl.Scatter(input, index, src, dim, scatter_mode)

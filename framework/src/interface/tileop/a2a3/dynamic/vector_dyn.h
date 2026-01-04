@@ -2616,9 +2616,9 @@ TILEOP void DynTcumSum(
 
 constexpr unsigned REDUCE_OP_MAX = 3;
 // 2-4dim
-template <typename T, typename T2, unsigned src1RawShape1, unsigned src1RawShape2, unsigned src1RawShape3,
+template <typename T, typename T1, typename T2, unsigned src1RawShape1, unsigned src1RawShape2, unsigned src1RawShape3,
     unsigned dstRawShape1, unsigned dstRawShape2, unsigned dstRawShape3, unsigned axis, unsigned reduceOp>
-TILEOP void DynTscatterElementS(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *src1, T src2, unsigned src1Shape0,
+TILEOP void DynTscatterElementS(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T1 *src1, T2 src2, unsigned src1Shape0,
     unsigned src1Shape1, unsigned src1Shape2, unsigned src1Shape3) {
     static_assert(reduceOp < REDUCE_OP_MAX, "Unsupport reduceOp");
     set_flag(PIPE_V, PIPE_S, EVENT_ID7);
@@ -2627,7 +2627,7 @@ TILEOP void DynTscatterElementS(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *
         for (int j = 0; j < src1Shape1; ++j) {
             for (int k = 0; k < src1Shape2; ++k) {
                 for (int l = 0; l < src1Shape3; ++l) {
-                    T2 index = (T2)(*(src1 + i * src1RawShape1 * src1RawShape2 * src1RawShape3 + 
+                    T1 index = (T1)(*(src1 + i * src1RawShape1 * src1RawShape2 * src1RawShape3 + 
                         j *  src1RawShape2 * src1RawShape3 + k * src1RawShape3 + l)); // index[i,j,k,l]
                     int dstOffset = 0;
                     if constexpr (axis == 0) {
@@ -2646,9 +2646,9 @@ TILEOP void DynTscatterElementS(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T2 *
                     if constexpr (reduceOp == 0) {
                         dst[dstOffset] = src2;
                     } else if constexpr (reduceOp == 1) {
-                        dst[dstOffset] = src2 + dst[dstOffset];
+                        dst[dstOffset] = static_cast<T>(static_cast<float>(src2) + static_cast<float>(dst[dstOffset]));
                     } else {
-                        dst[dstOffset] = src2 * dst[dstOffset];
+                        dst[dstOffset] = static_cast<T>(static_cast<float>(src2) * static_cast<float>(dst[dstOffset]));
                     }
                 }
             }

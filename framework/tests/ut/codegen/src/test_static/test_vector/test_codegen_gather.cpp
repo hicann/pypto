@@ -89,7 +89,6 @@ TEST_F(TestCodegenGather, TestGatherEle) {
 }
 
 TEST_F(TestCodegenGather, TestGatherEleTileTensor) {
-    InsertTileTensorOp(Opcode::OP_GATHER_ELEMENT, "TgatherElement");
     Function &func = testGatherEle(true, "GATHER_ELEMET_TILETENSOR");
     std::string res = GetResultFromCpp(func);
     std::string expect = R"!!!(#include "TileOpImpl.h"

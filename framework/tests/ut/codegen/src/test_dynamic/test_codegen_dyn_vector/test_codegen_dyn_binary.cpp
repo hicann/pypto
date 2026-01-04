@@ -188,7 +188,6 @@ TEST_F(TestCodegenDynBinary, TestGatherEle) {
 }
 TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    InsertTileTensorOp(Opcode::OP_GATHER_ELEMENT, "TgatherElement");
     config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
 
     constexpr const int32_t nRoutedExperts = 256;
