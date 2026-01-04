@@ -176,32 +176,30 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     # 入参信息获取
     w13, w13_scale = w13_params
     w2, w2_scale = w2_params
-    share_loop_idx, loop_base = offset_params
+    unroll_offset, unroll_level = offset_params
     vec_tile_shape, mm1_cube_tile_shape, mm2_cube_tile_shape = tiling_params
 
-    token_size, hidden_size = hidden_states.shape[:2]
+    hidden_size = hidden_states.shape[1]
     intermediate_size = w2.shape[0]
     x_dtype = hidden_states.dtype
 
     # offset
-    hidden_states_offset = [share_loop_idx * loop_base, 0]
-    cur_valid_size = pypto.min(token_size - share_loop_idx * loop_base, loop_base)
-    hidden_states_actual = pypto.view(hidden_states, [loop_base, hidden_size], hidden_states_offset,
-                                      valid_shape=[cur_valid_size, hidden_size])
-
     pypto.set_vec_tile_shapes(vec_tile_shape[0], vec_tile_shape[1])
+    hidden_states_offset = [unroll_offset, 0]
+    hidden_states_actual = pypto.view(hidden_states, [unroll_level, hidden_size], hidden_states_offset)
+
     # dynamic per_token_quant
     hidden_states_quant, hidden_states_scale = symmetric_quantization_per_token(hidden_states_actual)
 
     # up_proj的matmul计算
-    pypto.set_cube_tile_shapes([mm1_cube_tile_shape[0], mm1_cube_tile_shape[0]],
+    pypto.set_cube_tile_shapes([unroll_level, unroll_level],
                                [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
                                [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
     up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
 
     # dequant
     w13_scale_2d = pypto.unsqueeze(w13_scale, 0)
-    pypto.set_vec_tile_shapes(2, intermediate_size * 2)
+    pypto.set_vec_tile_shapes(4, intermediate_size * 2)
     up_proj_dequant = dequant_dynamic(up_proj, w13_scale_2d, hidden_states_scale)
     swiglu_out = swiglu(up_proj_dequant)
 
@@ -209,14 +207,14 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     down_proj_quant, down_proj_scale = symmetric_quantization_per_token(swiglu_out)
 
     # down_proj
-    pypto.set_cube_tile_shapes([mm2_cube_tile_shape[0], mm2_cube_tile_shape[0]],
+    pypto.set_cube_tile_shapes([unroll_level, unroll_level],
                                [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
                                [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, False)
     down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
 
     # dequant
     w2_scale_2d = pypto.unsqueeze(w2_scale, 0)
-    pypto.set_vec_tile_shapes(2, hidden_size)
+    pypto.set_vec_tile_shapes(4, hidden_size)
     down_proj_dequant = dequant_dynamic(down_proj, w2_scale_2d, down_proj_scale)
     out = pypto.cast(down_proj_dequant, x_dtype)
     pypto.assemble(out, hidden_states_offset, ffn_res)
@@ -227,7 +225,10 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     runtime_options={"device_sched_mode": 1,
                      "cfgcache_device_task_num": 100,
                      "cfgcache_root_task_num": 1000,
-                     "cfgcache_leaf_task_num": 10000},
+                     "cfgcache_leaf_task_num": 10000,
+                     "stitch_function_num_initial": 128,
+                     "stitch_function_outcast_memory": 1024,
+                     "stitch_function_inner_memory": 1024},
     pass_options={"cube_l1_reuse_mode": 2}
 )
 def share_expert_moe_main(hidden_states, w13, w13_scale, w2, w2_scale, ffn_res):
@@ -249,16 +250,18 @@ def share_expert_moe_main(hidden_states, w13, w13_scale, w2, w2_scale, ffn_res):
         This function uses cube L1 reuse mode 2 for better memory efficiency.
         Tokens are processed in tiles of size 8.
     """
+    pypto.experimental.set_operation_config(combine_axis=True)
+
     # tiling config
-    vec_tile_shape = (2, 5120)
-    mm1_cube_tile_shape = (8, 128, 384)
+    vec_tile_shape = (4, 5120)
+    mm1_cube_tile_shape = (8, 256, 256)
     mm2_cube_tile_shape = (8, 192, 256)
-    loop_base = 8
 
     token_nums = hidden_states.shape[0]
-    token_loop_times = (token_nums + loop_base - 1) // loop_base
-
-    for share_loop_idx in pypto.loop(token_loop_times, name="share_loop_idx"):
+    for share_loop_idx, loop_base in pypto.loop_unroll(
+        token_nums,
+        unroll_list=[1, 2, 4, 8, 16, 32, 64, 128],
+        name="share_loop_idx"):
         expert_infer_base(
             hidden_states=hidden_states,
             w13_params=[w13, w13_scale],
