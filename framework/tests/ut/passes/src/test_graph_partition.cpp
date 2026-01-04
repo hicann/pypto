@@ -610,5 +610,25 @@ TEST_F(GraphPartitionTest, TestAvoidSuperNodeLoop) {
     EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
     EXPECT_EQ(gpp.PostCheck(*function), SUCCESS);
 }
+
+TEST_F(GraphPartitionTest, TestBoundaryConvert) {
+    ComputationalGraphBuilder G;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<int64_t> tileShape{16,16};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_L1, MemoryType::MEM_L0A};
+    std::vector<Opcode> opCodes{Opcode::OP_MULS, Opcode::OP_CONVERT, Opcode::OP_L1_TO_L0A};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"muls", "convert", "L1ToL0A"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    G.GetOp("convert")->SetOpAttribute(std::make_shared<ConvertOpAttribute>(MemoryType::MEM_UB, MemoryType::MEM_L1));
+    Function *function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(G.GetOp("muls")->GetSubgraphID(), G.GetOp("convert")->GetSubgraphID());
+    EXPECT_NE(G.GetOp("L1ToL0A")->GetSubgraphID(), G.GetOp("convert")->GetSubgraphID());
+}
+
 } // namespace tile_fwk
 } // namespace npu

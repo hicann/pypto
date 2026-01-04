@@ -460,32 +460,25 @@ inline bool SuperNodeGraphBuilder::ConvertCombine(const std::shared_ptr<Operatio
     }
     std::shared_ptr<ConvertOpAttribute> attr  = std::static_pointer_cast<ConvertOpAttribute>(opList[i]->GetOpAttribute());
     if (attr == nullptr) {
-         APASS_LOG_WARN_F(Elements::Operation, "Convert Op %d has no ConvertOpAttribute.", opList[i]->GetOpMagic());
+        APASS_LOG_WARN_F(Elements::Operation, "Convert Op %d has no ConvertOpAttribute.", opList[i]->GetOpMagic());
         return true;
     }
     std::pair<MemoryType, MemoryType> convertPath = attr->GetConvertPath();
-    if (AICmem.count(convertPath.first) > 0 && AIVmem.count(convertPath.second) > 0) {
+    bool isAICtoAIV = (AICmem.count(convertPath.first) > 0 && AIVmem.count(convertPath.second) > 0);
+    bool isAIVtoAIC = (AIVmem.count(convertPath.first) > 0 && AICmem.count(convertPath.second) > 0);
+    if (isAICtoAIV || isAIVtoAIC) {
         for (auto inNode : operationInfo->inGraph_[i]) {
             mergePair.emplace_back(inNode, i);
         }
         return true;
     }
-    if (AIVmem.count(convertPath.first) > 0 && AICmem.count(convertPath.second) > 0) {
-        for (auto outNode : operationInfo->outGraph_[i]) {
-            mergePair.emplace_back(outNode, i);
-        }
-        return true;
+    for (auto inNode : operationInfo->inGraph_[i]) {
+        mergePair.emplace_back(inNode, i);
     }
-    if (opList[i]->GetOpcode() == Opcode::OP_CONVERT) {
-        for (auto inNode : operationInfo->inGraph_[i]) {
-            mergePair.emplace_back(inNode, i);
-        }
-        for (auto outNode : operationInfo->outGraph_[i]) {
-            mergePair.emplace_back(outNode, i);
-        }
-        return true;
+    for (auto outNode : operationInfo->outGraph_[i]) {
+        mergePair.emplace_back(outNode, i);
     }
-    return false;
+    return true;
 }
 
 inline bool SuperNodeGraphBuilder::AssembleCombine(const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*> &opList,
