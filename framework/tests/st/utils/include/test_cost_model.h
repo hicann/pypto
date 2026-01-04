@@ -184,11 +184,11 @@ private:
         std::cout << devProg->workspaceSize << std::endl;
         devProg->l2CacheOffset = machine::GetRA()->GetL2Offset();
         devProg->l2CacheOffset = machine::GetRA()->GetL2Offset();
+        AssignMetaAddr(devProg, h);
         kArgs->workspace = (int64_t *)h.AllocDev(devProg->workspaceSize);
         kArgs->cfgdata = (int64_t *)h.CopyToDev(devProg_);
         kArgs->machineConfig = devProg->devArgs.machineConfig;
         kArgs->toSubMachineConfig = devProg->devArgs.toSubMachineConfig;
-        AssignMetaAddr(devProg, h);
         return;
     }
 

@@ -80,6 +80,11 @@ public:
     inline bool IsEmpty() {
         return (head_ == tail_);
     }
+    
+    inline void ResetEmpty() {
+        head_ = 0;
+        tail_ = 0;
+    }
 
 private:
     alignas(ALIGN_SIZE) std::atomic<uint64_t> head_ = {0};

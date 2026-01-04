@@ -575,13 +575,11 @@ int DeviceRunner::launchDynamicAiCpuInit(rtStream_t aicpuStream, AstKernelArgs *
 }
 
 int DeviceRunner::RunPrepare() {
-    KernelArgs kernelArgs = {};
-    for (uint32_t i = 0; i < args_.nrAic + args_.nrAiv; i++) {
-        kernelArgs.shakeBuffer[SHAK_BUF_DFX_DATA_INDEX] = reinterpret_cast<uint64_t>(perfData_[i]);
-        rtMemcpy((reinterpret_cast<uint8_t *>(args_.sharedBuffer)) + i * SHARED_BUFFER_SIZE,
-            SHARED_BUFFER_SIZE,
-            reinterpret_cast<uint8_t *>(&kernelArgs),
-            sizeof(kernelArgs),
+   for (uint32_t i = 0; i < args_.nrAic + args_.nrAiv; i++) {
+        rtMemcpy((reinterpret_cast<uint8_t *>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) + i * SHARED_BUFFER_SIZE,
+            sizeof(uint64_t),
+            reinterpret_cast<uint8_t *>(&perfData_[i]),
+            sizeof(uint64_t),
             RT_MEMCPY_HOST_TO_DEVICE);
     }
     if (isCapture_) {

@@ -111,7 +111,7 @@ public:
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;
         size_t shmSize = DEVICE_SHM_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum +
             generalSize + stitchPoolSize;
-        uint64_t shmAddr = (uint64_t)devMem.AllocZero(shmSize, CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
+        uint64_t shmAddr = (uint64_t)devMem.AllocDev(shmSize, CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
         devProg->devArgs.startArgsAddr = shmAddr;
         shmAddr += DEV_ARGS_SIZE;
         devProg->devArgs.taskCtrl = shmAddr;
