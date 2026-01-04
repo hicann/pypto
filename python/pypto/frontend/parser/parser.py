@@ -1530,6 +1530,96 @@ class Parser(doc.NodeVisitor):
         # Reuse the assign visiting method to visit the annotated assign node.
         return self._visit_assign(node)
 
+    def _visit_aug_assign(self, node: doc.AugAssign) -> None:
+        """The general augmented assign visiting method.
+
+        This method handles compound assignment statements like +=, -=, *=, etc.
+        It converts them to equivalent binary operations and assignments.
+
+        Parameters
+        ----------
+        node : doc.AugAssign
+            The doc AST augmented assign node.
+
+        Returns
+        -------
+        res : None
+            The visiting result. None.
+
+        Note
+        ----
+        AugAssign node structure:
+            target: expr
+            op: operator (Add, Sub, Mult, Div, etc.)
+            value: expr
+        """
+        # Evaluate the value expression first
+        value_expr = self._eval_expr(node.value)
+        
+        # Handle different target types
+        if isinstance(node.target, doc.Name):
+            # For Name targets (e.g., out += y), get the value directly from context
+            # since node.target has Store context and cannot be evaluated with _eval_expr
+            var_values = self.context.get()
+            if node.target.id not in var_values:
+                raise ParserError(
+                    node.target,
+                    NameError(f"name '{node.target.id}' is not defined"),
+                )
+            target_value = var_values[node.target.id]
+        elif isinstance(node.target, doc.Subscript):
+            # For Subscript targets (e.g., a[i] += y), evaluate the tensor and slice/index
+            tensor = self._eval_expr(node.target.value)
+            slice_obj = self._eval_expr(node.target.slice)
+            
+            # Get the current value from the subscript
+            target_value = tensor[slice_obj]
+        else:
+            raise ParserError(
+                node.target,
+                NotImplementedError(
+                    f"Augmented assignment target type {type(node.target).__name__} is not supported."
+                ),
+            )
+
+        # Perform the binary operation based on the operator type
+        if isinstance(node.op, doc.Add):
+            result = target_value + value_expr
+        elif isinstance(node.op, doc.Sub):
+            result = target_value - value_expr
+        elif isinstance(node.op, doc.Mult):
+            result = target_value * value_expr
+        elif isinstance(node.op, doc.Div):
+            result = target_value / value_expr
+        elif isinstance(node.op, doc.FloorDiv):
+            result = target_value // value_expr
+        elif isinstance(node.op, doc.Mod):
+            result = target_value % value_expr
+        elif isinstance(node.op, doc.Pow):
+            result = target_value ** value_expr
+        elif isinstance(node.op, doc.LShift):
+            result = target_value << value_expr
+        elif isinstance(node.op, doc.RShift):
+            result = target_value >> value_expr
+        elif isinstance(node.op, doc.BitAnd):
+            result = target_value & value_expr
+        elif isinstance(node.op, doc.BitOr):
+            result = target_value | value_expr
+        elif isinstance(node.op, doc.BitXor):
+            result = target_value ^ value_expr
+        elif isinstance(node.op, doc.MatMult):
+            result = target_value @ value_expr
+        else:
+            raise ParserError(
+                node,
+                NotImplementedError(
+                    f"Augmented assignment operator {type(node.op).__name__} is not supported."
+                ),
+            )
+
+        # Assign the result back to the target
+        self._assign_target(node.target, result)
+
     def _visit_expr(self, node: doc.Expr) -> Any:
         """The general expression visiting method.
 

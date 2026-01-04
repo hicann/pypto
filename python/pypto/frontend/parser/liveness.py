@@ -122,6 +122,16 @@ class LivenessAnalyzer(doc.NodeVisitor):
             self.visit(node.value)
         self._visit_assign_target(node.target, is_def=True)
 
+    def visit_aug_assign(self, node: doc.AugAssign):
+        """Visit augmented assignment."""
+        self.current_stmt_id = _get_node_id(node)
+        # Visit the value expression first to record uses
+        self.visit(node.value)
+        # Visit the target to record uses (for reading the current value)
+        self.visit(node.target)
+        # Then record definition on the target (for writing the new value)
+        self._visit_assign_target(node.target, is_def=True)
+
     def visit_for(self, node: doc.For):
         """Visit for loop."""
         stmt_id = _get_node_id(node)
