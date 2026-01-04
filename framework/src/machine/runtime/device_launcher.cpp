@@ -117,6 +117,7 @@ int DeviceLauncher::RunWithProfile(rtStream_t aicoreStream, rtStream_t aicpuStre
             return rc;
         }
         DeviceRunner::Get().SynchronizeDeviceToHostProfData();
+        DeviceRunner::Get().ResetPerData();
     }
     return 0;
 }

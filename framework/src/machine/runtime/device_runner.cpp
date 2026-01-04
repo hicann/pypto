@@ -152,6 +152,16 @@ void DeviceRunner::InitDynamicArgs(DeviceArgs &args) {
     }
 }
 
+void DeviceRunner::ResetPerData() {
+    auto size = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+    for (uint64_t i = 0; i < args_.nrAic + args_.nrAiv; i++) {
+        int rc = rtMemset(perfData_[i], size, 0, size);
+        if (rc != 0) {
+            ALOG_WARN_F("CoreId %lu, rtMemSet failed, rc: %d", i, rc);
+        }
+    }
+}
+
 int DeviceRunner::InitDeviceArgs(DeviceArgs &args) {
     addressMappingTable_[ArchInfo::DAV_2201] = [&args](std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu) {
         std::vector<int64_t> aiv;

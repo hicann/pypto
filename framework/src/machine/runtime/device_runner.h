@@ -70,6 +70,7 @@ public:
         isCapture_ = isCapture;
     }
 
+    void ResetPerData();
     void DumpAiCoreExecutionTimeData();
     void DumpAiCorePmuData();
     void SynchronizeDeviceToHostProfData();
