@@ -10,7 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
-import inspect
+import sys
 from pathlib import Path
 from typing import Sequence, Union, List
 
@@ -37,31 +37,9 @@ def ceil(a: SymInt, b: SymInt) -> SymInt:
     return (a + b - 1) // b
 
 
-def extract_user_backtrace(stack_frames) -> str:
-    result = []
-    for frame in stack_frames:
-        filename = frame.filename
-        lineno = frame.lineno
-
-        # 过滤条件
-        # 1. 排除第三方库（site-packages、python安装目录、<frozen runpy>）
-        # 2. 排除常见的装饰器包装函数（wrapper/decorator）
-        skip_site = "site-packages" in filename or "lib/python" in filename
-        skip_frozen = "<frozen runpy>" in filename
-        skip_func = frame.function in ("wrapper", "decorator")
-
-        if skip_site or skip_frozen or skip_func:
-            continue
-        result.append(f"{(filename)}:{lineno}")
-    return "\n".join(result)
-
-
 def set_source_location(level: int = 1):
-    pypto_impl.SetLocation(
-        str(Path(inspect.stack()[level + 1].filename).resolve()),
-        inspect.stack()[level + 1].lineno,
-        extract_user_backtrace(inspect.stack())
-    )
+    frame = sys._getframe(level + 1)
+    pypto_impl.SetLocation(frame.f_code.co_filename, frame.f_lineno, "")
 
 
 def clear_source_location():
