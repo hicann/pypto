@@ -1304,6 +1304,83 @@ TEST_F(SplitLargeFanoutTensorTest, ComplexOverlap) {
     }
 }
 
+/*
+    输入是8个{16， 656}，输出是{16， 512}, {16， 128}各两个。
+    其中两个输入与两个输出形成一对一，一个输入对应两个输出的和，其余五个输入未被使用
+    拆分后理应得到
+    {16， 656} -> view -> {16， 512}
+    {16， 656} -> view -> {16， 128}
+    {16， 656} -> view -> {16， 512} + {16， 128}
+    {16， 656}
+    {16， 656}
+    {16， 656}
+    {16， 656}
+    {16， 656}
+*/
+void BuildPartialInputUnusedGraph(ComputationalGraphBuilder &G){
+    G.AddTensor(DataType::DT_FP32, {128, 656}, "largeTensor");
+    auto largeTensor = G.GetTensor("largeTensor");
+    largeTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    std::map<std::string, Shape> logicTensors = {
+        {"in1", {16, 656}}, {"in2", {16, 656}}, {"in3", {16, 656}}, {"in4", {16, 656}},
+        {"in5", {16, 656}}, {"in6", {16, 656}}, {"in7", {16, 656}}, {"in8", {16, 656}},
+        {"out11", {16, 512}}, {"out81", {16, 512}},
+        {"out22", {16, 128}}, {"out82", {16, 128}},
+        {"out33", {16, 16}}, {"out83", {16, 16}}
+    };
+    for (const auto& [name, shape] : logicTensors) {
+        G.AddTensor(DataType::DT_FP32, shape, name);
+        auto logicTensor = G.GetTensor(name);
+        logicTensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+    G.SetInCast({"in1", "in2", "in3", "in4", "in5", "in6", "in7", "in8"});
+    G.SetOutCast({"out11", "out22", "out81", "out82"});
+
+    std::vector<std::tuple<std::string, std::string, std::string, Shape>> assembleOps = {
+        {"in1", "largeTensor", "assemble1", {0, 0}}, {"in2", "largeTensor", "assemble2", {16, 0}},
+        {"in3", "largeTensor", "assemble3", {32, 0}}, {"in4", "largeTensor", "assemble4", {48, 0}},
+        {"in5", "largeTensor", "assemble5", {64, 0}}, {"in6", "largeTensor", "assemble6", {80, 0}},
+        {"in7", "largeTensor", "assemble7", {96, 0}}, {"in8", "largeTensor", "assemble8", {112, 0}}
+    };
+    for (const auto& [input, output, opName, offset] : assembleOps) {
+        G.AddOp(Opcode::OP_ASSEMBLE, {input}, {output}, opName);
+        auto assembleOp = G.GetOp(opName);
+        assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset));
+    }
+
+    std::vector<std::tuple<std::string, std::string, std::string, Shape>> viewOps = {
+        {"largeTensor", "out11", "view11", {0, 0}}, {"largeTensor", "out81", "view81", {112, 0}},
+        {"largeTensor", "out22", "view22", {16, 512}}, {"largeTensor", "out82", "view82", {112, 512}}
+    };
+    for (const auto& [input, output, opName, offset] : viewOps) {
+        G.AddOp(Opcode::OP_VIEW, {input}, {output}, opName);
+        auto viewOp = G.GetOp(opName);
+        viewOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, MemoryType::MEM_DEVICE_DDR));
+    }
+}
+
+TEST_F(SplitLargeFanoutTensorTest, TestPartialInputUnused) {
+    ComputationalGraphBuilder G;
+    BuildPartialInputUnusedGraph(G);
+    Function *function = G.GetFunction();
+
+    std::cout << "Build Graph Done." << std::endl;
+    // 单独执行pass
+    npu::tile_fwk::SplitLargeFanoutTensor splitLargeFanoutTensor;
+    splitLargeFanoutTensor.enableMoreSplit = false;
+    splitLargeFanoutTensor.PreCheck(*function);
+    splitLargeFanoutTensor.RunOnFunction(*function);
+    splitLargeFanoutTensor.PostCheck(*function);
+    std::cout << "Run Pass Done." << std::endl;
+
+    const int viewNum = 4;
+    const int assembleNum = 0;
+    auto countResultAfter = CountViewAssemble(*function);
+    EXPECT_EQ(viewNum, countResultAfter[0]) << countResultAfter[0] << "OP_VIEW after pass, should be 4";
+    EXPECT_EQ(assembleNum, countResultAfter[1]) << countResultAfter[1] << "OP_ASSEMBLE after pass, should be 0";
+}
+
 void BuildOneDim(ComputationalGraphBuilder &G, bool shouldSplit){
     int NUM_1 = 1;
     int NUM_15 = 15;
