@@ -40,8 +40,7 @@ public:
     void TearDown() override {
     }
 };
-const Opcode BRCB = Opcode::OP_BRCB;
-std::string prefix = "brcb_idx";
+
 constexpr int64_t K_1 = 1;
 constexpr int64_t K_2 = 2;
 constexpr int64_t K_4 = 4;
@@ -63,10 +62,10 @@ TEST_F(TestAxisCombine, Test1) {
     auto updatedOperations = rootFuncPtr->Operations();
     int64_t brcbCnt = 0;
     for (const auto &op : updatedOperations) {
-        if (op.GetOpcode() == BRCB) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
             ++brcbCnt;
-            if (op.HasAttr(prefix)) {
-                auto idx = op.GetIntAttribute(prefix) - 1;
+            if (op.HasAttr(OpAttributeKey::brcbIdx)) {
+                auto idx = op.GetIntAttribute(OpAttributeKey::brcbIdx) - 1;
                 auto tensor = op.GetIOperands()[idx];
                 EXPECT_TRUE(tensor != nullptr);
                 EXPECT_EQ(tensor->shape[0], K_4);
@@ -91,10 +90,10 @@ TEST_F(TestAxisCombine, Test2) {
     auto updatedOperations = rootFuncPtr->Operations();
     int64_t cnt = 0;
     for (const auto &op : updatedOperations) {
-        if (op.GetOpcode() == BRCB) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
             ++cnt;
-            if (op.HasAttr(prefix)) {
-                auto idx = op.GetIntAttribute(prefix) - 1;
+            if (op.HasAttr(OpAttributeKey::brcbIdx)) {
+                auto idx = op.GetIntAttribute(OpAttributeKey::brcbIdx) - 1;
                 auto tensor = op.GetIOperands()[idx];
                 EXPECT_TRUE(tensor != nullptr);
                 EXPECT_EQ(tensor->shape[1], K_8);
@@ -127,9 +126,9 @@ TEST_F(TestAxisCombine, Test3) {
     // ================== Verify Pass Effect ==================
     auto updatedOperations = rootFuncPtr->Operations();
     for (const auto &op : updatedOperations) {
-        if (op.GetOpcode() == BRCB) {
-            if (op.HasAttr(prefix)) {
-                auto idx = op.GetIntAttribute(prefix);
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
+            if (op.HasAttr(OpAttributeKey::brcbIdx)) {
+                auto idx = op.GetIntAttribute(OpAttributeKey::brcbIdx);
                 auto tensor = op.GetIOperands()[idx];
                 EXPECT_TRUE(tensor != nullptr);
                 EXPECT_EQ(tensor->shape[0], K_4);

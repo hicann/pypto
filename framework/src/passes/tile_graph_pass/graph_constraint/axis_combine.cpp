@@ -21,9 +21,7 @@
 
 namespace npu {
 namespace tile_fwk {
-const Opcode BRCB = Opcode::OP_BRCB;
 constexpr size_t INPUT_SIZE = 2;
-std::string prefix = "brcb_idx";
 const std::unordered_set<Opcode> NEED_BRC_OPS{
     Opcode::OP_ADD,
     Opcode::OP_SUB,
@@ -40,7 +38,7 @@ bool InsertCondition(const Opcode &code) {
     return false;
 }
 
-void AlignedIfNeed(const int64_t &padValue, int64_t &currentDim) {
+void AlignedIfNeed(int64_t &currentDim, int64_t &padValue) {
     if (padValue == 0) {
         APASS_LOG_ERROR_F(Elements::Config, "invalid pad base %d.", padValue);
         return;
@@ -76,14 +74,14 @@ Status AlignBroadCastOpInputs(Function &function, Operation &op) {
             if (GetPaddingValue(srcTensor, padValue) != SUCCESS) {
                 return FAILED;
             }
-            AlignedIfNeed(padValue, alignedShape.back());
+            AlignedIfNeed(alignedShape.back(), padValue);
             auto alignedTensor = std::make_shared<LogicalTensor>(function, srcTensor->Datatype(), alignedShape, srcTensor->Format());
             alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-            auto &brcb = function.AddRawOperation(BRCB, {srcTensor}, {alignedTensor});
+            auto &brcb = function.AddRawOperation(Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
             brcb.UpdateSubgraphID(op.GetSubgraphID());
             srcTensor->RemoveConsumer(op);
             op.ReplaceInputOperand(srcTensor, alignedTensor);
-            op.SetAttribute(prefix, idx + 1);
+            op.SetAttribute(OpAttributeKey::brcbIdx, idx + 1);
             inputTensor[idx] = alignedTensor;
         }
     }

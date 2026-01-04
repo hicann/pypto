@@ -35,7 +35,6 @@ constexpr int64_t CUBE_PAD_VALUE = 16;
 constexpr int64_t CUBE_PAD_INT8_VALUE = 32;
 const std::vector<bool> AXIS_COMBINED = {true};
 const std::vector<bool> BROADCAST_AXIS_COMBINED = {true, true};
-const Opcode BRCB = Opcode::OP_BRCB;
 const int64_t BRCB_SECOND_LAST_BASE = 8;
 const size_t LAST_SECOND_AXIS = 2;
 int64_t Pad(int64_t dim, int64_t padValue) {
@@ -496,6 +495,14 @@ int64_t PadLocalBuffer::ProcessBroadcastForAxisCombine(Operation &op, size_t blo
     return (dimSize - 1);
 }
 
+void AlignedRawTensorIfNeed(LogicalTensorPtr &in, int64_t pos, const int64_t base) {
+    if (in == nullptr || pos < 0 || pos >= static_cast<int64_t>(in->tensor->rawshape.size())) {
+        return;
+    }
+    int64_t padDim = Pad(in->tensor->rawshape[pos], base);
+    in->tensor->rawshape[pos] = padDim;
+}
+
 void PadLocalBuffer::PadVectorForAxisCombine(Operation &op, LogicalTensorPtr &in, std::unordered_set<std::shared_ptr<RawTensor>> &visitedRaw) {
     if (in->shape.empty()) {
         APASS_LOG_ERROR_F(Elements::Operation, "Vector Op %d %s input %d shape size is less than 2; Please check the input size. %s", op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
@@ -511,50 +518,40 @@ void PadLocalBuffer::PadVectorForAxisCombine(Operation &op, LogicalTensorPtr &in
     in->oriShape = in->shape;
     in->tensor->oriRawshape = in->tensor->rawshape;
     auto producerOp = *(in->GetProducers().begin());
-    if (producerOp->GetOpcode() == BRCB) {
+    if (producerOp != nullptr && producerOp->GetOpcode() == Opcode::OP_BRCB) {
         if (lastIdx == 0 && in->tensor->rawshape[lastIdx] != 1) {
             return;
         }
-        int64_t secondLastDim = Pad(in->tensor->rawshape[lastIdx - 1], BRCB_SECOND_LAST_BASE);
-        in->tensor->rawshape[lastIdx - 1] = secondLastDim;
+        AlignedRawTensorIfNeed(in, lastIdx - 1, BRCB_SECOND_LAST_BASE);
     }
     if (calcType == OpCalcType::REDUCE) {
-        int64_t shapeAfterPad = Pad(in->tensor->rawshape[lastIdx], paddingValue);
-        in->tensor->rawshape[lastIdx] = shapeAfterPad;
+        AlignedRawTensorIfNeed(in, lastIdx, paddingValue);
         return;
     }
-    if (op.GetOpcode() == BRCB) {
+    if (op.GetOpcode() == Opcode::OP_BRCB) {
         if (lastIdx == 0 && in->tensor->rawshape[lastIdx] != 1) {
             return;
         }
-        int64_t secondLastDim = Pad(in->tensor->rawshape[lastIdx - 1], BRCB_SECOND_LAST_BASE);
-        in->tensor->rawshape[lastIdx - 1] = secondLastDim;
+        AlignedRawTensorIfNeed(in, lastIdx - 1, BRCB_SECOND_LAST_BASE);
         for (auto &out : op.GetOOperands()) {
-            int64_t outSecondLastDim = Pad(out->tensor->rawshape[lastIdx - 1], BRCB_SECOND_LAST_BASE);
-            int64_t outLastDim = Pad(out->tensor->rawshape[lastIdx], paddingValue);
-            out->tensor->rawshape[lastIdx - 1] = outSecondLastDim;
-            out->tensor->rawshape[lastIdx] = outLastDim;
+            AlignedRawTensorIfNeed(out, lastIdx - 1, BRCB_SECOND_LAST_BASE);
+            AlignedRawTensorIfNeed(out, lastIdx, paddingValue);
             visitedRaw.emplace(out->tensor);
         }
     }
     if (calcType == OpCalcType::BROADCAST) {
         auto dimIdx = ProcessBroadcastForAxisCombine(op, paddingValue);
-        if (dimIdx < 0) {
-            return;
-        }
-        in->tensor->rawshape[dimIdx] = Pad(in->tensor->rawshape[dimIdx], paddingValue);
+        AlignedRawTensorIfNeed(in, dimIdx, paddingValue);
         return;
     }
-    if (calcType == OpCalcType::ELMWISE || calcType == OpCalcType::MOVE_IN || calcType == OpCalcType::MOVE_OUT) {
+    if (calcType == OpCalcType::ELMWISE || calcType == OpCalcType::MOVE_IN || calcType == OpCalcType::MOVE_OUT ||
+            (producerOp != nullptr && OpcodeManager::Inst().GetOpCalcType(producerOp->GetOpcode()) == OpCalcType::BROADCAST)) {
         if (lastIdx > 0 && in->tensor->rawshape[lastIdx] == 1) {
-            int64_t lastDim = Pad(in->tensor->rawshape[lastIdx - 1], paddingValue);
-            in->tensor->rawshape[lastIdx - 1] = lastDim;
+            AlignedRawTensorIfNeed(in, lastIdx - 1, paddingValue);
             return;
         }
     }
-    int64_t lastDim = static_cast<int64_t>(in->tensor->rawshape[lastIdx]);
-    int64_t shapeAfterPad = Pad(lastDim, paddingValue);
-    in->tensor->rawshape[lastIdx] = shapeAfterPad;
+    AlignedRawTensorIfNeed(in, lastIdx, paddingValue);
 }
 
 Status PadLocalBuffer::RunOnFunction(Function &function) {

@@ -28,8 +28,6 @@
 #include <string>
 
 using namespace npu::tile_fwk;
-const Opcode BRCB = Opcode::OP_BRCB;
-std::string brcb_prefix = "brcb_idx";
 constexpr size_t K_1 = 1;
 constexpr size_t K_4 = 4;
 constexpr size_t K_8 = 8;
@@ -953,9 +951,9 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_transpose) {
 
 TEST_F(TestPadLocalBuffer, axiscombine) {
     ComputationalGraphBuilder graph;
-    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4,127}, "t1"), true);
-    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4,1}, "t2"), true);
-    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4,127}, "t3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4,127}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4,1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4,127}, MemoryType::MEM_UB, "t3"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_ADD, {"t1","t2"}, {"t3"}, "add", true), true);
     auto *rootFuncPtr = graph.GetFunction();
     config::SetOperationConfig("COMBINE_AXIS", true);
@@ -967,10 +965,10 @@ TEST_F(TestPadLocalBuffer, axiscombine) {
     auto updatedOperations = rootFuncPtr->Operations();
     int64_t cnt = 0;
     for (const auto &op : updatedOperations) {
-        if (op.GetOpcode() == BRCB) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
             ++cnt;
-            if (op.HasAttr(brcb_prefix)) {
-                auto idx = op.GetIntAttribute(brcb_prefix) - 1;
+            if (op.HasAttr(OpAttributeKey::brcbIdx)) {
+                auto idx = op.GetIntAttribute(OpAttributeKey::brcbIdx) - 1;
                 auto tensor = op.GetIOperands()[idx];
                 EXPECT_TRUE(tensor != nullptr);
                 EXPECT_EQ(tensor->shape[0], K_4);
@@ -981,4 +979,33 @@ TEST_F(TestPadLocalBuffer, axiscombine) {
         }
     }
     EXPECT_EQ(cnt, K_1);
+}
+
+TEST_F(TestPadLocalBuffer, axiscombine2) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {32,4,1}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {32,4,1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {32,4,1}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_DIV, {"t1","t2"}, {"t3"}, "div", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {32,4,1,1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "reshape", true), true);
+    config::SetOperationConfig("COMBINE_AXIS", true);
+    auto *rootFuncPtr = graph.GetFunction();
+    AxisCombine axisCombineTest;
+    EXPECT_EQ(axisCombineTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    // ================== Verify Pass Effect ==================
+    auto updatedOperations = rootFuncPtr->Operations();
+    int64_t cnt = 0;
+    for (const auto &op : updatedOperations) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
+            ++cnt;
+        }
+    }
+    EXPECT_EQ(cnt, 0);
+    auto t3 = graph.GetTensor("t3");
+    auto shape = t3->GetRawTensor()->GetRawShape();
+    EXPECT_EQ(shape[shape.size()-1], K_1);
+    EXPECT_EQ(shape[shape.size()-2], K_8);
 }
