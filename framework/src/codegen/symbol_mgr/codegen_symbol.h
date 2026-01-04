@@ -32,6 +32,7 @@ const std::string TILE_TENSOR = "TileTensor";
 const std::string LAYOUT = "Layout";
 const std::string SCOPE_NAMESPACE = "Hardware";
 const std::string DIM = "Dim";
+const std::string COORD = "Coord";
 using BufferType = enum OperandType;
 using AllocKey = std::tuple<BufferType, int64_t /*RangeStart*/, int64_t /*RangeEnd*/>;
 

@@ -27,8 +27,8 @@ enum BroadcastOperand : int64_t {
 };
 
 struct PrintScatterElemParam {
-    int axis;
-    int scatterMode;
+    const int axis;
+    const int scatterMode;
     const std::string &dVar;
     const std::string &s0Var;
     const std::string &s1Var;
@@ -38,8 +38,8 @@ struct PrintScatterElemParam {
 };
 
 struct PrintScatterParam {
-    int axis;
-    int scatterMode;
+    const int axis;
+    const int scatterMode;
     const std::string &dVar;
     const std::string &s1Var;
     const std::string &s2Var;
@@ -50,7 +50,7 @@ struct PrintScatterParam {
 };
 
 struct PrintIndexAddParam {
-    int axis;
+    const int axis;
     const std::string &dstVar;
     const std::string &srcVar;
     const std::string &indicesVar;
@@ -91,9 +91,9 @@ struct PrintUnaryTmpBuffParam {
 };
 
 struct PrintMemCopyWithL0CParam {
-    unsigned uf;
-    unsigned gmIdx;
-    unsigned localIdx;
+    const unsigned uf;
+    const unsigned gmIdx;
+    const unsigned localIdx;
     const std::vector<std::string> &addrTypeHead;
     const std::vector<std::string> &addrExpr;
     const std::vector<int64_t> &gmShape;
@@ -102,9 +102,9 @@ struct PrintMemCopyWithL0CParam {
 };
 
 struct PrintMemCopyWithL1Param {
-    unsigned uf;
-    unsigned gmIdx;
-    unsigned localIdx;
+    const unsigned uf;
+    const unsigned gmIdx;
+    const unsigned localIdx;
     const std::vector<std::string> &addrTypeHead;
     const std::vector<std::string> &addrExpr;
     const std::vector<int64_t> &gmShape;
@@ -113,12 +113,12 @@ struct PrintMemCopyWithL1Param {
 };
 
 struct PrintMemCopyWithUBParam {
-    unsigned gmIdx;
-    unsigned localIdx;
+    const unsigned gmIdx;
+    const unsigned localIdx;
     const std::vector<std::string> &addrTypeHead;
     std::vector<std::string> &addrExpr;
     std::vector<std::string> &dataTypeExpr;
-    bool isSpillIntoGM;
+    const bool isSpillIntoGM;
 };
 
 struct PrintGatherParam {
@@ -169,7 +169,7 @@ struct PrintTransposeDataMoveParam {
 };
 
 struct PrintGatherEleParam {
-    int axis;
+    const int axis;
     const std::string &dVar;
     const std::string &s0Var;
     const std::string &s1Var;
@@ -195,8 +195,8 @@ struct PrintIndexOutCastParam {
 };
 
 struct PrintCumSumParam {
-    int axis;
-    bool flag;
+    const int axis;
+    const bool flag;
     const std::string &dVar;
     const std::string &inputVar;
     std::vector<int64_t> &inputRawShape;

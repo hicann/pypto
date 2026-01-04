@@ -33,7 +33,7 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           {   Opcode::OP_RESHAPE_COPY_OUT,        [this]() { return GenReshapeCopyOut(); }},
           {Opcode::OP_L1_TO_FIX_QUANT_PRE,             [this]() { return GenMemL1ToFB(); }},
           {       Opcode::OP_GATHER_IN_UB,            [this]() { return GenGatherInUB(); }},
-          {             Opcode::OP_GATHER,          [this]() { return GenGatherOp(); }},
+          {             Opcode::OP_GATHER,              [this]() { return GenGatherOp(); }},
           // L1 <-> GM/BT/L1
           {         Opcode::OP_L1_COPY_IN,           [this]() { return GenMemL1CopyIn(); }},
           {        Opcode::OP_L1_COPY_OUT,          [this]() { return GenMemL1CopyOut(); }},
@@ -63,7 +63,7 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           // lOC -> UB
           {        Opcode::OP_L0C_COPY_UB,     [this]() { return GenL0CToUBTileTensor(); }},
 
-          {      Opcode::OP_UB_COPY_L1,      [this]() { return GenUBToL1TileTensor(); }},
+          {         Opcode::OP_UB_COPY_L1,      [this]() { return GenUBToL1TileTensor(); }},
           {      Opcode::OP_UB_COPY_ND2NZ, [this]() { return GenUBToUBND2NZTileTensor(); }},
 }),
       unaryOps_({
@@ -561,6 +561,12 @@ std::string CodeGenOpCloudNPU::GenCVSyncWaitOp() const {
     std::ostringstream oss;
     oss << "wait_intra_block(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ");\n";
     return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::PrintCoord(size_t dim, const std::string &coord) const {
+    std::string ret = COORD;
+    ret.append(std::to_string(dim)).append(DIM).append(coord);
+    return ret;
 }
 
 } // namespace npu::tile_fwk
