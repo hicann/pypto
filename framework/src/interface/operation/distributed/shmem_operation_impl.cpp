@@ -234,6 +234,7 @@ void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* grou
 
     int32_t hcclGroupIndex = static_cast<int32_t>(CommGroupRecorder::GetInstance().Input(std::string(group)));
     auto [rankSize, tileCount] = GetRankSizeAndTileCount();
+    (void)tileCount;
     SymbolicScalar thisRank = GetHcclRankId(hcclGroupIndex);
 
     auto shmemSignalTile = View(shmemSignal, {rankSize, 1, 1, 8}, std::vector<SymbolicScalar>{0, 0, 0, 0});

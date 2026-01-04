@@ -37,25 +37,9 @@ public:
         SHMEM_WAIT_UNTIL = 0,
         TASK_TYPE_NUM,
     };
-    using InitCallBack = std::function<void(DynDeviceTask *)>;
-    using EnqueueOpCallBack = std::function<void(uint64_t, const npu::tile_fwk::dynamic::DevRelocVector<int32_t> &)>;
-    using PollCompletedCallBack = std::function<void(std::vector<uint64_t> &)>;
 
-    inline void TaskCallBackRegister() {}
-
-    AicpuTaskManager() {
-        TaskCallBackResigter<npu::tile_fwk::Distributed::ShmemWaitUntil>(TaskType::SHMEM_WAIT_UNTIL, shmemWaitUntil_);
-    };
+    AicpuTaskManager() {};
     ~AicpuTaskManager() {};
-
-    template <typename T>
-    inline void TaskCallBackResigter(TaskType taskType, T &obj) {
-        auto index = static_cast<uint32_t>(taskType);
-        initCallBack_[index] = std::bind(&T::Init, &obj, std::placeholders::_1);
-        enqueueOpCallBack_[index] =
-            std::bind(&T::EnqueueOp, &obj, std::placeholders::_1, std::placeholders::_2);
-        pollCompletedCallBack_[index] = std::bind(&T::PollCompleted, &obj, std::placeholders::_1);
-    }
 
     // 每个AICPU都会调用
     inline void TaskEnqueue(uint64_t taskId) {
@@ -66,13 +50,12 @@ public:
     }
 
     // 仅AICPU_0会调用
-    void Init(DynDeviceTask *deviceTask) {
+     inline int32_t Init(DynDeviceTask *deviceTask) {
         curDevTask_ = deviceTask;
         funcDataList_ = reinterpret_cast<DynFuncData*>(&deviceTask->GetDynFuncDataList()->At(0));
         readyQueue_ = reinterpret_cast<ReadyCoreFunctionQueue *>(deviceTask->devTask.readyAicpuFunctionQue);
-        for (auto &init : initCallBack_) {
-            init(deviceTask);
-        }
+        shmemWaitUntil_.Init(deviceTask);
+        return PrepareAicpuTask();
     }
 
     // 仅AICPU_0会调用
@@ -87,24 +70,18 @@ public:
         ReadyQueueUnLock();
 
         for (uint32_t i = 0; i < taskCount; ++i) {
-            TaskDispatch(readyQueue_->elem[taskIdx + i]);
+            // 暂不处理返回值 修改aicoremanager时处理返回值
+            (void)TaskDispatch(readyQueue_->elem[taskIdx + i]);
         }
         return taskCount;
     }
 
-    inline std::vector<uint64_t> TaskPoll() {
-        std::vector<uint64_t> completed;
-        for (auto &pollCompleted : pollCompletedCallBack_) {
-            pollCompleted(completed);
-        }
-        return completed;
+    inline int32_t TaskPoll(std::vector<uint64_t> &completed) {
+        return shmemWaitUntil_.PollCompleted(completed);
     }
 
     inline bool Finished() {
-        ReadyQueueLock();
-        auto fin = readyQueue_->head == readyQueue_->tail;
-        ReadyQueueUnLock();
-        return fin;
+        return shmemWaitUntil_.runingTaskQueue_.IsEmpty();
     }
 
 private:
@@ -131,26 +108,35 @@ private:
         return taskType;
     }
 
-    inline void TaskDispatch(uint64_t taskId) {
+    inline int32_t TaskDispatch(uint64_t taskId) {
+        int32_t ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
         auto taskType = GetTaskType(taskId);
         if (taskType < TaskType::TASK_TYPE_NUM) {
-            auto enqueueOp = enqueueOpCallBack_[static_cast<uint64_t>(taskType)];
-            auto funcId = FuncID(taskId);
-            auto opIndex = TaskID(taskId);
-            auto callList = curDevTask_->dynFuncDataCacheList[funcId].calleeList;
-            auto &code = curDevTask_->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
-            enqueueOp(taskId, code);
+            ret = shmemWaitUntil_.EnqueueOp(taskId);
         }
+        return ret;
+    }
+
+    inline int32_t PrepareAicpuTask() {
+        for (uint64_t funcId = 0; funcId < curDevTask_->dynFuncDataCacheListSize; ++funcId) {
+            auto callList = curDevTask_->dynFuncDataCacheList[funcId].calleeList;
+            for (size_t opIndex = 0; opIndex < curDevTask_->dynFuncDataCacheList[funcId].devFunc->GetOperationSize(); ++opIndex) {
+                auto coreType = curDevTask_->cceBinary[callList[opIndex]].coreType;
+                if (unlikely(coreType != static_cast<int>(MachineType::AICPU))) continue;
+                uint32_t taskId = MakeTaskID(funcId, opIndex);
+                auto &code = curDevTask_->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
+                auto ret = shmemWaitUntil_.PrepareTask(taskId, code);
+                if (ret != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
+                    return ret;
+                }
+            }
+        }
+        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
     }
 
     ReadyCoreFunctionQueue *readyQueue_{nullptr};
 
     npu::tile_fwk::Distributed::ShmemWaitUntil shmemWaitUntil_;
-
-    std::array<InitCallBack, TaskType::TASK_TYPE_NUM> initCallBack_;
-    std::array<EnqueueOpCallBack, TaskType::TASK_TYPE_NUM> enqueueOpCallBack_;
-    std::array<PollCompletedCallBack, TaskType::TASK_TYPE_NUM> pollCompletedCallBack_;
-
     DynDeviceTask *curDevTask_;
     DynFuncData *funcDataList_;
 };
