@@ -27,9 +27,9 @@ def test_adds_onboard():
     tile_shape = (32, 32)
     pypto.runtime._device_init()
 
-    input1 = pypto.tensor(shape, pypto.DataType.DT_INT32, "PTO_TENSOR_input1")
+    input1 = pypto.tensor(shape, pypto.DT_INT32, "PTO_TENSOR_input1")
     input2 = 1
-    output = pypto.tensor(shape, pypto.DataType.DT_INT32, "PTO_TENSOR_output")
+    output = pypto.tensor(shape, pypto.DT_INT32, "PTO_TENSOR_output")
 
     b_loop_num = math.ceil(shape[0] / view_shape[0])
     s_loop_num = math.ceil(shape[1] / view_shape[1])

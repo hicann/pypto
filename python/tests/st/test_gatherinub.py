@@ -229,11 +229,11 @@ def test_vector_operator_gatherinub():
     offsetsShapes = [1, cfg.topk_count]
     pageTableShapes = [1, cfg.num_logical_blocks]
     dstShapes = [cfg.topk_count, cfg.hidden_dim]
-    src = pypto.tensor(srcShapes, pypto.DataType.DT_FP16, "src")
-    offsets = pypto.tensor(offsetsShapes, pypto.DataType.DT_INT32, "offsets")
+    src = pypto.tensor(srcShapes, pypto.DT_FP16, "src")
+    offsets = pypto.tensor(offsetsShapes, pypto.DT_INT32, "offsets")
     pageTable = pypto.tensor(
-        pageTableShapes, pypto.DataType.DT_INT32, "pageTable")
-    dst = pypto.tensor(dstShapes, pypto.DataType.DT_FP16, "dst")
+        pageTableShapes, pypto.DT_INT32, "pageTable")
+    dst = pypto.tensor(dstShapes, pypto.DT_FP16, "dst")
     with pypto.function("MAIN", src, offsets, pageTable, dst):
         for _ in pypto.loop(1, name="b0", idx_name="bidx"):
             pypto.set_vec_tile_shapes(32, 64)

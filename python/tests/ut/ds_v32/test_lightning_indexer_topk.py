@@ -109,7 +109,7 @@ def lightning_indexer_topk_impl(args: LightningIndexerInputs):
     n2 = key.shape[SHAPE_DIM2]
 
     qk_dtype = query.dtype
-    scale_dtype = q_scale.dtype if is_quant else pypto.DataType.DT_FP16
+    scale_dtype = q_scale.dtype if is_quant else pypto.DT_FP16
     w_dtype = weights.dtype
 
     group = index_n1 // n2
@@ -127,7 +127,7 @@ def lightning_indexer_topk_impl(args: LightningIndexerInputs):
     weight_2d = pypto.tensor([b * s1 * index_n1, 1], w_dtype, "weight2D")
     local_sum = pypto.tensor(
         [max_batch * max_s1 * max_n2, max_s2],
-        pypto.DataType.DT_FP32,
+        pypto.DT_FP32,
         "localSum",
     )
 
@@ -274,7 +274,7 @@ def lightning_indexer_topk_impl(args: LightningIndexerInputs):
                         mm_res = pypto.matmul(
                             cur_q,
                             cur_k,
-                            pypto.DataType.DT_INT32,
+                            pypto.DT_INT32,
                             a_trans=False,
                             b_trans=True,
                         )
@@ -297,18 +297,18 @@ def lightning_indexer_topk_impl(args: LightningIndexerInputs):
                     pypto.set_vec_tile_shapes(*tile_config.weight_tile)
 
                     cur_w = pypto.view(weight_2d, [group, 1], [q_offset, 0])
-                    w_f16 = pypto.cast(cur_w, pypto.DataType.DT_FP16)
+                    w_f16 = pypto.cast(cur_w, pypto.DT_FP16)
 
                     pypto.set_vec_tile_shapes(*tile_config.v1_tile)
 
                     cur_k_scale = pypto.concat(k_scale_concat_srcs, 0)
                     mm_res_i32 = pypto.concat(mm_res_quant_concat_srcs, -1)
                     mm_res_fp32 = (
-                        pypto.cast(mm_res_i32, pypto.DataType.DT_FP32)
+                        pypto.cast(mm_res_i32, pypto.DT_FP32)
                         * AVOID_FP32_TO_FP16_OVERFLOW_SCALE
                     )
                     mm_res_fp16 = pypto.cast(
-                        mm_res_fp32, pypto.DataType.DT_FP16
+                        mm_res_fp32, pypto.DT_FP16
                     )
                     mm_res_dequant = (
                         mm_res_fp16
@@ -319,7 +319,7 @@ def lightning_indexer_topk_impl(args: LightningIndexerInputs):
                     mul_res = relu_res * w_f16
 
                     sum_res = pypto.sum(
-                        pypto.cast(mul_res, pypto.DataType.DT_FP32),
+                        pypto.cast(mul_res, pypto.DT_FP32),
                         0,
                         True
                     )
@@ -532,7 +532,7 @@ def lightning_indexer_topk_impl(args: LightningIndexerInputs):
                                 topk_value_pad = pypto.full(
                                     [1, 1, 1, selected_count],
                                     pad_value,
-                                    pypto.DataType.DT_FP32,
+                                    pypto.DT_FP32,
                                     valid_shape=[
                                         1,
                                         1,

@@ -36,10 +36,10 @@ def indexadd_2dim_comm_test_body(indexadd_para, test_func):
     value = indexadd_para.value
     pypto.runtime._device_init()
 
-    src_tensor = pypto.tensor(src_shape, pypto.DataType.DT_FP32, "PTO_TENSOR_SRC")
-    index_tensor = pypto.tensor(index_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_INDEX")
-    self_tensor = pypto.tensor(self_shape, pypto.DataType.DT_FP32, "PTO_TENSOR_SELF")
-    dst_tensor = pypto.tensor(self_shape, pypto.DataType.DT_FP32, "PTO_TENSOR_DST")
+    src_tensor = pypto.tensor(src_shape, pypto.DT_FP32, "PTO_TENSOR_SRC")
+    index_tensor = pypto.tensor(index_shape, pypto.DT_INT32, "PTO_TENSOR_INDEX")
+    self_tensor = pypto.tensor(self_shape, pypto.DT_FP32, "PTO_TENSOR_SELF")
+    dst_tensor = pypto.tensor(self_shape, pypto.DT_FP32, "PTO_TENSOR_DST")
 
     b_loop_num = math.ceil(src_shape[0] / view_shape[0])
     s_loop_num = math.ceil(src_shape[1] / view_shape[1])

@@ -82,7 +82,7 @@ def bytes_of(dtype: DataType) -> int:
 
     Examples
     --------
-    >>> print(pypto.bytes_of(pypto.DataType.DT_FP32))
+    >>> print(pypto.bytes_of(pypto.DT_FP32))
         4
     """
     # implementation

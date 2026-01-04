@@ -111,16 +111,16 @@ def k_nope_quant(x: pypto.Tensor) -> Tuple[pypto.Tensor, pypto.Tensor]:
         The input is expected to be split into 4 chunks along the last dimension
         for per-channel quantization.
     """
-    x_fp32 = pypto.cast(x, pypto.DataType.DT_FP32)
+    x_fp32 = pypto.cast(x, pypto.DT_FP32)
     abs_res = pypto.abs(x_fp32)
     max_value = pypto.amax(abs_res, -1, keepdim=True)
-    scale_quant = pypto.div(pypto.full(max_value.shape, 127.0, pypto.DataType.DT_FP32), max_value)
+    scale_quant = pypto.div(pypto.full(max_value.shape, 127.0, pypto.DT_FP32), max_value)
     out_fp32 = pypto.mul(x_fp32, scale_quant)
-    out_int32 = pypto.cast(out_fp32, pypto.DataType.DT_INT32, pypto.CastMode.CAST_RINT)
-    out_half = pypto.cast(out_int32, pypto.DataType.DT_FP16, pypto.CastMode.CAST_ROUND)
-    out_int8 = pypto.cast(out_half, pypto.DataType.DT_INT8, pypto.CastMode.CAST_TRUNC)
+    out_int32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
+    out_half = pypto.cast(out_int32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
+    out_int8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC)
 
-    scale_de_quant = pypto.div(pypto.full(scale_quant.shape, 1.0, pypto.DataType.DT_FP32), scale_quant)
+    scale_de_quant = pypto.div(pypto.full(scale_quant.shape, 1.0, pypto.DT_FP32), scale_quant)
     return out_int8, scale_de_quant
 
 
@@ -144,18 +144,18 @@ def rms_norm(input_tensor: pypto.Tensor, gamma: pypto.Tensor, epsilon: float) ->
         The normalization is performed along the last dimension.
         Computation is done in FP32 for numerical stability.
     """
-    input_fp32 = pypto.cast(input_tensor, pypto.DataType.DT_FP32)
+    input_fp32 = pypto.cast(input_tensor, pypto.DT_FP32)
     dim = len(input_tensor.shape)
     shape = [1] * dim
     shape[dim - 1] = gamma.shape[0]
     gamma_cast = pypto.reshape(gamma, shape)
-    gamma_fp32 = pypto.cast(gamma_cast, pypto.DataType.DT_FP32)
+    gamma_fp32 = pypto.cast(gamma_cast, pypto.DT_FP32)
     y = pypto.mul(input_fp32, input_fp32)
     y = pypto.mul(y, 1.0 / input_tensor.shape[dim - 1])
     y = pypto.sum(y, -1, keepdim=True)
     y = pypto.add(y, epsilon)
     y = pypto.sqrt(y)
-    ones_vector = pypto.full(y.shape, 1.0, pypto.DataType.DT_FP32)
+    ones_vector = pypto.full(y.shape, 1.0, pypto.DT_FP32)
     y = pypto.div(ones_vector, y)
     y = pypto.mul(input_fp32, y)
     y = pypto.mul(gamma_fp32, y)
@@ -191,7 +191,7 @@ def quant(
         For symmetric quantization, scale = max(|input|) / 127.0
         For asymmetric quantization, scale = (max - min) / 255.0
     """
-    input_fp32 = pypto.cast(input_tensor, pypto.DataType.DT_FP32)
+    input_fp32 = pypto.cast(input_tensor, pypto.DT_FP32)
     if has_smooth_factor:
         input_fp32 = pypto.mul(input_fp32, smooth_factor)
     if is_symmetry:
@@ -199,9 +199,9 @@ def quant(
         max_value = pypto.amax(abs_res, -1, keepdim=True)
         scale_quant = scalar_div(max_value, 127.0, True)
         out_fp32 = pypto.mul(input_fp32, scale_quant)
-        out_int32 = pypto.cast(out_fp32, pypto.DataType.DT_INT32, pypto.CastMode.CAST_RINT)
-        out_half = pypto.cast(out_int32, pypto.DataType.DT_FP16, pypto.CastMode.CAST_ROUND)
-        out_int8 = pypto.cast(out_half, pypto.DataType.DT_INT8, pypto.CastMode.CAST_TRUNC)
+        out_int32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
+        out_half = pypto.cast(out_int32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
+        out_int8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC)
         scale_de_quant = scalar_div(scale_quant, 1.0, True)
         return out_int8, scale_de_quant
     else:
@@ -211,9 +211,9 @@ def quant(
         offset = pypto.sub(127.0, pypto.div(max_value, scale_de_quant))
         scale_quant = scalar_div(max_value, 1.0, True)
         out_fp32 = pypto.mul(input_fp32, scale_quant)
-        out_int32 = pypto.cast(out_fp32, pypto.DataType.DT_INT32, pypto.CastMode.CAST_RINT)
-        out_half = pypto.cast(out_int32, pypto.DataType.DT_FP16, pypto.CastMode.CAST_ROUND)
-        out_int8 = pypto.cast(out_half, pypto.DataType.DT_INT8, pypto.CastMode.CAST_TRUNC)
+        out_int32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
+        out_half = pypto.cast(out_int32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
+        out_int8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC)
         return out_int8, scale_de_quant
 
 
@@ -238,7 +238,7 @@ def dequant(
         Dequantization formula: output = (input * scale) * w_scale
         The computation is done in FP32, then cast to target dtype.
     """
-    dequant_res = pypto.cast(input_tensor, pypto.DataType.DT_FP32)
+    dequant_res = pypto.cast(input_tensor, pypto.DT_FP32)
     dequant_res = dequant_res * scale
     dequant_res = dequant_res * w_scale
     return pypto.cast(dequant_res, dtype)
@@ -308,9 +308,9 @@ def rope_v2(
     x_dtype = x.dtype
 
     pypto.set_vec_tile_shapes(tile_config.two_dim[0], tile_config.two_dim[1])
-    cast_x = pypto.cast(x, pypto.DataType.DT_FP32)
-    cast_cos = pypto.cast(cos, pypto.DataType.DT_FP32)
-    cast_sin = pypto.cast(sin, pypto.DataType.DT_FP32)
+    cast_x = pypto.cast(x, pypto.DT_FP32)
+    cast_cos = pypto.cast(cos, pypto.DT_FP32)
+    cast_sin = pypto.cast(sin, pypto.DT_FP32)
 
     pypto.set_vec_tile_shapes(*tile_config.three_dim)
     x_view = pypto.reshape(cast_x, [seq_size, d_r // 2, 2])
@@ -344,11 +344,11 @@ def rope_3d_v2(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.T
     assert len(x.shape) == 3 and len(cos.shape) == 2 and len(sin.shape) == 2
 
     pypto.set_vec_tile_shapes(1, 64)
-    cast_cos = pypto.cast(cos, pypto.DataType.DT_FP32)
-    cast_sin = pypto.cast(sin, pypto.DataType.DT_FP32)
+    cast_cos = pypto.cast(cos, pypto.DT_FP32)
+    cast_sin = pypto.cast(sin, pypto.DT_FP32)
 
     pypto.set_vec_tile_shapes(1, 64, 64)
-    cast_x = pypto.cast(x, pypto.DataType.DT_FP32)
+    cast_x = pypto.cast(x, pypto.DT_FP32)
     cast_cos = pypto.reshape(cast_cos, [x.shape[0], 1, x.shape[2]])
     cast_sin = pypto.reshape(cast_sin, [x.shape[0], 1, x.shape[2]])
 
@@ -420,8 +420,8 @@ def pre_compute_2d(
     q_lora_rank = w_dq.shape[1]
 
     dtype = token_x.dtype
-    dtype_quant_a_out = pypto.DataType.DT_INT32 if is_quant_a else dtype
-    dtype_quant_b_out = pypto.DataType.DT_INT32 if is_quant_b else dtype
+    dtype_quant_a_out = pypto.DT_INT32 if is_quant_a else dtype
+    dtype_quant_b_out = pypto.DT_INT32 if is_quant_b else dtype
     qkv_pre_res = []
 
     pypto.set_semantic_label("pre_reshape")

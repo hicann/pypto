@@ -35,11 +35,11 @@ def test_gather_onboard():
 
     pypto.runtime._device_init()
 
-    src_tensor = pypto.tensor(src_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_SRC")
+    src_tensor = pypto.tensor(src_shape, pypto.DT_INT32, "PTO_TENSOR_SRC")
     index_tensor = pypto.tensor(
-        index_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_INDEX")
+        index_shape, pypto.DT_INT32, "PTO_TENSOR_INDEX")
     dst_tensor = pypto.tensor(
-        index_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_DST")
+        index_shape, pypto.DT_INT32, "PTO_TENSOR_DST")
 
     b_loop_num = math.ceil(index_shape[0] / view_shape[0])
     s_loop_num = math.ceil(index_shape[1] / view_shape[1])

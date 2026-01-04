@@ -75,12 +75,12 @@ def test_scatterupdate_tensor_onboard():
     tile_shape = (b, s, n, d)
     pypto.runtime._device_init()
 
-    src_tensor = pypto.tensor(src_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_SRC")
+    src_tensor = pypto.tensor(src_shape, pypto.DT_INT32, "PTO_TENSOR_SRC")
     index_tensor = pypto.tensor(
-        index_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_INDEX")
+        index_shape, pypto.DT_INT32, "PTO_TENSOR_INDEX")
     update_tensor = pypto.tensor(
-        dst_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_DST")
-    dst_tensor = pypto.tensor(dst_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_DST")
+        dst_shape, pypto.DT_INT32, "PTO_TENSOR_DST")
+    dst_tensor = pypto.tensor(dst_shape, pypto.DT_INT32, "PTO_TENSOR_DST")
 
     b_loop_num = math.ceil(src_shape[0] / view_shape[0])
     s_loop_num = math.ceil(src_shape[1] / view_shape[1])
@@ -88,7 +88,7 @@ def test_scatterupdate_tensor_onboard():
         for b_idx in pypto.loop(b_loop_num, name="b0", idx_name="bidx"):
             for s_idx in pypto.loop(s_loop_num, name="s0", idx_name="sidx"):
                 tmp_dst_tensor = pypto.tensor(
-                    dst_shape, pypto.DataType.DT_INT32, "PTO_TENSOR_TMP")
+                    dst_shape, pypto.DT_INT32, "PTO_TENSOR_TMP")
                 view_tensor_src = pypto.view(src_tensor, view_shape,
                                            [b_idx * view_shape[0], s_idx *
                                                view_shape[1], 0, 0],

@@ -502,15 +502,15 @@ def gen_mla_prolog_quant_v32_data(params, dtypes, actual_seq, is_quant=(False, F
 
 
 def convert_pypto_to_torch_type(pypto_type):
-    if pypto_type == pypto.DataType.DT_INT8:
+    if pypto_type == pypto.DT_INT8:
         return torch.int8
-    elif pypto_type == pypto.DataType.DT_INT32:
+    elif pypto_type == pypto.DT_INT32:
         return torch.int32
-    elif pypto_type == pypto.DataType.DT_FP32:
+    elif pypto_type == pypto.DT_FP32:
         return torch.float32
-    elif pypto_type == pypto.DataType.DT_FP16:
+    elif pypto_type == pypto.DT_FP16:
         return torch.float16
-    elif pypto_type == pypto.DataType.DT_BF16:
+    elif pypto_type == pypto.DT_BF16:
         return torch.bfloat16
     else:
         raise ValueError(f"Unsupported pypto.DataType: {pypto_type}")
@@ -519,13 +519,13 @@ def convert_pypto_to_torch_type(pypto_type):
 def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, is_quant_a, \
                         is_quant_b, nz, tile_config, cache_mode, is_p):
 
-    d_type = pypto.DataType.DT_FP16 if dtype == pypto.DataType.DT_FP16 else pypto.DataType.DT_BF16
-    if is_quant_a and w_dtype == pypto.DataType.DT_INT8:
-        dtype_qa = pypto.DataType.DT_INT8
+    d_type = pypto.DT_FP16 if dtype == pypto.DT_FP16 else pypto.DT_BF16
+    if is_quant_a and w_dtype == pypto.DT_INT8:
+        dtype_qa = pypto.DT_INT8
     else:
         dtype_qa = dtype
-    if is_quant_b and w_dtype == pypto.DataType.DT_INT8:
-        dtype_qb = pypto.DataType.DT_INT8
+    if is_quant_b and w_dtype == pypto.DT_INT8:
+        dtype_qb = pypto.DT_INT8
     else:
         dtype_qb = dtype
     dtype_kv_quant = dtype_qb
@@ -535,7 +535,7 @@ def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, is_
         w_dtype_a = dtype
     if is_quant_b:
         w_dtype_b = w_dtype
-        kv_dtype = pypto.DataType.DT_INT8
+        kv_dtype = pypto.DT_INT8
     else:
         w_dtype_b = dtype
         kv_dtype = dtype
@@ -712,8 +712,8 @@ def test_b128_s4k4_pa_nd_bf16_quantb_p():
         'kv_lora_rank': 512,
         'block_size': 128
     }
-    dtype = pypto.DataType.DT_BF16
-    w_dtype = pypto.DataType.DT_INT8
+    dtype = pypto.DT_BF16
+    w_dtype = pypto.DT_INT8
     is_quant_a, is_quant_b, is_nz = False, True, False
     cache_mode = "PA_BSND"
     tile_config = MlaTileConfig()
@@ -759,8 +759,8 @@ def test_b1_s4k512_pa_nd_bf16_quantb_p():
         'kv_lora_rank': 512,
         'block_size': 128
     }
-    dtype = pypto.DataType.DT_BF16
-    w_dtype = pypto.DataType.DT_INT8
+    dtype = pypto.DT_BF16
+    w_dtype = pypto.DT_INT8
     is_quant_a, is_quant_b, is_nz = False, True, False
     cache_mode = "PA_BSND"
     tile_config = MlaTileConfig()
@@ -806,8 +806,8 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
         'kv_lora_rank': 512,
         'block_size': 128
     }
-    dtype = pypto.DataType.DT_BF16
-    w_dtype = pypto.DataType.DT_INT8
+    dtype = pypto.DT_BF16
+    w_dtype = pypto.DT_INT8
     is_quant_a, is_quant_b, is_nz = False, True, False
     cache_mode = "PA_BSND"
     tile_config = MlaTileConfig()

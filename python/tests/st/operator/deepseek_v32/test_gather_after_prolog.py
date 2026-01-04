@@ -58,8 +58,8 @@ def gather_after_prolog_graph(
                         kr_slc_block = pypto.view(k_rope_cache, [1, dr], [slc_block_idx * block_size + tail, 0])
 
                         pypto.set_semantic_label("gather1")
-                        kv_slc_block_fp32 = pypto.cast(kv_slc_block, pypto.DataType.DT_FP32)
-                        kr_slc_block_fp32 = pypto.cast(kr_slc_block, pypto.DataType.DT_FP32)
+                        kv_slc_block_fp32 = pypto.cast(kv_slc_block, pypto.DT_FP32)
+                        kr_slc_block_fp32 = pypto.cast(kr_slc_block, pypto.DT_FP32)
 
                         pypto.set_semantic_label("gather2")
                         kv_slc_block_fp16 = pypto.cast(kv_slc_block_fp32, gather_res.dtype)

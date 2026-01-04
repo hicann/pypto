@@ -61,9 +61,9 @@ def gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
 
     Examples
     --------
-    param = pypto.tensor([6,4], pypto.DataType.DT_FP16, "src")
-    offsets = pypto.tensor([1,3], pypto.DataType.DT_INT32, "offsets")
-    pageTable = pypto.tensor([1,3], pypto.DataType.DT_INT32, "pageTable")
+    param = pypto.tensor([6,4], pypto.DT_FP16, "src")
+    offsets = pypto.tensor([1,3], pypto.DT_INT32, "offsets")
+    pageTable = pypto.tensor([1,3], pypto.DT_INT32, "pageTable")
     blockSize = 2
     out = pypto.experimental.gather_in_ub(param, offsets, pageTable, blockSize, -2)
 

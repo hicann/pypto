@@ -132,7 +132,7 @@ def layer_norm(
     x: pypto.Tensor, weight: pypto.Tensor, bias: pypto.Tensor, dim: int
 ) -> pypto.Tensor:
     assert dim == (len(x.shape) - 1) or dim == -1
-    assert x.dtype == pypto.DataType.DT_FP32
+    assert x.dtype == pypto.DT_FP32
     eps = 1e-6
     actual_dim = dim + len(x.shape) if dim < 0 else dim
     x_scaled = x / (x.shape[actual_dim])
@@ -143,8 +143,8 @@ def layer_norm(
     var = pypto.sum(square_diff_scaled, -1, True)
     std_var = pypto.sqrt(var + eps)
     res32 = diff / std_var
-    weight32 = pypto.cast(weight, pypto.DataType.DT_FP32)
-    bias32 = pypto.cast(bias, pypto.DataType.DT_FP32)
+    weight32 = pypto.cast(weight, pypto.DT_FP32)
+    bias32 = pypto.cast(bias, pypto.DT_FP32)
     return res32 * weight32 + bias32
 
 
@@ -190,11 +190,11 @@ def rope_3d(
         and len(sin.shape) == SHAPE_DIM_2
     )
     pypto.set_vec_tile_shapes(NUM_1, NUM_32, NUM_128)
-    cast_x = pypto.cast(x, pypto.DataType.DT_FP32)
-    if x.dtype == pypto.DataType.DT_FP32:
+    cast_x = pypto.cast(x, pypto.DT_FP32)
+    if x.dtype == pypto.DT_FP32:
         cast_x = cast_x + 0.0
-    cast_cos = pypto.cast(cos, pypto.DataType.DT_FP32)
-    cast_sin = pypto.cast(sin, pypto.DataType.DT_FP32)
+    cast_cos = pypto.cast(cos, pypto.DT_FP32)
+    cast_sin = pypto.cast(sin, pypto.DT_FP32)
     cast_cos[:] = pypto.reshape(cast_cos, [x.shape[NUM_0], 1, x.shape[NUM_2]])
     cast_sin[:] = pypto.reshape(cast_sin, [x.shape[NUM_0], 1, x.shape[NUM_2]])
     x_valid_shape = x.shape
@@ -234,11 +234,11 @@ def rope(
         tile_config.rope_2d[NUM_0],
         tile_config.rope_2d[NUM_1],
     )
-    cast_x = pypto.cast(x, pypto.DataType.DT_FP32)
-    if x_dtype == pypto.DataType.DT_FP32:
+    cast_x = pypto.cast(x, pypto.DT_FP32)
+    if x_dtype == pypto.DT_FP32:
         cast_x = cast_x + 0.0
-    cast_cos = pypto.cast(cos, pypto.DataType.DT_FP32)
-    cast_sin = pypto.cast(sin, pypto.DataType.DT_FP32)
+    cast_cos = pypto.cast(cos, pypto.DT_FP32)
+    cast_sin = pypto.cast(sin, pypto.DT_FP32)
     x_view = pypto.reshape(cast_x, [1, seq_size, d_r // NUM_2, NUM_2])
     pypto.set_vec_tile_shapes(
         tile_config.rope_4d[0],
@@ -325,7 +325,7 @@ def lightning_indexer_prolog_impl(args: LightningIndexerPrologArgs):
             valid_shape=[act_bs, q_lora_rank],
         )
 
-        q_32 = pypto.matmul(qr_block, q_w, pypto.DataType.DT_FP32)
+        q_32 = pypto.matmul(qr_block, q_w, pypto.DT_FP32)
 
         pypto.set_semantic_label("QCast")
         pypto.set_vec_tile_shapes(
@@ -357,7 +357,7 @@ def lightning_indexer_prolog_impl(args: LightningIndexerPrologArgs):
         )
 
         q_nope[:] = pypto.cast(
-            pypto.cast(q_nope, pypto.DataType.DT_FP32), q_nope.dtype
+            pypto.cast(q_nope, pypto.DT_FP32), q_nope.dtype
         )
 
         pypto.set_semantic_label("KMatmul")
@@ -384,7 +384,7 @@ def lightning_indexer_prolog_impl(args: LightningIndexerPrologArgs):
         weights = pypto.matmul(x_block, proj_w, x_block.dtype)
         pypto.assemble(weights, [b_idx, 0], weight)
 
-        k = pypto.matmul(x_block, k_w, pypto.DataType.DT_FP32)
+        k = pypto.matmul(x_block, k_w, pypto.DT_FP32)
 
         k[:] = pypto.cast(
             layer_norm(k, ln_w_2d, ln_b_2d, -1),
@@ -466,7 +466,7 @@ def lightning_indexer_prolog_impl(args: LightningIndexerPrologArgs):
         pypto.set_vec_tile_shapes(tile_bs, NUM_128 * NUM_2)
         k_type = k_nope.dtype
         k_nope[:] = pypto.cast(
-            pypto.cast(k_nope, pypto.DataType.DT_FP32),
+            pypto.cast(k_nope, pypto.DT_FP32),
             k_type,
         )
 
@@ -532,8 +532,8 @@ def setup_lightning_indexer_prolog_config():
 def build_lightning_indexer_prolog_args(
     cfg: LightningIndexerPrologBuildConfig = LightningIndexerPrologBuildConfig(),
 ):
-    d_bf16 = pypto.DataType.DT_BF16
-    d_i32 = pypto.DataType.DT_INT32
+    d_bf16 = pypto.DT_BF16
+    d_i32 = pypto.DT_INT32
 
     x = pypto.tensor(dtype=d_bf16, shape=[cfg.b, cfg.s1, cfg.dim], name="x")
     qr = pypto.tensor(
