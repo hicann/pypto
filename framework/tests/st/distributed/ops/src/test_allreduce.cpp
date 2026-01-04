@@ -37,11 +37,11 @@ void TestShmemAllReduce(OpTestParam &testParam)
     Tensor in(dType, shape, "in");
     Tensor out(dType, shape, "out");
 
-    std::vector<T> ipPtr = ReadToVector<T>(
+    std::vector<T> inPtr = ReadToVector<T>(
         GetGoldenDir() + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
 
     ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateTensor<T>(in, ipPtr),
+        RawTensorData::CreateTensor<T>(in, inPtr),
     });
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateTensorZero(out),
@@ -55,9 +55,9 @@ void TestShmemAllReduce(OpTestParam &testParam)
             {col / tileNum2, tileNum2, col % tileNum2},
             {1, testParam.rankSize, 0});
         if (useTwoShot) {
-            TwoShotShmemAllReduce(in, testParam.group, out);
+            TwoShotShmemAllReduce(in, in, testParam.group, out);
         } else {
-            OneShotShmemAllReduce(in, testParam.group, out);
+            OneShotShmemAllReduce(in, in, testParam.group, out);
         }
     }
     auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();

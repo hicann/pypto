@@ -41,7 +41,7 @@ void LoopAllReduce1(const Tensor& in, Tensor& allReduceOut, const OpTestParam& t
     LOOP("AllReduce1", FunctionType::DYNAMIC_LOOP, allReduce1Index, LoopRange(0, 1, 1)) {
         (void)allReduce1Index;
         TileShape::Current().SetDistTile({row, 1, 0}, {col, 1, 0}, {1, testParam.rankSize, 0});
-        OneShotShmemAllReduce(in, testParam.group, allReduceOut);
+        OneShotShmemAllReduce(in, in, testParam.group, allReduceOut);
     }
 }
 

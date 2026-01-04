@@ -101,10 +101,11 @@ TEST_F(TestDistributedShmemImpl, TestTwoShotShmemAllReduce)
     int32_t ranksize = 4;
     Tensor in(DT_FP16, {64, 256}, "in");
     Tensor out(DT_FP16, {64, 256}, "out");
-    FUNCTION("ALLREDUCE", {in}, {out}) {
+    Tensor predToken(DT_INT32, {1, 1}, "predToken");
+    FUNCTION("ALLREDUCE", {in, predToken}, {out}) {
         TileShape::Current().SetDistTile(
             {64 / ranksize, 1, 0}, {256, 1, 0}, {1, ranksize, 0});
-        TwoShotShmemAllReduce(in, group, out);
+        TwoShotShmemAllReduce(predToken, in, group, out);
     }
 
     std::string functionRawName = GetFunctionRawName("TowShotAllReduce");
@@ -121,10 +122,11 @@ TEST_F(TestDistributedShmemImpl, TestOneShotShmemAllReduce)
     int32_t ranksize = 4;
     Tensor in(DT_FP16, {64, 256}, "in");
     Tensor out(DT_FP16, {64, 256}, "out");
-    FUNCTION("ALLREDUCE", {in}, {out}) {
+    Tensor predToken(DT_INT32, {1, 1}, "predToken");
+    FUNCTION("ALLREDUCE", {in, predToken}, {out}) {
         TileShape::Current().SetDistTile(
             {64, 1, 0}, {256, 1, 0}, {1, ranksize, 0});
-        OneShotShmemAllReduce(in, group, out);
+        OneShotShmemAllReduce(predToken, in, group, out);
     }
 
     std::string functionRawName = GetFunctionRawName("OneShotAllReduce");

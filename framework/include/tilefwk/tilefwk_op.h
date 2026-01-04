@@ -411,10 +411,10 @@ void ShmemAllGather(const Tensor &in, const Tensor &dummy, const char *group, Te
 void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, Tensor& out);
 Tensor ShmemSet(const Tensor& predToken, const Tensor& shmemTensor);
 void ShmemReduceScatter(const Tensor& in, const char* group, DistReduceType reduceType, Tensor& out);
-void OneShotShmemAllReduce(const Tensor& in, const char* group, Tensor& out);
+void OneShotShmemAllReduce(const Tensor& predToken, const Tensor& in, const char* group, Tensor& out);
 void OneShotShmemAllReduce(const Tensor& predToken, const Tensor& in, Tensor& shmemData, Tensor& shmemSignal,
     const char* group, Tensor& out);
-void TwoShotShmemAllReduce(const Tensor& in, const char* group, Tensor& out);
+void TwoShotShmemAllReduce(const Tensor& predToken, const Tensor& in, const char* group, Tensor& out);
 void ShmemMoeCombine(const Tensor& in, const Tensor& combineInfo, const Tensor& scale, const char* group,
     int32_t rankSize, int32_t totalExpertNum, Tensor& out);
 void CreateShmemTensor(Tensor& shmemTensor, int32_t rankSize, int32_t hcclGroupIndex, DataType dataType,
