@@ -218,7 +218,7 @@ Status ConvertInserter::RecordConflict(Function &function) {
             }
             //step2:解析冲突需求
             std::map<MemoryType, std::set<Operation *>> tobeMap = conflictMap.at(oOperand->magic);
-            for (const auto &item : tobeMap){
+            for (const auto &item : tobeMap) {
                 MemoryType requiredMemoryType = item.first;
                 if (requiredMemoryType == oOperand->GetMemoryTypeOriginal()) {
                     continue;
@@ -246,7 +246,6 @@ Status ConvertInserter::RecordConflict(Function &function) {
                 std::vector<MemoryType> paths;
                 Status status = ConstructPath(oOperand->GetMemoryTypeOriginal(),requiredMemoryType,paths,oOperand,op);
                 if (status != SUCCESS) {return status;}
-
                 //step5：记录需要插入的Convert Op
                 auto output = RecordInsertConvertOp(oOperand,paths,function,op);
 

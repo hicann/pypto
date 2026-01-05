@@ -356,7 +356,7 @@ public:
         opAttribute_ = attr;
         static std::unordered_set<Opcode> copyOpAttrOpTypes{Opcode::OP_L1_COPY_IN, Opcode::OP_L1_COPY_OUT,
             Opcode::OP_COPY_IN, Opcode::OP_L0C_TO_L1, Opcode::OP_L1_TO_BT, Opcode::OP_L1_TO_FIX_QUANT_PRE, Opcode::OP_L1_TO_L0A,
-            Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT, Opcode::OP_L1_TO_L0_BT, Opcode::OP_COPY_OUT,
+            Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT, Opcode::OP_L1_TO_L0_BT, Opcode::OP_UB_COPY_L1, Opcode::OP_COPY_OUT,
             Opcode::OP_RESHAPE_COPY_IN, Opcode::OP_RESHAPE_COPY_OUT, Opcode::OP_INDEX_OUTCAST,
             Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEOUT, Opcode::OP_FFN_SCHED, Opcode::OP_FFN_BATCHING,
             Opcode::OP_FFN_COMBINEINFO, Opcode::OP_FFN_VALIDCNT, Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT_UB2GM,

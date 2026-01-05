@@ -446,7 +446,6 @@ void AssignMemoryType::AssignMemUnknown(Function &function) {
         }
     }
 }
-
 void AssignMemoryType::ProcesSmallTileToLargeTile(Function &function) {
     //CASE1:处理cube级联场景小搬大
     for (auto &op : function.Operations()) {
@@ -456,13 +455,8 @@ void AssignMemoryType::ProcesSmallTileToLargeTile(Function &function) {
         }
         auto oOperand = op.GetOOperands().front();
         auto iOperand = op.GetIOperands().front();
-        auto &consumerOps = oOperand->GetConsumers();
-        for(const auto &consumerOp : consumerOps) {
-            auto consumerOpcode = consumerOp->GetOpcode();
-            if(consumerOpcode == Opcode::OP_L1_TO_L0_AT || consumerOpcode == Opcode::OP_L1_TO_L0_BT ||
-                consumerOpcode == Opcode::OP_L1_TO_L0A || consumerOpcode == Opcode::OP_L1_TO_L0B) {
-                oOperand->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
-            }
+        if(iOperand->GetMemoryTypeOriginal() == MEM_L0C) {
+            oOperand->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
         }
     }
 }
@@ -477,7 +471,7 @@ void AssignMemoryType::ProcessLargeTileToSamllTile(Function &function) {
         MemoryType attrToType = viewOpAttribute->GetTo();
         if(attrToType == MEM_L1) {
             auto iOperand = op.GetIOperands().front();
-            if(iOperand->GetMemoryTypeOriginal() != MEM_L0C) {
+            if(iOperand->GetMemoryTypeOriginal() != MEM_L0C && iOperand->GetMemoryTypeOriginal() != MEM_UB) {
                 continue;
             }
             auto oOperand = op.GetOOperands().front();

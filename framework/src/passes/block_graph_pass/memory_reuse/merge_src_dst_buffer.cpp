@@ -96,7 +96,7 @@ Status SrcDstBufferMergeImpl::Init(const std::vector<Operation *> &opList) {
 
 bool SrcDstBufferMergeImpl::CheckIgnoreScene(const Operation &oriOps) {
     /* use opcode is unfavorable for reading and modification, maybe use opcalctype */
-    const std::set<Opcode> ignoreOps = {Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_COPY_OUT};
+    const std::set<Opcode> ignoreOps = {Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN, Opcode::OP_COPY_OUT, Opcode::OP_UB_COPY_ND2NZ};
     if (ignoreOps.count(oriOps.GetOpcode()) != 0) {
         return true;
     }

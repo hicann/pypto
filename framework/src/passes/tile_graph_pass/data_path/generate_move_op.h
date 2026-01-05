@@ -40,6 +40,7 @@ const std::map<std::pair<MemoryType, MemoryType>,Opcode> platformPathMap = {
     {{MEM_L1, MEM_BT},Opcode::OP_L1_TO_BT},
     {{MEM_L1, MEM_FIX_QUANT_PRE},Opcode::OP_L1_TO_FIX_QUANT_PRE},
     {{MEM_L0C, MEM_UB},Opcode::OP_L0C_COPY_UB},
+    {{MEM_UB, MEM_L1},Opcode::OP_UB_COPY_L1},
 };
 
 class GenerateMoveOp : public Pass {
@@ -55,9 +56,11 @@ private:
     Status SetOpcodeByMemPath(Operation &op,MemoryType from,MemoryType to) const;
     bool HasSpecificConsumer(const Operation &op) const;
     void ConvertViewToCopyInWhenInputGm(Operation &op, ViewOpAttribute *viewOpAttribute) const;
-    Status CreateMoveOpForView(Operation &op) const;
+    Status CreateMoveOpForView(Function &function, Operation &op) const;
     void CreateMoveOpForAssemble(Operation &op) const;
-    Status CreateMoveOpForConvert(Operation &op) const;
+    Status CreateMoveOpForConvert(Function &function, Operation &op) const;
+    void ProcessUB2L1(Function &function, Operation &op) const;
+    static int64_t PadUB(int64_t dim, int64_t padValue);
 };
 }
 #endif // PASS_GENERATE_MOVE_OP_H_
