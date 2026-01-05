@@ -291,31 +291,141 @@ TILEOP void UBCopyInBase(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T
     }
 }
 
+template <typename T, unsigned UBS>
+TILEOP void UBCopyInBase(
+    __ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1, unsigned GMS, unsigned dstStartOffset) {
+    constexpr auto blockSize = BLOCK_SIZE / sizeof(T);
+    if (T1 == 0) {
+        return;
+    }
+    if constexpr (UBS % blockSize != 0) {
+        pipe_barrier(PIPE_ALL);
+        for (unsigned i = 0; i < T0; i++) {
+            unsigned startOffset = ((dstStartOffset - 1) / blockSize + 1) * blockSize - dstStartOffset;
+            unsigned endOffset = (dstStartOffset + T1) / blockSize * blockSize - dstStartOffset;
+            unsigned length = endOffset - startOffset;
+            uint32_t lenBurst = length * sizeof(T);
+            if (startOffset >= T1) {
+                for (unsigned j = 0; j < T1; j++) { // 考虑如何用mask写法替代
+                    dcci((__gm__ T *)(src + j), SINGLE_CACHE_LINE);
+                    dst[dstStartOffset + j] = src[j];
+                }
+                dstStartOffset += UBS;
+                src += GMS;
+                continue;
+            }
+            for (unsigned j = 0; j < startOffset; j++) { // 考虑如何用mask写法替代
+                dcci((__gm__ T *)(src + j), SINGLE_CACHE_LINE);
+                dst[dstStartOffset + j] = src[j];
+            }
+            for (unsigned j = endOffset; j < T1; j++) { // 考虑如何用mask写法替代
+                dcci((__gm__ T *)(src + j), SINGLE_CACHE_LINE);
+                dst[dstStartOffset + j] = src[j];
+            }
+            if (length > 0) {
+                if constexpr (sizeof(T) == 1) {
+                    copy_gm_to_ubuf_align_b8(dst + dstStartOffset + startOffset, src + startOffset, 0 /*sid*/, 1, lenBurst,
+                        0 /*left padding count*/, 0 /*right padding count*/, 0, 0);
+                } else if constexpr (sizeof(T) == 2) {
+                    copy_gm_to_ubuf_align_b16(dst + dstStartOffset + startOffset, src + startOffset, 0 /*sid*/, 1, lenBurst,
+                        0 /*left padding count*/, 0 /*right padding count*/, 0, 0);
+                } else {
+                    copy_gm_to_ubuf_align_b32(dst + dstStartOffset + startOffset, src + startOffset, 0 /*sid*/, 1, lenBurst,
+                        0 /*left padding count*/, 0 /*right padding count*/, 0, 0);
+                }
+            }
+            dstStartOffset += UBS;
+            src += GMS;
+        }
+        pipe_barrier(PIPE_ALL);
+    } else if ((dstStartOffset % blockSize == 0) && (T1 % blockSize == 0)) { // 头块尾块均对齐到32B
+        UBCopyInBase<T, UBS>(dst + dstStartOffset, src, T0, T1, GMS);
+    } else {
+        pipe_barrier(PIPE_ALL);
+        unsigned startOffset = ((dstStartOffset - 1) / blockSize + 1) * blockSize - dstStartOffset;
+        unsigned endOffset = (dstStartOffset + T1) / blockSize * blockSize - dstStartOffset;
+        unsigned length = endOffset - startOffset;
+        uint32_t lenBurst = length * sizeof(T);
+        uint32_t gmGap = (GMS - length) * sizeof(T);
+        uint32_t ubGap = (UBS - length) / blockSize;
+        dst += dstStartOffset;
+        if (startOffset >= T1) {
+            for (unsigned i = 0; i < T0; i++) {
+                for (unsigned j = 0; j < T1; j++) { // 考虑如何用mask写法替代
+                    dcci((__gm__ T *)(src + j), SINGLE_CACHE_LINE);
+                    dst[j] = src[j];
+                }
+                dst += UBS;
+                src += GMS;
+            }
+            return;
+        }
+        if (length > 0) {
+            if constexpr (sizeof(T) == 1) {
+                copy_gm_to_ubuf_align_b8(dst + startOffset, src + startOffset, 0 /*sid*/, T0, lenBurst,
+                    0 /*left padding count*/, 0 /*right padding count*/, gmGap, ubGap);
+            } else if constexpr (sizeof(T) == 2) {
+                copy_gm_to_ubuf_align_b16(dst + startOffset, src + startOffset, 0 /*sid*/, T0, lenBurst,
+                    0 /*left padding count*/, 0 /*right padding count*/, gmGap, ubGap);
+            } else {
+                copy_gm_to_ubuf_align_b32(dst + startOffset, src + startOffset, 0 /*sid*/, T0, lenBurst,
+                    0 /*left padding count*/, 0 /*right padding count*/, gmGap, ubGap);
+            }
+        }
+        for (unsigned i = 0; i < T0; i++) {
+            for (unsigned j = 0; j < startOffset; j++) { // 考虑如何用mask写法替代
+                dcci((__gm__ T *)(src + j), SINGLE_CACHE_LINE);
+                dst[j] = src[j];
+            }
+            for (unsigned j = endOffset; j < T1; j++) { // 考虑如何用mask写法替代
+                dcci((__gm__ T *)(src + j), SINGLE_CACHE_LINE);
+                dst[j] = src[j];
+            }
+            dst += UBS;
+            src += GMS;
+        }
+        pipe_barrier(PIPE_ALL);
+    }
+}
+
+template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
+TILEOP void DynUBCopyIn(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4,
+    unsigned GMS0, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned Offset0, unsigned Offset1,
+    unsigned Offset2, unsigned Offset3, unsigned Offset4, unsigned dstStartOffset) {
+    constexpr auto blockSize = BLOCK_SIZE / sizeof(T);
+    src += CalcLinearOffset(GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4);
+    for (int i0 = 0; i0 < T0; i0++) {
+        __gm__ T *src0 = src;
+        for (int i1 = 0; i1 < T1; i1++) {
+            __gm__ T *src1 = src0;
+            for (int i2 = 0; i2 < T2; i2++) {
+                if constexpr (UBS4 % blockSize == 0) {
+                    if ((dstStartOffset % blockSize == 0) && (T4 % blockSize == 0)) {
+                        TileOp::UBCopyInBase<T, UBS4>(dst + dstStartOffset, src1, T3, T4, GMS4);
+                    } else {
+                        // gm_to_ubuf无法处理尾块非对齐场景
+                        TileOp::UBCopyInBase<T, UBS4>(dst, src1, T3, T4, GMS4, dstStartOffset);
+                    }
+                } else {
+                    TileOp::UBCopyInBase<T, UBS4>(dst, src1, T3, T4, GMS4, dstStartOffset);
+                }
+                src1 += GMS3 * GMS4;
+                dstStartOffset += UBS3 * UBS4;
+            }
+            src0 += GMS2 * GMS3 * GMS4;
+            dstStartOffset += (UBS2 - T2) * UBS3 * UBS4;
+        }
+        src += GMS1 * GMS2 * GMS3 * GMS4;
+        dstStartOffset += (UBS1 - T1) * UBS2 * UBS3 * UBS4;
+    }
+}
+
 template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
 TILEOP void DynUBCopyIn(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4,
     unsigned GMS0, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned Offset0, unsigned Offset1,
     unsigned Offset2, unsigned Offset3, unsigned Offset4) {
-    src += CalcLinearOffset(GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4);
-
-    static_assert((UBS4 * sizeof(T)) % 32 == 0, "UB tile must be 32B aligned!");
-
-    for (int i0 = 0; i0 < T0; i0++) {
-        __gm__ T *src0 = src;
-        __ubuf__ T *dst0 = dst;
-        for (int i1 = 0; i1 < T1; i1++) {
-            __gm__ T *src1 = src0;
-            __ubuf__ T *dst1 = dst0;
-            for (int i2 = 0; i2 < T2; i2++) {
-                TileOp::UBCopyInBase<T, UBS4>(dst1, src1, T3, T4, GMS4);
-                src1 += GMS3 * GMS4;
-                dst1 += UBS3 * UBS4;
-            }
-            src0 += GMS2 * GMS3 * GMS4;
-            dst0 += UBS2 * UBS3 * UBS4;
-        }
-        src += GMS1 * GMS2 * GMS3 * GMS4;
-        dst += UBS1 * UBS2 * UBS3 * UBS4;
-    }
+    DynUBCopyIn<T, UBS1, UBS2, UBS3, UBS4>(
+        dst, src, T0, T1, T2, T3, T4, GMS0, GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4, 0);
 }
 
 template <typename T, unsigned UBS>
@@ -341,31 +451,76 @@ TILEOP void UBCopyOutBase(__gm__ T *dst, __ubuf__ T *src, unsigned T0, unsigned 
     }
 }
 
+template <typename T, unsigned UBS>
+TILEOP void UBCopyOutBase(
+    __gm__ T *dst, __ubuf__ T *src, unsigned T0, unsigned T1, unsigned GMS, unsigned srcStartOffset) {
+    if (T1 == 0) {
+        return;
+    }
+    pipe_barrier(PIPE_ALL);
+    constexpr uint32_t blockSize = BLOCK_SIZE / sizeof(T);
+    for (unsigned i = 0; i < T0; i++) {
+        if ((srcStartOffset % BLOCK_SIZE != 0) || (T1 % BLOCK_SIZE != 0)) {
+            for (unsigned j = 0; j < T1; j++) {
+                dst[j] = src[srcStartOffset + j];
+                dcci((__gm__ T *)(dst + j), SINGLE_CACHE_LINE);
+            }
+        } else {
+            uint32_t lenBurst = T1 * sizeof(T);
+            if constexpr (sizeof(T) == 1) {
+                copy_ubuf_to_gm_align_b8(dst, src + srcStartOffset, 0 /*sid*/, 1, lenBurst, 0 /*left padding count*/,
+                    0 /*right padding count*/, 0, 0);
+            } else if (sizeof(T) == 2) {
+                copy_ubuf_to_gm_align_b16(dst, src + srcStartOffset, 0 /*sid*/, 1, lenBurst, 0 /*left padding count*/,
+                    0 /*right padding count*/, 0, 0);
+            } else {
+                copy_ubuf_to_gm_align_b32(dst, src + srcStartOffset, 0 /*sid*/, 1, lenBurst, 0 /*left padding count*/,
+                    0 /*right padding count*/, 0, 0);
+            }
+        }
+        srcStartOffset += UBS;
+        dst += GMS;
+    }
+    pipe_barrier(PIPE_ALL);
+}
+
+template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
+TILEOP void DynUBCopyOut(__gm__ T *dst, __ubuf__ T *src, unsigned T0, unsigned T1, unsigned T2, unsigned T3,
+    unsigned T4, unsigned GMS0, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned Offset0,
+    unsigned Offset1, unsigned Offset2, unsigned Offset3, unsigned Offset4, unsigned srcStartOffset) {
+    dst += CalcLinearOffset(GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4);
+    constexpr uint32_t blockSize = BLOCK_SIZE / sizeof(T);
+    for (int i0 = 0; i0 < T0; i0++) {
+        __gm__ T *dst0 = dst;
+        for (int i1 = 0; i1 < T1; i1++) {
+            __gm__ T *dst1 = dst0;
+            for (int i2 = 0; i2 < T2; i2++) {
+                if constexpr (UBS4 % blockSize == 0) {
+                    if (srcStartOffset % blockSize == 0) {
+                        TileOp::UBCopyOutBase<T, UBS4>(dst1, src + srcStartOffset, T3, T4, GMS4);
+                    } else {
+                        TileOp::UBCopyOutBase<T, UBS4>(dst1, src, T3, T4, GMS4, srcStartOffset);
+                    }
+                } else {
+                    TileOp::UBCopyOutBase<T, UBS4>(dst1, src, T3, T4, GMS4, srcStartOffset);
+                }
+                dst1 += GMS3 * GMS4;
+                srcStartOffset += UBS3 * UBS4;
+            }
+            dst0 += GMS2 * GMS3 * GMS4;
+            srcStartOffset += (UBS2 - T2) * UBS3 * UBS4;
+        }
+        dst += GMS1 * GMS2 * GMS3 * GMS4;
+        srcStartOffset += (UBS1 - T1) * UBS2 * UBS3 * UBS4;
+    }
+}
+
 template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
 TILEOP void DynUBCopyOut(__gm__ T *dst, __ubuf__ T *src, unsigned T0, unsigned T1, unsigned T2, unsigned T3,
     unsigned T4, unsigned GMS0, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned Offset0,
     unsigned Offset1, unsigned Offset2, unsigned Offset3, unsigned Offset4) {
-    dst += CalcLinearOffset(GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4);
-
-    static_assert((UBS4 * sizeof(T)) % 32 == 0, "UB tile must be 32B aligned!");
-
-    for (int i0 = 0; i0 < T0; i0++) {
-        __gm__ T *dst0 = dst;
-        __ubuf__ T *src0 = src;
-        for (int i1 = 0; i1 < T1; i1++) {
-            __gm__ T *dst1 = dst0;
-            __ubuf__ T *src1 = src0;
-            for (int i2 = 0; i2 < T2; i2++) {
-                TileOp::UBCopyOutBase<T, UBS4>(dst1, src1, T3, T4, GMS4);
-                dst1 += GMS3 * GMS4;
-                src1 += UBS3 * UBS4;
-            }
-            dst0 += GMS2 * GMS3 * GMS4;
-            src0 += UBS2 * UBS3 * UBS4;
-        }
-        dst += GMS1 * GMS2 * GMS3 * GMS4;
-        src += UBS1 * UBS2 * UBS3 * UBS4;
-    }
+    DynUBCopyOut<T, UBS1, UBS2, UBS3, UBS4>(
+        dst, src, T0, T1, T2, T3, T4, GMS0, GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4, 0);
 }
 
 // for ub spill out scene

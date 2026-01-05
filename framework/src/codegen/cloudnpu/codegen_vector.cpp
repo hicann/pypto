@@ -82,6 +82,12 @@ std::string CodeGenOpCloudNPU::PrintDupOpDynUnaligned(const PrintDupOpParam &par
     for (auto dstOriShape : dynDstShape) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstOriShape));
     }
+
+    auto startOffset = GetOperandStartOffset(0);
+    if (!startOffset.ConcreteValid() || startOffset.Concrete() != 0) {
+        paramList.emplace_back(startOffset.Dump());
+    }
+
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "_<" << templateParam << ">"
        << "(" << tiloOpCallParam << ");\n";
@@ -90,8 +96,9 @@ std::string CodeGenOpCloudNPU::PrintDupOpDynUnaligned(const PrintDupOpParam &par
 
 std::string CodeGenOpCloudNPU::PrintDupOpStatic(const PrintDupOpParam &param) const {
     const std::string &dstDtypeStr = param.dstDtypeStr;
-    const std::string &dVar = param.dVar;
+    std::string dVar = param.dVar;
     const std::string &dupV = param.dupV;
+    AppendLocalBufVarOffsetInOrder(dVar);
     // dst origin shape
     std::vector<int64_t> dos = NormalizeShape(originShape[0], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
@@ -125,7 +132,6 @@ std::string CodeGenOpCloudNPU::PrintDupOp(const PrintDupOpParam &param) const {
 
 std::string CodeGenOpCloudNPU::GenDupOp() const {
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
-    AppendLocalBufVarOffsetInOrder(dVar);
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
     std::string dupV;

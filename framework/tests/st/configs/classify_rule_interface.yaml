@@ -36,3 +36,14 @@ stest:
       - AssembleTest.test_assemble_to_inner_tensor_2
       - AssembleTest.test_assemble_to_inner_tensor_3
       - AssembleTest.test_mix_assemble_with_tiling
+      - AssembleTest.test_inner_assemble_with_concat
+      - AssembleTest.test_inner_assemble_fp32
+      - AssembleTest.test_inner_assemble_by_framework_fp32
+      - AssembleTest.test_inner_assemble_multi_line_fp32
+      - AssembleTest.test_inner_assemble_multi_view_fp32
+      - AssembleTest.test_inner_assemble_multi_view_fp16
+      - AssembleTest.test_inner_assemble_multi_view_bf16
+
+  interface_view:
+    cases:
+      - ViewTest.test_inner_view_fp32

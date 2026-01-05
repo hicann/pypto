@@ -562,6 +562,15 @@ public:
 
     std::vector<std::vector<SymbolicScalar>> NormalizeCoa(
         std::vector<int> &iOffset, std::vector<int> &oOffset);
+    void NormalizeCoaForInCasts(std::vector<int> &iOffset, std::vector<std::vector<SymbolicScalar>> &coaLists,
+        int &coaIndex, std::unordered_map<LogicalTensorPtr, int> &processedOperands,
+        const std::unordered_map<int, Operation *> &opmagicToOp);
+    void NormalizeCoaForOutCasts(std::vector<int> &oOffset, std::vector<std::vector<SymbolicScalar>> &coaLists,
+        int &coaIndex, std::unordered_map<LogicalTensorPtr, int> &processedOperands,
+        const std::unordered_map<int, Operation *> &opmagicToOp);
+    void NormalizeCoaForNormalOperands(std::vector<std::vector<SymbolicScalar>> &coaLists, int &coaIndex,
+        std::unordered_map<LogicalTensorPtr, int> &processedOperands);
+    void NormalizeCoaForSpecialInfo(std::vector<std::vector<SymbolicScalar>> &coaLists, int &coaIndex);
     void GetOutcastSymbolicExpr(std::map<int, SymbolicScalar>& tabel);
 
     void DumpTopoFile(const std::string &fileName) const;

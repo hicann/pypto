@@ -33,6 +33,7 @@
 
 #include "tilefwk/error.h"
 #include "securec.h"
+#include "tilefwk/symbolic_scalar.h"
 
 namespace npu::tile_fwk {
 using Status = uint32_t;
@@ -205,6 +206,21 @@ inline std::string IntVecToStr(const std::vector<T> &shape) {
         ss << shape[0];
         for (size_t i = 1; i < shape.size(); ++i) {
             ss << ", " << shape[i];
+        }
+    }
+
+    ss << "]";
+    return ss.str();
+}
+
+inline std::string SymbolicVecToStr(const std::vector<SymbolicScalar> &a) {
+    std::stringstream ss;
+    ss << "[";
+
+    if (!a.empty()) {
+        ss << a[0].Dump();
+        for (size_t i = 1; i < a.size(); ++i) {
+            ss << ", " << a[i].Dump();
         }
     }
 

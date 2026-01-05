@@ -1144,7 +1144,7 @@ void Assemble(const std::vector<AssembleItem> &items, Tensor &src, bool parallel
                 src.GetStorage()->Format());
         }
         for (const auto &item : items) {
-            auto viewTensor = View(src.GetStorage(), item.tensor.GetShape(), item.offsets);
+            auto viewTensor = View(src.GetStorage(), item.tensor.GetShape(), item.tensor.GetStorage()->GetDynValidShape(), item.offsets);
             TensorInnerAssemble(*Program::GetInstance().GetCurrentFunction(), item.tensor.GetStorage(), item.offsets,
                 viewTensor.GetStorage(), result.GetStorage());
         }
@@ -1156,7 +1156,7 @@ void Assemble(const std::vector<AssembleItem> &items, Tensor &src, bool parallel
     auto preResult = src.GetStorage();
     int i = 0;
     for (const auto &item : items) {
-        auto viewTensor = View(preResult, item.tensor.GetShape(), item.offsets);
+        auto viewTensor = View(preResult, item.tensor.GetShape(), item.tensor.GetStorage()->GetDynValidShape(), item.offsets);
         Tensor curResult(src.GetDataType(), src.GetShape(), "assemble_seq_out" + std::to_string(i),
             src.GetStorage()->Format());
         auto shapes = curResult.GetStorage()->GetShape();

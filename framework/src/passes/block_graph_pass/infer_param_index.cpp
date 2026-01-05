@@ -49,7 +49,9 @@ Status InferParamIndex::ResetOutputDynValidShape(const Operation &op) {
                                                     "_dim_" + std::to_string(dimIdx)));
             }
         }
-        outOperand->UpdateDynValidShape(validShape);
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) { // Assemble的oOperand保持validShape不变
+            outOperand->UpdateDynValidShape(validShape);
+        }
     }
     return SUCCESS;
 }

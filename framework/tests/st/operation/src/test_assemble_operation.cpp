@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file test_add_operation.cpp
+ * \file test_assemble_operation.cpp
  * \brief
  */
 
@@ -29,6 +29,7 @@ class AssembleTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {
     void SetUp() override {
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
         config::SetHostOption(ONLY_CODEGEN, true);
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         // 测试精度工具功能支持时，打开下面的注释
         // config::SetVerifyOption(KEY_VERIFY_TENSOR_GRAPH, true);
         // config::SetVerifyOption(KEY_VERIFY_PASS, true);
@@ -1606,5 +1607,539 @@ TEST_F(AssembleTest, test_mix_assemble_with_tiling) {
     float eps = 1e-3f; // Compare results
     std::cout << "=======================dst===============================" << std::endl;
     EXPECT_TRUE(resultCmp(dstGolden, (float *)dstResult->data(), eps));
+}
+
+// 测试Concat转核内Assemble的能力
+TEST_F(AssembleTest, test_inner_assemble_with_concat) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> uniform(-10, 10);
+
+    constexpr int X = 509;
+    constexpr int M = 1024;
+
+    auto SimuResult = [](const std::vector<float> &a, const std::vector<float> &b) {
+        ASSERT(a.size() + b.size() == M);
+        std::vector<float> out(M, 0);
+        for (size_t i = 0; i < a.size(); i++) {
+            out[i] = a[i];
+        }
+        for (size_t i = 0; i < b.size(); i++) {
+            out[a.size() + i] = b[i];
+        }
+        for (size_t i = 0; i < out.size(); i++) {
+            out[i] *= 2;
+        }
+        return out;
+    };
+
+    Tensor a(DT_FP32, {1, X}, "a");
+    Tensor b(DT_FP32, {1, M - X}, "b");
+    Tensor dst(DT_FP32, {1, M}, "dst");
+
+    std::vector<float> aData(ShapeSize(a.GetShape()), 0);
+    for (size_t i = 0; i < aData.size(); i++) {
+        aData[i] = uniform(gen);
+    }
+    std::vector<float> bData(ShapeSize(b.GetShape()), 0);
+    for (size_t i = 0; i < bData.size(); i++) {
+        bData[i] = uniform(gen);
+    }
+    auto dstGolden = SimuResult(aData, bData);
+    std::cout << "simu finished" << std::endl;
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor<float>(a, aData),
+        RawTensorData::CreateTensor<float>(b, bData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(dst, 0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<float>(dst, dstGolden),
+    });
+
+    FUNCTION("test", {a, b}, {dst}) {
+        LOOP("loop1", FunctionType::DYNAMIC_LOOP, unused, LoopRange(1)) {
+            (void)unused;
+            TileShape::Current().SetVecTile(1, 2048);
+            auto c = Cat(std::vector<Tensor>{a, b}, -1);
+            dst = Add(c, c);
+        }
+    }
+    std::cout << "compile finished" << std::endl;
+
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+    std::cout << "run finished" << std::endl;
+
+    auto dstResult = ProgramData::GetInstance().GetOutputData(0);
+    float eps = 1e-3f; // Compare results
+    std::cout << "=======================dst===============================" << std::endl;
+    EXPECT_TRUE(resultCmp(dstGolden, (float *)dstResult->data(), eps));
+}
+
+template<typename T>
+void TestInnerAssemble() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> uniform(-10, 10);
+
+    DataType dType;
+    if constexpr (std::is_same_v<T, float>) {
+        dType = DT_FP32;
+    } else if constexpr (std::is_same_v<T, int>) {
+        dType = DT_INT32;
+    } else if constexpr (std::is_same_v<T, float16>) {
+        dType = DT_FP16;
+    } else if constexpr (std::is_same_v<T, bfloat16>) {
+        dType = DT_BF16;
+    } else {
+        ASSERT(false);
+    }
+
+    constexpr int N = 20;
+    constexpr int M = 1024;
+
+    int row = N;
+    auto SimuResult = [&row](const std::vector<T> &a, const std::vector<int> &lens, T startValue) {
+        ASSERT(a.size() == N * M);
+        ASSERT(lens.size() == N);
+        std::vector<T> out(N * M, -5.0f);
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < lens[i]; j++) {
+                out[i * M + j] = startValue;
+            }
+            for (int j = lens[i]; j < M; j++) {
+                out[i * M + j] = a[i * M + j];
+            }
+        }
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < M; j++) {
+                out[i * M + j] *= 2;
+            }
+        }
+        return out;
+    };
+
+    Tensor a(dType, {N, M}, "a");
+    Tensor lens(DT_INT32, {N}, "len");
+    Tensor dst(dType, {N, M}, "dst");
+
+    T startValue = uniform(gen);
+    std::vector<T> aData(ShapeSize(a.GetShape()), 0);
+    for (size_t i = 0; i < aData.size(); i++) {
+        aData[i] = uniform(gen);
+    }
+    std::vector<int> lenData(ShapeSize(lens.GetShape()), 0);
+    std::uniform_int_distribution<int> uniformInt(1, M - 1);
+    for (size_t i = 0; i < lenData.size(); i++) {
+        lenData[i] = uniformInt(gen);
+    }
+    auto dstGolden = SimuResult(aData, lenData, startValue);
+    std::cout << "simu finished" << std::endl;
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor<T>(a, aData),
+        RawTensorData::CreateTensor<int>(lens, lenData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<T>(dst, -5.0f),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<T>(dst, dstGolden),
+    });
+
+    FUNCTION("test", {a, lens}, {dst}) {
+        LOOP("loop1", FunctionType::DYNAMIC_LOOP, idx, LoopRange(row)) {
+            TileShape::Current().SetVecTile(1, 2048);
+            Tensor tmp(dType, {1, M}, "tmp");
+            auto len = GetTensorData(lens, {idx});
+            auto defaultValue = Full(Element(dType, startValue), dType, {1, M}, {1, len}); // full不支持fp16
+            auto aView = View(a, {1, M}, {1, M - len}, {idx, len});
+            Assemble({{defaultValue, {0, 0}}, {Assign(aView), {0, len}}}, tmp, true);
+            tmp = Add(tmp, tmp);
+            Assemble({{tmp, {idx, 0}}}, dst, true);
+        }
+    }
+
+    std::cout << "compile finished" << std::endl;
+
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+    std::cout << "run finished" << std::endl;
+
+    auto dstResult = ProgramData::GetInstance().GetOutputData(0);
+    float eps = 1e-6f; // Compare results
+    std::cout << "=======================dst===============================" << std::endl;
+    EXPECT_TRUE(resultCmp(dstGolden, (T *)dstResult->data(), eps));
+    for (int i = 0; i < ShapeSize(dst.GetShape()); i++) {
+        auto actual = ((T *)dstResult->data())[i];
+        auto expect = dstGolden[i];
+        if (fabs(actual - expect) > eps) {
+            std::cout << i << ": actual: " << actual << ", expect: " << expect << std::endl;
+        }
+    }
+}
+
+// 测试核内assemble，尾轴字节对齐，每次view一行
+TEST_F(AssembleTest, test_inner_assemble_fp32) {
+    TestInnerAssemble<float>();
+}
+
+template<typename T>
+void TestInnerAssembleByFrameWork() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> uniform(-10, 10);
+
+    DataType dType;
+    if constexpr (std::is_same_v<T, float>) {
+        dType = DT_FP32;
+    } else if constexpr (std::is_same_v<T, int>) {
+        dType = DT_INT32;
+    } else if constexpr (std::is_same_v<T, float16>) {
+        dType = DT_FP16;
+    } else if constexpr (std::is_same_v<T, bfloat16>) {
+        dType = DT_BF16;
+    } else {
+        ASSERT(false);
+    }
+
+    constexpr int N = 20;
+    constexpr int M = 1024;
+
+    int row = N;
+    auto SimuResult = [&row](const std::vector<T> &a, const std::vector<int> &lens) {
+        ASSERT(a.size() == N * M);
+        ASSERT(lens.size() == N);
+        std::vector<T> out(N * M, -5.0f);
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < lens[i]; j++) {
+                out[i * M + j] = a[i * M + j] * 2 * a[i * M + j];
+            }
+        }
+        return out;
+    };
+
+    Tensor a(dType, {N, M}, "a");
+    Tensor lens(DT_INT32, {N}, "len");
+    Tensor dst(dType, {N, M}, "dst");
+
+    T startValue = uniform(gen);
+    std::vector<T> aData(ShapeSize(a.GetShape()), 0);
+    for (size_t i = 0; i < aData.size(); i++) {
+        aData[i] = uniform(gen);
+    }
+    std::vector<int> lenData(ShapeSize(lens.GetShape()), 0);
+    std::uniform_int_distribution<int> uniformInt(1, M - 1);
+    for (size_t i = 0; i < lenData.size(); i++) {
+        lenData[i] = uniformInt(gen);
+    }
+    auto dstGolden = SimuResult(aData, lenData);
+    std::cout << "simu finished" << std::endl;
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor<T>(a, aData),
+        RawTensorData::CreateTensor<int>(lens, lenData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<T>(dst, -5.0f),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<T>(dst, dstGolden),
+    });
+
+    FUNCTION("test", {a, lens}, {dst}) {
+        LOOP("loop1", FunctionType::DYNAMIC_LOOP, idx, LoopRange(row)) {
+            TileShape::Current().SetVecTile(1, 128);
+            auto len = GetTensorData(lens, {idx});
+            auto b = View(a, {1, M}, {1, len}, {idx, 0});
+            auto c = Add(b, b);
+            TileShape::Current().SetVecTile(1, 512);
+            auto d = Mul(c, b);
+            Assemble({{d, {idx, 0}}}, dst, true);
+        }
+    }
+
+    std::cout << "compile finished" << std::endl;
+
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+    std::cout << "run finished" << std::endl;
+
+    auto dstResult = ProgramData::GetInstance().GetOutputData(0);
+    float eps = 1e-6f; // Compare results
+    std::cout << "=======================dst===============================" << std::endl;
+    EXPECT_TRUE(resultCmp(dstGolden, (T *)dstResult->data(), eps));
+    for (int i = 0; i < ShapeSize(dst.GetShape()); i++) {
+        auto actual = ((T *)dstResult->data())[i];
+        auto expect = dstGolden[i];
+        if (fabs(actual - expect) > eps) {
+            std::cout << i << ": actual: " << actual << ", expect: " << expect << std::endl;
+        }
+    }
+}
+
+// 测试核内assemble，尾轴字节对齐，每次view一行
+TEST_F(AssembleTest, test_inner_assemble_by_framework_fp32) {
+    TestInnerAssembleByFrameWork<float>();
+}
+
+template<typename T>
+void TestInnerAssembleMultiLine() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> uniform(-10, 10);
+
+    DataType dType;
+    if constexpr (std::is_same_v<T, float>) {
+        dType = DT_FP32;
+    } else if constexpr (std::is_same_v<T, int>) {
+        dType = DT_INT32;
+    } else if constexpr (std::is_same_v<T, float16>) {
+        dType = DT_FP16;
+    } else if constexpr (std::is_same_v<T, bfloat16>) {
+        dType = DT_BF16;
+    } else {
+        ASSERT(false);
+    }
+
+    constexpr int N = 20;
+    constexpr int M = 1032;
+
+    ASSERT(N % 5 == 0);
+    int row = N / 5;
+    auto SimuResult = [&row](const std::vector<T> &a, const std::vector<int> &lens, T startValue) {
+        ASSERT(a.size() == N * M);
+        ASSERT(lens.size()  * 5 == N);
+        std::vector<T> out(N * M, -5.0f);
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < 5; j++) {
+                for (int k = 0; k < lens[i]; k++) {
+                    out[(i * 5 + j) * M + k] = startValue;
+                }
+                for (int k = lens[i]; k < M; k++) {
+                    out[(i * 5 + j) * M + k] = a[(i * 5 + j) * M + k];
+                }
+            }
+
+        }
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < M; j++) {
+                out[i * M + j] *= 2;
+            }
+        }
+        return out;
+    };
+
+    Tensor a(dType, {N, M}, "a");
+    Tensor lens(DT_INT32, {row}, "len");
+    Tensor dst(dType, {N, M}, "dst");
+
+    T startValue = uniform(gen);
+    std::vector<T> aData(ShapeSize(a.GetShape()), 0);
+    for (size_t i = 0; i < aData.size(); i++) {
+        aData[i] = uniform(gen);
+    }
+    std::vector<int> lenData(ShapeSize(lens.GetShape()), 0);
+    std::uniform_int_distribution<int> uniformInt(1, M - 1);
+    for (size_t i = 0; i < lenData.size(); i++) {
+        lenData[i] = uniformInt(gen);
+    }
+    auto dstGolden = SimuResult(aData, lenData, startValue);
+    std::cout << "simu finished" << std::endl;
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor<T>(a, aData),
+        RawTensorData::CreateTensor<int>(lens, lenData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<T>(dst, -5.0f),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<T>(dst, dstGolden),
+    });
+
+    FUNCTION("test", {a, lens}, {dst}) {
+        LOOP("loop1", FunctionType::DYNAMIC_LOOP, idx, LoopRange(row)) {
+            TileShape::Current().SetVecTile(5, 2048);
+            Tensor tmp(dType, {5, M}, "tmp");
+            auto len = GetTensorData(lens, {idx});
+            auto defaultValue = Full(Element(dType, startValue), dType, {5, M}, {5, len}); // full不支持fp16
+            auto aView = View(a, {5, M}, {5, M - len}, {idx * 5, len});
+            Assemble({{defaultValue, {0, 0}}, {Assign(aView), {0, len}}}, tmp, true);
+            tmp = Add(tmp, tmp);
+            Assemble({{tmp, {idx * 5, 0}}}, dst, true);
+        }
+    }
+
+    std::cout << "compile finished" << std::endl;
+
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+    std::cout << "run finished" << std::endl;
+
+    auto dstResult = ProgramData::GetInstance().GetOutputData(0);
+    float eps = 1e-6f; // Compare results
+    std::cout << "=======================dst===============================" << std::endl;
+    EXPECT_TRUE(resultCmp(dstGolden, (T *)dstResult->data(), eps));
+    for (int i = 0; i < ShapeSize(dst.GetShape()); i++) {
+        auto actual = ((T *)dstResult->data())[i];
+        auto expect = dstGolden[i];
+        if (fabs(actual - expect) > eps) {
+            std::cout << i << ": actual: " << actual << ", expect: " << expect << std::endl;
+        }
+    }
+}
+
+// 测试核内assemble，每次view一个矩形
+TEST_F(AssembleTest, test_inner_assemble_multi_line_fp32) {
+    TestInnerAssembleMultiLine<float>();
+}
+
+template<typename T>
+void TestInnerAssembleMultiView() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> uniform(-10, 10);
+
+    DataType dType;
+    if constexpr (std::is_same_v<T, float>) {
+        dType = DT_FP32;
+    } else if constexpr (std::is_same_v<T, int>) {
+        dType = DT_INT32;
+    } else if constexpr (std::is_same_v<T, float16>) {
+        dType = DT_FP16;
+    } else if constexpr (std::is_same_v<T, bfloat16>) {
+        dType = DT_BF16;
+    } else {
+        ASSERT(false);
+    }
+
+    constexpr int N = 5;
+    constexpr int M = 1032;
+
+    ASSERT(N % 5 == 0);
+    int row = N / 5;
+    auto SimuResult = [&row](const std::vector<T> &a, const std::vector<T> &b, const std::vector<T> &c,
+                          const std::vector<int> &lens1, const std::vector<int> &lens2) {
+        ASSERT(a.size() == N * M);
+        ASSERT(lens1.size() * 5 == N);
+        ASSERT(lens2.size() * 5 == N);
+        std::vector<T> out(N * M, -5.0f);
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < 5; j++) {
+                for (int k = 0; k < lens1[i]; k++) {
+                    out[(i * 5 + j) * M + k] = a[(i * 5 + j) * M + k];
+                }
+                for (int k = lens1[i]; k < lens2[i]; k++) {
+                    out[(i * 5 + j) * M + k] = b[(i * 5 + j) * M + k];
+                }
+                for (int k = lens2[i]; k < M; k++) {
+                    out[(i * 5 + j) * M + k] = c[(i * 5 + j) * M + k];
+                }
+            }
+        }
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < M; j++) {
+                out[i * M + j] *= 2;
+            }
+        }
+        return out;
+    };
+
+    Tensor a(dType, {N, M}, "a");
+    Tensor b(dType, {N, M}, "b");
+    Tensor c(dType, {N, M}, "c");
+    Tensor lens1(DT_INT32, {row}, "lens1");
+    Tensor lens2(DT_INT32, {row}, "lens2");
+    Tensor dst(dType, {N, M}, "dst");
+
+    std::vector<T> aData(ShapeSize(a.GetShape()), 0);
+    for (size_t i = 0; i < aData.size(); i++) {
+        aData[i] = uniform(gen);
+    }
+    std::vector<T> bData(ShapeSize(b.GetShape()), 0);
+    for (size_t i = 0; i < bData.size(); i++) {
+        bData[i] = uniform(gen);
+    }
+    std::vector<T> cData(ShapeSize(c.GetShape()), 0);
+    for (size_t i = 0; i < cData.size(); i++) {
+        cData[i] = uniform(gen);
+    }
+    std::vector<int> lens1Data(ShapeSize(lens1.GetShape()), 0);
+    std::uniform_int_distribution<int> uniformInt1(1, M / 2);
+    for (size_t i = 0; i < lens1Data.size(); i++) {
+        lens1Data[i] = 364; // uniformInt1(gen);
+        std::cout << "lens1:" << lens1Data[i] << std::endl;
+    }
+    std::vector<int> lens2Data(ShapeSize(lens2.GetShape()), 0);
+    std::uniform_int_distribution<int> uniformInt2(M / 2, M);
+    for (size_t i = 0; i < lens2Data.size(); i++) {
+        lens2Data[i] = 644; // uniformInt2(gen);
+        std::cout << "lens2:" << lens2Data[i] << std::endl;
+    }
+    auto dstGolden = SimuResult(aData, bData, cData, lens1Data, lens2Data);
+    std::cout << "simu finished" << std::endl;
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor<T>(a, aData),
+        RawTensorData::CreateTensor<T>(b, bData),
+        RawTensorData::CreateTensor<T>(c, cData),
+        RawTensorData::CreateTensor<int>(lens1, lens1Data),
+        RawTensorData::CreateTensor<int>(lens2, lens2Data),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<T>(dst, -5.0f),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<T>(dst, dstGolden),
+    });
+
+    FUNCTION("test", {a, b, c, lens1, lens2}, {dst}) {
+        config::SetPassOption(PG_SKIP_PARTITION, true);
+        LOOP("loop1", FunctionType::DYNAMIC_LOOP, idx, LoopRange(row)) {
+            TileShape::Current().SetVecTile(5, 2048);
+            Tensor tmp(dType, {5, M}, "tmp");
+            auto len1 = GetTensorData(lens1, {idx});
+            auto len2 = GetTensorData(lens2, {idx});
+            auto aView = View(a, {5, M}, {5, len1}, {idx * 5, 0});
+            auto bView = View(b, {5, M}, {5, len2 - len1}, {idx * 5, len1});
+            auto cView = View(c, {5, M}, {5, M - len2}, {idx * 5, len2});
+            Assemble({{Assign(aView), {0, 0}}, {Assign(bView), {0, len1}}, {Assign(cView), {0, len2}}}, tmp, true);
+            tmp = Add(tmp, tmp);
+            Assemble({{tmp, {idx * 5, 0}}}, dst, true);
+        }
+        config::SetPassOption(PG_SKIP_PARTITION, false);
+    }
+
+    std::cout << "compile finished" << std::endl;
+
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+    std::cout << "run finished" << std::endl;
+
+    auto dstResult = ProgramData::GetInstance().GetOutputData(0);
+    float eps = 1e-6f; // Compare results
+    std::cout << "=======================dst===============================" << std::endl;
+    EXPECT_TRUE(resultCmp(dstGolden, (T *)dstResult->data(), eps));
+    for (int i = 0; i < ShapeSize(dst.GetShape()); i++) {
+        auto actual = ((T *)dstResult->data())[i];
+        auto expect = dstGolden[i];
+        if (fabs(actual - expect) > eps) {
+            std::cout << i << ": actual: " << actual << ", expect: " << expect << std::endl;
+        }
+    }
+}
+
+// 测试核内assemble，每次view一个矩形
+TEST_F(AssembleTest, test_inner_assemble_multi_view_fp32) {
+    TestInnerAssembleMultiView<float>();
+}
+
+// 测试核内assemble，每次view一个矩形
+TEST_F(AssembleTest, test_inner_assemble_multi_view_fp16) {
+    TestInnerAssembleMultiView<float16>();
+}
+
+// 测试核内assemble，每次view一个矩形
+TEST_F(AssembleTest, test_inner_assemble_multi_view_bf16) {
+    TestInnerAssembleMultiView<bfloat16>();
 }
 } // namespace

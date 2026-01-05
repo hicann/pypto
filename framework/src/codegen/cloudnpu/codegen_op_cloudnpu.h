@@ -195,6 +195,9 @@ private:
     }
     void AppendLocalBufferVarOffset(const std::map<unsigned, std::reference_wrapper<std::string>> &vars) const;
 
+    // get start offset in total block
+    SymbolicScalar GetOperandStartOffset(int operandIdx) const;
+
     std::string GenGmParamVar(unsigned gmParamIdx) const;
 
     bool CombineAxis(

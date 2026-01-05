@@ -23,8 +23,10 @@ Tensor CalcOffsetsForGather(const Tensor &topKIndcies, const Tensor &blockTable,
     int blockSize = params.blockSize;
     int topk = params.topk;
     auto maxBlockNumPerBatch = GetInputShape(blockTable, 1);
+    constexpr int64_t maxBatch = 128;
+    constexpr int64_t maxS1 = 4;
 
-    Tensor offsets(DT_INT32, {b * s1, n2 * params.topk}, "offsets");
+    Tensor offsets(DT_INT32, {maxBatch * maxS1, n2 * params.topk}, "offsets");
     LOOP("gather_and_matmul", FunctionType::DYNAMIC_LOOP, idx, LoopRange(b * s1)) {
         // ASSERT(s1 != 0) << "s1 can`t be zero!";
         auto bIdx = idx / s1;

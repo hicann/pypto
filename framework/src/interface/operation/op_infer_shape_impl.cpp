@@ -601,21 +601,21 @@ void CopyInInferFunc(Operation* op,
 REGISTER_INFER_SHAPE_FUNC(OP_COPY_IN, Opcode::OP_COPY_IN, CopyInInferFunc);
 
 void CopyOutInferFunc(Operation* op,
-                      std::vector<std::vector<SymbolicScalar>>& outValisShapes)
+                      std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
     if (copyOpAttribute != nullptr) {
         copyOpAttribute->SetFromDynValidShape(OpImmediate::Specified(op->GetIOperands()[0]->GetDynValidShape()));
     } else {
         ALOG_WARN_F("Copyout [%d] has no copy out attr.", op->GetOpMagic());
-        outValisShapes.push_back(op->GetIOperands()[0]->GetDynValidShape());
+        outValidShapes.push_back(op->GetIOperands()[0]->GetDynValidShape());
         return;
     }
 
     // 多个tile块copyout到同一个tensor时， 每一个tile都需要推导
     bool needInferShape = false;
     if (!(op->GetOOperands()[0]->GetDynValidShape().empty()) && !op->GetOOperands()[0]->GetAttr(COPY_OUT_FORCE_INFER_SHAPE, needInferShape)) {
-        outValisShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
+        outValidShapes.push_back(op->GetOOperands()[0]->GetDynValidShape());
         return;
     }
 
@@ -651,7 +651,7 @@ void CopyOutInferFunc(Operation* op,
         outShape.push_back(actualDim);
     }
     for (auto output : op->GetOOperands()) {
-        outValisShapes.push_back(outShape);
+        outValidShapes.push_back(outShape);
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_COPY_OUT, Opcode::OP_COPY_OUT, CopyOutInferFunc);

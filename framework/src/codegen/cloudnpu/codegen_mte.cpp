@@ -1059,23 +1059,26 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL
     return oss.str();
 }
 
+// When ub tensor spilling to GM occurred, the spilling unit is entire raw shape of ub tensor.
+// So ub offset is always zero under this scene, do not need to calculate anymore.
 std::string CodeGenOpCloudNPU::PrintMemCopyWithUB(PrintMemCopyWithUBParam &param) const {
     unsigned localIdx = param.localIdx;
     std::vector<std::string> &addrExpr = param.addrExpr;
-    // When ub tensor spilling to GM occurred, the spilling unit is entire raw shape of ub tensor.
-    // So ub offset is always zero under this scene, do not need to calculate anymore.
-    AppendLocalBufferVarOffset({
-        {localIdx, std::ref(addrExpr[localIdx])}
-    });
     if (isSupportLayout) {
         return PrintMemCopyWithUBTileTensor(param);
     }
     if (isSupportDynamicAligned) {
+        AppendLocalBufferVarOffset({
+            {localIdx, addrExpr[localIdx]}
+        });
         return PrintMemCopyWithUBDynamic(param);
     }
     if (isDynamicFunction) {
         return PrintMemCopyWithUBDynamicSupportUnaligned(param);
     }
+    AppendLocalBufferVarOffset({
+        {localIdx, addrExpr[localIdx]}
+    });
     return PrintMemCopyWithUBStatic(param);
 }
 
@@ -1187,6 +1190,10 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const P
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(ts));
     }
     paramList.insert(paramList.end(), paramPack.paramList.begin(), paramPack.paramList.end());
+    auto startOffset = GetOperandStartOffset(localIdx);
+    if (!startOffset.ConcreteValid() || startOffset.Concrete() != 0) {
+        paramList.emplace_back(startOffset.Dump());
+    }
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     os << tileOpName.c_str() << "<" << templateParam << ">"

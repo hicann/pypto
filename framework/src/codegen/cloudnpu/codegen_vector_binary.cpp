@@ -176,7 +176,18 @@ std::string CodeGenOpCloudNPU::GenBinaryOp() const {
 
     std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
 
-    AppendLocalBufVarOffsetInOrder(dVar, s0Var, s1Var);
+    auto offset0 = GetOperandStartOffset(ID0);
+    auto offset1 = GetOperandStartOffset(ID1);
+    auto offset2 = GetOperandStartOffset(ID2);
+    if (!offset0.ConcreteValid() || offset0.Concrete() != 0) {
+        dVar += "+" + GetOperandStartOffset(ID0).Dump();
+    }
+    if (!offset1.ConcreteValid() || offset1.Concrete() != 0) {
+        s0Var += "+" + GetOperandStartOffset(ID1).Dump();
+    }
+    if (!offset2.ConcreteValid() || offset2.Concrete() != 0) {
+        s1Var += "+" + GetOperandStartOffset(ID2).Dump();
+    }
     return PrintBinary({s0Var, s1Var, dVar, src0DtypeStr, src1DtypeStr, dstDtypeStr});
 }
 

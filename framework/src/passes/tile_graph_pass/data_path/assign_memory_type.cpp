@@ -350,14 +350,6 @@ void AssignMemoryType::AssignMoveOpForAssemble(Operation &operation) {
         auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute *>(operation.GetOpAttribute().get());
         assembleOpAttribute->SetFromType(fromType);
     }
-    auto inputTensor = operation.GetIOperands().front();
-    auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute *>(operation.GetOpAttribute().get());
-    auto assembleOffset = assembleOpAttribute->GetToOffset();
-    bool unaligned = ((BytesOf(inputTensor->Datatype()) * assembleOffset.back()) % 32 != 0);
-    if(unaligned) {
-        auto outputTensor = operation.GetOOperands().front();
-        outputTensor -> SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR,true);
-    }
 }
 void AssignMemoryType::AssignMoveOpForView(Operation &operation) {
     /*

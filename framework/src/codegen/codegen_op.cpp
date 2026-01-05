@@ -214,6 +214,7 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
     operand[operandIdx] = tensor->GetMemoryTypeOriginal() == MEM_DEVICE_DDR ? tensor->tensor->GetRawMagic() :
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
+    dynamicOffset[operandIdx] = tensor->GetDynOffset();
     UpdateShape(ops, *tensor, operandIdx, isInput, ioIdx);
     if (isInput) {
         UpdateOffsetForInput(ops, *tensor, operandIdx);

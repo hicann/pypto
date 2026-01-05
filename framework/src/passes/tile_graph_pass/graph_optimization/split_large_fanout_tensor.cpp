@@ -336,15 +336,31 @@ void SplitLargeFanoutTensor::CollectLargeTensorToInfo(const LogicalTensorPtr &la
 
 void SplitLargeFanoutTensor::CollectLargeTensorFromInfo(const LogicalTensorPtr &largeTensor) {
     for (const auto &viewOp : largeTensor->GetConsumers()) {
+        if (viewOp->GetOpcode() != Opcode::OP_VIEW) {
+            continue;
+        }
         // 收集outputs
         auto output = viewOp->GetOOperands().front();
         if (fromInfoMap.count(largeTensor->tensor->rawmagic) == 0) {
             fromInfoMap.insert({largeTensor->tensor->rawmagic, {}});
         }
         auto opAttr = dynamic_cast<ViewOpAttribute *>(viewOp->GetOpAttribute().get());
-        if (opAttr != nullptr) {
-            fromInfoMap[largeTensor->tensor->rawmagic].emplace_back(output, opAttr->GetFromOffset());
+        if (opAttr == nullptr) { // 不可能为空，否则有问题
+            continue;
         }
+        if (!opAttr->GetFromDynOffset().empty()) {
+            bool hasDynOffset = false;
+            for (auto dynOffset : opAttr->GetFromDynOffset()) {
+                if (!dynOffset.ConcreteValid()) {
+                    hasDynOffset = true;
+                    break;
+                }
+            }
+            if (hasDynOffset) { // 当View存在动态offset时，无法进行split，因为不知道会用哪些Assemble
+                continue;
+            }
+        }
+        fromInfoMap[largeTensor->tensor->rawmagic].emplace_back(output, opAttr->GetFromOffset());
         // 收集outputs的shape
         if (fromShapes.count(largeTensor) == 0) {
             fromShapes.insert({largeTensor, {}});

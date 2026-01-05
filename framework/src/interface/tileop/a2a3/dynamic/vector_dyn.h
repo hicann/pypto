@@ -874,17 +874,70 @@ TILEOP void DynTduplicate_(__ubuf__ T *dst, T value, unsigned T0, unsigned T1) {
     }
 }
 
+// dim2
+template <typename T, unsigned Ds>
+TILEOP void DynTduplicate_(__ubuf__ T *dst, T value, unsigned T0, unsigned T1, unsigned dstStartOffset) {
+    constexpr unsigned npr = REPEAT_BYTE / sizeof(T);
+    if ((dstStartOffset % npr == 0) && (Ds % npr == 0)) { // 该分支里会处理头块对齐尾块非对齐场景
+        DynTduplicate_<T, Ds>(dst + dstStartOffset, value, T0, T1);
+    } else {
+        pipe_barrier(PIPE_ALL);
+        constexpr auto block = BLOCK_SIZE / sizeof(T);
+        unsigned curDstStartOffset = dstStartOffset;
+        for (unsigned i = 0; i < T0; i++) {
+            unsigned startOffset = ((curDstStartOffset - 1) / npr + 1) * npr - curDstStartOffset;
+            unsigned endOffset = (curDstStartOffset + T1) / npr * npr - curDstStartOffset;
+            if (startOffset >= T1) {
+                for (unsigned j = 0; j < T1; j++) { // 可用mask写法替代
+                    dst[curDstStartOffset + j] = value;
+                }
+                curDstStartOffset += Ds;
+                continue;
+            }
+            for (unsigned j = 0; j < startOffset; j++) { // 可用mask写法替代
+                dst[curDstStartOffset + j] = value;
+            }
+            for (unsigned j = endOffset; j < T1; j++) { // 可用mask写法替代
+                dst[curDstStartOffset + j] = value;
+            }
+            unsigned length = endOffset - startOffset;
+            unsigned numRepeatPerLine = length / npr;
+            unsigned blockPerRepeat = npr / block;
+            if (length > 0) {
+                vector_dup(dst + curDstStartOffset + startOffset, value, numRepeatPerLine, 1, 1, blockPerRepeat, (int64_t)0);
+            }
+            curDstStartOffset += Ds;
+        }
+        pipe_barrier(PIPE_ALL);
+    }
+}
+
+// dim4
+template <typename T, unsigned Ds0, unsigned Ds1, unsigned Ds2>
+TILEOP void DynTduplicate_(__ubuf__ T *dst, T value, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned dstStartOffset) {
+    for (unsigned i = 0; i < T0; i++) {
+        for (unsigned j = 0; j < T1; j++) {
+            DynTduplicate_<T, Ds2>(dst, value, T2, T3, dstStartOffset);
+            dstStartOffset += Ds1 * Ds2;
+        }
+        dstStartOffset += (Ds0 - T1) * Ds1 * Ds2;
+    }
+}
+
 // dim4
 template <typename T, unsigned Ds0, unsigned Ds1, unsigned Ds2>
 TILEOP void DynTduplicate_(__ubuf__ T *dst, T value, unsigned T0, unsigned T1, unsigned T2, unsigned T3) {
-    static_assert((Ds2 * sizeof(T)) % BLOCK_SIZE == 0);
+    unsigned dstStartOffset = 0;
     for (unsigned i = 0; i < T0; i++) {
-        __ubuf__ T *dst_ = dst;
         for (unsigned j = 0; j < T1; j++) {
-            DynTduplicate_<T, Ds2>(dst_, value, T2, T3);
-            dst_ += Ds1 * Ds2;
+            if constexpr ((Ds2 * sizeof(T)) % BLOCK_SIZE == 0) {
+                DynTduplicate_<T, Ds2>(dst + dstStartOffset, value, T2, T3);
+            } else {
+                DynTduplicate_<T, Ds2>(dst, value, T2, T3, dstStartOffset);
+            }
+            dstStartOffset += Ds1 * Ds2;
         }
-        dst += Ds0 * Ds1 * Ds2;
+        dstStartOffset += (Ds0 - T1) * Ds1 * Ds2;
     }
 }
 
