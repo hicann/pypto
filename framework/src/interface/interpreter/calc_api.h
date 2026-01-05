@@ -91,6 +91,7 @@ struct CalcOps {
     void (*Expand)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*GatherElements)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int);
     void (*IndexAdd)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int, const Element &);
+    void (*CumSum)(LogicalTensorDataPtr, LogicalTensorDataPtr, int);
 
     void (*Reshape)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*Permute)(LogicalTensorDataPtr, LogicalTensorDataPtr, const std::vector<int64_t> &);

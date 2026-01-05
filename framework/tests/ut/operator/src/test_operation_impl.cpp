@@ -47,7 +47,7 @@ TEST_F(OperationImplTest, test_CumSum_dim2_1) {
 TEST_F(OperationImplTest, test_CumSum_dim2_0) {
     int axis = 0;
     TileShape::Current().SetVecTile(4, 3);
-    Tensor input(DT_FP32, {11, 7}, "input");
+    Tensor input(DT_FP16, {11, 7}, "input");
     Tensor result;
     FUNCTION("TestCumSum") {
         result = CumSum(input, axis);
@@ -57,7 +57,7 @@ TEST_F(OperationImplTest, test_CumSum_dim2_0) {
 TEST_F(OperationImplTest, test_CumSum_dim1) {
     int axis = 0;
     TileShape::Current().SetVecTile(5);
-    Tensor input(DT_FP32, {13}, "input");
+    Tensor input(DT_INT8, {13}, "input");
     Tensor result;
     FUNCTION("TestCumSum") {
         result = CumSum(input, axis);

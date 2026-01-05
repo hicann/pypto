@@ -497,6 +497,13 @@ void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensor
     torch::index_add_out(output, inputSelf, axis, inputIndices, inputSrc, From(alpha));
 }
 
+void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
+    torch::Tensor output = From(out);
+    torch::Tensor input = From(in);
+
+    torch::cumsum_out(output, input, axis);
+}
+
 static void Copy(LogicalTensorDataPtr out, LogicalTensorDataPtr self, bool trans) {
     if (trans) {
         From(out) = From(self).transpose_(-1, AXIS_TO_LAST);
@@ -855,6 +862,7 @@ static struct CalcOps calcOps = {
     .Expand = Expand,
     .GatherElements = GatherElements,
     .IndexAdd = IndexAdd,
+    .CumSum = CumSum,
     .Reshape = Reshape,
     .Permute = Permute,
     .Transpose = Transpose,

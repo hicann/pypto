@@ -171,6 +171,9 @@ inline void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logica
     LogicalTensorDataPtr indices, int axis, const Element &alpha = Element(DT_FP32, 1.0)) {
     GetCalcOps()->IndexAdd(out, self, src, indices, axis, alpha);
 }
+inline void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
+    GetCalcOps()->CumSum(out, in, axis);
+}
 inline void Reshape(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Reshape(out, self);
 }

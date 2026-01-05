@@ -730,13 +730,12 @@ std::string CodeGenOpCloudNPU::PrintCumSumDynamicUnaligned(const PrintCumSumPara
     // template params
     std::vector<std::string> paramList;
     paramList.insert(paramList.end(), {dataTypeExpr[ID0]});
-    for (size_t i = 1; i < inputRawShape.size(); ++i) {
+    for (size_t i = 0; i < inputRawShape.size(); ++i) {
         paramList.emplace_back(std::to_string(inputRawShape[i]));
     }
 
-    int axis = param.axis + SHAPE_DIM4 - param.inputRawShape.size(); // 调用4维tileop需要切换axis
     bool flag = param.flag;
-    paramList.emplace_back(std::to_string(axis));
+    paramList.emplace_back(std::to_string(param.axis));
     paramList.emplace_back(std::to_string(flag));
     std::string templateParam = JoinString(paramList, ", ");
 
@@ -778,6 +777,7 @@ std::string CodeGenOpCloudNPU::GenCumSumOp() const {
 
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
     int axis = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+    axis = axis + SHAPE_DIM4 - inputRawShape.size(); // 调用4维tileop需要切换axis
 
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "flag")) << "cannot get flag attr";
     bool flag = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OP_ATTR_PREFIX + "flag"));

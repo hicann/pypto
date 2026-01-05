@@ -15,6 +15,7 @@
 
 #include "tileop_common.h"
 #include "vector.h"
+#include <array>
 
 #include <type_traits>
 
@@ -2526,7 +2527,7 @@ TILEOP void DynTindexAdd(__ubuf__ T *dst, __ubuf__ T *src, __ubuf__ T1 *indices,
     wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
 }
 
-template <typename T>
+template <typename T, typename T1>
 TILEOP void CumSumPublicTool(
     __ubuf__ T *dst, __ubuf__ T *input, unsigned TShape3, uint64_t offset, uint32_t idx, uint64_t stride) {
     uint32_t rptElm = REPEAT_BYTE / sizeof(T);
@@ -2559,7 +2560,7 @@ TILEOP void CumSumPublicTool(
     }
 }
 
-template <typename T, unsigned axis>
+template <typename T, typename T1, unsigned axis>
 TILEOP void CumSumAxis0_2(__ubuf__ T *dst, __ubuf__ T *input, unsigned TShape0, unsigned TShape1, unsigned TShape2,
     unsigned TShape3, uint64_t inputStride1, uint64_t inputStride2, uint64_t inputStride3) {
     uint64_t offset = 0;
@@ -2568,47 +2569,179 @@ TILEOP void CumSumAxis0_2(__ubuf__ T *dst, __ubuf__ T *input, unsigned TShape0, 
             for (uint32_t k = 0; k < TShape2; ++k) {
                 offset = i * inputStride1 + j * inputStride2 + k * inputStride3;
                 if constexpr (axis == 0) {
-                    CumSumPublicTool<T>(dst, input, TShape3, offset, i, inputStride1);
+                    CumSumPublicTool<T, T1>(dst, input, TShape3, offset, i, inputStride1);
                 } else if constexpr (axis == 1) {
-                    CumSumPublicTool<T>(dst, input, TShape3, offset, j, inputStride2);
+                    CumSumPublicTool<T, T1>(dst, input, TShape3, offset, j, inputStride2);
                 } else if constexpr (axis == 2) {
-                    CumSumPublicTool<T>(dst, input, TShape3, offset, k, inputStride3);
+                    CumSumPublicTool<T, T1>(dst, input, TShape3, offset, k, inputStride3);
                 }
             }
         }
     }
 }
 
-template <typename T, unsigned inputRawShape1, unsigned inputRawShape2, unsigned inputRawShape3, unsigned axis,
-    bool flag>
+template <typename T>
+TILEOP void CumSumAdd(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T *src1, int repeat, int dstBlockStride,
+    int src0BlockStride, int src1BlockStride, int dstRepeatStride, int src0RepeatStride, int src1RepeatStride) {
+    int n = repeat / REPEAT_MAX;
+    int rest = repeat % REPEAT_MAX;
+    constexpr int elePerRepeat = REPEAT_BYTE / sizeof(T);
+    __ubuf__ T *dst_ = dst;
+    __ubuf__ T *src0_ = src0;
+    __ubuf__ T *src1_ = src1;
+
+    for (size_t i = 0; i < n; i++) {
+        vadd(dst_, src0_, src1_, REPEAT_MAX, dstBlockStride, src0BlockStride, src1BlockStride, dstRepeatStride,
+            src0RepeatStride, src1RepeatStride);
+        dst_ += REPEAT_MAX * elePerRepeat;
+        src0_ += REPEAT_MAX * elePerRepeat;
+        src1_ += REPEAT_MAX * elePerRepeat;
+    }
+    vadd(dst_, src0_, src1_, rest, dstBlockStride, src0BlockStride, src1BlockStride, dstRepeatStride, src0RepeatStride,
+        src1RepeatStride);
+}
+
+template <typename T>
+TILEOP void CumSumAdds(__ubuf__ T *dst, __ubuf__ T *src0, T src1, int repeat, int dstBlockStride, int src0BlockStride,
+    int dstRepeatStride, int src0RepeatStride) {
+    int n = repeat / REPEAT_MAX;
+    int rest = repeat % REPEAT_MAX;
+    constexpr int elePerRepeat = REPEAT_BYTE / sizeof(T);
+
+    __ubuf__ T *dst_ = dst;
+    __ubuf__ T *src0_ = src0;
+
+    for (size_t i = 0; i < n; i++) {
+        vadds(dst_, src0_, src1, REPEAT_MAX, dstBlockStride, src0BlockStride, dstRepeatStride, src0RepeatStride);
+        dst_ += REPEAT_MAX * elePerRepeat;
+        src0_ += REPEAT_MAX * elePerRepeat;
+    }
+    vadds(dst_, src0_, src1, rest, dstBlockStride, src0BlockStride, dstRepeatStride, src0RepeatStride);
+}
+
+template <typename T, unsigned int RawShape0, unsigned int RawShape1, int Axis>
+TILEOP void CumSum2d(__ubuf__ T *dst, __ubuf__ T *src) {
+    if constexpr (Axis == 0) {
+        int repeat = RawShape1 * sizeof(T) / REPEAT_BYTE;
+        int rest = (RawShape1 * sizeof(T) % REPEAT_BYTE) / sizeof(T);
+        constexpr int blockStride = 1;
+        constexpr int repeatStride = 8;
+        constexpr int elePerRepeat = REPEAT_BYTE / sizeof(T);
+
+        if (repeat > 0) {
+            CumSumAdds(dst, src, (T)0, repeat, blockStride, blockStride, repeatStride, repeatStride);
+        }
+        if (rest > 0) {
+            SetContinuousMask(rest);
+            set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+            wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+            CumSumAdds(dst + repeat * elePerRepeat, src + repeat * elePerRepeat, (T)0, 1, blockStride, blockStride,
+                repeatStride, repeatStride);
+            set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+            wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+            set_vector_mask(-1, -1);
+        }
+        pipe_barrier(PIPE_V);
+
+        int i = 1;
+        while (i < RawShape0) {
+            repeat = (RawShape0 - i) * RawShape1 * sizeof(T) / REPEAT_BYTE;
+            rest = ((RawShape0 - i) * RawShape1 * sizeof(T) % REPEAT_BYTE) / sizeof(T);
+            if (repeat > 0) {
+                CumSumAdd(dst + i * RawShape1, src, src + i * RawShape1, repeat, blockStride, blockStride, blockStride,
+                    repeatStride, repeatStride, repeatStride);
+            }
+            if (rest > 0) {
+                SetContinuousMask(rest);
+                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                CumSumAdd(dst + i * RawShape1 + repeat * elePerRepeat, src + repeat * elePerRepeat,
+                    src + i * RawShape1 + repeat * elePerRepeat, 1, blockStride, blockStride, blockStride, repeatStride,
+                    repeatStride, repeatStride);
+                set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                set_vector_mask(-1, -1);
+            }
+            pipe_barrier(PIPE_V);
+            if (repeat > 0) {
+                CumSumAdds(src + i * RawShape1, dst + i * RawShape1, (T)0, repeat, blockStride, blockStride,
+                    repeatStride, repeatStride);
+            }
+            if (rest > 0) {
+                SetContinuousMask(rest);
+                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                CumSumAdds(src + i * RawShape1 + repeat * elePerRepeat, dst + i * RawShape1 + repeat * elePerRepeat,
+                    (T)0, 1, blockStride, blockStride, repeatStride, repeatStride);
+                set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                set_vector_mask(-1, -1);
+            }
+            pipe_barrier(PIPE_V);
+            i *= 2;
+        }
+    } else {
+        __ubuf__ T *dst_ = dst;
+        __ubuf__ T *src_ = src;
+        for (size_t i = 0; i < RawShape0; i++) {
+            dst_[0] = src_[0];
+            for (size_t j = 1; j < RawShape1; j++) {
+                if constexpr (std::is_same_v<T, half>) {
+                    T tmp = static_cast<float>(src_[j]) + static_cast<float>(dst_[j - 1]);
+                    dst_[j] = tmp;
+                } else {
+                    dst_[j] = dst_[j - 1] + src_[j];
+                }
+            }
+            dst_ += RawShape1;
+            src_ += RawShape1;
+        }
+    }
+}
+
+template <int axis, unsigned... RawShapes>
+[host, aicore] constexpr int product() {
+    constexpr size_t rank = sizeof...(RawShapes);
+    constexpr std::array<unsigned int, rank> dims = {RawShapes...};
+    static_assert(axis >= 0 && axis < rank, "Axis out of bounds");
+
+    int product = 1;
+    for (size_t i = axis; i < rank; ++i) {
+        product *= dims[i];
+    }
+    return product;
+}
+
+template <typename T, int Axis, unsigned... RawShapes>
+TILEOP void CumSum(__ubuf__ T *dst, __ubuf__ T *src) {
+    constexpr size_t rank = sizeof...(RawShapes);
+
+    if constexpr (Axis == 0) {
+        constexpr int dim0 = product<0, RawShapes...>() / product<1, RawShapes...>();
+        constexpr int dim1 = product<1, RawShapes...>();
+        CumSum2d<T, dim0, dim1, 0>(dst, src);
+    } else if constexpr (Axis == (int)rank - 1) {
+        constexpr int dim0 = product<0, RawShapes...>() / product<Axis, RawShapes...>();
+        constexpr int dim1 = product<Axis, RawShapes...>();
+        CumSum2d<T, dim0, dim1, 1>(dst, src);
+    } else {
+        constexpr int loop = product<0, RawShapes...>() / product<Axis, RawShapes...>();
+        constexpr int dim0 = product<Axis, RawShapes...>() / product<Axis + 1, RawShapes...>();
+        constexpr int dim1 = product<Axis + 1, RawShapes...>();
+        for (size_t i = 0; i < loop; i++) {
+            CumSum2d<T, dim0, dim1, 0>(dst + i * dim0 * dim1, src + i * dim0 * dim1);
+        }
+    }
+}
+
+template <typename T, unsigned inputRawShape0, unsigned inputRawShape1, unsigned inputRawShape2,
+    unsigned inputRawShape3, int axis, bool flag>
 TILEOP void DynTcumSum(
     __ubuf__ T *dst, __ubuf__ T *input, unsigned TShape0, unsigned TShape1, unsigned TShape2, unsigned TShape3) {
     set_flag(PIPE_V, PIPE_S, EVENT_ID7);
     wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
-    uint64_t inputStride1 = inputRawShape1 * inputRawShape2 * inputRawShape3;
-    uint64_t inputStride2 = inputRawShape2 * inputRawShape3;
-    uint64_t inputStride3 = inputRawShape3;
 
-    if constexpr (axis != 3) {
-        CumSumAxis0_2<T, axis>(
-            dst, input, TShape0, TShape1, TShape2, TShape3, inputStride1, inputStride2, inputStride3);
-    } else {
-        uint64_t offset = 0;
-        for (uint32_t i = 0; i < TShape0; ++i) {
-            for (uint32_t j = 0; j < TShape1; ++j) {
-                for (uint32_t k = 0; k < TShape2; ++k) {
-                    for (uint32_t idx = 0; idx < TShape3; ++idx) {
-                        offset = i * inputStride1 + j * inputStride2 + k * inputStride3 + idx;
-                        if (idx == 0) {
-                            dst[offset] = input[offset];
-                        } else {
-                            dst[offset] = input[offset] + dst[offset - 1];
-                        }
-                    }
-                }
-            }
-        }
-    }
+    CumSum<T, axis, inputRawShape0, inputRawShape1, inputRawShape2, inputRawShape3>(dst, input);
 
     set_flag(PIPE_S, PIPE_V, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
