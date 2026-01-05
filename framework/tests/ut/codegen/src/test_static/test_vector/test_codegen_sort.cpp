@@ -88,7 +88,7 @@ void TopKOnBoardFunc(TopKParams &params) {
     std::string res = GetResultFromCpp(*function);
     std::string expect = R"!!!(#include "TileOpImpl.h"
 
-// funcHash: 17439136257815218973
+// funcHash: 9622810300601126008
 
 extern "C" [aicore] void TENSOR_TOPK_T_TILETENSOR_2_0_4503599627370496(__gm__ GMTensorInfo* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ GMTensorInfo* oriAddrParam) {
 float __ubuf__ *UB_S0_E16384 = (float __ubuf__ *)get_imm(0x0); // size: 0x4000
@@ -97,22 +97,22 @@ float __ubuf__ *UB_S16384_E81920 = (float __ubuf__ *)get_imm(0x4000); // size: 0
 float *UB_S16384_E81920_T = (float *)get_imm(0x4000); // size: 0x10000
 float __ubuf__ *UB_S81920_E114688 = (float __ubuf__ *)get_imm(0x14000); // size: 0x8000
 float *UB_S81920_E114688_T = (float *)get_imm(0x14000); // size: 0x8000
-float __ubuf__ *UB_S114688_E131072 = (float __ubuf__ *)get_imm(0x1c000); // size: 0x4000
-float *UB_S114688_E131072_T = (float *)get_imm(0x1c000); // size: 0x4000
-int32_t __ubuf__ *UB_S131072_E147456 = (int32_t __ubuf__ *)get_imm(0x20000); // size: 0x4000
-int32_t *UB_S131072_E147456_T = (int32_t *)get_imm(0x20000); // size: 0x4000
+int32_t __ubuf__ *UB_S114688_E131072 = (int32_t __ubuf__ *)get_imm(0x1c000); // size: 0x4000
+int32_t *UB_S114688_E131072_T = (int32_t *)get_imm(0x1c000); // size: 0x4000
+float __ubuf__ *UB_S131072_E147456 = (float __ubuf__ *)get_imm(0x20000); // size: 0x4000
+float *UB_S131072_E147456_T = (float *)get_imm(0x20000); // size: 0x4000
 using UBTileTensorINT32Dim2_5 = TileTensor<int32_t, StaticLayout2Dim<128, 32, 128, 32>, Hardware::UB>;
 using GMTileTensorINT32Dim2_6 = TileTensor<__gm__ int32_t, DynLayout2Dim, Hardware::GM>;
 using UBTileTensorFP32Dim2_3 = TileTensor<float, StaticLayout2Dim<128, 128, 128, 128>, Hardware::UB>;
 using UBTileTensorFP32Dim2_4 = TileTensor<float, StaticLayout2Dim<128, 64, 128, 64>, Hardware::UB>;
 using GMTileTensorFP32Dim2_2 = TileTensor<__gm__ float, DynLayout2Dim, Hardware::GM>;
 using UBTileTensorFP32Dim2_1 = TileTensor<float, StaticLayout2Dim<128, 32, 128, 32>, Hardware::UB>;
-GMTileTensorFP32Dim2_2 gmTensor_11((__gm__ float*)((__gm__ GMTensorInfo*)(param) + 2)->Addr, DynLayout2Dim(Shape2Dim(128, 32), Stride2Dim(32, 1)));
-UBTileTensorINT32Dim2_5 ubTensor_9((uint64_t)UB_S131072_E147456_T);
-UBTileTensorFP32Dim2_1 ubTensor_7((uint64_t)UB_S114688_E131072_T);
+GMTileTensorINT32Dim2_6 gmTensor_11((__gm__ int32_t*)((__gm__ GMTensorInfo*)(param) + 2)->Addr, DynLayout2Dim(Shape2Dim(128, 32), Stride2Dim(32, 1)));
+UBTileTensorFP32Dim2_1 ubTensor_9((uint64_t)UB_S131072_E147456_T);
+UBTileTensorINT32Dim2_5 ubTensor_7((uint64_t)UB_S114688_E131072_T);
+GMTileTensorFP32Dim2_2 gmTensor_13((__gm__ float*)((__gm__ GMTensorInfo*)(param) + 1)->Addr, DynLayout2Dim(Shape2Dim(128, 32), Stride2Dim(32, 1)));
 UBTileTensorFP32Dim2_4 ubTensor_5((uint64_t)UB_S81920_E114688_T);
 UBTileTensorFP32Dim2_3 ubTensor_3((uint64_t)UB_S16384_E81920_T);
-GMTileTensorINT32Dim2_6 gmTensor_13((__gm__ int32_t*)((__gm__ GMTensorInfo*)(param) + 1)->Addr, DynLayout2Dim(Shape2Dim(128, 32), Stride2Dim(32, 1)));
 GMTileTensorFP32Dim2_2 gmTensor_2((__gm__ float*)((__gm__ GMTensorInfo*)(param) + 0)->Addr, DynLayout2Dim(Shape2Dim(128, 32), Stride2Dim(32, 1)));
 UBTileTensorFP32Dim2_1 ubTensor_1((uint64_t)UB_S0_E16384_T);
 SUBKERNEL_PHASE1
@@ -124,9 +124,9 @@ pipe_barrier(PIPE_V);
 SUBKERNEL_PHASE2
 TMrgSort<1, 32, 1>(ubTensor_5, ubTensor_3);
 pipe_barrier(PIPE_V);
-TExtract<32, 0, 1>(ubTensor_7, ubTensor_5);
+TExtract<32, 1, 1>(ubTensor_7, ubTensor_5);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-TExtract<32, 1, 1>(ubTensor_9, ubTensor_5);
+TExtract<32, 0, 1>(ubTensor_9, ubTensor_5);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID1);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 TStore(gmTensor_11, ubTensor_7, Coord2Dim(0, 0));

@@ -32,6 +32,7 @@ private:
     Status PreCheckAssemble(Function &function, const Operation &op, const LogicalTensorPtr &in);
     Status PreCheckView(Function &function, const Operation &op, const LogicalTensorPtr &in);
     Status PreCheckRegCopy(Function &function, const Operation &op);
+    Status PreCheckReshape(const Operation &op);
     Status ProcessPreCheck(Function &function, const Operation &op);
     Status PostCheckAssemble(const Operation &op);
     Status PostCheckView(const Operation &op);

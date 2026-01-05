@@ -41,15 +41,22 @@ private:
     Status PreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
     Status RunOnFunction(Function &function) override;
-    Status ProcessRedundantOpWithDynShape(Operation &op, Function &function) const;
-    Status ProcessRedundantOpWithoutDynShape(Operation &op, Function &function) const;
-    Status RemoveDummyOp(Function &function) const;
-    Status RemoveViewAssemble(Function &function) const;
-    void ProcessPerfectMatch(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
-    void RemoveViewAssembleForOutcast(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
-    void GenerateNewView(Function &function, Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
+    Status RemoveDummyOp(Function &function);
+    Status ProcessViewAssemble(Function &function);
+    Status ProcessReshape(Function &function);
+    Status RemoveDummyOps(Function &function);
+    void ProcessPerfectMatch(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor);
+    void RemoveViewAssembleForOutcast(Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor);
+    void CalculateViewOffset(Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor, std::vector<long> &newoffset);
+    void GenerateNewView(Function &function, Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor);
     bool IsNotSameViewInput(LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
     bool IsDataReplace(LogicalTensorPtr &endTensor) const;
+    bool IsValidViewAssemble(LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const;
+    bool ProcessRedundantOpWithDynShape(Operation &op) const;
+    bool ProcessRedundantOpWithoutDynShape(Operation &op) const;
+
+    bool operationUpdated;
+    uint32_t iterTime;
 };
 } // namespace tile_fwk
 } // namespace npu
