@@ -244,6 +244,17 @@ void CheckDependencyForTestFindDep(PipeSync &ps, std::set<int> dataDependencySet
     }
 }
 
+void ProcessOpList(PipeSync &ps, DataDependencySearcher &dataDependencySearcher, std::vector<Operation *> &opLogPtr) {
+    for (auto &op : opLogPtr) {
+        bool isCubeComponent = op->HasAttr(OpAttributeKey::isCube) && op->GetAttr<bool>(OpAttributeKey::isCube);
+        if (!isCubeComponent) {
+            op->SetAIVCore(AIVCore::AIV0);
+        }
+        ps.BuildTensorRangeMap(op);
+    }
+    dataDependencySearcher.ubTensorRangeMap = ps.ubTensorRangeMap;
+}
+
 TEST_F(InsertSyncTest, TestFindDep) {
     auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestFindDep", "TestFindDep", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
@@ -255,6 +266,7 @@ TEST_F(InsertSyncTest, TestFindDep) {
     auto tensors = AddOpForTestFindDep(opLogPtr, currFunctionPtr);
     PipeSync ps;
     DataDependencySearcher dataDependencySearcher;
+    ProcessOpList(ps, dataDependencySearcher, opLogPtr);
     for (size_t i = 0; i < opLogPtr.size(); i++) {
         auto opcfg = OpcodeManager::Inst().GetTileOpCfg(opLogPtr[i]->GetOpcode());
         AdjustCopyOpTileCfg(*opLogPtr[i], opcfg);
@@ -384,6 +396,7 @@ TEST_F(InsertSyncTest, TestUpdateDep) {
 
     PipeSync ps;
     DataDependencySearcher dataDependencySearcher;
+    ProcessOpList(ps, dataDependencySearcher, opLogPtr);
     for (size_t i = 0; i < opLogPtr.size(); i++) {
         auto opcfg = OpcodeManager::Inst().GetTileOpCfg(opLogPtr[i]->GetOpcode());
         AdjustCopyOpTileCfg(*opLogPtr[i], opcfg);
@@ -458,11 +471,10 @@ TEST_F(InsertSyncTest, TestHandleEventID) {
     AddOpForTestHandleEventID(opLogPtr, currFunctionPtr);
 
     PipeSync ps;
-    // PipeDispatch
     DataDependencySearcher dataDependencySearcher;
+    ProcessOpList(ps, dataDependencySearcher, opLogPtr);
     std::vector<IndexOp> synced;
     BuildDeps(ps, dataDependencySearcher, opLogPtr, synced);
-
     EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM1);
     EXPECT_EQ(ps.depOps_[IS_NUM1].waitPipe[0], 0);
 
@@ -479,9 +491,17 @@ TEST_F(InsertSyncTest, TestHandleEventID) {
     issuenum.maxIssueNum.emplace(pp, IS_NUM8);
     issuenum.currIssueNum.emplace(pp, IS_NUM8);
     ps.HandleEventID(handleOp, issueQ, issuenum, eventIdDeadlock, res);
-
     EXPECT_EQ(ps.depOps_[IS_NUM1].waitPipe[0], IS_NUM2);
     EXPECT_EQ(ps.depOps_[IS_NUM2].setPipe[0], IS_NUM1);
+
+    // InitCVEventIdQ
+    PipeSync::CoreTypeDetail setCore = {CoreType::AIC, AIVCore::UNSPECIFIED};
+    PipeSync::CoreTypeDetail waitCore = {CoreType::AIV, AIVCore::AIV1};
+    PipeSync::CorePair corePair = {setCore, waitCore};
+    PipeSync::CorePair corePairReverse = {waitCore, setCore};
+    ps.InitCVEventIdQ(true, corePair, corePairReverse);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[corePair].size(), IS_NUM16);
+    EXPECT_EQ(ps.crossCoreFreeEventId_[corePairReverse].size(), IS_NUM16);
 }
 
 TEST_F(InsertSyncTest, TestRelaxFakeDataDep) {
@@ -667,8 +687,8 @@ TEST_F(InsertSyncTest, TestRelaxFakeDataDep) {
     opLogPtr.emplace_back(&cast18);
 
     PipeSync ps;
-    // PipeDispatch
     DataDependencySearcher dataDependencySearcher;
+    ProcessOpList(ps, dataDependencySearcher, opLogPtr);
     std::vector<IndexOp> synced;
     size_t index = UINT64_MAX;
     EXPECT_EQ(ps.InjectSync(*currFunctionPtr, opLogPtr, index, synced), FAILED);

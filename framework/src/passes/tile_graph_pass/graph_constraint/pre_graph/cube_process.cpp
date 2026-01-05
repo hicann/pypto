@@ -265,9 +265,6 @@ Status CubeProcess::AlignGMTensor(Function &function, std::vector<Operation *> &
             }
         }
     }
-    if (chainEndCopyOut == nullptr) {
-        return SUCCESS;
-    }
     for (auto &input : mulOp.GetIOperands()) {
         if (input->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
             continue;
@@ -275,6 +272,10 @@ Status CubeProcess::AlignGMTensor(Function &function, std::vector<Operation *> &
         if (function.IsFromInCast(input)) {
             APASS_LOG_WARN_F(Elements::Operation, "PreGraphProcess:CubeProcess::UpdateCubeOp::AlignGMTensor: OP_A_MUL_B iOperand tensor[%d] is incast.", input->GetMagic());
             continue;
+        }
+        if (chainEndCopyOut == nullptr) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Cannot find chainEndCopyOut, AlignGMTensor failed.");
+            return FAILED;
         }
         auto finalOutput = chainEndCopyOut->GetOOperands().front();
         input->tensor = finalOutput->tensor;

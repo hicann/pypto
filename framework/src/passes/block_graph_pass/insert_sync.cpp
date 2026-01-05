@@ -122,9 +122,10 @@ std::set<int> RangeSearchTree::GetCovered(int left, int right) {
 
 void DataDependencySearcher::CheckWAWSearchTree(Operation *opWait, std::set<int> &res) {
     for (size_t outIdx = 0; outIdx < opWait->GetOOperands().size(); outIdx++) {
-        MemoryType currMemoryType = opWait->GetOOperands()[outIdx]->GetMemoryTypeOriginal();
+        auto tensor = opWait->GetOOperands()[outIdx];
+        MemoryType currMemoryType = tensor->GetMemoryTypeOriginal();
         if (wawSearchTree_.count(currMemoryType) > 0) {
-            TileRange rg = opWait->GetOOperands()[outIdx]->memoryrange;
+            TileRange rg = currMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
             std::set<int> found = wawSearchTree_[currMemoryType].GetCovered(rg.start, rg.end);
             res.insert(found.begin(), found.end());
         }
@@ -133,14 +134,15 @@ void DataDependencySearcher::CheckWAWSearchTree(Operation *opWait, std::set<int>
 
 void DataDependencySearcher::CheckRAWSearchTree(Operation *opWait, std::set<int> &res) {
     for (size_t inIdx = 0; inIdx < opWait->GetIOperands().size(); inIdx++) {
-        MemoryType readMemoryType = opWait->GetIOperands()[inIdx]->GetMemoryTypeOriginal();
-        int readDDRmemId = opWait->GetIOperands()[inIdx]->memoryrange.memId;
+        auto tensor = opWait->GetIOperands()[inIdx];
+        MemoryType readMemoryType = tensor->GetMemoryTypeOriginal();
+        int readDDRmemId = tensor->memoryrange.memId;
         if (readDDRmemId != -1 && writeDdrMemMap.count(readDDRmemId) > 0) {
             std::set<int> found = writeDdrMemMap[readDDRmemId];
             res.insert(found.begin(), found.end());
         }
         if (rawSearchTree_.count(readMemoryType) > 0) {
-            TileRange rg = opWait->GetIOperands()[inIdx]->memoryrange;
+            TileRange rg = readMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
             std::set<int> found = rawSearchTree_[readMemoryType].GetCovered(rg.start, rg.end);
             res.insert(found.begin(), found.end());
         }
@@ -149,14 +151,15 @@ void DataDependencySearcher::CheckRAWSearchTree(Operation *opWait, std::set<int>
 
 void DataDependencySearcher::CheckWARSearchTree(Operation *opWait, std::set<int> &res) {
     for (size_t outIdx = 0; outIdx < opWait->GetOOperands().size(); outIdx++) {
-        MemoryType writeMemoryType = opWait->GetOOperands()[outIdx]->GetMemoryTypeOriginal();
-        int writeDDRmemId = opWait->GetOOperands()[outIdx]->memoryrange.memId;
+        auto tensor = opWait->GetOOperands()[outIdx];
+        MemoryType writeMemoryType = tensor->GetMemoryTypeOriginal();
+        int writeDDRmemId = tensor->memoryrange.memId;
         if (writeDDRmemId != -1 && readDdrMemMap.count(writeDDRmemId) > 0) {
             std::set<int> found = readDdrMemMap[writeDDRmemId];
             res.insert(found.begin(), found.end());
         }
         if (warSearchTree_.count(writeMemoryType) > 0) {
-            TileRange rg = opWait->GetOOperands()[outIdx]->memoryrange;
+            TileRange rg = writeMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
             std::set<int> found = warSearchTree_[writeMemoryType].GetCovered(rg.start, rg.end);
             res.insert(found.begin(), found.end());
         }
@@ -178,19 +181,21 @@ std::set<int> DataDependencySearcher::Find(Operation *opWait) {
 
 void DataDependencySearcher::InsertWAWSearchTree(const Operation *opSet, int idx) {
     for (size_t outIdx = 0; outIdx < opSet->GetOOperands().size(); outIdx++) {
-        MemoryType prevMemoryType = opSet->GetOOperands()[outIdx]->GetMemoryTypeOriginal();
+        auto tensor = opSet->GetOOperands()[outIdx];
+        MemoryType prevMemoryType = tensor->GetMemoryTypeOriginal();
         if (wawSearchTree_.count(prevMemoryType) == 0) {
             wawSearchTree_[prevMemoryType] = RangeSearchTree();
         }
-        TileRange rg = opSet->GetOOperands()[outIdx]->memoryrange;
+        TileRange rg = prevMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
         wawSearchTree_[prevMemoryType].Insert(rg.start, rg.end, idx);
     }
 }
 
 void DataDependencySearcher::InsertRAWSearchTree(const Operation *opSet, int idx) {
     for (size_t outIdx = 0; outIdx < opSet->GetOOperands().size(); outIdx++) {
-        MemoryType writeMemoryType = opSet->GetOOperands()[outIdx]->GetMemoryTypeOriginal();
-        int writeDDRmemId = opSet->GetOOperands()[outIdx]->GetMemoryTypeOriginal();
+        auto tensor = opSet->GetOOperands()[outIdx];
+        MemoryType writeMemoryType = tensor->GetMemoryTypeOriginal();
+        int writeDDRmemId = tensor->memoryrange.memId;
         if (writeDDRmemId != -1) {
             if (writeDdrMemMap.count(writeDDRmemId) == 0) {
                 writeDdrMemMap[writeDDRmemId] = std::set<int>{};
@@ -200,15 +205,16 @@ void DataDependencySearcher::InsertRAWSearchTree(const Operation *opSet, int idx
         if (rawSearchTree_.count(writeMemoryType) == 0) {
             rawSearchTree_[writeMemoryType] = RangeSearchTree();
         }
-        TileRange rg = opSet->GetOOperands()[outIdx]->memoryrange;
+        TileRange rg = writeMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
         rawSearchTree_[writeMemoryType].Insert(rg.start, rg.end,idx);
     }
 }
 
 void DataDependencySearcher::InsertWARSearchTree(const Operation *opSet, int idx) {
     for (size_t inIdx = 0; inIdx < opSet->GetIOperands().size(); inIdx++) {
-        MemoryType readMemoryType = opSet->GetIOperands()[inIdx]->GetMemoryTypeOriginal();
-        int readDDRmemId = opSet->GetIOperands()[inIdx]->GetMemoryTypeOriginal();
+        auto tensor = opSet->GetIOperands()[inIdx];
+        MemoryType readMemoryType = tensor->GetMemoryTypeOriginal();
+        int readDDRmemId = tensor->memoryrange.memId;
         if (readDDRmemId != -1) {
             if (readDdrMemMap.count(readDDRmemId) == 0) {
                 readDdrMemMap[readDDRmemId] = std::set<int>{};
@@ -218,7 +224,7 @@ void DataDependencySearcher::InsertWARSearchTree(const Operation *opSet, int idx
         if (warSearchTree_.count(readMemoryType) == 0) {
             warSearchTree_[readMemoryType] = RangeSearchTree();
         }
-        TileRange rg = opSet->GetIOperands()[inIdx]->memoryrange;
+        TileRange rg = readMemoryType == MemoryType::MEM_UB ? ubTensorRangeMap[tensor->GetMagic()] : tensor->memoryrange;
         warSearchTree_[readMemoryType].Insert(rg.start, rg.end,idx);
     }
 }
@@ -229,11 +235,43 @@ void DataDependencySearcher::Insert(const Operation *opSet, int idx) {
     InsertWARSearchTree(opSet, idx);
 }
 
+void PipeSync::BuildTensorRangeMap(Operation *op) {
+    auto opcfg = OpcodeManager::Inst().GetTileOpCfg(op->GetOpcode());
+    if (opcfg.coreType_ != CoreType::AIV) {
+        return;
+    }
+    bool isAIV1 = op->GetAIVCore() == AIVCore::AIV1;
+    auto inTensors = op->GetIOperands();
+    auto outTensors = op->GetOOperands();
+    LogicalTensors inOutTensors;
+    inOutTensors.reserve(inTensors.size() + outTensors.size());
+    inOutTensors.insert(inOutTensors.end(), inTensors.begin(), inTensors.end());
+    inOutTensors.insert(inOutTensors.end(), outTensors.begin(), outTensors.end());
+    for (const auto &tensor : inOutTensors) {
+        if (ubTensorRangeMap.count(tensor->GetMagic()) || tensor->GetMemoryTypeOriginal() != MemoryType::MEM_UB) {
+            continue;
+        }
+        TileRange tensorRange;
+        if (!isAIV1) {
+            tensorRange.start = tensor->memoryrange.start;
+            tensorRange.end = tensor->memoryrange.end;
+        } else {
+            // 将AIV1中的tensor地址映射到的区间
+            size_t curUBSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+            tensorRange.start = tensor->memoryrange.start + curUBSize;
+            tensorRange.end = tensor->memoryrange.end + curUBSize;
+        }
+        ubTensorRangeMap.emplace(std::make_pair(tensor->GetMagic(), tensorRange));
+    }
+}
+
 Status PipeSync::InsertSync(Function &function, std::vector<Operation *> &syncedOpLog) {
     std::vector<IndexOp> synced;
     std::vector<Operation *> opLogPtr(function.Operations(false).DuplicatedOpList());
+    oriOpList_ = opLogPtr;
     uint64_t idxInput = 0;
     for (const auto &op : opLogPtr) {
+        BuildTensorRangeMap(op);
         APASS_LOG_DEBUG_F(Elements::Operation, "Input operation %d %d: %s.", idxInput, op->GetOpMagic(), op->GetOpcodeStr().c_str());
         idxInput++;
     }
@@ -448,6 +486,7 @@ Status PipeSync::AdjustOpCfg(TileOpCfg &opcfg, Operation &op) {
 
 Status PipeSync::PipeDispatch(const std::vector<Operation *> opLogPtr, std::vector<IndexOp> &syncedOpLog) {
     DataDependencySearcher dataDependencySearcher;
+    dataDependencySearcher.ubTensorRangeMap = ubTensorRangeMap;
     for (size_t i = 0; i < opLogPtr.size(); i++) {
         if (opLogPtr[i]->GetOpcodeStr().find("ALLOC") != std::string::npos) { 
             APASS_LOG_ERROR_F(Elements::Operation, "%d ALLOC op should not appear in InsertSync, PipeDispatch failed.%s", opLogPtr[i]->GetOpMagic(), GetFormatBacktrace(opLogPtr[i]).c_str());
@@ -489,7 +528,7 @@ void PipeSync::EnqueueOp(DepOp &op, const std::vector<Operation *> opLogPtr, std
         int opMagic = opLogPtr[op.idx]->GetOpMagic();
         doublePipeOp[pp].emplace_back(opMagic);
     }
-    orderedOplist_.emplace(op.idx);
+    orderedOpList_.emplace(op.idx);
 }
 
 void PipeSync::RemoveOpDep(DepOp &setOp, DepOp &waitOp) const {
@@ -573,7 +612,8 @@ Status PipeSync::HandleEventID(DepOp &op, IssueQueue &issueQ, IssueNum &issuenum
         PipeCoreReal currPipeCore(op.selfPipeCore.pipeEnd, op.selfPipeCore.core);
         PipeCoreReal elePipeCore(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core);
         PipePair pp{currPipeCore, elePipeCore};
-        issuenum.maxIssueNum.emplace(pp, GetFreeEventIdQueue(pp).size());
+        std::pair<CoreTypeDetail, CoreTypeDetail> setWaitCoreType;
+        issuenum.maxIssueNum.emplace(pp, GetFreeEventIdQueue(pp, op.idx, ele, setWaitCoreType).size());
         issuenum.currIssueNum.emplace(pp, 0);
 
         if (issuenum.currIssueNum[pp] >= issuenum.maxIssueNum[pp]) {
@@ -623,7 +663,7 @@ Status PipeSync::PopFromQueue(IssueQueue &issueQ, std::vector<size_t> &poped, bo
             break;
         }
         auto &op = depOps_[issueQ.ops[issueQ.currOp]];
-        if (op.idx != orderedOplist_.front()) {
+        if (op.idx != orderedOpList_.front()) {
             break;
         }
         if (op.issued) {
@@ -643,7 +683,7 @@ Status PipeSync::PopFromQueue(IssueQueue &issueQ, std::vector<size_t> &poped, bo
         }
         op.issued = true;
         poped.emplace_back(op.idx);
-        orderedOplist_.pop();
+        orderedOpList_.pop();
         for (auto ele : op.setPipe) {
             PipeCoreReal currPipeCore(op.selfPipeCore.pipeEnd, op.selfPipeCore.core);
             PipeCoreReal elePipeCore(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core);
@@ -677,7 +717,11 @@ Status PipeSync::InjectWaitFlag(Function &function, size_t idx, std::vector<Inde
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d",
             syncOp.GetOpMagic(), syncOp.GetOpcodeStr().c_str(), GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
             GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_);
-        GetFreeEventIdQueue({setPipeReal, currPipeReal}).push_back(eventId);
+        std::pair<CoreTypeDetail, CoreTypeDetail> setWaitCoreType;
+        GetFreeEventIdQueue({setPipeReal, currPipeReal}, ele, idx, setWaitCoreType).push_back(eventId);
+        if (setPipeReal.core != currPipeReal.core) {
+            crossCoreFreeEventId_[{setWaitCoreType.second, setWaitCoreType.first}].push_back(eventId);
+        }
     }
     return SUCCESS;
 }
@@ -690,7 +734,7 @@ Status PipeSync::InjectSetFlag(Function &function, size_t idx, std::vector<Index
         PipeCoreReal waitPipeReal(waitPipe.pipeStart, waitPipe.core);
         PipeCoreReal currPipeReal(currPipe.pipeEnd, currPipe.core);
         int eventId{0};
-        if (GetEventId({currPipeReal, waitPipeReal}, eventId) != SUCCESS) {
+        if (GetEventId({currPipeReal, waitPipeReal}, idx, ele, eventId) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "InjectSetFlag failed at function GetEventId.");
             return FAILED;
         }
@@ -737,9 +781,6 @@ Status PipeSync::InjectSync(Function &function, std::vector<Operation *> opLogPt
 }
 
 int PipeSync::GetMaxEventId(const PipePair &pp) {
-    if (pp.first.core != pp.second.core) {
-        return CV_EVENT_NUM;
-    }
     PipePair ppReverse = {pp.second, pp.first};
     auto it1 = doublePipeOp.find(pp);
     auto it2 = doublePipeOp.find(ppReverse);
@@ -994,7 +1035,9 @@ Status PipeSync::SynDependency(int maxOverlapDepIdx, const DataDepInfo &depInfo,
         APASS_LOG_ERROR_F(Elements::Operation, "RelaxFakeDataDep failed at function AddOpDep.");
         return FAILED;
     }
-    GetFreeEventIdQueue(pipePair).push_back(eventId1);
+    std::pair<CoreTypeDetail, CoreTypeDetail> setWaitCoreType;
+    // 此函数中coretype一定是相同的
+    GetFreeEventIdQueue(pipePair, set1, wait1, setWaitCoreType).push_back(eventId1);
     setWaitPairMap_[{set2, wait1}] = eventId2;
     //将靠前的一对有依赖关系op中插入的SYNC_SRC op删除
     syncedOpLog[syncOpIdx1].second.get().SetAsDeleted();
@@ -1086,14 +1129,15 @@ bool PipeSync::GenSyncOp(PipeCoreReal set, PipeCoreReal wait, int eventId, bool 
     return true;
 }
 
-Status PipeSync::GetEventId(const PipePair &pp, int &eventId) {
+Status PipeSync::GetEventId(const PipePair &pp, size_t setIdx, size_t waitIdx, int &eventId) {
     if (pp.first.pipe == pp.second.pipe && pp.first.core == pp.second.core) {
         // Pipe Barrier
         eventId = -1;
         return SUCCESS;
     }
 
-    auto &eventQ = GetFreeEventIdQueue(pp);
+    std::pair<CoreTypeDetail, CoreTypeDetail> setWaitCoreType;
+    auto &eventQ = GetFreeEventIdQueue(pp, setIdx, waitIdx, setWaitCoreType);
     if (eventQ.empty()) { 
         APASS_LOG_ERROR_F(Elements::Operation, "Eventid exhausted, GetEventId failed.");
         return FAILED; 
@@ -1101,11 +1145,20 @@ Status PipeSync::GetEventId(const PipePair &pp, int &eventId) {
 
     eventId = eventQ.front();
     eventQ.pop_front();
+    if (pp.first.core != pp.second.core) {
+        auto &eventQReverse = crossCoreFreeEventId_[{setWaitCoreType.second, setWaitCoreType.first}];
+        eventQReverse.pop_front();
+        if (eventQ.size() != eventQReverse.size()) {
+            APASS_LOG_ERROR_F(Elements::Operation, "CV eventId queue size is not equal, GetEventId failed.");
+            return FAILED;
+        }
+    }
     return SUCCESS;
 }
 
 bool PipeSync::HasFreeEventId(const PipePair &pp) {
-    std::deque<int> &eventQ = GetFreeEventIdQueue(pp);
+    std::pair<CoreTypeDetail, CoreTypeDetail> setWaitCoreType;
+    std::deque<int> &eventQ = GetFreeEventIdQueue(pp, SIZE_MAX, SIZE_MAX, setWaitCoreType);
     return !eventQ.empty();
 }
 
@@ -1119,12 +1172,20 @@ bool PipeSync::BufOverlap(const TileRange &range1, int magic1, const TileRange &
     return false;
 }
 
-bool PipeSync::CheckWawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const {
+bool PipeSync::CheckWawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) {
     for (size_t setIdx = 0; setIdx < opSet.GetOOperands().size(); setIdx++) {
         for (size_t waitIdx = 0; waitIdx < opWait.GetOOperands().size(); waitIdx++) {
-            if (opSet.GetOOperands()[setIdx]->GetMemoryTypeOriginal() == opWait.GetOOperands()[waitIdx]->GetMemoryTypeOriginal() && 
-                BufOverlap(opSet.GetOOperands()[setIdx]->memoryrange, opSet.GetOOperands()[setIdx]->GetMagic(), 
-                    opWait.GetOOperands()[waitIdx]->memoryrange, opWait.GetOOperands()[waitIdx]->GetMagic())) {
+            if (opSet.GetOOperands()[setIdx]->GetMemoryTypeOriginal() != opWait.GetOOperands()[waitIdx]->GetMemoryTypeOriginal()) {
+                continue;
+            }
+            auto memType = opSet.GetOOperands()[setIdx]->GetMemoryTypeOriginal();
+            int magic1 = opSet.GetOOperands()[setIdx]->GetMagic();
+            int magic2 = opWait.GetOOperands()[waitIdx]->GetMagic();
+            TileRange range1 = memType == MemoryType::MEM_UB ?
+                ubTensorRangeMap[magic1] : opSet.GetOOperands()[setIdx]->memoryrange;
+            TileRange range2 = memType == MemoryType::MEM_UB ?
+                ubTensorRangeMap[magic2] : opWait.GetOOperands()[waitIdx]->memoryrange;
+            if (BufOverlap(range1, magic1, range2, magic2)) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "%d %zu %s and %d %zu %s has WAW data dependency", opSet.GetOpMagic(), 
                     k, opSet.GetOpcodeStr().c_str(), opWait.GetOpMagic(), idx, opWait.GetOpcodeStr().c_str());
                 return true;
@@ -1134,16 +1195,22 @@ bool PipeSync::CheckWawDependency(const Operation &opSet, const Operation &opWai
     return false;
 }
 
-bool PipeSync::CheckRawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const {
+bool PipeSync::CheckRawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) {
     for (size_t outIdx = 0; outIdx < opSet.GetOOperands().size(); outIdx++) {
         for (size_t inIdx = 0; inIdx < opWait.GetIOperands().size(); inIdx++) {
-            auto memTypeSame = opWait.GetIOperands()[inIdx]->GetMemoryTypeOriginal() == opSet.GetOOperands()[outIdx]->GetMemoryTypeOriginal();
-            auto ddrTensorSame = opSet.GetOOperands()[outIdx]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
-                opWait.GetIOperands()[inIdx]->memoryrange.memId ==
-                opSet.GetOOperands()[outIdx]->memoryrange.memId;
-            auto overlap = BufOverlap(opWait.GetIOperands()[inIdx]->memoryrange, opWait.GetIOperands()[inIdx]->GetMagic(), 
-                opSet.GetOOperands()[outIdx]->memoryrange, opSet.GetOOperands()[outIdx]->GetMagic());
-            if (memTypeSame && (overlap || ddrTensorSame)) {
+            if (opWait.GetIOperands()[inIdx]->GetMemoryTypeOriginal() != opSet.GetOOperands()[outIdx]->GetMemoryTypeOriginal()) {
+                continue;
+            }
+            auto memType = opWait.GetIOperands()[inIdx]->GetMemoryTypeOriginal();
+            int magic1 = opWait.GetIOperands()[inIdx]->GetMagic();
+            int magic2 = opSet.GetOOperands()[outIdx]->GetMagic();
+            TileRange range1 = memType == MemoryType::MEM_UB ?
+                ubTensorRangeMap[magic1] : opWait.GetIOperands()[inIdx]->memoryrange;
+            TileRange range2 = memType == MemoryType::MEM_UB ?
+                ubTensorRangeMap[magic2] : opSet.GetOOperands()[outIdx]->memoryrange;
+            auto overlap = BufOverlap(range1, magic1, range2, magic2);
+            auto ddrTensorSame = memType == MemoryType::MEM_DEVICE_DDR && range1.memId == range2.memId;
+            if (overlap || ddrTensorSame) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "%d %zu %s and %d %zu %s has RAW data dependency", opSet.GetOpMagic(), 
                     k, opSet.GetOpcodeStr().c_str(), opWait.GetOpMagic(), idx, opWait.GetOpcodeStr().c_str());
                 return true;
@@ -1153,16 +1220,22 @@ bool PipeSync::CheckRawDependency(const Operation &opSet, const Operation &opWai
     return false;
 }
 
-bool PipeSync::CheckWarDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const {
+bool PipeSync::CheckWarDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) {
     for (size_t outIdx = 0; outIdx < opWait.GetOOperands().size(); outIdx++) {
         for (size_t inIdx = 0; inIdx < opSet.GetIOperands().size(); inIdx++) {
-            auto memTypeSame = opSet.GetIOperands()[inIdx]->GetMemoryTypeOriginal() == opWait.GetOOperands()[outIdx]->GetMemoryTypeOriginal();
-            auto ddrTensorSame = opSet.GetIOperands()[inIdx]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
-                opWait.GetOOperands()[outIdx]->memoryrange.memId ==
-                opSet.GetIOperands()[inIdx]->memoryrange.memId;
-            auto overlap = BufOverlap(opSet.GetIOperands()[inIdx]->memoryrange, opSet.GetIOperands()[inIdx]->GetMagic(), 
-                opWait.GetOOperands()[outIdx]->memoryrange, opWait.GetOOperands()[outIdx]->GetMagic());
-            if (memTypeSame && (overlap || ddrTensorSame)) {
+            if (opSet.GetIOperands()[inIdx]->GetMemoryTypeOriginal() != opWait.GetOOperands()[outIdx]->GetMemoryTypeOriginal()) {
+                continue;
+            }
+            auto memType = opSet.GetIOperands()[inIdx]->GetMemoryTypeOriginal();
+            int magic1 = opSet.GetIOperands()[inIdx]->GetMagic();
+            int magic2 = opWait.GetOOperands()[outIdx]->GetMagic();
+            TileRange range1 = memType == MemoryType::MEM_UB ?
+                ubTensorRangeMap[magic1] : opSet.GetIOperands()[inIdx]->memoryrange;
+            TileRange range2 = memType == MemoryType::MEM_UB ?
+                ubTensorRangeMap[magic2] : opWait.GetOOperands()[outIdx]->memoryrange;
+            auto overlap = BufOverlap(range1, magic1, range2, magic2);
+            auto ddrTensorSame = memType == MemoryType::MEM_DEVICE_DDR && range1.memId == range2.memId;
+            if (overlap || ddrTensorSame) {
                 APASS_LOG_DEBUG_F(Elements::Operation, "%d %zu %s and %d %zu %s has WAR data dependency", opSet.GetOpMagic(), 
                     k, opSet.GetOpcodeStr().c_str(), opWait.GetOpMagic(), idx, opWait.GetOpcodeStr().c_str());
                 return true;
@@ -1172,7 +1245,7 @@ bool PipeSync::CheckWarDependency(const Operation &opSet, const Operation &opWai
     return false;
 }
 
-bool PipeSync::HasDataDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const {
+bool PipeSync::HasDataDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) {
     std::string opSetStr = opSet.GetOpcodeStr();
     std::string opWaitStr = opWait.GetOpcodeStr();
 
@@ -1275,7 +1348,53 @@ void PipeSync::FindDep(DepOp &op, const std::vector<Operation *> opLogPtr, size_
     dataDependencySearcher.Insert(currOp, idx);
 }
 
-std::deque<int> &PipeSync::GetFreeEventIdQueue(const PipePair &pp) {
+std::pair<PipeSync::CoreTypeDetail, PipeSync::CoreTypeDetail> PipeSync::GetCorePairDetail(const PipePair &pp, size_t setIdx, size_t waitIdx, bool &isAIV1) {
+    CoreTypeDetail setCoreType;
+    CoreTypeDetail waitCoreType;
+    if (pp.first.core == CoreType::AIV) {
+        AIVCore setAIV = oriOpList_[setIdx]->GetAIVCore();
+        if (setAIV == AIVCore::AIV1) {
+            isAIV1 = true;
+        }
+        setCoreType = {CoreType::AIV, setAIV};
+        waitCoreType = {CoreType::AIC, AIVCore::UNSPECIFIED};
+    } else {
+        AIVCore waitAIV = oriOpList_[waitIdx]->GetAIVCore();
+        if (waitAIV == AIVCore::AIV1) {
+            isAIV1 = true;
+        }
+        setCoreType = {CoreType::AIC, AIVCore::UNSPECIFIED};
+        waitCoreType = {CoreType::AIV, waitAIV};
+    }
+    return {setCoreType, waitCoreType};
+}
+
+void PipeSync::InitCVEventIdQ(bool isAIV1, CorePair corePair, CorePair corePairReverse) {
+    if (!isAIV1) {
+        for (int i = 0; i < CROSS_CORE_EVENT_NUM; i++) {
+            crossCoreFreeEventId_[corePair].push_back(i);
+            crossCoreFreeEventId_[corePairReverse].push_back(i);
+        }
+    } else {
+        for (int i = CROSS_CORE_EVENT_NUM; i < CROSS_CORE_EVENT_NUM * NUM2; i++) {
+            crossCoreFreeEventId_[corePair].push_back(i);
+            crossCoreFreeEventId_[corePairReverse].push_back(i);
+        }
+    }
+}
+
+std::deque<int> &PipeSync::GetFreeEventIdQueue(const PipePair &pp, size_t setIdx, size_t waitIdx, std::pair<CoreTypeDetail, CoreTypeDetail> &setWaitCoreType) {
+    // 若coretype不同，所有CV同步共享16个eventid
+    if (pp.first.core != pp.second.core) {
+        bool isAIV1{false};
+        setWaitCoreType = GetCorePairDetail(pp, setIdx, waitIdx, isAIV1);
+        CorePair corePair = {setWaitCoreType.first, setWaitCoreType.second};
+        CorePair corePairReverse = {setWaitCoreType.second, setWaitCoreType.first};
+        if (crossCoreFreeEventId_.count(corePair) == 0) {
+            InitCVEventIdQ(isAIV1, corePair, corePairReverse);
+        }
+        return crossCoreFreeEventId_[corePair];
+    }
     if (freeEventId_.count(pp) == 0) {
         for (int i = 0; i < GetMaxEventId(pp); i++) {
             freeEventId_[pp].push_back(i);

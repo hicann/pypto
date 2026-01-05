@@ -74,6 +74,7 @@ class DataDependencySearcher {
 public:
     std::set<int> Find(Operation *opWait);
     void Insert(const Operation *opSet, int idx);
+    std::unordered_map<int, TileRange> ubTensorRangeMap;
 
 private:
     void CheckRAWSearchTree(Operation *opWait, std::set<int> &res);
@@ -139,6 +140,8 @@ private:
     };
 
     using PipePair = std::pair<PipeCoreReal, PipeCoreReal>; // setPipe, waitPipe
+    using CoreTypeDetail = std::pair<CoreType, AIVCore>;
+    using CorePair = std::pair<CoreTypeDetail, CoreTypeDetail>;
 
     struct PipePairHash {
         std::size_t operator()(const PipePair &pp) const noexcept {
@@ -147,6 +150,17 @@ private:
             HashCombine(res, pp.first.core);
             HashCombine(res, pp.second.pipe);
             HashCombine(res, pp.second.core);
+            return res;
+        };
+    };
+
+    struct CorePairHash {
+        std::size_t operator()(const CorePair &pp) const noexcept {
+            std::size_t res = 0;
+            HashCombine(res, pp.first.first);
+            HashCombine(res, pp.first.second);
+            HashCombine(res, pp.second.first);
+            HashCombine(res, pp.second.second);
             return res;
         };
     };
@@ -235,17 +249,19 @@ private:
     bool FindDataDep(DataDepInfo &depInfo, std::vector<IndexOp> &syncedOpLog, int i);
     bool FindMaxOverlap(DataDepInfo &depInfo, int &maxOverlapDepIdx);
     bool GenSyncOp(PipeCoreReal set, PipeCoreReal wait, int eventId, bool isSet, Operation &op);
-    Status GetEventId(const PipePair &pp, int &eventId);
+    Status GetEventId(const PipePair &pp, size_t setIdx, size_t waitIdx, int &eventId);
     bool HasFreeEventId(const PipePair &pp);
     bool BufOverlap(const TileRange &range1, int magic1, const TileRange &range2, int magic2) const;
-    bool CheckWawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const;
-    bool CheckRawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const;
-    bool CheckWarDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const;
-    bool HasDataDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx) const;
+    bool CheckWawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx);
+    bool CheckRawDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx);
+    bool CheckWarDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx);
+    bool HasDataDependency(const Operation &opSet, const Operation &opWait, size_t k, size_t idx);
     void UpdateDep(DepOp &currOp, DepOp &prevOp);
     bool IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector<Operation *> opLogPtr);
     void FindDep(DepOp &op, const std::vector<Operation *> opLogPtr, size_t idx, DataDependencySearcher& dataDependencySearcher);
-    std::deque<int> &GetFreeEventIdQueue(const PipePair &pp);
+    std::pair<CoreTypeDetail, CoreTypeDetail> GetCorePairDetail(const PipePair &pp, size_t setIdx, size_t waitIdx, bool &isAIV1);
+    void InitCVEventIdQ(bool isAIV1, CorePair corePair, CorePair corePairReverse);
+    std::deque<int> &GetFreeEventIdQueue(const PipePair &pp, size_t setIdx, size_t waitIdx, std::pair<CoreTypeDetail, CoreTypeDetail> &setWaitCoreType);
     int GetSyncSrcLogIdx(std::vector<IndexOp> &syncedOpLog, int i);
     int GetMaxEventId(const PipePair &pp);
     Status ProcessView(std::vector<Operation *> &opLogNew, std::pair<Operation *, Operation *> pair);
@@ -253,11 +269,13 @@ private:
     Status ProcessViewAssemble(std::vector<Operation *> &opLogNew, std::pair<Operation *, Operation *> pair);
     Status ReorderViewAssemble(std::vector<Operation *> &opLog, std::vector<Operation *> &opListNew, const std::unordered_map<Operation *, Operation *> &changeMap);
     std::string DumpLatestPipeDepMap();
+    void BuildTensorRangeMap(Operation *op);
 
     std::vector<DepOp> depOps_;
     // Cube: MTE2, MTE1, M, FIX, Vector: MTE2, V, MTE3
     std::vector<IssueQueue> issueState_;
     std::unordered_map<PipePair, std::deque<int>, PipePairHash> freeEventId_;
+    std::unordered_map<CorePair, std::deque<int>, CorePairHash> crossCoreFreeEventId_;
     std::unordered_map<std::pair<size_t, size_t>, int, IndexVecHash> setWaitPairMap_;
     std::map<PipeCoreReal, PipeDepInfo, PipeCoreRealCompare> latestPipeDep_;
     static std::map<PipeCoreReal, PipeSeq, PipeCoreRealCompare> pipe2Seq;
@@ -265,11 +283,13 @@ private:
     static std::vector<PipePair> dataDepPair;
 
     static constexpr int EVENT_NUM = 8;
-    static constexpr int CV_EVENT_NUM = 16;
+    static constexpr int CROSS_CORE_EVENT_NUM = 16;
     static constexpr int EVENT_ID7 = 7;
     int minimalMergeOverlap{25};
     std::unordered_map<PipePair, std::vector<int>, PipePairHash> doublePipeOp; // pipepair, opmagic
-    std::queue<size_t> orderedOplist_;
+    std::queue<size_t> orderedOpList_;
+    std::vector<Operation *> oriOpList_;
+    std::unordered_map<int, TileRange> ubTensorRangeMap;
 };
 
 class InsertSync : public Pass {
