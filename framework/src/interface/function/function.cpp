@@ -1042,7 +1042,10 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const {
 
     for (auto &op : operations_) {
         for (auto &iop : op->iOperand) {
-            addProd(op.get(), iop);
+           addProd(op.get(), iop);
+        }
+        for (auto &dop : op->dependOperand) {
+            addProd(op.get(), dop);
         }
         for (auto [type, index] : usageDict[op.get()]) {
             if (type == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) {
@@ -1090,6 +1093,9 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const {
         }
         for (auto &iop : op->iOperand) {
             visit(op.get(), iop);
+        }
+        for (auto &dop : op->dependOperand) {
+            visit(op.get(), dop);
         }
         for (auto [type, index] : usageDict[op.get()]) {
             if (type == GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST) {
@@ -1363,6 +1369,11 @@ void Function::EraseOperations(bool eraseRelatedTensor, bool sorted) {
             output->RemoveProducer(op.get());
             removeCandidiateTensor.insert(output);
             removeProducerTensor.insert(output);
+        }
+
+        for (auto &depend : op->GetDependOperands()) {
+            depend->RemoveDependOp(op.get());
+            removeCandidiateTensor.insert(depend);
         }
     }
     operations_ = operations;

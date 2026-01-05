@@ -14,11 +14,14 @@
   * */
 #include <gtest/gtest.h>
 #include "passes/block_graph_pass/mix_subgraph_split.h"
+#include "computational_graph_builder.h"
 
 namespace npu {
 namespace tile_fwk {
 constexpr uint64_t programId = 100;
 constexpr int MS_NUM16 = 16;
+constexpr int MS_NUM3 = 3;
+constexpr int MS_NUM10005 = 10005;
 
 class MixSubgraphSplitTest : public ::testing::Test {
 public:
@@ -304,6 +307,69 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
             EXPECT_GT(leafAttr->mixId, -1) << "Mix ID should be assigned";
         }
     }
+}
+
+TEST_F(MixSubgraphSplitTest, TestDependOperand) {
+    // Build Graph
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB,
+        MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,
+        Opcode::OP_COPY_IN, Opcode::OP_ADD};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {}, {}, {"t1"}, {"t2"}, {"t4", "t5"}};
+    std::vector<std::vector<std::string>> ooperands{{"t3"}, {"t4"}, {"t5"}, {"t6"}, {"t3", "t4"}, {"t5"}, {"t6"}};
+    std::vector<std::string> opNames{"Alloc1", "Alloc2", "Alloc3", "Alloc4", "Copyin1", "Copyin2", "Add1"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function *function = subGraph.GetFunction();
+
+    // Add and check depend operand
+    Operation *copyin2 = subGraph.GetOp("Copyin2");
+    std::shared_ptr<LogicalTensor> tensor4 = subGraph.GetTensor("t4");
+    copyin2->AddDependOperand(tensor4);
+    Operation *add1 = subGraph.GetOp("Add1");
+    std::shared_ptr<LogicalTensor> tensor3 = subGraph.GetTensor("t3");
+    add1->AddDependOperand(tensor3);
+    EXPECT_EQ(copyin2->GetDependOperands().front()->GetMagic(), MS_NUM3);
+    EXPECT_EQ(copyin2->GetDependOperandSize(), 1);
+
+    // Check depend
+    tensor4->AddDependOp(copyin2);
+    tensor4->AddDependOp(copyin2);
+    EXPECT_EQ(tensor4->GetDependOps().size(), 1);
+    tensor3->AddDependOp(add1);
+    auto dependOp = *(tensor4->GetDependOps().begin());
+    EXPECT_EQ(dependOp->GetOpMagic(), MS_NUM10005);
+    EXPECT_EQ(tensor4->HasDependOp(copyin2), true);
+
+    // Sort Operations
+    function->SortOperations();
+    Operation *alloc2 = subGraph.GetOp("Alloc2");
+    auto sortedOpList = function->Operations().DuplicatedOpList();
+    auto alloc2Iter = std::find(sortedOpList.begin(), sortedOpList.end(), alloc2);
+    auto copyin2Iter = std::find(sortedOpList.begin(), sortedOpList.end(), copyin2);
+    EXPECT_EQ(alloc2Iter - sortedOpList.begin() < copyin2Iter - sortedOpList.begin(), true);
+
+    // Erase operands and depend Ops
+    copyin2->EraseDependTensor(tensor4);
+    add1->EraseDependTensor(tensor3);
+    tensor4->RemoveDependOp(copyin2);
+    tensor3->RemoveDependOp(add1);
+
+    //Sort Operations
+    function->SortOperations();
+    auto sortedOpList2 = function->Operations().DuplicatedOpList();
+    auto alloc2Iter2 = std::find(sortedOpList2.begin(), sortedOpList2.end(), alloc2);
+    auto copyin2Iter2 = std::find(sortedOpList2.begin(), sortedOpList2.end(), copyin2);
+    EXPECT_EQ(alloc2Iter2 - sortedOpList2.begin() > copyin2Iter2 - sortedOpList2.begin(), true);
+
+    // Erase Operations
+    copyin2->AddDependOperand(tensor4);
+    tensor4->AddDependOp(copyin2);
+    copyin2->SetAsDeleted();
+    function->EraseOperations();
+    EXPECT_EQ(tensor4->GetDependOps().size(), 0);
 }
 } // namespace tile_fwk
 } // namespace npu

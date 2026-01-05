@@ -147,20 +147,28 @@ public:
 
     auto &GetProducers() { return producers_; }
     auto &GetConsumers() { return consumers_; }
+    auto &GetDependOps() { return dependOps_; }
     const auto &GetProducers() const { return producers_; }
     const auto &GetConsumers() const { return consumers_; }
+    const auto &GetDependOps() const { return dependOps_; }
     bool HasProducer(Operation *operation) const { return producers_.count(operation) > 0; }
     bool HasConsumer(Operation *operation) const { return consumers_.count(operation) > 0; }
+    bool HasDependOp(Operation *operation) const { return dependOps_.count(operation) > 0; }
     bool HasProducer(Operation &operation) const { return HasProducer(&operation); }
     bool HasConsumer(Operation &operation) const { return HasConsumer(&operation); }
+    bool HasDependOp(Operation &operation) const { return HasDependOp(&operation); }
     void AddProducer(Operation *operation) { producers_.emplace(operation); }
     void AddConsumer(Operation *operation) { consumers_.emplace(operation); }
+    void AddDependOp(Operation *operation) { dependOps_.emplace(operation); }
     void RemoveProducer(Operation *operation) { producers_.erase(operation); }
     void RemoveConsumer(Operation *operation) { consumers_.erase(operation); }
+    void RemoveDependOp(Operation *operation) { dependOps_.erase(operation); }
     void AddProducer(Operation &operation) { AddProducer(&operation); }
     void AddConsumer(Operation &operation) { AddConsumer(&operation); }
+    void AddDependOp(Operation &operation) { AddDependOp(&operation); }
     void RemoveProducer(Operation &operation) { RemoveProducer(&operation); }
     void RemoveConsumer(Operation &operation) { RemoveConsumer(&operation); }
+    void RemoveDependOp(Operation &operation) { RemoveDependOp(&operation); }
     void ClearAllProducers() { producers_.clear(); }
 
     void operator<<(LogicalTensor &right);
@@ -198,6 +206,7 @@ private:
 
     std::set<Operation *, CompareOp> producers_;
     std::set<Operation *, CompareOp> consumers_;
+    std::set<Operation *, CompareOp> dependOps_;
 };
 
 enum EmuOpcode {
