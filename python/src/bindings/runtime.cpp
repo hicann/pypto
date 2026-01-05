@@ -26,8 +26,8 @@ using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
 
-DeviceTensorData CopyToHost(const DeviceTensorData &tensorData) {
-    return CopyDevToHost(tensorData);
+void CopyToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor) {
+    CopyDevToHost(devTensor, hostTensor);
 }
 
 void SetVerifyData(const std::vector<DeviceTensorData> &inputs,

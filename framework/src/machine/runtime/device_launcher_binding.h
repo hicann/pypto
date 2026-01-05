@@ -220,7 +220,7 @@ ExportedOperator *ExportedOperatorBegin();
 
 void ExportedOperatorEnd(ExportedOperator *op);
 
-DeviceTensorData CopyDevToHost(const DeviceTensorData &tensorData);
+void CopyDevToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor);
 
 } // namespace npu::tile_fwk::dynamic
 

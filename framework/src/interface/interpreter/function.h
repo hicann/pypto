@@ -253,8 +253,8 @@ constexpr int EXEC_DUMP_LEVEL_OPERATION = 1;
 constexpr int EXEC_DUMP_LEVEL_TENSOR = 2;
 
 enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
-enum class CsvCol {
-    Num = 0,
+enum class OpInfoCsvHeader {
+    num = 0,
     rootFuncID,
     funcID,
     verifyType,
@@ -281,7 +281,7 @@ enum class CsvCol {
     COL_COUNT
 };
 
-constexpr int32_t toIndex(CsvCol e) noexcept {
+constexpr int32_t toIndex(OpInfoCsvHeader e) noexcept {
     return static_cast<int32_t>(e);
 }
 
@@ -292,8 +292,7 @@ struct FunctionInterpreter {
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
         std::stringstream timestamp;
         timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
-        constexpr int NUM_SIX = 6;
-        timestamp << "_" << std::setw(NUM_SIX) << std::setfill('0') << us;
+        timestamp << "_" << std::setw(6) << std::setfill('0') << us;    // 6 is the width
         dumpPath = config::GetVerifyOption<std::string>(KEY_PASS_VERIFY_SAVE_TENSOR_DIR);
         if (dumpPath.empty()) {
             dumpPath = config::LogTopFolder();
@@ -303,7 +302,7 @@ struct FunctionInterpreter {
 
         std::string dumpFilePath = dumpPath + "verify_result.csv";
         execResultFile = fopen(dumpFilePath.c_str(), "w");
-        std::vector<std::string> csvHeader = {"No.", "rootFuncID", "funcID", "verifyType", "LoopInfo", "opMagic", "op", 
+        std::vector<std::string> csvHeader = {"No.", "rootFuncID", "funcID", "verifyType", "LoopInfo", "opMagic", "opCode", 
             "rawTensorMagic", "tensorMagic", "offset", "inputShape", "inputValidShape", "inputDtype", "inputTensors", 
             "outputShape", "outputValidShape", "outputDynValidShape", "outputDtype",
             "outputTensor", "verifyResult", "maxAbsDiff", "maxRelDiff", "errorCount", "errorRatio"};
@@ -490,11 +489,17 @@ struct FunctionInterpreter {
         if (op.GetOpcode() == Opcode::OP_VIEW) {
             auto opAttr = std::static_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
             ASSERT(opAttr != nullptr);
+            Offset iopOffsets = iOpDataList[index]->GetOffset();
             Offset viewOffsets = EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
+            Offset actualOffsets = viewOffsets;
+            if (std::all_of(viewOffsets.begin(), viewOffsets.end(),
+                    [](const int64_t& val) {return val == static_cast<int64_t>(0);})) {
+                actualOffsets = iopOffsets;
+            }
             auto validShape = EvaluateValidShape(oop->GetDynValidShape());
             auto rawShape = EvaluateValidShape(oop->GetRawTensor()->GetDynRawShape());
             auto ret = frame.AllocateDataView(
-                oop, viewOffsets, validShape, rawShape, oop->GetRawTensor()->GetDataType(), iop);
+                oop, actualOffsets, validShape, rawShape, oop->GetRawTensor()->GetDataType(), iop);
             oOpDataList.emplace_back(ret);
         } else {
             oOpDataList.emplace_back(AllocateDataView(frame, oop, iop));
@@ -779,6 +784,8 @@ struct FunctionInterpreter {
     void DumpTensorBinary(
             const std::shared_ptr<LogicalTensorData> &dataView,
             std::string dumpTensorFileName);
+    void DumpBinary(std::vector<int64_t> &shape, std::vector<int64_t> &stride, std::vector<int64_t> &offset, 
+            FILE *fdata, uint8_t *data, size_t dtypeSize);
     void DumpTensorList(
             const std::string &name,
             const std::vector<std::shared_ptr<LogicalTensor>> *tensorList,
@@ -876,7 +883,7 @@ struct FunctionInterpreter {
  
     void WriteCsvRow(std::vector<std::string>& row) {
         if (rowNum > 0) {
-            row[toIndex(CsvCol::Num)] = std::to_string(rowNum);
+            row[toIndex(OpInfoCsvHeader::num)] = std::to_string(rowNum);
         }
         rowNum += 1;
         std::string textLine = row[0];

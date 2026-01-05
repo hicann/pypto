@@ -88,7 +88,7 @@ private:
             if (validShape == dataView->GetShape()) {
                 result.emplace_back(dataView);
             } else {
-                result.emplace_back(dataView->View(validShape, std::vector<int64_t>(validShape.size(), 0)));
+                result.emplace_back(dataView->View(validShape, dataView->GetOffset()));
             }
         }
         return result;

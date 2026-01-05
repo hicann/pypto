@@ -286,6 +286,8 @@ def set_verify_options(*,
     pass_verify_pass_filter : List
         Filting pass to verify.
     """
+    if pass_verify_pass_filter == []:
+        pass_verify_pass_filter = None
     _pto_options.set_options("verify", locals())
 
 

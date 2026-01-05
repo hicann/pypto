@@ -201,8 +201,7 @@ public:
     static bool VerifyResult(const std::string &key,
         const std::vector<std::shared_ptr<LogicalTensorData>> &goldenDataViewList,
         const std::vector<std::shared_ptr<LogicalTensorData>> &outputDataViewList, float eps);
-    bool VerifyResult(const std::string &key,
-        const std::vector<std::string> tensorNameList,
+    bool VerifyResult(const std::string &key, const std::string tensorNameList,
         const std::vector<std::shared_ptr<LogicalTensorData>> &goldenDataViewList,
         const std::vector<std::shared_ptr<LogicalTensorData>> &tensorDataViewList, float eps);
 

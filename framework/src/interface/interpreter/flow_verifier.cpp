@@ -69,43 +69,46 @@ bool FlowVerifier::VerifyResult(const std::string &key,
 }
 
 bool FlowVerifier::VerifyResult(const std::string &key,
-    const std::vector<std::string> tensorNameList,
+    const std::string tensorName,
     const std::vector<std::shared_ptr<LogicalTensorData>> &goldenDataViewList,
     const std::vector<std::shared_ptr<LogicalTensorData>> &tensorDataViewList, float eps) {
     bool result = true;
-    if (goldenDataViewList.size() == tensorDataViewList.size()) {
-        for (size_t k = 0; k < tensorDataViewList.size(); k++) {
-            if (!goldenDataViewList[k]){
-                ALOG_EVENT(key, " Verify for ", goldenDataViewList.size(), " data view list index ", k, " result NO_COMPARE");
-                continue;
-            }
-            std::string fileName = "tensor_" + tensorNameList[k] + ".data";
-            functionInterpreter_->DumpTensorBinary(tensorDataViewList[k], fileName);
- 
-            std::vector<std::string> opInfo(toIndex(CsvCol::COL_COUNT));
-            opInfo[toIndex(CsvCol::funcID)] = std::to_string(entry_->GetFuncMagic());
-            opInfo[toIndex(CsvCol::verifyType)] = key;
- 
-            opInfo[toIndex(CsvCol::outputShape)] = functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetShape());
-            opInfo[toIndex(CsvCol::outputValidShape)] = functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetValidShape());
-            opInfo[toIndex(CsvCol::outputDtype)] = DataType2String(tensorDataViewList[k]->GetDataType()); 
-            opInfo[toIndex(CsvCol::outputTensor)] = fileName;
-            opInfo[toIndex(CsvCol::verifyResult)] = "PASS";
- 
-            auto tensorGraphResult = VerifyResult(goldenDataViewList_[k], tensorDataViewList[k], eps);
-            if (!tensorGraphResult.Check()) {
-                ALOG_ERROR(key, " Verify for ", goldenDataViewList.size(), " data view list index ", k, " result ", TTY_RED("FAILED"));
-                opInfo[toIndex(CsvCol::verifyResult)] = "FAILED";
-                result = false;
-            } else {
-                ALOG_EVENT(key, " Verify for ", goldenDataViewList.size(), " data view list index ", k, " result PASS");
-            }
-            auto res = tensorGraphResult.Dump();
-            std::copy(res.begin(), res.end(), opInfo.begin() + toIndex(CsvCol::maxAbsDiff));
-            functionInterpreter_->WriteCsvRow(opInfo);
+    if (goldenDataViewList.size() != tensorDataViewList.size()) {
+        ALOG_EVENT(key, " Verify NO_COMPARE");
+        return result;
+    }
+    for (size_t k = 0; k < tensorDataViewList.size(); k++) {
+        if (!goldenDataViewList[k]){
+            ALOG_EVENT(key, " Verify for ", goldenDataViewList.size(), " data view list index ", k, " result NO_COMPARE");
+            continue;
         }
-    } else {
-        ALOG_EVENT(key, " Verify NO_COPARE");
+        struct timeval tv;
+        gettimeofday(&tv, nullptr);
+        auto ts = tv.tv_sec * 1000000 + tv.tv_usec;    // 1000000 is us per sec
+
+        std::string fileName = tensorName + "~" + std::to_string(k) + "~" + std::to_string(ts) + ".data";
+        functionInterpreter_->DumpTensorBinary(tensorDataViewList[k], fileName);
+
+        std::vector<std::string> opInfo(toIndex(OpInfoCsvHeader::COL_COUNT));
+        opInfo[toIndex(OpInfoCsvHeader::funcID)] = std::to_string(entry_->GetFuncMagic());
+        opInfo[toIndex(OpInfoCsvHeader::verifyType)] = key;
+        opInfo[toIndex(OpInfoCsvHeader::outputShape)] = functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetShape());
+        opInfo[toIndex(OpInfoCsvHeader::outputValidShape)] = functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetValidShape());
+        opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = DataType2String(tensorDataViewList[k]->GetDataType()); 
+        opInfo[toIndex(OpInfoCsvHeader::outputTensor)] = fileName;
+        opInfo[toIndex(OpInfoCsvHeader::verifyResult)] = "PASS";
+
+        auto tensorGraphResult = VerifyResult(goldenDataViewList[k], tensorDataViewList[k], eps);
+        if (!tensorGraphResult.Check()) {
+            ALOG_ERROR(key, " Verify for ", goldenDataViewList.size(), " data view list index ", k, " result ", TTY_RED("FAILED"));
+            opInfo[toIndex(OpInfoCsvHeader::verifyResult)] = "FAILED";
+            result = false;
+        } else {
+            ALOG_EVENT(key, " Verify for ", goldenDataViewList.size(), " data view list index ", k, " result PASS");
+        }
+        auto res = tensorGraphResult.Dump();
+        std::copy(res.begin(), res.end(), opInfo.begin() + toIndex(OpInfoCsvHeader::maxAbsDiff));
+        functionInterpreter_->WriteCsvRow(opInfo);
     }
     return result;
 }
@@ -199,9 +202,9 @@ void FlowVerifier::VerifyTensorGraph(Function *entry,
     bool res = true;
 
     if (outputDataViewList.size() == 0){
-        res = VerifyResult("tensor_graph", inputNameList, goldenDataViewList_, inputDataViewList_, static_cast<float>(1e-2));
+        res = VerifyResult("tensor_graph", "tensor_graph", goldenDataViewList_, inputDataViewList_, static_cast<float>(1e-2));
     } else {
-        res = VerifyResult("tensor_graph", outputNameList, goldenDataViewList_, outputDataViewList_, static_cast<float>(1e-2));
+        res = VerifyResult("tensor_graph", "tensor_graph", goldenDataViewList_, outputDataViewList_, static_cast<float>(1e-2));
     }
     if (!res) {
         checkResult = false;
@@ -257,33 +260,12 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
         /* record it */
         lastCaptureExecution_[func][captureIndex] = captureExecution;
 
-        for (size_t k = 0; k < executeDataViewList.size(); k++) {
-            std::string fileName = "tensor_" + func->GetMagicName() + "~" + passIdentifier +
-                    "~" + functionInterpreter_->GetLoopSymbolString() + "~" + "OUT_" + std::to_string(k) + ".data";
-            functionInterpreter_->DumpTensorBinary(executeDataViewList[k], fileName);
-            std::vector<std::string> opInfo(toIndex(CsvCol::COL_COUNT));
-            opInfo[toIndex(CsvCol::funcID)] = std::to_string(func->GetFuncMagic());
-            opInfo[toIndex(CsvCol::verifyType)] = key;
-            opInfo[toIndex(CsvCol::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
+        std::string tensorName = "tensor~" + func->GetMagicName() + "~" + passIdentifier +
+                    "~" + functionInterpreter_->GetLoopSymbolString();
 
-            opInfo[toIndex(CsvCol::outputShape)] = functionInterpreter_->ShapeToString(executeDataViewList[k]->GetShape());   
-            opInfo[toIndex(CsvCol::outputValidShape)] = functionInterpreter_->ShapeToString(executeDataViewList[k]->GetValidShape());
-            opInfo[toIndex(CsvCol::outputDtype)] = DataType2String(executeDataViewList[k]->GetDataType());
-            opInfo[toIndex(CsvCol::outputTensor)] = fileName;
-            opInfo[toIndex(CsvCol::verifyResult)] = "PASS";
-
-            auto passResult = VerifyResult(goldenDataViewList[k], executeDataViewList[k], eps);
-            if (!passResult.Check()) {
-                ALOG_ERROR(key, ":\n    Verify for ", goldenDataViewList.size(), " data view list index ", k, " result ", TTY_RED("FAILED"));
-                opInfo[toIndex(CsvCol::verifyResult)] = "FAILED";
-                checkResult = false;
-            } else {
-                ALOG_EVENT(key, " Verify result PASS");
-            }
-            auto res = passResult.Dump();
-            std::copy(res.begin(), res.end(), opInfo.begin() + toIndex(CsvCol::maxAbsDiff));
-
-            functionInterpreter_->WriteCsvRow(opInfo);
+        auto res = VerifyResult(key, tensorName, goldenDataViewList, executeDataViewList, eps);
+        if (!res) {
+            checkResult = false;
         }
     }
     functionInterpreter_->DumpReset();

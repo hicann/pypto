@@ -17,7 +17,7 @@ import os
 
 from enum import Enum
 from . import pypto_impl
-from .converter import _dtype_from, from_torch
+from .converter import _dtype_from, from_torch, _gen_pto_tensor
 
 __all__ = [
     "_device_init",
@@ -38,7 +38,7 @@ class RunMode(Enum):
     SIM = 1
 
 
-class CachedVerifyData:
+class _CachedVerifyData:
 
     def __init__(self):
         self._data = []
@@ -52,7 +52,7 @@ class CachedVerifyData:
     def get_data(self):
         return self._data
 
-_pto_verify_datas = CachedVerifyData()
+_pto_verify_datas = _CachedVerifyData()
 
 
 def _set_device(device: int):
@@ -115,10 +115,11 @@ class _JIT:
         in_out_tensors = [item for item in args if isinstance(item, pypto.Tensor)]
 
         if isinstance(self.verify_options, dict) and self.verify_options.get("enable_pass_verify"):
-            verify_inputs = _pto_to_tensor_data(in_out_tensors)
-            if in_out_tensors and in_out_tensors[0].device != "cpu":
-                verify_inputs = [pypto_impl.CopyToHost(t) for t in verify_inputs]
-            pypto_impl.SetVerifyData(verify_inputs, [], _pto_verify_datas.get_data())
+            host_pto_tensors, _ = _gen_pto_tensor(in_out_tensors)
+            host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
+            for i, dev_tensor in enumerate(_pto_to_tensor_data(in_out_tensors)):
+                pypto_impl.CopyToHost(dev_tensor, host_pto_t_datas[i])
+            pypto_impl.SetVerifyData(host_pto_t_datas, [], _pto_verify_datas.get_data())
 
         handler = pypto_impl.OperatorBegin()
         with pypto.options("jit_scope"):

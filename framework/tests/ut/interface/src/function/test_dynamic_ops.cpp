@@ -124,6 +124,43 @@ TEST_F(DynamicOpsTest, AssembleFp16) {
     }
 }
 
+TEST_F(DynamicOpsTest, PassVerifyWithoutGoldens) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int s = 32;
+    int m = 1;
+    int n = 2;
+    Tensor t0(DT_FP16, {n * s, m * s}, "t0");
+    Tensor t1(DT_FP16, {n * s, m * s}, "t1");
+    Tensor output(DT_FP16, {n * s, m * s}, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<npu::tile_fwk::float16>(t0, 1.0),
+        RawTensorData::CreateConstantTensor<npu::tile_fwk::float16>(t1, 2.0),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<npu::tile_fwk::float16>(output, 0),
+    });
+
+    FUNCTION("main", {t0, t1}, {output}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(3)) {
+            auto t0a = View(t0, {s, s}, {0, 0});
+            auto t0b = View(t0, {s, s}, {s, 0});
+            auto t1a = View(t1, {s, s}, {0, 0});
+            auto t1b = View(t1, {s, s}, {s, 0});
+            auto t2a = Add(t0a, t1a);
+            auto t2b = Add(t0b, t1b);
+            PrintIf(i == 1,"t2b=", t2b);
+            std::vector<std::pair<Tensor, std::vector<int64_t>>> data = {
+                {t2a, {0, 0}},
+                {t2b, {s, 0}},
+            };
+            output = Assemble(data);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, OpsElementWise) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
