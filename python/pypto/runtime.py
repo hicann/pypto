@@ -96,13 +96,23 @@ def _device_run_once_data_from_host(*args):
         _pto_to_tensor_data(in_out_tensors), [])
 
 
+def _compute_tensor_hash(tensors):
+    hash_list = []
+    for tensor in tensors:
+        shape = tuple([dim if isinstance(dim, int) else -1 for dim in tensor.shape])
+        dtype = tensor.dtype
+        hash_list.append(tuple([shape, dtype]))
+    comupted_hash = tuple(hash_list)
+    return comupted_hash
+
+
 class _JIT:
     def __init__(self, dyn_func, codegen_options=None, host_options=None,
                  pass_options=None, runtime_options=None, verify_options=None, debug_options=None):
         self.dyn_func = dyn_func
         self._is_compiled: bool = False
         self._handler = None
-        self._cached_shapes = None
+        self._handler_cache = {}
         self.codegen_options = codegen_options
         self.host_options = host_options
         self.pass_options = pass_options
@@ -219,16 +229,17 @@ class _JIT:
 
         # Convert tensors to tensor data before compile, as compile turns tensor shapes into symbolic scalars.
         in_out_tensors_data = _pto_to_tensor_data(in_out_tensors)
-        real_shapes = [t.GetShape() for t in in_out_tensors_data]
+        input_hash = _compute_tensor_hash(in_out_tensors)
 
         self.set_run_mode()
-        if not self._is_compiled or not self._hit_cache(real_shapes):
+        if not self._is_compiled or not self._hit_cache(input_hash):
             self.compile(*args, **kwargs)
-            self._cached_shapes = real_shapes
+            self._handler_cache[input_hash] = self._handler
             pypto_impl.BuildCache(self._handler, in_out_tensors_data, [])
         else:
             pypto_impl.ResetLog()
             self._set_config_option()
+            self._handler = self._handler_cache.get(input_hash)
         # dispatch run mode based on ASCEND_HOME_PATH or run_mode
         '''
           if run_mode is not config, use ASCEND_HOME_PATH
@@ -265,15 +276,10 @@ class _JIT:
         if isinstance(self.debug_options, dict):
             pypto.set_debug_options(**self.debug_options)
 
-    def _hit_cache(self, shapes):
-        if None in [self._handler, self._cached_shapes]:
+    def _hit_cache(self, input_hash):
+        if self._handler is None or len(self._handler_cache) == 0:
             return False
-        if len(shapes) != len(self._cached_shapes):
-            raise RuntimeError("Tensor count mismatch, please check inputs and outputs")
-        for shape1, shape2 in zip(shapes, self._cached_shapes):
-            if shape1 != shape2:
-                return False
-        return True
+        return self._handler_cache.get(input_hash) is not None
 
 
 @overload
