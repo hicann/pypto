@@ -261,6 +261,8 @@ def main():
     args = parser.parse_args()
     print("start parser log data:" + args.path)
     task_log_list = parse(args.path, args.dyn)
+    for task in task_log_list:
+        task["tasks"].sort(key=lambda x: x['execStart'])
     print("end parser log data")
     json_path = 'tilefwk_prof_data.json'
     if args.output != '':
@@ -268,7 +270,7 @@ def main():
         if not Path(args.output).exists():
             os.makedirs(args.output)
     with open(json_path, 'w') as json_file:
-        json.dump(task_log_list, json_file)
+        json.dump(task_log_list, json_file, indent=4)
 
     task_id_flag = False
     if args.task_id:
