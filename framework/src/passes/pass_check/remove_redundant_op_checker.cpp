@@ -162,11 +162,6 @@ Status RemoveRedundantOpChecker::PostCheckView(const Operation &op) {
         op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    if (childOp->GetOpcode() == Opcode::OP_COMM_WAIT_FLAG) {
-        APASS_LOG_ERROR_F(Elements::Operation, "View op[%d] has only one commit wait child; Please check view op[%d].%s", 
-        op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
-        return FAILED;
-    }
     return SUCCESS;
 }
 

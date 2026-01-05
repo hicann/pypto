@@ -49,7 +49,6 @@ const std::string OpAttributeKey::needAlloc = "NEED_ALLOC";
 const std::string OpAttributeKey::broadcastLastAxis = "BROADCAST_LAST_AXIS";
 const std::string OpAttributeKey::dontTouch = "DONT_TOUCH";
 const std::string OpAttributeKey::tag = "TAG";
-const std::string OpAttributeKey::commGroupInfo = "COMM_GROUP_INFO";
 const std::string OpAttributeKey::distTilingInfo = "DIST_TILING_INFO";
 const std::string OpAttributeKey::sameInOut = "SAME_IN_OUT";
 const std::string OpAttributeKey::inputCombineAxis = "op_attr_input_combine_axis";

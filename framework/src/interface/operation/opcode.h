@@ -207,12 +207,6 @@ enum class Opcode {
     OP_PAD,
 
     // Distributed
-    OP_REMOTE_GATHER,
-    OP_LOCAL_COPY_OUT,
-    OP_WRITE_REMOTE,
-    OP_REMOTE_REDUCE,
-    OP_COMM_WAIT_FLAG,
-    OP_DEPEND_ON,
     OP_SEND_TO_ROUTING_EXPERT,
     OP_SEND_TO_SHARED_EXPERT,
     OP_COPY_TO_LOCAL_EXPERT,
@@ -397,8 +391,7 @@ public:
     inline bool IsCopyOut(Opcode opCode) const {
         return opCode == Opcode::OP_COPY_OUT || opCode == Opcode::OP_UB_COPY_OUT || opCode == Opcode::OP_L0C_COPY_OUT ||
                opCode == Opcode::OP_L1_COPY_OUT || opCode == Opcode::OP_TRANSPOSE_MOVEOUT ||
-               opCode == Opcode::OP_INDEX_OUTCAST || opCode == Opcode::OP_REMOTE_GATHER ||
-               opCode == Opcode::OP_LOCAL_COPY_OUT || opCode == Opcode::OP_REMOTE_REDUCE ||
+               opCode == Opcode::OP_INDEX_OUTCAST ||
                opCode == Opcode::OP_FFN_SCHED || opCode == Opcode::OP_FFN_BATCHING ||
                opCode == Opcode::OP_FFN_COMBINEINFO || opCode == Opcode::OP_FFN_VALIDCNT ||
                opCode == Opcode::OP_COPY_TO_LOCAL_EXPERT || opCode == Opcode::OP_SHMEM_PUT ||
@@ -565,8 +558,7 @@ const std::unordered_set<Opcode> LOGICALNOT_OPS{Opcode::OP_LOGICALNOT};
 
 const std::unordered_set<Opcode> LOGICALAND_OPS{Opcode::OP_LOGICALAND};
 
-const std::unordered_set<Opcode> DISTRIBUTED_OPS{Opcode::OP_REMOTE_GATHER, Opcode::OP_LOCAL_COPY_OUT,
-    Opcode::OP_WRITE_REMOTE, Opcode::OP_REMOTE_REDUCE, Opcode::OP_SEND_TO_ROUTING_EXPERT,
+const std::unordered_set<Opcode> DISTRIBUTED_OPS{Opcode::OP_SEND_TO_ROUTING_EXPERT,
     Opcode::OP_SEND_TO_SHARED_EXPERT, Opcode::OP_COPY_TO_LOCAL_EXPERT, Opcode::OP_DISPATCH_SET_FLAG,
     Opcode::OP_FFN_SCHED, Opcode::OP_FFN_BATCHING, Opcode::OP_FFN_COMBINEINFO, Opcode::OP_FFN_VALIDCNT,
     Opcode::OP_SHMEM_PUT, Opcode::OP_SHMEM_SIGNAL, Opcode::OP_SHMEM_GET, Opcode::OP_SHMEM_REDUCE,
@@ -577,10 +569,6 @@ inline bool IsAllocOpCode(Opcode opCode) {
     return (ALLOC_OPCODE.count(opCode) != 0);
 }
 
-inline bool IsEmptyOut(const Opcode opCode) {
-    return opCode == Opcode::OP_WRITE_REMOTE;
-}
-
 inline bool IsCopyIn(const Opcode opCode) {
     return opCode == Opcode::OP_COPY_IN || opCode == Opcode::OP_UB_COPY_IN || opCode == Opcode::OP_L1_COPY_IN ||
            opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN;
@@ -588,8 +576,7 @@ inline bool IsCopyIn(const Opcode opCode) {
 
 inline bool IsCopyOut(const Opcode &op) {
     return (op == Opcode::OP_COPY_OUT || op == Opcode::OP_L0C_COPY_OUT || op == Opcode::OP_TRANSPOSE_MOVEOUT ||
-            op == Opcode::OP_INDEX_OUTCAST || op == Opcode::OP_REMOTE_GATHER || op == Opcode::OP_LOCAL_COPY_OUT ||
-            op == Opcode::OP_REMOTE_REDUCE || op == Opcode::OP_FFN_SCHED || op == Opcode::OP_FFN_BATCHING ||
+            op == Opcode::OP_INDEX_OUTCAST || op == Opcode::OP_FFN_SCHED || op == Opcode::OP_FFN_BATCHING ||
             op == Opcode::OP_FFN_COMBINEINFO || op == Opcode::OP_FFN_VALIDCNT || op == Opcode::OP_COPY_TO_LOCAL_EXPERT ||
             op == Opcode::OP_SHMEM_PUT || op == Opcode::OP_SHMEM_SIGNAL || op == Opcode::OP_SHMEM_GET ||
             op == Opcode::OP_SHMEM_REDUCE || op == Opcode::OP_RESHAPE_COPY_OUT || op == Opcode::OP_SHMEM_PUT_UB2GM ||

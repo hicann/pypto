@@ -102,24 +102,6 @@ bool ReplaceTensor::CheckAMulAccBConflict(const Operation& op) {
     return false;
 }
 
-/*
-用于校验remote_reduce节点的输入输出是否存在冲突
-*/
-bool ReplaceTensor::CheckRemoteReduceConflict(const Operation& op) {
-    int index = 0;
-    auto reduceIn = op.GetInputOperand(index);
-    auto reduceOut = op.GetOOperands().front();
-    auto &inOp = *reduceIn->GetProducers().begin();
-    auto &outOp = *reduceOut->GetConsumers().begin();
-    if (inOp == nullptr && outOp == nullptr) {
-        return false;
-    }
-    if (reduceIn->GetRawMagic() != reduceOut->GetRawMagic()) {
-        return true;
-    }
-    return false;
-}
-
 Status ReplaceTensor::InplaceCheck(Function &function) {
     struct OpValidator {
         std::function<bool(const Operation&)> validate;
@@ -133,7 +115,6 @@ Status ReplaceTensor::InplaceCheck(Function &function) {
         { Opcode::OP_INDEX_OUTCAST, { [this](const Operation &op) { return this->CheckIndexOutcastConflict(op); }, "Index_Outcast", 3UL, 1UL } },
         { Opcode::OP_RESHAPE, { [this](const Operation &op) { return this->CheckReshapeConflict(op); }, "Reshape", 1UL, 1UL } },
         { Opcode::OP_A_MULACC_B, { [this](const Operation &op) { return this->CheckAMulAccBConflict(op); }, "A_Mulacc_B", 3UL, 1UL } },
-        { Opcode::OP_REMOTE_REDUCE, { [this](const Operation &op) { return this->CheckRemoteReduceConflict(op); }, "Remote_Reduce", 1UL, 1UL } },
     };
     for (const auto &op : function.Operations()) {
         auto it = opValidators.find(op.GetOpcode());

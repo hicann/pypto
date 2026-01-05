@@ -36,7 +36,6 @@ vaule: vector of pair, 每个pair记录了第几个输入和第几个输出存�
 const std::unordered_map<Opcode, std::vector<std::pair<size_t, size_t>>> inplaceOpMap = {
     {   Opcode::OP_A_MULACC_B, {std::pair<size_t, size_t>{2, 0}}},
     {Opcode::OP_INDEX_OUTCAST, {std::pair<size_t, size_t>{2, 0}}},
-    {Opcode::OP_REMOTE_REDUCE, {std::pair<size_t, size_t>{0, 0}}},
 };
 
 class InplaceProcess : public Pass {

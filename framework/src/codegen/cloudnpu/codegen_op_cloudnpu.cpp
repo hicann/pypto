@@ -196,10 +196,6 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
       }),
       distributeOps_({
           // distribute op
-          {Opcode::OP_WRITE_REMOTE, [this]() { return GenDistOp(); }},
-          {Opcode::OP_REMOTE_REDUCE, [this]() { return GenDistOp(); }},
-          {Opcode::OP_REMOTE_GATHER, [this]() { return GenDistOp(); }},
-          {Opcode::OP_LOCAL_COPY_OUT, [this]() { return GenDistOp(); }},
           {Opcode::OP_FFN_SCHED, [this]() { return GenDistOp(); }},
           {Opcode::OP_FFN_BATCHING, [this]() { return GenDistOp(); }},
           {Opcode::OP_FFN_COMBINEINFO, [this]() { return GenDistOp(); }},

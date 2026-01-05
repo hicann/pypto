@@ -266,10 +266,6 @@ void ShmemAllGather(const Tensor &in, const Tensor &barrierDummy, const char *gr
     Shape shmemSignalShape = {rankSize, tileCount, 8};
     Shape outShape = {row * rankSize, col};
     ASSERT(out.GetShape() == outShape) << "This shape of out is invalid";
-    DataType shmemDataType = in.GetDataType();
-    if ((shmemDataType == DT_BF16) || (shmemDataType == DT_FP16)) {
-        shmemDataType = DT_FP32;
-    }
     const TileShape& tileShape = TileShape::Current();
     ValidateTilingSize(tileShape.GetDistTileRow(), row, "row");
     ValidateTilingSize(tileShape.GetDistTileCol(), col, "col");

@@ -119,40 +119,53 @@ int MachineAgent::PrepareWorkSpace(DeviceAgentTask *task) {
     return MACHINE_OK;
 }
 
-void PrepareDistTilingInfo(DeviceAgentTask *task, InvokeParaOffset &elm, std::vector<uint64_t> &invokeOffsetVec) {
-#ifdef BUILD_WITH_CANN
-    if (elm.offset != elm.rawTensorOffset) {
-        return;
-    }
-    auto distTilingData = task->compileInfo.distTilingManager->Get(elm.rawSymbol);
-    if (distTilingData.has_value()) {
-        if (rtMemcpy(reinterpret_cast<void *>(invokeOffsetVec.back()),
-            distTilingData.value().second,
-            distTilingData.value().first,
-            distTilingData.value().second,
-            RT_MEMCPY_HOST_TO_DEVICE) != 0) {
-            ALOG_ERROR_F("[DEVICE AGENT] Added tiling info fail: symbol=%s, devAddr=%lx, len=%lu",
-                elm.rawSymbol.c_str(), invokeOffsetVec.back(),
-                distTilingData.value().second);
+void ProcessInvokeParaOffset(DeviceAgentTask *task, InvokeParaOffset &elm,
+    uint8_t *paraWorkSpaceAddr, std::vector<uint64_t> &invokeOffsetVec, 
+    std::vector<uint64_t> &invokeOffsetOriVec)
+{
+    uint64_t value;
+    uint64_t oriValue;
+    if (elm.rawTensorAddr != nullptr) {
+        /* rawTensorAddr 不为空，插入 rawTensorAddr + offset ,直接使用op层传入的workspace地址*/
+        value = reinterpret_cast<uint64_t>(elm.rawTensorAddr) + elm.offset;
+        oriValue = reinterpret_cast<uint64_t>(elm.rawTensorAddr);
+        ALOG_INFO_F("[DEVICE AGENT] Added op rawTensorAddr offset: %lu", value);
+    } else if (elm.isTensorParam) {
+        if (elm.opOriginArgsSeq != INVALID_IN_OUT_INDEX) {
+            elm.rawTensorAddr = task->GetOpOriginArgsRawTensorAddr(elm.opOriginArgsSeq);
+            MACHINE_ASSERT(elm.rawTensorAddr != nullptr);
+            value = reinterpret_cast<uint64_t>(elm.rawTensorAddr) + elm.offset;
+            oriValue = reinterpret_cast<uint64_t>(elm.rawTensorAddr);
+            ALOG_INFO_F("[DEVICE AGENT] Get op origin args raw tensor addr:segno %zu, base addr %p, offset "
+                        "%lu, addr+offset %lx",
+                elm.opOriginArgsSeq, elm.rawTensorAddr, elm.offset, value);
         } else {
-            ALOG_INFO_F("[DEVICE AGENT] Added tiling info success: symbol=%s, devAddr=%lx, len=%lu",
-                elm.rawSymbol.c_str(), invokeOffsetVec.back(),
-                distTilingData.value().second);
+            ALOG_INFO_F("prepare stub output rawtensor gm addr, rawMagic = %d symbol %s", elm.rawMagic,
+                elm.rawSymbol.c_str());
+            auto addr = task->deviceInfo.stubOutRawTensorAddr.find(elm.rawMagic);
+            if (addr == task->deviceInfo.stubOutRawTensorAddr.end()) {
+                elm.rawTensorAddr = paraWorkSpaceAddr + elm.rawTensorOffset;
+                task->deviceInfo.stubOutRawTensorAddr[elm.rawMagic] = elm.rawTensorAddr;
+                ALOG_INFO_F("[DEVICE AGENT] alloc stub workspace raw tensor addr: rawmagic = %d", elm.rawMagic);
+            } else {
+                ALOG_INFO_F("Use exist stub out raw tensor addr.");
+            }
+            value = reinterpret_cast<uint64_t>(paraWorkSpaceAddr) + elm.offset;
+            oriValue = reinterpret_cast<uint64_t>(paraWorkSpaceAddr);
+            ALOG_INFO_F("[DEVICE AGENT] Added stub op rawTensorAddr offset: %lx", value);
         }
+    } else {
+        /* raw_tensor_addr_ 为空代表是incast outcast，插入新申请的workspace地址偏移 */
+        value = reinterpret_cast<uint64_t>(paraWorkSpaceAddr) + elm.offset;
+        oriValue = reinterpret_cast<uint64_t>(paraWorkSpaceAddr);
+        ALOG_INFO_F("[DEVICE AGENT] Added incast outcast workSpaceAddr: %lx", value);
     }
-#else
-    (void)task;
-    (void)elm;
-    (void)invokeOffsetVec;
-#endif
+    invokeOffsetVec.push_back(value);
+    invokeOffsetOriVec.push_back(oriValue);
 }
 
-int MachineAgent::PrepareInvokeEntry(DeviceAgentTask *task) {
-    uint8_t *paraWorkSpaceAddr = task->deviceInfo.workspaceGmAddr;
-    ALOG_INFO_F("paraWorkSpaceAddr base addr %p", paraWorkSpaceAddr);
-    std::vector<uint64_t> invokeOffsetVec;
-    std::vector<uint64_t> invokeOffsetOriVec;
-    std::vector<uint64_t> coreTensorInfoEntyVec;
+void ProcessCoreFunction(DeviceAgentTask *task, uint8_t *paraWorkSpaceAddr, 
+    std::vector<uint64_t> &invokeOffsetVec, std::vector<uint64_t> &invokeOffsetOriVec) {
     std::map<uint64_t, std::list<InvokeParaOffset>> &invokeParaOffsetMap =
         task->compileInfo.invokeParaOffset;
     for (auto &mapEntry : invokeParaOffsetMap) {
@@ -164,93 +177,90 @@ int MachineAgent::PrepareInvokeEntry(DeviceAgentTask *task) {
         for (auto &elm : invokeParaOffsetList) {
             ALOG_INFO_F("idx is %d, ele rawMagic: %d, rawSymbol %s, offset: %lu", i++, elm.rawMagic,
                 elm.rawSymbol.c_str(), elm.offset);
-            uint64_t value;
-            uint64_t oriValue;
-            if (elm.rawTensorAddr != nullptr) {
-                /* rawTensorAddr 不为空，插入 rawTensorAddr + offset ,直接使用op层传入的workspace地址*/
-                value = reinterpret_cast<uint64_t>(elm.rawTensorAddr) + elm.offset;
-                invokeOffsetVec.push_back(value);
-                oriValue = reinterpret_cast<uint64_t>(elm.rawTensorAddr);
-                invokeOffsetOriVec.push_back(oriValue);
-                ALOG_INFO_F("[DEVICE AGENT] Added op rawTensorAddr offset: %lu", value);
-            } else if (elm.isTensorParam) {
-                if (elm.opOriginArgsSeq != INVALID_IN_OUT_INDEX) {
-                    elm.rawTensorAddr = task->GetOpOriginArgsRawTensorAddr(elm.opOriginArgsSeq);
-                    MACHINE_ASSERT(elm.rawTensorAddr != nullptr);
-                    value = reinterpret_cast<uint64_t>(elm.rawTensorAddr) + elm.offset;
-                    invokeOffsetVec.push_back(value);
-                    oriValue = reinterpret_cast<uint64_t>(elm.rawTensorAddr);
-                    invokeOffsetOriVec.push_back(oriValue);
-                    ALOG_INFO_F("[DEVICE AGENT] Get op origin args raw tensor addr:segno %zu, base addr %p, offset "
-                                "%lu, addr+offset %lx",
-                        elm.opOriginArgsSeq, elm.rawTensorAddr, elm.offset, value);
-                } else {
-                    ALOG_INFO_F("prepare stub output rawtensor gm addr, rawMagic = %d symbol %s", elm.rawMagic,
-                        elm.rawSymbol.c_str());
-                    auto addr = task->deviceInfo.stubOutRawTensorAddr.find(elm.rawMagic);
-                    if (addr == task->deviceInfo.stubOutRawTensorAddr.end()) {
-                        elm.rawTensorAddr = paraWorkSpaceAddr + elm.rawTensorOffset;
-                        task->deviceInfo.stubOutRawTensorAddr[elm.rawMagic] = elm.rawTensorAddr;
-                        ALOG_INFO_F("[DEVICE AGENT] alloc stub workspace raw tensor addr: rawmagic = %d", elm.rawMagic);
-                    } else {
-                        ALOG_INFO_F("Use exist stub out raw tensor addr.");
-                    }
-
-                    value = reinterpret_cast<uint64_t>(paraWorkSpaceAddr) + elm.offset;
-                    invokeOffsetVec.push_back(value);
-                    oriValue = reinterpret_cast<uint64_t>(paraWorkSpaceAddr);
-                    invokeOffsetOriVec.push_back(oriValue);
-                    ALOG_INFO_F("[DEVICE AGENT] Added stub op rawTensorAddr offset: %lx", value);
-                }
-            } else {
-                /* raw_tensor_addr_ 为空代表是incast outcast，插入新申请的workspace地址偏移 */
-                value = reinterpret_cast<uint64_t>(paraWorkSpaceAddr) + elm.offset;
-                invokeOffsetVec.push_back(value);
-                oriValue = reinterpret_cast<uint64_t>(paraWorkSpaceAddr);
-                invokeOffsetOriVec.push_back(oriValue);
-                ALOG_INFO_F("[DEVICE AGENT] Added incast outcast workSpaceAddr: %lx", value);
-            }
-            PrepareDistTilingInfo(task, elm, invokeOffsetVec);
+                ProcessInvokeParaOffset(task, elm, paraWorkSpaceAddr, invokeOffsetVec, invokeOffsetOriVec);
         }
-    }
-    ALOG_INFO_F("[DEVICE AGENT] invokeOffsetVec size: %zu", invokeOffsetVec.size());
-    size_t invokeOffsetVecSize = invokeOffsetVec.size() * sizeof(uint64_t);
-    uint8_t *invokeEntyDev = nullptr;
-    uint8_t *invokeTensorsInfoDev = nullptr;
-    uint8_t *invokeEntyDevOri = nullptr;
+    }    
+}
+
+bool AllocateDeviceMemory(uint8_t*& invokeEntyDev, uint8_t*& invokeEntyDevOri, 
+        uint8_t*& invokeTensorsInfoDev, size_t invokeOffsetVecSize, 
+        size_t invokeOffsetOriSize, size_t invokeTensorsInfoSize)
+{
+    (void)invokeEntyDev;
+    (void)invokeEntyDevOri;
+    (void)invokeTensorsInfoDev;
+    (void)invokeOffsetVecSize;
+    (void)invokeOffsetOriSize;
+    (void)invokeTensorsInfoSize;
 #ifdef BUILD_WITH_CANN
     machine::GetRA()->AllocDevAddr(&invokeEntyDev, invokeOffsetVecSize);
     if (invokeEntyDev == nullptr) {
         std::cerr << "[DEVICE AGENT] Error: Failed to allocate memory for invokeEntyDev!" << std::endl;
-        return MACHINE_ERROR;
+        return false;
     }
-    machine::GetRA()->AllocDevAddr(&invokeEntyDevOri, invokeOffsetOriVec.size() * sizeof(uint64_t));
+    machine::GetRA()->AllocDevAddr(&invokeEntyDevOri, invokeOffsetOriSize);
     if (invokeEntyDevOri == nullptr) {
         std::cerr << "[DEVICE AGENT] Error: Failed to allocate memory for invokeEntyDev!" << std::endl;
-        return MACHINE_ERROR;
+        return false;
     }
-    size_t invokeTensorsInfoSize = task->compileInfo.coreTensorInfoVec.size() * sizeof(TensorInfo);
     machine::GetRA()->AllocDevAddr(&invokeTensorsInfoDev, invokeTensorsInfoSize);
     if (invokeTensorsInfoDev == nullptr) {
         std::cerr << "[DEVICE AGENT] Error: Failed to allocate memory for invokeEntyInfo!" << std::endl;
-        return MACHINE_ERROR;
+        return false;
     }
+    return true;
+#else
+    return true;
 #endif
+}
+
+void CopyDataToDevice(uint8_t* invokeEntyDev, uint8_t* invokeEntyDevOri, uint8_t* invokeTensorsInfoDev,
+        size_t invokeOffsetVecSize, size_t invokeTensorsInfoSize, std::vector<uint64_t>& invokeOffsetVec, 
+        std::vector<uint64_t>& invokeOffsetOriVec, std::vector<TensorInfo>& coreTensorInfoVec)
+{
+    (void)invokeEntyDev;
+    (void)invokeEntyDevOri;
+    (void)invokeTensorsInfoDev;
+    (void)invokeOffsetVecSize;
+    (void)invokeTensorsInfoSize;
+    (void)invokeOffsetVec;
+    (void)invokeOffsetOriVec;
+    (void)coreTensorInfoVec;
+#ifdef BUILD_WITH_CANN
+    machine::GetRA()->CopyToDev(
+        invokeEntyDev, reinterpret_cast<uint8_t *>(invokeOffsetVec.data()), invokeOffsetVecSize);
+    machine::GetRA()->CopyToDev(invokeTensorsInfoDev,
+        reinterpret_cast<uint8_t *>(coreTensorInfoVec.data()),invokeTensorsInfoSize);
+    machine::GetRA()->CopyToDev(invokeEntyDevOri,
+        reinterpret_cast<uint8_t *>(invokeOffsetOriVec.data()), invokeOffsetOriVec.size() * sizeof(uint64_t));
+    ALOG_INFO_F("[DEVICE AGENT] Copied invokeOffsetVec data to invokeEntyDev, size: %lu bytes", invokeOffsetVecSize);
+#endif  
+}
+
+int MachineAgent::PrepareInvokeEntry(DeviceAgentTask *task) {
+    uint8_t *paraWorkSpaceAddr = task->deviceInfo.workspaceGmAddr;
+    ALOG_INFO_F("paraWorkSpaceAddr base addr %p", paraWorkSpaceAddr);
+    std::vector<uint64_t> invokeOffsetVec;
+    std::vector<uint64_t> invokeOffsetOriVec;
+    ProcessCoreFunction(task, paraWorkSpaceAddr, invokeOffsetVec, invokeOffsetOriVec);
+    ALOG_INFO_F("[DEVICE AGENT] invokeOffsetVec size: %zu", invokeOffsetVec.size());
+    size_t invokeOffsetVecSize = invokeOffsetVec.size() * sizeof(uint64_t);
+    size_t invokeOffsetOriSize = invokeOffsetOriVec.size() * sizeof(uint64_t);
+    size_t invokeTensorsInfoSize = task->compileInfo.coreTensorInfoVec.size() * sizeof(TensorInfo);
+    uint8_t *invokeEntyDev = nullptr;
+    uint8_t *invokeTensorsInfoDev = nullptr;
+    uint8_t *invokeEntyDevOri = nullptr;
+    if (!AllocateDeviceMemory(invokeEntyDev, invokeEntyDevOri, invokeTensorsInfoDev,
+        invokeOffsetVecSize, invokeOffsetOriSize, invokeTensorsInfoSize)) {
+            return MACHINE_ERROR;
+    }
     task->deviceInfo.invokeEntryOffsetsGmAddr = invokeEntyDev;
     ALOG_INFO_F("[DEVICE AGENT] Allocated invokeEntyDev: %lx", reinterpret_cast<uint64_t>(invokeEntyDev));
     ALOG_INFO_F("PrepareInvokeEntry invokeEntyDev: %p, invokeTensorsInfoDev: %p", invokeEntyDev, invokeTensorsInfoDev);
     DumpData("invokeEntyDev.data", reinterpret_cast<const char *>(&invokeEntyDev), sizeof(uint8_t *));
     DumpData("invokeOffsetVec.data", reinterpret_cast<const char *>(invokeOffsetVec.data()), invokeOffsetVecSize);
-#ifdef BUILD_WITH_CANN
-    machine::GetRA()->CopyToDev(
-        invokeEntyDev, reinterpret_cast<uint8_t *>(invokeOffsetVec.data()), invokeOffsetVecSize);
-    machine::GetRA()->CopyToDev(invokeTensorsInfoDev,
-        reinterpret_cast<uint8_t *>(task->compileInfo.coreTensorInfoVec.data()),invokeTensorsInfoSize);
-    machine::GetRA()->CopyToDev(invokeEntyDevOri,
-        reinterpret_cast<uint8_t *>(invokeOffsetOriVec.data()), invokeOffsetOriVec.size() * sizeof(uint64_t));
-#endif
-    ALOG_INFO_F("[DEVICE AGENT] Copied invokeOffsetVec data to invokeEntyDev, size: %lu bytes", invokeOffsetVecSize);
-
+    CopyDataToDevice(invokeEntyDev, invokeEntyDevOri, invokeTensorsInfoDev, invokeOffsetVecSize, 
+        invokeTensorsInfoSize, invokeOffsetVec, invokeOffsetOriVec, task->compileInfo.coreTensorInfoVec);
     /* cache core function absolute addr */
     for (auto &elm : task->compileInfo.coreFunctionInvokeEntryOffset) {
         task->deviceInfo.coreFunctionInvokeEntryAddr.push_back(reinterpret_cast<uint64_t>(invokeEntyDev + elm));

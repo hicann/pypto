@@ -14,8 +14,6 @@
  */
 
 #pragma once
-#include "distributed/depend_on.h"
-#include "distributed/comm_wait_flag.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "tilefwk/core_func_data.h"
 #include "interface/operation/opcode.h"
@@ -32,8 +30,6 @@ constexpr uint32_t AICPU_QUEUE_SIZE = 1024;
 class AicpuTaskManager {
 public:
     enum TaskType {
-        COMM_WAIT_FLAG = 0,
-        DEPEND_ON,
         TASK_TYPE_NUM,
     };
     using InitCallBack = std::function<void(DeviceTask *)>;
@@ -42,10 +38,7 @@ public:
 
     inline void TaskCallBackRegister() {}
 
-    AicpuTaskManager() {
-        TaskCallBackResigter<Distributed::CommWaitFlag>(TaskType::COMM_WAIT_FLAG, commWaitFlag_);
-        TaskCallBackResigter<Distributed::DependOn>(TaskType::DEPEND_ON, dependOn_);
-    };
+    AicpuTaskManager() {};
     ~AicpuTaskManager() {};
 
     template <typename T>
@@ -57,14 +50,8 @@ public:
         pollCompletedCallBack_[index] = std::bind(&T::PollCompleted, &obj, std::placeholders::_1);
     }
 
-    inline TaskType GetTaskType(uint32_t extType) {
-        auto taskType = TaskType::TASK_TYPE_NUM;
-        switch (extType) {
-            case static_cast<uint32_t>(Opcode::OP_COMM_WAIT_FLAG): taskType = TaskType::COMM_WAIT_FLAG; break;
-            case static_cast<uint32_t>(Opcode::OP_DEPEND_ON): taskType = TaskType::DEPEND_ON; break;
-            default: break;
-        }
-        return taskType;
+    inline TaskType GetTaskType() {
+        return TaskType::TASK_TYPE_NUM;
     }
 
     // 每个AICPU都会调用
@@ -126,7 +113,7 @@ private:
 
     inline void TaskDispatch(uint64_t elem) {
         auto topo = reinterpret_cast<CoreFunctionTopo *>(funcInfo_[elem].topoAddr);
-        auto taskType = GetTaskType(topo->extType);
+        auto taskType = GetTaskType();
         if (taskType < TaskType::TASK_TYPE_NUM) {
             auto enqueueOp = enqueueOpCallBack_[static_cast<uint64_t>(taskType)];
             enqueueOp(elem, reinterpret_cast<uint64_t *>(&topo->depIds[topo->depNum]), topo->extParamNum);
@@ -134,9 +121,6 @@ private:
     }
 
     StaticReadyCoreFunctionQueue *readyQueue_{nullptr};
-
-    Distributed::CommWaitFlag commWaitFlag_;
-    Distributed::DependOn dependOn_;
 
     std::array<InitCallBack, TaskType::TASK_TYPE_NUM> initCallBack_;
     std::array<EnqueueOpCallBack, TaskType::TASK_TYPE_NUM> enqueueOpCallBack_;

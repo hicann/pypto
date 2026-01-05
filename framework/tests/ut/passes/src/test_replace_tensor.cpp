@@ -468,32 +468,5 @@ TEST_F(ReplaceTensorTest, TestA_MULACC_B) {
     EXPECT_EQ(mulaccIn->GetRawMagic(), mulaccOut->GetRawMagic());
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
-
-TEST_F(ReplaceTensorTest, TestReduce) {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestProcessHubAssembleOp_BrokenChain", 
-                                                     "TestProcessHubAssembleOp_BrokenChain", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-    // Prepare the graph
-    std::vector<int64_t> reduceshape = {kNumEight, kNumEight};
-    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
-    // init RawTensor
-    std::shared_ptr<RawTensor> inRawTensor = std::make_shared<RawTensor>(DT_FP32, reduceshape);
-    std::shared_ptr<RawTensor> outRawTensor = std::make_shared<RawTensor>(DT_FP32, reduceshape);
-    // init LogicalTensor
-    auto reduceIn = std::make_shared<LogicalTensor>(*currFunctionPtr, inRawTensor, offset0, reduceshape);
-    auto reduceOut = std::make_shared<LogicalTensor>(*currFunctionPtr, outRawTensor, offset0, reduceshape);
-    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, reduceshape);
-    /* Init Graph
-        incast -> Reduce -> reduceOut-> op
-    */
-    currFunctionPtr->AddOperation(Opcode::OP_REMOTE_REDUCE, {reduceIn}, {reduceOut});
-    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {reduceOut}, {outTensor});
-    ReplaceTensor pass;
-    currFunctionPtr->inCasts_.push_back(reduceIn);
-    currFunctionPtr->outCasts_.push_back(outTensor);
-    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(reduceIn->GetRawMagic(), reduceOut->GetRawMagic());
-    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
-}
 }
 }

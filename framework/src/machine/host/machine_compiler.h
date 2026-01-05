@@ -17,7 +17,6 @@
 
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
-#include "interface/operation/distributed/tiling_manager.h"
 #include "tilefwk/comm_group_recorder.h"
 
 namespace npu::tile_fwk {
@@ -45,20 +44,10 @@ struct MachineCompileInfo {
     std::vector<TensorInfo> coreTensorInfoVec;
     std::vector<uint64_t> coreFunctionTensorInfoOffset;
     std::vector<uint64_t> coreTensorNum;
-    std::shared_ptr<Distributed::TilingManager> distTilingManager;
     void Print() {
         ALOG_DEBUG(
             "programFunctionCnt =  %lu, coreFunctionCnt = %lu, workSpaceStackSize = %lu, invokeParaWorkSpaceSize = %lu",
             programFunctionCnt, coreFunctionCnt, workSpaceStackSize, invokeParaWorkSpaceSize);
-    }
-    void PrintDistributed() {
-        if (distTilingManager) {
-            ALOG_INFO("%s", distTilingManager->PrintString().c_str());
-        }
-        if (!commGroups.empty()) {
-            ALOG_INFO("%s", Distributed::CommGroupRecorder::GetInstance().PrintString(commGroups).c_str());
-        }
-        ALOG_INFO("distributed compile info prepared form backend");
     }
 };
 
