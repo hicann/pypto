@@ -29,6 +29,21 @@
 
 namespace npu {
 namespace tile_fwk {
+
+struct OperandCount {
+    constexpr static size_t VIEW_INPUT = 1;
+    constexpr static size_t VIEW_OUTPUT = 1;
+    constexpr static size_t ASSEMBLE_INPUT = 1;
+    constexpr static size_t ASSEMBLE_OUTPUT = 1;
+    constexpr static size_t RESHAPE_INPUT = 1;
+    constexpr static size_t RESHAPE_OUTPUT = 1;
+    constexpr static size_t INDEX_OUTCAST_INPUTS = 3;
+    constexpr static size_t INDEX_OUTCAST_OUTPUT = 1;
+    constexpr static size_t A_MULACC_B_MIN_INPUTS = 3;
+    constexpr static size_t A_MULACC_B_MAX_INPUTS = 4;
+    constexpr static size_t A_MULACC_B_OUTPUT = 1;
+};
+
 /*
 key: Opcode类型
 vaule: vector of pair, 每个pair记录了第几个输入和第几个输出存在inplace关系
