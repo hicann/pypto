@@ -153,14 +153,12 @@ Status SrcDstBufferMergeImpl::FindReplaced(const Operation &oriOps, const Operat
 void SrcDstBufferMergeImpl::NotFindReplacedProcess(const Operation &ops,
     std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors) {
     for (auto &out : ops.GetOOperands()) {
-        auto outTensorMagic = out->memoryrange.memId;
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Op %d out tensor magic: %d",
-            ops.GetOpMagic(), outTensorMagic);
-        if (replacedTensors.find(outTensorMagic) != replacedTensors.end()) {
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Find tensor: %d replaced by tensor: %d",
-                outTensorMagic, replacedTensors[outTensorMagic]->memoryrange.memId);
+        auto outTensorMemId = out->memoryrange.memId;
+        if (replacedTensors.find(outTensorMemId) != replacedTensors.end()) {
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Find memId: %d replaced by memId: %d, tensor magic: %d, continue replacing",
+                outTensorMemId, replacedTensors[outTensorMemId]->memoryrange.memId, out->GetMagic());
             out->memoryrange.memId =
-                replacedTensors[outTensorMagic]->memoryrange.memId;
+                replacedTensors[outTensorMemId]->memoryrange.memId;
         }
     }
 }
@@ -181,8 +179,8 @@ Status SrcDstBufferMergeImpl::Run(Function &func) {
         auto oriOps(opList);
         std::unordered_map<int, std::shared_ptr<LogicalTensor>> replacedTensors;
         for (size_t i = 0; i < oriOps.size(); i++) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "Try reuse op [%d] input by out tensor.",
-                oriOps[i]->GetOpMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "Attempt memory reuse for op:%s[%d]",
+                oriOps[i]->GetOpcodeStr().c_str(), oriOps[i]->GetOpMagic());
             if (CheckIgnoreScene(*oriOps[i])) {
                 continue;
             }
@@ -228,20 +226,25 @@ bool SrcDstBufferMergeImpl::CanSrcDstReuse(const Operation &ops, std::shared_ptr
             return true;
         }
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "Try reuse src %d dst %d",
+    APASS_LOG_DEBUG_F(Elements::Operation, "Try to reuse memory, iOperand %d -> oOperand %d",
         iOperand->GetMagic(), oOperand->GetMagic());
     if (oOperand->GetMemoryTypeOriginal() != iOperand->GetMemoryTypeOriginal()) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Memtype is not same.");
+        APASS_LOG_DEBUG_F(Elements::Operation, "iOperand memtype %s is not same as oOperand memtype %s",
+            MemoryTypeToString(iOperand->GetMemoryTypeOriginal()).c_str(), MemoryTypeToString(iOperand->GetMemoryTypeOriginal()).c_str());
         return false;
     }
     if (tensorMaxSize_[oOperand->memoryrange.memId] != tensorMaxSize_[iOperand->memoryrange.memId]) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Output tensor (memId=%d, size=%d) != input tensor (memId=%d, size=%d), op:%s[%d]", oOperand->memoryrange.memId, 
+            tensorMaxSize_[oOperand->memoryrange.memId], iOperand->memoryrange.memId, tensorMaxSize_[iOperand->memoryrange.memId], ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
         return false;
     }
-    if (oOperand->Datatype() != iOperand->Datatype()) {
+    if (BytesOf(oOperand->Datatype()) != BytesOf(iOperand->Datatype())) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Bytes of output datatype[%zu] != Bytes of output datatype[%zu], op:%s[%d]",
+            BytesOf(oOperand->Datatype()), BytesOf(iOperand->Datatype()), ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
         return false;
     }
     if (!CheckAssembleReuse(oOperand)) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Check Assemble op which cannot be reused.");
+        APASS_LOG_DEBUG_F(Elements::Operation, "Check Assemble op which cannot be reused, current op:%s[%d]", ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
         return false;
     }
     // 确保复用UB buffer后不会被覆写
@@ -250,8 +253,8 @@ bool SrcDstBufferMergeImpl::CanSrcDstReuse(const Operation &ops, std::shared_ptr
         APASS_LOG_DEBUG_F(Elements::Operation, "Op:%s[%d] has more than 1 output.", ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
         return false;
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Reusable, iOperand magic: %d, memId: %d, oOperand magic: %d, memId: %d, op:%s[%d]", iOperand->GetMagic(), iOperand->memoryrange.memId, 
-        oOperand->GetMagic(), oOperand->memoryrange.memId, ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Reusable, iOperand magic: %d, memId: %d ,datatype: %s, oOperand magic: %d, memId: %d datatype: %s, op:%s[%d]", iOperand->GetMagic(), iOperand->memoryrange.memId, 
+        DataType2String(iOperand->Datatype()).c_str(), oOperand->GetMagic(), oOperand->memoryrange.memId, DataType2String(oOperand->Datatype()).c_str(), ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
     return true;
 }
 
