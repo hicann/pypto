@@ -57,8 +57,10 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp) {
     srcTileDefine srcTile;
     idxTileDefine idxTile(1, n4IdxShape);
     dstTileDefine dstTile(1, n4IdxShape);
-    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
-    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    if constexpr (scalarFlag) {
+        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    }
     auto srcAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src0.GetAddr()));
     auto idxAddr = (__ubuf__ typename T2::Type*)((uint64_t)(src1.GetAddr()));
     auto dstAddr = (__ubuf__ typename T0::Type*)((uint64_t)(dst.GetAddr()));
@@ -68,6 +70,10 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp) {
         for (int j = 0; j < n1IdxShape; ++j) {
             for (int k = 0; k < n2IdxShape; ++k) {
                 for (int l = 0; l < n3IdxShape; ++l) {
+                    if constexpr (scalarFlag == false) {
+                        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                    }
                     for (int m = 0; m < n4IdxShape; ++m) {
                         auto dstOffset = i * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride + m;
                         auto orgIdxValue = 
