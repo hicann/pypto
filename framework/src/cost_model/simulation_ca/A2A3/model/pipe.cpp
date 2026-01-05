@@ -557,6 +557,8 @@ std::unordered_map<InstrName, std::function<void(CostModelPipe*, PInstrParam&)>>
 ,   { InstrName::FIX_L0C_OUT, [](CostModelPipe* self, PInstrParam &instr) { self->CalcFixL0cOut(instr); } }
 ,   { InstrName::VADD, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }
 ,   { InstrName::VSEL, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }
+,   { InstrName::VBITSORT, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }
+,   { InstrName::VMRGSORT4, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }
 ,   { InstrName::VSUB, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }
 ,   { InstrName::VMUL, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }
 ,   { InstrName::VDIV, [](CostModelPipe* self, PInstrParam &instr) { self->CalcVecOp(instr); } }

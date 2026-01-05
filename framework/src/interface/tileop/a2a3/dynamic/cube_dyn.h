@@ -17,6 +17,7 @@
 #define TILE_FWK_CUBE_DYN_H
 
 #include "tileop_common.h"
+#include "cube.h"
 
 #include <type_traits>
 

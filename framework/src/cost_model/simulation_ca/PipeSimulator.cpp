@@ -76,9 +76,10 @@ namespace CostModel
 
         os << "#include <iostream>" << std::endl;
         os << "#include \"mock_inst.h\"" << std::endl;
-        os << "#include \"vector.h\"" << std::endl;
-        os << "#include \"cube.h\"" << std::endl;
-        os << "#include \"mte.h\"" << std::endl;
+        os << "#include \"aicore_runtime.h\"" << std::endl;
+ 	    os << "#include \"vector_dyn.h\"" << std::endl;
+ 	    os << "#include \"cube_dyn.h\"" << std::endl;
+ 	    os << "#include \"mte_dyn.h\"" << std::endl;
         os << "int main(int argc, char **argv) {" << std::endl;
         os << "char charArray1[65536] = {0};" << std::endl;
         os << "char* charArrayPtr1 = charArray1;" << std::endl;
@@ -88,8 +89,8 @@ namespace CostModel
         os << "char* charArrayPtr3 = charArray3;" << std::endl;
         os << "char charArray4[256] = {0};" << std::endl;
         os << "char* charArrayPtr4 = charArray4;" << std::endl;
-        os << "    " << buffer;
-        os << "    return 0;" << std::endl;
+         os << "" << buffer;
+ 	    os << "return 0;" << std::endl;
         os << "}" << std::endl;
         os.close();
         return true;
@@ -123,11 +124,17 @@ namespace CostModel
         std::string cPlusPlus = "g++";
 
         std::string executable = source.substr(0, source.size() - 4);
-        std::string cmd = config.cPlusPlus + " -w -std=c++17 " + source + " -o " + executable + " -I " + includePath + 
-                          "/tileop/a2a3 -I " + includePath +
-                          "/mock -I " + includePath + "/tileop" + ">/dev/null 2>&1";
+         std::string cmd = config.cPlusPlus + " -w -std=c++17 "
+ 	                         + source + " -o " + executable + " "
+ 	                         + "-I" + includePath + " "
+ 	                         + "-I" + includePath + "/tileop/a2a3 "
+ 	                         + "-I" + includePath + "/tileop/a2a3/dynamic "
+ 	                         + "-I" + includePath + "/mock "
+ 	                         + "-I" + includePath + "/tileop "
+ 	                         + "-I" + includePath + "/tilefwk " + ">/dev/null 2>&1";
         int result = std::system(cmd.c_str());
         if (result != 0) {
+            MLOG_ERROR("compile error:", cmd);
             return {};
         }
 #ifdef _WIN32
@@ -182,6 +189,7 @@ namespace CostModel
         EnvConfig config;
         std::vector<std::string> program = CompileAndRunCode(fileName, config);
         if (program.empty()) {
+            MLOG_ERROR("can't run code, buf:", buf.c_str());
             return tileopLatencyCacheMp[buf] = 1;
         }
 

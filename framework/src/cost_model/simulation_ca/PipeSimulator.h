@@ -33,7 +33,7 @@ namespace CostModel
 
     namespace PipeSimulatorUtils {
         std::string ReplaceGMStr(const std::string &str) { 
-            std::regex pattern(R"(\(\(__gm__ GMTensorInfo\*\)\(param\) \+ \d+\)->Addr)");  // 正则表达式匹配目标格式
+            std::regex pattern(R"(\(\(__gm__ GMTensorInfo\*\)\(param\) \+ \d+\)->Addr)");
             std::string result = std::regex_replace(str, pattern, "charArray1");
             result = std::regex_replace(result, std::regex("GMStackBase"), "charArray1");
             std::regex getParamPattern(R"(GET_PARAM_ADDR\(param, \d+, \d+\))");
@@ -46,6 +46,26 @@ namespace CostModel
             result = std::regex_replace(result, runtimeCoaSpacePattern, "0");
             std::regex runtimeCoaParamPattern(R"(RUNTIME_COA_GET_PARAM\(\d+\))");
             result = std::regex_replace(result, runtimeCoaParamPattern, "0");
+            std::regex runtimeRawShapePattern1(R"(GET_PARAM_RAWSHAPE_1\(param, \d+, \d+\))");
+            result = std::regex_replace(result, runtimeRawShapePattern1, "1");
+            std::regex runtimeRawShapePattern2(R"(GET_PARAM_RAWSHAPE_2\(param, \d+, \d+\))");
+            result = std::regex_replace(result, runtimeRawShapePattern2, "1, 1");
+            std::regex runtimeRawShapePattern3(R"(GET_PARAM_RAWSHAPE_3\(param, \d+, \d+\))");
+            result = std::regex_replace(result, runtimeRawShapePattern3, "1, 1, 1");
+            std::regex runtimeRawShapePattern4(R"(GET_PARAM_RAWSHAPE_4\(param, \d+, \d+\))");
+            result = std::regex_replace(result, runtimeRawShapePattern4, "1, 1, 1, 1");
+            std::regex getParamOffsetPattern1(R"(GET_PARAM_OFFSET_1\(param, \d+, \d+\))");
+            result = std::regex_replace(result, getParamOffsetPattern1, "0");
+            std::regex getParamOffsetPattern2(R"(GET_PARAM_OFFSET_2\(param, \d+, \d+\))");
+            result = std::regex_replace(result, getParamOffsetPattern2, "0, 0");
+            std::regex getParamOffsetPattern3(R"(GET_PARAM_OFFSET_3\(param, \d+, \d+\))");
+            result = std::regex_replace(result, getParamOffsetPattern3, "0, 0");
+            std::regex getParamOffsetPattern4(R"(GET_PARAM_OFFSET_4\(param, \d+, \d+\))");
+            result = std::regex_replace(result, getParamOffsetPattern4, "0, 0, 0, 0");
+            std::regex getParamShapePattern(R"(GET_PARAM_RAWSHAPE_BY_IDX\(param, \d+, \d+, \d+, \d+\))");
+            result = std::regex_replace(result, getParamShapePattern, "0");
+            std::regex sysdimPattern(R"(sym_\d+_dim_\d+)");
+            result = std::regex_replace(result, sysdimPattern, "1");
             return result;
         }
     }

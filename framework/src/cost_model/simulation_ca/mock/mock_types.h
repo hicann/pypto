@@ -21,14 +21,18 @@
 
 
 #define __ubuf__
-#define __gm__
 #define __aicore__
 #define __cbuf__
+#define __fbuf__
 #define __ca__
 #define __cb__
 #define __cc__
 #define TILEOP static __attribute__((always_inline))
 #define INLINE static __attribute__((always_inline))
+#define ENTIRE_DATA_CACHE 0
+#define CACHELINE_OUT 0
+
+typedef uint64_t mem_dsb_t;
 
 typedef enum {
 #if (defined __DAV_N350__)

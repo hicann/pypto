@@ -15,8 +15,8 @@
 
 #include "tileop_common.h"
 #include "vector.h"
+#include "mte_dyn.h"
 #include <array>
-
 #include <type_traits>
 
 #ifndef TILE_FWK_VECTOR_DYN_H
@@ -191,7 +191,7 @@ INLINE bfloat16_t Fp32ToBf16R(const float fVal) {
     union Float32Union {
         float fVal;
         uint32_t fNum;
-    } fp32Union;
+    } fp32Union = {};
     fp32Union.fVal = fVal;
     uint32_t x = fp32Union.fNum;
     // 处理特殊值
@@ -228,7 +228,7 @@ INLINE float Bf16ToFp32(const bfloat16_t bVal) {
     union Bfloat16Union {
         bfloat16_t bVal;
         uint16_t bNum;
-    } bf16Union;
+    } bf16Union = {};
     union Float32Union {
         float fVal;
         uint32_t fNum;

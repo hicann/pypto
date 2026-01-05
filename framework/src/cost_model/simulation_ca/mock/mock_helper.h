@@ -59,6 +59,8 @@ namespace MockHelper {
             std::cout << "int8_t ";
         } else if constexpr (std::is_same_v<T, ub_addr8_t> || std::is_same_v<T, ub_addr8_t*>) {
             std::cout << "ub_addr8_t ";
+        } else if constexpr (std::is_same_v<T, int64_t> || std::is_same_v<T, int64_t*>) {
+            std::cout << "int64_t ";
         } else {
             throw std::invalid_argument(std::string("bad type: ") + typeid(T).name());
         }

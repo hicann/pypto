@@ -75,6 +75,8 @@ enum class InstrName {
     // vector
     VADD,
     VSEL,
+    VBITSORT,
+    VMRGSORT4,
     VSUB,
     VMUL,
     VDIV,
@@ -128,6 +130,12 @@ const std::map<uint32_t, std::vector<uint32_t>> VEC_VALU_TAB = {
     { static_cast<uint32_t>(DataType::DT_INT32) << 24 | static_cast<uint32_t>(InstrName::VSEL), { 256, 1, 4 } },
     { static_cast<uint32_t>(DataType::DT_FP16) << 24 | static_cast<uint32_t>(InstrName::VSEL), { 256, 1, 6 } },
     { static_cast<uint32_t>(DataType::DT_FP32) << 24 | static_cast<uint32_t>(InstrName::VSEL), { 256, 1, 6 } },
+
+    { static_cast<uint32_t>(DataType::DT_FP16) << 24 | static_cast<uint32_t>(InstrName::VBITSORT), { 128, 1, 18 } },
+    { static_cast<uint32_t>(DataType::DT_FP32) << 24 | static_cast<uint32_t>(InstrName::VBITSORT), { 64, 1, 18 } },
+
+    { static_cast<uint32_t>(DataType::DT_FP16) << 24 | static_cast<uint32_t>(InstrName::VMRGSORT4), { 128, 1, 18 } },
+    { static_cast<uint32_t>(DataType::DT_FP32) << 24 | static_cast<uint32_t>(InstrName::VMRGSORT4), { 64, 1, 18 } },
 
     { static_cast<uint32_t>(DataType::DT_INT16) << 24 | static_cast<uint32_t>(InstrName::VSUB), { 256, 1, 4 } },
     { static_cast<uint32_t>(DataType::DT_INT32) << 24 | static_cast<uint32_t>(InstrName::VSUB), { 256, 1, 4 } },
@@ -488,7 +496,7 @@ inline uint32_t GetDataType(string dataType)
 inline uint32_t GetParam(string param)
 {
     try {
-        int num = std::stoi(param);
+        unsigned long num = std::stoul(param);
         return static_cast<uint32_t>(num);
     } catch (const std::invalid_argument& e) {
         std::cerr << "无效的参数: " << e.what() << std::endl;
@@ -715,7 +723,7 @@ inline deque<PInstrParam> GetProgram(vector<string> program)
             ret.push_back(SetSpr(InstrName::ALU, PipeId::F, SprId::FPC, params));
         } else if (funcName == "vadd") {
             ret.push_back(VecTemplate0(InstrName::VADD, templates, params));
-        }  else if (funcName == "vsel") {
+        } else if (funcName == "vsel") {
             ret.push_back(VecTemplate0(InstrName::VSEL, templates, params));
         } else if (funcName == "vsub") {
             ret.push_back(VecTemplate0(InstrName::VSUB, templates, params));
@@ -735,6 +743,10 @@ inline deque<PInstrParam> GetProgram(vector<string> program)
             ret.push_back(VecTemplate0(InstrName::VMINS, templates, params));
         } else if (funcName == "vmaxs") {
             ret.push_back(VecTemplate0(InstrName::VMAXS, templates, params));
+        } else if (funcName == "vbitsort") {
+            ret.push_back(VecTemplate0(InstrName::VBITSORT, templates, params));
+        } else if (funcName == "vmrgsort4") {
+            ret.push_back(VecTemplate0(InstrName::VMRGSORT4, templates, params));
         } else if (funcName == "vreducev2") {
             ret.push_back(VecReduceV2(InstrName::VREDUCEV2, templates, params));
         } else if (funcName == "vcopy") {
