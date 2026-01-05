@@ -32,11 +32,11 @@ constexpr uint64_t SHMEM_DIM_ROW = 2;
 constexpr uint64_t SHMEM_DIM_COL = 3;
 
 struct TensorInfo {
-    uint64_t rawAddr;
-    uint32_t dim;
-    uint64_t rawIndex;
-    int32_t expectedSum;
-    bool resetSignal;
+    uint64_t rawAddr{0};
+    uint32_t dim{0};
+    uint64_t rawIndex{0};
+    int32_t expectedSum{0};
+    bool resetSignal{false};
     std::vector<uint32_t> offset;
 };
 
