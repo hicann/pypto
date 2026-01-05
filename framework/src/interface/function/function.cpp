@@ -1107,7 +1107,7 @@ std::vector<std::shared_ptr<Operation>> Function::GetSortedOperations() const {
     }
     for (auto &op : operations_) {
         ASSERT(outDegree[opToIndex[op.get()]] == 0)
-            << "Operation not fully processed: " << op->Dump();
+            << "cycle detected: " << op->Dump();
     }
     ASSERT(operations_.size() == sortedOperations.size())
         << "Sorted operations size mismatch: " << sortedOperations.size()
@@ -1921,8 +1921,8 @@ LogicalTensors Function::MakeOutcasts(const std::shared_ptr<TensorSlotScope> &sc
             });
             if (partitalAssemble) {
                 for (auto producer : producerSet) {
-                    DEFINE_SOURCE_LOCATION();
                     auto producerAttr = std::static_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
+                    ASSERT(producerAttr) << "mix assemble and common operation for same output \n" << producer->Dump();
                     auto [offset, dynOffset] = TensorOffset::Add(iOperand[i]->GetOffset(), iOperand[i]->GetDynOffset(),
                                                                  producerAttr->GetToOffset(), producerAttr->GetToDynOffset());
                     producer->ReplaceOOperand(0, rawSymbol);

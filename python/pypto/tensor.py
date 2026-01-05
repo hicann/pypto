@@ -382,7 +382,10 @@ class Tensor:
         return self._base.GetCachePolicy(policy)
 
     def move(self, other: 'Tensor') -> None:
-        self._base.Move(other._base)
+        if isinstance(other, Tensor):
+            self._base.Move(other._base)
+        else:
+            raise TypeError(f"'{type(other).__name__}' type cannot be moved to Tensor")
 
     def base(self) -> pypto_impl.Tensor:
         return self._base

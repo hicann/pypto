@@ -13,18 +13,13 @@
  * \brief
  */
 
-#include "tilefwk/error.h"
-
-#include <stdlib.h>
-#include <execinfo.h>
-#include <signal.h>
 #include <cstring>
 #include <sstream>
 #include <functional>
-#include <iostream>
 #include <cxxabi.h>
 #include <securec.h>
 
+#include "error.h"
 #include "interface/utils/string_utils.h"
 
 namespace npu::tile_fwk {
@@ -39,24 +34,32 @@ public:
         callStack_.resize(nrFrames - skipFrames);
     }
 
-    void ParseFrame(std::stringstream &ss, char *line) const {
-        auto funcName = strstr(line, "(");
-        auto funcOffset = strstr(line, "+");
+    void ParseFrame(std::stringstream &ss, char *line, bool &isPyptoFrame) const {
+        auto funcName = strchr(line, '(');
+        auto funcOffset = strchr(line, '+');
         auto libname = strrchr(line, '/');
-        if (funcName == nullptr || funcOffset == nullptr || libname == nullptr) {
-            ss << line << '\n';
+        if (funcName == nullptr || funcOffset == nullptr) {
+            ss << line <<'\n';
             return;
         }
 
         *funcName++ = '\0';
         *funcOffset++ = '\0';
+        libname = (libname == nullptr) ? line : libname + 1;
+        if (!strncmp(libname, "pypto_impl", strlen("pypto_impl"))) {
+            isPyptoFrame = true;
+        } else if (isPyptoFrame) {
+            // python frames after pypto frame, skip it
+            return;
+        }
+
         int status = 0;
         std::unique_ptr<char, std::function<void(char *)>> demangled(
             abi::__cxa_demangle(funcName, nullptr, nullptr, &status),
             /* deleter */ free);
         if (status == 0)
             funcName = demangled.get();
-        ss << (libname + 1) << '(' << funcName << '+' << funcOffset << '\n';
+        ss << libname << '(' << funcName << '+' << funcOffset << '\n';
     }
 
     const std::string &Get() const {
@@ -66,8 +69,9 @@ public:
                 return "Backtrace Failed";
             }
             std::stringstream ss;
+            bool isPyptoFrame = false;
             for (size_t i = 0; i < callStack_.size(); i++) {
-                ParseFrame(ss, strings[i]);
+                ParseFrame(ss, strings[i], isPyptoFrame);
             }
             free(strings);
             return ss.str();
@@ -94,26 +98,5 @@ const char *Error::what() const noexcept {
         .c_str();
 }
 
-struct SignalHandler {
-    SignalHandler() {
-        struct sigaction sa;
-        sa.sa_handler = SignalHandler::SigAction;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = SA_RESTART;
-        sigaction(SIGSEGV, &sa, &ori);
-    }
-
-    static void SigAction(int signo) {
-        (void)signo;
-        std::cerr << "segment fault!!!\n" << GetBacktrace(0x2, 0x10)->Get() << std::endl;
-        _Exit(1);
-    }
-
-    ~SignalHandler() {
-        sigaction(SIGSEGV, &ori, nullptr);
-    }
-
-    struct sigaction ori;
-} signalHandler;
-
+static struct TerminateHandler terminateHandler;
 } // namespace npu::tile_fwk

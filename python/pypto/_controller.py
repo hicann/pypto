@@ -43,13 +43,21 @@ __all__ = [
 
 class Controller:
     _loop_idx_generator = itertools.count(0)
+    in_function = False
 
     @classmethod
     def next_loop_idx(cls) -> int:
         return next(cls._loop_idx_generator)
 
     @classmethod
-    def reset(cls):
+    def begin_function(cls):
+        if cls.in_function:
+            raise RuntimeError("function nested is not allowed")
+        cls.in_function = True
+
+    @classmethod
+    def end_function(cls):
+        cls.in_function = False
         cls._loop_idx_generator = itertools.count(0)
 
 
@@ -308,8 +316,8 @@ def function(name: str, *args) -> Iterator:
     """
     in_out_tensors = [item for item in args if isinstance(item, Tensor)]
     func = None
+    Controller.begin_function()
     try:
-        Controller.reset()
         set_source_location(level=2)
         func = pypto_impl.RecordFunc(name, [t.base() for t in in_out_tensors])
         clear_source_location()
@@ -320,7 +328,7 @@ def function(name: str, *args) -> Iterator:
     finally:
         assert func
         func.EndFunction()
-        del func
+        Controller.end_function()
 
 
 def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = None):

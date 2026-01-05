@@ -9,8 +9,10 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """ """
-import pypto
+import torch
 import pytest
+
+import pypto
 import pypto._controller as controller
 
 
@@ -54,3 +56,52 @@ def test_dyn_function():
     c[:] = pypto.add(a, b)
 
     print(controller.dump())
+
+
+def test_mix_assemble_and_common_op():
+    x = pypto.from_torch(torch.ones(32, 32, dtype=torch.float32))
+    y = pypto.from_torch(torch.empty(32, 32, dtype=torch.float32))
+
+    with pytest.raises(RuntimeError, match=".*mix assemble and common operation.*"):
+        with pypto.function("cycle", [x, y]):
+            pypto.set_vec_tile_shapes(16, 16)
+            a = pypto.zeros([32, 32])
+            b = a[:16, :16]
+            a[16:, 16:] = b.exp()
+            y[:] = x + a
+
+
+def test_cycle_detection():
+    x = pypto.from_torch(torch.ones(32, 32, dtype=torch.float32))
+    y = pypto.from_torch(torch.empty(32, 32, dtype=torch.float32))
+
+    with pytest.raises(RuntimeError, match=".*cycle detected.*"):
+        with pypto.function("cycle", [x, y]):
+            pypto.set_vec_tile_shapes(16, 16)
+            b = x[:16, :16]
+            x[16:, 16:] = b.exp()
+            y[:] = x + x
+
+
+def test_nested_function():
+    x = pypto.from_torch(torch.ones(32, 32, dtype=torch.float32))
+    y = pypto.from_torch(torch.empty(32, 32, dtype=torch.float32))
+
+    with pytest.raises(RuntimeError, match="function nested is not allowed"):
+        with pypto.function("graph", [x, y]):
+            pypto.set_vec_tile_shapes(16, 16)
+            a = pypto.zeros([32, 32])
+            c = pypto.zeros([16, 16])
+
+            with pypto.function("graph_0"):
+                b = a[:16, :16]
+                c = b.exp()
+
+
+def test_move_from_scalar():
+    y = pypto.from_torch(torch.empty(32, 32, dtype=torch.float32))
+
+    with pytest.raises(TypeError, match="'int' type cannot be moved to Tensor"):
+        with pypto.function("graph", [y]):
+            y[:] = 0
+
