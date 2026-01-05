@@ -248,8 +248,6 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask *dyntask, uint32_t taskId,
 void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask *dyntask, size_t funcIndex, size_t opIdx) {
     size_t succSize;
 
-    dyntask->devTask.coreFunctionCnt--;
-
     auto cceBinary = dyntask->cceBinary;
     auto func = dyntask->dynFuncDataCacheList[funcIndex].devFunc;
     auto predList = dyntask->dynFuncDataCacheList[funcIndex].predCount;

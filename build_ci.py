@@ -1027,6 +1027,12 @@ class BuildCtrl(CMakeParam):
             if self.install_root.exists():
                 logging.info("Clean Install-Tree(%s)", self.install_root)
                 shutil.rmtree(self.install_root)
+            home_dir = os.environ.get('HOME')
+            astdata_folder = os.path.join(home_dir, 'ast_data')
+            if os.path.exists(astdata_folder):
+                logging.info("Clean ast data cache folder(%s)", astdata_folder)
+                shutil.rmtree(astdata_folder)
+
 
     def py_clean(self):
         self.cmake_clean()

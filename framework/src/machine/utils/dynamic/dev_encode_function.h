@@ -76,6 +76,7 @@ struct DevAscendFunction {
 
     uint32_t getInputDataCount;
     uint32_t getTensorDataCount;
+    uint64_t hubOpCount_{0};
 
     DevLocalVector<AddressDescriptor> incastAddressList;
     DevLocalVector<AddressDescriptor> outcastAddressList;
@@ -441,7 +442,7 @@ public:
                 oss << INDENTINNER << "#assembleSlot_" << j << "{" << GetRedaccAssembleSlotList(j) << "}\n";
             }
         }
-
+        oss << INDENTINNER << "#hubOpCount:" << hubOpCount_ << "\n";
         oss << INDENTINNER << "#zeropred:" << predInfo_.totalZeroPred << "\n";
         oss << INDENTINNER << "#zeropred-aiv:" << predInfo_.totalZeroPredAIV << "\n";
         oss << INDENTINNER << "#zeropred-aic:" << predInfo_.totalZeroPredAIC << "\n";

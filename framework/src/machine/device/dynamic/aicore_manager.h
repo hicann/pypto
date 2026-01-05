@@ -111,6 +111,7 @@ public:
         curTaskType_ = taskCtrl->taskType;
         curTaskId_ = taskCtrl->taskId;
         aicoreHal_.SetModel(taskCtrl->devTask->aicoreModel);
+        resolveHubCnt_ = 0;
 
         if (!preFetchSuccess_) {
             SendDevTaskModel(curDevTask_);
@@ -174,8 +175,7 @@ public:
                 taskCtrl->finishedAicFunctionCnt, taskCtrl->finishedAivFunctionCnt,
                 taskCtrl->finishedHubFunctionCnt, taskCtrl->finishedAicpuFunctionCnt, curDevTask_->coreFunctionCnt);
         }
-        sent += (sentAic + sentAiv + resolveHubCnt_);
-        resolveHubCnt_ = 0;
+        sent += (sentAic + sentAiv);
         return ret;
     }
 
@@ -583,7 +583,6 @@ private:
                 if ((coreStatus[coreIdx] == AicoreStatus::CORE_SEND_STOP) &&
                     (aicoreHal_.GetFinishedTask(coreIdx) == ((static_cast<uint64_t>(curTaskId_) <<
                         REG_HIGH_DTASKID_SHIFT) | (AICORE_FUNC_STOP | AICORE_FIN_MASK)))) {
-                    aicoreHal_.SetReadyQueue(coreIdx, 0);
                     SendPreFetchNextDevTaskDataToCore(coreIdx);
                     coreStatus[coreIdx] = AicoreStatus::CORE_FINISH_STOP;
                     finishStopNum++;

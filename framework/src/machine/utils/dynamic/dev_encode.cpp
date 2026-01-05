@@ -848,6 +848,7 @@ struct EncodeDevAscendFunctionInfo {
     uint64_t totalZeroPredAIC{0};
     uint64_t totalZeroPredHub{0};
     uint64_t totalZeroPredAicpu{0};
+    uint32_t hubOpCount{0};
 
     std::unordered_map<Operation *, uint64_t> callOpPredDict;
     std::unordered_map<Operation *, OrderedSet<Operation *>> callOpSuccDict;
@@ -1333,111 +1334,60 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
-    EncodeDevAscendFunctionInfo(
-            Function *dyndev,
-            const std::unordered_map<uint64_t, int> &tHashIndexDict,
-            const std::vector<CceCodeInfo> &tCceCodeInfoList,
-            const SymbolicExpressionTable *tExpressionTable,
-            Function *tdevRoot)
-            : devRoot(tdevRoot),
-              calleeHashIndexDict(tHashIndexDict),
-              cceCodeInfoList(tCceCodeInfoList),
-              expressionTable(tExpressionTable) {
-        (void)dyndev;
-        ASSERT(dyndev->GetDyndevAttribute()->rootTileDict.count(devRoot)) << "devRoot: " << devRoot << " not found in rootTileDict of dyndev";
-        devTile = dyndev->GetDyndevAttribute()->rootTileDict[devRoot];
-        if (dyndev->GetDyndevAttribute()->valueDependDescDict.count(devTile)) {
-            valueDependDesc = dyndev->GetDyndevAttribute()->valueDependDescDict[devTile];
-        }
-
-        std::unordered_map<std::shared_ptr<LogicalTensor>, OrderedSet<Operation *>> consumerDict;
-        std::unordered_map<Operation *, int> callopIndexDict;
-
-        rawName = devRoot->GetRawName();
-
-        incastList = devRoot->GetIncast();
-        outcastList = devRoot->GetOutcast();
-
-        incastSet.insert(incastList.begin(), incastList.end());
-        outcastSet.insert(outcastList.begin(), outcastList.end());
-
-        std::vector<Operation *> callopList;
-        for (auto &op : devRoot->Operations()) {
-            if (op.GetOpcode() == Opcode::OP_CALL) {
-                callopIndexDict[&op] = callopList.size();
-                callopList.push_back(&op);
-
-                for (auto &i : op.GetIOperands()) {
-                    tensorList.Insert(i);
-                    RecordRawTensor(i);
-                    consumerDict[i].Insert(&op);
-                }
-                for (auto &j : op.GetOOperands()) {
-                    tensorList.Insert(j);
-                    RecordRawTensor(j);
-                }
-            }
-        }
+    void EncodeZeroPredCount(std::vector<Operation *>& callopList) {
+        std::unordered_map<Operation *, int> callopCoreTypeDict;
         for (auto &op : callopList) {
-            callOpPredDict[op] = 0;
-            callOpSuccDict[op].clear();
+            auto callOpAttr = std::static_pointer_cast<CallOpAttribute>(op->GetOpAttribute());
+            auto calleeHash = callOpAttr->GetCalleeHash().GetHash();
+            ASSERT(calleeHashIndexDict.count(calleeHash)) << "calleeHash 0x" << std::hex << calleeHash << " is not found in calleeHashIndexDict";
+            int cceIndex = calleeHashIndexDict.find(calleeHash)->second;
+            ASSERT(cceIndex < static_cast<int>(cceCodeInfoList.size())) << "cceIndex " << cceIndex << " exceeds cceCodeInfoList size: " << cceCodeInfoList.size();
+
+            uint32_t coreType = cceCodeInfoList[cceIndex].coreType;
+            ASSERT(coreType == static_cast<uint32_t>(CoreType::AIV) || coreType == static_cast<uint32_t>(CoreType::AIC) ||
+                   coreType == static_cast<uint32_t>(CoreType::HUB) || coreType == static_cast<uint32_t>(CoreType::AICPU)) <<
+                   "invalid coreType " << coreType << " for op " << op;
+            callopCoreTypeDict[op] = coreType;
         }
 
-        FunctionCache &cache = Program::GetInstance().GetFunctionCache();
-        std::unordered_map<Operation *, std::unordered_map<Operation *, int>> producerConsumerOOperandIndexDict;
-        for (auto &op : callopList) {
-            Function *devLeafFunc = cache.GetCacheFunction(op->GetCalleeHash());
-            std::shared_ptr<LeafFuncAttribute> leafAttr = devLeafFunc != nullptr ? devLeafFunc->GetLeafFuncAttribute() : nullptr;
-
-            for (auto &o : op->GetOOperands()) {
-                for (auto &consumer : consumerDict[o]) {
-                    if (consumer->GetOpcode() != Opcode::OP_CALL) {
-                        // This should be prevented from the above: only call op is considered as consumer
-                        continue;
-                    }
-                    if (op == consumer) {
-                        // Consumer and producer can not be the same.
-                        continue;
-                    }
-                    // Index for callop to its ooperand's consumer callop index list
-                    colorOutGraph[callopIndexDict[op]].push_back(callopIndexDict[consumer]);
-
-                    if (producerConsumerOOperandIndexDict.count(op) && producerConsumerOOperandIndexDict[op].count(consumer)) {
-                        // There might be multiple ooperand of op that is consumed by the same consumer. So when
-                        // it happens, we need to select the ooperand with the biggest counter.
-                        int currIndex = producerConsumerOOperandIndexDict[op][consumer];
-                        int oIndex = op->GetOOperandIndex(o);
-                        if (leafAttr != nullptr && leafAttr->outcastCopyOutResolveCounterList.size() != 0) {
-                            // When there is leaf, and the root is marked as resolve, the leafAttr records the biggest counter.
-                            int currCounter = leafAttr->outcastCopyOutResolveCounterList[currIndex];
-                            int oCounter = leafAttr->outcastCopyOutResolveCounterList[oIndex];
-                            if (oCounter > currCounter) {
-                                producerConsumerOOperandIndexDict[op][consumer] = oIndex;
-                            }
-                        } else {
-                            // Otherwise, we use any, which is the first
-                        }
-                    } else {
-                        producerConsumerOOperandIndexDict[op][consumer] = op->GetOOperandIndex(o);
-                    }
-                }
+        std::sort(callopList.begin(), callopList.end(), [&](Operation *lhs, Operation *rhs) {
+            if (callOpPredDict[lhs] != callOpPredDict[rhs]) {
+                return callOpPredDict[lhs] < callOpPredDict[rhs];
             }
-        }
+            ASSERT(callopCoreTypeDict.count(lhs)) << "lhs operation " << lhs << " is not found in callopCoreTypeDict";
+            ASSERT(callopCoreTypeDict.count(rhs)) << "rhs operation " << rhs << " is not found in callopCoreTypeDict";
+            return callopCoreTypeDict[lhs] < callopCoreTypeDict[rhs];
+        });
+
+        totalZeroPred = callopList.size();
         for (size_t index = 0; index < callopList.size(); index++) {
-            std::sort(colorOutGraph[index].begin(), colorOutGraph[index].end());
-            // remove repeated index in ooperand's consumer callop index list
-            colorOutGraph[index].resize(std::unique(colorOutGraph[index].begin(), colorOutGraph[index].end()) -
-                                colorOutGraph[index].begin());
+            if (callOpPredDict[callopList[index]] != 0) {
+                totalZeroPred = index;
+                break;
+            }
         }
-        PrintColorGraph(callopList.size());
-        EraseRedundantColorEdges(callopList);
-        PrintColorGraph(callopList.size());
+        for (size_t index = totalZeroPred; index < callopList.size(); index++) {
+            ASSERT(callOpPredDict[callopList[index]] != 0) << "callOpPredDict[callopList[" << index << "]] is zero, callopList[" << index <<
+                   "] = " << callopList[index];
+        }
 
-        RemoveDeadHubCall(callopList);
-        ReplaceSuccessorWithHub(callopList, 10); // add dummp op at least 10 depends can be reduced
+        for (uint32_t index = 0; index < totalZeroPred; index++) {
+            if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AIV)) {
+                totalZeroPredAIV++;
+            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AIC)) {
+                totalZeroPredAIC++;
+            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::HUB)) {
+                totalZeroPredHub++;
+            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AICPU)) {
+                totalZeroPredAicpu++;
+            } else {
+                ASSERT(false) << "Invalid coreType for callopList[" << index << "], op : " << callopList[index];
+            }
+        }
+    }
 
-        AddDummyCallsAtBeginningAndEnding(callopList);
-
+    void EncodeCopyOutReslove(std::unordered_map<Operation *, std::unordered_map<Operation *, int>>& producerConsumerOOperandIndexDict) {
+        FunctionCache &cache = Program::GetInstance().GetFunctionCache();
         for (auto &[callop, succSet] : callOpSuccDict) {
             Function *devLeafFunc = cache.GetCacheFunction(callop->GetCalleeHash());
             if (devLeafFunc == nullptr) {
@@ -1489,56 +1439,129 @@ struct EncodeDevAscendFunctionInfo {
 
             copyOutResolveSuccIndexListDict[callop] = copyOutResolveSuccIndexList;
         }
+    }
 
-        std::unordered_map<Operation *, int> callopCoreTypeDict;
-        for (auto &op : callopList) {
-            auto callOpAttr = std::static_pointer_cast<CallOpAttribute>(op->GetOpAttribute());
-            auto calleeHash = callOpAttr->GetCalleeHash().GetHash();
-            ASSERT(calleeHashIndexDict.count(calleeHash)) << "calleeHash 0x" << std::hex << calleeHash << " is not found in calleeHashIndexDict";
-            int cceIndex = calleeHashIndexDict.find(calleeHash)->second;
-            ASSERT(cceIndex < static_cast<int>(cceCodeInfoList.size())) << "cceIndex " << cceIndex << " exceeds cceCodeInfoList size: " << cceCodeInfoList.size();
-
-            uint32_t coreType = cceCodeInfoList[cceIndex].coreType;
-            ASSERT(coreType == static_cast<uint32_t>(CoreType::AIV) || coreType == static_cast<uint32_t>(CoreType::AIC) ||
-                   coreType == static_cast<uint32_t>(CoreType::HUB) || coreType == static_cast<uint32_t>(CoreType::AICPU)) <<
-                   "invalid coreType " << coreType << " for op " << op;
-            callopCoreTypeDict[op] = coreType;
-        }
-
-        std::sort(callopList.begin(), callopList.end(), [&](Operation *lhs, Operation *rhs) {
-            if (callOpPredDict[lhs] != callOpPredDict[rhs]) {
-                return callOpPredDict[lhs] < callOpPredDict[rhs];
-            }
-            ASSERT(callopCoreTypeDict.count(lhs)) << "lhs operation " << lhs << " is not found in callopCoreTypeDict";
-            ASSERT(callopCoreTypeDict.count(rhs)) << "rhs operation " << rhs << " is not found in callopCoreTypeDict";
-            return callopCoreTypeDict[lhs] < callopCoreTypeDict[rhs];
-        });
-
-        totalZeroPred = callopList.size();
-        for (size_t index = 0; index < callopList.size(); index++) {
-            if (callOpPredDict[callopList[index]] != 0) {
-                totalZeroPred = index;
-                break;
-            }
-        }
-        for (size_t index = totalZeroPred; index < callopList.size(); index++) {
-            ASSERT(callOpPredDict[callopList[index]] != 0) << "callOpPredDict[callopList[" << index << "]] is zero, callopList[" << index <<
-                   "] = " << callopList[index];
-        }
-
-        for (uint32_t index = 0; index < totalZeroPred; index++) {
-            if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AIV)) {
-                totalZeroPredAIV++;
-            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AIC)) {
-                totalZeroPredAIC++;
-            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::HUB)) {
-                totalZeroPredHub++;
-            } else if (callopCoreTypeDict[callopList[index]] == static_cast<uint32_t>(CoreType::AICPU)) {
-                totalZeroPredAicpu++;
+    void InsertProducerConsmerOOperandIndexDict(std::shared_ptr<LeafFuncAttribute> leafAttr, Operation *op, Operation *consumer, std::shared_ptr<LogicalTensor> o,
+        std::unordered_map<Operation *, std::unordered_map<Operation *, int>>& producerConsumerOOperandIndexDict) {
+            if (producerConsumerOOperandIndexDict.count(op) && producerConsumerOOperandIndexDict[op].count(consumer)) {
+                // There might be multiple ooperand of op that is consumed by the same consumer. So when
+                // it happens, we need to select the ooperand with the biggest counter.
+                int currIndex = producerConsumerOOperandIndexDict[op][consumer];
+                int oIndex = op->GetOOperandIndex(o);
+                if (leafAttr != nullptr && leafAttr->outcastCopyOutResolveCounterList.size() != 0) {
+                    // When there is leaf, and the root is marked as resolve, the leafAttr records the biggest counter.
+                    int currCounter = leafAttr->outcastCopyOutResolveCounterList[currIndex];
+                    int oCounter = leafAttr->outcastCopyOutResolveCounterList[oIndex];
+                    if (oCounter > currCounter) {
+                        producerConsumerOOperandIndexDict[op][consumer] = oIndex;
+                    }
+                } else {
+                    // Otherwise, we use any, which is the first
+                }
             } else {
-                ASSERT(false) << "Invalid coreType for callopList[" << index << "], op : " << callopList[index];
+                producerConsumerOOperandIndexDict[op][consumer] = op->GetOOperandIndex(o);
+            }
+    }
+
+    void BuildColorOutGraphAndProducerConsumerOOperandDict(std::vector<Operation *>& callopList,
+        std::unordered_map<std::shared_ptr<LogicalTensor>, OrderedSet<Operation *>>& consumerDict,
+        std::unordered_map<Operation *, int>& callopIndexDict,
+        std::unordered_map<Operation *, std::unordered_map<Operation *, int>>& producerConsumerOOperandIndexDict) {
+        FunctionCache &cache = Program::GetInstance().GetFunctionCache();
+        for (auto &op : callopList) {
+            Function *devLeafFunc = cache.GetCacheFunction(op->GetCalleeHash());
+            std::shared_ptr<LeafFuncAttribute> leafAttr = devLeafFunc != nullptr ? devLeafFunc->GetLeafFuncAttribute() : nullptr;
+
+            for (auto &o : op->GetOOperands()) {
+                for (auto &consumer : consumerDict[o]) {
+                    if (consumer->GetOpcode() != Opcode::OP_CALL) {
+                        // This should be prevented from the above: only call op is considered as consumer
+                        continue;
+                    }
+                    if (op == consumer) {
+                        // Consumer and producer can not be the same.
+                        continue;
+                    }
+                    // Index for callop to its ooperand's consumer callop index list
+                    colorOutGraph[callopIndexDict[op]].push_back(callopIndexDict[consumer]);
+                    InsertProducerConsmerOOperandIndexDict(leafAttr, op, consumer, o, producerConsumerOOperandIndexDict);
+                }
             }
         }
+        for (size_t index = 0; index < callopList.size(); index++) {
+            std::sort(colorOutGraph[index].begin(), colorOutGraph[index].end());
+            // remove repeated index in ooperand's consumer callop index list
+            colorOutGraph[index].resize(std::unique(colorOutGraph[index].begin(), colorOutGraph[index].end()) -
+                                colorOutGraph[index].begin());
+        }
+    }
+
+    void BuildCallopList(std::vector<Operation *>& callopList, std::unordered_map<Operation *, int>& callopIndexDict,
+        std::unordered_map<std::shared_ptr<LogicalTensor>, OrderedSet<Operation *>>& consumerDict) {
+        for (auto &op : devRoot->Operations()) {
+            if (op.GetOpcode() == Opcode::OP_CALL) {
+                callopIndexDict[&op] = callopList.size();
+                callopList.push_back(&op);
+
+                for (auto &i : op.GetIOperands()) {
+                    tensorList.Insert(i);
+                    RecordRawTensor(i);
+                    consumerDict[i].Insert(&op);
+                }
+                for (auto &j : op.GetOOperands()) {
+                    tensorList.Insert(j);
+                    RecordRawTensor(j);
+                }
+            }
+        }
+        for (auto &op : callopList) {
+            callOpPredDict[op] = 0;
+            callOpSuccDict[op].clear();
+        }
+    }
+
+    EncodeDevAscendFunctionInfo(
+            Function *dyndev,
+            const std::unordered_map<uint64_t, int> &tHashIndexDict,
+            const std::vector<CceCodeInfo> &tCceCodeInfoList,
+            const SymbolicExpressionTable *tExpressionTable,
+            Function *tdevRoot)
+            : devRoot(tdevRoot),
+              calleeHashIndexDict(tHashIndexDict),
+              cceCodeInfoList(tCceCodeInfoList),
+              expressionTable(tExpressionTable) {
+        (void)dyndev;
+        ASSERT(dyndev->GetDyndevAttribute()->rootTileDict.count(devRoot)) << "devRoot: " << devRoot << " not found in rootTileDict of dyndev";
+        devTile = dyndev->GetDyndevAttribute()->rootTileDict[devRoot];
+        if (dyndev->GetDyndevAttribute()->valueDependDescDict.count(devTile)) {
+            valueDependDesc = dyndev->GetDyndevAttribute()->valueDependDescDict[devTile];
+        }
+
+        std::unordered_map<std::shared_ptr<LogicalTensor>, OrderedSet<Operation *>> consumerDict;
+        std::unordered_map<Operation *, int> callopIndexDict;
+        std::vector<Operation *> callopList;
+        std::unordered_map<Operation *, std::unordered_map<Operation *, int>> producerConsumerOOperandIndexDict;
+
+        rawName = devRoot->GetRawName();
+        incastList = devRoot->GetIncast();
+        outcastList = devRoot->GetOutcast();
+        incastSet.insert(incastList.begin(), incastList.end());
+        outcastSet.insert(outcastList.begin(), outcastList.end());
+
+        BuildCallopList(callopList, callopIndexDict, consumerDict);
+        BuildColorOutGraphAndProducerConsumerOOperandDict(callopList, consumerDict, callopIndexDict, producerConsumerOOperandIndexDict);
+
+        PrintColorGraph(callopList.size());
+        EraseRedundantColorEdges(callopList);
+        PrintColorGraph(callopList.size());
+
+        RemoveDeadHubCall(callopList);
+        ReplaceSuccessorWithHub(callopList, 10); // add dummp op at least 10 depends can be reduced
+
+        AddDummyCallsAtBeginningAndEnding(callopList);
+
+        EncodeCopyOutReslove(producerConsumerOOperandIndexDict);
+        EncodeZeroPredCount(callopList);
 
         for (auto &op : callopList) {
             callList.Insert(op);
@@ -1552,6 +1575,10 @@ struct EncodeDevAscendFunctionInfo {
             if (!copyOutResolveSuccIndexListDict.count(op)) {
                 copyOutResolveSuccIndexListDict[op] = std::vector<int>({0});
             }
+
+            if (GetCoreType(op) == static_cast<int>(CoreType::HUB)) {
+                hubOpCount++;
+            }
         }
     }
 
@@ -1562,6 +1589,7 @@ struct EncodeDevAscendFunctionInfo {
         devFunc->sourceFunc = nullptr;
         devFunc->getInputDataCount = valueDependDesc.getInputDataCount;
         devFunc->getTensorDataCount = valueDependDesc.getTensorDataCount;
+        devFunc->hubOpCount_ = hubOpCount;
         devFunc->InitIncastOutcastAttr(initOffset, incastList, outcastList, fillContent);
         devFunc->InitOperationDynamicField(initOffset, predInfo, outcastStitchCount, calleeHashIndexDict,
             expressionTable, callList, incastList, outcastList, callOpSuccDict, fillContent);

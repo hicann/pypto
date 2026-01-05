@@ -82,7 +82,7 @@ uint64_t DeviceStitchContext::Stitch(DeviceSlotContext &slotContext, DevAscendFu
         stitchedList_.reserve(MAX_CACHED_FUNC_NUM);
     }
     Append(nextDup);
-    stitchedCallOpSize_ += nextDup.GetSource()->GetOperationSize();
+    stitchedCallOpSize_ += (nextDup.GetSource()->GetOperationSize() - nextDup.GetSource()->hubOpCount_);
     return count;
 }
 
