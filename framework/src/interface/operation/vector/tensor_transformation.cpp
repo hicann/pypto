@@ -572,12 +572,18 @@ void InnerConcatNew(Function &function, const LogicalTensorPtr &operand, const L
     CALL(InnerConcatNew, function, operand, result);
 }
 
-Tensor Cat(const std::vector<Tensor> &tensors, int axis) {
-    DECLARE_TRACER();
-
+void CheckCat(const std::vector<Tensor> &tensors, int axis) {
     auto shape = tensors[0].GetShape();
     auto format = tensors[0].Format();
     auto shapeSize = shape.size();
+    auto dataType = tensors[0].GetDataType();
+
+    ASSERT(SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4) << "The support dimension must be 2 to 4 dimensions";
+    std::vector<DataType> CAT_SUPPORT_DATATYPES = {DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32,
+        DataType::DT_INT16, DataType::DT_INT8, DataType::DT_BF16};
+    ASSERT(
+        std::find(CAT_SUPPORT_DATATYPES.begin(), CAT_SUPPORT_DATATYPES.end(), dataType) != CAT_SUPPORT_DATATYPES.end()) << "The datatype is not within the supported range";
+
     if (axis < 0) {
         axis = shapeSize + axis;
     }
@@ -585,6 +591,8 @@ Tensor Cat(const std::vector<Tensor> &tensors, int axis) {
     for (auto tensor : tensors) {
         ASSERT(tensor.GetShape().size() == shapeSize) << "The shape size of all tensors should be equal";
         ASSERT(tensor.Format() == format) << "The format of all tensors should be equal";
+        ASSERT(tensor.GetStorage() != nullptr) << "Each input must not be a null pointer";
+        ASSERT(tensor.GetDataType() == dataType) << "The dataType of all tensors should be equal";
     }
 
     for (auto tensor : tensors) {
@@ -595,14 +603,24 @@ Tensor Cat(const std::vector<Tensor> &tensors, int axis) {
             ASSERT(shape[i] == tensor.GetShape()[i]) << "The shape of all tensors should be equal except at axis";
         }
     }
+}
 
-    auto resultShape = shape;
+Tensor Cat(const std::vector<Tensor> &tensors, int axis) {
+    DECLARE_TRACER();
+    CheckCat(tensors, axis);
+
+    auto resultShape = tensors[0].GetShape();
+    auto shapeSize = resultShape.size();
+    if (axis < 0) {
+        axis = shapeSize + axis;
+    }
     int axisSize = 0;
     for (auto tensor : tensors) {
         axisSize += tensor.GetShape()[axis];
     }
     resultShape[axis] = axisSize;
 
+    auto format = tensors[0].Format();
     Tensor result(tensors[0].GetDataType(), resultShape, "", format);
     Tensor tmp(tensors[0].GetDataType(), resultShape, "", format);
     auto &function = *Program::GetInstance().GetCurrentFunction();
