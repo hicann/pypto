@@ -59,29 +59,46 @@ public:
     }
 
     // 仅AICPU_0会调用
-    inline uint64_t  TaskProcess() {
+    inline int32_t TaskProcess(uint64_t &taskCount) {
         if (__atomic_load_n(&readyQueue_->tail, __ATOMIC_RELAXED) == __atomic_load_n(&readyQueue_->head, __ATOMIC_RELAXED)) {
-            return 0;
+            return DEVICE_MACHINE_OK;
         }
         ReadyQueueLock();
         uint64_t taskIdx = readyQueue_->head;
-        uint64_t taskCount = readyQueue_->tail - readyQueue_->head;
+        taskCount = readyQueue_->tail - readyQueue_->head;
         readyQueue_->head += taskCount;
         ReadyQueueUnLock();
 
         for (uint32_t i = 0; i < taskCount; ++i) {
-            // 暂不处理返回值 修改aicoremanager时处理返回值
-            (void)TaskDispatch(readyQueue_->elem[taskIdx + i]);
+            auto ret = TaskDispatch(readyQueue_->elem[taskIdx + i]);
+            if (ret != DEVICE_MACHINE_OK) {
+                return ret;
+            }
         }
-        return taskCount;
+        return DEVICE_MACHINE_OK;
     }
 
-    inline int32_t TaskPoll(std::vector<uint64_t> &completed) {
-        return shmemWaitUntil_.PollCompleted(completed);
+    inline int32_t TaskPoll(AiCoreManager &aiCoreManager) {
+        return shmemWaitUntil_.PollCompleted(aiCoreManager);
     }
 
     inline bool Finished() {
         return shmemWaitUntil_.runingTaskQueue_.IsEmpty();
+    }
+
+    inline int32_t SyncAicpuTaskFinish(AiCoreManager &aiCoreManager) {
+        int64_t start_cycles = GetCycles();
+        while(!Finished()) {
+            auto ret = TaskPoll(aiCoreManager);
+            if (unlikely(ret != DEVICE_MACHINE_OK)) {
+                return ret;
+            }
+            if (GetCycles() - start_cycles > TIMEOUT_CYCLES) {
+                DEV_ERROR("SyncAicpuTaskFinish timeout.");
+                return DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH;
+            }
+        }
+        return DEVICE_MACHINE_OK;
     }
 
 private:
@@ -109,7 +126,7 @@ private:
     }
 
     inline int32_t TaskDispatch(uint64_t taskId) {
-        int32_t ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        int32_t ret = DEVICE_MACHINE_OK;
         auto taskType = GetTaskType(taskId);
         if (taskType < TaskType::TASK_TYPE_NUM) {
             ret = shmemWaitUntil_.EnqueueOp(taskId);
@@ -126,12 +143,12 @@ private:
                 uint32_t taskId = MakeTaskID(funcId, opIndex);
                 auto &code = curDevTask_->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
                 auto ret = shmemWaitUntil_.PrepareTask(taskId, code);
-                if (ret != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
+                if (ret != DEVICE_MACHINE_OK) {
                     return ret;
                 }
             }
         }
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        return DEVICE_MACHINE_OK;
     }
 
     ReadyCoreFunctionQueue *readyQueue_{nullptr};

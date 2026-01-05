@@ -31,9 +31,8 @@
 
 namespace npu::tile_fwk::Distributed {
 
-inline bool SignalTileOp::PollCompleted(std::vector<uint64_t> &completed) const {
+inline bool SignalTileOp::PollCompleted() const {
     if (addr_[0] == expectedSum_) {
-        completed.emplace_back(taskId_);
         if (resetSignal_) {
             addr_[0] = 0;
         }
@@ -42,8 +41,11 @@ inline bool SignalTileOp::PollCompleted(std::vector<uint64_t> &completed) const 
     return false;
 }
 
-int32_t ShmemWaitUntil::PollCompleted(std::vector<uint64_t> &completed) {
-    return runingTaskQueue_.RemoveCompletedTasks(completed);
+int32_t ShmemWaitUntil::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager &aicoreManager)
+{
+    return runingTaskQueue_.PollCompleted([&](SignalTileOp* task) {
+        return aicoreManager.ProcessCompletedAicpuTask(task->taskId_);
+    });
 }
 
 uint64_t ShmemWaitUntil::GetRawAddr(const uint64_t addr, const uint64_t dstRankId) {

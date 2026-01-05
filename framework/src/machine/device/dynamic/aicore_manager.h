@@ -210,21 +210,14 @@ public:
         }
         PerfMtTrace(PERF_TRACE_DEV_TASK_SCHED_EXEC, aicpuIdx_);
         PerfMtBegin(PERF_EVT_SYNC_AICORE, aicpuIdx_);
-        int32_t rc = SyncAicoreDevTaskFinish();
+        int32_t rc = SyncTaskFinish();
         PerfMtTrace(PERF_TRACE_DEV_TASK_SYNC_CORE_STOP, aicpuIdx_);
         if (rc != DEVICE_MACHINE_OK) {
             ret = rc;
         }
-        DEV_DEBUG("sync finish ret = %d .", rc);
-
-        if (IsNeedProcAicpuTask()) {
-            while (!aicpuTaskManager_.Finished()) {
-                (void)aicpuTaskManager_.TaskProcess();
-            }
-        }
         PerfMtEnd(PERF_EVT_SYNC_AICORE, aicpuIdx_);
-        DEV_DEBUG("aicpu %d proc finish send all task,aic: %lu, aiv: %lu, aicpu: %lu.",
-            aicpuIdx_, procAicCoreFunctionCnt_, procAivCoreFunctionCnt_, procAicpuFunctionCnt_);
+        DEV_DEBUG("aicpu %d proc finish send all task,aic: %lu, aiv: %lu, aicpu: %lu, sync finish ret: %d.",
+            aicpuIdx_, procAicCoreFunctionCnt_, procAivCoreFunctionCnt_, procAicpuFunctionCnt_, ret);
         return ret;
     }
 
@@ -394,6 +387,13 @@ public:
             procAicCoreFunctionCnt_,
             procAivCoreFunctionCnt_);
         return ret;
+    }
+     int32_t ProcessCompletedAicpuTask(uint64_t taskId) {
+        int32_t ret = ResolveDepDyn(taskId);
+        if (unlikely(ret != DEVICE_MACHINE_OK)) {
+            return ret;
+        }
+        return BatchPushReadyQueue();
     }
 
     inline void DumpAicorePerfTrace(std::ostringstream& oss) {
@@ -615,7 +615,7 @@ private:
         }
     }
 
-    inline int SyncAicoreDevTaskFinish() {
+    inline int SyncTaskFinish() {
         int finishStopNum = 0;
         int aicNum = aicEnd_ - aicStart_;
         int aivNum = aivEnd_ - aivStart_;
@@ -667,6 +667,16 @@ private:
                 DumpDfxWhenCoreNotStop(coreStatus);
                 DEV_ERROR("SyncAicoreDevTaskFinish timeout notstopNum=%d.", mngCoreNum - finishStopNum);
                 return DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH;
+            }
+        }
+        return SyncAicpuTaskFinish();
+    }
+
+    inline int32_t SyncAicpuTaskFinish() {
+        if (IsNeedProcAicpuTask()) {
+            auto ret = aicpuTaskManager_.SyncAicpuTaskFinish(*this);
+            if (unlikely(ret != DEVICE_MACHINE_OK)) {
+                return ret;
             }
         }
         return DEVICE_MACHINE_OK;
@@ -894,24 +904,11 @@ private:
     }
 
     inline int32_t ResolveDepForAicpuTask(uint64_t& taskCount) {
-        int32_t ret = DEVICE_MACHINE_OK;
-        taskCount = aicpuTaskManager_.TaskProcess();
-        std::vector<uint64_t> completed;
-        ret = aicpuTaskManager_.TaskPoll(completed);
+        int32_t ret = aicpuTaskManager_.TaskProcess(taskCount);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return ret;
         }
-        for (const uint64_t &taskId : completed) {
-            ret = ResolveDepDyn(taskId);
-            if (unlikely(ret != DEVICE_MACHINE_OK)) {
-                return ret;
-            }
-            ret = BatchPushReadyQueue();
-            if (unlikely(ret != DEVICE_MACHINE_OK)) {
-                return ret;
-            }
-        }
-        return ret;
+        return aicpuTaskManager_.TaskPoll(*this);
     }
 
     inline int32_t ResolveWhenSyncMode(CoreType type, uint32_t finTaskId, uint32_t finTaskState, int coreIdx)  {

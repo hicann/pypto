@@ -20,6 +20,10 @@
 #include "tilefwk/aicore_data.h"
 #include "machine/utils/dynamic/dev_encode_types.h"
 
+namespace npu::tile_fwk::dynamic {
+    class AiCoreManager;
+}
+
 namespace npu::tile_fwk::Distributed {
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE = 512;
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE_MOD = AICPU_TASK_ARRAY_SIZE - 1;

@@ -30,7 +30,7 @@ struct SignalTileOp {
         expectedSum_ = expectedSum;
         resetSignal_ = resetSignal;
     }
-    bool PollCompleted(std::vector<uint64_t> &completed) const;
+    bool PollCompleted() const;
 
     SignalTileOp* next{nullptr};
     uint64_t taskId_;
@@ -57,22 +57,22 @@ public:
             return nullptr;
         }
         SignalTileOp* newTask = &taskArray[taskCount];
-        newTask->Init(taskId, addr, expectSum, resetSignal); //  endOffset, stride, 后续删除
+        newTask->Init(taskId, addr, expectSum, resetSignal);
         taskCount++;
         return newTask;
     }
 
     int32_t InsertTask(uint32_t taskId, int32_t *addr, int32_t expectSum, bool resetSignal) {
-        SignalTileOp* newTask = CreateTaskData(taskId, addr, expectSum, resetSignal); //  endOffset, stride, 后续删除
+        SignalTileOp* newTask = CreateTaskData(taskId, addr, expectSum, resetSignal);
         if (newTask == nullptr) {
             DEV_ERROR("newTask is nullptr");
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
+            return dynamic::DEVICE_MACHINE_ERROR;
         }
         uint32_t index = Hash(taskId);
         SignalTileOp* current = hashTable[index];
         hashTable[index] = newTask;
         newTask->next = current;
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        return dynamic::DEVICE_MACHINE_OK;
     }
 
     SignalTileOp* FindTask(uint32_t taskId) {
@@ -102,9 +102,9 @@ public:
         rear_ = (rear_ + 1) & AICPU_TASK_ARRAY_SIZE_MOD;
         if (rear_ == front_) {
             DEV_ERROR("SignalTileOp* queue_ is Full, Need resize queue_, front_ = %u, rear_ = %u", front_, rear_);
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
+            return dynamic::DEVICE_MACHINE_ERROR;
         }
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        return dynamic::DEVICE_MACHINE_OK;
     }
 
     inline bool IsEmpty() const {
@@ -114,10 +114,10 @@ public:
     inline int32_t Dequeue() {
         if (IsEmpty()) {
             DEV_ERROR("Queue is empty.");
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
+            return dynamic::DEVICE_MACHINE_ERROR;
         }
         front_ = (front_ + 1) & AICPU_TASK_ARRAY_SIZE_MOD;
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        return dynamic::DEVICE_MACHINE_OK;
     }
 
     inline const SignalTileOp* operator[](uint16_t index) const {
@@ -129,32 +129,26 @@ public:
         return Dequeue();
     }
 
-    int32_t RemoveCompletedTasks(std::vector<uint64_t>& completed) {
-        if (IsEmpty()) {
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+    int32_t PollCompleted(std::function<int32_t(SignalTileOp*)> processor)
+    {
+        if (front_ > rear_) {
+            rear_ += AICPU_TASK_ARRAY_SIZE;
         }
-
-        uint16_t current = front_;
-        uint16_t end = rear_;
-        if (current > end) {
-            end += AICPU_TASK_ARRAY_SIZE;
-        }
-
-        for (uint16_t i = current; i < end; ++i) {
+        for (uint16_t i = front_; i < rear_; ++i) {
             uint16_t actualIndex = i & AICPU_TASK_ARRAY_SIZE_MOD;
             SignalTileOp* task = queue_[actualIndex];
-            if (task == nullptr) {
-                return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
-            }
-            if (task->PollCompleted(completed)) {
-                auto rs = Remove(actualIndex);
-                if (rs != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-                    DEV_ERROR("Remove task failed.");
-                    return rs;
+            if (task->PollCompleted()) {
+                int32_t ret = processor(task);
+                if (ret != dynamic::DEVICE_MACHINE_OK) {
+                    return ret;
+                }
+                ret = Remove(actualIndex);
+                if (ret != dynamic::DEVICE_MACHINE_OK) {
+                    return ret;
                 }
             }
         }
-        return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
+        return dynamic::DEVICE_MACHINE_OK;
     }
 
 private:
@@ -176,7 +170,7 @@ public:
         SignalTileOp* task = hashMap_.FindTask(taskId);
         if (task == nullptr) {
             DEV_ERROR("There is no this taskId: %lu", taskId);
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
+            return dynamic::DEVICE_MACHINE_ERROR;
         }
         return runingTaskQueue_.Enqueue(task);
     }
@@ -194,7 +188,7 @@ public:
         return hashMap_.InsertTask(taskId, addr, expectedSum, resetSignal);
     }
 
-    int32_t PollCompleted(std::vector<uint64_t> &completed);
+    int32_t PollCompleted(npu::tile_fwk::dynamic::AiCoreManager &aiCoreManager);
 
     CircularQueue runingTaskQueue_;
 
