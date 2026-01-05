@@ -4,9 +4,10 @@
 关键目录结构如下：
 ```
 ├── context                    # 环境部署
-├── invocation                 # 运行样例
-├── tutorials                  # 教程文档
-├── api                        # API文档
+├── invocation                 # 样例运行
+├── tutorials                  # PyPTO 编程指南
+├── api                        # PyPTO API参考
+├── tools                      # PyPTO Toolkit工具用户指南
 └── README
 ```
 
@@ -17,5 +18,6 @@
 |---|---|
 | [环境部署](./context/build_and_install.md) | 基础环境的搭建以及安装PyPTO软件包。  |
 | [样例运行](./invocation/examples_invocation.md) | 安装PyPTO软件包后，如何快速实现样例运行。  |
-| [编程指南](./tutorials/README.md) | PyPTO的教程文档，介绍编程范式、开发要点、调试调优流程等。 |
-| [API参考](./api/README.md) | PyPTO提供的Python API。 |
+| [PyPTO 编程指南](./tutorials/README.md) | PyPTO编程范式、算子开发过程、调试调优流程等。 |
+| [PyPTO API参考](./api/README.md) | PyPTO提供的Python API。 |
+| [PyPTO Toolkit工具用户指南](./tools/README.md) | PyPTO框架全流程辅助工具的使用方法。 |
