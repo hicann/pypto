@@ -105,9 +105,6 @@ bool SrcDstBufferMergeImpl::CheckIgnoreScene(const Operation &oriOps) {
         return true;
     }
 
-    if (OpcodeManager::Inst().GetCoreType(oriOps.GetOpcode()) == OpCoreType::AIC) {
-        return true;
-    }
     for (auto &output : oriOps.GetOOperands()) {
         if (output == nullptr) {
             return true;
@@ -116,15 +113,20 @@ bool SrcDstBufferMergeImpl::CheckIgnoreScene(const Operation &oriOps) {
     return false;
 }
 
-std::pair<bool, Status> SrcDstBufferMergeImpl::CheckHasInplaced(const Operation &oriOps, const Operation &ops,
-    std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors) {
+Status SrcDstBufferMergeImpl::CheckHasInplaced(const Operation &oriOps, const Operation &ops,
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool &hasInplaced) {
     if (oriOps.HasAttr(OpAttributeKey::inplaceInfo)) {
         std::map<int, int> inplaceInfo;
         if (!oriOps.GetAttr(OpAttributeKey::inplaceInfo, inplaceInfo)) {
             APASS_LOG_ERROR_F(Elements::Tensor, "OriOps:%s[%d] get inplaceInfo error.%s", oriOps.GetOpcodeStr().c_str(), oriOps.GetOpMagic(), GetFormatBacktrace(oriOps).c_str());
-            return std::make_pair(false, FAILED);
+            return FAILED;
         }
         for (auto &[iIdx, oIdx] : inplaceInfo) {
+            if (ops.GetIOperands().size() < static_cast<size_t>(iIdx) || ops.GetOOperands().size() < static_cast<size_t>(oIdx)) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "The number of inputs or outputs for op:%s[%d] does not match inplaceInfo, inputs size: %zu, iIdx: %d, outputs size: %zu, oIdx: %d.",
+                    oriOps.GetOpcodeStr().c_str(), oriOps.GetOpMagic(), ops.GetIOperands().size(), iIdx, ops.GetOOperands().size(), oIdx);
+                return FAILED;
+            }
             auto in = ops.GetIOperands()[iIdx];
             auto out = ops.GetOOperands()[oIdx];
             out->memoryrange.memId = in->memoryrange.memId;
@@ -133,38 +135,19 @@ std::pair<bool, Status> SrcDstBufferMergeImpl::CheckHasInplaced(const Operation 
                 tensorConsumers_[out->memoryrange.memId].end());
             replacedTensors[out->memoryrange.memId] = in;
         }
-        return std::make_pair(true, SUCCESS);
+        hasInplaced = true;
+        return SUCCESS;
     }
-    return std::make_pair(false, SUCCESS);
+    return SUCCESS;
 }
 
-bool SrcDstBufferMergeImpl::FindReplaced(const Operation &oriOps, const Operation &ops,
-    std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors) {
-    if (ops.GetOOperands().size() == 0) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Operation %s[%d] has no outOperans", ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
-        return false;
+Status SrcDstBufferMergeImpl::FindReplaced(const Operation &oriOps, const Operation &ops,
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool& hasFound) {
+    if (OpcodeManager::Inst().GetCoreType(ops.GetOpcode()) == OpCoreType::AIC) {
+        return ProcessL0MemoryReuse(ops, replacedTensors, hasFound);
+    } else {
+        return ProcessInplaceReuse(oriOps, ops, replacedTensors, hasFound);
     }
-    auto out = ops.GetOOperands()[0];
-    auto outTensorMagic = out->memoryrange.memId;
-    for (auto in : oriOps.GetIOperands()) {
-        if (in != nullptr && CanSrcDstReuse(oriOps, in, out)) {
-            // 当前输出复用输入
-            auto inTensorMagic = in->memoryrange.memId;
-            if (inTensorMagic == outTensorMagic) {
-                continue;
-            }
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Set out tensor %d reuse src tensor %d",
-                out->GetMagic(), in->GetMagic());
-            out->memoryrange.memId = in->memoryrange.memId;
-            if (tensorConsumers_[outTensorMagic].size() > tensorConsumers_[inTensorMagic].size()) {
-                tensorConsumers_[inTensorMagic] = tensorConsumers_[outTensorMagic];
-            }
-            replacedTensors[outTensorMagic] = in;
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void SrcDstBufferMergeImpl::NotFindReplacedProcess(const Operation &ops,
@@ -203,16 +186,20 @@ Status SrcDstBufferMergeImpl::Run(Function &func) {
             if (CheckIgnoreScene(*oriOps[i])) {
                 continue;
             }
-            auto hasInplaced = CheckHasInplaced(*oriOps[i], *opList[i], replacedTensors);
-            if (hasInplaced.second == FAILED) {
+            bool hasInplaced = false;
+            if (CheckHasInplaced(*oriOps[i], *opList[i], replacedTensors, hasInplaced) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "CheckHasInplaced failed; Please check the CheckHasInplaced method.");
                 return FAILED;
             }
-            if (hasInplaced.first) {
+            if (hasInplaced) {
                 continue;
             }
-            bool findReplaced = FindReplaced(*oriOps[i], *opList[i], replacedTensors);
-            if (!findReplaced) {
+            bool hasFound = false;
+            if (FindReplaced(*oriOps[i], *opList[i], replacedTensors, hasFound) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "FindReplaced failed; Please check the FindReplaced method.");
+                return FAILED;
+            }
+            if (!hasFound) {
                 NotFindReplacedProcess(*opList[i], replacedTensors);
             }
         }
@@ -266,5 +253,135 @@ bool SrcDstBufferMergeImpl::CanSrcDstReuse(const Operation &ops, std::shared_ptr
     APASS_LOG_DEBUG_F(Elements::Tensor, "Reusable, iOperand magic: %d, memId: %d, oOperand magic: %d, memId: %d, op:%s[%d]", iOperand->GetMagic(), iOperand->memoryrange.memId, 
         oOperand->GetMagic(), oOperand->memoryrange.memId, ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
     return true;
+}
+
+Status SrcDstBufferMergeImpl::ProcessInplaceReuse(const Operation &oriOps, const Operation &ops, std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool& hasFound) {
+    if (ops.GetOOperands().size() == 0) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Operation %s[%d] has no outOperands", ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
+        return FAILED;
+    }
+    auto out = ops.GetOOperands()[0];
+    auto outTensorMagic = out->memoryrange.memId;
+    for (auto in : oriOps.GetIOperands()) {
+        if (in != nullptr && CanSrcDstReuse(oriOps, in, out)) {
+            // 当前输出复用输入
+            auto inTensorMagic = in->memoryrange.memId;
+            if (inTensorMagic == outTensorMagic) {
+                continue;
+            }
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Set out tensor %d reuse src tensor %d",
+                out->GetMagic(), in->GetMagic());
+            out->memoryrange.memId = in->memoryrange.memId;
+            if (tensorConsumers_[outTensorMagic].size() > tensorConsumers_[inTensorMagic].size()) {
+                tensorConsumers_[inTensorMagic] = tensorConsumers_[outTensorMagic];
+            }
+            replacedTensors[outTensorMagic] = in;
+            hasFound = true;
+            return SUCCESS;
+        }
+    }
+    return SUCCESS;
+}
+
+bool SrcDstBufferMergeImpl::IsL1ToL0Transfer(const Operation& op) {
+    for (auto &inputTensor : op.GetIOperands()) {
+        if (inputTensor->GetMemoryTypeOriginal() != MemoryType::MEM_L1) {
+            return false;
+        }
+    }
+    for (auto &outputTensor : op.GetOOperands()) {
+        if (outputTensor->GetMemoryTypeOriginal() != MemoryType::MEM_L0A && outputTensor->GetMemoryTypeOriginal() != MemoryType::MEM_L0B) {
+            return false;
+        }
+    }
+    ASSERT(op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1) << "The L1-to-L0 copy op can have only one input and one output tensor";
+    return true;
+}
+
+bool SrcDstBufferMergeImpl::IsL0CToL1Transfer(const Operation& op) {
+    for (auto &inputTensor : op.GetIOperands()) {
+        if (inputTensor->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
+            return false;
+        }
+    }
+    for (auto &outputTensor : op.GetOOperands()) {
+        if (outputTensor->GetMemoryTypeOriginal() != MemoryType::MEM_L1) {
+            return false;
+        }
+    }
+    ASSERT(op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1) << "The L0C-to-L1 copy op can have only one input and one output tensor";
+    return true;
+}
+
+Status SrcDstBufferMergeImpl::ProcessL0MemoryReuse(const Operation& op, std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool& hasFound) {
+    if (!IsL1ToL0Transfer(op)) {
+        return SUCCESS;
+    }
+    auto inputTensor = op.GetIOperands().front();
+    auto outputTensor = op.GetOOperands().front();
+    if (inputTensor == nullptr || outputTensor == nullptr) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Op:%s[%d] failed to obtain the input/output tensor", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+        return FAILED;
+    }
+    for (auto& producerOp : inputTensor->GetProducers()) {
+        if (!IsL0CToL1Transfer(*producerOp)) {
+            return SUCCESS;
+        }
+        auto l0cTensor = producerOp->GetIOperands().front();
+        auto checkOp = *l0cTensor->GetProducers().begin();
+        if(FindReuseableL0Tensor(*checkOp, replacedTensors, outputTensor, hasFound) != SUCCESS) {
+            return FAILED;
+        }
+        if (hasFound) {
+            break;
+        }
+    }
+    return SUCCESS;
+}
+
+Status SrcDstBufferMergeImpl::FindReuseableL0Tensor(const Operation& op, std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors,
+        LogicalTensorPtr needReplacedTensor, bool& hasFound) {
+    if (npu::tile_fwk::OpcodeManager::Inst().GetOpCalcType(op.GetOpcode()) != npu::tile_fwk::OpCalcType::MATMUL) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Op:%s[%d] is not a matmul operation.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+        return SUCCESS;
+    }
+    Operation* nextCandidateOp = nullptr;
+    for (const auto& inputTensor : op.GetIOperands()) {
+        if (inputTensor->GetMemoryTypeOriginal() != needReplacedTensor->GetMemoryTypeOriginal()) {
+            if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
+                APASS_LOG_DEBUG_F(Elements::Operation, "Obtain the candidate matmul op:%s[%d].", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+                nextCandidateOp = *inputTensor->GetProducers().begin();
+            }   
+            continue;
+        }
+        if (tensorMaxSize_[inputTensor->memoryrange.memId] != tensorMaxSize_[needReplacedTensor->memoryrange.memId]) {
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Matmul input tensor (memId=%d, size=%d) != needReplaced tensor (memId=%d, size=%d), op:%s[%d].", inputTensor->memoryrange.memId, 
+                tensorMaxSize_[inputTensor->memoryrange.memId], needReplacedTensor->memoryrange.memId, tensorMaxSize_[needReplacedTensor->memoryrange.memId], op.GetOpcodeStr().c_str(), op.GetOpMagic());
+            continue;
+        }
+        if (tensorConsumers_[inputTensor->memoryrange.memId].size() > 1) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Tensor[%d], memId[%d] has more than 1 consumer.", inputTensor->GetMagic(), inputTensor->memoryrange.memId);
+            continue;
+        }
+        if (hasReusedL0Tensors_.count(inputTensor->GetMagic())) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Tensor[%d], memId[%d] has been reused", inputTensor->GetMagic(), inputTensor->memoryrange.memId);
+            continue;
+        }
+        if (tensorConsumers_[needReplacedTensor->memoryrange.memId].size() > tensorConsumers_[inputTensor->memoryrange.memId].size()) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "Needreplaced tensor[%d] consumers > matmul input tensor[%d] consumers, perform refresh.",
+                needReplacedTensor->GetMagic(), inputTensor->GetMagic());
+            tensorConsumers_[inputTensor->memoryrange.memId] = tensorConsumers_[needReplacedTensor->GetMagic()];
+        }
+        APASS_LOG_INFO_F(Elements::Operation, "Successfully performed L0 memory reuse, Needreplaced tensor[%d] memId[%d] , input tensor[%d] memId[%d]",
+            needReplacedTensor->GetMagic(), needReplacedTensor->memoryrange.memId, inputTensor->GetMagic(), inputTensor->memoryrange.memId);
+        needReplacedTensor->memoryrange.memId = inputTensor->memoryrange.memId;
+        hasReusedL0Tensors_.insert(inputTensor->GetMagic());
+        hasFound = true;
+        return SUCCESS;
+    }
+    if (nextCandidateOp != nullptr) {
+        return FindReuseableL0Tensor(*nextCandidateOp, replacedTensors, needReplacedTensor, hasFound);
+    }
+    return SUCCESS;
 }
 } // namespace npu::tile_fwk

@@ -33,17 +33,25 @@ private:
     Status CheckOpValid(const Operation *op, int opId);
     Status Init(const std::vector<Operation *> &opList);
     bool CheckIgnoreScene(const Operation &oriOps);
-    std::pair<bool, Status> CheckHasInplaced(const Operation &oriOps, const Operation &ops,
-        std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors);
-    bool FindReplaced(const Operation &oriOps, const Operation &ops,
-        std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors);
+    Status CheckHasInplaced(const Operation &oriOps, const Operation &ops,
+        std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool &hasInplaced);
+    Status FindReplaced(const Operation &oriOps, const Operation &ops,
+        std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool& hasFound);
     void NotFindReplacedProcess(const Operation &ops,
         std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors);
     bool CheckAssembleReuse(const LogicalTensorPtr &outOperand);
     bool CanSrcDstReuse(const Operation &ops, std::shared_ptr<LogicalTensor> iOperand, std::shared_ptr<LogicalTensor> oOperand);
+    bool IsL1ToL0Transfer(const Operation& op);
+    bool IsL0CToL1Transfer(const Operation& op);
+    Status ProcessInplaceReuse(const Operation &oriOps, const Operation &ops, 
+        std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool& hasFound);
+    Status ProcessL0MemoryReuse(const Operation& op, std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, bool& hasFound);
+    Status FindReuseableL0Tensor(const Operation& op, std::unordered_map<int, std::shared_ptr<LogicalTensor>> &replacedTensors, 
+        LogicalTensorPtr needReplacedTensor, bool& hasFound);
 
     std::map<int, std::set<int>> tensorConsumers_;
     std::map<int, int> tensorMaxSize_;
+    std::set<int> hasReusedL0Tensors_;
 };
 
 class SrcDstBufferMerge : public Pass {
