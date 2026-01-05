@@ -39,8 +39,8 @@ class STestAccelerate(GTestAccelerate):
                                  "If this parameter is not specified, 0 device will be used by default.")
         # 流程处理
         args = parser.parse_args()
-        params: List[GTestAccelerate.ExecParam] = []
-        device_list: List[int] = [0]
+        params = []
+        device_list = [0]
         if args.device is not None:
             device_list = [int(d) for d in list(set(args.device)) if d is not None and str(d) != ""]
         for _id in device_list:
@@ -52,7 +52,7 @@ class STestAccelerate(GTestAccelerate):
 
     @staticmethod
     def set_device_id_envs(p: Any) -> Optional[Dict[str, str]]:
-        self: GTestAccelerate.ExecParam = p
+        self = p
         return {"TILE_FWK_DEVICE_ID": f"{self.cntr_id}"}
 
 

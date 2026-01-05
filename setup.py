@@ -54,8 +54,7 @@ class EditModeHelper:
             if "dist-packages" in path:
                 return Path(path)
         # 非 Debian 系统(如 CentOS/Windows), 返回默认 platlib
-        rst: Path = Path(site_paths[0]) if site_paths else Path(sysconfig.get_path("platlib"))
-        return rst
+        return Path(site_paths[0]) if site_paths else Path(sysconfig.get_path("platlib"))
 
 
 class CustomEditableWheel(editable_wheel, EditModeHelper):
@@ -92,12 +91,12 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
             raise ImportError("Could not import setuptools wheel module") from e
 
         # 找到 whl 包的 RECORD 文件路径(如: pypto-0.0.1.dist-info/RECORD)
-        whl_file: Path = self._get_editable_whl_file()
+        whl_file = self._get_editable_whl_file()
         with setuptools_wheel(whl_file, "r") as wf:
-            record_file_lst: List[Path] = [Path(p) for p in wf.namelist() if p.endswith(".dist-info/RECORD")]
+            record_file_lst = [Path(p) for p in wf.namelist() if p.endswith(".dist-info/RECORD")]
         if not record_file_lst:
             raise RuntimeError(f"Can't find RECORD file in {whl_file}")
-        record_file: Path = record_file_lst[0]
+        record_file = record_file_lst[0]
 
         # 将新增条目插入 whl 包的 RECORD 文件
         logging.info("Overwrite RECORD(%s), will insert %s entries.", record_file, record_num)
@@ -106,12 +105,12 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
 
     def _get_cmake_install_files_record_info(self) -> Tuple[str, int]:
         # 获取 cmake install 文件列表
-        install_files: List[Path] = self._get_cmake_install_files()
+        install_files = self._get_cmake_install_files()
         if not install_files:
             return "", 0
         # 生成 cmake install 文件的 RECORD 条目(符合 setuptools 标准格式)
-        record_entries: List[str] = []
-        site_pkg: Path = self.get_pip_edit_mode_install_path()  # site-packages 绝对路径
+        record_entries = []
+        site_pkg = self.get_pip_edit_mode_install_path()  # site-packages 绝对路径
         for abs_file in install_files:
             # 跳过不存在的文件
             if not abs_file.exists():
@@ -120,7 +119,7 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
             # 格式1: 相对于 site-packages 的路径, RECORD 中必须用此路径, 否则 pip 无法识别
             # 格式2: SHA256 哈希(格式: sha256=xxx)
             # 格式3: 文件大小(字节数)
-            rel_path: str = os.path.relpath(str(abs_file), str(site_pkg))
+            rel_path = os.path.relpath(str(abs_file), str(site_pkg))
             with open(abs_file, "rb") as f:
                 file_hash = hashlib.sha256(f.read()).hexdigest()
             file_hash = f"sha256={file_hash}"  # 与 setuptools 原生格式一致
@@ -131,7 +130,7 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
         return "\n".join(record_entries), len(record_entries)
 
     def _get_cmake_install_files(self) -> List[Path]:
-        install_files: List[Path] = []
+        install_files = []
         if not (hasattr(self, 'pypto_install_manifest_lst') and self.pypto_install_manifest_lst):
             logging.warning("Can't get any CMake install manifest.")
         else:
@@ -140,7 +139,7 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
 
     def _get_editable_whl_file(self) -> Path:
         dist_info = self.get_finalized_command("dist_info")
-        dist_name: str = getattr(dist_info, "name", "pypto")
+        dist_name = getattr(dist_info, "name", "pypto")
         whl_pattern = f"{dist_name}-*.editable-*.whl"
         whl_file_lst = list(Path(self.dist_dir).glob(whl_pattern))
         if not whl_file_lst:
@@ -150,7 +149,7 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
 
 class CMakeUserOption:
     # 额外的命令行配置, 格式: 长选项, 短选项, 描述, 默认值
-    USER_OPTION: List[Any] = [
+    USER_OPTION = [
         ('cmake-generator=', None, 'CMake Generator', None),
         ('cmake-build-type=', None, 'CMake Build Type', None),
         ('cmake-options=', None, 'CMake Options', None),
@@ -170,8 +169,7 @@ class CMakeUserOption:
         ver1 = metadata.version("setuptools")
         ver2 = metadata.version("pybind11")
 
-        desc: str = ""
-        desc += f"\nEnviron"
+        desc = f"\nEnviron"
         desc += f"\n    Python3               : {sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"
         desc += f"\n        pip"
         desc += f"\n               setuptools : {ver1}"
@@ -195,17 +193,17 @@ class CMakeUserOption:
         path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
 
         # 遍历每个 PATH 目录，逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
-        valid_path_lst: List[str] = []
+        valid_path_lst = []
         for path_dir in path_dir_lst:
             # 避免 PATH 环境变量中有重复的单元
             if path_dir in valid_path_lst:
                 continue
             valid_path_lst.append(path_dir)
             # 检查当前目录
-            cmake_str: Optional[Union[Path, str]] = shutil.which("cmake", path=path_dir)
+            cmake_str = shutil.which("cmake", path=path_dir)
             if not cmake_str:
                 continue
-            cmake_file: Path = Path(cmake_str).resolve()
+            cmake_file = Path(cmake_str).resolve()
             if not cmake_file.exists() or not cmake_file.is_file():
                 continue
             if cmake_file.stat().st_size <= 4:  # 下文读取前 4 字节判断文件是否是 ELF 文件
@@ -232,7 +230,7 @@ class CMakeUserOption:
         if not env_build_ext_args:
             return
         pattern = r'(?:[^\s\"\']|\"[^\"]*\"|\'[^\']*\')+'
-        env_build_ext_args_split: List[str] = re.findall(pattern, env_build_ext_args)
+        env_build_ext_args_split = re.findall(pattern, env_build_ext_args)
         parser = argparse.ArgumentParser(description=f"Setuptools CMakeBuild Ext.", add_help=False)
         parser.add_argument("--cmake-generator", nargs="?", type=str, default=None, dest="cmake_generator")
         parser.add_argument("--cmake-build-type", nargs="?", type=str, default=None, dest="cmake_build_type")
@@ -254,8 +252,7 @@ class CMakeUserOption:
         self.cmake_options = self.cmake_options.replace("'", "").replace('"', "") if self.cmake_options else None
         self.cmake_verbose = True if self.cmake_verbose else False
         # CMake Options 修正
-        cmake_option_lst: List[str] = [o.replace(" ", "")
-                                       for o in (self.cmake_options.split(" ") if self.cmake_options else [])]
+        cmake_option_lst = [o.replace(" ", "") for o in (self.cmake_options.split(" ") if self.cmake_options else [])]
         if self.cmake_generator:
             for option in cmake_option_lst:
                 if option.startswith("-DCMAKE_GENERATOR="):
@@ -278,15 +275,15 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
 
     @staticmethod
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
-        def_job_num: Optional[int] = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 48)  # 48 为缺省最大核数
+        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 48)  # 48 为缺省最大核数
         def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 由其自身决定缺省核数
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
 
     @staticmethod
     def _get_cmake_install_manifest(build_dir: Path, file_name: str = "install_manifest.txt") -> List[str]:
-        installed_files: List[str] = []
-        install_manifest_file: Path = Path(build_dir, file_name)
+        installed_files = []
+        install_manifest_file = Path(build_dir, file_name)
         if install_manifest_file.exists():
             with open(install_manifest_file, 'r', encoding="utf-8") as fh:
                 installed_files = [line.strip() for line in fh if line.strip()]
@@ -307,15 +304,15 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         """
         logging.info("%s", self)
         # 源码根目录
-        src: Path = Path(__file__).parent.resolve()
+        src = Path(__file__).parent.resolve()
         # 准备构建目录, 使用扩展名创建唯一的构建目录
-        build_dir: Path = Path(self.build_temp).resolve()
+        build_dir = Path(self.build_temp).resolve()
         build_dir.mkdir(parents=True, exist_ok=True)
         # 获取 cmake install prefix
-        cmake_install_prefix: Path = self._get_cmake_install_prefix()
+        cmake_install_prefix = self._get_cmake_install_prefix()
 
         # CMake Configure
-        cmd: str = f"{self.cmake} -S {src} -B {build_dir}"
+        cmd = f"{self.cmake} -S {src} -B {build_dir}"
         cmd += f" -G {self.cmake_generator}" if self.cmake_generator else ""
         cmd += f" -DCMAKE_BUILD_TYPE={self.cmake_build_type}" if self.cmake_build_type else ""
         cmd += f" -DPython3_EXECUTABLE={sys.executable} -DCMAKE_INSTALL_PREFIX={cmake_install_prefix}"
@@ -325,8 +322,8 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         ret.check_returncode()
 
         # CMake Build
-        job_num: Optional[int] = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
-        cmd: str = f"{self.cmake} --build {build_dir}" + (f" -j {job_num}" if job_num else "")
+        job_num = self._get_job_num(job_num=self.parallel, generator=self.cmake_generator)
+        cmd = f"{self.cmake} --build {build_dir}" + (f" -j {job_num}" if job_num else "")
         cmd += f" --verbose" if self.cmake_verbose else ""
         logging.info("CMake Build, Cmd: %s", cmd)
         ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
@@ -334,12 +331,12 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
 
         # CMake Install
         cmake_install_prefix: Path = self._get_cmake_install_prefix()  # 重复获取触发提示
-        cmd: str = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix}"
+        cmd = f"{self.cmake} --install {build_dir} --prefix {cmake_install_prefix}"
         logging.info("CMake Install, Cmd: %s", cmd)
         ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
         ret.check_returncode()
         if self._edit_mode():
-            installed_files: List[str] = self._get_cmake_install_manifest(build_dir=build_dir)
+            installed_files = self._get_cmake_install_manifest(build_dir=build_dir)
             if installed_files:
                 # 向 editable_wheel 命令传递
                 editable_wheel_cmd = self.distribution.get_command_obj("editable_wheel")
@@ -353,10 +350,10 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         return False
 
     def _get_cmake_install_prefix(self) -> Path:
-        cmake_install_prefix: Path = Path(self.build_lib)
+        cmake_install_prefix = Path(self.build_lib)
         if self._edit_mode():
             # 可编辑安装模式下, 设置 CMake Install Prefix 为源码相关路径
-            src_root: Path = Path(__file__).parent.resolve()  # -e 模式下不会 copy 源码到 tmp 目录
+            src_root = Path(__file__).parent.resolve()  # -e 模式下不会 copy 源码到 tmp 目录
             cmake_install_prefix = Path(src_root, "python")
             logging.warning("Run in editable mode, use %s as cmake install prefix.", cmake_install_prefix)
         return cmake_install_prefix.resolve()

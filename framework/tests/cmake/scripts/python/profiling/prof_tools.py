@@ -77,9 +77,9 @@ class ProfTools(ToolsRunAbcSp):
         # 产生复用二进制, 在多卡情况下, 复用多卡并行执行所有用例, 预先产生所复用二进制
         if len(self.device_list) > 1:
             # 复用 STest 多卡执行脚本实现多卡并行产生 Kernel 二进制
-            pys: Path = Path(self.source_root, "framework/tests/cmake/scripts/stest_accelerate.py")
-            cases_name_str: str = ":".join([c.name for c in self.case_list])
-            cmd: str = f"{sys.executable} {pys} -t={self.exe.file} -c={cases_name_str}"
+            pys = Path(self.source_root, "framework/tests/cmake/scripts/stest_accelerate.py")
+            cases_name_str = ":".join([c.name for c in self.case_list])
+            cmd = f"{sys.executable} {pys} -t={self.exe.file} -c={cases_name_str}"
             for _k, _v in self.exe.envs.items():
                 cmd += f" --env {_k}={_v}"
             cmd += " --halt_on_error" if self.halt_on_error else ""
@@ -116,7 +116,7 @@ class ProfTools(ToolsRunAbcSp):
         output_dirs.sort(reverse=False)
         idx = output_dirs.index(self.case_output_dir_bak) + 1 if self.case_output_dir_bak else 0
         self.case_output_dir_bak = output_dirs[idx] if idx < len(output_dirs) else None
-        case_output_dir_bak_name: str = self.case_output_dir_bak.name if self.case_output_dir_bak else "None"
+        case_output_dir_bak_name = self.case_output_dir_bak.name if self.case_output_dir_bak else "None"
         logging.info("%s output back dir(%s)", cs.full_name, case_output_dir_bak_name)
         return True
 
@@ -133,7 +133,7 @@ class ProfTools(ToolsRunAbcSp):
                                      + f"\"aicpuTrace\":\"on\""
                                      + "}"
         }
-        cur_cnt: int = 0
+        cur_cnt = 0
         for i in range(1, cs.prof_try_cnt + 1):
             # 性能采集
             self.run_case(cs=cs, device_id=device_id, envs=env)
@@ -144,8 +144,8 @@ class ProfTools(ToolsRunAbcSp):
                 logging.warning("%s Profiling Collection failed(Try:%s/%s), can't get any PROF_* dir in %s",
                                 cs.full_name, i, cs.prof_try_cnt, self.case_prof_ori_dir_root)
                 continue
-            prof_dir: ProfDir = ProfDir(src_root=self.source_root, path=rest_sub_dirs[0],
-                                        prof_case=cs, device_id=device_id, level=self.level)
+            prof_dir = ProfDir(src_root=self.source_root, path=rest_sub_dirs[0],
+                               prof_case=cs, device_id=device_id, level=self.level)
             if not prof_dir.check():
                 logging.warning("%s Profiling Collection failed(Try:%s/%s), prof dir(%s) check failed, "
                                 "delete current prof result",
@@ -181,7 +181,7 @@ class ProfTools(ToolsRunAbcSp):
         if len(output_dirs) == 0:
             logging.error("%s can't get any output dir after execute.", prof_dir.result_case.full_name)
             return False
-        output_dir: Path = output_dirs[0]
+        output_dir = output_dirs[0]
         if not Path(output_dir, "topo.json").exists():
             if self.case_output_dir_bak is None:
                 raise RuntimeError("Case Output Back Dir is None")
@@ -200,8 +200,8 @@ class ProfTools(ToolsRunAbcSp):
         """
         rest_sub_dirs = [d for d in self.case_prof_ori_dir_root.glob(pattern="PROF_*") if d.is_dir()]
         for sub_dir in rest_sub_dirs:
-            prof_dir: ProfDir = ProfDir(src_root=self.source_root, path=sub_dir,
-                                        prof_case=cs, device_id=device_id, level=self.level)
+            prof_dir = ProfDir(src_root=self.source_root, path=sub_dir,
+                               prof_case=cs, device_id=device_id, level=self.level)
             prof_dir.result_case.update(k=ProfCase.FieldType.TimeStamp.value, v=prof_dir.timestamp)
             self.case_prof_dirs.update({prof_dir.timestamp: prof_dir})
 
@@ -209,14 +209,14 @@ class ProfTools(ToolsRunAbcSp):
         """对采集结果进行解析, 并做初步结果筛选
         """
         # 遍历当前 Case 所采集的各个 ProfDir, 产生 Cycle
-        cycle_lst: List[int] = []
+        cycle_lst = []
         for idx, (timestamp, prof_dir) in enumerate(self.case_prof_dirs.items(), start=1):
             prof_dir.parse()
             cycle_lst.append(prof_dir.result_case.cycle)
             logging.info("%s Profiling Statistics update(SuccCnt:%s/%s), TimeStamp(%s)",
                          cs.full_name, idx, len(self.case_prof_dirs), timestamp)
         # 遍历当前 Case 所采集的各个 ProfDir, 查找 Cycle 最接近平均值的结果, 作为当前 Case 采集的最终结果
-        rest_prof_dir: Optional[ProfDir] = None
+        rest_prof_dir = None
         cycle_avg = math.ceil(sum(cycle_lst) / len(cycle_lst))
         cycle_sub_abs_min = sys.maxsize
         for _, prof_dir in self.case_prof_dirs.items():
@@ -239,7 +239,7 @@ class ProfTools(ToolsRunAbcSp):
         datas = []
         for idx, (timestamp, prof_dir) in enumerate(self.case_prof_dirs.items(), start=1):
             # JitterRate, 计算本 Case 的抖动率时, 仅统计劣化情况, 并取 ProfDir 最小值作为结果
-            jitter_rate: float = (cs.cycle - prof_dir.result_case.cycle) / prof_dir.result_case.cycle
+            jitter_rate = (cs.cycle - prof_dir.result_case.cycle) / prof_dir.result_case.cycle
             prof_dir.result_case.update(k=ProfCase.FieldType.JitterRate.value, v=jitter_rate)
             if cs.jitter_rate >= jitter_rate:
                 cs.update(k=ProfCase.FieldType.JitterRate.value, v=jitter_rate)

@@ -67,8 +67,7 @@ class CMakeParam(abc.ABC):
         :param fv: 控制变量为 False 时, 设置的值
         :return: 设置的值
         """
-        cmd: str = f" -D{opt}=" + (tv if ctr else fv)
-        return cmd
+        return f" -D{opt}=" + (tv if ctr else fv)
 
     @classmethod
     def _cfg_optional(cls, opt: str, ctr: bool, v: str):
@@ -78,8 +77,7 @@ class CMakeParam(abc.ABC):
         :param ctr: 控制变量
         :param v: 控制变量为 True 时, 设置的值
         """
-        cmd: str = (f" -D{opt}=" + v) if ctr else ""
-        return cmd
+        return (f" -D{opt}=" + v) if ctr else ""
 
     @abc.abstractmethod
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
@@ -104,11 +102,11 @@ class FeatureParam(CMakeParam):
             logging.warning("Environment variable ASCEND_HOME_PATH is unset/empty, falling back to cost_model backend.")
             self.backend_type = "cost_model"
         self.whl_plat_name = f"{args.plat_name}_{CMakeParam.get_system_processor()}" if args.plat_name else ""
-        self.whl_isolation: bool = args.isolation
-        self.whl_editable: bool = args.editable
+        self.whl_isolation = args.isolation
+        self.whl_editable = args.editable
 
     def __str__(self):
-        desc: str = ""
+        desc = ""
         desc += f"\nFeature"
         desc += f"\n    Frontend                : {self.frontend_type}"
         if self.frontend_type_python3:
@@ -141,7 +139,7 @@ class FeatureParam(CMakeParam):
                             help="backend, such as npu/cost_model etc.")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
+        cmd = ""
         cmd += self._cfg_require(opt="ENABLE_FEATURE_PYTHON_FRONT_END", ctr=self.frontend_type_python3)
         cmd += self._cfg_require(opt="BUILD_WITH_CANN", ctr=self.backend_type in ["npu"])
         return cmd
@@ -177,8 +175,7 @@ class BuildParam(CMakeParam):
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
 
     def __str__(self):
-        desc: str = ""
-        desc += f"\nBuild"
+        desc = f"\nBuild"
         desc += f"\n    Clean                   : {self.clean}"
         desc += f"\n    Timeout                 : {self.timeout}"
         desc += f"\n    CMake"
@@ -241,7 +238,7 @@ class BuildParam(CMakeParam):
 
     @staticmethod
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
-        def_job_num: Optional[int] = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 48)  # 48 为缺省最大核数
+        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 48)  # 48 为缺省最大核数
         def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 由其自身决定缺省核数
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
@@ -251,25 +248,23 @@ class BuildParam(CMakeParam):
         return f"\"{generator}\"" if generator else generator
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        inc_build_type: bool = bool(ext) if ext is not None else True
-        cmd: str = ""
-        cmd += (self._cfg_require(opt="CMAKE_BUILD_TYPE", tv=self.build_type) if inc_build_type else "")
+        inc_build_type = bool(ext) if ext is not None else True
+        cmd = (self._cfg_require(opt="CMAKE_BUILD_TYPE", tv=self.build_type) if inc_build_type else "")
         cmd += self._cfg_require(opt="ENABLE_ASAN", ctr=self.asan)
         cmd += self._cfg_require(opt="ENABLE_UBSAN", ctr=self.ubsan)
         cmd += self._cfg_require(opt="ENABLE_GCOV", ctr=self.gcov)
 
         def _check_clang_toolchain(_opt: str, _b: str) -> Tuple[bool, str]:
-            _p: Path = Path(self.clang_install_path, _b)
+            _p = Path(self.clang_install_path, _b)
             if _p.exists():
                 return True, self._cfg_require(opt=_opt, tv=str(_p))
             logging.error("Clang Toolchain %s not exist.", _p)
             return False, ""
 
         def _gen_clang_cmd() -> Tuple[bool, str]:
-            _bin_opt_lst: List[List[str]] = [["clang", "CMAKE_C_COMPILER"],
-                                             ["clang++", "CMAKE_CXX_COMPILER"]]
-            _rst: bool = True
-            _cmd: str = ""
+            _bin_opt_lst = [["clang", "CMAKE_C_COMPILER"], ["clang++", "CMAKE_CXX_COMPILER"]]
+            _rst = True
+            _cmd = ""
             for _bin_opt in _bin_opt_lst:
                 _sub_bin, _sub_opt = _bin_opt
                 _sub_rst, _sub_cmd = _check_clang_toolchain(_opt=_sub_opt, _b=_sub_bin)
@@ -286,14 +281,14 @@ class BuildParam(CMakeParam):
         return cmd
 
     def get_build_cmd_lst(self, cmake: Path, binary_path: Path) -> List[str]:
-        cmd_list: List[str] = []
+        cmd_list = []
         if self.targets:
             for t in self.targets:
-                cmd: str = f"{cmake} --build {binary_path} --target {t}"
+                cmd = f"{cmake} --build {binary_path} --target {t}"
                 cmd += f" -j {self.job_num}" if self.job_num else ""
                 cmd_list.append(cmd)
         else:
-            cmd: str = f"{cmake} --build {binary_path}"
+            cmd = f"{cmake} --build {binary_path}"
             cmd += f" -j {self.job_num}" if self.job_num else ""
             cmd_list.append(cmd)
         return cmd_list
@@ -325,10 +320,9 @@ class TestsExecuteParam(CMakeParam):
                             help="Disable auto execute STest/Utest with build.")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
-        cmd += self._cfg_require(opt="ENABLE_TESTS_EXECUTE", ctr=self.auto_execute)
+        cmd = self._cfg_require(opt="ENABLE_TESTS_EXECUTE", ctr=self.auto_execute)
         cmd += self._cfg_require(opt="ENABLE_TESTS_EXECUTE_PARALLEL", ctr=self.auto_execute_parallel)
-        changed: bool = self.changed_file and self.changed_file.exists() and self.changed_file.suffix.lower() == ".txt"
+        changed = self.changed_file and self.changed_file.exists() and self.changed_file.suffix.lower() == ".txt"
         cmd += self._cfg_require(opt="ENABLE_TESTS_EXECUTE_CHANGED_FILE", ctr=changed, tv=str(self.changed_file))
         return cmd
 
@@ -353,8 +347,7 @@ class TestsGoldenParam(CMakeParam):
                             help="Clean Tests golden.", dest="golden_clean")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
-        cmd += self._cfg_require(opt="ENABLE_STEST_GOLDEN_PATH_CLEAN", ctr=self.clean)
+        cmd = self._cfg_require(opt="ENABLE_STEST_GOLDEN_PATH_CLEAN", ctr=self.clean)
         cmd += self._cfg_require(opt="ENABLE_STEST_GOLDEN_PATH", ctr=bool(self.path), tv=str(self.path))
         return cmd
 
@@ -376,20 +369,19 @@ class TestsFilterParam(CMakeParam):
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
-        mark: str = str(ext).lower()
-        mark_lst: List[str] = mark.split("_")
-        have_char: bool = len(mark_lst) <= 1
-        mark_word: str = mark.replace("_", " ")
-        help_str: str = (f"Enable {mark_word} scene, specific {mark_word} filter, "
-                         f"multiple cases are separated by ','")
+        mark = str(ext).lower()
+        mark_lst = mark.split("_")
+        have_char = len(mark_lst) <= 1
+        mark_word = mark.replace("_", " ")
+        help_str = f"Enable {mark_word} scene, specific {mark_word} filter, multiple cases are separated by ','"
         if have_char:
-            mark_char: Optional[str] = mark_lst[0][0] if have_char else None
+            mark_char = mark_lst[0][0] if have_char else None
             parser.add_argument(f"-{mark_char}", f"--{mark}", nargs="?", type=str, default="", help=help_str)
         else:
             parser.add_argument(f"--{mark}", nargs="?", type=str, default="", help=help_str)
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
+        cmd = ""
         if self.cmake_option:
             cmd += self._cfg_require(opt=f"{self.cmake_option}", ctr=self.enable, tv=f"{self.filter_str}")
         return cmd
@@ -430,8 +422,7 @@ class STestExecuteParam(CMakeParam):
                             help="enable STest Interpreter Config")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
-        cmd += self._cfg_require(opt="ENABLE_STEST_EXECUTE_DEVICE_ID", tv=self.auto_execute_device_id)
+        cmd = self._cfg_require(opt="ENABLE_STEST_EXECUTE_DEVICE_ID", tv=self.auto_execute_device_id)
         cmd += self._cfg_require(opt="ENABLE_STEST_DUMP_JSON", ctr=self.dump_json)
         cmd += self._cfg_require(opt="ENABLE_STEST_INTERPRETER_CONFIG", ctr=self.interpreter_config)
         cmd += self._cfg_require(opt="ENABLE_STEST_BINARY_CACHE", ctr=self.enable_binary_cache)
@@ -490,8 +481,7 @@ class STestToolsParam(CMakeParam):
         self.prof_max_cnt = args.prof_max_cnt[0] if args.prof_max_cnt else None
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF", ctr=self.prof_enable)
+        cmd = self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF", ctr=self.prof_enable)
 
         # 当前 tools 下仅支持 prof 工具, 当其未使能时, 不需设置其他 option
         if not self.prof_enable:
@@ -532,7 +522,7 @@ class TestsParam(CMakeParam):
         self.example: TestsFilterParam = TestsFilterParam(argv=args.example)
 
     def __str__(self):
-        desc: str = ""
+        desc = ""
         if self.enable:
             desc += f"\nTests"
             desc += f"\n    Execute"
@@ -595,8 +585,7 @@ class TestsParam(CMakeParam):
         TestsFilterParam.reg_args(parser=parser, ext="example")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
-        cmd += self.utest.get_cfg_cmd()
+        cmd = self.utest.get_cfg_cmd()
         cmd += self.stest.get_cfg_cmd()
         cmd += self.stest_distributed.get_cfg_cmd()
         cmd += self.example.get_cfg_cmd()
@@ -780,8 +769,8 @@ class BuildCtrl(CMakeParam):
             raise RuntimeError(f"Can't find cmake")
         # 表示 pip 版本是否支持传递 --config-setting 这种 pep 标准参数传递方式
         self.pip_dependence_desc: Dict[str, str] = {"pip": ">=22.1"}
-        self.pip_support_config_setting: bool = self.check_pip_dependencies(deps=self.pip_dependence_desc,
-                                                                            raise_err=False, log_err=False)
+        self.pip_support_config_setting = self.check_pip_dependencies(deps=self.pip_dependence_desc,
+                                                                      raise_err=False, log_err=False)
 
     def __str__(self):
         py3_ver = sys.version_info
@@ -813,17 +802,17 @@ class BuildCtrl(CMakeParam):
         path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
 
         # 遍历每个 PATH 目录，逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
-        valid_path_lst: List[str] = []
+        valid_path_lst = []
         for path_dir in path_dir_lst:
             # 避免 PATH 环境变量中有重复的单元
             if path_dir in valid_path_lst:
                 continue
             valid_path_lst.append(path_dir)
             # 检查当前目录
-            cmake_str: Optional[Union[Path, str]] = shutil.which("cmake", path=path_dir)
+            cmake_str = shutil.which("cmake", path=path_dir)
             if not cmake_str:
                 continue
-            cmake_file: Path = Path(cmake_str).resolve()
+            cmake_file = Path(cmake_str).resolve()
             if not cmake_file.exists() or not cmake_file.is_file():
                 continue
             if cmake_file.stat().st_size <= 4:  # 下文读取前 4 字节判断文件是否是 ELF 文件
@@ -859,8 +848,8 @@ class BuildCtrl(CMakeParam):
             logging.info("%s. Send terminate event to CMake[%s]", _msg, _pgid)
             os.killpg(_pgid, signal.SIGINT)
 
-        stdout: Optional[str] = None
-        stderr: Optional[str] = None
+        stdout = None
+        stderr = None
         env = os.environ.copy()
         env.update(update_env if update_env else {})
         with subprocess.Popen(shlex.split(cmd), env=env, text=True, encoding='utf-8',
@@ -892,11 +881,11 @@ class BuildCtrl(CMakeParam):
         :param path: 指定路径
         :return: whl 包路径, None 表示未找到
         """
-        cpp_desc: str = f"cp{sys.version_info.major}{sys.version_info.minor}"
-        pattern: str = f"{name}-*-{cpp_desc}-{cpp_desc}-*.whl"
+        cpp_desc = f"cp{sys.version_info.major}{sys.version_info.minor}"
+        pattern = f"{name}-*-{cpp_desc}-{cpp_desc}-*.whl"
         whl_glob = path.glob(pattern=pattern)
         whl_files = [Path(f) for f in whl_glob]
-        whl_file: Optional[Path] = whl_files[0] if whl_files else None
+        whl_file = whl_files[0] if whl_files else None
         if whl_file:
             logging.info("Success find match %s from %s", whl_file, path)
         else:
@@ -954,14 +943,14 @@ class BuildCtrl(CMakeParam):
         :param path: 指定安装路径(可选), 如果指定对应路径, 仅会在对应路径尝试卸载
         """
         if path:
-            del_lst: List[Path] = [Path(f) for f in path.glob(pattern=f"{name}-*.dist-info")]
-            pkg_dir: Path = Path(path, name)
+            del_lst = [Path(f) for f in path.glob(pattern=f"{name}-*.dist-info")]
+            pkg_dir = Path(path, name)
             if pkg_dir.exists() and pkg_dir.is_dir():
                 del_lst.append(pkg_dir)
             for p in del_lst:
                 shutil.rmtree(p)
         else:
-            cmd: str = f"{sys.executable} -m pip uninstall -v -y {name}"
+            cmd = f"{sys.executable} -m pip uninstall -v -y {name}"
             ret = cls.run_build_cmd(cmd=cmd, check=True)
             ret.check_returncode()
         logging.info("Success uninstall %s package%s", name, f" from {path}" if path else "")
@@ -970,7 +959,7 @@ class BuildCtrl(CMakeParam):
     def check_pip_dependencies(cls, deps: Dict[str, str], raise_err: bool = False, log_err: bool = True) -> bool:
         info_lst = []
         for pkg, ver in deps.items():
-            info: List[str] = cls._check_pip_pkg(pkg=pkg, ver=ver)
+            info = cls._check_pip_pkg(pkg=pkg, ver=ver)
             info_lst.extend(info)
         if info_lst:
             if log_err:
@@ -985,7 +974,7 @@ class BuildCtrl(CMakeParam):
     @classmethod
     def _check_pip_pkg(cls, pkg: str, ver: str) -> List[str]:
         info_lst = []
-        requirement_str: str = f"{pkg}{ver}"
+        requirement_str = f"{pkg}{ver}"
         try:
             req = requirements.Requirement(requirement_str)
             try:
@@ -999,13 +988,12 @@ class BuildCtrl(CMakeParam):
         return info_lst
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd: str = ""
-        cmd += self._cfg_require(opt=f"PYPTO_THIRD_PARTY_PATH", ctr=bool(self.third_party_path),
-                                 tv=f"{self.third_party_path}")
+        cmd = self._cfg_require(opt=f"PYPTO_THIRD_PARTY_PATH", ctr=bool(self.third_party_path),
+                                tv=f"{self.third_party_path}")
         return cmd
 
     def get_cfg_update_env(self) -> Dict[str, str]:
-        env: Dict[str, str] = {}
+        env = {}
         if self.third_party_path:
             env.update({"PYPTO_THIRD_PARTY_PATH": self.third_party_path})
         return env
@@ -1020,13 +1008,13 @@ class BuildCtrl(CMakeParam):
         :param update_env:
         """
         ts = datetime.now(tz=timezone.utc)
-        edit_str: str = "-e " if self.feature.whl_editable else ""
-        cmd: str = f"{sys.executable} -m pip install {edit_str}" + f"{whl} {opt}" + (" -vvv " if self.verbose else "")
+        edit_str = "-e " if self.feature.whl_editable else ""
+        cmd = f"{sys.executable} -m pip install {edit_str}" + f"{whl} {opt}" + (" -vvv " if self.verbose else "")
         cmd += f" --target={dest}" if dest else ""
         logging.info("Begin install %s, cmd: %s", whl, cmd)
         ret = self.run_build_cmd(cmd=cmd, check=True, update_env=update_env)
         ret.check_returncode()
-        duration: int = int((datetime.now(tz=timezone.utc) - ts).seconds)
+        duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
         logging.info("Success install %s%s, Duration %s sec", whl, f" to {dest}" if dest else "", duration)
 
     def cmake_clean(self):
@@ -1044,8 +1032,8 @@ class BuildCtrl(CMakeParam):
         self.cmake_clean()
         if not self.build.clean:
             return
-        pkg_src: Path = Path(self.src_root, "python/pypto")
-        path_lst: List[Path] = [
+        pkg_src = Path(self.src_root, "python/pypto")
+        path_lst = [
             Path(Path.cwd(), "output"),
             Path(Path.cwd(), "kernel_meta"),
             Path(self.src_root, "python/pypto.egg-info"),
@@ -1054,7 +1042,7 @@ class BuildCtrl(CMakeParam):
             Path(pkg_src, "lib"),  # edit 模式
         ]
         so_glob = pkg_src.glob(pattern=f"*.so")
-        so_path: List[Path] = [Path(p) for p in so_glob]
+        so_path = [Path(p) for p in so_glob]
         path_lst.extend(so_path)
         for cache_dir in path_lst:
             if not cache_dir.exists():
@@ -1069,14 +1057,14 @@ class BuildCtrl(CMakeParam):
         """CMake Configure 阶段流程.
         """
         # 基本配置, 当前 CMake 中有调用 python3 的情况, 传入 python3 解释器, 保证所使用的 python3 版本一致
-        cmd: str = f"{self.cmake} -S {self.src_root} -B {self.build_root}"
+        cmd = f"{self.cmake} -S {self.src_root} -B {self.build_root}"
         cmd += f" -G {self.build.generator}" if self.build.generator else ""
         cmd += f" -DPython3_EXECUTABLE={sys.executable}"
         cmd += self.feature.get_cfg_cmd()
         cmd += self.build.get_cfg_cmd()
         cmd += self.tests.get_cfg_cmd()
         # 执行
-        update_env: Dict[str, str] = self.get_cfg_update_env()
+        update_env = self.get_cfg_update_env()
         logging.info("CMake Configure, Cmd: %s", cmd)
         ret = self.run_build_cmd(cmd=cmd, update_env=update_env, check=True)
         ret.check_returncode()
@@ -1090,7 +1078,7 @@ class BuildCtrl(CMakeParam):
             update_env = wf.ini(self.build_root, self.model.prof, self.model.pe)
         if self.build.job_num:
             update_env["PYPTO_UTEST_PARALLEL_NUM"] = str(self.build.job_num)
-        cmd_list: List[str] = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
+        cmd_list = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
         for i, c in enumerate(cmd_list, start=1):
             ts = datetime.now(tz=timezone.utc)
             c += " --verbose" if self.verbose else ""
@@ -1104,10 +1092,9 @@ class BuildCtrl(CMakeParam):
                     wf.work_flow_plot(self.build_root, self.model.prof, self.model.pe)
                 raise
             ret.check_returncode()
-            duration: int = int((datetime.now(tz=timezone.utc) - ts).seconds)
-            duration_str: str = f"{duration}/{self.build.timeout}" if self.build.timeout else f"{duration}"
-            logging.info("CMake Build(%s/%s), Cmd: %s, Duration %s sec",
-                         i, len(cmd_list), c, duration_str)
+            duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
+            duration_str = f"{duration}/{self.build.timeout}" if self.build.timeout else f"{duration}"
+            logging.info("CMake Build(%s/%s), Cmd: %s, Duration %s sec", i, len(cmd_list), c, duration_str)
             # 超时时长更新, 当指定多 target 时, 各 target 共享总超时时长
             self.build.timeout = self.build.timeout - duration if self.build.timeout else self.build.timeout
         # 一键绘图
@@ -1123,9 +1110,9 @@ class BuildCtrl(CMakeParam):
                 1. 常规安装: 适用于生产环境或代码稳定后使用, 其安装后对源码的修改不会反映到已安装的包中;
                 2. 可编辑安装: 便于开发调试. 它在 site-packages 中创建指向本地的链接, 对 Python 源码的修改会即时生效, 无需重新安装;
         """
-        update_env: Dict[str, str] = self.get_cfg_update_env()
+        update_env = self.get_cfg_update_env()
         if self._use_pip_install_mode() or self.feature.whl_editable:
-            opt: str = f" --no-compile --no-deps"
+            opt = f" --no-compile --no-deps"
             opt += f" --no-build-isolation" if not self.feature.whl_isolation else ""
 
             cmd_config_setting, env_config_setting = self._get_setuptools_build_ext_config_setting()
@@ -1139,32 +1126,32 @@ class BuildCtrl(CMakeParam):
                     update_env["PYPTO_BUILD_EXT_ARGS"] = env_config_setting
 
             # 重装 whl 包
-            dist: Optional[Path] = self._get_pip_install_dist()
+            dist = self._get_pip_install_dist()
             self.pip_uninstall(name=self.feature.whl_name, path=dist)
             self.pip_install(whl=self.src_root, dest=dist, opt=opt, update_env=update_env)
         else:
             # 检查 build 包版本是否符合要求, 之所以将其放在此处检查, 是因为 pyproject.toml 中 build-system.requires 的检查功能
             # 就是 build 包实现的, 所以将其写在 pyproject.toml 中并无法提前检查
             self.check_pip_dependencies(deps={"build": ">=1.0.3"}, raise_err=True, log_err=True)
-            cmd: str = f"{sys.executable} -m build --outdir={self.install_root}"
+            cmd = f"{sys.executable} -m build --outdir={self.install_root}"
             cmd += f" --no-isolation" if not self.feature.whl_isolation else ""
             cmd += f" {self._get_setuptools_bdist_wheel_config_setting()}"
             ts = datetime.now(tz=timezone.utc)
             logging.info("Begin Build whl, Cmd: %s", cmd)
             ret = self.run_build_cmd(cmd=cmd, update_env=update_env, check=True, timeout=self.build.timeout)
             ret.check_returncode()
-            duration: int = int((datetime.now(tz=timezone.utc) - ts).seconds)
-            duration_str: str = f"{duration}/{self.build.timeout}" if self.build.timeout else f"{duration}"
+            duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
+            duration_str = f"{duration}/{self.build.timeout}" if self.build.timeout else f"{duration}"
             logging.info("Success Build whl, Cmd: %s, Duration %s sec", cmd, duration_str)
 
     def py_tests(self):
         if not self.tests.utest.enable and not self.tests.stest.enable and not self.tests.example.enable:
             return
-        dist: Optional[Path] = self._get_pip_install_dist()
+        dist = self._get_pip_install_dist()
         if not self._use_pip_install_mode():
             # 此时需查找重装对应 whl 包
             self.pip_uninstall(name=self.feature.whl_name, path=dist)  # 卸载 whl 包
-            whl: Optional[Path] = self.find_match_whl(name=self.feature.whl_name, path=dist)  # 查找 whl 包
+            whl = self.find_match_whl(name=self.feature.whl_name, path=dist)  # 查找 whl 包
             if not whl:
                 raise RuntimeError(f"Can't find {self.feature.whl_name} whl file from {dist}")
             self.pip_install(whl=whl, dest=dist, opt="--no-compile --no-deps")  # 安装 whl 包
@@ -1199,7 +1186,7 @@ class BuildCtrl(CMakeParam):
         if not tests.enable:
             return
         # filter 处理
-        filter_str: str = tests.get_filter_str(def_filter=def_filter)
+        filter_str = tests.get_filter_str(def_filter=def_filter)
         # 执行 pytest
         self._py_tests_run_pytest(dist=dist, filter_str=filter_str, ext=ext)
 
@@ -1209,20 +1196,20 @@ class BuildCtrl(CMakeParam):
         # filter 处理
         filter_str = filter_str.replace(',', ' ')
         # cmd 拼接
-        cmd: str = f"{sys.executable} -m pytest {filter_str} -v --durations=0 -s --capture=no"
+        cmd = f"{sys.executable} -m pytest {filter_str} -v --durations=0 -s --capture=no"
         cmd += f" --rootdir={self.src_root} {ext} --forked"
         # cmd 执行
         origin_env = os.environ.copy()
-        update_env: Dict[str, str] = {}
+        update_env = {}
         if dist:
-            ori_env_python_path: str = origin_env.get(self._PYTHONPATH, "")
-            act_env_python_path: str = f"{dist}:{ori_env_python_path}" if ori_env_python_path else f"{dist}"
+            ori_env_python_path = origin_env.get(self._PYTHONPATH, "")
+            act_env_python_path = f"{dist}:{ori_env_python_path}" if ori_env_python_path else f"{dist}"
             update_env.update({self._PYTHONPATH: act_env_python_path})
         ts = datetime.now(tz=timezone.utc)
         logging.info("pytest run, Cmd: %s", cmd)
         ret = self.run_build_cmd(cmd=cmd, check=True, update_env=update_env)
         ret.check_returncode()
-        duration: int = int((datetime.now(tz=timezone.utc) - ts).seconds)
+        duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
         logging.info("pytest run, Cmd: %s, Duration %s sec", cmd, duration)
 
     def _tests_enable(self) -> bool:
@@ -1237,19 +1224,18 @@ class BuildCtrl(CMakeParam):
 
     def _get_setuptools_build_ext_config_setting(self) -> Tuple[str, str]:
         cmake_args = f"{self.build.get_cfg_cmd(ext=False)}"
-        env_setting: str = ""
+        env_setting = ""
         env_setting += f" --cmake-generator={self.build.generator}" if self.build.generator else ""
         env_setting += f" --cmake-build-type={self.build.build_type}" if self.build.build_type else ""
         env_setting += f" --cmake-options=\"{cmake_args}\"" if cmake_args else ""
         env_setting += f" --cmake-verbose" if self.verbose else ""
-        cmd_setting: str = ""
+        cmd_setting = ""
         if env_setting:
             cmd_setting = f" --config-setting=--build-option='build_ext {env_setting}'"
         return cmd_setting, env_setting
 
     def _get_setuptools_bdist_wheel_config_setting(self) -> str:
-        cmd: str = ""
-        cmd += f" bdist_wheel --plat-name={self.feature.whl_plat_name}" if self.feature.whl_plat_name else ""
+        cmd = f" bdist_wheel --plat-name={self.feature.whl_plat_name}" if self.feature.whl_plat_name else ""
         cmd += f" build --build-base={self.build_root.name}"
         cmd += f" --parallel={self.build.job_num}" if self.build.job_num else ""
         _, ext = self._get_setuptools_build_ext_config_setting()

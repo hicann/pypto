@@ -35,7 +35,7 @@ class ToolsRunAbcSp(ToolsRunAbc, ABC):
         return super().brief + datas
 
     def process(self) -> bool:
-        rst: bool = True
+        rst = True
         for cs in self.case_list:
             rst = rst and self.process_case(cs=cs, device_id=self.device_id)
             if not rst and self.halt_on_error:
@@ -84,8 +84,7 @@ class ToolsRunAbcSp(ToolsRunAbc, ABC):
             heads, ds = cs.brief
             datas.append(ds)
         if len(datas) != 0:
-            out: str = ""
-            out += f"{self.__class__.__name__} post, InterceptFlag({self.intercept}), "
+            out = f"{self.__class__.__name__} post, InterceptFlag({self.intercept}), "
             out += f"Total execute {len(self.case_list)} cases, has {len(datas)} failed case brief below:\n"
             out += Table.table(datas=datas, headers=heads)
             if self.intercept:

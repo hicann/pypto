@@ -41,11 +41,11 @@ class UTestAccelerate(GTestAccelerate):
                             help="Specific parallel accelerate job num.")
         # 流程处理
         args = parser.parse_args()
-        params: List[GTestAccelerate.ExecParam] = []
+        params = []
 
         # 获取job_num
         if args.job_num:
-            job_num: int = args.job_num
+            job_num = args.job_num
         else:
             if os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", 0):
                 job_num = int(os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL"), 0)
@@ -53,7 +53,7 @@ class UTestAccelerate(GTestAccelerate):
                 job_num = int(os.environ.get("PYPTO_UTEST_PARALLEL_NUM", 0))
             else:
                 job_num = int(math.ceil(float(cpu_count()) * 0.8))    # use 0.8 cpu
-        job_num: int = min(min(min(max(int(job_num), 1), cpu_count()), 16), len(args.cases))
+        job_num = min(min(min(max(int(job_num), 1), cpu_count()), 16), len(args.cases))
 
         for job_idx in range(job_num):
             params.append(GTestAccelerate.ExecParam(cntr_id=job_idx))

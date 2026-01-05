@@ -94,7 +94,7 @@ class ToolsCtrl:
         if 'processor' in args:
             ts = datetime.now(tz=timezone.utc)
             tools = args.processor(args=args)
-            ret: bool = tools.clean()
+            ret = tools.clean()
             ret = ret and tools.prepare()
             ret = ret and tools.process()
             ret = ret and tools.post()

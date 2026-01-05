@@ -32,7 +32,7 @@ class Analysis:
 
     def __str__(self) -> str:
         ver = sys.version_info
-        desc: str = "\n"
+        desc = "\n"
         desc += f"\nEnviron"
         desc += f"\n  Output  : {self.output}"
         desc += f"\n  Python3 : {sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"
@@ -72,7 +72,7 @@ class Analysis:
 
         :return: pybind11_DIR
         """
-        pybind11_dir: Optional[Path] = None
+        pybind11_dir = None
         try:
             import pybind11
             pybind11_dir = Path(pybind11.get_cmake_dir()).resolve()
@@ -81,7 +81,7 @@ class Analysis:
         return str(pybind11_dir) if pybind11_dir else ""
 
     def analysis(self):
-        lines: List[str] = [
+        lines = [
             f'\n# Python3 Version',
             f'\nset(PYTHON3_VERSION_ID "{self.interpreter_version}")',
             '\nmessage(STATUS "PYTHON3_VERSION_ID=${PYTHON3_VERSION_ID}")',

@@ -92,12 +92,12 @@ class GoldenRegister:
         #   TestSuiteName.TestCaseName
         #   TestInstanceName/TestSuiteName.TestCaseName
         #   TestInstanceName/TestSuiteName.TestCaseName/{int}
-        cs: str = case_name.replace("*", "")
+        cs = case_name.replace("*", "")
         cs = cs[:-1] if cs.endswith("/") else cs
 
         # 提取用例编号(可选)
-        cs_idx: Optional[int] = None
-        cs_split: List[str] = cs.split("/")
+        cs_idx = None
+        cs_split = cs.split("/")
         if cs_split[-1].isdigit():
             cs_idx = int(cs_split[-1])
             cs_split = cs_split[:-1]

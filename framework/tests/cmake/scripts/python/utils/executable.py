@@ -34,8 +34,8 @@ class Executable:
 
     @property
     def brief(self) -> str:
-        asan: str = "ON" if "ASAN_OPTIONS" in self.envs.keys() else "OFF"
-        ubsan: str = "ON" if "UBSAN_OPTIONS" in self.envs.keys() else "OFF"
+        asan = "ON" if "ASAN_OPTIONS" in self.envs.keys() else "OFF"
+        ubsan = "ON" if "UBSAN_OPTIONS" in self.envs.keys() else "OFF"
         return f"({self.file.name}) XSAN(ASAN:{asan} UBSAN:{ubsan})"
 
     def run(self, gtest_filter: str,
@@ -47,14 +47,14 @@ class Executable:
         :return: subprocess.CompletedProcess 执行结果
         :raise subprocess.TimeoutExpired: timeout 指定且执行超时
         """
-        cmd: str = (f"{sys.executable} " if self.file.name.endswith(".py") else "./") + f"{self.file.name} "
+        cmd = (f"{sys.executable} " if self.file.name.endswith(".py") else "./") + f"{self.file.name} "
         cmd += f"--gtest_filter={gtest_filter}"
         # 环境变量优先级: 函数参数指定 > 类内环境变量(命令行参数指定) > 系统内已有的
         envs = envs if envs is not None else {}
         act_env = os.environ.copy()  # 系统环境变量
         act_env.update(self.envs)  # 额外指定环境变量
         act_env.update(envs)  # 函数调用时指定的环境变量
-        cwd: str = str(self.file.parent)
+        cwd = str(self.file.parent)
         ts = datetime.now(tz=timezone.utc)
         ret = subprocess.run(shlex.split(cmd), env=act_env, cwd=cwd, timeout=self.timeout,
                              capture_output=True, check=False, text=True, encoding='utf-8')

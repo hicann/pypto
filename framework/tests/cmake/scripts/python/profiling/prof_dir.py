@@ -72,16 +72,16 @@ class ProfDir:
         task_info_csv_file: Path = Path(self._rest_dir, "work_flow/tilefwk_task_info.csv")
         if not task_info_csv_file.exists():
             self._rest_dir.mkdir(parents=True, exist_ok=True)
-            wf_py: Path = Path(self._src_root, "tools/tilefwk_prof_data_parser.py")
-            cmd: str = f"{sys.executable} {wf_py} -p {self._data_dir} --output=work_flow"
+            wf_py = Path(self._src_root, "tools/tilefwk_prof_data_parser.py")
+            cmd = f"{sys.executable} {wf_py} -p {self._data_dir} --output=work_flow"
             ret = subprocess.run(shlex.split(cmd), cwd=self._rest_dir,
                                  capture_output=True, check=False, text=True, encoding='utf-8')
             if ret.returncode:
                 logging.error("Cmd[%s] failed, RetCode[%s]\nstdout:\n%s\nstderr:\n%s",
                               cmd, ret.returncode, ret.stdout, ret.stderr)
                 raise subprocess.CalledProcessError(ret.returncode, ret.args, ret.stdout, ret.stderr)
-        t_min: int = int(sys.maxsize)
-        t_max: int = -1
+        t_min = int(sys.maxsize)
+        t_max = -1
         with open(task_info_csv_file, mode='r', newline='', encoding='utf-8') as fp:
             csv_reader = csv.DictReader(fp)
             lines = list(csv_reader)
@@ -93,12 +93,12 @@ class ProfDir:
         self._rest.update(k=ProfCase.FieldType.Cycle.value, v=(t_max - t_min))
 
     def parse_perfetto(self):
-        prof_log_json: Path = Path(self._rest_dir, "work_flow/tilefwk_prof_data.json")
-        topo_json: Path = Path(self.result_dump_dir, "topo.json")
+        prof_log_json = Path(self._rest_dir, "work_flow/tilefwk_prof_data.json")
+        topo_json = Path(self.result_dump_dir, "topo.json")
         if prof_log_json.exists() and topo_json.exists():
             # 多卡预热场景下, 暂无法获取准确 json, 暂不支持 perfetto 输出
-            py: Path = Path(self._src_root, "tools/draw_swim_lane.py")
-            cmd: str = f"{sys.executable} {py} {prof_log_json} {topo_json}"
+            py = Path(self._src_root, "tools/draw_swim_lane.py")
+            cmd = f"{sys.executable} {py} {prof_log_json} {topo_json}"
             ret = subprocess.run(shlex.split(cmd), cwd=self._src_root,
                                  capture_output=True, check=False, text=True, encoding='utf-8')
             if ret.returncode:

@@ -59,7 +59,7 @@ class ArgsGTestFilterListAction(argparse.Action):
     def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: List[str],
                  option_string: Optional[str] = None) -> None:
         # 解析每个字符串，按冒号分隔并展平
-        case_list: List[str] = []
+        case_list = []
 
         target = getattr(namespace, 'target')
         if (len(values) == 1 and values[0] == "*"):

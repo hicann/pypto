@@ -39,8 +39,7 @@ class Analysis:
         self.target_include_illegal: Dict[Path, List[Path]] = {}
 
     def __str__(self) -> str:
-        desc: str = ""
-        desc += f"\nBinaryHeaderAnalysis:"
+        desc = f"\nBinaryHeaderAnalysis:"
         desc += f"\n    Source          : {self.source}"
         desc += f"\n    Binary          : {self.binary}"
         desc += f"\n    Target          : {self.target_file}"
@@ -82,13 +81,13 @@ class Analysis:
         if not o.exists():
             logging.error("%s object-file not exist, %s", self.target_name, o)
             return False
-        d: Path = Path(str(o) + ".d")
+        d = Path(str(o) + ".d")
         d = d if d.exists() else o.with_suffix(".d")
         if not d.exists():
             logging.error("%s dependence-file not exist, %s", self.target_name, d)
             return False
         # 解析 .d 获取具体 .h 依赖列表
-        h_lst: List[Path] = []
+        h_lst = []
         with open(d, mode='r', encoding='utf-8', errors="ignore") as fh:
             for _, line in enumerate(fh, 1):
                 # 去除首尾空白字符, 规范化路径

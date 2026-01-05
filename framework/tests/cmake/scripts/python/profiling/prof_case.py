@@ -49,9 +49,9 @@ class ProfCase(CaseAbc):
                  try_cnt: Optional[int] = None,
                  max_cnt: Optional[int] = None):
         super().__init__(desc)
-        warn_up: int = warn_up_cnt if warn_up_cnt is not None and warn_up_cnt >= 0 else self.prof_warn_up_cnt
-        try_cnt: int = max(try_cnt if try_cnt is not None and try_cnt >= 0 else self.prof_try_cnt, 1)
-        max_cnt: int = max(min(try_cnt, max_cnt if max_cnt is not None and max_cnt >= 0 else self.prof_max_cnt), 1)
+        warn_up = warn_up_cnt if warn_up_cnt is not None and warn_up_cnt >= 0 else self.prof_warn_up_cnt
+        try_cnt = max(try_cnt if try_cnt is not None and try_cnt >= 0 else self.prof_try_cnt, 1)
+        max_cnt = max(min(try_cnt, max_cnt if max_cnt is not None and max_cnt >= 0 else self.prof_max_cnt), 1)
         self._fields_dict.update({self.FieldType.ProfWarnUpCnt.value: warn_up,
                                   self.FieldType.ProfTryCnt.value: try_cnt,
                                   self.FieldType.ProfMaxCnt.value: max_cnt})

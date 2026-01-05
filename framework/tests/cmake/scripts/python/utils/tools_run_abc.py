@@ -70,8 +70,8 @@ class ToolsRunAbc(ToolsAbc, ABC):
         return super().brief + datas
 
     def init_case_lines(self, args):
-        cases_names: str = args.cases[0] if args.cases else ""
-        cases_csv: Path = Path(args.cases_csv_file[0]).resolve() if args.cases_csv_file else None
+        cases_names = args.cases[0] if args.cases else ""
+        cases_csv = Path(args.cases_csv_file[0]).resolve() if args.cases_csv_file else None
         # cases lines
         if cases_names == "":  # 未指定 --cases, 使用 .csv
             if cases_csv is None:
@@ -100,7 +100,7 @@ class ToolsRunAbc(ToolsAbc, ABC):
 
     def clean(self) -> bool:
         if self.clean_flg:
-            output_tools_name: str = Path(self.output_root).parent.name
+            output_tools_name = Path(self.output_root).parent.name
             output_tools_dir = Path(Path(self.output_root, "../../"), output_tools_name).resolve()
             if output_tools_dir.exists():
                 shutil.rmtree(output_tools_dir)
@@ -108,8 +108,8 @@ class ToolsRunAbc(ToolsAbc, ABC):
 
     def prepare(self) -> bool:
         # Golden 生成
-        cases_name_str: str = ":".join([c.name for c in self.case_list])
-        golden_ctrl_py: Path = Path(self.source_root, "framework/tests/cmake/scripts/golden_ctrl.py")
+        cases_name_str = ":".join([c.name for c in self.case_list])
+        golden_ctrl_py = Path(self.source_root, "framework/tests/cmake/scripts/golden_ctrl.py")
         cmd = f"{sys.executable} {golden_ctrl_py} -o={self.cases_golden_output_path} -c={cases_name_str}"
         for imp_d in self.cases_golden_impl_path:
             cmd += f" --path={imp_d}"

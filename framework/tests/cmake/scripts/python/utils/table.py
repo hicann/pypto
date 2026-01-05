@@ -30,12 +30,12 @@ class Table:
         :return: 格式化后的网格表格字符串
         """
         # 归一化为列数相等的表格, 并计算各列所需的最大字符串长度
-        _heads: Optional[List[Any]] = None if headers is None else copy.deepcopy(headers)
-        _datas: List[List[Any]] = copy.deepcopy(datas)
+        _heads = None if headers is None else copy.deepcopy(headers)
+        _datas = copy.deepcopy(datas)
         if _heads is not None:
             _datas.append(_heads)
-        col_num: int = max(len(row) for row in _datas)
-        col_widths: List[int] = [0] * col_num
+        col_num = max(len(row) for row in _datas)
+        col_widths = [0] * col_num
         for i, row in enumerate(_datas):
             if len(row) < col_num:
                 _datas[i] = row + [""] * (col_num - len(row))
@@ -49,7 +49,7 @@ class Table:
 
         # 构造表头(如果有)
         separator = Table._make_separator(widths=col_widths, width_max=col_width_max, div='-')
-        lines: List[str] = []
+        lines = []
         if headers is not None:
             lines.append(separator)
             lines.append(Table._make_details(widths=col_widths, datas=_heads, width_max=col_width_max))
@@ -74,7 +74,7 @@ class Table:
         :param div: division 行中某元素点字符
         :return 分割线字符串
         """
-        line: str = cross
+        line = cross
         for width in widths:
             width = min(width, width_max)
             line += div * (width + 2) + cross
@@ -90,7 +90,7 @@ class Table:
         :param mode: 单元素对齐方式
         :return: 数据行字符串
         """
-        line: str = "|"
+        line = "|"
         mode = mode.lower()
         for idx, ele in enumerate(datas):
             ele = str(ele)

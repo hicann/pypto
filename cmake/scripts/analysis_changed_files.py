@@ -44,7 +44,7 @@ class Module:
             return True, self.cases
         # 当所有 changed 均命中白名单, 无需触发
         for c in changed:
-            c_skip: bool = False
+            c_skip = False
             for w in self.write:
                 if self._relative_to(c, w):
                     c_skip = True
@@ -71,8 +71,7 @@ class Analysis:
 
     def __str__(self) -> str:
         ver = sys.version_info
-        desc: str = ""
-        desc += f"\nPython3 : {sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"
+        desc = f"\nPython3 : {sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"
         desc += f"\nRule    : {self.rule}"
         desc += f"\nType    : {self.type}"
         desc += f"\nGroup   : {self.group}"
@@ -105,65 +104,65 @@ class Analysis:
             ]
         )
         # 参数解析
-        ctrl: Analysis = Analysis(args=args)
+        ctrl = Analysis(args=args)
         logging.info(ctrl)
         # 流程处理
         return ctrl.analysis()
 
     def analysis(self) -> str:
-        cases: List[str] = self._analysis_cases()
-        cases_str: str = ",".join(cases) if cases else ""
+        cases = self._analysis_cases()
+        cases_str = ",".join(cases) if cases else ""
         return cases_str
 
     def _get_write_list(self, _desc: Dict[str, Any]) -> List[Path]:
-        _lst: List[str] = _desc.get(self._KEY_WRITE_LIST, [])
+        _lst = _desc.get(self._KEY_WRITE_LIST, [])
         _lst = _lst if _lst else []
-        _rst: List[Path] = [Path(_rel) for _rel in _lst]
+        _rst = [Path(_rel) for _rel in _lst]
         _desc.pop(self._KEY_WRITE_LIST, None)
         return _rst
 
     def _init_get_models_from_file(self, file: Path, write_list: List[Path] = None) -> Dict[str, Module]:
-        modules: Dict[str, Module] = {}
+        modules = {}
         with open(file, 'r', encoding='utf-8') as f:
-            rule_dict: Optional[Dict[str, Any]] = yaml.safe_load(f)
+            rule_dict = yaml.safe_load(f)
         rule_dict = rule_dict.get(self.type, {})
         # 处理 type 下白名单
-        type_write_list: List[Path] = self._get_write_list(_desc=rule_dict)
+        type_write_list = self._get_write_list(_desc=rule_dict)
         type_write_list = write_list if write_list else type_write_list
         # 循环处理 module
         for name, desc in rule_dict.items():
             # 处理 module 下白名单
-            write_list: List[Path] = self._get_write_list(_desc=desc)
+            write_list = self._get_write_list(_desc=desc)
             write_list.extend(type_write_list)
             # 获取 module 下用例列表
-            cases_list: List[str] = desc.get(self._KEY_CASES, [])
+            cases_list = desc.get(self._KEY_CASES, [])
             mod = Module(name=name, cases=cases_list, write=write_list)
             modules[name] = mod
         return modules
 
     def _init_get_models(self) -> Dict[str, Module]:
         yaml_lst = self.rule.glob(pattern=f"classify_rule_*.yaml")
-        modules: Dict[str, Module] = {}
+        modules = {}
         rule_file = self.rule.joinpath(f"classify_rule_{self.type}.yaml")
         with open(rule_file, 'r', encoding='utf-8') as f:
-            rule_dict: Optional[Dict[str, Any]] = yaml.safe_load(f)
+            rule_dict = yaml.safe_load(f)
         write_list = self._get_write_list(_desc=rule_dict.get(self.type, {}))
         for file in yaml_lst:
-            file_module: Dict[str, Module] = self._init_get_models_from_file(file=file, write_list=write_list)
+            file_module = self._init_get_models_from_file(file=file, write_list=write_list)
             modules.update(file_module)
         return modules
 
     def _init_get_changed(self) -> List[Path]:
-        changed: List[Path] = []
+        changed = []
         if self.file:
             with open(self.file, 'r', encoding='utf-8') as f:
-                changed: List[Path] = [Path(l.rstrip('\n')) for l in f]
+                changed = [Path(l.rstrip('\n')) for l in f]
         return changed
 
     def _analysis_cases(self) -> List[str]:
-        cases: List[str] = []
+        cases = []
         for module in self.modules.values():
-            match_group: bool = False if self.group else True
+            match_group = False if self.group else True
             for group in self.group:
                 # 支持 group 名称模糊匹配
                 if fnmatch.fnmatch(module.name, group):

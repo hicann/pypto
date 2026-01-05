@@ -32,15 +32,15 @@ class Analysis:
 
     def __str__(self):
         # 结果
-        str_1: str = ""
+        str_1 = ""
         if self.print_defined_relations:
             str_1 = f"\nDefined:\n\t"
             str_1 += "\n\t".join(self.defined_relations)
-        str_2: str = ""
+        str_2 = ""
         if len(self.undefined_symbols_self) != 0:
             str_2 += f"\nUnDefined-Self({len(self.undefined_symbols_self)}):\n\t"
             str_2 += "\n\t".join(self.undefined_symbols_self)
-        str_3: str = ""
+        str_3 = ""
         if len(self.undefined_symbols_pass) != 0:
             str_3 += f"\nUnDefined-Pass({len(self.undefined_symbols_pass)}):\n\t"
             str_3 += "\n\t".join(self.undefined_symbols_pass)
@@ -56,7 +56,7 @@ class Analysis:
     def analysis(self) -> bool:
         ts = datetime.now(tz=timezone.utc)
         # 获取二进制自身未定义原始符号范围
-        ori_undefined_symbols_self: List[str] = self._analysis_ori_undefined_symbols_self()
+        ori_undefined_symbols_self = self._analysis_ori_undefined_symbols_self()
 
         # 解析二进制符号
         self._analysis_symbols(ori_undefined_symbols_self=ori_undefined_symbols_self)
@@ -69,7 +69,7 @@ class Analysis:
         ret = subprocess.run(shlex.split(cmd), capture_output=True, check=True, text=True, encoding='utf-8')
         ret.check_returncode()
         lines = str(ret.stdout)
-        ori_undefined_symbols_self: List[str] = []
+        ori_undefined_symbols_self = []
         for line in lines.splitlines():
             ori_symbol = line.strip().split()[1]
             ori_undefined_symbols_self.append(ori_symbol)
