@@ -420,4 +420,8 @@ void ShmemMoeCombine(const Tensor& in, const Tensor& combineInfo, const Tensor& 
 void CreateShmemTensor(Tensor& shmemTensor, int32_t rankSize, int32_t hcclGroupIndex, DataType dataType,
     const Shape& shape, uint64_t memType = 0);
 } // namespace Distributed
+std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, int idxStart);
+std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, const SymbolicScalar &idxStart); 
+Tensor TopKExtract(const Tensor &x, int k, bool isIndex);
+Tensor TopKMerge(const Tensor &x, int mergeSize);
 } // namespace npu::tile_fwk

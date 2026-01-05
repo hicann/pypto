@@ -30,7 +30,7 @@ Main Functions:
     - mla_indexer_prolog_quant_d: Fused computation for decode phase
 
 Example:
-    See testdsv32_mla_indexer_prolog_quant.py for usage examples.
+    See deepseekv32_mla_indexer_prolog_quant.py for usage examples.
 """
 
 

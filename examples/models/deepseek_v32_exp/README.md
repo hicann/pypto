@@ -1,6 +1,6 @@
 # deepseek V3.2 样例 (Examples)
 
-本目录包含了一系列 PyPTO deepseek V3.2 EXP 的开发样例代码，我们对 DeepSeek-V3.2-Exp 进行了拆解，交付了四个算子：mla prolog, lightning indexer prolog, sparese flash attention, mla_indexer_prolog。
+本目录包含了一系列 PyPTO deepseek V3.2 EXP 的开发样例代码，我们对 DeepSeek-V3.2-Exp 进行了拆解，交付了五个算子：mla prolog, lightning indexer prolog, sparese flash attention, mla_indexer_prolog和lightning indexer。
 ## 参数说明/约束
 -  shape 格式字段含义说明
     | 字段名       | 英文全称/含义                  | 取值规则与说明                                                                 |
@@ -84,18 +84,18 @@ def mla_prolog_quant_compute(token_x, w_dq, w_uq_qr, dequant_scale, w_uk, w_dkv_
 
 ## 参数说明
 
--   **token_x**（`Tensor`）：公式中用于计算Query和Key的输入tensor。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, h]。
+-   **token_x**（`Tensor`）：公式中用于计算Query和Key的输入tensor，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, h]。
 -   **w_dq**（`Tensor`）：公式中用于计算Query的下采样权重矩阵$W^{DQ}$，不支持非连续的 Tensor。数据格式支持NZ，数据类型支持`bfloat16`，shape为[h, q_lora_rank]。
--   **w_uq_qr**（`Tensor`）：公式中用于计算Query的上采样权重矩阵$W^{UQ}$和位置编码权重矩阵$W^{QR}$。，不支持非连续的 Tensor，数据格式支持NZ，数据类型支持`int8`，shape为[q_lora_rank, n_q * q_head_dim]。
+-   **w_uq_qr**（`Tensor`）：公式中用于计算Query的上采样权重矩阵$W^{UQ}$和位置编码权重矩阵$W^{QR}$，不支持非连续的 Tensor，数据格式支持NZ，数据类型支持`int8`，shape为[q_lora_rank, n_q * q_head_dim]。
 -   **dequant_scale**（`Tensor`）：用于MatmulQcQr矩阵乘后w_uq_qr反量化操作的per-channel参数，不支持非连续的 Tensor。数据格式支持ND，数据类型支持`float`，shape为[n_q*q_head_dim, 1]。
--   **w_uk**（`Tensor`）：公式中用于计算Key的上采样权重$W^{UK}$。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[n_q, qk_nope_head_dim, kv_lora_rank]。
--   **w_dkv_kr**（`Tensor`）：公式中用于计算Key的下采样权重矩阵$W^{DKV}$和位置编码权重矩阵$W^{KR}$。，不支持非连续的 Tensor，数据格式支持NZ，数据类型支持`bfloat16`，shape为[h, kv_lora_rank+rope_dim]。
--   **gamma_cq**（`Tensor`）：计算$c^Q$的RmsNorm公式中的$\gamma$参数。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[q_lora_rank]。
--   **gamma_ckv**（`Tensor`）：计算$c^{KV}$的RmsNorm公式中的$\gamma$参数。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[kv_lora_rank]。
--   **cos**（`Tensor`）：用于计算旋转位置编码的余弦参数矩阵。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
--   **sin**（`Tensor`）：用于计算旋转位置编码的正弦参数矩阵。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
--   **cache_index**（`Tensor`）：用于存储kv_cache和kr_cache的索引。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int64`，shape为[t]。
--   **kv_cache**（`Tensor`）：用于cache索引的aclTensor，计算结果原地更新（对应公式中的$k^C$），不支持非连续的 Tensor。数据格式支持ND，数据类型支持`int8`，cache_mode为"PA_BSND"、shape为[block_num, block_size, n_kv, kv_lora_rank]。
+-   **w_uk**（`Tensor`）：公式中用于计算Key的上采样权重$W^{UK}$，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[n_q, qk_nope_head_dim, kv_lora_rank]。
+-   **w_dkv_kr**（`Tensor`）：公式中用于计算Key的下采样权重矩阵$W^{DKV}$和位置编码权重矩阵$W^{KR}$，不支持非连续的 Tensor，数据格式支持NZ，数据类型支持`bfloat16`，shape为[h, kv_lora_rank+rope_dim]。
+-   **gamma_cq**（`Tensor`）：计算$c^Q$的RmsNorm公式中的$\gamma$参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[q_lora_rank]。
+-   **gamma_ckv**（`Tensor`）：计算$c^{KV}$的RmsNorm公式中的$\gamma$参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[kv_lora_rank]。
+-   **cos**（`Tensor`）：用于计算旋转位置编码的余弦参数矩阵，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
+-   **sin**（`Tensor`）：用于计算旋转位置编码的正弦参数矩阵，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, rope_dim]。
+-   **cache_index**（`Tensor`）：用于存储kv_cache和kr_cache的索引，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int64`，shape为[t]。
+-   **kv_cache**（`Tensor`）：用于cache索引的aclTensor，计算结果原地更新（对应公式中的$k^C$），不支持非连续的 Tensor。数据格式支持ND，数据类型支持`int8`，cache_mode为"PA_BSND"，shape为[block_num, block_size, n_kv, kv_lora_rank]。
 -   **kr_cache**（`Tensor`）：用于key位置编码的cache，计算结果原地更新（对应公式中的$k^R$），不支持非连续的 Tensor。数据格式支持ND，cache_mode为"PA_BSND"，数据类型支持`bfloat16`，cache_mode为"PA_BSND"、shape为[block_num, block_size, n_kv, rope_dim]。
 -   **k_scale_cache**（`Tensor`）：表示 key 反量化因子的缓存，必选参数，不支持非连续的 Tensor，数据格式支持 ND，cache_mode为"PA_BSND"，数据类型支持`float`，shape为[block_num, block_size, n_kv, 4]。
 -   **epsilon_cq**（`float`）：计算$c^Q$的RmsNorm公式中的$\epsilon$参数。用户未特意指定时，建议传入1e-05，仅支持double类型，默认值为1e-05。
@@ -208,18 +208,18 @@ $$
 
 ```
 def sparse_flash_attention_quant_compute(query_nope, query_rope, key_nope_2d, key_rope_2d, k_nope_scales, 
-		topk_indcies, block_table, kv_act_seqs, attention_out, nq, n_kv, softmax_scale, topk, block_size, 
+		topk_indices, block_table, kv_act_seqs, attention_out, nq, n_kv, softmax_scale, topk, block_size, 
         max_blocknum_perbatch, tile_config):
 ```
 
 ## 参数说明
 
--   **query_nope**（`Tensor`）：必选参数，表示MLA结构中的query的rope信息，，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t * n_q, kv_lora_rank]。 
--   **query_rope**（`Tensor`）：必选参数，表示MLA结构中的query的nope信息，，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t * n_q, rope_dim]。 
--   **key_nope_2d**（`Tensor`）：必选参数，表示MLA结构中的key的rope信息，，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int8`，shape为[block_num * block_size, kv_lora_rank]。 
--   **key_rope_2d**（`Tensor`）：必选参数，表示MLA结构中的key的nope信息，，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[block_num * block_size, rope_dim]。 
--   **k_nope_scales**（`Tensor`）：必选参数，表示k_nope的反量化缩放因子，必选参数，，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`float`，shape为[block_num * block_size, 4]。
--   **topk_indcies**（`Tensor`）：必选参数，表示每个token选出的topk索引，必选参数，，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int32`，shape为[t, n_kv * selected_count]。
+-   **query_nope**（`Tensor`）：必选参数，表示MLA结构中的query的rope信息，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t * n_q, kv_lora_rank]。 
+-   **query_rope**（`Tensor`）：必选参数，表示MLA结构中的query的nope信息，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t * n_q, rope_dim]。 
+-   **key_nope_2d**（`Tensor`）：必选参数，表示MLA结构中的key的rope信息，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int8`，shape为[block_num * block_size, kv_lora_rank]。 
+-   **key_rope_2d**（`Tensor`）：必选参数，表示MLA结构中的key的nope信息，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[block_num * block_size, rope_dim]。 
+-   **k_nope_scales**（`Tensor`）：必选参数，表示k_nope的反量化缩放因子，必选参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`float`，shape为[block_num * block_size, 4]。
+-   **topk_indices**（`Tensor`）：必选参数，表示每个token选出的topk索引，必选参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int32`，shape为[t, n_kv * selected_count]。
 -   **block_table**（`Tensor`）：必选参数，表示PageAttention中KV存储使用的block映射表，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int32`，shape为[b, s2_max/block_size]，其中第二维表示长度不小于所有batch中最大的s2对应的block数量，即s2_max / block_size向上取整。
 -   **kv_act_seqs**（`Tensor`）：必选参数，数据格式支持ND,表示不同Batch中`key`和`value`的有效token数，数据类型支持`int32`,shape为[b]。
 -   **nq**（`int`）：必选参数，代表缩放系数，作为query和key矩阵乘后Muls的scalar值，数据类型支持float。
@@ -238,6 +238,48 @@ def sparse_flash_attention_quant_compute(query_nope, query_rope, key_nope_2d, ke
 ## 调用示例
 
 -   详见[deepseekv32_sparse_flash_attention_quant.py](deepseekv32_sparse_flash_attention_quant.py)
+
+
+# sparse_attention_antiquant
+
+## 功能说明
+
+sa_antiquant是在sfa_quant基础上做的 存8算16 优化。在sfa_quant场景中，key_nope_2d，key_rope_2d 和 k_nope_scales 分别是 int8，bf16 和 fp32 类型；在后续 attention 的计算上，会离散地存储这三个 tensor，需要调三次离散访存指令去分别调用进行反量化和 concat；而 sa_antiquant 会将同一个 token 的 nope，rope 和 nope_scale 按尾轴合并在一起，仅需一条离散访存指令，总计可以节省 b * s * topk 次离散访存命令，节省搬运指令，提升搬运效率。
+
+## 函数原型
+
+```
+def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices, block_table, 
+		kv_act_seqs, attention_out, nq, n_kv, softmax_scale, topk, block_size, max_blocknum_perbatch,
+        tile_config):
+```
+
+## 参数说明
+
+-   **query_nope**（`Tensor`）：必选参数，表示MLA结构中的query的rope信息，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t * n_q, kv_lora_rank]。 
+-   **query_rope**（`Tensor`）：必选参数，表示MLA结构中的query的nope信息，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t * n_q, rope_dim]。 
+-   **nope_cache**（`Tensor`）：必选参数，表示MLA结构中的key的反量化缩放因子，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int8`，shape为[block_num * block_size, kv_lora_rank + rope_dim * 2 + 4 * scale_size]，其中scale_size=4。 
+-   **topk_indices**（`Tensor`）：必选参数，表示每个token选出的topk索引，必选参数，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int32`，shape为[t, n_kv * selected_count]。
+-   **block_table**（`Tensor`）：必选参数，表示PageAttention中KV存储使用的block映射表，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`int32`，shape为[b, s2_max/block_size]，其中第二维表示长度不小于所有batch中最大的s2对应的block数量，即s2_max / block_size向上取整。
+-   **kv_act_seqs**（`Tensor`）：必选参数，数据格式支持ND,表示不同Batch中`key`和`value`的有效token数，数据类型支持`int32`,shape为[b]。
+-   **nq**（`int`）：必选参数，代表缩放系数，作为query和key矩阵乘后Muls的scalar值，数据类型支持float。
+-   **n_kv**（`int`）：必选参数，代表缩放系数，作为query和key矩阵乘后Muls的scalar值，数据类型支持float。
+-   **softmax_scale**（`float`）：必选参数，代表缩放系数，作为query和key矩阵乘后Muls的scalar值，数据类型支持float。
+-   **topk**（`int`）：必选参数，代表选取的token个数，数据类型支持int。
+-   **block_size**（`int`）：必选参数，代表sparse阶段的block大小，数据类型支持int。
+-   **max_blocknum_perbatch**（`int`）：必选参数，每个batch最大的blocksize数量，数据类型支持int。
+-   **tile_config**（`class SaTileShapeConfig`）：TileShapeConfig配置结构体，表示tile切分配置，配置项数据类型支持int。
+
+
+## 返回值说明
+
+-   **attention_out**（`Tensor`）：公式中的输出。数据格式支持ND，数据类型支持`bfloat16`，输出shape[b * s1 * n_q, kv_lora_rank]。
+
+## 调用示例
+
+-   详见[deepseekv32_sparse_attention_antiquant.py](deepseekv32_sparse_attention_antiquant.py)
+
+
 # mla_indexer_polog_quant 
 
 ## 功能说明
@@ -257,7 +299,7 @@ def mla_indexer_prolog_quant_d(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale
 
 ## 参数说明
 
--   **token_x**（`Tensor`）：公式中用于计算Query和Key的输入tensor。，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, h]。
+-   **token_x**（`Tensor`）：公式中用于计算Query和Key的输入tensor，不支持非连续的 Tensor，数据格式支持ND，数据类型支持`bfloat16`，shape为[t, h]。
 -   **mla_w_dq**（`Tensor`）：公式中用于计算Query的下采样权重矩阵$W^{DQ}$，不支持非连续的 Tensor。数据格式支持NZ，数据类型支持`bfloat16`，shape为[h, q_lora_rank]。
 -   **mla_w_uq_qr**（`Tensor`）：公式中用于计算Query的上采样权重矩阵$W^{UQ}$和位置编码权重矩阵$W^{QR}$。不支持非连续，数据格式支持NZ，数据类型支持`int8`，shape为[q_lora_rank, n_q*q_head_dim]。
 -   **mla_dequant_scale**（`Tensor`）：用于MatmulQcQr矩阵乘后w_uq_qr反量化操作的per-channel参数，不支持非连续的 Tensor。数据格式支持ND，数据类型支持`float`，shape为[n_q*q_head_dim, 1]。
@@ -284,7 +326,7 @@ def mla_indexer_prolog_quant_d(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale
 -   **mla_epsilon_cq**（`float`）：计算$c^Q$的RmsNorm公式中的$\epsilon$参数。用户未特意指定时，建议传入1e-05，仅支持double类型，默认值为1e-05。
 -   **mla_epsilon_ckv**（`float`）：计算$c^{KV}$的RmsNorm公式中的$\epsilon$参数。用户未特意指定时，建议传入1e-05，仅支持double类型，默认值为1e-05。
 -   **mla_cache_mode**（`str`）：表示kv_cache的模式，支持"PA_BSND"
--   **mla_tile_config**（`class MlaTileConfig`）：表示mla子图的tile切分配置。。
+-   **mla_tile_config**（`class MlaTileConfig`）：表示mla子图的tile切分配置。
 -   **ip_attrs**（`class IndexerPrologQuantAttr`）：lightning indexer prolog子图计算所需的属性值，包括layernorm_epsilon_k，layout\_query，layout\_key
 -   **ip.layernorm_epsilon_k**（`float`）：表示 key layernorm 防除 0 系数，必选参数，数据类型支持`float32`。
 -   **ip.layout_query**（`str`）：可选参数，用于标识输入`query`的数据排布格式，默认值"TND"。当前仅支持 "TND"。
@@ -308,3 +350,40 @@ def mla_indexer_prolog_quant_d(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale
 
 - 详见 [deepseekv32_mla_indexer_prolog_quant.py](deepseekv32_mla_indexer_prolog_quant.py)
 
+# lightning indexer
+
+## 功能说明
+
+LightningIndexer基于一系列操作得到每一个 token 对应的 Top-$k$ 个位置。对于某个 token 对应的 Index Query $Q_{index}\in\R^{g\times d}$，给定上下文 Index Key $K_{index}\in\R^{S_{k}\times d},W\in\R^{g\times 1}$，其中 $g$ 为 GQA 对应的 group size，$d$ 为每一个头的维度，$S_{k}$ 是上下文的长度，LightningIndexer的具体计算公式如下：
+$$
+\text{Top-}k\left\{[1]_{1\times g}@\left[(W@[1]_{1\times S_{k}})\odot\text{ReLU}\left(Q_{index}@K_{index}^T\right)\right]\right\}
+$$
+
+## 函数原型
+
+```
+def lightning_indexer_decode_compute(
+    idx_query, idx_query_scale, idx_key_cache, idx_key_scale, idx_weight, act_seq_key, block_table, topk_res,
+    unroll_list, configs, selected_count):
+```
+
+## 参数说明
+
+-   **idx_query**（`Tensor`）：必选参数，不支持非连续，数据格式支持ND，数据类型支持`int8`，shape为[t, n_q, idx_head_dim]。
+-   **idx_query_scale**（`Tensor`）：必选参数，表示idx_query的缩放系数，数据格式支持ND，数据类型支持`float16`，shape为[t, n_q, idx_head_dim]。
+-   **idx_key_cache**（`Tensor`）：必选参数，不支持非连续，数据格式支持ND，数据类型支持`int8`，shape为[t, n_kv, idx_head_dim]。
+-   **idx_key_scale**（`Tensor`）：必选参数，表示idx_key_cache的缩放系数，数据格式支持ND，数据类型支持`float16`，shape为[t, n_kv, idx_head_dim]
+-   **idx_weight**（`Tensor`）：必选参数，不支持非连续，数据格式支持ND，数据类型支持`float16`，支持输入shape[t, n_q]。
+-   **act_seq_key**（`Tensor`）：必选参数，表示不同Batch中`key`的有效token数，数据类型支持`int32`, shape为[b]。
+-   **block_table**（`Tensor`）：必选参数，表示PageAttention中KV存储使用的block映射表，数据格式支持ND，数据类型支持`int32`，shape为[b, ceilDiv(max(s2), block_size)], 其中max(s2)为s2中最大值, ceilDiv表示向上取整。
+-   **unroll_list**（`List`）：非必选参数，表示多档位切分配置。
+-   **configs**（`class LightningIndexerConfigs`）：非必选参数，LightningIndexerConfigs配置结构体，表示tile切分配置和优化选项。
+-   **selected_count**（`int`）：必选参数，topk选择数量，默认为2048。
+
+## 返回值说明
+
+-   **topk_res**（`Tensor`）：公式中的输出，数据类型支持`int32`。数据格式支持ND，输出shape[t, n_kv, selected_count]。
+
+## 调用示例
+
+-   详见[deepseekv32_lightning_indexer_quant.py](deepseekv32_lightning_indexer_quant.py)

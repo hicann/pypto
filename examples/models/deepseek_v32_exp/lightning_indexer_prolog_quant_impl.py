@@ -25,7 +25,7 @@ Main Functions:
     - rope_3d: 3D RoPE computation
 
 Example:
-    See testdsv32_lightning_indexer_prolog_quant.py for usage examples.
+    See deepseekv32_lightning_indexer_prolog_quant.py for usage examples.
 """
 from dataclasses import dataclass
 import pypto

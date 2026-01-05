@@ -26,7 +26,7 @@ Main Functions:
     - k_nope_quant: Key quantization function
 
 Example:
-    See testdsv32_mla_prolog_quant.py for usage examples.
+    See deepseekv32_mla_prolog_quant.py for usage examples.
 """
 from dataclasses import dataclass
 from typing import List, Tuple

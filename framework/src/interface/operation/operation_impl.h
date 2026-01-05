@@ -142,12 +142,4 @@ struct MatmulAttrParam {
 void ConstructTileGraph(Function &function, const TileShape &tileShape, const std::vector<LogicalTensorPtr> &operandVec,
                         const LogicalTensorPtr &cTensorPtr, const Operation &op);
 }  // namespace Matrix
-
-std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, int idxStart);
-
-std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, const SymbolicScalar &idxStart);
-
-Tensor TopKExtract(const Tensor &x, int k, bool isIndex);
-
-Tensor TopKMerge(const Tensor &x, int mergeSize);
 }  // namespace npu::tile_fwk

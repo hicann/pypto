@@ -499,5 +499,49 @@ void bind_operation(py::module &m) {
     });
     m.def("ToFile", [](const Tensor &operand, const std::string &fname, const std::vector<SymbolicScalar> &scalars,
                         SymbolicScalar cond) { npu::tile_fwk::ToFile(operand, fname, scalars, cond); });
+    m.def(
+        "topk_sort",
+        [](const Tensor &x, int idx_start) {
+            auto result = npu::tile_fwk::TopKSort(x, idx_start);
+            // return as a Python tuple (y, temp)
+            return py::make_tuple(std::get<0>(result), std::get<1>(result));
+        },
+        py::arg("x"), py::arg("idx_start"),
+        "TopKSort(x, idx_start:int) -> (y, temp)\n"
+        "Performs tiled Top-K sorting starting at a scalar index.\n"
+        "Returns a tuple of (sorted_values, workspace_temp)."
+    );
+
+    m.def(
+        "topk_sort",
+        [](const Tensor &x, const SymbolicScalar &idx_start) {
+            auto result = npu::tile_fwk::TopKSort(x, idx_start);
+            return py::make_tuple(std::get<0>(result), std::get<1>(result));
+        },
+        py::arg("x"), py::arg("idx_start"),
+        "TopKSort(x, idx_start:SymbolicScalar) -> (y, temp)\n"
+        "Performs tiled Top-K sorting with a symbolic starting index.\n"
+        "Returns a tuple of (sorted_values, workspace_temp)."
+    );
+
+    m.def(
+        "topk_merge",
+        [](const Tensor &x, int merge_size) {
+            return npu::tile_fwk::TopKMerge(x, merge_size);
+        },
+        py::arg("x"), py::arg("merge_size"),
+        "TopKMerge(x, merge_size:int) -> y\n"
+        "Merges partial Top-K results into a single tensor."
+    );
+
+    m.def(
+        "topk_extract",
+        [](const Tensor &x, int k, bool is_index) {
+            return npu::tile_fwk::TopKExtract(x, k, is_index);
+        },
+        py::arg("x"), py::arg("k"), py::arg("is_index") = false,
+        "TopKExtract(x, k:int, is_index:bool=False) -> y\n"
+        "Extracts the top-k values (or indices if is_index=True)."
+    );
 }
 } // namespace pypto
