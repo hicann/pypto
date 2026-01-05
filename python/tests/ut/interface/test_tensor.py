@@ -10,6 +10,7 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
+import torch
 import pypto
 import pytest
 
@@ -109,3 +110,14 @@ def test_tensor_subs_tensor_element():
 
     assert c.shape == shape
     assert c.dtype == dtype
+
+
+def test_tensor_nz_format():
+    a = pypto.from_torch(torch.randn((64, 64)), "a", tensor_format=pypto.TileOpFormat.TILEOP_NZ)
+    assert a.format == pypto.TileOpFormat.TILEOP_NZ
+
+    b = pypto.from_torch(torch.randn((64, 64)), "b")
+    assert b.format == pypto.TileOpFormat.TILEOP_ND
+
+    c = pypto.from_torch(torch.randn((64, 64)), "c", tensor_format=pypto.TileOpFormat.TILEOP_ND)
+    assert c.format == pypto.TileOpFormat.TILEOP_ND
