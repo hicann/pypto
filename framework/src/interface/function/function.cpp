@@ -125,9 +125,6 @@ std::string DynloopFunctionPathNode::Dump() const
 std::shared_ptr<DynloopFunctionPathNode> DynloopFunctionAttribute::BuildPathNode() {
     std::shared_ptr<DynloopFunctionPathNode> root = std::make_shared<DynloopFunctionPathNode>();
     if (pathList.size() == 1) {
-        // No branch
-        ASSERT(pathList[0].pathCondList.size() == 0)
-            << "Path condition list size: " << pathList[0].pathCondList.size();
         root->root = pathList[0].GetRoot();
     } else {
         for (size_t i = 0; i < pathList.size(); i++) {
@@ -199,7 +196,7 @@ bool DynloopFunctionAttribute::IterationEnd(int unroll, Function *pathFunc, Oper
 
     bool finished = true;
     for (size_t idx = 0; idx < currPathCond.size(); idx++) {
-        if (!currPathCond[idx].IsSat()) {
+        if (!currPathCond[idx].IsSat() && !currPathCond[idx].isConst_) {
             const auto &cond = currPathCond[idx].cond_;
             if (IsLoopBeginOrEndExpr(cond)) {
                 if (!cond.IsLoopBegin() && !cond.IsLoopEnd()) {
@@ -221,20 +218,28 @@ bool DynloopFunctionAttribute::IterationEnd(int unroll, Function *pathFunc, Oper
     return finished;
 }
 
+bool DynloopFunctionAttribute::GuessCondResult(const SymbolicScalar &cond, bool &result) {
+    if (cond.ConcreteValid()) {
+        result = cond.Concrete();
+        return true;
+    }
+    auto condstr = cond.Dump();
+    for (auto &pcond : currPathCond) {
+        if (condstr == pcond.GetCond().Dump()) {
+            result = pcond.IsSat();
+            return true;
+        }
+    }
+    return false;
+}
+
 bool DynloopFunctionAttribute::AppendCond(const SymbolicScalar &cond, const std::string &file, int line) {
     bool result = false;
     if (currIndex < currPathCond.size()) {
         result = currPathCond[currIndex].IsSat();
     } else {
-        auto condstr = cond.Dump();
-        bool found = false;
-        for (auto &pcond : currPathCond) {
-            if (condstr == pcond.GetCond().Dump()) {
-                found = true;
-                result = pcond.IsSat();
-            }
-        }
-        currPathCond.emplace_back(result, found, cond, file, line);
+        bool isConst = GuessCondResult(cond, result);
+        currPathCond.emplace_back(result, isConst, cond, file, line);
     }
     currIndex++;
     return result;
@@ -246,30 +251,23 @@ void DynloopFunctionAttribute::CreateCurrCond() {
         currIndex = 0;
         return;
     }
-    bool found = false;
     for (size_t idx = currPathCond.size() - 1; idx != static_cast<size_t>(-1); idx--) {
         if ((!currPathCond[idx].IsSat()) && (!currPathCond[idx].isConst_)) {
             const auto &cond = currPathCond[idx].cond_;
-            if (IsLoopBeginOrEndExpr(cond)) {
-                if (!cond.IsLoopBegin() && !cond.IsLoopEnd()) {
+            if (cond.IsExpression()) {
+                auto expr = std::static_pointer_cast<RawSymbolicExpression>(cond.Raw());
+                if (expr->IsLoopBeginCall() && !cond.IsLoopBegin()) {
                     continue;
                 }
-                if (std::static_pointer_cast<RawSymbolicExpression>(
-                    cond.Raw())->IsLoopBeginCall() && !cond.IsLoopBegin()) {
-                    continue;
-                }
-                if (std::static_pointer_cast<RawSymbolicExpression>(
-                    cond.Raw())->IsLoopEndCall() && !cond.IsLoopEnd()) {
+                if (expr->IsLoopEndCall() && !cond.IsLoopEnd()) {
                     continue;
                 }
             }
             currPathCond[idx].IsSat() = true;
             currPathCond.erase(currPathCond.begin() + idx + 1, currPathCond.end());
-            found = true;
             break;
         }
     }
-    ASSERT(found) << "DynloopFunctionAttribute::CreateCurrCond - All currPathConds are SAT";
     currIndex = 0;
 }
 

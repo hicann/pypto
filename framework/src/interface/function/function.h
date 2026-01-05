@@ -291,6 +291,7 @@ struct DynloopFunctionAttribute {
     std::vector<DynloopFunctionPathCondition> GenCondWithBeginEnd(const std::vector<DynloopFunctionPathCondition> &conds) const;
     bool IterationEnd(int unroll, Function *pathFunc, Operation *operation);
     bool AppendCond(const SymbolicScalar &cond, const std::string &file, int line);
+    bool GuessCondResult(const SymbolicScalar &cond, bool &result);
 private:
     void CreateCurrCond();
 };
