@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Any, Dict, Tuple
 
-from golden_register import GoldenRegister, GoldenRegInfo, GoldenParam
+from golden_register import GoldenRegister, GoldenRegInfo
 from python.utils.table import Table
 
 
@@ -180,14 +180,10 @@ class GoldenCtrl:
             logging.info("Generate golden skip Idx[%s/%s] Case(%s).", idx, len(self.cases), c)
             return True
         try:
-            if reg_info.version == 0:
-                if case_idx is None:
-                    ret = bool(reg_info.func(case_name=c, output=case_output))
-                else:
-                    ret = bool(reg_info.func(case_name=c, output=case_output, case_index=case_idx))
+            if case_idx is None:
+                ret = bool(reg_info.func(case_name=c, output=case_output))
             else:
-                param = GoldenParam(name=c, idx=case_idx, output=case_output)
-                ret = bool(reg_info.func(case_param=param))
+                ret = bool(reg_info.func(case_name=c, output=case_output, case_index=case_idx))
         except Exception as e:
             raise RuntimeError(f"Error in Case[{c}]") from e
         if ret:

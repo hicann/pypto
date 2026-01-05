@@ -23,13 +23,6 @@ class GoldenRegInfo:
     timeout: Optional[int] = None  # Golden 超时时间
 
 
-@dataclasses.dataclass
-class GoldenParam:
-    name: str
-    idx: int  # TEST_P 场景需要
-    output: Path
-
-
 class GoldenRegister:
     # 全局回调函数注册表
     _REG_MAP: Dict[str, GoldenRegInfo] = {}
@@ -37,14 +30,10 @@ class GoldenRegister:
     @classmethod
     def reg_golden_func(cls, case_names: Union[str, List[str]],
                         version: int = 0, timeout: Optional[int] = None) -> Callable:
-        """注册回调函数
-
-        version 0 支持两种函数原型
+        """
+        注册回调函数, 支持两种函数原型:
             func(case_name: str, output: Path)
             func(case_name: str, output: Path, case_index: int)
-
-        version > 0 支持一种函数原型
-            func(case_param: GoldenParam)
 
         :param case_names: CaseName
         :param version: 实现版本, 由 Golden 脚本控制. 当框架感知 version 大于缓存内的 version, 会触发重新生成 Golden
