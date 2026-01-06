@@ -13,10 +13,7 @@
  * \brief
  */
 
-#include "tilefwk/tilefwk.h"
-
 #include <sstream>
-#include <stdexcept>
 #include <iostream>
 #include <fstream>
 #include <unordered_set>
@@ -30,10 +27,7 @@
 #include "interface/function/function.h"
 #include "interface/interpreter/flow_verifier.h"
 #include "interface/machine/host/host_machine.h"
-#include "tilefwk/tilefwk.h"
-#include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
-#include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager_ng.h"
 
 namespace npu::tile_fwk {
@@ -165,6 +159,18 @@ void Program::UpdateCompileTask() {
         HostMachine::GetInstance().StashTask(func);
     }
     HostMachine::GetInstance().SubAllStashedTask();
+}
+
+void Program::ClearEmptyHiddenFunction() {
+    std::vector<std::string> funcNames;
+    for (auto &[name, func] : functionmap_) {
+        if (func->IsHiddenFunction() && func->Operations(false).IsEmpty()) {
+            funcNames.push_back(name);
+        }
+    }
+    for (auto &name : funcNames) {
+        functionmap_.erase(name);
+    }
 }
 
 void SetParamConfig(Function* currentFunctionPtr_) {
@@ -309,7 +315,6 @@ void Program::HandleTaskSubmission(Function *result) {
                 HostMachine::GetInstance().StashTask(result);
             } else {
                 ALOG_INFO("Empty function: ", result->GetRawName(), ", skip stashing and removed");
-                functionmap_.erase(result->GetMagicName());
                 auto &scopes = GetTensorSlotManager()->scopeList;
                 scopes.erase(std::remove_if(scopes.begin(), scopes.end(),
                                  [result](const std::shared_ptr<TensorSlotScope> &scope) {

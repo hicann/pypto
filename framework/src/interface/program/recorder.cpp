@@ -14,11 +14,8 @@
  */
 
 #include "interface/configs/config_manager.h"
-#include "interface/tensor/logical_tensor.h"
-#include "interface/tensor/raw_tensor.h"
 #include "interface/utils/log.h"
 #include "passes/pass_mgr/pass_manager.h"
-#include "tilefwk/tilefwk.h"
 
 namespace npu::tile_fwk {
 const std::string PROGRAM_ENTRY_FUNCTION_NAME = "PROGRAM_ENTRY";
@@ -150,6 +147,7 @@ void RecordFunc::EndFunction() {
     if (dynFunc_) {
         Program::GetInstance().SetLastFunction(dynFunc_);
         if (dynFunc_->IsDyndev()) {
+            Program::GetInstance().ClearEmptyHiddenFunction();
             dynFunc_->CleanRedundantOutCast();
             // Destructor GetTensorData small Tensor
             auto attr = dynFunc_->GetDyndevAttribute();
