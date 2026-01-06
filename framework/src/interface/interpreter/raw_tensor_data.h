@@ -19,6 +19,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <fstream>
 
 #include "tilefwk/data_type.h"
 #include "tilefwk/tensor.h"

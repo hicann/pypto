@@ -19,29 +19,9 @@
 #include <string>
 #include <cstdint>
 #include <vector>
-#include <cassert>
+#include "error.h"
 
 namespace npu::tile_fwk {
-
-#define ASSERT_F(f) assert(f)
-class NotLessThan {
-public:
-    explicit NotLessThan(int64_t v) : v_(v) {}
-    [[nodiscard]] std::int64_t AsInt64() const { return v_; }
-
-private:
-    std::int64_t v_;
-};
-
-class NotGreaterThan {
-public:
-    explicit NotGreaterThan(int64_t v) : v_(v) {}
-    [[nodiscard]] std::int64_t AsInt64() const { return v_; }
-
-private:
-    std::int64_t v_;
-};
-
 class RawSymbolicScalar;
 using RawSymbolicScalarPtr = std::shared_ptr<RawSymbolicScalar>;
 
@@ -55,18 +35,13 @@ public:
     /* Symbol type with explicit value */
     SymbolicScalar(const std::string &name, int64_t value);
 
-    /* Symbol type with limited ranges */
-    SymbolicScalar(const std::string &name, NotLessThan minVal);
-    SymbolicScalar(const std::string &name, NotGreaterThan maxVal);
-    SymbolicScalar(const std::string &name, NotLessThan minVal, NotGreaterThan maxVal);
-
     SymbolicScalar() = default;
     SymbolicScalar(const SymbolicScalar &val) = default;
     SymbolicScalar &operator=(const SymbolicScalar &) = default;
 
     bool ConcreteValid() const { return concreteValid_; }
     int64_t Concrete() const {
-        ASSERT_F(concreteValid_ && "concrete value is not valid !");
+        ASSERT(concreteValid_) << "concrete value is not valid !";
         return concrete_;
     }
 
@@ -81,7 +56,7 @@ public:
     bool IsIntermediateVariable() const;
 
     operator int() const {
-        ASSERT_F(concreteValid_ && "concrete value is not valid for int() !");
+        ASSERT(concreteValid_) << "concrete value is not valid for int() !";
         return concrete_;
     }
 

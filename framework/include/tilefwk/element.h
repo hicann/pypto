@@ -16,11 +16,10 @@
 #pragma once
 
 #include <cstdint>
+#include <variant>
+
 #include "tilefwk/data_type.h"
 #include "tilefwk/error.h"
-#include <limits>
-#include <cmath>
-#include <variant>
 
 namespace npu::tile_fwk {
 class Element {
@@ -74,9 +73,9 @@ public:
     bool operator>(const Element &rhs) const;
     bool operator>=(const Element &rhs) const;
 
-    uint64_t my_abs(uint64_t value1, uint64_t value2) const;
-    int64_t my_abs(int64_t value1, int64_t value2) const;
-    double my_abs(double value1, double value2) const;
+    uint64_t Abs(uint64_t value1, uint64_t value2) const;
+    int64_t Abs(int64_t value1, int64_t value2) const;
+    double Abs(double value1, double value2) const;
 
 private:
     template <typename T>

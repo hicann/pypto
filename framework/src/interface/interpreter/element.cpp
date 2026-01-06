@@ -59,8 +59,8 @@ DISPATCH_DATA_TYPE(ELEMENT_CAST);
 #define CALC_MUL(lhs, rhs) ((lhs) * (rhs))
 #define CALC_DIV(lhs, rhs) ((lhs) / (rhs))
 #define CALC_MOD(lhs, rhs) ((lhs) % (rhs))
-#define CALC_EQ(lhs, rhs) (Element::my_abs((lhs), (rhs)) < D_EPSILON)
-#define CALC_NE(lhs, rhs) (Element::my_abs((lhs), (rhs)) > D_EPSILON)
+#define CALC_EQ(lhs, rhs) (Element::Abs((lhs), (rhs)) < D_EPSILON)
+#define CALC_NE(lhs, rhs) (Element::Abs((lhs), (rhs)) > D_EPSILON)
 #define CALC_LT(lhs, rhs) ((lhs) < (rhs))
 #define CALC_LE(lhs, rhs) ((lhs) <= (rhs))
 #define CALC_GT(lhs, rhs) ((lhs) > (rhs))
@@ -99,19 +99,25 @@ Element parseElement(const Json &j) {
     throw std::runtime_error("Unsupported value type in JSON");
 }
 
-uint64_t Element::my_abs(uint64_t value1, uint64_t value2) const {
+uint64_t Element::Abs(uint64_t value1, uint64_t value2) const {
     if (value1 < value2) {
         return value2 - value1;
     }
     return value1 - value2;
 }
 
-int64_t Element::my_abs(int64_t value1, int64_t value2) const {
-    return std::abs(value1 - value2);
+int64_t Element::Abs(int64_t value1, int64_t value2) const {
+    if (value1 < value2) {
+        return value2 - value1;
+    }
+    return value1 - value2;
 }
 
-double Element::my_abs(double value1, double value2) const {
-    return std::abs(value1 - value2);
+double Element::Abs(double value1, double value2) const {
+    if (value1 < value2) {
+        return value2 - value1;
+    }
+    return value1 - value2;
 }
 
 Element Element::operator+(const Element &rhs) const {

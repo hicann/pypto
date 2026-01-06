@@ -29,7 +29,6 @@
 #include "symbol_handler.h"
 #include "interface/utils/string_utils.h"
 #include "interface/utils/common.h"
-#include "value_guesser.h"
 
 #include <nlohmann/json.hpp>
 using Json = nlohmann::json;
@@ -102,8 +101,6 @@ public:
 
     RawSymbolicScalar(SymbolicScalarKind tkind) : kind(tkind) {}
 
-    RawSymbolicScalar(SymbolicScalarKind tkind, ValueGuesser valueGuesser) : kind(tkind), valueGuesser_(valueGuesser) {}
-
     SymbolicScalarKind Kind() const { return kind; }
 
     bool IsImmediate() const { return Kind() == SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE; }
@@ -122,8 +119,6 @@ public:
     virtual Json DumpJson() const = 0;
     virtual ~RawSymbolicScalar() = default;
 
-    void ResetValueGuesser(ValueGuesser valueGuesser);
-
     std::string Dump() const;
 
 private:
@@ -131,7 +126,6 @@ private:
     friend class RawSymbolicExpression;
     virtual void DumpBuffer(std::string &buffer) const = 0;
 
-    ValueGuesser valueGuesser_;
     bool intermediateVariable_{false};
 };
 
@@ -162,8 +156,6 @@ class RawSymbolicSymbol : public RawSymbolicScalar {
 public:
     explicit RawSymbolicSymbol(const std::string &name)
         : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL), name_(name) {}
-    RawSymbolicSymbol(const std::string &name, ValueGuesser valueGuesser)
-        : RawSymbolicScalar(SymbolicScalarKind::T_SCALAR_SYMBOLIC_SYMBOL, valueGuesser), name_(name) {}
 
     const std::string &Name() const { return name_; }
 
@@ -175,9 +167,6 @@ public:
     }
 
     static RawSymbolicScalarPtr Create(const std::string &name) { return std::make_shared<RawSymbolicSymbol>(name); }
-    static RawSymbolicScalarPtr Create(const std::string &name, ValueGuesser valueGuesser) {
-        return std::make_shared<RawSymbolicSymbol>(name, valueGuesser);
-    }
 
 private:
     void DumpBuffer(std::string &buffer) const override { buffer += name_; }

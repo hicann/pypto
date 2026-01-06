@@ -26,6 +26,10 @@ namespace {
 auto InitializeTensorInfo(const uint32_t rankSize) {
     npu::tile_fwk::Distributed::TensorInfo info;
     info.offset = {0, 1, 0, 0};
+    info.dim = 3;
+    info.expectedSum = 0;
+    info.resetSignal = false;
+    info.rawIndex = 0;
     const uint32_t rawShape0 = rankSize;
     const uint32_t rawShape1 = rankSize;
     const uint32_t rawShape2 = 4;

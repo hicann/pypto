@@ -338,19 +338,6 @@ bool RecordLoopFunc::Iterator::operator!=(const IteratorEnd &rhs) {
     ASSERT(rlf_.StillHaveUnrollTimes());
     cur_ = 0;
     scalar_ = originalScalar_;
-    if (rlf_.LoopBegin().IsImmediate()) {
-        auto beginValue = std::static_pointer_cast<RawSymbolicImmediate>(rlf_.LoopBegin().Raw())->Immediate();
-        if (rlf_.LoopStep().IsImmediate() && rlf_.LoopEnd().IsImmediate()) {
-            auto endValue = std::static_pointer_cast<RawSymbolicImmediate>(rlf_.LoopEnd().Raw())->Immediate();
-            scalar_.Raw()->ResetValueGuesser(
-                ValueGuesser(NotLessThan(beginValue), NotGreaterThan(endValue - 1)));
-        } else {
-            scalar_.Raw()->ResetValueGuesser(ValueGuesser(NotLessThan(beginValue)));
-        }
-    } else {
-        scalar_.Raw()->ResetValueGuesser(ValueGuesser::Any());
-    }
-
     scalar_.AsLoopBegin(true);
     rlf_.IterationBegin();
     if (rlf_.IsCustomUnrollTimes(rlf_.CurUnrollTimes()) || cur_ + 1 == rlf_.CurUnrollTimes()) {
@@ -360,22 +347,10 @@ bool RecordLoopFunc::Iterator::operator!=(const IteratorEnd &rhs) {
 }
 
 RecordLoopFunc::Iterator RecordLoopFunc::begin() {
-    if (loopRange_->Begin().ConcreteValid()) {
-        return {*this, SymbolicScalar(iterName_, NotLessThan(loopRange_->Begin().Concrete()))};
-    }
     return {*this, SymbolicScalar(iterName_)};
 }
 
 RecordLoopFunc::IteratorEnd RecordLoopFunc::end() {
-    if (loopRange_->End().ConcreteValid()) {
-        if (funcType_ == FunctionType::STATIC) {
-            /* Static loop, expand all */
-            return {*this, SymbolicScalar(iterName_, NotGreaterThan(loopRange_->End().Concrete()))};
-        } else {
-            /* Runtime: Run only once */
-            return {*this, SymbolicScalar(iterName_, NotGreaterThan(loopRange_->End().Concrete()))};
-        }
-    }
     return {*this, SymbolicScalar(iterName_)};
 }
 

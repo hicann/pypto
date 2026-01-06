@@ -190,7 +190,7 @@ void SetParamConfig(Function* currentFunctionPtr_) {
 
 #if ENABLE_HIDDENLOOP
 void Program::BeginHiddenLoop(Function *func, const FunctionType &funcType, const std::string funcName) {
-    if (func->GetGraphType() == GraphType::TENSOR_GRAPH 
+    if (func->GetGraphType() == GraphType::TENSOR_GRAPH
         && func->GetFunctionType() == funcType
         && !func->IsHiddenFunction()) {
         BeginFunction(funcName, FunctionType::DYNAMIC_LOOP_PATH, GraphType::TENSOR_GRAPH, {}, true);
@@ -198,9 +198,9 @@ void Program::BeginHiddenLoop(Function *func, const FunctionType &funcType, cons
 }
 
 void Program::EndHiddenLoop(Function *func, bool generateCall) {
-    if (func->GetGraphType() == GraphType::TENSOR_GRAPH 
-        && func->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH 
-        && func->IsHiddenFunction() 
+    if (func->GetGraphType() == GraphType::TENSOR_GRAPH
+        && func->GetFunctionType() == FunctionType::DYNAMIC_LOOP_PATH
+        && func->IsHiddenFunction()
         && !func->Parent().IsHiddenFunction()) {
         func->Parent().SetHiddenFunction(true);
         EndFunction(func->GetRawName(), generateCall);

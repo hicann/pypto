@@ -155,10 +155,6 @@ TEST_F(DynamicFunctionTest, TestSymbolic) {
             a.AsIntermediateVariable();
             EXPECT_TRUE(a.IsIntermediateVariable());
         }
-        {
-            auto x = SymbolicScalar("x", NotLessThan(1), NotGreaterThan(2));
-            EXPECT_TRUE(x.IsSymbol());
-        }
     }
 }
 

@@ -14,10 +14,9 @@
  */
 
 #include <securec.h>
-#include <string>
 #include <runtime/rt.h>
 #include <runtime/base.h>
-#include "rts/rts_kernel.h"
+
 #define EVENT_LENTH 10
 #define DEVICE_VALUE 2000
 #define TIME 12345
@@ -341,6 +340,8 @@ rtError_t rtStreamAddToModel(rtStream_t stm, rtModel_t captureMdl)
     (void)captureMdl;
     return RT_ERROR_NONE;
 }
+
+struct rtLoadBinaryConfig_t;
 rtError_t rtsBinaryLoadFromFile([[maybe_unused]] const char * const binPath, [[maybe_unused]] const rtLoadBinaryConfig_t *const optionalCfg,
     [[maybe_unused]] rtBinHandle *binHandle)
 {
@@ -353,6 +354,7 @@ rtError_t rtsFuncGetByName([[maybe_unused]] const rtBinHandle binHandle, [[maybe
     return RT_ERROR_NONE;
 }
 
+struct rtKernelLaunchCfg_t;
 rtError_t rtsLaunchCpuKernel([[maybe_unused]] const rtFuncHandle funcHandle, [[maybe_unused]]  const uint32_t blockDim,
     [[maybe_unused]] rtStream_t st, [[maybe_unused]] const rtKernelLaunchCfg_t *cfg, [[maybe_unused]] rtCpuKernelArgs_t *argsInfo)
 {
