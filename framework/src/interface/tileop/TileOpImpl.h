@@ -45,7 +45,6 @@
 #include "vector/extract.h"
 #include "vector/pair_binary.h"
 #include "vector/where.h"
-#include "cube/cube_pto.h"
 #endif
 
 #endif
