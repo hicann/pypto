@@ -274,8 +274,8 @@ INLINE void TExtractL1ToL0(T &dst, U &src, const int64_t &offset0, const int64_t
     // L0 TileLeft为L0A的Tile，TileRight为L0B的Tile，传入的值分别为：
     // 矩阵数据类型，tileShape0，tileShape1，validShape0，validShape0（-1表明传递动态值，在声明时传入）
     using tileL0Tensor =
-        std::conditional_t<T::FORMAT == Hardware::L0A, TileLeft<typename T::Type, staticL0H, staticL0W, -1, -1>,
-            TileRight<typename T::Type, staticL0H, staticL0W, -1, -1>>;
+        std::conditional_t<T::FORMAT == Hardware::L0A, TileLeftCompact<typename T::Type, staticL0H, staticL0W, -1, -1>,
+            TileRightCompact<typename T::Type, staticL0H, staticL0W, -1, -1>>;
     tileL1Tensor l1Tile(srcShape0, srcShape1);
     tileL0Tensor l0Tile(dstShape0, dstShape1);
     pto::TASSIGN(l1Tile, (uint64_t)src.GetAddr());
@@ -375,6 +375,9 @@ TILEOP void Matmul(T &c, U &a, V &b) {
     tileL0ATensor l0a(validM, validK);
     tileL0BTensor l0b(validK, validN);
     tileL0CTensor l0c(validM, validN);
+    if (std::is_same<typename tileL0ATensor::DType, float>::value){
+        l0a.SetKAligned(true);
+    }
 
     pto::TASSIGN(l0a, (uint64_t)a.GetAddr());
     pto::TASSIGN(l0b, (uint64_t)b.GetAddr());
@@ -459,7 +462,7 @@ INLINE void TStoreNZ2ND(T &dst, U &src, const int64_t &offset0, const int64_t &o
     int64_t gmOffset = offset1 + offset0 * dstShape1;
     using globalData = pto::GlobalTensor<typename T::Type, shapeDim2, strideDim2, pto::Layout::ND>;
     using tileData = pto::Tile<pto::TileType::Acc, typename U::Type, tileH, tileW, pto::BLayout::ColMajor, -1, -1,
-        SLayout::RowMajor>;
+        SLayout::RowMajor, TileConfig::fractalCSize, PadValue::Null, CompactMode::Normal>;
     globalData dstGlobal((__gm__ typename T::Type *)(dst.GetAddr() + gmOffset),
         pto::Shape<1, 1, 1, -1, -1>(srcShape0, srcShape1), pto::Stride<1, 1, 1, -1, -1>(dstStride0, dstStride1));
     tileData srcL0C(srcShape0, srcShape1);
@@ -492,7 +495,7 @@ INLINE void TStoreNZ2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &o
         shapeDim2(dstShape1 / c0Size, dstShape0 / BLOCK_CUBE_M_N),
         strideDim2(dstShape0 * dstShape1, dstShape0 * c0Size, BLOCK_CUBE_M_N * c0Size));
     using tileData = pto::Tile<pto::TileType::Acc, typename U::Type, tileH, tileW, pto::BLayout::ColMajor, -1, -1,
-        SLayout::RowMajor>;
+        SLayout::RowMajor, TileConfig::fractalCSize, PadValue::Null, CompactMode::Normal>;
     tileData srcL0C(srcShape0, srcShape1);
     pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr());
     TStoreExecute<config, globalData, tileData>(dstGlobal, srcL0C, scaleValue);
