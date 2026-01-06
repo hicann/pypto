@@ -499,6 +499,14 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootAlloc(void *ctx_, uint64
     return result;
 }
 
+bool IsSpecialRootKey(uint64_t rootKey) {
+    if (rootKey == RUNTIME_FUNCKEY_FINISH || rootKey == RUNTIME_FUNCKEY_CACHESTOP ||
+        rootKey == RUNTIME_FUNCKEY_LOOP_BARRIER) {
+        return true;
+    }
+    return false;
+}
+
 void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void *ctx_, uint64_t rootKey) {
     DeviceExecuteContext *ctx = (DeviceExecuteContext *)ctx_;
     if (ctx == nullptr) {
@@ -517,6 +525,11 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void *ctx_, uint6
             ctx->SetErrorState(DEVICE_MACHINE_ERROR);
         }
     }
+
+    if (result == nullptr && IsSpecialRootKey(rootKey)) {
+        return result;
+    }
+
     PerfEnd(PERF_EVT_ROOT_FUNC);
     if (ctx->DuppedRootUpdateAndCachedAllSubmitted()) {
         DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCachePartRunControlContinue()));

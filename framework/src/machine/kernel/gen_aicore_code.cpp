@@ -138,11 +138,11 @@ using npu::tile_fwk::DevRawTensorDesc;
 using npu::tile_fwk::CoreFunctionData;
 
 #if defined(__MIX__) && defined(__AIV__)
-#define blockIdx __v_blockIdx
+#define aicore_blockIdx __v_blockIdx
 #define GmWorkspace __v_GmWorkspace
 #endif
 
-[[block_local]] int blockIdx;
+[[block_local]] int aicore_blockIdx;
 [[block_local]] int64_t GmWorkspace;
 
 enum DFX_STAGE_STATUS {
@@ -220,7 +220,7 @@ INLINE void HandshakeClient(volatile __gm__ int64_t *shakeBuf) {
     set_cond(AICORE_TASK_INIT);
 #if ENABLE_HAND_SHAKE_BY_REG
     uint64_t AICORE_REG_SAY_HELLO = 0xF000000080000000;
-    set_cond(((int64_t)blockIdx << 48) | ((int64_t)get_coreid() << 32) | AICORE_REG_SAY_HELLO);
+    set_cond(((int64_t)aicore_blockIdx << 48) | ((int64_t)get_coreid() << 32) | AICORE_REG_SAY_HELLO);
 #endif
     volatile __gm__ int64_t *hello = shakeBuf;
     *hello = (int64_t)get_coreid() << 32 | AICORE_SAY_HELLO;
@@ -371,7 +371,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext *ctx, uint32_t taskId) {
 #else
     CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
 #endif
-    CallSubFuncTask(opAttrs[0], &param, funcData->stackWorkSpaceAddr + blockIdx * funcData->stackWorkSpaceSize,
+    CallSubFuncTask(opAttrs[0], &param, funcData->stackWorkSpaceAddr + aicore_blockIdx * funcData->stackWorkSpaceSize,
                     (__gm__ int64_t *)funcData->hcclContext);
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();
@@ -412,12 +412,12 @@ INLINE void ExecCoreFunctionKernel(ExecuteContext *ctx, uint32_t curTaskIdx) {
 extern "C" __global__ __aicore__ void KERNEL_ENTRY(__OPTYPE__, __TILINGKEY__)(int64_t ffts_addr, int64_t inputs,
         int64_t outputs, int64_t workspace, int64_t tilingdata, int64_t cfgdata) {
 #if defined(__AIV__) and defined(__MIX__)
-    blockIdx = get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num();
+    aicore_blockIdx = get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num();
 #else
-    blockIdx = get_block_idx();
+    aicore_blockIdx = get_block_idx();
 #endif
     auto devArgs = (DeviceArgs*)cfgdata;
-    __gm__ KernelArgs *args = (__gm__ KernelArgs *)(devArgs->sharedBuffer + blockIdx * SHARED_BUFFER_SIZE);
+    __gm__ KernelArgs *args = (__gm__ KernelArgs *)(devArgs->sharedBuffer + aicore_blockIdx * SHARED_BUFFER_SIZE);
     __gm__ Metrics* metric = (__gm__ Metrics*)(args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
     PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_BEGIN);
     bool isFirstTask = true;

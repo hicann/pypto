@@ -42,9 +42,9 @@ add_custom_command(
         COMMENT "Build core, create ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/kernel"
 )
 
-add_custom_target(tile_fwk_core ALL DEPENDS aicore.cpp ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/kernel
-        COMMAND ${BISHENG_PROGRAM} ${AI_CORE_FLAGS} -D__AIC__ --cce-aicore-arch=dav-c220-cube -o kernel_aic.o ${CMAKE_CURRENT_SOURCE_DIR}/aicore.cpp
-        COMMAND ${BISHENG_PROGRAM} ${AI_CORE_FLAGS} -D__AIV__ --cce-aicore-arch=dav-c220-vec  -o kernel_aiv.o ${CMAKE_CURRENT_SOURCE_DIR}/aicore.cpp
+add_custom_target(tile_fwk_core ALL DEPENDS aicore.ascpp ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/kernel
+        COMMAND ${BISHENG_PROGRAM} ${AI_CORE_FLAGS} -D__AIC__ --cce-aicore-arch=dav-c220-cube -o kernel_aic.o ${CMAKE_CURRENT_SOURCE_DIR}/aicore.ascpp
+        COMMAND ${BISHENG_PROGRAM} ${AI_CORE_FLAGS} -D__AIV__ --cce-aicore-arch=dav-c220-vec  -o kernel_aiv.o ${CMAKE_CURRENT_SOURCE_DIR}/aicore.ascpp
         COMMAND ${BISHENG_LD} -m aicorelinux -Ttext=0 -static -o  kernel.o kernel_aic.o kernel_aiv.o
         COMMAND ld -r -b binary -o kernel_host.o kernel.o
         COMMENT "Build core, output to ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
