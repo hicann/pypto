@@ -107,5 +107,12 @@ std::string GetAddrTypeByOperandType(OperandType type);
 
 int64_t CalcLinearOffset(const std::vector<int64_t> &shape, const std::vector<int64_t> &offset);
 
+template <typename T>
+void FillParamWithInput(std::vector<std::string> &paramList, const std::vector<T> &input, int start, int count) {
+    for (int i = start; i < count; ++i) {
+        paramList.emplace_back(ToStringHelper(input[i]));
+    }
+}
+
 } // namespace npu::tile_fwk
 #endif

@@ -366,6 +366,8 @@ private:
 
     std::string PrintCoord(size_t dim, const std::string &coord) const;
     std::string PrintTensorForCopyBetweenGM(unsigned operandIdx, unsigned gmIdx, const std::string &gmVarName) const;
+    void FillParamWithFullShape(std::vector<std::string> &paramList, const std::vector<int64_t> &input) const;
+    void FillParamWithShapeExceptFirst(std::vector<std::string> &paramList, const std::vector<int64_t> &input) const;
 
     const std::unordered_map<Opcode, std::function<std::string()>> mteFixPipeOps_;
 

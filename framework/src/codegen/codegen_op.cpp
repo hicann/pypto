@@ -27,18 +27,18 @@
 
 namespace npu::tile_fwk {
 namespace {
-bool IsCopyOpWithShapeOffsetAttr(Opcode opcode) {
-    bool result = opcode == Opcode::OP_COPY_IN || opcode == Opcode::OP_COPY_OUT ||
-                  opcode == Opcode::OP_TRANSPOSE_MOVEOUT || opcode == Opcode::OP_TRANSPOSE_MOVEIN ||
-                  opcode == Opcode::OP_INDEX_OUTCAST ||
-                  opcode == Opcode::OP_FFN_SCHED || opcode == Opcode::OP_FFN_BATCHING ||
-                  opcode == Opcode::OP_FFN_COMBINEINFO || opcode == Opcode::OP_FFN_VALIDCNT ||
-                  opcode == Opcode::OP_COPY_TO_LOCAL_EXPERT || opcode == Opcode::OP_SHMEM_PUT ||
-                  opcode == Opcode::OP_SHMEM_PUT_UB2GM || opcode == Opcode::OP_SHMEM_SIGNAL ||
-                  opcode == Opcode::OP_SHMEM_GET || opcode == Opcode::OP_SHMEM_GET_GM2UB ||
-                  opcode == Opcode::OP_SHMEM_REDUCE || opcode == Opcode::OP_SHMEM_SET ||
-                  opcode == Opcode::OP_SHMEM_MOE_COMBINE_SEND || opcode == Opcode::OP_SHMEM_MOE_COMBINE_RECEIVE;
-    return result;
+const std::unordered_set<Opcode> OP_SHAPE_FROM_ATTR{
+    // copy in/out
+    Opcode::OP_COPY_IN,
+    Opcode::OP_COPY_OUT,
+    // transpose move in/out
+    Opcode::OP_TRANSPOSE_MOVEOUT,
+    Opcode::OP_TRANSPOSE_MOVEIN,
+    // index outcast
+    Opcode::OP_INDEX_OUTCAST,
+};
+bool IsOpShapeFromAttr(Opcode opcode) {
+    return OP_SHAPE_FROM_ATTR.find(opcode) != OP_SHAPE_FROM_ATTR.end();
 }
 } // namespace
 
@@ -74,9 +74,10 @@ void CodeGenOp::CombineAxis(const Operation &oper, int operandIdx, bool isInput,
 
 void CodeGenOp::UpdateShape(
     const Operation &oper, const LogicalTensor &logicalTensor, int operandIdx, bool isInput, size_t ioIdx) {
-    ALOG_INFO_F("op code %s, operandIdx: %d, raw shape is %s, originShape is %s, dynamicValidShape is %s",
-        oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(logicalTensor.tensor->rawshape).c_str(),
-        IntVecToStr(logicalTensor.oriShape).c_str(), IntVecToStr(logicalTensor.GetDynValidShape()).c_str());
+    ALOG_INFO_F("op code %s, operandIdx: %d, shape is %s, raw shape is %s, originShape is %s, dynamicValidShape is %s",
+        oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(logicalTensor.shape),
+        IntVecToStr(logicalTensor.tensor->rawshape).c_str(), IntVecToStr(logicalTensor.oriShape).c_str(),
+        IntVecToStr(logicalTensor.GetDynValidShape()).c_str());
 
     rawShape[operandIdx] = logicalTensor.tensor->rawshape;
     // need adapt unaligned scene after
@@ -89,20 +90,14 @@ void CodeGenOp::UpdateShape(
     ASSERT(logicalTensor.shape.size() <= MAX_DIM) << "only support max dim: " << MAX_DIM;
 
     Opcode opcode = oper.GetOpcode();
-    bool useAttrForGM = IsCopyOpWithShapeOffsetAttr(opcode);
-    // Local Tensor shape just use shape from LogicalTensor
-    if (!useAttrForGM || logicalTensor.GetMemoryTypeOriginal() != MEM_DEVICE_DDR) {
-        shape[operandIdx] = logicalTensor.shape;
-        if (isDynamicFunction) { // NEXTNEXT: stack gm should also has dynShape_ later
-            ASSERT(!logicalTensor.GetDynValidShape().empty())
-                << "LogicalTensor::dynShape_ can not empty in Dynamic Unaligned Scene";
-        }
-    } else {
+    if (logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR && IsOpShapeFromAttr(opcode)) {
         // used for spilling GM scene
         std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
         ASSERT(attr != nullptr) << ": missing OpAttr in copy op: \n" << oper.Dump();
         shape[operandIdx] = attr->GetSpecifiedShape(1);
         ALOG_INFO_F("attrShape(from op CopyOpAttribute) = %s", IntVecToStr(shape[operandIdx]).c_str());
+    } else { // Local Tensor shape just use shape from LogicalTensor
+        shape[operandIdx] = logicalTensor.shape;
     }
 
     CombineAxis(oper, operandIdx, isInput, ioIdx);

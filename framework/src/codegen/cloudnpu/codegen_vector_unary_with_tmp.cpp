@@ -135,7 +135,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam 
     if (isSupportLayout) {
         return PrintReduceLastAxisTileTensor();
     }
-    
+
     if (isDynamicFunction) {
         return PrintReduceLastAxisDynamicUnalign({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
@@ -286,44 +286,32 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffPara
     if (axis.HasValue()) {
         reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
     }
-    ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(shape[ID2].size()) - 1)))) << "unsupported reduce axis";
-    const std::string &dstDtypeStr = param.dstDtypeStr;
-    const std::string &srcDtypeStr = param.srcDtypeStr;
-    const std::string &tmpDtypeStr = param.tmpDtypeStr;
-    const std::string &dVar = param.dVar;
-    const std::string &s0Var = param.s0Var;
-    const std::string &tmpVar = param.tmpVar;
+    ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
+        << "unsupported reduce axis" << reduceAxis;
 
     reduceAxis += SHAPE_DIM4 - rawShape[0].size();
     std::vector<int64_t> dstShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
     std::vector<int64_t> tmpShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> os = NormalizeShape(originShape[ID2], SHAPE_DIM4);
-    std::ostringstream oss;
+
     std::vector<std::string> paramList;
-    paramList.emplace_back(dstDtypeStr);
-    for (int i = 0; i < SHAPE_DIM4; ++i) {
-        paramList.emplace_back(std::to_string(os[i]));
-    }
-    for (int i = 1; i < SHAPE_DIM4; ++i) {
-        paramList.emplace_back(std::to_string(srcShape[i]));
-    }
-    for (int i = 1; i < SHAPE_DIM4; ++i) {
-        paramList.emplace_back(std::to_string(dstShape[i]));
-    }
-    for (int i = 1; i < SHAPE_DIM4; ++i) {
-        paramList.emplace_back(std::to_string(tmpShape[i]));
-    }
+    paramList.emplace_back(param.dstDtypeStr);
+    FillParamWithFullShape(paramList, os);
+    FillParamWithShapeExceptFirst(paramList, srcShape);
+    FillParamWithShapeExceptFirst(paramList, dstShape);
+    FillParamWithShapeExceptFirst(paramList, tmpShape);
     paramList.emplace_back(std::to_string(reduceAxis));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
 
     paramList.clear();
-    std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
-    std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
-    std::string tmp = "(__ubuf__ " + tmpDtypeStr + "*)" + tmpVar;
+    std::string dst = "(__ubuf__ " + param.dstDtypeStr + "*)" + param.dVar;
+    std::string src = "(__ubuf__ " + param.srcDtypeStr + "*)" + param.s0Var;
+    std::string tmp = "(__ubuf__ " + param.tmpDtypeStr + "*)" + param.tmpVar;
     paramList.insert(paramList.end(), {dst, src, tmp});
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
+    std::ostringstream oss;
     oss << tileOpName << "_<" << templateParam << ">"
         << "(" << tiloOpCallParam << ");\n";
     return oss.str();
@@ -335,7 +323,8 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryT
     if (axis.HasValue()) {
         reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
     }
-    ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(shape[ID2].size()) - 1)))) << "unsupported reduce axis";
+    ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
+        << "unsupported reduce axis" << reduceAxis;
     const std::string &dstDtypeStr = param.dstDtypeStr;
     const std::string &srcDtypeStr = param.srcDtypeStr;
     const std::string &tmpDtypeStr = param.tmpDtypeStr;
@@ -393,7 +382,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineTileTensor() const {
     if (axis.HasValue()) {
         reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
     }
-    ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(shape[ID2].size()) - 1)))) << "unsupported reduce axis";
+    ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1)))) << "unsupported reduce axis";
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();
     std::ostringstream oss;
     oss << tileOpName << "<" << reduceAxis << ">"
@@ -434,7 +423,7 @@ std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const {
         return PrintVnchwconv({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
-    if(opCode == Opcode::OP_ROWSUMLINE) {
+    if (opCode == Opcode::OP_ROWSUMLINE) {
         return PrintRowSumline({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
     if (opCode == Opcode::OP_ROWSUM_SINGLE || opCode == Opcode::OP_ROWMAX_SINGLE ||

@@ -705,11 +705,6 @@ std::string CodeGenOpCloudNPU::GenIndexAddOp() const {
     std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
     std::string indicesVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
 
-    ALOG_INFO_F("GenIndexAddOp, dst Shape is %s", IntVecToStr(shape[ID0]).c_str());
-    ALOG_INFO_F("GenIndexAddOp, self Shape is %s", IntVecToStr(shape[ID1]).c_str());
-    ALOG_INFO_F("GenIndexAddOp, src Shape is %s", IntVecToStr(shape[ID2]).c_str());
-    ALOG_INFO_F("GenIndexAddOp, indices Shape is %s", IntVecToStr(shape[ID3]).c_str());
-
     std::vector dstRawShape = this->rawShape[ID0];
     std::vector srcRawShape = this->rawShape[ID2];
 
@@ -768,9 +763,6 @@ std::string CodeGenOpCloudNPU::PrintCumSumDynamicUnaligned(const PrintCumSumPara
 std::string CodeGenOpCloudNPU::GenCumSumOp() const {
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
     std::string inputVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
-
-    ALOG_INFO_F("GenCumSumOp, dst Shape is %s", IntVecToStr(shape[ID0]).c_str());
-    ALOG_INFO_F("GenCumSumOp, input Shape is %s", IntVecToStr(shape[ID1]).c_str());
 
     std::vector inputRawShape = this->rawShape[ID1];
 
@@ -891,10 +883,6 @@ std::string CodeGenOpCloudNPU::GenScatterElementSOp() const {
     std::string src0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
     std::string src1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
-
-    ALOG_INFO_F("GenScatterElementSOp, dst Shape is %s", IntVecToStr(shape[ToUnderlying(MISOIdx::DST_IDX)]).c_str());
-    ALOG_INFO_F("GenScatterElementSOp, src0 Shape is %s", IntVecToStr(shape[ToUnderlying(MISOIdx::SRC0_IDX)]).c_str());
-    ALOG_INFO_F("GenScatterElementSOp, src1 Shape is %s", IntVecToStr(shape[ToUnderlying(MISOIdx::SRC1_IDX)]).c_str());
 
     std::vector dstRawShape = this->rawShape[ToUnderlying(MISOIdx::DST_IDX)];
     std::vector src1RawShape = this->rawShape[ToUnderlying(MISOIdx::SRC1_IDX)];

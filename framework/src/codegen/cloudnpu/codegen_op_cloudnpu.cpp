@@ -613,4 +613,14 @@ std::string CodeGenOpCloudNPU::PrintCoord(size_t dim, const std::string &coord) 
     return ret;
 }
 
+void CodeGenOpCloudNPU::FillParamWithFullShape(
+    std::vector<std::string> &paramList, const std::vector<int64_t> &input) const {
+    FillParamWithInput(paramList, input, 0, input.size());
+}
+
+void CodeGenOpCloudNPU::FillParamWithShapeExceptFirst(
+    std::vector<std::string> &paramList, const std::vector<int64_t> &input) const {
+    FillParamWithInput(paramList, input, 1, input.size());
+}
+
 } // namespace npu::tile_fwk
