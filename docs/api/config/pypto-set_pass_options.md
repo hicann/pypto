@@ -48,7 +48,7 @@ set_pass_options(*,
 | cube_l1_reuse_setting   | 输入      | 含义：合图参数，用于配置结构相同且重复搬运同一GM数据的子图合并数量。 <br> 说明：该参数适用于含有CUBE计算的子图合并 <br> 类型： dict[int, int] <br> 默认值：nullMap <br> 影响Pass范围：L1ReuseMerge |
 | cube_nbuffer_mode       | 输入      | 含义：合图参数，用于配置相同结构AIC子图合并策略 <br> 说明：该参数适用于结构相同的AIC子图合并，避免同一结构子图数过大并增大核内流水调度可能性。 <br> 类型：int <br> 取值：<br> 0：不使能相同结构子图间合并逻辑。但用户设置cube_nbuffer_setting时仍然按用户设置的cube_nbuffer_setting来做子图间的合并。<br> 1：使能相同结构子图间合并，合并逻辑为依据cube核数自适应计算每个结构的合并数。<br> 2：所有结构相同子图都按用户设置cube_nbuffer_setting来做子图间的合并。 <br> 默认值：0 <br> 影响Pass范围：<span> L1ReuseMerge</span> |
 | cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构AIC子图的合并数量。 <br> 说明：该参数适用于结构相同的AIC子图合并。 <br> 类型： dict[int, int] <br> 取值：<br> {-1, N}：key为-1时，value值N表示结构相同的AIC子图的合并数量默认值为N <br> 默认值：nullMap <br> 影响Pass范围： L1ReuseMerge |
-| mg_copyin_upper_bound   | 输入      | 含义：合图参数，用于配置合图大小。 |
+| mg_copyin_upper_bound   | 输入      | 含义：合图参数，用于配置合图大小。 <br> 说明：该参数控制子图内搬运数据总量上界。当子图内数据搬运量大于该值则不再合并。 <br> 类型：int <br> 取值：0~2147483647 <br> 默认值：1048576 <br> 影响pass范围：L1ReuseMerge|
 
 ## 返回值说明
 
