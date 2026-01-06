@@ -120,6 +120,17 @@ public:
     //graph重连
     void GraphReconnect(const std::shared_ptr<LogicalTensor> &oOperand, std::shared_ptr<LogicalTensor> output, 
         const std::set<Operation *> &consumers,Function &function) const;
+    
+    //cube级联场景
+    bool IsNotValidDataType(const std::shared_ptr<LogicalTensor> &firstCVOutput) const;
+
+    //特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
+    void ProcessSpecialProducersOrConsumers(const Operation &op, const std::shared_ptr<LogicalTensor> &oOperand,
+        std::set<Operation *> &consumers, MemoryType &requiredMemoryType);
+
+    //构造转换路径
+    Status ProcessConvertPath(const Operation &op, const std::shared_ptr<LogicalTensor> &oOperand,
+        MemoryType requiredMemoryType, std::vector<MemoryType> &paths);
 };
 } 
 }// namespace npu::tile_fwk
