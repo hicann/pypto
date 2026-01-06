@@ -176,7 +176,7 @@ folders_to_process=()
 for folder_info in "${sorted_folders[@]}"; do
     folder_name="${folder_info%%:*}"
     folder_number="${folder_info##*:}"
-    
+
     # Check if this folder should be included
     if [[ $folder_number -le $start_number ]] && [[ $folder_number -gt $((start_number - number)) ]]; then
         folders_to_process+=("$folder_name")
@@ -206,48 +206,48 @@ for folder_name in "${folders_to_process[@]}"; do
     echo ""
     echo "Processing folder [$((processed_count + 1))/$number]: $folder_name (number: $folder_number)"
     echo "----------------------------------------------------------------"
-    
+
     # Build file paths
     prof_data_json_path="$output_folder/$folder_name/tilefwk_L1_prof_data.json"
     program_json_path="$output_folder/$folder_name/program.json"
     topo_txt_path="$output_folder/$folder_name/dyn_topo.txt"
-    
+
     # Check if required files exist
     missing_files=0
     if [[ ! -f "$prof_data_json_path" ]]; then
         echo "  Warning: File does not exist: tilefwk_L1_prof_data.json"
         missing_files=$((missing_files + 1))
     fi
-    
+
     if [[ ! -f "$program_json_path" ]]; then
         echo "  Warning: File does not exist: program.json"
         missing_files=$((missing_files + 1))
     fi
-    
+
     if [[ ! -f "$topo_txt_path" ]]; then
         echo "  Warning: File does not exist: dyn_topo.txt"
         missing_files=$((missing_files + 1))
     fi
-    
+
     if [[ $missing_files -gt 0 ]]; then
         echo "  Skipping folder $folder_name due to missing files"
         continue
     fi
-    
+
     # Extract hash from program.json
     original_hash=$(grep -m 1 -Eo '"hash": [0-9]+' "$program_json_path" 2>/dev/null | awk '{print $2}')
-    
+
     # Display file info
     echo "Configuration file paths:"
     echo "  prof_data_json: $prof_data_json_path"
     echo "  program_json:   $program_json_path"
     echo "  topo_txt:       $topo_txt_path"
     echo ""
-    
+
     # Execute Python script
     echo "  Generating swim lane diagram..."
-    python3 tools/draw_swim_lane.py "$prof_data_json_path" "$topo_txt_path" "$program_json_path" --label_type=1 --time_convert_denominator=50
-    
+    python3 tools/profiling/draw_swim_lane.py "$prof_data_json_path" "$topo_txt_path" "$program_json_path" --label_type=1 --time_convert_denominator=50
+
     if [[ $? -eq 0 ]]; then
         echo "  ✓ Successfully generated diagram for $folder_name"
         processed_count=$((processed_count + 1))

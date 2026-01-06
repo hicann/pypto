@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
+This is a subscript of build_ci.py
 """
 import os
 from pathlib import Path
@@ -81,11 +82,11 @@ def work_flow_plot(path, level, pe):
     if not save_path.exists():
         os.makedirs(save_path)
     print(save_path)
-    cmd = f"python3 ./tools/tilefwk_prof_data_parser.py -p {path_pro[0]} --output={str(save_path)} -t"
+    cmd = f"python3 ./tools/profiling/tilefwk_prof_data_parser.py -p {path_pro[0]} --output={str(save_path)} -t"
     print(cmd)
     subprocess.run(cmd, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
     if level == 2:
-        cmd = f"python3 ./tools/tilefwk_pmu_to_csv.py -p {path_pro[0]} --output={str(save_path)} -pe={pe}"
+        cmd = f"python3 ./tools/profiling/tilefwk_pmu_to_csv.py -p {path_pro[0]} --output={str(save_path)} -pe={pe}"
         print(cmd)
         subprocess.run(cmd, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
     #删除Prof落盘日志，避免有干扰

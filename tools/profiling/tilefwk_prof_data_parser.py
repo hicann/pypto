@@ -210,12 +210,12 @@ def prepare_workflow_data(infile, task_id_flag, output):
         last_start_time = min_start_time
         for j, task in enumerate(data["tasks"]): # 遍历task数据
             ndata[i][j * 2] = task["execStart"] - last_start_time # 计算execStart - (上一个)execEnd，写入ndata i行
-            ndata[i][j * 2+1] = task["execEnd"] - task["execStart"] # 计算execEnd - execStart，写入ndata i行
+            ndata[i][j * 2 + 1] = task["execEnd"] - task["execStart"] # 计算execEnd - execStart，写入ndata i行
             last_start_time = task["execEnd"] # 更新上一个时间戳
             if task_id_flag: # 若输入task-id，写入task id到task_ids i行
-                task_ids[i][j * 2+1] = task["taskId"]
+                task_ids[i][j * 2 + 1] = task["taskId"]
             else:
-                task_ids[i][j * 2+1] = task["subGraphId"]
+                task_ids[i][j * 2 + 1] = task["subGraphId"]
             task_info[1] = task.get("seqNo", 0)
             task_info[2] = task["subGraphId"]
             task_info[3] = task["taskId"]

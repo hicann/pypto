@@ -31,8 +31,8 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/framework/src/cost_model/simulation/scripts/print_swim_lane.py         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
         COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/framework/src/cost_model/simulation/scripts/draw_comm_swim_lane_png.py ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
         COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/framework/src/cost_model/simulation/scripts/draw_pipe_swim_lane.py     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
-        COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/tools/draw_swim_lane.py                                                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
-        COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/tools/function_json_convert.py                                         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
-        COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/tools/parse_pipe_time_trace.py                                         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
+        COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/tools/profiling/draw_swim_lane.py                                      ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
+        COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/tools/profiling/function_json_convert.py                               ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
+        COMMAND ${CMAKE_COMMAND} -E copy ${PTO_FWK_SRC_ROOT}/tools/profiling/parse_pipe_time_trace.py                               ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts/
         COMMENT "Soft link of ${_Target} dependence scripts file has been created at ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts"
 )

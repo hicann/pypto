@@ -20,9 +20,9 @@ import parse_pipe_time_trace as pipe_time
 
 
 class TaskInfo:
-    def __init__(self, id):
+    def __init__(self, task_id):
         self.task_id = (
-            id  # task_id is stitchedStatic << 32 + stitchedRootIndex << 20 + opIndex
+            task_id  # task_id is stitchedStatic << 32 + stitchedRootIndex << 20 + opIndex
         )
         self.root_index = -1
         self.root_hash = 0
@@ -158,13 +158,13 @@ class TaskAnalysisInfo:
 
 
 class CoreInfo:
-    def __init__(self, id, c_type):
-        self.core_idx = id
+    def __init__(self, core_idx, c_type):
+        self.core_idx = core_idx
         self.core_type = c_type
         self.tasks = []
         self.total_time = 0
         self.pipe_exec_cycles = {}
-        self.pipe_exec_time = {} # vector and cube time unchanged. MTE scale proportionally 
+        self.pipe_exec_time = {} # vector and cube time unchanged. MTE scale proportionally
         self.has_overlap = False
         self.last_task_end_time = 0
         self.total_wait_time = 0
@@ -270,42 +270,27 @@ def decimal_to_26(num):
     return "".join(reversed(result))
 
 
-def build_fake_entry(id):
+def build_fake_entry(task_id):
     global total_tasks
     global total_cores
 
-    entry = TaskInfo(id)
+    entry = TaskInfo(task_id)
     entry.core_idx = 0
     entry.psg_id_within_static = 0
     entry.psg_id_in_dyn = 0
     entry.color_label = "fake"
     entry.is_fake = True
-    total_tasks[id] = entry
+    total_tasks[task_id] = entry
     total_cores[0].tasks.append(entry)
     total_cores[0].faketask_num += 1
     return entry
 
 
-def get_min_max_value(vec, min):
-    min_value = vec[0]
-    max_value = vec[0]
-    for num in vec:
-        if num < min_value:
-            min_value = num
-        elif num > max_value:
-            max_value = num
-
-    if min:
-        return min_value
-    else:
-        return max_value
-
-
-def get_fake_task_start_end_cycles(id):
+def get_fake_task_start_end_cycles(fake_task_id):
     global total_tasks
     global fake_task_start_time_alloc
 
-    entry = total_tasks[id]
+    entry = total_tasks[fake_task_id]
     find = False
     # 根据successor 对Fake Task 赋值
     if len(entry.successors) > 0:
@@ -316,7 +301,7 @@ def get_fake_task_start_end_cycles(id):
                 continue
             tmp_list.append(succ_entry.exec_start)
         if len(tmp_list) > 0:
-            time = get_min_max_value(tmp_list, True)
+            time = min(tmp_list)
             entry.exec_start = time - 1
             entry.exec_end = time
             find = True
@@ -328,10 +313,10 @@ def get_fake_task_start_end_cycles(id):
             if task_entry.is_fake == True:
                 continue
             for succ in task_entry.successors:
-                if succ == id:
+                if succ == fake_task_id:
                     tmp_list.append(task_entry.exec_end)
         if len(tmp_list) > 0:
-            time = get_min_max_value(tmp_list, False)
+            time = max(tmp_list)
             entry.exec_start = time
             entry.exec_end = time + 1
             find = True
@@ -401,13 +386,13 @@ def build_swim_info(swim_data, topo_data, label_type: int = 0):
         total_cores[core_idx] = core_entry
 
     # 解析topo.json 文件中的数据
-    if topo_data != None:
+    if topo_data is not None:
         for topo_task in topo_data:
             task_id = topo_task["taskId"]
             if task_id not in total_tasks:
                 build_fake_entry(task_id)
                 fake_task_list.append(task_id)
-            func_name = topo_task.get("funcName", "")        
+            func_name = topo_task.get("funcName", "")
             sematic_label = topo_task.get("semanticLabel", "")
             entry = total_tasks[task_id]
             entry.root_index = topo_task.get("rootIndex", -1)
@@ -1089,15 +1074,15 @@ def calculate_pipe_usage(path):
         f.write(f"AIV: {aiv_num}\n")
         f.write(f"Total Pipe Usage\n")
         f.write(f"Pipe, AverageTime, TotalExecuteTime, AverageUsage\n")
-        avg_time = total_pipe_use_time['CUBE'] / aic_num
+        avg_time = total_pipe_use_time.get('CUBE', 0) / aic_num
         f.write(f"CUBE, {avg_time}, {total_execute_time}, {(avg_time / total_execute_time) * 100:.{4}}%\n")
-        avg_time = total_pipe_use_time['VECTOR_ALU'] / aiv_num
+        avg_time = total_pipe_use_time.get('VECTOR_ALU', 0) / aiv_num
         f.write(f"VECTOR_ALU, {avg_time}, {total_execute_time}, {(avg_time / total_execute_time) * 100:.{4}}%\n")
-        avg_time = total_pipe_use_time['MTE_IN'] / (aic_num + aiv_num)
+        avg_time = total_pipe_use_time.get('MTE_IN', 0) / (aic_num + aiv_num)
         f.write(f"MTE_IN, {avg_time}, {total_execute_time}, {(avg_time / total_execute_time) * 100:.{4}}%\n")
-        avg_time = total_pipe_use_time['MTE1'] / aic_num
+        avg_time = total_pipe_use_time.get('MTE1', 0) / aic_num
         f.write(f"MTE1, {avg_time}, {total_execute_time}, {(avg_time / total_execute_time) * 100:.{4}}%\n")
-        avg_time = total_pipe_use_time['MTE_OUT'] / (aic_num + aiv_num)
+        avg_time = total_pipe_use_time.get('MTE_OUT', 0) / (aic_num + aiv_num)
         f.write(f"MTE_OUT, {avg_time}, {total_execute_time}, {(avg_time / total_execute_time) * 100:.{4}}%\n")
 
         pipe_list = ['MTE_IN', 'MTE1', 'MTE_OUT', 'CUBE', 'VECTOR_ALU']

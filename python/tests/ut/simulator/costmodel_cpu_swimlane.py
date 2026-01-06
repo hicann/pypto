@@ -33,7 +33,7 @@ def safe_json_load(file_path):
     except json.JSONDecodeError as e:
         return None, f"Invalid json format: {e}"
     except PermissionError:
-        return None, "Permission Erro"
+        return None, "Permission Error"
     except Exception as e:
         return None, f"Load json fail, unknow error: {e}"
 
@@ -166,8 +166,9 @@ def test_softmax():
     output_path = get_out_put_path()
     assert output_path
 
-    merged_swimlane, error = safe_json_load(os.path.join(output_path, 'CostModelSimulationOutput/merged_swimlane.json'))
-    assert not error
+    merged_swimlane_path = os.path.join(output_path, "CostModelSimulationOutput", "merged_swimlane.json")
+    merged_swimlane, error = safe_json_load(merged_swimlane_path)
+    assert not error, f"safe_json_load({merged_swimlane_path}): {error}"
 
 
 if __name__ == "__main__":

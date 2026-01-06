@@ -50,7 +50,7 @@ def parse_log_file(log_file_path):
                     print(f"Successfully parsed performance trace block from line {block_start_line} to {line_num}")
                 else:
                     print(f"Warning: Empty performance trace block from line {block_start_line} to {line_num}")
-                
+
                 current_block_aicpu = []
                 current_block_aicore = []
                 continue
@@ -112,7 +112,7 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
         trace_events.append({
             "name": "thread_name",
             "ph": "M",
-            "pid": 0, 
+            "pid": 0,
             "tid": thread_id,
             "args": {
                 "name": thread_name
@@ -121,14 +121,14 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
 
         tasks = block.get("tasks", [])
         sorted_tasks = sorted(tasks, key=lambda x: x.get("end", 0))
-        
+
         # 处理相同end_time的情况
         adjusted_tasks = []
         prev_end = None
         for task in sorted_tasks:
             task_copy = task.copy()
             current_end = task_copy.get("end", 0)
-            
+
             # 如果当前end与上一个相同，则递增1
             if prev_end is not None and current_end == prev_end:
                 task_copy["end"] = prev_end + 1
@@ -151,11 +151,11 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
                 dur = 1 / freq
             perfetto_event = {
                 "name": f"{task_name}",
-                "cat": core_type, 
-                "ph": "X", 
+                "cat": core_type,
+                "ph": "X",
                 "ts": ts,
                 "dur": dur,
-                "pid": 0, 
+                "pid": 0,
                 "tid": thread_id,
                 "freq": freq
             }
@@ -180,7 +180,7 @@ def gen_perfetto_command(input_file, output_file):
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(perfetto_data, f, ensure_ascii=False, indent=2)
         print(f"Success to generate perfetto file: {output_file}")
-        
+
         complete_events = [e for e in perfetto_data if e.get('ph') == 'X']
         metadata_events = [e for e in perfetto_data if e.get('ph') == 'M']
         print(f"Process {len(complete_events)} task events, {len(metadata_events)} meta data events")

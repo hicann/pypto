@@ -72,7 +72,7 @@ class ProfDir:
         task_info_csv_file: Path = Path(self._rest_dir, "work_flow/tilefwk_task_info.csv")
         if not task_info_csv_file.exists():
             self._rest_dir.mkdir(parents=True, exist_ok=True)
-            wf_py = Path(self._src_root, "tools/tilefwk_prof_data_parser.py")
+            wf_py = Path(self._src_root, "tools/profiling/tilefwk_prof_data_parser.py")
             cmd = f"{sys.executable} {wf_py} -p {self._data_dir} --output=work_flow"
             ret = subprocess.run(shlex.split(cmd), cwd=self._rest_dir,
                                  capture_output=True, check=False, text=True, encoding='utf-8')
@@ -97,7 +97,7 @@ class ProfDir:
         topo_json = Path(self.result_dump_dir, "topo.json")
         if prof_log_json.exists() and topo_json.exists():
             # 多卡预热场景下, 暂无法获取准确 json, 暂不支持 perfetto 输出
-            py = Path(self._src_root, "tools/draw_swim_lane.py")
+            py = Path(self._src_root, "tools/profiling/draw_swim_lane.py")
             cmd = f"{sys.executable} {py} {prof_log_json} {topo_json}"
             ret = subprocess.run(shlex.split(cmd), cwd=self._src_root,
                                  capture_output=True, check=False, text=True, encoding='utf-8')

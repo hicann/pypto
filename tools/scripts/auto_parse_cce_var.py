@@ -179,7 +179,7 @@ if __name__ == "__main__":
     """
     脚本说明:
     脚本用于将动态cce中表征validShape的变量, 根据aicpu3日志中的funcData进行真实值计算。
-    使用方法:python3 tools/auto_parse_cce_var.py -f ./aicpu3.txt -k ./build/output/bin/kernel_meta/
+    使用方法:python3 tools/scripts/auto_parse_cce_var.py -f ./aicpu3.txt -k ./build/output/bin/kernel_meta/
 
     输入:
     aicpu3.txt-----funcData代表了运行时的真实参数

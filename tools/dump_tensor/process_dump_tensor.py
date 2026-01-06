@@ -9,34 +9,39 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-Invoke this script in `ascend_tensor` project root dir
+Invoke this script in `pypto` project root dir
 """
-from typing import List, Tuple, Optional
 from dataclasses import dataclass
-import struct
-import torch
+from typing import List, Tuple, Optional
 import argparse
-import numpy as np
 import os
+import struct
+
+import numpy as np
+import torch
+
 from thread_task_runner import ThreadTaskRunner
 
 DEFAULT_MAX_WORKERS = 16
 HUGE_TENSOR_THRESHOLD = 1024 * 1024 # numel threshold
+PROPERTY_NUM = 6
+
 
 def parse_task_id(task_id: int) -> Tuple[int, int]: # root id + leaf call id
-    TASKID_TASK_BITS = 20
-    return (task_id >> TASKID_TASK_BITS, task_id & ((1 << TASKID_TASK_BITS) - 1))
+    taskid_task_bits = 20
+    return (task_id >> taskid_task_bits, task_id & ((1 << taskid_task_bits) - 1))
+
 
 @dataclass(frozen=True)
 class RawTensorDesc:
-    seqNo: int
-    taskId: int
-    rawMagic: int
+    seq_no: int
+    task_id: int
+    raw_magic: int
     address: int
     dtype: str
-    bytesOfDtype: int
+    bytes_of_dtype: int
     shape: Tuple[int]
-    ioMark: Optional[str]
+    io_mark: Optional[str]
     symlink_src: Optional[str] = None
 
     def numel(self) -> int:
@@ -46,26 +51,25 @@ class RawTensorDesc:
         return (self.address, self.dtype, tuple(self.shape))
 
     def name(self) -> str:
-        func_id, subtask_id = parse_task_id(self.taskId)
-        name = f"{self.seqNo}-{func_id}-{subtask_id}-{self.rawMagic}"
-        if self.ioMark is not None:
-            name += f"-{self.ioMark}"
+        func_id, subtask_id = parse_task_id(self.task_id)
+        name = f"{self.seq_no}-{func_id}-{subtask_id}-{self.raw_magic}"
+        if self.io_mark is not None:
+            name += f"-{self.io_mark}"
         return name
 
     def copy_with_symlink_src(self, symlink_src) -> "RawTensorDesc":
         return RawTensorDesc(
-            seqNo=self.seqNo,
-            taskId=self.taskId,
-            rawMagic=self.rawMagic,
+            seq_no=self.seq_no,
+            task_id=self.task_id,
+            raw_magic=self.raw_magic,
             address=self.address,
             dtype=self.dtype,
-            bytesOfDtype=self.bytesOfDtype,
+            bytes_of_dtype=self.bytes_of_dtype,
             shape=self.shape,
-            ioMark=self.ioMark,
+            io_mark=self.io_mark,
             symlink_src=symlink_src,
         )
 
-PROPERTY_NUM = 6
 
 def parse_tile_fwk_aicpu_ctrl(filename, inputs, outputs) -> List[RawTensorDesc]:
     io_map = {}
@@ -80,10 +84,10 @@ def parse_tile_fwk_aicpu_ctrl(filename, inputs, outputs) -> List[RawTensorDesc]:
     preprocess_io_map(inputs, 'i')
     preprocess_io_map(outputs, 'o')
 
-    rawTensors: List[RawTensorDesc] = []
+    raw_tensors: List[RawTensorDesc] = []
     tensor_cache = {}
     with open(filename, 'r') as f:
-        startRecording = False
+        start_recording = False
         for line in f:
             stripped_line = line.strip()
             if not stripped_line:
@@ -94,28 +98,30 @@ def parse_tile_fwk_aicpu_ctrl(filename, inputs, outputs) -> List[RawTensorDesc]:
             stripped_line = stripped_line.split('[DumpTensor]')[-1].strip(' "')
 
             if stripped_line.startswith(">>>"):
-                startRecording = True
+                start_recording = True
                 continue
 
             if stripped_line.startswith("<<<"):
-                startRecording = False
+                start_recording = False
                 continue
 
-            if startRecording:
+            if start_recording:
                 splits = stripped_line.strip().split(',')
-                seqNo, taskId, rawMagic, address, dtype, bytesOfDtype = splits[:PROPERTY_NUM]
-                seqNo, taskId, rawMagic, address, bytesOfDtype = map(int, (seqNo, taskId, rawMagic, address, bytesOfDtype))
+                seq_no, task_id, raw_magic, address, dtype, bytes_of_dtype = splits[:PROPERTY_NUM]
+                seq_no, task_id, raw_magic, address, bytes_of_dtype = map(int, (
+                    seq_no, task_id, raw_magic, address, bytes_of_dtype
+                ))
                 shape = tuple(map(lambda x : int(x.strip('()')), splits[PROPERTY_NUM:]))
 
                 rt = RawTensorDesc(
-                    seqNo=seqNo,
-                    taskId=taskId,
-                    rawMagic=rawMagic,
+                    seq_no=seq_no,
+                    task_id=task_id,
+                    raw_magic=raw_magic,
                     address=address,
                     dtype=dtype,
-                    bytesOfDtype=bytesOfDtype,
+                    bytes_of_dtype=bytes_of_dtype,
                     shape=shape,
-                    ioMark=None if address not in io_map else io_map[address],
+                    io_mark=None if address not in io_map else io_map[address],
                 )
 
                 key = rt.tensor_key()
@@ -126,25 +132,15 @@ def parse_tile_fwk_aicpu_ctrl(filename, inputs, outputs) -> List[RawTensorDesc]:
                 else:
                     tensor_cache[key] = rt.name()
 
-                rawTensors.append(rt)
-    rawTensors = list(set(rawTensors))
-    return rawTensors
+                raw_tensors.append(rt)
+    raw_tensors = list(set(raw_tensors))
+    return raw_tensors
+
 
 class ByteTable:
     def __init__(self, binary_data, offset=0):
-        self.blocks = []  # 每个元素是 (baseAddr, size, data)
+        self.blocks = []  # 每个元素是 (base_addr, size, data)
         self._parse(binary_data, offset)
-
-    def _parse(self, data, offset=0):
-        while offset < len(data):
-            # 读取 baseAddr 和 size
-            baseAddr, size = struct.unpack_from('<QQ', data, offset)
-            offset += 16
-            # 读取 data[size]
-            block_data = data[offset:offset + size]
-            offset += size
-            self.blocks.append((baseAddr, size, block_data))
-            print(f"Parsed a binary data block | addr=0x{baseAddr:X}, size={size}")
 
     def query(self, addr_start, addr_end):
         for base, size, data in self.blocks:
@@ -160,6 +156,18 @@ class ByteTable:
             return bytearray(data[offset_in_block:offset_in_block + length])
         raise Exception("Address mismatching")
 
+    def _parse(self, data, offset=0):
+        while offset < len(data):
+            # 读取 base_addr 和 size
+            base_addr, size = struct.unpack_from('<QQ', data, offset)
+            offset += 16
+            # 读取 data[size]
+            block_data = data[offset:offset + size]
+            offset += size
+            self.blocks.append((base_addr, size, block_data))
+            print(f"Parsed a binary data block | addr=0x{base_addr:X}, size={size}")
+
+
 def read_uint64_list(binary_data: bytes, offset: int):
     # 读取 size（8 字节）
     size = struct.unpack_from('<Q', binary_data, offset)[0]
@@ -172,6 +180,7 @@ def read_uint64_list(binary_data: bytes, offset: int):
 
     return data, offset
 
+
 def parse_dump_tensor_binary(filename) -> Tuple[ByteTable, List[int], List[int]]:
     with open(filename, 'rb') as f:
         binary_data = f.read()
@@ -180,7 +189,8 @@ def parse_dump_tensor_binary(filename) -> Tuple[ByteTable, List[int], List[int]]
         outputs, offset = read_uint64_list(binary_data, offset)
         return ByteTable(binary_data, offset), inputs, outputs
 
-def ascpp_dtype_to_torch_dtype(dtype: str) -> torch.dtype:
+
+def pypto_dtype_to_torch_dtype(dtype: str) -> Optional[torch.dtype]:
     dtype_map = {
         "INT4": None,
         "INT8": torch.int8,
@@ -200,16 +210,17 @@ def ascpp_dtype_to_torch_dtype(dtype: str) -> torch.dtype:
         "BOOL": torch.bool,
         "DOUBLE": torch.double,
     }
-    if not dtype in dtype_map:
-        print(f"Invalid ascendcpp dtype: {dtype}")
-        exit(-1)
+    if dtype not in dtype_map:
+        print(f"Invalid pypto dtype: {dtype}")
+        return None
 
     torch_dtype = dtype_map[dtype]
     if torch_dtype is None:
-        print(f"Cannot convert ascendcpp dtype: {dtype} to corresponding torch dtype")
-        exit(-1)
+        print(f"Cannot convert pypto dtype: {dtype} to corresponding torch dtype")
+        return None
 
     return torch_dtype
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process process_dump_tensor.")
@@ -218,6 +229,7 @@ def parse_arguments():
     parser.add_argument("--max_workers", type=int, default=DEFAULT_MAX_WORKERS,
                         help=f"Maximum number of threading workers, {DEFAULT_MAX_WORKERS} by default")
     return parser.parse_args()
+
 
 def main():
     args = parse_arguments()
@@ -229,34 +241,36 @@ def main():
     os.makedirs(dump_tensor_dir, exist_ok=True)
 
     torch.set_printoptions(
-        threshold=1024*1024*1024,
-        linewidth=1024*1024,
+        threshold=1024**3,
+        linewidth=1024**2,
     )
 
     print(f"In total {len(raw_tensors)} raw tensors to be processed")
 
-    def seq_no_dir_str(seqNo: int):
-        return f"seqNo-{seqNo}"
+    def seq_no_dir_str(seq_no: int):
+        return f"seqNo-{seq_no}"
 
     for rt in raw_tensors:
-        os.makedirs(os.path.join(dump_tensor_dir, seq_no_dir_str(rt.seqNo)), exist_ok=True)
+        os.makedirs(os.path.join(dump_tensor_dir, seq_no_dir_str(rt.seq_no)), exist_ok=True)
 
     def dump_raw_tensor(rt: RawTensorDesc):
-        # print(f"Process tensor | address=0x{rt.address:X}, shape={rt.shape}, dtype={rt.dtype}, name={rt.name()}")
-        dst_file = os.path.join(dump_tensor_dir, seq_no_dir_str(rt.seqNo), f"{rt.name()}.txt")
+        dst_file = os.path.join(dump_tensor_dir, seq_no_dir_str(rt.seq_no), f"{rt.name()}.txt")
         if rt.symlink_src is not None:
             assert rt.symlink_src != rt.name(), f"Invalid symlink to self: {rt.name()}" # No self-symlink
 
-            src_seqNo = int(rt.symlink_src.split('-')[0])
-            src_file = f"../{seq_no_dir_str(src_seqNo)}/{rt.symlink_src}.txt"
+            src_seq_no = int(rt.symlink_src.split('-')[0])
+            src_file = f"../{seq_no_dir_str(src_seq_no)}/{rt.symlink_src}.txt"
             if os.path.islink(dst_file) or os.path.exists(dst_file):
                 os.remove(dst_file)
             os.symlink(src=src_file, dst=dst_file)
             return
 
-        memReq = rt.numel() * rt.bytesOfDtype
-        binary_data = binary_table.query(rt.address, rt.address + memReq)
-        torch_dtype = ascpp_dtype_to_torch_dtype(rt.dtype)
+        mem_req = rt.numel() * rt.bytes_of_dtype
+        binary_data = binary_table.query(rt.address, rt.address + mem_req)
+        torch_dtype = pypto_dtype_to_torch_dtype(rt.dtype)
+        if torch_dtype is None:
+            # error message already printed in pypto_dtype_to_torch_dtype
+            return
         tensor = torch.frombuffer(binary_data, dtype=torch_dtype).reshape(rt.shape)
 
         with open(dst_file, 'w') as f:
@@ -274,5 +288,5 @@ def main():
 
     print(f"Output files location: `{dump_tensor_dir}`")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
