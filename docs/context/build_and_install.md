@@ -4,6 +4,15 @@
 
 - **环境准备**: 编译安装 PyPTO 项目前, 请先参考[环境准备](prepare_environment.md)完成基础环境搭建.
 
+## 通过 PyPI 安装 
+ 
+PyPTO 已发布至 [PyPI](https://pypi.org/), 若不涉及对 PyPTO 源码的修改, 可以直接使用 `pip` 命令安装: 
+
+```bash 
+# 由 PyPI 源下载并安装 
+python3 -m pip install pypto 
+``` 
+ 
 ## 通过源码编译安装
 
 ### 环境自检

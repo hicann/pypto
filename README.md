@@ -30,19 +30,19 @@ PyPTO 提供了丰富的示例代码, 涵盖从基础操作到复杂模型实现
 
 ### 大模型实现样例
 
-- [DeepSeekV3.2 SFA](examples/models/deepseek_v32_exp/deepseekv32_sparse_flash_attention_quant.py) - 稀疏 Flash Attention 量化实现
-- [DeepSeekV3.2 MLA-PROLOG](examples/models/deepseek_v32_exp/deepseekv32_mla_indexer_prolog_quant.py) - MLA Indexer Prolog 量化实现
-- [GLM V4.5 Attention](examples/models/glm_v4_5/glm_attention.py) - GLM 注意力机制实现
-- [GLM V4.5 ExpertsSelector](examples/models/glm_v4_5/glm_select_experts.py) - GLM 专家选择器实现
+- [DeepSeekV3.2 SFA](https://gitcode.com/cann/pypto/blob/master/examples/models/deepseek_v32_exp/deepseekv32_sparse_flash_attention_quant.py) - 稀疏 Flash Attention 量化实现
+- [DeepSeekV3.2 MLA-PROLOG](https://gitcode.com/cann/pypto/blob/master/examples/models/deepseek_v32_exp/deepseekv32_mla_indexer_prolog_quant.py) - MLA Indexer Prolog 量化实现
+- [GLM V4.5 Attention](https://gitcode.com/cann/pypto/blob/master/examples/models/glm_v4_5/glm_attention.py) - GLM 注意力机制实现
+- [GLM V4.5 ExpertsSelector](https://gitcode.com/cann/pypto/blob/master/examples/models/glm_v4_5/glm_select_experts.py) - GLM 专家选择器实现
 
 ### 学习路径
 
-在 [examples](examples) 目录下, 我们规划了多个层级的样例:
+在 [examples](https://gitcode.com/cann/pypto/blob/master/examples) 目录下, 我们规划了多个层级的样例:
 
-- [beginner/](examples/01_beginner): 基础操作示例, 帮助初学者快速上手 PyPTO 编程
-- [intermediate/](examples/02_intermediate): 中级示例, 包括自定义操作、神经网络模块等
-- [advanced/](examples/03_advanced): 高级示例, 包括复杂模式和多函数组合
-- [models/](examples/models): 完整的大模型实现样例, 供快速移植和部署
+- [beginner/](https://gitcode.com/cann/pypto/blob/master/examples/01_beginner): 基础操作示例, 帮助初学者快速上手 PyPTO 编程
+- [intermediate/](https://gitcode.com/cann/pypto/blob/master/examples/02_intermediate): 中级示例, 包括自定义操作、神经网络模块等
+- [advanced/](https://gitcode.com/cann/pypto/blob/master/examples/03_advanced): 高级示例, 包括复杂模式和多函数组合
+- [models/](https://gitcode.com/cann/pypto/blob/master/examples/models): 完整的大模型实现样例, 供快速移植和部署
 
 这些示例可以帮助开发者学习如何编写 PyPTO 算子, 从简单的 Tensor 操作到复杂的模型网络实现.
 
@@ -50,15 +50,15 @@ PyPTO 提供了丰富的示例代码, 涵盖从基础操作到复杂模型实现
 
 若您希望快速体验 PyPTO 的使用和开发过程, 请访问如下文档获取简易教程.
 
-- [环境部署](docs/context/prepare_environment.md): 介绍项目基础环境的搭建, 包括软件包和第三方依赖的获取和安装.
-- [编译安装](docs/context/build_and_install.md): 环境部署后, 介绍如何快速获取或编译 PyPTO 软件包并安装.
-- [样例运行](docs/invocation/examples_invocation.md): 安装 PyPTO 软件包后, 介绍如何快速实现样例运行.
+- [环境部署](https://gitcode.com/cann/pypto/blob/master/docs/context/prepare_environment.md): 介绍项目基础环境的搭建, 包括软件包和第三方依赖的获取和安装.
+- [编译安装](https://gitcode.com/cann/pypto/blob/master/docs/context/build_and_install.md): 环境部署后, 介绍如何快速获取或编译 PyPTO 软件包并安装.
+- [样例运行](https://gitcode.com/cann/pypto/blob/master/docs/invocation/examples_invocation.md): 安装 PyPTO 软件包后, 介绍如何快速实现样例运行.
 
 ## 📖文档资源
 
 若您希望深入体验项目功能并修改源码, 请访问如下文档获取详细教程.
-- **[docs](./docs/)**: 当前发布版本的详细文档, 包括编程指南、API 参考等
-- **[示例代码](./examples/)**: 丰富的示例代码, 从基础到高级应用
+- **[docs](https://gitcode.com/cann/pypto/blob/master/./docs/)**: 当前发布版本的详细文档, 包括编程指南、API 参考等
+- **[示例代码](https://gitcode.com/cann/pypto/blob/master/./examples/)**: 丰富的示例代码, 从基础到高级应用
 
 ## 🔍目录结构
 
@@ -95,9 +95,9 @@ PyPTO 提供了丰富的示例代码, 涵盖从基础操作到复杂模型实现
 
 ## 📝相关信息
 
-- [贡献指南](CONTRIBUTION.md)
-- [安全声明](SECURITY.md)
-- [许可证](LICENSE)
+- [贡献指南](https://gitcode.com/cann/pypto/blob/master/CONTRIBUTION.md)
+- [安全声明](https://gitcode.com/cann/pypto/blob/master/SECURITY.md)
+- [许可证](https://gitcode.com/cann/pypto/blob/master/LICENSE)
 
 ## 联系我们
 
