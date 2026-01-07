@@ -59,12 +59,31 @@ class GTestAccelerate(ABC):
         """执行结果
         """
         cntr_name: str = "Cntr"
-        duration: Optional[timedelta] = None
+        act_duration: Optional[timedelta] = None  # 实际总耗时
+        ori_duration: Optional[timedelta] = None  # 原始总耗时(预估)
+        cntr_max_duration: Optional[timedelta] = None  # 各 Cntr 中最长的耗时
+        cntr_min_duration: Optional[timedelta] = None  # 各 Cntr 中最短的耗时
         cntr_execution_details: JoinableQueue = JoinableQueue()
         cntr_duration_dict: Dict[int, timedelta] = dataclasses.field(default_factory=dict)
         case_execution_details: JoinableQueue = JoinableQueue()
         case_exception_details: JoinableQueue = JoinableQueue()
         case_terminate_details: JoinableQueue = JoinableQueue()
+
+        @property
+        def revenue_desc(self) -> str:
+            diff = self.ori_duration - self.act_duration
+            rate = float(diff / self.act_duration) * 100
+            desc = f"Revenue(Act/Ori, {self.act_duration.total_seconds():.2f}/"
+            desc += f"{self.ori_duration.total_seconds():.2f}) {rate:.2f}%"
+            return desc
+
+        @property
+        def cntr_latency_desc(self) -> str:
+            diff = self.cntr_max_duration - self.cntr_min_duration
+            rate = float(diff / self.cntr_min_duration) * 100
+            desc = f"Latency(Max/Min/Diff, {self.cntr_max_duration.total_seconds():.2f}/"
+            desc += f"{self.cntr_min_duration.total_seconds():.2f}/{diff.total_seconds():.2f}) {rate:.2f}%"
+            return desc
 
         def get_cntr_exec_info(self) -> Tuple[str, str]:
             """获取 Container 执行信息统计.
@@ -76,7 +95,7 @@ class GTestAccelerate(ABC):
             """
             heads = [self.cntr_name, "Total", "Success", "Failed", "Duration"]
             datas = []
-            duration_sum = timedelta()
+            self.ori_duration = timedelta()
             while not self.cntr_execution_details.empty():
                 _brief = self.cntr_execution_details.get()
                 devs_id = int(_brief[0])
@@ -84,17 +103,23 @@ class GTestAccelerate(ABC):
                 case_pass = int(_brief[2])
                 case_fail = int(_brief[3])
                 devs_duration = _brief[-1]
+                # 耗时统计
+                if self.cntr_max_duration is None:
+                    self.cntr_max_duration = devs_duration
+                self.cntr_max_duration = max(self.cntr_max_duration, devs_duration)
+                if self.cntr_min_duration is None:
+                    self.cntr_min_duration = devs_duration
+                self.cntr_min_duration = min(self.cntr_min_duration, devs_duration)
+                # 结果保存
                 self.cntr_duration_dict[devs_id] = devs_duration
-                duration_sum += devs_duration
+                self.ori_duration += devs_duration
                 datas.append([devs_id, case_total, case_pass, case_fail, f"{devs_duration.total_seconds():.2f}"])
                 self.cntr_execution_details.task_done()
             brief = "\nNone"
             if len(datas) != 0:
                 brief = Table.table(datas=datas, headers=heads)
             # 并行执行收益计算
-            rate = float((duration_sum - self.duration) / self.duration) * 100
-            desc = f"Duration {self.duration.total_seconds():.2f} secs, Revenue(Act/Ori, "
-            desc += f"{self.duration.total_seconds():.2f}/{duration_sum.total_seconds():.2f}) {rate:.2f}%"
+            desc = f"Duration {self.act_duration.total_seconds():.2f} secs, {self.revenue_desc}"
             return f"\n\n{self.cntr_name} Execution Brief:{brief}", desc
 
         def get_case_exec_terminate_info(self) -> Tuple[str, int]:
@@ -157,11 +182,11 @@ class GTestAccelerate(ABC):
                 case_duration = _brief[2]
                 job_duration = self.cntr_duration_dict[job_idx]
                 ratio_job = float(case_duration / job_duration) * 100
-                ratio_process = float(case_duration / self.duration) * 100
+                ratio_process = float(case_duration / self.act_duration) * 100
                 datas.append(
                     [job_idx, case_name, case_duration.total_seconds(),
                      f"{case_duration.total_seconds():.2f}/{job_duration.total_seconds():.2f} {ratio_job:.2f}%",
-                     f"{case_duration.total_seconds():.2f}/{self.duration.total_seconds():.2f} "
+                     f"{case_duration.total_seconds():.2f}/{self.act_duration.total_seconds():.2f} "
                      f"{ratio_process:.2f}%"])
                 self.case_execution_details.task_done()
             brief = "\nNone"
@@ -265,21 +290,21 @@ class GTestAccelerate(ABC):
         self.case_execution_queue: JoinableQueue = JoinableQueue()  # Case 正常执行结束时，收集相关信息
         self.case_exception_queue: JoinableQueue = JoinableQueue()  # Case 执行失败时, 用于收集错误信息
         self.case_terminate_queue: JoinableQueue = JoinableQueue()  # Case 被终止执行时, 收集相关信息
-        self.case_exec_count: Value = Value('i', 0)  # DFX, 统计 Case 完成进度
+        self.case_exec_count = Value('i', 0)  # DFX, 统计 Case 完成进度
 
         # 容器管理
         self.cntr_name: str = cntr_name
         self.cntr_execution_queue: JoinableQueue = JoinableQueue()  # Container 执行结果统计上报
-        self.cntr_terminate_event: Event = Event()  # 用于通知其他 Container 进程结束运行
-        self.cntr_exit_count: Value = Value('i', 0)  # DFX, 统计 Container 退出进度
+        self.cntr_terminate_event = Event()  # 用于通知其他 Container 进程结束运行
+        self.cntr_exit_count = Value('i', 0)  # DFX, 统计 Container 退出进度
 
         # 其他
-        if len(self.exe_params) == 0:
+        if self.cntr_num == 0:
             raise ValueError("ExecParams is empty, won't run any task.")
-        if len(params) > len(self.case_list):
+        if len(params) > self.case_num:
             logging.info("CaseNum(%s) less than len(ExecParams)=%s, will only start the first %s %s.",
-                         len(self.case_list), len(self.exe_params), len(self.case_list), self.cntr_name)
-            self.exe_params = self.exe_params[:len(self.case_list)]
+                         self.case_num, self.cntr_num, self.case_num, self.cntr_name)
+            self.exe_params = self.exe_params[:self.case_num]
         logging.info("\n\n%s Accelerate Args:%s", self.mark, Table.table(datas=self.brief))
 
     @property
@@ -289,15 +314,23 @@ class GTestAccelerate(ABC):
             ["Python3", f"{sys.executable} ({ver.major}.{ver.minor}.{ver.micro})"],
             ["Timeout", self.exe_timeout],
             ["HaltOnError", self.exe_halt_on_error],
-            [f"{self.cntr_name}Num", len(self.exe_params)],
+            [f"{self.cntr_name}Num", self.cntr_num],
             [f"{self.cntr_name}List", [p.cntr_id for p in self.exe_params]],
-            ["CaseNum", len(self.case_list)],
+            ["CaseNum", self.case_num],
             ["CaseTimeout", self.exe.timeout],
             ["Executable", self.exe.file],
         ]
         for k, v in self.exe.envs.items():
             lst.append([k, v])
         return lst
+
+    @property
+    def cntr_num(self) -> int:
+        return len(self.exe_params)
+
+    @property
+    def case_num(self) -> int:
+        return len(self.case_list)
 
     @property
     @abstractmethod
@@ -359,7 +392,7 @@ class GTestAccelerate(ABC):
         # 执行流程
         ts = datetime.now(tz=timezone.utc)
         self._main()
-        self.exe_result.duration = datetime.now(tz=timezone.utc) - ts
+        self.exe_result.act_duration = datetime.now(tz=timezone.utc) - ts
 
     def post(self) -> bool:
         """后处理, 获得执行结果汇总
@@ -376,6 +409,9 @@ class GTestAccelerate(ABC):
 
         if case_exec_result:
             logging.info(out)
+            logging.info("Use %s %s | Exec %s case | %s | %s",
+                         self.cntr_num, self.cntr_name, self.case_num,
+                         self.exe_result.revenue_desc, self.exe_result.cntr_latency_desc)
         else:
             logging.error(out)
         return case_exec_result
@@ -399,9 +435,9 @@ class GTestAccelerate(ABC):
             if cs is not None:
                 remaining_count += 1
             self.case_queue.task_done()
-        success_count = len(self.case_list) - remaining_count - terminate_count - exception_count
+        success_count = self.case_num - remaining_count - terminate_count - exception_count
         execution_heads = ["Total", "Success", "Failed", "Terminate", "Remaining"]
-        execution_datas = [[len(self.case_list), success_count, exception_count, terminate_count, remaining_count]]
+        execution_datas = [[self.case_num, success_count, exception_count, terminate_count, remaining_count]]
         execution_brief = Table.table(datas=execution_datas, headers=execution_heads)
         execution_brief = f"\n\nCase Execution Brief:{execution_brief}"
 
@@ -437,7 +473,7 @@ class GTestAccelerate(ABC):
         """
         for cs in self.case_list:
             self.case_queue.put(cs)
-        for _ in range(len(self.exe_params)):
+        for _ in range(self.cntr_num):
             self.case_queue.put(None)
 
     def _start_move_process_grp(self) -> List[Process]:
@@ -495,7 +531,7 @@ class GTestAccelerate(ABC):
             if not self._wait_cntr_one_step(cntr_process_grp=cntr_process_grp, s_time=s_time, step=step):
                 break
 
-    def _wait_cntr_one_step(self, cntr_process_grp: List[Process], s_time: time, step: int = 1) -> bool:
+    def _wait_cntr_one_step(self, cntr_process_grp: List[Process], s_time, step: int = 1) -> bool:
         """阻塞当前进程, 检测 Cntr 进程组完成情况
 
         :param cntr_process_grp: Cntr 进程组
@@ -699,8 +735,8 @@ class GTestAccelerate(ABC):
             with self.cntr_exit_count.get_lock():
                 self.cntr_exit_count.value += 1
         cnt = int(self.cntr_exit_count.value)
-        pgs = cnt / len(self.exe_params) * 100
-        return f"{self.cntr_name}Progress[{cnt}/{len(self.exe_params)} {pgs:.2f}%]"
+        pgs = cnt / self.cntr_num * 100
+        return f"{self.cntr_name}Progress[{cnt}/{self.cntr_num} {pgs:.2f}%]"
 
     def _case_progress(self, update=True) -> str:
         """获取 Case 处理进展, 调用本函数前, 由调用方加锁(dfx_output_lock)
@@ -709,8 +745,8 @@ class GTestAccelerate(ABC):
             with self.case_exec_count.get_lock():
                 self.case_exec_count.value += 1
         cnt = int(self.case_exec_count.value)
-        pgs = cnt / len(self.case_list) * 100
-        return f"CaseProgress[{cnt}/{len(self.case_list)} {pgs:.2f}%]"
+        pgs = cnt / self.case_num * 100
+        return f"CaseProgress[{cnt}/{self.case_num} {pgs:.2f}%]"
 
     def _put_case_execution_info(self, info: List[Any]):
         self.case_execution_queue.put(info)

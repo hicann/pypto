@@ -45,9 +45,6 @@ struct Backend {
     }
 
     ~Backend() {
-        if (passHandle != nullptr) {
-            dlclose(passHandle);
-        }
         if (compilerHandle != nullptr) {
             dlclose(compilerHandle);
         }
@@ -59,12 +56,11 @@ struct Backend {
 private:
     Backend() {
         progHandle = dlopen(nullptr, RTLD_LAZY | RTLD_NOLOAD);
-        passHandle = dlopen("libtile_fwk_passes.so", RTLD_LAZY | RTLD_NOLOAD);
         compilerHandle = dlopen("libtile_fwk_compiler.so", RTLD_LAZY | RTLD_NOLOAD);
         simuHandle = dlopen("libtile_fwk_simulator.so", RTLD_LAZY | RTLD_NOLOAD);
 
-        runPass = (RunPassFunc)GetSymbol(passHandle, "RunPass");
-        getResumePath = (GetResumePathFunc)GetSymbol(passHandle, "GetResumePath");
+        runPass = (RunPassFunc)GetSymbol(progHandle, "RunPass");
+        getResumePath = (GetResumePathFunc)GetSymbol(progHandle, "GetResumePath");
         execute = (ExecuteFunc)GetSymbol(compilerHandle, "Execute");
         platform = (PlatformFunc)GetSymbol(compilerHandle, "GetPlatformInfo");
         matchCache = (MatchCacheFunc)GetSymbol(compilerHandle, "MatchCache");
@@ -88,7 +84,6 @@ private:
     }
 
     void *progHandle;
-    void *passHandle;
     void *compilerHandle;
     void *simuHandle;
 };

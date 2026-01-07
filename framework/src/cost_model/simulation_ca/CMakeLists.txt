@@ -45,7 +45,6 @@ if (BUILD_WITH_CANN AND NOT ENABLE_FEATURE_PYTHON_FRONT_END)
                 tile_fwk_intf_pub
                 tile_fwk_simulation_ca
                 tile_fwk_interface
-                tile_fwk_passes
                 tile_fwk_codegen
                 tile_fwk_simulation
                 dl

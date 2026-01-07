@@ -21,7 +21,6 @@ target_link_libraries(tile_fwk_simulation
         PUBLIC
             dl
             $<$<BOOL:${ENABLE_UTEST}>:tile_fwk_interface>
-            $<$<BOOL:${ENABLE_UTEST}>:tile_fwk_passes>
         PRIVATE
             intf_pub_cxx17
             tile_fwk_intf_pub

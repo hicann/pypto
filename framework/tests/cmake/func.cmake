@@ -110,8 +110,10 @@ function(PTO_Fwk_GTest_RunExe_GetPreExecSetup PY_CMD_SETUP PY_ENV_LINES BASH_CMD
 
     # 环境变量
     set(EnvLines)
-    # 处理变量 LD_LIBRARIES_EXT 及环境变量 LD_LIBRARY_PATH
-    set(LD_LIBRARY_PATH_EXT)
+    # 处理变量 LD_LIBRARIES_EXT 及环境变量 LD_LIBRARY_PATH 及 CMAKE_LIBRARY_OUTPUT_DIRECTORY
+    # 1. 当前 UTest/STest 已把动态库生成路径设置到 CMAKE_LIBRARY_OUTPUT_DIRECTORY 路径下, 此处需增加该路径配置;
+    # 2. 保留 LD_LIBRARY_PATH_EXT 处理逻辑, 已供后续其他场景使用;
+    set(LD_LIBRARY_PATH_EXT ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
     foreach (LIBRARY ${ARG_LD_LIBRARIES_EXT})
         add_dependencies(${ARG_TARGET} ${LIBRARY})
         list(APPEND LD_LIBRARY_PATH_EXT "$<TARGET_FILE_DIR:${LIBRARY}>")
@@ -301,4 +303,34 @@ function(PTO_Fwk_GTest_GetGTestFilterStr GTEST_FILTER_STR)
     )
     string(REPLACE "," ":" OutputVariable "${OutputVariable}")
     set(${GTEST_FILTER_STR} ${OutputVariable} PARENT_SCOPE)
+endfunction()
+
+# GTest 按模块添加路径
+#[[
+Parameters:
+  one_value_keywords:
+      MARK                          : [Required] 标识测试类型
+      DIR                           : [Required] 待添加的模块名(与子路径同名)
+  multi_value_keywords:
+      MODULE_LIST                   : [Optional] 配置的模块名列表
+]]
+function(PTO_Fwk_GTest_AddModuleDir)
+    cmake_parse_arguments(
+            ARG
+            ""
+            "MARK;DIR"
+            "MODULE_LIST"
+            ""
+            ${ARGN}
+    )
+    if ((NOT ARG_MODULE_LIST) OR "${ARG_MODULE_LIST}x" STREQUAL "ONx")
+        set(_TestModuleList "ALL")
+    else ()
+        string(REPLACE "," ";" _TestModuleList "${ARG_MODULE_LIST}")
+        string(REPLACE ":" ";" _TestModuleList "${_TestModuleList}")
+    endif ()
+    if (("${_TestModuleList}" STREQUAL "ALL") OR ("${ARG_DIR}" IN_LIST _TestModuleList))
+        add_subdirectory(${ARG_DIR})
+        message(STATUS "${ARG_MARK} Add module(${ARG_DIR})")
+    endif()
 endfunction()

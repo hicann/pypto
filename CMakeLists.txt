@@ -47,6 +47,7 @@ option(ENABLE_TESTS_EXECUTE_PARALLEL "Auto execute tests executable parallel" OF
 option(ENABLE_TESTS_EXECUTE_PARALLEL_TIMEOUT "Auto execute tests executable parallel timeout" OFF)
 option(ENABLE_TESTS_EXECUTE_CHANGED_FILE "Specify tests changed file" OFF)
 option(ENABLE_UTEST "Enable UTest" OFF)
+option(ENABLE_UTEST_MODULE "Enable UTest Module compile and execute" OFF)
 option(ENABLE_STEST_GOLDEN_PATH "Specific STest Golden Path" OFF)
 option(ENABLE_STEST_GOLDEN_PATH_CLEAN "Clean STest Golden" OFF)
 option(ENABLE_STEST_EXECUTE_DEVICE_ID "Auto execute tests executable with Device Id" OFF)

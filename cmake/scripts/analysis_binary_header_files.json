@@ -38,24 +38,6 @@
       ]
     }
   },
-  "libtile_fwk_passes.so": {
-    "Source-Header": {
-      "Self": [
-        "framework/src/passes/"
-      ],
-      "Area": [
-        "framework/src/interface/"
-      ],
-      "Include": [
-        "framework/include/"
-      ],
-      "WhiteList": [
-      ],
-      "BlackList": [
-        "framework/src/interface/tileop/"
-      ]
-    }
-  },
   "libtile_fwk_codegen.so": {
     "Source-Header": {
       "Self": [

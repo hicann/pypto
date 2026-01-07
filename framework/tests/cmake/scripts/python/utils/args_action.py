@@ -41,8 +41,7 @@ class ArgsGTestFilterListAction(argparse.Action):
     def parse_all_cases(binary: str) -> List[str]:
         """获取gtest ut测试用例
         """
-        result = subprocess.run([binary, '--gtest_list_tests'],
-                            capture_output=True, text=True)
+        result = subprocess.run([binary, '--gtest_list_tests'], capture_output=True, text=True)
         cases = []
         current_suite = ""
         for line in result.stdout.split('\n'):

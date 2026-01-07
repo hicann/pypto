@@ -11,21 +11,4 @@
 file(GLOB_RECURSE _Passes_Srcs *.cpp)
 #PTO_Fwk_Debug_Source_List(NAME "_Passes_Srcs" LIST ${_Passes_Srcs} DETAIL OFF)
 
-if (ENABLE_FEATURE_PYTHON_FRONT_END)
-        target_sources(tile_fwk_interface PRIVATE ${_Passes_Srcs})
-else ()
-        add_library(tile_fwk_passes SHARED)
-        target_sources(tile_fwk_passes PRIVATE ${_Passes_Srcs})
-        target_link_libraries(tile_fwk_passes
-                PUBLIC
-                    json
-                    c_sec
-                PRIVATE
-                    intf_pub_cxx17
-                    tile_fwk_intf_pub
-                    dl
-                    Threads::Threads
-        )
-        PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_passes)
-        #PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_passes)
-endif ()
+target_sources(tile_fwk_interface PRIVATE ${_Passes_Srcs})

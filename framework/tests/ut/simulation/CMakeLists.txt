@@ -16,11 +16,10 @@ PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
         PRIVATE_INCLUDE_DIRECTORIES ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
-
-        PUBLIC_LINK_LIBRARIES tile_fwk_simulation tile_fwk_simulation_platform tile_fwk_passes tile_fwk_interface dl
-        GTEST_FILTER_LIST ${_CaseFilterList}
-        LD_LIBRARIES_EXT tile_fwk_simulation tile_fwk_simulation_platform tile_fwk_simulation_ca tile_fwk_simulation_pv
+        PUBLIC_LINK_LIBRARIES tile_fwk_interface tile_fwk_operator tile_fwk_simulation dl
 )
+add_dependencies(${_Target} tile_fwk_simulation_ca tile_fwk_simulation_pv)
+
 # 可执行程序运行依赖的配置, 脚本配置
 add_custom_command(
         TARGET ${_Target} PRE_BUILD

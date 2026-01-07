@@ -513,6 +513,7 @@ class TestsParam(CMakeParam):
         self.exec: TestsExecuteParam = TestsExecuteParam(args=args)
         self.golden: TestsGoldenParam = TestsGoldenParam(args=args)
         self.utest: TestsFilterParam = TestsFilterParam(argv=args.utest, opt="ENABLE_UTEST")
+        self.utest_module: TestsFilterParam = TestsFilterParam(argv=args.utest_module, opt="ENABLE_UTEST_MODULE")
         self.stest_exec: STestExecuteParam = STestExecuteParam(args=args, enable_binary_cache=self.exec.ci_model)
         self.stest_tools: STestToolsParam = STestToolsParam()
         self.stest: TestsFilterParam = TestsFilterParam(argv=args.stest, opt="ENABLE_STEST")
@@ -577,6 +578,7 @@ class TestsParam(CMakeParam):
         TestsExecuteParam.reg_args(parser=parser)
         TestsGoldenParam.reg_args(parser=parser)
         TestsFilterParam.reg_args(parser=parser, ext="utest")
+        TestsFilterParam.reg_args(parser=parser, ext="utest_module")
         STestExecuteParam.reg_args(parser=parser)
         STestToolsParam.reg_args(parser=ext)
         TestsFilterParam.reg_args(parser=parser, ext="stest")
@@ -591,6 +593,8 @@ class TestsParam(CMakeParam):
         cmd += self.example.get_cfg_cmd()
         if self.enable:
             cmd += self.exec.get_cfg_cmd()
+            if self.utest.enable:
+                cmd += self.utest_module.get_cfg_cmd()
             if self.stest.enable or self.stest_distributed.enable:
                 cmd += self.golden.get_cfg_cmd()
                 cmd += self.stest_exec.get_cfg_cmd()
