@@ -123,15 +123,15 @@ TEST_F(TestCodegenDynIndexOutCast, DynIndexOutUnaligned) {
     PassManager &passManager = PassManager::Instance();
     passManager.RegisterStrategy(
         "GenerateMoveOpPassTestStrategy", {
-                                              {"RemoveRedundantReshape", "RemoveRedundantReshape"},
-                                              {        "ExpandFunction",         "ExpandFunction"},
-                                              {           "DuplicateOp",            "DuplicateOp"},
-                                              {     "MergeViewAssemble",      "MergeViewAssemble"},
-                                              {      "AssignMemoryType",       "AssignMemoryType"},
-                                              {"SplitLargeFanoutTensor", "SplitLargeFanoutTensor"},
-                                              {          "SplitReshape",           "SplitReshape"},
-                                              {     "RemoveRedundantOp",      "RemoveRedundantOp"},
-                                              {        "GenerateMoveOp",         "GenerateMoveOp"},
+                                              {"RemoveRedundantReshape",  PassName::REMOVE_REDUNDANT_RESHAPE},
+                                              {        "ExpandFunction",           PassName::EXPAND_FUNCTION},
+                                              {           "DuplicateOp",              PassName::DUPLICATE_OP},
+                                              {     "MergeViewAssemble",       PassName::MERGE_VIEW_ASSEMBLE},
+                                              {      "AssignMemoryType",        PassName::ASSIGN_MEMORY_TYPE},
+                                              {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                              {          "SplitReshape",             PassName::SPLIT_RESHAPE},
+                                              {     "RemoveRedundantOp",       PassName::REMOVE_REDUNDANT_OP},
+                                              {        "GenerateMoveOp",          PassName::GENERATE_MOVE_OP},
     });
 
     int h = 32;

@@ -72,6 +72,34 @@ void PrintGraphInfoPreGraph(Function* func, std::set<int>& tensorMagicWithColorS
     }
 }
 
+void SetUpPassStrategy() {
+    PassManager &passManager = PassManager::Instance();
+    passManager.RegisterStrategy(
+        "PreGraphTestStrategy", {
+                                    {  "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE},
+                                    {     "InferMemoryConflict",      PassName::INFER_MEMORY_CONFLICT},
+                                    {          "ExpandFunction",            PassName::EXPAND_FUNCTION},
+                                    {             "DuplicateOp",               PassName::DUPLICATE_OP},
+                                    {       "MergeViewAssemble",        PassName::MERGE_VIEW_ASSEMBLE},
+                                    {            "SplitReshape",              PassName::SPLIT_RESHAPE},
+                                    {          "SplitRawTensor",           PassName::SPLIT_RAW_TENSOR},
+                                    {  "SplitLargeFanoutTensor",  PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                    { "InferDiscontinuousInput",  PassName::INFER_DISCONTINUOUS_INPUT},
+                                    {        "AssignMemoryType",         PassName::ASSIGN_MEMORY_TYPE},
+                                    {       "RemoveRedundantOp",        PassName::REMOVE_REDUNDANT_OP},
+                                    {                  "SplitK",                    PassName::SPLIT_K},
+                                    {          "GraphPartition",            PassName::GRAPH_PARTITION},
+                                    {            "NBufferMerge",             PassName::N_BUFFER_MERGE},
+                                    {    "IntraSubgraphAdapter",     PassName::INTRA_SUBGRAPH_ADAPTER},
+                                    {          "GenerateMoveOp",           PassName::GENERATE_MOVE_OP},
+                                    {"CommonOperationEliminate", PassName::COMMON_OPERATION_ELIMINATE},
+                                    {      "L1CopyInReuseMerge",     PassName::L1_COPY_IN_REUSE_MERGE},
+                                    {          "PadLocalBuffer",           PassName::PAD_LOCAL_BUFFER},
+                                    {  "RemoveUnalignedReshape",   PassName::REMOVE_UNALIGNED_RESHAPE},
+                                    {           "ReplaceTensor",             PassName::REPLACE_TENSOR},
+    });
+}
+
 class PreGraphTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
@@ -259,31 +287,7 @@ public:
 };
 
 TEST_F(PreGraphTest, TestAssemble) {
-    PassManager &passManager = PassManager::Instance();
-    passManager.RegisterStrategy("PreGraphTestStrategy", {
-        {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-        {      "InferMemoryConflict",      "InferMemoryConflict"},
-        {           "ExpandFunction",           "ExpandFunction"},
-        {              "DuplicateOp",              "DuplicateOp"},
-        {        "MergeViewAssemble",        "MergeViewAssemble"},
-        {             "SplitReshape",             "SplitReshape"},
-        {           "SplitRawTensor",           "SplitRawTensor"},
-        {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-        {  "InferDiscontinuousInput",  "InferDiscontinuousInput"},
-        {         "AssignMemoryType",         "AssignMemoryType"},
-        {        "RemoveRedundantOp",        "RemoveRedundantOp"},
-        {                   "SplitK",                   "SplitK"},
-        {           "GraphPartition",           "GraphPartition"},
-        {             "NBufferMerge",             "NBufferMerge"},
-        {     "IntraSubgraphAdapter",     "IntraSubgraphAdapter"},
-        {           "GenerateMoveOp",           "GenerateMoveOp"},
-        { "CommonOperationEliminate", "CommonOperationEliminate"},
-        {       "L1CopyInReuseMerge",       "L1CopyInReuseMerge"},
-        {           "PadLocalBuffer",           "PadLocalBuffer"},
-        {   "RemoveUnalignedReshape",   "RemoveUnalignedReshape"},
-        {           "ReplaceTensor",           "ReplaceTensor"},
-
-    });
+    SetUpPassStrategy();
     int dim1 = 8;
     int dim2 = 2;
     int dim3 = 64;
@@ -330,30 +334,7 @@ config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
     std::vector<int64_t> shape2{64, 64};
     std::vector<int64_t> shape3{16, 256};
 
-    PassManager &passManager = PassManager::Instance();
-    passManager.RegisterStrategy("PreGraphTestStrategy", {
-        {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-        {      "InferMemoryConflict",      "InferMemoryConflict"},
-        {           "ExpandFunction",           "ExpandFunction"},
-        {              "DuplicateOp",              "DuplicateOp"},
-        {        "MergeViewAssemble",        "MergeViewAssemble"},
-        {             "SplitReshape",             "SplitReshape"},
-        {           "SplitRawTensor",           "SplitRawTensor"},
-        {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-        {  "InferDiscontinuousInput",  "InferDiscontinuousInput"},
-        {         "AssignMemoryType",         "AssignMemoryType"},
-        {        "RemoveRedundantOp",        "RemoveRedundantOp"},
-        {                   "SplitK",                   "SplitK"},
-        {           "GraphPartition",           "GraphPartition"},
-        {             "NBufferMerge",             "NBufferMerge"},
-        {     "IntraSubgraphAdapter",     "IntraSubgraphAdapter"},
-        {           "GenerateMoveOp",           "GenerateMoveOp"},
-        { "CommonOperationEliminate", "CommonOperationEliminate"},
-        {       "L1CopyInReuseMerge",       "L1CopyInReuseMerge"},
-        {           "PadLocalBuffer",           "PadLocalBuffer"},
-        {   "RemoveUnalignedReshape",   "RemoveUnalignedReshape"},
-        {           "ReplaceTensor",           "ReplaceTensor"},
-    });
+    SetUpPassStrategy();
     ConfigManager::Instance();
 
     Function* originFunction = nullptr;

@@ -24,16 +24,21 @@ class PassDependency {
 public:
     static PassDependency &Instance();
 
-    Status CheckStrategyDependency(const std::string &strategyName, const std::vector<std::string> &passes);
+    Status CheckStrategyDependency(const std::string &strategyName, const std::vector<PassName> &passes);
 
 private:
     PassDependency();
     ~PassDependency() = default;
 
-    PassDependency(const PassDependency&) = delete;
-    PassDependency& operator=(const PassDependency&) = delete;
+    PassDependency(const PassDependency &) = delete;
+    PassDependency &operator=(const PassDependency &) = delete;
 
+    void RegisterPreDependencies();
+    void RegisterSequenceDependencies();
+    Status CheckSequenceDependency(size_t index, const std::string &strategyName, const std::vector<PassName> &passes);
+    
 private:
-    std::unordered_map<std::string, std::vector<std::string>> passDependencies_;
+    std::unordered_map<PassName, std::vector<PassName>> preDependencies_;
+    std::unordered_map<PassName, std::vector<PassName>> sequenceDependencies_;
 };
 } // namespace npu::tile_fwk

@@ -100,52 +100,52 @@ void RegPass() {
 void PassManager::RegDefaultStrategy() {
     RegisterStrategy(
         "PVC2_OOO", {
-            {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-            {                 "AutoCast",                 "AutoCast"},
-            {      "InferMemoryConflict",      "InferMemoryConflict"},
-            {       "RemoveUndrivenView",       "RemoveUndrivenView"},
-            {           "ExpandFunction",           "ExpandFunction"},
-            {        "MergeViewAssemble",        "MergeViewAssemble"},
-            {             "SplitReshape",             "SplitReshape"},
-            {           "SplitRawTensor",           "SplitRawTensor"},
-            {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-            {              "DuplicateOp",              "DuplicateOp"},
-            {         "AssignMemoryType",         "AssignMemoryType"},
-            {  "InferDiscontinuousInput",  "InferDiscontinuousInput"},
-            {        "RemoveRedundantOp",        "RemoveRedundantOp"},
-            {                   "SplitK",                   "SplitK"},
-            {           "GraphPartition",           "GraphPartition"},
-            {          "ReduceCopyMerge",          "ReduceCopyMerge"},
-            {             "NBufferMerge",             "NBufferMerge"},
-            {       "L1CopyInReuseMerge",       "L1CopyInReuseMerge"},
-            {     "IntraSubgraphAdapter",     "IntraSubgraphAdapter"},
-            {           "GenerateMoveOp",           "GenerateMoveOp"},
-            { "CommonOperationEliminate", "CommonOperationEliminate"},
-            {              "AxisCombine",              "AxisCombine"},
-            {           "PadLocalBuffer",           "PadLocalBuffer"},
-            {   "RemoveUnalignedReshape",   "RemoveUnalignedReshape"},
-            {          "ReplaceTensor",              "ReplaceTensor"},
-            {          "PreGraphProcess",          "PreGraphProcess"},
-            {            "InferDynShape",            "InferDynShape"},
-            {       "SubgraphToFunction",       "SubgraphToFunction"},
-            {          "InferParamIndex",          "InferParamIndex"},
-            {        "SrcDstBufferMerge",        "SrcDstBufferMerge"},
-            {                 "AddAlloc",                 "AddAlloc"},
-            {              "OoOSchedule",              "OoOSchedule"},
-            {        "GlobalMemoryReuse",        "GlobalMemoryReuse"},
-            {              "RemoveAlloc",              "RemoveAlloc"},
-            {           "CopyOutResolve",           "CopyOutResolve"},
-            {               "InsertSync",               "InsertSync"},
-            {         "MixSubgraphSplit",         "MixSubgraphSplit"},
-            {           "CodegenPreproc",           "CodegenPreproc"},
+            {  "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE},
+            {                "AutoCast",                  PassName::AUTO_CAST},
+            {     "InferMemoryConflict",      PassName::INFER_MEMORY_CONFLICT},
+            {      "RemoveUndrivenView",       PassName::REMOVE_UNDRIVEN_VIEW},
+            {          "ExpandFunction",            PassName::EXPAND_FUNCTION},
+            {       "MergeViewAssemble",        PassName::MERGE_VIEW_ASSEMBLE},
+            {            "SplitReshape",              PassName::SPLIT_RESHAPE},
+            {          "SplitRawTensor",           PassName::SPLIT_RAW_TENSOR},
+            {  "SplitLargeFanoutTensor",  PassName::SPLIT_LARGE_FANOUT_TENSOR},
+            {             "DuplicateOp",               PassName::DUPLICATE_OP},
+            {        "AssignMemoryType",         PassName::ASSIGN_MEMORY_TYPE},
+            { "InferDiscontinuousInput",  PassName::INFER_DISCONTINUOUS_INPUT},
+            {       "RemoveRedundantOp",        PassName::REMOVE_REDUNDANT_OP},
+            {                  "SplitK",                    PassName::SPLIT_K},
+            {          "GraphPartition",            PassName::GRAPH_PARTITION},
+            {         "ReduceCopyMerge",          PassName::REDUCE_COPY_MERGE},
+            {            "NBufferMerge",             PassName::N_BUFFER_MERGE},
+            {      "L1CopyInReuseMerge",     PassName::L1_COPY_IN_REUSE_MERGE},
+            {    "IntraSubgraphAdapter",     PassName::INTRA_SUBGRAPH_ADAPTER},
+            {          "GenerateMoveOp",           PassName::GENERATE_MOVE_OP},
+            {"CommonOperationEliminate", PassName::COMMON_OPERATION_ELIMINATE},
+            {             "AxisCombine",               PassName::AXIS_COMBINE},
+            {          "PadLocalBuffer",           PassName::PAD_LOCAL_BUFFER},
+            {  "RemoveUnalignedReshape",   PassName::REMOVE_UNALIGNED_RESHAPE},
+            {           "ReplaceTensor",             PassName::REPLACE_TENSOR},
+            {         "PreGraphProcess",          PassName::PRE_GRAPH_PROCESS},
+            {           "InferDynShape",            PassName::INFER_DYN_SHAPE},
+            {      "SubgraphToFunction",       PassName::SUBGRAPH_TO_FUNCTION},
+            {         "InferParamIndex",          PassName::INFER_PARAM_INDEX},
+            {       "SrcDstBufferMerge",       PassName::SRC_DST_BUFFER_MERGE},
+            {                "AddAlloc",                  PassName::ADD_ALLOC},
+            {             "OoOSchedule",               PassName::OOO_SCHEDULE},
+            {       "GlobalMemoryReuse",        PassName::GLOBAL_MEMORY_REUSE},
+            {             "RemoveAlloc",               PassName::REMOVE_ALLOC},
+            {          "CopyOutResolve",           PassName::COPY_OUT_RESOLVE},
+            {              "InsertSync",                PassName::INSERT_SYNC},
+            {        "MixSubgraphSplit",         PassName::MIX_SUBGRAPH_SPLIT},
+            {          "CodegenPreproc",            PassName::CODEGEN_PREPROC},
     });
     RegisterStrategy(
         "FunctionUnroll", {
-            {               "LoopUnroll",               "LoopUnroll"}
+            {              "LoopUnroll",                PassName::LOOP_UNROLL}
     });
     RegisterStrategy(
         "ExecuteGraph", {
-            {          "DynAttrToStatic",          "DynAttrToStatic"},
+            {         "DynAttrToStatic",         PassName::DYN_ATTR_TO_STATIC},
     });
 }
 
@@ -157,8 +157,8 @@ PassManager::PassManager() {
 
 void PassManager::RegisterStrategy(const std::string &strategy, const std::vector<PassEntry> &passEntries) {
     // check pass dependency
-    std::vector<std::string> passes;
-    for (const auto &passEntry : passEntries){
+    std::vector<PassName> passes;
+    for (const auto &passEntry : passEntries) {
         passes.emplace_back(passEntry.passName);
     }
     PassDependency::Instance().CheckStrategyDependency(strategy, passes);
@@ -192,10 +192,10 @@ std::vector<PassManager::PassEntry> PassManager::GetStrategyPasses(const std::st
     NPUArch currArch = Platform::Instance().GetSoc().GetNPUArch();
  	auto selectedPass = std::vector<PassManager::PassEntry>();
  	for (auto &currPassEntry : it->second) {
- 	    const auto &passName = currPassEntry.passName;
+ 	    const auto &passName = PassNameStr(currPassEntry.passName);
  	    auto pass = PassRegistry::GetInstance().CreatePass(passName);
  	    if (pass == nullptr) {
-            ALOG_WARN_F("Pass %s does not exist.", passName.c_str());
+            ALOG_WARN_F("Pass %s does not exist.", passName);
  	        continue;
  	    }
  	    std::vector<NPUArch> &arches = pass->GetSupportedArches();
@@ -233,9 +233,9 @@ Status PassManager::RunPass(Program &program, Function &function, const std::str
     for (size_t i = startIdx; i < strategyPasses.size(); i++) {
         const auto &identifier = strategyPasses[i].identifier;
         const auto &passName = strategyPasses[i].passName;
-        auto pass = PassRegistry::GetInstance().CreatePass(passName);
+        auto pass = PassRegistry::GetInstance().CreatePass(PassNameStr(passName));
         if (pass == nullptr) {
-            ALOG_ERROR_F("Pass [%s] does not exist.", passName.c_str());
+            ALOG_ERROR_F("Pass [%s] does not exist.", PassNameStr(passName));
             return FAILED;
         }
         std::string originLogOutPath = config::LogFile();

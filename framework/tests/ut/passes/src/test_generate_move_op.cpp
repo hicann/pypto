@@ -61,15 +61,15 @@ TEST_F(GenerateMoveOpPassTest, AssembleViewToCopy) {
         Tensor output(DT_FP32, shape2, "output");
         PassManager &passManager = PassManager::Instance();
         passManager.RegisterStrategy("GenerateMoveOpPassTestStrategy", {
-            {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-            {      "InferMemoryConflict",      "InferMemoryConflict"},
-            {           "ExpandFunction",           "ExpandFunction"},
-            {              "DuplicateOp",              "DuplicateOp"},
-            {        "MergeViewAssemble",        "MergeViewAssemble"},
-            {         "AssignMemoryType",         "AssignMemoryType"},
-            {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-            {             "SplitReshape",             "SplitReshape"},
-            {        "RemoveRedundantOp",        "RemoveRedundantOp"},
+            {   "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE},
+            {      "InferMemoryConflict",      PassName::INFER_MEMORY_CONFLICT},
+            {           "ExpandFunction",           PassName::EXPAND_FUNCTION},
+            {              "DuplicateOp",              PassName::DUPLICATE_OP},
+            {        "MergeViewAssemble",        PassName::MERGE_VIEW_ASSEMBLE},
+            {         "AssignMemoryType",         PassName::ASSIGN_MEMORY_TYPE},
+            {   "SplitLargeFanoutTensor",   PassName::SPLIT_LARGE_FANOUT_TENSOR},
+            {             "SplitReshape",             PassName::SPLIT_RESHAPE},
+            {        "RemoveRedundantOp",        PassName::REMOVE_REDUNDANT_OP},
 
         });
         ConfigManager::Instance();
@@ -156,16 +156,16 @@ TEST_F(GenerateMoveOpPassTest, ConvertToCopy) {
         Tensor output(DT_FP32, shape2, "output");
         PassManager &passManager = PassManager::Instance();
         passManager.RegisterStrategy("GenerateMoveOpPassTestStrategy", {
-            {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-            {      "InferMemoryConflict",      "InferMemoryConflict"},
-            {           "ExpandFunction",           "ExpandFunction"},
-            {              "DuplicateOp",              "DuplicateOp"},
-            {        "MergeViewAssemble",        "MergeViewAssemble"},
-            {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-            {             "SplitReshape",             "SplitReshape"},
-            {         "AssignMemoryType",         "AssignMemoryType"},
-            {        "RemoveRedundantOp",        "RemoveRedundantOp"},
-            {           "GenerateMoveOp",           "GenerateMoveOp"},
+            {   "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE },
+            {      "InferMemoryConflict",      PassName::INFER_MEMORY_CONFLICT },
+            {           "ExpandFunction",           PassName::EXPAND_FUNCTION },
+            {              "DuplicateOp",              PassName::DUPLICATE_OP },
+            {        "MergeViewAssemble",        PassName::MERGE_VIEW_ASSEMBLE },
+            {   "SplitLargeFanoutTensor",   PassName::SPLIT_LARGE_FANOUT_TENSOR },
+            {             "SplitReshape",             PassName::SPLIT_RESHAPE },
+            {         "AssignMemoryType",         PassName::ASSIGN_MEMORY_TYPE },
+            {        "RemoveRedundantOp",        PassName::REMOVE_REDUNDANT_OP },
+            {           "GenerateMoveOp",           PassName::GENERATE_MOVE_OP },
         });
         ConfigManager::Instance();
 
@@ -233,15 +233,15 @@ TEST_F(GenerateMoveOpPassTest, Transpose) {
 
         PassManager &passManager = PassManager::Instance();
         passManager.RegisterStrategy("GenerateMoveOpPassTestStrategy", {
-            {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-            {      "InferMemoryConflict",      "InferMemoryConflict"},
-            {           "ExpandFunction",           "ExpandFunction"},
-            {              "DuplicateOp",              "DuplicateOp"},
-            {        "MergeViewAssemble",        "MergeViewAssemble"},
-            {         "AssignMemoryType",         "AssignMemoryType"},
-            {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-            {             "SplitReshape",             "SplitReshape"},
-            {        "RemoveRedundantOp",        "RemoveRedundantOp"},
+            {   "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE },
+            {      "InferMemoryConflict",      PassName::INFER_MEMORY_CONFLICT },
+            {           "ExpandFunction",           PassName::EXPAND_FUNCTION },
+            {              "DuplicateOp",              PassName::DUPLICATE_OP },
+            {        "MergeViewAssemble",        PassName::MERGE_VIEW_ASSEMBLE },
+            {         "AssignMemoryType",         PassName::ASSIGN_MEMORY_TYPE },
+            {   "SplitLargeFanoutTensor",   PassName::SPLIT_LARGE_FANOUT_TENSOR },
+            {             "SplitReshape",             PassName::SPLIT_RESHAPE },
+            {        "RemoveRedundantOp",        PassName::REMOVE_REDUNDANT_OP },
 
         });
         ConfigManager::Instance();
@@ -316,16 +316,15 @@ TEST_F(GenerateMoveOpPassTest, ScatterUpdate) {
 
         PassManager &passManager = PassManager::Instance();
         passManager.RegisterStrategy("GenerateMoveOpPassTestStrategy", {
-            {   "RemoveRedundantReshape",   "RemoveRedundantReshape"},
-            {      "InferMemoryConflict",      "InferMemoryConflict"},
-            {           "ExpandFunction",           "ExpandFunction"},
-            {              "DuplicateOp",              "DuplicateOp"},
-            {        "MergeViewAssemble",        "MergeViewAssemble"},
-            {         "AssignMemoryType",         "AssignMemoryType"},
-            {   "SplitLargeFanoutTensor",   "SplitLargeFanoutTensor"},
-            {             "SplitReshape",             "SplitReshape"},
-            {        "RemoveRedundantOp",        "RemoveRedundantOp"},
-
+            {"RemoveRedundantReshape",  PassName::REMOVE_REDUNDANT_RESHAPE},
+            {   "InferMemoryConflict",     PassName::INFER_MEMORY_CONFLICT},
+            {        "ExpandFunction",           PassName::EXPAND_FUNCTION},
+            {           "DuplicateOp",              PassName::DUPLICATE_OP},
+            {     "MergeViewAssemble",       PassName::MERGE_VIEW_ASSEMBLE},
+            {      "AssignMemoryType",        PassName::ASSIGN_MEMORY_TYPE},
+            {"SplitLargeFanoutTensor", PassName::SPLIT_LARGE_FANOUT_TENSOR},
+            {          "SplitReshape",             PassName::SPLIT_RESHAPE},
+            {     "RemoveRedundantOp",       PassName::REMOVE_REDUNDANT_OP},
         });
         ConfigManager::Instance();
 
@@ -683,8 +682,8 @@ TEST_F(GenerateMoveOpPassTest, ProcessUB2L1FullCoverage) {
         // 注册基础Pass策略（模拟真实流程）
         PassManager &passManager = PassManager::Instance();
         passManager.RegisterStrategy("ProcessUB2L1Strategy", {
-            {"AssignMemoryType", "AssignMemoryType"},
-            {"GenerateMoveOp", "GenerateMoveOp"}
+            {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+            {"GenerateMoveOp", PassName::GENERATE_MOVE_OP}
         });
 
         FUNCTION("ProcessUB2L1Func") {
@@ -748,9 +747,9 @@ TEST_F(GenerateMoveOpPassTest, CreateMoveOpForViewUB2L1) {
         // 注册Pass策略
         PassManager &passManager = PassManager::Instance();
         passManager.RegisterStrategy("GenerateMoveOpViewStrategy", {
-            {"AssignMemoryType", "AssignMemoryType"},
-            {"MergeViewAssemble", "MergeViewAssemble"},
-            {"GenerateMoveOp", "GenerateMoveOp"}
+            {"AssignMemoryType", PassName::ASSIGN_MEMORY_TYPE},
+            {"MergeViewAssemble", PassName::MERGE_VIEW_ASSEMBLE},
+            {"GenerateMoveOp", PassName::GENERATE_MOVE_OP}
         });
 
         FUNCTION("View2UBCopyL1Func") {

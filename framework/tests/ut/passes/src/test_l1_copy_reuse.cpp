@@ -379,7 +379,7 @@ TEST_F(L1CopyInReuseTest, TestGeneralizationL1CopyIn) {
     function->SetTotalSubGraphCount(subGraphNum);
     PassManager &passManager = PassManager::Instance();
     passManager.RegisterStrategy("myStrategy", {
-        {"L1CopyInReuseMerge", "L1CopyInReuseMerge"},
+        {"L1CopyInReuseMerge", PassName::L1_COPY_IN_REUSE_MERGE},
     });
     auto ret = passManager.RunPass(Program::GetInstance(), *function, "myStrategy");
     // L1CopyInReuseMerge LCRM;

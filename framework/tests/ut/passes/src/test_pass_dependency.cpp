@@ -27,9 +27,7 @@ public:
 
     static void TearDownTestCase() {}
 
-    void SetUp() override {
-        Program::GetInstance().Reset();
-    }
+    void SetUp() override { Program::GetInstance().Reset(); }
 
     void TearDown() override {}
 };
@@ -37,20 +35,34 @@ public:
 TEST_F(TestPassDependency, TestCheckStrategyDependency) {
     PassDependency &passDependency = PassDependency::Instance();
 
-    std::vector<std::string> normalPasses = {
-        PassNameStr(PassName::GRAPH_PARTITION), PassNameStr(PassName::PRE_GRAPH_PROCESS),
-        PassNameStr(PassName::INPLACE_PROCESS), PassNameStr(PassName::INFER_DYN_SHAPE), PassNameStr(PassName::SUBGRAPH_TO_FUNCTION)};
-    std::vector<std::string> passesLessDependency = {PassNameStr(PassName::GRAPH_PARTITION),
-        PassNameStr(PassName::INFER_DYN_SHAPE), PassNameStr(PassName::SUBGRAPH_TO_FUNCTION)};
-    std::vector<std::string> passesConsecutiveDup = {PassNameStr(PassName::GRAPH_PARTITION),
-        PassNameStr(PassName::GRAPH_PARTITION), PassNameStr(PassName::PRE_GRAPH_PROCESS),
-        PassNameStr(PassName::INPLACE_PROCESS), PassNameStr(PassName::INFER_DYN_SHAPE),
-        PassNameStr(PassName::SUBGRAPH_TO_FUNCTION), PassNameStr(PassName::SUBGRAPH_TO_FUNCTION),
-        PassNameStr(PassName::SUBGRAPH_TO_FUNCTION), PassNameStr(PassName::SUBGRAPH_TO_FUNCTION)};
-    
+    std::vector<PassName> normalPasses = {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR,
+        PassName::SPLIT_RESHAPE, PassName::SPLIT_K, PassName::GRAPH_PARTITION, PassName::REDUCE_COPY_MERGE,
+        PassName::N_BUFFER_MERGE, PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER,
+        PassName::GENERATE_MOVE_OP, PassName::PRE_GRAPH_PROCESS, PassName::REPLACE_TENSOR, PassName::INFER_DYN_SHAPE,
+        PassName::SUBGRAPH_TO_FUNCTION};
+    // GraphPartition缺少前置DuplicateOp
+    std::vector<PassName> passesLessPreDependency = {PassName::SPLIT_LARGE_FANOUT_TENSOR, PassName::SPLIT_RESHAPE,
+        PassName::SPLIT_K, PassName::GRAPH_PARTITION, PassName::REDUCE_COPY_MERGE, PassName::N_BUFFER_MERGE,
+        PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP};
+    // SplitK重复
+    std::vector<PassName> passesConsecutiveDup = {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR,
+        PassName::SPLIT_RESHAPE, PassName::SPLIT_K, PassName::SPLIT_K, PassName::GRAPH_PARTITION,
+        PassName::REDUCE_COPY_MERGE, PassName::N_BUFFER_MERGE, PassName::L1_COPY_IN_REUSE_MERGE,
+        PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP};
+
     EXPECT_EQ(passDependency.CheckStrategyDependency("normalPasses", normalPasses), SUCCESS);
-    EXPECT_EQ(passDependency.CheckStrategyDependency("passesLessDependency", passesLessDependency), WARNING);
+    EXPECT_EQ(passDependency.CheckStrategyDependency("passesLessPreDependency", passesLessPreDependency), WARNING);
     EXPECT_EQ(passDependency.CheckStrategyDependency("passesConsecutiveDup", passesConsecutiveDup), WARNING);
+}
+
+TEST_F(TestPassDependency, TestStrategySequenceDependency) {
+    PassDependency &passDependency = PassDependency::Instance();
+    // GraphPartition后缺少ReduceConpyMerge
+    std::vector<PassName> lessSequenceDependency = {PassName::DUPLICATE_OP, PassName::SPLIT_LARGE_FANOUT_TENSOR,
+        PassName::SPLIT_RESHAPE, PassName::SPLIT_K, PassName::GRAPH_PARTITION, PassName::N_BUFFER_MERGE,
+        PassName::L1_COPY_IN_REUSE_MERGE, PassName::INTRA_SUBGRAPH_ADAPTER, PassName::GENERATE_MOVE_OP};
+
+    EXPECT_EQ(passDependency.CheckStrategyDependency("lessSequenceDependency", lessSequenceDependency), WARNING);
 }
 } // namespace tile_fwk
 } // namespace npu

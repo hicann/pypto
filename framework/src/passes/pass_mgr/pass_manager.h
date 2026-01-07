@@ -22,6 +22,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/function/function.h"
+#include "passes/pass_mgr/pass_dependency.h"
 
 namespace npu::tile_fwk {
 
@@ -36,8 +37,8 @@ public:
 
     struct PassEntry {
         std::string identifier;
-        std::string passName;
-        PassEntry(std::string id, std::string name) : identifier(id), passName(name) {}
+        PassName passName;
+        PassEntry(std::string id, PassName name) : identifier(id), passName(name) {}
     };
 
     void RegisterStrategy(const std::string &strategy, const std::vector<PassEntry> &passEntries);

@@ -27,8 +27,10 @@ enum class PassType : int32_t {
 
 enum class PassName {
     LOOP_UNROLL,
+    AUTO_CAST,
     REMOVE_REDUNDANT_RESHAPE,
     INFER_MEMORY_CONFLICT,
+    REMOVE_UNDRIVEN_VIEW,
     EXPAND_FUNCTION,
     DUPLICATE_OP,
     MERGE_VIEW_ASSEMBLE,
@@ -40,14 +42,16 @@ enum class PassName {
     REMOVE_REDUNDANT_OP,
     SPLIT_K,
     GRAPH_PARTITION,
+    REDUCE_COPY_MERGE,
     N_BUFFER_MERGE,
     INTRA_SUBGRAPH_ADAPTER,
     GENERATE_MOVE_OP,
     COMMON_OPERATION_ELIMINATE,
     L1_COPY_IN_REUSE_MERGE,
+    AXIS_COMBINE,
     PAD_LOCAL_BUFFER,
     REMOVE_UNALIGNED_RESHAPE,
-    INPLACE_PROCESS,
+    REPLACE_TENSOR,
     PRE_GRAPH_PROCESS,
     INFER_DYN_SHAPE,
     SUBGRAPH_TO_FUNCTION,
@@ -59,15 +63,19 @@ enum class PassName {
     REMOVE_ALLOC,
     COPY_OUT_RESOLVE,
     INSERT_SYNC,
+    MIX_SUBGRAPH_SPLIT,
     CODEGEN_PREPROC,
-    DYN_ATTR_TO_STATIC
+    DYN_ATTR_TO_STATIC,
+    NOT_DEFINED
 };
 
 inline constexpr const char *PassNameStr(PassName name){
     switch (name) {
         case PassName::LOOP_UNROLL: return "LoopUnroll";
         case PassName::REMOVE_REDUNDANT_RESHAPE: return "RemoveRedundantReshape";
+        case PassName::AUTO_CAST: return "AutoCast";
         case PassName::INFER_MEMORY_CONFLICT: return "InferMemoryConflict";
+        case PassName::REMOVE_UNDRIVEN_VIEW: return "RemoveUndrivenView";
         case PassName::EXPAND_FUNCTION: return "ExpandFunction";
         case PassName::DUPLICATE_OP: return "DuplicateOp";
         case PassName::MERGE_VIEW_ASSEMBLE: return "MergeViewAssemble";
@@ -79,14 +87,16 @@ inline constexpr const char *PassNameStr(PassName name){
         case PassName::REMOVE_REDUNDANT_OP: return "RemoveRedundantOp";
         case PassName::SPLIT_K: return "SplitK";
         case PassName::GRAPH_PARTITION: return "GraphPartition";
+        case PassName::REDUCE_COPY_MERGE: return "ReduceCopyMerge";
         case PassName::N_BUFFER_MERGE: return "NBufferMerge";
         case PassName::INTRA_SUBGRAPH_ADAPTER: return "IntraSubgraphAdapter";
         case PassName::GENERATE_MOVE_OP: return "GenerateMoveOp";
         case PassName::COMMON_OPERATION_ELIMINATE: return "CommonOperationEliminate";
+        case PassName::AXIS_COMBINE: return "AxisCombine";
         case PassName::L1_COPY_IN_REUSE_MERGE: return "L1CopyInReuseMerge";
         case PassName::PAD_LOCAL_BUFFER: return "PadLocalBuffer";
         case PassName::REMOVE_UNALIGNED_RESHAPE: return "RemoveUnalignedReshape";
-        case PassName::INPLACE_PROCESS: return "InplaceProcess";
+        case PassName::REPLACE_TENSOR: return "ReplaceTensor";
         case PassName::PRE_GRAPH_PROCESS: return "PreGraphProcess";
         case PassName::INFER_DYN_SHAPE: return "InferDynShape";
         case PassName::SUBGRAPH_TO_FUNCTION: return "SubgraphToFunction";
@@ -98,11 +108,17 @@ inline constexpr const char *PassNameStr(PassName name){
         case PassName::REMOVE_ALLOC: return "RemoveAlloc";
         case PassName::COPY_OUT_RESOLVE: return "CopyOutResolve";
         case PassName::INSERT_SYNC: return "InsertSync";
+        case PassName::MIX_SUBGRAPH_SPLIT: return "MixSubgraphSplit";
         case PassName::CODEGEN_PREPROC: return "CodegenPreproc";
         case PassName::DYN_ATTR_TO_STATIC: return "DynAttrToStatic";
+        case PassName::NOT_DEFINED: return "NotDefined";
         default: 
             ASSERT(false) << "[PassDependency][Manager][ERROR]: PassName not defined.";
-            return "NotDefined";
+            return "Invalid";
     }
+}
+
+inline std::ostream &operator<<(std::ostream &os, PassName name) {
+    return os << PassNameStr(name);
 }
 } // PASSES_PASS_TYPE_H_
