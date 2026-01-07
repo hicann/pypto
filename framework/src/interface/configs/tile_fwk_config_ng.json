@@ -22,7 +22,8 @@
         "cfgcache_device_task_num": 0,
         "cfgcache_root_task_num": 0,
         "cfgcache_leaf_task_num": 0,
-        "stitch_function_size": 20000
+        "stitch_function_size": 20000,
+        "run_mode": 0
     },
     "host": {
         "only_codegen": false

@@ -1229,7 +1229,7 @@ void Function::ProducerMagicLookup(const Function *function, const LogicalTensor
                << op->DumpAttr(attr) << "]";
         }
         if (function->GetGraphType() != GraphType::BLOCK_GRAPH) {
-            ss << op->GetTileShape().toString();
+            ss << op->GetTileShape().ToString();
         }
         if (op->GetOpAttribute() != nullptr) {
             if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
@@ -1310,7 +1310,7 @@ unsigned long Function::ComputeHashOrderless() const {
                 ss << " attr: [" << attr << " : "
                    << operations_[i]->DumpAttr(attr) << "]";
             }
-            ss << operations_[i]->GetTileShape().toString();
+            ss << operations_[i]->GetTileShape().ToString();
             MagicLookup(this, operations_[i]->GetIOperands(), operations_[0]->GetSubgraphID(), index, magic2index, ss);
         }
     }

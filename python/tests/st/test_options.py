@@ -33,7 +33,7 @@ def layer_norm_func():
 @pypto.jit(host_options={"only_codegen": True},
         pass_options={"mg_copyin_upper_bound": 1048},
         )
-def cust_dyn_func_add(a, c, tiling=None):
+def set_scope_options(a, c, tiling=None):
     assert 1048 == get_options("pass.mg_copyin_upper_bound")
 
     # 原接口依然有效，同时修改当前scope中的配置
@@ -57,8 +57,8 @@ def cust_dyn_func_add(a, c, tiling=None):
         # 显式 scope
         with pypto.options("scope2",
                             host_options={"only_codegen": True},
-                            pass_options={"cube_l1_reuse_mode": 1, 
-                                          "pg_upper_bound": 100, 
+                            pass_options={"cube_l1_reuse_mode": 1,
+                                          "pg_upper_bound": 100,
                                           "cube_nbuffer_setting": {3: 4}},
                             vec_tile_shapes=[64, 64],
                             matrix_size=[64, 32],
@@ -91,7 +91,7 @@ def check_cube_tile_shapes(expected_m, expected_k, expected_n, expected_set_l1_t
 
 def get_options(key):
     scope = pypto.get_current_scope()
-    return scope.GetConfig(key)
+    return scope.get_options_prefix(key)
 
 
 def test_scope():
@@ -108,11 +108,50 @@ def test_scope():
     outputs = [c_data]
     pto_inputs = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
     pto_outputs = [pypto.from_torch(tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
-    cust_dyn_func_add(*pto_inputs, *pto_outputs, tiling)
+    set_scope_options(*pto_inputs, *pto_outputs, tiling)
     torch_npu.npu.synchronize()
     golden = torch.ones((n, m)) * 2
     assert torch.allclose(golden.int(), c_data.cpu(), atol=1e-5)
 
+
+@pypto.jit
+def loop_scope(a, b, c, tiling=None):
+    pypto.set_vec_tile_shapes(tiling * 2, tiling * 2)
+    for _ in pypto.loop(1, name="s0", idx_name="k"):
+        pypto.set_vec_tile_shapes(tiling, tiling)
+        c.move(pypto.add(a, b))
+
+    for _ in pypto.loop(1, name="s0", idx_name="k"):
+        assert [tiling * 2, tiling * 2] == pypto.get_vec_tile_shapes()
+        c.move(pypto.add(c, b))
+
+
+def test_loop_scope():
+    device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
+    torch.npu.set_device(int(device_id))
+    tiling = 32
+    n, m = tiling * 1, tiling * 1
+
+    # prepare data
+    a_rawdata = torch.ones((n, m)) * 2
+    a_data = a_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
+
+    b_rawdata = torch.ones((n, m))
+    b_data = b_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
+
+    c_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
+
+    # def inputs and outputs
+    inputs = [a_data, b_data]
+    outputs = [c_data]
+    pto_inputs = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
+    pto_outputs = [pypto.from_torch(tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
+
+    loop_scope(pto_inputs[0], pto_inputs[1], pto_outputs[0], tiling)
+    torch_npu.npu.synchronize()
+
+    golden = torch.ones((n, m)) * 4
+    assert torch.allclose(golden.int(), c_data.cpu(), atol=1e-5)
 
 if __name__ == "__main__":
     test_scope()

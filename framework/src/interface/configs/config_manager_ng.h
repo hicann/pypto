@@ -12,6 +12,10 @@
  * \file config_manager_ng.h
  * \brief
  */
+
+#ifndef CONFIG_MANAGER_NG_H
+#define CONFIG_MANAGER_NG_H
+
 #include <map>
 #include <memory>
 #include <list>
@@ -33,6 +37,11 @@ public:
      * the key is not found.
      */
     const Any &GetConfig(const std::string &key) const;
+
+    /**
+     * \brief Returns a map of all configuration key-value pairs.
+     */
+    const std::map<std::string, Any> GetAllConfig() const;
 
     /**
      * \brief Get the typed config value with the specific key.
@@ -89,6 +98,33 @@ public:
     }
 
     /**
+     * \brief Retrieves the CubeTile configuration.
+     */
+    CubeTile GetCubeTile() const {
+        const Any& value = GetConfig("cube_tile_shapes");
+        return AnyCast<CubeTile>(value);
+    }
+
+    /**
+     * \brief Retrieves the VecTile configuration as a VecTile structure.
+     */
+    VecTile GetVecTile() const {
+        const Any& value = GetConfig("vec_tile_shapes");
+        std::vector<int64_t> vecValue = AnyCast<std::vector<int64_t>>(value);
+        VecTile vectile;
+        vectile.tile = vecValue;
+        return vectile;
+    }
+
+    /**
+     * \brief Retrieves the matrix size configuration as a vector of integers.
+     */
+    std::vector<int64_t> GetMatrixSize() const {
+        const Any& value = GetConfig("matrix_size");
+        return AnyCast<std::vector<int64_t>>(value);
+    }
+
+    /**
      * \brief Generate a TileShape object from the current configuration scope.
      */
     TileShape GenerateTileShape() const;
@@ -120,11 +156,13 @@ public:
      */
     void UpdateValue(const std::string &key, Any value);
 
-    ConfigScope(ConfigScopePtr parent);
-    ~ConfigScope();
-private:
-    friend struct ConfigManagerImpl;
-    std::shared_ptr<ConfigScope> Clone();
+    /**
+     * \brief clear the config in Scope
+     */
+    void Clear() {
+        values_.clear();
+    }
+
     template <typename T>
     T GetConfigAllType(const std::string &key) const {
         if constexpr (std::is_same_v<T, bool>) {
@@ -136,6 +174,12 @@ private:
             return AnyCast<T>(GetConfig(key));
         }
     }
+
+    ConfigScope(ConfigScopePtr parent);
+    ~ConfigScope();
+private:
+    friend struct ConfigManagerImpl;
+    std::shared_ptr<ConfigScope> Clone();
 
 private:
     std::shared_ptr<ConfigScope> parent_;
@@ -184,7 +228,12 @@ public:
      *
      * @return std::shared_ptr<ConfigScope>
      */
-    std::shared_ptr<ConfigScope> CurrentScope() const;
+    static std::shared_ptr<ConfigScope> CurrentScope();
+
+    /**
+     * @brief change the currentScope
+     */
+    void PushScope(ConfigScopePtr scope);
 
     /**
      * @brief Get the type of the config value with the specific key. type void
@@ -217,3 +266,4 @@ private:
     std::unique_ptr<ConfigManagerImpl> impl_;
 };
 } // namespace npu::tile_fwk
+#endif // CONFIG_MANAGER_NG_H

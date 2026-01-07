@@ -149,13 +149,11 @@ ConfigScope::ConfigScope(ConfigScopePtr parent) : parent_(parent) {
 }
 
 TileShape ConfigScope::GenerateTileShape() const {
-    TileShape tileShape;
+    std::vector<int64_t> vecTile = GetConfig<std::vector<int64_t>>("vec_tile_shapes");
     CubeTile cubeTile = GetConfig<CubeTile>("cube_tile_shapes");
-    std::vector<int64_t> vec1 = GetConfig<std::vector<int64_t>>("vec_tile_shapes");
-    std::vector<int64_t> vec2 = GetConfig<std::vector<int64_t>>("matrix_size");
-    tileShape.SetCubeTile(cubeTile.m, cubeTile.k, cubeTile.n, cubeTile.setL1Tile, cubeTile.enableSplitK);
-    tileShape.SetVecTile(vec1);
-    tileShape.SetMatrixSize(vec2);
+    DistTile distTile = GetConfig<DistTile>("dist_tile_shapes");
+    std::vector<int64_t> matrixSize = GetConfig<std::vector<int64_t>>("matrix_size");
+    TileShape tileShape(vecTile, cubeTile, distTile, matrixSize);
     return tileShape;
 }
 
@@ -191,9 +189,12 @@ void DumpValues(std::stringstream &os, const std::map<std::string, Any> &values,
             os << '}';
         } else if (val.Type() == typeid(CubeTile)) {
             os << (AnyCast<CubeTile>(val).ToString());
+        } else if (val.Type() == typeid(DistTile)) {
+            os << (AnyCast<DistTile>(val).ToString());
         } else {
             os << "unknow type: " << val.Type().name();
         }
+        os << "\n";
     }
 }
 
@@ -215,6 +216,14 @@ void DumpRange(
 }
 
 std::string ConfigScope::ToString() const{
+    auto values = GetAllConfig();
+    std::stringstream os;
+    DumpValues(os, values, "");
+    os << "\n";
+    return os.str();
+}
+
+const std::map<std::string, Any> ConfigScope::GetAllConfig() const{
     std::map<std::string, Any> values;
     auto scope = this;
     while (scope) {
@@ -225,10 +234,7 @@ std::string ConfigScope::ToString() const{
         }
         scope = scope->parent_.get();
     }
-    std::stringstream os;
-    DumpValues(os, values, "");
-    os << "\n";
-    return os.str();
+    return values;
 }
 
 void ConfigScope::AddValue(const std::string &key, Any value) {
@@ -266,6 +272,12 @@ struct ConfigManagerImpl {
         auto global = std::make_shared<ConfigScope>(root);
         global->name_ = "global";
         scopes.push(global);
+    }
+    
+    void PushScope(ConfigScopePtr scope) {
+        // Ensure the provided scope is not null
+        ASSERT(scope != nullptr) << "Cannot push a null scope";
+        scopes.push(scope);
     }
 
     inline bool IntervalJudge(const int64_t &stand, const int64_t &lf, const int64_t &rf) const {
@@ -389,6 +401,7 @@ private:
         root->AddValue("cube_tile_shapes", tileShape.GetCubeTile());
         root->AddValue("vec_tile_shapes", tileShape.GetVecTile().tile);
         root->AddValue("matrix_size", tileShape.GetMatrixSize());
+        root->AddValue("dist_tile_shapes", tileShape.GetDistTile());
     }
 };
 
@@ -405,8 +418,12 @@ void ConfigManagerNg::SetScope(std::map<std::string, Any> &&values, const char *
     return impl_->SetScope(std::move(values), file, lino);
 }
 
-std::shared_ptr<ConfigScope> ConfigManagerNg::CurrentScope() const {
-    return impl_->scopes.top();
+void ConfigManagerNg::PushScope(ConfigScopePtr scope) {
+    impl_->PushScope(scope);
+}
+
+std::shared_ptr<ConfigScope> ConfigManagerNg::CurrentScope() {
+    return GetInstance().impl_->scopes.top();
 }
 
 bool ConfigManagerNg::IsWithinRange(const std::string &properties, Any &value) const {

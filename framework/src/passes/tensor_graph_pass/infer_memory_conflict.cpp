@@ -155,13 +155,13 @@ bool InferMemoryConflict::IsValidTileShape(const Operation &op) const {
     auto input = op.GetIOperands().front();
     VecTile tileSize = op.GetTileShape().GetVecTile();
     if (input->GetShape().size() != tileSize.size()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has unequal input shape dims size and tile shape dims, input shape: %s, tile size: %s. %s", 
+        APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has unequal input shape dims size and tile shape dims, input shape: %s, tile size: %s. %s",
                             op.GetOpcodeStr().c_str(), op.GetOpMagic(),
-                            input->DumpType().c_str(), op.GetTileShape().toString(TileType::VEC).c_str(), GetFormatBacktrace(op).c_str());
+                            input->DumpType().c_str(), op.GetTileShape().ToString(TileType::VEC).c_str(), GetFormatBacktrace(op).c_str());
         return false;
     }
     APASS_LOG_DEBUG_F(Elements::Operation, "The size info of %s[%d]: input shape: %s, tile size: %s", op.GetOpcodeStr().c_str(), op.GetOpMagic(),
-            input->DumpType().c_str(), op.GetTileShape().toString(TileType::VEC).c_str());
+            input->DumpType().c_str(), op.GetTileShape().ToString(TileType::VEC).c_str());
     return true;
 }
 

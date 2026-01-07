@@ -17,6 +17,7 @@
 #include <iostream>
 #include <variant>
 #include "tilefwk/tilefwk.h"
+#include "interface/configs/config_manager_ng.h"
 
 namespace npu::tile_fwk {
 
@@ -136,12 +137,9 @@ T GetOption(const std::string &key) {
 }
 
 #define DEFINE_CONFIG_GROUP(group, prefix)                   \
-    inline bool Has##group##Option(const std::string &key) { \
-        return HasOption(prefix "." + key);                  \
-    }                                                        \
     template <typename T>                                    \
     inline T Get##group##Option(const std::string &key) {    \
-        return GetOption<T>(prefix "." + key);               \
+        return ConfigManagerNg::CurrentScope()->GetConfigAllType<T>(prefix "." + key); \
     }
 
 DEFINE_CONFIG_GROUP(CodeGen, "codegen")
@@ -151,8 +149,8 @@ DEFINE_CONFIG_GROUP(Host, "host")
 DEFINE_CONFIG_GROUP(Verify, "verify")
 DEFINE_CONFIG_GROUP(Debug, "debug")
 
-std::shared_ptr<ConfigStorage> Duplicate();
-void Restore(std::shared_ptr<ConfigStorage> config);
+std::shared_ptr<ConfigScope> Duplicate();
+void Restore(std::shared_ptr<ConfigScope> config);
 
 PrintOptions &GetPrintOptions();
 

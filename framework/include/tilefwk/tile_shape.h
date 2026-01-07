@@ -34,9 +34,7 @@
 struct VecTile {
     std::vector<int64_t> tile;
 
-    bool valid() const {
-        return std::all_of(tile.begin(), tile.end(), [](int x) { return x > 0; }) && tile.size() > 0;
-    }
+    bool valid() const;
 
     int64_t operator[](int i) const { return tile[i]; }
     int64_t &operator[](int i) { return tile[i]; }
@@ -55,23 +53,9 @@ struct CubeTile {
     bool setL1Tile {false};
     bool enableSplitK {false};
 
-    bool valid() const {
-        return std::all_of(m.begin(), m.end(), [](int64_t x) { return x > 0; }) &&
-               std::all_of(k.begin(), k.end(), [](int64_t x) { return x > 0; }) &&
-               std::all_of(n.begin(), n.end(), [](int64_t x) { return x > 0; });
-    }
+    bool valid() const;
 
-    std::string ToString() const {
-        std::stringstream ss;
-        ss << "CubeTile: " << '{'
-           << "m: {" << m[0] << ", " << m[1] << '}' << ", "
-           << "k: {" << k[0] << ", " << k[1] << ", " << k[0x2] << '}' << ", "
-           << "n: {" << n[0] << ", " << n[1] << '}' << ", "
-           << "setL1Tile: " << setL1Tile
-           << "enableSplitK: " << enableSplitK
-           << "}";
-        return ss.str();
-    }
+    std::string ToString() const;
 };
 
 /**
@@ -84,11 +68,9 @@ struct DistTile {
     std::array<int, MAX_DIST_DIM_SIZE> rank;
     int rankId {INT16_MAX};
 
-    bool valid() const {
-        return std::all_of(row.begin(), row.end(), [](int x) { return x > 0; }) &&
-               std::all_of(col.begin(), col.end(), [](int x) { return x > 0; }) &&
-               std::all_of(rank.begin(), rank.end(), [](int x) { return x > 0; }) && rankId >= 0;
-    }
+    bool valid() const;
+
+    std::string ToString() const;
 };
 
 enum class TileType {
@@ -103,6 +85,15 @@ enum class TileType {
  *
  */
 struct TileShape {
+    TileShape();
+
+    TileShape(
+        const std::vector<int64_t>& vTile,
+        const CubeTile& cTile,
+        const DistTile& dTile,
+        const std::vector<int64_t>& mSize
+    );
+
     /**
      * \brief Set the Vec Tile
      *
@@ -150,11 +141,9 @@ struct TileShape {
      * \param rank
      */
     void SetDistTile(
-        const std::array<int, MAX_DIST_DIM_SIZE> &row, const std::array<int, MAX_DIST_DIM_SIZE> &col, const std::array<int, MAX_DIST_DIM_SIZE> &rank) {
-        SetDistTileRow(row);
-        SetDistTileCol(col);
-        SetDistTileRank(rank);
-    }
+        const std::array<int, MAX_DIST_DIM_SIZE> &row,
+        const std::array<int, MAX_DIST_DIM_SIZE> &col,
+        const std::array<int, MAX_DIST_DIM_SIZE> &rank);
 
     /**
      * \brief Get the Dist Tile
@@ -169,8 +158,7 @@ struct TileShape {
      *
      * @param rankId
      */
-    void SetDistRankId(int64_t rankId) { distTile.rankId = rankId; }
-
+    void SetDistRankId(int64_t rankId);
     /**
      * @brief Get the Dist Rank Id
      *
@@ -183,9 +171,7 @@ struct TileShape {
      *
      * @param col
      */
-    void SetDistTileCol(const std::array<int, MAX_DIST_DIM_SIZE> &col) {
-        distTile.col = col;
-    }
+    void SetDistTileCol(const std::array<int, MAX_DIST_DIM_SIZE> &col);
 
     /**
      * @brief Get the Dist Col
@@ -199,9 +185,7 @@ struct TileShape {
      *
      * @param row
      */
-    void SetDistTileRow(const std::array<int, MAX_DIST_DIM_SIZE> &row) {
-        distTile.row = row;
-    }
+    void SetDistTileRow(const std::array<int, MAX_DIST_DIM_SIZE> &row);
 
     /**
      * @brief Get the Dist Row
@@ -215,9 +199,7 @@ struct TileShape {
      *
      * @param rank
      */
-    void SetDistTileRank(const std::array<int, MAX_DIST_DIM_SIZE> &rank) {
-        distTile.rank = rank;
-    }
+    void SetDistTileRank(const std::array<int, MAX_DIST_DIM_SIZE> &rank);
 
     /**
      * @brief Get the Dist Rank
@@ -249,30 +231,9 @@ struct TileShape {
         return matrixSize;
     }
 
-    std::string toString(TileType type = TileType::MAX) const {
-        std::stringstream ss;
-        if (type == TileType::VEC || type == TileType::MAX) {
-            ss << "VecTile: " << '{';
-            for (size_t i = 0; i < vecTile.tile.size(); ++i) {
-                if (i != 0) ss << ", ";
-                ss << vecTile.tile[i];
-            }
-            ss << '}';
-        } else if (type == TileType::CUBE || type == TileType::MAX) {
-            ss << "CubeTile: " << '{'
-               << "m: {" << cubeTile.m[0] << ", " << cubeTile.m[1] << '}' << ", "
-               << "k: {" << cubeTile.k[0] << ", " << cubeTile.k[1] << ", " << cubeTile.k[0x2] << '}' << ", "
-               << "n: {" << cubeTile.n[0] << ", " << cubeTile.n[1] << '}'
-               << "}";
-        } else if (type == TileType::DIST || type == TileType::MAX) {
-            ss << "DistTile: " << '{'
-               << "row: {" << distTile.row[0] << ", " << distTile.row[1] << ", " << distTile.row[0x2] << '}' << ", "
-               << "col: {" << distTile.col[0] << ", " << distTile.col[1] << ", " << distTile.col[0x2] << '}' << ", "
-               << "rank: {" << distTile.rank[0] << ", " << distTile.rank[1] << ", " << distTile.rank[0x2] << '}' << ", "
-               << "rankId: " << distTile.rankId << '}';
-        }
-        return ss.str();
-    }
+    void UpdateScopeDistTile();
+
+    std::string ToString(TileType type = TileType::MAX) const;
 private:
     VecTile vecTile;
     CubeTile cubeTile;

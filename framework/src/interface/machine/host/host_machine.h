@@ -133,7 +133,7 @@ private:
     SafeQueue<std::unique_ptr<MachineTask>> compileQueue_; // 待编译任务
     SafeQueue<std::unique_ptr<MachineTask>> agentQueue_; // 待device agent处理任务
     SafeQueue<std::unique_ptr<MachineTask>> finishQueue_; // device machine 处理结束任务
-    SafeQueue<std::tuple<Function *, std::shared_ptr<ConfigStorage>, InternalGlobalConfig,
+    SafeQueue<std::tuple<Function *, std::shared_ptr<ConfigScope>, InternalGlobalConfig,
                          nlohmann::json>> stashedFuncQueue_; // stash func
 };
 
