@@ -126,10 +126,10 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
 std::string CodeGenOpCloudNPU::GenTemplateParamsForSignal() const
 {
     std::ostringstream oss;
-    int32_t shmemSignalIndex = 3;
-    int64_t rankShape = originShape[shmemSignalIndex][0];
     DistOpAttr distOpAttr = npu::tile_fwk::AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
-    oss << "<" << std::to_string(distOpAttr.signalValue) << ", " << npu::tile_fwk::Distributed::AtomicTypeToString(distOpAttr.atomicType) << ", " << rankShape << ">";
+    oss << "<" << std::to_string(distOpAttr.signalValue) << ", "
+        << std::to_string(distOpAttr.signalStride) << ", "
+        << npu::tile_fwk::Distributed::AtomicTypeToString(distOpAttr.atomicType) << ">";
     return oss.str();
 }
 
@@ -205,6 +205,11 @@ std::string CodeGenOpCloudNPU::GenOffsets(int32_t operandIndex, int32_t dim) con
     return GenGetParamMacroPacked(operandIndex, dim, PREFIX_STR_OFFSET)[0];
 }
 
+std::string CodeGenOpCloudNPU::GenShapes(int32_t operandIndex, int32_t dim) const
+{
+    return GenGetParamMacroPacked(operandIndex, dim, "SHAPE")[0];
+}
+
 std::string CodeGenOpCloudNPU::GenRawShapes(int32_t operandIndex, int32_t dim) const
 {
     return GenGetParamMacroPacked(operandIndex, dim, PREFIX_STR_RAW_SHAPE)[0];
@@ -242,8 +247,9 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemSignal() const
 {
     std::ostringstream oss;
     int32_t shmemSignalIndex = 3;
-    int32_t shmemSignalDim = 4;
-    oss << ", " << GenOffsetsAndRawShapes(shmemSignalIndex, shmemSignalDim);
+    int32_t shmemSignalDim = 5;
+    oss << ", " << GenOffsetsAndRawShapes(shmemSignalIndex, shmemSignalDim)
+        << ", " << GenShapes(shmemSignalIndex, shmemSignalDim);
     return oss.str();
 }
 

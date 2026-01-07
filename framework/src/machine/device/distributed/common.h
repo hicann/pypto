@@ -27,17 +27,20 @@ namespace npu::tile_fwk::dynamic {
 namespace npu::tile_fwk::Distributed {
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE = 512;
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE_MOD = AICPU_TASK_ARRAY_SIZE - 1;
-constexpr uint64_t SRC_RANK_ID = 1;
-constexpr uint64_t SHMEM_DIM_ROW = 2;
-constexpr uint64_t SHMEM_DIM_COL = 3;
+constexpr uint64_t SRC_SHMEM_SIGNAL_ID = 1;
+constexpr uint64_t SRC_RANK_ID = 2;
+constexpr uint64_t SHMEM_DIM_ROW = 3;
+constexpr uint64_t SHMEM_DIM_COL = 4;
 
 struct TensorInfo {
     uint64_t rawAddr{0};
     uint32_t dim{0};
     uint64_t rawIndex{0};
     int32_t expectedSum{0};
+    int32_t signalStride{0};
     bool resetSignal{false};
     std::vector<uint32_t> offset;
+    std::vector<uint32_t> shape;
 };
 
 struct AicpuParamInfo {
@@ -45,8 +48,12 @@ struct AicpuParamInfo {
     int32_t inIndex{0};
     int32_t attrIndex{0};
     int32_t rawShapeIndex{0};
+    int32_t tileShapeIndex{0};
     uint32_t rawShapeRow{0};
     uint32_t rawShapeCol{0};
+    uint32_t rawRankShape{0};
+    uint32_t tileShapeRow{0};
+    uint32_t tileShapeCol{0};
 };
 
 inline uint64_t GetVirtualAddrBist(uint64_t val, uint64_t start, uint64_t end) {
@@ -99,9 +106,12 @@ inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVect
 
     index = index + aicpuCode[index] + 1;
     paramInfo.rawShapeIndex = index + 1;
-    paramInfo.rawShapeRow = aicpuCode[index + 3]; // ShmemSignal Shape[ranksize, ranksize, row, col], 3表示row的值
-    paramInfo.rawShapeCol = aicpuCode[index + 4]; // ShmemSignal Shape[ranksize, ranksize, row, col], 4表示col的值
-
+    paramInfo.rawRankShape = aicpuCode[paramInfo.rawShapeIndex + 2]; // ShmemSignal RawShape[ranksize, ranksize, ranksize, row, col], 2表示rankShape的值
+    paramInfo.rawShapeRow = aicpuCode[paramInfo.rawShapeIndex + 3]; // ShmemSignal RawShape[ranksize, ranksize, ranksize, row, col], 3表示row的值
+    paramInfo.rawShapeCol = aicpuCode[paramInfo.rawShapeIndex + 4]; // ShmemSignal RawShape[ranksize, ranksize, ranksize, row, col], 4表示col的值
+    paramInfo.tileShapeIndex = paramInfo.rawShapeIndex + aicpuCode[index] / 2; // 存储了signal_dim * 2个参数, tieShape往后偏移dim位
+    paramInfo.tileShapeRow = aicpuCode[paramInfo.tileShapeIndex + 3]; // ShmemSignal Shape[ranksize, ranksize, ranksize, row, col], 3表示row的值
+    paramInfo.tileShapeCol = aicpuCode[paramInfo.tileShapeIndex + 4]; // ShmemSignal Shape[ranksize, ranksize, ranksize, row, col], 4表示col的值
     index = index + aicpuCode[index] + 1;
     if (index + 1 < static_cast<int32_t>(aicpuCode.size())) {
         paramInfo.attrIndex = index + 1;

@@ -57,14 +57,13 @@ std::string GetFunctionRawName(const std::string& functionName)
 TEST_F(TestDistributedShmemImpl, TestShmemAllGather)
 {
     const char *group = "hcom123";
-
+    uint32_t worldSize = 4;
     Tensor in(DT_FP16, {16, 32}, "in");
     Tensor out(DT_FP16, {64, 32}, "out");
     FUNCTION("ALLGATHER", {in}, {out}) {
-        TileShape::Current().SetDistTile(
-            {16, 1, 0}, {32, 1, 0}, {1, 4, 0});
-        Tensor barrierDummy(DT_INT32, {1, 1}, "barrierDummy");
-        ShmemAllGather(in, barrierDummy, group, out);
+        TileShape::Current().SetVecTile({16, 32});
+        Tensor predToken(DT_INT32, {1, 1}, "predToken");
+        AllGather(predToken, in, group, worldSize, out);
     }
 
     std::string functionRawName = GetFunctionRawName("L0");
@@ -78,13 +77,13 @@ TEST_F(TestDistributedShmemImpl, TestShmemReduceScatter)
 {
     const char *group = "hcom123";
 
-    int32_t ranksize = 4;
+    uint32_t worldSize = 4;
     Tensor in(DT_FP16, {64, 256}, "in");
     Tensor out(DT_FP16, {16, 256}, "out");
     FUNCTION("REDUCESCATTER", {in}, {out}) {
-        TileShape::Current().SetDistTile(
-            {64 / ranksize, 1, 0}, {256, 1, 0}, {1, ranksize, 0});
-        ShmemReduceScatter(in, group, DistReduceType::DIST_REDUCE_ADD, out);
+        TileShape::Current().SetVecTile({64, 256});
+        Tensor predToken(DT_INT32, {1, 1}, "predToken");
+        ReduceScatter(predToken, in, group, worldSize, DistReduceType::DIST_REDUCE_ADD, out);
     }
 
     std::string functionRawName = GetFunctionRawName("RS");
@@ -98,17 +97,16 @@ TEST_F(TestDistributedShmemImpl, TestTwoShotShmemAllReduce)
 {
     const char *group = "hcom123";
 
-    int32_t ranksize = 4;
+    uint32_t worldSize = 4;
     Tensor in(DT_FP16, {64, 256}, "in");
     Tensor out(DT_FP16, {64, 256}, "out");
-    Tensor predToken(DT_INT32, {1, 1}, "predToken");
-    FUNCTION("ALLREDUCE", {in, predToken}, {out}) {
-        TileShape::Current().SetDistTile(
-            {64 / ranksize, 1, 0}, {256, 1, 0}, {1, ranksize, 0});
-        TwoShotShmemAllReduce(predToken, in, group, out);
+    FUNCTION("ALLREDUCE", {in}, {out}) {
+        TileShape::Current().SetVecTile({64, 256});
+        Tensor predToken(DT_INT32, {1, 1}, "predToken");
+        TwoShotAllReduce(predToken, in, group, worldSize, out);
     }
 
-    std::string functionRawName = GetFunctionRawName("TowShotAllReduce");
+    std::string functionRawName = GetFunctionRawName("TwoShotAllReduce");
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -119,14 +117,13 @@ TEST_F(TestDistributedShmemImpl, TestOneShotShmemAllReduce)
 {
     const char *group = "hcom123";
 
-    int32_t ranksize = 4;
+    uint32_t worldSize = 4;
     Tensor in(DT_FP16, {64, 256}, "in");
     Tensor out(DT_FP16, {64, 256}, "out");
-    Tensor predToken(DT_INT32, {1, 1}, "predToken");
-    FUNCTION("ALLREDUCE", {in, predToken}, {out}) {
-        TileShape::Current().SetDistTile(
-            {64, 1, 0}, {256, 1, 0}, {1, ranksize, 0});
-        OneShotShmemAllReduce(predToken, in, group, out);
+    FUNCTION("ALLREDUCE", {in}, {out}) {
+        TileShape::Current().SetVecTile({64, 256});
+        Tensor predToken(DT_INT32, {1, 1}, "predToken");
+        OneShotAllReduce(predToken, in, group, worldSize, out);
     }
 
     std::string functionRawName = GetFunctionRawName("OneShotAllReduce");

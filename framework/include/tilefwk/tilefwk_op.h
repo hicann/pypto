@@ -407,18 +407,19 @@ struct MoeConfig {
 
 void MoeDispatch(const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tensor& expandX, Tensor& validCnt,
     Tensor& combineInfo, const char *group, const MoeConfig& moeConfig);
-void ShmemAllGather(const Tensor &in, const Tensor &dummy, const char *group, Tensor &out);
+void AllGather(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
 void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, Tensor& out);
 Tensor ShmemSet(const Tensor& predToken, const Tensor& shmemTensor);
-void ShmemReduceScatter(const Tensor& in, const char* group, DistReduceType reduceType, Tensor& out);
-void OneShotShmemAllReduce(const Tensor& predToken, const Tensor& in, const char* group, Tensor& out);
-void OneShotShmemAllReduce(const Tensor& predToken, const Tensor& in, Tensor& shmemData, Tensor& shmemSignal,
-    const char* group, Tensor& out);
-void TwoShotShmemAllReduce(const Tensor& predToken, const Tensor& in, const char* group, Tensor& out);
+void ReduceScatter(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, DistReduceType reduceType, Tensor& out);
+void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
+void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const Tensor& shmemData, const Tensor& shmemSignal,
+    const char* group, uint32_t worldSize, Tensor& out);
+void TwoShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
 void ShmemMoeCombine(const Tensor& in, const Tensor& combineInfo, const Tensor& scale, const char* group,
     int32_t rankSize, int32_t totalExpertNum, Tensor& out);
-void CreateShmemTensor(Tensor& shmemTensor, int32_t rankSize, int32_t hcclGroupIndex, DataType dataType,
-    const Shape& shape, uint64_t memType = 0);
+void CreateShmemData(const char *group, int64_t worldSize, DataType dataType,
+    const Shape &shape, Tensor &shmemTensor, uint64_t memType = 0);
+void CreateShmemSignal(const char *group, Tensor &shmemData, Tensor &shmemSignal);
 } // namespace Distributed
 std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, int idxStart);
 std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, const SymbolicScalar &idxStart); 

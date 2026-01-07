@@ -62,9 +62,8 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
         Tensor agOut(dtype, {b * n * s, kvLoraRank}, "agOut");
         LOOP("ALLGATHER", FunctionType::DYNAMIC_LOOP, unusedDynRankId, LoopRange(1)) {
             (void) unusedDynRankId;
-            TileShape::Current().SetDistTile({64, b * n * s / testParam.rankSize / 64, 0}, {kvLoraRank, 1, 0}, 
-                {1, testParam.rankSize, 0});
-            ShmemAllGather(agIn, agIn, testParam.group, agOut);
+            TileShape::Current().SetVecTile({64, kvLoraRank});
+            AllGather(agIn, agIn, testParam.group, static_cast<uint32_t>(testParam.rankSize), agOut);
         }
         Tensor attnOut(dtype, {b * s, h}, "attnOut");
         LOOP("ATTNPOST", FunctionType::DYNAMIC_LOOP, batchId, LoopRange(1)) {
@@ -91,9 +90,10 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
         }
         LOOP("REDUCESCATTER", FunctionType::DYNAMIC_LOOP, unusedIndex, LoopRange(1)) {
             (void) unusedIndex;
-            TileShape::Current().SetDistTile({16, b * s / testParam.rankSize / 16, 0}, {h, 1, 0}, 
-                {1, testParam.rankSize, 0});
-            Distributed::ShmemReduceScatter(attnOut, testParam.group, DistReduceType::DIST_REDUCE_ADD, out);
+            Tensor predToken(DT_INT32, {1, 1}, "predToken");
+            TileShape::Current().SetVecTile({16, h});
+            Distributed::ReduceScatter(predToken, attnOut, testParam.group, static_cast<uint32_t>(testParam.rankSize),
+                DistReduceType::DIST_REDUCE_ADD, out);
         }
     }
     auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();

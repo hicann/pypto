@@ -40,8 +40,9 @@ void LoopAllReduce1(const Tensor& in, Tensor& allReduceOut, const OpTestParam& t
 {
     LOOP("AllReduce1", FunctionType::DYNAMIC_LOOP, allReduce1Index, LoopRange(0, 1, 1)) {
         (void)allReduce1Index;
+        Tensor predToken(DT_INT32, {1, 1}, "predToken");
         TileShape::Current().SetDistTile({row, 1, 0}, {col, 1, 0}, {1, testParam.rankSize, 0});
-        OneShotShmemAllReduce(in, in, testParam.group, allReduceOut);
+        OneShotAllReduce(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), allReduceOut);
     }
 }
 
@@ -60,10 +61,9 @@ void LoopCreateShmemTensor(const Tensor& addOut, Tensor& shmemBarrier1ShmemSigna
 {
     LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
         (void)index;
-        CreateShmemTensor(shmemBarrier1ShmemSignal, testParam.rankSize, hcclGroupIndex, DT_INT32, Shape{1, 1, 8},
-            1);
-        CreateShmemTensor(shmemBarrier2ShmemSignal, testParam.rankSize, hcclGroupIndex, DT_INT32, Shape{1, 1, 8},
-            1);
+        uint32_t worldSize = static_cast<uint32_t>(worldSize);
+        CreateShmemData(testParam.group, worldSize, DT_INT32, Shape{1, 1, 8}, shmemBarrier1ShmemSignal);
+        CreateShmemData(testParam.group, worldSize, DT_INT32, Shape{1, 1, 8}, shmemBarrier2ShmemSignal);
         TileShape::Current().SetDistTile({row, 1, 0}, {col, 1, 0}, {1, testParam.rankSize, 0});
         int32_t tileCount = 1;
         Shape allReduce2ShmemDataShape = {1, addOut.GetShape(0), addOut.GetShape(1)};
@@ -72,10 +72,8 @@ void LoopCreateShmemTensor(const Tensor& addOut, Tensor& shmemBarrier1ShmemSigna
         if ((allReduce2ShmemDataType == DT_BF16) || (allReduce2ShmemDataType == DT_FP16)) {
             allReduce2ShmemDataType = DT_FP32;
         }
-        CreateShmemTensor(allReduce2ShmemData, testParam.rankSize, hcclGroupIndex, allReduce2ShmemDataType,
-            allReduce2ShmemDataShape);
-        CreateShmemTensor(allReduce2ShmemSignal, testParam.rankSize, hcclGroupIndex, DT_INT32,
-            allReduce2ShmemSignalShape);
+        CreateShmemData(testParam.group, worldSize, allReduce2ShmemDataType, allReduce2ShmemDataShape, allReduce2ShmemData);
+        CreateShmemData(testParam.group, worldSize, DT_INT32, allReduce2ShmemSignalShape, allReduce2ShmemSignal);
     }
 }
 
@@ -106,8 +104,8 @@ void LoopAllReduce2(const Tensor& addOut, Tensor& shmemBarrier1ShmemSignal, Tens
             memSetOut = Nop({memSetDataOut, memSetSignalOut});
         }
         ShmemBarrier(memSetOut, shmemBarrier2ShmemSignal, testParam.group, barrier2Out);
-        OneShotShmemAllReduce(barrier2Out, addOut, allReduce2ShmemData, allReduce2ShmemSignal, testParam.group,
-            out);
+        OneShotAllReduce(barrier2Out, addOut, allReduce2ShmemData, allReduce2ShmemSignal, testParam.group,
+            static_cast<uint32_t>(testParam.rankSize), out);
     }
 }
 

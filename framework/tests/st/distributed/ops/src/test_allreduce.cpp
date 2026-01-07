@@ -36,6 +36,7 @@ void TestShmemAllReduce(OpTestParam &testParam)
     Shape shape{row, col};
     Tensor in(dType, shape, "in");
     Tensor out(dType, shape, "out");
+    Tensor predToken(DT_INT32, {1, 1}, "predToken");
 
     std::vector<T> inPtr = ReadToVector<T>(
         GetGoldenDir() + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
@@ -50,14 +51,11 @@ void TestShmemAllReduce(OpTestParam &testParam)
     int32_t tileNum2 = 1;
     int32_t scatterRow = useTwoShot ? row / testParam.rankSize : row;
     FUNCTION("ALLREDUCE", {in}, {out}) {
-        TileShape::Current().SetDistTile(
-            {scatterRow / tileNum1, tileNum1, scatterRow % tileNum1},
-            {col / tileNum2, tileNum2, col % tileNum2},
-            {1, testParam.rankSize, 0});
+        TileShape::Current().SetVecTile({scatterRow / tileNum1, col / tileNum2});
         if (useTwoShot) {
-            TwoShotShmemAllReduce(in, in, testParam.group, out);
+            TwoShotAllReduce(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), out);
         } else {
-            OneShotShmemAllReduce(in, in, testParam.group, out);
+            OneShotAllReduce(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), out);
         }
     }
     auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();

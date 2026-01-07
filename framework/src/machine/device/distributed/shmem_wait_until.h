@@ -131,10 +131,12 @@ public:
 
     int32_t PollCompleted(std::function<int32_t(SignalTileOp*)> processor)
     {
-        if (front_ > rear_) {
-            rear_ += AICPU_TASK_ARRAY_SIZE;
+        uint16_t current = front_;
+        uint16_t end = rear_;
+        if (current > end) {
+            end += AICPU_TASK_ARRAY_SIZE;
         }
-        for (uint16_t i = front_; i < rear_; ++i) {
+        for (uint16_t i = current; i < end; ++i) {
             uint16_t actualIndex = i & AICPU_TASK_ARRAY_SIZE_MOD;
             SignalTileOp* task = queue_[actualIndex];
             if (task->PollCompleted()) {
@@ -180,11 +182,19 @@ public:
         TensorInfo info = ShmemWaitUntil::GetTensorInfo(taskId, aicpuCode);
         const int32_t expectedSum = info.expectedSum;
         const bool resetSignal = info.resetSignal;
-        // info.offset[1]代表src rankId, info.offset[2]代表row offset, info.offset[3]代表col offset
-        DEV_DEBUG("ShmemWaitUntil::EnqueueOp offset1=%u, offset2=%u, offset3=%u, rawShape2=%u, rawShape3=%u", info.offset[SRC_RANK_ID],
-            info.offset[SHMEM_DIM_ROW], info.offset[SHMEM_DIM_COL], paramInfo_.rawShapeRow, paramInfo_.rawShapeCol);
-        int32_t* addr = reinterpret_cast<int32_t*>(info.rawAddr) + info.offset[SRC_RANK_ID] * paramInfo_.rawShapeRow *
-            paramInfo_.rawShapeCol + info.offset[SHMEM_DIM_ROW] * paramInfo_.rawShapeCol + info.offset[SHMEM_DIM_COL];
+        int32_t stride = aicpuCode[paramInfo_.attrIndex + 1];
+        int32_t tileIndex = (info.offset[SHMEM_DIM_ROW] / paramInfo_.tileShapeRow) * 
+            ((paramInfo_.rawShapeCol + paramInfo_.tileShapeCol - 1) / paramInfo_.tileShapeCol) +
+            (info.offset[SHMEM_DIM_COL] / paramInfo_.tileShapeCol);
+        int32_t totalTileNum = ((paramInfo_.rawShapeRow - 1) / paramInfo_.tileShapeRow + 1) * ((paramInfo_.rawShapeCol - 1) / paramInfo_.tileShapeCol + 1);
+
+        // info.offset[1]代表src的rankId=offset[1]的shmemSignal版图, info.offset[2]代表srcRankId, info.offset[3]代表row offset, info.offset[4]代表col offset
+        DEV_DEBUG("ShmemWaitUntil::EnqueueOp offset1=%u, offset2=%u, offset3=%u,  offset4=%u, shape3=%u, shape4=%u, rawShape3=%u, rawShape4=%u, tileIndex=%d, totalTileNum=%d", 
+            info.offset[SRC_SHMEM_SIGNAL_ID], info.offset[SRC_RANK_ID], info.offset[SHMEM_DIM_ROW], info.offset[SHMEM_DIM_COL],
+            paramInfo_.tileShapeRow, paramInfo_.tileShapeCol, paramInfo_.rawShapeRow, paramInfo_.rawShapeCol, tileIndex, totalTileNum);
+
+        int32_t* addr = reinterpret_cast<int32_t*>(info.rawAddr) + info.offset[SRC_SHMEM_SIGNAL_ID] * paramInfo_.rawRankShape * totalTileNum * stride +
+            (info.offset[SRC_RANK_ID] * totalTileNum + tileIndex) * stride;
         return hashMap_.InsertTask(taskId, addr, expectedSum, resetSignal);
     }
 

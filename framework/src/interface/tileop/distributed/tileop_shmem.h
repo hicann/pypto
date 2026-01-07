@@ -288,22 +288,31 @@ TILEOP void ShmemPutUb2Gm(__ubuf__ UBType* UBDataBaseAddr, __gm__ ShmemType* shm
     CopyUbToGm<ShmemType, UBType, tileRowShape, tileColShape, bufferRowShape, bufferColShape, srcStride, dstStride, atomicType>(shmemDataAddr, UBDataAddr);
 }
 
-template<int64_t value, AtomicType atomicType, uint32_t rankShape>
-TILEOP void ShmemSignal(__ubuf__ int32_t* buffer, __gm__ int32_t* shmemSignalBaseAddr, uint32_t shmemSignalOffset0,
-    uint32_t shmemSignalOffset1, uint32_t shmemSignalOffset2, uint32_t shmemSignalOffset3,
-    uint32_t shmemSignalRawShape0, uint32_t shmemSignalRawShape1, uint32_t shmemSignalRawShape2,
-    uint32_t shmemSignalRawShape3, __gm__ int64_t *hcclContext)
+template<int64_t value, int32_t stride, AtomicType atomicType>
+TILEOP void ShmemSignal(__ubuf__ int32_t* buffer, __gm__ int32_t* shmemSignalBaseAddr,
+    uint32_t shmemSignalOffset0, uint32_t shmemSignalOffset1, uint32_t shmemSignalOffset2, uint32_t shmemSignalOffset3, uint32_t shmemSignalOffset4,
+    uint32_t shmemSignalRawShape0, uint32_t shmemSignalRawShape1, uint32_t shmemSignalRawShape2, uint32_t shmemSignalRawShape3, uint32_t shmemSignalRawShape4,
+    uint32_t shmemSignalShape0, uint32_t shmemSignalShape1, uint32_t shmemSignalShape2, uint32_t shmemSignalShape3, uint32_t shmemSignalShape4, __gm__ int64_t *hcclContext)
 {
-    for (uint32_t rank = shmemSignalOffset0; rank < shmemSignalOffset0 + rankShape; rank++) {
-        __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t>(hcclContext, shmemSignalBaseAddr, rank) +
-            shmemSignalRawShape3 * shmemSignalRawShape2 * shmemSignalOffset1 + shmemSignalRawShape3 *
-            shmemSignalOffset2 + shmemSignalOffset3;
-        const uint16_t sid = 0;
-        const uint16_t nBurst = 1;
-        const uint16_t lenBurst = 1;
-        const uint16_t srcStride = 0;
-        const uint16_t dstStride = 0;
-        buffer[0] = value;
+    (void)shmemSignalRawShape0;
+    (void)shmemSignalRawShape1;
+    (void)shmemSignalShape1;
+    int32_t tileIndex = (shmemSignalOffset3 / shmemSignalShape3) *
+        (shmemSignalRawShape4 / shmemSignalShape4 + (shmemSignalRawShape4 % shmemSignalShape4 == 0 ? 0 : 1)) +
+        (shmemSignalOffset4 / shmemSignalShape4);
+    int32_t totalTileNum = (shmemSignalRawShape3 / shmemSignalShape3 + (shmemSignalRawShape3 % shmemSignalShape3 == 0 ? 0 : 1)) *
+        (shmemSignalRawShape4 / shmemSignalShape4 + (shmemSignalRawShape4 % shmemSignalShape4 == 0 ? 0 : 1));
+
+    for (uint32_t rankId = shmemSignalOffset0; rankId < shmemSignalOffset0 + shmemSignalShape0; rankId++) {
+        __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t>(hcclContext, shmemSignalBaseAddr, rankId) +
+            static_cast<int32_t>(shmemSignalOffset1) * shmemSignalRawShape2 * totalTileNum * stride +
+            (static_cast<int32_t>(shmemSignalOffset2) * totalTileNum + tileIndex) * stride;
+        constexpr uint16_t sid = 0;
+        constexpr uint16_t nBurst = 1;
+        constexpr uint16_t lenBurst = 1;
+        constexpr uint16_t srcStride = 0;
+        constexpr uint16_t dstStride = 0;
+        buffer[0] = static_cast<int32_t>(value);
         if constexpr (atomicType == AtomicType::ADD) {
             set_atomic_s32();
             set_atomic_add();
@@ -311,6 +320,8 @@ TILEOP void ShmemSignal(__ubuf__ int32_t* buffer, __gm__ int32_t* shmemSignalBas
         set_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
         wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID0);
         copy_ubuf_to_gm(shmemSignalAddr, buffer, sid, nBurst, lenBurst, dstStride, srcStride);
+        set_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
+        wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID0);
         if constexpr (atomicType == AtomicType::ADD) {
             set_atomic_none();
         }

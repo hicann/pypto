@@ -41,11 +41,9 @@ void TestShmemReduceScatter(OpTestParam &testParam)
     FUNCTION("ShmemReduceScatter", {in}, {out}) {
         LOOP("LOOP", FunctionType::DYNAMIC_LOOP, idx, LoopRange(1)) {
             (void)idx;
-            TileShape::Current().SetDistTile(
-                {rowOut / tileNum1, tileNum1, rowOut % tileNum1}, 
-                {col / tileNum2, tileNum2, col % tileNum2}, 
-                {1, testParam.rankSize, 0});
-            Distributed::ShmemReduceScatter(in, testParam.group,
+            TileShape::Current().SetVecTile({rowOut / tileNum1, col / tileNum2});
+            Tensor predToken(DT_INT32, {1, 1}, "predToken");
+            ReduceScatter(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize),
                 npu::tile_fwk::Distributed::DistReduceType::DIST_REDUCE_ADD, out);
         }
     }

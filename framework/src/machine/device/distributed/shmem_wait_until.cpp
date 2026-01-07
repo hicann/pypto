@@ -76,7 +76,7 @@ TensorInfo ShmemWaitUntil::GetTensorInfo(uint64_t taskId, const npu::tile_fwk::d
     const uint32_t dstRankId = info.offset[0];
 
     info.expectedSum = aicpuCode[paramInfo_.attrIndex];
-    info.resetSignal = aicpuCode[paramInfo_.attrIndex + 1];
+    info.resetSignal = aicpuCode[paramInfo_.attrIndex + 2];
     auto desc = &funcData.rawTensorDesc[info.rawIndex];
     info.rawAddr = ShmemWaitUntil::GetRawAddr(funcData.rawTensorAddr[desc->offsetOrIndex], dstRankId);
     return info;

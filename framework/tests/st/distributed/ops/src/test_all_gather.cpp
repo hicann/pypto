@@ -37,6 +37,7 @@ void TestDynAllGather(OpTestParam &testParam)
     Shape shape{M, N};
     Shape outShape{testParam.rankSize * M, N};
     Tensor in(dType, shape, "in");
+    Tensor predToken(DT_INT32, {1, 1}, "predToken");
     Tensor barrierDummy(DT_INT32, {1, 1}, "barrierDummy");
     Tensor out(dType, outShape, "out");
 
@@ -44,17 +45,14 @@ void TestDynAllGather(OpTestParam &testParam)
 
     int32_t tileNum1 = 8;
     int32_t tileNum2 = 8;
-    FUNCTION("ALLGATHER", {in, barrierDummy}, {out}) {
-        TileShape::Current().SetDistTile(
-            {M / tileNum1, tileNum1, M % tileNum1},
-            {N / tileNum2, tileNum2, N % tileNum2},
-            {1, testParam.rankSize, 0});
-        ShmemAllGather(in, barrierDummy, testParam.group, out);
+    FUNCTION("ALLGATHER", {in, predToken}, {out}) {
+        TileShape::Current().SetVecTile({M / tileNum1, N / tileNum2});
+        AllGather(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), out);
     }
 
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateTensor<T>(in, inPtr),
-        RawTensorData::CreateTensorZero(barrierDummy)
+        RawTensorData::CreateTensorZero(predToken)
     });
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateTensorZero(out)
