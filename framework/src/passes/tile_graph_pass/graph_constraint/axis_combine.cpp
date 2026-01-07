@@ -66,7 +66,7 @@ Status AlignBroadCastOpInputs(Function &function, Operation &op) {
     if (inTensor0->GetShape() == inTensor1->GetShape()) {
         return SUCCESS;
     }
-    for (int64_t idx = 0; idx < static_cast<int16_t>(inputTensor.size()); ++idx) {
+    for (size_t idx = 0; idx < inputTensor.size(); ++idx) {
         auto srcTensor = inputTensor[idx];
         auto alignedShape = srcTensor->GetShape();
         if (alignedShape.back() == 1) {
@@ -80,8 +80,8 @@ Status AlignBroadCastOpInputs(Function &function, Operation &op) {
             auto &brcb = function.AddRawOperation(Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
             brcb.UpdateSubgraphID(op.GetSubgraphID());
             srcTensor->RemoveConsumer(op);
-            op.ReplaceInputOperand(srcTensor, alignedTensor);
-            op.SetAttribute(OpAttributeKey::brcbIdx, idx + 1);
+            op.ReplaceIOperand(idx, alignedTensor);
+            op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(idx + 1));
             inputTensor[idx] = alignedTensor;
         }
     }
