@@ -162,7 +162,7 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE {
     {"REG_ALLOC", CorePipeType::PIPE_S},
     {"VLD", CorePipeType::PIPE_S},
     {"VST", CorePipeType::PIPE_S},
-    
+
     // Cube
     {"L1_ALLOC", CorePipeType::PIPE_CUBE_BMU_L1},
     {"L0A_ALLOC", CorePipeType::PIPE_CUBE_BMU_L0A},
