@@ -460,6 +460,7 @@ void DeviceRunner::DumpAiCoreExecutionTimeData() {
     std::string topo_txt_path = config::LogTopFolder() + "/dyn_topo.txt";
     std::string program_json_path = config::LogTopFolder() + "/program.json";
     std::string draw_swim_lane_py_path = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
+    config::SetRunDataOption(KEY_SWIM_GRAPH_PATH, config::GetAbsoluteTopFolder());        
 
     if (FileExist(program_json_path) && FileExist(topo_txt_path)) {
         ALOG_INFO("The files program.json and dyn_topo.txt exist. Start merging the swimlane.");

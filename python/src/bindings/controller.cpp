@@ -67,9 +67,9 @@ void bind_controller_config(py::module &m) {
         },
         py::arg("key"), "get config option");
 
-    m.def("Reset",[]() { config::Reset(); });
+    m.def("Reset", []() { config::Reset(); });
 
-    m.def("GetOptions",[]() -> py::object { return py::cast(config::GetOptions()); });
+    m.def("GetOptions", []() -> py::object { return py::cast(config::GetOptions()); });
 
     m.def(
         "SetPrintOptions",
@@ -84,7 +84,7 @@ void bind_controller_config(py::module &m) {
         }, py::arg("label"), py::arg("filename"), py::arg("lineno"));
 
     m.def("IsVerifyEnabled", &calc::IsVerifyEnabled);
-    m.def("ResetLog",[]() { ConfigManager::Instance().ResetLog(); });
+    m.def("ResetLog", []() { ConfigManager::Instance().ResetLog(); });
 }
 
 

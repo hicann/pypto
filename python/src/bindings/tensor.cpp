@@ -180,14 +180,5 @@ void BindTensor(py::module &m) {
         },
         py::arg("value"), py::arg("offset"), py::arg("dst"),
         "Set the tensor data at the destination offset from the source value.");
-    m.def("MarkDynamic",
-        [](Tensor &t, int axis) {
-            if (t.IsEmpty()) {
-                throw py::value_error("Empty tensor.");
-            }
-            npu::tile_fwk::MarkDynamic(t, axis);
-        },
-        py::arg("tensor"), py::arg("axis"),
-        "Mark the input tensor as dynamic at the specified axis.");
 }
 } // namespace pypto

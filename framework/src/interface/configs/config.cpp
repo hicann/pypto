@@ -104,6 +104,11 @@ struct RunDataDir {
     bool empty() {
         return (path.empty() || dName.empty());
     }
+
+    void Reset() {
+        path.clear();
+        dName.clear();
+    }
 };
 
 struct ConfigStorage {
@@ -125,6 +130,7 @@ struct ConfigStorage {
     void Reset() {
         funcType = FunctionType::DYNAMIC;
         semanticLabel = nullptr;
+        rundataDir.Reset();
         for (auto &[key, val] : g_passConfig) {
             options["pass." + key] = val;
         }
