@@ -2753,7 +2753,7 @@ TILEOP void CumSum2d(__ubuf__ T *dst, __ubuf__ T *src) {
 }
 
 template <int axis, unsigned... RawShapes>
-[host, aicore] constexpr int product() {
+__aicore_host__ constexpr int product() {
     constexpr size_t rank = sizeof...(RawShapes);
     constexpr std::array<unsigned int, rank> dims = {RawShapes...};
     static_assert(axis >= 0 && axis < rank, "Axis out of bounds");

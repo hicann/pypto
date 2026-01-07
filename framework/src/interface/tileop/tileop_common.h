@@ -24,6 +24,10 @@
 #define __aicore__ [aicore]
 #endif
 
+#ifndef __aicore_host__
+#define __aicore_host__ [host, aicore]
+#endif
+
 #ifndef TILEOP
 #define TILEOP static __attribute__((always_inline))[aicore]
 #endif

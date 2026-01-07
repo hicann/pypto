@@ -134,7 +134,6 @@ namespace CostModel
  	                         + "-I" + includePath + "/tilefwk " + ">/dev/null 2>&1";
         int result = std::system(cmd.c_str());
         if (result != 0) {
-            MLOG_ERROR("compile error:", cmd);
             return {};
         }
 #ifdef _WIN32

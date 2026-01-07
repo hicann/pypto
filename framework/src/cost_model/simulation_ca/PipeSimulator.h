@@ -66,6 +66,10 @@ namespace CostModel
             result = std::regex_replace(result, getParamShapePattern, "0");
             std::regex sysdimPattern(R"(sym_\d+_dim_\d+)");
             result = std::regex_replace(result, sysdimPattern, "1");
+            std::regex maybeConst(R"(RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST\(-?\d+, -?\d+, -?\d+, -?\d+, -?\d+\))");
+            result = std::regex_replace(result, maybeConst, "0");
+            std::regex maybeConst_0(R"(RUNTIME_COA_GET_PARAM_OFFSET_MAYBE_CONST_0\(-?\d+, -?\d+, -?\d+, -?\d+\))");
+            result = std::regex_replace(result, maybeConst_0, "0");
             return result;
         }
     }

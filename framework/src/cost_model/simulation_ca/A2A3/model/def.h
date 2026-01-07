@@ -112,6 +112,7 @@ enum class InstrName {
     // scalar
     SET_FLAG,
     WAIT_FLAG,
+    DCCI,
     BAR,
     LD,
     ST,
@@ -715,7 +716,11 @@ inline deque<PInstrParam> GetProgram(vector<string> program)
             ret.push_back(ScalarInstr(InstrName::SET_FLAG, PipeId::S));
         } else if (funcName == "wait_flag") {
             ret.push_back(ScalarInstr(InstrName::WAIT_FLAG, PipeId::S));
+        } else if (funcName == "dcci") {
+            ret.push_back(ScalarInstr(InstrName::DCCI, PipeId::S));
         } else if (funcName == "set_fmatrix") {
+            ret.push_back(SetSpr(InstrName::ALU, PipeId::MTE1, SprId::FMATRIX, params));
+        } else if (funcName == "set_fmatrix_b") {
             ret.push_back(SetSpr(InstrName::ALU, PipeId::MTE1, SprId::FMATRIX, params));
         } else if (funcName == "set_nd_para") {
             ret.push_back(SetSpr(InstrName::ALU, PipeId::F, SprId::NDPARA, params));

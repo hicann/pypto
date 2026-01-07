@@ -297,6 +297,7 @@ private:
             return;
         }
         config::SetSimConfig("SIM_MODE", CostModel::SimMode::NORMAL);
+        config::SetCodeGenConfig("CODEGEN_SUPPORT_TILE_TENSOR", false);
         CostModelAgent costModelAgent;
 
         std::string path = config::LogTopFolder() + "/dyn_topo.txt";
