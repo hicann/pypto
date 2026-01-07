@@ -4,7 +4,7 @@
 
 ffn\_shared\_expert\_quant算子对应GLM4.5网络中MoE共享专家的计算逻辑，包含symmetric\_quantization\_per\_token、matmul、dequant\_dynamic和swiglu，用于进行单个共享专家的量化前向传播计算，通过在不同任务或数据流之间复用同一组权重参数，以学习通用的特征表示，同时减少模型的参数总量。
 
-下面通过该算子介绍功能调试的大致步骤，完整样例请参考：examples/models/glm\_v4\_5/glm\_ffn\_shared\_expert\_quant.py
+下面通过该算子介绍功能调试的大致步骤，完整样例请参考：[glm_ffn_shared_expert_quant](../../../examples/models/glm_v4_5/glm_ffn_shared_expert_quant.py)。
 
 ## 问题定位
 

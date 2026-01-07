@@ -55,5 +55,5 @@ if __name__ == "__main__":
 2025-12-08 20:56:27.043	capture mode[1]
 ```
 
-完整的样例请参考：examples/03\_advanced/aclgraph/aclgraph.py。
+完整的样例请参考：[aclgraph.py](../../../examples/03_advanced/aclgraph/aclgraph.py)。
 

@@ -16,7 +16,7 @@
 
 调通精度后，得到了初版性能，也称之为开箱性能，其开箱性能如下：
 
-![](../figures/优化前.png)
+![](../figures/pre_optimization_state.png)
 
 从开箱性能泳道图上，可以观察到有如下的性能优化点：
 
@@ -28,19 +28,19 @@
 
 -   Tile块的调整：经过观察，在反量化和RoPE计算片段，任务数量多，且并没有合并到一个同构子图内；若能达到预期的Vector计算集中到一个同构子图，就能避免冗余的搬运消除；通过调整相关计算中的Tile块，使得相关计算中的Tile块保持一致，这样pass就会把相关计算切到同样一个同构子图内；经此优化后，性能提升至76us，泳道图如下：
 
-    ![](../figures/vec优化泳道图.png)
+    ![](../figures/vec_optimization_swimlane.png)
 
 -   Cube Tile块的调整：初始的Tile块为\(\[128, 128\], \[128, 128\], \[128, 128\]\)，通常来说会得到一个不错的性能；但由于该算子的实现中，m=8，我们可以设置更为合适的Tile块得到更优的性能，譬如m轴切成16，k轴切大为512/1024，n轴切成64/32，经优化后性能达到56us，泳道图如下：
 
-    ![](../figures/cube优化.png)
+    ![](../figures/cube_optimization.png)
 
 -   Q计算的Cube任务数量过多，从而导致右矩阵的重复搬运，所以我们开启L1Reuse，使任务合并，减少冗余搬运，经优化后性能达到49us，泳道图如下：
 
-    ![](../figures/优化后泳道图.png)
+    ![](../figures/optimized_swimlane.png)
 
 ## 获取完整样例
 
-实现的example代码位于：examples/models/deepseek\_v32\_exp/lightning\_indexer\_prolog\_quant.py。该文件主要展示了QuantIndexerProlog的具体实现。
+实现的example代码位于：[lightning_indexer_prolog_quant.py](../../../examples/models/deepseek_v32_exp/deepseekv32_lightning_indexer_prolog_quant.py)。该文件主要展示了QuantIndexerProlog的具体实现。
 
 QuantIndexerProlog算子在典型场景（Batch=4，MTP1，Kv Cache长度64k），可以运行如下实例脚本执行：
 

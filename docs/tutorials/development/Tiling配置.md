@@ -100,7 +100,7 @@ def test_set_vec_different_tile_shapes_runtime():
 
 在该示例中，对于两个shape为\(4, 32, 64, 256\)的向量相加，set\_vec\_tile\_shapes\(1, 2, 4, 128\)的运行时间明显比set\_vec\_tile\_shapes\(2, 4, 8, 256\)要长。
 
-完整样例请参考：examples/01\_beginner/tiling/tiling\_config.py
+完整样例请参考：[tiling_config.py](../../../examples/01_beginner/tiling/tiling_config.py)。
 
 ## Cube计算的Tiling配置
 
