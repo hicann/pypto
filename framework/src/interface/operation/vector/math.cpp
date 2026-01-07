@@ -139,8 +139,8 @@ Tensor Log(const Tensor &self, LogBaseType base) {
 }
 
 LogicalTensorPtr GenAllOneTensor(const Shape &shape, std::vector<SymbolicScalar> validShape, const DataType &dataType) {
-    auto result = CALL(FullOperation, *Program::GetInstance().GetCurrentFunction(),
-        Element(DataType::DT_FP32, 1.0), SymbolicScalar(), DataType::DT_FP32, shape, validShape);
+    auto result = CALL(FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, 1.0),
+        SymbolicScalar(), DataType::DT_FP32, shape, validShape);
     if (dataType != DataType::DT_FP32) {
         RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result.GetStorage(),
             dataType, CastMode::CAST_NONE);
@@ -175,9 +175,11 @@ LogicalTensorPtr GeneralPow(const Tensor &self, double exponent) {
     if (exponent - intExponent < NUM_VALUE_EPS) {
         result = IntegerPow(self, intExponent);
     } else {
-        auto exponents = CALL(FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, exponent),
-            SymbolicScalar(), DataType::DT_FP32, self.GetShape(), self.GetStorage()->GetDynValidShape());
-        result = CALL(BinaryOperation<BinaryOpType::POW>, *Program::GetInstance().GetCurrentFunction(), self, exponents);
+        auto exponents =
+            CALL(FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, exponent),
+                SymbolicScalar(), DataType::DT_FP32, self.GetShape(), self.GetStorage()->GetDynValidShape());
+        result =
+            CALL(BinaryOperation<BinaryOpType::POW>, *Program::GetInstance().GetCurrentFunction(), self, exponents);
     }
 
     // 指数小于零，结果取倒数
@@ -201,8 +203,8 @@ Tensor Pow(const Tensor &self, const Element &other) {
     Tensor castSelf = self;
     DataType dataType = self.GetDataType();
     if (dataType != DT_FP32) {
-        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
-            DataType::DT_FP32, CastMode::CAST_NONE);
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
     }
     auto result = castSelf.GetStorage();
     if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {
@@ -212,13 +214,14 @@ Tensor Pow(const Tensor &self, const Element &other) {
     } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) {
         auto doubleSelf =
             CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
-        result = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), doubleSelf, result);
+        result =
+            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), doubleSelf, result);
     } else {
         result = GeneralPow(result, exponent);
     }
     if (dataType != DT_FP32) {
-        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result,
-            dataType, CastMode::CAST_NONE);
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, dataType,
+            CastMode::CAST_NONE);
     }
     return result;
 }
@@ -414,7 +417,8 @@ void InnerTiledCumSum(size_t cur, Function &function, const TileShape &tileShape
             std::vector<int64_t> shape = cumSumTileInfo.dstTileInfo.shape;
             shape[axis] = 1;
             LogicalTensorPtr lastAxisTile = dstTensor->View(function, shape, offset);
-            LogicalTensorPtr lastTile = std::make_shared<LogicalTensor>(function, srcTile->Datatype(), srcTile->GetShape());
+            LogicalTensorPtr lastTile =
+                std::make_shared<LogicalTensor>(function, srcTile->Datatype(), srcTile->GetShape());
             auto &eop = function.AddOperation("TILE_EXPAND", {lastAxisTile}, {lastTile});
             eop.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", axis);
             function.AddOperation(Opcode::OP_ADD, {srcTile, lastTile}, {dstTile});
@@ -447,10 +451,12 @@ void TiledCumSum(Function &function, const TileShape &tileShape, const CumSumPar
 
 void TensorCumSum(Function &function, const CumSumPara &cumSumPara) {
     if (cumSumPara.Input->Datatype() == DT_INT8) {
-        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(function, DT_FP16, cumSumPara.Input->GetShape());
+        LogicalTensorPtr inputConverted =
+            std::make_shared<LogicalTensor>(function, DT_FP16, cumSumPara.Input->GetShape());
         Operation &castInputOp = function.AddOperation(Opcode::OP_CAST, {cumSumPara.Input}, {inputConverted});
         castInputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(function, DT_FP16, cumSumPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted =
+            std::make_shared<LogicalTensor>(function, DT_FP16, cumSumPara.dstTensor->GetShape());
         auto &op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConverted}, {dstConverted});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumSumPara.axis);
         op.SetAttribute(OP_ATTR_PREFIX + "flag", cumSumPara.flag);
@@ -458,10 +464,12 @@ void TensorCumSum(Function &function, const CumSumPara &cumSumPara) {
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         return;
     } else if (cumSumPara.Input->Datatype() == DT_BF16 || cumSumPara.Input->Datatype() == DT_FP16) {
-        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(function, DT_FP32, cumSumPara.Input->GetShape());
+        LogicalTensorPtr inputConverted =
+            std::make_shared<LogicalTensor>(function, DT_FP32, cumSumPara.Input->GetShape());
         Operation &castInputOp = function.AddOperation(Opcode::OP_CAST, {cumSumPara.Input}, {inputConverted});
         castInputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(function, DT_FP32, cumSumPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted =
+            std::make_shared<LogicalTensor>(function, DT_FP32, cumSumPara.dstTensor->GetShape());
         auto &op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConverted}, {dstConverted});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumSumPara.axis);
         op.SetAttribute(OP_ATTR_PREFIX + "flag", cumSumPara.flag);
@@ -485,13 +493,15 @@ Tensor CumSum(const Tensor &input, const int &axis) {
     std::vector<DataType> CUMSUM_SUPPORT_DATATYPES = {DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32,
         DataType::DT_INT16, DataType::DT_INT8, DataType::DT_BF16};
     ASSERT(std::find(CUMSUM_SUPPORT_DATATYPES.begin(), CUMSUM_SUPPORT_DATATYPES.end(), dataType) !=
-           CUMSUM_SUPPORT_DATATYPES.end()) << "The datatype is not supported";
+           CUMSUM_SUPPORT_DATATYPES.end())
+        << "The datatype is not supported";
     int tmpAxis0 = axis < 0 ? shapeSize + axis : axis;
     bool flag = input.GetShape().size() == 1 ? true : false;
     if (flag) {
         ASSERT(tmpAxis0 == 0) << "when input.GetShape().size() is 1, axis must be 0";
     }
-    ASSERT(tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < shapeSize) << "The tmpAxis0 should be 0 and less than shape size";
+    ASSERT(tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < shapeSize)
+        << "The tmpAxis0 should be 0 and less than shape size";
 
     const int n_1 = input.GetShape().size() - 1;
     const int n_2 = input.GetShape().size() - 2;
@@ -531,11 +541,13 @@ void CumSumOperationTileFunc(Function &function, const TileShape &tileShape,
 // beginregin: Clip
 
 Tensor Clip(const Tensor &self, const Element &min, const Element &max) {
-    ASSERT(self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4) << "The shape.size() only support 2~4";
+    ASSERT(self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4)
+        << "The shape.size() only support 2~4";
     std::vector<DataType> CLIP_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) != 
-        CLIP_SUPPORT_DATATYPES.end()) << "The datatype is not supported";
+    ASSERT(std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) !=
+           CLIP_SUPPORT_DATATYPES.end())
+        << "The datatype is not supported";
 
     Element min_ = min, max_ = max;
 
@@ -553,11 +565,13 @@ Tensor Clip(const Tensor &self, const Element &min, const Element &max) {
 }
 
 Tensor Clip(const Tensor &self, const Tensor &min, const Tensor &max) {
-    ASSERT(self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4) << "The shape.size() only support 2~4";
+    ASSERT(self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4)
+        << "The shape.size() only support 2~4";
     std::vector<DataType> CLIP_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16};
     ASSERT(std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) !=
-        CLIP_SUPPORT_DATATYPES.end()) << "The datatype is not supported";
+           CLIP_SUPPORT_DATATYPES.end())
+        << "The datatype is not supported";
 
     Tensor result = self;
     if (min.GetStorage() != nullptr) {

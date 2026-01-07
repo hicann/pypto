@@ -122,11 +122,26 @@ PyPTO 支持在具备 Ascend-NPU 硬件的**真实环境**和仅有 CPU 硬件�
     ./Ascend-cann-${device_type}-ops_8.5.0_linux-${arch}.run --install --force --install-path=${install_path}
     ```
 
-    - \$\{device_type\}: NPU 型号, 当前支持 A2、A3
-    - \$\{arch\}: CPU架构, 如aarch64、x86_64
-    - \$\{install-path\}: 表示制定安装路径, 默认安装在`/usr/local/Ascend`目录
+    - \$\{device_type\}: NPU 型号, 当前支持 A2、A3.
+    - \$\{arch\}: CPU架构, 如aarch64、x86_64.
+    - \$\{install-path\}: 表示制定安装路径, 默认安装在`/usr/local/Ascend`目录.
 
-4. **环境变量配置**
+4. **安装CANN pto-isa包**
+
+    根据实际环境下载对应的安装包, 下载链接如下:
+    - x86: [cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-tile-lib-dev/version_compile/master/202601/20260105/ubuntu_x86/cann-pto-isa_8.5.0_linux-x86_64.run)
+    - aarch64: [cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-tile-lib-dev/version_compile/master/202601/20260105/ubuntu_aarch64/cann-pto-isa_8.5.0_linux-aarch64.run)
+    ```
+    # 确保安装包有可执行权限
+    chmod +x cann-pto-isa_8.5.0_linux-${arch}.run
+    # 安装命令
+    ./cann-pto-isa_8.5.0_linux-${arch}.run --full --install-path=${install_path}
+    ```
+
+    - \$\{arch\}: CPU架构, 如aarch64、x86_64.
+    - \$\{install-path\}: 表示制定安装路径, 默认安装在`/usr/local/Ascend`目录.
+
+5. **环境变量配置**
 
     ```bash
     # 默认路径安装, 以root用户为例（非root用户, 将/usr/local替换为${HOME}）

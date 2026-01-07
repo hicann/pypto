@@ -449,18 +449,27 @@ std::string CodeGenCloudNPU::GetIncludePathForCompileCCE() const {
 }
 
 std::string CodeGenCloudNPU::GetPtoTileLibPathByEnv() const {
-    const char *homePath = std::getenv(ENV_PTO_TILE_LIB_CODE_PATH.c_str());
-    if (homePath == nullptr) {
-        homePath = std::getenv(ENV_ASCEND_HOME_PATH.c_str());
-        if (homePath == nullptr) {
-            return "";
-        }
+    if (!ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false)) {
+        return "";
     }
 
-    std::string includePath = std::string(homePath) + "/include";
-    if (IsPathExist(includePath)) {
-        return includePath;
+    // Priority 1: Obtain pto-isa from the patch specified by the environment variable "PTO_TILE_LIB_CODE_PATH".
+    const char *homePath = std::getenv(ENV_PTO_TILE_LIB_CODE_PATH.c_str());
+    if (homePath != nullptr) {
+        std::string envPath = std::string(homePath) + "/include";
+        ASSERT(IsPathExist(envPath + "/pto")) << "Pto-isa path " << envPath << "/pto not found! please check.";
+        return envPath;
     }
+
+    // Priority 2: Obtain pto-isa from the installed cann package. 
+    homePath = std::getenv(ENV_ASCEND_HOME_PATH.c_str());
+    if (homePath != nullptr) {
+        std::string cannPath = std::string(homePath) + "/include";
+        ASSERT(IsPathExist(cannPath + "/pto")) << "Pto-isa path " << cannPath << "/pto not found! please check.";
+        return cannPath;
+    }
+
+    ASSERT(false) << "Pto-isa path not found. please install pto-isa properly.";
     return "";
 }
 
