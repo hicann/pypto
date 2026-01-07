@@ -63,6 +63,14 @@ enum class MISOIdx : unsigned {
     SRC2_IDX = 3,
 };
 
+// multi input multi output
+enum class MIMOIdx : int {
+    DST_IDX = 0,
+    TMP_IDX = 1,
+    SRC0_IDX = 2,
+    SRC1_IDX = 3,
+};
+
 const std::unordered_map<OperandType, std::string> OPERAND_TYPE_TO_ADDR_TYPE{
     {BUF_DDR,   "__gm__"},
     { BUF_UB, "__ubuf__"},

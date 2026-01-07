@@ -90,6 +90,7 @@ public:
     std::string GenGatherElementOp() const;
 
     std::string GenRangeOp() const;
+    std::string PrintRangeTileTensor(std::string startVal, std::string stepVal) const;
     std::string GenL0CToUBTileTensor() const;
 
     std::string GenScatterElementSOp() const;
@@ -354,6 +355,10 @@ private:
     void GetVarAndTypeParam(std::vector<std::string> &varExpr, std::vector<std::string> &dataTypeExpr) const;
     std::string PrintWhereOp(const WhereParam &param) const;
     std::string PrintWhereOpTileTensor() const;
+
+    std::string PrintCmpTileTensor() const;
+    std::string PrintLogicalAndTileTensor() const;
+    std::string PrintLogicalNotTileTensor() const;
 
     void InitOpsGenMap();
     void InitScalaOpsMap();
