@@ -128,6 +128,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         const DeviceLauncherConfig &config) {
     bool isCapture = false;
     std::cout << "!!! Kernel Launch " << "\n";
+    config::SetRunDataOption(KEY_RUNTYPE, "npu");
     if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
         DeviceRunner::SetBinData(function->GetDyndevAttribute()->kernelBinary);
     }

@@ -142,6 +142,7 @@ static std::string CreateLogTopFolder() {
     }
     res = CreateDir(folderPath);
     ASSERT(res) << "Failed to create directory: " << folderPath;
+    config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, RealPath(folderPath));
 
     return folderPath;
 }
@@ -157,7 +158,6 @@ const std::string &ConfigManager::LogTensorGraphFolder() {
     if (globalConfigs_.logTensorGraphFolder.empty()) {
         globalConfigs_.logTensorGraphFolder = LogTopFolder() + "/TensorGraph";
         CreateDir(globalConfigs_.logTensorGraphFolder);
-        config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, config::GetAbsoluteTopFolder() + "/TensorGraph");
     }
     return globalConfigs_.logTensorGraphFolder;
 }

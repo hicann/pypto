@@ -393,6 +393,7 @@ PrintOptions &GetPrintOptions() {
 
 void Reset() {
     g_rwlock.lock();
+    g_config.Reset();
     ConfigManagerNg::CurrentScope()->Clear();
     g_rwlock.unlock();
 }

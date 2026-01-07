@@ -257,6 +257,7 @@ private:
 
     void RunOnBoard(const std::vector<RawTensorDataPtr> &inputs, const std::vector<RawTensorDataPtr> &outputs) {
         std::cout << "!!! Kernel Launch " << "\n";
+        config::SetRunDataOption(KEY_RUNTYPE, "npu");
         int rc = aclInit(nullptr);
         if (rc != 0 && rc != ACL_ERROR_REPEAT_INITIALIZE) {
             ALOG_ERROR_F("Acl init failed!!!");
