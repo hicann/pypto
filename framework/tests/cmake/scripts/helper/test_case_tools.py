@@ -10,16 +10,17 @@
 # -----------------------------------------------------------------------------------------------------------
 
 import pkgutil
-import re
 
 import numpy as np
 import torch
 
 
 def is_number(input_str: str):
-    return (
-        re.fullmatch("^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$", input_str) is not None
-    )
+    try:
+        float(input_str)
+        return True
+    except ValueError:
+        return False
 
 
 def parse_list_str(input_str: str):
@@ -93,14 +94,17 @@ def parse_dict_str(input_str: str):
     if input_str.startswith("{") and input_str.endswith("}"):
         input_str = input_str[1:-1]
 
-    key_values = input_str.split(',')
+    key_values = input_str.split(",")
     res = {}
     value_index = 0
     while value_index < len(key_values):
-        if ':' in key_values[value_index]:
-            key, value = key_values[value_index].split(':')
-            while value_index + 1 < len(key_values) and ':' not in key_values[value_index + 1]:
-                value += ',' + key_values[value_index + 1]
+        if ":" in key_values[value_index]:
+            key, value = key_values[value_index].split(":")
+            while (
+                value_index + 1 < len(key_values)
+                and ":" not in key_values[value_index + 1]
+            ):
+                value += "," + key_values[value_index + 1]
                 value_index += 1
             res[key] = value
         value_index += 1
