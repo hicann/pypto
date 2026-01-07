@@ -39,6 +39,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         config::SetPlatformConfig(KEY_ONLY_TENSOR_GRAPH, true);
         config::SetPlatformConfig("ENABLE_COST_MODEL", false);
     }
@@ -103,4 +104,42 @@ TEST_F(TestCodegenDynTransposeDataMove, TransposeDataMoveDim3) {
 TEST_F(TestCodegenDynTransposeDataMove, TransposeDataMoveDim4) {
     TestTransposeDataMoveBody(SHAPE_DIM4);
 }
+
+class TestCodegenLayoutTransposeDataMove : public ::testing::Test {
+public:
+    static void SetUpTestCase() {}
+
+    static void TearDownTestCase() {}
+
+    void SetUp() override {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetBuildStatic(true);
+        config::SetHostOption(ONLY_CODEGEN, true);
+        config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+    }
+
+    void TearDown() override {}
+};
+
+TEST_F(TestCodegenLayoutTransposeDataMove, TransposeDataMoveLayout) {
+    constexpr int64_t dim = 3;
+    constexpr int64_t shape0 = 8;
+    constexpr int dim0 = 0;
+    constexpr int dim1 = 1;
+    std::vector<int64_t> shape(dim, shape0);
+    TileShape::Current().SetVecTile(shape);
+    Tensor input(DataType::DT_FP32, shape, "input");
+    Tensor output(DataType::DT_FP32, shape, "output");
+    FUNCTION("TRANSPOSE", {input, output}) {
+        output = Transpose(input, {dim0, dim1});
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "TRANSPOSE");
+    CodeGenCtx ctx;
+    CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
 } // namespace npu::tile_fwk

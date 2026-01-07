@@ -198,12 +198,37 @@ std::string CodeGenOpCloudNPU::GenTransposeDataMove() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintTransposeDataMove(const PrintTransposeDataMoveParam &param) const {
+    if (isSupportLayout) {
+        return PrintTransposeDataMoveLayout(param);
+    }
     if (isSupportDynamicAligned) {
         return PrintTransposeDataMoveDynamic(param);
     } else if (isDynamicFunction) {
         return PrintTransposeDataMoveDynamicUnaligned(param);
     }
     return PrintTransposeDataMoveStatic(param);
+}
+
+std::string CodeGenOpCloudNPU::PrintTransposeDataMoveLayout(const PrintTransposeDataMoveParam &param) const {
+    std::string gmVarName = GenGmParamVar(param.gmIdx);
+    std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
+    std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
+    std::vector<int64_t> transposeAxis =
+        npu::tile_fwk::AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+    int correctionAxis = SHAPE_DIM5 - originShape[param.localIdx].size();
+    std::vector<std::string> uselessVector0;
+    std::vector<std::string> uselessVector1;
+    std::vector<std::string> uselessVector2;
+    std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor({param.gmIdx, param.localIdx,
+        uselessVector0, uselessVector1, uselessVector2, false});
+    std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
+    int dim = static_cast<int>(rawShape[param.gmIdx].size());
+    std::string coord = "Coord" + std::to_string(dim) + DIM + coordCp;
+
+    std::ostringstream oss;
+    oss << tileOpName << "<" << (transposeAxis[0] + correctionAxis) << ", " << (transposeAxis[1] + correctionAxis)
+        << ">" << WrapParamByParentheses({dstTensor, srcTensor, coord}) << ";\n";
+    return oss.str();
 }
 
 std::string CodeGenOpCloudNPU::PrintTransposeDataMoveStatic(const PrintTransposeDataMoveParam &param) const {

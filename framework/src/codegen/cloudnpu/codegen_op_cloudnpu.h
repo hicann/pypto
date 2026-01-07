@@ -300,6 +300,7 @@ private:
     std::string PrintBinaryBrc(const PrintBinaryBrcParam &param) const;
 
     std::string PrintTransposeDataMove(const PrintTransposeDataMoveParam &param) const;
+    std::string PrintTransposeDataMoveLayout(const PrintTransposeDataMoveParam &param) const;
     std::string PrintTransposeDataMoveStatic(const PrintTransposeDataMoveParam &param) const;
     std::string PrintTransposeDataMoveDynamic(const PrintTransposeDataMoveParam &param) const;
     std::string PrintTransposeDataMoveDynamicUnaligned(const PrintTransposeDataMoveParam &param) const;
