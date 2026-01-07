@@ -15,45 +15,117 @@
 
 #ifndef TILEOP_TILE_OPERATOR_PTO_TILE__H
 #define TILEOP_TILE_OPERATOR_PTO_TILE__H
-#include "utils/layout.h"
-#include "utils/tile_tensor.h"
 #include <cstddef>
 
+#include "utils/layout.h"
+#include "utils/tile_tensor.h"
+
+template <typename Tuple, size_t index, size_t default_value = 1, bool use_default = false>
+__aicore__ inline constexpr size_t GetTupleElement(const Tuple &t) {
+    static_assert(index < MAX_DIMS, "The index of tuple is out of range.");
+    constexpr auto size = Std::tuple_size<Tuple>::value;
+    if constexpr (use_default || (size < MAX_DIMS && index < (MAX_DIMS - size))) {
+        return default_value;
+    } else {
+        return Std::get<index + size - MAX_DIMS>(t);
+    }
+}
+
+template <typename T, typename Shape, typename Stride, bool need_mask = false>
+class PtoGlobal {
+public:
+    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;
+    using Type = pto::GlobalTensor<Dtype, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
+
+    __aicore__ inline PtoGlobal(__gm__ typename T::Type *addr, const Shape &shape, const Stride &stride)
+        : data_((__gm__ Dtype *)(addr),
+              pto::Shape(GetTupleElement<Shape, DIM_1ST, 1, need_mask>(shape),
+                  GetTupleElement<Shape, DIM_2ND, 1, need_mask>(shape),
+                  GetTupleElement<Shape, DIM_3RD, 1, need_mask>(shape), GetTupleElement<Shape, DIM_4TH>(shape),
+                  GetTupleElement<Shape, DIM_5TH>(shape)),
+              pto::Stride(GetTupleElement<Stride, DIM_1ST, 0, need_mask>(stride),
+                  GetTupleElement<Stride, DIM_2ND, 0, need_mask>(stride),
+                  GetTupleElement<Stride, DIM_3RD, 0, need_mask>(stride), GetTupleElement<Stride, DIM_4TH, 0>(stride),
+                  GetTupleElement<Stride, DIM_5TH, 0>(stride))) {}
+
+    __aicore__ inline PtoGlobal(const Shape &shape, const Stride &stride) : PtoGlobal(0x0, shape, stride) {}
+
+    __aicore__ inline void Assign(__gm__ typename T::Type *addr) { pto::TASSIGN(data_, (__gm__ Dtype *)addr); }
+
+    inline Type &Data() { return data_; }
+
+private:
+    Type data_;
+};
+
+template <typename... Indexs>
+using Offsets = Std::tuple<Indexs...>;
+
+using TileOffset = Offsets<size_t, size_t, size_t>;
+
+template <typename T, bool Mergeable = false>
+__aicore__ inline constexpr size_t GetMergedAxisIfNeed() {
+    if constexpr (Mergeable) {
+        constexpr auto size = Std::tuple_size<typename T::TileShape>::value;
+        return TileOp::GetOutterAxisMergeResult<size, typename T::TileShape>();
+    } else {
+        return TileOp::GetTensorTileShapeDim<T, DIM_4TH, MAX_DIMS>();
+    }
+}
+
+template <typename T, bool Mergeable = false>
+__aicore__ inline constexpr int GetValidHeight() {
+    if constexpr (Mergeable) {
+        constexpr auto size = Std::tuple_size<typename T::Shape>::value;
+        return TileOp::GetOutterAxisMergeResult<size, typename T::Shape>();
+    } else if constexpr (T::IsStaticLayout()) {
+        return TileOp::GetTensorShapeDim<T, DIM_4TH, MAX_DIMS>();
+    } else {
+        return -1;
+    }
+}
+
 template <typename T>
+__aicore__ inline constexpr int GetValidWidth() {
+    if constexpr (T::IsStaticLayout()) {
+        return TileOp::GetTensorShapeDim<T, DIM_5TH, MAX_DIMS>();
+    } else {
+        return -1;
+    }
+}
+
+template <typename T, pto::BLayout Layout = pto::BLayout::RowMajor, bool Mergeable = false>
 class PtoTile {
-public:
-    static constexpr auto expect_size = 5;
+private:
     static constexpr auto size = Std::tuple_size<typename T::Shape>::value;
-    using Type =
-        pto::Tile<pto::TileType::Vec, typename T::Type, TileOp::GetOutterAxisMergeResult<size, typename T::TileShape>(),
-            TileOp::GetTensorTileShapeDim<T, DIM_5TH, expect_size>(), pto::BLayout::RowMajor,
-            TileOp::GetOutterAxisMergeResult<size, typename T::Shape>(),
-            TileOp::GetTensorShapeDim<T, DIM_5TH, expect_size>()>;
+    static constexpr auto tileH = GetMergedAxisIfNeed<T, Mergeable>();
+    static constexpr auto tileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
+    static constexpr auto validH = GetValidHeight<T, Mergeable>();
+    static constexpr auto validW = GetValidWidth<T>();
 
-    __aicore__ inline PtoTile() {}
+public:
+    using Dtype = std::conditional_t<std::is_same_v<typename T::Type, bool>, uint8_t, typename T::Type>;
+    using Type = pto::Tile<pto::TileType::Vec, Dtype, tileH, tileW, Layout, validH, validW>;
 
-    __aicore__ inline const Type &Tile() const { return tile_; }
+    __aicore__ inline PtoTile(const T &tensor = T(0)) {
+        if constexpr (!T::IsStaticLayout()) {
+            Type tile(tensor.GetLayout().template GetShapeDim<DIM_4TH, MAX_DIMS>(),
+                tensor.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>());
+            data_ = tile;
+        }
+    }
+
+    __aicore__ inline const Type &Data() const { return data_; }
+
+    __aicore__ inline void Assign(T &tensor, const TileOffset &offsets = TileOffset(0, 0, 0)) {
+        const auto layout = tensor.GetLayout();
+        size_t offset = Std::get<DIM_1ST>(offsets) * layout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+        offset += Std::get<DIM_2ND>(offsets) * layout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+        offset += Std::get<DIM_3RD>(offsets) * layout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+        pto::TASSIGN(data_, (uint64_t)(tensor.GetAddr() + offset * sizeof(typename T::Type)));
+    }
 
 private:
-    Type tile_;
+    Type data_;
 };
-
-template <typename T>
-class DynPtoTile {
-public:
-    static constexpr auto expect_size = 5;
-    static constexpr auto size = Std::tuple_size<typename T::Shape>::value;
-    using Type =
-        pto::Tile<pto::TileType::Vec, typename T::Type, TileOp::GetTensorTileShapeDim<T, DIM_4TH, expect_size>(),
-            TileOp::GetTensorTileShapeDim<T, DIM_5TH, expect_size>(), pto::BLayout::RowMajor, -1, -1>;
-
-    __aicore__ inline DynPtoTile(T tensor)
-        : tile_(tensor.GetLayout().template GetShapeDim<DIM_4TH, expect_size>(),
-              tensor.GetLayout().template GetShapeDim<DIM_5TH, expect_size>()) {}
-
-    __aicore__ inline const Type &Tile() const { return tile_; }
-
-private:
-    Type tile_;
-};
-#endif
+#endif // TILEOP_TILE_OPERATOR_PTO_TILE__H

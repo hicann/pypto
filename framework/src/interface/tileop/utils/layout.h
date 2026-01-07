@@ -24,6 +24,7 @@ constexpr size_t DIM_2ND = 1;
 constexpr size_t DIM_3RD = 2;
 constexpr size_t DIM_4TH = 3;
 constexpr size_t DIM_5TH = 4;
+constexpr size_t MAX_DIMS = 5;
 
 namespace TileOp {
 template <typename CoordType, typename ShapeType, typename StrideType>
