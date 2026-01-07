@@ -156,6 +156,51 @@ TEST_F(TestCodegenUnary, RowMaxExpandDim2) {
     TestRowMaxExpandBody({128, 64}, {128, 64}, {16, 16}, "ROWMAXEXPAND_DIM2");
 }
 
+Function &TestFullBody(std::vector<int64_t> shape, std::vector<int64_t> tileShape, std::string name,
+    bool isSupportTileTensor = false) {
+    if(isSupportTileTensor){
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+        config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    }
+    TileShape::Current().SetVecTile(tileShape);
+    Tensor input_a(DT_FP32, shape, "A");
+    Tensor output(DT_FP32, shape, "C");
+    Element value(DataType::DT_FP32, 2.0);
+    config::SetBuildStatic(true);
+    FUNCTION(name, {input_a, output}) {
+        output = Full(value, DT_FP32, shape, {});
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name);
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+    return *function;
+}
+
+TEST_F(TestCodegenUnary, FullDim2TileTensor) {
+    Function& func = TestFullBody({32, 32}, {16, 16}, "FULL_DIM2_TILETENSOR", true);
+    std::string res = GetResultFromCpp(func);
+    std::string expect = R"!!!(#include "TileOpImpl.h"
+
+// funcHash: 16465914044878388469
+
+extern "C" [aicore] void TENSOR_FULL_DIM2_TILETENSOR_2_0_4503599627370496(__gm__ GMTensorInfo* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ GMTensorInfo* oriAddrParam) {
+float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400
+float *UB_S0_E1024_T = (float *)get_imm(0x0); // size: 0x400
+using GMTileTensorFP32Dim2_2 = TileTensor<__gm__ float, DynLayout2Dim, Hardware::GM>;
+using UBTileTensorFP32Dim2_1 = TileTensor<float, StaticLayout2Dim<16, 16, 16, 16>, Hardware::UB>;
+GMTileTensorFP32Dim2_2 gmTensor_2((__gm__ float*)((__gm__ GMTensorInfo*)(param) + 0)->Addr, DynLayout2Dim(Shape2Dim(32, 32), Stride2Dim(32, 1)));
+UBTileTensorFP32Dim2_1 ubTensor_1((uint64_t)UB_S0_E1024_T);
+TVecDup<float>(ubTensor_1, 2.000000);
+set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
+TStore(gmTensor_2, ubTensor_1, Coord2Dim(0, 0));
+}
+)!!!";
+
+    EXPECT_EQ(res, expect);
+}
+
 Function &TestCastBody(std::vector<int64_t> shape, std::vector<int64_t> outShape, std::vector<int64_t> tileShape,
     std::string name, bool isSupportTileTensor = false) {
     if (isSupportTileTensor) {

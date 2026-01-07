@@ -124,7 +124,22 @@ std::string CodeGenOpCloudNPU::PrintDupOpStatic(const PrintDupOpParam &param) co
     return os.str();
 }
 
+std::string CodeGenOpCloudNPU::PrintDupTileTensor(const PrintDupOpParam &param) const {
+    const std::string &dupV = param.dupV;
+    const std::string &dstDtypeStr = param.dstDtypeStr;
+    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+
+    std::ostringstream oss;
+    oss << tileOpName << "<" << dstDtypeStr << ">"
+        << "(" << dstTensor << ", " << dupV << ");\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::PrintDupOp(const PrintDupOpParam &param) const {
+    if (isSupportLayout) {
+        return PrintDupTileTensor(param);
+    }
+
     if (isDynamicFunction) {
         return PrintDupOpDynUnaligned(param);
     }

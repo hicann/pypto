@@ -221,6 +221,7 @@ private:
     std::string PrintDupOp(const PrintDupOpParam &param) const;
     std::string PrintDupOpDynUnaligned(const PrintDupOpParam &param) const;
     std::string PrintDupOpStatic(const PrintDupOpParam &param) const;
+    std::string PrintDupTileTensor(const PrintDupOpParam &param) const;
 
     std::string PrintRowMaxline(const PrintUnaryParam &param) const;
     std::string PrintRowMaxlineTileTensor() const;
