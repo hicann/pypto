@@ -245,18 +245,27 @@ Status ConvertInserter::RecordConflict(Function &function) {
                 std::vector<MemoryType> paths;
                 Status status = ProcessConvertPath(op, oOperand, requiredMemoryType, paths);
                 if (status != SUCCESS) {return status;}
-                //step5：记录需要插入的Convert Op
-                auto output = RecordInsertConvertOp(oOperand,paths,function,op);
 
-                //step6：更新消费者连接
-                GraphReconnect(oOperand, output, consumers,function);
+                //step5：对每个消费者插入的Convert Op并更新图链接
+                InsertConvertOpForEachConsumer(function, op, oOperand, consumers, paths);
 
-                //step7：标记已处理
+                //step6：标记已处理
                 visitedTensor.push_back(oOperand->magic);
             }
         }
     }
     return SUCCESS;
+}
+
+//为每个存在内存冲突的消费者插入convert op
+void ConvertInserter::InsertConvertOpForEachConsumer(Function &function, const Operation &op, const std::shared_ptr<LogicalTensor> &oOperand,
+ std::set<Operation *> &consumers, std::vector<MemoryType> &paths) {
+    for (auto consumer : consumers) {
+        auto output = RecordInsertConvertOp(oOperand,paths,function,op);
+        if (consumer->BelongTo() == &function) {
+            UpdateConsumerAndReconnect(oOperand, output, consumer);
+        }
+    }
 }
 
 //特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR

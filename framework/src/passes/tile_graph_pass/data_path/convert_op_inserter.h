@@ -113,6 +113,10 @@ public:
     //检查tensor所有的消费者是否都有效
     bool isAllConsumersValid(const std::set<Operation *> &consumers) const;
     
+    //为每个存在内存冲突的消费者插入convert op
+    void InsertConvertOpForEachConsumer(Function &function, const Operation &op, const std::shared_ptr<LogicalTensor> &oOperand,
+        std::set<Operation *> &consumers, std::vector<MemoryType> &paths); 
+
     //记录需要插入的convert op
     std::shared_ptr<LogicalTensor> RecordInsertConvertOp(const std::shared_ptr<LogicalTensor> &oOperand, const std::vector<MemoryType> &paths,
         Function &function,const Operation &op);
