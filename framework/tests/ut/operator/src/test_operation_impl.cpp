@@ -20,7 +20,7 @@
 #include "interface/configs/config_manager.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
-
+#include "interface/interpreter/calc.h"
 using namespace npu::tile_fwk;
 
 class OperationImplTest : public testing::Test {
@@ -573,9 +573,27 @@ TEST_F(OperationImplTest, test_Gather) {
     Tensor operand1(DT_FP16, {8, 16}, "operand1");
     Tensor operand2(DT_INT32, {8, 16}, "operand1");
     Tensor result;
-    FUNCTION("TestMinS") {
+    FUNCTION("TestGather") {
         result = Gather(operand1, operand2, -1);
     }
+}
+TEST_F(OperationImplTest, test_GatherINUB_torch) {
+    Shape paramShape({4, 16});
+    Shape indicesShape({1, 4});
+    Shape pagetableShape({1, 2});
+    Shape outShape({4, 16});
+    std::vector<int64_t> offset({0, 0});
+
+    Tensor result;
+    auto paramData = std::make_shared<RawTensorData>(DataType::DT_FP16, paramShape);
+    auto param = std::make_shared<LogicalTensorData>(paramData, paramShape, offset);
+    auto indicesData = std::make_shared<RawTensorData>(DataType::DT_INT32, indicesShape);
+    auto indices = std::make_shared<LogicalTensorData>(indicesData, indicesShape, offset);
+    auto pagetableData = std::make_shared<RawTensorData>(DataType::DT_INT32, pagetableShape);
+    auto pagetable = std::make_shared<LogicalTensorData>(pagetableData, pagetableShape, offset);
+    auto outData = std::make_shared<RawTensorData>(DataType::DT_FP16, outShape);
+    auto out = std::make_shared<LogicalTensorData>(outData, outShape, offset);
+    npu::tile_fwk::calc::GatherINUB(out, param, indices, pagetable, 2, -2);
 }
 
 TEST_F(OperationImplTest, test_Scatter_FP16) {

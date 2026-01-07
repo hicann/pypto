@@ -205,6 +205,10 @@ inline void BitSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t
 inline void Gather(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices, int64_t axis) {
     GetCalcOps()->Gather(out, params, indices, axis);
 }
+inline void GatherINUB(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices,
+    LogicalTensorDataPtr pageTable, int64_t blockSize, int64_t axis) {
+    GetCalcOps()->GatherINUB(out, params, indices, pageTable, blockSize, axis);
+}
 
 inline void Extract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mod, bool descending) {
     GetCalcOps()->Extract(out, self, mod, descending);
