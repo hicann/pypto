@@ -241,16 +241,6 @@ inline bool IsDebugMode() {
         }                                                               \
     } while (0)
 
-#define DEV_DEBUG_ASSERT(expr)                                                      \
-    do {                                                                            \
-        if (!(expr)) {                                                              \
-            DEV_ERROR("Assertion failed at %s:%d (%s)", __FILE__, __LINE__, #expr); \
-            assert(0);                                                              \
-        }                                                                           \
-    } while (0)
-
-#define DEV_DEBUG_ASSERT_MSG(expr, fmt, args...) DEV_ASSERT_MSG(expr, fmt, ##args)
-
 #define DEV_MEM_DUMP(fmt, args...)
 
 #else
@@ -314,9 +304,6 @@ inline bool IsDebugMode() {
         }                                                                      \
     } while (0)
 
-
-#define DEV_DEBUG_ASSERT(expr) DEV_ASSERT(expr)
-#define DEV_DEBUG_ASSERT_MSG(expr, fmt, args...) DEV_ASSERT_MSG(expr, fmt, ##args)
 #endif // DEBUG_PLOG
 
 #define BACKTRACE_STACK_COUNT 64

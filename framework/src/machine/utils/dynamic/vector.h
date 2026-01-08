@@ -64,9 +64,6 @@ public:
     ~Vector() {
         clear();
         if (dataAllocation_) {
-            if (!allocator_) {
-                DEV_ERROR("allocator_ is null, expected valid allocator pointer\n");
-            }
             DEV_ASSERT(allocator_);
             allocator_->Deallocate(dataAllocation_);
         }
@@ -96,19 +93,21 @@ public:
 
     void InitAllocator(WsAllocator_T &allocator) {
         // InitAllocator or passing allocator via constructor is allowed to happen only once
-        if (allocator_) {
-            auto void_allocator = static_cast<void*>(allocator_);
-            DEV_ERROR("allocator_ is not null when it should be, allocator=%p\n", void_allocator);
-        }
-        DEV_ASSERT(!allocator_);
+        DEV_ASSERT_MSG(!allocator_, "Vector has been initialized already");
         allocator_ = &allocator;
     }
 
     value_type *data() { return dataAllocation_.As<value_type>(); }
     const value_type *data() const { return dataAllocation_.As<value_type>(); }
 
-    value_type &operator[](size_type idx) { if (idx >= size_) {DEV_DEBUG("idx %u >= size_ %u in operator[]", idx, size_);} DEV_DEBUG_ASSERT(idx < size_); return data()[idx]; }
-    const value_type &operator[](size_type idx) const { if (idx >= size_) {DEV_DEBUG("idx %u >= size_ %u in const operator[]", idx, size_);}DEV_DEBUG_ASSERT(idx < size_); return data()[idx]; }
+    value_type &operator[](size_type idx) {
+        DEV_ASSERT_MSG(idx < size_, "idx=%u >= size_=%u", idx, size_);
+        return data()[idx];
+    }
+    const value_type &operator[](size_type idx) const {
+        DEV_ASSERT_MSG(idx < size_, "idx=%u >= size_=%u", idx, size_);
+        return data()[idx];
+    }
 
     value_type *begin() { return data(); }
     const value_type *begin() const { return data(); }
@@ -116,11 +115,11 @@ public:
     value_type *end() { return data() + size_; }
     const value_type *end() const { return data() + size_; }
 
-    value_type &front() { if (empty()){ DEV_ERROR("front() called on empty container");} DEV_ASSERT(!empty()); return *begin(); }
-    const value_type &front() const { if (empty()){ DEV_ERROR("front() called on empty container");} DEV_ASSERT(!empty()); return *begin(); }
+    value_type &front() { DEV_ASSERT(!empty()); return *begin(); }
+    const value_type &front() const { DEV_ASSERT(!empty()); return *begin(); }
 
-    value_type &back() { if (empty()){ DEV_ERROR("back() called on empty container");} DEV_ASSERT(!empty()); return *(end() - 1); }
-    const value_type &back() const { if (empty()){ DEV_ERROR("back() called on empty container");} DEV_ASSERT(!empty()); return *(end() - 1); }
+    value_type &back() { DEV_ASSERT(!empty()); return *(end() - 1); }
+    const value_type &back() const { DEV_ASSERT(!empty()); return *(end() - 1); }
 
     size_type capacity() const { return capacity_; }
     size_type size() const { return size_; }
@@ -143,9 +142,6 @@ public:
     }
 
     void pop_back() {
-        if (empty()){
-            DEV_ERROR("pop_back failed, container is empty\n");
-        }
         DEV_ASSERT(!empty());
         if constexpr (!std::is_trivially_destructible_v<value_type>) {
             data()[size_ - 1].~value_type();
@@ -185,10 +181,8 @@ private:
     void ExpandCapacity(size_type capacityReq) {
         static constexpr size_type MIN_CAPACITY = 8;
 
-        if (capacityReq <= capacity_) {
-            DEV_ERROR("capacityReq %u <= capacity_ %u in ExpandCapacity\n", capacityReq, capacity_);
-        }
-        DEV_ASSERT(capacityReq > capacity_);
+        DEV_ASSERT_MSG(capacityReq > capacity_,
+            "Unexpected ExpandCapacity call: capacityReq %u <= capacity_ %u", capacityReq, capacity_);
 
         size_type newCapacity = std::max(MIN_CAPACITY, capacityReq);
         newCapacity = std::max(newCapacity, capacity_ << 1); // multiplier: 2.0
@@ -196,9 +190,6 @@ private:
     }
 
     void InternalReserve(size_type capacity) {
-        if (!allocator_) {
-            DEV_ERROR("allocator_ is null, expected valid allocator pointer\n");
-        }
         DEV_ASSERT(allocator_);
         WsAllocation alloc = allocator_->template Allocate<value_type>(capacity, category);
         if (dataAllocation_) {
@@ -248,10 +239,7 @@ private:
             return;
         }
 
-        if (n > size_) {
-            DEV_ERROR("n %u > size_ %u in InternalPopBack\n", n, size_);
-        }
-        DEV_ASSERT(n <= size_);
+        DEV_ASSERT_MSG(n <= size_, "n=%u > size_=%u", n, size_);
         if constexpr (!std::is_trivially_destructible_v<value_type>) {
             for (size_type i = size_ - n; i < size_; i++) {
                 data()[i].~value_type();

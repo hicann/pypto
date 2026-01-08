@@ -40,7 +40,7 @@ struct DeviceStitchContext {
 
     size_t Size() const { return stitchedList_.size(); }
     bool Empty() const { return stitchedList_.empty(); }
-    
+
     void Append(DevAscendFunctionDupped &devRootDup) { stitchedList_.push_back(devRootDup); }
 
     const auto &GetStitchedList() const { return stitchedList_; }
@@ -56,8 +56,7 @@ struct DeviceStitchContext {
 
     void DumpSlotInfo(const char *label, DeviceExecuteSlot *slotList, size_t slotSize);
 
-    int DecideSlotAddress(DeviceExecuteSlot *slotList, size_t slotSize,
-                           ItemPool<uint32_t, WsMemCategory::ITEMPOOL_SLOT_REF_CNT> &slotRefCntPool);
+    void DecideSlotAddress(DeviceExecuteSlot *slotList, size_t slotSize);
 
     int DecideIncastOutcast(uint64_t taskId);
 
@@ -75,24 +74,9 @@ struct DeviceStitchContext {
     uint32_t stitchedCallOpSize() { return stitchedCallOpSize_; }
 
 private:
-    struct SlotAdditionalInfo {
-        uintdevptr_t slotPtr{0};
-        int64_t refCntIndex{itemPoolInvalidIndex};
-
-        template<WsMemCategory category>
-        void RefCntInit(ItemPool<uint32_t, category> &slotRefCntPool) {
-            refCntIndex = slotRefCntPool.Allocate(1);
-        }
-
-        template<WsMemCategory category>
-        void RefCntInc(ItemPool<uint32_t, category> &slotRefCntPool) {
-            (void)slotRefCntPool;
-            ++slotRefCntPool.At(refCntIndex);
-        }
-    };
     uint32_t stitchedCallOpSize_{0};
     StitchedList stitchedList_;
-    Vector<SlotAdditionalInfo, WsMemCategory::VECTOR_TEMPORARY> slotInfosInDecidingSlotMem_;
+    Vector<ItemPoolIter, WsMemCategory::VECTOR_TEMPORARY> slotInfosInDecidingSlotMem_;
     DeviceWorkspaceAllocator *workspace_{nullptr};
 
 public:

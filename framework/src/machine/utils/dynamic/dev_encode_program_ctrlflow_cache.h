@@ -20,6 +20,7 @@
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/dynamic/item_pool.h"
+#include "machine/utils/dynamic/runtime_outcast_tensor.h"
 
 namespace npu::tile_fwk::dynamic {
 #define ADDRESS_CACHE_KIND_WORKSPACE         0
@@ -98,13 +99,12 @@ struct DeviceTaskCache {
 };
 
 struct DeviceExecuteSlot {
-    AddressDescriptor desc;
+    ItemPoolIter rtOutcastIter{ITEM_POOL_INVALID_INDEX};
     bool isOutputSlot{false};
     bool isAssembleSlot{false};
     bool isAssembleSlotNeedAlloc{false};
     bool isPartialUpdateStitch{false};
     bool isPartialUpdateDirty{false};
-    int64_t refCntIndex{itemPoolInvalidIndex}; // refCnt to stored tensor
     uint32_t stitchDupIdx{INVALID_STITCH_IDX};
     uint32_t stitchOutcastIdx;
 
@@ -116,54 +116,20 @@ struct DeviceExecuteSlot {
     bool IsAssembleAddress() const {
         return isAssembleSlot;
     }
-
-    bool RefCntIsNull() {
-        return refCntIndex == itemPoolInvalidIndex;
-    }
-
-    void RefCntReset() {
-        refCntIndex = itemPoolInvalidIndex;
-    }
-
-    template<typename T>
-    void RefCntCopyFrom(T &info) {
-        refCntIndex = info.refCntIndex;
-    }
-
-    template <WsMemCategory category>
-    bool RefCntDec(ItemPool<uint32_t, category> &pool) {
-        if (refCntIndex == itemPoolInvalidIndex) {
-            DEV_ERROR("RefCntDec failed: refCntIndex is invalid.");
-        }
-        DEV_DEBUG_ASSERT(refCntIndex != itemPoolInvalidIndex);
-        --pool.At(refCntIndex);
-        if (pool.At(refCntIndex) == 0) {
-            pool.DestroyAt(refCntIndex);
-            RefCntReset();
-            return true;
-        }
-        return false;
-    }
-
-    template <WsMemCategory category>
-    void RefCntInc(ItemPool<uint32_t, category> &pool, uint32_t count) {
-        pool.At(refCntIndex) += count;
-    }
 };
 
 struct DevProgramControlFlowCacheRuntime {
     struct DeviceWorkspaceAllocator {
         struct {
-            SeqWsAllocator dassembleDests;
             SeqWsAllocator rootInner;
             SeqWsAllocator devTaskInnerExclusiveOutcasts;
             WsSlotAllocator devTaskBoundaryOutcasts;
             DevRelocVector<WsSlotAllocator::BlockHeader> slottedOutcastsBlockList;
         } tensorAllocators;
+        DevRelocVector<ItemPool<RuntimeOutcastTensor>::ItemBlock> runtimeOutcastTensorPool;
     } workspace;
     struct DeviceSlotContext {
         DevRelocVector<DeviceExecuteSlot> slotList;
-        DevRelocVector<ItemPool<uint32_t>::ItemBlock> slotRefCntList;
     } slotContext;
 };
 
@@ -465,7 +431,7 @@ struct DevProgramControlFlowCache {
                 DEV_ERROR("[RelocDescFromCache] Invalid kind: %lu\n", (unsigned long)desc.cacheKind);
                 break;
         }
-        AddressDescriptor resultDesc = AddressDescriptor::MakeAddress(resultAddr);
+        AddressDescriptor resultDesc = AddressDescriptor::MakeFromAddress(resultAddr);
         desc = resultDesc;
     }
 
@@ -641,18 +607,19 @@ struct DevProgramControlFlowCache {
         }
     }
 
-    void RuntimeAddrBackup(DeviceExecuteSlot *runtimeSlotList, uint32_t *runtimeSlotRefCntList, uint32_t slotSize, TensorAllocator &allocator) {
-        uint32_t slotDataSize = sizeof(DeviceExecuteSlot) * slotSize;
-        uint32_t slotRefCntDataSize = sizeof(ItemPool<uint32_t>::ItemBlock) * slotSize;
+    void RuntimeAddrBackup(
+            DeviceExecuteSlot *runtimeSlotList, const ItemPool<RuntimeOutcastTensor>::ItemBlock *runtimeOutcastTensorPool,
+            uint64_t slotSize, uint64_t runtimeOutcastTensorSize, TensorAllocator &allocator) {
+        uint64_t slotDataSize = sizeof(DeviceExecuteSlot) * slotSize;
+        uint64_t runtimeOutcastPoolDataSize = sizeof(ItemPool<RuntimeOutcastTensor>::ItemBlock) * runtimeOutcastTensorSize;
         (void)memcpy_s(runtimeBackup.slotContext.slotList.Data(), slotDataSize, runtimeSlotList, slotDataSize);
-        (void)memcpy_s(runtimeBackup.slotContext.slotRefCntList.Data(), slotRefCntDataSize, runtimeSlotRefCntList, slotRefCntDataSize);
+        (void)memcpy_s(runtimeBackup.workspace.runtimeOutcastTensorPool.Data(), runtimeOutcastPoolDataSize, runtimeOutcastTensorPool, runtimeOutcastPoolDataSize);
 
         struct Backup {
             static void BackupBlockHeader(WsSlotAllocator::BlockHeader *&ptr, WsSlotAllocator::BlockHeader *base) {
                 ptr = reinterpret_cast<WsSlotAllocator::BlockHeader *>(static_cast<uintptr_t>(ptr - base));
             }
         };
-        runtimeBackup.workspace.tensorAllocators.dassembleDests = allocator.dassembleDests;
         runtimeBackup.workspace.tensorAllocators.rootInner = allocator.rootInner;
         runtimeBackup.workspace.tensorAllocators.devTaskInnerExclusiveOutcasts = allocator.devTaskInnerExclusiveOutcasts;
         runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts = allocator.devTaskBoundaryOutcasts;
@@ -669,11 +636,13 @@ struct DevProgramControlFlowCache {
         }
     }
 
-    void RuntimeAddrRestore(DeviceExecuteSlot *runtimeSlotList, uint32_t *runtimeSlotRefCntList, uint32_t slotSize, TensorAllocator &allocator) {
-        uint32_t slotDataSize = sizeof(DeviceExecuteSlot) * slotSize;
-        uint32_t slotRefCntDataSize = sizeof(ItemPool<uint32_t>::ItemBlock) * slotSize;
+    void RuntimeAddrRestore(
+            DeviceExecuteSlot *runtimeSlotList, ItemPool<RuntimeOutcastTensor>::ItemBlock *runtimeOutcastTensorPool,
+            uint64_t slotSize, uint64_t runtimeOutcastTensorSize, TensorAllocator &allocator) {
+        uint64_t slotDataSize = sizeof(DeviceExecuteSlot) * slotSize;
+        uint64_t runtimeOutcastPoolDataSize = sizeof(ItemPool<RuntimeOutcastTensor>::ItemBlock) * runtimeOutcastTensorSize;
         (void)memcpy_s(runtimeSlotList, slotDataSize, runtimeBackup.slotContext.slotList.Data(), slotDataSize);
-        (void)memcpy_s(runtimeSlotRefCntList, slotRefCntDataSize, runtimeBackup.slotContext.slotRefCntList.Data(), slotRefCntDataSize);
+        (void)memcpy_s(runtimeOutcastTensorPool, runtimeOutcastPoolDataSize, runtimeBackup.workspace.runtimeOutcastTensorPool.Data(), runtimeOutcastPoolDataSize);
 
         struct Restore {
             static void RestoreBlockHeader(WsSlotAllocator::BlockHeader *&ptr, WsSlotAllocator::BlockHeader *base, WsSlotAllocator::BlockHeader *index) {
@@ -684,7 +653,6 @@ struct DevProgramControlFlowCache {
                 dst.resetTimes_ = src.resetTimes_;
             }
         };
-        Restore::RestoreSeqAllocator(allocator.dassembleDests, runtimeBackup.workspace.tensorAllocators.dassembleDests);
         Restore::RestoreSeqAllocator(allocator.rootInner, runtimeBackup.workspace.tensorAllocators.rootInner);
         Restore::RestoreSeqAllocator(allocator.devTaskInnerExclusiveOutcasts, runtimeBackup.workspace.tensorAllocators.devTaskInnerExclusiveOutcasts);
         allocator.devTaskBoundaryOutcasts.availableSlots_ = runtimeBackup.workspace.tensorAllocators.devTaskBoundaryOutcasts.availableSlots_;
@@ -712,7 +680,8 @@ struct DevProgramControlFlowCache {
 
     void RuntimeAddrRelocWorkspace(
             uint64_t srcWorkspace, uint64_t dstWorkspace,
-            DevStartArgsBase *devStartArgs, DeviceExecuteSlot *runtimeSlotList) {
+            DevStartArgsBase *devStartArgs, DeviceExecuteSlot *runtimeSlotList,
+            ItemPool<RuntimeOutcastTensor>::ItemBlock *runtimeOutcastTensorPool) {
         RelocRange relocWorkspace(srcWorkspace, dstWorkspace);
         /* empty constructor's overhead should be negligible */
         std::unordered_map<uint64_t, AddressDescriptor> cacheInputOutputDict;
@@ -731,16 +700,29 @@ struct DevProgramControlFlowCache {
         {
             auto &slotList = runtimeBackup.slotContext.slotList;
             DeviceExecuteSlot *base = slotList.Data();
+            ItemPool<RuntimeOutcastTensor>::ItemBlock *backupRtOutcastPool = runtimeBackup.workspace.runtimeOutcastTensorPool.Data();
             uint64_t size = slotList.size();
             for (uint64_t k = 0; k < size; k++) {
+                static_assert(sizeof(AddressDescriptor) == sizeof(uintdevptr_t));
                 if (devStartArgs == nullptr) {
                     // Host: addr uses backup
-                    AddressDescriptor *addr = &base[k].desc;
-                    RelocDescToCache(*addr, relocWorkspace, cacheInputOutputDict);
+                    if (base[k].rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
+                        continue;
+                    }
+                    auto &rtOutcast = backupRtOutcastPool[base[k].rtOutcastIter].Item();
+                    uintdevptr_t addr = rtOutcast.addr;
+                    AddressDescriptor *desc = reinterpret_cast<AddressDescriptor *>(&rtOutcast.addr);
+                    *desc = AddressDescriptor::MakeFromAddress(addr);
+                    RelocDescToCache(*desc, relocWorkspace, cacheInputOutputDict);
                 } else {
                     // Device: addr uses actual
-                    AddressDescriptor *addr = &runtimeSlotList[k].desc;
-                    RelocDescFromCache(*addr, relocWorkspace, devStartArgs);
+                    if (runtimeSlotList[k].rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
+                        continue;
+                    }
+                    auto &rtOutcast = runtimeOutcastTensorPool[runtimeSlotList[k].rtOutcastIter].Item();
+                    AddressDescriptor *desc = reinterpret_cast<AddressDescriptor *>(&rtOutcast.addr);
+                    RelocDescFromCache(*desc, relocWorkspace, devStartArgs);
+                    rtOutcast.addr = desc->GetAddressValue();
                 }
             }
         }

@@ -128,42 +128,57 @@ public:
         return;
     }
 
-    template<typename DeviceMemoryTy>
-    static void DeviceInitTilingData(DeviceMemoryTy devMem, AstKernelArgs &kArgs, const std::vector<uint8_t> &devProgData,
-        const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
-        DeviceLauncherConfig &launchConfig = const_cast<DeviceLauncherConfig &>(config);
-        ASSERT(launchConfig.blockdim != 0) << "Invalid blockdim: " << launchConfig.blockdim << ", must not be zero";
-        auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(devProgData.data()));
+    // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
+    static void PrepareDevProgArgs(DevAscendProgram *devProg, const DeviceLauncherConfig &config) {
+#ifdef BUILD_WITH_CANN
+        int maxBlockDim = GetCfgBlockdim();
+#else
+        int maxBlockDim = 25;
+#endif
+        int blockdim = config.blockdim;
+        // Validate and clamp blockdim locally (do not mutate config)
+        int effectiveBlockdim = (blockdim == 0 || blockdim > maxBlockDim) ? maxBlockDim : blockdim;
+
         devProg->devArgs.nrAic = kDefaultAicNum;
         devProg->devArgs.nrAiv = kDefaultAivNum;
-        devProg->devArgs.nrValidAic = config.blockdim;
+        devProg->devArgs.nrValidAic = effectiveBlockdim;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
-        launchConfig.aicpuNum =  launchConfig.aicpuNum < static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1 ?
-            launchConfig.aicpuNum : static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1;
-        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(launchConfig.blockdim, launchConfig.aicpuNum);
+
+        int aicpuNum = config.aicpuNum;
+        int platformMaxAicpu = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1;
+        int clampedAicpu = (aicpuNum < platformMaxAicpu) ? aicpuNum : platformMaxAicpu;
+        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(effectiveBlockdim, clampedAicpu);
+
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
         devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
+
         int minCpuNum = devProg->devArgs.scheCpuNum + 1;
-        if (config.aicpuNum < minCpuNum || config.aicpuNum > DEVICE_MAX_AICPU_NUM) {
-            launchConfig.aicpuNum = minCpuNum + 1;
-        }
-        devProg->devArgs.nrAicpu = config.aicpuNum;
-        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
+        int effectiveAicpuNum = (aicpuNum < minCpuNum || aicpuNum > DEVICE_MAX_AICPU_NUM) ? (minCpuNum + 1) : aicpuNum;
+        devProg->devArgs.nrAicpu = effectiveAicpuNum;
+
+        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", effectiveBlockdim, effectiveAicpuNum);
+
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize) {
-            ALOG_ERROR("[Deprecated] User provided dynamic workspace: ", config.dynWorkspaceSize);
+            ALOG_ERROR("[Deprecated] User provided dynamic workspace: %zu", config.dynWorkspaceSize);
             devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = std::max(
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
         }
+
         devProg->workspaceSize = devProg->memBudget.Total();
         ALOG_INFO_F("workspaceSize=%lu, tensor=%lu, metadata=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu",
             devProg->workspaceSize, devProg->memBudget.tensor.Total(), devProg->memBudget.metadata.Total(),
             devProg->memBudget.aicoreSpilled, devProg->memBudget.debug.dumpTensor);
-        ALOG_INFO_F("Tensor:rootInner=%lu, dessembleDests=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
-            devProg->memBudget.tensor.rootInner, devProg->memBudget.tensor.DAssembleDests(),
+        ALOG_INFO_F("Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
             devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts, devProg->memBudget.tensor.MaxOutcastMem(),
             devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
+    }
+
+    // Fill metadata and kArgs (templated because it uses DeviceMemoryTy) (keeps <= 50 lines)
+    template<typename DeviceMemoryTy>
+    static void FillKernelMeta(DeviceMemoryTy devMem, AstKernelArgs &kArgs, DevAscendProgram *devProg,
+            const std::vector<uint8_t> &devProgData, const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
         AssignMetaAddr(kArgs, devMem, devProg, cachedOperator);
         devProg->l2CacheOffset = devMem.GetL2Offset();
         ASSERT(devProg->commGroupNum == config.hcclContext.size()) << "commGroupNum mismatch. commGroupNum = " <<
@@ -197,7 +212,15 @@ public:
             kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
         }
         kArgs.toSubMachineConfig.isGETensorList = config.isGETensorList ? 1 : 0;
-        return;
+    }
+
+    template<typename DeviceMemoryTy>
+    static void DeviceInitTilingData(DeviceMemoryTy devMem, AstKernelArgs &kArgs, const std::vector<uint8_t> &devProgData,
+        const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
+        auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(devProgData.data()));
+        PrepareDevProgArgs(devProg, config);
+        // Fill all metadata and kernel args
+        FillKernelMeta(devMem, kArgs, devProg, devProgData, config, cachedOperator);
     }
 
     template<typename DeviceMemoryTy>

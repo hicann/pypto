@@ -1824,7 +1824,6 @@ void TestInnerAssembleByFrameWork() {
     Tensor lens(DT_INT32, {N}, "len");
     Tensor dst(dType, {N, M}, "dst");
 
-    T startValue = uniform(gen);
     std::vector<T> aData(ShapeSize(a.GetShape()), 0);
     for (size_t i = 0; i < aData.size(); i++) {
         aData[i] = uniform(gen);

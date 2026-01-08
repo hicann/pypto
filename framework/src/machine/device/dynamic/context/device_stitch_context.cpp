@@ -97,104 +97,41 @@ void DeviceStitchContext::DumpSlotInfo(const char *label, DeviceExecuteSlot *slo
     UNUSED(slotList);
     UNUSED(slotSize);
     DEV_IF_VERBOSE_DEBUG {
-        DEV_VERBOSE_DEBUG("[DecideSlotAddress] %s.", label);
+        DEV_DEBUG("[DecideSlotAddress] %s.", label);
         for (size_t slotIdx = 0; slotIdx < slotSize; slotIdx++) {
-            auto &desc = slotList[slotIdx].desc;
-            UNUSED(desc);
-            const char *extraAttr = "";
-            UNUSED(extraAttr);
+            [[maybe_unused]] const char *extraAttr = "";
             if (slotList[slotIdx].isOutputSlot) {
                 extraAttr = " <output>";
             } else if (slotList[slotIdx].isAssembleSlot) {
                 extraAttr = " <assemble>";
             }
-            DEV_VERBOSE_DEBUG("[DecideSlotAddress]   Slot [%3lu]: addr %s%s.",
-                slotIdx, desc.Dump().c_str(), extraAttr);
+
+            if (slotList[slotIdx].rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
+                DEV_DEBUG("[DecideSlotAddress]   Slot [%3lu]: <no tensor>%s", slotIdx, extraAttr);
+                continue;
+            }
+            [[maybe_unused]] auto &outcastDesc = workspace_->GetRuntimeOutcastTensor(slotList[slotIdx].rtOutcastIter);
+            DEV_DEBUG("[DecideSlotAddress]   Slot [%3lu]: %s%s",
+                slotIdx, outcastDesc.Dump().c_str(), extraAttr);
         }
     }
 }
 
-int DeviceStitchContext::DecideSlotAddress(DeviceExecuteSlot *slotList, size_t slotSize,
-    ItemPool<uint32_t, WsMemCategory::ITEMPOOL_SLOT_REF_CNT> &slotRefCntPool) {
-    static constexpr uint64_t NON_ADDR_MASK = UINT64_C(1) << 62;
-
-    UNUSED(slotRefCntPool);
-    UNUSED(NON_ADDR_MASK);
+void DeviceStitchContext::DecideSlotAddress(DeviceExecuteSlot *slotList, size_t slotSize) {
+    [[maybe_unused]] static constexpr uint64_t NON_ADDR_MASK = UINT64_C(1) << 62;
 
     DumpSlotInfo("Update before", slotList, slotSize);
-    for (size_t slotIndex = 0; slotIndex < slotSize; ++slotIndex) {
-        auto &slot = slotList[slotIndex];
-        auto &desc = slot.desc;
-        if (desc.IsAddress()) {
-            continue;
+#if !DEBUG_INFINITE_LIFETIME
+    for (size_t slotIdx = 0; slotIdx < slotSize; ++slotIdx) {
+        auto &slot = slotList[slotIdx];
+        if (slot.rtOutcastIter != ITEM_POOL_INVALID_INDEX &&
+            workspace_->GetRuntimeOutcastTensor(slot.rtOutcastIter).property == RuntimeTensorMemProperty::DEVTASK_INNER_OUTCAST) {
+            workspace_->RuntimeOutcastTensorReplaceAddrWithoutRecycle(
+                slot.rtOutcastIter, workspace_->AllocateSlot(), RuntimeTensorMemProperty::BOUNDARY_OUTCAST);
         }
-
-        auto &dup = stitchedList_[desc.dupIdx];
-        auto &outcastDesc = dup.GetOutcastAddress(desc.outcastIdx);
-        if (!outcastDesc.IsAddress()) {
-            DEV_ERROR("outcastDesc is not an address.");
-            return DEVICE_MACHINE_ERROR;
-        }
-        DEV_DEBUG_ASSERT(outcastDesc.IsAddress());
-#if DEBUG_INFINITE_LIFETIME
-        desc = outcastDesc;
-#else
-        auto *outcastRawTensor = dup.GetSource()->GetOutcastRawTensor(desc.outcastIdx);
-        if (slot.IsOutputAddress() || slot.IsAssembleAddress() || (outcastRawTensor->linkedIncastId != -1) ||
-                (dup.GetSource()->GetOutcast(desc.outcastIdx).exprListIndex != -1)) {
-            desc = outcastDesc;
-            continue;
-        }
-
-        uintdevptr_t outcastWsStandardAddr = dup.RuntimeOutcastBase() + outcastRawTensor->addrOffset;
-        bool isStandardOutcastSlot = outcastDesc.addr == outcastWsStandardAddr ||
-                                        (outcastDesc.addr & NON_ADDR_MASK) == NON_ADDR_MASK;
-        if (!isStandardOutcastSlot) {
-            desc = outcastDesc;
-            continue;
-        }
-        if (outcastDesc.addr == outcastWsStandardAddr) {
-            // First time meet this unsolved slot
-            slotInfosInDecidingSlotMem_[slotIndex].slotPtr = workspace_->AllocateSlot(dup.GetSource()->GetRawName());
-            slotInfosInDecidingSlotMem_[slotIndex].RefCntInit(slotRefCntPool);
-            outcastDesc = AddressDescriptor(slotIndex ^ NON_ADDR_MASK); // mark as first slot
-        } else {
-            if ((outcastDesc.addr & NON_ADDR_MASK) != NON_ADDR_MASK) {
-                DEV_ERROR("OutcastDesc address %lx is invalid.", outcastDesc.addr);
-                return DEVICE_MACHINE_ERROR;
-            }
-            DEV_DEBUG_ASSERT((outcastDesc.addr & NON_ADDR_MASK) == NON_ADDR_MASK);
-            size_t firstSlotIdx = outcastDesc.addr ^ NON_ADDR_MASK;
-            slotInfosInDecidingSlotMem_[firstSlotIdx].RefCntInc(slotRefCntPool);
-            slotInfosInDecidingSlotMem_[slotIndex] = slotInfosInDecidingSlotMem_[firstSlotIdx];
-        }
-#endif
     }
-    for (size_t slotIndex = 0; slotIndex < slotSize; ++slotIndex) {
-        auto &slot = slotList[slotIndex];
-        auto &desc = slot.desc;
-        if (desc.IsAddress()) {
-            continue;
-        }
-#if DEBUG_INFINITE_LIFETIME
-        if (true) {
-            return DEVICE_MACHINE_ERROR;
-        }
-        DEV_ASSERT(false);
-#endif
-        auto &dup = stitchedList_[desc.dupIdx];
-        auto &outcastDesc = dup.GetOutcastAddress(desc.outcastIdx);
-        if (size_t firstSlotIdx = outcastDesc.addr ^ NON_ADDR_MASK; firstSlotIdx == slotIndex) {
-            // First time meet this unsolved slot
-            outcastDesc = AddressDescriptor(slotInfosInDecidingSlotMem_[firstSlotIdx].slotPtr);
-        }
-
-        slot.desc = outcastDesc;
-        slot.RefCntCopyFrom(slotInfosInDecidingSlotMem_[slotIndex]);
-    }
-
+#endif // !DEBUG_INFINITE_LIFETIME
     DumpSlotInfo("Update after", slotList, slotSize);
-    return DEVICE_MACHINE_OK;
 }
 
 int DeviceStitchContext::DecideIncastOutcast(uint64_t taskId) {
@@ -203,30 +140,24 @@ int DeviceStitchContext::DecideIncastOutcast(uint64_t taskId) {
         auto &dup = stitchedList_[funcIndex];
         // decide incast address
         size_t incastSize = dup.GetSource()->GetIncastSize();
-        for (size_t index = 0; index < incastSize; ++index) {
-            auto &desc = dup.GetIncastAddress(index);
-            if (!desc.IsAddress()) {
-                desc = stitchedList_[desc.dupIdx].GetOutcastAddress(desc.outcastIdx);;
-            }
-            if (!desc.IsAddress()) {
-                DEV_ERROR("Failed to resolve valid address for incast at index %zu.", index);
-                return DEVICE_MACHINE_ERROR;
-            }
-            DEV_DEBUG_ASSERT(desc.IsAddress());
+        for (size_t i = 0; i < incastSize; ++i) {
+            auto &desc = dup.GetIncastAddress(i);
+            DEV_ASSERT(desc.IsRtOutcast());
+            ItemPoolIter iter = desc.GetRtOutcastIter();
+            uintdevptr_t addr = workspace_->GetRuntimeOutcastTensor(iter).addr;
+            workspace_->RuntimeOutcastTensorDeref(iter);
+            desc = AddressDescriptor::MakeFromAddress(addr);
         }
 
         // decide outcast address
         size_t outcastSize = dup.GetSource()->GetOutcastSize();
-        for (size_t index = 0; index < outcastSize; ++index) {
-            auto &desc = dup.GetOutcastAddress(index);
-            if (!desc.IsAddress()) {
-                desc = stitchedList_[desc.dupIdx].GetOutcastAddress(desc.outcastIdx);
-            }
-            if (!desc.IsAddress()) {
-                DEV_ERROR("Failed to resolve valid address for outcast at index %zu.", index);
-                return DEVICE_MACHINE_ERROR;
-            }
-            DEV_DEBUG_ASSERT(desc.IsAddress());
+        for (size_t i = 0; i < outcastSize; ++i) {
+            auto &desc = dup.GetOutcastAddress(i);
+            DEV_ASSERT(desc.IsRtOutcast());
+            ItemPoolIter iter = desc.GetRtOutcastIter();
+            uintdevptr_t addr = workspace_->GetRuntimeOutcastTensor(iter).addr;
+            workspace_->RuntimeOutcastTensorDeref(iter);
+            desc = AddressDescriptor::MakeFromAddress(addr);
         }
     }
     return DEVICE_MACHINE_OK;
@@ -533,7 +464,7 @@ uint64_t DeviceStitchContext::FastStitch(DeviceExecuteSlot *slotList, size_t slo
                 continue;
             }
 
-            if (slot.desc.IsNullAddress()) {
+            if (slot.rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
                 continue;
             }
             DEV_VERBOSE_DEBUG("incast %zu is %d, cellMatchStaticIncastTable is %s\n", incastIdx, incast.stitchByAllFullMatch,

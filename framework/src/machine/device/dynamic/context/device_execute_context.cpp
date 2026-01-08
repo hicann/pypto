@@ -305,8 +305,7 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
     }
 
     PROF_STAGE_BEGIN(PERF_EVT_DECIDE_SLOT_ADDRESS, "slotaddr.before\n");
-    ret = stitchContext.DecideSlotAddress(
-        slotContext.GetSlotList(), slotContext.GetSlotSize(), slotContext.GetSlotRefCntPool());
+    stitchContext.DecideSlotAddress(slotContext.GetSlotList(), slotContext.GetSlotSize());
     PROF_STAGE_END(PERF_EVT_DECIDE_SLOT_ADDRESS, "slotaddr.after\n");
     if (unlikely(ret != DEVICE_MACHINE_OK)) {
         return DEVICE_MACHINE_ERROR;
@@ -354,7 +353,8 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
             devProg->controlFlowCache.ReadyQueueDataBackup(dynTask);
             devProg->controlFlowCache.IncastOutcastAddrBackup(dynTask);
             devProg->controlFlowCache.TaskAddrBackupWorkspace(dynTask);
-            devProg->controlFlowCache.RuntimeAddrBackup(slotContext.GetSlotList(), &slotContext.GetSlotRefCntPool().At(0), devProg->slotSize, workspace.GetTensorAllocator());
+            devProg->controlFlowCache.RuntimeAddrBackup(slotContext.GetSlotList(), workspace.GetRuntimeOutcastTensorPoolBase(),
+                devProg->slotSize, devProg->runtimeOutcastPoolSize, workspace.GetTensorAllocator());
         }
         devProg->controlFlowCache.AppendDeviceTask(dynTask);
     }
@@ -383,7 +383,7 @@ int DeviceExecuteContext::ControlFlowCacheStopCache(uint64_t rootKey) {
         return DEVICE_MACHINE_ERROR;
     }
     devProg->controlFlowCache.StopRecording();
-    DEV_INFO("[Stitch Finish]Stop recording ctrl flow cache. rootKey=%" PRIu64 ".", rootKey);
+    DEV_INFO("[Stitch Finish] Stop recording ctrl flow cache. rootKey=%" PRIu64 ".", rootKey);
     return ret;
 }
 
@@ -393,15 +393,15 @@ void *DeviceExecuteContext::CallRootFunctionAlloc(uint64_t rootKey) {
     DEV_DEBUG("Slloc one func %lu %p %s.", rootKey, devRoot, devRoot->GetRawName());
     if (stitchContext.Size() == stitchTaskLoopNumThreshold ||
         stitchContext.stitchedCallOpSize() + devRoot->GetOperationSize() > devProg->stitchFunctionsize) {
+        DEV_INFO("[Stitch Finish] Stitch Limit Exceeded. #task=%zu+1 (limit=%u), #callop=%u+%zu (limit=%u).",
+            stitchContext.Size(), stitchTaskLoopNumThreshold,
+            stitchContext.stitchedCallOpSize(), devRoot->GetOperationSize(), devProg->stitchFunctionsize);
         ret = SubmitToAicoreAndRecycleMemory(false);
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
         }
         auto nextThreshold =
             std::min<uint16_t>(stitchTaskLoopNumThreshold + devProg->stitchFunctionNumStep, MAX_CACHED_FUNC_NUM);
-        DEV_INFO("[Stitch Finish]Stitch Limit Exceeded. #task=%zu+1 (limit=%u), #callop=%u+%zu (limit=%u).",
-            stitchContext.Size(), stitchTaskLoopNumThreshold,
-            stitchContext.stitchedCallOpSize(), devRoot->GetOperationSize(), devProg->stitchFunctionsize);
         stitchTaskLoopNumThreshold = nextThreshold;
     }
     DEV_TRACE_DEBUG(REvent(GetRuid(rootKey), RActDup(devRoot->GetRawName())));
@@ -431,7 +431,7 @@ void *DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey) {
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
         }
-        DEV_INFO("[Stitch Finish] Finish Signal or Barrier. rootKey=%" PRIu64 " .", rootKey);
+        DEV_INFO("[Stitch Finish] Finish Signal or Barrier. rootKey=%" PRIu64 ".", rootKey);
         return nullptr;
     }
 
@@ -444,7 +444,7 @@ void *DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey) {
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
         }
-        DEV_INFO("[Stitch Finish] Memory Limit Exceeded .");
+        DEV_INFO("[Stitch Finish] Memory Limit Exceeded.");
     }
 
     if (AiCoreFree()) {
@@ -452,7 +452,7 @@ void *DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey) {
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return RUNTIME_FUNCKEY_ERROR;
         }
-        DEV_INFO("[Stitch Finish] AICore Free .");
+        DEV_INFO("[Stitch Finish] AICore Free.");
     }
 
     DEV_TRACE_DEBUG(DEvent(taskId, DActStitchStart(GetRuid(rootKey))));
@@ -460,10 +460,7 @@ void *DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey) {
     size_t devNextIdx = stitchContext.Size();
     stitchContext.Stitch(slotContext, currDevRootDup, taskId, devNextIdx);
 
-    ret = slotContext.UpdateSlots(currDevRootDup, stitchContext.GetStitchedList(), taskId, devNextIdx);
-    if (unlikely(ret != DEVICE_MACHINE_OK)) {
-        return RUNTIME_FUNCKEY_ERROR;
-    }
+    slotContext.UpdateSlots(currDevRootDup, taskId, devNextIdx);
     PROF_STAGE_END(PERF_EVT_STAGE_STITCH, "stitch.after\n");
     DEV_TRACE_DEBUG(DEvent(taskId, DActStitchFinish(GetRuid(rootKey, true))));
     return nullptr;
@@ -534,8 +531,10 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void *ctx_, uint6
     if (ctx->DuppedRootUpdateAndCachedAllSubmitted()) {
         DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCachePartRunControlContinue()));
         // forcely break device task
-        ctx->devProg->controlFlowCache.RuntimeAddrRestore(ctx->slotContext.GetSlotList(), &ctx->slotContext.GetSlotRefCntPool().At(0), ctx->devProg->slotSize, ctx->workspace.GetTensorAllocator());
-        ctx->devProg->controlFlowCache.RuntimeAddrRelocWorkspace(0, ctx->args->contextWorkspaceAddr, ctx->args, ctx->slotContext.GetSlotList());
+        ctx->devProg->controlFlowCache.RuntimeAddrRestore(ctx->slotContext.GetSlotList(), ctx->workspace.GetRuntimeOutcastTensorPoolBase(),
+            ctx->devProg->slotSize, ctx->devProg->runtimeOutcastPoolSize, ctx->workspace.GetTensorAllocator());
+        ctx->devProg->controlFlowCache.RuntimeAddrRelocWorkspace(0, ctx->args->contextWorkspaceAddr,
+            ctx->args, ctx->slotContext.GetSlotList(), ctx->workspace.GetRuntimeOutcastTensorPoolBase());
     }
     return result;
 }

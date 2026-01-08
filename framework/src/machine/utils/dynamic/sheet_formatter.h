@@ -60,10 +60,8 @@ public:
 
     template <typename... Args>
     void AddRow(Args &&... args) {
-        if (sizeof...(Args) != columnTitles_.size()) {
-            DEV_ERROR("sizeof...(Args)=%zu != columnTitles_.size()=%zu\n", sizeof...(Args), columnTitles_.size());
-        }
-        DEV_ASSERT(sizeof...(Args) == columnTitles_.size());
+        DEV_ASSERT_MSG(sizeof...(Args) == columnTitles_.size(),
+            "sizeof...(Args)=%zu != columnTitles_.size()=%zu", sizeof...(Args), columnTitles_.size());
         rows_.emplace_back();
         rows_.back().reserve(sizeof...(Args));
         auto toString = [](auto &&arg) {
@@ -79,10 +77,8 @@ public:
     }
 
     void AddRowSeparator(size_t fromColumn = 0, char c = '-') {
-        if (fromColumn >= columnTitles_.size()) {
-            DEV_ERROR("fromColumn=%zu >= columnTitles_.size()=%zu\n", fromColumn, columnTitles_.size());
-        }
-        DEV_ASSERT(fromColumn < columnTitles_.size());
+        DEV_ASSERT_MSG(fromColumn < columnTitles_.size(),
+            "fromColumn=%zu >= columnTitles_.size()=%zu", fromColumn, columnTitles_.size());
         if (!rows_.empty()) {
             rowSeparators_.push_back(RowSeparator { rows_.size(), fromColumn, c });
         }
