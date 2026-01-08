@@ -48,19 +48,21 @@ public:
         }
     }
 
-    std::vector<int64_t> EvaluateValidShape(const std::vector<SymbolicScalar> &dynValidShape) {
+    std::vector<int64_t> EvaluateValidShape(const std::vector<SymbolicScalar> &dynValidShape, 
+            const std::vector<SymbolicScalar> &linearArgList = {}) {
         std::vector<int64_t> result;
         for (auto &shape : dynValidShape) {
-            result.push_back(EvaluateSymbolicScalar(shape));
+            result.push_back(EvaluateSymbolicScalar(shape, linearArgList));
         }
         return result;
     }
 
-    std::vector<int64_t> EvaluateOffset(const std::vector<int64_t> &offset, const std::vector<SymbolicScalar> &dynOffset) {
+    std::vector<int64_t> EvaluateOffset(const std::vector<int64_t> &offset, const std::vector<SymbolicScalar> &dynOffset, 
+            const std::vector<SymbolicScalar> &linearArgList = {}) {
         std::vector<int64_t> resultOffset;
         if (dynOffset.size() != 0) {
             for (auto &off : dynOffset) {
-                resultOffset.push_back(EvaluateSymbolicScalar(off));
+                resultOffset.push_back(EvaluateSymbolicScalar(off, linearArgList));
             }
         } else {
             for (auto &off : offset) {
@@ -73,9 +75,13 @@ public:
     bool RuntimeIsLoopBegin(ScalarImmediateType idx, ScalarImmediateType begin) { return idx == begin; }
     bool RuntimeIsLoopEnd(ScalarImmediateType idx, ScalarImmediateType end) { return idx >= end; }
 
-    ScalarImmediateType EvaluateSymbolicCall(const std::string &name, const std::vector<ScalarImmediateType> &dataList);
-    ScalarImmediateType EvaluateSymbolicScalar(const RawSymbolicScalarPtr &ss);
+    ScalarImmediateType EvaluateSymbolicCall(
+        const std::string &name, const std::vector<ScalarImmediateType> &dataList, const std::vector<SymbolicScalar> &linearArgList);
+    ScalarImmediateType EvaluateSymbolicScalar(const RawSymbolicScalarPtr &ss, const std::vector<SymbolicScalar> &linearArgList = {});
     ScalarImmediateType EvaluateSymbolicScalar(const SymbolicScalar &ss) { return EvaluateSymbolicScalar(ss.Raw()); }
+    ScalarImmediateType EvaluateSymbolicScalar(const SymbolicScalar &ss, const std::vector<SymbolicScalar> &linearArgList) {  
+        return EvaluateSymbolicScalar(ss.Raw(), linearArgList); 
+    }
 
     const std::unordered_map<std::string, ScalarImmediateType> &GetSymbolDict() const { return symbolDict_; }
     void UpdateSymbolDict(const std::string key, const ScalarImmediateType value) { symbolDict_[key] = value; }

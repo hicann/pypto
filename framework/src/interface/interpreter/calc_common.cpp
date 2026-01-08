@@ -42,7 +42,20 @@ REGISTER_CALC_OP(OP_SYNC_DST, Opcode::OP_SYNC_DST, ExecuteOpNone);
 REGISTER_CALC_OP(OP_BAR_V, Opcode::OP_BAR_V, ExecuteOpNone);
 REGISTER_CALC_OP(OP_BAR_M, Opcode::OP_BAR_M, ExecuteOpNone);
 REGISTER_CALC_OP(OP_NOP, Opcode::OP_NOP, ExecuteOpNone);
-REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpNone); // View作为视图操作，操作前后是同一块内存
+
+void ExecuteOpView(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ioperandDataViewList->size() == 1);
+    auto &oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto &iop = ctx->ioperandDataViewList->at(0);
+    auto opAttr = std::static_pointer_cast<ViewOpAttribute>(ctx->op->GetOpAttribute());
+    auto offset = ctx->opInter->EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
+    if (oop->GetData() == iop->GetData()) {
+        return;
+    }
+    calc::LogicalView(oop, iop, offset);
+}
+REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView); 
 
 void ExecuteOpCopyOut(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);

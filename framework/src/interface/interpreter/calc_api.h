@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <ostream>
 #include "tilefwk/data_type.h"
+#include "tilefwk/tensor.h"
 #include "raw_tensor_data.h"
 namespace npu::tile_fwk {
 struct MatMulParam {
@@ -100,6 +101,7 @@ struct CalcOps {
     void (*ReduceAcc)(LogicalTensorDataPtr, const std::vector<LogicalTensorDataPtr> &);
     void (*Copy)(LogicalTensorDataPtr, LogicalTensorDataPtr, bool);
     void (*ScatterUpdate)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int, std::string, int);
+    void (*LogicalView)(LogicalTensorDataPtr, LogicalTensorDataPtr, Offset);
     void (*Scatter)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, const Element &, int, int);
     void (*FormatND2NZ)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*FormatNZ2ND)(LogicalTensorDataPtr, LogicalTensorDataPtr);

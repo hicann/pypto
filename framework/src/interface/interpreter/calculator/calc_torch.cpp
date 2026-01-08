@@ -90,6 +90,13 @@ static torch::Tensor View(const torch::Tensor &self, const std::vector<int64_t> 
     return self.as_strided(shape, self.strides(), storageOffset);
 }
 
+static void LogicalView(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Offset offset) {
+    auto shape = out->GetShape();
+    auto tself = From(self);
+    auto view = View(tself, shape, offset);
+    From(out) = view;
+}
+
 static bool AllClose(LogicalTensorDataPtr self, LogicalTensorDataPtr other, double atol, double rtol) {
     return From(self).allclose(From(other), atol, rtol);
 }
@@ -956,6 +963,7 @@ static struct CalcOps calcOps = {
     .ReduceAcc = ReduceAcc,
     .Copy = Copy,
     .ScatterUpdate = ScatterUpdate,
+    .LogicalView = LogicalView,
     .Scatter = Scatter,
     .FormatND2NZ = FormatND2NZ,
     .FormatNZ2ND = FormatNZ2ND,
