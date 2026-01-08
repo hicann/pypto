@@ -439,7 +439,7 @@ INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, uint64_t scaleV
                 config::kIsAcc ? AtomicType::AtomicAdd : AtomicType::AtomicNone>(dstGlobal, srcL0C, fpData);
         }
     } else {
-        pto::TSTORE(dstGlobal, srcL0C);
+        pto::TSTORE<tileData, globalData, config::kIsAcc ? AtomicType::AtomicAdd : AtomicType::AtomicNone>(dstGlobal, srcL0C);
     }
 }
 
