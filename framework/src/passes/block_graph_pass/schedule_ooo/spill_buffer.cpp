@@ -834,6 +834,7 @@ Status OoOScheduler::GenBufferSpill(IssueEntryPtr allocIssue) {
         for (auto memId : memIds) {
             auto spillIssue = tensorOccupyMap[memType][memId];
             if (spillIssue->tileOp.GetOpcode() == Opcode::OP_VIEW ||
+                spillIssue->tileOp.GetOpcode() == Opcode::OP_VIEW_TYPE ||
                 spillIssue->tileOp.GetOpcode() == Opcode::OP_ASSEMBLE) {
                 continue;
             }
@@ -888,7 +889,7 @@ Status OoOScheduler::GenSpillOp(LocalBufferPtr allocBuffer, size_t &pcIdx) {
         std::vector<int> memIds = bufferManagerMap[memType].GetAddrSortedBufs();	
         for (auto memId : memIds) {	
             auto spillIssue = GetBufLastWriteIssue(issueEntries[pcIdx], memId);	
-            if (spillIssue->tileOp.GetOpcode() == Opcode::OP_VIEW || spillIssue->tileOp.GetOpcode() == Opcode::OP_ASSEMBLE) {	
+            if (spillIssue->tileOp.GetOpcode() == Opcode::OP_VIEW || spillIssue->tileOp.GetOpcode() == Opcode::OP_VIEW_TYPE || spillIssue->tileOp.GetOpcode() == Opcode::OP_ASSEMBLE) {	
                 continue;
             }
             if (spillIssue->tileOp.GetOpcodeStr().find("ALLOC") != std::string::npos) {

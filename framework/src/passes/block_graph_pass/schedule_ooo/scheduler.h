@@ -84,7 +84,7 @@ struct IssueEntry {
     void UpdateTensorInput(std::shared_ptr<IssueEntry> &spillSrcIssue, LogicalTensorPtr tensor) const;
     void UpdateTensorInputForOperand(size_t index, std::shared_ptr<IssueEntry> &spillSrcIssue,
         LogicalTensorPtr tensor) const;
-    void UpdateTensorInputForView(Operation *op, std::shared_ptr<IssueEntry> &spillSrcIssue,
+    void UpdateTensorInputForView(Operation& op, std::shared_ptr<IssueEntry> &spillSrcIssue,
         LogicalTensorPtr tensor) const;
     std::string GetOpInfo();
 };
@@ -316,10 +316,10 @@ private:
 
     // buffer rearrange
     Status RearrangeBuffers(IssueEntryPtr issue, bool isGenSpillStage, bool &rearrangeUBBF16);
-    Status GenRearrangeCopyOp(MemoryType memType, int memId, int &newMemId, bool &rearrangeUBBF16);
+    Status GenRearrangeCopyOp(IssueEntryPtr issue, MemoryType memType, int memId, int &newMemId, bool &rearrangeUBBF16);
     Status UpdateMemId(int oldMemId, int newMemId);
     void UpdateMoveOpAttr(Operation &moveOp, Operation &occupyOp);
-    IssueEntryPtr ProcessMoveOp(Operation &moveOp,  Operation &occupyOp, int oldMemId, int newMemId);
+    void ProcessMoveIssue(IssueEntryPtr moveIssuePtr, IssueEntryPtr AllocIssue, MemoryType memType, int oldMemId, int newMemId);
     Status UpdateRange(int newMemId, size_t offset, MemoryType memType, BufferPool &bufferManager);
     Status FindMoveFromTensor(Operation &occupyOp, int oldMemId, MemoryType memType, bool &rearrangeUBBF16, LogicalTensorPtr &moveFromTensor);
     Status GetMoveOpInTensor(Opcode moveOpcode, Operation &occupyOp, LogicalTensorPtr &inTensor, LogicalTensorPtr &moveFromTensor);
