@@ -180,6 +180,7 @@ public:
         return customUnrollTimes_.count(unrollTimes) > 0;
     } // check is user defined
     bool StillHaveUnrollTimes() const { return !unrollTimes_.empty(); }
+    size_t UnrollTimesSize() const { return unrollTimes_.size(); }
     int CurUnrollTimes() const;
     void NextUnrollTimes();
 

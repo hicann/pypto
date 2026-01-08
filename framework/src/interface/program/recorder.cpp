@@ -238,11 +238,13 @@ void RecordLoopFunc::BeginLoopFunction() {
     ASSERT(currentLoopFunc_->InsertLoopIdxNameList(iterName_)) << "Forbid duplicate name of loop idx. It names " << iterName_;
     auto currentStep = CurUnrollTimes() == 1 ? loopRange_->Step() : loopRange_->Step() * CurUnrollTimes();
     if (rangeOfEaceUnroll_.empty()) {
-        std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(loopRange_->Begin(), loopRange_->End() / currentStep * currentStep, currentStep);
+        auto newRangeEnd = (UnrollTimesSize() == 1 ? loopRange_->End() : loopRange_->End() / currentStep * currentStep);
+        std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(loopRange_->Begin(), newRangeEnd, currentStep);
         rangeOfEaceUnroll_.push_back(newRange);
     } else {
         auto prevRange = rangeOfEaceUnroll_.back();
-        std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(prevRange->End(), prevRange->End() + (loopRange_->End() - prevRange->End()) / currentStep * currentStep, currentStep);
+        auto newRangeEnd = (UnrollTimesSize() == 1 ? loopRange_->End() : prevRange->End() + (loopRange_->End() - prevRange->End()) / currentStep * currentStep);
+        std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(prevRange->End(), newRangeEnd, currentStep);
         rangeOfEaceUnroll_.push_back(newRange);
     }
     auto range = rangeOfEaceUnroll_.back();
