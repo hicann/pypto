@@ -530,6 +530,18 @@ def get_current_scope():
     return ConfigScope(cpp_scope)
 
 
+def get_global_config(key: str):
+    """Get global config config."""
+    cpp_scope = pypto_impl.GlobalScope()
+    py_scope = ConfigScope(cpp_scope)
+    return py_scope.get_options_prefix("global." + key)
+
+
+def set_global_config(key, value):
+    """Set global config config."""
+    pypto_impl.SetGlobalConfig({"global." + key: value})
+
+
 def set_options(
     codegen_options=None,
     host_options=None,

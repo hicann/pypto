@@ -281,8 +281,21 @@ void bind_controller_scope(py::module &m) {
         py::arg("lineno") = -1
     );
 
+    m.def("SetGlobalConfig",
+        [](const py::dict &values, const std::string &filename, int lineno) {
+            auto cpp_values = ConvertPyDictToCppMap(values);
+            ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(cpp_values), filename.c_str(), lineno);
+        },
+        py::arg("values"),
+        py::arg("filename") = "default",
+        py::arg("lineno") = -1
+    );
+
     m.def("CurrentScope",
         []() { return ConfigManagerNg::GetInstance().CurrentScope(); });
+
+    m.def("GlobalScope",
+        []() { return ConfigManagerNg::GetInstance().GlobalScope(); });
 
     m.def("GetOptionsTree",
         []() { return ConfigManagerNg::GetInstance().GetOptionsTree(); });

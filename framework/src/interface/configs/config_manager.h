@@ -140,116 +140,116 @@ public:
 
     template <typename T>
     auto GetPlatformConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "platform_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "platform", key}, defaultValue);
     }
 
     template <typename T>
     auto GetHostConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "host_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "host", key}, defaultValue);
     }
 
     template <typename T>
     auto GetDeviceConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "device_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "device", key}, defaultValue);
     }
 
     template <typename T>
     auto GetCoreConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "core_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "core", key}, defaultValue);
     }
 
     template <typename T>
     auto GetSimConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "simulation_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "simulation", key}, defaultValue);
     }
 
     template <typename T>
     auto GetCodeGenConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "codegen_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "codegen", key}, defaultValue);
     }
 
     template <typename T>
     auto GetDistConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "distributed_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "distributed", key}, defaultValue);
     }
 
     template <typename T>
     auto GetPassConfig(
         const std::string &strategy, const std::string &identifier, const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"strategies", strategy, identifier, key}, defaultValue);
+        return GetConfig(json_, {"global", "pass_strategies", strategy, identifier, key}, defaultValue);
     }
 
     template <typename T>
     auto GetPassDefaultConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"pass_global_configs", "default_pass_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "pass", "default_pass_configs", key}, defaultValue);
     }
 
     template <typename T>
     auto SetPassDefaultConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"pass_global_configs", "default_pass_configs", key}, value);
+        SetConfig(json_, {"global", "pass", "default_pass_configs", key}, value);
         RefreshGlobalPassCfg();
     }
 
     template <typename T>
     auto GetPassGlobalConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"pass_global_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "pass", key}, defaultValue);
     }
 
     template <typename T>
     auto SetPassGlobalConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"pass_global_configs", key}, value);
+        SetConfig(json_, {"global", "pass", key}, value);
         RefreshGlobalPassCfg();
     }
 
     template <typename T>
     void SetPlatformConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "platform_configs", key}, value);
+        SetConfig(json_, {"global", "platform", key}, value);
     }
 
     template <typename T>
     void SetHostConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "host_configs", key}, value);
+        SetConfig(json_, {"global", "host", key}, value);
     }
 
     template <typename T>
     void SetDeviceConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "device_configs", key}, value);
+        SetConfig(json_, {"global", "device", key}, value);
     }
 
     template <typename T>
     void SetCoreConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "core_configs", key}, value);
+        SetConfig(json_, {"global", "core", key}, value);
     }
 
     template <typename T>
     void SetSimConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "simulation_configs", key}, value);
+        SetConfig(json_, {"global", "simulation", key}, value);
     }
 
     template <typename T>
     void SetDistConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "distributed_configs", key}, value);
+        SetConfig(json_, {"global", "distributed", key}, value);
     }
 
     template <typename T>
     void SetPassConfig(
         const std::string &strategy, const std::string &identifier, const std::string &key, const T &value) {
-        SetConfig(json_, {"strategies", strategy, identifier, key}, value);
+        SetConfig(json_, {"global", "pass_strategies", strategy, identifier, key}, value);
     }
 
     template <typename T>
     auto GetOperationConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global_configs", "operation_configs", key}, defaultValue);
+        return GetConfig(json_, {"global", "operation", key}, defaultValue);
     }
 
     template <typename T>
     void SetOperationConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "operation_configs", key}, value);
+        SetConfig(json_, {"global", "operation", key}, value);
     }
 
     template <typename T>
     void SetCodeGenConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global_configs", "codegen_configs", key}, value);
+        SetConfig(json_, {"global", "codegen", key}, value);
     }
 
     void Reset() { json_ = originJson_; }

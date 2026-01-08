@@ -231,6 +231,13 @@ public:
     static std::shared_ptr<ConfigScope> CurrentScope();
 
     /**
+     * @brief Get the Global Scope object
+     *
+     * @return std::shared_ptr<ConfigScope>
+     */
+    static std::shared_ptr<ConfigScope> GlobalScope();
+
+    /**
      * @brief change the currentScope
      */
     void PushScope(ConfigScopePtr scope);
@@ -255,6 +262,30 @@ public:
 
     std::string GetOptionsTree();
 
+    /**
+     * @brief Get Global Config for cpp frontend
+     *
+     */
+    template <typename T>
+    static T GetGlobalConfig(const std::string &key) {
+        return GetInstance().globalScope->GetConfig<T>("global." + key);
+    }
+
+    /**
+     * @brief Set Global Config for cpp frontend
+     *
+     */
+    template <typename T>
+    static void SetGlobalConfig(const std::string &key, T value) {
+        return GetInstance().globalScope->AddValue("global." + key, value);
+    }
+
+    /**
+     * @brief Set Global Config for python frontend
+     *
+     */
+    void SetGlobalConfig(std::map<std::string, Any> &&values, const char *file, int lino);
+
     ~ConfigManagerNg();
 
 private:
@@ -264,6 +295,7 @@ private:
 
 private:
     std::unique_ptr<ConfigManagerImpl> impl_;
+    ConfigScopePtr globalScope;
 };
 } // namespace npu::tile_fwk
 #endif // CONFIG_MANAGER_NG_H

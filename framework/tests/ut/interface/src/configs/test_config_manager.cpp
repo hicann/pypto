@@ -228,3 +228,30 @@ TEST_F(TestConfigManager, AbnormalPassTest) {
     ret = RangeTest<std::map<int64_t, int64_t>>(input2, &(config::SetOption), "pass");
     EXPECT_EQ(ret, true);
 }
+
+TEST_F(TestConfigManager, GlobalConfig) {
+    std::string res = ConfigManagerNg::GetGlobalConfig<std::string>("platform.DEVICE_PLATFORM");
+    EXPECT_EQ(res, "ASCEND_910B2");
+
+    ConfigManagerNg::SetGlobalConfig("platform.DEVICE_PLATFORM", "test");
+    res = ConfigManagerNg::GetGlobalConfig<std::string>("platform.DEVICE_PLATFORM");
+    EXPECT_EQ(res, "test");
+
+    ConfigManagerNg::SetGlobalConfig("simulation.EXECUTE_CYCLE_THRESHOLD", 10);
+    long res_int = ConfigManagerNg::GetGlobalConfig<long>("simulation.EXECUTE_CYCLE_THRESHOLD");
+    EXPECT_EQ(res_int, 10);
+
+    ConfigManagerNg::SetGlobalConfig("codegen.CODEGEN_SUPPORT_TILE_TENSOR", true);
+    bool res_bool = ConfigManagerNg::GetGlobalConfig<bool>("codegen.CODEGEN_SUPPORT_TILE_TENSOR");
+    EXPECT_EQ(res_bool, true);
+
+    // python pybind interface
+    std::map<std::string, Any> config_values = {
+        {"simulation.EXECUTE_CYCLE_THRESHOLD", 10}
+    };
+    ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(config_values), "default", 1);
+    ConfigManagerNg::GetInstance().GlobalScope();
+
+    std::map<std::string, Any> empty_values = {};
+    ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(empty_values), "default", 1);
+}

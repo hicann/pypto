@@ -72,7 +72,7 @@ def changeAccLevel(new_value):
     :return: 成功状态及提示信息
     """
     file_path = f"src/configs/tile_fwk_config.json"
-    key = f"global_configs.simulation_configs.ACCURACY_LEVEL"
+    key = f"global.simulation.ACCURACY_LEVEL"
     try:
         # 读取原始配置
         with open(file_path, 'r', encoding='utf-8') as f:
