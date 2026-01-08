@@ -582,8 +582,10 @@ def clip(
         if not is_element_mode
         else pypto_impl.Element(pypto_impl.DataType.DT_BOTTOM, 0)
     )
-    min = min or default
-    max = max or default
+    if min is None:
+        min = default
+    if max is None:
+        max = default
 
     if not isinstance(min, pypto_impl.Element) and isinstance(min, element_types):
         min = pypto_impl.Element(input.GetDataType(), min)
