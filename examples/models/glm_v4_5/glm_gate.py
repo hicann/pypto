@@ -55,9 +55,7 @@ def check_args(
 
 @pypto.jit(
     runtime_options={
-    "cfgcache_device_task_num": 100,
-    "cfgcache_root_task_num": 1000,
-    "cfgcache_leaf_task_num": 10000},
+    "stitch_cfgcache_size": 2500000},
     host_options={"only_codegen": True},
 )
 def select_experts_mm_kernel(hidden_states, mm_weight, router_logits_out):

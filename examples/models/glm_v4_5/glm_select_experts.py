@@ -184,9 +184,7 @@ def process_main_loop_interation(
     runtime_options={"stitch_function_num_initial": 128,
     "stitch_function_outcast_memory": 128,
     "stitch_function_inner_memory": 128,
-    "cfgcache_device_task_num": 100,
-    "cfgcache_root_task_num": 1000,
-    "cfgcache_leaf_task_num": 10000},
+    "stitch_cfgcache_size": 2500000},
     host_options={"only_codegen": True},
 )
 def select_experts_kernel(logits_input, e_score_bias_input, weight_k, ids_k,

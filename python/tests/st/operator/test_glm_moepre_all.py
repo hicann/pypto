@@ -25,9 +25,7 @@ def main():
 
 @pypto.jit(
     host_options={"only_codegen": True},
-    runtime_options={"cfgcache_device_task_num": 100,
-                     "cfgcache_root_task_num": 1000,
-                     "cfgcache_leaf_task_num": 10000}
+    runtime_options={"stitch_cfgcache_size": 3100000}
 )
 def select_experts_glm(hidden_states, residual, weight, bias_input, mm_weight, e_score_bias_input,
                        weight_k, ids_k, row_idx, residual_out,

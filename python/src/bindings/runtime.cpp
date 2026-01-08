@@ -206,7 +206,7 @@ std::string BuildCache(uintptr_t opAddr, const std::vector<DeviceTensorData> &in
         const std::vector<DeviceTensorData> &outputList) {
     ExportedOperator *op = reinterpret_cast<ExportedOperator *>(opAddr);
 
-    if (config::GetRuntimeOption<int64_t>(CFGCACHE_DEVICE_TASK_NUM) != 0) {
+    if (config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE) != 0) {
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
         if (EmulationLauncher::BuildControlFlowCache(op->GetFunction(), inputList, outputList, config) != 0) {

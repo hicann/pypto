@@ -22,9 +22,7 @@
         "stitch_function_outcast_memory": 50,
         "stitch_function_num_initial": 30,
         "stitch_function_num_step": 30,
-        "cfgcache_device_task_num": 0,
-        "cfgcache_root_task_num": 0,
-        "cfgcache_leaf_task_num": 0,
+        "stitch_cfgcache_size": 0,
         "stitch_function_size": 20000,
         "run_mode": 0
     },

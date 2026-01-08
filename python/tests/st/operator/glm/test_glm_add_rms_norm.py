@@ -85,9 +85,7 @@ def add_rms_norm_golden(hidden_states, residual, gamma, bias_input, eps):
 
 @pypto.jit(
     runtime_options={
-    "cfgcache_device_task_num": 100,
-    "cfgcache_root_task_num": 1000,
-    "cfgcache_leaf_task_num": 10000},
+    "stitch_cfgcache_size": 2700000},
     host_options={"only_codegen": True},
 )
 def add_rms_norm_kernel(x, residual_input, x_gamma, x_bias,

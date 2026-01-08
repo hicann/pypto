@@ -61,9 +61,7 @@ static std::map<std::string, ValueType> g_runtimeConfig = {
     {STITCH_FUNCTION_OUTCAST_MEMORY, 50L},
     {STITCH_FUNCTION_NUM_INITIAL, 30L},
     {STITCH_FUNCTION_NUM_STEP, 30L}, // Increasing loop number
-    {CFGCACHE_DEVICE_TASK_NUM, 0L},
-    {CFGCACHE_ROOT_TASK_NUM, 0L},
-    {CFGCACHE_LEAF_TASK_NUM, 0L},
+    {STITCH_CFGCACHE_SIZE, 0L},
     {STITCH_FUNCTION_SIZE, 20000L},
     {CFG_RUN_MODE, CFG_RUN_MODE_NPU}
 };

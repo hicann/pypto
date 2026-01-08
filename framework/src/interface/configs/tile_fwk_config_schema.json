@@ -116,20 +116,10 @@
                     "minimum": 0,
                     "maximum": 128
                 },
-                "cfgcache_device_task_num": {
+                "stitch_cfgcache_size": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 100
-                },
-                "cfgcache_root_task_num": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 1000
-                },
-                "cfgcache_leaf_task_num": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 10000
+                    "maximum": 100000000
                 },
                 "stitch_function_size": {
                     "type": "integer",

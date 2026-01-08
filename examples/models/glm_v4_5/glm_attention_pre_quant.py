@@ -232,9 +232,7 @@ def rope_data(x1, x2, cos, sin, tile_shape):
     runtime_options={"stitch_function_num_initial": 128, 
     "stitch_function_outcast_memory": 1024,
     "stitch_function_inner_memory": 1024,
-    "cfgcache_device_task_num": 100,
-    "cfgcache_root_task_num": 1000,
-    "cfgcache_leaf_task_num": 10000},
+    "stitch_cfgcache_size": 3000000},
     host_options={"only_codegen": True},
 )
 def quant_attention_pre_kernel(x, residual_input, x_gamma, x_bias,

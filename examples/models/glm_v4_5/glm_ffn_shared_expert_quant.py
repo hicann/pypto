@@ -223,9 +223,7 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
 @pypto.jit(
     host_options={"only_codegen": True},
     runtime_options={"device_sched_mode": 1,
-                     "cfgcache_device_task_num": 100,
-                     "cfgcache_root_task_num": 1000,
-                     "cfgcache_leaf_task_num": 10000},
+                     "stitch_cfgcache_size": 2700000},
     pass_options={"cube_l1_reuse_mode": 2}
 )
 def share_expert_moe_main(hidden_states, w13, w13_scale, w2, w2_scale, ffn_res):
