@@ -9,90 +9,87 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-Parallel Python Script Executor with Retry Logic and Device-Aware Validation
+Parallel Python Script Executor with Adaptive Retry Logic
 
-This utility orchestrates the robust, concurrent execution of Python scripts or test suites
-across multiple hardware devices (e.g., NPUs/GPUs), featuring intelligent dispatch, adaptive
-retry mechanisms, and comprehensive result analysis. Designed for validation pipelines in
-hardware-accelerated development environments, it ensures reliable script evaluation under
-resource-constrained and failure-prone conditions.
+This utility orchestrates the concurrent execution of Python scripts across multiple hardware devices
+(NPUs), featuring intelligent script analysis, adaptive execution strategies,
+and comprehensive reporting. Designed for validation workflows in CANN-based hardware-accelerated 
+environments, it ensures reliable script evaluation.
 
 Key Capabilities:
-- Target Flexibility: Accepts a single `.py` file or an entire directory for recursive processing.
-- Execution Intelligence:
-    - Scripts with `if __name__ == "__main__":` are run directly via `python`.
-    - Test-only scripts (containing `test_*` functions or `Test*` classes) are dispatched to `pytest`.
-    - Automatically skips files lacking executable content.
-- Run Mode Control:
-    - `npu` (default): Executes all eligible scripts.
-    - `sim`: Filters and runs only scripts that explicitly declare support for `--run_mode sim`.
-- Device-Aware Parallelism:
-    - Leverages a pool of device IDs (e.g., `DEVICE_ID=0,1,2`) to enable true hardware-level concurrency.
-    - Each script leases a device during execution and releases it upon completion or failure.
-- Resilient Execution Strategy:
-    - Initial Parallel Round: All eligible scripts run concurrently (bounded by available devices).
-    - Configurable Parallel Retries: Failed scripts are retried up to `N` additional times in parallel.
-    - Final Serial Fallback: Remaining failures undergo a last-chance serial retry on a single device
-      to rule out resource contention or race conditions.
-- Timeout & Isolation:
-    - Each script enforces a configurable timeout (default: 300s).
-    - Child processes inherit only necessary environment variables (`TILE_FWK_DEVICE_ID`).
-- Smart Filtering & Self-Protection:
-    - Excludes itself from execution to prevent recursion.
-    - Skips non-Python files and invalid targets early with clear diagnostics.
-- Granular Test Selection: Supports passing a specific test identifier (e.g., `test_add`) to either
-  the script (as CLI arg) or pytest (as `file::test`), enabling focused validation.
+- Target Flexibility: Processes single .py files or recursively scans directories, excluding itself.
+- Intelligent Script Analysis (via AST parsing):
+    - Detects if name == 'main' guards for direct execution
+    - Identifies pytest-style tests (test* functions or Test* classes) for pytest dispatch
+    - Verifies '--run_mode' argument support for simulation mode filtering
+    - Automatically skips files with no executable content
+- Dual Execution Modes:
+    - npu (default): Executes eligible scripts on physical hardware devices with device isolation
+    - sim: Filters and runs only scripts that explicitly support '--run_mode' argument 
+        using virtual workers
+- Resource Management:
+    - Thread-safe device leasing system for hardware resource allocation
+    - Hierarchical process termination (parent + children) on timeout or failure
+    - Device-specific environment isolation (TILE_FWK_DEVICE_ID, ASCEND_VISIBLE_DEVICES, 
+        TILE_FWK_STEST_DEVICE_ID)
+- Adaptive Execution Strategies:
+    - Single-Device Mode: Serial execution with progressive retry rounds (default: 3)
+    - Multi-Device Mode:
+        * Initial parallel execution across available physical/virtual devices
+        * Configurable parallel retry rounds (default: 1)
+        * Final serial fallback for persistent failures to eliminate resource contention
+- Granular Test Selection: Passes specific test identifiers to scripts or pytest as needed
 - Comprehensive Reporting:
-    - Real-time status indicators (✅/❌/⏭️) with device assignment.
-    - Final summary categorizing successes, failures, and skip reasons.
-    - Optional output snippet preview for failed scripts (last 5 lines).
-- Dependency Validation: Checks for `pytest` presence if any target requires test discovery.
+    - Real-time emoji-enhanced status indicators (✅/❌/⏭️/⚠️) with device assignment
+    - Final categorized summary with success/failure/skip counts
+    - Optional failure diagnostics showing last 5 lines of output
+    - Structured retry progression tracking
+- Safety Features:
+    - Per-script timeout enforcement (default: 300s) with cleanup guarantees
+    - Dependency validation (pytest availability check)
+    - Process group isolation for reliable cleanup
 
 Exit Behavior:
-- Returns `0` only if all executed scripts succeed (skipped scripts do not affect exit code).
-- Returns `1` if any script fails after all retry attempts.
-- Exits early with `1` on invalid input (e.g., missing file, empty device list).
+- Returns 0 only if all executed scripts succeed (skipped scripts don't affect exit code)
+- Returns 1 if any script fails after all retry attempts
+- Early exits with descriptive errors for invalid inputs or missing dependencies
 
 Usage Examples:
-    # 1. Execute all Python scripts in a directory using single device
-    python3 examples/validate_examples.py -t examples/02_intermediate --device_ids 0
-    
-    # 2. Single-device mode with up to 3 serial retry rounds for unstable scripts
-    python3 examples/validate_examples.py -t examples --device_ids 0 --serial-retries 3
+    # 1. Execute directory on single NPU device
+    python3 examples/validate_examples.py -t examples/02_intermediate -d 0
 
-    # 3. Run a single script in default NPU mode on device 0
-    python3 examples/validate_examples.py -t examples/01_beginner/basic/basic_ops.py --device_ids 0
+    # 2. Multi-device parallel execution
+    python3 examples/validate_examples.py -t examples -d 0,1,2,3
 
-    # 4. Execute all Python scripts in a directory using multiple devices (parallel execution)
-    python3 examples/validate_examples.py -t examples --device_ids 0,1,2,3
+    # 3. Execute specific script on device 0
+    python3 examples/validate_examples.py -t examples/01_beginner/basic/basic_ops.py -d 0
 
-    # 5. Execute in simulation mode (only scripts supporting --run_mode sim are run)
-    python3 examples/validate_examples.py -t examples --run_mode sim --device_ids 0
+    # 4. Simulation mode (single virtual worker)
+    python3 examples/validate_examples.py -t examples --run_mode sim -w 1
 
-    # 6. Concurrent execution in simulation mode
-    python3 examples/validate_examples.py -t examples --run_mode sim --device_ids 0,1,2,3,4,5,6,7
+    # 5. Concurrent execution in simulation mode (16 virtual workers)
+    python3 examples/validate_examples.py -t examples --run_mode sim -w 16
 
-    # 7. Set custom timeout (in seconds) for each script execution
-    python3 examples/validate_examples.py -t examples/02_intermediate --device_ids 0 --timeout 120
+    # 6. Custom timeout per script
+    python3 examples/validate_examples.py -t examples/02_intermediate -d 0 --timeout 120
 
-    # 8. Enable parallel retries (initial run + 1 retry rounds) for flaky scripts
-    python3 examples/validate_examples.py -t examples --device_ids 0,1 --parallel-retries 1
+    # 7. Show failure diagnostics in summary
+    python3 examples/validate_examples.py -t examples -d 0 --show-fail-details
 
-    # 9. Show last 5 lines of output for failed scripts in final summary (for debugging)
-    python3 examples/validate_examples.py -t examples --device_ids 0 --show-fail-details
+    # 8. Full configuration
+    python3 examples/validate_examples.py -t examples -d 0,1,2,3 
+        --parallel-retries 2 --serial-retries 5 
+        --timeout 300 --show-fail-details --allow-pytest-auto-detect
 
-    # 10. Full production-grade validation: multi-device, retries, timeout, and failure details
-    python3 examples/validate_examples.py -t examples --device_ids 0,1,2,3,4,5,6,7 
-        --parallel-retries 2 --serial-retries 5 --timeout 300 --show-fail-details
-
-Note: This script is intended for use within CANN-based development workflows and assumes
-hardware context awareness via the `TILE_FWK_DEVICE_ID`/
-    `TILE_FWK_STEST_DEVICE_ID`/`ASCEND_VISIBLE_DEVICES` environment variable.
+Note: This tool is designed specifically for CANN-based development workflows. In npu mode, device
+parallelism is determined by provided device IDs. In sim mode, parallelism is controlled by the
+--workers parameter which creates virtual device slots.
 """
 import os
 import subprocess
 import sys
 import argparse
+import ast
 import re
 from pathlib import Path
 import shutil
@@ -100,37 +97,154 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import queue
 import time
+import signal
+from typing import List, Dict, Any, Optional, Tuple, Union
+import psutil
 
 
 def _has_main_guard(file_path: Path) -> bool:
+    """Check if the file contains an 'if __name__ == '__main__'' guard using AST parsing"""
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
-        return bool(re.search(r'if\s+__name__\s*==\s*["\']__main__["\']\s*:', content))
-    except Exception:
+        
+        # Avoid exceptions for empty files
+        if not content.strip():
+            return False
+            
+        tree = ast.parse(content, filename=str(file_path))
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If):
+                # Check if condition is __name__ == '__main__'
+                if (isinstance(node.test, ast.Compare) and
+                    isinstance(node.test.left, ast.Name) and
+                    node.test.left.id == '__name__' and
+                    len(node.test.ops) == 1 and
+                    isinstance(node.test.ops[0], ast.Eq) and
+                    len(node.test.comparators) == 1 and
+                    isinstance(node.test.comparators[0], ast.Constant) and
+                    node.test.comparators[0].value == '__main__'):
+                    return True
+        return False
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
+        # The file may not be Python code or may have encoding issues
+        return False
+    except Exception as e:
+        print(f"Warning: Error parsing {file_path} with AST: {e}", file=sys.stderr)
         return False
 
 
 def _supports_run_mode_sim(file_path: Path) -> bool:
+    """Check if the file supports the '--run_mode' argument using AST parsing"""
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
-        pattern = re.compile(r'add_argument\s*\(.*?["\']--run_mode["\']| \
-                             dest\s*=\s*["\']run_mode["\']', re.DOTALL)
-        return bool(pattern.search(content))
-    except Exception:
+        
+        # Avoid exceptions for empty files
+        if not content.strip():
+            return False
+            
+        tree = ast.parse(content, filename=str(file_path))
+        
+        # Check argparse-related code
+        for node in ast.walk(tree):
+            # Check add_argument calls
+            if (isinstance(node, ast.Call) and 
+                hasattr(node.func, 'attr') and node.func.attr == 'add_argument'):
+                for arg in node.args:
+                    if (isinstance(arg, ast.Constant) and 
+                        isinstance(arg.value, str) and 
+                        '--run_mode' in arg.value):
+                        return True
+                
+                # Check keyword arguments
+                for keyword in node.keywords:
+                    if keyword.arg == 'dest' and isinstance(keyword.value, ast.Constant):
+                        if keyword.value.value == 'run_mode':
+                            return True
+        
+        return False
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
+        return False
+    except Exception as e:
+        print(f"Warning: Error parsing {file_path} with AST for run_mode support: {e}", 
+              file=sys.stderr)
         return False
 
 
 def _has_pytest_tests(file_path: Path) -> bool:
+    """Check if the file contains pytest-style tests using AST parsing"""
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
-        has_test_func = re.search(r'^\s*def\s+test[a-zA-Z0-9_]*\s*\(', content, re.MULTILINE)
-        has_test_class = re.search(r'^\s*class\s+Test[a-zA-Z0-9_]*\s*[:\(]', content, re.MULTILINE)
-        return bool(has_test_func or has_test_class)
-    except Exception:
+        
+        # Avoid exceptions for empty files
+        if not content.strip():
+            return False
+            
+        tree = ast.parse(content, filename=str(file_path))
+        
+        has_test_function = False
+        has_test_class = False
+        
+        for node in ast.walk(tree):
+            # Check test functions
+            if isinstance(node, ast.FunctionDef):
+                if node.name.startswith('test'):
+                    has_test_function = True
+            
+            # Check test classes
+            if isinstance(node, ast.ClassDef):
+                if node.name.startswith('Test'):
+                    has_test_class = True
+        
+        return has_test_function or has_test_class
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
         return False
+    except Exception as e:
+        print(f"Warning: Error parsing {file_path} with AST for pytest tests: {e}", file=sys.stderr)
+        return False
+
+
+def _terminate_process_and_children(proc: subprocess.Popen) -> None:
+    """Terminate a process and all its child processes"""
+    try:
+        parent = psutil.Process(proc.pid)
+        children = parent.children(recursive=True)
+        
+        # Terminate child processes first
+        for child in children:
+            try:
+                child.terminate()
+            except psutil.NoSuchProcess:
+                pass
+        
+        # Wait for child processes to terminate
+        gone, still_alive = psutil.wait_procs(children, timeout=3)
+        
+        # Force-kill remaining processes
+        for child in still_alive:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        
+        # Terminate parent process
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        # The process may no longer exist
+        try:
+            proc.kill()
+        except Exception as e:
+            print(f"Unexpected error while killing process: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"Warning: Error terminating process tree: {e}", file=sys.stderr)
 
 
 def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
@@ -152,11 +266,11 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
         }
 
     if args.run_mode == "sim" and not _supports_run_mode_sim(full_path):
-        safe_print(f"⏭️  Skipped: {rel_path} (script does not support --run_mode sim)")
+        safe_print(f"⏭️  Skipped: {rel_path} (script does not support --run_mode)")
         return {
             "rel_path": rel_path,
             "status": "skipped_sim",
-            "message": "script does not support --run_mode sim"
+            "message": "script does not support --run_mode"
         }
 
     # Lease a device
@@ -178,11 +292,14 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
     else:
         safe_print(f"▶️  Starting: {rel_path} (device={device_id})")
 
+    proc = None
     try:
         env = os.environ.copy()
-        env["TILE_FWK_DEVICE_ID"] = device_id
-        env["ASCEND_VISIBLE_DEVICES"] = device_id
-        env["TILE_FWK_STEST_DEVICE_ID"] = device_id
+        # Only set device-related environment variables in NPU mode
+        if args.run_mode != "sim":
+            env["TILE_FWK_DEVICE_ID"] = device_id
+            env["ASCEND_VISIBLE_DEVICES"] = device_id
+            env["TILE_FWK_STEST_DEVICE_ID"] = device_id
 
         if has_main:
             cmd = [sys.executable, str(full_path)]
@@ -191,6 +308,12 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
             if args.run_mode == "sim":
                 cmd.extend(["--run_mode", "sim"])
         else:
+            if not args.allow_pytest_auto_detect:
+                safe_print(f"⚠️  Warning: {rel_path} relies on pytest but auto-detection \
+                            is not explicitly allowed.")
+                safe_print("    The script will still be executed with pytest. \
+                           Use the flag to suppress this warning.")
+            
             if args.example_id:
                 cmd = ["pytest", f"{full_path}::{args.example_id}", "-v", "--capture=no"]
             else:
@@ -200,18 +323,23 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
             cmd_str = " ".join(str(part) for part in cmd)
             safe_print(f"→  Executing: {cmd_str}")
 
+        # Create a new process group for easier cleanup later
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            preexec_fn=os.setsid if os.name != 'nt' else None
+        )
+
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=timeout
-            )
-            output = result.stdout + result.stderr
+            # Wait for process completion or timeout
+            stdout, stderr = proc.communicate(timeout=timeout)
+            output = stdout + stderr
             snippet = "\n".join(output.strip().splitlines()[-5:]) if output.strip() else ""
 
-            if result.returncode == 0:
+            if proc.returncode == 0:
                 safe_print(f"✅ Success: {rel_path}")
                 return {
                     "rel_path": rel_path,
@@ -224,20 +352,29 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
                 return {
                     "rel_path": rel_path,
                     "status": "failure",
-                    "reason": f"Non-zero exit code ({result.returncode})",
+                    "reason": f"Non-zero exit code ({proc.returncode})",
                     "device_id": device_id,
                     "output_snippet": snippet
                 }
         except subprocess.TimeoutExpired:
+            # Timeout handling: terminate the process and its child processes
+            _terminate_process_and_children(proc)
+            stdout, stderr = proc.communicate()
+            output = stdout + stderr
+            snippet = "\n".join(output.strip().splitlines()[-5:]) if output.strip() else ""
+            
             safe_print(f"❌ Failure: {rel_path}")
             return {
                 "rel_path": rel_path,
                 "status": "failure",
                 "reason": f"Timeout (exceeded {timeout}s)",
                 "device_id": device_id,
-                "output_snippet": ""
+                "output_snippet": snippet
             }
         except Exception as e:
+            # Exception handling: terminate the process and its child processes
+            if proc:
+                _terminate_process_and_children(proc)
             safe_print(f"❌ Failure: {rel_path}")
             return {
                 "rel_path": rel_path,
@@ -248,12 +385,187 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
             }
 
     finally:
+        if proc and proc.poll() is None:
+            # Ensure the process has been terminated
+            _terminate_process_and_children(proc)
+            
         device_queue.put(device_id)
         safe_print("-" * 50)
 
 
+class ExecutionStrategy:
+    """Base class for execution strategies"""
+    
+    def __init__(self, args, target_dir, device_ids, timeout, safe_print):
+        self.args = args
+        self.target_dir = target_dir
+        self.device_ids = device_ids
+        self.timeout = timeout
+        self.safe_print = safe_print
+        
+    def execute(self, scripts: List[str], 
+                all_results_map: Dict[str, Dict]) -> Tuple[List[Dict], List[Dict]]:
+        """Execute scripts and return success and failure lists"""
+        raise NotImplementedError()
+
+
+class SingleDeviceStrategy(ExecutionStrategy):
+    """Execution strategy for a single device"""
+    
+    def execute(self, scripts: List[str], 
+                all_results_map: Dict[str, Dict]) -> Tuple[List[Dict], List[Dict]]:
+        current_candidates = scripts[:]
+        prev_failure_count = len(current_candidates)
+        max_serial_retries = max(0, self.args.serial_retries)
+        retry_round = 0
+
+        # Always run at least once (initial run)
+        while current_candidates and retry_round <= max_serial_retries:
+            if retry_round == 0:
+                self.safe_print(f"▶️  Initial Serial Run — {len(current_candidates)} script(s)\n")
+            else:
+                self.safe_print(f"🔁 Serial Retry Round {retry_round}/{max_serial_retries} "
+                               f"— {len(current_candidates)} script(s)\n")
+
+            serial_results = _execute_scripts(
+                self.args, current_candidates, self.target_dir, self.device_ids,
+                workers=1, timeout=self.timeout, 
+                safe_print=self.safe_print, print_cmd_on_serial=True
+            )
+
+            # Update global result map
+            for r in serial_results:
+                all_results_map[r["rel_path"]] = r
+
+            new_failures = [r for r in serial_results if r["status"] == "failure"]
+            current_candidates = [r["rel_path"] for r in new_failures]
+            current_failure_count = len(current_candidates)
+
+            # Success: break early
+            if current_failure_count == 0:
+                self.safe_print("✅ All scripts passed.\n")
+                break
+
+            # Check if failure count stopped decreasing
+            if current_failure_count >= prev_failure_count:
+                self.safe_print(f"⚠️  Failure count did not decrease (was {prev_failure_count}, "
+                               f"now {current_failure_count}). Stopping retries.\n")
+                break
+
+            prev_failure_count = current_failure_count
+            retry_round += 1
+
+        # If we exited because of retry limit (and still have failures)
+        if current_candidates and retry_round > max_serial_retries:
+            self.safe_print(f"🛑 Reached maximum serial retries ({max_serial_retries}). Stopping.\n")
+
+        success_list = [r for r in all_results_map.values() if r["status"] == "success"]
+        failure_list = [r for r in all_results_map.values() if r["status"] == "failure"]
+        
+        return success_list, failure_list
+
+
+class MultiDeviceStrategy(ExecutionStrategy):
+    """Execution strategy for multiple devices"""
+    
+    def execute(self, scripts: List[str], 
+                all_results_map: Dict[str, Dict]) -> Tuple[List[Dict], List[Dict]]:
+        current_candidates = scripts[:]
+        parallel_retries = max(0, self.args.parallel_retries)
+        
+        # Determine actual workers to use based on mode
+        if self.args.run_mode == "sim":
+            actual_workers = len(self.device_ids)  # Use virtual devices count
+        else:
+            actual_workers = len(self.device_ids)  # Use physical devices count
+        
+        # Parallel execution rounds
+        for round_idx in range(parallel_retries + 1):
+            round_name = "Initial" if round_idx == 0 else f"Retry {round_idx}"
+            self.safe_print(f"🚀 Starting Parallel Round {round_idx + 1}/{parallel_retries + 1} "
+                           f"({round_name}) — {len(current_candidates)} script(s)\n")
+
+            round_results = _execute_scripts(
+                self.args, current_candidates, self.target_dir, self.device_ids, 
+                workers=actual_workers, timeout=self.timeout, 
+                safe_print=self.safe_print, print_cmd_on_serial=False
+            )
+
+            # Update final results map
+            for r in round_results:
+                all_results_map[r["rel_path"]] = r
+
+            # Check for failures
+            round_failures = [r for r in round_results if r["status"] == "failure"]
+            if not round_failures:
+                self.safe_print(f"✅ All scripts passed in Parallel Round {round_idx + 1}. "
+                               f"No further retries needed.")
+                success_list = [r for r in all_results_map.values() if r["status"] == "success"]
+                failure_list = []
+                return success_list, failure_list
+
+            # Prepare next round
+            current_candidates = [r["rel_path"] for r in round_failures]
+            self.safe_print(f"🔁 {len(current_candidates)} script(s) failed and will be retried.")
+
+        # Final serial retry loop for remaining failures
+        if current_candidates:
+            self.safe_print(f"🔂 Starting Final Serial Retry Loop — {len(current_candidates)} "
+                           f"remaining failed script(s)\n")
+            serial_candidates = current_candidates[:]
+            prev_failure_count = len(serial_candidates)
+            max_serial_retries = max(0, self.args.serial_retries)
+            serial_retry_round = 0
+
+            while serial_candidates and serial_retry_round <= max_serial_retries:
+                if serial_retry_round == 0:
+                    self.safe_print(f"▶️  Final Serial Run — {len(serial_candidates)} script(s)\n")
+                else:
+                    self.safe_print(f"🔁 Final Serial Retry {serial_retry_round}/{max_serial_retries} "
+                                   f"— {len(serial_candidates)} script(s)\n")
+
+                # Use only the first device for serial retries
+                serial_device_ids = [self.device_ids[0]]
+                serial_results = _execute_scripts(
+                    self.args, serial_candidates, self.target_dir, serial_device_ids,
+                    workers=1, timeout=self.timeout, 
+                    safe_print=self.safe_print, print_cmd_on_serial=True
+                )
+
+                # Update global results map
+                for r in serial_results:
+                    all_results_map[r["rel_path"]] = r
+
+                new_failures = [r for r in serial_results if r["status"] == "failure"]
+                serial_candidates = [r["rel_path"] for r in new_failures]
+                current_failure_count = len(serial_candidates)
+
+                if current_failure_count == 0:
+                    self.safe_print("✅ All scripts passed after final serial retry loop.\n")
+                    break
+
+                if current_failure_count >= prev_failure_count:
+                    self.safe_print(f"⚠️  Final serial retry: failure count did not "
+                                   f"decrease (was {prev_failure_count}, "
+                                   f"now {current_failure_count}). Stopping.\n")
+                    break
+
+                prev_failure_count = current_failure_count
+                serial_retry_round += 1
+
+            if serial_candidates and serial_retry_round > max_serial_retries:
+                self.safe_print(f"🛑 Reached maximum final serial retries "
+                               f"({max_serial_retries}). Stopping.\n")
+
+        success_list = [r for r in all_results_map.values() if r["status"] == "success"]
+        failure_list = [r for r in all_results_map.values() if r["status"] == "failure"]
+        
+        self.safe_print("\n🏁 All execution rounds completed.")
+        return success_list, failure_list
+
+
 def _execute_scripts(args, rel_paths, target_dir, device_ids,
-                     max_workers, timeout, safe_print, print_cmd_on_serial=False):
+                     workers, timeout, safe_print, print_cmd_on_serial=False):
     """Helper to execute a list of scripts with given device pool."""
     if not rel_paths:
         return []
@@ -262,7 +574,7 @@ def _execute_scripts(args, rel_paths, target_dir, device_ids,
     for dev in device_ids:
         device_queue.put(dev)
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         future_to_rel = {}
         for rel_path in rel_paths:
             full_path = target_dir / rel_path
@@ -289,7 +601,10 @@ def _print_final_summary(success_list, failure_list, skipped_sim_list, skipped_n
     safe_print("=" * 60)
     safe_print(f"Target directory/file : {target}")
     safe_print(f"Run mode              : {args.run_mode}")
-    safe_print(f"DEVICE_IDs            : {', '.join(device_ids)}")
+    if args.run_mode == "sim":
+        safe_print(f"Workers (sim mode)    : {len(device_ids)}")
+    else:
+        safe_print(f"DEVICE_IDs (npu mode) : {', '.join(device_ids)}")
     safe_print(f"Total scripts found   : {total_original}")
     safe_print(f"Total execution time  : {total_time_sec:.2f} seconds")
     safe_print(f"Scripts executed      : {len(success_list) + len(failure_list)}")
@@ -327,21 +642,8 @@ def _print_final_summary(success_list, failure_list, skipped_sim_list, skipped_n
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Execute and validate Python scripts with configurable \
-            parallel retries and final serial fallback."
-    )
-    parser.add_argument(
-        "-d", "--device_ids",
-        type=str,
-        default="0",
-        help="Comma-separated list of DEVICE_IDs (e.g., '0,1,2,3'). Default: '0'."
-    )
-    parser.add_argument(
-        "-r", "--run_mode",
-        choices=["npu", "sim"],
-        default="npu",
-        help="Execution mode: 'npu' (default) or 'sim'. \
-            In 'sim' mode, only scripts supporting --run_mode sim are executed."
+        description="Execute and validate Python scripts with configurable "
+                    "parallel retries and final serial fallback."
     )
     parser.add_argument(
         "-t", "--target",
@@ -350,25 +652,40 @@ def main() -> None:
         help="Target: either a .py file path or a directory path."
     )
     parser.add_argument(
+        "-r", "--run_mode",
+        choices=["npu", "sim"],
+        default="npu",
+        help="Execution mode: 'npu' (default) or 'sim'. "
+             "In 'sim' mode, only scripts supporting --run_mode are executed."
+    )
+    parser.add_argument(
+        "-d", "--device_ids",
+        type=str,
+        default="0",
+        help="Comma-separated list of DEVICE_IDs (e.g., '0,1,2,3'). Default: '0'. "
+             "Only effective in 'npu' mode. In 'sim' mode, use --workers instead."
+    )
+    parser.add_argument(
+        "-w", "--workers",
+        type=int,
+        default=16,
+        help="Number of parallel workers (only effective in 'sim' mode). "
+             "In 'npu' mode, parallelism is determined by device count. "
+             "Default: auto-detected CPU count (up to 16) in sim mode."
+    )
+    parser.add_argument(
         "example_id",
         type=str,
         default=None,
         nargs='?',
-        help="Optional test identifier (e.g., 'test_add' or \
-            'test_file.py::test_add') to pass to script or pytest."
+        help="Optional test identifier (e.g., 'test_add' or "
+             "'test_file.py::test_add') to pass to script or pytest."
     )
     parser.add_argument(
         "--timeout",
         type=int,
         default=300,
         help="Per-script execution timeout in seconds (default: 300)."
-    )
-    parser.add_argument(
-        "--max_workers",
-        type=int,
-        default=None,
-        help="Maximum number of concurrent workers (default: number of device_ids). "
-             "Note: actual parallelism is limited by available devices."
     )
     parser.add_argument(
         "--parallel-retries",
@@ -380,14 +697,20 @@ def main() -> None:
     parser.add_argument(
         "--serial-retries",
         type=int,
-        default=5,
-        help="Maximum number of serial retry rounds in single-device mode (default: 5). "
+        default=3,
+        help="Maximum number of serial retry rounds in single-device mode (default: 3). "
              "Total serial runs = 1 (initial) + N (retries). Set to 0 to disable retries."
     )
     parser.add_argument(
         "--show-fail-details",
         action="store_true",
         help="Show last 5 lines of output for each failed script in the final summary."
+    )
+    parser.add_argument(
+        "--allow-pytest-auto-detect",
+        action="store_true",
+        help="Allow automatic detection and execution of pytest-style tests. "
+             "Without this flag, a warning will be shown when pytest tests are detected."
     )
     args = parser.parse_args()
 
@@ -427,30 +750,59 @@ def main() -> None:
     # Check pytest requirement
     need_pytest = any(not _has_main_guard(f) and _has_pytest_tests(f) for f in py_files)
     pytest_available = shutil.which("pytest") is not None
+    
     if need_pytest and not pytest_available:
-        print("Error: Some scripts require 'pytest'...", file=sys.stderr)
-        print("    pip install pytest", file=sys.stderr)
+        print("Error: Some scripts require 'pytest' but it is not installed.", file=sys.stderr)
+        print("    Please install pytest with: pip install pytest", file=sys.stderr)
         sys.exit(1)
+    
+    if need_pytest and not args.allow_pytest_auto_detect:
+        print("\n⚠️  WARNING: Some scripts appear to contain pytest-style tests, \
+                but --allow-pytest-auto-detect was not set.")
+        print("    Add the --allow-pytest-auto-detect flag to explicitly allow pytest execution.")
+        print("    Use --allow-pytest-auto-detect to suppress this warning.\n")
 
-    # Determine execution strategy based on number of devices
-    is_single_device = len(device_ids) == 1
-
-    if is_single_device:
-        max_workers = 1
-        parallel_retries = 0
+    # Handle workers and device configuration based on run mode
+    if args.run_mode == "sim":
+        # SIM mode: workers parameter determines parallelism
+        if args.workers is None:
+            import multiprocessing
+            cpu_count = multiprocessing.cpu_count()
+            args.workers = min(16, cpu_count)
+            print(f"💡 Sim mode: auto-setting workers to {args.workers} (CPU cores: {cpu_count})")
+        
+        # Create virtual devices for SIM mode (just placeholders for the queue)
+        virtual_devices = [str(i) for i in range(args.workers)]
+        actual_device_ids = virtual_devices
+        print(f"💡 Sim mode: using {args.workers} virtual workers")
+        
+        # Determine if we should use single or multi-device strategy based on workers
+        is_single_device = (args.workers == 1)
     else:
-        max_workers = args.max_workers or len(device_ids)
-        parallel_retries = max(0, args.parallel_retries)
+        # NPU mode: device_ids determines parallelism, workers parameter is ignored
+        actual_device_ids = device_ids
+        print(f"💡 NPU mode: using {len(device_ids)} physical devices")
+        
+        # Determine if we should use single or multi-device strategy based on physical devices
+        is_single_device = (len(device_ids) == 1)
 
-    print(f"DEVICE_IDs        : {', '.join(device_ids)}")
     print(f"Run mode          : {args.run_mode}")
+    if args.run_mode == "sim":
+        print(f"Workers (sim mode): {args.workers}")
+    else:
+        print(f"DEVICE_IDs (npu mode): {', '.join(device_ids)}")
+    
     if is_single_device:
         print("Execution mode    : Serial (single device)")
     else:
-        print(f"Parallel retries  : {parallel_retries} \
-              (total parallel rounds = {parallel_retries + 1})")
+        print(f"Parallel retries  : {args.parallel_retries} "
+              f"(total parallel rounds = {args.parallel_retries + 1})")
     if args.example_id:
         print(f"Test selector     : {args.example_id}")
+    if not args.allow_pytest_auto_detect:
+        print("Pytest auto-detect: Disabled (warning only for pytest-style tests)")
+    else:
+        print("Pytest auto-detect: Enabled")
     print(f"Target            : {target}")
     print(f"Found {len(relative_paths)} .py file(s).")
     print("=" * 60)
@@ -501,162 +853,24 @@ def main() -> None:
         safe_print("ℹ️  No executable scripts found. All were skipped.")
         total_time_sec = time.perf_counter() - start_time
         _print_final_summary([], [], skipped_sim_results, skipped_no_tests_results,
-                             args, target, device_ids, total_time_sec, safe_print)
+                             args, target, actual_device_ids, total_time_sec, safe_print)
         sys.exit(0)
 
-        # ----------------------------
-    # SINGLE DEVICE: SERIAL EXECUTION WITH RETRY LOOP
-    # ----------------------------
-    if is_single_device:
-        safe_print("🚀 Starting Serial Execution — single device mode\n")
-        current_candidates = candidates_to_run[:]
-        prev_failure_count = len(current_candidates)
-        max_serial_retries = max(0, args.serial_retries)  # ensure non-negative
-        retry_round = 0
+    # Create execution strategy
+    strategy = SingleDeviceStrategy(args, target_dir, actual_device_ids, args.timeout, safe_print) \
+        if is_single_device else MultiDeviceStrategy(args, target_dir, actual_device_ids, 
+                                                     args.timeout, safe_print)
+    
+    # Execute scripts using the selected strategy
+    success_list, failure_list = strategy.execute(current_candidates, all_results_map)
 
-        # Always run at least once (initial run)
-        while current_candidates and retry_round <= max_serial_retries:
-            if retry_round == 0:
-                safe_print(f"▶️  Initial Serial Run — {len(current_candidates)} script(s)\n")
-            else:
-                safe_print(f"🔁 Serial Retry Round {retry_round}/{max_serial_retries} \
-                           — {len(current_candidates)} script(s)\n")
+    # Generate final summary
+    total_time_sec = time.perf_counter() - start_time
+    _print_final_summary(success_list, failure_list, skipped_sim_results, 
+                         skipped_no_tests_results, args, target, 
+                         actual_device_ids, total_time_sec, safe_print)
 
-            serial_results = _execute_scripts(
-                args, current_candidates, target_dir, device_ids,
-                max_workers=1, timeout=args.timeout, 
-                safe_print=safe_print, print_cmd_on_serial=True
-            )
-
-            # Update global result map
-            for r in serial_results:
-                all_results_map[r["rel_path"]] = r
-
-            new_failures = [r for r in serial_results if r["status"] == "failure"]
-            current_candidates = [r["rel_path"] for r in new_failures]
-            current_failure_count = len(current_candidates)
-
-            # Success: break early
-            if current_failure_count == 0:
-                safe_print("✅ All scripts passed.\n")
-                break
-
-            # Check if failure count stopped decreasing
-            if current_failure_count >= prev_failure_count:
-                safe_print(f"⚠️  Failure count did not decrease (was {prev_failure_count}, \
-                           now {current_failure_count}). Stopping retries.\n")
-                break
-
-            prev_failure_count = current_failure_count
-            retry_round += 1
-
-        # If we exited because of retry limit (and still have failures)
-        if current_candidates and retry_round > max_serial_retries:
-            safe_print(f"🛑 Reached maximum serial retries ({max_serial_retries}). Stopping.\n")
-
-        success_list = [r for r in all_results_map.values() if r["status"] == "success"]
-        failure_list = [r for r in all_results_map.values() if r["status"] == "failure"]
-
-        total_time_sec = time.perf_counter() - start_time
-        _print_final_summary(success_list, failure_list, skipped_sim_results, 
-                             skipped_no_tests_results, args, target, 
-                             device_ids, total_time_sec, safe_print)
-        sys.exit(1 if len(failure_list) > 0 else 0)
-
-    # ----------------------------
-    # MULTI DEVICE: PARALLEL + RETRIES + FINAL SERIAL FALLBACK
-    # ----------------------------
-    else:
-        for round_idx in range(parallel_retries + 1):
-            round_name = "Initial" if round_idx == 0 else f"Retry {round_idx}"
-            safe_print(f"🚀 Starting Parallel Round {round_idx + 1}/{parallel_retries + 1} \
-                       ({round_name}) — {len(current_candidates)} script(s)\n")
-
-            round_results = _execute_scripts(
-                args, current_candidates, target_dir, device_ids, max_workers, 
-                args.timeout, safe_print, print_cmd_on_serial=False
-            )
-
-            # Update final results map
-            for r in round_results:
-                all_results_map[r["rel_path"]] = r
-
-            # Check for failures
-            round_failures = [r for r in round_results if r["status"] == "failure"]
-            if not round_failures:
-                safe_print(f"✅ All scripts passed in Parallel Round {round_idx + 1}. \
-                           No further retries needed.")
-                success_list = [r for r in all_results_map.values() if r["status"] == "success"]
-                failure_list = []
-                
-                total_time_sec = time.perf_counter() - start_time
-                _print_final_summary(success_list, failure_list, skipped_sim_results, 
-                                     skipped_no_tests_results, args, target, 
-                                     device_ids, total_time_sec, safe_print)
-                sys.exit(0)
-
-            # Prepare next round
-            current_candidates = [r["rel_path"] for r in round_failures]
-            safe_print(f"🔁 {len(current_candidates)} script(s) failed and will be retried.")
-
-        # Final serial retry loop for remaining failures (with convergence and max retries)
-        if current_candidates:
-            safe_print(f"🔂 Starting Final Serial Retry Loop — {len(current_candidates)} \
-                       remaining failed script(s)\n")
-            serial_candidates = current_candidates[:]
-            prev_failure_count = len(serial_candidates)
-            max_serial_retries = max(0, args.serial_retries)
-            serial_retry_round = 0
-
-            while serial_candidates and serial_retry_round <= max_serial_retries:
-                if serial_retry_round == 0:
-                    safe_print(f"▶️  Final Serial Run — {len(serial_candidates)} script(s)\n")
-                else:
-                    safe_print(f"🔁 Final Serial Retry {serial_retry_round}/{max_serial_retries} \
-                               — {len(serial_candidates)} script(s)\n")
-
-                serial_device_ids = [device_ids[0]]  # use first device
-                serial_results = _execute_scripts(
-                    args, serial_candidates, target_dir, serial_device_ids,
-                    max_workers=1, timeout=args.timeout, 
-                    safe_print=safe_print, print_cmd_on_serial=True
-                )
-
-                # Update global results map
-                for r in serial_results:
-                    all_results_map[r["rel_path"]] = r
-
-                new_failures = [r for r in serial_results if r["status"] == "failure"]
-                serial_candidates = [r["rel_path"] for r in new_failures]
-                current_failure_count = len(serial_candidates)
-
-                if current_failure_count == 0:
-                    safe_print("✅ All scripts passed after final serial retry loop.\n")
-                    break
-
-                if current_failure_count >= prev_failure_count:
-                    safe_print(f"⚠️  Final serial retry: failure count did not \
-                               decrease (was {prev_failure_count}, \
-                               now {current_failure_count}). Stopping.\n")
-                    break
-
-                prev_failure_count = current_failure_count
-                serial_retry_round += 1
-
-            if serial_candidates and serial_retry_round > max_serial_retries:
-                safe_print(f"🛑 Reached maximum final serial retries \
-                           ({max_serial_retries}). Stopping.\n")
-
-        success_list = [r for r in all_results_map.values() if r["status"] == "success"]
-        failure_list = [r for r in all_results_map.values() if r["status"] == "failure"]
-
-        safe_print("\n🏁 All execution rounds completed.")
-        total_time_sec = time.perf_counter() - start_time
-        _print_final_summary(success_list, failure_list, skipped_sim_results, 
-                             skipped_no_tests_results, args, target, 
-                             device_ids, total_time_sec, safe_print)
-
-        sys.exit(1 if len(failure_list) > 0 else 0)
+    sys.exit(1 if len(failure_list) > 0 else 0)
 
 
 if __name__ == "__main__":
