@@ -1202,7 +1202,7 @@ void ConstructTileGraph(Function &function, const TileShape &tileShape, const st
     MatmulGraphNodes tileGraphNodes;
 
     auto &cubeTile = tileShape.GetCubeTile();
-    if (!cubeTile.setL1Tile) {
+    if (!cubeTile.enableMultiDataLoad) {
         Deprecate::TiledInnerAMulB(function, tileShape, operandVec, cTensorPtr, attrParam);
         return;
     }

@@ -17,6 +17,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
+#include "interface/configs/config_manager_ng.h"
 
 using namespace npu::tile_fwk;
 
@@ -159,6 +160,15 @@ TEST_F(DynamicMatmulUTest, mm_A_B_ND_perchannel_with_bias) {
     param.scaleTensor = Tensor(DT_UINT64, {1, n}, "scale_tensor", TileOpFormat::TILEOP_ND);
     using TestMatmulType = MatmulImpl<int8_t, npu::tile_fwk::float16, MatrixInputs<false, false, false, false, false>>;
     TestDynMatmul<TestMatmulType> (m, k, n, param);
+}
+
+TEST_F(DynamicMatmulUTest, mm_A_B_ND_config) {
+    std::shared_ptr<ConfigScope> scope = ConfigManagerNg::GetInstance().CurrentScope();
+    ASSERT(scope != nullptr);
+    const TileShape &tileScope = scope->GenerateTileShape();
+    if (tileScope.GetCubeTile().enableSplitK == false){
+        return;
+    }
 }
 
 } // namespace

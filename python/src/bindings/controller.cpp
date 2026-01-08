@@ -104,7 +104,7 @@ void bind_controller_set_tile(py::module &m) {
     m.def(
         "SetCubeTile",
         [](const std::vector<int64_t> &mvec, const std::vector<int64_t> &kvec, const std::vector<int64_t> &nvec,
-            bool setL1Tile, bool enableSplitK) {
+            bool enableMultiDataLoad, bool enableSplitK) {
             if (mvec.size() > MAX_M_DIM_SIZE) {
                 throw py::value_error(
                     "Parameter 'm' must have exactly " + std::to_string(MAX_M_DIM_SIZE) + " elements");
@@ -125,13 +125,13 @@ void bind_controller_set_tile(py::module &m) {
             std::copy(mvec.begin(), mvec.end(), marr.begin());
             std::copy(kvec.begin(), kvec.end(), karr.begin());
             std::copy(nvec.begin(), nvec.end(), narr.begin());
-            TileShape::Current().SetCubeTile(marr, karr, narr, setL1Tile, enableSplitK);
+            TileShape::Current().SetCubeTile(marr, karr, narr, enableMultiDataLoad, enableSplitK);
         },
-        py::arg("m"), py::arg("k"), py::arg("n"), py::arg("set_l1_tile"), py::arg("enable_split_k"),
+        py::arg("m"), py::arg("k"), py::arg("n"), py::arg("enable_multi_data_load"), py::arg("enable_split_k"), 
         "Set cube tile shapes with specified dimensions");
     m.def("GetCubeTile", []() {
         auto cubeTile = TileShape::Current().GetCubeTile();
-        return std::tuple(cubeTile.m, cubeTile.k, cubeTile.n, cubeTile.setL1Tile, cubeTile.enableSplitK);
+        return std::tuple(cubeTile.m, cubeTile.k, cubeTile.n, cubeTile.enableMultiDataLoad, cubeTile.enableSplitK);
     });
 }
 
@@ -346,12 +346,12 @@ void bind_controller_scope_classes(py::module &m) {
          py::arg("m"),
          py::arg("k"),
          py::arg("n"),
-         py::arg("setL1Tile") = false,
+         py::arg("enableMultiDataLoad") = false,
          py::arg("enableSplitK") = false)
     .def_readwrite("m", &CubeTile::m)
     .def_readwrite("k", &CubeTile::k)
     .def_readwrite("n", &CubeTile::n)
-    .def_readwrite("setL1Tile", &CubeTile::setL1Tile)
+    .def_readwrite("enableMultiDataLoad", &CubeTile::enableMultiDataLoad)
     .def_readwrite("enableSplitK", &CubeTile::enableSplitK)
     .def("valid", &CubeTile::valid)
     .def("ToString", &CubeTile::ToString)
