@@ -1,0 +1,51 @@
+{
+    "test_cases": [
+        {
+            "case_index": 0,
+            "case_name": "Allgather_test_1",
+            "operation": "Allgather",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        256
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        512,
+                        256
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                ""
+            ],
+            "tile_shape": [
+                ""
+            ],
+            "params": {
+                "rank_size": 4,
+                "tile_num_row": 8,
+                "tile_num_col": 8,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 0
+        }
+    ]
+}

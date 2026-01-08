@@ -13,7 +13,6 @@
  * \brief
  */
 
-#include "distributed_op_test_suite.h"
 #include "distributed_op_test_common.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"

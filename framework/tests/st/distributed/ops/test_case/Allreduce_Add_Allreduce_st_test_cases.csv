@@ -1,0 +1,2 @@
+case_name,input_shape,input_dtype,input_format,input_datarange,output_shape,output_dtype,output_format,view_shape,tile_shape,rank_size,tile_num_row,tile_num_col
+Allreduce_Add_Allreduce_test_1,"[256, 102400]","bfloat16","ND","[,]","[256, 102400]","bfloat16","ND","[]","[]",4,1,1

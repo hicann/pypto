@@ -31,7 +31,7 @@ template<typename T>
 void TestDynAllGather(OpTestParam &testParam);
 template<typename T>
 void TestShmemReduceScatter(OpTestParam &testParam);
-template<typename T, bool useTwoShot>
+template<typename T>
 void TestShmemAllReduce(OpTestParam &testParam);
 void TestShmemMoeDispatch(OpTestParam &testParam);
 template<typename T>

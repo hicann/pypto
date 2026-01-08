@@ -1,0 +1,145 @@
+{
+    "test_cases": [
+        {
+            "case_index": 0,
+            "case_name": "Reducescatter_test_1",
+            "operation": "Reducescatter",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        256
+                    ],
+                    "dtype": "float16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": "",
+                        "max": ""
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        256
+                    ],
+                    "dtype": "float16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                ""
+            ],
+            "tile_shape": [
+                ""
+            ],
+            "params": {
+                "rank_size": 4,
+                "tile_num_row": 2,
+                "tile_num_col": 2,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 0
+        },
+        {
+            "case_index": 1,
+            "case_name": "Reducescatter_test_2",
+            "operation": "Reducescatter",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "bfloat16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": "",
+                        "max": ""
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        8,
+                        32
+                    ],
+                    "dtype": "bfloat16",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                ""
+            ],
+            "tile_shape": [
+                ""
+            ],
+            "params": {
+                "rank_size": 4,
+                "tile_num_row": 2,
+                "tile_num_col": 2,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 1
+        },
+        {
+            "case_index": 2,
+            "case_name": "Reducescatter_test_3",
+            "operation": "Reducescatter",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        128,
+                        256
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        256
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                ""
+            ],
+            "tile_shape": [
+                ""
+            ],
+            "params": {
+                "rank_size": 4,
+                "tile_num_row": 2,
+                "tile_num_col": 2,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 2
+        }
+    ]
+}

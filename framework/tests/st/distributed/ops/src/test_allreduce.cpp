@@ -13,7 +13,6 @@
  * \brief
  */
 
-#include "distributed_op_test_suite.h"
 #include "distributed_op_test_common.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -24,11 +23,11 @@
 namespace npu::tile_fwk {
 namespace Distributed {
 
-template<typename T, bool useTwoShot>
+template<typename T>
 void TestShmemAllReduce(OpTestParam &testParam)
 {
-    constexpr size_t paramsSize = 3;
-    auto [row, col, typeNum] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    constexpr size_t paramsSize = 6;
+    auto [row, col, typeNum, tileNumRow, tileNumCol, useTwoShot] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
     DataType dType = GetDataTypeNum(typeNum);
 
     int32_t outSize = row * col;
@@ -47,11 +46,9 @@ void TestShmemAllReduce(OpTestParam &testParam)
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateTensorZero(out),
     });
-    int32_t tileNum1 = 1;
-    int32_t tileNum2 = 1;
     int32_t scatterRow = useTwoShot ? row / testParam.rankSize : row;
     FUNCTION("ALLREDUCE", {in}, {out}) {
-        TileShape::Current().SetVecTile({scatterRow / tileNum1, col / tileNum2});
+        TileShape::Current().SetVecTile({scatterRow / tileNumRow, col / tileNumCol});
         if (useTwoShot) {
             TwoShotAllReduce(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), out);
         } else {
@@ -68,14 +65,10 @@ void TestShmemAllReduce(OpTestParam &testParam)
     auto output = ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/output_rank_", outSize, output->GetDevPtr(), testParam));
 }
-template void TestShmemAllReduce<int32_t, true>(OpTestParam &testParam);
-template void TestShmemAllReduce<int32_t, false>(OpTestParam &testParam);
-template void TestShmemAllReduce<float, true>(OpTestParam &testParam);
-template void TestShmemAllReduce<float, false>(OpTestParam &testParam);
-template void TestShmemAllReduce<float16, true>(OpTestParam &testParam);
-template void TestShmemAllReduce<float16, false>(OpTestParam &testParam);
-template void TestShmemAllReduce<bfloat16, true>(OpTestParam &testParam);
-template void TestShmemAllReduce<bfloat16, false>(OpTestParam &testParam);
+template void TestShmemAllReduce<int32_t>(OpTestParam &testParam);
+template void TestShmemAllReduce<float>(OpTestParam &testParam);
+template void TestShmemAllReduce<float16>(OpTestParam &testParam);
+template void TestShmemAllReduce<bfloat16>(OpTestParam &testParam);
 
-} // namespace Distributed
+} // namespace Distributed 
 } // namespace npu::tile_fwk

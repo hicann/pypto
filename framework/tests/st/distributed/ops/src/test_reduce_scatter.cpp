@@ -26,8 +26,8 @@ namespace Distributed {
 template<typename T>
 void TestShmemReduceScatter(OpTestParam &testParam)
 {
-    constexpr size_t paramsSize = 3;
-    auto [row, col, typeNum] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    constexpr size_t paramsSize = 5;
+    auto [row, col, typeNum, tileNumRow, tileNumCol] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
     int rowOut = row / testParam.rankSize;
     DataType dType = GetDataTypeNum(typeNum);
     Tensor in(dType, {row, col}, "in");
@@ -36,12 +36,10 @@ void TestShmemReduceScatter(OpTestParam &testParam)
     std::vector<T> inData = ReadToVector<T>(
         GetGoldenDir() + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
 
-    int32_t tileNum1 = 2;
-    int32_t tileNum2 = 2;
     FUNCTION("ShmemReduceScatter", {in}, {out}) {
         LOOP("LOOP", FunctionType::DYNAMIC_LOOP, idx, LoopRange(1)) {
             (void)idx;
-            TileShape::Current().SetVecTile({rowOut / tileNum1, col / tileNum2});
+            TileShape::Current().SetVecTile({rowOut / tileNumRow, col / tileNumRow});
             Tensor predToken(DT_INT32, {1, 1}, "predToken");
             ReduceScatter(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize),
                 npu::tile_fwk::Distributed::DistReduceType::DIST_REDUCE_ADD, out);
