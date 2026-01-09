@@ -46,7 +46,7 @@ int CompileCCEForSingleOpTest(const std::string &srcFile, const std::string &obj
         "-L%s "
         "-lruntime "
         "-I%s "
-        "-I%s/framework/src/interface/tileop/a2a3 "
+        "-I%s/framework/src/interface/tileop/arch32 "
         "-I%s/framework/src/machine/kernel/ "
         "-I%s/framework/src/ "
         "-I%s/framework/src/interface "

@@ -127,8 +127,8 @@ namespace CostModel
          std::string cmd = config.cPlusPlus + " -w -std=c++17 "
  	                         + source + " -o " + executable + " "
  	                         + "-I" + includePath + " "
- 	                         + "-I" + includePath + "/tileop/a2a3 "
- 	                         + "-I" + includePath + "/tileop/a2a3/dynamic "
+ 	                         + "-I" + includePath + "/tileop/arch32 "
+ 	                         + "-I" + includePath + "/tileop/arch32/dynamic "
  	                         + "-I" + includePath + "/mock "
  	                         + "-I" + includePath + "/tileop "
  	                         + "-I" + includePath + "/tilefwk " + ">/dev/null 2>&1";

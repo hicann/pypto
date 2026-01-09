@@ -60,9 +60,9 @@ static int CompileCoreMachine(const std::string &objFile, bool isCube, uint64_t 
                    "-D__HEAD_FILE__=%s "
                    "%s "
                    "%s "
-                   "-I%s/tileop/a2a3 "
+                   "-I%s/tileop/arch32 "
                    "-I%s/ "
-                   "-I%s/include/tileop/a2a3 "
+                   "-I%s/include/tileop/arch32 "
                    "-I%s/include/ "
                    "-o %s "
                    "%s",

@@ -498,7 +498,7 @@ void CodeGenCloudNPU::BuildIncludes(std::ostringstream &oss) const {
     std::string includePath = GetIncludePathForCompileCCE();
     oss << "-I" << includePath << "/tilefwk "
         << "-I" << includePath << "/tileop "
-        << "-I" << includePath << "/tileop/a2a3 "
+        << "-I" << includePath << "/tileop/arch32 "
         << "-I" << includePath << " ";
 
     std::string ptoTileLibPath = GetPtoTileLibPathByEnv();
