@@ -39,44 +39,43 @@ TEST(IRTEST, TestTensorOperation){
 
     // Input tensor: tensor<[B, 128], f32>
     auto B = std::make_shared<ScalarValue>(DataType::INT32, "B", ScalarValueKind::Symbolic);
-    std::vector<ScalarValuePtr> tensorShape = { B, std::make_shared<ScalarValue>(int64_t(128)) };
+    std::vector<uint64_t> tileShape = { 128, 128 };
     auto inputTensor =
-        std::make_shared<TensorValue>(tensorShape, DataType::FP32, "input");
+        std::make_shared<TileValue>(tileShape, DataType::FP32, "input");
 
     sig.arguments.push_back(inputTensor);
 
     // Output tensor
     auto outputTensor =
-        std::make_shared<TensorValue>(tensorShape, DataType::FP32, "output");
+        std::make_shared<TileValue>(tileShape, DataType::FP32, "output");
     sig.arguments.push_back(outputTensor);
 
     // ===== Function =====
     auto func = builder.CreateFunction("test_all_ops", FunctionKind::ControlFlow, sig, /*setAsEntry=*/true);
 
-    
     builder.EnterFunctionBody(ctx, func);
 
     auto c2 = builder.CreateConst(ctx, 2.0, "c2");
     auto c3 = builder.CreateConst(ctx, 3.0, "c3");
 
     // tensorAdd = add(input, c2)
-    auto tensorAdd = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "tensorAdd");
-    auto addOp = builder.CreateBinaryOp(Opcode::OP_ADD, inputTensor, c2, tensorAdd);
+    auto tensorAdd = builder.CreateTile(ctx, tileShape, DataType::FP32, "tensorAdd");
+    auto addOp = builder.CreateBinaryScalarMixOp(Opcode::OP_ADDS, inputTensor, c2, tensorAdd);
     builder.Emit(ctx, addOp);
 
     // tensorSub = sub(tensorAdd, c3)
-    auto tensorSub = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "tensorSub");
-    auto subOp = builder.CreateBinaryOp(Opcode::OP_SUB, tensorAdd, c3, tensorSub);
+    auto tensorSub = builder.CreateTile(ctx, tileShape, DataType::FP32, "tensorSub");
+    auto subOp = builder.CreateBinaryScalarMixOp(Opcode::OP_SUBS, tensorAdd, c3, tensorSub);
     builder.Emit(ctx, subOp);
 
     // tensorMul = mul(tensorSub, c2)
-    auto tensorMul = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "tensorMul");
-    auto mulOp = builder.CreateBinaryOp(Opcode::OP_MUL, tensorSub, c2, tensorMul);
+    auto tensorMul = builder.CreateTile(ctx, tileShape, DataType::FP32, "tensorMul");
+    auto mulOp = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, tensorSub, c2, tensorMul);
     builder.Emit(ctx, mulOp);
 
     // tensorDiv = div(tensorMul, c2)
-    auto tensorDiv = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "output");
-    auto divOp = builder.CreateBinaryOp(Opcode::OP_DIV, tensorMul, c2, tensorDiv);
+    auto tensorDiv = builder.CreateTile(ctx, tileShape, DataType::FP32, "output");
+    auto divOp = builder.CreateBinaryScalarMixOp(Opcode::OP_DIVS, tensorMul, c2, tensorDiv);
     builder.Emit(ctx, divOp);
 
     // return tensorDiv

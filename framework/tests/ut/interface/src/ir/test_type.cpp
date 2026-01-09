@@ -400,11 +400,11 @@ TEST(IRTEST, TestTypeCompleteProgram) {
 
     // 输入：直接使用 Tile 和 Scalar，不使用 Tensor
     // 输入 Tile: tile<[16, 32], fp32>
-    auto inputTile = std::make_shared<TileValue>(std::vector<size_t>{16, 32}, DataType::FP32, "input_tile");
+    auto inputTile = std::make_shared<TileValue>(std::vector<uint64_t>{16, 32}, DataType::FP32, "input_tile");
     // 输入 Scalar: scalar<fp32>
     auto scale = std::make_shared<ScalarValue>(DataType::FP32, "scale", ScalarValueKind::Symbolic);
     // 输出：Tile tile<[16, 32], fp32>
-    auto result = std::make_shared<TileValue>(std::vector<size_t>{16, 32}, DataType::FP32, "output_tile");
+    auto result = std::make_shared<TileValue>(std::vector<uint64_t>{16, 32}, DataType::FP32, "output_tile");
 
     sig.arguments = { inputTile, scale, result };
     sig.results.push_back(std::make_shared<ScalarValue>(DataType::FP64));
@@ -421,24 +421,24 @@ TEST(IRTEST, TestTypeCompleteProgram) {
 
     // Tile 乘法操作：tile_mul = mul(input_tile, scale)
     // 当两个操作数都是 Tile 时，输出也是 Tile，会使用 tile.mul
-    auto tileMul = builder.CreateTile(ctx, std::vector<size_t>{16, 32}, DataType::FP32, "tile_mul");
-    auto mulOp = builder.CreateBinaryOp(Opcode::OP_MUL, inputTile, scale, tileMul);
+    auto tileMul = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "tile_mul");
+    auto mulOp = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, inputTile, scale, tileMul);
     builder.Emit(ctx, mulOp);
 
     // Tile 加法操作：tile_add = add(tile_mul, constant2)
     // Tile + Scalar -> Tile，会使用 tile.add
-    auto tileAdd = builder.CreateTile(ctx, std::vector<size_t>{16, 32}, DataType::FP32, "tile_add");
-    auto addOp = builder.CreateBinaryOp(Opcode::OP_ADD, tileMul, constant2, tileAdd);
+    auto tileAdd = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "tile_add");
+    auto addOp = builder.CreateBinaryScalarMixOp(Opcode::OP_ADDS, tileMul, constant2, tileAdd);
     builder.Emit(ctx, addOp);
 
     // Tile 减法操作：tile_sub = sub(tile_add, constant3)
-    auto tileSub = builder.CreateTile(ctx, std::vector<size_t>{16, 32}, DataType::FP32, "tile_sub");
-    auto subOp = builder.CreateBinaryOp(Opcode::OP_SUB, tileAdd, constant3, tileSub);
+    auto tileSub = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "tile_sub");
+    auto subOp = builder.CreateBinaryScalarMixOp(Opcode::OP_SUBS, tileAdd, constant3, tileSub);
     builder.Emit(ctx, subOp);
 
     // Tile 除法操作：tile_div = div(tile_sub, scale)
-    auto tileDiv = builder.CreateTile(ctx, std::vector<size_t>{16, 32}, DataType::FP32, "output_tile");
-    auto divOp = builder.CreateBinaryOp(Opcode::OP_DIV, tileSub, scale, tileDiv);
+    auto tileDiv = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "output_tile");
+    auto divOp = builder.CreateBinaryScalarMixOp(Opcode::OP_DIVS, tileSub, scale, tileDiv);
     builder.Emit(ctx, divOp);
 
     // Scalar 操作：计算两个 scalar 的和
@@ -470,7 +470,7 @@ TEST(IRTEST, TestTypeCompleteProgram) {
     ASSERT_EQ(scalarMul->GetValueKind(), ValueKind::Scalar);
 
     ctx.PopScope();
-    
+
     // 验证离开作用域后的状态
     ASSERT_EQ(ctx.func, nullptr);
     ASSERT_EQ(ctx.compound, nullptr);

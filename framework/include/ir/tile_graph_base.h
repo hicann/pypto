@@ -28,15 +28,24 @@ namespace pto {
 
 class TileBaseOp : public Operation {
 public:
+    TileBaseOp(Opcode opcode, std::vector<ValuePtr> iops, std::vector<ValuePtr> oops)
+     : Operation(opcode, iops, oops) {}
+
     std::shared_ptr<TileValue> GetInOperand(size_t index) const;
     std::shared_ptr<TileValue> GetOutOperand(size_t index) const;
 private:
 };
 
 class ElementWiseTileBaseOp : public TileBaseOp {
+public:
+    ElementWiseTileBaseOp(Opcode opcode, std::vector<ValuePtr> iops, std::vector<ValuePtr> oops)
+     : TileBaseOp(opcode, iops, oops) {}
 };
 
-class ElementWiseUnaryTileBaseOp : public TileBaseOp {
+class ElementWiseUnaryTileBaseOp : public ElementWiseTileBaseOp {
+public:
+    ElementWiseUnaryTileBaseOp(Opcode opcode, TileValuePtr input, TileValuePtr output)
+        : ElementWiseTileBaseOp(opcode, {ValueCast<Value>(input)}, {ValueCast<Value>(output)}) {}
 };
 
 class ElementWiseBinaryTileBaseOp : public ElementWiseTileBaseOp {
@@ -45,14 +54,14 @@ public:
                                 ValuePtr lhs,
                                 ValuePtr rhs,
                                 ValuePtr out)
-        : ElementWiseTileBaseOp() {
-        opcode_ = opcode;
-        ioperands_ = std::vector<ValuePtr>{lhs, rhs};
-        ooperands_ = std::vector<ValuePtr>{out};
+        : ElementWiseTileBaseOp(opcode, {lhs, rhs}, {out}) {
     }
 };
 
 class ElementWiseScalarMixBinaryTileBaseOp : public ElementWiseTileBaseOp {
+public:
+    ElementWiseScalarMixBinaryTileBaseOp(Opcode opcode, TileValuePtr lhs, ScalarValuePtr rhs, TileValuePtr output)
+        : ElementWiseTileBaseOp(opcode, {ValueCast<Value>(lhs), ValueCast<Value>(rhs)}, {ValueCast<Value>(output)}) {}
 };
 
 class ReduceTileBaseOp : public TileBaseOp {

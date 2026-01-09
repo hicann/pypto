@@ -40,13 +40,12 @@ TEST(IRTEST, TestBuilder) {
     FunctionSignature sig;
 
     // tensor<[b, 128], fp32>
-    auto batch = std::make_shared<ScalarValue>(DataType::INT32, "b", ScalarValueKind::Symbolic);
-    std::vector<ScalarValuePtr> tensorShape = { batch, std::make_shared<ScalarValue>(int64_t(128)) };
+    std::vector<uint64_t> tileShape = { 128, 128 };
 
-    auto inputTensor  = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "input");
+    auto inputTensor  = std::make_shared<TileValue>(tileShape, DataType::FP32, "input");
     auto scale1       = std::make_shared<ScalarValue>(DataType::FP32, "scale1", ScalarValueKind::Symbolic);
 
-    auto result = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "output");
+    auto result = std::make_shared<TileValue>(tileShape, DataType::FP32, "output");
 
     sig.arguments = { inputTensor, scale1, result };
 
@@ -57,15 +56,15 @@ TEST(IRTEST, TestBuilder) {
     builder.EnterFunctionBody(ctx, func);
 
     // mul1_res = mul(input, scale1)
-    auto mulVal1 = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "mul1_res");
-    auto mulOp1 = builder.CreateBinaryOp(Opcode::OP_MUL, inputTensor, scale1, mulVal1);
+    auto mulVal1 = builder.CreateTile(ctx, tileShape, DataType::FP32, "mul1_res");
+    auto mulOp1 = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, inputTensor, scale1, mulVal1);
     builder.Emit(ctx, mulOp1);
 
     auto pi = builder.CreateConst(ctx, 3.14, "const_pi");
 
     // mul2_res = mul(mul1_res, pi)
-    auto mulVal2 = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "output");
-    auto mulOp2 = builder.CreateBinaryOp(Opcode::OP_MUL, mulVal1, pi, mulVal2);
+    auto mulVal2 = builder.CreateTile(ctx, tileShape, DataType::FP32, "output");
+    auto mulOp2 = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, mulVal1, pi, mulVal2);
     builder.Emit(ctx, mulOp2);
 
     builder.CreateReturn(ctx, { });
@@ -75,7 +74,7 @@ TEST(IRTEST, TestBuilder) {
     ASSERT_EQ(ctx.activeOpStmt, func->GetCompound()->GetStatement(0));
 
     ctx.PopScope();
-    
+
 
     ASSERT_EQ(ctx.func, nullptr);
     ASSERT_EQ(ctx.compound, nullptr);
@@ -103,6 +102,8 @@ TEST(IRTEST, TestControlFlow) {
     auto constant128 = std::make_shared<ScalarValue>(int64_t(128), "const_128");
     std::vector<ScalarValuePtr> tensorShape = { batch, constant128 };
 
+    std::vector<uint64_t> tileShape = { 128, 128 };
+
     auto inputX = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "inputX");
     auto inputY = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "inputY");
     auto scale1 = std::make_shared<ScalarValue>(DataType::FP32, "scale1", ScalarValueKind::Symbolic);
@@ -110,7 +111,7 @@ TEST(IRTEST, TestControlFlow) {
 
     auto resultX = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "outputX");
     auto resultY = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "outputY");
-    
+
     sig.arguments = { inputX, inputY, scale1, scale2, resultX, resultY };
 
     sig.results.push_back(std::make_shared<ScalarValue>(DataType::INT32));
@@ -129,29 +130,27 @@ TEST(IRTEST, TestControlFlow) {
 
     // test for attribute
     fs->Attributes()["unroll"] = "4";
-        
+
     builder.EnterForBody(ctx, fs);
 
     // 目前没有 view / assemble，直接在整张 tensor 上做计算
     // outputX = add(inputX, scale1)
-    auto resLoopX = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "outputX");
-    auto addOpX = builder.CreateBinaryOp(Opcode::OP_ADD, inputX, scale1, resLoopX);
+    auto resLoopX = builder.CreateTile(ctx, tileShape, DataType::FP32, "outputX");
+    auto addOpX = builder.CreateBinaryScalarMixOp(Opcode::OP_ADDS, resLoopX, scale1, resLoopX);
     builder.Emit(ctx, addOpX);
 
     // outputY = add(inputY, scale2)
-    auto resLoopY = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "outputY");
-    auto addOpY = builder.CreateBinaryOp(Opcode::OP_ADD, inputY, scale2, resLoopY);
+    auto resLoopY = builder.CreateTile(ctx, tileShape, DataType::FP32, "outputY");
+    auto addOpY = builder.CreateBinaryScalarMixOp(Opcode::OP_ADDS, resLoopY, scale2, resLoopY);
     builder.Emit(ctx, addOpY);
 
     // if i then outputX = mul(outputX, scale1) else outputY = mul(outputY, scale2)
     auto ifs = builder.CreateIfStmt(ctx, i);
-    ValuePtr resIfX;
-    ValuePtr resIfY;
-    
+
     builder.EnterIfThen(ctx, ifs);
 
-    resIfX = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "outputX");
-    auto mulOpX = builder.CreateBinaryOp(Opcode::OP_MUL, resLoopX, scale1, resIfX);
+    auto resIfX = builder.CreateTile(ctx, tileShape, DataType::FP32, "outputX");
+    auto mulOpX = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, resLoopX, scale1, resIfX);
     builder.Emit(ctx, mulOpX);
 
     // test compound remove value
@@ -164,12 +163,12 @@ TEST(IRTEST, TestControlFlow) {
 
     builder.EnterIfElse(ctx, ifs);
 
-    resIfY = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "outputY");
-    auto mulOpY = builder.CreateBinaryOp(Opcode::OP_MUL, resLoopY, scale2, resIfY);
+    auto resIfY = builder.CreateTile(ctx, tileShape, DataType::FP32, "outputY");
+    auto mulOpY = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, resLoopY, scale2, resIfY);
     builder.Emit(ctx, mulOpY);
 
     ctx.PopScope();
-            
+
     builder.ExitIfStatement(ctx, ifs);
 
     // check if then and else yield
@@ -188,7 +187,7 @@ TEST(IRTEST, TestControlFlow) {
     ASSERT_EQ(elseYield->Values()[1], resLoopX);
 
     ctx.PopScope(); // for-body
-        
+
     builder.ExitForStatement(ctx, fs);
 
     // check for yield of for-statement: for 的结果应等于 if 的结果
@@ -199,11 +198,11 @@ TEST(IRTEST, TestControlFlow) {
     std::unordered_set<ValuePtr> forYieldSet(forYields.begin(), forYields.end());
     ASSERT_EQ(ifResultSet, forYieldSet);
 
-    // return 
+    // return
     builder.CreateReturn(ctx, {constant0});
 
     ctx.PopScope(); // function-body
-    
+
     std::cout << *module << std::endl;
 }
 

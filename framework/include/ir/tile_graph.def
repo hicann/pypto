@@ -26,7 +26,9 @@ DEFOP(
         OP_ABS,
         OP_LN
     ),
-    ATTR(int, CombineAxis)
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, CombineAxis, -1)
 )
 
 DEFOP(
@@ -40,20 +42,26 @@ DEFOP(
         OP_MIN,
         OP_MAX
     ),
-    ATTR(int, CombineAxis)
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    ATTR(int, CombineAxis, -1)
 )
 
 DEFOP(
     BinaryScalarMixOp,
     INHERIT(ElementWiseScalarMixBinaryTileBaseOp),
     OPCODE(
-        OP_ADD_S,
-        OP_SUB_S,
-        OP_MUL_S,
-        OP_DIV_S,
-        OP_MIN_S,
-        OP_MAX_S
+        OP_ADDS,
+        OP_SUBS,
+        OP_MULS,
+        OP_DIVS,
+        OP_MINS,
+        OP_MAXS
     ),
-    ATTR(int, CombineAxis),
-    ATTR(int, Reverse),
+    INPUT(Tile, Lhs),
+    INPUT(Scalar, Rhs),
+    OUTPUT(Tile, Output),
+    ATTR(int, CombineAxis, -1),
+    ATTR(bool, Reverse, false)
 )

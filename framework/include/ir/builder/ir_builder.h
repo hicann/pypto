@@ -54,7 +54,7 @@ public:
     std::shared_ptr<TensorValue> CreateTensor(IRBuilderContext& ctx,
         const std::vector<ScalarValuePtr>& shape, DataType dt, std::string name = "");
     std::shared_ptr<TileValue> CreateTile(IRBuilderContext& ctx,
-        const std::vector<size_t>& shape, DataType dt, std::string name = "");
+        const std::vector<uint64_t>& shape, DataType dt, std::string name = "");
     std::shared_ptr<ScalarValue> CreateScalar(IRBuilderContext& ctx,
         DataType dt, std::string name = "");
     std::shared_ptr<ScalarValue> CreateConst(IRBuilderContext& ctx,

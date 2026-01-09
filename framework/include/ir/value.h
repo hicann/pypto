@@ -229,6 +229,11 @@ private:
 
 using TileValuePtr = std::shared_ptr<TileValue>;
 
+template<typename TDst, typename TSrc>
+static inline std::shared_ptr<TDst> ValueCast(const std::shared_ptr<TSrc> &src) {
+    return std::static_pointer_cast<TDst>(src);
+}
+
 // Enumeration for tile operation formats.
 enum class TileOpFormat {
     TILEOP_ND = 0,  // Dense format

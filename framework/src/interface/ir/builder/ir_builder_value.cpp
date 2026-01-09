@@ -40,7 +40,7 @@ std::shared_ptr<TensorValue> IRBuilder::CreateTensor(
 
 std::shared_ptr<TileValue> IRBuilder::CreateTile(
     IRBuilderContext& ctx,
-    const std::vector<size_t>& shape, DataType dt, std::string name) {
+    const std::vector<uint64_t>& shape, DataType dt, std::string name) {
 
     auto t = std::make_shared<TileValue>(shape, dt, std::move(name));
     AddToCompound(ctx, t);
