@@ -25,7 +25,6 @@
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/load_aicpu_op.h"
 #include "machine/utils/machine_ws_intf.h"
-#include "machine/kernel/aicore.h"
 #include "machine/device/dynamic/device_common.h"
 #include "interface/utils/log.h"
 #include "interface/utils/file_utils.h"
@@ -659,8 +658,6 @@ int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreS
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
-
-    rc = RunPost(aicpuStream, aicoreStream);
     return rc;
 }
 

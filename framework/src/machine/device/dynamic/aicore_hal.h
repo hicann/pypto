@@ -445,6 +445,7 @@ public:
             }
             volatile KernelArgs *arg = args_[coreIdx];
             arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = funcdata;
+            arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
 #if ENABLE_AICORE_PRINT
             arg->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = buffer;
 #endif
@@ -491,12 +492,15 @@ public:
         return true;
     }
 
+    // We must makesure close 0x18 before aicore exit.
     void ResetShakeBuf(int coreIdx) {
         if (isNeedWriteRegForFastPath_) {
             WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_CLOSE);
+            __sync_synchronize();
         }
         args_[coreIdx]->shakeBuffer[0] = 0;
         args_[coreIdx]->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
+        args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
         return;
     }
 

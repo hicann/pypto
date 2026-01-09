@@ -22,7 +22,6 @@
 #include <array>
 #include <semaphore.h>
 #include "machine/utils/dynamic/spsc_queue.h"
-#include "machine/kernel/aicore.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/device_log.h"
 #include "aicpu_task_manager.h"

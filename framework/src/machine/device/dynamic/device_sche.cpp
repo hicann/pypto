@@ -22,7 +22,6 @@
 #include <signal.h>
 #include <sys/ucontext.h>
 #include "machine/device/dynamic/device_utils.h"
-#include "machine/kernel/aicore.h"
 #include "machine/utils/device_log.h"
 #include "device_utils.h"
 

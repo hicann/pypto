@@ -28,77 +28,6 @@ const std::string kAicoreSrcCode = R"!!!(
 #include "tilefwk/aicore_print.h"
 #include "tilefwk/core_func_data.h"
 
-#define TO_ENTRY_IMPL(name, line, key, type) (name##line##key##type)
-#define TO_ENTRY(name, key, type) TO_ENTRY_IMPL(name, _, key, type)
-
-#ifdef __MIX__
-#ifdef __AIV__
-#define KERNEL_ENTRY(x, y) TO_ENTRY(x, y, _mix_aiv)
-#else
-#define KERNEL_ENTRY(x, y) TO_ENTRY(x, y, _mix_aic)
-#endif
-#else
-#define KERNEL_ENTRY(x, y) x
-#endif
-#define unlikely(expr) __builtin_expect(!!(expr), 0)
-
-constexpr uint32_t REG_HIGH_DTASKID_SHIFT = 32;
-enum class TASK_POS : size_t { LOW_REG = 0, HIGH_REG = 1, ALL_REG = 2, REG_POS_BUTT = 3 };
-
-struct TaskStat {
-    int16_t seqNo;
-    int16_t subGraphId;
-    int32_t taskId;
-    int64_t execStart;
-    int64_t execEnd;
-    int64_t waitStart; // 2.0 dfx 当前未使用
-};
-
-constexpr uint32_t PERF_TRACE_INST_MAX_NUM_EVERY_TYPE = 10;
-constexpr uint32_t INVALID_DEV_TASK_ID = 0xFFFFFFFF;
-enum AicorePerfTrace {
-    PERF_TRACE_CORE_BEGIN = 0,
-    PERF_TRACE_CORE_INIT,
-    PERF_TRACE_CORE_DEV_TASK_RCV_MODEL,
-    PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_CALLOP_TASK,
-    PERF_TRACE_CORE_DEV_TASK_CALLOP_TASK_EXEC,
-    PERF_TRACE_CORE_DEV_TASK_WAIT_SYNC_STOP_NOTIFY,
-    PERF_TRACE_CORE_WAIT_ALL_DEV_TASK_CALLOP_EXEC_FINISH,
-    PERF_TRACE_CORE_WAIT_EXIT_NOTIFY,
-    PERF_TRACE_CORE_MAX
-};
-
-struct Metrics {
-  int64_t isMetricStop;
-  int64_t taskCount; 
-  int64_t perfTrace[PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
-  uint32_t perfTraceDevTaskId[PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
-  uint32_t perfTraceCnt[PERF_TRACE_CORE_MAX];
-  TaskStat tasks[];
-};
-
-struct TaskEntry {
-    int32_t subGraphId;
-    int32_t taskId;
-    int64_t funcAddr;
-    int64_t tensorAddrs;
-    int64_t gmStackSize;
-    int64_t gmStackBase;
-    int64_t reserved2[2];
-    uint32_t tensorSize;
-    uint32_t reserved[1];
-};
-
-struct KernelArgs {
-    int64_t shakeBuffer[8];
-    int64_t shakeBufferCpuToCore[8];
-    TaskEntry taskEntry;
-    TaskStat taskStat[2];
-};
-
-static_assert(sizeof(KernelArgs) < SHARED_BUFFER_SIZE);
-// aicore head file end
-
 // device switch head file begin
 namespace npu::tile_fwk {
 #define PERF_PMU_TEST_SWITCH 0
@@ -138,6 +67,8 @@ using npu::tile_fwk::CoreFunctionData;
 #define aicore_blockIdx __v_blockIdx
 #define GmWorkspace __v_GmWorkspace
 #endif
+
+#define unlikely(expr) __builtin_expect(!!(expr), 0)
 
 [[block_local]] int aicore_blockIdx;
 [[block_local]] int64_t GmWorkspace;
@@ -184,7 +115,6 @@ INLINE uint32_t GetNextTask(uint32_t lastTaskIdx, uint32_t curDevTaskId) {
                 isForceContinue = true;
             }
         }
-
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > 500000000)) {
             return AICORE_TASK_STOP;
@@ -402,6 +332,20 @@ INLINE void ExecCoreFunctionKernel(ExecuteContext *ctx, uint32_t curTaskIdx) {
 #endif
 }
 
+INLINE void WaitWaveSignal(__gm__ KernelArgs *args) {
+    uint64_t t2 = get_sys_cnt();
+    volatile __gm__ int64_t *waveBuffer = args->waveBufferCpuToCore;
+    while (true) {         
+        dcci(waveBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
+        if (*waveBuffer == AICORE_SAY_GOODBYE) {
+            return;
+        }
+        if ((get_sys_cnt() - t2 > 50000000)) {
+            return;
+        }
+    }
+}
+
 extern "C" __global__ __aicore__ void KERNEL_ENTRY(__OPTYPE__, __TILINGKEY__)(int64_t ffts_addr, int64_t inputs,
         int64_t outputs, int64_t workspace, int64_t tilingdata, int64_t cfgdata) {
 #if defined(__AIV__) and defined(__MIX__)
@@ -435,7 +379,7 @@ extern "C" __global__ __aicore__ void KERNEL_ENTRY(__OPTYPE__, __TILINGKEY__)(in
         lastTaskIdx = AICORE_TASK_INIT;
         if (bIsExit) {
             DfxProcWhenCoreExit(&ctx, args, metric);
-            return; // no data exit
+            return WaitWaveSignal(args); // no data exit
         }
         coreFuncData = getCoreFuncionData(args, coreFuncData);
         if (coreFuncData == 0) {

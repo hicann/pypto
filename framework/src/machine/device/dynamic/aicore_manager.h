@@ -34,7 +34,6 @@
 #include "machine/utils/dynamic/spsc_queue.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/device_log.h"
-#include "machine/kernel/aicore.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "machine/device/dynamic/aicore_hal.h"
 #include "machine/device/dynamic/aicpu_task_manager.h"

@@ -19,7 +19,6 @@
 #include "tilefwk/aicore_runtime.h"
 #include "tilefwk/aicore_print.h"
 #include "tilefwk/core_func_data.h"
-#include "machine/kernel/aicore.h"
 #include "machine/utils/device_switch.h"
 
 #define TO_STRING_IMPL(str) #str
