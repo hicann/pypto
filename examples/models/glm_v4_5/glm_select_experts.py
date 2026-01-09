@@ -297,7 +297,6 @@ def test_select_experts():
         with torch.npu.graph(g):
             select_experts_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
         g.replay()
-        pypto.runtime._device_synchronize()#内部接口，不推荐使用
 
         # 5. 与PyTorch参考实现对比
         router_logits_fp32 = router_logits.to(torch.float)
@@ -407,7 +406,6 @@ def select_experts(router_logits: torch.Tensor,
     pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
     pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
     select_experts_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
-    pypto.runtime._device_synchronize()#内部接口，不推荐使用
 
 
 def main():
