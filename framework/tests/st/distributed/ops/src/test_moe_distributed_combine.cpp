@@ -22,42 +22,47 @@
 
 namespace npu::tile_fwk::Distributed {
 
-void TestShmemMoeCombine(OpTestParam& testParam)
+template<typename T>
+void TestMoeDistributedCombine(OpTestParam& testParam)
 {
     constexpr size_t paramsSize = 5;
-    auto [batchSize, hiddenSize, totalExpertNum, topK, dtype_num] =
-        GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [batchSize, hiddenSize, moeExpertNum, topK, dtype_num] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
 
     DataType dType = GetDataTypeNum(dtype_num);
 
-    int64_t row = std::min(topK * batchSize * testParam.rankSize, batchSize * totalExpertNum);
+    int64_t row = std::min(topK * batchSize * testParam.rankSize, batchSize * moeExpertNum);
     Shape inShape{row, hiddenSize};
     Shape combineInfoShape{row, 3};
+    Shape recvCountsShape{1};
     Shape scaleShape{batchSize, topK};
     Shape outShape{batchSize, hiddenSize};
 
-    Tensor in(dType, inShape, "in");
-    Tensor combineInfo(DataType::DT_INT32, combineInfoShape, "combineInfo");
-    Tensor scale(DataType::DT_FP32, scaleShape, "scale");
+    Tensor expandX(dType, inShape, "expandX");
+    Tensor assistInfoForCombine(DataType::DT_INT32, combineInfoShape, "assistInfoForCombine");
+    Tensor recvCounts(DataType::DT_INT32, recvCountsShape, "recvCounts");
+    Tensor expertScales(DataType::DT_FP32, scaleShape, "expertScales");
     Tensor out(dType, outShape, "out");
 
-    using T = npu::tile_fwk::bfloat16;
     std::string dispatchPath = GetGoldenDir() + "/dispatch";
-    std::vector<T> inPtr = ReadToVector<T>(
+    std::vector<T> expandXPtr = ReadToVector<T>(
         dispatchPath + "/y_rank_" + std::to_string(testParam.rankId) + ".bin", inShape);
-    std::vector<int32_t> combineInfoPtr = ReadToVector<int32_t>(
+    std::vector<int32_t> assistInfoForCombinePtr = ReadToVector<int32_t>(
         dispatchPath + "/combine_info_rank_" + std::to_string(testParam.rankId) + ".bin", combineInfoShape);
-    std::vector<float> scalePtr = ReadToVector<float>(
+    std::vector<int32_t> recvCountsPtr = ReadToVector<int32_t>(
+        dispatchPath + "/recv_counts_rank_" + std::to_string(testParam.rankId) + ".bin", recvCountsShape);
+    std::vector<float> expertScalesPtr = ReadToVector<float>(
         dispatchPath + "/scale_rank_" + std::to_string(testParam.rankId) + ".bin", scaleShape);
 
-    FUNCTION("Moe_Combine", {in, combineInfo, scale}, {out}) {
-        ShmemMoeCombine(in, combineInfo, scale, testParam.group, testParam.rankSize, totalExpertNum, out);
+    FUNCTION("MoeDistributedCombineMain", {expandX, assistInfoForCombine, recvCounts, expertScales}, {out}) {
+        MoeDistributedCombine(expandX, assistInfoForCombine, recvCounts, expertScales, testParam.group,
+            testParam.rankSize, moeExpertNum, 0, 0, out);
     }
 
     ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateTensor<T>(in, inPtr),
-        RawTensorData::CreateTensor<int32_t>(combineInfo, combineInfoPtr),
-        RawTensorData::CreateTensor<float>(scale, scalePtr)
+        RawTensorData::CreateTensor<T>(expandX, expandXPtr),
+        RawTensorData::CreateTensor<int32_t>(assistInfoForCombine, assistInfoForCombinePtr),
+        RawTensorData::CreateTensor<int32_t>(recvCounts, recvCountsPtr),
+        RawTensorData::CreateTensor<float>(expertScales, expertScalesPtr)
     });
     ProgramData::GetInstance().AppendOutputs({RawTensorData::CreateTensorZero(out)});
 
@@ -71,10 +76,15 @@ void TestShmemMoeCombine(OpTestParam& testParam)
     int64_t outEleNum = outShape[0] * outShape[1];
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
     if (batchSize == 256) { // bs=256 暂时不支持零误差一致
-        EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/y_rank_", outEleNum, outPtr, testParam));
+        EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/out_rank_", outEleNum, outPtr, testParam));
     } else {
-        EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/y_rank_", outEleNum, outPtr, testParam, 0));
+        EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/out_rank_", outEleNum, outPtr, testParam, 0));
     }
 }
+
+template void TestMoeDistributedCombine<int32_t>(OpTestParam& testParam);
+template void TestMoeDistributedCombine<float>(OpTestParam& testParam);
+template void TestMoeDistributedCombine<float16>(OpTestParam& testParam);
+template void TestMoeDistributedCombine<bfloat16>(OpTestParam& testParam);
 
 } // namespace tile_fwk::Distributed

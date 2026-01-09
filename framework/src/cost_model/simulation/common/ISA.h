@@ -235,8 +235,8 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE {
     {"SHMEM_GET_GM2UB", CorePipeType::PIPE_MTE_IN},
     {"SHMEM_REDUCE", CorePipeType::PIPE_MTE_OUT},
     {"BIND_TENSOR", CorePipeType::PIPE_S},
-    {"SHMEM_MOE_COMBINE_SEND", CorePipeType::PIPE_MTE_OUT},
-    {"SHMEM_MOE_COMBINE_RECEIVE", CorePipeType::PIPE_MTE_IN},
+    {"MOE_DISTRIBUTED_COMBINE_SEND", CorePipeType::PIPE_MTE_OUT},
+    {"MOE_DISTRIBUTED_COMBINE_RECEIVE", CorePipeType::PIPE_MTE_IN},
     // TOPK and ArgSort
     {"TOPK", CorePipeType::PIPE_VECTOR_ALU},
     {"TILEDMRGSORT", CorePipeType::PIPE_VECTOR_ALU},

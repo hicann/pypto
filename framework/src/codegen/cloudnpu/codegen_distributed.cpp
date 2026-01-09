@@ -27,15 +27,6 @@ using AtomicType = npu::tile_fwk::Distributed::AtomicType;
 using DistOpAttr = npu::tile_fwk::Distributed::DistOpAttr;
 constexpr int32_t GM2UB_SHMEMDATA_INDEX = 2;
 
-static const std::unordered_map<Opcode, std::unordered_set<int32_t>> skipIndexMap = {
-    {Opcode::OP_SHMEM_PUT, {0, 4}},
-    {Opcode::OP_SHMEM_GET, {2}},
-    {Opcode::OP_SHMEM_PUT_UB2GM, {0, 3}},
-    {Opcode::OP_SHMEM_GET_GM2UB, {1}},
-    {Opcode::OP_SHMEM_SIGNAL, {0, 2}},
-    {Opcode::OP_SHMEM_SET, {0, 2}},
-};
-
 void CheckInRange(int64_t value)
 {
     if (value < std::numeric_limits<uint32_t>::min() || value > std::numeric_limits<uint32_t>::max()) {
@@ -45,40 +36,44 @@ void CheckInRange(int64_t value)
 
 std::string CodeGenOpCloudNPU::GetTemplateDType() const
 {
-    int32_t operandIndex{1};
-    switch (opCode) {
-        case Opcode::OP_FFN_BATCHING:
-        case Opcode::OP_SHMEM_MOE_COMBINE_RECEIVE:
-        case Opcode::OP_COPY_TO_LOCAL_EXPERT: {
-            operandIndex = 0;
-            break;
-        }
-        case Opcode::OP_FFN_COMBINEINFO: {
-            operandIndex = 2; // 从 operand 2 获取 T
-            break;
-        }
-        case Opcode::OP_SHMEM_SET: {
-            operandIndex = 3; // 从 operand 3 获取 T
-            break;
-        }
-        case Opcode::OP_DISPATCH_SET_FLAG: {
-            operandIndex = 4; // 从 operand 4 获取 T
-            break;
-        }
-        default: {
-            break;
-        }
-    }
+    static const std::unordered_map<Opcode, int32_t> dTypeOperandIndexMap = {
+        {Opcode::OP_FFN_BATCHING, 0},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, 0},
+        {Opcode::OP_COPY_TO_LOCAL_EXPERT, 0},
+        {Opcode::OP_SEND_TO_ROUTING_EXPERT, 1},
+        {Opcode::OP_SEND_TO_SHARED_EXPERT, 1},
+        {Opcode::OP_FFN_SCHED, 1},
+        {Opcode::OP_FFN_BATCHING, 1},
+        {Opcode::OP_FFN_VALIDCNT, 1},
+        {Opcode::OP_SHMEM_PUT, 1},
+        {Opcode::OP_SHMEM_PUT_UB2GM, 1},
+        {Opcode::OP_SHMEM_SIGNAL, 1},
+        {Opcode::OP_SHMEM_WAIT_UNTIL, 1},
+        {Opcode::OP_SHMEM_GET, 1},
+        {Opcode::OP_SHMEM_GET_GM2UB, 1},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, 1},
+        {Opcode::OP_FFN_COMBINEINFO, 2},
+        {Opcode::OP_SHMEM_SET, 3},
+        {Opcode::OP_DISPATCH_SET_FLAG, 4},
+    };
+    auto it = dTypeOperandIndexMap.find(opCode);
+    ASSERT(it != dTypeOperandIndexMap.end());
+    int32_t operandIndex = it->second;
     return DataType2CCEStr(operandDtype[operandIndex]);
 }
 
-void CodeGenOpCloudNPU::GenExtraTemplateParamsForMoeCombine(std::ostringstream& oss, int32_t operandIndex) const {
+std::string CodeGenOpCloudNPU::GenExtraTemplateParamsForMoeDistributedCombine(int32_t operandIndex) const {
     DistOpAttr distOpAttr = npu::tile_fwk::AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    int64_t secondToLastIndex = 2;
+    int64_t rowShape = originShape[operandIndex][originShape[operandIndex].size() - secondToLastIndex];
+    if (distOpAttr.rowShape != -1) {
+        rowShape = distOpAttr.rowShape;
+    }
     int64_t colShape = originShape[operandIndex][originShape[operandIndex].size() - 1];
-    int64_t dataIndex = (opCode == Opcode::OP_SHMEM_MOE_COMBINE_SEND) ? 4 : 6;
-    int64_t rowShape = originShape[dataIndex][originShape[dataIndex].size() - 2];
+    std::ostringstream oss;
     oss << "<" << GetTemplateDType() << ", " << distOpAttr.topK << ", " << rowShape << ", " << colShape << ", "
         << distOpAttr.paddedColShape << ">";
+    return oss.str();
 }
 
 std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
@@ -133,19 +128,19 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSignal() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenTemplateParamsForMoeCombineSend() const
+std::string CodeGenOpCloudNPU::GenTemplateParamsForMoeDistributedCombineSend() const
 {
     std::ostringstream oss;
-    int32_t dataBufferIndex = 1;
-    GenExtraTemplateParamsForMoeCombine(oss, dataBufferIndex);
+    int32_t expandXIndex = 4;
+    oss << GenExtraTemplateParamsForMoeDistributedCombine(expandXIndex);
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenTemplateParamsForMoeCombineReceive() const
+std::string CodeGenOpCloudNPU::GenTemplateParamsForMoeDistributedCombineReceive() const
 {
     std::ostringstream oss;
-    int32_t outBufferIndex = 3;
-    GenExtraTemplateParamsForMoeCombine(oss, outBufferIndex);
+    int32_t outIndex = 0;
+    oss << GenExtraTemplateParamsForMoeDistributedCombine(outIndex);
     return oss.str();
 }
 
@@ -187,8 +182,8 @@ std::string CodeGenOpCloudNPU::GenTemplateParams() const
         {Opcode::OP_SHMEM_PUT_UB2GM, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForPutAndGet(); }},
         {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForPutAndGet(); }},
         {Opcode::OP_SHMEM_SIGNAL, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForSignal(); }},
-        {Opcode::OP_SHMEM_MOE_COMBINE_SEND, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForMoeCombineSend(); }},
-        {Opcode::OP_SHMEM_MOE_COMBINE_RECEIVE, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForMoeCombineReceive(); }},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForMoeDistributedCombineSend(); }},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForMoeDistributedCombineReceive(); }},
         {Opcode::OP_SHMEM_SET, [](const CodeGenOpCloudNPU* self) { return self->GenTemplateParamsForSet(); }}
     };
 
@@ -253,21 +248,22 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemSignal() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemMoeCombineSend() const
+std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForMoeDistributedCombineSend() const
 {
     std::ostringstream oss;
-    int32_t inIndex = 4;
-    int32_t inDim = 2;
-    oss << ", " << GenOffsets(inIndex, inDim);
+    int32_t expandXIndex = 4;
+    int32_t expandXDim = 2;
+    oss << ", " << GenOffsets(expandXIndex, expandXDim);
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemMoeCombineReceive() const
+std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForMoeDistributedCombineReceive() const
 {
     std::ostringstream oss;
     int32_t shmemDataIndex = 6;
     int32_t shmemDataDim = 4;
-    oss << ", " << GenOffsets(shmemDataIndex, shmemDataDim);
+    DistOpAttr distOpAttr = npu::tile_fwk::AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    oss << ", " << GenOffsets(shmemDataIndex, shmemDataDim) << ", " << distOpAttr.rowOffset;
     return oss.str();
 }
 
@@ -344,7 +340,7 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesDefault() const
     return "";
 }
 
-std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapes() const
+std::string CodeGenOpCloudNPU::GenExtraParamsStr() const
 {
     static const std::unordered_map<Opcode,
         std::function<std::string(CodeGenOpCloudNPU const*)>> offsetsAndRawShapesHandlers = {
@@ -353,8 +349,8 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapes() const
         {Opcode::OP_SHMEM_PUT_UB2GM, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGetUB(); }},
         {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGetUB(); }},
         {Opcode::OP_SHMEM_SIGNAL, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemSignal(); }},
-        {Opcode::OP_SHMEM_MOE_COMBINE_SEND, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemMoeCombineSend(); }},
-        {Opcode::OP_SHMEM_MOE_COMBINE_RECEIVE, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemMoeCombineReceive(); }},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForMoeDistributedCombineSend(); }},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForMoeDistributedCombineReceive(); }},
         {Opcode::OP_SEND_TO_ROUTING_EXPERT, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForSendToRoutingExpert(); }},
         {Opcode::OP_SEND_TO_SHARED_EXPERT, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForSendToSharedExpert(); }},
         {Opcode::OP_COPY_TO_LOCAL_EXPERT, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForCopyToLocalExpert(); }},
@@ -378,11 +374,21 @@ std::string CodeGenOpCloudNPU::GenDistOp() const
 {
     std::ostringstream oss;
     std::unordered_set<int32_t> skipOperands = {};
+    static const std::unordered_map<Opcode, std::unordered_set<int32_t>> skipIndexMap = {
+        {Opcode::OP_SHMEM_PUT, {0, 4}},
+        {Opcode::OP_SHMEM_GET, {2}},
+        {Opcode::OP_SHMEM_PUT_UB2GM, {0, 3}},
+        {Opcode::OP_SHMEM_GET_GM2UB, {1}},
+        {Opcode::OP_SHMEM_SIGNAL, {0, 2}},
+        {Opcode::OP_SHMEM_SET, {0, 2}},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, {0}},
+        {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, {4}},
+    };
     auto it = skipIndexMap.find(opCode);
     if (it != skipIndexMap.end()) {
         skipOperands = it->second;
     }
-    oss << tileOpName << GenTemplateParams() << "(" << GenParamsStr(skipOperands) << GenOffsetsAndRawShapes()
+    oss << tileOpName << GenTemplateParams() << "(" << GenParamsStr(skipOperands) << GenExtraParamsStr()
         << ", hcclContext);\n";
     return oss.str();
 }

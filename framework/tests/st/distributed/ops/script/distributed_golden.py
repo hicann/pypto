@@ -380,6 +380,9 @@ def collect_and_save(
         save_tensor(fixed_shape_y, save_dir / f'y_rank_{rank_id}.bin')
         save_tensor(fixed_shape_combine_info, save_dir / f'combine_info_rank_{rank_id}.bin')
         save_tensor(valid_count, save_dir / f'valid_count_rank_{rank_id}.bin')
+        recv_counts = torch.sum(valid_count).item()
+        recv_counts_tensor = torch.tensor(recv_counts, dtype=torch.int32)
+        save_tensor(recv_counts_tensor, save_dir / f'recv_counts_rank_{rank_id}.bin')
 
 
 def generate_moe_dispatch_case(case: MoeCase, save_dir: Path) -> None:
@@ -397,89 +400,97 @@ def generate_moe_dispatch_case(case: MoeCase, save_dir: Path) -> None:
     collect_and_save(case, y_list, combine_info_list, save_dir)
 
 
-def get_moe_combine_input_data(dispatch_save_dir: Path, case: MoeCase) \
+def get_moe_distributed_combine_input_data(dispatch_save_dir: Path, case: MoeCase) \
     -> Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
-    x_list = []
-    combine_info_list = []
-    scale_list = []
+    expand_x_list = []
+    assist_info_for_combine_list = []
+    expert_scales_list = []
     row = get_dispatch_output_row(case)
     for rank in range(case.rank_size):
-        x = torch.from_numpy(np.fromfile(dispatch_save_dir / f'y_rank_{rank}.bin'))
-        x = x.view(dtype=case.dtype).view([row, case.hidden_size])
-        x_list.append(x)
+        expand_x = torch.from_numpy(np.fromfile(dispatch_save_dir / f'y_rank_{rank}.bin'))
+        expand_x = expand_x.view(dtype=case.dtype).view([row, case.hidden_size])
+        expand_x_list.append(expand_x)
 
-        combine_info = torch.from_numpy(
+        assist_info_for_combine = torch.from_numpy(
             np.fromfile(dispatch_save_dir / f'combine_info_rank_{rank}.bin', dtype=np.int32),
         )
-        combine_info = combine_info.view([row, 3])
-        combine_info_list.append(combine_info)
+        assist_info_for_combine = assist_info_for_combine.view([row, 3])
+        assist_info_for_combine_list.append(assist_info_for_combine)
 
-        scale = torch.from_numpy(np.fromfile(dispatch_save_dir / f'scale_rank_{rank}.bin', dtype=np.float32))
-        scale = scale.view([case.batch_size, case.top_k, 1])
-        scale_list.append(scale)
+        expert_scales = torch.from_numpy(np.fromfile(dispatch_save_dir / f'scale_rank_{rank}.bin', dtype=np.float32))
+        expert_scales = expert_scales.view([case.batch_size, case.top_k, 1])
+        expert_scales_list.append(expert_scales)
 
-    return x_list, combine_info_list, scale_list
+    return expand_x_list, assist_info_for_combine_list, expert_scales_list
 
 
-def get_shared_y_and_save(
+def get_shared_out_and_save(
     case: MoeCase,
-    x_list: List[torch.Tensor],
-    combine_info_list: List[torch.Tensor],
+    expand_x_list: List[torch.Tensor],
+    assist_info_for_combine_list: List[torch.Tensor],
     save_dir: Path,
 ) -> List[torch.Tensor]:
-    shared_y_list = []
+    shared_out_list = []
     for rank_id in range(case.rank_size):
         source_shared_expert_rank_id = get_shared_expert_rank_id(case, rank_id)
-        x = x_list[source_shared_expert_rank_id]
-        combine_info = combine_info_list[source_shared_expert_rank_id]
-        mask = combine_info[:, 0] == rank_id
-        shared_y = x[mask]
-        shared_y_list.append(shared_y)
-        save_tensor(shared_y, save_dir / f'share_y_rank_{rank_id}.bin')
-    return shared_y_list
+        expand_x = expand_x_list[source_shared_expert_rank_id]
+        assist_info_for_combine = assist_info_for_combine_list[source_shared_expert_rank_id]
+        mask = assist_info_for_combine[:, 0] == rank_id
+        shared_out = expand_x[mask]
+        shared_out_list.append(shared_out)
+        save_tensor(shared_out, save_dir / f'share_y_rank_{rank_id}.bin')
+    return shared_out_list
 
 
-def get_routed_y_and_save(
+def get_routed_out_and_save(
     case: MoeCase,
-    x_list: List[torch.Tensor],
-    combine_info_list: List[torch.Tensor],
-    scale_list: List[torch.Tensor],
+    expand_x_list: List[torch.Tensor],
+    assist_info_for_combine_list: List[torch.Tensor],
+    expert_scales_list: List[torch.Tensor],
     save_dir: Path,
 ) -> List[torch.Tensor]:
-    routed_y_list = [
+    routed_out_list = [
         torch.zeros([case.batch_size, case.top_k, case.hidden_size], dtype=case.dtype)
         for _ in range(case.rank_size)
     ]
     for source_rank_id in range(case.shared_expert_num, case.rank_size):
-        x = x_list[source_rank_id]
-        combine_info = combine_info_list[source_rank_id]
-        for token, (target_rank_id, token_id, k_offset) in zip(x, combine_info):
+        expand_x = expand_x_list[source_rank_id]
+        assist_info_for_combine = assist_info_for_combine_list[source_rank_id]
+        for token, (target_rank_id, token_id, k_offset) in zip(expand_x, assist_info_for_combine):
             if target_rank_id != -1:
-                routed_y_list[target_rank_id][token_id, k_offset] = token
+                routed_out_list[target_rank_id][token_id, k_offset] = token
     for source_rank_id in range(case.rank_size):
-        routed_y = routed_y_list[source_rank_id]
-        save_tensor(routed_y, save_dir / f'moe_y_rank_{source_rank_id}.bin')
-        scale = scale_list[source_rank_id]
-        routed_y = routed_y.to(dtype=torch.float32)
-        routed_y = routed_y * scale
-        save_tensor(routed_y, save_dir / f'scaled_moe_y_rank_{source_rank_id}.bin')
-        routed_y_list[source_rank_id] = torch.sum(routed_y, dim=1)
-    return routed_y_list
+        routed_out = routed_out_list[source_rank_id]
+        save_tensor(routed_out, save_dir / f'moe_y_rank_{source_rank_id}.bin')
+        expert_scales = expert_scales_list[source_rank_id]
+        routed_out = routed_out.to(dtype=torch.float32)
+        routed_out = routed_out * expert_scales
+        save_tensor(routed_out, save_dir / f'scaled_moe_y_rank_{source_rank_id}.bin')
+        routed_out_list[source_rank_id] = torch.sum(routed_out, dim=1)
+    return routed_out_list
 
 
-def generate_combine_case(case: MoeCase, save_dir: Path, dispatch_save_dir: Path) -> None:
-    x_list, combine_info_list, scale_list = get_moe_combine_input_data(dispatch_save_dir, case)
+def generate_moe_distributed_combine_case(case: MoeCase, save_dir: Path, dispatch_save_dir: Path) \
+    -> None:
+    expand_x_list, assist_info_for_combine_list, expert_scales_list \
+        = get_moe_distributed_combine_input_data(dispatch_save_dir, case)
 
     if case.shared_expert_num > 0:
-        shared_y_list = get_shared_y_and_save(case, x_list, combine_info_list, save_dir)
-    routed_y_list = get_routed_y_and_save(case, x_list, combine_info_list, scale_list, save_dir)
+        shared_out_list = get_shared_out_and_save(case, expand_x_list, assist_info_for_combine_list, save_dir)
+    routed_out_list = get_routed_out_and_save(
+        case,
+        expand_x_list,
+        assist_info_for_combine_list,
+        expert_scales_list,
+        save_dir,
+    )
 
     for rank_id in range(case.rank_size):
-        routed_y = routed_y_list[rank_id]
-        y = routed_y.to(dtype=torch.float32)
+        routed_out = routed_out_list[rank_id]
+        out = routed_out.to(dtype=torch.float32)
         if case.shared_expert_num > 0:
-            y += shared_y_list[rank_id]
-        save_tensor(y.to(dtype=case.dtype), save_dir / f'y_rank_{rank_id}.bin')
+            out += shared_out_list[rank_id]
+        save_tensor(out.to(dtype=case.dtype), save_dir / f'out_rank_{rank_id}.bin')
 
 
 def generate_allgather_attn_post_reducescatter_case(config: dict) -> AllGatherAttnPostReducescatterCase:
@@ -523,7 +534,6 @@ def gen_op_golden(op: str, golden_func, output_path: Path, case_index: int = Non
         'TestAllgather/DistributedTest.TestAllgather',
     ]
 )
-
 def generate_all_gather_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = parse_base_case(config)
@@ -544,7 +554,6 @@ def generate_all_gather_golden(case_name: str, output: Path, case_index: int = N
         'TestReducescatter/DistributedTest.TestReducescatter',
     ]
 )
-
 def generate_reduce_scatter_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = parse_base_case(config)
@@ -571,8 +580,6 @@ def generate_reduce_scatter_golden(case_name: str, output: Path, case_index: int
         'TestAllreduce/DistributedTest.TestAllreduce',
     ]
 )
-
-
 def generate_all_reduce_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = parse_base_case(config)
@@ -601,7 +608,6 @@ def generate_all_reduce_golden(case_name: str, output: Path, case_index: int = N
         'TestAllreduce_Add_Allreduce/DistributedTest.TestAllreduce_Add_Allreduce',
     ]
 )
-
 def generate_allreduce_add_allreduce_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = parse_base_case(config)
@@ -630,11 +636,10 @@ def generate_moe_dispatch_golden(case_name: str, output: Path, case_index: int =
 
 @GoldenRegister.reg_golden_func(
     case_names=[
-        'TestMoeCombine/DistributedTest.TestMoeCombine',
+        'TestMoeDistributedCombine/DistributedTest.TestMoeDistributedCombine',
     ]
 )
-
-def generate_moe_combine_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+def generate_moe_distributed_combine_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = parse_moe_case(config)
         params = (case.batch_size, case.hidden_size, case.routed_expert_num, case.top_k, get_dtype_num(case.dtype))
@@ -642,9 +647,9 @@ def generate_moe_combine_golden(case_name: str, output: Path, case_index: int = 
         dispatch_save_dir = output / 'dispatch'
         dispatch_save_dir.mkdir(parents=True, exist_ok=True)
         generate_moe_dispatch_case(case, dispatch_save_dir)
-        generate_combine_case(case, output, dispatch_save_dir)
+        generate_moe_distributed_combine_case(case, output, dispatch_save_dir)
     logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('MoeCombine', golden_func, output, case_index)
+    return gen_op_golden('MoeDistributedCombine', golden_func, output, case_index)
 
 
 @GoldenRegister.reg_golden_func(
@@ -652,7 +657,6 @@ def generate_moe_combine_golden(case_name: str, output: Path, case_index: int = 
         'TestAllgather_AttnPost_Reducescatter/DistributedTest.TestAllgather_AttnPost_Reducescatter',
     ]
 )
-
 def gen_allgather_attnpost_reducescatter_case(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = generate_allgather_attn_post_reducescatter_case(config)

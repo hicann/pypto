@@ -97,6 +97,13 @@ struct Allreduce_Add_AllreduceFunc {
     }
 };
 
+struct MoeDistributedCombineFunc {
+    template <typename T>
+    void operator()(OpTestParam& testParam) const
+    {
+        Distributed::TestMoeDistributedCombine<T>(testParam);
+    }
+};
 
 // 注册所有算子
 void GegisterAllOps()
@@ -106,9 +113,7 @@ void GegisterAllOps()
     reg.RegisterOp("Reducescatter", ReducescatterFunc{});
     reg.RegisterOp("Allreduce", AllreduceFunc{});
     reg.RegisterOp("Allreduce_Add_Allreduce", Allreduce_Add_AllreduceFunc{});
-    reg.registry["MoeCombine"] = [](OpTestParam &testParam, const std::string&) {
-        Distributed::TestShmemMoeCombine(testParam);
-    };
+    reg.RegisterOp("MoeDistributedCombine", MoeDistributedCombineFunc{});
     reg.registry["Allgather_AttnPost_Reducescatter"] = [](OpTestParam &testParam, const std::string&) {
         Distributed::TestAllGatherAttentionPostReducescatter(testParam);
     };
@@ -221,12 +226,12 @@ TEST_P(DistributedTest, TestAllreduce)
     RunDistributedTestGeneric("Allreduce", GetParam().testData_);
 }
 
-INSTANTIATE_TEST_SUITE_P(TestMoeCombine, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("MoeCombine")));
-TEST_P(DistributedTest, TestMoeCombine)
+INSTANTIATE_TEST_SUITE_P(TestMoeDistributedCombine, DistributedTest,
+    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("MoeDistributedCombine")));
+TEST_P(DistributedTest, TestMoeDistributedCombine)
 {
     config::SetHostOption(ONLY_CODEGEN, true);
-    RunDistributedTestGeneric("MoeCombine", GetParam().testData_);
+    RunDistributedTestGeneric("MoeDistributedCombine", GetParam().testData_);
 }
 
 INSTANTIATE_TEST_SUITE_P(TestAllreduce_Add_Allreduce, DistributedTest,

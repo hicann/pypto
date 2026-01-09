@@ -415,8 +415,9 @@ void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const char* gro
 void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const Tensor& shmemData, const Tensor& shmemSignal,
     const char* group, uint32_t worldSize, Tensor& out);
 void TwoShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
-void ShmemMoeCombine(const Tensor& in, const Tensor& combineInfo, const Tensor& scale, const char* group,
-    int32_t rankSize, int32_t totalExpertNum, Tensor& out);
+void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts,
+    const Tensor& expertScales, const char* group, uint32_t epWorldSize, uint32_t moeExpertNum,
+    uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& out);
 void CreateShmemData(const char *group, int64_t worldSize, DataType dataType,
     const Shape &shape, Tensor &shmemTensor, uint64_t memType = 0);
 void CreateShmemSignal(const char *group, Tensor &shmemData, Tensor &shmemSignal);

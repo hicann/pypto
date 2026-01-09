@@ -127,11 +127,11 @@ public:
     std::string GenDistOp() const;
     std::string GetTemplateDType() const;
     std::string GenTemplateParams() const;
-    void GenExtraTemplateParamsForMoeCombine(std::ostringstream &oss, int32_t operandIndex) const;
+    std::string GenExtraTemplateParamsForMoeDistributedCombine(int32_t operandIndex) const;
     std::string GenOffsets(int32_t operandIndex, int32_t dim) const;
     std::string GenShapes(int32_t operandIndex, int32_t dim) const;
     std::string GenRawShapes(int32_t operandIndex, int32_t dim) const;
-    std::string GenOffsetsAndRawShapes() const;
+    std::string GenExtraParamsStr() const;
     std::string GenOffsetsAndRawShapes(int32_t operandIndex, int32_t dim) const;
 
     std::string GenAicpuCallOp() const;
@@ -152,16 +152,16 @@ public:
 private:
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForSignal() const;
-    std::string GenTemplateParamsForMoeCombineSend() const;
-    std::string GenTemplateParamsForMoeCombineReceive() const;
+    std::string GenTemplateParamsForMoeDistributedCombineSend() const;
+    std::string GenTemplateParamsForMoeDistributedCombineReceive() const;
     std::string GenTemplateParamsForSet() const;
     std::string GenTemplateParamsDefault() const;
 
     std::string GenOffsetsAndRawShapesForShmemPutAndGet() const;
     std::string GenOffsetsAndRawShapesForShmemPutAndGetUB() const;
     std::string GenOffsetsAndRawShapesForShmemSignal() const;
-    std::string GenOffsetsAndRawShapesForShmemMoeCombineSend() const;
-    std::string GenOffsetsAndRawShapesForShmemMoeCombineReceive() const;
+    std::string GenOffsetsAndRawShapesForMoeDistributedCombineSend() const;
+    std::string GenOffsetsAndRawShapesForMoeDistributedCombineReceive() const;
     std::string GenOffsetsAndRawShapesForSendToRoutingExpert() const;
     std::string GenOffsetsAndRawShapesForSendToSharedExpert() const;
     std::string GenOffsetsAndRawShapesForCopyToLocalExpert() const;

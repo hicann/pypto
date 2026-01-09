@@ -389,16 +389,24 @@ OpcodeManager::OpcodeManager() {
     registerInfo(Opcode::OP_BIND_TENSOR, OpCoreType::ANY, "BIND_TENSOR",
         {}, {MemoryType::MEM_DEVICE_DDR}, {"TileOp::Distributed::ShmemGet", PIPE_S, PIPE_S, CoreType::AIV},
         OpCalcType::DISTRIBUTED, {OP_ATTR_PREFIX + "BindTensor"});
-    registerInfo(Opcode::OP_SHMEM_MOE_COMBINE_SEND, OpCoreType::ANY, "SHMEM_MOE_COMBINE_SEND",
-        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
+    registerInfo(
+        Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND,
+        OpCoreType::ANY,
+        "MOE_DISTRIBUTED_COMBINE_SEND",
+        {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
         {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {"TileOp::Distributed::ShmemMoeCombineSend", PIPE_S, PIPE_S, CoreType::AIV},
-        OpCalcType::DISTRIBUTED, {OpAttributeKey::requiresBoundaryCopy});
-    registerInfo(Opcode::OP_SHMEM_MOE_COMBINE_RECEIVE, OpCoreType::ANY, "SHMEM_MOE_COMBINE_RECEIVE",
+        {"TileOp::Distributed::MoeDistributedCombineSend", PIPE_S, PIPE_S, CoreType::AIV},
+        OpCalcType::DISTRIBUTED,
+        {OpAttributeKey::requiresBoundaryCopy});
+    registerInfo(
+        Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE,
+        OpCoreType::ANY,
+        "MOE_DISTRIBUTED_COMBINE_RECEIVE",
         {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR},
         {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {"TileOp::Distributed::ShmemMoeCombineReceive", PIPE_S, PIPE_S, CoreType::AIV},
-        OpCalcType::DISTRIBUTED, {OpAttributeKey::requiresBoundaryCopy});
+        {"TileOp::Distributed::MoeDistributedCombineReceive", PIPE_S, PIPE_S, CoreType::AIV},
+        OpCalcType::DISTRIBUTED,
+        {OpAttributeKey::requiresBoundaryCopy});
 
     registerInfo(Opcode::OP_AICPU_CALL_AIC, OpCoreType::ANY, "AICPU_CALL_AIC", {}, {}, {"TileOp::AicpuCall", PIPE_S, PIPE_S, CoreType::AIC}, OpCalcType::SYS);
     registerInfo(Opcode::OP_AICPU_CALL_AIV, OpCoreType::ANY, "AICPU_CALL_AIV", {}, {}, {"TileOp::AicpuCall", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::SYS);

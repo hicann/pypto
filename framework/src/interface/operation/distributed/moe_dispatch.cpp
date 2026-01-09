@@ -28,25 +28,6 @@
 
 namespace npu::tile_fwk {
 namespace Distributed {
-void AddTileOp(const TileShape& tileShape,
-    const std::function<void(int32_t, int32_t, int32_t, int32_t, int32_t)>& callback)
-{
-    const auto& tileRow = tileShape.GetDistTileRow();
-    const auto& tileCol = tileShape.GetDistTileCol();
-    int32_t rowCount = tileRow[1] + (tileRow[2] == 0 ? 0 : 1);
-    int32_t colCount = tileCol[1] + (tileCol[2] == 0 ? 0 : 1);
-
-    int32_t tileIndex = 0;
-    for (int32_t rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-        int32_t rowShape = ((tileRow[2] != 0) && (rowIndex == rowCount - 1)) ? tileRow[2] : tileRow[0];
-        for (int32_t colIndex = 0; colIndex < colCount; colIndex++) {
-            int32_t colShape = ((tileCol[2] != 0) && (colIndex == colCount - 1)) ? tileCol[2] : tileCol[0];
-            callback(tileIndex, rowIndex * tileRow[0], colIndex * tileCol[0], rowShape, colShape);
-            tileIndex++;
-        }
-    }
-}
-
 void TiledDispatchFFNSched(Function& function, const TileShape& tileShape,
     const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
@@ -315,7 +296,7 @@ void TiledSendToRoutingExpert(Function& function, const TileShape& tileShape,
     int64_t expertNumPerRank;
     op.GetAttr("expertNumPerRank", expertNumPerRank);
     op.GetAttr("hcclGroupIndex", hcclGroupIndex);
-    AddTileOp(tileShape,
+    CreateTileOp(tileShape,
         [&](int32_t tileIndex, int32_t rowOffset, int32_t colOffset, int32_t rowShape, int32_t colShape) {
             (void) tileIndex;
             auto expertTableTile = expertTable->View(function, {rowShape, colShape}, {rowOffset, colOffset});
@@ -346,7 +327,7 @@ void TiledSendToSharedExpert(Function& function, const TileShape& tileShape,
     (void) oOperand;
     std::string hcclGroupIndex;
     op.GetAttr("hcclGroupIndex", hcclGroupIndex);
-    AddTileOp(tileShape,
+    CreateTileOp(tileShape,
         [&](int32_t tileIndex, int32_t rowOffset, int32_t colOffset, int32_t rowShape, int32_t colShape) {
             (void) tileIndex;
             Shape shape = {rowShape, colShape};
@@ -371,7 +352,7 @@ void TiledCopyToLocalExpert(Function& function, const TileShape& tileShape,
     auto expandX = oOperand[DIST_INDEX_ZERO];
     auto syncTensor = oOperand[DIST_INDEX_ONE];
     (void) op;
-    AddTileOp(tileShape,
+    CreateTileOp(tileShape,
         [&](int32_t tileIndex, int32_t rowOffset, int32_t colOffset, int32_t rowShape, int32_t colShape) {
             (void) tileIndex;
             auto tokenTensorTile = tokenTensor->View(function, {rowShape, colShape}, {rowOffset, colOffset});

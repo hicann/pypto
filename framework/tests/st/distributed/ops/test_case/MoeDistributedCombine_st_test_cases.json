@@ -2,8 +2,8 @@
     "test_cases": [
         {
             "case_index": 0,
-            "case_name": "MoeCombine_test_1",
-            "operation": "MoeCombine",
+            "case_name": "MoeDistributedCombine_test_1",
+            "operation": "MoeDistributedCombine",
             "input_tensors": [
                 {
                     "name": "input0",
@@ -50,8 +50,8 @@
         },
         {
             "case_index": 1,
-            "case_name": "MoeCombine_test_2",
-            "operation": "MoeCombine",
+            "case_name": "MoeDistributedCombine_test_2",
+            "operation": "MoeDistributedCombine",
             "input_tensors": [
                 {
                     "name": "input0",

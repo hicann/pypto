@@ -91,6 +91,8 @@ public:
     Shape setBufferShape;
     std::string extraTemplateParam{};
     int64_t paddedColShape;
+    int64_t rowOffset{-1};
+    int64_t rowShape{-1};
 };
 
 inline int GetTotalTileNum(const std::array<int, MAX_DIST_DIM_SIZE> &tile)

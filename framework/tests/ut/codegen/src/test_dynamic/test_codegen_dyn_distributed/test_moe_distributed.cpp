@@ -25,9 +25,8 @@
 #include <vector>
 #include <string>
 
-namespace npu::tile_fwk {
-namespace Distributed {
-class TestCodegenDispatch : public ::testing::Test {
+namespace npu::tile_fwk::Distributed {
+class TestMoeDistributed : public ::testing::Test {
 public:
     static void SetUpTestCase() {}
 
@@ -46,7 +45,16 @@ protected:
     bool oriEnableAihacBackend = false;
 };
 
-void TestMoeDispatch() {
+std::string MoeDistributedGetFunctionRawName(const std::string& functionName)
+{
+    std::string functionRawName = FUNCTION_PREFIX + functionName + SUB_FUNC_SUFFIX;
+#if ENABLE_HIDDENLOOP
+    functionRawName += HIDDEN_FUNC_SUFFIX;
+#endif
+    return functionRawName;
+}
+
+TEST_F(TestMoeDistributed, TestMoeDispatchMultipyExperts) {
     const char *group = "hcom123";
     DataType dType = DT_BF16;
     int routingExpertNum = 160;
@@ -77,18 +85,38 @@ void TestMoeDispatch() {
         Distributed::MoeDispatch(tokenTensor, tokenExpertTable, expandX, validCnt, combineInfo, group, moeConfig);
     }
 
-#if ENABLE_HIDDENLOOP
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "L0" + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-#else
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "L0" + SUB_FUNC_SUFFIX);
-#endif
+    auto functionRawName = MoeDistributedGetFunctionRawName("L0");
+    auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestCodegenDispatch, TestMoeDispatchMultipyExperts) {
-    TestMoeDispatch();
+TEST_F(TestMoeDistributed, TestMoeDistributedCombine) {
+    const char *group = "hcom123";
+    int32_t batchSize = 8;
+    int32_t hiddenSize = 5120;
+    int32_t moeExpertNum = 160;
+    int32_t topK = 8;
+    int32_t epWorldSize = 4;
+    int32_t row = std::min(topK * batchSize * epWorldSize, batchSize * moeExpertNum);
+    DataType dType = DT_BF16;
+
+    Tensor expandX(dType, {row, hiddenSize}, "expandX");
+    Tensor assistInfoForCombine(DT_INT32, {row, 3}, "assistInfoForCombine");
+    Tensor recvCounts(DataType::DT_INT32, {1}, "recvCounts");
+    Tensor expertScales(DT_FP32, {batchSize, topK}, "expertScales");
+    Tensor out(dType, {batchSize, hiddenSize}, "out");
+
+    FUNCTION("MoeDistributedCombineMain", {expandX, assistInfoForCombine, expertScales}, {out}) {
+        Distributed::MoeDistributedCombine(expandX, assistInfoForCombine, recvCounts, expertScales, group, epWorldSize,
+            moeExpertNum, 0, 0, out);
+    }
+
+    auto functionRawName = MoeDistributedGetFunctionRawName("MoeDistributedCombine");
+    auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
 }
-} // namespace Distributed
-} // namespace npu::tile_fwk
+} // namespace npu::tile_fwk::Distributed
