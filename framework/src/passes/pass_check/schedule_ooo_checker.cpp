@@ -23,7 +23,9 @@
 #include "passes/pass_utils/parallel_tool.h"
 #include "passes/pass_log/pass_log.h"
 
+#ifndef MODULE_NAME
 #define MODULE_NAME "OoOSchedule"
+#endif
 
 namespace npu {
 namespace tile_fwk {
