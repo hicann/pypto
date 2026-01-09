@@ -101,7 +101,7 @@ struct DynMachineManager {
             DEV_INFO("devQueueAddr %lx, sharedBuffer %lx coreRegAddr %lx corePmuAdr %lx .", devArgs->devQueueAddr,
                 devArgs->sharedBuffer, devArgs->coreRegAddr, devArgs->corePmuAddr);
             DEV_TRACE_DEBUG(schema::ScheEvent(threadIdx, schema::ThreadStart()));
-            ret = machine_.Run(threadIdx, devArgs, handshakeByGm_);
+            ret = machine_.Run(threadIdx, devArgs);
             if (ret != DEVICE_MACHINE_OK) {
                 schRunFailed_ = true;
             }
@@ -123,12 +123,6 @@ struct DynMachineManager {
         PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         if (++finished_ == static_cast<std::atomic<int>>(devArgs->nrAicpu)) {
             LastFinishThreadIdx_ = threadIdx;
-#if ENABLE_AICORE_HAND_SHAKE_BY_REG
-            if (!schRunFailed_ && handshakeByGm_) {
-                machine_.CacheValidCore();
-                handshakeByGm_ = false; // hand shake by reg next time
-            }
-#endif      
             if (unlikely(!machine_.CheckAndResetReg())) {
                 DEV_WARN("Some registers force closed!");
             }
@@ -171,7 +165,6 @@ struct DynMachineManager {
     struct sigaction oriBordAct_;
     std::atomic<bool> reset_{false};
     std::atomic<bool> init_{false};
-    bool handshakeByGm_{true};
     std::atomic<bool> schRunFailed_{false};
 };
 

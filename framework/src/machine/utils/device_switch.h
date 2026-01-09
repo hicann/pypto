@@ -56,9 +56,6 @@ namespace npu::tile_fwk {
 
 #define ENABLE_AICORE_PRINT 0
 
-// whether to support hand shake by reg
-#define ENABLE_AICORE_HAND_SHAKE_BY_REG 0
-
 #define PERF_AICPU_TEST_SWITCH 0 //性能AICPU数据测试
 
 // ready quene mode for aicore task : Last-in-first-out(LIFO stack mode) or first-in-first-out(FIFO quene mode)

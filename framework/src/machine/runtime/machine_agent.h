@@ -18,7 +18,7 @@
 #include <iostream>
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
-#include "machine/host/machine_compiler.h"
+#include "machine/compile/machine_compiler.h"
 #include "machine/host/device_agent_task.h"
 #include "machine/runtime/runtime.h"
 

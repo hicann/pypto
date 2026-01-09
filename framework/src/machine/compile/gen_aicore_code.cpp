@@ -13,7 +13,7 @@
  * \brief
  */
 
-#include "machine/kernel/gen_aicore_code.h"
+#include "machine/compile/gen_aicore_code.h"
 #include "interface/utils/file_utils.h"
 
 namespace npu::tile_fwk {
@@ -108,9 +108,6 @@ namespace npu::tile_fwk {
 #define ENABLE_AICORE_PRINT 0
 
 #define ENABLE_AICORE_PERF_TRACE  0
-
-// whether to support hand shake by reg
-#define ENABLE_HAND_SHAKE_BY_REG 0
 
 /* The DFX swimlane performance statistics use host pre-allocated memory mode, which avoids data collection during
    AICPU scheduling to minimize scheduling interference. However, each AICore only supports tracking up to
@@ -218,10 +215,6 @@ INLINE void Barrier()
 
 INLINE void HandshakeClient(volatile __gm__ int64_t *shakeBuf) {
     set_cond(AICORE_TASK_INIT);
-#if ENABLE_HAND_SHAKE_BY_REG
-    uint64_t AICORE_REG_SAY_HELLO = 0xF000000080000000;
-    set_cond(((int64_t)aicore_blockIdx << 48) | ((int64_t)get_coreid() << 32) | AICORE_REG_SAY_HELLO);
-#endif
     volatile __gm__ int64_t *hello = shakeBuf;
     *hello = (int64_t)get_coreid() << 32 | AICORE_SAY_HELLO;
     Barrier();

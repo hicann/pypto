@@ -12,7 +12,7 @@
 
 #include "interface/machine/host/machine_task.h"
 #include "tilefwk/core_func_data.h"
-#include "machine/host/machine_compiler.h"
+#include "machine/compile/machine_compiler.h"
 
 namespace npu::tile_fwk {
 /* 每次device agent 处理后的信息, 如所有在workspace申请的内存, 每个AscendFunction一个 */

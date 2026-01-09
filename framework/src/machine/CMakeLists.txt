@@ -17,8 +17,7 @@ add_subdirectory(runtime)
 
 file(GLOB_RECURSE _Compiler_Srcs
         host/*.cpp
-        kernel/aicore_compiler.cpp
-        kernel/gen_aicore_code.cpp
+        compile/*.cpp
         dump/*.cpp
         platform/*.cpp
         utils/*.cpp
