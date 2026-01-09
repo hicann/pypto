@@ -137,9 +137,9 @@ void IRBuilder::ExitIfStatement(IRBuilderContext& ctx, IfStatementPtr st) {
 
     if (hasElseBranch) {
         std::unordered_set<std::string> candidateVars;
-        for (const auto& [varName, _] : envAfterThen) candidateVars.insert(varName);
-        for (const auto& [varName, _] : envAfterElse) candidateVars.insert(varName);
-        for (const auto& [varName, _] : envBeforeIf) candidateVars.insert(varName);
+        for (const auto& envItem : envAfterThen) candidateVars.insert(envItem.first);
+        for (const auto& envItem : envAfterElse) candidateVars.insert(envItem.first);
+        for (const auto& envItem : envBeforeIf) candidateVars.insert(envItem.first);
 
         for (const std::string& varName : candidateVars) {
             auto itAfterThen = envAfterThen.find(varName);

@@ -80,6 +80,9 @@ public:
         ooperands_.at(idx) = value;
     }
 
+    std::vector<ValuePtr> &GetIOperands() { return ioperands_; }
+    std::vector<ValuePtr> &GetOOperands() { return ooperands_; }
+
     size_t GetNumOutputScalarOperand() const { return oScalarIndex_; }
     ScalarValuePtr GetOutputScalarOperand(size_t idx) const { return std::static_pointer_cast<ScalarValue>(GetOutputOperand(oScalarIndex_ + idx)); }
     void SetOutputScalarOperand(size_t idx, ScalarValuePtr ptr) { SetOutputOperand(oScalarIndex_ + idx, ptr); }

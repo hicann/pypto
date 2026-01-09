@@ -65,7 +65,7 @@ void TensorValue::Print(std::ostream& os, int indent) const {
 
     // ====== type ======
     os << ", ";
-    os << DataTypeToString(GetDataType());
+    os << DTypeInfoOf(GetDataType()).name;
 
     os << ">";
 }
@@ -94,7 +94,7 @@ void TileValue::Print(std::ostream& os, int indent) const {
     os << "], ";
 
     // ====== type ======
-    os << DataTypeToString(GetDataType());
+    os << DTypeInfoOf(GetDataType()).name;
 
     os << ">";
 }

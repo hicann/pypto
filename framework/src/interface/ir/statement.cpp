@@ -114,8 +114,8 @@ void ForStatement::Print(std::ostream& os, int indent) const {
             }
         }
         os << " = ";
-    } 
-    
+    }
+
     // Print loop header: statement.for %iv = %lb to %ub step %step
     os << "statement.for ";
     if (iterationVar_) {
@@ -434,5 +434,3 @@ void ReturnStatement::Print(std::ostream& os, int indent) const {
 }
 
 } // namespace pto
-
-

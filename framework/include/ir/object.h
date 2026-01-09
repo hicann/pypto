@@ -35,7 +35,7 @@ using AttributeMap = std::map<std::string, std::string>;
 // Base class for all IR objects.
 class Object {
 public:
-    explicit Object(ObjectType type, std::string name = "")
+    explicit Object(ObjectType type, const std::string &name = "")
         : id_(IDGen::NextID(type)), name_(name) {}
     virtual ~Object() = default;
 

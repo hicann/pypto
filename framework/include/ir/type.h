@@ -40,7 +40,9 @@ enum class DataType {
     UINT32,
     UINT64,
 
-    FP8,
+    FP8_E4M3FN,
+    FP8_E5M2,
+
     FP16,
     BF16,
     FP32,
@@ -49,8 +51,17 @@ enum class DataType {
     HF4,
     HF8,
 
-    BOTTOM,
     UNKNOWN
+};
+
+struct DTypeInfo {
+    DataType dtype;
+    const char *name;
+    int bits;
+    int bytes;
+    bool isFloat;
+    bool isSigned;
+    bool isUnsigned;
 };
 
 // Base class for all types in PTO-IR.
@@ -97,16 +108,16 @@ using ScalarTypePtr = std::shared_ptr<ScalarType>;
 // TileType represents the type of a tile with a specific (shape, dataType) combination.
 class TileType : public Type {
 public:
-    TileType(DataType elementType, const std::vector<uint64_t>& shape)
+    TileType(DataType elementType, const std::vector<int64_t>& shape)
         : Type(elementType), shape_(shape) {}
 
-    const std::vector<uint64_t>& GetShape() const { return shape_; }
+    const std::vector<int64_t>& GetShape() const { return shape_; }
 
     uint64_t GetTypeSize() const override;
     void Print(std::ostream& os) const override;
 
 private:
-    std::vector<uint64_t> shape_;  // Static shape dimensions
+    std::vector<int64_t> shape_;  // Static shape dimensions
 };
 
 using TileTypePtr = std::shared_ptr<TileType>;

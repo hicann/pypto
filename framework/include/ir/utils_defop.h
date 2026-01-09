@@ -71,6 +71,10 @@
 #define DEFOP_OPCODE_DICT_OPCODE(...) MAP(DEFOP_OPCODE_DICT_NAME, __VA_ARGS__)
 #define DEFOP_OPCODE_DICT_NAME(n) {Opcode::n, #n},
 
+#define DEFOP_OPCODE_PYENUM(name, inherit, opcode, ...) DEFOP_OPCODE_PYENUM_##opcode
+#define DEFOP_OPCODE_PYENUM_OPCODE(...) MAP(DEFOP_OPCODE_PYENUM_NAME, __VA_ARGS__)
+#define DEFOP_OPCODE_PYENUM_NAME(n) .value(#n, Opcode::n)
+
 #define DEFOP_CLASS_Scalar const ScalarValuePtr &
 #define DEFOP_CLASS_Tile const TileValuePtr &
 #define DEFOP_CLASS_ScalarList const std::vector<ScalarValuePtr> &

@@ -21,6 +21,7 @@ pybind11_add_module(pypto_impl
             bindings/cost_model.cpp
             bindings/pass_config.cpp
             bindings/function.cpp
+            bindings/ir.cpp
 )
 target_include_directories(pypto_impl
         PRIVATE  # 使用 CANN 场景依赖

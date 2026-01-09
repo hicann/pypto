@@ -40,7 +40,7 @@ TEST(IRTEST, TestBuilder) {
     FunctionSignature sig;
 
     // tensor<[b, 128], fp32>
-    std::vector<uint64_t> tileShape = { 128, 128 };
+    std::vector<int64_t> tileShape = { 128, 128 };
 
     auto inputTensor  = std::make_shared<TileValue>(tileShape, DataType::FP32, "input");
     auto scale1       = std::make_shared<ScalarValue>(DataType::FP32, "scale1", ScalarValueKind::Symbolic);
@@ -102,7 +102,7 @@ TEST(IRTEST, TestControlFlow) {
     auto constant128 = std::make_shared<ScalarValue>(int64_t(128), "const_128");
     std::vector<ScalarValuePtr> tensorShape = { batch, constant128 };
 
-    std::vector<uint64_t> tileShape = { 128, 128 };
+    std::vector<int64_t> tileShape = { 128, 128 };
 
     auto inputX = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "inputX");
     auto inputY = std::make_shared<TensorValue>(tensorShape, DataType::FP32, "inputY");

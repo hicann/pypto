@@ -81,6 +81,8 @@ public:
     StatementPtr GetStatement(size_t index) const { return statements_[index]; }
     // Set the statement by index
     void SetStatement(size_t index, StatementPtr stmt) { statements_[index] = stmt; }
+    // Get all statements
+    std::vector<StatementPtr> &GetStatements() { return statements_; }
 
     // Add a Statement to this scope.
     void AddStatement(StatementPtr stmt) { statements_.push_back(std::move(stmt)); }

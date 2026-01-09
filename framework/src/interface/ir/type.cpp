@@ -17,52 +17,60 @@
 #include "ir/utils.h"
 
 #include <ostream>
+#include <cstring>
 
 namespace pto {
 
 // ========== Type System Implementation ==========
+static struct DTypeInfo dtypeInfo[] = {
+    {      DataType::BOOL,       "bool",  8, 1, false,  true, false},
+    {      DataType::INT4,       "int4",  4, 1, false,  true, false},
+    {      DataType::INT8,       "int8",  8, 1, false,  true, false},
+    {     DataType::INT16,      "int16", 16, 2, false,  true, false},
+    {     DataType::INT32,      "int32", 32, 4, false,  true, false},
+    {     DataType::INT64,      "int64", 64, 8, false,  true, false},
+    {     DataType::UINT8,      "uint8",  8, 1, false, false,  true},
+    {    DataType::UINT16,     "uint16", 16, 2, false, false,  true},
+    {    DataType::UINT32,     "uint32", 32, 4, false, false,  true},
+    {    DataType::UINT64,     "uint64", 64, 8, false, false,  true},
+    {DataType::FP8_E4M3FN, "fp8_e4m3fn",  8, 1,  true, false, false},
+    {  DataType::FP8_E5M2,   "fp8_e5m2",  8, 1,  true, false, false},
+    {      DataType::FP16,    "float16", 16, 2,  true, false, false},
+    {      DataType::BF16,   "bfloat16", 16, 2,  true, false, false},
+    {      DataType::FP32,    "float32", 32, 4,  true, false, false},
+    {      DataType::FP64,    "float64", 64, 8,  true, false, false},
+    {       DataType::HF4,        "hf4",  4, 1,  true, false, false},
+    {       DataType::HF8,        "hf8",  8, 1,  true, false, false},
+    {   DataType::UNKNOWN,    "unknown",  0, 0, false, false, false},
+};
+
+DTypeInfo &DTypeInfoOf(DataType dtype) {
+    return dtypeInfo[static_cast<int>(dtype)];
+}
+
+DTypeInfo &DTypeInfoOf(const char *name) {
+    for (auto &spec : dtypeInfo) {
+        if (strcmp(spec.name, name) == 0) {
+            return spec;
+        }
+    }
+    return DTypeInfoOf(DataType::UNKNOWN);
+}
 
 uint64_t Type::GetDataTypeSize(DataType dataType) {
-    switch (dataType) {
-    case DataType::INT4:
-    case DataType::HF4:
-        return 1;  // 4 bits still need 1 byte
-    case DataType::INT8:
-    case DataType::UINT8:
-    case DataType::BOOL:
-    case DataType::FP8:
-    case DataType::HF8:
-        return 1;
-    case DataType::INT16:
-    case DataType::UINT16:
-    case DataType::FP16:
-    case DataType::BF16:
-        return 2;
-    case DataType::INT32:
-    case DataType::UINT32:
-    case DataType::FP32:
-        return 4;
-    case DataType::INT64:
-    case DataType::UINT64:
-    case DataType::FP64:
-        return 8;
-    case DataType::BOTTOM:
-    case DataType::UNKNOWN:
-    default:
-        return 0;
-    }
+    return DTypeInfoOf(dataType).bytes;
 }
 
 void ScalarType::Print(std::ostream& os) const {
-    os << DataTypeToString(dataType_);
+    os << DTypeInfoOf(dataType_).name;
 }
 
 void TensorType::Print(std::ostream& os) const {
-    os << DataTypeToString(dataType_);
+    os << DTypeInfoOf(dataType_).name;
 }
 
 uint64_t TileType::GetTypeSize() const {
-    uint64_t elementSize = GetDataTypeSize();
+    uint64_t elementSize = GetDataTypeSize(dataType_);
     uint64_t totalElements = 1;
     for (size_t dim : shape_) {
         totalElements *= dim;
@@ -78,7 +86,7 @@ void TileType::Print(std::ostream& os) const {
             os << ", ";
         }
     }
-    os << "], " << DataTypeToString(dataType_) << ">";
+    os << "], " << DTypeInfoOf(dataType_).name << ">";
 }
 
 } // namespace pto

@@ -15,6 +15,7 @@
 
 #include "gtest/gtest.h"
 
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -39,7 +40,7 @@ TEST(IRTEST, TestTensorOperation){
 
     // Input tensor: tensor<[B, 128], f32>
     auto B = std::make_shared<ScalarValue>(DataType::INT32, "B", ScalarValueKind::Symbolic);
-    std::vector<uint64_t> tileShape = { 128, 128 };
+    std::vector<int64_t> tileShape = { 128, 128 };
     auto inputTensor =
         std::make_shared<TileValue>(tileShape, DataType::FP32, "input");
 

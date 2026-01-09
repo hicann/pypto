@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -98,10 +99,10 @@ TEST(IRTEST, TestScalarType) {
 TEST(IRTEST, TestTileType) {
     // 测试 TileType 的基本功能
     // 测试不同形状和数据类型的 TileType
-    std::vector<size_t> shape1D = {128};
-    std::vector<size_t> shape2D = {16, 32};
-    std::vector<size_t> shape3D = {4, 8, 16};
-    std::vector<size_t> shape4D = {2, 4, 8, 16};
+    std::vector<int64_t> shape1D = {128};
+    std::vector<int64_t> shape2D = {16, 32};
+    std::vector<int64_t> shape3D = {4, 8, 16};
+    std::vector<int64_t> shape4D = {2, 4, 8, 16};
 
     auto tile1D = std::make_shared<TileType>(DataType::FP32, shape1D);
     auto tile2D = std::make_shared<TileType>(DataType::FP32, shape2D);
@@ -169,7 +170,7 @@ TEST(IRTEST, TestTileType) {
     ASSERT_NE(oss2.str().find("32"), std::string::npos);
 
     // 测试空形状的情况
-    std::vector<size_t> emptyShape = {};
+    std::vector<int64_t> emptyShape = {};
     auto emptyTile = std::make_shared<TileType>(DataType::FP32, emptyShape);
     ASSERT_EQ(emptyTile->GetShape().size(), 0);
     ASSERT_EQ(emptyTile->GetTypeSize(), 4);  // 只有一个元素
@@ -226,7 +227,7 @@ TEST(IRTEST, TestTypePolymorphism) {
     // 测试类型系统的多态性
     // 使用基类指针指向不同的派生类
     TypePtr scalarType = std::make_shared<ScalarType>(DataType::FP32);
-    TypePtr tileType = std::make_shared<TileType>(DataType::FP32, std::vector<size_t>{16, 32});
+    TypePtr tileType = std::make_shared<TileType>(DataType::FP32, std::vector<int64_t>{16, 32});
     TypePtr tensorType = std::make_shared<TensorType>(DataType::FP32);
 
     // 测试多态调用 GetDataType()
@@ -259,30 +260,26 @@ TEST(IRTEST, TestTypeEdgeCases) {
     // 测试边界情况
     // 测试 UNKNOWN 和 BOTTOM 类型
     auto unknownScalar = std::make_shared<ScalarType>(DataType::UNKNOWN);
-    auto bottomScalar = std::make_shared<ScalarType>(DataType::BOTTOM);
-
     ASSERT_EQ(unknownScalar->GetDataType(), DataType::UNKNOWN);
-    ASSERT_EQ(bottomScalar->GetDataType(), DataType::BOTTOM);
     ASSERT_EQ(unknownScalar->GetDataTypeSize(), 0);
-    ASSERT_EQ(bottomScalar->GetDataTypeSize(), 0);
     ASSERT_EQ(unknownScalar->GetTypeSize(), 0);
-    ASSERT_EQ(bottomScalar->GetTypeSize(), 0);
 
     // 测试特殊数据类型的大小
     ASSERT_EQ(Type::GetDataTypeSize(DataType::INT4), 1);
     ASSERT_EQ(Type::GetDataTypeSize(DataType::HF4), 1);
-    ASSERT_EQ(Type::GetDataTypeSize(DataType::FP8), 1);
+    ASSERT_EQ(Type::GetDataTypeSize(DataType::FP8_E4M3FN), 1);
+    ASSERT_EQ(Type::GetDataTypeSize(DataType::FP8_E5M2), 1);
     ASSERT_EQ(Type::GetDataTypeSize(DataType::HF8), 1);
     ASSERT_EQ(Type::GetDataTypeSize(DataType::BF16), 2);
     ASSERT_EQ(Type::GetDataTypeSize(DataType::UINT16), 2);
 
     // 测试大形状的 TileType
-    std::vector<size_t> largeShape = {1024, 1024};
+    std::vector<int64_t> largeShape = {1024, 1024};
     auto largeTile = std::make_shared<TileType>(DataType::FP32, largeShape);
     ASSERT_EQ(largeTile->GetTypeSize(), 4 * 1024 * 1024);  // 4MB
 
     // 测试单元素 TileType
-    std::vector<size_t> singleElement = {1};
+    std::vector<int64_t> singleElement = {1};
     auto singleTile = std::make_shared<TileType>(DataType::FP32, singleElement);
     ASSERT_EQ(singleTile->GetTypeSize(), 4);
     ASSERT_EQ(singleTile->GetShape()[0], 1);
@@ -294,9 +291,8 @@ TEST(IRTEST, TestTypeAllDataTypes) {
         DataType::BOOL,
         DataType::INT4, DataType::INT8, DataType::INT16, DataType::INT32, DataType::INT64,
         DataType::UINT8, DataType::UINT16, DataType::UINT32, DataType::UINT64,
-        DataType::FP8, DataType::FP16, DataType::BF16, DataType::FP32, DataType::FP64,
+        DataType::FP8_E4M3FN, DataType::FP8_E5M2, DataType::FP16, DataType::BF16, DataType::FP32, DataType::FP64,
         DataType::HF4, DataType::HF8,
-        DataType::UNKNOWN, DataType::BOTTOM
     };
 
     for (DataType dt : allTypes) {
@@ -329,63 +325,50 @@ TEST(IRTEST, TestTypeAllDataTypes) {
 TEST(IRTEST, TestStringToValueType) {
     // 测试 StringToValueType 函数的基本功能
     // 测试所有支持的数据类型字符串（完整名称）
-    ASSERT_EQ(StringToValueType("bool"), DataType::BOOL);
-    ASSERT_EQ(StringToValueType("int4"), DataType::INT4);
-    ASSERT_EQ(StringToValueType("int8"), DataType::INT8);
-    ASSERT_EQ(StringToValueType("int16"), DataType::INT16);
-    ASSERT_EQ(StringToValueType("int32"), DataType::INT32);
-    ASSERT_EQ(StringToValueType("int64"), DataType::INT64);
-    ASSERT_EQ(StringToValueType("uint8"), DataType::UINT8);
-    ASSERT_EQ(StringToValueType("uint16"), DataType::UINT16);
-    ASSERT_EQ(StringToValueType("uint32"), DataType::UINT32);
-    ASSERT_EQ(StringToValueType("uint64"), DataType::UINT64);
-    ASSERT_EQ(StringToValueType("fp8"), DataType::FP8);
-    ASSERT_EQ(StringToValueType("fp16"), DataType::FP16);
-    ASSERT_EQ(StringToValueType("bf16"), DataType::BF16);
-    ASSERT_EQ(StringToValueType("fp32"), DataType::FP32);
-    ASSERT_EQ(StringToValueType("fp64"), DataType::FP64);
-    ASSERT_EQ(StringToValueType("hf4"), DataType::HF4);
-    ASSERT_EQ(StringToValueType("hf8"), DataType::HF8);
-    ASSERT_EQ(StringToValueType("bottom"), DataType::BOTTOM);
-    ASSERT_EQ(StringToValueType("unknown"), DataType::UNKNOWN);
-
-    // 测试别名（简短形式）
-    ASSERT_EQ(StringToValueType("i8"), DataType::INT8);
-    ASSERT_EQ(StringToValueType("i16"), DataType::INT16);
-    ASSERT_EQ(StringToValueType("i32"), DataType::INT32);
-    ASSERT_EQ(StringToValueType("i64"), DataType::INT64);
-    ASSERT_EQ(StringToValueType("u8"), DataType::UINT8);
-    ASSERT_EQ(StringToValueType("u16"), DataType::UINT16);
-    ASSERT_EQ(StringToValueType("u32"), DataType::UINT32);
-    ASSERT_EQ(StringToValueType("u64"), DataType::UINT64);
-    ASSERT_EQ(StringToValueType("f16"), DataType::FP16);
-    ASSERT_EQ(StringToValueType("f32"), DataType::FP32);
-    ASSERT_EQ(StringToValueType("f64"), DataType::FP64);
+    ASSERT_EQ(DTypeInfoOf("bool").dtype, DataType::BOOL);
+    ASSERT_EQ(DTypeInfoOf("int4").dtype, DataType::INT4);
+    ASSERT_EQ(DTypeInfoOf("int8").dtype, DataType::INT8);
+    ASSERT_EQ(DTypeInfoOf("int16").dtype, DataType::INT16);
+    ASSERT_EQ(DTypeInfoOf("int32").dtype, DataType::INT32);
+    ASSERT_EQ(DTypeInfoOf("int64").dtype, DataType::INT64);
+    ASSERT_EQ(DTypeInfoOf("uint8").dtype, DataType::UINT8);
+    ASSERT_EQ(DTypeInfoOf("uint16").dtype, DataType::UINT16);
+    ASSERT_EQ(DTypeInfoOf("uint32").dtype, DataType::UINT32);
+    ASSERT_EQ(DTypeInfoOf("uint64").dtype, DataType::UINT64);
+    ASSERT_EQ(DTypeInfoOf("fp8_e4m3fn").dtype, DataType::FP8_E4M3FN);
+    ASSERT_EQ(DTypeInfoOf("fp8_e5m2").dtype, DataType::FP8_E5M2);
+    ASSERT_EQ(DTypeInfoOf("float16").dtype, DataType::FP16);
+    ASSERT_EQ(DTypeInfoOf("bfloat16").dtype, DataType::BF16);
+    ASSERT_EQ(DTypeInfoOf("float32").dtype, DataType::FP32);
+    ASSERT_EQ(DTypeInfoOf("float64").dtype, DataType::FP64);
+    ASSERT_EQ(DTypeInfoOf("hf4").dtype, DataType::HF4);
+    ASSERT_EQ(DTypeInfoOf("hf8").dtype, DataType::HF8);
 
     // 测试未知字符串（应该返回默认值 INT32）
-    ASSERT_EQ(StringToValueType("invalid_type"), DataType::UNKNOWN);
-    ASSERT_EQ(StringToValueType(""), DataType::UNKNOWN);
-    ASSERT_EQ(StringToValueType("xyz"), DataType::UNKNOWN);
-    ASSERT_EQ(StringToValueType("float"), DataType::UNKNOWN);
-    ASSERT_EQ(StringToValueType("double"), DataType::UNKNOWN);
+    ASSERT_EQ(DTypeInfoOf("invalid_type").dtype, DataType::UNKNOWN);
+    ASSERT_EQ(DTypeInfoOf("").dtype, DataType::UNKNOWN);
+    ASSERT_EQ(DTypeInfoOf("xyz").dtype, DataType::UNKNOWN);
+    ASSERT_EQ(DTypeInfoOf("float").dtype, DataType::UNKNOWN);
+    ASSERT_EQ(DTypeInfoOf("double").dtype, DataType::UNKNOWN);
 
     // 测试大小写敏感性（函数是大小写敏感的，不匹配的字符串返回默认值 INT32）
-    ASSERT_EQ(StringToValueType("INT32"), DataType::UNKNOWN);  // 不匹配，返回默认值 INT32
-    ASSERT_EQ(StringToValueType("Int32"), DataType::UNKNOWN);  // 不匹配，返回默认值 INT32
-    ASSERT_EQ(StringToValueType("FP32"), DataType::UNKNOWN);   // 不匹配，返回默认值 INT32
+    ASSERT_EQ(DTypeInfoOf("INT32").dtype, DataType::UNKNOWN);  // 不匹配，返回默认值 INT32
+    ASSERT_EQ(DTypeInfoOf("Int32").dtype, DataType::UNKNOWN);  // 不匹配，返回默认值 INT32
+    ASSERT_EQ(DTypeInfoOf("FP32").dtype, DataType::UNKNOWN);   // 不匹配，返回默认值 INT32
 
     // 测试与 DataTypeToString 的往返转换
     std::vector<DataType> testTypes = {
         DataType::BOOL, DataType::INT8, DataType::INT32, DataType::INT64,
         DataType::UINT8, DataType::UINT32, DataType::UINT64,
         DataType::FP16, DataType::FP32, DataType::FP64,
-        DataType::BF16, DataType::FP8, DataType::HF4, DataType::HF8
+        DataType::BF16, DataType::FP8_E4M3FN, DataType::FP8_E5M2,
+        DataType::HF4, DataType::HF8
     };
 
     for (DataType dt : testTypes) {
-        std::string typeStr = DataTypeToString(dt);
-        DataType converted = StringToValueType(typeStr);
-        ASSERT_EQ(converted, dt) << "Failed to convert " << typeStr << " back to DataType";
+        auto name = DTypeInfoOf(dt).name;
+        DataType converted = DTypeInfoOf(name).dtype;
+        ASSERT_EQ(converted, dt) << "Failed to convert " << name << " back to DataType";
     }
 }
 
@@ -400,11 +383,11 @@ TEST(IRTEST, TestTypeCompleteProgram) {
 
     // 输入：直接使用 Tile 和 Scalar，不使用 Tensor
     // 输入 Tile: tile<[16, 32], fp32>
-    auto inputTile = std::make_shared<TileValue>(std::vector<uint64_t>{16, 32}, DataType::FP32, "input_tile");
+    auto inputTile = std::make_shared<TileValue>(std::vector<int64_t>{16, 32}, DataType::FP32, "input_tile");
     // 输入 Scalar: scalar<fp32>
     auto scale = std::make_shared<ScalarValue>(DataType::FP32, "scale", ScalarValueKind::Symbolic);
     // 输出：Tile tile<[16, 32], fp32>
-    auto result = std::make_shared<TileValue>(std::vector<uint64_t>{16, 32}, DataType::FP32, "output_tile");
+    auto result = std::make_shared<TileValue>(std::vector<int64_t>{16, 32}, DataType::FP32, "output_tile");
 
     sig.arguments = { inputTile, scale, result };
     sig.results.push_back(std::make_shared<ScalarValue>(DataType::FP64));
@@ -421,23 +404,23 @@ TEST(IRTEST, TestTypeCompleteProgram) {
 
     // Tile 乘法操作：tile_mul = mul(input_tile, scale)
     // 当两个操作数都是 Tile 时，输出也是 Tile，会使用 tile.mul
-    auto tileMul = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "tile_mul");
+    auto tileMul = builder.CreateTile(ctx, std::vector<int64_t>{16, 32}, DataType::FP32, "tile_mul");
     auto mulOp = builder.CreateBinaryScalarMixOp(Opcode::OP_MULS, inputTile, scale, tileMul);
     builder.Emit(ctx, mulOp);
 
     // Tile 加法操作：tile_add = add(tile_mul, constant2)
     // Tile + Scalar -> Tile，会使用 tile.add
-    auto tileAdd = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "tile_add");
+    auto tileAdd = builder.CreateTile(ctx, std::vector<int64_t>{16, 32}, DataType::FP32, "tile_add");
     auto addOp = builder.CreateBinaryScalarMixOp(Opcode::OP_ADDS, tileMul, constant2, tileAdd);
     builder.Emit(ctx, addOp);
 
     // Tile 减法操作：tile_sub = sub(tile_add, constant3)
-    auto tileSub = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "tile_sub");
+    auto tileSub = builder.CreateTile(ctx, std::vector<int64_t>{16, 32}, DataType::FP32, "tile_sub");
     auto subOp = builder.CreateBinaryScalarMixOp(Opcode::OP_SUBS, tileAdd, constant3, tileSub);
     builder.Emit(ctx, subOp);
 
     // Tile 除法操作：tile_div = div(tile_sub, scale)
-    auto tileDiv = builder.CreateTile(ctx, std::vector<uint64_t>{16, 32}, DataType::FP32, "output_tile");
+    auto tileDiv = builder.CreateTile(ctx, std::vector<int64_t>{16, 32}, DataType::FP32, "output_tile");
     auto divOp = builder.CreateBinaryScalarMixOp(Opcode::OP_DIVS, tileSub, scale, tileDiv);
     builder.Emit(ctx, divOp);
 
@@ -489,4 +472,3 @@ TEST(IRTEST, TestTypeCompleteProgram) {
 }
 
 } // namespace pto
-
