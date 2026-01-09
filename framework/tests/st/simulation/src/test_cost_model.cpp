@@ -54,13 +54,13 @@ public:
     {
         CostModel::PvData::Instance().Enable();
         CostModel::SoftMemory::Instance().Enable();
-        oriPvLevel = config::GetSimConfig("PV_LEVEL", 0);
-        config::SetSimConfig("PV_LEVEL", level);
+        oriPvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
+        config::SetSimConfig(KEY_PV_LEVEL, level);
     }
 
     void ResetPVModelConfig()
     {
-        config::SetSimConfig("PV_LEVEL", oriPvLevel);
+        config::SetSimConfig(KEY_PV_LEVEL, oriPvLevel);
     }
 
 protected:
@@ -145,13 +145,13 @@ public:
 
     void EnablePVModel(int level)
     {
-        oriPvLevel = config::GetSimConfig("PV_LEVEL", 0);
-        config::SetSimConfig("PV_LEVEL", level);
+        oriPvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
+        config::SetSimConfig(KEY_PV_LEVEL, level);
     }
 
     void ResetPVModelConfig()
     {
-        config::SetSimConfig("PV_LEVEL", oriPvLevel);
+        config::SetSimConfig(KEY_PV_LEVEL, oriPvLevel);
     }
 
 protected:

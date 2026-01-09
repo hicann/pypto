@@ -47,7 +47,7 @@ bool ParallelQueue::Get(WorkItem *workItem) {
 
 void ParallelTool::Init() {
     if (parallelToolPtr == nullptr) {
-        const int default_concurrency = config::GetPassGlobalConfig("pass_thread_num", 1);
+        const int default_concurrency = config::GetPassGlobalConfig(KEY_PASS_THREAD_NUM, 1);
         parallelToolPtr = std::make_unique<ParallelTool>(default_concurrency);
     }
 }

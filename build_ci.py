@@ -675,11 +675,11 @@ class ModelParam(CMakeParam):
 
     def _gen_simulation_json_sim(self, cfg: Dict[Any, Any]):
         if self.sim:
-            cfg["global_configs"]["platform_configs"]["ENABLE_COST_MODEL"] = True
+            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
 
     def _gen_simulation_json_sim_with_onboard_aicpu(self, cfg: Dict[Any, Any]):
         if self.sim_with_onboard_aicpu:
-            cfg["global_configs"]["platform_configs"]["ENABLE_COST_MODEL"] = True
+            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
             cfg["global_configs"]["simulation_configs"]["USE_ON_BOARD_INFO"] = True
             cfg["global_configs"]["simulation_configs"]["args"] = [
                 "Model.statisticReportToFile=true",
@@ -693,7 +693,7 @@ class ModelParam(CMakeParam):
             if self.replay_file_path is None:
                 logging.error("Error: replay_file_path is required when back_annotation_aicpu is enabled")
                 raise ValueError("Missing required argument: -rf, --replay_file_path")
-            cfg["global_configs"]["platform_configs"]["ENABLE_COST_MODEL"] = True
+            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
             cfg["global_configs"]["simulation_configs"]["args"] = [
                 "Model.statisticReportToFile=true",
                 "Model.deviceArch=910B",
@@ -708,9 +708,9 @@ class ModelParam(CMakeParam):
             if self.replay_file_path is None:
                 logging.error("Error: replay_file_path is required when back_annotation_aicore is enabled")
                 raise ValueError("Missing required argument: -rf, --replay_file_path")
-            cfg["global_configs"]["platform_configs"]["ENABLE_COST_MODEL"] = True
+            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
             cfg["global_configs"]["simulation_configs"]["USE_ON_BOARD_INFO"] = True
-            cfg["global_configs"]["simulation_configs"]["JSON_PATH"] = self.replay_file_path
+            cfg["global_configs"]["simulation_configs"]["json_path"] = self.replay_file_path
             cfg["global_configs"]["simulation_configs"]["args"] = [
                 "Model.statisticReportToFile=true",
                 "Model.deviceArch=910B",
@@ -723,7 +723,7 @@ class ModelParam(CMakeParam):
             if self.replay_file_path is None:
                 logging.error("Error: replay_file_path is required when calendar is enabled")
                 raise ValueError("Missing required argument: -rf, --replay_file_path")
-            cfg["global_configs"]["platform_configs"]["ENABLE_COST_MODEL"] = True
+            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
             cfg["global_configs"]["simulation_configs"]["args"] = [
                 "Model.statisticReportToFile=true",
                 "Model.deviceArch=910B",
@@ -741,8 +741,8 @@ class ModelParam(CMakeParam):
 
     def _gen_simulation_json_pvmodel(self, cfg: Dict[Any, Any]):
         if self.pvmodel:
-            cfg["global_configs"]["platform_configs"]["ENABLE_COST_MODEL"] = True
-            cfg["global_configs"]["simulation_configs"]["PV_LEVEL"] = 2
+            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
+            cfg["global_configs"]["simulation_configs"]["pv_level"] = 2
             cfg["global_configs"]["simulation_configs"]["args"] = [
                 "Model.statisticReportToFile=true",
                 "Model.deviceArch=910B",

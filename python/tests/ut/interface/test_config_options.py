@@ -74,10 +74,10 @@ def test_operation_option():
 
 
 def test_global_option():
-    res = pypto.get_global_config("platform.ENABLE_COST_MODEL")
+    res = pypto.get_global_config("platform.enable_cost_model")
     assert res == False
-    pypto.set_global_config("platform.ENABLE_COST_MODEL", True)
-    res = pypto.get_global_config("platform.ENABLE_COST_MODEL")
+    pypto.set_global_config("platform.enable_cost_model", True)
+    res = pypto.get_global_config("platform.enable_cost_model")
     assert res == True
 
     pypto.set_global_config("codegen.parallel_compile", 10)

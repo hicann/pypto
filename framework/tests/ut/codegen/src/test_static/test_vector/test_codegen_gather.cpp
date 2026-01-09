@@ -38,7 +38,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         IdGen<IdType::CG_USING_NAME>::Inst().SetId(DummyFuncMagic);
         IdGen<IdType::CG_VAR_NAME>::Inst().SetId(DummyFuncMagic);

@@ -171,7 +171,7 @@ TEST_F(DynamicPATest, dynamic_pa_low_lantency_pass_unroll) {
 
 TEST_F(DynamicPATest, dynamic_pa_low_lantency_manual_unroll) {
     config::SetHostOption(ONLY_CODEGEN, true);
-    config::SetPassDefaultConfig("print_graph", true);
+    config::SetPassDefaultConfig(KEY_PRINT_GRAPH, true);
     std::vector<uint8_t> devProgBinary;
 
     std::vector<int> input_param = {4, 1, 32, 1, 512, 64, 128, 32};

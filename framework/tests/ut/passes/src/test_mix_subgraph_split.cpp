@@ -33,9 +33,9 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
-    
+
     void TearDown() override {}
 
 protected:
@@ -52,10 +52,10 @@ protected:
 
         // 添加callOp
         auto& callOp = rootFunc.AddRawOperation(
-            Opcode::OP_CALL, 
-            {incast1, incast2, incast3}, 
+            Opcode::OP_CALL,
+            {incast1, incast2, incast3},
             {outcast1, outcast2});
-        
+
         // 创建CallOpAttribute
         std::vector<std::vector<SymbolicScalar>> argList;
         for (int i = 0; i < 5; ++i) {
@@ -119,7 +119,7 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
     mixFuncPtr->inCasts_.push_back(incast3);
     mixFuncPtr->outCasts_.push_back(outcast1);
     mixFuncPtr->outCasts_.push_back(outcast2);
-    
+
     // 创建OpImmediate
     auto shapeImme = OpImmediate::Specified(tensorShape);
     std::vector<int64_t> offsetVec = {0, 0};
@@ -216,7 +216,7 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
 
     // 4. 执行MixSubgraphSplit
     Status status = splitter.RunOnFunction(*rootFuncPtr);
-    EXPECT_EQ(status, SUCCESS) << "MixSubgraphSplit should succeed"; 
+    EXPECT_EQ(status, SUCCESS) << "MixSubgraphSplit should succeed";
 
     // 5. 验证拆分结果
     // 检查programs数量变化
@@ -225,29 +225,29 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
     // 检查新创建的programs
     for (const auto& program : programs) {
         ASSERT_NE(program.second, nullptr);
-        
+
         // 验证新function的名称包含后缀
         std::string funcName = program.second->GetRawName();
-        EXPECT_NE(funcName.find("leaf"), std::string::npos) 
+        EXPECT_NE(funcName.find("leaf"), std::string::npos)
             << "New function name should contain 'leaf' suffix";
-        
+
         // 验证function类型
         EXPECT_EQ(program.second->GetFunctionType(), FunctionType::STATIC);
         EXPECT_EQ(program.second->GetGraphType(), GraphType::BLOCK_GRAPH);
-        
+
         // 验证program ID在合理范围内
         EXPECT_EQ(program.second->GetProgramId(), program.first)
             << "Function's program ID should match map key";
     }
     // 6. 验证CallOps被正确更新
     auto newCallOps = rootFuncPtr->GetCallopList();
-    EXPECT_GT(newCallOps.size(), callOps.size()) 
+    EXPECT_GT(newCallOps.size(), callOps.size())
         << "Should have more call ops after split";
     // 验证每个callOp都有正确的program ID
     for (auto* callOp : newCallOps) {
         ASSERT_NE(callOp, nullptr);
         EXPECT_FALSE(callOp->IsDeleted()) << "CallOp should not be deleted";
-        
+
         // 验证program ID存在
         auto callAttr = dynamic_cast<CallOpAttribute*>(callOp->GetOpAttribute().get());
         if (callAttr != nullptr && callAttr->invokeInfo_ != nullptr) {
@@ -261,7 +261,7 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
     int cubeCount = 0;
     int aiv0Count = 0;
     int aiv1Count = 0;
-    
+
     for (const auto& program : programs) {
         auto leafAttr = program.second->GetLeafFuncAttribute();
         if (leafAttr) {
@@ -274,7 +274,7 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
             }
         }
     }
-    
+
     // 根据CreateMixSubgraphScenario的设置验证
     EXPECT_GE(cubeCount, 0) << "Should have at least one cube component";
     EXPECT_GE(aiv0Count, 0) << "Should have at least one AIV0 component";
@@ -283,12 +283,12 @@ TEST_F(MixSubgraphSplitTest, TestMixSubgraphSplit) {
     // 8. 验证operations被正确分配到各组件
     for (const auto& program : programs) {
         auto operations = program.second->Operations(false);
-        
+
         // 验证operations的internalSubgraphID一致
         int componentID = -1;
         for (auto& op : operations) {
             if (op.IsNOP()) continue;
-            
+
             int opComponentID = op.GetInternalSubgraphID();
             if (componentID == -1) {
                 componentID = opComponentID;
@@ -373,5 +373,3 @@ TEST_F(MixSubgraphSplitTest, TestDependOperand) {
 }
 } // namespace tile_fwk
 } // namespace npu
-
-

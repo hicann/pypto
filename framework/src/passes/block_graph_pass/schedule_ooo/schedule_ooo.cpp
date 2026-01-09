@@ -70,7 +70,7 @@ void OoOSchedule::OoOHealthCheck(OoOScheduler &oooSchedule, Function &function, 
 Status OoOSchedule::A23Schedule(std::vector<Operation*> &opList, Function &function,
     std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize) {
     // 直接对oplist进行GenSpill和mainLoop
-    OoOScheduler oooSchedule(*program.second, ConfigManager::Instance().GetOperationConfig("COMBINE_AXIS", false));
+    OoOScheduler oooSchedule(*program.second, ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false));
     if (oooSchedule.Schedule(opList) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
         return FAILED;

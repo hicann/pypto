@@ -32,19 +32,35 @@ const std::string KEY_STD_LOG_LEVEL = "STD_LOG_LEVEL";
 const std::string KEY_FILE_LOG_LEVEL = "FILE_LOG_LEVEL";
 const std::string KEY_GRAPH_FILE_TYPE = "GRAPH_FILE_TYPE";
 const std::string KEY_GRAPH_ONLY_DOT = "GRAPH_ONLY_DOT";
-const std::string KEY_ONLY_TENSOR_GRAPH = "ONLY_TENSOR_GRAPH";
-const std::string KEY_ONLY_HOST_COMPILE = "ONLY_HOST_COMPILE";
-const std::string KEY_ENABLE_COST_MODEL = "ENABLE_COST_MODEL";
+const std::string KEY_ONLY_TENSOR_GRAPH = "only_tensor_graph";
+const std::string KEY_ONLY_HOST_COMPILE = "only_host_compile";
+const std::string KEY_ENABLE_COST_MODEL = "enable_cost_model";
 const std::string KEY_ENABLE_DYN_FULL_COST_MODEL = "ENABLE_DYN_FULL_COST_MODEL";
-const std::string KEY_ENABLE_AIHAC_BACKEND = "ENABLE_AIHAC_BACKEND";
-const std::string KEY_ENABLE_CHECKER = "ENABLE_CHECKER";
-const std::string KEY_DUMP_SOURCE_LOCATION = "DUMP_SOURCE_LOCATION";
-const std::string KEY_ENABLE_PROF_FUNC = "ENABLE_PROF_FUNC";
-const std::string KEY_ENABLE_PROF_AICORE_TIME = "ENABLE_PROF_AICORE_TIME";
-const std::string KEY_ENABLE_PROF_AICORE_PMU = "ENABLE_PROF_AICORE_PMU";
+const std::string KEY_ENABLE_AIHAC_BACKEND = "enable_aihac_backend";
+const std::string KEY_ENABLE_CHECKER = "enable_checker";
+const std::string KEY_DUMP_SOURCE_LOCATION = "dump_source_location";
+const std::string KEY_ENABLE_PROF_FUNC = "enable_prof_func";
+const std::string KEY_ENABLE_PROF_AICORE_TIME = "enable_prof_aicore_time";
+const std::string KEY_ENABLE_PROF_AICORE_PMU = "enable_prof_aicore_pmu";
+const std::string KEY_ENABLE_DYN_COST_MODEL = "enable_dyn_cost_model";
+const std::string KEY_TEST_IS_TIG = "test_is_tig";
+
+/* Simulation KEYs */
+const std::string KEY_BUILD_TASK_BASED_TOPO = "build_task_based_topo";
+const std::string KEY_SIM_MODE = "sim_mode";
+const std::string KEY_ACCURACY_LEVEL = "accuracy_level";
+const std::string KEY_PV_LEVEL = "pv_level";
+const std::string KEY_DEBUG_SINGLE_FUNC = "debug_single_func";
+const std::string KEY_DEBUG_SINGLE_FUNCNAME = "debug_single_funcname";
+const std::string KEY_DRAW_FUNCTION_GRAPH = "draw_function_graph";
+const std::string KEY_LOG_LEVEL = "log_level";
+const std::string KEY_EXECUTE_CYCLE_THRESHOLD = "execute_cycle_threshold";
+const std::string KEY_JSON_PATH = "json_path";
+const std::string KEY_AGENT_JSON_PATH = "agent_json_path";
+const std::string KEY_ARGS = "args";
 
 /* Host KEYs */
-const std::string KEY_STRATEGY = "STRATEGY";
+const std::string KEY_STRATEGY = "strategy";
 const std::string KEY_ENABLE_BINARY_CACHE = "enable_binary_cache";
 const std::string KEY_ONLY_CODEGEN = "only_codegen";
 
@@ -53,23 +69,28 @@ const std::string KEY_ONLY_CODEGEN = "only_codegen";
 const std::string KEY_PRINT_GRAPH = "print_graph";
 const std::string KEY_PRINT_PROGRAM = "print_program";
 const std::string KEY_DUMP_GRAPH = "dump_graph";
-const std::string KEY_DUMP_PASS_TIME_COST = "DUMP_PASS_TIME_COST";
-const std::string KEY_PRE_CHECK = "PRE_CHECK";
-const std::string KEY_POST_CHECK = "POST_CHECK";
-const std::string KEY_EXPECTED_VALUE_CHECK = "EXPECTED_VALUE_CHECK";
-const std::string KEY_DISABLE_PASS = "DISABLE_PASS";
-const std::string KEY_HEALTH_CHECK = "HEALTH_CHECK";
+const std::string KEY_DUMP_PASS_TIME_COST = "dump_pass_time_cost";
+const std::string KEY_PRE_CHECK = "pre_check";
+const std::string KEY_POST_CHECK = "post_check";
+const std::string KEY_EXPECTED_VALUE_CHECK = "expected_value_check";
+const std::string KEY_DISABLE_PASS = "disable_pass";
+const std::string KEY_HEALTH_CHECK = "health_check";
 const std::string KEY_RESUME_PARH = "RESUME_PATH";
 const std::string KEY_EXEC_VERIFIER = "EXEC_VERIFIER";
 const std::string KEY_SET_SCOPE = "SCOPE";
+const std::string KEY_ENABLE_CV_FUSE = "enable_cv_fuse";
+const std::string KEY_PASS_THREAD_NUM = "pass_thread_num";
 
 
 /* CodeGen KEYs */
 const std::string KEY_PARALLEL_COMPILE = "parallel_compile";
 const std::string KEY_FIXED_OUTPUT_PATH = "fixed_output_path"; // if true, dump cce to output directory
 const std::string KEY_FORCE_OVERWRITE = "force_overwrite"; // if true, don't dump cce when file exists
-const std::string KEY_CODEGEN_SUPPORT_TILE_TENSOR = "CODEGEN_SUPPORT_TILE_TENSOR";       // if true, gen code with layout mode
-const std::string KEY_CODEGEN_NEED_COMPILE = "CODEGEN_NEED_COMPILE";       // if true, gen code & compile code
+const std::string KEY_CODEGEN_SUPPORT_TILE_TENSOR = "codegen_support_tile_tensor";       // if true, gen code with layout mode
+const std::string KEY_CODEGEN_NEED_COMPILE = "codegen_need_compile";       // if true, gen code & compile code
+
+const std::string KEY_FORCE_COMBINE_AXIS = "force_combine_axis";
+const std::string KEY_COMBINE_AXIS = "combine_axis";
 
 enum class DPlatform {
     ASCEND_910B1,
@@ -403,7 +424,7 @@ void SetCodeGenConfig(const std::string &key, const T &value) {
 }
 
 inline DPlatform GetDevicePlatform() {
-    auto platform = ConfigManager::Instance().GetPlatformConfig("DEVICE_PLATFORM", "ASCEND_910B2");
+    auto platform = ConfigManager::Instance().GetPlatformConfig("device_platform", "ASCEND_910B2");
     return StringToDpaltform(platform);
 }
 
@@ -437,7 +458,7 @@ inline std::string GetPassStrategy() {
 }
 
 inline bool UseTIG() {
-    return GetPassStrategy() == "TIG" || GetPassStrategy() == "PVC2_OOO" || GetPlatformConfig("TEST_IS_TIG", false) ||
+    return GetPassStrategy() == "TIG" || GetPassStrategy() == "PVC2_OOO" || GetPlatformConfig(KEY_TEST_IS_TIG, false) ||
            GetPassStrategy() == "DFS_OOO" || GetPassStrategy() == "BFS_DFS_OOO";
 }
 

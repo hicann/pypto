@@ -103,9 +103,9 @@ def set_operation_config(*, force_combine_axis: Optional[bool] = None,
         Codegen forced axis fusion optimization.
     """
     if force_combine_axis is not None:
-        pypto_impl.SetOperationConfig("FORCE_COMBINE_AXIS", force_combine_axis)
+        pypto_impl.SetOperationConfig("force_combine_axis", force_combine_axis)
     if combine_axis is not None:
-        pypto_impl.SetOperationConfig("COMBINE_AXIS", combine_axis)
+        pypto_impl.SetOperationConfig("combine_axis", combine_axis)
 
 
 def get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
@@ -118,6 +118,6 @@ def get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int
         All operation config
     """
     return {
-        "force_combine_axis": pypto_impl.GetOperationConfig("FORCE_COMBINE_AXIS", False),
-        "combine_axis": pypto_impl.GetOperationConfig("COMBINE_AXIS", False),
+        "force_combine_axis": pypto_impl.GetOperationConfig("force_combine_axis", False),
+        "combine_axis": pypto_impl.GetOperationConfig("combine_axis", False),
     }

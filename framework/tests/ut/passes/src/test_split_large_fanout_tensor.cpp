@@ -42,7 +42,7 @@ public:
         config::Reset();
         config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
         config::SetHostConfig(KEY_STRATEGY, "SplitLargeFanoutTensorTestStrategy");
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
     void TearDown() override {}
 

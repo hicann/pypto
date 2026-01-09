@@ -485,7 +485,7 @@ Status SubgraphToFunction::ProcessCacheResult(const std::tuple<Function *, Opera
 
 void SubgraphToFunction::SetSemanticLabel(const std::vector<std::shared_ptr<Operation>>& subgraph, Operation& callOp) {
     std::shared_ptr<SemanticLabel> label;
-    if (GetConfig("USE_MAX_FREQ_LABEL", false)) {
+    if (GetConfig("use_max_freq_label", false)) {
         std::unordered_map<std::string, int> freqMap;
         std::unordered_map<std::string, std::shared_ptr<SemanticLabel>> labelMap;
         for (const auto& op : subgraph) {

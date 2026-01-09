@@ -31,14 +31,14 @@ void CostModelAgent::BuildCostModel()
     ALOG_INFO("Init CostModel Simulation.");
     ALOG_INFO("Using Config A2A3.");
     costModel = std::make_shared<CostModel::CostModelInterface>();
-    std::vector<std::string> inputArgs = config::GetSimConfig("args", inputArgs);
-    int mode = config::GetSimConfig("SIM_MODE", 0);
-    int accLevel = config::GetSimConfig("ACCURACY_LEVEL", 2);
-    int pvLevel = config::GetSimConfig("PV_LEVEL", 0);
-    int logLevel = config::GetSimConfig("LOG_LEVEL", 3);
-    int cycleThreshold = config::GetSimConfig("EXECUTE_CYCLE_THRESHOLD", -1);
-    std::string jsonPath = config::GetSimConfig("JSON_PATH", "");
-    agentJsonPath = config::GetSimConfig("AGENT_JSON_PATH", "");
+    std::vector<std::string> inputArgs = config::GetSimConfig(KEY_ARGS, inputArgs);
+    int mode = config::GetSimConfig(KEY_SIM_MODE, 0);
+    int accLevel = config::GetSimConfig(KEY_ACCURACY_LEVEL, 2);
+    int pvLevel = config::GetSimConfig(KEY_PV_LEVEL, 0);
+    int logLevel = config::GetSimConfig(KEY_LOG_LEVEL, 3);
+    int cycleThreshold = config::GetSimConfig(KEY_EXECUTE_CYCLE_THRESHOLD, -1);
+    std::string jsonPath = config::GetSimConfig(KEY_JSON_PATH, "");
+    agentJsonPath = config::GetSimConfig(KEY_AGENT_JSON_PATH, "");
     auto folder = config::GetAbsoluteTopFolder() + "/" + ("CostModelSimulationOutput");
     config::SetRunDataOption(KEY_RUNTYPE, "simulation");
     config::SetRunDataOption(KEY_SWIM_GRAPH_PATH, folder + "/merged_swimlane.json");
@@ -64,7 +64,7 @@ void CostModelAgent::BuildCostModel()
         configs.push_back("-l");
         configs.push_back(std::to_string(cycleThreshold));
     }
-    if (config::GetSimConfig("DRAW_FUNCTION_GRAPH", false)) {
+    if (config::GetSimConfig(KEY_DRAW_FUNCTION_GRAPH, false)) {
         configs.push_back("-d");
         configs.push_back("true");
     }
@@ -93,7 +93,7 @@ void CostModelAgent::SubmitToCostModel(Function *rootFunc)
     }
     ALOG_INFO("Submit to CostModel: ", rootFunc->GetMagicName());
     std::vector<npu::tile_fwk::Function *> funcs;
-    if (config::GetSimConfig("BUILD_TASK_BASED_TOPO", true)) {
+    if (config::GetSimConfig(KEY_BUILD_TASK_BASED_TOPO, true)) {
         funcs.push_back(rootFunc);
         costModel->Submit(funcs, true, "");
     } else {
@@ -218,7 +218,7 @@ void CostModelAgent::TerminateCostModel()
 
 void CostModelAgent::DebugSingleFunc(Function *func)
 {
-    auto debugFuncName = config::GetSimConfig("DEBUG_SINGLE_FUNCNAME", "");
+    auto debugFuncName = config::GetSimConfig(KEY_DEBUG_SINGLE_FUNCNAME, "");
     for (auto &leafFunc : func->programs_) {
         std::cout << "Func: " << leafFunc.second->GetMagicName() << std::endl;
         if (leafFunc.second->GetMagicName() == debugFuncName) {
@@ -247,18 +247,18 @@ void CostModelAgent::GetFunctionFromJson(const std::string &jsonPath)
 extern "C" int32_t ExecuteSimulation(const MachineTask *task, FunctionCache &cache)
 {
     (void)cache;
-    if (!config::GetPlatformConfig("ENABLE_COST_MODEL", true)) {
+    if (!config::GetPlatformConfig(KEY_ENABLE_COST_MODEL, true)) {
         return 0;
     }
 
     CostModelAgent costModelAgent;
 
-    if (config::GetSimConfig("DEBUG_SINGLE_FUNC", false)) {
+    if (config::GetSimConfig(KEY_DEBUG_SINGLE_FUNC, false)) {
         costModelAgent.DebugSingleFunc(task->GetFunction()->rootFunc_);
         return 0;
     }
 
-    if (config::GetSimConfig("SIM_MODE", 0) == static_cast<int>(CostModel::SimMode::LEAF_FUNCTION)) {
+    if (config::GetSimConfig(KEY_SIM_MODE, 0) == static_cast<int>(CostModel::SimMode::LEAF_FUNCTION)) {
         costModelAgent.SubmitLeafFunctionsToCostModel();
     } else {
         costModelAgent.SubmitToCostModel(task->GetFunction()->rootFunc_);

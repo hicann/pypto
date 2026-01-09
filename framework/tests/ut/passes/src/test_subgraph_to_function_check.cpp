@@ -40,8 +40,8 @@ public:
 TEST_F(SubgraphToFunctionCheckTest, TestPrePostCheck) {
     constexpr int kTileSize = 32;
     constexpr int kVectorSize = 64;
-    config::SetPassConfig("PVC2_OOO", "SubgraphToFunction", "PRE_CHECK", true);
-    config::SetPassConfig("PVC2_OOO", "SubgraphToFunction", "POST_CHECK", true);
+    config::SetPassConfig("PVC2_OOO", "SubgraphToFunction", KEY_PRE_CHECK, true);
+    config::SetPassConfig("PVC2_OOO", "SubgraphToFunction", KEY_POST_CHECK, true);
     TileShape::Current().SetVecTile(kTileSize, kTileSize);
     TileShape::Current().SetCubeTile({kTileSize, kTileSize}, {kTileSize, kTileSize}, {kTileSize, kTileSize});
 

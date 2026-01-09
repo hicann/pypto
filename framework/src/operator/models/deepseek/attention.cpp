@@ -62,7 +62,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
 
     std::vector<int> paOutShape = {b * s * n, kvLoraRank};
 
-    config::SetPassConfig("PVC2_OOO", "InferMemoryConflict", "DISABLE_PASS", true);
+    config::SetPassConfig("PVC2_OOO", "InferMemoryConflict", KEY_DISABLE_PASS, true);
 
     FUNCTION("main",
         {tokenX, wDq, wUqQr, wUk, wDkvKr, gammaCq, gammaCkv, sin, cos, cacheIndex, kvCache, krCache,
@@ -222,7 +222,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
         config::SetPassOption(SG_PG_UPPER_BOUND, NUM_100000);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_2);
-        config::SetOperationConfig("FORCE_COMBINE_AXIS", true);
+        config::SetOperationConfig(KEY_FORCE_COMBINE_AXIS, true);
 
         LOOP("LOOP_L0_bIdx_pa", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, batchSizeScalar, 1), {}, true) {
             SymbolicScalar curSeq = GetTensorData(actSeqs, {bIdx});
@@ -333,7 +333,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
         config::SetPassOption(SG_PG_UPPER_BOUND, NUM_500000);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_20);
-        config::SetOperationConfig("FORCE_COMBINE_AXIS", false);
+        config::SetOperationConfig(KEY_FORCE_COMBINE_AXIS, false);
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 4}});
         TileShape::Current().SetMatrixSize({});
         LOOP("PaPost", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(bLoop), {}, true) {

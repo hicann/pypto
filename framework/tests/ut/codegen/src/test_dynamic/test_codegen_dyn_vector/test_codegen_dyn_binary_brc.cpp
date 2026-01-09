@@ -38,7 +38,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
 
     void TearDown() override {}
@@ -46,7 +46,7 @@ public:
 
 // mul (32, 512), (32, 1)
 TEST_F(TestCodegenDynBinaryBrc, TestMulDynamic) {
-    config::SetOperationConfig("FORCE_COMBINE_AXIS", true);
+    config::SetOperationConfig(KEY_FORCE_COMBINE_AXIS, true);
     std::vector<int64_t> shape1 = {32, 512};
     std::vector<int64_t> shape2 = {32, 1};
     TileShape::Current().SetVecTile({32, 256});

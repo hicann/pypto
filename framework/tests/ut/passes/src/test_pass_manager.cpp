@@ -183,7 +183,7 @@ TEST_F(PassManagerTest, TestPassDFX) {
     EXPECT_TRUE(IsPathExist(beforeJsonPath));
     EXPECT_TRUE(IsPathExist(beforeJsonPath));
     EXPECT_TRUE(IsPathExist(afterJsonPath));
-    config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", "DISABLE_PASS", true);
+    config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", KEY_DISABLE_PASS, true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
 }
 }

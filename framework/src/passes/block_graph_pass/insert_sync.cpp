@@ -1683,7 +1683,7 @@ Status InsertSync::InsertSyncMainLoop(Function *subGraphFunc) {
 // regist pass
 Status InsertSync::RunOnFunction(Function &function) {
     APASS_LOG_INFO_F(Elements::Operation, "===============================================================> Start InsertSync.");
-    const unsigned hardwareConcurrency = config::GetPassGlobalConfig("pass_thread_num", 1);
+    const unsigned hardwareConcurrency = config::GetPassGlobalConfig(KEY_PASS_THREAD_NUM, 1);
     uint64_t index = 0;
     std::vector<std::pair<uint64_t, Function*>> subPrograms;
     for (auto &subProgram : function.rootFunc_->programs_) {

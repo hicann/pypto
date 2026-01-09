@@ -39,8 +39,8 @@ public:
         config::Reset();
         config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
         config::SetHostConfig(KEY_STRATEGY, "PVC2_OOO");
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
-        config::SetSimConfig("BUILD_TASK_BASED_TOPO", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        config::SetSimConfig(KEY_BUILD_TASK_BASED_TOPO, false);
     }
 
     void TearDown() override {}
@@ -83,8 +83,8 @@ TEST_F(GraphTest, llama_1_1_512_128)
 
 TEST_F(GraphTest, llama_1_1_256_128_mix)
 {
-    config::SetPassConfig("PVC2_OOO", "PreGraphProcess", "PRE_CHECK", false);
-    config::SetPassConfig("PVC2_OOO", "PreGraphProcess", "POST_CHECK", false);
+    config::SetPassConfig("PVC2_OOO", "PreGraphProcess", KEY_PRE_CHECK, false);
+    config::SetPassConfig("PVC2_OOO", "PreGraphProcess", KEY_POST_CHECK, false);
     AttentionDims dimsCfg = {1, 1, 256, 128, DFT_SINGLE_M, DFT_SINGLE_N};
     RunLLamaLayerGraph(dimsCfg);
 }

@@ -287,14 +287,14 @@ private:
     }
 
     void RunCostModel(AstKernelArgs *kArgs) {
-        if (!config::GetPlatformConfig("ENABLE_DYN_COST_MODEL", true)) {
+        if (!config::GetPlatformConfig(KEY_ENABLE_DYN_COST_MODEL, true)) {
             return;
         }
         Function *function = Program::GetInstance().GetLastFunction();
         if (function == nullptr) {
             return;
         }
-        config::SetSimConfig("SIM_MODE", CostModel::SimMode::LEAF_FUNCTION);
+        config::SetSimConfig(KEY_SIM_MODE, CostModel::SimMode::LEAF_FUNCTION);
         CostModelAgent costModelAgent;
         costModelAgent.SubmitLeafFunctionsToCostModel();
         costModelAgent.RunCostModel();
@@ -315,7 +315,7 @@ private:
         if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
             return;
         }
-        config::SetSimConfig("SIM_MODE", CostModel::SimMode::NORMAL);
+        config::SetSimConfig(KEY_SIM_MODE, CostModel::SimMode::NORMAL);
         CostModelAgent costModelAgent;
 
         std::string path = config::LogTopFolder() + "/dyn_topo.txt";

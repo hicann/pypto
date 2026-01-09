@@ -172,7 +172,7 @@ void PadLocalBuffer::PadVector(Operation &op, LogicalTensorPtr &in, std::unorder
         in->oriShape = in->shape;
         in->tensor->UpdateRawShape(in->shape);
         in->tensor->oriRawshape = in->tensor->rawshape;
-        if (ConfigManager::Instance().GetOperationConfig("FORCE_COMBINE_AXIS", false) && paddingValue > 0 && in->tensor->rawshape[lastIdx - 1] % paddingValue != 0) {
+        if (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) && paddingValue > 0 && in->tensor->rawshape[lastIdx - 1] % paddingValue != 0) {
             int64_t shapeAfterPad = Pad(in->tensor->rawshape[lastIdx - 1], paddingValue);
             in->tensor->rawshape[lastIdx - 1] = shapeAfterPad;
         }
@@ -325,7 +325,7 @@ void PadLocalBuffer::ProcessReduce(Function &function, Operation &op) {
         if (paddingIter != BLOCK_PADDING_DIM.end()) {
             paddingDim = paddingIter->second;
         }
-        if (!ConfigManager::Instance().GetOperationConfig("FORCE_COMBINE_AXIS", false) && paddingDim > 0 && op.oOperand[0]->shape[op.GetOOperands()[0]->shape.size() - AXIS_COMBINE_MIN_SHAPE_SIZE] % paddingDim != 0) {
+        if (!ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) && paddingDim > 0 && op.oOperand[0]->shape[op.GetOOperands()[0]->shape.size() - AXIS_COMBINE_MIN_SHAPE_SIZE] % paddingDim != 0) {
             return;
         }
         APASS_LOG_DEBUG_F(Elements::Operation, "op %d %s is reduce, next to last dim is aligned\n", op.opmagic, op.GetOpcodeStr().c_str());
@@ -404,7 +404,7 @@ void PadLocalBuffer::DoPadding(Function &function) {
             if (in->tensor->GetRawDataSize() == 0) {
                 continue;
             }
-            if (ConfigManager::Instance().GetOperationConfig("COMBINE_AXIS", false)) {
+            if (ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false)) {
                 PadVectorForAxisCombine(op, in, visitedRaw);
             } else {
                 bool noPadding = false;
@@ -555,7 +555,7 @@ void PadLocalBuffer::PadVectorForAxisCombine(Operation &op, LogicalTensorPtr &in
 }
 
 Status PadLocalBuffer::RunOnFunction(Function &function) {
-    if (ConfigManager::Instance().GetOperationConfig("COMBINE_AXIS", false)) {
+    if (ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false)) {
         DoPadding(function);
         return SUCCESS;
     }
@@ -566,7 +566,7 @@ Status PadLocalBuffer::RunOnFunction(Function &function) {
             ProcessReduce(function, op);
         }
 
-        if (ConfigManager::Instance().GetOperationConfig("FORCE_COMBINE_AXIS", false) && IsCopyIn(op)) {
+        if (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) && IsCopyIn(op)) {
             ProcessCopyIn(function, op);
         }
 

@@ -34,7 +34,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-        config::SetPlatformConfig("ENABLE_COST_MODEL", false);
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         dynFunc = std::make_shared<Function>(Program::GetInstance(), "DYN_0", "DYN", Program::GetInstance().GetCurrentFunction());
         Program::GetInstance().SetCurrentDynamicFunction(dynFunc.get());
     }
@@ -111,7 +111,7 @@ TEST_F(GeneralizetionTest, TestScatterUpdate) {
 }
 
 TEST_F(GeneralizetionTest, TestTranspose) {
-    config::GetPassGlobalConfig("pass_thread_num", 2);
+    config::GetPassGlobalConfig(KEY_PASS_THREAD_NUM, 2);
     // 若是二维，则报错
     int b = 4;
     int n = 1;
@@ -132,7 +132,7 @@ TEST_F(GeneralizetionTest, TestTranspose) {
 
 // =======================================================  Same OP Test ====================================================================
 TEST_F(GeneralizetionTest, TestReshapeReshape) {
-    config::GetPassGlobalConfig("pass_thread_num", 2);
+    config::GetPassGlobalConfig(KEY_PASS_THREAD_NUM, 2);
     TileShape::Current().SetVecTile({64, 64});
     std::vector<int64_t> shape1{256, 256};
 
