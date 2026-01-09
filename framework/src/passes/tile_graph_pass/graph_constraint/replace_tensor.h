@@ -58,10 +58,10 @@ const std::unordered_set<Opcode> inplaceOpSet = {Opcode::OP_VIEW, Opcode::OP_ASS
 
 class UnionFind {
 public:
-    explicit UnionFind(const LogicalTensors &objects) {
-        for (const auto &obj : objects) {
-            parentMap[obj] = obj;
-            rankMap[obj] = 1;
+    explicit UnionFind(std::unordered_map<LogicalTensorPtr, int> &tensorToOrderIndex) {
+        for (auto it = tensorToOrderIndex.begin(); it != tensorToOrderIndex.end(); it++) {
+            parentMap[it->first] = it->first;
+            rankMap[it->first] = 1;
         }
     }
 
@@ -128,7 +128,8 @@ private:
     Status InplaceCheck(Function &function);
     bool CheckInplace(const Operation &op);
 
-    Status FindBaseTensor(Function &function, LogicalTensorPtr &baseTensor, LogicalTensors &group);
+    std::unordered_map<LogicalTensorPtr, int> BuildTensorOrderIndexMap(Function &function);
+    Status FindBaseTensor(Function &function, std::unordered_map<LogicalTensorPtr, int> &tensorToOderIndex, LogicalTensors &group, LogicalTensorPtr &baseTensor);
     Status ProcessHubOp(Function &function);
     void ProcessHubAssembleOp(Function &function, Operation &hubOp, Operation &assembleOp, 
                              std::shared_ptr<LogicalTensor> hubInput, std::shared_ptr<LogicalTensor> hubOutput);

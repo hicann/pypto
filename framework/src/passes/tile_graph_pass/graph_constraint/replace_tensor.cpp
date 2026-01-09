@@ -223,11 +223,8 @@ void ReplaceTensor::UniteTensor(Function &function, UnionFind &uf) {
     }
 }
 
-Status ReplaceTensor::FindBaseTensor(Function &function, LogicalTensorPtr &baseTensor, LogicalTensors &group) {
-    std::unordered_set<LogicalTensorPtr> groupTensor;
-    LogicalTensors orderGroup;
+Status ReplaceTensor::FindBaseTensor(Function &function, std::unordered_map<LogicalTensorPtr, int> &tensorToOrderIndex, LogicalTensors &group, LogicalTensorPtr &baseTensor) {
     for (const auto &curTensor : group) {
-        groupTensor.insert(curTensor);
         if (function.IsFromInCast(curTensor) || function.IsFromOutCast(curTensor)) {
             if (baseTensor == nullptr) {
                 baseTensor = curTensor;
@@ -244,31 +241,20 @@ Status ReplaceTensor::FindBaseTensor(Function &function, LogicalTensorPtr &baseT
             }
         }
     }
-    for (auto &op : function.Operations()) {
-        for (auto &ioperand : op.GetIOperands()) {
-            if (groupTensor.erase(ioperand)) {
-                orderGroup.push_back(ioperand);
-            }
-        }
-        for (auto &ooperand : op.GetOOperands()) {
-            if (groupTensor.erase(ooperand)) {
-                orderGroup.push_back(ooperand);
-            }
-        }
-        if (groupTensor.empty()) {
-            break;
-        }
-    }
     if (baseTensor == nullptr) {
-        baseTensor = orderGroup.front();
+        baseTensor = group.front();
         int64_t baseShape = abs(baseTensor->tensor->GetRawDataSize());
-        for (auto &curTensor : orderGroup) {
+        for (auto &curTensor : group) {
             int64_t curShape = abs(curTensor->tensor->GetRawDataSize());
             if (curShape > baseShape) {
                 APASS_LOG_INFO_F(Elements::Tensor, "Replace curTensor %d size %d to baseTensor %d size %d.",
                                 curTensor->GetMagic(), curShape, baseTensor->GetMagic(), baseShape);
                 baseTensor = curTensor;
                 baseShape = curShape;
+            } else if (curShape == baseShape && tensorToOrderIndex[curTensor] < tensorToOrderIndex[baseTensor]) {
+                APASS_LOG_INFO_F(Elements::Tensor, "Replace curTensor %d idx %d to baseTensor %d idx %d.",
+                                curTensor->GetMagic(), tensorToOrderIndex[curTensor], baseTensor->GetMagic(), tensorToOrderIndex[baseTensor]);
+                baseTensor = curTensor;
             }
         }
     }
@@ -712,27 +698,36 @@ Status ReplaceTensor::ProcessHubOp(Function &function) {
     return SUCCESS;
 }
 
-Status ReplaceTensor::RunOnFunction(Function &function) {
-    APASS_LOG_INFO_F(Elements::Operation, "===> Start ReplaceTensor.");
-    LogicalTensors rec;
+std::unordered_map<LogicalTensorPtr, int> ReplaceTensor::BuildTensorOrderIndexMap(Function &function) {
+    std::unordered_map<LogicalTensorPtr, int> tensorToOrderIndex;
+    int index = 0;
     for (const auto &op : function.Operations()) {
         for (const auto &inTensor : op.GetIOperands()) {
-            rec.emplace_back(inTensor);
+            if (!tensorToOrderIndex.count(inTensor)) {
+                tensorToOrderIndex[inTensor] = index++;
+            }
         }
         for (const auto &outTensor : op.GetOOperands()) {
-            rec.emplace_back(outTensor);
+            if (!tensorToOrderIndex.count(outTensor)) {
+                tensorToOrderIndex[outTensor] = index++;
+            }
         }
     }
-    UnionFind uf(rec);
+    return tensorToOrderIndex;
+}
+
+Status ReplaceTensor::RunOnFunction(Function &function) {
+    APASS_LOG_INFO_F(Elements::Operation, "===> Start ReplaceTensor.");
+    auto tensorToOrderIndex = BuildTensorOrderIndexMap(function);
+    UnionFind uf(tensorToOrderIndex);
     UniteTensor(function, uf);
     std::vector<LogicalTensors> tensorGroups = uf.GetGroups();
-    LogicalTensorPtr baseTensor;
     for (auto &group : tensorGroups) {
-        baseTensor = nullptr;
+        LogicalTensorPtr baseTensor = nullptr;
         if (group.size() == 1) {
             continue;
         }
-        if (FindBaseTensor(function, baseTensor, group) == FAILED || baseTensor == nullptr) {
+        if (FindBaseTensor(function, tensorToOrderIndex, group, baseTensor) == FAILED || baseTensor == nullptr) {
             return FAILED;
         }
         backRoots.push(baseTensor);
