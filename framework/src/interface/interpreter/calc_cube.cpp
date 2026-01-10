@@ -17,6 +17,7 @@
 #include "interface/utils/log.h"
 #include "interface/interpreter/operation.h"
 #include "calc.h"
+#include "interface/operation/operation_impl.h"
 
 namespace npu::tile_fwk {
 
@@ -31,21 +32,16 @@ void ExecuteOpAMulB(ExecuteOperationContext *ctx) {
     int k1 = cubeTile.k[1];
     int k2 = cubeTile.k[2];
     int kStep = std::gcd(k1, k2);
+    bool transA = (ctx->op->HasAttr(Matrix::A_MUL_B_TRANS_A)) ? ctx->op->GetBoolAttribute(Matrix::A_MUL_B_TRANS_A) : false;
+    bool transB = (ctx->op->HasAttr(Matrix::A_MUL_B_TRANS_B)) ? ctx->op->GetBoolAttribute(Matrix::A_MUL_B_TRANS_B) : false;
+    MatMulParam param = {transA, transB, kStep};
     switch (ctx->op->GetOpcode()) {
-        case Opcode::OP_A_MUL_B: npu::tile_fwk::calc::MatMul<false, false>(ret, lhs, rhs, kStep); break;
+        case Opcode::OP_A_MUL_B: calc::MatMul(ret, lhs, rhs, param); break;
         case Opcode::OP_A_MULACC_B: {
             ASSERT(ctx->ioperandDataViewList->size() == SIZE_THREE);
             auto acc = ctx->ioperandDataViewList->at(2);
-            npu::tile_fwk::calc::AccMatMul<false, false>(ret, lhs, rhs, acc, kStep);
+            calc::AccMatMul(ret, lhs, rhs, acc, param);
         } break;
-        case Opcode::OP_A_MUL_BT: npu::tile_fwk::calc::MatMul<false, true>(ret, lhs, rhs, kStep); break;
-        case Opcode::OP_A_MULACC_BT: {
-            ASSERT(ctx->ioperandDataViewList->size() == SIZE_THREE);
-            auto acc = ctx->ioperandDataViewList->at(2);
-            npu::tile_fwk::calc::AccMatMul<false, true>(ret, lhs, rhs, acc, kStep);
-        } break;
-        case Opcode::OP_AT_MUL_B: npu::tile_fwk::calc::MatMul<true, false>(ret, lhs, rhs, kStep); break;
-        case Opcode::OP_AT_MUL_BT: npu::tile_fwk::calc::MatMul<true, true>(ret, lhs, rhs, kStep); break;
         default: ASSERT(false); break;
     }
 }

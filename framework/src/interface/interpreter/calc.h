@@ -229,16 +229,13 @@ inline void FormatND2NZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->FormatND2NZ(out, self);
 }
 
-template <bool aTrans = false, bool bTrans = false>
-inline void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other, int64_t kStep = 0) {
-    MatMulParam param = {aTrans, bTrans, kStep};
+inline void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other, 
+    MatMulParam param = {false, false, 0}) {
     GetCalcOps()->MatMul(out, self, other, nullptr, param);
 }
 
-template <bool aTrans = false, bool bTrans = false>
 inline void AccMatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other,
-    LogicalTensorDataPtr acc = nullptr, int64_t kStep = 0) {
-    MatMulParam param = {aTrans, bTrans, kStep};
+    LogicalTensorDataPtr acc = nullptr, MatMulParam param = {false, false, 0}) {
     GetCalcOps()->MatMul(out, self, other, acc, param);
 }
 } // namespace npu::tile_fwk::calc

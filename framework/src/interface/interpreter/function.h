@@ -725,6 +725,9 @@ struct FunctionInterpreter {
             UpdateSymbolDict(loop->IterSymbolName(), idx);
             loopSymbolDict[loop->IterSymbolName()] = idx;
             Operation *callop = ExecuteFunctionLoopLookupSat(loop);
+            if (callop == nullptr) {
+                continue;
+            }
             Function *callee = GetCallee(callop);
 
             ExecuteHandleOperationBegin(callop);
