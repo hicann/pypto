@@ -388,7 +388,7 @@ TILEOP void UBCopyInBase(
     }
 }
 
-template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
+template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4, bool DST_IS_PARTIAL_MEM = false>
 TILEOP void DynUBCopyIn(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4,
     unsigned GMS0, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned Offset0, unsigned Offset1,
     unsigned Offset2, unsigned Offset3, unsigned Offset4, unsigned dstStartOffset) {
@@ -400,7 +400,9 @@ TILEOP void DynUBCopyIn(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1
             __gm__ T *src1 = src0;
             for (int i2 = 0; i2 < T2; i2++) {
                 if constexpr (UBS4 % blockSize == 0) {
-                    if ((dstStartOffset % blockSize == 0) && (T4 % blockSize == 0)) {
+                    if constexpr (!DST_IS_PARTIAL_MEM) {
+                        TileOp::UBCopyInBase<T, UBS4>(dst + dstStartOffset, src1, T3, T4, GMS4);
+                    } else if ((dstStartOffset % blockSize == 0) && (T4 % blockSize == 0)) {
                         TileOp::UBCopyInBase<T, UBS4>(dst + dstStartOffset, src1, T3, T4, GMS4);
                     } else {
                         // gm_to_ubuf无法处理尾块非对齐场景
@@ -420,11 +422,11 @@ TILEOP void DynUBCopyIn(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1
     }
 }
 
-template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4>
+template <typename T, unsigned UBS1, unsigned UBS2, unsigned UBS3, unsigned UBS4, bool DST_IS_PARTIAL_MEM = false>
 TILEOP void DynUBCopyIn(__ubuf__ T *dst, __gm__ T *src, unsigned T0, unsigned T1, unsigned T2, unsigned T3, unsigned T4,
     unsigned GMS0, unsigned GMS1, unsigned GMS2, unsigned GMS3, unsigned GMS4, unsigned Offset0, unsigned Offset1,
     unsigned Offset2, unsigned Offset3, unsigned Offset4) {
-    DynUBCopyIn<T, UBS1, UBS2, UBS3, UBS4>(
+    DynUBCopyIn<T, UBS1, UBS2, UBS3, UBS4, DST_IS_PARTIAL_MEM>(
         dst, src, T0, T1, T2, T3, T4, GMS0, GMS1, GMS2, GMS3, GMS4, Offset0, Offset1, Offset2, Offset3, Offset4, 0);
 }
 

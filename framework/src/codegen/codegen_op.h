@@ -103,6 +103,7 @@ protected:
     std::vector<SymbolicScalar> dynamicOffset[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicValidShape[MAX_OPERANDS] = {}; // valid shape
     std::vector<SymbolicScalar> offsetGmSymbolic[MAX_OPERANDS] = {};  // for spilling into GM scene
+    bool isPartialMem[MAX_OPERANDS] = {};
     // if operand is an variable, record its related argument location
     // In COA(Call Operation Attribute), 0-index is the callee's cce info. So the tensor list starts from 1.
     int paramLocation[MAX_OPERANDS] = {1, 1, 1, 1, 1, 1};

@@ -210,6 +210,8 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
+    auto value = tensor->GetAttr<bool>("isPartialMem");
+    isPartialMem[operandIdx] = (value != nullptr) && (*value == true);
     UpdateShape(ops, *tensor, operandIdx, isInput, ioIdx);
     if (isInput) {
         UpdateOffsetForInput(ops, *tensor, operandIdx);

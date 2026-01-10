@@ -2012,7 +2012,7 @@ void TestInnerAssembleMultiView() {
         ASSERT(false);
     }
 
-    constexpr int N = 5;
+    constexpr int N = 20;
     constexpr int M = 1032;
 
     ASSERT(N % 5 == 0);

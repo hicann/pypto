@@ -160,6 +160,8 @@ private:
     Status ForUpdateView(Operation *op);
     Status BackUpdateAssemble(Operation *op);
 
+    Status MarkTensorAsPartialMem(Function &function);
+
     std::unordered_map<DataType, int> viewTypeTable = {{DT_INT8, 1}, {DT_BF16, 2}, {DT_FP16, 2}, {DT_FP32, 4}};
     std::queue<LogicalTensorPtr> backRoots;
     std::queue<LogicalTensorPtr> forRoots;
