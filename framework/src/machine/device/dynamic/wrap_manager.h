@@ -308,7 +308,7 @@ public:
     }
 
     bool IsBindedWrapId(uint32_t taskId) {
-        if (curDevTask_->wrapIdNum == 0 || GetWrapId(taskId) != -1) {
+        if (curDevTask_->wrapIdNum == 0 || GetWrapId(taskId) == -1) {
             return false;
         }
         return true;

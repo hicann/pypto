@@ -97,11 +97,17 @@ public:
         DeviceLauncherConfig &devConfig = const_cast<DeviceLauncherConfig &>(config);
 #ifdef BUILD_WITH_CANN
         int maxBlockDim = GetCfgBlockdim();
+        int maxAicpuNum = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum() - 1);
 #else
-        int maxBlockDim = 25;
+        int maxBlockDim = 25; // 25:maxblockDim
+        int maxAicpuNum = 5; // 5:maxaicpuNUm
 #endif
         if (devConfig.blockdim == 0 || devConfig.blockdim > maxBlockDim) {
             devConfig.blockdim = maxBlockDim;
+        }
+
+        if (devConfig.aicpuNum == 0 || devConfig.aicpuNum > maxAicpuNum) {
+            devConfig.aicpuNum = maxAicpuNum;
         }
     }
 
@@ -130,33 +136,19 @@ public:
 
     // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
     static void PrepareDevProgArgs(DevAscendProgram *devProg, const DeviceLauncherConfig &config) {
-#ifdef BUILD_WITH_CANN
-        int maxBlockDim = GetCfgBlockdim();
-#else
-        int maxBlockDim = 25;
-#endif
-        int blockdim = config.blockdim;
-        // Validate and clamp blockdim locally (do not mutate config)
-        int effectiveBlockdim = (blockdim == 0 || blockdim > maxBlockDim) ? maxBlockDim : blockdim;
-
         devProg->devArgs.nrAic = kDefaultAicNum;
         devProg->devArgs.nrAiv = kDefaultAivNum;
-        devProg->devArgs.nrValidAic = effectiveBlockdim;
+        devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
-
-        int aicpuNum = config.aicpuNum;
-        int platformMaxAicpu = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1;
-        int clampedAicpu = (aicpuNum < platformMaxAicpu) ? aicpuNum : platformMaxAicpu;
-        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(effectiveBlockdim, clampedAicpu);
-
+        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, config.aicpuNum);
+        devProg->devArgs.nrAicpu = config.aicpuNum;
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
         devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
 
         int minCpuNum = devProg->devArgs.scheCpuNum + 1;
-        int effectiveAicpuNum = (aicpuNum < minCpuNum || aicpuNum > DEVICE_MAX_AICPU_NUM) ? (minCpuNum + 1) : aicpuNum;
+        int effectiveAicpuNum = (config.aicpuNum < minCpuNum || config.aicpuNum > DEVICE_MAX_AICPU_NUM) ? (minCpuNum + 1) : config.aicpuNum;
         devProg->devArgs.nrAicpu = effectiveAicpuNum;
-
-        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", effectiveBlockdim, effectiveAicpuNum);
+        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, effectiveAicpuNum);
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize) {
