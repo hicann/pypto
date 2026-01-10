@@ -26,6 +26,11 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1) {
         return;
     }
 
+    if constexpr (op == BinaryScalarOp::SUB) {
+        pto::TADDS(dst, src0, -src1);
+        return;
+    }
+
     if constexpr (op == BinaryScalarOp::MUL) {
         pto::TMULS(dst, src0, src1);
     }
@@ -59,6 +64,11 @@ TILEOP void BinaryScalarCompute(T0 dst, T1 src0, Scalar src1) {
 template <typename Scalar, typename T0, typename T1>
 TILEOP void TAddS(T0 dst, T1 src0, Scalar src1) {
     BinaryScalarCompute<BinaryScalarOp::ADD>(dst, src0, src1);
+}
+
+template <typename Scalar, typename T0, typename T1>
+TILEOP void TSubS(T0 dst, T1 src0, Scalar src1) {
+    BinaryScalarCompute<BinaryScalarOp::SUB>(dst, src0, src1);
 }
 
 template <typename Scalar, typename T0, typename T1>
