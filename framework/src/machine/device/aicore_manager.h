@@ -27,7 +27,6 @@
 #include "aicpu_task_manager.h"
 #include "interface/operation/opcode.h"
 #include "securec.h"
-#include "aicore_prof.h"
 #include "dynamic/device_utils.h"
 #include "aicore_dump.h"
 #include "interface/utils/common.h"
@@ -132,7 +131,7 @@ void SdmaPrefetch(DeviceTask *devTask);
 
 class AiCoreManager {
 public:
-    AiCoreManager(AicpuTaskManager &aicpuTaskManager) : aicpuTaskManager_(aicpuTaskManager), prof_(*this){};
+    AiCoreManager(AicpuTaskManager &aicpuTaskManager) : aicpuTaskManager_(aicpuTaskManager){};
     ~AiCoreManager(){};
 
     inline void InitTaskData(DeviceTaskCtrl *taskCtrl) {
@@ -444,7 +443,6 @@ private:
     StaticReadyCoreFunctionQueue *readyAicCoreFunctionQue_{nullptr};
     StaticReadyCoreFunctionQueue *readyAivCoreFunctionQue_{nullptr};
 
-    AiCoreProf prof_;
     AicoreDump aicoreDump_;
     int64_t dotStatus_{0};
     uint64_t waitTaskCnt_[AICORE_TYPE_NUM]{0,0};

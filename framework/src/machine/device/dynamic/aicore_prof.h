@@ -30,7 +30,7 @@ __attribute__((weak)) int32_t AdprofCheckFeatureIsOn(uint64_t feature);
 
 namespace npu::tile_fwk::dynamic {
 class AiCoreManager;
-struct AstMsprofAdditionalInfo { // for MsprofReportAdditionalInfo buffer data
+struct PyPtoMsprofAdditionalInfo { // for MsprofReportAdditionalInfo buffer data
     uint16_t magicNumber = 0x5A5AU;
     uint16_t level;
     uint32_t type;
@@ -40,8 +40,8 @@ struct AstMsprofAdditionalInfo { // for MsprofReportAdditionalInfo buffer data
     uint8_t data[232];
 };
 
-constexpr uint32_t AST_MSPROF_REPORT_AICPU_LEVEL = 6000U;
-constexpr uint32_t AST_MSPROF_REPORT_AICPU_NODE_TYPE = 10U; /* type info: DATA_PREPROCESS.AICPU */
+constexpr uint32_t PYPTO_MSPROF_REPORT_AICPU_LEVEL = 6000U;
+constexpr uint32_t PYPTO_MSPROF_REPORT_AICPU_NODE_TYPE = 10U; /* type info: DATA_PREPROCESS.AICPU */
 
 constexpr uint64_t PROF_TASK_TIME_L0 = 0x00000008ULL;
 constexpr uint64_t PROF_TASK_TIME_L1 = 0x00000010ULL;
@@ -152,7 +152,7 @@ const uint16_t AIC_EVENT_LIST[MAX_PMU_CNT] = {
     L2_R0_MISS_ALLOC_CNT,
 };
 
-struct MsprofAicpuAstPmuData {
+struct MsprofAicpuPyPtoPmuData {
     uint32_t seqNo{0};
     uint32_t taskId{0};
     uint64_t totalCyc{0};
@@ -167,7 +167,7 @@ struct MsprofAicpuAstPmuData {
 };
 
 // !!注意和 TaskStat 前面的数据区保持一致
-struct MsprofAicpuAstLogData {
+struct MsprofAicpuPyPtoLogData {
     int16_t seqNo;
     int16_t subGraphId;
     int32_t taskId{0};
@@ -175,7 +175,7 @@ struct MsprofAicpuAstLogData {
     int64_t execEnd{0};
 };
 
-struct MsprofAicpuAstHead {
+struct MsprofAicpuPyPtoHead {
     uint16_t magicNumber = 0x6BD3U;
     uint16_t coreId   : 7;
     uint16_t coreType : 3;
@@ -186,10 +186,10 @@ struct MsprofAicpuAstHead {
     uint8_t rsv[29];
 };
 
-using MsprofAicpuAstPmuHead = struct MsprofAicpuAstHead;
-using MsprofAicpuAstLogHead = struct MsprofAicpuAstHead;
-using MsprofAicpuHandShakeHead = struct MsprofAicpuAstHead;
-using MsProfAiCpuTaskStatHead = struct MsprofAicpuAstHead;
+using MsprofAicpuPyPtoPmuHead = struct MsprofAicpuPyPtoHead;
+using MsprofAicpuPyPtoLogHead = struct MsprofAicpuPyPtoHead;
+using MsprofAicpuHandShakeHead = struct MsprofAicpuPyPtoHead;
+using MsProfAiCpuTaskStatHead = struct MsprofAicpuPyPtoHead;
 
 struct AiCpuHandShakeSta {
     int32_t threadId{0};
@@ -237,7 +237,7 @@ private:
     inline void SetPmuEvents(void *mapBase, const int32_t coreIdx) const;
     inline void ProfStartPmu();
     inline void ProfStopPmu();
-    void FillPmuData(MsprofAicpuAstPmuData &data, int32_t &coreIdx, uint32_t &subGraphId, uint32_t &taskId,
+    void FillPmuData(MsprofAicpuPyPtoPmuData &data, int32_t &coreIdx, uint32_t &subGraphId, uint32_t &taskId,
         const struct TaskStat *taskStat) const;
     inline void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
     inline bool ProfCheckLevel(uint64_t feature) const;
@@ -267,25 +267,25 @@ private:
     uint32_t pmuMsgSize_ = 0;
     uint32_t pmuDataSize_ = 0;
     uint32_t pmuHeadSize_ = 0;
-    std::vector<AstMsprofAdditionalInfo> pmuMsg_;
-    std::vector<MsprofAicpuAstPmuHead *> pmuHead_;
-    std::vector<MsprofAicpuAstPmuData *> pmuData_;
+    std::vector<PyPtoMsprofAdditionalInfo> pmuMsg_;
+    std::vector<MsprofAicpuPyPtoPmuHead *> pmuHead_;
+    std::vector<MsprofAicpuPyPtoPmuData *> pmuData_;
 
     // log data
     uint32_t logDataMaxNum_ = 8;
     uint32_t logMsgSize_ = 0;
     uint32_t logDataSize_ = 0;
     uint32_t logHeadSize_ = 0;
-    std::vector<AstMsprofAdditionalInfo> logMsg_;
-    std::vector<MsprofAicpuAstLogHead *> logHead_;
-    std::vector<MsprofAicpuAstLogData *> logData_;
+    std::vector<PyPtoMsprofAdditionalInfo> logMsg_;
+    std::vector<MsprofAicpuPyPtoLogHead *> logHead_;
+    std::vector<MsprofAicpuPyPtoLogData *> logData_;
 
     // handshake data
     const uint32_t handkShakeMaxNum_ = 8;
     uint32_t handkShakeMsgSize_{0};
     uint32_t handShakeDataSize_{0};
     uint32_t handkShakeHeadSize_{0};
-    std::vector<AstMsprofAdditionalInfo> HandShakeMsg_;
+    std::vector<PyPtoMsprofAdditionalInfo> HandShakeMsg_;
     std::vector<MsprofAicpuHandShakeHead *> HandShakeHead_;
     std::vector<AiCpuHandShakeSta *> handShakeData_;
     // AiCputStat data
@@ -293,7 +293,7 @@ private:
     uint32_t aiCpuStatMsgSize_{0};
     uint32_t aiCpuStatDataSize_{0};
     uint32_t aiCpuStatHeadSize_{0};
-    std::vector<AstMsprofAdditionalInfo> aiCpuStatMsg_;
+    std::vector<PyPtoMsprofAdditionalInfo> aiCpuStatMsg_;
     std::vector<MsprofAicpuHandShakeHead *> aiCpuStatHead_;
     std::vector<AiCpuTaskStat *> aiCpuStatData_;
 

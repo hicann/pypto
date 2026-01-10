@@ -22,14 +22,15 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "machine/runtime/runtime.h"
-#include "machine/device/aicore_prof.h"
-#include "machine/device/aicpu_task_manager.h"
-#include "machine/device/aicore_manager.h"
+#include "machine/device/dynamic/aicore_prof.h"
+#include "machine/device/dynamic/aicpu_task_manager.h"
+#include "machine/device/dynamic/aicore_manager.h"
 #include "interface/utils/common.h"
+#include "machine/device/tilefwk/aicpu_common.h"
 
 #include <iostream>
 
-using namespace npu::tile_fwk;
+using namespace npu::tile_fwk::dynamic;
 
 class TestPro : public testing::Test {
 public:
@@ -44,24 +45,22 @@ public:
 };
 
 TEST_F(TestPro, test_ini) {
-    std::unique_ptr<npu::tile_fwk::AicpuTaskManager> aicpuTaskPtr = std::make_unique<npu::tile_fwk::AicpuTaskManager>();
-    std::unique_ptr<npu::tile_fwk::AiCoreManager> AiCoreManagerPtr = std::make_unique<npu::tile_fwk::AiCoreManager>(*aicpuTaskPtr);
+    std::unique_ptr<AicpuTaskManager> aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
+    std::unique_ptr<AiCoreManager> AiCoreManagerPtr = std::make_unique<AiCoreManager>(*aicpuTaskPtr);
     AiCoreManagerPtr->aicNum_ = 0;
     AiCoreManagerPtr->aivNum_ = 1;
-    AiCoreManagerPtr->aivStart_ = 0;
     AiCoreManagerPtr->aivEnd_ = 1;
-    AiCoreManagerPtr->aicStart_ = 0;
     AiCoreManagerPtr->aicEnd_ = 0;
     AiCoreManagerPtr->aicpuIdx_ = 0;
-    AiCoreManagerPtr->blockIdToPhyCoreId_[0] = 0;
-    npu::tile_fwk::AiCoreProf prof(*AiCoreManagerPtr);
+    AiCoreProf prof(*AiCoreManagerPtr);
 
     int64_t *oriRegAddrs_ = (int64_t *)malloc(sizeof(int64_t) * 1024 * 2);
     int64_t *regAddrs_ = oriRegAddrs_ + 1024;
     regAddrs_[0] = (int64_t)&regAddrs_[0];
     std::cout << "oriRegAddrs_ " << oriRegAddrs_ << std::endl;
     std::cout << "regAddrs_    " << regAddrs_ << std::endl;
-    prof.ProfInit(regAddrs_, regAddrs_);
+    ProfConfig profConfig;
+    prof.ProfInit(regAddrs_, regAddrs_, profConfig);
     prof.ProfStart();
 
     int32_t aicoreId = 0;
@@ -73,15 +72,6 @@ TEST_F(TestPro, test_ini) {
     taskStat->execStart = 0;
     taskStat->subGraphId = 0;
 
-    uint32_t pmuCnt0 = 0;
-    prof.pmuCnt0Plain_[0] = &pmuCnt0;
-    prof.pmuCnt1Plain_[0] = &pmuCnt0;
-    prof.pmuCnt2Plain_[0] = &pmuCnt0;
-    prof.pmuCnt3Plain_[0] = &pmuCnt0;
-    prof.pmuCnt4Plain_[0] = &pmuCnt0;
-    prof.pmuCnt5Plain_[0] = &pmuCnt0;
-    prof.pmuCnt6Plain_[0] = &pmuCnt0;
-    prof.pmuCnt7Plain_[0] = &pmuCnt0;
     prof.ProInitHandShake();
     prof.ProInitAiCpuTaskStat();
     int threadIdx = 0;

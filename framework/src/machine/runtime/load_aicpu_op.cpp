@@ -97,15 +97,10 @@ void LoadAicpuOp::CustomAiCpuSoLoad() {
 #endif
 }
 
-int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]std::string &OpType) {
+int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]]void* funcHandle, [[maybe_unused]]const rtStream_t &stream,
+ 	                                     [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]const uint32_t &blockDim) {
 #ifdef BUILD_WITH_NEW_CANN
-    ASSERT(customBinHandle_ != nullptr) << "customBinHandle cannot be null";
-    rtFuncHandle custFuncHandle;
-    auto ret = rtsFuncGetByName(customBinHandle_, OpType.c_str(), &custFuncHandle);
-    if (ret != 0) {
-        ALOG_ERROR_F("Get OpType[%s] funcHandle failed ret[%d]", OpType.c_str(), ret);
-        return ret;
-    }
+    rtFuncHandle aicpuFuncHandle = static_cast<rtFuncHandle>(funcHandle);
     rtAicpuArgsEx_t rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
     rtArgs.args = kArgs;
@@ -117,7 +112,22 @@ int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unuse
     rtKernelLaunchCfg_t kernelLaunchCfg = {nullptr, 0U};
     auto launchKernelAttr = std::make_unique<rtLaunchKernelAttr_t>();
     kernelLaunchCfg.attrs = launchKernelAttr.get();
-    return rtsLaunchCpuKernel(custFuncHandle, 1, stream, &kernelLaunchCfg, &argInfo);
+    return rtsLaunchCpuKernel(aicpuFuncHandle, blockDim, stream, &kernelLaunchCfg, &argInfo);
+#else
+    return 0;
+#endif
+}
+
+int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]std::string &OpType) {
+#ifdef BUILD_WITH_NEW_CANN
+    ASSERT(customBinHandle_ != nullptr) << "customBinHandle cannot be null";
+    rtFuncHandle custFuncHandle;
+    auto ret = rtsFuncGetByName(customBinHandle_, OpType.c_str(), &custFuncHandle);
+    if (ret != 0) {
+        ALOG_ERROR_F("Get OpType[%s] funcHandle failed ret[%d]", OpType.c_str(), ret);
+        return ret;
+    }
+    return AicpuKernelLaunch(custFuncHandle, stream, kArgs, 1);
 #else
     return 0;
 #endif
@@ -167,18 +177,7 @@ int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]]rtStream_t stream, [[maybe_unus
         ALOG_ERROR_F("The func name[%s] is invalid", funcName.c_str());
         return -1;
     }
-    rtAicpuArgsEx_t rtArgs;
-    memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
-    rtArgs.args = kArgs;
-    rtArgs.argsSize = sizeof(AstKernelArgs);
-
-    rtCpuKernelArgs_t argInfo;
-    memset_s(&argInfo, sizeof(argInfo), 0, sizeof(argInfo));
-    argInfo.baseArgs = rtArgs;
-    rtKernelLaunchCfg_t kernelLaunchCfg = {nullptr, 0U};
-    auto launchKernelAttr = std::make_unique<rtLaunchKernelAttr_t>();
-    kernelLaunchCfg.attrs = launchKernelAttr.get();
-    return rtsLaunchCpuKernel(funcHandle, aicpuNum, stream, &kernelLaunchCfg, &argInfo);
+    return AicpuKernelLaunch(funcHandle, stream, kArgs, aicpuNum);
 #else
     return 0;
 #endif

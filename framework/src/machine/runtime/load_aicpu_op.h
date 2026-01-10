@@ -36,6 +36,8 @@ private:
 public:
     LoadAicpuOp() = default;
     ~LoadAicpuOp() {};
+    int AicpuKernelLaunch([[maybe_unused]]void* funcHandle, [[maybe_unused]]const rtStream_t &stream,
+                          [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]const uint32_t &blockDim);
     int LaunchBuiltInOp(rtStream_t stream, AstKernelArgs *kArgs, const int &aicpuNum, const std::string &funcName);
     int GetBuiltInOpBinHandle();
     int LaunchCustomOp(rtStream_t stream, AstKernelArgs *kArgs, std::string &OpType);

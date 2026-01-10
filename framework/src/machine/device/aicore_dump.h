@@ -248,7 +248,7 @@ public:
     void DoDump(int64_t tensorInfo, int64_t tensorNum, int64_t tensorAddr, std::string iOinfo) {
         npu::tile_fwk::TensorInfo *info = reinterpret_cast<npu::tile_fwk::TensorInfo *>(tensorInfo);
         if (info == nullptr || info->hostpid == 0) {
-            DEV_DEBUG("Current Datadump is not abailable, please check the state of AST_DATADUMP_PATH.");
+            DEV_DEBUG("Current Datadump is not abailable, please check the state of PyPto_DATADUMP_PATH.");
             return;
         }
         uint32_t deviceid = 0;
