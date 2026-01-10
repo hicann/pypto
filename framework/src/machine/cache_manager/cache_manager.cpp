@@ -42,7 +42,7 @@ bool CacheManager::Initialize() {
     if (isInit_) {
         return true;
     }
-    if (!config::GetHostConfig(KEY_ENABLE_BINARY_CACHE, false)) {
+    if (!config::GetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, false)) {
         ALOG_INFO_F("Binary cache is not enable.");
         return true;
     }

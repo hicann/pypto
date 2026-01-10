@@ -241,7 +241,7 @@ TEST_F(TestConfigManager, GlobalConfig) {
     bool res_bool = ConfigManagerNg::GetGlobalConfig<bool>("codegen.codegen_support_tile_tensor");
     EXPECT_EQ(res_bool, true);
 
-    // python pybind interface
+    // // add code for coverage, python pybind interface
     std::map<std::string, Any> config_values = {
         {"simulation.execute_cycle_threshold", 10}
     };
@@ -250,4 +250,8 @@ TEST_F(TestConfigManager, GlobalConfig) {
 
     std::map<std::string, Any> empty_values = {};
     ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(empty_values), "default", 1);
+
+    // add code for coverage
+    auto values = std::vector<std::string>{"value"};
+    config::experimental::SetOption("key", std::move(values));
 }

@@ -333,8 +333,8 @@ public:
     static void TearDownTestCase() {}
 
     void SetUp() override {
-        cacheEnable = config::GetHostConfig(KEY_ENABLE_BINARY_CACHE, false);
-        config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, false);
+        cacheEnable = config::GetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, false);
+        config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, false);
         oriEnableAihacBackend = config::GetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
         Program::GetInstance().Reset();
@@ -343,7 +343,7 @@ public:
     }
 
     void TearDown() override {
-        config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, cacheEnable);
+        config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, cacheEnable);
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
         ResetPVModelConfig();
     }

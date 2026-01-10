@@ -364,6 +364,7 @@ void experimental::SetOption(const std::string &key, const std::vector<int64_t> 
 }
 
 void experimental::SetOption(const std::string &key, const std::vector<std::string> &value) {
+    ConfigManagerNg::CurrentScope()->UpdateValue(key, value);
     g_rwlock.lock();
     g_config.options[StringUtils::ToLower(key)] = value;
     g_rwlock.unlock();

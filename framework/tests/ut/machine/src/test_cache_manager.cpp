@@ -35,29 +35,29 @@ private:
 };
 
 TEST(CacheManagerUnitTest, test_init_case1) {
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, true);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, true);
     CacheManager cacheManager;
     EXPECT_EQ(cacheManager.Initialize(), true);
     EXPECT_EQ(cacheManager.MatchBinCache("112233"), false);
     EXPECT_EQ(cacheManager.RecoverTask("112233", nullptr), false);
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, false);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, false);
 }
 
 TEST(CacheManagerUnitTest, test_init_case2) {
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, true);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, true);
     CacheManager cacheManager;
     EXPECT_EQ(cacheManager.Initialize(), true);
     EXPECT_EQ(cacheManager.Initialize(), true);
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, false);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, false);
 }
 
 TEST(CacheManagerUnitTest, test_match_cache) {
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, true);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, true);
     CacheManager cacheManager;
     EXPECT_EQ(cacheManager.Initialize(), true);
     EXPECT_EQ(cacheManager.MatchBinCache("112233"), false);
     EXPECT_EQ(cacheManager.RecoverTask("112233", nullptr), false);
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, false);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, false);
 }
 
 TEST(CacheManagerUnitTest, test_page_attention) {
@@ -103,7 +103,7 @@ TEST(CacheManagerUnitTest, test_page_attention) {
     Function *lastFunc = Program::GetInstance().GetLastFunction();
     EXPECT_NE(lastFunc, nullptr);
     std::cout << "===hash of last func==" << lastFunc->GetFunctionHash().Data() << lastFunc->GetFunctionTypeStr() << std::endl;
-    config::SetHostConfig(KEY_ENABLE_BINARY_CACHE, true);
+    config::SetPassGlobalConfig(KEY_ENABLE_BINARY_CACHE, true);
     CacheManager cacheManager;
     EXPECT_EQ(cacheManager.Initialize(), true);
     auto task = std::make_shared<MachineTask>(111, lastFunc);

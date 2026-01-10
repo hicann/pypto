@@ -65,11 +65,7 @@
             "enable_prof_aicore_pmu": false
         },
         "host": {
-            "strategy": "PVC2_OOO",
-            "enable_binary_cache": false,
-            "stitch_function_inner_memory": 10,
-            "stitch_function_outcast_memory": 50,
-            "only_codegen":false
+            "strategy": "PVC2_OOO"
         },
         "device": {},
         "core": {},
@@ -106,9 +102,9 @@
             "force_combine_axis" : false,
             "combine_axis" : false
         },
-
         "distributed": {},
         "pass": {
+            "enable_binary_cache": false,
             "enable_pass_configs": true,
             "enable_cv_fuse": false,
             "pass_thread_num": 1,

@@ -1,34 +1,57 @@
 {
     "additionalProperties": false,
-
     "type": "object",
     "properties": {
         "pass": {
             "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
             "properties": {
                 "pg_parallel_lower_bound": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2147483647
                 },
                 "pg_upper_bound": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2147483647
                 },
                 "pg_lower_bound": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2147483647
                 },
                 "cube_l1_reuse_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2147483647
                 },
                 "cube_l1_reuse_setting": {
                     "type": "object",
                     "typeHints": "intmap",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "key_minimum": 0,
                     "key_maximum": 2147483647,
                     "value_minimum": 0,
@@ -36,30 +59,51 @@
                 },
                 "cube_nbuffer_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2
                 },
                 "cube_nbuffer_setting": {
                     "type": "object",
                     "typeHints": "intmap",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "key_minimum": -1,
                     "key_maximum": 2147483647,
                     "value_minimum": 1,
                     "value_maximum": 2147483647
+
                 },
                 "mg_copyin_upper_bound": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2147483647
                 },
                 "vec_nbuffer_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2
                 },
                 "vec_nbuffer_setting": {
                     "type": "object",
                     "typeHints": "intmap",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "key_minimum": -1,
                     "key_maximum": 2147483647,
                     "value_minimum": 1,
@@ -67,22 +111,44 @@
                 },
                 "mg_vec_parallel_lb": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 1,
                     "maximum": 48
                 },
                 "sg_cube_parallel_num": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 1,
                     "maximum": 24
                 },
-                "pg_skip_partition": {"type": "boolean"},
+                "pg_skip_partition": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                },
                 "copyout_resolve_coalescing": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 1000000
                 },
                 "sg_set_scope": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": -1,
                     "maximum": 2147483647
                 }
@@ -90,92 +156,673 @@
         },
         "runtime": {
             "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
             "properties": {
                 "device_sched_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
-                    "maximum": 3
+                    "maximum": 3,
+                    "options": [
+                        {
+                            "value": 0,
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        {
+                            "value": 1,
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        {
+                            "value": 2,
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        {
+                            "value": 3,
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    ]
                 },
                 "stitch_function_inner_memory": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 1,
                     "maximum": 2147483647
                 },
                 "stitch_function_outcast_memory": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 1,
                     "maximum": 2147483647
                 },
                 "stitch_function_num_initial": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 1,
                     "maximum": 128
                 },
                 "stitch_function_num_step": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 128
                 },
                 "stitch_cfgcache_size": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 100000000
                 },
                 "stitch_function_size": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 1,
                     "maximum": 65535
                 },
                 "run_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
-                    "maximum": 1
+                    "maximum": 1,
+                    "options": [
+                        {
+                            "value": 0,
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        {
+                            "value": 1,
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    ]
                 }
             }
         },
         "host": {
             "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
             "properties": {
-                "only_codegen": {"type": "boolean"}
+                "only_codegen": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "屏蔽静态function的上板过程",
+                        "en": "Shield the static on-board process."
+                    }
+                }
             }
         },
         "codegen": {
             "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
             "properties": {
-                "support_dynamic_aligned": {"type": "boolean"}
+                "support_dynamic_aligned": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                }
             }
         },
         "verify": {
             "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
             "properties": {
-                "enable_pass_verify": {"type": "boolean"},
-                "pass_verify_save_tensor": {"type": "boolean"},
-                "pass_verify_save_tensor_dir": {"type": "string"},
-                "pass_verify_pass_filter": {"type": "array", "items": {"type": "string"}}
+                "enable_pass_verify": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                },
+                "pass_verify_save_tensor": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                },
+                "pass_verify_save_tensor_dir": {
+                    "type": "string",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                },
+                "pass_verify_pass_filter": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                }
             }
         },
         "debug": {
             "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
             "properties": {
-                "profile_enable": {"type": "boolean"},
+                "profile_enable": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                },
                 "print": {
                     "type": "object",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "properties": {
-                        "edgeitems": {"type": "integer"},
-                        "precision": {"type": "integer"},
-                        "threshold": {"type": "integer"},
-                        "linewidth": {"type": "integer"}
+                        "edgeitems": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "precision": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "threshold": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "linewidth": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
                     }
                 },
                 "compile_debug_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 1
                 },
                 "runtime_debug_mode": {
                     "type": "integer",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
                     "minimum": 0,
                     "maximum": 2
+                }
+            }
+        },
+        "global": {
+            "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
+            "properties": {
+                "platform": {
+                    "type": "object",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
+                    "properties": {
+                        "enable_cost_model": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_dyn_cost_model": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_aihac_backend": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "only_tensor_graph": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "only_host_compile": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "test_is_tig": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "dump_source_location": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_checker": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "device_platform": {
+                            "type": "string",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_prof_func": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_prof_aicore_time": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_prof_aicore_pmu": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    }
+                },
+                "host": {
+                    "type": "object",
+                    "properties": {
+                        "strategy": {
+                            "type": "string",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    }
+                },
+                "simulation": {
+                    "type": "object",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
+                    "properties": {
+                        "debug_single_func": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "debug_single_funcname": {
+                            "type": "string",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "draw_function_graph": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "build_task_based_topo": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "sim_mode": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+
+                        },
+                        "accuracy_level": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "pv_level": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "log_level": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "execute_cycle_threshold": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "json_path": {
+                            "type": "string",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "agent_json_path": {
+                            "type": "string",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "args": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "leaf_function": {
+                            "type": "string",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    }
+                },
+                "codegen": {
+                    "type": "object",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
+                    "properties": {
+                        "parallel_compile": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "support_dynamic_aligned": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "fixed_output_path": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "force_overwrite": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "codegen_support_tile_tensor": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "codegen_need_compile": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    }
+                },
+                "operation": {
+                    "type": "object",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
+                    "properties": {
+                        "force_combine_axis": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "combine_axis": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        }
+                    }
+                },
+                "pass": {
+                    "type": "object",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    },
+                    "properties": {
+                        "enable_binary_cache": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_pass_configs": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "enable_cv_fuse": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            }
+                        },
+                        "pass_thread_num": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            },
+                            "minimum": 1
+                        },
+                        "default_pass_configs": {
+                            "type": "object",
+                            "label": {
+                                "zh": "...",
+                                "en": "..."
+                            },
+                            "properties": {
+                                "print_graph": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "print_program": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "dump_graph": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "dump_pass_time_cost": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "pre_check": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "post_check": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "expected_value_check": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "disable_pass": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                },
+                                "health_check": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "...",
+                                        "en": "..."
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
