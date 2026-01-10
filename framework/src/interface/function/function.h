@@ -892,8 +892,7 @@ private:
     void OpValidCheck(Operation &op) const;
     std::shared_ptr<LogicalTensor> ConnectWithOverlap(std::shared_ptr<LogicalTensor> iOperand);
     void RemoveOriginIncastConsumer(const std::shared_ptr<LogicalTensor> &originIncast) const;
-    std::pair<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensor>> CreateIncastTensor(
-        const std::shared_ptr<LogicalTensor> &inArgument);
+    std::shared_ptr<LogicalTensor> CreateIncastTensor(const std::shared_ptr<LogicalTensor> &inArgument);
     void CreateFromIncast(const std::shared_ptr<LogicalTensor> &symbol, const std::shared_ptr<LogicalTensor> &newIncast,
                           const std::shared_ptr<LogicalTensor> &originIncast);
     void ReplaceMaybeParams(const std::shared_ptr<LogicalTensor> &newIncast,

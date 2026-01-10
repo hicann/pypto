@@ -1686,7 +1686,7 @@ void Function::UpdateLinkMap(const std::shared_ptr<LogicalTensor> &oriLogicalTen
     }
 }
 
-std::pair<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensor>> Function::CreateIncastTensor(const std::shared_ptr<LogicalTensor> &inArgument) {
+std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_ptr<LogicalTensor> &inArgument) {
     auto idx = inCasts_.size();
     auto newSymbol = inArgument->tensor->GetSymbol();
     if (newSymbol == "") {
@@ -1699,7 +1699,7 @@ std::pair<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensor>> Functi
     incastToInArgumentDict[incastSymbol] = inArgument;
 
     UpdateLinkMap(inArgument, incastSymbol);
-    return std::pair<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensor>>{incastSymbol, nullptr};
+    return incastSymbol;
 }
 
 void Function::CreateFromIncast(const std::shared_ptr<LogicalTensor> &symbol,
@@ -1772,12 +1772,11 @@ LogicalTensors Function::MakeIncasts(const std::shared_ptr<TensorSlotScope> &sco
             NodeType::LOCAL);
         inArgumentList.push_back(inArgument);
 
-        auto [incastSymbol, incastLocalBuf] = CreateIncastTensor(inArgument);
+        auto incastSymbol = CreateIncastTensor(inArgument);
         if (scope) {
             scope->incastToInArgumentDict[incastSymbol] = inArgument;
             scope->incastToInOriginalDict[incastSymbol].insert(sameRawIncasts.begin(), sameRawIncasts.end());
         }
-        (void)incastLocalBuf;
 
         std::map<ViewKey, std::shared_ptr<LogicalTensor>> newincastMap;
         for (auto &originIncast : sameRawIncasts) {

@@ -341,16 +341,13 @@ std::string LogicalTensor::Dump(bool showFrom, bool showMem) const {
 
 std::shared_ptr<LogicalTensor> LogicalTensor::View(
     Function &function, const Shape &newShape, const Offset &newOffset) const {
-    assert((shape.size() == newShape.size()) && ".view, shape must be the same dimension");
-    assert((offset.size() == newOffset.size()) && ".view, offset must be the same dimension");
+    ASSERT(shape.size() == newShape.size()) << "Tensor.view, shape must be the same dimension";
+    ASSERT(offset.size() == newOffset.size()) << "Tensor.view, offset must be the same dimension";
 
     auto view = std::make_shared<LogicalTensor>(
         function, this->tensor, this->offset, this->shape, this->nodetype);
     for (size_t i = 0; i < shape.size(); i++) {
-        if (!(shape[i] >= (newShape[i] + newOffset[i]))) {
-            assert(shape[i] >= (newShape[i] + newOffset[i]));
-        }
-        assert(shape[i] >= (newShape[i] + newOffset[i]));
+        ASSERT(shape[i] >= (newShape[i] + newOffset[i]));
     }
 
     view->shape = newShape;
