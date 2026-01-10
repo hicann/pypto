@@ -1331,6 +1331,28 @@ struct EncodeDevAscendFunctionInfo {
         }
     }
 
+     void AddDependOperandsToColorGraph(std::vector<Operation *> &callopList, std::unordered_map<Operation *, int> &callopIndexDict) {
+        std::unordered_map<std::shared_ptr<LogicalTensor>, OrderedSet<Operation *>> producerDict;
+        for (auto &op : callopList) {
+            for (auto &i : op->GetOOperands()) {
+                producerDict[i].Insert(op);
+            }
+        }
+
+        for (auto &op : callopList) {
+            for (auto &o : op->GetDependOperands()) {
+                for (auto &producer : producerDict[o]) {
+                    if (op == producer) {
+                        // Consumer and producer can not be the same.
+                        continue;
+                    }
+                    // Index for callop from its depend operand's producer callop index list
+                    colorOutGraph[callopIndexDict[producer]].push_back(callopIndexDict[op]);
+                }
+            }
+        }
+    }
+
     void EncodeZeroPredCount(std::vector<Operation *>& callopList) {
         std::unordered_map<Operation *, int> callopCoreTypeDict;
         for (auto &op : callopList) {
@@ -1485,11 +1507,12 @@ struct EncodeDevAscendFunctionInfo {
                 }
             }
         }
-        for (size_t index = 0; index < callopList.size(); index++) {
-            std::sort(colorOutGraph[index].begin(), colorOutGraph[index].end());
-            // remove repeated index in ooperand's consumer callop index list
-            colorOutGraph[index].resize(std::unique(colorOutGraph[index].begin(), colorOutGraph[index].end()) -
-                                colorOutGraph[index].begin());
+        AddDependOperandsToColorGraph(callopList, callopIndexDict);
+        for (size_t idx = 0; idx < callopList.size(); idx++) {
+            std::sort(colorOutGraph[idx].begin(), colorOutGraph[idx].end());
+            // remove repeated idx in ooperand's consumer callop idx list
+            colorOutGraph[idx].resize(std::unique(colorOutGraph[idx].begin(), colorOutGraph[idx].end()) -
+                                colorOutGraph[idx].begin());
         }
     }
 
@@ -1505,9 +1528,9 @@ struct EncodeDevAscendFunctionInfo {
                     RecordRawTensor(i);
                     consumerDict[i].Insert(&op);
                 }
-                for (auto &j : op.GetOOperands()) {
-                    tensorList.Insert(j);
-                    RecordRawTensor(j);
+                for (auto &o : op.GetOOperands()) {
+                    tensorList.Insert(o);
+                    RecordRawTensor(o);
                 }
             }
         }
