@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ add_library(tile_fwk_codegen SHARED)
 target_sources(tile_fwk_codegen PRIVATE ${_CodeGen_Srcs})
 target_link_libraries(tile_fwk_codegen
         PUBLIC
-            $<BUILD_INTERFACE:$<$<BOOL:${ENABLE_UTEST}>:tile_fwk_interface>>
+            $<BUILD_INTERFACE:$<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_interface>>
             $<BUILD_INTERFACE:json>
         PRIVATE
             intf_pub_cxx17

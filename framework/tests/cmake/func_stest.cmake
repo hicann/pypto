@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -49,9 +49,6 @@ function(PTO_Fwk_STest_AddLib)
                 ${PTO_Fwk_STestNamePrefix}_utils
                 GTest::gtest
     )
-    # 后检查
-    PTO_Fwk_AnalysisTargetHeaderFiles(TARGET ${ARG_TARGET})
-    # STest 暂不支持并行执行
     set(PTO_Fwk_STestCaseLibraries            ${PTO_Fwk_STestCaseLibraries}            ${ARG_TARGET}            CACHE INTERNAL "" FORCE)
     set(PTO_Fwk_STestCaseLdLibrariesExt       ${PTO_Fwk_STestCaseLdLibrariesExt}       ${ARG_LD_LIBRARIES_EXT}  CACHE INTERNAL "" FORCE)
     set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${ARG_GOLDEN_SCRIPT_DIR} CACHE INTERNAL "" FORCE)
@@ -178,7 +175,6 @@ function(PTO_Fwk_STest_RunExe_GenerateGolden)
         set(_Args)
         list(APPEND _Args "-o=${ENABLE_STEST_GOLDEN_PATH}")
 
-        list(FILTER ARG_GTEST_FILTER_LIST EXCLUDE REGEX "PARALLEL_SEPARATOR")
         string(REPLACE ";" ":" GTestFilterStr "${ARG_GTEST_FILTER_LIST}")
         list(APPEND _Args "-c=${GTestFilterStr}")
         list(REMOVE_DUPLICATES PTO_Fwk_STestCaseGoldenScriptPathList)
@@ -300,6 +296,7 @@ function(PTO_Fwk_STest_AddExe_RunExe)
     execute_process(COMMAND touch ${_Sources})
     list(REMOVE_DUPLICATES PTO_Fwk_STestCaseLibraries)
     set(PTO_Fwk_Libraries
+            tile_fwk_simulation_platform
             tile_fwk_interface
             tile_fwk_codegen
             tile_fwk_compiler
@@ -311,9 +308,11 @@ function(PTO_Fwk_STest_AddExe_RunExe)
     PTO_Fwk_GTest_AddExe(
             TARGET                      ${ARG_TARGET}
             SOURCES                     ${_Sources}
-            PRIVATE_LINK_LIBRARIES      ${PTO_Fwk_STestNamePrefix}_intf_pub ${PTO_Fwk_Libraries} ${PTO_Fwk_STestCaseLibraries}
+            PRIVATE_LINK_LIBRARIES      ${PTO_Fwk_STestNamePrefix}_utils ${PTO_Fwk_Libraries} ${PTO_Fwk_STestCaseLibraries}
     )
-    add_dependencies(${ARG_TARGET} tile_fwk_server)
+    if (ENABLE_TORCH_VERIFIER)
+        add_dependencies(${ARG_TARGET} tile_fwk_calculator)
+    endif()
 
     #
     # 执行

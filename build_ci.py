@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -158,6 +158,7 @@ class BuildParam(CMakeParam):
     ubsan: bool = False  # 使能 UndefinedBehaviorSanitizer
     gcov: bool = False  # 使能 GNU Coverage
     clang_install_path: Optional[Path] = None  # Clang 安装位置
+    compile_dependency_check: bool = False  # 使能编译依赖关系检查
     # Build
     targets: Optional[List[str]] = None  # 编译目标
     job_num: Optional[int] = None  # 编译阶段使用核数
@@ -173,6 +174,7 @@ class BuildParam(CMakeParam):
         self.ubsan = args.ubsan
         self.gcov = args.gcov
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
+        self.compile_dependency_check = args.compile_dependency_check
 
     def __str__(self):
         desc = f"\nBuild"
@@ -186,6 +188,7 @@ class BuildParam(CMakeParam):
         desc += f"\n                      UbSan : {self.ubsan}"
         desc += f"\n                       GCov : {self.gcov}"
         desc += f"\n           ClangInstallPath : {self.clang_install_path}"
+        desc += f"\n            CompileDepCheck : {self.compile_dependency_check}"
         desc += f"\n        Build"
         desc += f"\n                    Targets : {self.targets}"
         desc += f"\n                    Job Num : {self.job_num}"
@@ -211,6 +214,8 @@ class BuildParam(CMakeParam):
                             help="Enable GNU Coverage Instrumentation Tool.")
         parser.add_argument("--clang", nargs="?", type=str, default="",
                             help="Specify clang install path, such as /usr/bin/clang")
+        parser.add_argument("--compile_dependency_check", action="store_true", default=False,
+                            help="Enable compile dependency relation check.")
         # Build
         parser.add_argument("-t", "--targets", nargs="?", type=str, action="append",
                             help="targets, specific build targets, "
@@ -278,6 +283,9 @@ class BuildParam(CMakeParam):
             if not ret:
                 raise RuntimeError(f"Clang({self.clang_install_path}) not complete.")
             cmd += clang_cmd
+
+        # Others
+        cmd += self._cfg_require(opt="ENABLE_COMPILE_DEPENDENCY_CHECK", ctr=self.compile_dependency_check)
         return cmd
 
     def get_build_cmd_lst(self, cmake: Path, binary_path: Path) -> List[str]:
@@ -509,7 +517,7 @@ class STestToolsParam(CMakeParam):
 
 class TestsParam(CMakeParam):
 
-    def __init__(self, args):
+    def __init__(self, args, build: BuildParam):
         self.exec: TestsExecuteParam = TestsExecuteParam(args=args)
         self.golden: TestsGoldenParam = TestsGoldenParam(args=args)
         self.utest: TestsFilterParam = TestsFilterParam(argv=args.utest, opt="ENABLE_UTEST")
@@ -764,7 +772,7 @@ class BuildCtrl(CMakeParam):
         self.install_root: Path = Path(self.build_root.parent, "build_out")
         self.feature: FeatureParam = FeatureParam(args=args)
         self.build: BuildParam = BuildParam(args=args)
-        self.tests: TestsParam = TestsParam(args=args)
+        self.tests: TestsParam = TestsParam(args=args, build=self.build)
         self.model: ModelParam = ModelParam(args=args)
         self.third_party_path: Optional[Path] = Path(args.third_party_path).resolve() if args.third_party_path else None
         self.verbose: bool = args.verbose

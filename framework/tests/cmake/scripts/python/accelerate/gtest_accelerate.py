@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -506,7 +506,7 @@ class GTestAccelerate(ABC):
         ]
         return pairs
 
-    def _start_cntr_process_grp(self, delay: int = 5) -> List[Process]:
+    def _start_cntr_process_grp(self, delay: int = 2) -> List[Process]:
         """启动 Cntr 进程组
 
         :param delay: 各 Cntr 启动后, 处理具体 Case 前延迟时长, 在多消费者模式下, 各消费者启动时增加一定延迟, 等待所有消费者启动完成

@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,6 +9,7 @@
 # -----------------------------------------------------------------------------------------------------------
 
 set(PTO_Fwk_UTestCaseLibraries         "" CACHE INTERNAL "" FORCE)     # UTest 各模块 用例实现二进制
+set(PTO_Fwk_UTestCaseLkLibraries       "" CACHE INTERNAL "" FORCE)     # UTest 各模块 额外 Link 二进制
 set(PTO_Fwk_UTestCaseLdLibrariesExt    "" CACHE INTERNAL "" FORCE)     # UTest 各模块 额外 Load 二进制
 
 # UTest 添加测试用例二进制库
@@ -19,7 +20,7 @@ Parameters:
   multi_value_keywords:
       SOURCES                     : [Required] 编译源码
       PRIVATE_INCLUDE_DIRECTORIES : [Optional] 头文件搜索路径(PRIVATE)
-      PUBLIC_LINK_LIBRARIES       : [Optional] 链接库(PUBLIC)
+      LINK_LIBRARIES              : [Optional] 链接库(PUBLIC), 仅会在最终编译出可执行文件时链接;
       LD_LIBRARIES_EXT            : [Optional] 需要在执行时将所在路径配置到环境变量 LD_LIBRARY_PATH 中的 Libraries
 Attention:
     1. 一般 LD_LIBRARIES_EXT 内配置的二进制, 在正常 source CANN 包环境变量后, LD_LIBRARY_PATH 内也应包含其所在路径;
@@ -29,7 +30,7 @@ function(PTO_Fwk_UTest_AddCaseLib)
             ARG
             ""
             "TARGET"
-            "SOURCES;PRIVATE_INCLUDE_DIRECTORIES;PUBLIC_LINK_LIBRARIES;LD_LIBRARIES_EXT"
+            "SOURCES;PRIVATE_INCLUDE_DIRECTORIES;LINK_LIBRARIES;LD_LIBRARIES_EXT"
             ""
             ${ARGN}
     )
@@ -38,14 +39,13 @@ function(PTO_Fwk_UTest_AddCaseLib)
     target_include_directories(${ARG_TARGET} PRIVATE ${ARG_PRIVATE_INCLUDE_DIRECTORIES})
     target_link_libraries(${ARG_TARGET}
             PRIVATE
-                ${ARG_PUBLIC_LINK_LIBRARIES}
-                ${PTO_Fwk_UTestNamePrefix}_intf_pub
+                ${PTO_Fwk_UTestNamePrefix}_utils
                 GTest::gtest
+                json
+                c_sec
     )
-    # 后检查
-    PTO_Fwk_AnalysisTargetHeaderFiles(TARGET ${ARG_TARGET})
-
     set(PTO_Fwk_UTestCaseLibraries       ${PTO_Fwk_UTestCaseLibraries}       ${ARG_TARGET}            CACHE INTERNAL "" FORCE)
+    set(PTO_Fwk_UTestCaseLkLibrariesExt  ${PTO_Fwk_UTestCaseLkLibrariesExt}  ${ARG_LINK_LIBRARIES}    CACHE INTERNAL "" FORCE)
     set(PTO_Fwk_UTestCaseLdLibrariesExt  ${PTO_Fwk_UTestCaseLdLibrariesExt}  ${ARG_LD_LIBRARIES_EXT}  CACHE INTERNAL "" FORCE)
 endfunction()
 
@@ -134,13 +134,6 @@ function(PTO_Fwk_UTest_AddExe_RunExe)
     set(_Sources ${CMAKE_CURRENT_BINARY_DIR}/${PTO_Fwk_UTestNamePrefix}_main_stub.cpp)
     execute_process(COMMAND touch ${_Sources})
 
-    set(_PrivateLinkLibraries
-            ${PTO_Fwk_UTestNamePrefix}_intf_pub
-            $<$<BOOL:${BUILD_WITH_CANN}>:${PTO_Fwk_UTestNamePrefix}_stubs>
-            # Interface 内 HostMachine 存在 dlopen 逻辑, 此处增加对应库连接, 触发相关 so 被添加到可执行程序依赖中
-            tile_fwk_compiler
-    )
-
     # 默认全部执行
     set(GTestFilterList "*")
     # 支持由 ENABLE_UTEST 传入指定的 Filter
@@ -149,10 +142,8 @@ function(PTO_Fwk_UTest_AddExe_RunExe)
         string(REPLACE ":" ";" GTestFilterList "${GTestFilterList}")
     endif ()
 
-    list(FILTER PTO_Fwk_UTestCaseLibraries         EXCLUDE REGEX "PARALLEL_SEPARATOR")
-    list(FILTER PTO_Fwk_UTestCaseLdLibrariesExt    EXCLUDE REGEX "PARALLEL_SEPARATOR")
-    list(FILTER GTestFilterList                    EXCLUDE REGEX "PARALLEL_SEPARATOR")
     list(REMOVE_DUPLICATES PTO_Fwk_UTestCaseLibraries)
+    list(REMOVE_DUPLICATES PTO_Fwk_UTestCaseLkLibrariesExt)
     list(REMOVE_DUPLICATES PTO_Fwk_UTestCaseLdLibrariesExt)
     list(REMOVE_DUPLICATES GTestFilterList)
 
@@ -163,11 +154,25 @@ function(PTO_Fwk_UTest_AddExe_RunExe)
         endif ()
     endif ()
 
+    set(_PrivateLinkLibraries
+            ${PTO_Fwk_UTestNamePrefix}_utils
+            $<$<BOOL:${BUILD_WITH_CANN}>:${PTO_Fwk_UTestNamePrefix}_stubs>
+            # 基本依赖
+            # Interface 内 HostMachine 存在 dlopen 逻辑, 此处增加对应库连接, 触发相关 so 被添加到可执行程序依赖中
+            tile_fwk_simulation_platform
+            tile_fwk_interface
+            tile_fwk_codegen
+            tile_fwk_compiler
+            # 用例特殊依赖
+            ${PTO_Fwk_UTestCaseLkLibrariesExt}
+            ${PTO_Fwk_UTestCaseLibraries}
+    )
+    list(REMOVE_DUPLICATES _PrivateLinkLibraries)
     PTO_Fwk_GTest_AddExe(
             TARGET                      ${ARG_TARGET}
             SOURCES                     ${_Sources}
             PRIVATE_INCLUDE_DIRECTORIES ${ARG_PRIVATE_INCLUDE_DIRECTORIES}
-            PRIVATE_LINK_LIBRARIES      ${_PrivateLinkLibraries} ${PTO_Fwk_UTestCaseLibraries}
+            PRIVATE_LINK_LIBRARIES      ${_PrivateLinkLibraries}
     )
     PTO_Fwk_UTest_RunExe(
             TARGET              ${ARG_TARGET}

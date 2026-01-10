@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
         PRIVATE_INCLUDE_DIRECTORIES ${_Include}
-        PUBLIC_LINK_LIBRARIES tile_fwk_interface tile_fwk_compiler tile_fwk_runtime tile_fwk_operator dl
+        LINK_LIBRARIES tile_fwk_runtime tile_fwk_operator dl
 )
 target_compile_definitions(${_Target}
         PRIVATE
