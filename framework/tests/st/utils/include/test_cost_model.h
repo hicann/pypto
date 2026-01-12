@@ -143,7 +143,7 @@ private:
             pv_->Codegen(func_);
 
             for (int i = 0; i < 1; i++) {
-                AstKernelArgs kArgs = BuildKernelArgs(inputs, outputs);
+                DeviceKernelArgs kArgs = BuildKernelArgs(inputs, outputs);
                 std::cout << "!!! Run CostModel " << i << "\n";
                 RunTestMode(&kArgs);
             }
@@ -172,7 +172,7 @@ private:
         return;
     }
 
-    void InitTilingData(AstKernelArgs *kArgs, bool isTest) {
+    void InitTilingData(DeviceKernelArgs *kArgs, bool isTest) {
         MemoryH h{isTest};
         auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t *>(devProg_.data()));
         devProg->devArgs.nrAic = 25;
@@ -192,7 +192,7 @@ private:
         return;
     }
 
-    void RunTestMode(AstKernelArgs *kArgs) {
+    void RunTestMode(DeviceKernelArgs *kArgs) {
         (void) kArgs;
         InitTilingData(kArgs, true);
         constexpr int threadNum = 6;
@@ -228,9 +228,9 @@ private:
         }
     }
 
-    AstKernelArgs BuildKernelArgs(const std::vector<RawTensorDataPtr> &inputs,
+    DeviceKernelArgs BuildKernelArgs(const std::vector<RawTensorDataPtr> &inputs,
         const std::vector<RawTensorDataPtr> &outputs) {
-        AstKernelArgs kArgs;
+        DeviceKernelArgs kArgs;
 
         auto buildInouts = [&](auto &tensorList) {
             std::vector<DevTensorData> geTensors;

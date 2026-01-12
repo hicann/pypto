@@ -23,8 +23,15 @@
 #include "interface/configs/config_manager.h"
 #include "interface/operation/operation.h"
 #include "tilefwk/data_type.h"
+#include "machine/device/machine_interface/pypto_aicpu_interface.h"
+#include "machine/utils/machine_ws_intf.h"
+#include "machine/dump/kernel_dump_utils.h"
+#include "interface/program/program.h"
+#include "interface/utils/file_utils.h"
 #define private public
 using namespace npu::tile_fwk;
+
+ extern "C" uint32_t DynPyptoKernelServerNull(void *targ);
 class TestDynamicDeviceRunner : public testing::Test {
 public:
     static void SetUpTestCase() {
@@ -61,7 +68,7 @@ TEST_F(TestDynamicDeviceRunner, TestDynamicRun) {
     args.nrAic = 2;
     args.nrAiv = 2;
     runner.InitDynamicArgs(args);
-    [[maybe_unused]]npu::tile_fwk::AstKernelArgs taskArgs;
+    [[maybe_unused]]npu::tile_fwk::DeviceKernelArgs taskArgs;
     runner.args_.nrAic = 2;
     runner.args_.nrAiv = 2;
     int ret = runner.DynamicRun(0, 0, 0, 0, &taskArgs, 2);
@@ -103,4 +110,43 @@ TEST_F(TestDynamicDeviceRunner, TestRegisterDynamicKernel) {
     [[maybe_unused]]rtBinHandle staticHdl_;
     npu::tile_fwk::DeviceRunner runner;
     runner.RegisterKernelBin(&staticHdl_);
+}
+
+TEST_F(TestDynamicDeviceRunner, test_pypto_kernel_server_null) {
+    DeviceKernelArgs pyptoKernelArgs;
+    DeviceArgs devKernelArgs;
+    devKernelArgs.aicpuSoLen = 2;
+    pyptoKernelArgs.cfgdata = static_cast<int64_t *>(static_cast<void *>(&devKernelArgs));
+    auto ret = DynPyptoKernelServerNull(&pyptoKernelArgs);
+    EXPECT_EQ(ret, 1);
+}
+
+TEST_F(TestDynamicDeviceRunner, test_kernel_dump) {
+    const std::vector<int64_t> shape = {64, 64};
+    TileShape::Current().SetVecTile(shape);
+
+    Tensor inputA(DT_FP32, shape, "A0");
+    Tensor inputB(DT_FP32, shape, "B1");
+    Tensor output(DT_FP32, shape, "C0");
+
+    config::SetBuildStatic(true);
+    FUNCTION("ADD0", {inputA, inputB, output}) {
+        output = Add(inputA, inputB);
+    }
+
+    auto function = Program::GetInstance().GetFunctionByRawName("TENSOR_ADD0");
+    auto task_1 = std::make_shared<MachineTask>(0, function);
+    auto deviceMachineTask = std::make_shared<MachineTask>(task_1->GetTaskId(), task_1->GetFunction());
+    auto deviceAgentTask = std::make_shared<DeviceAgentTask>(deviceMachineTask);
+
+    KernelDumpUtils kernelDump;
+    std::string jsonDir = "/tmp/pypto/";
+    std::string kerneName = "pypto_add";
+    kernelDump.DumpJsonFile(deviceAgentTask.get(), kerneName,jsonDir);
+    std::vector<JsonInfo> binJsonPath;
+    std::string jsonFilePath = jsonDir + kerneName + ".json";
+    std::string binFileName = "add_bin";
+    kernelDump.WriteFatbinJson(binJsonPath, jsonFilePath, binFileName);
+    auto ret = IsPathExist(jsonFilePath);
+    EXPECT_EQ(ret, false);
 }

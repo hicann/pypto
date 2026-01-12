@@ -99,7 +99,7 @@ struct DeviceTaskBin {
 constexpr int64_t DEVICE_QUEUE_SIZE = 512;
 #define DEVICE_TASK_STOP 0x7FFFFFFE
 
-struct AstKernelArgs {
+struct DeviceKernelArgs {
     int64_t *syncaddr{nullptr}; // not used
     int64_t *inputs{nullptr};
     int64_t *outputs{nullptr};

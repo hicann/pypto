@@ -502,7 +502,7 @@ int DeviceRunner::DynamicLaunchSynchronize(rtStream_t aicpuStream, rtStream_t ct
     return rcAicore + rcAicpu + rcCtrl;
 }
 
-int DeviceRunner::launchDynamicAiCore(rtStream_t aicoreStream, AstKernelArgs *kernelArgs) {
+int DeviceRunner::launchDynamicAiCore(rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs) {
     rtArgsEx_t rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
     std::vector<void *> kArgs = {nullptr, nullptr, nullptr, nullptr, nullptr, kernelArgs->cfgdata};
@@ -514,12 +514,12 @@ int DeviceRunner::launchDynamicAiCore(rtStream_t aicoreStream, AstKernelArgs *ke
     return rtKernelLaunchWithHandleV2(binHdl_, tilingKey, blockDim_, &rtArgs, nullptr, aicoreStream, &cfg);
 }
 
-int DeviceRunner::launchDynamicAiCpu(rtStream_t aicpuStream, AstKernelArgs *kArgs) {
+int DeviceRunner::launchDynamicAiCpu(rtStream_t aicpuStream, DeviceKernelArgs *kArgs) {
 #ifdef BUILD_WITH_NEW_CANN
     return LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kArgs, aicpuNum_, "PyptoRun");
 #endif
     struct Args {
-        AstKernelArgs kArgs;
+        DeviceKernelArgs kArgs;
         const char kernelName[32] = {"DynTileFwkKernelServer"};
         const char soName[32] = {"libaicpu_extend_kernels.so"};
         const char opName[32] = {""};
@@ -551,12 +551,12 @@ void DeviceRunner::InitAiCpuSoBin() {
     args_.deviceId = GetLogDeviceId();
 }
 
-int DeviceRunner::launchDynamicAiCpuInit(rtStream_t aicpuStream, AstKernelArgs *kArgs) {
+int DeviceRunner::launchDynamicAiCpuInit(rtStream_t aicpuStream, DeviceKernelArgs *kArgs) {
 #ifdef BUILD_WITH_NEW_CANN
     return LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kArgs, 1, "PyptoInit");
 #endif
     struct Args {
-        AstKernelArgs kArgs;
+        DeviceKernelArgs kArgs;
         const char kernelName[32] = {"DynTileFwkKernelServerInit"};
         const char soName[32] = {"libaicpu_extend_kernels.so"};
         const char opName[32] = {""};
@@ -634,7 +634,7 @@ int DeviceRunner::RunPost(rtStream_t aicpuStream, rtStream_t aicoreStream) {
     return 0;
 }
 
-int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreStream, AstKernelArgs *kernelArgs, int blockdim) {
+int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs, int blockdim) {
     uint64_t startTime = MsprofSysCycleTime();
     int rc = launchDynamicAiCpuInit(aicpuStream, kernelArgs);
     if (rc < 0) {
@@ -662,7 +662,7 @@ int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreS
 }
 
 int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream,
-    AstKernelArgs *kernelArgs, int blockdim) {
+    DeviceKernelArgs *kernelArgs, int blockdim) {
     LoadAicpuOp::GetInstance().CustomAiCpuSoLoad();
     std::string initKernel =  OpInfoManager::GetInstance().GetOpFuncName() + "Init";
     std::string mainKernel =  OpInfoManager::GetInstance().GetOpFuncName() + "Run";
@@ -709,7 +709,7 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
 }
 
 int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId,
-    AstKernelArgs *kernelArgs, int blockdim, int launchAicpuNum) {
+    DeviceKernelArgs *kernelArgs, int blockdim, int launchAicpuNum) {
     InitializeErrorCallback();
     if (!g_IsFirstInit) {
         InitAiCpuSoBin();
@@ -777,7 +777,7 @@ void DeviceRunner::ReportHostProfInfo(uint64_t startTime, uint32_t blockDim, uin
     }
 }
 
-int DeviceRunner::DynamicRun(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId, AstKernelArgs *kernelArgs, int blockdim, int launchAicpuNum) {
+int DeviceRunner::DynamicRun(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId, DeviceKernelArgs *kernelArgs, int blockdim, int launchAicpuNum) {
     int rc = DynamicLaunch(aicpuStream, ctrlStream, aicoreStream, taskId, kernelArgs, blockdim, launchAicpuNum);
     if (rc < 0) {
         return rc;

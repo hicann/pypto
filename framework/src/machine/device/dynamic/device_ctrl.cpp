@@ -34,7 +34,7 @@ extern "C" __attribute__((visibility("default"))) int PyptoKernelCtrlServerInit(
 #if DEBUG_PLOG && defined(__DEVICE__)
     InitLogSwitch();
 #endif
-    auto kargs = (AstKernelArgs *)targ;
+    auto kargs = (DeviceKernelArgs *)targ;
     if (kargs == nullptr) {
         return -1;
     }
@@ -49,7 +49,7 @@ extern "C" __attribute__((visibility("default"))) int PyptoKernelCtrlServerInit(
 }
 
 extern "C" __attribute__((visibility("default"))) int PyptoKernelCtrlServer(void *targ) {
-    auto kargs = (AstKernelArgs *)targ;
+    auto kargs = (DeviceKernelArgs *)targ;
     int rc = g_ctrl_machine.ExecDyn(kargs);
     if (rc == npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
         DEV_INFO("All schedule exited, destroy the machine.\n");

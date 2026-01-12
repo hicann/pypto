@@ -98,13 +98,13 @@ void LoadAicpuOp::CustomAiCpuSoLoad() {
 }
 
 int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]]void* funcHandle, [[maybe_unused]]const rtStream_t &stream,
- 	                                     [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]const uint32_t &blockDim) {
+ 	                                     [[maybe_unused]]DeviceKernelArgs *kArgs, [[maybe_unused]]const uint32_t &blockDim) {
 #ifdef BUILD_WITH_NEW_CANN
     rtFuncHandle aicpuFuncHandle = static_cast<rtFuncHandle>(funcHandle);
     rtAicpuArgsEx_t rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
     rtArgs.args = kArgs;
-    rtArgs.argsSize = sizeof(AstKernelArgs);
+    rtArgs.argsSize = sizeof(DeviceKernelArgs);
 
     rtCpuKernelArgs_t argInfo;
     memset_s(&argInfo, sizeof(argInfo), 0, sizeof(argInfo));
@@ -118,7 +118,7 @@ int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]]void* funcHandle, [[maybe_unu
 #endif
 }
 
-int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]std::string &OpType) {
+int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unused]]DeviceKernelArgs *kArgs, [[maybe_unused]]std::string &OpType) {
 #ifdef BUILD_WITH_NEW_CANN
     ASSERT(customBinHandle_ != nullptr) << "customBinHandle cannot be null";
     rtFuncHandle custFuncHandle;
@@ -166,7 +166,7 @@ int LoadAicpuOp::GetBuiltInOpBinHandle() {
     return 0;
 }
 
-int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]]rtStream_t stream, [[maybe_unused]]AstKernelArgs *kArgs, [[maybe_unused]]const int &aicpuNum,
+int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]]rtStream_t stream, [[maybe_unused]]DeviceKernelArgs *kArgs, [[maybe_unused]]const int &aicpuNum,
                                  [[maybe_unused]]const std::string &funcName) {
 #ifdef BUILD_WITH_NEW_CANN
     rtFuncHandle funcHandle;
