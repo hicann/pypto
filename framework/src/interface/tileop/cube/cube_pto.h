@@ -53,7 +53,7 @@ INLINE int64_t CalNZOffset(const int64_t &srcShape0, const int64_t &srcShape1, c
 
 // Copy data from DDR to L1
 template <CopyInMode mode, typename Coord, typename T, typename U>
-TILEOP void TLoad(T &dst, U &src, const Coord &coord) {
+TILEOP void TLoad(T &dst, U &src, const Coord &coord, const int64_t &curH, const int64_t &curW) {
     constexpr auto shapeSize = Std::tuple_size<typename T::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     uint16_t offset0 = coord.GetValue();
@@ -64,7 +64,7 @@ TILEOP void TLoad(T &dst, U &src, const Coord &coord) {
     if constexpr (mode == CopyInMode::ND2NZ) {
         TLoadND2NZ(dst, src, offset0, offset1);
     } else if constexpr (mode == CopyInMode::NZ2NZ) {
-        TLoadNZ2NZ(dst, src, offset0, offset1);
+        TLoadNZ2NZ(dst, src, offset0, offset1, curH, curW);
     } else if constexpr (mode == CopyInMode::ND2ND) {
         TLoadND2ND(dst, src, offset0, offset1);
     }
@@ -99,13 +99,12 @@ INLINE void TLoadND2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &of
 
 // Copy data from DDR to L1 with NZ -> NZ format
 template <typename T, typename U>
-INLINE void TLoadNZ2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &offset1) {
+INLINE void TLoadNZ2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &offset1, const int64_t &curH,
+    const int64_t &curW) {
     constexpr int64_t c0Size = BLOCK_ALIGN_BYTE / sizeof(typename U::Type);
     constexpr auto shapeSize = Std::tuple_size<typename T::Shape>::value;
-    int64_t srcShape0 = GetShape<0>(src);
-    int64_t srcShape1 = GetShape<1>(src);
-    int64_t srcStride0 = GetStride<0>(src);
-    int64_t srcStride1 = GetStride<1>(src);
+    int64_t srcShape0 = curH;
+    int64_t srcShape1 = curW;
     int64_t dstShape0 = GetShape<0>(dst);
     int64_t dstShape1 = GetShape<1>(dst);
     constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM2, typename T::TileShape>::type::value;
@@ -245,7 +244,7 @@ TILEOP void TExtract(T &dst, U &src, V &fixbuf, const Coord &coord, uint64_t sca
             using scaleTileData =
                 pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor, -1, -1>;
             scaleTileData scaleData(scaleShape0, scaleShape1);
-            pto::TMOV(dstL1, srcL0C, scaleData);
+            pto::TMOV_FP(dstL1, srcL0C, scaleData);
         }
     } else {
         pto::TMOV(dstL1, srcL0C);
@@ -473,14 +472,13 @@ INLINE void TStoreNZ2ND(T &dst, U &src, const int64_t &offset0, const int64_t &o
 
 // Copy data from L0C to DDR with NZ -> NZ format
 template <typename config, typename T, typename U>
-INLINE void TStoreNZ2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &offset1, uint64_t scaleValue = 0) {
+INLINE void TStoreNZ2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &offset1, const int64_t &curH,
+    const int64_t &curW, uint64_t scaleValue = 0) {
     constexpr auto shapeSize = Std::tuple_size<typename T::Shape>::value;
     constexpr int64_t c0Size =
         std::is_same<typename U::Type, int32_t>::value ? BLOCK_CUBE_M_N : BLOCK_ALIGN_BYTE / sizeof(typename T::Type);
-    int64_t dstShape0 = GetShape<0>(dst);
-    int64_t dstShape1 = GetShape<1>(dst);
-    int64_t dstStride0 = GetStride<0>(dst);
-    int64_t dstStride1 = GetStride<1>(dst);
+    int64_t dstShape0 = curH;
+    int64_t dstShape1 = curW;
     int64_t srcShape0 = GetShape<0>(src);
     int64_t srcShape1 = GetShape<1>(src);
 
@@ -504,7 +502,8 @@ INLINE void TStoreNZ2NZ(T &dst, U &src, const int64_t &offset0, const int64_t &o
 
 // Copy data from L0C to DDR with quantization ability
 template <typename config, typename Coord, typename T, typename U, typename V>
-TILEOP void TStore(T &dst, U &src, V &fixbuf, const Coord &coord, uint64_t scaleValue = 0) {
+TILEOP void TStore(T &dst, U &src, V &fixbuf, const Coord &coord, const int64_t &curH, const int64_t &curW,
+    uint64_t scaleValue = 0) {
     constexpr auto shapeSize = Std::tuple_size<typename T::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     uint16_t offset0 = coord.GetValue();
@@ -513,7 +512,7 @@ TILEOP void TStore(T &dst, U &src, V &fixbuf, const Coord &coord, uint64_t scale
         if constexpr (config::kMode == CopyOutMode::NZ2ND) {
             TStoreNZ2ND<config>(dst, src, offset0, offset1, scaleValue);
         } else {
-            TStoreNZ2NZ<config>(dst, src, offset0, offset1, scaleValue);
+            TStoreNZ2NZ<config>(dst, src, offset0, offset1, curH, curW, scaleValue);
         }
     }
 }

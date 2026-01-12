@@ -734,6 +734,13 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     int64_t nzValue = 0;
     int64_t isAcc = 0;
     int64_t reluMode = 0;
+    int64_t outerValue = 0;
+    int64_t innerValue = 0;
+    auto ret = GetAttr("op_attr_curH", outerValue);
+    ret = GetAttr("op_attr_curW", innerValue);
+    auto gmShapeExprByIndex = GenParamIdxExprByIndex(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
+    std::string outerValueStr = outerValue == 0 ? gmShapeExprByIndex[0] : std::to_string(outerValue);
+    std::string innerValueStr = innerValue == 0 ? gmShapeExprByIndex[1] : std::to_string(innerValue);
     GetAttr(OP_ATTR_PREFIX + "atomic_add", isAcc);
     GetAttr("op_attr_is_nz", nzValue);
     GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
@@ -744,8 +751,8 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     if (!isAcc) {
         GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
     }
-    std::vector<std::string> tileOpParamList = {
-        dstTensor, srcTensor, src1Tensor, coord, std::to_string(scaleValue.GetUnsignedData())};
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord, outerValueStr, innerValueStr,
+        std::to_string(scaleValue.GetUnsignedData())};
     std::ostringstream oss;
     oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
@@ -889,7 +896,15 @@ std::string CodeGenOpCloudNPU::PrintL1CopyInTileTensor(const PrintMemCopyWithL1P
     std::string gmVarName = GenGmParamVar(param.gmIdx);
     std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord};
+    int64_t outerValue = 0;
+    int64_t innerValue = 0;
+    auto ret = GetAttr("op_attr_outer_value", outerValue);
+    ret = GetAttr("op_attr_inner_value", innerValue);
+    auto gmShapeExprByIndex = GenParamIdxExprByIndex(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
+    std::string outerValueStr = outerValue == 0 ? gmShapeExprByIndex[0] : std::to_string(outerValue);
+    std::string innerValueStr = innerValue == 0 ? gmShapeExprByIndex[1] : std::to_string(innerValue);
+
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord, outerValueStr, innerValueStr};
     int64_t copyInMode = -1;
     std::string cpModeStr = "";
     const int64_t ND2ND = 0;
@@ -898,7 +913,7 @@ std::string CodeGenOpCloudNPU::PrintL1CopyInTileTensor(const PrintMemCopyWithL1P
         copyInMode = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "copy_in_mode"));
     }
     int64_t nzValue = 0;
-    auto ret = GetAttr(OP_ATTR_PREFIX + "is_nz", nzValue);
+    ret = GetAttr(OP_ATTR_PREFIX + "is_nz", nzValue);
     if (copyInMode == ND2ND) {
         cpModeStr = "CopyInMode::ND2ND";
     } else if (copyInMode == ND2NZ) {
