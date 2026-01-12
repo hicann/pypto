@@ -300,15 +300,15 @@
         "codegen": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "生成Device侧运行的类C代码，作为毕昇编译器输入，用于编译出可在设备侧运行的二进制",
+                "en": "Generate C-like code that runs on the Device side, which serves as input to the Bisheng Compiler for compiling into Device-side executable binaries"
             },
             "properties": {
                 "support_dynamic_aligned": {
                     "type": "boolean",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "（不建议使用，后续收编）动态Shape场景下，用户若能确认运行时所有切分数据均能对齐到Tile块大小，即不包含非对齐的尾块，则可启用该选项，提示PTO框架尝试优化",
+                        "en": "(Deprecated)In Dynamic Shape scenarios, if the user can confirm that all data at runtime can be aligned to the tiled block size, this option can be enabled to prompt the PTO framework to attempt optimization"
                     }
                 }
             }
@@ -643,50 +643,50 @@
                 "codegen": {
                     "type": "object",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "生成Device侧运行的类C代码，作为毕昇编译器输入，用于编译出可在设备侧运行的二进制",
+                        "en": "Generate C-like code that runs on the Device side, which serves as input to the Bisheng Compiler for compiling into Device-side executable binaries"
                     },
                     "properties": {
                         "parallel_compile": {
                             "type": "integer",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "控制CodeGen框架对多个子图并发生成设备侧中间代码及二进制的线程数量",
+                                "en": "Control the number of threads used by the CodeGen framework to concurrently generate device-side code and binaries for multiple subgraphs"
                             }
                         },
                         "support_dynamic_aligned": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "（不建议使用，后续收编）动态Shape场景下，用户若能确认运行时所有切分数据均能对齐到Tile块大小，即不包含非对齐的尾块，则可启用该选项，提示PTO框架尝试优化",
+                                "en": "(Deprecated)In Dynamic Shape scenarios, if the user can confirm that all data at runtime can be aligned to the tiled block size, this option can be enabled to prompt the PTO framework to attempt optimization"
                             }
                         },
                         "fixed_output_path": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "固定设备侧代码及二进制的输出路径",
+                                "en": "Fix the output paths of the device-side code and binaries"
                             }
                         },
                         "force_overwrite": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "每次编译是否重新生成设备侧代码",
+                                "en": "Whether to regenerate device-side code for each compilation"
                             }
                         },
                         "codegen_support_tile_tensor": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "生成的设备侧代码是否支持PTO-ISA指令",
+                                "en": "Whether the generated device-side code supports PTO-ISA instruction"
                             }
                         },
                         "codegen_need_compile": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否需要将生成的设备侧代码编译为二进制",
+                                "en": "Whether it is necessary to compile the generated device-side code into binaries"
                             }
                         }
                     }
