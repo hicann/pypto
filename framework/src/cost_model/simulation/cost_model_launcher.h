@@ -309,7 +309,6 @@ private:
 
     void RunTestMode(AstKernelArgs *kArgs) {
         (void) kArgs;
-        const int BUFFER_SIZE_64 = 64;
         std::thread aicpus[DEVICE_MAX_AICPU_NUM];
         std::atomic<int> idx{0};
         auto *devProg = (DevAscendProgram *)(kArgs->cfgdata);
@@ -322,10 +321,9 @@ private:
                 cpu_set_t cpuset;
                 CPU_ZERO(&cpuset);
                 CPU_SET(tidx, &cpuset);
-                char name[BUFFER_SIZE_64];
-                (void)sprintf_s(name, sizeof(name), "aicput%d", tidx);
+                std::string name = "aicput" + std::to_string(tidx);
                 std::cout << "start thread: " << name << std::endl;
-                pthread_setname_np(pthread_self(), name);
+                pthread_setname_np(pthread_self(), name.c_str());
                 pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
                 if ((devProg->devArgs.enableCtrl == 0) && (uint32_t)tidx == devProg->devArgs.scheCpuNum) {
                     (void)PyptoKernelCtrlServer(kArgs);
