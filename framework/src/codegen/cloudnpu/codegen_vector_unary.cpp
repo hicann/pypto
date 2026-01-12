@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -353,7 +353,19 @@ std::string CodeGenOpCloudNPU::PrintExpand(const std::string &s0Var, const std::
     return buffer;
 }
 
+std::string CodeGenOpCloudNPU::PrintOneHotLayout() const {
+    std::string dstTensor =sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string srcTensor =sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    std::ostringstream oss;
+    oss << tileOpName << "(" << dstTensor <<","<< srcTensor << ");\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::PrintOneHot(const PrintUnaryParam &param) const {
+    if (isSupportLayout) {
+        return PrintOneHotLayout();
+    }
+
     const std::string &srcDtypeStr = param.srcDtypeStr;
     const std::string &dVar = param.dVar;
     const std::string &s0Var = param.s0Var;

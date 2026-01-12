@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -319,6 +319,7 @@ private:
     std::string PrintExpand(const std::string &s0Var, const std::string &dVar, const std::string &srcDtypeStr,
         const std::string &dstDtypeStr) const;
     std::string PrintOneHot(const PrintUnaryParam &param) const;
+    std::string PrintOneHotLayout() const;
 
     DynamicParamPackMTE PrepareDynamicShapeInfoForMTE(
         int dynShapeIdx, int ShapeDim = SHAPE_DIM4, bool isGmSpill = false) const;
