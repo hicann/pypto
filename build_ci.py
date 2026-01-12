@@ -26,7 +26,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Any, Union
+from typing import Optional, List, Dict, Tuple, Any
 from importlib import metadata
 from packaging import requirements
 
@@ -94,6 +94,7 @@ class FeatureParam(CMakeParam):
     whl_plat_name: Optional[str] = None  # python3 whl 包 plat-name
     whl_isolation: bool = False  # 以 isolation 模式编译 whl 包
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
+    whl_sdist: bool = False  # 使能 sdist 打包
 
     def __init__(self, args):
         self.frontend_type = "python3" if args.frontend is None else args.frontend
@@ -104,6 +105,7 @@ class FeatureParam(CMakeParam):
         self.whl_plat_name = f"{args.plat_name}_{CMakeParam.get_system_processor()}" if args.plat_name else ""
         self.whl_isolation = args.isolation
         self.whl_editable = args.editable
+        self.whl_sdist = args.sdist
 
     def __str__(self):
         desc = ""
@@ -114,6 +116,7 @@ class FeatureParam(CMakeParam):
                 desc += f"\n    PlatName                : {self.whl_plat_name}"
             desc += f"\n    Isolation               : {self.whl_isolation}"
             desc += f"\n    Editable                : {self.whl_editable}"
+            desc += f"\n    SDist                   : {self.whl_sdist}"
         desc += f"\n    Backend                 : {self.backend_type}"
         return desc
 
@@ -134,6 +137,8 @@ class FeatureParam(CMakeParam):
                                  "Build dependencies must be installed separately when this option is used.")
         parser.add_argument("--editable", action="store_true", default=False,
                             help="Install whl in editable mode (i.e. setuptools \"editable_wheel\")")
+        parser.add_argument("--sdist", action="store_true", default=False,
+                            help="Build a source distribution")
         parser.add_argument("-b", "--backend", nargs="?", type=str, default="npu",
                             choices=["npu", "cost_model"],
                             help="backend, such as npu/cost_model etc.")
@@ -394,7 +399,7 @@ class TestsFilterParam(CMakeParam):
             cmd += self._cfg_require(opt=f"{self.cmake_option}", ctr=self.enable, tv=f"{self.filter_str}")
         return cmd
 
-    def get_filter_str(self, def_filter: str):
+    def get_filter_str(self, def_filter: str) -> str:
         if not self.enable:
             return ""
         if self.filter_str not in ["ON"]:
@@ -1153,6 +1158,7 @@ class BuildCtrl(CMakeParam):
             self.check_pip_dependencies(deps={"build": ">=1.0.3"}, raise_err=True, log_err=True)
             cmd = f"{sys.executable} -m build --outdir={self.install_root}"
             cmd += f" --no-isolation" if not self.feature.whl_isolation else ""
+            cmd += f"" if self.feature.whl_sdist else " --wheel"
             cmd += f" {self._get_setuptools_bdist_wheel_config_setting()}"
             ts = datetime.now(tz=timezone.utc)
             logging.info("Begin Build whl, Cmd: %s", cmd)

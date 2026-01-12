@@ -44,7 +44,7 @@ target_compile_options(tile_fwk_intf_pub
             -Wtype-limits
             -Wshift-negative-value
             -Wswitch-default
-            $<$<CXX_COMPILER_ID:GNU>:$<$<OR:$<BOOL:${ENABLE_ASAN}>,$<BOOL:${ENABLE_UBSAN}>>:--param max-gcse-memory=1000000000>>
+            $<$<CXX_COMPILER_ID:GNU>:$<$<OR:$<BOOL:${ENABLE_ASAN}>,$<BOOL:${ENABLE_UBSAN}>,$<BOOL:${ENABLE_GCOV}>>:--param max-gcse-memory=1000000000>>
             -Wframe-larger-than=$<IF:$<OR:$<BOOL:${ENABLE_ASAN}>,$<BOOL:${ENABLE_UBSAN}>>,131072,32768>
             -Woverloaded-virtual
             -Wnon-virtual-dtor
