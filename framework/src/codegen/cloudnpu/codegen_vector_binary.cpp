@@ -149,10 +149,23 @@ std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const {
     std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
     std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
     std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
+    std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor};
+
+    std::vector<std::string> templateParamList;
+    int64_t brcOperandIdx = 0;
+    if (GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
+        templateParamList.emplace_back(GetBrcOprandIdxStr(brcOperandIdx));
+    }
+
     std::ostringstream oss;
-    oss << tileOpName << "(" << dstTensor << ", " << src0Tensor << ", " << src1Tensor << ");\n";
+    oss << tileOpName;
+    if (!templateParamList.empty()) {
+        oss << WrapParamByAngleBrackets(templateParamList);
+    }
+    oss << WrapParamByParentheses(tileOpCallParamList) << ";\n";
     return oss.str();
 }
+
 std::string CodeGenOpCloudNPU::PrintBinary(const PrintBinaryParam &param) const {
     if (isSupportLayout) {
         return PrintBinaryTileTensor();
