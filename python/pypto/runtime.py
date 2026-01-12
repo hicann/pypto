@@ -96,12 +96,15 @@ def _device_run_once_data_from_host(*args):
         _pto_to_tensor_data(in_out_tensors), [])
 
 
-def _compute_tensor_hash(tensors):
+def _compute_tensor_hash(tensors, tensor_data):
+    if (len(tensors) != len(tensor_data)):
+        raise RuntimeError("The number of tensors does not match the number of tensor_data.")
     hash_list = []
-    for tensor in tensors:
+    for tensor, t_data in zip(tensors, tensor_data):
         shape = tuple([dim if isinstance(dim, int) else -1 for dim in tensor.shape])
+        real_shape = tuple(t_data.GetShape())
         dtype = tensor.dtype
-        hash_list.append(tuple([shape, dtype]))
+        hash_list.append(tuple([shape, real_shape, dtype]))
     comupted_hash = tuple(hash_list)
     return comupted_hash
 
@@ -229,7 +232,7 @@ class _JIT:
 
         # Convert tensors to tensor data before compile, as compile turns tensor shapes into symbolic scalars.
         in_out_tensors_data = _pto_to_tensor_data(in_out_tensors)
-        input_hash = _compute_tensor_hash(in_out_tensors)
+        input_hash = _compute_tensor_hash(in_out_tensors, in_out_tensors_data)
 
         self.set_run_mode()
         if not self._is_compiled or not self._hit_cache(input_hash):
