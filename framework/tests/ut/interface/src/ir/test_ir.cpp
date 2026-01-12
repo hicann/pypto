@@ -57,10 +57,12 @@ TEST_F(IRTest, TestClass) {
 
 TEST_F(IRTest, TestIRBuilder) {
     auto module = std::make_shared<ProgramModule>("main");
-    IRBuilder builder(module);
+    IRBuilder builder;
     IRBuilderContext ctx;
 
     auto func = builder.CreateFunction("bbb", FunctionKind::Kernel, FunctionSignature());
+    module->AddFunction(func);
+    module->SetProgramEntry(func);
     builder.EnterFunctionBody(ctx, func);
 
     ScalarValuePtr lhs = builder.CreateConst(ctx, int64_t{2});

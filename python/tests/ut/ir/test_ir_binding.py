@@ -91,7 +91,7 @@ def test_enum():
 def test_control_flow():
     # ===== Module =====
     module = ir.module("main")
-    builder = ir.IrBuilder(module)
+    builder = ir.IrBuilder()
     ctx = ir.IrBuilderContext()
 
     # ===== Signature =====
@@ -121,7 +121,8 @@ def test_control_flow():
 
     # ===== Function =====
     func = builder.create_function(
-        "test_control", ir.FunctionKind.ControlFlow, sig, False)
+        "test_control", ir.FunctionKind.ControlFlow, sig)
+    module.add_function(func)
     module.entry = func  # NOTE: now runs until here
 
     # Enter function body scope

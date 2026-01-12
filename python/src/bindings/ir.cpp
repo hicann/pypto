@@ -280,7 +280,8 @@ static void IrBindModule(py::module &m) {
     py::class_<ProgramModule, Object, std::shared_ptr<ProgramModule>>(m, "module")
         .def(py::init<const std::string &>(), py::arg("name"))
         .def_property("entry", &ProgramModule::GetProgramEntry, &ProgramModule::SetProgramEntry)
-        .def("functions", &ProgramModule::GetFunctions, py::return_value_policy::reference_internal);
+        .def("functions", &ProgramModule::GetFunctions, py::return_value_policy::reference_internal)
+        .def("add_function", &ProgramModule::AddFunction, py::arg("function"));
 }
 
 static void IrBindFunction(py::module &m) {
@@ -343,9 +344,8 @@ static void IrBindBuilder(py::module &m) {
 
     auto irBuilder =
         py::class_<IRBuilder>(m, "IrBuilder")
-            .def(py::init<std::shared_ptr<ProgramModule>>(), py::arg("module") = nullptr)
-            .def("create_function", &IRBuilder::CreateFunction, py::arg("name"), py::arg("kind"), py::arg("sig"),
-                py::arg("is_entry") = false)
+            .def(py::init<>())
+            .def("create_function", &IRBuilder::CreateFunction, py::arg("name"), py::arg("kind"), py::arg("sig"))
             .def("create_tensor", &IRBuilder::CreateTensor, py::arg("ctx"), py::arg("shape"), py::arg("dtype"),
                 py::arg("name") = "")
             .def("create_tile", &IRBuilder::CreateTile, py::arg("ctx"), py::arg("shape"), py::arg("dtype"),

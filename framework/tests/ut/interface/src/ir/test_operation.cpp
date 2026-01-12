@@ -32,7 +32,7 @@ namespace pto{
 TEST(IRTEST, TestTensorOperation){
     // ===== Program module =====
     auto module = std::make_shared<ProgramModule>("main");
-    IRBuilder builder(module);
+    IRBuilder builder;
     IRBuilderContext ctx;
 
     // ===== Function signature =====
@@ -52,7 +52,9 @@ TEST(IRTEST, TestTensorOperation){
     sig.arguments.push_back(outputTensor);
 
     // ===== Function =====
-    auto func = builder.CreateFunction("test_all_ops", FunctionKind::ControlFlow, sig, /*setAsEntry=*/true);
+    auto func = builder.CreateFunction("test_all_ops", FunctionKind::ControlFlow, sig);
+    module->AddFunction(func);
+    module->SetProgramEntry(func);
 
     builder.EnterFunctionBody(ctx, func);
 

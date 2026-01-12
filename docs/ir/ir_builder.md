@@ -31,7 +31,7 @@ IRBuilder
 ```cpp
 // ===== Module =====
 auto module = std::make_shared<ProgramModule>("main");
-IRBuilder builder(module);
+IRBuilder builder;
 IRBuilderContext ctx;
 
 // ===== Signature =====
@@ -77,7 +77,7 @@ IRBuilder 是无状态的工具类，所有构建状态存储在显式的 `IRBui
 
 ### Syntax
 ```cpp
-IRBuilder builder(module);
+IRBuilder builder;
 IRBuilderContext ctx;  // 显式上下文对象
 auto func = builder.CreateFunction(name, kind, sig, setAsEntry);
 builder.EnterFunctionBody(ctx, func);

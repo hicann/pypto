@@ -375,7 +375,7 @@ TEST(IRTEST, TestStringToValueType) {
 TEST(IRTEST, TestTypeCompleteProgram) {
     // ===== 创建一个完整的程序，只使用 Tile 和 Scalar 操作，不涉及 Tensor =====
     auto module = std::make_shared<ProgramModule>("test_type_program");
-    IRBuilder builder(module);
+    IRBuilder builder;
     IRBuilderContext ctx;
 
     // ===== 函数签名 =====
@@ -393,7 +393,9 @@ TEST(IRTEST, TestTypeCompleteProgram) {
     sig.results.push_back(std::make_shared<ScalarValue>(DataType::FP64));
 
     // ===== 创建函数 =====
-    auto func = builder.CreateFunction("test_type_complete", FunctionKind::ControlFlow, sig, /*setAsEntry=*/true);
+    auto func = builder.CreateFunction("test_type_complete", FunctionKind::ControlFlow, sig);
+    module->AddFunction(func);
+    module->SetProgramEntry(func);
 
     // 进入函数体作用域
     builder.EnterFunctionBody(ctx, func);
