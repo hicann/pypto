@@ -129,8 +129,8 @@ PyPTO 支持在具备 Ascend-NPU 硬件的**真实环境**和仅有 CPU 硬件�
 4. **安装CANN pto-isa包**
 
     根据实际环境下载对应的安装包, 下载链接如下:
-    - x86: [cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-tile-lib-dev/version_compile/master/202601/20260105/ubuntu_x86/cann-pto-isa_8.5.0_linux-x86_64.run)
-    - aarch64: [cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-tile-lib-dev/version_compile/master/202601/20260105/ubuntu_aarch64/cann-pto-isa_8.5.0_linux-aarch64.run)
+    - x86: [cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-tile-lib-dev/version_compile/master/202601/20260112/ubuntu_x86/cann-pto-isa_8.5.0_linux-x86_64.run)
+    - aarch64: [cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-tile-lib-dev/version_compile/master/202601/20260112/ubuntu_aarch64/cann-pto-isa_8.5.0_linux-aarch64.run)
     ```
     # 确保安装包有可执行权限
     chmod +x cann-pto-isa_8.5.0_linux-${arch}.run
