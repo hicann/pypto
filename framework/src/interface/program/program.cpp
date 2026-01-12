@@ -257,7 +257,7 @@ bool Program::BeginFunction(const std::string &funcName,
         currentFunctionPtr_->GetGraphType() != GraphType::EXECUTE_GRAPH) {
         GetTensorSlotManager()->BeginScope(currentFunctionPtr_);
     }
-    SetParamConfig(currentFunctionPtr_);
+
 
 #if ENABLE_HIDDENLOOP
     // Begin new hidden loop for the new function
@@ -356,6 +356,8 @@ std::tuple<Function*, Operation *, bool> Program::EndFunction(const std::string 
     Operation *callop = FinishCurrentFunction(scope, generateCall);
     bool hit = QueryAndUpdateCurrentFunction();
     auto result = currentFunctionPtr_;
+
+    SetParamConfig(currentFunctionPtr_);
 
     DumpTensorGraphIfNeeded(result);
     PopStackAndUpdateCurrent();
