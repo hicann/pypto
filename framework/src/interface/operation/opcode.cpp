@@ -472,6 +472,7 @@ OpcodeManager::OpcodeManager() {
         {              Opcode::OP_RSQRT,         "TRsqrt"},
         {               Opcode::OP_SQRT,          "TSqrt"},
         {                Opcode::OP_EXP,           "TExp"},
+        {                Opcode::OP_ABS,           "TAbs"},
         {            Opcode::OP_MAXIMUM,           "TMax"},
         {            Opcode::OP_MINIMUM,           "TMin"},
         {            Opcode::OP_PAIRSUM,       "TPairSum"},
