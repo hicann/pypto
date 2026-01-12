@@ -20,6 +20,8 @@ Key Capabilities:
 - Target Flexibility: Processes single .py files or recursively scans directories, excluding itself.
 - Intelligent Script Analysis (via AST parsing):
     - Detects if name == 'main' guards for direct execution
+    - Skips the entire script by default when @pytest.mark.skip decorators are detected and 
+        the script is run via if __name__ == '__main__':. (Can be disabled via configuration.)
     - Identifies pytest-style tests (test* functions or Test* classes) for pytest dispatch
     - Verifies '--run_mode' argument support for simulation mode filtering
     - Automatically skips files with no executable content
@@ -27,6 +29,10 @@ Key Capabilities:
     - npu (default): Executes eligible scripts on physical hardware devices with device isolation
     - sim: Filters and runs only scripts that explicitly support '--run_mode' argument 
         using virtual workers
+- Script-level skip control: 
+    - Automatically excludes scripts containing @pytest.mark.skip decorators (enabled by default), 
+        mimicking pytest’s skip behavior at the file level. 
+        Can be disabled via --no-skip-pytest-mark-skip.
 - Resource Management:
     - Thread-safe device leasing system for hardware resource allocation
     - Hierarchical process termination (parent + children) on timeout or failure
@@ -75,11 +81,14 @@ Usage Examples:
 
     # 7. Show failure diagnostics in summary
     python3 examples/validate_examples.py -t examples -d 0 --show-fail-details
+    
+    # 8. Include scripts marked with @pytest.mark.skip (override default behavior)
+    python3 examples/validate_examples.py -t examples -d 0 --no-skip-pytest-mark-skip
 
-    # 8. Full configuration
+    # 9. Full configuration
     python3 examples/validate_examples.py -t examples -d 0,1,2,3 
-        --parallel-retries 2 --serial-retries 5 
-        --timeout 300 --show-fail-details --allow-pytest-auto-detect
+        --parallel-retries 2 --serial-retries 5 --timeout 300 
+        --show-fail-details --allow-pytest-auto-detect --skip-pytest-mark-skip
 
 Note: This tool is designed specifically for CANN-based development workflows. In npu mode, device
 parallelism is determined by provided device IDs. In sim mode, parallelism is controlled by the
@@ -207,6 +216,50 @@ def _has_pytest_tests(file_path: Path) -> bool:
         return False
 
 
+def _has_pytest_skip_mark(file_path: Path) -> bool:
+    """
+    Check if the file contains @pytest.mark.skip decorator using AST parsing.
+    This function looks for the specific decorator, not just the string 'pytest.mark.skip'.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+
+        # Avoid exceptions for empty files
+        if not content.strip():
+            return False
+
+        tree = ast.parse(content, filename=str(file_path))
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                for decorator in node.decorator_list:
+                    # Check for @pytest.mark.skip(...)
+                    if (isinstance(decorator, ast.Call) and
+                        isinstance(decorator.func, ast.Attribute) and
+                        isinstance(decorator.func.value, ast.Attribute) and
+                        decorator.func.value.attr == 'mark' and
+                        isinstance(decorator.func.value.value, ast.Name) and
+                        decorator.func.value.value.id == 'pytest' and
+                        decorator.func.attr == 'skip'):
+                        return True
+                    # Check for @pytest.mark.skip
+                    if (isinstance(decorator, ast.Attribute) and
+                        isinstance(decorator.value, ast.Attribute) and
+                        decorator.value.attr == 'mark' and
+                        isinstance(decorator.value.value, ast.Name) and
+                        decorator.value.value.id == 'pytest' and
+                        decorator.attr == 'skip'):
+                        return True
+        return False
+    except (SyntaxError, UnicodeDecodeError, FileNotFoundError):
+        # The file may not be Python code or may have encoding issues
+        return False
+    except Exception as e:
+        print(f"Warning: Error parsing {file_path} with AST for skip mark: {e}", file=sys.stderr)
+        return False
+
+
 def _terminate_process_and_children(proc: subprocess.Popen) -> None:
     """Terminate a process and all its child processes"""
     try:
@@ -263,6 +316,14 @@ def run_script(args, full_path: Path, rel_path: str, device_queue: queue.Queue,
             "rel_path": rel_path,
             "status": "skipped_no_tests",
             "message": "no '__main__' guard and no pytest-style tests"
+        }
+    
+    if args.skip_pytest_mark_skip and _has_pytest_skip_mark(full_path):
+        safe_print(f"⏭️  Skipped: {rel_path} (contains @pytest.mark.skip)")
+        return {
+            "rel_path": rel_path,
+            "status": "skipped_pytest_mark",
+            "message": "contains @pytest.mark.skip decorator"
         }
 
     if args.run_mode == "sim" and not _supports_run_mode_sim(full_path):
@@ -592,7 +653,7 @@ def _execute_scripts(args, rel_paths, target_dir, device_ids,
 
 
 def _print_final_summary(success_list, failure_list, skipped_sim_list, skipped_no_tests_list,
-                         args, target, device_ids, total_time_sec, safe_print):
+                         skipped_pytest_mark_list, args, target, device_ids, total_time_sec, safe_print):
     total_original = len(success_list) + len(failure_list) + \
         len(skipped_sim_list) + len(skipped_no_tests_list)
 
@@ -614,6 +675,8 @@ def _print_final_summary(success_list, failure_list, skipped_sim_list, skipped_n
         safe_print(f"⏭️  Skipped (no sim support): {len(skipped_sim_list)}")
     if skipped_no_tests_list:
         safe_print(f"⏭️  Skipped (no main/test): {len(skipped_no_tests_list)}")
+    if skipped_pytest_mark_list:
+        safe_print(f"⏭️  Skipped (@pytest.mark.skip): {len(skipped_pytest_mark_list)}")
 
     if failure_list:
         safe_print("\nFailed Scripts:")
@@ -635,6 +698,11 @@ def _print_final_summary(success_list, failure_list, skipped_sim_list, skipped_n
     if skipped_no_tests_list:
         safe_print("\nSkipped Due to No Executable Content:")
         for r in skipped_no_tests_list:
+            safe_print(f"  • {r['rel_path']}")
+            
+    if skipped_pytest_mark_list:
+        safe_print("\nSkipped Due to @pytest.mark.skip:")
+        for r in skipped_pytest_mark_list:
             safe_print(f"  • {r['rel_path']}")
 
     safe_print("=" * 60)
@@ -711,6 +779,20 @@ def main() -> None:
         action="store_true",
         help="Allow automatic detection and execution of pytest-style tests. "
              "Without this flag, a warning will be shown when pytest tests are detected."
+    )
+    parser.add_argument(
+        "--skip-pytest-mark-skip",
+        action="store_true",
+        default=True,
+        help="Enable skipping of scripts that contain @pytest.mark.skip decorator. "
+             "This flag is enabled by default. Use --no-skip-pytest-mark-skip to disable."
+    )
+    parser.add_argument(
+        "--no-skip-pytest-mark-skip",
+        action="store_false",
+        dest="skip_pytest_mark_skip",
+        help="Disable the skipping of scripts based on @pytest.mark.skip decorator. "
+             "Overrides --skip-pytest-mark-skip."
     )
     args = parser.parse_args()
 
@@ -820,6 +902,7 @@ def main() -> None:
     candidates_to_run = []
     skipped_sim_scripts = []
     skipped_no_tests_scripts = []
+    skipped_pytest_mark_scripts = []
 
     for rel_path in relative_paths:
         full_path = target_dir / rel_path
@@ -833,6 +916,10 @@ def main() -> None:
         if args.run_mode == "sim" and not _supports_run_mode_sim(full_path):
             skipped_sim_scripts.append(rel_path)
             continue
+        
+        if args.skip_pytest_mark_skip and _has_pytest_skip_mark(full_path):
+            skipped_pytest_mark_scripts.append(rel_path)
+            continue # Skip to the next file
 
         candidates_to_run.append(rel_path)
 
@@ -840,12 +927,14 @@ def main() -> None:
     skipped_sim_results = [{"rel_path": p, "status": "skipped_sim"} for p in skipped_sim_scripts]
     skipped_no_tests_results = [{"rel_path": p, "status": "skipped_no_tests"} 
                                 for p in skipped_no_tests_scripts]
+    skipped_pytest_mark_results = [{"rel_path": p, "status": "skipped_pytest_mark"} # Add new list
+                                   for p in skipped_pytest_mark_scripts]
 
     current_candidates = candidates_to_run[:]
     all_results_map = {}
 
     # Add skipped results to final map immediately
-    for r in skipped_sim_results + skipped_no_tests_results:
+    for r in skipped_sim_results + skipped_no_tests_results + skipped_pytest_mark_results:
         all_results_map[r["rel_path"]] = r
 
     # If no executable scripts, just print summary and exit
@@ -853,7 +942,8 @@ def main() -> None:
         safe_print("ℹ️  No executable scripts found. All were skipped.")
         total_time_sec = time.perf_counter() - start_time
         _print_final_summary([], [], skipped_sim_results, skipped_no_tests_results,
-                             args, target, actual_device_ids, total_time_sec, safe_print)
+                             skipped_pytest_mark_results, args, target,
+                             actual_device_ids, total_time_sec, safe_print)
         sys.exit(0)
 
     # Create execution strategy
@@ -867,7 +957,7 @@ def main() -> None:
     # Generate final summary
     total_time_sec = time.perf_counter() - start_time
     _print_final_summary(success_list, failure_list, skipped_sim_results, 
-                         skipped_no_tests_results, args, target, 
+                         skipped_no_tests_results, skipped_pytest_mark_results, args, target, 
                          actual_device_ids, total_time_sec, safe_print)
 
     sys.exit(1 if len(failure_list) > 0 else 0)

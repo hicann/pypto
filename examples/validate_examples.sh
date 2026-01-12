@@ -29,7 +29,10 @@ python3 examples/validate_examples.py -t examples/02_intermediate -d 0 --timeout
 # 7. Show failure diagnostics in summary
 python3 examples/validate_examples.py -t examples -d 0 --show-fail-details
 
-# 8. Full configuration
+# 8. Include scripts marked with @pytest.mark.skip (override default behavior)
+python3 examples/validate_examples.py -t examples -d 0 --no-skip-pytest-mark-skip
+
+# 9. Full configuration
 python3 examples/validate_examples.py -t examples -d 0,1,2,3 
-    --parallel-retries 2 --serial-retries 5 
-    --timeout 300 --show-fail-details --allow-pytest-auto-detect
+    --parallel-retries 2 --serial-retries 5 --timeout 300 
+    --show-fail-details --allow-pytest-auto-detect --skip-pytest-mark-skip
