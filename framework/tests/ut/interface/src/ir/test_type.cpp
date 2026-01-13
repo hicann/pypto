@@ -384,10 +384,13 @@ TEST(IRTEST, TestTypeCompleteProgram) {
     // 输入：直接使用 Tile 和 Scalar，不使用 Tensor
     // 输入 Tile: tile<[16, 32], fp32>
     auto inputTile = std::make_shared<TileValue>(std::vector<int64_t>{16, 32}, DataType::FP32, "input_tile");
+    inputTile->Attributes()["io"] = "in";
     // 输入 Scalar: scalar<fp32>
     auto scale = std::make_shared<ScalarValue>(DataType::FP32, "scale", ScalarValueKind::Symbolic);
+    scale->Attributes()["io"] = "in";
     // 输出：Tile tile<[16, 32], fp32>
     auto result = std::make_shared<TileValue>(std::vector<int64_t>{16, 32}, DataType::FP32, "output_tile");
+    result->Attributes()["io"] = "out";
 
     sig.arguments = { inputTile, scale, result };
     sig.results.push_back(std::make_shared<ScalarValue>(DataType::FP64));
@@ -460,6 +463,12 @@ TEST(IRTEST, TestTypeCompleteProgram) {
     ASSERT_EQ(ctx.func, nullptr);
     ASSERT_EQ(ctx.compound, nullptr);
     ASSERT_EQ(ctx.activeOpStmt, nullptr);
+
+    // 验证 in cast 和 out cast
+    ASSERT_EQ(func->isFromInCast(inputTile), true);
+    ASSERT_EQ(func->isFromOutCast(result), true);
+    ASSERT_EQ(func->GetIncastIndex(inputTile), 0);
+    ASSERT_EQ(func->GetOutcastIndex(result), 2);
 
     // 设置模块属性
     module->Attributes()["arch"] = "\"PTOv2\"";

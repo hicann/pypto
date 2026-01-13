@@ -26,6 +26,7 @@ ValuePtr IRBuilder::AddToCompound(IRBuilderContext& ctx, ValuePtr v) {
 
     std::string key = v->GetName();
     ctx.compound->SetEnvVar(key, v);
+    ctx.compound->AddValue(v);
     return v;
 }
 

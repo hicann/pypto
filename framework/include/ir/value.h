@@ -60,13 +60,6 @@ public:
         : Object(ObjectType::Value, name), valueKind_(kind), type_(type) {}
     virtual ~Value() = default;
 
-    const std::string GetSSAName() const {
-        if (name_.empty()) {
-            return "%" + std::to_string(id_);
-        }
-        // If tensor has a name, return it directly without adding numeric suffix
-        return GetPrefixedName() + "_" + std::to_string(id_);
-    }
     ObjectType GetObjectType() const override { return ObjectType::Value; }
 
     ValueKind GetValueKind() const { return valueKind_; }
@@ -218,6 +211,7 @@ public:
         // Update Type with new shape
         type_ = std::make_shared<TileType>(GetDataType(), newShape);
     }
+    void SetValidShape(const std::vector<ScalarValuePtr>& newValidShape) { validShapes_ = newValidShape; }
     void SetStrides(const std::vector<int64_t>& newStrides) { strides_ = newStrides; }
     void SetStartOffset(const ScalarValuePtr newStartOffset) { startOffset_ = newStartOffset; }
     void SetMemory(const std::shared_ptr<Memory> newMem) { mem_ = newMem; }

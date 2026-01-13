@@ -67,7 +67,7 @@ static void IrBindEnum(py::module &m) {
     py::enum_<FunctionKind>(m, "FunctionKind")
         .value("ControlFlow", FunctionKind::ControlFlow)
         .value("DataFlow", FunctionKind::DataFlow)
-        .value("Kernel", FunctionKind::Kernel);
+        .value("Block", FunctionKind::Block);
 
     py::enum_<StatementKind>(m, "StatementKind")
         .value("Compound", StatementKind::Compound)

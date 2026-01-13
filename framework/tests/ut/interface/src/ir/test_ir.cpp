@@ -60,7 +60,7 @@ TEST_F(IRTest, TestIRBuilder) {
     IRBuilder builder;
     IRBuilderContext ctx;
 
-    auto func = builder.CreateFunction("bbb", FunctionKind::Kernel, FunctionSignature());
+    auto func = builder.CreateFunction("bbb", FunctionKind::Block, FunctionSignature());
     module->AddFunction(func);
     module->SetProgramEntry(func);
     builder.EnterFunctionBody(ctx, func);

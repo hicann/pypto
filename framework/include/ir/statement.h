@@ -111,10 +111,18 @@ public:
     std::unordered_map<std::string, ValuePtr>& GetEnvTable() { return envTable_; }
     const std::unordered_map<std::string, ValuePtr>& GetEnvTable() const { return envTable_; }
 
+    // Get the values index table for this scope
+    std::unordered_map<int, ValuePtr>& GetValuesIndexTable() { return valuesIndexTable_; }
+    const std::unordered_map<int, ValuePtr>& GetValuesIndexTable() const { return valuesIndexTable_; }
+
+    // Add a value to the values index table
+    void AddValue(ValuePtr value) { valuesIndexTable_[value->GetID()] = value; }
+
 private:
-    std::weak_ptr<CompoundStatement> parent_{};                         // Pointer to parent scope (nullptr for root)
-    std::vector<StatementPtr> statements_;  // Statements in this scope
+    std::weak_ptr<CompoundStatement> parent_{};           // Pointer to parent scope (nullptr for root)
+    std::vector<StatementPtr> statements_;                // Statements in this scope
     std::unordered_map<std::string, ValuePtr> envTable_;  // Environment table: variable name -> latest SSA Value
+    std::unordered_map<int, ValuePtr> valuesIndexTable_;  // Index table: index -> ValuePtr 
 };
 
 using CompoundStatementPtr = std::shared_ptr<CompoundStatement>;

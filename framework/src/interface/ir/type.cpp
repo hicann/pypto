@@ -23,24 +23,24 @@ namespace pto {
 
 // ========== Type System Implementation ==========
 static struct DTypeInfo dtypeInfo[] = {
-    {      DataType::BOOL,       "bool",  8, 1, false,  true, false},
     {      DataType::INT4,       "int4",  4, 1, false,  true, false},
     {      DataType::INT8,       "int8",  8, 1, false,  true, false},
     {     DataType::INT16,      "int16", 16, 2, false,  true, false},
     {     DataType::INT32,      "int32", 32, 4, false,  true, false},
     {     DataType::INT64,      "int64", 64, 8, false,  true, false},
+    {DataType::FP8_E4M3FN, "fp8_e4m3fn",  8, 1,  true, false, false},
+    {      DataType::FP16,    "float16", 16, 2,  true, false, false},
+    {      DataType::FP32,    "float32", 32, 4,  true, false, false},
+    {      DataType::BF16,   "bfloat16", 16, 2,  true, false, false},
+    {       DataType::HF4,        "hf4",  4, 1,  true, false, false},
+    {       DataType::HF8,        "hf8",  8, 1,  true, false, false},
     {     DataType::UINT8,      "uint8",  8, 1, false, false,  true},
     {    DataType::UINT16,     "uint16", 16, 2, false, false,  true},
     {    DataType::UINT32,     "uint32", 32, 4, false, false,  true},
     {    DataType::UINT64,     "uint64", 64, 8, false, false,  true},
-    {DataType::FP8_E4M3FN, "fp8_e4m3fn",  8, 1,  true, false, false},
-    {  DataType::FP8_E5M2,   "fp8_e5m2",  8, 1,  true, false, false},
-    {      DataType::FP16,    "float16", 16, 2,  true, false, false},
-    {      DataType::BF16,   "bfloat16", 16, 2,  true, false, false},
-    {      DataType::FP32,    "float32", 32, 4,  true, false, false},
+    {      DataType::BOOL,       "bool",  8, 1, false,  true, false},
     {      DataType::FP64,    "float64", 64, 8,  true, false, false},
-    {       DataType::HF4,        "hf4",  4, 1,  true, false, false},
-    {       DataType::HF8,        "hf8",  8, 1,  true, false, false},
+    {  DataType::FP8_E5M2,   "fp8_e5m2",  8, 1,  true, false, false},
     {   DataType::UNKNOWN,    "unknown",  0, 0, false, false, false},
 };
 

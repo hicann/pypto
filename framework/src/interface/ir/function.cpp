@@ -45,8 +45,8 @@ static const char* toString(FunctionKind kind) {
         return "control_flow";
     case FunctionKind::DataFlow:
         return "data_flow";
-    case FunctionKind::Kernel:
-        return "kernel";
+    case FunctionKind::Block:
+        return "block";
     default:
         return "unknown";
     }
@@ -70,6 +70,9 @@ void Function::Print(std::ostream& os, int indent) const {
         if (arg) {
             os << arg->GetSSAName() << ": ";
             arg->Print(os, 0);
+        }
+        if (arg->Attributes().find("io") != arg->Attributes().end()) {
+            os << " #" << arg->Attributes().at("io");
         }
         if (i + 1 < signature_.arguments.size()) {
             os << ", ";
@@ -107,9 +110,6 @@ void Function::Print(std::ostream& os, int indent) const {
     os << "}\n";
 
     // Function attributes can be printed as separate lines following MLIR style.
-    // Example:
-    // func.attr private = true
-    // func.attr inline = true
     std::string attrPrefix;
     for (int i = 0; i < indent; ++i) {
         attrPrefix += "  ";
@@ -127,6 +127,47 @@ void Function::Print(std::ostream& os, int indent) const {
 std::ostream& operator<<(std::ostream& os, const Function& func) {
     func.Print(os, 0);
     return os;
+}
+
+uint64_t Function::ComputeHash() {
+    // wait for IRVisitor to implement
+    return 0;
+}
+
+bool Function::isFromInCast(const ValuePtr &value) const {
+    for (auto arg : signature_.arguments) {
+        if (arg == value && arg->Attributes().at("io") == "in") {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Function::isFromOutCast(const ValuePtr &value) const {
+    for (auto result : signature_.arguments) {
+        if (result == value && result->Attributes().at("io") == "out") {
+            return true;
+        }
+    }
+    return false;
+}
+
+int Function::GetIncastIndex(const ValuePtr &value) const {
+    for (size_t i = 0; i < signature_.arguments.size(); i++) {
+        if (signature_.arguments[i] == value && signature_.arguments[i]->Attributes().at("io") == "in") {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int Function::GetOutcastIndex(const ValuePtr &value) const {
+    for (size_t i = 0; i < signature_.arguments.size(); i++) {
+        if (signature_.arguments[i] == value && signature_.arguments[i]->Attributes().at("io") == "out") {
+            return i;
+        }
+    }
+    return -1;
 }
 
 } // namespace pto

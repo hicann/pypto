@@ -51,7 +51,7 @@ def test_enum():
         "FunctionKind": [
             ("ControlFlow", ir.FunctionKind.ControlFlow),
             ("DataFlow", ir.FunctionKind.DataFlow),
-            ("Kernel", ir.FunctionKind.Kernel),
+            ("Block", ir.FunctionKind.Block),
         ],
         "StatementKind": [
             ("Compound", ir.StatementKind.Compound),

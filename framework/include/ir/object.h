@@ -48,10 +48,6 @@ public:
     // - Value: add % prefix
     // - Other types: no prefix
     std::string GetPrefixedName() const {
-        if (name_.empty()) {
-            return name_;
-        }
-        
         ObjectType type = GetObjectType();
         char prefix = '\0';
         if (type == ObjectType::Program || type == ObjectType::Function) {
@@ -65,6 +61,11 @@ public:
         }
         
         return name_;
+    }
+
+    // Get the SSA name for the object
+    std::string GetSSAName() const {
+        return GetPrefixedName() + "_" + std::to_string(id_);
     }
 
     // Each derived class must specify its object type.

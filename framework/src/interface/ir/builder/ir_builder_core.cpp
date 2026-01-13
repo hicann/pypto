@@ -25,7 +25,13 @@ std::shared_ptr<Function> IRBuilder::CreateFunction(
     FunctionKind kind,
     FunctionSignature sig) {
 
-    auto fn = std::make_shared<Function>(std::move(name), kind, std::move(sig));
+    std::shared_ptr<Function> fn;
+    if (kind == FunctionKind::Block) {
+        fn = std::make_shared<BlockFunction>(std::move(name), std::move(sig));
+    } else {
+        fn = std::make_shared<Function>(std::move(name), kind, std::move(sig));
+    }
+
 
     return fn;
 }
