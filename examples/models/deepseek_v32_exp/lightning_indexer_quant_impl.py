@@ -233,8 +233,8 @@ def lightning_indexer_decode_compute(
                     eff_8k = pypto.view(max_tensor, [1, length_8k], [src_offset, 0], valid_shape=[1, eff_seq])
                     ax = pypto.view(eff_8k, [1, length_8k], [0, 0], valid_shape=[1, eff_seq])
                     bx = pypto.full([1, length_8k], pad_value, pypto.DT_FP32, valid_shape=[1, length_8k - eff_seq])
-                    pypto.assemble(pypto.clone(ax), [src_offset, 0], pad_x8k)
-                    pypto.assemble(bx, [src_offset, eff_seq], pad_x8k)
+                    pypto.assemble(pypto.clone(ax), [0, 0], pad_x8k)
+                    pypto.assemble(bx, [0, eff_seq], pad_x8k)
                     pypto.set_pass_options(pg_skip_partition=False)
 
                     res, _ = topk_sort(pypto.view(pad_x8k, [1, length_8k], [0, 0]), 0)
