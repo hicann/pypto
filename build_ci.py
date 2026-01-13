@@ -94,7 +94,6 @@ class FeatureParam(CMakeParam):
     whl_plat_name: Optional[str] = None  # python3 whl 包 plat-name
     whl_isolation: bool = False  # 以 isolation 模式编译 whl 包
     whl_editable: bool = False  # 以 editable 模式编译 whl 包
-    whl_sdist: bool = False  # 使能 sdist 打包
 
     def __init__(self, args):
         self.frontend_type = "python3" if args.frontend is None else args.frontend
@@ -105,7 +104,6 @@ class FeatureParam(CMakeParam):
         self.whl_plat_name = f"{args.plat_name}_{CMakeParam.get_system_processor()}" if args.plat_name else ""
         self.whl_isolation = args.isolation
         self.whl_editable = args.editable
-        self.whl_sdist = args.sdist
 
     def __str__(self):
         desc = ""
@@ -116,7 +114,6 @@ class FeatureParam(CMakeParam):
                 desc += f"\n    PlatName                : {self.whl_plat_name}"
             desc += f"\n    Isolation               : {self.whl_isolation}"
             desc += f"\n    Editable                : {self.whl_editable}"
-            desc += f"\n    SDist                   : {self.whl_sdist}"
         desc += f"\n    Backend                 : {self.backend_type}"
         return desc
 
@@ -137,8 +134,6 @@ class FeatureParam(CMakeParam):
                                  "Build dependencies must be installed separately when this option is used.")
         parser.add_argument("--editable", action="store_true", default=False,
                             help="Install whl in editable mode (i.e. setuptools \"editable_wheel\")")
-        parser.add_argument("--sdist", action="store_true", default=False,
-                            help="Build a source distribution")
         parser.add_argument("-b", "--backend", nargs="?", type=str, default="npu",
                             choices=["npu", "cost_model"],
                             help="backend, such as npu/cost_model etc.")
@@ -522,7 +517,7 @@ class STestToolsParam(CMakeParam):
 
 class TestsParam(CMakeParam):
 
-    def __init__(self, args, build: BuildParam):
+    def __init__(self, args):
         self.exec: TestsExecuteParam = TestsExecuteParam(args=args)
         self.golden: TestsGoldenParam = TestsGoldenParam(args=args)
         self.utest: TestsFilterParam = TestsFilterParam(argv=args.utest, opt="ENABLE_UTEST")
@@ -777,7 +772,7 @@ class BuildCtrl(CMakeParam):
         self.install_root: Path = Path(self.build_root.parent, "build_out")
         self.feature: FeatureParam = FeatureParam(args=args)
         self.build: BuildParam = BuildParam(args=args)
-        self.tests: TestsParam = TestsParam(args=args, build=self.build)
+        self.tests: TestsParam = TestsParam(args=args)
         self.model: ModelParam = ModelParam(args=args)
         self.third_party_path: Optional[Path] = Path(args.third_party_path).resolve() if args.third_party_path else None
         self.verbose: bool = args.verbose
@@ -1158,7 +1153,6 @@ class BuildCtrl(CMakeParam):
             self.check_pip_dependencies(deps={"build": ">=1.0.3"}, raise_err=True, log_err=True)
             cmd = f"{sys.executable} -m build --outdir={self.install_root}"
             cmd += f" --no-isolation" if not self.feature.whl_isolation else ""
-            cmd += f"" if self.feature.whl_sdist else " --wheel"
             cmd += f" {self._get_setuptools_bdist_wheel_config_setting()}"
             ts = datetime.now(tz=timezone.utc)
             logging.info("Begin Build whl, Cmd: %s", cmd)
@@ -1278,7 +1272,7 @@ class SubCommandMgr:
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
-    ts = datetime.now(tz=timezone.utc)
+    g_ts = datetime.now(tz=timezone.utc)
     BuildCtrl.main()
-    duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
-    logging.info("Build[CI] Success, duration %s secs.", duration)
+    g_duration = int((datetime.now(tz=timezone.utc) - g_ts).seconds)
+    logging.info("Build[CI] Success, duration %s secs.", g_duration)

@@ -305,6 +305,8 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         logging.info("%s", self)
         # 源码根目录
         src = Path(__file__).parent.resolve()
+        env = os.environ.copy()
+        env["CCACHE_BASEDIR"] = str(src)  # 在 ccache 场景支持路径归一化
         # 准备构建目录, 使用扩展名创建唯一的构建目录
         build_dir = Path(self.build_temp).resolve()
         build_dir.mkdir(parents=True, exist_ok=True)
@@ -318,7 +320,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         cmd += f" -DPython3_EXECUTABLE={sys.executable} -DCMAKE_INSTALL_PREFIX={cmake_install_prefix}"
         cmd += f" {self.cmake_options}" if self.cmake_options else ""
         logging.info("CMake Configure, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
+        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=env)
         ret.check_returncode()
 
         # CMake Build
@@ -326,7 +328,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         cmd = f"{self.cmake} --build {build_dir}" + (f" -j {job_num}" if job_num else "")
         cmd += f" --verbose" if self.cmake_verbose else ""
         logging.info("CMake Build, Cmd: %s", cmd)
-        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8')
+        ret = subprocess.run(shlex.split(cmd), capture_output=False, check=True, text=True, encoding='utf-8', env=env)
         ret.check_returncode()
 
         # CMake Install
