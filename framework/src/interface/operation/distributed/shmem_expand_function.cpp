@@ -70,10 +70,10 @@ LogicalTensorPtr CreateAdaptiveUbTensor(Function& function, const Shape& shape, 
     Shape ubShape;
     int64_t ubLen = AlignUp(shape[0] * shape[1] * BytesOf(ubType), UB_ALIGIN_SIZE) / BytesOf(ubType);
     if (!shouldConvertDtype(ubType, castType)) {
-        ubShape = {ubLen};
+        ubShape = {ubLen * 2};
     } else {
         uint64_t castSize = AlignUp(ubLen * BytesOf(castType), DTYPE_CAST_BYTE_SIZE);
-        ubShape = {ubLen + static_cast<int64_t>(castSize / BytesOf(ubType))};
+        ubShape = {(ubLen + static_cast<int64_t>(castSize / BytesOf(ubType))) * 2};
     }
     return std::make_shared<LogicalTensor>(function, ubType, ubShape);
 }
