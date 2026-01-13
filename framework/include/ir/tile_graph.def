@@ -65,3 +65,94 @@ DEFOP(
     ATTR(int, CombineAxis, -1),
     ATTR(bool, Reverse, false)
 )
+
+DEFOP(
+    MatmulLoadOp,
+    INHERIT(MatmulTileBaseOp),
+    OPCODE(
+        OP_L1_COPY_IN
+    ),
+    INPUT(Tile, Input),
+    INPUT(ScalarList, Offsets),
+    OUTPUT(Tile, Output),
+    // 0:ND2ND, 1:ND2NZ, 2:NZ2NZ
+    ATTR(int, CopyInMode, 1)
+)
+
+DEFOP(
+    MatmulExtractOp,
+    INHERIT(MatmulTileBaseOp),
+    OPCODE(
+        OP_L1_TO_L0A,
+ 	    OP_L1_TO_L0B,
+ 	    OP_L1_TO_L0_AT,
+ 	    OP_L1_TO_L0_BT
+    ),
+    INPUT(Tile, Input),
+    INPUT(ScalarList, Offsets),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    MatmulMmadOp,
+    INHERIT(MatmulMmadTileBaseOp),
+    OPCODE(
+        OP_A_MUL_B
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    ATTR(bool, HasBias, false)
+)
+
+DEFOP(
+    MatmulAccOp,
+    INHERIT(MatmulMmadTileBaseOp),
+    OPCODE(
+ 	    OP_A_MULACC_B
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    ATTR(bool, HasBias, false)
+)
+
+DEFOP(
+    MatmulStoreOp,
+    INHERIT(MatmulTileBaseOp),
+    OPCODE(
+ 	    OP_L0C_COPY_OUT,
+        OP_L0C_TO_L1
+    ),
+    INPUT(Tile, Input),
+    INPUT(ScalarList, Offsets),
+    OUTPUT(Tile, Output),
+    // 0:NZ2ND, 1:NZ2NZ
+    ATTR(int, CopyOutMode, 0),
+    // 0:no_relu, 1:relue
+    ATTR(int, ReluMode, 0),
+    // 0:no_acc, 1:enable_acc
+    ATTR(bool, EnableGmAcc, false)
+)
+
+DEFOP(
+    MatmulBiasOp,
+    INHERIT(MatmulTileBaseOp),
+    OPCODE(
+ 	    OP_L1_TO_BT
+    ),
+    INPUT(Tile, Input),
+    INPUT(ScalarList, Offsets),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    MatmulQuantOp,
+    INHERIT(MatmulTileBaseOp),
+    OPCODE(
+        OP_L1_TO_FIX_QUANT_PRE
+    ),
+    INPUT(Tile, Input),
+    INPUT(ScalarList, Offsets),
+    OUTPUT(Tile, Output)
+)

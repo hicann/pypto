@@ -74,6 +74,24 @@ class DataCopyTileBaseOp : public TileBaseOp {
 };
 
 class MatmulTileBaseOp : public TileBaseOp {
+public:
+    MatmulTileBaseOp(Opcode opcode, TileValuePtr input, std::vector<ScalarValuePtr> offsets, TileValuePtr output)
+        : TileBaseOp(opcode, {ValueCast<Value>(input)}, {ValueCast<Value>(output)}),  offsets_(offsets) {}
+
+    ScalarValuePtr GetOffset(size_t index) const;
+
+private:
+    std::vector<ScalarValuePtr> offsets_;
+};
+
+class MatmulMmadTileBaseOp : public TileBaseOp {
+public:
+    MatmulMmadTileBaseOp(Opcode opcode,
+                            TileValuePtr lhs,
+                            TileValuePtr rhs,
+                            TileValuePtr out)
+        : TileBaseOp(opcode, {lhs, rhs}, {out}) {
+    }
 };
 
 class SysBaseOp : public ScalarBaseOp {
