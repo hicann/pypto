@@ -120,6 +120,8 @@ void PrepareTasks(uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUnt
     const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode, npu::tile_fwk::DynFuncData* funcData,
     uint64_t* opAttrsPtr) {
     constexpr size_t opAttrsLength = 17;
+    std::vector<std::unique_ptr<int32_t[]>> opAtrrOffsetsHolder;
+    std::vector<std::unique_ptr<uint64_t[]>> opAttrsCopyHolder;
     for (uint32_t taskId = 0; taskId < tileOpCount; ++taskId) {
         auto opAtrrOffsets = std::make_unique<int32_t[]>(taskId + 1);
         opAtrrOffsets[taskId] = 0;
@@ -128,8 +130,11 @@ void PrepareTasks(uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUnt
         auto opAttrsCopy = std::make_unique<uint64_t[]>(opAttrsSize);
         std::copy(opAttrsPtr, opAttrsPtr + opAttrsLength, opAttrsCopy.get() + opAtrrOffsets[taskId]);
 
-        funcData->opAtrrOffsets = opAtrrOffsets.get();
-        funcData->opAttrs = opAttrsCopy.get();
+        opAtrrOffsetsHolder.push_back(std::move(opAtrrOffsets));
+        opAttrsCopyHolder.push_back(std::move(opAttrsCopy));
+
+        funcData->opAtrrOffsets = opAtrrOffsetsHolder.back().get();
+        funcData->opAttrs = opAttrsCopyHolder.back().get();
 
         shmemWaitUntil->PrepareTask(taskId, aicpuCode);
     }
