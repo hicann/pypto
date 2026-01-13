@@ -110,6 +110,9 @@ inline void SetOption(const std::string &key, const char *value) {
     SetOption(key, std::string(value));
 }
 
+template <typename T>
+void SetOptionsNg(const std::string &key, const T &value);
+
 /**
  * \brief Set pass options
  *
@@ -124,7 +127,7 @@ inline void SetOption(const std::string &key, const char *value) {
  */
 template <typename T>
 void SetPassOption(const std::string &key, const T &value) {
-    SetOption("pass." + key, value);
+    SetOptionsNg("pass." + key, value);
 }
 
 /**
@@ -135,7 +138,7 @@ void SetPassOption(const std::string &key, const T &value) {
  */
 template <typename T>
 void SetCodeGenOption(const std::string &key, const T &value) {
-    SetOption("codegen." + key, value);
+    SetOptionsNg("codegen." + key, value);
 }
 
 /**
@@ -146,7 +149,7 @@ void SetCodeGenOption(const std::string &key, const T &value) {
  */
 template <typename T>
 void SetRuntimeOption(const std::string &key, const T &value) {
-    SetOption("runtime." + key, value);
+    SetOptionsNg("runtime." + key, value);
 }
 
 /**
@@ -157,7 +160,7 @@ void SetRuntimeOption(const std::string &key, const T &value) {
  */
 template <typename T>
 void SetHostOption(const std::string &key, const T &value) {
-    SetOption("host." + key, value);
+    SetOptionsNg("host." + key, value);
 }
 
 /**
@@ -168,7 +171,7 @@ void SetHostOption(const std::string &key, const T &value) {
  */
 template <typename T>
 void SetVerifyOption(const std::string &key, const T &value) {
-    SetOption("verify." + key, value);
+    SetOptionsNg("pass." + key, value);
 }
 
 /**

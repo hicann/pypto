@@ -234,20 +234,10 @@ const std::map<std::string, Any> ConfigScope::GetAllConfig() const{
 
 void ConfigScope::AddValue(const std::string &key, Any value) {
     std::lock_guard<std::mutex> lock(mtx);
-    if (value.Type() == typeid(int)) {
-        int intValue = AnyCast<int>(value);
-        int64_t newInt64Variable = static_cast<int64_t>(intValue);
-        values_[key] = Any(newInt64Variable);
-    } else if (value.Type() == typeid(const char*)) {
-        const char* charPointer = AnyCast<const char*>(value);
-        std::string stringValue(charPointer);
-        values_[key] = Any(stringValue);
-    } else {
-        values_[key] = value;
-    }
+    values_[key] = value;
 }
 
-void ConfigScope::UpdateValue(const std::string &key, Any value) {
+void ConfigScope::UpdateValueWithAny(const std::string &key, Any value) {
     if (!ConfigManagerNg::GetInstance().IsWithinRange(key, value)) {
         std::stringstream os("Option:");
         std::map<std::string, Any> node;

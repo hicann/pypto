@@ -134,18 +134,7 @@ T GetOption(const std::string &key) {
     return val;
 }
 
-#define DEFINE_CONFIG_GROUP(group, prefix)                   \
-    template <typename T>                                    \
-    inline T Get##group##Option(const std::string &key) {    \
-        return ConfigManagerNg::CurrentScope()->GetConfigAllType<T>(prefix "." + key); \
-    }
 
-DEFINE_CONFIG_GROUP(CodeGen, "codegen")
-DEFINE_CONFIG_GROUP(Pass, "pass")
-DEFINE_CONFIG_GROUP(Runtime, "runtime")
-DEFINE_CONFIG_GROUP(Host, "host")
-DEFINE_CONFIG_GROUP(Verify, "verify")
-DEFINE_CONFIG_GROUP(Debug, "debug")
 
 std::shared_ptr<ConfigScope> Duplicate();
 void Restore(std::shared_ptr<ConfigScope> config);
