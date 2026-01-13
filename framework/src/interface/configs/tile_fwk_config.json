@@ -71,14 +71,14 @@
         "core": {},
         "simulation": {
             "debug_single_func": false,
-            "debug_single_funcname": "DEBUG_LEAF_FUNC",
+            "leaf_function": "DEBUG_LEAF_FUNC",
             "draw_function_graph": true,
             "build_task_based_topo": true,
             "sim_mode": 0,
             "accuracy_level": 2,
-            "pv_level": 0,
+            "pv_run_level": 0,
             "log_level": 3,
-            "execute_cycle_threshold": -1,
+            "timeout_threshold": -1,
             "json_path": "",
             "agent_json_path": "",
             "args" : [
@@ -87,8 +87,7 @@
                 "Model.useOOOPassSeq=true",
                 "Core.logLabelMode=0",
                 "Core.bufferBackPressure=false"
-            ],
-            "leaf_function": "DEBUG_LEAF_FUNC"
+            ]
         },
         "codegen": {
             "parallel_compile" : 8,

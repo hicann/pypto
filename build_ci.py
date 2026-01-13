@@ -750,7 +750,7 @@ class ModelParam(CMakeParam):
     def _gen_simulation_json_pvmodel(self, cfg: Dict[Any, Any]):
         if self.pvmodel:
             cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-            cfg["global_configs"]["simulation_configs"]["pv_level"] = 2
+            cfg["global_configs"]["simulation_configs"]["pv_run_level"] = 2
             cfg["global_configs"]["simulation_configs"]["args"] = [
                 "Model.statisticReportToFile=true",
                 "Model.deviceArch=910B",

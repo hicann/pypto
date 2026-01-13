@@ -539,86 +539,199 @@
                 "simulation": {
                     "type": "object",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "仿真相关配置",
+                        "en": "Simulation-related configuration"
                     },
                     "properties": {
                         "debug_single_func": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否只针对一个指定的leaf进行仿真，不生成完整拓扑文件",
+                                "en": "Is it to simulate only a specified leaf without generating a complete topology file"
                             }
                         },
-                        "debug_single_funcname": {
+                        "leaf_function": {
                             "type": "string",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "指定的leaf function名称",
+                                "en": "Specified leaf function name"
                             }
                         },
                         "draw_function_graph": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否绘制task间、TILE和TILEOP间的依赖关系图（dot 文件）",
+                                "en": "Whether to draw dependency graphs (dot files) between tasks, TILEs, and TILEOPs"
                             }
                         },
                         "build_task_based_topo": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否使用前端传入的TOPO信息构建task间依赖",
+                                "en": "Whether to use the TOPO information passed from the front end to build dependencies between tasks"
                             }
                         },
                         "sim_mode": {
                             "type": "integer",
+                            "default": 0,
+                            "enum": [0, 1, 2],
                             "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-
+                                "zh": "仿真模式",
+                                "en": "Simulation Mode"
+                            },
+                            "options": [
+                              {
+                                "value": 0,
+                                "label": {
+                                  "zh": "AICPU、AICORE、PIPE仿真",
+                                  "en": "AICPU, AICORE, PIPE simulation"
+                                }
+                              },
+                              {
+                                "value": 1,
+                                "label": {
+                                  "zh": "通信仿真",
+                                  "en": "communication simulation"
+                                }
+                              },
+                              {
+                                "value": 2,
+                                "label": {
+                                  "zh": "功能仿真",
+                                  "en": "functional simulation"
+                                }
+                              }
+                            ]
                         },
                         "accuracy_level": {
                             "type": "integer",
+                            "default": 2,
+                            "enum": [0, 1, 2],
                             "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
+                                "zh": "TILEOP 仿真时延计算的准确度等级",
+                                "en": "Accuracy level of TILEOP simulation delay calculation"
+                            },
+                            "options": [
+                              {
+                                "value": 0,
+                                "label": {
+                                  "zh": "对于新增TILEOP,根据对应PIPE 的计算并行度以及TILEOP 的计算量,计算Cycles",
+                                  "en": "For the newly added TILEOP, calculate the Cycles based on the computational parallelism of the corresponding PIPE and the computational workload of TILEOP"
+                                }
+                              },
+                              {
+                                "value": 1,
+                                "label": {
+                                  "zh": "根据历史上板数据,对不同TILE OP 进行数据统计和线性拟合,得到TILEOP 相关的参数表格;输入shape、dataType 等参数 通过公式计算Cycles",
+                                  "en": "Based on historical board data, perform data statistics and linear fitting on different TILE OPs to obtain a parameter table related to TILEOP; input parameters such as shape and dataType to calculate Cycles through a formula"
+                                }
+                              },
+                              {
+                                "value": 2,
+                                "label": {
+                                  "zh": "根据CCE代码,执行AICORE的CAModel获取Cycles,对单个TileOp生成codeGen代码,编译之后得到真实的指令,对指令进行仿真",
+                                  "en": "According to the CCE code, execute AICORE's CAModel to obtain Cycles, generate codeGen code for a single TileOp, compile it to obtain the actual instructions, and simulate the instructions"
+                                }
+                              }
+                            ]
                         },
-                        "pv_level": {
+                        "pv_run_level": {
                             "type": "integer",
+                            "default": 0,
+                            "enum": [0, 1, 2],
                             "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
+                                "zh": "PvModel的运行等级",
+                                "en": "The operational level of PvModel"
+                            },
+                            "options": [
+                              {
+                                "value": 0,
+                                "label": {
+                                  "zh": "不启用",
+                                  "en": "Not enabled"
+                                }
+                              },
+                              {
+                                "value": 1,
+                                "label": {
+                                  "zh": "仅测试流程启用",
+                                  "en": "Only the testing process is enabled"
+                                }
+                              },
+                              {
+                                "value": 2,
+                                "label": {
+                                  "zh": "启用PvModel",
+                                  "en": "Enable PvModel"
+                                }
+                              }
+                            ]
                         },
                         "log_level": {
                             "type": "integer",
+                            "default": 3,
+                            "enum": [1, 2, 3, 4, 5],
                             "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
+                                "zh": "日志输出等级",
+                                "en": "Log output level"
+                            },
+                            "options": [
+                              {
+                                "value": 1,
+                                "label": {
+                                  "zh": "DEBUG",
+                                  "en": "DEBUG"
+                                }
+                              },
+                              {
+                                "value": 2,
+                                "label": {
+                                  "zh": "INFO",
+                                  "en": "INFO"
+                                }
+                              },
+                              {
+                                "value": 3,
+                                "label": {
+                                  "zh": "WARN",
+                                  "en": "WARN"
+                                }
+                              },
+                              {
+                                "value": 4,
+                                "label": {
+                                  "zh": "ERROR",
+                                  "en": "ERROR"
+                                }
+                              },
+                              {
+                                "value": 5,
+                                "label": {
+                                  "zh": "FATAL",
+                                  "en": "FATAL"
+                                }
+                              }
+                            ]
                         },
-                        "execute_cycle_threshold": {
+                        "timeout_threshold": {
                             "type": "integer",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "仿真Cycle限制,当Cycle超过指定值时主动停止仿真。默认值-1为全部仿真完成",
+                                "en": "Simulation Cycle limit: When the Cycle exceeds the specified value, the simulation will be actively stopped. The default value is -1, indicating that the simulation will be completed in its entirety"
                             }
                         },
                         "json_path": {
                             "type": "string",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "加载的JSON文件路径",
+                                "en": "Input json file to load"
                             }
                         },
                         "agent_json_path": {
                             "type": "string",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "program.json的路径，用于重新构建AscendFunction并执行CostModel",
+                                "en": "The path to program.json, used for rebuilding AscendFunction and executing CostModel"
                             }
                         },
                         "args": {
@@ -627,15 +740,8 @@
                                 "type": "string"
                             },
                             "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "leaf_function": {
-                            "type": "string",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "命令行参数列表",
+                                "en": "List of command-line arguments"
                             }
                         }
                     }
