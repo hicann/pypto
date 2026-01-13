@@ -563,42 +563,35 @@ TEST_F(MergeSrcDstBufferTest, UnReusePreMulL0BMemoryForMultiConsumers) {
     }
 }
 
-void ConstructGrapgForRecursivelyReuse(ComputationalGraphBuilder& G) {
+void ConstructGrapgForOnlyOneSubPathReuse(ComputationalGraphBuilder& G) {
     // add tensor
     DataType dateType = DataType::DT_FP16;
     Shape shape = {16, 16};
-    std::vector<std::string> tensorNames{"matA1DDR", "matA2DDR", "matA3DDR", "matA4DDR", "matB1DDR", "matB3DDR", "matA1L1", 
-        "matA2L1", "matA3L1", "matA4L1", "matB1L1", "matB2L1", "matB3L1", "matA1L0A", "matA2L0A", "matA3L0A", "matA4L0A", 
-        "matB1L0B", "matB2L0B", "matB3L0B", "matC1L0C", "matC2L0C", "matC3L0C", "matC4L0C", "outcast1", "outcast2"};
-    std::vector<MemoryType> tensorMemoryType{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,  MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, 
-        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1, 
-        MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0A, MemoryType::MEM_L0A, MemoryType::MEM_L0A, MemoryType::MEM_L0B, 
-        MemoryType::MEM_L0B, MemoryType::MEM_L0B, MemoryType::MEM_L0C, MemoryType::MEM_L0C, MemoryType::MEM_L0C, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR};
+    std::vector<std::string> tensorNames{"matA1DDR", "matA2DDR", "matA3DDR", "matB1DDR", "matA1L1", "matA2L1", "matA3L1", "matB1L1", "matB2L1",
+        "matA1L0A", "matA2L0A", "matA3L0A", "matB1L0B", "matB2L0B", "matB3L0B", "matC1L0C", "matC2L0C", "matC3L0C", "outcast1", "outcast2"};
+    std::vector<MemoryType> tensorMemoryType{MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,  MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,
+        MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L1, MemoryType::MEM_L0A, MemoryType::MEM_L0A, MemoryType::MEM_L0A, 
+        MemoryType::MEM_L0B, MemoryType::MEM_L0B, MemoryType::MEM_L0B, MemoryType::MEM_L0C, MemoryType::MEM_L0C, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR};
     EXPECT_EQ(G.AddTensors(dateType, shape, tensorMemoryType, tensorNames, 0), true);
     // add operation
     std::vector<Opcode> opCodes{Opcode::OP_L1_COPY_IN, Opcode::OP_L1_COPY_IN, Opcode::OP_L1_TO_L0A, 
-        Opcode::OP_L1_TO_L0B, Opcode::OP_A_MULACC_B, Opcode::OP_L0C_TO_L1, Opcode::OP_L1_TO_L0B, Opcode::OP_L1_COPY_IN, 
-        Opcode::OP_L1_TO_L0A, Opcode::OP_A_MUL_B, Opcode::OP_L0C_COPY_OUT, Opcode::OP_L1_COPY_IN, Opcode::OP_L1_TO_L0A,
-        Opcode::OP_A_MUL_B, Opcode::OP_L0C_COPY_OUT, Opcode::OP_L1_COPY_IN, Opcode::OP_L1_COPY_IN, Opcode::OP_L1_TO_L0A, 
-        Opcode::OP_L1_TO_L0B, Opcode::OP_A_MUL_B};
-    std::vector<std::string> opNames{"CopyIn1", "CopyIn2", "L1ToL0A1", "L1ToL0B1", "MulAcc1", "L0CToL11", "L1ToL0B2", "CopyIn3", 
-        "L1ToL0A2", "Mul2", "L0CCopyOut1", "CopyIn4", "L1ToL0A3", "Mul3", "L0CCopyOut2", "CopyIn5", "CopyIn6", "L1ToL0A4", "L1ToL0B3", "Mul4"};
-    std::vector<std::vector<std::string>> iOperands{{"matA1DDR"}, {"matB1DDR"}, {"matA1L1"}, {"matB1L1"}, {"matA1L0A","matB1L0B", "matC4L0C"}, {"matC1L0C"}, 
-        {"matB2L1"}, {"matA2DDR"}, {"matA2L1"}, {"matA2L0A","matB2L0B"}, {"matC2L0C"}, {"matA3DDR"}, {"matA3L1"}, {"matA3L0A","matB1L0B"}, {"matC3L0C"},
-        {"matA4DDR"}, {"matB3DDR"}, {"matA4L1"}, {"matB3L1"}, {"matA4L0A", "matB3L0B"}};
+        Opcode::OP_L1_TO_L0B, Opcode::OP_A_MUL_B, Opcode::OP_L0C_TO_L1, Opcode::OP_L1_TO_L0B, Opcode::OP_L1_COPY_IN, 
+        Opcode::OP_L1_TO_L0A, Opcode::OP_A_MUL_B, Opcode::OP_L0C_COPY_OUT, Opcode::OP_L1_COPY_IN, Opcode::OP_L1_TO_L0A, 
+        Opcode::OP_L1_TO_L0B, Opcode::OP_A_MUL_B, Opcode::OP_L0C_COPY_OUT};
+    std::vector<std::string> opNames{"CopyIn1", "CopyIn2", "L1ToL0A1", "L1ToL0B1", "Mul1", "L0CToL11", "L1ToL0B2", "CopyIn3", 
+        "L1ToL0A2", "Mul2", "L0CCopyOut1", "CopyIn4", "L1ToL0A3", "L1ToL0B3", "Mul3", "L0CCopyOut2"};
+    std::vector<std::vector<std::string>> iOperands{{"matA1DDR"}, {"matB1DDR"}, {"matA1L1"}, {"matB1L1"}, {"matA1L0A","matB1L0B"}, {"matC1L0C"}, 
+        {"matB2L1"}, {"matA2DDR"}, {"matA2L1"}, {"matA2L0A","matB2L0B"}, {"matC2L0C"}, {"matA3DDR"}, {"matA3L1"}, {"matB2L1"}, {"matA3L0A", "matB3L0B"}, {"matC3L0C"}};
     std::vector<std::vector<std::string>> oOperands{{"matA1L1"}, {"matB1L1"}, {"matA1L0A"}, {"matB1L0B"}, {"matC1L0C"}, {"matB2L1"}, 
-        {"matB2L0B"}, {"matA2L1"}, {"matA2L0A"}, {"matC2L0C"}, {"outcast1"}, {"matA3L1"}, {"matA3L0A"}, {"matC3L0C"}, {"outcast2"},
-        {"matA4L1"}, {"matB3L1"}, {"matA4L0A"}, {"matB3L0B"}, {"matC4L0C"}};
+        {"matB2L0B"}, {"matA2L1"}, {"matA2L0A"}, {"matC2L0C"}, {"outcast1"}, {"matA3L1"}, {"matA3L0A"}, {"matB3L0B"}, {"matC3L0C"}, {"outcast2"}};
     EXPECT_EQ(G.AddOps(opCodes, iOperands, oOperands, opNames, true), true);
     EXPECT_EQ(G.SetInCast({"matA1DDR", "matB1DDR", "matA2DDR", "matA3DDR"}), true);
     EXPECT_EQ(G.SetOutCast({"outcast1", "outcast2"}), true);
-    Function *function = G.GetFunction();
-    EXPECT_NE(function, nullptr);
 }
 
-TEST_F(MergeSrcDstBufferTest, FindReusablePreL0BRecursively) {
+TEST_F(MergeSrcDstBufferTest, OnlyOneSubPathMemoryReuse) {
     ComputationalGraphBuilder G;
-    ConstructGrapgForRecursivelyReuse(G);
+    ConstructGrapgForOnlyOneSubPathReuse(G);
     Function *function = G.GetFunction();
     EXPECT_NE(function, nullptr);
 
@@ -608,40 +601,32 @@ TEST_F(MergeSrcDstBufferTest, FindReusablePreL0BRecursively) {
     SrcDstBufferMerge mergePass;
     mergePass.RunOnFunction(*function);
 
-    auto firstMulOp = G.GetOp("MulAcc1");
+    auto firstMulOp = G.GetOp("Mul1");
     auto secondMulOp = G.GetOp("Mul2");
     auto thirdMulOp = G.GetOp("Mul3");
-    auto fourthMulOp = G.GetOp("Mul4");
-    int firstSrcMemId = -1;    
-    int fourthSrcMemId = -1;    
+    int firstMemId = -1;    
     for (auto inputTensor : firstMulOp->GetIOperands()) {
         if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
             EXPECT_NE(inputTensor->memoryrange.memId, -1);
-            firstSrcMemId = inputTensor->memoryrange.memId;
+            firstMemId = inputTensor->memoryrange.memId;
         }
     }
-    // 第一路和第三路matmul复用同一个L0B进行计算
-    for (auto inputTensor : thirdMulOp->GetIOperands()) {
-        if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
-            EXPECT_NE(inputTensor->memoryrange.memId, -1);
-            EXPECT_EQ(inputTensor->memoryrange.memId, firstSrcMemId);
-        }
-    }
-    for (auto inputTensor : fourthMulOp->GetIOperands()) {
-        if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
-            EXPECT_NE(inputTensor->memoryrange.memId, -1);
-            fourthSrcMemId = inputTensor->memoryrange.memId;
-        }
-    }
-    // 因为第一路matmul的L0B tensor有两个消费者 这里不进行复用
-    // 递归向前寻找到前序第四路matmul的L0B tensor进行复用
+    int secondMemId = -1;    
     for (auto inputTensor : secondMulOp->GetIOperands()) {
         if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
             EXPECT_NE(inputTensor->memoryrange.memId, -1);
-            EXPECT_NE(inputTensor->memoryrange.memId, firstSrcMemId);
-            EXPECT_EQ(inputTensor->memoryrange.memId, fourthSrcMemId);
+            secondMemId = inputTensor->memoryrange.memId;
         }
     }
+    int thirdMemId = -1;    
+    for (auto inputTensor : thirdMulOp->GetIOperands()) {
+        if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
+            EXPECT_NE(inputTensor->memoryrange.memId, -1);
+            thirdMemId = inputTensor->memoryrange.memId;
+        }
+    }
+    EXPECT_TRUE(((firstMemId == secondMemId) || (firstMemId == thirdMemId)));
+    EXPECT_NE(secondMemId, thirdMemId);
 }
 
 } // namespace tile_fwk

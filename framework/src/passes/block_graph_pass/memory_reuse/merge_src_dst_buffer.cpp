@@ -348,42 +348,35 @@ Status SrcDstBufferMergeImpl::FindReuseableL0Tensor(const Operation& op, std::un
         APASS_LOG_DEBUG_F(Elements::Operation, "Op:%s[%d] is not a matmul operation.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
         return SUCCESS;
     }
-    Operation* nextCandidateOp = nullptr;
     for (const auto& inputTensor : op.GetIOperands()) {
         if (inputTensor->GetMemoryTypeOriginal() != needReplacedTensor->GetMemoryTypeOriginal()) {
-            if (inputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "Obtain the candidate matmul op:%s[%d].", op.GetOpcodeStr().c_str(), op.GetOpMagic());
-                nextCandidateOp = *inputTensor->GetProducers().begin();
-            }   
             continue;
         }
         if (tensorMaxSize_[inputTensor->memoryrange.memId] != tensorMaxSize_[needReplacedTensor->memoryrange.memId]) {
             APASS_LOG_DEBUG_F(Elements::Tensor, "Matmul input tensor (memId=%d, size=%d) != needReplaced tensor (memId=%d, size=%d), op:%s[%d].", inputTensor->memoryrange.memId, 
                 tensorMaxSize_[inputTensor->memoryrange.memId], needReplacedTensor->memoryrange.memId, tensorMaxSize_[needReplacedTensor->memoryrange.memId], op.GetOpcodeStr().c_str(), op.GetOpMagic());
-            continue;
+            return SUCCESS;
         }
         if (tensorConsumers_[inputTensor->memoryrange.memId].size() > 1) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Tensor[%d], memId[%d] has more than 1 consumer.", inputTensor->GetMagic(), inputTensor->memoryrange.memId);
-            continue;
+            return SUCCESS;
         }
         if (hasReusedL0Tensors_.count(inputTensor->GetMagic())) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Tensor[%d], memId[%d] has been reused", inputTensor->GetMagic(), inputTensor->memoryrange.memId);
-            continue;
+            return SUCCESS;
         }
         if (tensorConsumers_[needReplacedTensor->memoryrange.memId].size() > tensorConsumers_[inputTensor->memoryrange.memId].size()) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Needreplaced tensor[%d] consumers > matmul input tensor[%d] consumers, perform refresh.",
                 needReplacedTensor->GetMagic(), inputTensor->GetMagic());
             tensorConsumers_[inputTensor->memoryrange.memId] = tensorConsumers_[needReplacedTensor->GetMagic()];
         }
+        replacedTensors[needReplacedTensor->memoryrange.memId] = inputTensor;
         APASS_LOG_INFO_F(Elements::Operation, "Successfully performed L0 memory reuse, Needreplaced tensor[%d] memId[%d] , input tensor[%d] memId[%d]",
             needReplacedTensor->GetMagic(), needReplacedTensor->memoryrange.memId, inputTensor->GetMagic(), inputTensor->memoryrange.memId);
         needReplacedTensor->memoryrange.memId = inputTensor->memoryrange.memId;
         hasReusedL0Tensors_.insert(inputTensor->GetMagic());
         hasFound = true;
         return SUCCESS;
-    }
-    if (nextCandidateOp != nullptr) {
-        return FindReuseableL0Tensor(*nextCandidateOp, replacedTensors, needReplacedTensor, hasFound);
     }
     return SUCCESS;
 }
