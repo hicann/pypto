@@ -14,11 +14,7 @@
  */
 
 #include "distributed_op_test_common.h"
-#ifdef BUILD_WITH_CANN_SUB
-#include<hccl/hcom.h>
-#else
-#include "hcom.h"
-#endif
+#include "hccl/hcom.h"
 
 extern "C" HcclResult HcclAllocComResourceByTiling(HcclComm comm, void *stream, void *mc2Tiling, void **commContext);
 

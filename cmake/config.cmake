@@ -66,10 +66,6 @@ if (BUILD_WITH_CANN)
         if ("${ASCEND_CANN_PACKAGE_PATH}x" STREQUAL "x" OR NOT EXISTS "${ASCEND_CANN_PACKAGE_PATH}")
             set(BUILD_WITH_CANN OFF)
             message(STATUS "ASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH} is empty or not exist, auto turn off BUILD_WITH_CANN")
-        else ()
-            if (EXISTS "${ASCEND_CANN_PACKAGE_PATH}/hcomm" OR EXISTS "${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/runtime")
-                set(BUILD_WITH_CANN_SUB ON)
-            endif ()
         endif ()
     else ()
         set(ASCEND_CANN_PACKAGE_PATH)
@@ -77,7 +73,6 @@ if (BUILD_WITH_CANN)
 endif ()
 message(STATUS "ASCEND_CANN_PACKAGE_PATH=${ASCEND_CANN_PACKAGE_PATH}")
 message(STATUS "BUILD_WITH_CANN=${BUILD_WITH_CANN}")
-message(STATUS "BUILD_WITH_CANN_SUB=${BUILD_WITH_CANN_SUB}")
 
 
 # 获取 3rd Path

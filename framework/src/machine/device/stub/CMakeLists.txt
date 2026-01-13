@@ -42,10 +42,8 @@ target_include_directories(slog_stub
             ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
         PRIVATE  # 使用 CANN 场景依赖
             $<$<BOOL:${BUILD_OPEN_PROJECT}>:${ASCEND_CANN_PACKAGE_PATH}/include>
-        PRIVATE  # 使用 CANN 整包
             $<$<BOOL:${BUILD_OPEN_PROJECT}>:${ASCEND_CANN_PACKAGE_PATH}/include/toolchain>
-        PRIVATE  # 使用 CANN 分包
-            $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN_SUB}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base>>
+            $<$<BOOL:${BUILD_OPEN_PROJECT}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base>
 )
 target_link_directories(slog_stub
         PRIVATE

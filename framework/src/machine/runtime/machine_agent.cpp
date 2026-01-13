@@ -26,9 +26,6 @@
 #ifdef BUILD_WITH_CANN
 #include "securec.h"
 extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
-#ifndef BUILD_WITH_CANN_SUB
-
-#endif
 #endif
 
 
