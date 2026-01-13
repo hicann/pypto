@@ -83,13 +83,17 @@ struct MixSubgraphInfo {
     Function* function;
     std::vector<InternalComponentInfo> components;
     std::vector<Operation*> originalCallOps;
+    FunctionHash hashValue;
+    bool isLocalFunction;
+    MixSubgraphInfo(uint64_t pid, Function* func, std::vector<InternalComponentInfo> comp,
+                    std::vector<Operation*> ops, FunctionHash hash, bool isLocal)
+        : programID(pid), function(func), components(std::move(comp)),
+          originalCallOps(std::move(ops)), hashValue(hash), isLocalFunction(isLocal) {}
 };
 
 struct ExtractInfo {
-    std::vector<std::vector<SymbolicScalar>> &extractedArgList;
     std::vector<int>& iOffsets;
     std::vector<int>& oOffsets;
-    int& currentOffset;
     std::set<LogicalTensorPtr>& processedTensors;
 };
 
@@ -101,6 +105,27 @@ struct CallOpCreationInfo {
     uint64_t wrapId;
     std::vector<int> iOffsets;
     std::vector<int> oOffsets;
+    Operation* createdCallOp = nullptr;
+};
+
+enum class ComponentType {
+    UNKNOWN = 0,
+    C_SCOPE = 1,    // C类型scope
+    V_SCOPE = 2,    // V类型scope
+};
+
+// 内部依赖信息结构
+struct InternalDependencyInfo {
+    int srcComp;  // 源scope索引
+    int dstComp;  // 目标scope索引
+    LogicalTensorPtr dummyTensor;  // 用于表示依赖的dummy tensor
+    uint64_t dummyTensorMagic;  // dummy tensor的magic值
+    bool isSameType;  // 是否是同类型scope依赖
+    ComponentType compType;  // scope类型（C或V）
+    
+    InternalDependencyInfo(int src, int dst, ComponentType type)
+        : srcComp(src), dstComp(dst), dummyTensor(nullptr), 
+          dummyTensorMagic(0), isSameType(true), compType(type) {}
 };
 
 class MixSubgraphSplit : public Pass {
@@ -128,7 +153,8 @@ private:
                         const std::vector<InternalComponentInfo>& components,
                         const std::vector<uint64_t>& newProgramIDs,
                         SubgraphToFunction& subgraphToFunction,
-                        std::vector<Function*>& newFunctions);
+                        std::vector<Function*>& newFunctions,
+                        const std::vector<InternalDependencyInfo>& internalDeps);
     Status SetMixIdResourceType(std::vector<Function*> &newFunctions, uint64_t mixId, MixResourceType resourceType);
     // 处理单个leaf function
     Status ProcessLeafFunction(Function& rootFunc,
@@ -195,9 +221,7 @@ private:
                                      Operation* originalCallOp,
                                      Function* originalMixFunc,  
                                      SubgraphToFunction& subgraphToFunction,
-                                     uint64_t wrapId,
-                                     std::vector<int>& iOffsets,
-                                     std::vector<int>& oOffsets);
+                                     CallOpCreationInfo& info);
     
     int FindTensorIndexInList(int tensorMagic, const std::vector<LogicalTensorPtr>& tensorList) const;
 
@@ -250,23 +274,25 @@ private:
     Operation* FindNextOpInSequence(Operation* op, Function& mixSubgraphFunc) const;
     void DisplayArg(const std::vector<SymbolicScalar>& originalLinearArgs) const;
     
-    bool ExtractArgListFromIncast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const;
-    bool ExtractArgListFromOutcast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const;
-    bool ExtractArgListFromGlobalTensor(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const;
-    bool ExtractArgListFromActualIncasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualIncasts, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const; 
-    bool ExtractArgListFromActualOutcasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualOutcasts, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const;
+    bool ExtractArgListFromIncast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const;
+    bool ExtractArgListFromOutcast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const;
+    bool ExtractArgListFromGlobalTensor(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const;
+    bool ExtractArgListFromActualIncasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualIncasts, ExtractInfo& extractInfo, Function* originalMixFunc) const; 
+    bool ExtractArgListFromActualOutcasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualOutcasts, ExtractInfo& extractInfo, Function* originalMixFunc) const;
     // 参数提取函数
     std::vector<std::vector<SymbolicScalar>> ExtractArgListForLeafFunction(
         Function& leafFunc,
         CallOpAttribute* originalCallAttr,
         const SubfuncInvokeInfoTy& invokeInfo,
         std::vector<int>& iOffsets,
-        std::vector<int>& oOffsets) const;
+        std::vector<int>& oOffsets,
+        Function* originalMixFunc) const;
 
-    int FindOriginalOffsetInMixFunction(LogicalTensorPtr tensor) const;
+    int FindOriginalOffsetInMixFunction(LogicalTensorPtr tensor, Function* originalMixFunc) const;
 
     int GetOffsetFromIncastParam(const SubfuncInvokeInfoTy::IncastParamPackTy& incastParam, Function& leafFunc) const;
     int GetOffsetFromOutcastParam(const SubfuncInvokeInfoTy::OutcastParamPackTy& outcastParam, Function& leafFunc) const;
+    int GetOffsetFromOp(int opMagic, int operandIdx, Function& leafFunc, bool isOutput) const;
     int GetOffsetFromTensorParam(const SubfuncInvokeInfoTy::TensorParamPackTy& tensorParam, Function& leafFunc) const;
     Status SetOffsetsToLeafFunction(Function& leafFunc, const std::vector<int>& iOffsets, const std::vector<int> &oOffsets, const SubfuncInvokeInfoTy& invokeInfo);
     bool SetOffsetToOpByMagic(int opMagic, int operandIdx, int offset, Function& leafFunc, bool isOutput) const;
@@ -277,8 +303,92 @@ private:
     Status CalculateSplit(Function &function, std::vector<MixSubgraphInfo> &mixSubgraphs, std::set<uint64_t> &mixSubgraphIDsToDelete, std::unordered_map<uint64_t, std::vector<uint64_t>> &mixSubgraphNewIDs, std::unordered_map<uint64_t, uint64_t> &programIDRemap);
     Status ExecuteSplit(Function &function, std::vector<MixSubgraphInfo> &mixSubgraphs, std::vector<Operation*> callOpsToDelete, std::unordered_map<uint64_t, std::vector<uint64_t>> &mixSubgraphNewIDs, std::unordered_map<uint64_t, uint64_t> &programIDRemap);
 
+    // 内部依赖处理相关函数
+    void ProcessAllInternalDependencies(
+        Function& rootFunc,
+        const std::vector<CallOpCreationInfo>& callOpInfos,
+        const std::vector<InternalDependencyInfo>& internalDeps) const;
+        
+    void ProcessInternalDependenciesForWrap(
+        Function& rootFunc,
+        const std::vector<const CallOpCreationInfo*>& infos,
+        const std::vector<InternalDependencyInfo>& internalDeps,
+        uint64_t wrapId) const;
+    ComponentType DetermineComponentType(const InternalComponentInfo& component) const;
+    void CollectInternalDependencies(
+        const std::unordered_map<int, std::set<int>>& dependencyClosure,
+        std::vector<InternalDependencyInfo>& internalDeps,
+        const std::unordered_map<int, ComponentType>& componentTypes) const;
+    void EliminateRedundantIncasts(
+        std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+        const std::vector<InternalDependencyInfo>& internalDeps) const;
+        
+    void EliminateRedundantOutcasts(
+        std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts,
+        const std::vector<InternalDependencyInfo>& internalDeps) const;
+        
+    void EliminateRedundantDependencies(
+        std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+        std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts,
+        const std::vector<InternalDependencyInfo>& internalDeps) const;
+        
+    void ExtractExternalDependencies(
+        const SubgraphToFunction& subgraphToFunction,
+        std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+        std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts) const;
+        
+    void PropagateExternalDependenciesWithClosure(
+        std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+        std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts,
+        const std::unordered_map<int, std::set<int>>& dependencyClosure) const;
+        
+    void ApplyFinalDependencies(
+        const std::vector<Function*>& newFunctions,
+        const std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+        const std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts) const;
+    
+    void ApplyIncastDependencies(
+        Function* leafFunc,
+        int componentId,
+        const std::vector<SimpleIncastParam>& incastParams) const;
+        
+    void ApplyOutcastDependencies(
+        Function* leafFunc,
+        int componentId,
+        const std::vector<SimpleOutcastParam>& outcastParams) const;
+        
+    bool ContainsIncast(
+        const std::vector<SimpleIncastParam>& incasts,
+        LogicalTensorPtr tensor) const;
+        
+    bool ContainsOutcast(
+        const std::vector<SimpleOutcastParam>& outcasts,
+        LogicalTensorPtr tensor) const;    
+
+    // 用于存储每个leaf function的op magic映射
+    struct LeafFuncMagicMap {
+        Function* leafFunc;
+        std::unordered_map<int, int> originalToClonedMagic; // 原始magic -> 克隆magic
+    };
+    
+    std::unordered_map<Function*, LeafFuncMagicMap> leafFuncMagicMaps_;
+    
+    // 辅助函数：查找映射后的magic
+    int GetMappedOpMagic(Function* leafFunc, int originalMagic) const {
+        auto it = leafFuncMagicMaps_.find(leafFunc);
+        if (it != leafFuncMagicMaps_.end()) {
+            const auto& magicMap = it->second.originalToClonedMagic;
+            auto magicIt = magicMap.find(originalMagic);
+            if (magicIt != magicMap.end()) {
+                return magicIt->second;
+            }
+        }
+        return originalMagic; // 没找到映射，返回原始值
+    }
+
     uint64_t nextWrapId_;
     uint64_t nextMixId_;
+    static constexpr uint64_t INVALID_PROGRAM_ID = static_cast<uint64_t>(-1);
 };
 
 } // namespace tile_fwk

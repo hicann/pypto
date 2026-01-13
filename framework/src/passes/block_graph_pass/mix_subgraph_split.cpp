@@ -35,38 +35,65 @@ int GetStartIndex(const std::vector<Operation *> &opList, Operation* startOp) {
 }
 
 Status MixSubgraphSplit::GatherSubGraphInfo(Function &function, std::vector<MixSubgraphInfo> &mixSubgraphs, std::set<uint64_t> &mixSubgraphIDsToDelete, std::vector<Operation*> &callOpsToDelete) {
-    // 获取所有CallOps
     auto rootFunc = function.rootFunc_;
     auto callOps = rootFunc->GetCallopList();
-    std::unordered_map<uint64_t, std::vector<Operation*>> programIDToCallOps;
-    // 构建programID到callOps的映射
+    
+    // 按哈希值分组callOp
+    std::unordered_map<FunctionHash, std::vector<Operation*>> hashToCallOps;  
     for (auto* callOp : callOps) {
         if (callOp == nullptr || callOp->IsDeleted()) {
             continue;
         }
         auto callAttr = dynamic_cast<CallOpAttribute*>(callOp->GetOpAttribute().get());
-        if (callAttr != nullptr && callAttr->invokeInfo_ != nullptr) {
-            uint64_t programID = callAttr->invokeInfo_->GetProgramId();
-            programIDToCallOps[programID].push_back(callOp);
+        if (callAttr != nullptr) {
+            FunctionHash calleeHash = callAttr->GetCalleeHash();
+            hashToCallOps[calleeHash].push_back(callOp);
         }
     }
-    for (auto &program : rootFunc->programs_) {
-        if (program.second != nullptr && IsMixSubgraph(*program.second)) {
-            auto components = AnalyzeInternalComponents(*program.second);
-            if (components.size() > 1) {
-                // 获取该programID对应的原始callOps
-                std::vector<Operation*> originalCallOps;
-                auto it = programIDToCallOps.find(program.first);
-                if (it != programIDToCallOps.end()) {
-                    originalCallOps = it->second;
-                    callOpsToDelete.insert(callOpsToDelete.end(),
-                                            originalCallOps.begin(), originalCallOps.end());
-                }
-                mixSubgraphs.push_back({program.first, program.second, components, originalCallOps});
-                mixSubgraphIDsToDelete.insert(program.first);
-                ALOG_INFO_F("Found mix subgraph: programID=%d, components=%d", program.first, components.size());
+    // 为每个哈希值查找对应的cacheFunction并判断是否为Mix子图
+    for (auto& pair : hashToCallOps) {
+        const FunctionHash& calleeHash = pair.first;
+        std::vector<Operation*>& callOpList = pair.second;
+        if (callOpList.empty()) {
+            continue;
+        }
+        // 从全局缓存中获取function
+        auto cacheValue = Program::GetInstance().TryHitCahce(calleeHash);
+        Function* cacheFunc = cacheValue->cacheFunction;
+        // 检查是否是Mix子图
+        if (!IsMixSubgraph(*cacheFunc)) {
+            continue;
+        }
+        // 分析内部组件
+        auto components = AnalyzeInternalComponents(*cacheFunc);
+        // 确定programID（仅在当前function中查找）
+        uint64_t localProgramID = INVALID_PROGRAM_ID;
+        bool isInCurrentFunc = false;
+        // 检查这个function是否在当前function的programs中
+        for (const auto& program : rootFunc->programs_) {
+            if (program.second == cacheFunc) {
+                localProgramID = program.first;
+                isInCurrentFunc = true;   
+                break;
             }
         }
+        // 添加到待处理列表
+        mixSubgraphs.push_back(MixSubgraphInfo(
+            localProgramID,
+            cacheFunc,
+            components,
+            callOpList,
+            calleeHash,  
+            isInCurrentFunc
+        ));
+        // 如果需要删除当前function中的原leaffunction
+        if (isInCurrentFunc) {
+            mixSubgraphIDsToDelete.insert(localProgramID);
+        }          
+        callOpsToDelete.insert(callOpsToDelete.end(),
+                                callOpList.begin(), callOpList.end());
+        ALOG_INFO_F("Found mix subgraph: local=%d, programID=%lu, callOps=%zu, components=%zu",
+                isInCurrentFunc, localProgramID, callOpList.size(), components.size());
     }
     return SUCCESS;
 }
@@ -78,7 +105,10 @@ Status MixSubgraphSplit::CalculateSplit(Function &function, std::vector<MixSubgr
     size_t deleteCount = mixSubgraphIDsToDelete.size();
     size_t newSubgraphCount = 0;
     for (const auto& mixInfo : mixSubgraphs) {
-        newSubgraphCount += mixInfo.components.size();
+        if (mixInfo.isLocalFunction) {
+            // 只有本地function的拆分才会在当前function中添加新program
+            newSubgraphCount += mixInfo.components.size();
+        }
     }
     size_t finalCount = originalCount - deleteCount + newSubgraphCount;
     ALOG_INFO_F("Program count: original= %d, delete=%d, new=%d, final=%d", originalCount, deleteCount, newSubgraphCount, finalCount);
@@ -92,14 +122,18 @@ Status MixSubgraphSplit::CalculateSplit(Function &function, std::vector<MixSubgr
             ALOG_DEBUG_F("Remap preserved program: %d ->  %d", program.first, programIDRemap[program.first]);
         }
     }
-    // 然后为新创建的子图分配连续的ID
+    // 为新创建的子图分配连续的ID
     for (const auto& mixInfo : mixSubgraphs) {
+        if (!mixInfo.isLocalFunction) {
+            continue; // 跳过跨function
+        }
         std::vector<uint64_t> newProgramIDs;
         for (size_t i = 0; i < mixInfo.components.size(); ++i) {
             newProgramIDs.push_back(nextProgramID++);
         }
         mixSubgraphNewIDs[mixInfo.programID] = newProgramIDs;
-        ALOG_INFO_F("Allocated new programIDs for mix subgraph %d.", mixInfo.programID);
+        ALOG_INFO_F("Allocated %zu new programIDs for local mix subgraph %lu", 
+                    newProgramIDs.size(), mixInfo.programID);
     }
     return SUCCESS;
 }
@@ -109,14 +143,23 @@ Status MixSubgraphSplit::ExecuteSplit(Function &function, std::vector<MixSubgrap
     std::vector<MixSubgraphSplitResult> splitResults;
     auto rootFunc = function.rootFunc_;
     for (const auto& mixInfo : mixSubgraphs) {
-        auto newProgramIDs = mixSubgraphNewIDs[mixInfo.programID];
-        auto status = ProcessLeafFunction(*rootFunc, mixInfo.programID, mixInfo.function, mixInfo.components, newProgramIDs, mixInfo.originalCallOps, splitResults);
-        if (status != SUCCESS) {
-            ALOG_ERROR_F("ProcessLeafFunction failed for programID=%d.", mixInfo.programID);
-            return status;
+        std::vector<uint64_t> newProgramIDs;
+        if (mixInfo.isLocalFunction) {
+             // 本地function：使用预分配的programID
+            auto it = mixSubgraphNewIDs.find(mixInfo.programID);
+            if (it != mixSubgraphNewIDs.end()) {
+                newProgramIDs = it->second;
+            } 
+        } else {
+            // 跨function：创建虚拟的programID（不添加到programs中）
+            static uint64_t tempIDBase = 0xFFFFFFFF00000000ULL;
+            for (size_t i = 0; i < mixInfo.components.size(); ++i) {
+                newProgramIDs.push_back(tempIDBase++);
+            }
         }
+        ProcessLeafFunction(*rootFunc, mixInfo.programID, mixInfo.function, mixInfo.components, 
+                            newProgramIDs, mixInfo.originalCallOps, splitResults);
     }
-
     // 删除原始Mix子图的callOp
     DeleteOriginalMixCallOps(*rootFunc, callOpsToDelete);
     ALOG_INFO_F("Found %d mix subgraphs to split", mixSubgraphs.size());
@@ -226,7 +269,8 @@ void MixSubgraphSplit::ProcessUnassignedOperations(
         }
     }
     std::vector<Operation*> remainingOps;
-    // 处理数据移动op(基于OpCalcType)和同步op
+    // 处理数据移动op(基于OpCalcType)
+    std::vector<Operation*> syncOps;
     for (auto* op : unassignedOps) {
         bool merged = false;
         // 通过OpcodeManager获取OpCalcType
@@ -241,16 +285,26 @@ void MixSubgraphSplit::ProcessUnassignedOperations(
             // 应该与输入tensor的生产者在同一个组件
             merged = MergeMoveOutOperation(op, componentsByInternalID, opToComponentMap);
         }
-        // 处理同步节点
-        else if (IsSyncOperation(op)) {
-            merged = MergeSyncOperation(op, componentsByInternalID, opToComponentMap, mixSubgraphFunc);
-        }
-        if (!merged) {
+        if (!merged && IsSyncOperation(op)) {
+            // 同步op先收集起来，稍后处理
+            syncOps.push_back(op);
+            ALOG_DEBUG_F("Deferring sync operation %s %d", 
+                        op->GetOpcodeStr().c_str(), op->GetOpMagic());    
+        } else if (!merged) {
             remainingOps.push_back(op);
-            ALOG_DEBUG_F("Operation %s (calcType=%d) not merged by data movement pattern",
-                       op->GetOpcodeStr().c_str(), static_cast<int>(opCalcType));
         }
     }
+
+    // 处理同步op（此时数据移动op已经分配）
+    for (auto* syncOp : syncOps) {
+        bool merged = MergeSyncOperation(syncOp, componentsByInternalID, opToComponentMap, mixSubgraphFunc);
+        if (!merged) {
+            remainingOps.push_back(syncOp);
+            ALOG_DEBUG_F("Sync operation %s %d not merged", 
+                        syncOp->GetOpcodeStr().c_str(), syncOp->GetOpMagic());
+        }
+    }
+    // 报告未分配的op
     if (!remainingOps.empty()) {
         ALOG_ERROR_F("Found %d unexpected unassigned operations after first step:", remainingOps.size());
     }
@@ -376,9 +430,15 @@ bool MixSubgraphSplit::MergeSyncSrcDst(Operation* op, Operation* targetOp, std::
             ALOG_DEBUG_F("Merged %s %d to component %d via non-sync op %d",
                         op->GetOpcodeStr().c_str(), op->GetOpMagic(), it->second, targetOp->GetOpMagic());
             return true;
+        } else {
+            // 目标op存在但尚未分配
+            ALOG_DEBUG_F("Cannot merge %s %d: target op %d exists but not yet assigned (will retry later)",
+                        op->GetOpcodeStr().c_str(), op->GetOpMagic(), targetOp->GetOpMagic());
+            return false;
         }
     }
-    ALOG_WARN_F("Failed to merge %s %d: no non-sync op found backward", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+    ALOG_WARN_F("Failed to merge %s %d: no non-sync operation found in search direction",
+                op->GetOpcodeStr().c_str(), op->GetOpMagic());
     return false;
 }
 
@@ -507,9 +567,24 @@ AIVCore MixSubgraphSplit::DetermineComponentAIVCore(const std::vector<Operation*
         return AIVCore::UNSPECIFIED;
     }
 
-    // 检查第一个操作的isCube属性来确定组件类型
-    bool isCubeComponent = operations[0]->HasAttr(OpAttributeKey::isCube) &&
-                          operations[0]->GetAttr<bool>(OpAttributeKey::isCube);
+    bool isCubeComponent = false;
+    Operation* firstNonSyncOp = nullptr;
+    
+    for (auto* op : operations) {
+        if (!IsSyncOperation(op)) {
+            firstNonSyncOp = op;
+            break;
+        }
+    }
+    
+    // 使用第一个非同步op的isCube属性
+    isCubeComponent = firstNonSyncOp->HasAttribute(OpAttributeKey::isCube) &&
+                     firstNonSyncOp->GetBoolAttribute(OpAttributeKey::isCube);
+    
+    ALOG_DEBUG_F("Component type determined by first non-sync op %s (magic=%d): isCube=%d",
+                firstNonSyncOp->GetOpcodeStr().c_str(),
+                firstNonSyncOp->GetOpMagic(),
+                isCubeComponent);
     if (isCubeComponent) {
         // Cube组件：分析L0C_COPY_UB op的目标vector子图的AIVCore
         AIVCore targetAIVCore = AIVCore::UNSPECIFIED;
@@ -605,7 +680,6 @@ Status MixSubgraphSplit::ApplySplitResultsWithRemap(Function& function,
     std::map<uint64_t, Function*> newPrograms;
     //添加保留的子图
     for (auto &program : rootFunc->programs_) {
-        // 跳过要删除的Mix子图
         if (programIDRemap.find(program.first) != programIDRemap.end()) {
             uint64_t newID = programIDRemap.at(program.first);
             newPrograms[newID] = program.second;
@@ -618,7 +692,17 @@ Status MixSubgraphSplit::ApplySplitResultsWithRemap(Function& function,
     }
     // 添加新创建的子图
     for (const auto& result : splitResults) {
-        auto newProgramIDs = mixSubgraphNewIDs.at(result.originalProgramID);
+        if (result.originalProgramID == INVALID_PROGRAM_ID) {
+            ALOG_DEBUG_F("Skip cross-function result: originalProgramID=INVALID");
+            continue;
+        }
+        auto it = mixSubgraphNewIDs.find(result.originalProgramID);
+        if (it == mixSubgraphNewIDs.end()) {
+            ALOG_WARN_F("No programIDs found for result with originalProgramID=%lu", 
+                          result.originalProgramID);    
+            continue;
+        }
+        const auto& newProgramIDs = it->second;
         for (size_t i = 0; i < result.newFunctions.size(); i++) {
             uint64_t newProgramID = newProgramIDs[i];
             Function* newFunc = result.newFunctions[i];
@@ -644,10 +728,8 @@ Status MixSubgraphSplit::CreateCallOpInRootFunction(Function& rootFunc,
                                                     Operation* originalCallOp,
                                                     Function* originalMixFunc,
                                                     SubgraphToFunction& subgraphToFunction,
-                                                    uint64_t wrapId,
-                                                    std::vector<int>& iOffsets,
-                                                    std::vector<int>& oOffsets) {
-    ALOG_DEBUG_F("Creating callOp in root function for leaf: %s, programID=%d, component=%d, wrapId=%lu", leafFunc.GetRawName().c_str(), newProgramID, componentIndex, wrapId);
+                                                    CallOpCreationInfo& info) {
+    ALOG_DEBUG_F("Creating callOp in root function for leaf: %s, programID=%d, component=%d, wrapId=%lu", leafFunc.GetRawName().c_str(), newProgramID, componentIndex, info.wrapId);
     auto originalCallAttr = dynamic_cast<CallOpAttribute*>(originalCallOp->GetOpAttribute().get());
     if (originalCallAttr == nullptr) {
         ALOG_ERROR_F("Original callOp %d has no CallOpAttribute", originalCallOp->GetOpMagic());
@@ -760,19 +842,19 @@ Status MixSubgraphSplit::CreateCallOpInRootFunction(Function& rootFunc,
     ALOG_INFO_F("Created operands for new callOp %d: %zu inputs, %zu outputs",
             callOp.GetOpMagic(), newIOperands.size(), newOOperands.size());
     // 使用invokeInfo提取argList
-    auto extractedArgList = ExtractArgListForLeafFunction(leafFunc, originalCallAttr, invokeInfo, iOffsets, oOffsets);
-    ALOG_DEBUG_F("Created callOp %d: %zu arg blocks (from original callOp %d), %zu input offsets, %zu output offsets", callOp.GetOpMagic(), extractedArgList.size(), originalCallOp->GetOpMagic(), iOffsets.size(), oOffsets.size());
+    auto extractedArgList = ExtractArgListForLeafFunction(leafFunc, originalCallAttr, invokeInfo, info.iOffsets, info.oOffsets, originalMixFunc);
+    ALOG_DEBUG_F("Created callOp %d: %zu arg blocks (from original callOp %d), %zu input offsets, %zu output offsets", callOp.GetOpMagic(), extractedArgList.size(), originalCallOp->GetOpMagic(), info.iOffsets.size(), info.oOffsets.size());
     std::map<int, SymbolicScalar> outIndexToExpr;
     leafFunc.GetOutcastSymbolicExpr(outIndexToExpr);
     // 创建CallOpAttribute（使用从原始CallOp提取的argList）
     auto callAttr = leafFunc.CreateCallOpAttribute(extractedArgList, outIndexToExpr);
     auto callOpAttr = std::dynamic_pointer_cast<CallOpAttribute>(callAttr);
     if (callOpAttr != nullptr) {
-        callOpAttr->wrapId = wrapId;
-        ALOG_DEBUG_F("Set wrapId=%lu to callOp attribute for programID=%d (from original callOp %d)", wrapId, newProgramID, originalCallOp->GetOpMagic());
+        callOpAttr->wrapId = info.wrapId;
+        ALOG_DEBUG_F("Set wrapId=%lu to callOp attribute for programID=%d (from original callOp %d)", info.wrapId, newProgramID, originalCallOp->GetOpMagic());
     }
     callOp.SetOpAttribute(callAttr);
-    callOp.SetOpOffset(iOffsets, oOffsets);
+    callOp.SetOpOffset(info.iOffsets, info.oOffsets);
     callOp.UpdateSubgraphID(newProgramID);
     if (componentIndex < subgraphToFunction.subFuncInvokeInfos.size()) {
         callOp.SetSubFuncInvokeInfo(subgraphToFunction.subFuncInvokeInfos[componentIndex]);
@@ -781,7 +863,10 @@ Status MixSubgraphSplit::CreateCallOpInRootFunction(Function& rootFunc,
     if (callOpAttr != nullptr && callOpAttr->invokeInfo_ != nullptr) {
         callOpAttr->invokeInfo_->UpdateProgramSubgraphId(newProgramID);
     }
-    ALOG_INFO_F("Successfully created callOp in root function for programID=%d, leaf=%s", newProgramID, leafFunc.GetRawName().c_str());
+    // 将创建的call op记录到info中
+    info.createdCallOp = &callOp;
+    ALOG_INFO_F("Successfully created callOp %d in root function for programID=%d, leaf=%s", 
+                callOp.GetOpMagic(), newProgramID, leafFunc.GetRawName().c_str());
     return SUCCESS;
 }
 
@@ -796,7 +881,7 @@ int MixSubgraphSplit::FindTensorIndexInList(int tensorMagic,
     return -1;
 }
 
-bool MixSubgraphSplit::ExtractArgListFromIncast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const {
+bool MixSubgraphSplit::ExtractArgListFromIncast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const {
     //使用invokeInfo中预先构造的incast信息
     for (const auto& in : invokeInfo.GetIncastTensorParamList()) {
         if (in.opMagic == -1) { // 有效的incast
@@ -805,27 +890,16 @@ bool MixSubgraphSplit::ExtractArgListFromIncast(const SubfuncInvokeInfoTy& invok
         int offset = GetOffsetFromIncastParam(in, leafFunc);
         if (offset == -1) {
             continue;
-        }
-        // 根据tensor维度计算参数块长度
-        int dim = in.shape.size();
-        int blockLength = 1 + 4 * dim;
-        std::vector<SymbolicScalar> argBlock;
-        for (size_t i = 0; i < static_cast<size_t>(blockLength) && (offset + i) < originalLinearArgs.size(); i++) {
-            argBlock.push_back(originalLinearArgs[offset + i]);
-        }
-        if (argBlock.size() == static_cast<size_t>(blockLength)) {
-            extractInfo.extractedArgList.push_back(argBlock);
-            extractInfo.iOffsets.push_back(extractInfo.currentOffset);
-            extractInfo.currentOffset += blockLength;
-            extractInfo.processedTensors.insert(in.tensor);
-            ALOG_DEBUG_F("Incast (op=%d, idx=%d, dim=%d) -> offset=%d, length=%d -> extracted arg block",
-                        in.opMagic, in.operandIdx, dim, offset, blockLength);
-        }
+        }       
+        extractInfo.iOffsets.push_back(offset);
+        extractInfo.processedTensors.insert(in.tensor);
+        ALOG_DEBUG_F("Incast (op=%d, idx=%d) -> original offset=%d",
+                    in.opMagic, in.operandIdx, offset);
     }
     return true;
 }
 
-bool MixSubgraphSplit::ExtractArgListFromOutcast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const {
+bool MixSubgraphSplit::ExtractArgListFromOutcast(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const {
     //使用invokeInfo中预先构造的outcast信息
     for (const auto& out : invokeInfo.GetOutcastTensorParamList()) {
         if (out.opMagic == -1) {
@@ -837,31 +911,15 @@ bool MixSubgraphSplit::ExtractArgListFromOutcast(const SubfuncInvokeInfoTy& invo
                         out.opMagic, out.operandIdx);
             continue;
         }
-        // 根据tensor维度计算参数块长度
-        int dim = out.shape.size();  // 从outcastParam中获取维度
-        int blockLength = 1 + 4 * dim;
-        // 提取完整的参数块
-        std::vector<SymbolicScalar> argBlock;
-        for (size_t i = 0; i < static_cast<size_t>(blockLength) && (offset + i) < originalLinearArgs.size(); i++) {
-            argBlock.push_back(originalLinearArgs[offset + i]);
-        }
-        if (argBlock.size() == static_cast<size_t>(blockLength)) {
-            extractInfo.extractedArgList.push_back(argBlock);
-            extractInfo.oOffsets.push_back(extractInfo.currentOffset);
-            extractInfo.currentOffset += blockLength;
-            extractInfo.processedTensors.insert(out.tensor);
-            ALOG_DEBUG_F("Outcast (op=%d, idx=%d, dim=%d) -> offset=%d, length=%d -> extracted arg block",
-                        out.opMagic, out.operandIdx, dim, offset, blockLength);
-        } else {
-            ALOG_ERROR_F("Failed to extract complete arg block for outcast (op=%d, idx=%d): expected %d elements, got %zu",
-                        out.opMagic, out.operandIdx, blockLength, argBlock.size());
-            return false;
-        }
+        extractInfo.oOffsets.push_back(offset);
+        extractInfo.processedTensors.insert(out.tensor);
+        ALOG_DEBUG_F("Outcast (op=%d, idx=%d) -> original offset=%d",
+                    out.opMagic, out.operandIdx, offset);
     }
     return true;
 }
 
-bool MixSubgraphSplit::ExtractArgListFromGlobalTensor(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const {
+bool MixSubgraphSplit::ExtractArgListFromGlobalTensor(const SubfuncInvokeInfoTy& invokeInfo, Function& leafFunc, ExtractInfo& extractInfo) const {
     for (const auto &tensor : invokeInfo.GetTensorParamList()) {
         if (tensor.opMagic == -1) {
             continue;
@@ -872,46 +930,21 @@ bool MixSubgraphSplit::ExtractArgListFromGlobalTensor(const SubfuncInvokeInfoTy&
                         tensor.opMagic, tensor.operandIdx, tensor.isOutputToGM);
             continue;
         }
-        // 根据tensor维度计算参数块长度
-        int dim = tensor.shape.size(); // 从tensorParam中获取维度
-        int blockLength = 1 + 4 * dim;
-
-        // 提取完整的参数块
-        std::vector<SymbolicScalar> argBlock;
-        for (size_t i = 0; i < static_cast<size_t>(blockLength) && (offset + i) < originalLinearArgs.size(); i++) {
-            argBlock.push_back(originalLinearArgs[offset + i]);
-        }
-        if (argBlock.size() == static_cast<size_t>(blockLength)) {
-            extractInfo.extractedArgList.push_back(argBlock);
-            ALOG_DEBUG_F("Incast arg block [offset=%d, length=%d]:", offset, blockLength);
-            for (size_t j = 0; j < argBlock.size(); ++j) {
-                const auto& arg = argBlock[j];
-                if (arg.Raw()->IsImmediate()) {
-                    auto imm = std::dynamic_pointer_cast<RawSymbolicImmediate>(arg.Raw());
-                    if (imm) {
-                        ALOG_DEBUG_F("  [%zu]: Immediate = %ld", j, imm->Immediate());
-                    }
-                } 
-            }
-            if (tensor.isOutputToGM) {
-                extractInfo.oOffsets.push_back(extractInfo.currentOffset);
-                ALOG_DEBUG_F("Global tensor -> Outcast: op=%d, idx=%d, dim=%d -> oOffset=%d", tensor.opMagic, tensor.operandIdx, dim, extractInfo.oOffsets.back());
-            } else {
-                extractInfo.iOffsets.push_back(extractInfo.currentOffset);
-                ALOG_DEBUG_F("Global tensor -> Incast: op=%d, idx=%d, dim=%d -> iOffset=%d", tensor.opMagic, tensor.operandIdx, dim, extractInfo.iOffsets.back());
-            }
-            extractInfo.currentOffset += blockLength;
-            extractInfo.processedTensors.insert(tensor.tensor);
-            ALOG_DEBUG_F("Global tensor (op=%d, idx=%d, dim=%d, isOutput=%d) -> offset=%d, length=%d -> extracted arg block", tensor.opMagic, tensor.operandIdx, dim, tensor.isOutputToGM, offset, blockLength);
+        if (tensor.isOutputToGM) {
+            extractInfo.oOffsets.push_back(offset);
+            ALOG_DEBUG_F("Global tensor -> Outcast: op=%d, idx=%d -> oOffset=%d", 
+                        tensor.opMagic, tensor.operandIdx, offset);
         } else {
-            ALOG_ERROR_F("Failed to extract complete arg block for global tensor (op=%d, idx=%d): expected %d elements, got %zu", tensor.opMagic, tensor.operandIdx, blockLength, argBlock.size());
-            return false;
+            extractInfo.iOffsets.push_back(offset);
+            ALOG_DEBUG_F("Global tensor -> Incast: op=%d, idx=%d -> iOffset=%d", 
+                        tensor.opMagic, tensor.operandIdx, offset);
         }
+        extractInfo.processedTensors.insert(tensor.tensor);
     }
     return true;
 }
 
-bool MixSubgraphSplit::ExtractArgListFromActualIncasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualIncasts, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const {
+bool MixSubgraphSplit::ExtractArgListFromActualIncasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualIncasts, ExtractInfo& extractInfo, Function* originalMixFunc) const {
     // 然后处理传播依赖添加的参数（在actualIncasts中但不在InvokeInfo中）
     for (const auto& incast : actualIncasts) {
         if (incast == nullptr || extractInfo.processedTensors.count(incast) > 0) {
@@ -922,49 +955,20 @@ bool MixSubgraphSplit::ExtractArgListFromActualIncasts(const std::vector<std::sh
         ALOG_DEBUG_F("Processing propagated incast: tensor=%d", incast->GetRawMagic());
 
         // 在原始Mix function中查找这个tensor的offset
-        int offset = FindOriginalOffsetInMixFunction(incast);
+        int offset = FindOriginalOffsetInMixFunction(incast, originalMixFunc);
         if (offset == -1) {
             ALOG_ERROR_F("Failed to find offset for propagated incast tensor %d!", incast->GetRawMagic());
             return false;  // 直接报错返回
         }
-        auto shape = incast->GetShape();
-        if (shape.empty()) {
-            ALOG_ERROR_F("Propagated incast tensor %d has empty shape!", incast->GetRawMagic());
-            return false;
-        }
-        int dim = shape.size();
-        int blockLength = 1 + 4 * dim;
-        std::vector<SymbolicScalar> argBlock;
-        for (size_t i = 0; i < static_cast<size_t>(blockLength) && (offset + i) < originalLinearArgs.size(); i++) {
-            argBlock.push_back(originalLinearArgs[offset + i]);
-        }
-        if (argBlock.size() == static_cast<size_t>(blockLength)) {
-            extractInfo.extractedArgList.push_back(argBlock);
-            ALOG_DEBUG_F("Incast arg block [offset=%d, length=%d]:", offset, blockLength);
-            for (size_t j = 0; j < argBlock.size(); ++j) {
-                const auto& arg = argBlock[j];
-                if (arg.Raw()->IsImmediate()) {
-                    auto imm = std::dynamic_pointer_cast<RawSymbolicImmediate>(arg.Raw());
-                    if (imm) {
-                        ALOG_DEBUG_F("  [%zu]: Immediate = %ld", j, imm->Immediate());
-                    }
-                } 
-            }
-            extractInfo.iOffsets.push_back(extractInfo.currentOffset); // 传播的incast
-            extractInfo.currentOffset += blockLength;
-            extractInfo.processedTensors.insert(incast);
-            ALOG_DEBUG_F("Extracted propagated incast: tensor=%d, offset=%d",
-                        incast->GetRawMagic(), offset);
-        } else {
-            ALOG_ERROR_F("Failed to extract complete arg block for propagated incast tensor %d: expected %d elements, got %zu",
-                        incast->GetRawMagic(), blockLength, argBlock.size());
-            return false;
-        }
+        extractInfo.iOffsets.push_back(offset);
+        extractInfo.processedTensors.insert(incast);
+        ALOG_DEBUG_F("Extracted propagated incast: tensor=%d, offset=%d",
+                    incast->GetRawMagic(), offset);
     }
     return true;
 }
 
-bool MixSubgraphSplit::ExtractArgListFromActualOutcasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualOutcasts, std::vector<SymbolicScalar> &originalLinearArgs, ExtractInfo& extractInfo) const {
+bool MixSubgraphSplit::ExtractArgListFromActualOutcasts(const std::vector<std::shared_ptr<LogicalTensor>> &actualOutcasts, ExtractInfo& extractInfo, Function* originalMixFunc) const {
     // 处理传播依赖添加的outcast参数（在actualOutcasts中但不在InvokeInfo中）
     for (const auto& outcast : actualOutcasts) {
         if (outcast == nullptr || extractInfo.processedTensors.count(outcast) > 0) {
@@ -976,39 +980,15 @@ bool MixSubgraphSplit::ExtractArgListFromActualOutcasts(const std::vector<std::s
             ALOG_ERROR_F("Propagated outcast tensor %d has empty shape!", outcast->GetRawMagic());
             return false;
         }
-        int offset = FindOriginalOffsetInMixFunction(outcast);
+        int offset = FindOriginalOffsetInMixFunction(outcast, originalMixFunc);
         if (offset == -1) {
             ALOG_ERROR_F("Failed to find offset for propagated outcast tensor %d!", outcast->GetRawMagic());
             return false;  // 直接报错返回
         }
-        std::vector<SymbolicScalar> argBlock;
-        int dim = shape.size();
-        int blockLength = 4 * dim + 1;
-        for (size_t i = 0; i < static_cast<size_t>(blockLength) && (offset + i) < originalLinearArgs.size(); i++) {
-            argBlock.push_back(originalLinearArgs[offset + i]);
-        }
-        if (argBlock.size() == static_cast<size_t>(blockLength)) {
-            extractInfo.extractedArgList.push_back(argBlock);
-            ALOG_DEBUG_F("Incast arg block [offset=%d, length=%d]:", offset, blockLength);
-            for (size_t j = 0; j < argBlock.size(); ++j) {
-                const auto& arg = argBlock[j];
-                if (arg.Raw()->IsImmediate()) {
-                    auto imm = std::dynamic_pointer_cast<RawSymbolicImmediate>(arg.Raw());
-                    if (imm) {
-                        ALOG_DEBUG_F("  [%zu]: Immediate = %ld", j, imm->Immediate());
-                    }
-                } 
-            }
-            extractInfo.oOffsets.push_back(extractInfo.currentOffset); // 传播的outcast
-            extractInfo.currentOffset += blockLength;
-            extractInfo.processedTensors.insert(outcast);
-            ALOG_DEBUG_F("Extracted propagated outcast: tensor=%d, offset=%d, dim=%d",
-                        outcast->GetRawMagic(), offset, dim);
-        } else {
-            ALOG_ERROR_F("Failed to extract complete arg block for propagated outcast tensor %d: expected %d elements, got %zu",
-                        outcast->GetRawMagic(), blockLength, argBlock.size());
-            return false;
-        }
+        extractInfo.oOffsets.push_back(offset);
+        extractInfo.processedTensors.insert(outcast);
+            ALOG_DEBUG_F("Propagated outcast tensor %d -> original offset=%d",
+                    outcast->GetRawMagic(), offset);
     }
     return true;
 }
@@ -1032,14 +1012,12 @@ std::vector<std::vector<SymbolicScalar>> MixSubgraphSplit::ExtractArgListForLeaf
         CallOpAttribute* originalCallAttr,
         const SubfuncInvokeInfoTy& invokeInfo,
         std::vector<int>& iOffsets,
-        std::vector<int>& oOffsets) const {
-    auto originalLinearArgs = originalCallAttr->GetLinearArgList();
-    std::vector<std::vector<SymbolicScalar>> extractedArgList;
-    DisplayArg(originalLinearArgs);
+        std::vector<int>& oOffsets,
+        Function* originalMixFunc) const {
+    auto originalArgList = originalCallAttr->GetArgList();
     // 清空offset向量
     iOffsets.clear();
     oOffsets.clear();
-    int currentOffset = COA_INDEX_BASE;
     // 获取传播依赖后的实际incast/outcast
     auto actualIncasts = leafFunc.GetIncast();
     auto actualOutcasts = leafFunc.GetOutcast();
@@ -1049,42 +1027,52 @@ std::vector<std::vector<SymbolicScalar>> MixSubgraphSplit::ExtractArgListForLeaf
     //处理直接参数（在原始invokeInfo中能找到的）
     std::set<LogicalTensorPtr> processedTensors;
 
-    ExtractInfo extractInfo{extractedArgList, iOffsets, oOffsets, currentOffset, processedTensors};
+    ExtractInfo extractInfo{iOffsets, oOffsets, processedTensors};
     //使用invokeInfo中预先构造的incast信息
-    if (!ExtractArgListFromIncast(invokeInfo, leafFunc, originalLinearArgs, extractInfo)) {
+    if (!ExtractArgListFromIncast(invokeInfo, leafFunc, extractInfo)) {
         return {};
     }
     //使用invokeInfo中的outcast信息
-    if (!ExtractArgListFromOutcast(invokeInfo, leafFunc, originalLinearArgs, extractInfo)) {
+    if (!ExtractArgListFromOutcast(invokeInfo, leafFunc, extractInfo)) {
         return {};
     }
     // 使用invokeInfo中的global tensor信息
-    if (!ExtractArgListFromGlobalTensor(invokeInfo, leafFunc, originalLinearArgs, extractInfo)) {
+    if (!ExtractArgListFromGlobalTensor(invokeInfo, leafFunc, extractInfo)) {
         return {};
     }
     // 然后处理传播依赖添加的参数（在actualIncasts中但不在InvokeInfo中）
-    if (!ExtractArgListFromActualIncasts(actualIncasts, originalLinearArgs, extractInfo)) {
+    if (!ExtractArgListFromActualIncasts(actualIncasts, extractInfo, originalMixFunc)) {
         return {};
     }
     // 处理传播依赖添加的outcast参数（在actualOutcasts中但不在InvokeInfo中）
-    if (!ExtractArgListFromActualOutcasts(actualOutcasts, originalLinearArgs, extractInfo)) {
+    if (!ExtractArgListFromActualOutcasts(actualOutcasts, extractInfo, originalMixFunc)) {
         return {};
     }
-
-    ALOG_INFO_F("Extracted %zu arg blocks for leaf function %s",
-                extractedArgList.size(), leafFunc.GetRawName().c_str());
-    return extractedArgList;
+    return originalArgList;
 }
 
 Status MixSubgraphSplit::SetOffsetsToLeafFunction(Function& leafFunc, const std::vector<int>& iOffsets, const std::vector<int> &oOffsets, const SubfuncInvokeInfoTy& invokeInfo) {
     ALOG_DEBUG_F("Setting offsets to leaf function %s, %zu iOffsets, %zu oOffsets",
                 leafFunc.GetRawName().c_str(), iOffsets.size(), oOffsets.size());
+    // 获取该leaf function的magic映射
+    auto mapIt = leafFuncMagicMaps_.find(&leafFunc);
+    const auto* magicMap = (mapIt != leafFuncMagicMaps_.end()) ? 
+                          &mapIt->second.originalToClonedMagic : nullptr;
     int iOffsetIndex = 0;
     int oOffsetIndex = 0;
     // 设置incast的offset
     for (const auto& in : invokeInfo.GetIncastTensorParamList()) {
         if (in.opMagic != -1 && iOffsetIndex < static_cast<int>(iOffsets.size())) {
-            if (SetOffsetToOpByMagic(in.opMagic, in.operandIdx, iOffsets[iOffsetIndex], leafFunc, false)) {
+            int opMagicToFind = in.opMagic;
+            if (magicMap) {
+                auto it = magicMap->find(in.opMagic);
+                if (it != magicMap->end()) {
+                    opMagicToFind = it->second;
+                    ALOG_DEBUG_F("Mapping incast op magic %d -> %d", in.opMagic, opMagicToFind);
+                }
+            }
+            
+            if (SetOffsetToOpByMagic(opMagicToFind, in.operandIdx, iOffsets[iOffsetIndex], leafFunc, false)) {
                 ALOG_DEBUG_F("Set offset %d to op %d input[%d] for incast",
                             iOffsets[iOffsetIndex], in.opMagic, in.operandIdx);
             }
@@ -1094,8 +1082,17 @@ Status MixSubgraphSplit::SetOffsetsToLeafFunction(Function& leafFunc, const std:
     // 设置global tensor作为输入的offset（使用iOffsets）
     for (const auto& tensorParam : invokeInfo.GetTensorParamList()) {
         if (tensorParam.opMagic != -1 && !tensorParam.isOutputToGM) {
+            int opMagicToFind = tensorParam.opMagic;
+            if (magicMap) {
+                auto it = magicMap->find(tensorParam.opMagic);
+                if (it != magicMap->end()) {
+                    opMagicToFind = it->second;
+                    ALOG_DEBUG_F("Mapping global input op magic %d -> %d", tensorParam.opMagic, opMagicToFind);
+                }
+            }
+            
             int offset = iOffsets[iOffsetIndex];
-            if (SetOffsetToOpByMagic(tensorParam.opMagic, tensorParam.operandIdx, offset, leafFunc, false)) {
+            if (SetOffsetToOpByMagic(opMagicToFind, tensorParam.operandIdx, offset, leafFunc, false)) {
                 ALOG_DEBUG_F("Set global tensor input offset %d to op %d input[%d] for tensor %d (iOffsetIndex = %d)",
                             offset, tensorParam.opMagic, tensorParam.operandIdx,
                             tensorParam.tensor->GetRawMagic(), iOffsetIndex);
@@ -1106,7 +1103,16 @@ Status MixSubgraphSplit::SetOffsetsToLeafFunction(Function& leafFunc, const std:
     // 设置outcast的offset
     for (const auto& out : invokeInfo.GetOutcastTensorParamList()) {
         if (out.opMagic != -1 && oOffsetIndex < static_cast<int>(oOffsets.size())) {
-            if (SetOffsetToOpByMagic(out.opMagic, out.operandIdx, oOffsets[oOffsetIndex], leafFunc, true)) {
+            int opMagicToFind = out.opMagic;
+            if (magicMap) {
+                auto it = magicMap->find(out.opMagic);
+                if (it != magicMap->end()) {
+                    opMagicToFind = it->second;
+                    ALOG_DEBUG_F("Mapping outcast op magic %d -> %d", out.opMagic, opMagicToFind);
+                }
+            }
+            
+            if (SetOffsetToOpByMagic(opMagicToFind, out.operandIdx, oOffsets[oOffsetIndex], leafFunc, true)) {
                 ALOG_DEBUG_F("Set offset %d to op %d output[%d] for outcast",
                             oOffsets[oOffsetIndex], out.opMagic, out.operandIdx);
             }
@@ -1116,8 +1122,17 @@ Status MixSubgraphSplit::SetOffsetsToLeafFunction(Function& leafFunc, const std:
     // 设置global tensor作为输出的offset（使用oOffsets）
     for (const auto& tensorParam : invokeInfo.GetTensorParamList()) {
         if (tensorParam.opMagic != -1 && tensorParam.isOutputToGM) {
+            int opMagicToFind = tensorParam.opMagic;
+            if (magicMap) {
+                auto it = magicMap->find(tensorParam.opMagic);
+                if (it != magicMap->end()) {
+                    opMagicToFind = it->second;
+                    ALOG_DEBUG_F("Mapping global output op magic %d -> %d", tensorParam.opMagic, opMagicToFind);
+                }
+            }
+            
             int offset = oOffsets[oOffsetIndex];
-            if (SetOffsetToOpByMagic(tensorParam.opMagic, tensorParam.operandIdx, offset, leafFunc, true)) {
+            if (SetOffsetToOpByMagic(opMagicToFind, tensorParam.operandIdx, offset, leafFunc, true)) {
                 ALOG_DEBUG_F("Set global tensor output offset %d to op %d output[%d] for tensor %d (oOffsetIndex = %d)",
                             offset, tensorParam.opMagic, tensorParam.operandIdx,
                             tensorParam.tensor->GetRawMagic(), oOffsetIndex);
@@ -1230,127 +1245,153 @@ void MixSubgraphSplit::UpdateOffsetExpressions(std::vector<OpImmediate>& offsets
     }
 }
 
-int MixSubgraphSplit::FindOriginalOffsetInMixFunction(LogicalTensorPtr tensor) const {
-    if (tensor == nullptr) {
-        ALOG_ERROR_F("Tensor is nullptr in FindOriginalOffsetInMixFunction");
+int MixSubgraphSplit::FindOriginalOffsetInMixFunction(LogicalTensorPtr tensor, Function* originalMixFunc) const {
+    if (tensor == nullptr || originalMixFunc == nullptr) {
+        ALOG_ERROR_F("Tensor or function is nullptr in FindOriginalOffsetInMixFunction");
         return -1;
     }
-
-    ALOG_DEBUG_F("Finding original offset for tensor %d in mix function", tensor->GetRawMagic());
-
-    // 检查producers
-    auto producers = tensor->GetProducers();
-    for (auto* producer : producers) {
-        if (producer == nullptr) {
+    int rawMagic = tensor->GetRawMagic();
+    ALOG_DEBUG_F("Finding original offset for tensor raw magic=%d in function %s", 
+            rawMagic, originalMixFunc->GetRawName().c_str());
+    auto operations = originalMixFunc->Operations(false);
+    for (auto& op : operations) {
+        if (op.IsNOP()) {
             continue;
         }
-
-        auto oOperands = producer->GetOOperands();
-        for (size_t i = 0; i < oOperands.size(); i++) {
-            if (oOperands[i] == tensor) {
-                int offset = producer->GetOOpAttrOffset(i);
-                if (offset != -1) {
-                    ALOG_DEBUG_F("Found offset %d for tensor %d via producer op %d output[%zu]",
-                                offset, tensor->GetRawMagic(), producer->GetOpMagic(), i);
-                    return offset;
-                }
-            }
-        }
-    }
-
-    // 检查consumers
-    auto consumers = tensor->GetConsumers();
-    for (auto* consumer : consumers) {
-        if (consumer == nullptr) {
-            continue;
-        }
-
-        auto iOperands = consumer->GetIOperands();
+        auto iOperands = op.GetIOperands();
         for (size_t i = 0; i < iOperands.size(); i++) {
-            if (iOperands[i] == tensor) {
-                int offset = consumer->GetIOpAttrOffset(i);
+            auto inputTensor = iOperands[i];
+            if (inputTensor.get() == tensor.get()) {  
+                int offset = op.GetIOpAttrOffset(i);
                 if (offset != -1) {
-                    ALOG_DEBUG_F("Found offset %d for tensor %d via consumer op %d input[%zu]",
-                                offset, tensor->GetRawMagic(), consumer->GetOpMagic(), i);
                     return offset;
                 }
             }
         }
-    }
-
-    ALOG_ERROR_F("Failed to find original offset for tensor %d in mix function (checked %zu producers, %zu consumers)",
-                tensor->GetRawMagic(), producers.size(), consumers.size());
+        auto oOperands = op.GetOOperands();
+        for (size_t i = 0; i < oOperands.size(); i++) {
+            auto outputTensor = oOperands[i];
+            if (outputTensor.get() == tensor.get()) {  
+                int offset = op.GetOOpAttrOffset(i);
+                if (offset != -1) {
+                    return offset;
+                }
+            }
+        }
+    }   
+    ALOG_ERROR_F("Tensor raw magic=%d not found in function %s operations",
+                rawMagic, originalMixFunc->GetRawName().c_str());
     return -1;
 }
 
 int MixSubgraphSplit::GetOffsetFromIncastParam(const SubfuncInvokeInfoTy::IncastParamPackTy& incastParam, Function& leafFunc) const {
-    // 通过opMagic在leafFunc中查找对应的操作
-    auto operations = leafFunc.Operations(false);
-    for (auto& op : operations) {
-        if (op.GetOpMagic() == incastParam.opMagic) {
-            // 检查输入操作数
-            if (incastParam.operandIdx >= 0 && static_cast<size_t>(incastParam.operandIdx) < op.GetIOperands().size()) {
-                int offset = op.GetIOpAttrOffset(incastParam.operandIdx);
-                if (offset != -1) {
-                    ALOG_DEBUG_F("Found input offset %d for incast (op=%d, idx=%d)",
-                                offset, incastParam.opMagic, incastParam.operandIdx);
-                    return offset;
-                } else {
-                    ALOG_WARN_F("Input offset is -1 for incast (op=%d, idx=%d)",
-                                incastParam.opMagic, incastParam.operandIdx);
-                }
-            } else {
-                ALOG_WARN_F("Invalid operand index %d for op %d (max=%zu)",
-                            incastParam.operandIdx, incastParam.opMagic, op.GetIOperands().size());
-            }
-            break;
-        }
+    // 首先尝试通过映射表查找
+    auto mapIt = leafFuncMagicMaps_.find(&leafFunc);
+    if (mapIt == leafFuncMagicMaps_.end()) {
+        ALOG_ERROR_F("No magic mapping found for leaf function %s", 
+                    leafFunc.GetRawName().c_str());
+        return -1;
     }
-    ALOG_WARN_F("Could not find op %d for incast", incastParam.opMagic);
-    return -1;
+    const auto& magicMap = mapIt->second.originalToClonedMagic;
+    auto magicIt = magicMap.find(incastParam.opMagic);
+    if (magicIt == magicMap.end()) {
+        ALOG_ERROR_F("No magic mapping for original magic %d in leaf function %s (incast)",
+                    incastParam.opMagic, leafFunc.GetRawName().c_str());
+        return -1;
+    }    
+    int mappedMagic = magicIt->second;
+    ALOG_DEBUG_F("Mapping original magic %d to %d for leaf function", 
+                incastParam.opMagic, mappedMagic);
+    // 用映射后的magic查找在leafFunc中查找对应的op
+    return GetOffsetFromOp(mappedMagic, incastParam.operandIdx, leafFunc, false);
 }
 
 int MixSubgraphSplit::GetOffsetFromOutcastParam(const SubfuncInvokeInfoTy::OutcastParamPackTy& outcastParam, Function& leafFunc) const {
-    // 通过opMagic在leafFunc中查找对应的操作
+    // 获取该leaf function的magic映射
+    auto mapIt = leafFuncMagicMaps_.find(&leafFunc);
+    if (mapIt == leafFuncMagicMaps_.end()) {
+        ALOG_ERROR_F("No magic mapping found for leaf function %s", 
+                    leafFunc.GetRawName().c_str());
+        return -1;
+    }
+    const auto& magicMap = mapIt->second.originalToClonedMagic;
+    // 查找对应的新magic
+    auto magicIt = magicMap.find(outcastParam.opMagic);
+    if (magicIt == magicMap.end()) {
+        ALOG_ERROR_F("No magic mapping for original magic %d in leaf function %s (outcast)",
+                    outcastParam.opMagic, leafFunc.GetRawName().c_str());
+        return -1;
+    }
+    int mappedMagic = magicIt->second;
+    ALOG_DEBUG_F("Mapping outcast op magic %d -> %d", outcastParam.opMagic, mappedMagic);
+    // 使用映射后的magic查找offset
+    return GetOffsetFromOp(mappedMagic, outcastParam.operandIdx, leafFunc, true);
+}
+
+// 统一的offset获取函数
+int MixSubgraphSplit::GetOffsetFromOp(int opMagic, int operandIdx, 
+                                     Function& leafFunc, bool isOutput) const {
     auto operations = leafFunc.Operations(false);
     for (auto& op : operations) {
-        if (op.GetOpMagic() == outcastParam.opMagic) {
-            // 检查输出操作数
-            if (outcastParam.operandIdx >= 0 && static_cast<size_t>(outcastParam.operandIdx) < op.GetOOperands().size()) {
-                int offset = op.GetOOpAttrOffset(outcastParam.operandIdx);
-                if (offset != -1) {
-                    ALOG_DEBUG_F("Found output offset %d for outcast (op=%d, idx=%d)",
-                                offset, outcastParam.opMagic, outcastParam.operandIdx);
+        if (op.GetOpMagic() == opMagic) {
+            if (isOutput) {
+                if (operandIdx >= 0 && static_cast<size_t>(operandIdx) < op.GetOOperands().size()) {
+                    int offset = op.GetOOpAttrOffset(operandIdx);
+                    if (offset != -1) {
+                        ALOG_DEBUG_F("Found output offset %d for op %d idx %d", 
+                                    offset, opMagic, operandIdx);
+                    }
                     return offset;
-                } else {
-                    ALOG_WARN_F("Output offset is -1 for outcast (op=%d, idx=%d)",
-                                outcastParam.opMagic, outcastParam.operandIdx);
                 }
             } else {
-                ALOG_WARN_F("Invalid operand index %d for op %d (max=%zu)",
-                            outcastParam.operandIdx, outcastParam.opMagic, op.GetOOperands().size());
+                if (operandIdx >= 0 && static_cast<size_t>(operandIdx) < op.GetIOperands().size()) {
+                    int offset = op.GetIOpAttrOffset(operandIdx);
+                    if (offset != -1) {
+                        ALOG_DEBUG_F("Found input offset %d for op %d idx %d", 
+                                    offset, opMagic, operandIdx);
+                    }
+                    return offset;
+                }
             }
-            break;
         }
     }
-    ALOG_WARN_F("Could not find op %d for outcast", outcastParam.opMagic);
+    
+    ALOG_WARN_F("Could not find offset for op %d idx %d (isOutput=%d)", 
+                opMagic, operandIdx, isOutput);
     return -1;
 }
 
 int MixSubgraphSplit::GetOffsetFromTensorParam(const SubfuncInvokeInfoTy::TensorParamPackTy& tensorParam, Function& leafFunc) const {
+    // 获取leafFunc对应的magic映射
+    auto it = leafFuncMagicMaps_.find(&leafFunc);
+    if (it == leafFuncMagicMaps_.end()) {
+        ALOG_ERROR_F("No magic mapping found for leaf function");
+        return -1;
+    }
+    
+    const auto& magicMap = it->second.originalToClonedMagic;
+    
+    // 查找对应的新magic
+    auto magicIt = magicMap.find(tensorParam.opMagic);
+    if (magicIt == magicMap.end()) {
+        ALOG_ERROR_F("No magic mapping for original magic %d in function", tensorParam.opMagic);
+        return -1;
+    }
+    
+    int newMagic = magicIt->second;
     // 对于global tensor，根据isOutputToGM判断是输入还是输出
     if (tensorParam.isOutputToGM) {
         // 作为输出处理
         auto operations = leafFunc.Operations(false);
         for (auto& op : operations) {
-            if (op.GetOpMagic() != tensorParam.opMagic) {
+            if (op.GetOpMagic() != newMagic) {
                 continue;
             }
             if (tensorParam.operandIdx >= 0 && static_cast<size_t>(tensorParam.operandIdx) < op.GetOOperands().size()) {
                 int offset = op.GetOOpAttrOffset(tensorParam.operandIdx);
                 if (offset != -1) {
                     ALOG_DEBUG_F("Found output offset %d for global tensor (op=%d, idx=%d)",
-                                offset, tensorParam.opMagic, tensorParam.operandIdx);
+                                offset, newMagic, tensorParam.operandIdx);
                     return offset;
                 }
             }
@@ -1360,14 +1401,14 @@ int MixSubgraphSplit::GetOffsetFromTensorParam(const SubfuncInvokeInfoTy::Tensor
         // 作为输入处理
         auto operations = leafFunc.Operations(false);
         for (auto& op : operations) {
-            if (op.GetOpMagic() != tensorParam.opMagic) {
+            if (op.GetOpMagic() != newMagic) {
                 continue;
             }
             if (tensorParam.operandIdx >= 0 && static_cast<size_t>(tensorParam.operandIdx) < op.GetIOperands().size()) {
                 int offset = op.GetIOpAttrOffset(tensorParam.operandIdx);
                 if (offset != -1) {
                     ALOG_DEBUG_F("Found input offset %d for global tensor (op=%d, idx=%d)",
-                                offset, tensorParam.opMagic, tensorParam.operandIdx);
+                                offset, newMagic, tensorParam.operandIdx);
                     return offset;
                 }
             }
@@ -1376,7 +1417,7 @@ int MixSubgraphSplit::GetOffsetFromTensorParam(const SubfuncInvokeInfoTy::Tensor
     }
 
     ALOG_WARN_F("Could not find offset for global tensor (op=%d, idx=%d, isOutput=%d)",
-                tensorParam.opMagic, tensorParam.operandIdx, tensorParam.isOutputToGM);
+                newMagic, tensorParam.operandIdx, tensorParam.isOutputToGM);
     return -1;
 }
 
@@ -1397,6 +1438,7 @@ Function* MixSubgraphSplit::CreateSplitLeafFunction(Function& rootFunc,
     newFunc->SetGraphType(GraphType::BLOCK_GRAPH);
 
     std::vector<std::shared_ptr<Operation>> programOps;
+    std::unordered_map<int, int> magicMap; // 原始magic -> 新magic
     // 获取原始Mix子图的所有op（按原始顺序）
     auto originalOps = originalMixFunc.Operations(false).DuplicatedOpList();
     // 按原始顺序筛选属于当前component的op
@@ -1414,11 +1456,49 @@ Function* MixSubgraphSplit::CreateSplitLeafFunction(Function& rootFunc,
         }
 
         if (belongsToComponent) {
-            programOps.push_back(originalOp->shared_from_this());
-            ALOG_DEBUG_F("Added op %d to leaf function %s (original order preserved)",
-                        originalOp->GetOpMagic(), leafName.c_str());
+            // 判断是否为同步op
+            bool isSyncOp = IsSyncOperation(originalOp);
+            if (isSyncOp) {
+                // 对于同步op，直接使用原始op的shared_ptr
+                std::shared_ptr<Operation> opPtr = originalOp->shared_from_this();
+                programOps.push_back(opPtr);
+                int originalMagic = originalOp->GetOpMagic();
+                magicMap[originalMagic] = originalMagic;
+                ALOG_DEBUG_F("Reuse sync op %d in leaf function %s",
+                        originalMagic, leafName.c_str());
+            } else {
+                // 对于非同步op，进行克隆
+                auto iOperands = originalOp->GetIOperands();
+                auto oOperands = originalOp->GetOOperands();
+                Operation& clonedOp = originalOp->CloneOperation(*newFunc, iOperands, oOperands);
+                // 记录映射关系
+                int originalMagic = originalOp->GetOpMagic();
+                int clonedMagic = clonedOp.GetOpMagic();
+                magicMap[originalMagic] = clonedMagic;
+                // 复制offset信息
+                for (size_t idx = 0; idx < iOperands.size(); ++idx) {
+                    int offset = originalOp->GetIOpAttrOffset(idx);
+                    if (offset != -1) {
+                        clonedOp.SetIOpAttrOffset(idx, offset);
+                    }
+                }
+                for (size_t idx = 0; idx < oOperands.size(); ++idx) {
+                    int offset = originalOp->GetOOpAttrOffset(idx);
+                    if (offset != -1) {
+                        clonedOp.SetOOpAttrOffset(idx, offset);
+                    }
+                }
+                programOps.push_back(clonedOp.shared_from_this());
+                ALOG_DEBUG_F("Cloned op %d to leaf function %s (original order preserved)",
+                                originalOp->GetOpMagic(), leafName.c_str());
+            }
         }
     }
+    // 保存映射关系
+    LeafFuncMagicMap leafMap;
+    leafMap.leafFunc = newFunc.get();
+    leafMap.originalToClonedMagic = std::move(magicMap);
+    leafFuncMagicMaps_[newFunc.get()] = std::move(leafMap);
     // 验证顺序正确性
     ALOG_DEBUG_F("Leaf function %s has %zu ops in original order",
                 leafName.c_str(), programOps.size());
@@ -1435,10 +1515,10 @@ Function* MixSubgraphSplit::CreateSplitLeafFunction(Function& rootFunc,
     ALOG_DEBUG_F("Called UpdateBelongToThis for new function: %s", leafName.c_str());
     newFunc->ComputeHash();
     FunctionHash funcHash = newFunc->GetFunctionHash();
-    ALOG_DEBUG_F("Function %s computed hash: %lu", leafName.c_str(), funcHash);
+    ALOG_DEBUG_F("Function %s computed hash: %lu", leafName.c_str(), funcHash.GetHash());
     Program::GetInstance().GetFunctionCache().Insert(funcHash, *newFunc);
     ALOG_DEBUG_F("Inserted new function %s into function cache with hash %lu",
-                leafName.c_str(), funcHash);
+                leafName.c_str(), funcHash.GetHash());
     // 注册到program的function map中
     auto* resultFunc = newFunc.get();
     Program::GetInstance().InsertFuncToFunctionMap(funcMagicName, newFunc);
@@ -1523,7 +1603,11 @@ Status MixSubgraphSplit::CreateCallOps(Function& rootFunc, const std::vector<Ope
                                         const std::vector<InternalComponentInfo>& components,
                                         const std::vector<uint64_t>& newProgramIDs,
                                         SubgraphToFunction& subgraphToFunction,
-                                        std::vector<Function*>& newFunctions) {
+                                        std::vector<Function*>& newFunctions,
+                                     const std::vector<InternalDependencyInfo>& internalDeps)
+{
+    ALOG_INFO_F("Creating call operations for %zu original call ops and %zu components", 
+               originalCallOps.size(), components.size());
     std::vector<CallOpCreationInfo> callOpInfos;
     // 处理所有指向同构originalMixFunc的originalCallOps
     for (auto* originalCallOp : originalCallOps) {
@@ -1537,26 +1621,135 @@ Status MixSubgraphSplit::CreateCallOps(Function& rootFunc, const std::vector<Ope
             info.componentIndex = i;
             info.originalCallOp = originalCallOp;
             info.wrapId = wrapId;
+            auto status = CreateCallOpInRootFunction(rootFunc, *info.leafFunc, info.newProgramID, info.componentIndex,
+                                                                    info.originalCallOp, originalMixFunc, subgraphToFunction, info);
+            if (status != SUCCESS) {
+                ALOG_ERROR_F("Failed to create call op for component %zu", info.componentIndex);
+                return FAILED;
+            }
+            if (!info.createdCallOp) {
+                ALOG_ERROR_F("Created call op is null for component %zu", info.componentIndex);
+                return FAILED;
+            }
+            // 记录这个call op的信息
             callOpInfos.push_back(info);
+            ALOG_DEBUG_F("Created call op %d in info for component %zu (wrapId=%lu)", 
+                    info.createdCallOp->GetOpMagic(), info.componentIndex, wrapId);
         }
     }
-    // 先创建所有callOp但不设置offset到leaf function中的op
-    std::vector<Operation*> newCallOps;
-    for (auto& info : callOpInfos) {
-        auto status = CreateCallOpInRootFunction(rootFunc, *info.leafFunc, info.newProgramID, info.componentIndex,
-                                                        info.originalCallOp, originalMixFunc, subgraphToFunction, info.wrapId, info.iOffsets, info.oOffsets);
-        (void)status;
-    }
+    // 现在统一处理内部依赖（按wrapId分组）
+    ProcessAllInternalDependencies(rootFunc, callOpInfos, internalDeps);
+    std::unordered_set<Function*> processedLeafFuncs;
     // 在所有callOp都创建完成后，统一设置offset到leaffunction中的op
     for (size_t i = 0; i < callOpInfos.size(); ++i) {
         const auto& info = callOpInfos[i];
         auto* leafFunc = info.leafFunc;
+        
+        // 每个leaf function只设置一次offsets
+        if (processedLeafFuncs.find(leafFunc) != processedLeafFuncs.end()) {
+            continue;
+        }
+        
         // 设置offset到leaf function中的op
         auto status = SetOffsetsToLeafFunction(*leafFunc, info.iOffsets, info.oOffsets,
                                                 subgraphToFunction.subFuncInvokeInfos[info.componentIndex]);
-        (void)status;
+        if (status != SUCCESS) {
+            ALOG_ERROR_F("Failed to set offsets for leaf function %s", 
+                        leafFunc->GetRawName().c_str());
+            return FAILED;
+        }
+        
+        processedLeafFuncs.insert(leafFunc);
+        ALOG_DEBUG_F("Set offsets for leaf function %s (component %d)", 
+                    leafFunc->GetRawName().c_str(), info.componentIndex);
     }
+    ALOG_INFO_F("Successfully created %zu call operations with internal dependencies", 
+               callOpInfos.size());
     return SUCCESS;
+}
+
+// 添加内部依赖的depend operands
+void MixSubgraphSplit::ProcessAllInternalDependencies(
+    Function& rootFunc,
+    const std::vector<CallOpCreationInfo>& callOpInfos,
+    const std::vector<InternalDependencyInfo>& internalDeps) const {
+    if (internalDeps.empty()) {
+        ALOG_DEBUG_F("No internal dependencies to process");
+        return;
+    }
+    // 按wrapId分组call op信息
+    std::unordered_map<uint64_t, std::vector<const CallOpCreationInfo*>> wrapIdToInfos;
+    for (const auto& info : callOpInfos) {
+        wrapIdToInfos[info.wrapId].push_back(&info);
+    }
+    ALOG_INFO_F("Processing internal dependencies for %zu wrap groups", wrapIdToInfos.size());
+    // 为每个wrap组处理内部依赖
+    for (const auto& [wrapId, infos] : wrapIdToInfos) {
+        ProcessInternalDependenciesForWrap(rootFunc, infos, internalDeps, wrapId);
+    }
+}
+
+// 为单个wrap组处理内部依赖
+void MixSubgraphSplit::ProcessInternalDependenciesForWrap(
+    Function& rootFunc,
+    const std::vector<const CallOpCreationInfo*>& infos,
+    const std::vector<InternalDependencyInfo>& internalDeps,
+    uint64_t wrapId) const {
+    // 构建scope索引到call op的映射
+    std::unordered_map<int, Operation*> componentToCallOp;
+    for (const auto& info : infos) {
+        if (info->createdCallOp) {
+            componentToCallOp[info->componentIndex] = info->createdCallOp;
+            ALOG_DEBUG_F("Wrap %lu: map component %d -> call op %d", 
+                        wrapId, info->componentIndex, info->createdCallOp->GetOpMagic());
+        }
+    }
+    // 如果没有内部依赖，直接返回
+    if (internalDeps.empty()) {
+        ALOG_DEBUG_F("Wrap %lu: No internal dependencies to add", wrapId);
+        return;
+    }
+    ALOG_INFO_F("Wrap %lu: Processing %zu internal dependencies", wrapId, internalDeps.size());
+    
+    // 处理每个内部依赖
+    for (const auto& dep : internalDeps) {
+        int srcComp = dep.srcComp;
+        int dstComp = dep.dstComp;
+        auto srcIt = componentToCallOp.find(srcComp);
+        auto dstIt = componentToCallOp.find(dstComp);
+        if (srcIt == componentToCallOp.end() || dstIt == componentToCallOp.end()) {
+            // 这个wrap中可能不包含这个依赖的所有scope
+            continue;
+        }
+        Operation* producerCallOp = srcIt->second;
+        Operation* consumerCallOp = dstIt->second;
+        // 生成tensor key
+        const char* scopeType = (dep.compType == ComponentType::C_SCOPE) ? "C" : "V";
+        std::string tensorKey = "depend_" + std::to_string(wrapId) + "_" +
+                               scopeType + std::to_string(srcComp) + "_to_" + 
+                               scopeType + std::to_string(dstComp);
+        // 创建新的dummy tensor
+        LogicalTensorPtr dependTensor;
+        dependTensor = std::make_shared<LogicalTensor>(
+            rootFunc,                   // 属于root function
+            DataType::DT_INT8,             // 最小数据类型
+            Shape({1}),                 // 最小形状 (标量)
+            TileOpFormat::TILEOP_ND,    // 默认格式
+            tensorKey,                  // tensor名称
+            NodeType::LOCAL             // 节点类型
+        );
+        dependTensor->AddProducer(producerCallOp);
+        dependTensor->AddConsumer(consumerCallOp);
+        consumerCallOp->AddDependOperand(dependTensor);
+        ALOG_INFO_F("Wrap %lu: component %d -> component %d "
+                "(call op %d -> %d, tensor magic=%d, has %zu producers, %zu consumers)",
+                wrapId,
+                srcComp, dstComp,
+                producerCallOp->GetOpMagic(), consumerCallOp->GetOpMagic(),
+                dependTensor->magic,
+                dependTensor->GetProducers().size(),
+                dependTensor->GetConsumers().size());
+    }
 }
 
 Status MixSubgraphSplit::SetMixIdResourceType(std::vector<Function*> &newFunctions, uint64_t mixId, MixResourceType resourceType) {
@@ -1574,6 +1767,7 @@ Status MixSubgraphSplit::SetMixIdResourceType(std::vector<Function*> &newFunctio
     return SUCCESS;
 }
 
+// 每个mixLeafFunction的处理
 Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
                                             uint64_t programID,
                                             Function* originalMixFunc,
@@ -1584,38 +1778,80 @@ Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
     ALOG_INFO_F("Processing mix subgraph: programID=%d, callOps=%d, components=%d", programID, originalCallOps.size(), components.size());
     ALOG_DEBUG_F("=== Component Details ===");
     DisplayComponents(components);
-    // 获取资源类型
+
     MixResourceType resourceType = GetMixResourceType(*originalMixFunc);
     ALOG_DEBUG_F("Mix resource type: %d for programID=%d", static_cast<int>(resourceType), programID);
-    // 为这个mix leafFunction分配唯一的mixId
+    
+    // 从原始mix函数获取isUnderDynamicFunction属性
+    bool isUnderDynamicFunction = originalMixFunc->IsUnderDynamicFunction();
+    ALOG_DEBUG_F("Original mix function isUnderDynamicFunction: %s for programID=%d", 
+                 isUnderDynamicFunction ? "true" : "false", programID);
+    
     uint64_t mixId = nextMixId_++;
     ALOG_DEBUG_F("Assigning mixId=%lu for original mix function programID=%d", mixId, programID);
+   
     SubgraphToFunction subgraphToFunction = InitSubgraphToFunction(components);
-    // 步骤1：分析组件间直接依赖关系
-    ALOG_INFO_F("Analyzing component dependencies...");
-    auto directDeps = AnalyzeComponentDependencies(*originalMixFunc);
-    // 步骤2：计算依赖传递闭包
-    ALOG_INFO_F("Computing dependency closure...");
-    auto dependencyClosure = ComputeDependencyClosure(directDeps);
-    // 步骤3：记录直接的incast/outcast
+
+    // 步骤1：记录直接的incast/outcast(Mix子图整体与外部的依赖)
+    ALOG_INFO_F("Step 1: Recording direct incast/outcast...");
     InOutCastRecord(subgraphToFunction, originalMixFunc);
-    // 步骤4：为每个组件创建leaf function并插入参数
+    // 步骤2：分析组件间直接依赖（scope与scope之间的依赖）
+    ALOG_INFO_F("Step 2: Analyzing inter-component dependencies...");
+    auto directDeps = AnalyzeComponentDependencies(*originalMixFunc);
+    // 步骤3：计算依赖传递闭包
+    ALOG_INFO_F("Step 3: Computing dependency closure...");
+    auto dependencyClosure = ComputeDependencyClosure(directDeps);    
+    // 步骤4：为每个scope创建leaf function
     std::vector<Function*> newFunctions;
     if (GenNewFunctions(rootFunc, originalMixFunc, components, newProgramIDs, subgraphToFunction, newFunctions) != SUCCESS) {
         return FAILED;
     }
-    // 步骤5：传播外部依赖（基于传递闭包）
-    ALOG_INFO_F("Propagating external dependencies...");
-    PropagateExternalDependencies(newFunctions, dependencyClosure, subgraphToFunction);
-    // 步骤6：为每个原始CallOp创建一组新的callOp, 每个原始callOp使用不同的wrapId
-    if (CreateCallOps(rootFunc, originalCallOps, originalMixFunc, components, newProgramIDs, subgraphToFunction, newFunctions) != SUCCESS) {
+
+    // 设置每个新建leaf function的isUnderDynamicFunction属性
+    ALOG_INFO_F("Setting isUnderDynamicFunction for %zu new leaf functions", newFunctions.size());
+    for (auto* leafFunc : newFunctions) {
+        if (leafFunc) {
+            leafFunc->SetUnderDynamicFunction(isUnderDynamicFunction);
+            ALOG_DEBUG_F("Set isUnderDynamicFunction=%s for leaf function programID=%d",
+                         isUnderDynamicFunction ? "true" : "false", leafFunc->GetProgramId());
+        }
+    }
+    
+    // 步骤5：计算所有依赖（包括外部依赖和内部依赖）
+    ALOG_INFO_F("Step 5: Computing all dependencies...");
+    // 5.1：提取外部依赖（从subgraphToFunction）
+    std::unordered_map<int, std::vector<SimpleIncastParam>> allIncasts;
+    std::unordered_map<int, std::vector<SimpleOutcastParam>> allOutcasts;
+    ExtractExternalDependencies(subgraphToFunction, allIncasts, allOutcasts);
+    // 5.2：基于传递闭包传播外部依赖到内部scope
+    PropagateExternalDependenciesWithClosure(allIncasts, allOutcasts, dependencyClosure);
+    
+    // 构建scope类型映射
+    std::unordered_map<int, ComponentType> componentTypes;
+    for (size_t i = 0; i < components.size(); i++) {
+        componentTypes[i] = DetermineComponentType(components[i]);
+    }
+    // 5.3：添加内部同类型scope之间的依赖（只收集C-C、V-V的依赖）
+    std::vector<InternalDependencyInfo> internalDeps;
+    CollectInternalDependencies(dependencyClosure, internalDeps, componentTypes);
+    
+    // 步骤6：消除冗余依赖
+    ALOG_INFO_F("Step 6: Eliminating redundant dependencies...");
+    EliminateRedundantDependencies(allIncasts, allOutcasts, internalDeps);
+    // 步骤7：应用最终的依赖到leaf functions（外部依赖）
+    ALOG_INFO_F("Step 7: Applying final dependencies to leaf functions...");
+    ApplyFinalDependencies(newFunctions, allIncasts, allOutcasts);
+    
+    // 为每个原始CallOp创建一组新的callOp, 每个原始callOp使用不同的wrapId（包含dummyTensor依赖）
+    if (CreateCallOps(rootFunc, originalCallOps, originalMixFunc, components, newProgramIDs, subgraphToFunction, newFunctions, internalDeps) != SUCCESS) {
         return FAILED;
     }
-    // 步骤7：复制InferParamIndex信息到所有新子图
+    
+    // 复制InferParamIndex信息到所有新子图
     if (CopyInferParamIndexInfo(originalMixFunc, newFunctions) != SUCCESS) {
         return FAILED;
     }
-    // 步骤8：设置wrapId和resourceType
+    // 设置wrapId和resourceType
     if (SetMixIdResourceType(newFunctions, mixId, resourceType) != SUCCESS) {
         return FAILED;
     }
@@ -1631,6 +1867,39 @@ Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
     return SUCCESS;
 }
 
+ComponentType MixSubgraphSplit::DetermineComponentType(const InternalComponentInfo& component) const 
+{
+    if (component.operations.empty()) {
+        ALOG_WARN_F("Empty component, cannot determine type");
+        return ComponentType::UNKNOWN;
+    }
+    // 遍历所有非同步op，查找isCube属性
+    for (auto* op : component.operations) {
+        // 跳过同步op
+        if (IsSyncOperation(op)) {
+            ALOG_DEBUG_F("Skipping sync op %d (opcode=%s)", 
+                        op->GetOpMagic(), op->GetOpcodeStr().c_str());
+            continue;
+        }
+        // 检查isCube属性
+        if (op->HasAttribute(OpAttributeKey::isCube)) {
+            bool isCube = op->GetBoolAttribute(OpAttributeKey::isCube);
+            if (isCube) {
+                ALOG_DEBUG_F("Component %zu determined as C_SCOPE (non-sync op %d has isCube=true)", 
+                            component.suffix, op->GetOpMagic());
+                return ComponentType::C_SCOPE;
+            }
+        }
+        ALOG_DEBUG_F("Component %zu determined as V_SCOPE (non-sync op %d has isCube=false or no isCube attr)", 
+                    component.suffix, op->GetOpMagic());
+        return ComponentType::V_SCOPE;
+    }
+    // 如果所有操作都是同步操作
+    ALOG_DEBUG_F("Component %zu has only sync operations (%zu ops)", 
+                component.suffix, component.operations.size());
+    return ComponentType::UNKNOWN;
+}
+    
 // 分析component间依赖
 std::unordered_map<int, std::vector<int>> MixSubgraphSplit::AnalyzeComponentDependencies(Function& mixFunc) const {
     std::unordered_map<int, std::vector<int>> dependencies;
@@ -1648,7 +1917,7 @@ std::unordered_map<int, std::vector<int>> MixSubgraphSplit::AnalyzeComponentDepe
             auto consumers = oOperand->GetConsumers();
             for (auto* consumer : consumers) {
                 if (consumer == nullptr) continue;
-
+                if (consumer->GetSubgraphID() != op.GetSubgraphID()) continue;
                 int consumerID = consumer->GetInternalSubgraphID();
                 // 记录子图间依赖（忽略同一组件内的依赖）
                 if (producerInternalID != consumerID) {
@@ -1660,104 +1929,361 @@ std::unordered_map<int, std::vector<int>> MixSubgraphSplit::AnalyzeComponentDepe
     return dependencies;
 }
 
-void MixSubgraphSplit::PropagateIncastDependencies(const std::vector<Function*>& leafFunctions,
-                                                const std::unordered_map<int, std::vector<LogicalTensorPtr>> &directIncasts,
-                                                const std::unordered_map<int, std::set<int>>& dependencyClosure,
-                                                const SubgraphToFunction& subgraphToFunction) const {
-    for (const auto& pair : directIncasts) {
-        auto it = dependencyClosure.find(pair.first);
-        if (it == dependencyClosure.end()) {
+// 从subgraphToFunction中提取外部依赖
+void MixSubgraphSplit::ExtractExternalDependencies(
+    const SubgraphToFunction& subgraphToFunction,
+    std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+    std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts) const {
+    for (size_t i = 0; i < subgraphToFunction.subFuncInvokeInfos.size(); i++) {
+        const auto& invokeInfo = subgraphToFunction.subFuncInvokeInfos[i];
+        // 提取incast
+        for (const auto& incast : invokeInfo.GetIncastTensorParamList()) {
+            allIncasts[i].emplace_back(incast.tensor, incast.opMagic, incast.operandIdx);
+        }
+        // 提取global tensor作为输入
+        for (const auto& tensorParam : invokeInfo.GetTensorParamList()) {
+            if (!tensorParam.isOutputToGM) {
+                allIncasts[i].emplace_back(tensorParam.tensor, tensorParam.opMagic, tensorParam.operandIdx);                
+            }
+        }
+        // 提取outcast
+        for (const auto& outcast : invokeInfo.GetOutcastTensorParamList()) {
+            allOutcasts[i].emplace_back(outcast.tensor, outcast.opMagic, outcast.operandIdx);
+        }
+        // 提取global tensor作为输出
+        for (const auto& tensorParam : invokeInfo.GetTensorParamList()) {
+            if (tensorParam.isOutputToGM) {
+                allOutcasts[i].emplace_back(tensorParam.tensor, tensorParam.opMagic, tensorParam.operandIdx);
+            }
+        }
+    }
+}
+
+// 传播外部依赖到内部scope（基于传递闭包）
+void MixSubgraphSplit::PropagateExternalDependenciesWithClosure(
+    std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+    std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts,
+    const std::unordered_map<int, std::set<int>>& dependencyClosure) const {    
+    // 基于传递闭包传播依赖
+    for (const auto& [sourceComp, targets] : dependencyClosure) {
+        // 传播incast：source的incast传播给所有依赖它的target
+        auto incastIt = allIncasts.find(sourceComp);
+        if (incastIt != allIncasts.end()) {
+            for (int targetComp : targets) {
+                if (targetComp >= 0) {
+                    for (const auto& incastParam : incastIt->second) {
+                        if (!ContainsIncast(allIncasts[targetComp], incastParam.tensor)) {
+                            allIncasts[targetComp].push_back(incastParam);
+                        }
+                    }
+                }
+            }
+        }
+        // 传播outcast：target的outcast反向传播给所有source
+        for (int targetComp : targets) {
+            auto outcastIt = allOutcasts.find(targetComp);
+            if (outcastIt != allOutcasts.end()) {
+                for (const auto& outcastParam : outcastIt->second) {
+                    if (!ContainsOutcast(allOutcasts[sourceComp], outcastParam.tensor)) {
+                        allOutcasts[sourceComp].push_back(outcastParam);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 检查incast列表中是否包含指定的tensor
+bool MixSubgraphSplit::ContainsIncast(
+    const std::vector<SimpleIncastParam>& incasts,
+    LogicalTensorPtr tensor) const {
+    
+    if (!tensor) return false;
+    
+    for (const auto& incast : incasts) {
+        if (incast.tensor == tensor) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// 检查outcast列表中是否包含指定的tensor
+bool MixSubgraphSplit::ContainsOutcast(
+    const std::vector<SimpleOutcastParam>& outcasts,
+    LogicalTensorPtr tensor) const {
+    
+    if (!tensor) return false;
+    
+    for (const auto& outcast : outcasts) {
+        if (outcast.tensor == tensor) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// 添加内部scope之间的依赖（包括直接依赖和传递依赖）
+void MixSubgraphSplit::CollectInternalDependencies(
+    const std::unordered_map<int, std::set<int>>& dependencyClosure,
+    std::vector<InternalDependencyInfo>& internalDeps,
+    const std::unordered_map<int, ComponentType>& componentTypes) const {    
+    // 遍历传递闭包中的每个依赖关系
+    for (const auto& [srcComp, dstComps] : dependencyClosure) {
+        ComponentType srcType = componentTypes.at(srcComp);
+        if (srcType == ComponentType::UNKNOWN) continue;
+        for (int dstComp : dstComps) {
+            // 跳过自依赖（scope依赖自己）
+            if (srcComp == dstComp) {
+                ALOG_DEBUG_F("Skip self-dependency: component %d -> %d", srcComp, dstComp);
+                continue;    
+            }
+            ComponentType dstType = componentTypes.at(dstComp);
+            // 只添加同类型scope间的依赖（C-C、V-V）   
+            if (srcType == dstType && dstType != ComponentType::UNKNOWN) {
+                // 添加这两个组件间的tensor依赖
+                InternalDependencyInfo depInfo(srcComp, dstComp, srcType);
+                internalDeps.push_back(depInfo);
+                ALOG_DEBUG_F("Added internal dependency: component %d (%s) -> component %d (%s)",
+                           srcComp, srcType == ComponentType::C_SCOPE ? "C" : "V",
+                           dstComp, dstType == ComponentType::C_SCOPE ? "C" : "V");
+            }
+        }
+    } 
+    ALOG_INFO_F("Collected %zu internal dependencies between same-type components", 
+               internalDeps.size());        
+}  
+
+// 消除冗余依赖
+void MixSubgraphSplit::EliminateRedundantDependencies(
+    std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+    std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts,
+    const std::vector<InternalDependencyInfo>& internalDeps) const {
+    ALOG_INFO_F("Eliminating redundant dependencies...");
+    // 消除冗余incast
+    EliminateRedundantIncasts(allIncasts, internalDeps);
+    // 消除冗余outcast
+    EliminateRedundantOutcasts(allOutcasts, internalDeps);
+}   
+
+// 消除冗余incast
+void MixSubgraphSplit::EliminateRedundantIncasts(
+    std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+    const std::vector<InternalDependencyInfo>& internalDeps) const {
+    // 步骤1：按tensor分组，找出每个外部tensor被传播到了哪些组件
+    std::unordered_map<LogicalTensorPtr, std::set<int>> tensorToComponents;
+    for (const auto& [compId, incasts] : allIncasts) {
+        for (const auto& incast : incasts) {
+            if (incast.tensor) {
+                tensorToComponents[incast.tensor].insert(compId);
+            }
+        }
+    }
+    // 步骤2：构建同类型依赖的快速查找表
+    std::unordered_map<int, std::set<int>> sameTypeReachable;
+    for (const auto& dep : internalDeps) {
+        sameTypeReachable[dep.srcComp].insert(dep.dstComp);
+    }
+    // 步骤3：对于每个tensor，找出所有接收它的组件，分析哪些是冗余的
+    for (const auto& item : tensorToComponents) {
+        const auto& tensor = item.first;
+        const auto& compSet = item.second;
+        if (compSet.size() <= 1) continue;  
+        std::vector<int> comps(compSet.begin(), compSet.end());
+        std::vector<bool> isRedundant(comps.size(), false);
+        for (size_t i = 0; i < comps.size(); i++) {
+            int compB = comps[i];
+            // 检查是否存在其他同类型组件可以到达compB
+            for (size_t j = 0; j < comps.size(); j++) {
+                if (i == j) continue;
+                int compA = comps[j];
+                // 直接查找：compA是否可以通过同类型依赖到达compB
+                auto reachableIt = sameTypeReachable.find(compA);
+                if (reachableIt != sameTypeReachable.end() && 
+                    reachableIt->second.find(compB) != reachableIt->second.end()) {
+                    // compA可以通过同类型scope依赖到达compB
+                    isRedundant[i] = true;
+                    ALOG_DEBUG_F("  Component %d's incast is redundant: "
+                                "can be obtained from component %d via same-type dependency",
+                                compB, compA);
+                    break;
+                }
+            }
+        }
+        // 删除冗余incast
+        for (size_t i = 0; i < comps.size(); i++) {
+            if (isRedundant[i]) {
+                int compId = comps[i];
+                auto& incasts = allIncasts[compId];       
+                auto newEnd = std::remove_if(incasts.begin(), incasts.end(),
+                    [tensor](const SimpleIncastParam& param) {
+                        return param.tensor == tensor;
+                    });
+                incasts.erase(newEnd, incasts.end());
+                ALOG_DEBUG_F("Removed redundant incast for tensor %d from component %d",
+                           tensor->GetRawMagic(), compId);
+            }
+        }
+    }
+}
+    
+void MixSubgraphSplit::EliminateRedundantOutcasts(
+    std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts,  
+    const std::vector<InternalDependencyInfo>& internalDeps) const {
+    // 步骤1：按tensor分组，找出每个输出tensor来自哪些组件
+    std::unordered_map<LogicalTensorPtr, std::set<int>> tensorFromComponents;
+    
+    for (const auto& [compId, outcasts] : allOutcasts) {
+        for (const auto& outcast : outcasts) {
+            if (outcast.tensor) {
+                tensorFromComponents[outcast.tensor].insert(compId);
+            }
+        }
+    }
+    // 步骤2：构建同类型依赖的快速查找表
+    std::unordered_map<int, std::set<int>> sameTypeReachable;
+    for (const auto& dep : internalDeps) {
+        sameTypeReachable[dep.srcComp].insert(dep.dstComp);
+    }
+    // 步骤3：对于每个tensor，分析哪些scope的outcast是冗余的
+    for (const auto& item : tensorFromComponents) {
+        const auto& tensor = item.first;
+        const auto& compSet = item.second;
+        if (compSet.size() <= 1) continue;
+        std::vector<int> comps(compSet.begin(), compSet.end());
+        std::vector<bool> isRedundant(comps.size(), false);
+        for (size_t i = 0; i < comps.size(); i++) {
+            int compA = comps[i];  // 被检查的源组件
+            // 检查compA是否可以通过同类型依赖将tensor传递给其他组件
+            for (size_t j = 0; j < comps.size(); j++) {
+                if (i == j) continue;
+                int compB = comps[j];  // 可能的目标组件
+                // 直接查找：compA是否可以通过同类型依赖到达compB
+                auto reachableIt = sameTypeReachable.find(compA);
+                if (reachableIt != sameTypeReachable.end() && 
+                    reachableIt->second.find(compB) != reachableIt->second.end()) {
+                    // compA可以通过同类型scope依赖到达compB
+                    isRedundant[i] = true;
+                    ALOG_DEBUG_F("  Component %d's outcast (tensor %d) is redundant: "
+                               "tensor can be output via component %d via same-type dependency",
+                               compA, tensor->GetRawMagic(), compB);
+                    break;
+                }
+            }
+        }
+        // 删除冗余outcast
+        for (size_t i = 0; i < comps.size(); i++) {
+            if (isRedundant[i]) {
+                int compId = comps[i];
+                auto& outcasts = allOutcasts[compId];
+                
+                auto newEnd = std::remove_if(outcasts.begin(), outcasts.end(),
+                    [tensor](const SimpleOutcastParam& param) {
+                        return param.tensor == tensor;
+                    });
+                
+                outcasts.erase(newEnd, outcasts.end());                
+                ALOG_DEBUG_F("Removed redundant outcast: tensor %d from component %d",
+                           tensor->GetRawMagic(), compId);
+            }
+        }
+    }
+}
+
+void MixSubgraphSplit::ApplyFinalDependencies(
+    const std::vector<Function*>& newFunctions,
+    const std::unordered_map<int, std::vector<SimpleIncastParam>>& allIncasts,
+    const std::unordered_map<int, std::vector<SimpleOutcastParam>>& allOutcasts) const {
+    ALOG_INFO_F("Applying final dependencies to %zu leaf functions", newFunctions.size());
+    for (size_t i = 0; i < newFunctions.size(); i++) {
+        Function* leafFunc = newFunctions[i];
+        if (!leafFunc) continue;        
+        // 应用incast依赖
+        auto incastIt = allIncasts.find(i);
+        if (incastIt != allIncasts.end()) {
+            ApplyIncastDependencies(leafFunc, i, incastIt->second);
+        } 
+        // 应用outcast依赖
+        auto outcastIt = allOutcasts.find(i);
+        if (outcastIt != allOutcasts.end()) {
+            ApplyOutcastDependencies(leafFunc, i, outcastIt->second);
+        } 
+    }
+}
+
+// 应用incast依赖
+void MixSubgraphSplit::ApplyIncastDependencies(
+    Function* leafFunc,
+    int componentId,
+    const std::vector<SimpleIncastParam>& incastParams) const {
+    if (!leafFunc) return;
+    // 获取当前已有的incast，用于去重
+    const auto& existingIncasts = leafFunc->GetIncast();
+    std::unordered_set<uint32_t> existingMagicSet;
+    
+    for (const auto& tensor : existingIncasts) {
+        if (tensor) {
+            existingMagicSet.insert(tensor->magic);
+        }
+    }
+    for (const auto& param : incastParams) {
+        if (!param.tensor) {
+            ALOG_WARN_F("Component %d: Null tensor in incast params, skipping", componentId);
+            continue;
+        } 
+        // 检查是否已经存在相同tensor（按magic）
+        if (existingMagicSet.find(param.tensor->magic) != existingMagicSet.end()) {
+            ALOG_DEBUG_F("Component %d: Tensor %d already in incast list, skipping",
+                        componentId, param.tensor->GetRawMagic());
             continue;
         }
-        // 从subgraphToFunction获取完整的incast参数信息
-        std::vector<SimpleIncastParam> incastParams;
-        if (pair.first >= 0 && pair.first < static_cast<int>(subgraphToFunction.subFuncInvokeInfos.size())) {
-            const auto& invokeInfo = subgraphToFunction.subFuncInvokeInfos[pair.first];
-            // 收集所有incast参数
-            for (const auto& incast : invokeInfo.GetIncastTensorParamList()) {
-                // 创建IncastParam对象，包含完整的参数信息
-                incastParams.emplace_back(incast.tensor, incast.opMagic, incast.operandIdx);
-                ALOG_DEBUG_F("Collected incast: tensor=%d, opMagic=%d, operandIdx=%d",
-                            incast.tensor->GetRawMagic(), incast.opMagic, incast.operandIdx);
-            }
-            // 从tensorParamList中收集作为输入的tensor
-            for (const auto& tensorParam : invokeInfo.GetTensorParamList()) {
-                if (!tensorParam.isOutputToGM) {
-                    incastParams.emplace_back(tensorParam.tensor, tensorParam.opMagic, tensorParam.operandIdx);
-                    ALOG_DEBUG_F("Collected tensor param (input): tensor=%d, opMagic=%d, operandIdx=%d",
-                                tensorParam.tensor->GetRawMagic(), tensorParam.opMagic, tensorParam.operandIdx);
-                }
-            }
-        }
-        for (int targetComp : it->second) {
-            if (targetComp >= 0 && targetComp < static_cast<int>(leafFunctions.size())) {
-                PropagateIncastToLeafFunction(leafFunctions[targetComp], pair.first, incastParams);
-            }
-        }
+        // 添加新的incast
+        leafFunc->AppendIncast(param.tensor, param.opMagic, param.operandIdx);   
+        existingMagicSet.insert(param.tensor->magic);
+        ALOG_DEBUG_F("Component %d: Added incast - tensor %d (opMagic=%d, operandIdx=%d)",
+                    componentId, param.tensor->GetRawMagic(), 
+                    param.opMagic, param.operandIdx);
     }
 }
 
-void MixSubgraphSplit::PropagateOutcastDependencies(const std::vector<Function*>& leafFunctions,
-                                                    const std::unordered_map<int, std::vector<LogicalTensorPtr>> &directOutcasts,
-                                                    const std::unordered_map<int, std::set<int>>& dependencyClosure,
-                                                    const SubgraphToFunction& subgraphToFunction) const {
-    for (const auto& pair : directOutcasts) {
-        // 从subgraphToFunction获取完整的outcast参数信息
-        std::vector<SimpleOutcastParam> outcastParams;
-        if (pair.first >= 0 && pair.first < static_cast<int>(subgraphToFunction.subFuncInvokeInfos.size())) {
-            const auto& invokeInfo = subgraphToFunction.subFuncInvokeInfos[pair.first];
-            // 收集所有outcast参数
-            for (const auto& outcast : invokeInfo.GetOutcastTensorParamList()) {
-                outcastParams.emplace_back(outcast.tensor, outcast.opMagic, outcast.operandIdx);
-                ALOG_DEBUG_F("Collected outcast: tensor=%d, opMagic=%d, operandIdx=%d",
-                            outcast.tensor->GetRawMagic(), outcast.opMagic, outcast.operandIdx);
-            }
-            // 从tensorParamList中收集作为输出的tensor
-            for (const auto& tensorParam : invokeInfo.GetTensorParamList()) {
-                if (tensorParam.isOutputToGM) {
-                    outcastParams.emplace_back(tensorParam.tensor, tensorParam.opMagic, tensorParam.operandIdx);
-                    ALOG_DEBUG_F("Collected tensor param (output): tensor=%d, opMagic=%d, operandIdx=%d",
-                                tensorParam.tensor->GetRawMagic(), tensorParam.opMagic, tensorParam.operandIdx);
-                }
-            }
-        }
-        for (const auto& [sourceComp, deps] : dependencyClosure) {
-            if (deps.count(pair.first)) {
-                if (sourceComp >= 0 && sourceComp < static_cast<int>(leafFunctions.size())) {
-                    PropagateOutcastToLeafFunction(leafFunctions[sourceComp], pair.first, outcastParams);
-                }
-            }
+// 应用outcast依赖
+void MixSubgraphSplit::ApplyOutcastDependencies(
+    Function* leafFunc,
+    int componentId,
+    const std::vector<SimpleOutcastParam>& outcastParams) const {
+    
+    if (!leafFunc) return;
+    // 获取当前已有的outcast，用于去重
+    const auto& existingOutcasts = leafFunc->GetOutcast();
+    std::unordered_set<uint32_t> existingMagicSet;
+    
+    for (const auto& tensor : existingOutcasts) {
+        if (tensor) {
+            existingMagicSet.insert(tensor->magic);
         }
     }
-}
-
-void MixSubgraphSplit::PropagateExternalDependencies(
-    const std::vector<Function*>& leafFunctions,
-    const std::unordered_map<int, std::set<int>>& dependencyClosure,
-    const SubgraphToFunction& subgraphToFunction) const {
-    // 收集所有leaf function的直接外部依赖
-    std::unordered_map<int, std::vector<LogicalTensorPtr>> directIncasts;
-    std::unordered_map<int, std::vector<LogicalTensorPtr>> directOutcasts;
-    // 第一遍：收集直接的外部依赖
-    for (size_t i = 0; i < leafFunctions.size(); i++) {
-        auto* leafFunc = leafFunctions[i];
-        if (leafFunc == nullptr) continue;
-
-        const auto& incasts = leafFunc->GetIncast();
-        if (!incasts.empty()) {
-            directIncasts[i] = incasts;
+    for (const auto& param : outcastParams) {
+        if (!param.tensor) {
+            ALOG_WARN_F("Component %d: Null tensor in outcast params, skipping", componentId);
+             continue;
         }
-
-        const auto& outcasts = leafFunc->GetOutcast();
-        if (!outcasts.empty()) {
-            directOutcasts[i] = outcasts;
+        
+        // 检查是否已经存在相同tensor（按magic）
+        if (existingMagicSet.find(param.tensor->magic) != existingMagicSet.end()) {
+            ALOG_DEBUG_F("Component %d: Tensor %d already in outcast list, skipping",
+                        componentId, param.tensor->GetRawMagic());
+            continue;
         }
+        
+        // 添加新的outcast
+        leafFunc->AppendOutcast(param.tensor, param.opMagic, param.operandIdx);
+        existingMagicSet.insert(param.tensor->magic);
+        ALOG_DEBUG_F("Component %d: Added outcast - tensor %d (opMagic=%d, operandIdx=%d)",
+                    componentId, param.tensor->GetRawMagic(), 
+                    param.opMagic, param.operandIdx);
     }
-    // 第二遍：传播incast依赖（外部输入依赖向前传播）
-    PropagateIncastDependencies(leafFunctions, directIncasts, dependencyClosure, subgraphToFunction);
-
-    // 第三遍：传播outcast依赖（外部输出依赖向后传播）
-    PropagateOutcastDependencies(leafFunctions, directOutcasts, dependencyClosure, subgraphToFunction);
 }
 
 // 传播incast到目标leaf function
