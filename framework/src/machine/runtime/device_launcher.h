@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #define SRC_MACHINE_DEVICE_LAUNCHER_H
 
 #include <cstdint>
+#include <cinttypes>
 
 #include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
@@ -135,24 +136,33 @@ public:
     }
 
     // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
-    static void PrepareDevProgArgs(DevAscendProgram *devProg, const DeviceLauncherConfig &config) {
+    static void PrepareDevProgArgs(DevAscendProgram *devProg, DeviceLauncherConfig &config) {
+        ASSERT(config.blockdim != 0) << "Invalid blockdim: " << config.blockdim << ", must not be zero";
+
         devProg->devArgs.nrAic = kDefaultAicNum;
         devProg->devArgs.nrAiv = kDefaultAivNum;
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
+        devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
+        devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
+
+        config.aicpuNum = std::min(config.aicpuNum,
+            static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1);
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, config.aicpuNum);
-        devProg->devArgs.nrAicpu = config.aicpuNum;
+
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
         devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
 
         int minCpuNum = devProg->devArgs.scheCpuNum + 1;
-        int effectiveAicpuNum = (config.aicpuNum < minCpuNum || config.aicpuNum > DEVICE_MAX_AICPU_NUM) ? (minCpuNum + 1) : config.aicpuNum;
-        devProg->devArgs.nrAicpu = effectiveAicpuNum;
-        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, effectiveAicpuNum);
+        if (config.aicpuNum < minCpuNum || config.aicpuNum > DEVICE_MAX_AICPU_NUM) {
+            config.aicpuNum = minCpuNum + 1;
+        }
+        devProg->devArgs.nrAicpu = config.aicpuNum;
+        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
-        if (config.dynWorkspaceSize) {
-            ALOG_ERROR("[Deprecated] User provided dynamic workspace: %zu", config.dynWorkspaceSize);
+        if (config.dynWorkspaceSize != 0) {
+            ALOG_ERROR_F("[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
             devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = std::max(
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
@@ -163,6 +173,7 @@ public:
             devProg->workspaceSize, devProg->memBudget.tensor.Total(), devProg->memBudget.metadata.Total(),
             devProg->memBudget.aicoreSpilled, devProg->memBudget.debug.dumpTensor);
         ALOG_INFO_F("Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
+            devProg->memBudget.tensor.rootInner,
             devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts, devProg->memBudget.tensor.MaxOutcastMem(),
             devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
     }
@@ -208,9 +219,10 @@ public:
 
     template<typename DeviceMemoryTy>
     static void DeviceInitTilingData(DeviceMemoryTy devMem, DeviceKernelArgs &kArgs, const std::vector<uint8_t> &devProgData,
-        const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
+            const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
+        auto &mutableConfig = const_cast<DeviceLauncherConfig &>(config);
         auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(devProgData.data()));
-        PrepareDevProgArgs(devProg, config);
+        PrepareDevProgArgs(devProg, mutableConfig);
         // Fill all metadata and kernel args
         FillKernelMeta(devMem, kArgs, devProg, devProgData, config, cachedOperator);
     }

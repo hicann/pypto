@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cinttypes>
 #include "machine/utils/dynamic/dev_encode_types.h"
 #include "machine/utils/dynamic/dev_encode_function.h"
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
@@ -706,23 +707,28 @@ struct DevProgramControlFlowCache {
             ItemPool<RuntimeOutcastTensor>::ItemBlock *backupRtOutcastPool = runtimeBackup.workspace.runtimeOutcastTensorPool.Data();
             uint64_t size = slotList.size();
             for (uint64_t k = 0; k < size; k++) {
-                static_assert(sizeof(AddressDescriptor) == sizeof(uintdevptr_t));
+                static_assert(sizeof(AddressDescriptor) == sizeof(uintdevptr_t),
+                    "Please review the following logics when the condition does not hold anymore.");
                 if (devStartArgs == nullptr) {
                     // Host: addr uses backup
-                    if (base[k].rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
-                        continue;
-                    }
+                    if (base[k].rtOutcastIter == ITEM_POOL_INVALID_INDEX) { continue; }
+
                     auto &rtOutcast = backupRtOutcastPool[base[k].rtOutcastIter].Item();
+                    if (rtOutcast.isCache) { continue; } // To avoid duplicate reloc
+                    rtOutcast.isCache = true;
+
                     uintdevptr_t addr = rtOutcast.addr;
                     AddressDescriptor *desc = reinterpret_cast<AddressDescriptor *>(&rtOutcast.addr);
                     *desc = AddressDescriptor::MakeFromAddress(addr);
                     RelocDescToCache(*desc, relocWorkspace, cacheInputOutputDict);
                 } else {
                     // Device: addr uses actual
-                    if (runtimeSlotList[k].rtOutcastIter == ITEM_POOL_INVALID_INDEX) {
-                        continue;
-                    }
+                    if (runtimeSlotList[k].rtOutcastIter == ITEM_POOL_INVALID_INDEX) { continue; }
+
                     auto &rtOutcast = runtimeOutcastTensorPool[runtimeSlotList[k].rtOutcastIter].Item();
+                    if (!rtOutcast.isCache) { continue; } // To avoid duplicate reloc
+                    rtOutcast.isCache = false;
+
                     AddressDescriptor *desc = reinterpret_cast<AddressDescriptor *>(&rtOutcast.addr);
                     RelocDescFromCache(*desc, relocWorkspace, devStartArgs);
                     rtOutcast.addr = desc->GetAddressValue();
