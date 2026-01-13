@@ -293,6 +293,17 @@ public:
         static OpcodeManager inst;
         return inst;
     }
+    void RegisterInfo(Opcode opcode, OpCoreType coreType, std::string str, std::vector<MemoryType> inputsMemType,
+        std::vector<MemoryType> outputsMemType, const TileOpCfg tileOpCfg, OpCalcType calcType,
+        const std::vector<std::string> &attrs = {}, VerifyOperationEntry verifyOperationEntry = nullptr);
+    void RegisterVectorBinary();
+    void RegisterVectorUnary();
+    void RegisterVectorSort();
+    void RegisterVectorReduction();
+    void RegisterVector();
+    void RegisterCube();
+    void RegisterDistribute();
+    void RegisterCommon();
 
     bool HasOpcode(Opcode opcode) const {
         return static_cast<int>(opcode) >= 0 && static_cast<size_t>(opcode) < opcodeInfos_.size();
@@ -438,6 +449,7 @@ private:
 private:
     std::array<OpcodeInfo, static_cast<int>(Opcode::OP_UNKNOWN)> opcodeInfos_{};
     std::unordered_map<std::string, Opcode> strToEnum_;
+    std::unordered_set<Opcode> registered_;
 };
 
 inline Opcode FindOpcode(const std::string &op) {
