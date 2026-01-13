@@ -11,7 +11,7 @@
 """
 """
 import sys
-from pathlib import Path
+import functools
 from typing import Sequence, Union, List
 
 from . import pypto_impl
@@ -36,14 +36,33 @@ def to_syms(value: Union[Sequence[int], Sequence[SymbolicScalar]]) -> List[pypto
 def ceil(a: SymInt, b: SymInt) -> SymInt:
     return (a + b - 1) // b
 
+# only outer takes effect void avoid tensor.py hide source_location of user code
+_source_location_depth = 0
+
 
 def set_source_location(level: int = 1):
-    frame = sys._getframe(level + 1)
-    pypto_impl.SetLocation(frame.f_code.co_filename, frame.f_lineno, "")
+    global _source_location_depth
+    if _source_location_depth == 0:
+        frame = sys._getframe(level + 1)
+        pypto_impl.SetLocation(frame.f_code.co_filename, frame.f_lineno, "")
+    _source_location_depth += 1
 
 
 def clear_source_location():
-    pypto_impl.ClearLocation()
+    global _source_location_depth
+    _source_location_depth -= 1
+    if _source_location_depth == 0:
+        pypto_impl.ClearLocation()
+
+
+def source_location(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        set_source_location()
+        out = func(*args, **kwargs)
+        clear_source_location()
+        return out
+    return wrapper
 
 
 def bytes_of(dtype: DataType) -> int:

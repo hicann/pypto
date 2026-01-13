@@ -211,6 +211,14 @@ public:
      */
     int32_t GetShape(int axis) const;
 
+
+    /**
+     * \brief Get the valid shape of the tensor.
+     *
+     * \return std::vector<SymbolicScalar> : The valid shape of the tensor.
+     */
+    std::vector<SymbolicScalar> &GetValidShape() const;
+
     /**
      * \brief Get the format of the tensor.
      *

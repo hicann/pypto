@@ -239,6 +239,10 @@ int32_t Tensor::GetShape(int axis) const {
     return storage_->shape[axis];
 }
 
+std::vector<SymbolicScalar> &Tensor::GetValidShape() const {
+    return storage_->GetDynValidShape();
+}
+
 TileOpFormat Tensor::Format() const {
     return storage_->Format();
 }
