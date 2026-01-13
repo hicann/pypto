@@ -125,6 +125,8 @@ class _JIT:
 
     def compile(self, *args, **kwargs):
         pypto_impl.DeviceInit()
+        # config is reset DeviceInit
+        self._set_config_option()
         in_out_tensors = [item for item in args if isinstance(item, pypto.Tensor)]
 
         if isinstance(self.verify_options, dict) and self.verify_options.get("enable_pass_verify"):
@@ -135,12 +137,11 @@ class _JIT:
             pypto_impl.SetVerifyData(host_pto_t_datas, [], _pto_verify_datas.get_data())
 
         handler = pypto_impl.OperatorBegin()
-        with pypto.options("jit_scope"):
-            self._set_config_option()
-            with pypto.function(self.dyn_func.__name__, *in_out_tensors) as rlf:
-                for _ in rlf:
-                    self.dyn_func(*args, **kwargs)
-                del rlf
+        self._set_config_option()
+        with pypto.function(self.dyn_func.__name__, *in_out_tensors) as rlf:
+            for _ in rlf:
+                self.dyn_func(*args, **kwargs)
+            del rlf
         pypto_impl.OperatorEnd(handler)
 
         _pto_verify_datas.reset()
@@ -235,25 +236,26 @@ class _JIT:
         input_hash = _compute_tensor_hash(in_out_tensors, in_out_tensors_data)
 
         self.set_run_mode()
-        if not self._is_compiled or not self._hit_cache(input_hash):
-            self.compile(*args, **kwargs)
-            self._handler_cache[input_hash] = self._handler
-            pypto_impl.BuildCache(self._handler, in_out_tensors_data, [])
-        else:
-            pypto_impl.ResetLog()
+        with pypto.options("jit_scope"):
             self._set_config_option()
-            self._handler = self._handler_cache.get(input_hash)
-        # dispatch run mode based on ASCEND_HOME_PATH or run_mode
-        '''
-          if run_mode is not config, use ASCEND_HOME_PATH
-          when ASCEND_HONE_PATH is config, run on with npu
-          when ASCEND_HONE_PATH is not config, run on with simulator
+            if not self._is_compiled or not self._hit_cache(input_hash):
+                self.compile(*args, **kwargs)
+                self._handler_cache[input_hash] = self._handler
+                pypto_impl.BuildCache(self._handler, in_out_tensors_data, [])
+            else:
+                pypto_impl.ResetLog()
+                self._handler = self._handler_cache.get(input_hash)
+            # dispatch run mode based on ASCEND_HOME_PATH or run_mode
+            '''
+              if run_mode is not config, use ASCEND_HOME_PATH
+              when ASCEND_HONE_PATH is config, run on with npu
+              when ASCEND_HONE_PATH is not config, run on with simulator
 
-          if run_mode is configed, use run_mode
-          if run_mode is npu , check env, than run with differnet tensor type (support cpu or npu)
-          if run_mode is simulator, dont check env, change all tensor to cpu, and run
-        '''
-        self.dispatch_with_run_mode(in_out_tensors, [], device)
+              if run_mode is configed, use run_mode
+              if run_mode is npu , check env, than run with differnet tensor type (support cpu or npu)
+              if run_mode is simulator, dont check env, change all tensor to cpu, and run
+            '''
+            self.dispatch_with_run_mode(in_out_tensors, [], device)
 
     @property
     def handler(self):
@@ -275,7 +277,7 @@ class _JIT:
 
         if isinstance(self.verify_options, dict):
             pypto.set_verify_options(**self.verify_options)
-        
+
         if isinstance(self.debug_options, dict):
             pypto.set_debug_options(**self.debug_options)
 
@@ -391,11 +393,11 @@ def set_verify_golden_data(in_out_tensors=None, goldens=None):
                 data = pypto_impl.DeviceTensorData(DT_FP16, 0, [0, 0])
                 pto_goldens.append(data)
                 continue
-            if not isinstance(golden, pypto.Tensor): 
+            if not isinstance(golden, pypto.Tensor):
                 t = pypto.from_torch(golden)
             else:
                 t = golden
-            
+
             data = pypto_impl.DeviceTensorData(
                     t.dtype,
                     t.data_ptr,
@@ -403,11 +405,11 @@ def set_verify_golden_data(in_out_tensors=None, goldens=None):
                 )
             pto_goldens.append(data)
         _pto_verify_datas.set_data(pto_goldens)
- 
+
     if in_out_tensors:
         pto_in_out = []
         for t in in_out_tensors:
             pto_in_out.append(t if isinstance(t, pypto.Tensor) else pypto.from_torch(t))
- 
+
         pypto_impl.SetVerifyData(_pto_to_tensor_data(pto_in_out),
                                  [], pto_goldens)
