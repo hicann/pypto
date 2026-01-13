@@ -66,7 +66,7 @@ Tensor QuantMM(const Tensor &operand1, const Tensor &operand2, const Tensor &deq
     auto dequantScaleA = std::get<1>(quantA);
     Tensor res;
     if (operand1.GetShape().size() == NUM_VALUE_2) {
-        res = Matmul<false, false>(DataType::DT_INT32, quantizedA, operand2);
+        res = Matmul(DataType::DT_INT32, quantizedA, operand2, false, false);
     } else if (operand1.GetShape().size() == NUM_VALUE_3) {
         res = BatchMatmul(DataType::DT_INT32, quantizedA, operand2);
     } else {

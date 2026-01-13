@@ -42,52 +42,23 @@ struct MatmulOpMetaData {
 
 static Tensor CallMatmulOp(const Tensor &tensorA, const Tensor &tensorB, const MatmulTestCaseParam &param,
     const Matrix::MatmulExtendParam &matmulExtendParam) {
-    using MatmulFunc = Tensor(*)(DataType, const Tensor&, const Tensor&, const Matrix::MatmulExtendParam&);
-    static const MatmulFunc funcs[8] = {
-        Matrix::Matmul<false, false, false>,
-        Matrix::Matmul<false, false, true>,
-        Matrix::Matmul<false, true, false>,
-        Matrix::Matmul<false, true, true>,
-        Matrix::Matmul<true, false, false>,
-        Matrix::Matmul<true, false, true>,
-        Matrix::Matmul<true, true, false>,
-        Matrix::Matmul<true, true, true>
-    };
-    int index = (param.transA << 2) | (param.transB << 1) | param.isCMatrixNz;
-    return funcs[index](param.outDtype, tensorA, tensorB, matmulExtendParam);
+    return Matrix::Matmul(param.outDtype, tensorA, tensorB, matmulExtendParam, param.transA, param.transB, param.isCMatrixNz);
 }
 
 static Tensor CallMatmulOpWithL0C2L1(const Tensor &tensorA, const Tensor &tensorB, const vector<int> &transInfo,
-        const bool &isCMatrixNz, const DataType &outDtype) {
+    const bool &isCMatrixNz, const DataType &outDtype) {
     // 2: transinfo vector has two elements
     ASSERT(transInfo.size() == 2);
-    using MatmulWithL0C2L1Func = Tensor(*)(DataType, const Tensor&, const Tensor&);
-    static const MatmulWithL0C2L1Func funcs[8] = {
-        Matrix::Matmul<false, false, false>,
-        Matrix::Matmul<false, false, true>,
-        Matrix::Matmul<false, true, false>,
-        Matrix::Matmul<false, true, true>,
-        Matrix::Matmul<true, false, false>,
-        Matrix::Matmul<true, false, true>,
-        Matrix::Matmul<true, true, false>,
-        Matrix::Matmul<true, true, true>
-    };
-    int index = (transInfo.at(0) << 2) | (transInfo.at(1) << 1) | isCMatrixNz;
-    return funcs[index](outDtype, tensorA, tensorB);
+    return Matrix::Matmul(outDtype, tensorA, tensorB, transInfo.at(0), transInfo.at(1), isCMatrixNz);
 }
 
-static Tensor CallMatmulOpWithL0C2L1AndScale(const Tensor &tensorA, const Tensor &tensorB, const vector<int> &transInform,
-        const bool &isCMatrixNz, const DataType &outDtype, const Matrix::MatmulExtendParam &matmulExtendParam) {
+static Tensor CallMatmulOpWithL0C2L1AndScale(const Tensor &tensorA, const Tensor &tensorB,
+    const vector<int> &transInform, const bool &isCMatrixNz, const DataType &outDtype,
+    const Matrix::MatmulExtendParam &matmulExtendParam) {
     // 2: transinfo vector has two elements
     ASSERT(transInform.size() == 2);
-    using MatmulWithL0C2L1FuncWithScale = Tensor(*)(DataType, const Tensor&, const Tensor&, const Matrix::MatmulExtendParam&);
-    static const MatmulWithL0C2L1FuncWithScale funcs[8] = {Matrix::Matmul<false, false, false>,
-        Matrix::Matmul<false, false, true>, Matrix::Matmul<false, true, false>, Matrix::Matmul<false, true, true>,
-        Matrix::Matmul<true, false, false>, Matrix::Matmul<true, false, true>, Matrix::Matmul<true, true, false>,
-        Matrix::Matmul<true, true, true>
-    };
-    int index = (transInform.at(0) << 2) | (transInform.at(1) << 1) | isCMatrixNz;
-    return funcs[index](outDtype, tensorA, tensorB, matmulExtendParam);
+    return Matrix::Matmul(
+        outDtype, tensorA, tensorB, matmulExtendParam, transInform.at(0), transInform.at(1), isCMatrixNz);
 }
 
 static void MatmulOperationExeFuncNoSplitWithL0C2L1(

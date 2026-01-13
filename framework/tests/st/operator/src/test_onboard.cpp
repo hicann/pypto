@@ -2596,7 +2596,7 @@ TEST_F(OnBoardTest, test_matmul_add_dynamic) {
     FUNCTION("matmul_add", {tensor_a, tensor_b, tensor_c, tensor_d}, {tensor_o}) {
         LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx, LoopRange(1)) {
             (void)mIdx;
-            Tensor tmp1 = npu::tile_fwk::Matrix::Matmul<false, false, false>(DataType::DT_FP16, tensor_a, tensor_b);
+            Tensor tmp1 = npu::tile_fwk::Matrix::Matmul(DataType::DT_FP16, tensor_a, tensor_b, false, false, false);
             Tensor tmp2 = Add(tmp1, tensor_c);
             tensor_o = Add(tmp2, tensor_d);
         }

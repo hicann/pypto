@@ -98,7 +98,7 @@ Tensor BatchMlpCompress(const Tensor &x, const Tensor &w1, const Tensor &w2, Mlp
     config::SetSemanticLabel("MlpCompress-1");
     TileShape::Current().SetCubeTile({c1Tile[NUM_VALUE_0], c1Tile[NUM_VALUE_1]},
         {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]}, {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]}, true);
-    auto firstMm = Matrix::Matmul<false, false>(DT_FP32, x, w1); // (b, 2 * cmpBlockSize * d)
+    auto firstMm = Matrix::Matmul(DT_FP32, x, w1, false, false); // (b, 2 * cmpBlockSize * d)
     TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1]);
     config::SetSemanticLabel("MlpCompress-2");
     auto sigTensor = Sigmoid(firstMm);
@@ -108,7 +108,7 @@ Tensor BatchMlpCompress(const Tensor &x, const Tensor &w1, const Tensor &w2, Mlp
     config::SetSemanticLabel("MlpCompress-4");
     TileShape::Current().SetCubeTile({c2Tile[NUM_VALUE_0], c2Tile[NUM_VALUE_1]},
         {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]}, {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]}, true);
-    auto res = Matrix::Matmul<false, false>(xDtype, castTensor, w2); // (b, d)
+    auto res = Matrix::Matmul(xDtype, castTensor, w2, false, false); // (b, d)
     config::SetSemanticLabel("MlpCompress-5");
     TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1]);
     config::SetSemanticLabel("");
@@ -142,7 +142,7 @@ Tensor MlpCompress(const Tensor &x, const Tensor &w1, const Tensor &w2, MlpCmpTi
     config::SetSemanticLabel("MlpCompress-2");
     TileShape::Current().SetCubeTile({c1Tile[NUM_VALUE_0], c1Tile[NUM_VALUE_1]},
         {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]}, {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]}, true);
-    auto firstMm = Matrix::Matmul<false, false>(DT_FP32, xCast2, w1); // (n2, 2 * cmpBlockSize * d)
+    auto firstMm = Matrix::Matmul(DT_FP32, xCast2, w1, false, false); // (n2, 2 * cmpBlockSize * d)
     TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1]);
     config::SetSemanticLabel("MlpCompress-3");
     auto sigTensor = Sigmoid(firstMm);
@@ -152,7 +152,7 @@ Tensor MlpCompress(const Tensor &x, const Tensor &w1, const Tensor &w2, MlpCmpTi
     config::SetSemanticLabel("MlpCompress-5");
     TileShape::Current().SetCubeTile({c2Tile[NUM_VALUE_0], c2Tile[NUM_VALUE_1]},
         {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]}, {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]}, true);
-    auto res = Matrix::Matmul<false, false>(DT_FP32, castTensor, w2); // (n2, d)
+    auto res = Matrix::Matmul(DT_FP32, castTensor, w2, false, false); // (n2, d)
     config::SetSemanticLabel("MlpCompress-6");
     auto resRe = Reshape(res, {NUM_VALUE_1, n, d});
     config::SetSemanticLabel("MlpCompress-7");
@@ -171,7 +171,7 @@ std::tuple<Tensor, Tensor> CmpAttn(
     config::SetSemanticLabel("CmpAttention-MatMul1");
     TileShape::Current().SetCubeTile({c1Tile[NUM_VALUE_0], c1Tile[NUM_VALUE_1]},
         {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]}, {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]}, true);
-    auto mm1 = Matrix::Matmul<false, true>(DT_FP32, q, k); // (g, effSeq)
+    auto mm1 = Matrix::Matmul(DT_FP32, q, k, false, true); // (g, effSeq)
     TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1]);
     config::SetSemanticLabel("CmpAttention-Softmax");
     auto softmaxRes = SoftmaxNew(mm1);                         // (g, effSeq)
@@ -180,7 +180,7 @@ std::tuple<Tensor, Tensor> CmpAttn(
     config::SetSemanticLabel("CmpAttention-MatMul2");
     TileShape::Current().SetCubeTile({c2Tile[NUM_VALUE_0], c2Tile[NUM_VALUE_1]},
         {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]}, {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]}, true);
-    auto mm2 = Matrix::Matmul<false, false>(DT_FP32, castScale, v); // (g, dN)
+    auto mm2 = Matrix::Matmul(DT_FP32, castScale, v, false, false); // (g, dN)
     return std::tie(softmaxRes, mm2);
 }
 

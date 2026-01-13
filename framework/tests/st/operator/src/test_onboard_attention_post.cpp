@@ -98,7 +98,7 @@ TEST_F(OnBoardTest, test_attention_post_bf16_real_batch4) {
             // [b,s, n*vHeadDim] @ [n*vHeadDim, h] = [b,s,h]
             TileShape::Current().SetCubeTile({16, 16}, {std::min(256, N * vHeadDim), std::min(256, N * vHeadDim)},
                 {std::min(128, H), std::min(128, H)});
-            Tensor bmm5_res = Matrix::Matmul<false, false>(dType, r2_res, w_o_i);
+            Tensor bmm5_res = Matrix::Matmul(dType, r2_res, w_o_i, false, false);
 
             TileShape::Current().SetVecTile({4, std::min(2048, H)});
             outputT = Reshape(bmm5_res, {B, S, H});
@@ -195,7 +195,7 @@ TEST_F(OnBoardTest, test_attention_post_bf16_real_n128) {
             // [b,s, n*vHeadDim] @ [n*vHeadDim, h] = [b,s,h]
             TileShape::Current().SetCubeTile({32, 32}, {std::min(256, N * vHeadDim), std::min(256, N * vHeadDim)},
                 {std::min(128, H), std::min(128, H)});
-            Tensor bmm5_res = Matrix::Matmul<false, false>(dType, r2_res, w_o_i);
+            Tensor bmm5_res = Matrix::Matmul(dType, r2_res, w_o_i, false, false);
 
             TileShape::Current().SetVecTile({32, std::min(2048, H)});
             outputT = Reshape(bmm5_res, {B, S, H});

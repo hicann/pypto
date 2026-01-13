@@ -145,7 +145,7 @@ void TestLoopViewAssemble(const Tensor &t0, const Tensor &t1, const Tensor &bloc
             Assemble(t0s, {0, 0}, ki);
             Assemble(t1, {0, s}, ki);
 
-            Tensor t2 = Matrix::Matmul<false, true>(DataType::DT_FP32, qi, ki);
+            Tensor t2 = Matrix::Matmul(DataType::DT_FP32, qi, ki, false, true);
             // conat((t0s + t1, t1)) @ concat (t0s, t1)^T
             Assemble(t2, {idx * s, 0}, out);
         }
@@ -546,7 +546,7 @@ TEST_F(DynamicBasicTest, DynamicRawShape) {
     FUNCTION("main", {t0, t1}, {out}) {
         LOOP("L0", FunctionType::DYNAMIC_LOOP, idx, LoopRange(GetInputShape(out, 0) / s)) {
             Tensor t0s = View(t0, {s, s}, {idx * s, 0});
-            Tensor t2 = Matrix::Matmul<false, true>(DataType::DT_FP32, t0s, t1);
+            Tensor t2 = Matrix::Matmul(DataType::DT_FP32, t0s, t1, false, true);
             Assemble(t2, {idx * s, 0}, out);
         }
     }
@@ -1557,7 +1557,7 @@ TEST_F(DynamicBasicTest, TestSelectAttention) {
             LOOP("Step2", FunctionType::DYNAMIC_LOOP, j, LoopRange(n), {}, true) {
                 LOOP("loop1", FunctionType::DYNAMIC_LOOP, _, LoopRange(1), {}, true) {
                     (void)_;
-                    auto matmul = Matrix::Matmul<false, true>(DataType::DT_FP32, r0, r1);
+                    auto matmul = Matrix::Matmul(DataType::DT_FP32, r0, r1, false, true);
                     auto d1 = Div(matmul, Element(dtype, (float)n));
                     auto d2 = Div(d1, Element(dtype, (float)n));
                     IF (i == 0) {

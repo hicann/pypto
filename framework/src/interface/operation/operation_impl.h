@@ -137,6 +137,15 @@ struct MatmulAttrParam {
     bool transA = false;
     bool transB = false;
     bool gmAccumulationFlag = false;
+    bool isCMatrixNZ = false;
+
+    MatmulAttrParam() = default;
+
+    MatmulAttrParam(bool isATrans, bool isBTrans, bool cMatrixNZ) {
+        transA = isATrans;
+        transB = isBTrans;
+        isCMatrixNZ = cMatrixNZ;
+    }
 };
 
 void ConstructTileGraph(Function &function, const TileShape &tileShape, const std::vector<LogicalTensorPtr> &operandVec,

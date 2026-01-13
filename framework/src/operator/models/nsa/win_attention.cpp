@@ -109,7 +109,7 @@ void WinAttentionCompute(const Tensor &qNope, Tensor &vNopeCache, const Tensor &
                     // matmul_1
                     TileShape::Current().SetCubeTile(
                         {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, true);
-                    auto qKT = Matrix::Matmul<false, true>(DataType::DT_FP32, qPart, kActualPart);
+                    auto qKT = Matrix::Matmul(DataType::DT_FP32, qPart, kActualPart, false, true);
                     TileShape::Current().SetVecTile(v1Tile[0], v1Tile[1]);
                     auto qKTScale = Mul(qKT, Element(qKT.GetStorage()->Datatype(), softmaxScale));
 
@@ -123,7 +123,7 @@ void WinAttentionCompute(const Tensor &qNope, Tensor &vNopeCache, const Tensor &
                     // matmul_2
                     TileShape::Current().SetCubeTile(
                         {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
-                    auto oiTmp = Matrix::Matmul<false, false>(DataType::DT_FP32, tileExpF16, vActualPart);
+                    auto oiTmp = Matrix::Matmul(DataType::DT_FP32, tileExpF16, vActualPart, false, false);
                     TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);
                     // reshape and copyOut
                     auto out = Div(oiTmp, tileSum);
@@ -235,7 +235,7 @@ void WinAttentionComputeFlash(const Tensor &qNope, Tensor &vNopeCache, const Ten
                         // matmul_1
                         TileShape::Current().SetCubeTile(
                             {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, true);
-                        auto qKT = Matrix::Matmul<false, true>(DataType::DT_FP32, qPart, kActualPart);
+                        auto qKT = Matrix::Matmul(DataType::DT_FP32, qPart, kActualPart, false, true);
                         TileShape::Current().SetVecTile(v1Tile[0], v1Tile[1]);
                         auto qKTScale = Mul(qKT, Element(qKT.GetStorage()->Datatype(), softmaxScale));
 
@@ -250,7 +250,7 @@ void WinAttentionComputeFlash(const Tensor &qNope, Tensor &vNopeCache, const Ten
                             // matmul_2
                             TileShape::Current().SetCubeTile(
                                 {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
-                            auto oiTmp = Matrix::Matmul<false, false>(DataType::DT_FP32, tileExpF16, vActualPart);
+                            auto oiTmp = Matrix::Matmul(DataType::DT_FP32, tileExpF16, vActualPart, false, false);
                             TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);
                             IF (IsLoopEnd(s2Idx, s2Loop)) {
                                 // reshape and copyOut
@@ -281,7 +281,7 @@ void WinAttentionComputeFlash(const Tensor &qNope, Tensor &vNopeCache, const Ten
                             auto q3 = Mul(oi, t2);
                             TileShape::Current().SetCubeTile(
                                 {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
-                            auto q1 = Matrix::Matmul<false, false>(DataType::DT_FP32, tileExpF16, vActualPart);
+                            auto q1 = Matrix::Matmul(DataType::DT_FP32, tileExpF16, vActualPart, false, false);
                             TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);
                             auto q2 = Mul(q1, t4);
                             auto oiTmp = Add(q3, q2);
@@ -398,7 +398,7 @@ void WinAttentionDebugCompute(const Tensor &qNope, Tensor &vNopeCache, const Ten
                         // matmul_1
                         TileShape::Current().SetCubeTile(
                             {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, true);
-                        auto qKT = Matrix::Matmul<false, true>(DataType::DT_FP32, qPart, kActualPart);
+                        auto qKT = Matrix::Matmul(DataType::DT_FP32, qPart, kActualPart, false, true);
                         TileShape::Current().SetVecTile(v1Tile[0], v1Tile[1]);
                         auto qKTScale = Mul(qKT, Element(qKT.GetStorage()->Datatype(), softmaxScale));
 
@@ -413,7 +413,7 @@ void WinAttentionDebugCompute(const Tensor &qNope, Tensor &vNopeCache, const Ten
                         // matmul_2
                         TileShape::Current().SetCubeTile(
                             {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
-                        auto out = Matrix::Matmul<false, false>(DataType::DT_FP32, valueType16, vActualPart);
+                        auto out = Matrix::Matmul(DataType::DT_FP32, valueType16, vActualPart, false, false);
 
                         // reshape and copyOut
                         TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);

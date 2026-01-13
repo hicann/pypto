@@ -65,7 +65,7 @@ TEST_F(OnBoardTest, test_query_states_fp16_b32_n2) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(DataType::DT_FP16, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(DataType::DT_FP16, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 1, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)
@@ -132,7 +132,7 @@ TEST_F(OnBoardTest, test_query_states_fp16_b32_n16) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(DataType::DT_FP16, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(DataType::DT_FP16, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 8, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)
@@ -199,7 +199,7 @@ TEST_F(OnBoardTest, test_query_states_fp16_b32_n32) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(DataType::DT_FP16, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(DataType::DT_FP16, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 8, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)
@@ -267,7 +267,7 @@ TEST_F(OnBoardTest, test_query_states_bf16_b32_n2) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(dType, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(dType, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 1, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)
@@ -387,7 +387,7 @@ TEST_F(OnBoardTest, test_query_states_bf16_b32_n2_nocat) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(dType, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(dType, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 1, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)
@@ -453,7 +453,7 @@ TEST_F(OnBoardTest, test_query_states_bf16_b32_n16) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(dType, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(dType, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 8, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)
@@ -521,7 +521,7 @@ TEST_F(OnBoardTest, test_query_states_bf16_b32_n32) {
             // bmm: (num_heads, bs, qkNopeHeadDim) * (num_heads, qkNopeHeadDim, kvLoraRank)
             // = (num_heads, bs, kvLoraRank)
             TileShape::Current().SetCubeTile({std::min(128, bs), std::min(128, bs)}, {128, 128}, {128, 128});
-            Tensor q_nope_new = Matrix::BatchMatmul<false, false>(dType, q_nope2, kvBProjWK);
+            Tensor q_nope_new = Matrix::BatchMatmul(dType, q_nope2, kvBProjWK, false, false);
 
             TileShape::Current().SetVecTile(1, 8, 512);
             Tensor q_nope_new2 = Transpose(q_nope_new, {0, 1}); //(bs, num_heads, kvLoraRank)

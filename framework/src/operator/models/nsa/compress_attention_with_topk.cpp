@@ -148,8 +148,8 @@ void CompressAttentionWithTopK(const Tensor &qNope, const Tensor &qRope, const T
                     config::SetSemanticLabel("Cmp-Attn-C1");
                     TileShape::Current().SetCubeTile(
                         {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
-                    auto sij = Matrix::Matmul<false, true>(
-                        DataType::DT_FP32, curKAttn, curQAttn); // (blockSize, dQK), (n1, dQK)-> (blockSize, n1)
+                    auto sij = Matrix::Matmul(
+                        DataType::DT_FP32, curKAttn, curQAttn, false, true); // (blockSize, dQK), (n1, dQK)-> (blockSize, n1)
                     sij.SetName("sij");
 
                     TileShape::Current().SetVecTile(vecTile, vecTile);
@@ -166,8 +166,8 @@ void CompressAttentionWithTopK(const Tensor &qNope, const Tensor &qRope, const T
                         config::SetSemanticLabel("Cmp-Attn-First-Block-C2");
                         TileShape::Current().SetCubeTile(
                             {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
-                        auto oiTmp = Matrix::Matmul<true, false>(DataType::DT_FP32, tildaPijB16,
-                            curVAttn); // (n1, blockSize), (blockSize, dN) -> (n1, dN)
+                        auto oiTmp = Matrix::Matmul(DataType::DT_FP32, tildaPijB16,
+                            curVAttn, true, false); // (n1, blockSize), (blockSize, dN) -> (n1, dN)
                         oiTmp.SetName("oiTmp");
                         config::SetSemanticLabel("Cmp-Attn-First-Block-V2");
                         TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);
@@ -205,8 +205,8 @@ void CompressAttentionWithTopK(const Tensor &qNope, const Tensor &qRope, const T
                             {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
 
                         auto tildaPijB16T = Transpose(tildaPijB16, {0, 1}); // (blockSize, n1) -> (n1, blockSize)
-                        auto q1 = Matrix::Matmul<false, false>(DataType::DT_FP32, tildaPijB16T,
-                            curVAttn); // (n1, blockSize), (blockSize, dN) -> (n1, dN)
+                        auto q1 = Matrix::Matmul(DataType::DT_FP32, tildaPijB16T,
+                            curVAttn, false, false); // (n1, blockSize), (blockSize, dN) -> (n1, dN)
                         q1.SetName("q1");
                         config::SetSemanticLabel("Cmp-Attn-Other-Update-V2");
                         TileShape::Current().SetVecTile(v2Tile[0], v2Tile[1]);

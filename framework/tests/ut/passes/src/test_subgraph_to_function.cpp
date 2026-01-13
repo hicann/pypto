@@ -391,7 +391,7 @@ TEST_F(SubgraphToFunctionTest, test_json_dump_and_load)
     FUNCTION("BATCHMATMUL", {matA, matB, matC})
     {
         config::SetPassConfig("PVC2_OOO", "OoOSchedule", KEY_DISABLE_PASS, true);
-        matC = npu::tile_fwk::Matrix::BatchMatmul<false, false>(DT_FP32, matA, matB);
+        matC = npu::tile_fwk::Matrix::BatchMatmul(DT_FP32, matA, matB, false, false);
     }
     config::SetPassConfig("PVC2_OOO", "OoOSchedule", KEY_DISABLE_PASS, false);
     auto programJson = Program::GetInstance().DumpJson();

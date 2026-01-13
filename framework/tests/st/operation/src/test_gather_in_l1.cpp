@@ -327,15 +327,15 @@ void BasicGatherTest(Config &cfg, bool isB, bool isTrans) {
                     dst = Matrix::Matmul(DT_FP16, a, dynUnit);
                 } else {
                     auto a = experimental::GatherInL1<false, true>(dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
-                    dst = Matrix::Matmul<true, false>(DT_FP16, a, dynUnit);
+                    dst = Matrix::Matmul(DT_FP16, a, dynUnit, true, false);
                 }
             } else {
                 if (!isTrans) {
                     auto b = experimental::GatherInL1<true, false>(dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
-                    dst = Matrix::Matmul<false, false>(DT_FP16, dynUnit, b);
+                    dst = Matrix::Matmul(DT_FP16, dynUnit, b, false, false);
                 } else {
                     auto b = experimental::GatherInL1<true, true>(dynSrc, dynOffsets, pageTable, cfg.block_size, cfg.hidden_dim);
-                    dst = Matrix::Matmul<false, true>(DT_FP16, dynUnit, b);
+                    dst = Matrix::Matmul(DT_FP16, dynUnit, b, false, true);
                 }
             }
         }

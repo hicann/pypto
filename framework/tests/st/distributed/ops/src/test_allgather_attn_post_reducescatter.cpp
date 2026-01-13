@@ -85,7 +85,7 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
             Tensor r2Res = Reshape(t3Res, {b * s, n * vHeadDim});
             TileShape::Current().SetCubeTile({16, 16}, {256, 256}, {128, 128});
             // {b * s, n * vHeadDim} @ {n * vHeadDim, h} = {b * s, h}
-            attnOut = Matrix::Matmul<false, false>(dtype, r2Res, wOut);
+            attnOut = Matrix::Matmul(dtype, r2Res, wOut, false, false);
         }
         LOOP("REDUCESCATTER", FunctionType::DYNAMIC_LOOP, unusedIndex, LoopRange(1)) {
             (void) unusedIndex;

@@ -80,7 +80,7 @@ void TestDynBatchMatmul(int b, int m, int k, int n, string dataPath) {
             if constexpr (IsBNZ) {
                 TileShape::Current().SetMatrixSize({m, k, n});
             }
-            tensor_c = Matrix::BatchMatmul<false, IsBtrans>(OutputAstDtype, dyn_a, dyn_b);
+            tensor_c = Matrix::BatchMatmul(OutputAstDtype, dyn_a, dyn_b, false, IsBtrans);
         }
     }
 }
@@ -136,7 +136,7 @@ void TestDynBatchMatmul4D(vector<int> b1, vector<int> b2, int m, int k, int n, s
             if constexpr (IsBNZ) {
                 TileShape::Current().SetMatrixSize({m, k, n});
             }
-            tensor_c = Matrix::BatchMatmul<false, IsBtrans>(OutputAstDtype, dyn_a, dyn_b);
+            tensor_c = Matrix::BatchMatmul(OutputAstDtype, dyn_a, dyn_b, false, IsBtrans);
         }
     }
 }

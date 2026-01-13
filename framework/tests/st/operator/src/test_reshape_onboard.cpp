@@ -244,7 +244,7 @@ TEST_F(OnBoardTest, test_reshape_matmul_mul) {
         config::SetBuildStatic(true);
         FUNCTION("RESHAPE", {A_R, B, E, RES}) {
             Tensor A = Reshape(A_R, a_shape);
-            Tensor C = Matrix::Matmul<false, false>(DataType::DT_FP32, A, B);
+            Tensor C = Matrix::Matmul(DataType::DT_FP32, A, B, false, false);
             Tensor D = Reshape(C, {8, 8, 64});
             RES = Mul(D, E);
         }

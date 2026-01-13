@@ -47,7 +47,7 @@ void TestLoopViewAssemble(const Tensor &t0, const Tensor &t1, const Tensor &bloc
             Assemble(t0s, {0, 0}, ki);
             Assemble(t1, {0, s}, ki);
 
-            Tensor t2 = Matrix::Matmul<false, true>(DataType::DT_FP32, qi, ki);
+            Tensor t2 = Matrix::Matmul(DataType::DT_FP32, qi, ki, false, true);
             // conat((t0s + t1, t1)) @ concat (t0s, t1)^T
             Assemble(t2, {idx * s, 0}, out);
         }

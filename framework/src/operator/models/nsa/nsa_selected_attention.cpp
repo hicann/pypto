@@ -155,7 +155,7 @@ void SelectedAttentionCompute(Tensor &topKIndcies, Tensor &kvNopeCache, Tensor &
                         TileShape::Current().SetCubeTile(
                             {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, true);
                         TileShape::Current().SetMatrixSize({qi.GetShape()[0], 0, kj.GetShape()[0]});
-                        auto sij = Matrix::Matmul<false, true>(DataType::DT_FP32, qi, kj);
+                        auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kj, false, true);
 
                         // V1
                         config::SetSemanticLabel("Sa_Qkvec1");
@@ -174,7 +174,7 @@ void SelectedAttentionCompute(Tensor &topKIndcies, Tensor &kvNopeCache, Tensor &
                             {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
                         TileShape::Current().SetMatrixSize(
                             {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
-                        auto oi = Matrix::Matmul<false, false>(DataType::DT_FP32, tildaPijF16, vj);
+                        auto oi = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
 
                         // V2
                         config::SetSemanticLabel("Sa_KvVec2");

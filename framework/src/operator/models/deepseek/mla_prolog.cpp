@@ -39,26 +39,15 @@ std::vector<Tensor> QkvPre(const Tensor &tokenX, const Tensor &wDq, const Tensor
     /******** q ********/
     int c0 = NUM_16;
     int tieM = (bs + c0 - 1) / c0 * c0;
-    TileShape::Current().SetCubeTile({tieM, tieM}, {NUM_256, NUM_256}, {NUM_64, NUM_64});
     // [b*s,h] * [h,q_lora_rank] = [b*s,q_lora_rank]
     Tensor qMmRes;
     if (splitK) {
-        TileShape::Current().SetVecTile(std::min(NUM_32, bs), NUM_128);
-        auto tmpC = Full(Element(DataType::DT_FP32, 0.0f), DT_FP32, {bs, q_lora_rank});
-        tmpC.SetName("tmp_q");
-        std::vector<Tensor> matmulResult;
-        auto kSplit = 7;
-        auto kSplitSize = h / kSplit;
-        for (int ki = 0; ki < kSplit; ki++) {
-            auto input_mk = View(input, {bs, kSplitSize}, {0, ki * kSplitSize});
-            auto input_kn = View(wDq, {kSplitSize, q_lora_rank}, {ki * kSplitSize, 0});
-            auto tmp = Matrix::Matmul(DT_FP32, input_mk, input_kn, tmpC); // [b*s,h/2] * [h/2,q_lora_rank]
-            matmulResult.emplace_back(tmp);
-        }
-        Tensor qMmResF32 = npu::tile_fwk::Reduce(matmulResult, ReduceMode::ATOMIC_ADD);
+        TileShape::Current().SetCubeTile({tieM, tieM}, {NUM_256, NUM_256}, {NUM_64, NUM_64}, false, true);
+        Tensor qMmResF32 = Matrix::Matmul(DT_FP32, input, wDq);
         TileShape::Current().SetVecTile(std::min(NUM_32, bs), NUM_128);
         qMmRes = Cast(qMmResF32, dType);
     } else {
+        TileShape::Current().SetCubeTile({tieM, tieM}, {NUM_256, NUM_256}, {NUM_64, NUM_64});
         qMmRes = Matrix::Matmul(dType, input, wDq); // bf16
     }
 
@@ -84,7 +73,7 @@ std::vector<Tensor> QkvPre(const Tensor &tokenX, const Tensor &wDq, const Tensor
         TileShape::Current().SetCubeTile({tieM, tieM}, {NUM_256, NUM_256}, {NUM_64, NUM_64});
     }
     // [b*s,qLoraRank] * [qLoraRank, n*qHeadDim] = [b*s, n*qHeadDim]
-    Tensor q = Matrix::Matmul<false, false>(dTypeQuantOut, normRes, wUqQr); // bf16  // quant: A8W8O32 -> bf16
+    Tensor q = Matrix::Matmul(dTypeQuantOut, normRes, wUqQr, false, false); // bf16  // quant: A8W8O32 -> bf16
     qkvPreRes.emplace_back(q);
 
     /******** kv ********/
@@ -92,20 +81,7 @@ std::vector<Tensor> QkvPre(const Tensor &tokenX, const Tensor &wDq, const Tensor
     // [b*s,h] * [h,kvLoraRank+qkRopeHeadDim] = [b*s,kvLoraRank+qkRopeHeadDim]
     Tensor compressedKv;
     if (splitK) {
-        TileShape::Current().SetVecTile(std::min(NUM_32, bs), NUM_64);
-        int kv_n = wDkvKr.GetShape()[1];
-        auto tmpC_kv = Full(Element(DataType::DT_FP32, 0.0f), DT_FP32, {bs, kv_n});
-        tmpC_kv.SetName("tmp_kv");
-        std::vector<Tensor> matmulResult_kv;
-        auto kSplit_kv = 7;
-        auto kSplitSize_kv = h / kSplit_kv;
-        for (int ki = 0; ki < kSplit_kv; ki++) {
-            auto input_mk = View(input, {bs, kSplitSize_kv}, {0, ki * kSplitSize_kv});
-            auto input_kn = View(wDkvKr, {kSplitSize_kv, kv_n}, {ki * kSplitSize_kv, 0});
-            auto tmp = Matrix::Matmul(DT_FP32, input_mk, input_kn, tmpC_kv); // [b*s,h/2] * [h/2,kv_n] = [b*s,kv_n]
-            matmulResult_kv.emplace_back(tmp);
-        }
-        Tensor kvMmResF32 = npu::tile_fwk::Reduce(matmulResult_kv, ReduceMode::ATOMIC_ADD);
+        Tensor kvMmResF32 = Matrix::Matmul(DT_FP32, input, wDkvKr);
         TileShape::Current().SetVecTile(std::min(NUM_32, bs), NUM_64);
         compressedKv = Cast(kvMmResF32, dType);
     } else {

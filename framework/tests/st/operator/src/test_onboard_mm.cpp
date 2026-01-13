@@ -47,7 +47,7 @@ void TestMatmul(int m, int k, int n, string dataPath) {
 
         config::SetBuildStatic(true);
         FUNCTION("Matmul_T", {mat_a, mat_b, mat_c}) {
-            mat_c = npu::tile_fwk::Matrix::Matmul<false, false>(OutputAstDtype, mat_a, mat_b);  // result dtype
+            mat_c = npu::tile_fwk::Matrix::Matmul(OutputAstDtype, mat_a, mat_b, false, false);  // result dtype
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -88,7 +88,7 @@ void TestMatmulTrans(int m, int k, int n, string dataPath) {
 
         config::SetBuildStatic(true);
         FUNCTION("Matmul_T", {mat_a, mat_b, mat_c}) {
-            mat_c = npu::tile_fwk::Matrix::Matmul<false, true>(OutputAstDtype, mat_a, mat_b);  // result dtype
+            mat_c = npu::tile_fwk::Matrix::Matmul(OutputAstDtype, mat_a, mat_b, false, true);  // result dtype
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -129,18 +129,7 @@ void TestMatmulACC(int m, int k, int n, string dataPath) {
         auto kSplitSize = k / kSplit;
         config::SetBuildStatic(true);
         FUNCTION("Matmul_T", {mat_a, mat_b, final_out}) {
-            TileShape::Current().SetVecTile(64, 64);
-            Tensor tmpC(OutputAstDtype, shape_c, "tmp_c");
-            tmpC = Mul(tmpC, Element(DataType::DT_FP32, 0.0f));
-            std::vector<Tensor> matmulResult;
-            for (int ki = 0; ki < kSplit; ki++) {
-                auto input_mk = View(mat_a, {m, kSplitSize}, {0, ki * kSplitSize});
-                auto input_kn = View(mat_b, {kSplitSize, n}, {ki * kSplitSize, 0});
-                auto tmpC1 = Matrix::Matmul<false, false>(OutputAstDtype, input_mk, input_kn, tmpC);
-                matmulResult.emplace_back(tmpC1);
-            }
-            TileShape::Current().SetVecTile(32, 256);
-            tmpC = npu::tile_fwk::Reduce(matmulResult, ReduceMode::ATOMIC_ADD);
+            Tensor tmpC = Matrix::Matmul(OutputAstDtype, mat_a, mat_b, false, false);
             TileShape::Current().SetVecTile(32, 32);
             final_out = Add(tmpC, Element(DataType::DT_FP32, 0.0));
         }
@@ -156,22 +145,22 @@ void TestMatmulACC(int m, int k, int n, string dataPath) {
 }
 
 TEST_F(MatmulOnBoardTest, test_mm_float32_64_64_64_acc) {
-    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
+    TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32}, false, true);
     TestMatmulACC<npu::tile_fwk::float16, float>(64, 64, 64, GetGoldenDir());
 }
 
 TEST_F(MatmulOnBoardTest, test_mm_float32_32_7168_1536_acc) {
-    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64});
+    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64}, false, true);
     TestMatmulACC<npu::tile_fwk::float16, float>(32, 7168, 1536, GetGoldenDir());
 }
 
 TEST_F(MatmulOnBoardTest, test_mm_float32_32_512_128_acc) {
-    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64});
+    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64}, false, true);
     TestMatmulACC<npu::tile_fwk::float16, float>(32, 512, 128, GetGoldenDir());
 }
 
 TEST_F(MatmulOnBoardTest, test_mm_float32_32_1024_512_acc) {
-    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {256, 256});
+    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {256, 256}, false, true);
     TestMatmulACC<npu::tile_fwk::float16, float>(32, 1024, 512, GetGoldenDir());
 }
 

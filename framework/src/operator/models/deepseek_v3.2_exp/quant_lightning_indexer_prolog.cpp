@@ -184,7 +184,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
                 config::SetSemanticLabel("Query-Linear");
                 TileShape::Current().SetCubeTile({qLinear[L0M_INDEX], qLinear[L1M_INDEX]},
                     {qLinear[L0K_INDEX], qLinear[L1K_INDEX]}, {qLinear[L0N_INDEX], qLinear[L1N_INDEX]}, true);
-                auto qS32 = Matrix::Matmul<false, false>(DT_INT32, qNorm, wQb); // (tTile, headNum * headDim)
+                auto qS32 = Matrix::Matmul(DT_INT32, qNorm, wQb, false, false); // (tTile, headNum * headDim)
 
                 config::SetSemanticLabel("Query-Dequant");
                 TileShape::Current().SetVecTile(configs.tSubTile, headNum * headDim / configs.chunkSize);  // (tTile, headNum * headDim), fp32
@@ -213,7 +213,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
                 TileShape::Current().SetCubeTile({qHdMTile, qHdMTile}, {qHd[L0K_INDEX], qHd[L1K_INDEX]},
                     {qHd[L0N_INDEX], qHd[L1N_INDEX]});
                 auto qHadamard =
-                    Matrix::BatchMatmul<false, false, false>(xDtype, qCat, hadamardQ); // (tTile, headNum, headDim)
+                    Matrix::BatchMatmul(xDtype, qCat, hadamardQ, false, false, false); // (tTile, headNum, headDim)
 
                 config::SetSemanticLabel("Query-Quant");
                 TileShape::Current().SetVecTile(configs.tSubTile, headNum / configs.chunkSize, headDim);
@@ -229,7 +229,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
                 TileShape::Current().SetCubeTile({kLinear[L0M_INDEX], kLinear[L1M_INDEX]},
                     {kLinear[L0K_INDEX], kLinear[L1K_INDEX]}, {kLinear[L0N_INDEX], kLinear[L1N_INDEX]}, true);
                 auto x = View(inputs.x, {tTile, h}, {tTile, h}, {tIdx, 0}); // 这里将tTile分档，offset不需要乘tTile
-                auto k = Matrix::Matmul<false, false>(DT_FP32, x, wk);      // (tTile, headDim)
+                auto k = Matrix::Matmul(DT_FP32, x, wk, false, false);      // (tTile, headDim)
 
                 if (tTile <= VEC_TILE_32) {
                     TileShape::Current().SetVecTile(std::min(tTile, VEC_TILE_4), headDim);
@@ -248,7 +248,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
 
                 config::SetSemanticLabel("Key-Hadamard");
                 auto hadamardK =
-                    Matrix::Matmul<false, false>(xDtype, kCat, inputs.hadamardK); // (tTile, headDim), bf16
+                    Matrix::Matmul(xDtype, kCat, inputs.hadamardK, false, false); // (tTile, headDim), bf16
                 config::SetSemanticLabel("Key-Quant");
                 std::tuple<Tensor, Tensor> kRes = PrologQuant(hadamardK);
                 auto kCache4D = Reshape(std::get<0>(kRes), {tTile, 1, 1, headDim}, {tTile, 1, 1, headDim});
@@ -266,7 +266,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
                 TileShape::Current().SetCubeTile({wLinear[L0M_INDEX], wLinear[L1M_INDEX]},
                     {wLinear[L0K_INDEX], wLinear[L1K_INDEX]}, {wLinear[L0N_INDEX], wLinear[L1N_INDEX]});
                 TileShape::Current().SetVecTile(tTile, headNum);
-                auto weights = Cast(Matrix::Matmul<false, false>(xDtype, x, wProj), DT_FP32);
+                auto weights = Cast(Matrix::Matmul(xDtype, x, wProj, false, false), DT_FP32);
                 weights = Mul(weights, Element(DataType::DT_FP32, 1.0f / (std::sqrt(headNum) * std::sqrt(headDim))));
                 auto weightsF16 = Cast(weights, DT_FP16);
                 Assemble(weightsF16, {tIdx, 0}, outputs.weights);

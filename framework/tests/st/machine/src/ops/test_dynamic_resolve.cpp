@@ -87,7 +87,7 @@ TEST_F(DynamicResolveTest, TestResolve) {
             std::vector<Tensor> tensorList;
             for (int j = 0; j < v64; j++) {
                 auto t = View(inputB, {v128, v128}, {0, v128 * j}); // <128 x 128 x FP32>
-                auto mm = Matrix::Matmul<false, true>(DataType::DT_FP32, inputA, t); // <64 x 128 x FP32>
+                auto mm = Matrix::Matmul(DataType::DT_FP32, inputA, t, false, true); // <64 x 128 x FP32>
                 tensorList.emplace_back(mm);
             }
             auto mmConcat = Cat(tensorList, -1); // <64 x (128 * 64) x FP32>

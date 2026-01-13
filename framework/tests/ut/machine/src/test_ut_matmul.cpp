@@ -94,7 +94,8 @@ void TestDynMatmul(int m, int k, int n, Matrix::MatmulExtendParam param = {}) {
         LOOP("L0", FunctionType::DYNAMIC_LOOP, batchId, LoopRange(1)) {
             Tensor dyn_a = View(tensor_a, {ma, ka}, {ma, ka}, {batchId * ma, 0});
             Tensor dyn_b = View(tensor_b, {kb, nb}, {kb, nb}, {0, 0});
-            tensor_c = Matrix::Matmul<MatmulImplType::cfg::transA, MatmulImplType::cfg::transB, MatmulImplType::cfg::isCNz>(OutputUTDtype, dyn_a, dyn_b, param);
+            tensor_c = Matrix::Matmul(OutputUTDtype, dyn_a, dyn_b, param, MatmulImplType::cfg::transA,
+                MatmulImplType::cfg::transB, MatmulImplType::cfg::isCNz);
         }
     }
 }

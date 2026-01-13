@@ -57,7 +57,7 @@ static void NonSplitFunc(const Tensor &tensor_a, const Tensor &tensor_b, Tensor 
             Tensor dyn_a = View(tensor_a, aShape, aValidShape, {0, mIdx, 0});
             Tensor dyn_b = View(tensor_b, bShape, bValidShape, {0, 0, 0});
             TileShape::Current().SetMatrixSize({m, k, n});
-            tensor_c = Matrix::BatchMatmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+            tensor_c = Matrix::BatchMatmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
         }
     }
 }
@@ -87,7 +87,7 @@ static void MSplitFunc(
             }
             Tensor dyn_b = View(tensor_b, bShape, bValidShape, {0, 0, 0});
             TileShape::Current().SetMatrixSize({m, k, n});
-            Tensor res = Matrix::BatchMatmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+            Tensor res = Matrix::BatchMatmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
             Assemble(res, {0, mIdx * viewShape[0], 0}, tensor_c);
         }
     }
@@ -118,7 +118,7 @@ static void NSplitFunc(
                     {bShape[0], std::min(bShape[1] - viewShape[2] * nIdx, viewShape[2]), bShape[2]}, {0, nIdx * viewShape[2], 0});
             }
             TileShape::Current().SetMatrixSize({m, k, n});
-            Tensor res = Matrix::BatchMatmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+            Tensor res = Matrix::BatchMatmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
             Assemble(res, {0, 0, nIdx * viewShape[2]}, tensor_c);
         }
     }
@@ -162,7 +162,7 @@ static void MNSplitFunc(
                         {0, nIdx * viewShape[2], 0});
                 }
                 TileShape::Current().SetMatrixSize({m, k, n});
-                Tensor res = Matrix::BatchMatmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+                Tensor res = Matrix::BatchMatmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
                 Assemble(res, {0, mIdx * viewShape[0], nIdx * viewShape[1]}, tensor_c);
             }
         }

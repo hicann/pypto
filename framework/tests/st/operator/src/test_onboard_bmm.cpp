@@ -55,7 +55,7 @@ void TestBatchMatmul3D(std::vector<int64_t> shape_a, std::vector<int64_t>shape_b
         Tensor matC(OutputAstDtype, shape_c, mat_c_ptr, "MatC");
         config::SetBuildStatic(true);
         FUNCTION("BATCHMATMUL", {matA, matB, matC}) {
-            matC = npu::tile_fwk::Matrix::BatchMatmul<false, transpose>(OutputAstDtype, matA, matB);
+            matC = npu::tile_fwk::Matrix::BatchMatmul(OutputAstDtype, matA, matB, false, transpose);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -93,7 +93,7 @@ void TestBatchMatmul4D(std::vector<int64_t> shape_a, std::vector<int64_t>shape_b
         Tensor matC(OutputAstDtype, shape_c, mat_c_ptr, "MatC");
         config::SetBuildStatic(true);
         FUNCTION("BATCHMATMUL", {matA, matB, matC}) {
-            matC = npu::tile_fwk::Matrix::BatchMatmul<false, transpose>(OutputAstDtype, matA, matB);
+            matC = npu::tile_fwk::Matrix::BatchMatmul(OutputAstDtype, matA, matB, false, transpose);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -224,7 +224,7 @@ void TestBatchMatmulA8W8O32(std::vector<int64_t> shape_a_in, std::vector<int64_t
         Tensor matC(DataType::DT_INT32, shape_c, mat_c_ptr, "MatC");
         config::SetBuildStatic(true);
         FUNCTION("BATCHMATMUL", {matA, matB, matC}) {
-            matC = npu::tile_fwk::Matrix::BatchMatmul<false, false>(DataType::DT_INT32, matA, matB);
+            matC = npu::tile_fwk::Matrix::BatchMatmul(DataType::DT_INT32, matA, matB, false, false);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -266,24 +266,9 @@ void TestBatchMatmulA8W8O32ACC(std::vector<int64_t> shape_a_in, std::vector<int6
         Tensor matB(DataType::DT_INT8, shape_b, (uint8_t *)mat_b_ptr, "MatB");
         Tensor matC(DataType::DT_INT32, shape_c, mat_c_ptr, "MatC");
 
-        auto kSplit = 2;
-        auto kSplitSize = k / kSplit;
-
         config::SetBuildStatic(true);
         FUNCTION("BATCHMATMUL", {matA, matB, matC}) {
-            TileShape::Current().SetVecTile(64, 64);
-            Tensor tmpc(DT_FP32, shape_c, "tmpC");
-            tmpc = Mul(tmpc, Element(DataType::DT_FP32, 0.0f));
-            Tensor tmpcInt(DT_FP32, shape_c, "tmpC");
-            tmpcInt = Cast(tmpc, DataType::DT_INT32);
-            std::vector<Tensor> matmulResult;
-            for (int ki = 0; ki < kSplit; ++ki) {
-                auto input_mk = View(matA, {m, kSplitSize}, {0, ki*kSplitSize});
-                auto input_kn = View(matB, {kSplitSize, n}, {ki*kSplitSize, 0});
-                auto tmpC1 = npu::tile_fwk::Matrix::Matmul<false, false>(DataType::DT_INT32, input_mk, input_kn, tmpcInt);
-                matmulResult.emplace_back(tmpC1);
-            }
-            matC = npu::tile_fwk::Reduce(matmulResult, ReduceMode::ATOMIC_ADD);
+            matC = npu::tile_fwk::Matrix::Matmul(DataType::DT_INT32, matA, matB, false, false);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());

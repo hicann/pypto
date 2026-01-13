@@ -65,7 +65,7 @@ TEST_F(MoEGatePart1OnBoardTest, test_moe_gate_part1) {
         config::SetBuildStatic(true);
         FUNCTION("MOE_GATE_Part1_1", {input_e_score_bias, input_hidden_state, input_weight, output_score, output_score4choice}) {
             Tensor input_hidden_state_reshape = Reshape(input_hidden_state, {B*S, H});
-            Tensor logits = npu::tile_fwk::Matrix::Matmul<false, true>(DataType::DT_FP32, input_hidden_state_reshape, input_weight);
+            Tensor logits = npu::tile_fwk::Matrix::Matmul(DataType::DT_FP32, input_hidden_state_reshape, input_weight, false, true);
             output_score = Sigmoid(logits);
             output_score4choice = Add(output_score, input_e_score_bias);
         }

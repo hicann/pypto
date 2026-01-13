@@ -58,7 +58,7 @@ static void NonSplitFunc(const Tensor &tensor_a, const Tensor &tensor_b, Tensor 
         LOOP("mLoop", FunctionType::DYNAMIC_LOOP, mIdx, LoopRange(1)) {
             Tensor dyn_a = View(tensor_a, aShape, aValidShape, {mIdx, 0});
             Tensor dyn_b = View(tensor_b, bShape, bValidShape, {0, 0});
-            tensor_c = Matrix::Matmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+            tensor_c = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
         }
     }
 }
@@ -83,7 +83,7 @@ static void MSplitFunc(
                     {std::min(aShape[0] - viewShape[0] * mIdx, viewShape[0]), aShape[1]}, {mIdx * viewShape[0], 0});
             }
             Tensor dyn_b = View(tensor_b, bShape, bValidShape, {0, 0});
-            Tensor res = Matrix::Matmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+            Tensor res = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
             Assemble(res, {mIdx * viewShape[0], 0}, tensor_c);
         }
     }
@@ -109,7 +109,7 @@ static void NSplitFunc(
                 dyn_b = View(tensor_b, {viewShape[1], bShape[1]},
                     {std::min(bShape[0] - viewShape[1] * nIdx, viewShape[1]), bShape[1]}, {nIdx * viewShape[1], 0});
             }
-            Tensor res = Matrix::Matmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+            Tensor res = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
             Assemble(res, {0, nIdx * viewShape[1]}, tensor_c);
         }
     }
@@ -144,7 +144,7 @@ static void MNSplitFunc(
                     dyn_b = View(tensor_b, {viewShape[1], bShape[1]},
                         {std::min(bShape[0] - viewShape[1] * nIdx, viewShape[1]), bShape[1]}, {nIdx * viewShape[1], 0});
                 }
-                Tensor res = Matrix::Matmul<transA, transB, isCNz>(GetAstDtype<outputDtype>(), dyn_a, dyn_b);
+                Tensor res = Matrix::Matmul(GetAstDtype<outputDtype>(), dyn_a, dyn_b, transA, transB, isCNz);
                 Assemble(res, {mIdx * viewShape[0], nIdx * viewShape[1]}, tensor_c);
             }
         }

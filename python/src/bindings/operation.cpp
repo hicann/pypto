@@ -304,21 +304,21 @@ void bind_operation(py::module &m) {
         [](DataType out_type, const Tensor &tensor_a, const Tensor &tensor_b, bool a_trans, bool b_trans,
             bool c_matrix_nz) {
             if (!a_trans && !b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<false, false, false>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, false, false, false);
             } else if (!a_trans && !b_trans && c_matrix_nz) {
-                return Matrix::Matmul<false, false, true>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, false, false, true);
             } else if (!a_trans && b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<false, true, false>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, false, true, false);
             } else if (!a_trans && b_trans && c_matrix_nz) {
-                return Matrix::Matmul<false, true, true>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, false, true, true);
             } else if (a_trans && !b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<true, false, false>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, true, false, false);
             } else if (a_trans && !b_trans && c_matrix_nz) {
-                return Matrix::Matmul<true, false, true>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, true, false, true);
             } else if (a_trans && b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<true, true, false>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, true, true, false);
             } else {
-                return Matrix::Matmul<true, true, true>(out_type, tensor_a, tensor_b);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, true, true, true);
             }
         },
         py::arg("out_type"), py::arg("tensor_a"), py::arg("tensor_b"), py::arg("a_trans") = false,
@@ -331,24 +331,24 @@ void bind_operation(py::module &m) {
 
     m.def(
         "Matmul",
-        [](DataType out_type, const Tensor &tensor_a, const Tensor &tensor_b, bool a_trans, bool b_trans,
-            bool c_matrix_nz, const Matrix::MatmulExtendParam &extendParam) {
+        [](DataType out_type, const Tensor &tensor_a, const Tensor &tensor_b,
+            bool a_trans, bool b_trans, bool c_matrix_nz, const Matrix::MatmulExtendParam &extendParam) {
             if (!a_trans && !b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<false, false, false>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, false, false, false);
             } else if (!a_trans && !b_trans && c_matrix_nz) {
-                return Matrix::Matmul<false, false, true>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, false, false, true);
             } else if (!a_trans && b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<false, true, false>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, false, true, false);
             } else if (!a_trans && b_trans && c_matrix_nz) {
-                return Matrix::Matmul<false, true, true>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, false, true, true);
             } else if (a_trans && !b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<true, false, false>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, true, false, false);
             } else if (a_trans && !b_trans && c_matrix_nz) {
-                return Matrix::Matmul<true, false, true>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, true, false, true);
             } else if (a_trans && b_trans && !c_matrix_nz) {
-                return Matrix::Matmul<true, true, false>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, true, true, false);
             } else {
-                return Matrix::Matmul<true, true, true>(out_type, tensor_a, tensor_b, extendParam);
+                return Matrix::Matmul(out_type, tensor_a, tensor_b, extendParam, true, true, true);
             }
         },
         py::arg("out_type"), py::arg("tensor_a"), py::arg("tensor_b"), py::arg("a_trans") = false,
@@ -383,21 +383,21 @@ void bind_operation(py::module &m) {
         [](DataType out_type, const Tensor &tensor_a, const Tensor &tensor_b, bool a_trans, bool b_trans,
             bool c_matrix_nz) {
             if (!a_trans && !b_trans && !c_matrix_nz) {
-                return Matrix::BatchMatmul<false, false, false>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, false, false, false);
             } else if (!a_trans && !b_trans && c_matrix_nz) {
-                return Matrix::BatchMatmul<false, false, true>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, false, false, true);
             } else if (!a_trans && b_trans && !c_matrix_nz) {
-                return Matrix::BatchMatmul<false, true, false>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, false, true, false);
             } else if (!a_trans && b_trans && c_matrix_nz) {
-                return Matrix::BatchMatmul<false, true, true>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, false, true, true);
             } else if (a_trans && !b_trans && !c_matrix_nz) {
-                return Matrix::BatchMatmul<true, false, false>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, true, false, false);
             } else if (a_trans && !b_trans && c_matrix_nz) {
-                return Matrix::BatchMatmul<true, false, true>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, true, false, true);
             } else if (a_trans && b_trans && !c_matrix_nz) {
-                return Matrix::BatchMatmul<true, true, false>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, true, true, false);
             } else {
-                return Matrix::BatchMatmul<true, true, true>(out_type, tensor_a, tensor_b);
+                return Matrix::BatchMatmul(out_type, tensor_a, tensor_b, true, true, true);
             }
         },
         py::arg("out_type"), py::arg("a"), py::arg("b"), py::arg("a_trans") = false, py::arg("b_trans") = false,

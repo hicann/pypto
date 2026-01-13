@@ -42,7 +42,7 @@ constexpr float F_NEGA_1 = -1.0;
             auto swish_fp16 = Cast(swish, DataType::DT_FP16);
 
             // down_proj
-            auto mlpRes = Matrix::Matmul<false, true>(DataType::DT_FP32, swish_fp16, ffnWeight3);
+            auto mlpRes = Matrix::Matmul(DataType::DT_FP32, swish_fp16, ffnWeight3, false, true);
             Assemble(mlpRes, {batchIdx, 0}, out);
         }
     }
@@ -84,7 +84,7 @@ constexpr float F_NEGA_1 = -1.0;
             Tensor swishRes = std::get<0>(swishQuantRes);
             Tensor swishScale = std::get<1>(swishQuantRes);
 
-            Tensor resInt32 = Matrix::Matmul<false, true>(DataType::DT_INT32, swishRes, ffnWeight3);
+            Tensor resInt32 = Matrix::Matmul(DataType::DT_INT32, swishRes, ffnWeight3, false, true);
             auto resTmpFp32 = Cast(resInt32, DataType::DT_FP32);
             auto resTmpDequantPerToken = Mul(resTmpFp32, swishScale);
             auto res = Mul(resTmpDequantPerToken, ffnScale3);

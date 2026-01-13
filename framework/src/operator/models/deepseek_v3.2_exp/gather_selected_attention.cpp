@@ -99,7 +99,7 @@ void SelectedAttentionComputeV2(const Tensor &qNope, const Tensor &qRope, const 
                         Assemble(kn, {0, 0}, kj);
                         Assemble(kr, {0, dN}, kj);
                         auto kjView = View(kj, {curS2Tile, dN + dR}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN + dR}, {0, 0});
-                        auto sij = Matrix::Matmul<false, true>(DataType::DT_FP32, qi, kjView);
+                        auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kjView, false, true);
 
                         // V1
                         config::SetSemanticLabel("Sa_Qkvec1");
@@ -124,10 +124,10 @@ void SelectedAttentionComputeV2(const Tensor &qNope, const Tensor &qRope, const 
                         Tensor q1(dtype, {curGTile, dN});
                         if (knDtype == DataType::DT_INT8) {
                             auto vj = View(kn, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN}, {0, 0});
-                            q1 = Matrix::Matmul<false, false>(DataType::DT_FP32, tildaPijF16, vj);
+                            q1 = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
                         } else {
                             auto vj = experimental::GatherInL1<true, false>(kNope2D, curTopKIndcies, curBlockTable, blockSize, dN);
-                            q1 = Matrix::Matmul<false, false>(DataType::DT_FP32, tildaPijF16, vj);
+                            q1 = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
                         }
                         IF (IsLoopBegin(s2Idx, 0)) {
                             auto oiTmp = q1;

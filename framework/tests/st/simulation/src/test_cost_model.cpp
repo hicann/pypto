@@ -99,7 +99,7 @@ void TestMatmulTrans(int m, int k, int n, string dataPath) {
 
         npu::tile_fwk::config::SetBuildStatic(true);
         FUNCTION("Matmul_T", {mat_a, mat_b, mat_c}) {
-            mat_c = npu::tile_fwk::Matrix::Matmul<false, true>(OutputDtype, mat_a, mat_b);  // result dtype
+            mat_c = npu::tile_fwk::Matrix::Matmul(OutputDtype, mat_a, mat_b, false, true);  // result dtype
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -174,7 +174,7 @@ void CostModelTestLoopViewAssemble(const Tensor &t0, const Tensor &t1, const Ten
             Assemble(t0s, {0, 0}, ki);
             Assemble(t1, {0, s}, ki);
 
-            Tensor t2 = Matrix::Matmul<false, true>(DataType::DT_FP32, qi, ki);
+            Tensor t2 = Matrix::Matmul(DataType::DT_FP32, qi, ki, false, true);
             // conat((t0s + t1, t1)) @ concat (t0s, t1)^T
             Assemble(t2, {idx * s, 0}, out);
         }

@@ -167,7 +167,7 @@ void LightningIndexerPrologCompute(
                     {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]}, {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]}, true);
                 auto qrBlock = View(qr2D, {tileBS, qLoraRank}, {actBS, qLoraRank}, {bsIdx, 0});
                 // {tileBS, qLoraRank} * {qLoraRank, headNum * headDim} = {tileBS, headNum * headDim}
-                auto q32 = Matrix::Matmul<false, false>(DT_FP32, qrBlock, inputs.qW);
+                auto q32 = Matrix::Matmul(DT_FP32, qrBlock, inputs.qW, false, false);
 
                 config::SetSemanticLabel("QCast");
                 TileShape::Current().SetVecTile(std::min(tileBS, NUM_4), NUM_32, v1Tile[NUM_VALUE_1]);
@@ -184,11 +184,11 @@ void LightningIndexerPrologCompute(
                 TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1], v1Tile[NUM_VALUE_1]);
                 auto xBlock = View(x2D, {tileBS, dim}, {actBS, dim}, {bsIdx, 0});
                 // {tileBS, dim} * {dim, headNum} = {tileBS, headNum}
-                auto weights = Matrix::Matmul<false, false>(inputs.x.GetStorage()->Datatype(), xBlock, inputs.projW);
+                auto weights = Matrix::Matmul(inputs.x.GetStorage()->Datatype(), xBlock, inputs.projW, false, false);
                 Assemble(weights, {bsIdx, 0}, outputs.weight);
 
                 // {tileBS, dim} * {dim, headDim} = {tileBS, headDim}
-                auto k = Matrix::Matmul<false, false>(DT_FP32, xBlock, inputs.kW);
+                auto k = Matrix::Matmul(DT_FP32, xBlock, inputs.kW, false, false);
                 k = Cast(LayerNorm(k, lnW2D, lnBias2D, -1), xBlock.GetStorage()->Datatype()); // {tileBS, headDim}
                 Tensor kRope = View(k, {tileBS, ropeHeadDim}, {actBS, ropeHeadDim}, {0, 0});
                 Tensor kNope =

@@ -98,7 +98,7 @@ TEST_F(TestCodegenScatterUpdate, TestBatchMatmul) {
     std::string funcName = "BATCHMATMUL";
     config::SetBuildStatic(true);
     FUNCTION(funcName, {matA, matB, matC}) {
-        matC = npu::tile_fwk::Matrix::BatchMatmul<false, false>(DT_FP32, matA, matB);
+        matC = npu::tile_fwk::Matrix::BatchMatmul(DT_FP32, matA, matB, false, false);
     }
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
     npu::tile_fwk::CodeGenCtx ctx;

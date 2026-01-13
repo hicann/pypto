@@ -368,7 +368,7 @@ void TestNZFormatBatch(int bs, int m, int k, int n) {
                 auto inputB =
                     isTransB ? View(matB, {n, k}, {(int)index * n, 0}) : View(matB, {k, n}, {(int)index * k, 0});
                 TileShape::Current().SetMatrixSize({m, k, n});
-                auto outTensor = npu::tile_fwk::Matrix::Matmul<false, isTransB>(outputType, inputA, inputB);
+                auto outTensor = npu::tile_fwk::Matrix::Matmul(outputType, inputA, inputB, false, isTransB);
                 std::vector<int64_t> pairSecond = {(int)index * m, 0};
                 auto pair = std::make_pair(outTensor, pairSecond);
                 assembleVec.emplace_back(pair);

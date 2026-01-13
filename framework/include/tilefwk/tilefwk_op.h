@@ -377,17 +377,14 @@ struct MatmulExtendParam {
     MatmulExtendParam() = default;
 };
 
-template <bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false>
-Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix);
+Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, bool isATrans = false,
+    bool isBTrans = false, bool isCMatrixNZ = false);
 
-template <bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false>
-Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, const Tensor &cMatrix);
+Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, const MatmulExtendParam &extendParam,
+    bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false);
 
-template <bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false>
-Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, const MatmulExtendParam &extendParam);
-
-template <bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false>
-Tensor BatchMatmul(DataType dataType, const Tensor &aMatrix, const Tensor &bMatrix);
+Tensor BatchMatmul(DataType dataType, const Tensor &aMatrix, const Tensor &bMatrix, bool isATrans = false,
+    bool isBTrans = false, bool isCMatrixNZ = false);
 
 Tensor QuantMM(const Tensor &operand1, const Tensor &operand2, const Tensor &dequantScaleW);
 } // namespace Matrix

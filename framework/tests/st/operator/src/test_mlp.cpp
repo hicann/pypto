@@ -72,7 +72,7 @@ TEST_F(MlpTest, test_16_7168_tileop)
         config::SetBuildStatic(true);
         FUNCTION("MLP_T", {hiddenStates, ffnweigth1, ffnweigth2, ffnweigth3, output})     {
             auto castRes = Cast(hiddenStates, DataType::DT_FP16);
-            auto gate = Matrix::Matmul<false, false, true>(DataType::DT_FP32, castRes, ffnweigth1);
+            auto gate = Matrix::Matmul(DataType::DT_FP32, castRes, ffnweigth1, false, false, true);
 
             // swish: x / (1 + e^(-x))
             auto swish = Mul(gate, Element(DataType::DT_FP32, F_NEGA_1));
@@ -82,13 +82,13 @@ TEST_F(MlpTest, test_16_7168_tileop)
 
             // up_proj
             // [b*s, n*d] [n*d, n*d*3] => [b*s, n*d*3]
-            auto up = Matrix::Matmul<false, false, true>(DataType::DT_FP32, castRes, Cast(ffnweigth2, DataType::DT_FP16));
+            auto up = Matrix::Matmul(DataType::DT_FP32, castRes, Cast(ffnweigth2, DataType::DT_FP16), false, false, true);
             swish = Mul(swish, up);
             auto swish_fp16 = Cast(swish, DataType::DT_FP16);
 
             // down_proj
             // [b*s, n*d*3] [n*d, n*d*3]^T => [b*s, n*d]
-            output = Matrix::Matmul<false, true, true>(DataType::DT_FP32, swish_fp16, Cast(ffnweigth3, DataType::DT_FP16));
+            output = Matrix::Matmul(DataType::DT_FP32, swish_fp16, Cast(ffnweigth3, DataType::DT_FP16), false, true, true);
         }
     }
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
