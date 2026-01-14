@@ -189,10 +189,10 @@ class CMakeUserOption:
 
         排除 cmake pip 包的干扰
         """
-        # 拆分 PATH 环境变量为单个目录列表（排除空目录）
+        # 拆分 PATH 环境变量为单个目录列表(排除空目录)
         path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
 
-        # 遍历每个 PATH 目录，逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
+        # 遍历每个 PATH 目录, 逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
         valid_path_lst = []
         for path_dir in path_dir_lst:
             # 避免 PATH 环境变量中有重复的单元

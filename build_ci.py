@@ -656,10 +656,10 @@ class BuildCtrl(CMakeParam):
 
         排除 cmake pip 包的干扰
         """
-        # 拆分 PATH 环境变量为单个目录列表（排除空目录）
+        # 拆分 PATH 环境变量为单个目录列表(排除空目录)
         path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
 
-        # 遍历每个 PATH 目录，逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
+        # 遍历每个 PATH 目录, 逐个调用 shutil.which 检查, 限定 shutil.which 只在当前单个目录下查找 cmake
         valid_path_lst = []
         for path_dir in path_dir_lst:
             # 避免 PATH 环境变量中有重复的单元
@@ -937,6 +937,7 @@ class BuildCtrl(CMakeParam):
         cmd += self.tests.get_cfg_cmd()
         # 执行
         update_env = self.get_cfg_update_env()
+        update_env["CCACHE_BASEDIR"] = str(self.src_root)
         logging.info("CMake Configure, Cmd: %s", cmd)
         ret, _ = self.run_build_cmd(cmd=cmd, update_env=update_env, check=True)
         ret.check_returncode()
@@ -948,6 +949,7 @@ class BuildCtrl(CMakeParam):
         update_env = {}
         if self.build.job_num:
             update_env["PYPTO_UTEST_PARALLEL_NUM"] = str(self.build.job_num)
+        update_env["CCACHE_BASEDIR"] = str(self.src_root)
         cmd_list = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
         for i, c in enumerate(cmd_list, start=1):
             c += " --verbose" if self.verbose else ""
@@ -1013,8 +1015,8 @@ class BuildCtrl(CMakeParam):
             self.pip_install(whl=whl, dest=dist, opt="--no-compile --no-deps")  # 安装 whl 包
 
         # 执行用例, UTest
-        # 在 Python 3.12 中，pytest-xdist 通过 os.fork() 创建子进程时会产生 DeprecationWarning。
-        # 使用 -W ignore::DeprecationWarning 参数来忽略该警告。
+        # 在 Python 3.12 中, pytest-xdist 通过 os.fork() 创建子进程时会产生 DeprecationWarning.
+        # 使用 -W ignore::DeprecationWarning 参数来忽略该警告.
         if self.build.job_num is not None and self.build.job_num > 0:
             n_workers = str(self.build.job_num)
         else:

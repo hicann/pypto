@@ -57,8 +57,8 @@ PyPTO 提供了丰富的示例代码, 涵盖从基础操作到复杂模型实现
 ## 📖文档资源
 
 若您希望深入体验项目功能并修改源码, 请访问如下文档获取详细教程.
-- **[docs](https://gitcode.com/cann/pypto/blob/master/./docs/)**: 当前发布版本的详细文档, 包括编程指南、API 参考, 贡献指南等
-- **[示例代码](https://gitcode.com/cann/pypto/blob/master/./examples/)**: 丰富的示例代码, 从基础到高级应用
+- **[docs](https://gitcode.com/cann/pypto/blob/master/docs/)**: 当前发布版本的详细文档, 包括编程指南、API 参考, 贡献指南等
+- **[示例代码](https://gitcode.com/cann/pypto/blob/master/examples/)**: 丰富的示例代码, 从基础到高级应用
 
 ## 🔍目录结构
 

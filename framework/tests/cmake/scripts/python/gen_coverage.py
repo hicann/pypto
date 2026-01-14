@@ -119,7 +119,7 @@ class GenCoverage:
             ret.check_returncode()
             # 提取版本号(兼容 2.3.2, 2.3.2-1, 2.3.2+rc1 等格式)
             version_output = ret.stdout.strip()
-            # 正则匹配：提取 主版本.次版本.补丁版本(忽略后缀)
+            # 正则匹配:提取 主版本.次版本.补丁版本(忽略后缀)
             version_match = re.search(r'version (\d+\.\d+\.\d+)', version_output)
             if not version_match:
                 # 兼容只有两位版本号的情况(如 2.3)
@@ -134,7 +134,7 @@ class GenCoverage:
             # 验证版本是否 ≥2.3.2
             req = [2, 3, 2]
             parts = list(map(int, self.lcov_version.split('.')))
-            # 版本对比逻辑：逐位比较主, 次, 补丁版本
+            # 版本对比逻辑:逐位比较主, 次, 补丁版本
             self.lcov_version_new = (parts[0] > req[0] or
                                      (parts[0] == req[0] and parts[1] > req[1]) or
                                      (parts[0] == req[0] and parts[1] == req[1] and parts[2] >= req[2]))
