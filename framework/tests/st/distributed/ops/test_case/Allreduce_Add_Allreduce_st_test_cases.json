@@ -8,8 +8,8 @@
                 {
                     "name": "input0",
                     "shape": [
-                        256,
-                        102400
+                        4096,
+                        8192
                     ],
                     "dtype": "bfloat16",
                     "format": "ND",
@@ -24,8 +24,8 @@
                 {
                     "name": "output0",
                     "shape": [
-                        256,
-                        102400
+                        4096,
+                        8192
                     ],
                     "dtype": "bfloat16",
                     "format": "ND",
@@ -40,8 +40,8 @@
             ],
             "params": {
                 "rank_size": 4,
-                "tile_num_row": 1,
-                "tile_num_col": 1,
+                "tile_row_shape": 4096,
+                "tile_col_shape": 8192,
                 "on_board": true,
                 "func_id": -1
             },

@@ -25,7 +25,7 @@ namespace npu::tile_fwk::dynamic {
 }
 
 namespace npu::tile_fwk::Distributed {
-constexpr uint64_t AICPU_TASK_ARRAY_SIZE = 512;
+constexpr uint64_t AICPU_TASK_ARRAY_SIZE = 1024;
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE_MOD = AICPU_TASK_ARRAY_SIZE - 1;
 constexpr uint64_t SRC_SHMEM_SIGNAL_ID = 1;
 constexpr uint64_t SRC_RANK_ID = 2;

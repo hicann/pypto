@@ -152,9 +152,17 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSet() const
     int64_t bufferEleNum = distOpAttr.setBufferShape[0];
     int32_t rowDimIndex = 2;
     int32_t colDimIndex = 3;
+    int64_t rawShapeRow;
+    int64_t rawShapeCol;
+    if (distOpAttr.setType == 0) {
+        rawShapeRow = originShape[shmemTensorIndex][rowDimIndex];
+        rawShapeCol = originShape[shmemTensorIndex][colDimIndex];
+    } else {
+        rawShapeRow = Distributed::MAX_TILE_NUM;
+        rawShapeCol = Distributed::SHMEM_SIGNAL_STRIDE;
+    }
     oss << "<" << GetTemplateDType() << ", " << originShape[shmemTensorIndex][1] << ", "
-        << originShape[shmemTensorIndex][rowDimIndex] << ", " << originShape[shmemTensorIndex][colDimIndex]
-        << ", " << bufferEleNum << ">";
+            << rawShapeRow << ", " << rawShapeCol << ", " << bufferEleNum << ">";
     return oss.str();
 }
 
@@ -329,9 +337,16 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForFfnCombineInfo() const
 std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemSet() const
 {
     std::ostringstream oss;
+    DistOpAttr distOpAttr = npu::tile_fwk::AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int32_t shmemTensorIndex = 3;
-    int32_t shmemTensorDim = 4;
-    oss << ", " << GenOffsets(shmemTensorIndex, shmemTensorDim);
+    int32_t shmemTensorDim;
+    if (distOpAttr.setType == 0) {
+        shmemTensorDim = 4;
+        oss << ", " << GenOffsets(shmemTensorIndex, shmemTensorDim);
+    } else {
+        shmemTensorDim = 5;
+        oss << ", " << GenOffsetsAndRawShapes(shmemTensorIndex, shmemTensorDim) << ", " << GenShapes(shmemTensorIndex, shmemTensorDim);
+    }
     return oss.str();
 }
 

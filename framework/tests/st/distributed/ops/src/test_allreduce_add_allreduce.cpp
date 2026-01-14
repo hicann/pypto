@@ -41,7 +41,7 @@ void LoopAllReduce1(const Tensor& in, Tensor& allReduceOut, const OpTestParam& t
     LOOP("AllReduce1", FunctionType::DYNAMIC_LOOP, allReduce1Index, LoopRange(0, 1, 1)) {
         (void)allReduce1Index;
         Tensor predToken(DT_INT32, {1, 1}, "predToken");
-        TileShape::Current().SetDistTile({row, 1, 0}, {col, 1, 0}, {1, testParam.rankSize, 0});
+        TileShape::Current().SetVecTile(row, col);
         OneShotAllReduce(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), allReduceOut);
     }
 }
@@ -61,19 +61,17 @@ void LoopCreateShmemTensor(const Tensor& addOut, Tensor& shmemBarrier1ShmemSigna
 {
     LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
         (void)index;
-        uint32_t worldSize = static_cast<uint32_t>(worldSize);
-        CreateShmemData(testParam.group, worldSize, DT_INT32, Shape{1, 1, 8}, shmemBarrier1ShmemSignal);
-        CreateShmemData(testParam.group, worldSize, DT_INT32, Shape{1, 1, 8}, shmemBarrier2ShmemSignal);
-        TileShape::Current().SetDistTile({row, 1, 0}, {col, 1, 0}, {1, testParam.rankSize, 0});
-        int32_t tileCount = 1;
+        uint32_t worldSize = static_cast<uint32_t>(testParam.rankSize);
+        CreateShmemData(testParam.group, worldSize, DT_INT32, Shape{1, 1, 1, 8}, shmemBarrier1ShmemSignal, 1);
+        CreateShmemData(testParam.group, worldSize, DT_INT32, Shape{1, 1, 1, 8}, shmemBarrier2ShmemSignal, 1);
+        TileShape::Current().SetVecTile(row, col);
         Shape allReduce2ShmemDataShape = {1, addOut.GetShape(0), addOut.GetShape(1)};
-        Shape allReduce2ShmemSignalShape = {1, tileCount, 8};
         DataType allReduce2ShmemDataType = addOut.GetDataType();
         if ((allReduce2ShmemDataType == DT_BF16) || (allReduce2ShmemDataType == DT_FP16)) {
             allReduce2ShmemDataType = DT_FP32;
         }
         CreateShmemData(testParam.group, worldSize, allReduce2ShmemDataType, allReduce2ShmemDataShape, allReduce2ShmemData);
-        CreateShmemData(testParam.group, worldSize, DT_INT32, allReduce2ShmemSignalShape, allReduce2ShmemSignal);
+        CreateShmemSignal(testParam.group, allReduce2ShmemData, allReduce2ShmemSignal);
     }
 }
 
@@ -84,26 +82,24 @@ void LoopAllReduce2(const Tensor& addOut, Tensor& shmemBarrier1ShmemSignal, Tens
     LOOP("AllReduce2", FunctionType::DYNAMIC_LOOP, allReduce2Index, LoopRange(0, 1, 1)) {
         (void)allReduce2Index;
 
-        Tensor barrier1Out(DT_INT32, {1, 1}, "barrier1Out");
-        Tensor memSetOut(DT_INT32, {1, 1}, "memSetOut");
-        Tensor barrier2Out(DT_INT32, {1, 1}, "barrier2Out");
+        Tensor barrier1Out(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "barrier1Out");
+        Tensor memSetOut(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "memSetOut");
+        Tensor barrier2Out(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "barrier2Out");
 
-        TileShape::Current().SetDistTile({row, 1, 0}, {col, 1, 0}, {1, testParam.rankSize, 0});
-        int32_t tileCount = 1;
         SymbolicScalar thisRank = GetHcclRankId(hcclGroupIndex);
-
-        ShmemBarrier(addOut, shmemBarrier1ShmemSignal, testParam.group, barrier1Out);
-        LOOP("ShmemSet", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
-            (void)index;
-            auto allReduce2ShmemDataTile = View(allReduce2ShmemData, {1, 1, addOut.GetShape(0), addOut.GetShape(1)},
-                std::vector<SymbolicScalar>{thisRank, 0, 0, 0});
-            auto memSetDataOut = ShmemSet(barrier1Out, allReduce2ShmemDataTile);
-            auto allReduce2ShmemSignalTile = View(allReduce2ShmemSignal, {1, 1, tileCount, 8},
-                std::vector<SymbolicScalar>{thisRank, 0, 0, 0});
-            auto memSetSignalOut = ShmemSet(barrier1Out, allReduce2ShmemSignalTile);
-            memSetOut = Nop({memSetDataOut, memSetSignalOut});
-        }
-        ShmemBarrier(memSetOut, shmemBarrier2ShmemSignal, testParam.group, barrier2Out);
+        TileShape::Current().SetVecTile({1, 8});
+        ShmemBarrier(addOut, shmemBarrier1ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize), barrier1Out);
+        TileShape::Current().SetVecTile(row, col);
+        auto allReduce2ShmemDataTile = View(allReduce2ShmemData, {1, 1, addOut.GetShape(0), addOut.GetShape(1)},
+            std::vector<SymbolicScalar>{thisRank, 0, 0, 0});
+        auto memSetDataOut = ShmemDataSet(barrier1Out, allReduce2ShmemDataTile);
+        auto allReduce2ShmemSignalTile = View(allReduce2ShmemSignal, {1, 1, 1, addOut.GetShape(0), addOut.GetShape(1)},
+            std::vector<SymbolicScalar>{thisRank, 0, 0, 0, 0});
+        auto memSetSignalOut = ShmemSignalSet(barrier1Out, allReduce2ShmemSignalTile);
+        memSetOut = Nop({memSetDataOut, memSetSignalOut});
+        TileShape::Current().SetVecTile({1, 8});
+        ShmemBarrier(memSetOut, shmemBarrier2ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize), barrier2Out);
+        TileShape::Current().SetVecTile(row, col);
         OneShotAllReduce(barrier2Out, addOut, allReduce2ShmemData, allReduce2ShmemSignal, testParam.group,
             static_cast<uint32_t>(testParam.rankSize), out);
     }

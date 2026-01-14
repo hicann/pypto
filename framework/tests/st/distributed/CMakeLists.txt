@@ -48,6 +48,7 @@ set(_DistributedGTestCaseFilterConfig
         "TestReducescatter/DistributedTest.TestReducescatter/1" "4"
         "TestReducescatter/DistributedTest.TestReducescatter/2" "4"
         "TestAllgather_AttnPost_Reducescatter/DistributedTest.TestAllgather_AttnPost_Reducescatter/0" "4"
+        "TestAllreduce_Add_Allreduce/DistributedTest.TestAllreduce_Add_Allreduce/0" "4"
 )
 set(_LdLibrariesExt
         tile_fwk_compiler

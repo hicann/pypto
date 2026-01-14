@@ -27,7 +27,7 @@ template<typename T>
 void TestDynAllGather(OpTestParam &testParam)
 {
     constexpr size_t paramsSize = 5;
-    auto [row, col, typeNum, tileNumRow, tileNumCol] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [row, col, typeNum, tileRow, tileCol] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
 
     DataType dType = GetDataTypeNum(typeNum);
 
@@ -43,7 +43,7 @@ void TestDynAllGather(OpTestParam &testParam)
     std::vector<T> inPtr = ReadToVector<T>(GetGoldenDir() + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
     
     FUNCTION("ALLGATHER", {in, predToken}, {out}) {
-        TileShape::Current().SetVecTile({row / tileNumRow, col / tileNumCol});
+        TileShape::Current().SetVecTile({tileRow, tileCol});
         AllGather(predToken, in, testParam.group, static_cast<uint32_t>(testParam.rankSize), out);
     }
 

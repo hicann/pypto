@@ -405,8 +405,9 @@ struct MoeConfig {
 void MoeDispatch(const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tensor& expandX, Tensor& validCnt,
     Tensor& combineInfo, const char *group, const MoeConfig& moeConfig);
 void AllGather(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
-void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, Tensor& out);
-Tensor ShmemSet(const Tensor& predToken, const Tensor& shmemTensor);
+void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, uint32_t worldSize, Tensor& out);
+Tensor ShmemDataSet(const Tensor& predToken, const Tensor& shmemData);
+Tensor ShmemSignalSet(const Tensor& predToken, const Tensor& shmemSignal);
 void ReduceScatter(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, DistReduceType reduceType, Tensor& out);
 void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
 void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const Tensor& shmemData, const Tensor& shmemSignal,

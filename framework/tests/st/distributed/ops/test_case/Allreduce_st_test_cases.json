@@ -40,8 +40,8 @@
             ],
             "params": {
                 "rank_size": 4,
-                "tile_num_row": 1,
-                "tile_num_col": 1,
+                "tile_row_shape": 16,
+                "tile_col_shape": 256,
                 "use_two_shot": true,
                 "on_board": true,
                 "func_id": -1
@@ -88,8 +88,8 @@
             ],
             "params": {
                 "rank_size": 4,
-                "tile_num_row": 1,
-                "tile_num_col": 1,
+                "tile_row_shape": 50,
+                "tile_col_shape": 256,
                 "use_two_shot": false,
                 "on_board": true,
                 "func_id": -1

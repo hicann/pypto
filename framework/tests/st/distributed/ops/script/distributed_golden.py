@@ -71,8 +71,8 @@ class BaseCase:
     dtype: torch.dtype
     shape: Tuple[int, ...]
     rank_size: int
-    tile_num_row: int
-    tile_num_col: int
+    tile_row_shape: int
+    tile_col_shape: int
     value_range: ValueRange
 
 
@@ -132,10 +132,10 @@ def parse_base_case(config: dict) -> BaseCase:
     shape = tuple(input_tensor['shape'])
     dtype = get_dtype(input_tensor['dtype'])
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
-    tile_num_row, tile_num_col = params['tile_num_row'], params['tile_num_col']
+    tile_row_shape, tile_col_shape = params['tile_row_shape'], params['tile_col_shape']
     value_range = ValueRange(min_val=min_val, max_val=max_val)
     case = BaseCase(dtype=dtype, shape=shape, rank_size=rank_size, 
-    tile_num_row=tile_num_row, tile_num_col=tile_num_col, value_range=value_range)
+    tile_row_shape=tile_row_shape, tile_col_shape=tile_col_shape, value_range=value_range)
     return case
 
 
@@ -538,7 +538,7 @@ def generate_all_gather_golden(case_name: str, output: Path, case_index: int = N
     def golden_func(config: dict):
         case = parse_base_case(config)
         validate_rank_size(case.rank_size)
-        params = (*case.shape, get_dtype_num(case.dtype), case.tile_num_row, case.tile_num_col)
+        params = (*case.shape, get_dtype_num(case.dtype), case.tile_row_shape, case.tile_col_shape)
         save_params(params, output)
         gen_tensor_case = GenTensorCase(
             dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range
@@ -564,7 +564,7 @@ def generate_reduce_scatter_golden(case_name: str, output: Path, case_index: int
                 'The first dimension of the input tensor must be an integer multiple of the rank size, '
                 f'got row={row}, rank_size={case.rank_size}'
             )
-        params = (*case.shape, get_dtype_num(case.dtype), case.tile_num_row, case.tile_num_col)
+        params = (*case.shape, get_dtype_num(case.dtype), case.tile_row_shape, case.tile_col_shape)
         save_params(params, output)
         gen_tensor_case = GenTensorCase(
             dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range
@@ -592,7 +592,7 @@ def generate_all_reduce_golden(case_name: str, output: Path, case_index: int = N
             )
         params = config['params']
         use_two_shot = params['use_two_shot']
-        params = (*case.shape, get_dtype_num(case.dtype), case.tile_num_row, case.tile_num_col, use_two_shot)
+        params = (*case.shape, get_dtype_num(case.dtype), case.tile_row_shape, case.tile_col_shape, use_two_shot)
         save_params(params, output)
         gen_tensor_case = GenTensorCase(
             dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range

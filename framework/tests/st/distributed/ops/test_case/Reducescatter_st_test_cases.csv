@@ -1,4 +1,4 @@
-case_name,input_shape,input_dtype,input_format,input_datarange,output_shape,output_dtype,output_format,view_shape,tile_shape,rank_size,tile_num_row,tile_num_col
-Reducescatter_test_1,"[128, 256]","float16","ND","[,]","[32, 256]","float16","ND","[]","[]",4,2,2
-Reducescatter_test_2,"[32, 32]","bfloat16","ND","[,]","[8, 32]","bfloat16","ND","[]","[]",4,2,2
-Reducescatter_test_3,"[128, 256]","int32","ND","[-10, 10]","[32, 256]","int32","ND","[]","[]",4,2,2
+case_name,input_shape,input_dtype,input_format,input_datarange,output_shape,output_dtype,output_format,view_shape,tile_shape,rank_size,tile_row_shape,tile_col_shape
+Reducescatter_test_1,"[128, 256]","float16","ND","[,]","[32, 256]","float16","ND","[]","[]",4,16,128
+Reducescatter_test_2,"[32, 32]","bfloat16","ND","[,]","[8, 32]","bfloat16","ND","[]","[]",4,4,16
+Reducescatter_test_3,"[128, 256]","int32","ND","[-10, 10]","[32, 256]","int32","ND","[]","[]",4,16,128

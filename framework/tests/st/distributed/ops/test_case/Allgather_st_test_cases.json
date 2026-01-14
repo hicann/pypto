@@ -40,8 +40,8 @@
             ],
             "params": {
                 "rank_size": 4,
-                "tile_num_row": 8,
-                "tile_num_col": 8,
+                "tile_row_shape": 16,
+                "tile_col_shape": 32,
                 "on_board": true,
                 "func_id": -1
             },

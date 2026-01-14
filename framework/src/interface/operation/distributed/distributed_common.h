@@ -83,7 +83,7 @@ public:
     AtomicType atomicType = AtomicType::SET;
     int64_t signalValue;
     int64_t signalStride;
-    int64_t memType;
+    int64_t setType;
     std::vector<int64_t> aicpuOpParams;
     bool fp32Mode;
     int64_t topK;
