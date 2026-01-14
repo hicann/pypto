@@ -305,7 +305,7 @@ TEST_F(DynAttrToStaticTest, IntBasicCases) {
     std::vector<std::vector<size_t>> groups = {{0,1}, {2}};
     std::string output = checker.PrintIndexGroups(groups);
     std::string expected = 
-        "ALL Consistent Index Group:  {"
+        "\nALL Consistent Index Group:  {\n"
         "Consistent Index Group: 1{0, 1, }"
         "\n"
         "Consistent Index Group: 2{2, }"

@@ -333,8 +333,12 @@ void ReplaceCommonSymbol(Function *leafFunc, std::vector<std::vector<SymbolicSca
             if (index2BaseSymbol.find(index2GroupId[coaIdx]) == index2BaseSymbol.end()) {
                 leafFunc->GetMutableDynParam(symbolStr).isBaseParam = true;
                 index2BaseSymbol[index2GroupId[coaIdx]] = symbolStr;
+                APASS_LOG_INFO_F(Elements::Operation, "Mark coaIndex[%d] groupId[%zu] symbolStr[%s] as baseParam",
+                    coaIdx, index2GroupId[coaIdx], symbolStr.c_str());
             } else {
                 leafFunc->GetMutableDynParam(symbolStr).replacedSymbol = index2BaseSymbol[index2GroupId[coaIdx]];
+                APASS_LOG_INFO_F(Elements::Operation, "Replace coaIndex[%d] groupId[%zu] symbolStr[%s] with baseParam[%s]", 
+                    coaIdx, index2GroupId[coaIdx], symbolStr.c_str(), index2BaseSymbol[index2GroupId[coaIdx]]);
             }
         }
     }
