@@ -30,7 +30,7 @@ def main():
 def select_experts_glm(hidden_states, residual, weight, bias_input, mm_weight, e_score_bias_input,
                        weight_k, ids_k, row_idx, residual_out,
                        renormalize_flag, topk_group, num_expert_group, row_ids_flag, eps):
-    pypto.set_option('profile_enable', True)
+
 
     # 3. 得到动态tensor的shape
     bs = hidden_states.shape[0]

@@ -58,11 +58,6 @@ def test_reset_option():
     assert host_option["only_codegen"] == False
 
 
-def test_option():
-    pypto.set_option("profile_enable", True)
-    option = pypto.get_option("profile_enable")
-    assert option == True
-
 
 def test_operation_option():
     set_operation_config(force_combine_axis=True)

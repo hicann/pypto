@@ -90,7 +90,7 @@ def add_rms_norm_golden(hidden_states, residual, gamma, bias_input, eps):
 )
 def add_rms_norm_kernel(x, residual_input, x_gamma, x_bias,
                         hidden_states_out, residual_out, eps):
-    # 泳道图使能  pypto.set_option('profile_enable', True)
+
     # 从入参拿到输入和输出tensor
     calc_dtype = pypto.DT_FP32
     input_dtype = x.dtype

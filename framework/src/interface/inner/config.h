@@ -49,7 +49,6 @@ constexpr const char *STITCH_FUNCTION_INNER_MEMORY = "stitch_function_inner_memo
 constexpr const char *STITCH_FUNCTION_OUTCAST_MEMORY = "stitch_function_outcast_memory";
 constexpr const char *STITCH_FUNCTION_NUM_INITIAL = "stitch_function_num_initial";
 constexpr const char *STITCH_FUNCTION_NUM_STEP = "stitch_function_num_step";
-constexpr const char *PROFILE_ENABLE = "profile_enable";
 constexpr const char *COST_MODEL_ENABLE = "cost_model_enable";
 constexpr const char *STITCH_FUNCTION_SIZE = "stitch_function_size";
 constexpr const char *STITCH_CFGCACHE_SIZE = "stitch_cfgcache_size";

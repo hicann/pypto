@@ -83,7 +83,7 @@ std::string DeviceRunOnceDataFromHost(
         ProgramData::GetInstance().AppendOutput(rawData);
     }
 
-    if (config::GetOption<bool>(PROFILE_ENABLE) && EmulationLauncher::EmulationRunOnce(func) != 0) {
+    if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE) && EmulationLauncher::EmulationRunOnce(func) != 0) {
         return "emulation run failed";
     }
 
@@ -131,7 +131,7 @@ std::string OperatorDeviceRunOnceDataFromDevice([[maybe_unused]] py::int_ python
         return "mismatch input/output";
     }
 
-    if (config::GetOption<bool>(PROFILE_ENABLE)) {
+    if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE)) {
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
         if (EmulationLauncher::EmulationLaunchDeviceTensorData(func, inputs, outputs, config) != 0) {

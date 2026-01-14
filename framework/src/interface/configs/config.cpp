@@ -87,7 +87,6 @@ static std::map<std::string, ValueType> g_debugConfig = {
 };
 
 static std::map<std::string, ValueType> g_globalConfig = {
-    {PROFILE_ENABLE, false},
     {COST_MODEL_ENABLE, false},
 };
 

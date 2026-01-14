@@ -182,15 +182,8 @@ class _JIT:
         _cost_model_run_once_data_from_host(in_tensor_data, out_tensor_data)
         return
 
-    def set_runtime_debug_mode(self):
-        if self.debug_options is None:
-            self.debug_options = {}
-        if self.debug_options.get("runtime_debug_mode") == 1 \
-             or pypto.get_debug_options().get("runtime_debug_mode") == 1:
-            pypto.set_option("profile_enable", True)
 
     def dispatch_with_run_mode(self, in_tensor_data, out_tensor_data, device):
-        self.set_runtime_debug_mode()
         cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
         run_mode = pypto.get_runtime_options().get('run_mode', 0)
         if run_mode == 0:

@@ -39,7 +39,6 @@
         "pass_verify_pass_filter": []
     },
     "debug": {
-        "profile_enable": false,
         "print": {
             "edgeitems": 3,
             "precision": 4,

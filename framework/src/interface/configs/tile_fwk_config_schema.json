@@ -360,13 +360,6 @@
                 "en": "..."
             },
             "properties": {
-                "profile_enable": {
-                    "type": "boolean",
-                    "label": {
-                        "zh": "...",
-                        "en": "..."
-                    }
-                },
                 "print": {
                     "type": "object",
                     "label": {
