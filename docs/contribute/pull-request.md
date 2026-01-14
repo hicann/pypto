@@ -40,9 +40,7 @@ Changes:
 - Optimize the pypto.cond with concrete value, which can reduce the number of branches in the program
 - Update the test cases to cover the new features
 
-Related Issues:
-#1234
-#5678
+Related Issues: #1234,#5678
 ```
 
 Commit:

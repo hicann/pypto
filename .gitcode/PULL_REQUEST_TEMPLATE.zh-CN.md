@@ -1,22 +1,13 @@
-## 描述
-<!--在这里详细描述你的改动，包括改动的原因和所采取的方法。-->
+PR 应该避免没有描述信息, 描述信息的最重要的作用是描述修改意图，应该清晰明了. 例如: 标题中包含了 `fix` 标签, 如果没有描述信息，就需要Review人员猜测PR具体修复了哪些内容，或者怀疑修改的必要性. 如果PR和特定的Issue相关，可以单独包含一行 `Related Issue:` 放到描述信息最后.
 
-## 关联的Issue
-<!-- 如果这个PR是为了解决特定的Issue，请在这里提供Issue链接。例如：关联Issue #000-->
-<!-- 如果这个PR是为了解决特定的问题单，请在这里描述问题单单号。-->
+下面是一个典型的PR描述信息:
+```
+The origin issue template brings too many noise, it's not suitable for git message. eg: comments
+are not removed, labels are redundant as the PR tile already contains the tag.
 
-## 测试
-<!--描述进行了哪些测试来验证你的改动。包括但不限于二级冒烟、算子泛化等。-->
+The guide gives a clear suggestion on how to write the PR body.
 
-## 文档更新
-<!--如果这个PR包含文档的更新，请在这里指出。例如：更新了README.md文件。-->
+Related Issue: #1234,#5678
+```
 
-## 类型标签
-<!--  [x] 表示选中 -->
-- [ ] Bug修复
-- [ ] 新特性
-- [ ] 性能优化
-- [ ] 文档更新
-- [ ] 其他，请描述：
-
-
+更多描述信息见：[Commit Message 规范](https://gitcode.com/cann/pypto/blob/master/docs/contribute/pull-request.md#commit-message)
