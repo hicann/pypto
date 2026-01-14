@@ -15,20 +15,13 @@ list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/dynamic/ai
 list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/device_machine.cpp)
 list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/distributed/shmem_wait_until.cpp)
 list(APPEND _Sources ${PTO_FWK_SRC_ROOT}/framework/src/machine/device/machine_interface/pypto_aicpu_interface.cpp)
-set(_Include "include")
+set(_Include ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 PTO_Fwk_UTest_AddCaseLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
         PRIVATE_INCLUDE_DIRECTORIES ${_Include}
         LINK_LIBRARIES tile_fwk_runtime tile_fwk_operator dl
-)
-target_include_directories(${_Target}
-        PRIVATE
-                $<$<NOT:$<BOOL:${BUILD_WITH_CANN_SUB}>>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/runtime>
-                $<$<NOT:$<BOOL:${BUILD_WITH_CANN_SUB}>>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/runtime/runtime>
-                $<$<NOT:$<BOOL:${BUILD_WITH_CANN_SUB}>>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/msprof>
-                $<$<NOT:$<BOOL:${BUILD_WITH_CANN_SUB}>>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/msprof/toolchain>
 )
 target_compile_definitions(${_Target}
         PRIVATE
