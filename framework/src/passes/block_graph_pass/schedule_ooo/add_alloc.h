@@ -53,14 +53,14 @@ private:
     // 按color去判断是否需要插入alloc
     Status GenAllocNode(Function &function);
     Status AddAndCheckAlloc(Function &function);
-    Status UpdateTensorAllocMsg(Operation &op, size_t i, const std::vector<int> &allocMagic, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const;
+    Status UpdateTensorAllocMsg(Operation &op, size_t i, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const;
     Status FindTensorAllocMsg(Operation &op, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const;
     Status CreateAllocNode(const TensorAllocMsg &tensorAllocMsg, Function &function);
     Status GenAllocOpcode(const Opcode &allocOpcode, const TensorAllocMsg& tensorAllocMsg, Function& function);
     Status GenTensorAllocMsgMap(Function &function, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const;
-    Status SetTensorAllocMsg(Operation &op, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap, const std::vector<int> &allocMagic) const;
+    Status SetTensorAllocMsg(Operation &op, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const;
 
-    TensorAllocMsg ConstructTensorAllocMsg(Operation &op, size_t i, int memId, const std::vector<int> &allocMagic) const;
+    TensorAllocMsg ConstructTensorAllocMsg(Operation &op, size_t i, int memId) const;
     const std::unordered_map<MemoryType, Opcode> allocOpcodeMap = {
         {MemoryType::MEM_L0A, Opcode::OP_L0A_ALLOC},
         { MemoryType::MEM_UB,  Opcode::OP_UB_ALLOC},

@@ -63,44 +63,34 @@ Status AddAlloc::AddAndCheckAlloc(Function &function) {
     return SUCCESS;
 }
 
-TensorAllocMsg AddAlloc::ConstructTensorAllocMsg(Operation &op, size_t i, int memId, const std::vector<int> &allocMagic) const {
+TensorAllocMsg AddAlloc::ConstructTensorAllocMsg(Operation &op, size_t i, int memId) const {
     TensorAllocMsg tensorAllocMsg;
     tensorAllocMsg.producer.push_back(std::ref(op));
     tensorAllocMsg.memType = op.GetOutputOperand(i)->GetMemoryTypeOriginal();
     tensorAllocMsg.memId = memId;
-    if (allocMagic.empty() || i >= allocMagic.size()) {
-        APASS_LOG_INFO_F(Elements::Tensor, "Tensor [%d] is not allocted.", memId);
-        tensorAllocMsg.isAllocated = false;
-    }
     return tensorAllocMsg;
 }
 
-Status AddAlloc::UpdateTensorAllocMsg(Operation &op, size_t i, const std::vector<int> &allocMagic,
-                                      std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const {
+Status AddAlloc::UpdateTensorAllocMsg(Operation &op, size_t i, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const {
     auto memId = op.GetOutputOperand(i)->memoryrange.memId;
     if (memId == -1) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Get memId in memoryrange failed, op:%d, operand: %zu.%s", op.GetOpMagic(), i, GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (tensorAllocMsgMap.find(memId) == tensorAllocMsgMap.end()) {
-        tensorAllocMsgMap.emplace(memId, ConstructTensorAllocMsg(op, i, memId, allocMagic));
+        tensorAllocMsgMap.emplace(memId, ConstructTensorAllocMsg(op, i, memId));
         return SUCCESS;
     }
     tensorAllocMsgMap[memId].producer.push_back(op);
-    if (i < allocMagic.size() && tensorAllocMsgMap[memId].isAllocated == false) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor [%d] is allocaterd at the first time.", memId);
-        tensorAllocMsgMap[memId].isAllocated = true;
-    }
     return SUCCESS;
 }
 
-Status AddAlloc::SetTensorAllocMsg(Operation &op, 
-    std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap, const std::vector<int> &allocMagic) const {
+Status AddAlloc::SetTensorAllocMsg(Operation &op, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const {
     for (size_t i = 0; i < op.GetOOperands().size(); i++) {
         if (op.GetOutputOperand(i)->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
             continue;
         }
-        if (UpdateTensorAllocMsg(op, i, allocMagic, tensorAllocMsgMap) != SUCCESS) {
+        if (UpdateTensorAllocMsg(op, i, tensorAllocMsgMap) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Tensor, "UpdateTensorAllocMsg failed.");
             return FAILED;
         }
@@ -111,13 +101,7 @@ Status AddAlloc::SetTensorAllocMsg(Operation &op,
 Status AddAlloc::FindTensorAllocMsg(Operation &op, 
     std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const {
     // 遍历所有节点，找到需要分配Alloc的tensor以及其第一次出现时候的位置
-    std::vector<int> allocMagic;
-    for (const auto &inCtrlOp : op.GetInCtrlOperations()) {
-        if (inCtrlOp->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-            allocMagic.emplace_back(inCtrlOp->GetOpMagic());
-        }
-    }
-    if (SetTensorAllocMsg(op, tensorAllocMsgMap, allocMagic) != SUCCESS) {
+    if (SetTensorAllocMsg(op, tensorAllocMsgMap) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Tensor, "SetTensorAllocMsg failed.");
         return FAILED;
     }
