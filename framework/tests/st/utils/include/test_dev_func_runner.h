@@ -27,6 +27,7 @@
 #include "machine/runtime/device_launcher.h"
 #include "cost_model/simulation/backend.h"
 #include "machine/runtime/host_prof.h"
+#include "machine/runtime/distributed_context.h"
 
 using namespace npu::tile_fwk::dynamic;
 
@@ -170,6 +171,8 @@ private:
         }
         DeviceKernelArgs kArgs;
         DeviceLauncherConfigFillDeviceInfo(config_);
+        DeviceInitDistributedContextToHost(function_->GetDyndevAttribute()->commGroupNames,
+ 	        function_->GetDyndevAttribute()->devProgBinary);
         DeviceInitTilingData(MemoryHelper(true), kArgs, function_->GetDyndevAttribute()->devProgBinary, config_, nullptr);
         for (int i = 0; i < (config_.controlFlowCache ? 1 : config_.repeatNum); i++) {
             InitKernelInOuts(kArgs, inputs, outputs, true, {}, false);
@@ -265,6 +268,8 @@ private:
         CheckDeviceId();
         DeviceKernelArgs kArgs;
         DeviceLauncherConfigFillDeviceInfo(config_);
+        DeviceInitDistributedContext(function_->GetDyndevAttribute()->commGroupNames,
+ 	        function_->GetDyndevAttribute()->devProgBinary);
         DeviceInitTilingData(MemoryHelper(false), kArgs, function_->GetDyndevAttribute()->devProgBinary, config_, nullptr);
         auto aicpuStream = machine::GetRA()->GetScheStream();
         auto aicoreStream = machine::GetRA()->GetStream();

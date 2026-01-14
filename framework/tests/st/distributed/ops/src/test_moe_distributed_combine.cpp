@@ -66,11 +66,8 @@ void TestMoeDistributedCombine(OpTestParam& testParam)
     });
     ProgramData::GetInstance().AppendOutputs({RawTensorData::CreateTensorZero(out)});
 
-    auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
-    auto hcclContext = GetHcclContext(dynAttr->commGroupNames);
     DeviceLauncherConfig config;
     config.runModel = false;
-    config.hcclContext = hcclContext;
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
 
     int64_t outEleNum = outShape[0] * outShape[1];

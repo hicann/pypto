@@ -185,6 +185,8 @@ private:
         DeviceKernelArgs kArgs;
         config_.onBoard = false;
         DeviceLauncherConfigFillDeviceInfo(config_);
+        DeviceInitDistributedContextToHost(function_->GetDyndevAttribute()->commGroupNames,
+ 	        function_->GetDyndevAttribute()->devProgBinary);  
         DeviceInitTilingData(MemoryHelper(true), kArgs, function_->GetDyndevAttribute()->devProgBinary, config_, nullptr);
         InitKernelInOuts(kArgs, inputs, outputs, true);
         std::cout << "Run CostModel " << "\n";

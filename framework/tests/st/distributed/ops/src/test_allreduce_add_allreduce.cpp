@@ -143,10 +143,8 @@ void TestShmemAllReduceAddAllReduce(OpTestParam &testParam)
 
     FuncAllReduceAddAllReduce(in, out, testParam, row, col);
 
-    auto hcclContext = GetHcclContext({std::string(testParam.group)});
     DeviceLauncherConfig config;
     config.runModel = false;
-    config.hcclContext = hcclContext;
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
 
     auto output = ProgramData::GetInstance().GetOutputData(0);

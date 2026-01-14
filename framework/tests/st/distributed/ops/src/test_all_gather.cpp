@@ -55,11 +55,8 @@ void TestDynAllGather(OpTestParam &testParam)
         RawTensorData::CreateTensorZero(out)
     });
 
-    auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
-    auto hcclContext = GetHcclContext(dynAttr->commGroupNames);
     DeviceLauncherConfig config;
     config.runModel = false;
-    config.hcclContext = hcclContext;
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
 
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();

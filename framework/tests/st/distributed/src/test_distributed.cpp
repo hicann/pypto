@@ -114,6 +114,9 @@ void GegisterAllOps()
     reg.RegisterOp("Allreduce", AllreduceFunc{});
     reg.RegisterOp("Allreduce_Add_Allreduce", Allreduce_Add_AllreduceFunc{});
     reg.RegisterOp("MoeDistributedCombine", MoeDistributedCombineFunc{});
+    reg.registry["MoeDispatch"] = [](OpTestParam &testParam, const std::string&) {
+ 	    Distributed::TestShmemMoeDispatch(testParam);
+    };
     reg.registry["Allgather_AttnPost_Reducescatter"] = [](OpTestParam &testParam, const std::string&) {
         Distributed::TestAllGatherAttentionPostReducescatter(testParam);
     };

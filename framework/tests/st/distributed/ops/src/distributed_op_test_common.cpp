@@ -14,88 +14,9 @@
  */
 
 #include "distributed_op_test_common.h"
-#include "hccl/hcom.h"
-
-extern "C" HcclResult HcclAllocComResourceByTiling(HcclComm comm, void *stream, void *mc2Tiling, void **commContext);
 
 namespace npu::tile_fwk {
 namespace Distributed {
-#pragma pack(push, 8)
-struct Mc2ServerCfg {
-    uint32_t version = 0;
-    uint8_t debugMode = 0;
-    uint8_t sendArgIndex = 0;
-    uint8_t recvArgIndex = 0;
-    uint8_t commOutArgIndex = 0;
-    uint8_t reserved[8] = {};
-};
-#pragma pack(pop)
-
-#pragma pack(push, 8)
-struct Mc2HcommCfg {
-    uint8_t skipLocalRankCopy = 0;
-    uint8_t skipBufferWindowCopy = 0;
-    uint8_t stepSize = 0;
-    char reserved[13] = {};
-    char groupName[128] = {};
-    char algConfig[128] = {};
-    uint32_t opType = 0;
-    uint32_t reduceType = 0;
-};
-#pragma pack(pop)
-
-struct Mc2CommConfig {
-    uint32_t version;
-    uint32_t hcommCnt;
-    struct Mc2ServerCfg serverCfg;
-    struct Mc2HcommCfg hcommCfg;
-};
-
-int32_t MakeMc2TilingStruct(struct Mc2CommConfig &commConfig, std::string &groupName)
-{
-    constexpr uint32_t version = 2;
-    constexpr uint32_t hcommCnt = 1;
-    constexpr uint32_t opTypeAllToAll = 6; // numeric representation of AlltoAll
-    const char *algConfig = "AllGather=level0:ring";
-    constexpr uint32_t arraySize = 128;
-
-    commConfig.version = version;
-    commConfig.hcommCnt = hcommCnt;
-    commConfig.hcommCfg.skipLocalRankCopy = 0;
-    commConfig.hcommCfg.skipBufferWindowCopy = 0;
-    commConfig.hcommCfg.stepSize = 0;
-    commConfig.hcommCfg.opType = opTypeAllToAll;
-    auto ret = strcpy_s(commConfig.hcommCfg.groupName, arraySize, groupName.c_str());
-    if (ret != 0) {
-        return -1;
-    }
-    ret = strcpy_s(commConfig.hcommCfg.algConfig, arraySize, algConfig);
-    if (ret != 0) {
-        return -1;
-    }
-    return 0;
-}
-
-std::vector<uint64_t> GetHcclContext(const std::vector<std::string> &groupNames)
-{
-    std::vector<uint64_t> hcclContext(groupNames.size(), 0);
-    for (size_t groupIndex = 0; groupIndex < groupNames.size(); ++groupIndex) {
-        auto groupName = groupNames[groupIndex];
-        HcclComm commHandle = nullptr;
-        HcclResult ret = HcomGetCommHandleByGroup(groupName.c_str(), &commHandle);
-        ASSERT(ret == 0);
-        struct Mc2CommConfig commConfig;
-        (void)memset_s(&commConfig, sizeof(commConfig), 0, sizeof(commConfig));
-        ASSERT(MakeMc2TilingStruct(commConfig, groupName) == 0);
-        ret = HcclAllocComResourceByTiling(commHandle, machine::GetRA()->GetStream(), &commConfig,
-            reinterpret_cast<void **>(&hcclContext[groupIndex]));
-        ASSERT((ret == 0) && (hcclContext[groupIndex] != 0UL));
-        ALOG_INFO_F("groupIndex=%u, groupName=%s, hcclContext=%lu", groupIndex, groupName.c_str(),
-            hcclContext[groupIndex]);
-    }
-    return hcclContext;
-}
-
 int64_t GetEleNumFromShape(std::vector<int64_t>& shape)
 {
     int64_t eleNum = 1;

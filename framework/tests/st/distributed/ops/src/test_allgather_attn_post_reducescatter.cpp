@@ -95,11 +95,8 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
                 DistReduceType::DIST_REDUCE_ADD, out);
         }
     }
-    auto dynAttr = Program::GetInstance().GetLastFunction()->GetDyndevAttribute();
-    auto hcclContext = GetHcclContext(dynAttr->commGroupNames);
     DeviceLauncherConfig config;
     config.runModel = false;
-    config.hcclContext = hcclContext;
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
 
     auto output = ProgramData::GetInstance().GetOutputData(0);
