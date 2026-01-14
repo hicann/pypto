@@ -114,7 +114,7 @@ def get_vec_tile_shapes() -> List[int]:
     return scope.get_vec_tile_shapes()
 
 
-def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_data_load: bool = False, 
+def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_data_load: bool = False,
                         enable_split_k: bool = False):
     """ set the tile shapes in cube computation
 
@@ -572,10 +572,10 @@ def loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymbolicScalar, int]]:
     Returns
     --------
     return an iterator and unroll factor.
-    
+
     Examples
     --------
-        for idx in pypto.loop_unroll(0, 10, 1, name="LOOP_L0_bIdx", 
+        for idx in pypto.loop_unroll(0, 10, 1, name="LOOP_L0_bIdx",
                                                       idx_name="bIdx", unroll_list=[4, 2, 1]):
             b[:] = a + idx
     """
@@ -592,9 +592,10 @@ def loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymbolicScalar, int]]:
     nstart = start
     for p in unroll_list:
         if ori_name:
-            kwargs["name"] = f"{ori_name}_{p}"
-        if ori_idx_name:
-            kwargs["idx_name"] = f"{ori_idx_name}_{p}"
+            # "_LoopUnroll" is used by the backend to parse the unroll_times in function
+            kwargs["name"] = f"{ori_name}_LoopUnroll{p}"
+        else:
+            kwargs["name"] = f"_LoopUnroll{p}"
 
         nstep = step * p
         left = (stop - start) % nstep
