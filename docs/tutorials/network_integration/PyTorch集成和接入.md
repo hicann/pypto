@@ -51,7 +51,6 @@ if __name__ == "__main__":
 可以查看info级别Host编译日志，搜索capture mode关键字，默认为0表示关闭图捕获模式，如果为1则表示启用图捕获模式。
 
 ```txt
-!!!!Kernel Launch
 2025-12-08 20:56:27.043	capture mode[1]
 ```
 

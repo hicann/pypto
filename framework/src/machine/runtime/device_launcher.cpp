@@ -127,7 +127,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         rtStream_t aicpuStream, rtStream_t aicoreStream, bool streamSynchronize, CachedOperator *cachedOperator,
         const DeviceLauncherConfig &config) {
     bool isCapture = false;
-    std::cout << "!!! Kernel Launch " << "\n";
+    ALOG_INFO_F("start Kernel Launch.");
     config::SetRunDataOption(KEY_RUNTYPE, "npu");
     if (function != nullptr && function->GetDyndevAttribute() != nullptr) {
         DeviceRunner::SetBinData(function->GetDyndevAttribute()->kernelBinary);
@@ -179,6 +179,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     if (streamSynchronize) {
         rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
     }
+    ALOG_INFO_F("finish Kernel Launch.");
     return rc;
 }
 
