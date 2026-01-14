@@ -26,7 +26,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Any, Dict, Tuple
+from typing import List, Any, Tuple
 
 from golden_register import GoldenRegister, GoldenRegInfo
 from python.utils.table import Table
