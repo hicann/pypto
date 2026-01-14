@@ -34,8 +34,6 @@ from packaging import requirements
 if str(Path(Path(__file__).parent, "tools")) not in sys.path:
     sys.path.append(str(Path(Path(__file__).parent, "tools")))
 
-import work_flow as wf
-
 
 class CMakeParam(abc.ABC):
     """需要向 CMake 传入 Option 的参数
@@ -602,153 +600,6 @@ class TestsParam(CMakeParam):
         return cmd
 
 
-@dataclasses.dataclass
-class ModelParam(CMakeParam):
-    prof: int = 0
-    pe: int = 2
-    sim: bool = False
-    sim_with_onboard_aicpu: bool = False
-    back_annotation_aicpu: bool = False
-    back_annotation_aicore: bool = False
-    replay_file_path: Optional[str] = None
-    calendar: bool = False
-    pvmodel: bool = False
-
-    def __init__(self, args):
-        self.prof = args.prof
-        self.pe = args.pe
-        self.sim = args.sim
-        self.sim_with_onboard_aicpu = args.sim_with_onboard_aicpu
-        self.back_annotation_aicpu = args.back_annotation_aicpu
-        self.back_annotation_aicore = args.back_annotation_aicore
-        self.replay_file_path = args.replay_file_path
-        self.calendar = args.calendar
-        self.pvmodel = args.pvmodel
-
-    @staticmethod
-    def reg_args(parser, ext: Optional[Any] = None):
-        parser.add_argument("--prof", nargs="?", type=int, default=0, choices=[1, 2],
-                            help="Enable workflow.")
-        parser.add_argument("--pe", nargs="?", type=int, default=2, choices=[1, 2, 4, 5, 6, 7, 8],
-                            help="Enable pmuEvent.")
-        parser.add_argument("-s1", "--sim", action="store_true", default=False,
-                            help="enable simulation")
-        parser.add_argument("-s2", "--sim_with_onboard_aicpu", action="store_true", default=False,
-                            help="enable simulation with onboard aicpu code")
-        parser.add_argument("-b1", "--back_annotation_aicpu", action="store_true", default=False,
-                            help="enable back-annotation in simulation with aicpu onboard data.")
-        parser.add_argument("-b2", "--back_annotation_aicore", action="store_true", default=False,
-                            help="(WIP)enable back-annotation in simulation with aicore onboard data.")
-        parser.add_argument("-rf", "--replay_file_path", type=str, default=None,
-                            help="Specify replay file path for back annotation.")
-        parser.add_argument("-cal", "--calendar", action="store_true", default=False,
-                            help="Enable calendar mode.")
-        parser.add_argument("-pv", "--pvmodel", action="store_true", default=False,
-                            help="Enable PVModel mode.")
-
-    @staticmethod
-    def _save_simulation_json(simulation_json, src_root: Path):
-        temp_json_path = os.path.join(str(src_root), "framework/src/cost_model/simulation/scripts/tmp_simulation.json")
-        os.makedirs(os.path.dirname(temp_json_path), exist_ok=True)
-        with open(temp_json_path, 'w') as f:
-            json.dump(simulation_json, f, indent=4)
-
-    def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        return ""
-
-    def gen_simulation_json(self, src_root: Path) -> None:
-        simulation_json = {
-            "global_configs": {
-                "platform_configs": {},
-                "simulation_configs": {}
-            }
-        }
-        self._gen_simulation_json_sim(cfg=simulation_json)
-        self._gen_simulation_json_sim_with_onboard_aicpu(cfg=simulation_json)
-        self._gen_simulation_json_back_annotation_aicpu(cfg=simulation_json)
-        self._gen_simulation_json_back_annotation_aicore(cfg=simulation_json)
-        self._gen_simulation_json_calendar(cfg=simulation_json)
-        self._gen_simulation_json_pvmodel(cfg=simulation_json)
-        self._save_simulation_json(simulation_json, src_root=src_root)
-
-    def _gen_simulation_json_sim(self, cfg: Dict[Any, Any]):
-        if self.sim:
-            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-
-    def _gen_simulation_json_sim_with_onboard_aicpu(self, cfg: Dict[Any, Any]):
-        if self.sim_with_onboard_aicpu:
-            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-            cfg["global_configs"]["simulation_configs"]["USE_ON_BOARD_INFO"] = True
-            cfg["global_configs"]["simulation_configs"]["args"] = [
-                "Model.statisticReportToFile=true",
-                "Model.deviceArch=910B",
-                "Model.useOOOPassSeq=true",
-                "Core.logLabelMode=0"
-            ]
-
-    def _gen_simulation_json_back_annotation_aicpu(self, cfg: Dict[Any, Any]):
-        if self.back_annotation_aicpu:
-            if self.replay_file_path is None:
-                logging.error("Error: replay_file_path is required when back_annotation_aicpu is enabled")
-                raise ValueError("Missing required argument: -rf, --replay_file_path")
-            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-            cfg["global_configs"]["simulation_configs"]["args"] = [
-                "Model.statisticReportToFile=true",
-                "Model.deviceArch=910B",
-                "Model.useOOOPassSeq=true",
-                "Core.logLabelMode=0",
-                "Model.replayAllMode=1",
-                f"Model.replayFile={self.replay_file_path}"
-            ]
-
-    def _gen_simulation_json_back_annotation_aicore(self, cfg: Dict[Any, Any]):
-        if self.back_annotation_aicore:
-            if self.replay_file_path is None:
-                logging.error("Error: replay_file_path is required when back_annotation_aicore is enabled")
-                raise ValueError("Missing required argument: -rf, --replay_file_path")
-            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-            cfg["global_configs"]["simulation_configs"]["USE_ON_BOARD_INFO"] = True
-            cfg["global_configs"]["simulation_configs"]["json_path"] = self.replay_file_path
-            cfg["global_configs"]["simulation_configs"]["args"] = [
-                "Model.statisticReportToFile=true",
-                "Model.deviceArch=910B",
-                "Model.useOOOPassSeq=true",
-                "Core.logLabelMode=0"
-            ]
-
-    def _gen_simulation_json_calendar(self, cfg: Dict[Any, Any]):
-        if self.calendar:
-            if self.replay_file_path is None:
-                logging.error("Error: replay_file_path is required when calendar is enabled")
-                raise ValueError("Missing required argument: -rf, --replay_file_path")
-            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-            cfg["global_configs"]["simulation_configs"]["args"] = [
-                "Model.statisticReportToFile=true",
-                "Model.deviceArch=910B",
-                "Model.useOOOPassSeq=true",
-                "Core.logLabelMode=0",
-                "Model.genCalendarScheduleCpp=true",
-                "Model.simulationFixedLatencyTask=true",
-                f"Model.fixedLatencyTaskInfoPath={self.replay_file_path}",
-                "Model.fixedLatencyTimeConvert=1",
-                "Model.aicpuMachineNumber=1",
-                "Model.coreMachineNumberPerAICPU=54",
-                "Model.cubeMachineNumberPerAICPU=27",
-                "Model.vecMachineNumberPerAICPU=27",
-            ]
-
-    def _gen_simulation_json_pvmodel(self, cfg: Dict[Any, Any]):
-        if self.pvmodel:
-            cfg["global_configs"]["platform_configs"]["enable_cost_model"] = True
-            cfg["global_configs"]["simulation_configs"]["pv_run_level"] = 2
-            cfg["global_configs"]["simulation_configs"]["args"] = [
-                "Model.statisticReportToFile=true",
-                "Model.deviceArch=910B",
-                "Model.useOOOPassSeq=true",
-                "Core.logLabelMode=0",
-            ]
-
-
 class BuildCtrl(CMakeParam):
     """构建过程控制.
 
@@ -766,7 +617,6 @@ class BuildCtrl(CMakeParam):
         self.feature: FeatureParam = FeatureParam(args=args)
         self.build: BuildParam = BuildParam(args=args)
         self.tests: TestsParam = TestsParam(args=args)
-        self.model: ModelParam = ModelParam(args=args)
         self.third_party_path: Optional[Path] = Path(args.third_party_path).resolve() if args.third_party_path else None
         self.verbose: bool = args.verbose
         self.cmake: Optional[Path] = self.which_cmake()
@@ -873,7 +723,6 @@ class BuildCtrl(CMakeParam):
         FeatureParam.reg_args(parser=parser)
         BuildParam.reg_args(parser=parser)
         TestsParam.reg_args(parser=parser, ext=sub_parser)
-        ModelParam.reg_args(parser=parser)
         BuildCtrl.reg_args(parser=parser)
 
         # 参数处理
@@ -895,7 +744,6 @@ class BuildCtrl(CMakeParam):
                 args.func(args=args, ctrl=ctrl)
             ctrl.cmake_clean()
             ctrl.cmake_configure()
-            ctrl.model.gen_simulation_json(src_root=ctrl.src_root)
             ctrl.cmake_build()
         return ctrl.duration()
 
@@ -1098,8 +946,6 @@ class BuildCtrl(CMakeParam):
         """
         # prof使能初始化
         update_env = {}
-        if self.model.prof == 1 or self.model.prof == 2:
-            update_env = wf.ini(self.build_root, self.model.prof, self.model.pe)
         if self.build.job_num:
             update_env["PYPTO_UTEST_PARALLEL_NUM"] = str(self.build.job_num)
         cmd_list = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
@@ -1110,15 +956,9 @@ class BuildCtrl(CMakeParam):
                 ret, duration = self.run_build_cmd(cmd=c, update_env=update_env, check=True)
             except subprocess.CalledProcessError as e:
                 logging.info(f"Run cmd {c} failed, ERROR CODE: {e.returncode}")
-                # 一键绘图
-                if self.model.prof == 1 or self.model.prof == 2:
-                    wf.work_flow_plot(self.build_root, self.model.prof, self.model.pe)
                 raise
             ret.check_returncode()
             logging.info("CMake Build(%s/%s), Cmd: %s, Duration %s sec", i, len(cmd_list), c, duration)
-        # 一键绘图
-        if self.model.prof == 1 or self.model.prof == 2:
-            wf.work_flow_plot(self.build_root, self.model.prof, self.model.pe)
 
     def py_build(self):
         """whl 包编译处理
