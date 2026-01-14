@@ -67,7 +67,7 @@ void OoOSchedule::OoOHealthCheck(OoOScheduler &oooSchedule, Function &function, 
     }
 }
 
-Status OoOSchedule::A23Schedule(std::vector<Operation*> &opList, Function &function,
+Status OoOSchedule::NonMixSchedule(std::vector<Operation*> &opList, Function &function,
     std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize) {
     // 直接对oplist进行GenSpill和mainLoop
     OoOScheduler oooSchedule(*program.second, ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false));
@@ -85,16 +85,9 @@ Status OoOSchedule::A23Schedule(std::vector<Operation*> &opList, Function &funct
     return SUCCESS;
 }
 
-Status OoOSchedule::A5Schedule(std::vector<Operation*> &opList, Function &function,
+Status OoOSchedule::MixSchedule(std::vector<Operation*> &opList, Function &function,
     std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize) {
     std::unordered_map<TargetCoreType, std::string>  targetToString{{TargetCoreType::AIC, "AIC"}, {TargetCoreType::AIV0, "AIV0"}, {TargetCoreType::AIV1, "AIV1"}, {TargetCoreType::UNKNOWN, "UNKNOWN"}};
-    OptimizeSort optimizeSort(opList, *program.second);
-    if (optimizeSort.SortOps() != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Global sortOps failed.");
-        return FAILED;
-    }
-    // 全局排序的序列
-    opList = optimizeSort.operations;
     TaskSpliter spliter;
     spliter.SplitGraph(opList);
     for (auto &taskNode : spliter.GetTaskGraph().tasks) {
@@ -153,19 +146,26 @@ Status OoOSchedule::RunOnFunction(Function &function) {
         if (IsAicpuProgram(opList)) {
             continue;
         }
+        OptimizeSort optimizeSort(opList, *program.second);
+        if (optimizeSort.SortOps() != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Global sortOps failed");
+            return FAILED;
+        }
+        // 全局排序的序列
+        opList = optimizeSort.operations;
         std::pair<uint64_t, Function*> programRef;
         programRef.first = program.first;
         programRef.second = program.second;
         if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 || !IsMixGraph(opList)) {
-            if (A23Schedule(opList, function, programRef, maxWorkeSpaceSize) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "A2/3 OoO schedule failed.");
+            if (NonMixSchedule(opList, function, programRef, maxWorkeSpaceSize) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "NonMix OoO schedule failed.");
                 return FAILED;
             }
             programRef.second = program.second;
             continue;
         }
-        if (A5Schedule(opList, function, programRef, maxWorkeSpaceSize) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "A5 OoO schedule failed.");
+        if (MixSchedule(opList, function, programRef, maxWorkeSpaceSize) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "Mix OoO schedule failed.");
             return FAILED;
         }
         programRef.second = program.second;
