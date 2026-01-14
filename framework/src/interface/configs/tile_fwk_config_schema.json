@@ -12,8 +12,8 @@
                 "pg_parallel_lower_bound": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置相同结构子图的最小并行度。当某个相同结构的子图数小于该值时不做合并。",
+                        "en": "Graph merging parameter, used to configure the minimum parallelism of subgraphs with identical structures. Merging is not performed when the number of subgraphs with the same structure is less than this value."
                     },
                     "minimum": 0,
                     "maximum": 2147483647
@@ -21,8 +21,8 @@
                 "pg_upper_bound": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置子图大小上界。当子图大小达到上界不允许与其他子图合并。",
+                        "en": "Graph merging parameter, used to configure the upper bound of subgraph size. When the subgraph size reaches the upper bound, merging with other subgraphs is not allowed."
                     },
                     "minimum": 0,
                     "maximum": 2147483647
@@ -30,8 +30,8 @@
                 "pg_lower_bound": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置子图大小下界。当子图大小小于下界时尝试与其他子图合并。",
+                        "en": "Graph merging parameter, used to configure the lower bound of subgraph size. When the subgraph size is smaller than the lower bound, an attempt is made to merge it with other subgraphs."
                     },
                     "minimum": 0,
                     "maximum": 2147483647
@@ -39,8 +39,8 @@
                 "cube_l1_reuse_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置结构相同且重复搬运同一GM数据的子图合并策略。该参数适用于含有CUBE计算的子图，避免同一数据被重复搬运次数过多。",
+                        "en": "Graph merging parameter, used to configure the merging strategy for subgraphs with identical structures that repeatedly transfer the same GM data. This parameter is applicable to subgraphs involving CUBE computation, and avoids excessive transfers of the same data."
                     },
                     "minimum": 0,
                     "maximum": 2147483647
@@ -49,8 +49,8 @@
                     "type": "object",
                     "typeHints": "intmap",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置结构相同且重复搬运同一GM数据的子图合并数量。该参数适用于含有CUBE计算的子图合并。",
+                        "en": "Graph merging parameter, used to configure the merging count of subgraphs with identical structures that repeatedly transfer the same GM data. This parameter is applicable to the merging of subgraphs involving CUBE computation."
                     },
                     "key_minimum": 0,
                     "key_maximum": 2147483647,
@@ -60,8 +60,8 @@
                 "cube_nbuffer_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置相同结构AIC子图合并策略。该参数适用于结构相同的AIC子图合并，避免同一结构子图数过大并增大核内流水调度可能性。",
+                        "en": "Graph merging parameter, used to configure the merging strategy for AIC subgraphs with identical structures. This parameter is applicable to the merging of AIC subgraphs that share the same structure, which prevents an excessive number of subgraphs of the same structure and increases the possibility of intra-core pipeline scheduling."
                     },
                     "minimum": 0,
                     "maximum": 2
@@ -70,8 +70,8 @@
                     "type": "object",
                     "typeHints": "intmap",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置相同结构AIC子图的合并数量。该参数适用于结构相同的AIC子图合并。",
+                        "en": "Graph merging parameter, used to configure the merging count of AIC subgraphs with identical structures. This parameter is applicable to the merging of AIC subgraphs that share the same structure."
                     },
                     "key_minimum": -1,
                     "key_maximum": 2147483647,
@@ -82,8 +82,8 @@
                 "mg_copyin_upper_bound": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置合图大小。该参数控制子图内搬运数据总量上界。当子图内数据搬运量大于该值则不再合并。",
+                        "en": "Graph merging parameter, used to configure the graph merging size. This parameter controls the upper limit of the total data transfer volume within a subgraph. Mergeing will not be performed if the data transfer volume within the subgraph exceeds this value."
                     },
                     "minimum": 0,
                     "maximum": 2147483647
@@ -91,8 +91,8 @@
                 "vec_nbuffer_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置相同结构AIV子图合并策略。该参数适用于结构相同的AIV子图合并，避免同一结构子图数过大并增大核内流水调度可能性。",
+                        "en": "Graph merging parameters, used to configure the merging strategy for AIV subgraphs with identical structures. This parameter applies to the merging of AIV subgraphs with identical structures, which prevents an excessive number of subgraphs of the same structure and increases the possibility of intra-core pipeline scheduling."
                     },
                     "minimum": 0,
                     "maximum": 2
@@ -101,8 +101,8 @@
                     "type": "object",
                     "typeHints": "intmap",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置相同结构AIV子图的合并数量。该参数适用于结构相同的AIV子图合并。",
+                        "en": "Graph merging parameter, used to configure the merging count of AIV subgraphs with identical structures. This parameter is applicable to the merging of AIV subgraphs that share the same structures."
                     },
                     "key_minimum": -1,
                     "key_maximum": 2147483647,
@@ -112,8 +112,8 @@
                 "mg_vec_parallel_lb": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "合图参数，用于配置相同结构AIV子图的最小并行度。当某个相同结构的子图数小于该值时不做合并。",
+                        "en": "Graph merging parameters, used to configure the minimum parallelism of AIV subgraphs with identical structures. Merging will not be performed when the number of subgraphs with the same structure is less than this value."
                     },
                     "minimum": 1,
                     "maximum": 48
@@ -130,8 +130,8 @@
                 "pg_skip_partition": {
                     "type": "boolean",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "是否跳过子图切分过程。当值为True时，将完整的计算图作为单一子图，不进行切分。当值为False时，进行子图切分。",
+                        "en": "Whether to skip the subgraph partitioning process. When the value is True, the complete computation graph is treated as a single subgraph without partitioning; when the value is False, subgraph partitioning is performed."
                     }
                 },
                 "copyout_resolve_coalescing": {
@@ -146,8 +146,8 @@
                 "sg_set_scope": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "手动控制合图参数。将operation赋予特定的scopeId，若相邻的operation具有相同的非-1的scopeId，则会被强制合并在一个子图之中，并且这个子图不会与其他子图合并。",
+                        "en": "Parameter for manual control of graph merging. Assign a specific scopeId to an operation; if adjacent operations have the same non-1 scopeId, they will be forcibly merged into one subgraph, and this subgraph will not be merged with any other subgraphs."
                     },
                     "minimum": -1,
                     "maximum": 2147483647
