@@ -670,7 +670,7 @@ void OpcodeManager::RegisterCommon() {
         {OP_ATTR_PREFIX + "atomic_add", OpAttributeKey::inputCombineAxis, OpAttributeKey::excludeBufferReuse});
     RegisterInfo(Opcode::OP_CALL, OpCoreType::ANY, "CALL", {}, {}, {}, OpCalcType::SYS);
     RegisterInfo(Opcode::OP_PRINT, OpCoreType::ANY, "OP_DUMP", {}, {}, {}, OpCalcType::SYS, {});
-    RegisterInfo(Opcode::OP_CALL_NOT_EXPAND, OpCoreType::ANY, "CALL_NOT_EXPAND", {}, {}, {}, OpCalcType::SYS);
+    RegisterInfo(Opcode::OP_BLOCK_CALL, OpCoreType::ANY, "BLOCK_CALL", {}, {}, {}, OpCalcType::SYS);
     RegisterInfo(Opcode::OP_FUSED_OP, OpCoreType::AIV, "FUSED_OP", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB}, {"TileOp::fusedOP", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::BROADCAST);
     RegisterInfo(Opcode::OP_VLD, OpCoreType::ANY, "VLD", {}, {}, {}, OpCalcType::MOVE_IN);

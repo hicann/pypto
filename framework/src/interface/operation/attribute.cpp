@@ -351,7 +351,7 @@ std::vector<int64_t> CallOpAttribute::GetLinearImmediateArgList(int begin, int e
     std::vector<int64_t> result;
 
     auto &linearArgList = GetLinearArgList();
-    for (int i = begin; i < end; i++) {
+    for (int i = begin; i < end && i < static_cast<int>(linearArgList.size()); i++) {
         if (linearArgList[i].IsImmediate()) {
             result.push_back(linearArgList[i].Concrete());
         } else {

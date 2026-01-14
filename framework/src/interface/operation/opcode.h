@@ -146,7 +146,7 @@ enum class Opcode {
     OP_LOAD,
     // Special
     OP_CALL,
-    OP_CALL_NOT_EXPAND,
+    OP_BLOCK_CALL,
     OP_PRINT,
     OP_NOP,
 

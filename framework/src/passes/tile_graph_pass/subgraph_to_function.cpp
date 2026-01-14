@@ -23,6 +23,9 @@
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "ir/program.h"
+#include "ir/function.h"
+
 
 #define MODULE_NAME "SubgraphToFunction"
 
@@ -32,7 +35,80 @@ void SubgraphToFunction::Init() {
     viewToCopyInMapping_.clear();
 }
 
+Function* SubgraphToFunction::CreateRootFunc(npu::tile_fwk::Function &function) {
+    if (function.rootFunc_ != nullptr) {
+        return function.rootFunc_;
+    }
+    auto rootName = npu::tile_fwk::Function::CreateRootRawName(function.GetRawName());
+    npu::tile_fwk::Program::GetInstance().BeginFunction(rootName, function.GetFunctionType(), GraphType::EXECUTE_GRAPH);
+    auto rootFunc = npu::tile_fwk::Program::GetInstance().GetCurrentFunction();
+    rootFunc->SetParent(nullptr);
+    rootFunc->SetDynloopAttribute(function.GetDynloopAttribute());
+    for (auto &tensor: function.outCasts_) {
+        auto newOutcast = tensor->Clone(*rootFunc);
+        rootFunc->outCasts_.push_back(newOutcast);
+        // update outcast
+        auto it = function.outIncastLinkMap.find(tensor->tensor);
+        if (it != function.outIncastLinkMap.end()) {
+            rootFunc->outIncastLinkMap[newOutcast->tensor] = it->second;
+        }
+    }
+
+    for (auto &tensor: function.inCasts_) {
+        auto newIncast = tensor->Clone(*rootFunc);
+        rootFunc->inCasts_.push_back(newIncast);
+        //update rootFunc incast
+        for (auto it : rootFunc->outIncastLinkMap) {
+            if (it.second == tensor->tensor) {
+                rootFunc->outIncastLinkMap[it.first] = newIncast->tensor;
+            }
+        }
+    }
+    APASS_LOG_DEBUG_F(Elements::Function, "root name is %s", rootName.c_str());
+    auto rootEndResult = npu::tile_fwk::Program::GetInstance().EndFunction(rootName, false);
+    APASS_LOG_DEBUG_F(Elements::Function, "Done EndFunction of root name is %s", rootName.c_str());
+
+    function.rootFunc_ = rootFunc;
+    return rootFunc;
+}
+
+Status SubgraphToFunction::HandleBlockCall(Function &function) {
+    APASS_LOG_DEBUG_F(Elements::Function, "Enter HandleBlockCall by function %s", function.GetMagicName().c_str());
+    // 1. Create a root function in tile graph
+    auto rootFunc = CreateRootFunc(function);
+    ASSERT(rootFunc != nullptr) << "Failed to create root function!";
+    rootFunc->programModule_ = function.programModule_;
+    std::cout << *(rootFunc->programModule_) << std::endl;
+    for (auto &oriCallOp : function.Operations(false)) {
+        APASS_LOG_DEBUG_F(Elements::Function, "Try handle block callop %d", oriCallOp.GetOpMagic());
+        ASSERT(oriCallOp.GetOpcode() == Opcode::OP_BLOCK_CALL) << "oriCallOp is invalid";
+        // 2. Turn each function in program module into a CallOp into rootFunc
+        FunctionCallArgs args;
+        for (auto &outTensor : oriCallOp.GetOOperands()) {
+            args.oOperands.emplace_back(outTensor->Clone(*rootFunc));
+        }
+        for (auto &inTensor : oriCallOp.GetIOperands()) {
+            args.iOperands.emplace_back(inTensor->Clone(*rootFunc));
+        }
+        auto &callOpInRoot = rootFunc->AddRawOperation(npu::tile_fwk::Opcode::OP_CALL, 
+            args.iOperands, args.oOperands, false);
+        // 2.1 TODO NormalizeCoa
+
+        // 2.2 Create Call op attribute
+        auto oriCallOpAttr = std::static_pointer_cast<CallOpAttribute>(oriCallOp.GetOpAttribute());
+        auto opAttribute = std::make_shared<CallOpAttribute>(oriCallOp.GetCalleeHash(), oriCallOpAttr->GetArgList(), 
+            rootFunc->programModule_->GetFunctions().back()->GetName().c_str());
+        callOpInRoot.SetOpAttribute(opAttribute);
+        callOpInRoot.SetOpOffset(args.iOpAttrOffset, args.oOpAttrOffset);
+    }
+    return SUCCESS;
+}
+
 Status SubgraphToFunction::RunOnFunction(Function &function) {
+    if (function.programModule_ != nullptr) {
+        // Now we do not support mix-programing by block and tensor.
+        return HandleBlockCall(function);
+    }
     /* 需要将所有缓存在类成员的信息清零 */
     Init();
 

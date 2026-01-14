@@ -383,6 +383,7 @@ public:
                 ASSERT(std::dynamic_pointer_cast<AssembleOpAttribute>(opAttribute_) != nullptr ||
                        std::dynamic_pointer_cast<CopyOpAttribute>(opAttribute_) != nullptr);
                 break;
+            case Opcode::OP_BLOCK_CALL:
             case Opcode::OP_CALL: {
                 ASSERT(std::dynamic_pointer_cast<CallOpAttribute>(opAttribute_) != nullptr);
                 break;
@@ -414,7 +415,7 @@ public:
     }
 
     const FunctionHash &GetCalleeHash() const {
-        ASSERT(IsCall() || opcode_ == Opcode::OP_CALL_NOT_EXPAND);
+        ASSERT(IsCall() || opcode_ == Opcode::OP_BLOCK_CALL);
         auto callop = std::dynamic_pointer_cast<CallOpAttribute>(opAttribute_);
         return callop->GetCalleeHash();
     }

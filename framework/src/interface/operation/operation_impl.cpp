@@ -1595,6 +1595,12 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
             TiledViewTypeOperation(function, tileShape, iOperand[0], oOperand[0]);
             break;
         }
+        case Opcode::OP_BLOCK_CALL: {
+            auto &newOp = function.AddRawOperation(Opcode::OP_BLOCK_CALL, iOperand, oOperand, true);
+            newOp.SetOpAttribute(op.GetOpAttribute());
+            newOp.SetAttr(OpAttributeKey::dontTouch, true);
+            break;
+        }
         default: {
             ASLOGE("Unsupported opcode %d, opmagic is %d", static_cast<int>(opCode), op.GetOpMagic());
             ASSERT(false) << "Unsupported opcode " << static_cast<int>(opCode) << ", opmagic is " << op.GetOpMagic();

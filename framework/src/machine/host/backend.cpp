@@ -32,6 +32,8 @@
 #include "machine/compile/compile_control_bin.h"
 #include "tilefwk/comm_group_recorder.h"
 #include "passes/pass_mgr/pass_manager.h"
+#include "ir/program.h"
+#include "ir/function.h"
 #include "tilefwk/op_registry.h"
 #include <dlfcn.h>
 
@@ -210,6 +212,9 @@ static void FindAllExpression(FunctionCache &cache, Linker &linker, Function *fu
             }
             auto hash = callopAttr->GetCalleeHash();
             Function *leafFunc = cache.GetCacheFunction(hash);
+            if (leafFunc == nullptr) {
+                continue;
+            }
             FindAllExpression(cache, linker, leafFunc);
         }
         for (auto &incast : func->inCasts_) {
@@ -349,8 +354,8 @@ static void SimplifySlots(DyndevFunctionAttribute *attr, std::unordered_map<int,
 
         ASSERT(inoutLink.ioslotDict.count(devTile))<<"Function pointer "<<devTile->GetMagicName()<<" not found in ioslotDict";
         IncastOutcastSlot &ioslot = inoutLink.ioslotDict[devTile];
-
         for (auto &outcastSlots : ioslot.outcastSlot) {
+            ALOG_ERROR_F("outcastSlots size is %zu for function %s", outcastSlots.size(), devTile->GetMagicName().c_str());
             ASSERT(!outcastSlots.empty()) << "devTile: " << devTile->GetMagicName();
             bool outcastSlotFound = false;
             for (auto &outcastSlot : outcastSlots) {
@@ -667,8 +672,10 @@ std::vector<SymbolicExpressionTable *> GetAllExpressionTable(DyndevFunctionAttri
 }
 
 static void ConstructCodeInfo(struct EncodeDevAscendFunctionParam &encodeDevAscendFunctionParam,
-    std::map<uint64_t, Function *> &leafDict, std::shared_ptr<DyndevFunctionAttribute> attr) {
-    attr->cceCodeInfo.resize(leafDict.size() + 1);
+    std::map<uint64_t, Function *> &leafDict,
+    std::map<uint64_t, std::shared_ptr<pto::Function>> irLeafDict,
+     std::shared_ptr<DyndevFunctionAttribute> attr) {
+    attr->cceCodeInfo.resize(leafDict.size() + irLeafDict.size() + 1);
     /* cceIdx 0 for dummy callop */
     attr->cceCodeInfo[0].coreType = static_cast<uint32_t>(CoreType::HUB);
     attr->cceCodeInfo[0].psgId = 0;
@@ -679,7 +686,6 @@ static void ConstructCodeInfo(struct EncodeDevAscendFunctionParam &encodeDevAsce
     for (auto &[hash, leaf] : leafDict) {
       auto leafFuncAttr = leaf->GetLeafFuncAttribute();
       ASSERT(leafFuncAttr != nullptr)<<"leafFuncAttr is null\n";
-
       encodeDevAscendFunctionParam.calleeHashIndexDict[hash] = leafIndex;
       attr->devLeafIndex2Hash[leafIndex] = hash;
       ALOG_INFO("Dyndev.codegen: [", leafIndex, "] hash=", hash, " binpath=", leafFuncAttr->binPath);
@@ -694,6 +700,15 @@ static void ConstructCodeInfo(struct EncodeDevAscendFunctionParam &encodeDevAsce
       attr->cceCodeInfo[leafIndex].mixResourceType = static_cast<uint32_t>(leafFuncAttr->mixResourceType);
 #endif
       leafIndex++;
+    }
+
+    for (auto &[hash, leaf] : irLeafDict) {
+        encodeDevAscendFunctionParam.calleeHashIndexDict[hash] = leafIndex;
+        attr->devLeafIndex2Hash[leafIndex] = hash;
+        attr->cceCodeInfo[leafIndex].coreType = static_cast<uint32_t>(CoreType::HUB); // TODO 补充leafFunctionAttribute
+        attr->cceCodeInfo[leafIndex].psgId = leaf->GetID();
+        attr->cceCodeInfo[leafIndex].funcHash = hash;
+        leafIndex++;
     }
     encodeDevAscendFunctionParam.cceCodeInfoList = attr->cceCodeInfo;
     return;
@@ -803,7 +818,6 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
 
     std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();
     ASSERT(attr != nullptr)<<"DyndevFunctionAttribute is nullptr\n";
-
     Linker linker(attr->symbolTable, attr->funcGroup, attr->exprTableDictGroup);
     FindAllExpression(cache, linker, function);
 
@@ -879,8 +893,8 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
         attr->devControlFlowBinary = std::vector<uint8_t>{0xd4, 0x20, 0x00, 0x00};
     }
     AlignUpTo(attr->devControlFlowBinary, 0x8, 0);
-
     std::map<uint64_t, Function *> leafDict;
+    std::map<uint64_t, std::shared_ptr<pto::Function>> irLeafDict;
     for (auto &devRoot : attr->funcGroup.devRootList) {
         Function *devTile = attr->rootTileDict[devRoot];
         config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, devTile->paramConfigs_.dynamicAlignedOps);
@@ -898,10 +912,23 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
                 ALOG_ERROR(" Duplicate func hash ", hash, " name ", leaf->GetRawName());
             }
         }
+        if (devRoot->programModule_ != nullptr) {
+            auto callOps = devRoot->Operations();
+            for (size_t i = 0; i < devRoot->programModule_->GetFunctions().size(); i++) {
+                auto hash = callOps[i].GetCalleeHash().GetHash();
+                auto leaf = devRoot->programModule_->GetFunctions()[i];
+                if (!irLeafDict.count(hash)) {
+                    irLeafDict[hash] = leaf;
+                    ALOG_INFO("Dyndev.codegen: ", leaf->GetName());
+                } else {
+                    ALOG_ERROR("Duplicate func hash ", hash, " name ", leaf->GetName());
+                }
+            }
+        }
     }
 
     struct EncodeDevAscendFunctionParam encodeDevAscendFunctionParam = {};
-    ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, attr);
+    ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, irLeafDict, attr);
 
     encodeDevAscendFunctionParam.inoutLink = &attr->inoutLink;
 
@@ -927,7 +954,6 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
         Function *devTile = attr->rootTileDict[devRoot];
         ASSERT(attr->inoutLink.ioslotDict.count(devTile))<<"devTile not found in rootTileDict";
         IncastOutcastSlot *slot = &attr->inoutLink.ioslotDict[devTile];
-
         encodeDevAscendFunctionParam.symbolTable = linker.GetSymbolTable();
         if (linker.GetExpressionTableDictGroup().devRootCoaDict.count(devRoot) != 0) {
             encodeDevAscendFunctionParam.expressionTable = &linker.GetExpressionTableDictGroup().devRootCoaDict.find(devRoot)->second;
@@ -935,10 +961,8 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
         encodeDevAscendFunctionParam.devRoot = devRoot;
         encodeDevAscendFunctionParam.slot = slot;
         EncodeOutcastProperty(encodeDevAscendFunctionParam, &attr->inoutLink, slot);
-
         uint64_t size = 0;
         EncodeDevAscendFunction(function, encodeDevAscendFunctionParam, size, nullptr);
-
         attr->devEncodeList[devRootKey].resize(size);
         DevAscendFunction *funcBin = reinterpret_cast<DevAscendFunction *>(&attr->devEncodeList[devRootKey][0]);
         funcBin->rootHash = devRoot->GetFunctionHash().GetHash();
@@ -962,7 +986,6 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
             attr->startArgsSymbolHandlerList.emplace_back(symbolHandlerIndexDict.find(name)->second, index);
         }
     }
-
     // save dev prog binary
     SetDyndevProgBinary(function);
 }

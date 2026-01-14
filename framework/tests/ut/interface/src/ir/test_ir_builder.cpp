@@ -17,8 +17,7 @@
 #include <memory>
 #include <unordered_set>
 #include "gtest/gtest.h"
-
-
+#include "ir/block_call.h"
 #include "ir/builder/ir_builder.h"
 #include "ir/builder/ir_context.h"
 #include "ir/opcode.h"
@@ -27,7 +26,9 @@
 #include "ir/statement.h"
 #include "ir/value.h"
 
-
+#include "tilefwk/tilefwk.h"
+#include "interface/inner/tilefwk.h"
+using namespace npu::tile_fwk;
 namespace pto{
 
 TEST(IRTEST, TestBuilder) {
@@ -216,4 +217,48 @@ TEST(IRTEST, TestControlFlow) {
     std::cout << *module << std::endl;
 }
 
+std::shared_ptr<Function> TestBlockFunction(
+    const std::vector<TileValuePtr> &inputArgs,
+    const std::vector<TileValuePtr> &outputArgs,
+    [[maybe_unused]]const std::vector<ScalarValuePtr> &indices) 
+{
+    IRBuilderContext ctx;
+    IRBuilder builder;
+    FunctionSignature sig = FunctionSignature(inputArgs, outputArgs);
+    sig.results.push_back(std::make_shared<ScalarValue>(DataType::INT32));
+
+    auto func = builder.CreateFunction("test_all_ops", FunctionKind::ControlFlow, sig);
+    builder.EnterFunctionBody(ctx, func);
+
+    // tensorAdd = add(input[0], input[1])
+    auto tileAdd = builder.CreateTile(ctx, inputArgs[0]->GetShape(), DataType::FP32, "tensorAdd");
+    auto addOp = builder.CreateBinaryOp(Opcode::OP_ADD, inputArgs[0], inputArgs[1], tileAdd);
+    builder.Emit(ctx, addOp);
+
+    auto divOp = builder.CreateBinaryOp(Opcode::OP_DIV, inputArgs[0], tileAdd, outputArgs[0]);
+    builder.Emit(ctx, divOp);
+
+    builder.CreateReturn(ctx, {});
+
+    ctx.PopScope();
+
+    return func;
+}
+
+TEST(IRTEST, TestDynControlFlow)
+{
+    constexpr int LOOP_ITERATION = 8;
+    std::vector<int64_t> shape = {64, 64 * LOOP_ITERATION};
+    std::vector<int64_t> shapeTemp = {64, 64};
+    Tensor inputA(DT_FP32, shape, "A");
+    Tensor inputB(DT_FP32, shape, "B");
+    Tensor output(DT_FP32, shape, "C");
+
+    std::string funcName = "TestNewIR";
+    FUNCTION(funcName, {inputA, inputB}, {output}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, npu::tile_fwk::LoopRange(LOOP_ITERATION)) {
+            CallBlock(TestBlockFunction, {inputA, inputB}, {output}, {i});
+        }
+    }
+}
 } // namespace pto
