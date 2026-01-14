@@ -43,14 +43,13 @@ function(PTO_Fwk_GTest_GenerateCoverage)
         find_program(LCOV lcov REQUIRED)
         get_filename_component(GenCoveragePy ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/gen_coverage.py REALPATH)
         get_filename_component(GenCoverageDataDir "${PTO_FWK_BIN_ROOT}" REALPATH)
-        set(_Args "-s=${PTO_FWK_SRC_ROOT}" "-c=${GenCoverageDataDir}")
+        set(_Args "-s=${PTO_FWK_SRC_ROOT}" "-d=${GenCoverageDataDir}")
 
         get_target_property(GTest_GTest_Inc     GTest::gtest           INTERFACE_INCLUDE_DIRECTORIES)
         get_target_property(GTest_GTestMain_Inc GTest::gtest_main      INTERFACE_INCLUDE_DIRECTORIES)
         get_target_property(Json_Inc            json                   INTERFACE_INCLUDE_DIRECTORIES)
         set(Filter_Dirs
                 ${PTO_FWK_SRC_ROOT}/framework/tests
-                ${PTO_FWK_SRC_ROOT}/third_party
                 ${GTest_GTest_Inc}
                 ${GTest_GTestMain_Inc}
                 ${Json_Inc}
