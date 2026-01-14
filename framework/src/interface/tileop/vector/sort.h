@@ -18,6 +18,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#define OP_TILE_OP_BITSORT TBitSort
 template <int axis, int offset, int isLargest, typename T0, typename T1>
 TILEOP void TBitSort(T0 dst, T1 src) {
     constexpr size_t expectSize = 5;
@@ -96,6 +97,7 @@ TILEOP void TBitSort(T0 dst, T1 src) {
     }
 }
 
+#define OP_TILE_OP_MRGSORT TMrgSort
 template <int axis, int k, int isLargest, typename T0, typename T1>
 TILEOP void TMrgSort(T0 dst, T1 src) {
     constexpr size_t expectSize = 5;
@@ -233,6 +235,7 @@ TILEOP void TMrgSort(T0 dst, T1 src) {
     }
 }
 
+#define OP_TILE_OP_TILEDMEGSORT TTiledMrgSort
 template <int k, int validBit, typename T0, typename T1, typename T2, typename T3, typename T4, typename T5>
 TILEOP void TTiledMrgSort(T0 dst, T1 src1, T2 src2, T3 src3, T4 src4, T5 tmp) {
     constexpr size_t expectSize = 5;

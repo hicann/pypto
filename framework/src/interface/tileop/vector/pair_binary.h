@@ -212,16 +212,19 @@ TILEOP void PairBinaryCompute(T0 dst, T1 src0, T2 src1) {
     }
 }
 
+#define OP_TILE_OP_PAIRSUM TPairSum
 template <typename T0, typename T1, typename T2>
 TILEOP void TPairSum(T0 dst, T1 src0, T2 src1) {
     PairBinaryCompute<PairBinaryOp::ADD>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_PAIRMAX TPairMax
 template <typename T0, typename T1, typename T2>
 TILEOP void TPairMax(T0 dst, T1 src0, T2 src1) {
     PairBinaryCompute<PairBinaryOp::MAX>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_PAIRMIN TPairMin
 template <typename T0, typename T1, typename T2>
 TILEOP void TPairMin(T0 dst, T1 src0, T2 src1) {
     PairBinaryCompute<PairBinaryOp::MIN>(dst, src0, src1);

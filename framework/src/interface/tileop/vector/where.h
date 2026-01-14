@@ -52,6 +52,7 @@ TILEOP void ProcessBool(uint64_t vcmpBitResult, uint64_t condition,
     }
 }
 
+#define OP_TILE_OP_WHERE_TT TWhere
 template <typename TDst, typename TTmp, typename TCond, typename TSrc0, typename TSrc1>
 TILEOP void TWhere(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 src1) {
     unsigned elementsPerCount = 1024;

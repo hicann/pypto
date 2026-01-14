@@ -18,6 +18,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#define OP_TILE_OP_EXPAND TExpand
 template <unsigned axis, typename T0, typename T1>
 TILEOP void TExpand(T0 dst, T1 src) {
     constexpr size_t expectSize = 5;

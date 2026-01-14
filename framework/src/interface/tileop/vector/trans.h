@@ -18,6 +18,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#define OP_TILE_OP_TRANSPOSE_VNCHWCONV TTrans
 template <typename T0, typename T1, typename T2>
 TILEOP void TTrans(T0 dst, T1 src, T2 tmp) {
     constexpr size_t expectSize = 5;

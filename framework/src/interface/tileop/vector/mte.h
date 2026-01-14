@@ -18,6 +18,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#define OP_TILE_OP_UB_COPY_IN TLoad
 template <typename T, typename U, typename C>
 __aicore__ inline void TLoad(T dst, U src, C coordinate) {
     if constexpr (T::FORMAT == Hardware::UB && U::FORMAT == Hardware::GM) {
@@ -58,6 +59,8 @@ __aicore__ inline void TLoad(T dst, U src, C coordinate) {
         }
     }
 }
+
+#define OP_TILE_OP_UB_COPY_OUT TStore
 template <typename T, typename U, typename C>
 __aicore__ inline void TStore(T dst, U src, C coordinate) {
     if constexpr (U::FORMAT == Hardware::UB && T::FORMAT == Hardware::GM) {
@@ -177,12 +180,14 @@ __aicore__ inline void CallTransMove(GM gm, UB ub, C coordinate) {
         srcShape, gmShape4, gmStride, ubStride, gm.GetAddr(), gmOffset, ub.GetAddr());
 }
 
+#define OP_TILE_OP_TRANSPOSE_MOVEIN TTransMoveIn
 template <unsigned axis0, unsigned axis1, typename DST, typename SRC, typename C>
 __aicore__ inline void TTransMoveIn(DST dst, SRC src, C coordinate) {
     static_assert(DST::FORMAT == Hardware::UB && SRC::FORMAT == Hardware::GM);
     CallTransMove<axis0, axis1, true>(src, dst, coordinate);
 }
 
+#define OP_TILE_OP_TRANSPOSE_MOVEOUT TTransMoveOut
 template <unsigned axis0, unsigned axis1, typename DST, typename SRC, typename C>
 __aicore__ inline void TTransMoveOut(DST dst, SRC src, C coordinate) {
     static_assert(DST::FORMAT == Hardware::GM && SRC::FORMAT == Hardware::UB);

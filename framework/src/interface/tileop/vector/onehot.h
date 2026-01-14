@@ -36,6 +36,7 @@ PTO_INST void TZEROS(TileData &dst) {
     }
 }
 
+#define OP_TILE_OP_ONEHOT TOneHot
 template <typename DstTensor, typename SrcTensor>
 TILEOP void TOneHot(DstTensor dst,SrcTensor src) {
     constexpr auto dstShapeSize = Std::tuple_size<typename DstTensor::Shape>::value;

@@ -18,6 +18,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#define OP_TILE_OP_CAST TCast
 template <unsigned Mode, typename T0, typename T1>
 TILEOP void TCast(T0 dst, T1 src) {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;

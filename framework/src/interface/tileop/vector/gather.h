@@ -17,6 +17,7 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#define OP_TILE_OP_GATHER_ELEMENT TgatherElement
 template <int axis, typename T0, typename T1, typename T2, typename T3>
 TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp) {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;

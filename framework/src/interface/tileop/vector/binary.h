@@ -80,31 +80,37 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1) {
     }
 }
 
+#define OP_TILE_OP_ADD TAdd
 template <typename T0, typename T1, typename T2>
 TILEOP void TAdd(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::ADD>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_SUB TSub
 template <typename T0, typename T1, typename T2>
 TILEOP void TSub(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::SUB>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_MUL TMul
 template <typename T0, typename T1, typename T2>
 TILEOP void TMul(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::MUL>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_DIV TDiv
 template <typename T0, typename T1, typename T2>
 TILEOP void TDiv(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::DIV>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_MAX TMax
 template <typename T0, typename T1, typename T2>
 TILEOP void TMax(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::MAX>(dst, src0, src1);
 }
 
+#define OP_TILE_OP_MIN TMin
 template <typename T0, typename T1, typename T2>
 TILEOP void TMin(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::MIN>(dst, src0, src1);
