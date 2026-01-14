@@ -84,7 +84,8 @@ void bind_controller_config(py::module &m) {
         }, py::arg("label"), py::arg("filename"), py::arg("lineno"));
 
     m.def("IsVerifyEnabled", &calc::IsVerifyEnabled);
-    m.def("ResetLog", []() { ConfigManager::Instance().ResetLog(); });
+    m.def("LogTopFolder", []() { return py::cast(ConfigManager::Instance().LogTopFolder()); });
+    m.def("ResetLog", [](const std::string &path) { ConfigManager::Instance().ResetLog(path); });
 }
 
 

@@ -133,17 +133,12 @@ T GetOption(const std::string &key) {
     return val;
 }
 
-
-
 std::shared_ptr<ConfigScope> Duplicate();
 void Restore(std::shared_ptr<ConfigScope> config);
 
 PrintOptions &GetPrintOptions();
 
-template <typename T>
-void SetRunDataOption(const std::string &key, T &&value) {
-    experimental::SetOption("rundata." + key, value);
-}
+void SetRunDataOption(const std::string &key, const std::string &value);
 
 using ValueType = std::variant<bool, int64_t, std::string, std::vector<int64_t>,
                                std::vector<std::string>, std::map<int64_t, int64_t>>;
