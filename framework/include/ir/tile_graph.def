@@ -127,12 +127,11 @@ DEFOP(
     INPUT(Tile, Input),
     INPUT(ScalarList, Offsets),
     OUTPUT(Tile, Output),
-    // 0:NZ2ND, 1:NZ2NZ
-    ATTR(int, CopyOutMode, 0),
     // 0:no_relu, 1:relue
     ATTR(int, ReluMode, 0),
     // 0:no_acc, 1:enable_acc
-    ATTR(bool, EnableGmAcc, false)
+    ATTR(bool, EnableGmAcc, false),
+    ATTR(int, QuantScaleValue, 0)
 )
 
 DEFOP(
