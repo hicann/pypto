@@ -88,17 +88,17 @@ TEST_F(TestConfigManager, Dump) {
     {
         cm.BeginScope("scope2.1", {{"debug.print.linewidth", 120L}});
         auto scope2 = cm.CurrentScope();
-        auto linewidth = AnyCast<int64_t>(scope2->GetConfig("debug.print.linewidth"));
+        auto linewidth = AnyCast<int64_t>(scope2->GetAnyConfig("debug.print.linewidth"));
         EXPECT_EQ(linewidth, 120);
-        auto edgeitems = AnyCast<int64_t>(scope2->GetConfig("debug.print.edgeitems"));
+        auto edgeitems = AnyCast<int64_t>(scope2->GetAnyConfig("debug.print.edgeitems"));
         EXPECT_EQ(edgeitems, 20);
         cm.EndScope();
     }
 
     auto scope = cm.CurrentScope();
-    auto linewidth = AnyCast<int64_t>(scope->GetConfig("debug.print.linewidth"));
+    auto linewidth = AnyCast<int64_t>(scope->GetAnyConfig("debug.print.linewidth"));
     EXPECT_EQ(linewidth, 80);
-    auto edgeitems = AnyCast<int64_t>(scope->GetConfig("debug.print.edgeitems"));
+    auto edgeitems = AnyCast<int64_t>(scope->GetAnyConfig("debug.print.edgeitems"));
     EXPECT_EQ(edgeitems, 20);
     cm.EndScope();
 

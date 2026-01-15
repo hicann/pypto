@@ -36,7 +36,7 @@ public:
      * \brief Get the config value with the specific key. throw runtime_error if
      * the key is not found.
      */
-    const Any &GetConfig(const std::string &key) const;
+    const Any &GetAnyConfig(const std::string &key) const;
 
     /**
      * \brief Returns a map of all configuration key-value pairs.
@@ -101,7 +101,7 @@ public:
      * \brief Retrieves the CubeTile configuration.
      */
     CubeTile GetCubeTile() const {
-        const Any& value = GetConfig("cube_tile_shapes");
+        const Any& value = GetAnyConfig("cube_tile_shapes");
         return AnyCast<CubeTile>(value);
     }
 
@@ -109,18 +109,16 @@ public:
      * \brief Retrieves the VecTile configuration as a VecTile structure.
      */
     VecTile GetVecTile() const {
-        const Any& value = GetConfig("vec_tile_shapes");
-        std::vector<int64_t> vecValue = AnyCast<std::vector<int64_t>>(value);
-        VecTile vectile;
-        vectile.tile = vecValue;
-        return vectile;
-    }
+        const Any& value = GetAnyConfig("vec_tile_shapes");
+
+        return VecTile{AnyCast<std::vector<int64_t>>(value)};
+}
 
     /**
      * \brief Retrieves the matrix size configuration as a vector of integers.
      */
     std::vector<int64_t> GetMatrixSize() const {
-        const Any& value = GetConfig("matrix_size");
+        const Any& value = GetAnyConfig("matrix_size");
         return AnyCast<std::vector<int64_t>>(value);
     }
 
@@ -172,12 +170,12 @@ public:
     template <typename T>
     T GetConfigAllType(const std::string &key) const {
         if constexpr (std::is_same_v<T, bool>) {
-            return AnyCast<bool>(GetConfig(key));
+            return AnyCast<bool>(GetAnyConfig(key));
         } else if constexpr (std::is_integral_v<T>) {
-            int64_t tmp = AnyCast<int64_t>(GetConfig(key));
+            int64_t tmp = AnyCast<int64_t>(GetAnyConfig(key));
             return static_cast<T>(tmp);
         } else {
-            return AnyCast<T>(GetConfig(key));
+            return AnyCast<T>(GetAnyConfig(key));
         }
     }
 
@@ -187,7 +185,6 @@ private:
     friend struct ConfigManagerImpl;
     std::shared_ptr<ConfigScope> Clone();
 
-private:
     std::shared_ptr<ConfigScope> parent_;
     std::list<ConfigScope *> children_;
     std::map<std::string, Any> values_;

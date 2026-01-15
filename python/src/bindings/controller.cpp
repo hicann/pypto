@@ -324,9 +324,9 @@ py::object AnyToPyObject(const Any &val) {
 
 void bind_controller_scope_classes(py::module &m) {
     py::class_<ConfigScope, std::shared_ptr<ConfigScope>>(m, "ConfigScope")
-        .def("GetConfig",
+        .def("GetAnyConfig",
             [](const ConfigScope &scope, const std::string &key) -> py::object {
-                return AnyToPyObject(scope.GetConfig(key));
+                return AnyToPyObject(scope.GetAnyConfig(key));
             },
             py::arg("key"))
         .def("GetAllConfig",
