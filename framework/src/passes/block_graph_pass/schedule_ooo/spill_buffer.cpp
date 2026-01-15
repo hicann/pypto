@@ -125,7 +125,7 @@ void OoOScheduler::UpdateOpAttr(
             OpImmediate::Specified(spillTensor->GetRawTensor()->GetDynRawShape())));
     } else if (op.GetOpcodeStr().find("ALLOC") == std::string::npos) {
         if (spillIssue->tileOp.GetOpcode() == Opcode::OP_COPY_IN) {
-            op.SetOpAttribute(spillIssue->tileOp.GetOpAttribute());
+            op.SetOpAttribute(spillIssue->tileOp.GetOpAttribute()->Clone());
             op.inParamLocation_ = spillIssue->tileOp.inParamLocation_;
         } else {
             op.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset),

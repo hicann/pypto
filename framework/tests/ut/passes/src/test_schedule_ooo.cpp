@@ -52,6 +52,7 @@ public:
     static void TearDownTestCase() {}
 
     void SetUp() override {
+        Program::GetInstance().Reset();
         Platform::Instance().ObtainPlatformInfo();
     }
     void TearDown() override {}
@@ -1318,7 +1319,7 @@ TEST_F(ScheduleOoOTest, TestScheduleMainLoopRearrangeL1) {
     for (auto moveOp : tensor1->GetConsumers()) {
         if (moveOp != copyin) {
             EXPECT_EQ(moveOp->GetOpcode(), Opcode::OP_COPY_IN);
-            EXPECT_EQ(moveOp->GetOpAttribute(), attr);
+            EXPECT_EQ(moveOp->GetOpAttribute()->Dump(), attr->Dump());
             break;
         }
     }

@@ -1117,7 +1117,7 @@ Status OoOScheduler::UpdateMemId(int oldMemId, int newMemId) {
 
 void OoOScheduler::UpdateMoveOpAttr(Operation &moveOp, Operation &occupyOp) {
     if (moveOp.GetOpcode() == Opcode::OP_COPY_IN && occupyOp.GetOpcode() == Opcode::OP_COPY_IN) {
-        moveOp.SetOpAttribute(occupyOp.GetOpAttribute());
+        moveOp.SetOpAttribute(occupyOp.GetOpAttribute()->Clone());
         moveOp.inParamLocation_ = occupyOp.inParamLocation_;
         moveOp.SetIOpAttrOffset(0, occupyOp.GetIOpAttrOffset(0));
     } else if (moveOp.GetOpcode() == Opcode::OP_ADDS) {

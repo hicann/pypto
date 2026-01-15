@@ -814,7 +814,7 @@ static void CompileControlFlow(const std::string &aicpuDirPath,
 
 static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[maybe_unused]] const std::string &ccePath,
                                   std::string &kernelPath) {
-    PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph");
+    ASSERT((PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph") == SUCCESS));
 
     std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();
     ASSERT(attr != nullptr)<<"DyndevFunctionAttribute is nullptr\n";
