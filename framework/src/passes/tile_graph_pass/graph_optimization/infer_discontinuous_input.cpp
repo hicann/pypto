@@ -16,6 +16,7 @@
 #include "infer_discontinuous_input.h"
 #include <queue>
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_check/infer_discontinuous_input_checker.h"
 
 #define MODULE_NAME "InferDiscontinuousInput"
 
@@ -37,7 +38,8 @@ Status InferDiscontinuousInput::RunOnFunction(Function &function) {
 }
 
 std::vector<std::pair<LogicalTensorPtr, Operation *>> GetInplacedTileTensors(LogicalTensorPtr targetTensor) {
-    std::set<Opcode> inplaceNodes{Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST};
+    std::unordered_set<Opcode> inplaceNodes{
+        Opcode::OP_VIEW, Opcode::OP_ASSEMBLE, Opcode::OP_RESHAPE, Opcode::OP_INDEX_OUTCAST};
     std::vector<std::pair<LogicalTensorPtr, Operation *>> inplacedTensor;
     for (auto &producer : targetTensor->GetProducers()) {
         if (inplaceNodes.count(producer->GetOpcode()) == 0) {
@@ -113,7 +115,7 @@ inline bool PerfectOffsetOverlap(std::vector<int> &rawTensorIds, std::vector<Sha
 }
 
 inline bool IsTraceableView(Operation* cur) {
-    auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(cur->GetOpAttribute().get());
+    auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(cur->GetOpAttribute());
     if (viewOpAttribute == nullptr) {
         return false;
     }
@@ -167,7 +169,7 @@ inline bool NoViewConflict(const std::vector<std::pair<LogicalTensorPtr, Operati
 
 inline std::vector<size_t> GetInputTileConflict(
     const std::vector<std::pair<LogicalTensorPtr, Operation*>> &inplaceTensors) {
-    std::vector<int> rawTensorIds;
+    std::vector<int> rawTensorMagics;
     std::vector<Shape> rawShapes;
     std::vector<Shape> shapes;
     std::vector<Offset> offsets;
@@ -179,23 +181,25 @@ inline std::vector<size_t> GetInputTileConflict(
             assembleCheck = false;
             break;
         }
-        rawTensorIds.push_back(pr.first->GetRawMagic());
-        rawShapes.push_back(pr.first->GetRawTensor()->GetRawShape());
-        shapes.push_back(pr.first->GetShape());
-        offsets.push_back(pr.first->GetOffset());
-        std::shared_ptr<AssembleOpAttribute> attr = std::static_pointer_cast<AssembleOpAttribute>(pr.second->GetOpAttribute());
+        std::shared_ptr<AssembleOpAttribute> attr =
+            std::dynamic_pointer_cast<AssembleOpAttribute>(pr.second->GetOpAttribute());
         if (attr == nullptr) {
             assembleCheck = false;
             break;
         }
         offsetTos.push_back(attr->GetToOffset());
+        rawTensorMagics.push_back(pr.first->GetRawMagic());
+        rawShapes.push_back(pr.first->GetRawTensor()->GetRawShape());
+        shapes.push_back(pr.first->GetShape());
+        offsets.push_back(pr.first->GetOffset());
     }
     std::vector<size_t> copyIdx;
     if (!assembleCheck) {
         return {};
     }
-    if (!(PerfectOffsetOverlap(rawTensorIds, rawShapes, shapes, offsets, offsetTos) && NoViewConflict(inplaceTensors)) &&
-            inplaceTensors.size() > 1) {
+    if (!(PerfectOffsetOverlap(rawTensorMagics, rawShapes, shapes, offsets, offsetTos) &&
+            NoViewConflict(inplaceTensors)) &&
+        inplaceTensors.size() > 1) {
         for (size_t i = 0; i < inplaceTensors.size(); i++) {
             copyIdx.push_back(i);
         }
@@ -370,6 +374,11 @@ Status InferDiscontinuousInput::InsertTensorCopy(Function &function) {
         }
     }
     return SUCCESS;
+}
+
+Status InferDiscontinuousInput::PostCheck(Function &function) {
+    InferDisContinuousInputChecker checker;
+    return checker.DoPostCheck(function);
 }
 } // namespace tile_fwk
 } // namespace npu
