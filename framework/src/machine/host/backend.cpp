@@ -695,10 +695,8 @@ static void ConstructCodeInfo(struct EncodeDevAscendFunctionParam &encodeDevAsce
       attr->cceCodeInfo[leafIndex].psgId = leaf->GetProgramId();
       attr->cceCodeInfo[leafIndex].funcHash = hash;
       attr->cceCodeInfo[leafIndex].aicpuLeafCode = leafFuncAttr->aicpuLeafCode;
-#ifdef SUPPORT_MIX_SUBGRAPH_SCHE
       attr->cceCodeInfo[leafIndex].wrapVecId = static_cast<int32_t>(leafFuncAttr->aivCore);
       attr->cceCodeInfo[leafIndex].mixResourceType = static_cast<uint32_t>(leafFuncAttr->mixResourceType);
-#endif
       leafIndex++;
     }
 

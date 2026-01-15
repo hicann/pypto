@@ -261,10 +261,8 @@ struct DevCceBinary {
     uint32_t coreType;
     uint32_t psgId;
     uint64_t funcHash;
-#ifdef SUPPORT_MIX_SUBGRAPH_SCHE
     int32_t wrapVecId {-1};
     uint32_t mixResourceType {0};
-#endif
 };
 static_assert(sizeof(DynFuncBin) == sizeof(DevCceBinary));
 

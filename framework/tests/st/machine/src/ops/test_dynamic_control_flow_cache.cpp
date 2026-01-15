@@ -296,7 +296,7 @@ static DeviceTensorData toTensorData(const std::shared_ptr<LogicalTensor> &t) {
 
 TEST_F(DynamicControlFlowCacheTest, PartialCache) {
     // cache at most 3 task
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 40000);
+    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 46000);
 
     // every task 4 root func
     config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_NUM_INITIAL, 0x4);

@@ -120,7 +120,7 @@ public:
         readyAivCoreFunctionQue_ = reinterpret_cast<ReadyCoreFunctionQueue *>(curDevTask_->readyAivCoreFunctionQue);
         readyAicpuFunctionQue_ = reinterpret_cast<ReadyCoreFunctionQueue *>(curDevTask_->readyAicpuFunctionQue);
         wrapManager_.Init(curDevTask_, coreRunReadyCnt_, runReadyCoreIdx_[CORE_IDX_AIV],
-            runReadyCoreIdx_[CORE_IDX_AIC], corePendReadyCnt_, aicValidNum_,
+            runReadyCoreIdx_[CORE_IDX_AIC], corePendReadyCnt_, pendingIds_.data(), runningIds_.data(), aicValidNum_,
             [&](CoreType coreType, int arg1, uint64_t arg2) {SendTaskToAiCore(coreType, arg1, arg2);});
     }
 
@@ -1319,6 +1319,7 @@ private:
         pendingResolveIndexList_.fill(0);
         taskDfxStatPos_.fill(REG_LOW_TASK_PING);
 
+        wrapManager_.InitArchInfo(deviceArgs->archInfo);
         if (deviceArgs->machineConfig != static_cast<uint8_t>(MachineScheduleConfig::DEFAULT_SCH)) {
             if (aicpuNum_ > 1) {
                 enableFairSch_ = static_cast<uint8_t>(deviceArgs->machineConfig) &

@@ -41,7 +41,6 @@ struct StaticReadyCoreFunctionQueue {
   size_t lock;
 };
 
-#ifdef SUPPORT_MIX_SUBGRAPH_SCHE
 struct WrapInfo {
     uint32_t wrapId;
     uint32_t aicCoreIdx;
@@ -60,7 +59,6 @@ struct WrapInfoQueue {
   size_t lock;
   uint64_t Size() { return tail - head;}
 };
-#endif
 
 inline void ReadyQueueLock(ReadyCoreFunctionQueue* rq) {
   while (!__sync_bool_compare_and_swap(&rq->lock, 0, 1)) {

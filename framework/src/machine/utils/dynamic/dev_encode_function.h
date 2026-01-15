@@ -88,7 +88,7 @@ struct DevAscendFunction {
     uint64_t duppedDataAllocSize_;
     uint64_t duppedDataCopySize_;
     DevLocalVector<uint8_t> duppedData_;
-#ifdef SUPPORT_MIX_SUBGRAPH_SCHE
+// wrap for mix subgraph schedule
 public:
     uint64_t wrapIdNum_{0};
     int *GetOpWrapListAddr() { return &At(opWrapList_, 0); }
@@ -96,7 +96,7 @@ public:
 private:
     DevLocalVector<int> opWrapList_;
     DevLocalVector<int> opWrapTaskNumList_;
-#endif
+
 public:
     // total memory requirement of non-root-incast/outcast raw tensors
     uint64_t rootInnerTensorWsMemoryRequirement{0};
@@ -759,9 +759,7 @@ private:
             const std::vector<int> &noSuccOpList,
             const std::unordered_map<Operation *, std::vector<int>> &copyOutResolveSuccIndexListDict,
             bool fillContent);
-#ifdef SUPPORT_MIX_SUBGRAPH_SCHE
     void InitWrapInfo(uintdevptr_t &initOffset, const OrderedSet<Operation *> &callList, bool fillContent);
-#endif
     void InitIncastOutcast(uintdevptr_t &initOffset, const std::vector<std::shared_ptr<LogicalTensor>> &incastTensorList,
         const std::vector<std::shared_ptr<LogicalTensor>> &outcastTensorList,
         const OrderedSet<std::shared_ptr<LogicalTensor>> &tlist,

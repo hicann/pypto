@@ -100,6 +100,8 @@ struct DeviceExecuteContext {
 
     int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false);
 
+    void ProcessControlFlowCacheRecord(DynDeviceTask *dynTask);
+
     schema::RUid GetRuid(uint64_t rootKey, bool afterAppend = false);
 
     int ControlFlowCacheStopCache(uint64_t rootKey);
