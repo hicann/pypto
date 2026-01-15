@@ -60,7 +60,7 @@ python3 examples/01_beginner/basic/basic_ops.py --run_mode sim
 ## 学习路径建议
 
 1. **第一阶段：夯实基础**
-   - [Hello World](hello_world/hello_world.py)
+   - [Hello World](00_hello_world/hello_world.py)
    - [01_beginner/basic](01_beginner/basic/README.md)
    - [01_beginner/compute](01_beginner/compute/README.md)
 
