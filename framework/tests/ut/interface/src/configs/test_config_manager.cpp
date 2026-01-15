@@ -118,7 +118,7 @@ constexpr const char *ERROR_KEY_WORD = "its value doesn't within the value range
 template <typename T>
 bool RangeTest(
     const std::unordered_map<std::string, std::vector<T>> &input,
-    void (*SetFunc)(const std::string &, T &&),
+    void (*SetFunc)(const std::string &, const T &),
     std::string group) {
     for (auto &[key, val] : input) {
         for (auto it : val) {
@@ -152,7 +152,7 @@ TEST_F(TestConfigManager, NormalRuntimeTest) {
         {STITCH_FUNCTION_SIZE, {1, 65535}},
         {CFG_RUN_MODE, {0, 1}},
     };
-    bool ret = RangeTest<int64_t>(input, &(config::SetOption), "runtime");
+    bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "runtime");
     EXPECT_EQ(ret, true);
 }
 
@@ -169,7 +169,7 @@ TEST_F(TestConfigManager, AbnormalRuntimeTest) {
         {STITCH_FUNCTION_SIZE, {0, 65536}},
         {CFG_RUN_MODE, {-1, 2}},
     };
-    bool ret = RangeTest<int64_t>(input, &(config::SetOption), "runtime");
+    bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "runtime");
     EXPECT_EQ(ret, true);
 }
 
@@ -186,7 +186,7 @@ TEST_F(TestConfigManager, NormalPassTest) {
         {SG_CUBE_PARALLEL_NUM, {1, 24}},
         {COPYOUT_RESOLVE_COALESCING, {0, 1000000}}
     };
-    bool ret = RangeTest<int64_t>(input, &(config::SetOption), "pass");
+    bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "pass");
     EXPECT_EQ(ret, true);
 
     std::unordered_map<std::string, std::vector<std::map<int64_t, int64_t>>> input2 = {
@@ -194,7 +194,7 @@ TEST_F(TestConfigManager, NormalPassTest) {
         {CUBE_NBUFFER_SETTING, {{{-1, 1}}, {{INT_MAX, INT_MAX}}}},
         {VEC_NBUFFER_SETTING, {{{-1, 1}}, {{INT_MAX, INT_MAX}}}}
     };
-    ret = RangeTest<std::map<int64_t, int64_t>>(input2, &(config::SetOption), "pass");
+    ret = RangeTest<std::map<int64_t, int64_t>>(input2, &(config::SetOptionsNg), "pass");
     EXPECT_EQ(ret, true);
 }
 
@@ -213,7 +213,7 @@ TEST_F(TestConfigManager, AbnormalPassTest) {
         {SG_CUBE_PARALLEL_NUM, {0, 25}},
         {COPYOUT_RESOLVE_COALESCING, {-1, 1000001}}
     };
-    bool ret = RangeTest<int64_t>(input, &(config::SetOption), "pass");
+    bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "pass");
     EXPECT_EQ(ret, true);
 
     std::unordered_map<std::string, std::vector<std::map<int64_t, int64_t>>> input2 = {
@@ -221,7 +221,7 @@ TEST_F(TestConfigManager, AbnormalPassTest) {
         {CUBE_NBUFFER_SETTING, {{{-2, 1}}, {{INT_MAX, outVal}}, {{-1, 0}}, {{outVal, INT_MAX}}}},
         {VEC_NBUFFER_SETTING, {{{-2, 1}}, {{INT_MAX, outVal}}, {{-1, 0}}, {{outVal, INT_MAX}}}}
     };
-    ret = RangeTest<std::map<int64_t, int64_t>>(input2, &(config::SetOption), "pass");
+    ret = RangeTest<std::map<int64_t, int64_t>>(input2, &(config::SetOptionsNg), "pass");
     EXPECT_EQ(ret, true);
 }
 
@@ -250,8 +250,4 @@ TEST_F(TestConfigManager, GlobalConfig) {
 
     std::map<std::string, Any> empty_values = {};
     ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(empty_values), "default", 1);
-
-    // add code for coverage
-    auto values = std::vector<std::string>{"value"};
-    config::experimental::SetOption("key", std::move(values));
 }

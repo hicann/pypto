@@ -40,75 +40,7 @@ enum class MachineScheduleConfig {
 };
 
 namespace config {
-namespace experimental {
-    bool IsType(const std::string &key, const std::type_info &type);
-    void SetOption(const std::string &key, bool value);
-    void SetOption(const std::string &key, int64_t value);
-    void SetOption(const std::string &key, const char *value);
-    void SetOption(const std::string &key, const std::string &value);
-    void SetOption(const std::string &key, const std::vector<int64_t> &value);
-    void SetOption(const std::string &key, const std::vector<std::string> &value);
-    void SetOption(const std::string &key, const std::map<int64_t, int64_t> &value);
-}
 
-/**
- * \brief Check if option exists
- *
- * \param key config option key
- * \return true if option exists, false otherwise
- */
-bool HasOption(const std::string &key);
-
-/**
- * \brief Check if option type is compatible with T
- *
- * \tparam T type to check compatibility with
- * \param key config option key
- * \return true if option type is compatible with T, false otherwise
- */
-template <typename T>
-bool IsType(const std::string &key) {
-    using type = std::decay_t<T>;
-    if constexpr (std::is_same_v<type, bool>) {
-        return experimental::IsType(key, typeid(bool));
-    } else if constexpr (std::is_integral_v<type>) {
-        return experimental::IsType(key, typeid(int64_t));
-    } else if constexpr (std::is_same_v<type, char *>) {
-        return experimental::IsType(key, typeid(std::string));
-    } else {
-        return experimental::IsType(key, typeid(T));
-    }
-    return false;
-}
-
-/**
- * \brief Set config option value
- *
- * \tparam T type of config option value
- * \param key config option key
- * \param value config option value
- */
-template <typename T>
-void SetOption(const std::string &key, T &&value) {
-    if (!HasOption(key)) {
-        throw std::runtime_error("Option " + key + " does not exist");
-    }
-    if (!IsType<T>(key)) {
-        throw std::runtime_error("Option " + key + " bad type");
-    }
-    using type = std::decay_t<T>;
-    if constexpr (std::is_same_v<type, bool>) {
-        experimental::SetOption(key, value);
-    } else if constexpr (std::is_integral_v<type>) {
-        experimental::SetOption(key, static_cast<int64_t>(value));
-    } else {
-        experimental::SetOption(key, value);
-    }
-}
-
-inline void SetOption(const std::string &key, const char *value) {
-    SetOption(key, std::string(value));
-}
 
 template <typename T>
 void SetOptionsNg(const std::string &key, const T &value);

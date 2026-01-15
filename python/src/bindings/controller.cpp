@@ -26,50 +26,8 @@ namespace pypto {
 void bind_controller_config(py::module &m) {
     m.def("SetBuildStatic", [](const bool &value) { config::SetBuildStatic(value); }, py::arg("value"));
 
-    m.def(
-        "SetOption", [](const std::string &key, const std::string &value) { config::SetOption(key, value); },
-        py::arg("key"), py::arg("value"));
-    m.def(
-        "SetOption", [](const std::string &key, bool value) { config::SetOption(key, value); }, py::arg("key"),
-        py::arg("value"));
-    m.def(
-        "SetOption", [](const std::string &key, int64_t value) { config::SetOption(key, value); }, py::arg("key"),
-        py::arg("value"));
-    m.def(
-        "SetOption", [](const std::string &key, const std::vector<int64_t> &value) { config::SetOption(key, value); },
-        py::arg("key"), py::arg("value"));
-    m.def(
-        "SetOption", [](const std::string &key, const std::vector<std::string> &value) { config::SetOption(key, value); },
-        py::arg("key"), py::arg("value"));
-    m.def(
-        "SetOption",
-        [](const std::string &key, const std::map<int64_t, int64_t> &value) { config::SetOption(key, value); },
-        py::arg("key"), py::arg("value"));
-
-        m.def(
-        "GetOption",
-        [](const std::string &key) -> py::object {
-            if (config::IsType<int64_t>(key)) {
-                return py::cast(config::GetOption<int64_t>(key));
-            } else if (config::IsType<std::string>(key)) {
-                return py::cast(config::GetOption<std::string>(key));
-            } else if (config::IsType<bool>(key)) {
-                return py::cast(config::GetOption<bool>(key));
-            } else if (config::IsType<std::vector<int64_t>>(key)) {
-                return py::cast(config::GetOption<std::vector<int64_t>>(key));
-            } else if (config::IsType<std::vector<std::string>>(key)) {
-                return py::cast(config::GetOption<std::vector<std::string>>(key));
-            } else if (config::IsType<std::map<int64_t, int64_t>>(key)) {
-                return py::cast(config::GetOption<std::map<int64_t, int64_t>>(key));
-            } else {
-                return py::cast(std::nullopt);
-            }
-        },
-        py::arg("key"), "get config option");
-
     m.def("Reset", []() { config::Reset(); });
 
-    m.def("GetOptions", []() -> py::object { return py::cast(config::GetOptions()); });
 
     m.def(
         "SetPrintOptions",

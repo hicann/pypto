@@ -18,34 +18,6 @@ from functools import wraps
 from . import pypto_impl
 
 
-class _CachedOptions:
-
-    def __init__(self):
-        self._options = pypto_impl.GetOptions()
-
-    def reset(self):
-        self._options = pypto_impl.GetOptions()
-
-    def set_options(self, prefix, options):
-        for name, value in options.items():
-            key = f"{prefix}.{name}"
-            if key in self._options and value is not None:
-                pypto_impl.SetOption(key, value)
-                self._options[key] = value
-
-    def __getitem__(self, key):
-        return self._options[key]
-
-    def __setitem__(self, key, value):
-        self._options[key] = value
-        pypto_impl.SetOption(key, value)
-
-    def get_options(self, prefix):
-        prefix = f"{prefix}."
-        return {k[len(prefix):]: v for k, v in self._options.items() if k.startswith(prefix)}
-
-
-_pto_options = _CachedOptions()
 
 
 def set_print_options(*,
@@ -362,45 +334,11 @@ def set_semantic_label(label: str) -> None:
     pypto_impl.SetSemanticLabel(label, frame.f_code.co_filename, frame.f_lineno)
 
 
-def set_option(key: str, value: Union[str, int, List[int], Dict[int, int]]) -> None:
-    """
-    Set global options.
-
-    Parameters
-    ---------
-    key: str
-        Config option key.
-
-    value : Union[str, int, List[int], Dict[int, int]]
-        Config option value.
-    """
-    _pto_options[key] = value
-
-
-def get_option(key: str) -> Union[str, int, List[int], Dict[int, int]]:
-    """
-    Get global options.
-
-    Parameters
-    ---------
-    key: str
-        Config option key.
-
-    Returns
-    -------
-    Union[str, int, List[int], Dict[int, int]]
-        Config option value.
-    """
-
-    return _pto_options[key]
-
-
 def reset_options() -> None:
     """
         Reset all configuration items to their default values.
     """
     pypto_impl.Reset()
-    _pto_options.reset()
 
 
 class _Options:

@@ -49,7 +49,6 @@ constexpr const char *STITCH_FUNCTION_INNER_MEMORY = "stitch_function_inner_memo
 constexpr const char *STITCH_FUNCTION_OUTCAST_MEMORY = "stitch_function_outcast_memory";
 constexpr const char *STITCH_FUNCTION_NUM_INITIAL = "stitch_function_num_initial";
 constexpr const char *STITCH_FUNCTION_NUM_STEP = "stitch_function_num_step";
-constexpr const char *COST_MODEL_ENABLE = "cost_model_enable";
 constexpr const char *STITCH_FUNCTION_SIZE = "stitch_function_size";
 constexpr const char *STITCH_CFGCACHE_SIZE = "stitch_cfgcache_size";
 constexpr const char *CFG_RUN_MODE = "run_mode";
@@ -104,35 +103,6 @@ FunctionType GetFunctionType();
 std::shared_ptr<SemanticLabel> GetSemanticLabel();
 void SetSemanticLabel(std::shared_ptr<SemanticLabel> label);
 
-namespace experimental {
-bool GetOption(const std::string &key, bool &value);
-bool GetOption(const std::string &key, int64_t &value);
-bool GetOption(const std::string &key, std::string &value);
-bool GetOption(const std::string &key, std::vector<int64_t> &value);
-bool GetOption(const std::string &key, std::vector<std::string> &value);
-bool GetOption(const std::string &key, std::map<int64_t, int64_t> &value);
-} // namespace experimental
-
-template <typename T>
-T GetOption(const std::string &key) {
-    bool exist = false;
-    T val = {};
-    if constexpr (std::is_same_v<T, bool>) {
-        exist = experimental::GetOption(key, val);
-    } else if constexpr (std::is_integral_v<T>) {
-        int64_t tmp = 0;
-        exist = experimental::GetOption(key, tmp);
-        val = static_cast<T>(tmp);
-    } else {
-        exist = experimental::GetOption(key, val);
-    }
-    if (!exist) {
-        std::cout << Dump() << std::endl;
-        throw std::runtime_error("config " + key + " not exist");
-    }
-    return val;
-}
-
 std::shared_ptr<ConfigScope> Duplicate();
 void Restore(std::shared_ptr<ConfigScope> config);
 
@@ -142,6 +112,6 @@ void SetRunDataOption(const std::string &key, const std::string &value);
 
 using ValueType = std::variant<bool, int64_t, std::string, std::vector<int64_t>,
                                std::vector<std::string>, std::map<int64_t, int64_t>>;
-std::unordered_map<std::string, ValueType> GetOptions();
+
 } // namespace config
 } // namespace npu::tile_fwk
