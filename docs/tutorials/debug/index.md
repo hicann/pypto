@@ -1,8 +1,11 @@
-# 功能调试
+# 调试调优
 
 ```{toctree}
 :maxdepth: 2
 :titlesonly:
 
-功能调试
-ffn_shared_expert_quant算子NPU上板调试案例
+debug
+precision
+performance
+debug_case_ffn
+performance_case_quantindexerprolog

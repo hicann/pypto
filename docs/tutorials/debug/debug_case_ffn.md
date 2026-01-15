@@ -1,4 +1,4 @@
-# ffn\_shared\_expert\_quant算子NPU上板调试案例
+# ffn_shared_expert_quant算子NPU上板调试案例
 
 ## 任务与目标
 

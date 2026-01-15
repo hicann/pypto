@@ -3,8 +3,8 @@
 ```{toctree}
 :maxdepth: 2
 
-pypto-Tensor简介
-pypto-Tensor构造函数
+pypto-Tensor_introduction
+pypto-Tensor_constructor
 pypto-Tensor-add
 pypto-Tensor-amax
 pypto-Tensor-amin
@@ -47,4 +47,4 @@ pypto-Tensor-transpose
 pypto-Tensor-unsqueeze
 pypto-Tensor-view
 pypto-Tensor-where
-pypto-Tensor索引功能说明
+pypto-Tensor-getitem

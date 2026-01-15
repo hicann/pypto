@@ -16,7 +16,7 @@ python3 hello_world.py --run_mode=npu
 更多示例请参考 `examples/` 目录下的示例代码。
 ## 结果查看
 
-该基础样例运行成功后, 在`${work_path}/output/`目录下生成编译和运行产物，相关产物包括[计算图](../tutorials/appendix/术语表.md)和[泳道图](../tutorials/appendix/术语表.md), 计算图和泳道图可通过PyPTO配套的ToolKit插件, 在VS-CODE中查看并与代码关联, 相关ToolKit使用请参考[快速入门-查看计算图](../tutorials/introduction/快速入门.md#查看计算图)、[快速入门-查看泳道图](../tutorials/introduction/快速入门.md#查看泳道图)
+该基础样例运行成功后, 在`${work_path}/output/`目录下生成编译和运行产物，相关产物包括[计算图](../tutorials/appendix/glossary.md)和[泳道图](../tutorials/appendix/glossary.md), 计算图和泳道图可通过PyPTO配套的ToolKit插件, 在VS-CODE中查看并与代码关联, 相关ToolKit使用请参考[快速入门-查看计算图](../tutorials/introduction/quick_start.md#查看计算图)、[快速入门-查看泳道图](../tutorials/introduction/quick_start.md#查看泳道图)
 
 ## 快速开始
 以下是一个简单的 PyPTO 使用示例, 可以通过 `sim` 和 `npu` 参数指定运行仿真示例或者真实环境示例:

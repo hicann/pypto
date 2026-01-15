@@ -7,7 +7,7 @@ tensor/index
 element/index
 operation/index
 datatype/index
-contrlflow/index
+controlflow/index
 config/index
 symbolic/index
 others/index
