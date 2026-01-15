@@ -490,7 +490,7 @@ TILEOP void DynL0CCopyOut(__gm__ GMT *dst, __cc__ L0CT *src, unsigned oriTShape0
     unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0, unsigned GmOffset1, unsigned curH, unsigned curW,
     int uf) {
     static_assert(reluMode == 0, "Relu operation is not supported in GM accumulate mode");
-    SetAtomicAdd<GMT>();
+    SetAtomicAddition<GMT>();
     DynL0CCopyOut<GMT, L0CT, enableNZ2ND, 0>(
         dst, src, oriTShape0, oriTShape1, GmShape0, GmShape1, GmOffset0, GmOffset1, curH, curW, uf);
     if constexpr (isAcc == 1) {
@@ -816,7 +816,7 @@ template <typename GMT, typename L0CT, unsigned TShape0, unsigned TShape1, unsig
     int isAcc>
 TILEOP void DynL0CCopyOut(__gm__ GMT *dst, __cc__ L0CT *src, unsigned GmShape0, unsigned GmShape1, unsigned GmOffset0,
     unsigned GmOffset1, int uf) {
-    SetAtomicAdd<GMT>();
+    SetAtomicAddition<GMT>();
     DynL0CCopyOut<GMT, L0CT, TShape0, TShape1, oriTShape0, oriTShape1>(
         dst, src, GmShape0, GmShape1, GmOffset0, GmOffset1, uf);
     if constexpr (isAcc == 1) {

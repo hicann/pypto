@@ -403,6 +403,7 @@ public:
         return opCode == Opcode::OP_COPY_OUT || opCode == Opcode::OP_UB_COPY_OUT || opCode == Opcode::OP_L0C_COPY_OUT ||
                opCode == Opcode::OP_L1_COPY_OUT || opCode == Opcode::OP_TRANSPOSE_MOVEOUT ||
                opCode == Opcode::OP_INDEX_OUTCAST ||
+               opCode == Opcode::OP_INDEX_PUT ||
                opCode == Opcode::OP_FFN_SCHED || opCode == Opcode::OP_FFN_BATCHING ||
                opCode == Opcode::OP_FFN_COMBINEINFO || opCode == Opcode::OP_FFN_VALIDCNT ||
                opCode == Opcode::OP_COPY_TO_LOCAL_EXPERT || opCode == Opcode::OP_SHMEM_PUT ||
@@ -525,6 +526,7 @@ const std::unordered_set<Opcode> GATHER_ELEMENT_OPS{Opcode::OP_GATHER_ELEMENT};
 const std::unordered_set<Opcode> SCATTER_ELEMENT_OPS{Opcode::OP_SCATTER_ELEMENT};
 const std::unordered_set<Opcode> SCATTER_OPS{Opcode::OP_SCATTER};
 const std::unordered_set<Opcode> INDEX_ADD_OPS{Opcode::OP_INDEX_ADD};
+const std::unordered_set<Opcode> INDEX_PUT_OPS{Opcode::OP_INDEX_PUT};
 const std::unordered_set<Opcode> CUM_SUM_OPS{Opcode::OP_CUM_SUM};
 
 const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE, Opcode::OP_TRANSPOSE_VNCHWCONV,
@@ -535,7 +537,7 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE,
     Opcode::OP_SQRT, Opcode::OP_RECIPROCAL, Opcode::OP_CAST, Opcode::OP_ADDS, Opcode::OP_SUBS, Opcode::OP_MULS,
     Opcode::OP_DIVS, Opcode::OP_MAXS, Opcode::OP_MINS, Opcode::OP_PAIRMAX, Opcode::OP_PAIRSUM, Opcode::OP_ROWMAX_SINGLE,
     Opcode::OP_ROWSUM_SINGLE, Opcode::OP_EXPAND, Opcode::OP_VEC_DUP, Opcode::OP_MAXIMUM, Opcode::OP_MINIMUM,
-    Opcode::OP_L1_TO_L0A, Opcode::OP_LOGICALNOT, Opcode::OP_LOGICALAND, Opcode::OP_ONEHOT, Opcode::OP_POW,
+    Opcode::OP_L1_TO_L0A, Opcode::OP_LOGICALNOT, Opcode::OP_LOGICALAND, Opcode::OP_ONEHOT, Opcode::OP_POW, Opcode::OP_INDEX_PUT,
     Opcode::OP_L1_TO_L0_BT, Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT, Opcode::OP_A_MUL_B, Opcode::OP_A_MULACC_B,
     Opcode::OP_A_MUL_BT, Opcode::OP_AT_MUL_B, Opcode::OP_AT_MUL_BT, Opcode::OP_WHERE_TT, Opcode::OP_WHERE_TS,
     Opcode::OP_WHERE_ST, Opcode::OP_WHERE_SS, Opcode::OP_ROWSUMLINE, Opcode::OP_ADD_BRC, Opcode::OP_ADD_BRC,
@@ -592,6 +594,7 @@ inline bool IsCopyIn(const Opcode opCode) {
 inline bool IsCopyOut(const Opcode &op) {
     return (op == Opcode::OP_COPY_OUT || op == Opcode::OP_L0C_COPY_OUT || op == Opcode::OP_TRANSPOSE_MOVEOUT ||
             op == Opcode::OP_INDEX_OUTCAST || op == Opcode::OP_FFN_SCHED || op == Opcode::OP_FFN_BATCHING ||
+            op == Opcode::OP_INDEX_PUT ||
             op == Opcode::OP_FFN_COMBINEINFO || op == Opcode::OP_FFN_VALIDCNT || op == Opcode::OP_COPY_TO_LOCAL_EXPERT ||
             op == Opcode::OP_SHMEM_PUT || op == Opcode::OP_SHMEM_SIGNAL || op == Opcode::OP_SHMEM_GET ||
             op == Opcode::OP_SHMEM_REDUCE || op == Opcode::OP_RESHAPE_COPY_OUT || op == Opcode::OP_SHMEM_PUT_UB2GM ||

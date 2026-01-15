@@ -65,6 +65,8 @@ const std::string OpAttributeKey::bindTensor = "BIND_TENSOR";
 const std::string OpAttributeKey::startOffset = "start_offset";
 const std::string OpAttributeKey::distOpAttr = "DIST_OP_ATTR";
 const std::string OpAttributeKey::subBlockIdx = "SUB_BLOCK_IDX";
+const std::string OpAttributeKey::accumulate = "accumulate";
+const std::string OpAttributeKey::indicesSize = "indicesSize";
 const std::string OpAttributeKey::brcbIdx = "brcb_idx";
 const std::string OpAttributeKey::quantFlag = "op_attr_vector_quant_flag";
 
@@ -507,6 +509,7 @@ std::shared_ptr<Operation> Operation::LoadJson(
             case Opcode::OP_COPY_OUT: opAttribute = DeserializeFrom<CopyOpAttribute>(attrJson); break;
             case Opcode::OP_TRANSPOSE_MOVEIN: opAttribute = DeserializeFrom<CopyOpAttribute>(attrJson); break;
             case Opcode::OP_TRANSPOSE_MOVEOUT: opAttribute = DeserializeFrom<CopyOpAttribute>(attrJson); break;
+            case Opcode::OP_INDEX_PUT: opAttribute = DeserializeFrom<CopyOpAttribute>(attrJson); break;
             case Opcode::OP_INDEX_OUTCAST: opAttribute = DeserializeFrom<CopyOpAttribute>(attrJson); break;
             default: break;
         }

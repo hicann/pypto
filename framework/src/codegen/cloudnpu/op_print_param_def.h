@@ -59,6 +59,16 @@ struct PrintIndexAddParam {
     const std::vector<std::string> &dataTypeExpr;
 };
 
+struct PrintIndexPutParam {
+    const std::string &dVar;
+    const std::string &s1Var;
+    const std::vector<std::string> &s2Var;
+    const std::vector<int64_t> &gmShape;
+    const std::vector<int64_t> &src1RawShape;
+    const std::vector<std::string> &dataTypeExpr;
+    const bool accumulate;
+};
+
 enum class WhereOpIdx : int { resIdx = 0, tempIdx, condIdx, src0Idx, src1Idx };
 struct WhereParam {
     std::vector<std::string> templateList;

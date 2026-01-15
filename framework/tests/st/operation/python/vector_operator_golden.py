@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 from typing import List
 
+import random
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -1484,6 +1485,109 @@ def gen_indexadd__op_golden(
 ) -> bool:
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("IndexAdd_", indexadd_golden_func, output, case_index)
+
+
+def indexput_dfs(indices_range, deep, max_count, cur_indices, all_indices):
+    if deep == max_count:
+        all_indices.append([i for i in cur_indices])
+        return
+    for i in range(indices_range[deep][0], indices_range[deep][1]):
+        cur_indices[deep] = i
+        indexput_dfs(indices_range, deep + 1, max_count, cur_indices, all_indices)
+
+
+def indexput_golden_func(indexput_config):
+    output_path = indexput_config["output_path"]
+    indices_range = indexput_config["indices_range"]
+    dtype = indexput_config["dtype"]
+    indices_dtype = indexput_config["indices_dtype"]
+    indices_count = len(indices_range)
+    input_path = Path(output_path, 'input0.bin')
+    values_path = Path(output_path, 'input1.bin')
+    indices_paths = [Path(output_path, f'input{2 + i}.bin') for i in range(indices_count)]
+    input_ = np.random.uniform(indexput_config["input_range"][0],
+        indexput_config["input_range"][1], size=indexput_config["input_shape"]).astype(dtype)
+    input_.tofile(input_path)
+    values = np.random.uniform(indexput_config["values_range"][0],
+        indexput_config["values_range"][1], size=indexput_config["values_shape"]).astype(dtype)
+    values.tofile(values_path)
+    result = 1
+    for arr in indices_range:
+        result *= 1 if arr[0] == arr[1] else arr[1] - arr[0]
+    indices_shape = indexput_config["values_shape"][0]
+    indices = np.zeros((indices_count, indices_shape), dtype=indices_dtype)
+    if indices_shape < result // 2:
+        cnt = 0
+        visit = set()
+        while cnt < indices_shape:
+            tmp = [0 for i in range(indices_count)]
+            for i in range(indices_count):
+                tmp[i] = random.randrange(indices_range[i][0], indices_range[i][1])
+            if tuple(tmp) in visit:
+                continue
+            visit.add(tuple(tmp))
+            for i in range(indices_count):
+                indices[i][cnt] = tmp[i]
+            cnt += 1
+        for i in range(indices_count):
+            indices[i].tofile(indices_paths[i])
+    else:
+        cur_indices = [0 for i in range(indices_count)]
+        all_indices = []
+        indexput_dfs(indices_range, 0, indices_count, cur_indices, all_indices)
+        perm = np.random.permutation(len(all_indices))
+        for i in range(indices_count):
+            for j in range(indices_shape):
+                indices[i][j] = all_indices[perm[j]][i]
+            indices[i].tofile(indices_paths[i])
+    result_path = Path(output_path, 'output0.bin')
+    if indexput_config["accumulate"]:
+        input_[tuple(indices)] += values
+    else:
+        input_[tuple(indices)] = values
+    input_.tofile(result_path)
+    return True
+
+
+def indexput_pre_golden_func(output_path: Path, config: dict):
+    input_tensors = config["input_tensors"]
+    accumulate = config["params"]["accumulate"]
+    input_ = input_tensors[0]
+    values = input_tensors[1]
+    input_data_range = input_["data_range"]
+    values_data_range = values["data_range"]
+    indices_range = []
+    for i in range(len(input_tensors) - 2):
+        indices = input_tensors[i + 2]
+        indices_data_range = indices["data_range"]
+        indices_range.append([indices_data_range['min'], indices_data_range['max']])
+    indexput_config = {
+        "output_path": output_path,
+        "input_shape": input_["shape"],
+        "values_shape": values["shape"],
+        "input_range": [input_data_range["min"], input_data_range["max"]],
+        "values_range": [values_data_range["min"], values_data_range["max"]],
+        "indices_range": indices_range,
+        "dtype": get_dtype_by_name(input_["dtype"]),
+        "indices_dtype": get_dtype_by_name(input_tensors[2]["dtype"]),
+        "accumulate": accumulate
+    }
+    return indexput_golden_func(indexput_config)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestIndexPut_/IndexPut_OperationTest.TestIndexPut_",
+    ]
+)
+def gen_indexput__op_golden(
+    case_name: str, output: Path, case_index: int = None
+) -> bool:
+    case_file: Path = Path(Path(__file__).parent.parent, "test_case/IndexPut__st_test_cases.json").resolve()
+    test_configs = load_test_cases_from_json(str(case_file))
+    if len(test_configs) == 0:
+        raise ValueError("Not find test cases, please check.")
+    return indexput_pre_golden_func(output, test_configs[case_index])
 
 
 @TestCaseLoader.reg_params_handler(ops=["Scatter", "Scatter_", "ScatterTensor", "Scatter_Tensor"])

@@ -380,6 +380,22 @@ void ExecuteOpCumSum(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_CUM_SUM, Opcode::OP_CUM_SUM, ExecuteOpCumSum);
 
+void ExecuteOpIndexPut(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ioperandDataViewList->size() <= SIZE_SIX);
+    auto out = ctx->ooperandInplaceDataViewList->at(0);
+    auto self = ctx->ioperandDataViewList->at(0);
+    auto values = ctx->ioperandDataViewList->at(1);
+    std::vector<LogicalTensorDataPtr> indices;
+    for (int i = SIZE_TWO; i < static_cast<int>(ctx->ioperandDataViewList->size()); i++) {
+        auto indicesTemp = ctx->ioperandDataViewList->at(i);
+        indices.push_back(indicesTemp);
+    }
+    bool accumulate = ctx->op->GetBoolAttribute(OpAttributeKey::accumulate);
+    calc::IndexPut(out, self, indices, values, accumulate);
+}
+REGISTER_CALC_OP(OP_INDEX_PUT, Opcode::OP_INDEX_PUT, ExecuteOpIndexPut);
+
 void ExecuteOpMrgSort(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ioperandDataViewList->size() == 1);
     auto oop = ctx->ooperandInplaceDataViewList->at(0);

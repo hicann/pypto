@@ -44,6 +44,7 @@ using Status = uint32_t;
 inline constexpr uint32_t DIST_COMM_GROUP_NUM = 8;
 
 constexpr const int NUM2 = 2;
+constexpr const int NUM4 = 4;
 constexpr const int NUM150 = 150;
 constexpr const int NUM16 = 16;
 

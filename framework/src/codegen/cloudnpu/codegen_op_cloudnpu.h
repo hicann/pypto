@@ -98,6 +98,8 @@ public:
 
     std::string GenIndexAddOp() const;
 
+    std::string GenIndexPutOp() const;
+
     std::string GenIndexOutCastOp() const;
 
     std::string GenCumSumOp() const;
@@ -354,6 +356,9 @@ private:
     std::string PrintScatterOpDynamicUnaligned(const PrintScatterParam &param) const;
 
     std::string PrintIndexAddDynamicUnaligned(const PrintIndexAddParam &param) const;
+
+    std::string PrintIndexPut(const PrintIndexPutParam &param) const;
+    std::string PrintIndexPutDynamicUnaligned(const PrintIndexPutParam &param) const;
 
     std::string PrintCumSumDynamicUnaligned(const PrintCumSumParam &param) const;
 

@@ -335,9 +335,10 @@ void OpcodeManager::RegisterVector() {
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Tscatter", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "scatter_mode"}, TileShapeVerifier::Verify);
-    RegisterInfo(Opcode::OP_INDEX_PUT, OpCoreType::AIV, "INDEX_PUT", {MemoryType::MEM_UB, MemoryType::MEM_UB},
-        {MemoryType::MEM_UB}, {"TileOp::Tindexput", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER, {"axis"},
-        TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_INDEX_PUT, OpCoreType::ANY, "INDEX_PUT",
+ 	    {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+ 	    {MemoryType::MEM_DEVICE_DDR}, {"TileOp::TIndexPut", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
+        {OpAttributeKey::accumulate, OpAttributeKey::indicesSize});
     RegisterInfo(Opcode::OP_SCATTER_UPDATE, OpCoreType::ANY, "SCATTER_UPDATE", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB}, {}, OpCalcType::OTHER);
     RegisterInfo(Opcode::OP_SCATTER_SCALAR, OpCoreType::ANY, "SCATTER_SCALAR", {MemoryType::MEM_UB, MemoryType::MEM_UB},

@@ -26,6 +26,7 @@ namespace npu::tile_fwk {
 constexpr int SIZE_TWO = 2;
 constexpr int SIZE_THREE = 3;
 constexpr int SIZE_FOUR = 4;
+constexpr int SIZE_SIX = 6;
 
 struct FunctionIODataPair;
 struct FunctionFrame;

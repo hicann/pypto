@@ -632,6 +632,83 @@ std::string CodeGenOpCloudNPU::GenGatherElementOp() const {
     return PrintGatherElementStatic({gatherEleAxis, dVar, s0Var, s1Var, dos, ds, s0s, s1s, dataTypeExpr});
 }
 
+std::string CodeGenOpCloudNPU::PrintIndexPutDynamicUnaligned(const PrintIndexPutParam &param) const {
+    const std::string &dstVar = param.dVar;
+    const std::string &src1Var = param.s1Var;
+    std::vector<std::string> src2Var = param.s2Var;
+    const std::vector<std::string> &dataTypeExpr = param.dataTypeExpr;
+    size_t dstRank = param.gmShape.size();
+    std::vector<int64_t> s1rs = NormalizeShape(param.src1RawShape, SHAPE_DIM4);
+    int dim = static_cast<int>(rawShape[ID0].size());
+    auto paramPack = GenParamIdxExprByIndex(ID0, dim, PREFIX_STR_RAW_SHAPE);
+    FillIntVecWithDummyInHead<std::string>(paramPack, ID4 - dim, "1");
+    bool accumulate = param.accumulate;
+    
+    // template param
+    std::vector<std::string> paramList;
+    paramList.insert(paramList.end(), {dataTypeExpr[ID1], dataTypeExpr[ID3]});
+    paramList.emplace_back(std::to_string(dstRank));
+    for (int i = 1; i < SHAPE_DIM4; i++) {
+        paramList.emplace_back(std::to_string(s1rs[i]));
+    }
+    paramList.emplace_back(std::to_string(accumulate));
+    std::string templateParam = JoinString(paramList, CONN_COMMA);
+
+    // function actual params
+    paramList.clear();
+    std::string dst = "(__gm__ " + dataTypeExpr[ID0] + "*)" + dstVar;
+    std::string src1 = "(__ubuf__ " + dataTypeExpr[ID2] + "*)" + src1Var;
+    paramList.insert(paramList.end(), {dst, src1});
+    for (size_t i = 0; i < src2Var.size(); i++) {
+        std::string src2Temp = "(__ubuf__ " + dataTypeExpr[ID3] + "*)" + src2Var[i];
+        paramList.emplace_back(src2Temp);
+    }
+    auto validShape = dynamicValidShape[ID2]; // src1
+    paramList.emplace_back(SymbolicExpressionTable::BuildExpression(validShape[0]));
+    paramList.insert(paramList.end(), paramPack.begin(), paramPack.end());
+
+    std::string tileOpCallParam = JoinString(paramList, CONN_COMMA);
+    std::ostringstream os;
+    os << tileOpName.c_str() << "<" << templateParam << ">" << "(" << tileOpCallParam << ");\n";
+    return os.str();
+}
+
+std::string CodeGenOpCloudNPU::PrintIndexPut(const PrintIndexPutParam &param) const {
+    ASSERT(isDynamicFunction) << "Only Support the DynamicUnaligned tileOp";
+    return PrintIndexPutDynamicUnaligned(param);
+}
+
+std::string CodeGenOpCloudNPU::GenIndexPutOp() const {
+    ASSERT(opAttrs.count(OpAttributeKey::accumulate)) << "cannot get accumulate attr";
+    ASSERT(opAttrs.count(OpAttributeKey::indicesSize)) << "cannot get indicesSize attr";
+    bool accumulate = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OpAttributeKey::accumulate));
+    int64_t indicesSize = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OpAttributeKey::indicesSize));
+    // dst:gm, s0/self:gm, s1/values:ub, s2/indices:ub
+    std::string dstVar = GenGmParamVar(ID0);
+    std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
+    std::vector<std::string> s2Var;
+    for (int i = 0; i < indicesSize; i++) {
+        std::string s2VarTemp = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3 + i]);
+        s2Var.emplace_back(s2VarTemp);
+    }
+    std::vector gmShape = this->rawShape[ID0];
+    std::vector src1RawShape = this->rawShape[ID2];
+
+    std::vector<std::string> dataTypeExpr;
+    for (int i = 0; i < NUM4; i++) {
+        dataTypeExpr.emplace_back(DataType2CCEStr(operandDtype[i]));
+    }
+
+    std::map<unsigned, std::reference_wrapper<std::string>> vars;
+    vars.insert({ID1, s1Var});
+    for (int i = 0; i < indicesSize; i++) {
+        vars.insert({i + ID2, s2Var[i]});
+    }
+    AppendLocalBufferVarOffset(vars);
+
+    return PrintIndexPut({dstVar, s1Var, s2Var, gmShape, src1RawShape, dataTypeExpr, accumulate});
+}
+
 std::string CodeGenOpCloudNPU::PrintRangeTileTensor(std::string startVal, std::string stepVal) const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     auto dstValidShape = dynamicValidShape[ToUnderlying(MISOIdx::DST_IDX)];

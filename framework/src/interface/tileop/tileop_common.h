@@ -142,4 +142,33 @@ INLINE unsigned CalcLinearOffset(unsigned GmShape1, unsigned Offset0, unsigned O
 }
 }
 
+template <bool b>
+struct BoolInst {
+    using Type = BoolInst<b>;
+    static constexpr bool value = b;
+};
+using TrueType = BoolInst<true>;
+using FalseType = BoolInst<false>;
+template <typename T, typename U>
+struct IsSameType : public FalseType {};
+template <typename T>
+struct IsSameType<T, T> : public TrueType {};
+template <typename T>
+TILEOP void SetAtomicAddition() {
+    if constexpr (IsSameType<T, float>::value) {
+        set_atomic_f32();
+    } else if constexpr (IsSameType<T, half>::value) {
+        set_atomic_f16();
+    } else if constexpr (IsSameType<T, int16_t>::value) {
+        set_atomic_s16();
+    } else if constexpr (IsSameType<T, int32_t>::value) {
+        set_atomic_s32();
+    } else if constexpr (IsSameType<T, int8_t>::value) {
+        set_atomic_s8();
+    } else if constexpr (IsSameType<T, bfloat16_t>::value) {
+        set_atomic_bf16();
+    }
+    set_atomic_add();
+}
+
 #endif

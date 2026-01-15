@@ -150,6 +150,7 @@ private:
     Status ForwardInplaceOp(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
     Status ForwardViewType(Operation *op, LogicalTensorPtr &rootTensor);
     Status ForwardCopyOut(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
+    Status ForwardInputIdx(Operation *op, LogicalTensorPtr &rootTensor, Function &function);
 
     Status BackwardAssemble(Operation *op, LogicalTensorPtr &rootTensor);
     Status BackwardReshape(Operation *op, LogicalTensorPtr &rootTensor);

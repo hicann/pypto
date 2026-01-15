@@ -132,11 +132,11 @@ void bind_operation(py::module &m) {
         "Tensor row sum expand.");
     m.def("Compact", [](const Tensor &operand) { return npu::tile_fwk::Compact(operand); }, "Tensor compact.");
     m.def(
-        "IndexPut",
-        [](const Tensor &src, std::vector<Tensor> indices, const Tensor &values) {
-            return npu::tile_fwk::IndexPut(src, indices, values);
+        "IndexPut_",
+        [](Tensor &self, std::vector<Tensor> indices, const Tensor &values, bool accumulate) {
+            npu::tile_fwk::IndexPut_(self, indices, values, accumulate);
         },
-        "Tensor indexput.");
+        "Tensor indexput_.");
     m.def(
         "Scatter_",
         [](const Tensor &self, const Tensor &indices, const Element &src, int axis, ScatterMode reduce) {

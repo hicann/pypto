@@ -217,7 +217,7 @@ void ReplaceTensor::UniteTensor(Function &function, UnionFind &uf) {
                                      op.GetOpcodeStr().c_str(), op.GetOpMagic(), op.GetIOperands()[0]->GetMagic(), op.GetOOperands()[0]->GetMagic());
             }
         }
-        if (op.GetOpcode() == Opcode::OP_COPY_OUT && op.HasAttribute(OpAttributeKey::inplaceIdx)) {
+        if (op.HasAttribute(OpAttributeKey::inplaceIdx)) {
             uf.Unite(op.GetIOperands()[op.GetIntAttribute(OpAttributeKey::inplaceIdx)], op.GetOOperands().front());
         }
     }
@@ -400,6 +400,25 @@ Status ReplaceTensor::ForwardCopyOut(Operation *op, LogicalTensorPtr &rootTensor
     return SUCCESS;
 }
 
+Status ReplaceTensor::ForwardInputIdx(Operation *op, LogicalTensorPtr &rootTensor, Function &function) {
+    auto index = op->GetIntAttribute(OpAttributeKey::inplaceIdx);
+    auto inTensor = op->GetIOperands()[index];
+    auto outTensor = op->GetOOperands().front();
+    if (inTensor != rootTensor) {
+        APASS_LOG_INFO_F(Elements::Operation, "op %s[%d] tensorIn %d is not same as rootTensor %d.",
+                            op->GetOpcodeStr().c_str(), op->GetOpMagic(), inTensor->GetMagic(), rootTensor->GetMagic());
+        return SUCCESS;
+    }
+    processedOp.insert(op->GetOpMagic());
+    if (!function.IsFromOutCast(outTensor)) {
+        function.UpdateLinkMap(outTensor, inTensor);
+    }
+    outTensor->tensor = rootTensor->tensor;
+    outTensor->UpdateOffset(rootTensor->GetOffset());
+    forRoots.push(outTensor);
+    return SUCCESS;
+}
+
 Status ReplaceTensor::BackwardReshape(Operation *op, LogicalTensorPtr &rootTensor) {
     processedOp.insert(op->GetOpMagic());
     op->GetIOperands()[0]->tensor->actualRawmagic = rootTensor->GetRawMagic();
@@ -504,7 +523,12 @@ Status ReplaceTensor::ForwardProcess(Function &function) {
                 if (ForwardCopyOut(consumerOp, rootTensor, function) == FAILED) {
                     return FAILED;
                 }
-            } else {
+            } else if (consumerOp->GetOpcode() == Opcode::OP_INDEX_PUT && consumerOp->HasAttribute(OpAttributeKey::inplaceIdx)) {
+                if (ForwardInputIdx(consumerOp, rootTensor, function) == FAILED) {
+                    return FAILED;
+                }
+            }
+            else {
                 continue;
             }
         }

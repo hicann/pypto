@@ -174,6 +174,10 @@ inline void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logica
 inline void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
     GetCalcOps()->CumSum(out, in, axis);
 }
+inline void IndexPut(LogicalTensorDataPtr out, LogicalTensorDataPtr self, std::vector<LogicalTensorDataPtr> indices,
+    LogicalTensorDataPtr values, bool accumulate = false) {
+    GetCalcOps()->IndexPut(out, self, indices, values, accumulate);
+}
 inline void Reshape(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Reshape(out, self);
 }

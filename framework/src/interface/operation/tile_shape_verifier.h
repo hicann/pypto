@@ -24,10 +24,13 @@ using VerifyFunc = std::function<bool(const Operation &op, std::ostream &oss, co
 constexpr uint32_t VERIFY_SHAPE_SIZE = 0x0001;
 constexpr uint32_t VERIFY_TAIL_ALIGN = 0x0002;
 constexpr uint32_t VERIFY_FIX_AXIS = 0x0004;
+constexpr uint32_t VERIFY_SHAPE_SIZE_LAST_INPUT = 0x0008;
 
 // customize the check items of opcode
 // for example : {OP_XX, VERIFY_TAIL_ALIGN | VERIFY_FIX_AXIS}
-const std::unordered_map<Opcode, uint32_t> verify_cfg = {};
+const std::unordered_map<Opcode, uint32_t> verify_cfg = {
+    {Opcode::OP_INDEX_PUT, VERIFY_SHAPE_SIZE_LAST_INPUT}
+};
 
 const std::unordered_map<Opcode, std::string> axis_name_map = {
     {Opcode::OP_EXPAND, "EXPANDDIM"},
@@ -50,12 +53,18 @@ public:
                 return false;
             }
         }
+        if ((config & VERIFY_SHAPE_SIZE_LAST_INPUT) && !RunVerifyFuncLastInput(op, oss, VerifyTileShapeSize)) {
+            return false;
+        }
         return true;
     }
 
 private:
     static bool RunVerifyFunc(const Operation &op, std::ostream &oss, const VerifyFunc &func) {
         return func(op, oss, op.GetOOperands().front());
+    }
+    static bool RunVerifyFuncLastInput(const Operation &op, std::ostream &oss, const VerifyFunc &func) {
+        return func(op, oss, op.GetIOperands().back());
     }
     static bool VerifyTileShapeSize(const Operation &op, std::ostream &oss, const LogicalTensorPtr &tensor) {
         auto tile_size = op.GetTileShape().GetVecTile().size();

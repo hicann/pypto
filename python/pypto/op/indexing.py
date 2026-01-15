@@ -104,6 +104,71 @@ def index_add(
 
 
 @op_wrapper
+def index_put_(
+    input: Tensor, indices: tuple, values: Tensor, accumulate: bool = False
+    ) -> None:
+    """
+    Puts values from the tensor `values` into the tensor `input` using the 
+    indices specified in `indices`(which is a tuple of Tensors).
+
+    With different numbers of tensors in indices, this function specified output as:
+    input[indices[0][i], ...] = values[i, ...]                      # with 1 tensor in indices
+    input[indices[0][i], indices[1][i], ...] = values[i, ...]       # with 2 tensors in indices
+    input[indices[0][i], ..., indices[k][i], ...] = values[i, ...]  # with k tensors in indices
+
+    Parameters
+    ----------
+    input : Tensor
+        Source tensor that needs to be updated in place.
+    indices : a tuple of 1-dimensional Tensor(s)
+        The i-th 1-dimensional tensor represents the index along the 
+        i-th dimension in `input`, with a dtype of either int64 or int32. 
+        Broadcasting is not currently supported, and each 1-dimensional
+        tensor must have the same length.
+    values : Tensor
+        Tensor of the same dtype as self. Broadcasting is not currently 
+        supported. The size of the first dimension of `values` must be
+        the same as the length of the 1-dimensional tensors in `indices`.
+        All other dimensions must match `input`.
+    accumulate : bool
+        Specify whether to accumulate into `input`. Specifically, when
+        `indices` contain duplicate elements, the behavior is undefined.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    RuntimeError
+        If any value in the i-th 1-dimensional tensor of `indices` exceed
+        the range [0, input.shape[i - 1]].
+
+    Examples
+    --------
+    x = pypto.tensor([4, 2], pypto.DT_FP32)
+    indices = (pypto.tensor([3], pypto.DT_INT32), )
+    values = pypto.tensor([3, 2], pypto.DT_FP32)
+
+    input x:  [[0 0],
+               [0 0],
+               [0 0],
+               [0 0]]
+      indices: [0 1 3]
+       values: [[1 1],
+               [2 2],
+               [3 3]]
+
+    updated x: [[1 1],
+               [2 2],
+               [0 0],
+               [3 3]]
+    """
+    indices_list = list(indices)
+    pypto_impl.IndexPut_(input, indices_list, values, accumulate)
+
+
+@op_wrapper
 def gather(input: Tensor, dim: int, index: Tensor) -> Tensor:
     """
     Gather elements from `input` along `dim` according to `index`.

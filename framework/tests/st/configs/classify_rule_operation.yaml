@@ -179,6 +179,8 @@ stest:
       - TestLogicalNot/LogicalNotOperationTest.TestLogicalNot/4
       - TestCompare/CompareOperationTest.TestCompare/1
       - TestCompare/CompareOperationTest.TestCompare/13
+      - TestIndexPut_/IndexPut_OperationTest.TestIndexPut_/6
+      - TestIndexPut_/IndexPut_OperationTest.TestIndexPut_/12
       - TestExpand/ExpandOperationTest.TestExpand/4
       - TestExpand/ExpandOperationTest.TestExpand/20
       - TestMinimum/MinimumOperationTest.TestMinimum/12

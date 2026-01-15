@@ -740,11 +740,11 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, Tens
     for (auto n: outs.GetShape()){
         std::cout << "=outs.GetShape()" << n << std::endl;
     }
-    TileShape::Current().SetVecTile({NUM_128, NUM_128});
     // newX[idxs] = outs  -->index_put: (b*s*num_experts_per_tok, h)[b*s*num_experts_per_tok] =
     // (b*s*num_experts_per_tok, h)
-    auto newIdxs = Reshape(idxs, {1, idxs.GetShape(0)});
-    newX = IndexPut(newX, {newIdxs}, outs);
+    TileShape::Current().SetVecTile(NUM_16);
+    auto newIdxs = Reshape(idxs, {idxs.GetShape(0)});
+    IndexPut_(newX, {newIdxs}, outs);
 
     int newXSize = std::accumulate(
         newX.GetShape().begin(), newX.GetShape().end(), 1, [](const int &a, const int &b) { return a * b; });
@@ -967,8 +967,9 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, Tens
     TileShape::Current().SetVecTile({NUM_128, NUM_128});
     // newX[idxs] = outs  -->index_put: (b*s*numExpertsPerTok, h)[b*s*numExpertsPerTok] =
     // (b*s*numExpertsPerTok, h)
-    auto newIdxs = Reshape(idxs, {1, idxs.GetShape(0)});
-    newX = IndexPut(newX, {newIdxs}, outs);
+    auto newIdxs = Reshape(idxs, {idxs.GetShape(0)});
+    TileShape::Current().SetVecTile(NUM_16);
+    IndexPut_(newX, {newIdxs}, outs);
 
     int newXSize = std::accumulate(
         newX.GetShape().begin(), newX.GetShape().end(), 1, [](const int &a, const int &b) { return a * b; });
@@ -1020,14 +1021,9 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, int 
     // tokensPerExpertCpu = tokensPerExpert.cpu().numpy(); 手动设置规避动态图
     // 这里构造总大小为b*s*num_experts_per_tok的vector,模拟选择专家，执行256次Mlp计算
     std::vector<int> tokensPerExpertCpu(NUM_256, 0);
-    tokensPerExpertCpu[0] = sortedTokensShape[0] / NUM_8;
-    // tokensPerExpertCpu[1] = sortedTokensShape[0] / 8;
-    // tokensPerExpertCpu[2] = sortedTokensShape[0] / 8;
-    // tokensPerExpertCpu[3] = sortedTokensShape[0] / 8;
-    // tokensPerExpertCpu[4] = sortedTokensShape[0] / 8;
-    // tokensPerExpertCpu[5] = sortedTokensShape[0] / 8;
-    // tokensPerExpertCpu[6] = sortedTokensShape[0] / 8;
-    // tokensPerExpertCpu[7] = sortedTokensShape[0] / 8;
+    for (int i = 0; i < NUM_8; i++) {
+        tokensPerExpertCpu[i] = sortedTokensShape[0] / NUM_8;
+    }
 
     std::vector<Tensor> outputs;
     int startIdx = 0;
@@ -1054,8 +1050,9 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, int 
 
     // newX[idxs] = outs  -->index_put: (b*s*numExpertsPerTok, h)[b*s*numExpertsPerTok] =
     // (b*s*numExpertsPerTok, h)
-    auto newIdxs = Reshape(idxs, {1, idxs.GetShape(0)});
-    newX = IndexPut(newX, {newIdxs}, outs);
+    auto newIdxs = Reshape(idxs, {idxs.GetShape(0)});
+    TileShape::Current().SetVecTile(NUM_8);
+    IndexPut_(newX, {newIdxs}, outs);
 
     int newXSize = std::accumulate(
         newX.GetShape().begin(), newX.GetShape().end(), 1, [](const int &a, const int &b) { return a * b; });

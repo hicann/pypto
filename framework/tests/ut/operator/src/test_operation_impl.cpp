@@ -14,7 +14,7 @@
  */
 
 #include "gtest/gtest.h"
-
+#include "interface/interpreter/calc.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/tensor/raw_tensor.h"
 #include "interface/configs/config_manager.h"
@@ -458,6 +458,41 @@ TEST_F(OperationImplTest, test_Rsqrt_FP32) {
     FUNCTION("TestRsqrt") {
         result = Rsqrt(operand1);
     }
+}
+
+TEST_F(OperationImplTest, TestIndexPut_) {
+    constexpr int TILE_SHAPE = 8;
+    TileShape::Current().SetVecTile(TILE_SHAPE);
+    Shape shapeSelf({128, 8, 8});
+    Shape shapeValues({128, 8});
+    Shape shapeIndices({128});
+    Tensor self(DT_INT32, shapeSelf, "self");
+    Tensor values(DT_INT32, shapeValues, "values");
+    Tensor indices0(DT_INT32, shapeIndices, "indices0");
+    Tensor indices1(DT_INT32, shapeIndices, "indices1");
+    std::vector<Tensor> indices{indices0, indices1};
+    bool accumulate = false;
+    Tensor result;
+    FUNCTION("TestIndexPut_") {
+        IndexPut_(self, indices, values, accumulate);
+    }
+}
+
+TEST_F(OperationImplTest, TestIndexPut_torch) {
+    Shape shapeSelf({16, 16});
+    Shape shapeValues({8, 16});
+    Shape shapeIndices({8});
+    Shape shapeOffset({0, 0});
+    Shape shapeOffset1({0});
+    auto outData = std::make_shared<RawTensorData>(DataType::DT_FP32, shapeSelf);
+    auto out = std::make_shared<LogicalTensorData>(outData, shapeSelf, shapeOffset);
+    auto selfData = std::make_shared<RawTensorData>(DataType::DT_FP32, shapeSelf);
+    auto self = std::make_shared<LogicalTensorData>(selfData, shapeSelf, shapeOffset);
+    auto indicesData = std::make_shared<RawTensorData>(DataType::DT_INT32, shapeIndices);
+    auto indices = std::make_shared<LogicalTensorData>(indicesData, shapeIndices, shapeOffset1);
+    auto valuesData = std::make_shared<RawTensorData>(DataType::DT_FP32, shapeValues);
+    auto values = std::make_shared<LogicalTensorData>(valuesData, shapeValues, shapeOffset); 
+    npu::tile_fwk::calc::IndexPut(out, self, {indices}, values, false);
 }
 
 TEST_F(OperationImplTest, test_Expand_8_1_to_8_8) {
