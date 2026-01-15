@@ -89,6 +89,45 @@ def gather_in_ub(param: Tensor, indices: Tensor, block_table: Tensor,
     return pypto_impl.gather_in_ub(param, indices, block_table, block_size, axis)
 
 
+@op_wrapper
+def transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype) -> Tensor:
+    """
+    Performs a transposed batch matrix multiplication.
+
+    This operator computes:
+        1. Transpose tensor_a from shape (M, B, K) to (B, M, K).
+        2. Perform a batch matrix multiplication between the transposed tensor_a
+           (B, M, K) and tensor_b (B, K, N), yielding an intermediate result of
+           shape (B, M, N).
+        3. Transpose the intermediate result back to shape (M, B, N).
+
+    Parameters
+    ----------
+    tensor_a : Tensor
+        The left-hand input tensor with shape (M, B, K).
+        Supported data types: DT_FP16, DT_BF16.
+
+    tensor_b : Tensor
+        The right-hand input tensor with shape (B, K, N).
+        Supported data types: DT_FP16, DT_BF16.
+
+    out_dtype : dtype
+        The data type for the output tensor.
+
+    Returns
+    -------
+    Tensor
+        The output tensor of shape (M, B, N).
+
+    Examples
+    --------
+    a = pypto.tensor((16, 2, 32), pypto.DT_FP16, "tensor_a")
+    b = pypto.tensor((2, 32, 64), pypto.DT_FP16, "tensor_b")
+    c = pypto.experimental.transposed_batchmatmul(a, b, pypto.DT_FP16)
+    """
+    return pypto_impl.TransposedBatchMatmul(out_dtype, tensor_a, tensor_b)
+
+
 def set_operation_config(*, force_combine_axis: Optional[bool] = None,
                          combine_axis: Optional[bool] = None):
 

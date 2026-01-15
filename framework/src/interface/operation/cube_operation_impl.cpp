@@ -1238,7 +1238,7 @@ void ConstructTileGraph(Function &function, const TileShape &tileShape, const st
 
 void AddAMulBNode(const LogicalTensorPtr &aTensorPtr, const LogicalTensorPtr &bTensorPtr,
     const LogicalTensorPtr &cTensorPtr, const LogicalTensorPtr &gmTensorPtr, const MatmulAttrParam &attrParam,
-    const MatmulExtendParam &param = {}) {
+    const MatmulExtendParam &extendParam = {}) {
     if (CheckValidShape(aTensorPtr) && CheckValidShape(bTensorPtr)) {
         SymbolicScalar mSizeDyn =
             attrParam.transA ? aTensorPtr->GetDynValidShape()[1] : aTensorPtr->GetDynValidShape()[0];
@@ -1256,17 +1256,17 @@ void AddAMulBNode(const LogicalTensorPtr &aTensorPtr, const LogicalTensorPtr &bT
         operandVec.push_back(gmTensorPtr);
         gmAccumulationFlag = true;
     }
-    if (param.biasTensor.GetStorage() != nullptr) {
-        operandVec.push_back(param.biasTensor.GetStorage());
+    if (extendParam.biasTensor.GetStorage() != nullptr) {
+        operandVec.push_back(extendParam.biasTensor.GetStorage());
     }
-    if (param.scaleTensor.GetStorage() != nullptr) {
-        operandVec.push_back(param.scaleTensor.GetStorage());
+    if (extendParam.scaleTensor.GetStorage() != nullptr) {
+        operandVec.push_back(extendParam.scaleTensor.GetStorage());
     }
     Function *functionPtr = Program::GetInstance().GetCurrentFunction();
 
     OP_CHECK(true, { ASSERT(functionPtr != nullptr) << "functionPtr is nullptr." << std::endl; });
     auto &op = functionPtr->AddOperation(Opcode::OP_A_MUL_B, operandVec, {cTensorPtr});
-    SetTensorGraphAttr(op, param, gmAccumulationFlag, attrParam);
+    SetTensorGraphAttr(op, extendParam, gmAccumulationFlag, attrParam);
 }
 
 Tensor ConstructTensorGraph(DataType dataType, const Tensor &aMatrix, const Tensor &bMatrix, const Tensor &gmMatrix,
@@ -1512,6 +1512,45 @@ Tensor BatchMatmul(DataType dataType, const Tensor &aMatrix, const Tensor &bMatr
         res = ABatchMulB3D(dataType, aMatrix, bMatrix, attrParam);
     }
     return res;
+}
+
+// 定制接口：用于Transpose + BMM + Transpose融合场景
+// 当前仅支持：(M, B, K) @ (B, K, N) -> (M, B, N)
+Tensor TransposedBatchMatmul(DataType dataType, const Tensor &aMatrix, const Tensor &bMatrix) {
+    OP_CHECK(aMatrix.GetShape().size() != SHAPE_DIM3 || bMatrix.GetShape().size() != SHAPE_DIM3, {
+        ASSERT(false) << "TransposedBatchMatmul only support 3-dim inputs, aMatrix dim: " << aMatrix.GetShape().size()
+                      << ", bMatrix dim: " << bMatrix.GetShape().size() << std::endl;
+    });
+    const int64_t mSize = aMatrix.GetShape()[0];
+    const int64_t batchSizeA = aMatrix.GetShape()[1];
+    const int64_t kaSize = aMatrix.GetShape()[SHAPE_DIM2];
+    const int64_t batchSizeB = bMatrix.GetShape()[0];
+    const int64_t kbSize = bMatrix.GetShape()[1];
+    const int64_t nSize = bMatrix.GetShape()[SHAPE_DIM2];
+    OP_CHECK(batchSizeA != batchSizeB, {
+        ASSERT(false) << "batchSize invalid, expect batchSizeA = batchSizeB, given batchSizeA: " << batchSizeA
+                      << ", batchSizeB: " << batchSizeB << std::endl;
+    });
+    OP_CHECK(kaSize != kbSize, {
+        ASSERT(false) << "kSize invalid, expect kaSize = kbSize, given kaSize: " << kaSize << ", kbSize: " << kbSize
+                      << std::endl;
+    });
+    // 128: custom tile shape size
+    TileShape::Current().SetVecTile({1, 128, 128});
+    Tensor aMatrixFused = Reshape(aMatrix, {mSize, batchSizeA * kaSize});
+    Tensor cMatrix(dataType, {mSize, batchSizeA * nSize});
+    for (int64_t bIdx = 0; bIdx < batchSizeA; ++bIdx) {
+        Tensor aTensor =
+            View(aMatrixFused, {mSize, kaSize}, std::vector<SymbolicScalar>({mSize, kaSize}), {0, bIdx * kaSize});
+        Tensor bTensorSingleBatch =
+            View(bMatrix, {1, kbSize, nSize}, std::vector<SymbolicScalar>({1, kbSize, nSize}), {bIdx, 0, 0});
+        Tensor bTensor = Reshape(bTensorSingleBatch, {kbSize, nSize});
+        Tensor cTensor(dataType, {mSize, nSize}, "TensorC");
+        MatmulAttrParam attrParam(false, false, false);
+        AddAMulBNode(aTensor.GetStorage(), bTensor.GetStorage(), cTensor.GetStorage(), nullptr, attrParam);
+        Assemble(cTensor, {0, bIdx * nSize}, cMatrix);
+    }
+    return Reshape(cMatrix, {mSize, batchSizeA, nSize});
 }
 }  // namespace Matrix
 }  // namespace tile_fwk

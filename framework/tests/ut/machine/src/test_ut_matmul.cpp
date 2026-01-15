@@ -172,4 +172,28 @@ TEST_F(DynamicMatmulUTest, mm_A_B_ND_config) {
     }
 }
 
+TEST_F(DynamicMatmulUTest, transposed_batchmatmul_test) {
+    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+    config::SetHostOption(ONLY_CODEGEN, true);
+
+    int64_t b = 4;
+    int64_t m = 16;
+    int64_t k = 128;
+    int64_t n = 256;
+    std::vector<int64_t> shape_a = {m, b, k};
+    std::vector<int64_t> shape_b = {b, k, n};
+    std::vector<int64_t> shape_c = {m, b, n};
+
+    Tensor tensor_a(DataType::DT_BF16, shape_a, "tensor_a", TileOpFormat::TILEOP_ND);
+    Tensor tensor_b(DataType::DT_BF16, shape_b, "tensor_b", TileOpFormat::TILEOP_ND);
+    Tensor tensor_c(DataType::DT_BF16, shape_c, "tensor_c", TileOpFormat::TILEOP_ND);
+
+    FUNCTION("test_transposed_batch_mm", {tensor_a, tensor_b}, {tensor_c}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, batchId, LoopRange(1)) {
+            TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+            tensor_c = Matrix::TransposedBatchMatmul(DataType::DT_BF16, tensor_a, tensor_b);
+        }
+    }
+}
+
 } // namespace

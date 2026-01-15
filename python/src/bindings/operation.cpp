@@ -402,7 +402,12 @@ void bind_operation(py::module &m) {
         },
         py::arg("out_type"), py::arg("a"), py::arg("b"), py::arg("a_trans") = false, py::arg("b_trans") = false,
         py::arg("c_matrix_nz") = false, "Batch matrix multiply.");
-
+    m.def(
+        "TransposedBatchMatmul",
+        [](DataType out_type, const Tensor &tensor_a, const Tensor &tensor_b) {
+            return Matrix::TransposedBatchMatmul(out_type, tensor_a, tensor_b);
+        },
+        py::arg("out_type"), py::arg("a"), py::arg("b"), "Transposed batch matrix multiply.");
     m.def(
         "ArgSort",
         [](const Tensor &operand, int axis, bool is_largest = true) {
