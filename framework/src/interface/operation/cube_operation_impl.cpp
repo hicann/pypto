@@ -629,6 +629,21 @@ void CheckOperandShape(const Tensor &operand1, const Tensor &operand2)
     }
 }
 
+void CheckL1L0Tile(const int64_t L0Tile, const int64_t L1Tile, const std::string L0TileName, const std::string L1TileName) 
+{
+    OP_CHECK(true, {
+        ASSERT(L0Tile != 0) 
+            << "Current " << L0TileName << ": " << L0Tile
+            << ", Requirement: " << L0TileName << " cannot be zero." << std::endl;
+    });
+    OP_CHECK(true, {
+        ASSERT(L0Tile <= L1Tile && L1Tile % L0Tile == 0) 
+            << "Current " << L0TileName << ": " << L0Tile << ", " << L1TileName << ": " << L1Tile
+            << ", Requirement: " << L0TileName << " <= " << L1TileName << " && "
+            << L1TileName << " % " << L0TileName << " == 0" << std::endl;
+    });
+}
+
 void CheckCubeTiling(const Tensor &operand1, const Tensor &operand2, const MatmulAttrParam &attrParam) {
     auto cubeTile = TileShape::Current().GetCubeTile();
     const int32_t kBL1Idx = 2;
@@ -646,21 +661,14 @@ void CheckCubeTiling(const Tensor &operand1, const Tensor &operand2, const Matmu
             << " Requirement: kL0 > 0 && kL1a > 0 && mL0 > 0 && mL1 > 0 && nL0 > 0 && nL1 > 0" << std::endl;
     });
     OP_CHECK(true, {
-        ASSERT(kL0 <= kL1a && kL1a % kL0 == 0) << "Current kL0: " << kL0 << ", kL1a: " << kL1a
-                                               << ", Requirement: kL0 <= kL1a && kL1a % kL0 == 0" << std::endl;
+        ASSERT(kL0 % ALIGN_SIZE_16 == 0 && nL0 % ALIGN_SIZE_16 == 0)
+            << "Current element count of kL0: " << kL0 << ", nL0: " << nL0
+            << ", the element count must be aligned to 16" << std::endl;
     });
-    OP_CHECK(true, {
-        ASSERT(kL0 <= kL1b && kL1b % kL0 == 0) << "Current kL0: " << kL0 << ", kL1b: " << kL1b
-                                               << ", Requirement: kL0 <= kL1b && kL1b % kL0 == 0" << std::endl;
-    });
-    OP_CHECK(true, {
-        ASSERT(nL0 <= nL1 && nL1 % nL0 == 0)
-            << "Current nL0: " << nL0 << ", nL1: " << nL1 << ", Requirement: nL0 <= nL1 && nL1 % nL0 == 0" << std::endl;
-    });
-    OP_CHECK(true, {
-        ASSERT(mL0 <= mL1 && mL1 % mL0 == 0)
-            << "Current mL0: " << mL0 << ", mL1: " << mL1 << ", Requirement: mL0 <= mL1 && mL1 % mL0 == 0" << std::endl;
-    });
+    CheckL1L0Tile(kL0, kL1a, "kL0", "kL1a");
+    CheckL1L0Tile(kL0, kL1b, "kL0", "kL1b");
+    CheckL1L0Tile(nL0, nL1, "nL0", "nL1");
+    CheckL1L0Tile(mL0, mL1, "mL0", "mL1");
     OP_CHECK(true, {
         ASSERT(kL0 * BytesOf(operand1.GetDataType()) % ALIGN_SIZE_32 == 0)
             << "Current length of kL0: " << (kL0 * BytesOf(operand1.GetDataType()))
