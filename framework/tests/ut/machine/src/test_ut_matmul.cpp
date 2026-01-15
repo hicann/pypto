@@ -190,6 +190,7 @@ TEST_F(DynamicMatmulUTest, transposed_batchmatmul_test) {
 
     FUNCTION("test_transposed_batch_mm", {tensor_a, tensor_b}, {tensor_c}) {
         LOOP("L0", FunctionType::DYNAMIC_LOOP, batchId, LoopRange(1)) {
+            (void)batchId;
             TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
             tensor_c = Matrix::TransposedBatchMatmul(DataType::DT_BF16, tensor_a, tensor_b);
         }
