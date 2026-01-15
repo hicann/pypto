@@ -144,7 +144,7 @@ python3 softmax.py
 
 程序执行成功后，显示以下信息：
 
-```txt
+```text
 Input shape: torch.Size([32, 32, 1, 256])
 Output shape: torch.Size([32, 32, 1, 256])
 ✓ Softmax test passed

@@ -23,7 +23,7 @@ Value (基类)
 - `Tensor` → `TensorType`
 
 示例：
-```ir
+```text
 func.func @test_value(%input_3: tensor<[%b_1, 128], fp32>, %scale1_4: fp32) {
   statement.op {
     %const_0 = 0 : int64
@@ -84,7 +84,7 @@ public:
 `ScalarType` 表示标量类型（单个值）。
 
 #### Syntax
-```ir
+```text
 fp32
 int32
 bool
@@ -139,7 +139,7 @@ public:
 `TensorType` 表示张量类型（动态形状）。
 
 #### Syntax
-```ir
+```text
 tensor<[%b_1, 128], fp32>
 tensor<[%M, %N, %K], fp16>
 ```
@@ -193,7 +193,7 @@ enum class ScalarValueKind {
 `Value` 是所有值的基类。
 
 #### Syntax
-```ir
+```text
 %value_name_1 : type
 %input_3 : tensor<[%b_1, 128], fp32>
 %scale1_4 : fp32
@@ -229,7 +229,7 @@ public:
 `Scalar` 表示标量值，支持常量值和符号值。
 
 #### Syntax
-```ir
+```text
 %const_0 = 0 : int64
 %const_pi_13 = 3.14 : fp64
 %scale1_4 : fp32
@@ -275,7 +275,7 @@ public:
 `Tile` 表示 Tile 值（固定形状的多维数组）。
 
 #### Syntax
-```ir
+```text
 %tile_0 : tile<[16, 32], fp32>
 %tile_1 : tile<[M, N], fp16> {valid_shape=[%m, %n], strides=[32, 1], offset=0}
 ```
@@ -321,7 +321,7 @@ public:
 `Tensor` 表示张量值（动态形状的多维数组）。
 
 #### Syntax
-```ir
+```text
 %input_3 : tensor<[%b_1, 128], fp32>
 %output_8 : tensor<[%b_1, 128], fp32>
 %tensor_0 : tensor<[%M, %N, %K], fp16>

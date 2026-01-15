@@ -29,7 +29,7 @@ ffn\_shared\_expert\_quant算子对应GLM4.5网络中MoE共享专家的计算逻
 
 以下是ffn\_shared\_expert\_quant算子测试用例运行失败时展示的ERROR信息：
 
-```txt
+```text
 ERROR:root:Record function share_expert_moe_main failed: ASSERTION FAILED: kSizeA == kSizeB
 Matrix K dimemsion mismatch, kSizeA: 384, kSizeB: 8
 , func ConstructTensorGraph, file cube_operation_impl.cpp, line 1220

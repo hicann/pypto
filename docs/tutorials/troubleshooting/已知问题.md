@@ -37,13 +37,13 @@ foo_kernel(pypto.from_torch(x), pypto.from_torch(y))
 
 执行时报错：ASSERTION FAILED
 
-```txt
+```text
 ERROR:root:Record function foo_kernel failed: ASSERTION FAILED: outDegree[opToIndex[op.get()]] == 0
 ```
 
 详细报错如下：
 
-```txt
+```text
 ERROR:root:Record function foo_kernel failed: ASSERTION FAILED: outDegree[opToIndex[op.get()]] == 0
 Operation not fully processed: /* /home/pypto-dev/a.py:9 */
 <32 x 32 x DT_FP32 / 32 x 32 x DT_FP32> %0@2#(-1)MEM_UNKNOWN::MEM_UNKNOWN = !10000 VEC_DUP(g:-1, s:-1) #SCALAR{0.000000} #op_attr_shape{[32, 32]} #op_attr_validShape{[32,32]}
@@ -173,7 +173,7 @@ def add_kernel_1(a, b, c):
 
 在仿真环境中执行算子时，出现失败，报错信息如下。
 
-```txt
+```text
 ImportError: libhccl.so: cannot open shared object file: No such file or directory
 ```
 

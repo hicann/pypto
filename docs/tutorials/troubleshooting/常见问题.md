@@ -70,7 +70,7 @@ tensor([[2., 2., 2., 2.],
 
 在昇腾AI处理器上执行算子时，出现失败，报错信息如下。
 
-```txt
+```text
 2025-12-17 14:31:32.491 E | fail get device id, check if set device id
 2025-12-17 14:31:32.492 E | RuntimeAgent::AllocDevAddr failed for size 20448
 2025-12-17 14:31:32.493 E | RuntimeAgent::AllocDevAddr failed for size 20448
@@ -97,7 +97,7 @@ def test_onboard():
 
 算子上板执行时出现如下报错字样：
 
-```txt
+```text
 ErrorTracking callback in, task_id = 0, stream_id = 3.
 [ERROR] Exception Type: exception invalid error
 taskid: 0, streamid: 3, tid: 6495, deviceid: 0, retcode: 507018
@@ -110,7 +110,7 @@ kernelName = (null)
 
 且device日志中出现类似如下接口为空报错：
 
-```txt
+```text
 ~/ascend/log/debug/device-0/device-6495_20251222194004973.log
 [ERROR] CCECPU(5670,aicpu_scheduler):2025-12-22-19:40:01.899.541 [ae_kernel_lib_aicpu_kfc.cpp:105][CallKernelApi][tid:5680][AICPU_PROCESSER] Get KFC DynTileFwkKernelServerInit api success, but func is nullptr: (null)
 [ERROR] CCECPU(5670,aicpu_scheduler):2025-12-22-19:40:01.902.745 [ae_kernel_lib_aicpu_kfc.cpp:105][CallKernelApi][tid:5681][AICPU_PROCESSER] Get KFC DynTileFwkKernelServer api success, but func is nullptr: (null)
@@ -124,7 +124,7 @@ PyPTO驱动包支持25.2.0以上版本，CANN包支持8.5.0以上版本。
 
 可以查看驱动包安装目录下的version信息，如：
 
-```txt
+```text
 /usr/local/Ascend/driver/version.info
     Version=25.3.rc1
     ascendhal_version=7.35.23
@@ -142,7 +142,7 @@ PyPTO驱动包支持25.2.0以上版本，CANN包支持8.5.0以上版本。
 
 同样可以查看CANN包安装目录下opp包内的version信息，如：
 
-```txt
+```text
 /usr/local/Ascend/ascend-toolkit/latest/opp/version.info
     Version=8.5.0.2.220
     version_dir=8.5.0
@@ -158,7 +158,7 @@ PyPTO驱动包支持25.2.0以上版本，CANN包支持8.5.0以上版本。
 
 算子执行时出现如下报错：
 
-```txt
+```text
 2025-12-18 10:33:06.107 E | [ExpandFunction][Function][ERROR]: FUnction[TENSOR_b_loop_Unroll1_PATH0_hiddenfunc0] ExpandFunction failed: Tile shape size 1 is not matched the output shape size 2.
 2025-12-18 10:33:06.107 E | Run pass [ExpandFunction] failed.
 2025-12-18 10:33:06.107 E | Run pass <ExpandFunction> failed
@@ -172,7 +172,7 @@ PyPTO驱动包支持25.2.0以上版本，CANN包支持8.5.0以上版本。
 
 根据报错提示定位到相应的循环，如下所说，问题代码出现在b\_loop循环中。
 
-```txt
+```text
 FUnction[TENSOR_b_loop_Unroll1_PATH0_hiddenfunc0]
 ```
 
@@ -221,7 +221,7 @@ with pypto.function("TENSOR_SUM_FP32", [x], [res]):
 
 通过pypto.set\_xxx\_tile\_shapes设置TileShape大小最后一维需要32字节对齐，否则会校验报错。
 
-```txt
+```text
 C++ exception with description "ASSERTION FAILED: vecTile[lastDim] % alignNum == 0
 Sum op: the tileShape of last axis need to 32Byte align!, func Sum, file reduction.cpp, line 374
 libtile_fwk_interface.so(npu::tile_fwk::Sum(npu::tile_fwk::Tensor const&, int, bool)+0x620) [0xffff9ff2e090]
@@ -242,13 +242,13 @@ libtile_fwk_interface.so(npu::tile_fwk::Sum(npu::tile_fwk::Tensor const&, int, b
 
 算子编译时出现类似如下报错字样：
 
-```txt
+```text
 error: stack frame size (*****) exceeds limit (32768) in function '*****'
 ```
 
 在打屏日志中呈现样例如下：
 
-```txt
+```text
 error: stack frame size (47928) exceeds limit (32768) in function 'TENSOR_nLoop_Unroll1_PATH0_6_0_4503599627370496'
 error: stack frame size (47928) exceeds limit (32768) in function 'TENSOR_nLoop_Unroll1_PATH0_6_0_4503599627370496'
 2 errors generated.
