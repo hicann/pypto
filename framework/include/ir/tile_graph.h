@@ -20,6 +20,20 @@
 
 namespace pto {
 
+enum class CmpOperationType {
+    EQ,
+    NE,
+    LT,
+    LE,
+    GT,
+    GE,
+};
+
+enum class CmpModeType {
+    BOOL,
+    BIT,
+};
+
 #define DEFOP DEFOP_CLASS
 #include "tile_graph.def"
 #undef DEFOP

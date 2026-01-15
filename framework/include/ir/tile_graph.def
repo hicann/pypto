@@ -21,14 +21,107 @@ DEFOP(
         OP_NEG,
         OP_RSQRT,
         OP_SQRT,
-        OP_LOGICALNOT,
         OP_RECIPROCAL,
         OP_ABS,
-        OP_LN
+        OP_LN,
+ 	    OP_COMPACT
     ),
     INPUT(Tile, Input),
     OUTPUT(Tile, Output),
     ATTR(int, CombineAxis, -1)
+)
+
+DEFOP(
+    UnaryWithTempOp,
+    INHERIT(ElementWiseUnaryWithTempTileBaseOp),
+    OPCODE(
+        OP_LOGICALNOT
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor)
+)
+
+DEFOP(
+    ExpandOp,
+    INHERIT(ExpandTileBaseOp),
+    OPCODE(
+ 	    OP_EXPAND
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+ 	ATTR(int, ExpandDim, -1)
+)
+
+DEFOP(
+    TransposeOp, 
+    INHERIT(TransposeTileBaseOp),
+    OPCODE(
+        OP_TRANSPOSE_MOVEIN,
+        OP_TRANSPOSE_MOVEOUT
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis0, -1),
+    ATTR(int, Axis1, -1) 
+)
+
+DEFOP(
+    TransposeVnchwConvOp,
+    INHERIT(TransposeTileBaseOp),
+    OPCODE(
+        OP_TRANSPOSE_VNCHWCONV
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(bool, ExcludeBufferReuse, false)
+)
+
+DEFOP(
+    OnehotOp,
+    INHERIT(OnehotTileBaseOp),
+    OPCODE(
+ 	    OP_ONEHOT
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+ 	ATTR(int, NumClasses, -1)
+)
+
+DEFOP(
+    CastOp,
+    INHERIT(CastTileBaseOp),
+    OPCODE(
+        OP_CAST
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(CastMode, Mode, CastMode::CAST_NONE)
+)
+
+DEFOP(
+    RangeOp,
+    INHERIT(RangeTileBaseOp),
+    OPCODE(
+        OP_RANGE
+    ),
+    INPUT(Scalar, START),
+    INPUT(Scalar, STEP),
+    INPUT(Scalar, Size),
+    OUTPUT(Tile, Output),
+    ATTR(int, TileIdx, -1)
+)
+
+DEFOP(
+    CumSumOp,
+    INHERIT(CumSumTileBaseOp),
+    OPCODE(
+        OP_CUM_SUM
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, -1),
+    ATTR(bool, Flag, false)
 )
 
 DEFOP(
@@ -40,12 +133,64 @@ DEFOP(
         OP_MUL,
         OP_DIV,
         OP_MIN,
-        OP_MAX
+        OP_MAX,
+        OP_S_ADD,
+        OP_S_SUB,
+        OP_S_MUL,
+        OP_S_DIV,
+        OP_S_MAX,
+        OP_S_MIN,
+        OP_PAD
     ),
     INPUT(Tile, Lhs),
     INPUT(Tile, Rhs),
     OUTPUT(Tile, Output),
-    ATTR(int, CombineAxis, -1)
+    ATTR(int, CombineAxis, -1),
+    ATTR(bool, ReverseOperand, false)
+)
+
+DEFOP(
+    BinaryWithTempOp,
+    INHERIT(ElementWiseBinaryWithTempTileBaseOp),
+    OPCODE(
+        OP_LOGICALAND
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor),
+    ATTR(int, CombineAxis, -1),
+    ATTR(bool, ReverseOperand, false)
+)
+
+DEFOP(
+    ScatterElementsOp,
+    INHERIT(ScatetrElementsTileBaseOp),
+    OPCODE(
+        OP_SCATTER_ELEMENT
+    ),
+    INPUT(Tile, Src0),
+    INPUT(Tile, Src1),
+    INPUT(Scalar, scatter),
+    OUTPUT(Tile, Output),
+    ATTR(int, CombineAxis, -1),
+    ATTR(int, Axis, -1),
+    ATTR(int, ScatterMode, 0)
+)
+
+DEFOP(
+    ScatterOp,
+    INHERIT(ScatterTileBaseOp),
+    OPCODE(
+        OP_SCATTER
+    ),
+    INPUT(Tile, Src0),
+    INPUT(Tile, Src1),
+    INPUT(Tile, Src2),
+    OUTPUT(Tile, Output),
+    ATTR(int, CombineAxis, -1),
+    ATTR(int, Axis, -1),
+    ATTR(int, ScatterMode, 0)
 )
 
 DEFOP(
@@ -57,13 +202,20 @@ DEFOP(
         OP_MULS,
         OP_DIVS,
         OP_MINS,
-        OP_MAXS
+        OP_MAXS,
+        OP_S_ADDS,
+        OP_S_SUBS,
+        OP_S_MULS,
+        OP_S_DIVS,
+        OP_S_MAXS,
+        OP_S_MINS
+        
     ),
     INPUT(Tile, Lhs),
     INPUT(Scalar, Rhs),
     OUTPUT(Tile, Output),
     ATTR(int, CombineAxis, -1),
-    ATTR(bool, Reverse, false)
+    ATTR(bool, ReverseOperand, false)
 )
 
 DEFOP(
@@ -157,4 +309,395 @@ DEFOP(
     INPUT(Tile, Input),
     INPUT(ScalarList, Offsets),
     OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    VecDupOp,
+    INHERIT(VecDupTileBaseOp),
+    OPCODE(
+        OP_VEC_DUP
+    ),
+    INPUT(Scalar, Value),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    PowOp,
+    INHERIT(PowTileBaseOp),
+    OPCODE(
+        OP_POW
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Scalar, Rhs),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    GatherOp,
+    INHERIT(GatherTileBaseOp),
+    OPCODE(
+        OP_GATHER
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, -1)
+)
+
+DEFOP(
+    GatherExtendedOp,
+    INHERIT(GatherTileBaseOp),
+    OPCODE(
+        OP_GATHER_FROM_UB,
+        OP_GATHER_ELEMENT
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, -1),
+    ATTR(bool, ExcludeBufferReuse, false)   // 控制内存复用的属性值
+)
+
+DEFOP(
+    BroadcastWithTempOp,
+    INHERIT(BroadcastWithTempTileBaseOp),
+    OPCODE(
+        OP_MAXIMUM,
+        OP_MINIMUM,
+        OP_PAIRMAX,
+        OP_PAIRMIN,
+        OP_PAIRSUM
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor),
+    ATTR(int, CombineAxis, -1)
+)
+
+
+DEFOP(
+    FusedOp,
+    INHERIT(BroadcastTileBaseOp),
+    OPCODE(
+        OP_FUSED_OP
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output)
+)
+
+
+DEFOP(
+    ReduceWithTempOp,
+    INHERIT(ReduceWithTempTileBaseOp),
+    OPCODE(
+        OP_ROWMAX_SINGLE,
+        OP_ROWMIN_SINGLE,
+        OP_ROWSUM_SINGLE,
+        OP_ROWSUMLINE
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor),
+    ATTR(int, Axis, -1),
+    ATTR(bool, ExcludeBufferReuse, false)
+)
+
+DEFOP(
+    ReduceOp,
+    INHERIT(ReduceTileBaseOp),
+    OPCODE(
+        OP_ROWMAXLINE,
+        OP_ROWMINLINE
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, -1)
+)
+
+DEFOP(
+    ConvertOp,
+    INHERIT(ConvertTileOp),
+    OPCODE(
+ 	    OP_CONVERT
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    CopyInOutOp,
+    INHERIT(CopyInOutTileOp),
+    OPCODE(
+ 	    OP_COPY_IN,
+ 	    OP_COPY_OUT
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, FromOffset, 0),
+    ATTR(int, ToOffset, 0),
+    ATTR(bool, ExcludeBufferReuse, false),
+    ATTR(int, CombineAxis, -1)
+)
+
+DEFOP(
+    DuplicateOp,
+    INHERIT(DuplicateTileOp),
+    OPCODE(
+ 	    OP_DUPLICATE
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(bool, ExcludeBufferReuse, false)
+)
+
+DEFOP(
+    LoadOp,
+    INHERIT(LoadTileOp),
+    OPCODE(
+ 	    OP_LOAD
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    LoadStoreOp,
+    INHERIT(LoadStoreTileOp),
+    OPCODE(
+        OP_UB_COPY_IN,
+        OP_UB_COPY_OUT
+    ),
+    INPUT(Tile, Lhs),
+    INPUT(Tile, Rhs),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+ 	GatherInUBOp,
+ 	INHERIT(GatherInUBTileOp),
+ 	OPCODE(
+ 	    OP_GATHER_IN_UB
+ 	),
+    INPUT(Tile, Input1),
+    INPUT(Tile, Input2),
+    INPUT(Tile, Input3),
+    OUTPUT(Tile, Output),
+    ATTR(int, BlockSize, 32)
+)
+
+DEFOP(
+ 	GatherInL1Op,
+ 	INHERIT(GatherInL1TileOp),
+ 	OPCODE(
+ 	    OP_GATHER_IN_L1
+ 	),
+    INPUT(Tile, Input1),
+    INPUT(Tile, Input2),
+    INPUT(Tile, Input3),
+    OUTPUT(Tile, Output),
+ 	ATTR(int, StartOffset, 0),
+    ATTR(int, BlockSize, 32)
+)
+
+DEFOP(
+    AnyDataCopyOp,
+    INHERIT(AnyDataCopyTileOp),
+    OPCODE(
+ 	    OP_VLD,
+ 	    OP_VST
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+    IndexOutCastOp,
+    INHERIT(IndexOutCastTileOp),
+    OPCODE(
+        OP_INDEX_OUTCAST
+    ),
+    INPUT(Tile, Src),
+    INPUT(Tile, Index),
+    INPUT(Tile, Dst),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, -1),
+    ATTR(int, PanzBlockSize, 32),
+    ATTR(int, BlockSize, 32),
+    ATTR(std::string, CacheMode, "PA_NZ")
+)
+
+DEFOP(
+    IndexAddOp,
+    INHERIT(IndexAddTileOp),
+    OPCODE(
+        OP_INDEX_ADD
+    ),
+    INPUT(Tile, Input1),
+    INPUT(Tile, Input2),
+    INPUT(Tile, Input3),
+    INPUT(Scalar, Alpha),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, -1)
+)
+
+DEFOP(
+    TopKOp,
+    INHERIT(TopKTileOp),
+    OPCODE(
+        OP_TOPK
+    ),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output1),
+    OUTPUT(Tile, Output2),
+    ATTR(int, Axis, 1),
+    ATTR(int, KValue, 1),
+    ATTR(bool, Order, false)
+)
+
+DEFOP(
+ 	BitSortOp,
+ 	INHERIT(BitSortTileOp),
+ 	OPCODE(
+ 	    OP_BITSORT
+ 	),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, 1),
+ 	ATTR(int, TopOffset, 0),
+    ATTR(bool, Order, false)
+)
+
+DEFOP(
+ 	MrgSortOp,
+ 	INHERIT(MrgSortTileOp),
+ 	OPCODE(
+ 	    OP_MRGSORT
+ 	),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+    ATTR(int, Axis, 1),
+    ATTR(int, KValue, 1),
+    ATTR(bool, Order, false)
+)
+
+DEFOP(
+ 	ArgSortOp,
+ 	INHERIT(ArgSortTileOp),
+ 	OPCODE(
+ 	    OP_ARGSORT
+ 	),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output)
+)
+
+DEFOP(
+ 	ExtractOp,
+ 	INHERIT(ExtractSortTileOp),
+ 	OPCODE(
+ 	    OP_EXTRACT
+ 	),
+    INPUT(Tile, Input),
+    OUTPUT(Tile, Output),
+ 	ATTR(int, ExtractMaskMode, 0),
+    ATTR(int, KValue, 1),
+    ATTR(bool, Order, false)
+)
+
+DEFOP(
+ 	TiledMrgSortOp,
+ 	INHERIT(TiledMrgSortTileOp),
+ 	OPCODE(
+ 	    OP_TILEDMRGSORT
+ 	),
+    INPUT(Tile, Input1),
+    INPUT(Tile, Input2),
+    INPUT(Tile, Input3),
+    INPUT(Tile, Input4),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, Temp),
+ 	ATTR(int, TopKValidBit, 2),
+    ATTR(int, KValue, 1)
+)
+
+DEFOP(
+ 	TernaryOp,
+ 	INHERIT(WhereTTTileOp),
+ 	OPCODE(
+ 	    OP_WHERE_TT
+ 	),
+    INPUT(Tile, Condition),
+    INPUT(Tile, Input),
+    INPUT(Tile, Other),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor)
+)
+
+DEFOP(
+    WhereTSOp,
+    INHERIT(WhereTSTileOp),
+    OPCODE(
+        OP_WHERE_TS
+    ),
+    INPUT(Tile, Condition),
+    INPUT(Tile, Input),
+    INPUT(Scalar, Other),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor)
+)
+
+DEFOP(
+    WhereSTOp,
+    INHERIT(WhereSTTileOp),
+    OPCODE(
+        OP_WHERE_ST
+    ),
+    INPUT(Tile, Condition),
+    INPUT(Scalar, Input),
+    INPUT(Tile, Other),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor)
+)
+
+DEFOP(
+    WhereSSOp,
+    INHERIT(WhereSSTileOp),
+    OPCODE(
+        OP_WHERE_SS
+    ),
+    INPUT(Tile, Condition),
+    INPUT(Scalar, Input),
+    INPUT(Scalar, Other),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor)
+)
+
+DEFOP(
+    CompareOp,
+    INHERIT(CompareTileBaseOp),
+    OPCODE(
+        OP_CMP
+    ),
+    INPUT(Tile, Input1),
+    INPUT(Tile, Input2),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor),
+    ATTR(CmpOperationType, CmpOperation, CmpOperationType::EQ),
+    ATTR(CmpModeType, CmpMode, CmpModeType::BOOL)
+)
+
+DEFOP(
+    CompareScalarOp,
+    INHERIT(CompareScalarTileBaseOp),
+    OPCODE(
+        OP_CMPS
+    ),
+    INPUT(Tile, Input1),
+    INPUT(Scalar, Input2),
+    OUTPUT(Tile, Output),
+    OUTPUT(Tile, TempTensor),
+    ATTR(CmpOperationType, CmpOperation, CmpOperationType::EQ),
+    ATTR(CmpModeType, CmpMode, CmpModeType::BOOL)
 )
