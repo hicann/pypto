@@ -429,7 +429,7 @@ def quant_attention_pre_kernel(x, residual_input, x_gamma, x_bias,
             valid_shape=[act_bs_tile, q_num_head, half_rotary_dim])
 
         # rope data
-        q_rope = rope_data(q1, q2, cos_fp32, sin_fp32, [q_batch_tile, q_num_head, half_rotary_dim])
+        q_rope = rope_data(q1, q2, cos_fp32, sin_fp32, [q_batch_tile, q_num_head, head_size])
         q_cat = pypto.concat([q_rope, q_pass], 2)
 
         # k split
@@ -439,7 +439,7 @@ def quant_attention_pre_kernel(x, residual_input, x_gamma, x_bias,
             valid_shape=[act_bs_tile, kv_num_head, half_rotary_dim])
 
         # rope data
-        k_rope = rope_data(k1, k2, cos_fp32, sin_fp32, [q_batch_tile, q_num_head, half_rotary_dim])
+        k_rope = rope_data(k1, k2, cos_fp32, sin_fp32, [q_batch_tile, kv_num_head, head_size])
         k_cat = pypto.concat([k_rope, k_pass], 2)
 
         # post process
