@@ -416,14 +416,12 @@ std::string CodeGenOpCloudNPU::GenMemL0CToL1() const {
     }
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
     std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
-
-    std::vector dstShape = this->rawShape[ID0];
-    std::vector dstOffset = this->offset[ID0];
-
     std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID1]);
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
-    auto dynValidShape = dynamicValidShape[ID1];
+    auto dstValidShape = dynamicValidShape[ID0];
+    auto srcValidShape = dynamicValidShape[ID1];
+    auto dynValidShapeFromAttr = dynValidShapeFromOpAttr[ID0];
 
     std::ostringstream os;
     std::vector<std::string> paramList;
@@ -437,14 +435,22 @@ std::string CodeGenOpCloudNPU::GenMemL0CToL1() const {
     std::string dst = "(" + GetAddrTypeByOperandType(BUF_L1) + " " + dstDtypeStr + "*)" + dstVar;
     std::string src = "(" + GetAddrTypeByOperandType(BUF_L0C) + " " + srcDtypeStr + "*)" + srcVar;
     paramList.insert(paramList.end(), {dst, src});
-    for (const auto &dynShape : dynValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dynShape));
+    for (const auto &realShape : dynValidShapeFromAttr) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(realShape));
     }
-    for (auto tmpShape : dstShape) {
-        paramList.emplace_back(std::to_string(tmpShape));
+    for (const auto &dstShape : dstValidShape) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstShape));
     }
-    for (auto tmpOffset : dstOffset) {
-        paramList.emplace_back(std::to_string(tmpOffset));
+    auto l1Offset = offsetGmSymbolic[ID0];
+    for (auto dstOffset : l1Offset) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstOffset));
+    }
+    for (auto srcShape : srcValidShape) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(srcShape));
+    }
+    auto l0COffset = offsetGmSymbolic[ID1];
+    for (auto srcOffset : l0COffset) {
+        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(srcOffset));
     }
     npu::tile_fwk::Element scaleValue = npu::tile_fwk::Element(DataType::DT_UINT64, 0);
     GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);

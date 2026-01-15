@@ -505,14 +505,14 @@ TILEOP void DynL0CCopyOut(__gm__ GMT *dst, __cc__ L0CT *src, unsigned oriTShape0
         l1Addr, l0cAddr, l0cValidShape0, l0cValidShape1, l1ValidShape0, l1ValidShape1, offset0, offset1, scaleValue);
 
 template <typename L1T, typename L0CT, uint8_t reluMode>
-TILEOP void DynL0CToL1(__cbuf__ L1T *dst, __cc__ L0CT *src, unsigned oriTShape0, unsigned oriTShape1,
-    unsigned l1Shape0, unsigned l1Shape1, unsigned l1Offset0, unsigned l1Offset1, uint64_t scaleValue = 0) {
+TILEOP void DynL0CToL1(__cbuf__ L1T *dst, __cc__ L0CT *src, unsigned shape0, unsigned shape1, unsigned l1Shape0,
+    unsigned l1Shape1, unsigned l1Offset0, unsigned l1Offset1, unsigned l0cShape0, unsigned l0cShape1,
+    unsigned l0cOffset0, unsigned l0cOffset1, uint64_t scaleValue = 0) {
     int64_t c0Size = BLOCK_ALIGN_BYTE / sizeof(L1T);
-    uint16_t mSize = oriTShape0;
-    uint16_t nSize = CeilAlign<uint16_t>(oriTShape1, c0Size);
-    uint32_t dstStrideDstD = l1Shape0;
-    uint16_t srcStride = CeilAlign<uint16_t>(oriTShape0, BLOCK_CUBE_M_N);
-
+    uint16_t mSize = CeilAlign<uint16_t>(shape0, BLOCK_CUBE_M_N);
+    uint16_t nSize = CeilAlign<uint16_t>(shape1, c0Size);
+    uint32_t dstStrideDstD = CeilAlign<uint16_t>(l1Shape0, BLOCK_CUBE_M_N);;
+    uint16_t srcStride = CeilAlign<uint16_t>(l0cShape0, BLOCK_CUBE_M_N);
     uint8_t unitFlagMode = 0;
     uint64_t quantPre = NoQuant;
     uint8_t reluPre = 0;
@@ -525,19 +525,19 @@ TILEOP void DynL0CToL1(__cbuf__ L1T *dst, __cc__ L0CT *src, unsigned oriTShape0,
             quantPre = QuantMode_t::NoQuant;
         }
     } else if constexpr (std::is_same<L0CT, int32_t>::value && std::is_same<L1T, half>::value) {
-       if (scaleValue == 0) {
-           quantPre = QuantMode_t::VDEQF16;
-       }else {
-           set_quant_pre(scaleValue);
-           quantPre = QuantMode_t::DEQF16;
-       }
+        if (scaleValue == 0) {
+            quantPre = QuantMode_t::VDEQF16;
+        }else {
+            set_quant_pre(scaleValue);
+            quantPre = QuantMode_t::DEQF16;
+        }
     }
-
     bool channelSplit = std::is_same<L1T, float>::value;
     bool nZ2NDEN = false;
     int64_t l1Offset = l1Offset1 * l1Shape0 + l1Offset0 * c0Size;
-    copy_matrix_cc_to_cbuf((__cbuf__ L1T *)(dst + l1Offset), (__cc__ L0CT *)src, 0, nSize, mSize, dstStrideDstD,
-        srcStride, unitFlagMode, quantPre, reluMode, channelSplit, nZ2NDEN);
+    int64_t l0cOffset = l0cOffset1 * l0cShape0 + l0cOffset0 * c0Size;
+    copy_matrix_cc_to_cbuf((__cbuf__ L1T *)(dst + l1Offset), (__cc__ L0CT *)(src + l0cOffset), 0, nSize, mSize,
+        dstStrideDstD, srcStride, unitFlagMode, quantPre, reluMode, channelSplit, nZ2NDEN);
 }
 
 // Internal: Reserved for custom scenarios.
