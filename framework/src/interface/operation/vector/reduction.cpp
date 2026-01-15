@@ -293,7 +293,7 @@ Tensor Amax(const Tensor &self, int axis, bool keepDim) {
 
     const int lastDim = self.GetShape().size() - 1;
     const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
-    auto &vecTile = TileShape::Current().GetVecTile();
+    auto vecTile = TileShape::Current().GetVecTile();
     if (axis == lastDim) {
         ASSERT(vecTile[lastDim] % alignNum == 0) << "Amax op: the tileShape of last axis need to 32Byte align!";
     }
@@ -332,7 +332,7 @@ Tensor Amin(const Tensor &self, int axis, bool keepDim) {
 
     const int lastDim = self.GetShape().size() - 1;
     const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
-    auto &vecTile = TileShape::Current().GetVecTile();
+    auto vecTile = TileShape::Current().GetVecTile();
     if (axis == lastDim) {
         ASSERT(vecTile[lastDim] % alignNum == 0) << "Amin op: the tileShape of last axis need to 32Byte align!";
     }
@@ -372,7 +372,7 @@ Tensor Sum(const Tensor &self, int axis, bool keepDim) {
 
     const int lastDim = self.GetShape().size() - 1;
     const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
-    auto &vecTile = TileShape::Current().GetVecTile();
+    auto vecTile = TileShape::Current().GetVecTile();
     if (axis == lastDim) {
         ASSERT(vecTile[lastDim] % alignNum == 0) << "Sum op: the tileShape of last axis need to 32Byte align!";
     }
