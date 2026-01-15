@@ -355,7 +355,6 @@ static void SimplifySlots(DyndevFunctionAttribute *attr, std::unordered_map<int,
         ASSERT(inoutLink.ioslotDict.count(devTile))<<"Function pointer "<<devTile->GetMagicName()<<" not found in ioslotDict";
         IncastOutcastSlot &ioslot = inoutLink.ioslotDict[devTile];
         for (auto &outcastSlots : ioslot.outcastSlot) {
-            ALOG_ERROR_F("outcastSlots size is %zu for function %s", outcastSlots.size(), devTile->GetMagicName().c_str());
             ASSERT(!outcastSlots.empty()) << "devTile: " << devTile->GetMagicName();
             bool outcastSlotFound = false;
             for (auto &outcastSlot : outcastSlots) {
