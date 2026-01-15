@@ -660,7 +660,6 @@ class JitCallableWrapper:
         RuntimeError
             If NPU mode is selected but CANN environment is not configured.
         """
-        self._set_runtime_debug_mode()
         cann_is_configed = bool(os.environ.get("ASCEND_HOME_PATH"))
         run_mode = pypto.get_runtime_options().get("run_mode", 0)
         if run_mode == 0:  # NPU mode
