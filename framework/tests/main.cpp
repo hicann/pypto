@@ -14,6 +14,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <iostream>
+#include "utils/test_cost_macro.h"
 
 class TestExecutionCounter : public testing::EmptyTestEventListener {
 public:
@@ -27,6 +29,13 @@ public:
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
 
+    auto isMetaParam = [](const std::string& arg) {
+        return arg == "--gtest_list_tests_with_meta";
+    };
+    if (std::find_if(argv + 1, argv + argc, isMetaParam) != argv + argc) {
+        ListTestsWithMetadata();
+        return 0;
+    }
     // 创建并注册监听器
     TestExecutionCounter counter;
     testing::UnitTest::GetInstance()->listeners().Append(&counter);

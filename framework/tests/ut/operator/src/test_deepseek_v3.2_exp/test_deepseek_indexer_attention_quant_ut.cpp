@@ -13,9 +13,8 @@
  * \brief
  */
 
-#include "gtest/gtest.h"
 #include "tilefwk/tilefwk_op.h"
-
+#include "test_cost_macro.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/tensor/logical_tensor.h"
@@ -84,8 +83,8 @@ void TestDeepSeekIndexerAttentionQuantUTest(DSIASimpleParams &params) {
     }
     params.blockNum = blockNum;
 
-    std::cout << "====input param==== b sq nq nkv dn dr blockNum blockSize topk: " 
-                << b << " " << s1 << " " << n1 << " " << n2 << " " << dn << " " << dr << " " << blockNum << " " << blockSize << " " << topk 
+    std::cout << "====input param==== b sq nq nkv dn dr blockNum blockSize topk: "
+                << b << " " << s1 << " " << n1 << " " << n2 << " " << dn << " " << dr << " " << blockNum << " " << blockSize << " " << topk
                 << std::endl;
 
     DataType dType = DT_BF16;
@@ -242,7 +241,7 @@ void test_common_ut(DSIASimpleParams params) {
     TestDeepSeekIndexerAttentionQuantUTest(params);
 }
 
-TEST_F(DeepSeekIndexerAttentionQuantUTest, 4B_mtp_ut) {
+TEST_F_WITH_COST(DeepSeekIndexerAttentionQuantUTest, 4B_mtp_ut, 176) {
     DSIASimpleParams params = DSIASimpleParams::getDecodeParams();
     params.b = 4;
     params.s1 = 2;

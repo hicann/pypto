@@ -13,9 +13,9 @@
  * \brief
  */
 
-#include <gtest/gtest.h>
 #include "operator/models/deepseek/page_attention.h"
 #include "interface/configs/config_manager.h"
+#include "test_cost_macro.h"
 
 using namespace npu::tile_fwk;
 
@@ -169,7 +169,7 @@ TEST_F(DynamicPATest, dynamic_pa_low_lantency_pass_unroll) {
         tileConfig, maxUnrollTimes);
 }
 
-TEST_F(DynamicPATest, dynamic_pa_low_lantency_manual_unroll) {
+TEST_F_WITH_COST(DynamicPATest, dynamic_pa_low_lantency_manual_unroll, 96) {
     config::SetHostOption(ONLY_CODEGEN, true);
     config::SetPassDefaultConfig(KEY_PRINT_GRAPH, true);
     std::vector<uint8_t> devProgBinary;
