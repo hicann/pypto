@@ -53,7 +53,7 @@ private:
     void ProcessCopyIn(Function &function, Operation &op);
     Status ProcessTranspose(Function &function);
     void PadVectorForAxisCombine(Operation &op, LogicalTensorPtr &in, std::unordered_set<std::shared_ptr<RawTensor>> &visitedRaw);
-    int64_t ProcessBroadcastForAxisCombine(Operation &op, size_t blockPadding);
+    int64_t ProcessBroadcastForAxisCombine(LogicalTensorPtr &inTensor);
     bool IsMatmul(const LogicalTensorPtr &tensor) const;
     bool IsVector(const LogicalTensorPtr &tensor);
     void DoPadding(Function &function);

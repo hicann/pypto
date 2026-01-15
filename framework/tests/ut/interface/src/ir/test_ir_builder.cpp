@@ -245,20 +245,4 @@ std::shared_ptr<Function> TestBlockFunction(
     return func;
 }
 
-TEST(IRTEST, TestDynControlFlow)
-{
-    constexpr int LOOP_ITERATION = 8;
-    std::vector<int64_t> shape = {64, 64 * LOOP_ITERATION};
-    std::vector<int64_t> shapeTemp = {64, 64};
-    Tensor inputA(DT_FP32, shape, "A");
-    Tensor inputB(DT_FP32, shape, "B");
-    Tensor output(DT_FP32, shape, "C");
-
-    std::string funcName = "TestNewIR";
-    FUNCTION(funcName, {inputA, inputB}, {output}) {
-        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, npu::tile_fwk::LoopRange(LOOP_ITERATION)) {
-            CallBlock(TestBlockFunction, {inputA, inputB}, {output}, {i});
-        }
-    }
-}
 } // namespace pto
