@@ -84,3 +84,15 @@ def test_slice_ellipsis_index():
         assert res2.shape == [1, 8, 8, 2]
         assert res3.shape == [8, 8]
         assert res4.shape == [4, 8, 8, 8]
+
+
+def test_tensor_batch_assemble():
+    a = pypto.tensor((32, 32), pypto.DT_FP32, "a")
+    b = pypto.tensor((32, 32), pypto.DT_FP32, "b")
+    c = pypto.tensor((64, 64), pypto.DT_FP32, "c")
+    with pypto.function("MAIN", a, b, c):
+        pypto.set_vec_tile_shapes(32, 32)
+        pypto.assemble([
+            (a, (0, 0)),
+            (b, (0, 32)),
+        ], c, parallel=True)

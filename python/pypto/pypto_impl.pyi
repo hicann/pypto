@@ -535,6 +535,12 @@ def Batch_matmul(dtype: DataType, a: Tensor, b: Tensor, a_trans: bool = False,
                  b_trans: bool = False, c_matrix_nz: bool = False) -> Tensor: ...
 
 
+@overload
+def Assemble(a: List[Tuple[Tensor, List[SymbolicScalar]]], dst: Tensor,
+             parallel: bool = False) -> None: ...
+
+
+@overload
 def Assemble(a: Tensor, offset: List[SymbolicScalar], dst: Tensor) -> None: ...
 
 

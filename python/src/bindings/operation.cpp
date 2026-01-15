@@ -477,8 +477,13 @@ void bind_operation(py::module &m) {
         py::arg("scalar"), py::arg("operand"), py::arg("operation"), py::arg("mode"), "Tensor compare.");
     m.def(
         "Assemble",
-        [](const std::vector<std::pair<Tensor, std::vector<int64_t>>> &tensor_int_pairs) {
-            return npu::tile_fwk::Assemble(tensor_int_pairs);
+        [](const std::vector<std::pair<Tensor, std::vector<SymbolicScalar>>> &inputs,
+            Tensor &dest, bool parallel = false) {
+            std::vector<npu::tile_fwk::AssembleItem> items;
+            for (const auto &[tensor, offset] : inputs) {
+                items.push_back({tensor, offset});
+            }
+            npu::tile_fwk::Assemble(items, dest, parallel);
         },
         "Tensor assemble");
     m.def(
