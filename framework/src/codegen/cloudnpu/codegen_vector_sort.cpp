@@ -156,8 +156,8 @@ std::string CodeGenOpCloudNPU::PrintBitSortStatic(const SortParam &param) const 
 }
 
 std::string CodeGenOpCloudNPU::PrintSortTileTensor() const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
-    std::string srcTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::ostringstream oss;
     oss << tileOpName << "<" << GenOpAttr(false) << ">" << "(" << dstTensor << ", " << srcTensor << ");\n";
     return oss.str();
@@ -250,12 +250,12 @@ TiledSortParam CodeGenOpCloudNPU::PrepareTiledSortParam() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintTileSortTileTensor() const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ID0]);
-    std::string tmpTensor = sm->QueryTileTensorByMagic(operandWithMagic[ID1]);
-    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID2]);
-    std::string src2Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID3]);
-    std::string src3Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID4]);
-    std::string src4Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID5]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
+    std::string src1Tensor = QueryTileTensorNameByIdx(ID2);
+    std::string src2Tensor = QueryTileTensorNameByIdx(ID3);
+    std::string src3Tensor = QueryTileTensorNameByIdx(ID4);
+    std::string src4Tensor = QueryTileTensorNameByIdx(ID5);
     std::ostringstream oss;
     oss << tileOpName << "<" << GenOpAttr(false) << ">"
         << "(" << dstTensor << ", " << src1Tensor << ", " << src2Tensor << ", " << src3Tensor << ", " << src4Tensor

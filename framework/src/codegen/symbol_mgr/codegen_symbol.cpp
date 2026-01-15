@@ -113,29 +113,38 @@ std::string SymbolManager::FindUsingName(const TileTensorUsing &tileTensorUsing)
 std::string SymbolManager::AddTileTensorUsing(const TileTensorUsing &tileTensorUsing) {
     std::string tensorUsingType = FindUsingName(tileTensorUsing);
     if (!tensorUsingType.empty()) {
+        ALOG_INFO_F("found tensorUsingType %s", tensorUsingType.c_str());
         return tensorUsingType;
     }
     tensorUsingType = tileTensorUsing.GenName();
     tileTensorUsing_.insert({tensorUsingType, tileTensorUsing});
+    ALOG_INFO_F("insert tensorUsingType %s = %s", tensorUsingType.c_str(), tileTensorUsing.ToString().c_str());
     return tensorUsingType;
 }
 
 void SymbolManager::AddTileTensor(const TileTensor &tileTensor) {
     auto result = tileTensor_.insert({tileTensor, tileTensor.tensorName});
     std::string tensorName = result.second ? tileTensor.tensorName : result.first->second;
-    tileTensorByMagic_.insert({tileTensor.magic, tensorName});
+    if (result.second) {
+        tileTensorByMagic_.insert({tileTensor.magic, tileTensor});
+    } else {
+        tileTensorByMagic_.insert({tileTensor.magic, result.first->first});
+    }
+
     ALOG_INFO_F("tileTensor_.insert result is %d Add TileTensor --> tensor magic: %d, tensor name: %s, tile tensor: %s",
         result.second, tileTensor.magic, tensorName.c_str(), tileTensor.ToString().c_str());
 }
 
-std::string SymbolManager::QueryTileTensorByMagic(int magic) {
-    auto iterByMagic = tileTensorByMagic_.find(magic);
-    if (iterByMagic != tileTensorByMagic_.end()) {
-        return iterByMagic->second;
+std::vector<TileTensor> SymbolManager::QueryTileTensorByMagic(int magic) {
+    ALOG_INFO_F("QueryTileTensorByMagic magic is %d", magic);
+    std::vector<TileTensor> res;
+    auto [start, end] = tileTensorByMagic_.equal_range(magic);
+    for (auto it = start; it != end; ++it) {
+        res.emplace_back(it->second); // 或 emplace_back，性能更优
     }
 
-    ASSERT(false) << "tensor magic " << magic << " is not found !!! ";
-    return "";
+    ASSERT(!res.empty()) << "tensor magic " << magic << " is not found !!! ";
+    return res;
 }
 
 std::string SymbolManager::QueryTileTensorByBufVarName(const std::string &bufVarName) {

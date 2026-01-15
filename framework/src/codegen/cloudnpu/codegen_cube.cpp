@@ -20,15 +20,15 @@
 
 namespace npu::tile_fwk {
 std::string CodeGenOpCloudNPU::PrintMatmulTileTensor(bool isAcc) const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
-    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
-    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC1_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
 
     std::ostringstream oss;
     if (opAttrs.count(OP_ATTR_PREFIX + "has_bias")) {
         bool hasBias = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OP_ATTR_PREFIX + "has_bias"));
         if (hasBias) {
-            std::string biasTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC2_IDX)]);
+            std::string biasTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC2_IDX));
             oss << tileOpName << "(" << dstTensor << ", " << src0Tensor << ", " << src1Tensor << ", " << biasTensor
                 << ");\n";
             return oss.str();

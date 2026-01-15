@@ -127,7 +127,7 @@ std::string CodeGenOpCloudNPU::PrintDupOpStatic(const PrintDupOpParam &param) co
 std::string CodeGenOpCloudNPU::PrintDupTileTensor(const PrintDupOpParam &param) const {
     const std::string &dupV = param.dupV;
     const std::string &dstDtypeStr = param.dstDtypeStr;
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
 
     std::ostringstream oss;
     oss << tileOpName << "<" << dstDtypeStr << ">"
@@ -219,8 +219,8 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveLayout(const PrintTranspose
     std::vector<std::string> uselessVector0;
     std::vector<std::string> uselessVector1;
     std::vector<std::string> uselessVector2;
-    std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor({param.gmIdx, param.localIdx,
-        uselessVector0, uselessVector1, uselessVector2, false});
+    std::vector<std::string> gmOffsetExpr =
+        GetGmOffsetForTileTensor({param.gmIdx, param.localIdx, uselessVector0, uselessVector1, uselessVector2, false});
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     int dim = static_cast<int>(rawShape[param.gmIdx].size());
     std::string coord = "Coord" + std::to_string(dim) + DIM + coordCp;
@@ -585,10 +585,10 @@ std::string CodeGenOpCloudNPU::PrintGatherElementDynamicUnaligned(const PrintGat
 }
 
 std::string CodeGenOpCloudNPU::PrintGatherElementTileTensor(const PrintGatherEleParam &param) const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ID0]);
-    std::string tmpTensor = sm->QueryTileTensorByMagic(operandWithMagic[ID1]);
-    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID2]);
-    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ID3]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
+    std::string src0Tensor = QueryTileTensorNameByIdx(ID2);
+    std::string src1Tensor = QueryTileTensorNameByIdx(ID3);
     std::vector<std::string> paramList;
     int axis = param.axis + SHAPE_DIM5 - param.src1RawShape.size();
     paramList.emplace_back(std::to_string(axis));
@@ -633,7 +633,7 @@ std::string CodeGenOpCloudNPU::GenGatherElementOp() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintRangeTileTensor(std::string startVal, std::string stepVal) const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     auto dstValidShape = dynamicValidShape[ToUnderlying(MISOIdx::DST_IDX)];
     std::vector<std::string> paramList = {
         dstTensor, SymbolicExpressionTable::BuildExpression(dstValidShape[ID0]), startVal, stepVal};
@@ -1101,8 +1101,8 @@ std::string CodeGenOpCloudNPU::PrintExtractDynamicUnaligned() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintExtractTileTensor() const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::DST_IDX)]);
-    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MISOIdx::SRC0_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
 
     std::ostringstream oss;
     oss << tileOpName << "<" << GenOpAttr(false) << ">"
@@ -1269,11 +1269,11 @@ std::string CodeGenOpCloudNPU::PrintWhereOp(const WhereParam &param) const {
 }
 
 std::string CodeGenOpCloudNPU::PrintWhereOpTileTensor() const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(WhereOpIdx::resIdx)]);
-    std::string tempTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(WhereOpIdx::tempIdx)]);
-    std::string condTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(WhereOpIdx::condIdx)]);
-    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(WhereOpIdx::src0Idx)]);
-    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(WhereOpIdx::src1Idx)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::resIdx));
+    std::string tempTensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::tempIdx));
+    std::string condTensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::condIdx));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::src0Idx));
+    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(WhereOpIdx::src1Idx));
 
     std::ostringstream oss;
     oss << tileOpName << "(" << dstTensor << ", " << tempTensor << ", " << condTensor << ", " << src0Tensor << ", "
@@ -1342,12 +1342,12 @@ std::string CodeGenOpCloudNPU::GenLogicalNotOp() const {
 
 std::string CodeGenOpCloudNPU::PrintCmpTileTensor() const {
     enum class TensorIdx : int { dstIdx = 0, tmpIdx, src0Idx, src1Idx };
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(TensorIdx::dstIdx)]);
-    std::string tmpTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(TensorIdx::tmpIdx)]);
-    std::string src0Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(TensorIdx::src0Idx)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::dstIdx));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::tmpIdx));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::src0Idx));
     std::string src1Tensor = "";
     if (opCode == Opcode::OP_CMP) {
-        src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(TensorIdx::src1Idx)]);
+        src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(TensorIdx::src1Idx));
     }
 
     auto cmpOp = opAttrs.at(OP_ATTR_PREFIX + "cmp_operation");
@@ -1473,10 +1473,10 @@ std::string CodeGenOpCloudNPU::GenCmpOp() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintLogicalAndTileTensor() const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::DST_IDX)]);
-    std::string tmpTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::TMP_IDX)]);
-    std::string srcTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::SRC0_IDX)]);
-    std::string src1Tensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::SRC1_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
     std::vector<std::string> paramList = {dstTensor, srcTensor, src1Tensor, tmpTensor};
     std::ostringstream oss;
     oss << tileOpName;
@@ -1486,9 +1486,9 @@ std::string CodeGenOpCloudNPU::PrintLogicalAndTileTensor() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintLogicalNotTileTensor() const {
-    std::string dstTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::DST_IDX)]);
-    std::string tmpTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::TMP_IDX)]);
-    std::string srcTensor = sm->QueryTileTensorByMagic(operandWithMagic[ToUnderlying(MIMOIdx::SRC0_IDX)]);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
     std::vector<std::string> paramList = {dstTensor, srcTensor, tmpTensor};
     std::ostringstream oss;
     oss << tileOpName;
