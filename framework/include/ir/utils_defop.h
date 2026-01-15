@@ -77,6 +77,7 @@
 
 #define DEFOP_CLASS_Scalar const ScalarValuePtr &
 #define DEFOP_CLASS_Tile const TileValuePtr &
+#define DEFOP_CLASS_Tensor const TensorValuePtr &
 #define DEFOP_CLASS_ScalarList const std::vector<ScalarValuePtr> &
 
 #define DEFOP_CLASS_CONSTRUCT_PARAM_INPUT(type, name) , DEFOP_CLASS_##type name
@@ -101,6 +102,7 @@
     } while (0)
 #define DEFOP_CLASS_GET_OPERAND_COUNT_Scalar(name) 1
 #define DEFOP_CLASS_GET_OPERAND_COUNT_Tile(name) 1
+#define DEFOP_CLASS_GET_OPERAND_COUNT_Tensor(name) 1
 #define DEFOP_CLASS_GET_OPERAND_COUNT_ScalarList(name) ((name).size())
 
 #define DEFOP_CLASS_CONSTRUCT_INPUT_INDEX_INPUT(type, name) DEFOP_CLASS_FILL_INDEX( \
@@ -144,11 +146,13 @@
 
 #define DEFOP_CLASS_OPERAND_INPUT_Scalar(name) DEFOP_CLASS_OPERAND_TYPE(name, ScalarValue, DEFOP_CLASS_OPERAND_INPUT_INDEX, GetInputOperand, SetInputOperand)
 #define DEFOP_CLASS_OPERAND_INPUT_Tile(name) DEFOP_CLASS_OPERAND_TYPE(name, TileValue, DEFOP_CLASS_OPERAND_INPUT_INDEX, GetInputOperand, SetInputOperand)
+#define DEFOP_CLASS_OPERAND_INPUT_Tensor(name) DEFOP_CLASS_OPERAND_TYPE(name, TensorValue, DEFOP_CLASS_OPERAND_INPUT_INDEX, GetInputOperand, SetInputOperand)
 #define DEFOP_CLASS_OPERAND_INPUT_ScalarList(name) DEFOP_CLASS_OPERAND_TYPE_LIST(name, ScalarValue, DEFOP_CLASS_OPERAND_INPUT_INDEX, GetInputOperand, SetInputOperand, \
         inputIndexList_[DEFOP_CLASS_INPUT_FIELD_INDEX(name) + 1] - inputIndexList_[DEFOP_CLASS_INPUT_FIELD_INDEX(name)])
 
 #define DEFOP_CLASS_OPERAND_OUTPUT_Scalar(name) DEFOP_CLASS_OPERAND_TYPE(name, ScalarValue, DEFOP_CLASS_OPERAND_OUTPUT_INDEX, GetOutputOperand, SetOutputOperand)
 #define DEFOP_CLASS_OPERAND_OUTPUT_Tile(name) DEFOP_CLASS_OPERAND_TYPE(name, TileValue, DEFOP_CLASS_OPERAND_OUTPUT_INDEX, GetOutputOperand, SetOutputOperand)
+#define DEFOP_CLASS_OPERAND_OUTPUT_Tensor(name) DEFOP_CLASS_OPERAND_TYPE(name, TensorValue, DEFOP_CLASS_OPERAND_OUTPUT_INDEX, GetOutputOperand, SetOutputOperand)
 #define DEFOP_CLASS_OPERAND_OUTPUT_ScalarList(name) DEFOP_CLASS_OPERAND_TYPE_LIST(name, ScalarValue, DEFOP_CLASS_OPERAND_OUTPUT_INDEX, GetOutputOperand, SetOutputOperand, \
         outputIndexList_[DEFOP_CLASS_OUTPUT_FIELD_INDEX(name) + 1] - outputIndexList_[DEFOP_CLASS_OUTPUT_FIELD_INDEX(name)])
 
@@ -165,6 +169,10 @@
         type Get##name() const { return attr##name##_; } \
         void Set##name(type &&value) { attr##name##_ = value; }
 
+#define DEFOP_CLASS_ATTR_NAME_VALUE_INPUT(type, name)
+#define DEFOP_CLASS_ATTR_NAME_VALUE_OUTPUT(type, name)
+#define DEFOP_CLASS_ATTR_NAME_VALUE_ATTR(type, name, defaultAttr) AttributeKeyValue{#name, attr##name##_},
+
 #define DEFOP_CLASS_INHERIT(name) name
 #define DEFOP_CLASS_PREFIX_CONSTRUCT_PARAM(n) DEFOP_CLASS_CONSTRUCT_PARAM_##n
 #define DEFOP_CLASS_PREFIX_CONSTRUCT_INHERIT(n) DEFOP_CLASS_CONSTRUCT_INHERIT_##n
@@ -175,6 +183,7 @@
 #define DEFOP_CLASS_PREFIX_OUTPUT_OPERAND_INDEX(n) DEFOP_CLASS_OUTPUT_OPERAND_INDEX_##n
 #define DEFOP_CLASS_PREFIX_OPERAND(n) DEFOP_CLASS_OPERAND_##n
 #define DEFOP_CLASS_PREFIX_ATTR(n) DEFOP_CLASS_ATTR_##n
+#define DEFOP_CLASS_PREFIX_ATTR_NAME_VALUE(n) DEFOP_CLASS_ATTR_NAME_VALUE_##n
 
 #define DEFOP_CLASS(name, inherit, opcode, ...) \
     class name : public DEFOP_CLASS_##inherit { \
@@ -204,6 +213,13 @@
         MAP(DEFOP_CLASS_PREFIX_ATTR, __VA_ARGS__) \
         int inputIndexList_[DEFOP_CLASS_INPUT_FIELD_INDEX(DefopMax) + 1]; \
         int outputIndexList_[DEFOP_CLASS_OUTPUT_FIELD_INDEX(DefopMax) + 1]; \
+    public: \
+        virtual std::vector<AttributeKeyValue> GetAttributeList() const { \
+            std::vector<AttributeKeyValue> attributeList = { \
+                MAP(DEFOP_CLASS_PREFIX_ATTR_NAME_VALUE, __VA_ARGS__) \
+            }; \
+            return attributeList; \
+        } \
     }; \
     using name##Ptr = std::shared_ptr<name>;
 

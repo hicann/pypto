@@ -125,8 +125,6 @@ void TestMatmulACC(int m, int k, int n, string dataPath) {
         Tensor mat_a(InputAstDtype, shape_a, (uint8_t *)a_ptr, "mat_a");
         Tensor mat_b(InputAstDtype, shape_b, (uint8_t *)b_ptr, "mat_b");
         Tensor final_out(OutputAstDtype, shape_c, c_ptr, "final_out");
-        auto kSplit = 4;
-        auto kSplitSize = k / kSplit;
         config::SetBuildStatic(true);
         FUNCTION("Matmul_T", {mat_a, mat_b, final_out}) {
             Tensor tmpC = Matrix::Matmul(OutputAstDtype, mat_a, mat_b, false, false);

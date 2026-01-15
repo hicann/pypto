@@ -204,6 +204,10 @@ public:
     std::vector<IterArg>& IterArgs() { return iterArgs_; }
     const std::vector<IterArg>& IterArgs() const { return iterArgs_; }
 
+    size_t GetIterNum() { return iterArgs_.size(); }
+    ValuePtr GetIterValue(size_t index) const { return iterArgs_[index].value; }
+    ValuePtr GetIterInitValue(size_t index) const { return iterArgs_[index].initValue; }
+
     // Add an iter_arg with the given initial value.
     // The value field will be created and set in ExitForStatement.
     void AddIterArg(ValuePtr initValue) {

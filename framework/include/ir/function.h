@@ -98,7 +98,7 @@ public:
     uint64_t ComputeHash();
 
     // Get function hash value
-    uint64_t GetFunctionHash() const { return functionHash_; }    
+    uint64_t GetFunctionHash() const { return functionHash_; }
 
     // check if value is from in cast
     bool isFromInCast(const ValuePtr &value) const;
@@ -151,6 +151,7 @@ private:
     std::shared_ptr<npu::tile_fwk::LeafFuncAttribute> leafFuncAttr_;
 };
 
+using FunctionPtr = std::shared_ptr<Function>;
 
 // Helper for convenient streaming: std::cout << func;
 std::ostream& operator<<(std::ostream& os, const Function& func);

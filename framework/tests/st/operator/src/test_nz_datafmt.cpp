@@ -181,8 +181,6 @@ void TestNZFormatACC(int bs, int m, int k, int n) {
     assert(mat_a_ptr != nullptr && mat_b_ptr != nullptr);
     uint32_t outputSize = capacity_mat_c * sizeof(float);
     uint8_t* mat_c_ptr = allocDevAddr(outputSize);
-    auto kSplit = 4;
-    auto kSplitSize = k / kSplit;
     auto afmt = IsANZ ? TileOpFormat::TILEOP_NZ : TileOpFormat::TILEOP_ND;
     auto bfmt = IsBNZ ? TileOpFormat::TILEOP_NZ : TileOpFormat::TILEOP_ND;
     Tensor mat_a(inputType, shape_a, (uint8_t *)mat_a_ptr, "MatA", afmt);

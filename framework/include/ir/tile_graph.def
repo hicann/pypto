@@ -17,6 +17,7 @@ DEFOP(
     UnaryOp,
     INHERIT(ElementWiseUnaryTileBaseOp),
     OPCODE(
+        OP_ASSIGN,
         OP_EXP,
         OP_NEG,
         OP_RSQRT,
@@ -54,7 +55,7 @@ DEFOP(
 )
 
 DEFOP(
-    TransposeOp, 
+    TransposeOp,
     INHERIT(TransposeTileBaseOp),
     OPCODE(
         OP_TRANSPOSE_MOVEIN,
@@ -63,7 +64,7 @@ DEFOP(
     INPUT(Tile, Input),
     OUTPUT(Tile, Output),
     ATTR(int, Axis0, -1),
-    ATTR(int, Axis1, -1) 
+    ATTR(int, Axis1, -1)
 )
 
 DEFOP(
@@ -96,7 +97,7 @@ DEFOP(
     ),
     INPUT(Tile, Input),
     OUTPUT(Tile, Output),
-    ATTR(CastMode, Mode, CastMode::CAST_NONE)
+    ATTR(int, Mode, static_cast<int>(CastMode::CAST_NONE))
 )
 
 DEFOP(
@@ -209,7 +210,6 @@ DEFOP(
         OP_S_DIVS,
         OP_S_MAXS,
         OP_S_MINS
-        
     ),
     INPUT(Tile, Lhs),
     INPUT(Scalar, Rhs),
@@ -220,11 +220,11 @@ DEFOP(
 
 DEFOP(
     MatmulLoadOp,
-    INHERIT(MatmulTileBaseOp),
+    INHERIT(DataCopyInTileBaseOp),
     OPCODE(
         OP_L1_COPY_IN
     ),
-    INPUT(Tile, Input),
+    INPUT(Tensor, Input),
     INPUT(ScalarList, Offsets),
     OUTPUT(Tile, Output),
     // 0:ND2ND, 1:ND2NZ, 2:NZ2NZ
@@ -275,13 +275,13 @@ DEFOP(
 
 DEFOP(
     MatmulStoreOp,
-    INHERIT(MatmulTileBaseOp),
+    INHERIT(DataCopyOutTileBaseOp),
     OPCODE(
  	    OP_L0C_COPY_OUT
     ),
     INPUT(Tile, Input),
     INPUT(ScalarList, Offsets),
-    OUTPUT(Tile, Output),
+    OUTPUT(Tensor, Output),
     // 0:no_relu, 1:relue
     ATTR(int, ReluMode, 0),
     // 0:no_acc, 1:enable_acc
@@ -457,18 +457,6 @@ DEFOP(
     INHERIT(LoadTileOp),
     OPCODE(
  	    OP_LOAD
-    ),
-    INPUT(Tile, Lhs),
-    INPUT(Tile, Rhs),
-    OUTPUT(Tile, Output)
-)
-
-DEFOP(
-    LoadStoreOp,
-    INHERIT(LoadStoreTileOp),
-    OPCODE(
-        OP_UB_COPY_IN,
-        OP_UB_COPY_OUT
     ),
     INPUT(Tile, Lhs),
     INPUT(Tile, Rhs),
@@ -684,8 +672,8 @@ DEFOP(
     INPUT(Tile, Input2),
     OUTPUT(Tile, Output),
     OUTPUT(Tile, TempTensor),
-    ATTR(CmpOperationType, CmpOperation, CmpOperationType::EQ),
-    ATTR(CmpModeType, CmpMode, CmpModeType::BOOL)
+    ATTR(int, CmpOperation, static_cast<int>(CmpOperationType::EQ)),
+    ATTR(int, CmpMode, static_cast<int>(CmpModeType::BOOL))
 )
 
 DEFOP(
@@ -698,6 +686,28 @@ DEFOP(
     INPUT(Scalar, Input2),
     OUTPUT(Tile, Output),
     OUTPUT(Tile, TempTensor),
-    ATTR(CmpOperationType, CmpOperation, CmpOperationType::EQ),
-    ATTR(CmpModeType, CmpMode, CmpModeType::BOOL)
+    ATTR(int, CmpOperation, static_cast<int>(CmpOperationType::EQ)),
+    ATTR(int, CmpMode, static_cast<int>(CmpModeType::BOOL))
+)
+
+DEFOP(
+    UBCopyInOp,
+    INHERIT(DataCopyInTileBaseOp),
+    OPCODE(
+        OP_UB_COPY_IN
+    ),
+    INPUT(Tensor, Src),
+    INPUT(ScalarList, Offset),
+    OUTPUT(Tile, Dst)
+)
+
+DEFOP(
+    UBCopyOutOp,
+    INHERIT(DataCopyOutTileBaseOp),
+    OPCODE(
+        OP_UB_COPY_OUT
+    ),
+    INPUT(Tile, Src),
+    INPUT(ScalarList, Offset),
+    OUTPUT(Tensor, Dst)
 )

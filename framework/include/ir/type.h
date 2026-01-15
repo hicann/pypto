@@ -127,8 +127,11 @@ public:
     explicit TensorType(DataType dataType) : Type(dataType) {}
 
     uint64_t GetTypeSize() const override { return GetDataTypeSize(); }
+
     void Print(std::ostream& os) const override;
 };
+
+using TensorTypePtr = std::shared_ptr<TensorType>;
 
 } // namespace pto
 

@@ -130,7 +130,7 @@ TEST(IRTEST, TestControlFlow) {
     auto func = builder.CreateFunction("test_control", FunctionKind::ControlFlow, sig);
     module->AddFunction(func);
     module->SetProgramEntry(func);
-        // 进入函数体作用域 
+        // 进入函数体作用域
     builder.EnterFunctionBody(ctx, func);
 
     // for i = 0 to batch step 1

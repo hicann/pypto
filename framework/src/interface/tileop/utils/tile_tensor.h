@@ -27,6 +27,7 @@ struct TileTensor {
     using TileShape = typename LA::TileShape;
     static constexpr Hardware FORMAT = FMT;
 
+    __aicore__ inline TileTensor() {}
     __aicore__ inline TileTensor(uint64_t addr, LA layout) : addr_(addr), layout_(layout) {}
     __aicore__ inline TileTensor(uint64_t addr, Shape shape) : addr_(addr), layout_(LA(shape)) {}
 
@@ -53,6 +54,7 @@ struct TileTensor<T, LA, Hardware::GM> {
     using TileShape = typename LA::TileShape;
     static constexpr Hardware FORMAT = Hardware::GM;
 
+    __aicore__ inline TileTensor() {}
     __aicore__ inline TileTensor(T *addr, LA layout) : addr_(addr), layout_(layout) {}
     __aicore__ inline TileTensor(T *addr, Shape shape) : addr_(addr), layout_(LA(shape)) {}
 

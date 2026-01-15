@@ -34,6 +34,17 @@ enum class CmpModeType {
     BIT,
 };
 
+// Enumeration for cast modes.
+enum class CastMode {
+    CAST_NONE,       // No rounding mode specified
+    CAST_RINT,       // Round to nearest integer (ties to even)
+    CAST_ROUND,      // Round to nearest integer
+    CAST_FLOOR,      // Round down to nearest integer
+    CAST_CEIL,       // Round up to nearest integer
+    CAST_TRUNC,      // Truncate towards zero
+    CAST_ODD,        // Round to nearest odd integer
+};
+
 #define DEFOP DEFOP_CLASS
 #include "tile_graph.def"
 #undef DEFOP

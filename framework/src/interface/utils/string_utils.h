@@ -72,8 +72,20 @@ public:
         if (str.size() < prefix.size())
             return false;
         for (size_t i = 0; i < prefix.size(); i++) {
-            if (prefix[i] != str[i])
+            if (prefix[i] != str[i]) {
                 return false;
+            }
+        }
+        return true;
+    }
+
+    static bool EndsWith(const std::string &str, const std::string &suffix) {
+        if (str.size() < suffix.size())
+            return false;
+        for (size_t i = 0; i < suffix.size(); i++) {
+            if (suffix[suffix.size() - 1 - i] != str[str.size() - 1 - i]) {
+                return false;
+            }
         }
         return true;
     }

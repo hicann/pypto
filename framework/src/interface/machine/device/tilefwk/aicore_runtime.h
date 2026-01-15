@@ -335,7 +335,7 @@ INLINE uint64_t RUNTIME_Ne(uint64_t input1, uint64_t input2) {
 }
 
 INLINE uint32_t GetTensorDataInt32(CoreFuncParam *ctx, uint64_t address) {
-    dcci((__gm__ uint32_t *)address, ENTIRE_DATA_CACHE, CACHELINE_OUT); 
+    dcci((__gm__ uint32_t *)address, ENTIRE_DATA_CACHE, CACHELINE_OUT);
     return *(__gm__ uint32_t *)(address);
 }
 #define RUNTIME_GetTensorDataInt32Dim1(index, ioType, ioTypeIndex, address, ...)    GetTensorDataInt32(param, address)
@@ -389,5 +389,72 @@ INLINE uint32_t GetTensorDataInt32(CoreFuncParam *ctx, uint64_t address) {
     } while(0)
 
 #define RUNTIME_GetSymbol(idx)          (param->exprTbl[idx])
+
+#define RT_float32          float
+#define RT_int64            int64_t
+#define RT_int32            int32_t
+#define RT_uint64           uint64_t
+#define RT_uint32           uint32_t
+#define RT_UB               __ubuf__
+
+#define RT_FUNCTION(name)                                   extern "C" [aicore] void name(CoreFuncParam *param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ GMTensorInfo *oriAddrParam)
+#define RT_OPERATION(opcode, ...)                           RT_OPERATION_##opcode(__VA_ARGS__)
+#define RT_OPERATION_MACRO(opcode, ...)                     RT_OPERATION_MACRO_##opcode(__VA_ARGS__)
+#define RT_DECL_TYPE_TILE(name, primType, space, dim, ...)  using name = TileTensor<RT_##primType, LocalLayout##dim##Dim<__VA_ARGS__>, Hardware::space>;
+#define RT_DECL_TYPE_TENSOR(name, primType, dim)            using name = TileTensor<__gm__ RT_##primType, DynLayout##dim##Dim, Hardware::GM>;
+#define RT_DECL_VALUE_SCALAR(name, primType)                RT_##primType name;
+#define RT_DECL_VALUE_TILE(name, defType)                   defType name;
+#define RT_DECL_VALUE_TENSOR(name, defType)                 defType name;
+
+#define RT_INIT_ADDR(name, primType, space, addr, size)     RT_##primType RT_##space *name##_AS = (RT_##primType RT_##space *)get_imm(addr);\
+                                                            RT_##primType *name = (RT_##primType *)get_imm((addr));
+
+#define RT_INIT_VALUE_TILE(name, defType, addr, dim, ...) name = defType((uint64_t)(addr), Shape##dim##Dim(__VA_ARGS__));
+
+#define RT_INIT_VALUE_TENSOR_1(shape0) \
+        DynLayout1Dim(Shape1Dim((shape0)), \
+                      Stride1Dim(1))
+#define RT_INIT_VALUE_TENSOR_2(shape0, shape1) \
+        DynLayout2Dim(Shape2Dim((shape0), (shape1)), \
+                      Stride2Dim((shape1), 1))
+#define RT_INIT_VALUE_TENSOR_3(shape0, shape1, shape2) \
+        DynLayout3Dim(Shape3Dim((shape0), (shape1), (shape2)), \
+                      Stride3Dim((shape1) * (shape2), (shape2), 1))
+#define RT_INIT_VALUE_TENSOR_4(shape0, shape1, shape2, shape3) \
+        DynLayout4Dim(Shape4Dim((shape0), (shape1), (shape2), (shape3)), \
+                      Stride4Dim((shape1) * (shape2) * (shape3), (shape2) * (shape3), (shape3), 1))
+#define RT_INIT_VALUE_TENSOR_5(shape0, shape1, shape2, shape3, shape4) \
+        DynLayout5Dim(Shape5Dim((shape0), (shape1), (shape2), (shape3), (shape4)), \
+                      Stride5Dim((shape1) * (shape2) * (shape3) * (shape4), (shape2) * (shape3) * (shape4), (shape3) * (shape4), (shape4), 1))
+#define RT_INIT_VALUE_TENSOR(name, defType, primType, addr, dim, ...) name = defType((__gm__ RT_##primType *)(addr), RT_INIT_VALUE_TENSOR_##dim(__VA_ARGS__));
+
+#define RT_STMT_OP()
+#define RT_STMT_IF()
+#define RT_STMT_ELSE()
+#define RT_STMT_FOR()
+#define RT_STMT_YIELD()
+#define RT_STMT_RETURN()
+#define RT_LOOP_BEGIN()
+#define RT_LOOP_ITER()
+#define RT_LOOP_ASSIGN()
+#define RT_IF_ASSIGN()
+
+#define RT_OPERATION_OP_SCALAR_CALL_3(ret, arg0, arg1, arg2, callee)                ret = callee(arg0, arg1, arg2);
+#define RT_OPERATION_OP_SCALAR_CALL_5(ret, arg0, arg1, arg2, arg3, arg4, callee)    ret = callee(arg0, arg1, arg2, arg3, arg4);
+
+#define RT_OPERATION_OP_SCALAR_CALL_3_RETVOID(ret, arg0, arg1, arg2, callee)        callee(arg0, arg1, arg2);
+
+#define RT_OPERATION_MACRO_OP_SCALAR_CALL_3(arg0, arg1, arg2, callee)               callee(arg0, arg1, arg2)
+#define RT_OPERATION_MACRO_OP_SCALAR_CALL_5(arg0, arg1, arg2, arg3, arg4, callee)   callee(arg0, arg1, arg2, arg3, arg4)
+
+#define RT_OPERATION_MACRO_OP_SCALAR_CALL_3_RETVOID(arg0, arg1, arg2, callee)       callee(arg0, arg1, arg2)
+
+#define RT_OPERATION_OP_SCALAR_ASSIGN(ret, arg)                                     ret = (arg);
+
+#define RT_OPERATION_MACRO_OP_SCALAR_ASSIGN(arg)                                    (arg)
+
+#define RT_OPERATION_OP_UB_COPY_IN(dst, src, off0, off1)                            TLoad((dst), (src), Coord2Dim((off0), (off1)));
+#define RT_OPERATION_OP_ADD(dst, src0, src1, combineAxis, reverse)                  TAdd((dst), (src0), (src1));
+#define RT_OPERATION_OP_UB_COPY_OUT(dst, src, off0, off1)                           TStore((dst), (src), Coord2Dim((off0), (off1)));
 
 #endif // AST_RUNTIME_H

@@ -36,7 +36,7 @@ public:
     // Entrypoints.
     void SetProgramEntry(const std::shared_ptr<Function>& programEntry);
     const std::shared_ptr<Function> GetProgramEntry() const { return programEntry_; }
-    
+
     // Functions (defined in func.h).
     void AddFunction(const std::shared_ptr<Function>& function);
     const std::vector<std::shared_ptr<Function>> GetFunctions() const { return functions_; }
@@ -48,6 +48,8 @@ private:
     std::shared_ptr<Function> programEntry_;
     std::vector<std::shared_ptr<Function>> functions_;
 };
+
+using ProgramModulePtr = std::shared_ptr<ProgramModule>;
 
 // Helper for convenient streaming: std::cout << module;
 std::ostream& operator<<(std::ostream& os, const ProgramModule& module);

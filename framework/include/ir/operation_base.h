@@ -26,6 +26,22 @@
 
 namespace pto {
 
+using AttributeValue = std::variant<std::string, int64_t, bool>;
+class AttributeKeyValue {
+public:
+    explicit AttributeKeyValue(const std::string &name, const std::string &value) : name_(name), value_(value) {}
+    explicit AttributeKeyValue(const std::string &name, const int &value) : name_(name), value_(int64_t(value)) {}
+    explicit AttributeKeyValue(const std::string &name, const int64_t &value) : name_(name), value_(value) {}
+    explicit AttributeKeyValue(const std::string &name, const bool &value) : name_(name), value_(value) {}
+    AttributeKeyValue(const AttributeKeyValue &) = default;
+
+    const std::string &GetName() const { return name_; }
+    const AttributeValue &GetValue() const { return value_; }
+private:
+    std::string name_;
+    AttributeValue value_;
+};
+
 // Base class for operations inside statements.
 class Operation : public Object {
 public:
@@ -89,6 +105,9 @@ public:
 
     // Pretty-print with the given indentation (in spaces).
     void Print(std::ostream& os, int indent = 0) const;
+
+    virtual std::vector<AttributeKeyValue> GetAttributeList() const { return {}; }
+
 protected:
     std::vector<ValuePtr> ioperands_;
     std::vector<ValuePtr> ooperands_;
@@ -105,7 +124,7 @@ public:
             Opcode opcode,
             const std::vector<ScalarValuePtr> &inOperandList,
             const std::vector<ScalarValuePtr> &outOperandList)
-        : Operation(opcode, CastScalarToValue(inOperandList), CastScalarToValue(outOperandList)) {}
+        : Operation(opcode, ValueUtils::Join(inOperandList), ValueUtils::Join(outOperandList)) {}
 
     ScalarValuePtr GetInOperand(size_t index) const;
     ScalarValuePtr GetOutOperand(size_t index) const;
@@ -128,6 +147,36 @@ class CondScalarBaseOp : public ScalarBaseOp {
 protected:
     CondScalarBaseOp(Opcode opcode, ScalarValuePtr cond, ScalarValuePtr sat, ScalarValuePtr unsat, ScalarValuePtr out)
         : ScalarBaseOp(opcode, std::vector<ScalarValuePtr>({cond, sat, unsat}), std::vector<ScalarValuePtr>({out})) {}
+};
+
+class Call1ScalarBaseOp : public ScalarBaseOp {
+protected:
+    Call1ScalarBaseOp(Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr out)
+        : ScalarBaseOp(opcode, std::vector<ScalarValuePtr>({arg0}), std::vector<ScalarValuePtr>({out})) {}
+};
+
+class Call2ScalarBaseOp : public ScalarBaseOp {
+protected:
+    Call2ScalarBaseOp(Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, ScalarValuePtr out)
+        : ScalarBaseOp(opcode, std::vector<ScalarValuePtr>({arg0, arg1}), std::vector<ScalarValuePtr>({out})) {}
+};
+
+class Call3ScalarBaseOp : public ScalarBaseOp {
+protected:
+    Call3ScalarBaseOp(Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, ScalarValuePtr arg2, ScalarValuePtr out)
+        : ScalarBaseOp(opcode, std::vector<ScalarValuePtr>({arg0, arg1, arg2}), std::vector<ScalarValuePtr>({out})) {}
+};
+
+class Call4ScalarBaseOp : public ScalarBaseOp {
+protected:
+    Call4ScalarBaseOp(Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, ScalarValuePtr arg2, ScalarValuePtr arg3, ScalarValuePtr out)
+        : ScalarBaseOp(opcode, std::vector<ScalarValuePtr>({arg0, arg1, arg2, arg3}), std::vector<ScalarValuePtr>({out})) {}
+};
+
+class Call5ScalarBaseOp : public ScalarBaseOp {
+protected:
+    Call5ScalarBaseOp(Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, ScalarValuePtr arg2, ScalarValuePtr arg3, ScalarValuePtr arg4, ScalarValuePtr out)
+        : ScalarBaseOp(opcode, std::vector<ScalarValuePtr>({arg0, arg1, arg2, arg3, arg4}), std::vector<ScalarValuePtr>({out})) {}
 };
 
 } // namespace pto

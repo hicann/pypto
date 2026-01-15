@@ -17,6 +17,7 @@ DEFOP(
     UnaryScalarOp,
     INHERIT(UnaryScalarBaseOp),
     OPCODE(
+        OP_SCALAR_ASSIGN,
         OP_SCALAR_NOT,
         OP_SCALAR_NEG,
         OP_SCALAR_POS
@@ -63,4 +64,74 @@ DEFOP(
     INPUT(Scalar, Sat),
     INPUT(Scalar, Unsat),
     OUTPUT(Scalar, Output)
+)
+
+DEFOP(
+    Call1ScalarOp,
+    INHERIT(Call1ScalarBaseOp),
+    OPCODE(
+        OP_SCALAR_CALL_1,
+        OP_SCALAR_CALL_1_RETVOID
+    ),
+    INPUT(Scalar, Arg0),
+    OUTPUT(Scalar, Output),
+    ATTR(std::string, Name, "")
+)
+
+DEFOP(
+    Call2ScalarOp,
+    INHERIT(Call2ScalarBaseOp),
+    OPCODE(
+        OP_SCALAR_CALL_2,
+        OP_SCALAR_CALL_2_RETVOID
+    ),
+    INPUT(Scalar, Arg0),
+    INPUT(Scalar, Arg1),
+    OUTPUT(Scalar, Output),
+    ATTR(std::string, Name, "")
+)
+
+DEFOP(
+    Call3ScalarOp,
+    INHERIT(Call3ScalarBaseOp),
+    OPCODE(
+        OP_SCALAR_CALL_3,
+        OP_SCALAR_CALL_3_RETVOID
+    ),
+    INPUT(Scalar, Arg0),
+    INPUT(Scalar, Arg1),
+    INPUT(Scalar, Arg2),
+    OUTPUT(Scalar, Output),
+    ATTR(std::string, Name, "")
+)
+
+DEFOP(
+    Call4ScalarOp,
+    INHERIT(Call4ScalarBaseOp),
+    OPCODE(
+        OP_SCALAR_CALL_4,
+        OP_SCALAR_CALL_4_RETVOID
+    ),
+    INPUT(Scalar, Arg0),
+    INPUT(Scalar, Arg1),
+    INPUT(Scalar, Arg2),
+    INPUT(Scalar, Arg3),
+    OUTPUT(Scalar, Output),
+    ATTR(std::string, Name, "")
+)
+
+DEFOP(
+    Call5ScalarOp,
+    INHERIT(Call5ScalarBaseOp),
+    OPCODE(
+        OP_SCALAR_CALL_5,
+        OP_SCALAR_CALL_5_RETVOID
+    ),
+    INPUT(Scalar, Arg0),
+    INPUT(Scalar, Arg1),
+    INPUT(Scalar, Arg2),
+    INPUT(Scalar, Arg3),
+    INPUT(Scalar, Arg4),
+    OUTPUT(Scalar, Output),
+    ATTR(std::string, Name, "")
 )
