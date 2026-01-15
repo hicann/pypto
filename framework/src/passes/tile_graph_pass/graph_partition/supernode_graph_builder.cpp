@@ -427,11 +427,32 @@ Status SuperNodeGraphBuilder::BuildOpGraph(const std::vector<Operation*> &opList
     return SUCCESS;
 }
 
+inline bool IsL0cToL1MoveOp(Operation* op) {
+    return (op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) &&
+        op->GetOOperands().size() > 0 &&
+        op->GetIOperands().size() > 0 &&
+        op->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+        op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1;
+}
+
 inline bool SuperNodeGraphBuilder::L1CopyInCombine(const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*> &opList,
                             int32_t i, std::vector<std::pair<int32_t, int32_t>> &mergePair)
 {
     if (i < 0 || i > static_cast<int32_t>(opList.size())) {
         return false;
+    }
+    if (IsL0cToL1MoveOp(opList[i])) {
+        for (auto outNode : operationInfo->outGraph_[i]) {
+            mergePair.emplace_back(outNode, i);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Combine %d and %d(outNode) for L1 CopyIn in building SuperNode.",
+                opList[i]->GetOpMagic(), opList[outNode]->GetOpMagic());
+        }        
+        for (auto inNode : operationInfo->inGraph_[i]) {
+            mergePair.emplace_back(inNode, i);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Combine %d and %d(inNode) for L1 CopyIn in building SuperNode.",
+                opList[i]->GetOpMagic(), opList[inNode]->GetOpMagic());
+        }
+        return true;
     }
     if (opList[i]->GetOOperands().size() > 0 &&
         (opList[i]->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||

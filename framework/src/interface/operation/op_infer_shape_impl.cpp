@@ -458,6 +458,37 @@ void MatmulACCInferFunc(Operation* op,
 REGISTER_INFER_SHAPE_FUNC(OP_A_MULACC_B, Opcode::OP_A_MULACC_B, MatmulACCInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_A_MULACC_BT, Opcode::OP_A_MULACC_BT, MatmulACCInferFunc);
 
+void LoadL0C2L1InferFunc(Operation* op,
+                        std::vector<std::vector<SymbolicScalar>>& outValidShapes) {
+    auto copyAttr = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (copyAttr != nullptr) {
+        auto fromValidShape = op->GetIOperands()[0]->GetDynValidShape();
+        copyAttr->SetFromDynValidShape(OpImmediate::Specified(fromValidShape));
+    } else {
+        ALOG_WARN_F("%s[%d] has no copy out attr, set output valid shape same as input.",
+            op->GetOpcodeStr().c_str(), op->GetOpMagic());
+        outValidShapes.emplace_back(op->GetIOperands()[0]->GetDynValidShape());
+        return;
+    }
+    auto offsets = copyAttr->GetToOffset();
+    auto inputShapes = copyAttr->GetToDynValidShape();
+    std::vector<SymbolicScalar> outDynShape = op->GetOOperands()[0]->GetDynValidShape();
+    if (outDynShape.empty()) {
+        outDynShape.resize(op->GetOOperands()[0]->GetShape().size(), SymbolicScalar(0));
+    }
+    std::vector<SymbolicScalar> outShape;
+    for (size_t i = 0; i < inputShapes.size(); i++) {
+        auto inputShape = inputShapes[i].GetSpecifiedValue();
+        auto offset = offsets[i].GetSpecifiedValue();
+        SymbolicScalar actualDim = std::max(outDynShape[i], (inputShape + offset) * (inputShape != 0));
+        outShape.emplace_back(actualDim);
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.emplace_back(outShape);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_L0C_TO_L1, Opcode::OP_L0C_TO_L1, LoadL0C2L1InferFunc);
+
 void Load2L1InferFunc(Operation* op,
                         std::vector<std::vector<SymbolicScalar>>& outValidShapes) {
     std::vector<std::vector<SymbolicScalar>> inputValidShapes;
@@ -472,7 +503,6 @@ void Load2L1InferFunc(Operation* op,
         outValidShapes.push_back(inputValidShapes[0]);
     }
 }
-REGISTER_INFER_SHAPE_FUNC(OP_L0C_TO_L1, Opcode::OP_L0C_TO_L1, Load2L1InferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_L1, Opcode::OP_UB_COPY_L1, Load2L1InferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_ND2NZ, Opcode::OP_UB_COPY_ND2NZ, Load2L1InferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_UB, Opcode::OP_L0C_COPY_UB, Load2L1InferFunc);

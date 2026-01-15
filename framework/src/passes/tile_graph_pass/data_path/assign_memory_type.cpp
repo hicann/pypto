@@ -130,6 +130,9 @@ void AssignMemoryType::RunOnOperation(Operation &operation) {
     if(operation.GetOpcode() == Opcode::OP_VIEW) {
         ProcessViewwithSpecificMem(operation);
     }
+    if(operation.GetOpcode() == Opcode::OP_ASSEMBLE) {
+        ProcessAssemblewithSpecificMem(operation);
+    }
 }
 void AssignMemoryType::ProcessAmulBInput(Operation &operation, LogicalTensorPtr &tensor) {
     /*
@@ -165,18 +168,22 @@ void AssignMemoryType::ProcessAmulBInput(Operation &operation, LogicalTensorPtr 
 void AssignMemoryType::ProcessViewwithSpecificMem(Operation &operation) {
     auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(operation.GetOpAttribute().get());
     MemoryType attrToType = viewOpAttribute->GetTo();
+    auto out = operation.GetOOperands().front();
+    auto in = operation.iOperand.front();
     if(attrToType == MemoryType::MEM_UNKNOWN) {
         //跳过前端没有指定mem类型的view
+        //适配L0C2L1通路，优先选择将view转化为L0C2L1，不满足场景后续转为ddr
+        if (in->GetMemoryTypeOriginal() == MemoryType::MEM_L0C && out->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+            inserter.UpdateTensorTobeMap(in,operation,MemoryType::MEM_L0C);
+        }
         return;
     }
     //将view的输出tensor的memory ori和tobe类型设置为view上指定的mem类型
-    auto out = operation.GetOOperands().front();
     out->SetMemoryTypeOriginal(attrToType,true); 
     for (auto &consumerOp : out->GetConsumers()) {
         inserter.UpdateTensorTobeMap(out,*consumerOp,attrToType);
     }
     if(attrToType == MemoryType::MEM_L1) {
-        auto in =operation.iOperand.front();
         auto producerOps = operation.ProducerOps();
         for(const auto &producerOp : producerOps) {
             if(producerOp->GetOpcode() == Opcode::OP_VIEW) {
@@ -185,6 +192,36 @@ void AssignMemoryType::ProcessViewwithSpecificMem(Operation &operation) {
             }
         }
     }
+}
+// 适配L0C2L1: assemble的输入来源时l0c且输出预期l1时，不再插convert而是assemble后续转为l0c2l1
+void AssignMemoryType::ProcessAssemblewithSpecificMem(Operation &operation) {
+    auto input =operation.iOperand.front();
+    auto output =operation.oOperand.front();
+    if (input->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
+        return;
+    }
+    for (const auto &consumerOp : output->GetConsumers()) {
+        auto consumerOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
+        // 大包搬运场景：assemble后接view且view的toAttr为L1
+        // 非大包搬运场景：assemble后的op预期输入为L1
+        if (consumerOpAttribute) {
+            if (consumerOpAttribute->GetTo() != MemoryType::MEM_L1) {
+                return;
+            }
+        } else {
+            const auto &inputsMemType = OpcodeManager::Inst().GetInputsMemType(consumerOp->GetOpcode());
+            if (!inputsMemType.empty() && inputsMemType[0] != MemoryType::MEM_L1) {
+                return;
+            }
+        }
+    }
+    output->SetMemoryTypeOriginal(MemoryType::MEM_L1, true);
+    inserter.UpdateTensorTobeMap(input, operation, MemoryType::MEM_L0C);
+    for(const auto &consumerOp : output->GetConsumers()) {
+        inserter.UpdateTensorTobeMap(output, *consumerOp,MemoryType::MEM_L1);
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation, "Set assemble Op[%d]'s input[%d] tobeMap as MEM_L0C and output[%d] origin and tobeMap as MEM_L1.",
+        operation.GetOpMagic(), input->magic, output->magic);
 }
 
 void AssignMemoryType::AssignMemtypeForSplitReshape(Operation &op, const LogicalTensorPtr &input, const LogicalTensorPtr &output) {
@@ -351,8 +388,12 @@ void AssignMemoryType::AssignMoveOpForAssemble(Operation &operation) {
         APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] output %d mem original %s --> %s.", operation.GetOpcodeStr().c_str(),
             operation.GetOpMagic(), tensor->magic, BriefMemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str(),
             BriefMemoryTypeToString(fromType).c_str());
+        if (operation.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+            tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+            continue;
+        }
         tensor->SetMemoryTypeOriginal(fromType, true);
-        auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute *>(operation.GetOpAttribute().get());
+        auto assembleOpAttribute = std::dynamic_pointer_cast<AssembleOpAttribute>(operation.GetOpAttribute());
         assembleOpAttribute->SetFromType(fromType);
     }
 }
@@ -381,6 +422,11 @@ void AssignMemoryType::AssignMoveOpForView(Operation &operation) {
             //view输出的消费者是assemble或者reshape
             operation.oOperand.front()->SetMemoryTypeOriginal(tensor->GetMemoryTypeOriginal());
             viewOpAttribute->SetToType(tensor->GetMemoryTypeOriginal());
+            continue;
+        }
+        if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C && outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+            inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0C);
+            viewOpAttribute->SetToType(outputTensor->GetMemoryTypeOriginal());
             continue;
         }
         APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] input %d mem original %s --> %s.", operation.GetOpcodeStr().c_str(),
@@ -453,7 +499,9 @@ void AssignMemoryType::ProcesSmallTileToLargeTile(Function &function) {
         auto oOperand = op.GetOOperands().front();
         auto iOperand = op.GetIOperands().front();
         if(iOperand->GetMemoryTypeOriginal() == MEM_L0C) {
-            oOperand->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
+            if (!IsDimMultiple(oOperand->GetShape(), iOperand->GetShape())){
+                oOperand->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
+            }
         }
     }
 }
@@ -468,14 +516,32 @@ void AssignMemoryType::ProcessLargeTileToSamllTile(Function &function) {
         MemoryType attrToType = viewOpAttribute->GetTo();
         if(attrToType == MEM_L1) {
             auto iOperand = op.GetIOperands().front();
-            if(iOperand->GetMemoryTypeOriginal() != MEM_L0C && iOperand->GetMemoryTypeOriginal() != MEM_UB) {
+            auto oOperand = op.GetOOperands().front();
+            if(iOperand->GetMemoryTypeOriginal() == MEM_L0C && !IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
+                inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
-            auto oOperand = op.GetOOperands().front();
-            if(oOperand->shape != iOperand->shape) {
+            if(iOperand->GetMemoryTypeOriginal() == MEM_UB && oOperand->shape != iOperand->shape) {
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+                continue;
             }
         }
     }
+}
+/*
+    @brief 检查第一个矩阵的所有维度是否为第二个矩阵的正整数倍
+    @param shape1为第一个矩阵，shape2为第二个矩阵。
+    @return 如果第一个矩阵是第二个的正整数倍，则返回true；否则返回false。
+*/
+bool AssignMemoryType::IsDimMultiple(const Shape &shape1, const Shape &shape2) {
+    if (shape1.size() != shape2.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < shape1.size(); ++i) {
+        if (shape1[i] <= 0 || shape2[i] <= 0 || shape1[i] % shape2[i] != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 } //namespace npu::tile_fwk

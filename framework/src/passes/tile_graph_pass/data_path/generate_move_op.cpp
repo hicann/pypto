@@ -26,6 +26,7 @@
 namespace npu::tile_fwk {
 constexpr int64_t INNER_PAD_VALUE = 32;
 constexpr int64_t OUTER_PAD_VALUE = 16;
+const Offset ZERO_OFFSET = {0, 0};
 
 int64_t GenerateMoveOp::PadUB(int64_t dim, int64_t padValue) {
     ASSERT (padValue >0);
@@ -102,11 +103,15 @@ Status GenerateMoveOp::CreateMoveOpForView(Function &function, Operation &op) co
             return SUCCESS;
         }
         Status status = SetOpcodeByMemPath(op,from,to);
+        if(status != SUCCESS) {return status;}
         if(op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
             ProcessUB2L1(function, op);
-        } 
-        if(status != SUCCESS) {return status;}
-        SetCopyAttr(op,viewOpAttribute);
+        }
+        if(op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
+            SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
+        } else {
+            SetCopyAttr(op,viewOpAttribute);
+        }
     }
     return SUCCESS;
 }
@@ -120,6 +125,24 @@ void GenerateMoveOp::SetCopyAttr(Operation &op,ViewOpAttribute *viewOpAttribute)
     op.GetOOperands()[0]->UpdateDynValidShape(viewOpAttribute->GetToDynValidShape());
     op.SetOpAttribute(copyAttr);
 }
+
+void GenerateMoveOp::SetL0C2L1CopyAttr(Operation &op, const Shape &realShape,
+    const std::vector<OpImmediate> &fromOffset, const std::vector<OpImmediate> &toOffset) const {
+    std::vector<SymbolicScalar> validShape;
+    for (auto dim : realShape) {
+        SymbolicScalar scal = SymbolicScalar(dim);
+        validShape.push_back(scal);
+    }
+    auto copyAttr = std::make_shared<CopyOpAttribute>(
+        fromOffset,
+        op.oOperand.front()->GetMemoryTypeOriginal(),
+        OpImmediate::Specified(realShape),
+        OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
+        OpImmediate::Specified(validShape)
+    );
+    copyAttr->SetToOffset(toOffset);
+    op.SetOpAttribute(copyAttr);
+} 
 
 Status GenerateMoveOp::SetOpcodeByMemPath(Operation &op,MemoryType from,MemoryType to) const {
     std::pair<MemoryType,MemoryType> memPathPair = {from,to};
@@ -141,8 +164,14 @@ void GenerateMoveOp::CreateMoveOpForAssemble(Operation &op) const {
     auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute *>(op.GetOpAttribute().get());
     auto ASSEMBLE_in = op.iOperand.front();
     auto parentOp = *ASSEMBLE_in->GetProducers().begin();
-    if (op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR ||
-        op.oOperand.front()->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR ||
+    auto inputMemtype = op.iOperand.front()->GetMemoryTypeOriginal();
+    auto outputMemtype = op.oOperand.front()->GetMemoryTypeOriginal();
+    if (inputMemtype == MemoryType::MEM_L0C && outputMemtype == MemoryType::MEM_L1) {
+        SetOpcodeByMemPath(op, inputMemtype, outputMemtype);
+        SetL0C2L1CopyAttr(op, op.GetIOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET), OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()));
+        return;
+    }
+    if (inputMemtype == MemoryType::MEM_DEVICE_DDR || outputMemtype != MemoryType::MEM_DEVICE_DDR ||
         parentOp->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT || parentOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST) {
         return;
     }
@@ -163,7 +192,10 @@ Status GenerateMoveOp::CreateMoveOpForConvert(Function &function, Operation &op)
     Status status = SetOpcodeByMemPath(op,from,to);
     if(op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
         ProcessUB2L1(function, op);
-    }  
+    }
+    if (op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
+        SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET), OpImmediate::Specified(ZERO_OFFSET));
+    }
     if(status != SUCCESS) {return status;}
     auto childOp = *op.oOperand.front()->GetConsumers().begin();
     op.UpdateSubgraphID(childOp->GetSubgraphID());

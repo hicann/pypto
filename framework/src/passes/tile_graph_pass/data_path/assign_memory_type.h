@@ -39,6 +39,7 @@ private:
     void RunOnOperation(Operation &operation);
     void AssignMemUnknown(Function &function);
     void ProcessAmulBInput(Operation &operation,LogicalTensorPtr &tensor);
+    void ProcessAssemblewithSpecificMem(Operation &operation);
     void ProcessViewwithSpecificMem(Operation &operation);
     void AssignSpecialOpMemtype(Operation &op, bool &infoBufferSize);
     void AssignOpReshapeMemtype(Operation &op);
@@ -48,6 +49,7 @@ private:
     void UpdateOverSizedLocalBuffer(Operation &operation);
     void ProcesSmallTileToLargeTile(Function &function);
     void ProcessLargeTileToSamllTile(Function &function);
+    bool IsDimMultiple(const Shape &shape1, const Shape &shape2);
     std::string PrintTensorMem(std::shared_ptr<LogicalTensor>& tensor) const;
     ConvertInserter inserter;
 };
