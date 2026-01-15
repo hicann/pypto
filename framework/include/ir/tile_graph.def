@@ -86,11 +86,15 @@ DEFOP(
         OP_L1_TO_L0A,
  	    OP_L1_TO_L0B,
  	    OP_L1_TO_L0_AT,
- 	    OP_L1_TO_L0_BT
+ 	    OP_L1_TO_L0_BT,
+        OP_L0C_TO_L1
     ),
     INPUT(Tile, Input),
     INPUT(ScalarList, Offsets),
-    OUTPUT(Tile, Output)
+    OUTPUT(Tile, Output),
+    // 0:no_relu, 1:relue
+    ATTR(int, ReluMode, 0),
+    ATTR(int, QuantScaleValue, 0)
 )
 
 DEFOP(
@@ -121,8 +125,7 @@ DEFOP(
     MatmulStoreOp,
     INHERIT(MatmulTileBaseOp),
     OPCODE(
- 	    OP_L0C_COPY_OUT,
-        OP_L0C_TO_L1
+ 	    OP_L0C_COPY_OUT
     ),
     INPUT(Tile, Input),
     INPUT(ScalarList, Offsets),

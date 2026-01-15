@@ -140,7 +140,7 @@ TILEOP void DynL1CopyInNZ2NZ(__cbuf__ L1T *dst, __gm__ GMT *src, unsigned TShape
 
 #define RT_OPERATION_OP_L1_TO_L0A(l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1, l0aStride0, \
     l0aStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, l1Offset0,    \
-    l1Offset1)                                                                                                         \
+    l1Offset1, reluMode, scaleValue)                                                                                                         \
     DynL1ToL0A<l1Dtype, l1Offset0, l1Offset1>(                                                                         \
         l0aAddr, l1Addr, l0aValidShape0, l0aValidShape1, l1ValidShape0, l1ValidShape1);
 
@@ -188,7 +188,7 @@ TILEOP void DynL1ToL0A(__ca__ T *dst, __cbuf__ T *src, unsigned dstM, unsigned d
 
 #define RT_OPERATION_OP_L1_TO_L0_AT(l0aAddr, l0aDtype, l0aShape0, l0aShape1, l0aValidShape0, l0aValidShape1,         \
     l0aStride0, l0aStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, \
-    l1Offset0, l1Offset1)                                                                                            \
+    l1Offset0, l1Offset1, reluMode, scaleValue)                                                                                            \
     DynL1ToL0At<l1Dtype, l1Offset0, l1Offset1>(                                                                      \
         l0aAddr, l1Addr, l0aValidShape0, l0aValidShape1, l1ValidShape0, l1ValidShape1);
 
@@ -249,7 +249,7 @@ TILEOP void DynL1ToL0At(__ca__ T *dst, __cbuf__ T *src, unsigned dstM, unsigned 
 
 #define RT_OPERATION_OP_L1_TO_L0_B(l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1,          \
     l0bStride0, l0bStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, \
-    l1Offset0, l1Offset1)                                                                                            \
+    l1Offset0, l1Offset1, reluMode, scaleValue)                                                                                            \
     DynL1ToL0B<l1Dtype, l1Offset0, l1Offset1>(                                                                       \
         l0bAddr, l1Addr, l0bValidShape0, l0bValidShape1, l1ValidShape0, l1ValidShape1);
 
@@ -310,7 +310,7 @@ TILEOP void DynL1ToL0B(__cb__ T *dst, __cbuf__ T *src, unsigned dstK, unsigned d
 
 #define RT_OPERATION_OP_L1_TO_L0_BT(l0bAddr, l0bDtype, l0bShape0, l0bShape1, l0bValidShape0, l0bValidShape1,         \
     l0bStride0, l0bStride1, l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, l1Stride1, \
-    l1Offset0, l1Offset1)                                                                                            \
+    l1Offset0, l1Offset1, reluMode, scaleValue)                                                                                            \
     DynL1ToL0Bt<l1Dtype, l1Offset0, l1Offset1>(                                                                      \
         l0bAddr, l1Addr, l0bValidShape0, l0bValidShape1, l1ValidShape0, l1ValidShape1);
 
@@ -500,7 +500,7 @@ TILEOP void DynL0CCopyOut(__gm__ GMT *dst, __cc__ L0CT *src, unsigned oriTShape0
 
 #define RT_OPERATION_OP_L0C_TO_L1(l1Addr, l1Dtype, l1Shape0, l1Shape1, l1ValidShape0, l1ValidShape1, l1Stride0, \
     l1Stride1, l0cAddr, l0cDtype, l0cShape0, l0cShape1, l0cValidShape0, l0cValidShape1, l0cStride0, l0cStride1, \
-    offset0, offset1, reluMode, enableGmAcc, scaleValue)                                                        \
+    offset0, offset1, reluMode, scaleValue)                                                        \
     DynL0CToL1<l1Dtype, l0cDtype, reluMode>(                                                                    \
         l1Addr, l0cAddr, l0cValidShape0, l0cValidShape1, l1ValidShape0, l1ValidShape1, offset0, offset1, scaleValue);
 
