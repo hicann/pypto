@@ -166,7 +166,7 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs *startArgs, PushTaskEn
     this->args = startArgs;
     this->devProg = startArgs->devProg;
     PerfEnd(PERF_EVT_CONTROL_FLOW_INIT);
-    PerfMtTrace(PERF_TRACE_INIT, CTRL_CPU_THREAD_IDX);
+    PerfMtTrace(PERF_TRACE_INIT, this->devProg->devArgs.scheCpuNum);
     PerfBegin(PERF_EVT_CONTROL_FLOW);
     for (size_t index = 0; index < devProg->controlFlowCache.deviceTaskCount; index++) {
         DynDeviceTask *dynTask = reinterpret_cast<DynDeviceTask *>(devProg->controlFlowCache.deviceTaskCacheList[index].dynTaskBase);
@@ -178,7 +178,7 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs *startArgs, PushTaskEn
         PROF_STAGE_BEGIN(PERF_EVT_STAGE_PUSH_TASK, "push.before\n");
         DumpDeviceTask(taskId, dynTask);
         PushTask(dynTask);
-        PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, CTRL_CPU_THREAD_IDX);
+        PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, this->devProg->devArgs.scheCpuNum);
         PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
     }
     PerfEnd(PERF_EVT_CONTROL_FLOW);
@@ -365,7 +365,7 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
     DumpDeviceTask(taskId, dynTask);
     PushTask(dynTask);
     PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
-    PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, CTRL_CPU_THREAD_IDX);
+    PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, devProg->devArgs.scheCpuNum);
     return ret;
 }
 

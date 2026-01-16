@@ -204,27 +204,25 @@ struct PerfEvtMgr {
         perfTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
     }
 
-    void DumpPerfTrace(std::string file = "") {
-        (void)file;
-#if ENABLE_PERF_TRACE
-        auto devTaskPerfFormatFunc = [this](std::ostringstream &oss, uint32_t tid, uint32_t type) -> void {
+    void DumpPerfTraceCore(std::ostringstream &oss, uint32_t scheCpuNum) {
+        auto devTaskPerfFormatFunc = [this](std::ostringstream &osStr, uint32_t tid, uint32_t type) -> void {
             for (uint32_t i = 0; i < perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)]; i++) {
                 if (type == PERF_TRACE_DEV_TASK_SEND_FIRST_CALLOP_TASK) {
-                    oss << "{\"name\":\"" << PerfTraceName[type] << "\",";
+                    osStr << "{\"name\":\"" << PerfTraceName[type] << "\",";
                 } else {
-                    oss << "{\"name\":\"" << PerfTraceName[type] << "(" << i << ")\",";
+                    osStr << "{\"name\":\"" << PerfTraceName[type] << "(" << i << ")\",";
                 }
-                oss << "\"end\":" << perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][i] << "},";
+                osStr << "\"end\":" << perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][i] << "},";
             }
         };
 
-        std::ostringstream oss;
         uint64_t freq = GetFreq() / (NSEC_PER_SEC / NSEC_PER_USEC);
-        for (uint32_t tid = 0 ; tid < MAX_USED_AICPU_NUM; tid++) {
+        uint32_t usedAicpuNum = scheCpuNum + MAX_OTHER_AICPU_NUM;
+        for (uint32_t tid = 0 ; tid < usedAicpuNum; tid++) {
             std::string coreType = "\"AICPU\"";
-            if (tid < MAX_SCHEDULE_AICPU_NUM) {
+            if (tid < scheCpuNum) {
                 coreType = "\"AICPU-SCHED\"";
-            } else if (tid == CTRL_CPU_THREAD_IDX) {
+            } else if (tid == scheCpuNum) {
                 coreType = "\"AICPU-CTRL\"";
             }
             oss << "{\"blockIdx\":" << tid << ",\"coreType\":" << coreType << ",\"freq\":"<< freq <<",\"tasks\":[";
@@ -239,9 +237,16 @@ struct PerfEvtMgr {
                 oss << "{\"name\":\"" << PerfTraceName[type] << "\",\"end\":" << perfTrace[tid][type]
                     << "}" << (type == PERF_TRACE_MAX - 1 ? "" : ",");
             }
-            oss << "]}" << (tid == MAX_USED_AICPU_NUM - 1 ? "" : ",");
+            oss << "]}" << (tid == usedAicpuNum - 1 ? "" : ",");
         }
+    }
 
+    void DumpPerfTrace(uint32_t scheCpuNum, std::string file = "") {
+        (void)file;
+        (void)scheCpuNum;
+#if ENABLE_PERF_TRACE
+        std::ostringstream oss;
+        DumpPerfTraceCore(oss, scheCpuNum);
         const std::string& str = oss.str();
         uint32_t totalLength = str.length();
         uint32_t startPos = 0;

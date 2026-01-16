@@ -38,7 +38,7 @@ struct DevAscendStride {
         if (dim == dimSize - 1) {
             return dimStride[dim];
         } else {
-            return dimStride[dim] / dimStride[dim + 1];
+            return dimStride[dim + 1] != 0 ? dimStride[dim] / dimStride[dim + 1] : 0;
         }
     }
 

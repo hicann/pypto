@@ -147,19 +147,13 @@ public:
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
         devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
 
-        config.aicpuNum = std::min(config.aicpuNum,
-            static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1);
-        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, config.aicpuNum);
-
-        devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
-        devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
-
-        int minCpuNum = devProg->devArgs.scheCpuNum + 1;
-        if (config.aicpuNum < minCpuNum || config.aicpuNum > DEVICE_MAX_AICPU_NUM) {
-            config.aicpuNum = minCpuNum + 1;
-        }
+        int aiCpuNum = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1;
+        devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum);
+        config.aicpuNum = devProg->devArgs.scheCpuNum + dynamic::MAX_OTHER_AICPU_NUM;
         devProg->devArgs.nrAicpu = config.aicpuNum;
         ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
+        devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
+        devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {

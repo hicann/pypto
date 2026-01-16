@@ -59,6 +59,7 @@ public:
         sharedBuffer_ = deviceArgs->sharedBuffer;
         regAddrs_ = reinterpret_cast<int64_t *>(deviceArgs->coreRegAddr);
         regNum_ = deviceArgs->nrAic + deviceArgs->nrAiv;
+        freq_ = GetFreq() / (NSEC_PER_SEC / NSEC_PER_USEC);
         readyRegQueues_.fill(nullptr);
         finishRegQueues_.fill(nullptr);
         blockIdToPhyCoreId_.fill(-1);
@@ -391,7 +392,7 @@ public:
         }
 
         oss << "{\"blockIdx\":" << coreIdx << ",\"coreType\":\"SCHED" << aicpuIdx << "-"
-            << (coretype == CoreType::AIC ? "AIC" : "AIV") << "\",\"freq\":50,\"tasks\":[";
+            << (coretype == CoreType::AIC ? "AIC" : "AIV") << "\",\"freq\":" << freq_ << ",\"tasks\":[";
 
         uint64_t curCycle = 0;
         for (uint32_t type = 0; type < PERF_TRACE_CORE_MAX; type++) {
@@ -517,6 +518,7 @@ private:
     int aivStart_{0};
     int aivEnd_{0};
     uint32_t regNum_{0};
+    uint64_t freq_{50};
     
     std::array<volatile KernelArgs*, MAX_AICORE_NUM> args_;
 

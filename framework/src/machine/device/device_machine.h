@@ -31,7 +31,7 @@ namespace npu::tile_fwk {
 class DeviceMachine {
 public:
     DeviceMachine() {
-        for (uint32_t i = 0; i < npu::tile_fwk::dynamic::MAX_SCHEDULE_AICPU_NUM; ++i) {
+        for (uint32_t i = 0; i < MAX_STATIC_SCHEDULE_AICPU_NUM; ++i) {
             aicoreManager_.push_back(std::make_unique<AiCoreManager>(aicpuTaskManager_));
         }
     }

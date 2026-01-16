@@ -41,7 +41,7 @@ struct MachineManager {
         int cpuoff = 0;
         for (int i = 0; i < static_cast<int>(sizeof(uint64_t)); i++) {
             int mask = (maskval >> cpuoff) & 0xF;
-            if (__builtin_popcount(static_cast<uint32_t>(mask)) >= static_cast<int>(MAX_SCHEDULE_AICPU_NUM)) {
+            if (__builtin_popcount(static_cast<uint32_t>(mask)) >= static_cast<int>(MAX_STATIC_SCHEDULE_AICPU_NUM)) {
                 threadIdx = threadIdx_++;
                 break;
             }
@@ -81,7 +81,7 @@ struct MachineManager {
     void GetTaskTotalWastTime(volatile uint64_t *totalWastTime) {
         uint64_t min_task_start_time = UINT64_MAX;
         uint64_t max_task_end_time = 0;
-        for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; i++) {
+        for (uint32_t i = 0; i < MAX_STATIC_SCHEDULE_AICPU_NUM; i++) {
             min_task_start_time = std::min(machine.GetMinTaskTime(i), min_task_start_time);
             max_task_end_time = std::max(machine.GetMaxTaskTime(i), max_task_end_time);
         }

@@ -63,7 +63,7 @@ public:
         }
 
         DEV_INFO("thread %d start .", threadIdx);
-        if (static_cast<uint32_t>(threadIdx) >= MAX_SCHEDULE_AICPU_NUM) {
+        if (static_cast<uint32_t>(threadIdx) >= args->scheCpuNum) {
             DEV_INFO("thread start ignore ");
             return DEVICE_MACHINE_OK;
         }

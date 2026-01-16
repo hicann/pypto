@@ -78,6 +78,7 @@ public:
 private:
     DeviceRunner() = default;
     void *DevAlloc(int size);
+    int InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t> &regs, const std::vector<int64_t> &regsPmu);
     int InitDeviceArgs(DeviceArgs &args);
     int Init();
 
