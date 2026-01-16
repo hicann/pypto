@@ -62,7 +62,7 @@ struct TileTensor {
 
     bool operator==(const TileTensor &other) const {
         return dim == other.dim && bufVar == other.bufVar && shape == other.shape && dtype == other.dtype &&
-               localBufOffset == other.localBufOffset;
+               localBufOffset == other.localBufOffset && rawShape == other.rawShape;
     }
 
     /*  e.g.
@@ -132,6 +132,9 @@ struct TileTensorHash {
         HashCombine(seed, t.bufVar);
         HashCombine(seed, ToUnderlying(t.dtype));
         for (const auto &s : t.shape) {
+            HashCombine(seed, s);
+        }
+        for (const auto &s : t.rawShape) {
             HashCombine(seed, s);
         }
         for (const auto &s : t.localBufOffset) {

@@ -18,9 +18,11 @@
 
 enum class Hardware : uint8_t { GM = 0, UB, L1, L0A, L0B, L0C, BIAS, FIXBUF, MAX };
 
-enum class UnaryOp : uint8_t { ABS = 0, EXP, NEG, REC, RSQRT, SQRT };
+enum class UnaryOp : uint8_t { ABS = 0, EXP, NEG, REC, RSQRT, SQRT, BRCB };
 
 enum class BinaryOp : uint8_t { ADD = 0, SUB, MUL, DIV, AND, OR, MAX, MIN, SUM, AMAX};
+
+enum class BroadcastOperand : uint8_t { NONE = 0, LEFT, RIGHT };
 
 enum class PairBinaryOp : uint8_t { ADD = 0, MAX, MIN };
 

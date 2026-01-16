@@ -537,6 +537,10 @@ void PadLocalBuffer::PadVectorForAxisCombine(Operation &op, LogicalTensorPtr &in
     }
     if (calcType == OpCalcType::ELMWISE || calcType == OpCalcType::MOVE_IN || calcType == OpCalcType::MOVE_OUT ||
             (producerOp != nullptr && OpcodeManager::Inst().GetOpCalcType(producerOp->GetOpcode()) == OpCalcType::BROADCAST)) {
+        if (op.GetOpcode() == Opcode::OP_EXPAND) {
+            AlignedRawTensorIfNeed(in, lastIdx, paddingValue);
+            return;
+        }
         if (lastIdx > 0 && in->tensor->rawshape[lastIdx] == 1) {
             AlignedRawTensorIfNeed(in, lastIdx - 1, paddingValue);
             return;

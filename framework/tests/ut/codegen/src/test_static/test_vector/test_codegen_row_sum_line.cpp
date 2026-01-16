@@ -107,10 +107,10 @@ using UBTileTensorFP32Dim2_4 = TileTensor<float, StaticLayout2Dim<4, 512, 4, 512
 using UBTileTensorFP32Dim3_3 = TileTensor<float, StaticLayout3Dim<2, 1, 512, 2, 1, 512>, Hardware::UB>;
 using GMTileTensorFP32Dim3_2 = TileTensor<__gm__ float, DynLayout3Dim, Hardware::GM>;
 using UBTileTensorFP32Dim3_1 = TileTensor<float, StaticLayout3Dim<2, 8, 512, 2, 8, 512>, Hardware::UB>;
+GMTileTensorFP32Dim3_5 gmTensor_6((__gm__ float*)GET_PARAM_ADDR(param, 0, 0), DynLayout3Dim(Shape3Dim(6, 1, 1024), Stride3Dim(1024, 1024, 1)));
 UBTileTensorFP32Dim2_4 ubTensor_4((uint64_t)UB_S36864_E45056_T);
 UBTileTensorFP32Dim3_3 ubTensor_3((uint64_t)UB_S32768_E36864_T);
 GMTileTensorFP32Dim3_2 gmTensor_2((__gm__ float*)GET_PARAM_ADDR(param, 0, 0), DynLayout3Dim(Shape3Dim(6, 8, 1024), Stride3Dim(8192, 1024, 1)));
-GMTileTensorFP32Dim3_5 gmTensor_6((__gm__ float*)GET_PARAM_ADDR(param, 0, 0), DynLayout3Dim(Shape3Dim(6, 1, 1024), Stride3Dim(1024, 1024, 1)));
 UBTileTensorFP32Dim3_1 ubTensor_1((uint64_t)UB_S0_E32768_T);
 SUBKERNEL_PHASE1
 TLoad(ubTensor_1, gmTensor_2, Coord3Dim(0, 0, 0));
@@ -120,7 +120,7 @@ SUBKERNEL_PHASE2
 TRowSumLine<3>(ubTensor_3, ubTensor_1, ubTensor_4);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-TStore(gmTensor_2, ubTensor_3, Coord3Dim(0, 0, 0));
+TStore(gmTensor_6, ubTensor_3, Coord3Dim(0, 0, 0));
 }
 )!!!";
     EXPECT_EQ(res, expect);

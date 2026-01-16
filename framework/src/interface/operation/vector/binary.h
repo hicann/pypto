@@ -134,9 +134,6 @@ void CheckBinaryInputTensors(const LogicalTensorPtr &tensor1, const LogicalTenso
 // OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX
 template <BinaryOpType T>
 LogicalTensorPtr TensorBinaryOperation(Function &function, const Tensor &operand1, const Tensor &operand2) {
-    if (ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false)) {
-        ConfigManager::Instance().SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-    }
     auto oprandT1 = operand1.GetStorage();
     auto oprandT2 = operand2.GetStorage();
     if (oprandT1->shape.size() != oprandT2->shape.size()) {

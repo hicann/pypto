@@ -19,34 +19,58 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-template <BinaryOp op, typename T0, typename T1, typename T2>
+template <BinaryOp op, TileOp::BroadcastOperand operand, typename T0, typename T1, typename T2>
 TILEOP void BinaryComputeImpl(T0 dst, T1 src0, T2 src1) {
     if constexpr (op == BinaryOp::ADD) {
-        pto::TADD(dst, src0, src1);
+        if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+            pto::TADD(dst, src0, src1);
+        } else {
+            pto::TROWEXPANDADD(dst, src0, src1);
+        }
         return;
     }
     if constexpr (op == BinaryOp::SUB) {
-        pto::TSUB(dst, src0, src1);
+        if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+            pto::TSUB(dst, src0, src1);
+        } else {
+            pto::TROWEXPANDSUB(dst, src0, src1);
+        }
     }
 
     if constexpr (op == BinaryOp::MUL) {
-        pto::TMUL(dst, src0, src1);
+        if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+            pto::TMUL(dst, src0, src1);
+        } else {
+            pto::TROWEXPANDMUL(dst, src0, src1);
+        }
     }
 
     if constexpr (op == BinaryOp::DIV) {
-        pto::TDIV(dst, src0, src1);
+        if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+            pto::TDIV(dst, src0, src1);
+        } else {
+            pto::TROWEXPANDDIV(dst, src0, src1);
+        }
     }
 
     if constexpr (op == BinaryOp::MAX) {
-        pto::TMAX(dst, src0, src1);
+        if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+            pto::TMAX(dst, src0, src1);
+        } else {
+            pto::TROWEXPANDMAX(dst, src0, src1);
+        }
     }
 
     if constexpr (op == BinaryOp::MIN) {
-        pto::TMIN(dst, src0, src1);
+        if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+            pto::TMIN(dst, src0, src1);
+        } else {
+            pto::TROWEXPANDMIN(dst, src0, src1);
+        }
     }
 }
 
-template <BinaryOp op, typename T0, typename T1, typename T2>
+template <BinaryOp op, TileOp::BroadcastOperand operand, typename T0, typename T1, typename T2>
 TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1) {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     if constexpr (TileOp::IsConstContinous<T0, T1, T2>() == true) {
@@ -56,7 +80,7 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1) {
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(src0Tile, (uint64_t)src0.GetAddr());
         pto::TASSIGN(src1Tile, (uint64_t)src1.GetAddr());
-        BinaryComputeImpl<op>(dstTile, src0Tile, src1Tile);
+        BinaryComputeImpl<op, operand>(dstTile, src0Tile, src1Tile);
         return;
     }
     const auto dstLayout = dst.GetLayout();
@@ -74,45 +98,45 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1) {
                 dstTile.Assign(dst, tileOffsets);
                 src0Tile.Assign(src0, tileOffsets);
                 src1Tile.Assign(src1, tileOffsets);
-                BinaryComputeImpl<op>(dstTile.Data(), src0Tile.Data(), src1Tile.Data());
+                BinaryComputeImpl<op, operand>(dstTile.Data(), src0Tile.Data(), src1Tile.Data());
             }
         }
     }
 }
 
 #define OP_TILE_OP_ADD TAdd
-template <typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TAdd(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::ADD>(dst, src0, src1);
+    BinaryCompute<BinaryOp::ADD, operand>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_SUB TSub
-template <typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TSub(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::SUB>(dst, src0, src1);
+    BinaryCompute<BinaryOp::SUB, operand>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MUL TMul
-template <typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TMul(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::MUL>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MUL, operand>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_DIV TDiv
-template <typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TDiv(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::DIV>(dst, src0, src1);
+    BinaryCompute<BinaryOp::DIV, operand>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MAX TMax
-template <typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TMax(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::MAX>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MAX, operand>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MIN TMin
-template <typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TMin(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::MIN>(dst, src0, src1);
+    BinaryCompute<BinaryOp::MIN, operand>(dst, src0, src1);
 }
 #endif
