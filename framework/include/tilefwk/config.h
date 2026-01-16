@@ -103,7 +103,7 @@ void SetHostOption(const std::string &key, const T &value) {
  */
 template <typename T>
 void SetVerifyOption(const std::string &key, const T &value) {
-    SetOptionsNg("pass." + key, value);
+    SetOptionsNg("verify." + key, value);
 }
 
 /**

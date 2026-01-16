@@ -199,9 +199,6 @@ inline void ScatterUpdate(LogicalTensorDataPtr out, LogicalTensorDataPtr self, L
     int axis = -2, std::string cacheMode = "BSND", int blockSize = 1) {
     GetCalcOps()->ScatterUpdate(out, self, index, axis, cacheMode, blockSize);
 }
-inline void LogicalView(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Offset offset) {
-    GetCalcOps()->LogicalView(out, self, offset);
-}
 inline void Scatter(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index, const Element &src,
     int axis, int reduce) {
     GetCalcOps()->Scatter(out, self, index, src, axis, reduce);
