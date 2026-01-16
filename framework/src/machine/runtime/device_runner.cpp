@@ -431,7 +431,7 @@ void DeviceRunner::Dump() {
 void DeviceRunner::DumpAiCoreExecutionTimeData() {
     json root_taskStats = json::array();
     uint32_t block_num_ = args_.GetBlockNum();
-    ALOG_INFO("GetBlockNum : %d",  block_num_);
+    ALOG_INFO_F("GetBlockNum : %d",  block_num_);
     for (uint32_t i = 0; i < block_num_; i++) {
         void* devPtr = perfData_[i];
         size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
@@ -466,7 +466,7 @@ void DeviceRunner::DumpAiCoreExecutionTimeData() {
     std::ofstream jsonFile(jsonFilePath);
     jsonFile << root_taskStats << std::endl;
     jsonFile.close();
-    ALOG_INFO("tilefwk_L1_prof_data have saved in: %s",  jsonFilePath);
+    ALOG_INFO("tilefwk_L1_prof_data have saved in: ",  jsonFilePath);
     std::string topo_txt_path = config::LogTopFolder() + "/dyn_topo.txt";
     std::string program_json_path = config::LogTopFolder() + "/program.json";
     std::string draw_swim_lane_py_path = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";

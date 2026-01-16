@@ -45,7 +45,7 @@ struct MachineCompileInfo {
     std::vector<uint64_t> coreFunctionTensorInfoOffset;
     std::vector<uint64_t> coreTensorNum;
     void Print() {
-        ALOG_DEBUG(
+        ALOG_DEBUG_F(
             "programFunctionCnt =  %lu, coreFunctionCnt = %lu, workSpaceStackSize = %lu, invokeParaWorkSpaceSize = %lu",
             programFunctionCnt, coreFunctionCnt, workSpaceStackSize, invokeParaWorkSpaceSize);
     }
