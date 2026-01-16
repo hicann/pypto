@@ -16,7 +16,11 @@ from pypto.pypto_impl import ir
 
 
 class BlockBuilderHelper:
-    def __init__(self, builder, ctx):
+    def __init__(self, builder=None, ctx=None):
+        if builder is None:
+            builder = ir.IrBuilder()
+        if ctx is None:
+            ctx = ir.IrBuilderContext()
         self.builder = builder
         self.ctx = ctx
 
@@ -93,6 +97,9 @@ class BlockBuilderHelper:
     def tile(self, shape, dtype, name):
         return self.builder.create_tile(self.ctx, shape, dtype, name)
 
+    def tensor(self, shape, dtype, name):
+        return self.builder.create_tensor(self.ctx, shape, dtype, name)
+
     # ===== Operations =====
 
     # Unary operations (Tile -> Tile)
@@ -136,7 +143,22 @@ class BlockBuilderHelper:
         self.builder.emit(self.ctx, op)
         return op
 
+    def assign(self, a, out):
+        op = self.builder.create_unary_op(ir.Opcode.OP_ASSIGN, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def compact(self, a, out):
+        op = self.builder.create_unary_op(ir.Opcode.OP_COMPACT, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
     # Binary operations (Tile, Tile -> Tile)
+    def add(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_ADD, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
     def sub(self, a, b, out):
         op = self.builder.create_binary_op(ir.Opcode.OP_SUB, a, b, out)
         self.builder.emit(self.ctx, op)
@@ -159,6 +181,41 @@ class BlockBuilderHelper:
 
     def max(self, a, b, out):
         op = self.builder.create_binary_op(ir.Opcode.OP_MAX, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_add(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_S_ADD, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_sub(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_S_SUB, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_mul(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_S_MUL, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_div(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_S_DIV, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_min(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_S_MIN, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_max(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_S_MAX, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def pad(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_PAD, a, b, out)
         self.builder.emit(self.ctx, op)
         return op
 
@@ -190,5 +247,264 @@ class BlockBuilderHelper:
 
     def maxs(self, a, b, out):
         op = self.builder.create_binary_scalar_op(ir.Opcode.OP_MAXS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_adds(self, a, b, out):
+        op = self.builder.create_binary_scalar_op(ir.Opcode.OP_S_ADDS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_subs(self, a, b, out):
+        op = self.builder.create_binary_scalar_op(ir.Opcode.OP_S_SUBS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_muls(self, a, b, out):
+        op = self.builder.create_binary_scalar_op(ir.Opcode.OP_S_MULS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_divs(self, a, b, out):
+        op = self.builder.create_binary_scalar_op(ir.Opcode.OP_S_DIVS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_mins(self, a, b, out):
+        op = self.builder.create_binary_scalar_op(ir.Opcode.OP_S_MINS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def s_maxs(self, a, b, out):
+        op = self.builder.create_binary_scalar_op(ir.Opcode.OP_S_MAXS, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Binary operations with temp tensor
+    def logicaland(self, a, b, out, temp):
+        op = self.builder.create_binary_with_temp_op(ir.Opcode.OP_LOGICALAND, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Unary operations with temp tensor
+    def logicalnot_with_temp(self, a, out, temp):
+        op = self.builder.create_unary_with_temp_op(ir.Opcode.OP_LOGICALNOT, a, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Range and vector operations
+    def range_op(self, start, step, size, out):
+        op = self.builder.create_range_op(ir.Opcode.OP_RANGE, start, step, size, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def vec_dup(self, value, out):
+        op = self.builder.create_vec_dup_op(ir.Opcode.OP_VEC_DUP, value, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def pow(self, a, b, out):
+        op = self.builder.create_pow_op(ir.Opcode.OP_POW, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Gather operations
+    def gather(self, lhs, rhs, out):
+        op = self.builder.create_gather_op(ir.Opcode.OP_GATHER, lhs, rhs, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def gather_extended(self, lhs, rhs, out):
+        op = self.builder.create_gather_extended_op(ir.Opcode.OP_GATHER_FROM_UB, lhs, rhs, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def gather_element(self, lhs, rhs, out):
+        op = self.builder.create_gather_extended_op(ir.Opcode.OP_GATHER_ELEMENT, lhs, rhs, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Reduce operations
+    def reduce(self, a, out):
+        op = self.builder.create_reduce_op(ir.Opcode.OP_ROWMAXLINE, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def reduce_minline(self, a, out):
+        op = self.builder.create_reduce_op(ir.Opcode.OP_ROWMINLINE, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def reduce_with_temp(self, a, out, temp):
+        op = self.builder.create_reduce_with_temp_op(ir.Opcode.OP_ROWMAX_SINGLE, a, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def reduce_min_with_temp(self, a, out, temp):
+        op = self.builder.create_reduce_with_temp_op(ir.Opcode.OP_ROWMIN_SINGLE, a, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def reduce_sum_with_temp(self, a, out, temp):
+        op = self.builder.create_reduce_with_temp_op(ir.Opcode.OP_ROWSUM_SINGLE, a, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def reduce_sumline_with_temp(self, a, out, temp):
+        op = self.builder.create_reduce_with_temp_op(ir.Opcode.OP_ROWSUMLINE, a, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Broadcast operations
+    def broadcast_with_temp(self, a, b, out, temp):
+        op = self.builder.create_broadcast_with_temp_op(ir.Opcode.OP_MAXIMUM, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def broadcast_minimum(self, a, b, out, temp):
+        op = self.builder.create_broadcast_with_temp_op(ir.Opcode.OP_MINIMUM, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def broadcast_pairmax(self, a, b, out, temp):
+        op = self.builder.create_broadcast_with_temp_op(ir.Opcode.OP_PAIRMAX, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def broadcast_pairmin(self, a, b, out, temp):
+        op = self.builder.create_broadcast_with_temp_op(ir.Opcode.OP_PAIRMIN, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def broadcast_pairsum(self, a, b, out, temp):
+        op = self.builder.create_broadcast_with_temp_op(ir.Opcode.OP_PAIRSUM, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Cast operation
+    def cast(self, a, out):
+        op = self.builder.create_cast_op(ir.Opcode.OP_CAST, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Where/Ternary operations
+    def where_tt(self, condition, input_val, other, out, temp):
+        op = self.builder.create_ternary_op(ir.Opcode.OP_WHERE_TT, condition, input_val, other, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def where_ts(self, condition, input_val, other, out, temp):
+        op = self.builder.create_where_ts_op(ir.Opcode.OP_WHERE_TS, condition, input_val, other, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def where_st(self, condition, input_val, other, out, temp):
+        op = self.builder.create_where_st_op(ir.Opcode.OP_WHERE_ST, condition, input_val, other, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def where_ss(self, condition, input_val, other, out, temp):
+        op = self.builder.create_where_ss_op(ir.Opcode.OP_WHERE_SS, condition, input_val, other, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Compare operations
+    def compare(self, a, b, out, temp):
+        op = self.builder.create_compare_op(ir.Opcode.OP_CMP, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def compare_scalar(self, a, b, out, temp):
+        op = self.builder.create_compare_scalar_op(ir.Opcode.OP_CMPS, a, b, out, temp)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Matmul operations
+    def matmul_extract(self, input_val, offsets, out):
+        op = self.builder.create_matmul_extract_op(ir.Opcode.OP_L1_TO_L0A, input_val, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_extract_l0b(self, input_val, offsets, out):
+        op = self.builder.create_matmul_extract_op(ir.Opcode.OP_L1_TO_L0B, input_val, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_extract_l0at(self, input_val, offsets, out):
+        op = self.builder.create_matmul_extract_op(ir.Opcode.OP_L1_TO_L0_AT, input_val, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_extract_l0bt(self, input_val, offsets, out):
+        op = self.builder.create_matmul_extract_op(ir.Opcode.OP_L1_TO_L0_BT, input_val, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_extract_l0c_to_l1(self, input_val, offsets, out):
+        op = self.builder.create_matmul_extract_op(ir.Opcode.OP_L0C_TO_L1, input_val, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_mmad(self, lhs, rhs, out):
+        op = self.builder.create_matmul_mmad_op(ir.Opcode.OP_A_MUL_B, lhs, rhs, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_acc(self, lhs, rhs, out):
+        op = self.builder.create_matmul_acc_op(ir.Opcode.OP_A_MULACC_B, lhs, rhs, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_load(self, input_tensor, offsets, out):
+        op = self.builder.create_matmul_load_op(ir.Opcode.OP_L1_COPY_IN, input_tensor, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def matmul_store(self, input_tile, offsets, out):
+        op = self.builder.create_matmul_store_op(ir.Opcode.OP_L0C_COPY_OUT, input_tile, offsets, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Transpose operations
+    def transpose_movein(self, a, out):
+        op = self.builder.create_transpose_op(ir.Opcode.OP_TRANSPOSE_MOVEIN, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def transpose_moveout(self, a, out):
+        op = self.builder.create_transpose_op(ir.Opcode.OP_TRANSPOSE_MOVEOUT, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # Copy operations
+    def copy_in(self, a, out):
+        op = self.builder.create_copy_in_out_op(ir.Opcode.OP_COPY_IN, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def copy_out(self, a, out):
+        op = self.builder.create_copy_in_out_op(ir.Opcode.OP_COPY_OUT, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # UB copy operations (Tensor <-> Tile with offsets)
+    def ub_copy_in(self, src_tensor, offsets, dst_tile):
+        op = self.builder.create_ub_copy_in_op(ir.Opcode.OP_UB_COPY_IN, src_tensor, offsets, dst_tile)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def ub_copy_out(self, src_tile, offsets, dst_tensor):
+        op = self.builder.create_ub_copy_out_op(ir.Opcode.OP_UB_COPY_OUT, src_tile, offsets, dst_tensor)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    # AnyDataCopy operations
+    def vld(self, a, out):
+        op = self.builder.create_any_data_copy_op(ir.Opcode.OP_VLD, a, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def vst(self, a, out):
+        op = self.builder.create_any_data_copy_op(ir.Opcode.OP_VST, a, out)
         self.builder.emit(self.ctx, op)
         return op

@@ -18,9 +18,7 @@ from pypto.blockgraph.ast_mutator import ast_to_ir
 
 def ast_to_ir_demo():
     module = ir.module("main")
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")

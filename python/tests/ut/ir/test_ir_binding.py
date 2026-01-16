@@ -13,6 +13,15 @@
 from pypto.pypto_impl import ir
 
 
+def _get_common_test_shape():
+    """Helper function to create common test shape variables used across test functions."""
+    tile_shape = [128, 128]
+    batch = ir.Scalar(ir.DataType.int32, None, "batch")
+    constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
+    tensor_shape = [batch, constant128]
+    return tile_shape, batch, constant128, tensor_shape
+
+
 def test_dtype():
     dtypes = [
         (ir.DataType.bool, "bool", 8, 1, False),
@@ -99,10 +108,7 @@ def test_control_flow():
 
     # tensor<[batch, 128], float32>
     # Passing None to Scalar indicates a symbolic/non-immediate value
-    batch = ir.Scalar(ir.DataType.int32, None, "batch")
-    constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
-    tensor_shape = [batch, constant128]
-    tile_shape = [128, 128]
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
 
     input_x = ir.Tensor(tensor_shape, ir.DataType.float, "inputX", ir.Format.ND)
     input_y = ir.Tensor(tensor_shape, ir.DataType.float, "inputY", ir.Format.ND)
@@ -203,16 +209,12 @@ def test_control_flow():
 
 
 def test_unary_operations():
-    """Test all unary operations: exp, neg, rsqrt, sqrt, logicalnot, reciprocal, abs, ln"""
     module = ir.module("test_unary")
     builder = ir.IrBuilder()
     ctx = ir.IrBuilderContext()
 
     # Setup
-    tile_shape = [128, 128]
-    batch = ir.Scalar(ir.DataType.int32, None, "batch")
-    constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
-    tensor_shape = [batch, constant128]
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
     input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
     output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
 
@@ -230,63 +232,34 @@ def test_unary_operations():
     input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
 
     # Test all unary operations
-    res_exp = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_exp")
-    op_exp = builder.create_unary_op(ir.Opcode.OP_EXP, input_tile, res_exp)
-    builder.emit(ctx, op_exp)
+    unary_ops = [
+        (ir.Opcode.OP_ASSIGN, "res_assign"),
+        (ir.Opcode.OP_EXP, "res_exp"),
+        (ir.Opcode.OP_NEG, "res_neg"),
+        (ir.Opcode.OP_RSQRT, "res_rsqrt"),
+        (ir.Opcode.OP_SQRT, "res_sqrt"),
+        (ir.Opcode.OP_RECIPROCAL, "res_reciprocal"),
+        (ir.Opcode.OP_ABS, "res_abs"),
+        (ir.Opcode.OP_LN, "res_ln"),
+        (ir.Opcode.OP_COMPACT, "res_compact"),
+    ]
+    for opcode, res_name in unary_ops:
+        res = builder.create_tile(ctx, tile_shape, ir.DataType.float, res_name)
+        op = builder.create_unary_op(opcode, input_tile, res)
+        builder.emit(ctx, op)
+    res_compact = res  # Keep reference for return statement
 
-    res_neg = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_neg")
-    op_neg = builder.create_unary_op(ir.Opcode.OP_NEG, input_tile, res_neg)
-    builder.emit(ctx, op_neg)
-
-    res_rsqrt = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_rsqrt")
-    op_rsqrt = builder.create_unary_op(ir.Opcode.OP_RSQRT, input_tile, res_rsqrt)
-    builder.emit(ctx, op_rsqrt)
-
-    res_sqrt = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_sqrt")
-    op_sqrt = builder.create_unary_op(ir.Opcode.OP_SQRT, input_tile, res_sqrt)
-    builder.emit(ctx, op_sqrt)
-
-    res_logicalnot = builder.create_tile(
-        ctx, tile_shape, ir.DataType.float, "res_logicalnot"
-    )
-    op_logicalnot = builder.create_unary_op(
-        ir.Opcode.OP_LOGICALNOT, input_tile, res_logicalnot
-    )
-    builder.emit(ctx, op_logicalnot)
-
-    res_reciprocal = builder.create_tile(
-        ctx, tile_shape, ir.DataType.float, "res_reciprocal"
-    )
-    op_reciprocal = builder.create_unary_op(
-        ir.Opcode.OP_RECIPROCAL, input_tile, res_reciprocal
-    )
-    builder.emit(ctx, op_reciprocal)
-
-    res_abs = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_abs")
-    op_abs = builder.create_unary_op(ir.Opcode.OP_ABS, input_tile, res_abs)
-    builder.emit(ctx, op_abs)
-
-    res_ln = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_ln")
-    op_ln = builder.create_unary_op(ir.Opcode.OP_LN, input_tile, res_ln)
-    builder.emit(ctx, op_ln)
-
-    builder.create_return(ctx, [res_ln])
+    builder.create_return(ctx, [res_compact])
     ctx.pop_scope()
-
-    print(f"Unary operations test completed: {module}")
 
 
 def test_binary_operations():
-    """Test all binary operations: sub, mul, div, min, max"""
     module = ir.module("test_binary")
     builder = ir.IrBuilder()
     ctx = ir.IrBuilderContext()
 
     # Setup
-    tile_shape = [128, 128]
-    batch = ir.Scalar(ir.DataType.int32, None, "batch")
-    constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
-    tensor_shape = [batch, constant128]
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
     input_x_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_x", ir.Format.ND)
     input_y_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_y", ir.Format.ND)
     output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
@@ -306,43 +279,38 @@ def test_binary_operations():
     input_y = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_y")
 
     # Test all binary operations
-    res_sub = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_sub")
-    op_sub = builder.create_binary_op(ir.Opcode.OP_SUB, input_x, input_y, res_sub)
-    builder.emit(ctx, op_sub)
+    binary_ops = [
+        (ir.Opcode.OP_ADD, "res_add"),
+        (ir.Opcode.OP_SUB, "res_sub"),
+        (ir.Opcode.OP_MUL, "res_mul"),
+        (ir.Opcode.OP_DIV, "res_div"),
+        (ir.Opcode.OP_MIN, "res_min"),
+        (ir.Opcode.OP_MAX, "res_max"),
+        (ir.Opcode.OP_S_ADD, "res_s_add"),
+        (ir.Opcode.OP_S_SUB, "res_s_sub"),
+        (ir.Opcode.OP_S_MUL, "res_s_mul"),
+        (ir.Opcode.OP_S_DIV, "res_s_div"),
+        (ir.Opcode.OP_S_MIN, "res_s_min"),
+        (ir.Opcode.OP_S_MAX, "res_s_max"),
+        (ir.Opcode.OP_PAD, "res_pad"),
+    ]
+    for opcode, res_name in binary_ops:
+        res = builder.create_tile(ctx, tile_shape, ir.DataType.float, res_name)
+        op = builder.create_binary_op(opcode, input_x, input_y, res)
+        builder.emit(ctx, op)
+    res_pad = res  # Keep reference for return statement
 
-    res_mul = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_mul")
-    op_mul = builder.create_binary_op(ir.Opcode.OP_MUL, input_x, input_y, res_mul)
-    builder.emit(ctx, op_mul)
-
-    res_div = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_div")
-    op_div = builder.create_binary_op(ir.Opcode.OP_DIV, input_x, input_y, res_div)
-    builder.emit(ctx, op_div)
-
-    res_min = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_min")
-    op_min = builder.create_binary_op(ir.Opcode.OP_MIN, input_x, input_y, res_min)
-    builder.emit(ctx, op_min)
-
-    res_max = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_max")
-    op_max = builder.create_binary_op(ir.Opcode.OP_MAX, input_x, input_y, res_max)
-    builder.emit(ctx, op_max)
-
-    builder.create_return(ctx, [res_max])
+    builder.create_return(ctx, [res_pad])
     ctx.pop_scope()
-
-    print(f"Binary operations test completed: {module}")
 
 
 def test_binary_scalar_mix_operations():
-    """Test all binary scalar mix operations: adds, subs, muls, divs, mins, maxs"""
     module = ir.module("test_binary_scalar")
     builder = ir.IrBuilder()
     ctx = ir.IrBuilderContext()
 
     # Setup
-    tile_shape = [128, 128]
-    batch = ir.Scalar(ir.DataType.int32, None, "batch")
-    constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
-    tensor_shape = [batch, constant128]
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
     input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
     scale = ir.Scalar(ir.DataType.float, None, "scale")
     output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
@@ -361,43 +329,707 @@ def test_binary_scalar_mix_operations():
     input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
 
     # Test all binary scalar mix operations
-    res_adds = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_adds")
-    op_adds = builder.create_binary_scalar_op(
-        ir.Opcode.OP_ADDS, input_tile, scale, res_adds
-    )
-    builder.emit(ctx, op_adds)
+    binary_scalar_ops = [
+        (ir.Opcode.OP_ADDS, "res_adds"),
+        (ir.Opcode.OP_SUBS, "res_subs"),
+        (ir.Opcode.OP_MULS, "res_muls"),
+        (ir.Opcode.OP_DIVS, "res_divs"),
+        (ir.Opcode.OP_MINS, "res_mins"),
+        (ir.Opcode.OP_MAXS, "res_maxs"),
+        (ir.Opcode.OP_S_ADDS, "res_s_adds"),
+        (ir.Opcode.OP_S_SUBS, "res_s_subs"),
+        (ir.Opcode.OP_S_MULS, "res_s_muls"),
+        (ir.Opcode.OP_S_DIVS, "res_s_divs"),
+        (ir.Opcode.OP_S_MINS, "res_s_mins"),
+        (ir.Opcode.OP_S_MAXS, "res_s_maxs"),
+    ]
+    for opcode, res_name in binary_scalar_ops:
+        res = builder.create_tile(ctx, tile_shape, ir.DataType.float, res_name)
+        op = builder.create_binary_scalar_op(opcode, input_tile, scale, res)
+        builder.emit(ctx, op)
+    res_s_maxs = res  # Keep reference for return statement
 
-    res_subs = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_subs")
-    op_subs = builder.create_binary_scalar_op(
-        ir.Opcode.OP_SUBS, input_tile, scale, res_subs
-    )
-    builder.emit(ctx, op_subs)
-
-    res_muls = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_muls")
-    op_muls = builder.create_binary_scalar_op(
-        ir.Opcode.OP_MULS, input_tile, scale, res_muls
-    )
-    builder.emit(ctx, op_muls)
-
-    res_divs = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_divs")
-    op_divs = builder.create_binary_scalar_op(
-        ir.Opcode.OP_DIVS, input_tile, scale, res_divs
-    )
-    builder.emit(ctx, op_divs)
-
-    res_mins = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_mins")
-    op_mins = builder.create_binary_scalar_op(
-        ir.Opcode.OP_MINS, input_tile, scale, res_mins
-    )
-    builder.emit(ctx, op_mins)
-
-    res_maxs = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_maxs")
-    op_maxs = builder.create_binary_scalar_op(
-        ir.Opcode.OP_MAXS, input_tile, scale, res_maxs
-    )
-    builder.emit(ctx, op_maxs)
-
-    builder.create_return(ctx, [res_maxs])
+    builder.create_return(ctx, [res_s_maxs])
     ctx.pop_scope()
 
-    print(f"Binary scalar mix operations test completed: {module}")
+
+def test_unary_with_temp_operations():
+    module = ir.module("test_unary_with_temp")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_unary_with_temp", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    res_logicalnot = builder.create_tile(ctx, tile_shape, ir.DataType.float, "res_logicalnot")
+    temp_tensor = builder.create_tile(ctx, tile_shape, ir.DataType.float, "temp_tensor")
+    op_logicalnot = builder.create_unary_with_temp_op(
+        ir.Opcode.OP_LOGICALNOT, input_tile, res_logicalnot, temp_tensor
+    )
+    builder.emit(ctx, op_logicalnot)
+
+    builder.create_return(ctx, [res_logicalnot])
+    ctx.pop_scope()
+
+
+def test_range_operations():
+    module = ir.module("test_range")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    _, _, constant128, _ = _get_common_test_shape()
+    tile_shape = [128]
+    tensor_shape = [constant128]
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.int32, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = []
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_range", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    start = builder.create_const(ctx, 0, "start")
+    step = builder.create_const(ctx, 1, "step")
+    size = builder.create_const(ctx, 128, "size")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.int32, "output_tile")
+    op_range = builder.create_range_op(ir.Opcode.OP_RANGE, start, step, size, output_tile)
+    builder.emit(ctx, op_range)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_vec_dup_operations():
+    module = ir.module("test_vec_dup")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = []
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_vec_dup", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    value = builder.create_const(ctx, 1.0, "value")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    op_vec_dup = builder.create_vec_dup_op(ir.Opcode.OP_VEC_DUP, value, output_tile)
+    builder.emit(ctx, op_vec_dup)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_pow_operations():
+    module = ir.module("test_pow")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_pow", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    exponent = builder.create_const(ctx, 2.0, "exponent")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    op_pow = builder.create_pow_op(ir.Opcode.OP_POW, input_tile, exponent, output_tile)
+    builder.emit(ctx, op_pow)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_gather_operations():
+    module = ir.module("test_gather")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    indices_tensor = ir.Tensor(tensor_shape, ir.DataType.int32, "indices", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor, indices_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_gather", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    indices_tile = builder.create_tile(ctx, tile_shape, ir.DataType.int32, "indices_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    op_gather = builder.create_gather_op(ir.Opcode.OP_GATHER, input_tile, indices_tile, output_tile)
+    builder.emit(ctx, op_gather)
+
+    op_gather_from_ub = builder.create_gather_extended_op(
+        ir.Opcode.OP_GATHER_FROM_UB, input_tile, indices_tile, output_tile
+    )
+    builder.emit(ctx, op_gather_from_ub)
+
+    op_gather_element = builder.create_gather_extended_op(
+        ir.Opcode.OP_GATHER_ELEMENT, input_tile, indices_tile, output_tile
+    )
+    builder.emit(ctx, op_gather_element)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_reduce_operations():
+    module = ir.module("test_reduce")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor([batch], ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_reduce", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    output_tile = builder.create_tile(ctx, [128], ir.DataType.float, "output_tile")
+    op_reduce_max = builder.create_reduce_op(ir.Opcode.OP_ROWMAXLINE, input_tile, output_tile)
+    builder.emit(ctx, op_reduce_max)
+
+    op_reduce_min = builder.create_reduce_op(ir.Opcode.OP_ROWMINLINE, input_tile, output_tile)
+    builder.emit(ctx, op_reduce_min)
+
+    temp_tensor = builder.create_tile(ctx, tile_shape, ir.DataType.float, "temp_tensor")
+    op_reduce_max_temp = builder.create_reduce_with_temp_op(
+        ir.Opcode.OP_ROWMAX_SINGLE, input_tile, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_reduce_max_temp)
+
+    op_reduce_min_temp = builder.create_reduce_with_temp_op(
+        ir.Opcode.OP_ROWMIN_SINGLE, input_tile, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_reduce_min_temp)
+
+    op_reduce_sum_temp = builder.create_reduce_with_temp_op(
+        ir.Opcode.OP_ROWSUM_SINGLE, input_tile, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_reduce_sum_temp)
+
+    op_reduce_sumline_temp = builder.create_reduce_with_temp_op(
+        ir.Opcode.OP_ROWSUMLINE, input_tile, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_reduce_sumline_temp)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_broadcast_operations():
+    module = ir.module("test_broadcast")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_x_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_x", ir.Format.ND)
+    input_y_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_y", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_x_tensor, input_y_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_broadcast", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_x = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_x")
+    input_y = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_y")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    temp_tensor = builder.create_tile(ctx, tile_shape, ir.DataType.float, "temp_tensor")
+    
+    op_maximum = builder.create_broadcast_with_temp_op(
+        ir.Opcode.OP_MAXIMUM, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_maximum)
+
+    op_minimum = builder.create_broadcast_with_temp_op(
+        ir.Opcode.OP_MINIMUM, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_minimum)
+
+    op_pairmax = builder.create_broadcast_with_temp_op(
+        ir.Opcode.OP_PAIRMAX, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_pairmax)
+
+    op_pairmin = builder.create_broadcast_with_temp_op(
+        ir.Opcode.OP_PAIRMIN, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_pairmin)
+
+    op_pairsum = builder.create_broadcast_with_temp_op(
+        ir.Opcode.OP_PAIRSUM, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_pairsum)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_cast_operations():
+    module = ir.module("test_cast")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.int32, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_cast", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.int32, "output_tile")
+    op_cast = builder.create_cast_op(ir.Opcode.OP_CAST, input_tile, output_tile)
+    builder.emit(ctx, op_cast)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_where_operations():
+    module = ir.module("test_where")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    condition_tensor = ir.Tensor(tensor_shape, ir.DataType.bool, "condition", ir.Format.ND)
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    other_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "other", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [condition_tensor, input_tensor, other_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_where", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    condition_tile = builder.create_tile(ctx, tile_shape, ir.DataType.bool, "condition_tile")
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    other_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "other_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    temp_tensor = builder.create_tile(ctx, tile_shape, ir.DataType.float, "temp_tensor")
+
+    op_where_tt = builder.create_ternary_op(
+        ir.Opcode.OP_WHERE_TT, condition_tile, input_tile, other_tile, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_where_tt)
+
+    scalar_other = builder.create_const(ctx, 0.0, "scalar_other")
+    op_where_ts = builder.create_where_ts_op(
+        ir.Opcode.OP_WHERE_TS, condition_tile, input_tile, scalar_other, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_where_ts)
+
+    scalar_input = builder.create_const(ctx, 1.0, "scalar_input")
+    op_where_st = builder.create_where_st_op(
+        ir.Opcode.OP_WHERE_ST, condition_tile, scalar_input, other_tile, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_where_st)
+
+    op_where_ss = builder.create_where_ss_op(
+        ir.Opcode.OP_WHERE_SS, condition_tile, scalar_input, scalar_other, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_where_ss)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_compare_operations():
+    module = ir.module("test_compare")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_x_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_x", ir.Format.ND)
+    input_y_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_y", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.bool, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_x_tensor, input_y_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_compare", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_x = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_x")
+    input_y = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_y")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.bool, "output_tile")
+    temp_tensor = builder.create_tile(ctx, tile_shape, ir.DataType.float, "temp_tensor")
+
+    op_compare = builder.create_compare_op(
+        ir.Opcode.OP_CMP, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_compare)
+
+    scalar_y = builder.create_const(ctx, 0.0, "scalar_y")
+    op_compare_scalar = builder.create_compare_scalar_op(
+        ir.Opcode.OP_CMPS, input_x, scalar_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_compare_scalar)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_matmul_operations():
+    module = ir.module("test_matmul")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_matmul", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    offsets = [builder.create_const(ctx, 0, "offset0"), builder.create_const(ctx, 0, "offset1")]
+
+    op_l1_to_l0a = builder.create_matmul_extract_op(
+        ir.Opcode.OP_L1_TO_L0A, input_tile, offsets, output_tile
+    )
+    builder.emit(ctx, op_l1_to_l0a)
+
+    op_l1_to_l0b = builder.create_matmul_extract_op(
+        ir.Opcode.OP_L1_TO_L0B, input_tile, offsets, output_tile
+    )
+    builder.emit(ctx, op_l1_to_l0b)
+
+    op_l1_to_l0at = builder.create_matmul_extract_op(
+        ir.Opcode.OP_L1_TO_L0_AT, input_tile, offsets, output_tile
+    )
+    builder.emit(ctx, op_l1_to_l0at)
+
+    op_l1_to_l0bt = builder.create_matmul_extract_op(
+        ir.Opcode.OP_L1_TO_L0_BT, input_tile, offsets, output_tile
+    )
+    builder.emit(ctx, op_l1_to_l0bt)
+
+    op_l0c_to_l1 = builder.create_matmul_extract_op(
+        ir.Opcode.OP_L0C_TO_L1, input_tile, offsets, output_tile
+    )
+    builder.emit(ctx, op_l0c_to_l1)
+
+    lhs_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "lhs_tile")
+    rhs_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "rhs_tile")
+    op_matmul_mmad = builder.create_matmul_mmad_op(
+        ir.Opcode.OP_A_MUL_B, lhs_tile, rhs_tile, output_tile
+    )
+    builder.emit(ctx, op_matmul_mmad)
+
+    op_matmul_acc = builder.create_matmul_acc_op(
+        ir.Opcode.OP_A_MULACC_B, lhs_tile, rhs_tile, output_tile
+    )
+    builder.emit(ctx, op_matmul_acc)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_transpose_operations():
+    module = ir.module("test_transpose")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_transpose", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+
+    op_transpose_movein = builder.create_transpose_op(
+        ir.Opcode.OP_TRANSPOSE_MOVEIN, input_tile, output_tile
+    )
+    builder.emit(ctx, op_transpose_movein)
+
+    op_transpose_moveout = builder.create_transpose_op(
+        ir.Opcode.OP_TRANSPOSE_MOVEOUT, input_tile, output_tile
+    )
+    builder.emit(ctx, op_transpose_moveout)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_copy_operations():
+    module = ir.module("test_copy")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_copy", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+
+    op_copy_in = builder.create_copy_in_out_op(
+        ir.Opcode.OP_COPY_IN, input_tile, output_tile
+    )
+    builder.emit(ctx, op_copy_in)
+
+    op_copy_out = builder.create_copy_in_out_op(
+        ir.Opcode.OP_COPY_OUT, input_tile, output_tile
+    )
+    builder.emit(ctx, op_copy_out)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_any_data_copy_operations():
+    module = ir.module("test_any_data_copy")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_any_data_copy", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+
+    op_vld = builder.create_any_data_copy_op(
+        ir.Opcode.OP_VLD, input_tile, output_tile
+    )
+    builder.emit(ctx, op_vld)
+
+    op_vst = builder.create_any_data_copy_op(
+        ir.Opcode.OP_VST, input_tile, output_tile
+    )
+    builder.emit(ctx, op_vst)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_binary_with_temp_operations():
+    module = ir.module("test_binary_with_temp")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_x_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_x", ir.Format.ND)
+    input_y_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input_y", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_x_tensor, input_y_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_binary_with_temp", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    input_x = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_x")
+    input_y = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_y")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    temp_tensor = builder.create_tile(ctx, tile_shape, ir.DataType.float, "temp_tensor")
+
+    op_logicaland = builder.create_binary_with_temp_op(
+        ir.Opcode.OP_LOGICALAND, input_x, input_y, output_tile, temp_tensor
+    )
+    builder.emit(ctx, op_logicaland)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()
+
+
+def test_ub_copy_operations():
+    module = ir.module("test_ub_copy")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_ub_copy", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    tensor_shape_scalars = [batch, constant128]
+    input_tensor_value = builder.create_tensor(ctx, tensor_shape_scalars, ir.DataType.float, "input_tensor")
+    output_tensor_value = builder.create_tensor(ctx, tensor_shape_scalars, ir.DataType.float, "output_tensor")
+
+    ub_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "ub_tile")
+
+    offset0 = builder.create_const(ctx, 0, "offset0")
+    offset1 = builder.create_const(ctx, 0, "offset1")
+    offsets = [offset0, offset1]
+
+    # Test UB copy in: tensor -> tile
+    op_ub_copy_in = builder.create_ub_copy_in_op(
+        ir.Opcode.OP_UB_COPY_IN, input_tensor_value, offsets, ub_tile
+    )
+    builder.emit(ctx, op_ub_copy_in)
+
+    # Test UB copy out: tile -> tensor
+    op_ub_copy_out = builder.create_ub_copy_out_op(
+        ir.Opcode.OP_UB_COPY_OUT, ub_tile, offsets, output_tensor_value
+    )
+    builder.emit(ctx, op_ub_copy_out)
+
+    builder.create_return(ctx, [output_tensor_value])
+    ctx.pop_scope()
+
+
+def test_matmul_load_store_operations():
+    module = ir.module("test_matmul_load_store")
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, batch, constant128, tensor_shape = _get_common_test_shape()
+    input_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "input", ir.Format.ND)
+    output_tensor = ir.Tensor(tensor_shape, ir.DataType.float, "output", ir.Format.ND)
+
+    sig = ir.FunctionSignature()
+    sig.arguments = [input_tensor]
+    sig.returns = [output_tensor]
+
+    func = builder.create_function("test_matmul_load_store", ir.FunctionKind.DataFlow, sig)
+    module.add_function(func)
+    module.entry = func
+
+    builder.enter_function(ctx, func)
+
+    tensor_shape_scalars = [batch, constant128]
+    input_tensor_value = builder.create_tensor(ctx, tensor_shape_scalars, ir.DataType.float, "input_tensor")
+    output_tensor_value = builder.create_tensor(ctx, tensor_shape_scalars, ir.DataType.float, "output_tensor")
+
+    l1_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "l1_tile")
+    l0c_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "l0c_tile")
+
+    offset0 = builder.create_const(ctx, 0, "offset0")
+    offset1 = builder.create_const(ctx, 0, "offset1")
+    offsets = [offset0, offset1]
+
+    # Test matmul load: tensor -> tile (L1 copy in)
+    op_matmul_load = builder.create_matmul_load_op(
+        ir.Opcode.OP_L1_COPY_IN, input_tensor_value, offsets, l1_tile
+    )
+    builder.emit(ctx, op_matmul_load)
+
+    # Test matmul store: tile -> tensor (L0C copy out)
+    op_matmul_store = builder.create_matmul_store_op(
+        ir.Opcode.OP_L0C_COPY_OUT, l0c_tile, offsets, output_tensor_value
+    )
+    builder.emit(ctx, op_matmul_store)
+
+    builder.create_return(ctx, [output_tensor_value])
+    ctx.pop_scope()

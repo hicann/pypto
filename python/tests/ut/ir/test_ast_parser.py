@@ -20,9 +20,7 @@ from pypto.blockgraph.ast_mutator import AstMutator, ast_to_ir
 
 def test_ast_to_ir_explicit():
     module = ir.module("main")
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -90,9 +88,7 @@ def test_ast_to_ir_decorator():
     Checks that the transformed AST contains expected patterns.
     """
     module = ir.module("main")
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")

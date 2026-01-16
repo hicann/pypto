@@ -85,9 +85,7 @@ def test_ast_transform():
     Test AST transformation without executing the transformed code.
     Checks that the transformed AST contains expected patterns.
     """
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -145,9 +143,7 @@ def test_ast_transform():
 
 def test_nested_for_loops():
     """Test nested for loops transformation."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -181,9 +177,7 @@ def test_nested_for_loops():
 
 def test_nested_if_statements():
     """Test nested if statements transformation."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -228,9 +222,7 @@ def test_nested_if_statements():
 
 def test_for_with_nested_if():
     """Test for loop with nested if statement."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -270,9 +262,7 @@ def test_for_with_nested_if():
 
 def test_if_with_nested_for():
     """Test if statement with nested for loop."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -313,9 +303,7 @@ def test_if_with_nested_for():
 
 def test_if_without_else():
     """Test if statement without else block."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -350,9 +338,7 @@ def test_if_without_else():
 
 def test_if_with_python_bool_constant():
     """Test if statement with Python bool constant (True/False) is not transformed."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -390,9 +376,7 @@ def test_if_with_python_bool_constant():
 
 def test_if_with_python_bool_variable():
     """Test if statement with Python bool variable is not transformed."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
@@ -431,9 +415,7 @@ def test_if_with_python_bool_variable():
 
 def test_if_with_ir_scalar_still_transformed():
     """Test that if statement with ir.Scalar condition is still transformed."""
-    builder = ir.IrBuilder()
-    ctx = ir.IrBuilderContext()
-    block = BlockBuilderHelper(builder, ctx)
+    block = BlockBuilderHelper()
 
     batch = ir.Scalar(ir.DataType.int32, None, "batch")
     constant128 = ir.Scalar(ir.DataType.int64, 128, "const_128")
