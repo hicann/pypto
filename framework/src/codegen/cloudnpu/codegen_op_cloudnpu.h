@@ -104,6 +104,7 @@ public:
 
     std::string GenCumSumOp() const;
     std::string PrintGatherDynamicUnaligned() const;
+    std::string PrintGatherLayout() const;
     std::string GenGatherOp() const;
     std::string GenGatherFromUBOp() const;
 

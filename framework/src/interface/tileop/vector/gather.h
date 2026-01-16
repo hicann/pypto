@@ -120,4 +120,166 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp) {
     }
 }
 
+template <int axis, size_t index0, size_t index1, size_t index2, size_t index3, size_t index4, typename T0, typename T1,
+    typename T2, typename C1, typename C2>
+TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate) {
+    constexpr size_t N = Std::tuple_size<typename T0::Shape>::value;
+    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
+    constexpr size_t srcExpectSize = 4;
+    constexpr size_t idxExpectSize = 2;
+    constexpr size_t dstExpectSize = 5;
+    const auto srcLayout = src.GetLayout();
+    auto n0SrcStride = srcLayout.template GetStrideDim<0, srcExpectSize>();
+    auto n1SrcStride = srcLayout.template GetStrideDim<1, srcExpectSize>();
+    auto n2SrcStride = srcLayout.template GetStrideDim<2, srcExpectSize>();
+    auto n3SrcStride = srcLayout.template GetStrideDim<3, srcExpectSize>();
+
+    auto n0SrcShape = srcLayout.template GetShapeDim<0, srcExpectSize>();
+    auto n1SrcShape = srcLayout.template GetShapeDim<1, srcExpectSize>();
+    auto n2SrcShape = srcLayout.template GetShapeDim<2, srcExpectSize>();
+    auto n3SrcShape = srcLayout.template GetShapeDim<3, srcExpectSize>();
+
+    const auto idxLayout = idx.GetLayout();
+    auto n0IdxStride = idxLayout.template GetStrideDim<0, idxExpectSize>();
+
+    const auto dstLayout = dst.GetLayout();
+    auto n0DstStride = dstLayout.template GetStrideDim<index0, dstExpectSize>();
+    auto n1DstStride = dstLayout.template GetStrideDim<index1, dstExpectSize>();
+    auto n2DstStride = dstLayout.template GetStrideDim<index2, dstExpectSize>();
+    auto n3DstStride = dstLayout.template GetStrideDim<index3, dstExpectSize>();
+    auto n4DstStride = dstLayout.template GetStrideDim<index4, dstExpectSize>();
+
+    auto n0DstShape = dstLayout.template GetShapeDim<index0, dstExpectSize>();
+    auto n1DstShape = dstLayout.template GetShapeDim<index1, dstExpectSize>();
+    auto n2DstShape = dstLayout.template GetShapeDim<index2, dstExpectSize>();
+    auto n3DstShape = dstLayout.template GetShapeDim<index3, dstExpectSize>();
+    auto n4DstShape = dstLayout.template GetShapeDim<index4, dstExpectSize>();
+
+    auto srcOffset = srcLayout.template GetGmOffset<C1, 5>(srcCoordinate);
+    auto idxOffset = idxLayout.template GetGmOffset<C2, 5>(idxCoordinate);
+    using idxType = typename T2::Type;
+    using srcType = typename T1::Type;
+    using dstType = typename T0::Type;
+    __gm__ srcType *srcAddr = (__gm__ srcType *)((uint64_t)(src.GetAddr()));
+    __gm__ idxType *idxAddr = (__gm__ idxType *)((uint64_t)(idx.GetAddr()));
+    srcAddr += srcOffset;
+    idxAddr += idxOffset;
+    __ubuf__ dstType *dstAddr = (__ubuf__ dstType *)((uint64_t)(dst.GetAddr()));
+    constexpr auto tileH = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
+    constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
+    using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
+    using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
+    using GlobalData = pto::GlobalTensor<srcType, ShapeDim5, StrideDim5>;
+    using TileDefine = pto::Tile<pto::TileType::Vec, dstType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    if constexpr (axis == 0) {
+        __gm__ idxType *idx0 = idxAddr;
+        for (int i = 0; i < n0DstShape; i++) {
+            __gm__ dstType *src0 = srcAddr;
+            __ubuf__ dstType *dst0 = dstAddr;
+            for (int j = 0; j < n1DstShape; j++) {
+                __ubuf__ dstType *dst1 = dst0;
+                uint64_t index = idx0[j];
+                src0 = srcAddr + index * n0SrcStride;
+                for (int k = 0; k < n2DstShape; k++) {
+                    TileDefine dstTile(n3DstShape, n4DstShape);
+                    GlobalData srcGlobal(src0, pto::Shape(1, 1, 1, n3DstShape, n4DstShape),
+                        pto::Stride(0, 0, 0, n2SrcStride, n3SrcStride));
+                    pto::TASSIGN(dstTile, (uint64_t)dst1);
+                    pto::TLOAD(dstTile, srcGlobal);
+                    dst1 += n2DstStride;
+                    src0 += n1SrcStride;
+                }
+                dst0 += n1DstStride;
+            }
+            dstAddr += n0DstStride;
+            idx0 += n0IdxStride;
+        }
+    } else if constexpr (axis == 1) {
+        for (int i = 0; i < n0DstShape; i++) { // a
+            __gm__ dstType *src0 = srcAddr;
+            __gm__ idxType *idx0 = idxAddr;
+            __ubuf__ dstType *dst0 = dstAddr;
+            for (int j = 0; j < n1DstShape; j++) { // e
+                __ubuf__ dstType *dst1 = dst0;
+                for (int k = 0; k < n2DstShape; k++) {
+                    uint64_t index = idx0[k];
+                    src0 = srcAddr + index * n1SrcStride;
+                    TileDefine dstTile(n3DstShape, n4DstShape);
+                    GlobalData srcGlobal(src0, pto::Shape(1, 1, 1, n3DstShape, n4DstShape),
+                        pto::Stride(0, 0, 0, n2SrcStride, n3SrcStride));
+                    pto::TASSIGN(dstTile, (uint64_t)dst1);
+                    pto::TLOAD(dstTile, srcGlobal);
+                    dst1 += n2DstStride;
+                }
+                dst0 += n1DstStride;
+                idx0 += n0IdxStride;
+            }
+            dstAddr += n0DstStride;
+            srcAddr += n0SrcStride;
+        }
+    } else if constexpr (axis == 2) {
+        for (int i = 0; i < n0DstShape; i++) {
+            __gm__ dstType *src0 = srcAddr;
+            __ubuf__ dstType *dst0 = dstAddr;
+            for (int j = 0; j < n1DstShape; j++) { // b
+                __gm__ idxType *idx0 = idxAddr;
+                __gm__ dstType *src1 = src0;
+                __ubuf__ dstType *dst1 = dst0;
+                for (int k = 0; k < n2DstShape; k++) { // e
+                    __ubuf__ dstType *dst2 = dst1;
+                    for (int l = 0; l < n3DstShape; l++) { // f
+                        uint64_t index = idx0[l];
+                        src1 = src0 + index * n2SrcStride;
+                        TileDefine dstTile(1, n4DstShape);
+                        GlobalData srcGlobal(
+                            src1, pto::Shape(1, 1, 1, 1, n4DstShape), pto::Stride(0, 0, 0, n2SrcStride, n3SrcStride));
+                        pto::TASSIGN(dstTile, (uint64_t)dst2);
+                        pto::TLOAD(dstTile, srcGlobal);
+                        dst2 += n3DstStride;
+                    }
+                    dst1 += n2DstStride;
+                    idx0 += n0IdxStride;
+                }
+                src0 += n1SrcStride;
+                dst0 += n1DstStride;
+            }
+            srcAddr += n0SrcStride;
+            dstAddr += n0DstStride;
+        }
+    } else if constexpr (axis == 3) {
+        for (int i = 0; i < n0DstShape; i++) {
+            __gm__ dstType *src0 = srcAddr;
+            __ubuf__ dstType *dst0 = dstAddr;
+            for (int j = 0; j < n1DstShape; j++) { // b
+                __gm__ dstType *src1 = src0;
+                __ubuf__ dstType *dst1 = dst0;
+                for (int k = 0; k < n2DstShape; k++) { // c
+                    __gm__ dstType *src2 = src1;
+                    __ubuf__ dstType *dst2 = dst1;
+                    __gm__ idxType *idx0 = idxAddr;
+                    for (int l = 0; l < n3DstShape; l++) { // e
+                        __ubuf__ dstType *dst3 = dst2;
+                        for (int p = 0; p < n4DstShape; p++) {
+                            uint64_t index = idx0[p];
+                            src2 = src1 + index;
+                            *dst3 = *src2;
+                            dst3++;
+                        }
+                        dst2 += n3DstStride;
+                        idx0 += n0IdxStride;
+                    }
+                    src1 += n2SrcStride;
+                    dst1 += n2DstStride;
+                }
+                src0 += n1SrcStride;
+                dst0 += n1DstStride;
+            }
+            srcAddr += n0SrcStride;
+            dstAddr += n0DstStride;
+        }
+        set_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+        wait_flag(PIPE_S, PIPE_MTE2, EVENT_ID7);
+    }
+}
+
 #endif
