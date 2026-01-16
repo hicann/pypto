@@ -24,7 +24,6 @@
 
 namespace npu::tile_fwk {
 
-
 constexpr float FP16_MAX = 65504.0f;
 
 struct IndexAddPara {
@@ -52,11 +51,14 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
     const Element &alpha = indexaddPara.alpha;
 
     auto dstTile = dstTensor->View(function, indexaddTileInfo.dstTileInfo.shape, indexaddTileInfo.dstTileInfo.offset);
-    auto selfTile =selfInput->View(function, indexaddTileInfo.selfTileInfo.shape, indexaddTileInfo.selfTileInfo.offset);
+    auto selfTile =
+        selfInput->View(function, indexaddTileInfo.selfTileInfo.shape, indexaddTileInfo.selfTileInfo.offset);
     auto srcTile = srcInput->View(function, indexaddTileInfo.srcTileInfo.shape, indexaddTileInfo.srcTileInfo.offset);
-    indexaddTileInfo.indicesTileInfo.offset = {indexaddTileInfo.srcTileInfo.offset[axis]}; // 按照srcShape所在的axis轴切分
+    indexaddTileInfo.indicesTileInfo.offset = {
+        indexaddTileInfo.srcTileInfo.offset[axis]}; // 按照srcShape所在的axis轴切分
     indexaddTileInfo.indicesTileInfo.shape = {indexaddTileInfo.srcTileInfo.shape[axis]};
-    auto indexTile =indicesInput->View(function, indexaddTileInfo.indicesTileInfo.shape, indexaddTileInfo.indicesTileInfo.offset);
+    auto indexTile =
+        indicesInput->View(function, indexaddTileInfo.indicesTileInfo.shape, indexaddTileInfo.indicesTileInfo.offset);
 
     if (selfTile->Datatype() == DT_INT8) { // vector指令不支持int8的直接计算
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, selfTile->GetShape());
@@ -67,7 +69,8 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
         castSrcOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, dstTile->GetShape());
 
-        auto &op = function.AddOperation(Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
+        auto &op = function.AddOperation(
+            Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
@@ -81,7 +84,8 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
         castSrcOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, dstTile->GetShape());
 
-        auto &op = function.AddOperation(Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
+        auto &op = function.AddOperation(
+            Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
@@ -184,7 +188,8 @@ void CheckIndexAddParamsInvalid(
     const std::unordered_set<DataType> SRC_SUPPORT_DATATYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT8};
     ASSERT(SRC_SUPPORT_DATATYPES.count(self.GetDataType()) > 0) << "The datatype is not supported";
     ASSERT(self.GetDataType() == src.GetDataType()) << "Datatype of src and self should be equal";
-    ASSERT(indices.GetDataType() == DT_INT32 || indices.GetDataType() == DT_INT64) << "Datatype of indices is incorrect";
+    ASSERT(indices.GetDataType() == DT_INT32 || indices.GetDataType() == DT_INT64)
+        << "Datatype of indices is incorrect";
     // 检验 alpha 溢出
     if (CheckAlphaOverflow(alpha, self.GetDataType())) {
         std::string errorMessage =
@@ -284,7 +289,8 @@ void TiledGatherOperation(Function &function, const TileShape &tileShape, const 
     const LogicalTensorPtr &indices, int axis, const LogicalTensorPtr &result) {
     // Check Operands Valid
     std::vector<int64_t> expectedShape = GatherOperationResultShape(params, indices, axis);
-    ASSERT(result->shape.size() == expectedShape.size()) << "The size of result shape and expectedShape should be equal";
+    ASSERT(result->shape.size() == expectedShape.size())
+        << "The size of result shape and expectedShape should be equal";
     ASSERT(result->shape.size() == result->offset.size()) << "The size of result shape and offset should be equal";
     ASSERT(params->shape.size() == params->offset.size()) << "The size of params shape and offset should be equal";
     ASSERT(indices->shape.size() == indices->offset.size()) << "The size of indices shape and offset should be equal";
@@ -413,7 +419,8 @@ LogicalTensorPtr TensorGatherElementOperation(
 
 Tensor GatherElements(const Tensor &params, const Tensor &indices, int axis) {
     DECLARE_TRACER();
-    ASSERT(params.GetShape().size() == indices.GetShape().size()) << "The shape size of params and indices should be equal";
+    ASSERT(params.GetShape().size() == indices.GetShape().size())
+        << "The shape size of params and indices should be equal";
     ASSERT(axis < static_cast<int>(params.GetShape().size()) && axis >= -static_cast<int>(params.GetShape().size()))
         << "The axis out of range of params shape size";
     axis = axis < 0 ? params.GetShape().size() + axis : axis; // 支持负轴
@@ -474,7 +481,7 @@ void InnerTiledScatterElementS(size_t cur, Function &function, const TileShape &
     // 按照dstShape进行切分
     auto &vecTile = tileShape.GetVecTile();
     if (vecTile[axis] < std::max(dstTensor->shape[axis], idxInput->shape[axis])) {
-        ALOG_ERROR_F("the axis:%d is not allowed to be cut. tileshape:%lld dstshape:%lld idxshape:%lld", 
+        ALOG_ERROR_F("the axis:%d is not allowed to be cut. tileshape:%lld dstshape:%lld idxshape:%lld", 	 
             axis, vecTile[axis], dstTensor->shape[axis], idxInput->shape[axis]);
     }
     ASSERT(vecTile[axis] >= dstTensor->shape[axis]) << "The axis is not supported for tile splitting";
@@ -574,7 +581,7 @@ Tensor Scatter_(const Tensor &self, const Tensor &indices, const Element &src, i
 
     if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
         (reduce == ScatterMode::ADD || reduce == ScatterMode::MULTIPLY)) {
-        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),	 
         result.GetStorage(), orgDtype, CastMode::CAST_RINT);
     }
     return result;
@@ -596,8 +603,8 @@ struct ScatterTileInfoPara {
     TileInfo selfInfo;
 };
 
-void InnerTiledScatter(size_t cur, Function &function, const TileShape &tileShape, 
-    const ScatterPara &scatterPara, ScatterTileInfoPara &scatterTileInfo) {
+void InnerTiledScatter(size_t cur, Function &function, const TileShape &tileShape, const ScatterPara &scatterPara,
+    ScatterTileInfoPara &scatterTileInfo) {
     const LogicalTensorPtr &dstTensor = scatterPara.dstTensor;
     const LogicalTensorPtr &selfInput = scatterPara.selfInput;
     const LogicalTensorPtr &idxInput = scatterPara.idxInput;
@@ -620,7 +627,7 @@ void InnerTiledScatter(size_t cur, Function &function, const TileShape &tileShap
     // 按照dstShape进行切分
     auto &vecTile = tileShape.GetVecTile();
     if (vecTile[axis] < std::max(dstTensor->shape[axis], idxInput->shape[axis])) {
-        ALOG_ERROR_F("the axis:%d is not allowed to be cut. tileshape:%lld dstshape:%lld idxshape:%lld", 
+        ALOG_ERROR_F("the axis:%d is not allowed to be cut. tileshape:%lld dstshape:%lld idxshape:%lld", 	 
             axis, vecTile[axis], dstTensor->shape[axis], idxInput->shape[axis]);
     }
     ASSERT(vecTile[axis] >= dstTensor->shape[axis]) << "The axis is not supported for tile splitting";
@@ -684,8 +691,8 @@ void TensorScatter(Function &function, const ScatterPara &scatterPara) {
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", scatterPara.scatterMode);
 }
 
-static void CheckScatterParamsInvalid(const Tensor &self, const Tensor &indices, const Tensor &src, int axis, 
-    const ScatterMode reduce) {
+static void CheckScatterParamsInvalid(
+    const Tensor &self, const Tensor &indices, const Tensor &src, int axis, const ScatterMode reduce) {
     ASSERT(self.GetShape().size() == indices.GetShape().size()) << "The shape size of self and indices should be equal";
     ASSERT(src.GetShape().size() == indices.GetShape().size()) << "The shape size of src and indices should be equal";
     ASSERT(axis < static_cast<int>(self.GetShape().size())) << "The axis should be less than size of self shape";
@@ -715,8 +722,9 @@ Tensor Scatter_(const Tensor &self, const Tensor &indices, const Tensor &src, in
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     CheckScatterParamsInvalid(self, indices, src, axis, reduce);
     Tensor result(self.GetStorage()->tensor->datatype, self.GetShape());
-    CALL(Scatter, *Program::GetInstance().GetCurrentFunction(), {result.GetStorage(), self.GetStorage(),
-        indices.GetStorage(), src.GetStorage(), axis, static_cast<int>(reduce)});
+    CALL(Scatter, *Program::GetInstance().GetCurrentFunction(),
+        {result.GetStorage(), self.GetStorage(), indices.GetStorage(), src.GetStorage(), axis,
+            static_cast<int>(reduce)});
     return result;
 }
 
@@ -973,7 +981,8 @@ static void CheckScatterUpdateIndex(const Tensor &index) {
         ALOG_ERROR_F("index.GetShape().size() is %d, shoud be 2", index.GetShape().size());
     }
     ASSERT(index.GetShape().size() == NUM_VALUE_2 && index.GetShape(NUM_VALUE_0) != NUM_VALUE_0 &&
-           index.GetShape(NUM_VALUE_1) != NUM_VALUE_0) << "The shape of index is invaild";
+           index.GetShape(NUM_VALUE_1) != NUM_VALUE_0)
+        << "The shape of index is invaild";
 }
 
 static void CheckScatterUpdateInvalid(const Tensor &dst, const Tensor &index, const Tensor &src) {
@@ -1163,7 +1172,7 @@ void TiledRange(Function &function, const TileShape &tileShape, const Element st
         op.SetAttribute(OP_ATTR_PREFIX + "SIZE", curSize);
         op.SetAttribute(OP_ATTR_PREFIX + "STEP", step);
         SymbolicScalar tileIdx(i);
- 	    op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);         
+        op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
     }
     return;
 }
@@ -1197,7 +1206,7 @@ Tensor RealRange(Element &start, Element &end, Element &step) {
     RETURN_CALL(Range, *Program::GetInstance().GetCurrentFunction(), resTensor.GetStorage(), start, step);
 }
 
-bool IsDataTypeUnsupport (DataType dType){
+bool IsDataTypeUnsupport(DataType dType) {
     return dType != DT_FP32 && dType != DT_INT64 && dType != DT_INT32 && dType != DT_FP16 && dType != DT_BF16;
 }
 

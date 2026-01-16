@@ -303,7 +303,8 @@ void TensorInnerTranspose(
     int dim2 = (tmpShape.size() == 3) ? 1 : 2; // if input is 3 dims, dim2 = 1, otherwise dim2 = 2
     std::swap(tmpShape[dim1], tmpShape[dim2]);
     std::swap(newVecTileShape[dim1], newVecTileShape[dim2]);
-    auto moveInResult = std::make_shared<LogicalTensor>(function, self->Datatype(), tmpShape);
+    auto moveInResult =
+        std::make_shared<LogicalTensor>(function, self->Datatype(), tmpShape, SymbolicScalar::FromConcrete(tmpShape));
     auto &inOp = function.AddOperation(Opcode::OP_TRANSPOSE_MOVEIN, {self}, {moveInResult});
     inOp.SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{dim1, dim2});
     TileShape::Current().SetVecTile(newVecTileShape);
@@ -314,7 +315,8 @@ void TensorInnerTranspose(
     dim2 = (tmpShape.size() == 3) ? 2 : 3; // if input is 3 dims, dim2 = 2, otherwise dim2 = 3
     std::swap(tmpShape[dim1], tmpShape[dim2]);
     std::swap(newVecTileShape[dim1], newVecTileShape[dim2]);
-    auto vnchwconvResult = std::make_shared<LogicalTensor>(function, self->Datatype(), tmpShape);
+    auto vnchwconvResult =
+        std::make_shared<LogicalTensor>(function, self->Datatype(), tmpShape, SymbolicScalar::FromConcrete(tmpShape));
     auto &convOp = function.AddOperation(Opcode::OP_TRANSPOSE_VNCHWCONV, {moveInResult}, {vnchwconvResult});
     convOp.SetAttribute(OP_ATTR_PREFIX + "shape", std::vector<int>{dim1, dim2});
     TileShape::Current().SetVecTile(newVecTileShape);

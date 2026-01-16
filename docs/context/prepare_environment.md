@@ -124,22 +124,36 @@ PyPTO 支持在具备 Ascend-NPU 硬件的**真实环境**和仅有 CPU 硬件�
 
     - \$\{device_type\}: NPU 型号, 当前支持 A2、A3.
     - \$\{arch\}: CPU架构, 如aarch64、x86_64.
-    - \$\{install-path\}: 表示制定安装路径, 默认安装在`/usr/local/Ascend`目录.
+    - \$\{install-path\}: 表示指定安装路径, 默认安装在`/usr/local/Ascend`目录.
 
-4. **安装CANN pto-isa包**
+4. **获取pto-isa源码**
 
-    根据实际环境下载对应的安装包, 下载链接如下:
-    - x86: [cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/202601/20260112/ubuntu_x86/cann-pto-isa_8.5.0_linux-x86_64.run)
-    - aarch64: [cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/202601/20260112/ubuntu_aarch64/cann-pto-isa_8.5.0_linux-aarch64.run)
-    ```
-    # 确保安装包有可执行权限
-    chmod +x cann-pto-isa_8.5.0_linux-${arch}.run
-    # 安装命令
-    ./cann-pto-isa_8.5.0_linux-${arch}.run --full --install-path=${install_path}
-    ```
+    > 方法一: 安装CANN pto-isa包
+    > 根据实际环境下载对应的安装包, 下载链接如下(如果浏览器不支持自动下载, 请选择右键, "链接另存为..."):
+    > - x86: [cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/202601/20260112/ubuntu_x86/cann-pto-isa_8.5.0_linux-x86_64.run)
+    > - aarch64: [cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/202601/20260112/ubuntu_aarch64/cann-pto-isa_8.5.0_linux-aarch64.run)
+    > ```
+    > # 确保安装包有可执行权限
+    > chmod +x cann-pto-isa_8.5.0_linux-${arch}.run
+    > # 安装命令
+    > ./cann-pto-isa_8.5.0_linux-${arch}.run --full --install-path=${install_path}
+    > ```
+    >
+    > - \$\{arch\}: CPU架构, 如aarch64、x86_64.
+    > - \$\{install-path\}: 表示指定安装路径, 默认安装在`/usr/local/Ascend`目录.
 
-    - \$\{arch\}: CPU架构, 如aarch64、x86_64.
-    - \$\{install-path\}: 表示制定安装路径, 默认安装在`/usr/local/Ascend`目录.
+    > 方法二: 下载源码方式
+    > ```bash
+    > # 创建用于存放第三方开源软件源码包的目录 path-to-your-pto-isa
+    > mkdir -p ${path-to-your-pto-isa}
+    > git clone https://gitcode.com/cann/pto-isa.git
+    > # 设置环境变量
+    > export PTO_TILE_LIB_CODE_PATH="${path-to-your-pto-isa}/pto-isa"
+    > # 检查目录是否存在
+    > ls ${PTO_TILE_LIB_CODE_PATH}/include/pto/
+    > ```
+    >
+    > - \$\{path-to-your-pto-isa\}: 存放pto-isa源码的路径.
 
 5. **环境变量配置**
 
