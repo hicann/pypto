@@ -11,10 +11,10 @@
 ```
 #**************docker info*******************#
 # os: ubuntu22.04, openeuler24.03
-# arch: x86, arm
+# arch: x86_64, aarch64
 # python: 3.11
 # cann env
-# cann_verison: 8.5.0alpha001 
+# cann_verison: 8.5.0 
 # torch: 2.6.0
 # torch_npu: 2.6.0
 # device_type: A2, A3
@@ -22,47 +22,67 @@
 ```
 
 示例dockerfile基于ubuntu操作系统进行编写，不同操作系统略有差异请根据实际使用进行调整。
-使用前请根据自身环境指定ARG CANN_VERSION:<br>
+使用前请根据操作系统及硬件类型指定 CANN_VERSION:<br>
 Ubuntu+A3 :ARG CANN_VERSION=8.5.0.alpha001-a3-ubuntu22.04-py3.11;	<br>
 Ubuntu+A2 :ARG CANN_VERSION=8.5.0.alpha001-910b-ubuntu22.04-py3.11;<br>
 openEuler+A2 :ARG CANN_VERSION=8.5.0.alpha001-910b-openeuler24.03-py3.11;<br>
+根据CPU架构指定 TARGETPLATFORM：<br>
+x86_64: ARG TARGETPLATFORM=linux/amd64;<br>
+aarch64:ARG TARGETPLATFORM=linux/arm64;<br>
+<span style="font-size:12px;">*(若指定信息与硬件驱动不匹配，会导致CANN包安装失败，导致镜像无法构建）*</span><br>
 示例dockerfile内容如下：
 
 ```
-
-
-   # check your version
-   ARG CANN_VERSION=8.5.0.alpha001-a3-ubuntu22.04-py3.11
-   FROM quay.io/ascend/cann:$CANN_VERSION
-
+# step1 check your version
+ARG CANN_VERSION=8.5.0.alpha002-a3-ubuntu22.04-py3.11
+FROM quay.io/ascend/cann:$CANN_VERSION
+ARG TARGETPLATFORM=linux/arm64
    # [Optional] set proxy
-   ARG PROXY=""
-   ENV https_proxy=$PROXY
-   ENV http_proxy=$PROXY
-   ENV GIT_SSL_NO_VERIFY=1
-   # # [Optional] set pip proxy
-   # RUN pip config set global.index-url http://cmc-cd-mirror.rnd.huawei.com/pypi/simple/
-   # RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-   # RUN pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple/
-
-   WORKDIR /tmp
-   # extra utils, for PyPTO project
-   RUN pip install --no-cache-dir \
-       wheel tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
-       tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
-   RUN pip install --no-cache-dir --upgrade \
-       setuptools
+ARG PROXY=""
+ENV https_proxy=$PROXY
+ENV http_proxy=$PROXY
+ENV GIT_SSL_NO_VERIFY=1
+   
+WORKDIR /tmp
+# step2 extra utils, for PyPTO project
+RUN pip install --no-cache-dir \
+    wheel tomli pybind11 pybind11-stubgen pytest pytest-forked pytest-xdist \
+    tabulate pandas matplotlib build ml_dtypes jinja2 cloudpickle tornado
+RUN pip install --no-cache-dir --upgrade \
+    setuptools
    # pypto wants `setuptools>=77.0.3`
    #set  torch-npu&npu version
-   RUN pip install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
-   RUN pip install --no-cache-dir torch-npu==2.6.0
-
-
-   # [Optional] set default proxy
-    ENV PROXY=""
-    ENV https_proxy=$PROXY
-    ENV http_proxy=$PROXY
-
+RUN pip install --no-cache-dir torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch-npu==2.6.0
+# step3 install cann packages provided by pypto
+WORKDIR /mount_home
+RUN git clone https://gitcode.com/cann/pypto.git
+WORKDIR /mount_home/pypto
+ARG CANN_VERSION
+RUN if echo "${CANN_VERSION}" | grep -iq "910b"; then \
+        DEVICE_TYPE="a2"; \
+    elif echo "${CANN_VERSION}" | grep -iq "a3"; then \
+        DEVICE_TYPE="a3"; \
+    else \
+        echo "ERROR: Unsupported CANN_VERSION format: ${CANN_VERSION}" 1>&2 && \
+        echo "Version should contain '910b' or 'a3' (case-insensitive)" 1>&2 && \
+        exit 1; \
+    fi && \
+    echo "DEVICE_TYPE=${DEVICE_TYPE}" && \
+    chmod +x tools/prepare_env.sh && \
+    bash tools/prepare_env.sh --type=cann --device-type=${DEVICE_TYPE} --install-path=/usr/local/Ascend/CANN_pypto --quiet
+# Note: Set environment variables
+RUN \
+    CANN_TOOLKIT_ENV_FILE="/usr/local/Ascend/CANN_pypto/ascend-toolkit/latest/set_env.sh" && \
+    echo "source ${CANN_TOOLKIT_ENV_FILE}" >> /etc/profile && \
+    echo "source ${CANN_TOOLKIT_ENV_FILE}" >> ~/.bashrc
+ENTRYPOINT ["/bin/bash", "-c", "\
+    source /usr/local/Ascend/CANN_pypto/ascend-toolkit/latest/set_env.sh && \
+    exec \"$@\"", "--"]
+#step 4 [Optional] set default proxy
+ENV PROXY=""
+ENV https_proxy=$PROXY
+ENV http_proxy=$PROXY
 ```
 
 若希望构建其他环境版本的镜像，可参考[https://quay.io/repository/ascend/cann](https://quay.io/repository/ascend/cann)，Ascend社区提供了丰富的基础镜像。
@@ -74,7 +94,7 @@ openEuler+A2 :ARG CANN_VERSION=8.5.0.alpha001-910b-openeuler24.03-py3.11;<br>
 ```
 #**************docker info*******************#
 # os: ubuntu22.04, openeuler22.03
-# arch: x86, arm
+# arch:  x86_64, aarch64
 # python: 3.11
 # cann env: none
 # torch: 2.6.0
@@ -202,4 +222,8 @@ docker exec -it pypto_x86a3 /bin/bash
 ```
 
 进入容器拉取代码：
-git clone [https://gitcode.com/cann/pypto.git](https://gitcode.com/cann/pypto.git)。考虑兼容性问题，当前docker环境编译构建的whl包仅支持docker容器内使用。
+git clone [https://gitcode.com/cann/pypto.git](https://gitcode.com/cann/pypto.git)。<br>
+基于源码编译与安装pypto.whl包：
+进入Pypto源码目录，执行命令python3 -m pip install -e . --verbose进行安装。使用时根据需要进行修改适配<br>
+完成以上命令后，即可运行Pypto相关用例。<br>
+*<span style="font-size:12px;">注：考虑兼容性问题，当前docker环境编译构建的whl包建议仅在docker容器内使用。</span>*
