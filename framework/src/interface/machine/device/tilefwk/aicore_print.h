@@ -146,11 +146,11 @@ struct AicoreLogger {
             return;
         }
         switch (curFmt[idx++]) {
-            case 'u': {
+            case 'f': {
                 Encode(FLOAT, reinterpret_cast<uint8_t *>(&val), sizeof(val), *fmt, idx);
                 break;
-                default: Encode(NORMAL, static_cast<uint8_t *>(nullptr), 0, *fmt, idx); break;
             }
+            default: Encode(NORMAL, static_cast<uint8_t *>(nullptr), 0, *fmt, idx); break;
         }
         *fmt = *fmt + idx;
     }
