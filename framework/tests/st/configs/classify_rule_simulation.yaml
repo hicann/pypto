@@ -18,5 +18,4 @@
 stest:
   simulation:
     cases:
-      - CostModelTest.test_mm_float32_64_64_64_bt
       - CostModelDynTest.TestDD
