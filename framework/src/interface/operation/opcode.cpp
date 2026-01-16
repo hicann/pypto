@@ -787,6 +787,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {             Opcode::OP_ONEHOT,        "TOneHot"},
     {        Opcode::OP_L0C_COPY_UB,       "TExtract"},
     {            Opcode::OP_VEC_DUP,        "TVecDup"},
+    {            Opcode::OP_RANGE,           "TRange"},
     {               Opcode::OP_BRCB,          "Tbrcb"},
 };
 } // namespace npu::tile_fwk

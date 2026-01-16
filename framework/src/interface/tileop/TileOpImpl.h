@@ -46,6 +46,7 @@
 #include "vector/pair_binary.h"
 #include "vector/where.h"
 #include "vector/vector_dup.h"
+#include "vector/range.h"
 #include "vector/onehot.h"
 #endif
 
