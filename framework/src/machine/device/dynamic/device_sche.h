@@ -46,6 +46,10 @@ public:
         }
     }
 
+    void SetStachSchduleContext(int threadIdx, SchduleContext* context) {
+        aicoreManager_[threadIdx]->SetSchduleContext(context);
+    }
+    
     bool CheckAndResetReg(){
         return aicoreManager_[0]->CheckAndResetReg();
     }
