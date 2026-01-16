@@ -47,8 +47,8 @@ struct EmulationMemoryUtils {
         return devPtr;
     }
 
-    uint8_t *CopyToDev(uint8_t *data, uint64_t size) {
-        uint8_t *devPtr = AllocDev(size, nullptr);
+    uint8_t *CopyToDev(uint8_t *data, uint64_t size, uint8_t **cachedDevAddrHolder) {
+        uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
         memcpy_s(devPtr, size, data, size);
         return devPtr;
     }
@@ -56,7 +56,7 @@ struct EmulationMemoryUtils {
     template <typename T>
     T *CopyToDev(std::vector<T> data, uint8_t **cachedDevAddrHolder) {
         (void)cachedDevAddrHolder;
-        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T));
+        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T), nullptr);
     }
 
     void CopyFromDev(uint8_t *data, uint8_t *devPtr, uint64_t size) {
@@ -65,8 +65,8 @@ struct EmulationMemoryUtils {
 
     uint8_t *CopyToDev(RawTensorData &data) {
         if (data.GetDevPtr() == nullptr) {
-            auto devPtr = CopyToDev((uint8_t *)data.data(), data.size());
-            data.SetDevPtr(devPtr);
+            auto devAddr = CopyToDev((uint8_t *)data.data(), data.size(), nullptr);
+            data.SetDevPtr(devAddr);
         }
         return data.GetDevPtr();
     }

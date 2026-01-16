@@ -39,6 +39,8 @@ DeviceLauncherContext &DeviceLauncherContext::Get() {
     return context;
 }
 
+std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
+
 #ifdef BUILD_WITH_CANN
 static const std::unordered_map<int, std::function<void(bool&)>> captureStatusHandlers = {
     {aclmdlRICaptureStatus::ACL_MODEL_RI_CAPTURE_STATUS_ACTIVE, [](bool& isCapture) {isCapture = true;}},

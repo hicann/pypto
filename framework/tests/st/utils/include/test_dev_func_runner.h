@@ -38,8 +38,8 @@ struct MemoryHelper {
 
     bool IsDevice() { return !isTest_; }
 
-    uint8_t *CopyToDev(uint8_t *data, uint64_t size) {
-        uint8_t *devPtr = AllocDev(size, nullptr);
+    uint8_t *CopyToDev(uint8_t *data, uint64_t size, uint8_t **cachedDevAddrHolder) {
+        uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
         if (isTest_)
             memcpy_s(devPtr, size, data, size);
         else
@@ -75,21 +75,21 @@ struct MemoryHelper {
     }
 
     template <typename T>
-    T *CopyToDev(std::vector<T> data, uint8_t **cachedDevAddrHolder) {
-        (void)cachedDevAddrHolder;
-        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T));
+    T *CopyToDev(std::vector<T> data, uint8_t **cachedHolder) {
+        (void)cachedHolder;
+        return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T), nullptr);
     }
 
     uint8_t *CopyToDev(RawTensorData &data) {
         if (data.GetDevPtr() == nullptr) {
-            auto devPtr = CopyToDev((uint8_t *)data.data(), data.size());
+            auto devPtr = CopyToDev((uint8_t *)data.data(), data.size(), nullptr);
             data.SetDevPtr(devPtr);
         }
         return data.GetDevPtr();
     }
 
-    void CopyFromDev(RawTensorData &t) {
-        CopyFromDev(t.data(), t.GetDevPtr(), t.size());
+    void CopyFromDev(RawTensorData &tensorData) {
+        CopyFromDev(tensorData.data(), tensorData.GetDevPtr(), tensorData.size());
     }
 
     uint64_t GetL2Offset() {
