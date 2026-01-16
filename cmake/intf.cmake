@@ -61,7 +61,7 @@ target_compile_options(tile_fwk_intf_pub
             $<$<CXX_COMPILER_ID:GNU>:-Wsuggest-attribute=format>
             $<$<COMPILE_LANGUAGE:C>:-Wnested-externs>
             $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-branches>
-            -Wmissing-include-dirs
+            # -Wmissing-include-dirs
             $<$<CXX_COMPILER_ID:GNU>:-Wformat-signedness>
             $<$<CXX_COMPILER_ID:GNU>:-Wreturn-local-addr>
             -Wredundant-decls
