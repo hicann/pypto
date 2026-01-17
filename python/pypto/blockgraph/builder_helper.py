@@ -324,6 +324,17 @@ class BlockBuilderHelper:
         self.builder.emit(self.ctx, op)
         return op
 
+    # Scatter operations
+    def scatter_elements(self, src0, src1, scatter, out):
+        op = self.builder.create_scatter_elements_op(ir.Opcode.OP_SCATTER_ELEMENT, src0, src1, scatter, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
+    def scatter(self, src0, src1, src2, out):
+        op = self.builder.create_scatter_op(ir.Opcode.OP_SCATTER, src0, src1, src2, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
     # Reduce operations
     def reduce(self, a, out):
         op = self.builder.create_reduce_op(ir.Opcode.OP_ROWMAXLINE, a, out)

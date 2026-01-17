@@ -1033,3 +1033,33 @@ def test_matmul_load_store_operations():
 
     builder.create_return(ctx, [output_tensor_value])
     ctx.pop_scope()
+
+
+def test_scatter_operations():
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+
+    tile_shape, _, _, _ = _get_common_test_shape()
+
+    sig = ir.FunctionSignature()
+    func = builder.create_function("test_scatter", ir.FunctionKind.DataFlow, sig)
+    builder.enter_function(ctx, func)
+
+    input_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "input_tile")
+    indices_tile = builder.create_tile(ctx, tile_shape, ir.DataType.int32, "indices_tile")
+    updates_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "updates_tile")
+    output_tile = builder.create_tile(ctx, tile_shape, ir.DataType.float, "output_tile")
+    scatter_scalar = builder.create_const(ctx, 0, "scatter")
+
+    op_scatter_elements = builder.create_scatter_elements_op(
+        ir.Opcode.OP_SCATTER_ELEMENT, input_tile, indices_tile, scatter_scalar, output_tile
+    )
+    builder.emit(ctx, op_scatter_elements)
+
+    op_scatter = builder.create_scatter_op(
+        ir.Opcode.OP_SCATTER, input_tile, indices_tile, updates_tile, output_tile
+    )
+    builder.emit(ctx, op_scatter)
+
+    builder.create_return(ctx, [output_tile])
+    ctx.pop_scope()

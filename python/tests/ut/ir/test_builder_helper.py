@@ -489,6 +489,23 @@ def test_gather_operations():
         block.create_return([output_tile])
 
 
+def test_scatter_operations():
+    block = BlockBuilderHelper()
+    tile_shape, _, _, _ = _get_common_test_shape()
+    sig = ir.FunctionSignature()
+    func = block.create_function("test_scatter", ir.FunctionKind.DataFlow, sig)
+
+    with block.function_scope(func):
+        input_tile = block.tile(tile_shape, ir.DataType.float, "input_tile")
+        indices_tile = block.tile(tile_shape, ir.DataType.int32, "indices_tile")
+        updates_tile = block.tile(tile_shape, ir.DataType.float, "updates_tile")
+        output_tile = block.tile(tile_shape, ir.DataType.float, "output_tile")
+        scatter_scalar = block.const(0, "scatter")
+        block.scatter_elements(input_tile, indices_tile, scatter_scalar, output_tile)
+        block.scatter(input_tile, indices_tile, updates_tile, output_tile)
+        block.create_return([output_tile])
+
+
 def test_reduce_operations():
     module = ir.module("test_reduce")
     block = BlockBuilderHelper()
