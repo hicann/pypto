@@ -157,15 +157,15 @@
         "runtime": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "设置运行时优化参数信息",
+                "en": "Set Runtime Optimization Parameters"
             },
             "properties": {
                 "device_sched_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "设置计算子图的调度模式",
+                        "en": "Set the schedule mode for subgraphs"
                     },
                     "minimum": 0,
                     "maximum": 3,
@@ -173,29 +173,29 @@
                         {
                             "value": 0,
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "默认调度模式:ready子图放入共享队列，各个调度线程抢占子图进行发送，子图获取发送遵循先入先出",
+                                "en": "default schedule mode:Ready subgraph enter a shared queue. Schedule threads fetch and dispatch subgraph on first-in-first-out basis"
                             }
                         },
                         {
                             "value": 1,
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "L2cache亲和调度模式:选择最新依赖ready的子图优先下发，达到复用L2cache的效果",
+                                "en": "L2 cache affinity schedule mode: prioritizes dispatching the most recently dependency-ready subgraph to improve L2 cache reuse"
                             }
                         },
                         {
                             "value": 2,
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "公平调度模式：下发子图时尽量控制多线程间的公平性，但会带来额外的调度开销",
+                                "en": "Fair schedule mode: maintains fairness across threads when dispatching subgraph, at the cost of additional schedule overhead"
                             }
                         },
                         {
                             "value": 3,
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "公平调度兼L2cache亲和调度模式:同时开启L2cache亲和调度模式以及公平调度模式",
+                                "en": "Fair & L2 cache affinity schedule mode: enables both L2 cache affinity and fair schedule"
                             }
                         }
                     ]
@@ -203,8 +203,8 @@
                 "stitch_function_inner_memory": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "控制root function中间计算结果的内存池大小的参数，该数值越大root function运行时并行度越高",
+                        "en": "Control the memory pool size for intermediate results of rootfunction; a larger value enables higher runtime parallelism of rootfunction"
                     },
                     "minimum": 1,
                     "maximum": 2147483647
@@ -212,8 +212,8 @@
                 "stitch_function_outcast_memory": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "控制stitch构建的devicetask中间计算结果（devitask内部rootfunction的outcast）的内存池大小的参数，该数值越大devicetask下发的rootfunction越多",
+                        "en": "Control the memory pool size for intermediate results inside stitch-constructed device task; a larger value allows more rootfunction to be dispatched per device task"
                     },
                     "minimum": 1,
                     "maximum": 2147483647
@@ -221,8 +221,8 @@
                 "stitch_function_num_initial": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "设置运行时ctrlflow aicpu里stitch构建首个device task的rootfunction数量，进而控制device machine启动头开销大小",
+                        "en": "Set the number of rootfunction generated for the first device task in ctrlflow AICPU, thereby controlling the startup overhead of device machine"
                     },
                     "minimum": 1,
                     "maximum": 128
@@ -230,8 +230,8 @@
                 "stitch_function_num_step": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "设置运行时ctrlflow aicpu里stitch构建非首次device task的rootfunction数量",
+                        "en": "Set the number of rootfunction generated for subsequent (non-initial) device task in ctrlflow AICPU"
                     },
                     "minimum": 0,
                     "maximum": 128
@@ -239,8 +239,8 @@
                 "stitch_cfgcache_size": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "指定生成controlflow缓存的大小",
+                        "en": "Specify the size of the generated controlflow cache"
                     },
                     "minimum": 0,
                     "maximum": 100000000
@@ -248,8 +248,8 @@
                 "stitch_function_size": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "运行时ctrlflow aicpu里控制devicetask处理最大Callop计算量",
+                        "en": "control the maximum CallOp workload that a single device task can process in ctrlflow aicpu"
                     },
                     "minimum": 1,
                     "maximum": 65535
@@ -257,8 +257,8 @@
                 "run_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "设置计算子图的执行设备",
+                        "en": "Set the execution device for computational subgraph"
                     },
                     "minimum": 0,
                     "maximum": 1,
@@ -266,15 +266,15 @@
                         {
                             "value": 0,
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "设置计算子图在NPU上执行",
+                                "en": "Execute computation subgraph on NPU"
                             }
                         },
                         {
                             "value": 1,
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "设置计算子图在模拟器上执行",
+                                "en": "Execute computation subgraph on the simulator"
                             }
                         }
                     ]

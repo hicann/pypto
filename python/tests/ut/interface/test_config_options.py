@@ -54,7 +54,7 @@ def test_reset_option():
     pypto.reset_options()
     runtime_option = pypto.get_runtime_options()
     host_option = pypto.get_host_options()
-    assert runtime_option["stitch_function_num_initial"] == 30
+    assert runtime_option["stitch_function_num_initial"] == 128
     assert host_option["only_codegen"] == False
 
 
