@@ -17,6 +17,40 @@
 #include <iostream>
 #include "utils/test_cost_macro.h"
 
+#if defined(BUILD_WITH_CANN) && defined(ENABLE_STEST)
+#include "runtime/dev.h"
+
+bool CheckDeviceConsistency() {
+    /* 获取实际生效的 DeviceId */
+    int32_t rtDevId = -1;  // -1 表示无效 DeviceId
+    int32_t getDeviceResult = rtGetDevice(&rtDevId);
+    if (getDeviceResult != RT_ERROR_NONE) {
+        std::cout << "Error: Can't get deviceId" << std::endl;
+        return false;
+    }
+
+    /* 获取环境变量中设置的 DeviceId */
+    int32_t envDevId = 0;
+    const char *devIdPtr = getenv("TILE_FWK_DEVICE_ID");
+    if (devIdPtr != nullptr) {
+        envDevId = std::stoi(devIdPtr);
+    }
+
+    if (rtDevId != envDevId) {
+        std::cout << "Error: rtDevId(" << rtDevId << ") != envDevId(" << envDevId << ")" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+#else
+
+bool CheckDeviceConsistency() {
+    return true;
+}
+
+#endif
+
 class TestExecutionCounter : public testing::EmptyTestEventListener {
 public:
     uint64_t executed_count = 0;
@@ -49,6 +83,7 @@ int main(int argc, char** argv) {
                   << " to filter." << std::endl;
         ret = ret == 0 ? 1 : ret;
     }
+    ret = CheckDeviceConsistency() ? ret : 1;
 
     return ret;
 }

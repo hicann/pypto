@@ -95,8 +95,8 @@ class GenCoverage:
         else:
             if os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", 0):
                 job_num = int(os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL"), 0)
-            elif os.environ.get("PYPTO_UTEST_PARALLEL_NUM", 0):
-                job_num = int(os.environ.get("PYPTO_UTEST_PARALLEL_NUM", 0))
+            elif os.environ.get("PYPTO_TESTS_PARALLEL_NUM", 0):
+                job_num = int(os.environ.get("PYPTO_TESTS_PARALLEL_NUM", 0))
             else:
                 job_num = int(math.ceil(float(cpu_count()) * 0.8))    # use 0.8 cpu
         job_num = min(max(int(job_num), 1), cpu_count(), 48)

@@ -30,7 +30,12 @@ class Executable:
         """
         self.file: Path = Path(file).resolve()
         self.envs: Dict[str, str] = envs if envs is not None else {}
-        self.timeout: Optional[int] = timeout
+        self.timeout: Optional[int] = None
+        env_timeout = os.environ.get("PYPTO_TESTS_CASE_EXECUTE_TIMEOUT", None)
+        if env_timeout:
+            self.timeout = int(env_timeout)
+        if timeout and timeout > 0:
+            self.timeout = timeout  # 参数设置优先级高于环境变量
 
     @property
     def brief(self) -> str:

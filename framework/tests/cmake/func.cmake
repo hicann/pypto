@@ -213,6 +213,12 @@ function(PTO_Fwk_GTest_AddExe)
             PRIVATE
                 ${ARG_PRIVATE_INCLUDE_DIRECTORIES}
     )
+    target_compile_definitions(${ARG_TARGET}
+            PRIVATE
+                $<$<BOOL:${BUILD_WITH_CANN}>:BUILD_WITH_CANN>
+                $<$<BOOL:${ENABLE_UTEST}>:ENABLE_UTEST>
+                $<$<BOOL:${ENABLE_STEST}>:ENABLE_STEST>
+    )
     target_link_libraries(${ARG_TARGET}
             PRIVATE
                 GTest::gtest

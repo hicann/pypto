@@ -13,7 +13,6 @@
 import abc
 import argparse
 import dataclasses
-import json
 import logging
 import math
 import multiprocessing
@@ -297,11 +296,14 @@ class TestsExecuteParam(CMakeParam):
     changed_file: Optional[Path] = None  # 修改文件路径
     auto_execute: bool = False  # 用例自动执行
     auto_execute_parallel: bool = False  # 用例并行执行
+    case_execute_timeout: Optional[int] = None  # 用例执行时, 单个用例超时时长
 
     def __init__(self, args):
         self.changed_file = None if not args.changed_files else Path(args.changed_files).resolve()
         self.auto_execute = args.disable_auto_execute
         self.auto_execute_parallel = self.auto_execute and self.ci_model
+        timeout = args.case_execute_timeout
+        self.case_execute_timeout = timeout if timeout and timeout > 0 else None  # 单个用例执行超时时长
 
     @property
     def ci_model(self) -> bool:
@@ -314,6 +316,8 @@ class TestsExecuteParam(CMakeParam):
                                  "so that the corresponding test cases can be triggered incrementally.")
         parser.add_argument("--disable_auto_execute", action="store_false", default=True,
                             help="Disable auto execute STest/Utest with build.")
+        parser.add_argument("--case_execute_timeout", nargs="?", type=int, default=None,
+                            help="Case execute timeout.")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         cmd = self._cfg_require(opt="ENABLE_TESTS_EXECUTE", ctr=self.auto_execute)
@@ -510,7 +514,7 @@ class TestsParam(CMakeParam):
         self.golden: TestsGoldenParam = TestsGoldenParam(args=args)
         self.utest: TestsFilterParam = TestsFilterParam(argv=args.utest, opt="ENABLE_UTEST")
         self.utest_module: TestsFilterParam = TestsFilterParam(argv=args.utest_module, opt="ENABLE_UTEST_MODULE")
-        self.stest_exec: STestExecuteParam = STestExecuteParam(args=args, enable_binary_cache=self.exec.ci_model)
+        self.stest_exec: STestExecuteParam = STestExecuteParam(args=args, enable_binary_cache=False)
         self.stest_tools: STestToolsParam = STestToolsParam()
         self.stest: TestsFilterParam = TestsFilterParam(argv=args.stest, opt="ENABLE_STEST")
         self.stest_group: TestsFilterParam = TestsFilterParam(argv=args.stest_group, opt="ENABLE_STEST_GROUP")
@@ -526,6 +530,7 @@ class TestsParam(CMakeParam):
             desc += f"\n               Changed File : {self.exec.changed_file}"
             desc += f"\n                       Auto : {self.exec.auto_execute}"
             desc += f"\n                   Parallel : {self.exec.auto_execute_parallel}"
+            desc += f"\n                CaseTimeout : {self.exec.case_execute_timeout}"
             if self.utest.enable:
                 desc += f"\n    Utest"
                 desc += f"\n                     Enable : {self.utest.enable}"
@@ -609,8 +614,8 @@ class BuildCtrl(CMakeParam):
 
     def __init__(self, args):
         self.clean: bool = args.clean  # 强制清理 Build-Tree 及 Install-Tree 标记
-        self.time_start: datetime = datetime.now(tz=timezone.utc)  # 启动时间
-        self.timeout = None if args.timeout <= 0 else args.timeout  # 超时时长
+        self.origin_timeout: Optional[int] = args.timeout if args.timeout and args.timeout > 0 else None  # 超时时长
+        self.remain_timeout: Optional[int] = self.origin_timeout
         self.src_root: Path = Path(__file__).parent.resolve()
         self.build_root: Path = Path(Path.cwd(), "build")
         self.install_root: Path = Path(self.build_root.parent, "build_out")
@@ -643,7 +648,7 @@ class BuildCtrl(CMakeParam):
         desc += f"\n    Clean                   : {self.clean}"
         desc += f"\n    Verbose                 : {self.verbose}"
         desc += f"\nOthers"
-        desc += f"\n    Timeout                 : {self.timeout}"
+        desc += f"\n    Timeout                 : {self.origin_timeout}"
         desc += f"{self.feature}"
         desc += f"{self.build}"
         desc += f"{self.tests}"
@@ -705,7 +710,7 @@ class BuildCtrl(CMakeParam):
     def reg_args(parser, ext: Optional[Any] = None):
         parser.add_argument("-c", "--clean", action="store_true", default=False,
                             help="clean, clean Build-Tree and Install-Tree before build.")
-        parser.add_argument("--timeout", nargs="?", type=int, default=-1,
+        parser.add_argument("--timeout", nargs="?", type=int, default=None,
                             help="Total timeout.")
         parser.add_argument("--cann_3rd_lib_path", "--third_party_path",
                             nargs="?", type=str, default="", dest="third_party_path",
@@ -714,7 +719,54 @@ class BuildCtrl(CMakeParam):
                             help="verbose, enable verbose output.")
 
     @classmethod
-    def main(cls) -> str:
+    def check_pip_dependencies(cls, deps: Dict[str, str], raise_err: bool = False, log_err: bool = True) -> bool:
+        info_lst = []
+        for pkg, ver in deps.items():
+            info = cls._check_pip_pkg(pkg=pkg, ver=ver)
+            info_lst.extend(info)
+        if info_lst:
+            if log_err:
+                logging.error("%s", info_lst)
+                install_cmd = " ".join([f'{pkg}{deps[pkg]}' for pkg in deps])
+                logging.error(f"Please install the missing dependencies first [{install_cmd}]")
+            if raise_err:
+                raise RuntimeError("\n".join(info_lst))
+            return False
+        return True
+
+    @classmethod
+    def main(cls):
+        ts = datetime.now(tz=timezone.utc)
+        try:
+            cls._main()
+        except KeyboardInterrupt as e:
+            logging.error("Operation cancelled by user")
+            raise e
+        except subprocess.TimeoutExpired as e:
+            logging.error("Operation timeout, %s", e)
+            raise e
+        # 计算总耗时
+        duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
+        logging.info("Build[CI] Finish, Duration %s secs.", duration)
+
+    @classmethod
+    def _check_pip_pkg(cls, pkg: str, ver: str) -> List[str]:
+        info_lst = []
+        requirement_str = f"{pkg}{ver}"
+        try:
+            req = requirements.Requirement(requirement_str)
+            try:
+                installed_version = metadata.version(pkg)
+                if ver and not req.specifier.contains(installed_version, prereleases=True):
+                    info_lst.append(f"{pkg}: version {installed_version} not satisfy {ver}")
+            except metadata.PackageNotFoundError:
+                info_lst.append(f"package {pkg} has not been installed")
+        except Exception as e:
+            info_lst.append(f"package {pkg} check fail {e}")
+        return info_lst
+
+    @classmethod
+    def _main(cls):
         """主处理流程
         """
         parser = argparse.ArgumentParser(description=f"PyPTO Build Ctrl.", epilog="Best Regards!")
@@ -745,42 +797,9 @@ class BuildCtrl(CMakeParam):
             ctrl.cmake_clean()
             ctrl.cmake_configure()
             ctrl.cmake_build()
-        return ctrl.duration()
-
-    @classmethod
-    def check_pip_dependencies(cls, deps: Dict[str, str], raise_err: bool = False, log_err: bool = True) -> bool:
-        info_lst = []
-        for pkg, ver in deps.items():
-            info = cls._check_pip_pkg(pkg=pkg, ver=ver)
-            info_lst.extend(info)
-        if info_lst:
-            if log_err:
-                logging.error("%s", info_lst)
-                install_cmd = " ".join([f'{pkg}{deps[pkg]}' for pkg in deps])
-                logging.error(f"Please install the missing dependencies first [{install_cmd}]")
-            if raise_err:
-                raise RuntimeError("\n".join(info_lst))
-            return False
-        return True
-
-    @classmethod
-    def _check_pip_pkg(cls, pkg: str, ver: str) -> List[str]:
-        info_lst = []
-        requirement_str = f"{pkg}{ver}"
-        try:
-            req = requirements.Requirement(requirement_str)
-            try:
-                installed_version = metadata.version(pkg)
-                if ver and not req.specifier.contains(installed_version, prereleases=True):
-                    info_lst.append(f"{pkg}: version {installed_version} not satisfy {ver}")
-            except metadata.PackageNotFoundError:
-                info_lst.append(f"package {pkg} has not been installed")
-        except Exception as e:
-            info_lst.append(f"package {pkg} check fail {e}")
-        return info_lst
 
     def run_build_cmd(self, cmd: str, update_env: Optional[Dict[str, str]] = None,
-                      check: bool = False, pg_desc: str = "CMake") -> Tuple[subprocess.CompletedProcess, str]:
+                      check: bool = True, pg_desc: str = "CMake") -> Tuple[subprocess.CompletedProcess, str]:
         """执行具体 build 命令行
 
         因以下原因, 设置本函数, 而非调用原生 subprocess.run
@@ -804,6 +823,7 @@ class BuildCtrl(CMakeParam):
             logging.info("%s. Send terminate event to %s[%s]", _msg, pg_desc, _pgid)
             os.killpg(_pgid, signal.SIGINT)
 
+        ts = datetime.now(tz=timezone.utc)
         stdout = None
         stderr = None
         env = os.environ.copy()
@@ -811,9 +831,9 @@ class BuildCtrl(CMakeParam):
         with subprocess.Popen(shlex.split(cmd), env=env, text=True, encoding='utf-8',
                               start_new_session=True) as process:
             try:
-                stdout, stderr = process.communicate(timeout=self.timeout)
+                stdout, stderr = process.communicate(timeout=self.remain_timeout)
             except subprocess.TimeoutExpired as e:
-                _stop_pg(_msg="Timeout", _p=process)
+                _stop_pg(_msg=f"Timeout({self.remain_timeout})", _p=process)
                 raise e
             except KeyboardInterrupt as e:
                 _stop_pg(_msg="KeyboardInterrupt", _p=process)
@@ -828,23 +848,25 @@ class BuildCtrl(CMakeParam):
             if check and ret_code:
                 raise subprocess.CalledProcessError(ret_code, process.args, output=stdout, stderr=stderr)
         # 超时时长更新
-        duration = self.duration()
+        duration = self._duration(ts=ts)
         return subprocess.CompletedProcess(process.args, ret_code, stdout, stderr), duration
 
-    def duration(self) -> str:
-        duration = int((datetime.now(tz=timezone.utc) - self.time_start).seconds)
-        self.timeout = self.timeout - duration if self.timeout else self.timeout
-        return f"{duration}/{self.timeout}" if self.timeout else f"{duration}"
-
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd = self._cfg_require(opt=f"PYPTO_THIRD_PARTY_PATH", ctr=bool(self.third_party_path),
-                                tv=f"{self.third_party_path}")
-        return cmd
+        return ""
 
     def get_cfg_update_env(self) -> Dict[str, str]:
         env = {}
         if self.third_party_path:
             env.update({"PYPTO_THIRD_PARTY_PATH": self.third_party_path})
+        return env
+
+    def get_cmake_build_update_env(self) -> Dict[str, str]:
+        env = {}
+        if self.build.job_num:
+            env["PYPTO_TESTS_PARALLEL_NUM"] = str(self.build.job_num)
+        case_timeout = self.tests.exec.case_execute_timeout
+        if self.tests.exec.auto_execute and case_timeout and case_timeout > 0:
+            env["PYPTO_TESTS_CASE_EXECUTE_TIMEOUT"] = str(case_timeout)
         return env
 
     def pip_install(self, whl: Path, dest: Optional[Path] = None, opt: str = "",
@@ -859,10 +881,9 @@ class BuildCtrl(CMakeParam):
         edit_str = "-e " if self.feature.whl_editable else ""
         cmd = f"{sys.executable} -m pip install {edit_str}" + f"{whl} {opt}" + (" -vvv " if self.verbose else "")
         cmd += f" --target={dest}" if dest else ""
-        logging.info("Begin install %s, cmd: %s", whl, cmd)
-        ret, duration = self.run_build_cmd(cmd=cmd, check=True, update_env=update_env, pg_desc="pip")
-        ret.check_returncode()
-        logging.info("Success install %s%s, Duration %s sec", whl, f" to {dest}" if dest else "", duration)
+        logging.info("Install %s, Cmd: %s, Timeout: %s", whl, cmd, self.remain_timeout)
+        _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pip")
+        logging.info("Install %s%s success, %s", whl, f" to {dest}" if dest else "", duration)
 
     def pip_uninstall(self, name: str, path: Optional[Path] = None):
         """卸载对应 whl 包
@@ -879,9 +900,9 @@ class BuildCtrl(CMakeParam):
                 shutil.rmtree(p)
         else:
             cmd = f"{sys.executable} -m pip uninstall -v -y {name}"
-            ret, _ = self.run_build_cmd(cmd=cmd, check=True, pg_desc="pip")
-            ret.check_returncode()
-        logging.info("Success uninstall %s package%s", name, f" from {path}" if path else "")
+            logging.info("Uninstall %s package, Cmd: %s, Timeout: %s", name, cmd, self.remain_timeout)
+            _, _ = self.run_build_cmd(cmd=cmd, pg_desc="pip")
+        logging.info("Uninstall %s package%s success", name, f" from {path}" if path else "")
 
     def cmake_clean(self):
         """清理中间结果, 清理内容包括构建树, 安装树全部内容.
@@ -898,7 +919,6 @@ class BuildCtrl(CMakeParam):
             if os.path.exists(astdata_folder):
                 logging.info("Clean ast data cache folder(%s)", astdata_folder)
                 shutil.rmtree(astdata_folder)
-
 
     def py_clean(self):
         self.cmake_clean()
@@ -938,29 +958,25 @@ class BuildCtrl(CMakeParam):
         # 执行
         update_env = self.get_cfg_update_env()
         update_env["CCACHE_BASEDIR"] = str(self.src_root)
-        logging.info("CMake Configure, Cmd: %s", cmd)
-        ret, _ = self.run_build_cmd(cmd=cmd, update_env=update_env, check=True)
-        ret.check_returncode()
+        logging.info("CMake Configure, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env)
+        logging.info("CMake Configure success, %s", duration)
 
     def cmake_build(self):
         """CMake Build 阶段流程.
         """
-        # prof使能初始化
-        update_env = {}
-        if self.build.job_num:
-            update_env["PYPTO_UTEST_PARALLEL_NUM"] = str(self.build.job_num)
+        update_env = self.get_cmake_build_update_env()
         update_env["CCACHE_BASEDIR"] = str(self.src_root)
         cmd_list = self.build.get_build_cmd_lst(cmake=self.cmake, binary_path=self.build_root)
         for i, c in enumerate(cmd_list, start=1):
             c += " --verbose" if self.verbose else ""
-            logging.info("CMake Build(%s/%s), Cmd: %s", i, len(cmd_list), c)
+            logging.info("CMake Build(%s/%s), Cmd: %s, Timeout: %s", i, len(cmd_list), c, self.remain_timeout)
             try:
-                ret, duration = self.run_build_cmd(cmd=c, update_env=update_env, check=True)
+                _, duration = self.run_build_cmd(cmd=c, update_env=update_env)
             except subprocess.CalledProcessError as e:
-                logging.info(f"Run cmd {c} failed, ERROR CODE: {e.returncode}")
-                raise
-            ret.check_returncode()
-            logging.info("CMake Build(%s/%s), Cmd: %s, Duration %s sec", i, len(cmd_list), c, duration)
+                logging.info(f"CMake Build(%s/%s) failed, ERROR CODE: %s", i, len(cmd_list), e.returncode)
+                raise e
+            logging.info("CMake Build(%s/%s) success, %s", i, len(cmd_list), duration)
 
     def py_build(self):
         """whl 包编译处理
@@ -997,10 +1013,9 @@ class BuildCtrl(CMakeParam):
             cmd = f"{sys.executable} -m build --outdir={self.install_root}"
             cmd += f" --no-isolation" if not self.feature.whl_isolation else ""
             cmd += f" {self._get_setuptools_bdist_wheel_config_setting()}"
-            logging.info("Begin Build whl, Cmd: %s", cmd)
-            ret, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, check=True, pg_desc="build")
-            ret.check_returncode()
-            logging.info("Success Build whl, Cmd: %s, Duration %s sec", cmd, duration)
+            logging.info("Build whl, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+            _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="build")
+            logging.info("Build whl success, %s", duration)
 
     def py_tests(self):
         if not self.tests.utest.enable and not self.tests.stest.enable and not self.tests.example.enable:
@@ -1063,10 +1078,9 @@ class BuildCtrl(CMakeParam):
             ori_env_python_path = origin_env.get(self._PYTHONPATH, "")
             act_env_python_path = f"{dist}:{ori_env_python_path}" if ori_env_python_path else f"{dist}"
             update_env.update({self._PYTHONPATH: act_env_python_path})
-        logging.info("pytest run, Cmd: %s", cmd)
-        ret, duration = self.run_build_cmd(cmd=cmd, check=True, update_env=update_env, pg_desc="pytest")
-        ret.check_returncode()
-        logging.info("pytest run, Cmd: %s, Duration %s sec", cmd, duration)
+        logging.info("pytest run, Cmd: %s, Timeout: %s", cmd, self.remain_timeout)
+        _, duration = self.run_build_cmd(cmd=cmd, update_env=update_env, pg_desc="pytest")
+        logging.info("pytest run success, %s", duration)
 
     def _tests_enable(self) -> bool:
         return self.tests.utest.enable or self.tests.stest.enable
@@ -1100,6 +1114,14 @@ class BuildCtrl(CMakeParam):
         cmd = f" --config-setting=--build-option='{cmd}'"
         return cmd
 
+    def _duration(self, ts: datetime) -> str:
+        duration = int((datetime.now(tz=timezone.utc) - ts).seconds)
+        duration_str = f"Duration {duration} secs"
+        if self.remain_timeout:
+            self.remain_timeout = max(self.remain_timeout - duration, 0)
+            duration_str += f" Remain {self.remain_timeout} secs"
+        return duration_str
+
 
 class SubCommandMgr:
     @classmethod
@@ -1110,10 +1132,4 @@ class SubCommandMgr:
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s', level=logging.INFO)
-    try:
-        g_duration = BuildCtrl.main()
-        logging.info("Build[CI] Finish, duration %s secs.", g_duration)
-    except KeyboardInterrupt:
-        logging.error("Operation cancelled by user")
-    except subprocess.TimeoutExpired:
-        logging.error("Operation timeout")
+    BuildCtrl.main()
