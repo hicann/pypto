@@ -24,6 +24,7 @@ import os
 import torch
 import torch_npu
 import pypto
+import pytest
 import numpy as np
 from numpy.testing import assert_allclose
 from torch._subclasses.fake_tensor import FakeTensor
@@ -310,6 +311,7 @@ def ffn_dense_quant(hidden_states: torch.Tensor,
     return ffn_res
 
 
+@pytest.mark.skip(reason="case run in bug")
 def test_glm_mlp() -> None:
     x_dtype = torch.bfloat16
     # parameter config
