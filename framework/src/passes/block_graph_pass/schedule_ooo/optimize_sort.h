@@ -43,6 +43,7 @@ public:
     std::map<Operation*, std::unordered_map<int, int>> backTraceBufRefCount;
     // 回退点,防止死循环
     Operation* rollBackNodeOp{nullptr};
+    std::unordered_map<Operation*, int> depthCache;
 
     void opListInit();
     Status SortOps();

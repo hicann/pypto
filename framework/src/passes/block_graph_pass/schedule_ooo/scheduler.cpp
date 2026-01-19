@@ -989,7 +989,6 @@ Status OoOScheduler::CheckOpBufferSize(Operation *op) {
     return SUCCESS;
 }
 
-
 Status OoOScheduler::Init(const std::vector<Operation *> &operations) {
     issueEntries.clear();
     localBufferMap.clear();

@@ -75,18 +75,19 @@ int OptimizeSort::GetNodePriority(std::unordered_map<Opcode, int> preNodePriorit
 }
 
 int OptimizeSort::GetMaxDepthSimple(Operation* op) {
-    if (inGraph[op].empty()) {
-        return 1;
+    auto it = depthCache.find(op);
+    if (it != depthCache.end()) {
+        return it->second;
     }
 
     int maxDepth = 0;
     for (const auto& pre : inGraph[op]) {
-        int depth = GetMaxDepthSimple(pre);
-        if (depth > maxDepth) {
-            maxDepth = depth;
-        }
+        maxDepth = std::max(maxDepth, GetMaxDepthSimple(pre));
     }
-    return maxDepth + 1;
+
+    int depth = maxDepth + 1;
+    depthCache[op] = depth;
+    return depth;
 }
 
 void OptimizeSort::QueueNotReadyPreNode(Operation* curOp, std::map<Operation*, bool>& visited,
