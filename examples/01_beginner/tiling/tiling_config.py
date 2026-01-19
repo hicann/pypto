@@ -143,7 +143,7 @@ def create_different_tile_shapes_kernel(run_mode):
         print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
         out1[:] = pypto.matmul(x, y, x.dtype)
 
-        pypto.set_cube_tile_shapes([32, 32], [8, 64], [32, 128])
+        pypto.set_cube_tile_shapes([32, 32], [16, 64], [32, 128])
         print(f"pypto.get_cube_tile_shapes(): {pypto.get_cube_tile_shapes()}")
         out2[:] = pypto.matmul(x, y, x.dtype)
 
