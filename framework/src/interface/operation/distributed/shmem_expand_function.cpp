@@ -18,34 +18,14 @@
 
 namespace npu::tile_fwk::Distributed {
 namespace {
+using DummyTileFunc = std::function<LogicalTensorPtr(int32_t tileIndex)>;
+
 constexpr uint16_t UB_BUFFER_BYTE_SIZE = 16 * 1024;
 constexpr uint16_t DTYPE_CAST_BYTE_SIZE = 256;
 constexpr uint16_t UB_ALIGIN_SIZE = 32;
 
-template<typename AddTileOp>
-void DfsTiling(const TileShape& tileShape, size_t curDim, Input& input, size_t startDim,
-    uint32_t& tileIndex, Shape& dataShape, AddTileOp&& addTileOp)
-{
-    auto& vecTile = tileShape.GetVecTile();
-    ASSERT(vecTile.size() == input.tileInfo.shape.size());
-    int32_t tileRowNum = dataShape[0] / vecTile[0] + (dataShape[0] % vecTile[0] == 0 ? 0 : 1);
-    int32_t tileColNum = dataShape[1] / vecTile[1] + (dataShape[1] % vecTile[1] == 0 ? 0 : 1);
-    size_t inDim = input.tileInfo.shape.size();
-    if (curDim == inDim) {
-        ASSERT(tileIndex <= MAX_TILE_NUM) << "TileNum must be <= " << MAX_TILE_NUM << ".";
-        addTileOp(tileIndex, tileRowNum, tileColNum, input);
-        tileIndex++;
-        return;
-    }    
-    for (int i = 0; i < input.tensor.GetShape()[startDim + curDim]; i += vecTile[curDim]) {
-        input.tileInfo.shape[curDim] = std::min(input.tensor.GetShape()[startDim + curDim] - i, vecTile[curDim]);
-        input.tileInfo.offset[curDim] = i;
-        DfsTiling(tileShape, curDim + 1, input, startDim, tileIndex, dataShape, std::forward<AddTileOp>(addTileOp));
-    }
-}
-
-LogicalTensorPtr View2DTile(LogicalTensorPtr& dummy,
-    int32_t tileIndex, int32_t tileRowNum, int32_t tileColNum, Function& function)
+LogicalTensorPtr View2DTile(const LogicalTensorPtr dummy, int32_t tileIndex, int32_t tileRowNum, int32_t tileColNum,
+    Function& function)
 {
     Shape dummyShape = dummy->shape;
     ASSERT(tileRowNum > 0 && tileColNum > 0) << "TileRowNum and tileColNum can not be 0";
@@ -64,8 +44,7 @@ LogicalTensorPtr View2DTile(LogicalTensorPtr& dummy,
     return dummy->View(function, {tileRowShape, tileColShape}, {tileRowOffset, tileColOffset});
 }
 
-LogicalTensorPtr View1DTile(LogicalTensorPtr& dummy,
-    int32_t tileIndex, int32_t totalTileNum, Function& function)
+LogicalTensorPtr View1DTile(const LogicalTensorPtr dummy, int32_t tileIndex, int32_t totalTileNum, Function& function)
 {
     Shape dummyShape = dummy->shape;
     int32_t totalElem = dummyShape[0] * dummyShape[1];
@@ -87,19 +66,71 @@ LogicalTensorPtr View1DTile(LogicalTensorPtr& dummy,
     return dummy->View(function, {1, 1}, {tileRowStart, tileColStart});
 }
 
-LogicalTensorPtr GetDummyTile(LogicalTensorPtr& dummy,
-    int32_t tileIndex, int32_t tileRowNum, int32_t tileColNum, Function& function)
+DummyTileFunc GetDummyTileFunc(const LogicalTensorPtr dummy, const LogicalTensorPtr shmemTensor, const VecTile& vecTile,
+    Function& function)
 {
-    Shape dummyShape = dummy->shape;
+    int32_t totalRowShape = shmemTensor->shape[shmemTensor->shape.size() - 2];
+    int32_t totalColShape = shmemTensor->shape[shmemTensor->shape.size() - 1];
+    int32_t tileRowShape = vecTile[0];
+    int32_t tileColShape = vecTile[1];
+    int32_t dummyRowShape = dummy->shape[0];
+    int32_t dummyColShape = dummy->shape[1];
+    int32_t tileRowNum = totalRowShape / tileRowShape + (totalRowShape % tileRowShape == 0 ? 0 : 1);
+    int32_t tileColNum = totalColShape / tileColShape + (totalColShape % tileColShape == 0 ? 0 : 1);
+    int32_t totalDummyElemNum = dummyRowShape * dummyColShape;
     int32_t totalTileNum = tileRowNum * tileColNum;
-    int32_t totalDummyElem = dummyShape[0] * dummyShape[1];
-    if (tileRowNum <= dummyShape[0] && tileColNum <= dummyShape[1]) {
-        return View2DTile(dummy, tileIndex, tileRowNum, tileColNum, function);
+
+    if (tileRowNum <= dummyRowShape && tileColNum <= dummyColShape) {
+        return [dummy, tileRowNum, tileColNum, &function](int32_t tileIndex) -> LogicalTensorPtr {
+            return View2DTile(dummy, tileIndex, tileRowNum, tileColNum, function);
+        };
     }
-    if (totalTileNum <= totalDummyElem) {
-        return View1DTile(dummy, tileIndex, totalTileNum, function);
+    if (totalTileNum <= totalDummyElemNum) {
+        return [dummy, totalTileNum, &function](int32_t tileIndex) -> LogicalTensorPtr {
+            return View1DTile(dummy, tileIndex, totalTileNum, function);
+        };
     }
-    return dummy;
+    return [dummy](int32_t tileIndex) -> LogicalTensorPtr {
+        (void)tileIndex;
+        return dummy;
+    };
+}
+
+void DfsTiling(const Shape& shmemTensorTileShape, Input& input, size_t curDim, uint32_t& tileIndex,
+    std::function<void(uint32_t, Input&)> addTileOp)
+{
+    std::vector<int64_t>& tileShape = input.tileInfo.shape;
+    std::vector<int64_t>& tileOffset = input.tileInfo.offset;
+    if (curDim == tileShape.size()) {
+        ASSERT(tileIndex < MAX_TILE_NUM) << "tileIndex must be < " << MAX_TILE_NUM << ", but got " << tileIndex;
+        for (int64_t shape : tileShape) {
+            ASSERT(shape != 0) << "view shape should not be 0, but got " << IntVecToStr(tileShape);
+        }
+        addTileOp(tileIndex, input);
+        tileIndex++;
+        return;
+    }
+    int64_t total = input.tensor.GetShape()[curDim];
+    for (int64_t offset = 0; offset < total; offset += shmemTensorTileShape[curDim]) {
+        tileShape[curDim] = std::min(total - offset, shmemTensorTileShape[curDim]);
+        tileOffset[curDim] = offset;
+        DfsTiling(shmemTensorTileShape, input, curDim + 1, tileIndex, addTileOp);
+    }
+}
+
+void DfsTiling(const VecTile& vecTile, const LogicalTensorPtr shmemTensor,
+    std::function<void(uint32_t, Input&)> addTileOp)
+{
+    size_t dim = shmemTensor->shape.size();
+    Shape shmemTensorTileShape = shmemTensor->shape;
+    Shape shmemTensorTileOffset = shmemTensor->offset;
+    size_t shmemTensorStartDim = dim - vecTile.size();
+    std::copy(vecTile.tile.begin(), vecTile.tile.end(), shmemTensorTileShape.begin() + shmemTensorStartDim);
+    std::fill(shmemTensorTileOffset.begin() + shmemTensorStartDim, shmemTensorTileOffset.end(), 0);
+    TileInfo tileInfo{shmemTensorTileShape, shmemTensorTileOffset};
+    Input input{shmemTensor, tileInfo};
+    uint32_t tileIndex = 0;
+    DfsTiling(shmemTensorTileShape, input, shmemTensorStartDim, tileIndex, addTileOp);
 }
 
 bool shouldConvertDtype(DataType ubType, DataType castType)
@@ -138,6 +169,17 @@ LogicalTensorPtr CreateAdaptiveUbTensor(Function& function, const Shape& shape, 
     }
     return std::make_shared<LogicalTensor>(function, ubType, ubShape);
 }
+
+std::pair<Shape, Offset> GetNonShmemDataTileShapeAndOffset(const Shape& shmemDataTileShape,
+    const Offset& shmemDataTileOffset, size_t nonShmemDataDim)
+{
+    Shape nonShmemTileShape(nonShmemDataDim);
+    Offset nonShmemOffset(nonShmemDataDim);
+    size_t shmemDataStartDim = shmemDataTileShape.size() - nonShmemDataDim;
+    std::copy(shmemDataTileShape.begin() + shmemDataStartDim, shmemDataTileShape.end(), nonShmemTileShape.begin());
+    std::copy(shmemDataTileOffset.begin() + shmemDataStartDim, shmemDataTileOffset.end(), nonShmemOffset.begin());
+    return {nonShmemTileShape, nonShmemOffset};
+}
 } // namespace
 
 void TiledShmemPut(Function& function, const TileShape& tileShape,
@@ -150,41 +192,25 @@ void TiledShmemPut(Function& function, const TileShape& tileShape,
     auto shmemData = iOperand[1];
     auto predToken = iOperand[2]; // operand 2
     auto dummy = oOperand[0];
-    TileInfo tileInfo(in->shape.size(), in->offset.size());
-    auto startInput = Input{in, tileInfo};
-    size_t inDim = startInput.tileInfo.shape.size();
-    size_t startInDim = in->shape.size() - inDim;
-    uint32_t startTileIndex = 0;
-    uint32_t curDim = 0;
-    DfsTiling(tileShape, curDim, startInput, startInDim, startTileIndex, in->shape, [&](uint32_t tileIndex, 
-        int32_t tileRowNum, int32_t tileColNum, Input& input) {
-        std::vector<int64_t> tilingShape = input.tileInfo.shape;
-        std::vector<int64_t> tilingOffset = input.tileInfo.offset;
-        auto inShape = in->shape;
-        auto inOffset = in->offset;
-        for (auto dim = 0UL, inTileDim = startInDim; dim < inDim; dim++, inTileDim++) {
-            inShape[inTileDim] = tilingShape[dim];
-            inOffset[inTileDim] = tilingOffset[dim];
-            ASSERT(inShape[inTileDim] != 0) << "inShape view shape should not be 0";
-        }
-        auto inTile = input.tensor.GetStorage()->View(function, inShape, inOffset);
 
-        auto shmemShape = shmemData->shape;
-        auto shmemOffset = shmemData->offset;
-        size_t startShmemDim = shmemData->shape.size() - inDim;
-        for (auto dim = 0UL, shmemDim = startShmemDim; dim < inDim; dim++, shmemDim++) {
-            shmemShape[shmemDim] = tilingShape[dim];
-            shmemOffset[shmemDim] = tilingOffset[dim];
-            ASSERT(shmemShape[shmemDim] != 0) << "shmem view shape should not be 0";
-        }
-        auto shmDataTile = shmemData->View(function, shmemShape, shmemOffset);
+    DummyTileFunc predTokenTileFunc = GetDummyTileFunc(predToken, shmemData, tileShape.GetVecTile(), function);
+    DummyTileFunc dummyTileFunc = GetDummyTileFunc(dummy, shmemData, tileShape.GetVecTile(), function);
+    DfsTiling(tileShape.GetVecTile(), shmemData, [&](uint32_t tileIndex, Input& input) {
+        Shape shmemDataTileShape = input.tileInfo.shape;
+        Offset shmemDataTileOffset = input.tileInfo.offset;
+        auto [nonShmemDataTileShape, nonShmemDataTileOffset] = GetNonShmemDataTileShapeAndOffset(shmemDataTileShape,
+            shmemDataTileOffset, in->shape.size());
+        auto inTile = in->View(function, nonShmemDataTileShape, nonShmemDataTileOffset);
+        auto shmemDataTile = shmemData->View(function, shmemDataTileShape, shmemDataTileOffset);
+        auto predTokenTile = predTokenTileFunc(tileIndex);
+        auto dummyTile = dummyTileFunc(tileIndex);
+        auto copyBufferShape = GetCopyBufferShape(inTile->Datatype(), shmemDataTile->Datatype(), nonShmemDataTileShape);
+        auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, inTile->Datatype(),
+            shmemDataTile->Datatype());
 
-        auto dummyTile = GetDummyTile(dummy, tileIndex, tileRowNum, tileColNum, function);
-        auto predTokenTile = GetDummyTile(predToken, tileIndex, tileRowNum, tileColNum, function);
-        auto copyBufferShape = GetCopyBufferShape(inTile->Datatype(), shmDataTile->Datatype(), input.tileInfo.shape);
-        auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, inTile->Datatype(), shmDataTile->Datatype());
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_PUT, {inTile, shmDataTile, predTokenTile},
+        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_PUT, {inTile, shmemDataTile, predTokenTile},
             {dummyTile, ubTensor});
+
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.copyBufferShape = copyBufferShape;
@@ -221,38 +247,24 @@ void TiledShmemSignal(Function& function, const TileShape& tileShape,
     auto dummy = iOperand[0];
     auto shmemSignal = iOperand[1];
     auto dummyOut = oOperand[0];
-    std::vector<int64_t> inShape(tileShape.GetVecTile().size());
-    std::vector<int64_t> inOffset(tileShape.GetVecTile().size());
-    TileInfo tileInfo(inShape, inOffset);
-    auto startInput = Input{shmemSignal, tileInfo};
-    size_t inDim = startInput.tileInfo.shape.size();
-    size_t startDim = shmemSignal->shape.size() - inDim;
-    uint32_t startTileIndex = 0;
-    uint32_t curDim = 0;
-    Shape dataShape = {shmemSignal->shape[shmemSignal->shape.size() - 2], shmemSignal->shape[shmemSignal->shape.size() - 1]};
-    DfsTiling(tileShape, curDim, startInput, startDim, startTileIndex, dataShape, [&](uint32_t tileIndex,
-        int32_t tileRowNum, int32_t tileColNum, Input& input){
-        auto shmemShape = shmemSignal->shape;
-        auto shmemOffset = shmemSignal->offset;
-        ASSERT(shmemShape.size() > inDim && shmemOffset.size() > inDim)
-            << "Size of shmemShape and shmemOffset should be more than " << inDim;
 
-        for (auto dim = 0UL, shmemDim = startDim; dim < inDim; dim++, shmemDim++) {
-            shmemShape[shmemDim] = input.tileInfo.shape[dim];
-            shmemOffset[shmemDim] = input.tileInfo.offset[dim];
-            ASSERT(shmemShape[shmemDim] != 0) << "shmem view shape should not be 0";
-        }
-        auto shmSignalTile = shmemSignal->View(function, shmemShape, shmemOffset);
-        auto dummyTile = GetDummyTile(dummy, tileIndex, tileRowNum, tileColNum, function);
-        auto dummyOutTile = GetDummyTile(dummyOut, tileIndex, tileRowNum, tileColNum, function);
+    DummyTileFunc dummyTileFunc = GetDummyTileFunc(dummy, shmemSignal, tileShape.GetVecTile(), function);
+    DummyTileFunc dummyOutTileFunc = GetDummyTileFunc(dummyOut, shmemSignal, tileShape.GetVecTile(), function);
+    DfsTiling(tileShape.GetVecTile(), shmemSignal, [&](uint32_t tileIndex, Input& input){
+        auto dummyTile = dummyTileFunc(tileIndex);
+        std::vector<int64_t>& shmemSignalTileShape = input.tileInfo.shape;
+        std::vector<int64_t>& shmemSignalTileOffset = input.tileInfo.offset;
+        auto shmemSignalTile = shmemSignal->View(function, shmemSignalTileShape, shmemSignalTileOffset);
+        auto dummyOutTile = dummyOutTileFunc(tileIndex);
         auto ubTensor = std::make_shared<LogicalTensor>(function, shmemSignal->Datatype(), Shape{SHMEM_SIGNAL_STRIDE});
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_SIGNAL, {dummyTile, shmSignalTile},
+
+        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_SIGNAL, {dummyTile, shmemSignalTile},
             {dummyOutTile, ubTensor});
+
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::dontTouch, true);
-        tileIndex++;
     });
 }
 
@@ -265,35 +277,20 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
     auto dummyIn = iOperand[0];
     auto shmemSignal = iOperand[1];
     auto dummy = oOperand[0];
-    int32_t vetTileSize = tileShape.GetVecTile().size();
-    std::vector<int64_t> inShape(vetTileSize);
-    std::vector<int64_t> inOffset(vetTileSize);
-    TileInfo tileInfo(inShape, inOffset);
-    auto startInput = Input{shmemSignal, tileInfo};
-    size_t inDim = startInput.tileInfo.shape.size();
-    size_t startDim = shmemSignal->shape.size() - inDim;
-    uint32_t startTileIndex = 0;
-    uint32_t curDim = 0;
-    Shape dataShape = {shmemSignal->shape[shmemSignal->shape.size() - 2], shmemSignal->shape[shmemSignal->shape.size() - 1]};
-    DfsTiling(tileShape, curDim, startInput, startDim, startTileIndex, dataShape, [&](uint32_t tileIndex,
-        int32_t tileRowNum, int32_t tileColNum, Input& input) {
-        auto shmemShape = shmemSignal->shape;
-        auto shmemOffset = shmemSignal->offset;
-        ASSERT(shmemShape.size() > inDim && shmemOffset.size() > inDim)
-            << "Size of shmemShape and shmemOffset should be more than " << inDim;
-        ASSERT(tileIndex < MAX_TILE_NUM / shmemShape[0]) << "ShmemWaitUntil tileIndex is " << tileIndex
-            << ", but tileIndex should be less than " << MAX_TILE_NUM / shmemShape[0];
 
-        for (auto dim = 0UL, shmemDim = startDim; dim < inDim; dim++, shmemDim++) {
-            shmemShape[shmemDim] = input.tileInfo.shape[dim];
-            shmemOffset[shmemDim] = input.tileInfo.offset[dim];
-            ASSERT(shmemShape[shmemDim] != 0) << "shmem view shape should not be 0";
-        }
-        auto shmSignalTile = shmemSignal->View(function, shmemShape, shmemOffset);
-        auto dummyInTile = GetDummyTile(dummyIn, tileIndex, tileRowNum, tileColNum, function);
-        auto dummyTile = GetDummyTile(dummy, tileIndex, tileRowNum, tileColNum, function);
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_WAIT_UNTIL, {dummyInTile, shmSignalTile},
-            {dummyTile});
+    DummyTileFunc dummyInTileFunc = GetDummyTileFunc(dummyIn, shmemSignal, tileShape.GetVecTile(), function);
+    DummyTileFunc dummyTileFunc = GetDummyTileFunc(dummy, shmemSignal, tileShape.GetVecTile(), function);
+    DfsTiling(tileShape.GetVecTile(), shmemSignal, [&](uint32_t tileIndex, Input& input) {
+        ASSERT(tileIndex <= MAX_TILE_NUM / shmemSignal->shape[0]) << "ShmemWaitUntil totalTileNum is invalid";
+
+        auto dummyInTile = dummyInTileFunc(tileIndex);
+        std::vector<int64_t>& shmemSignalTileShape = input.tileInfo.shape;
+        std::vector<int64_t>& shmemSignalTileOffset = input.tileInfo.offset;
+        auto shmemSignalTile = shmemSignal->View(function, shmemSignalTileShape, shmemSignalTileOffset);
+        auto dummyTile = dummyTileFunc(tileIndex);
+
+        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_WAIT_UNTIL, {dummyInTile, shmemSignalTile}, {dummyTile});
+
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
@@ -309,32 +306,22 @@ void TiledShmemGet(Function& function, const TileShape& tileShape,
     auto dummy = iOperand[0];
     auto shmemData = iOperand[1];
     auto out = oOperand[0];
-    std::vector<int64_t> inShape(tileShape.GetVecTile().size());
-    std::vector<int64_t> inOffset(tileShape.GetVecTile().size());
-    TileInfo tileInfo(inShape, inOffset);
-    auto startInput = Input{shmemData, tileInfo};
-    size_t inDim = startInput.tileInfo.shape.size();
-    size_t startDim = shmemData->shape.size() - inDim;
-    uint32_t startTileIndex = 0;
-    uint32_t curDim = 0;
-    Shape dataShape = {shmemData->shape[shmemData->shape.size() - 2], shmemData->shape[shmemData->shape.size() - 1]};
-    DfsTiling(tileShape, curDim, startInput, startDim, startTileIndex, dataShape, [&](uint32_t tileIndex,
-        int32_t tileRowNum, int32_t tileColNum, Input& input) {
-        auto shmemShape = shmemData->shape;
-        auto shmemOffset = shmemData->offset;
-        ASSERT(shmemShape.size() > inDim && shmemOffset.size() > inDim);
 
-        for (auto dim = 0UL, shmemDim = startDim; dim < inDim; dim++, shmemDim++) {
-            shmemShape[shmemDim] = input.tileInfo.shape[dim];
-            shmemOffset[shmemDim] = input.tileInfo.offset[dim];
-            ASSERT(shmemShape[shmemDim] != 0);
-        }
-        auto shmDataTile = shmemData->View(function, shmemShape, shmemOffset);
-        auto dummyTile = GetDummyTile(dummy, tileIndex, tileRowNum, tileColNum, function);
-        auto outTile = out->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        auto copyBufferShape = GetCopyBufferShape(out->Datatype(), shmDataTile->Datatype(), input.tileInfo.shape);
-        auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, out->Datatype(), shmDataTile->Datatype());
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_GET, {dummyTile, shmDataTile}, {outTile, ubTensor});
+    DummyTileFunc dummyTileFunc = GetDummyTileFunc(dummy, shmemData, tileShape.GetVecTile(), function);
+    DummyTileFunc outTileFunc;
+    DfsTiling(tileShape.GetVecTile(), shmemData, [&](uint32_t tileIndex, Input& input) {
+        auto dummyTile = dummyTileFunc(tileIndex);
+        std::vector<int64_t>& shmemDataTileShape = input.tileInfo.shape;
+        std::vector<int64_t>& shmemDataTileOffset = input.tileInfo.offset;
+        auto shmemDataTile = shmemData->View(function, shmemDataTileShape, shmemDataTileOffset);
+        auto [nonShmemDataTileShape, nonShmemDataTileOffset] = GetNonShmemDataTileShapeAndOffset(shmemDataTileShape,
+            shmemDataTileOffset, out->shape.size());
+        auto outTile = out->View(function, nonShmemDataTileShape, nonShmemDataTileOffset);
+        auto copyBufferShape = GetCopyBufferShape(out->Datatype(), shmemDataTile->Datatype(), nonShmemDataTileShape);
+        auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, out->Datatype(), shmemDataTile->Datatype());
+
+        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_GET, {dummyTile, shmemDataTile}, {outTile, ubTensor});
+
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.copyBufferShape = copyBufferShape;
