@@ -49,8 +49,7 @@ def test_pass_option():
         "mg_vec_parallel_lb": 6,
         "vec_nbuffer_mode": 2,
         "vec_nbuffer_setting": {1: 2},
-        "cube_l1_reuse_mode": 6,
-        "cube_l1_reuse_setting": {2: 3},
+        "cube_l1_reuse_setting": {-1: 6, 2: 3},
         "cube_nbuffer_mode": 2,
         "cube_nbuffer_setting": {-1: 2},
         "mg_copyin_upper_bound": 7

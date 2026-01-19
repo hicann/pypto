@@ -251,7 +251,7 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
         "pg_parallel_lower_bound": 20,
         "vec_nbuffer_mode": 2,
         "vec_nbuffer_setting": {-1: 2, 0: 4},
-        "cube_l1_reuse_mode": 2
+        "cube_l1_reuse_setting": {-1: 2},
     },
     runtime_options={
         "stitch_function_inner_memory": 128,
@@ -307,7 +307,7 @@ def sparse_attention_antiquant_d(query_nope, query_rope, nope_cache, topk_indice
         "pg_parallel_lower_bound": 20,
         "vec_nbuffer_mode": 2,
         "vec_nbuffer_setting": {-1: 4, 0: 4},
-        "cube_l1_reuse_mode": 4
+        "cube_l1_reuse_setting": {-1: 4},
     },
     runtime_options={
         "stitch_function_inner_memory": 32,

@@ -55,6 +55,11 @@ class L1CopyInReuseRunner {
                         std::vector<std::vector<int>> &replacedOutputs);
     Status Phase1(Function &func, int color, std::vector<std::vector<int>> &colorNode,
                   std::vector<int> &colorCopyIn, std::vector<uint64_t> &hashColor);
+    void GetL1ReuseOpOrder(std::vector<std::pair<int, int>> &opOrder,
+                    std::map<uint64_t, int> &mgRem, std::vector<int> &numLRList, std::vector<uint64_t> &hashColor, int color);
+    bool GetMergedL1(int maxInColor, std::vector<int> &mergedNum, int maxMergeNum, int &tmpColor, int i,
+                    std::map<std::vector<uint64_t>, int> &l1InputList, std::vector<uint64_t> &vec, std::vector<int> &colorCopyIn,
+                    std::map<uint64_t, int> &mgRem, int idx);
     Status L1MergeProcess(OperationsViewer &opOriList, std::vector<std::vector<int>> &colorNode,
                           std::vector<uint64_t> &hashColor, std::vector<int> &colorCopyIn,
                           std::map<std::vector<uint64_t>, int> &l1InputList, int &tmpColor,
@@ -68,10 +73,10 @@ class L1CopyInReuseRunner {
     std::unordered_map<int, int> tensormagic2Op_;
     std::unordered_map<uint64_t, std::vector<int>> hashMap;
     std::unordered_map<uint64_t, int> hashOrder;
-    int numLR;
     std::map<int64_t, int64_t> numLRMap;
     std::map<int64_t, int64_t> numDBMap;
     int mgCopyInUpperBound;
+    int L1ReuseMode;
     int cubeNBufferMode;
 };
 

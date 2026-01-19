@@ -151,7 +151,7 @@ void DynamicNsa(const Tensor &x, const Tensor &wDq, const Tensor &wUqQr, const T
         {postOut, cmpAttnOut, cmpSoftmax, fullK, cmpK, topkRes, topkInput},
         {{kvCacheOut, kvCache}, {krCacheOut, krCache}}) {
         config::SetPassOption(VEC_NBUFFER_MODE, 1);
-        config::SetPassOption(CUBE_L1_REUSE_MODE, NUM_4);
+        config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, NUM_4}});
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{NUM_3, NUM_4}});
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, NUM_2 * NUM_1024 * NUM_1024);
 

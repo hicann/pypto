@@ -153,7 +153,7 @@ TEST_F(DynamicGatherSlcFlashAttnDSASTest, SFA_b4_s2_seq64K_int8_perf) {
     config::SetPassOption(SG_PG_UPPER_BOUND, 20000);
     config::SetPassOption(SG_PG_LOWER_BOUND, 512);
 
-    // config::SetPassOption(CUBE_L1_REUSE_MODE, 8);
+    // config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 8}});
 
     // config::SetRuntimeOption<uint8_t>(
     //     DEVICE_SCHED_MODE, static_cast<uint8_t>(MachineScheduleConfig::L2CACHE_AFFINITY_SCH) |

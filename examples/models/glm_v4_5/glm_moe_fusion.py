@@ -113,7 +113,7 @@ def gen_quan_per_channel_weight_nz(x):
                      "stitch_function_outcast_memory": 128,
                      "stitch_function_inner_memory": 128,
                      "stitch_cfgcache_size": 7700000},
-    pass_options={"cube_l1_reuse_mode": 2}
+    pass_options={"cube_l1_reuse_setting": {-1: 2}, }
 )
 def moe_fusion_kernel(hidden_states, mm_weight, e_score_bias_input, w13, w13_scale, w2, w2_scale, weight_k,
                       ids_k, ffn_res, renormalize_flag, topk_group, num_expert_group):

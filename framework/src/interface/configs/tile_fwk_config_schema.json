@@ -43,7 +43,7 @@
                         "en": "Graph merging parameter, used to configure the merging strategy for subgraphs with identical structures that repeatedly transfer the same GM data. This parameter is applicable to subgraphs involving CUBE computation, and avoids excessive transfers of the same data."
                     },
                     "minimum": 0,
-                    "maximum": 2147483647
+                    "maximum": 2
                 },
                 "cube_l1_reuse_setting": {
                     "type": "object",
@@ -52,7 +52,7 @@
                         "zh": "合图参数，用于配置结构相同且重复搬运同一GM数据的子图合并数量。该参数适用于含有CUBE计算的子图合并。",
                         "en": "Graph merging parameter, used to configure the merging count of subgraphs with identical structures that repeatedly transfer the same GM data. This parameter is applicable to the merging of subgraphs involving CUBE computation."
                     },
-                    "key_minimum": 0,
+                    "key_minimum": -1,
                     "key_maximum": 2147483647,
                     "value_minimum": 0,
                     "value_maximum": 2147483647

@@ -2076,7 +2076,7 @@ Json Function::DumpJson(bool useTable) {
     funcDump["_opseed"] = opSeed_;
     funcDump["_rawid"] = IdGen<IdType::RAW_TENSOR>::Inst().CurId();
     funcDump["_funcid"] = IdGen<IdType::FUNCTION>::Inst().CurId();
-    funcDump["_l1_reuse_num"] = paramConfigs_.l1ReuseNum;
+    funcDump["_l1_reuse_mode"] = paramConfigs_.L1ReuseMode;
     funcDump["_cube_nbuffer_mode"] = paramConfigs_.cubeNBufferMode;
     funcDump["_sg_pg_upperbound"] = paramConfigs_.sgPgUpperBound;
     funcDump["_sg_pg_lowerbound"] = paramConfigs_.sgPgLowerBound;
@@ -2397,7 +2397,7 @@ std::shared_ptr<Function> Function::LoadJson(Program &belongTo, const Json &func
     IdGen<IdType::RAW_TENSOR>::Inst().SetId(rawid);
     int funcid = funcDump["_funcid"].get<int>();
     IdGen<IdType::FUNCTION>::Inst().SetId(funcid);
-    func->paramConfigs_.l1ReuseNum = funcDump["_l1_reuse_num"].get<int>();
+    func->paramConfigs_.L1ReuseMode = funcDump["_l1_reuse_mode"].get<int>();
     func->paramConfigs_.cubeNBufferMode = funcDump["_cube_nbuffer_mode"].get<int>();
     func->paramConfigs_.sgPgUpperBound = funcDump["_sg_pg_upperbound"].get<int>();
     func->paramConfigs_.sgPgLowerBound = funcDump["_sg_pg_lowerbound"].get<int>();

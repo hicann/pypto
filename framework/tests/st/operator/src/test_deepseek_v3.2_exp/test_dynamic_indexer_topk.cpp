@@ -133,7 +133,7 @@ TEST_F(DynamicIndexerTopk, indexer_topk_quant_4_b_1_s1_64k_s2) {
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 100 * 1024 * 1024); // mistake
     config::SetPassOption(SG_PG_LOWER_BOUND, 1024);
     config::SetPassOption(SG_PG_UPPER_BOUND, 1024 * 1024);
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 32);
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 32}});
     config::SetPassOption(SG_PARALLEL_NUM, 2);
     config::SetPassOption(VEC_NBUFFER_MODE, 1);
     config::SetRuntimeOption<uint8_t>(

@@ -3,7 +3,7 @@
         "pg_parallel_lower_bound": 20,
         "pg_upper_bound": 10000,
         "pg_lower_bound": 512,
-        "cube_l1_reuse_mode": 0,
+        "cube_l1_reuse_mode": 1,
         "cube_nbuffer_mode": 0,
         "mg_copyin_upper_bound": 1048576,
         "vec_nbuffer_mode": 1,

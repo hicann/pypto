@@ -67,8 +67,7 @@ class MlaTileConfig:
         self.q_vec_tile1 = 16
         self.k_vec_tile0 = 16
         self.k_vec_tile1 = 16
-        self.cube_l1_reuse_mode = 4
-        self.cube_l1_reuse_setting = {}
+        self.cube_l1_reuse_setting = {-1: 4}
         self.mg_copyin_upper_bound = 2 * 1024 * 1024
         self.pg_upper_bound = 8192
         self.vec_nbuffer_mode = 1
@@ -709,8 +708,8 @@ def mla_prolog_quant_compute(
 
 @pypto.jit(
     pass_options={"vec_nbuffer_mode": 1,
-                "cube_l1_reuse_mode": 4,
-                "cube_l1_reuse_setting": {3: 4},
+                "cube_l1_reuse_setting": {-1: 4},
+                "cube_nbuffer_setting": {3: 4},
                 "mg_copyin_upper_bound": 2 * 1024 * 1024},
     host_options={"only_codegen": True}
 )
@@ -790,8 +789,8 @@ def mla_prolog_quant_p(
 
 @pypto.jit(
     pass_options={"vec_nbuffer_mode": 1,
-                "cube_l1_reuse_mode": 4,
-                "cube_l1_reuse_setting": {3: 4},
+                "cube_l1_reuse_setting": {-1: 4},
+                "cube_nbuffer_setting": {3: 4},
                 "mg_copyin_upper_bound": 2 * 1024 * 1024},
     host_options={"only_codegen": True}
 )

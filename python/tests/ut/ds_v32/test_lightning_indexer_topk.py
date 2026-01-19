@@ -870,7 +870,7 @@ def setup_lightning_indexer_topk_config():
     pypto.set_pass_options(mg_copyin_upper_bound=NUM_100 * NUM_1024 * NUM_1024,
                          pg_lower_bound=NUM_1024,
                          pg_upper_bound=NUM_1024 * NUM_1024,
-                         cube_l1_reuse_mode=NUM_32,
+                         cube_l1_reuse_setting={-1: NUM_32},
                          pg_parallel_lower_bound=NUM_2,
                          vec_nbuffer_mode=NUM_2,
                          vec_nbuffer_setting={NUM_NEG1: NUM_16})

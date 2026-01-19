@@ -62,6 +62,7 @@ void TopKOnBoardFunc(TopKParams &params) {
     config::SetHostOption(ONLY_CODEGEN, true);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    config::SetPassOption(CUBE_L1_REUSE_MODE, 0);
     config::SetBuildStatic(true);
 
     int32_t shape0 = params.shape0;

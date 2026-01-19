@@ -1457,7 +1457,7 @@ TEST_F(MlaPrologOnBoardTest, test_MlaProlog_bfloat16_4_32_1_256_7168_1536_quant)
 TEST_F(MlaPrologOnBoardTest, test_MlaProlog_float16_32_128_1_4096_7168_1536_quant) {  // b_n_s_s2_h_q_lora_rank
     // config::SetPassOption(NBUFFER_NUM, 2);
     config::SetPassOption(VEC_NBUFFER_MODE, 1);
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
     int& h = std::get<int>(g_deepseekConfig["hiddenSize"]);
     int& n = std::get<int>(g_deepseekConfig["numAttentionHeads"]);
     int& qLoraRank = std::get<int>(g_deepseekConfig["qLoraRank"]);

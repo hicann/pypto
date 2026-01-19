@@ -175,7 +175,7 @@ void Program::ClearEmptyHiddenFunction() {
 
 void SetParamConfig(Function* currentFunctionPtr_) {
     std::shared_ptr<ConfigScope> currentScope = ConfigManagerNg::GetInstance().CurrentScope();
-    currentFunctionPtr_->paramConfigs_.l1ReuseNum = currentScope->GetPassConfig<int>(CUBE_L1_REUSE_MODE);
+    currentFunctionPtr_->paramConfigs_.L1ReuseMode = currentScope->GetPassConfig<int>(CUBE_L1_REUSE_MODE);
     currentFunctionPtr_->paramConfigs_.cubeNBufferMode = currentScope->GetPassConfig<int>(CUBE_NBUFFER_MODE);
     currentFunctionPtr_->paramConfigs_.sgPgUpperBound = currentScope->GetPassConfig<int>(SG_PG_UPPER_BOUND);
     currentFunctionPtr_->paramConfigs_.sgPgLowerBound = currentScope->GetPassConfig<int>(SG_PG_LOWER_BOUND);

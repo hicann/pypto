@@ -842,7 +842,7 @@ TEST_F(MlaPrologV2OnBoardTest, test_MlaPrologV2_bfloat16_4_128_1_4096_7168_1536)
 }
 
 TEST_F(MlaPrologV2OnBoardTest, test_mla_bf16_low_quant_smooth) {  // b_n_s_s2_h_q_lora_rank
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
     int b = 4;
     int s = 1;
     int s2 = 256;
@@ -882,7 +882,7 @@ TEST_F(MlaPrologV2OnBoardTest, test_mla_bf16_high_quant_smooth) {  // b_n_s_s2_h
 }
 
 TEST_F(MlaPrologV2OnBoardTest, test_MlaPrologV2_float16_4_32_1_256_7168_1536_quant) {  // b_n_s_s2_h_q_lora_rank
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
     int b = 4;
     int s = 1;
     int s2 = 256;
@@ -918,8 +918,8 @@ TEST_F(MlaPrologV2OnBoardTest, test_MlaPrologV2_float16_32_32_1_256_7168_1536_qu
 
 TEST_F(MlaPrologV2OnBoardTest, test_mla_fp16_high_quant_smooth) {  // b_n_s_s2_h_q_lora_rank
     config::SetPassOption(VEC_NBUFFER_MODE, 1);
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
-    config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{3,4}});
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
+    config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{3, 4}});
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 2*1024*1024);
     int b = 32;
     int s = 1;
@@ -941,7 +941,7 @@ TEST_F(MlaPrologV2OnBoardTest, test_mla_fp16_high_quant_smooth) {  // b_n_s_s2_h
 }
 
 TEST_F(MlaPrologV2OnBoardTest, test_mla_fp16_low_quant_smooth_pa_bsnd) {  // b_n_s_s2_h_q_lora_rank
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
     int b = 4;
     int s = 1;
     int s2 = 256;
@@ -997,7 +997,7 @@ TEST_F(MlaPrologV2OnBoardTest, test_mla_fp16_high_quant_smooth_pa_bsnd) {  // b_
 }
 
 TEST_F(MlaPrologV2OnBoardTest, test_mla_fp16_low_quant_smooth_nz_pa_bsnd) {  // b_n_s_s2_h_q_lora_rank
-    config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
+    config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
     int b = 4;
     int s = 1;
     int s2 = 256;

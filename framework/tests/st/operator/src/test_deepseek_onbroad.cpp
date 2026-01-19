@@ -322,7 +322,7 @@ TEST_F(MoeInferOnbroadTest, test_deepseekMoEInfer_singleout_singlemlp_withquant)
     PROGRAM("MOE_INFER_SINGLEMLP_QUANT") {
         config::Reset();
         TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64});
-        config::SetPassOption(CUBE_L1_REUSE_MODE, 4);
+        config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
 
         TileShape::Current().SetVecTile(64, nRoutedExperts); // for Assemble
 

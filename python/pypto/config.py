@@ -451,7 +451,7 @@ def options(
     Examples:
     -------
     # As decorator
-    @pypto.options(pass_options={"cube_l1_reuse_mode": 4})
+    @pypto.options(pass_options={"cube_l1_reuse_setting": {-1: 4}})
     def func():
         pass
 
@@ -509,7 +509,7 @@ def set_options(
 
     Examples:
     ---------
-    set_options(pass_options={"cube_l1_reuse_mode": 4})
+    set_options(pass_options={"cube_l1_reuse_setting": {-1: 4}})
     set_options(cube_tile_shapes=[[16, 16], [256, 512, 128], [128, 128], True])
     """
     temp_opts = options(**locals())

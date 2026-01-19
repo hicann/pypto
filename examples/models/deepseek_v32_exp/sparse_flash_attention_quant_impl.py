@@ -425,7 +425,7 @@ def sparse_flash_attention_quant_compute_flash(query_nope, query_rope, key_nope_
         "pg_parallel_lower_bound": 20,
         "vec_nbuffer_mode": 2,
         "vec_nbuffer_setting": {-1: 2, 0: 8},
-        "cube_l1_reuse_mode": 2
+        "cube_l1_reuse_setting": {-1: 2},
     },
     runtime_options={
         "stitch_function_inner_memory": 128,
@@ -484,7 +484,7 @@ def sparse_flash_attention_quant_d(query_nope, query_rope, key_nope_2d, key_rope
         "pg_parallel_lower_bound": 20,
         "vec_nbuffer_mode": 2,
         "vec_nbuffer_setting": {-1: 4, 0: 16},
-        "cube_l1_reuse_mode": 4
+        "cube_l1_reuse_setting": {-1: 4},
     },
     runtime_options={
         "stitch_function_inner_memory": 32,

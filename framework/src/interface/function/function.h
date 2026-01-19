@@ -438,8 +438,6 @@ struct DynParamInfo{
     std::string replacedSymbol;
 };
 struct ParamConfigs {
-    int l1ReuseNum{0};
-    int cubeNBufferNum{1};
     bool dynamicAlignedOps;
     int sgPgUpperBound{1};
     int sgPgLowerBound{1};
@@ -452,6 +450,7 @@ struct ParamConfigs {
     std::map<int64_t, int64_t> cubeNBufferSetting;
     std::string OoOPreScheduleMethod{"PriorDFS"};
     int vecNBuffermode{1};
+    int L1ReuseMode{1};
     int cubeNBufferMode{0};
     int mgVecParallelLb{48};
     int sgCubeParallelNum{24};
