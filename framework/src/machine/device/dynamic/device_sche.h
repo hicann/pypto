@@ -38,16 +38,16 @@ struct AicoreLogManager {
     AicoreLogger logger[MAX_AICORE_NUM];
 };
 
-class DeviceMachine {
+class DeviceSchedMachine {
 public:
-    DeviceMachine() {
+    DeviceSchedMachine() {
         for (uint32_t i = 0; i < MAX_SCHEDULE_AICPU_NUM; ++i) {
             aicoreManager_[i] = std::make_unique<AiCoreManager>(aicpuTaskManager_);
         }
     }
 
-    void SetStachSchduleContext(int threadIdx, SchduleContext* context) {
-        aicoreManager_[threadIdx]->SetSchduleContext(context);
+    void SetStachSchduleContext(int schedIdx, SchduleContext* context) {
+        aicoreManager_[schedIdx]->SetSchduleContext(context);
     }
     
     bool CheckAndResetReg(){
@@ -58,7 +58,7 @@ public:
         schAicpuNum_ = schNum;
     }
 
-    int Run(int threadIdx, DeviceArgs *args) {
+    int Run(int threadIdx, DeviceArgs *args, int schedIdx) {
         int ret = 0;
         if (args->nrAic == 0 || args->nrValidAic == 0 || args->nrAicpu < NEED_LAUNCH_AICPU_MINNUM) {
             DEV_ERROR("Device machinr run invalid args aicnum:%u, blockdim:%u, launchAicpu num:%u",
@@ -67,14 +67,14 @@ public:
         }
 
         DEV_INFO("thread %d start .", threadIdx);
-        if (static_cast<uint32_t>(threadIdx) >= args->scheCpuNum) {
+        if (static_cast<uint32_t>(threadIdx) > args->scheCpuNum) {
             DEV_INFO("thread start ignore ");
             return DEVICE_MACHINE_OK;
         }
 #if ENABLE_AICORE_PRINT
-        aicoreManager_[threadIdx]->InitLogger(logManager.logger);
+        aicoreManager_[schedIdx]->InitLogger(logManager.logger);
 #endif
-        ret = aicoreManager_[threadIdx]->Run(threadIdx, args);
+        ret = aicoreManager_[schedIdx]->Run(threadIdx, args, schedIdx);
         DEV_INFO("thread  %d end , ret = %d", threadIdx, ret);
         return ret;
     }

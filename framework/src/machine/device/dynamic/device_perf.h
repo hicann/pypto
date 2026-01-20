@@ -220,10 +220,10 @@ struct PerfEvtMgr {
         uint32_t usedAicpuNum = scheCpuNum + MAX_OTHER_AICPU_NUM;
         for (uint32_t tid = 0 ; tid < usedAicpuNum; tid++) {
             std::string coreType = "\"AICPU\"";
-            if (tid < scheCpuNum) {
-                coreType = "\"AICPU-SCHED\"";
-            } else if (tid == scheCpuNum) {
+            if (tid == 0) {
                 coreType = "\"AICPU-CTRL\"";
+            } else if (tid <= scheCpuNum) {
+                coreType = "\"AICPU-SCHED\"";
             }
             oss << "{\"blockIdx\":" << tid << ",\"coreType\":" << coreType << ",\"freq\":"<< freq <<",\"tasks\":[";
             for (uint32_t type = 0; type < PERF_TRACE_MAX; type++) {

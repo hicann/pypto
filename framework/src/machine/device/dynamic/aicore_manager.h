@@ -322,14 +322,14 @@ public:
                  aicpuIdx_, ret, procAicCoreFunctionCnt_, procAivCoreFunctionCnt_);
     }
 
-    inline int Run(int threadIdx, DeviceArgs *deviceArgs) {
+    inline int Run(int threadIdx, DeviceArgs *deviceArgs, int schedIdx) {
         int ret = DEVICE_MACHINE_OK;
         DEV_DEBUG("schedule run threadIdx:%d", threadIdx);
-        Init(threadIdx, deviceArgs);
+        Init(threadIdx, deviceArgs, schedIdx);
         PerfMtTrace(PERF_TRACE_INIT, threadIdx);
         DEV_DEBUG("Schedule run init succ");
         DeviceTaskCtrl *taskCtrl = nullptr;
-        taskQueue_ = &(reinterpret_cast<SPSCQueue<DeviceTaskCtrl *, DEFAULT_QUEUE_SIZE>*>(deviceArgs->taskQueue)[threadIdx]);
+        taskQueue_ = &(reinterpret_cast<SPSCQueue<DeviceTaskCtrl *, DEFAULT_QUEUE_SIZE>*>(deviceArgs->taskQueue)[schedIdx_]);
         if constexpr (IsDeviceMode()) {
             ret = HandShake();
             PerfMtTrace(PERF_TRACE_CORE_HAND_SHAKE, threadIdx);
@@ -341,8 +341,7 @@ public:
                 }
                 return ret;
             }
-            auto devStartArgs = reinterpret_cast<DevStartArgs *>(deviceArgs->startArgsAddr);
-            devStartArgs->syncFlag = 1;
+            reinterpret_cast<DevStartArgs *>(deviceArgs->startArgsAddr)->syncFlag = 1;
             aicoreProf_.ProfStart();
         }
         DEV_DEBUG("Schedule run start succ");
@@ -1287,8 +1286,8 @@ private:
     }
 
     inline bool IsExistOtherAicpuIdle(CoreType type) {
-        int idx = (aicpuIdx_ + 1) % aicpuNum_;
-        while (idx != aicpuIdx_) {
+        int idx = (schedIdx_ + 1) % aicpuNum_;
+        while (idx != schedIdx_) {
             if (curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][idx].load(std::memory_order_relaxed) == true){
                 return true;
             }
@@ -1298,22 +1297,23 @@ private:
     }
 
     inline void AicpuIsBusy(CoreType type) {
-        if (curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][aicpuIdx_] != false) {
-            curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][aicpuIdx_].store(false, std::memory_order_relaxed);
+        if (curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][schedIdx_] != false) {
+            curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][schedIdx_].store(false, std::memory_order_relaxed);
         }
     }
 
     inline void AicpuIsIdle(CoreType type) {
-        if (curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][aicpuIdx_] != true) {
-            curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][aicpuIdx_].store(true, std::memory_order_relaxed);
+        if (curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][schedIdx_] != true) {
+            curTaskCtrl_->isAicpuIdle[static_cast<int>(type)][schedIdx_].store(true, std::memory_order_relaxed);
         }
     }
 
-    inline void Init(int threadIdx, DeviceArgs *deviceArgs) {
+    inline void Init(int threadIdx, DeviceArgs *deviceArgs, int schedIdx) {
         aicNum_ = static_cast<int32_t>(deviceArgs->nrAic);
         aivNum_ = static_cast<int32_t>(deviceArgs->nrAiv);
         aicpuNum_ = deviceArgs->scheCpuNum;
         aicpuIdx_ = threadIdx;
+        schedIdx_ = schedIdx;
         aicValidNum_ = deviceArgs->nrValidAic;
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
         validGetPgMask_ = deviceArgs->validGetPgMask;
@@ -1509,8 +1509,8 @@ private:
             end = start + perCpu + ((idx < remain) ? 1 : 0);
         };
 
-        f(aicValidNum_, aicpuIdx_, aicpuNum_, aicStart_, aicEnd_);
-        f(AIV_NUM_PER_AI_CORE * aicValidNum_, aicpuIdx_, aicpuNum_, aivStart_, aivEnd_);
+        f(aicValidNum_, schedIdx_, aicpuNum_, aicStart_, aicEnd_);
+        f(AIV_NUM_PER_AI_CORE * aicValidNum_, schedIdx_, aicpuNum_, aivStart_, aivEnd_);
         aivStart_ += aicValidNum_;
         aivEnd_ += aicValidNum_;
 
@@ -1633,7 +1633,7 @@ private:
     }
 
     inline bool IsNeedProcAicpuTask() {
-        return aicpuIdx_ == 1;
+        return aicpuIdx_ == 2;
     }
 
 private:
@@ -1645,6 +1645,7 @@ private:
     int aivNum_{0};
     int aicValidNum_{0}; // 有效的aic，根据pgmask计算host传过来
     int aicpuIdx_{0};
+    int schedIdx_{0};
     int aicpuNum_{MAX_SCHEDULE_AICPU_NUM};
     int aicStart_{0};
     int aicEnd_{0};
