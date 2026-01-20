@@ -352,7 +352,6 @@ std::shared_ptr<LogicalTensor> LogicalTensor::View(
 
     view->shape = newShape;
     view->oriShape = newShape;
-    view->offset = newOffset;
     view->offset = TensorOffset::Add(offset, newOffset);
 
     if (dynOffset_.size() != 0) {

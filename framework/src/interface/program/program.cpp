@@ -705,26 +705,6 @@ bool Program::QueryAndUpdateCurrentFunction() {
     }
 }
 
-/* submit to hostmachine , prepare compile */
-int Program::EndFunction(const bool isWaitTaskFinished)
-{
-    ASSERT(currentFunctionPtr_ != nullptr);
-    auto scope = GetTensorSlotManager()->EndScope();
-    auto funcArgs = currentFunctionPtr_->EndFunction(scope);
-    if (currentFunctionPtr_->HasParent()) {
-        auto &callop =
-            currentFunctionPtr_->Parent().AddOperation(Opcode::OP_CALL, funcArgs.iOperands, funcArgs.oOperands, false);
-        callop.SetOpAttribute(currentFunctionPtr_->CreateCallOpAttribute(funcArgs.argList, funcArgs.outIndexToExpr));
-        callop.SetOpOffset(funcArgs.iOpAttrOffset, funcArgs.oOpAttrOffset);
-    }
-    HostMachine::GetInstance().SubTask(currentFunctionPtr_);
-    if (isWaitTaskFinished) {
-        HostMachine::GetInstance().WaitTaskFinish();
-    }
-    ALOG_INFO("End func: name = ", currentFunctionPtr_->GetRawName());
-    return 0;
-}
-
 void Program::VerifyTensorGraph() {
     Function *func = GetLastFunction();
 

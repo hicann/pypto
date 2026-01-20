@@ -25,7 +25,6 @@
 namespace npu::tile_fwk {
 class Program {
 public: // public api for torch
-    int EndFunction(const bool isWaitTaskFinished);
 
     std::vector<Function *> functionSequence_;
     Program();
