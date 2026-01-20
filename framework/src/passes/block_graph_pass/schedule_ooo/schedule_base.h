@@ -138,10 +138,10 @@ public:
         }
         if (localBufferMap.find(memId) == localBufferMap.end()) {
             localBufferMap[memId] = std::make_shared<LocalBuffer>(
-                memId, ShapeCeilAlign(operand->GetShape(), operand->Datatype()), operand->GetMemoryTypeOriginal());
+                memId, ShapeCeilAlign(operand->tensor->rawshape, operand->Datatype()), operand->GetMemoryTypeOriginal());
         } else {
             localBufferMap[memId]->size =
-                std::max(localBufferMap[memId]->size, ShapeCeilAlign(operand->GetShape(), operand->Datatype()));
+                std::max(localBufferMap[memId]->size, ShapeCeilAlign(operand->tensor->rawshape, operand->Datatype()));
         }
     }
 
@@ -421,11 +421,6 @@ public:
         // 构建依赖关系
         if (InitDependencies() != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "InitDependencies failed!");
-            return FAILED;
-        }
-
-        if (CheckAllocOp(operations) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "CheckAllocOp failed!");
             return FAILED;
         }
 

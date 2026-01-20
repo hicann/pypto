@@ -104,7 +104,6 @@ Status OoOSchedule::MixSchedule(std::vector<Operation*> &opList, Function &funct
     }
     spliter.MergeTaskByTargetCoreType();
     for (auto &taskNode : spliter.GetTaskGraph().tasks) {
-        SortTaskList(opList, taskNode.opList_);
         OoOScheduler oooSchedule(*program.second);
         if (oooSchedule.Schedule(taskNode.opList_) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "TaskNode[%d] schedule failed.", taskNode.idx);

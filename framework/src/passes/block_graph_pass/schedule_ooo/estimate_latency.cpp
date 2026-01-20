@@ -43,6 +43,8 @@ Status LatencyEstimator::FreeBuffer(Operation* op) {
         if (bufRefCount[memId] == 0) {
             auto freeMemSize = localBufferMap[memId]->size;
             localMemoryCurrentSize[localBufferMap[memId]->memType] += freeMemSize;
+            APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, currentSize %d, memId: %d.",
+                localBufferMap[memId]->memType, localMemoryCurrentSize[localBufferMap[memId]->memType], memId);
             if (localMemoryCurrentSize[localBufferMap[memId]->memType] > localMemSize[localBufferMap[memId]->memType]
                 || localMemoryCurrentSize[localBufferMap[memId]->memType] < 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor [%d] failed.", memId);
@@ -114,10 +116,12 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
             break;
         }
         Operation* op = pipe.Front();
-        auto needMemSize = GetInOutOperand(op)[0]->MemorySize();
+        auto memId = GetInOutOperand(op)[0]->memoryrange.memId;
+        auto needMemSize = localBufferMap[memId]->size;
         if (localMemoryCurrentSize[memType] >= static_cast<long int>(needMemSize)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
             localMemoryCurrentSize[memType] -= needMemSize;
+            APASS_LOG_DEBUG_F(Elements::Operation, "ExecuteAllocIssue memType: %d, currentSize %d, memId: %d.", memType, localMemoryCurrentSize[memType], memId);
             if (localMemoryCurrentSize[memType] > localMemSize[memType] ||
                 localMemoryCurrentSize[memType] < 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", GetInOutOperand(op)[0]);
@@ -227,8 +231,8 @@ void LatencyEstimator::InitMemWithoutAlloc() {
 }
 
 Status LatencyEstimator::LatencyEstimatorMainLoop() {
-    LaunchReadyIssue();
     initLatencyEstimatorOpQueues();
+    LaunchReadyIssue();
     InitMemWithoutAlloc();
     numTotalIssues = taskList.size();
     uint64_t commitCount = 0; // 当前已提交的issue数量

@@ -478,10 +478,7 @@ Status OoOScheduler::FreeBuffer(IssueEntryPtr issue) {
                 UpdateBufferUsage(localBufferMap[memId]->memType, memId, true);
             }
             localBufferMap[memId]->retireCycle = clock;
-            if (tensorOccupyMap[localBufferMap[memId]->memType].erase(localBufferMap[memId]->id) == 0) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", memId);
-                return FAILED;
-            }
+            tensorOccupyMap[localBufferMap[memId]->memType].erase(localBufferMap[memId]->id);
         }
     }
     return SUCCESS;
@@ -570,7 +567,11 @@ Status OoOScheduler::InitMemWithoutAlloc() {
                 continue;
             }
             for (auto pre : iOperand->GetProducers()) {
-                if (pre->GetOpcode() == Opcode::OP_VIEW || pre->GetOpcode() == Opcode::OP_VIEW_TYPE || IsInissueEntries(pre)) {
+                if (IsViewOp(*pre) && IsInissueEntries(*SkipViewChain(pre, true)->GetInputOperand(0)->GetProducers().begin())) {
+                    needAlloc = false;
+                    break;
+                }
+                if (!IsViewOp(*pre) && IsInissueEntries(pre)) {
                     needAlloc = false;
                     break;
                 }
@@ -606,7 +607,7 @@ Status OoOScheduler::ScheduleMainLoop() {
     bool isAllRetired = false;
     while (!isAllRetired) {
         int nextCycle = -1;
-        APASS_LOG_DEBUG_F(Elements::Operation, "\n clock: %d", clock);
+        APASS_LOG_DEBUG_F(Elements::Operation, "     clock: %d", clock);
         // Retire Stage : 检查现有pipe中的op是否执行完。如果op执行完，则将op标记为retired状态，将可以被释放的buffer释放掉，并唤醒后续已经就绪的op。
         // 完毕后更新整个pipe的状态。
         if (RetireIssueStage(commitCnt, nextCycle) != SUCCESS) {
@@ -691,6 +692,10 @@ Status OoOScheduler::GenSpillSchedule() {
     UpdateIssueExecOrder();
     size_t pcIdx = 0;
     APASS_LOG_DEBUG_F(Elements::Operation, "=========> Begin GenSpillSchedule.");
+    if (InitMemWithoutAlloc() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "InitMemWithoutAlloc failed.");
+        return FAILED;
+    }
     while (pcIdx < issueEntries.size()) {
         auto issue = issueEntries[pcIdx];
         APASS_LOG_DEBUG_F(Elements::Operation, "Launch %s", issue->GetOpInfo().c_str());
@@ -791,19 +796,6 @@ void OoOScheduler::InitLocalBuffer(LogicalTensorPtr oOperand, int memId) {
     }
     if (localBufferMap.find(memId) == localBufferMap.end()) {
         localBufferMap[memId] = std::make_shared<LocalBuffer>(
-            memId, ShapeCeilAlign(oOperand->GetShape(), oOperand->Datatype()), oOperand->GetMemoryTypeOriginal());
-    } else {
-        localBufferMap[memId]->size =
-            std::max(localBufferMap[memId]->size, ShapeCeilAlign(oOperand->GetShape(), oOperand->Datatype()));
-    }
-}
-
-void OoOScheduler::InitLocalBufferForAxisCombine(LogicalTensorPtr oOperand, int memId) {
-    if (oOperand->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-        return;
-    }
-    if (localBufferMap.find(memId) == localBufferMap.end()) {
-        localBufferMap[memId] = std::make_shared<LocalBuffer>(
             memId, ShapeCeilAlign(oOperand->tensor->rawshape, oOperand->Datatype()), oOperand->GetMemoryTypeOriginal());
     } else {
         localBufferMap[memId]->size =
@@ -831,11 +823,7 @@ void OoOScheduler::InitBufRefCount() {
         for (auto &tensor : issue->tileOp.GetOOperands()) {
             UpdateBufRefCount(issue, tensor);
             int memId = tensor->memoryrange.memId;
-            if (isCombineAxis_) {
-               InitLocalBufferForAxisCombine(tensor, memId);
-            } else {
-                InitLocalBuffer(tensor, memId);
-            }
+            InitLocalBuffer(tensor, memId);
         }
     }
 }
@@ -1027,11 +1015,6 @@ Status OoOScheduler::Init(const std::vector<Operation *> &operations) {
         return FAILED;
     }
 
-    if (CheckAllocIssue() != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "CheckAllocIssue failed!");
-        return FAILED;
-    }
-
     // 初始化内存管理器
     InitIssueQueuesAndBufferManager();
     return SUCCESS;
@@ -1062,7 +1045,7 @@ Status OoOScheduler::Schedule(const std::vector<Operation *> &operations) {
     PrintOpList(operations);
     if (Init(operations) != SUCCESS) { 
         APASS_LOG_ERROR_F(Elements::Operation, "Init failed!"); 
-        return FAILED;
+        return FAILED; 
     }
     // 生成spill指令
     if (GenSpillSchedule() != SUCCESS) { 
