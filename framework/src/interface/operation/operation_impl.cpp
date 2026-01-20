@@ -254,7 +254,10 @@ Tensor Unsqueeze(const Tensor &old, int unsqueezeDimNum) {
     }
     std::vector<int64_t> newShape(old.GetStorage()->shape);
     newShape.insert(newShape.begin() + unsqueezeDim, 1);
-    return Reshape(old, newShape);
+    auto validShape = old.GetStorage()->GetDynValidShape();
+    ASSERT(!validShape.empty());
+    validShape.insert(validShape.begin() + unsqueezeDim, 1);
+    return Reshape(old, newShape, validShape);
 }
 
 void TensorInnerAssign(Function &function, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
