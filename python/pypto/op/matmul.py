@@ -8,11 +8,14 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-""" """
+"""PyPTO"""
 import struct
+from typing import Any, Type
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
+from ..enum import DataType
+from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
 
 
@@ -123,32 +126,70 @@ def matmul(
     extend_params = {'scale_tensor': scale_tensor, 'relu_type': pypto.ReLuType.RELU}
     pypto.matmul(a, b, pypto.DT_BF16, extend_params=extend_params)
     """
-    input_dim = input.Dim()
-    mat2_dim = mat2.Dim()
-    check_data_valid(input, mat2, c_matrix_nz)
-    if input_dim == mat2_dim == 2:
-        if (extend_params is None) or (not extend_params):
-            return pypto_impl.Matmul(
-                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
-            )
-        else:
+    __validate_inputs(input, mat2, out_dtype, [a_trans, b_trans, c_matrix_nz, extend_params])
+    if input.Dim() == 2:
+        if extend_params is not None:
             extend_params = pypto_impl.MatmulExtendParam(
-                **convert_matmul_extend_params(extend_params)
+                **__convert_matmul_extend_params(extend_params)
             )
             return pypto_impl.Matmul(
                 out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz, extend_params
             )
-    elif (input_dim == mat2_dim == 3) or (input_dim == mat2_dim == 4):
+        else:
+            return pypto_impl.Matmul(
+                out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
+            )
+    else:
         return pypto_impl.BatchMatmul(
             out_dtype, input, mat2, a_trans, b_trans, c_matrix_nz
         )
-    else:
-        raise RuntimeError(
-            "input dim and mat dim must equals, which only support 2-D/3-D/4-D currently"
+
+
+def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> None:
+    if value is None:
+        return
+    if not isinstance(value, expect_type):
+        raise TypeError(
+            f"Argument '{arg_name}' must be of type {expect_type.__name__}, but got {type(value).__name__}."
         )
 
 
-def check_data_valid(input_tensor1, input_tensor2, is_out_nz):
+def __get_valid_shape(tensor):
+    return [SymbolicScalar.from_base(n) for n in tensor.GetValidShape()]
+
+
+def __validate_shape(input_tensor1: Tensor, input_tensor2: Tensor, a_trans: bool, b_trans: bool) -> None:
+    input_dim = input_tensor1.Dim()
+    mat2_dim = input_tensor2.Dim()
+    if input_dim != mat2_dim or input_dim not in {2, 3, 4}:
+        raise RuntimeError(
+            "Tensor dimension mismatch. Expect input_dim == mat2_dim and both in [2, 3, 4], "
+            f"got input_dim: {input_dim}, mat2_dim: {mat2_dim}."
+        )
+
+    input_valid_shape = __get_valid_shape(input_tensor1)
+    mat2_valid_shape = __get_valid_shape(input_tensor2)
+    m_dim, ka_dim = (input_valid_shape[-2], input_valid_shape[-1]) if not a_trans else \
+        (input_valid_shape[-1], input_valid_shape[-2])
+    kb_dim, n_dim = (mat2_valid_shape[-2], mat2_valid_shape[-1]) if not b_trans else \
+        (mat2_valid_shape[-1], mat2_valid_shape[-2])
+    if ka_dim.is_concrete() and kb_dim.is_concrete() and ka_dim != kb_dim:
+        raise RuntimeError(
+            "K-dimension valid shape mismatch. "
+            f"Got input valid shape: {input_valid_shape}, mat2 valid shape: {mat2_valid_shape}, "
+            f"a_trans: {a_trans}, b_trans: {b_trans}."
+        )
+
+
+def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -> None:
+    a_trans, b_trans, is_out_nz, extend_params = optional_param
+    __validate_type(out_dtype, DataType, "out_dtype")
+    __validate_type(a_trans, bool, "a_trans")
+    __validate_type(b_trans, bool, "b_trans")
+    __validate_type(is_out_nz, bool, "is_out_nz")
+    __validate_type(extend_params, dict, "extend_params")
+    __validate_shape(input_tensor1, input_tensor2, a_trans, b_trans)
+
     if is_out_nz:
         raise ValueError("Output tensor do not support NZ currently.")
     input1_valid = input_tensor1.GetDataType() == pypto_impl.DataType.DT_FP32 \
@@ -159,9 +200,13 @@ def check_data_valid(input_tensor1, input_tensor2, is_out_nz):
         raise ValueError("Input tensor with DT_FP32 must use ND format, NZ format is not support currently.")
     if input_tensor1.GetDataType() != input_tensor2.GetDataType():
         raise ValueError("All input tensors must have the same data type")
+    if input_tensor1.Dim() != 2 and extend_params is not None:
+        raise RuntimeError(
+            "extend_params is not supported for batched matrix multiplication."
+        )
 
 
-def convert_matmul_extend_params(extend_params) -> dict:
+def __convert_matmul_extend_params(extend_params) -> dict:
     extend_params.setdefault('bias_tensor', pypto_impl.Tensor())
     extend_params.setdefault('scale_tensor', pypto_impl.Tensor())
     extend_params.setdefault('relu_type', pypto_impl.ReLuType.NO_RELU)
