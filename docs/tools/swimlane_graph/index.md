@@ -1,11 +1,9 @@
 # 泳道图
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :titlesonly:
 
-泳道图
-查看泳道图
 泳道图跳转到计算图
 搜索泳道图节点
 测量节点间的时间间隔

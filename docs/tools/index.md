@@ -1,6 +1,6 @@
 # 辅助工具
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :titlesonly:
 
 introduction/简介

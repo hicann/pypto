@@ -3,7 +3,7 @@
 ## 目录说明
 关键目录结构如下：
 ```
-├── context                    # 环境部署
+├── install                    # 环境部署
 ├── invocation                 # 样例运行
 ├── tutorials                  # PyPTO 编程指南
 ├── api                        # PyPTO API参考

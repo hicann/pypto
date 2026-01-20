@@ -108,7 +108,7 @@ PyPTO在计算图编译的各Pass阶段拥有完整的中间表示，可翻译�
 需要重新编译并安装PyPTO后才能使用该工具。
 
 1.  确认GCC安装并升级到9.4.0或更高版本。
-2.  重新通过源码编译安装PyPTO。主要区别是在编译安装命令中增加选项 --no-build-isolation，其他操作请参见[编译安装](../../context/prepare_environment.md)。
+2.  重新通过源码编译安装PyPTO。主要区别是在编译安装命令中增加选项 --no-build-isolation，其他操作请参见[编译安装](../../install/prepare_environment.md)。
 
     ```bash
     python3 -m pip install . --verbose --no-build-isolation

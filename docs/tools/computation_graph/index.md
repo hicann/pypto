@@ -1,10 +1,9 @@
 # 计算图
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :titlesonly:
 
-计算图
 查看计算图
 查看健康报告
 搜索计算图节点

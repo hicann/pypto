@@ -1,7 +1,7 @@
 # 编程指南
 
 ```{toctree}
-:maxdepth: 3
+:maxdepth: 1
 
 introduction/introduction
 introduction/quick_start

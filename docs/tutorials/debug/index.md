@@ -1,7 +1,7 @@
 # 调试调优
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :titlesonly:
 
 debug
