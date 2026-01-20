@@ -25,6 +25,7 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 
+#include "ir/function.h"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -1415,13 +1416,24 @@ struct EncodeDevAscendFunctionInfo {
         FunctionCache &cache = Program::GetInstance().GetFunctionCache();
         for (auto &[callop, succSet] : callOpSuccDict) {
             Function *devLeafFunc = cache.GetCacheFunction(callop->GetCalleeHash());
+            std::shared_ptr<LeafFuncAttribute> leafAttr = nullptr;
             if (devLeafFunc == nullptr) {
-                ASSERT(GetCoreType(callop) == static_cast<int>(CoreType::HUB)) << "GetCoreType return unexpected value: " <<
-                       GetCoreType(callop) << ", expected: " << static_cast<int>(CoreType::HUB) << " for callop: " << callop;
-                copyOutResolveSuccIndexListDict[callop] = std::vector<int>({0});
+                pto::BlockFunction *devIrBlockFunc = cache.GetCacheIrBlockFunction(callop->GetCalleeHash());
+                if (devIrBlockFunc == nullptr) {
+                    ASSERT(GetCoreType(callop) == static_cast<int>(CoreType::HUB)) << "GetCoreType return unexpected value: " <<
+                       GetCoreType(callop) << ", expectedBlockFunction: " << static_cast<int>(CoreType::HUB) << " for callop: " << callop;
+                    copyOutResolveSuccIndexListDict[callop] = std::vector<int>({0});
+                    continue;
+                }
+                leafAttr = devIrBlockFunc->GetLeafFuncAttribute();
+            } else {
+                leafAttr = devLeafFunc->GetLeafFuncAttribute();
+            }
+
+            if (leafAttr == nullptr) {
+                ALOG_ERROR_F("Leaf Attr of leaf function %s is nullptr.", callop->GetCalleeMagicName().c_str());
                 continue;
             }
-            std::shared_ptr<LeafFuncAttribute> leafAttr = devLeafFunc->GetLeafFuncAttribute();
             if (leafAttr->outcastCopyOutResolveCounterList.size() == 0) {
                 copyOutResolveSuccIndexListDict[callop] = std::vector<int>({0});
                 continue;

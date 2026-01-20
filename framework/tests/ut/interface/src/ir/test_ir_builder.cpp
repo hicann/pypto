@@ -218,8 +218,8 @@ TEST(IRTEST, TestControlFlow) {
 }
 
 std::shared_ptr<Function> TestBlockFunction(
-    const std::vector<TileValuePtr> &inputArgs,
-    const std::vector<TileValuePtr> &outputArgs,
+    const std::vector<TensorValuePtr> &inputArgs,
+    const std::vector<TensorValuePtr> &outputArgs,
     [[maybe_unused]]const std::vector<ScalarValuePtr> &indices) 
 {
     IRBuilderContext ctx;
@@ -227,15 +227,23 @@ std::shared_ptr<Function> TestBlockFunction(
     FunctionSignature sig = FunctionSignature(inputArgs, outputArgs);
     sig.results.push_back(std::make_shared<ScalarValue>(DataType::INT32));
 
-    auto func = builder.CreateFunction("test_all_ops", FunctionKind::ControlFlow, sig);
+    auto func = builder.CreateFunction("test_all_ops", FunctionKind::Block, sig);
     builder.EnterFunctionBody(ctx, func);
-
+    // STUB LeafFuncAttribute
+    auto blockFunc = std::dynamic_pointer_cast<pto::BlockFunction>(func);
+    auto leafFuncAttr = std::make_shared<npu::tile_fwk::LeafFuncAttribute>();
+    leafFuncAttr->coreType = CoreType::AIV;
+    blockFunc->SetLeafFuncAttribute(leafFuncAttr);
+    std::vector<int64_t> shape = {64, 64};
     // tensorAdd = add(input[0], input[1])
-    auto tileAdd = builder.CreateTile(ctx, inputArgs[0]->GetShape(), DataType::FP32, "tensorAdd");
-    auto addOp = builder.CreateBinaryOp(Opcode::OP_ADD, inputArgs[0], inputArgs[1], tileAdd);
+    auto tileAdd = builder.CreateTile(ctx, shape, DataType::FP32, "tensorAdd");
+    auto tileAdd1 = builder.CreateTile(ctx, shape, DataType::FP32, "tensorAdd1");
+    auto tileAdd2 = builder.CreateTile(ctx, shape, DataType::FP32, "tensorAdd2");
+    auto addOp = builder.CreateBinaryOp(Opcode::OP_ADD, tileAdd1, tileAdd2, tileAdd);
     builder.Emit(ctx, addOp);
 
-    auto divOp = builder.CreateBinaryOp(Opcode::OP_DIV, inputArgs[0], tileAdd, outputArgs[0]);
+    auto tileOut = builder.CreateTile(ctx, shape, DataType::FP32, "tensorAdd2");
+    auto divOp = builder.CreateBinaryOp(Opcode::OP_DIV, tileAdd1, tileAdd, tileOut);
     builder.Emit(ctx, divOp);
 
     builder.CreateReturn(ctx, {});
@@ -245,4 +253,19 @@ std::shared_ptr<Function> TestBlockFunction(
     return func;
 }
 
+TEST(IRTEST, TestDynControlFlow)
+{
+    constexpr int LOOP_ITERATION = 8;
+    std::vector<int64_t> shape = {512, 64 * LOOP_ITERATION};
+    Tensor inputA(DT_FP32, shape, "A");
+    Tensor inputB(DT_FP32, shape, "B");
+    Tensor output(DT_FP32, shape, "C");
+
+    std::string funcName = "TestNewIR";
+    FUNCTION(funcName, {inputA, inputB}, {output}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, npu::tile_fwk::LoopRange(LOOP_ITERATION)) {
+            CallBlock(TestBlockFunction, {inputA, inputB}, {output}, {i});
+        }
+    }
+}
 } // namespace pto

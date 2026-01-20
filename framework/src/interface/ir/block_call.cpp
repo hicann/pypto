@@ -17,43 +17,33 @@
 
 namespace pto {
 using namespace npu::tile_fwk;
-void CallBlock(BlockFunctionType blockFunction,
+std::vector<Tensor> CallBlock(const pto::FunctionPtr &blockFuncPtr,
     const std::vector<std::reference_wrapper<const Tensor>> &inputTensorArgs,
     const std::vector<std::reference_wrapper<const Tensor>> &outputTensorArgs,
     const std::vector<SymbolicScalar>& indices) {
-    // 根据Tensor生成TileValue
-    std::vector<TileValuePtr> inputArgs;
+    ASSERT(blockFuncPtr != nullptr) << "Block function pointer should not be nullptr";
     std::vector<LogicalTensorPtr> inputLogicTensors;
     for (const auto &tensorRef : inputTensorArgs) {
         const auto &tensor = tensorRef.get();
-        std::vector<int64_t> tensorShape;
-        std::vector<ScalarValuePtr> validShapes;
+        std::vector<uint64_t> tensorShape;
         for (int64_t ele : tensor.GetShape()) {
-            tensorShape.emplace_back(ele);
-            validShapes.emplace_back(std::make_shared<ScalarValue>(ele));
+            tensorShape.emplace_back(static_cast<uint64_t>(ele));
         }
-        auto tileValue = std::make_shared<TileValue>(tensorShape, 
-            (pto::DataType)tensor.GetDataType(), validShapes, tensor.GetName());
-        inputArgs.emplace_back(tileValue);
         inputLogicTensors.emplace_back(tensor.GetStorage(true));
     }
 
-    std::vector<TileValuePtr> outputArgs;
+    std::vector<Tensor> result;
     std::vector<LogicalTensorPtr> outputLogicTensors;
+    size_t i = 0;
     for (const auto &tensorRef : outputTensorArgs) {
         const auto &tensor = tensorRef.get();
-        std::vector<int64_t> tensorShape;
-        std::vector<ScalarValuePtr> validShapes;
-        for (int64_t ele : tensor.GetShape()) {
-            tensorShape.emplace_back(ele);
-            validShapes.emplace_back(std::make_shared<ScalarValue>(ele));
+        std::vector<uint64_t> tensorShape;
+        for (auto ele : tensor.GetShape()) {
+            tensorShape.emplace_back(static_cast<uint64_t>(ele));
         }
-        auto tileValue = std::make_shared<TileValue>(tensorShape, 
-            (pto::DataType)tensor.GetDataType(), validShapes, tensor.GetName());
-        outputArgs.emplace_back(tileValue);
-        outputLogicTensors.emplace_back(tensor.GetStorage(false));
-        // Handle slot: simulate the behavior in Tensor::operation=
-        Program::GetInstance().GetTensorSlotManager()->TensorWrite(tensor);
+        result.emplace_back(tensor.GetDataType(), tensor.GetShape(), "result" + std::to_string(i), TileOpFormat::TILEOP_ND);
+        outputLogicTensors.emplace_back(result.back().GetStorage(false));
+        i++;
     }
 
     auto function = npu::tile_fwk::Program::GetInstance().GetCurrentFunction();
@@ -64,14 +54,20 @@ void CallBlock(BlockFunctionType blockFunction,
         function->programModule_ = std::make_shared<ProgramModule>(function->GetMagicName() + "_IR");
     }
     std::vector<ScalarValuePtr> index;
-    auto irFunc = blockFunction(inputArgs, outputArgs, index);
-    function->programModule_->AddFunction(irFunc);
-    function->programModule_->SetProgramEntry(irFunc);
+    ASSERT(blockFuncPtr->GetKind() == FunctionKind::Block);
+    function->programModule_->AddFunction(blockFuncPtr);
+    function->programModule_->SetProgramEntry(blockFuncPtr);
     auto &callOp = function->AddRawOperation(npu::tile_fwk::Opcode::OP_BLOCK_CALL, 
         inputLogicTensors, outputLogicTensors, false);
 
     // 2 Compute hash of program module
-    FunctionHash hash = irFunc->ComputeHash();
+    FunctionHash hash = blockFuncPtr->ComputeHash();
+    auto &functionCache = npu::tile_fwk::Program::GetInstance().GetFunctionCache();
+    auto cacheValue = functionCache.Get(hash);
+    if (cacheValue == std::nullopt) {
+        functionCache.Insert(hash, blockFuncPtr.get());
+    }
+
     // IR block function hash
     // 3 Create Call op attribute
     std::vector<std::vector<SymbolicScalar>> argList;
@@ -79,5 +75,41 @@ void CallBlock(BlockFunctionType blockFunction,
     auto opAttribute = std::make_shared<CallOpAttribute>(hash, argList,
         function->programModule_->GetFunctions().back()->GetName());
     callOp.SetOpAttribute(opAttribute);
+    return result;
+}
+
+std::vector<npu::tile_fwk::Tensor> CallBlock(const BlockFunctionType &blockFunc,
+    const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &inputTensorArgs,
+    const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &outputTensorArgs,
+    const std::vector<npu::tile_fwk::SymbolicScalar> &indices) 
+{
+    std::vector<TensorValuePtr> inputArgs;
+    for (const auto &tensorRef : inputTensorArgs) {
+        const auto &tensor = tensorRef.get();
+        std::vector<uint64_t> tensorShape;
+        for (int64_t ele : tensor.GetShape()) {
+            tensorShape.emplace_back(static_cast<uint64_t>(ele));
+        }
+        auto tensorValue = std::make_shared<TensorValue>((pto::DataType)tensor.GetDataType(), tensorShape, 
+            tensor.GetName());
+        inputArgs.emplace_back(tensorValue);
+    }
+
+    std::vector<TensorValuePtr> outputArgs;
+    for (const auto &tensorRef : outputTensorArgs) {
+        const auto &tensor = tensorRef.get();
+        std::vector<uint64_t> tensorShape;
+        for (auto ele : tensor.GetShape()) {
+            tensorShape.emplace_back(static_cast<uint64_t>(ele));
+        }
+        auto tensorValue = std::make_shared<TensorValue>((pto::DataType)tensor.GetDataType(), tensorShape, 
+            tensor.GetName());
+        outputArgs.emplace_back(tensorValue);
+    }
+    std::vector<ScalarValuePtr> index;
+    auto blockFuncPtr = blockFunc(inputArgs, outputArgs, index);
+    ASSERT(blockFuncPtr != nullptr) << "Block function pointer should not be nullptr";
+    ASSERT(blockFuncPtr->GetKind() == FunctionKind::Block);
+    return CallBlock(blockFuncPtr, inputTensorArgs, outputTensorArgs, indices);
 }
 }

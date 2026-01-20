@@ -26,7 +26,7 @@
 #include "ir/utils.h"
 #include "ir/utils_defop.h"
 #include "ir/value.h"
-
+#include "ir/block_call.h"
 namespace py = pybind11;
 
 namespace pto {
@@ -287,6 +287,9 @@ static void IrBindModule(py::module &m) {
 static void IrBindFunction(py::module &m) {
     py::class_<FunctionSignature>(m, "FunctionSignature")
         .def(py::init<>())
+        .def(py::init<const std::vector<pto::TensorValuePtr> &,
+                      const std::vector<pto::TensorValuePtr> &>(),
+                      py::arg("input_args"), py::arg("output_args"))
         .def_readwrite("arguments", &FunctionSignature::arguments, py::return_value_policy::reference_internal)
         .def_readwrite("returns", &FunctionSignature::results, py::return_value_policy::reference_internal);
 
@@ -643,6 +646,25 @@ static void IrBindBuilder(py::module &m) {
 
     IrBuilderBindOp(irBuilder);
 }
+
+void IrBindBlockCall(py::module &m) {
+    m.def("call_block", [](const pto::FunctionPtr &blockFuncPtr,
+                           const std::vector<npu::tile_fwk::Tensor>& inputTensors,
+                           const std::vector<npu::tile_fwk::Tensor>& outputTensors,
+                           const std::vector<npu::tile_fwk::SymbolicScalar>& indices) {
+        // 转换为 reference_wrapper
+        std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> inputRefs;
+        std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> outputRefs;
+        for (const auto& t : inputTensors) inputRefs.emplace_back(t);
+        for (const auto& t : outputTensors) outputRefs.emplace_back(t);
+        // 调用 C++ 的 CallBlock (通过 blockName)
+        return CallBlock(blockFuncPtr, inputRefs, outputRefs, indices);
+    }, py::arg("block_func_ptr"),
+       py::arg("input_tensors"),
+       py::arg("output_tensors"),
+       py::arg("indices"),
+       "Call a registered block by name (PascalCase).");
+}
 } // namespace pto
 
 namespace pypto {
@@ -657,5 +679,6 @@ void BindIr(py::module &m) {
     pto::IrBindFunction(ir);
     pto::IrBindModule(ir);
     pto::IrBindBuilder(ir);
+    pto::IrBindBlockCall(ir);
 }
 } // namespace pypto

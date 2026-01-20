@@ -643,7 +643,7 @@ bool Allocator::TryReuseInputForOutput(
                          callOp.GetCalleeHash().GetHash(), callOp.opmagic);
         return false;
     }
-    Function* leafProgram = cacheValue->cacheFunction;
+    Function* leafProgram = cacheValue->GetFunction();
 
     // 从 map 中获取该 program 的 leafFuncOutputInputReuseMap_ 数据
     const auto reuseInfoIt = leafFuncOutputInputReuseMap_.find(leafProgram);

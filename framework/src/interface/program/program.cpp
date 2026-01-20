@@ -697,7 +697,7 @@ bool Program::QueryAndUpdateCurrentFunction() {
         return false;
     } else {
         ASSERT(currentFunctionPtr_->IsGraphType(GraphType::BLOCK_GRAPH));
-        auto cacheFunc = cacheValue->cacheFunction;
+        auto cacheFunc = cacheValue->GetFunction();
         functionmap_.erase(currentFunctionPtr_->GetMagicName());
         currentFunctionPtr_ = cacheFunc;
         currentFunctionMagicName_ = currentFunctionPtr_->GetMagicName();

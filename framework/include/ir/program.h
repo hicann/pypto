@@ -25,6 +25,7 @@
 namespace pto {
 
 class Function;
+class BlockFunction;
 
 // Represents the top-level program.module container.
 class ProgramModule : public Object {

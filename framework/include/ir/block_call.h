@@ -24,12 +24,17 @@
 #include "interface/program/program.h"
 
 namespace pto {
-using BlockFunctionType = std::shared_ptr<Function> (*) (
-    const std::vector<TileValuePtr> &inputArgs,
-    const std::vector<TileValuePtr> &outputArgs,
-    const std::vector<ScalarValuePtr> &indices);
+using BlockFunctionType = std::function<std::shared_ptr<pto::Function>(
+    const std::vector<std::shared_ptr<pto::TensorValue>>&,
+    const std::vector<std::shared_ptr<pto::TensorValue>>&,
+    const std::vector<std::shared_ptr<pto::ScalarValue>>&)>;
 
-void CallBlock(BlockFunctionType blockFunction,
+std::vector<npu::tile_fwk::Tensor> CallBlock(const pto::FunctionPtr &blockFuncPtr,
+    const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &inputTensorArgs,
+    const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &outputTensorArgs,
+    const std::vector<npu::tile_fwk::SymbolicScalar> &indices);
+
+std::vector<npu::tile_fwk::Tensor> CallBlock(const BlockFunctionType &blockFunc,
     const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &inputTensorArgs,
     const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &outputTensorArgs,
     const std::vector<npu::tile_fwk::SymbolicScalar> &indices);

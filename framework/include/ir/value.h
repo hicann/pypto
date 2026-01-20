@@ -260,6 +260,7 @@ private:
     std::vector<ScalarValuePtr> shape_;
     Format format_;
 };
+using TensorValuePtr = std::shared_ptr<TensorValue>;
 
 using TensorValuePtr = std::shared_ptr<TensorValue>;
 

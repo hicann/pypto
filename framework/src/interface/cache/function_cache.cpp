@@ -201,10 +201,10 @@ void FunctionCache::Insert(const HashKey& key, Function &func) {
             UpdateBinCache(*func.rootFunc_, cacheVal);
             UpdateReadyFunction(*func.rootFunc_, cacheVal);
         }
-        cacheVal.cacheFunction = &func;
+        cacheVal.SetCacheFunction(&func);
     } else {
         if (func.GetGraphType() == GraphType::BLOCK_GRAPH) {
-            cacheVal.cacheFunction = &func;
+            cacheVal.SetCacheFunction(&func);
         } else {
             return;
         }
@@ -212,6 +212,11 @@ void FunctionCache::Insert(const HashKey& key, Function &func) {
     Insert(key, cacheVal);
 }
 
+void FunctionCache::Insert(const HashKey& key, pto::Function *func) {
+    CacheValue cacheVal;
+    cacheVal.SetCacheFunction(func);
+    Insert(key, cacheVal);
+}
 void FunctionCache::Insert(const HashKey& key, CacheValue value) {
     std::lock_guard<std::mutex> cLockGuard(lock_);
     cache_[key] = value;
@@ -233,7 +238,29 @@ Function *FunctionCache::GetCacheFunction(const HashKey &key) {
     getCnt_++;
     if (auto it = cache_.find(key); it != cache_.end()) {
         hitCnt_++;
-        return it->second.cacheFunction;
+        return it->second.GetFunction();
+    } else {
+        return nullptr;
+    }
+}
+
+pto::Function *FunctionCache::GetCacheIrFunction(const HashKey &key) {
+    std::lock_guard<std::mutex> cLockGuard(lock_);
+    getCnt_++;
+    if (auto it = cache_.find(key); it != cache_.end()) {
+        hitCnt_++;
+        return it->second.GetIrFunction();
+    } else {
+        return nullptr;
+    }
+}
+
+pto::BlockFunction *FunctionCache::GetCacheIrBlockFunction(const HashKey &key) {
+    std::lock_guard<std::mutex> cLockGuard(lock_);
+    getCnt_++;
+    if (auto it = cache_.find(key); it != cache_.end()) {
+        hitCnt_++;
+        return dynamic_cast<pto::BlockFunction *>(it->second.GetIrFunction());
     } else {
         return nullptr;
     }

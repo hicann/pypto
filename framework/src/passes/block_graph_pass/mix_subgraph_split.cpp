@@ -59,7 +59,7 @@ Status MixSubgraphSplit::GatherSubGraphInfo(Function &function, std::vector<MixS
         }
         // 从全局缓存中获取function
         auto cacheValue = Program::GetInstance().TryHitCahce(calleeHash);
-        Function* cacheFunc = cacheValue->cacheFunction;
+        Function* cacheFunc = cacheValue->GetFunction();
         // 检查是否是Mix子图
         if (!IsMixSubgraph(*cacheFunc)) {
             continue;

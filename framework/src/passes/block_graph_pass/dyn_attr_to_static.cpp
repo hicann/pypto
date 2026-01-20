@@ -237,6 +237,9 @@ Status DynAttrToStatic::BuildLeafToCaller(Function *func) {
         Function *rootFunc = func->GetRootFunction();
         return BuildLeafToCaller(rootFunc);
     } else if (func->GetGraphType() == GraphType::EXECUTE_GRAPH) {
+        if (func->programModule_ != nullptr) {
+            return SUCCESS;
+        }
         for (auto callop : func->GetCallopList()) {
             Function *leafFunc = nullptr;
             if (GetCallee(*callop, leafFunc) != SUCCESS) {
