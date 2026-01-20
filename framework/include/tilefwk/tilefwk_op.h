@@ -398,6 +398,11 @@ enum class DistReduceType {
     DIST_REDUCE_MIN,
 };
 
+enum class AtomicType {
+    SET,
+    ADD
+};
+
 struct MoeConfig {
     int32_t routedExpertNum{0};
     int32_t expertNumPerRank{0};
@@ -425,9 +430,18 @@ void TwoShotAllReduce(const Tensor& predToken, const Tensor& in, const char* gro
 void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts,
     const Tensor& expertScales, const char* group, uint32_t epWorldSize, uint32_t moeExpertNum,
     uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& out);
+void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts,
+    const Tensor& expertScales, const char* group, uint32_t epWorldSize, uint32_t moeExpertNum,
+    uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& out);
 void CreateShmemData(const char *group, int64_t worldSize, DataType dataType,
     const Shape &shape, Tensor &shmemTensor, uint64_t memType = 0);
 void CreateShmemSignal(const char *group, Tensor &shmemData, Tensor &shmemSignal);
+Tensor ShmemPut(const Tensor& in, const Tensor& shmemDataTile, const Tensor& barrierDummy,
+    AtomicType atomicType = AtomicType::SET);
+Tensor ShmemSignal(const Tensor& dummy, const Tensor& shmemSignalTile, AtomicType atomicType);
+Tensor WaitUntil(const Tensor& dummyIn, const Tensor& shmemSignalTile, int32_t expectedSum, bool resetSignal = false);
+Tensor ShmemGet(const Tensor& dummy, const Tensor& shmemDataTile, DataType nonShmemDataType = DataType::DT_BOTTOM,
+    AtomicType atomicType = AtomicType::SET);
 } // namespace Distributed
 std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, int idxStart);
 std::tuple<Tensor, Tensor> TopKSort(const Tensor &x, const SymbolicScalar &idxStart);

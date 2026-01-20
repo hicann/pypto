@@ -56,11 +56,6 @@ enum class TileIndex : size_t {
     TAIL_SHAPE
 };
 
-enum class AtomicType {
-    SET,
-    ADD
-};
-
 enum class AllReduceType {
     ONE_SHOT,
     TWO_SHOT,

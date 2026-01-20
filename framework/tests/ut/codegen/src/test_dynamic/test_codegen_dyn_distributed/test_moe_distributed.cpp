@@ -92,7 +92,9 @@ TEST_F(TestMoeDistributed, TestMoeDispatchMultipyExperts) {
     codeGen.GenCode(*function, {});
 }
 
-TEST_F(TestMoeDistributed, TestMoeDistributedCombine) {
+void TestMoeDistributedCombineFunc(std::function<void(const Tensor&, const Tensor&, const Tensor&, const Tensor&,
+    const char*, uint32_t, uint32_t, uint32_t, uint32_t, Tensor&)> func, std::string loopName)
+{
     const char *group = "hcom123";
     int32_t batchSize = 8;
     int32_t hiddenSize = 5120;
@@ -108,15 +110,25 @@ TEST_F(TestMoeDistributed, TestMoeDistributedCombine) {
     Tensor expertScales(DT_FP32, {batchSize, topK}, "expertScales");
     Tensor out(dType, {batchSize, hiddenSize}, "out");
 
-    FUNCTION("MoeDistributedCombineMain", {expandX, assistInfoForCombine, expertScales}, {out}) {
-        Distributed::MoeDistributedCombine(expandX, assistInfoForCombine, recvCounts, expertScales, group, epWorldSize,
-            moeExpertNum, 0, 0, out);
+    FUNCTION("MoeDistributedCombineMain", {expandX, assistInfoForCombine, recvCounts, expertScales}, {out}) {
+        func(expandX, assistInfoForCombine, recvCounts, expertScales, group, epWorldSize, moeExpertNum, 0, 0, out);
     }
 
-    auto functionRawName = MoeDistributedGetFunctionRawName("MoeDistributedCombine");
+    auto functionRawName = MoeDistributedGetFunctionRawName(loopName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
 }
+
+TEST_F(TestMoeDistributed, TestMoeDistributedCombine)
+{
+    TestMoeDistributedCombineFunc(Distributed::MoeDistributedCombine, "MoeDistributedCombine");
+}
+
+TEST_F(TestMoeDistributed, TestMoeDistributedCombineV2)
+{
+    TestMoeDistributedCombineFunc(Distributed::MoeDistributedCombineV2, "MoeDistributedCombineSend");
+}
+
 } // namespace npu::tile_fwk::Distributed
