@@ -1,0 +1,2 @@
+case_name,input_shape,input_dtype,input_format,input_datarange,output_shape,output_dtype,output_format,view_shape,tile_shape,batch_size,hidden_size,shared_expert_num,routed_expert_num,top_k,rank_size
+MoeDispatch_test_1,"[]","bfloat16","ND","[,]","[]","bfloat16","ND","[]","[]",8,5120,0,160,8,4

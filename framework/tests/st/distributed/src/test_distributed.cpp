@@ -229,6 +229,14 @@ TEST_P(DistributedTest, TestAllreduce)
     RunDistributedTestGeneric("Allreduce", GetParam().testData_);
 }
 
+INSTANTIATE_TEST_SUITE_P(TestMoeDispatch, DistributedTest,
+    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("MoeDispatch")));
+TEST_P(DistributedTest, TestMoeDispatch)
+{
+    config::SetHostOption(ONLY_CODEGEN, true);
+    RunDistributedTestGeneric("MoeDispatch", GetParam().testData_);
+}
+
 INSTANTIATE_TEST_SUITE_P(TestMoeDistributedCombine, DistributedTest,
     ::testing::ValuesIn(GetOpMetaData<OpMetaData>("MoeDistributedCombine")));
 TEST_P(DistributedTest, TestMoeDistributedCombine)

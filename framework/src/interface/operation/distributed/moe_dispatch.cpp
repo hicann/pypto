@@ -223,7 +223,8 @@ Tensor DispatchFFNCombineInfo(const char *group, const Tensor &tokenTensor,
     auto combineInfoPtr = std::make_shared<LogicalTensor>(function, DataType::DT_INT32, combineInfoShape);
     auto &oper = function.AddOperation(Opcode::OP_FFN_COMBINEINFO, {recvTokenCntOut.GetStorage(), shmemData.GetStorage(),
         shmemFlag.GetStorage()}, {combineInfoPtr});
-    int tempBufSize = (moeConfig.expertNumPerRank * ffnTileNum * 32 + 255) / 256 * 256 + 256 + (moeConfig.expertNumPerRank * ffnTileNum * 4 + 31) / 32 * 32;
+    int tempBufSize = AlignUp(moeConfig.expertNumPerRank * ffnTileNum * 32, 256) + 256 +
+        AlignUp(moeConfig.expertNumPerRank * ffnTileNum * 4, 32) + 512; // tempBufSize = recvTokenCnt数 + 存储mask + recvTokenCnt的int数 + 数据搬运
     std::string hcclGroupIndex = std::to_string(CommGroupRecorder::GetInstance().Input(std::string(group)));
     const std::vector<int64_t> bufferShape {tempBufSize};
     oper.SetAttr("hcclGroupIndex", hcclGroupIndex);
@@ -245,8 +246,9 @@ Tensor DispatchFFNBatching(const char *group, const Tensor &tokenTensor,
     auto expandXPtr = std::make_shared<LogicalTensor>(function, tokenTensor.GetDataType(), expandXShape);
     auto &oper = function.AddOperation(Opcode::OP_FFN_BATCHING, {recvTokenCntOut.GetStorage(), shmemData.GetStorage(),
         shmemFlag.GetStorage()}, {expandXPtr, validCntPtr});
-    int cumSumBuffer = (moeConfig.expertNumPerRank * ffnTileNum * 32 + 255) / 256 * 256 + 256 + (moeConfig.expertNumPerRank * ffnTileNum * 4 + 31) / 32 * 32;
-    int tokenCopyBuffer = tokenTensor.GetShape(1) + 512;
+    int cumSumBuffer = AlignUp(moeConfig.expertNumPerRank * ffnTileNum * 32, 256)
+        + 256 + AlignUp(moeConfig.expertNumPerRank * ffnTileNum * 4, 32) + 512; // tempBufSize = recvTokenCnt数 + 存储mask + recvTokenCnt的int数 + 数据搬运
+    int tokenCopyBuffer = tokenTensor.GetShape(1);
     int tempBufSize = (cumSumBuffer < tokenCopyBuffer) ? tokenCopyBuffer : cumSumBuffer;
     std::string hcclGroupIndex = std::to_string(CommGroupRecorder::GetInstance().Input(std::string(group)));
     const std::vector<int64_t> bufferShape {tempBufSize};
@@ -261,13 +263,14 @@ Tensor DispatchFFNBatching(const char *group, const Tensor &tokenTensor,
 Tensor DispatchFFNSched(const char *group, const Tensor &flagDummy, Tensor &shmemFlag, const MoeConfig &moeConfig, int32_t ffnTileCnt)
 {
     auto &function = *Program::GetInstance().GetCurrentFunction();
-    Shape shape = {RECEIVE_CNT_OUT_ROW, RECEIVE_CNT_OUT_COL};
+    int32_t totalTileNum = moeConfig.routedExpertNum * ffnTileCnt;
+    Shape shape = {totalTileNum, 512}; // 每个flag_count预留512个int存储
     auto recvTokenCntOutPtr = std::make_shared<LogicalTensor>(function, DataType::DT_INT32, shape);
     auto &oper = function.AddOperation(Opcode::OP_FFN_SCHED, {flagDummy.GetStorage(), shmemFlag.GetStorage()},
         {recvTokenCntOutPtr});
-    int32_t moeOpProcessRankSize = moeConfig.expertNumPerRank * ffnTileCnt;
+    int32_t moeOpProcessRankSize = ffnTileCnt;
     int32_t maxProcessRankSize = moeOpProcessRankSize;
-    int tempBufSize = maxProcessRankSize * 32 + 32 + (maxProcessRankSize * 4 + 31) / 32 * 32;
+    int tempBufSize = maxProcessRankSize * 32 + 256 + AlignUp(maxProcessRankSize * 4, 256);
     std::string hcclGroupIndex = std::to_string(CommGroupRecorder::GetInstance().Input(std::string(group)));
     oper.SetAttr("hcclGroupIndex", hcclGroupIndex);
     const std::vector<int64_t> bufferShape {tempBufSize / 8, 8};
@@ -303,7 +306,8 @@ void TiledSendToRoutingExpert(Function& function, const TileShape& tileShape,
             auto expertBufferUb = std::make_shared<LogicalTensor>(function, expertTable->Datatype(),
                 std::vector<int64_t>{1, expertTable->shape[0] * expertTable->shape[1]});
             auto expertBuffer = std::make_shared<LogicalTensor>(function, expertTable->Datatype(),
-                std::vector<int64_t>{1, expertTable->shape[0] * expertTable->shape[1] * 2});
+                std::vector<int64_t>{1, expertTable->shape[0] * expertTable->shape[1] *
+                (static_cast<int64_t>(sizeof(int32_t)) + 1)});
             auto tokenBuffer = std::make_shared<LogicalTensor>(function, tokenTensor->Datatype(), 
                 GetCommBufferSize(tokenTensor));
             auto &tileop = function.AddOperation(Opcode::OP_SEND_TO_ROUTING_EXPERT, {tokenTensor, shmemData, 
@@ -401,7 +405,8 @@ void TiledDispatchSetFlag(Function& function, const TileShape& tileShape,
             auto expertBufferUb = std::make_shared<LogicalTensor>(function, tokenExpertTable->Datatype(),
                 std::vector<int64_t>{1, tokenExpertTable->shape[0] * tokenExpertTable->shape[1]});
             auto expertBuffer = std::make_shared<LogicalTensor>(function, tokenExpertTable->Datatype(),
-                std::vector<int64_t>{1, tokenExpertTable->shape[0] * tokenExpertTable->shape[1] * 2});
+                std::vector<int64_t>{1, tokenExpertTable->shape[0] * tokenExpertTable->shape[1] *
+                (static_cast<int64_t>(sizeof(int32_t)) + 1)});
             auto shmemFlagTile = shmemFlag->View(function, {rankShape, expertShape, 1, flagColSize}, 
                 {rankOffset, expertOffset, 0, 0});
             auto &tileop = function.AddOperation(Opcode::OP_DISPATCH_SET_FLAG, {tokenExpertTable, shmemFlagTile, 
@@ -485,9 +490,9 @@ Tensor CreateShmem(int32_t rankSize, int32_t expertNumPerRank, int32_t shmemCol,
 
 std::tuple<int32_t, int32_t, int32_t> GetFFNTileParam(const MoeConfig &moeConfig)
 {
-    int32_t tileRankCnt = moeConfig.rankNum > AIV_MAX_NUM ? AIV_MAX_NUM : moeConfig.rankNum;
-    int32_t tileNum = tileRankCnt == AIV_MAX_NUM ? moeConfig.rankNum / AIV_MAX_NUM : 1;
-    int32_t tailNum = tileNum == 1 ? 0 : (moeConfig.rankNum % AIV_MAX_NUM == 0 ? 0 : 1);
+    int32_t tileRankCnt = moeConfig.rankNum > FFN_TILE_SIZE ? FFN_TILE_SIZE : moeConfig.rankNum;
+    int32_t tileNum = tileRankCnt == FFN_TILE_SIZE ? moeConfig.rankNum / FFN_TILE_SIZE : 1;
+    int32_t tailNum = tileNum == 1 ? 0 : (moeConfig.rankNum % FFN_TILE_SIZE == 0 ? 0 : 1);
     return {tileRankCnt, tileNum, tailNum};
 }
 
@@ -531,14 +536,14 @@ void MoeDispatch(const Tensor &tokenTensor, const Tensor &tokenExpertTable, Tens
     LOOP("L0", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
         (void) index;
         TileShape::Current().SetDistTile(
-            {batchSize, 1, 0},
-            {topK/2, 2, 0},
+            {1, batchSize, 0},
+            {topK, 1, 0},
             {moeConfig.rankNum, 1, 0});
         Tensor syncTensor = SendToRoutingExpert(shmemData, tokenTensor, tokenExpertTable, group, moeConfig);
         TileShape::Current().SetDistTile(
             {flagRow, 1, 0},
-            {1, moeConfig.rankNum, 0},
-            {moeConfig.expertNumPerRank, 1, 0});
+            {moeConfig.rankNum, 1, 0},
+            {1, moeConfig.expertNumPerRank, 0});
         auto localShmemFlag = View(shmemFlag, {moeConfig.rankNum, moeConfig.expertNumPerRank, 1, flagCol}, 
             {0, 0, thisRank, 0});
         Tensor flagDummy = DispatchSetFlag(localShmemFlag, tokenExpertTable, syncTensor, group, moeConfig);
