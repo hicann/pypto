@@ -116,7 +116,6 @@ def mla_indexer_prolog_quant_p(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale
 
     # 设置mla模块的优化参数
     pypto.set_pass_options(vec_nbuffer_mode=mla_tile_config.vec_nbuffer_mode,
-                           cube_l1_reuse_mode=mla_tile_config.cube_l1_reuse_mode,
                            cube_l1_reuse_setting=mla_tile_config.cube_l1_reuse_setting,
                            cube_nbuffer_setting=mla_tile_config.cube_nbuffer_setting,
                            mg_copyin_upper_bound=mla_tile_config.mg_copyin_upper_bound)
@@ -225,7 +224,6 @@ def mla_indexer_prolog_quant_d(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale
 
     # 设置mla模块的优化参数
     pypto.set_pass_options(vec_nbuffer_mode=mla_tile_config.vec_nbuffer_mode,
-                           cube_l1_reuse_mode=mla_tile_config.cube_l1_reuse_mode,
                            cube_l1_reuse_setting=mla_tile_config.cube_l1_reuse_setting,
                            cube_nbuffer_setting=mla_tile_config.cube_nbuffer_setting,
                            mg_copyin_upper_bound=mla_tile_config.mg_copyin_upper_bound)
