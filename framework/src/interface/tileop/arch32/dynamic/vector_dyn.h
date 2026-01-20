@@ -180,64 +180,6 @@ namespace TileOp {
 #undef T_UNA
 #undef V_UNA_FUNC
 
-constexpr uint32_t BF16_FP32_MAN_LEN = 16;
-
-// fp32->bf16, rint mode
-INLINE bfloat16_t Fp32ToBf16R(const float fVal) {
-    union Bfloat16Union {
-        bfloat16_t bVal;
-        uint16_t bNum;
-    } bf16Union = {};
-    union Float32Union {
-        float fVal;
-        uint32_t fNum;
-    } fp32Union = {};
-    fp32Union.fVal = fVal;
-    uint32_t x = fp32Union.fNum;
-    // 处理特殊值
-    uint32_t exp = x & 0x7F800000;
-    if (exp == 0x7F800000) { // NaN 或无穷大
-        bf16Union.bNum = static_cast<uint16_t>((x >> BF16_FP32_MAN_LEN) | 0x7F80);
-        return bf16Union.bVal;
-    }
-    if (exp == 0) { // 0或非规格化
-        bf16Union.bNum = static_cast<uint16_t>((x >> BF16_FP32_MAN_LEN) & 0x8000);
-        return bf16Union.bVal;
-    }
-    // RINT舍入
-    uint32_t lsb = (x >> BF16_FP32_MAN_LEN) & 1;
-    uint32_t rounding_bit = (x >> (BF16_FP32_MAN_LEN - 1)) & 1;
-    uint32_t sticky = x & 0x7FFF;
-
-    uint32_t round_up = 0;
-    if (rounding_bit) {
-        round_up = (sticky != 0) ? 1 : lsb;
-    }
-
-    uint32_t result = (x + (round_up << (BF16_FP32_MAN_LEN - 1))) >> BF16_FP32_MAN_LEN;
-    // 溢出检查
-    if ((result & 0x7F80) == 0x7F80) {
-        result = (result & 0x8000) | 0x7F80;
-    }
-    bf16Union.bNum = static_cast<uint16_t>(result);
-    return bf16Union.bVal;
-}
-
-// bf16->fp32
-INLINE float Bf16ToFp32(const bfloat16_t bVal) {
-    union Bfloat16Union {
-        bfloat16_t bVal;
-        uint16_t bNum;
-    } bf16Union = {};
-    union Float32Union {
-        float fVal;
-        uint32_t fNum;
-    } fp32Union = {};
-    bf16Union.bVal = bVal;
-    fp32Union.fNum = static_cast<uint32_t>(bf16Union.bNum) << BF16_FP32_MAN_LEN;
-    return fp32Union.fVal;
-}
-
 template <typename T, unsigned TShape0, unsigned TShape1, unsigned TShape2, unsigned srcRawShape1,
     unsigned srcRawShape2, unsigned axis0, unsigned axis1>
 TILEOP void DynTtransposeMoveOutBase(__gm__ T *dst, __ubuf__ T *src, unsigned dstShape1, unsigned dstShape2) {
@@ -2392,7 +2334,7 @@ TILEOP void IndexAddPublicTool(
     uint32_t repeatTime = TShape3 / rptElm;
     uint32_t remainElm = TShape3 % rptElm;
     if (repeatTime) {
-        if (static_cast<float>(alpha) != 1.0f) {
+        if (abs(static_cast<float>(alpha) - 1) > EPSILON) {
             vmuls(src + srcOffset, src + srcOffset, (T)alpha, repeatTime, 1, 1, 8, 8);
             pipe_barrier(PIPE_V);
             if constexpr (std::is_same_v<T2, bfloat16_t>) {
@@ -2413,7 +2355,7 @@ TILEOP void IndexAddPublicTool(
     }
     if (remainElm) {
         SetContinuousMask(remainElm);
-        if (static_cast<float>(alpha) != 1.0f) {
+        if (abs(static_cast<float>(alpha) - 1) > EPSILON) {
             vmuls(src + srcOffset + repeatTime * rptElm, src + srcOffset + repeatTime * rptElm, (T)alpha, 1, 1, 1, 8, 8);
             pipe_barrier(PIPE_V);
             if constexpr (std::is_same_v<T2, bfloat16_t>) {
@@ -2500,7 +2442,7 @@ TILEOP void IndexAddAxis3(__ubuf__ T *dst, __ubuf__ T *src, __ubuf__ T1 *indices
     uint64_t dstOffset = 0;
     uint64_t srcOffset = 0;
     // 乘法
-    if (static_cast<float>(alpha) != 1.0f) {
+    if (abs(static_cast<float>(alpha) - 1) > EPSILON) {
         for (uint32_t i = 0; i < TShape0; ++i) {
             for (uint32_t j = 0; j < TShape1; ++j) {
                 for (uint32_t k = 0; k < TShape2; ++k) {

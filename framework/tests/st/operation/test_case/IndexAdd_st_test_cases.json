@@ -1889,6 +1889,96 @@
                 "func_id": -1
             },
             "index": 24
+        },
+        {
+            "case_index": 25,
+            "case_name": "IndexAddNotInplace_test_25",
+            "operation": "IndexAdd",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        10,
+                        10,
+                        10,
+                        10,
+                        10
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -1,
+                        "max": 1
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        5,
+                        10,
+                        10,
+                        10,
+                        10
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                },
+                {
+                    "name": "input2",
+                    "shape": [
+                        5
+                    ],
+                    "dtype": "int64",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        10,
+                        10,
+                        10,
+                        10,
+                        10
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                10,
+                10,
+                10,
+                10,
+                10
+            ],
+            "tile_shape": [
+                10,
+                2,
+                8,
+                8,
+                8
+            ],
+            "params": {
+                "axis": 0,
+                "alpha": 1.2,
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 25
         }
     ]
 }
