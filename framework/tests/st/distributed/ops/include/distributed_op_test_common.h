@@ -23,6 +23,8 @@
 #include "test_common.h"
 #include "distributed_op_test_suite.h"
 #include "tileop/distributed/hccl_context.h"
+#include "tilefwk/tilefwk_op.h"
+#include "test_dev_func_runner.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {
@@ -107,6 +109,12 @@ bool CompareWithGolden(const DataType dType, const std::string &goldenFilename, 
             break;
     }
     return result;
+}
+
+inline void RunTestVerification() {
+    DeviceLauncherConfig config;
+    config.runModel = false;
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
 }
 
 enum class WinType : uint32_t {

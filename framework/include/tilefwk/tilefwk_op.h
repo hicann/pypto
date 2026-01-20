@@ -407,14 +407,21 @@ struct MoeConfig {
 void MoeDispatch(const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tensor& expandX, Tensor& validCnt,
     Tensor& combineInfo, const char *group, const MoeConfig& moeConfig);
 void AllGather(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
+void AllGather(const Tensor& predToken, const Tensor& in, const char* group, Tensor& shmemData,
+    Tensor &shmemSignal, Tensor &out);
 void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, uint32_t worldSize, Tensor& out);
 Tensor ShmemDataSet(const Tensor& predToken, const Tensor& shmemData);
 Tensor ShmemSignalSet(const Tensor& predToken, const Tensor& shmemSignal);
-void ReduceScatter(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, DistReduceType reduceType, Tensor& out);
+void ReduceScatter(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize,
+    DistReduceType reduceType, Tensor& out);
+void ReduceScatter(const Tensor& predToken, const Tensor& in, const char* group, Tensor& shmemData, Tensor& shmemSignal,
+    DistReduceType reduceType, Tensor& out);
 void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
-void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const Tensor& shmemData, const Tensor& shmemSignal,
-    const char* group, uint32_t worldSize, Tensor& out);
+void OneShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, Tensor& shmemData,
+    Tensor& shmemSignal, Tensor& out);
 void TwoShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
+void TwoShotAllReduce(const Tensor& predToken, const Tensor& in, const char* group, Tensor& shmemData,
+    Tensor& shmemSignal, Tensor& out);
 void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts,
     const Tensor& expertScales, const char* group, uint32_t epWorldSize, uint32_t moeExpertNum,
     uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& out);
