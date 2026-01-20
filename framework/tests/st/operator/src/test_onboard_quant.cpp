@@ -15,6 +15,7 @@
 
 #include "test_suite_stest_ops.h"
 #include "test_dev_func_runner.h"
+#include "test_cost_macro.h"
 
 using namespace npu::tile_fwk;
 constexpr int DIM2 = 2;
@@ -220,7 +221,7 @@ void TestQuantWithSmoothFactor(std::vector<int64_t>& inputShape) {
     EXPECT_EQ(ret0 && ret1, true);
 }
 
-TEST_F(QuantOnBoardTest, test_Quant_32_1_7168) {
+TEST_F_WITH_COST(QuantOnBoardTest, test_Quant_32_1_7168, 17) {
     std::vector<int64_t> inputShape = {32, 1, 7168};
     TestQuant(inputShape);
 }
@@ -351,7 +352,7 @@ void TestQuantMM3D(std::vector<int64_t>& shapeA, std::vector<int64_t>& shapeW) {
     EXPECT_EQ(ret, true);
 }
 
-TEST_F(QuantMMOnBoardTest, test_QuantMM_32_16384_times_16384_7168_np) {
+TEST_F_WITH_COST(QuantMMOnBoardTest, test_QuantMM_32_16384_times_16384_7168_np, 18) {
     std::vector<int64_t> shapeA = {32, 16384};
     std::vector<int64_t> shapeW = {16384, 7168};
     TestQuantMM(shapeA, shapeW);

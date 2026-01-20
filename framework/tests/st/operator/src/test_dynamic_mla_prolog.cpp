@@ -16,6 +16,7 @@
 #include "test_dev_func_runner.h"
 #include "test_suite_stest_ops.h"
 #include "operator/models/deepseek/dynamic_mla.h"
+#include "test_cost_macro.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -477,7 +478,7 @@ TEST_F(MlaPrologSTest, b32_s1_pa_nd_fp16_quant) {
     TestDynamicMlaProlog<npu::tile_fwk::float16, int8_t, false, true, true, false, true>(params, tileConfig, cacheMode);
 }
 
-TEST_F(MlaPrologSTest, b32_s2_pa_nd_fp16_quant) {
+TEST_F_WITH_COST(MlaPrologSTest, b32_s2_pa_nd_fp16_quant, 15) {
     // b, s, s2, n, h, qLoraRank, qkNopeHeadDim, qkRopeHeadDim, kvLoraRank, blockSize
     TestShapeParams params = {32, 2, 8192, 128, 7168, 1536, 128, 64, 512, 128};
     std::string cacheMode = "PA_BSND";

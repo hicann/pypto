@@ -25,6 +25,7 @@
 #include "machine/utils/dynamic/dev_encode.h"
 #include "operator/models/deepseek_v3.2_exp/lightning_indexer_prolog.h"
 #include "operator/models/deepseek_v3.2_exp/dsia_common.h"
+#include "test_cost_macro.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
@@ -197,7 +198,7 @@ TEST_F(LightningIndexerPrologSTest, bf16_indexer_prolog) {
     TesLightningIndexerProlog<npu::tile_fwk::bfloat16, true>(params);
 }
 
-TEST_F(LightningIndexerPrologSTest, b48_s1_1_s2_8k) {
+TEST_F_WITH_COST(LightningIndexerPrologSTest, b48_s1_1_s2_8k, 26) {
     RopeTileShapeConfig ropeTileConfigs = {
         {128, 256},
         { 32, 128, 128},
@@ -269,7 +270,7 @@ TEST_F(LightningIndexerPrologSTest, b40_s1_4_s2_8k) {
     TesLightningIndexerProlog<npu::tile_fwk::bfloat16, true>(params);
 }
 
-TEST_F(LightningIndexerPrologSTest, b4_s1_1_s2_64k) {
+TEST_F_WITH_COST(LightningIndexerPrologSTest, b4_s1_1_s2_64k, 26) {
     RopeTileShapeConfig ropeTileConfigs = {
         {128, 256},
         { 32, 128, 128},
