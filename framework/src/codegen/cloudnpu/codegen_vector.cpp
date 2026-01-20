@@ -677,11 +677,32 @@ std::string CodeGenOpCloudNPU::PrintIndexPut(const PrintIndexPutParam &param) co
     return PrintIndexPutDynamicUnaligned(param);
 }
 
+std::string CodeGenOpCloudNPU::PrintIndexPutLayout(size_t indicesSize, bool accumulate) const {
+    std::string gmVarName = GenGmParamVar(ID0);
+    std::string dstTensor = sm->QueryTileTensorByBufVarName(gmVarName);
+    std::string valuesTensor = QueryTileTensorNameByIdx(ID2);
+    std::vector<std::string> paramList = {dstTensor, valuesTensor};
+    for (size_t i = 0; i < SHAPE_DIM4; ++i) {
+        if (i < indicesSize) {
+            std::string indices = QueryTileTensorNameByIdx(ID3 + i);
+            paramList.push_back(indices);
+        } else {
+            paramList.push_back(paramList.back());
+        }
+    }
+    std::ostringstream oss;
+    oss << tileOpName << "<" << accumulate << ", " << indicesSize << ">" << WrapParamByParentheses(paramList) << ";\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::GenIndexPutOp() const {
     ASSERT(opAttrs.count(OpAttributeKey::accumulate)) << "cannot get accumulate attr";
     ASSERT(opAttrs.count(OpAttributeKey::indicesSize)) << "cannot get indicesSize attr";
     bool accumulate = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OpAttributeKey::accumulate));
     int64_t indicesSize = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OpAttributeKey::indicesSize));
+    if (isSupportLayout) {
+        return PrintIndexPutLayout(indicesSize, accumulate);
+    }
     // dst:gm, s0/self:gm, s1/values:ub, s2/indices:ub
     std::string dstVar = GenGmParamVar(ID0);
     std::string s1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
