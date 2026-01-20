@@ -46,6 +46,8 @@ private:
     Status ProcessAxis(Operation &op, std::vector<bool> attr, bool isInput) const;
     void SetNeedAllocAttr(Function &function);
     std::string DumpOpList(Function &function);
+    bool combineAxis{false};
+    bool forceCombineAxis{false};
 };
 
 } // namespace tile_fwk

@@ -48,6 +48,10 @@
         "compile_debug_mode": 0,
         "runtime_debug_mode": 0
     },
+    "operation": {
+        "force_combine_axis" : false,
+        "combine_axis" : false
+    },
     "global": {
         "platform": {
             "enable_cost_model": false,

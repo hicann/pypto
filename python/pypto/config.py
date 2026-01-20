@@ -284,7 +284,7 @@ def get_verify_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]
         All verify options
     """
     scope = get_current_scope()
-    return scope.get_runtime_options()
+    return scope.get_verify_options()
 
 
 def set_debug_options(*,
@@ -346,7 +346,8 @@ class _Options:
     INIT_FIELDS = [
         "name", "codegen_options", "host_options", "pass_options",
         "runtime_options", "verify_options", "debug_options",
-        "vec_tile_shapes", "cube_tile_shapes", "matrix_size"
+        "vec_tile_shapes", "cube_tile_shapes", "matrix_size",
+        "operation_options"
     ]
 
     PREFIX_MAP = {
@@ -356,6 +357,7 @@ class _Options:
         "runtime_options": "runtime.",
         "verify_options": "verify.",
         "debug_options": "debug.",
+        "operation_options": "operation."
     }
 
     def __init__(self, **kwargs):
@@ -423,6 +425,7 @@ def options(
     pass_options=None,
     runtime_options=None,
     verify_options=None,
+    operation_options=None,
     debug_options=None,
     vec_tile_shapes=None,
     cube_tile_shapes=None,
@@ -440,6 +443,7 @@ def options(
     runtime_options: Runtime options (dict)
     verify_options: Verify options (dict)
     debug_options: Debug options (dict)
+    operation_options: Operation options (dict)
     vec_tile_shapes: Vector tile shapes (list)
     cube_tile_shapes: Cube tile shapes (CubeTile instance or list)
     matrix_size: Matrix size (list)
@@ -488,6 +492,7 @@ def set_options(
     runtime_options=None,
     verify_options=None,
     debug_options=None,
+    operation_options=None,
     vec_tile_shapes=None,
     cube_tile_shapes=None,
     matrix_size=None,
@@ -503,6 +508,7 @@ def set_options(
     runtime_options: Runtime options (dict)
     verify_options: Verify options (dict)
     debug_options: Debug options (dict)
+    operation_options: Operation options (dict)
     vec_tile_shapes: Vector tile shapes (list)
     cube_tile_shapes: Cube tile shapes (CubeTile instance or list)
     matrix_size: Matrix size (list)
@@ -619,6 +625,9 @@ class ConfigScope:
 
     def get_verify_options(self):
         return self.get_options("verify")
+
+    def get_operation_options(self):
+        return self.get_options("operation")
 
     def get_vec_tile_shapes(self):
         return self._options.get("vec_tile_shapes")

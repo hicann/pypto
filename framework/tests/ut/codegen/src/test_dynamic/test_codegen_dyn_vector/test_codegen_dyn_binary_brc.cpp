@@ -47,7 +47,7 @@ public:
 
 // mul (32, 512), (32, 1)
 TEST_F(TestCodegenDynBinaryBrc, TestMulDynamic) {
-    config::SetOperationConfig(KEY_FORCE_COMBINE_AXIS, true);
+    config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, true);
     std::vector<int64_t> shape1 = {32, 512};
     std::vector<int64_t> shape2 = {32, 1};
     TileShape::Current().SetVecTile({32, 256});

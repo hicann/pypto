@@ -13,6 +13,7 @@ from typing import List, Union, Dict, Optional
 from . import pypto_impl
 from ._op_wrapper import op_wrapper
 from .tensor import Tensor
+from .config import get_current_scope, set_options
 
 
 @op_wrapper
@@ -141,10 +142,9 @@ def set_operation_config(*, force_combine_axis: Optional[bool] = None,
     combine_axis : bool
         Codegen forced axis fusion optimization.
     """
-    if force_combine_axis is not None:
-        pypto_impl.SetOperationConfig("force_combine_axis", force_combine_axis)
-    if combine_axis is not None:
-        pypto_impl.SetOperationConfig("combine_axis", combine_axis)
+
+    options_dict = {k: v for k, v in locals().items() if v is not None}
+    set_options(operation_options=options_dict)
 
 
 def get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
@@ -156,7 +156,6 @@ def get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int
     Dict[str, Union[str, int, List[int], Dict[int, int]]]
         All operation config
     """
-    return {
-        "force_combine_axis": pypto_impl.GetOperationConfig("force_combine_axis", False),
-        "combine_axis": pypto_impl.GetOperationConfig("combine_axis", False),
-    }
+
+    scope = get_current_scope()
+    return scope.get_operation_options()

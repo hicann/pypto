@@ -105,7 +105,7 @@ Status CodegenPreproc::ProcessAxis(Operation &op, std::vector<bool> attr, bool i
             CombineTailAxis(operands[i]->shape, shapeSize);
             CombineTailAxis(operands[i]->oriShape, shapeSize);
             CombineTailAxis(operands[i]->tensor->rawshape, shapeSize);
-            if (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false)) {
+            if (forceCombineAxis) {
                 CombineLastAxis(operands[i]->dynValidShape_, shapeSize);
             }
         }
@@ -237,6 +237,8 @@ void CodegenPreproc::SetNeedAllocAttr(Function &function) {
 }
 
 Status CodegenPreproc::RunOnFunction(Function &function) {
+    combineAxis = function.paramConfigs_.combineAxis;
+    forceCombineAxis = function.paramConfigs_.forceCombineAxis;
     APASS_LOG_INFO_F(Elements::Operation, "===============================================================> Start CodegenPreproc.");
     for (auto &op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_VIEW_TYPE) {
@@ -248,7 +250,7 @@ Status CodegenPreproc::RunOnFunction(Function &function) {
         return FAILED;
     }
 
-    if (ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false)) {
+    if (combineAxis) {
         if (ForceCombineAxisForAxisCombine(function) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "CodegenPreproc RunOnFunction failed at function ForceCombineAxisForAxisCombine.");
             return FAILED;

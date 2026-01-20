@@ -297,7 +297,7 @@ Tensor Amax(const Tensor &self, int axis, bool keepDim) {
 
     Tensor result(self.GetStorage()->tensor->datatype, resultShape);
     int shapeSize = static_cast<int>(resultShape.size());
-    if (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) && axis == shapeSize - 1 &&
+    if (config::GetOperationOption<bool>(KEY_FORCE_COMBINE_AXIS) && axis == shapeSize - 1 &&
         shapeSize >= NUM2) {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "MAX_COMBINE_AXIS", self, result, axis);
     } else {
@@ -336,7 +336,7 @@ Tensor Amin(const Tensor &self, int axis, bool keepDim) {
 
     Tensor result(self.GetStorage()->tensor->datatype, resultShape);
     int shapeSize = static_cast<int>(resultShape.size());
-    if (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) && axis == shapeSize - 1 &&
+    if (config::GetOperationOption<bool>(KEY_FORCE_COMBINE_AXIS) && axis == shapeSize - 1 &&
         shapeSize >= NUM2 &&
         (resultShape[shapeSize - NUM2] % NUM_VALUE_8 == 0 && vecTile[vecTile.size() - NUM2] % NUM_VALUE_8 == 0)) {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "MIN_COMBINE_AXIS", self, result, axis);
@@ -376,7 +376,7 @@ Tensor Sum(const Tensor &self, int axis, bool keepDim) {
 
     Tensor result(self.GetStorage()->tensor->datatype, resultShape);
     int shapeSize = static_cast<int>(resultShape.size());
-    if (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) && axis == shapeSize - 1 &&
+    if (config::GetOperationOption<bool>(KEY_FORCE_COMBINE_AXIS) && axis == shapeSize - 1 &&
         shapeSize >= NUM2) {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "SUM_COMBINE_AXIS", self, result, axis);
     } else {

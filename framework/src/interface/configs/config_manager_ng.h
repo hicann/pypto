@@ -98,6 +98,14 @@ public:
     }
 
     /**
+     * \brief Get operation config (prefix: "operation.")
+     */
+    template <typename T>
+    T GetOperationConfig(const std::string &key) const {
+        return GetConfigAllType<T>("operation." + key);
+    }
+
+    /**
      * \brief Retrieves the CubeTile configuration.
      */
     CubeTile GetCubeTile() const {
@@ -327,6 +335,7 @@ DEFINE_CONFIG_GROUP(Runtime, "runtime")
 DEFINE_CONFIG_GROUP(Host, "host")
 DEFINE_CONFIG_GROUP(Verify, "verify")
 DEFINE_CONFIG_GROUP(Debug, "debug")
+DEFINE_CONFIG_GROUP(Operation, "operation")
 
 } // namespace config
 

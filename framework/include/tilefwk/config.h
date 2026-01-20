@@ -107,6 +107,17 @@ void SetVerifyOption(const std::string &key, const T &value) {
 }
 
 /**
+ * \brief Set Operation options
+ *
+ * \param key config option key
+ * \param value config option value
+ */
+template <typename T>
+void SetOperationOption(const std::string &key, const T &value) {
+    SetOptionsNg("operation." + key, value);
+}
+
+/**
  * \brief Set tensor print options
  *
  * \param edgeItems print max items in tensor head and tail

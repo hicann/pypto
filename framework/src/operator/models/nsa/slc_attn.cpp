@@ -50,7 +50,7 @@ void SlcAttnCompute(const Tensor &qNope, const Tensor &qRope, const Tensor &kSlc
     // config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * 1024 * 1024);
     // config::SetPassOption(SG_PG_UPPER_BOUND, 100000);
     // config::SetPassOption(SG_PARALLEL_NUM, 2);
-    // config::SetOperationConfig(KEY_FORCE_COMBINE_AXIS, true);
+    // config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, true);
 
     SymbolicScalar batchSizeSym = kvSlcActSeqs.GetShape()[0]; // b
     SymbolicScalar s1N2GSym = qNope.GetShape()[0] / batchSizeSym; // s1n2

@@ -60,6 +60,8 @@ private:
     bool IsInputInt8(const Operation &op, const LogicalTensorPtr &in) const;
     bool processTranspose_;
     std::unordered_map<int64_t, int64_t> broadcastLastAxis_;
+    bool combineAxis{false};
+    bool forceCombineAxis{false};
 };
 } // namespace
 #endif  // PAD_LOCAL_BUFFER_H

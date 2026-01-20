@@ -60,7 +60,7 @@ void SelectedAttentionCompute(Tensor &topKIndcies, Tensor &kvNopeCache, Tensor &
     // config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * 1024 * 1024);
     // config::SetPassOption(SG_PG_UPPER_BOUND, 100000);
     // config::SetPassOption(PG_PARALLEL_LOWER_BOUND, 2);
-    // config::SetOperationConfig(KEY_FORCE_COMBINE_AXIS, true);
+    // config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, true);
 
     SymbolicScalar batchSizeSym = topKIndcies.GetShape()[0]; // b
     SymbolicScalar s1N2GSym = qNope.GetShape()[0] / batchSizeSym; // s1n2

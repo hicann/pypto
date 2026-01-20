@@ -669,7 +669,7 @@ TEST_F(OperationImplTest, test_Add_Brcb) {
     Tensor input0(DT_FP32, {16, 16}, "input0");
     Tensor input1(DT_FP32, {16, 1}, "input0");
     Tensor result;
-    config::SetOperationConfig(KEY_COMBINE_AXIS, true);
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
     FUNCTION("TestAddBrcb") {
         result = Add(input0, input1);
     }

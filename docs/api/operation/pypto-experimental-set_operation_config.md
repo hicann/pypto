@@ -34,7 +34,7 @@ void：Set方法无返回值。设置操作成功即生效。
 
 -   使用场景：尾轴broadcast输入尾轴必须是连续的，否则功能失效。如果前序节点是尾轴reduce，reduce接口能够保证；如果前序节点是COPY_IN，需要在前端保证在gm连续。
 -   类型安全：必须确保传入的value的类型与参数定义的类型完全一致，否则可能导致未定义行为或运行时错误。
--   作用范围：参数设置是全局性的，会影响后续所有的编译过程。
+-   作用范围：参数设置是局部的，只会影响当前jit/loop内的编译过程，若未设置，则继承上层jit/loop作用域中的设置。
 
 ## 调用示例
 
@@ -42,4 +42,3 @@ void：Set方法无返回值。设置操作成功即生效。
 pypto.set_operation_config(combine_axis=True)
 pypto.set_operation_config(force_combine_axis=False)
 ```
-

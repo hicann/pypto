@@ -134,8 +134,8 @@ void TiledBinaryOperation(Function &function, const TileShape &tileShape, Logica
     LogicalTensorPtr operand2, const LogicalTensorPtr &result) {
     CheckBinOpOperandsValid(operand1, operand2);
     bool withBrc = CallBrcBinOp(operand1, operand2) &&
-                   (ConfigManager::Instance().GetOperationConfig(KEY_FORCE_COMBINE_AXIS, false) ||
-                       ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false));
+                   (function.paramConfigs_.forceCombineAxis ||
+                       function.paramConfigs_.combineAxis);
     // nolast brc will be inline
     if (!withBrc) {
         if (operand1->shape != result->shape) {
@@ -159,7 +159,7 @@ void TiledBinaryOperation(Function &function, const TileShape &tileShape, Logica
     auto input1 = LogicalInput{operand1, tileInfo1};
     auto input2 = LogicalInput{operand2, tileInfo2};
     // 如果使能了Combine Axis逻辑，需要将withbrc置为false，避免后续走OP_XX_BRC逻辑
-    if (ConfigManager::Instance().GetOperationConfig(KEY_COMBINE_AXIS, false)) {
+    if (function.paramConfigs_.combineAxis) {
         withBrc = false;
     }
     TiledBinaryOperation<T>(function, tileShape, 0, input1, input2, result, resultTileInfo, withBrc);
