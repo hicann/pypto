@@ -249,6 +249,14 @@ INLINE uint64_t getCoreFuncionData(__gm__ KernelArgs *args, int64_t lastFunc) {
     uint64_t t0 = get_sys_cnt();
     uint64_t loop_count = 0;
     while (true) {
+        if (lastFunc) {
+            volatile __gm__ int64_t *waveBuffer = args->waveBufferCpuToCore;
+            dcci(waveBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
+            if (*waveBuffer == AICORE_SAY_GOODBYE) {
+                return 0;
+            }
+        }
+
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > 500000000)) {
             SetStatus(args, STAGE_GET_COREFUNC_DATA_TIMEOUT);
@@ -335,7 +343,7 @@ INLINE void ExecCoreFunctionKernel(ExecuteContext *ctx, uint32_t curTaskIdx) {
 INLINE void WaitWaveSignal(__gm__ KernelArgs *args) {
     uint64_t t2 = get_sys_cnt();
     volatile __gm__ int64_t *waveBuffer = args->waveBufferCpuToCore;
-    while (true) {         
+    while (true) {
         dcci(waveBuffer, SINGLE_CACHE_LINE, CACHELINE_OUT);
         if (*waveBuffer == AICORE_SAY_GOODBYE) {
             return;

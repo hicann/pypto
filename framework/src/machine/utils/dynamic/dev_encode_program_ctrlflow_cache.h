@@ -271,16 +271,7 @@ struct DevProgramControlFlowCache {
         if (outputTensorDataList.size() != startArgs->outputTensorSize) {
             return false;
         }
-        for (size_t k = 0; k < inputTensorDataList.size(); k++) {
-            if (!inputTensorDataList[k].shape.Equal(startArgs->GetInputTensor(k).shape)) {
-                return false;
-            }
-        }
-        for (size_t k = 0; k < outputTensorDataList.size(); k++) {
-            if (!outputTensorDataList[k].shape.Equal(startArgs->GetOutputTensor(k).shape)) {
-                return false;
-            }
-        }
+        // support infer controlflow cache now, cached shape and realshape may not match now
         return true;
     }
 

@@ -137,14 +137,17 @@ def test_device_run_data_from_device():
     n, m = tiling * 1, tiling * 1
 
     # prepare data
-    a_rawdata = torch.tensor([[k * 100 + v for v in range(m)] for k in range(n)])
+    a_rawdata = torch.tensor(
+        [[k * 100 + v for v in range(m)] for k in range(n)])
     a_data = a_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
     b_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
     # def inputs and outputs
     inputs = [a_data]
     outputs = [b_data]
-    pto_inputs = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
-    pto_outputs = [pypto.from_torch(tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
+    pto_inputs = [pypto.from_torch(
+        tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
+    pto_outputs = [pypto.from_torch(
+        tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
     cust_dyn_func(pto_inputs[0], pto_outputs[0], tiling)
 
     torch_npu.npu.synchronize()
@@ -156,7 +159,8 @@ def test_device_run_data_from_device():
     b_data_list = [c for r in b_data_cpu.tolist() for c in r]
     assert b_data_list == [v * 11 for v in a_data_list]
 
-    c_rawdata = torch.tensor([[k * 1000 + v for v in range(m)] for k in range(n)])
+    c_rawdata = torch.tensor(
+        [[k * 1000 + v for v in range(m)] for k in range(n)])
     c_data = a_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
     d_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
     pto_inputs = [pypto.from_torch(c_data, f"IN")]
@@ -177,7 +181,8 @@ def matmul_add(in_tensor0, in_tensor1, in_tensor2, out_tensor, m, k, n, tiling=N
     c = in_tensor2
     d = out_tensor
     pypto.set_vec_tile_shapes(tiling, tiling)
-    pypto.set_cube_tile_shapes([tiling, tiling], [tiling, tiling], [tiling, tiling])
+    pypto.set_cube_tile_shapes(
+        [tiling, tiling], [tiling, tiling], [tiling, tiling])
     for _ in pypto.loop(1, name="s0", idx_name="i"):
         a0 = pypto.view(a, [n, k], [0, 0])
         b0 = pypto.view(b, [k, m], [0, 0])
@@ -207,15 +212,19 @@ def test_device_run_data_from_device_mix_nodep():
         c_data = c_rawdata.to(dtype=torch.int32, device=f'npu:{device_id}')
         c_data_list.append(c_data)
 
-        d_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
+        d_data = torch.zeros((n, m), dtype=torch.int32,
+                             device=f'npu:{device_id}')
         d_data_list.append(d_data)
 
         # def inputs and outputs
         inputs = [a_data, b_data, c_data]
         outputs = [d_data]
-        pto_inputs = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
-        pto_outputs = [pypto.from_torch(tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
-        matmul_add(pto_inputs[0], pto_inputs[1], pto_inputs[2], pto_outputs[0], m, k, n, tiling=tiling)
+        pto_inputs = [pypto.from_torch(
+            tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
+        pto_outputs = [pypto.from_torch(
+            tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
+        matmul_add(pto_inputs[0], pto_inputs[1], pto_inputs[2],
+                   pto_outputs[0], m, k, n, tiling=tiling)
 
     torch_npu.npu.synchronize()
 
@@ -223,3 +232,51 @@ def test_device_run_data_from_device_mix_nodep():
         # get data and compare result
         d_data_inlist = [c for r in d_data_list[idx].cpu().tolist() for c in r]
         assert d_data_inlist == [k + idx] * len(d_data_inlist)
+
+
+class InferControlflowShape:
+
+    def __init__(self):
+        s = 32
+        self.b_vec = [1024, 128, 64, 32]
+        self.cache_shapes = {b: [(b, s), (b, s), (b, s)] for b in self.b_vec}
+
+    def __call__(self, *args):
+        if not args:
+            return list(self.cache_shapes.values())
+        for b in self.b_vec:
+            if args[0][0] >= b:
+                return self.cache_shapes[b]
+        raise ValueError(f"invalid shape {args[0]}")
+
+
+@pypto.jit(
+    host_options={"only_codegen": True},
+    infer_controlflow_shape=InferControlflowShape()
+)
+def infer_shape_kenrel(a, b, c):
+    pypto.set_vec_tile_shapes(16, 16)
+    for i in pypto.loop(0, a.shape[0], 32):
+        ta = a[i: i + 32, :]
+        tb = b[i: i + 32, :]
+        c[i:, 0:] = ta + tb
+
+
+def test_infer_shape():
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
+
+    device = f'npu:{device_id}'
+    for b in [2048, 1024, 512, 256, 128, 64, 32]:
+        a = torch.randn((b, 32), device=device)
+        b = torch.randn((b, 32), device=device)
+        c = torch.zeros_like(a, device=device)
+        g = a + b
+
+        infer_shape_kenrel(
+            pypto.from_torch(a, dynamic_axis=[0]),
+            pypto.from_torch(b, dynamic_axis=[0]),
+            pypto.from_torch(c, dynamic_axis=[0]),
+        )
+        torch.npu.synchronize()
+        torch.testing.assert_close(c, g)
