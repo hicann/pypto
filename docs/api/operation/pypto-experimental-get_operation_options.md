@@ -1,4 +1,4 @@
-# pypto.experimental.get\_operation\_config
+# pypto.experimental.get\_operation\_options
 
 ## 产品支持情况
 
@@ -14,7 +14,7 @@
 ## 函数原型
 
 ```python
-get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
+get_operation_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
 ```
 
 ## 参数说明
@@ -32,6 +32,6 @@ get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]
 ## 调用示例
 
 ```python
-pypto.get_operation_config()
+pypto.get_operation_options()
 ```
 

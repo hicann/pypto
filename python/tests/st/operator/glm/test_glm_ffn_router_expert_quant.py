@@ -403,7 +403,7 @@ def moe_router_expert_main(hidden_states, hidden_states_scale,
         This function uses cube L1 reuse mode 2 for better memory efficiency.
         Each expert processes tokens in tiles of size 8.
     """
-    pypto.experimental.set_operation_config(combine_axis=True)
+    pypto.experimental.set_operation_options(combine_axis=True)
 
     # tiling config
     mm1_cube_tile_shape = (8, 256, 256)

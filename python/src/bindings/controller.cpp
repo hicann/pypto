@@ -331,18 +331,6 @@ void bind_controller_scope_classes(py::module &m) {
     .def("__str__",  [](const CubeTile &t) { return t.ToString(); });
 }
 
-
-void bind_operation_config(py::module &m) {
-    m.def("GetOperationConfig", [](const std::string &key, const bool &default_value) -> py::object {
-        bool result = ConfigManager::Instance().GetOperationConfig<bool>(key, default_value);
-        return py::cast(result);
-    }, py::arg("key"), py::arg("default_value"));
-
-    m.def("SetOperationConfig", [](const std::string &key, const bool &value) {
-            config::SetOperationConfig<bool>(key, value);
-        }, py::arg("key"), py::arg("value"));
-}
-
 void bind_controller(py::module &m) {
     bind_controller_config(m);
     bind_controller_set_tile(m);
@@ -351,7 +339,6 @@ void bind_controller(py::module &m) {
     bind_controller_utils(m);
     bind_controller_scope(m);
     bind_controller_scope_classes(m);
-    bind_operation_config(m);
 
     // disable cpp mode
     SourceLocation::SetCppMode(false);

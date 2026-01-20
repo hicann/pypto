@@ -292,7 +292,7 @@ def sparse_attention_antiquant_d(query_nope, query_rope, nope_cache, topk_indice
         Configured for decode phase with optimized memory and parallelism settings.
         Uses flash attention algorithm for better numerical stability.
     """
-    pypto.experimental.set_operation_config(combine_axis=True)
+    pypto.experimental.set_operation_options(combine_axis=True)
     sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices, 
                                             block_table, kv_act_seqs, attention_out, 
                                             nq, n_kv, softmax_scale, topk, block_size, 
@@ -348,7 +348,7 @@ def sparse_attention_antiquant_p(query_nope, query_rope, nope_cache, topk_indice
         Configured for decode phase with optimized memory and parallelism settings.
         Uses flash attention algorithm for better numerical stability.
     """
-    pypto.experimental.set_operation_config(combine_axis=True)
+    pypto.experimental.set_operation_options(combine_axis=True)
     sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_indices, 
                                             block_table, kv_act_seqs, attention_out, 
                                             nq, n_kv, softmax_scale, topk, block_size, 

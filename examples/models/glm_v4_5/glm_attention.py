@@ -316,7 +316,7 @@ def ifa_func(q_shape, kv_shape, block_table_shape):
     ):
 
         # 1. 添加支持动态的config
-        pypto.experimental.set_operation_config(combine_axis=True)
+        pypto.experimental.set_operation_options(combine_axis=True)
 
         atten_cfg, tile_cfg = get_qwen_common_config()
         softmax_scale = atten_cfg.softmax_scale

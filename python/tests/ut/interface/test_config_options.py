@@ -11,7 +11,7 @@
 """
 """
 import pypto
-from pypto.experimental import set_operation_config, get_operation_config
+from pypto.experimental import set_operation_options, get_operation_options
 
 
 def test_print_options():
@@ -60,11 +60,11 @@ def test_reset_option():
 
 
 def test_operation_option():
-    set_operation_config(force_combine_axis=True)
-    option = get_operation_config()
+    set_operation_options(force_combine_axis=True)
+    option = get_operation_options()
     assert option["force_combine_axis"] == True
-    set_operation_config(combine_axis=True)
-    option = get_operation_config()
+    set_operation_options(combine_axis=True)
+    option = get_operation_options()
     assert option["combine_axis"] == True
 
 

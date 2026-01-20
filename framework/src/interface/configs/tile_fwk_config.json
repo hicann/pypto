@@ -70,8 +70,6 @@
         "host": {
             "strategy": "PVC2_OOO"
         },
-        "device": {},
-        "core": {},
         "simulation": {
             "debug_single_func": false,
             "leaf_function": "DEBUG_LEAF_FUNC",
@@ -100,11 +98,6 @@
             "codegen_support_tile_tensor": true,
             "codegen_need_compile": true
         },
-        "operation": {
-            "force_combine_axis" : false,
-            "combine_axis" : false
-        },
-        "distributed": {},
         "pass": {
             "enable_binary_cache": false,
             "enable_pass_configs": true,

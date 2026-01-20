@@ -129,11 +129,11 @@ def transposed_batchmatmul(tensor_a: Tensor, tensor_b: Tensor, out_dtype) -> Ten
     return pypto_impl.TransposedBatchMatmul(out_dtype, tensor_a, tensor_b)
 
 
-def set_operation_config(*, force_combine_axis: Optional[bool] = None,
+def set_operation_options(*, force_combine_axis: Optional[bool] = None,
                          combine_axis: Optional[bool] = None):
 
     """
-    Set operation config.
+    Set operation options.
 
     Parameters
     ---------
@@ -147,14 +147,14 @@ def set_operation_config(*, force_combine_axis: Optional[bool] = None,
     set_options(operation_options=options_dict)
 
 
-def get_operation_config() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
+def get_operation_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
     """
-    Get operation config.
+    Get operation options.
 
     Returns
     -------
     Dict[str, Union[str, int, List[int], Dict[int, int]]]
-        All operation config
+        All operation options
     """
 
     scope = get_current_scope()

@@ -146,7 +146,7 @@ def moe_fusion_kernel(shapes, renormalize, topk_group, num_expert_group):
         ne = mm_weight.shape[0]
         topk = ids_k.shape[1]
 
-        pypto.experimental.set_operation_config(combine_axis=True)
+        pypto.experimental.set_operation_options(combine_axis=True)
 
         # tiling config
         vec_tile_shape = (4, 5120)

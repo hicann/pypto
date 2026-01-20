@@ -417,6 +417,29 @@
                 }
             }
         },
+        "operation": {
+            "type": "object",
+            "label": {
+                "zh": "...",
+                "en": "..."
+            },
+            "properties": {
+                "force_combine_axis": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                },
+                "combine_axis": {
+                    "type": "boolean",
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
+                }
+            }
+        },
         "global": {
             "type": "object",
             "label": {
@@ -786,29 +809,6 @@
                             "label": {
                                 "zh": "是否需要将生成的设备侧代码编译为二进制",
                                 "en": "Whether it is necessary to compile the generated device-side code into binaries"
-                            }
-                        }
-                    }
-                },
-                "operation": {
-                    "type": "object",
-                    "label": {
-                        "zh": "...",
-                        "en": "..."
-                    },
-                    "properties": {
-                        "force_combine_axis": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "combine_axis": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
                             }
                         }
                     }

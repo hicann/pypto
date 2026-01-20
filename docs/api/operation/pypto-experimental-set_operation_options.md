@@ -1,4 +1,4 @@
-# pypto.experimental.set\_operation\_config
+# pypto.experimental.set\_operation\_options
 
 ## 产品支持情况
 
@@ -14,7 +14,7 @@
 ## 函数原型
 
 ```python
-set_operation_config(*, force_combine_axis: Optional[bool] = None,
+set_operation_options(*, force_combine_axis: Optional[bool] = None,
                       combine_axis: Optional[bool] = None)
 ```
 
@@ -39,6 +39,6 @@ void：Set方法无返回值。设置操作成功即生效。
 ## 调用示例
 
 ```python
-pypto.set_operation_config(combine_axis=True)
-pypto.set_operation_config(force_combine_axis=False)
+pypto.set_operation_options(combine_axis=True)
+pypto.set_operation_options(force_combine_axis=False)
 ```

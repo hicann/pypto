@@ -169,15 +169,6 @@ public:
         return GetConfig(json_, {"global", "host", key}, defaultValue);
     }
 
-    template <typename T>
-    auto GetDeviceConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global", "device", key}, defaultValue);
-    }
-
-    template <typename T>
-    auto GetCoreConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global", "core", key}, defaultValue);
-    }
 
     template <typename T>
     auto GetSimConfig(const std::string &key, const T &defaultValue) {
@@ -187,11 +178,6 @@ public:
     template <typename T>
     auto GetCodeGenConfig(const std::string &key, const T &defaultValue) {
         return GetConfig(json_, {"global", "codegen", key}, defaultValue);
-    }
-
-    template <typename T>
-    auto GetDistConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global", "distributed", key}, defaultValue);
     }
 
     template <typename T>
@@ -233,39 +219,14 @@ public:
     }
 
     template <typename T>
-    void SetDeviceConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global", "device", key}, value);
-    }
-
-    template <typename T>
-    void SetCoreConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global", "core", key}, value);
-    }
-
-    template <typename T>
     void SetSimConfig(const std::string &key, const T &value) {
         SetConfig(json_, {"global", "simulation", key}, value);
-    }
-
-    template <typename T>
-    void SetDistConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global", "distributed", key}, value);
     }
 
     template <typename T>
     void SetPassConfig(
         const std::string &strategy, const std::string &identifier, const std::string &key, const T &value) {
         SetConfig(json_, {"global", "pass_strategies", strategy, identifier, key}, value);
-    }
-
-    template <typename T>
-    auto GetOperationConfig(const std::string &key, const T &defaultValue) {
-        return GetConfig(json_, {"global", "operation", key}, defaultValue);
-    }
-
-    template <typename T>
-    void SetOperationConfig(const std::string &key, const T &value) {
-        SetConfig(json_, {"global", "operation", key}, value);
     }
 
     template <typename T>
@@ -332,15 +293,6 @@ auto GetHostConfig(const std::string &key, const T &defaultValue) {
     return ConfigManager::Instance().GetHostConfig(key, defaultValue);
 }
 
-template <typename T>
-auto GetDeviceConfig(const std::string &key, const T &defaultValue) {
-    return ConfigManager::Instance().GetDeviceConfig(key, defaultValue);
-}
-
-template <typename T>
-auto GetCoreConfig(const std::string &key, const T &defaultValue) {
-    return ConfigManager::Instance().GetCoreConfig(key, defaultValue);
-}
 
 template <typename T>
 auto GetPassConfig(
@@ -389,21 +341,6 @@ void SetHostConfig(const std::string &key, const T &value) {
 }
 
 template <typename T>
-void SetDeviceConfig(const std::string &key, const T &value) {
-    ConfigManager::Instance().SetDeviceConfig(key, value);
-}
-
-template <typename T>
-void SetCoreConfig(const std::string &key, const T &value) {
-    ConfigManager::Instance().SetCoreConfig(key, value);
-}
-
-template <typename T>
-void SetDistConfig(const std::string &key, const T &value) {
-    ConfigManager::Instance().SetDistConfig(key, value);
-}
-
-template <typename T>
 void SetPassConfig(const std::string &strategy, const std::string &identifier, const std::string &key, const T &value) {
     ConfigManager::Instance().SetPassConfig(strategy, identifier, key, value);
 }
@@ -411,11 +348,6 @@ void SetPassConfig(const std::string &strategy, const std::string &identifier, c
 template <typename T>
 void SetSimConfig(const std::string &key, const T &value) {
     ConfigManager::Instance().SetSimConfig(key, value);
-}
-
-template <typename T>
-void SetOperationConfig(const std::string &key, const T &value) {
-    ConfigManager::Instance().SetOperationConfig(key, value);
 }
 
 template <typename T>
