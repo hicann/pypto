@@ -166,7 +166,7 @@ def process_main_loop_interation(
 
     # sum & div
     pypto.set_vec_tile_shapes(view_first, topk)
-    if pypto.cond(pypto.symbolic_scalar(renormalize_flag)):
+    if pypto.symbolic_scalar(renormalize_flag):
         # sum
         denominator = pypto.sum(tw_gather, -1, True)  # (bs, 1)
         # div for shape (b*s, topk) (b*s, 1)
@@ -180,70 +180,60 @@ def process_main_loop_interation(
     ids_k[bs_idx * view_shape[0]:, 0:] = topk_ids
 
 
-@pypto.jit(
-    runtime_options={"stitch_function_num_initial": 128,
-    "stitch_function_outcast_memory": 128,
-    "stitch_function_inner_memory": 128,
-    "stitch_cfgcache_size": 2500000},
-    host_options={"only_codegen": True},
-)
-def select_experts_kernel(logits_input, e_score_bias_input, weight_k, ids_k,
-                          renormalize_flag, topk_group, num_expert_group):
-    """
-    JIT compiled kernel for expert selection in MoE architecture.
+def select_experts_kernel(shapes, renormalize, topk_group, num_expert_group):
 
-    This kernel implements the expert selection algorithm:
-    1. Applies sigmoid to router logits to get expert scores
-    2. Adds expert score correction bias
-    3. Groups experts and selects top-k groups
-    4. Masks non-selected experts
-    5. Selects top-k experts from masked logits
-    6. Optionally renormalizes expert weights
+    router_logits_shape = (pypto.frontend.dynamic("bs"), shapes[0][1])
+    e_score_bias_shape = shapes[1]
+    topk_weights_shape = (pypto.frontend.dynamic("bs"), shapes[2][1])
+    topk_ids_shape = (pypto.frontend.dynamic("bs"), shapes[3][1])
 
-    Args:
-        logits_input: Router logits [num_tokens, num_router_experts]
-        e_score_bias_input: Expert score correction bias [num_router_experts]
-        weight_k: Output tensor for top-k weights [num_tokens, topk]
-        ids_k: Output tensor for top-k expert IDs [num_tokens, topk]
-        renormalize_flag: Whether to renormalize expert weights (0 or 1)
-        topk_group: Number of expert groups for top-k selection
-        num_expert_group: Number of experts per group
+    @pypto.frontend.jit(
+        runtime_options={"stitch_function_num_initial": 128,
+        "stitch_function_outcast_memory": 128,
+        "stitch_function_inner_memory": 128,
+        "stitch_cfgcache_size": 2500000},
+        host_options={"only_codegen": True},
+    )
+    def kernel(
+        logits: pypto.tensor(router_logits_shape, pypto.DT_FP32),
+        e_score_bias_input: pypto.tensor(e_score_bias_shape, pypto.DT_BF16),
+    ) -> (
+        pypto.tensor(topk_weights_shape, pypto.DT_FP32),  
+        pypto.tensor(topk_ids_shape, pypto.DT_INT32),
+    ):
+        batch_size = logits.shape[0]
+        number_experts = logits.shape[1]
+        idx_k_shape = topk_ids_shape
+        topk = idx_k_shape[1]
+        view_shape = (1, number_experts)
+        view_first = 1
+        bs_loop = (batch_size + view_shape[0] - 1) // view_shape[0]
 
-    Note:
-        This function processes inputs in tiles of size 1 to support dynamic batch sizes.
-        The expert selection uses a two-stage approach: first select groups, then select experts.
-    """
-    # 3. 得到动态tensor的shape
-    bs = logits_input.shape[0]
-    ne = logits_input.shape[1]
-    idx_k_shape = ids_k.shape
-    topk = idx_k_shape[1]
-    view_shape = (1, ne)
-    view_first = 1
-    bs_loop = (bs + view_shape[0] - 1) // view_shape[0]
+        weight_k = pypto.tensor(topk_weights_shape, pypto.DT_FP32)
+        index_k = pypto.tensor(topk_ids_shape, pypto.DT_INT32)
 
-    # 4. 定义动态函数
-    for _ in pypto.loop(1, name="LOOP_RESHAPE_INPLACE", idx_name="_"):
-        pypto.set_vec_tile_shapes(ne)
-        e_score_bias_2d = pypto.reshape(e_score_bias_input, [1, ne], inplace=True)  # (160) -> (1,160)
+        pypto.set_vec_tile_shapes(number_experts)
+        e_score_bias_2d = pypto.reshape(e_score_bias_input, [1, number_experts], inplace=True)  # (160) -> (1,160)
+        
+        for bs_index in pypto.loop(bs_loop, name="LOOP_MOEGATE_L0", idx_name="bs_idx"):
+            process_main_loop_interation(
+                bs_index, 
+                logits, 
+                e_score_bias_2d, 
+                weight_k, 
+                index_k, 
+                batch_size, 
+                number_experts, 
+                view_shape, 
+                view_first, 
+                topk, 
+                topk_group, 
+                num_expert_group, 
+                renormalize
+            )
+        return weight_k, index_k
 
-    # 5. 实现kernel逻辑，循环展开BS动态轴
-    for bs_idx in pypto.loop(bs_loop, name="LOOP_MOEGATE_L0", idx_name="bs_idx"):
-        process_main_loop_interation(
-            bs_idx,
-            logits_input,
-            e_score_bias_2d,
-            weight_k,
-            ids_k,
-            bs,
-            ne,
-            view_shape,
-            view_first,
-            topk,
-            topk_group,
-            num_expert_group,
-            renormalize_flag
-        )
+    return kernel
 
 
 def gen_row_idx_gloden(hidden_states, top_k):
@@ -277,25 +267,12 @@ def test_select_experts():
             (bs, ne), dtype=torch.float32, device=f'npu:{device_id}')
         e_score_bias = torch.rand(
             (ne), dtype=torch.bfloat16, device=f'npu:{device_id}')
-        topk_weights = torch.empty(
-            (bs, top_k), dtype=torch.float32, device=f'npu:{device_id}')
-        topk_ids = torch.empty(
-            (bs, top_k), dtype=torch.int32, device=f'npu:{device_id}')
 
-        # 4. 执行kernel并获取结果
-        inputs = {
-            router_logits: [0],
-            e_score_bias: []
-        }
-        outputs = {
-            topk_weights: [0],
-            topk_ids: [0]
-        }
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
         g = torch.npu.NPUGraph()
         with torch.npu.graph(g):
-            select_experts_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
+            shapes = [router_logits.shape, e_score_bias.shape, (bs, top_k), (bs, top_k)]
+            topk_weights, topk_ids = \
+            select_experts_kernel(shapes, renormalize, topk_group, num_expert_group)(router_logits, e_score_bias)
         g.replay()
 
         # 5. 与PyTorch参考实现对比

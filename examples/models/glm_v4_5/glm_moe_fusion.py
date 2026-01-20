@@ -106,156 +106,181 @@ def gen_quan_per_channel_weight_nz(x):
     return y_int8_nz, scale_dequant
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"device_sched_mode": 1,
-                     "stitch_function_num_initial": 128,
-                     "stitch_function_outcast_memory": 128,
-                     "stitch_function_inner_memory": 128,
-                     "stitch_cfgcache_size": 7700000},
-    pass_options={"cube_l1_reuse_setting": {-1: 2}, }
-)
-def moe_fusion_kernel(hidden_states, mm_weight, e_score_bias_input, w13, w13_scale, w2, w2_scale, weight_k,
-                      ids_k, ffn_res, renormalize_flag, topk_group, num_expert_group):
-    # 3. 得到动态tensor的shape
-    bs = hidden_states.shape[0]
+def moe_fusion_kernel(shapes, renormalize, topk_group, num_expert_group):
+    hidden_states_shape = (pypto.frontend.dynamic("bs"), shapes[0][1])
+    mm_weight_shape, e_score_bias_shape, w13_shape, w13_scale_shape, w2_shape, w2_scale_shape = shapes[1:7]
+    topk_weights_shape = (pypto.frontend.dynamic("bs"), shapes[7][1])
+    topk_ids_shape = (pypto.frontend.dynamic("bs"), shapes[8][1])
+    ffn_res_shape = (pypto.frontend.dynamic("bs"), shapes[9][1])
 
-    ne = mm_weight.shape[0]
-    topk = ids_k.shape[1]
 
-    pypto.experimental.set_operation_config(combine_axis=True)
+    @pypto.frontend.jit(
+        host_options={"only_codegen": True},
+        runtime_options={"device_sched_mode": 1,
+                        "stitch_function_num_initial": 128,
+                        "stitch_function_outcast_memory": 128,
+                        "stitch_function_inner_memory": 128,
+                        "stitch_cfgcache_size": 7700000},
+        pass_options={"cube_l1_reuse_mode": 2}
+    )
+    def kernel(
+        hidden_states: pypto.tensor(hidden_states_shape, dtype=pypto.DT_BF16),
+        mm_weight: pypto.tensor(mm_weight_shape, dtype=pypto.DT_BF16),
+        e_score_bias_input: pypto.tensor(e_score_bias_shape, dtype=pypto.DT_BF16),
+        w13: pypto.tensor(w13_shape, dtype=pypto.DT_INT8),
+        w13_scale: pypto.tensor(w13_scale_shape, dtype=pypto.DT_BF16),
+        w2: pypto.tensor(w2_shape, dtype=pypto.DT_INT8),
+        w2_scale: pypto.tensor(w2_scale_shape, dtype=pypto.DT_BF16),
+    ) -> (
+        pypto.tensor(topk_weights_shape, dtype=pypto.DT_FP32),
+        pypto.tensor(topk_ids_shape, dtype=pypto.DT_INT32),
+        pypto.tensor(ffn_res_shape, dtype=pypto.DT_BF16),
+    ):
+        weight_k = pypto.tensor(topk_weights_shape, dtype=pypto.DT_FP32)
+        ids_k = pypto.tensor(topk_ids_shape, dtype=pypto.DT_INT32)
+        ffn_res = pypto.tensor(ffn_res_shape, dtype=pypto.DT_BF16)
 
-    # tiling config
-    vec_tile_shape = (4, 5120)
-    mm1_cube_tile_shape = (8, 256, 256)
-    mm2_cube_tile_shape = (8, 192, 256)
-    hidden_size = hidden_states.shape[1]
-    intermediate_size = w2.shape[0]
+        # 3. 得到动态tensor的shape
+        bs = hidden_states.shape[0]
 
-    # 4. 定义动态函数
-    pypto.set_vec_tile_shapes(ne)
-    e_score_bias_2d = pypto.reshape(e_score_bias_input, [1, ne], inplace=True)  # (160) -> (1,160)
+        ne = mm_weight.shape[0]
+        topk = ids_k.shape[1]
 
-    # 4. 实现kernel逻辑，循环展开BS动态轴
-    for bs_idx, tile_batch in pypto.loop_unroll(0, bs, 1, name="LOOP_MOE_FUSION_L0", idx_name="bs_idx",
-                                                unroll_list=powers_of_2(32)):
-        # 5. 通过view得到tile_logits
-        tile_hidden_states = hidden_states[bs_idx:bs_idx + tile_batch, :]
+        pypto.experimental.set_operation_config(combine_axis=True)
 
-        # gate start
-        pypto.set_vec_tile_shapes(min(tile_batch, 4), 5120)
-        tile_hidden_states_fp32 = pypto.cast(tile_hidden_states, pypto.DT_FP32)
-        mm_weight_fp32 = pypto.cast(mm_weight, pypto.DT_FP32)
-        pypto.set_cube_tile_shapes([min(tile_batch, 32), min(tile_batch, 32)], [512, 1024], [16, 16])
-        res = pypto.matmul(tile_hidden_states_fp32, mm_weight_fp32, tile_hidden_states_fp32.dtype, b_trans=True)
-        # gate end
+        # tiling config
+        vec_tile_shape = (4, 5120)
+        mm1_cube_tile_shape = (8, 256, 256)
+        mm2_cube_tile_shape = (8, 192, 256)
+        hidden_size = hidden_states.shape[1]
+        intermediate_size = w2.shape[0]
 
-        # select start
-        tile_logits = res
-        view_first = 1
+        # 4. 定义动态函数
+        pypto.set_vec_tile_shapes(ne)
+        e_score_bias_2d = pypto.reshape(e_score_bias_input, [1, ne], inplace=True)  # (160) -> (1,160)
 
-        # 7. 按照计算图实现运算逻辑，设置set_vec_tile_shapes时应尽可能用满UB，但不要超过UB的大小。
-        pypto.set_vec_tile_shapes(view_first, ne)
-        tile_logits_fp32 = pypto.cast(tile_logits, pypto.DT_FP32)
-        e_score_bias_2d_tile = pypto.tensor([tile_batch, ne], e_score_bias_2d.dtype, "e_score_bias_2d_tile")
-        for tmp_idx in range(tile_batch):
-            pypto.assemble(e_score_bias_2d, [tmp_idx, 0], e_score_bias_2d_tile)
-        e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
+        # 4. 实现kernel逻辑，循环展开BS动态轴
+        tile_batch = 1
+        for bs_idx in pypto.loop(bs):
+            # 5. 通过view得到tile_logits
+            tile_hidden_states = hidden_states[bs_idx:bs_idx + tile_batch, :]
 
-        # sigmoid
-        topk_weights = pypto.sigmoid(tile_logits_fp32)  # (bs, ne) fp32
+            # gate start
+            pypto.set_vec_tile_shapes(min(tile_batch, 4), 5120)
+            tile_hidden_states_fp32 = pypto.cast(tile_hidden_states, pypto.DT_FP32)
+            mm_weight_fp32 = pypto.cast(mm_weight, pypto.DT_FP32)
+            pypto.set_cube_tile_shapes([min(tile_batch, 32), min(tile_batch, 32)], [512, 1024], [16, 16])
+            res = pypto.matmul(tile_hidden_states_fp32, mm_weight_fp32, tile_hidden_states_fp32.dtype, b_trans=True)
+            # gate end
 
-        # add
-        topk_weights_add = pypto.add(topk_weights, e_score_bias_2d_cast)  # (8, 160) fp32
-        # reshape
-        group_unit = ne // num_expert_group
-        r1 = pypto.reshape(topk_weights_add, [tile_batch, num_expert_group, group_unit])
+            # select start
+            tile_logits = res
+            view_first = 1
 
-        # amax
-        pypto.set_vec_tile_shapes(view_first, num_expert_group, group_unit)
-        max1 = pypto.amax(r1, -1, False)
-        group_weight = max1
+            # 7. 按照计算图实现运算逻辑，设置set_vec_tile_shapes时应尽可能用满UB，但不要超过UB的大小。
+            pypto.set_vec_tile_shapes(view_first, ne)
+            tile_logits_fp32 = pypto.cast(tile_logits, pypto.DT_FP32)
+            e_score_bias_2d_tile = pypto.tensor([tile_batch, ne], e_score_bias_2d.dtype, "e_score_bias_2d_tile")
+            for tmp_idx in pypto.loop(tile_batch):
+                pypto.assemble(e_score_bias_2d, [tmp_idx, 0], e_score_bias_2d_tile)
+            e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 
-        # topk
-        pypto.set_vec_tile_shapes(view_first, num_expert_group)
-        _, topk_group_indices = pypto.topk(group_weight, topk_group, -1, True)  # (2, topk_group) int32
+            # sigmoid
+            topk_weights = pypto.sigmoid(tile_logits_fp32)  # (bs, ne) fp32
 
-        # zeros -> full(0)
-        topk_group_mask = pypto.full([tile_batch, num_expert_group], 0.0, group_weight.dtype)  # (16, 1)
+            # add
+            topk_weights_add = pypto.add(topk_weights, e_score_bias_2d_cast)  # (8, 160) fp32
+            # reshape
+            group_unit = ne // num_expert_group
+            r1 = pypto.reshape(topk_weights_add, [tile_batch, num_expert_group, group_unit])
 
-        # scatter 尾轴不能切
-        topk_group_mask_scatter_trans = pypto.scatter_(topk_group_mask, 1, topk_group_indices, 1.0)
+            # amax
+            pypto.set_vec_tile_shapes(view_first, num_expert_group, group_unit)
+            max1 = pypto.amax(r1, -1, False)
+            group_weight = max1
 
-        # unsqueeze
-        twm_unsqueeze = pypto.unsqueeze(topk_group_mask_scatter_trans, -1)  # (1, 1, 1) fp32
+            # topk
+            pypto.set_vec_tile_shapes(view_first, num_expert_group)
+            _, topk_group_indices = pypto.topk(group_weight, topk_group, -1, True)  # (2, topk_group) int32
 
-        # expand
-        pypto.set_vec_tile_shapes(view_first, num_expert_group, ne)  # ne时 可以切成一块
-        twm_expand = pypto.expand_clone(twm_unsqueeze, [tile_batch, num_expert_group, group_unit])
+            # zeros -> full(0)
+            topk_group_mask = pypto.full([tile_batch, num_expert_group], 0.0, group_weight.dtype)  # (16, 1)
 
-        # reshape
-        pypto.set_vec_tile_shapes(view_first, num_expert_group, group_unit)  # (1,1,160)
-        twm_reshape = pypto.reshape(twm_expand, [tile_batch, ne])
+            # scatter 尾轴不能切
+            topk_group_mask_scatter_trans = pypto.scatter_(topk_group_mask, 1, topk_group_indices, 1.0)
 
-        # logical_not 
-        pypto.set_vec_tile_shapes(view_first, ne)
-        twm_not = pypto.logical_not(twm_reshape)
+            # unsqueeze
+            twm_unsqueeze = pypto.unsqueeze(topk_group_mask_scatter_trans, -1)  # (1, 1, 1) fp32
 
-        # where
-        topk_weights_maskfill = pypto.where(twm_not, 0.0, topk_weights_add)
+            # expand
+            pypto.set_vec_tile_shapes(view_first, num_expert_group, ne)  # ne时 可以切成一块
+            twm_expand = pypto.expand_clone(twm_unsqueeze, [tile_batch, num_expert_group, group_unit])
 
-        # topk2
-        _, topk_ids = pypto.topk(topk_weights_maskfill, topk, -1, True)  # (bs, topk) int32
+            # reshape
+            pypto.set_vec_tile_shapes(view_first, num_expert_group, group_unit)  # (1,1,160)
+            twm_reshape = pypto.reshape(twm_expand, [tile_batch, ne])
 
-        # tw_gather
-        tw_gather = pypto.gather(topk_weights, 1, topk_ids)  # (bs, 8)
+            # logical_not 
+            pypto.set_vec_tile_shapes(view_first, ne)
+            twm_not = pypto.logical_not(twm_reshape)
 
-        # sum & div
-        pypto.set_vec_tile_shapes(view_first, topk)
-        denominator = pypto.sum(tw_gather, -1, True)  # (bs, 1)
+            # where
+            topk_weights_maskfill = pypto.where(twm_not, 0.0, topk_weights_add)
 
-        # div for shape (b*s, topk) (b*s, 1)
-        topk_weight_out = pypto.div(tw_gather, denominator)  # (bs, topk)
+            # topk2
+            _, topk_ids = pypto.topk(topk_weights_maskfill, topk, -1, True)  # (bs, topk) int32
 
-        weight_k[bs_idx:bs_idx + tile_batch, :] = topk_weight_out
-        ids_k[bs_idx:bs_idx + tile_batch, :] = topk_ids
-        # select end
+            # tw_gather
+            tw_gather = pypto.gather(topk_weights, 1, topk_ids)  # (bs, 8)
 
-        # share start
-        pypto.set_vec_tile_shapes(vec_tile_shape[0], vec_tile_shape[1])
-        hidden_states_offset = [bs_idx, 0]
+            # sum & div
+            pypto.set_vec_tile_shapes(view_first, topk)
+            denominator = pypto.sum(tw_gather, -1, True)  # (bs, 1)
 
-        # dynamic per_token_quant
-        hidden_states_quant, hidden_states_scale = symmetric_quantization_per_token(tile_hidden_states)
+            # div for shape (b*s, topk) (b*s, 1)
+            topk_weight_out = pypto.div(tw_gather, denominator)  # (bs, topk)
 
-        # up_proj的matmul计算
-        pypto.set_cube_tile_shapes([tile_batch, tile_batch],
-                                   [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
-                                   [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
-        up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
+            weight_k[bs_idx:bs_idx + tile_batch, :] = topk_weight_out
+            ids_k[bs_idx:bs_idx + tile_batch, :] = topk_ids
+            # select end
 
-        # dequant
-        w13_scale_2d = pypto.unsqueeze(w13_scale, 0)
-        pypto.set_vec_tile_shapes(8, intermediate_size * 2)
-        up_proj_dequant = dequant_dynamic(up_proj, w13_scale_2d, hidden_states_scale)
-        swiglu_out = swiglu(up_proj_dequant)
+            # share start
+            pypto.set_vec_tile_shapes(vec_tile_shape[0], vec_tile_shape[1])
+            hidden_states_offset = [bs_idx, 0]
 
-        # dynamic per_token_quant
-        down_proj_quant, down_proj_scale = symmetric_quantization_per_token(swiglu_out)
+            # dynamic per_token_quant
+            hidden_states_quant, hidden_states_scale = symmetric_quantization_per_token(tile_hidden_states)
 
-        # down_proj
-        pypto.set_cube_tile_shapes([tile_batch, tile_batch],
-                                   [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
-                                   [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, False)
-        down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
+            # up_proj的matmul计算
+            pypto.set_cube_tile_shapes([tile_batch, tile_batch],
+                                    [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
+                                    [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
+            up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
 
-        # dequant
-        w2_scale_2d = pypto.unsqueeze(w2_scale, 0)
-        pypto.set_vec_tile_shapes(4, hidden_size)
-        down_proj_dequant = dequant_dynamic(down_proj, w2_scale_2d, down_proj_scale)
-        out = pypto.cast(down_proj_dequant, hidden_states.dtype)
-        pypto.assemble(out, hidden_states_offset, ffn_res)
-        # share end
+            # dequant
+            w13_scale_2d = pypto.unsqueeze(w13_scale, 0)
+            pypto.set_vec_tile_shapes(8, intermediate_size * 2)
+            up_proj_dequant = dequant_dynamic(up_proj, w13_scale_2d, hidden_states_scale)
+            swiglu_out = swiglu(up_proj_dequant)
+
+            # dynamic per_token_quant
+            down_proj_quant, down_proj_scale = symmetric_quantization_per_token(swiglu_out)
+
+            # down_proj
+            pypto.set_cube_tile_shapes([tile_batch, tile_batch],
+                                    [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
+                                    [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, False)
+            down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
+
+            # dequant
+            w2_scale_2d = pypto.unsqueeze(w2_scale, 0)
+            pypto.set_vec_tile_shapes(4, hidden_size)
+            down_proj_dequant = dequant_dynamic(down_proj, w2_scale_2d, down_proj_scale)
+            out = pypto.cast(down_proj_dequant, hidden_states.dtype)
+            pypto.assemble(out, hidden_states_offset, ffn_res)
+            # share end
+        return weight_k, ids_k, ffn_res
+    return kernel
 
 
 def test_moe_fusion():
@@ -299,32 +324,18 @@ def test_moe_fusion():
         topk_ids = torch.empty(
             (bs, top_k), dtype=torch.int32, device=f'npu:{device_id}')
 
-        # 4. 执行kernel并获取结果
-        inputs = {
-            hidden_states: [0],
-            mm_weight: [],
-            e_score_bias: [],
-            w13: [],
-            w13_scale: [],
-            w2: [],
-            w2_scale: []
-        }
-        outputs = {
-            topk_weights: [0],
-            topk_ids: [0],
-            ffn_res: [0]
-        }
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-
+        shapes = [hidden_states.shape, mm_weight.shape, e_score_bias.shape, w13.shape, w13_scale.shape,
+                 w2.shape, w2_scale.shape, (bs, top_k), (bs, top_k), (bs, hidden_size)]
         if enable_graph:
             g = torch.npu.NPUGraph()
             with torch.npu.graph(g):
-                moe_fusion_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
+                topk_weights, topk_ids, ffn_res = moe_fusion_kernel(shapes, renormalize, topk_group, 
+                        num_expert_group)(hidden_states, mm_weight, e_score_bias, w13, w13_scale, w2, w2_scale)
             g.replay()
         else:
-            moe_fusion_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
-
+            topk_weights, topk_ids, ffn_res = moe_fusion_kernel(shapes, renormalize, topk_group, 
+                        num_expert_group)(hidden_states, mm_weight, e_score_bias, w13, w13_scale, w2, w2_scale)
+            
         # 5. 与PyTorch参考实现对比
         result = torch.matmul(hidden_states.to(torch.float32), mm_weight.to(torch.float32).t())
         router_logits_fp32 = result.to(torch.float)
@@ -418,23 +429,10 @@ def moe_fusion(
     check_args(gate_weight, hidden_states, top_k, renormalize, topk_group, num_expert_group, e_score_correction_bias,
                w13, w13_scale, w2, w2_scale)
 
-    inputs = {
-        hidden_states: [0],
-        gate_weight: [],
-        e_score_correction_bias: [],
-        w13: [],
-        w13_scale: [],
-        w2: [],
-        w2_scale: []
-    }
-    outputs = {
-        topk_weights: [0],
-        topk_ids: [0],
-        ffn_res: [0]
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-    moe_fusion_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
+    shapes = [hidden_states.shape, gate_weight.shape, e_score_correction_bias.shape, w13.shape, \
+        w13_scale.shape, w2.shape, w2_scale.shape, topk_weights.shape, topk_ids.shape, ffn_res.shape]
+    topk_weights, topk_ids, ffn_res = moe_fusion_kernel(shapes, renormalize, topk_group, \
+        num_expert_group)(hidden_states, gate_weight, e_score_correction_bias, w13, w13_scale, w2, w2_scale)
     return topk_weights, topk_ids, ffn_res
 
 

@@ -176,30 +176,32 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     # 入参信息获取
     w13, w13_scale = w13_params
     w2, w2_scale = w2_params
-    unroll_offset, unroll_level = offset_params
+    share_loop_idx, loop_base = offset_params
     vec_tile_shape, mm1_cube_tile_shape, mm2_cube_tile_shape = tiling_params
 
-    hidden_size = hidden_states.shape[1]
+    token_size, hidden_size = hidden_states.shape[:2]
     intermediate_size = w2.shape[0]
     x_dtype = hidden_states.dtype
 
     # offset
-    pypto.set_vec_tile_shapes(vec_tile_shape[0], vec_tile_shape[1])
-    hidden_states_offset = [unroll_offset, 0]
-    hidden_states_actual = pypto.view(hidden_states, [unroll_level, hidden_size], hidden_states_offset)
+    hidden_states_offset = [share_loop_idx * loop_base, 0]
+    cur_valid_size = pypto.min(token_size - share_loop_idx * loop_base, loop_base)
+    hidden_states_actual = pypto.view(hidden_states, [loop_base, hidden_size], hidden_states_offset,
+                                      valid_shape=[cur_valid_size, hidden_size])
 
+    pypto.set_vec_tile_shapes(vec_tile_shape[0], vec_tile_shape[1])
     # dynamic per_token_quant
     hidden_states_quant, hidden_states_scale = symmetric_quantization_per_token(hidden_states_actual)
 
     # up_proj的matmul计算
-    pypto.set_cube_tile_shapes([unroll_level, unroll_level],
+    pypto.set_cube_tile_shapes([mm1_cube_tile_shape[0], mm1_cube_tile_shape[0]],
                                [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
                                [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
     up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
 
     # dequant
     w13_scale_2d = pypto.unsqueeze(w13_scale, 0)
-    pypto.set_vec_tile_shapes(4, intermediate_size * 2)
+    pypto.set_vec_tile_shapes(2, intermediate_size * 2)
     up_proj_dequant = dequant_dynamic(up_proj, w13_scale_2d, hidden_states_scale)
     swiglu_out = swiglu(up_proj_dequant)
 
@@ -207,64 +209,60 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     down_proj_quant, down_proj_scale = symmetric_quantization_per_token(swiglu_out)
 
     # down_proj
-    pypto.set_cube_tile_shapes([unroll_level, unroll_level],
+    pypto.set_cube_tile_shapes([mm2_cube_tile_shape[0], mm2_cube_tile_shape[0]],
                                [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
                                [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, False)
     down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
 
     # dequant
     w2_scale_2d = pypto.unsqueeze(w2_scale, 0)
-    pypto.set_vec_tile_shapes(4, hidden_size)
+    pypto.set_vec_tile_shapes(2, hidden_size)
     down_proj_dequant = dequant_dynamic(down_proj, w2_scale_2d, down_proj_scale)
     out = pypto.cast(down_proj_dequant, x_dtype)
     pypto.assemble(out, hidden_states_offset, ffn_res)
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-    runtime_options={"device_sched_mode": 1,
-                     "stitch_cfgcache_size": 2700000},
-    pass_options={"cube_l1_reuse_setting": {-1: 2}}
-)
-def share_expert_moe_main(hidden_states, w13, w13_scale, w2, w2_scale, ffn_res):
-    """
-    JIT compiled kernel for shared expert FFN quantization.
+def share_expert_moe_main(shapes):
+    hidden_states_shape = (pypto.frontend.dynamic("hidden_states_shape"), shapes[0][1])
+    w13_shape, w13_scale_shape, w2_shape, w2_scale_shape = shapes[1:5]
+    ffn_shape = (pypto.frontend.dynamic("hidden_states_shape"), shapes[5][1])
 
-    This kernel processes all tokens using a single shared expert. The computation
-    is done in tiles to support efficient execution on NPU.
+    @pypto.frontend.jit(
+        host_options={"only_codegen": True},
+        runtime_options={"device_sched_mode": 1,
+                         "stitch_cfgcache_size": 2700000},
+        pass_options={"cube_l1_reuse_mode": 2}
+    )
+    def kernel(
+        hidden_states: pypto.tensor(hidden_states_shape, pypto.DT_BF16),
+        w13: pypto.tensor(w13_shape, pypto.DT_INT8),
+        w13_scale: pypto.tensor(w13_scale_shape, pypto.DT_BF16),
+        w2: pypto.tensor(w2_shape, pypto.DT_INT8),
+        w2_scale: pypto.tensor(w2_scale_shape, pypto.DT_BF16),
+    ) -> (
+        pypto.tensor(ffn_shape, pypto.DT_BF16)
+    ):
+        vec_tile_shape = (2, 5120)
+        mm1_cube_tile_shape = (8, 128, 384)
+        mm2_cube_tile_shape = (8, 192, 256)
+        loop_base = 8
 
-    Args:
-        hidden_states: Input hidden states [num_tokens, hidden_size]
-        w13: Gate and up projection weights (int8) [hidden_size, intermediate_size * 2]
-        w13_scale: w13 weight scales [intermediate_size * 2]
-        w2: Down projection weights (int8) [intermediate_size, hidden_size]
-        w2_scale: w2 weight scales [hidden_size]
-        ffn_res: Output tensor [num_tokens, hidden_size]
+        token_nums = hidden_states.shape[0]
+        token_loop_times = (token_nums + loop_base - 1) // loop_base
 
-    Note:
-        This function uses cube L1 reuse mode 2 for better memory efficiency.
-        Tokens are processed in tiles of size 8.
-    """
-    pypto.experimental.set_operation_config(combine_axis=True)
+        ffn_res = pypto.tensor(ffn_shape, pypto.DT_BF16)
 
-    # tiling config
-    vec_tile_shape = (4, 5120)
-    mm1_cube_tile_shape = (8, 256, 256)
-    mm2_cube_tile_shape = (8, 192, 256)
-
-    token_nums = hidden_states.shape[0]
-    for share_loop_idx, loop_base in pypto.loop_unroll(
-        token_nums,
-        unroll_list=[1, 2, 4, 8, 16, 32, 64, 128],
-        name="share_loop_idx"):
-        expert_infer_base(
+        for share_loop_idx in pypto.loop(token_loop_times, name="share_loop_idx"):
+            expert_infer_base(
             hidden_states=hidden_states,
             w13_params=[w13, w13_scale],
             w2_params=[w2, w2_scale],
             ffn_res=ffn_res,
             tiling_params=[vec_tile_shape, mm1_cube_tile_shape, mm2_cube_tile_shape],
             offset_params=[share_loop_idx, loop_base]
-        )
+            )
+        return ffn_res
+    return kernel
 
 
 @allow_in_graph
@@ -295,28 +293,16 @@ def ffn_shared_expert_quant(hidden_states: torch.Tensor,
         with PyTorch's compilation graph. The computation uses per-token quantization
         for better accuracy compared to per-channel quantization.
     """
-    inputs = {
-        hidden_states: [0],
-        w13: [],
-        w13_scale: [],
-        w2: [],
-        w2_scale: []
-    }
-    outputs = {
-        ffn_res: [0]
-    }
     if not isinstance(hidden_states, FakeTensor):
         check_args(hidden_states, w13, w13_scale, w2, w2_scale)
 
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-        share_expert_moe_main(*pto_inputs, *pto_outputs)
-        pypto.runtime._device_synchronize()#内部接口，不推荐使用
+        shapes = [hidden_states.shape, w13.shape, w13_scale.shape, w2.shape, w2_scale.shape, ffn_res.shape]
+        ffn_res = share_expert_moe_main(shapes)(hidden_states, w13, w13_scale, w2, w2_scale)
 
 
 def test_ffn_share() -> None:
     x_dtype = torch.bfloat16
-    # parameter config
+    # parameter config 
     s = 1
     intermediate_size = 192
     hidden_size = 5120
@@ -328,20 +314,9 @@ def test_ffn_share() -> None:
         # hidden_states, w13, w13_scale, w2, w2_scale, ffn_res
         hidden_states, w13, w13_scale, w2, w2_scale, ffn_res = \
             gen_input(b, s, hidden_size, intermediate_size, x_dtype, device_id)
-        inputs = {
-            hidden_states: [0],
-            w13: [],
-            w13_scale: [],
-            w2: [],
-            w2_scale: []
-        }
-        outputs = {
-            ffn_res: [0]
-        }
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-        share_expert_moe_main(*pto_inputs, *pto_outputs)
-        pypto.runtime._device_synchronize()#内部接口，不推荐使用
+
+        shapes = [hidden_states.shape, w13.shape, w13_scale.shape, w2.shape, w2_scale.shape, ffn_res.shape]
+        ffn_res = share_expert_moe_main(shapes)(hidden_states, w13, w13_scale, w2, w2_scale)
 
         # golden
         golden = moe_torch_npu(hidden_states, w13, w13_scale, w2, w2_scale)

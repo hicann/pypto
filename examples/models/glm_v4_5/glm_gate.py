@@ -53,51 +53,65 @@ def check_args(
     assert hidden_states.dtype == torch.float32
 
 
-@pypto.jit(
-    runtime_options={
-    "stitch_cfgcache_size": 2500000},
-    host_options={"only_codegen": True},
-)
-def select_experts_mm_kernel(hidden_states, mm_weight, router_logits_out):
-    """
-    JIT compiled kernel for gate matrix multiplication.
+def select_experts_mm(bs, ne, h_num) -> torch.Tensor:
+    bs = pypto.frontend.dynamic("bs")
+    
+    @pypto.frontend.jit(
+        runtime_options={
+        "stitch_cfgcache_size": 2500000},
+        host_options={"only_codegen": True},
+    )
+    def select_experts_mm_kernel(
+        hidden_states: pypto.Tensor((bs, h_num), pypto.DT_FP32),
+        mm_weight: pypto.Tensor((ne, h_num), pypto.DT_FP32),
+    ) -> (
+        pypto.Tensor((bs, ne), pypto.DT_FP32),
+    ):
+        """
+        JIT compiled kernel for gate matrix multiplication.
 
-    This kernel performs the matrix multiplication: router_logits = hidden_states @ weight^T
-    to project hidden states from d_model to d_router dimension for expert routing.
+        This kernel performs the matrix multiplication: router_logits = hidden_states @ weight^T
+        to project hidden states from d_model to d_router dimension for expert routing.
 
-    Args:
-        hidden_states: Input hidden states [num_tokens, hidden_size]
-        mm_weight: Gate weight matrix [num_router_experts, hidden_size]
-        router_logits_out: Output router logits [num_tokens, num_router_experts]
+        Args:
+            hidden_states: Input hidden states [num_tokens, hidden_size]
+            mm_weight: Gate weight matrix [num_router_experts, hidden_size]
+            router_logits_out: Output router logits [num_tokens, num_router_experts]
 
-    Note:
-        This function processes inputs in tiles of size 32 to support dynamic batch sizes.
-        The computation uses cube tiling for efficient matrix multiplication on NPU.
-    """
-    # 3. 得到动态tensor的shape
-    bs = hidden_states.shape[0]
-    ne = mm_weight.shape[0]
-    h_num = hidden_states.shape[1]
+        Note:
+            This function processes inputs in tiles of size 32 to support dynamic batch sizes.
+            The computation uses cube tiling for efficient matrix multiplication on NPU.
+        """
+        # 3. 得到动态tensor的shape
+        bs = hidden_states.shape[0]
+        ne = mm_weight.shape[0]
+        h_num = hidden_states.shape[1]
 
-    view_shape = (32, h_num)
+        view_shape = (32, h_num)
 
-    bs_loop = (bs + view_shape[0] - 1) // view_shape[0]
+        bs_loop = (bs + view_shape[0] - 1) // view_shape[0]
+        
+        router_logits_out = pypto.Tensor((bs, ne), pypto.DT_FP32)
+        
+        # 4. 实现kernel逻辑，循环展开BS动态轴
+        for bs_idx in pypto.loop(bs_loop, name="LOOP_MOE_MM_L0", idx_name="bs_idx"):
 
-    # 4. 实现kernel逻辑，循环展开BS动态轴
-    for bs_idx in pypto.loop(bs_loop, name="LOOP_MOE_MM_L0", idx_name="bs_idx"):
+            # 5. 通过view得到tile_logits
+            tile_hidden_states = pypto.view(hidden_states, view_shape,
+                                            [bs_idx * view_shape[0], 0],
+                                            valid_shape=[(bs - bs_idx * view_shape[0]).min(view_shape[0]),
+                                                            h_num])
 
-        # 5. 通过view得到tile_logits
-        tile_hidden_states = pypto.view(hidden_states, view_shape,
-                                        [bs_idx * view_shape[0], 0],
-                                        valid_shape=[(bs - bs_idx * view_shape[0]).min(view_shape[0]),
-                                                        h_num])
+            pypto.set_cube_tile_shapes([32, 32], [512, 1024], [16, 16])
 
-        pypto.set_cube_tile_shapes([32, 32], [512, 1024], [16, 16])
+            res = pypto.matmul(tile_hidden_states, mm_weight, tile_hidden_states.dtype, b_trans=True)
 
-        res = pypto.matmul(tile_hidden_states, mm_weight, tile_hidden_states.dtype, b_trans=True)
-
-        # 6. 将结果搬运到输出tensor上
-        router_logits_out[bs_idx * view_shape[0]:, 0:] = res
+            # 6. 将结果搬运到输出tensor上
+            router_logits_out[bs_idx * view_shape[0]:, 0:] = res
+        
+        return router_logits_out
+    
+    return select_experts_mm_kernel
 
 
 def test_select_experts_mm():
@@ -118,21 +132,13 @@ def test_select_experts_mm():
         np.random.seed(0)
         hidden_states = torch.rand((bs, h_num), dtype=torch.float32, device=f'npu:{device_id}')
         mm_weight = torch.rand((ne, h_num), dtype=torch.float32, device=f'npu:{device_id}')
-        router_logits_out = torch.empty((bs, ne), dtype=torch.float32, device=f'npu:{device_id}')
 
         # 4. 执行kernel并获取结果
-        inputs = {
-            hidden_states: [0],
-            mm_weight: []
-        }
-        outputs = {
-            router_logits_out: [0]
-        }
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
+        inputs = [hidden_states, mm_weight]
+
         g = torch.npu.NPUGraph()
         with torch.npu.graph(g):
-            select_experts_mm_kernel(*pto_inputs, *pto_outputs)
+            router_logits_out = select_experts_mm(bs, ne, h_num)(*inputs)
         g.replay()
 
         # 5. 与PyTorch参考实现对比
@@ -174,16 +180,12 @@ def gate(
     if isinstance(hidden_states, FakeTensor):
         return router_logits_out
     check_args(gate_weight, hidden_states)
-    inputs = {
-        hidden_states: [0],
-        gate_weight: []
-    }
-    outputs = {
-        router_logits_out: [0]
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-    select_experts_mm_kernel(*pto_inputs, *pto_outputs)
+
+    inputs = [hidden_states, gate_weight]
+    bs, h_num = hidden_states.shape
+    ne = gate_weight.shape[0]
+    router_logits_out = select_experts_mm(bs, ne, h_num)(*inputs)
+
 
 
 def main():

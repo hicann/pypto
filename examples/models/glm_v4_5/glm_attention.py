@@ -246,17 +246,24 @@ def softmax(x, is_fp16=False):
     return ans, x_max, x_sum
 
 
-@pypto.jit(
-    runtime_options={"stitch_function_num_initial": 128, 
-    "stitch_function_outcast_memory": 1024,
-    "stitch_function_inner_memory": 1024},
-    host_options={"only_codegen": True},
-    # 当子图大小达到上界不允许与其他子图合并
-    pass_options={"pg_upper_bound": 1536,
-    # Q常驻，0代表第一组mmad，4代表4次matmul合并
-    "cube_l1_reuse_setting": {0: 4}}
-)
-def ifa_func(q, k, v, block_table, kv_act_seqs, atten_out):
+def c2_compute(args):
+    v, tmp_k_2d_shape, s2_tile, dn, block_num, block_table, b_idx, idx, k, act, c2_tile, tilda_pij_fp16 = args
+    # c2
+    tmp_v_2d = pypto.reshape(v, tmp_k_2d_shape, inplace=True)
+    vj_assemble = pypto.tensor([s2_tile, dn], tmp_v_2d.dtype, "vj_assemble")
+    for i in pypto.loop(block_num):
+        block_idx = block_table[b_idx, idx + i]
+        block_idx_valid = block_idx.max(0)
+        vj_assemble[i * k.shape[1]:(i + 1) * k.shape[1], 0:] = \
+            pypto.view(tmp_v_2d, [k.shape[1], dn], [block_idx_valid * k.shape[1], 0])
+    vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
+                            [0, 0], valid_shape=[act, dn])
+    pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
+    oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
+    return oi_tmp
+
+
+def ifa_func(q_shape, kv_shape, block_table_shape):
     """
     JIT compiled kernel implementing Incremental Flash Attention (IFA) with Attention.
 
@@ -283,148 +290,166 @@ def ifa_func(q, k, v, block_table, kv_act_seqs, atten_out):
         This function uses Flash Attention's online softmax algorithm to avoid storing
         the full attention matrix, significantly reducing memory requirements.
     """
-    # 1. 添加支持动态的config
-    pypto.experimental.set_operation_config(combine_axis=True)
+    q_shape[0] = pypto.frontend.dynamic("qshape")
+    kv_shape[0] = pypto.frontend.dynamic("kvshape")
 
-    atten_cfg, tile_cfg = get_qwen_common_config()
-    softmax_scale = atten_cfg.softmax_scale
+    bs = pypto.frontend.dynamic("bs")
 
-     # 2. 从入参拿到输入和输出tensor
-    shape_q = q.shape
-    shape_k = k.shape
-    bs_scalar = shape_q[0]
-    nq = shape_q[1]
-    block_num_scalar = shape_k[0]
-    block_size = shape_k[1]
-    nkv = shape_k[2]
-    dn = shape_k[3]
-    b_scalar = kv_act_seqs.shape[0]
+    @pypto.frontend.jit(
+        runtime_options={"stitch_function_num_initial": 128, 
+        "stitch_function_outcast_memory": 1024,
+        "stitch_function_inner_memory": 1024},
+        host_options={"only_codegen": True},
+        # 当子图大小达到上界不允许与其他子图合并
+        pass_options={"pg_upper_bound": 1536,
+        # Q常驻，0代表第一组mmad，4代表4次matmul合并
+        "cube_l1_reuse_setting": {0: 4}}
+    )
+    def ifa_func_kernel(
+        q: pypto.Tensor(q_shape, pypto.DT_FP16),
+        k: pypto.Tensor(kv_shape, pypto.DT_FP16),
+        v: pypto.Tensor(kv_shape, pypto.DT_FP16),
+        block_table: pypto.Tensor(block_table_shape, pypto.DT_INT32),
+        kv_act_seqs: pypto.Tensor((bs, ), pypto.DT_INT32),
+    ) -> (
+        pypto.Tensor(q_shape, pypto.DT_FP16)
+    ):
 
-    dtype = q.dtype
-    group = nq // nkv
-    n2_sym = nkv
+        # 1. 添加支持动态的config
+        pypto.experimental.set_operation_config(combine_axis=True)
 
-    g_tile = tile_cfg.g_tile
-    s2_tile = tile_cfg.s2_tile
-    c1_tile = tile_cfg.c1_tile_shape
-    v1_tile = tile_cfg.v1_tile_shape
-    c2_tile = tile_cfg.c2_tile_shape
-    v2_tile = tile_cfg.v2_tile_shape
+        atten_cfg, tile_cfg = get_qwen_common_config()
+        softmax_scale = atten_cfg.softmax_scale
 
-    # 3. 得到动态tensor的shape
-    s1_scalar = bs_scalar // b_scalar
-    g = nq // nkv
-    g_loop = g // g_tile
+        # 2. 从入参拿到输入和输出tensor
+        shape_q = q.shape
+        shape_k = k.shape
+        bs_scalar = shape_q[0]
+        nq = shape_q[1]
+        block_num_scalar = shape_k[0]
+        block_size = shape_k[1]
+        nkv = shape_k[2]
+        dn = shape_k[3]
+        b_scalar = kv_act_seqs.shape[0]
 
-    k_2d_shape = (block_num_scalar * block_size, n2_sym * dn)
-    q_2d_shape = (b_scalar * s1_scalar * nq, dn)
+        dtype = q.dtype
+        group = nq // nkv
+        n2_sym = nkv
 
-    k_2d = pypto.reshape(k, k_2d_shape, inplace=True)
-    v_2d = pypto.reshape(v, k_2d_shape, inplace=True)
-    q_2d = pypto.reshape(q, q_2d_shape, inplace=True)
-    # 4. 实现kernel逻辑，循环展开B动态轴
-    for b_idx in pypto.loop(b_scalar, name="LOOP_b", idx_name="b_idx"):
-        for s1_idx in pypto.loop(s1_scalar, name="LOOP_s1", idx_name="s1_idx"):
-            cur_seq = kv_act_seqs[b_idx] - (s1_scalar - 1 - s1_idx)
-            s2_loop = (cur_seq + s2_tile - 1) // s2_tile
-            for n2_idx in pypto.loop(n2_sym, name="LOOP_n2", idx_name="n2_idx"):
-                for g_idx in pypto.loop(g_loop, name="LOOP_g", idx_name="g_idx"):
-                    oi_update = pypto.tensor([g_tile, dn], pypto.DT_FP32, "oi_update")
-                    sum_update = pypto.tensor([g_tile, 1], pypto.DT_FP32, "sum_update")
-                    max_update = pypto.tensor([g_tile, 1], pypto.DT_FP32, "max_update")
-                    for s2_idx in pypto.loop(s2_loop, name="LOOP_s2", idx_name="s2_idx", unroll_list=[8, 4, 2, 1]):
-                        block_num = s2_tile // block_size
-                        idx = s2_idx * block_num
-                        bs_ofs = b_idx * s1_scalar + s1_idx
-                        n1g_ofs = n2_idx * group + g_idx * g_tile
-                        actual_s2_tile = (cur_seq - s2_idx * s2_tile).min(s2_tile)
-                        oi_ofs = [bs_ofs, n1g_ofs, 0]
-                        # 5. 按照计算图实现运算逻辑，设置set_vec_tile_shapes时应尽可能用满UB，但不要超过UB的大小。
-                        pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
-                        qi = pypto.view(q_2d, [g_tile, dn], [bs_ofs * nq + n1g_ofs, 0])
+        g_tile = tile_cfg.g_tile
+        s2_tile = tile_cfg.s2_tile
+        c1_tile = tile_cfg.c1_tile_shape
+        v1_tile = tile_cfg.v1_tile_shape
+        c2_tile = tile_cfg.c2_tile_shape
+        v2_tile = tile_cfg.v2_tile_shape
 
-                        kj_assemble = pypto.tensor([s2_tile, dn], k_2d.dtype, "kj_assemble")
-                        for i in range(block_num):
-                            block_idx = block_table[b_idx, idx + i]
-                            block_idx_valid = block_idx.max(0)
-                            kj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                pypto.view(k_2d, [block_size, dn], [block_idx_valid * block_size, 0])
-                        kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0], valid_shape=[s2_tile, dn])
+        # 3. 得到动态tensor的shape
+        s1_scalar = bs_scalar // b_scalar
+        g = nq // nkv
+        g_loop = g // g_tile
 
-                        # c1
-                        # 6. 下面是flash attention的计算逻辑
-                        pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
-                        sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False,
-                                            b_trans=True)
-                        sij = pypto.view(sij, [g_tile, s2_tile], [0, 0],
-                                            valid_shape=[g_tile, actual_s2_tile])
-                        # v1
-                        pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
-                        if pypto.cond(pypto.is_loop_begin(s2_idx)):
-                            sij_scale = pypto.mul(sij, softmax_scale)
-                            tilda_mij = pypto.amax(sij_scale, dim=-1, keepdim=True)
+        k_2d_shape = (block_num_scalar * block_size, n2_sym * dn)
+        q_2d_shape = (b_scalar * s1_scalar * nq, dn)
 
-                            tsub = pypto.sub(sij_scale, tilda_mij)
-                            tilda_pij = pypto.exp(tsub)
-                            tilda_pij_fp16 = pypto.cast(tilda_pij, dtype)
-                            sum_update[:] = pypto.sum(tilda_pij, dim=-1, keepdim=True)
-                            max_update[:] = tilda_mij
+        k_2d = pypto.reshape(k, k_2d_shape, inplace=True)
+        v_2d = pypto.reshape(v, k_2d_shape, inplace=True)
+        q_2d = pypto.reshape(q, q_2d_shape, inplace=True)
 
-                            # c2
-                            vj_assemble = pypto.tensor([s2_tile, dn], v_2d.dtype, "vj_assemble")
-                            for i in range(block_num):
+        atten_out = pypto.Tensor(q_shape, pypto.DT_FP16)
+        block_num = s2_tile // block_size
+        
+                        
+        # 4. 实现kernel逻辑，循环展开B动态轴
+        for b_idx in pypto.loop(b_scalar, name="LOOP_b", idx_name="b_idx"):
+            for s1_idx in pypto.loop(s1_scalar, name="LOOP_s1", idx_name="s1_idx"):
+                cur_seq = kv_act_seqs[b_idx] - (s1_scalar - 1 - s1_idx)
+                s2_loop = (cur_seq + s2_tile - 1) // s2_tile
+                for n2_idx in pypto.loop(n2_sym, name="LOOP_n2", idx_name="n2_idx"):
+                    for g_idx in pypto.loop(g_loop, name="LOOP_g", idx_name="g_idx"):
+                        oi_update = pypto.tensor([g_tile, dn], pypto.DT_FP32, "oi_update")
+                        sum_update = pypto.tensor([g_tile, 1], pypto.DT_FP32, "sum_update")
+                        max_update = pypto.tensor([g_tile, 1], pypto.DT_FP32, "max_update")
+                        for s2_idx in pypto.loop(s2_loop, name="LOOP_s2", idx_name="s2_idx", unroll_list=[8, 4, 2, 1]):
+                    
+                            idx = s2_idx * block_num
+                            bs_ofs = b_idx * s1_scalar + s1_idx
+                            n1g_ofs = n2_idx * group + g_idx * g_tile
+                            actual_s2_tile = (cur_seq - s2_idx * s2_tile).min(s2_tile)
+                            oi_ofs = [bs_ofs, n1g_ofs, 0]
+                            # 5. 按照计算图实现运算逻辑，设置set_vec_tile_shapes时应尽可能用满UB，但不要超过UB的大小。
+                            pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
+                            qi = pypto.view(q_2d, [g_tile, dn], [bs_ofs * nq + n1g_ofs, 0])
+                            tmp_k_2d_shape = (k.shape[0] * k.shape[1], k.shape[2] * k.shape[3])
+                            tmp_k_2d = pypto.reshape(k, tmp_k_2d_shape, inplace=True)
+                            kj_assemble = pypto.tensor([s2_tile, dn], tmp_k_2d.dtype, "kj_assemble")
+                            
+                            for i in pypto.loop(block_num):
                                 block_idx = block_table[b_idx, idx + i]
                                 block_idx_valid = block_idx.max(0)
-                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, 0])
-                            vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                                                     [0, 0], valid_shape=[actual_s2_tile, dn])
-                            pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
-                            oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
+                                kj_assemble[i * k.shape[1]:(i + 1) * k.shape[1], 0:] = \
+                                    pypto.view(tmp_k_2d, [k.shape[1], dn], [block_idx_valid * k.shape[1], 0])
+                            kj_assemble = pypto.view(kj_assemble, [s2_tile, dn], [0, 0], valid_shape=[s2_tile, dn])
 
-                            pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
-                            oi_update[:] = oi_tmp
-                        else:
-                            pypto.set_pass_options(sg_set_scope=1)
-                            sij_scale = pypto.mul(sij, softmax_scale)
-                            tilda_mij = pypto.amax(sij_scale, dim=-1, keepdim=True)
-                            max_new = pypto.maximum(max_update, tilda_mij)
-                            tsub = pypto.sub(sij_scale, max_new)
-                            tilda_pij = pypto.exp(tsub)
-                            tilda_pij_fp16 = pypto.cast(tilda_pij, dtype)
-                            sum_local = pypto.sum(tilda_pij, dim=-1, keepdim=True)
-                            pypto.set_pass_options(sg_set_scope=-1)
+                            # c1
+                            # 6. 下面是flash attention的计算逻辑
+                            pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
+                            sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False,
+                                                b_trans=True)
+                            sij = pypto.view(sij, [g_tile, s2_tile], [0, 0],
+                                                valid_shape=[g_tile, actual_s2_tile])
+                            # v1
+                            pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
+                            if pypto.is_loop_begin(s2_idx):
+                                sij_scale = pypto.mul(sij, softmax_scale)
+                                tilda_mij = pypto.amax(sij_scale, dim=-1, keepdim=True)
 
-                            pypto.set_pass_options(sg_set_scope=2)
-                            tsub2 = pypto.sub(max_update, max_new)
-                            max_update[:] = max_new
-                            update_mul = pypto.exp(tsub2)
-                            sum_update[:] = sum_update * update_mul + sum_local
-                            pypto.set_pass_options(sg_set_scope=-1)
+                                tsub = pypto.sub(sij_scale, tilda_mij)
+                                tilda_pij = pypto.exp(tsub)
+                                tilda_pij_fp16 = pypto.cast(tilda_pij, dtype)
+                                sum_update[:] = pypto.sum(tilda_pij, dim=-1, keepdim=True)
+                                max_update[:] = tilda_mij
 
-                            #c2
-                            vj_assemble = pypto.tensor([s2_tile, dn], v_2d.dtype, "vj_assemble")
-                            for i in range(block_num):
-                                block_idx = block_table[b_idx, idx + i]
-                                block_idx_valid = block_idx.max(0)
-                                vj_assemble[i * block_size:(i + 1) * block_size, 0:] = \
-                                    pypto.view(v_2d, [block_size, dn], [block_idx_valid * block_size, 0])
-                            vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                                                     [0, 0], valid_shape=[actual_s2_tile, dn])
-                            pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
-                            oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
+                                args = v, tmp_k_2d_shape, s2_tile, dn, block_num, block_table, b_idx, \
+                                    idx, k, actual_s2_tile, c2_tile, tilda_pij_fp16
+                                oi_tmp = c2_compute(args)
+                                pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
+                                oi_update[:] = oi_tmp
+                            else:
+                                pypto.set_pass_options(sg_set_scope=1)
+                                sij_scale = pypto.mul(sij, softmax_scale)
+                                tilda_mij = pypto.amax(sij_scale, dim=-1, keepdim=True)
+                                max_new = pypto.maximum(max_update, tilda_mij)
+                                tsub = pypto.sub(sij_scale, max_new)
+                                tilda_pij = pypto.exp(tsub)
+                                tilda_pij_fp16 = pypto.cast(tilda_pij, dtype)
+                                sum_local = pypto.sum(tilda_pij, dim=-1, keepdim=True)
+                                pypto.set_pass_options(sg_set_scope=-1)
 
-                            # v2
-                            pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
-                            oi_update[:] = oi_update * update_mul + oi_tmp
-                        if pypto.cond(pypto.is_loop_end(s2_idx)):
-                            oi_final = pypto.div(oi_update, sum_update)
-                            pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
-                            oi_final_3d = pypto.cast(
-                                pypto.reshape(oi_final, [1, g_tile, dn]),
-                                dtype)
-                            # 7. 将结果搬运到输出tensor上
-                            pypto.assemble(oi_final_3d, oi_ofs, atten_out)
+                                pypto.set_pass_options(sg_set_scope=2)
+                                tsub2 = pypto.sub(max_update, max_new)
+                                max_update[:] = max_new
+                                update_mul = pypto.exp(tsub2)
+                                sum_update[:] = sum_update * update_mul + sum_local
+                                pypto.set_pass_options(sg_set_scope=-1)
+
+                                args = v, tmp_k_2d_shape, s2_tile, dn, block_num, block_table, b_idx, \
+                                    idx, k, actual_s2_tile, c2_tile, tilda_pij_fp16
+                                oi_tmp = c2_compute(args)
+
+                                # v2
+                                pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
+                                oi_update[:] = oi_update * update_mul + oi_tmp
+                            if pypto.is_loop_end(s2_idx):
+                                oi_final = pypto.div(oi_update, sum_update)
+                                pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
+                                oi_final_3d = pypto.cast(
+                                    pypto.reshape(oi_final, [1, g_tile, dn]),
+                                    dtype)
+                                # 7. 将结果搬运到输出tensor上
+                                pypto.assemble(oi_final_3d, oi_ofs, atten_out)
+        return atten_out
+
+    return ifa_func_kernel
 
 def IFA(atten_cfg):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
@@ -486,21 +511,17 @@ def IFA(atten_cfg):
 
     out_torch = torch.zeros(q_shape, dtype=torch_dtype).to(device=device)
 
-    inputs = {
-        q: [0],
-        k: [0],
-        v: [0],
-        block_table_torch: [],
-        act_seq_torch: [0]
-    }
-    outputs = {
-        out_torch: []
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
+    inputs = [
+        q,
+        k,
+        v,
+        block_table_torch,
+        act_seq_torch
+    ]
+
+    shapes = [q_shape, kv_shape, block_table_shape]
     # 5. 执行kernel并获取结果
-    ifa_func(*pto_inputs, *pto_outputs)
-    pypto.runtime._device_synchronize()#内部接口，不推荐使用
+    out_torch = ifa_func(*shapes)(*inputs)
 
     # 6. 与PyTorch参考实现对比
     assert_allclose(np.array(attention_output.cpu().flatten().tolist()), 
