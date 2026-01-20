@@ -40,6 +40,7 @@
 #include "vector/reduce.h"
 #include "vector/sort.h"
 #include "vector/mte.h"
+#include "vector/logicalnot.h"
 #include "vector/gather.h"
 #include "vector/expand.h"
 #include "vector/extract.h"

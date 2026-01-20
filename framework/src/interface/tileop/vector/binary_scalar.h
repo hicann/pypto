@@ -78,7 +78,7 @@ TILEOP void TMulS(T0 dst, T1 src0, Scalar src1) {
     BinaryScalarCompute<BinaryScalarOp::MUL>(dst, src0, src1);
 }
 
-#define OP_TILE_OP_DivS TDivS
+#define OP_TILE_OP_DIVS TDivS
 template <typename Scalar, typename T0, typename T1>
 TILEOP void TDivS(T0 dst, T1 src0, Scalar src1) {
     BinaryScalarCompute<BinaryScalarOp::DIV>(dst, src0, src1);

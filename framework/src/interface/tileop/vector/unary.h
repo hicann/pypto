@@ -129,11 +129,13 @@ TILEOP void TSqrt(T0 dst, T1 src) {
     UnaryCompute<UnaryOp::SQRT>(dst, src);
 }
 
+#define OP_TILE_OP_BRCB Tbrcb
 template <typename T0, typename T1>
 TILEOP void Tbrcb(T0 dst, T1 src) {
     BrcbCompute(dst, src);
 }
 
+#define OP_TILE_OP_ABS TAbs
 template <typename T0, typename T1>
 TILEOP void TAbs(T0 dst, T1 src) {
     UnaryCompute<UnaryOp::ABS>(dst, src);
