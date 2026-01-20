@@ -500,6 +500,18 @@ public:
         iOpAttrOffset = iOffset;
         oOpAttrOffset = oOffset;
     }
+    std::vector<int>& GetIOpAttrOffsets() {
+        return iOpAttrOffset;
+    }
+    std::vector<int>& GetOOpAttrOffsets() {
+        return oOpAttrOffset;
+    }
+    const std::vector<int>& GetIOpAttrOffsets() const {
+        return iOpAttrOffset;
+    }
+    const std::vector<int>& GetOOpAttrOffsets() const {
+        return oOpAttrOffset;
+    }
 
     std::vector<std::reference_wrapper<SymbolicScalar>> GetDynamicAttributeList();
     SourceLocationPtr GetLocation() const { return location_; }

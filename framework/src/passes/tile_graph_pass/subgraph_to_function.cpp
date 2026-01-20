@@ -92,7 +92,9 @@ Status SubgraphToFunction::HandleBlockCall(Function &function) {
         }
         auto &callOpInRoot = rootFunc->AddRawOperation(npu::tile_fwk::Opcode::OP_CALL, 
             args.iOperands, args.oOperands, false);
-        // 2.1 TODO NormalizeCoa
+        // 2.1 Get OpAttrOffsets
+        args.iOpAttrOffset = oriCallOp.GetIOpAttrOffsets();
+        args.oOpAttrOffset = oriCallOp.GetOOpAttrOffsets();
 
         // 2.2 Create Call op attribute
         auto oriCallOpAttr = std::static_pointer_cast<CallOpAttribute>(oriCallOp.GetOpAttribute());

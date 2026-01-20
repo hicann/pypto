@@ -1599,6 +1599,7 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
             auto &newOp = function.AddRawOperation(Opcode::OP_BLOCK_CALL, iOperand, oOperand, true);
             newOp.SetOpAttribute(op.GetOpAttribute());
             newOp.SetAttr(OpAttributeKey::dontTouch, true);
+            newOp.SetOpOffset(op.GetIOpAttrOffsets(), op.GetOOpAttrOffsets());
             break;
         }
         default: {
