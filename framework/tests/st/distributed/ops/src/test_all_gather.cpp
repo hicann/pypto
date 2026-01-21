@@ -24,7 +24,7 @@ namespace npu::tile_fwk {
 namespace Distributed {
 
 template<typename T>
-void TestAllGather(OpTestParam &testParam)
+void TestAllGather(OpTestParam& testParam)
 {
     constexpr size_t paramsSize = 5;
     auto [row, col, typeNum, tileRow, tileCol] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
@@ -60,16 +60,16 @@ void TestAllGather(OpTestParam &testParam)
         RawTensorData::CreateTensorZero(out)
     });
 
-    RunTestVerification();
+    RunTest();
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/output_rank_", outSize, outPtr, testParam));
 
 }
 
-template void TestAllGather<int32_t>(OpTestParam &testParam);
-template void TestAllGather<float>(OpTestParam &testParam);
-template void TestAllGather<float16>(OpTestParam &testParam);
-template void TestAllGather<bfloat16>(OpTestParam &testParam);
+template void TestAllGather<int32_t>(OpTestParam& testParam);
+template void TestAllGather<float>(OpTestParam& testParam);
+template void TestAllGather<float16>(OpTestParam& testParam);
+template void TestAllGather<bfloat16>(OpTestParam& testParam);
 
 } // namespace Distributed
 } // namespace npu::tile_fwk

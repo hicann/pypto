@@ -24,7 +24,7 @@ namespace npu::tile_fwk {
 namespace Distributed {
 
 template<typename T>
-void TestAllReduce(OpTestParam &testParam)
+void TestAllReduce(OpTestParam& testParam)
 {
     constexpr size_t paramsSize = 6;
     auto [row, col, typeNum, tileRow, tileCol, useTwoShot] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
@@ -48,7 +48,7 @@ void TestAllReduce(OpTestParam &testParam)
     int32_t rowPerRank = row;
     Shape shmemDataShape{1, rowPerRank, col};
     if (useTwoShot) {
-        ASSERT(row % testParam.rankSize == 0) << "Two_Shot_AllReduce constraint: row must be divisible by worldSize";
+        ASSERT(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
         rowPerRank /= testParam.rankSize;
         shmemDataShape = {testParam.rankSize, rowPerRank, col};
     }
@@ -71,15 +71,15 @@ void TestAllReduce(OpTestParam &testParam)
             OneShotAllReduce(in, in, testParam.group, shmemData, shmemSignal, out);
         }
     }
-    RunTestVerification();
+    RunTest();
     auto output = ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/output_rank_", outSize, output->GetDevPtr(), testParam));
 
 }
 
-template void TestAllReduce<int32_t>(OpTestParam &testParam);
-template void TestAllReduce<float>(OpTestParam &testParam);
-template void TestAllReduce<float16>(OpTestParam &testParam);
-template void TestAllReduce<bfloat16>(OpTestParam &testParam);
+template void TestAllReduce<int32_t>(OpTestParam& testParam);
+template void TestAllReduce<float>(OpTestParam& testParam);
+template void TestAllReduce<float16>(OpTestParam& testParam);
+template void TestAllReduce<bfloat16>(OpTestParam& testParam);
 } // namespace Distributed 
 } // namespace npu::tile_fwk

@@ -50,7 +50,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> InitializeTestData(OpTestParam &testP
     return {agIn, wLora, wOut, out};
 }
 
-std::tuple<Tensor, Tensor> CreateShmemTensors(OpTestParam &testParam, DataType dtype, const Shape &shape) {
+std::tuple<Tensor, Tensor> CreateShmemTensors(OpTestParam& testParam, DataType dtype, const Shape& shape) {
     Tensor shmemData;
     Tensor shmemSignal;
     LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
@@ -66,6 +66,8 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
     auto [b, s, n, kvLoraRank, vHeadDim, h, typeNum] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
     DataType dtype = GetDataTypeNum(typeNum);
     auto [agIn, wLora, wOut, out] = InitializeTestData(testParam);
+    ASSERT(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
+    int32_t outRow = b * s / testParam.rankSize;
     FUNCTION("ALLGATHER_ATTNPOST_REDUCESCATTER", {agIn, wLora, wOut}, {out}) {
         Tensor agOut(dtype, {b * n * s, kvLoraRank}, "agOut");
         LOOP("ALLGATHER", FunctionType::DYNAMIC_LOOP, unusedDynRankId, LoopRange(1)) {
@@ -98,19 +100,17 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
         }
         LOOP("REDUCESCATTER", FunctionType::DYNAMIC_LOOP, unusedIndex, LoopRange(1)) {
             (void) unusedIndex;
-            Shape shmemDataRsShape{1, (b * s) / testParam.rankSize, h};
             DataType shmemDataType = (attnOut.GetDataType() == DT_BF16 || attnOut.GetDataType() == DT_FP16) 
                 ? DT_FP32 : attnOut.GetDataType();
-            auto [shmemData, shmemSignal] = CreateShmemTensors(testParam, shmemDataType, shmemDataRsShape);
+            auto [shmemData, shmemSignal] = CreateShmemTensors(testParam, shmemDataType, {1, outRow, h});
             TileShape::Current().SetVecTile({16, h});
             Distributed::ReduceScatter(attnOut, attnOut, testParam.group, shmemData, shmemSignal,
                 DistReduceType::DIST_REDUCE_ADD, out);
         }
     }
-    RunTestVerification();
+    RunTest();
     auto output = ProgramData::GetInstance().GetOutputData(0);
-    int32_t outSize = b * s / testParam.rankSize * h;
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dtype, "/rs_out_rank_", outSize, output->GetDevPtr(), testParam, 0.1f));
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dtype, "/rs_out_rank_", outRow * h, output->GetDevPtr(), testParam, 0.1f));
 }
 
 } // namespace Distributed

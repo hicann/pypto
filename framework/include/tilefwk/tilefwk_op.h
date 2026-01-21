@@ -413,7 +413,7 @@ void MoeDispatch(const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tens
     Tensor& combineInfo, const char *group, const MoeConfig& moeConfig);
 void AllGather(const Tensor& predToken, const Tensor& in, const char* group, uint32_t worldSize, Tensor& out);
 void AllGather(const Tensor& predToken, const Tensor& in, const char* group, Tensor& shmemData,
-    Tensor &shmemSignal, Tensor &out);
+    Tensor& shmemSignal, Tensor& out);
 void ShmemBarrier(const Tensor& predToken, Tensor& shmemSignal, const char* group, uint32_t worldSize, Tensor& out);
 Tensor ShmemDataSet(const Tensor& predToken, const Tensor& shmemData);
 Tensor ShmemSignalSet(const Tensor& predToken, const Tensor& shmemSignal);

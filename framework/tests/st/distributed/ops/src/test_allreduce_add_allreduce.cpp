@@ -153,7 +153,7 @@ void TestAllReduceAddAllReduce(OpTestParam &testParam)
 
     FuncAllReduceAddAllReduce(in, out, testParam, row, col);
 
-    RunTestVerification();
+    RunTest();
     auto output = ProgramData::GetInstance().GetOutputData(0);
     int32_t outSize = row * col;
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/out_rank_", outSize, output->GetDevPtr(), testParam));

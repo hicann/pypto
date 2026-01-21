@@ -24,11 +24,11 @@ namespace npu::tile_fwk {
 namespace Distributed {
 
 template<typename T>
-void TestReduceScatter(OpTestParam &testParam)
+void TestReduceScatter(OpTestParam& testParam)
 {
     constexpr size_t paramsSize = 5;
     auto [row, col, typeNum, tileRow, tileCol] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
-    ASSERT((testParam.rankSize > 0) && (row % testParam.rankSize == 0)) << "worldSize constraint";
+    ASSERT(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
     int rowOut = row / testParam.rankSize;
     DataType dType = GetDataTypeNum(typeNum);
     Tensor in(dType, {row, col}, "in");
@@ -58,14 +58,14 @@ void TestReduceScatter(OpTestParam &testParam)
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<T>(out, 0),
     });
-    RunTestVerification();
+    RunTest();
     auto outPut = ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/output_rank_", rowOut * col, outPut->GetDevPtr(), testParam));
 }
 
-template void TestReduceScatter<int32_t>(OpTestParam &testParam);
-template void TestReduceScatter<float>(OpTestParam &testParam);
-template void TestReduceScatter<float16>(OpTestParam &testParam);
-template void TestReduceScatter<bfloat16>(OpTestParam &testParam);
+template void TestReduceScatter<int32_t>(OpTestParam& testParam);
+template void TestReduceScatter<float>(OpTestParam& testParam);
+template void TestReduceScatter<float16>(OpTestParam& testParam);
+template void TestReduceScatter<bfloat16>(OpTestParam& testParam);
 } // namespace Distributed
 } // namespace npu::tile_fwk

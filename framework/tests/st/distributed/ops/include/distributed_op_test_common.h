@@ -111,7 +111,7 @@ bool CompareWithGolden(const DataType dType, const std::string &goldenFilename, 
     return result;
 }
 
-inline void RunTestVerification() {
+inline void RunTest() {
     DeviceLauncherConfig config;
     config.runModel = false;
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
