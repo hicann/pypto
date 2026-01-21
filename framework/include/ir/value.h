@@ -206,10 +206,26 @@ public:
     void SetStrides(const std::vector<int64_t>& newStrides) { strides_ = newStrides; }
     void SetStartOffset(const ScalarValuePtr newStartOffset) { startOffset_ = newStartOffset; }
     void SetMemory(const std::shared_ptr<Memory> newMem) { mem_ = newMem; }
+    void SetMemoryParam(uint64_t byteSize, MemSpaceKind space, uint64_t addr) 
+    { 
+        if (mem_ == nullptr) {
+            mem_ = std::make_shared<Memory>(byteSize, space); 
+        } else {
+            mem_->SetSize(byteSize);
+            mem_->SetSpace(space);
+        }
+        mem_->SetAddr(addr);
+    }
+    void SetMemoryAddr(uint64_t addr)
+    {
+        if (mem_ == nullptr) {
+            return;
+        }
+        mem_->SetAddr(addr);
+    }
     void SetValidShapes(const std::vector<ScalarValuePtr> &validShapes) { validShapes_ = validShapes; }
 
     void Print(std::ostream& os, int indent = 0) const override;
-
 private:
     std::vector<ScalarValuePtr> validShapes_;
     std::vector<int64_t> strides_;

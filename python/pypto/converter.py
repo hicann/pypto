@@ -205,4 +205,4 @@ def ir_from_tensor(pto_tensor: Tensor):
         tensor_shape.append(dim)
         dim_num = dim_num + 1
     return ir.Tensor(tensor_shape, ir.DataType(int(pto_tensor.dtype)), \
-        pto_tensor.name, ir.Format((int(pto_tensor.format))))
+        "_MACRO_" + pto_tensor.name, ir.Format((int(pto_tensor.format))))

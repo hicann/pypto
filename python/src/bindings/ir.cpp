@@ -191,6 +191,10 @@ static void IrBindValue(py::module &m) {
                  ScalarValuePtr, DataType, MemoryPtr>(),
             py::arg("name"), py::arg("valid_shape"), py::arg("shape"), py::arg("strides"), py::arg("offset"),
             py::arg("dtype"), py::arg("memory"))
+        .def("set_valid_shape", &TileValue::SetValidShape, py::arg("new_valid_shape"))
+        .def("set_memory_param", &TileValue::SetMemoryParam, py::arg("byte_size"), py::arg("space"),
+            py::arg("addr"))
+        .def("set_memory_addr", &TileValue::SetMemoryAddr, py::arg("addr"))
         .def_property("shape", &TileValue::GetShape, &TileValue::SetShape)
         .def_property("strides", &TileValue::GetStrides, &TileValue::SetStrides)
         .def_property("offset", &TileValue::GetStartOffset, &TileValue::SetStartOffset)
@@ -287,6 +291,8 @@ static void IrBindModule(py::module &m) {
 static void IrBindFunction(py::module &m) {
     py::class_<FunctionSignature>(m, "FunctionSignature")
         .def(py::init<>())
+        .def(py::init<const std::vector<pto::TensorValuePtr> &>(),
+                      py::arg("args"))
         .def(py::init<const std::vector<pto::TensorValuePtr> &,
                       const std::vector<pto::TensorValuePtr> &>(),
                       py::arg("input_args"), py::arg("output_args"))
@@ -298,6 +304,7 @@ static void IrBindFunction(py::module &m) {
             return std::make_shared<Function>(name, kind, sig);
         }),
             py::arg("kind"), py::arg("name"), py::arg("sig"))
+        .def("get_sig", &Function::GetSignature)
         .def(
             "stmts", [](Function &self) { return self.GetCompound(); }, py::return_value_policy::reference_internal)
         .def_property_readonly("kind", &Function::GetKind);
@@ -313,7 +320,38 @@ static void IrBuilderBindScalarOps(py::class_<IRBuilder> &irBuilder) {
         .def("create_binary_scalar_op",
             [](IRBuilder &self, Opcode opcode, ScalarValuePtr lhs, ScalarValuePtr rhs, ScalarValuePtr out) {
                 return std::static_pointer_cast<Operation>(self.CreateBinaryScalarOp(opcode, lhs, rhs, out));
-}, py::arg("opcode"), py::arg("lhs"), py::arg("rhs"), py::arg("out"));
+}, py::arg("opcode"), py::arg("lhs"), py::arg("rhs"), py::arg("out"))
+        .def("create_call_1_scalar_op",
+            [](IRBuilder &self, Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr out, const std::string &name) {
+                return std::static_pointer_cast<Operation>(self.CreateCall1ScalarOp(opcode, arg0, out, name));
+}, py::arg("opcode"), py::arg("ar0"), py::arg("out"), py::arg("name"))
+        .def("create_call_2_scalar_op",
+            [](IRBuilder &self, Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, 
+               ScalarValuePtr out, const std::string &name) {
+                return std::static_pointer_cast<Operation>(self.CreateCall2ScalarOp(opcode, arg0, arg1, out, name));
+}, py::arg("opcode"), py::arg("arg0"), py::arg("arg1"), py::arg("out"), py::arg("name"))
+        .def("create_call_3_scalar_op",
+            [](IRBuilder &self, Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, 
+               ScalarValuePtr arg2, ScalarValuePtr out, const std::string &name) {
+                return std::static_pointer_cast<Operation>(
+                    self.CreateCall3ScalarOp(opcode, arg0, arg1, arg2, out, name));
+}, py::arg("opcode"), py::arg("arg0"), py::arg("arg1"), py::arg("arg2"), py::arg("out"), py::arg("name"))
+        .def("create_call_4_scalar_op",
+            [](IRBuilder &self, Opcode opcode, 
+                ScalarValuePtr arg0, ScalarValuePtr arg1, ScalarValuePtr arg2, ScalarValuePtr arg3, 
+                ScalarValuePtr out, const std::string &name) {
+                return std::static_pointer_cast<Operation>(
+                    self.CreateCall4ScalarOp(opcode, arg0, arg1, arg2, arg3, out, name));
+}, py::arg("opcode"), py::arg("arg0"), py::arg("arg1"), py::arg("arg2"), py::arg("arg3"), 
+    py::arg("out"), py::arg("name"))
+        .def("create_call_5_scalar_op",
+            [](IRBuilder &self, Opcode opcode, ScalarValuePtr arg0, ScalarValuePtr arg1, 
+                ScalarValuePtr arg2, ScalarValuePtr arg3, ScalarValuePtr arg4, 
+                ScalarValuePtr out, const std::string &name) {
+                return std::static_pointer_cast<Operation>(
+                    self.CreateCall5ScalarOp(opcode, arg0, arg1, arg2, arg3, arg4, out, name));
+}, py::arg("opcode"), py::arg("arg0"), py::arg("arg1"), py::arg("arg2"), py::arg("arg3"), py::arg("arg4"),
+    py::arg("out"), py::arg("name"));
 }
 
 // Tile operations (from tile_graph.def)

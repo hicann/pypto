@@ -27,7 +27,7 @@ def _get_common_test_shape():
     return tile_shape, batch, constant128, tensor_shape
 
 
-def block_function(input_args, output_args):
+def block_function(args):
     """
     1:1 ported from `test_control_flow` in `test_ir_binding.py`
     just hide `builder` and `ctx` behind ``BlockBuilderHelper
@@ -125,3 +125,82 @@ def test_block_call_1():
         loop_count = 4
         for idx in pypto.loop(0, loop_count, 1, name="LOOP_L0", idx_name="idx"):
             pto_c = BlockCallHelper.call(block_function, [pto_a, pto_b], [pto_c], [idx])[0]
+
+
+# block function计算
+def block_function_add(args):
+    tile_shape_const = [32, 512]
+    
+    builder = ir.IrBuilder()
+    ctx = ir.IrBuilderContext()
+    block = BlockBuilderHelper(builder, ctx)
+    sig = ir.FunctionSignature(args)
+    func = block.create_function("test_div", ir.FunctionKind.Block, sig)
+    with block.function_scope(func):
+        constant0 = block.const(0, "const_0")
+        constant1 = block.const(1, "const_1")
+        constant2 = block.const(2, "const_2")
+        constant3 = block.const(16384, "const_16384")
+        constant32 = block.const(32, "const_32")
+        constant512 = block.const(512, "const_512")
+                
+        idx = block.scalar(ir.DataType.int32, "idx")
+        block.call_scalar(constant0, out=idx, call_type="GET_COA")
+        offset0 = block.scalar(ir.DataType.int32, "offset0")
+        block.muls(idx, constant3, offset0)
+
+        i = block.scalar(ir.DataType.int32, "i")
+        pipe_v = block.scalar(ir.DataType.int32, "PIPE_V")
+        pipe_mte2 = block.scalar(ir.DataType.int32, "PIPE_MTE2")
+        pipe_mte3 = block.scalar(ir.DataType.int32, "PIPE_MTE3")
+        event_id0 = block.scalar(ir.DataType.int32, "EVENT_ID0")
+        void_value = block.scalar(ir.DataType.int32, "_")
+        # 定义 & 获取GM地址
+        pipe_mte2 = block.scalar(ir.DataType.int32, "PIPE_MTE2")
+        # 定义 UB地址
+        tile_shape = [constant32, constant512]
+        ubt0 = block.tile(tile_shape_const, ir.DataType.float32, "ubt0")
+        ubt0.set_valid_shape(tile_shape) # 后续需要支持validshape不等于tile的场景
+        ubt0.set_memory_param(0x10000, ir.MemSpaceKind.UB, 0x0)
+
+        ubt1 = block.tile(tile_shape_const, ir.DataType.float32, "ubt1")
+        ubt1.set_valid_shape(tile_shape) # 后续需要支持validshape不等于tile的场景
+        ubt1.set_memory_param(0x10000, ir.MemSpaceKind.UB, 0x10000)
+
+        # Copy输入
+        block.ub_copy_in(args[0], {offset0, constant0}, ubt0)
+        block.ub_copy_in(args[1], {offset0, constant0}, ubt1)
+
+        # 插入同步 MTE2_TO_V
+        block.call_scalar(pipe_mte2, pipe_v, event_id0, out=void_value, call_type="set_flag")
+        block.call_scalar(pipe_mte2, pipe_v, event_id0, out=void_value, call_type="wait_flag")
+
+        # 计算Add
+        block.add(ubt0, ubt1, ubt0)
+
+        # 插入同步 V_TO_MTE3
+        block.call_scalar(pipe_v, pipe_mte3, event_id0, out=void_value, call_type="set_flag")
+        block.call_scalar(pipe_v, pipe_mte3, event_id0, out=void_value, call_type="wait_flag")
+
+        # Copy到Gm
+        block.ub_copy_out(ubt0, {offset0, constant0}, args[2])
+        block.create_return([constant0])
+    return func
+
+
+def test_block_call_add():
+    shape = [512, 512]
+    a = torch.rand(shape, dtype=torch.float32, device=f'cpu')
+    b = torch.rand(shape, dtype=torch.float32, device=f'cpu')
+    c = torch.rand(shape, dtype=torch.float32, device=f'cpu')
+    pto_a = pypto.from_torch(a)
+    pto_b = pypto.from_torch(b)
+    pto_c = pypto.from_torch(c)
+    with pypto.function("test_block_call_add", pto_a, pto_b, pto_c):
+        loop_count = 16
+        for idx in pypto.loop(0, loop_count, 1, name="LOOP_L0", idx_name="idx"):
+            pto_c = BlockCallHelper.call(block_function_add, [pto_a, pto_b], [pto_c], [idx])[0]
+
+
+if __name__ == "__main__":
+    test_block_call_1()

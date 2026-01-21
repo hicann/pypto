@@ -18,12 +18,12 @@ from pypto.blockgraph.block_call import BlockCallHelper
 import pypto
 
 
-def test_block_function(input_args, output_args):
+def test_block_function(args):
     builder = ir.IrBuilder()
     ctx = ir.IrBuilderContext()
     block = BlockBuilderHelper(builder, ctx)
     tile_shape = [128, 128]
-    sig = ir.FunctionSignature(input_args, output_args)
+    sig = ir.FunctionSignature(args)
     func = block.create_function("test_div", ir.FunctionKind.Block, sig)
     with block.function_scope(func):
         constant0 = block.const(0, "const_0")

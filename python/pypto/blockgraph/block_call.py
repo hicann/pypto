@@ -19,22 +19,21 @@ class BlockCallHelper:
     @staticmethod
     def call(block_func: Callable, input_tensors: List[pypto.tensor], \
              output_tensors: List[pypto.tensor], indices: List[pypto.symbolic_scalar]):
-        input_args = []
+        args = []
         impl_in_tensors = []
         for in_tensor in input_tensors:
-            input_args.append(pypto.ir_from_tensor(in_tensor))
+            args.append(pypto.ir_from_tensor(in_tensor))
             impl_in_tensors.append(in_tensor.base())
 
-        output_args = []
         impl_out_tensors = []
         for out_tensor in output_tensors:
-            output_args.append(pypto.ir_from_tensor(out_tensor))
+            args.append(pypto.ir_from_tensor(out_tensor))
             impl_out_tensors.append(out_tensor.base())
         
         if not callable(block_func):
             raise TypeError("func must be callable")
         try:
-            ir_func_ptr = block_func(input_args, output_args)
+            ir_func_ptr = block_func(args)
         except Exception as e:
             raise RuntimeError(f"Error in block function: {e}") from e
         impl_sym_scalar = []
