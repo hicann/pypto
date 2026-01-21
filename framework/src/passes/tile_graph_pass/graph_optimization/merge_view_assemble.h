@@ -89,8 +89,9 @@ private:
     Status Initialize();
 
     // Processing methods
-    Status ProcessViewOperations(Function &function);
-    Status ProcessAssembleOperations(Function &function);
+    Status ProcessOperations(Function &function);
+    Status ProcessViewOperations(Function &function, Operation& op);
+    Status ProcessAssembleOperations(Function &function, Operation& op);
 
     // Operation appending methods
     Status AppendMergedViewOperations(Function &function);
@@ -99,8 +100,8 @@ private:
     // Cleanup methods
     Status CleanUp(Function &function);
     Status EraseRedundantAssemble(Function &function) const;
-    std::set<int32_t> visitedOp_;
-    std::unordered_set<int32_t> assembleWithoutAssembleConsumer_;
+    std::unordered_set<int> visitedOp_;
+    std::unordered_set<int> assembleWithoutAssembleConsumer_;
     std::vector<ViewOp> viewOpToAppend_;
     std::vector<AssembleOp> assembleOpToAppend_;
 };
