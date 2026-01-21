@@ -87,12 +87,6 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
         shmemDataIndex = GM2UB_SHMEMDATA_INDEX;
         shapeIndex = 1;
     }
-    if (opCode == Opcode::OP_SHMEM_GET_GM2UB) {
-        nonShmemDataIndex = 0;
-        shmemDataIndex = GM2UB_SHMEMDATA_INDEX;
-        shapeIndex = GM2UB_SHMEMDATA_INDEX;
-    }
-
     const std::vector<int64_t>& tileShape = originShape[shapeIndex];
     int64_t tileRowShape = tileShape[tileShape.size() - 2];
     int64_t tileColShape = tileShape[tileShape.size() - 1];
@@ -102,18 +96,25 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
     int64_t bufferRowShape = distOpAttr.copyBufferShape[0];
     int64_t bufferColShape = distOpAttr.copyBufferShape[1];
 
-    const std::vector<int64_t>& originTensorShape = rawShape[shapeIndex];
-    int64_t stride = originTensorShape[originTensorShape.size() - 1];
+    const std::vector<int64_t>& shmemTensorRawShape = rawShape[shapeIndex];
+    const std::vector<int64_t>& nonShmemTensorRawShape = rawShape[nonShmemDataIndex];
+    int64_t srcStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
+    int64_t dstStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
+    if ((opCode == Opcode::OP_SHMEM_GET) || (opCode == Opcode::OP_SHMEM_GET_GM2UB)) {
+        srcStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
+        dstStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
+    }
 
     CheckInRange(tileRowShape);
     CheckInRange(tileColShape);
     CheckInRange(bufferRowShape);
     CheckInRange(bufferColShape);
-    CheckInRange(stride);
+    CheckInRange(srcStride);
+    CheckInRange(dstStride);
 
     oss << "<" << DataType2CCEStr(operandDtype[nonShmemDataIndex]) << ", " << DataType2CCEStr(operandDtype[shmemDataIndex])
         << ", " << tileRowShape << ", " << tileColShape << ", " << bufferRowShape
-        << ", " << bufferColShape << ", " << stride << ", " << stride << ", "
+        << ", " << bufferColShape << ", " << srcStride << ", " << dstStride << ", "
         << npu::tile_fwk::Distributed::AtomicTypeToString(distOpAttr.atomicType) << ">";
     return oss.str();
 }
@@ -362,7 +363,7 @@ std::string CodeGenOpCloudNPU::GenExtraParamsStr() const
         {Opcode::OP_SHMEM_PUT, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGet(); }},
         {Opcode::OP_SHMEM_GET, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGet(); }},
         {Opcode::OP_SHMEM_PUT_UB2GM, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGetUB(); }},
-        {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGetUB(); }},
+        {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGet(); }},
         {Opcode::OP_SHMEM_SIGNAL, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemSignal(); }},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForMoeDistributedCombineSend(); }},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForMoeDistributedCombineReceive(); }},
@@ -393,7 +394,7 @@ std::string CodeGenOpCloudNPU::GenDistOp() const
         {Opcode::OP_SHMEM_PUT, {0, 4}},
         {Opcode::OP_SHMEM_GET, {2}},
         {Opcode::OP_SHMEM_PUT_UB2GM, {0, 3}},
-        {Opcode::OP_SHMEM_GET_GM2UB, {1}},
+        {Opcode::OP_SHMEM_GET_GM2UB, {2}},
         {Opcode::OP_SHMEM_SIGNAL, {0, 2}},
         {Opcode::OP_SHMEM_SET, {0, 2}},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, {0}},

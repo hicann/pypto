@@ -230,4 +230,28 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
     codeGen.GenCode(*function, {});
 }
 
+TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
+{
+    const char* group = "hcom123";
+    int64_t row = 4;
+    int64_t col = 64;
+    Tensor dummy(DT_INT32, {1, 1}, "dummy");
+    Tensor shmemData(DT_INT32, {1, 1, row, col}, "in");
+    Tensor out(DT_INT32, {row, col}, "out");
+    std::string functionName = "ShmemGetGm2Ub";
+    FUNCTION(functionName + "Main", {dummy, shmemData}, {out}) {
+        TileShape::Current().SetVecTile({row, col});
+        LOOP(functionName, FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
+            (void) index;
+            out = ShmemGetGm2Ub(dummy, shmemData);
+        }
+    }
+
+    std::string functionRawName = GetFunctionRawName(functionName);
+    auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
 }

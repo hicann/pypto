@@ -19,6 +19,6 @@
 #include "tilefwk/symbolic_scalar.h"
 
 namespace npu::tile_fwk {
-SymbolicScalar GetHcclRankId(int32_t groupIndex);
+SymbolicScalar GetHcclRankId(const std::string &groupName);
 SymbolicScalar BindTensor(uint64_t groupIndex, uint64_t memType, uint64_t size);
 }

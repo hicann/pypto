@@ -643,6 +643,17 @@ void CopyInInferFunc(Operation* op,
 }
 REGISTER_INFER_SHAPE_FUNC(OP_COPY_IN, Opcode::OP_COPY_IN, CopyInInferFunc);
 
+void ShmemGetGm2UBInferFunc(Operation* op,
+                      std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    std::vector<SymbolicScalar> toValidShapeSym(copyOpAttribute->GetToDynValidShape().size());
+    OpImmediate::NormalizeValue(toValidShapeSym, 0, copyOpAttribute->GetToDynValidShape(), 0, false);
+    outValidShapes.push_back(toValidShapeSym);
+    outValidShapes.push_back(std::vector<SymbolicScalar>{});
+}
+REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_GET_GM2UB, Opcode::OP_SHMEM_GET_GM2UB, ShmemGetGm2UBInferFunc);
+
 void CopyOutInferFunc(Operation* op,
                       std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

@@ -59,6 +59,8 @@ struct DeviceExecuteContext {
     uint64_t duppedRootCount{0};
     bool controlFlowCacheActivated{false};
 
+    uint64_t shmemAddrOffset[2] = {0};
+
     bool DuppedRootCached();
 
     bool DuppedRootUpdateAndCachedAllSubmitted();

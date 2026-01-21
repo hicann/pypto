@@ -67,7 +67,7 @@ Status PreGraphProcess::RunOnFunction(Function &function) {
         if (IsCopyOut(op.GetOpcode()) && op.GetOpcode() != Opcode::OP_COPY_OUT) {
             setCopyAttr.ProcessSpecialMTEOperation(op);
         }
-        if (IsCopyIn(op.GetOpcode()) && op.GetOpcode() != Opcode::OP_COPY_IN) {
+        if (IsCopyIn(op.GetOpcode()) && op.GetOpcode() != Opcode::OP_COPY_IN && op.GetOpcode() != Opcode::OP_SHMEM_GET_GM2UB) {
             setCopyAttr.ProcessMoveInOperation(op);
         }
     }

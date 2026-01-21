@@ -88,7 +88,7 @@ void LoopCreateShmemTensor(const Tensor& addOut, Tensor& shmemBarrier1ShmemSigna
 
 void LoopAllReduce2(const Tensor& addOut, Tensor& shmemBarrier1ShmemSignal, Tensor& shmemBarrier2ShmemSignal,
     Tensor& allReduce2ShmemData, Tensor& allReduce2ShmemSignal, Tensor& out, const OpTestParam& testParam, int32_t row,
-    int32_t col, int32_t hcclGroupIndex)
+    int32_t col, std::string group)
 {
     LOOP("AllReduce2", FunctionType::DYNAMIC_LOOP, allReduce2Index, LoopRange(0, 1, 1)) {
         (void)allReduce2Index;
@@ -97,7 +97,7 @@ void LoopAllReduce2(const Tensor& addOut, Tensor& shmemBarrier1ShmemSignal, Tens
         Tensor memSetOut(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "memSetOut");
         Tensor barrier2Out(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "barrier2Out");
 
-        SymbolicScalar thisRank = GetHcclRankId(hcclGroupIndex);
+        SymbolicScalar thisRank = GetHcclRankId(group);
         TileShape::Current().SetVecTile({1, 8});
         ShmemBarrier(addOut, shmemBarrier1ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize), barrier1Out);
         TileShape::Current().SetVecTile(row, col);
@@ -130,7 +130,7 @@ void FuncAllReduceAddAllReduce(const Tensor& in, Tensor& out, const OpTestParam&
         LoopCreateShmemTensor(addOut, shmemBarrier1ShmemSignal, shmemBarrier2ShmemSignal, allReduce2ShmemData,
             allReduce2ShmemSignal, testParam, row, col, hcclGroupIndex);
         LoopAllReduce2(addOut, shmemBarrier1ShmemSignal, shmemBarrier2ShmemSignal, allReduce2ShmemData,
-            allReduce2ShmemSignal, out, testParam, row, col, hcclGroupIndex);
+            allReduce2ShmemSignal, out, testParam, row, col, std::string(testParam.group));
     };
 }
 
