@@ -67,6 +67,7 @@ constexpr int32_t DFX_TIME_OUT_THRESHOLD = 50000000; // 超时阈值 50s
 constexpr uint32_t MAX_SCHEDULE_AICPU_NUM = 5;          // 真正负责调度aicore的最大aicpu个数
 constexpr uint32_t MAX_OTHER_AICPU_NUM = 2; // 除调度cpu以外的其它aicpu数量
 constexpr uint32_t MAX_USED_AICPU_NUM = MAX_SCHEDULE_AICPU_NUM + MAX_OTHER_AICPU_NUM;
+constexpr uint32_t CTRL_CPU_THREAD_IDX = 0;
 constexpr int32_t START_AICPU_NUM = 3;
 constexpr uint64_t NUM_FIFTY = 50;
 constexpr uint64_t US_PER_SEC = 1000000;
