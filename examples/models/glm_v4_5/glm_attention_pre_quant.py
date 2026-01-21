@@ -276,8 +276,7 @@ def quant_attention_pre(shapes) -> torch.Tensor:
         runtime_options={"stitch_function_num_initial": 128, 
         "stitch_function_outcast_memory": 1024,
         "stitch_function_inner_memory": 1024,
-        "stitch_cfgcache_size": 3000000},
-        host_options={"only_codegen": True},
+        "stitch_cfgcache_size": 3000000}
     )
     def quant_attention_pre_kernel(
         x: pypto.Tensor((bs, hidden_size), pypto.DT_BF16),

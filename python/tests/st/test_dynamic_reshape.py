@@ -159,9 +159,7 @@ def test_reshape_validshape2():
     pypto.runtime._device_fini()
 
 
-@pypto.jit(
-    host_options={"only_codegen": True}
-)
+@pypto.jit
 def reshape_kernel(in_tensor, out_tensor):
     b = 3
     n1 = 64

@@ -160,7 +160,7 @@ void RecordFunc::EndFunction() {
             MergeAllFuncDupIocast(nullptr);
             PassManager::Instance().RunPass(Program::GetInstance(),
                 *Program::GetInstance().GetFunctionByMagicName(PROGRAM_ENTRY_FUNCTION_NAME), "FunctionUnroll");
-            if (!config::GetPlatformConfig(npu::tile_fwk::KEY_ONLY_TENSOR_GRAPH, false)) {
+            if (config::GetHostOption<int64_t>(COMPILE_STAGE) != GEN_TENSOR_GRAPH) {
                 Program::GetInstance().UpdateCompileTask();
             }
         }

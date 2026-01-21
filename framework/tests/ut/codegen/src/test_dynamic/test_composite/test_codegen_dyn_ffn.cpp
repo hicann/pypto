@@ -32,7 +32,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
 
@@ -40,7 +40,6 @@ public:
 };
 
 void testffnquant() {
-    config::SetHostOption(ONLY_CODEGEN, true);
 
     TileShape::Current().SetVecTile(32, 128);
     TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {128, 128});

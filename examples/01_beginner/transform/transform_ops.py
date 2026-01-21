@@ -157,7 +157,7 @@ def test_assemble_different_offsets_shapes(device_id: int = None, run_mode: str 
 
 
 def gather_wrapper(mode: pypto.RunMode, dim: int, input_shape: tuple, index_shape: tuple):
-    @pypto.frontend.jit(host_options={"only_codegen": True}, runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def gather_kernel(
         input_tensor: pypto.Tensor(input_shape, pypto.DT_INT32),
         index_tensor: pypto.Tensor(index_shape, pypto.DT_INT32)
@@ -310,7 +310,7 @@ def scatter_wrapper(dim: int, src: torch.float32, input_shape: tuple, index_shap
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
     
-    @pypto.frontend.jit(host_options={"only_codegen": True}, runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def scatter_kernel(
         x: pypto.Tensor(input_shape, pypto.DT_FP32),
         y: pypto.Tensor(index_shape, pypto.DT_INT64)

@@ -30,7 +30,7 @@ class DynamicBatchMatmulInterpreterTest : public npu::tile_fwk::stest::TestSuite
 
 template <typename InputT, typename OutputT, bool IsBtrans = false, bool IsBNZ = false>
 void TestDynBatchMatmul(int b, int m, int k, int n, string dataPath) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     SetInterpreterConfig();
 
@@ -87,7 +87,7 @@ void TestDynBatchMatmul(int b, int m, int k, int n, string dataPath) {
 
 template <typename InputT, typename OutputT, bool IsBtrans = false, bool IsBNZ = false>
 void TestDynBatchMatmul4D(vector<int> b1, vector<int> b2, int m, int k, int n, string dataPath) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
 

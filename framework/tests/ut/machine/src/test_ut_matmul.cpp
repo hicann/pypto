@@ -65,8 +65,8 @@ DataType GetAstDtype() {
 
 template <typename MatmulImplType>
 void TestDynMatmul(int m, int k, int n, Matrix::MatmulExtendParam param = {}) {
-    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     int nb = n;
     int kb = k;
     int ka = k;
@@ -173,8 +173,7 @@ TEST_F(DynamicMatmulUTest, mm_A_B_ND_config) {
 }
 
 TEST_F(DynamicMatmulUTest, transposed_batchmatmul_test) {
-    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t b = 4;
     int64_t m = 16;

@@ -30,7 +30,7 @@ public:
         rtSetDevice(GetDeviceIdByEnvVar());
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, false);
+        config::SetHostOption(COMPILE_STAGE, ALL_COMPLETE);
         config::SetHostConfig(KEY_STRATEGY, "PVC2_OOO");
         config::SetPassOption(VEC_NBUFFER_MODE, 1);
         config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, LLMA_L1REUSE_THRESHOLD}});

@@ -26,7 +26,10 @@ namespace pypto {
 void bind_controller_config(py::module &m) {
     m.def("SetBuildStatic", [](const bool &value) { config::SetBuildStatic(value); }, py::arg("value"));
 
-    m.def("Reset", []() { config::Reset(); });
+    m.def("ResetOptions", []() {
+        config::Reset();
+        ConfigManagerNg::GetInstance().SetScope(std::map<std::string, Any>({{"host.compile_stage", (int64_t)GEN_KERNEL_CODE}}));
+    });
 
 
     m.def(
@@ -102,7 +105,6 @@ void bind_controller_function(py::module &m) {
             tensors.push_back(a.cast<Tensor &>());
         }
         Program::GetInstance().Reset();
-        config::Reset();
         Program::GetInstance().BeginFunction(FUNCTION_PREFIX + funcName, funcType, graphType, tensors);
     });
     m.def("EndFunction", [](const std::string &funcName, bool generateCall) {
@@ -342,5 +344,7 @@ void bind_controller(py::module &m) {
 
     // disable cpp mode
     SourceLocation::SetCppMode(false);
+    // set default compile stage to codegen
+    ConfigManagerNg::GetInstance().SetScope(std::map<std::string, Any>({{"host.compile_stage", (int64_t)GEN_KERNEL_CODE}}));
 }
 } // namespace pypto

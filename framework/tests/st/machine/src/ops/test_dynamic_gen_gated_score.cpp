@@ -42,7 +42,7 @@ static std::vector<T> GetGoldenVec(std::vector<int64_t> shape, std::string fileN
 
 template<typename T = npu::tile_fwk::float16>
 void GenGatedScoreEntryPrefill(const std::vector<int64_t>& bnsh) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t b = bnsh[0];
     int64_t n = bnsh[1];

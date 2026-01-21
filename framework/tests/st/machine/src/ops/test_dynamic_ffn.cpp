@@ -27,7 +27,7 @@ class DynamicFFNTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {}
 namespace {
 TEST_F(DynamicFFNTest, TestOnbroadDynamicFFN) {
     SetInterpreterConfig();
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 256);
     TileShape::Current().SetCubeTile({32, 32}, {128, 256}, {128, 128});
     constexpr int BATCH_SIZE = 32;
@@ -82,7 +82,7 @@ TEST_F(DynamicFFNTest, TestOnbroadDynamicFFN) {
 }
 
 TEST_F(DynamicFFNTest, TestOnbroadDynamicFFNQuant) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 256);
     TileShape::Current().SetCubeTile({32, 32}, {256, 256}, {128, 128}, true);
     config::SetPassOption(VEC_NBUFFER_MODE, 1);      // 是否开启db切分 1开启

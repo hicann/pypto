@@ -33,7 +33,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         dynFunc = std::make_shared<Function>(Program::GetInstance(), "DYN_0", "DYN", Program::GetInstance().GetCurrentFunction());
         Program::GetInstance().SetCurrentDynamicFunction(dynFunc.get());

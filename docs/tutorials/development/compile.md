@@ -50,7 +50,7 @@ JIT装饰器支持参数配置，可根据配置支持不同的条件编译：
 
 ```python
 @pypto.jit(
-    host_options={"only_codegen": False},               
+    host_options={},               
     pass_options={},                                    
     runtime_options={},
     verify_options={},                                    

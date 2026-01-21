@@ -79,7 +79,6 @@ def dynamic_matmul_onboard_util(input_config: ShapeConfig, extend_params: Option
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     pypto.runtime._device_init()
-    pypto.set_host_options(only_codegen=True)
     pypto.set_cube_tile_shapes(input_config.m_tile_shape, input_config.k_tile_shape, input_config.n_tile_shape)
 
     tensor_a = create_tensor(input_config.in_dtype, input_config.ori_shape, "tensor_a", input_config.a_format_nz,

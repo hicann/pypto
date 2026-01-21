@@ -59,7 +59,6 @@ def dynamic_batch_matmul_onboard_util(input_config: BatchMatmulShapeConfig):
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     pypto.runtime._device_init()
-    pypto.set_host_options(only_codegen=True)
     pypto.set_cube_tile_shapes(input_config.m_tile_shape, input_config.k_tile_shape, input_config.n_tile_shape)
 
     tensor_a = batch_matmu_create_tensor(input_config.in_dtype, input_config.ori_shape, "tensor_a",

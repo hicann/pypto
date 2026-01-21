@@ -154,7 +154,7 @@ static void MNSplitFunc(
 template <typename inputDtype, typename outputDtype, bool transA, bool transB, bool isCNz>
 void TestDynMatmul(
     const std::vector<int64_t>& mmShape, bool isANz, bool isBNz, const std::vector<int64_t> &viewShape, string dataPath) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     SetInterpreterConfig();
 

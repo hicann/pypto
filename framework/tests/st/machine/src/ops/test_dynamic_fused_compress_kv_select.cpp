@@ -48,7 +48,7 @@ static std::shared_ptr<RawTensorData> CreateTensorData(Tensor tensor, std::strin
 
 template <typename T = npu::tile_fwk::bfloat16>
 void TestCmpKvSel(CmpAttnTile &tileConfig) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     DataType dType = DT_FP32;
     if (std::is_same<T, npu::tile_fwk::bfloat16>::value) {

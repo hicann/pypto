@@ -29,11 +29,11 @@ using namespace npu::tile_fwk::dynamic;
 class LoadTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {
     void SetUp() override {
         TestSuite_STest_Ops_Aihac::SetUp();
-        config::SetHostOption(ONLY_CODEGEN, true);
+        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
         rtSetDevice(GetDeviceIdByEnvVar());
     }
     void TearDown() override {
-        config::SetHostOption(ONLY_CODEGEN, false);
+        config::SetHostOption(COMPILE_STAGE, 0);
         TestSuite_STest_Ops_Aihac::TearDown();
     }
 };

@@ -72,7 +72,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetHostConfig(KEY_STRATEGY, "RemoveRedundantOpTestStrategy");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
@@ -80,7 +80,7 @@ public:
 };
 
 TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast) {
-    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
     int bs = 1;
     int n = 32;
     int d = 128;
@@ -139,7 +139,7 @@ TEST_F(RemoveRedundantOpTest, TestIntermediateOutcast) {
 }
 
 TEST_F(RemoveRedundantOpTest, TestInternalAssembleView) {
-    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
     int bs = 4;
     int n = 32;
     int d = 128;

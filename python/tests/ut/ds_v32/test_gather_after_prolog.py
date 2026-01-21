@@ -16,10 +16,6 @@ import pytest
 import pypto
 
 
-def set_config():
-    pypto.set_host_options(only_codegen=True)
-
-
 @dataclass
 class NSASimpleParamsObj:
     def __init__(self, block_size=128, topk=2048, **kwargs):
@@ -205,7 +201,6 @@ def build_gather_args(cfg: BuildConfig = BuildConfig()):
 
 def test_gather_with_builder():
     logging.basicConfig(level=logging.INFO)
-    set_config()
     args, meta = build_gather_args()
     logging.info({"Sanity": meta})
     gather_after_prolog_compute(args)

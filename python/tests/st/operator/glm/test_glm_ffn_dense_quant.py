@@ -224,7 +224,6 @@ def expert_infer_base(hidden_states, w13_params, w2, ffn_res, tiling_params, off
 
 
 @pypto.jit(
-    host_options={"only_codegen": True},
     runtime_options={"device_sched_mode": 1,
                      "stitch_cfgcache_size": 3200000}
 )

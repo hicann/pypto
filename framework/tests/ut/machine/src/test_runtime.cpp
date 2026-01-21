@@ -30,7 +30,7 @@ public:
 
     void SetUp() override {
         npu::tile_fwk::Program::GetInstance().Reset();
-        npu::tile_fwk::config::SetPlatformConfig(npu::tile_fwk::KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
     }
 
     void TearDown() override {}

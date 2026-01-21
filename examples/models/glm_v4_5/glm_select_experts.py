@@ -191,8 +191,7 @@ def select_experts_kernel(shapes, renormalize, topk_group, num_expert_group):
         runtime_options={"stitch_function_num_initial": 128,
         "stitch_function_outcast_memory": 128,
         "stitch_function_inner_memory": 128,
-        "stitch_cfgcache_size": 2500000},
-        host_options={"only_codegen": True},
+        "stitch_cfgcache_size": 2500000}
     )
     def kernel(
         logits: pypto.tensor(router_logits_shape, pypto.DT_FP32),

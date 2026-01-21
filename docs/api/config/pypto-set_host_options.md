@@ -14,7 +14,7 @@
 ## 函数原型
 
 ```python
-set_host_options(*, only_codegen: bool = None) -> None
+set_host_options(*, compile_stage: CompStage = pypto.CompStage.CODEGEN) -> None
 ```
 
 ## 参数说明
@@ -22,7 +22,7 @@ set_host_options(*, only_codegen: bool = None) -> None
 
 | 参数名          | 输入/输出 | 说明                                                                 |
 |-----------------|-----------|----------------------------------------------------------------------|
-| only_codegen    | 输入      | 含义：忽略静态的上板流程 <br> 说明：当值为True时，对于静态function用例，执行到代码生成阶段终止，不执行上板流程，当值为False时，代码生成之后正常执行上板流程。 <br> 类型：bool <br> 取值范围：{True, False} <br> 默认值：False |
+| compile_stage    | 输入      | 含义：控制编译执行的阶段 <br> 说明：<br> CODEGEN: Codegen执行GenCode后，忽略静态的上板流程，终止后续执行; <br> HOST: 仅完成Host编译，不执行Codegen编译，且终止后续执行; <br> FUNCTION: 生成TensorGraph后，终止后续执行；<br> 类型: Enum <br> 取值范围: CompStage (CODEGEN/HOST/FUNCTION) <br> 默认值: CODEGEN |
 
 ## 返回值说明
 
@@ -36,6 +36,6 @@ void：Set方法无返回值。设置操作成功即生效。
 ## 调用示例
 
 ```python
-pypto.set_host_options(only_codegen=False)
+pypto.set_host_options(compile_stage=pypto.CompStage.CODEGEN)
 ```
 

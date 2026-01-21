@@ -21,10 +21,6 @@ SHAPE_DIM_0 = 0
 SHAPE_DIM_1 = 1
 
 
-def set_config():
-    pypto.set_host_options(only_codegen=True)
-
-
 @dataclass
 class SelectedAttentionTileConfig:
     g_tile: int
@@ -482,7 +478,6 @@ def build_selected_args(cfg: SABuildConfig = SABuildConfig()):
 
 def test_selected_attention_with_builder():
     logging.basicConfig(level=logging.INFO)
-    set_config()
     args, meta = build_selected_args()
     logging.info({"Sanity": meta})
     selected_attention_compute(args)

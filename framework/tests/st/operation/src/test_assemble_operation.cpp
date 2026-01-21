@@ -28,7 +28,7 @@ using namespace npu::tile_fwk::dynamic;
 class AssembleTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {
     void SetUp() override {
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
-        config::SetHostOption(ONLY_CODEGEN, true);
+        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         // 测试精度工具功能支持时，打开下面的注释
         // config::SetVerifyOption(KEY_VERIFY_TENSOR_GRAPH, true);

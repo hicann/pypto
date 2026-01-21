@@ -50,7 +50,7 @@ struct GenAttenConfig {
 
 template<typename T = npu::tile_fwk::float16>
 void genAtten(GenAttenTileShapeConfig &tileConfig) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     config::SetRuntimeOption(DEVICE_SCHED_MODE, static_cast<uint8_t>(MachineScheduleConfig::L2CACHE_AFFINITY_SCH));
 
     int B = NUM_16;

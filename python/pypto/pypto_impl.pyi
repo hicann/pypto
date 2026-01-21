@@ -359,6 +359,9 @@ def SetPrintOptions(edge_items: int, precision: int, threshold: int, linewidth: 
 def BytesOf(t: DataType) -> int: ...
 
 
+def ResetOptions(): ...
+
+
 def Reset(): ...
 
 

@@ -53,9 +53,7 @@ def get_token_acc_table(group_list):
     return token_acc_table
 
 
-@pypto.jit(
-    host_options={"only_codegen": True},
-)
+@pypto.jit
 def moe_group_list_cumsum(group_list, group_list_cumsum):
     """
     JIT compiled kernel for computing cumulative sum of group list.

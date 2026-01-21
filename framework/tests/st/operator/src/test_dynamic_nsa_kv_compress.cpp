@@ -41,7 +41,7 @@ static std::shared_ptr<RawTensorData> CreateTensorData(Tensor tensor, std::strin
 
 template <typename T = npu::tile_fwk::bfloat16>
 void TestCmpKv(CmpAttnTile &tileConfig) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 13;
     std::vector<int32_t> input_param(paramsSize);
@@ -206,7 +206,7 @@ TEST_F(DynKVCmp, KVCmpBatch32bf16) {
 
 template <typename T = npu::tile_fwk::bfloat16>
 void TestAuxTensor() {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 13;
     std::vector<int32_t> input_param(paramsSize);

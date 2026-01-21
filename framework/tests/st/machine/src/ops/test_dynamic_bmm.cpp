@@ -173,7 +173,7 @@ template <typename inputDtype, typename outputDtype, bool transA, bool transB, b
 void TestDynBatchMatmul(
     const std::vector<int64_t>& mmShape, bool isANz, bool isBNz, const std::vector<int64_t> &viewShape, string dataPath) {
     SetInterpreterConfig();
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     if (mmShape.size() != BMM_SHAPE_SIZE || viewShape.size() != BMM_VIEW_SHAPE_SIZE) {
         return;

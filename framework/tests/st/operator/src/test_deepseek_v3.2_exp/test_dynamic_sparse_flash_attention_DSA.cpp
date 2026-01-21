@@ -28,7 +28,7 @@ class DynamicSparseFlashAttnDSASTest : public npu::tile_fwk::stest::TestSuite_ST
  
 template <typename T = npu::tile_fwk::float16>
 void TestSa(SaTileShapeConfig& tileConfig) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
  
     DataType dType = DT_FP32;
     if (std::is_same<T, npu::tile_fwk::float16>::value) {

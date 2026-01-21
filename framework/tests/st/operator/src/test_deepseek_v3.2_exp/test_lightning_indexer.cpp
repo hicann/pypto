@@ -47,7 +47,7 @@ static std::shared_ptr<RawTensorData> CreateTensorData(
 }
 
 void TestLightningIndexer(LightningIndexerConfigs &tileConfig) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 9;
     std::vector<int> input_param(paramsSize);

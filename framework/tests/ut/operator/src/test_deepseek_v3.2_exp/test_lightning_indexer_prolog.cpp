@@ -90,7 +90,7 @@ TEST_F_WITH_COST(DynamicLightningIndexerPrologUtest, utest_lightning_indexer_pro
 
     auto params = ReadParams(ropeTileConfigs, indexerConfigs, -1);
     PerformanceConfig();
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     // inputs
     DataType dType = DT_BF16;

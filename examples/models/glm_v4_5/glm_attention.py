@@ -299,7 +299,6 @@ def ifa_func(q_shape, kv_shape, block_table_shape):
         runtime_options={"stitch_function_num_initial": 128, 
         "stitch_function_outcast_memory": 1024,
         "stitch_function_inner_memory": 1024},
-        host_options={"only_codegen": True},
         # 当子图大小达到上界不允许与其他子图合并
         pass_options={"pg_upper_bound": 1536,
         # Q常驻，0代表第一组mmad，4代表4次matmul合并

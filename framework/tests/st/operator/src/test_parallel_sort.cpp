@@ -91,7 +91,7 @@ void SortStaticTest(int tileSize){
 
 template <typename T = float, typename idxT = int>
 void SortTest(int tileSize){
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     
     std::vector<int> params(2);
     readInput<int>(GetGoldenDir() + "/params.bin", params);
@@ -136,7 +136,7 @@ void SortTest(int tileSize){
 
 template <typename T = float, typename idxT = int>
 void SortWithIndexTest(int tileSize){
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     
     std::vector<int> params(2);
     readInput<int>(GetGoldenDir() + "/params.bin", params);
@@ -183,7 +183,7 @@ void SortWithIndexTest(int tileSize){
 
 template <typename T = float, typename idxT = int>
 void TopKTest(int tileSize){
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     
     std::vector<int> params(3);
     readInput<int>(GetGoldenDir() + "/params.bin", params);

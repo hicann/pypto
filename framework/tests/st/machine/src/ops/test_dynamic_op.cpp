@@ -26,7 +26,7 @@ using namespace npu::tile_fwk::dynamic;
 class DynamicOpTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 TEST_F(DynamicOpTest, FullUnalign) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(16, 128);
 
     // [b*s,h]

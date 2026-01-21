@@ -35,7 +35,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
     }
     void TearDown() override {
     }
@@ -149,7 +149,7 @@ TEST_F(TestAxisCombine, Test3) {
 
 TEST_F(TestAxisCombine, TestDD) {
     config::SetOperationOption(KEY_COMBINE_AXIS, true);
-    config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
 
     TileShape::Current().SetVecTile(K_1, K_1, K_32, K_32);
     std::vector<int64_t> tshape = {K_2, K_2, K_64, K_64};

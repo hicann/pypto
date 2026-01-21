@@ -38,7 +38,7 @@ public:
 };
 
 TEST_F(DynamicSoftmaxUtest, utest_softmax_dyn) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile({4, 4, 1, 64});
     std::vector<int64_t> shape = {32, 32, 1, 256};
     DataType dtype = DataType::DT_FP32;

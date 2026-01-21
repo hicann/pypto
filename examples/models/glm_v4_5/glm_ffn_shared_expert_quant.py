@@ -228,7 +228,6 @@ def share_expert_moe_main(shapes):
     ffn_shape = (pypto.frontend.dynamic("hidden_states_shape"), shapes[5][1])
 
     @pypto.frontend.jit(
-        host_options={"only_codegen": True},
         runtime_options={"device_sched_mode": 1,
                          "stitch_cfgcache_size": 2700000},
         pass_options={"cube_l1_reuse_mode": 2}

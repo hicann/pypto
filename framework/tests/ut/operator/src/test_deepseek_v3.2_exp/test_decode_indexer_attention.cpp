@@ -40,7 +40,7 @@ public:
 };
 
 void SetPreConfig() {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 }
 
 struct TensorWithData {

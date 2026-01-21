@@ -34,8 +34,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetBuildStatic(true);
-        config::SetHostOption(ONLY_CODEGEN, true);
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
     }

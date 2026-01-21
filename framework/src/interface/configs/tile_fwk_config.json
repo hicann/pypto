@@ -27,7 +27,7 @@
         "run_mode": 0
     },
     "host": {
-        "only_codegen": false
+        "compile_stage": 0
     },
     "codegen": {
         "support_dynamic_aligned": false
@@ -57,8 +57,6 @@
             "enable_cost_model": false,
             "enable_dyn_cost_model": false,
             "enable_aihac_backend": true,
-            "only_tensor_graph": false,
-            "only_host_compile": false,
             "test_is_tig": false,
             "dump_source_location": true,
             "enable_checker": false,

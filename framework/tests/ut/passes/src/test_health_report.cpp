@@ -60,7 +60,7 @@ void TestLoopViewAssembleCopy(const Tensor &t0, const Tensor &t1, const Tensor &
 }
 
 TEST_F(HealthReportTest, TestDD) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
     std::vector<uint8_t> devProgBinary;

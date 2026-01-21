@@ -33,7 +33,7 @@ protected:
 };
 
 TEST_F(DynamicKvSlcUtTest, test_kv_slc) { // b_n_s_s2_h_q_lora_rank
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     KvSlcTileShapeConfig tileConfig;
     const int nTile = 32;
     tileConfig.v0TileShape = {nTile, 32};

@@ -58,8 +58,7 @@ def select_experts_mm(bs, ne, h_num) -> torch.Tensor:
     
     @pypto.frontend.jit(
         runtime_options={
-        "stitch_cfgcache_size": 2500000},
-        host_options={"only_codegen": True},
+        "stitch_cfgcache_size": 2500000}
     )
     def select_experts_mm_kernel(
         hidden_states: pypto.Tensor((bs, h_num), pypto.DT_FP32),

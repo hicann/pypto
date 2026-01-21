@@ -104,7 +104,7 @@ TEST_F(OnBoardTest, test_attention_post_bf16_real_batch4) {
             outputT = Reshape(bmm5_res, {B, S, H});
         }
     }
-    if (config::GetPlatformConfig(KEY_ONLY_HOST_COMPILE, true)) {
+    if (config::GetHostOption<int64_t>(COMPILE_STAGE) == HOST_COMPILE_END) {
         std::cout << Program::GetInstance().Dump() << std::endl;
     } else {
         DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
@@ -201,7 +201,7 @@ TEST_F(OnBoardTest, test_attention_post_bf16_real_n128) {
             outputT = Reshape(bmm5_res, {B, S, H});
         }
     }
-    if (config::GetPlatformConfig(KEY_ONLY_HOST_COMPILE, true)) {
+    if (config::GetHostOption<int64_t>(COMPILE_STAGE) == HOST_COMPILE_END) {
         std::cout << Program::GetInstance().Dump() << std::endl;
     } else {
         DevFuncRunner::Run(Program::GetInstance().GetLastFunction());

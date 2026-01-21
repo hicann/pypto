@@ -374,7 +374,6 @@ def expert_infer_base(
 
 
 @pypto.jit(
-    host_options={"only_codegen": True},
     runtime_options={"device_sched_mode": 1},
     pass_options={"cube_l1_reuse_setting": {-1: 2}}
 )

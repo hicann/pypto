@@ -392,10 +392,6 @@ def verify(func, inputs, outputs, goldens, *args,
     """
     pypto_impl.DeviceInit()
 
-    if host_options is None:
-        host_options = {"only_codegen": True}
-    pypto.set_host_options(**host_options)
-
     if pass_options is None:
         pass_options = {}
     pypto.set_pass_options(**pass_options)

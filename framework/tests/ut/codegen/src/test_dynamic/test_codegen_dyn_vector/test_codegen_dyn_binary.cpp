@@ -39,7 +39,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetPlatformConfig(KEY_ONLY_HOST_COMPILE, true);
+        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
@@ -279,7 +279,6 @@ TStore(gmTensor_9, ubTensor_5, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)
 }
 
 TEST_F(TestCodegenDynBinary, AddUnalignTileTensor) {
-    config::SetHostOption(ONLY_CODEGEN, true);
     TileShape::Current().SetVecTile(64, 64);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     // NEXTNEXT: delete after tileop adapted layout mode

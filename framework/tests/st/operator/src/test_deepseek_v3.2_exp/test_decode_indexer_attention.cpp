@@ -30,7 +30,7 @@ using namespace npu::tile_fwk::dynamic;
 class DecodeIndexerAttentionSTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 namespace {
 void SetPreConfig() {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 }
 
 template <typename T = npu::tile_fwk::float16, typename wDtype = int8_t, bool isSmooth = false, bool nz = false>

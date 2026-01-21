@@ -24,7 +24,7 @@ class DyMla : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 namespace {
 
 void pre() {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
 }
 

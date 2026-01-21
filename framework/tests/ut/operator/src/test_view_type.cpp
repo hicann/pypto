@@ -43,7 +43,7 @@ public:
 };
 
 TEST_F(ViewTypeUtest, add0_test) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t m = 4;
     int64_t k = 32;
@@ -63,7 +63,7 @@ TEST_F(ViewTypeUtest, add0_test) {
 }
 
 TEST_F(ViewTypeUtest, cast_add0_test) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t m = 4;
     int64_t k = 32;
@@ -84,7 +84,7 @@ TEST_F(ViewTypeUtest, cast_add0_test) {
 }
 
 TEST_F(ViewTypeUtest, quant_test) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t m = 64;
     int64_t k = 1;
@@ -102,7 +102,7 @@ TEST_F(ViewTypeUtest, quant_test) {
 }
 
 TEST_F(ViewTypeUtest, dequant_test) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t m = 2048;
     int64_t k = 1;

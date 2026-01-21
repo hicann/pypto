@@ -55,7 +55,7 @@ void TestLoopViewAssemble(const Tensor &t0, const Tensor &t1, const Tensor &bloc
 }
 
 TEST_F(DynamicPATest, TestDD) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
     std::vector<uint8_t> devProgBinary;
@@ -76,7 +76,7 @@ TEST_F(DynamicPATest, TestDD) {
 }
 
 TEST_F(DynamicPATest, dynamic_pa_low_lantency_unroll) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     std::vector<uint8_t> devProgBinary;
 
     std::vector<int> input_param = {4, 1, 32, 1, 512, 64, 128, 32};
@@ -123,7 +123,7 @@ TEST_F(DynamicPATest, dynamic_pa_low_lantency_unroll) {
 }
 
 TEST_F(DynamicPATest, dynamic_pa_low_lantency_pass_unroll) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     std::vector<uint8_t> devProgBinary;
 
     std::vector<int> input_param = {1, 1, 128, 1, 512, 64, 256, 32};
@@ -170,7 +170,7 @@ TEST_F(DynamicPATest, dynamic_pa_low_lantency_pass_unroll) {
 }
 
 TEST_F_WITH_COST(DynamicPATest, dynamic_pa_low_lantency_manual_unroll, 96) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     config::SetPassDefaultConfig(KEY_PRINT_GRAPH, true);
     std::vector<uint8_t> devProgBinary;
 
@@ -270,7 +270,7 @@ TEST_F_WITH_COST(DynamicPATest, dynamic_pa_low_lantency_manual_unroll, 96) {
 }
 
 TEST_F(DynamicPATest, dynamic_pa_high_throughput_only_batch_loop) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     std::vector<uint8_t> devProgBinary;
 
     std::vector<int> input_param = {4, 1, 32, 1, 512, 64, 128, 32};

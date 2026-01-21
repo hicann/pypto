@@ -199,7 +199,6 @@ def amax_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = Fa
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        host_options={"only_codegen": True},
         runtime_options={"run_mode": mode}
         )
     def amax_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
@@ -329,7 +328,6 @@ def amin_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = Fa
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
         
     @pypto.frontend.jit(
-        host_options={"only_codegen": True},
         runtime_options={"run_mode": mode}
     )
     def amin_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):

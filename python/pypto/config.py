@@ -11,13 +11,17 @@
 """
 """
 import sys
+import enum
 from typing import List, Union, Dict, Optional
-from enum import IntEnum
 from functools import wraps
 
 from . import pypto_impl
 
 
+class CompStage(enum.Enum):
+    CODEGEN = 1
+    HOST = 2
+    FUNCTION = 3
 
 
 def set_print_options(*,
@@ -132,16 +136,16 @@ def get_pass_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
 
 
 
-def set_host_options(*, only_codegen: Optional[bool] = None) -> None:
+def set_host_options(*, compile_stage: Optional[CompStage] = None) -> None:
     """
     Set host options.
 
     Parameters
     ---------
-    only_codegen : bool
-        Shield the static on-board process.
+    compile_stage : CompStage
+        Control the compilation phase.
     """
-    options_dict = {k: v for k, v in locals().items() if v is not None}
+    options_dict = {k: v.value for k, v in locals().items() if v is not None}
     set_options(host_options=options_dict)
 
 
@@ -338,7 +342,7 @@ def reset_options() -> None:
     """
         Reset all configuration items to their default values.
     """
-    pypto_impl.Reset()
+    pypto_impl.ResetOptions()
 
 
 class _Options:
@@ -371,7 +375,8 @@ class _Options:
         for attr, prefix in self.PREFIX_MAP.items():
             value = getattr(self, attr)
             if isinstance(value, dict):
-                opts.update({f"{prefix}{k}": v for k, v in value.items()})
+                opts.update(
+                    {f"{prefix}{k}": v.value if isinstance(v, enum.Enum) else v for k, v in value.items()})
 
         if self.vec_tile_shapes is not None:
             opts["vec_tile_shapes"] = self.vec_tile_shapes

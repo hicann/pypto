@@ -115,7 +115,6 @@ def moe_fusion_kernel(shapes, renormalize, topk_group, num_expert_group):
 
 
     @pypto.frontend.jit(
-        host_options={"only_codegen": True},
         runtime_options={"device_sched_mode": 1,
                         "stitch_function_num_initial": 128,
                         "stitch_function_outcast_memory": 128,

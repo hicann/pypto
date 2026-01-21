@@ -21,7 +21,7 @@ using namespace npu::tile_fwk;
 
 class DyNsa : public testing::Test {
     void SetUp() override {
-        config::SetHostOption(ONLY_CODEGEN, true);
+        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
         config::SetPassOption(VEC_NBUFFER_MODE, 1);
         config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}});
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{3, 4}});

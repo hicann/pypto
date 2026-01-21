@@ -288,11 +288,13 @@
                 "en": "..."
             },
             "properties": {
-                "only_codegen": {
-                    "type": "boolean",
+                "compile_stage": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 3,
                     "label": {
-                        "zh": "屏蔽静态function的上板过程",
-                        "en": "Shield the static on-board process."
+                        "zh": "控制编译执行的阶段",
+                        "en": "Set the stage of compile."
                     }
                 }
             }
@@ -469,20 +471,6 @@
                             }
                         },
                         "enable_aihac_backend": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "only_tensor_graph": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "only_host_compile": {
                             "type": "boolean",
                             "label": {
                                 "zh": "...",

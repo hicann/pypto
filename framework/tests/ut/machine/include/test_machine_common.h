@@ -34,7 +34,7 @@ protected:
         ProgramData::GetInstance().Reset();
 
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-        config::SetHostOption(ONLY_CODEGEN, true);
+        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
         testing::UnitTest *ut = testing::UnitTest::GetInstance();
         const testing::TestInfo *testInfo = ut->current_test_info();

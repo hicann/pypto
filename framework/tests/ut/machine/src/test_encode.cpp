@@ -41,7 +41,7 @@ TEST_F(TestDevEncode, DevSymShape) {
 
 TEST_F(TestDevEncode, test_dev_encode_program) {
     config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
     constexpr int LOOP_COUNT_INNER = 4;

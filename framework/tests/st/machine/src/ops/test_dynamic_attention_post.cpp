@@ -50,7 +50,7 @@ void PaPostDebugCastFirstR1(Tensor &postIn, Tensor &r1Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_r1) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -111,7 +111,7 @@ void PaPostDebugCastFirstT1(Tensor &postIn, Tensor &t1Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_t1) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
     readInput<int64_t>(GetGoldenDir() + "/params.bin", params);
@@ -179,7 +179,7 @@ void PaPostDebugCastFirstBmm4(Tensor &postIn, Tensor &weightUV, Tensor &bmm4Out)
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_bmm4) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -256,7 +256,7 @@ void PaPostDebugCastFirstCrtb4tr(Tensor &postIn, Tensor &weightUV, Tensor &r2Out
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_crtb4tr) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -318,7 +318,7 @@ void PaPostDebugCastFirstOnlyT1(Tensor &r1Res, Tensor &t1Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlyt1) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -382,7 +382,7 @@ void PaPostNewOnlyBmm4(Tensor &bmm4In, Tensor &weightUV, Tensor &bmm4Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlybmm4) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -451,7 +451,7 @@ void PaPostNewOnlyBmm4Fail(Tensor &bmm4In, Tensor &weightUV, Tensor &bmm4Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlybmm4_fail) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -521,7 +521,7 @@ void PaPostNewOnlyMm5Nd(Tensor &quant0In, Tensor &weightO, Tensor &mm5Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlymm5_nd) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -592,7 +592,7 @@ void PaPostNewOnlyMm5NdK(Tensor &quant0In, Tensor &weightO, Tensor &mm5Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlymm5_ndk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -673,7 +673,7 @@ void PaPostNewMm5NdkUnquantR3(Tensor &quant0In, Tensor &weightO, Tensor &weightO
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_mm5ndk_unquant_r3) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -750,7 +750,7 @@ void PaPostNewOnlyMm5Nz(Tensor &quant0In, Tensor &weightO, Tensor &mm5Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlymm5_nz) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -820,7 +820,7 @@ void PaPostNewOnlyMm5NzK(Tensor &quant0In, Tensor &weightO, Tensor &mm5Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_onlymm5_nzk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -883,7 +883,7 @@ void PaPostDebugCastFirst(Tensor &postIn, Tensor &cast1Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -946,7 +946,7 @@ void PaPostCastFirstQuant(Tensor &postIn, Tensor &r2In, Tensor &weightUV, Tensor
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_quant) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1033,7 +1033,7 @@ void PaPostCastFirstT3r2(Tensor &bmm4In, Tensor &weightUV, Tensor &weightO, Tens
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_t3r2) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1107,7 +1107,7 @@ void PaPostCastFirstT3(Tensor &bmm4In, Tensor &t3Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_t3) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1165,7 +1165,7 @@ void PaPostCastFirstR2(Tensor &t3In, Tensor &r2Out) {
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_r2) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1231,7 +1231,7 @@ void PaPostCastFirstUnquantR3(Tensor &postIn, Tensor &weightUV, Tensor &weightO,
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_unquant_r3) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1329,7 +1329,7 @@ void PaPostDebugCastFirstCrtb4trQuant(Tensor &postIn, Tensor &weightUV, Tensor &
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_crtb4tr_quant) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1422,7 +1422,7 @@ void PaPostDebugCastFirstCrtb4trQuantFail(Tensor &postIn, Tensor &weightUV, Tens
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_crtb4tr_quant_fail) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
     readInput<int64_t>(GetGoldenDir() + "/params.bin", params);
@@ -1519,7 +1519,7 @@ void PaPostDebugCastFirstCrtb4trQMM5ND(Tensor &postIn, Tensor &weightUV, Tensor 
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_crtb4trq_mm5nd) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1614,7 +1614,7 @@ void PaPostDebugCastFirstCrtb4trQMM5NDk(Tensor &postIn, Tensor &weightUV, Tensor
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_cast_first_crtb4trq_mm5ndk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1719,7 +1719,7 @@ void PaPostDebugCastFirstMm5UnsplitKLow(Tensor &postIn, Tensor &weightUV, Tensor
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nd_unsplitk_low) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1769,7 +1769,7 @@ TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nd_unsplitk_low) {
     EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::bfloat16 *)outs->data(), 0.005f));
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_unsplitk_low) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1878,7 +1878,7 @@ void PaPostDebugCastFirstMm5UnsplitK(Tensor &postIn, Tensor &weightUV, Tensor &w
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nd_unsplitk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -1928,7 +1928,7 @@ TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nd_unsplitk) {
     EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::bfloat16 *)outs->data(), 0.005f));
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_unsplitk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -2107,7 +2107,7 @@ void PaPostDebugCastFirstMm5NormalUnSplitK(Tensor &postIn, Tensor &weightUV, Ten
     }
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_splitk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -2157,7 +2157,7 @@ TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_splitk) {
     EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::bfloat16 *)outs->data(), 0.004f));
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_normal_unsplitk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -2207,7 +2207,7 @@ TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_normal_unsplitk) {
     EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::bfloat16 *)outs->data(), 0.004f));
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nd_splitk) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -2318,7 +2318,7 @@ void PaPostDebugCastFirstMm5SplitKLow(Tensor &postIn, Tensor &weightUV, Tensor &
 }
 
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_splitk_low) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -2368,7 +2368,7 @@ TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nz_splitk_low) {
     EXPECT_TRUE(resultCmp(golden, (npu::tile_fwk::bfloat16 *)outs->data(), 0.0001f));
 }
 TEST_F(DynamicAttentionPostTest, dynamic_pa_post_new_mm5nd_splitk_low) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int paramsSize = 7;
     std::vector<int64_t> params(paramsSize);
@@ -2587,7 +2587,7 @@ void PageAttentionPostBf16(Tensor &qNope, Tensor &kNopeCache, Tensor &vNopeCache
     }
 }
 void testPaPostBf16(PaTileShapeConfig& tileConfig, int maxUnrollTimes, int bTile) {
-    config::SetHostOption(ONLY_CODEGEN, true);
+    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     std::vector<uint8_t> devProgBinary;
 
