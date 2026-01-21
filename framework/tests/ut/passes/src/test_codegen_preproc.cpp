@@ -18,6 +18,9 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/block_graph_pass/codegen_preproc.h"
+#include "passes/tile_graph_pass/graph_constraint/pad_local_buffer.h"
+#include "passes/tile_graph_pass/graph_constraint/axis_combine.h"
+#include "computational_graph_builder.h"
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
 #include <vector>
@@ -29,6 +32,7 @@ constexpr int CP_NUM1 = 1;
 constexpr int CP_NUM16 = 16;
 constexpr int CP_NUM256 = 256;
 const std::vector<bool> AXIS_COMBINED = {true};
+const std::string REDUCE_AXIS = OP_ATTR_PREFIX + "AXIS";
 
 class CodegenPreprocTest : public testing::Test {
 public:
@@ -158,5 +162,56 @@ TEST_F(CodegenPreprocTest, TestForceCombineAxis) {
     EXPECT_EQ(copyin2Res, true);
     EXPECT_EQ(tensor2->tensor->rawshape, combinedShape);
 }
+
+TEST_F(CodegenPreprocTest, TestCombineAxis) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {4, 12, 1}, MemoryType::MEM_UB, "in"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 12, 1}, MemoryType::MEM_UB, "out"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 8}, MemoryType::MEM_UB, "tmp"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUMLINE, {"in"}, {"out", "tmp"}, "sumline", true), true);
+    auto sumline = graph.GetOp("sumline");
+    sumline->SetAttribute(REDUCE_AXIS, 0);
+
+    auto funcPtr = graph.GetFunction();
+    funcPtr->paramConfigs_.combineAxis = true;
+    AxisCombine axisCombineTest;
+    EXPECT_EQ(axisCombineTest.RunOnFunction(*funcPtr), SUCCESS);
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
+
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+
+    CodegenPreproc codegenPreprocPass;
+    EXPECT_EQ(codegenPreprocPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+    // Verify AxisCombine
+    auto updatedOperations = rootFuncPtr->Operations();
+    int64_t cnt = 0;
+    for (const auto &op : updatedOperations) {
+        if (op.GetOpcode() == Opcode::OP_BRCB) {
+            ++cnt;
+        }
+    }
+    EXPECT_EQ(cnt, 0);
+    // Verify PadLocalBuffer
+    auto tmp = graph.GetTensor("tmp");
+    auto shape = tmp->GetRawTensor()->GetRawShape();
+    EXPECT_EQ(shape[shape.size() - 1], CP_NUM16);
+    // Verify CodegenPreproc
+    sumline = graph.GetOp("sumline");
+    std::vector<bool> attr;
+    EXPECT_TRUE(sumline->HasAttr(OpAttributeKey::outputCombineAxis));
+    sumline->GetAttr(OpAttributeKey::outputCombineAxis, attr);
+    EXPECT_EQ(attr, (std::vector<bool>{true, false}));
+}
+
 } // namespace tile_fwk
 } // namespace npu

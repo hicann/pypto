@@ -31,6 +31,7 @@ using namespace npu::tile_fwk;
 constexpr size_t K_1 = 1;
 constexpr size_t K_4 = 4;
 constexpr size_t K_8 = 8;
+constexpr size_t K_16 = 16;
 constexpr size_t K_64 = 64;
 constexpr size_t K_128 = 128;
 class TestPadLocalBuffer : public ::testing::Test {

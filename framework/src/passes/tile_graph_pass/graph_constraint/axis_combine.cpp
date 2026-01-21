@@ -38,14 +38,15 @@ bool InsertCondition(const Opcode &code) {
     return false;
 }
 
-void AlignedIfNeed(int64_t &currentDim, int64_t &padValue) {
+Status AlignedIfNeed(int64_t &currentDim, int64_t &padValue) {
     if (padValue == 0) {
         APASS_LOG_ERROR_F(Elements::Config, "invalid pad base %d.", padValue);
-        return;
+        return FAILED;
     }
     if (currentDim % padValue != 0) {
         currentDim = (currentDim + padValue - 1) / padValue * padValue;
     }
+    return SUCCESS;
 }
 
 Status GetPaddingValue(const LogicalTensorPtr &tensor, int64_t &padValue) {
@@ -75,7 +76,9 @@ Status AlignBroadCastOpInputs([[maybe_unused]]Function &function, Operation &op)
                 if (GetPaddingValue(srcTensor, padValue) != SUCCESS) {
                     return FAILED;
                 }
-                AlignedIfNeed(alignedShape.back(), padValue);
+                if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
+                    return FAILED;
+                }
                 auto alignedTensor = std::make_shared<LogicalTensor>(function, srcTensor->Datatype(), alignedShape, srcTensor->Format());
                 alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
                 auto &brcb = function.AddRawOperation(Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
