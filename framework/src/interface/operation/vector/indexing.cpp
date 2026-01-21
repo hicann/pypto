@@ -1000,7 +1000,7 @@ Tensor ScatterUpdate(
     DECLARE_TRACER();
 
     CheckScatterUpdateInvalid(dst, index, src);
-    axis = axis < 0 ? dst.GetShape().size() + axis : axis;
+    CheckAxisRange(dst, axis);
 
     Tensor result(dst.GetStorage()->tensor->datatype, dst.GetStorage()->GetShape(), "", dst.Format());
     if (std::find(dst.GetStorage()->GetShape().begin(), dst.GetStorage()->GetShape().end(), -1) !=

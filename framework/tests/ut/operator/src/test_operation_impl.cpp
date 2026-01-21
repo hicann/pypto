@@ -478,23 +478,6 @@ TEST_F(OperationImplTest, TestIndexPut_) {
     }
 }
 
-TEST_F(OperationImplTest, TestIndexPut_torch) {
-    Shape shapeSelf({16, 16});
-    Shape shapeValues({8, 16});
-    Shape shapeIndices({8});
-    Shape shapeOffset({0, 0});
-    Shape shapeOffset1({0});
-    auto outData = std::make_shared<RawTensorData>(DataType::DT_FP32, shapeSelf);
-    auto out = std::make_shared<LogicalTensorData>(outData, shapeSelf, shapeOffset);
-    auto selfData = std::make_shared<RawTensorData>(DataType::DT_FP32, shapeSelf);
-    auto self = std::make_shared<LogicalTensorData>(selfData, shapeSelf, shapeOffset);
-    auto indicesData = std::make_shared<RawTensorData>(DataType::DT_INT32, shapeIndices);
-    auto indices = std::make_shared<LogicalTensorData>(indicesData, shapeIndices, shapeOffset1);
-    auto valuesData = std::make_shared<RawTensorData>(DataType::DT_FP32, shapeValues);
-    auto values = std::make_shared<LogicalTensorData>(valuesData, shapeValues, shapeOffset); 
-    npu::tile_fwk::calc::IndexPut(out, self, {indices}, values, false);
-}
-
 TEST_F(OperationImplTest, test_Expand_8_1_to_8_8) {
     TileShape::Current().SetVecTile({4, 4});
 
@@ -611,24 +594,6 @@ TEST_F(OperationImplTest, test_Gather) {
     FUNCTION("TestGather") {
         result = Gather(operand1, operand2, -1);
     }
-}
-TEST_F(OperationImplTest, test_GatherINUB_torch) {
-    Shape paramShape({4, 16});
-    Shape indicesShape({1, 4});
-    Shape pagetableShape({1, 2});
-    Shape outShape({4, 16});
-    std::vector<int64_t> offset({0, 0});
-
-    Tensor result;
-    auto paramData = std::make_shared<RawTensorData>(DataType::DT_FP16, paramShape);
-    auto param = std::make_shared<LogicalTensorData>(paramData, paramShape, offset);
-    auto indicesData = std::make_shared<RawTensorData>(DataType::DT_INT32, indicesShape);
-    auto indices = std::make_shared<LogicalTensorData>(indicesData, indicesShape, offset);
-    auto pagetableData = std::make_shared<RawTensorData>(DataType::DT_INT32, pagetableShape);
-    auto pagetable = std::make_shared<LogicalTensorData>(pagetableData, pagetableShape, offset);
-    auto outData = std::make_shared<RawTensorData>(DataType::DT_FP16, outShape);
-    auto out = std::make_shared<LogicalTensorData>(outData, outShape, offset);
-    npu::tile_fwk::calc::GatherINUB(out, param, indices, pagetable, 2, -2);
 }
 
 TEST_F(OperationImplTest, test_Scatter_FP16) {

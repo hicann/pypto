@@ -83,4 +83,12 @@ std::vector<int> GetBroadcastAxes(const Shape &shape1, const Shape &shape2) {
     }
     return result;
 }
+
+void CheckAxisRange(const Tensor &tensor, int &axis) {
+    int shapeSize = tensor.GetShape().size();
+    if (axis < 0) {
+        axis += shapeSize;
+    }
+    ASSERT(axis >= 0 && axis < shapeSize) << "Axis is not in the reasonable range!";
+}
 }

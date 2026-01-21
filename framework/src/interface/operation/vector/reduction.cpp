@@ -283,7 +283,7 @@ void TiledReduceSingle(Function &function, const TileShape &tileShape, const std
 Tensor Amax(const Tensor &self, int axis, bool keepDim) {
     DECLARE_TRACER();
     auto resultShape = self.GetShape();
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    CheckAxisRange(self, axis);
 
     resultShape[axis] = 1;
     std::vector<int64_t> outShape(resultShape.begin(), resultShape.end());
@@ -362,7 +362,7 @@ Tensor Amin(const Tensor &self, int axis, bool keepDim) {
 Tensor Sum(const Tensor &self, int axis, bool keepDim) {
     DECLARE_TRACER();
     auto resultShape = self.GetShape();
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    CheckAxisRange(self, axis);
 
     resultShape[axis] = 1;
     std::vector<int64_t> outShape(resultShape.begin(), resultShape.end());

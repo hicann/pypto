@@ -495,7 +495,8 @@ Tensor CumSum(const Tensor &input, const int &axis) {
     ASSERT(std::find(CUMSUM_SUPPORT_DATATYPES.begin(), CUMSUM_SUPPORT_DATATYPES.end(), dataType) !=
            CUMSUM_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
-    int tmpAxis0 = axis < 0 ? shapeSize + axis : axis;
+    int tmpAxis0 = axis;
+    CheckAxisRange(input, tmpAxis0);
     bool flag = input.GetShape().size() == 1 ? true : false;
     if (flag) {
         ASSERT(tmpAxis0 == 0) << "when input.GetShape().size() is 1, axis must be 0";
