@@ -125,6 +125,8 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSignal() const
     DistOpAttr distOpAttr = npu::tile_fwk::AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     oss << "<" << std::to_string(distOpAttr.signalValue) << ", "
         << std::to_string(distOpAttr.signalStride) << ", "
+        << std::to_string(distOpAttr.tileRowShape) << ", "
+        << std::to_string(distOpAttr.tileColShape) << ", "
         << npu::tile_fwk::Distributed::AtomicTypeToString(distOpAttr.atomicType) << ">";
     return oss.str();
 }

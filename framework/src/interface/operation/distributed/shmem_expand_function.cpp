@@ -160,7 +160,7 @@ Shape GetCopyBufferShape(DataType nonShmemDtype, DataType shmemDtype, Shape tile
 LogicalTensorPtr CreateAdaptiveUbTensor(
     Function &function, const Shape &shape, DataType ubType, DataType castType, bool gm2Ub = false) {
     Shape ubShape = {0};
-    int64_t ubLen = AlignUp(shape[0] * shape[1] * BytesOf(ubType), UB_ALIGN_SIZE) / BytesOf(ubType);
+    int64_t ubLen = shape[0] * AlignUp(shape[1] * BytesOf(ubType), UB_ALIGN_SIZE) / BytesOf(ubType);
     if (!shouldConvertDtype(ubType, castType) && !gm2Ub) {
         ubShape = {ubLen * 2};
     } else {
@@ -267,6 +267,8 @@ void TiledShmemSignal(Function& function, const TileShape& tileShape,
 
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        distOpAttr.tileRowShape = tileShape.GetVecTile()[0];
+        distOpAttr.tileColShape = tileShape.GetVecTile()[1];
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::dontTouch, true);
     });
@@ -282,11 +284,16 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
     auto shmemSignal = iOperand[1];
     auto dummy = oOperand[0];
 
+    int32_t totalRowShape = shmemSignal->shape[shmemSignal->shape.size() - 2];
+    int32_t totalColShape = shmemSignal->shape[shmemSignal->shape.size() - 1];
+    int32_t tileRowShape = tileShape.GetVecTile()[0];
+    int32_t tileColShape = tileShape.GetVecTile()[1];
+    int32_t tileRowNum = totalRowShape / tileRowShape + (totalRowShape % tileRowShape == 0 ? 0 : 1);
+    int32_t tileColNum = totalColShape / tileColShape + (totalColShape % tileColShape == 0 ? 0 : 1);
+
     DummyTileFunc dummyInTileFunc = GetDummyTileFunc(dummyIn, shmemSignal, tileShape.GetVecTile(), function);
     DummyTileFunc dummyTileFunc = GetDummyTileFunc(dummy, shmemSignal, tileShape.GetVecTile(), function);
     DfsTiling(tileShape.GetVecTile(), shmemSignal, [&](uint32_t tileIndex, Input& input) {
-        ASSERT(tileIndex <= MAX_TILE_NUM / shmemSignal->shape[0]) << "ShmemWaitUntil totalTileNum is invalid";
-
         auto dummyInTile = dummyInTileFunc(tileIndex);
         std::vector<int64_t>& shmemSignalTileShape = input.tileInfo.shape;
         std::vector<int64_t>& shmemSignalTileOffset = input.tileInfo.offset;
@@ -297,6 +304,8 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
 
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        distOpAttr.aicpuOpParams.push_back(tileIndex);
+        distOpAttr.aicpuOpParams.push_back(tileRowNum * tileColNum);
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
     });
 }
