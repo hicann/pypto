@@ -100,7 +100,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     devProg->controlFlowCache.deviceTaskCount = 0;
     devProg->controlFlowCache.cacheDataOffset = 0;
     DeviceKernelArgs kArgs;
-    DeviceLauncher::DeviceInitDistributedContext(function->GetDyndevAttribute()->commGroupNames,
+    DeviceLauncher::DeviceInitDistributedContextToHost(function->GetDyndevAttribute()->commGroupNames,
  	         function->GetDyndevAttribute()->devProgBinary);
     DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, devProgData, config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList,
