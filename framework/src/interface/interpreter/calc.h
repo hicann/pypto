@@ -199,8 +199,12 @@ inline void ScatterUpdate(LogicalTensorDataPtr out, LogicalTensorDataPtr self, L
     int axis = -2, std::string cacheMode = "BSND", int blockSize = 1) {
     GetCalcOps()->ScatterUpdate(out, self, index, axis, cacheMode, blockSize);
 }
-inline void Scatter(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index, const Element &src,
-    int axis, int reduce) {
+inline void ScatterElement(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index,
+    const Element &src, int axis, int reduce) {
+    GetCalcOps()->ScatterElement(out, self, index, src, axis, reduce);
+}
+inline void Scatter(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index,
+    LogicalTensorDataPtr src, int axis, int reduce) {
     GetCalcOps()->Scatter(out, self, index, src, axis, reduce);
 }
 inline void BitSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t axis, bool descending) {

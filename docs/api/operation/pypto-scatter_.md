@@ -22,7 +22,7 @@ $$
 ## 函数原型
 
 ```python
-scatter_(input: Tensor, dim: int, index: Tensor, src: float, *, reduce: str = None) -> Tensor
+scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None) -> Tensor
 ```
 
 ## 参数说明
@@ -30,10 +30,10 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: float, *, reduce: str = No
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32、DT_FP16。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 指定用于索引的维度，支持input的维度范围内的任意维度。 <br> 合法的维度索引 ，范围为：-input.dim 到 input.dim - 1。 |
-| index   | 输入      | input的一组索引。 <br> 支持的数据类型为：Tensor。 <br> Tensor支持的数据类型为：INT64。 <br> 支持的维度：和input保持一致 <br> index 的每一维的Shape <= input的每一维的Shape <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX） |
-| src     | 输入      | src是更新的标量值。 <br> 支持的数据类型为：DT_FP32。数据类型和 input 保持一致 <br> 不支持输入INF/NAN。 |
+| index   | 输入      | input的一组索引。 <br> 支持的数据类型为：Tensor。 <br> Tensor支持的数据类型为：INT64、INT32。 <br> 支持的维度：和input保持一致 <br> 对于所有d != dim的维度，需满足要求：index.size(d) <= input.size(d) <br> 当src为Tensor时，所有维度都需满足：index.size(d) <= src.size(d) <br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX） |
+| src     | 输入      | src是更新的标量或Tensor。 <br> src为Element时，支持的数据类型为：DT_FP32、DT_FP16，不支持输入INF/NAN <br> src为Tensor时，支持的数据类型为：DT_FP32、DT_FP16，数据类型和 input 保持一致。 <br> |
 | reduce  | 输入      | 要应用的归约操作，支持 'add' 或 'multiply'，不传参时默认为直接替换 |
 
 ## 返回值说明
@@ -46,7 +46,9 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: float, *, reduce: str = No
 
 2. input.shape的dim轴不可切，viewshape的维度与input维度相同，要求viewshape\[dim\] \>= max\( input.shape\[dim\], index.shape\[dim\] \)，其余维度的Shape大小不做限制；
 
-3. input.shape的dim轴不可切，TileShape的维度与input维度相同，TileShape\[dim\] \>= viewshape\[dim\]，其余维度的Shape大小不做限制，input index 和 result 都会在 UB 中，需满足所有输入和输出的 TileShape 大小总和不能超过UB内存的大小。
+3. input.shape的dim轴不可切，tileshape的维度与input维度相同，tileshape\[dim\] \>= viewshape\[dim\]，其余维度的Shape大小不做限制，input index 和 result 都会在 UB 中，需满足所有输入和输出的 tileshape 大小总和不能超过UB内存的大小。
+
+4. input.shape和index.shape的非dim轴切分，需满足viewshape[non dim]切分后，input和index的非dim轴切分块数相同。
 
 ## 调用示例
 

@@ -30,9 +30,13 @@
 namespace npu::tile_fwk {
 class TestCodegenDynScatter : public ::testing::Test {
 public:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase() {
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+    }
 
-    static void TearDownTestCase() {}
+    static void TearDownTestCase() {
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    }
 
     void SetUp() override {
         Program::GetInstance().Reset();
@@ -120,6 +124,7 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter) {
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
     auto localTensorIdx = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, {32}});
     auto localTensorDst = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
+    auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_INT32, MemoryType::MEM_UB, {32}});
 
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     std::vector<SymbolicScalar> dynValidShapeIdx = {32};
@@ -129,7 +134,8 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter) {
     localTensorDst->UpdateDynValidShape(dynValidShape);
 
     auto &op =
-        function->AddOperation(Opcode::OP_SCATTER, {localTensorSelf, localTensorIdx, localTensorSrc}, {localTensorDst});
+        function->AddOperation(Opcode::OP_SCATTER, {localTensorSelf, localTensorIdx, localTensorSrc},
+        {localTensorDst, localTensorTmp});
     op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", 0);
@@ -143,6 +149,7 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter) {
     function->GetTensorMap().inverseMap_[localTensorSrc->GetMagic()] = localTensorSrc;
     function->GetTensorMap().inverseMap_[localTensorIdx->GetMagic()] = localTensorIdx;
     function->GetTensorMap().inverseMap_[localTensorDst->GetMagic()] = localTensorDst;
+    function->GetTensorMap().inverseMap_[localTensorTmp->GetMagic()] = localTensorTmp;
 
     cop.Init(op);
     std::string res = cop.GenOpCode();

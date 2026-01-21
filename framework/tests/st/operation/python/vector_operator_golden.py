@@ -1601,7 +1601,10 @@ def scatter_golden_func(inputs, config: dict):
     axis = params["axis"]
     reduceop = params["reduce"]
     scalar = params["src"]
-    indices = torch.from_numpy(inputs[1])
+    if inputs[1].dtype == np.int32:
+        indices = torch.from_numpy(inputs[1]).long()
+    else:
+        indices = torch.from_numpy(inputs[1])
 
     if inputs[0].dtype == bfloat16:
         bf16_scalar = np.array([scalar], np.float32).astype(inputs[0].dtype).astype(np.float32)
@@ -1650,15 +1653,18 @@ def scatter_tensor_golden_func(inputs, config: dict):
     params = config.get("params")
     axis = params["axis"]
     reduceop = params["reduce"]
-    indices = torch.from_numpy(inputs[1])
+    if inputs[1].dtype == np.int32:
+        indices = torch.from_numpy(inputs[1]).long()
+    else:
+        indices = torch.from_numpy(inputs[1])
 
     if inputs[0].dtype == bfloat16:
         dst = torch.from_numpy(inputs[0].astype(np.float32))
         src = torch.from_numpy(inputs[2].astype(np.float32))
         if len(reduceop) == 0 or reduceop == "None":
-            res = dst.scatter(axis, indices, src).numpy().astype(bfloat16)
+            res = dst.scatter(axis, indices, src).numpy().astype(inputs[0].dtype)
         else:
-            res = dst.scatter(axis, indices, src, reduce=reduceop).numpy().astype(bfloat16)
+            res = dst.scatter(axis, indices, src, reduce=reduceop).numpy().astype(inputs[0].dtype)
     else:
         dst = torch.from_numpy(inputs[0])
         src = torch.from_numpy(inputs[2])

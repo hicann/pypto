@@ -618,7 +618,9 @@ void InnerTiledScatter(size_t cur, Function &function, const TileShape &tileShap
         auto idxTile = idxInput->View(function, scatterTileInfo.idxInfo.shape, scatterTileInfo.idxInfo.offset);
         auto srcTile = srcInput->View(function, scatterTileInfo.srcInfo.shape, scatterTileInfo.srcInfo.offset);
         auto dstTile = dstTensor->View(function, scatterTileInfo.dstInfo.shape, scatterTileInfo.dstInfo.offset);
-        auto &op = function.AddOperation(Opcode::OP_SCATTER, {selfTile, idxTile, srcTile}, {dstTile});
+        Shape tmpShape({idxTile->GetShape()[idxTile->GetShape().size() - 1]});
+        auto tmpBuffer = std::make_shared<LogicalTensor>(function, idxTile->Datatype(), tmpShape);
+        auto &op = function.AddOperation(Opcode::OP_SCATTER, {selfTile, idxTile, srcTile}, {dstTile, tmpBuffer});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", mode);
         return;
@@ -718,13 +720,33 @@ Tensor Scatter(const Tensor &self, const Tensor &indices, const Tensor &src, int
 
 Tensor Scatter_(const Tensor &self, const Tensor &indices, const Tensor &src, int axis, ScatterMode reduce) {
     DECLARE_TRACER();
+    ASSERT(self.GetDataType() == src.GetDataType());
 
-    axis = axis < 0 ? self.GetShape().size() + axis : axis;
-    CheckScatterParamsInvalid(self, indices, src, axis, reduce);
-    Tensor result(self.GetStorage()->tensor->datatype, self.GetShape());
-    CALL(Scatter, *Program::GetInstance().GetCurrentFunction(),
-        {result.GetStorage(), self.GetStorage(), indices.GetStorage(), src.GetStorage(), axis,
+    DataType orgDtype = self.GetDataType();
+    auto operandSelfCast = Tensor(DataType::DT_FP32, self.GetShape());
+    auto operandSrcCast = Tensor(DataType::DT_FP32, src.GetShape());
+    if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
+        (reduce == ScatterMode::ADD || reduce == ScatterMode::MULTIPLY)) {
+        operandSelfCast = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+        operandSrcCast = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            src.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    } else {
+        operandSelfCast = self;
+        operandSrcCast = src;
+    }
+    axis = axis < 0 ? operandSelfCast.GetShape().size() + axis : axis;
+    CheckScatterParamsInvalid(operandSelfCast, indices, operandSrcCast, axis, reduce);
+    Tensor result(operandSelfCast.GetStorage()->tensor->datatype, operandSelfCast.GetShape());
+    CALL(Scatter, *Program::GetInstance().GetCurrentFunction(), 
+        {result.GetStorage(), operandSelfCast.GetStorage(), indices.GetStorage(), operandSrcCast.GetStorage(), axis,
             static_cast<int>(reduce)});
+
+    if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
+        (reduce == ScatterMode::ADD || reduce == ScatterMode::MULTIPLY)) {
+        RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            result.GetStorage(), orgDtype, CastMode::CAST_RINT);
+    }
     return result;
 }
 

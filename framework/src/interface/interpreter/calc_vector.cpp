@@ -268,7 +268,7 @@ void ExecuteOpIndexOutcast(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, ExecuteOpIndexOutcast);
 
-void ExecuteOpScatter(ExecuteOperationContext *ctx) {
+void ExecuteOpScatterElement(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ioperandDataViewList->size() == SIZE_TWO);
     auto oop = ctx->ooperandInplaceDataViewList->at(0);
     auto self = ctx->ioperandDataViewList->at(0);
@@ -278,9 +278,22 @@ void ExecuteOpScatter(ExecuteOperationContext *ctx) {
     ctx->op->GetAttr(OpAttributeKey::scalar, src);
     int reduce = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "scatter_mode");
 
+    calc::ScatterElement(oop, self, indices, src, axis, reduce);
+}
+REGISTER_CALC_OP(OP_SCATTER_ELEMENT, Opcode::OP_SCATTER_ELEMENT, ExecuteOpScatterElement);
+
+void ExecuteOpScatter(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ioperandDataViewList->size() == SIZE_THREE);
+    auto oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto self = ctx->ioperandDataViewList->at(0);
+    auto indices = ctx->ioperandDataViewList->at(1);
+    auto src = ctx->ioperandDataViewList->at(2);
+    int axis = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "axis");
+    int reduce = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "scatter_mode");
+
     calc::Scatter(oop, self, indices, src, axis, reduce);
 }
-REGISTER_CALC_OP(OP_SCATTER_ELEMENT, Opcode::OP_SCATTER_ELEMENT, ExecuteOpScatter);
+REGISTER_CALC_OP(OP_SCATTER, Opcode::OP_SCATTER, ExecuteOpScatter);
 
 template <typename T, DataType dataType>
 Element GetEndBySize(Element start, Element size, Element step) {

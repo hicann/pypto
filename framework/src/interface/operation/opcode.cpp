@@ -332,7 +332,7 @@ void OpcodeManager::RegisterVector() {
         {"TileOp::TscatterElementS", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OpAttributeKey::scalar, OP_ATTR_PREFIX + "scatter_mode"}, TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_SCATTER, OpCoreType::AIV, "SCATTER",
-        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tscatter", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "scatter_mode"}, TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_INDEX_PUT, OpCoreType::ANY, "INDEX_PUT",
@@ -762,6 +762,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {          Opcode::OP_INDEX_ADD,      "TIndexAdd"},
     {     Opcode::OP_GATHER_ELEMENT, "TgatherElement"},
     {             Opcode::OP_GATHER,        "Tgather"},
+    {            Opcode::OP_SCATTER,       "Tscatter"},
     {             Opcode::OP_EXPAND,        "TExpand"},
     {            Opcode::OP_BITSORT,       "TBitSort"},
     {            Opcode::OP_MRGSORT,       "TMrgSort"},

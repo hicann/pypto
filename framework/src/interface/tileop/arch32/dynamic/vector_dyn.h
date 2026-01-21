@@ -2813,17 +2813,6 @@ TILEOP void DynTscatterElementS(__ubuf__ T *dst, __ubuf__ T *src0, __ubuf__ T1 *
     wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
 }
 
-template <typename T>
-INLINE void ScatterReduceOp(__ubuf__ T *dst, int dstOffset, __ubuf__ T *src2, int src2Offset, unsigned reduceOp) {
-    if (reduceOp == 0) {
-        dst[dstOffset] = src2[src2Offset];
-    } else if (reduceOp == 1) {
-        dst[dstOffset] = static_cast<T>(static_cast<float>(src2[src2Offset]) + static_cast<float>(dst[dstOffset]));
-    } else {
-        dst[dstOffset] = static_cast<T>(static_cast<float>(src2[src2Offset]) * static_cast<float>(dst[dstOffset]));
-    }
-}
-
 // 2-4dim
 template <typename T, typename T2, unsigned src1RawShape1, unsigned src1RawShape2, unsigned src1RawShape3,
     unsigned src2RawShape1, unsigned src2RawShape2, unsigned src2RawShape3,
@@ -2855,7 +2844,13 @@ TILEOP void DynTscatter(__ubuf__ T *dst, __ubuf__ T2 *src1, __ubuf__ T *src2, un
                         dstOffset = i * dstRawShape1 * dstRawShape2 * dstRawShape3 +
                             j * dstRawShape2 * dstRawShape3 + k * dstRawShape3 + index;
                     }
-                    ScatterReduceOp<T>(dst, dstOffset, src2, src2Offset, reduceOp);
+                    if constexpr (reduceOp == 0) {
+                        dst[dstOffset] = src2[src2Offset];
+                    } else if constexpr (reduceOp == 1) {
+                        dst[dstOffset] = src2[src2Offset] + dst[dstOffset];
+                    } else {
+                        dst[dstOffset] = src2[src2Offset] * dst[dstOffset];
+                    }
                 }
             }
         }

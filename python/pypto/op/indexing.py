@@ -15,6 +15,7 @@ from ..enum import ScatterMode
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
 from .._element import Element
+from ..tensor import Tensor
 
 
 @op_wrapper
@@ -414,7 +415,8 @@ def get_scatter_mode(reduce: str):
 
 
 @op_wrapper
-def scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element], *, reduce: str = None) -> Tensor:
+def scatter_(
+    input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None) -> Tensor:
     """Write all values from the value 'src' into 'input' at the indices specified in the 'index' tensor.
 
     This function calculates the formula:
@@ -473,7 +475,8 @@ def scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element],
 
 
 @op_wrapper
-def scatter(input: Tensor, dim: int, index: Tensor, src: Union[float, Element], *, reduce: str = None) -> Tensor:
+def scatter(
+    input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tensor], *, reduce: str = None) -> Tensor:
     """Out-of-place version of 'scatter_'."""
     scatter_mode = get_scatter_mode(reduce)
     if isinstance(src, float):
