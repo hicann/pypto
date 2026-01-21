@@ -267,7 +267,16 @@ class JitCallableWrapper:
                         f"{device} and {tensor.device}"
                     )
         else:
-            raise RuntimeError("pypto.frontend.jit requires at least one input tensor")
+            run_mode = self._runtime_options.get("run_mode", None)
+            if run_mode == pypto.RunMode.NPU:
+                if torch.npu.is_available():
+                    device = torch.device('npu', torch.npu.current_device())
+                else:
+                    raise RuntimeError("NPU is not available.")
+            elif run_mode == pypto.RunMode.SIM:
+                device = torch.device('cpu')
+            else:
+                raise RuntimeError(f"Invalid run mode: {run_mode}.")
 
         # Resolve symbolic dimensions using current input shapes so outputs
         # allocated below match the runtime dynamic sizes.

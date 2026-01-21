@@ -66,7 +66,6 @@ def create_arange_op_kernel(shape: tuple, start=None, end=None, step=None, run_m
 
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def arange_start_end_step_kernel(
-        dummy_input: pypto.Tensor(shape, pypto.DT_FP32),
     ) -> pypto.Tensor(shape, pypto.DT_FP32):
         pypto.set_vec_tile_shapes(8)
         output = pypto.arange(start, end, step)
@@ -74,7 +73,6 @@ def create_arange_op_kernel(shape: tuple, start=None, end=None, step=None, run_m
     
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def arange_start_end_kernel(
-        dummy_input: pypto.Tensor(shape, pypto.DT_FP32),
     ) -> pypto.Tensor(shape, pypto.DT_FP32):
         pypto.set_vec_tile_shapes(8)
         output = pypto.arange(start, end)
@@ -82,7 +80,6 @@ def create_arange_op_kernel(shape: tuple, start=None, end=None, step=None, run_m
     
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def arange_end_kernel(
-        dummy_input: pypto.Tensor(shape, pypto.DT_INT32),
     ) -> pypto.Tensor(shape, pypto.DT_INT32):
         pypto.set_vec_tile_shapes(8)
         output = pypto.arange(end)
@@ -109,7 +106,7 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.int32
     expected_a = torch.tensor([0, 1, 2, 3], dtype=dtype, device=device)
 
-    out_torch = create_arange_op_kernel(shape, end=4, run_mode=run_mode)(torch.tensor([0], dtype=dtype, device=device))
+    out_torch = create_arange_op_kernel(shape, end=4, run_mode=run_mode)()
     print(f"Output a: {out_torch}")
     print(f"Expected a: {expected_a}")
     if run_mode == "npu":
@@ -121,7 +118,7 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     expected_b = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32, device=device)
 
     out_torch = create_arange_op_kernel(shape, start=1.0, end=4.0, 
-                                        run_mode=run_mode)(torch.tensor([0], dtype=dtype, device=device))
+                                        run_mode=run_mode)()
     print(f"Output b: {out_torch}")
     print(f"Expected b: {expected_b}")
     if run_mode == "npu":
@@ -133,7 +130,7 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     expected_c = torch.tensor([1.0, 1.5, 2.0, 2.5, 3.0, 3.5], dtype=torch.float32, device=device)
 
     out_torch = create_arange_op_kernel(shape, start=1.0, end=4.0, step=0.5, 
-                                        run_mode=run_mode)(torch.tensor([0], dtype=dtype, device=device))
+                                        run_mode=run_mode)()
     print(f"Output c: {out_torch}")
     print(f"Expected c: {expected_c}")
     if run_mode == "npu":
