@@ -225,8 +225,8 @@ class JitCallableWrapper:
 
         Returns
         -------
-        Union[torch.Tensor, tuple[torch.Tensor, ...]]
-            Output tensor(s).
+        Optional[Union[torch.Tensor, tuple[torch.Tensor, ...]]]
+            Output tensor(s), or None if the kernel has no return value.
         """
 
         # Validate that all arguments are tensors
@@ -336,6 +336,8 @@ class JitCallableWrapper:
         self._dispatch_with_run_mode(pto_in_tensors + pto_out_tensors, [], device)
 
         # Return single tensor or tuple based on number of outputs
+        if not out_tensors:
+            return None
         if len(out_tensors) == 1:
             return out_tensors[0]
         return tuple(out_tensors)

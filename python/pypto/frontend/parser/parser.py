@@ -43,6 +43,8 @@ DEFAULT_VISIT = {
     "Pass",
 }
 
+_NESTED_CALL_UNHANDLED = object()
+
 
 def _catch_parser_errors(func):
     """Decorator to normalize parser error handling for public APIs."""
@@ -289,10 +291,13 @@ class Parser(doc.NodeVisitor):
             tensor_input_args = self._visit_arguments(function_node.args)
 
             # Get and validate output arguments
-            output_expr = self._visit_expr(function_node.returns)
-            output_tensors = self._normalize_output_annotation(
-                output_expr, function_node.returns
-            )
+            if function_node.returns is None:
+                output_tensors = []
+            else:
+                output_expr = self._visit_expr(function_node.returns)
+                output_tensors = self._normalize_output_annotation(
+                    output_expr, function_node.returns
+                )
 
             self._signature_cache = (
                 tensor_input_args,
@@ -552,9 +557,12 @@ class Parser(doc.NodeVisitor):
         Any
             The evaluated result of the expression.
         """
+        if isinstance(node, doc.Expr) and hasattr(node, "value"):
+            node = node.value
+
         if isinstance(node, doc.Call):
             nested_result = self._try_nested_call(node, extra_vars)
-            if nested_result is not None:
+            if nested_result is not _NESTED_CALL_UNHANDLED:
                 return nested_result
 
         var_values = self.context.get()
@@ -618,6 +626,8 @@ class Parser(doc.NodeVisitor):
         ParserError
             If the annotation is not a valid tensor or collection of tensors.
         """
+        if output_expr is None:
+            return []
         if isinstance(output_expr, pypto.Tensor):
             return [output_expr]
         if isinstance(output_expr, (list, tuple)):
@@ -781,6 +791,8 @@ class Parser(doc.NodeVisitor):
 
         # Extract variable names from the return value
         return_value = last_stmt.value
+        if isinstance(return_value, doc.Constant) and return_value.value is None:
+            return None
         if isinstance(return_value, doc.Name):
             # Single return value: return x
             return [return_value.id]
@@ -1180,8 +1192,9 @@ class Parser(doc.NodeVisitor):
 
         Returns
         -------
-        Optional[Any]
-            The result of the inlined function, or None if inlining is not applicable.
+        Any
+            The result of the inlined function, or _NESTED_CALL_UNHANDLED if inlining
+            is not applicable.
 
         Raises
         ------
@@ -1190,7 +1203,7 @@ class Parser(doc.NodeVisitor):
         """
         # Only simple name calls (no attributes/methods) are considered for inlining.
         if not isinstance(node.func, doc.Name):
-            return None
+            return _NESTED_CALL_UNHANDLED
 
         # Collect current context variables and any extra_vars provided by eval_expr.
         func_name = node.func.id
@@ -1199,7 +1212,7 @@ class Parser(doc.NodeVisitor):
             var_values = {**var_values, **extra_vars}
 
         if func_name not in var_values:
-            return None
+            return _NESTED_CALL_UNHANDLED
 
         # Resolve the callee function object; if it's a NestedFunctionMarker, unwrap to the original function.
         func_value = var_values[func_name]
@@ -1225,7 +1238,7 @@ class Parser(doc.NodeVisitor):
         # If callee is a normal function, ensure it is decorated as nested; otherwise, bail out.
         if not isinstance(func_value, NestedFunctionMarker):
             if not self._is_nested_function(func_def_node.decorator_list):
-                return None
+                return _NESTED_CALL_UNHANDLED
 
         # Parse parameters/return annotations to get tensor/non-tensor lists and ordered specs.
         # Seed the temp frame with the callee's env so that annotations depending on globals
@@ -1238,9 +1251,16 @@ class Parser(doc.NodeVisitor):
                 func_def_node.args
             )
 
-            output_args = self._eval_expr(func_def_node.returns, extra_vars=var_values)
-            if not isinstance(output_args, (list, tuple)):
-                output_args = [output_args]
+            if func_def_node.returns is None:
+                output_args = []
+            else:
+                output_args = self._eval_expr(
+                    func_def_node.returns, extra_vars=var_values
+                )
+                if output_args is None:
+                    output_args = []
+                elif not isinstance(output_args, (list, tuple)):
+                    output_args = [output_args]
 
         # Evaluate call-site arguments; keyword arguments are not supported yet.
         # Use merged env (locals + globals of callee + caller extras) so symbols referenced
@@ -1343,6 +1363,8 @@ class Parser(doc.NodeVisitor):
                 self.diag = old_diag
 
             # Return aggregation: single tensor returns directly; multiple returns as a list.
+            if not nested_output_args:
+                return None
             if len(nested_output_args) == 1:
                 return nested_output_args[0]
             return nested_output_args
@@ -1633,6 +1655,8 @@ class Parser(doc.NodeVisitor):
         res : Any
             The visiting result.
         """
+        if isinstance(node, doc.Expr):
+            return self._eval_expr(node.value)
         return self._eval_expr(node)
 
     def _visit_if(self, node: doc.If) -> Any:
