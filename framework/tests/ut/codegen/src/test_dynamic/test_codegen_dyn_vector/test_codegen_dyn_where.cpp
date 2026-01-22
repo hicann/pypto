@@ -30,20 +30,22 @@
 namespace npu::tile_fwk {
 class TestCodegenDynWhere : public ::testing::Test {
 public:
-    static void SetUpTestCase() {}
+    static void SetUpTestCase() {
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+    }
 
-    static void TearDownTestCase() {}
+    static void TearDownTestCase() {
+        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    }
 
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
     }
 
     void TearDown() override {
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     }
 };
 
@@ -54,7 +56,7 @@ TEST_F(TestCodegenDynWhere, TestDynOpWhere) {
     Tensor inputA(DT_FP32, shape, "A");
     Tensor inputB(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "C");
-
+    
     Element scalaVal(DataType::DT_FP32, 1.0);
 
     std::string funcName = "TestDynOpWhere";
