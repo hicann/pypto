@@ -100,8 +100,8 @@ stest:
       - TestAdd/AddOperationTest.TestAdd/11
       - TestConcat/ConcatOperationTest.TestConcat/0
       - TestConcat/ConcatOperationTest.TestConcat/1
-      - TestCumSum/CumSumOperationTest.TestCumSum/0
-      - TestCumSum/CumSumOperationTest.TestCumSum/1
+      - TestCumSum/CumSumOperationTest.TestCumSum/2
+      - TestCumSum/CumSumOperationTest.TestCumSum/3
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/0
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/4
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/14

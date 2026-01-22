@@ -450,13 +450,13 @@ void TiledCumSum(Function &function, const TileShape &tileShape, const CumSumPar
 }
 
 void TensorCumSum(Function &function, const CumSumPara &cumSumPara) {
-    if (cumSumPara.Input->Datatype() == DT_INT8) {
+    if (cumSumPara.Input->Datatype() == DT_INT16) {
         LogicalTensorPtr inputConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP16, cumSumPara.Input->GetShape());
+            std::make_shared<LogicalTensor>(function, DT_FP32, cumSumPara.Input->GetShape());
         Operation &castInputOp = function.AddOperation(Opcode::OP_CAST, {cumSumPara.Input}, {inputConverted});
         castInputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr dstConverted =
-            std::make_shared<LogicalTensor>(function, DT_FP16, cumSumPara.dstTensor->GetShape());
+            std::make_shared<LogicalTensor>(function, DT_FP32, cumSumPara.dstTensor->GetShape());
         auto &op = function.AddOperation(Opcode::OP_CUM_SUM, {inputConverted}, {dstConverted});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumSumPara.axis);
         op.SetAttribute(OP_ATTR_PREFIX + "flag", cumSumPara.flag);
@@ -476,6 +476,15 @@ void TensorCumSum(Function &function, const CumSumPara &cumSumPara) {
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConverted}, {cumSumPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         return;
+    } if (cumSumPara.Input->Datatype() == DT_INT32) {
+        LogicalTensorPtr dstConverted =
+            std::make_shared<LogicalTensor>(function, DT_INT32, cumSumPara.dstTensor->GetShape());
+        auto &op = function.AddOperation(Opcode::OP_CUM_SUM, {cumSumPara.Input}, {dstConverted});
+        op.SetAttribute(OP_ATTR_PREFIX + "axis", cumSumPara.axis);
+        op.SetAttribute(OP_ATTR_PREFIX + "flag", cumSumPara.flag);
+        Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConverted}, {cumSumPara.dstTensor});
+        castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        return;
     } else {
         auto &op = function.AddOperation(Opcode::OP_CUM_SUM, {cumSumPara.Input}, {cumSumPara.dstTensor});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", cumSumPara.axis);
@@ -484,8 +493,7 @@ void TensorCumSum(Function &function, const CumSumPara &cumSumPara) {
     }
 }
 
-Tensor CumSum(const Tensor &input, const int &axis) {
-    DECLARE_TRACER();
+void CheckCumSum(const Tensor &input, const int &axis) {
     auto shapeSize = input.GetShape().size();
     auto dataType = input.GetDataType();
 
@@ -503,10 +511,24 @@ Tensor CumSum(const Tensor &input, const int &axis) {
     }
     ASSERT(tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < shapeSize)
         << "The tmpAxis0 should be 0 and less than shape size";
+}
 
-    const int n_1 = input.GetShape().size() - 1;
-    const int n_2 = input.GetShape().size() - 2;
-    if ((dataType != DataType::DT_INT8) && tmpAxis0 > 0 && tmpAxis0 == n_1) {
+Tensor CumSum(const Tensor &input, const int &axis) {
+    DECLARE_TRACER();
+    CheckCumSum(input, axis);
+
+    auto resultDType = input.GetDataType();
+    int shapeSize = input.GetShape().size();
+    int tmpAxis0 = axis < 0 ? shapeSize + axis : axis;
+    bool flag = shapeSize == 1 ? true : false;
+
+    if (resultDType == DataType::DT_INT16 || resultDType == DataType::DT_INT32) {
+        resultDType = DataType::DT_INT64;
+    }
+
+    const int n_1 = shapeSize - 1;
+    const int n_2 = shapeSize - 2;
+    if ((resultDType != DataType::DT_INT64) && tmpAxis0 > 0 && tmpAxis0 == n_1) {
         Tensor tmpInput = Transpose(input, {n_2, n_1});
         const int transposedAxis = n_2;
 
@@ -524,7 +546,7 @@ Tensor CumSum(const Tensor &input, const int &axis) {
         tmpresult.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);
         return tmpresult;
     } else {
-        Tensor result(input.GetDataType(), input.GetShape());
+        Tensor result(resultDType, input.GetShape());
         CALL(CumSum, *Program::GetInstance().GetCurrentFunction(),
             {input.GetStorage(), result.GetStorage(), tmpAxis0, flag});
         result.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);

@@ -28,7 +28,7 @@ def test_cumsum_onboard():
 
     input1 = pypto.tensor(shape, pypto.DT_INT32, "pypto_TENSOR_input1")
     dim = 0
-    output = pypto.tensor(shape, pypto.DT_INT32, "pypto_TENSOR_output")
+    output = pypto.tensor(shape, pypto.DT_INT64, "pypto_TENSOR_output")
 
     b_loop_num = math.ceil(shape[1] / view_shape[1])
 
@@ -49,7 +49,7 @@ def test_cumsum_onboard():
 
     a_tensor = torch.randint(
         low=-10, high=10, size=[shape[0], shape[1]], dtype=torch.int32)
-    b_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int32)
+    b_tensor = torch.zeros(shape[0], shape[1], dtype=torch.int64)
 
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
     pto_b_tensor = pypto.from_torch(b_tensor, "b_tensor")
