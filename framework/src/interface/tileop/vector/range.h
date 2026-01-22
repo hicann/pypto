@@ -38,7 +38,7 @@
  	     }
  	     if (tailSize > 0) {
  	         using TailTile = pto::Tile<pto::TileType::Vec, T, 1, Unit, pto::BLayout::RowMajor, -1, -1>;
- 	         TailTile src(1, Unit), dst(1, tailSize);
+ 	         TailTile src(1, tailSize), dst(1, tailSize);
  	         pto::TASSIGN(src, reinterpret_cast<uint64_t>(base + loopN * Unit));
  	         pto::TASSIGN(dst, reinterpret_cast<uint64_t>(base + (loopN + 1) * Unit));
  	         pto::TADDS(dst, src, offset);
