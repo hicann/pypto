@@ -399,7 +399,7 @@ void OptimizeSort::RecoverSymbol(size_t startIndex, std::vector<Operation*> curO
 }
 
 // 找未被执行的 consumer
-void OptimizeSort::GetConsumerGroup(std::set<Operation*> consumers, std::vector<Operation*> &consumersGroup) {
+void OptimizeSort::GetConsumerGroup(std::unordered_set<Operation*> &consumers, std::vector<Operation*> &consumersGroup) {
     for (auto op : consumers) {
         APASS_LOG_DEBUG_F(Elements::Operation, "consumer: %s", GetOpInfo(op).c_str());
         if (!visitedOp[op]) {

@@ -70,7 +70,7 @@ public:
     Status UpdateOOperandPreDependence(size_t startIndex, std::vector<Operation*> &curOpList,
         std::vector<Operation*> consumersGroup);
     void RecoverSymbol(size_t startIndex, std::vector<Operation*> curOpList);
-    void GetConsumerGroup(std::set<Operation*> consumers, std::vector<Operation*> &consumersGroup);
+    void GetConsumerGroup(std::unordered_set<Operation*> &consumers, std::vector<Operation*> &consumersGroup);
     void GetStackTop(size_t &startIndex, std::vector<Operation*> &curOpList,
         std::map<MemoryType, int64_t> &curMemoryMap);
     Status BacktraceOnMemoryExceeded(size_t &startIndex, std::vector<Operation*> &curOpList,
