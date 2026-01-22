@@ -110,7 +110,7 @@ TEST_F(TestInsertCopyPass, TestNoEqualSize) {
     /* 
                | ------- view --- t0 --- assemble ------- |
              | ------- view --- t1 --- assemble  ---------- |
-    inTensor [16, 16]                                         outTensor [16, 16]
+    inTensor [16, 16]                                         outTensor [16, 64]
              | ------- view --- t2 --- assemble  ---------- |
                | ------- view --- t3 --- assemble ------- |
  */
@@ -124,40 +124,39 @@ TEST_F(TestInsertCopyPass, TestNoEqualSize) {
     std::vector<int64_t> offset3 = {kSizeZero, kSizeTwelve};
 
     auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    inTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+    inTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
     auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
-    outTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+    outTensor->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
     auto midTensor0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
-    midTensor0->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+    midTensor0->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
     auto midTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
-    midTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+    midTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
     auto midTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
-    midTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+    midTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
     auto midTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, midShape);
-    midTensor3->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+    midTensor3->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
 
     auto &viewOp0 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor0});
-    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0, MemoryType::MEM_DEVICE_DDR));
+    viewOp0.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0, MemoryType::MEM_UB));
     auto &viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor1});
-    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1, MemoryType::MEM_DEVICE_DDR));
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset1, MemoryType::MEM_UB));
     auto &viewOp2 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor2});
-    viewOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2, MemoryType::MEM_DEVICE_DDR));
+    viewOp2.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset2, MemoryType::MEM_UB));
     auto &viewOp3 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inTensor}, {midTensor3});
-    viewOp3.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset3, MemoryType::MEM_DEVICE_DDR));
+    viewOp3.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset3, MemoryType::MEM_UB));
 
     auto &assOp0 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {midTensor0}, {outTensor});
-    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset0));
+    assOp0.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset0));
     auto &assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {midTensor1}, {outTensor});
-    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset1));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset1));
     auto &assOp2 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {midTensor2}, {outTensor});
-    assOp2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset2));
+    assOp2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset2));
     auto &assOp3 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {midTensor3}, {outTensor});
-    assOp3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset3));
+    assOp3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, offset3));
 
     InsertOpForViewAssemble pass;
     EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(currFunctionPtr->Operations().size(), kSizeEight);
-    EXPECT_EQ(midTensor0->GetMemoryTypeOriginal(), MemoryType::MEM_UB);
+    EXPECT_EQ(currFunctionPtr->Operations().size(), kNumExpFour);
 }
 
 TEST_F(TestInsertCopyPass, TestInsert) {

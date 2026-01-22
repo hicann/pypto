@@ -109,6 +109,9 @@ Status InsertOpForViewAssemble::JudgedViewAssemble(Function &function) {
             continue;
         }
         auto &prodOp = *op.GetIOperands()[0]->GetProducers().begin();
+        if (op.GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && op.GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+            continue;
+        }
         if (prodOp->GetOpcode() == Opcode::OP_VIEW && assembleOutSet_.find(op.GetOOperands()[0]) == assembleOutSet_.end()) {
             assembleOutSet_.insert(op.GetOOperands()[0]);
         }
