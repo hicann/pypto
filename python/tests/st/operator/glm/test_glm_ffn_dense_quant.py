@@ -310,7 +310,6 @@ def ffn_dense_quant(hidden_states: torch.Tensor,
     return ffn_res
 
 
-@pytest.mark.skip(reason="case run in bug")
 def test_glm_mlp() -> None:
     x_dtype = torch.bfloat16
     # parameter config
