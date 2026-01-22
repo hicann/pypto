@@ -731,15 +731,14 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::string gmVarName = GenGmParamVar(param.gmIdx);
     std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
-    bool vquantFlag = false;
-    GetAttr(OpAttributeKey::quantFlag, vquantFlag);
+    int64_t reluMode = 0;
+ 	GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
     std::string src1Tensor = srcTensor;
-    if (vquantFlag) {
+    if (reluMode) {
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     }
     int64_t nzValue = 0;
     int64_t isAcc = 0;
-    int64_t reluMode = 0;
     int64_t outerValue = 0;
     int64_t innerValue = 0;
     GetAttr("op_attr_curH", outerValue);
