@@ -171,7 +171,7 @@ inline std::string DataType2CCEStr(DataType t) {
         case DT_FP16: return "half";
         case DT_FP32: return "float";
         case DT_BF16: return "bfloat16_t";
-        case DT_HF8: return "hfloat8";
+        case DT_HF8: return "hifloat8_t";
         case DT_HF4: return "hfloat4";
         case DT_BOOL: return "bool";
         case DT_UINT8: return "uint8_t";

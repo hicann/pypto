@@ -486,7 +486,7 @@ inline uint32_t GetDataType(string dataType)
         ret = DataType::DT_FP32;
     } else if (dataType == "bfloat16_t") {
         ret = DataType::DT_BF16;
-    } else if (dataType == "hfloat8") {
+    } else if (dataType == "hifloat8_t") {
         ret = DataType::DT_HF8;
     } else if (dataType == "hfloat4") {
         ret = DataType::DT_HF4;
@@ -544,7 +544,7 @@ inline PInstrParam  SetSpr(InstrName name, PipeId pipe, SprId spr, const vector<
     } else {
         instr->param = { static_cast<uint32_t>(spr), sprValLo, sprValHi };
     }
-    
+
     return instr;
     // set_vector_mask, set_fmatrix set_nd_para set_fpc
 }
@@ -610,7 +610,7 @@ inline PInstrParam  VecVconv(InstrName name, const vector<string> templates, con
     instr->pipe = PipeId::V;
     instr->param = { GetDataType(templates[1]), GetDataType(templates[0]), GetParam(params[2]) };
     return instr;
-    // vconv 
+    // vconv
 }
 
 inline PInstrParam  MteDma(InstrName name, PipeId pipe, const vector<string> params)
