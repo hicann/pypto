@@ -45,30 +45,6 @@ stest:
   #     # - QkvPreOnBoardTest.test_qkvPre_float16_32_32_1_256_256_1536
   #     # - QkvPreOnBoardTest.test_qkvPre_bfloat16_32_32_1_256_7168_1536
 
-  # operator_op_prolog:
-  #   cases:
-  #     # - MlaPrologAbOnBoardTest.test_MlaPrologAb_float16_32_32_1_256_1024_1536
-  #     # - MlaPrologAbOnBoardTest.test_MlaPrologAb_float16_32_32_1_256_7168_1536_quant
-  #     # - MlaPrologAbOnBoardTest.test_MlaPrologAb_bfloat16_32_32_1_256_7168_1536
-  #     # - MlaPrologOnBoardTest.test_MlaProlog_float16_32_2_1_256_256_512
-  #     # - MlaPrologOnBoardTest.test_MlaProlog_bfloat16_4_32_1_256_7168_1536_quant
-  #     # - MlaPrologOnBoardTest.test_MlaProlog_float16_32_128_1_4096_7168_1536_quant
-  #     # - MlaPrologOnBoardTest.test_MlaProlog_bfloat16_32_32_1_256_7168_1536
-
-  # operator_op_mla_prolog_new:
-  #   cases:
-  #     # - MlaPrologV2OnBoardTest.test_MlaPrologV2_bfloat16_4_32_1_256_7168_1536
-  #     # - MlaPrologV2OnBoardTest.test_MlaPrologV2_bfloat16_32_128_1_4096_7168_1536
-  #     # - MlaPrologV2OnBoardTest.test_MlaPrologV2_bfloat16_32_32_1_256_7168_1536
-  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_low_quant_smooth
-  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_high_quant_smooth
-
-  # operator_op_mla_prolog_PA_BSND:
-  #   cases:
-  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_high_quant_smooth_nz_pa_bsnd
-  #     # - MlaPrologV2OnBoardTest.test_mla_bf16_high48_quant_smooth_nz_pa_bsnd
-  #     # - MlaPrologV2OnBoardTest.attentionV2_bf16_low
-
   # operator_op_attention:
   #   cases:
   #     # - MlaPrologOnBoardTest.attention_bf16_4_1024_1024_32_256
