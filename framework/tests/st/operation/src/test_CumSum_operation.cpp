@@ -204,11 +204,69 @@ static void CumSumOperationExeFuncQuadraticCut(
     }
 }
 
+static void CumSumOperationExeFuncPentaCut(
+    const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
+    auto args = static_cast<const CumSumOpFuncArgs *>(opArgs);
+
+    FUNCTION("main", {inputs[0]}, {outputs[0]}) {
+        int axis = args->axis_ < 0 ? args->axis_ + inputs[0].GetShape().size() : args->axis_;
+        std::vector<SymbolicScalar> noAxisDims = GetNoAxisDims(inputs[0], axis);
+        std::vector<int64_t> noAxisViewShapes = GetNoAxisViewShapes(args->viewShape_, axis);
+        const int bloop = CeilDiv(noAxisDims[0], noAxisViewShapes[0]);
+        const int sloop = CeilDiv(noAxisDims[1], noAxisViewShapes[1]);
+        const int kloop = CeilDiv(noAxisDims[2], noAxisViewShapes[2]);
+        const int mloop = CeilDiv(noAxisDims[3], noAxisViewShapes[3]);
+        LOOP("LOOP_L1_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1)) {
+            LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1)) {
+                LOOP("LOOP_L1_kIdx", FunctionType::DYNAMIC_LOOP, kIdx, LoopRange(0, kloop, 1)) {
+                    LOOP("LOOP_L1_mIdx", FunctionType::DYNAMIC_LOOP, mIdx, LoopRange(0, mloop, 1)) {
+                        std::vector<SymbolicScalar> tmpIndices = {bIdx, sIdx, kIdx, mIdx};
+                        tmpIndices.insert(tmpIndices.begin() + axis, 0);
+
+                        const std::vector<int64_t> tensorViewShape = GetCumSumViewShape(inputs[0], args->viewShape_, axis);
+                        SymbolicScalar validShape0 = std::min(
+                            SymbolicScalar(inputs[0].GetShape()[0]) - tmpIndices[0] * tensorViewShape[0], tensorViewShape[0]);
+                        SymbolicScalar validShape1 = std::min(
+                            SymbolicScalar(inputs[0].GetShape()[1]) - tmpIndices[1] * tensorViewShape[1], tensorViewShape[1]);
+                        SymbolicScalar validShape2 = std::min(
+                            SymbolicScalar(inputs[0].GetShape()[2]) - tmpIndices[2] * tensorViewShape[2], tensorViewShape[2]);
+                        SymbolicScalar validShape3 = std::min(
+                            SymbolicScalar(inputs[0].GetShape()[3]) - tmpIndices[3] * tensorViewShape[3], tensorViewShape[3]);
+                        SymbolicScalar validShape4 = std::min(
+                            SymbolicScalar(inputs[0].GetShape()[4]) - tmpIndices[4] * tensorViewShape[4], tensorViewShape[4]);
+                        auto tileTensor =
+                            View(inputs[0], tensorViewShape, {validShape0, validShape1, validShape2, validShape3, validShape4},
+                                {
+                                    tmpIndices[0] * tensorViewShape[0],
+                                    tmpIndices[1] * tensorViewShape[1],
+                                    tmpIndices[2] * tensorViewShape[2],
+                                    tmpIndices[3] * tensorViewShape[3],
+                                    tmpIndices[4] * tensorViewShape[4]
+                                });
+
+                        TileShape::Current().SetVecTile(args->tileShape_);
+                        auto res = CumSum(tileTensor, axis);
+                        Assemble(res,
+                            {
+                                tmpIndices[0] * args->viewShape_[0],
+                                tmpIndices[1] * args->viewShape_[1],
+                                tmpIndices[2] * args->viewShape_[2],
+                                tmpIndices[3] * args->viewShape_[3],
+                                tmpIndices[4] * args->viewShape_[4]
+                            },
+                            outputs[0]);
+                    }
+                }
+            }
+        }
+    }
+}
+
 class CumSumOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<CumSumOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(TestCumSum, CumSumOperationTest,
     ::testing::ValuesIn(GetOpMetaData<CumSumOpMetaData>(
-        {CumSumOperationExeFuncDoubleCut, CumSumOperationExeFuncTripleCut, CumSumOperationExeFuncQuadraticCut},
+        {CumSumOperationExeFuncDoubleCut, CumSumOperationExeFuncTripleCut, CumSumOperationExeFuncQuadraticCut, CumSumOperationExeFuncPentaCut},
         "CumSum")));
 
 TEST_P(CumSumOperationTest, TestCumSum) {

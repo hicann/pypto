@@ -49,6 +49,7 @@ public:
 };
 
 void TestCodegenDynCumSumBody(int axis) {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     std::vector<int64_t> vecTileShape = {5, 9};
     std::vector<int64_t> shape{12, 14};
 

@@ -45,6 +45,7 @@
 #include "vector/indexadd.h"
 #include "vector/scatter.h"
 #include "vector/expand.h"
+#include "vector/cumsum.h"
 #include "vector/extract.h"
 #include "vector/pair_binary.h"
 #include "vector/where.h"
