@@ -255,7 +255,16 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
         float eps = static_cast<float>(1e-3);
         capture = captureList[captureIndex];
 
-        auto captureExecution = functionInterpreter_->RunForPass(key, func, capture);
+        std::shared_ptr<FunctionCaptureExecution> captureExecution = nullptr;
+        try {
+            captureExecution = functionInterpreter_->RunForPass(key, func, capture);
+        } catch (std::exception &e) {
+            ALOG_ERROR_F("VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s", 
+                         func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex, e.what());
+            checkResult = false;
+            continue;
+        }
+
         auto goldenDataViewList = capture->golden->outcastDataViewList;
         auto executeDataViewList = captureExecution->golden->outcastDataViewList;
         /* record it */

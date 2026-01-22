@@ -264,7 +264,7 @@ void ExecuteOpIndexOutcast(ExecuteOperationContext *ctx) {
     int blockSize = ctx->op->GetIntAttribute(OpAttributeKey::panzBlockSize);
     std::string cacheMode = ctx->op->GetStringAttribute(OpAttributeKey::cacheMode);
 
-    calc::ScatterUpdate(oop, src, index, axis, cacheMode, blockSize);
+    calc::ScatterUpdate(oop, src, index, dst, axis, cacheMode, blockSize);
 }
 REGISTER_CALC_OP(OP_INDEX_OUTCAST, Opcode::OP_INDEX_OUTCAST, ExecuteOpIndexOutcast);
 
