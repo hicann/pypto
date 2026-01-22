@@ -62,7 +62,8 @@ def scatter_2dim_proc(scatter_para, is_inplace):
                         s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 if is_inplace == True:
-                    tmp_dst_tensor.move(pypto.scatter_(view_tensor_src, scatter_para.axis, view_tensor_index, src))
+                    pypto.scatter_(view_tensor_src, scatter_para.axis, view_tensor_index, src)
+                    tmp_dst_tensor.move(view_tensor_src)
                 else:
                     tmp_dst_tensor.move(pypto.scatter(view_tensor_src, scatter_para.axis, view_tensor_index, src))
                 pypto.assemble(tmp_dst_tensor, [b_idx * view_shape[0], s_idx * view_shape[1]], dst_tensor)
@@ -219,8 +220,8 @@ def scatter_2dim_tensor_proc(scatter_para, is_inplace):
                         s_idx * view_shape[1]).min(pypto.symbolic_scalar(view_shape[1]))])
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
                 if is_inplace == True:
-                    tmp_dst_tensor.move(pypto.scatter_(view_tensor_self, scatter_para.axis, view_tensor_index, 
-                        view_tensor_src))
+                    pypto.scatter_(view_tensor_self, scatter_para.axis, view_tensor_index, view_tensor_src)
+                    tmp_dst_tensor.move(view_tensor_self)
                 else:
                     tmp_dst_tensor.move(pypto.scatter(view_tensor_self, scatter_para.axis, view_tensor_index, 
                         view_tensor_src))

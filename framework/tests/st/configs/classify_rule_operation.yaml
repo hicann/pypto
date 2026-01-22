@@ -133,8 +133,6 @@ stest:
       - TestAmax/AmaxOperationTest.TestAmax/65
       - TestAmax/AmaxOperationTest.TestAmax/64
       - TestAmax/AmaxOperationTest.TestAmax/63
-      - TestScatter_/Scatter_OperationTest.TestScatter_/0
-      - TestScatter_/Scatter_OperationTest.TestScatter_/1
       - TestScatter/ScatterOperationTest.TestScatter/0
       - TestScatter/ScatterOperationTest.TestScatter/2
       - TestScatterTensor/ScatterTensorOperationTest.TestScatterTensor/8

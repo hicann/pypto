@@ -10,12 +10,20 @@
 ## 功能说明
 
 将src的值写入input中。写入位置由index指定。3维计算公式如下，其他维度以此类推：
-
+ <br> src为固定标量时：
 $$
 \begin{cases}
 input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src & \text{if } dim = 0 \\
 input\left[i\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[k\right] = src & \text{if } dim = 1 \\
 input\left[i\right]\left[j\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right] = src & \text{if } dim = 2
+\end{cases}
+$$
+ <br> src为Tensor时：
+$$
+\begin{cases}
+input\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[j\right]\left[k\right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 0 \\
+input\left[i\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right]\left[k\right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 1 \\
+input\left[i\right]\left[j\right]\left[ index\left[i\right]\left[j\right]\left[k\right] \right] = src\left[i\right]\left[j\right]\left[k\right] & \text{if } dim = 2
 \end{cases}
 $$
 
@@ -49,6 +57,8 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 3. input.shape的dim轴不可切，tileshape的维度与input维度相同，tileshape\[dim\] \>= viewshape\[dim\]，其余维度的Shape大小不做限制，input index 和 result 都会在 UB 中，需满足所有输入和输出的 tileshape 大小总和不能超过UB内存的大小。
 
 4. input.shape和index.shape的非dim轴切分，需满足viewshape[non dim]切分后，input和index的非dim轴切分块数相同。
+
+5. src为Tensor，dim为尾轴，reduce为None，且当index每行数据内存在不唯一索引时，行为是不确定的，将从src中任意选择一个值
 
 ## 调用示例
 

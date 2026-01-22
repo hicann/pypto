@@ -1590,7 +1590,7 @@ def gen_indexput__op_golden(
     return indexput_pre_golden_func(output, test_configs[case_index])
 
 
-@TestCaseLoader.reg_params_handler(ops=["Scatter", "Scatter_", "ScatterTensor", "Scatter_Tensor"])
+@TestCaseLoader.reg_params_handler(ops=["Scatter", "ScatterTensor"])
 def params_axis_reduce_func(params: dict):
     params["axis"] = int(params.get("axis"))
     params["reduce"] = "" if params["reduce"] is None else params["reduce"]
@@ -1637,22 +1637,38 @@ def gen_scatter_op_golden(case_name: str, output: Path, case_index: int = None) 
     return gen_op_golden("Scatter", scatter_golden_func, output, case_index)
 
 
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        "TestScatter_/Scatter_OperationTest.TestScatter_",
-    ]
-)
-def gen_scatter__op_golden(
-    case_name: str, output: Path, case_index: int = None
-) -> bool:
-    logging.debug("Case(%s), Golden creating...", case_name)
-    return gen_op_golden("Scatter_", scatter_golden_func, output, case_index)
-
-
 def scatter_tensor_golden_func(inputs, config: dict):
     params = config.get("params")
     axis = params["axis"]
     reduceop = params["reduce"]
+
+    input1_tensor = config["input_tensors"][1]
+    data_min = input1_tensor["data_range"]["min"]
+    data_max = input1_tensor["data_range"]["max"]
+    shape = inputs[1].shape
+    dtype = inputs[1].dtype
+    dims = inputs[1].ndim
+    # 当前A5 vscatter指令在index索引重复的情况下并不保证，计算时序，生成golden时需要保证index数据不重复。
+    # 仅axis为尾轴时，会出现此问题，因为pto内部处理时，单次只处理index的一行数据，axis为其他值时单次处理并不会导致
+    # 其他场景，例如reduce为add，当前还是用标量场景
+    is_regen_index = (axis == dims - 1 or axis + dims == dims - 1) and (len(reduceop) == 0 or reduceop == "None") and \
+        (data_max >= shape[-1])
+    if is_regen_index:
+        if dims == 2:
+            for i in range(shape[0]):
+                inputs[1][i] = np.random.choice(range(data_min, data_max), shape[-1], False).astype(dtype)
+        elif dims == 3:
+            for i in range(shape[0]):
+                for j in range(shape[1]):
+                    inputs[1][i, j] = np.random.choice(range(data_min, data_max), shape[-1], False).astype(dtype)
+        elif dims == 4:
+            for i in range(shape[0]):
+                for j in range(shape[1]):
+                    for k in range(shape[2]):
+                        inputs[1][i, j, k] = np.random.choice(range(data_min, data_max), shape[-1], False).astype(dtype)
+        else:
+            raise ValueError("Dims is not supported, please check.")
+
     if inputs[1].dtype == np.int32:
         indices = torch.from_numpy(inputs[1]).long()
     else:
@@ -1684,18 +1700,6 @@ def scatter_tensor_golden_func(inputs, config: dict):
 def gen_scatter_tensor_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("ScatterTensor", scatter_tensor_golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        "TestScatter_Tensor/Scatter_TensorOperationTest.TestScatter_Tensor",
-    ]
-)
-def gen_scatter__tensor_op_golden(
-    case_name: str, output: Path, case_index: int = None
-) -> bool:
-    logging.debug("Case(%s), Golden creating...", case_name)
-    return gen_op_golden("Scatter_Tensor", scatter_tensor_golden_func, output, case_index)
 
 
 @GoldenRegister.reg_golden_func(

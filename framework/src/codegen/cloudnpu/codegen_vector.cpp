@@ -1123,10 +1123,9 @@ std::string CodeGenOpCloudNPU::PrintScatterTileTensor(const PrintScatterParam &p
     int axis = param.axis + SHAPE_DIM5 - param.src1RawShape.size();
     paramList.emplace_back(std::to_string(axis));
     paramList.emplace_back(std::to_string(param.scatterMode));
-    std::string templateParam = JoinString(paramList, CONN_COMMA);
     std::ostringstream oss;
-    oss << tileOpName << "<" << templateParam << ">"
-        << "(" << dstTensor << ", " << src1Tensor << ", " << src2Tensor << ", " << tmpTensor << ");\n";
+    oss << tileOpName << WrapParamByAngleBrackets(paramList) <<
+        WrapParamByParentheses({dstTensor, src1Tensor, src2Tensor, tmpTensor}) << ";\n" ;
     return oss.str();
 }
 

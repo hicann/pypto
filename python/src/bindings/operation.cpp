@@ -138,26 +138,12 @@ void bind_operation(py::module &m) {
         },
         "Tensor indexput_.");
     m.def(
-        "Scatter_",
-        [](const Tensor &self, const Tensor &indices, const Element &src, int axis, ScatterMode reduce) {
-            return npu::tile_fwk::Scatter_(self, indices, src, axis, reduce);
-        },
-        py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
-        "Tensor scatter element inplace.");
-    m.def(
         "Scatter",
         [](const Tensor &self, const Tensor &indices, const Element &src, int axis, ScatterMode reduce) {
             return npu::tile_fwk::Scatter(self, indices, src, axis, reduce);
         },
         py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
         "Tensor scatter element noninplace.");
-    m.def(
-        "Scatter_",
-        [](const Tensor &self, const Tensor &indices, const Tensor &src, int axis, ScatterMode reduce) {
-            return npu::tile_fwk::Scatter_(self, indices, src, axis, reduce);
-        },
-        py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
-        "Tensor scatter inplace.");
     m.def(
         "Scatter",
         [](const Tensor &self, const Tensor &indices, const Tensor &src, int axis, ScatterMode reduce) {

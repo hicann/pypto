@@ -433,8 +433,8 @@ def scatter_(
         The axis along which to index.
     index : Tensor
         The indices of elements to scatter.
-    src : float
-        The scalar value to scatter.
+    src : Tensor or Element
+        The Tensor or Element to scatter.
 
     Returns
     -------
@@ -446,6 +446,7 @@ def scatter_(
     RuntimeError
         If the dimension of 'index' is not equal to the dimension of 'input'.
         If the index.size(d) > input.size(d)
+        If the index.size(d) > src.size(d) when src is Tensor and d != dim 
         If the value of 'input[i][j][k]' is bigger than the shape size of the dimension of 'input'.
 
     See Also
@@ -470,8 +471,10 @@ def scatter_(
     """
     scatter_mode = get_scatter_mode(reduce)
     if isinstance(src, float):
-        return pypto_impl.Scatter_(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
-    return pypto_impl.Scatter_(input, index, src, dim, scatter_mode)
+        input.Move(pypto_impl.Scatter(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode))
+        return input
+    input.Move(pypto_impl.Scatter(input, index, src, dim, scatter_mode))
+    return input
 
 
 @op_wrapper

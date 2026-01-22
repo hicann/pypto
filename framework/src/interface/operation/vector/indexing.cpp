@@ -536,6 +536,8 @@ void TensorScatterElementS(Function &function, const ScatterElementSPara &scatte
     op.SetAttribute(OP_ATTR_PREFIX + "axis", scatterPara.axis);
     op.SetAttribute(OpAttributeKey::scalar, scatterPara.scalar);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", scatterPara.scatterMode);
+    std::map<int, int> inplaceInfo = {{0, 0}};
+    op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
 }
 
 static void CheckScatterElementSParamsInvalid(
@@ -552,16 +554,6 @@ static void CheckScatterElementSParamsInvalid(
 }
 
 Tensor Scatter(const Tensor &self, const Tensor &indices, const Element &src, int axis, ScatterMode reduce) {
-    DECLARE_TRACER();
-
-    Tensor result(self.GetStorage()->tensor->datatype, self.GetShape());
-    GraphUtils::AddDynOperation(*Program::GetInstance().GetCurrentFunction(), Opcode::OP_REGISTER_COPY,
-        {self.GetStorage()}, {result.GetStorage()});
-
-    return Scatter_(result, indices, src, axis, reduce);
-}
-
-Tensor Scatter_(const Tensor &self, const Tensor &indices, const Element &src, int axis, ScatterMode reduce) {
     DECLARE_TRACER();
 
     DataType orgDtype = self.GetDataType();
@@ -691,6 +683,8 @@ void TensorScatter(Function &function, const ScatterPara &scatterPara) {
         {scatterPara.selfInput, scatterPara.idxInput, scatterPara.srcInput}, {scatterPara.dstTensor});
     op.SetAttribute(OP_ATTR_PREFIX + "axis", scatterPara.axis);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", scatterPara.scatterMode);
+    std::map<int, int> inplaceInfo = {{0, 0}};
+    op.SetAttr(OpAttributeKey::inplaceInfo, inplaceInfo);
 }
 
 static void CheckScatterParamsInvalid(
@@ -709,16 +703,6 @@ static void CheckScatterParamsInvalid(
 }
 
 Tensor Scatter(const Tensor &self, const Tensor &indices, const Tensor &src, int axis, ScatterMode reduce) {
-    DECLARE_TRACER();
-
-    Tensor result(self.GetStorage()->tensor->datatype, self.GetShape());
-    GraphUtils::AddDynOperation(*Program::GetInstance().GetCurrentFunction(), Opcode::OP_REGISTER_COPY,
-        {self.GetStorage()}, {result.GetStorage()});
-
-    return Scatter_(result, indices, src, axis, reduce);
-}
-
-Tensor Scatter_(const Tensor &self, const Tensor &indices, const Tensor &src, int axis, ScatterMode reduce) {
     DECLARE_TRACER();
     ASSERT(self.GetDataType() == src.GetDataType());
 

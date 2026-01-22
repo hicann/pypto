@@ -190,6 +190,9 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp) {
     if constexpr (scalarFlag) {
         set_flag(PIPE_S, PIPE_V, EVENT_ID7);
         wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    } else {
+        set_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
+        wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID7);
     }
 }
 

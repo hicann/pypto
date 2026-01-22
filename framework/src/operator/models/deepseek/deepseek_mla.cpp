@@ -688,7 +688,7 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, Tens
 
     Tensor cnts = Mul(randoms, Element(DataType::DT_FP32, F_0)); // (b*s, nRoutedExperts)
 
-    cnts = Scatter_(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
+    cnts = Scatter(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
 
     Tensor tokensPerExpert = Sum(cnts, 0, true);
 
@@ -783,7 +783,7 @@ Tensor DeepseekV2MoE::MoeInferSingleMlp(Tensor x, Tensor topkIds, Tensor topkWei
 
     Tensor cnts = Mul(randoms, Element(DataType::DT_FP32, F_0)); // (b*s, nRoutedExperts)
 
-    cnts = Scatter_(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
+    cnts = Scatter(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
 
     Tensor tokensPerExpert = Sum(cnts, 0, true);
 
@@ -847,7 +847,7 @@ Tensor DeepseekV2MoE::MoeInferSingleMlpQuant(Tensor x, Tensor topkIds, Tensor to
 
     Tensor cnts = Mul(randoms, Element(DataType::DT_FP32, F_0)); // (b*s, nRoutedExperts)
 
-    cnts = Scatter_(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
+    cnts = Scatter(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
 
     Tensor tokensPerExpert = Sum(cnts, 0, true);
 
@@ -912,7 +912,7 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, Tens
 
     Tensor cnts = Mul(randoms, Element(DataType::DT_FP32, F_0)); // (b*s, nRoutedExperts)
 
-    cnts = Scatter_(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
+    cnts = Scatter(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
 
     Tensor tokensPerExpert = Sum(cnts, 0, true);
 
@@ -1007,7 +1007,7 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, int 
 
     Tensor cnts = Mul(randoms, Element(DataType::DT_FP32, F_0)); // (b*s, nRoutedExperts)
 
-    cnts = Scatter_(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
+    cnts = Scatter(cnts, topkIds, Element(DataType::DT_FP32, F_1), 1); // (b*s, nRoutedExperts)
 
     Tensor tokensPerExpert = Sum(cnts, 0, true);
     // reduce 0维, (b*s, nRoutedExperts)->(nRoutedExperts)
@@ -1117,7 +1117,7 @@ std::tuple<Tensor, Tensor> MoEGate::Forward(const Tensor &hiddenStates) {
     // groupMask = torch.zeros_like(groupScores)
     auto groupMask = Mul(groupScoresReshape, Element(DataType::DT_FP32, F_0)); // [b*s,8]
     // groupMask.scatter_(1, groupIdx, 1)
-    auto groupMaskScatter = Scatter_(groupMask, groupIdx, Element(DataType::DT_FP32, F_1), 1); // [b*s,8]
+    auto groupMaskScatter = Scatter(groupMask, groupIdx, Element(DataType::DT_FP32, F_1), 1); // [b*s,8]
     // scoreMask
     int dim0 = groupMaskScatter.GetShape()[0] * groupMaskScatter.GetShape()[1];
 
