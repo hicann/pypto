@@ -17,6 +17,7 @@
 #define RUNTIME_COMMON_DEF_H
 
 #include <cstdint>
+#include "aicpu_perf.h"
 
 const uint64_t AICORE_TASK_INIT = 0xFFFFFFFF;
 const uint64_t AICORE_TASK_STOP = 0x7FFFFFF0;

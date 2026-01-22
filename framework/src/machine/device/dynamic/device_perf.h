@@ -17,6 +17,7 @@
 
 #include <cstdint>
 #include <string>
+#include "tilefwk/aicpu_common.h"
 
 namespace npu::tile_fwk::dynamic {
 struct PerfettoMgr {
@@ -287,9 +288,9 @@ private:
 
 private:
     Counter counters[PERF_EVT_MAX];
-    uint64_t perfTrace[MAX_USED_AICPU_NUM][PERF_TRACE_MAX];
-    uint64_t perfTraceDevTask[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM][PERF_TRACE_COUNT_DEVTASK_MAX_NUM];
-    uint8_t perfTraceDevTaskCnt[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM];
+    uint64_t perfTrace[MAX_USED_AICPU_NUM][PERF_TRACE_MAX] = {{0}};
+    uint64_t perfTraceDevTask[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM][PERF_TRACE_COUNT_DEVTASK_MAX_NUM] = {{{0}}};
+    uint8_t perfTraceDevTaskCnt[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM] = {{0}};
 };
 
 inline void PerfBegin(int type) {

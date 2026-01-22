@@ -410,10 +410,11 @@ public:
                 oss << "\",\"end\":" << curCycle << "}"
                     << (((type == PERF_TRACE_CORE_MAX - 1) && (cnt ==  metric->perfTraceCnt[type] - 1)) ? "" : ",");
             }
-            metric->perfTraceCnt[type] = 0;
         }
         oss << "]}";
-        memset_s(metric, sizeof(Metrics), 0, sizeof(Metrics));
+        if (!aicoreProf_->ProfIsEnable()) {
+            memset_s(metric, sizeof(Metrics), 0, sizeof(Metrics));
+        }
 #endif
         return DEVICE_MACHINE_OK;
     }

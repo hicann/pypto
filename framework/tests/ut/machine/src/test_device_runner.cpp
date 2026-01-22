@@ -131,17 +131,17 @@ TEST_F(TestDeviceRunner, test_create_proflevel) {
 
     ProfConfig config0;
     EXPECT_TRUE(config0.Empty());
-    EXPECT_EQ(prof.AiCoreProf::CreateProfLevel(config0), npu::tile_fwk::dynamic::PROF_LEVEL_OFF);
+    EXPECT_EQ(npu::tile_fwk::dynamic::CreateProfLevel(config0), npu::tile_fwk::dynamic::PROF_LEVEL_OFF);
     ProfConfig config1;
     config1.Add(ProfConfig::AICORE_PMU);
-    EXPECT_EQ(prof.AiCoreProf::CreateProfLevel(config1), npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG_PMU);
+    EXPECT_EQ(npu::tile_fwk::dynamic::CreateProfLevel(config1), npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG_PMU);
     EXPECT_FALSE(config1.Empty());
     ProfConfig config2;
     config2.Add(ProfConfig::AICORE_TIME);
-    EXPECT_EQ(prof.AiCoreProf::CreateProfLevel(config2), npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG);
+    EXPECT_EQ(npu::tile_fwk::dynamic::CreateProfLevel(config2), npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG);
     ProfConfig config3;
     config3.Add(ProfConfig::AICPU_FUNC);
-    EXPECT_EQ(prof.AiCoreProf::CreateProfLevel(config3), npu::tile_fwk::dynamic::PROF_LEVEL_FUNC);
+    EXPECT_EQ(npu::tile_fwk::dynamic::CreateProfLevel(config3), npu::tile_fwk::dynamic::PROF_LEVEL_FUNC);
     EXPECT_TRUE(config3.Contains(ProfConfig::AICPU_FUNC));
 
     ProfConfig config4 = config2 | config3;

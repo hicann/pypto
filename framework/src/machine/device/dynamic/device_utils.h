@@ -27,6 +27,7 @@
 #include <ostream>
 #include "securec.h"
 #include "machine/utils/device_log.h"
+#include "interface/machine/device/tilefwk/aicpu_perf.h"
 
 #ifndef CONFIG_MAX_DEVICE_TASK_NUM
 #define CONFIG_MAX_DEVICE_TASK_NUM 64
@@ -64,9 +65,6 @@ constexpr int32_t DEVICE_MACHINE_OK = 0;
 constexpr int32_t DEVICE_MACHINE_FINISHED = 1;
 constexpr int32_t TIME_OUT_THRESHOLD = 1000000; // 超时阈值 1s
 constexpr int32_t DFX_TIME_OUT_THRESHOLD = 50000000; // 超时阈值 50s
-constexpr uint32_t MAX_SCHEDULE_AICPU_NUM = 5;          // 真正负责调度aicore的最大aicpu个数
-constexpr uint32_t MAX_OTHER_AICPU_NUM = 2; // 除调度cpu以外的其它aicpu数量
-constexpr uint32_t MAX_USED_AICPU_NUM = MAX_SCHEDULE_AICPU_NUM + MAX_OTHER_AICPU_NUM;
 constexpr uint32_t CTRL_CPU_THREAD_IDX = 0;
 constexpr int32_t START_AICPU_NUM = 3;
 constexpr uint64_t NUM_FIFTY = 50;
@@ -192,52 +190,6 @@ inline bool PerfEvtEnable[] = {
 #undef X_L2
 #undef X
 };
-
-
-#define PERF_TRACES                             \
-    X(BEGIN)                                    \
-    X(ALLOC_THREAD_ID)                          \
-    X(INIT)                                     \
-    X(CORE_HAND_SHAKE)                          \
-    XDEVTASK(DEV_TASK_BUILD)                    \
-    XDEVTASK(DEV_TASK_RCV)                      \
-    XDEVTASK(DEV_TASK_SEND_FIRST_CALLOP_TASK)   \
-    XDEVTASK(DEV_TASK_SCHED_EXEC)               \
-    XDEVTASK(DEV_TASK_SYNC_CORE_STOP)           \
-    XDEVTASK(DEV_TASK_RSP)                      \
-    X(WAIT_ALL_DEV_TASK_FINISH)                 \
-    X(WAIT_CORE_EXIT)                           \
-    X(EXIT)                                     \
-    X(MAX)                                      \
-
-
-inline bool PerfTraceIsDevTask[] = {
-#define X(trace)  0,
-#define XDEVTASK(trace) 1,
-    PERF_TRACES
-#undef XDEVTASK
-#undef X
-};
-
-enum PerfTraceType {
-#define X(trace) PERF_TRACE_##trace,
-#define XDEVTASK(trace) PERF_TRACE_##trace,
-    PERF_TRACES
-#undef XDEVTASK
-#undef X
-};
-
-inline const char *PerfTraceName[] = {
-#define X(trace) #trace,
-#define XDEVTASK(trace) #trace,
-    PERF_TRACES
-#undef XDEVTASK
-#undef X
-};
-
-#define DEVTASK_PERF_ARRY_INDEX(type) (type - PERF_TRACE_DEV_TASK_BUILD)
-inline constexpr uint32_t DEVTASK_PERF_TYPE_NUM (PERF_TRACE_DEV_TASK_RSP - PERF_TRACE_DEV_TASK_BUILD + 1);
-inline constexpr uint32_t PERF_TRACE_COUNT_DEVTASK_MAX_NUM = 20;
 
 // common of ptr
 template<typename TI, typename TO>

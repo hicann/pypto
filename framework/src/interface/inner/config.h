@@ -65,6 +65,7 @@ constexpr const char *KEY_RUNTYPE = "runtype";
 constexpr const char *KEY_PTO_CONFIG_FILE = "pto_config_file";
 constexpr const char *KEY_COMPUTE_GRAPH_PATH = "compute_graph_path";
 constexpr const char *KEY_SWIM_GRAPH_PATH = "swim_graph_path";
+constexpr const char *KEY_AICPU_PERF_GRAPH_PATH = "aicpu_perf_path";
 constexpr const char *KEY_FLOW_VERIFY_PATH = "flow_verify_path";
 constexpr const char *KEY_PROGRAM_PATH = "program_file";
 

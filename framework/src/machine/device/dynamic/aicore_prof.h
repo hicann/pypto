@@ -206,6 +206,9 @@ struct AiCpuTaskStat {
     uint64_t execEnd;
 };
 
+bool ProfCheckLevel(uint64_t feature);
+AiCoreProfLevel CreateProfLevel(ProfConfig profConfig);
+
 class AiCoreProf {
 public:
     explicit AiCoreProf(AiCoreManager &aicoreMng) : hostAicoreMng_(aicoreMng) {}
@@ -226,7 +229,6 @@ public:
     void ProInitAiCpuTaskStat();
     void ProInitHandShake();
     bool ProfIsEnable() { return profLevel_ != PROF_LEVEL_OFF; }
-    AiCoreProfLevel CreateProfLevel(ProfConfig profConfig);
     
 private:
     inline void ProfInitLog();
@@ -240,7 +242,6 @@ private:
     void FillPmuData(MsprofAicpuPyPtoPmuData &data, int32_t &coreIdx, uint32_t &subGraphId, uint32_t &taskId,
         const struct TaskStat *taskStat) const;
     inline void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
-    inline bool ProfCheckLevel(uint64_t feature) const;
     inline uint64_t ProfGetCurCpuTimestamp();
 
 private:

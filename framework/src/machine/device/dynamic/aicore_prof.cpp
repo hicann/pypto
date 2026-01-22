@@ -23,6 +23,24 @@ constexpr int64_t HIG_32BIT = 32;
 } // namespace
 
 namespace npu::tile_fwk::dynamic {
+AiCoreProfLevel CreateProfLevel(ProfConfig profConfig) {
+    if (profConfig.Contains(ProfConfig::AICORE_PMU)) {
+        return PROF_LEVEL_FUNC_LOG_PMU;
+    } else if (profConfig.Contains(ProfConfig::AICORE_TIME) ) {
+        return PROF_LEVEL_FUNC_LOG;
+    } else if (profConfig.Contains(ProfConfig::AICPU_FUNC)) {
+        return PROF_LEVEL_FUNC;
+    }
+    return PROF_LEVEL_OFF;
+}
+
+bool ProfCheckLevel(uint64_t feature) {
+    if (AdprofCheckFeatureIsOn == nullptr) {
+        return false;
+    }
+    return AdprofCheckFeatureIsOn(feature) > 0;
+}
+
 
 void AiCoreProf::ProInitHandShake() {
     handkShakeMsgSize_ = sizeof(PyPtoMsprofAdditionalInfo);
@@ -82,17 +100,6 @@ void AiCoreProf::ProInitAiCpuTaskStat() {
     }
     DEV_INFO("ProfInitAicpuStat finish.");
     sleep(1);
-}
-
-AiCoreProfLevel AiCoreProf::CreateProfLevel(ProfConfig profConfig) {
-    if (profConfig.Contains(ProfConfig::AICORE_PMU)) {
-        return PROF_LEVEL_FUNC_LOG_PMU;
-    } else if (profConfig.Contains(ProfConfig::AICORE_TIME) ) {
-        return PROF_LEVEL_FUNC_LOG;
-    } else if (profConfig.Contains(ProfConfig::AICPU_FUNC)) {
-        return PROF_LEVEL_FUNC;
-    }
-    return PROF_LEVEL_OFF;
 }
 
 void AiCoreProf::ProfInit([[maybe_unused]]int64_t *regAddrs, [[maybe_unused]]int64_t *pmuEventAddrs, ProfConfig profConfig) {
@@ -523,13 +530,6 @@ inline void AiCoreProf::ProfGetPmu(
         pmuMsg_[coreIdx].dataLen += pmuDataSize_;
         pmuHead_[coreIdx]->cnt++;
     }
-}
-
-inline bool AiCoreProf::ProfCheckLevel(uint64_t feature) const {
-    if (AdprofCheckFeatureIsOn == nullptr) {
-        return false;
-    }
-    return AdprofCheckFeatureIsOn(feature) > 0;
 }
 
 void AiCoreProf::AsmCntvc(uint64_t &cntvct) const {
