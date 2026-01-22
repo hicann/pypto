@@ -371,7 +371,8 @@ void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCom
         (void)index;
 
         int32_t expandXRow = expandX.GetShape(0);
-        TileShape::Current().SetDistTile({expandXRow / AIV_NUM, AIV_NUM, expandXRow % AIV_NUM}, {hiddenSize, 1, 0},
+        int32_t aivNum = 40;
+        TileShape::Current().SetDistTile({expandXRow / aivNum, aivNum, expandXRow % aivNum}, {hiddenSize, 1, 0},
             {0, 0, 0});
         auto sendOut = MoeDistributedCombineSend(
             expandX,
@@ -386,8 +387,7 @@ void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCom
             std::vector<SymbolicScalar>{thisRank, 0, 0, 0});
         auto shmemSignalThisRank = View(shmemSignal, {1, batchSize, shmemSignalCol},
             std::vector<SymbolicScalar>{thisRank, 0, 0});
-        TileShape::Current().SetDistTile(
-            {batchSize / AIV_NUM, AIV_NUM, batchSize % AIV_NUM}, {hiddenSize, 1, 0}, {0, 0, 0});
+        TileShape::Current().SetDistTile({1, batchSize, 0}, {hiddenSize, 1, 0}, {0, 0, 0});
         out = MoeDistributedCombineReceive(sendOut, expertScales, shmemDataThisRank, shmemSignalThisRank);
     }
 }
@@ -403,12 +403,11 @@ void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForC
     int32_t topK = expertScales.GetShape(1);
     int32_t hiddenSize = expandX.GetShape(1);
 
-    Shape shmemDataShape = {1, batchSize * topK, hiddenSize};
     Tensor shmemData;
     Tensor shmemSignal;
     LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
         (void)index;
-        CreateShmemData(group, epWorldSize, expandX.GetDataType(), shmemDataShape, shmemData);
+        CreateShmemData(group, epWorldSize, expandX.GetDataType(), {1, batchSize * topK, hiddenSize}, shmemData);
         CreateShmemSignal(group, shmemData, shmemSignal);
     }
 
@@ -441,11 +440,15 @@ void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForC
         Tensor shmemDataTile = View(shmemData, {1, 1, topK, hiddenSize}, {thisRank, 0, topK * tokenId, 0});
         Tensor shmemGetOutFp16 = ShmemGet(waitUntilOut, shmemDataTile);
 
-        TileShape::Current().SetVecTile({128, 256});
+        TileShape::Current().SetVecTile({topK / 2, hiddenSize});
         Tensor shmemGetOutFp32 = npu::tile_fwk::Cast(shmemGetOutFp16, DT_FP32);
 
         Tensor expertScalesTile = View(expertScales, {1, topK}, {tokenId, 0});
-        TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});
+        int64_t kTileShape = AlignUp(topK, 16);
+        int64_t l0bSize = 65536;
+        ASSERT((BytesOf(DT_FP32) != 0) && (kTileShape != 0));
+        int64_t nTileShape = l0bSize / BytesOf(DT_FP32) / kTileShape;
+        TileShape::Current().SetCubeTile({1, 1}, {kTileShape, kTileShape}, {nTileShape, nTileShape});
         Tensor matmulOutFp32 = Matrix::Matmul(DT_FP32, expertScalesTile, shmemGetOutFp32);
 
         Tensor matmulOutFp16 = npu::tile_fwk::Cast(matmulOutFp32, DT_BF16);
