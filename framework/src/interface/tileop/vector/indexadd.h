@@ -24,10 +24,12 @@ TILEOP void IndexAddNotLastAxisCompute(dstTileDefine dstTile, src1TileDefine src
     pto::TASSIGN(src1Tile, (uint64_t)(src1Addr + src1Offset));
 
     if constexpr (Std::is_same_v<Scalar, bfloat16_t>) {
-        using dstTempTile = pto::Tile<pto::TileType::Vec, bfloat16_t, 1, dstTile.Cols * 2, pto::BLayout::RowMajor, -1, -1>;
-        using src1TempTile = pto::Tile<pto::TileType::Vec, bfloat16_t, 1, src1Tile.Cols * 2, pto::BLayout::RowMajor, -1, -1>;
-        dstTempTile dstTemp(1, dstTile.ValidCol);
-        src1TempTile src1Temp(1, src1Tile.ValidCol);
+        using dstTempTile = pto::Tile<pto::TileType::Vec, bfloat16_t, dstTileDefine::Rows, dstTileDefine::Cols * 2,
+            pto::BLayout::RowMajor, -1, -1>;
+        using src1TempTile = pto::Tile<pto::TileType::Vec, bfloat16_t, src1TileDefine::Rows, src1TileDefine::Cols * 2,
+            pto::BLayout::RowMajor, -1, -1>;
+        dstTempTile dstTemp(dstTile.GetValidRow(), dstTile.GetValidCol());
+        src1TempTile src1Temp(src1Tile.GetValidRow(), src1Tile.GetValidCol());
         pto::TASSIGN(src1Temp, (uint64_t)(src1Addr + src1Offset));
         pto::TASSIGN(dstTemp, (uint64_t)(dstAddr + dstOffset));
         set_flag(PIPE_S, PIPE_V, EVENT_ID7);
@@ -172,6 +174,9 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, Scalar alpha) {   // T0
     auto dstAddr = (__ubuf__ typename T0::Type *)((uint64_t)(dst.GetAddr()));
     auto src1Addr = (__ubuf__ typename T2::Type *)((uint64_t)(src1.GetAddr()));
     auto idxAddr = (__ubuf__ typename T3::Type *)((uint64_t)(src2.GetAddr()));
+    if (!dstShape0 || !dstShape1 || !dstShape2 || !dstShape3 || !dstShape4) {
+        return;
+    }
 
     if constexpr (axis == 0) { // 从第2轴开始合轴
         constexpr auto dstTileW =

@@ -188,8 +188,8 @@ stest:
       - TestMinimum/MinimumOperationTest.TestMinimum/19
       - TestMaximum/MaximumOperationTest.TestMaximum/19
       - TestClip/ClipOperationTest.TestClip/29
-      - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/1
-      - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/7
+      - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/20
+      - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/21
       - TestLogicalAnd/LogicalAndOperationTest.TestLogicalAnd/0
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
