@@ -776,7 +776,7 @@ def convert_to_chrome_trace_json(out_path, is_dyn):
             + machine_view_thread_offset
             + task_entry.swim_lane_offset
         )
-        src_time = task_entry.exec_end - 0.1
+        src_time = task_entry.exec_end - 0.0001
 
         for dst in task_entry.successors:
             if dst not in total_tasks:
