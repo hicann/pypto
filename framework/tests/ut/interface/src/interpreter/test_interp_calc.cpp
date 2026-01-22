@@ -285,6 +285,19 @@ TEST_F(TorchAdaptorTest, UnaryOps) {
             calc::Cast(out, self);
             ASSERT_ALLCLOSE(out, golden);
         }
+        // brcb 
+        {
+            std::vector<float> sdata = {1.0f, 2.0f, 3.0f, 4.0f};
+            std::vector<float> gdata = {1.0f, 1.0f, 1.0f,
+                                        2.0f, 2.0f, 2.0f,
+                                        3.0f, 3.0f, 3.0f,
+                                        4.0f, 4.0f, 4.0f};
+            auto self_brcb = makeTensorData(DT_FP32, {4, 1}, sdata);
+            auto out = makeTensorData(DT_FP32, {4, 3}, 0.0f);
+            auto golden = makeTensorData(DT_FP32, {4, 3}, gdata);
+            calc::Brcb(out, self_brcb);
+            ASSERT_ALLCLOSE(out, golden);
+    }
     }
 }
 
@@ -292,16 +305,32 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // add
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
-        auto other = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 1.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 5.0f);
         calc::Add(out, self, other);
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        calc::Add(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }   
+    {
         // sub
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
-        auto other = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 3.0f);
+        calc::Sub(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 1.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 3.0f);
         calc::Sub(out, self, other);
@@ -310,7 +339,15 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // mul
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
-        auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 8.0f);
+        calc::Mul(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 8.0f);
         calc::Mul(out, self, other);
@@ -319,7 +356,15 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // div
         auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
-        auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 2.5f);
+        calc::Div(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 2.5f);
         calc::Div(out, self, other);
@@ -347,6 +392,14 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 6.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 6.0f);
+        calc::Max(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // elementwise min
         std::vector<float> sdata = {1.0, 2.0, 5.0, 4.0};
         std::vector<float> odata = {2.0, 2.0, 3.0, 5.0};
@@ -355,6 +408,14 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
         auto other = makeTensorData(DT_FP32, {2, 2}, odata);
         auto out = makeTensorData(DT_FP32, {2, 2}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {2, 2}, gdata);
+        calc::Min(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 2.0f);
         calc::Min(out, self, other);
         ASSERT_ALLCLOSE(out, golden);
     }

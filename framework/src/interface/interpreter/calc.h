@@ -55,6 +55,9 @@ inline void Sqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 inline void Abs(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Abs(out, self);
 }
+inline void Brcb(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Brcb(out, self);
+}
 inline void WhereTT(
     LogicalTensorDataPtr out, LogicalTensorDataPtr condition, LogicalTensorDataPtr input, LogicalTensorDataPtr other) {
     GetCalcOps()->WhereTT(out, condition, input, other);
