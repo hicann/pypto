@@ -2086,7 +2086,6 @@ Json Function::DumpJson(bool useTable) {
     funcDump["_sg_mg_copyin_upper_bound"] = paramConfigs_.sgMgCopyInUpperBound;
     funcDump["_vec_nbuffer_mode"] = paramConfigs_.vecNBuffermode;
     funcDump["_mg_vec_parallel_lb"] = paramConfigs_.mgVecParallelLb;
-    funcDump["_sg_cube_parallel_num"] = paramConfigs_.sgCubeParallelNum;
     funcDump["_pg_skip_partition"] = paramConfigs_.pgSkipPartition;
     funcDump["_total_subgraph_count"] = totalSubGraphCount_;
     funcDump["_ooo_preschedule_method"] = paramConfigs_.OoOPreScheduleMethod;
@@ -2407,7 +2406,6 @@ std::shared_ptr<Function> Function::LoadJson(Program &belongTo, const Json &func
     func->paramConfigs_.sgMgCopyInUpperBound = funcDump["_sg_mg_copyin_upper_bound"].get<int>();
     func->paramConfigs_.vecNBuffermode = funcDump["_vec_nbuffer_mode"].get<int>();
     func->paramConfigs_.mgVecParallelLb = funcDump["_mg_vec_parallel_lb"].get<int>();
-    func->paramConfigs_.sgCubeParallelNum = funcDump["_sg_cube_parallel_num"].get<int>();
     func->paramConfigs_.pgSkipPartition = funcDump["_pg_skip_partition"].get<bool>();
     auto subGraphCount = funcDump["_total_subgraph_count"].get<size_t>();
     func->SetTotalSubGraphCount(subGraphCount);

@@ -44,8 +44,7 @@ private:
     Status CheckAndFixColorOrder(OperationsViewer &opOriList,
                                int &color1, std::vector<int> &colorCycles1,
                                std::vector<std::vector<int>> &colorNode1);
-    std::map<int, size_t> GetIsoColorMergeNum(const OperationsViewer &opOriList,
-                                                   const std::map<uint64_t, std::vector<int>> &hashMap) const;
+    std::map<int, size_t> GetIsoColorMergeNum(const std::map<uint64_t, std::vector<int>> &hashMap) const;
     std::vector<std::vector<int>> SortColorWithInput(std::vector<int> &colorValues) const;
     Status MergeProcess(const OperationsViewer &opOriList,
                         std::map<uint64_t, std::vector<int>> &hashMap,
@@ -71,7 +70,6 @@ private:
     std::vector<int> colorCycles_;
     int vecNBuffermode;
     int mgVecParallelLb;
-    int sgCubeParallelNum;
     std::map<int64_t, int64_t> vecNBufferSetting;
     std::unordered_map<uint64_t, int> hashOrder;
     enum ModeType {

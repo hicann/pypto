@@ -43,7 +43,7 @@
                         "en": "Graph merging parameter, used to configure the merging strategy for subgraphs with identical structures that repeatedly transfer the same GM data. This parameter is applicable to subgraphs involving CUBE computation, and avoids excessive transfers of the same data."
                     },
                     "minimum": 0,
-                    "maximum": 2
+                    "maximum": 1
                 },
                 "cube_l1_reuse_setting": {
                     "type": "object",
@@ -64,7 +64,7 @@
                         "en": "Graph merging parameter, used to configure the merging strategy for AIC subgraphs with identical structures. This parameter is applicable to the merging of AIC subgraphs that share the same structure, which prevents an excessive number of subgraphs of the same structure and increases the possibility of intra-core pipeline scheduling."
                     },
                     "minimum": 0,
-                    "maximum": 2
+                    "maximum": 1
                 },
                 "cube_nbuffer_setting": {
                     "type": "object",
@@ -117,15 +117,6 @@
                     },
                     "minimum": 1,
                     "maximum": 48
-                },
-                "sg_cube_parallel_num": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "...",
-                        "en": "..."
-                    },
-                    "minimum": 1,
-                    "maximum": 24
                 },
                 "pg_skip_partition": {
                     "type": "boolean",

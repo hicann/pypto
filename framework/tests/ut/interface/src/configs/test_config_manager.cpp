@@ -183,7 +183,6 @@ TEST_F(TestConfigManager, NormalPassTest) {
         {MG_COPYIN_UPPER_BOUND, {0, INT_MAX}},
         {VEC_NBUFFER_MODE, {0, 2}},
         {MG_VEC_PARALLEL_LB, {1, 48}},
-        {SG_CUBE_PARALLEL_NUM, {1, 24}},
         {COPYOUT_RESOLVE_COALESCING, {0, 1000000}}
     };
     bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "pass");
@@ -210,7 +209,6 @@ TEST_F(TestConfigManager, AbnormalPassTest) {
         {MG_COPYIN_UPPER_BOUND, {-1, outVal}},
         {VEC_NBUFFER_MODE, {-1, 3}},
         {MG_VEC_PARALLEL_LB, {0, 49}},
-        {SG_CUBE_PARALLEL_NUM, {0, 25}},
         {COPYOUT_RESOLVE_COALESCING, {-1, 1000001}}
     };
     bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "pass");

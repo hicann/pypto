@@ -237,7 +237,6 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
 
 TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
 {
-    const char* group = "hcom123";
     int64_t row = 4;
     int64_t col = 64;
     Tensor dummy(DT_INT32, {1, 1}, "dummy");

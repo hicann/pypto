@@ -354,7 +354,6 @@ Status LoopUnroll::CreateLoopUnrollFunc(Function *function) {
     paramConfigs.cubeNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_NBUFFER_SETTING);
     paramConfigs.vecNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);
     paramConfigs.vecNBuffermode = currentScope->GetPassConfig<int>(VEC_NBUFFER_MODE);
-    paramConfigs.sgCubeParallelNum = currentScope->GetPassConfig<int>(SG_CUBE_PARALLEL_NUM);
     paramConfigs.mgVecParallelLb = currentScope->GetPassConfig<int>(MG_VEC_PARALLEL_LB);
     topFunction_ = Program::GetInstance().GetCurrentFunction();
     auto &cache = Program::GetInstance().GetFunctionCache();

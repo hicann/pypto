@@ -228,19 +228,11 @@ Status NBufferMerge::Init(Function &func) {
     return SUCCESS;
 }
 
-std::map<int, size_t> NBufferMerge::GetIsoColorMergeNum(const OperationsViewer &opOriList,
-    const std::map<uint64_t, std::vector<int>> &hashMap) const {
+std::map<int, size_t> NBufferMerge::GetIsoColorMergeNum(const std::map<uint64_t, std::vector<int>> &hashMap) const {
     std::map<int, size_t> hashCoreNum;
     for (const auto& entry : hashMap) {
         if (entry.first == 0 || entry.second.empty()) {
             continue;
-        }
-        auto subGraphIdx = entry.second.front();
-        for (const auto& opIdx : colorNode_[subGraphIdx]) {
-            if (OpcodeManager::Inst().GetCoreType(opOriList[opIdx].GetOpcode()) == OpCoreType::AIC) {
-                hashCoreNum[entry.first] = sgCubeParallelNum;
-                break;
-            }
         }
         if (hashCoreNum.find(entry.first) == hashCoreNum.end()) {
             hashCoreNum[entry.first] = mgVecParallelLb;
@@ -474,7 +466,7 @@ Status NBufferMerge::NBufferMergeProcess(Function &func) {
             return FAILED;
         }
         APASS_LOG_INFO_F(Elements::Config, "Manually set VEC_NBUFFER_MODE to 1, automatically calculate mergeNum.");
-        hashMergeNum = GetIsoColorMergeNum(opOriList, hashMap);
+        hashMergeNum = GetIsoColorMergeNum(hashMap);
     } else {
         if (CheckVecNBufferSettingForManualMerge() == FAILED) {
             APASS_LOG_ERROR_F(Elements::Config, "Check VEC_NBUFFER_SETTING for manualMerge failed; Please check the VEC_NBUFFER_SETTING config.");
@@ -527,7 +519,6 @@ Status NBufferMerge::RunOnFunction(Function &function) {
         APASS_LOG_INFO_F(Elements::Config, "Manually set VEC_NBUFFER_MODE to 0, skip NBufferMerge.");
         return SUCCESS;
     }
-    sgCubeParallelNum = function.paramConfigs_.sgCubeParallelNum;
     mgVecParallelLb = function.paramConfigs_.mgVecParallelLb;
     vecNBufferSetting = function.paramConfigs_.vecNBufferSetting;
     if (NBufferMergeProcess(function) == FAILED) {
