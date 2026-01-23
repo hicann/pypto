@@ -1665,6 +1665,70 @@ TEST_F(TestSplitReshapePass, TestDynPerfectlyMatchWithAllSTest) {
     EXPECT_NE(*(reshapeOutputs[0]->GetConsumers().begin()), *(reshapeOutputs[3]->GetConsumers().begin()));
 }
 
+namespace {
+    const int scopeId = 10;
+    const std::string keyInt = "key_int";
+    const int attrInt = 0;
+    const std::string keyBool = "key_bool";
+    const bool attrBool = true;
+    const std::string keyElement = "key_element";
+    const DataType eleDatatype = DT_INT4;
+    const int32_t eleValue = 1;
+    const Element attrElement = Element(eleDatatype, eleValue);
+    const std::string keyInt64 = "key_int64";
+    const int64_t attrInt64 = 2;
+    const std::string keyCastmode = "key_castmode";
+    const CastMode attrCastmode = CAST_FLOOR;
+    const std::string keyString = "key_string";
+    const std::string attrString = "attr_string";
+    const std::string keySymbolicScalar = "key_symbolicScalar";
+    const SymbolicScalar attrSymbolicScalar = SymbolicScalar(4);
+}
+
+// 测试新生成的op是否继承了原op的scopeID和attribute。
+TEST_F(TestSplitReshapePass, TestInheritAttribute) {
+    std::vector<int64_t> origShape = {kNumFour, kNumTwo, kNumTwo};
+    std::vector<int64_t> reshapeShape = {kNumFour, kNumFour};
+    std::vector<int64_t> tiledShape = {kNumTwo, kNumTwo, kNumTwo};
+    std::vector<int64_t> tiledorigShape = {kNumTwo, kNumTwo, kNumTwo};
+    std::vector<int64_t> tiledreshapeShape = {kNumTwo, kNumFour};
+    std::vector<int64_t> tiledviewShape = {kNumTwo, kNumTwo};
+    TileShape::Current().SetVecTile(tiledShape);
+    Tensor input(DT_FP32, origShape, "input");
+    Tensor output(DT_FP32, reshapeShape, "output");
+
+    FUNCTION("STCase4") {
+        Tensor exp = Exp(input);
+        Tensor reshape = Reshape(exp, reshapeShape);
+        output = Exp(reshape);
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase4");
+    RunPassStra(*func, PassName::EXPAND_FUNCTION);
+    for (auto &op : func->Operations()) {
+        op.SetScopeId(scopeId);
+        op.SetAttribute(keyInt, attrInt);
+        op.SetAttribute(keyBool, attrBool);
+        op.SetAttribute(keyElement, attrElement);
+        op.SetAttribute(keyInt64, attrInt64);
+        op.SetAttribute(keyCastmode, attrCastmode);
+        op.SetAttribute(keyString, attrString);
+        op.SetAttribute(keySymbolicScalar, attrSymbolicScalar);
+    }
+    RunPassStra(*func, PassName::SPLIT_RESHAPE);
+    for (const auto &op : func->Operations()) {
+        EXPECT_EQ(scopeId, op.GetScopeId());
+        EXPECT_EQ(attrInt, op.GetIntAttribute(keyInt));
+        EXPECT_EQ(attrBool, op.GetBoolAttribute(keyBool));
+        EXPECT_EQ(eleDatatype, op.GetElementAttribute(keyElement).GetDataType());
+        EXPECT_EQ(eleValue, op.GetElementAttribute(keyElement).GetUnsignedData());
+        EXPECT_EQ(attrInt64, op.GetIntAttribute(keyInt64));
+        EXPECT_EQ(attrCastmode, op.GetCastModeAttribute(keyCastmode));
+        EXPECT_EQ(attrString, op.GetStringAttribute(keyString));
+        EXPECT_EQ(attrSymbolicScalar, op.GetSymbolicScalarAttribute(keySymbolicScalar));
+    }
+}
+
 // check the number of reshape operations
 // return the number of total operations
 int CheckOpNum(Function* func, const uint32_t expectReshapeNum){

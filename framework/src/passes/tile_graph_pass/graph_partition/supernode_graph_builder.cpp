@@ -597,6 +597,25 @@ inline bool SuperNodeGraphBuilder::AssembleToCopyoutScene(Operation *op)
     return true;
 }
 
+inline void UpdateScopeId(std::vector<Operation*> &opList) {
+    for (size_t i = 0; i < opList.size(); i++) {
+        int targetScope = opList[i]->GetScopeId();
+        if (targetScope == DEFAULT_SCOPE_ID) {
+            continue;
+        }
+        for (auto &consumer : opList[i]->ConsumerOps()) {
+            if (consumer->GetScopeId() == -1 && consumer->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                consumer->SetScopeId(targetScope);
+            }
+        }
+        for (auto &producer : opList[i]->ProducerOps()) {
+            if (producer->GetScopeId() == -1 && producer->GetOpcode() == Opcode::OP_VIEW) {
+                producer->SetScopeId(targetScope);
+            }
+        }
+    }
+}
+
 Status SuperNodeGraphBuilder::BuildSuperNodeGraph()
 {
     std::vector<Operation*> &opList = operationInfo_->opList_;
@@ -605,6 +624,7 @@ Status SuperNodeGraphBuilder::BuildSuperNodeGraph()
         return FAILED;
     }
     std::vector<std::pair<int32_t, int32_t>> mergePair;
+    UpdateScopeId(opList);
     for (size_t i = 0; i < opList.size(); i++) {
         auto targetScope = opList[i]->GetScopeId();
         if (targetScope == -1) {

@@ -99,5 +99,6 @@ protected:
     std::shared_ptr<OperationGraphInfo> operationInfo_;
     std::shared_ptr<NodeGraphInfo> superNodeInfo_;
 };
+static constexpr int DEFAULT_SCOPE_ID = -1;
 }  // namespace npu::tile_fwk
 #endif  // SUPERNODE_GRAPH_BUILDER_H

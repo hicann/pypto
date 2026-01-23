@@ -28,15 +28,6 @@ using InputMaigc = int;
 using OutputMaigc = int;
 using OverlaprawMagic = int;
 
-class ReshapeOp {
-    public:
-        ReshapeOp(LogicalTensorPtr aInput, LogicalTensorPtr aOutput)
-            : input(aInput), output(aOutput) {}
-        LogicalTensorPtr input;
-        LogicalTensorPtr output;
-        std::vector<std::vector<SymbolicScalar>> dynValidShapes;
-};
-
 struct UpdatePara {
     int64_t ShapeVal;
     int64_t OffsetVal;
@@ -164,6 +155,7 @@ private:
     Status ProcessPerfectlyMatchWithAll(Function &function, Operation &op, const PerfectlyMatchWithAllPara &para);
     Status UpdateForPerfectlyMatchWithAll(Function &function, Operation &op, const CalcOverlapPara &para, const ReshapeSourcePara &sourcePara);
     Status ProcessMultitoOne(Function &function, Operation &op, const CalcOverlapPara &para);
+    Status AddReshapeRawInputs(const int overlapRawMagic, const LogicalTensorPtr overlap);
 
     bool CheckSameRawInput(const LogicalTensorPtr &reshapeSource);
     std::shared_ptr<ReshapeOp> ReshapeOperationExist(const std::shared_ptr<ReshapeOp> &isAddReshapeop);
@@ -171,7 +163,7 @@ private:
     unsigned long ComputeReshapeHashOrderless(const LogicalTensorPtr &input, const LogicalTensorPtr &output) const;
     std::vector<int64_t> ObtainMapOffset(const LogicalTensorPtr &input, const LogicalTensorPtr &output) const;
 
-    Status AddAssembleOp(const MemoryType &memoryType, const std::vector<int64_t> &outputOffset, const LogicalTensorPtr &input, const LogicalTensorPtr &output);
+    Status AddAssembleOp(const MemoryType &memoryType, const std::vector<int64_t> &outputOffset, const LogicalTensorPtr &input, const LogicalTensorPtr &output, const Operation *originOp);
     Status GetAssembleDynShape(const LogicalTensorPtr &input, const LogicalTensorPtr &output, const std::vector<int64_t> &toOffset, std::vector<SymbolicScalar> &dynValidShape);
     Status GetReshapeDynShape(const std::shared_ptr<ReshapeOp> &op, std::vector<SymbolicScalar> &dynValidShape);
     Status GroupReshapeOffset(const std::shared_ptr<ReshapeOp> &isAddReshapeop, const std::vector<int64_t> &offset);
@@ -194,6 +186,10 @@ private:
     std::unordered_set<Operation *> redundantViewops;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs;
     std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs;
+    // 记录所有op_reshape的指针，键值为reshape的输出Operand的magic。
+    std::unordered_map<int, const Operation *> reshapeOpPtrs;
+    // 记录满足后续op为reshape的op_assemble的指针，第一个map的键值为assemble输入Operand的magic, 第二个map的键值为后续op_reshape的输出Operand的magic。
+    std::unordered_map<int, std::unordered_map<int, const Operation *>> assembleOpPtrs;
 };
 
 } // namespace npu::tile_fwk
