@@ -600,6 +600,83 @@ TEST_F(SplitLargeFanoutTensorTest, MtoMtoMoreSplit) {
     EXPECT_EQ(assembleNumCount, assembleNumAfter) << assembleNumAfter << " OP_ASSEMBLE after pass";
 }
 
+TEST_F(SplitLargeFanoutTensorTest, MtoMGetCorrectAssemble) {
+    ComputationalGraphBuilder G;
+    BuildGraphForMToM(G, true);
+    Function *function = G.GetFunction();
+
+    std::cout << "Build Graph Done" << std::endl;
+    // 执行pass, 不发生segmentFault即为获取assemble正常
+    npu::tile_fwk::SplitLargeFanoutTensor splitLargeFanoutTensor;
+    splitLargeFanoutTensor.enableMoreSplit = true;
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.PreCheck(*function));
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.RunOnFunction(*function));
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.PostCheck(*function));
+    std::cout << "Run Pass Done" << std::endl;
+}
+
+void Build1ToMMultiConsumers(ComputationalGraphBuilder &G){
+    int NUM_16 = 16;
+    int NUM_32 = 32;
+
+    // 定义所有张量的形状和名称并添加
+    std::map<std::string, std::vector<int64_t>> tensors = {
+        {"incast0", {NUM_16, NUM_32}}, {"incast1", {NUM_16, NUM_32}},
+        {"outcast0", {NUM_16, NUM_16}}, {"outcast1", {NUM_16, NUM_16}},
+        {"outcast2", {NUM_16, NUM_16}}, {"outcast3", {NUM_16, NUM_16}},
+        {"largeTensor", {NUM_32, NUM_32}}, {"outcast", {NUM_16, NUM_16}}
+    };
+    for (const auto& [name, shape] : tensors) {
+        G.AddTensor(DataType::DT_FP32, shape, name);
+        auto tensor = G.GetTensor(name);
+        tensor->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    }
+
+    G.AddOp(Opcode::OP_VIEW, {"incast0"}, {"outcast"}, "view");
+    auto viewEX = G.GetOp("view");
+    Offset offsetEX = {0, 0};
+    viewEX->SetOpAttribute(std::make_shared<ViewOpAttribute>(offsetEX, MemoryType::MEM_DEVICE_DDR));
+
+    // 定义所有ASSEMBLE操作并添加
+    std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>> assembleOps = {
+        {"incast0", "assemble0", {0, 0}}, {"incast1", "assemble1", {16, 0}}
+    };
+    for (const auto& [input, opName, offset] : assembleOps) {
+        G.AddOp(Opcode::OP_ASSEMBLE, {input}, {"largeTensor"}, opName);
+        auto assembleOp = G.GetOp(opName);
+        assembleOp->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, offset));
+    }
+
+    // 定义所有VIEW操作并添加
+    std::vector<std::tuple<std::string, std::string, std::vector<int64_t>>> viewOps = {
+        {"outcast0", "view0", {0, 0}}, {"outcast1", "view1", {0, 16}},
+        {"outcast2", "view2", {16, 0}}, {"outcast3", "view3", {16, 16}}
+    };
+    for (const auto& [output, opName, offset] : viewOps) {
+        G.AddOp(Opcode::OP_VIEW, {"largeTensor"}, {output}, opName);
+        auto viewOp = G.GetOp(opName);
+        viewOp->SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, MemoryType::MEM_DEVICE_DDR));
+    }
+
+    G.SetInCast({"incast0", "incast1"});
+    G.SetOutCast({"outcast0", "outcast1", "outcast2", "outcast3", "outcast"});
+}
+
+TEST_F(SplitLargeFanoutTensorTest, 1ToMGetCorrectAssemble) {
+    ComputationalGraphBuilder G;
+    Build1ToMMultiConsumers(G);
+    Function *function = G.GetFunction();
+
+    std::cout << "Build Graph Done." << std::endl;
+    // 单独执行pass, 不发生segmentFault即为获取assemble正常
+    npu::tile_fwk::SplitLargeFanoutTensor splitLargeFanoutTensor;
+    splitLargeFanoutTensor.enableMoreSplit = false;
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.PreCheck(*function));
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.RunOnFunction(*function));
+    EXPECT_EQ(SUCCESS, splitLargeFanoutTensor.PostCheck(*function));
+    std::cout << "Run Pass Done." << std::endl;
+}
+
 TEST_F(SplitLargeFanoutTensorTest, Unmatched) {
     int N = 2;
     int T = 8;

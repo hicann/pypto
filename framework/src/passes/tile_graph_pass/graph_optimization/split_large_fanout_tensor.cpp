@@ -134,6 +134,30 @@ void SplitLargeFanoutTensor::CollectOverlaps(Function &function, LogicalTensorPt
     }
 }
 
+// 根据原有assembleOp增加新的assembleOp。寻找原assembleOp时，由于tensor->assemble->largeTensor中assemble可以不唯一并指向其他tensor，
+// 或assemble位置为其他种类op(op_view)。所以需要找到largeTensor的生产者op来确认。
+Status AddNewAssembleOp(Function &function, LogicalTensorPtr overlap, LogicalTensorPtr largeTensor, Offset lcmTileOffset, LogicalTensorPtr &newTensor) {
+    Operation *oldAssembleOp = nullptr;
+    for (const auto &consumerOp : overlap->GetConsumers()) {
+        for (auto tensorPtr : consumerOp->GetOOperands()) {
+            if (tensorPtr == largeTensor) {
+                oldAssembleOp = consumerOp;
+                auto oldAssembleOpAttr = dynamic_cast<AssembleOpAttribute *>(oldAssembleOp->GetOpAttribute().get());
+                Shape newAssembleOffset = oldAssembleOpAttr->GetToOffset();
+                for (size_t j = 0; j < newAssembleOffset.size(); j++) {
+                    newAssembleOffset[j] -= lcmTileOffset[j];
+                }
+                auto newAssembleOp = AssembleOp{overlap->GetMemoryTypeOriginal(), newAssembleOffset, overlap, newTensor};
+                GraphUtils::AddAssembleOperation(function, newAssembleOp);
+                return SUCCESS;
+            }
+        }
+    }
+    APASS_LOG_WARN_F(Elements::Operation, "No valid assemble op found between tensor[%d] and tensor[%d], skip.",
+        overlap->GetMagic(), largeTensor->GetMagic());
+    return FAILED;
+}
+
 // 对于一对一、一对多场景创建新的AssembleOp和Tensor
 void SplitLargeFanoutTensor::CreateOpFor1toM(Function &function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset,
     LogicalTensors overlaps, LogicalTensors dualOverlaps) {
@@ -146,14 +170,9 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(Function &function, LogicalTensorPt
             auto newTensor = std::make_shared<LogicalTensor>(function, largeTensor->Datatype(),
                 lcmTileShape, largeTensor->Format());
             auto overlap = overlaps[0];
-            auto oldAssembleOp = *overlap->GetConsumers().begin();
-            auto oldAssembleOpAttr = dynamic_cast<AssembleOpAttribute *>(oldAssembleOp->GetOpAttribute().get());
-            Shape newAssembleOffset = oldAssembleOpAttr->GetToOffset();
-            for (size_t j = 0; j < newAssembleOffset.size(); j++) {
-                newAssembleOffset[j] -= lcmTileOffset[j];
+            if (AddNewAssembleOp(function, overlap, largeTensor, lcmTileOffset, newTensor) != SUCCESS) {
+                continue;
             }
-            auto newAssembleOp = AssembleOp{overlap->GetMemoryTypeOriginal(), newAssembleOffset, overlap, newTensor};
-            GraphUtils::AddAssembleOperation(function, newAssembleOp);
             auto assembleOp = *newTensor->GetProducers().begin();
             APASS_LOG_INFO_F(Elements::Operation, "In one-to-multiple situation, create an AssembleOp[%d], input is a "
                 "overlap[%d], output is a newTensor[%d].", assembleOp->GetOpMagic(), overlap->GetMagic(), newTensor->GetMagic());
@@ -177,28 +196,9 @@ void SplitLargeFanoutTensor::CreateOpForMtoM(Function &function, LogicalTensorPt
     auto newTensor = std::make_shared<LogicalTensor>(function, largeTensor->Datatype(),
         lcmTileShape, largeTensor->Format());
     for (const auto &overlap : overlaps) {
-        // 由于tensor->assemble->largeTensor中assemble可以不唯一并指向其他tensor，或assemble位置为其他种类op(op_view)。所以需要找到largeTensor的生产者op
-        Operation *oldAssembleOp = nullptr;
-        for (const auto &consumerOp : overlap->GetConsumers()) {
-            for (auto tensorPtr : consumerOp->GetOOperands()) {
-                if (tensorPtr == largeTensor) {
-                    oldAssembleOp = consumerOp;
-                }
-            }
-        }
-        if (oldAssembleOp == nullptr) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "No valid assemble op found between tensor[%d] and tensor[%d], skip.",
-                overlap->GetMagic(), largeTensor->GetMagic());
+        if (AddNewAssembleOp(function, overlap, largeTensor, lcmTileOffset, newTensor) != SUCCESS) {
             continue;
         }
-
-        auto oldAssembleOpAttr = dynamic_cast<AssembleOpAttribute *>(oldAssembleOp->GetOpAttribute().get());
-        Shape newAssembleOffset = oldAssembleOpAttr->GetToOffset();
-        for (size_t j = 0; j < newAssembleOffset.size(); j++) {
-            newAssembleOffset[j] -= lcmTileOffset[j];
-        }
-        auto newAssembleOp = AssembleOp{overlap->GetMemoryTypeOriginal(), newAssembleOffset, overlap, newTensor};
-        GraphUtils::AddAssembleOperation(function, newAssembleOp);
         auto assembleOp = *newTensor->GetProducers().begin();
         APASS_LOG_INFO_F(Elements::Operation, "In multiple-to-multiple situation, create an AssembleOp[%d], "
             "input is a overlap[%d], output is a newTensor[%d].", assembleOp->GetOpMagic(), overlap->GetMagic(), newTensor->GetMagic());
