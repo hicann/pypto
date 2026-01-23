@@ -27,7 +27,6 @@ namespace CostModel {
 
         std::string title_;
         uint64_t binAddr_;
-        uint64_t subcoreId_;
         std::string binPath_;
         std::vector<ArgPack> inputArgs_;
         std::vector<ArgPack> outputArgs_;
@@ -37,21 +36,22 @@ namespace CostModel {
         PvModelCaseConfigBase() = default;
         void SetTitle(std::string title);
         void SetCoreType(uint64_t coreType);
+        std::uint64_t GetCoreType();
         void SetBin(uint64_t addr, std::string path);
         void AddInputArg(uint64_t addr, uint64_t size, std::string path);
         void AddOutputArg(uint64_t addr, uint64_t size, std::string path);
         virtual void Dump(std::string path) = 0;
+        uint64_t subcoreId_;
     };
 
-    // A2A3
-    class PvModelSystemConfigA2A3 {
+    class PvModelSystemConfig {
     public:
         void Dump(std::string path);
     };
 
-    class PvModelCaseConfigA2A3 : public PvModelCaseConfigBase {
+    class PvModelCaseConfig : public PvModelCaseConfigBase {
     public:
-        PvModelCaseConfigA2A3() = default;
+        PvModelCaseConfig() = default;
         void Dump(std::string path);
     };
 } // namespace CostModel

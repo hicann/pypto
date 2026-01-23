@@ -31,7 +31,7 @@ namespace CostModel {
     
     uint64_t PvMemAllocator::AllocArg(uint64_t size) {
         uint64_t addr = argBase_;
-        argBase_ += size;
+        argBase_ += ((size + 128 - 1) / 128 * 128);
         return addr;
     }
     

@@ -26,7 +26,7 @@ using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
 
-std::string InitInputOutputData(
+static std::string InitInputOutputData(
     const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
     Function *func = Program::GetInstance().GetLastFunction();
     if (!func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH)) {
@@ -55,6 +55,13 @@ std::string InitInputOutputData(
     return "";
 }
 
+static void CopyTensorFromModel(const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
+    auto &rawInputTensors = ProgramData::GetInstance().GetInputDataList();
+    for (size_t i = 0; i < inputs.size(); i++) {
+        StringUtils::DataCopy((uint8_t *)inputs[i].GetAddr(), inputs[i].GetDataSize(), rawInputTensors[i]->data(), rawInputTensors[i]->GetDataSize());
+    }
+}
+
 std::string CostModelRunOnceDataFromHost(
     const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
     std::string initResult = InitInputOutputData(inputs, outputs);
@@ -64,6 +71,7 @@ std::string CostModelRunOnceDataFromHost(
 
     Function *func = Program::GetInstance().GetLastFunction();
     CostModelLauncher::CostModelRunOnce(func);
+    CopyTensorFromModel(inputs, outputs);
     return "";
 }
 

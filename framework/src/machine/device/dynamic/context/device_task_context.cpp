@@ -226,7 +226,7 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask *dyntask, uint32_t taskId,
         dyndata->stackWorkSpaceSize = workspace_->StandardStackWorkspacePerCore();
         dyndata->stackWorkSpaceAddr = workspace_->StackWorkspaceAddr();
         dyndata->opAttrSize = dupFunc.GetSource()->GetOpAttrSize();
-        dyndata->rawTensorAddrSize = dupFunc.GetSource()->GetIncastSize();
+        dyndata->rawTensorAddrSize = dupFunc.GetSource()->GetIncastSize() + dupFunc.GetSource()->GetOutcastSize();
         dyndata->rawTensorDescSize = dupFunc.GetSource()->GetRawTensorDescSize();
         dyndata->commGroupNum = devProg->commGroupNum;
         if (sizeof(dyndata->hcclContext) != sizeof(devProg->hcclContext)) {

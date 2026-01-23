@@ -269,7 +269,7 @@ void CodeGenCloudNPU::GenCode(
             leafKernelFunc << GenFuncBody(*subFunc, topFunc);
             leafKernelFunc << GenFuncEnd();
 #ifdef BUILD_WITH_CANN
-            if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM) {
+            if (std::getenv(ENV_ASCEND_HOME_PATH.c_str()) != nullptr) {
                 DumpCCE(compileInfo.GetCCEAbsPath(), leafKernelFunc.str());
                 DoCompileCCE(compileInfo, "");
             }

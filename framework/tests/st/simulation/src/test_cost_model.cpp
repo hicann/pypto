@@ -22,6 +22,7 @@
 #include "test_common.h"
 #include "test_cost_model.h"
 #include "test_dev_func_runner.h"
+#include "cost_model/simulation/cost_model_launcher.h"
 
 using namespace npu::tile_fwk;
 namespace CostModel {
@@ -182,6 +183,7 @@ void CostModelTestLoopViewAssemble(const Tensor &t0, const Tensor &t1, const Ten
 }
 
 TEST_F(CostModelDynTest, TestDD) {
+    config::SetRuntimeOption(CFG_RUN_MODE, CFG_RUN_MODE_SIM);
     config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     constexpr int tilingX = 32;
     constexpr int tilingY = 32;
@@ -218,11 +220,52 @@ TEST_F(CostModelDynTest, TestDD) {
 
     auto func = Program::GetInstance().GetLastFunction();
 #ifdef BUILD_WITH_CANN
-    CostModelDynFuncRunner::Run(func);
-    std::vector<float> golden(n * s * s, 0.0f);
+    CostModelLauncher::CostModelRunOnce(func);
+    std::vector<float> golden(n * s * s, 128.0f);
     auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(resultCmp(golden, (float *)outs->data(), 0.001f));
 #endif
 }
 
+TEST_F(CostModelDynTest, TestGG) {
+    config::SetRuntimeOption(CFG_RUN_MODE, CFG_RUN_MODE_SIM);
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
+    constexpr int tilingX = 32;
+    constexpr int tilingY = 32;
+    TileShape::Current().SetVecTile(tilingX, tilingY);
+    constexpr int tilingM = 32;
+    constexpr int tilingN = 32;
+    constexpr int tilingK = 32;
+    TileShape::Current().SetCubeTile({tilingM, tilingM}, {tilingN, tilingN}, {tilingK, tilingK});
+
+    Tensor t0(DT_FP32, {32, 32}, "t0");
+    Tensor t1(DT_FP32, {32, 32}, "t1");
+    Tensor t2(DT_FP32, {32, 32}, "t2");
+    Tensor t3(DT_FP32, {32, 32}, "t3");
+
+    FUNCTION("main",
+        {t0, t1}, {t3}, {{t2, t0}}) {
+        LOOP("l0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            UNUSED(i);
+            t3 = Add(t0, t1);
+            Assemble(t3, {0, 0}, t2);
+        }
+    }
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(t0, 1.0),
+        RawTensorData::CreateConstantTensor<float>(t1, 2.0),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(t3, 0.0f),
+    });
+    auto func = Program::GetInstance().GetLastFunction();
+
+#ifdef BUILD_WITH_CANN
+    CostModelLauncher::CostModelRunOnce(func);
+    std::vector<float> golden(tilingX * tilingY, 3.0f);
+    auto outs = npu::tile_fwk::ProgramData::GetInstance().GetOutputData(0);
+    EXPECT_TRUE(resultCmp(golden, (float *)outs->data(), 0.001f));
+#endif
+}
 }

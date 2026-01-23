@@ -57,7 +57,7 @@ void SimSys::BuildPvModel()
     if (pvLevel == PVModelLevel::PV_NON) {
         return;
     }
-    pv = PvModelFactory::Create(config.deviceArch);
+    pv = PvModelFactory::Create();
 }
 
 

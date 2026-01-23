@@ -18,4 +18,3 @@
 stest:
   simulation:
     cases:
-      - CostModelDynTest.TestDD

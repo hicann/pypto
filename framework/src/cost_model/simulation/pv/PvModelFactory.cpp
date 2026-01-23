@@ -18,8 +18,9 @@
 
 namespace CostModel
 {
-    std::shared_ptr<PvModel> PvModelFactory::Create(std::string arch)
+    std::shared_ptr<PvModel> PvModelFactory::Create()
     {
+        std::string arch = "A2A3";
         std::string soPath = "libtile_fwk_simulation_pv.so";
         void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
         if (!handle) {
@@ -30,16 +31,12 @@ namespace CostModel
         using CreateFunc = std::shared_ptr<PvModel>(*)();
         std::string funcName = "CreatePvModelImpl" + arch;
         auto createFunc = (CreateFunc)(dlsym(handle, funcName.c_str()));
-        if (!createFunc) {
-            dlclose(handle);
-            throw std::runtime_error("can not find the factory func: " + arch);
-        }
 
         // 创建对象并返回
         return createFunc();
     }
 
-    std::shared_ptr<DynPvModel> PvModelFactory::CreateDyn(std::string arch)
+    std::shared_ptr<DynPvModel> PvModelFactory::CreateDyn()
     {
         std::string soPath = "libtile_fwk_simulation_pv.so";
         void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
@@ -49,12 +46,8 @@ namespace CostModel
 
         // 获取工厂函数符号
         using CreateFunc = std::shared_ptr<DynPvModel>(*)();
-        std::string funcName = "CreateDynPvModelImpl" + arch;
+        std::string funcName = "CreateDynPvModelImpl";
         auto createFunc = (CreateFunc)(dlsym(handle, funcName.c_str()));
-        if (!createFunc) {
-            dlclose(handle);
-            throw std::runtime_error("can not find the factory func: " + arch);
-        }
 
         // 创建对象并返回
         return createFunc();

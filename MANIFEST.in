@@ -23,6 +23,7 @@ recursive-include framework/include *.def
 recursive-include framework/src/codegen *
 recursive-include framework/src/cost_model/simulation *
 recursive-include framework/src/cost_model/simulation_ca *
+recursive-include framework/src/cost_model/simulation_pv *
 recursive-include framework/src/cost_model/simulation_platform *
 include framework/src/cost_model/CMakeLists.txt
 recursive-include framework/src/interface *

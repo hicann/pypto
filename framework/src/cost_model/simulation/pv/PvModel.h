@@ -35,10 +35,13 @@ namespace CostModel
     public:
         virtual ~DynPvModel() = default;
         virtual void Codegen(npu::tile_fwk::Function *func) = 0;
+        virtual void InitPv() = 0;
         virtual uint8_t* AllocWorkspaceDev(uint64_t size) = 0;
         virtual uint8_t* CopyToDev(const uint8_t *data, uint64_t size) = 0;
         virtual uint8_t* CopyTensorToDev(const uint8_t *data, uint64_t size) = 0;
         virtual void CopyFromDev(uint8_t *data, uint8_t *devPtr, uint64_t size) = 0;
         virtual void Run(npu::tile_fwk::DynFuncData *funcdata, int coreId, int funcId, int taskId) = 0;
+        virtual uint64_t *GetDataHostPtr(int index) = 0;
+        virtual int GetOutIndex(int index, int out_size) = 0;
     };
 } // namespace CostModel

@@ -17,6 +17,7 @@ pypto:
       - framework/src
     unrelease:
       - framework/src/machine/runtime
+      - framework/src/cost_model/simulation_pv
   llt:
     ut_check: true
     st_check: false
