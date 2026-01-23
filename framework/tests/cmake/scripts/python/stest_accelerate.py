@@ -26,11 +26,9 @@ class STestAccelerate(GTestAccelerate):
     通过多进程并行执行, 以提升 STest 执行效率.
     """
 
-    def __init__(self, args, params: List[GTestAccelerate.ExecParam], cntr_name: str = "Device"):
+    def __init__(self, args):
         """
         :param args: 命令行参数
-        :param params: 执行参数
-        :param cntr_name: 容器名称, 用于回显内容
         """
         # 在调用父类初始化之前，从二进制文件获取 meta 信息并重排序用例列表
         # 二进制文件路径通过 -t/--target 参数传入，存储在 args.target[0] 中
@@ -51,11 +49,9 @@ class STestAccelerate(GTestAccelerate):
             logging.warning("Binary path not found, skipping meta-based reordering")
 
         # 调用父类初始化
-        super().__init__(args, params, cntr_name)
+        super().__init__(args, scene_mark="STest", cntr_name="Device")
 
-    @property
-    def mark(self) -> str:
-        return "STest"
+        self.device_list: List[int] = self._init_get_device_list(args=args)
 
     @staticmethod
     def main() -> bool:
@@ -69,21 +65,22 @@ class STestAccelerate(GTestAccelerate):
                                  "If this parameter is not specified, 0 device will be used by default.")
         # 流程处理
         args = parser.parse_args()
-        params = []
-        device_list = [0]
-        if args.device is not None:
-            device_list = [int(d) for d in list(set(args.device)) if d is not None and str(d) != ""]
-        for _id in device_list:
-            p = GTestAccelerate.ExecParam(cntr_id=_id, envs_func=STestAccelerate.set_device_id_envs)
-            params.append(p)
-        ctrl = STestAccelerate(args=args, params=params, cntr_name="Device")
+        ctrl = STestAccelerate(args=args)
+        ctrl.prepare()
         ctrl.process()
         return ctrl.post()
 
     @staticmethod
-    def set_device_id_envs(p: Any) -> Optional[Dict[str, str]]:
+    def get_case_exec_update_envs(p: Any) -> Optional[Dict[str, str]]:
         self = p
         return {"TILE_FWK_DEVICE_ID": f"{self.cntr_id}"}
+
+    @staticmethod
+    def _init_get_device_list(args) -> List[int]:
+        device_list = [0]
+        if args.device is not None:
+            device_list = [int(d) for d in list(set(args.device)) if d is not None and str(d) != ""]
+        return device_list
 
     @staticmethod
     def _get_test_costs(binary: str) -> Dict[str, float]:
@@ -108,7 +105,7 @@ class STestAccelerate(GTestAccelerate):
                 return cost_map
 
             # 仅解析stdout(格式:TestCaseName.TestName|cost_seconds)
-            pattern = re.compile(r'^([\w\.]+)\|(\d+\.?\d*)$', re.MULTILINE)
+            pattern = re.compile(r'^([\w.]+)\|(\d+\.?\d*)$', re.MULTILINE)
             matches = pattern.findall(result.stdout)
             for test_name, cost_str in matches:
                 try:
@@ -154,6 +151,13 @@ class STestAccelerate(GTestAccelerate):
             logging.info("STest(meta): First few cost-aware tests(desc): %s", cost_cases_sorted[:5])
 
         return cost_cases_sorted + no_cost_cases
+
+    def _prepare_get_params(self) -> List[GTestAccelerate.ExecParam]:
+        params = []
+        for _id in self.device_list:
+            p = GTestAccelerate.ExecParam(cntr_id=_id, envs_func=STestAccelerate.get_case_exec_update_envs)
+            params.append(p)
+        return params
 
 
 if __name__ == "__main__":

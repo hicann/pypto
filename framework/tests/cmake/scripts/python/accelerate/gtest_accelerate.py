@@ -15,19 +15,47 @@ import dataclasses
 import logging
 import multiprocessing
 import os
+import re
 import queue
+import json
 import signal
 import subprocess
 import sys
 import time
-from abc import ABC, abstractmethod
+from abc import ABC
 from datetime import datetime, timezone, timedelta
-from multiprocessing import JoinableQueue, Event, Process, Value
+from multiprocessing import JoinableQueue, Event, Process, Value, cpu_count
 from typing import List, Any, Optional, Tuple, Dict, Callable
+from pathlib import Path
 
-from utils.args_action import ArgsEnvDictAction, ArgsGTestFilterListAction
+from utils.args_action import ArgsEnvDictAction
 from utils.executable import Executable
 from utils.table import Table
+
+
+@dataclasses.dataclass
+class CaseDesc:
+    name: Optional[str] = None
+    duration_estimate: Optional[float] = None
+
+    def __init__(self, name: str, duration_estimate: Optional[float] = None):
+        self.name = name
+        self.duration_estimate = duration_estimate
+
+
+class ArgsGTestFilterListAction(argparse.Action):
+    """解析命令行参数传入的 GTestFilter 字段(适配自定义元信息参数)
+    """
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: List[str],
+                 option_string: Optional[str] = None) -> None:
+        # 解析每个字符串，按冒号分隔并展平
+        case_list = []
+        for value in values:
+            cases = [cs.strip() for cs in value.split(':') if cs.strip()]  # 分割每个字符串，并过滤空字符串
+            case_list.extend(cases)
+        # 将结果设置到命名空间
+        setattr(namespace, self.dest, case_list)
 
 
 class GTestAccelerate(ABC):
@@ -85,6 +113,51 @@ class GTestAccelerate(ABC):
             desc += f"{self.cntr_min_duration.total_seconds():.2f}/{diff.total_seconds():.2f}) {rate:.2f}%"
             return desc
 
+        @staticmethod
+        def save_case_duration_to_json(sorted_datas: List[List[Any]], 
+                                       dump_item_num: int = 100, dump_min_duration: float = 5,
+                                       path: Optional[Path] = None):
+            # 路径处理
+            if path is None:
+                return
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # 数据处理
+            item_num = 0
+            case_name_idx = 1
+            duration_idx = 2
+            duration_dict = {}
+            for item in sorted_datas:
+                case_name = item[case_name_idx]
+                duration = float(item[duration_idx])
+                duration_dict[case_name] = duration
+                item_num += 1
+                if item_num >= dump_item_num:
+                    break
+                if duration <= dump_min_duration:
+                    break
+            # 数据落盘
+            with path.open("w", encoding="utf-8") as f:
+                json.dump(duration_dict, f, indent=4)
+
+        @staticmethod
+        def load_case_duration_from_json(desc_dict: Dict[str, CaseDesc], path: Optional[Path] = None):
+            if path is None:
+                return
+            if not path.exists():
+                return
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    case_duration_dict = json.load(f)
+            except json.JSONDecodeError:
+                return
+            update_cnt = 0
+            for case_name, duration in case_duration_dict.items():
+                desc = desc_dict.get(case_name, None)
+                if desc:
+                    desc.duration_estimate = float(duration)
+                    update_cnt += 1
+            logging.info("Determine TestCase Order, %s case's estimate update by local cache file", update_cnt)
+
         def get_cntr_exec_info(self) -> Tuple[str, str]:
             """获取 Container 执行信息统计.
 
@@ -134,10 +207,10 @@ class GTestAccelerate(ABC):
             datas = []
             while not self.case_terminate_details.empty():
                 _brief = self.case_terminate_details.get()
-                job_id = int(_brief[0])
+                cntr_id = int(_brief[0])
                 case_name = str(_brief[1])
                 case_duration = _brief[2]
-                datas.append([job_id, case_name, f"{case_duration.total_seconds():.2f}"])
+                datas.append([cntr_id, case_name, f"{case_duration.total_seconds():.2f}"])
                 self.case_terminate_details.task_done()
             brief = "\nNone"
             if len(datas) != 0:
@@ -168,36 +241,56 @@ class GTestAccelerate(ABC):
                 brief += f"\nIdx:{idx}/{len(datas)}\n{data}"
             return f"\n\nCase Exception Brief({len(datas)}):{brief}", len(datas)
 
-        def get_case_exec_duration_info(self) -> str:
+        def get_case_exec_duration_info(self, case_dict: Dict[str, CaseDesc], 
+                                        min_print_cnt: Optional[int] = None,
+                                        dump_json_path: Optional[Path] = None) -> str:
             """获取 Case 执行耗时统计信息.
 
             :return: Case 执行耗时统计信息.
             """
-            heads = [self.cntr_name, "CaseName", "Duration", f"Ratio({self.cntr_name})", "Ratio(Total)"]
+            heads = [self.cntr_name, "CaseName", "Duration", "Estimate", f"Ratio({self.cntr_name})", "Ratio(Total)"]
             datas = []
             while not self.case_execution_details.empty():
                 _brief = self.case_execution_details.get()
-                job_idx = _brief[0]
+                cntr_id = _brief[0]
                 case_name = str(_brief[1])
                 case_duration = _brief[2]
-                job_duration = self.cntr_duration_dict[job_idx]
-                ratio_job = float(case_duration / job_duration) * 100
+                case_desc = case_dict.get(case_name, None)
+                case_estimate = ""
+                if case_desc and case_desc.duration_estimate:
+                    case_estimate = timedelta(seconds=case_desc.duration_estimate).total_seconds()
+                cntr_duration = self.cntr_duration_dict[cntr_id]
+                ratio_cntr = float(case_duration / cntr_duration) * 100
                 ratio_process = float(case_duration / self.act_duration) * 100
                 datas.append(
-                    [job_idx, case_name, case_duration.total_seconds(),
-                     f"{case_duration.total_seconds():.2f}/{job_duration.total_seconds():.2f} {ratio_job:.2f}%",
+                    [cntr_id, case_name, case_duration.total_seconds(), case_estimate,
+                     f"{case_duration.total_seconds():.2f}/{cntr_duration.total_seconds():.2f} {ratio_cntr:.2f}%",
                      f"{case_duration.total_seconds():.2f}/{self.act_duration.total_seconds():.2f} "
                      f"{ratio_process:.2f}%"])
                 self.case_execution_details.task_done()
             brief = "\nNone"
+            add_desc = ""
             if len(datas) != 0:
                 # 把 data 按耗时降序重排, 重排后转换格式
                 duration_idx = 2  # 2 is idx of duration
                 datas = sorted(datas, key=lambda x: x[duration_idx], reverse=True)
                 for item in datas:
                     item[duration_idx] = f"{item[duration_idx]:.2f}"
+                # 结果落盘, 常用于本地重复执行时加速
+                self.save_case_duration_to_json(sorted_datas=datas, path=dump_json_path)
+                # 缩略功能
+                if min_print_cnt:
+                    print_cnt = min_print_cnt + 50  # 除已配置预估耗时的用例外, 再额外打印 50 个用例
+                    ori_len = len(datas)
+                    datas = datas[:print_cnt]
+                    cur_len = len(datas)
+                    if ori_len > cur_len:
+                        hidden_cnt = ori_len - cur_len
+                        hidden_first_data = datas[-1]  # 取切片后的最后一个用例
+                        add_desc = f"\n({hidden_cnt} durations <= {hidden_first_data[2]}s hidden.)"  # 2 Duration
+                # 结果汇总
                 brief = Table.table(datas=datas, headers=heads, auto_sort=False)
-            return f"\n\nCase Duration Brief:{brief}"
+            return f"\n\nCase Duration Brief:{brief}" + add_desc
 
     @dataclasses.dataclass
     class CntrContext:
@@ -271,21 +364,28 @@ class GTestAccelerate(ABC):
                 pass
             return True
 
-    def __init__(self, args, params: List[ExecParam], cntr_name: str = "Cntr"):
+    def __init__(self, args, scene_mark: str, cntr_name: str):
         """
         :param args: 命令行参数
-        :param params: 执行参数
         :param cntr_name: 容器名称, 用于回显内容
         """
+        # 场景标识
+        self.mark: str = scene_mark
+
         # 用例执行参数, 执行行为控制参数
         self.exe: Executable = Executable(file=args.target[0], envs=args.envs, timeout=args.timeout_case)
-        self.exe_params: List[GTestAccelerate.ExecParam] = params
+        self.exe_params: List[GTestAccelerate.ExecParam] = []
         self.exe_result: GTestAccelerate.ExecResult = GTestAccelerate.ExecResult(cntr_name=cntr_name)
         self.exe_timeout: Optional[int] = args.timeout
         self.exe_halt_on_error: bool = args.halt_on_error  # 失败时终止后续 Case 执行
 
         # 用例管理
-        self.case_list: List[str] = args.cases
+        tagert = Path(args.target[0])
+        self.case_duration_json: Path = Path(tagert.parent, f"{tagert.stem}_duration.json").resolve()
+        self.case_dict: Dict[str, CaseDesc] = {}
+        self.case_list: List[CaseDesc] = []
+        self.case_ordered_cnt: int = 0
+        self._init_case_info(args=args)
         self.case_queue: JoinableQueue = JoinableQueue()
         self.case_execution_queue: JoinableQueue = JoinableQueue()  # Case 正常执行结束时，收集相关信息
         self.case_exception_queue: JoinableQueue = JoinableQueue()  # Case 执行失败时, 用于收集错误信息
@@ -298,14 +398,9 @@ class GTestAccelerate(ABC):
         self.cntr_terminate_event = Event()  # 用于通知其他 Container 进程结束运行
         self.cntr_exit_count = Value('i', 0)  # DFX, 统计 Container 退出进度
 
-        # 其他
-        if self.cntr_num == 0:
-            raise ValueError("ExecParams is empty, won't run any task.")
-        if len(params) > self.case_num:
-            logging.info("CaseNum(%s) less than len(ExecParams)=%s, will only start the first %s %s.",
-                         self.case_num, self.cntr_num, self.case_num, self.cntr_name)
-            self.exe_params = self.exe_params[:self.case_num]
-        logging.info("\n\n%s Accelerate Args:%s", self.mark, Table.table(datas=self.brief))
+        # CPU 亲和性管理
+        self.cpu_rank_size: Optional[int] = self._init_get_cpu_rank_size(args=args)
+        self.cpu_affinity_policy: Optional[int] = None
 
     @property
     def brief(self) -> List[Any]:
@@ -320,6 +415,9 @@ class GTestAccelerate(ABC):
             ["CaseTimeout", self.exe.timeout],
             ["Executable", self.exe.file],
         ]
+        if self.cpu_rank_size:
+            lst.append(["CpuRankSize", self.cpu_rank_size])
+            lst.append(["CpuAffinityPolicy", f"{self.cpu_affinity_policy_str}({self.cpu_affinity_policy})"])
         for k, v in self.exe.envs.items():
             lst.append([k, v])
         return lst
@@ -333,9 +431,15 @@ class GTestAccelerate(ABC):
         return len(self.case_list)
 
     @property
-    @abstractmethod
-    def mark(self) -> str:
-        pass
+    def cpu_affinity_policy_str(self) -> str:
+        if not self.cpu_affinity_policy:
+            return "Disable"
+        elif self.cpu_affinity_policy == 1:
+            return "Even Allocation"  # 均匀分配
+        elif self.cpu_affinity_policy == 2:
+            return "Cyclic Reuse Allocation"  # 循环再利用分配
+        else:
+            return "Unknown"
 
     @staticmethod
     def reg_args(parser: argparse.ArgumentParser):
@@ -361,8 +465,24 @@ class GTestAccelerate(ABC):
                             help="If any case failed, subsequent cases are not executed.")
         # 用例参数
         parser.add_argument("--gtest_filter",
-                            nargs="+", action=ArgsGTestFilterListAction, default=[], required=True, dest="cases",
+                            nargs='*', action=ArgsGTestFilterListAction, default=[], required=False, dest="cases",
                             help="GTestFilter, multiple cases are separated by ':'")
+        # 其他
+        parser.add_argument("--cpu_rank_size", nargs="?", type=int, default=None,
+                            help="Specify the rank size for CPU affinity grouping.")
+
+    @staticmethod
+    def _init_get_cpu_rank_size(args) -> Optional[int]:
+        cpu_rank_size = None
+        if args.cpu_rank_size:
+            cpu_rank_size = args.cpu_rank_size
+        else:
+            cpu_rank_size_str = os.environ.get("PYPTO_TESTS_CASE_EXECUTE_CPU_RANK_SIZE", None)
+            if cpu_rank_size_str:
+                cpu_rank_size = int(cpu_rank_size_str)
+        if cpu_rank_size and cpu_rank_size > 0:
+            return cpu_rank_size
+        return None
 
     @staticmethod
     def _move(src: JoinableQueue, dst: JoinableQueue):
@@ -386,9 +506,23 @@ class GTestAccelerate(ABC):
         except ModuleNotFoundError:
             pass
 
+    def prepare(self):
+        """执行准备
+        """
+        self.exe_params = self._prepare_get_params()
+        if self.cntr_num == 0:
+            raise ValueError("ExecParams is empty, won't run any task.")
+        if self.cntr_num > self.case_num:
+            logging.info("CaseNum(%s) less than len(ExecParams)=%s, will only start the first %s %s.",
+                         self.case_num, self.cntr_num, self.case_num, self.cntr_name)
+            self.exe_params = self.exe_params[:self.case_num]
+        # CPU 亲和性设置
+        self._prepare_determine_cpu_affinity_policy()
+
     def process(self):
         """执行任务
         """
+        logging.info("\n\n%s Accelerate Args:%s", self.mark, Table.table(datas=self.brief))
         # 执行流程
         ts = datetime.now(tz=timezone.utc)
         self._main()
@@ -416,6 +550,78 @@ class GTestAccelerate(ABC):
             logging.error(out)
         return case_exec_result
 
+    def _init_case_info(self, args):
+        # 确定用例名列表
+        case_name_list = args.cases  # 其内容为用例名列表
+        if len(case_name_list) == 0 or "*" in case_name_list:
+            case_name_list = self._init_get_case_name_list_from_exe()
+            logging.info("Determine TestCase from executable, get %s cases", len(case_name_list))
+        else:
+            logging.info("Determine TestCase from args, get %s cases", len(case_name_list))
+        # 补充刷新预估耗时信息(由用例内)
+        self.case_dict = {name: CaseDesc(name=name) for name in case_name_list}
+        ret, _, _, = self.exe.run(params=["--gtest_list_tests_with_meta"], check=True)  # 自定义参数
+        pattern = re.compile(r'^([\w\.]+)\|(\d+\.?\d*)$', re.MULTILINE)
+        matches = pattern.findall(ret.stdout)
+        for test_name, cost_str in matches:
+            case_desc = self.case_dict.get(test_name, None)
+            if case_desc:
+                case_desc.duration_estimate = float(cost_str.strip())
+        # 补充刷新预估耗时信息(由本地缓存)
+        self.ExecResult.load_case_duration_from_json(desc_dict=self.case_dict, path=self.case_duration_json)
+        # 重排用例
+        self.case_list = self.case_dict.values()
+        self.case_list = sorted(self.case_list, 
+                                key=lambda x: x.duration_estimate if x.duration_estimate is not None else float('-inf'),
+                                reverse=True)
+        self.case_ordered_cnt = 0
+        for desc in self.case_list:
+            if desc.duration_estimate:
+                self.case_ordered_cnt += 1
+            else:
+                break  # 排序后, 有耗时预估的会排在前面
+        normal_cnt = len(self.case_list) - self.case_ordered_cnt
+        logging.info("Determine TestCase Order, OrderdCase(%s), NormalCase(%s)", self.case_ordered_cnt, normal_cnt)
+
+    def _init_get_case_name_list_from_exe(self) -> List[str]:
+        """
+        从可执行文件中获取测试用例列表:
+
+        :return: 用例名列表
+        :rtype: List[str]
+        """
+        case_name_list = []
+        ret, _, _, = self.exe.run(params=["--gtest_list_tests"], check=True)  # GoogleTest 原生参数
+        for line in ret.stdout.split('\n'):
+            line = line.rstrip()
+            if not line or line.startswith('#') or "GoogleTestVerification" in line:
+                continue
+            if line.endswith('.'):
+                current_suite = line[:-1]
+            elif line.startswith('  '):
+                test_name = line.strip()
+                full_name = f"{current_suite}.{test_name}"
+                case_name_list.append(full_name)
+        return case_name_list
+
+    def _prepare_determine_cpu_affinity_policy(self):
+        """初始化 CPU 亲和性策略
+
+        策略确定需要依赖的 CntrNum 等参数无法在类构造阶段确定, 故本流程延迟到 prepare 阶段处理
+        """
+        self.cpu_affinity_policy = None
+        if self.cpu_rank_size and self.cpu_rank_size > 0:
+            if self.cntr_num * self.cpu_rank_size <= cpu_count():
+                self.cpu_affinity_policy = 1  # 策略1: 均匀分配(每 CPU 组对应 1 个 cntr)
+            else:
+                self.cpu_affinity_policy = 2  # 策略2: 循环复用核心组(期望 CPU 数超出 CPU 总数场景)
+        logging.info("Determine CpuAffinity, Policy=%s(%s), CntrNum=%s, CpuNum=%s, CpuRankSize=%s",
+                     self.cpu_affinity_policy_str, self.cpu_affinity_policy, 
+                     self.cntr_num, cpu_count(), self.cpu_rank_size)
+
+    def _prepare_get_params(self) -> List[ExecParam]:
+        return []
+
     def _post_case_exec_info(self) -> Tuple[str, bool]:
         """获取 Case 执行信息.
 
@@ -426,7 +632,9 @@ class GTestAccelerate(ABC):
         """
         terminate_brief, terminate_count = self.exe_result.get_case_exec_terminate_info()
         exception_brief, exception_count = self.exe_result.get_case_exec_exception_info()
-        duration_brief = self.exe_result.get_case_exec_duration_info()
+        duration_brief = self.exe_result.get_case_exec_duration_info(case_dict=self.case_dict, 
+                                                                     min_print_cnt=self.case_ordered_cnt,
+                                                                     dump_json_path=self.case_duration_json)
 
         # Case 执行总体情况汇总
         remaining_count = 0
@@ -472,7 +680,7 @@ class GTestAccelerate(ABC):
         """以同步方式将待执行用例插入待执行队列, 按 Container 数量插入终止信号
         """
         for cs in self.case_list:
-            self.case_queue.put(cs)
+            self.case_queue.put(cs.name)
         for _ in range(self.cntr_num):
             self.case_queue.put(None)
 
@@ -592,6 +800,7 @@ class GTestAccelerate(ABC):
         :param exec_param: ContainerParam
         """
         self._set_process_desc()
+        self._cntr_set_cpu_affinity(cntr_id=cntr_id)
         ctx = GTestAccelerate.CntrContext(cntr_id=cntr_id, exec_param=exec_param)
         try:
             time.sleep(delay)
@@ -674,6 +883,32 @@ class GTestAccelerate(ABC):
         ctx.exit_code = process.exitcode
         logging.info("%s Recv Case[%s] upload terminate event.", self._get_process_desc(), gtest_filter)
         return False
+
+    def _cntr_set_cpu_affinity(self, cntr_id: int):
+        """在 Cntr 启动初期, 设置 CPU 亲和性
+
+        将 CPU 亲和性配置在 Cntr 进程, 则该 Cntr 所执行的 Case 都会继承该配置
+        """
+        if not self.cpu_affinity_policy:
+            return
+        # 确定 CPU 分组索引
+        if self.cpu_affinity_policy == 1:
+            group_idx = cntr_id
+        else:
+            cpu_rank_num = cpu_count() // self.cpu_rank_size
+            group_idx = cntr_id % cpu_rank_num
+        # 计算 CPU 分组内容
+        start_core = group_idx * self.cpu_rank_size
+        end_core = min(start_core + self.cpu_rank_size, cpu_count())  # 防止超出 CPU 总数
+        cpu_core_list = [int(i) for i in range(start_core, end_core)]
+        try:
+            os.sched_setaffinity(0, cpu_core_list)  # 0代表当前进程PID
+            # 验证设置结果（可选）
+        except OSError as e:
+            # CPU 亲和性设置失败不影响用例执行
+            logging.error("%s[%s] Failed to set CPU affinity: %s", self.cntr_name, cntr_id, e)
+        current_affinity = os.sched_getaffinity(0)  # 0代表当前进程PID
+        logging.debug("%s[%s] cpu affinity cores: %s", self.cntr_name, cntr_id, current_affinity)
 
     def _case(self, cntr_id: int, param: ExecParam, gtest_filter: str):
         """具体用例执行进程

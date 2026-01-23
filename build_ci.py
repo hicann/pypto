@@ -230,7 +230,7 @@ class BuildParam(CMakeParam):
 
     @staticmethod
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
-        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 48)  # 48 为缺省最大核数
+        def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
         def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 由其自身决定缺省核数
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
@@ -297,6 +297,7 @@ class TestsExecuteParam(CMakeParam):
     auto_execute: bool = False  # 用例自动执行
     auto_execute_parallel: bool = False  # 用例并行执行
     case_execute_timeout: Optional[int] = None  # 用例执行时, 单个用例超时时长
+    case_execute_cpu_rank_size: Optional[int] = None  # 用例并行执行时, CPU 亲和性 Rank Size
 
     def __init__(self, args):
         self.changed_file = None if not args.changed_files else Path(args.changed_files).resolve()
@@ -304,6 +305,7 @@ class TestsExecuteParam(CMakeParam):
         self.auto_execute_parallel = self.auto_execute and self.ci_model
         timeout = args.case_execute_timeout
         self.case_execute_timeout = timeout if timeout and timeout > 0 else None  # 单个用例执行超时时长
+        self.case_execute_cpu_rank_size = args.cpu_rank_size
 
     @property
     def ci_model(self) -> bool:
@@ -318,6 +320,8 @@ class TestsExecuteParam(CMakeParam):
                             help="Disable auto execute STest/Utest with build.")
         parser.add_argument("--case_execute_timeout", nargs="?", type=int, default=None,
                             help="Case execute timeout.")
+        parser.add_argument("--cpu_rank_size", nargs="?", type=int, default=None,
+                            help="Specify the rank size for CPU affinity grouping.")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         cmd = self._cfg_require(opt="ENABLE_TESTS_EXECUTE", ctr=self.auto_execute)
@@ -864,9 +868,15 @@ class BuildCtrl(CMakeParam):
         env = {}
         if self.build.job_num:
             env["PYPTO_TESTS_PARALLEL_NUM"] = str(self.build.job_num)
-        case_timeout = self.tests.exec.case_execute_timeout
-        if self.tests.exec.auto_execute and case_timeout and case_timeout > 0:
-            env["PYPTO_TESTS_CASE_EXECUTE_TIMEOUT"] = str(case_timeout)
+        # Tests exec
+        tests_exec = self.tests.exec
+        if tests_exec.auto_execute:
+            case_timeout = tests_exec.case_execute_timeout
+            if case_timeout and case_timeout > 0:
+                env["PYPTO_TESTS_CASE_EXECUTE_TIMEOUT"] = str(case_timeout)
+            rank_size = tests_exec.case_execute_cpu_rank_size
+            if rank_size and rank_size > 0:
+                env["PYPTO_TESTS_CASE_EXECUTE_CPU_RANK_SIZE"] = str(rank_size)
         return env
 
     def pip_install(self, whl: Path, dest: Optional[Path] = None, opt: str = "",

@@ -26,9 +26,9 @@ class UTestAccelerate(GTestAccelerate):
     通过多进程并行执行, 以提升 UTest 执行效率.
     """
 
-    @property
-    def mark(self) -> str:
-        return "UTest"
+    def __init__(self, args):
+        super().__init__(args=args, scene_mark="UTest", cntr_name="Cntr")
+        self.job_num: int = self._init_get_job_num(args=args)
 
     @staticmethod
     def main() -> bool:
@@ -41,9 +41,12 @@ class UTestAccelerate(GTestAccelerate):
                             help="Specific parallel accelerate job num.")
         # 流程处理
         args = parser.parse_args()
-        params = []
+        ctrl = UTestAccelerate(args=args)
+        ctrl.prepare()
+        ctrl.process()
+        return ctrl.post()
 
-        # 获取job_num
+    def _init_get_job_num(self, args) -> int:
         if args.job_num:
             job_num = args.job_num
         else:
@@ -52,14 +55,15 @@ class UTestAccelerate(GTestAccelerate):
             elif os.environ.get("PYPTO_TESTS_PARALLEL_NUM", 0):
                 job_num = int(os.environ.get("PYPTO_TESTS_PARALLEL_NUM", 0))
             else:
-                job_num = int(math.ceil(float(cpu_count()) * 0.8))    # use 0.8 cpu
-        job_num = min(min(min(max(int(job_num), 1), cpu_count()), 16), len(args.cases))
+                job_num = int(math.ceil(float(cpu_count()) * 0.8))  # use 0.8 cpu
+        job_num = min(max(int(job_num), 1), cpu_count(), 32, self.case_num)  # 32 表示最大并发度
+        return job_num
 
-        for job_idx in range(job_num):
-            params.append(GTestAccelerate.ExecParam(cntr_id=job_idx))
-        ctrl = UTestAccelerate(args=args, params=params)
-        ctrl.process()
-        return ctrl.post()
+    def _prepare_get_params(self) -> List[GTestAccelerate.ExecParam]:
+        params = []
+        for cntr_id in range(self.job_num):
+            params.append(GTestAccelerate.ExecParam(cntr_id=cntr_id))
+        return params
 
 
 if __name__ == "__main__":
