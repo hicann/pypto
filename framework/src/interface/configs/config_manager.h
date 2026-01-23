@@ -86,8 +86,6 @@ const std::string KEY_FORCE_OVERWRITE = "force_overwrite"; // if true, don't dum
 const std::string KEY_CODEGEN_SUPPORT_TILE_TENSOR = "codegen_support_tile_tensor";       // if true, gen code with layout mode
 const std::string KEY_CODEGEN_NEED_COMPILE = "codegen_need_compile";       // if true, gen code & compile code
 
-const std::string KEY_FORCE_COMBINE_AXIS = "force_combine_axis";
-const std::string KEY_COMBINE_AXIS = "combine_axis";
 
 enum class DPlatform {
     ASCEND_910B1,

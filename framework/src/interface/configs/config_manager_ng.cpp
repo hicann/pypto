@@ -496,4 +496,37 @@ ConfigManagerNg &ConfigManagerNg::GetInstance() {
 }
 
 ConfigManagerNg::~ConfigManagerNg() = default;
+
+namespace config{
+
+template <typename T>
+void SetOptionsNg(const std::string &key, const T &value){
+    ConfigManagerNg::CurrentScope()->UpdateValue(key, value);
+}
+
+template void SetOptionsNg<bool>(const std::string &key, const bool &value);
+template void SetOptionsNg<int>(const std::string &key, const int &value);
+template void SetOptionsNg<double>(const std::string &key, const double &value);
+template void SetOptionsNg<std::string>(const std::string &key, const std::string &value);
+template void SetOptionsNg<long>(const std::string &key, const long &value);
+template void SetOptionsNg<uint8_t>(const std::string &key, const uint8_t &value);
+template void SetOptionsNg<std::map<int, int>>(const std::string &key, const std::map<int, int> &value);
+template void SetOptionsNg<std::map<long, long>>(const std::string &key, const std::map<long, long> &value);
+template void SetOptionsNg<std::vector<int>>(const std::string &key, const std::vector<int> &value);
+template void SetOptionsNg<std::vector<std::string>>(const std::string &key, const std::vector<std::string> &value);
+
+void Reset() {
+    ConfigManagerNg::CurrentScope()->Clear();
+}
+
+
+void Restore(std::shared_ptr<ConfigScope> config) {
+    ConfigManagerNg::GetInstance().PushScope(config);
+}
+
+std::shared_ptr<ConfigScope> Duplicate() {
+    return ConfigManagerNg::CurrentScope();
+}
+
+}
 } // namespace npu::tile_fwk
