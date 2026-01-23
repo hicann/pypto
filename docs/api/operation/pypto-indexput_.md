@@ -1,0 +1,78 @@
+# pypto.index\_put\_
+
+## 产品支持情况
+
+| 产品             | 是否支持 |
+|:-----------------|:--------:|
+| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
+| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
+
+## 功能说明
+
+根据索引indices将values的多个或多块数据更新到self中。如果accumulate参数为True，则表示在更新时，values和原本存储在相应位置的值进行累加；如果accumulate为False，则会直接覆盖原本的值。
+
+## 函数原型
+
+```python
+index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = False) -> None
+```
+
+## 参数说明
+
+
+|   参数名   | 输入/输出 | 说明                                                                  |
+|------------|-----------|----------------------------------------------------------------------|
+|   input    |    输入   | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32。 <br> 不支持空Tensor，Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
+|  indices   |   输入    | Tensor类型的元组，每个Tensor表示一个维度的索引。 <br> 支持的类型为：tuple\[Tensor\], 每个Tensor均为一维，且维度相同。 <br> Tensor支持的数据类型为：INT64, INT32。 <br> 不支持空Tensor，tuple中Tensor的个数不大于input的维数。 |
+|   values   |   输入    | 待更新到input中的值。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32。 <br> 不支持空Tensor，维数不大于input的维数。 |
+| accumulate |   输入    | 累加参数，默认为False。 <br> 支持的类型为：bool。 |
+
+## 返回值说明
+
+对input进行原地操作，无返回值
+
+## 约束说明
+
+1. indices中的一维Tensor维度相同，不支持broadcast。indices中第i个Tensor中的值须小于input中第i-1维的Shape大小。当indices的选取会对同一个位置进行重复更新时，结果是未确定的。
+
+2. values不支持broadcast，其第0维的shape须和indices中一维Tensor的shape相同。
+
+3. input的维度、indices中Tensor的个数和values的维度之间需满足：（input.shape.size） + 1 = (indices.size) + (values.shape.size)。
+
+4. input和values的数据类型须相同。
+
+5. viewshape为一维，针对indices中的每个一维Tensor和values的第0维进行切分，values的其它维度不做切分。
+
+6. TileShape为一维，针对indices中的每个一维Tensor和values的第0维进行切分，values的其它维度不做切分。indices和values的TileShape大小总和不能超过UB内存的大小。
+
+## 调用示例
+
+```python
+x = pypto.tensor([3, 3], pypto.DT_INT32)
+indices0 = pypto.tensor([2], pypto.DT_INT32)
+indices = (indices0, )
+values = pypto.tensor([2, 3], pypto.DT_INT32)
+accumulate = True
+# accumulate is True
+pypto.index_put_(x, indices, values, accumulate)
+# accumulate is False(default)
+pypto.index_put_(x, indices, values)
+```
+
+结果示例如下：
+
+```python
+输入数据 x:      [[1 1 1],
+                 [1 1 1],
+                 [0 0 0]]
+      indices:   ([1 2], )
+      values:    [[0 1 0],
+                  [0 2 0]]
+原地更新后的 x:   [[1 1 1],
+                 [1 2 1],
+                 [0 2 0]]               # accumulate is True
+                 [[1 1 1],
+                 [0 1 0],
+                 [0 2 0]]               # accumulate is False
+```
+
