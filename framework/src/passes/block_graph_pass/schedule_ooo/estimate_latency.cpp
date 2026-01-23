@@ -203,37 +203,44 @@ void LatencyEstimator::initLatencyEstimatorOpQueues(){
 }
 
 void LatencyEstimator::InitMemWithoutAlloc() {
-    std::set<int> needAllocMem;
+    std::unordered_set<int> memIds;
+    std::unordered_map<int, Operation*> memIdAllocMap;
+    bool needAddAlloc = false;
     for (const auto &op : taskList) {
+        if (IsOpAlloc(op)) {
+            memIdAllocMap[op->GetOutputOperand(0)->memoryrange.memId] = op;
+        }
         for (auto &iOperand : op->GetIOperands()) {
-            bool needAlloc = true;
-            if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR){
-                needAlloc = false;
-                continue;
-            }
-            for (auto pre : iOperand->GetProducers()) {
-                if (std::find(taskList.begin(), taskList.end(), pre) != taskList.end()) {
-                    needAlloc = false;
-                    break;
-                }
-            }
-            if (needAlloc){
-                auto memId = iOperand->memoryrange.memId;
-                needAllocMem.insert(memId);
-                APASS_LOG_DEBUG_F(Elements::Tensor, "Buffer[%d] is ALLOC, it has no producers", memId);
+            memIds.insert(iOperand->memoryrange.memId);
+        }
+    }
+    for (const auto &memId : memIds) {
+        if (memIdAllocMap.find(memId) != memIdAllocMap.end()) {
+            continue;
+        }
+        APASS_LOG_INFO_F(Elements::Operation, "The alloc op of memId[%d] in other graph", memId);
+        needAddAlloc = true;
+        for (const auto &op : operations) {
+            if (IsOpAlloc(op) && op->GetOutputOperand(0)->memoryrange.memId == memId) {
+                taskList.push_back(op);
+                APASS_LOG_INFO_F(Elements::Operation, "Add alloc op %s for memId[%d]", GetOpInfo(op).c_str(), memId);
             }
         }
     }
-    for (auto memId : needAllocMem){
-        auto freeMemSize = localBufferMap[memId]->size;
-        localMemoryCurrentSize[localBufferMap[memId]->memType] -= freeMemSize;
+    std::vector<Operation*> opList;
+    if (needAddAlloc) {
+        for (auto op : operations) {
+            if (std::find(taskList.begin(), taskList.end(), op) != taskList.end()) {
+                opList.push_back(op);
+            }
+        }
+        taskList = opList;
     }
 }
 
 Status LatencyEstimator::LatencyEstimatorMainLoop() {
     initLatencyEstimatorOpQueues();
     LaunchReadyIssue();
-    InitMemWithoutAlloc();
     numTotalIssues = taskList.size();
     uint64_t commitCount = 0; // 当前已提交的issue数量
     bool isAllRetired = false;

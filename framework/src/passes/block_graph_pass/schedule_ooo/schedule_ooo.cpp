@@ -125,7 +125,7 @@ Status OoOSchedule::SortAndLatencyEstimate(std::vector<Operation*> &opList, std:
     int &latency) {
     APASS_LOG_INFO_F(Elements::Operation, "=======>start SortAndLatencyEstimate");
     SortTaskList(opList, taskOpList);
-    LatencyEstimator latencyEstimator(taskOpList);
+    LatencyEstimator latencyEstimator(taskOpList, opList);
     if (latencyEstimator.LatencyEstimatorMainLoop() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "SortAndLatencyEstimate LatencyEstimatorMainLoop failed.");
         return FAILED;

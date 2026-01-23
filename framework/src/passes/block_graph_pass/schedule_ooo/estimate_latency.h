@@ -23,8 +23,10 @@ namespace npu::tile_fwk {
 class LatencyEstimator : public ScheduleBase {
 public:
     LatencyEstimator() {}
-    LatencyEstimator(std::vector<Operation*>& newTaskList) : ScheduleBase(), taskList(newTaskList) {
-        Init(newTaskList);
+    LatencyEstimator(std::vector<Operation*>& newTaskList, std::vector<Operation*>& newOperations) : ScheduleBase(), taskList(newTaskList),
+        operations(newOperations) {
+        InitMemWithoutAlloc();
+        Init(taskList);
     }
     ~LatencyEstimator() {}
 
@@ -34,6 +36,7 @@ public:
     int clock{0};
     uint64_t numTotalIssues{0};
     std::vector<Operation*> taskList;
+    std::vector<Operation*> operations;
 
     void LaunchReadyIssue();
     Status FreeBuffer(Operation* op);
