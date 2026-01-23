@@ -19,7 +19,6 @@
 #include "machine/host/backend.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
-extern "C" int DynTileFwkBackendKernelServerInit(void *targ);
 
 namespace npu::tile_fwk::dynamic {
 
@@ -29,10 +28,8 @@ static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
     int aicpuResultList[threadNum] = {0};
     std::atomic<int> idx{0};
     auto *devProg = (DevAscendProgram *)(kArgs.cfgdata);
-    auto rc = DynTileFwkBackendKernelServerInit(&kArgs);
-    if (rc != 0) {
-        return rc;
-    }
+    size_t shmSize = DEVICE_TASK_CTRL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+    (void)memset_s(reinterpret_cast<void*>(devProg->devArgs.taskQueue), shmSize, 0, shmSize);
     for (int i = 0; i < static_cast<int>(devProg->devArgs.nrAicpu); i++) {
         aicpuThreadList[i] = std::thread([&](int threadIndex) {
             int tidx = idx++;
@@ -73,7 +70,7 @@ int EmulationLauncher::EmulationLaunchOnceWithHostTensorData(
     DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, function->GetDyndevAttribute()->devProgBinary,
                                          config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList,
-        function->GetDyndevAttribute()->disableL2List, config.isGETensorList);
+        function->GetDyndevAttribute()->disableL2List);
     int rc = EmulationLaunchOnce(kArgs);
     return rc;
 }
@@ -104,7 +101,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
  	         function->GetDyndevAttribute()->devProgBinary);
     DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, devProgData, config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList,
-        function->GetDyndevAttribute()->disableL2List, config.isGETensorList);
+        function->GetDyndevAttribute()->disableL2List);
     int rc = EmulationLaunchOnce(kArgs);
 
     devProg->controlFlowCache.isRecording = false;

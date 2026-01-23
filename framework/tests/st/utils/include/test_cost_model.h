@@ -33,7 +33,6 @@ using namespace npu::tile_fwk::dynamic;
 using namespace CostModel;
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
-extern "C" int DynTileFwkBackendKernelServerInit(void *targ);
 
 struct MemoryH {
     MemoryH(bool isTest) : isTest_(isTest) {}
@@ -198,8 +197,6 @@ private:
         constexpr int threadNum = 6;
         std::thread aicpus[threadNum];
         std::atomic<int> idx{0};
-        auto rc0 = DynTileFwkBackendKernelServerInit(kArgs);
-        EXPECT_EQ(rc0, 0);
         for (int i = 0; i < threadNum; i++) {
             aicpus[i] = std::thread([&]() {
                 int tidx = idx++;

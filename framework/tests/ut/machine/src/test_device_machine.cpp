@@ -36,6 +36,7 @@ public:
 };
 
 extern "C" int StaticTileFwkBackendKernelServer(void *targ);
+extern "C" int PyptoKernelCtrlServerInit(void *targ);
 
 TEST(DeviceMachineTest, test_get_task_time) {
     DeviceArgs args = {};
@@ -62,4 +63,11 @@ TEST(DeviceMachineTest, test_get_task_time) {
     for (int i = 0; i < 1; i++) {
         aicpus[i].join();
     }
+}
+
+TEST(DeviceMachineTest, test_ctrl_server) {
+    DeviceKernelArgs args;
+    args.inputs = nullptr;
+    auto ret = PyptoKernelCtrlServerInit((void*)&args);
+    EXPECT_EQ(ret, -1);
 }

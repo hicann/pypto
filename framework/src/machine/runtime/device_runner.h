@@ -115,7 +115,8 @@ private:
     FileLock lock_;
     HostProf hostProf_;
     std::unordered_map<ArchInfo, std::function<int(std::vector<int64_t>&, std::vector<int64_t>&)>> addressMappingTable_;
-    bool isCapture_ = false;
+    bool isCapture_{false};
+    bool initFlag_{false};
 };
 }
 #else

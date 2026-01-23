@@ -166,7 +166,6 @@ public:
 };
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
-extern "C" int DynTileFwkBackendKernelServerInit(void *targ);
 extern "C" int PyptoKernelCtrlServer(void *targ);
 
 class CostModelLauncher : public DeviceLauncher {
@@ -365,19 +364,18 @@ private:
     void BuildPvKernelArgs(DeviceKernelArgs &kArgs, const std::vector<RawTensorDataPtr> &inputs, const std::vector<RawTensorDataPtr> &outputs)
     {
         MemoryHelper devMem{true};
-        auto buildInouts = [&](auto &tensorList) {
-            std::vector<DevTensorData> geTensors;
+        auto buildInouts = [&](auto &tensorList, DevTensorData* tensorData) {
             for (auto &t : tensorList) {
                 if (t) {
-                    auto addrs = pv_->CopyTensorToDev((uint8_t *)t->data(), t->size());
-                    geTensors.emplace_back(DevAscendTensorDataCreator::Create((uint64_t)addrs, t->GetShape()));
+                    auto addrs = reinterpret_cast<uint64_t>(pv_->CopyTensorToDev((uint8_t *)t->data(), t->size()));
+                    DevAscendTensorDataCreator::Init(tensorData, addrs, t->GetShape().data(), t->GetShape().size());
                 } else {
                     std::vector<int> shape;
-                    geTensors.emplace_back(DevAscendTensorDataCreator::Create(0UL, shape));
+                    DevAscendTensorDataCreator::Init(tensorData, 0UL, shape.data(), shape.size());
                 }
+                tensorData++;
             }
-            auto outs = DevAscendTensorDataCreator::Encode(geTensors);
-            return (int64_t *)pv_->CopyToDev((uint8_t *)outs.data(), outs.size() * sizeof(int64_t));
+            return;
         };
 
         std::vector<uint8_t> &devProgData = function_->GetDyndevAttribute()->devProgBinary;
@@ -388,7 +386,6 @@ private:
         devProg->devArgs.startArgsAddr = (uint64_t)pv_->AllocWorkspaceDev(DEV_ARGS_SIZE);
         devProg->workspaceSize = devProg->memBudget.Total();
         devProg->devArgs.scheCpuNum = 1;
-        devProg->devArgs.isGETensorList = 1;
         AssignMetaAddr(kArgs, devMem, devProg, nullptr);
         for (auto &input: inputs) {
             if (input)
@@ -398,9 +395,19 @@ private:
             if (output)
                 output->SetDevPtr(nullptr);
         }
-
-        kArgs.inputs = buildInouts(inputs);
-        kArgs.outputs = buildInouts(outputs);
+        size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t);
+        std::vector<uint8_t> tensorInfo(tensorSize);
+        auto data = reinterpret_cast<uint64_t*>(tensorInfo.data());
+        *data = inputs.size();
+        data++;
+        *data = outputs.size();
+        data++;
+        auto dataPtr = reinterpret_cast<DevTensorData*>(data);
+        buildInouts(inputs, dataPtr);
+        dataPtr += inputs.size();
+        buildInouts(outputs, dataPtr);
+        kArgs.inputs = (int64_t *)pv_->CopyToDev(tensorInfo.data(), tensorSize);
+        kArgs.outputs = kArgs.inputs + 1;
         kArgs.workspace = (int64_t *)pv_->AllocWorkspaceDev(devProg->workspaceSize);
         kArgs.cfgdata = (int64_t *)pv_->CopyToDev(devProgData.data(), devProgData.size());
         kArgs.aicoreModel = model_.get();
@@ -436,7 +443,8 @@ private:
         std::vector<std::thread> aicpus(maxCpuNum);
         std::atomic<int> idx{0};
         auto *devProg = (DevAscendProgram *)(kArgs->cfgdata);
-        (void)DynTileFwkBackendKernelServerInit(kArgs);
+        size_t shmSize = DEVICE_TASK_CTRL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+        (void)memset_s(reinterpret_cast<void*>(devProg->devArgs.taskQueue), shmSize, 0, shmSize);
         int threadNum = static_cast<int>(devProg->devArgs.nrAicpu);
         threadNum = (devProg->devArgs.enableCtrl == 1) ? threadNum : threadNum + 1;
         for (int i = 0; i < threadNum; i++) {
@@ -469,7 +477,7 @@ private:
         std::vector<DeviceTensorData> inputList;
         std::vector<DeviceTensorData> outputList;
         std::tie(inputList, outputList) = BuildInputOutputFromHost(MemoryHelper(isTest), inputTensors, outputTensors);
-        DeviceInitKernelInOuts(MemoryHelper(isTest), kArgs, inputList, outputList, {}, false);
+        DeviceInitKernelInOuts(MemoryHelper(isTest), kArgs, inputList, outputList, {});
         ALOG_INFO_F("Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata);
     }

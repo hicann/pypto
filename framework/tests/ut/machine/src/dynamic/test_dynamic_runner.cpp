@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 #include "machine/runtime/device_runner.h"
 #include "machine/runtime/machine_agent.h"
+#include "machine/runtime/device_launcher.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -72,6 +73,9 @@ TEST_F(TestDynamicDeviceRunner, TestDynamicRun) {
     args.nrAiv = 2;
     runner.InitDynamicArgs(args);
     [[maybe_unused]]npu::tile_fwk::DeviceKernelArgs taskArgs;
+    std::vector<uint8_t> tensorInfo(sizeof(dynamic::AiCpuArgs));
+    taskArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo.data());
+    taskArgs.outputs = 0;
     runner.args_.nrAic = 2;
     runner.args_.nrAiv = 2;
     int ret = runner.DynamicRun(0, 0, 0, 0, &taskArgs, 2);

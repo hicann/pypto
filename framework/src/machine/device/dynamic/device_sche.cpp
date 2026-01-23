@@ -98,6 +98,16 @@ struct DynMachineManager {
         }
         return ret;
     }
+     void CtrlServerInit(void *targ) {
+        mutex_.lock();
+        if (initCtrl_.load()) {
+            mutex_.unlock();
+            return;
+        }
+        (void)PyptoKernelCtrlServerInit(targ);
+        initCtrl_.store(true);
+        mutex_.unlock();
+    }
 
     void Init(DeviceArgs *args) {
         if (init_.load()) {
@@ -115,6 +125,7 @@ struct DynMachineManager {
       cpumask_ = 0;
       ctrlcpuIdx_ = 0;
       init_.store(false);
+      initCtrl_.store(false);
     }
 
     int LastFinishThreadIdx_{0};
@@ -131,6 +142,8 @@ struct DynMachineManager {
     struct sigaction oriBordAct_;
     std::atomic<bool> reset_{false};
     std::atomic<bool> init_{false};
+    std::atomic<bool> initCtrl_{false};
+    std::mutex mutex_;
     std::atomic<bool> schRunFailed_{false};
 };
 
@@ -194,10 +207,12 @@ void SigAct(int signum, siginfo_t* info, void* act) {
 
 
 extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelServerInit(void *targ) {
-    return PyptoKernelCtrlServerInit(targ);
+    (void)targ;
+    return 0;
 }
 
 extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelServer(void *targ) {
+    g_machine_mgr.CtrlServerInit(targ);
     auto kargs = (DeviceKernelArgs *)targ;
     auto devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
     kargs->taskWastTime = GetCycles();

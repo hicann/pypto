@@ -36,6 +36,13 @@
 
 namespace npu::tile_fwk::dynamic {
 
+struct AiCpuArgs {
+    DeviceKernelArgs kArgs;
+    const char kernelName[32] = {"DynTileFwkKernelServer"};
+    const char soName[32] = {"libaicpu_extend_kernels.so"};
+    const char opName[32] = {""};
+};
+
 int GetCfgBlockdim();
 
 class DeviceLauncherContext {
@@ -144,7 +151,6 @@ public:
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
-        devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
 
         int aiCpuNum = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum()) - 1;
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
@@ -152,7 +158,6 @@ public:
         devProg->devArgs.nrAicpu = config.aicpuNum;
         ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
-        devProg->devArgs.isGETensorList = config.isGETensorList ? 1 : 0;
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {
@@ -201,7 +206,6 @@ public:
         if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {
             kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
         }
-        kArgs.toSubMachineConfig.isGETensorList = config.isGETensorList ? 1 : 0;
     }
 
     static void PrepareHcclContext(const std::vector<uint64_t> &hcclContext, const std::vector<uint8_t> &devProgData) {
@@ -247,32 +251,9 @@ public:
         FillKernelMeta(devMem, kArgs, devProg, devProgData, config, cachedOperator);
     }
 
-    template<typename DeviceMemoryTy>
-    static void DeviceInitTensorLists(
-            DeviceMemoryTy devMem,
-            DeviceKernelArgs &kArgs,
-            const std::vector<DeviceTensorData> &inputList,
-            const std::vector<DeviceTensorData> &outputList) {
-        auto buildInouts = [&](const std::vector<DeviceTensorData> &tensorDataList) {
-            std::vector<DevTensorData> geTensors;
-            for (size_t k = 0; k < tensorDataList.size(); k++) {
-                auto &tensorData = tensorDataList[k];
-                uint64_t addr = 0;
-                if (tensorData.GetAddr() != 0) {
-                    addr = (uint64_t)tensorData.GetAddr();
-                }
-                geTensors.emplace_back(DevAscendTensorDataCreator::Create(addr, tensorData.GetShape()));
-            }
-            std::vector<int64_t> encoded = DevAscendTensorDataCreator::Encode(geTensors);
-            return encoded;
-        };
-        std::vector<int64_t> encodedInputList = buildInouts(inputList);
-        std::vector<int64_t> encodedOutputList = buildInouts(outputList);
-        kArgs.inputs = devMem.CopyToDev(encodedInputList, nullptr);
-        kArgs.outputs = devMem.CopyToDev(encodedOutputList, nullptr);
-        ALOG_INFO_F("Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
-            kArgs.cfgdata);
-        return;
+    static int InitAicpuTaskInfo() {
+        AiCpuArgs initArgs;
+        return memcpy_s(tensorInfo_.data(), sizeof(AiCpuArgs), &initArgs, sizeof(AiCpuArgs));
     }
 
     /*
@@ -288,10 +269,7 @@ public:
     template<typename DeviceMemoryTy>
     static void DeviceInitKernelInOuts(DeviceMemoryTy devMem, DeviceKernelArgs &kArgs,
             const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-            const std::vector<uint8_t>& disableL2List, bool isGETensorList) {
-        if (isGETensorList) {
-            return DeviceInitTensorLists(devMem, kArgs, inputList, outputList);
-        }
+            const std::vector<uint8_t>& disableL2List) {
         size_t l2InfoSize = disableL2List.size();
         auto buildInouts = [&](const std::vector<DeviceTensorData> &tensorDataList, DevTensorData* data,
             size_t &tensorIdx) {
@@ -310,11 +288,17 @@ public:
         };
         size_t inputSize = inputList.size() * sizeof(DevTensorData);
         size_t outputSize = outputList.size() * sizeof(DevTensorData);
-        size_t allSize = inputSize + outputSize + 2 * sizeof(uint64_t);
+        size_t tensorSize = inputSize + outputSize + 2 * sizeof(uint64_t);
+        size_t allSize = tensorSize + sizeof(AiCpuArgs);
         if (unlikely(allSize > tensorInfo_.size())) {
             tensorInfo_.resize(allSize);
         }
-        auto data = reinterpret_cast<uint64_t*>(tensorInfo_.data());
+        static auto ret = InitAicpuTaskInfo();
+        if (unlikely(ret != 0)) {
+            ALOG_ERROR_F("Copy aicpu task info failed!");
+            return;
+        }
+        auto data = reinterpret_cast<uint64_t*>(tensorInfo_.data() + sizeof(AiCpuArgs));
         *data = inputList.size();
         data++;
         *data = outputList.size();
@@ -324,10 +308,15 @@ public:
         buildInouts(inputList, dataPtr, tensorIdx);
         dataPtr += inputList.size();
         buildInouts(outputList, dataPtr, tensorIdx);
-        kArgs.inputs = reinterpret_cast<int64_t*>(devMem.CopyToDev(tensorInfo_.data(), allSize, nullptr));
-        kArgs.outputs = kArgs.inputs + 1;
-        ALOG_INFO_F("Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
-            kArgs.cfgdata);
+        if (devMem.IsDevice()) {
+            kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data());
+            kArgs.outputs = (int64_t *)allSize;
+        } else {;
+            kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data() + sizeof(AiCpuArgs));
+            kArgs.outputs = kArgs.inputs + 1;
+        }
+        ALOG_DEBUG_F("Inputs %p outputs %p workspace %p cfgdata %p tensorSize %zu", kArgs.inputs, kArgs.outputs, kArgs.workspace,
+            kArgs.cfgdata, tensorSize);
     }
 
     template<typename DeviceMemoryTy>
