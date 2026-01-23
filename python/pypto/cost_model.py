@@ -45,6 +45,11 @@ def _device_to_host_tensor_datas(dev_tensors):
     return host_tensor_datas
 
 
+def _host_to_device_tensor_datas(dev_tensors, host_tensors):
+    for i, dev_tensor_data in enumerate(_pto_to_tensor_data(dev_tensors)):
+        pypto_impl.CopyToDev(dev_tensor_data, host_tensors[i])
+
+
 def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: List[pypto.Tensor]):
     isDevice = False
     for t in inputs:
@@ -60,3 +65,7 @@ def _cost_model_run_once_data_from_host(inputs: List[pypto.Tensor], outputs: Lis
         output_datas = _pto_to_tensor_data(outputs)
 
     pypto_impl.CostModelRunOnceDataFromHost(input_datas, output_datas)
+
+    if isDevice:
+        _host_to_device_tensor_datas(inputs, input_datas);
+        _host_to_device_tensor_datas(outputs, output_datas);

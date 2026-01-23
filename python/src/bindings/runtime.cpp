@@ -30,6 +30,10 @@ void CopyToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor)
     CopyDevToHost(devTensor, hostTensor);
 }
 
+void CopyToDev(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor) {
+    CopyHostToDev(devTensor, hostTensor);
+}
+
 void SetVerifyData(const std::vector<DeviceTensorData> &inputs,
                    const std::vector<DeviceTensorData> &outputs,
                    const std::vector<DeviceTensorData> &goldens) {
@@ -229,6 +233,7 @@ void BindRuntime(py::module &m) {
     m.def("SetVerifyData", &SetVerifyData);
     m.def("BuildCache", BuildCache);
     m.def("CopyToHost", &CopyToHost);
+    m.def("CopyToDev", &CopyToDev);
 
     py::class_<DeviceTensorData>(m, "DeviceTensorData")
         .def(py::init<DataType, uintptr_t, const std::vector<int64_t> &>(), py::arg("dtype"), py::arg("addr"),

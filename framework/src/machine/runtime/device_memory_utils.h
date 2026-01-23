@@ -50,6 +50,10 @@ struct DeviceMemoryUtils {
         return devPtr;
     }
 
+    void CopyToDev(uint8_t *devPtr, uint8_t *data, uint64_t size) {
+        rtMemcpy(devPtr, size, data, size, RT_MEMCPY_HOST_TO_DEVICE);
+    }
+
     template <typename T>
     T *CopyToDev(std::vector<T> data, uint8_t **cachedDevAddrHolder) {
         return (T *)CopyToDev((uint8_t *)data.data(), data.size() * sizeof(T), cachedDevAddrHolder);

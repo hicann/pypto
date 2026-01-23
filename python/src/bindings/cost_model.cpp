@@ -60,6 +60,11 @@ static void CopyTensorFromModel(const std::vector<DeviceTensorData> &inputs, con
     for (size_t i = 0; i < inputs.size(); i++) {
         StringUtils::DataCopy((uint8_t *)inputs[i].GetAddr(), inputs[i].GetDataSize(), rawInputTensors[i]->data(), rawInputTensors[i]->GetDataSize());
     }
+
+    auto &rawOutputTensors = ProgramData::GetInstance().GetOutputDataList();
+    for (size_t i = 0; i < outputs.size(); i++) {
+        StringUtils::DataCopy((uint8_t *)outputs[i].GetAddr(), outputs[i].GetDataSize(), rawOutputTensors[i]->data(), rawOutputTensors[i]->GetDataSize());
+    }
 }
 
 std::string CostModelRunOnceDataFromHost(

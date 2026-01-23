@@ -332,4 +332,12 @@ void CopyDevToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTens
 #endif
 }
 
+void CopyHostToDev(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor) {
+#ifdef BUILD_WITH_CANN
+    DeviceMemoryUtils().CopyToDev((uint8_t *)devTensor.GetAddr(), (uint8_t *)hostTensor.GetAddr(), devTensor.GetDataSize());
+#else
+    (void)devTensor;
+    (void)hostTensor;
+#endif
+}
 }
