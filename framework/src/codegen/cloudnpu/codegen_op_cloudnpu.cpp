@@ -422,65 +422,6 @@ std::vector<std::string> CodeGenOpCloudNPU::GenSymbolicArgument(const std::vecto
     return argList;
 }
 
-bool CodeGenOpCloudNPU::CombineAxis(
-    std::vector<std::reference_wrapper<std::vector<int64_t>>> &shapes, bool secondLastAxis) const {
-    size_t num;
-    {
-        auto iter = shapes.begin();
-        num = iter->get().size();
-        for (; iter != shapes.end(); ++iter) {
-            ASSERT(num == iter->get().size()) << "shapes have to be the same!";
-        }
-    }
-
-    if (secondLastAxis) {
-        num--;
-    }
-
-    int64_t i = num - 1;
-    for (; i >= 0; i--) {
-        bool match = true;
-        auto iter = shapes.begin();
-        int64_t s = iter->get().at(i);
-        for (; iter != shapes.end(); ++iter) {
-            if (s != iter->get().at(i)) {
-                match = false;
-                break;
-            }
-        }
-        if (!match) {
-            if (i >= static_cast<int64_t>(num - NUM2)) {
-                return false;
-            }
-            break;
-        }
-    }
-
-    i = std::max(i, static_cast<int64_t>(0));
-    size_t numVec = shapes.size();
-    std::vector<int> acc(numVec, 1);
-    for (size_t j = i; j < num - 1; j++) {
-        for (size_t k = 0; k < numVec; k++) {
-            // 核心修改：shapes[k].get() 替代 shapes[k]->
-            acc[k] *= shapes[k].get().at(j);
-            shapes[k].get().at(j) = 1; // 直接修改原始vector
-        }
-    }
-    for (size_t k = 0; k < numVec; k++) {
-        shapes[k].get().at(num - 1) = acc[k] * shapes[k].get().at(num - 1);
-    }
-
-    for (size_t k = 0; k < numVec; k++) {
-        auto &vec = shapes[k].get();
-        // remove redundant ones so better chance for repeat
-        vec.erase(vec.begin() + i, vec.begin() + (num - 1));
-        // pad ones to preserve shape length
-        vec.insert(vec.begin(), (num - 1) - i, 1);
-    }
-
-    return true;
-}
-
 std::vector<std::string> CodeGenOpCloudNPU::BuildStride(const std::vector<int64_t> &input) {
     if (input.empty()) {
         return {};

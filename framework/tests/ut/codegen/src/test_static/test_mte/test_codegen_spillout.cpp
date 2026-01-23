@@ -91,7 +91,7 @@ TEST_F(TestCodegenSpillOut, UBSpillOut) {
 
     std::string res = cop.GenOpCode();
     std::string expect =
-        R"!!!(TileOp::UBCopyOut<float, 1, 1, 1, 1, 4096, /*dst stride*/ 1, 1, 1, 4096,/*src stride*/ 1, 1, 1, 4096 >((__gm__ float*)GMStackBase, (__ubuf__ float*)UB_S0_E0);
+        R"!!!(TileOp::UBCopyOut<float, 1, 1, 1, 64, 64, /*dst stride*/ 1, 1, 64, 64,/*src stride*/ 1, 1, 64, 64 >((__gm__ float*)GMStackBase, (__ubuf__ float*)UB_S0_E0);
 )!!!";
 
     EXPECT_EQ(res, expect);

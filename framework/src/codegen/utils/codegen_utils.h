@@ -95,7 +95,8 @@ std::string GetTypeForB16B32(const DataType &dtype);
 
 inline std::string GetPipeId(PipeType queue) {
     auto res = PIPE_ID.find(queue);
-    return res == PIPE_ID.end() ? "" : res->second;
+    ASSERT(res != PIPE_ID.end()) << "can not find pipe id: " << ToUnderlying(queue);
+    return res->second;
 }
 
 inline std::string GetTileOpName(Opcode opCode) {

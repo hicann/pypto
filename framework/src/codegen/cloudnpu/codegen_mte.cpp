@@ -718,8 +718,8 @@ std::string CodeGenOpCloudNPU::GenMemCopyVar(bool isCopyLocalToGM, unsigned uf) 
 
 std::string CodeGenOpCloudNPU::PrintTensorForCopyBetweenGM(
     unsigned operandIdx, unsigned gmIdx, const std::string &gmVarName) const {
-    std::string tensor = operandIdx == gmIdx ? sm->QueryTileTensorByBufVarName(gmVarName) :
-                                              QueryTileTensorNameByIdx(operandIdx);
+    std::string tensor =
+        operandIdx == gmIdx ? sm->QueryTileTensorByBufVarName(gmVarName) : QueryTileTensorNameByIdx(operandIdx);
     return tensor;
 }
 
@@ -732,7 +732,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
     int64_t reluMode = 0;
- 	GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
+    GetAttr(OP_ATTR_PREFIX + "relu_type", reluMode);
     std::string src1Tensor = srcTensor;
     if (reluMode) {
         src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
@@ -1112,13 +1112,6 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBStatic(const PrintMemCopyWithUB
     std::vector<int64_t> os = NormalizeShape(originShape[localIdx], SHAPE_DIM5);
     std::vector<int64_t> dstStride = NormalizeShape(rawShape[ID0], SHAPE_DIM5);
     std::vector<int64_t> srcStride = NormalizeShape(rawShape[ID1], SHAPE_DIM5);
-
-    std::vector<std::reference_wrapper<std::vector<int64_t>>> container = {
-        std::ref(os), std::ref(dstStride), std::ref(srcStride)};
-
-    if (!CombineAxis(container)) {
-        CombineAxis(container, true);
-    }
 
     // Support int64
     if (dataTypeExpr[localIdx] == "int64_t") {
@@ -1563,7 +1556,7 @@ std::string CodeGenOpCloudNPU::PrintGatherLayout() const {
     auto indicesOffsetSymbol = GenGetParamMacroPacked(ID2, indicesDim, PREFIX_STR_OFFSET);
     std::string coordCpparamOffset = WrapParamByParentheses(paramOffsetSymbol);
     std::string coordCpindicesOffset = WrapParamByParentheses(indicesOffsetSymbol);
-    std::string coord4Param =  PrintCoord(paramDim, coordCpparamOffset);
+    std::string coord4Param = PrintCoord(paramDim, coordCpparamOffset);
     std::string coord4Indices = PrintCoord(indicesDim, coordCpindicesOffset);
 
     std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));

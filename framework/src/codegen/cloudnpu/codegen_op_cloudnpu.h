@@ -210,9 +210,6 @@ private:
 
     std::string GenGmParamVar(unsigned gmParamIdx) const;
 
-    bool CombineAxis(
-        std::vector<std::reference_wrapper<std::vector<int64_t>>> &shapes, bool secondLastAxis = false) const;
-
     std::vector<std::string> GenGetParamMacroPacked(unsigned gmParamIdx, int dim, const std::string &prefix) const;
 
     std::vector<std::string> GenParamIdxExprByIndex(unsigned gmParamIdx, int dim, const std::string &prefix) const;
