@@ -518,6 +518,14 @@ def gen_cast_op_golden(case_name: str, output: Path, case_index: int = None) -> 
             x = torch.from_numpy(inputs[0])
             if dtype_out == torch.bfloat16:
                 x = x.to(torch.float32).numpy().astype(bfloat16)
+            elif dst_dtype == "hf8":
+                x = inputs[0].astype("hifloat8")
+            elif dst_dtype == "fp8e4m3":
+                x = inputs[0].astype("float8_e4m3fn")
+            elif dst_dtype == "fp8e5m2":
+                x = inputs[0].astype("float8_e5m2")
+            elif dst_dtype == "fp8e8m0":
+                x = inputs[0].astype("float8_e8m0")
             else:
                 x = x.to(dtype_out).numpy()
 

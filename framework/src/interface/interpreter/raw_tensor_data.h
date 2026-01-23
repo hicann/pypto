@@ -72,6 +72,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
             case DT_BF16: result = DATA_SIZE_SHORT; break;
             case DT_HF4: result = DATA_SIZE_HALF; break;
             case DT_HF8: result = DATA_SIZE_BYTE; break;
+            case DT_FP8E4M3: result = DATA_SIZE_BYTE; break;
+            case DT_FP8E5M2: result = DATA_SIZE_BYTE; break;
+            case DT_FP8E8M0: result = DATA_SIZE_BYTE; break;
             case DT_UINT8: result = DATA_SIZE_BYTE; break;
             case DT_UINT16: result = DATA_SIZE_SHORT; break;
             case DT_UINT32: result = DATA_SIZE_INT; break;
