@@ -12,6 +12,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 import pypto
+from conftest import duration_estimate
 
 
 SHAPE_DIM_0 = 0
@@ -684,6 +685,7 @@ def build_args(cfg: MlaBuildConfig):
     return MlaArgs(params=params, tensors=tensors, quant=MlaQuantInputs())
 
 
+@duration_estimate(12)
 def test_dynamic_mla_prolog():
     args = build_args(MlaBuildConfig())
     setup_codegen_passes()

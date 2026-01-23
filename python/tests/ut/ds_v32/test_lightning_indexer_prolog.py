@@ -15,6 +15,8 @@ from typing import List, Set
 import logging
 import pytest
 import pypto
+from conftest import duration_estimate
+
 
 SHAPE_DIM_2 = 2
 SHAPE_DIM_3 = 3
@@ -716,6 +718,7 @@ def build_lightning_indexer_prolog_args(
     return args, meta
 
 
+@duration_estimate(16)
 def test_lightning_indexer_prolog():
     logging.basicConfig(level=logging.INFO)
     setup_lightning_indexer_prolog_config()

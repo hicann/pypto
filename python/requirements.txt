@@ -3,14 +3,16 @@ setuptools>=77.0.3
 pybind11>=2.13.6
 
 # build_ci.py
-pip
-build
+pip>=22.1
+build>=1.0.3
 packaging
 
 # UTest/STest 依赖 pytest 相关包
 pytest
 pytest-forked
 pytest-xdist
+setproctitle
+psutil
 
 # pypto 依赖
 sympy

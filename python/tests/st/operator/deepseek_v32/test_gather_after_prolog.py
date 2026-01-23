@@ -17,6 +17,7 @@ import torch
 import pytest
 
 import pypto
+from conftest import duration_estimate
 
 
 def gather_after_prolog_graph(
@@ -183,6 +184,7 @@ def compare(t: torch.Tensor, t_ref: torch.Tensor):
     torch.testing.assert_close(t, t_ref, rtol=0.0, atol=0.0)
 
 
+@duration_estimate(33)
 def test_gather():
     topk = 2048
     block_size = 128

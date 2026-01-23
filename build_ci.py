@@ -1081,6 +1081,9 @@ class BuildCtrl(CMakeParam):
         # cmd 拼接
         cmd = f"{sys.executable} -m pytest {filter_str} -v --durations=0 -s --capture=no"
         cmd += f" --rootdir={self.src_root} {ext} --forked"
+        if self.check_pip_dependencies(deps={"pytest-xdist": ">=3.8.0"}, raise_err=False, log_err=False):
+            cmd += " --dist=loadscope"
+            cmd += " --no-loadscope-reorder"
         # cmd 执行
         origin_env = os.environ.copy()
         update_env = {}

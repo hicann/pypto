@@ -15,6 +15,7 @@ from typing import List
 import logging
 import pytest
 import pypto
+from conftest import duration_estimate
 
 
 SHAPE_DIM_0 = 0
@@ -476,6 +477,7 @@ def build_selected_args(cfg: SABuildConfig = SABuildConfig()):
     return args, meta
 
 
+@duration_estimate(21)
 def test_selected_attention_with_builder():
     logging.basicConfig(level=logging.INFO)
     args, meta = build_selected_args()
