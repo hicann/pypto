@@ -298,6 +298,22 @@ static inline std::string Delim(bool cond, const std::string &delim) {
     return cond ? delim : "";
 }
 
+static inline std::string DumpByte(uint8_t byte) {
+    char buf[0x10];
+    (void)sprintf_s(buf, sizeof(buf), "0x%02x", byte);
+    return buf;
+}
+
+static inline std::string DumpShape(const DevShape &shape) {
+    std::ostringstream oss;
+    oss << "<";
+    for (int k = 0; k < shape.dimSize; k++) {
+        oss << Delim(k != 0, ",") << shape.dim[k];
+    }
+    oss << ">";
+    return oss.str();
+}
+
 struct AddressDescriptor {
     union {
         struct {

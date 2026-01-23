@@ -82,6 +82,7 @@ TEST_F(TestDevEncode, test_dev_encode_program) {
     devProg->controlFlowCache.isActivated = true;
 
     devProg->Dump(0, true);
+    devProg->DumpFile("./dum_dev_program.txt");
     devProg->ResetRerun();
     devProg->RuntimeVerify(0, 0);
     EXPECT_NE(devProg->GetInputTensorSlotIndexList().empty(), true);
@@ -107,5 +108,18 @@ TEST_F(TestDevEncode, test_dev_encode_program) {
         devFunc->LookupConnectionSlotIndexFrom(devFunc1);
     }
 
+    DevAscendFunctionDuppedData *devFuncDuppedData = devFunc->GetDuppedData();
+    ASSERT_NE(devFuncDuppedData, nullptr);
+    devFuncDuppedData->source_ = devFunc;
+    (void)devFuncDuppedData->Dump();
+
     devProg->ResetFromLaunch();
+}
+
+TEST_F(TestDevEncode, test_dev_func_dupped) {
+    DevAscendRawTensor rawTensor;
+    std::vector<std::string> lines;
+    std::stringstream oss;
+    DevAscendFunctionDupped funcDuppped;
+    funcDuppped.DumpRawShape(&rawTensor, 0, lines, oss);
 }

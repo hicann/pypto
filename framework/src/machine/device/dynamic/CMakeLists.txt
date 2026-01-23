@@ -36,7 +36,7 @@ file(GLOB CTRL_FILES RELATIVE ${CMAKE_CURRENT_LIST_DIR}
 )
 
 add_library(pypto_ctrl_server STATIC)
-target_sources(pypto_ctrl_server PRIVATE ${CTRL_FILES})
+target_sources(pypto_ctrl_server PRIVATE ${CTRL_FILES} ${_Device_Utils_Srcs})
 target_compile_options(pypto_ctrl_server
         PRIVATE
             -Wall

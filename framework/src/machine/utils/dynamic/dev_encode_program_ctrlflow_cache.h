@@ -243,22 +243,22 @@ struct DevProgramControlFlowCache {
     void MatchInputOutputDump(DevStartArgsBase *startArgs) const {
         DEV_VERBOSE_DEBUG("matchio cache input size: %d", (int)inputTensorDataList.size());
         for (size_t k = 0; k < inputTensorDataList.size(); k++) {
-            DEV_VERBOSE_DEBUG("matchio cache input %d: %s", (int)k, DevAscendFunction::DumpShape(inputTensorDataList[k].shape).c_str());
+            DEV_VERBOSE_DEBUG("matchio cache input %d: %s", (int)k, DumpShape(inputTensorDataList[k].shape).c_str());
         }
 
         DEV_VERBOSE_DEBUG("matchio cache output size: %d", (int)outputTensorDataList.size());
         for (size_t k = 0; k < outputTensorDataList.size(); k++) {
-            DEV_VERBOSE_DEBUG("matchio cache output %d: %s", (int)k, DevAscendFunction::DumpShape(outputTensorDataList[k].shape).c_str());
+            DEV_VERBOSE_DEBUG("matchio cache output %d: %s", (int)k, DumpShape(outputTensorDataList[k].shape).c_str());
         }
 
         DEV_VERBOSE_DEBUG("matchio real input size: %d", (int)startArgs->inputTensorSize);
         for (size_t k = 0; k < startArgs->inputTensorSize; k++) {
-            DEV_VERBOSE_DEBUG("matchio real input %d: %s", (int)k, DevAscendFunction::DumpShape(startArgs->GetInputTensor(k).shape).c_str());
+            DEV_VERBOSE_DEBUG("matchio real input %d: %s", (int)k, DumpShape(startArgs->GetInputTensor(k).shape).c_str());
         }
 
         DEV_VERBOSE_DEBUG("matchio real output size: %d", (int)startArgs->outputTensorSize);
         for (size_t k = 0; k < startArgs->outputTensorSize; k++) {
-            DEV_VERBOSE_DEBUG("matchio real output %d: %s", (int)k, DevAscendFunction::DumpShape(startArgs->GetOutputTensor(k).shape).c_str());
+            DEV_VERBOSE_DEBUG("matchio real output %d: %s", (int)k, DumpShape(startArgs->GetOutputTensor(k).shape).c_str());
         }
     }
 

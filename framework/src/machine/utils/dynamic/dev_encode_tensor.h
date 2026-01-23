@@ -63,6 +63,16 @@ struct DevAscendStride {
     }
 };
 
+static inline std::string DumpStride(const DevAscendStride &stride) {
+    std::ostringstream oss;
+    oss << "<";
+    for (int k = 0; k < stride.dimSize; k++) {
+        oss << Delim(k != 0, ",") << stride.dimStride[k];
+    }
+    oss << ">";
+    return oss.str();
+}
+
 struct DevCellMatchTableDesc {
     DevShape cellShape;
     DevAscendStride stride;
@@ -84,6 +94,10 @@ struct DevCellMatchTableDesc {
         stride.SetShape(shape);
     }
 };
+
+static inline std::string DumpCellMatchTableDesc(const DevCellMatchTableDesc &desc) {
+    return DumpShape(desc.cellShape) + " x " + DumpStride(desc.stride);
+}
 
 struct DevSymShape {
     int dimSize{0};
