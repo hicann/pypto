@@ -103,7 +103,7 @@ class TestCaseLogAnalyzer:
         test_result = TestCaseResult(self.case_index, self.case_name, self.case_op)
         if not os.path.exists(self._log_file):
             return test_result
-        with open(self._log_file, "r", encoding="utf-8") as file:
+        with open(self._log_file, "r", encoding="utf-8", errors="replace") as file:
             for line in file:
                 line = line.strip()
                 if "[  PASSED  ] 1 test" in line or "1 passed" in line:

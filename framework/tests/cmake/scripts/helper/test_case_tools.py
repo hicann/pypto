@@ -9,6 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+import math
 import pkgutil
 
 import numpy as np
@@ -17,10 +18,18 @@ import torch
 
 def is_number(input_str: str):
     try:
-        float(input_str)
-        return True
+        num = float(input_str)
+        # not support parse inf nan in c++ json parser
+        return not math.isinf(num) and not math.isnan(num)
     except ValueError:
         return False
+
+
+def parse_number(input_str: str):
+    try:
+        return int(input_str)
+    except ValueError:
+        return float(input_str)
 
 
 def parse_list_str(input_str: str):
@@ -43,10 +52,8 @@ def parse_list_str(input_str: str):
         for sub_str in input_str.split(","):
             if not is_number(sub_str):
                 ret_list.append(sub_str)
-            elif "." in sub_str or "e" in sub_str or "E" in sub_str:
-                ret_list.append(float(sub_str))
             else:
-                ret_list.append(int(sub_str))
+                ret_list.append(parse_number(sub_str))
     return ret_list
 
 
