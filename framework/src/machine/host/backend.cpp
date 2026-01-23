@@ -71,21 +71,49 @@ static void InitSocVersion(std::string &socVersion) {
     ALOG_WARN_F("InitSocVersion requires BUILD_WITH_CANN.");
 }
 
+extern "C" std::string GetPlatformFile(const std::string &socVersion) {
+    #ifdef PROCESSOR_SUBPATH
+        const char *configSubpath = PROCESSOR_SUBPATH;
+    #else
+        const char *configSubpath = "";
+    #endif
+    const char *configRelativePath = "data/platform_config/";
+
+    ALOG_INFO_F("Get Soc version [%s].", socVersion.c_str());
+    if (socVersion.empty()) {
+        return "";
+    }
+    // get platform file path
+    const char *envPath = std::getenv("ASCEND_HOME_PATH");
+    if (envPath == nullptr) {
+        ALOG_WARN_F("Env[ASCEND_HOME_PATH] is not existed or empty.");
+        return "";
+    }
+    ALOG_INFO_F("Get Env[ASCEND_HOME_PATH] is [%s].", std::string(envPath).c_str());
+    std::string platformConfDir = std::string(envPath) + "/" + std::string(configSubpath) + "/" + configRelativePath;
+    if (RealPath(platformConfDir).empty()) {
+        platformConfDir = std::string(envPath) + "/" + configRelativePath;
+    }
+    ALOG_INFO_F("Get platformConfDir [%s].", platformConfDir.c_str());
+    std::string platformFile = platformConfDir + socVersion + ".ini";
+    ALOG_INFO_F("Get platformFile [%s].", platformFile.c_str());
+    if (RealPath(platformFile).empty()) {
+        return "";
+    }
+    return platformFile;
+}
+
 extern "C" std::string GetPlatformInfo() {
     std::string socVersion;
+    ALOG_DEBUG_F("Start InitSocVersion.");
     InitSocVersion(socVersion);
 #ifdef BUILD_WITH_CANN
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM) {
         ALOG_WARN("GetPlatformInfo: run in SIM mode, platform info not available.");
         return "";
     }
-
-    if (!PlatformManager::Instance().Initialize(socVersion)) {
-        ALOG_WARN_F("Failed to get platform info for SoC version %s.", socVersion.c_str());
-        return "";
-    }
-
-    return PlatformManager::Instance().GetFilePath();
+    ALOG_DEBUG_F("GetPlatformFile by %s.", socVersion.c_str());
+    return GetPlatformFile(socVersion);
 #else
     ALOG_WARN_F("GetPlatformInfo requires BUILD_WITH_CANN.");
     return "";

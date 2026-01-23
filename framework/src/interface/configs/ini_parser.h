@@ -36,7 +36,7 @@ class INIParser {
     bool FilterDirections(const std::string& value, std::string &part);
     bool FilterDataPath(const std::string& part, std::string &from, std::string &to);
 
-    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> data_;
+    std::map<std::string, std::map<std::string, std::string>> data_;
 };
 } // namespace tile_fwk
 } // namepsace npu 
