@@ -2268,9 +2268,23 @@ static TensorWorkspaceResult CalcTensorWorkspace(Function *func, DevAscendProgra
     return res;
 }
 
-static uint64_t CalcGeneralMetadataWorkspace(DevAscendProgram *devProg) {
+static uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram *devProg) {
+    uint64_t generalMetadataSlotSize = 0;
+    uint64_t itemPoolMemSize = DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(devProg);
+    uint64_t vectorMemSize = DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(devProg);
+    uint64_t slotAllocatorMemSize = DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(devProg);
+    ALOG_DEBUG_F("itemPoolMemSize is: %lu, vectorMemSize is: %lu, slotAllocatorMemSize is %lu,", 
+                  itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
+    static constexpr uint64_t AICPU_SLOT_STATIC_MEMSIZE = 2 * MEBI;
+    generalMetadataSlotSize = itemPoolMemSize + vectorMemSize + 
+                              slotAllocatorMemSize + AICPU_SLOT_STATIC_MEMSIZE;
+    ALOG_DEBUG_F("workspace of generalMetadataSlotSize is %lu, ", generalMetadataSlotSize);
+    return generalMetadataSlotSize;
+}
+
+static uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram *devProg) {
     DeviceWorkspaceAllocator workspace(devProg);
-    uint64_t generalMetadataSize = 0;
+    uint64_t generalMetadataSlabSize = 0;
     uint32_t slabSize = workspace.CalcSlabMemObjmaxSize() * ALLOC_NUM_ONE_SLAB;
     uint32_t slabCapacity[ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)];
     size_t objUsedNum [ToUnderlying(WsAicpuSlabMemType::COHERENT_SLAB_MEM_TYPE_BUTT)] {
@@ -2295,11 +2309,11 @@ static uint64_t CalcGeneralMetadataWorkspace(DevAscendProgram *devProg) {
         if(i == ToUnderlying(WsAicpuSlabMemType::DUPPED_FUNC_DATA) ||
          i == ToUnderlying(WsAicpuSlabMemType::READY_QUE)) requiredSlabNum++;
         ALOG_DEBUG_F("requiredSlabNum[%d] is %u", i, requiredSlabNum);
-        generalMetadataSize += static_cast<uint64_t>(requiredSlabNum) * slabSize;
+        generalMetadataSlabSize += static_cast<uint64_t>(requiredSlabNum) * slabSize;
     }
-    ALOG_DEBUG_F("generalMetadataSize is %u", generalMetadataSize);
-    generalMetadataSize = (generalMetadataSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN : generalMetadataSize;
-    return generalMetadataSize;
+    ALOG_DEBUG_F("generalMetadataSlabSize is %u", generalMetadataSlabSize);
+    generalMetadataSlabSize = (generalMetadataSlabSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN : generalMetadataSlabSize;
+    return generalMetadataSlabSize;
 }
 
 static uint64_t CalcStitchWorkspace(DevAscendProgram &devProg) {
@@ -2344,7 +2358,8 @@ void EncodeDevAscendProgram(Function *func, uint64_t &offset, DevAscendProgram *
         base->stitchFunctionNumInitial = func->paramConfigs_.stitchFunctionNumInitial_;
         base->stitchFunctionNumStep = func->paramConfigs_.stitchFunctionNumStep_;
         base->stitchFunctionsize = config::GetRuntimeOption<uint32_t>(STITCH_FUNCTION_SIZE);
-        base->memBudget.metadata.general = CalcGeneralMetadataWorkspace(base);
+        base->memBudget.metadata.general = CalcGeneralMetadataSlotWorkspace(base);
+        base->memBudget.metadata.general += CalcGeneralMetadataSlabWorkspace(base);
         base->memBudget.metadata.stitchPool = CalcStitchWorkspace(*base);
         base->memBudget.debug.dumpTensor = DumpTensorWorkspace();
 
