@@ -47,8 +47,8 @@ DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
     FillIntVecWithDummyInHead<std::string>(pack.gmShapeExpr, shapeDim - dim, "1");
     ALOG_INFO_F("dynamic gmShape param: %s", IntVecToStr(pack.gmShapeExpr).c_str());
 
-    if (offsetGmSymbolic[dynShapeIdx][ID0].IsValid()) {
-        pack.gmOffsetExpr = GenSymbolicArgument(offsetGmSymbolic[dynShapeIdx]);
+    if (offsetFromAttr[dynShapeIdx][ID0].IsValid()) {
+        pack.gmOffsetExpr = GenSymbolicArgument(offsetFromAttr[dynShapeIdx]);
     } else {
         pack.gmOffsetExpr = GenGetParamMacroPacked(dynShapeIdx, dim, PREFIX_STR_OFFSET);
     }
@@ -177,7 +177,7 @@ std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const {
 
     unsigned srcOffset0 = 0;
     unsigned srcOffset1 = 0;
-    auto dynoffset = offsetGmSymbolic[ToUnderlying(MISOIdx::SRC0_IDX)];
+    auto dynoffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
     if (!dynoffset.empty()) {
         ASSERT(dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToL0 only support 2-dim!";
         srcOffset0 = dynoffset[ID0];
@@ -210,7 +210,7 @@ std::string CodeGenOpCloudNPU::GenMemL1ToL0() const {
 
     unsigned srcOffset0 = 0;
     unsigned srcOffset1 = 0;
-    auto dynoffset = offsetGmSymbolic[ID1];
+    auto dynoffset = offsetFromAttr[ID1];
     if (!dynoffset.empty()) {
         ASSERT(dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToL0 only support 2-dim!";
         srcOffset0 = dynoffset[ID0];
@@ -266,7 +266,7 @@ std::string CodeGenOpCloudNPU::GenMemL1ToBt() const {
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
     auto dynValidShape = dynamicValidShape[ID0];
-    auto dynoffset = offsetGmSymbolic[ID1];
+    auto dynoffset = offsetFromAttr[ID1];
     // only support 2-dim shape
     ASSERT(dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToBt only support 2-dim!";
 
@@ -406,7 +406,7 @@ std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const {
     std::ostringstream oss;
     oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -441,14 +441,14 @@ std::string CodeGenOpCloudNPU::GenMemL0CToL1() const {
     for (const auto &dstShape : dstValidShape) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstShape));
     }
-    auto l1Offset = offsetGmSymbolic[ID0];
+    auto l1Offset = offsetFromAttr[ID0];
     for (auto dstOffset : l1Offset) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstOffset));
     }
     for (auto srcShape : srcValidShape) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(srcShape));
     }
-    auto l0COffset = offsetGmSymbolic[ID1];
+    auto l0COffset = offsetFromAttr[ID1];
     for (auto srcOffset : l0COffset) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(srcOffset));
     }
@@ -475,7 +475,7 @@ std::string CodeGenOpCloudNPU::GenUBToL1TileTensor() const {
     std::ostringstream oss;
     oss << tileOpName;
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -491,7 +491,7 @@ std::string CodeGenOpCloudNPU::GenUBToUBND2NZTileTensor() const {
     std::ostringstream oss;
     oss << tileOpName;
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -761,7 +761,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::ostringstream oss;
     oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -783,7 +783,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL
     const std::vector<std::string> &addrExpr = param.addrExpr;
     const std::vector<int64_t> &gmShape = param.gmShape;
     const std::vector<int64_t> &tileShapeForMT = param.tileShapeForMT;
-    const std::vector<SymbolicScalar> &outputOffset = offsetGmSymbolic[gmIdx];
+    const std::vector<SymbolicScalar> &outputOffset = offsetFromAttr[gmIdx];
     const std::vector<std::string> &dataTypeExpr = param.dataTypeExpr;
 
     int oriTileShape0 = std::min(originShape[localIdx][ID0], tileShapeForMT[ID0]);
@@ -931,7 +931,7 @@ std::string CodeGenOpCloudNPU::PrintL1CopyInTileTensor(const PrintMemCopyWithL1P
     std::ostringstream oss;
     oss << tileOpName << "<" << cpModeStr << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -984,7 +984,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1
             addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(), dataTypeExpr[ID1].c_str(), addrBuffer, oriAddrBuffer, uf);
         ASSERT(printRet >= 0) << "sprintf_s failed in genMemCopyVar, return value:" << printRet;
     } else {
-        std::vector<SymbolicScalar> gmOffset = this->offsetGmSymbolic[gmIdx];
+        std::vector<SymbolicScalar> gmOffset = this->offsetFromAttr[gmIdx];
         printRet = sprintf_s(addrBuffer, BUFFER_SIZE_1024, "%s", addrExpr[ID1].c_str());
         ASSERT(printRet >= 0) << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
         printRet =
@@ -1281,8 +1281,8 @@ std::vector<std::string> CodeGenOpCloudNPU::GetGmOffsetForTileTensor(const Print
         return std::vector<std::string>(dim, "0");
     }
 
-    if (offsetGmSymbolic[gmIdx][ID0].IsValid()) {
-        return GenSymbolicArgument(offsetGmSymbolic[gmIdx]);
+    if (offsetFromAttr[gmIdx][ID0].IsValid()) {
+        return GenSymbolicArgument(offsetFromAttr[gmIdx]);
     }
 
     return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
@@ -1305,7 +1305,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWi
     std::ostringstream oss;
     oss << tileOpName;
     oss << WrapParamByParentheses(tileOpParamList);
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -1318,7 +1318,7 @@ std::string CodeGenOpCloudNPU::GenMemL1ToFB() const {
 
     std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID1]);
     auto dynValidShape = dynamicValidShape[ID0];
-    auto dynoffset = offsetGmSymbolic[ID1];
+    auto dynoffset = offsetFromAttr[ID1];
     ASSERT(dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToFB only support 2-dim!";
 
     std::ostringstream os;
@@ -1341,7 +1341,7 @@ std::string CodeGenOpCloudNPU::GenMemL1ToFB() const {
 
 std::string CodeGenOpCloudNPU::GenGMAddrExprWithOffset(const std::string &addrExpr, unsigned gmIdx) const {
     // gm offset of spilling workspace is calculated by pass, the value is saved in dim 0.
-    SymbolicScalar gmOffset = this->offsetGmSymbolic[gmIdx][ID0];
+    SymbolicScalar gmOffset = this->offsetFromAttr[gmIdx][ID0];
     bool isZero = gmOffset.IsValid() && gmOffset.ConcreteValid() && gmOffset.Concrete() == 0;
 
     std::ostringstream oss;
@@ -1577,7 +1577,7 @@ std::string CodeGenOpCloudNPU::PrintGatherLayout() const {
 
     std::vector<std::string> tileOpParamList = {outputTensor, paramTensor, indicesTensor, coord4Param, coord4Indices};
     std::ostringstream oss;
-    oss << tileOpName << "<" << templateParam << ">" << WrapParamByParentheses(tileOpParamList) << ";\n";
+    oss << tileOpName << "<" << templateParam << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 

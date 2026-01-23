@@ -162,7 +162,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const {
     if (!templateParamList.empty()) {
         oss << WrapParamByAngleBrackets(templateParamList);
     }
-    oss << WrapParamByParentheses(tileOpCallParamList) << ";\n";
+    oss << WrapParamByParentheses(tileOpCallParamList) << STMT_END;
     return oss.str();
 }
 

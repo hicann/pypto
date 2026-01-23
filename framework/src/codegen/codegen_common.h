@@ -38,6 +38,7 @@ const std::string GM_STACK_BASE = "GMStackBase";
 const std::pair<std::string, std::string> DELIMITER_PARENTHESES("(", ")");
 const std::pair<std::string, std::string> DELIMITER_ANGLE_BRACKETS("<", ">");
 const std::string CONN_COMMA = ", ";
+const std::string STMT_END = ";\n";
 
 constexpr const int K_BYTES_OF16_BIT = 2;
 constexpr const int K_BYTES_OF32_BIT = 4;

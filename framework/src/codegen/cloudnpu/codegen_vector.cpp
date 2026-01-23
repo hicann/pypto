@@ -227,7 +227,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveLayout(const PrintTranspose
 
     std::ostringstream oss;
     oss << tileOpName << "<" << (transposeAxis[0] + correctionAxis) << ", " << (transposeAxis[1] + correctionAxis)
-        << ">" << WrapParamByParentheses({dstTensor, srcTensor, coord}) << ";\n";
+        << ">" << WrapParamByParentheses({dstTensor, srcTensor, coord}) << STMT_END;
     return oss.str();
 }
 
@@ -691,7 +691,7 @@ std::string CodeGenOpCloudNPU::PrintIndexPutLayout(size_t indicesSize, bool accu
         }
     }
     std::ostringstream oss;
-    oss << tileOpName << "<" << accumulate << ", " << indicesSize << ">" << WrapParamByParentheses(paramList) << ";\n";
+    oss << tileOpName << "<" << accumulate << ", " << indicesSize << ">" << WrapParamByParentheses(paramList) << STMT_END;
     return oss.str();
 }
 
@@ -737,7 +737,7 @@ std::string CodeGenOpCloudNPU::PrintRangeTileTensor(const std::string& startVal,
     std::ostringstream oss;
     oss << tileOpName;
     oss << PrintParams({"(", ")"}, paramList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -1271,26 +1271,6 @@ std::string CodeGenOpCloudNPU::GenExtractOp() const {
     return PrintExtractStatic();
 }
 
-static const std::unordered_map<int, std::string> aicpuCallNumDict = {
-    {AICPU_CALL_NUM_COPYOUT_RESOLVE, "AICPU_CALL_NUM_COPYOUT_RESOLVE"},
-};
-
-std::string CodeGenOpCloudNPU::GenAicpuCallOp() const {
-    ASSERT(opAttrs.count(OpAttributeKey::aicpuCall)) << "OpAttributeKey::aicpuCall not found";
-    uint32_t call =
-        static_cast<uint32_t>(npu::tile_fwk::AnyCast<int64_t>(opAttrs.find(OpAttributeKey::aicpuCall)->second));
-    uint16_t callNum = call >> AICPU_CALL_ARG_BIT;
-    uint16_t callArg = call & ((1 << AICPU_CALL_ARG_BIT) - 1);
-
-    std::ostringstream oss;
-    std::string callNumName = std::to_string(callNum);
-    if (aicpuCallNumDict.count(callNum)) {
-        callNumName = aicpuCallNumDict.find(callNum)->second;
-    }
-    oss << tileOpName << "<" << callNumName << "," << callArg << ">(GET_CURRENT_TASKID());\n";
-    return oss.str();
-}
-
 void CodeGenOpCloudNPU::GetVarAndTypeParam(
     std::vector<std::string> &varExpr, std::vector<std::string> &dataTypeExpr) const {
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::resIdx)]);
@@ -1547,7 +1527,7 @@ std::string CodeGenOpCloudNPU::PrintCmpTileTensor() const {
     oss << tileOpName;
     oss << PrintParams({"<", ">"}, templateParamList, ", ");
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -1654,7 +1634,7 @@ std::string CodeGenOpCloudNPU::PrintLogicalAndTileTensor() const {
     std::ostringstream oss;
     oss << tileOpName;
     oss << PrintParams({"(", ")"}, paramList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -1666,7 +1646,7 @@ std::string CodeGenOpCloudNPU::PrintLogicalNotTileTensor() const {
     std::ostringstream oss;
     oss << tileOpName;
     oss << PrintParams({"(", ")"}, paramList, ", ");
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 

@@ -110,7 +110,7 @@ struct TileTensor {
 
     std::string ToString() const {
         std::ostringstream oss;
-        oss << usingType << " " << tensorName << GenInitParam() << ";\n";
+        oss << usingType << " " << tensorName << GenInitParam() << STMT_END;
         return oss.str();
     }
 

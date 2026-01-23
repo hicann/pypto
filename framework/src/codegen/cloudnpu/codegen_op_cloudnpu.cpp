@@ -244,7 +244,7 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
 CodeGenOpCloudNPU::CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx)
     : CodeGenOpCloudNPU(ctx.symbolManager, ctx.topFunc.GetFunctionType(), ctx.locToOffset,
           ctx.topFunc.IsUnderDynamicFunction(), ctx.isMainBlock) {
-    CodeGenOp::Init(ctx.ops);
+    CodeGenOp::Init(ctx.operation);
     UpdateTileTensorInfo();
 }
 void CodeGenOpCloudNPU::InitOpsGenMap() {
@@ -594,20 +594,6 @@ void CodeGenOpCloudNPU::UpdateTileTensorInfo() {
         TileTensor tileTensor = BuildTileTensor(i, usingType);
         sm->AddTileTensor(tileTensor);
     }
-}
-
-std::string CodeGenOpCloudNPU::GenCVSyncSetOp() const {
-    auto pipeId = GetPipeId(syncQueue.pipeId_);
-    std::ostringstream oss;
-    oss << "set_intra_block(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ");\n";
-    return oss.str();
-}
-
-std::string CodeGenOpCloudNPU::GenCVSyncWaitOp() const {
-    auto pipeId = GetPipeId(syncQueue.trigPipeId_);
-    std::ostringstream oss;
-    oss << "wait_intra_block(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ");\n";
-    return oss.str();
 }
 
 std::string CodeGenOpCloudNPU::PrintCoord(size_t dim, const std::string &coord) const {

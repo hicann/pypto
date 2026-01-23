@@ -71,7 +71,7 @@ void CodeGenOp::CombineAxis(const Operation &oper, int operandIdx, bool isInput,
         CombineLastTwoAxis(dynamicValidShape[operandIdx], dim);
         ALOG_INFO_F("op code %s, operanIdx: %d, after CombineAxis shape is %s, raw shape is %s, originShape is %s, "
                     "dynamicValidShape is %s",
-            oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]),
+            oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]).c_str(),
             IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(originShape[operandIdx]).c_str(),
             IntVecToStr(dynamicValidShape[operandIdx]).c_str());
     }
@@ -113,7 +113,7 @@ void CodeGenOp::UpdateShape(
     CombineAxis(oper, operandIdx, isInput, ioIdx);
 }
 
-void CodeGenOp::UpdateOffsetValueForGM(const std::vector<OpImmediate> &offsets, int operandIdx) {
+void CodeGenOp::UpdateOffsetValueFromAttr(const std::vector<OpImmediate> &offsets, int operandIdx) {
     std::vector<SymbolicScalar> dynOffset(offsets.size());
     for (size_t i = 0; i < offsets.size(); ++i) {
         if (offsets[i].IsSpecified()) {
@@ -121,8 +121,8 @@ void CodeGenOp::UpdateOffsetValueForGM(const std::vector<OpImmediate> &offsets, 
             dynOffset[i] = val;
         }
     }
-    offsetGmSymbolic[operandIdx] = dynOffset;
-    ALOG_INFO_F("UpdateOffsetValueForGM , offsetGmSymbolic is %s", IntVecToStr(dynOffset).c_str());
+    offsetFromAttr[operandIdx] = dynOffset;
+    ALOG_INFO_F("UpdateOffsetValueFromAttr: %s", IntVecToStr(dynOffset).c_str());
 }
 
 void CodeGenOp::UpdateShapeFromAttr(const std::vector<OpImmediate> &toValidShape, int operandIdx) {
@@ -146,7 +146,7 @@ void CodeGenOp::UpdateOffsetForInput(const Operation &oper, const LogicalTensor 
         // only used for 1. L1 Copy; 2. spilling into gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         ALOG_INFO_F("start update offset for GM input");
         ASSERT(attr != nullptr) << ": missing OpAttr in copy in op: \n" << oper.Dump();
-        UpdateOffsetValueForGM(attr->GetCopyInAttr().first, operandIdx);
+        UpdateOffsetValueFromAttr(attr->GetCopyInAttr().first, operandIdx);
         return;
     }
 
@@ -159,11 +159,12 @@ void CodeGenOp::UpdateOffsetForOutput(const Operation &oper, const LogicalTensor
     const std::set<Opcode> cubeMDLOutOpCode = {Opcode::OP_L0C_TO_L1};
     std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
     bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode) && (attr != nullptr);
-    if (cubeMDLCondition || (useAttrShapeOffsetForOutputGM && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
+    if (cubeMDLCondition ||
+        (useAttrShapeOffsetForOutputGM && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
         // only used for 1. L1 Copy; 2. spilling into gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         ALOG_INFO_F("start update offset for GM output");
         ASSERT(attr != nullptr) << ": missing OpAttr in copy in op: \n" << oper.Dump();
-        UpdateOffsetValueForGM(attr->GetCopyOutAttr().second, operandIdx);
+        UpdateOffsetValueFromAttr(attr->GetCopyOutAttr().second, operandIdx);
         return;
     }
 
@@ -487,40 +488,6 @@ void CodeGenOp::GetGmParamIdx(const npu::tile_fwk::Operation &oper) {
         ALOG_INFO_F("%s GmTensorParamIdxInCallFunc: %d", __FUNCTION__, GmTensorParamIdxInCallFunc);
         return;
     }
-}
-
-std::string CodeGenOp::GenBarrier() const {
-    char buffer[256] = "CG_ERROR";
-    auto pipeId1 = GetPipeId(syncQueue.pipeId_);
-    int ret = snprintf_s(buffer, sizeof(buffer), sizeof(buffer) - 1, "pipe_barrier(%s);\n", pipeId1.c_str());
-    if (ret < 0) {
-        ALOG_INFO_F("genBarrier snprintf_s failed %d", ret);
-    }
-    return buffer;
-}
-
-std::string CodeGenOp::GenSyncSetOp() const {
-    char buffer[256] = "CG_ERROR";
-    auto pipeId1 = GetPipeId(syncQueue.pipeId_);
-    auto pipeId2 = GetPipeId(syncQueue.trigPipeId_);
-    int ret = snprintf_s(buffer, sizeof(buffer), sizeof(buffer) - 1, "set_flag(%s, %s, EVENT_ID%d);\n", pipeId1.c_str(),
-        pipeId2.c_str(), syncQueue.eventId_);
-    if (ret < 0) {
-        ALOG_INFO_F("genSyncSetOp snprintf_s failed %d", ret);
-    }
-    return buffer;
-}
-
-std::string CodeGenOp::GenSyncWaitOp() const {
-    char buffer[256] = "CG_ERROR";
-    auto pipeId1 = GetPipeId(syncQueue.pipeId_);
-    auto pipeId2 = GetPipeId(syncQueue.trigPipeId_);
-    int ret = snprintf_s(buffer, sizeof(buffer), sizeof(buffer) - 1, "wait_flag(%s, %s, EVENT_ID%d);\n",
-        pipeId1.c_str(), pipeId2.c_str(), syncQueue.eventId_);
-    if (ret < 0) {
-        ALOG_INFO_F("genSyncWaitOp snprintf_s failed %d", ret);
-    }
-    return buffer;
 }
 
 } // namespace npu::tile_fwk
