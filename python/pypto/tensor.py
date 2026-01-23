@@ -431,6 +431,11 @@ class Tensor:
         return pypto.greater(self, other)
 
     @source_location
+    def fill_(self, other: 'int | float') -> 'Tensor':
+        self.move(pypto.full(self.shape, other, self.dtype))
+        return self
+
+    @source_location
     def matmul(
             self,
             mat2,
