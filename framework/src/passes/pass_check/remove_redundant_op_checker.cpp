@@ -28,15 +28,15 @@ Status RemoveRedundantOpChecker::PreCheckAssemble(Function &function, const Oper
             ++otherOpNum;
             continue;
         }
-        auto child_in = op.iOperand.front();
-        auto child_out = op.oOperand.front();
-        if (!child_out->GetConsumers().empty()) {
+        auto childIn = op.iOperand.front();
+        auto childOut = op.oOperand.front();
+        if (!childOut->GetConsumers().empty()) {
             ++otherOpNum;
             continue;
         }
-        if (child_in->shape == child_out->shape &&
-            child_in->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
-            child_out->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+        if (childIn->shape == childOut->shape &&
+            childIn->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
+            childOut->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
             ++assembleRemoveNum;
         }
     }
@@ -103,16 +103,16 @@ Status RemoveRedundantOpChecker::PreCheckReshape(const Operation &op) {
 Status RemoveRedundantOpChecker::ProcessPreCheck(Function &function, const Operation &op) {
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Process preCheck for assemble op[%d].", op.GetOpMagic());
-        auto assemble_in = op.iOperand.front();
-        if (PreCheckAssemble(function, op, assemble_in) != SUCCESS) {
+        auto assembleIn = op.iOperand.front();
+        if (PreCheckAssemble(function, op, assembleIn) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for assemble op[%d] failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         return SUCCESS;
     } else if (op.GetOpcode() == Opcode::OP_VIEW) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Process preCheck for view op[%d].", op.GetOpMagic());
-        auto view_in = op.iOperand.front();
-        if (PreCheckView(function, op, view_in) != SUCCESS) {
+        auto viewIn = op.iOperand.front();
+        if (PreCheckView(function, op, viewIn) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "PreCheck for view op[%d] failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }  
@@ -133,42 +133,43 @@ Status RemoveRedundantOpChecker::ProcessPreCheck(Function &function, const Opera
 }
 
 Status RemoveRedundantOpChecker::PostCheckAssemble(const Operation &op) {
-    auto assemble_in = op.iOperand.front();
-    auto assemble_out = op.oOperand.front();
-    auto parentOp = *assemble_in->GetProducers().begin();
+    auto assembleIn = op.iOperand.front();
+    auto assembleOut = op.oOperand.front();
+    auto parentOp = *assembleIn->GetProducers().begin();
     if (parentOp == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, 
         "The input of assemble [%d] has no producer; Please check the input of assemble [%d] to ensure that it has producers.%s", 
         op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    if (assemble_in->shape == assemble_out->shape) {
-        if (assemble_in->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
-            assemble_out->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+    if (assembleOut->GetProducers().size() > 1) {
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Assemble's out[%d] has more than one producer, skip checking.", assembleOut->GetMagic());
+        return SUCCESS;
+    }
+    if (assembleIn->shape == assembleOut->shape && assembleIn->GetMemoryTypeOriginal() == assembleOut->GetMemoryTypeOriginal()) {
             APASS_LOG_ERROR_F(Elements::Operation, 
-            "PostCheck for assembleUB (both input and output are memorytype UB) op[%d] failed. Input and output has the same shape; Please check assembleUB op[%d].%s", 
+            "PostCheck for assemble op[%d] failed: input and output has the same shape and memorytype; Please check assemble op[%d].%s", 
             op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
-        }
     }
     return SUCCESS;
 }
 
 Status RemoveRedundantOpChecker::PostCheckView(const Operation &op) {
-    auto view_in = op.iOperand.front();
-    auto view_out = op.oOperand.front();
+    auto viewIn = op.iOperand.front();
+    auto viewOut = op.oOperand.front();
     auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(op.GetOpAttribute().get());
     if (viewOpAttribute != nullptr && viewOpAttribute->GetToDynValidShape().empty() &&
-        view_in->shape == view_out->shape && view_in->GetMemoryTypeOriginal() == view_out->GetMemoryTypeOriginal()) {
+        viewIn->shape == viewOut->shape && viewIn->GetMemoryTypeOriginal() == viewOut->GetMemoryTypeOriginal()) {
         APASS_LOG_ERROR_F(Elements::Operation, 
         "PostCheck for view op[%d] failed: DynValidShape empty, same shape and memory type; Please check view op[%d].%s", 
         op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
-    if (view_out->GetConsumers().size() != 1) {
+    if (viewOut->GetConsumers().size() != 1) {
         return SUCCESS;
     }
-    auto childOp = *(view_out->GetConsumers().begin());
+    auto childOp = *(viewOut->GetConsumers().begin());
     if (childOp == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, 
         "Found null childOp of op[%d]; Please check if the output consumers of the op[%d] are empty.%s", 
@@ -179,9 +180,9 @@ Status RemoveRedundantOpChecker::PostCheckView(const Operation &op) {
 }
 
 Status RemoveRedundantOpChecker::PostCheckRegCopy(const Operation &op) {
-    auto regcopy_in = op.iOperand.front();
-    auto regcopy_out = op.oOperand.front();
-    if (regcopy_in->shape == regcopy_out->shape && regcopy_in->GetMemoryTypeOriginal() == regcopy_out->GetMemoryTypeOriginal()) {
+    auto regcopyIn = op.iOperand.front();
+    auto regcopyOut = op.oOperand.front();
+    if (regcopyIn->shape == regcopyOut->shape && regcopyIn->GetMemoryTypeOriginal() == regcopyOut->GetMemoryTypeOriginal()) {
         APASS_LOG_ERROR_F(Elements::Operation, 
         "PostCheck for regcopy op[%d] failed: the shape of input equals to the output; Please check regcopy op[%d].%s", 
         op.GetOpMagic(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
@@ -191,9 +192,9 @@ Status RemoveRedundantOpChecker::PostCheckRegCopy(const Operation &op) {
 }
 
 Status RemoveRedundantOpChecker::PostCheckCopyIn(const Operation &op) {
-    auto copy_in = op.iOperand.front();
-    auto copy_out = op.oOperand.front();
-    if (copy_in->shape == copy_out->shape && copy_out->GetMemoryTypeOriginal() == npu::tile_fwk::MEM_L1) {
+    auto copyIn = op.iOperand.front();
+    auto copyOut = op.oOperand.front();
+    if (copyIn->shape == copyOut->shape && copyOut->GetMemoryTypeOriginal() == npu::tile_fwk::MEM_L1) {
         bool isRedundant = true;
         for (const auto &producerOp : op.ProducerOps()) {
             if (producerOp == nullptr) {

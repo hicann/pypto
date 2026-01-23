@@ -199,6 +199,7 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest3) {
     currFunctionPtr->outCasts_.push_back(outCast3);
 
     RemoveRedundantOp removeredundantpass;
+    EXPECT_NE(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
     EXPECT_NE(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);
@@ -937,6 +938,53 @@ TEST_F(TestRemoveRedundantOpPass, RemoveRedundantOpUTest17) {
     EXPECT_EQ(assemble_num, kNumZero);
     EXPECT_EQ(view_num, kNumZero);
     EXPECT_EQ(reshape_num, kNumZero);
+}
+
+/*
+TestRemoveAssembleSpecialCase
+inCast{8,16}->exp->ddrTensor1{8,16} ->assemble-> outCast{8,16}
+            ->exp->ddrTensor1{8,16} ->assemble->
+
+inCast{8,16}->exp->ddrTensor1{8,16} ->assemble-> outCast{8,16}
+            ->exp->ddrTensor1{8,16} ->assemble->
+*/
+TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleSpecialCase) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape,
+        TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor3->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {ubTensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {ubTensor2});
+    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor3});
+    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor2}, {ubTensor3});
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor3}, {outCast});
+    
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(RemoveRedundantOpPass.PostCheck(*currFunctionPtr), SUCCESS);
+
+    uint32_t assembleNum = kNumZero;
+    for (const auto &op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(assembleNum, kNumTwo);
 }
 }
 }
