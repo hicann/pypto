@@ -162,8 +162,8 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
             trace_events.append(perfetto_event)
             prev_end = end_time
         thread_id += 1
-
-    return trace_events
+    trace_events_pypto = {"traceEvents": trace_events}
+    return trace_events_pypto
 
 
 def parse_log_command(input_file, output_file):
@@ -181,14 +181,10 @@ def gen_perfetto_command(input_file, output_file):
             json.dump(perfetto_data, f, ensure_ascii=False, indent=2)
         print(f"Success to generate perfetto file: {output_file}")
 
-        complete_events = [e for e in perfetto_data if e.get('ph') == 'X']
-        metadata_events = [e for e in perfetto_data if e.get('ph') == 'M']
+        complete_events = [e for e in perfetto_data["traceEvents"] if e.get('ph') == 'X']
+        metadata_events = [e for e in perfetto_data["traceEvents"] if e.get('ph') == 'M']
         print(f"Process {len(complete_events)} task events, {len(metadata_events)} meta data events")
 
-        threads = [e for e in perfetto_data if e.get('name') == 'thread_name']
-        print("\nthread/swim lane info:")
-        for thread in threads:
-            print(f"  - TID {thread['tid']}: {thread['args']['name']}")
         print("\ninfo: upload this json file to https://ui.perfetto.dev/")
     except FileNotFoundError:
         print(f"error: cannot find input file {input_file}")

@@ -146,6 +146,15 @@ struct PerfEvtMgr {
         int64_t count;
     };
 
+    bool GetIsOpenProf() {
+        return isOpenProf_;
+    }
+
+    void SetIsOpenProf(bool isOpenProf, uint64_t aicpuPerf = 0) {
+        isOpenProf_ = isOpenProf;
+        aicpuPref_ = (MetricPerf*)aicpuPerf;
+    }
+
     void PerfBegin(int type) {
         counters[type].start = static_cast<int64_t>(GetCycles());
     }
@@ -197,12 +206,16 @@ struct PerfEvtMgr {
         if (PerfTraceIsDevTask[type] && DEVTASK_PERF_ARRY_INDEX(type) < DEVTASK_PERF_TYPE_NUM) {
             auto &cnt = perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
             if (cnt < PERF_TRACE_COUNT_DEVTASK_MAX_NUM) {
-                perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt++] =
+                perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt] =
                     cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
+                aicpuPref_->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)] = perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
+                aicpuPref_->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt] = perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt];
+                cnt++;
             }
             return;
         }
         perfTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
+        aicpuPref_->perfAicpuTrace[tid][type] = perfTrace[tid][type];
     }
 
     void DumpPerfTraceCore(std::ostringstream &oss, uint32_t scheCpuNum) {
@@ -291,6 +304,8 @@ private:
     uint64_t perfTrace[MAX_USED_AICPU_NUM][PERF_TRACE_MAX] = {{0}};
     uint64_t perfTraceDevTask[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM][PERF_TRACE_COUNT_DEVTASK_MAX_NUM] = {{{0}}};
     uint8_t perfTraceDevTaskCnt[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM] = {{0}};
+    bool isOpenProf_{false};
+    MetricPerf *aicpuPref_;
 };
 
 inline void PerfBegin(int type) {
@@ -337,9 +352,9 @@ inline void PerfMtTrace(uint32_t type, uint32_t tid, uint64_t cycle = 0) {
     (void)type;
     (void)tid;
     (void)cycle;
-#if ENABLE_PERF_TRACE
-    PerfEvtMgr::Instance().PerfTrace(type, tid, cycle);
-#endif
+    if (unlikely(ENABLE_PERF_TRACE == 1 || PerfEvtMgr::Instance().GetIsOpenProf())) {
+        PerfEvtMgr::Instance().PerfTrace(type, tid, cycle);
+    }
 }
 
 struct AutoScopedPerf {

@@ -49,3 +49,4 @@ include framework/src/cost_model/simulation/scripts/draw_comm_swim_lane_png.py
 include framework/src/cost_model/simulation/scripts/draw_pipe_swim_lane.py
 include tools/profiling/function_json_convert.py
 include tools/profiling/parse_pipe_time_trace.py
+include tools/scripts/machine_perf_trace.py

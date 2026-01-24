@@ -167,15 +167,17 @@ INLINE void SendRegAck(uint32_t taskIdx) {
     set_cond(taskIdx);
 }
 
-INLINE void PerfTraceRecord(uint32_t devTaskId, __gm__ Metrics* metric, AicorePerfTrace type, uint64_t cycle = 0) {
-#if ENABLE_AICORE_PERF_TRACE
-    uint32_t cnt = metric->perfTraceCnt[type];
-    if (cnt < PERF_TRACE_INST_MAX_NUM_EVERY_TYPE) {
-        metric->perfTrace[type][cnt] = cycle == 0 ? get_sys_cnt() : cycle;
-        metric->perfTraceDevTaskId[type][cnt] = devTaskId;
-        metric->perfTraceCnt[type]++;
+INLINE void PerfTraceRecord(uint32_t devTaskId, __gm__ Metrics* metric, AicorePerfTrace type, __gm__ KernelArgs *args,
+                            uint64_t cycle = 0) {
+    if (unlikely(args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||
+        ENABLE_AICORE_PERF_TRACE == 1)) {
+        uint32_t cnt = metric->perfTraceCnt[type];
+        if (cnt < PERF_TRACE_INST_MAX_NUM_EVERY_TYPE) {
+            metric->perfTrace[type][cnt] = cycle == 0 ? get_sys_cnt() : cycle;
+            metric->perfTraceDevTaskId[type][cnt] = devTaskId;
+            metric->perfTraceCnt[type]++;
+        }
     }
-#endif
 }
 
 INLINE void SetTaskStatistic(__gm__ KernelArgs *args, int32_t& dfxPose,
@@ -221,10 +223,10 @@ INLINE void FlushMetricStatistic(__gm__ volatile KernelArgs* args) {
 }
 
 INLINE void DfxProcWhenCoreExit(ExecuteContext *ctx, __gm__ KernelArgs *args, __gm__ Metrics* metric) {
-    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY);
+    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY, args);
     if (ctx->lastTaskFinishCycle > 0) {
         PerfTraceRecord(INVALID_DEV_TASK_ID, metric,
-            PERF_TRACE_CORE_WAIT_ALL_DEV_TASK_CALLOP_EXEC_FINISH, ctx->lastTaskFinishCycle);
+            PERF_TRACE_CORE_WAIT_ALL_DEV_TASK_CALLOP_EXEC_FINISH, args, ctx->lastTaskFinishCycle);
     }
     if (unlikely(args->taskEntry.reserved[0] == PRO_LEVEL2 || args->taskEntry.reserved[0] == PRO_LEVEL1 ||
         ENABLE_AICORE_PERF_TRACE == 1)) {
@@ -233,9 +235,9 @@ INLINE void DfxProcWhenCoreExit(ExecuteContext *ctx, __gm__ KernelArgs *args, __
 }
 
 INLINE void DfxProcWhenDevTaskStop(ExecuteContext *ctx, __gm__ KernelArgs *args, __gm__ Metrics* metric) {
-    PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_SYNC_STOP_NOTIFY);
+    PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_SYNC_STOP_NOTIFY, args);
     if (ctx->lastTaskFinishCycle > 0) {
-        PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_CALLOP_TASK_EXEC, ctx->lastTaskFinishCycle);
+        PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_CALLOP_TASK_EXEC, args, ctx->lastTaskFinishCycle);
     }
     SetStatus(args, STAGE_GET_NEXT_TASK_STOP);
 }
@@ -315,7 +317,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext *ctx, uint32_t taskId) {
 INLINE void InitCtx(ExecuteContext *ctx, __gm__ Metrics* metric, uint64_t coreFuncData) {
     __gm__ DynFuncHeader *header = (__gm__ DynFuncHeader *)coreFuncData;
     ctx->seqNo = header->seqNo;
-    PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL);
+    PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL, ctx->args);
     ctx->funcDataList = (__gm__ npu::tile_fwk::DynFuncData *)(header + 1);
     ctx->lastTaskFinishCycle = 0;
 #if ENABLE_AICORE_PRINT
@@ -359,7 +361,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs,
     auto devArgs = (DeviceArgs*)cfgdata;
     __gm__ KernelArgs *args = (__gm__ KernelArgs *)(devArgs->sharedBuffer + aicore_blockIdx * SHARED_BUFFER_SIZE);
     __gm__ Metrics* metric = (__gm__ Metrics*)(args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
-    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_BEGIN);
+    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_BEGIN, args);
     bool isFirstTask = true;
     SetStatus(args, STAGE_HANDSHAKE_START);
     HandshakeClient(args->shakeBuffer);
@@ -373,7 +375,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs,
     uint64_t t0 = get_sys_cnt();
     uint64_t loop_count = 0;
     bool bIsExit = false;
-    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_INIT);
+    PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_INIT, args);
     while (true) {
         ++loop_count;
         if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > 3000000000)) {
@@ -411,7 +413,7 @@ INLINE void KernelEntry(int64_t ffts_addr, int64_t inputs,
             }
 
             if (isFirstTask) {
-                PerfTraceRecord(ctx.seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_CALLOP_TASK);
+                PerfTraceRecord(ctx.seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_CALLOP_TASK, args);
                 isFirstTask = false;
             }
 

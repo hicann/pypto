@@ -98,15 +98,21 @@ struct DynMachineManager {
         }
         return ret;
     }
-     void CtrlServerInit(void *targ) {
+    int CtrlServerInit(void *targ) {
         mutex_.lock();
         if (initCtrl_.load()) {
             mutex_.unlock();
-            return;
+            return DEVICE_MACHINE_OK;
         }
-        (void)PyptoKernelCtrlServerInit(targ);
+        auto kargs = (DeviceKernelArgs *)targ;
+        auto devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
+        if (devArgs->aicpuPerfAddr != 0) {
+            PerfEvtMgr::Instance().SetIsOpenProf(true, devArgs->aicpuPerfAddr);
+        }
+        auto ret = PyptoKernelCtrlServerInit(targ);
         initCtrl_.store(true);
         mutex_.unlock();
+        return ret;
     }
 
     void Init(DeviceArgs *args) {
@@ -212,7 +218,11 @@ extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelSer
 }
 
 extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelServer(void *targ) {
-    g_machine_mgr.CtrlServerInit(targ);
+    auto ret = g_machine_mgr.CtrlServerInit(targ);
+    if (ret != DEVICE_MACHINE_OK) {
+        DEV_ERROR("Server init failed");
+        return -1;
+    }
     auto kargs = (DeviceKernelArgs *)targ;
     auto devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
     kargs->taskWastTime = GetCycles();
@@ -223,13 +233,13 @@ extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelSer
         g_machine_mgr.DeInit();
 #if ENABLE_PERF_TRACE
         PerfMtTrace(PERF_TRACE_EXIT, g_machine_mgr.LastFinishThreadIdx_);
-        DEV_ERROR("Begin dump machine perf trace:");
-        PerfEvtMgr::Instance().DumpPerfTrace(devArgs->scheCpuNum, "/tmp/tile_fwk_aicpu_perftrace.json");
-        DEV_IF_DEVICE {
-            g_machine_mgr.machine_.DumpAicorePerfTrace("tmp/tile_fwk_aicore_perftrace.json");
-        }
-        DEV_ERROR("Finish dump machine perf trace.");
-#endif
+         DEV_ERROR("Begin dump machine perf trace:");
+         PerfEvtMgr::Instance().DumpPerfTrace(devArgs->scheCpuNum, "/tmp/tile_fwk_aicpu_perftrace.json");
+         DEV_IF_DEVICE {
+             g_machine_mgr.machine_.DumpAicorePerfTrace("tmp/tile_fwk_aicore_perftrace.json");
+         }
+         DEV_ERROR("Finish dump machine perf trace.");
+ #endif
         return DEVICE_MACHINE_OK;
     }
     return rc;

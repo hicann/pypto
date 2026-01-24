@@ -41,7 +41,7 @@ def ini(path, prof, pe):
         real_pe = pe
     else:
         assert False, f'Current {prof} is invalid, only support[1, 2]'
-
+    level = "l2"
     env = {
         "PROFILER_SAMPLECONFIG": "{"
                                      + f"\"stars_acsq_task\":\"off\","
@@ -73,7 +73,7 @@ def find_file_and_get_parent_dirs(target_file, search_dir='.'):
 
 
 def work_flow_plot(path, level, pe):
-    path_pro = find_file_and_get_parent_dirs("aicpu.data.0.slice_0", path)
+    path_pro = find_file_and_get_parent_dirs("aicpu.data.*", path)
     cmd_rm = f'rm -rf {str(path)}/PROF*'
     if len(path_pro) < 1:
         subprocess.run(cmd_rm, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
