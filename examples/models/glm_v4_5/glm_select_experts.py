@@ -180,12 +180,12 @@ def process_main_loop_interation(
     ids_k[bs_idx * view_shape[0]:, 0:] = topk_ids
 
 
-def select_experts_kernel(shapes, renormalize, topk_group, num_expert_group):
+def select_experts_kernel(router_logits_shape, e_score_bias_shape, bs_top_k_frist, bs_top_k_second,
+                                         renormalize, topk_group, num_expert_group):
 
-    router_logits_shape = (pypto.frontend.dynamic("bs"), shapes[0][1])
-    e_score_bias_shape = shapes[1]
-    topk_weights_shape = (pypto.frontend.dynamic("bs"), shapes[2][1])
-    topk_ids_shape = (pypto.frontend.dynamic("bs"), shapes[3][1])
+    router_logits_shape = (pypto.frontend.dynamic("bs"), router_logits_shape[1])
+    topk_weights_shape = (pypto.frontend.dynamic("bs"), bs_top_k_frist[1])
+    topk_ids_shape = (pypto.frontend.dynamic("bs"), bs_top_k_second[1])
 
     @pypto.frontend.jit(
         runtime_options={"stitch_function_num_initial": 128,
@@ -196,9 +196,8 @@ def select_experts_kernel(shapes, renormalize, topk_group, num_expert_group):
     def kernel(
         logits: pypto.tensor(router_logits_shape, pypto.DT_FP32),
         e_score_bias_input: pypto.tensor(e_score_bias_shape, pypto.DT_BF16),
-    ) -> (
-        pypto.tensor(topk_weights_shape, pypto.DT_FP32),  
-        pypto.tensor(topk_ids_shape, pypto.DT_INT32),
+        weight_k: pypto.tensor(topk_weights_shape, pypto.DT_FP32),
+        index_k: pypto.tensor(topk_ids_shape, pypto.DT_INT32)
     ):
         batch_size = logits.shape[0]
         number_experts = logits.shape[1]
@@ -207,9 +206,6 @@ def select_experts_kernel(shapes, renormalize, topk_group, num_expert_group):
         view_shape = (1, number_experts)
         view_first = 1
         bs_loop = (batch_size + view_shape[0] - 1) // view_shape[0]
-
-        weight_k = pypto.tensor(topk_weights_shape, pypto.DT_FP32)
-        index_k = pypto.tensor(topk_ids_shape, pypto.DT_INT32)
 
         pypto.set_vec_tile_shapes(number_experts)
         e_score_bias_2d = pypto.reshape(e_score_bias_input, [1, number_experts], inplace=True)  # (160) -> (1,160)
@@ -230,8 +226,6 @@ def select_experts_kernel(shapes, renormalize, topk_group, num_expert_group):
                 num_expert_group, 
                 renormalize
             )
-        return weight_k, index_k
-
     return kernel
 
 
@@ -262,16 +256,15 @@ def test_select_experts():
         # 3. 准备测试数据
         torch.manual_seed(0)
         np.random.seed(0)
-        router_logits = torch.rand(
-            (bs, ne), dtype=torch.float32, device=f'npu:{device_id}')
-        e_score_bias = torch.rand(
-            (ne), dtype=torch.bfloat16, device=f'npu:{device_id}')
+        router_logits = torch.rand((bs, ne), dtype=torch.float32, device=f'npu:{device_id}')
+        e_score_bias = torch.rand((ne), dtype=torch.bfloat16, device=f'npu:{device_id}')
+        topk_weights = torch.rand((bs, top_k), dtype=torch.float32, device=f'npu:{device_id}')
+        topk_ids = torch.rand((bs, top_k), dtype=torch.int32, device=f'npu:{device_id}')
 
+        inputs = [router_logits, top_k, renormalize, topk_group, num_expert_group, e_score_bias, topk_weights, topk_ids]
         g = torch.npu.NPUGraph()
         with torch.npu.graph(g):
-            shapes = [router_logits.shape, e_score_bias.shape, (bs, top_k), (bs, top_k)]
-            topk_weights, topk_ids = \
-            select_experts_kernel(shapes, renormalize, topk_group, num_expert_group)(router_logits, e_score_bias)
+            select_experts(*inputs)
         g.replay()
 
         # 5. 与PyTorch参考实现对比
@@ -326,18 +319,19 @@ def test_select_experts():
 
 
 @allow_in_graph
-def select_experts(router_logits: torch.Tensor,
-                top_k: int,  # number of top k experts.
-                # Whether to renormalize the routing weights.
-                renormalize: bool,
-                # Number of expert groups to select from.
-                topk_group: int,
-                # Number of experts in each group.
-                num_expert_group: int,
-                # Correction bias to apply to expert scores.
-                e_score_correction_bias: torch.Tensor,
-                topk_weights: torch.Tensor,
-                topk_ids: torch.Tensor
+def select_experts(
+    router_logits: torch.Tensor,
+    top_k: int,  # number of top k experts.
+    # Whether to renormalize the routing weights.
+    renormalize: bool,
+    # Number of expert groups to select from.
+    topk_group: int,
+    # Number of experts in each group.
+    num_expert_group: int,
+    # Correction bias to apply to expert scores.
+    e_score_correction_bias: torch.Tensor,
+    topk_weights: torch.Tensor,
+    topk_ids: torch.Tensor
 ):
     """
     Select top-k experts for each token based on router logits.
@@ -371,17 +365,11 @@ def select_experts(router_logits: torch.Tensor,
         num_expert_group,
         e_score_correction_bias
     )
-    inputs = {
-        router_logits: [0],
-        e_score_correction_bias: []
-    }
-    outputs = {
-        topk_weights: [0],
-        topk_ids: [0]
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-    select_experts_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
+    bs = router_logits.shape[0]
+    shapes = [router_logits.shape, e_score_correction_bias.shape, (bs, top_k), (bs, top_k), \
+            renormalize, topk_group, num_expert_group]
+    inputs = [router_logits, e_score_correction_bias, topk_weights, topk_ids]
+    select_experts_kernel(*shapes)(*inputs)
 
 
 def main():

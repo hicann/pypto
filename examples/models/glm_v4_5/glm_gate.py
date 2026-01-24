@@ -53,7 +53,7 @@ def check_args(
     assert hidden_states.dtype == torch.float32
 
 
-def select_experts_mm(bs, ne, h_num) -> torch.Tensor:
+def select_experts_mm(bs, ne, h_num):
     bs = pypto.frontend.dynamic("bs")
     
     @pypto.frontend.jit(
@@ -63,8 +63,7 @@ def select_experts_mm(bs, ne, h_num) -> torch.Tensor:
     def select_experts_mm_kernel(
         hidden_states: pypto.Tensor((bs, h_num), pypto.DT_FP32),
         mm_weight: pypto.Tensor((ne, h_num), pypto.DT_FP32),
-    ) -> (
-        pypto.Tensor((bs, ne), pypto.DT_FP32),
+        router_logits_out: pypto.Tensor((bs, ne), pypto.DT_FP32)
     ):
         """
         JIT compiled kernel for gate matrix multiplication.
@@ -90,8 +89,6 @@ def select_experts_mm(bs, ne, h_num) -> torch.Tensor:
 
         bs_loop = (bs + view_shape[0] - 1) // view_shape[0]
         
-        router_logits_out = pypto.Tensor((bs, ne), pypto.DT_FP32)
-        
         # 4. 实现kernel逻辑，循环展开BS动态轴
         for bs_idx in pypto.loop(bs_loop, name="LOOP_MOE_MM_L0", idx_name="bs_idx"):
 
@@ -108,8 +105,6 @@ def select_experts_mm(bs, ne, h_num) -> torch.Tensor:
             # 6. 将结果搬运到输出tensor上
             router_logits_out[bs_idx * view_shape[0]:, 0:] = res
         
-        return router_logits_out
-    
     return select_experts_mm_kernel
 
 
@@ -131,13 +126,14 @@ def test_select_experts_mm():
         np.random.seed(0)
         hidden_states = torch.rand((bs, h_num), dtype=torch.float32, device=f'npu:{device_id}')
         mm_weight = torch.rand((ne, h_num), dtype=torch.float32, device=f'npu:{device_id}')
+        router_logits_out = torch.rand((bs, ne), dtype=torch.float32, device=f'npu:{device_id}')
 
         # 4. 执行kernel并获取结果
-        inputs = [hidden_states, mm_weight]
+        inputs = [hidden_states, mm_weight, router_logits_out]
 
         g = torch.npu.NPUGraph()
         with torch.npu.graph(g):
-            router_logits_out = select_experts_mm(bs, ne, h_num)(*inputs)
+            gate(*inputs)
         g.replay()
 
         # 5. 与PyTorch参考实现对比
@@ -152,10 +148,10 @@ def test_select_experts_mm():
 
 @allow_in_graph
 def gate(
-    gate_weight: torch.Tensor,  # gate matmul weights
     hidden_states: torch.Tensor,  # Hidden states of shape (num_tokens, hidden_size).
-    router_logits_out: torch.Tensor, 
-    ) -> torch.Tensor:
+    gate_weight: torch.Tensor,  # gate matmul weights
+    router_logits_out: torch.Tensor
+):
     """
     Gate operation for expert routing in MoE architecture.
 
@@ -180,11 +176,11 @@ def gate(
         return router_logits_out
     check_args(gate_weight, hidden_states)
 
-    inputs = [hidden_states, gate_weight]
+    inputs = [hidden_states, gate_weight, router_logits_out]
     bs, h_num = hidden_states.shape
     ne = gate_weight.shape[0]
-    router_logits_out = select_experts_mm(bs, ne, h_num)(*inputs)
-
+    params = [bs, ne, h_num]
+    select_experts_mm(*params)(*inputs)
 
 
 def main():
