@@ -185,37 +185,32 @@ bool ReadBytesFromFile(const std::string &filePath, std::vector<char> &buffer)
 {
     std::string realPath = RealPath(filePath);
     if (realPath.empty()) {
-        ALOG_WARN("Bin file path[%s] is not valid.", filePath.c_str());
+        ALOG_WARN_F("Bin file path[%s] is not valid.", filePath.c_str());
         return false;
     }
 
     std::ifstream ifStream(realPath.c_str(), std::ios::binary | std::ios::ate);
     if (!ifStream.is_open()) {
-        ALOG_WARN("read file %s failed.", filePath.c_str());
+        ALOG_WARN_F("read file %s failed.", filePath.c_str());
         return false;
     }
     try {
         std::streamsize size = ifStream.tellg();
-        if (size <= 0) {
+        if (size <= 0 || size > INT_MAX) {
             ifStream.close();
-            ALOG_WARN("file length <= 0, not valid.");
+            ALOG_WARN_F("File size %ld is not within the range: (0, %d].", size, INT_MAX);
             return false;
         }
 
-        if (size > INT_MAX) {
-            ifStream.close();
-            ALOG_WARN("File size %ld is out of limit: %d.", size, INT_MAX);
-            return false;
-        }
         ifStream.seekg(0, std::ios::beg);
 
         buffer.resize(size);
         ifStream.read(&buffer[0], size);
-        ALOG_DEBUG("Release file(%s) handle.", realPath.c_str());
+        ALOG_DEBUG_F("Release file(%s) handle.", realPath.c_str());
         ifStream.close();
-        ALOG_DEBUG("Read size:%ld.", size);
+        ALOG_DEBUG_F("Read size: %ld.", size);
     } catch (const std::ifstream::failure& e) {
-        ALOG_WARN("Fail to read file %s. Exception: %s.", filePath.c_str(), e.what());
+        ALOG_WARN_F("Fail to read file %s. Exception: %s.", filePath.c_str(), e.what());
         ifStream.close();
         return false;
     }
@@ -301,7 +296,7 @@ void SaveFileSafe(const std::string &filePath, const uint8_t *data, size_t size)
 
 void Rename(const std::string &oldPath, const std::string &newPath) {
     if (rename(oldPath.c_str(), newPath.c_str()) != 0) {
-        ALOG_WARN("Rename file %s to %s failed.", oldPath.c_str(), newPath.c_str());
+        ALOG_WARN_F("Rename file %s to %s failed.", oldPath.c_str(), newPath.c_str());
     }
 }
 
@@ -330,7 +325,7 @@ std::vector<uint8_t> LoadFile(const std::string &filePath) {
     std::vector<uint8_t> binary;
     std::string realPath = RealPath(filePath);
     if (realPath.empty()) {
-        ALOG_WARN("Bin file path[%s] is not valid.", filePath.c_str());
+        ALOG_WARN_F("Bin file path[%s] is not valid.", filePath.c_str());
         return binary;
     }
 
@@ -448,7 +443,7 @@ std::string GetCurRunningPath() {
 void RemoveOldestDirs(const std::string &path, const std::string &prefix, int left) {
     DIR *dir = opendir(path.c_str());
     if (dir == nullptr) {
-        ALOG_WARN_F("failed to opendir: ", path.c_str());
+        ALOG_WARN_F("failed to opendir: %s", path.c_str());
         return;
     }
 

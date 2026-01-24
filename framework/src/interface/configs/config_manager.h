@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <type_traits>
 #include <set>
+#include "interface/utils/file_utils.h"
 #include "interface/utils/common.h"
 #include "interface/utils/log.h"
 
@@ -356,11 +357,7 @@ inline DPlatform GetDevicePlatform() {
 }
 
 inline const std::string GetAbsoluteTopFolder() {
-    constexpr size_t size = 1024;
-    char cwdBuf[size] = {};
-    std::string cwd = getcwd(cwdBuf, size);
-
-    return cwd + "/" + ConfigManager::Instance().LogTopFolder();
+    return RealPath(ConfigManager::Instance().LogTopFolder());
 }
 
 inline const std::string &LogTopFolder() {

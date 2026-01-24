@@ -288,7 +288,7 @@ Operation *Program::FinishCurrentFunction(const std::shared_ptr<TensorSlotScope>
     auto funcArgs = currentFunctionPtr_->EndFunction(scope);
 
     currentFunctionPtr_->ComputeHash();
-    ALOG_DEBUG(currentFunctionPtr_->ComputeHash());
+    ALOG_DEBUG("The hash of current func is ", currentFunctionPtr_->ComputeHash());
     if (!generateCall) {
         return nullptr;
     }
