@@ -1340,7 +1340,8 @@ private:
         if constexpr (IsDeviceMode()) {
             aicoreHal_.MapRegistersForAllCores(aicNum_);
             aicoreProf_.ProfInit(reinterpret_cast<int64_t *>(deviceArgs->corePmuRegAddr),
-               reinterpret_cast<int64_t *>(deviceArgs->pmuEventAddr),  deviceArgs->toSubMachineConfig.profConfig);
+               reinterpret_cast<int64_t *>(deviceArgs->pmuEventAddr),
+               deviceArgs->toSubMachineConfig.profConfig, deviceArgs->archInfo);
         } else {
             aicoreHal_.SetTaskTimeCost([this](uint64_t coreIdx, uint64_t taskId, uint64_t time)
                 {return GetCostModelTaskTime(coreIdx, taskId, time); });

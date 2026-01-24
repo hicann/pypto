@@ -23,10 +23,17 @@
 #include <sys/syscall.h>
 #include "tilefwk/aicpu_common.h"
 
+typedef void* VOID_PTR;
+
 extern "C" {
-__attribute__((weak)) int32_t AdprofReportAdditionalInfo(uint32_t agingFlag, const void *data, uint32_t length);
+__attribute__((weak)) int32_t AdprofReportAdditionalInfo(uint32_t agingFlag, const VOID_PTR data, uint32_t length);
+#ifndef MSVP_PROF_API
+__attribute__((weak)) int32_t MsprofReportAdditionalInfo(uint32_t nonPersistantFlag, const VOID_PTR data, uint32_t length);
+#endif
 __attribute__((weak)) int32_t AdprofCheckFeatureIsOn(uint64_t feature);
 };
+
+typedef int32_t (*ProfReportAdditionalInfoFunc)(uint32_t agingFlag, const VOID_PTR data, uint32_t length);
 
 namespace npu::tile_fwk::dynamic {
 class AiCoreManager;
@@ -214,7 +221,8 @@ public:
     explicit AiCoreProf(AiCoreManager &aicoreMng) : hostAicoreMng_(aicoreMng) {}
     ~AiCoreProf() {}
 
-    void ProfInit([[maybe_unused]]int64_t *regAddrs, [[maybe_unused]]int64_t *pmuEventAddrs, ProfConfig profConfig);
+    void ProfInit([[maybe_unused]]int64_t *regAddrs, [[maybe_unused]]int64_t *pmuEventAddrs,
+        ProfConfig profConfig, ArchInfo archInfo = ArchInfo::DAV_2201);
     void ProfStart();
     void ProfGet(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
     void ProfGetSwitch(int64_t &flag) const;
@@ -250,6 +258,7 @@ private:
     uint64_t taskCnt_ = 0;
     int64_t *regAddrs_{nullptr};
     int64_t *pmuEventAddrs_{nullptr};
+    ProfReportAdditionalInfoFunc profReportAdditionalInfoFunc_{nullptr};
 
     // PMU_CNT0 ~ PMU_CNT7 共计8个cnt寄存器,32位寄存器,用来获取对应读数,单位为cycle
     std::vector<volatile uint32_t *> pmuCnt0Plain_;
