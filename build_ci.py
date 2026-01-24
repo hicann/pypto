@@ -30,10 +30,6 @@ from importlib import metadata
 from packaging import requirements
 
 
-if str(Path(Path(__file__).parent, "tools")) not in sys.path:
-    sys.path.append(str(Path(Path(__file__).parent, "tools")))
-
-
 class CMakeParam(abc.ABC):
     """需要向 CMake 传入 Option 的参数
     """
@@ -52,27 +48,46 @@ class CMakeParam(abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def reg_args(parser, ext: Optional[Any] = None):
+        """
+        注册命令行参数
+
+        :param parser: 参数解析器
+        :param ext: 扩展信息, 用于子类特殊实现扩展时使用
+        :type ext: Optional[Any]
+        """
         pass
 
     @classmethod
     def _cfg_require(cls, opt: str, ctr: bool = True, tv: str = "ON", fv: str = "OFF") -> str:
-        """获取 CMake Config 阶段的必选 Option 配置
+        """
+        获取 CMake Config 阶段的必选 Option 配置
 
-        :param opt: CMake 选项, 会最终体现到 CMake -D传入的参数中
-        :param ctr: 控制变量
-        :param tv: 控制变量为 True 时, 设置的值
-        :param fv: 控制变量为 False 时, 设置的值
-        :return: 设置的值
+        :param opt: CMake Option 值, 会最终体现到 CMake -D传入的参数中
+        :type opt: str
+        :param ctr: 控制变量, 标识 CMake Option 布尔值
+        :type ctr: bool
+        :param tv: ctr 为 True 时, 设置的值
+        :type tv: str
+        :param fv: ctr 为 False 时, 设置的值
+        :type fv: str
+        :return: 设置结果
+        :rtype: str
         """
         return f" -D{opt}=" + (tv if ctr else fv)
 
     @classmethod
     def _cfg_optional(cls, opt: str, ctr: bool, v: str):
-        """获取 CMake Config 阶段的可选 Option 配置
+        """
+        获取 CMake Config 阶段的可选 Option 配置
 
-        :param opt: CMake 选项, 会最终体现到 CMake -D传入的参数中
-        :param ctr: 控制变量
+        :param opt: CMake Option 值, 会最终体现到 CMake -D传入的参数中
+        :type opt: str
+        :param ctr: 控制变量, 标识 CMake Option 布尔值
+        :type ctr: bool
         :param v: 控制变量为 True 时, 设置的值
+        :type v: str
+        :return: 设置结果
+        :rtype: str
         """
         return (f" -D{opt}=" + v) if ctr else ""
 
@@ -661,9 +676,13 @@ class BuildCtrl(CMakeParam):
 
     @staticmethod
     def which_cmake() -> Optional[Path]:
-        """查找系统级 CMake 可执行文件路径
+        """
+        查找系统级 CMake 可执行文件路径
 
-        排除 cmake pip 包的干扰
+        实现本函数是为了排除 cmake pip 包的干扰, 否则在 Python 中直接调用 cmake 会调用到 cmake pip 包.
+
+        :return: 系统级 cmake 可执行文件绝对路径
+        :rtype: Path | None
         """
         # 拆分 PATH 环境变量为单个目录列表(排除空目录)
         path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
@@ -693,11 +712,15 @@ class BuildCtrl(CMakeParam):
 
     @staticmethod
     def find_match_whl(name: str, path: Path) -> Optional[Path]:
-        """在指定路径下, 查找对应匹配的 whl 包文件
+        """
+        在指定路径下, 查找对应匹配的 whl 包文件
 
         :param name: 包名
+        :type name: str
         :param path: 指定路径
-        :return: whl 包路径, None 表示未找到
+        :type path: Path
+        :return: 指定路径
+        :rtype: Path | None
         """
         cpp_desc = f"cp{sys.version_info.major}{sys.version_info.minor}"
         pattern = f"{name}-*-{cpp_desc}-{cpp_desc}-*.whl"
@@ -1046,30 +1069,36 @@ class BuildCtrl(CMakeParam):
             n_workers = str(self.build.job_num)
         else:
             n_workers = "auto"
-        self.py_tests_run_pytest(dist=dist, tests=self.tests.utest,
-                                 def_filter=str(Path(self.src_root, "python/tests/ut")),
+        self.py_tests_run_pytest(dist=dist, params=[(self.tests.utest, "python/tests/ut")],
                                  ext=f"-n {n_workers} -W ignore::DeprecationWarning")
 
-        # 设置 Device 相关参数
+        # 执行用例, Examples/STest, 支持混合执行
         dev_lst = [int(d) for d in self.tests.stest_exec.auto_execute_device_id.split(":")]
         dev_ext = " ".join(f"{d}" for d in dev_lst)
         ext_str = f"-n {len(dev_lst)} --device {dev_ext}"
-
-        # 执行用例, STest
-        self.py_tests_run_pytest(dist=dist, tests=self.tests.stest,
-                                 def_filter=str(Path(self.src_root, "python/tests/st")),
+        self.py_tests_run_pytest(dist=dist, params=[(self.tests.example, "examples"),
+                                                    (self.tests.stest, "python/tests/st")],
                                  ext=ext_str)
 
-        # 执行用例, Examples
-        self.py_tests_run_pytest(dist=dist, tests=self.tests.example,
-                                 def_filter=str(Path(self.src_root, "examples")),
-                                 ext=ext_str)
+    def py_tests_run_pytest(self, dist: Optional[Path], params: List[Tuple[TestsFilterParam, str]], ext: str = ""):
+        """
+        调用 pytest 执行用例
 
-    def py_tests_run_pytest(self, dist: Optional[Path], tests: TestsFilterParam, def_filter: str, ext: str = ""):
-        if not tests.enable:
-            return
+        :param dist: 二进制分发包安装路径
+        :type dist: Optional[Path]
+        :param params: 参数列表, 支持多路径下用例混跑
+        :type params: List[Tuple[TestsFilterParam, str]]
+        :param ext: 扩展命令参数
+        :type ext: str
+        """
         # filter 处理
-        filter_str = tests.get_filter_str(def_filter=def_filter)
+        filter_str = ""
+        for cur_tests, cur_filter_str in params:
+            cur_filter_str = cur_tests.get_filter_str(def_filter=cur_filter_str)
+            if cur_filter_str:
+                filter_str += f" {cur_filter_str}"
+        if not filter_str:
+            return
         # 执行 pytest
         self._py_tests_run_pytest(dist=dist, filter_str=filter_str, ext=ext)
 
