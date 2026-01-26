@@ -37,8 +37,8 @@ inline uint64_t Align(const uint64_t n) {
 
 void TensorBucket::UpdateOffset(const uint64_t offset) {
     offset_ = offset;
-    APASS_LOG_INFO_F(Elements::Tensor, "Updated bucket offset to %lu with %zu tensor groups.",
-                     offset, tensorGroups_.size());
+    APASS_LOG_INFO_F(
+        Elements::Tensor, "Updated bucket offset to %lu with %zu tensor groups.", offset, tensorGroups_.size());
 
     // 更新存储信息
     for (const auto &tensorGroup : tensorGroups_) {
@@ -48,9 +48,9 @@ void TensorBucket::UpdateOffset(const uint64_t offset) {
         LogicalTensorPtr leadTensor = *tensorGroup.begin();
         leadTensor->storage_->start_ = offset;
         leadTensor->storage_->length_ = size_;
-        APASS_LOG_DEBUG_F(Elements::Tensor,
-                          "Bucket Group lead tensor: magic=%d rawmagic=%d storage=[%lu, %lu].", leadTensor->magic,
-                          leadTensor->tensor->rawmagic, leadTensor->storage_->start_, leadTensor->storage_->length_);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Bucket Group lead tensor: magic=%d rawmagic=%d storage=[%lu, %lu].",
+            leadTensor->magic, leadTensor->tensor->rawmagic, leadTensor->storage_->start_,
+            leadTensor->storage_->length_);
     }
 }
 
@@ -63,9 +63,8 @@ bool TensorBucket::AddTensorGroup(const TensorsDesc &tensorsDesc) {
     LogicalTensorPtr tensor = *tensorsDesc.tensors.begin();
     uint64_t tensorSize = static_cast<uint64_t>(tensor->storage_->length_);
     size_ = std::max(tensorSize, size_);
-    APASS_LOG_INFO_F(Elements::Tensor,
-                     "Added tensor group - tensor: magic %d, rawmagic %d, Bucket size: %lu.",
-                     tensor->magic, tensor->tensor->rawmagic, size_);
+    APASS_LOG_INFO_F(Elements::Tensor, "Added tensor group - tensor: magic %d, rawmagic %d, Bucket size: %lu.",
+        tensor->magic, tensor->tensor->rawmagic, size_);
 
     // 存储tensor组
     tensorGroups_.emplace_back(tensorsDesc.tensors);
@@ -122,7 +121,7 @@ void Allocator::ScanParentOps(Function &leafFunc, const Operation &parent,
             continue;
         }
         visited.insert(in);
-        for (Operation* producer : in->GetProducers()) {
+        for (Operation *producer : in->GetProducers()) {
             operations.insert(producer);
         }
     }
@@ -132,7 +131,7 @@ bool Allocator::CheckReuseOp(const std::unordered_set<Operation *> &operations, 
     const WorkspaceInfo &outWspInfo, std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap,
     std::vector<WorkspaceInfo> &leafFuncReuseMap) {
     auto &out = outWspInfo.tensor;
-    for (Operation* operation : operations) {
+    for (Operation *operation : operations) {
         if (!OpcodeManager::Inst().IsCopyIn(operation->GetOpcode())) {
             parents.push_back(operation);
             continue;
@@ -144,7 +143,7 @@ bool Allocator::CheckReuseOp(const std::unordered_set<Operation *> &operations, 
             continue;
         }
         // 检查复用条件
-        WorkspaceInfo& candidate = iter->second;
+        WorkspaceInfo &candidate = iter->second;
         bool countCheck = candidate.count == 1;
         bool sizeCheck = candidate.size >= outWspInfo.size && candidate.size < outWspInfo.size * MEM_PROPORTION_COEFF;
         bool usageCheck = !candidate.used;
@@ -154,9 +153,9 @@ bool Allocator::CheckReuseOp(const std::unordered_set<Operation *> &operations, 
             leafFuncReuseMap[outWspInfo.position] = candidate;
             // 记录复用日志
             APASS_LOG_INFO_F(Elements::Tensor,
-                "Outcast %d (rawmagic %d) can reuse incast %d (rawmagic %d) size [%zu : %zu].",
-                out->magic, out->tensor->rawmagic, copyInInput->magic, copyInInput->tensor->rawmagic,
-                candidate.size, outWspInfo.size);
+                "Outcast %d (rawmagic %d) can reuse incast %d (rawmagic %d) size [%zu : %zu].", out->magic,
+                out->tensor->rawmagic, copyInInput->magic, copyInInput->tensor->rawmagic, candidate.size,
+                outWspInfo.size);
             return false;
         }
     }
@@ -164,35 +163,37 @@ bool Allocator::CheckReuseOp(const std::unordered_set<Operation *> &operations, 
 }
 
 // 在不引入额外同步的情况下，完成内存的复用，找到某一个CopyOut的前驱的CopyIn，依赖关系天然存在
-// 极限的复用，可以不考虑依赖关系，只看节点之间的顺序，在后续insert sync时可以插入mte3 wait mte2的同步，但是可能会有性能劣化。
+// 极限的复用，可以不考虑依赖关系，只看节点之间的顺序，在后续insert sync时可以插入mte3 wait
+// mte2的同步，但是可能会有性能劣化。
 void Allocator::FindReusableInputForOutput(Function &leafFunc, Operation &op, const WorkspaceInfo &outWspInfo,
-    std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap, std::vector<WorkspaceInfo> &leafFuncReuseMap) {
+    std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap,
+    std::vector<WorkspaceInfo> &leafFuncReuseMap) {
     APASS_LOG_DEBUG_F(Elements::Tensor, "Searching reusable input for output tensor %d (rawmagic %d).",
-                      outWspInfo.tensor->magic, outWspInfo.tensor->tensor->rawmagic);
-    std::deque<Operation*> parents;
+        outWspInfo.tensor->magic, outWspInfo.tensor->tensor->rawmagic);
+    std::deque<Operation *> parents;
     // 已访问tensor集合, 节省BFS搜索时长，并且防止出现环路后进入死循环
     std::unordered_set<LogicalTensorPtr> visited;
     parents.push_back(&op);
     while (!parents.empty()) {
-        Operation* parent = parents.front();
+        Operation *parent = parents.front();
         parents.pop_front();
         // 存储本层的所有操作，容器可自动去除重复值
-        std::unordered_set<Operation*> operations;
+        std::unordered_set<Operation *> operations;
         ScanParentOps(leafFunc, *parent, visited, operations);
         if (!CheckReuseOp(operations, parents, outWspInfo, inputWorkspaceInfoMap, leafFuncReuseMap)) {
             APASS_LOG_INFO_F(Elements::Tensor, "CheckReuseOp for leaf function: %s hash %lu.",
-                             leafFunc.GetMagicName().c_str(), leafFunc.GetFunctionHash().GetHash());
+                leafFunc.GetMagicName().c_str(), leafFunc.GetFunctionHash().GetHash());
             return;
         }
     }
 }
 
 void Allocator::ProcessOutputForGlobalMemoryReuse(Function &leafFunc, WorkspaceInfo &wspInfo,
-    std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap, std::vector<WorkspaceInfo> &leafFuncReuseMap) {
+    std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap,
+    std::vector<WorkspaceInfo> &leafFuncReuseMap) {
     auto &out = wspInfo.tensor;
     if (wspInfo.count != 1) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor magic %d (rawmagic %d) not 1.", out->magic,
-                          out->tensor->rawmagic);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor magic %d (rawmagic %d) not 1.", out->magic, out->tensor->rawmagic);
         return;
     }
     auto &producers = out->GetProducers();
@@ -200,11 +201,11 @@ void Allocator::ProcessOutputForGlobalMemoryReuse(Function &leafFunc, WorkspaceI
         return;
     }
     if (producers.empty()) {
-        APASS_LOG_WARN_F(Elements::Tensor, "Tensor %d producer is empty, function hash %lu.",
-                         out->magic, leafFunc.GetFunctionHash().GetHash());
+        APASS_LOG_WARN_F(Elements::Tensor, "Tensor %d producer is empty, function hash %lu.", out->magic,
+            leafFunc.GetFunctionHash().GetHash());
         return;
     }
-    Operation* producer = *producers.begin();
+    Operation *producer = *producers.begin();
     if (!OpcodeManager::Inst().IsCopyOut(producer->GetOpcode())) {
         return;
     }
@@ -221,7 +222,7 @@ bool GetCopyInSize(LogicalTensorPtr &in, Operation *copyIn, uint64_t &size) {
     if (copyIn == nullptr || !OpcodeManager::Inst().IsCopyIn(copyIn->GetOpcode())) {
         return false;
     }
-    auto attr = dynamic_cast<CopyOpAttribute *>(copyIn->GetOpAttribute().get());
+    auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
     if (attr == nullptr || attr->IsDynFromOffset()) {
         return false;
     }
@@ -269,7 +270,8 @@ void Allocator::CollectOutputTensor(Function &leafFunc, std::unordered_map<Logic
     }
 }
 
-void Allocator::CollectInputTensor(Function &leafFunc, std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap) {
+void Allocator::CollectInputTensor(
+    Function &leafFunc, std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap) {
     for (size_t i = 0; i < leafFunc.inCasts_.size(); ++i) {
         LogicalTensorPtr in = leafFunc.inCasts_[i];
 
@@ -284,7 +286,7 @@ void Allocator::CollectInputTensor(Function &leafFunc, std::unordered_map<Logica
             iter->second.count++;
             continue;
         }
-        Operation* consumer = *(in->GetConsumers().begin());
+        Operation *consumer = *(in->GetConsumers().begin());
         uint64_t size = 0;
         if (GetCopyInSize(in, consumer, size)) {
             inputWorkspaceInfoMap[in] = WorkspaceInfo(1, i, size, in);
@@ -295,37 +297,36 @@ void Allocator::CollectInputTensor(Function &leafFunc, std::unordered_map<Logica
 // leaf内复用注意：
 // 1. leaf的Incast、Outcast如果有重复，那么是不能被复用，也不需要复用的。
 // 2. reshape的相关处理
-// 3. 对outcast中没有actual raw magic且数量为1，且rawshape = shape的做广度优先遍历, 找到距离最近的一个incast，并将他们标记为
-// 一对可以复用的incast outcast pair。
+// 3. 对outcast中没有actual raw magic且数量为1，且rawshape = shape的做广度优先遍历,
+// 找到距离最近的一个incast，并将他们标记为 一对可以复用的incast outcast pair。
 // 4. 如果incast的size大于outcast，那么也可以复用，但是要给outcast的tensor上打上偏移量。
 // 5. 如果outcast的shape不等于rawshape，那么不能复用，这种场景较为复杂，有优化空间
 // 6. 如果outcast在leafFunction中存在后继的reshape，那么不需要复用
 void Allocator::ProcessLeafGlobalMemoryReuse(Function &leafFunc) {
     APASS_LOG_DEBUG_F(Elements::Operation, "Start processing the reuse of leaf function: %s (hash %lu).",
-                      leafFunc.GetMagicName().c_str(), leafFunc.GetFunctionHash().GetHash());
+        leafFunc.GetMagicName().c_str(), leafFunc.GetFunctionHash().GetHash());
     std::unordered_map<LogicalTensorPtr, size_t> tensorToInfo;
     std::vector<WorkspaceInfo> outWspInfo;
     std::unordered_map<LogicalTensorPtr, WorkspaceInfo> inputWorkspaceInfoMap;
     // 获取或创建该 leaf function 的 LeafFuncOutputInputReuseMap_ 数据
-    std::vector<WorkspaceInfo>& leafFuncReuseMap = GetLeafFuncOutputInputReuseMap(leafFunc);
+    std::vector<WorkspaceInfo> &leafFuncReuseMap = GetLeafFuncOutputInputReuseMap(leafFunc);
     CollectOutputTensor(leafFunc, tensorToInfo, outWspInfo, leafFuncReuseMap);
     CollectInputTensor(leafFunc, inputWorkspaceInfoMap);
     // 处理每个输出tensor的内存复用
     for (auto &wspInfo : outWspInfo) {
         ProcessOutputForGlobalMemoryReuse(leafFunc, wspInfo, inputWorkspaceInfoMap, leafFuncReuseMap);
-        APASS_LOG_DEBUG_F(Elements::Tensor,
-                          "End reuse check for output: magic=%d rawmagic=%d size=%lu count=%d.", wspInfo.tensor->magic,
-                          wspInfo.tensor->tensor->rawmagic, wspInfo.size, wspInfo.count);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "End reuse check for output: magic=%d rawmagic=%d size=%lu count=%d.",
+            wspInfo.tensor->magic, wspInfo.tensor->tensor->rawmagic, wspInfo.size, wspInfo.count);
     }
 }
 
 // 检查两个消费者在空间上是否有重叠
 bool DoConsumersOverlap(size_t firstIdx, size_t secondIdx, const std::vector<std::vector<int>> &allOffsets,
     const std::vector<std::vector<int>> &allShapes) {
-    const auto& firstOffset = allOffsets[firstIdx];
-    const auto& secondOffset = allOffsets[secondIdx];
-    const auto& firstShape = allShapes[firstIdx];
-    const auto& secondShape = allShapes[secondIdx];
+    const auto &firstOffset = allOffsets[firstIdx];
+    const auto &secondOffset = allOffsets[secondIdx];
+    const auto &firstShape = allShapes[firstIdx];
+    const auto &secondShape = allShapes[secondIdx];
 
     // 检查每个维度上的重叠情况
     for (size_t dim = 0; dim < firstOffset.size(); dim++) {
@@ -340,9 +341,8 @@ bool DoConsumersOverlap(size_t firstIdx, size_t secondIdx, const std::vector<std
         // 检查当前维度上是否有重叠
         if (firstEnd < secondStart || secondEnd < firstStart) {
             // 当前维度无重叠，即两个消费者空间上无重叠
-            APASS_LOG_DEBUG_F(Elements::Operation,
-                              "No overlap in dimension %zu (range [%d,%d] vs [%d,%d]).", dim, firstStart, firstEnd,
-                              secondStart, secondEnd);
+            APASS_LOG_DEBUG_F(Elements::Operation, "No overlap in dimension %zu (range [%d,%d] vs [%d,%d]).", dim,
+                firstStart, firstEnd, secondStart, secondEnd);
             return false;
         }
     }
@@ -385,7 +385,7 @@ void RecordAllConsumerShapeAndOffset(LogicalTensorPtr &out, std::vector<std::vec
     std::vector<std::vector<int>> &allShapes, bool &canReuse) {
     const size_t outShapeSize = out->shape.size();
     const size_t rawShapeStartIdx = OFFSET_INDEX + outShapeSize;
-    for (Operation* consumer : out->GetConsumers()) {
+    for (Operation *consumer : out->GetConsumers()) {
         if (consumer->GetOpcode() != Opcode::OP_CALL) {
             continue;
         }
@@ -399,14 +399,14 @@ void RecordAllConsumerShapeAndOffset(LogicalTensorPtr &out, std::vector<std::vec
             // 准备存储当前消费者的偏移和形状
             allOffsets.emplace_back();
             allShapes.emplace_back();
-            auto& currentOffset = allOffsets.back();
-            auto& currentShape = allShapes.back();
+            auto &currentOffset = allOffsets.back();
+            auto &currentShape = allShapes.back();
 
-            CallOpAttribute *attr = dynamic_cast<CallOpAttribute *>(consumer->GetOpAttribute().get());
+            auto attr = std::dynamic_pointer_cast<CallOpAttribute>(consumer->GetOpAttribute());
             if (attr == nullptr) {
                 continue;
             }
-            auto& argList = attr->GetArgList()[inputIdx];
+            auto &argList = attr->GetArgList()[inputIdx];
             // 提取offset
             if (!ExtractImmediateArguments(argList, OFFSET_INDEX, outShapeSize, currentOffset)) {
                 canReuse = false;
@@ -426,7 +426,7 @@ void RecordAllConsumerShapeAndOffset(LogicalTensorPtr &out, std::vector<std::vec
 }
 
 void Allocator::MarkNonOverlappingConsumerTensors() {
-    for (Operation& operation : function_->Operations(false)) {
+    for (Operation &operation : function_->Operations(false)) {
         for (LogicalTensorPtr outputTensor : operation.GetOOperands()) {
             // 跳过根输出tensor
             if (rootOutCasts_.count(outputTensor->GetRawMagic()) != 0) {
@@ -466,8 +466,8 @@ void Allocator::InitializeLeafGlobalMemoryReuse() {
         APASS_LOG_EVENT_F(Elements::Tensor, "Skip reuse judgment");
         return;
     }
-    for (auto& program : function_->programs_) {
-        Function* leafProgram = program.second;
+    for (auto &program : function_->programs_) {
+        Function *leafProgram = program.second;
         ProcessLeafGlobalMemoryReuse(*leafProgram);
     }
     // 标记无重叠的消费者张量
@@ -475,13 +475,13 @@ void Allocator::InitializeLeafGlobalMemoryReuse() {
 }
 
 /* 如果previous tensor的consumer中包含了tensor的producer，那么不能复用。
-   其余场景，如果previous tensor的所有consumer到tensor的一个producer之间有连接，那么意味着，tensor的producer的执行，一定要
+   其余场景，如果previous
+   tensor的所有consumer到tensor的一个producer之间有连接，那么意味着，tensor的producer的执行，一定要
    等到preivous的所有consumer都执行完。 */
 bool TensorBucket::HasTopoDependency(const LargeBitmap &producerOpsBitmap) const {
     for (const uint64_t consumerOpIndex : consumerOpIdxs_) {
         if (!producerOpsBitmap.GetBit(consumerOpIndex)) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "Missing connection to consumer op %lu.",
-                              consumerOpIndex);
+            APASS_LOG_DEBUG_F(Elements::Operation, "Missing connection to consumer op %lu.", consumerOpIndex);
             return false;
         }
     }
@@ -509,8 +509,8 @@ TensorBucket &Allocator::GetBestFitBucket(const TensorsDesc &tensorsDesc) {
     auto &first = *(tensorsDesc.tensors.begin());
     int64_t rawDataSize = first->tensor->GetRawDataSize();
     int64_t rawDataSizeKey = rawDataSize / MEM_PROPORTION_COEFF;
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Searching bucket for tensor: magic=%d rawmagic=%d size=%ld.",
-                      first->magic, first->tensor->rawmagic, rawDataSize);
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Searching bucket for tensor: magic=%d rawmagic=%d size=%ld.", first->magic,
+        first->tensor->rawmagic, rawDataSize);
     if (skipReuseJudgment_) {
         return HandleNewBuckets(tensorsDesc, rawDataSize, first->magic);
     }
@@ -536,8 +536,7 @@ TensorBucket &Allocator::GetBestFitBucket(const TensorsDesc &tensorsDesc) {
                 buckets_[bucketIdx].HasTopoDependency(tensorsDesc.connectionOpsBitmap)) {
                 bucketsIdxToSize_[bucketIdx] = rawDataSize;
                 UpdateTensorMagicToBucketIdx(tensorsDesc.tensors, bucketIdx);
-                APASS_LOG_DEBUG_F(Elements::Tensor, "Reusing bucket %d for tensor magic=%d.",
-                                  bucketIdx, first->magic);
+                APASS_LOG_DEBUG_F(Elements::Tensor, "Reusing bucket %d for tensor magic=%d.", bucketIdx, first->magic);
                 return buckets_[bucketIdx];
             }
         }
@@ -588,7 +587,7 @@ void Allocator::CalStridesStorageOffset(size_t dimCount, const LogicalTensorPtr 
     storageOffset *= bytesPerElement;
 }
 
-bool Allocator::GetStorageOffsetByCall(Operation& callOp, size_t inputIdx, uint64_t& storageOffset) const {
+bool Allocator::GetStorageOffsetByCall(Operation &callOp, size_t inputIdx, uint64_t &storageOffset) const {
     auto &input = callOp.GetIOperands()[inputIdx];
     if (input == nullptr) {
         return false;
@@ -597,7 +596,7 @@ bool Allocator::GetStorageOffsetByCall(Operation& callOp, size_t inputIdx, uint6
     storageOffset = input->storageOffset_;
 
     // 获取参数列表
-    CallOpAttribute* callAttr = dynamic_cast<CallOpAttribute*>(callOp.GetOpAttribute().get());
+    auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(callOp.GetOpAttribute());
     if (callAttr == nullptr) {
         return false;
     }
@@ -605,7 +604,7 @@ bool Allocator::GetStorageOffsetByCall(Operation& callOp, size_t inputIdx, uint6
     if (argIdx >= callAttr->GetArgList().size()) {
         return false;
     }
-    auto& argList = callAttr->GetArgList()[argIdx];
+    auto &argList = callAttr->GetArgList()[argIdx];
 
     // 提取offset和shape
     const size_t dimCount = input->shape.size();
@@ -619,7 +618,7 @@ bool Allocator::GetStorageOffsetByCall(Operation& callOp, size_t inputIdx, uint6
 }
 
 bool Allocator::CheckAllConsumersConnectedToOp(const LogicalTensorPtr &tensor, Operation &op) const {
-    for (const Operation* consumer : tensor->GetConsumers()) {
+    for (const Operation *consumer : tensor->GetConsumers()) {
         if (consumer == &op) {
             continue;
         }
@@ -640,7 +639,7 @@ bool Allocator::TryReuseInputForOutput(
     auto cacheValue = Program::GetInstance().TryHitCahce(calleeHash);
     if (cacheValue == std::nullopt) {
         APASS_LOG_WARN_F(Elements::Operation, "Cannot find program hash %lu by op %d.",
-                         callOp.GetCalleeHash().GetHash(), callOp.opmagic);
+            callOp.GetCalleeHash().GetHash(), callOp.opmagic);
         return false;
     }
     Function* leafProgram = cacheValue->GetFunction();
@@ -650,7 +649,7 @@ bool Allocator::TryReuseInputForOutput(
     if (reuseInfoIt == leafFuncOutputInputReuseMap_.end()) {
         return false;
     }
-    const auto& reuseMapping = reuseInfoIt->second;
+    const auto &reuseMapping = reuseInfoIt->second;
 
     // 验证输出索引有效性
     if (outputIdx >= reuseMapping.size()) {
@@ -658,7 +657,7 @@ bool Allocator::TryReuseInputForOutput(
     }
 
     // 获取复用配置
-    const auto& incastInfo = reuseMapping[outputIdx];
+    const auto &incastInfo = reuseMapping[outputIdx];
     const size_t incastIdx = incastInfo.position;
     if (incastInfo.count == -1 || incastIdx >= callOp.GetIOperands().size()) {
         return false;
@@ -669,7 +668,7 @@ bool Allocator::TryReuseInputForOutput(
     if (tensorConsumerNoOverlap_.count(candidateInput->GetMagic()) == 0) {
         if (!CheckAllConsumersConnectedToOp(candidateInput, callOp)) {
             APASS_LOG_DEBUG_F(Elements::Tensor, "Input %d has multiple consumers not linked to op %d.",
-                              candidateInput->magic, callOp.opmagic);
+                candidateInput->magic, callOp.opmagic);
             return false;
         }
     }
@@ -681,8 +680,8 @@ bool Allocator::TryReuseInputForOutput(
         return false;
     }
     APASS_LOG_DEBUG_F(Elements::Tensor, "Callop %d leaf function %s (hash %lu) output %zu reuses input %d.",
-                      callOp.opmagic, leafProgram->GetMagicName().c_str(), leafProgram->GetFunctionHash().GetHash(),
-                      outputIdx, incastIdx);
+        callOp.opmagic, leafProgram->GetMagicName().c_str(), leafProgram->GetFunctionHash().GetHash(), outputIdx,
+        incastIdx);
     return true;
 }
 
@@ -693,7 +692,7 @@ void Allocator::UpdateStorageForActualRaw(LogicalTensorPtr &input) const {
 
     // 获取当前actualRawmagic的tensor集合
     int64_t actualRawMagic = input->tensor->actualRawmagic;
-    auto& tensorMap = function_->GetTensorMap().tensorMap_;
+    auto &tensorMap = function_->GetTensorMap().tensorMap_;
     auto iter = tensorMap.find(actualRawMagic);
     if (iter == tensorMap.end() || iter->second.empty()) {
         return;
@@ -706,10 +705,10 @@ void Allocator::UpdateStorageForActualRaw(LogicalTensorPtr &input) const {
 }
 
 void UpdateCallOpRawShape(Operation &consumer, const LogicalTensorPtr &output) {
-    const std::vector<LogicalTensorPtr>& consumerInputs = consumer.GetIOperands();
+    const std::vector<LogicalTensorPtr> &consumerInputs = consumer.GetIOperands();
     const size_t outputShapeSize = output->shape.size();
     const size_t rawShapeStartIndex = OFFSET_INDEX + RAW_SHAPE_POS * outputShapeSize;
-    CallOpAttribute* callAttr = dynamic_cast<CallOpAttribute*>(consumer.GetOpAttribute().get());
+    auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(consumer.GetOpAttribute());
     if (callAttr == nullptr) {
         return;
     }
@@ -721,7 +720,7 @@ void UpdateCallOpRawShape(Operation &consumer, const LogicalTensorPtr &output) {
         }
 
         // 获取参数列表
-        auto& argList = callAttr->GetArgList()[inputIndex];
+        auto &argList = callAttr->GetArgList()[inputIndex];
 
         // 更新原始形状参数
         for (size_t dimIndex = 0; dimIndex < outputShapeSize; dimIndex++) {
@@ -754,12 +753,12 @@ void RefreshCallRawShape(
     APASS_LOG_DEBUG_F(Elements::Tensor, "Updating rawshape for tensor %d: [%s] -> [%s]", output->magic,
         vectorToString(output->tensor->rawshape).c_str(), vectorToString(reusableInput->tensor->rawshape).c_str());
     output->tensor->UpdateRawShape(reusableInput->tensor->rawshape);
-    CallOpAttribute* callAttr = dynamic_cast<CallOpAttribute*>(callOp.GetOpAttribute().get());
+    auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(callOp.GetOpAttribute());
     if (callAttr == nullptr) {
         return;
     }
     size_t argListIndex = callOp.GetIOperands().size() + outputIndex;
-    auto& argList = callAttr->GetArgList()[argListIndex];
+    auto &argList = callAttr->GetArgList()[argListIndex];
 
     // 刷新producer CallOp的Attr中的output rawshape数据
     const size_t shapeSize = reusableInput->shape.size();
@@ -771,17 +770,17 @@ void RefreshCallRawShape(
     }
 
     // 刷新对应的consumer CallOp的Attr中的input rawshape数据
-    for (Operation* consumer : output->GetConsumers()) {
+    for (Operation *consumer : output->GetConsumers()) {
         if (consumer->GetOpcode() != Opcode::OP_CALL) {
-            APASS_LOG_WARN_F(Elements::Operation, "Output magic %d consumer is %d %s.",
-                             output->magic, consumer->opmagic, consumer->GetOpcodeStr().c_str());
+            APASS_LOG_WARN_F(Elements::Operation, "Output magic %d consumer is %d %s.", output->magic,
+                consumer->opmagic, consumer->GetOpcodeStr().c_str());
             continue;
         }
         UpdateCallOpRawShape(*consumer, output);
     }
 }
 
-void Allocator::HandleNewTensor(Operation& callOp, size_t outputIdx, LogicalTensorPtr& outputTensor) {
+void Allocator::HandleNewTensor(Operation &callOp, size_t outputIdx, LogicalTensorPtr &outputTensor) {
     LogicalTensorPtr reusableInput = nullptr;
     const bool canReuse = TryReuseInputForOutput(callOp, outputIdx, reusableInput, outputTensor->storageOffset_);
     if (canReuse && reusableInput != nullptr) {
@@ -790,7 +789,7 @@ void Allocator::HandleNewTensor(Operation& callOp, size_t outputIdx, LogicalTens
         auto storageRecord = storageMap_.find(reusableInput->GetRawMagic());
         if (storageRecord == storageMap_.end()) {
             APASS_LOG_WARN_F(Elements::Tensor, "Cannot find reused input tensor: magic %d, rawmagic %d.",
-                             reusableInput->magic, reusableInput->GetRawMagic());
+                reusableInput->magic, reusableInput->GetRawMagic());
             return;
         }
         RefreshCallRawShape(callOp, outputIdx, outputTensor, reusableInput);
@@ -801,8 +800,8 @@ void Allocator::HandleNewTensor(Operation& callOp, size_t outputIdx, LogicalTens
         tensorsDesc.tensors.emplace(outputTensor);
         storageMap_.emplace(outputTensor->GetRawMagic(), storageIndex);
 
-        APASS_LOG_INFO_F(Elements::Tensor, "Reused storage for new tensor: magic=%d via input=%d.",
-                         outputTensor->magic, reusableInput->magic);
+        APASS_LOG_INFO_F(Elements::Tensor, "Reused storage for new tensor: magic=%d via input=%d.", outputTensor->magic,
+            reusableInput->magic);
         return;
     }
 
@@ -821,8 +820,8 @@ void Allocator::HandleNewTensor(Operation& callOp, size_t outputIdx, LogicalTens
 
     // 处理actualRawmagic的tensor集合
     UpdateStorageForActualRaw(outputTensor);
-    APASS_LOG_INFO_F(Elements::Tensor,
-        "New storage created for tensor: magic=%d size=%lu.", outputTensor->magic, outputTensor->storage_->length_);
+    APASS_LOG_INFO_F(Elements::Tensor, "New storage created for tensor: magic=%d size=%lu.", outputTensor->magic,
+        outputTensor->storage_->length_);
 }
 
 void Allocator::ProcessOperations() {
@@ -954,8 +953,7 @@ Status Allocator::UpdateStorageId(TensorsDesc &tensorsDesc, std::unordered_map<i
     }
     auto &tensor = *(tensorsDesc.tensors.begin());
     if (tensor->storage_ == nullptr) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Tensor rawMagic:%d, storage is nullptr.",
-                          tensor->GetRawMagic());
+        APASS_LOG_ERROR_F(Elements::Tensor, "Tensor rawMagic:%d, storage is nullptr.", tensor->GetRawMagic());
         return FAILED;
     }
 
@@ -974,25 +972,26 @@ Status Allocator::UpdateIncastOutCast() {
     auto callOps = function_->Operations(false);
     for (const auto &callOp : callOps) {
         if (callOp.GetOpcode() != Opcode::OP_CALL) {
-            continue; 
+            continue;
         }
-        auto callAttr = dynamic_cast<CallOpAttribute *>(callOp.GetOpAttribute().get());
+        auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(callOp.GetOpAttribute());
         if (callAttr == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Op %d callAttr is nullptr.%s", callOp.opmagic, GetFormatBacktrace(callOp).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "Op %d callAttr is nullptr.%s", callOp.opmagic,
+                GetFormatBacktrace(callOp).c_str());
             return FAILED;
         }
         auto &incasts = callAttr->invokeInfo_->incastTensorParamList_;
         auto &outcasts = callAttr->invokeInfo_->outcastTensorParamList_;
         if (incasts.size() > callOp.iOperand.size()) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                              "Op incasts.size:%ld, is larger than iOperand.size:%ld, opCode:%d.%s", incasts.size(),
-                              callOp.iOperand.size(), callOp.GetOpcode(), GetFormatBacktrace(callOp).c_str());
+                "Op incasts.size:%ld, is larger than iOperand.size:%ld, opCode:%d.%s", incasts.size(),
+                callOp.iOperand.size(), callOp.GetOpcode(), GetFormatBacktrace(callOp).c_str());
             return FAILED;
         }
         if (outcasts.size() > callOp.oOperand.size()) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                              "Op incasts.size:%ld, is larger than iOperand.size:%ld, opCode:%d.%s", incasts.size(),
-                              callOp.iOperand.size(), callOp.GetOpcode(), GetFormatBacktrace(callOp).c_str());
+                "Op incasts.size:%ld, is larger than iOperand.size:%ld, opCode:%d.%s", incasts.size(),
+                callOp.iOperand.size(), callOp.GetOpcode(), GetFormatBacktrace(callOp).c_str());
             return FAILED;
         }
         for (size_t i = 0; i < incasts.size(); ++i) {
@@ -1008,24 +1007,23 @@ Status Allocator::UpdateIncastOutCast() {
 }
 
 Status Allocator::Allocate() {
-    APASS_LOG_INFO_F(Elements::Tensor, "Starting memory allocation with %zu storage entries.",
-                     storageNeedToAllocate_.size());
+    APASS_LOG_INFO_F(
+        Elements::Tensor, "Starting memory allocation with %zu storage entries.", storageNeedToAllocate_.size());
     for (auto &tensorsDesc : storageNeedToAllocate_) {
         auto &tensor = *(tensorsDesc.tensors.begin());
         if (tensor->storage_ == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor rawMagic:%d, storage is nullptr.",
-                              tensor->GetRawMagic());
+            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor rawMagic:%d, storage is nullptr.", tensor->GetRawMagic());
             return FAILED;
         }
         StorageNeedToAllocatePreProcess(tensorsDesc);
         TensorBucket &bucket = GetBestFitBucket(tensorsDesc);
-        if(!bucket.AddTensorGroup(tensorsDesc)) {
-            APASS_LOG_ERROR_F(Elements::Tensor,
-                              "TensorsDesc.tensors is empty, Cannot add empty tensor group to bucket.");
+        if (!bucket.AddTensorGroup(tensorsDesc)) {
+            APASS_LOG_ERROR_F(
+                Elements::Tensor, "TensorsDesc.tensors is empty, Cannot add empty tensor group to bucket.");
             return FAILED;
         }
-        APASS_LOG_DEBUG_F(Elements::Tensor,
-            "Allocating storage for tensor: rawmagic=%d size=%ld.", tensor->GetRawMagic(), tensor->storage_->length_);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Allocating storage for tensor: rawmagic=%d size=%ld.",
+            tensor->GetRawMagic(), tensor->storage_->length_);
     }
     for (auto &bucket : buckets_) {
         bucket.UpdateOffset(size_);
@@ -1034,8 +1032,8 @@ Status Allocator::Allocate() {
     dummyPackets_.UpdateOffset(size_);
     size_ += dummyPackets_.GetSize();
 
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Total memory allocated: %lu bytes across %zu buckets.",
-                      size_, buckets_.size());
+    APASS_LOG_DEBUG_F(
+        Elements::Tensor, "Total memory allocated: %lu bytes across %zu buckets.", size_, buckets_.size());
     // 根据storage id刷新 DDRId, start相同认为是一个storage
     std::unordered_map<int64_t, int> idMap;
     int storageId = 0;
@@ -1052,8 +1050,8 @@ Status Allocator::Allocate() {
 Status GlobalMemoryReuse::RunOnFunction(Function &function) {
     /* 为incast、outcast类型申请storage，需要正确处理actual rawmagic */
     /* 标注每个CallOp输出Tensor生命周期，生命周期 */
-    APASS_LOG_INFO_F(Elements::Operation, "===> Start GlobalMemoryReuse on function: %s.",
-                     function.GetMagicName().c_str());
+    APASS_LOG_INFO_F(
+        Elements::Operation, "===> Start GlobalMemoryReuse on function: %s.", function.GetMagicName().c_str());
     if (function.rootFunc_ == nullptr) {
         APASS_LOG_ERROR_F(Elements::Function, "rootFunc_ is nullptr.");
         return FAILED;

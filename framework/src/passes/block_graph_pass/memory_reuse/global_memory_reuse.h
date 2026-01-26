@@ -28,8 +28,8 @@ struct WorkspaceInfo {
     bool used = false;
     LogicalTensorPtr tensor = nullptr;
     WorkspaceInfo() {}
-    WorkspaceInfo(int64_t countIn, size_t positionIn, uint64_t sizeIn, const LogicalTensorPtr &tensorIn) :
-        count(countIn), position(positionIn), size(sizeIn), tensor(tensorIn) {}
+    WorkspaceInfo(int64_t countIn, size_t positionIn, uint64_t sizeIn, const LogicalTensorPtr &tensorIn)
+        : count(countIn), position(positionIn), size(sizeIn), tensor(tensorIn) {}
 };
 
 struct TensorsDesc {
@@ -37,8 +37,8 @@ struct TensorsDesc {
     LargeBitmap connectionOpsBitmap; // 作为新tensor，判断是否可以复用bucket时使用的连接bitmap
     std::set<LogicalTensorPtr> tensors;
     std::unordered_set<uint64_t> consumerOpIdxs; // 放入bucket后，作为内存桶是否可以再次复用，需要判断的consumerOp集合
-    TensorsDesc(): connectionOpsBitmap(0) {}
-    TensorsDesc(Function *func): connectionOpsBitmap(func->Operations(false).size()) {}
+    TensorsDesc() : connectionOpsBitmap(0) {}
+    TensorsDesc(Function *func) : connectionOpsBitmap(func->Operations(false).size()) {}
 };
 
 class TensorBucket {
@@ -52,12 +52,12 @@ public:
     // 检查previous的所有consumer是否有一条到tensor的producer的通路
     // 保证tensor在写的时候，previous的所有consumer都已经读取完毕
     bool HasTopoDependency(const LargeBitmap &producerOpsBitmap) const;
+
 private:
-    
     uint64_t offset_{0};
     uint64_t size_{0};
     std::vector<std::set<LogicalTensorPtr>> tensorGroups_; // 所有rawTensor相同的tensor构成了一个tensorGroup
-    std::unordered_set<uint64_t> consumerOpIdxs_;  // 新tensor能否复用本bucket，需要判断的consumerOp集合
+    std::unordered_set<uint64_t> consumerOpIdxs_;          // 新tensor能否复用本bucket，需要判断的consumerOp集合
 };
 
 class Allocator {
@@ -72,7 +72,7 @@ public:
 private:
     void InitializeRootCasts();
     void ProcessOperations();
-    void HandleNewTensor(Operation& callOp, size_t outputIdx, LogicalTensorPtr& outputTensor);
+    void HandleNewTensor(Operation &callOp, size_t outputIdx, LogicalTensorPtr &outputTensor);
     void CollectComsuerOpDesc(TensorsDesc &tensorsDesc);
     void RemoveRedundantComsuerOp(TensorsDesc &tensorsDesc);
     void CollectConnectionOps(TensorsDesc &tensorsDesc);
@@ -108,13 +108,14 @@ private:
         std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap,
         std::vector<WorkspaceInfo> &leafFuncReuseMap);
     void ProcessOutputForGlobalMemoryReuse(Function &leafFunc, WorkspaceInfo &wspInfo,
-        std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap, std::vector<WorkspaceInfo> &leafFuncReuseMap);
+        std::unordered_map<LogicalTensorPtr, WorkspaceInfo> &inputWorkspaceInfoMap,
+        std::vector<WorkspaceInfo> &leafFuncReuseMap);
     Status UpdateIncastOutCast();
 
     std::vector<TensorBucket> buckets_;
 
     // first为buckets的最新一个tensor的size，second是对应的bucket index集合
-    std::map<int64_t, std::vector<int64_t>> bucketsSizeToIdx_; 
+    std::map<int64_t, std::vector<int64_t>> bucketsSizeToIdx_;
 
     TensorBucket dummyPackets_; // dummy tensor的bucket
     std::unordered_map<int, size_t> storageMap_;
@@ -126,10 +127,10 @@ private:
     std::unordered_set<int> rootInCasts_;
     std::unordered_set<int> rootOutCasts_;
     std::unordered_set<int> tensorConsumerNoOverlap_;
-    
+
     // 使用 map 存储，key 为 function 指针
     // function内，outcast可以和哪个incast复用gm内存，-1表示不能复用
-    std::unordered_map<Function*, std::vector<WorkspaceInfo>> leafFuncOutputInputReuseMap_;
+    std::unordered_map<Function *, std::vector<WorkspaceInfo>> leafFuncOutputInputReuseMap_;
 
     std::unordered_map<int, int> tensorMagicToBucketIdx_;
     std::unordered_map<int, int64_t> bucketsIdxToSize_;

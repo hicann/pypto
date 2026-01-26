@@ -19,8 +19,7 @@
 #define MODULE_NAME "GlobalMemoryReuse"
 
 namespace npu::tile_fwk {
-ConnectionMatrix::ConnectionMatrix(Function *func)
-    : impl_(std::make_shared<ConnectionMatrixImpl>(func)) {}
+ConnectionMatrix::ConnectionMatrix(Function *func) : impl_(std::make_shared<ConnectionMatrixImpl>(func)) {}
 
 bool ConnectionMatrix::IsConnected(const Operation &a, const Operation &b) const {
     if (impl_ == nullptr) {
@@ -36,8 +35,7 @@ bool ConnectionMatrix::IsConnected(uint64_t indexA, uint64_t indexB) const {
     return impl_->IsConnected(indexA, indexB);
 }
 
-void ConnectionMatrix::SetConnectivity(const std::unordered_set<Operation *> &producers,
-    Operation &op) {
+void ConnectionMatrix::SetConnectivity(const std::unordered_set<Operation *> &producers, Operation &op) {
     if (impl_ == nullptr) {
         return;
     }
@@ -56,14 +54,14 @@ uint64_t ConnectionMatrix::GetIndex(const Operation &op) const {
     return impl_->GetIndex(op);
 }
 
-const LargeBitmap& ConnectionMatrix::GetBitMap(const Operation &op) const {
-    const ConnectionMatrixImpl& const_impl = *impl_;
-    return const_impl.GetBitMap(op); 
+const LargeBitmap &ConnectionMatrix::GetBitMap(const Operation &op) const {
+    const ConnectionMatrixImpl &const_impl = *impl_;
+    return const_impl.GetBitMap(op);
 }
 
-const LargeBitmap& ConnectionMatrix::GetBitMap(uint64_t index) const {
-    const ConnectionMatrixImpl& const_impl = *impl_;
-    return const_impl.GetBitMap(index); 
+const LargeBitmap &ConnectionMatrix::GetBitMap(uint64_t index) const {
+    const ConnectionMatrixImpl &const_impl = *impl_;
+    return const_impl.GetBitMap(index);
 }
 
 ConnectionMatrixImpl::ConnectionMatrixImpl(Function *func) : func_(func) {
@@ -93,8 +91,7 @@ void ConnectionMatrixImpl::Generate(Function *func) {
     return;
 }
 
-void ConnectionMatrixImpl::SetConnectivity(const std::unordered_set<Operation *> &producers,
-    Operation &op) {
+void ConnectionMatrixImpl::SetConnectivity(const std::unordered_set<Operation *> &producers, Operation &op) {
     LargeBitmap &bitmap = GetBitMap(op);
     if (producers.count(&op) == 0) {
         bitmap.SetValues(0U);
@@ -104,8 +101,8 @@ void ConnectionMatrixImpl::SetConnectivity(const std::unordered_set<Operation *>
     for (Operation *producer : producers) {
         if (producer != &op) {
             bitmap.Or(GetBitMap(*producer));
-            APASS_LOG_DEBUG_F(Elements::Function, "SetConnectivity for op %s %d and op %s %d.", producer->GetOpcodeStr().c_str(), producer->opmagic,
-                op.GetOpcodeStr().c_str(), op.opmagic);
+            APASS_LOG_DEBUG_F(Elements::Function, "SetConnectivity for op %s %d and op %s %d.",
+                producer->GetOpcodeStr().c_str(), producer->opmagic, op.GetOpcodeStr().c_str(), op.opmagic);
         }
     }
 }
@@ -120,7 +117,8 @@ bool ConnectionMatrixImpl::IsConnected(const Operation &a, const Operation &b) c
 
 bool ConnectionMatrixImpl::IsConnected(uint64_t indexA, uint64_t indexB) const {
     if (indexA >= size_ || indexB >= size_) {
-        APASS_LOG_WARN_F(Elements::Function, "Func ConnectionMatrixImpl::IsConnected invalid index: indexA %d, indexB, %d.", indexA, indexB);
+        APASS_LOG_WARN_F(Elements::Function,
+            "Func ConnectionMatrixImpl::IsConnected invalid index: indexA %d, indexB, %d.", indexA, indexB);
         return false;
     }
     return GetBitMap(indexB).GetBit(static_cast<size_t>(indexA));
@@ -149,4 +147,4 @@ LargeBitmap &ConnectionMatrixImpl::GetBitMap(uint64_t index) {
     }
     return bitMaps_[index];
 }
-}
+} // namespace npu::tile_fwk

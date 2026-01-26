@@ -51,10 +51,11 @@ public:
     void ClearBit(const size_t bitIdx);
 
     void ResizeBits(const size_t newSize);
+
 private:
     // Number of element in vector bits
     size_t size_;
 
     std::vector<uint64_t> bits_;
 };
-}
+} // namespace npu::tile_fwk

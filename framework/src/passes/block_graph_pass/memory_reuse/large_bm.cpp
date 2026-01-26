@@ -53,14 +53,14 @@ void LargeBitmap::ResizeBits(const size_t newSize) {
 // Shifting right by 6 bits is equivalent to dividing by 64
 void LargeBitmap::ClearBit(const size_t bitIdx) {
     if (bitIdx >= size_) {
-        APASS_LOG_WARN_F(Elements::Function, "Func LargeBitmap::ClearBit bitIdx %zu is not valid, total size is %zu.", bitIdx, size_);
+        APASS_LOG_WARN_F(Elements::Function, "Func LargeBitmap::ClearBit bitIdx %zu is not valid, total size is %zu.",
+            bitIdx, size_);
         return;
     }
     bits_[bitIdx >> RIGHT_SHIFT_SIZE] &= ~(1UL << (bitIdx % BITS_EACH_VALUE));
 }
 
-LargeBitmap::LargeBitmap(const size_t &size)
-    : size_(size), bits_(AlignArraySize(size), 0UL) {}
+LargeBitmap::LargeBitmap(const size_t &size) : size_(size), bits_(AlignArraySize(size), 0UL) {}
 
 bool LargeBitmap::operator==(const LargeBitmap &anotherBm) const {
     return bits_ == anotherBm.bits_;
@@ -113,4 +113,4 @@ void LargeBitmap::And(const LargeBitmap &anotherBm) {
         ++index;
     }
 }
-}
+} // namespace npu::tile_fwk
