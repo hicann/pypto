@@ -29,6 +29,7 @@
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
 #include "tilefwk/core_func_data.h"
 #include "interface/configs/config_manager.h"
+#include "tilefwk/platform.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
 
@@ -303,7 +304,8 @@ public:
     }
 
     void InitPv() {
-        std::string soPath = std::string(std::getenv("ASCEND_HOME_PATH")) + "/toolkit/tools/simulator/Ascend910B1/lib/libpem_davinci.so";
+        auto socVersion = npu::tile_fwk::Platform::Instance().GetSoc().GetSocVersion();
+        std::string soPath = std::string(std::getenv("ASCEND_HOME_PATH")) + "/toolkit/tools/simulator/" + npu::tile_fwk::SocVersionToString(socVersion) + "/lib/libpem_davinci.so";
         void *handle = dlopen((soPath.c_str()), RTLD_LAZY);
         if (!handle) {
             throw std::runtime_error("can not load library: " + soPath);

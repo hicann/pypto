@@ -21,6 +21,7 @@
 
 namespace npu::tile_fwk {
 const std::string version = "version";
+const std::string socVersionInfo = "SoC_version";
 const std::string npuArchInfo = "NpuArch";
 const std::string socInfo = "SoCInfo";
 const std::string aiCoreCnt = "ai_core_cnt";
@@ -39,6 +40,10 @@ const std::unordered_map<std::string, NPUArch> npuArchMap = {
     {"3510", NPUArch::DAV_3510},
 };
 
+const std::unordered_map<std::string, SocVersion> socVersionMap = {
+    {"Ascend910B1", SocVersion::ASCEND_910B1},
+};
+
 // helper function
 MemoryType StringToMemoryType(const std::string& memType) {
     const std::unordered_map<std::string, MemoryType> memTypeMap = {
@@ -55,6 +60,15 @@ MemoryType StringToMemoryType(const std::string& memType) {
         return it->second;
     }
     return MemoryType::MEM_UNKNOWN;
+}
+
+SocVersion StringToSocVersion(const std::string& soc_version) {
+    auto it = socVersionMap.find(soc_version);
+    if (it != socVersionMap.end()) {
+        ALOG_DEBUG_F("Set SocVersion as %s.", soc_version.c_str());
+        return it->second;
+    }
+    return SocVersion::ASCEND_910B1;
 }
 
 NPUArch StringToNPUArch(const std::string& npuArch) {
@@ -125,6 +139,10 @@ bool Die::FindNearestPath(MemoryType from, MemoryType to, std::vector<MemoryType
 
 void SoC::SetNPUArch(const std::string& versionStr) {
     version_ = StringToNPUArch(versionStr);
+}
+
+void SoC::SetSocVersion(const std::string& versionStr) {
+    soc_version_ = StringToSocVersion(versionStr);
 }
 
 void SoC::SetCoreVersion(const std::unordered_map<std::string, std::string>& ver) {
@@ -247,10 +265,14 @@ Platform &Platform::Instance() {
 void Platform::LoadFromIni(const std::string &filePath) {
     npu::tile_fwk::INIParser parser;
     parser.Initialize(filePath);
+    std::string socVersion;
     std::string archType;
     std::unordered_map<std::string, std::string> versionInfo;
     if (parser.GetStringVal(version, npuArchInfo, archType) == SUCCESS) {
         GetSoc().SetNPUArch(archType);
+    }
+    if (parser.GetStringVal(version, socVersionInfo, socVersion) == SUCCESS) {
+        GetSoc().SetSocVersion(socVersion);
     }
     if (parser.GetCCECVersion(versionInfo) == SUCCESS) {
         GetSoc().SetCCECVersion(versionInfo);

@@ -297,12 +297,23 @@ public:
     AivCore& GetAIVCore() { return core_wrap_.GetAIVCore(); }
 };
 
+enum class SocVersion{
+    ASCEND_910B1
+};
+
 enum class NPUArch{
     DAV_1001 = 1001,
     DAV_2201 = 2201,
     DAV_3510 = 3510,
     DAV_UNKNOWN
 };
+
+inline std::string SocVersionToString(SocVersion soc_version) {
+    switch (soc_version) {
+        case SocVersion::ASCEND_910B1: return "Ascend910B1";
+        default: return "Ascend910B1";
+    }
+}
 
 inline std::string NPUArchToString(NPUArch npu_arch) {
     switch (npu_arch) {
@@ -316,6 +327,7 @@ inline std::string NPUArchToString(NPUArch npu_arch) {
 class SoC {
 private:
     Die die_;
+    SocVersion soc_version_;
     NPUArch version_;
     size_t dies_cnt_;
     size_t ai_core_cnt_;
@@ -324,6 +336,8 @@ private:
     size_t ai_cpu_cnt_;
 public:
     void SetDie(const Die& die) { die_ = die; }
+    void SetSocVersion(SocVersion soc_version) {soc_version_ = soc_version; }
+    void SetSocVersion(const std::string& soc_version);
     void SetNPUArch(NPUArch version) { version_ = version; }
     void SetNPUArch(const std::string& version);
     void SetDiesNum(size_t cnt) { dies_cnt_ = cnt; }
@@ -331,6 +345,7 @@ public:
     void SetCCECVersion(const std::unordered_map<std::string, std::string>& ver);
 
     Die& GetDies() { return die_; }
+    SocVersion GetSocVersion() const { return soc_version_; }
     NPUArch GetNPUArch() const { return version_; }
     size_t GetDiesNum() const { return dies_cnt_; }
     std::string GetCoreVersion(std::string CoreType);
@@ -357,6 +372,7 @@ public:
         std::stringstream ss;
         ss << "{\n";
         ss << "SOC_INFO : {\n";
+        ss << "    \"SOC_VERSION\" : " << static_cast<int>(soc_version_) << ",\n";
         ss << "    \"NPU_ARCH\" : " << static_cast<int>(version_) << ",\n";
         ss << "    \"DIES_NUM\" : " << dies_cnt_ << ",\n";
         ss << "    \"AI_CPU_NUM\" : " << ai_cpu_cnt_ << ",\n";
