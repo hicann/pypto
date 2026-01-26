@@ -50,11 +50,22 @@ public:
     }
 
     // 仅AICPU_0会调用
-     inline int32_t Init(DynDeviceTask *deviceTask) {
+    inline void InitDeviceArgs(DeviceArgs *deviceArgs) {
+        sharedBuffer_ = deviceArgs->sharedBuffer;
+        aicNum_ = deviceArgs->nrAic;
+        aivNum_ = deviceArgs->nrAiv;
+    }
+
+    // 仅AICPU_0会调用
+    inline int32_t Init(DynDeviceTask *deviceTask, bool profSwitch) {
         curDevTask_ = deviceTask;
         funcDataList_ = reinterpret_cast<DynFuncData*>(&deviceTask->GetDynFuncDataList()->At(0));
         readyQueue_ = reinterpret_cast<ReadyCoreFunctionQueue *>(deviceTask->devTask.readyAicpuFunctionQue);
         shmemWaitUntil_.Init(deviceTask);
+        if (profSwitch) {
+            KernelArgs *args = (KernelArgs *)(sharedBuffer_ + (aicNum_ + aivNum_) * SHARED_BUFFER_SIZE);
+            aicpuTaskStat_ = (Metrics*)(args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+        }
         return PrepareAicpuTask();
     }
 
@@ -68,7 +79,6 @@ public:
         taskCount = readyQueue_->tail - readyQueue_->head;
         readyQueue_->head += taskCount;
         ReadyQueueUnLock();
-
         for (uint32_t i = 0; i < taskCount; ++i) {
             auto ret = TaskDispatch(readyQueue_->elem[taskIdx + i]);
             if (ret != DEVICE_MACHINE_OK) {
@@ -129,7 +139,12 @@ private:
         int32_t ret = DEVICE_MACHINE_OK;
         auto taskType = GetTaskType(taskId);
         if (taskType < TaskType::TASK_TYPE_NUM) {
-            ret = shmemWaitUntil_.EnqueueOp(taskId);
+            TaskStat* taskStat = nullptr;
+            if (aicpuTaskStat_ != nullptr) {
+                taskStat = &(aicpuTaskStat_->tasks[aicpuTaskStat_->taskCount]);
+                ++aicpuTaskStat_->taskCount;
+            }
+            ret = shmemWaitUntil_.EnqueueOp(taskId, taskStat);
         }
         return ret;
     }
@@ -139,7 +154,9 @@ private:
             auto callList = curDevTask_->dynFuncDataCacheList[funcId].calleeList;
             for (size_t opIndex = 0; opIndex < curDevTask_->dynFuncDataCacheList[funcId].devFunc->GetOperationSize(); ++opIndex) {
                 auto coreType = curDevTask_->cceBinary[callList[opIndex]].coreType;
-                if (unlikely(coreType != static_cast<int>(MachineType::AICPU))) continue;
+                if (unlikely(coreType != static_cast<int>(MachineType::AICPU))) {
+                    continue;
+                }
                 uint32_t taskId = MakeTaskID(funcId, opIndex);
                 auto &code = curDevTask_->aicpuLeafBinary[callList[opIndex]].aicpuLeafCode;
                 auto ret = shmemWaitUntil_.PrepareTask(taskId, code);
@@ -156,5 +173,9 @@ private:
     npu::tile_fwk::Distributed::ShmemWaitUntil shmemWaitUntil_;
     DynDeviceTask *curDevTask_;
     DynFuncData *funcDataList_;
+    Metrics* aicpuTaskStat_;
+    uint64_t sharedBuffer_;
+    uint32_t aicNum_;
+    uint32_t aivNum_;
 };
 } // namespace npu::tile_fwk

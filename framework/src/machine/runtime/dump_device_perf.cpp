@@ -21,42 +21,40 @@
 #include "interface/utils/file_utils.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "interface/configs/config_manager.h"
+#include "machine/device/distributed/common.h"
 namespace npu::tile_fwk::dynamic {
 constexpr int DUMP_LEVEL_FOUR = 4;
 
-void ContructTaskInfo(const uint32_t &blockNum, json &rootTaskStats,
-                     const DeviceArgs &args, const std::vector<void *> &perfData) {
-    for (uint32_t i = 0; i < blockNum; i++) {
-        void* devPtr = perfData[i];
-        size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
-        std::vector<uint8_t> hostBuffer(dataSize);
-        rtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RT_MEMCPY_DEVICE_TO_HOST);
-        Metrics *aicpuMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
-        if (aicpuMetric->taskCount > MAX_DFX_TASK_NUM_PER_CORE) {
-            aicpuMetric->taskCount = MAX_DFX_TASK_NUM_PER_CORE;
+void ContructTaskInfo(const uint32_t &index, json &rootTaskStats, const std::vector<void *> &perfData,
+    const std::string& coreType) {
+    void* devPtr = perfData[index];
+    size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+    std::vector<uint8_t> hostBuffer(dataSize);
+    rtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RT_MEMCPY_DEVICE_TO_HOST);
+    Metrics *aicpuMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
+    if (aicpuMetric->taskCount > MAX_DFX_TASK_NUM_PER_CORE) {
+        aicpuMetric->taskCount = MAX_DFX_TASK_NUM_PER_CORE;
+    }
+    TaskStat* taskStats = aicpuMetric->tasks;
+    size_t numTasks = aicpuMetric->taskCount;
+    json coreObj;
+    coreObj["blockIdx"] = index;
+    coreObj["coreType"] = coreType;
+    json tasksArr = json::array();
+    for (size_t j = 0; j < numTasks; ++j) {
+        if (taskStats[j].execEnd != 0) {
+            json taskObj;
+            taskObj["seqNo"] = taskStats[j].seqNo;
+            taskObj["subGraphId"] = taskStats[j].subGraphId;
+            taskObj["taskId"] = taskStats[j].taskId;
+            taskObj["execStart"] = taskStats[j].execStart;
+            taskObj["execEnd"] = taskStats[j].execEnd;
+            tasksArr.push_back(taskObj);
         }
-        TaskStat* taskStats = aicpuMetric->tasks;
-        size_t numTasks = aicpuMetric->taskCount;
-        std::string coreType = (i < args.nrValidAic) ? "AIC" : "AIV";
-        json coreObj;
-        coreObj["blockIdx"] = i;
-        coreObj["coreType"] = coreType;
-        json tasksArr = json::array();
-        for (size_t j = 0; j < numTasks; ++j) {
-            if (taskStats[j].execEnd != 0) {
-                json taskObj;
-                taskObj["seqNo"] = taskStats[j].seqNo;
-                taskObj["subGraphId"] = taskStats[j].subGraphId;
-                taskObj["taskId"] = taskStats[j].taskId;
-                taskObj["execStart"] = taskStats[j].execStart;
-                taskObj["execEnd"] = taskStats[j].execEnd;
-                tasksArr.push_back(taskObj);
-            }
-        }
-        coreObj["tasks"] = tasksArr;
-        if (!tasksArr.empty()) {
-            rootTaskStats.push_back(coreObj);
-        }
+    }
+    coreObj["tasks"] = tasksArr;
+    if (!tasksArr.empty()) {
+        rootTaskStats.push_back(coreObj);
     }
 }
 
@@ -64,7 +62,14 @@ void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfDa
     json rootTaskStatus = json::array();
     auto blockNum = args.GetBlockNum();
     ALOG_INFO("GetBlockNum : %lu",  blockNum);
-    ContructTaskInfo(blockNum, rootTaskStatus, args, perfData);
+    for (uint32_t i = 0; i < blockNum; i++) {
+        std::string coreType = (i < args.nrValidAic) ? "AIC" : "AIV";
+        ContructTaskInfo(i, rootTaskStatus, perfData, coreType);
+    }
+    uint32_t aicoreBlockNum = args.nrAic + args.nrAiv;
+    for (uint32_t i = aicoreBlockNum; i < aicoreBlockNum + AICPU_NUM_OF_RUN_AICPU_TASKS; i++) {
+        ContructTaskInfo(i, rootTaskStatus, perfData, "AI-CPU");
+    }
     std::string jsonFilePath = npu::tile_fwk::config::LogTopFolder() + "/tilefwk_L1_prof_data.json";
     if (!DumpFile(rootTaskStatus.dump(DUMP_LEVEL_FOUR), jsonFilePath)) {
         ALOG_WARN_F("Contrust custom op json failed");

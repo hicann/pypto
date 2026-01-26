@@ -235,7 +235,8 @@ public:
         }
 
         if (IsNeedProcAicpuTask()) {
-            ret = aicpuTaskManager_.Init(reinterpret_cast<DynDeviceTask *>(curDevTask_));
+            const bool profSwitch = aicoreProf_.ProfIsEnable();
+            ret = aicpuTaskManager_.Init(reinterpret_cast<DynDeviceTask *>(curDevTask_), profSwitch);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
@@ -1326,6 +1327,9 @@ private:
         pendingResolveIndexList_.fill(0);
         taskDfxStatPos_.fill(REG_LOW_TASK_PING);
         isSendStop = false;
+        if (IsNeedProcAicpuTask()) {
+            aicpuTaskManager_.InitDeviceArgs(deviceArgs);
+        }
 
         wrapManager_.InitArchInfo(deviceArgs->archInfo);
         if (deviceArgs->machineConfig != static_cast<uint8_t>(MachineScheduleConfig::DEFAULT_SCH)) {
