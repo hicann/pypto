@@ -33,10 +33,22 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1) {
 
     if constexpr (op == BinaryScalarOp::MUL) {
         pto::TMULS(dst, src0, src1);
+        return;
     }
 
     if constexpr (op == BinaryScalarOp::DIV) {
         pto::TDIVS(dst, src0, src1);
+        return;
+    }
+
+    if constexpr (op == BinaryScalarOp::MAX) {
+        pto::TMAXS(dst, src0, src1);
+        return;
+    }
+
+    if constexpr (op == BinaryScalarOp::MIN) {
+        pto::TMINS(dst, src0, src1);
+        return;
     }
 }
 
@@ -82,5 +94,17 @@ TILEOP void TMulS(T0 dst, T1 src0, Scalar src1) {
 template <typename Scalar, typename T0, typename T1>
 TILEOP void TDivS(T0 dst, T1 src0, Scalar src1) {
     BinaryScalarCompute<BinaryScalarOp::DIV>(dst, src0, src1);
+}
+
+#define OP_TILE_OP_MAXS TMaxS
+template <typename Scalar, typename T0, typename T1>
+TILEOP void TMaxS(T0 dst, T1 src0, Scalar src1) {
+    BinaryScalarCompute<BinaryScalarOp::MAX>(dst, src0, src1);
+}
+
+#define OP_TILE_OP_MINS TMinS
+template <typename Scalar, typename T0, typename T1>
+TILEOP void TMinS(T0 dst, T1 src0, Scalar src1) {
+    BinaryScalarCompute<BinaryScalarOp::MIN>(dst, src0, src1);
 }
 #endif

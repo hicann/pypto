@@ -28,5 +28,5 @@ enum class PairBinaryOp : uint8_t { ADD = 0, MAX, MIN };
 
 enum class ReduceOp : uint8_t { SUM = 0, MAX, MIN};
 
-enum class BinaryScalarOp : uint8_t { ADD = 0, SUB, MUL, DIV };
+enum class BinaryScalarOp : uint8_t { ADD = 0, SUB, MUL, DIV, MAX, MIN };
 #endif // TILEOP_UTILS_COMMON_TYPE_H
