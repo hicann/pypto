@@ -229,6 +229,19 @@ inline void Topk(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t ax
     GetCalcOps()->Topk(out, self, axis, k, descending);
 }
 
+inline void TopkSort(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outTemp,
+                     LogicalTensorDataPtr self, int startIndex) {
+    GetCalcOps()->TopkSort(outValue, outTemp, self, startIndex);
+}
+
+inline void TopkMerge(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mergeSize) {
+    GetCalcOps()->TopkMerge(out, self, mergeSize);
+}
+
+inline void TopkExtract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int k, bool isIndex) {
+    GetCalcOps()->TopkExtract(out, self, k, isIndex);
+}
+
 // matmul
 inline void FormatNZ2ND(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->FormatNZ2ND(out, self);

@@ -554,3 +554,150 @@ TEST_F(DynamicOpsTest, Scatter) {
         }
     }
 }
+
+TEST_F(DynamicOpsTest, TopKSort) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 1;
+    int64_t n = 32;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, n * 2}, "outValue");
+    Tensor outTemp(DT_FP32, {b, n * 2}, "outTemp");
+
+    std::vector<float> inputData = {
+        31.0f, 15.0f, 27.0f, 8.0f, 19.0f, 3.0f, 23.0f, 11.0f,
+        7.0f, 28.0f, 16.0f, 2.0f, 24.0f, 9.0f, 30.0f, 14.0f,
+        22.0f, 5.0f, 18.0f, 1.0f, 26.0f, 10.0f, 29.0f, 13.0f,
+        6.0f, 20.0f, 12.0f, 25.0f, 4.0f, 21.0f, 0.0f, 17.0f
+    };
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+        RawTensorData::CreateConstantTensor<float>(outTemp, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue, outTemp}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            std::tie(outValue, outTemp) = TopKSort(t0, 0);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, TopKMerge) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 1;
+    int64_t n = 32;  // 32 elements = 16 packs
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor out(DT_FP32, {b, n}, "out");
+
+    // Pre-sorted pack data: two groups of 8 packs each
+    std::vector<float> packData = {
+        // First 8 packs (sorted descending)
+        30.0f, 0.0f, 28.0f, 1.0f, 26.0f, 2.0f, 24.0f, 3.0f,
+        22.0f, 4.0f, 20.0f, 5.0f, 18.0f, 6.0f, 16.0f, 7.0f,
+        // Second 8 packs (sorted descending)
+        31.0f, 8.0f, 29.0f, 9.0f, 27.0f, 10.0f, 25.0f, 11.0f,
+        23.0f, 12.0f, 21.0f, 13.0f, 19.0f, 14.0f, 17.0f, 15.0f
+    };
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, packData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            out = TopKMerge(t0, 8);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, TopKExtractValues) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 1;
+    int64_t n = 32;  // 16 packs
+    int64_t k = 8;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor out(DT_FP32, {1, k}, "out");
+
+    // Pack data with values and indices
+    std::vector<float> packData = {
+        100.0f, 5.0f, 95.0f, 12.0f, 90.0f, 3.0f, 85.0f, 18.0f,
+        80.0f, 7.0f, 75.0f, 21.0f, 70.0f, 1.0f, 65.0f, 14.0f,
+        60.0f, 9.0f, 55.0f, 25.0f, 50.0f, 2.0f, 45.0f, 16.0f,
+        40.0f, 11.0f, 35.0f, 28.0f, 30.0f, 4.0f, 25.0f, 19.0f
+    };
+
+    std::vector<float> expectedValues = {100.0f, 95.0f, 90.0f, 85.0f, 80.0f, 75.0f, 70.0f, 65.0f};
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, packData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 0.0f),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor(out, expectedValues),
+    });
+
+    FUNCTION("main", {self}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            out = TopKExtract(t0, k, false);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, TopKExtractIndices) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 1;
+    int64_t n = 32;  // 16 packs
+    int64_t k = 8;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor out(DT_INT32, {1, k}, "out");
+
+    // Pack data with values and indices
+    std::vector<float> packData = {
+        100.0f, 5.0f, 95.0f, 12.0f, 90.0f, 3.0f, 85.0f, 18.0f,
+        80.0f, 7.0f, 75.0f, 21.0f, 70.0f, 1.0f, 65.0f, 14.0f,
+        60.0f, 9.0f, 55.0f, 25.0f, 50.0f, 2.0f, 45.0f, 16.0f,
+        40.0f, 11.0f, 35.0f, 28.0f, 30.0f, 4.0f, 25.0f, 19.0f
+    };
+
+    std::vector<int32_t> expectedIndices = {5, 12, 3, 18, 7, 21, 1, 14};
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, packData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<int32_t>(out, 0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor(out, expectedIndices),
+    });
+
+    FUNCTION("main", {self}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            out = TopKExtract(t0, k, true);
+        }
+    }
+}
