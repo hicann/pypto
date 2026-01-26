@@ -326,6 +326,7 @@ class JitCallableWrapper:
                         torch_tensor,
                         name=name,
                         dynamic_axis=dynamic_axis if dynamic_axis else None,
+                        tensor_format=tensor_def.format,
                     )
                 )
             return pto_tensors

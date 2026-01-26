@@ -149,9 +149,18 @@ class LivenessAnalyzer(doc.NodeVisitor):
         self.vars_defined_in_loop = set()
 
         # Loop variable is defined here
+        # Support both single variable and tuple unpacking
         if isinstance(node.target, doc.Name):
             self._record_var_def(node.target.id)
             self.exempt_vars.add(node.target.id)  # Loop vars not auto-deleted
+        elif isinstance(node.target, (doc.Tuple, doc.List)):
+            # Tuple unpacking: for x, y in iterator
+            for elt in node.target.elts:
+                if isinstance(elt, doc.Name):
+                    self._record_var_def(elt.id)
+                    self.exempt_vars.add(elt.id)  # Loop vars not auto-deleted
+                # Note: nested tuples in loop targets are not supported
+                # (e.g., for (x, (y, z)) in iterator is not allowed)
 
         # Visit body
         for stmt in node.body:

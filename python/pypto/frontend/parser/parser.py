@@ -1407,15 +1407,34 @@ class Parser(doc.NodeVisitor):
                 ),
             )
 
-        # Extract the loop variable name
-        if not isinstance(node.target, doc.Name):
+        # Extract the loop variable(s) - support both single name and tuple unpacking
+        is_tuple_unpack = isinstance(node.target, (doc.Tuple, doc.List))
+
+        if isinstance(node.target, doc.Name):
+            # Single variable: for x in iterator
+            loop_var_name = node.target.id
+            target_names = [loop_var_name]
+        elif is_tuple_unpack:
+            # Tuple unpacking: for x, y in iterator
+            target_names = []
+            for elt in node.target.elts:
+                if not isinstance(elt, doc.Name):
+                    raise ParserError(
+                        elt,
+                        TypeError(
+                            f"Tuple unpacking in for loop only supports simple names, "
+                            f"but got {type(elt).__name__}."
+                        ),
+                    )
+                target_names.append(elt.id)
+        else:
             raise ParserError(
                 node.target,
                 TypeError(
-                    f"Loop variable must be a simple name, but got {type(node.target).__name__}."
+                    f"Loop variable must be a simple name or tuple/list for unpacking, "
+                    f"but got {type(node.target).__name__}."
                 ),
             )
-        loop_var_name = node.target.id
 
         # Try to evaluate the iterator expression (e.g., range(10))
         # This works even with symbolic values in range bounds because
@@ -1430,8 +1449,9 @@ class Parser(doc.NodeVisitor):
             start = iter_expr.start
             stop = iter_expr.stop
             step = iter_expr.step
+            # For range(), use the first target name as the loop variable name
             iterator = pypto.loop(
-                start, stop, step, name="Dynamic", idx_name=loop_var_name
+                start, stop, step, name="Dynamic", idx_name=target_names[0]
             )
         elif isinstance(iter_expr, Iterator):
             iterator = iter_expr
@@ -1450,8 +1470,30 @@ class Parser(doc.NodeVisitor):
         with self.context.with_frame():
             # The loop variable is yielded by the iterator
             for loop_var in iterator:
-                # Add the loop variable to the context
-                self.context.add(loop_var_name, loop_var)
+                if is_tuple_unpack:
+                    # Unpack tuple/list: for x, y in iterator
+                    # loop_var should be a tuple/list that can be unpacked
+                    if not isinstance(loop_var, (tuple, list)):
+                        raise ParserError(
+                            node.target,
+                            TypeError(
+                                f"Expected iterator to yield a tuple/list for unpacking, "
+                                f"but got {type(loop_var).__name__}."
+                            ),
+                        )
+                    if len(loop_var) != len(target_names):
+                        raise ParserError(
+                            node.target,
+                            ValueError(
+                                f"Cannot unpack {len(loop_var)} values into {len(target_names)} targets."
+                            ),
+                        )
+                    # Use _assign_target to handle unpacking (it already supports Tuple/List)
+                    self._assign_target(node.target, loop_var)
+                else:
+                    # Single variable: for x in iterator
+                    # Add the loop variable to the context
+                    self.context.add(loop_var_name, loop_var)
                 # Visit the loop body
                 self._visit_body(node.body)
 
