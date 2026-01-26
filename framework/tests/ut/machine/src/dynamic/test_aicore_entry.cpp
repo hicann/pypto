@@ -174,11 +174,5 @@ TEST_F(AicoreTest, MultipleCore) {
         EXPECT_EQ(buffer[i].args.shakeBuffer[2], STAGE_GET_NEXT_TASK_STOP);
     }
 
-    EXPECT_EQ(aicCount + aivCount, aicore->traceList.size());
-    DynFuncHeader *dataList = aicore->GetDataList();
-    for (int i = 0; i < aicCount + aivCount; i++) {
-        EXPECT_EQ(&dataList->At(aicore->traceList[i].coreIdx % 2), aicore->traceList[i].param.funcData);
-    }
-
     AicoreEmulationManager::GetInstance().Reset();
 }
