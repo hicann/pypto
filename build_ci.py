@@ -539,6 +539,7 @@ class TestsParam(CMakeParam):
         self.stest_group: TestsFilterParam = TestsFilterParam(argv=args.stest_group, opt="ENABLE_STEST_GROUP")
         self.stest_distributed: TestsFilterParam = TestsFilterParam(argv=args.stest_distributed,
                                                                     opt="ENABLE_STEST_DISTRIBUTED")
+        self.models: TestsFilterParam = TestsFilterParam(argv=args.models)
         self.example: TestsFilterParam = TestsFilterParam(argv=args.example)
 
     def __str__(self):
@@ -583,6 +584,10 @@ class TestsParam(CMakeParam):
                 desc += f"\n    Stest Distributed"
                 desc += f"\n                     Enable : {self.stest_distributed.enable}"
                 desc += f"\n                     Filter : {self.stest_distributed.filter_str}"
+            if self.models.enable:
+                desc += f"\n    Models"
+                desc += f"\n                     Enable : {self.models.enable}"
+                desc += f"\n                     Filter : {self.models.filter_str}"
             if self.example.enable:
                 desc += f"\n    Example"
                 desc += f"\n                     Enable : {self.example.enable}"
@@ -591,7 +596,8 @@ class TestsParam(CMakeParam):
 
     @property
     def enable(self) -> bool:
-        return self.utest.enable or self.stest.enable or self.stest_distributed.enable or self.example.enable
+        tests_enable = self.utest.enable or self.stest.enable or self.stest_distributed.enable
+        return tests_enable or self.example.enable or self.models.enable
 
     @staticmethod
     def reg_args(parser, ext: Optional[Any] = None):
@@ -604,12 +610,14 @@ class TestsParam(CMakeParam):
         TestsFilterParam.reg_args(parser=parser, ext="stest")
         TestsFilterParam.reg_args(parser=parser, ext="stest_group")
         TestsFilterParam.reg_args(parser=parser, ext="stest_distributed")
+        TestsFilterParam.reg_args(parser=parser, ext="models")
         TestsFilterParam.reg_args(parser=parser, ext="example")
 
     def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
         cmd = self.utest.get_cfg_cmd()
         cmd += self.stest.get_cfg_cmd()
         cmd += self.stest_distributed.get_cfg_cmd()
+        cmd += self.models.get_cfg_cmd()
         cmd += self.example.get_cfg_cmd()
         if self.enable:
             cmd += self.exec.get_cfg_cmd()
@@ -1051,7 +1059,8 @@ class BuildCtrl(CMakeParam):
             logging.info("Build whl success, %s", duration)
 
     def py_tests(self):
-        if not self.tests.utest.enable and not self.tests.stest.enable and not self.tests.example.enable:
+        tests_enable = self.tests.utest.enable or self.tests.stest.enable
+        if not tests_enable and not self.tests.example.enable and not self.tests.models.enable:
             return
         dist = self._get_pip_install_dist()
         if not self._use_pip_install_mode():
