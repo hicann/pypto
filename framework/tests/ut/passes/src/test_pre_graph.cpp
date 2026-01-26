@@ -33,7 +33,7 @@ using namespace npu::tile_fwk;
 namespace npu {
 namespace tile_fwk {
 constexpr int NUM10 = 10;
-
+constexpr int NUM128 = 128;
 void PrintGraphInfoPreGraph(Function* func, std::set<int>& tensorMagicWithColorSet) {
     std::cout << "func->Operations().size() = "  << func->Operations().size() << std::endl;
     for (auto &op : func->Operations()) {
@@ -656,6 +656,240 @@ TEST_F(PreGraphTest, TestFixPipeReconnectGraph) {
     EXPECT_EQ(scaleValue, Element(DataType::DT_UINT64, NUM10));
     EXPECT_EQ(reluType, 1);
 }
+
+void ConstructRemoveRedundantView(ComputationalGraphBuilder &G, bool multi) {
+    // add tensor
+    G.AddTensor(DataType::DT_FP16, {16, 64, 64}, "t1");
+    G.AddTensor(DataType::DT_FP16, {1, 64, 64}, "t2");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, "t3");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, "t4");
+    // add op
+    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "VIEW");
+    G.AddOp(Opcode::OP_RESHAPE, {"t2"}, {"t3"}, "RESHAPE");
+    G.AddOp(Opcode::OP_COPY_IN, {"t3"}, {"t4"}, "COPYIN");
+    std::vector<int64_t> offset = {2, 0, 0};
+    auto view = G.GetOp("VIEW");
+    auto attrA = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 0, 0}, MemoryType::MEM_UNKNOWN,
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{2, 0, 0})));
+    view->SetOpAttribute(attrA);
+    // set incast and outcast
+    G.SetInCast({"t1"});
+    G.SetOutCast({"t4"});
+
+    // another copyin
+    if (multi) {
+        G.AddTensor(DataType::DT_FP32, {64, 64}, "t41");
+        G.SetOutCast({"t41"});
+        G.AddOp(Opcode::OP_COPY_IN, {"t3"}, {"t41"}, "COPYIN2");
+        auto copyIn2 = G.GetOp("COPYIN2");
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn2->GetOpAttribute());
+        copyAttr->SetFromOffset(OpImmediate::Specified(std::vector<int64_t>{32, 0}));
+    }
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantView) {
+    ComputationalGraphBuilder G;
+    ConstructRemoveRedundantView(G, false);
+    // run pass
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    PreGraphProcess passLocal;
+    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
+    // check after pass
+    auto opList = function->Operations();
+    int64_t viewCnt = 0;
+    for (const auto &op : opList) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewCnt;
+        }
+    }
+    EXPECT_EQ(viewCnt, 0);
+
+    auto copyIn = G.GetOp("COPYIN");
+    std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+    auto newDynOffset = copyAttr->GetFromOffset();
+    EXPECT_EQ(newDynOffset[0].Dump(), "128");
+    EXPECT_EQ(newDynOffset[1].Dump(), "0");
+
+    auto newRawShape = copyAttr->GetRawShape();
+    EXPECT_EQ(newRawShape[0].Dump(), "1024");
+    EXPECT_EQ(newRawShape[1].Dump(), "64");
+    auto t = G.GetTensor("t3");
+    EXPECT_EQ(t->GetShape(), (std::vector<int64_t>{1024, 64}));
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantViewMultiCopyIn) {
+    ComputationalGraphBuilder G;
+    ConstructRemoveRedundantView(G, true);
+    // run pass
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    PreGraphProcess passLocal;
+    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
+    // check after pass
+    auto opList = function->Operations();
+    int64_t viewCnt = 0;
+    for (const auto &op : opList) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewCnt;
+        }
+    }
+    EXPECT_EQ(viewCnt, 0);
+    auto copyIn = G.GetOp("COPYIN");
+    auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+    auto newDynOffset = copyAttr->GetFromOffset();
+    EXPECT_EQ(newDynOffset[0].Dump(), "128");
+    copyIn = G.GetOp("COPYIN2");
+    copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+    newDynOffset = copyAttr->GetFromOffset();
+    EXPECT_EQ(newDynOffset[0].Dump(), "160");
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantViewMultiReshape) {
+    ComputationalGraphBuilder G;
+    // add tensor
+    G.AddTensor(DataType::DT_FP16, {4, 6144}, "t1");
+    G.AddTensor(DataType::DT_FP16, {4, 1, 32, 192}, "t2");
+    G.AddTensor(DataType::DT_FP16, {4, 1, 32, 128}, "t3");
+    auto inputTensor2 = G.GetTensor("t2");
+    auto inputTensor3 = G.GetTensor("t3");
+    inputTensor3->tensor = inputTensor2->tensor;
+    inputTensor3->tensor->UpdateRawShape({4, 1, 32, 192});
+
+    G.AddTensor(DataType::DT_FP16, {4, 32, 128}, "t4");
+
+    // add op
+    G.AddOp(Opcode::OP_RESHAPE, {"t1"}, {"t2"}, "RESHAPE1");
+    G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "VIEW");
+    auto view = G.GetOp("VIEW");
+    auto attrA = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0, 0}, MemoryType::MEM_UNKNOWN,
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{0, 0, 0})));
+    view->SetOpAttribute(attrA);
+    G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "RESHAPE2");
+    for (size_t i = 0; i < 32; ++i) {
+        std::string tensorName = "t5-" + std::to_string(i);
+        G.AddTensor(DataType::DT_FP16, {4, 1, 128}, tensorName);
+        std::string copyInName = "COPYIN" + tensorName;
+        G.AddOp(Opcode::OP_COPY_IN, {"t4"}, {tensorName}, copyInName);
+        auto copyIn = G.GetOp(copyInName);
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
+        copyAttr->SetFromOffset(OpImmediate::Specified(std::vector<int64_t>{0, static_cast<int64_t>(i), 0}));
+        copyAttr->SetShape(OpImmediate::Specified({4, 1, 128}));
+    }
+
+    // set incast and outcast
+    G.SetInCast({"t1"});
+
+    // run pass
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    PreGraphProcess passLocal;
+    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
+    // check after pass
+    auto opList = function->Operations();
+    int64_t viewCnt = 0;
+    for (const auto &op : opList) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewCnt;
+        }
+    }
+    EXPECT_EQ(viewCnt, 0);
+}
+
+TEST_F(PreGraphTest, TestProcessReshape) {
+    ComputationalGraphBuilder G;
+    // add tensor
+    G.AddTensor(DataType::DT_FP16, {16, 24576}, "t1");
+    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 192}, "t2");
+    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t3");
+    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t4");
+    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t5");
+    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t6");
+
+    // add op
+    G.AddOp(Opcode::OP_RESHAPE, {"t1"}, {"t2"}, "RESHAPE1");
+    G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "VIEW");
+    G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "RESHAPE2");
+    G.AddOp(Opcode::OP_COPY_IN, {"t2"}, {"t5"}, "COPY_IN1");
+    G.AddOp(Opcode::OP_COPY_IN, {"t2"}, {"t6"}, "COPY_IN2");
+    
+    // set incast and outcast
+    G.SetInCast({"t1"});
+
+    // run pass
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    PreGraphProcess passLocal;
+    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
+    
+    // check after pass
+    auto opList = function->Operations();
+    int64_t viewCnt = 0;
+    int64_t reshapeCnt = 0;
+    for (const auto &op : opList) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewCnt;
+        }
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            reshapeCnt++;
+        }
+    }
+    EXPECT_EQ(viewCnt, 0);
+    EXPECT_EQ(reshapeCnt, 2);
+}
+
+void CompareOpImmediateVector(const std::vector<OpImmediate> &result, const std::vector<int64_t> &expect) {
+    EXPECT_EQ(result.size(), expect.size());
+    for (size_t idx = 0; idx < result.size(); ++idx) {
+        EXPECT_EQ(result[idx].Dump(), std::to_string(expect[idx]));
+    }
+}
+
+TEST_F(PreGraphTest, TestRemoveRedundantAssemble) {
+    ComputationalGraphBuilder G;
+    // add tensor
+    G.AddTensor(DataType::DT_FP16, {128, 256}, "t2");
+    std::vector<std::vector<int64_t>> offsets = {
+        { 0,   0},
+        { 0, 128},
+        {64,   0},
+        {64, 128}
+    };
+    for (size_t i = 0; i < 4; i++) {
+        std::string tensorName = "t1" + std::to_string(i);
+        std::string copyName = "COPYOUT" + std::to_string(i);
+        G.AddTensor(DataType::DT_FP16, {64, 128}, tensorName);
+        G.AddOp(Opcode::OP_COPY_OUT, {tensorName}, {"t2"}, copyName);
+        auto copy = G.GetOp(copyName);
+        auto copyAttr = std::make_shared<CopyOpAttribute>(MemoryType::MEM_L0C, OpImmediate::Specified(offsets[i]),
+            OpImmediate::Specified(std::vector<int64_t>{64, 128}),
+            OpImmediate::Specified(std::vector<int64_t>{64, 128}));
+        copy->SetOpAttribute(copyAttr);
+    }
+
+    G.AddTensor(DataType::DT_FP16, {1, 128, 256}, "t3");
+    G.AddTensor(DataType::DT_FP16, {3, 128, 256}, MemoryType::MEM_DEVICE_DDR, "t4");
+    auto tensor3 = G.GetTensor("t3");
+    auto tensor4 = G.GetTensor("t4");
+    tensor3->tensor = tensor4->tensor;
+    // add op
+
+    G.AddOp(Opcode::OP_RESHAPE, {"t2"}, {"t3"}, "RESHAPE");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t3"}, {"t4"}, "ASSEMBLE");
+    std::vector<int64_t> offset = {0, 0, 0};
+    auto assemble = G.GetOp("ASSEMBLE");
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, std::vector<int64_t>{2, 0, 0},
+        OpImmediate::ToSpecified(OpImmediate::Specified(std::vector<int64_t>{2, 0, 0})));
+    assemble->SetOpAttribute(assembleAttr);
+    // set incast and outcast
+    G.SetOutCast({"t4"});
+    // run pass
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    PreGraphProcess passLocal;
+    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
+} // namespace tile_fwk
+
 } // namespace tile_fwk
 } // namespace npu
 #undef private

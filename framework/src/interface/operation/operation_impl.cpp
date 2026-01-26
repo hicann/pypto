@@ -1281,6 +1281,40 @@ static std::vector<int64_t> CheckAndInferShape(const std::vector<int64_t> &oriSh
     return newShape;
 }
 
+// batch MatMul优化pattern，不插入register copy
+bool MatchBatchMatMulPattern(const std::vector<int64_t> &inputShape, const std::vector<int64_t> &outputShape) {
+    constexpr size_t DIMENSIONS_2D = 2;
+    constexpr size_t DIMENSIONS_3D = 3;
+    constexpr size_t DIMENSIONS_4D = 4;
+    // 定义所有有效的模式：{input_size, output_size, 验证函数}
+    using Validator = std::function<bool(const std::vector<int64_t>&, const std::vector<int64_t>&)>;
+    
+    static const std::vector<std::pair<std::pair<size_t, size_t>, Validator>> patterns = {
+        {{DIMENSIONS_3D, DIMENSIONS_2D}, [](const auto& in, const auto& out) {
+            return in[0] == 1 && in[1] == out[0] && in[2] == out[1];
+        }},
+        {{DIMENSIONS_2D, DIMENSIONS_3D}, [](const auto& in, const auto& out) {
+            return out[0] == 1 && in[0] == out[1] && in[1] == out[2];
+        }},
+        {{DIMENSIONS_4D, DIMENSIONS_2D}, [](const auto& in, const auto& out) {
+            return in[0] == 1 && in[1] == 1 && in[2] == out[0] && in[3] == out[1];
+        }},
+        {{DIMENSIONS_2D, DIMENSIONS_4D}, [](const auto& in, const auto& out) {
+            return out[0] == 1 && out[1] == 1 && in[0] == out[2] && in[1] == out[3];
+        }}
+    };
+    
+    for (const auto& [sizes, validator] : patterns) {
+        if (inputShape.size() == sizes.first && 
+            outputShape.size() == sizes.second &&
+            validator(inputShape, outputShape)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 static bool ReshapeNeedCopy(const Tensor &operand) {
     if (operand.GetShape() != operand.GetStorage()->tensor->rawshape) {
         return true;
@@ -1305,7 +1339,7 @@ static bool ReshapeNeedCopy(const Tensor &operand) {
 
 Tensor Reshape(const Tensor &operand, const std::vector<int64_t> &dstshape, const std::vector<SymbolicScalar> &validShape, const bool inplace, const void *lr) {
     DECLARE_TRACERX(lr);
-    ASSERT(!inplace) << "The 'inplace' parameter muster be false !!!";
+    ASSERT(!inplace) << "The 'inplace' parameter must be false !!!";
     if (operand.GetShape() == dstshape) {
         return operand;
     }
@@ -1314,7 +1348,7 @@ Tensor Reshape(const Tensor &operand, const std::vector<int64_t> &dstshape, cons
         validShapeDefault = SymbolicScalar::FromConcrete(dstshape);
     }
     auto newShape = CheckAndInferShape(operand.GetShape(), dstshape);
-    if (ReshapeNeedCopy(operand)) {
+    if (ReshapeNeedCopy(operand) && !MatchBatchMatMulPattern(operand.GetShape(), dstshape)) {
         Tensor copyOperand(operand.GetStorage()->Datatype(), operand.GetShape(), "", operand.Format());
         copyOperand.GetStorage()->UpdateDynValidShape(operand.GetStorage()->GetDynValidShape());
         CALL(InnerAssign, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage(),
@@ -1330,16 +1364,18 @@ Tensor Reshape(const Tensor &operand, const std::vector<int64_t> &dstshape, cons
     }
 }
 
-Tensor Reshape(const Tensor &operand, const std::vector<int64_t> &dstshape, const std::vector<SymbolicScalar> &validShape, const bool inplace) {
+Tensor Reshape(const Tensor &operand, const std::vector<int64_t> &dstshape,
+    const std::vector<SymbolicScalar> &validShape, const bool inplace) {
     return Reshape(operand, dstshape, validShape, inplace, __builtin_return_address(0));
 }
 
-Tensor Reshape(const Tensor &operand, const std::initializer_list<int64_t> &dstshape, const std::initializer_list<SymbolicScalar> &validShape, const bool inplace) {
+Tensor Reshape(const Tensor &operand, const std::initializer_list<int64_t> &dstshape,
+    const std::initializer_list<SymbolicScalar> &validShape, const bool inplace) {
     return Reshape(operand, std::vector<int64_t>(dstshape), std::vector<SymbolicScalar>(validShape), inplace, __builtin_return_address(0));
 }
 
-Tensor Reshape( const Tensor &operand, const std::vector<SymbolicScalar> &dstShape, const bool inplace) {
-    ASSERT(inplace) << "The 'inplace' parameter muster be true !!!";
+Tensor Reshape(const Tensor &operand, const std::vector<SymbolicScalar> &dstShape, const bool inplace) {
+    ASSERT(inplace) << "The 'inplace' parameter must be true !!!";
     Tensor dst(operand.GetStorage()->Datatype(), dstShape, "", operand.Format());
     auto slotManager = Program::GetInstance().GetTensorSlotManager();
     auto &operation = Program::GetInstance().GetCurrentFunction()->AddOperation(Opcode::OP_RESHAPE, {operand.GetStorage()}, {dst.GetStorage()});

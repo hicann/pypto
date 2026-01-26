@@ -32,6 +32,7 @@ public:
     void HandleForReshapeToOutcast(Function &function) const;
     void HanldeForMultiAssemble(Function &function, std::unordered_set<Operation *>& concurrentAssembles) const;
     Status HanldeForSingleAssemble(Function &function, LogicalTensorPtr input, LogicalTensorPtr output, Operation &op) const;
+    Status ProcessView(Function &function) const;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_REMOVE_REDUNDANT_ASSEMBLE_H

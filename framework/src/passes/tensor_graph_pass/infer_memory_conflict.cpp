@@ -155,7 +155,7 @@ bool InferMemoryConflict::IsValidTileShape(const Operation &op) const {
     auto input = op.GetIOperands().front();
     VecTile tileSize = op.GetTileShape().GetVecTile();
     if (input->GetShape().size() != tileSize.size()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has unequal input shape dims size and tile shape dims, input shape: %s, tile size: %s. %s",
+        APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has unequal input shape dims size and tile shape dims, input shape: %s, tile size: %s. %s", 
                             op.GetOpcodeStr().c_str(), op.GetOpMagic(),
                             input->DumpType().c_str(), op.GetTileShape().ToString(TileType::VEC).c_str(), GetFormatBacktrace(op).c_str());
         return false;
@@ -165,11 +165,81 @@ bool InferMemoryConflict::IsValidTileShape(const Operation &op) const {
     return true;
 }
 
+// batch MatMul优化pattern，不插入register copy
+bool InferMemoryConflict::MatchReshapePattern(const LogicalTensorPtr &reshapeIn,
+                                            const LogicalTensorPtr &reshapeOut) {
+    if (!reshapeIn || !reshapeOut) return false;
+    
+    const auto &inputShape = reshapeIn->GetShape();
+    const auto &outputShape = reshapeOut->GetShape();
+    const size_t inputDims = inputShape.size();
+    const size_t outputDims = outputShape.size();
+    
+    // 常量定义
+    constexpr size_t MIN_DIMENSIONS = 2;
+    constexpr size_t MAX_DIMENSIONS = 4;
+    constexpr size_t DIMENSIONS_2D = 2;
+    constexpr size_t DIMENSIONS_3D = 3;
+    constexpr size_t DIMENSIONS_4D = 4;
+    
+    if (inputDims < MIN_DIMENSIONS || outputDims < MIN_DIMENSIONS || inputDims > MAX_DIMENSIONS || outputDims > MAX_DIMENSIONS) return false;
+    
+    // 验证总元素数是否相等（reshape的基本要求）
+    auto calculateTotalElements = [](const std::vector<int64_t>& shape) {
+        int64_t total = 1;
+        for (const auto& dim : shape) {
+            total *= dim;
+        }
+        return total;
+    };
+    
+    if (calculateTotalElements(inputShape) != calculateTotalElements(outputShape)) return false;
+    
+    // 编码维度对：输入维度在高位，输出维度在低位
+    const uint32_t dimensionPair = (inputDims << 4) | outputDims;
+    
+    switch (dimensionPair) {
+        // 4D转2D：[1, 1, H, W] -> [H, W]
+        case (DIMENSIONS_4D << 4) | DIMENSIONS_2D: {
+            return inputShape[0] == 1 && 
+                   inputShape[1] == 1 &&
+                   inputShape[2] == outputShape[0] &&
+                   inputShape[3] == outputShape[1];
+        }
+        
+        // 2D转4D：[H, W] -> [1, 1, H, W]
+        case (DIMENSIONS_2D << 4) | DIMENSIONS_4D: {
+            return outputShape[0] == 1 && 
+                   outputShape[1] == 1 &&
+                   inputShape[0] == outputShape[2] &&
+                   inputShape[1] == outputShape[3];
+        }
+        
+        // 3D转2D：[1, H, W] -> [H, W]
+        case (DIMENSIONS_3D << 4) | DIMENSIONS_2D: {
+            return inputShape[0] == 1 &&
+                   inputShape[1] == outputShape[0] &&
+                   inputShape[2] == outputShape[1];
+        }
+        
+        // 2D转3D：[H, W] -> [1, H, W]
+        case (DIMENSIONS_2D << 4) | DIMENSIONS_3D: {
+            return outputShape[0] == 1 &&
+                   inputShape[0] == outputShape[1] &&
+                   inputShape[1] == outputShape[2];
+        }
+        
+        default:
+            return false;
+    }
+}
+
 Status InferMemoryConflict::UpdateForwardTensor(Function &function, const LogicalTensorPtr &curTensor, Operation* consumer, std::queue<LogicalTensorPtr> &curTensors) {
     for (const auto &outputTensor : consumer->GetOOperands()) {
         if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
+            auto reshapeInput = consumer->GetIOperands().front();
             bool isInplace = consumer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
-            if (!isInplace && CheckRawShapeConflict(memoryInfo[curTensor], outputTensor)) {
+            if (!MatchReshapePattern(reshapeInput, outputTensor) && !isInplace && CheckRawShapeConflict(memoryInfo[curTensor], outputTensor)) {
                 preregcopys.insert(consumer);
                 continue;
             }
@@ -197,16 +267,17 @@ Status InferMemoryConflict::UpdateBackwardTensor(const LogicalTensorPtr &curTens
         if (producer->GetOpcode() == Opcode::OP_INDEX_OUTCAST && producer->GetIOperandIndex(inputTensor) != index) {
             continue;
         }
+        auto reshapeOutput = producer->GetOOperands().front();
         if (producer->GetOpcode() == Opcode::OP_RESHAPE) {
             bool isInplace = producer->GetBoolAttribute(OP_ATTR_PREFIX + "isInplace");
-            if (!isInplace && CheckRawShapeConflict(inputTensor, memoryInfo[curTensor])) {
+            if (!MatchReshapePattern(inputTensor, reshapeOutput) && !isInplace && CheckRawShapeConflict(inputTensor, memoryInfo[curTensor])) {
                 postregcopys.insert(producer);
                 continue;
             }
         }
         if (memoryInfo.find(inputTensor) != memoryInfo.end()) {
             if (CheckConflict(memoryInfo[curTensor], memoryInfo[inputTensor])) {
-                if (producer->GetOpcode() == Opcode::OP_RESHAPE) {
+                if (producer->GetOpcode() == Opcode::OP_RESHAPE && !MatchReshapePattern(inputTensor, reshapeOutput)) {
                     postregcopys.insert(producer);
                 } else {
                     preregcopys.insert(producer);
@@ -350,6 +421,7 @@ Status InferMemoryConflict::ObtainReshapeTile(Operation &op, Shape &inTileShape,
     return SUCCESS;
 }
 
+// 在OP_RESHAPE前面插入OP_REGISTER_COPY
 Status InferMemoryConflict::InsertPrecededCopys(Function &function) {
     for (const auto op : preregcopys) {
         LogicalTensorPtr inputTensor = op->GetIOperands().front();
