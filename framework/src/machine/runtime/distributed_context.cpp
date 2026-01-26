@@ -17,14 +17,14 @@
 #include "securec.h"
 #include "distributed_context.h"
 #include "interface/tileop/distributed/hccl_context.h"
-#include "interface/machine/device/tilefwk/core_func_data.h"
+#include "interface/utils/common.h"
 #include "runtime.h"
 #ifdef BUILD_WITH_CANN
 #include "hcom.h"
 extern "C" HcclResult HcclAllocComResourceByTiling(HcclComm comm, void* stream, void* mc2Tiling, void** commContext);
 #endif
 namespace {  
-TileOp::HcclCombinOpParam g_hostAddr[DIST_COMM_GROUP_NUM];
+TileOp::HcclCombinOpParam g_hostAddr[npu::tile_fwk::DIST_COMM_GROUP_NUM];
 std::unordered_map<std::string, uint64_t> g_context; //key: groupname, value: deviceHcclContext
 
 #pragma pack(push, 8)

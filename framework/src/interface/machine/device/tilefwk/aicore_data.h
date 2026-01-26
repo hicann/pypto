@@ -28,7 +28,7 @@
 
 namespace npu::tile_fwk {
 
-const uint32_t HCCL_GROUP_NUM = 2;
+constexpr uint32_t HCCL_GROUP_NUM = 2;
 const uint32_t RAW_TENSOR_LOCATION_LOCAL = 0;
 const uint32_t RAW_TENSOR_LOCATION_INCAST = 1;
 const uint32_t RAW_TENSOR_LOCATION_OUTCAST = 2;

@@ -21,7 +21,6 @@
 #include <cstdint>
 #include "tilefwk/aicore_data.h"
 
-inline constexpr uint32_t DIST_COMM_GROUP_NUM = 8;
 inline constexpr size_t MAX_CACHED_FUNC_NUM = 128;
 constexpr int MAX_DIMS = 8;
 using taskid_t = uint32_t;
@@ -73,7 +72,7 @@ struct CoreFunctionData {
     uint64_t coreFunctionWsAddr; // 指针指向CoreFunctionWsAddr结构体列表
     uint64_t stackWorkSpaceAddr;
     uint64_t stackWorkSpaceSize;
-    uint64_t hcclContextAddr[DIST_COMM_GROUP_NUM] {0};
+    uint64_t hcclContextAddr[HCCL_GROUP_NUM] {0};
     uint64_t commGroupNum {0};
 };
 
