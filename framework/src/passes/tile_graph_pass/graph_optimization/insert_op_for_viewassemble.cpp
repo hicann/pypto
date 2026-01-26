@@ -45,8 +45,10 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function &function, Operation *
 Status InsertOpForViewAssemble::InsertCopy(Function &function, Operation *viewOp, Operation *assOp) {
     if (assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
         assOp->GetIOperands()[0]->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+        APASS_LOG_INFO_F(Elements::Operation, "Set Assemble Op[%d] iOperand MEM_DDR.", assOp->GetOpMagic());
     } else if (assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||
             assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        APASS_LOG_INFO_F(Elements::Operation, "Insert Copy For View[%d], Assemble[%d].", viewOp->GetOpMagic(), assOp->GetOpMagic());
         InsertViewAssemble(function, viewOp, assOp);
     } else {
         APASS_LOG_ERROR_F(Elements::Operation, "Assemble inTensor %d memory type is unexpected, InsertCopy failed.",
@@ -62,6 +64,7 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr &assembleOut) {
         auto &prodOp = *assOp->GetIOperands()[0]->GetProducers().begin();
         if (prodOp->GetOpcode() != Opcode::OP_VIEW) {
             isNeedInsert = true;
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] producerOp %s[%d] is not viewOp.", assOp->GetOpMagic(), prodOp->GetOpcodeStr().c_str(), prodOp->GetOpMagic());
             continue;
         }
         recordOpPair_.push_back(std::make_pair(prodOp, assOp));
@@ -73,15 +76,18 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr &assembleOut) {
             return false;
         }
         if (assembleAttr->GetToOffset() != viewAttr->GetFromOffset()) {
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetToOffset is not equal to viewOp[%d] GetFromOffset.", assOp->GetOpMagic(), prodOp->GetOpMagic());
             isNeedInsert = true;
             continue;
         }
         if (assembleAttr->GetToDynOffset().size() != viewAttr->GetFromDynOffset().size()) {
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetToDynOffset size is not equal to viewOp[%d] GetFromDynOffset size.", assOp->GetOpMagic(), prodOp->GetOpMagic());
             isNeedInsert = true;
             continue;
         }
         for (size_t i = 0; i < assembleAttr->GetToDynOffset().size(); i++) {
             if (assembleAttr->GetToDynOffset()[i].Dump() != viewAttr->GetFromDynOffset()[i].Dump()) {
+                APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetToDynOffset value is not equal to viewOp[%d] GetFromDynOffset value.", assOp->GetOpMagic(), prodOp->GetOpMagic());
                 isNeedInsert = true;
                 break;
             }
@@ -90,16 +96,19 @@ bool InsertOpForViewAssemble::NeedInsertCopy(LogicalTensorPtr &assembleOut) {
         auto inShape = viewIn->GetShape();
         auto outShape = assembleOut->GetShape();
         if (inShape.size() != outShape.size()) {
+            APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetShape size is not equal to viewOp[%d] GetShape size.", assOp->GetOpMagic(), prodOp->GetOpMagic());
             isNeedInsert = true;
             continue;
         }
         for (size_t i = 0; i < inShape.size(); i++) {
             if (inShape[i] != outShape[i]) {
+                APASS_LOG_INFO_F(Elements::Operation, "assOp[%d] GetShape value is not equal to viewOp[%d] GetShape value.", assOp->GetOpMagic(), prodOp->GetOpMagic());
                 isNeedInsert = true;
                 break;
             }
         }
     }
+    APASS_LOG_INFO_F(Elements::Operation, "isNeedInsert value is %d.", isNeedInsert);
     return isNeedInsert;
 }
 
@@ -109,11 +118,10 @@ Status InsertOpForViewAssemble::JudgedViewAssemble(Function &function) {
             continue;
         }
         auto &prodOp = *op.GetIOperands()[0]->GetProducers().begin();
-        if (op.GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && op.GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-            continue;
-        }
-        if (prodOp->GetOpcode() == Opcode::OP_VIEW && assembleOutSet_.find(op.GetOOperands()[0]) == assembleOutSet_.end()) {
+        if (prodOp->GetOpcode() == Opcode::OP_VIEW && assembleOutSet_.find(op.GetOOperands()[0]) == assembleOutSet_.end() &&
+            prodOp->GetIOperands()[0]->GetMemoryTypeOriginal() == prodOp->GetOOperands()[0]->GetMemoryTypeOriginal()) {
             assembleOutSet_.insert(op.GetOOperands()[0]);
+            APASS_LOG_INFO_F(Elements::Operation, "assembleOutSet_ insert oOperand %d", op.GetOOperands()[0]->GetMagic());
         }
     }
     for (auto assembleOut : assembleOutSet_) {
