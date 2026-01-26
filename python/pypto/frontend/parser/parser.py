@@ -1221,6 +1221,14 @@ class Parser(doc.NodeVisitor):
         else:
             func_obj = func_value
 
+        # Check if the function is a builtin function or a function without source code.
+        if inspect.isbuiltin(func_obj) or inspect.isbuiltin(func_value):
+            return _NESTED_CALL_UNHANDLED
+
+        # Also check if it's a builtin function by checking the module
+        if hasattr(func_obj, '__module__') and func_obj.__module__ == 'builtins':
+            return _NESTED_CALL_UNHANDLED
+
         # Merge closure/global variables of the target function to allow resolving
         # free variables used inside the nested function body.
         env_vars = self._collect_function_environment(func_obj)
@@ -1230,10 +1238,9 @@ class Parser(doc.NodeVisitor):
         # Dynamically obtain the FunctionDef AST of the callee; fail fast if unavailable.
         func_def_node = self._get_function_def_from_func(func_obj)
         if func_def_node is None:
-            raise ParserError(
-                node,
-                ValueError(f"Failed to obtain AST for function '{func_name}'."),
-            )
+            # If we cannot get the AST for non-builtin functions, it might be a C extension
+            # or other callable that doesn't have Python source code. Let the evaluator handle it.
+            return _NESTED_CALL_UNHANDLED
 
         # If callee is a normal function, ensure it is decorated as nested; otherwise, bail out.
         if not isinstance(func_value, NestedFunctionMarker):
