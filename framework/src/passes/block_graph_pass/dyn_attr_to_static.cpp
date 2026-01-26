@@ -341,7 +341,7 @@ void ReplaceCommonSymbol(Function *leafFunc, std::vector<std::vector<SymbolicSca
             } else {
                 leafFunc->GetMutableDynParam(symbolStr).replacedSymbol = index2BaseSymbol[index2GroupId[coaIdx]];
                 APASS_LOG_INFO_F(Elements::Operation, "Replace coaIndex[%d] groupId[%zu] symbolStr[%s] with baseParam[%s]", 
-                    coaIdx, index2GroupId[coaIdx], symbolStr.c_str(), index2BaseSymbol[index2GroupId[coaIdx]]);
+                    coaIdx, index2GroupId[coaIdx], symbolStr.c_str(), index2BaseSymbol[index2GroupId[coaIdx]].c_str());
             }
         }
     }

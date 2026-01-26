@@ -79,10 +79,10 @@ public:
         if (args.empty()) return false; // 空vector无意义
         
         // 首次调用：记录vector长度，后续调用需保持长度一致
-        if (m_callCount == 0) {
-            m_vecLen = args.size();
-        } else if (args.size() != m_vecLen) {
-            m_isValid = false; // 长度不一致，直接标记无效
+        if (callCount_ == 0) {
+            vecLen_ = args.size();
+        } else if (args.size() != vecLen_) {
+            isValid_ = false; // 长度不一致，直接标记无效
             return false;
         }
 
@@ -93,21 +93,21 @@ public:
         }
 
         // 步骤2：更新候选索引组（首次调用初始化，后续调用筛选）
-        if (m_callCount == 0) {
+        if (callCount_ == 0) {
             // 首次调用：所有非空索引列表都作为候选组（去重+排序）
-            for (auto& [key, values] : currValIdxs) {
+            for (auto& [_, values] : currValIdxs) {
                 if (!values.empty()) {
                     // 索引组排序（保证相同索引组合的一致性，避免重复）
                     std::vector<size_t> vec{values.begin(), values.end()};
-                    m_candidateGroups.push_back(std::move(vec));
+                    candidateGroups_.push_back(std::move(vec));
                 }
             }
             // 对候选组去重（避免首次调用就有重复的索引组）
-            DeduplicateGroups(m_candidateGroups);
+            DeduplicateGroups(candidateGroups_);
         } else {
             // 非首次调用：筛选候选组（仅保留在本次调用中值相同的索引组）
             std::vector<std::vector<size_t>> newCandidates;
-            for (const auto& candidate : m_candidateGroups) {
+            for (const auto& candidate : candidateGroups_) {
                 // 检查候选组是否在本次调用的某值索引列表中（子集判断）
                 if (IsCandidateValidInCurrCall(candidate, currValIdxs)) {
                     newCandidates.push_back(candidate);
@@ -115,10 +115,10 @@ public:
             }
             // 去重后替换候选组
             DeduplicateGroups(newCandidates);
-            m_candidateGroups.swap(newCandidates);
+            candidateGroups_.swap(newCandidates);
         }
 
-        m_callCount++;
+        callCount_++;
         return true;
     }
 
@@ -127,10 +127,10 @@ public:
      * @return 第一个满足条件的索引组（空则无）
      */
     std::vector<size_t> GetConsistentIndexGroup() const {
-        if (!m_isValid || m_candidateGroups.empty()) {
+        if (!isValid_ || candidateGroups_.empty()) {
             return {};
         }
-        return m_candidateGroups.front();
+        return candidateGroups_.front();
     }
 
     /**
@@ -138,11 +138,11 @@ public:
      * @return 所有符合条件的索引组（空则无）
      */
     std::vector<std::vector<size_t>> GetAllConsistentIndexGroups() const {
-        if (!m_isValid || m_candidateGroups.empty()) {
+        if (!isValid_ || candidateGroups_.empty()) {
             return {};
         }
         // 返回完整的候选组列表（已去重、有序）
-        return m_candidateGroups;
+        return candidateGroups_;
     }
 
     std::string PrintIndexGroups(const std::vector<std::vector<size_t>>& groups) const {
@@ -166,10 +166,10 @@ public:
      * @brief 重置校验器（清空所有调用记录）
      */
     void Reset()  {
-        m_callCount = 0;
-        m_vecLen = 0;
-        m_isValid = true;
-        m_candidateGroups.clear();
+        callCount_ = 0;
+        vecLen_ = 0;
+        isValid_ = true;
+        candidateGroups_.clear();
     }
 
 private:
@@ -184,7 +184,7 @@ private:
         // 步骤1：查找第一个索引在当前args所在的索引组
         if (candidate.empty()) return false;
         size_t firstIdx = candidate[0];
-        for (const auto& [key, values] : currValIdxs) {
+        for (const auto& [_, values] : currValIdxs) {
             if (values.count(firstIdx)) {
                 // 步骤2：校验候选组中的索引在新的索引组中是否全部存在
                 for (size_t idx : candidate) {
@@ -223,11 +223,11 @@ private:
         groups.erase(last, groups.end());
     }
 
-    size_t m_callCount = 0; // 调用次数
-    size_t m_vecLen = 0;    // vector固定长度
-    bool m_isValid = true;  // 是否有效（长度一致）
+    size_t callCount_ = 0; // 调用次数
+    size_t vecLen_ = 0;    // vector固定长度
+    bool isValid_ = true;  // 是否有效（长度一致）
     // 候选索引组：用普通vector存储，无需排序/哈希（已去重）
-    std::vector<std::vector<size_t>> m_candidateGroups;
+    std::vector<std::vector<size_t>> candidateGroups_;
 };
 
 class DynAttrToStatic : public Pass {
