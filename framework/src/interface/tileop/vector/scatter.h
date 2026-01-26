@@ -48,9 +48,9 @@ TILEOP void TscatterElementS(T0 dst, T1 src1, Scalar src2) {
             for (int k = 0; k < n2IdxShape; ++k) {
                 for (int l = 0; l < n3IdxShape; ++l) {
                     for (int m = 0; m < n4IdxShape; ++m) {
-                        auto index =
+                        typename T1::Type index =
                             *(idxAddr + i * n0IdxStride + j * n1IdxStride + k * n2IdxStride + l * n3IdxStride + m);
-                        int dstOffset = 0;
+                        typename T1::Type dstOffset = 0;
                         if constexpr (axis == 0) {
                             dstOffset = index * n0DstStride + j * n1DstStride + k * n2DstStride + l * n3DstStride + m;
                         } else if constexpr (axis == 1) {
@@ -137,7 +137,7 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp) {
     auto idxAddr = (__ubuf__ typename T1::Type*)((uint64_t)(src1.GetAddr()));
     auto srcAddr = (__ubuf__ typename T2::Type*)((uint64_t)(src2.GetAddr()));
     auto tmpAddr = (__ubuf__ typename T3::Type*)((uint64_t)(tmp.GetAddr()));
-    int dstOffset = 0;
+    typename T1::Type dstOffset = 0;
     for (int i = 0; i < idxShape0; ++i) {
         for (int j = 0; j < idxShape1; ++j) {
             for (int k = 0; k < idxShape2; ++k) {
@@ -147,9 +147,10 @@ TILEOP void Tscatter(T0 dst, T1 src1, T2 src2, T3 tmp) {
                         wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
                     }
                     for (int m = 0; m < idxShape4; ++m) {
-                        auto index =
+                        typename T1::Type index =
                             *(idxAddr + i * idxStride0 + j * idxStride1 + k * idxStride2 + l * idxStride3 + m);
-                        int src2Offset = i * srcStride0 + j * srcStride1 + k * srcStride2 + l * srcStride3 + m;
+                        typename T1::Type src2Offset = 
+                            i * srcStride0 + j * srcStride1 + k * srcStride2 + l * srcStride3 + m;
                         if constexpr (axis == 0) {
                             dstOffset = index * dstStride0 + j * dstStride1 + k * dstStride2 + l * dstStride3 + m;
                         } else if constexpr (axis == 1) {
