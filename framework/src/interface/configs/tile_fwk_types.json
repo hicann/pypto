@@ -16,7 +16,10 @@
         "DT_UINT16": 12,
         "DT_UINT32": 13,
         "DT_UINT64": 14,
-        "DT_BOOL": 15
+        "DT_BOOL": 15,
+        "DT_DOUBLE": 16,
+        "DT_FP8E5M2": 17,
+        "DT_FP8E4M3": 18
     },
     "FunctionType": {
         "EAGER": 0,
