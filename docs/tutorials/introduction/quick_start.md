@@ -23,11 +23,6 @@ Softmax算子实现的example代码位于：[softmax.py](../../../examples/02_in
 
   基础计算接口：exp，sum，/ (div)，amax， -（sub）
 
-* 算子实现文件名称
-
-  test_softmax_custom.py
-
-
 ## 导入PyPTO模块
 
 在开始实现Softmax算子之前，首先需要导入PyPTO、PyTorch和Numpy模块。PyPTO模块提供了Tensor操作和编译能力，而PyTorch和Numpy模块用于结果验证。

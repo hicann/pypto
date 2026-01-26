@@ -20,10 +20,10 @@
 4. **大模型算子实现？** 探索 [模型样例 (models)](models/)。
 
 ### 环境准备
-请参考[环境准备](../docs/context/prepare_environment.md)，完成基础环境搭建
+请参考[环境准备](../docs/install/prepare_environment.md)，完成基础环境搭建
 
 ### 软件安装 
-请参考[软件安装](../docs/context/build_and_install.md)，完成PyPTO软件安装
+请参考[软件安装](../docs/install/build_and_install.md)，完成PyPTO软件安装
 
 ### 运行前配置（可选）
 如需运行在真实NPU环境中，请参考如下配置

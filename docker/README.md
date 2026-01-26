@@ -1,4 +1,4 @@
-说明：本文描述如何快速创建运行PyPTO的docker容器，在使用docker容器前请**完成主机NPU硬件部署、NPU驱动及固件安装**，参考文档[Environment README](../docs/context/prepare_environment.md)。docker推荐v27.2.1及以上。
+说明：本文描述如何快速创建运行PyPTO的docker容器，在使用docker容器前请**完成主机NPU硬件部署、NPU驱动及固件安装**，参考文档[Environment README](../docs/install/prepare_environment.md)。docker推荐v27.2.1及以上。
 
 ## 版本说明
 
