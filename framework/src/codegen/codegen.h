@@ -29,7 +29,6 @@ public:
     explicit CodeGen(const CodeGenCtx &ctx) : ctx_(ctx.includePath, ctx.cceDir, ctx.isMainBlock) {};
 
     void GenCode(Function &topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>> &invokeParaOffset);
-    void GenCode(const std::string &jsonPath, const std::map<uint64_t, std::list<InvokeParaOffset>> &invokeParaOffset);
 
 private:
     CodeGenCtx ctx_;

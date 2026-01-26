@@ -60,4 +60,8 @@ std::string GetResultFromCpp(const Function &function) {
     return res;
 }
 
+bool IsStringExist(const std::string &expect, const std::string &result) {
+    return result.find(expect) != std::string::npos;
+}
+
 } // namespace npu::tile_fwk

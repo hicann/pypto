@@ -117,22 +117,38 @@ std::string SymbolManager::AddTileTensorUsing(const TileTensorUsing &tileTensorU
         return tensorUsingType;
     }
     tensorUsingType = tileTensorUsing.GenName();
+    ALOG_INFO_F("Add tensorUsingType %s", tensorUsingType.c_str());
     tileTensorUsing_.insert({tensorUsingType, tileTensorUsing});
     ALOG_INFO_F("insert tensorUsingType %s = %s", tensorUsingType.c_str(), tileTensorUsing.ToString().c_str());
     return tensorUsingType;
 }
 
-void SymbolManager::AddTileTensor(const TileTensor &tileTensor) {
+std::string SymbolManager::AddTileTensor(const TileTensor &tileTensor) {
     auto result = tileTensor_.insert({tileTensor, tileTensor.tensorName});
     std::string tensorName = result.second ? tileTensor.tensorName : result.first->second;
-    if (result.second) {
-        tileTensorByMagic_.insert({tileTensor.magic, tileTensor});
-    } else {
-        tileTensorByMagic_.insert({tileTensor.magic, result.first->first});
+
+    // normal mode
+    if (tileTensor.shapeInLoop.loopDepth == 0) {
+        if (result.second) {
+            tileTensorByMagic_.insert({tileTensor.magic, tileTensor});
+        } else {
+            tileTensorByMagic_.insert({tileTensor.magic, result.first->first});
+        }
+        ALOG_INFO_F(
+            "tileTensor_.insert result is %d Add TileTensor --> tensor magic: %d, tensor name: %s, tile tensor: %s",
+            result.second, tileTensor.magic, tensorName.c_str(), tileTensor.ToString().c_str());
+        return tensorName;
     }
 
-    ALOG_INFO_F("tileTensor_.insert result is %d Add TileTensor --> tensor magic: %d, tensor name: %s, tile tensor: %s",
-        result.second, tileTensor.magic, tensorName.c_str(), tileTensor.ToString().c_str());
+    // enable marking 'for' to optimize VF Fusing
+    if (result.second) {
+        tileTensorByMagicInLoop_.insert({tileTensor.magic, tileTensor});
+    } else {
+        tileTensorByMagicInLoop_.insert({tileTensor.magic, result.first->first});
+    }
+    ALOG_INFO_F("tileTensor_.insert result is %d, tileTensor in loop insert tensor magic: %d, tensor name in loop: %s",
+        result.second, tileTensor.magic, tensorName.c_str());
+    return tensorName;
 }
 
 std::vector<TileTensor> SymbolManager::QueryTileTensorByMagic(int magic) {
@@ -140,11 +156,43 @@ std::vector<TileTensor> SymbolManager::QueryTileTensorByMagic(int magic) {
     std::vector<TileTensor> res;
     auto [start, end] = tileTensorByMagic_.equal_range(magic);
     for (auto it = start; it != end; ++it) {
-        res.emplace_back(it->second); // 或 emplace_back，性能更优
+        res.emplace_back(it->second);
     }
 
     ASSERT(!res.empty()) << "tensor magic " << magic << " is not found !!! ";
     return res;
+}
+
+std::vector<TileTensor> SymbolManager::QueryTileTensorInLoopByMagic(int magic) {
+    ALOG_INFO_F("QueryTileTensorInLoopByMagic magic is %d", magic);
+    std::vector<TileTensor> res;
+    auto [start, end] = tileTensorByMagicInLoop_.equal_range(magic);
+    for (auto it = start; it != end; ++it) {
+        res.emplace_back(it->second);
+    }
+    ALOG_INFO_F("TileTensor magic %d not found in loop", magic);
+    return res;
+}
+
+void SymbolManager::InsertTensorNameInLoopToFullDim(
+    const std::string &tensorName, const std::string &fullDimTensorName) {
+    auto res = tensorNameInLoopToFullDim_.insert({tensorName, fullDimTensorName});
+    ALOG_INFO_F("res is %d, InsertTensorNameInLoopToFullDim %s -> %s", res.second, tensorName.c_str(),
+        fullDimTensorName.c_str());
+}
+
+std::string SymbolManager::QueryTileTensorFullDimByTensorInLoop(const std::string &tensorName) {
+    std::string fullDimTensorName;
+    auto iter = tensorNameInLoopToFullDim_.find(tensorName);
+    if (iter != tensorNameInLoopToFullDim_.end()) {
+        ALOG_INFO_F("QueryTileTensorFullDimByTensorInLoop found tensor in loop %s, full dim tensor is %s",
+            tensorName.c_str(), iter->second.c_str());
+        fullDimTensorName = iter->second;
+    }
+
+    ASSERT(!fullDimTensorName.empty()) << "tensor in loop " << tensorName
+                                       << " is not found in tensorNameInLoopToFullDim_!!!";
+    return fullDimTensorName;
 }
 
 std::string SymbolManager::QueryTileTensorByBufVarName(const std::string &bufVarName) {

@@ -79,4 +79,10 @@ int64_t CalcLinearOffset(const std::vector<int64_t> &shape, const std::vector<in
     return resOffset;
 }
 
+void PrintIndent(std::ostringstream &os, int scopeLevel) {
+    for (int i = 0; i < scopeLevel; i++) {
+        os << "  ";
+    }
+}
+
 } // namespace npu::tile_fwk

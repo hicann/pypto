@@ -28,16 +28,23 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
+#include "codegen/stmt_mgr/codegen_for_block.h"
 #include "codegen/codegen_op.h"
 
 namespace npu::tile_fwk {
 struct CodeGenOpCloudNPUCtx : public CodeGenOpCtx {
     const Operation &operation;
+    std::shared_ptr<ForBlockManager> forBlockManager{nullptr};
 
     CodeGenOpCloudNPUCtx(std::shared_ptr<SymbolManager> sm, Function &tf, Function &sf, const Operation &op,
         const std::map<int, int> &lto = {}, bool isMainBlk = false)
         : CodeGenOpCtx(std::move(sm), tf, sf, lto, isMainBlk), operation(op) {}
+
+    CodeGenOpCloudNPUCtx(std::shared_ptr<SymbolManager> sm, std::shared_ptr<ForBlockManager> fbm, Function &tf,
+        Function &sf, const Operation &op, const std::map<int, int> &lto = {}, bool isMainBlk = false)
+        : CodeGenOpCtx(std::move(sm), tf, sf, lto, isMainBlk), operation(op), forBlockManager(fbm) {}
 };
+
 class CodeGenOpCloudNPU : public CodeGenOp {
 public:
     explicit CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx);
@@ -144,14 +151,7 @@ public:
 
     std::string GenWhereOp() const;
 
-    std::string GenOpCode() const override {
-        auto iter = opsGenMap_.find(opCode);
-        if (iter != opsGenMap_.end()) {
-            return iter->second();
-        }
-        // To aid in testing, do not use ASSERT.
-        return std::string{"CAN NOT HANDLE OP: " + opCodeStr};
-    }
+    std::string GenOpCode() const override;
 
     void UpdateSaturateStatus(FloatSaturateStatus &fs);
 
@@ -180,13 +180,42 @@ private:
     std::string GenOffsetsAndRawShapesDefault() const;
 
     void UpdateTileTensorInfo();
+    bool NeedUpdateLoopInfo();
+    void UpdateLoopInfo();
+    std::vector<SymbolicScalar> GetLoopAxes();
+    ShapeInLoop BuildShapeInLoop(int paramIdx, size_t loopDepth);
+    bool ShouldSkipProcInLoop(int paramIdx);
+
+    template <typename T = int64_t>
+    std::vector<T> GetShapeInLoop(const std::vector<T> &input, size_t loopDepth) {
+        ASSERT(loopDepth < input.size()) << "loopDepth " << loopDepth << " must be small than dim size" << input.size();
+        std::vector<T> reservedShapeExceptLoopAxes;
+        for (size_t i = loopDepth; i < input.size(); ++i) {
+            reservedShapeExceptLoopAxes.emplace_back(input[i]);
+        }
+        return reservedShapeExceptLoopAxes;
+    }
 
     int GetCacheModeFlag(const std::string &cacheMode) const;
-    template <typename T>
-    bool GetAttr(const std::string &key, T &value) const;
 
-    TileTensor BuildTileTensor(int paramIdx, const std::string &usingType);
-    void UpdateTileTensorShapeAndStride(int paramIdx, TileTensor &tileTensor, bool isSpillToGm);
+    template <typename T>
+    bool GetAttr(const std::string &key, T &value) const {
+        auto it = opAttrs.find(key);
+        if (it == opAttrs.end()) {
+            ALOG_INFO_F("can not find key: %s in opAttrs", key.c_str());
+            return false;
+        }
+        if (it->second.Type() == typeid(T)) {
+            value = npu::tile_fwk::AnyCast<T>(it->second);
+            return true;
+        }
+        ALOG_ERROR_F("Type mismatch: %s != %s", it->second.Type().name(), typeid(T).name());
+        return false;
+    }
+
+    TileTensor BuildTileTensor(int paramIdx, const std::string &usingType, const ShapeInLoop &shapeInLoop = {});
+    void UpdateTileTensorShapeAndStride(
+        int paramIdx, TileTensor &tileTensor, bool isSpillToGm, const ShapeInLoop &shapeInLoop = {});
     std::vector<std::string> BuildStride(const std::vector<int64_t> &input);
 
     std::vector<int64_t> GetTileShapeForMemTransfer(
@@ -416,6 +445,11 @@ private:
     std::unordered_map<Opcode, std::function<std::string()>> aicpuOps_;
 
     std::unordered_map<Opcode, std::function<std::string()>> opsGenMap_;
+
+    std::shared_ptr<ForBlockManager> forBlkMgr_;
+
+    // <parameter index, tensor name>
+    std::unordered_map<int, std::string> tensorNames_;
 
     mutable std::map<unsigned, std::reference_wrapper<std::string>> tempVarsMap;
     mutable unsigned tempKey = 0;

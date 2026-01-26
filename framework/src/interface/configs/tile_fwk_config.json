@@ -100,6 +100,7 @@
             "enable_pass_configs": true,
             "enable_cv_fuse": false,
             "pass_thread_num": 1,
+            "vf_opt_mark_for": false,
             "default_pass_configs": {
                 "print_graph": false,
                 "print_program": false,

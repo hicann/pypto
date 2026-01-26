@@ -33,22 +33,6 @@
 #include "codegen/symbol_mgr/codegen_symbol.h"
 
 namespace npu::tile_fwk {
-const std::unordered_set<Opcode> SKIP_OPCODE = {
-    Opcode::OP_VIEW,
-    Opcode::OP_ASSEMBLE,
-    Opcode::OP_RESHAPE,
-    Opcode::OP_UB_ALLOC,
-    Opcode::OP_L1_ALLOC,
-    Opcode::OP_L0A_ALLOC,
-    Opcode::OP_L0B_ALLOC,
-    Opcode::OP_L0C_ALLOC,
-    Opcode::OP_FIX_ALLOC,
-    Opcode::OP_BT_ALLOC,
-    Opcode::OP_BIND_TENSOR,
-    Opcode::OP_NOP,
-    Opcode::OP_HUB,
-};
-
 const int MAX_OPERANDS = 11;
 const int NULL_OPERAND = 0;
 

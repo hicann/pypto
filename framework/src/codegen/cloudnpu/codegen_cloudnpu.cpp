@@ -16,7 +16,6 @@
 #include "codegen_op_cloudnpu.h"
 
 #include <cstring>
-#include <nlohmann/json.hpp>
 
 #include "interface/utils/log.h"
 #include "codegen/utils/parallel_execute.h"
@@ -26,10 +25,10 @@
 #include "interface/configs/config_manager.h"
 #include "securec.h"
 #include "tilefwk/tilefwk.h"
-#include "interface/program/program.h"
 #include "interface/utils/op_info_manager.h"
 #include "codegen_cloudnpu.h"
 #include "interface/operation/distributed/distributed_common.h"
+#include "codegen/stmt_mgr/codegen_for_block.h"
 
 namespace npu::tile_fwk {
 const std::string ENV_ASCEND_HOME_PATH = "ASCEND_HOME_PATH";
@@ -134,6 +133,7 @@ std::string CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc) c
         topFunc.Dump().c_str());
 
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
+    std::shared_ptr<ForBlockManager> forBlkMgr = std::make_shared<ForBlockManager>(symbolMgr);
     std::string allocSourceRegion;
     std::string tileOpSourceRegion;
     auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
@@ -142,14 +142,14 @@ std::string CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc) c
         ALOG_INFO_F(
             "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
         Opcode opcode = op.GetOpcode();
-        if (SKIP_OPCODE.find(opcode) != SKIP_OPCODE.end()) {
+        if (SKIP_OPCODE_FOR_CODEGEN.find(opcode) != SKIP_OPCODE_FOR_CODEGEN.end()) {
             ALOG_INFO_F("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
             continue;
         }
 
         std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
 
-        CodeGenOpCloudNPU cop({symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock});
+        CodeGenOpCloudNPU cop({symbolMgr, forBlkMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock});
         // update fs
         cop.UpdateSaturateStatus(fs);
         std::string tileOpSourceCode = cop.GenOpCode();

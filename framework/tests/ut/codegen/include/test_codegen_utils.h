@@ -52,6 +52,8 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo &info
 
 std::string GetResultFromCpp(const Function &function);
 
+bool IsStringExist(const std::string &expect, const std::string &result);
+
 } // namespace npu::tile_fwk
 
 #endif // TEST_CODEGEN_UTILS_H

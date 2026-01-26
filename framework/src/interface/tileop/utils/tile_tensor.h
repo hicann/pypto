@@ -33,6 +33,7 @@ struct TileTensor {
 
     __aicore__ inline TileTensor(uint64_t addr) : addr_(addr) {}
     __aicore__ inline uint64_t GetAddr() { return addr_; }
+    __aicore__ inline void SetAddr(uint64_t addr) { addr_ = addr; }
     __aicore__ inline LA GetLayout() { return layout_; }
     __aicore__ inline const LA GetLayout() const { return layout_; }
     __aicore__ inline static constexpr bool IsStaticLayout() { return LayoutType::IsStaticLayout(); }

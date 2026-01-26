@@ -18,7 +18,6 @@
 #include "codegen_op_cloudnpu.h"
 #include "securec.h"
 #include "codegen/utils/codegen_utils.h"
-#include "codegen/symbol_mgr/codegen_symbol.h"
 
 namespace npu::tile_fwk {
 std::string CodeGenOpCloudNPU::PrintCastDynamicUnaligned(const PrintUnaryParam &param) const {
@@ -332,7 +331,7 @@ std::string CodeGenOpCloudNPU::PrintExpand(const std::string &s0Var, const std::
         expandAxis = AnyCast<int64_t>(axis);
     }
     ASSERT((expandAxis >= 0) && (expandAxis <= (static_cast<int>(rawShape[1].size() - 1))))
-        << "unsupported reduce axis";
+        << "unsupported expand axis";
     // modify expandAxis for SHAPE_DIM4
     expandAxis += SHAPE_DIM4 - rawShape[1].size();
 

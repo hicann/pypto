@@ -86,6 +86,8 @@ inline constexpr uint64_t KIBI = 1024;
 inline constexpr uint64_t MEBI = UINT64_C(1024) * 1024;
 inline constexpr uint64_t GIBI = UINT64_C(1024) * 1024 * 1024;
 
+constexpr const int INVALID_LOOP_GROUPID = -1;
+
 inline int64_t AlignUp(int64_t value, int64_t alignment) {
     if (alignment == 0) {
         return value;

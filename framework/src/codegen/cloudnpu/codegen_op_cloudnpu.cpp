@@ -22,6 +22,14 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
+std::unordered_map<Opcode, std::set<int>> SKIP_PROC_PRARAM_IDX_IN_LOOP = {
+    // scene: reduce for last axis
+    // Parameter at 1st index (after numbering by CodeGenOp::Init) is used as temp buffer which is reused in loop body.
+    {Opcode::OP_ROWSUM_SINGLE, {ID1}},
+    {Opcode::OP_ROWMAX_SINGLE, {ID1}},
+    {Opcode::OP_ROWMIN_SINGLE, {ID1}},
+};
+
 CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbolManager, FunctionType funcType,
     const std::map<int, int> &locToOffset, bool isUnderDynamicFunc, bool isMainBlk)
     : CodeGenOp(symbolManager, funcType, locToOffset, isUnderDynamicFunc, isMainBlk),
@@ -244,8 +252,10 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
 CodeGenOpCloudNPU::CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx)
     : CodeGenOpCloudNPU(ctx.symbolManager, ctx.topFunc.GetFunctionType(), ctx.locToOffset,
           ctx.topFunc.IsUnderDynamicFunction(), ctx.isMainBlock) {
+    forBlkMgr_ = ctx.forBlockManager;
     CodeGenOp::Init(ctx.operation);
     UpdateTileTensorInfo();
+    UpdateLoopInfo();
 }
 void CodeGenOpCloudNPU::InitOpsGenMap() {
     InitScalaOpsMap();
@@ -437,15 +447,22 @@ std::vector<std::string> CodeGenOpCloudNPU::BuildStride(const std::vector<int64_
     return res;
 }
 
-void CodeGenOpCloudNPU::UpdateTileTensorShapeAndStride(int paramIdx, TileTensor &tileTensor, bool isSpillToGm) {
-    tileTensor.rawShape = rawShape[paramIdx];
+void CodeGenOpCloudNPU::UpdateTileTensorShapeAndStride(
+    int paramIdx, TileTensor &tileTensor, bool isSpillToGm, const ShapeInLoop &shapeInLoop) {
+    auto newOriginShape = shapeInLoop.loopDepth > 0 ? shapeInLoop.originShape : originShape[paramIdx];
+    auto newRawShape = shapeInLoop.loopDepth > 0 ? shapeInLoop.rawShape : rawShape[paramIdx];
+    auto newDynValidShape = shapeInLoop.loopDepth > 0 ? shapeInLoop.dynamicValidShape : dynamicValidShape[paramIdx];
+    ALOG_INFO_F("newOriginShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newOriginShape).c_str(),
+        IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
+
+    tileTensor.rawShape = newRawShape;
 
     // ---- static ----
     if (functionType == FunctionType::STATIC) {
-        for (auto s : originShape[paramIdx]) {
+        for (auto s : newOriginShape) {
             tileTensor.shape.emplace_back(std::to_string(s));
         }
-        tileTensor.stride = BuildStride(rawShape[paramIdx]);
+        tileTensor.stride = BuildStride(newRawShape);
         return;
     }
 
@@ -465,19 +482,29 @@ void CodeGenOpCloudNPU::UpdateTileTensorShapeAndStride(int paramIdx, TileTensor 
     }
 
     // local tensor
-    for (const auto &s : dynamicValidShape[paramIdx]) {
+
+    for (const auto &s : newDynValidShape) {
         tileTensor.shape.emplace_back(SymbolicExpressionTable::BuildExpression(s));
     }
-    tileTensor.stride = BuildStride(rawShape[paramIdx]);
+    tileTensor.stride = BuildStride(newRawShape);
 }
 
-TileTensor CodeGenOpCloudNPU::BuildTileTensor(int paramIdx, const std::string &usingType) {
+TileTensor CodeGenOpCloudNPU::BuildTileTensor(
+    int paramIdx, const std::string &usingType, const ShapeInLoop &shapeInLoop) {
     bool isSpillToGm = operand[paramIdx] == SYMBOL_STACK_BASE;
 
     TileTensor tileTensor;
     tileTensor.isStatic = functionType == FunctionType::STATIC;
     tileTensor.magic = operandWithMagic[paramIdx];
-    tileTensor.dim = tileTensor.isStatic ? originShape[paramIdx].size() : dynamicValidShape[paramIdx].size();
+    tileTensor.shapeInLoop = shapeInLoop;
+
+    if (tileTensor.isStatic) {
+        tileTensor.dim = shapeInLoop.loopDepth > 0 ? shapeInLoop.originShape.size() : originShape[paramIdx].size();
+    } else {
+        tileTensor.dim =
+            shapeInLoop.loopDepth > 0 ? shapeInLoop.dynamicValidShape.size() : dynamicValidShape[paramIdx].size();
+    }
+
     tileTensor.dtype = operandDtype[paramIdx];
     tileTensor.bufType = operandType[paramIdx];
 
@@ -488,10 +515,17 @@ TileTensor CodeGenOpCloudNPU::BuildTileTensor(int paramIdx, const std::string &u
     }
 
     tileTensor.usingType = usingType;
+
     tileTensor.tensorName = BUFFER_TYPE_TO_PREFIX_LC.at(tileTensor.bufType) + "Tensor_" +
                             std::to_string(IdGen<IdType::CG_VAR_NAME>::Inst().NewId());
-
-    UpdateTileTensorShapeAndStride(paramIdx, tileTensor, isSpillToGm);
+    if (shapeInLoop.loopDepth != 0) {
+        std::string tensorName = tensorNames_[paramIdx];
+        if (!tensorName.empty()) {
+            tensorName.append("_low").append(std::to_string(tileTensor.dim)).append("DimInLoop");
+            tileTensor.tensorName = tensorName;
+        }
+    }
+    UpdateTileTensorShapeAndStride(paramIdx, tileTensor, isSpillToGm, shapeInLoop);
     tileTensor.localBufOffset = offset[paramIdx];
 
     return tileTensor;
@@ -533,8 +567,76 @@ void CodeGenOpCloudNPU::UpdateTileTensorInfo() {
             originShape[i], rawShape[i], functionType == FunctionType::STATIC};
         std::string usingType = sm->AddTileTensorUsing(tileTensorUsing);
         TileTensor tileTensor = BuildTileTensor(i, usingType);
-        sm->AddTileTensor(tileTensor);
+        std::string tensorName = sm->AddTileTensor(tileTensor);
+        tensorNames_[i] = tensorName;
     }
+}
+
+bool CodeGenOpCloudNPU::ShouldSkipProcInLoop(int paramIdx) {
+    auto iter = SKIP_PROC_PRARAM_IDX_IN_LOOP.find(opCode);
+    if (iter == SKIP_PROC_PRARAM_IDX_IN_LOOP.end()) {
+        return false;
+    }
+    return iter->second.find(paramIdx) != iter->second.end();
+}
+
+std::vector<SymbolicScalar> CodeGenOpCloudNPU::GetLoopAxes() {
+    std::vector<SymbolicScalar> loopAxes;
+    GetAttr(OpAttributeKey::loopAxes, loopAxes);
+
+    if (!isMainBlock) {
+        return loopAxes;
+    }
+    // use dst shape as loop axes in main block
+    std::vector<SymbolicScalar> newLoopAxes;
+    for (size_t i = 0; i < loopAxes.size(); ++i) {
+        SymbolicScalar axis = isDynamicFunction ? dynamicValidShape[0][i] : SymbolicScalar(originShape[0][i]);
+        newLoopAxes.emplace_back(axis);
+    }
+
+    return newLoopAxes;
+}
+
+void CodeGenOpCloudNPU::UpdateLoopInfo() {
+    if (SUPPORT_VF_FUSE_OPS.find(opCode) == SUPPORT_VF_FUSE_OPS.end()) {
+        return;
+    }
+
+    std::vector<SymbolicScalar> loopAxes = GetLoopAxes();
+    if (loopAxes.empty()) {
+        return;
+    }
+
+    bool isLoopStart{false};
+    if (GetAttr(OpAttributeKey::loopGroupStart, isLoopStart) && isLoopStart) {
+        forBlkMgr_->LoopStart();
+        forBlkMgr_->UpdateAxesList(loopAxes);
+    }
+
+    // Add TileTensor info in loop
+    ALOG_INFO_F("opCode %s has loopAxes: %s", opCodeStr.c_str(), IntVecToStr(loopAxes).c_str());
+    size_t loopDepth = loopAxes.size();
+    for (int i = 0; i < operandCnt; ++i) {
+        if (ShouldSkipProcInLoop(i)) {
+            continue;
+        }
+        ShapeInLoop shapeInLoop = BuildShapeInLoop(i, loopDepth);
+        ALOG_INFO_F("shapeInLoop: loopDepth is %d newOriginShape is %s, newRawShape is %s, newDynValidShape is %s",
+            loopDepth, IntVecToStr(shapeInLoop.originShape).c_str(), IntVecToStr(shapeInLoop.rawShape).c_str(),
+            IntVecToStr(shapeInLoop.dynamicValidShape).c_str());
+        TileTensorUsing tileTensorUsing{operandDtype[i], operandType[i], static_cast<int>(shapeInLoop.rawShape.size()),
+            shapeInLoop.originShape, shapeInLoop.rawShape, functionType == FunctionType::STATIC};
+        std::string usingType = sm->AddTileTensorUsing(tileTensorUsing);
+        TileTensor tileTensor = BuildTileTensor(i, usingType, shapeInLoop);
+        forBlkMgr_->AddTensorInLoopBody(tensorNames_[i], tileTensor);
+    }
+}
+
+ShapeInLoop CodeGenOpCloudNPU::BuildShapeInLoop(int paramIdx, size_t loopDepth) {
+    auto newOriginShape = GetShapeInLoop(originShape[paramIdx], loopDepth);
+    auto newRawShape = GetShapeInLoop(rawShape[paramIdx], loopDepth);
+    auto newDynValidShape = GetShapeInLoop<SymbolicScalar>(dynamicValidShape[paramIdx], loopDepth);
+    return {loopDepth, newOriginShape, newRawShape, newDynValidShape};
 }
 
 std::string CodeGenOpCloudNPU::PrintCoord(size_t dim, const std::string &coord) const {
@@ -554,20 +656,60 @@ void CodeGenOpCloudNPU::FillParamWithShapeExceptFirst(
 }
 
 std::string CodeGenOpCloudNPU::QueryTileTensorNameByIdx(int paramIdx) const {
-    std::vector<TileTensor> res = sm->QueryTileTensorByMagic(operandWithMagic[paramIdx]);
+    std::vector<TileTensor> res;
+    if (forBlkMgr_ != nullptr && forBlkMgr_->IsInLoop()) {
+        res = sm->QueryTileTensorInLoopByMagic(operandWithMagic[paramIdx]);
+        // some tensor in loop is reused same tensor out of loop
+        if (res.empty()) {
+            res = sm->QueryTileTensorByMagic(operandWithMagic[paramIdx]);
+        }
+    } else {
+        res = sm->QueryTileTensorByMagic(operandWithMagic[paramIdx]);
+    }
+
     if (res.size() == 1) {
         return res[0].tensorName;
     }
+    ALOG_INFO_F("paramIdx is %d, tensor magic is %d, res size is %d", paramIdx, operandWithMagic[paramIdx], res.size());
 
     for (const auto &tileTensor : res) {
+        auto targetRawShape =
+            forBlkMgr_ != nullptr && forBlkMgr_->IsInLoop() ? tileTensor.shapeInLoop.rawShape : rawShape[paramIdx];
         // Currently only support additional comparison of rawShape
-        if (tileTensor.rawShape == rawShape[paramIdx]) {
+        if (tileTensor.rawShape == targetRawShape) {
             return tileTensor.tensorName;
         }
     }
 
-    ASSERT(false) << "paramIdx " << paramIdx << ", tensor magic " << operandWithMagic[paramIdx] << " is not found !!! ";
+    ASSERT(false) << "paramIdx " << paramIdx << ", tensor magic " << operandWithMagic[paramIdx]
+                  << " is not found !!! res size is " << res.size();
     return "";
+}
+std::string CodeGenOpCloudNPU::GenOpCode() const {
+    std::string ret;
+    auto iter = opsGenMap_.find(opCode);
+    if (iter != opsGenMap_.end()) {
+        ret = iter->second();
+    } else {
+        // To aid in testing, do not use ASSERT.
+        return std::string{"CAN NOT HANDLE OP: " + opCodeStr};
+    }
+
+    if (forBlkMgr_ == nullptr || !forBlkMgr_->IsInLoop()) {
+        return ret;
+    }
+
+    forBlkMgr_->AddOpInLoopBody(ret);
+
+    bool isLoopEnd{false};
+    GetAttr(OpAttributeKey::loopGroupEnd, isLoopEnd);
+    if (!isLoopEnd) {
+        return "";
+    }
+
+    ret = forBlkMgr_->Print();
+    forBlkMgr_->OutLoop();
+    return ret;
 }
 
 } // namespace npu::tile_fwk

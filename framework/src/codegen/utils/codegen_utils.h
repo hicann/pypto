@@ -115,5 +115,7 @@ void FillParamWithInput(std::vector<std::string> &paramList, const std::vector<T
     }
 }
 
+void PrintIndent(std::ostringstream &os, int scopeLevel);
+
 } // namespace npu::tile_fwk
 #endif
