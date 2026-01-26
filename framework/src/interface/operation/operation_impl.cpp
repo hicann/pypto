@@ -1611,4 +1611,16 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
         }
     }
 }
+
+Tensor Nop(const std::vector<Tensor>& inTensors)
+{
+    auto& function = *Program::GetInstance().GetCurrentFunction();
+    auto out = std::make_shared<LogicalTensor>(function, DT_INT32, Shape{1, 1});
+    LogicalTensors iOperands;
+    for (const Tensor& inTensor : inTensors) {
+        iOperands.emplace_back(inTensor.GetStorage());
+    }
+    function.AddOperation(Opcode::OP_NOP, iOperands, {out});
+    return out;
+}
 } // namespace npu::tile_fwk

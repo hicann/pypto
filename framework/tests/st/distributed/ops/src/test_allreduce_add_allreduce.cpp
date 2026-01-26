@@ -21,20 +21,9 @@
 #include "tilefwk/data_type.h"
 #include "test_dev_func_runner.h"
 #include "tilefwk/symbolic_distributed.h"
+#include "interface/operation/operation_impl.cpp"
 
 namespace npu::tile_fwk::Distributed {
-
-Tensor Nop(const std::vector<Tensor>& inTensors)
-{
-    auto& function = *Program::GetInstance().GetCurrentFunction();
-    auto out = std::make_shared<LogicalTensor>(function, DT_INT32, Shape{1, 1});
-    LogicalTensors iOperands;
-    for (const Tensor& inTensor : inTensors) {
-        iOperands.emplace_back(inTensor.GetStorage());
-    }
-    function.AddOperation(Opcode::OP_NOP, iOperands, {out});
-    return out;
-}
 
 void LoopAllReduce1(const Tensor& in, Tensor& allReduceOut, const OpTestParam& testParam, int32_t row, int32_t col)
 {
@@ -93,13 +82,11 @@ void LoopAllReduce2(const Tensor& addOut, Tensor& shmemBarrier1ShmemSignal, Tens
     LOOP("AllReduce2", FunctionType::DYNAMIC_LOOP, allReduce2Index, LoopRange(0, 1, 1)) {
         (void)allReduce2Index;
 
-        Tensor barrier1Out(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "barrier1Out");
         Tensor memSetOut(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "memSetOut");
-        Tensor barrier2Out(DT_INT32, {addOut.GetShape(0), addOut.GetShape(1)}, "barrier2Out");
 
         SymbolicScalar thisRank = GetHcclRankId(group);
         TileShape::Current().SetVecTile({1, 8});
-        ShmemBarrier(addOut, shmemBarrier1ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize), barrier1Out);
+        auto barrier1Out = ShmemBarrier(addOut, shmemBarrier1ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize));
         TileShape::Current().SetVecTile(row, col);
         auto allReduce2ShmemDataTile = View(allReduce2ShmemData, {1, 1, addOut.GetShape(0), addOut.GetShape(1)},
             std::vector<SymbolicScalar>{thisRank, 0, 0, 0});
@@ -109,7 +96,7 @@ void LoopAllReduce2(const Tensor& addOut, Tensor& shmemBarrier1ShmemSignal, Tens
         auto memSetSignalOut = ShmemSignalSet(barrier1Out, allReduce2ShmemSignalTile);
         memSetOut = Nop({memSetDataOut, memSetSignalOut});
         TileShape::Current().SetVecTile({1, 8});
-        ShmemBarrier(memSetOut, shmemBarrier2ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize), barrier2Out);
+        auto barrier2Out = ShmemBarrier(memSetOut, shmemBarrier2ShmemSignal, testParam.group, static_cast<uint32_t>(testParam.rankSize));
         TileShape::Current().SetVecTile(row, col);
         OneShotAllReduce(barrier2Out, addOut, testParam.group, allReduce2ShmemData, allReduce2ShmemSignal, out);
     }

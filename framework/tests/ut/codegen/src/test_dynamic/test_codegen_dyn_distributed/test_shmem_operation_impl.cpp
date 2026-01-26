@@ -224,7 +224,7 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
         Tensor predToken(DT_INT32, {1, 1}, "predToken");
         LOOP(functionName, FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
             (void) index;
-            ShmemBarrier(predToken, shmemSignal, group, worldSize, out);
+            out = ShmemBarrier(predToken, shmemSignal, group, worldSize);
         }
     }
 
