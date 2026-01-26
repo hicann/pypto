@@ -22,6 +22,7 @@
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "interface/utils/op_info_manager.h"
+#include "machine/host/perf_analysis.h"
 
 extern "C" {
 using RunPassFunc = int (*)(npu::tile_fwk::Program &, npu::tile_fwk::Function &, const std::string &);
@@ -120,6 +121,7 @@ bool HostMachine::Init(const HostMachineMode mode) {
     }
 
     initialized_.store(true);
+    HOST_PERF_TRACE_START();
     return true;
 }
 
@@ -128,7 +130,11 @@ void HostMachine::Destroy() {
         WaitTaskFinish();
         DestroyThread();
     }
-
+#if HOST_PERF_SWITCH
+    std::string fileName = "/tmp/pypto_perf_statistics_pid_" + std::to_string(getpid()) + ".txt";
+    PerfAnalysis::Get().Dump(true, fileName);
+    PerfAnalysis::Get().Dump(false);
+#endif
     ALOG_DEBUG("HostMachine is destroying...");
 }
 

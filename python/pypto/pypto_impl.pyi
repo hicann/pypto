@@ -391,7 +391,8 @@ def OperatorDeviceRunOnceDataFromDevice(operator_id: int,
                                         a: List[DeviceTensorData],
                                         dst: List[DeviceTensorData],
                                         stream_id: int,
-                                        workspace_ptr: int): ...
+                                        workspace_ptr: int,
+                                        ctrl_cache: int): ...
 
 
 def DeviceRunOnceDataFromHost(a: List[DeviceTensorData],

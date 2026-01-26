@@ -1911,42 +1911,8 @@ void DevAscendProgram::InitControlFlowCache(
         bool fillContent) {
     (void)fillContent;
 
-    uint64_t maxDuppedDataAllocSize = 0;
-    uint64_t maxIncastOutcastCount = 0;
-    for (size_t index = 0; index < dyndevAttr->devEncodeList.size(); index++) {
-        std::vector<uint8_t> &devEncode = dyndevAttr->devEncodeList[index];
-        const DevAscendFunction *devFunc = reinterpret_cast<const DevAscendFunction *>(devEncode.data());
-        uint64_t duppedDataAllocSize = devFunc->GetDuppedDataAllocSize();
-        if (maxDuppedDataAllocSize < duppedDataAllocSize) {
-            maxDuppedDataAllocSize = duppedDataAllocSize;
-        }
-        uint64_t incastOutcastCount = devFunc->GetIncastSize() + devFunc->GetOutcastSize();
-        if (maxIncastOutcastCount < incastOutcastCount) {
-            maxIncastOutcastCount = incastOutcastCount;
-        }
-    }
-    uint64_t totalSize = config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE);
-
-    initOffset = AlignUp(initOffset, alignof(DevTensorData));
-    controlFlowCache.inputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsInputTensorList.size());
-    controlFlowCache.outputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsOutputTensorList.size());
-
-    uint64_t slottedCount = slotSize * (std::min(EstimatedStitchingCount(), (int)MAX_CACHED_FUNC_NUM) + SLOTS_NEED_ALLOC_SIZE);
-    controlFlowCache.runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList.HostInitDataSizeOffset(initOffset, slottedCount);
-
-    controlFlowCache.runtimeBackup.slotContext.slotList.HostInitDataSizeOffset(initOffset, slotSize);
-    controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool.HostInitDataSizeOffset(initOffset, runtimeOutcastPoolSize);
-
-    initOffset = AlignUp(initOffset, alignof(DynFuncHeader *));
-    controlFlowCache.deviceTaskCacheList.HostInitDataSizeOffset(initOffset, DEFAULT_CACHE_DEVICE_TASK_NUM);//10000
-    controlFlowCache.cacheData.HostInitDataSizeOffset(initOffset, totalSize);
-    controlFlowCache.isRecording = false;
-    controlFlowCache.isRecordingStopped= false;
-    controlFlowCache.isActivated = false;
-    controlFlowCache.deviceTaskCount = 0;
-    controlFlowCache.deviceTaskSkippedCount = 0;
-    controlFlowCache.cacheDataOffset = 0;
-    controlFlowCache.workspaceAddr = 0;
+    ctrlFlowCacheSize = config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE);
+    controlFlowCache.Init(dyndevAttr.get(), ctrlFlowCacheSize, runtimeOutcastPoolSize, initOffset);
 }
 
 struct EncodeDevAscendProgramInfo {
@@ -2366,5 +2332,33 @@ void EncodeDevAscendProgram(Function *func, uint64_t &offset, DevAscendProgram *
         func->GetDyndevAttribute()->maxDynamicAssembleOutcastMem = tensorWsRes.maxDynamicAssembleOutcastMem;
     }
 }
+
+void DevControlFlowCache::Init(void *dyndevAttrPtr,
+            uint64_t cacheSize, uint64_t runtimeOutcastPoolSize, uint64_t &initOffset) {
+    DyndevFunctionAttribute* dyndevAttr =  reinterpret_cast<DyndevFunctionAttribute*>(dyndevAttrPtr);
+    initOffset = AlignUp(initOffset, alignof(DevTensorData));
+    inputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsInputTensorList.size());
+    outputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsOutputTensorList.size());
+
+    uint64_t slottedCount = dyndevAttr->inoutLink.totalSlot * (std::min(EstimatedStitchingCount(), (int)MAX_CACHED_FUNC_NUM) + SLOTS_NEED_ALLOC_SIZE);
+    runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList.HostInitDataSizeOffset(initOffset, slottedCount);
+
+    runtimeBackup.slotContext.slotList.HostInitDataSizeOffset(initOffset, dyndevAttr->inoutLink.totalSlot);
+    runtimeBackup.workspace.runtimeOutcastTensorPool.HostInitDataSizeOffset(initOffset, runtimeOutcastPoolSize);
+
+    initOffset = AlignUp(initOffset, alignof(DynFuncHeader *));
+    deviceTaskCacheList.HostInitDataSizeOffset(initOffset, DEFAULT_CACHE_DEVICE_TASK_NUM);
+    cacheData.HostInitDataSizeOffset(initOffset, cacheSize);
+    isRecording = false;
+    isRecordingStopped= false;
+    isActivated = false;
+    deviceTaskCount = 0;
+    deviceTaskSkippedCount = 0;
+    cacheDataOffset = 0;
+    workspaceAddr = 0;
+
+    dataSize = initOffset - reinterpret_cast<uintdevptr_t>(data);
+}
+
 } // namespace dynamic
 } // namespace npu::tile_fwk

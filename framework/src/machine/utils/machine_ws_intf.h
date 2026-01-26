@@ -98,7 +98,7 @@ constexpr int64_t DEVICE_QUEUE_SIZE = 512;
 #define DEVICE_TASK_STOP 0x7FFFFFFE
 
 struct DeviceKernelArgs {
-    int64_t *syncaddr{nullptr}; // not used
+    int64_t *ctrlFlowCache{nullptr};
     int64_t *inputs{nullptr};
     int64_t *outputs{nullptr};
     int64_t *workspace{nullptr};

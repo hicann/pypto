@@ -23,7 +23,7 @@ bool DeviceExecuteContext::DuppedRootCached() {
     if (!controlFlowCacheActivated) {
         return false;
     }
-    return duppedRootCount < devProg->controlFlowCache.rootTaskCount;
+    return duppedRootCount < devProg->ctrlFlowCacheAnchor->rootTaskCount;
 }
 
 bool DeviceExecuteContext::DuppedRootUpdateAndCachedAllSubmitted() {
@@ -31,7 +31,7 @@ bool DeviceExecuteContext::DuppedRootUpdateAndCachedAllSubmitted() {
         return false;
     }
     duppedRootCount++;
-    return duppedRootCount == devProg->controlFlowCache.rootTaskCount;
+    return duppedRootCount == devProg->ctrlFlowCacheAnchor->rootTaskCount;
 }
 
 uint64_t DeviceExecuteContext::GetInputShapeDimSize(DeviceExecuteContext *ctx, uint64_t inputIndex) {
@@ -168,11 +168,11 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs *startArgs, PushTaskEn
     PerfEnd(PERF_EVT_CONTROL_FLOW_INIT);
     PerfMtTrace(PERF_TRACE_INIT, CTRL_CPU_THREAD_IDX);
     PerfBegin(PERF_EVT_CONTROL_FLOW);
-    for (size_t index = 0; index < devProg->controlFlowCache.deviceTaskCount; index++) {
-        DynDeviceTask *dynTask = reinterpret_cast<DynDeviceTask *>(devProg->controlFlowCache.deviceTaskCacheList[index].dynTaskBase);
-        devProg->controlFlowCache.PredCountDataRestore(dynTask);
-        devProg->controlFlowCache.ReadyQueueDataRestore(dynTask);
-        devProg->controlFlowCache.MixTaskDataRestore(dynTask);
+    for (size_t index = 0; index < devProg->ctrlFlowCacheAnchor->deviceTaskCount; index++) {
+        DynDeviceTask *dynTask = reinterpret_cast<DynDeviceTask *>(devProg->ctrlFlowCacheAnchor->deviceTaskCacheList[index].dynTaskBase);
+        devProg->ctrlFlowCacheAnchor->PredCountDataRestore(dynTask);
+        devProg->ctrlFlowCacheAnchor->ReadyQueueDataRestore(dynTask);
+        devProg->ctrlFlowCacheAnchor->MixTaskDataRestore(dynTask);
         taskContext.UpdateReadyTaskNum(dynTask->readyQueueBackup->readyTaskNum);
 
         PROF_STAGE_BEGIN(PERF_EVT_STAGE_PUSH_TASK, "push.before\n");
@@ -218,7 +218,7 @@ int DeviceExecuteContext::GELaunchFullCacheRunControlFlow(DevStartArgs *startArg
 }
 
 void DeviceExecuteContext::GELaunchFullCache(DevStartArgs *startArgs, PushTaskEntry tPushTask) {
-    if (devProg->controlFlowCache.IsActivatedFullCache(startArgs)) {
+    if (devProg->ctrlFlowCacheAnchor->IsActivatedFullCache(startArgs)) {
         DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCacheFullRunCache()));
         GELaunchRunCached(startArgs, tPushTask);
     } else {
@@ -229,8 +229,8 @@ void DeviceExecuteContext::GELaunchFullCache(DevStartArgs *startArgs, PushTaskEn
 
 int DeviceExecuteContext::GELaunch(DevStartArgs *startArgs, PushTaskEntry tPushTask) {
     int ret = DEVICE_MACHINE_OK;
-    if (devProg->controlFlowCache.IsRecording()) {
-        devProg->controlFlowCache.InitInputOutput(startArgs);
+    if (devProg->ctrlFlowCacheAnchor->IsRecording()) {
+        devProg->ctrlFlowCacheAnchor->InitInputOutput(startArgs);
     }
     ret = GELaunchPartialCache(startArgs, tPushTask);
     if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -243,20 +243,20 @@ int DeviceExecuteContext::GELaunchPartialCache(DevStartArgs *startArgs, PushTask
     int ret = DEVICE_MACHINE_OK;
     DEV_TRACE_DEBUG(CtrlEvent(none(), Workspace(Range(startArgs->contextWorkspaceAddr, startArgs->contextWorkspaceAddr + startArgs->contextWorkspaceSize))));
 
-    if (devProg->controlFlowCache.IsActivatedPartialCache(startArgs)) {
+    if (devProg->ctrlFlowCacheAnchor->IsActivatedPartialCache(startArgs)) {
         controlFlowCacheActivated = true;
-        DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCachePartRunCache(devProg->controlFlowCache.deviceTaskCount, devProg->controlFlowCache.rootTaskCount)));
+        DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCachePartRunCache(devProg->ctrlFlowCacheAnchor->deviceTaskCount, devProg->ctrlFlowCacheAnchor->rootTaskCount)));
         GELaunchRunCached(startArgs, tPushTask);
     }
-DEV_IF_DEVICE {
-    uint64_t start = GetCycles();
-    while ((startArgs->devProg->devArgs.disableSync == 0) && startArgs->syncFlag != 1) {
-        if (GetCycles() - start > HAND_SHAKE_TIMEOUT) {
-            DEV_ERROR("Wait sync flag timeout.");
-            break;
+    DEV_IF_DEVICE {
+        uint64_t start = GetCycles();
+        while ((startArgs->devProg->devArgs.disableSync == 0) && startArgs->syncFlag != 1) {
+            if (GetCycles() - start > HAND_SHAKE_TIMEOUT) {
+                DEV_ERROR("Wait sync flag timeout.");
+                break;
+            }
         }
     }
-}
     DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCacheFullRunControl()));
     ret = RunInit(startArgs, tPushTask);
     if (unlikely(ret != DEVICE_MACHINE_OK)) {
@@ -296,17 +296,17 @@ void DeviceExecuteContext::DumpDeviceTask(uint64_t taskId, DynDeviceTask *device
 }
 
 void DeviceExecuteContext::ProcessControlFlowCacheRecord(DynDeviceTask *dynTask) {
-    if (devProg->controlFlowCache.IsRecording()) {
-        if (!devProg->controlFlowCache.IsRecordingStopped()) {
-            devProg->controlFlowCache.PredCountDataBackup(dynTask);
-            devProg->controlFlowCache.ReadyQueueDataBackup(dynTask);
-            devProg->controlFlowCache.MixTaskDataBackup(dynTask);
-            devProg->controlFlowCache.IncastOutcastAddrBackup(dynTask);
-            devProg->controlFlowCache.TaskAddrBackupWorkspace(dynTask);
-            devProg->controlFlowCache.RuntimeAddrBackup(slotContext.GetSlotList(), workspace.GetRuntimeOutcastTensorPoolBase(),
+    if (devProg->ctrlFlowCacheAnchor->IsRecording()) {
+        if (!devProg->ctrlFlowCacheAnchor->IsRecordingStopped()) {
+            devProg->ctrlFlowCacheAnchor->PredCountDataBackup(dynTask);
+            devProg->ctrlFlowCacheAnchor->ReadyQueueDataBackup(dynTask);
+            devProg->ctrlFlowCacheAnchor->MixTaskDataBackup(dynTask);
+            devProg->ctrlFlowCacheAnchor->IncastOutcastAddrBackup(dynTask);
+            devProg->ctrlFlowCacheAnchor->TaskAddrBackupWorkspace(dynTask);
+            devProg->ctrlFlowCacheAnchor->RuntimeAddrBackup(slotContext.GetSlotList(), workspace.GetRuntimeOutcastTensorPoolBase(),
                 devProg->slotSize, devProg->runtimeOutcastPoolSize, workspace.GetTensorAllocator());
         }
-        devProg->controlFlowCache.AppendDeviceTask(dynTask);
+        devProg->ctrlFlowCacheAnchor->AppendDeviceTask(dynTask);
     }
 }
 
@@ -384,7 +384,7 @@ int DeviceExecuteContext::ControlFlowCacheStopCache(uint64_t rootKey) {
     if (unlikely(ret != DEVICE_MACHINE_OK)) {
         return DEVICE_MACHINE_ERROR;
     }
-    devProg->controlFlowCache.StopRecording();
+    devProg->ctrlFlowCacheAnchor->StopRecording();
     DEV_INFO("[Stitch Finish] Stop recording ctrl flow cache. rootKey=%" PRIu64 ".", rootKey);
     return ret;
 }
@@ -418,7 +418,7 @@ void *DeviceExecuteContext::CallRootFunctionStitch(uint64_t rootKey) {
     int ret = DEVICE_MACHINE_OK;
     DEV_DEBUG("Root stitch %lu.", rootKey);
     if (rootKey == RUNTIME_FUNCKEY_CACHESTOP) {
-        if (devProg->controlFlowCache.IsRecording()) {
+        if (devProg->ctrlFlowCacheAnchor->IsRecording()) {
             ret = ControlFlowCacheStopCache(rootKey);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return RUNTIME_FUNCKEY_ERROR;
@@ -485,7 +485,7 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootAlloc(void *ctx_, uint64
     void *result = nullptr;
     if (ctx->DuppedRootCached()) {
         result = nullptr;
-    } else if (ctx->devProg->controlFlowCache.IsRecording() && ctx->devProg->controlFlowCache.IsRecordingStopped()) {
+    } else if (ctx->devProg->ctrlFlowCacheAnchor->IsRecording() && ctx->devProg->ctrlFlowCacheAnchor->IsRecordingStopped()) {
         result = nullptr;
     } else {
         result = ctx->CallRootFunctionAlloc(rootKey);
@@ -516,7 +516,8 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void *ctx_, uint6
     void *result = nullptr;
     if (ctx->DuppedRootCached()) {
         result = nullptr;
-    } else if (ctx->devProg->controlFlowCache.IsRecording() && ctx->devProg->controlFlowCache.IsRecordingStopped()) {
+    } else if (ctx->devProg->ctrlFlowCacheAnchor->IsRecording() &&
+        ctx->devProg->ctrlFlowCacheAnchor->IsRecordingStopped()) {
         result = nullptr;
     } else {
         result = ctx->CallRootFunctionStitch(rootKey);
@@ -533,9 +534,9 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void *ctx_, uint6
     if (ctx->DuppedRootUpdateAndCachedAllSubmitted()) {
         DEV_TRACE_DEBUG(CtrlEvent(none(), ControlFlowCachePartRunControlContinue()));
         // forcely break device task
-        ctx->devProg->controlFlowCache.RuntimeAddrRestore(ctx->slotContext.GetSlotList(), ctx->workspace.GetRuntimeOutcastTensorPoolBase(),
+        ctx->devProg->ctrlFlowCacheAnchor->RuntimeAddrRestore(ctx->slotContext.GetSlotList(), ctx->workspace.GetRuntimeOutcastTensorPoolBase(),
             ctx->devProg->slotSize, ctx->devProg->runtimeOutcastPoolSize, ctx->workspace.GetTensorAllocator());
-        ctx->devProg->controlFlowCache.RuntimeAddrRelocWorkspace(0, ctx->args->contextWorkspaceAddr,
+        ctx->devProg->ctrlFlowCacheAnchor->RuntimeAddrRelocWorkspace(0, ctx->args->contextWorkspaceAddr,
             ctx->args, ctx->slotContext.GetSlotList(), ctx->workspace.GetRuntimeOutcastTensorPoolBase());
     }
     return result;

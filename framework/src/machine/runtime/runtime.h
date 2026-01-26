@@ -87,6 +87,91 @@ struct res_map_info {
 
 namespace npu::tile_fwk {
 
+class RuntimeHostAgentMemory {
+public:
+    void backtracePrint(int count = 1000) {
+        std::vector<void*> backtraceStack(count);
+        int backtraceStackCount = backtrace(backtraceStack.data(), static_cast<int>(backtraceStack.size()));
+        char **backtraceSymbolList = backtrace_symbols(backtraceStack.data(), backtraceStackCount);
+        free(backtraceSymbolList);
+    }
+#define DEVICE_ALLOC_ALIGN 512
+    uint8_t* AllocHostAddr(uint64_t size, bool cached = true, bool simuDevAlign = true) {
+        if (size == 0) {
+            ALOG_ERROR_F("Malloc size is 0!");
+            return nullptr;
+        }
+        // Device allocate always 512 aligned.
+        auto hostPtr = (uint8_t *)malloc(size + DEVICE_ALLOC_ALIGN);
+        if (hostPtr == nullptr) {
+            ALOG_ERROR_F("Malloc failed size !", size);
+            return nullptr;
+        }
+        memset_s(hostPtr, size + DEVICE_ALLOC_ALIGN, 0, size + DEVICE_ALLOC_ALIGN);
+        if (cached) {
+            allocatedHostAddr.emplace_back(hostPtr);
+        }
+        return simuDevAlign ?
+            (uint8_t *)((((uint64_t)hostPtr) + DEVICE_ALLOC_ALIGN - 1) / DEVICE_ALLOC_ALIGN * DEVICE_ALLOC_ALIGN) :
+            hostPtr;
+    }
+
+    void Free(uint8_t* ptr) {
+        if(ptr) {
+            free(ptr);
+        }
+    }
+protected:
+    void DestroyMemory() {
+        for (uint8_t *addr : allocatedHostAddr) {
+            free(addr);
+        }
+    }
+private:
+    std::vector<uint8_t *> allocatedHostAddr;
+};
+
+class RuntimeHostAgent : public RuntimeHostAgentMemory {
+public:
+    RuntimeHostAgent(RuntimeHostAgent &other) = delete;
+
+    void operator=(const RuntimeHostAgent &other) = delete;
+
+    static RuntimeHostAgent *GetAgent() {
+        static RuntimeHostAgent inst;
+        return &inst;
+    }
+
+protected:
+    RuntimeHostAgent() {
+        Init();
+    }
+
+public:
+    ~RuntimeHostAgent() { Finalize(); }
+
+public:
+    void Finalize() {
+        if (hostInited) {
+            DestroyMemory();
+        }
+    }
+
+private:
+    void Init() {
+        hostInited = true;
+    }
+
+private:
+    bool hostInited{false};
+};
+
+namespace machine {
+inline npu::tile_fwk::RuntimeHostAgent *GetRuntimeHostAgent() {
+    return npu::tile_fwk::RuntimeHostAgent::GetAgent();
+}
+}
+
 #ifdef BUILD_WITH_CANN
 
 inline void CheckDeviceId() {
@@ -307,153 +392,12 @@ private:
 private:
     bool aclInited{false};
 };
-
-class RuntimeHostAgentMemory {
-public:
-    void backtracePrint(int count = 1000) {
-        std::vector<void*> backtraceStack(count);
-        int backtraceStackCount = backtrace(backtraceStack.data(), static_cast<int>(backtraceStack.size()));
-        char **backtraceSymbolList = backtrace_symbols(backtraceStack.data(), backtraceStackCount);
-        free(backtraceSymbolList);
-    }
-#define DEVICE_ALLOC_ALIGN 512
-    uint8_t* AllocHostAddr(uint64_t size) {
-        if (size == 0) {
-            ALOG_ERROR_F("Malloc size is 0!");
-            return nullptr;
-        }
-        // Device allocate always 512 aligned.
-        auto hostPtr = (uint8_t *)malloc(size + DEVICE_ALLOC_ALIGN);
-        allocatedHostAddr.emplace_back(hostPtr);
-        auto resultPtr = (uint8_t *)((((uint64_t)hostPtr) + DEVICE_ALLOC_ALIGN - 1) / DEVICE_ALLOC_ALIGN * DEVICE_ALLOC_ALIGN);
-        return resultPtr;
-    }
-protected:
-    void DestroyMemory() {
-        for (uint8_t *addr : allocatedHostAddr) {
-            free(addr);
-        }
-    }
-private:
-    std::vector<uint8_t *> allocatedHostAddr;
-};
-
-class RuntimeHostAgent : public RuntimeHostAgentMemory {
-public:
-    RuntimeHostAgent(RuntimeHostAgent &other) = delete;
-
-    void operator=(const RuntimeHostAgent &other) = delete;
-
-    static RuntimeHostAgent *GetAgent() {
-        static RuntimeHostAgent inst;
-        return &inst;
-    }
-
-protected:
-    RuntimeHostAgent() {
-        Init();
-    }
-
-public:
-    ~RuntimeHostAgent() { Finalize(); }
-
-public:
-    void Finalize() {
-        if (hostInited) {
-            DestroyMemory();
-        }
-    }
-
-private:
-    void Init() {
-        hostInited = true;
-    }
-
-private:
-    bool hostInited{false};
-};
-
 namespace machine {
-
 inline npu::tile_fwk::RuntimeAgent *GetRA() {
     return npu::tile_fwk::RuntimeAgent::GetAgent();
 }
-
-inline npu::tile_fwk::RuntimeHostAgent *GetRuntimeHostAgent() {
-    return npu::tile_fwk::RuntimeHostAgent::GetAgent();
-}
-
 } // namespace machine
 #else
-class RuntimeHostAgentMemory {
-public:
-    void backtracePrint(int count = 1000) {
-        std::vector<void*> backtraceStack(count);
-        int backtraceStackCount = backtrace(backtraceStack.data(), static_cast<int>(backtraceStack.size()));
-        char **backtraceSymbolList = backtrace_symbols(backtraceStack.data(), backtraceStackCount);
-        free(backtraceSymbolList);
-    }
-#define DEVICE_ALLOC_ALIGN 512
-    uint8_t* AllocHostAddr(uint64_t size) {
-        if (size == 0) {
-            ALOG_ERROR_F("Malloc size is 0!");
-            return nullptr;
-        }
-        // Device allocate always 512 aligned.
-        auto hostPtr = (uint8_t *)malloc(size + DEVICE_ALLOC_ALIGN);
-        allocatedHostAddr.emplace_back(hostPtr);
-        auto resultPtr = (uint8_t *)((((uint64_t)hostPtr) + DEVICE_ALLOC_ALIGN - 1) / DEVICE_ALLOC_ALIGN * DEVICE_ALLOC_ALIGN);
-        return resultPtr;
-    }
-protected:
-    void DestroyMemory() {
-        for (uint8_t *addr : allocatedHostAddr) {
-            free(addr);
-        }
-    }
-private:
-    std::vector<uint8_t *> allocatedHostAddr;
-};
 
-class RuntimeHostAgent : public RuntimeHostAgentMemory {
-public:
-    RuntimeHostAgent(RuntimeHostAgent &other) = delete;
-
-    void operator=(const RuntimeHostAgent &other) = delete;
-
-    static RuntimeHostAgent *GetAgent() {
-        static RuntimeHostAgent inst;
-        return &inst;
-    }
-
-protected:
-    RuntimeHostAgent() {
-        Init();
-    }
-
-public:
-    ~RuntimeHostAgent() { Finalize(); }
-
-public:
-    void Finalize() {
-        if (hostInited) {
-            DestroyMemory();
-        }
-    }
-
-private:
-    void Init() {
-        hostInited = true;
-    }
-
-private:
-    bool hostInited{false};
-};
-
-namespace machine {
-inline npu::tile_fwk::RuntimeHostAgent *GetRuntimeHostAgent() {
-    return npu::tile_fwk::RuntimeHostAgent::GetAgent();
-}
-}
 #endif
 } // namespace npu::tile_fwk

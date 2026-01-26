@@ -180,7 +180,7 @@ public:
     // Fill metadata and kArgs (templated because it uses DeviceMemoryTy) (keeps <= 50 lines)
     template<typename DeviceMemoryTy>
     static void FillKernelMeta(DeviceMemoryTy devMem, DeviceKernelArgs &kArgs, DevAscendProgram *devProg,
-            const std::vector<uint8_t> &devProgData, const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
+            const std::vector<uint8_t> &devProgData, bool isCtrlCacheRecording, const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
         AssignMetaAddr(kArgs, devMem, devProg, cachedOperator);
         devProg->l2CacheOffset = devMem.GetL2Offset();
         if (config.workspaceAddr) {
@@ -188,7 +188,7 @@ public:
         } else if (kArgs.workspace == nullptr && (devProg->workspaceSize != 0)) {
             kArgs.workspace = (int64_t *)devMem.AllocDev(devProg->workspaceSize, CachedOperator::GetWorkspaceDevAddrHolder(cachedOperator));
         }
-        if (devProg->controlFlowCache.isRecording && !devMem.IsDevice()) {
+        if (isCtrlCacheRecording) {
             kArgs.cfgdata = (int64_t *)devProg;
         } else if (CachedOperator::GetCfgDataDevAddrHolder(cachedOperator) && *CachedOperator::GetCfgDataDevAddrHolder(cachedOperator)) {
             /* Already copied, do not copy again. */
@@ -243,12 +243,18 @@ public:
 
     template<typename DeviceMemoryTy>
     static void DeviceInitTilingData(DeviceMemoryTy devMem, DeviceKernelArgs &kArgs, const std::vector<uint8_t> &devProgData,
-            const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
+            DevControlFlowCache* ctrlFlowCache, const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
         auto &mutableConfig = const_cast<DeviceLauncherConfig &>(config);
         auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(devProgData.data()));
         PrepareDevProgArgs(devProg, mutableConfig);
+
         // Fill all metadata and kernel args
-        FillKernelMeta(devMem, kArgs, devProg, devProgData, config, cachedOperator);
+        bool isCtrlCacheRecording  = false;
+        if (!devMem.IsDevice()) {
+            isCtrlCacheRecording =  ctrlFlowCache != nullptr ? ctrlFlowCache->IsRecording() : devProg->controlFlowCache.IsRecording();
+        }
+        FillKernelMeta(devMem, kArgs, devProg, devProgData, isCtrlCacheRecording, config, cachedOperator);
+        kArgs.ctrlFlowCache = reinterpret_cast<int64_t*>(ctrlFlowCache);
     }
 
     static int InitAicpuTaskInfo() {
@@ -365,13 +371,16 @@ public:
     }
 
 #ifdef BUILD_WITH_CANN
-    static void ChangeCaptureMode();
+    static void ChangeCaptureModeRelax();
+    static void ChangeCaptureModeGlobal();
     static int GetStreamCaptureInfo(rtStream_t aicoreStream, aclmdlRI &rtModel, bool &isCapture);
     static int SetCaptureStream(rtStream_t aicoreStream, rtStream_t aicpuStream, bool &isCapture);
-    static int RunWithProfile(rtStream_t aicoreStream, rtStream_t aicpuStream);
+    static int RunWithProfile(rtStream_t aicoreStream, rtStream_t aicpuStream, bool isCapture);
     static int DeviceLaunchOnceWithDeviceTensorData(
-            Function *function, const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-            rtStream_t aicpuStream, rtStream_t aicoreStream, bool streamSynchronize, CachedOperator *cachedOperator,
+            Function *function, const std::vector<DeviceTensorData> &inputList,
+            const std::vector<DeviceTensorData> &outputList,
+            rtStream_t aicpuStream, rtStream_t aicoreStream, bool streamSynchronize,
+            CachedOperator *cachedOperator, DevControlFlowCache* ctrlCache = nullptr,
             const DeviceLauncherConfig &config = DeviceLauncherConfig());
 
     static int DeviceSynchronize(rtStream_t aicpuStream, rtStream_t aicoreStream);
@@ -379,7 +388,10 @@ public:
 using aclmdlRICaptureMode = uint32_t;
 using rtStream_t = uint64_t;
 using aclmdlRI = void *;
-    static void ChangeCaptureMode() {
+    static void ChangeCaptureModeRelax() {
+        return;
+    }
+    static void ChangeCaptureModeGlobal() {
         return;
     }
     static int GetStreamCaptureInfo(rtStream_t aicoreStream, aclmdlRI &rtModel, bool &isCapture) {
@@ -394,9 +406,10 @@ using aclmdlRI = void *;
         (void)isCapture;
         return 0;
     }
-    static int RunWithProfile(rtStream_t aicoreStream, rtStream_t aicpuStream) {
+    static int RunWithProfile(rtStream_t aicoreStream, rtStream_t aicpuStream, bool isCapture) {
         (void)aicoreStream;
         (void)aicpuStream;
+        (void)isCapture;
         return 0;
     }
     static int DeviceLaunchOnceWithDeviceTensorData(
@@ -421,12 +434,13 @@ using aclmdlRI = void *;
         return 0;
     }
 #endif
-    static int DeviceRunOnce(Function *function, const DeviceLauncherConfig &config = DeviceLauncherConfig());
+    static int DeviceRunOnce(Function *function, DevControlFlowCache* hostCtrlCache = nullptr, const DeviceLauncherConfig &config = DeviceLauncherConfig());
 
     static void DeviceRunCacheKernelEnable(Function *func, bool enabled);
     static bool DeviceRunCacheKernelEnable(Function *func);
     static void DeviceRunCacheKernelSet(Function *func, uint8_t *devProg);
     static uint8_t *DeviceRunCacheKernelGet(Function *func);
+    static CachedOperator* DeviceRunCacheOperatorGet(Function *func);
  public:
     static std::vector<uint8_t> tensorInfo_;
 };

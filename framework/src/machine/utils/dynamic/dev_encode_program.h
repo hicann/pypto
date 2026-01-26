@@ -81,10 +81,11 @@ struct DevAscendProgram {
     } memBudget;
     const void *controlFlowBinaryAddr{nullptr};
     uint64_t hcclContext[HCCL_GROUP_NUM];
-    uint64_t commGroupNum;
-    uint16_t stitchFunctionNumInitial;
-    uint16_t stitchFunctionNumStep;
-    uint32_t stitchFunctionsize;
+    uint64_t commGroupNum{0};
+    uint16_t stitchFunctionNumInitial{0};
+    uint16_t stitchFunctionNumStep{0};
+    uint32_t stitchFunctionsize{0};
+    uint32_t ctrlFlowCacheSize{0};
     DevRelocVector<DevAscendProgramSymbol> symbolTable;
     DevRelocVector<char> symbolTableNameList;
     uint64_t expressionTableSize;
@@ -109,7 +110,8 @@ struct DevAscendProgram {
     DevRelocVector<uint64_t> cellMatchRuntimePartialUpdateTableList;
     DevRelocVector<PrefetchInfo> prefetchInfoList;
     DevRelocVector<uint8_t> disableL2List;
-    DevProgramControlFlowCache controlFlowCache;
+    DevControlFlowCache *ctrlFlowCacheAnchor{nullptr};
+    DevControlFlowCache controlFlowCache;
 #define programLastField                              controlFlowCache.cacheData
     uint64_t dataSize;
     uint8_t data[0];
@@ -227,7 +229,7 @@ struct DevAscendProgram {
     const DevCceBinary *GetCceBinary(int index) const { return &cceCodeList[index]; }
     const DevAicpuLeafBinary *GetAicpuLeafBinary(int index) const { return &aicpuLeafCodeList[index]; }
 
-    DevProgramControlFlowCache *GetControlFlowCache() { return &controlFlowCache; }
+    DevControlFlowCache *GetControlFlowCache() { return ctrlFlowCacheAnchor; }
 
     template<typename Ty>
     typename Ty::ElementType *RelocOffset(intptr_t shift, void *&offset, Ty &list) {
@@ -299,6 +301,7 @@ struct DevAscendProgram {
         memset_s(&devArgs, sizeof(devArgs), 0, sizeof(devArgs));
         controlFlowBinaryAddr = nullptr;
         workspaceSize = 0;
+        ctrlFlowCacheAnchor = nullptr;
         RelocProgram(reinterpret_cast<int64_t>(this), 0);
     }
 

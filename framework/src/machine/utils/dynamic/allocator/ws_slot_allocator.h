@@ -154,7 +154,7 @@ private:
     } dfx_;
 #endif // DEBUG_MEM_DUMP_LEVEL >= DEBUG_MEM_DUMP_LIGHT
 
-    friend class DevProgramControlFlowCache;
+    friend class DevControlFlowCache;
 };
 
 } // namespace npu::tile_fwk::dynamic

@@ -147,7 +147,8 @@ private:
             functionDevProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr);
             functionDevProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(functionDevProg), 0);
             functionDevProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
-            functionDevProg->controlFlowCache.TaskAddrRelocProgram(reinterpret_cast<uint64_t>(functionDevProg), 0);
+            functionDevProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(reinterpret_cast<uint64_t>(functionDevProg),
+                reinterpret_cast<uint64_t>(&functionDevProg->controlFlowCache), 0, 0);
             functionDevProg->ResetFromLaunch();
             functionDevProg->controlFlowCache.isActivated = true;
         }
@@ -172,7 +173,7 @@ private:
         DeviceLauncherConfigFillDeviceInfo(config_);
         DeviceInitDistributedContextToHost(function_->GetDyndevAttribute()->commGroupNames,
  	        function_->GetDyndevAttribute()->devProgBinary);
-        DeviceInitTilingData(MemoryHelper(true), kArgs, function_->GetDyndevAttribute()->devProgBinary, config_, nullptr);
+        DeviceInitTilingData(MemoryHelper(true), kArgs, function_->GetDyndevAttribute()->devProgBinary, nullptr, config_, nullptr);
         for (int i = 0; i < (config_.controlFlowCache ? 1 : config_.repeatNum); i++) {
             InitKernelInOuts(kArgs, inputs, outputs, true, {});
             std::cout << "!!! Run CostModel " << i << "\n";
@@ -269,7 +270,7 @@ private:
         DeviceLauncherConfigFillDeviceInfo(config_);
         DeviceInitDistributedContext(function_->GetDyndevAttribute()->commGroupNames,
  	        function_->GetDyndevAttribute()->devProgBinary);
-        DeviceInitTilingData(MemoryHelper(false), kArgs, function_->GetDyndevAttribute()->devProgBinary, config_, nullptr);
+        DeviceInitTilingData(MemoryHelper(false), kArgs, function_->GetDyndevAttribute()->devProgBinary, nullptr, config_, nullptr);
         auto aicpuStream = machine::GetRA()->GetScheStream();
         auto aicoreStream = machine::GetRA()->GetStream();
         auto ctrlStream = config_.cpuSeparate ? machine::GetRA()->GetCtrlStream() : nullptr;

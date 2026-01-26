@@ -22,6 +22,7 @@
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "machine/utils/dynamic/dev_encode_program.h"
+#include "machine/utils/dynamic/dev_tensor_creator.h"
 
 namespace npu::tile_fwk::dynamic {
 using DeviceStream = unsigned long long;
@@ -79,6 +80,59 @@ struct DeviceLauncherConfig {
     }
 };
 
+struct OperatorTensorPara {
+    std::vector<DevTensorData> inputTensorParaList;
+    std::vector<DevTensorData> outputTensorParaList;
+    bool operator==(const OperatorTensorPara &other) const {
+        if (inputTensorParaList.size() != other.inputTensorParaList.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < inputTensorParaList.size(); i++) {
+            if (!inputTensorParaList[i].shape.Equal(other.inputTensorParaList[i].shape)) {
+                return false;
+            }
+        }
+
+        if (outputTensorParaList.size() != other.outputTensorParaList.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < outputTensorParaList.size(); i++) {
+            if (!outputTensorParaList[i].shape.Equal(other.outputTensorParaList[i].shape)) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+struct OperatorTensorParaHash {
+    std::size_t operator()(const OperatorTensorPara& para) const {
+        std::size_t hash = 0;
+        hash_combine(hash, para.inputTensorParaList.size());
+        for (const auto& tensor : para.inputTensorParaList) {
+            hash_combine(hash, tensor.shape.dimSize);
+            for (int i = 0; i < tensor.shape.dimSize; i++) {
+                hash_combine(hash, tensor.shape.dim[i]);
+            }
+        }
+        hash_combine(hash, para.outputTensorParaList.size());
+        for (const auto& tensor : para.outputTensorParaList) {
+            hash_combine(hash, tensor.shape.dimSize);
+            for (int i = 0; i < tensor.shape.dimSize; i++) {
+                hash_combine(hash, tensor.shape.dim[i]);
+            }
+        }
+        return hash;
+    }
+
+private:
+    template <class T>
+    static void hash_combine(std::size_t& seed, const T& v) {
+        std::hash<T> hasher;
+        seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+};
+
 class CachedOperator {
 public:
     static uint8_t **GetWorkspaceDevAddrHolder(CachedOperator *cachedOperator) {
@@ -90,9 +144,38 @@ public:
     static uint8_t **GetMetaDataDevAddrHolder(CachedOperator *cachedOperator) {
         return cachedOperator == nullptr ? nullptr : &cachedOperator->metaDataDevAddr_;
     }
-
     static void *GetBinHandleHolder(CachedOperator *cachedOperator) {
         return cachedOperator == nullptr ? nullptr : &cachedOperator->binHandle_;
+    }
+
+    uint8_t* FindCtrlFlowCache(
+            const std::vector<DeviceTensorData> &inputList,
+            const std::vector<DeviceTensorData> &outputList) {
+        auto it = devCtrlFlowCacheMap_.find(BuildOperatorTensorPara(inputList, outputList));
+        if (it != devCtrlFlowCacheMap_.end()) {
+            return it->second;
+        }
+        return nullptr;
+    }
+
+    void InsertCtrlFlowCache(const std::vector<DeviceTensorData> &inputList,
+            const std::vector<DeviceTensorData> &outputList, uint8_t* cache) {
+        devCtrlFlowCacheMap_[BuildOperatorTensorPara(inputList, outputList)] = cache;
+    }
+
+private:
+    OperatorTensorPara BuildOperatorTensorPara(
+            const std::vector<DeviceTensorData> &inputList,
+            const std::vector<DeviceTensorData> &outputList) {
+        OperatorTensorPara para; 
+        for (const auto& input : inputList) {
+            para.inputTensorParaList.emplace_back(DevAscendTensorDataCreator::Create(0, input.GetShape()));
+        }
+
+        for (const auto& output : outputList) {
+            para.outputTensorParaList.emplace_back(DevAscendTensorDataCreator::Create(0, output.GetShape()));
+        }
+        return para;
     }
 
 private:
@@ -100,6 +183,7 @@ private:
     uint8_t *cfgDataDevAddr_{nullptr};
     uint8_t *metaDataDevAddr_{nullptr};
     void *binHandle_{nullptr};
+    std::unordered_map<OperatorTensorPara, uint8_t*, OperatorTensorParaHash> devCtrlFlowCacheMap_;
 };
 
 struct Evaluator {
@@ -202,12 +286,12 @@ private:
 
 int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(ExportedOperator *op,
     const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-    DeviceStream aicpuStream, DeviceStream aicoreStream, bool streamSynchronize,
+    DeviceStream aicpuStream, DeviceStream aicoreStream, bool streamSynchronize, uint8_t* devCtrlCache = nullptr,
     const DeviceLauncherConfig &config = DeviceLauncherConfig());
 
 int DeviceSynchronize(DeviceStream aicpuStream, DeviceStream aicoreStream);
 
-int DeviceRunOnce(Function *function, const DeviceLauncherConfig &config = DeviceLauncherConfig());
+int DeviceRunOnce(Function *function, uint8_t* hostCtrlCache = nullptr, const DeviceLauncherConfig &config = DeviceLauncherConfig());
 
 int HasInplaceArgs(Function *function);
 
@@ -222,6 +306,10 @@ void ExportedOperatorEnd(ExportedOperator *op);
 void CopyDevToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor);
 
 void CopyHostToDev(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor);
+
+uint8_t* CopyHostToDev(uint8_t* data, uint64_t size);
+void ChangeCaptureModeRelax();
+void ChangeCaptureModeGlobal();
 
 } // namespace npu::tile_fwk::dynamic
 

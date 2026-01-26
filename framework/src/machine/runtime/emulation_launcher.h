@@ -83,15 +83,16 @@ struct EmulationMemoryUtils {
 class EmulationLauncher {
 public:
     static int EmulationLaunchOnceWithHostTensorData(Function *function, const std::vector<DeviceTensorData> &inputList,
-        const std::vector<DeviceTensorData> &outputList, const DeviceLauncherConfig &config = DeviceLauncherConfig());
+        const std::vector<DeviceTensorData> &outputList, DevControlFlowCache* ctrlCache, const DeviceLauncherConfig &config = DeviceLauncherConfig());
     static int EmulationLaunchDeviceTensorData(Function *function, const std::vector<DeviceTensorData> &inputList,
         const std::vector<DeviceTensorData> &outputList, const DeviceLauncherConfig &config = DeviceLauncherConfig());
-    static int EmulationRunOnce(Function *function, const DeviceLauncherConfig &config = DeviceLauncherConfig());
+    static int EmulationRunOnce(Function *function, DevControlFlowCache* ctrlCache, const DeviceLauncherConfig &config = DeviceLauncherConfig());
 
+    static DevControlFlowCache* CreateHostCtrlFlowCache(DevAscendProgram *devProg, Function *function);
     static int BuildControlFlowCacheWithEmulationTensorData(
             Function *function, const std::vector<DeviceTensorData> &inputList,
             const std::vector<DeviceTensorData> &outputList,
-            CachedOperator *cachedOperator,
+            CachedOperator *cachedOperator, DevControlFlowCache **outCtrlFlowCache,
             const DeviceLauncherConfig &config = DeviceLauncherConfig());
 
 #define CONTROL_FLOW_CACHE_BASE_ADDR                    0x100000000
@@ -99,9 +100,9 @@ public:
     static int BuildControlFlowCache(
             Function *function,
             const std::vector<DeviceTensorData> &inputList = {},
-            const std::vector<DeviceTensorData> &outputList = {},
+            const std::vector<DeviceTensorData> &outputList = {}, DevControlFlowCache **outCtrlFlowCache = nullptr,
             const DeviceLauncherConfig &config = DeviceLauncherConfig());
-    static int BuildControlFlowCache(Function *function,
+    static int BuildControlFlowCache(Function *function, DevControlFlowCache **outCtrlFlowCache,
                                      const DeviceLauncherConfig &config = DeviceLauncherConfig());
 };
 
