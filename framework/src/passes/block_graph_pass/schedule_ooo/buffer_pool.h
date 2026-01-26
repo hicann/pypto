@@ -49,8 +49,13 @@ struct LocalBuffer {
 using LocalBufferPtr = std::shared_ptr<LocalBuffer>;
 // BufferSlice 一个时刻只能给一个tensor使用，允许生命周期不重叠的多个tensor分时复用
 struct BufferSlice {
-    uint64_t size{0};
     uint64_t offset{0};
+    uint64_t size{0};
+    
+    BufferSlice() = default;
+
+    BufferSlice(uint64_t offset_, uint64_t size_)
+        : offset(offset_), size(size_) {}
 };
 
 class BufferPool {
@@ -83,6 +88,7 @@ class BufferPool {
     void PrintStatus();
     Status MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice);
     void SelectHeadAndTail(LocalBufferPtr tensor, bool &head, bool &tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals);
+    Status CompactBufferSlices();
 
   private:
     MemoryType memType_{MemoryType::MEM_UNKNOWN};

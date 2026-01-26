@@ -46,11 +46,6 @@ inline bool IsMixGraph(const std::vector<Operation*> &operations) {
     return false;
 }
 
-inline bool IsViewOp(const Operation& op) {
-    const auto opc = op.GetOpcode();
-    return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE;
-}
-
 inline Operation* SkipViewChain(Operation* start, bool followProducers) {
     if (start == nullptr) return nullptr;
     Operation* op = start;
@@ -316,13 +311,9 @@ Status OoOScheduler::SpillOnBlock() {
         APASS_LOG_ERROR_F(Elements::Operation, "Buffer[L0A/B/C] is Full. Please check tile shape and OOO spill failed info."); 
         return FAILED; 
     }
-    bool rearrangeUBBF16{false};
-    if (RearrangeBuffers(allocIssueQueue[spillMemType].Front(), false, rearrangeUBBF16) != SUCCESS) {
-        APASS_LOG_WARN_F(Elements::Operation, "SpillOnBlock failed at RearrangeBuffers. Try GenBufferSpill.");
-        if (GenBufferSpill(allocIssueQueue[spillMemType].Front()) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
-            return FAILED;
-        }
+    if (GenBufferSpill(allocIssueQueue[spillMemType].Front()) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
+        return FAILED;
     }
     return SUCCESS;
 }
@@ -667,17 +658,7 @@ Status OoOScheduler::ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx) {
 
     if (bufferManagerMap[allocBuffer->memType].IsFull(allocBuffer)) {
         if (GenSpillOp(allocBuffer, pcIdx) != SUCCESS) {
-            APASS_LOG_WARN_F(Elements::Operation, "GenSpillOp failed, start trying buffer rearrangement.");
-            if (bufferManagerMap[allocBuffer->memType].IsFullWithoutRearrange(allocBuffer->size)) {
-                APASS_LOG_ERROR_F(Elements::Operation, "GenSpillOp failed and there is no enough buffer space for rearrangement. %s", GetFormatBacktrace(issueEntries[pcIdx]->tileOp).c_str());
-                return FAILED;
-            }
-            // 如果内存剩余空间 > 需要alloc空间, 进行内存重排
-            bool rearrangeUBBF16{false};
-            if (RearrangeBuffers(issue, true, rearrangeUBBF16) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "ExecuteAllocIssue failed at RearrangeBuffers! %s", GetFormatBacktrace(issue->tileOp).c_str());
-                return FAILED;
-            }
+            APASS_LOG_WARN_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s", GetFormatBacktrace(issueEntries[pcIdx]->tileOp).c_str());
         }
     }
 

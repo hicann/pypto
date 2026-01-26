@@ -315,6 +315,38 @@ Status BufferPool::ModifyBufferRange(LocalBufferPtr localBuffer, size_t offset) 
     return SUCCESS;
 }
 
+Status BufferPool::CompactBufferSlices() {
+    if (bufferSlices.empty()) {
+        return SUCCESS;
+    }
+    // 收集并按原 size 从大到小排序
+    std::vector<std::pair<uint32_t, BufferSlice>> items(bufferSlices.begin(), bufferSlices.end());
+    std::sort(items.begin(), items.end(),
+              [](const auto &a, const auto &b) {
+                  return a.second.size > b.second.size;
+              });
+
+    // 紧凑重排
+    uint64_t cursor = 0;
+    for (auto &it : items) {
+        if (cursor + it.second.size > memSize_) {
+            return FAILED;
+        }
+        it.second.offset = cursor;
+        cursor += it.second.size;
+    }
+
+    // 写回
+    for (const auto &it : items) {
+        bufferSlices[it.first].offset = it.second.offset;
+    }
+    if (CheckBufferSlicesOverlap()) {
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+
 void BufferPool::PrintStatus() {
     ALOG_DEBUG_F("Buffer Status : ");
     std::vector<int> memIdList;

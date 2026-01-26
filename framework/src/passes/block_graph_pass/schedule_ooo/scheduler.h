@@ -35,6 +35,11 @@ inline uint64_t CeilAlign(uint64_t a, int b) {
     return ((a + b - 1) / b) * b;
 }
 
+inline bool IsViewOp(const Operation& op) {
+    const auto opc = op.GetOpcode();
+    return opc == Opcode::OP_VIEW || opc == Opcode::OP_VIEW_TYPE;
+}
+
 using LocalBufferPtr = std::shared_ptr<LocalBuffer>;
 
 const std::unordered_set<Opcode> USE_LESS_OPS = {
@@ -319,6 +324,7 @@ private:
     int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset);
 
     // buffer rearrange
+    Status RearrangeBuffer(MemoryType memType);
     Status RearrangeBuffers(IssueEntryPtr issue, bool isGenSpillStage, bool &rearrangeUBBF16);
     Status GenRearrangeCopyOp(IssueEntryPtr issue, MemoryType memType, int memId, int &newMemId, bool &rearrangeUBBF16);
     Status UpdateMemId(int oldMemId, int newMemId);
