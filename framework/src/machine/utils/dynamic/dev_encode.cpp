@@ -78,11 +78,11 @@ void DevAscendFunction::InitOperationDynamicField(
     uint64_t outcastSize = outcastTensorList.size();
     uint64_t expressionSize = expressionTable->GetPrimaryExpressionSize();
 
-    uint64_t predCountListDataSize = ALIGN_UP(operationSize * sizeof(predcount_t), sizeof(uint64_t));
-    uint64_t incastDataSize = ALIGN_UP(incastSize * sizeof(void *), sizeof(uint64_t));
-    uint64_t outcastDataSize = ALIGN_UP(outcastSize * sizeof(void *), sizeof(uint64_t));
-    uint64_t expressionDataSize = ALIGN_UP(expressionSize * sizeof(uint64_t), sizeof(uint64_t));
-    uint64_t stitchDataSize = ALIGN_UP(outcastStitchCount * sizeof(DevAscendFunctionDuppedStitchList), sizeof(uint64_t));
+    uint64_t predCountListDataSize = AlignUp(operationSize * sizeof(predcount_t), sizeof(uint64_t));
+    uint64_t incastDataSize = AlignUp(incastSize * sizeof(void *), sizeof(uint64_t));
+    uint64_t outcastDataSize = AlignUp(outcastSize * sizeof(void *), sizeof(uint64_t));
+    uint64_t expressionDataSize = AlignUp(expressionSize * sizeof(uint64_t), sizeof(uint64_t));
+    uint64_t stitchDataSize = AlignUp(outcastStitchCount * sizeof(DevAscendFunctionDuppedStitchList), sizeof(uint64_t));
     uint64_t totalDataSize = predCountListDataSize + incastDataSize + outcastDataSize + expressionDataSize + stitchDataSize;
     duppedDataAllocSize_ = sizeof(DevAscendFunctionDuppedData) + totalDataSize;
     duppedDataCopySize_ = sizeof(DevAscendFunctionDuppedData) + predCountListDataSize;
@@ -1671,7 +1671,7 @@ void DevAscendProgram::InitSymbolTable(
             symbolTable[index].name.HostAssignRangeOffsetSize(symbolTableNameList, offset, name.size());
             memcpy_s(symbolTable[index].name.Data(), symbolTable[index].name.size(), name.c_str(), name.size());
         }
-        offset += ALIGN_UP(name.size(), sizeof(uint64_t));
+        offset += AlignUp(name.size(), sizeof(uint64_t));
     }
     symbolTableNameList.HostInitDataSizeOffset(initOffset, offset);
 }
@@ -1694,11 +1694,11 @@ void DevAscendProgram::InitControlFlowBinary(
         uintdevptr_t &initOffset,
         const std::vector<uint8_t> &hostControlFlowBinaryInput, const std::vector<uint8_t> &devControlFlowBinaryInput,
         bool fillContent) {
-    uint64_t alignedHostControlFlowBinaryInputSize = ALIGN_UP(hostControlFlowBinaryInput.size(), sizeof(uint64_t));
+    uint64_t alignedHostControlFlowBinaryInputSize = AlignUp(hostControlFlowBinaryInput.size(), sizeof(uint64_t));
     hostControlFlowBinary.HostInitDataSizeOffset(initOffset, alignedHostControlFlowBinaryInputSize);
     ONFILLCONTENT { memcpy_s(hostControlFlowBinary.Data(), hostControlFlowBinaryInput.size(), hostControlFlowBinaryInput.data(), hostControlFlowBinaryInput.size()); }
 
-    uint64_t alignedDevControlFlowBinaryInputSize = ALIGN_UP(devControlFlowBinaryInput.size(), sizeof(uint64_t));
+    uint64_t alignedDevControlFlowBinaryInputSize = AlignUp(devControlFlowBinaryInput.size(), sizeof(uint64_t));
     devControlFlowBinary.HostInitDataSizeOffset(initOffset, alignedDevControlFlowBinaryInputSize);
     ONFILLCONTENT { memcpy_s(devControlFlowBinary.Data(), devControlFlowBinaryInput.size(), devControlFlowBinaryInput.data(), devControlFlowBinaryInput.size()); }
 }
@@ -1710,7 +1710,7 @@ void DevAscendProgram::InitDevEncodeList(
     devEncodeDataList.HostInitDataSizeOffset(initOffset, 0);
     uint64_t offset = 0;
     for (size_t index = 0; index < devEncodeListInput.size(); index++) {
-        uint64_t alignedDevEncodeListInputSize = ALIGN_UP(devEncodeListInput[index].size(), sizeof(uint64_t));
+        uint64_t alignedDevEncodeListInputSize = AlignUp(devEncodeListInput[index].size(), sizeof(uint64_t));
         ONFILLCONTENT {
             devEncodeList[index].HostAssignRangeOffsetSize(devEncodeDataList, offset, alignedDevEncodeListInputSize);
         };
@@ -1880,7 +1880,7 @@ void DevAscendProgram::InitPartialUpdateSlot(
         }
         totalCellMatchSize += tableSize;
     }
-    totalCellMatchSize = ALIGN_UP(totalCellMatchSize, sizeof(uint64_t) * FRIENDLY_CACHE_ALIGN_U64_SIZE / sizeof(uint64_t));
+    totalCellMatchSize = AlignUp(totalCellMatchSize, sizeof(uint64_t) * FRIENDLY_CACHE_ALIGN_U64_SIZE / sizeof(uint64_t));
     this->cellMatchRuntimePartialUpdateTableList.HostInitDataSizeOffset(initOffset, totalCellMatchSize);
 }
 
@@ -1927,7 +1927,7 @@ void DevAscendProgram::InitControlFlowCache(
     }
     uint64_t totalSize = config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE);
 
-    initOffset = ALIGN_UP(initOffset, alignof(DevTensorData));
+    initOffset = AlignUp(initOffset, alignof(DevTensorData));
     controlFlowCache.inputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsInputTensorList.size());
     controlFlowCache.outputTensorDataList.HostInitDataSizeOffset(initOffset, dyndevAttr->startArgsOutputTensorList.size());
 
@@ -1937,7 +1937,7 @@ void DevAscendProgram::InitControlFlowCache(
     controlFlowCache.runtimeBackup.slotContext.slotList.HostInitDataSizeOffset(initOffset, slotSize);
     controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool.HostInitDataSizeOffset(initOffset, runtimeOutcastPoolSize);
 
-    initOffset = ALIGN_UP(initOffset, alignof(DynFuncHeader *));
+    initOffset = AlignUp(initOffset, alignof(DynFuncHeader *));
     controlFlowCache.deviceTaskCacheList.HostInitDataSizeOffset(initOffset, DEFAULT_CACHE_DEVICE_TASK_NUM);//10000
     controlFlowCache.cacheData.HostInitDataSizeOffset(initOffset, totalSize);
     controlFlowCache.isRecording = false;
