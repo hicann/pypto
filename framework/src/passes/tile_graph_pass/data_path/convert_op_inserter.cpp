@@ -135,6 +135,15 @@ MemoryType ConvertInserter::GetMemoryTypeFromTensorTobeMap(LogicalTensorPtr &ten
     return tensorTobeMap.at(tensor).at(&operation);
 }
 
+// 提取指定tensor的所有consumer op和所需的mem类型
+std::map<Operation *, MemoryType> ConvertInserter::GetMemoryTypeFromTensorTobeMap(LogicalTensorPtr &tensor) const {
+    auto it = tensorTobeMap.find(tensor);
+    if (it != tensorTobeMap.end()) {
+        return it->second;
+    }
+    return {};
+}
+
 
 std::map<MemoryType, std::set<Operation *>> ConvertInserter::ReformMap(std::map<Operation *, MemoryType> &oriMap) const {
     std::map<MemoryType, std::set<Operation *>> result;

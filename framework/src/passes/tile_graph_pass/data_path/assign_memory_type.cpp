@@ -499,7 +499,15 @@ void AssignMemoryType::ProcesSmallTileToLargeTile(Function &function) {
         auto oOperand = op.GetOOperands().front();
         auto iOperand = op.GetIOperands().front();
         if(iOperand->GetMemoryTypeOriginal() == MEM_L0C) {
-            if (!IsDimMultiple(oOperand->GetShape(), iOperand->GetShape())){
+            bool isToL1 = true;
+            auto toBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
+            for (const auto &[_, toBeType] : toBeMap) {
+                if (toBeType != MemoryType::MEM_L1) {
+                    isToL1 = false;
+                    break;
+                }
+            }
+            if (!isToL1 || !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape())){
                 oOperand->SetMemoryTypeOriginal(MEM_DEVICE_DDR, true);
             }
         }
