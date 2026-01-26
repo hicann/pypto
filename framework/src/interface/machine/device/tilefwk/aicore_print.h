@@ -19,7 +19,7 @@
 #include <cstdlib>
 #include <type_traits>
 
-#include "aicore_data.h"
+#include "aikernel_data.h"
 
 #ifndef CACHE_LINE_SIZE
 #define CACHE_LINE_SIZE 64

@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <execinfo.h>
 #include "securec.h"
+#include "tilefwk/aikernel_define.h"
 #include "machine/utils/device_switch.h"
 #ifdef __DEVICE__
 #include "dlog_pub.h"

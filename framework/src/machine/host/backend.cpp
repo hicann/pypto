@@ -451,7 +451,7 @@ static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::st
             << "#define __TILE_FWK_AICPU__ 1\n"
             << "#include <stdint.h>\n"
             << "#include \"" << expName << "\"\n"
-            << "#include \"tilefwk/aicore_data.h\"\n"
+            << "#include \"tilefwk/aikernel_data.h\"\n"
             << "#include \"tilefwk/aicpu_runtime.h\"\n"
             << "#include \"tilefwk/aicpu_distributed.h\"\n";
         expressionOss

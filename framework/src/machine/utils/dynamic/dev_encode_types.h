@@ -24,7 +24,7 @@
 #include "tilefwk/error.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/aicpu_common.h"
-#include "tilefwk/aicore_data.h"
+#include "tilefwk/aikernel_data.h"
 #include "tilefwk/core_func_data.h"
 #include "interface/utils/common.h"
 #include "interface/schema/schema.h"
@@ -45,16 +45,6 @@ constexpr uint32_t IDENT2_SIZE = 4;
 constexpr uint32_t IDENT_SIZE_THREE = 3;
 
 /* please modify macros in aicore.cpp at the same time !!! */
-constexpr uint32_t TASKID_FUNC_BITS = 11;
-#define TASKID_FUNC_MASK ((1 << TASKID_FUNC_BITS) - 1)
-constexpr uint32_t TASKID_TASK_BITS = 20;
-#define TASKID_TASK_MASK ((1 << TASKID_TASK_BITS) - 1)
-constexpr uint32_t TASKID_SHIFT32 = 32;
-
-inline uint32_t MakeTaskID(uint32_t funcId, uint32_t taskId) {
-    return (funcId << TASKID_TASK_BITS) | taskId;
-}
-
 inline uint32_t MakeMixWrapID(uint32_t funcId, uint32_t wrapId) {
     return (funcId << TASKID_TASK_BITS) | wrapId;
 }
@@ -63,15 +53,7 @@ inline uint32_t MakeBatchTaskID(uint32_t batchNum) {
     return MakeTaskID(FUNC_ID_BATCH, batchNum);
 }
 
-inline uint32_t FuncID(uint32_t id) {
-    return id >> TASKID_TASK_BITS;
-}
-
 inline uint32_t FuncNum(uint32_t id) {
-    return id & TASKID_TASK_MASK;
-}
-
-inline uint32_t TaskID(uint32_t id) {
     return id & TASKID_TASK_MASK;
 }
 

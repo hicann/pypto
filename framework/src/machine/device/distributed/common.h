@@ -17,7 +17,7 @@
 
 #include <cstdint>
 #include <vector>
-#include "tilefwk/aicore_data.h"
+#include "tilefwk/aikernel_data.h"
 #include "machine/utils/dynamic/dev_encode_types.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -61,20 +61,20 @@ inline uint64_t GetVirtualAddrBist(uint64_t val, uint64_t start, uint64_t end) {
 }
 
 inline uint64_t GetVirtualAddrOffset(uint64_t val) {
-    constexpr uint64_t offsetStart = 0UL; 
-    constexpr uint64_t offsetEnd = 57UL; 
+    constexpr uint64_t offsetStart = 0UL;
+    constexpr uint64_t offsetEnd = 57UL;
     return GetVirtualAddrBist(val, offsetStart, offsetEnd);
 }
 
 inline uint64_t GetVirtualAddrGroupIndex(uint64_t val) {
-    constexpr uint64_t groupIndexStart = 58UL; 
-    constexpr uint64_t groupIndexEnd = 59UL; 
+    constexpr uint64_t groupIndexStart = 58UL;
+    constexpr uint64_t groupIndexEnd = 59UL;
     return GetVirtualAddrBist(val, groupIndexStart, groupIndexEnd);
 }
 
 inline uint64_t GetVirtaulAddrMemType(uint64_t val) {
-    constexpr uint64_t memTypeStart = 60UL; 
-    constexpr uint64_t memTypeEnd = 61UL; 
+    constexpr uint64_t memTypeStart = 60UL;
+    constexpr uint64_t memTypeEnd = 61UL;
     return GetVirtualAddrBist(val, memTypeStart, memTypeEnd);
 }
 

@@ -201,7 +201,7 @@ enum AicorePerfTrace {
 
 struct Metrics {
   int64_t isMetricStop;
-  int64_t taskCount; 
+  int64_t taskCount;
   int64_t perfTrace[PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
   uint32_t perfTraceDevTaskId[PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
   uint32_t perfTraceCnt[PERF_TRACE_CORE_MAX];
@@ -243,6 +243,11 @@ struct KernelArgs {
     int64_t waveBufferCpuToCore[8];
     TaskEntry taskEntry;
     TaskStat taskStat[2]; // 寄存器高低32位，两个task 和 pending & running task存储： 2 * 2 个
+};
+
+union KernelSharedBuffer {
+    struct KernelArgs args;
+    uint8_t sharedBuffer[SHARED_BUFFER_SIZE];
 };
 
 static_assert(sizeof(KernelArgs) < SHARED_BUFFER_SIZE);

@@ -35,16 +35,9 @@
 
 #define MAX_DEVICE_TASK_NUM CONFIG_MAX_DEVICE_TASK_NUM
 
-#define likely(x)   __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-
 #define BITS_PER_BYTES  8
 #define BITS_PER_INT    32
 #define BITS_PER_LONG   64
-
-#ifndef UNUSED
-#define UNUSED(n)       (void)(n)
-#endif
 
 namespace npu::tile_fwk::dynamic {
 inline constexpr bool IsDeviceMode() {

@@ -21,7 +21,7 @@
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/dynamic/device_perf.h"
 #include "tilefwk/aicpu_runtime.h"
-#include "tilefwk/aicore_data.h"
+#include "tilefwk/aikernel_data.h"
 
 #ifndef STR
 #define STR_(n)         #n
