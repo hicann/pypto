@@ -32,7 +32,13 @@ python3 examples/validate_examples.py -t examples -d 0 --show-fail-details
 # 8. Include scripts marked with @pytest.mark.skip (override default behavior)
 python3 examples/validate_examples.py -t examples -d 0 --no-skip-pytest-mark-skip
 
-# 9. Full configuration
-python3 examples/validate_examples.py -t examples -d 0,1,2,3 
-    --parallel-retries 2 --serial-retries 5 --timeout 300 
-    --show-fail-details --allow-pytest-auto-detect --skip-pytest-mark-skip
+# 9. Disable pytest auto-detection (skip scripts without __main__ guard)
+python3 examples/validate_examples.py -t examples -d 0 --no-pytest-auto-detect
+
+# 10. Skip serial fallback in multi-device mode (only parallel retries)
+python3 examples/validate_examples.py -t examples -d 0,1,2,3 --no-serial-fallback
+
+# 11. Full configuration
+python3 examples/validate_examples.py -t examples -d 0,1,2,3
+    --parallel_retries 2 --serial_retries 5 --timeout 300
+    --show-fail-details
