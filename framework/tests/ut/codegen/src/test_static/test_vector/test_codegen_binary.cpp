@@ -37,6 +37,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetBuildStatic(true);
         config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
@@ -53,7 +54,6 @@ void TestAddBody(std::vector<int64_t> shape, std::vector<int64_t> tile_shape, st
     Tensor input_b(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "C");
 
-    config::SetBuildStatic(true);
     FUNCTION(name, {input_a, input_b, output}) {
         output = Add(input_a, input_b);
     }
@@ -92,7 +92,7 @@ void TestAddSBody(std::vector<int64_t> shape, std::vector<int64_t> tile_shape, s
     Tensor input_a(DT_FP32, shape, "A");
     Tensor output(DT_FP32, shape, "C");
     Element value(DataType::DT_FP32, 1.5);
-    config::SetBuildStatic(true);
+
     FUNCTION(name, {input_a, output}) {
         output = Add(input_a, value);
     }
@@ -123,7 +123,6 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor) {
     Tensor input_b(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "OUT");
 
-    config::SetBuildStatic(true);
     std::string name = "AddMulDim4_TILETENSOR";
     FUNCTION(name, {input_a, input_b, output}) {
         Tensor tmp_c(DT_FP32, shape, "TEMP_C");

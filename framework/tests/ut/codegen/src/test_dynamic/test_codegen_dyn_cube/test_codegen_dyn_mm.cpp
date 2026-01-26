@@ -71,14 +71,12 @@ TEST_F(TestCodegenDynMM, TestDynMatmulTileTensor) {
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorA = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0A, shape});
-    auto localTensorB = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0B, shape});
-    auto localTensorBias = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_BT, shapeBias});
-    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L0C, shape});
-    localTensorA->UpdateDynValidShape(dynValidShape);
-    localTensorB->UpdateDynValidShape(dynValidShape);
-    localTensorBias->UpdateDynValidShape(dynValidShape);
-    localOutTensor->UpdateDynValidShape(dynValidShape);
+    auto localTensorA = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0A, shape, dynValidShape});
+    auto localTensorB = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_L0B, shape, dynValidShape});
+    auto localTensorBias =
+        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_BT, shapeBias, dynValidShape});
+    auto localOutTensor =
+        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L0C, shape, dynValidShape});
 
     auto &op =
         function->AddOperation(Opcode::OP_A_MUL_B, {localTensorA, localTensorB, localTensorBias}, {localOutTensor});

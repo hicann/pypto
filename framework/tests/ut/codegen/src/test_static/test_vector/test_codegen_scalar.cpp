@@ -43,6 +43,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetBuildStatic(true);
         config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
@@ -72,7 +73,6 @@ void TestQuant(std::vector<int64_t> &inputShape) {
     Tensor scaleDeQuant(DataType::DT_FP32, scaleShape, "scaleDeQuant");
 
     std::string funcName = "Quant";
-    config::SetBuildStatic(true);
     FUNCTION(funcName, {input, output, scaleDeQuant}) {
         auto res = Quant(input);
         output = std::get<0>(res);
@@ -100,7 +100,6 @@ TEST_F(TestCodegenScalar, TestScalarOp) {
     Tensor input(DataType::DT_FP32, shape, "input");
     Tensor output(DataType::DT_FP32, shape, "res");
     std::string funcName = "ScalarAddS";
-    config::SetBuildStatic(true);
     FUNCTION(funcName, {input, output}) {
         auto output_a = ScalarAddS(input, Element(DataType::DT_FP32, F_127), true);
         auto output_b = ScalarSubS(output_a, Element(DataType::DT_FP32, F_127), true);
@@ -124,7 +123,6 @@ TEST_F(TestCodegenScalar, TestPipeAll) {
     Tensor output(DT_FP32, shape, "C");
 
     std::string funcName = "ADD";
-    config::SetBuildStatic(true);
     FUNCTION(funcName, {inputA, inputB, output}) {
         output = Add(inputA, inputB);
     }
@@ -164,7 +162,6 @@ TEST_F(TestCodegenScalar, TestAicpuCallOp) {
     Tensor output(DT_FP32, shape, "C");
 
     std::string funcName = "TestAicpuCallOp";
-    config::SetBuildStatic(true);
     FUNCTION(funcName, {inputA, inputB, output}) {
         output = Add(inputA, inputB);
     }
@@ -186,5 +183,58 @@ TEST_F(TestCodegenScalar, TestAicpuCallOp) {
 )!!!";
 
     EXPECT_EQ(res, expect);
+}
+
+void TestCVSyncBody(Opcode syncOpcode) {
+    std::vector<int64_t> shape = {64, 64};
+    auto shapeImme = OpImmediate::Specified(shape);
+    TileShape::Current().SetVecTile(shape);
+    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {128, 128});
+    Tensor inputA(DT_FP32, shape, "A");
+    Tensor inputB(DT_FP32, shape, "B");
+    Tensor output(DT_FP32, shape, "C");
+
+    std::string funcName = "ADD";
+
+    FUNCTION(funcName, {inputA, inputB, output}) {
+        output = Add(inputA, inputB);
+    }
+    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
+    const std::vector<SymbolicScalar> dynValidShape = {64, 64};
+    auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L0C, shape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L1, shape, dynValidShape});
+
+    auto &op = function->AddOperation(syncOpcode, {localTensor}, {localOutTensor});
+    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+
+    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
+    CodeGenCtx ctx;
+    CodeGenCloudNPU cga(ctx);
+    cga.GenAllocForLocalBuffer(op, symbolManager);
+    CodeGenOpCloudNPU cop(symbolManager, function->GetFunctionType());
+    function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
+
+    cop.Init(op);
+    cop.originShape[0] = shape;
+    cop.originShape[1] = shape;
+
+    std::string res = cop.GenOpCode();
+    std::string expect;
+    if (syncOpcode == Opcode::OP_CV_SYNC_SRC) {
+        expect = R"!!!(set_intra_block(PIPE_S, 0);
+)!!!";
+    } else {
+        expect = R"!!!(wait_intra_block(PIPE_S, 0);
+)!!!";
+    }
+    EXPECT_EQ(res, expect);
+}
+
+TEST_F(TestCodegenScalar, InjectSyncSet) {
+    TestCVSyncBody(Opcode::OP_CV_SYNC_SRC);
+}
+
+TEST_F(TestCodegenScalar, InjectSyncWait) {
+    TestCVSyncBody(Opcode::OP_CV_SYNC_DST);
 }
 } // namespace npu::tile_fwk

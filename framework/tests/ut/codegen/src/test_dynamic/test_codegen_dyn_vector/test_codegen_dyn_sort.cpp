@@ -33,6 +33,10 @@
 namespace npu::tile_fwk {
 constexpr const unsigned OP_MAGIC3 = 3;
 constexpr const unsigned OP_MAGIC4 = 4;
+constexpr const unsigned TOPK_OP_X_IDX = 0;
+constexpr const unsigned TOPK_OP_Y_IDX = 1;
+constexpr const unsigned TOPK_OP_TMP_IDX = 2;
+
 class TestCodegenDynSort : public ::testing::Test {
 public:
     static void SetUpTestCase() {}
@@ -200,6 +204,81 @@ TEST_F(TestCodegenDynSort, TestDynTiledMgrSort) {
         R"!!!(TileOp::DynTiledMrgSort<float, 1, 1, 64, 64, 1, 1, 64, 64, 64, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 64, 64, 64, 64, 64);
 )!!!";
     EXPECT_EQ(res, expect);
+}
+
+Operation &GetTopkOp(Function *function, Opcode opCode, const LogicalTensors &tensors) {
+    if (opCode == Opcode::OP_TOPK_SORT) {
+        auto &op = function->AddOperation(
+            opCode, {tensors[TOPK_OP_Y_IDX]}, {tensors[TOPK_OP_TMP_IDX], tensors[TOPK_OP_X_IDX]});
+        op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
+        SymbolicScalar startIdx(1);
+        op.SetAttribute(OpAttributeKey::dynScalar, startIdx);
+        return op;
+    }
+    
+    auto &op = function->AddOperation(opCode, {tensors[TOPK_OP_X_IDX]}, {tensors[TOPK_OP_Y_IDX]});
+    return op;
+}
+
+void TestTopkBody(Opcode opCode, const std::string &expect) {
+    std::vector<int64_t> shape = {64, 64};
+    std::vector<SymbolicScalar> dynValidShape = {64, 64};
+    auto shapeImme = OpImmediate::Specified(shape);
+    TileShape::Current().SetVecTile(shape);
+    Tensor inputA(DT_FP32, shape, "A");
+    Tensor inputB(DT_FP32, shape, "B");
+    Tensor output(DT_FP32, shape, "C");
+
+    Element scalaVal(DataType::DT_FP32, 1.0);
+
+    std::string funcName = "TestDynTopkSort";
+    FUNCTION(funcName, {inputA, inputB, output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    auto yVar = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto tmpVar = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto xVar = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+
+    auto &op = GetTopkOp(function, opCode, {xVar, yVar, tmpVar});
+
+    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
+    CodeGenCtx ctx;
+    CodeGenCloudNPU cga(ctx);
+    cga.GenAllocForLocalBuffer(op, symbolManager);
+    CodeGenOpCloudNPU cop(symbolManager, FunctionType::DYNAMIC_LOOP_PATH, {}, true);
+    function->GetTensorMap().inverseMap_[yVar->GetMagic()] = yVar;
+    function->GetTensorMap().inverseMap_[tmpVar->GetMagic()] = tmpVar;
+    function->GetTensorMap().inverseMap_[xVar->GetMagic()] = xVar;
+
+    cop.Init(op);
+    std::string res = cop.GenOpCode();
+    EXPECT_EQ(res, expect);
+}
+
+TEST_F(TestCodegenDynSort, TestDynTopkSort) {
+    std::string expect =
+        R"!!!(TileOp::DynTopKSort<float, 64, 64>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1);
+)!!!";
+    TestTopkBody(Opcode::OP_TOPK_SORT, expect);
+}
+
+TEST_F(TestCodegenDynSort, TestDynTopkMerge) {
+    std::string expect =
+        R"!!!(TileOp::DynTopKMerge<float, 64, 32>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0);
+)!!!";
+    TestTopkBody(Opcode::OP_TOPK_MERGE, expect);
+}
+
+TEST_F(TestCodegenDynSort, TestDynTopkExract) {
+    std::string expect =
+        R"!!!(TileOp::DynTopKExtract<float, float, 64, 64, 64, 32>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0);
+)!!!";
+    TestTopkBody(Opcode::OP_TOPK_EXTRACT, expect);
 }
 
 } // namespace npu::tile_fwk
