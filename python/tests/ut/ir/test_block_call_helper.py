@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 - 2026 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ def test_block_call_1():
 # block function计算
 def block_function_add(args):
     tile_shape_const = [32, 512]
-    
+
     builder = ir.IrBuilder()
     ctx = ir.IrBuilderContext()
     block = BlockBuilderHelper(builder, ctx)
@@ -143,7 +143,7 @@ def block_function_add(args):
         constant3 = block.const(16384, "const_16384")
         constant32 = block.const(32, "const_32")
         constant512 = block.const(512, "const_512")
-                
+
         idx = block.scalar(ir.DataType.int32, "idx")
         block.call_scalar(constant0, out=idx, call_type="GET_COA")
         offset0 = block.scalar(ir.DataType.int32, "offset0")

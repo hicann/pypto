@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 - 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ std::vector<Tensor> CallBlock(const pto::FunctionPtr &blockFuncPtr,
     }
 
     auto function = npu::tile_fwk::Program::GetInstance().GetCurrentFunction();
-    ALOG_INFO_F("In block call Function name %s, type %d %d", function->GetMagicName().c_str(), 
+    ALOG_INFO_F("In block call Function name %s, type %d %d", function->GetMagicName().c_str(),
         (int)function->GetFunctionType(), (int)function->GetGraphType());
     // 1. Here we put program module into TensorGraph and create a CallOp in TensorGraph
     if (function->programModule_ == nullptr) {
@@ -128,7 +128,7 @@ std::vector<Tensor> CallBlock(const pto::FunctionPtr &blockFuncPtr,
     ASSERT(blockFuncPtr->GetKind() == FunctionKind::Block);
     function->programModule_->AddFunction(blockFuncPtr);
     function->programModule_->SetProgramEntry(blockFuncPtr);
-    auto &callOp = function->AddRawOperation(npu::tile_fwk::Opcode::OP_BLOCK_CALL, 
+    auto &callOp = function->AddRawOperation(npu::tile_fwk::Opcode::OP_BLOCK_CALL,
         inputLogicTensors, outputLogicTensors, false);
 
     // 2 Compute hash of program module
@@ -156,7 +156,7 @@ std::vector<Tensor> CallBlock(const pto::FunctionPtr &blockFuncPtr,
 std::vector<npu::tile_fwk::Tensor> CallBlock(const BlockFunctionType &blockFunc,
     const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &inputTensorArgs,
     const std::vector<std::reference_wrapper<const npu::tile_fwk::Tensor>> &outputTensorArgs,
-    const std::vector<npu::tile_fwk::SymbolicScalar> &indices) 
+    const std::vector<npu::tile_fwk::SymbolicScalar> &indices)
 {
     std::vector<TensorValuePtr> inputArgs;
     for (const auto &tensorRef : inputTensorArgs) {
@@ -165,7 +165,7 @@ std::vector<npu::tile_fwk::Tensor> CallBlock(const BlockFunctionType &blockFunc,
         for (int64_t ele : tensor.GetShape()) {
             tensorShape.emplace_back(static_cast<uint64_t>(ele));
         }
-        auto tensorValue = std::make_shared<TensorValue>((pto::DataType)tensor.GetDataType(), tensorShape, 
+        auto tensorValue = std::make_shared<TensorValue>((pto::DataType)tensor.GetDataType(), tensorShape,
             tensor.GetName());
         inputArgs.emplace_back(tensorValue);
     }
@@ -177,7 +177,7 @@ std::vector<npu::tile_fwk::Tensor> CallBlock(const BlockFunctionType &blockFunc,
         for (auto ele : tensor.GetShape()) {
             tensorShape.emplace_back(static_cast<uint64_t>(ele));
         }
-        auto tensorValue = std::make_shared<TensorValue>((pto::DataType)tensor.GetDataType(), tensorShape, 
+        auto tensorValue = std::make_shared<TensorValue>((pto::DataType)tensor.GetDataType(), tensorShape,
             tensor.GetName());
         outputArgs.emplace_back(tensorValue);
     }

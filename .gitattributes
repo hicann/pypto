@@ -1,1 +1,7 @@
 *.png filter=lfs diff=lfs merge=lfs -text
+models/glm_v4_5/images/attention.png filter=lfs diff=lfs merge=lfs -text
+models/glm_v4_5/images/ffn_router_expert_quant.png filter=lfs diff=lfs merge=lfs -text
+models/glm_v4_5/images/ffn_share_expert_quant.png filter=lfs diff=lfs merge=lfs -text
+models/glm_v4_5/images/matmul.png filter=lfs diff=lfs merge=lfs -text
+models/glm_v4_5/images/rms_norm_bias.png filter=lfs diff=lfs merge=lfs -text
+models/glm_v4_5/images/select_experts.png filter=lfs diff=lfs merge=lfs -text

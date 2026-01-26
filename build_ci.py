@@ -1081,11 +1081,11 @@ class BuildCtrl(CMakeParam):
         self.py_tests_run_pytest(dist=dist, params=[(self.tests.utest, "python/tests/ut")],
                                  ext=f"-n {n_workers} -W ignore::DeprecationWarning")
 
-        # 执行用例, Examples/STest, 支持混合执行
+        # 执行用例, Models/STest, 支持混合执行
         dev_lst = [int(d) for d in self.tests.stest_exec.auto_execute_device_id.split(":")]
         dev_ext = " ".join(f"{d}" for d in dev_lst)
         ext_str = f"-n {len(dev_lst)} --device {dev_ext}"
-        self.py_tests_run_pytest(dist=dist, params=[(self.tests.example, "examples"),
+        self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "models"),
                                                     (self.tests.stest, "python/tests/st")],
                                  ext=ext_str)
 

@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 - 2026 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('.'))
 autodoc_mock_imports = ["torch"]
 
 # 项目基本信息
-project = "PyPTO" 
+project = "PyPTO"
 html_title = "PyPTO文档"
 copyright = "2025-2026 Huawei Technologies Co., Ltd. All Rights Reserved."
 

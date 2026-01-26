@@ -24,8 +24,8 @@
                 <!--filteritem type="filepath" name="abcdefg/.*.uvwxyz" desc="Describe the reason for filtering scan results"/-->
                 <!--filteritem type="filepath" name="projectroot/[a-zA-Z0-9]{20,}.sh" desc="Temp files"/-->
                 <filteritem type="filepath" name="docs/.*.png" desc="filter docs png"/>
-                <filteritem 
-                    type="filepath" 
+                <filteritem
+                    type="filepath"
                     name="framework/tests/st/distributed/ops/test_case/.*.csv"
                     desc="ST distributed ops test case cvs files, no license header required"/>
             </filefilter>
@@ -73,7 +73,7 @@
                     See LICENSE in the root of the software repository for the full text of the License.
                 " desc=""/>
             </licensematcher>
-            <licensematcher name="cann License - 2025 - 2026" desc="If the scanning result is InvalidLicense, you can define matching rules here. Note that quotation marks must be escaped.">
+            <licensematcher name="cann License - 2025-2026" desc="If the scanning result is InvalidLicense, you can define matching rules here. Note that quotation marks must be escaped.">
                 <licensetext name="
                     Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
                     This program is free software, you can redistribute it and/or modify it under the terms and conditions of

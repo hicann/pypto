@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 - 2026 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ TILEOP void LogicalNotImpl(DstTile dstTile, SrcTile srcTile, CastTile castTile,
 
     if constexpr (std::is_same<T, half>::value || std::is_same<T, float>::value) {
         pto::TCMP(vcmpResTile, srcTile, zeroTile, pto::CmpMode::EQ);
-    } else if (std::is_same<T, bool>::value || std::is_same<T, uint8_t>::value || 
+    } else if (std::is_same<T, bool>::value || std::is_same<T, uint8_t>::value ||
                 std::is_same<T, int8_t>::value) {
         pto::TCMP(vcmpResTile, castTile, zeroTile, pto::CmpMode::EQ);
     }
@@ -76,7 +76,7 @@ TILEOP void LogicalNotImpl(DstTile dstTile, SrcTile srcTile, CastTile castTile,
 
 #define OP_TILE_OP_LOGICALNOT TLogicalNot
 template <typename T0, typename T1, typename T2>
-TILEOP void TLogicalNot(T0 dst, T1 src, T2 tmp) 
+TILEOP void TLogicalNot(T0 dst, T1 src, T2 tmp)
 {
     using ShapeValueType = typename Std::tuple_element<0, typename T0::Shape>::type;
     constexpr auto shapeSize0 = Std::tuple_size<typename T0::Shape>::value;
@@ -150,7 +150,7 @@ TILEOP void TLogicalNot(T0 dst, T1 src, T2 tmp)
         pto::Tile<pto::TileType::Vec, U, 1, COUNT_MAX, pto::BLayout::RowMajor, -1, -1>;
     using VcmpResTile =
         pto::Tile<pto::TileType::Vec, uint8_t, 1, COUNT_MAX / 8, pto::BLayout::RowMajor, 1, COUNT_MAX / 8>;
-    
+
     VcmpResTile vcmpResTile;
     pto::TASSIGN(vcmpResTile, (uint64_t)(vcmpBitResult));
 

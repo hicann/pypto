@@ -1,4 +1,6 @@
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+#!/usr/bin/env python3
+# coding: utf-8
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -6,10 +8,24 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+import enum
+import torch
 
-[pytest]
-# 全局测试文件匹配规则（包含 models 定制规则和 pytest 默认规则）
-python_files = test_*.py glm_*.py deepseekv32_*.py
 
-# 指定默认测试路径
-testpaths = models python/tests/ut python/tests/st
+class TileOpFormat(enum.Enum):
+    ND = "ND"
+    NZ = "NZ"
+
+
+def get_format(tensor):
+    if not isinstance(tensor, torch.Tensor):
+        raise TypeError("input type error")
+    if not tensor.is_contiguous():
+        raise TypeError("input type error")
+
+    tile_op_format = TileOpFormat.ND.value
+    if tensor.device.type == "npu":
+        import torch_npu
+        if torch_npu.get_npu_format(tensor) == 29:
+            tile_op_format = TileOpFormat.NZ.value
+    return tile_op_format
