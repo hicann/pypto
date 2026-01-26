@@ -18,7 +18,9 @@
 #include <fstream>
 #include <cstdlib>
 #include <string>
-#include "interface/inner/config.h"
+#include <sstream>
+#include <shared_mutex>
+
 #include "interface/utils/common.h"
 #include "interface/utils/log.h"
 #include "interface/utils/file_utils.h"
@@ -273,4 +275,123 @@ static GlobalPassConfigs InternalGetGlobalConfigs(const nlohmann::json &globalCf
     }
     return configs;
 }
+
+struct RunDataDir {
+    std::string path;
+    std::string dName;
+
+    std::string montage() {
+        return path + "/" + dName;
+    }
+
+    bool empty() {
+        return (path.empty() || dName.empty());
+    }
+
+    void Reset() {
+        path.clear();
+        dName.clear();
+    }
+};
+
+struct ConfigStorage {
+    ConfigStorage() { Init(); }
+
+    void Init() {
+        auto res = ConfigManager::Instance().GetPrintOptions();
+        if (res != nullptr && res->is_object()) {
+            printOption.edgeItems = res->value("edgeitems", printOption.edgeItems);
+            printOption.precision = res->value("precision", printOption.precision);
+            printOption.threshold = res->value("threshold", printOption.threshold);
+            printOption.linewidth = res->value("linewidth", printOption.linewidth);
+        }
+        Reset();
+    }
+
+    void Reset() {
+        funcType = FunctionType::DYNAMIC;
+        semanticLabel = nullptr;
+        rundataDir.Reset();
+    }
+
+    FunctionType funcType;
+    std::shared_ptr<SemanticLabel> semanticLabel;
+    RunDataDir rundataDir;
+    PrintOptions printOption;
+};
+
+
+namespace config {
+
+static ConfigStorage g_config;
+std::shared_mutex g_rwlock;
+
+void Reset() {
+    g_config.Reset();
+    ConfigManagerNg::CurrentScope()->Clear();
+}
+
+void SetBuildStatic(bool isStatic) {
+    g_config.funcType = isStatic ? FunctionType::STATIC : FunctionType::DYNAMIC;
+}
+
+FunctionType GetFunctionType() {
+    return g_config.funcType;
+}
+
+void SetSemanticLabel(const std::string &label, const char *filename , int lineno) {
+    g_config.semanticLabel = std::make_shared<SemanticLabel>(label, filename, lineno);
+}
+
+void SetSemanticLabel(std::shared_ptr<SemanticLabel> label) {
+    g_config.semanticLabel = label;
+}
+
+std::shared_ptr<SemanticLabel> GetSemanticLabel() {
+    return g_config.semanticLabel;
+}
+
+constexpr int LIMIT_DIR_NUM_BEFORE_CREATE = 127;
+constexpr const char *PREFIX_RUNDATA = "rundata_";
+constexpr const char *ENV_VAR_PYPTO_HOME = "PYPTO_HOME";
+constexpr const char *ENV_VAR_HOME = "HOME";
+
+void CreateRunDataDir() {
+    std::string envStr = GetEnvVar(ENV_VAR_PYPTO_HOME);
+    std::string dir = envStr.empty() ? (GetEnvVar(ENV_VAR_HOME) + "/.pypto") : envStr;
+    g_config.rundataDir.path = dir + "/run";
+    RemoveOldestDirs(g_config.rundataDir.path, PREFIX_RUNDATA, LIMIT_DIR_NUM_BEFORE_CREATE);
+    auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::stringstream timestamp;
+    timestamp << std::put_time(std::localtime(&time), "%Y%m%d%H%M%S");
+    g_config.rundataDir.dName = PREFIX_RUNDATA + timestamp.str();
+    bool res = CreateMultiLevelDir(g_config.rundataDir.montage());
+    ASSERT(res) << "Failed to create directory: " << g_config.rundataDir.montage();
+}
+
+void SetRunDataOption(const std::string &key, const std::string &value) {
+    static nlohmann::json j;
+    std::shared_lock lock(g_rwlock);
+    j[key] = value;
+    auto dumpValue = j.dump(2);
+    if (g_config.rundataDir.empty()) {
+        CreateRunDataDir();
+    }
+    auto filename = g_config.rundataDir.montage() + "/rundata.json";
+    SaveFileSafe(filename, reinterpret_cast<uint8_t*>(dumpValue.data()), dumpValue.size());
+}
+
+
+void SetPrintOptions(int edgeItems, int precision, int threshold, int linewidth) {
+    g_config.printOption.edgeItems = edgeItems;
+    g_config.printOption.precision = precision;
+    g_config.printOption.threshold = threshold;
+    g_config.printOption.linewidth = linewidth;
+}
+
+PrintOptions &GetPrintOptions() {
+    return g_config.printOption;
+}
+
+} // namespace config
 } // namespace npu::tile_fwk

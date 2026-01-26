@@ -24,7 +24,7 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/tensor.h"
 #include "interface/inner/element.h"
-#include "interface/inner/config.h"
+#include "interface/configs/config_manager.h"
 #include "interface/tensor/tensor_offset.h"
 
 

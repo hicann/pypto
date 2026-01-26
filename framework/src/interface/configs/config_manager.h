@@ -22,8 +22,11 @@
 #include <type_traits>
 #include <set>
 #include "interface/utils/file_utils.h"
+#include "interface/configs/config_manager_ng.h"
+#include "tilefwk/config.h"
+#include "tilefwk/function.h"
 #include "interface/utils/common.h"
-#include "interface/utils/log.h"
+
 
 namespace npu::tile_fwk {
 using JsonExpcetion = nlohmann::json::exception;
@@ -230,6 +233,10 @@ public:
         SetConfig(json_, {"global", "codegen", key}, value);
     }
 
+    const nlohmann::json* GetPrintOptions() {
+        return GetJsonNode(json_, {"global", "tensor_print"});
+    }
+
     void Reset() { json_ = originJson_; }
 
     const nlohmann::json &GetJsonData() const { return json_; }
@@ -276,6 +283,37 @@ private:
     static auto GetChildConfig(const nlohmann::json &root, const std::string &key, const T &defaultValue) {
         return GetConfig(root, {key}, defaultValue);
     }
+};
+
+// config.h
+
+/* Rundata KEYS */
+constexpr const char *KEY_RUNTYPE = "runtype";
+constexpr const char *KEY_PTO_CONFIG_FILE = "pto_config_file";
+constexpr const char *KEY_COMPUTE_GRAPH_PATH = "compute_graph_path";
+constexpr const char *KEY_AICPU_PERF_GRAPH_PATH = "aicpu_perf_path";
+constexpr const char *KEY_SWIM_GRAPH_PATH = "swim_graph_path";
+constexpr const char *KEY_FLOW_VERIFY_PATH = "flow_verify_path";
+constexpr const char *KEY_PROGRAM_PATH = "program_file";
+
+struct ConfigStorage;
+
+struct PrintOptions {
+    int edgeItems;
+    int precision;
+    int threshold;
+    int linewidth;
+};
+
+struct SemanticLabel {
+    std::string label;
+    std::string filename;
+    int lineno;
+
+    SemanticLabel(const std::string &tlabel, const char *tfilename, int tlineno)
+        : label(tlabel), filename(tfilename), lineno(tlineno) {}
+    SemanticLabel(const std::string &tlabel, const std::string &tfilename, int tlineno)
+        : label(tlabel), filename(tfilename), lineno(tlineno) {}
 };
 
 namespace config {
@@ -385,6 +423,18 @@ inline bool UseTIG() {
     return GetPassStrategy() == "TIG" || GetPassStrategy() == "PVC2_OOO" || GetPlatformConfig(KEY_TEST_IS_TIG, false) ||
            GetPassStrategy() == "DFS_OOO" || GetPassStrategy() == "BFS_DFS_OOO";
 }
+
+// config.h
+
+FunctionType GetFunctionType();
+
+std::shared_ptr<SemanticLabel> GetSemanticLabel();
+void SetSemanticLabel(std::shared_ptr<SemanticLabel> label);
+
+PrintOptions &GetPrintOptions();
+
+void SetRunDataOption(const std::string &key, const std::string &value);
+
 
 } // namespace config
 

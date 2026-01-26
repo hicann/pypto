@@ -15,6 +15,6 @@
 
 #pragma once
 
-#include "config.h"
+
 #include "function.h"
 #include "interface/program/program.h"

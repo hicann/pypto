@@ -21,7 +21,7 @@
 
 #include "test_cost_model.h"
 #include "test_suite_stest_ops.h"
-#include "interface/inner/config.h"
+#include "interface/configs/config_manager.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "machine/utils/dynamic/dev_encode.h"
 #include "test_dev_func_runner.h"

@@ -15,6 +15,8 @@
 
 #pragma once
 
+#include<string>
+
 #define PROGRAM(name, ...)                                                                      \
     if (auto recordProg = npu::tile_fwk::DefineProg(name, ##__VA_ARGS__); !recordProg.IsRecording()) { \
     } else

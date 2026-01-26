@@ -18,7 +18,6 @@
 #include "interface/machine/device/tilefwk/aicpu_common.h"
 #include "interface/utils/log.h"
 #include "runtime/mem.h"
-#include "interface/inner/config.h"
 #include "interface/utils/file_utils.h"
 #include "machine/device/dynamic/device_utils.h"
 #include "interface/configs/config_manager.h"

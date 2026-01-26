@@ -187,13 +187,13 @@ void DumpValue(std::stringstream &os, const std::string &key, const Any &val, co
     } else {
         os << "unknow type: " << val.Type().name();
     }
-    os << "\n";
 }
 
 void DumpValues(std::stringstream &os, const std::map<std::string, Any> &values,
                 const std::string &prefix) {
     for (const auto &[key, val] : values) {
         DumpValue(os, key, val, prefix);
+        os << "\n";
     }
 }
 
@@ -514,10 +514,6 @@ template void SetOptionsNg<std::map<int, int>>(const std::string &key, const std
 template void SetOptionsNg<std::map<long, long>>(const std::string &key, const std::map<long, long> &value);
 template void SetOptionsNg<std::vector<int>>(const std::string &key, const std::vector<int> &value);
 template void SetOptionsNg<std::vector<std::string>>(const std::string &key, const std::vector<std::string> &value);
-
-void Reset() {
-    ConfigManagerNg::CurrentScope()->Clear();
-}
 
 
 void Restore(std::shared_ptr<ConfigScope> config) {

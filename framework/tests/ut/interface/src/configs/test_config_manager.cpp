@@ -80,31 +80,31 @@ TEST_F(TestConfigManager, PassStrategies3) {
 TEST_F(TestConfigManager, Dump) {
     auto &cm = ConfigManagerNg::GetInstance();
 
-    cm.BeginScope("scope1", {{"debug.print.edgeitems", 10L}});
+    cm.BeginScope("scope1", {{"pass.pg_lower_bound", 10L}});
     auto scope1 = cm.CurrentScope();
     cm.EndScope();
 
-    cm.BeginScope("scope2", {{"debug.print.edgeitems", 20L}});
+    cm.BeginScope("scope2", {{"pass.pg_lower_bound", 20L}});
     {
-        cm.BeginScope("scope2.1", {{"debug.print.linewidth", 120L}});
+        cm.BeginScope("scope2.1", {{"pass.pg_upper_bound", 120L}});
         auto scope2 = cm.CurrentScope();
-        auto linewidth = AnyCast<int64_t>(scope2->GetAnyConfig("debug.print.linewidth"));
-        EXPECT_EQ(linewidth, 120);
-        auto edgeitems = AnyCast<int64_t>(scope2->GetAnyConfig("debug.print.edgeitems"));
-        EXPECT_EQ(edgeitems, 20);
+        auto upper = AnyCast<int64_t>(scope2->GetAnyConfig("pass.pg_upper_bound"));
+        EXPECT_EQ(upper, 120);
+        auto lower = AnyCast<int64_t>(scope2->GetAnyConfig("pass.pg_lower_bound"));
+        EXPECT_EQ(lower, 20);
         cm.EndScope();
     }
 
     auto scope = cm.CurrentScope();
-    auto linewidth = AnyCast<int64_t>(scope->GetAnyConfig("debug.print.linewidth"));
-    EXPECT_EQ(linewidth, 80);
-    auto edgeitems = AnyCast<int64_t>(scope->GetAnyConfig("debug.print.edgeitems"));
-    EXPECT_EQ(edgeitems, 20);
+    auto upper = AnyCast<int64_t>(scope->GetAnyConfig("pass.pg_upper_bound"));
+    EXPECT_EQ(upper, 10000);
+    auto lower = AnyCast<int64_t>(scope->GetAnyConfig("pass.pg_lower_bound"));
+    EXPECT_EQ(lower, 20);
     cm.EndScope();
 
-    cm.BeginScope("scope3", {{"debug.print.edgeitems", 30L}});
+    cm.BeginScope("scope3", {{"pass.pg_lower_bound", 30L}});
     auto scope3 = cm.CurrentScope();
-    cm.SetScope({{"debug.print.edgeitems", 35L}});
+    cm.SetScope({{"pass.pg_lower_bound", 35L}});
     auto scope4 = cm.CurrentScope();
     cm.EndScope();
 
@@ -248,4 +248,7 @@ TEST_F(TestConfigManager, GlobalConfig) {
 
     std::map<std::string, Any> empty_values = {};
     ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(empty_values), "default", 1);
+    
+    PrintOptions p = config::GetPrintOptions();
+    
 }

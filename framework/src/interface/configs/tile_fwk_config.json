@@ -38,12 +38,6 @@
         "pass_verify_pass_filter": []
     },
     "debug": {
-        "print": {
-            "edgeitems": 3,
-            "precision": 4,
-            "threshold": 1000,
-            "linewidth": 80
-        },
         "compile_debug_mode": 0,
         "runtime_debug_mode": 0
     },
@@ -94,6 +88,12 @@
             "force_overwrite": true,
             "codegen_support_tile_tensor": true,
             "codegen_need_compile": true
+        },
+        "tensor_print": {
+            "edgeitems": 3,
+            "precision": 4,
+            "threshold": 1000,
+            "linewidth": 80
         },
         "pass": {
             "enable_binary_cache": false,
