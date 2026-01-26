@@ -86,6 +86,7 @@ void ValidateParams(const Tensor &predToken, const Tensor &in, const Tensor &out
     int32_t inCol = in.GetShape(1);
     int32_t outRow = out.GetShape(0);
     int32_t outCol = out.GetShape(1);
+    ASSERT((in.Format() != TileOpFormat::TILEOP_NZ) && (out.Format() != TileOpFormat::TILEOP_NZ)) << "NZ not supported.";
     ASSERT(inRow > 0 && inCol > 0) << "Input parameter error - the 'row' and 'col' dimensional of the input tensor must be greater than 0, "
         << "but got row=" << inRow << ", col=" << inCol;
     if (checkShapeMatch) {
