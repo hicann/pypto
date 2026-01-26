@@ -32,7 +32,7 @@ extern "C" __attribute__((visibility("default"))) void* GetCtrlFlowFunc();
 namespace npu::tile_fwk::dynamic {
 
 class DeviceCtrlMachine {
- public:
+public:
     void InitTaskCtrl(int idx, int type, uint64_t taskId, DeviceTask *devTask, DeviceExecuteContext *ctx) {
         if (ctx == nullptr) {
             DEV_ERROR("Init Task control failed, which ctx is null.");
@@ -264,6 +264,33 @@ class DeviceCtrlMachine {
         PerfettoMgr::Instance().Dump("/tmp/perfetto.txt");
     #endif
         return ret;
+    }
+
+    int EntryInit(DeviceKernelArgs *kargs) {
+        PerfBegin(PERF_EVT_DEVICE_MACHINE_INIT_DYN);
+#if DEBUG_PLOG && defined(__DEVICE__)
+        InitLogSwitch();
+#endif
+        if (kargs == nullptr) {
+            return -1;
+        }
+        if (kargs->inputs == nullptr || kargs->outputs == nullptr || kargs->cfgdata == nullptr) {
+            DEV_ERROR("Args has null in inputs[%p] outputs[%p] work[%p] or cfg[%p].\n", kargs->inputs,
+                    kargs->outputs, kargs->workspace, kargs->cfgdata);
+            return -1;
+        }
+        InitDyn(kargs);
+        PerfEnd(PERF_EVT_DEVICE_MACHINE_INIT_DYN);
+        return 0;
+    }
+
+    int EntryMain(DeviceKernelArgs *kargs) {
+        int rc = ExecDyn(kargs);
+        if (rc == npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
+            DEV_INFO("All schedule exited, destroy the machine.\n");
+            return 0;
+        }
+        return -1;
     }
 
 private:

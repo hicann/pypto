@@ -231,7 +231,7 @@ int DeviceLauncher::DeviceRunOnce(Function *function, DevControlFlowCache* hostC
     if (hostCtrlCache) {
         devCtrlCache = devMemory.CopyToDev(reinterpret_cast<uint8_t *>(hostCtrlCache), hostCtrlCache->allCacheSize, nullptr);
     }
-    
+
     int rc = DeviceLaunchOnceWithDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList,
         aicpuStream, aicoreStream, true, nullptr, reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
     CopyFromDev(DeviceMemoryUtils(), outputDataList);
@@ -325,6 +325,7 @@ int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
     (void)aicpuStream;
     (void)aicoreStream;
     (void)streamSynchronize;
+    (void)devCtrlCache;
     (void)config;
     return 0;
 #endif
@@ -403,6 +404,7 @@ uint8_t* CopyHostToDev(uint8_t* data, uint64_t size) {
 #else
     (void)data;
     (void)size;
+    return 0;
 #endif
 }
 
