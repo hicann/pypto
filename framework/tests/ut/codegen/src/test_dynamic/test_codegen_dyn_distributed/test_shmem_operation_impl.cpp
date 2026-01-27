@@ -17,6 +17,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
@@ -50,6 +51,19 @@ private:
         return shmemDataType;
     }
 
+    std::string getTimeStamp() 
+    {
+        auto now = std::chrono::high_resolution_clock::now();
+        auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()).count() % 1000000;
+
+        std::stringstream timestamp;
+        timestamp << std::put_time(std::localtime(&time), "%Y%m%d_%H%M%S");
+        constexpr int NUM_SIX = 6;
+        timestamp << "_" << std::setw(NUM_SIX) << std::setfill('0') << us;
+        return timestamp.str();
+    }
+
 public:
     static void SetUpTestCase() {}
 
@@ -61,6 +75,8 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        std::string folderPath = "output/output_" + getTimeStamp() + "_" + std::to_string(getpid());
+        setenv("TILE_FWK_OUTPUT_DIR", folderPath.c_str(), 0);
     }
 
     void TearDown() override {}
