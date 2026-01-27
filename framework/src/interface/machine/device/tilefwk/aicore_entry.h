@@ -314,6 +314,10 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext *ctx, uint32_t taskId) {
     if (unlikely(ctx->args->taskEntry.reserved[0] == PRO_LEVEL2 || ctx->args->taskEntry.reserved[0] == PRO_LEVEL1)) {
         AddMetricStatistic(ctx, ctx->seqNo, taskId, opAttrs[0], t1);
     }
+#if ENABLE_AICORE_PERF_TRACE
+    ctx->lastTaskFinishCycle = get_sys_cnt();
+#endif
+
 #if PROF_DFX_HOST_PREPARE_MEMORY_MODE != 1
     static int32_t taskDfxPos = REG_LOW_TASK_PING;
     SetTaskStatistic(ctx->args, taskDfxPos, taskId, opAttrs[0], t1, ctx->seqNo);
