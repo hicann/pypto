@@ -206,16 +206,20 @@ struct PerfEvtMgr {
         if (PerfTraceIsDevTask[type] && DEVTASK_PERF_ARRY_INDEX(type) < DEVTASK_PERF_TYPE_NUM) {
             auto &cnt = perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
             if (cnt < PERF_TRACE_COUNT_DEVTASK_MAX_NUM) {
-                perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt] =
+                perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt++] =
                     cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
-                aicpuPref_->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)] = perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
-                aicpuPref_->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt] = perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][cnt];
-                cnt++;
+                if (aicpuPref_ != nullptr) {
+                    uint8_t devCnt = aicpuPref_->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)];
+                    aicpuPref_->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)] += 1;
+                    aicpuPref_->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][devCnt] = perfTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][devCnt];
+                }
             }
             return;
         }
         perfTrace[tid][type] = cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
-        aicpuPref_->perfAicpuTrace[tid][type] = perfTrace[tid][type];
+        if (aicpuPref_ != nullptr) {
+            aicpuPref_->perfAicpuTrace[tid][type] = perfTrace[tid][type];
+        }
     }
 
     void DumpPerfTraceCore(std::ostringstream &oss, uint32_t scheCpuNum) {
@@ -305,7 +309,7 @@ private:
     uint64_t perfTraceDevTask[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM][PERF_TRACE_COUNT_DEVTASK_MAX_NUM] = {{{0}}};
     uint8_t perfTraceDevTaskCnt[MAX_USED_AICPU_NUM][DEVTASK_PERF_TYPE_NUM] = {{0}};
     bool isOpenProf_{false};
-    MetricPerf *aicpuPref_;
+    MetricPerf *aicpuPref_{nullptr};
 };
 
 inline void PerfBegin(int type) {

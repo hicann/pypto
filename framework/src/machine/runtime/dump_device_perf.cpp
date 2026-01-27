@@ -118,7 +118,7 @@ inline void SparateCore(int total, int idx, int part, const int &offset, std::ve
     int start = idx * perCpu + ((idx < remain) ? idx : remain);
     int end = start + perCpu + ((idx < remain) ? 1 : 0);
     for (int i = start; i < end; i++) {
-        coreArray[i + offset] = idx;
+        coreArray[i + offset] = idx + 1;
     }
 }
 

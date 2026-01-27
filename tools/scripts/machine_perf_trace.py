@@ -46,6 +46,7 @@ def parse_log_file(log_file_path):
                 in_perf_trace_block = False
                 if current_block_aicpu and current_block_aicore:
                     block_json_str = ''.join(current_block_aicpu) + ',' + ''.join(current_block_aicore)
+                    block_json_str = block_json_str.replace(",]", "]")
                     all_blocks_data.append(block_json_str)
                     print(f"Successfully parsed performance trace block from line {block_start_line} to {line_num}")
                 else:
