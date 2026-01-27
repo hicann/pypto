@@ -104,7 +104,7 @@ void ForBlockManager::PrintSetAddrs(std::ostringstream &os) const {
 void ForBlockManager::PrintSetAddrSingle(std::ostringstream &os, const std::string &tensor) const {
     std::string fullDimTensor;
     fullDimTensor = sm_->QueryTileTensorFullDimByTensorInLoop(tensor);
-    os << tensor << ".SetAddr(" << "GenTileOffset(" << fullDimTensor << ", tileOffsets));\n";
+    os << tensor << ".SetAddr(" << fullDimTensor << ".GetLinearAddr(tileOffsets));\n";
 }
 
 void ForBlockManager::PrintTileOps(std::ostringstream &os) const {

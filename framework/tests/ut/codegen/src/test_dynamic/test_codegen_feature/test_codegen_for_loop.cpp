@@ -85,10 +85,10 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
   for (uint16_t idx1 = 0; idx1 < sym_86_dim_0; ++idx1) {
     for (uint16_t idx2 = 0; idx2 < sym_86_dim_1; ++idx2) {
         auto tileOffsets = TileOffset(idx0, idx1, idx2);
-        ubTensor_11_low2DimInLoop.SetAddr(GenTileOffset(ubTensor_11, tileOffsets));
-        ubTensor_3_low2DimInLoop.SetAddr(GenTileOffset(ubTensor_3, tileOffsets));
-        ubTensor_1_low2DimInLoop.SetAddr(GenTileOffset(ubTensor_1, tileOffsets));
-        ubTensor_5_low2DimInLoop.SetAddr(GenTileOffset(ubTensor_5, tileOffsets));
+        ubTensor_11_low2DimInLoop.SetAddr(ubTensor_11.GetLinearAddr(tileOffsets));
+        ubTensor_3_low2DimInLoop.SetAddr(ubTensor_3.GetLinearAddr(tileOffsets));
+        ubTensor_1_low2DimInLoop.SetAddr(ubTensor_1.GetLinearAddr(tileOffsets));
+        ubTensor_5_low2DimInLoop.SetAddr(ubTensor_5.GetLinearAddr(tileOffsets));
         TAdd(ubTensor_5_low2DimInLoop, ubTensor_1_low2DimInLoop, ubTensor_3_low2DimInLoop);
         TSub(ubTensor_11_low2DimInLoop, ubTensor_1_low2DimInLoop, ubTensor_3_low2DimInLoop);
     }
@@ -100,8 +100,8 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
   for (uint16_t idx1 = 0; idx1 < sym_86_dim_0; ++idx1) {
     for (uint16_t idx2 = 0; idx2 < sym_86_dim_1; ++idx2) {
         auto tileOffsets = TileOffset(idx0, idx1, idx2);
-        ubTensor_11_low2DimInLoop.SetAddr(GenTileOffset(ubTensor_11, tileOffsets));
-        ubTensor_5_low2DimInLoop.SetAddr(GenTileOffset(ubTensor_5, tileOffsets));
+        ubTensor_11_low2DimInLoop.SetAddr(ubTensor_11.GetLinearAddr(tileOffsets));
+        ubTensor_5_low2DimInLoop.SetAddr(ubTensor_5.GetLinearAddr(tileOffsets));
         TMul(ubTensor_5_low2DimInLoop, ubTensor_5_low2DimInLoop, ubTensor_11_low2DimInLoop);
     }
   }

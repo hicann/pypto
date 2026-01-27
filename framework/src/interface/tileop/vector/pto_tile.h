@@ -58,12 +58,6 @@ private:
     Type data_;
 };
 
-template <typename... Indexs>
-using Offsets = Std::tuple<Indexs...>;
-
-using TileOffset = Offsets<size_t, size_t, size_t>;
-using TileOffset4Dim = Offsets<size_t, size_t, size_t, size_t>;
-
 template <typename T>
 __aicore__ inline size_t GenTileOffset(const T &tensor, const TileOffset &offsets) {
     const auto layout = tensor.GetLayout();
