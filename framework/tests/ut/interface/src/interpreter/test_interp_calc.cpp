@@ -144,6 +144,34 @@ TEST_F(TorchAdaptorTest, CompareBit) {
     }
 }
 
+TEST_F(TorchAdaptorTest, Cmps) {
+    auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+    auto elem = Element(DT_FP32, 4.0f);
+    auto out = makeTensorData(DT_BOOL, {16, 16}, false);
+    auto golden_true = makeTensorData(DT_BOOL, {16, 16}, true);
+    auto golden_false = makeTensorData(DT_BOOL, {16, 16}, false);
+    struct {
+        CmpOperationType type;
+        CmpModeType mode;
+        bool expect;
+    } cases[] = {
+        {CmpOperationType::EQ, CmpModeType::BOOL, true},
+        {CmpOperationType::NE, CmpModeType::BOOL, false},
+        {CmpOperationType::LT, CmpModeType::BOOL, false},
+        {CmpOperationType::LE, CmpModeType::BOOL, true},
+        {CmpOperationType::GT, CmpModeType::BOOL, false},
+        {CmpOperationType::GE, CmpModeType::BOOL, true},
+    };
+    for (const auto &test : cases) {
+        calc::Cmps(out, self, elem, test.type, test.mode);
+        if (test.expect) {
+            ASSERT_ALLCLOSE(out, golden_true);
+        } else {
+            ASSERT_ALLCLOSE(out, golden_false);
+        }
+    }
+}
+
 TEST_F(TorchAdaptorTest, UnaryOps) {
     {
         // rsqrt

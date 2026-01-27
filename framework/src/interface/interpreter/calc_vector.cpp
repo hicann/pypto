@@ -347,6 +347,24 @@ void ExecuteOpCompare(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_CMP, Opcode::OP_CMP, ExecuteOpCompare);
 
+void ExecuteOpCmps(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ioperandDataViewList->size() == 1);
+    auto oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto iop_self = ctx->ioperandDataViewList->at(0);
+    auto element = Element(DT_FP32, 0.0f);
+    ctx->op->GetAttr(OpAttributeKey::scalar, element);
+    
+    auto operation = static_cast<CmpOperationType>(
+        ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "cmp_operation")
+    );
+    auto mode = static_cast<CmpModeType>(
+        ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "cmp_mode")
+    );
+    calc::Cmps(oop, iop_self, element, operation, mode);
+}
+REGISTER_CALC_OP(OP_CMPS, Opcode::OP_CMPS, ExecuteOpCmps);
+
 void ExecuteOpExtract(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ioperandDataViewList->size() == 1);
     auto oop = ctx->ooperandInplaceDataViewList->at(0);

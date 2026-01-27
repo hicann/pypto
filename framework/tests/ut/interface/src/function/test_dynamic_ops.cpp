@@ -313,6 +313,36 @@ TEST_F_WITH_COST(DynamicOpsTest, Cube, 98) {
     }
 }
 
+TEST_F(DynamicOpsTest, Cmps) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 1;
+    int64_t s = 16;
+    Tensor self(DT_FP32, {b, s}, "self");
+    Element elem(DT_FP32, 4.0f);
+    Tensor out(DT_BOOL, {b, s}, "out");
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(self, 4.0f),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<bool>(out, false),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<bool>(out, true),
+    });
+    FUNCTION("main", {self}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, s}, {0, 0});
+            out = Compare(t0, elem,
+                          static_cast<OpType>(CmpOperationType::EQ),
+                          static_cast<OutType>(CmpModeType::BOOL));
+        }
+    }
+}
+
+
 TEST_F(DynamicOpsTest, ElementScalar) {
     auto floatElement = Element(DT_BF16, 2.0);
     auto intElement = Element(DT_INT32, static_cast<long>(2));

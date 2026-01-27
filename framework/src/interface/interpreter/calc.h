@@ -87,6 +87,10 @@ inline void Compare(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logical
     CmpOperationType operation, CmpModeType mode) {
     GetCalcOps()->Compare(out, self, other, operation, mode);
 }
+inline void Cmps(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar,
+    CmpOperationType operation, CmpModeType mode) {
+    GetCalcOps()->Cmps(out, self, scalar, operation, mode);
+}
 inline void LogicalAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     GetCalcOps()->LogicalAnd(out, self, other);
 }

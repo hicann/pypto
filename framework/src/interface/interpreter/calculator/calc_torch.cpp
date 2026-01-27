@@ -401,44 +401,48 @@ static void Range(LogicalTensorDataPtr out, const Element &start, const Element 
     tout.copy_(tmp);
 }
 
-static void Compare(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other,
-             CmpOperationType operation, CmpModeType mode) {
+template <typename T>
+static void CompareImpl(LogicalTensorDataPtr out, const torch::Tensor& tself, const T& other_op,
+                        CmpOperationType operation, CmpModeType mode) {
     auto tout = From(out);
-    auto tself = From(self);
-    auto tother = From(other);
     torch::Tensor tmp_result;
     switch (operation) {
         case CmpOperationType::EQ:
-            tmp_result = torch::eq(tself, tother);
+            tmp_result = torch::eq(tself, other_op);
             break;
         case CmpOperationType::NE:
-            tmp_result = torch::ne(tself, tother);
+            tmp_result = torch::ne(tself, other_op);
             break;
         case CmpOperationType::LT:
-            tmp_result = torch::lt(tself, tother);
+            tmp_result = torch::lt(tself, other_op);
             break;
         case CmpOperationType::LE:
-            tmp_result = torch::le(tself, tother);
+            tmp_result = torch::le(tself, other_op);
             break;
         case CmpOperationType::GT:
-            tmp_result = torch::gt(tself, tother);
+            tmp_result = torch::gt(tself, other_op);
             break;
         case CmpOperationType::GE:
-            tmp_result = torch::ge(tself, tother);
+            tmp_result = torch::ge(tself, other_op);
             break;
         default:
             ASSERT(false) << "Unsupported compare type";
             break;
     }
+
     if (mode == CmpModeType::BIT) {
         if (tmp_result.dim() > 0) {
             int64_t last_dim = tmp_result.size(-1);
             ASSERT(last_dim % NUM_VALUE_8 == 0) << "Last dimension must be divisible by 8 in BIT mode";
+            
             auto shape = tmp_result.sizes().vec();
             shape.back() = last_dim / NUM_VALUE_8;
+            
             torch::Tensor packed = torch::empty(shape, torch::kUInt8);
-            auto tmp_data = tmp_result.data_ptr<bool>();
+            auto tmp_result_contig = tmp_result.contiguous();
+            auto tmp_data = tmp_result_contig.data_ptr<bool>();
             auto packed_data = packed.data_ptr<uint8_t>();
+            
             const int64_t num_elements = tmp_result.numel();
             for (int64_t i = 0; i < num_elements / NUM_VALUE_8; ++i) {
                 uint8_t byte = 0;
@@ -454,6 +458,16 @@ static void Compare(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logical
     } else {
         tout.copy_(tmp_result);
     }
+}
+
+static void Compare(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other,
+             CmpOperationType operation, CmpModeType mode) {
+    CompareImpl(out, From(self), From(other), operation, mode);
+}
+
+static void Cmps(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &elem,
+             CmpOperationType operation, CmpModeType mode) {
+    CompareImpl(out, From(self), From(elem), operation, mode);
 }
 
 #define DEFINE_BINARY_PAIR_OPS(Name, bop)                                                              \
@@ -1237,6 +1251,7 @@ static struct CalcOps calcOps = {
     .LogicalNot = LogicalNot,
     .Range = Range,
     .Compare = Compare,
+    .Cmps = Cmps,
     .LogicalAnd = LogicalAnd,
     .AddS = AddS,
     .SubS = SubS,
