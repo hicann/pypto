@@ -24,12 +24,11 @@ import os
 import torch
 import torch_npu
 import numpy as np
+from numpy.testing import assert_allclose
+from glm_ffn_common_interface import symmetric_quantization_per_token, dequant_dynamic, swiglu
 from torch._subclasses.fake_tensor import FakeTensor
 from torch._dynamo import allow_in_graph
-from numpy.testing import assert_allclose
 import pypto
-
-from glm_ffn_common_interface import symmetric_quantization_per_token, dequant_dynamic, swiglu
 from utils.get_format import get_format
 
 
@@ -319,6 +318,7 @@ def test_ffn_share() -> None:
     s = 1
     intermediate_size = 192
     hidden_size = 5120
+    torch_npu.npu.config.allow_internal_format = True
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
@@ -327,19 +327,20 @@ def test_ffn_share() -> None:
         # hidden_states, w13, w13_scale, w2, w2_scale, ffn_res
         hidden_states, w13, w13_scale, w2, w2_scale, ffn_res = \
             gen_input(b, s, hidden_size, intermediate_size, x_dtype, device_id)
-        inputs = {
-            hidden_states: [0],
-            w13: [],
-            w13_scale: [],
-            w2: [],
-            w2_scale: []
-        }
-        outputs = {
-            ffn_res: [0]
-        }
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-        share_expert_moe_main(*pto_inputs, *pto_outputs)
+        w13 = torch_npu.npu_format_cast(w13, 29)
+        w2 = torch_npu.npu_format_cast(w2, 29)
+        inputs = [
+            hidden_states,
+            w13,
+            w13_scale,
+            w2,
+            w2_scale
+        ]
+        outputs = [
+            ffn_res
+        ]
+
+        ffn_shared_expert_quant(*inputs, *outputs)
 
         # golden
         golden = moe_torch_npu(hidden_states, w13, w13_scale, w2, w2_scale)

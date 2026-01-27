@@ -196,7 +196,7 @@ def moe_fusion_kernel(hidden_states, mm_weight, e_score_bias_input, w13, w13_sca
         pypto.set_vec_tile_shapes(view_first, num_expert_group, group_unit)  # (1,1,160)
         twm_reshape = pypto.reshape(twm_expand, [tile_batch, ne])
 
-        # logical_not
+        # logical_not 
         pypto.set_vec_tile_shapes(view_first, ne)
         twm_not = pypto.logical_not(twm_reshape)
 
@@ -272,6 +272,7 @@ def test_moe_fusion():
     intermediate_size = 192
     hidden_size = h_num
 
+    torch_npu.npu.config.allow_internal_format = True
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
@@ -299,30 +300,32 @@ def test_moe_fusion():
             (bs, top_k), dtype=torch.int32, device=f'npu:{device_id}')
 
         # 4. 执行kernel并获取结果
-        inputs = {
-            hidden_states: [0],
-            mm_weight: [],
-            e_score_bias: [],
-            w13: [],
-            w13_scale: [],
-            w2: [],
-            w2_scale: []
-        }
-        outputs = {
-            topk_weights: [0],
-            topk_ids: [0],
-            ffn_res: [0]
-        }
-        pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-        pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
+        inputs = [
+            mm_weight,
+            hidden_states,
+            top_k,
+            renormalize,
+            topk_group,
+            num_expert_group,
+            e_score_bias,
+            w13,
+            w13_scale,
+            w2,
+            w2_scale
+        ]
+        outputs = [
+            topk_weights,
+            topk_ids,
+            ffn_res
+        ]
 
         if enable_graph:
             g = torch.npu.NPUGraph()
             with torch.npu.graph(g):
-                moe_fusion_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
+                topk_weights, topk_ids, ffn_res = moe_fusion(*inputs, *outputs)
             g.replay()
         else:
-            moe_fusion_kernel(*pto_inputs, *pto_outputs, renormalize, topk_group, num_expert_group)
+            topk_weights, topk_ids, ffn_res = moe_fusion(*inputs, *outputs)
 
         # 5. 与PyTorch参考实现对比
         result = torch.matmul(hidden_states.to(torch.float32), mm_weight.to(torch.float32).t())
