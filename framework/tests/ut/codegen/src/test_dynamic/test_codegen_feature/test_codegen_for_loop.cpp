@@ -94,7 +94,7 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
     }
   }
 })";
-    EXPECT_TRUE(IsStringExist(expect1, res));
+    CheckStringExist(expect1, res);
 
     const std::string expect2 = R"(for (uint16_t idx0 = 0; idx0 < 1; ++idx0) {
   for (uint16_t idx1 = 0; idx1 < sym_86_dim_0; ++idx1) {
@@ -106,7 +106,7 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
     }
   }
 })";
-    EXPECT_TRUE(IsStringExist(expect2, res));
+    CheckStringExist(expect2, res);
 }
 
 } // namespace npu::tile_fwk
