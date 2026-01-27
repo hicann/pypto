@@ -20,6 +20,13 @@
 #include "interface/utils/log.h"
 #include "interface/operation/operation.h"
 #include "interface/function/function.h"
+#include <chrono>
+
+#define APASS_LOG_F(lvl, MODULE_NAME, opName, fmt, args...)                        \
+    do {                                                                        \
+        ALOG_F(lvl, \
+        "[%s][%s][" #lvl "]: " fmt, MODULE_NAME, opName, ##args);       \
+    } while (false)
 
 namespace npu::tile_fwk {
 
@@ -51,13 +58,53 @@ inline const char* toString(Elements elem) {
     auto it = passElementName.find(elem);
     return (it != passElementName.end()) ? it->second : "Unknown";
 }
+
+class ScopeTimer {
+public:
+    ScopeTimer(const char* moduleName, Elements opEnum, const char* tag)
+        : module_(moduleName), opEnum_(opEnum), tag_(tag) {}
+
+    void Start() {
+        started_ = true;
+        ended_ = false;
+        start_ = std::chrono::steady_clock::now();
+        APASS_LOG_F(INFO, module_, toString(opEnum_), "==========> start %s.", tag_);
+    }
+
+    void End() {
+        if (!started_ || ended_) {
+            return;
+        }
+        ended_ = true;
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - start_).count();
+        APASS_LOG_F(INFO, module_, toString(opEnum_), "<========== end %s, cost time=%lld us.", tag_, (long long)us);
+    }
+
+    ~ScopeTimer() {
+        if (started_ && !ended_) {
+            End();
+        }
+    }
+
+private:
+    const char* module_;
+    Elements opEnum_;
+    const char* tag_;
+
+    bool started_{false};
+    bool ended_{false};
+    std::chrono::steady_clock::time_point start_;
+};
+
 }
 
-#define APASS_LOG_F(lvl, MODULE_NAME, opName, fmt, args...)                        \
-    do {                                                                        \
-        ALOG_F(lvl, \
-        "[%s][%s][" #lvl "]: " fmt, MODULE_NAME, opName, ##args);       \
-    } while (false)
+#define LOG_SCOPE_BEGIN(timerVar, opEnum, tag) \
+    ScopeTimer timerVar(MODULE_NAME, opEnum, tag); \
+    timerVar.Start()
+
+#define LOG_SCOPE_END(timerVar) \
+    timerVar.End()
 
 
 #define APASS_LOG_DEBUG_F(opEnum, fmt, args...)   APASS_LOG_F(DEBUG, MODULE_NAME, toString(opEnum), fmt, ##args)

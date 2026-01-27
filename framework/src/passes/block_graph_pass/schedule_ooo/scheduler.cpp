@@ -163,14 +163,16 @@ void OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue, MemoryType buf
     APASS_LOG_ERROR_F(Elements::Operation, "======== OoO Spill failed info ===========");
     APASS_LOG_ERROR_F(Elements::Operation, "Spill failed memoryType: %s. %s", MemoryTypeToString(bufferType).c_str(), GetFormatBacktrace(allocIssue->tileOp).c_str());
     if (localBufferMap.find(allocIssue->reqMemIds[0]) != localBufferMap.end()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "%s alloc buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(), 
+        APASS_LOG_ERROR_F(Elements::Operation, "---- alloc request ----");
+        APASS_LOG_ERROR_F(Elements::Operation, "op:%s need buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(), 
             localBufferMap[allocIssue->reqMemIds[0]]->size, GetFormatBacktrace(allocIssue->tileOp).c_str());
     }
     if (tensorOccupyMap.find(bufferType) != tensorOccupyMap.end()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "---- current buffer occupancy ----");
         for (auto occupyIssue : tensorOccupyMap[bufferType]) {
-            APASS_LOG_ERROR_F(Elements::Operation, "%s, range[%lu, %lu], Tensor[%d] size: %lu. %s", occupyIssue.second->GetOpInfo().c_str(),
+            APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d], size: %lu, range[%lu, %lu], last writer:%s. %s", occupyIssue.first, localBufferMap[occupyIssue.first]->size,
                 localBufferMap[occupyIssue.first]->start, localBufferMap[occupyIssue.first]->end, 
-                occupyIssue.first, localBufferMap[occupyIssue.first]->size, GetFormatBacktrace(occupyIssue.second->tileOp).c_str());
+                occupyIssue.second->GetOpInfo().c_str(), GetFormatBacktrace(occupyIssue.second->tileOp).c_str());
         }
     }
 }
@@ -308,7 +310,8 @@ Status OoOScheduler::SpillOnBlock() {
             }
             PrintSpillFailedInfo(memType.second.Front(), memType.first);
         }
-        APASS_LOG_ERROR_F(Elements::Operation, "Buffer[L0A/B/C] is Full. Please check tile shape and OOO spill failed info."); 
+        APASS_LOG_ERROR_F(Elements::Operation, "Buffer[L0A/B/C] is Full. Possible causes: incorrect memory reuse, memory fragmentation. "
+            "Please check tile shape and OOO spill failed info."); 
         return FAILED; 
     }
     if (GenBufferSpill(allocIssueQueue[spillMemType].Front()) != SUCCESS) {
@@ -593,6 +596,7 @@ Status OoOScheduler::ScheduleMainLoop() {
         APASS_LOG_ERROR_F(Elements::Operation, "InitMemWithoutAlloc failed.");
         return FAILED;
     }
+    LOG_SCOPE_BEGIN(tScheduleMainLoop, Elements::Function, "ScheduleMainLoop");
     numTotalIssues = issueEntries.size();
     uint64_t commitCnt = 0; // 当前已提交的issue数量
     bool isAllRetired = false;
@@ -629,6 +633,7 @@ Status OoOScheduler::ScheduleMainLoop() {
             clock = nextCycle;
         }
     }
+    LOG_SCOPE_END(tScheduleMainLoop);
     return SUCCESS;
 }
 
@@ -658,7 +663,8 @@ Status OoOScheduler::ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx) {
 
     if (bufferManagerMap[allocBuffer->memType].IsFull(allocBuffer)) {
         if (GenSpillOp(allocBuffer, pcIdx) != SUCCESS) {
-            APASS_LOG_WARN_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s", GetFormatBacktrace(issueEntries[pcIdx]->tileOp).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s", GetFormatBacktrace(issueEntries[pcIdx]->tileOp).c_str());
+            return FAILED;
         }
     }
 
@@ -672,7 +678,7 @@ Status OoOScheduler::ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx) {
 Status OoOScheduler::GenSpillSchedule() {
     UpdateIssueExecOrder();
     size_t pcIdx = 0;
-    APASS_LOG_DEBUG_F(Elements::Operation, "=========> Begin GenSpillSchedule.");
+    LOG_SCOPE_BEGIN(tGenSpillSchedule, Elements::Function, "GenSpillSchedule");
     if (InitMemWithoutAlloc() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "InitMemWithoutAlloc failed.");
         return FAILED;
@@ -698,7 +704,7 @@ Status OoOScheduler::GenSpillSchedule() {
             return FAILED; 
         }
     }
-    APASS_LOG_DEBUG_F(Elements::Operation, "=========> End GenSpillSchedule.");
+    LOG_SCOPE_END(tGenSpillSchedule);
     InitBufRefCount();
     // 更新依赖关系
     if (InitDependencies() != SUCCESS) { 
@@ -960,7 +966,7 @@ Status OoOScheduler::Init(const std::vector<Operation *> &operations) {
     issueEntries.clear();
     localBufferMap.clear();
     depthCache_.clear();
-
+    LOG_SCOPE_BEGIN(tInit, Elements::Function, "Init");
     // 初始化芯片各buffer大小
     InitMemorySize();
     // 校验并初始化issueEntry
@@ -996,6 +1002,7 @@ Status OoOScheduler::Init(const std::vector<Operation *> &operations) {
 
     // 初始化内存管理器
     InitIssueQueuesAndBufferManager();
+    LOG_SCOPE_END(tInit);
     return SUCCESS;
 }
 
@@ -1024,7 +1031,7 @@ Status OoOScheduler::Schedule(const std::vector<Operation *> &operations) {
     PrintOpList(operations);
     if (Init(operations) != SUCCESS) { 
         APASS_LOG_ERROR_F(Elements::Operation, "Init failed!"); 
-        return FAILED; 
+        return FAILED;
     }
     // 生成spill指令
     if (GenSpillSchedule() != SUCCESS) { 

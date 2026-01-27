@@ -634,7 +634,7 @@ void OptimizeSort::AllocAhead() {
 }
 
 Status OptimizeSort::SortOps() {
-    APASS_LOG_INFO_F(Elements::Operation, "====>start SortOps");
+    LOG_SCOPE_BEGIN(tSortOps, Elements::Function, "SortOps");
     Init(operations);
     if (CheckAllocOp(operations) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "CheckAllocOp failed!");
@@ -677,7 +677,7 @@ Status OptimizeSort::SortOps() {
         APASS_LOG_ERROR_F(Elements::Operation, "PreSchedule method not recognized.");
         return FAILED;
     }
-    APASS_LOG_INFO_F(Elements::Operation, "====>end SortOps");
+    LOG_SCOPE_END(tSortOps);
     return SUCCESS;
 }
 

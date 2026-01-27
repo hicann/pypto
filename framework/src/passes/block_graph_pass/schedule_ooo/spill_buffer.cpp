@@ -692,7 +692,9 @@ Status OoOScheduler::GetGroupNextUseOrder(std::vector<int> group, IssueEntryPtr 
             return FAILED;
         }
         if (IsBelongSpillBlackList(spillIssue, allocIssue)) {
-            break;
+            // 存在非法memId时将该group排除
+            groupNextUseTime.push_back(-1);
+            return SUCCESS;
         }
         if (nextUseTimeCache.find(memId) != nextUseTimeCache.end()) {
             bufNextUseTime.push_back(nextUseTimeCache[memId]);

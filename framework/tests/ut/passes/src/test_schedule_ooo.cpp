@@ -472,7 +472,7 @@ TEST_F(ScheduleOoOTest, TestSpillMultiTensor) {
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.GenSpillSchedule();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(ooOScheduler.issueEntries.size(), 21);
+    EXPECT_EQ(ooOScheduler.issueEntries.size(), 23);
 }
 
 TEST_F(ScheduleOoOTest, TestSpillView) {
@@ -1598,6 +1598,48 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange) {
     EXPECT_EQ(ubPool.GetBufferSize(2), 98304);
     EXPECT_EQ(ubPool.GetBufferOffset(1), 98304);
     EXPECT_EQ(ubPool.GetBufferOffset(2), 0);
+}
+
+TEST_F(ScheduleOoOTest, TestSpillOnBlockFailedAtL0) {
+     // 构造子图
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4"};
+    std::vector<MemoryType> tensorMemTypes{MemoryType::MEM_L0A, MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0B};
+    std::vector<Opcode> opCodes{Opcode::OP_L1_TO_L0A, Opcode::OP_L0A_ALLOC, Opcode::OP_L1_TO_L0B, Opcode::OP_L0B_ALLOC};
+    std::vector<std::vector<std::string>> ioperands{{}, {}, {}, {}};
+    std::vector<std::vector<std::string>> ooperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}};
+    std::vector<std::string> opNames{"L1toL0A", "AllocL0A", "L1toL0B", "AllocL0B"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP16, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function *function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+    // 构造issueEntry
+    auto L1toL0A = subGraph.GetOp("L1toL0A");
+    auto L1toL0AIssue = std::make_shared<IssueEntry>(*L1toL0A, 1);
+    auto L1toL0B = subGraph.GetOp("L1toL0B");
+    auto L1toL0BIssue = std::make_shared<IssueEntry>(*L1toL0B, 2);
+    auto AllocL0A = subGraph.GetOp("AllocL0A");
+    auto AllocL0AIssue = std::make_shared<IssueEntry>(*AllocL0A, 3);
+    AllocL0AIssue->reqMemIds = {3};
+    auto AllocL0B = subGraph.GetOp("AllocL0B");
+    auto AllocL0BIssue = std::make_shared<IssueEntry>(*AllocL0B, 4);
+    AllocL0BIssue->reqMemIds = {4};
+    // 构造alloc队列、内存气泡场景的localBufferMap、tensorOccupyMap
+    OoOScheduler oooSchedule(*function);
+    oooSchedule.allocIssueQueue[MemoryType::MEM_L0A].Insert(AllocL0AIssue);
+    oooSchedule.allocIssueQueue[MemoryType::MEM_L0B].Insert(AllocL0BIssue);
+    oooSchedule.tensorOccupyMap[MemoryType::MEM_L0A].emplace(1, L1toL0AIssue);
+    oooSchedule.tensorOccupyMap[MemoryType::MEM_L0B].emplace(2, L1toL0BIssue);
+    oooSchedule.localBufferMap[1] = std::make_shared<LocalBuffer>(1, 32768, MemoryType::MEM_L0A);
+    oooSchedule.localBufferMap[2] = std::make_shared<LocalBuffer>(2, 32768, MemoryType::MEM_L0B);
+    oooSchedule.localBufferMap[3] = std::make_shared<LocalBuffer>(3, 32768, MemoryType::MEM_L0A);
+    oooSchedule.localBufferMap[4] = std::make_shared<LocalBuffer>(4, 32768, MemoryType::MEM_L0B);
+    oooSchedule.localBufferMap[1]->start = 512;
+    oooSchedule.localBufferMap[1]->end = 33280;
+    oooSchedule.localBufferMap[2]->start = 512;
+    oooSchedule.localBufferMap[2]->end = 33280;
+    //验证内存气泡导致L0AB卡死
+    EXPECT_EQ(oooSchedule.SpillOnBlock(), FAILED);
 }
 
 } // namespace npu::tile_fwk
