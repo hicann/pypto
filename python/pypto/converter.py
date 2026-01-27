@@ -127,6 +127,9 @@ _dtype_dict = {
     "torch.int64": DataType.DT_INT64,
     "torch.uint64": DataType.DT_UINT64,
     "torch.bool": DataType.DT_BOOL,
+    "torch.hifloat8": DataType.DT_HF8,
+    "torch.float8_e4m3fn": DataType.DT_FP8E4M3,
+    "torch.float8_e5m2": DataType.DT_FP8E5M2,
 }
 
 
