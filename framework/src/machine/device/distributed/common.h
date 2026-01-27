@@ -72,7 +72,7 @@ inline uint64_t GetVirtualAddrGroupIndex(uint64_t val) {
     return GetVirtualAddrBist(val, groupIndexStart, groupIndexEnd);
 }
 
-inline uint64_t GetVirtaulAddrMemType(uint64_t val) {
+inline uint64_t GetVirtualAddrMemType(uint64_t val) {
     constexpr uint64_t memTypeStart = 60UL;
     constexpr uint64_t memTypeEnd = 61UL;
     return GetVirtualAddrBist(val, memTypeStart, memTypeEnd);
