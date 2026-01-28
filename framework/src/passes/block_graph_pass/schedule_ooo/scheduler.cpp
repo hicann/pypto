@@ -270,7 +270,7 @@ uint64_t OoOScheduler::ShapeCeilAlign(std::vector<int64_t> shape, DataType dtype
         uint64_t preDimSize = 1;
         uint64_t last2DimSize = 1;
         for (size_t i = 0; i < shape.size(); i++) {
-            if ((i < (shape.size() - LAST_TWO_DIM)) && (shape.size() != 1)) {
+            if ((shape.size() != 1) && (i < (shape.size() - LAST_TWO_DIM))) {
                 preDimSize *= shape[i];
             } else {
                 last2DimSize *= shape[i];
