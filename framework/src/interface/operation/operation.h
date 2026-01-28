@@ -90,6 +90,7 @@ public:
     static const std::string loopAxes;
     static const std::string loopGroupStart;
     static const std::string loopGroupEnd;
+    static const std::string lastUse;
 };
 
 

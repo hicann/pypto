@@ -39,10 +39,12 @@ private:
     Status SortAndLatencyEstimate(std::vector<Operation*> &opList, std::vector<Operation*> &taskOpList,
         int &latency);
     void OoOHealthCheck(OoOScheduler &oooSchedule, Function &function, std::pair<uint64_t, Function*> &program);
+    Status RecordLastUseMemory(Function &function);
     Status NonMixSchedule(std::vector<Operation*> &opList, Function &function, std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize);
     Status MixSchedule(std::vector<Operation*> &opList, Function &function, std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize);
     std::vector<Function *> oriFunctions;
     std::map<uint64_t, OoOScheduler> schedulerMap;
+    std::unordered_map<LogicalTensorPtr, Operation *> lastUseMap_;
     OoOScheduleChecker checker;
     bool combineAxis{false};
     bool forceCombineAxis{false};

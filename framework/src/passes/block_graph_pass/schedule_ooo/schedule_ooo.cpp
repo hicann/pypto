@@ -135,6 +135,53 @@ Status OoOSchedule::SortAndLatencyEstimate(std::vector<Operation*> &opList, std:
     return SUCCESS;
 }
 
+Status OoOSchedule::RecordLastUseMemory(Function &function) {
+    APASS_LOG_INFO_F(Elements::Function, "===> Start RecordLastUseMemory.");
+    for (auto &program : function.rootFunc_->programs_) {
+        auto opList = program.second->Operations(false);
+        for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
+            Operation *op = &opList[opIdx];
+            if (LASTUSE_OPS.find(op->GetOpcode()) == LASTUSE_OPS.end()) {
+                APASS_LOG_INFO_F(Elements::Operation, "Op %s[%d] is not in LASTUSE_OPS, skip record last_use Attribute.", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+                continue;
+            }
+            int tensorSize = op->GetIOperands().size() + op->GetOOperands().size();
+            std::vector<int> initVec(tensorSize, false);
+            op->SetAttribute(OpAttributeKey::lastUse, initVec);
+            for (size_t inputIdx = 0; inputIdx < op->GetIOperands().size(); inputIdx++) {
+                auto inTensor = op->GetInputOperand(inputIdx);
+                lastUseMap_[inTensor] = op;
+            }
+        }
+    }
+    std::unordered_map<Operation*, std::vector<int>> opInputIdxMap;
+    std::unordered_set<Opcode> reduceOp = {Opcode::OP_ROWSUM_SINGLE, Opcode::OP_ROWMAX_SINGLE, Opcode::OP_ROWMIN_SINGLE};
+    for (auto &entry : lastUseMap_) {
+        auto lastUseOp = entry.second;
+        auto lastUseTensor = entry.first;
+        if (opInputIdxMap.find(lastUseOp) == opInputIdxMap.end()) {
+            int tensorSize = lastUseOp->GetIOperands().size() + lastUseOp->GetOOperands().size();
+            std::vector<int> tensorIdxVec(tensorSize, false);
+            int inputIdx = lastUseOp->GetIOperandIndex(lastUseTensor) + lastUseOp->GetOOperands().size();
+            if (reduceOp.find(lastUseOp->GetOpcode()) != reduceOp.end() && inputIdx == tensorSize - 1) {
+                tensorIdxVec[inputIdx] = false;
+            } else {
+                tensorIdxVec[inputIdx] = true;
+            }
+            opInputIdxMap[lastUseOp] = tensorIdxVec;
+        } else {
+            int inputIdx = lastUseOp->GetIOperandIndex(lastUseTensor) + lastUseOp->GetOOperands().size();
+            opInputIdxMap[lastUseOp][inputIdx] = true;
+        }
+    }
+    for (auto &entry : opInputIdxMap) {
+        auto op = entry.first;
+        op->SetAttribute(OpAttributeKey::lastUse, opInputIdxMap[op]);
+    }
+    APASS_LOG_INFO_F(Elements::Function, "===> End RecordLastUseMemory.");
+    return SUCCESS;
+}
+
 Status OoOSchedule::RunOnFunction(Function &function) {
     combineAxis = function.paramConfigs_.combineAxis;
     forceCombineAxis = function.paramConfigs_.forceCombineAxis;
@@ -170,6 +217,10 @@ Status OoOSchedule::RunOnFunction(Function &function) {
             return FAILED;
         }
         programRef.second = program.second;
+    }
+    if (RecordLastUseMemory(function) == FAILED) {
+        APASS_LOG_ERROR_F(Elements::Function, "Run RecordLastUseMemory Failed.");
+        return FAILED;
     }
     APASS_LOG_INFO_F(Elements::Operation, "=============== END 2CoreSplit ===============");
     return SUCCESS;
