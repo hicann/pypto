@@ -1407,17 +1407,44 @@ class Parser(doc.NodeVisitor):
                 ),
             )
 
-        # Extract the loop variable(s) - support both single name and tuple unpacking
-        is_tuple_unpack = isinstance(node.target, (doc.Tuple, doc.List))
+        # Extract loop variable information
+        loop_vars = self._extract_loop_variables(node.target)
 
-        if isinstance(node.target, doc.Name):
-            # Single variable: for x in iterator
-            loop_var_name = node.target.id
+        # Evaluate iterator expression
+        iter_expr = self._eval_expr(node.iter)
+
+        # Handle different iterator types
+        if isinstance(iter_expr, range):
+            iter_expr = self._convert_range_iterator(node, iter_expr)
+
+        if isinstance(iter_expr, (list, tuple)):
+            self._handle_list_tuple_iterator(node, iter_expr, loop_vars)
+        elif isinstance(iter_expr, Iterator):
+            self._handle_pto_iterator(node, iter_expr, loop_vars)
+        else:
+            raise ParserError(
+                node.iter,
+                TypeError(
+                    f"Loop iterator must be range  Iterator, or list/tuple, but got {type(iter_expr).__name__}."
+                ),
+            )
+
+    def _extract_loop_variables(self, target: doc.expr) -> tuple[bool, str, list[str]]:
+        """Extract loop variable information from target expression.
+
+        Returns
+        -------
+        tuple[bool, str, list[str]]
+            (is_tuple_unpack, loop_var_name, target_names)
+        """
+        is_tuple_unpack = isinstance(target, (doc.Tuple, doc.List))
+
+        if isinstance(target, doc.Name):
+            loop_var_name = target.id
             target_names = [loop_var_name]
         elif is_tuple_unpack:
-            # Tuple unpacking: for x, y in iterator
             target_names = []
-            for elt in node.target.elts:
+            for elt in target.elts:
                 if not isinstance(elt, doc.Name):
                     raise ParserError(
                         elt,
@@ -1427,75 +1454,92 @@ class Parser(doc.NodeVisitor):
                         ),
                     )
                 target_names.append(elt.id)
+            loop_var_name = None  # Not used for tuple unpacking
         else:
             raise ParserError(
-                node.target,
+                target,
                 TypeError(
                     f"Loop variable must be a simple name or tuple/list for unpacking, "
-                    f"but got {type(node.target).__name__}."
+                    f"but got {type(target).__name__}."
                 ),
             )
 
-        # Try to evaluate the iterator expression (e.g., range(10))
-        # This works even with symbolic values in range bounds because
-        # Python's range() is lazily evaluated
-        iter_expr = self._eval_expr(node.iter)
+        return is_tuple_unpack, loop_var_name, target_names
 
-        # Support range() calls - extract start, stop, step parameters
-        # These parameters can be concrete values or symbolic expressions
-        iterator = None
-        if isinstance(iter_expr, range):
-            # Extract start, stop, step from range object
-            start = iter_expr.start
-            stop = iter_expr.stop
-            step = iter_expr.step
-            # For range(), use the first target name as the loop variable name
-            iterator = pypto.loop(
-                start, stop, step, name="Dynamic", idx_name=target_names[0]
+    def _convert_range_iterator(self, node: doc.For, range_expr: range) -> list:
+        """Convert range object to list for unified processing."""
+        if isinstance(range_expr.start, SymbolicScalar) or \
+            isinstance(range_expr.stop, SymbolicScalar) or \
+            isinstance(range_expr.step, SymbolicScalar):
+            raise ParserError(
+                node,
+                TypeError(
+                    f"range() not support symbolic scalar yet, "
+                    f"try use pypto.loop"
+                ),
             )
-        elif isinstance(iter_expr, Iterator):
-            iterator = iter_expr
-        else:
+
+        return list(range(range_expr.start, range_expr.stop, range_expr.step))
+
+    def _handle_list_tuple_iterator(self, node: doc.For, iter_expr: Union[list, tuple],
+                                   loop_vars: tuple[bool, str, list[str]]) -> None:
+        """Handle list/tuple iterators by unrolling at compile time."""
+        is_tuple_unpack, loop_var_name, target_names = loop_vars
+
+        if len(iter_expr) == 0:
             raise ParserError(
                 node.iter,
-                TypeError(
-                    f"Loop iterator must be a range object or Iterator, but got {type(iter_expr).__name__}."
+                ValueError("Empty list/tuple cannot be used as loop iterator."),
+            )
+
+        # Validate tuple unpacking compatibility
+        if is_tuple_unpack and len(iter_expr) != len(target_names):
+            raise ParserError(
+                node.target,
+                ValueError(
+                    f"Cannot unpack {len(iter_expr)} values into {len(target_names)} targets."
                 ),
             )
 
-        # Create the loop using pypto.loop, which generates the appropriate IR for iteration.
-        # The loop variable is created by the pypto.loop iterator and added to the context
-        # so it can be used within the loop body.
-        # Create a new frame for the loop body scope
+        # Unroll the loop at compile time
         with self.context.with_frame():
-            # The loop variable is yielded by the iterator
-            for loop_var in iterator:
-                if is_tuple_unpack:
-                    # Unpack tuple/list: for x, y in iterator
-                    # loop_var should be a tuple/list that can be unpacked
-                    if not isinstance(loop_var, (tuple, list)):
-                        raise ParserError(
-                            node.target,
-                            TypeError(
-                                f"Expected iterator to yield a tuple/list for unpacking, "
-                                f"but got {type(loop_var).__name__}."
-                            ),
-                        )
-                    if len(loop_var) != len(target_names):
-                        raise ParserError(
-                            node.target,
-                            ValueError(
-                                f"Cannot unpack {len(loop_var)} values into {len(target_names)} targets."
-                            ),
-                        )
-                    # Use _assign_target to handle unpacking (it already supports Tuple/List)
-                    self._assign_target(node.target, loop_var)
-                else:
-                    # Single variable: for x in iterator
-                    # Add the loop variable to the context
-                    self.context.add(loop_var_name, loop_var)
-                # Visit the loop body
+            for item in iter_expr:
+                self._assign_loop_variable(node.target, item, is_tuple_unpack, loop_var_name, target_names)
                 self._visit_body(node.body)
+
+    def _handle_pto_iterator(self, node: doc.For, iterator: Iterator,
+                            loop_vars: tuple[bool, str, list[str]]) -> None:
+        """Handle PTO iterators with traditional loop processing."""
+        is_tuple_unpack, loop_var_name, target_names = loop_vars
+
+        with self.context.with_frame():
+            for loop_var in iterator:
+                self._assign_loop_variable(node.target, loop_var, is_tuple_unpack, loop_var_name, target_names)
+                self._visit_body(node.body)
+
+    def _assign_loop_variable(self, target: doc.expr, value: Any, is_tuple_unpack: bool,
+                             loop_var_name: str, target_names: list[str]) -> None:
+        """Assign loop variable value to context."""
+        if is_tuple_unpack:
+            # Tuple unpacking validation and assignment
+            if not isinstance(value, (tuple, list)):
+                raise ParserError(
+                    target,
+                    TypeError(
+                        f"Expected tuple/list for unpacking, got {type(value).__name__}."
+                    ),
+                )
+            if len(value) != len(target_names):
+                raise ParserError(
+                    target,
+                    ValueError(
+                        f"Cannot unpack {len(value)} values into {len(target_names)} targets."
+                    ),
+                )
+            self._assign_target(target, value)
+        else:
+            # Single variable assignment
+            self.context.add(loop_var_name, value)
 
     def _assign_target(self, target: doc.expr, expr: Any) -> None:
         """Helper method to assign an expression to a target.
