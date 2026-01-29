@@ -24,7 +24,7 @@ python3 hello_world.py --run_mode=npu
 ```python
 import pypto
 import torch
-import sys
+import argparse
 
 # 定义计算函数
 @pypto.jit
@@ -39,11 +39,11 @@ def add_kernel_sim(x0, x1, y):
     y[:] = x0 + x1
 
 if __name__ == "__main__":
-
-    if len(sys.argv) < 2:
-        print("Please specify the running mode as npu or sim via the args parameter.")
-        sys.exit(1)
-    run_mode = sys.argv[1].lower()
+    parser = argparse.ArgumentParser(description="Add kernel example")
+    parser.add_argument("--run_mode", type=str, default="npu", choices=["npu", "sim"],
+                        help="Running mode: npu or sim (default: npu)")
+    args = parser.parse_args()
+    run_mode = args.run_mode.lower()
 
     # 创建 Tensor
     x0 = torch.ones(4, 4, dtype=torch.float32)
