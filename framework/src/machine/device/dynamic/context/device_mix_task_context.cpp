@@ -77,7 +77,9 @@ WrapInfoQueue* DeviceTaskContext::AllocWrapQueue(DynDeviceTask *dyntask) {
 
 bool DeviceTaskContext::IsNeedWrapProcess(DynDeviceTask *dyntask, DevAscendProgram *devProg) {
     dyntask->devTask.mixTaskData.wrapIdNum = 0;
-    if (devProg->devArgs.archInfo == ArchInfo::DAV_3510) {return false;}
+    if (devProg->devArgs.archInfo != ArchInfo::DAV_3510) {
+        return false;
+    }
     for (size_t funcIndex = 0; funcIndex < dyntask->dynFuncDataCacheListSize; ++funcIndex) {
         dyntask->devTask.mixTaskData.wrapIdNum += dyntask->dynFuncDataCacheList[funcIndex].devFunc->wrapIdNum_;
     }
