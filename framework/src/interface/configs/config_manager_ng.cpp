@@ -84,6 +84,8 @@ struct TypeInfo {
                     typeInfos.insert({prefix, typeid(std::vector<std::string>)});
                 } else if (jitem_type == "integer") {
                     typeInfos.insert({prefix, typeid(std::vector<int64_t>)});
+                } else if (jitem_type == "double") {
+                    typeInfos.insert({prefix, typeid(std::vector<double>)});
                 }
             } else if (type == "object") {
                 const std::string &typeHints = jdata["typeHints"];
@@ -393,6 +395,8 @@ private:
         } else if (jdata.is_array()) {
             if (typeInfo.Type(prefix) == typeid(std::vector<int64_t>)) {
                 root->AddValue(prefix, jdata.get<std::vector<int64_t>>());
+            } else if (typeInfo.Type(prefix) == typeid(std::vector<double>)) {
+                root->AddValue(prefix, jdata.get<std::vector<double>>());
             } else {
                 root->AddValue(prefix, jdata.get<std::vector<std::string>>());
             }
@@ -514,6 +518,7 @@ template void SetOptionsNg<std::map<int, int>>(const std::string &key, const std
 template void SetOptionsNg<std::map<long, long>>(const std::string &key, const std::map<long, long> &value);
 template void SetOptionsNg<std::vector<int>>(const std::string &key, const std::vector<int> &value);
 template void SetOptionsNg<std::vector<std::string>>(const std::string &key, const std::vector<std::string> &value);
+template void SetOptionsNg<std::vector<double>>(const std::string &key, const std::vector<double> &value);
 
 
 void Restore(std::shared_ptr<ConfigScope> config) {

@@ -195,6 +195,8 @@ std::map<std::string, npu::tile_fwk::Any> ConvertPyDictToCppMap(const py::dict &
                     cpp_values[key] = value.cast<std::vector<int64_t>>();
                 } else if (py::isinstance<py::str>(lst[0])) {
                     cpp_values[key] = value.cast<std::vector<std::string>>();
+                } else if (py::isinstance<py::float_>(lst[0])) {
+                    cpp_values[key] = value.cast<std::vector<double>>();
                 } else {
                     throw py::type_error("Unsupported list element type for key: " + key);
                 }
@@ -271,6 +273,7 @@ py::object AnyToPyObject(const Any &val) {
         {typeid(std::string), [](const Any& a){ return py::cast(AnyCast<std::string>(a)); }},
         {typeid(std::vector<int64_t>), [](const Any& a){ return py::cast(AnyCast<std::vector<int64_t>>(a)); }},
         {typeid(std::vector<std::string>), [](const Any& a){ return py::cast(AnyCast<std::vector<std::string>>(a)); }},
+        {typeid(std::vector<double>), [](const Any& a){ return py::cast(AnyCast<std::vector<double>>(a)); }},
         {typeid(std::map<int64_t,int64_t>), [](const Any& a){ return py::cast(AnyCast<std::map<int64_t,int64_t>>(a)); }},
         {typeid(CubeTile), [](const Any& a){ return py::cast(AnyCast<CubeTile>(a)); }},
         {typeid(DistTile), [](const Any& a){ return py::str(AnyCast<DistTile>(a).ToString()); }},

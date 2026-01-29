@@ -35,7 +35,8 @@
         "enable_pass_verify": false,
         "pass_verify_save_tensor": false,
         "pass_verify_save_tensor_dir": "",
-        "pass_verify_pass_filter": []
+        "pass_verify_pass_filter": [],
+        "pass_verify_error_tol": [1e-3, 1.5e-3]
     },
     "debug": {
         "compile_debug_mode": 0,

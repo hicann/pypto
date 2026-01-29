@@ -343,6 +343,16 @@
                         "zh": "...",
                         "en": "..."
                     }
+                },
+                "pass_verify_error_tol": {
+                    "type": "array",
+                    "items": {
+                        "type": "double"
+                    },
+                    "label": {
+                        "zh": "...",
+                        "en": "..."
+                    }
                 }
             }
         },
