@@ -28,22 +28,22 @@ public:
     std::vector<Operation*> operations;
     Function &function_;
 
-    bool opFinish{false};
-    std::map<Operation*, std::map<MemoryType, int64_t>> recordBufferAllocate;
-    std::map<Operation*, std::pair<size_t, std::vector<Operation*>>> recordOpList;
-    std::map<Operation*, MemoryType> recordOpBuffer;
-    std::stack<std::pair<Operation*, MemoryType>> needFreeOpStack;
-    std::map<Operation*, bool> visitedOp;
-    std::map<Operation*, std::unordered_map<int, int>> recordBufRefCount;
+    bool opFinish_{false};
+    std::map<Operation*, std::map<MemoryType, int64_t>> recordBufferAllocate_;
+    std::map<Operation*, std::pair<size_t, std::shared_ptr<std::vector<Operation*>>>> recordOpList_;
+    std::map<Operation*, MemoryType> recordOpBuffer_;
+    std::stack<std::pair<Operation*, MemoryType>> needFreeOpStack_;
+    std::map<Operation*, bool> visitedOp_;
+    std::map<Operation*, std::unordered_map<int, int>> recordBufRefCount_;
 
     // 回溯点位置,当前执行op的全部信息,用于后期回退
-    Operation* backTraceOp{nullptr};
-    std::map<Operation*, std::map<MemoryType, int64_t>> backTraceBufferAllocate;
-    std::map<Operation*, std::pair<size_t, std::vector<Operation*>>> backTraceOpList;
-    std::map<Operation*, std::unordered_map<int, int>> backTraceBufRefCount;
+    Operation* backTraceOp_{nullptr};
+    std::map<Operation*, std::map<MemoryType, int64_t>> backTraceBufferAllocate_;
+    std::map<Operation*, std::pair<size_t, std::shared_ptr<std::vector<Operation*>>>> backTraceOpList_;
+    std::map<Operation*, std::unordered_map<int, int>> backTraceBufRefCount_;
     // 回退点,防止死循环
-    Operation* rollBackNodeOp{nullptr};
-    std::unordered_map<Operation*, int> depthCache;
+    Operation* rollBackNodeOp_{nullptr};
+    std::unordered_map<Operation*, int> depthCache_;
 
     void opListInit();
     Status SortOps();
@@ -64,36 +64,36 @@ public:
     void UpdatePreNodeQueue(std::unordered_set<Operation*> &curr, std::unordered_set<Operation*> &preNodeTotal,
         std::map<Operation*, bool>& visited);
 
-    void ReorderOp(std::vector<size_t> &preIdx, std::vector<Operation*> &curOpList, size_t startIndex);
-    void FindIndex(Operation* op, std::vector<Operation*> curOpList, size_t &index);
-    Status FindConsumerList(size_t consumerIndex, std::vector<size_t> &preOpList, std::vector<Operation*> &curOpList);
-    Status UpdateOOperandPreDependence(size_t startIndex, std::vector<Operation*> &curOpList,
+    std::shared_ptr<std::vector<Operation*>> ReorderOp(std::vector<size_t> &preIdx, std::shared_ptr<std::vector<Operation*>> curOpList, size_t startIndex);
+    void FindIndex(Operation* op, std::shared_ptr<std::vector<Operation*>> curOpList, size_t &index);
+    Status FindConsumerList(size_t consumerIndex, std::vector<size_t> &preOpList, std::shared_ptr<std::vector<Operation*>> curOpList);
+    Status UpdateOOperandPreDependence(size_t startIndex, std::shared_ptr<std::vector<Operation*>> &curOpList,
         std::vector<Operation*> consumersGroup);
-    void RecoverSymbol(size_t startIndex, std::vector<Operation*> curOpList);
+    void RecoverSymbol(size_t startIndex, std::shared_ptr<std::vector<Operation*>> curOpList);
     void GetConsumerGroup(std::unordered_set<Operation*> &consumers, std::vector<Operation*> &consumersGroup);
-    void GetStackTop(size_t &startIndex, std::vector<Operation*> &curOpList,
+    void GetStackTop(size_t &startIndex, std::shared_ptr<std::vector<Operation*>> &curOpList,
         std::map<MemoryType, int64_t> &curMemoryMap);
-    Status BacktraceOnMemoryExceeded(size_t &startIndex, std::vector<Operation*> &curOpList,
+    Status BacktraceOnMemoryExceeded(size_t &startIndex, std::shared_ptr<std::vector<Operation*>> &curOpList,
         std::map<MemoryType, int64_t> &curMemoryMap);
     bool IsBufferFull(std::map<MemoryType, int64_t> curMemoryMap, MemoryType memType, int64_t size);
     Status ModifyBuffer(std::map<MemoryType, int64_t> &curMemoryMap, MemoryType memType, int64_t size, bool isAdd);
     Status RetireOpBuffer(std::map<MemoryType, int64_t> &curMemoryMap, Operation* op);
-    void OpMemoryUpdate(Operation* op, size_t startIndex, std::vector<Operation*> curOpList,
+    void OpMemoryUpdate(Operation* op, size_t startIndex, std::shared_ptr<std::vector<Operation*>> curOpList,
         std::map<MemoryType, int64_t> curMemoryMap);
-    Status AllocExecute(Operation* op, std::vector<Operation*> &curOpList,
+    Status AllocExecute(Operation* op, std::shared_ptr<std::vector<Operation*>> &curOpList,
         std::map<MemoryType, int64_t> &curMemoryMap, size_t &startIndex, bool &isContinue);
-    Status OpListExecute(std::vector<Operation*> &curOpList, std::map<MemoryType, int64_t> &curMemoryMap,
+    Status OpListExecute(std::shared_ptr<std::vector<Operation*>> &curOpList, std::map<MemoryType, int64_t> &curMemoryMap,
         size_t &startIndex);
     Status ExecuteOp();
     void AllocAhead();
 
-    void ReplaceIndex(std::vector<Operation*> &curOpList, std::set<size_t> advanceIndexList, size_t rollBackIndex);
+    std::shared_ptr<std::vector<Operation*>> ReplaceIndex(std::shared_ptr<std::vector<Operation*>> curOpList, std::set<size_t> &advanceIndexList, size_t rollBackIndex);
     bool HasDependency(Operation* rollBackOp, Operation* backOp);
-    void GetPreNode(size_t i, std::vector<Operation*> curOpList, size_t rollBackIndex,
+    void GetPreNode(size_t i, std::shared_ptr<std::vector<Operation*>> curOpList, size_t rollBackIndex,
         size_t backTraceIndex, std::set<size_t> &dependencyIndexList);
     void GetListToAdvance(size_t rollBackIndex, size_t backTraceIndex,
-        std::vector<Operation*> curOpList, std::set<size_t> &advanceIndexList);
-    Status RollBack(size_t &startIndex, std::vector<Operation*> &curOpList,
+        std::shared_ptr<std::vector<Operation*>> curOpList, std::set<size_t> &advanceIndexList);
+    Status RollBack(size_t &startIndex, std::shared_ptr<std::vector<Operation*>> &curOpList,
         std::map<MemoryType, int64_t> &curMemoryMap);
 
 
