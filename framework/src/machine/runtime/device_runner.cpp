@@ -658,7 +658,7 @@ void DeviceRunner::PrepareLaunchArgs(DeviceArgs &localArgs, DeviceKernelArgs *ke
     args_.scheCpuNum = localArgs.scheCpuNum;
 }
 
-int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId,
+int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, [[maybe_unused]] int64_t taskId,
     DeviceKernelArgs *kernelArgs, int blockdim, int launchAicpuNum) {
     if (kernelArgs == nullptr) {
         return -1;

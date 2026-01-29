@@ -224,8 +224,10 @@ static void freeHostTensorData(const std::vector<DeviceTensorData> &hostDataList
 int EmulationLauncher::EmulationLaunchDeviceTensorData(Function *function,
     const std::vector<DeviceTensorData> &inDevList, const std::vector<DeviceTensorData> &outDevList,
     const DeviceLauncherConfig &config) {
+    DeviceLauncher::ChangeCaptureModeRelax();
     auto inList = toHostTensorData(inDevList, true);
     auto outList = toHostTensorData(outDevList, false);
+    DeviceLauncher::ChangeCaptureModeGlobal();
     int rc = EmulationLaunchOnceWithHostTensorData(function, inList, outList, nullptr, config);
     freeHostTensorData(inList);
     freeHostTensorData(outList);

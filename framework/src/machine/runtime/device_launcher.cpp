@@ -112,16 +112,14 @@ int DeviceLauncher::RunWithProfile(rtStream_t aicoreStream, rtStream_t aicpuStre
     if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
         if (isCapture) {
             ALOG_WARN("The swimlane function is not currently supported in CaptureMode. The contents of tilefwk_L1_prof_data may be empty.");
+            return 0;
         }
-        aclmdlRICaptureMode mode = ACL_MODEL_RI_CAPTURE_MODE_RELAXED;
-        aclmdlRICaptureThreadExchangeMode(&mode);
         int rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
         if (rc < 0) {
             return rc;
         }
         DeviceRunner::Get().SynchronizeDeviceToHostProfData();
         DeviceRunner::Get().ResetPerData();
-        aclmdlRICaptureThreadExchangeMode(&mode);
     }
     return 0;
 }
@@ -319,6 +317,7 @@ int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
         aicpuStreamValue, aicoreStreamValue, streamSynchronize, op,
         reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
 #else
+    (void)devCtrlCache;
     (void)op;
     (void)inputList;
     (void)outputList;
@@ -404,7 +403,7 @@ uint8_t* CopyHostToDev(uint8_t* data, uint64_t size) {
 #else
     (void)data;
     (void)size;
-    return 0;
+    return nullptr;
 #endif
 }
 
