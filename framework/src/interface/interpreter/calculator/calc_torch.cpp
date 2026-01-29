@@ -1079,6 +1079,8 @@ static void TopkMerge(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int m
 
     // Input is pack format: [v0, i0, v1, i1, ...]
     // mergeSize: number of already-sorted packs
+    // Note: Current implementation uses global sort for simplicity (sufficient for precision verification)
+    (void)mergeSize;  // Suppress unused parameter warning
 
     // Extract all values (even positions)
     auto evenIndices = torch::arange(0, tself.size(axis), 2, torch::dtype(torch::kLong));
