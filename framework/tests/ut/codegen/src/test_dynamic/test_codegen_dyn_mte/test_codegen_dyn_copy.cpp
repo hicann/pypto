@@ -395,13 +395,19 @@ void TestMatmulMteBody(Opcode opcode, MemoryType inType, MemoryType outType, boo
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     const std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, inType, shape, dynValidShape});
-    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, outType, shape, dynValidShape});
+    auto localTensor = CreateLogicalTensor({*function, DataType::DT_INT32, inType, shape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP16, outType, shape, dynValidShape});
     std::vector<int64_t> offset = {0, 0};
     std::vector<SymbolicScalar> dynoffset = {0, 0};
     localTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
-    auto &op = function->AddOperation(opcode, {localTensor}, {localOutTensor});
+    LogicalTensors inputs = {localTensor};
+    LogicalTensors outputs = {localOutTensor};
+    if (opcode == Opcode::OP_COPY_OUT) {
+        inputs.emplace_back(localTensor);
+    }
+    auto &op = function->AddOperation(opcode, inputs, outputs);
+
     op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     if (opcode == Opcode::OP_COPY_OUT) {
         op.SetOpAttribute(

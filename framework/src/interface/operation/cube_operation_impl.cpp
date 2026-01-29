@@ -131,7 +131,8 @@ std::vector<SymbolicScalar> GetValidShapeFromTranspose(LogicalTensorPtr &l0Tenso
 
 void AddOpView(
     Function &function, const LogicalTensorPtr &operand, LogicalTensorPtr &viewTensor, const TensorAttributes &attrs) {
-    DataType dtype = (attrs.name == "bias_BT" ? DataType::DT_FP32 : operand->Datatype());
+    DataType dtype = ((attrs.name == "bias_BT" && operand->Datatype() == DataType::DT_FP16) ? DataType::DT_FP32 :
+                                                                                              operand->Datatype());
     viewTensor = std::make_shared<LogicalTensor>(function, dtype, std::vector<int64_t>{1, attrs.tileSize},
         SymbolicScalar::FromConcrete({1, attrs.tileSize}), operand->Format(), attrs.name, operand->nodetype);
     viewTensor->UpdateDynValidShape(
