@@ -15,7 +15,6 @@
 
 #include "schedule_ooo.h"
 #include "passes/pass_log/pass_log.h"
-#include "core_assign.h"
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "OoOSchedule"
@@ -102,22 +101,44 @@ Status OoOSchedule::MixSchedule(std::vector<Operation*> &opList, Function &funct
     for (auto &taskNode : spliter.GetTaskGraph().tasks) {
         APASS_LOG_INFO_F(Elements::Operation,  "eval task %d on %s: %d - %d.", taskNode.idx, targetToString[taskNode.targetCoreType].c_str(), taskNode.startTime, taskNode.endTime);
     }
-    spliter.MergeTaskByTargetCoreType();
-    for (auto &taskNode : spliter.GetTaskGraph().tasks) {
-        OoOScheduler oooSchedule(*program.second);
-        if (oooSchedule.Schedule(taskNode.opList_) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "TaskNode[%d] schedule failed.", taskNode.idx);
-            return FAILED;
-        }
-        OoOHealthCheck(oooSchedule, function, program);
-    }
+    spliter.MergeTask();
     spliter.MarkInternalSubgraphID();
+    // 传入一个taskNode序列 taskNodeList,对全部opList进行schedule
+    auto taskNodeList = spliter.GetTaskGraph().tasks;
+    std::sort(taskNodeList.begin(), taskNodeList.end(), [](const TaskNode& a, const TaskNode& b) {
+        return a.startTime < b.startTime;
+    });
+    std::vector<Operation*> operations;
+    std::unordered_map<Operation*, std::pair<OpCoreType, int>> opCoreMap;
+    for (auto& taskNode : taskNodeList) {
+        SortTaskList(taskNode.opList_, opList);
+        UpdateOpCoreMap(taskNode, opCoreMap);
+        operations.insert(operations.end(), taskNode.opList_.begin(), taskNode.opList_.end());
+    }
+    opList = operations;
+    OoOScheduler oooSchedule(*program.second);
+    if (oooSchedule.Schedule(opList, opCoreMap, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Schedule failed.");
+        return FAILED;
+    }
+    OoOHealthCheck(oooSchedule, function, program);
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OOOSchedule end.", program.first);
-    program.second->ScheduleBy(spliter.GetMergedOperations());
+    program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);
     maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
     function.SetStackWorkespaceSize(maxWorkeSpaceSize);
+    return SUCCESS;
+}
+
+Status OoOSchedule::UpdateOpCoreMap(const TaskNode &taskNode, std::unordered_map<Operation*, std::pair<OpCoreType, int>> &opCoreMap) {
+    for (auto op : taskNode.opList_) {
+        if (targetCoreTypeMap.find(taskNode.targetCoreType) == targetCoreTypeMap.end()) {
+            APASS_LOG_ERROR_F(Elements::Operation, "CoreType is not AIC, AIV0 or AIV1");
+            return FAILED;
+        }
+        opCoreMap[op] = targetCoreTypeMap.at(taskNode.targetCoreType);
+    }
     return SUCCESS;
 }
 

@@ -22,8 +22,21 @@
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/block_graph_pass/schedule_ooo/optimize_sort.h"
 #include "passes/block_graph_pass/schedule_ooo/estimate_latency.h"
+#include "passes/block_graph_pass/schedule_ooo/core_assign.h"
 
 namespace npu::tile_fwk {
+
+const std::unordered_map<TargetCoreType, std::pair<OpCoreType, int>> targetCoreTypeMap {
+    {TargetCoreType::AIC, std::make_pair(OpCoreType::AIC, 0)},
+    {TargetCoreType::AIV0, std::make_pair(OpCoreType::AIV, 0)},
+    {TargetCoreType::AIV1, std::make_pair(OpCoreType::AIV, 1)}
+};
+
+const std::unordered_map<OpCoreType, std::vector<int>> CORE_INIT_CONFIGS_HARDWARE_TWO_AIV = {
+    {OpCoreType::AIV, {0, 1}},
+    {OpCoreType::AIC, {0}}
+};
+
 class OoOSchedule : public Pass {
 public:
     OoOSchedule() : Pass("OoOSchedule") {}
@@ -42,6 +55,7 @@ private:
     Status RecordLastUseMemory(Function &function);
     Status NonMixSchedule(std::vector<Operation*> &opList, Function &function, std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize);
     Status MixSchedule(std::vector<Operation*> &opList, Function &function, std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize);
+    Status UpdateOpCoreMap(const TaskNode &taskNode, std::unordered_map<Operation*, std::pair<OpCoreType, int>> &opCoreMap);
     std::vector<Function *> oriFunctions;
     std::map<uint64_t, OoOScheduler> schedulerMap;
     std::unordered_map<LogicalTensorPtr, Operation *> lastUseMap_;

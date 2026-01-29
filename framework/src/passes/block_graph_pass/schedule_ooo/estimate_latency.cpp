@@ -211,7 +211,9 @@ void LatencyEstimator::InitMemWithoutAlloc() {
             memIdAllocMap[op->GetOutputOperand(0)->memoryrange.memId] = op;
         }
         for (auto &iOperand : op->GetIOperands()) {
-            memIds.insert(iOperand->memoryrange.memId);
+            if (iOperand->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+                memIds.insert(iOperand->memoryrange.memId);
+            }
         }
     }
     for (const auto &memId : memIds) {

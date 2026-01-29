@@ -22,6 +22,8 @@
 
 namespace npu::tile_fwk {
 
+constexpr int64_t NEGATIVE_ONE = -1;
+
 inline std::string ScheduleCoreTypeToString(ScheduleCoreType coreType) {
     if (coreType == ScheduleCoreType::AIC) {
         return "AIC";
@@ -729,11 +731,25 @@ void TaskSpliter::MergeTaskByTargetCoreType() {
 void TaskSpliter::MarkInternalSubgraphID() {
     std::unordered_map<TargetCoreType, AIVCore> targetMap{{TargetCoreType::AIC, AIVCore::UNSPECIFIED},
         {TargetCoreType::UNKNOWN, AIVCore::UNSPECIFIED}, {TargetCoreType::AIV0, AIVCore::AIV0}, {TargetCoreType::AIV1, AIVCore::AIV1}};
+    std::unordered_map<TargetCoreType, int> subGraphIdMap{{TargetCoreType::AIC, NEGATIVE_ONE},
+        {TargetCoreType::AIV0, NEGATIVE_ONE}, {TargetCoreType::AIV1, NEGATIVE_ONE}, {TargetCoreType::UNKNOWN, NEGATIVE_ONE}};
+    int id = 0;
     for (auto &task : taskGraph_.tasks) {
+        if (task.targetCoreType == TargetCoreType::UNKNOWN) {
+            APASS_LOG_ERROR_F(Elements::Operation, "task %d coreType is unknow", task.idx);
+        }
         AIVCore targetType = targetMap[task.targetCoreType];
+        if (subGraphIdMap[task.targetCoreType] == NEGATIVE_ONE) {
+            subGraphIdMap[task.targetCoreType] = id++;
+        }
         for (auto opPtr : task.opList_) {
             opPtr->SetAIVCore(targetType);
-            opPtr->UpdateInternalSubgraphID(task.idx);
+        }
+    }
+    for (auto &task : taskGraph_.tasks) {
+        auto subGraphId = subGraphIdMap[task.targetCoreType];
+        for (auto opPtr : task.opList_) {
+            opPtr->UpdateInternalSubgraphID(subGraphId);
         }
     }
 }
