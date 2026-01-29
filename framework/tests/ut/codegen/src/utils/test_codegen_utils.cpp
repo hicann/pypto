@@ -62,9 +62,9 @@ std::string GetResultFromCpp(const Function &function) {
     return res;
 }
 
-void CheckStringExist(const std::string &expect, const std::string &result) {
-    bool res = result.find(expect) != std::string::npos;
-    EXPECT_TRUE(res) << "expect: \n" << expect << "\n\n ---- not found in result ---- \n\n" << result << std::endl;
+void CheckStringExist(const std::string &target, const std::string &content) {
+    bool res = content.find(target) != std::string::npos;
+    EXPECT_TRUE(res) << "target: \n" << target << "\n\n ---- not found in content ---- \n\n" << content << std::endl;
 }
 
 } // namespace npu::tile_fwk

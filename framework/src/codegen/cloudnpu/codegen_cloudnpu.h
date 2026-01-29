@@ -150,10 +150,10 @@ private:
 
     void UpdateSubFunc(std::pair<uint64_t, Function *> subFuncPair, const CompileInfo &compileInfo) const;
 
-    NPUArch platform_;
-
     std::string GetIncludePathForCompileCCE() const;
     std::string GetPtoTileLibPathByEnv() const;
+
+    NPUArch platform_;
 };
 
 } // namespace npu::tile_fwk

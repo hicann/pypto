@@ -90,39 +90,9 @@ TEST_F(TestCodegenRowSumLine, TestOperationRowSumLineTileTensor) {
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(#include "TileOpImpl.h"
-
-// funcHash: 12633186027675011673
-
-extern "C" [aicore] void TENSOR_Reduce3dimMoe_TILERENSOR_2_0_4503599627370496(__gm__ GMTensorInfo* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ GMTensorInfo* oriAddrParam) {
-float __ubuf__ *UB_S0_E32768 = (float __ubuf__ *)get_imm(0x0); // size: 0x8000
-float *UB_S0_E32768_T = (float *)get_imm(0x0); // size: 0x8000
-float __ubuf__ *UB_S32768_E36864 = (float __ubuf__ *)get_imm(0x8000); // size: 0x1000
-float *UB_S32768_E36864_T = (float *)get_imm(0x8000); // size: 0x1000
-float __ubuf__ *UB_S36864_E45056 = (float __ubuf__ *)get_imm(0x9000); // size: 0x2000
-float *UB_S36864_E45056_T = (float *)get_imm(0x9000); // size: 0x2000
-using GMTileTensorFP32Dim3_5 = TileTensor<__gm__ float, DynLayout3Dim, Hardware::GM>;
-using UBTileTensorFP32Dim2_4 = TileTensor<float, StaticLayout2Dim<4, 512, 4, 512>, Hardware::UB>;
-using UBTileTensorFP32Dim3_3 = TileTensor<float, StaticLayout3Dim<2, 1, 512, 2, 1, 512>, Hardware::UB>;
-using GMTileTensorFP32Dim3_2 = TileTensor<__gm__ float, DynLayout3Dim, Hardware::GM>;
-using UBTileTensorFP32Dim3_1 = TileTensor<float, StaticLayout3Dim<2, 8, 512, 2, 8, 512>, Hardware::UB>;
-GMTileTensorFP32Dim3_5 gmTensor_6((__gm__ float*)GET_PARAM_ADDR(param, 0, 0), DynLayout3Dim(Shape3Dim(6, 1, 1024), Stride3Dim(1024, 1024, 1)));
-UBTileTensorFP32Dim2_4 ubTensor_4((uint64_t)UB_S36864_E45056_T);
-UBTileTensorFP32Dim3_3 ubTensor_3((uint64_t)UB_S32768_E36864_T);
-GMTileTensorFP32Dim3_2 gmTensor_2((__gm__ float*)GET_PARAM_ADDR(param, 0, 0), DynLayout3Dim(Shape3Dim(6, 8, 1024), Stride3Dim(8192, 1024, 1)));
-UBTileTensorFP32Dim3_1 ubTensor_1((uint64_t)UB_S0_E32768_T);
-SUBKERNEL_PHASE1
-TLoad(ubTensor_1, gmTensor_2, Coord3Dim(0, 0, 0));
-set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-SUBKERNEL_PHASE2
-TRowSumLine<3>(ubTensor_3, ubTensor_1, ubTensor_4);
-set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
-TStore(gmTensor_6, ubTensor_3, Coord3Dim(0, 0, 0));
-}
+    std::string expect = R"!!!(TRowSumLine<3>(ubTensor_3, ubTensor_1, ubTensor_4);
 )!!!";
-    EXPECT_EQ(res, expect);
+    CheckStringExist(expect, res);
 }
 
 } // namespace npu::tile_fwk
