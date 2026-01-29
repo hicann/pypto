@@ -65,6 +65,9 @@ SECUREC_URL="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/third_party_de
 CANN_TOOLKIT_URL_X86="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-toolkit_8.5.0_linux-x86_64.run"
 CANN_TOOLKIT_URL_ARM="https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/aarch64/Ascend-cann-toolkit_8.5.0_linux-aarch64.run"
 
+CANN_PTO_ISA_URL_X86="http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/ubuntu_x86/cann-pto-isa_linux-x86_64.run"
+CANN_PTO_ISA_URL_ARM="http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/ubuntu_aarch64/cann-pto-isa_linux-aarch64.run"
+
 CANN_DRIVER_URL_X86_910b="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/Ascend%20HDK/Ascend%20HDK%2025.3.RC1/Ascend-hdk-910b-npu-driver_25.3.rc1_linux-x86-64.run?response-content-type=application/octet-stream"
 CANN_DRIVER_URL_ARM_910b="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/Ascend%20HDK/Ascend%20HDK%2025.3.RC1/Ascend-hdk-910b-npu-driver_25.3.rc1_linux-aarch64.run?response-content-type=application/octet-stream"
 CANN_DRIVER_URL_X86_910c="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/Ascend%20HDK/Ascend%20HDK%2025.3.RC1/Atlas-A3-hdk-npu-driver_25.3.rc1_linux-x86-64.run?response-content-type=application/octet-stream"
@@ -555,6 +558,13 @@ get_package_url() {
                 *) echo "" ;;
             esac
             ;;
+        pto-isa)
+            case "$ARCH" in
+                x86) echo "$CANN_PTO_ISA_URL_X86" ;;
+                arm) echo "$CANN_PTO_ISA_URL_ARM" ;;
+                *) echo "" ;;
+            esac
+            ;;
         *)
             echo ""
             ;;
@@ -823,9 +833,9 @@ download_cann_packages() {
     log_print "info" "Detected architecture: $ARCH"
 
     if [ "$DOWNLOAD_HDK" = true ]; then
-        log_print "info" "Download: CANN-Toolkit + CANN-ops + CANN-deiver + CANN-firmware"
+        log_print "info" "Download: CANN-Toolkit + CANN-ops + CANN-pto-isa + CANN-deiver + CANN-firmware"
     else
-        log_print "info" "Download: CANN-Toolkit + CANN-ops"
+        log_print "info" "Download: CANN-Toolkit + CANN-ops + CANN-pto-isa"
     fi
     echo
     
@@ -838,7 +848,7 @@ download_cann_packages() {
     log_print "info" "=============================================="
     
     local download_success=true
-    local download_target=("toolkit" "ops")
+    local download_target=("toolkit" "ops" "pto-isa")
     local pkg_count=1
     if [ "$DOWNLOAD_HDK" = true ]; then
         download_target+=("driver" "firmware")
