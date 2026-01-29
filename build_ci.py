@@ -167,6 +167,7 @@ class BuildParam(CMakeParam):
     asan: bool = False  # 使能 AddressSanitizer
     ubsan: bool = False  # 使能 UndefinedBehaviorSanitizer
     gcov: bool = False  # 使能 GNU Coverage
+    gcov_incr: bool = False  # 使能增量覆盖率 GCov 计算
     clang_install_path: Optional[Path] = None  # Clang 安装位置
     compile_dependency_check: bool = False  # 使能编译依赖关系检查
     # Build
@@ -181,6 +182,7 @@ class BuildParam(CMakeParam):
         self.asan = args.asan
         self.ubsan = args.ubsan
         self.gcov = args.gcov
+        self.gcov_incr = args.gcov_increment
         self.clang_install_path = self._get_clang_install_path(opt=args.clang)
         self.compile_dependency_check = args.compile_dependency_check
 
@@ -192,7 +194,7 @@ class BuildParam(CMakeParam):
         desc += f"\n                  BuildType : {self.build_type}"
         desc += f"\n                       ASan : {self.asan}"
         desc += f"\n                      UbSan : {self.ubsan}"
-        desc += f"\n                       GCov : {self.gcov}"
+        desc += f"\n                       GCov : {self.gcov}, Increment: {self.gcov_incr}"
         desc += f"\n           ClangInstallPath : {self.clang_install_path}"
         desc += f"\n            CompileDepCheck : {self.compile_dependency_check}"
         desc += f"\n        Build"
@@ -214,6 +216,8 @@ class BuildParam(CMakeParam):
                             help="Enable UndefinedBehaviorSanitizer.")
         parser.add_argument("--gcov", action="store_true", default=False,
                             help="Enable GNU Coverage Instrumentation Tool.")
+        parser.add_argument("--gcov_increment", action="store_true", default=False,
+                            help="Enable increment coverage calculation based on latest commit.")
         parser.add_argument("--clang", nargs="?", type=str, default="",
                             help="Specify clang install path, such as /usr/bin/clang")
         parser.add_argument("--compile_dependency_check", action="store_true", default=False,
@@ -899,6 +903,8 @@ class BuildCtrl(CMakeParam):
         env = {}
         if self.build.job_num:
             env["PYPTO_TESTS_PARALLEL_NUM"] = str(self.build.job_num)
+        if self.build.gcov_incr:
+            env["PYPTO_BUILD_GCOV_INCREMENT"] = "True"
         # Tests exec
         tests_exec = self.tests.exec
         if tests_exec.auto_execute:

@@ -21,6 +21,7 @@ target_compile_options(tile_fwk_intf_pub
         INTERFACE
             # 安全编译选项
             $<$<CONFIG:Release>:-O2 -D_FORTIFY_SOURCE=2>
+            $<$<OR:$<BOOL:${ENABLE_ASAN}>,$<BOOL:${ENABLE_UBSAN}>,$<BOOL:${ENABLE_GCOV}>>:-Og>
             # 基础要求选项
             $<$<CONFIG:Debug>:-g>
             # 告警增强选项
