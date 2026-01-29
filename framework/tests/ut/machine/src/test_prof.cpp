@@ -19,6 +19,10 @@
 #include <chrono>
 #include <vector>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <unistd.h>
+#include "securec.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "machine/runtime/runtime.h"
@@ -98,4 +102,96 @@ TEST_F(TestPro, test_ini) {
     delete aiCpuStat;
     delete taskStat;
     free(oriRegAddrs_);
+}
+
+static void *AllocAligned(size_t alignment, size_t size)
+{
+    void *ptr = nullptr;
+    int ret = posix_memalign(&ptr, alignment, size);
+    if (ret != 0) {
+        return nullptr;
+    }
+    // init as zero to avoid random register values
+    (void)memset_s(ptr, size, 0, size);
+    return ptr;
+}
+
+TEST_F(TestPro, test_prof_start_pmu_dav2201) {
+    // Setup manager: keep one aicore managed
+    std::unique_ptr<AicpuTaskManager> aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
+    std::unique_ptr<AiCoreManager> aicoreMng = std::make_unique<AiCoreManager>(*aicpuTaskPtr);
+    aicoreMng->aicNum_ = 1;
+    aicoreMng->aivNum_ = 0;
+    aicoreMng->aicStart_ = 0;
+    aicoreMng->aicEnd_ = 1;
+    aicoreMng->aicpuIdx_ = 0;
+    AiCoreProf prof(*aicoreMng);
+
+    const uint32_t pageSize = static_cast<uint32_t>(sysconf(_SC_PAGESIZE));
+    // cover PMU register offsets up to about 0x2000+ for 2201
+    const size_t regBufSize = 0x6000;
+    uint8_t *regBuf = reinterpret_cast<uint8_t *>(AllocAligned(pageSize, regBufSize));
+    ASSERT_NE(regBuf, nullptr);
+
+    // choose an address within the first page so mapBase aligns to regBuf
+    void *addr = reinterpret_cast<void *>(regBuf + 0x100);
+
+    int64_t regAddrsArr[1024] = {0};
+    regAddrsArr[0] = reinterpret_cast<int64_t>(addr);
+
+    int64_t pmuEventAddrsArr[10] = {0};
+    for (int i = 0; i < 8; ++i) {
+        pmuEventAddrsArr[i] = i + 1;
+    }
+
+    ProfConfig profConfig;
+    profConfig.Add(ProfConfig::AICORE_PMU);
+    prof.ProfInit(regAddrsArr, pmuEventAddrsArr, profConfig, ArchInfo::DAV_2201);
+    prof.ProfInitPmu(regAddrsArr, pmuEventAddrsArr);
+    prof.ProfStartPmu();
+    TaskStat taskStat;
+    taskStat.seqNo = 1;
+    prof.ProfGetPmu(0, 0, 0, &taskStat);
+    prof.ProfStop();
+
+    free(regBuf);
+}
+
+TEST_F(TestPro, test_prof_start_pmu_dav3510) {
+    std::unique_ptr<AicpuTaskManager> aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
+    std::unique_ptr<AiCoreManager> aicoreMng = std::make_unique<AiCoreManager>(*aicpuTaskPtr);
+    aicoreMng->aicNum_ = 1;
+    aicoreMng->aivNum_ = 0;
+    aicoreMng->aicStart_ = 0;
+    aicoreMng->aicEnd_ = 1;
+    aicoreMng->aicpuIdx_ = 0;
+    AiCoreProf prof(*aicoreMng);
+
+    const uint32_t pageSize = static_cast<uint32_t>(sysconf(_SC_PAGESIZE));
+    // cover DAV_3510 PMU register offsets up to ~0x4300
+    const size_t regBufSize = 0x9000;
+    uint8_t *regBuf = reinterpret_cast<uint8_t *>(AllocAligned(pageSize, regBufSize));
+    ASSERT_NE(regBuf, nullptr);
+
+    void *addr = reinterpret_cast<void *>(regBuf + 0x100);
+
+    int64_t regAddrsArr[1024] = {0};
+    regAddrsArr[0] = reinterpret_cast<int64_t>(addr);
+
+    int64_t pmuEventAddrsArr[10] = {0};
+    for (int i = 0; i < 10; ++i) {
+        pmuEventAddrsArr[i] = i + 1;
+    }
+
+    ProfConfig profConfig;
+    profConfig.Add(ProfConfig::AICORE_PMU);
+    prof.ProfInit(regAddrsArr, pmuEventAddrsArr, profConfig, ArchInfo::DAV_3510);
+    prof.ProfInitPmu(regAddrsArr, pmuEventAddrsArr);
+    prof.ProfStartPmu();
+    TaskStat taskStat;
+    taskStat.seqNo = 1;
+    prof.ProfGetPmu(0, 0, 0, &taskStat);
+    prof.ProfStop();
+
+    free(regBuf);
 }

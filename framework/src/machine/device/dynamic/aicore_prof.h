@@ -22,6 +22,7 @@
 #include <string>
 #include <sys/syscall.h>
 #include "tilefwk/aicpu_common.h"
+#include "machine/device/dynamic/aicore_prof_dav3510_pmu.h"
 
 typedef void* VOID_PTR;
 
@@ -61,6 +62,8 @@ constexpr bool DUAL_PAGE_EN = false; // 双页表是否使能，如何感知？�
 constexpr uint32_t MAX_PMU_CNT = 8;
 
 constexpr int32_t PMU_CYCLE = 80; // 记录按照了20MHZ的时钟周期，单位归一按照1600MHZ的时钟周期进行统一，所以80
+constexpr int64_t NUM_TWO_PMU = 2;
+
 typedef enum AiCoreProfLevel {
     PROF_LEVEL_OFF = 0,
     PROF_LEVEL_FUNC = 1,
@@ -89,8 +92,8 @@ typedef enum AiCoreRegister {
     PMU_CNT5 = 0x238,
     PMU_CNT6 = 0x240,
     PMU_CNT7 = 0x248,
-    PMU_CNT8 = 0x250,
-    PMU_CNT9 = 0x254,
+    PMU_CNT_TOTAL0 = 0x250,
+    PMU_CNT_TOTAL1 = 0x254,
     PMU_CNT0_IDX = 0x1280,
     PMU_CNT1_IDX = 0x1284,
     PMU_CNT2_IDX = 0x1288,
@@ -104,6 +107,47 @@ typedef enum AiCoreRegister {
     PMU_STOP_CNT_CYC_0 = 0x2A8,
     PMU_STOP_CNT_CYC_1 = 0x2AC,
 } AiCoreRegister;
+
+
+struct ArchPmuConfig {
+    std::vector<uint32_t> pmuCntIdxOffsets;
+    std::vector<uint32_t> pmuCntOffsets;
+    uint32_t pmuCntTotal0Offset;
+    uint32_t pmuCntTotal1Offset;
+    uint32_t ctrl0Offset;
+    uint32_t ctrl1Offset;
+    uint32_t startCntCyc0Offset;
+    uint32_t startCntCyc1Offset;
+    uint32_t stopCntCyc0Offset;
+    uint32_t stopCntCyc1Offset;
+    uint32_t ctrl0Val;
+    uint32_t ctrl1Val;
+};
+
+inline const std::map<ArchInfo, ArchPmuConfig> kArchPmuConfigs = {
+    {ArchInfo::DAV_2201, {
+        {PMU_CNT0_IDX, PMU_CNT1_IDX, PMU_CNT2_IDX, PMU_CNT3_IDX, PMU_CNT4_IDX, PMU_CNT5_IDX, PMU_CNT6_IDX, PMU_CNT7_IDX},
+        {PMU_CNT0, PMU_CNT1, PMU_CNT2, PMU_CNT3, PMU_CNT4, PMU_CNT5, PMU_CNT6, PMU_CNT7},
+        PMU_CNT_TOTAL0, PMU_CNT_TOTAL1,
+        PMU_CTRL_0, 0,
+        PMU_START_CNT_CYC_0, PMU_START_CNT_CYC_1,
+        PMU_STOP_CNT_CYC_0, PMU_STOP_CNT_CYC_1,
+        GLB_PMU_EN + (USER_PMU_MODE_EN << 1) + (SAMPLE_PMU_MODE_EN << NUM_TWO_PMU), 0
+    }},
+    {ArchInfo::DAV_3510, {
+        {DAV_3510::PMU_CNT0_IDX, DAV_3510::PMU_CNT1_IDX, DAV_3510::PMU_CNT2_IDX, DAV_3510::PMU_CNT3_IDX,
+         DAV_3510::PMU_CNT4_IDX, DAV_3510::PMU_CNT5_IDX, DAV_3510::PMU_CNT6_IDX, DAV_3510::PMU_CNT7_IDX,
+         DAV_3510::PMU_CNT8_IDX, DAV_3510::PMU_CNT9_IDX},
+        {DAV_3510::PMU_CNT0, DAV_3510::PMU_CNT1, DAV_3510::PMU_CNT2, DAV_3510::PMU_CNT3,
+         DAV_3510::PMU_CNT4, DAV_3510::PMU_CNT5, DAV_3510::PMU_CNT6, DAV_3510::PMU_CNT7,
+         DAV_3510::PMU_CNT8, DAV_3510::PMU_CNT9},
+        DAV_3510::PMU_CNT_TOTAL0, DAV_3510::PMU_CNT_TOTAL1,
+        DAV_3510::PMU_CTRL_0, DAV_3510::PMU_CTRL_1,
+        DAV_3510::PMU_START_CNT_CYC_0, DAV_3510::PMU_START_CNT_CYC_1,
+        DAV_3510::PMU_STOP_CNT_CYC_0, DAV_3510::PMU_STOP_CNT_CYC_1,
+        USER_PMU_MODE_EN + (SAMPLE_PMU_MODE_EN << 1), GLB_PMU_EN
+    }}
+};
 
 typedef enum AiCorePmuEvent {
     VEC_BUSY_CYCLE = 0x8,
@@ -171,6 +215,8 @@ struct MsprofAicpuPyPtoPmuData {
     uint32_t pmuCnt5{0};
     uint32_t pmuCnt6{0};
     uint32_t pmuCnt7{0};
+    uint32_t pmuCnt8{0};
+    uint32_t pmuCnt9{0};
 };
 
 // !!注意和 TaskStat 前面的数据区保持一致
@@ -237,20 +283,31 @@ public:
     void ProInitAiCpuTaskStat();
     void ProInitHandShake();
     bool ProfIsEnable() { return profLevel_ != PROF_LEVEL_OFF; }
+
+    void ProfInitPmu(int64_t *regAddrs, int64_t *pmuEventAddrs);
+    void ProfStartPmu();
+    void ProfStopPmu();
+    void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
     
 private:
+    struct PmuCtrlAddrs {
+        uint32_t *ctrl0Addr{nullptr};
+        uint32_t *ctrl1Addr{nullptr};
+        uint32_t *startCntCyc0Addr{nullptr};
+        uint32_t *startCntCyc1Addr{nullptr};
+        uint32_t *stopCntCyc0Addr{nullptr};
+        uint32_t *stopCntCyc1Addr{nullptr};
+    };
     inline void ProfInitLog();
     inline void ProfStopLog();
     inline void ProfGetLog(int32_t coreIdx, const struct TaskStat *taskStat);
-    inline void ProfInitPmu(int64_t *regAddrs, int64_t *pmuEventAddrs);
-    inline void ReadPmuCounters(const int32_t coreIdx) const;
-    inline void SetPmuEvents(void *mapBase, const int32_t coreIdx) const;
-    inline void ProfStartPmu();
-    inline void ProfStopPmu();
+    void ReadPmuCounters(const int32_t coreIdx) const;
+    void SetPmuEvents(void *mapBase, const int32_t coreIdx) const;
+    PmuCtrlAddrs InitPmuRegAddrsForCore(void *addr, void *mapBase, int coreIdx);
+    void ProgramPmuStartForCore(void *mapBase, int coreIdx, const PmuCtrlAddrs &addrs);
     void FillPmuData(MsprofAicpuPyPtoPmuData &data, int32_t &coreIdx, uint32_t &subGraphId, uint32_t &taskId,
         const struct TaskStat *taskStat) const;
-    inline void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
-    inline uint64_t ProfGetCurCpuTimestamp();
+    uint64_t ProfGetCurCpuTimestamp();
 
 private:
     int32_t coreNum_ = 0;
@@ -259,6 +316,7 @@ private:
     int64_t *regAddrs_{nullptr};
     int64_t *pmuEventAddrs_{nullptr};
     ProfReportAdditionalInfoFunc profReportAdditionalInfoFunc_{nullptr};
+    ArchInfo archInfo_{ArchInfo::DAV_2201};
 
     // PMU_CNT0 ~ PMU_CNT7 共计8个cnt寄存器,32位寄存器,用来获取对应读数,单位为cycle
     std::vector<volatile uint32_t *> pmuCnt0Plain_;
@@ -269,9 +327,11 @@ private:
     std::vector<volatile uint32_t *> pmuCnt5Plain_;
     std::vector<volatile uint32_t *> pmuCnt6Plain_;
     std::vector<volatile uint32_t *> pmuCnt7Plain_;
+    std::vector<volatile uint32_t *> pmuCntTotal0Plain_;
+    std::vector<volatile uint32_t *> pmuCntTotal1Plain_;
+
     std::vector<volatile uint32_t *> pmuCnt8Plain_;
     std::vector<volatile uint32_t *> pmuCnt9Plain_;
-
     // pmu data
     uint32_t pmuDataMaxNum_ = 4;
     uint32_t pmuMsgSize_ = 0;

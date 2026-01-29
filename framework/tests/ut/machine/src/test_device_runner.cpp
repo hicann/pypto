@@ -21,6 +21,7 @@
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
 #include "machine/runtime/device_runner.h"
+#include "machine/runtime/pmu_common.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/platform/platform_manager.h"
 #include "machine/device/dynamic/aicore_prof.h"
@@ -49,10 +50,14 @@ TEST_F(TestDeviceRunner, test_device_runner_get_task_time) {
 
 TEST_F(TestDeviceRunner, test_set_pmu_event) {
     // auto runner = npu::tile_fwk::DeviceRunner::Get();
+    std::vector<int64_t> pmuEvtType;
     for (int i = 0; i < 9; i++) {
         setenv("PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
-        npu::tile_fwk::DeviceRunner runner;
-        runner.GetPmuEventType();
+        npu::tile_fwk::PmuCommon::InitPmuEventType(ArchInfo::DAV_2201, pmuEvtType);
+    }
+    for (int i = 0; i < 9; i++) {
+        setenv("PROF_PMU_EVENT_TYPE", std::to_string(i).c_str(), 1);
+        npu::tile_fwk::PmuCommon::InitPmuEventType(ArchInfo::DAV_3510, pmuEvtType);
     }
 }
 

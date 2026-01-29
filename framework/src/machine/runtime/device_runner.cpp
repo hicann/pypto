@@ -49,14 +49,6 @@ extern char _binary_kernel_o_end[];
 
 constexpr int32_t AICORE_ADDR_TYPE = 2; // nocache Addr type for aicore/aicpu map
 constexpr int32_t PMU_ADDR_TYPE = 3;    // nGnRnE Addr type for Geting pmuInfo
-// pmu event type
-constexpr int32_t ARITHMETIC_UTILIZATION = 1;
-constexpr int32_t PIPE_UTILIZATION = 2;
-constexpr int32_t MEMORY = 4;
-constexpr int32_t MEMORY_L0 = 5;
-constexpr int32_t RESOURCE_CONFLICT_RATION = 6;
-constexpr int32_t MEMORY_UB = 7;
-constexpr int32_t L2_CACHE = 8;
 constexpr int32_t PATH_LENGTH = 64;
 constexpr uint32_t LOG_BUF_SIZE = 64 * 1024;
 bool g_IsFirstInit = false;
@@ -103,46 +95,6 @@ void *DeviceRunner::DevAlloc(int size) {
     return devPtr;
 }
 
-void DeviceRunner::SetPmuEventType(int32_t &profPmuType) {
-    // 按照环境变量设置的数值，获取pmu事件类型
-    switch (profPmuType) {
-        case  ARITHMETIC_UTILIZATION:
-            pmuEvtType_ = {0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x0};
-            break;
-        case PIPE_UTILIZATION:
-            pmuEvtType_ = {0x08, 0x0a, 0x09, 0x0b, 0x0c, 0x0d, 0x55, 0x54};
-            break;
-        case MEMORY:
-            pmuEvtType_ = {0x15, 0x16, 0x31, 0x32, 0x0f, 0x10, 0x12, 0x13};
-            break;
-        case MEMORY_L0:
-            pmuEvtType_ = {0x1b, 0x1c, 0x21, 0x22, 0x27, 0x28, 0x0, 0x0};
-            break;
-        case RESOURCE_CONFLICT_RATION:
-            pmuEvtType_ = {0x64, 0x65, 0x66, 0x0, 0x0, 0x0, 0x0, 0x0};
-            break;
-        case MEMORY_UB:
-            pmuEvtType_ = {0x3d, 0x10, 0x13, 0x3e, 0x43, 0x44, 0x37, 0x38};
-            break;
-        case L2_CACHE:
-            pmuEvtType_ = {0x500, 0x502, 0x504, 0x506, 0x508, 0x50a, 0x0, 0x0};
-            break;
-        default:
-            ALOG_WARN_F("Invalid profPmuType %d, only support [1,2,4,5,6,7,8].\n", profPmuType);
-    }
-}
-
-void DeviceRunner::GetPmuEventType() {
-    // 获取pmu事件类型环境变量获取方式
-    std::string eventTypeStr = GetEnvVar("PROF_PMU_EVENT_TYPE");
-    if (eventTypeStr.empty()) {
-        ALOG_WARN_F("Dont support PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
-        eventTypeStr = "2";
-    }
-    int32_t profPmuType = std::stoi(eventTypeStr);
-    SetPmuEventType(profPmuType);
-}
-
 void DeviceRunner::InitDynamicArgs(DeviceArgs &args) {
     devArgs_ = reinterpret_cast<DeviceArgs *>(DevAlloc(sizeof(DeviceArgs)));
     rtMemcpy(reinterpret_cast<void *>(devArgs_), sizeof(DeviceArgs), &args, sizeof(DeviceArgs),
@@ -183,13 +135,12 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t
     args.startArgsAddr = shmAddr;
     args.taskCtrl = shmAddr + dynamic::DEV_ARGS_SIZE;
     args.taskQueue = shmAddr + dynamic::DEV_ARGS_SIZE + dynamic::DEVICE_TASK_CTRL_SIZE;
-    pmuEvtType_.resize(PMU_EVENT_TYPE_MAX, 0x0);
+    PmuCommon::InitPmuEventType(args.archInfo, pmuEvtType_);
     args.pmuEventAddr = reinterpret_cast<uint64_t>(DevAlloc(pmuEvtType_.size() * sizeof(int64_t)));
 
     if (args.sharedBuffer == 0 || args.coreRegAddr == 0 || args.corePmuAddr == 0 || args.corePmuRegAddr == 0) {
         return -1;
     }
-    GetPmuEventType();
     size_t size = nrCore * sizeof(uint64_t);
     rtMemcpy(reinterpret_cast<void *>(args.coreRegAddr), size, regs.data(), size, RT_MEMCPY_HOST_TO_DEVICE);
     rtMemcpy(reinterpret_cast<void *>(args.corePmuRegAddr), size, regsPmu.data(), size, RT_MEMCPY_HOST_TO_DEVICE);
@@ -204,6 +155,7 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t
 
 int DeviceRunner::InitDeviceArgs(DeviceArgs &args) {
     hostProf_.RegHostProf();
+
     addressMappingTable_[ArchInfo::DAV_2201] = [&args](std::vector<int64_t>& regs, std::vector<int64_t>& regsPmu) {
         std::vector<int64_t> aiv;
         std::vector<int64_t> aic;
