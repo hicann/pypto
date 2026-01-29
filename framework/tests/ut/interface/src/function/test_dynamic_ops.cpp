@@ -654,6 +654,71 @@ TEST_F(DynamicOpsTest, Scatter) {
     }
 }
 
+TEST_F(DynamicOpsTest, ReduceMax) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 16;
+    int64_t n = 16;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {1, n}, "outValue");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(self, 1.0f),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            outValue = Amax(t0, 0, true);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, Topk) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 1;
+    int64_t n = 64;
+    int k = 32;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, k}, "outValue");
+    Tensor outIndex(DT_INT32, {b, k}, "outIndex");
+
+    std::vector<float> inputData = {
+        31.0f, 15.0f, 27.0f, 8.0f, 19.0f, 3.0f, 23.0f, 11.0f,
+        7.0f, 28.0f, 16.0f, 2.0f, 24.0f, 9.0f, 30.0f, 14.0f,
+        22.0f, 5.0f, 18.0f, 1.0f, 26.0f, 10.0f, 29.0f, 13.0f,
+        6.0f, 20.0f, 12.0f, 25.0f, 4.0f, 21.0f, 0.0f, 17.0f,
+
+        31.0f, 15.0f, 27.0f, 8.0f, 19.0f, 3.0f, 23.0f, 11.0f,
+        7.0f, 28.0f, 16.0f, 2.0f, 24.0f, 9.0f, 30.0f, 14.0f,
+        22.0f, 5.0f, 18.0f, 1.0f, 26.0f, 10.0f, 29.0f, 13.0f,
+        6.0f, 20.0f, 12.0f, 25.0f, 4.0f, 21.0f, 0.0f, 17.0f,
+    };
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+        RawTensorData::CreateConstantTensor<float>(outIndex, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue, outIndex}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            std::tie(outValue, outIndex) = TopK(t0, k, 1, true);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, TopKSort) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);

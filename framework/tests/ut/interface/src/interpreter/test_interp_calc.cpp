@@ -854,13 +854,21 @@ TEST_F(TorchAdaptorTest, Reduce) {
         ASSERT_ALLCLOSE(out, golden);
     }
     {
-        // min
+        // minsingle
         std::vector<float> sdata = {1.0, 2.0, 5.0, 4.0};
         std::vector<float> gdata = {1.0, 4.0};
         auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
         auto out = makeTensorData(DT_FP32, {2, 1}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {2, 1}, gdata);
         calc::RowMinSingle(out, self, -1);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // minline
+        auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {1, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {1, 16}, 1.0f);
+        calc::RowMinLine(out, self, 0);
         ASSERT_ALLCLOSE(out, golden);
     }
     {
@@ -874,13 +882,21 @@ TEST_F(TorchAdaptorTest, Reduce) {
         ASSERT_ALLCLOSE(out, golden);
     }
     {
-        // max
+        // maxsingle
         std::vector<float> sdata = {1.0, 2.0, 5.0, 4.0};
         std::vector<float> gdata = {2.0, 5.0};
         auto self = makeTensorData(DT_FP32, {2, 2}, sdata);
         auto out = makeTensorData(DT_FP32, {2, 1}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {2, 1}, gdata);
         calc::RowMaxSingle(out, self, -1);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // maxline
+        auto self = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {1, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {1, 16}, 1.0f);
+        calc::RowMaxLine(out, self, 0);
         ASSERT_ALLCLOSE(out, golden);
     }
     {
@@ -1082,6 +1098,23 @@ TEST_F(TorchAdaptorTest, TopkAscending) {
     const int64_t TOPK_VAL = 32;
 
     calc::Topk(out, self, -1, TOPK_VAL, false);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, TiledMrgSortOp) {
+    std::vector<float> sdata1 = {0.0, 0.0, -1.0, 1.0, -2.0, 2.0, -3.0, 3.0,
+                                -4.0, 4.0, -5.0, 5.0, -6.0, 6.0, -7.0, 7.0};
+    std::vector<float> sdata2 = {-0.5, 8.0, -10.0, 9.0, -20.0, 10.0, -30.0, 11.0,
+                                -40.0, 12.0, -50.0, 13.0, -60.0, 14.0, -70.0, 15.0};
+    std::vector<float> gdata = {0.0, 0.0, -0.5, 8.0, -1.0, 1.0, -2.0, 2.0, -3.0, 3.0,
+                                -4.0, 4.0, -5.0, 5.0, -6.0, 6.0};
+    auto golden = makeTensorData(DT_FP32, {1, 16}, gdata);
+    auto src1 = makeTensorData(DT_FP32, {1, 16}, sdata1);
+    auto src2 = makeTensorData(DT_FP32, {1, 16}, sdata2);
+    auto out = makeTensorData(DT_FP32, {1, 16}, 0.0f);
+    int validBit = 2;
+    int kvalue = 8;
+    calc::TiledMrgSort(out, src1, src2, src2, src2, validBit, kvalue);
     ASSERT_ALLCLOSE(out, golden);
 }
 
