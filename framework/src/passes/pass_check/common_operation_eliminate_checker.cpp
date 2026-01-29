@@ -48,58 +48,5 @@ Status CommonOperationEliminateChecker::DoPreCheck(Function &function) {
     }
     return SUCCESS;
 }
-
-Status CommonOperationEliminateChecker::DoPostCheck(Function &function) {
-    ALOG_INFO_F("PostCheck for CommonOperationEliminate.");
-    operationCache_.clear();
-    for (auto &op : function.Operations().DuplicatedOpList()) {
-        if (OpAlreadyExist(op)) {
-            ALOG_ERROR_F("Redundant Operation %d still exist after CommonOperationEliminate.", op->GetOpMagic());
-            return FAILED;
-        }
-    }
-    return SUCCESS;
-}
-
-bool CommonOperationEliminateChecker::OpAlreadyExist(Operation *op) {
-    auto existOp = OperationExist(op);
-    if (existOp == nullptr || op->GetOOperands().size() == 0 || existOp->GetOOperands().size() == 0) {
-        return false;
-    }
-    if (op->GetOOperands().front()->shape == existOp->GetOOperands().front()->shape) {
-        auto oldtensor = op->GetOOperands().front();
-        if (oldtensor->GetConsumers().size() == 0) {
-            return false;
-        }
-        auto newtensor = existOp->GetOOperands().front();
-        if (newtensor->GetMagic() == oldtensor->GetMagic()) {
-            ALOG_DEBUG_F("In CommonOperationEliminate, Operation %d is marked as redundant.", op->GetOpMagic());
-            return true;
-        }
-        ALOG_DEBUG_F("In CommonOperationEliminate, Operation %d is marked as redundant.", op->GetOpMagic());
-        return true;
-    }
-    return false;
-}
-
-Operation *CommonOperationEliminateChecker::OperationExist(Operation *operation) {
-    auto &inputsMemType = OpcodeManager::Inst().GetInputsMemType(operation->GetOpcode());
-    auto &outputsMemType = OpcodeManager::Inst().GetOutputsMemType(operation->GetOpcode());
-    OpCalcType opCalcType = OpcodeManager::Inst().GetOpCalcType(operation->GetOpcode());
-    bool inputCheck = inputsMemType.size() == 1 && inputsMemType[0] == MemoryType::MEM_L1;
-    bool calcTypeCheck = opCalcType == OpCalcType::MOVE_LOCAL || opCalcType == OpCalcType::MOVE_IN;
-    bool outputCheck = outputsMemType.size() == 1 && outputsMemType[0] != MemoryType::MEM_L1;
-    if (inputCheck && calcTypeCheck && outputCheck) { // copy from L1 to L0
-        return nullptr;
-    }
-    if (operation->GetOpcode() == Opcode::OP_VIEW) {
-        return nullptr;
-    }
-    if (operationCache_.count(operation->ComputeHash()) == 0) {
-        operationCache_.insert({operation->ComputeHash(), operation});
-        return nullptr;
-    }
-    return operationCache_[operation->ComputeHash()];
-}
 } // namespace tile_fwk
 } // namespace npu

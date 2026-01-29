@@ -82,8 +82,8 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
 
     // 定义第一个待检查的目标代码片段
     const std::string expect1 = R"(for (uint16_t idx0 = 0; idx0 < 1; ++idx0) {
-  for (uint16_t idx1 = 0; idx1 < sym_86_dim_0; ++idx1) {
-    for (uint16_t idx2 = 0; idx2 < sym_86_dim_1; ++idx2) {
+  for (uint16_t idx1 = 0; idx1 < sym_84_dim_0; ++idx1) {
+    for (uint16_t idx2 = 0; idx2 < sym_84_dim_1; ++idx2) {
         auto tileOffsets = TileOffset(idx0, idx1, idx2);
         ubTensor_11_low2DimInLoop.SetAddr(ubTensor_11.GetLinearAddr(tileOffsets));
         ubTensor_3_low2DimInLoop.SetAddr(ubTensor_3.GetLinearAddr(tileOffsets));
@@ -97,8 +97,8 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
     CheckStringExist(expect1, res);
 
     const std::string expect2 = R"(for (uint16_t idx0 = 0; idx0 < 1; ++idx0) {
-  for (uint16_t idx1 = 0; idx1 < sym_86_dim_0; ++idx1) {
-    for (uint16_t idx2 = 0; idx2 < sym_86_dim_1; ++idx2) {
+  for (uint16_t idx1 = 0; idx1 < sym_84_dim_0; ++idx1) {
+    for (uint16_t idx2 = 0; idx2 < sym_84_dim_1; ++idx2) {
         auto tileOffsets = TileOffset(idx0, idx1, idx2);
         ubTensor_11_low2DimInLoop.SetAddr(ubTensor_11.GetLinearAddr(tileOffsets));
         ubTensor_5_low2DimInLoop.SetAddr(ubTensor_5.GetLinearAddr(tileOffsets));

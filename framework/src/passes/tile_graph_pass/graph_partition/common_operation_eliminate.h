@@ -19,6 +19,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_interface/pass.h"
 #include "interface/function/function.h"
+#include "passes/pass_log/pass_log.h"
 
 namespace npu::tile_fwk {
 class CommonOperationEliminate : public Pass {
@@ -27,18 +28,17 @@ public:
     {}
     ~CommonOperationEliminate() override = default;
     Status PreCheck(Function &function) override;
-    Status PostCheck(Function &function) override;
 
 private:
     Status RunOnFunction(Function &function) override;
-    Operation *OperationExist(Operation *operation);
-    bool OpAlreadyExist(Operation *op);
-    void UpdateView(ViewOpAttribute *viewOpAttribute, const std::shared_ptr<LogicalTensor> oldtensor,
-                    const std::shared_ptr<LogicalTensor> newtensor) const;
-    void UpdateCopy(CopyOpAttribute *copyOpAttribute, const std::shared_ptr<LogicalTensor> oldtensor,
-                    const std::shared_ptr<LogicalTensor> newtensor) const;
-
-    std::unordered_map<unsigned long, Operation*> operationCache_;
+    std::unordered_map<LogicalTensorPtr, std::vector<Operation*>> GetTensorProducers(Function &function);
+    void UpdateConnection(LogicalTensorPtr oldtensors,  LogicalTensorPtr newtensors);
+    std::pair<LogicalTensorPtr, std::vector<Operation*>> TensorHashExist(const std::pair<LogicalTensorPtr, std::vector<Operation*>>& tensorProducersPair, std::unordered_set<Operation*>& cacheProducers);
+    bool TensorProducersMerge(const std::pair<LogicalTensorPtr, std::vector<Operation*>>& tensorProducerPair, std::unordered_set<Operation*>& cacheProducers);
+    void UpdateView(ViewOpAttribute *viewOpAttribute, const std::shared_ptr<LogicalTensor> oldtensors,
+                    const std::shared_ptr<LogicalTensor> newtensors) const;
+    void UpdateCopy(CopyOpAttribute *copyOpAttribute, const std::shared_ptr<LogicalTensor> oldtensors,
+                    const std::shared_ptr<LogicalTensor> newtensors) const;
 };
 }  // namespace npu::tile_fwk
 #endif  // PASS_COMMON_OPERATION_ELIMINATE_H_
