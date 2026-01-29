@@ -3,14 +3,14 @@
 ## 仿真环境（无 NPU 真实硬件）
 
 ```bash
-cd examples/hello_world
+cd examples/00_hello_world
 python3 hello_world.py --run_mode=sim
 ```
 
 ## 真实可运行环境（有 NPU 真实硬件）
 
 ```bash
-cd examples/hello_world
+cd examples/00_hello_world
 python3 hello_world.py --run_mode=npu
 ```
 更多示例请参考 `examples/` 目录下的示例代码。

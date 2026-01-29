@@ -86,16 +86,35 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 若仅在**仿真环境**中编译和运行PyPTO，可跳过本节。
 在**真实环境**中编译运行PyPTO并使用其在NPU上执行计算的能力时，必须安装如下软件包：
 
-### 手动安装
-
-1. **安装驱动与固件**
+### 安装驱动与固件
 
    详细安装指导详见《[CANN 软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)》。
 
     - 推荐版本：Ascend HDK 25.3.0
     - 支持版本：Ascend HDK 25.3.0、Ascend HDK 25.2.0
 
-2. **安装CANN toolkit包**
+### 安装工具包
+
+工具包的安装提供了脚本安装和手动安装两种方式。
+
+#### 使用安装脚本
+
+toolkit包、ops包、PTO-inst包的下载与安装可通过项目tools目录下prepare_env.sh一键执行，命令如下，若遇到不支持系统，请参考该文件自行适配
+```
+bash tools/prepare_env.sh --type=cann --device-type=a2
+```
+| 全写                    | 类型   | 是否必须 | 说明                                       |
+|:----------------------|:-----|:-----|:-----------------------------------------|
+| --type                | str  | 是    | 脚本安装类型，可选[deps, cann, third_party, all] |
+| --device-type         | str  | 是    | 指定 NPU 型号，可选 [a2, a3]               |
+| --install-path        | str  | 否    | 指定 CANN 包安装路径                            |
+| --download-path       | str  | 否    | 指定 CANN 包以及三方依赖包下载路径                     |
+| --with-install-driver | bool | 否    | 指定是否下载 NPU 驱动和固件包，默认为 false             |
+| --help                | -    | 否    | 查看命令参数帮助信息                               |
+
+#### 手动安装
+
+1. **安装CANN toolkit包**
 
     根据实际环境下载对应的安装包，下载链接如下:
     - x86：[Ascend-cann-toolkit_8.5.0_linux-x86_64.run](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-toolkit_8.5.0_linux-x86_64.run)
@@ -113,7 +132,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
     - \$\{arch\}：表示CPU架构，如aarch64、x86_64。
     - \$\{install\_path\}：表示指定安装路径，默认安装在`/usr/local/Ascend`目录。
 
-3. **安装CANN ops包**
+2. **安装CANN ops包**
 
     根据实际环境和硬件类型(支持A2/A3)，下载对应的安装包，下载链接如下：
     - A2、x86：[CANN_A2-OPS-8.5.0.x86](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-910b-ops_8.5.0_linux-x86_64.run)
@@ -131,7 +150,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
     - \$\{arch\}：CPU架构，如aarch64、x86_64。
     - \$\{install-path\}：表示指定安装路径，默认安装在`/usr/local/Ascend`目录。
 
-4. **获取pto-isa源码**
+3. **获取pto-isa源码**
 
     > 方法一：安装CANN pto-isa包
     > 根据实际环境下载对应的安装包，下载链接如下(如果浏览器不支持自动下载，请选择右键，"链接另存为...")：
@@ -160,7 +179,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
     >
     > - \$\{path-to-your-pto-isa\}：存放pto-isa源码的路径。
 
-5. **环境变量配置**
+#### 环境变量配置
 
     ```bash
     # 默认路径安装，以root用户为例（非root用户，将/usr/local替换为${HOME}）
@@ -169,21 +188,6 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
     # 指定路径安装
     source ${install_path}/cann/set_env.sh
     ```
-
-### 使用安装脚本
-
-上述流程2 ~ 4中，toolkit包、ops包、PTO-inst包的下载与安装可通过项目tools目录下prepare_env.sh一键执行，命令如下，若遇到不支持系统，请参考该文件自行适配
-```
-bash tools/prepare_env.sh --type=cann --device-type=a2
-```
-| 全写                    | 类型   | 是否必须 | 说明                                       |
-|:----------------------|:-----|:-----|:-----------------------------------------|
-| --type                | str  | 是    | 脚本安装类型，可选[deps, cann, third_party, all] |
-| --device-type         | str  | 是    | 指定 NPU 型号，可选 [a2, a3]               |
-| --install-path        | str  | 否    | 指定 CANN 包安装路径                            |
-| --download-path       | str  | 否    | 指定 CANN 包以及三方依赖包下载路径                     |
-| --with-install-driver | bool | 否    | 指定是否下载 NPU 驱动和固件包，默认为 false             |
-| --help                | -    | 否    | 查看命令参数帮助信息                               |
   
 ## 安装PyPTO Toolkit插件（可选）
 
