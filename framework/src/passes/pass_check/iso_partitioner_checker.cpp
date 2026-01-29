@@ -58,10 +58,6 @@ Status GraphPartitionChecker::DoPostCheck(Function &function) {
         APASS_LOG_ERROR_F(Elements::Function, "Operation post check failed.");
         return FAILED;
     }
-    if (PostSubgraphCheck(subgraphs) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Function, "Subgraph post check failed.");
-        return FAILED;
-    }
     return SUCCESS;
 }
 
@@ -107,52 +103,6 @@ Status GraphPartitionChecker::PostOperationCheck(Function &function) {
                              op.GetOpMagic(), op.GetOpcodeStr().c_str(), GetFormatBacktrace(op).c_str());
                 return FAILED;
             }
-        }
-    }
-    return SUCCESS;
-}
-
-Status GraphPartitionChecker::PostSubgraphCheck(const std::vector<std::vector<Operation*>> &subgraphs) {
-    for (auto subgraph : subgraphs) {
-        if (subgraph.empty()) {
-            continue;
-        }
-        int32_t aicCount = 0;
-        int32_t aivCount = 0;
-        int32_t aicMemoryCount = 0;
-        int32_t aivMemoryCount = 0;
-        std::unordered_set<std::shared_ptr<LogicalTensor>> tensorList;
-        int32_t subgraphId = subgraph[0]->GetSubgraphID();
-        for (auto &op : subgraph) {
-            for (auto iTensor : op->GetIOperands()) {
-                if (tensorList.find(iTensor) != tensorList.end()) {
-                    continue;
-                }
-                tensorList.insert(iTensor);
-                if (iTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||
-                    iTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0A ||
-                    iTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B ||
-                    iTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
-                    aicMemoryCount++;
-                    continue;
-                }
-                if (iTensor->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-                    aivMemoryCount++;
-                }
-            }
-            if (op->HasAttr(OpAttributeKey::isCube) && op->GetBoolAttribute(OpAttributeKey::isCube)) {
-                aicCount++;
-                continue;
-            }
-            aivCount++;
-        }
-        if (aicCount > 0 && aivCount > 0) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Subgraph %d has both AIV and AIC operation.", subgraphId);
-            return FAILED;
-        }
-        if (aicMemoryCount > 0 && aivMemoryCount > 0) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Subgraph %d has both ub and l0/l1 memory type tensor.", subgraphId);
-            return FAILED;
         }
     }
     return SUCCESS;

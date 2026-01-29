@@ -17,6 +17,7 @@
 #include "passes/pass_utils/graph_utils.h"
 #include "intra_subgraph_adapter.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_check/intra_subgraph_adapter_checker.h"
 
 #define MODULE_NAME "IntraSubgraphAdapter"
 
@@ -407,5 +408,10 @@ LogicalTensors IntraSubgraphAdapter::CollectBoundaryTensors(Function &function) 
         }
     }
     return ret;
+}
+
+Status IntraSubgraphAdapter::PostCheck(Function &function) {
+    IntraSubgraphAdapterChecker checker;
+    return checker.DoPostCheck(function);
 }
 } // namespace npu::tile_fwk

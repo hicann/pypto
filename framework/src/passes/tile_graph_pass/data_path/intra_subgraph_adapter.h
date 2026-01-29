@@ -31,6 +31,8 @@ public:
     IntraSubgraphAdapter() : Pass("IntraSubgraphAdapter") {}
     ~IntraSubgraphAdapter() override = default;
     Status RunOnFunction(Function &function) override;
+    Status PostCheck(Function &function) override;
+
 private:
     Status CheckBoundaryTensor(LogicalTensorPtr tensor);
     Status SplitBoundaryTensor(Function &function, LogicalTensorPtr tensor,

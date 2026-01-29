@@ -26,25 +26,6 @@ Status ExpandFunctionChecker::DoPreCheck(Function &function) {
         APASS_LOG_ERROR_F(Elements::Function, "Operation Loop detected before expand function; Please validate the operation input specifications.");
         return FAILED;
     }
-    std::unordered_set<OpCalcType> calTypes{OpCalcType::ELMWISE, OpCalcType::BROADCAST, OpCalcType::REDUCE,
-                                            OpCalcType::CONV};
-    for (auto &op : function.Operations().DuplicatedOpList()) {
-        OpCalcType opCalType = OpcodeManager::Inst().GetOpCalcType(op->GetOpcode());
-        if (calTypes.count(opCalType) > 0) {
-            for (auto &itensor: op->GetIOperands()) {
-                if (itensor->tensor->datatype == DT_BF16) {
-                    APASS_LOG_ERROR_F(Elements::Tensor, "Calculation Op [%d] has BF16 operand %d.", op->GetOpMagic(), itensor->GetMagic());
-                    return FAILED;
-                }
-            }
-            for (auto &otensor: op->GetOOperands()) {
-                if (otensor->tensor->datatype == DT_BF16) {
-                    APASS_LOG_ERROR_F(Elements::Tensor, "Calculation Op [%d] has BF16 operand %d.", op->GetOpMagic(), otensor->GetMagic());
-                    return FAILED;
-                }
-            }
-        }
-    }
     return SUCCESS;
 }
 
