@@ -4,16 +4,7 @@
 
 编译安装PyPTO项目前，请先参考[环境准备](prepare_environment.md)完成基础环境搭建。
 
-## 通过PyPI安装
- 
-PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改，可以直接使用`pip`命令安装：
-
-```bash 
-# 从PyPI源下载并安装 
-python3 -m pip install pypto 
-``` 
- 
-## 通过源码编译安装
+## 通过源码编译安装(推荐)
 
 ### 环境自检
 
@@ -64,7 +55,7 @@ python3 -m pip install . --verbose
    ```bash
    # 指定CMake Generator类型(Ninja，Ninja需提前安装)
    python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-generator=Ninja'
-   
+
    # 指定CMake Generator类型(Unix Makefiles)
    python3 -m pip install . --verbose --config-setting=--build-option='build_ext --cmake-generator="Unix Makefiles"'
    ```
@@ -101,6 +92,15 @@ export PYPTO_BUILD_EXT_ARGS='--cmake-build-type=Debug --cmake-verbose'
 
 # 执行编译及安装(可编辑模式)
 python3 -m pip install -e . --verbose
+```
+
+## 通过PyPI安装
+
+PyPTO已发布至[PyPI](https://pypi.org/)，若不涉及对PyPTO源码的修改，可以直接使用`pip`命令安装：
+
+```bash
+# 从PyPI源下载并安装
+python3 -m pip install pypto
 ```
 
 ## 通过Docker镜像安装

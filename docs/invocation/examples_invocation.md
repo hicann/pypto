@@ -60,8 +60,8 @@ if __name__ == "__main__":
         print("Simulation completed, please view the results through the swimlane diagram.")
     else:
         print("Invalid parameters")
-        
+
 ```
 - 对于真实环境，可以直接通过查看输出 `y` 的值查看运行结果
-- 对于仿真环境，通过 `output/` 下的泳道图查看仿真结果  
+- 对于仿真环境，通过 `output/` 下的泳道图查看仿真结果
 
