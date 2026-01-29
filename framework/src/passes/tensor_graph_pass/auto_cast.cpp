@@ -82,8 +82,13 @@ Status AutoCast::RunOnFunction(Function &function) {
 }
 
 bool AutoCast::SupportBF16(Operation *op) {
-    if (UNSUPPORT_BF16_OPS.count(op->GetOpcode()) > 0) {
-        return false;
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        if (UNSUPPORT_BF16_ARCH35_OPS.count(op->GetOpcode()) > 0) return false;
+    } else {
+        if (UNSUPPORT_BF16_OPS.count(op->GetOpcode()) > 0) {
+            ALOG_INFO_F("Op[%d] can find in UNSUPPORT_BF16_OPS.", op->GetOpMagic());
+            return false;
+        }
     }
     return true;
 }
