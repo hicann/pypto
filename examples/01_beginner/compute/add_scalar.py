@@ -50,7 +50,7 @@ def get_device_id():
         return None
 
 
-def create_add_scalar_kernel(shape: tuple, val, run_mode: str = "npu") -> torch.Tensor:
+def create_add_scalar_kernel(shape: tuple, val, run_mode: str = "npu"):
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":

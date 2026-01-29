@@ -71,7 +71,7 @@ def softmax_core(x: pypto.Tensor) -> pypto.Tensor:
     return exp / esum
 
 
-def softmax(shape: tuple, run_mode: str = "npu", dynamic: bool = True) -> torch.Tensor:
+def softmax(shape: tuple, run_mode: str = "npu", dynamic: bool = True):
 
     bs, seqlen, head, dim = shape
     if dynamic:

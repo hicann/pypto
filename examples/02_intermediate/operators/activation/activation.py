@@ -89,7 +89,7 @@ def geglu_golden(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.gelu(gate) * up
 
 
-def silu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def silu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         _, n = shape
         m = pypto.frontend.dynamic("M")
@@ -151,7 +151,7 @@ def test_silu(device_id: int = None, run_mode: str = "npu", dynamic: bool = Fals
     print()
 
 
-def gelu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def gelu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         _, n = shape
         m = pypto.frontend.dynamic("m")
@@ -215,7 +215,7 @@ def test_gelu(device_id: int = None, run_mode: str = "npu", dynamic: bool = Fals
     print()
 
 
-def swiglu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def swiglu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         _, n = shape
         m = pypto.frontend.dynamic("m")
@@ -283,7 +283,7 @@ def test_swiglu(device_id: int = None, run_mode: str = "npu", dynamic: bool = Fa
     print()
 
 
-def geglu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def geglu_activation(shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         _, n = shape
         m = pypto.frontend.dynamic("m")

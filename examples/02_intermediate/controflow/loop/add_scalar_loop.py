@@ -50,7 +50,7 @@ def get_device_id():
         return None
 
 
-def add_scalar_loop(shape: tuple, val: int, run_mode: str = "npu", dynamic: bool = True) -> torch.Tensor:
+def add_scalar_loop(shape: tuple, val: int, run_mode: str = "npu", dynamic: bool = True):
     if dynamic:
         w = pypto.frontend.dynamic("w")
         _, h, c, n = shape

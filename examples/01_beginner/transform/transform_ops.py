@@ -60,25 +60,25 @@ def assemble_wrapper(mode: pypto.RunMode, input_shape: tuple, out_shape: tuple, 
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def assemble_kernel(
         x: pypto.Tensor(input_shape, pypto.DT_FP32),
-    ) -> pypto.Tensor(out_shape, pypto.DT_FP32):
+        out: pypto.Tensor(out_shape, pypto.DT_FP32),
+    ) -> None:
         tile_shapes = [8 for _ in range(len(x.shape))]
         pypto.set_vec_tile_shapes(*tile_shapes)
-        out = pypto.tensor(out_shape, pypto.DT_FP32)
         pypto.assemble(x, offsets, out)
-        return out
+        return
 
     return assemble_kernel
 
 
-def assemble_op(x: torch.Tensor, out_shape: tuple, offsets: list, run_mode: str = "npu") -> torch.Tensor:
+def assemble_op(x: torch.Tensor, out: torch.Tensor, out_shape: tuple, offsets: list, run_mode: str = "npu"):
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":
         mode = pypto.RunMode.SIM
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
-    out = assemble_wrapper(mode, x.shape, out_shape, offsets)(x)
-    return out
+    assemble_wrapper(mode, x.shape, out_shape, offsets)(x, out)
+    return
 
 
 def test_assemble_basic(device_id: int = None, run_mode: str = "npu"):
@@ -92,13 +92,15 @@ def test_assemble_basic(device_id: int = None, run_mode: str = "npu"):
     # Test 1: Basic assembly of a small tensor into a larger tensor
     dtype = torch.float32
     x = torch.tensor([[1, 1], [1, 1]], dtype=dtype, device=device)
+    expected_shape = (4, 4)
+    out = torch.zeros(expected_shape, dtype=dtype, device=device)
     offsets = [0, 0]
     expected = torch.tensor([[1, 1, 0, 0],
                              [1, 1, 0, 0],
                              [0, 0, 0, 0],
                              [0, 0, 0, 0]], dtype=dtype, device=device)
 
-    out = assemble_op(x, (4, 4), offsets, run_mode).cpu()
+    assemble_op(x, out, expected_shape, offsets, run_mode)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
@@ -117,13 +119,15 @@ def test_assemble_different_offsets_shapes(device_id: int = None, run_mode: str 
     # Test 1: Using different offsets
     dtype = torch.float32
     x = torch.tensor([[2, 2], [2, 2]], dtype=dtype, device=device)
+    expected_shape = (4, 4)
+    out = torch.zeros(expected_shape, dtype=dtype, device=device)
     offsets = [1, 1]
     expected = torch.tensor([[0, 0, 0, 0],
                              [0, 2, 2, 0],
                              [0, 2, 2, 0],
                              [0, 0, 0, 0]], dtype=dtype, device=device)
 
-    out = assemble_op(x, (4, 4), offsets, run_mode)
+    assemble_op(x, out, expected_shape, offsets, run_mode)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
@@ -134,6 +138,8 @@ def test_assemble_different_offsets_shapes(device_id: int = None, run_mode: str 
     # Test 2: Assembly with different shapes
     dtype = torch.float32
     x = torch.tensor([[1, 1, 1], [1, 1, 1]], dtype=dtype, device=device)
+    expected_shape = (5, 5)
+    out = torch.zeros(expected_shape, dtype=dtype, device=device)
     offsets = [1, 1]
     expected = torch.tensor([[0, 0, 0, 0, 0],
                              [0, 1, 1, 1, 0],
@@ -141,7 +147,7 @@ def test_assemble_different_offsets_shapes(device_id: int = None, run_mode: str 
                              [0, 0, 0, 0, 0],
                              [0, 0, 0, 0, 0]], dtype=dtype, device=device)
 
-    out = assemble_op(x, (5, 5), offsets, run_mode)
+    assemble_op(x, out, expected_shape, offsets, run_mode)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
@@ -354,7 +360,7 @@ def test_scatter(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def scatter_update(x_shape: tuple, dim: int, y_shape: tuple, src: torch.float32, run_mode: str = "npu") -> torch.Tensor:
+def scatter_update(x_shape: tuple, dim: int, y_shape: tuple, src: torch.float32, run_mode: str = "npu"):
     update_dim_, update_src_ = dim, src
 
     if run_mode == "npu":
@@ -404,7 +410,7 @@ def test_scatter_update(device_id: int = None, run_mode: str = "npu") -> None:
 # ============================================================================
 # Concat Examples
 # ============================================================================
-def concat_op(a_shape: tuple, b_shape: tuple, dim: int, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def concat_op(a_shape: tuple, b_shape: tuple, dim: int, run_mode: str = "npu", dynamic: bool = False):
 
     if dim == 0:
         out_shape = (a_shape[0] + b_shape[0], a_shape[1])
@@ -432,7 +438,7 @@ def concat_op(a_shape: tuple, b_shape: tuple, dim: int, run_mode: str = "npu", d
 
 
 def concat_multiple_op(a_shape: tuple, b_shape: tuple, c_shape: tuple, 
-                      dim: int, run_mode: str = "npu") -> torch.Tensor:
+                      dim: int, run_mode: str = "npu"):
 
     if dim == 0:
         out_shape = (a_shape[0] + b_shape[0] + c_shape[0], a_shape[1])
@@ -570,7 +576,7 @@ def test_concat_different_shapes(device_id: int = None, run_mode: str = "npu"):
 # View Examples
 # ============================================================================
     
-def view_op(shape_x: tuple, shape: list, offsets: list, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def view_op(shape_x: tuple, shape: list, offsets: list, run_mode: str = "npu", dynamic: bool = False):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -580,12 +586,12 @@ def view_op(shape_x: tuple, shape: list, offsets: list, run_mode: str = "npu", d
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
         
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
-    def view_kernel(x: pypto.Tensor(shape_x, pypto.DT_FP32)) -> pypto.Tensor(tuple(shape), pypto.DT_FP32):
-        print(shape_x)
+    def view_kernel(x: pypto.Tensor(shape_x, pypto.DT_FP32),
+                    out: pypto.Tensor(shape, pypto.DT_FP32)) -> None:
         tile_shapes = [8 for _ in range(len(x.shape))]
         pypto.set_vec_tile_shapes(*tile_shapes)
-        out = pypto.view(x, shape, offsets)
-        return out
+        out[:] = pypto.view(x, shape, offsets)
+        return
     
     return view_kernel
 
@@ -606,12 +612,13 @@ def test_view_basic(device_id: int = None, run_mode: str = "npu"):
                       [1, 1, 2, 2, 3, 3, 4, 4]], dtype=dtype, device=device)
     shape = [4, 4]
     offsets = [0, 4]
+    out = torch.zeros(shape, dtype=dtype, device=device)
     expected = torch.tensor([[3, 3, 4, 4],
                              [3, 3, 4, 4],
                              [3, 3, 4, 4],
                              [3, 3, 4, 4]], dtype=dtype, device=device)
 
-    out = view_op(x.shape, shape, offsets, run_mode)(x)
+    view_op(x.shape, shape, offsets, run_mode)(x, out)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
@@ -623,7 +630,7 @@ def test_view_basic(device_id: int = None, run_mode: str = "npu"):
     
 def view_with_valid_shape_op(shape_x: tuple, shape: list, 
                              offsets: list, valid_shape: list, 
-                             run_mode: str = "npu") -> torch.Tensor:
+                             run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -633,12 +640,12 @@ def view_with_valid_shape_op(shape_x: tuple, shape: list,
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
         
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
-    def view_with_valid_shape_kernel(x: pypto.Tensor(shape_x, pypto.DT_FP32)
-                                ) -> pypto.Tensor(tuple(shape), pypto.DT_FP32):
+    def view_with_valid_shape_kernel(x: pypto.Tensor(shape_x, pypto.DT_FP32),
+                                     out: pypto.Tensor(shape, pypto.DT_FP32)) -> None:
         tile_shapes = [8 for _ in range(len(x.shape))]
         pypto.set_vec_tile_shapes(*tile_shapes)
-        out = pypto.view(x, shape, offsets, valid_shape=valid_shape)
-        return out
+        out[:] = pypto.view(x, shape, offsets, valid_shape=valid_shape)
+        return
     
     return view_with_valid_shape_kernel
 
@@ -660,12 +667,13 @@ def test_view_with_valid_shape(device_id: int = None, run_mode: str = "npu"):
     shape = [4, 4]
     offsets = [2, 4]
     valid_shape = [2, 4]
+    out = torch.zeros(shape, dtype=dtype, device=device)
     expected = torch.tensor([[5, 5, 6, 6],
                              [5, 5, 6, 6],
                              [0, 0, 0, 0],
                              [0, 0, 0, 0]], dtype=dtype, device=device)
 
-    out = view_with_valid_shape_op(x.shape, shape, offsets, valid_shape, run_mode)(x)
+    view_with_valid_shape_op(x.shape, shape, offsets, valid_shape, run_mode)(x, out)
     max_diff = np.abs(out.cpu().numpy() - expected.cpu().numpy()).max()
     print(f"Output: {out}")
     print(f"Expected: {expected}")
@@ -683,7 +691,7 @@ shape_transpose = (2, 3)
 shape_transpose2 = (3, 2)
 
 
-def transpose(dim0: int, dim1: int, run_mode: str = "npu") -> torch.Tensor:
+def transpose(dim0: int, dim1: int, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -753,7 +761,7 @@ data_type = {
 }
 
 
-def cast(shape: tuple, dtype: torch.dtype, run_mode: str = "npu") -> torch.Tensor:
+def cast(shape: tuple, dtype: torch.dtype, run_mode: str = "npu"):
 
     pto_type = data_type[dtype]
 
@@ -844,6 +852,11 @@ Examples:
             'description': 'Basic usage of assemble function example',
             'function': test_assemble_basic,
         },
+        'assemble::test_assemble_different_offsets_shapes': {
+            'name': 'Test assemble with different offsets and shapes',
+            'description': 'Assemble with different offsets and shapes example',
+            'function': test_assemble_different_offsets_shapes,
+        },
         'gather::test_gather_basic': {
             'name': 'Test basic usage of gather function',
             'description': 'Basic usage of gather function example',
@@ -893,6 +906,11 @@ Examples:
             'name': 'Test basic usage of view function',
             'description': 'Basic usage of view function example',
             'function': test_view_basic,
+        },
+        'view::test_view_with_valid_shape': {
+            'name': 'Test view with valid shape',
+            'description': 'View with valid shape example',
+            'function': test_view_with_valid_shape,
         },
         'transpose::test_transpose': {
             'name': 'Test basic usage of transpose function',

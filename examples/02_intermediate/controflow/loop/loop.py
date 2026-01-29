@@ -47,7 +47,7 @@ def get_device_id():
         return None
 
 
-def loop_basic(run_mode: str = "npu", dynamic: bool = True) -> torch.Tensor:
+def loop_basic(run_mode: str = "npu", dynamic: bool = True):
     if dynamic:
         n = pypto.frontend.dynamic("n")
     else:
@@ -116,7 +116,7 @@ def test_loop_basic(device_id: int = None, run_mode: str = "npu", dynamic: bool 
     print()
 
 
-def loop_compile_phase_print(shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def loop_compile_phase_print(shape: tuple, run_mode: str = "npu", dynamic: bool = False):
 
     if dynamic:
         m = pypto.frontend.dynamic("m")

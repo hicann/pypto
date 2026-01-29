@@ -200,7 +200,7 @@ def dynamic_gelu_activation_core(output: pypto.tensor, hidden_states: pypto.tens
     return
 
 
-def ffn(config: FFNConfig) -> torch.Tensor:
+def ffn(config: FFNConfig):
 
     batch_size, hidden_size, intermediate_size = config.batch_size, config.hidden_size, config.intermediate_size
     

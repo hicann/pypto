@@ -56,7 +56,7 @@ def get_device_id():
 # ============================================================================
 
 
-def create_arange_op_kernel(shape: tuple, start=None, end=None, step=None, run_mode: str = "npu") -> torch.Tensor:
+def create_arange_op_kernel(shape: tuple, start=None, end=None, step=None, run_mode: str = "npu"):
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":
@@ -186,7 +186,7 @@ def test_tensor_creation_with_datatypes(device_id = None, run_mode: str = "npu")
 # ============================================================================
 
 
-def create_full_op_kernel(shape: tuple, fill_value: float, run_mode: str = "npu") -> torch.Tensor:
+def create_full_op_kernel(shape: tuple, fill_value: float, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU

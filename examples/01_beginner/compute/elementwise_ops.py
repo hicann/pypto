@@ -56,7 +56,7 @@ def get_device_id():
 # ============================================================================
 
 
-def create_abs_op_kernel(shape: tuple, run_mode: str = "npu") -> torch.Tensor:
+def create_abs_op_kernel(shape: tuple, run_mode: str = "npu"):
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":
@@ -99,7 +99,7 @@ def test_abs_basic(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_add_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def create_add_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         a_shape = pypto.frontend.dynamic("a_shape")
         b_shape = pypto.frontend.dynamic("b_shape")
@@ -149,7 +149,7 @@ def test_add_basic(device_id: int = None, run_mode: str = "npu"):
 
 def create_add_broadcast_op_kernel(a_shape: tuple, b_shape: tuple, 
                                    run_mode: str = "npu", 
-                                   dynamic: bool = False) -> torch.Tensor:
+                                   dynamic: bool = False):
     if dynamic:
         m = pypto.frontend.dynamic("m")
         n = a_shape[1]
@@ -199,7 +199,7 @@ def test_add_broadcast(device_id: int = None, run_mode: str = "npu"):
 
 
 def create_add_scalar_op_kernel(shape: tuple, scalar: float, run_mode: str = "npu",
-                                dynamic: bool = False) -> torch.Tensor:
+                                dynamic: bool = False):
     if dynamic:
         shape = pypto.frontend.dynamic("shape")
     else:
@@ -245,7 +245,7 @@ def test_add_scalar(device_id: int = None, run_mode: str = "npu"):
 
 
 def create_add_with_alpha_op_kernel(a_shape: tuple, b_shape: tuple, 
-                                    alpha: float, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+                                    alpha: float, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         a_shape = pypto.frontend.dynamic("a_shape")
         b_shape = pypto.frontend.dynamic("b_shape")
@@ -301,7 +301,7 @@ def test_add_with_alpha(device_id: int = None, run_mode: str = "npu"):
 
 def create_clip_op_kernel(a_shape: tuple, min_shape: tuple, 
                           max_shape: tuple, run_mode: str = "npu", 
-                          dynamic: bool = False) -> torch.Tensor:
+                          dynamic: bool = False):
     if dynamic:
         m = pypto.frontend.dynamic("m")
         n = a_shape[1]
@@ -357,7 +357,7 @@ def test_clip_basic(device_id: int = None, run_mode: str = "npu"):
 
 def create_clip_broadcast_op_kernel(a_shape: tuple, min_shape: tuple, 
                                     max_shape: tuple, run_mode: str = "npu", 
-                                    dynamic: bool = False) -> torch.Tensor:
+                                    dynamic: bool = False):
     if dynamic:
         m = pypto.frontend.dynamic("m")
         n = a_shape[1]
@@ -414,7 +414,7 @@ def test_clip_broadcast(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_div_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def create_div_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         a_shape = pypto.frontend.dynamic("a_shape")
         b_shape = pypto.frontend.dynamic("b_shape")
@@ -464,7 +464,7 @@ def test_div_basic(device_id: int = None, run_mode: str = "npu"):
 
 def create_div_broadcast_op_kernel(a_shape: tuple, b_shape: tuple, 
                                    run_mode: str = "npu", 
-                                   dynamic: bool = False) -> torch.Tensor:
+                                   dynamic: bool = False):
     if dynamic:
         n = a_shape[1]
         m = pypto.frontend.dynamic("m")
@@ -509,7 +509,7 @@ def test_div_broadcast(device_id: int = None, run_mode: str = "npu"):
 
 
 def create_div_scalar_op_kernel(a_shape: tuple, scalar: float, 
-                                run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+                                run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         a_shape = pypto.frontend.dynamic("a_shape")
     else:
@@ -559,7 +559,7 @@ def test_div_scalar(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_exp_op_kernel(x_shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def create_exp_op_kernel(x_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         x_shape = pypto.frontend.dynamic("x_shape")
     else:
@@ -608,7 +608,7 @@ def test_exp_basic(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_log_op_kernel(a_shape: tuple, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def create_log_op_kernel(a_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
     if dynamic:
         a_shape = pypto.frontend.dynamic("a_shape")
     else:

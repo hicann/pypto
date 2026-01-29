@@ -88,7 +88,7 @@ def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto
 
 
 def scaled_dot_product_attention(q_shape: tuple, k_shape: tuple, config: AttentionConfig, run_mode: str = "npu",
-                                 dynamic: bool = True) -> torch.Tensor:
+                                 dynamic: bool = True):
     if dynamic:
         bs = pypto.frontend.dynamic("bs")
     else:

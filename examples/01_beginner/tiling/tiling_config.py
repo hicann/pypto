@@ -285,7 +285,8 @@ def create_vec_tile_kernel(shape, run_mode, set_shapes: tuple):
     return compute_with_vec_tile_shapes
 
 
-def compute_with_vec_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, set_shapes: tuple, run_mode:str = "npu", dynamic: bool = False) -> torch.Tensor:
+def compute_with_vec_tile_shapes_op(a: torch.Tensor, b: torch.Tensor, 
+        set_shapes: tuple, run_mode: str = "npu", dynamic: bool = False):
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":
