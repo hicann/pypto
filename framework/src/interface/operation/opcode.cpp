@@ -781,6 +781,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {            Opcode::OP_VEC_DUP,        "TVecDup"},
     {              Opcode::OP_RANGE,         "TRange"},
     {               Opcode::OP_BRCB,          "Tbrcb"},
+    {      Opcode::OP_INDEX_OUTCAST,  "TIndexOutcast"},
 };
 
 std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{
