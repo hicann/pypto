@@ -43,6 +43,75 @@ public:
     }
 };
 
+TEST_F(DynamicOpsTest, FmodFp32) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int s = 32;
+    int n = 2;
+    int m = 1;
+    Tensor t0(DT_FP32, {n * s, m * s}, "t0");
+    Tensor t1(DT_FP32, {n * s, m * s}, "t1");
+    Tensor out(DT_FP32, {n * s, m * s}, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(t0, 2.0),
+        RawTensorData::CreateConstantTensor<float>(t1, 2.0),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 0.0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<float>(out, 0.0),
+    });
+
+    FUNCTION("main", {t0, t1}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0a = View(t0, {s, s}, {0, 0});
+            auto t0b = View(t0, {s, s}, {s, 0});
+            auto t1a = View(t1, {s, s}, {0, 0});
+            auto t1b = View(t1, {s, s}, {s, 0});
+            auto t2a = Fmod(t0a, t1a);
+            auto t2b = Fmod(t0b, t1b);
+            std::vector<std::pair<Tensor, std::vector<int64_t>>> data = {
+                {t2a, {0, 0}},
+                {t2b, {s, 0}},
+            };
+            out = Assemble(data);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, FmodSFp32) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 8;
+    int64_t s = 8;
+    Tensor self(DT_FP32, {b, s}, "self");
+    Tensor out(DT_FP32, {b, s}, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(self, 5.0),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 1.0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<float>(out, 1.0),
+    });
+
+    FUNCTION("main", {self}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            Element src(DT_FP32, 2.0);
+            auto t0 = View(self, {b, s}, {0, 0});
+            out = Fmod(self, src);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, Assemble) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);

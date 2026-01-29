@@ -203,6 +203,31 @@ std::string CodeGenOpCloudNPU::GenBinaryOp() const {
     return PrintBinary({s0Var, s1Var, dVar, src0DtypeStr, src1DtypeStr, dstDtypeStr});
 }
 
+std::string CodeGenOpCloudNPU::GenBinaryOpWithTmp() const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
+    std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
+    std::ostringstream oss;
+    oss << tileOpName;
+    oss << WrapParamByParentheses(tileOpCallParamList) << ";\n";
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenVectorScalarOpWithTmp() const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::vector<std::string> tileOpCallParamList = {dstTensor, srcTensor, tmpTensor};
+    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
+    std::ostringstream oss;
+    oss << tileOpName << "<" << dstDtypeStr << ">"
+        << "(" << dstTensor << ", " << srcTensor << ", " << scalarTmpBuffer << ", " << tmpTensor << ");\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::PrintBinaryBrcStatic(const PrintBinaryBrcParam &param) const {
     const std::string &dstDtypeStr = param.dstDtypeStr;
     const std::string &src0DtypeStr = param.src0DtypeStr;

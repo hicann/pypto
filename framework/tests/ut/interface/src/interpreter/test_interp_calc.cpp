@@ -333,7 +333,7 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // add
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
-        auto other = makeTensorData(DT_FP32, {16, 8}, 1.0f);
+        auto other = makeTensorData(DT_FP32, {16, 16}, 1.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 5.0f);
         calc::Add(out, self, other);
@@ -350,7 +350,7 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // sub
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
-        auto other = makeTensorData(DT_FP32, {16, 8}, 1.0f);
+        auto other = makeTensorData(DT_FP32, {16, 16}, 1.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 3.0f);
         calc::Sub(out, self, other);
@@ -367,7 +367,7 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // mul
         auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
-        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
+        auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 8.0f);
         calc::Mul(out, self, other);
@@ -384,7 +384,7 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
     {
         // div
         auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
-        auto other = makeTensorData(DT_FP32, {16, 8}, 2.0f);
+        auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 2.5f);
         calc::Div(out, self, other);
@@ -396,6 +396,24 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 2.5f);
         calc::Div(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // fmod
+        auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        calc::Fmod(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // fmod broadcast
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto other = makeTensorData(DT_FP32, {16, 1}, 1.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        calc::Fmod(out, self, other);
         ASSERT_ALLCLOSE(out, golden);
     }
     {
@@ -610,6 +628,14 @@ TEST_F(TorchAdaptorTest, BinaryOpsS) {
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 0.4f);
         calc::DivS(out, self, elem, true);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        auto elem = Element(DT_FP32, 2.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+        calc::FmodS(out, self, elem);
         ASSERT_ALLCLOSE(out, golden);
     }
 }

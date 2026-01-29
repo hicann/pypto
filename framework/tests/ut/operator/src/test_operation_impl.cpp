@@ -643,6 +643,39 @@ TEST_F(OperationImplTest, test_Add_Brcb) {
     }
 }
 
+TEST_F(OperationImplTest, test_Fmod) {
+    TileShape::Current().SetVecTile(16, 16);
+    Tensor input0(DT_FP32, {16, 16}, "input0");
+    Tensor input1(DT_FP32, {16, 16}, "input1");
+    Tensor result;
+    config::SetOperationOption(KEY_COMBINE_AXIS, false);
+    FUNCTION("TestFmod") {
+        result = Fmod(input0, input1);
+    }
+}
+
+TEST_F(OperationImplTest, test_Fmod_Brcb) {
+    TileShape::Current().SetVecTile(16, 16);
+    Tensor input0(DT_FP32, {16, 16}, "input0");
+    Tensor input1(DT_FP32, {16, 1}, "input1");
+    Tensor result;
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    FUNCTION("TestFmodBrcb") {
+        result = Fmod(input0, input1);
+    }
+}
+
+TEST_F(OperationImplTest, test_FmodS) {
+    TileShape::Current().SetVecTile({4, 4});
+    Tensor input0(DT_FP32, {8, 8}, "input0");
+    float scalar = 10.0;
+    Element input1(DT_FP32, scalar);
+    Tensor result;
+    FUNCTION("TestFmodS") {
+        result = Fmod(input0, input1);
+    }
+}
+
 TEST_F(OperationImplTest, Test_TopK_01) {
     std::vector<int64_t> inputShape = {1, 16384};
     std::vector<int64_t> outputShape = {1, 2048};

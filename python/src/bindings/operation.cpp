@@ -31,6 +31,8 @@ void bind_operation(py::module &m) {
     m.def(
         "Div", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Div(self, other); }, "Tensor div.");
     m.def(
+        "Fmod", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Fmod(self, other); }, "Tensor fmod.");
+    m.def(
         "View",
         [](const Tensor &operand, const std::vector<int64_t> &shapes, const py::sequence &offsets) {
             bool has_symbolic = false;
@@ -106,6 +108,9 @@ void bind_operation(py::module &m) {
     m.def(
         "Div", [](const Tensor &self, const Element &other) { return npu::tile_fwk::Div(self, other); },
         "Tensor div scalar.");
+    m.def(
+        "Fmod", [](const Tensor &self, const Element &other) { return npu::tile_fwk::Fmod(self, other); },
+        "Tensor mod scalar.");
     m.def(
         "Range",
         [](const Element &start, const Element &end, const Element &step) {

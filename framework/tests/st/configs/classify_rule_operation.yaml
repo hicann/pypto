@@ -98,6 +98,8 @@ stest:
       - TestRange/RangeOperationTest.TestRange/1
       - TestAdd/AddOperationTest.TestAdd/10
       - TestAdd/AddOperationTest.TestAdd/11
+      - TestFmod/FmodOperationTest.TestFmod/0
+      - TestFmod/FmodOperationTest.TestFmod/1
       - TestConcat/ConcatOperationTest.TestConcat/0
       - TestConcat/ConcatOperationTest.TestConcat/1
       - TestCumSum/CumSumOperationTest.TestCumSum/2
@@ -108,6 +110,8 @@ stest:
       - TestAdds/AddsOperationTest.TestAdds/20
       - TestAdds/AddsOperationTest.TestAdds/21
       - TestAdds/AddsOperationTest.TestAdds/22
+      - TestFmods/FmodsOperationTest.TestFmods/0
+      - TestFmods/FmodsOperationTest.TestFmods/1
       - TestCast/CastOperationTest.TestCast/10
       - TestCast/CastOperationTest.TestCast/11
       - TestCast/CastOperationTest.TestCast/12

@@ -187,6 +187,7 @@ DEFINE_BINARY_S_OPS(AddS, add_out)
 DEFINE_BINARY_S_OPS(SubS, sub_out)
 DEFINE_BINARY_S_OPS(MulS, mul_out)
 DEFINE_BINARY_S_OPS(DivS, div_out)
+DEFINE_BINARY_S_OPS(FmodS, fmod_out)
 
 static void Add(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     auto tself = From(self);
@@ -301,6 +302,35 @@ static void Div(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
         }
     } else {
         torch::div_out(tout, tself, tother);
+    }
+}
+
+static void Fmod(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    auto tself = From(self);
+    auto tother = From(other);
+    auto tout = From(out);
+    
+    std::vector<int64_t> shape_self = tself.sizes().vec();
+    std::vector<int64_t> shape_other = tother.sizes().vec();
+
+    if (shape_self.size() == 2 && shape_other.size() == 2 &&
+        shape_self[0] == shape_other[0] && 
+        shape_self[1] != shape_other[1]) {
+        
+        if (shape_other[1] == 8) {
+            int64_t cols_self = shape_self[1];
+            int64_t cols_other = shape_other[1];
+            int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
+            auto tother_expanded = tother.repeat({1, repeat_times});
+            auto tother_final = tother_expanded.index(
+                {torch::indexing::Slice(), 
+                 torch::indexing::Slice(0, cols_self)});
+            torch::fmod_out(tout, tself, tother_final);
+        } else {
+            torch::fmod_out(tout, tself, tother);
+        }
+    } else {
+        torch::fmod_out(tout, tself, tother);
     }
 }
 
@@ -1259,10 +1289,12 @@ static struct CalcOps calcOps = {
     .SubS = SubS,
     .MulS = MulS,
     .DivS = DivS,
+    .FmodS = FmodS,
     .Add = Add,
     .Sub = Sub,
     .Mul = Mul,
     .Div = Div,
+    .Fmod = Fmod,
     .PairSum = PairSum,
     .PairMax = PairMax,
     .PairMin = PairMin,

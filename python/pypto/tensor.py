@@ -427,6 +427,10 @@ class Tensor:
         return pypto.div(self, other)
 
     @source_location
+    def fmod(self, other: 'Tensor | int | float') -> 'Tensor':
+        return pypto.fmod(self, other)
+
+    @source_location
     def greater(self, other: 'Tensor'):
         return pypto.greater(self, other)
 

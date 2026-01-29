@@ -176,6 +176,11 @@ class BlockBuilderHelper:
         self.builder.emit(self.ctx, op)
         return op
 
+    def fmod(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_MOD, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
     def min(self, a, b, out):
         op = self.builder.create_binary_op(ir.Opcode.OP_MIN, a, b, out)
         self.builder.emit(self.ctx, op)

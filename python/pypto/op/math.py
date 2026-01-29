@@ -228,6 +228,51 @@ def div(input: Tensor, other: Union[Tensor, float]) -> Tensor:
 
 
 @op_wrapper
+def fmod(input: Tensor, other: Union[Tensor, float]) -> Tensor:
+    """Computes the element-wise modulus of `input` and `other`.
+
+    This function calculates the formula: `out = input % other`.
+    It supports broadcasting between the input tensors.
+
+    Parameters
+    ----------
+    input : Tensor
+        The first input tensor.
+    other : Tensor or Number
+        The second input tensor or a scalar to modulo operation.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise modulus.
+
+    Raises
+    ------
+    RuntimeError
+        If the two tensors are not broadcastable to a common shape.
+
+    See Also
+    --------
+    sub : The inverse operation, element-wise subtraction.
+    mul : Element-wise multiplication.
+
+    Examples
+    --------
+    a = pypto.tensor([1, 3], pypto.DT_FP32)
+    b = pypto.tensor([1, 3], pypto.DT_FP32)
+    out = pypto.fmod(a, b)
+
+    Input a:    [[2.0 5.0 9.0]]
+    Input b:    [[2.0 2.0 2.0]]
+    Output out: [[0.0 1.0 1.0]]
+    """
+    if isinstance(other, pypto_impl.Tensor):
+        return pypto_impl.Fmod(input, other)
+    else:
+        return pypto_impl.Fmod(input, pypto_impl.Element(input.dtype, other))
+
+
+@op_wrapper
 def pow(input: Tensor, other: Union[int, float]) -> Tensor:
     """Computes the element-wise power of `input` raised to `other`.
 

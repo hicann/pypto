@@ -49,6 +49,7 @@ enum class Opcode {
     OP_SUBS,
     OP_MULS,
     OP_DIVS,
+    OP_MODS,
     OP_MAXS,
     OP_MINS,
     OP_POW,
@@ -70,6 +71,7 @@ enum class Opcode {
     OP_SUB,
     OP_MUL,
     OP_DIV,
+    OP_MOD,
     OP_ADD_BRC,
     OP_SUB_BRC,
     OP_MUL_BRC,
@@ -479,6 +481,7 @@ const std::unordered_set<Opcode> BINARY_OPS{
     Opcode::OP_SUB,
     Opcode::OP_MUL,
     Opcode::OP_DIV,
+    Opcode::OP_MOD,
     Opcode::OP_S_ADD,
     Opcode::OP_S_SUB,
     Opcode::OP_S_MUL,
@@ -549,7 +552,7 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE,
     Opcode::OP_TOPK_SORT, Opcode::OP_TOPK_MERGE, Opcode::OP_TOPK_EXTRACT, Opcode::OP_SCATTER_ELEMENT,
     Opcode::OP_TRANSPOSE_MOVEIN, Opcode::OP_SORT, Opcode::OP_COMPARE_SWAP, Opcode::OP_MERGE, Opcode::OP_L0C_TO_L1,
     Opcode::OP_SCATTER, Opcode::OP_GATHER_FROM_UB, Opcode::OP_RESHAPE_COPY_IN, Opcode::OP_RESHAPE_COPY_OUT, Opcode::OP_L1_TO_FIX_QUANT_PRE,
-    Opcode::OP_L1_TO_BT, Opcode::OP_BRCB};
+    Opcode::OP_L1_TO_BT, Opcode::OP_BRCB, Opcode::OP_MOD, Opcode::OP_MODS};
 
 const std::unordered_set<Opcode> UNSUPPORT_BF16_OPS{Opcode::OP_EXP, Opcode::OP_RSQRT, Opcode::OP_SQRT,
     Opcode::OP_RECIPROCAL, Opcode::OP_ABS, Opcode::OP_LN, Opcode::OP_LOGICALNOT,
@@ -562,7 +565,7 @@ const std::unordered_set<Opcode> UNSUPPORT_BF16_OPS{Opcode::OP_EXP, Opcode::OP_R
     Opcode::OP_WHERE_ST, Opcode::OP_WHERE_SS, Opcode::OP_ROWMAX, Opcode::OP_ROWSUM, Opcode::OP_ROWEXPMAX,
     Opcode::OP_ROWEXPSUM, Opcode::OP_ROWSUMLINE, Opcode::OP_ROWMAXLINE, Opcode::OP_ROWMINLINE, Opcode::OP_ROWMAX_SINGLE,
     Opcode::OP_ROWMIN_SINGLE, Opcode::OP_ROWSUM_SINGLE, Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE,
-    Opcode::OP_ROWSUM_COMBINE_AXIS_SINGLE};
+    Opcode::OP_ROWSUM_COMBINE_AXIS_SINGLE, Opcode::OP_MOD, Opcode::OP_MODS};
 
 const std::unordered_set<Opcode> UNSUPPORT_BF16_ARCH35_OPS{Opcode::OP_EXP, Opcode::OP_RSQRT, Opcode::OP_SQRT,
     Opcode::OP_ABS, Opcode::OP_LOGICALNOT,Opcode::OP_LOGICALAND, Opcode::OP_DIVS, Opcode::OP_DIV,

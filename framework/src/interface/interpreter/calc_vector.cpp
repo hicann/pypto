@@ -76,6 +76,27 @@ REGISTER_CALC_OP(OP_S_MIN, Opcode::OP_S_MIN, ExecuteOpBinary<Opcode::OP_S_MIN>);
 REGISTER_CALC_OP(OP_MAXIMUM, Opcode::OP_MAXIMUM, ExecuteOpBinary<Opcode::OP_S_MAX>);
 REGISTER_CALC_OP(OP_MINIMUM, Opcode::OP_MINIMUM, ExecuteOpBinary<Opcode::OP_S_MIN>);
 
+void ExecuteOpFmod(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
+    ASSERT(ctx->ioperandDataViewList->size() == SIZE_TWO);
+    auto ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto lhs = ctx->ioperandDataViewList->at(0);
+    auto rhs = ctx->ioperandDataViewList->at(1);
+    calc::Fmod(ret, lhs, rhs);
+}
+REGISTER_CALC_OP(OP_MOD, Opcode::OP_MOD, ExecuteOpFmod);
+
+void ExecuteOpFmods(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
+    ASSERT(ctx->ioperandDataViewList->size() == 1);
+    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto &lhs = ctx->ioperandDataViewList->at(0);
+    auto element = Element(DT_FP32, 0.0f);
+    ctx->op->GetAttr(OpAttributeKey::scalar, element);
+    calc::FmodS(ret, lhs, element);
+}
+REGISTER_CALC_OP(OP_MODS, Opcode::OP_MODS, ExecuteOpFmods);
+
 void ExecuteOpVecDup(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
     ASSERT(ctx->ioperandDataViewList->size() == 0);
