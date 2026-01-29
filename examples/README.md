@@ -65,12 +65,12 @@ python3 examples/01_beginner/basic/basic_ops.py --run_mode sim
    - [01_beginner/compute](01_beginner/compute/README.md)
 
 2. **第二阶段：进阶组件**
-   - [02_intermediate/nn/layer_normalization](02_intermediate/nn/layer_normalization/README.md)
+   - [02_intermediate/nn/layer_normalization](02_intermediate/basic_nn/layer_normalization/README.md)
    - [02_intermediate/operators/softmax](02_intermediate/operators/softmax/README.md)
-   - [02_intermediate/nn/ffn](02_intermediate/nn/ffn/README.md)
+   - [02_intermediate/nn/ffn](02_intermediate/basic_nn/ffn/README.md)
 
 3. **第三阶段：深度实践**
-   - [03_advanced/nn/attention](03_advanced/nn/attention/README.md)
+   - [03_advanced/nn/attention](03_advanced/advanced_nn/attention/README.md)
    - [models/deepseek_v32_exp](models/deepseek_v32_exp/README.md)
    - [models/glm_v4_5](models/glm_v4_5/README.md)
 

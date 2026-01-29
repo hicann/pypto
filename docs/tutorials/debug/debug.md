@@ -148,7 +148,7 @@
 2.  执行算子，自动触发仿真运行
 
     ```bash
-    python examples/hello_world/hello_world.py --run_mode=sim
+    python examples/00_hello_world/hello_world.py --run_mode=sim
     ```
 
 3.  执行成功，在output目录下，生成以下文件信息。

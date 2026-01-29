@@ -6,8 +6,8 @@
 
 高级样例涵盖以下核心领域：
 
-### 1. 复杂神经网络架构 ([nn](nn/))
-- **Attention Mechanism ([attention](nn/attention/))**:
+### 1. 复杂神经网络架构 ([advanced_nn](advanced_nn/))
+- **Attention Mechanism ([attention](advanced_nn/attention/))**:
     - 实现缩放点积注意力（Scaled Dot-Product Attention）。
     - 支持多头注意力（Multi-head Attention）。
     - 支持动态 Batch 和动态序列长度（Sequence Length）。
@@ -47,6 +47,6 @@ export TILE_FWK_DEVICE_ID=0
 
 ## 学习建议
 
-1. 首先深入学习 `nn/attention`，这是所有现代 LLM 的核心。
+1. 首先深入学习 `advanced_nn/attention`，这是所有现代 LLM 的核心。
 2. 通过 `patterns/function` 学习如何组织大型算子项目。
 3. 参考 `models` 目录下的真实模型实现，将这些高级特性应用到实际生产中。

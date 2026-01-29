@@ -6,11 +6,11 @@
 
 中级样例分为以下三个主要类别：
 
-### 1. 神经网络组件 ([nn](nn/))
-- **Layer Normalization ([layer_normalization](nn/layer_normalization/))**:
+### 1. 神经网络组件 ([basic_nn](basic_nn/))
+- **Layer Normalization ([layer_normalization](basic_nn/layer_normalization/))**:
     - 展示标准 LayerNorm 和 RMSNorm 的实现。
     - 涉及均值和方差的计算。
-- **FFN Module ([ffn](nn/ffn/))**:
+- **FFN Module ([ffn](basic_nn/ffn/))**:
     - 实现完整的 Feed-Forward Network（前馈网络）。
     - 支持多种激活函数（ReLU, GELU, SwiGLU）。
     - 结合了矩阵乘法、逐元素加法和激活函数。
@@ -53,5 +53,5 @@ export TILE_FWK_DEVICE_ID=0
 ## 学习建议
 
 1. 首先学习 `operators/activation`，了解如何通过基础算子组合出新算子。
-2. 学习 `nn/layer_normalization`，掌握涉及归约运算的规范化层实现。
+2. 学习 `basic_nn/layer_normalization`，掌握涉及归约运算的规范化层实现。
 3. 深入 `controflow` 目录，理解 PyPTO 在处理真实世界复杂逻辑时的强大能力。
