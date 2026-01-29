@@ -578,6 +578,7 @@ Tensor Cast(const Tensor &self, DataType dstDataType, CastMode mode) {
 }
 
 void TensorInnerConcatNew(Function &function, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
+    result->UpdateDynValidShape(operand->GetDynValidShape());
     function.AddOperation(Opcode::OP_REGISTER_COPY, {operand}, {result});
 }
 

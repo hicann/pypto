@@ -41,7 +41,7 @@ def test_verify_full_options():
     inputs = [a, b]
     outputs = [c]
 
-    inputs = [a.to(f"npu:{device_id}"), a.to(f"npu:{device_id}")]
+    inputs = [a.to(f"npu:{device_id}"), b.to(f"npu:{device_id}")]
     outputs = [c.to(f"npu:{device_id}")]
     pto_inputs = [pypto.from_torch(tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
     pto_outputs = [pypto.from_torch(tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]

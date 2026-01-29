@@ -26,6 +26,7 @@ from pypto.converter import _torch_dtype_from
 from pypto.cost_model import _cost_model_run_once_data_from_host
 from pypto.frontend.parser.diagnostics import Source
 from pypto.frontend.parser.parser import NestedFunctionMarker, Parser
+from pypto.runtime import _pto_verify_datas
 
 
 def _default_globals() -> dict[str, Any]:
@@ -281,10 +282,9 @@ class JitCallableWrapper:
         # Resolve symbolic dimensions using current input shapes so outputs
         # allocated below match the runtime dynamic sizes.
         concrete_input_shapes = [list(in_tensor.shape) for in_tensor in in_tensors]
-        self._compile_if_needed(concrete_input_shapes)
-        symbolic_dim_value_map = {}
         tmp_parser = self._create_parser()
         input_tensor_defs, output_tensor_defs = tmp_parser.get_signature()
+        symbolic_dim_value_map = {}
         symbolic_dim_value_map = tmp_parser.match_input_shapes(
             concrete_input_shapes, input_tensor_defs
         )
@@ -308,6 +308,8 @@ class JitCallableWrapper:
             dtype = _torch_dtype_from(out_tensor_def.dtype)
             out_tensor = torch.empty(shape, dtype=dtype, device=device)
             out_tensors.append(out_tensor)
+
+        self._compile_if_needed(concrete_input_shapes, in_tensors, out_tensors)
 
         # Execute the function using dispatch based on run mode
         def convert_tensors_with_metadata(torch_tensors, tensor_defs):
@@ -497,6 +499,8 @@ class JitCallableWrapper:
     def _compile_if_needed(
         self,
         concrete_input_shapes: list[list[int]],
+        in_tensors: list[torch.Tensor],
+        out_tensors: list[torch.Tensor],
     ) -> None:
         """Compile the function on first call if not already compiled (lazy compilation).
 
@@ -528,6 +532,7 @@ class JitCallableWrapper:
 
         # Initialize backend for compilation
         pypto_impl.DeviceInit()
+        self._setup_verify_data(in_tensors, out_tensors)
         handler = pypto_impl.OperatorBegin()
 
         # Set options AFTER OperatorBegin() to match @pypto.jit behavior
@@ -542,6 +547,42 @@ class JitCallableWrapper:
         pypto_impl.OperatorEnd(handler)
         self._handler = handler
         self._is_compiled = True
+
+        # Reset golden data after compilation, similar to pypto.jit
+        _pto_verify_datas.reset()
+
+    def _setup_verify_data(
+        self,
+        in_tensors: list[torch.Tensor],
+        out_tensors: list[torch.Tensor],
+    ) -> None:
+        """Set verify input/output/golden data for pass-level verification.
+
+        This mirrors the behavior of pypto.runtime._JIT.compile:
+        - Copy current input/output from NPU to Host
+        - Use golden data pre-injected via set_verify_golden_data
+        - Call SetVerifyData to register all three to the underlying ProgramData
+        """
+        if not (
+            isinstance(self._verify_options, dict)
+            and self._verify_options.get("enable_pass_verify")
+        ):
+            return
+
+        # Copy NPU Tensor to CPU, then convert to pypto.Tensor for constructing DeviceTensorData
+        host_pto_tensors = [t.cpu() for t in in_tensors + out_tensors]
+        pypto_tensors: list[pypto.Tensor] = []
+        for t in host_pto_tensors:
+            pto_tensor = pypto.from_torch(t)
+            pypto_tensors.append(pto_tensor)
+
+        host_pto_t_datas = _pto_to_tensor_data(pypto_tensors)
+        # Use golden data pre-injected via set_verify_golden_data
+        pypto_impl.SetVerifyData(
+            host_pto_t_datas,
+            [],
+            _pto_verify_datas.get_data(),
+        )
 
     def _run(
         self,
