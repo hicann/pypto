@@ -268,30 +268,9 @@ __aicore__ inline void DoIndexPut(size_t indicesShape, size_t dstShapes[], size_
     }
 }
 
-template <typename T>
-TILEOP void SetAtomicAddISA() {
-    if constexpr (std::is_same<T, __gm__ float>::value) {
-        set_atomic_f32();
-    } else if constexpr (std::is_same<T, __gm__ half>::value) {
-        set_atomic_f16();
-    } else if constexpr (std::is_same<T, __gm__ int16_t>::value) {
-        set_atomic_s16();
-    } else if constexpr (std::is_same<T, __gm__ int32_t>::value) {
-        set_atomic_s32();
-    } else if constexpr (std::is_same<T, __gm__ int8_t>::value) {
-        set_atomic_s8();
-    } else if constexpr (std::is_same<T, __gm__ bfloat16_t>::value) {
-        set_atomic_bf16();
-    }
-    set_atomic_add();
-}
-
 template <bool accumulate, size_t indicesSize, typename DST, typename VAL, typename IDX>
 __aicore__ inline void TIndexPut(DST dst, VAL values, IDX indices0, IDX indices1, IDX indices2, IDX indices3) {
     constexpr auto atomicType = accumulate ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone;
-    if constexpr (accumulate) {
-        SetAtomicAddISA<typename DST::Type>();
-    }
     constexpr auto dstShapeSize = Std::tuple_size<typename DST::Shape>::value;
     constexpr auto valuesSize = Std::tuple_size<typename VAL::Shape>::value;
     static_assert(dstShapeSize >= indicesSize && dstShapeSize <= 4 && dstShapeSize == valuesSize + indicesSize - 1);
@@ -316,9 +295,6 @@ __aicore__ inline void TIndexPut(DST dst, VAL values, IDX indices0, IDX indices1
         values.GetAddr(), dst.GetAddr(), indices0, indices1, indices2, indices3);
     set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-    if constexpr (accumulate) {
-        set_atomic_none();
-    }
 }
 
 #endif
