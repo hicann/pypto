@@ -190,6 +190,13 @@ Tensor Compare(const Tensor &self, const Element &other, OpType op, OutType mode
 Tensor Compare(const Element &self, const Tensor &other, OpType op, OutType mode);
 Tensor Pow(const Tensor &self, const Element &other);
 
+Tensor BitwiseRightShift(const Tensor &self, const Tensor &other);
+Tensor BitwiseRightShift(const Tensor &self, const Element &other);
+Tensor BitwiseRightShift(const Element &self, const Tensor &other);
+Tensor BitwiseLeftShift(const Tensor &self, const Tensor &other);
+Tensor BitwiseLeftShift(const Tensor &self, const Element &other);
+Tensor BitwiseLeftShift(const Element &self, const Tensor &other);
+
 Tensor Where(const Tensor &condition, const Tensor &input, const Tensor &other);
 Tensor Where(const Tensor &condition, const Tensor &input, const Element &other);
 Tensor Where(const Tensor &condition, const Element &input, const Tensor &other);

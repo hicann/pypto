@@ -1634,4 +1634,36 @@ std::string CodeGenOpCloudNPU::GenLogicalAndOp() const {
 
     return os.str();
 }
+
+std::string CodeGenOpCloudNPU::PrintBitwiseShiftTensor() const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
+    std::vector<std::string> paramList = {dstTensor, srcTensor, src1Tensor, tmpTensor};
+    std::ostringstream oss;
+    oss << tileOpName;
+    oss << WrapParamByParentheses(paramList) << ";\n";
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenBitwiseShiftOp() const {
+    ASSERT(isSupportLayout) << "BitwiseShift only support tile tensor";
+    return PrintBitwiseShiftTensor();
+}
+
+std::string CodeGenOpCloudNPU::PrintBitwiseShiftScalar() const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
+    std::ostringstream oss;
+    oss << tileOpName << "(" << dstTensor << ", " << scalarTmpBuffer << ", " << srcTensor << ", " << tmpTensor << ");\n";
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenBitwiseShiftScalarOp() const {
+    ASSERT(isSupportLayout) << "BitwiseShift only support tile tensor";
+    return PrintBitwiseShiftScalar();
+}
 } // namespace npu::tile_fwk

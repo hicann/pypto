@@ -640,6 +640,63 @@ TEST_F(TorchAdaptorTest, BinaryOpsS) {
     }
 }
 
+TEST_F(TorchAdaptorTest, BitwiseShift) {
+    {
+        // bitwiserightshift
+        auto self = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(4));
+        auto other = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(1));
+        auto out = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(0));
+        auto golden = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(2));
+        calc::BitwiseRightShift(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // bitwiseleftshift
+        auto self = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(4));
+        auto other = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(1));
+        auto out = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(0));
+        auto golden = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(8));
+        calc::BitwiseLeftShift(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // bitwiserightshifts
+        auto self = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(4));
+        auto other = Element(DT_INT16, static_cast<int16_t>(1));
+        auto out = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(0));
+        auto golden = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(2));
+        calc::BitwiseRightShiftS(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // bitwiseleftshifts
+        auto self = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(4));
+        auto other = Element(DT_INT16, static_cast<int16_t>(1));
+        auto out = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(0));
+        auto golden = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(8));
+        calc::BitwiseLeftShiftS(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // sbitwiserightshift
+        auto self = Element(DT_INT16, static_cast<int16_t>(4));
+        auto other = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(1));
+        auto out = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(0));
+        auto golden = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(2));
+        calc::SBitwiseRightShift(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // sbitwiseleftshift
+        auto self = Element(DT_INT16, static_cast<int16_t>(4));
+        auto other = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(1));
+        auto out = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(0));
+        auto golden = makeTensorData(DT_INT16, {16, 16}, static_cast<int16_t>(8));
+        calc::SBitwiseLeftShift(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+}
+
 TEST_F(TorchAdaptorTest, Where) {
     {
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);

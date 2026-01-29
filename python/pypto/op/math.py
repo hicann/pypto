@@ -668,3 +668,99 @@ def cumsum(
                 [3 5 7]]
     """
     return pypto_impl.cumsum(input, dim)
+
+
+@op_wrapper
+def bitwise_right_shift(
+    input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
+    """Computes the element-wise bitwise right shift of `input` and `other`.
+
+    This function calculates the formula: `out = input >> other`.
+    It supports broadcasting between the input tensors.
+
+    Parameters
+    ----------
+    input : Tensor
+        The first input tensor.
+    other : Tensor or Number
+        The second input tensor or a scalar to bitwise right shift.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise right shift.
+
+    Raises
+    ------
+    RuntimeError
+        If the two tensors are not broadcastable to a common shape.
+
+    See Also
+    --------
+    sub : The inverse operation, element-wise subtraction.
+    mul : Element-wise multiplication.
+
+    Examples
+    --------
+    a = pypto.tensor([1, 3], pypto.DT_INT16)
+    b = pypto.tensor([1, 3], pypto.DT_INT16)
+    out = pypto.bitwise_right_shift(a, b)
+
+    Input a:    [[1 2 3]]
+    Input b:    [[1 1 1]]
+    Output out: [[0 1 1]]
+    """
+    if isinstance(input, pypto_impl.Tensor) and isinstance(other, pypto_impl.Tensor):
+        return pypto_impl.BitwiseRightShift(input, other)
+    elif isinstance(input, pypto_impl.Tensor):
+        return pypto_impl.BitwiseRightShift(input, pypto_impl.Element(input.dtype, other))
+    else:
+        return pypto_impl.BitwiseRightShift(pypto_impl.Element(other.dtype, input), other)
+
+
+@op_wrapper
+def bitwise_left_shift(
+    input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
+    """Computes the element-wise bitwise left shift of `input` and `other`.
+
+    This function calculates the formula: `out = input << other`.
+    It supports broadcasting between the input tensors.
+
+    Parameters
+    ----------
+    input : Tensor
+        The first input tensor.
+    other : Tensor or Number
+        The second input tensor or a scalar to bitwise left shift.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise left shift.
+
+    Raises
+    ------
+    RuntimeError
+        If the two tensors are not broadcastable to a common shape.
+
+    See Also
+    --------
+    sub : The inverse operation, element-wise subtraction.
+    mul : Element-wise multiplication.
+
+    Examples
+    --------
+    a = pypto.tensor([1, 3], pypto.DT_INT16)
+    b = pypto.tensor([1, 3], pypto.DT_INT16)
+    out = pypto.bitwise_left_shift(a, b)
+
+    Input a:    [[1 2 3]]
+    Input b:    [[1 1 1]]
+    Output out: [[2 4 6]]
+    """
+    if isinstance(input, pypto_impl.Tensor) and isinstance(other, pypto_impl.Tensor):
+        return pypto_impl.BitwiseLeftShift(input, other)
+    elif isinstance(input, pypto_impl.Tensor):
+        return pypto_impl.BitwiseLeftShift(input, pypto_impl.Element(input.dtype, other))
+    else:
+        return pypto_impl.BitwiseLeftShift(pypto_impl.Element(other.dtype, input), other)

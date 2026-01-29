@@ -314,20 +314,9 @@ void TiledLogicalAndOperation(Function& function, const TileShape& tileShape, si
     }
 }
 
-void BroadcastOperand(LogicalTensorPtr &operand, LogicalTensorPtr &other, LogicalTensorPtr result,
-                                      Function& function, const TileShape& tileShape) {
-    auto dstShape = result->shape;
-    if (operand->shape == dstShape) {
-        return;
-    }
-    auto expanded = std::make_shared<LogicalTensor>(function, operand->Datatype(), dstShape);
-    Expand(function, tileShape, operand, {other}, expanded);
-    operand = expanded;
-}
-
 void TiledLogicalAndOperation(Function& function, const TileShape& tileShape, LogicalTensorPtr operand0, LogicalTensorPtr operand1, const LogicalTensorPtr& result) {
-    BroadcastOperand(operand0, operand1, result, function, tileShape);
-    BroadcastOperand(operand1, operand0, result, function, tileShape);
+    BroadcastOperandTensor(operand0, operand1, result, function, tileShape);
+    BroadcastOperandTensor(operand1, operand0, result, function, tileShape);
 
     TileInfo tileInfo0(result->shape.size(), result->offset.size());
     TileInfo tileInfo1(result->shape.size(), result->offset.size());

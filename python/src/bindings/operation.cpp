@@ -112,6 +112,24 @@ void bind_operation(py::module &m) {
         "Fmod", [](const Tensor &self, const Element &other) { return npu::tile_fwk::Fmod(self, other); },
         "Tensor mod scalar.");
     m.def(
+        "BitwiseRightShift", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseRightShift(self, other); },
+        "Tensor bitwise right shift.");
+    m.def(
+        "BitwiseLeftShift", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseLeftShift(self, other); },
+        "Tensor bitwise left shift.");
+    m.def(
+        "BitwiseRightShift", [](const Tensor &self, const Element &other) { return npu::tile_fwk::BitwiseRightShift(self, other); },
+        "Tensor bitwise right shift scalar.");
+    m.def(
+        "BitwiseLeftShift", [](const Tensor &self, const Element &other) { return npu::tile_fwk::BitwiseLeftShift(self, other); },
+        "Tensor bitwise right shift scalar.");
+    m.def(
+        "BitwiseRightShift", [](const Element &self, const Tensor &other) { return npu::tile_fwk::BitwiseRightShift(self, other); },
+        "Scalar bitwise right shift tensor.");
+    m.def(
+        "BitwiseLeftShift", [](const Element &self, const Tensor &other) { return npu::tile_fwk::BitwiseLeftShift(self, other); },
+        "Scalar bitwise right shift tensor.");
+    m.def(
         "Range",
         [](const Element &start, const Element &end, const Element &step) {
             return npu::tile_fwk::Range(start, end, step);

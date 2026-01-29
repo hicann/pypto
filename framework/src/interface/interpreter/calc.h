@@ -137,6 +137,24 @@ inline void MinS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Elem
 inline void MaxS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar) {
     GetCalcOps()->MaxS(out, self, scalar);
 }
+inline void BitwiseRightShift(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    GetCalcOps()->BitwiseRightShift(out, self, other);
+}
+inline void BitwiseLeftShift(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    GetCalcOps()->BitwiseLeftShift(out, self, other);
+}
+inline void BitwiseRightShiftS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar) {
+    GetCalcOps()->BitwiseRightShiftS(out, self, scalar);
+}
+inline void BitwiseLeftShiftS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar) {
+    GetCalcOps()->BitwiseLeftShiftS(out, self, scalar);
+}
+inline void SBitwiseRightShift(LogicalTensorDataPtr out, const Element &scalar, LogicalTensorDataPtr other) {
+    GetCalcOps()->SBitwiseRightShift(out, scalar, other);
+}
+inline void SBitwiseLeftShift(LogicalTensorDataPtr out, const Element &scalar, LogicalTensorDataPtr other) {
+    GetCalcOps()->SBitwiseLeftShift(out, scalar, other);
+}
 /* used by reducc op, if shape are not same, need masked */
 inline void PairSum(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     GetCalcOps()->PairSum(out, self, other);

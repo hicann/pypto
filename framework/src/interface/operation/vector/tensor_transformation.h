@@ -23,11 +23,12 @@
 #include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
-
 void Expand(Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand,
     const std::vector<LogicalTensorPtr> &other, const LogicalTensorPtr &result);
 void ExpandWithResultValidShape(Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand,
     const LogicalTensorPtr &result, const std::vector<SymbolicScalar> resultValidShape);
+void BroadcastOperandTensor(LogicalTensorPtr &operand, LogicalTensorPtr &other, LogicalTensorPtr result,
+                                      Function& function, const TileShape& tileShape);
 Tensor TensorFullOperation(Function &function, const Element &src, const SymbolicScalar &dynValue,
     DataType dtype, const std::vector<int64_t> &dstShape, const std::vector<SymbolicScalar> &validShape);
 

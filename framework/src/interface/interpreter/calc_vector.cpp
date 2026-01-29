@@ -599,4 +599,47 @@ void ExecuteOpGatherElement(ExecuteOperationContext *ctx) {
     calc::GatherElements(ret, params, indices, axis);
 }
 REGISTER_CALC_OP(OP_GATHER_ELEMENT, Opcode::OP_GATHER_ELEMENT, ExecuteOpGatherElement);
+
+template <Opcode opcode>
+void ExecuteOpBitwiseShift(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
+    ASSERT(ctx->ioperandDataViewList->size() == SIZE_TWO);
+    auto ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto lhs = ctx->ioperandDataViewList->at(0);
+    auto rhs = ctx->ioperandDataViewList->at(1);
+
+    switch (opcode) {
+        case Opcode::OP_BITWISERIGHTSHIFT: calc::BitwiseRightShift(ret, lhs, rhs); break;
+        case Opcode::OP_BITWISELEFTSHIFT: calc::BitwiseLeftShift(ret, lhs, rhs); break;
+        default: ASSERT(false);
+    }
+}
+
+template <Opcode opcode>
+void ExecuteOpBitwiseShiftScalar(ExecuteOperationContext *ctx) {
+    if (opcode == Opcode::OP_SBITWISERIGHTSHIFT || opcode == Opcode::OP_SBITWISELEFTSHIFT) {
+        ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
+    } else {
+        ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    }
+    ASSERT(ctx->ioperandDataViewList->size() == 1);
+    auto ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto lhs = ctx->ioperandDataViewList->at(0);
+    auto element = Element(DT_INT32, 0);
+    ctx->op->GetAttr(OpAttributeKey::scalar, element);
+
+    switch (opcode) {
+        case Opcode::OP_BITWISERIGHTSHIFTS: calc::BitwiseRightShiftS(ret, lhs, element); break;
+        case Opcode::OP_BITWISELEFTSHIFTS: calc::BitwiseLeftShiftS(ret, lhs, element); break;
+        case Opcode::OP_SBITWISERIGHTSHIFT: calc::SBitwiseRightShift(ret, element, lhs); break;
+        case Opcode::OP_SBITWISELEFTSHIFT: calc::SBitwiseLeftShift(ret, element, lhs); break;
+        default: ASSERT(false);
+    }
+}
+REGISTER_CALC_OP(OP_BITWISERIGHTSHIFT, Opcode::OP_BITWISERIGHTSHIFT, ExecuteOpBitwiseShift<Opcode::OP_BITWISERIGHTSHIFT>);
+REGISTER_CALC_OP(OP_BITWISELEFTSHIFT, Opcode::OP_BITWISELEFTSHIFT, ExecuteOpBitwiseShift<Opcode::OP_BITWISELEFTSHIFT>);
+REGISTER_CALC_OP(OP_BITWISERIGHTSHIFTS, Opcode::OP_BITWISERIGHTSHIFTS, ExecuteOpBitwiseShiftScalar<Opcode::OP_BITWISERIGHTSHIFTS>);
+REGISTER_CALC_OP(OP_BITWISELEFTSHIFTS, Opcode::OP_BITWISELEFTSHIFTS, ExecuteOpBitwiseShiftScalar<Opcode::OP_BITWISELEFTSHIFTS>);
+REGISTER_CALC_OP(OP_SBITWISERIGHTSHIFT, Opcode::OP_SBITWISERIGHTSHIFT, ExecuteOpBitwiseShiftScalar<Opcode::OP_SBITWISERIGHTSHIFT>);
+REGISTER_CALC_OP(OP_SBITWISELEFTSHIFT, Opcode::OP_SBITWISELEFTSHIFT, ExecuteOpBitwiseShiftScalar<Opcode::OP_SBITWISELEFTSHIFT>);
 }

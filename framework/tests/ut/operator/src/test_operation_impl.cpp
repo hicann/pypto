@@ -719,3 +719,87 @@ TEST_F(OperationImplTest, Test_TopK_04) {
         output = TopK(input_a, 2048, -1);
     }
 }
+
+TEST_F(OperationImplTest, Test_BitwiseRightShift) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_INT16, {16, 16}, "self");
+    Tensor other(DT_INT16, {16, 16}, "other");
+    Tensor result;
+    FUNCTION("TestBitwiseRightShift") {
+        result = BitwiseRightShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BitwiseRightShift_brc) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_INT16, {16, 16}, "self");
+    Tensor other(DT_INT16, {1, 16}, "other");
+    Tensor result;
+    FUNCTION("TestBitwiseRightShift") {
+        result = BitwiseRightShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BitwiseRightShifts) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_INT16, {16, 16}, "self");
+    int scalar = 1;
+    Element other(DT_INT16, scalar);
+    Tensor result;
+    FUNCTION("TestBitwiseRightShift") {
+        result = BitwiseRightShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_SBitwiseRightShift) {
+    TileShape::Current().SetVecTile({16, 16});
+    int scalar = 1;
+    Element self(DT_INT16, scalar);
+    Tensor other(DT_INT16, {16, 16}, "self");
+    Tensor result;
+    FUNCTION("TestBitwiseRightShift") {
+        result = BitwiseRightShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BitwiseLeftShift) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_INT16, {16, 16}, "self");
+    Tensor other(DT_INT16, {16, 16}, "other");
+    Tensor result;
+    FUNCTION("TestBitwiseLeftShift") {
+        result = BitwiseLeftShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BitwiseLeftShift_brc) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_INT16, {1, 16}, "self");
+    Tensor other(DT_INT16, {16, 16}, "other");
+    Tensor result;
+    FUNCTION("TestBitwiseLeftShift") {
+        result = BitwiseLeftShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_BitwiseLeftShifts) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_INT16, {16, 16}, "self");
+    int scalar = 1;
+    Element other(DT_INT16, scalar);
+    Tensor result;
+    FUNCTION("TestBitwiseLeftShift") {
+        result = BitwiseLeftShift(self, other);
+    }
+}
+
+TEST_F(OperationImplTest, Test_SBitwiseLeftShift) {
+    TileShape::Current().SetVecTile({16, 16});
+    int scalar = 1;
+    Element self(DT_INT16, scalar);
+    Tensor other(DT_INT16, {16, 16}, "self");
+    Tensor result;
+    FUNCTION("TestBitwiseLeftShift") {
+        result = BitwiseLeftShift(self, other);
+    }
+}
