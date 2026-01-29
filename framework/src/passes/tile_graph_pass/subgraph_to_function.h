@@ -39,6 +39,8 @@ public:
     SubgraphToFunction() : Pass("SubgraphToFunction") {}
     ~SubgraphToFunction() override = default;
     friend class MixSubgraphSplit;
+    friend class MixCallOperationBuilder; // 提供接口规避编译错误，后续整改
+    friend class MixDependencyAnalyzer;
 
     void SetupStaticProcessor() {
         staticProcessor_.SetNList(nLIST);
