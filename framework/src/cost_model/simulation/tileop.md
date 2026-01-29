@@ -358,6 +358,132 @@ function parameters:
 
 TileOp::Trsqrt<float, 64, 1>((__ubuf__ float *)UBId1Addr, (__ubuf__ float *)UBId1Addr);
 
+
+### Tceil
+
+#### Syntax
+
+template <typename T, unsigned TShape0, unsigned TShape1>
+TILEOP void Tceil(__ubuf__ T *dst, __ubuf__ T *src)
+
+#### Function Description
+
+```
+dst = Tensor(dtype=T, shape=(TShape0, TShape1))
+src = Tensor(dype=T, shape=(TShape0, TShape1))
+
+for (int i = 0; i < TShape0; i++) {
+    for (int j = 0; j < TShape1; j++) {
+        dst[i][j] = ceil(src[i][j])
+    }
+}
+```
+
+
+#### Parameters
+
+template parameters: 
+* T: dtype
+* TShape0: dst/src shape dim0
+* TShape1: dst/src shape dim1
+
+function parameters: 
+* dst: dst ub buffer
+* src: src ub buffer
+
+
+#### Constraints
+
+
+
+#### Demonstration
+
+TileOp::Tceil<float, 64, 1>((__ubuf__ float *)UBId1Addr, (__ubuf__ float *)UBId1Addr);
+
+
+### Tfloor
+
+#### Syntax
+
+template <typename T, unsigned TShape0, unsigned TShape1>
+TILEOP void Tfloor(__ubuf__ T *dst, __ubuf__ T *src)
+
+#### Function Description
+
+```
+dst = Tensor(dtype=T, shape=(TShape0, TShape1))
+src = Tensor(dype=T, shape=(TShape0, TShape1))
+
+for (int i = 0; i < TShape0; i++) {
+    for (int j = 0; j < TShape1; j++) {
+        dst[i][j] = floor(src[i][j])
+    }
+}
+```
+
+
+#### Parameters
+
+template parameters: 
+* T: dtype
+* TShape0: dst/src shape dim0
+* TShape1: dst/src shape dim1
+
+function parameters: 
+* dst: dst ub buffer
+* src: src ub buffer
+
+
+#### Constraints
+
+
+
+#### Demonstration
+
+TileOp::Tfloor<float, 64, 1>((__ubuf__ float *)UBId1Addr, (__ubuf__ float *)UBId1Addr);
+
+
+### Ttrunc
+
+#### Syntax
+
+template <typename T, unsigned TShape0, unsigned TShape1>
+TILEOP void Ttrunc(__ubuf__ T *dst, __ubuf__ T *src)
+
+#### Function Description
+
+```
+dst = Tensor(dtype=T, shape=(TShape0, TShape1))
+src = Tensor(dype=T, shape=(TShape0, TShape1))
+
+for (int i = 0; i < TShape0; i++) {
+    for (int j = 0; j < TShape1; j++) {
+        dst[i][j] = trunc(src[i][j])
+    }
+}
+```
+
+
+#### Parameters
+
+template parameters: 
+* T: dtype
+* TShape0: dst/src shape dim0
+* TShape1: dst/src shape dim1
+
+function parameters: 
+* dst: dst ub buffer
+* src: src ub buffer
+
+
+#### Constraints
+
+
+
+#### Demonstration
+
+TileOp::Ttrunc<float, 64, 1>((__ubuf__ float *)UBId1Addr, (__ubuf__ float *)UBId1Addr);
+
 ### Tadds
 
 #### Syntax

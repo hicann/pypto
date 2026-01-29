@@ -193,6 +193,99 @@ TEST_F(DynamicOpsTest, AssembleFp16) {
     }
 }
 
+TEST_F(DynamicOpsTest, Ceil) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 2;
+    int64_t n = 4;
+    
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, n}, "outValue");
+
+    std::vector<float> inputData = {
+        1.2f,  2.0f,  3.9f, -1.1f,
+        -2.9f, 5.5f, -0.1f, 7.0f
+    };
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            outValue = Ceil(t0);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, Floor) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 2;
+    int64_t n = 4;
+    
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, n}, "outValue");
+
+    std::vector<float> inputData = {
+        1.2f,  2.0f,  3.9f, -1.1f,
+        -2.9f, 5.5f, -0.1f, 7.0f
+    };
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            outValue = Floor(t0);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, Trunc) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 2;
+    int64_t n = 4;
+    
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, n}, "outValue");
+
+    std::vector<float> inputData = {
+        1.2f,  2.0f,  3.9f, -1.1f,
+        -2.9f, 5.5f, -0.1f, 7.0f
+    };
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            outValue = Trunc(t0);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, PassVerifyWithoutGoldens) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);

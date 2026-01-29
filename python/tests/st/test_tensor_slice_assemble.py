@@ -11,6 +11,7 @@
 """
 """
 import os
+import math
 import pypto
 import pytest
 import torch
@@ -89,7 +90,7 @@ def test_2d_assemble_to_3d():
 
     with pypto.function("SLICE_NEG_INDEX", x, res):
         for b_idx in pypto.loop(res.shape[0], name="LOOP_L0", idx_name="a_idx"):
-            s_loop = pypto.ceil(res.shape[1], x.shape[0])
+            s_loop = math.ceil(res.shape[1] / x.shape[0])
             for s_idx in pypto.loop(s_loop, name="LOOP_L1", idx_name="s_idx"):
                 pypto.set_vec_tile_shapes(4, 4, 8)
                 offset = s_idx * x.shape[1]

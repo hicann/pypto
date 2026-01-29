@@ -825,6 +825,45 @@ def gen_rsqrt_op_golden(case_name: str, output: Path, case_index: int = None) ->
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestCeil/CeilOperationTest.TestCeil",
+    ]
+)
+def gen_ceil_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        return [np.ceil(inputs[0])]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Ceil", golden_func, output, case_index)
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestFloor/FloorOperationTest.TestFloor",
+    ]
+)
+def gen_floor_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        return [np.floor(inputs[0])]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Floor", golden_func, output, case_index)
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestTrunc/TruncOperationTest.TestTrunc",
+    ]
+)
+def gen_trunc_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        return [np.trunc(inputs[0])]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Trunc", golden_func, output, case_index)
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestSqrt/SqrtOperationTest.TestSqrt",
     ]
 )

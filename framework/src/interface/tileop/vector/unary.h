@@ -19,6 +19,8 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#include <cmath>
+
 template <UnaryOp op, typename T0, typename T1>
 TILEOP void UnaryComputeImpl(T0 dst, T1 src) {
     if constexpr (op == UnaryOp::EXP) {
@@ -140,4 +142,113 @@ template <typename T0, typename T1>
 TILEOP void TAbs(T0 dst, T1 src) {
     UnaryCompute<UnaryOp::ABS>(dst, src);
 }
+
+template <typename Ttemp, typename T0, typename T1>
+TILEOP void CeilComputeImpl(T0 dst, T1 src) {
+    pto::TCVT(dst, src, pto::RoundMode::CAST_CEIL);
+}
+#define OP_TILE_OP_CEIL TCEIL
+template <typename T0, typename T1>
+TILEOP void TCeil(T0 dst, T1 src) {
+    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+        auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data;
+        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data;
+        pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
+        pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
+        CeilComputeImpl<float>(dstTile, srcTile);
+        return;
+    }
+
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+
+    auto dstTile = PtoTile<T0>(dst);
+    auto srcTile = PtoTile<T1>(src);
+
+    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                dstTile.Assign(dst, tileOffsets);
+                srcTile.Assign(src, tileOffsets);
+                CeilComputeImpl<float>(dstTile.Data(), srcTile.Data());
+            }
+        }
+    }
+}
+
+template <typename Ttemp, typename T0, typename T1>
+TILEOP void FloorComputeImpl(T0 dst, T1 src) {
+    pto::TCVT(dst, src, pto::RoundMode::CAST_FLOOR);
+}
+#define OP_TILE_OP_FLOOR TFLOOR
+template <typename T0, typename T1>
+TILEOP void TFloor(T0 dst, T1 src) {
+    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+        auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data;
+        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data;
+        pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
+        pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
+        FloorComputeImpl<float>(dstTile, srcTile);
+        return;
+    }
+
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+
+    auto dstTile = PtoTile<T0>(dst);
+    auto srcTile = PtoTile<T1>(src);
+
+    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                dstTile.Assign(dst, tileOffsets);
+                srcTile.Assign(src, tileOffsets);
+                FloorComputeImpl<float>(dstTile.Data(), srcTile.Data());
+            }
+        }
+    }
+}
+
+template <typename Ttemp, typename T0, typename T1>
+TILEOP void TruncComputeImpl(T0 dst, T1 src) {
+    pto::TCVT(dst, src, pto::RoundMode::CAST_TRUNC);
+}
+#define OP_TILE_OP_TRUNC TTRUNC
+template <typename T0, typename T1>
+TILEOP void TTrunc(T0 dst, T1 src) {
+    if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
+        auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data;
+        auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data;
+        pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
+        pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
+        TruncComputeImpl<float>(dstTile, srcTile);
+        return;
+    }
+
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+
+    auto dstTile = PtoTile<T0>(dst);
+    auto srcTile = PtoTile<T1>(src);
+
+    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                dstTile.Assign(dst, tileOffsets);
+                srcTile.Assign(src, tileOffsets);
+                TruncComputeImpl<float>(dstTile.Data(), srcTile.Data());
+            }
+        }
+    }
+}
+
 #endif

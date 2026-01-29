@@ -52,6 +52,15 @@ inline void Rsqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 inline void Sqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Sqrt(out, self);
 }
+inline void Ceil(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Ceil(out, self);
+}
+inline void Floor(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Floor(out, self);
+}
+inline void Trunc(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Trunc(out, self);
+}
 inline void Abs(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Abs(out, self);
 }

@@ -463,6 +463,39 @@ TEST_F(OperationImplTest, test_Rsqrt_FP32) {
     }
 }
 
+TEST_F(OperationImplTest, test_Ceil_FP32) {
+    constexpr int TILE_SHAPE = 32;
+    constexpr int SHAPE = 128;
+    TileShape::Current().SetVecTile(TILE_SHAPE, TILE_SHAPE);
+    Tensor operand1(DT_FP32, {SHAPE, SHAPE}, "operand1");
+    Tensor result;
+    FUNCTION("TestCeil") {
+        result = Ceil(operand1);
+    }
+}
+
+TEST_F(OperationImplTest, test_Floor_FP32) {
+    constexpr int TILE_SHAPE = 32;
+    constexpr int SHAPE = 128;
+    TileShape::Current().SetVecTile(TILE_SHAPE, TILE_SHAPE);
+    Tensor operand1(DT_FP32, {SHAPE, SHAPE}, "operand1");
+    Tensor result;
+    FUNCTION("TestFloor") {
+        result = Floor(operand1);
+    }
+}
+
+TEST_F(OperationImplTest, test_Trunc_FP32) {
+    constexpr int TILE_SHAPE = 32;
+    constexpr int SHAPE = 128;
+    TileShape::Current().SetVecTile(TILE_SHAPE, TILE_SHAPE);
+    Tensor operand1(DT_FP32, {SHAPE, SHAPE}, "operand1");
+    Tensor result;
+    FUNCTION("TestTrunc") {
+        result = Trunc(operand1);
+    }
+}
+
 TEST_F(OperationImplTest, TestIndexPut_) {
     constexpr int TILE_SHAPE = 8;
     TileShape::Current().SetVecTile(TILE_SHAPE);

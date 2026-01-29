@@ -146,6 +146,12 @@ stest:
       - TestRsqrt/RsqrtOperationTest.TestRsqrt/0
       - TestRsqrt/RsqrtOperationTest.TestRsqrt/2
       - TestRsqrt/RsqrtOperationTest.TestRsqrt/3
+      - TestCeil/CeilOperationTest.TestCeil/0
+      - TestCeil/CeilOperationTest.TestCeil/1
+      - TestFloor/FloorOperationTest.TestFloor/0
+      - TestFloor/FloorOperationTest.TestFloor/1
+      - TestTrunc/TruncOperationTest.TestTrunc/0
+      - TestTrunc/TruncOperationTest.TestTrunc/1
       - TestPows/PowsOperationTest.TestPows/12
       - TestPows/PowsOperationTest.TestPows/13
       - TestPows/PowsOperationTest.TestPows/14

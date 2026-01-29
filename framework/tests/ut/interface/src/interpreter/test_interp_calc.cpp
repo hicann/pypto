@@ -171,6 +171,30 @@ TEST_F(TorchAdaptorTest, Cmps) {
         }
     }
 }
+TEST_F(TorchAdaptorTest, Ceil) {
+    // ceil
+    auto self = makeTensorData(DT_FP32, {16, 16}, 1.1f);
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, 2.0f);
+    calc::Ceil(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
+TEST_F(TorchAdaptorTest, Floor) {
+    // floor
+    auto self = makeTensorData(DT_FP32, {16, 16}, 1.1f);
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+    calc::Floor(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
+TEST_F(TorchAdaptorTest, Trunc) {
+    // trunc
+    auto self = makeTensorData(DT_FP32, {16, 16}, 1.1f);
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, 1.0f);
+    calc::Trunc(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
 
 TEST_F(TorchAdaptorTest, UnaryOps) {
     {
