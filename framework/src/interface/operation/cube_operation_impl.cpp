@@ -90,6 +90,9 @@ void SetBiasAndScaleAttr(
     if (matmulAttrParam.scaleValue != 0 && isFirstTile) {
         op.SetAttribute(A_MUL_B_SCALE_ATTR, Element(DataType::DT_UINT64, matmulAttrParam.scaleValue));
     }
+    if (matmulAttrParam.gmAccumulationFlag) {
+        op.SetAttribute(A_MUL_B_GM_ACC, matmulAttrParam.gmAccumulationFlag);
+    }
 };
 
 struct L1DataLoadParam {
@@ -483,6 +486,7 @@ void SetAMulBAttr(const MatmulGraphNodes &tensorGraphNodes, const MatmulAttrPara
     op.SetAttribute(A_MUL_B_ACT_M, attrParam.mValue);
     op.SetAttribute(A_MUL_B_ACT_K, attrParam.kValue);
     op.SetAttribute(A_MUL_B_ACT_N, attrParam.nValue);
+    op.SetAttribute(A_MUL_B_GM_ACC, attrParam.gmAccumulationFlag);
 
     if (op.GetOpcode() == Opcode::OP_A_MUL_B) {
         op.SetAttribute(A_MUL_B_BIAS_ATTR, tensorGraphNodes.biasTensorPtr != nullptr);
