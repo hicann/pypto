@@ -647,7 +647,10 @@ def generate_moe_dispatch_golden(case_name: str, output: Path, case_index: int =
 def generate_moe_distributed_combine_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     def golden_func(config: dict):
         case = parse_moe_case(config)
-        params = (case.batch_size, case.hidden_size, case.routed_expert_num, case.top_k, get_dtype_num(case.dtype))
+        params = config['params']
+        use_v2 = params['use_v2']
+        params = (case.batch_size, case.hidden_size, case.routed_expert_num, case.top_k, get_dtype_num(case.dtype),
+            use_v2)
         save_params(params, output)
         dispatch_save_dir = output / 'dispatch'
         dispatch_save_dir.mkdir(parents=True, exist_ok=True)

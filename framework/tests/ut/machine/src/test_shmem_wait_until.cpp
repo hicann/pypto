@@ -23,28 +23,51 @@
 
 namespace {
 
-auto InitializeTensorInfo(const uint32_t rankSize) {
-    npu::tile_fwk::Distributed::TensorInfo info;
-    info.offset = {0, 1, 0, 0};
-    info.dim = 3;
-    info.expectedSum = 0;
-    info.resetSignal = false;
-    info.rawIndex = 0;
-    const uint32_t rawShape0 = rankSize;
-    const uint32_t rawShape1 = rankSize;
-    const uint32_t rawShape2 = 4;
-    const uint32_t rawShape3 = 8;
-    std::vector<int32_t> rawAddr(rawShape1 * rawShape2 * rawShape3, 0);
-    info.rawAddr = reinterpret_cast<uint64_t>(rawAddr.data());
-    int32_t* addr = rawAddr.data() + info.offset[1] * rawShape2 * rawShape3 + info.offset[2] * rawShape3 + info.offset[3];
-    addr[0] = 1;
-    return std::make_tuple(info, std::move(rawAddr), rawShape0, rawShape1, rawShape2, rawShape3);
+std::vector<int32_t> InitializeShmemSignal(std::vector<uint32_t> shmemSignalRawShape,
+    std::vector<uint32_t> shmemSignalOffset, std::vector<uint32_t> tileShape, uint32_t shmemSignalStride,
+    int32_t expectedValue)
+{
+    uint32_t tileRowNum = (shmemSignalRawShape[3] + tileShape[0] - 1) / tileShape[0];
+    uint32_t tileColNum = (shmemSignalRawShape[4] + tileShape[1] - 1) / tileShape[1];
+    uint32_t tileRowIndex = shmemSignalOffset[3] / tileShape[0];
+    uint32_t tileColIndex = shmemSignalOffset[4] / tileShape[1];
+    uint32_t totalTileNum = tileRowNum * tileColNum;
+    uint32_t tileIndex = tileRowIndex * tileColNum + tileColIndex;
+    uint32_t size = std::accumulate(shmemSignalRawShape.begin() + 1, shmemSignalRawShape.end(), 1,
+        std::multiplies<uint32_t>());
+    std::vector<int32_t> shmemSignal(size, 0);
+    uint32_t index = (shmemSignalOffset[1] * shmemSignalRawShape[2] * totalTileNum + shmemSignalOffset[2] *
+        totalTileNum + tileIndex) * shmemSignalStride;
+    shmemSignal[index] = expectedValue;
+    return shmemSignal;
 }
 
-auto InitializeAicpuCode(const uint32_t rankSize) {
-    constexpr size_t codeSize = 17;
+auto InitializeAicpuCode(std::vector<uint32_t> shmemSignalRawShape, std::vector<uint32_t> tileShape,
+    uint32_t shmemSignalStride, int32_t expectedValue, uint32_t shmemSignalAttrOffset)
+{
+    std::vector<uint32_t> shmemSignalShape = shmemSignalRawShape;
+    constexpr size_t codeSize = 26;
+    uint32_t paramSizePerOperand = 2; // 每个 operand 都保存 dim 和 attrOffset，总共 2 个 param
+    uint32_t oOperandNum = 1;
+    uint32_t iOperandNum = 2;
+    uint32_t opcode = -1;
+    uint32_t oOperandTotalParamNum = paramSizePerOperand * oOperandNum;
+    uint32_t outDim = 2;
+    uint32_t outAttrOffset = -1;
+    uint32_t iOperandTotalParamNum = paramSizePerOperand * iOperandNum;
+    uint32_t predTokenDim = 2;
+    uint32_t predTokenAttrOffset = -1;
+    uint32_t shmemSignalDim = 5;
+    uint32_t shmemSignalShapeNum = shmemSignalDim * 2; // raw shape 存一份，shape 存一份，总共 2 份
+    uint32_t attrSize = 5;
+    uint32_t resetSignal = 0;
+    uint32_t initData[codeSize] = {opcode, oOperandTotalParamNum, outDim, outAttrOffset, iOperandTotalParamNum,
+        predTokenDim, predTokenAttrOffset, shmemSignalDim, shmemSignalAttrOffset, shmemSignalShapeNum,
+        shmemSignalRawShape[0], shmemSignalRawShape[1], shmemSignalRawShape[2], shmemSignalRawShape[3],
+        shmemSignalRawShape[4], shmemSignalShape[0], shmemSignalShape[1], shmemSignalShape[2], shmemSignalShape[3],
+        shmemSignalShape[4], attrSize, static_cast<uint32_t>(expectedValue), shmemSignalStride, resetSignal,
+        tileShape[0], tileShape[1]};
     auto data = std::make_unique<int32_t[]>(codeSize);
-    uint32_t initData[codeSize] = {153, 2, 2, 44, 4, 2, 18, 4, 0, 2, 1, 0, 4, rankSize, rankSize, 4, 8};
     std::copy(initData, initData + codeSize, data.get());
     npu::tile_fwk::dynamic::DevRelocVector<int32_t> aicpuCode(codeSize, data.get());
     return std::make_tuple(std::move(data), std::move(aicpuCode));
@@ -66,9 +89,7 @@ auto InitializeTaskData(npu::tile_fwk::dynamic::DynDeviceTask* task) {
     return std::make_tuple(std::move(buffer), funcData);
 }
 
-auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr,
-                      const uint32_t rawShape0, const uint32_t rawShape1,
-                      const uint32_t rawShape2, const uint32_t rawShape3) {
+auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr) {
     constexpr size_t exprTblSize = 50;
     auto exprTbl = std::make_unique<uint64_t[]>(exprTblSize);
     funcData->exprTbl = exprTbl.get();
@@ -85,9 +106,9 @@ auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr,
     funcData->rawTensorAddr = rawTensorAddrHolder.get();
     funcData->rawTensorDesc = rawTensorDescHolder.get();
 
-    constexpr size_t opAttrsLength = 17;
+    constexpr size_t opAttrsLength = 5;
     auto opAttrs = std::make_unique<uint64_t[]>(opAttrsLength);
-    uint64_t initAttrs[opAttrsLength] = {0, 0, 1, 0, 0, 1, 1, 1, 8, rawShape0, rawShape1, rawShape2, rawShape3, 0, 0, 0, 0};
+    uint64_t initAttrs[opAttrsLength] = {0, 0, 0, 0, 0};
     std::copy(initAttrs, initAttrs + opAttrsLength, opAttrs.get());
 
     return std::make_tuple(std::move(exprTbl), std::move(hcclParam),
@@ -95,9 +116,24 @@ auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr,
                           std::move(opAttrs));
 }
 
-auto InitializeTestEnvironment(const uint32_t rankSize) {
-    auto [info, rawAddr, rawShape0, rawShape1, rawShape2, rawShape3] = InitializeTensorInfo(rankSize);
-    auto [data, aicpuCode] = InitializeAicpuCode(rankSize);
+auto InitializeTestEnvironment() {
+    uint32_t worldSize = 4;
+    uint32_t shmemSignalRawShape2 = 1;
+    uint32_t shmemSignalRawShape3 = 64;
+    uint32_t shmemSignalRawShape4 = 5120;
+    std::vector<uint32_t> shmemSignalRawShape{worldSize, worldSize, shmemSignalRawShape2, shmemSignalRawShape3,
+        shmemSignalRawShape4};
+    std::vector<uint32_t> shmemSignalOffset(shmemSignalRawShape.size());
+    std::vector<uint32_t> tileShape{1, shmemSignalRawShape4};
+    uint32_t shmemSignalStride = 8;
+    int32_t expectedValue = 8;
+    std::vector<int32_t> rawAddr = InitializeShmemSignal(shmemSignalRawShape, shmemSignalOffset, tileShape,
+        shmemSignalStride, expectedValue);
+
+    uint32_t shmemSignalAttrOffset = 0;
+    auto [data, aicpuCode] = InitializeAicpuCode(shmemSignalRawShape, tileShape, shmemSignalStride, expectedValue,
+        shmemSignalAttrOffset);
+
     auto allocator = std::make_unique<npu::tile_fwk::dynamic::DeviceWorkspaceAllocator>();
     auto task = std::make_unique<npu::tile_fwk::dynamic::DynDeviceTask>(*allocator);
     auto shmemWaitUntil = std::make_unique<npu::tile_fwk::Distributed::ShmemWaitUntil>();
@@ -105,7 +141,7 @@ auto InitializeTestEnvironment(const uint32_t rankSize) {
     auto [buffer, funcData] = InitializeTaskData(task.get());
 
     auto [exprTbl, hcclParam, rawTensorAddrHolder, rawTensorDescHolder, opAttrs] =
-        ConfigureFuncData(funcData, info.rawAddr, rawShape0, rawShape1, rawShape2, rawShape3);
+        ConfigureFuncData(funcData, reinterpret_cast<uint64_t>(rawAddr.data()));
     shmemWaitUntil->Init(task.get());
     return std::make_tuple(std::move(rawAddr), std::move(data), std::move(allocator), std::move(task),
                           std::move(shmemWaitUntil), std::move(buffer), std::move(exprTbl), std::move(hcclParam),
@@ -146,9 +182,8 @@ void RunTests(uint32_t tileOpCount, npu::tile_fwk::Distributed::ShmemWaitUntil* 
 }
 
 void TestShmemWaitUntil(const uint32_t tileOpCount) {
-    const uint32_t rankSize = 4;
     auto [rawAddr, data, allocator, task, shmemWaitUntil, buffer, exprTbl, hcclParam,
-          rawTensorAddrHolder, rawTensorDescHolder, opAttrs, aicpuCode, funcData] = InitializeTestEnvironment(rankSize);
+          rawTensorAddrHolder, rawTensorDescHolder, opAttrs, aicpuCode, funcData] = InitializeTestEnvironment();
 
     PrepareTasks(tileOpCount, shmemWaitUntil.get(), aicpuCode, funcData, opAttrs.get());
 

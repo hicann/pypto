@@ -283,12 +283,8 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
     auto shmemSignal = iOperand[1];
     auto out = oOperand[0];
 
-    int32_t totalRowShape = shmemSignal->shape[shmemSignal->shape.size() - 2];
-    int32_t totalColShape = shmemSignal->shape[shmemSignal->shape.size() - 1];
     int32_t tileRowShape = tileShape.GetVecTile()[0];
     int32_t tileColShape = tileShape.GetVecTile()[1];
-    int32_t tileRowNum = totalRowShape / tileRowShape + (totalRowShape % tileRowShape == 0 ? 0 : 1);
-    int32_t tileColNum = totalColShape / tileColShape + (totalColShape % tileColShape == 0 ? 0 : 1);
 
     DummyTileFunc predTokenTileFunc = GetDummyTileFunc(predToken, shmemSignal, tileShape.GetVecTile(), function);
     DummyTileFunc outTileFunc = GetDummyTileFunc(out, shmemSignal, tileShape.GetVecTile(), function);
@@ -303,8 +299,8 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
         
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
-        distOpAttr.aicpuOpParams.push_back(tileIndex);
-        distOpAttr.aicpuOpParams.push_back(tileRowNum * tileColNum);
+        distOpAttr.aicpuOpParams.push_back(tileRowShape);
+        distOpAttr.aicpuOpParams.push_back(tileColShape);
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
     });
 }
