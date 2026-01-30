@@ -496,6 +496,17 @@ TEST_F(OperationImplTest, test_Trunc_FP32) {
     }
 }
 
+ TEST_F(OperationImplTest, test_Reciprocal_FP32) {
+ 	     constexpr int TILE_SHAPE = 32;
+ 	     constexpr int SHAPE = 128;
+ 	     TileShape::Current().SetVecTile(TILE_SHAPE, TILE_SHAPE);
+ 	     Tensor operand1(DT_FP32, {SHAPE, SHAPE}, "operand1");
+ 	     Tensor result;
+ 	     FUNCTION("TestReciprocal") {
+ 	         result = Reciprocal(operand1);
+ 	     }
+}
+
 TEST_F(OperationImplTest, TestIndexPut_) {
     constexpr int TILE_SHAPE = 8;
     TileShape::Current().SetVecTile(TILE_SHAPE);

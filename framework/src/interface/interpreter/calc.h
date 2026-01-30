@@ -61,6 +61,9 @@ inline void Floor(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 inline void Trunc(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Trunc(out, self);
 }
+inline void Reciprocal(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Reciprocal(out, self);
+}
 inline void Abs(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Abs(out, self);
 }

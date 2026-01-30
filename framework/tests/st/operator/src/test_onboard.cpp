@@ -1873,7 +1873,7 @@ TEST_F(OnBoardTest, test_unary_operation_16_16_64_64_tileop_reciprocal) {
     PROGRAM("RECIPROCAL") {
         std::vector<int64_t> shape = {16, 16, 64, 64};
         void *x_ptr = readToDev(GetGoldenDir() + "/x.bin", capacity_16_16_64_64);
-        TileShape::Current().SetVecTile({8, 8, 16, 32});
+        TileShape::Current().SetVecTile({2, 8, 16, 16});
         Tensor input_a(DataType::DT_FP32, shape, (uint8_t *)x_ptr, "A");
         Tensor output(DataType::DT_FP32, shape, out_ptr, "C");
 

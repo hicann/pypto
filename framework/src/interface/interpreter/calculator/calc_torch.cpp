@@ -135,6 +135,11 @@ static void Sqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     torch::sqrt_out(tout, From(self));
 }
 
+static void Reciprocal(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    auto tout = From(out);
+    torch::reciprocal_out(tout, From(self));
+}
+
 static void LogicalNot(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     auto tout = From(out);
     torch::logical_not_out(tout, From(self));
@@ -1398,6 +1403,7 @@ static struct CalcOps calcOps = {
     .Ceil = Ceil,
     .Floor = Floor,
     .Trunc = Trunc,
+    .Reciprocal = Reciprocal,
     .Abs = Abs,
     .Brcb = Brcb,
     .WhereTT = WhereTT,
