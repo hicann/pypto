@@ -740,8 +740,103 @@ std::unordered_map<LogicalTensorPtr, int> ReplaceTensor::BuildTensorOrderIndexMa
     return tensorToOrderIndex;
 }
 
+void ReplaceTensor::InsertCopyUBOp(Function &function, Operation *needInsertCopyAssOp, LogicalTensorPtr &input) {
+    auto copyShape = input->GetShape();
+    auto copyDynShape = input->GetDynValidShape();
+    Offset offset(copyShape.size(), 0);
+
+    LogicalTensor copyOutOutput(function, input->Datatype(), copyShape);
+    copyOutOutput.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(std::move(copyOutOutput));
+    auto &copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {input}, {copyOutOutputPtr});
+
+    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        input->GetMemoryTypeOriginal(),
+        OpImmediate::Specified(offset),
+        OpImmediate::Specified(copyShape),
+        OpImmediate::Specified(copyDynShape)
+    ));
+    copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
+
+    LogicalTensor CopyInOutput(function, input->Datatype(), copyShape);
+    CopyInOutput.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto CopyInOutputPtr = std::make_shared<LogicalTensor>(std::move(CopyInOutput));
+    auto &copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyOutOutputPtr}, {CopyInOutputPtr});
+    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(offset),
+        input->GetMemoryTypeOriginal(),
+        OpImmediate::Specified(copyShape),
+        OpImmediate::Specified(copyDynShape)
+    ));
+    copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
+
+    needInsertCopyAssOp->ReplaceInput(CopyInOutputPtr, input);
+}
+
+void ReplaceTensor::InsertCopyDDROp(Function &function, Operation *needInsertCopyAssOp, LogicalTensorPtr &input) {
+    auto copyShape = input->GetShape();
+    auto copyDynShape = input->GetDynValidShape();
+    Offset offset(copyShape.size(), 0);
+
+    LogicalTensor CopyInOutput(function, input->Datatype(), copyShape);
+    CopyInOutput.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto CopyInOutputPtr = std::make_shared<LogicalTensor>(std::move(CopyInOutput));
+    auto &copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {input}, {CopyInOutputPtr});
+    copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(input->GetOffset()),
+        MemoryType::MEM_UB,
+        OpImmediate::Specified(copyShape),
+        OpImmediate::Specified(copyDynShape)
+    ));
+    copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
+
+    LogicalTensor copyOutOutput(function, input->Datatype(), copyShape);
+    copyOutOutput.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto copyOutOutputPtr = std::make_shared<LogicalTensor>(std::move(copyOutOutput));
+    auto &copyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {CopyInOutputPtr}, {copyOutOutputPtr});
+    copyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        MemoryType::MEM_UB,
+        OpImmediate::Specified(offset),
+        OpImmediate::Specified(copyShape),
+        OpImmediate::Specified(copyDynShape)
+    ));
+    copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
+
+    needInsertCopyAssOp->ReplaceInput(copyOutOutputPtr, input);
+}
+
+void ReplaceTensor::InsertAssembleCopy(Function &function) {
+    std::unordered_set<int> visitedAssOps;
+    std::unordered_set<Operation*> needInsertCopyAssOps;
+    for (auto &op : function.Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE && (!visitedAssOps.count(op.GetOpMagic()))) {
+            visitedAssOps.insert(op.GetOpMagic());
+            auto assembleIn = op.GetIOperands()[0];
+            auto consumers = assembleIn->GetConsumers();
+            if (consumers.size() <= 1) { 
+                continue;
+            }
+            for (auto &con : consumers) {
+                if (con->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                    visitedAssOps.insert(con->GetOpMagic());
+                    needInsertCopyAssOps.insert(con);
+                }
+            }
+        }
+    }
+    for (auto &needInsertCopyAssOp : needInsertCopyAssOps) {
+        auto input = needInsertCopyAssOp->GetIOperands()[0];
+        if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+            InsertCopyUBOp(function, needInsertCopyAssOp, input);
+        } else if (input->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+            InsertCopyDDROp(function, needInsertCopyAssOp, input);
+        }
+    }
+}
+
 Status ReplaceTensor::RunOnFunction(Function &function) {
     APASS_LOG_INFO_F(Elements::Operation, "===> Start ReplaceTensor.");
+    InsertAssembleCopy(function);
     auto tensorToOrderIndex = BuildTensorOrderIndexMap(function);
     UnionFind uf(tensorToOrderIndex);
     UniteTensor(function, uf);
