@@ -97,4 +97,9 @@ Status RemoveRedundantReshape::PreCheck(Function &function) {
     RemoveRedundantReshapeChecker checker;
     return checker.DoPreCheck(function);
 }
+
+Status RemoveRedundantReshape::PostCheck(Function &function) {
+    RemoveRedundantReshapeChecker checker;
+    return checker.DoPostCheck(function);
+}
 } // namespace npu::tile_fwk

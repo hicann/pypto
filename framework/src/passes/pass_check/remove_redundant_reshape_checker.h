@@ -27,9 +27,12 @@ namespace tile_fwk {
 class RemoveRedundantReshapeChecker : Checker {
 public:
     Status DoPreCheck(Function &function) override;
+    Status DoPostCheck(Function &function) override;
 private:
     Status PreCheckReshape(const LogicalTensorPtr &in);
-    Status ProcessPreCheck(const Operation *op);
+    Status ProcessPreCheck(const Operation &op);
+    Status PostCheckReshape(const LogicalTensorPtr &in);
+    Status ProcessPostCheck(const Operation &op);
 };
 } // namespace tile_fwk
 } // namespace npu

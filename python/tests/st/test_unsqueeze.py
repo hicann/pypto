@@ -20,20 +20,20 @@ import torch_npu
 
 def test_unsqueeze_shape_dim():
     """Test whether the output shape is correct"""
-
     shape = [8, 16, 16]
     dtype = pypto.DT_FP32
-    x = pypto.tensor(shape, dtype)
-    dim = 0
-    with pypto.function("UNSQUEEZE_SHAPE", x):
-        pypto.set_vec_tile_shapes(8, 8, 8, 8)
-
-        #Test each valid dim:[-4, -3, -2, -1, 0, 1, 2, 3]
-        for dim in range(-4, 4, 1):
-            res = pypto.unsqueeze(x, dim)
-            torch_case_tensor = torch.randn((8, 16, 16), dtype = torch.float32)
-            torch_case_res = torch.unsqueeze(torch_case_tensor, dim)
-            assert res.shape == list(torch_case_res.shape)
+    #Test each valid dim:[-4, -3, -2, -1, 0, 1, 2, 3]
+    test_dims = list(range(-4, 4))
+    for dim in test_dims:
+        x = pypto.tensor(shape, dtype)
+        res = pypto.tensor(shape, dtype)
+        with pypto.function(f"UNSQUEEZE_SHAPE_DIM_{dim}", x, res):
+            pypto.set_vec_tile_shapes(8, 8, 8, 8)
+            res[:] = pypto.unsqueeze(x, dim)
+        torch_case_tensor = torch.randn((8, 16, 16), dtype=torch.float32)
+        torch_case_res = torch.unsqueeze(torch_case_tensor, dim)
+        assert res.shape == list(torch_case_res.shape), \
+            f"dim={dim} shape mismatch: pypto={res.shape}, torch={list(torch_case_res.shape)}"
 
 def test_unsqueeze_content_equal():
     """Test whether the output content has changed"""
