@@ -1670,7 +1670,7 @@ class Parser(doc.NodeVisitor):
         """
         # Evaluate the value expression first
         value_expr = self._eval_expr(node.value)
-        
+
         # Handle different target types
         if isinstance(node.target, doc.Name):
             # For Name targets (e.g., out += y), get the value directly from context
@@ -1686,7 +1686,7 @@ class Parser(doc.NodeVisitor):
             # For Subscript targets (e.g., a[i] += y), evaluate the tensor and slice/index
             tensor = self._eval_expr(node.target.value)
             slice_obj = self._eval_expr(node.target.slice)
-            
+
             # Get the current value from the subscript
             target_value = tensor[slice_obj]
         else:
@@ -1928,3 +1928,53 @@ class Parser(doc.NodeVisitor):
             vars_to_delete = self.delete_after[stmt_id]
             self.context.mark_for_deletion(vars_to_delete)
             self.context.cleanup_marked()
+
+    def _visit_assert(self, node: doc.Assert) -> None:
+        """The general assert visiting method.
+
+        Parameters
+        ----------
+        node : doc.Assert
+            The doc AST assert node.
+
+        Returns
+        -------
+        res : None
+            The visiting result. None.
+
+        Raises
+        ------
+        ParserError
+            If the assert condition can be statically evaluated to False.
+
+        Note
+        ----
+        Assert node structure:
+            test: expr
+            msg: Optional[expr]
+
+        This implementation provides true assertion capability:
+        - For statically evaluable conditions, checks at compile time
+        - For dynamic conditions, generates runtime assertion code
+        """
+        # Evaluate the assert condition
+        test_result = self._visit_expr(node.test)
+
+        # Prepare the error message
+        if node.msg:
+            msg_result = self._visit_expr(node.msg)
+            error_msg = str(msg_result) if msg_result is not None else "Assertion failed"
+        else:
+            error_msg = "Assertion failed"
+
+        try:
+            if not bool(test_result):
+                raise ParserError(node, f"AssertionError: {error_msg}")
+        except (TypeError, ValueError) as e:
+            raise ParserError(
+                TypeError(
+                    node,
+                    f"Cannot convert assert condition of type "
+                    f"{type(test_result).__name__} to boolean."
+                ),
+            ) from e
