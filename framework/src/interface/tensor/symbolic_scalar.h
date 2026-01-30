@@ -744,6 +744,7 @@ struct SymbolicExpressionTable {
     OrderedSet<RawSymbolicScalarPtr> primaryExpressionSet;
     std::string elementKey_;
     std::string title_;
+    SymbolicScalar mainBlockScalar_;
 
     void SetElementKeyOnce(const std::string &key);
     void SetTitleOnce(const std::string &title);
@@ -763,6 +764,7 @@ struct SymbolicExpressionTable {
 
     void NormalizeForSymbolTable(const SymbolicSymbolTable &symbolTable) {
         primaryExpressionSet.Clear();
+        primaryExpressionSet.Insert(mainBlockScalar_.Raw());
         auto symTable = symbolTable.GetSymbolTable();
         auto symExprTable = symbolTable.GetSymbolTableDict();
         ASSERT(symTable.size() == symExprTable.size());

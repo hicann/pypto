@@ -24,6 +24,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "machine/dump/kernel_dump_utils.h"
 #include "machine/compile/gen_aicore_code.h"
+#include "machine/host/main_block.h"
 #include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {
@@ -98,9 +99,15 @@ std::string GenSubFuncCall(std::map<uint64_t, Function *> &leafDict, CoreType co
       if (coreType != leafFuncAttr->coreType) {
           continue;
       }
+      int baseIdx = leafFuncAttr->binPathMainBlock.empty() ? leafIndex : leafIndex * MAIN_BLOCK_SIZE - 1;
       src_obj << leafFuncAttr->binPath << " ";
       code << leafFuncAttr->kernelDeclare << std::endl;
-      idxNameMap[leafIndex] = leafFuncAttr->kernelName;
+      idxNameMap[baseIdx] = leafFuncAttr->kernelName;
+      if (!leafFuncAttr->binPathMainBlock.empty()) {
+        src_obj << leafFuncAttr->binPathMainBlock << " ";
+        code << leafFuncAttr->kernelDeclareMainBlock << std::endl;
+        idxNameMap[baseIdx + 1] = leafFuncAttr->kernelNameMainBlock;
+      }
       ALOG_DEBUG_F("Func[%d] kernel_name[%s].", leafIndex, leafFuncAttr->kernelName.c_str());
   }
   if (idxNameMap.empty()) {

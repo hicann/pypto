@@ -269,3 +269,49 @@ TEST_F(ControlFlowTest, CtrlFlowPartialCache) {
     EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(Program::GetInstance().GetLastFunction(), ctrolCache, config));
 
 }
+
+TEST_F(ControlFlowTest, TestMainBlock) {
+    config::SetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE, 1);
+
+    int tile_size = 32;
+    TileShape::Current().SetVecTile(tile_size, tile_size);
+    int tensor_dim = tile_size * 4;
+
+    Tensor tensor_a(DT_INT32, {tensor_dim, tensor_dim}, "A");
+    Tensor tensor_b(DT_INT32, {tensor_dim, tensor_dim}, "B");
+    Tensor output_tensor(DT_INT32, {tensor_dim, tensor_dim}, "O");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<int32_t>(tensor_a, 1),
+        RawTensorData::CreateConstantTensor<int32_t>(tensor_b, 2),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<int32_t>(output_tensor, 0),
+    });
+
+    FUNCTION("main", {tensor_a, tensor_b}, {output_tensor}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, loop_idx, LoopRange(0x2)) {
+            Tensor middle_tensor(DT_INT32, {tensor_dim, tensor_dim}, "O");
+            LOOP("s0", FunctionType::DYNAMIC_LOOP, row_idx, LoopRange(0x4)) {
+                LOOP("s1", FunctionType::DYNAMIC_LOOP, col_idx, LoopRange(0x4)) {
+                    Tensor tile_a = View(tensor_a, {tile_size, tile_size}, {row_idx * tile_size, col_idx * tile_size});
+                    Tensor tile_b = View(tensor_b, {tile_size, tile_size}, {row_idx * tile_size, col_idx * tile_size});
+                    Tensor tile_sum = Add(tile_a, tile_b);
+                    Assemble(tile_sum, {row_idx * tile_size, col_idx * tile_size}, middle_tensor);
+                }
+            }
+
+            LOOP("sum", FunctionType::DYNAMIC_LOOP, _, LoopRange(1)) {
+                (void)_;
+                IF (loop_idx == 0) {
+                    output_tensor = Add(middle_tensor, Element(DT_INT32, 0));
+                } else {
+                    output_tensor = Add(output_tensor, middle_tensor);
+                }
+            }
+        }
+    }
+    DeviceLauncherConfig config;
+    config.blockdim = 25; // 25: block dim
+    EXPECT_EQ(0, EmulationLauncher::EmulationRunOnce(Program::GetInstance().GetLastFunction(), nullptr, config));
+}

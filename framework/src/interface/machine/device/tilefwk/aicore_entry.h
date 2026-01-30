@@ -306,7 +306,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext *ctx, uint32_t taskId) {
 #else
     CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
 #endif
-    CallSubFuncTask(opAttrs[0], &param, funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize,
+    CallSubFuncTask(opAttrs[0] + funcData->exprTbl[0], &param, funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize,
                     (__gm__ int64_t *)funcData->hcclContext);
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();

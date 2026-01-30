@@ -15,6 +15,7 @@
 #include "tilefwk/platform.h"
 #include "machine/utils/dynamic/dev_encode.h"
 #include "machine/utils/dynamic/dev_workspace.h"
+#include "machine/host/main_block.h"
 
 #include "interface/operation/attribute.h"
 #include "interface/tensor/logical_tensor.h"
@@ -435,6 +436,16 @@ void DevAscendFunction::InitTensor(
     }
 }
 
+static int GetCceIndex(const std::unordered_map<uint64_t, int> &calleeHashIndexDict,
+    const std::shared_ptr<CallOpAttribute> &callop)
+{
+    int cceIndex = calleeHashIndexDict.at(callop->GetCalleeHash().GetHash());
+    if (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1) {
+        cceIndex = std::max(0, cceIndex * MAIN_BLOCK_SIZE - 1);
+    }
+    return cceIndex;
+}
+
 void DevAscendFunction::InitOperation(
         uintdevptr_t &initOffset,
         const SymbolicExpressionTable *expressionTable,
@@ -538,7 +549,7 @@ void DevAscendFunction::InitOperation(
             auto callArgs = callop->GetLinearArgList();
             int opStaticAttrSize = callArgs.size();
             staticField.attrList.AssignRangeOffsetSize(operationAttrList_, staticAttributeSize, opStaticAttrSize);
-            At(staticField.attrList, 0) = calleeHashIndexDict.at(callop->GetCalleeHash().GetHash());
+            At(staticField.attrList, 0) = GetCceIndex(calleeHashIndexDict, callop);
             for (size_t k = CALLOP_ARG_ATTR_BASE_INDEX; k < (size_t)opStaticAttrSize; k++) {
                 int fillValue = 0;
                 if (callArgs[k].IsImmediate()) {

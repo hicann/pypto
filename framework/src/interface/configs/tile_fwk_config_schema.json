@@ -269,6 +269,31 @@
                             }
                         }
                     ]
+                },
+                "valid_shape_optimize": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "动态图编译优化选项",
+                        "en": "Dynamic validShape compilation optimization option"
+                    },
+                    "minimum": 0,
+                    "maximum": 1,
+                    "options": [
+                        {
+                            "value": 0,
+                            "label": {
+                                "zh": "默认值，所有块采用动态图进行编译",
+                                "en": "Defalut value, all blocks are compiled using dynamic shape"
+                            }
+                        },
+                        {
+                            "value": 1,
+                            "label": {
+                                "zh": "主块采用静态图编译，尾块采用动态图编译",
+                                "en": "The main block is compiled using static shape, and the tile block is compiled using dynamic shape"
+                            }
+                        }
+                    ]
                 }
             }
         },

@@ -23,6 +23,7 @@ set_runtime_options(*,
                     stitch_function_size : int = None,
                     stitch_cfgcache_size: int = None,
                     run_mode : int = None,
+                    valid_shape_optimize : int = None,
                     ) -> None
 ```
 
@@ -39,6 +40,7 @@ set_runtime_options(*,
 | stitch_function_size           | 输入      | 含义：machine运行时ctrlflow aicpu里控制stitch生成的device task处理最大Callop计算量 <br> 说明：为了保障stitch task处理单次loop时的性能，需通过设置该配置项进行控制，该配置项设置的过大会带来额外的性能和内存开销，需根据算子最大Callop数量调整该配置项。若Callop数量超过该配置会报错提示：ASSERT FAILED：CallOpSize&lt;=CallOpmaxSize."loopFunction:&lt;function name&gt; ,CallopSize:&lt;当前Callop数量&gt;，CallOpmaxSize：&lt;配置项大小&gt;" <br> 类型：int <br> 取值范围:1 ~ 65535 <br> 默认值：20000 <br> 影响pass范围：NA |
 | stitch_cfgcache_size           | 输入      | 含义：指定生成控制流缓存的大小，单位是字节 <br>说明：如果该值是0，则表示不使能控制流缓存。由于控制流缓存是按照任务大小来缓存，如果设置比较小，例如小于一个任务，那么无法缓存。<br>类型：int<br>取值范围：0~100000000<br>默认值：0<br>影响pass范围：NA |
 | run_mode                       | 输入      | 含义：设置计算子图的执行设备 <br> 说明：<br> 0：表示在NPU上执行 <br> 1：表示在模拟器上执行 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：根据是否设置cann的环境变量来决定。如果设置了环境变量，则在NPU上执行；否则在模拟器上执行 <br> 影响pass范围：NA |
+| valid_shape_optimize           | 输入      | 含义：动态shape场景，validshape编译优化选项，打开该选项后，动态轴的Loop循环中，主块（shape与validshape相等）采用静态shape编译，尾块采用动态shape编译 <br> 说明：<br> 0：默认值，表示关闭validshape编译优化选项，所有Loop循环均采用动态shape进行编译 <br> 1：表示打开validshape编译优化选项 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：0 <br> 影响pass范围：NA |
 
 ## 返回值说明
 

@@ -55,6 +55,7 @@ constexpr const char *STITCH_FUNCTION_NUM_STEP = "stitch_function_num_step";
 constexpr const char *STITCH_FUNCTION_SIZE = "stitch_function_size";
 constexpr const char *STITCH_CFGCACHE_SIZE = "stitch_cfgcache_size";
 constexpr const char *CFG_RUN_MODE = "run_mode";
+constexpr const char *CFG_VALID_SHAPE_OPTIMIZE = "valid_shape_optimize";
 const int64_t CFG_RUN_MODE_NPU = 0;
 const int64_t CFG_RUN_MODE_SIM = 1;
 

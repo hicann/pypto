@@ -197,7 +197,8 @@ def set_runtime_options(*,
                         stitch_function_num_step: Optional[int] = None,
                         stitch_function_size: int = None,
                         stitch_cfgcache_size: Optional[int] = None,
-                        run_mode: Optional[int] = None
+                        run_mode: Optional[int] = None,
+                        valid_shape_optimize: Optional[int] = None
                         ) -> None:
     """
     Set runtime options.
@@ -231,6 +232,9 @@ def set_runtime_options(*,
 
     stitch_cfgcache_size: int
         The size of the control flow cache, in bytes.
+
+    valid_shape_optimize: int
+        Dynamic validShape compilation optimization option.
     """
     options_dict = {k: v for k, v in locals().items() if v is not None}
     set_options(runtime_options=options_dict)

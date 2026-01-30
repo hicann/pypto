@@ -35,6 +35,7 @@
 #include "ir/program.h"
 #include "ir/function.h"
 #include "tilefwk/op_registry.h"
+#include "main_block.h"
 #include <dlfcn.h>
 
 using namespace npu::tile_fwk::dynamic;
@@ -178,16 +179,6 @@ extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache) {
     return 0;
 }
 
-static std::string GetEmitPath(const std::string &name) {
-    std::string dirPath;
-    if (npu::tile_fwk::ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
-        dirPath = name;
-    } else {
-        dirPath = config::LogTopFolder() + "/" + name;
-    }
-    return dirPath;
-}
-
 static std::vector<Function *> GetCalleeList(FunctionCache &cache, Function *func) {
     std::vector<Function *> calleeList;
 
@@ -204,6 +195,7 @@ static std::vector<Function *> GetCalleeList(FunctionCache &cache, Function *fun
     return calleeList;
 }
 
+static void HandleExecuteGraph(FunctionCache &cache, Linker &linker, Function *func);
 static void FindAllExpression(FunctionCache &cache, Linker &linker, Function *func) {
     if (func->IsDynloop()) {
         auto dynloopAttr = func->GetDynloopAttribute();
@@ -233,28 +225,7 @@ static void FindAllExpression(FunctionCache &cache, Linker &linker, Function *fu
         Function *root = func->GetRootFunction();
         FindAllExpression(cache, linker, root);
     } else if (func->GetGraphType() == GraphType::EXECUTE_GRAPH) {
-        ALOG_INFO("Compile root:", func->Dump());
-        for (auto &callopAttr : func->GetCallopAttrList()) {
-            for (auto &arg : callopAttr->GetLinearArgList()) {
-                linker.AddPrimaryExpressionForDevRootCoa(func, arg);
-            }
-            auto hash = callopAttr->GetCalleeHash();
-            Function *leafFunc = cache.GetCacheFunction(hash);
-            if (leafFunc == nullptr) {
-                continue;
-            }
-            FindAllExpression(cache, linker, leafFunc);
-        }
-        for (auto &incast : func->inCasts_) {
-            for (auto  &arg : incast->GetRawTensor()->GetDynRawShape()) {
-                linker.AddPrimaryExpressionForDevRootCoa(func, arg);
-            }
-        }
-        for (auto &outcast : func->outCasts_) {
-            for (auto  &arg : outcast->GetRawTensor()->GetDynRawShape()) {
-                linker.AddPrimaryExpressionForDevRootCoa(func, arg);
-            }
-        }
+        HandleExecuteGraph(cache, linker, func);
     } else if (func->GetGraphType() == GraphType::BLOCK_GRAPH) {
         for (auto &op : func->Operations()) {
             if (op.GetOpcode() == Opcode::OP_VEC_DUP) {
@@ -267,6 +238,37 @@ static void FindAllExpression(FunctionCache &cache, Linker &linker, Function *fu
     } else {
         ASSERT(false) << "Impossible function type: " << GetFunctionTypeNameDict().Find(func->GetFunctionType());
     }
+}
+
+static void HandleExecuteGraph(FunctionCache &cache, Linker &linker, Function *func)
+{
+    ALOG_INFO("Compile root:", func->Dump());
+    MainBlockCondBulider builder;
+    builder.CollectCallopMainBlockConds(func);
+    for (auto &callopAttr : func->GetCallopAttrList()) {
+        for (auto &arg : callopAttr->GetLinearArgList()) {
+            linker.AddPrimaryExpressionForDevRootCoa(func, arg);
+        }
+        auto hash = callopAttr->GetCalleeHash();
+        Function *leafFunc = cache.GetCacheFunction(hash);
+        if (leafFunc == nullptr) {
+            continue;
+        }
+        builder.CollectCoaMainBlockConds(callopAttr->GetArgList());
+        FindAllExpression(cache, linker, leafFunc);
+    }
+    for (auto &incast : func->inCasts_) {
+        for (auto  &arg : incast->GetRawTensor()->GetDynRawShape()) {
+            linker.AddPrimaryExpressionForDevRootCoa(func, arg);
+        }
+    }
+    for (auto &outcast : func->outCasts_) {
+        for (auto  &arg : outcast->GetRawTensor()->GetDynRawShape()) {
+            linker.AddPrimaryExpressionForDevRootCoa(func, arg);
+        }
+    }
+    SymbolicScalar cond = builder.BuildMainBlockExpression();
+    linker.SetMainBlockExpressionForDevRootCoa(func, cond);
 }
 
 static void AlignUpTo(std::vector<uint8_t> &code, int align, uint8_t padding) {
@@ -937,7 +939,8 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
         npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"));
         npu::tile_fwk::CodeGen codeGen(codeGenCtx);
         codeGen.GenCode(*devTile, {});
-
+        MainBlockCondBulider builder;
+        builder.Gencode(devTile, {});
         for (auto &[psgId, leaf] : devRoot->programs_) {
             (void)psgId;
             auto hash = leaf->GetFunctionHash().GetHash();
@@ -1031,7 +1034,6 @@ MachineTask *GenCode(
     std::string &kernelPath) {
     npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"));
     npu::tile_fwk::CreateMultiLevelDir(codeGenCtx.cceDir);
-
     npu::tile_fwk::CodeGen codeGen(codeGenCtx);
     auto function = task->GetFunction();
     /* each leafFunction inside is compiled to a standalone object file.
@@ -1039,6 +1041,8 @@ MachineTask *GenCode(
      */
     if (function->GetGraphType() == GraphType::TILE_GRAPH) {
         codeGen.GenCode(*function, invokeParaOffset);
+        MainBlockCondBulider builder;
+        builder.Gencode(function, invokeParaOffset);
     } else {
         if (function->IsFunctionType(FunctionType::DYNAMIC)) {
             std::string cce_path = RealPath(codeGenCtx.cceDir) + "/";

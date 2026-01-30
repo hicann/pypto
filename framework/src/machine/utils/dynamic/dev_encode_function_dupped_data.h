@@ -382,6 +382,13 @@ struct DevAscendFunctionDupped {
         }
     }
 
+    std::string DumpMainBlockFlag()
+    {
+        std::stringstream oss;
+        oss << "isMainBlock: [" << funcData->exprTbl[0] << "]";
+        return oss.str();
+    }
+
     std::string DumpDyn(int funcIdx, const DevCceBinary *cceBinary) const {
         std::stringstream oss;
         auto func = GetSource();
