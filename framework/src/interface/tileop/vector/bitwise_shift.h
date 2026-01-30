@@ -205,13 +205,13 @@ TILEOP void TBitlshiftS(T0 dst, T1 src0, Scalar src1) {
 
 #define OP_TILE_OP_SBITWISERIGHTSHIFT TSBitrshift
 template <typename Scalar, typename T0, typename T1, typename T2>
-TILEOP void TSBitrshift(T0 dst, Scalar src0, T1 src1, T2 tmp) {
+TILEOP void TSBitrshift(T0 dst, T1 src1, Scalar src0, T2 tmp) {
     ScalarBitwiseShiftCompute<BitwiseShiftOp::BITWISERIGHTSHIFT>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_SBITWISELEFTSHIFT TSBitlshift
 template <typename Scalar, typename T0, typename T1, typename T2>
-TILEOP void TSBitlshift(T0 dst, Scalar src0, T1 src1, T2 tmp) {
+TILEOP void TSBitlshift(T0 dst, T1 src1, Scalar src0, T2 tmp) {
     ScalarBitwiseShiftCompute<BitwiseShiftOp::BITWISELEFTSHIFT>(dst, src0, src1, tmp);
 }
 #endif

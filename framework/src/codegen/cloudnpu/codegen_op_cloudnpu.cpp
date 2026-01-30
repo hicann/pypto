@@ -128,11 +128,9 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
 
           // binary op: vector operations with tmp
           {Opcode::OP_MOD, [this]() { return GenBinaryOpWithTmp(); }},
-          {Opcode::OP_BITWISERIGHTSHIFT, [this]() { return GenBitwiseShiftOp(); }},
-          {Opcode::OP_BITWISELEFTSHIFT, [this]() { return GenBitwiseShiftOp(); }},
+          {Opcode::OP_BITWISERIGHTSHIFT, [this]() { return GenBinaryOpWithTmp(); }},
+          {Opcode::OP_BITWISELEFTSHIFT, [this]() { return GenBinaryOpWithTmp(); }},
           {Opcode::OP_BITWISEXOR, [this]() { return GenBinaryOpWithTmp(); }},
-          {Opcode::OP_BITWISERIGHTSHIFT, [this]() { return GenBitwiseShiftOp(); }},
-          {Opcode::OP_BITWISELEFTSHIFT, [this]() { return GenBitwiseShiftOp(); }},
 
           // binary op: broadcast associated vector
           {Opcode::OP_ADD_BRC, [this]() { return GenBinaryWithBrc(); }},
@@ -153,15 +151,11 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           {Opcode::OP_BITWISEORS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_BITWISERIGHTSHIFTS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_BITWISELEFTSHIFTS, [this]() { return GenVectorScalarOp(); }},
-          {Opcode::OP_SBITWISERIGHTSHIFT, [this]() { return GenBitwiseShiftScalarOp(); }},
-          {Opcode::OP_SBITWISELEFTSHIFT, [this]() { return GenBitwiseShiftScalarOp(); }},
-          {Opcode::OP_BITWISERIGHTSHIFTS, [this]() { return GenVectorScalarOp(); }},
-          {Opcode::OP_BITWISELEFTSHIFTS, [this]() { return GenVectorScalarOp(); }},
-          {Opcode::OP_SBITWISERIGHTSHIFT, [this]() { return GenBitwiseShiftScalarOp(); }},
-          {Opcode::OP_SBITWISELEFTSHIFT, [this]() { return GenBitwiseShiftScalarOp(); }},
 
           // binary op: vector scalar with tmp
           {Opcode::OP_MODS, [this]() { return GenVectorScalarOpWithTmp(); }},
+          {Opcode::OP_SBITWISERIGHTSHIFT, [this]() { return GenVectorScalarOpWithTmp(); }},
+          {Opcode::OP_SBITWISELEFTSHIFT, [this]() { return GenVectorScalarOpWithTmp(); }},
           {Opcode::OP_BITWISEXORS, [this]() { return GenVectorScalarOpWithTmp(); }},
 
           // binary op: vector scalar, scalar mode

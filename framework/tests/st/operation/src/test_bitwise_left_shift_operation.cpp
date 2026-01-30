@@ -56,7 +56,7 @@ int BroadcastTensor(const std::vector<SymbolicScalar> &firstInputsShape, const s
     return -1;
 }
 
-void UpdateInputBrcViewShape(std::vector<int64_t> &inputBrcViewShape, int brcAxis, const std::vector<SymbolicScalar> &inputsShape, 
+void UpdateInputBrcViewShape(std::vector<int64_t> &inputBrcViewShape, const std::vector<SymbolicScalar> &inputsShape, 
                              const std::vector<SymbolicScalar> &outputsShape) {
     for (size_t i = 0; i < inputsShape.size(); i++) {
         if (inputsShape[i] != outputsShape[i]) {
@@ -84,10 +84,10 @@ static void BitwiseLeftShiftOperationExeFunc2Dims(
         int brcAxis = -1;
         if (brcTensor == 0) {
             brcAxis = BroadcastAxis(firstInputsShape, outputsShape);
-            UpdateInputBrcViewShape(firstInputViewShape, brcAxis, firstInputsShape, outputsShape);
+            UpdateInputBrcViewShape(firstInputViewShape, firstInputsShape, outputsShape);
         } else if (brcTensor == 1) {
             brcAxis = BroadcastAxis(secondInputsShape, outputsShape);
-            UpdateInputBrcViewShape(secondInputViewShape, brcAxis, secondInputsShape, outputsShape);
+            UpdateInputBrcViewShape(secondInputViewShape, secondInputsShape, outputsShape);
         }
         const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
         const int sloop = CeilDiv(outputsShape[1], viewShape[1]);
@@ -136,10 +136,10 @@ static void BitwiseLeftShiftOperationExeFunc3Dims(
         int brcAxis = -1;
         if (brcTensor == 0) {
             brcAxis = BroadcastAxis(firstInputsShape, outputsShape);
-            UpdateInputBrcViewShape(firstInputViewShape, brcAxis, firstInputsShape, outputsShape);
+            UpdateInputBrcViewShape(firstInputViewShape, firstInputsShape, outputsShape);
         } else if (brcTensor == 1) {
             brcAxis = BroadcastAxis(secondInputsShape, outputsShape);
-            UpdateInputBrcViewShape(secondInputViewShape, brcAxis, secondInputsShape, outputsShape);
+            UpdateInputBrcViewShape(secondInputViewShape, secondInputsShape, outputsShape);
         }
         const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
         const int sloop = CeilDiv(outputsShape[1], viewShape[1]);
@@ -193,10 +193,10 @@ static void BitwiseLeftShiftOperationExeFunc4Dims(
         int brcAxis = -1;
         if (brcTensor == 0) {
             brcAxis = BroadcastAxis(firstInputsShape, outputsShape);
-            UpdateInputBrcViewShape(firstInputViewShape, brcAxis, firstInputsShape, outputsShape);
+            UpdateInputBrcViewShape(firstInputViewShape, firstInputsShape, outputsShape);
         } else if (brcTensor == 1) {
             brcAxis = BroadcastAxis(secondInputsShape, outputsShape);
-            UpdateInputBrcViewShape(secondInputViewShape, brcAxis, secondInputsShape, outputsShape);
+            UpdateInputBrcViewShape(secondInputViewShape, secondInputsShape, outputsShape);
         }
         const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
         const int sloop = CeilDiv(outputsShape[1], viewShape[1]);
