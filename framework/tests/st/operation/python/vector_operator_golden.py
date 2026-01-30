@@ -892,6 +892,26 @@ def gen_reciprocal_op_golden(case_name: str, output: Path, case_index: int = Non
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestBitwiseNot/BitwiseNotOperationTest.TestBitwiseNot",
+    ]
+)
+def gen_bitwise_not_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        assert len(inputs) > 0, "inputs must contain at least one element"
+        x = torch.tensor(inputs[0])
+        if x.dtype == torch.uint16:
+            x.numpy()
+            y = np.bitwise_not(x)
+        else:
+            y = torch.bitwise_not(x)
+        return [y.numpy()]
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseNot", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestAdd/AddOperationTest.TestAdd",
     ]
 )
@@ -987,6 +1007,76 @@ def gen_sub_op_golden(case_name: str, output: Path, case_index: int = None) -> b
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Sub", golden_func, output, case_index)
 
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestBitwiseAnd/BitwiseAndOperationTest.TestBitwiseAnd",
+    ]
+)
+def gen_bitwise_and_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        assert len(inputs) > 1, "inputs must contain at least two elements"
+        x0 = torch.tensor(inputs[0])
+        x1 = torch.tensor(inputs[1])
+        if x0.dtype == torch.uint16:
+            x0.numpy()
+            x1.numpy()
+            y = np.bitwise_and(x0, x1)
+        else:
+            y = torch.bitwise_and(x0, x1)
+        return [y.numpy()]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseAnd", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestBitwiseOr/BitwiseOrOperationTest.TestBitwiseOr",
+    ]
+)
+def gen_bitwise_or_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        assert len(inputs) > 1, "inputs must contain at least two elements"
+        x0 = torch.tensor(inputs[0])
+        x1 = torch.tensor(inputs[1])
+        if x0.dtype == torch.uint16:
+            x0.numpy()
+            x1.numpy()
+            y = np.bitwise_or(x0, x1)
+        else:
+            y = torch.bitwise_or(x0, x1)
+        return [y.numpy()]
+
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseOr", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestBitwiseXor/BitwiseXorOperationTest.TestBitwiseXor",
+    ]
+)
+def gen_bitwise_xor_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        assert len(inputs) > 1, "inputs must contain at least two elements"
+        x0 = torch.tensor(inputs[0])
+        x1 = torch.tensor(inputs[1])
+        if x0.dtype == torch.uint16:
+            x0.numpy()
+            x1.numpy()
+            y = np.bitwise_xor(x0, x1)
+        else:
+            y = torch.bitwise_xor(x0, x1)
+        return [y.numpy()]
+
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseXor", golden_func, output, case_index)
 
 @GoldenRegister.reg_golden_func(
     case_names=[
@@ -1152,6 +1242,81 @@ def gen_subs_op_golden(case_name: str, output: Path, case_index: int = None) -> 
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Subs", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestBitwiseAnds/BitwiseAndsOperationTest.TestBitwiseAnds",
+    ]
+)
+def gen_bitwise_ands_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, config: dict):
+        params = config.get("params")
+        params["scalar_type"] = params.get("scalar_type", "int16")
+        numpy_scalar = get_dtype_by_name(params["scalar_type"])(params["scalar"])
+        params["scalar"] = numpy_scalar.item()
+        assert len(inputs) > 0, "inputs must contain at least one element"
+        x = torch.tensor(inputs[0])
+        if x.dtype == torch.uint16:
+            x.numpy()
+            y = np.bitwise_and(x, params["scalar"])
+        else:
+            y = torch.bitwise_and(x, params["scalar"])
+        return [y.numpy()]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseAnds", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestBitwiseOrs/BitwiseOrsOperationTest.TestBitwiseOrs",
+    ]
+)
+def gen_bitwise_ors_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, config: dict):
+        params = config.get("params")
+        params["scalar_type"] = params.get("scalar_type", "int16")
+        numpy_scalar = get_dtype_by_name(params["scalar_type"])(params["scalar"])
+        params["scalar"] = numpy_scalar.item()
+        assert len(inputs) > 0, "inputs must contain at least one element"
+        x = torch.tensor(inputs[0])
+        if x.dtype == torch.uint16:
+            x.numpy()
+            y = np.bitwise_or(x, params["scalar"])
+        else:
+            y = torch.bitwise_or(x, params["scalar"])
+        return [y.numpy()]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseOrs", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestBitwiseXors/BitwiseXorsOperationTest.TestBitwiseXors",
+    ]
+)
+def gen_bitwise_xors_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+   # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, config: dict):
+        params = config.get("params")
+        params["scalar_type"] = params.get("scalar_type", "int16")
+        numpy_scalar = get_dtype_by_name(params["scalar_type"])(params["scalar"])
+        params["scalar"] = numpy_scalar.item()
+        assert len(inputs) > 0, "inputs must contain at least one element"
+        x = torch.tensor(inputs[0])
+        if x.dtype == torch.uint16:
+            x.numpy()
+            y = np.bitwise_xor(x, params["scalar"])
+        else:
+            y = torch.bitwise_xor(x, params["scalar"])
+        return [y.numpy()]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("BitwiseXors", golden_func, output, case_index)
 
 
 @TestCaseLoader.reg_params_handler(ops=["Sum", "Amax", "Amin"])

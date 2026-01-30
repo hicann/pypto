@@ -29,6 +29,7 @@ TILEOP void BinaryComputeImpl(T0 dst, T1 src0, T2 src1) {
         }
         return;
     }
+
     if constexpr (op == BinaryOp::SUB) {
         if constexpr (operand == TileOp::BroadcastOperand::NONE) {
             pto::TSUB(dst, src0, src1);
@@ -68,6 +69,17 @@ TILEOP void BinaryComputeImpl(T0 dst, T1 src0, T2 src1) {
             pto::TROWEXPANDMIN(dst, src0, src1);
         }
     }
+        
+    if constexpr (op == BinaryOp::BITWISEAND) {
+        pto::TAND(dst, src0, src1);
+        return;
+    }
+  
+    if constexpr (op == BinaryOp::BITWISEOR) {
+        pto::TOR(dst, src0, src1);
+        return;
+    }
+        
 }
 
 template <BinaryOp op, TileOp::BroadcastOperand operand, typename T0, typename T1, typename T2>
@@ -138,6 +150,18 @@ TILEOP void TMax(T0 dst, T1 src0, T2 src1) {
 template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
 TILEOP void TMin(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::MIN, operand>(dst, src0, src1);
+}
+
+#define OP_TILE_OP_BITWISEAND TBitwiseAnd
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
+TILEOP void TBitwiseAnd(T0 dst, T1 src0, T2 src1) {
+    BinaryCompute<BinaryOp::BITWISEAND, operand>(dst, src0, src1);
+}
+
+#define OP_TILE_OP_BITWISEOR TBitwiseOr
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
+TILEOP void TBitwiseOr(T0 dst, T1 src0, T2 src1) {
+    BinaryCompute<BinaryOp::BITWISEOR, operand>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_Mod TMod
@@ -279,5 +303,57 @@ TILEOP void TMod(T0 dst, T1 src0, T2 src1, T3 tmp) {
             }
         }
     }
+}
+
+template <BinaryOp op, TileOp::BroadcastOperand operand, typename T0, typename T1, typename T2, typename T3>
+TILEOP void BinaryTmpComputeImpl(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    if constexpr (op == BinaryOp::BITWISEXOR) {
+        pto::TXOR(dst, src0, src1, tmp);
+        return;
+    }
+}
+
+template <BinaryOp op, TileOp::BroadcastOperand operand, typename T0, typename T1, typename T2, typename T3>
+TILEOP void BinaryTmpCompute(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
+    if constexpr (TileOp::IsConstContinous<T0, T1, T2, T3>() == true) {
+        auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
+        auto src0Tile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
+        auto src1Tile = PtoTile<T2, pto::BLayout::RowMajor, true>().Data();
+        auto tmpTile = PtoTile<T3, pto::BLayout::RowMajor, true>().Data();
+        pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
+        pto::TASSIGN(src0Tile, (uint64_t)src0.GetAddr());
+        pto::TASSIGN(src1Tile, (uint64_t)src1.GetAddr());
+        pto::TASSIGN(tmpTile, (uint64_t)tmp.GetAddr());
+        BinaryTmpComputeImpl<op, operand>(dstTile, src0Tile, src1Tile, tmpTile);
+        return;
+    }
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+
+    auto dstTile = PtoTile<T0>(dst);
+    auto src0Tile = PtoTile<T1>(src0);
+    auto src1Tile = PtoTile<T2>(src1);
+    auto tmpTile = PtoTile<T3>(tmp);
+    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                dstTile.Assign(dst, tileOffsets);
+                src0Tile.Assign(src0, tileOffsets);
+                src1Tile.Assign(src1, tileOffsets);
+                tmpTile.Assign(tmp, tileOffsets);
+                BinaryTmpComputeImpl<op, operand>(dstTile.Data(), src0Tile.Data(), src1Tile.Data(), tmpTile.Data());
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_BITWISEXOR TBitwiseXor
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2, typename T3>
+TILEOP void TBitwiseXor(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    BinaryTmpCompute<BinaryOp::BITWISEXOR, operand>(dst, src0, src1, tmp);
 }
 #endif

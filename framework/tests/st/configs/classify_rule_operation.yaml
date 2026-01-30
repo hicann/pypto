@@ -207,6 +207,10 @@ stest:
       - TestBitwiseLeftShifts/BitwiseLeftShiftsOperationTest.TestBitwiseLeftShifts/0
       - TestSBitwiseRightShift/SBitwiseRightShiftOperationTest.TestSBitwiseRightShift/0
       - TestSBitwiseLeftShift/SBitwiseLeftShiftOperationTest.TestSBitwiseLeftShift/0
+      - TestBitwiseAnd/BitwiseAndOperationTest.TestBitwiseAnd/1
+      - TestBitwiseOr/BitwiseOrOperationTest.TestBitwiseOr/1
+      - TestBitwiseXor/BitwiseXorOperationTest.TestBitwiseXor/1
+      - TestBitwiseNot/BitwiseNotOperationTest.TestBitwiseNot/2
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
       - GatherInUBTest.gather_in_a_

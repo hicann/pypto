@@ -47,6 +47,10 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src) {
         pto::TRECIP(dst, src);
         return;
     }
+    if constexpr (op == UnaryOp::BITWISENOT) {
+        pto::TNOT(dst, src);
+        return;
+    }
 }
 
 template <UnaryOp op, typename T0, typename T1>
@@ -145,6 +149,12 @@ TILEOP void Tbrcb(T0 dst, T1 src) {
 template <typename T0, typename T1>
 TILEOP void TAbs(T0 dst, T1 src) {
     UnaryCompute<UnaryOp::ABS>(dst, src);
+}
+
+#define OP_TILE_OP_BITWISENOT TBitwiseNot
+template <typename T0, typename T1>
+TILEOP void TBitwiseNot(T0 dst, T1 src) {
+    UnaryCompute<UnaryOp::BITWISENOT>(dst, src);
 }
 
 template <typename Ttemp, typename T0, typename T1>

@@ -91,6 +91,15 @@ struct PrintUnaryParam {
     const std::string &dstDtypeStr;
 };
 
+struct PrintUnaryTmpParam {
+    const std::string &s0Var;
+    const std::string &dVar;
+    const std::string &tmpVar;
+    const std::string &srcDtypeStr;
+    const std::string &dstDtypeStr;
+    const std::string &tmpDtypeStr;
+};
+
 struct PrintUnaryTmpBuffParam {
     const std::string &s0Var;
     const std::string &tmpVar;
@@ -156,6 +165,17 @@ struct PrintBinaryParam {
     const std::string &src0DtypeStr;
     const std::string &src1DtypeStr;
     const std::string &dstDtypeStr;
+};
+
+struct PrintBinaryTmpParam {
+    const std::string &s0Var;
+    const std::string &s1Var;
+    const std::string &dVar;
+    const std::string &tmpVar;
+    const std::string &src0DtypeStr;
+    const std::string &src1DtypeStr;
+    const std::string &dstDtypeStr;
+    const std::string &tmpDtypeStr;
 };
 
 struct PrintBinaryBrcParam {

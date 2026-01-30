@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -128,6 +128,7 @@ Tensor Cast(const Tensor &self, DataType dstDataType, CastMode mode = CAST_NONE)
 Tensor Exp(const Tensor &self);
 Tensor Neg(const Tensor &self);
 Tensor Rsqrt(const Tensor &self);
+Tensor BitwiseNot(const Tensor &self);
 Tensor Sqrt(const Tensor &self);
 Tensor Ceil(const Tensor &self);
 Tensor Floor(const Tensor &self);
@@ -181,11 +182,17 @@ Tensor Mul(const Tensor &self, const Tensor &other);
 Tensor Fmod(const Tensor &self, const Tensor &other);
 Tensor Maximum(const Tensor &operand1, const Tensor &operand2);
 Tensor Minimum(const Tensor &operand1, const Tensor &operand2);
+Tensor BitwiseAnd(const Tensor &self, const Tensor &other);
+Tensor BitwiseOr(const Tensor &self, const Tensor &other);
+Tensor BitwiseXor(const Tensor &self, const Tensor &other);
 Tensor Add(const Tensor &self, const Element &other);
 Tensor Sub(const Tensor &self, const Element &other);
 Tensor Div(const Tensor &self, const Element &other);
 Tensor Mul(const Tensor &self, const Element &other);
 Tensor Fmod(const Tensor &self, const Element &other);
+Tensor BitwiseAnd(const Tensor &self, const Element &other);
+Tensor BitwiseOr(const Tensor &self, const Element &other);
+Tensor BitwiseXor(const Tensor &self, const Element &other);
 Tensor Minimum(const Tensor &operand1, const Element &operand2);
 Tensor Maximum(const Tensor &operand1, const Element &operand2);
 Tensor Compare(const Tensor &self, const Tensor &other, OpType op, OutType mode);

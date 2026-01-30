@@ -48,7 +48,10 @@ enum class BinaryOpType {
     MAXIMUM,
     MINIMUM,
     CMP,
-    MOD
+    MOD,
+    BITWISEAND,
+    BITWISEOR,
+    BITWISEXOR,
 };
 
 template <BinaryOpType T>
@@ -71,6 +74,9 @@ std::string GetBinaryOpName() {
         case BinaryOpType::S_DIV: return "S_DIV";
         case BinaryOpType::S_MAX: return "S_MAX";
         case BinaryOpType::S_MIN: return "S_MIN";
+        case BinaryOpType::BITWISEAND: return "BITWISEAND";
+        case BinaryOpType::BITWISEOR: return "BITWISEOR";
+        case BinaryOpType::BITWISEXOR: return "BITWISEXOR";
         default: ASSERT(false && "unknown binary op type"); return "";
     }
 }
@@ -94,6 +100,9 @@ Opcode GetBinaryOpNameCode() {
             CASE(S_DIV);
             CASE(S_MAX);
             CASE(S_MIN);
+            CASE(BITWISEAND);
+            CASE(BITWISEOR);
+            CASE(BITWISEXOR);
             default: ASSERT(false && "unknown binary op type");
         }
 #undef CASE
@@ -131,6 +140,9 @@ Opcode GetBinaryOpNameCode() {
         CASE(MINIMUM);
         CASE(POW);
         CASE(MOD);
+        CASE(BITWISEAND);
+        CASE(BITWISEOR);
+        CASE(BITWISEXOR);
         default: ASSERT(false && "unknown binary op type");
     }
 #undef CASE
@@ -143,7 +155,7 @@ void BinaryOperationOperandCheck(
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand);
 void CheckBinaryInputTensors(const LogicalTensorPtr &tensor1, const LogicalTensorPtr &tensor2, std::string &op);
 
-// OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX
+// OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX OP_BITWISEAND OP_BITWISEOR OP_BITWISEXOR
 template <BinaryOpType T>
 LogicalTensorPtr TensorBinaryOperation(Function &function, const Tensor &operand1, const Tensor &operand2) {
     auto oprandT1 = operand1.GetStorage();
@@ -173,7 +185,7 @@ LogicalTensorPtr TensorBinaryOperation(Function &function, const Tensor &operand
     return result;
 }
 
-// OP_ADDS OP_SUBS OP_MULS OP_DIVS OP_MAXS OP_MINS
+// OP_ADDS OP_SUBS OP_MULS OP_DIVS OP_MAXS OP_MINS OP_BITWISEANDS OP_BITWISEORS OP_BITWISEXORS
 template <BinaryOpType T>
 LogicalTensorPtr TensorBinaryOperationScalar(Function &function, LogicalTensorPtr operand1, const Element &value) {
     auto opName = GetBinaryOpName<T>();

@@ -483,6 +483,15 @@ std::string CodeGenOpCloudNPU::PrintUnaryStatic(const PrintUnaryParam &param) co
     return os.str();
 }
 
+std::string CodeGenOpCloudNPU::PrintBitwiseNot() const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+
+    std::ostringstream oss;
+    oss << tileOpName << "(" << dstTensor << ", " << srcTensor << ");\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::PrintUnaryTileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -532,6 +541,8 @@ std::string CodeGenOpCloudNPU::GenUnaryOp() const {
         return PrintVcopy({s0Var, dVar, srcDtypeStr, dstDtypeStr});
     } else if (opCode == Opcode::OP_ROWSUM) {
         return PrintReduceSum({s0Var, dVar, srcDtypeStr, dstDtypeStr});
+    } else if (opCode == Opcode::OP_BITWISENOT) {
+        return PrintBitwiseNot();
     }
     ALOG_INFO_F("unsupported tileop: %s", opCodeStr.c_str());
     return "CG_ERROR";

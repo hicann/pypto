@@ -219,12 +219,17 @@ std::string CodeGenOpCloudNPU::GenVectorScalarOpWithTmp() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
-    std::vector<std::string> tileOpCallParamList = {dstTensor, srcTensor, tmpTensor};
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
-    std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
+    std::string srcScalar;
+    if (extOperandVal.IsFloat()) {
+        srcScalar = FormatFloat(extOperandVal.Cast<float>());
+    } else if (extOperandVal.IsUnsigned()||extOperandVal.IsSigned()) {
+        srcScalar = std::visit([](const auto& val) -> std::string {
+            return std::to_string(val);},extOperandVal.GetVariantData());
+    }
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, srcScalar, tmpTensor};
+
     std::ostringstream oss;
-    oss << tileOpName << "<" << dstDtypeStr << ">"
-        << "(" << dstTensor << ", " << srcTensor << ", " << scalarTmpBuffer << ", " << tmpTensor << ");\n";
+    oss << tileOpName << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 
