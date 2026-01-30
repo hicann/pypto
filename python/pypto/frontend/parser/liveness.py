@@ -297,15 +297,21 @@ class LivenessAnalyzer(doc.NodeVisitor):
         If inside a loop scope, records the use at the loop level to ensure
         variables aren't deleted inside the loop body, UNLESS the variable
         was defined inside the loop (in which case it can be deleted per-iteration).
+
+        For variables defined outside loops but used inside nested loops,
+        uses the outermost loop's statement ID to ensure variables are not
+        deleted prematurely (e.g., in loop_unroll scenarios where the loop
+        is split into multiple blocks).
         """
         if self.current_stmt_id is not None:
             if var_name not in self.var_uses:
                 self.var_uses[var_name] = []
             # If we're inside a loop and the variable was defined OUTSIDE the loop,
-            # use the loop's statement ID to delete after loop exits.
-            # If defined INSIDE the loop, use actual statement ID to delete per-iteration.
+            # use the OUTERMOST loop's statement ID to delete after that loop exits.
+            # This ensures variables used in nested loops (especially loop_unroll) are
+            # not deleted prematurely when inner loops exit.
             if self.loop_scope_stack and var_name not in self.vars_defined_in_loop:
-                stmt_id = self.loop_scope_stack[-1]  # Use innermost loop scope
+                stmt_id = self.loop_scope_stack[0]  # Use outermost loop scope
             else:
                 stmt_id = self.current_stmt_id
             self.var_uses[var_name].append(stmt_id)
