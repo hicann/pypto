@@ -216,10 +216,10 @@ inline constexpr uint32_t TWO_MB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POL
 
 class RuntimeAgentMemory {
 public:
-    void AllocDevAddr(uint8_t **devAddr, uint64_t size) {
+    void AllocDevAddr(uint8_t **devAddr, uint64_t size, bool tmpAddr = false) {
         auto alignSize = MemSizeAlign(size);
-        ALOG_INFO_F("RuntimeAgent::Alloc size[%u] with align size[%lu].", size, alignSize);
-        if (TryGetHugePageMem(devAddr, alignSize)) {
+        ALOG_INFO_F("RuntimeAgent::Alloc size[%lu] with align size[%lu].", size, alignSize);
+        if (TryGetHugePageMem(devAddr, alignSize, tmpAddr)) {
             return;
         }
         size_t allocSize = ((alignSize - 1) / ONT_GB_SIZE + 1) * ONT_GB_SIZE;
@@ -231,17 +231,26 @@ public:
                 ALOG_ERROR_F("RuntimeAgent::AllocDevAddr failed for size %lu", size);
                 return;
             }
-            allocatedDevAddr.emplace_back(*devAddr);
+            if (tmpAddr) {
+                allocatedTmpDevAddr.emplace_back(*devAddr);
+            } else {
+                allocatedDevAddr.emplace_back(*devAddr);
+            }
             ALOG_INFO_F("AllocDevAddr %p size is %lu", *devAddr, size);
             return;
         }
-        allocatedDevAddr.emplace_back(*devAddr);
-        hugePageVec.emplace_back(HugePageDesc(*devAddr, allocSize));
-        if (!TryGetHugePageMem(devAddr, alignSize)) {
+        if (tmpAddr) {
+            allocatedTmpDevAddr.emplace_back(*devAddr);
+            tmpHugePageVec.emplace_back(HugePageDesc(*devAddr, allocSize));
+        } else {
+            allocatedDevAddr.emplace_back(*devAddr);
+            hugePageVec.emplace_back(HugePageDesc(*devAddr, allocSize));
+        }
+        if (!TryGetHugePageMem(devAddr, alignSize, tmpAddr)) {
             ALOG_ERROR_F("RuntimeAgent::AllocDevAddr failed for size %lu", size);
             return;
         }
-        ALOG_INFO_F("Alloc 1G page mem %p size is %lu", *devAddr, allocSize);
+        ALOG_INFO_F("Alloc 1G page mem %p size is %lu.", *devAddr, allocSize);
         return;
     }
 
@@ -272,18 +281,31 @@ public:
     bool GetValidGetPgMask() const {
         return validGetPgMask;
     }
+
+    void FreeTmpMemory() {
+        for (uint8_t *addr : allocatedTmpDevAddr) {
+            rtFree(addr);
+        }
+        allocatedTmpDevAddr.clear();
+        tmpHugePageVec.clear();
+    }
+
 protected:
     void DestroyMemory() {
         for (uint8_t *addr : allocatedDevAddr) {
             rtFree(addr);
         }
+        allocatedDevAddr.clear();
+        hugePageVec.clear();
+        FreeTmpMemory();
     }
 private:
-    bool TryGetHugePageMem(uint8_t **devAddr, uint64_t alignSize) {
-        for (size_t i = 0; i < hugePageVec.size(); ++i) {
-            if (hugePageVec[i].current + alignSize <= hugePageVec[i].allSize) {
-                *devAddr = hugePageVec[i].baseAddr + hugePageVec[i].current;
-                hugePageVec[i].current += alignSize;
+    bool TryGetHugePageMem(uint8_t **devAddr, uint64_t alignSize, bool tmpAddr) {
+        std::vector<HugePageDesc> &pageVec = tmpAddr ? tmpHugePageVec : hugePageVec;
+        for (size_t i = 0; i < pageVec.size(); ++i) {
+            if (pageVec[i].current + alignSize <= pageVec[i].allSize) {
+                *devAddr = pageVec[i].baseAddr + pageVec[i].current;
+                pageVec[i].current += alignSize;
                 ALOG_INFO_F("HugePage Mem get with size:%u addr:%p.", alignSize, *devAddr);
                 return true;
             }
@@ -293,7 +315,9 @@ private:
 private:
     bool validGetPgMask = true;
     std::vector<HugePageDesc> hugePageVec;
+    std::vector<HugePageDesc> tmpHugePageVec;
     std::vector<uint8_t *> allocatedDevAddr;
+    std::vector<uint8_t *> allocatedTmpDevAddr;
 };
 
 class RuntimeAgentStream {

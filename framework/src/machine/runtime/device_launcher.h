@@ -19,6 +19,10 @@
 #include <cstdint>
 #include <cinttypes>
 
+#ifdef BUILD_WITH_CANN
+#include "machine/runtime/device_runner.h"
+#endif
+
 #include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
@@ -123,15 +127,20 @@ public:
     static void AssignMetaAddr(DeviceKernelArgs &kArgs, DeviceMemoryTy devMem, DevAscendProgram *devProg, CachedOperator *cachedOperator) {
         uint64_t generalSize = devProg->memBudget.metadata.general;
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;
-        size_t shmSize = DEVICE_SHM_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum +
-            generalSize + stitchPoolSize;
-        uint64_t shmAddr = (uint64_t)devMem.AllocDev(shmSize, CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
-        devProg->devArgs.startArgsAddr = shmAddr;
-        shmAddr += DEV_ARGS_SIZE;
-        devProg->devArgs.taskCtrl = shmAddr;
-        shmAddr += DEVICE_TASK_CTRL_SIZE;
-        devProg->devArgs.taskQueue = shmAddr;
-        shmAddr += DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+        size_t shmSize = generalSize + stitchPoolSize;
+        uint64_t shmAddr = 0U;
+        if (devMem.IsDevice()) {
+            shmAddr = (uint64_t)devMem.AllocDev(shmSize, CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
+        } else {
+            shmSize += (DEVICE_SHM_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum);
+            shmAddr = (uint64_t)devMem.AllocDev(shmSize, CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
+            devProg->devArgs.startArgsAddr = shmAddr;
+            shmAddr += DEV_ARGS_SIZE;
+            devProg->devArgs.taskCtrl = shmAddr;
+            shmAddr += DEVICE_TASK_CTRL_SIZE;
+            devProg->devArgs.taskQueue = shmAddr;
+            shmAddr += DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+        }
         devProg->devArgs.generalAddr = shmAddr;
         kArgs.opMetaAddrs.generalAddr = shmAddr;
         shmAddr += generalSize;
@@ -143,9 +152,9 @@ public:
     }
 
     // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
-    static void PrepareDevProgArgs(DevAscendProgram *devProg, DeviceLauncherConfig &config) {
+    static void PrepareDevProgArgs(DevAscendProgram *devProg, DeviceLauncherConfig &config, bool isDevice) {
         ASSERT(config.blockdim != 0) << "Invalid blockdim: " << config.blockdim << ", must not be zero";
-
+        devProg->devArgs.taskId = 0;
         devProg->devArgs.nrAic = kDefaultAicNum;
         devProg->devArgs.nrAiv = kDefaultAivNum;
         devProg->devArgs.nrValidAic = config.blockdim;
@@ -156,8 +165,13 @@ public:
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
         config.aicpuNum = devProg->devArgs.scheCpuNum + dynamic::MAX_OTHER_AICPU_NUM;
         devProg->devArgs.nrAicpu = config.aicpuNum;
+#ifdef BUILD_WITH_CANN
+        if (isDevice) {
+            devProg->devArgs.validGetPgMask = DeviceRunner::Get().GetValidGetPgMask();
+        }
+#endif
+        devProg->devArgs.disableSync = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_NO_DEVICE_TENSOR_DEPEND ? 1 : 0;
         ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
-        devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {
@@ -166,7 +180,11 @@ public:
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
         }
-
+#ifdef BUILD_WITH_CANN
+        if (isDevice) {
+            DeviceRunner::Get().InitMetaData(devProg->devArgs);
+        }
+#endif
         devProg->workspaceSize = devProg->memBudget.Total();
         ALOG_INFO_F("workspaceSize=%lu, tensor=%lu, metadata=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu",
             devProg->workspaceSize, devProg->memBudget.tensor.Total(), devProg->memBudget.metadata.Total(),
@@ -206,6 +224,7 @@ public:
         if (config::GetPlatformConfig(KEY_ENABLE_PROF_AICORE_PMU, false)) {
             kArgs.toSubMachineConfig.profConfig.Add(ProfConfig::AICORE_PMU);
         }
+        devProg->devArgs.toSubMachineConfig = kArgs.toSubMachineConfig;
     }
 
     static void PrepareHcclContext(const std::vector<uint64_t> &hcclContext, const std::vector<uint8_t> &devProgData) {
@@ -246,8 +265,7 @@ public:
             DevControlFlowCache* ctrlFlowCache, const DeviceLauncherConfig &config, CachedOperator *cachedOperator) {
         auto &mutableConfig = const_cast<DeviceLauncherConfig &>(config);
         auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(devProgData.data()));
-        PrepareDevProgArgs(devProg, mutableConfig);
-
+        PrepareDevProgArgs(devProg, mutableConfig, devMem.IsDevice());
         // Fill all metadata and kernel args
         bool isCtrlCacheRecording  = false;
         if (!devMem.IsDevice()) {

@@ -237,6 +237,7 @@ int DeviceLauncher::DeviceRunOnce(Function *function, DevControlFlowCache* hostC
         CopyFromDev(DeviceMemoryUtils(), inputDataList);
     }
     devMemory.Free(devCtrlCache);
+    machine::GetRA()->FreeTmpMemory();
     return rc;
 #else
     (void)hostCtrlCache;

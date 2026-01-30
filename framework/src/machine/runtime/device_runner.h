@@ -24,11 +24,11 @@
 #include <sys/file.h>
 #include "tilefwk/platform.h"
 #include "machine/runtime/host_prof.h"
+#include "machine/utils/machine_ws_intf.h"
 
 #ifdef BUILD_WITH_CANN
 #include <runtime/rt.h>
 #include <acl/acl_rt.h>
-#include "machine/utils/machine_ws_intf.h"
 #include "machine/runtime/pmu_common.h"
 
 constexpr int CORE_DEFAULT_NUM = 70;
@@ -75,7 +75,9 @@ public:
     void DumpAiCoreExecutionTimeData();
     void DumpAiCorePmuData();
     void SynchronizeDeviceToHostProfData();
-
+    void InitMetaData(DeviceArgs &devArgs);
+    void InitAiCpuSoBin(DeviceArgs &devArgs);
+    bool GetValidGetPgMask() const;
 private:
     DeviceRunner() = default;
     void *DevAlloc(int size);
@@ -94,7 +96,6 @@ private:
     int RunPreSync(rtStream_t aicpuStream, rtStream_t aicoreStream);
     int RunPost(rtStream_t aicpuStream, rtStream_t aicoreStream);
     int launchDynamicAiCpuInit(rtStream_t aicpuStream, DeviceKernelArgs *kArgs);
-    void InitAiCpuSoBin();
     void ReportHostProfInfo(uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore = false);
     int DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs, int blockdim);
     int DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs, int blockdim);
@@ -122,10 +123,7 @@ private:
 namespace npu::tile_fwk {
 class DeviceRunner {
 public:
-    static DeviceRunner &Get() {
-        static DeviceRunner runner;
-        return runner;
-    }
+    static DeviceRunner &Get();
     int Run(void *stream, int64_t taskId, uint64_t taskData) {
         (void)stream;
         (void)taskId;
@@ -138,6 +136,8 @@ public:
         (void)taskData;
         return 0;
     }
+    void InitMetaData(DeviceArgs &devArgs);
+    bool GetValidGetPgMask() const;
     HostProf &GetHostProfInstance() {
         return hostProf_;
     }
