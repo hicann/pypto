@@ -430,14 +430,14 @@ void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCom
 void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts,
     const Tensor& expertScales, const char* group, uint32_t epWorldSize, uint32_t moeExpertNum,
     uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& out);
-void CreateShmemData(const char *group, int64_t worldSize, DataType dataType,
-    const Shape &shape, Tensor &shmemTensor, uint64_t memType = 0);
-void CreateShmemSignal(const char *group, Tensor &shmemData, Tensor &shmemSignal);
+void CreateShmemData(const char* group, int64_t worldSize, DataType dataType,
+    const Shape& shape, Tensor& shmemTensor, uint64_t memType = 0);
+void CreateShmemSignal(const char* group, Tensor& shmemData, Tensor& shmemSignal);
 Tensor ShmemPut(const Tensor& predToken, const Tensor& in, const Tensor& shmemData,
     AtomicType atomicType = AtomicType::SET);
 Tensor ShmemPutUb2Gm(const Tensor &in, const Tensor &shmemDataTile, const Tensor &barrierDummy,
  	AtomicType atomicType = AtomicType::SET);
-Tensor ShmemSignal(const Tensor& predToken, const Tensor& shmemSignal, AtomicType atomicType);
+Tensor ShmemSignal(const Tensor& predToken, const Tensor& shmemSignal, AtomicType atomicType = AtomicType::SET);
 Tensor WaitUntil(const Tensor& predToken, const Tensor& shmemSignal, int32_t expectedSum, bool resetSignal = false);
 Tensor ShmemGet(const Tensor& predToken, const Tensor& shmemData, DataType nonShmemDataType = DataType::DT_BOTTOM,
     AtomicType atomicType = AtomicType::SET);
