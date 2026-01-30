@@ -478,24 +478,48 @@ function(PTO_Fwk_STest_Distributed_RunExe)
             # Golden 生成
             PTO_Fwk_STest_RunExe_GenerateGolden(TARGET ${ARG_TARGET} GTEST_FILTER_LIST ${GTestFilterList})
             # 执行流程
-            set(GtestFilterListIdx 1)
-            list(LENGTH GTestFilterList GtestFilterListLen)
+            math(EXPR MaxRankSizeTimes2 "${MaxRankSize} * 2")
             string(REPLACE ";" ":" GtestFilterStr "${GTestFilterList}")
-            message(STATUS "Run GTest(${ARG_TARGET}) XSAN(ASAN:${ENABLE_ASAN} UBSAN:${ENABLE_UBSAN}) GTestFilter(${GtestFilterListLen})=${GtestFilterStr}")
+            list(LENGTH PTO_Fwk_StestExecuteDeviceIdList DeviceIdListLen)
             set(Comment "Run GTest(${ARG_TARGET}) XSAN(ASAN:${ENABLE_ASAN} UBSAN:${ENABLE_UBSAN})")
-            foreach (Filter ${GTestFilterList})
-                PTO_Fwk_STest_Distributed_GetRankSize(RankSize
-                        GTEST_FILTER        ${Filter}
-                        GTEST_FILTER_CONFIG ${ARG_GTEST_FILTER_CONFIG}
-                )
+            if(ENABLE_TESTS_EXECUTE_PARALLEL OR (DeviceIdListLen GREATER_EQUAL MaxRankSizeTimes2))
+                set(_File $<TARGET_FILE:${ARG_TARGET}>)
+                set(_Args "-t=${_File}" "--gtest_filter=${GtestFilterStr}" "--halt_on_error")
+                foreach (DevId ${PTO_Fwk_StestExecuteDeviceIdList})
+                    list(APPEND _Args "--device=${DevId}")
+                endforeach ()
+                if (ENABLE_TESTS_EXECUTE_PARALLEL_TIMEOUT)
+                    list(APPEND _Args "--timeout=${ENABLE_TESTS_EXECUTE_PARALLEL_TIMEOUT}")
+                endif ()
+                if (PyEnvLines)
+                    list(APPEND _Args "--env" "${PyEnvLines}")
+                endif ()
+                list(APPEND _Args "--rank_size" "${MaxRankSize}")
+                get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/distributed_stest_accelerate.py" REALPATH)
+                get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python" REALPATH)
                 add_custom_command(
                         TARGET ${ARG_TARGET} POST_BUILD
-                        COMMAND ${BashCmdSetup} mpirun -n ${RankSize} ./${ARG_TARGET} ARGS '--gtest_filter=${Filter}'
-                        COMMENT "${Comment} [${GtestFilterListIdx}/${GtestFilterListLen}] With --gtest_filter=${Filter}"
-                        WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+                        COMMAND ${PyCmdSetup} ${Python3_EXECUTABLE} ${ParallelPy} ARGS ${_Args}
+                        COMMENT "${Comment} With Parallel Execute Accelerate"
+                        WORKING_DIRECTORY ${ParallelPyCwd}
                 )
-                math(EXPR GtestFilterListIdx "${GtestFilterListIdx} + 1")
-            endforeach ()
+            else ()
+                set(GtestFilterListIdx 1)
+                message(STATUS "Run GTest(${ARG_TARGET}) XSAN(ASAN:${ENABLE_ASAN} UBSAN:${ENABLE_UBSAN}) GTestFilter(${GtestFilterListLen})=${GtestFilterStr}")
+                foreach (Filter ${GTestFilterList})
+                    PTO_Fwk_STest_Distributed_GetRankSize(RankSize
+                            GTEST_FILTER        ${Filter}
+                            GTEST_FILTER_CONFIG ${ARG_GTEST_FILTER_CONFIG}
+                    )
+                    add_custom_command(
+                            TARGET ${ARG_TARGET} POST_BUILD
+                            COMMAND ${BashCmdSetup} mpirun -n ${RankSize} ./${ARG_TARGET} ARGS '--gtest_filter=${Filter}'
+                            COMMENT "${Comment} [${GtestFilterListIdx}/${GtestFilterListLen}] With --gtest_filter=${Filter}"
+                            WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+                    )
+                    math(EXPR GtestFilterListIdx "${GtestFilterListIdx} + 1")
+                endforeach ()
+            endif ()
         endif ()
     endif ()
 endfunction()

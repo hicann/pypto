@@ -883,6 +883,11 @@ class GTestAccelerate(ABC):
         ctx.exit_code = process.exitcode
         logging.info("%s Recv Case[%s] upload terminate event.", self._get_process_desc(), gtest_filter)
         return False
+    
+    def _execute_case(self, ctx: CaseContext, param: ExecParam,
+                    gtest_filter: str) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
+        """统一的用例执行入口 - 由子类重写此方法实现不同模式"""
+        return self.exe.run(gtest_filter=gtest_filter, envs=param.get_envs())
 
     def _cntr_set_cpu_affinity(self, cntr_id: int):
         """在 Cntr 启动初期, 设置 CPU 亲和性
@@ -923,7 +928,7 @@ class GTestAccelerate(ABC):
         run_desc = f"Run {self.mark}{self.exe.brief} GTestFilter({gtest_filter})"
         try:
             logging.info("%s[%s] [BGN] %s", self.cntr_name, cntr_id, run_desc)
-            ret, cmd, _ = self.exe.run(gtest_filter=ctx.gtest_filter, envs=ctx.exec_param.get_envs())
+            ret, cmd, _ = self._execute_case(ctx, param, gtest_filter)
             if ret.returncode:
                 self._case_exception_exit(cntr_id=cntr_id, cmd=cmd,
                                           ret_code=ret.returncode, out=ret.stdout, err=ret.stderr)

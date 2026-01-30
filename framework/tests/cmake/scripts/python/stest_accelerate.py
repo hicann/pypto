@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -26,9 +26,11 @@ class STestAccelerate(GTestAccelerate):
     通过多进程并行执行, 以提升 STest 执行效率.
     """
 
-    def __init__(self, args):
+    def __init__(self, args: argparse.Namespace, scene_mark: str = "STest", cntr_name: str = "Device"):
         """
         :param args: 命令行参数
+        :param scene_mark: 场景标识
+        :param cntr_name: 容器名称
         """
         # 在调用父类初始化之前，从二进制文件获取 meta 信息并重排序用例列表
         # 二进制文件路径通过 -t/--target 参数传入，存储在 args.target[0] 中
@@ -49,9 +51,20 @@ class STestAccelerate(GTestAccelerate):
             logging.warning("Binary path not found, skipping meta-based reordering")
 
         # 调用父类初始化
-        super().__init__(args, scene_mark="STest", cntr_name="Device")
+        super().__init__(args, scene_mark=scene_mark, cntr_name=cntr_name)
 
         self.device_list: List[int] = self._init_get_device_list(args=args)
+
+    @staticmethod
+    def reg_args(parser: argparse.ArgumentParser) -> None:
+        """注册STest加速器参数
+
+        先调用父类(GTestAccelerate)的参数注册, 再添加STest特有参数
+        """
+        GTestAccelerate.reg_args(parser)
+        parser.add_argument("-d", "--device", nargs="?", type=int, action="append",
+                            help="Specific parallel accelerate device, "
+                                 "If this parameter is not specified, 0 device will be used by default.")
 
     @staticmethod
     def main() -> bool:
@@ -60,9 +73,6 @@ class STestAccelerate(GTestAccelerate):
         # 参数注册
         parser = argparse.ArgumentParser(description=f"STest Execute Accelerate", epilog="Best Regards!")
         STestAccelerate.reg_args(parser=parser)
-        parser.add_argument("-d", "--device", nargs="?", type=int, action="append",
-                            help="Specific parallel accelerate device, "
-                                 "If this parameter is not specified, 0 device will be used by default.")
         # 流程处理
         args = parser.parse_args()
         ctrl = STestAccelerate(args=args)

@@ -23,6 +23,7 @@
 #include "test_common.h"
 #include "distributed_op_test_suite.h"
 #include "distributed_test_framework.h"
+#include <filesystem>
 
 namespace npu::tile_fwk::Distributed {
 
@@ -127,11 +128,22 @@ void GegisterAllOps()
 template <typename T>
 std::vector<T> GetOpMetaData(const std::string &op)
 {
-    auto caseFile = "../../../framework/tests/st/distributed/ops/test_case/" + op + "_st_test_cases.json";
+    std::string filename = op + "_st_test_cases.json";
+    std::filesystem::path caseFile;
+#ifdef TEST_CASE_RELATIVE_PATH
+    caseFile = std::filesystem::path(TEST_CASE_EXE_DIR) / TEST_CASE_RELATIVE_PATH / filename;
+#else
+    caseFile = "../../../framework/tests/st/distributed/ops/test_case/" + op + "_st_test_cases.json";
+#endif
+    if (!std::filesystem::exists(caseFile)) {
+        ALOG_ERROR_F("File not found: %s, absolute path: %s", caseFile.string().c_str(),
+            std::filesystem::absolute(caseFile).string().c_str());
+        return {};
+    }
     std::ifstream jsonFile(caseFile);
     if (!jsonFile.is_open()) {
-        std::cerr << "Failed to open JSON file for op " << op << ". "
-        << "Please check the path and ensure the file exists: " << caseFile << std::endl;
+        ALOG_ERROR_F("Failed to open JSON file for op %s. Path: %s", op.c_str(),
+            std::filesystem::absolute(caseFile).string().c_str());
         return {};
     }
     nlohmann::json jsonData = nlohmann::json::parse(jsonFile);
@@ -140,8 +152,8 @@ std::vector<T> GetOpMetaData(const std::string &op)
         testCaseList.emplace_back(tc);
     }
     if (testCaseList.empty()) {
-        std::cerr << "No test cases found in json for op: " << op << ". "
-        << "Please check the contents of: " << caseFile << std::endl;
+        ALOG_ERROR_F("No test cases found in json for op: %s. File: %s", op.c_str(),
+            std::filesystem::absolute(caseFile).string().c_str());
     }
     return testCaseList;
 }

@@ -25,6 +25,15 @@ else ()
 endif ()
 list(GET PTO_Fwk_StestExecuteDeviceIdList 0 TileFwkStestExecuteDeviceIdPref)
 
+if (ENABLE_STEST_DISTRIBUTED)
+    find_program(MPIRUN_EXECUTABLE NAMES mpirun mpiexec)
+    if (NOT MPIRUN_EXECUTABLE)
+        message(FATAL_ERROR "mpirun not found! Distributed tests require MPI runtime")
+    else ()
+        message(STATUS "Found mpirun: ${MPIRUN_EXECUTABLE}")
+    endif ()
+endif ()
+
 # 预定义路径
 if (ENABLE_STEST_GOLDEN_PATH)
     get_filename_component(ENABLE_STEST_GOLDEN_PATH "${ENABLE_STEST_GOLDEN_PATH}" REALPATH)

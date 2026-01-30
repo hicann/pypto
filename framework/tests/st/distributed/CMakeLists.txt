@@ -31,6 +31,21 @@ PTO_Fwk_GTest_AddExe(
         PRIVATE_LINK_LIBRARIES  ${_PrivateLinkLibraries}
 )
 
+set(TEST_CASE_SRC_DIR "${PTO_FWK_SRC_ROOT}/framework/tests/st/distributed/ops/test_case")
+set(TEST_CASE_DST_DIR "$<TARGET_FILE_DIR:${_Target}>/test_case")
+
+add_custom_command(TARGET ${_Target} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${TEST_CASE_SRC_DIR}"
+        "${TEST_CASE_DST_DIR}"
+    COMMENT "Copying test case data files to output directory..."
+    VERBATIM
+)
+target_compile_definitions(${_Target} PRIVATE
+    TEST_CASE_RELATIVE_PATH="test_case"
+    TEST_CASE_EXE_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+)
+
 # PyPTO, 依赖 CI 任务拆分, 先通过依赖确保上板顺序
 if (TARGET ${PTO_Fwk_STestNamePrefix}_python)
     message(STATUS "Add Dependencies ${_Target} -> ${PTO_Fwk_STestNamePrefix}_python")
@@ -38,18 +53,18 @@ if (TARGET ${PTO_Fwk_STestNamePrefix}_python)
 endif ()
 
 # 用例可执行程序(执行)
-set(_DistributedGTestCaseFilterConfig 
-        "TestAllgather/DistributedTest.TestAllgather/0" "4"
-        "TestAllreduce/DistributedTest.TestAllreduce/0" "4"
-        "TestAllreduce/DistributedTest.TestAllreduce/1" "4"
-        "TestMoeDispatch/DistributedTest.TestMoeDispatch/0" "4"
-        "TestMoeDistributedCombine/DistributedTest.TestMoeDistributedCombine/0" "4"
-        "TestMoeDistributedCombine/DistributedTest.TestMoeDistributedCombine/1" "4"
-        "TestReducescatter/DistributedTest.TestReducescatter/0" "4"
-        "TestReducescatter/DistributedTest.TestReducescatter/1" "4"
-        "TestReducescatter/DistributedTest.TestReducescatter/2" "4"
-        "TestAllgather_AttnPost_Reducescatter/DistributedTest.TestAllgather_AttnPost_Reducescatter/0" "4"
-        "TestAllreduce_Add_Allreduce/DistributedTest.TestAllreduce_Add_Allreduce/0" "4"
+set(_DistributedGTestCaseFilterConfig
+        # "TestAllgather/DistributedTest.TestAllgather/0" "4"
+        # "TestAllreduce/DistributedTest.TestAllreduce/0" "4"
+        # "TestAllreduce/DistributedTest.TestAllreduce/1" "4"
+        # "TestMoeDispatch/DistributedTest.TestMoeDispatch/0" "4"
+        # "TestMoeDistributedCombine/DistributedTest.TestMoeDistributedCombine/0" "4"
+        # "TestMoeDistributedCombine/DistributedTest.TestMoeDistributedCombine/1" "4"
+        # "TestReducescatter/DistributedTest.TestReducescatter/0" "4"
+        # "TestReducescatter/DistributedTest.TestReducescatter/1" "4"
+        # "TestReducescatter/DistributedTest.TestReducescatter/2" "4"
+        # "TestAllgather_AttnPost_Reducescatter/DistributedTest.TestAllgather_AttnPost_Reducescatter/0" "4"
+        # "TestAllreduce_Add_Allreduce/DistributedTest.TestAllreduce_Add_Allreduce/0" "4"
 )
 set(_LdLibrariesExt
         tile_fwk_compiler
