@@ -127,6 +127,7 @@ Tensor Cast(const Tensor &self, DataType dstDataType, CastMode mode = CAST_NONE)
 
 Tensor Exp(const Tensor &self);
 Tensor Neg(const Tensor &self);
+Tensor Round(const Tensor &self, const int &decimals = 0);
 Tensor Rsqrt(const Tensor &self);
 Tensor BitwiseNot(const Tensor &self);
 Tensor Sqrt(const Tensor &self);

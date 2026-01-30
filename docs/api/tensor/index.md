@@ -30,6 +30,7 @@ pypto-Tensor-move
 pypto-Tensor-mul
 pypto-Tensor-name
 pypto-Tensor-reshape
+pypto-Tensor-round
 pypto-Tensor-set_cache_policy
 pypto-Tensor-scatter
 pypto-Tensor-scatter_

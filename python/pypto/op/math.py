@@ -585,6 +585,34 @@ def logical_and(input: Tensor, other: Tensor) -> Tensor:
 
 
 @op_wrapper
+def round(input: Tensor, decimals: int = 0) -> Tensor:
+    """Rounds elements of `input` to the nearest number of decimal places.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+    decimals : int
+        Number of decimal places to round to (default: 0).
+        If decimals is negative, it specifies the number of positions to the left of the decimal point.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise round.
+
+    Examples
+    --------
+    x = pypto.tensor([2, 2], pypto.DT_FP32)
+    y = pypto.round(x, decimals=1)
+
+    Input x: [[1.21, 2.35], [3.65, 4.76]]
+    Output y: [[1.2, 2.4], [3.6, 4.8]]
+    """
+    return pypto_impl.Round(input, decimals)
+
+
+@op_wrapper
 def rsqrt(input: Tensor) -> Tensor:
     """Computes the element-wise reciprocal of the square-root of `input`
 

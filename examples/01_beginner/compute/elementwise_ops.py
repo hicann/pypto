@@ -886,6 +886,53 @@ def test_pow_basic(device_id: int = None, run_mode: str = "npu"):
 
 
 # ============================================================================
+# ROUND Examples
+# ============================================================================
+
+def round_op(a: torch.Tensor, b: int, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+    a_shape = a.shape
+
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def round_kernel(a: pypto.Tensor(a_shape, pypto.DT_FP32)) -> pypto.Tensor(a_shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(2, 8)
+        out = pypto.round(a, decimals=b)
+        return out
+
+    out = round_kernel(a)
+    return out
+
+
+def test_round_basic(device_id: int = None, run_mode: str = "npu"):
+    """Test basic usage of round function"""
+    print("=" * 60)
+    print("Test: Basic Usage of round Function")
+    print("=" * 60)
+
+    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+
+    dtype = torch.float32
+    a = torch.tensor([[1.21, 2.35],
+                      [3.65, 4.76]], dtype=dtype, device=device)
+    decimals = 1
+    expected = torch.tensor([[1.2, 2.4],
+                             [3.6, 4.8]], dtype=dtype, device=device)
+
+    out = round_op(a, decimals, run_mode)
+    if run_mode == "npu":
+        assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    print(f"Output: {out}")
+    print(f"Expected: {expected}")
+    print("✓ Basic usage of round function completed successfully")
+
+
+# ============================================================================
 # RSQRT Examples
 # ============================================================================
 
@@ -1425,6 +1472,11 @@ Examples:
             'name': 'Test basic usage of pow function',
             'description': 'Basic usage of pow function example',
             'function': test_pow_basic
+        },
+        'round::test_round_basic': {
+            'name': 'Test basic usage of round function',
+            'description': 'Basic usage of round function example',
+            'function': test_round_basic
         },
         'rsqrt::test_rsqrt_basic': {
             'name': 'Test basic usage of rsqrt function',

@@ -125,6 +125,12 @@ static void Trunc(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     torch::trunc_out(tout, From(self));
 }
 
+static void Round(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int decimals) {
+    auto ret = From(out);
+    auto src = From(self);
+    ret.copy_(torch::round(src, decimals));
+}
+
 static void Rsqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     auto tout = From(out);
     torch::rsqrt_out(tout, From(self));
@@ -1425,6 +1431,7 @@ static struct CalcOps calcOps = {
     .Ceil = Ceil,
     .Floor = Floor,
     .Trunc = Trunc,
+    .Round = Round,
     .Reciprocal = Reciprocal,
     .BitwiseNot = BitwiseNot,
     .Abs = Abs,

@@ -235,6 +235,10 @@ void OpcodeManager::RegisterVectorUnary() {
     RegisterInfo(Opcode::OP_TRUNC, OpCoreType::AIV, "TRUNC", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Ttrunc", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_ROUND, OpCoreType::AIV, "ROUND", {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Tround", PIPE_V, PIPE_V, CoreType::AIV},
+        OpCalcType::ELMWISE, {OP_ATTR_PREFIX + "powDecimals", OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_BITWISENOT, OpCoreType::AIV, "BITWISENOT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Tbitwisenot", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
@@ -831,6 +835,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {               Opcode::OP_CEIL,          "TCeil"},
     {               Opcode::OP_FLOOR,        "TFloor"},
     {               Opcode::OP_TRUNC,        "TTrunc"},
+    {              Opcode::OP_ROUND,         "TRound"},
     {         Opcode::OP_RECIPROCAL,    "TReciprocal"},
     {                Opcode::OP_EXP,           "TExp"},
     {                Opcode::OP_ABS,           "TAbs"},

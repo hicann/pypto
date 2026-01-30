@@ -681,6 +681,34 @@ TEST_F(DynamicOpsTest, MatmulFP32FP32) {
     TestMatmul(DT_FP32, DT_FP32);
 }
 
+TEST_F(DynamicOpsTest, Round) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 2;
+    int64_t n = 4;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, n}, "outValue");
+
+    std::vector<float> inputData = {1.2f, 2.0f, 3.9f, -1.1f, -2.9f, 5.5f, -0.1f, 7.0f};
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+    });
+
+    int decimals = 0;
+    FUNCTION("main", {self}, {outValue}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            outValue = Round(t0, decimals);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, ScatterElement) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);

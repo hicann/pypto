@@ -152,6 +152,11 @@ stest:
       - TestFloor/FloorOperationTest.TestFloor/1
       - TestTrunc/TruncOperationTest.TestTrunc/0
       - TestTrunc/TruncOperationTest.TestTrunc/1
+      - TestRound/RoundOperationTest.TestRound/0
+      - TestRound/RoundOperationTest.TestRound/1
+      - TestRound/RoundOperationTest.TestRound/2
+      - TestRound/RoundOperationTest.TestRound/13
+      - TestRound/RoundOperationTest.TestRound/14
       - TestPows/PowsOperationTest.TestPows/12
       - TestPows/PowsOperationTest.TestPows/13
       - TestPows/PowsOperationTest.TestPows/14

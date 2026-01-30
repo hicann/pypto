@@ -608,8 +608,81 @@ void LogicAndOperationTileFunc(Function &function, const TileShape &tileShape,
     TiledLogicalAndOperation(function, tileShape, iOperand[0], iOperand[1], oOperand[0]);
 }
 
+Tensor TensorRound(Function &function, const LogicalTensorPtr &self, const int &decimals = 0) {
+    auto result =
+        std::make_shared<LogicalTensor>(function, self->Datatype(), self->GetShape(), self->GetDynValidShape());
+    auto &op = function.AddOperation(Opcode::OP_ROUND, {self}, {result});
+    op.SetAttribute(OP_ATTR_PREFIX + "decimals", decimals);
+    function.UpdateTensorDataUsage(op);
+    return result;
+}
+
+Tensor Round(const Tensor &self, const int &decimals) {
+    DECLARE_TRACER();
+
+    auto shapeSize = self.GetShape().size();
+    auto dataType = self.GetDataType();
+    ASSERT(SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4) << "The shape.size() only support 2~4";
+    std::vector<DataType> ROUND_SUPPORT_DATATYPES = {
+        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_BF16, DataType::DT_INT32, DataType::DT_INT16};
+    ASSERT(std::find(ROUND_SUPPORT_DATATYPES.begin(), ROUND_SUPPORT_DATATYPES.end(), dataType) !=
+           ROUND_SUPPORT_DATATYPES.end())
+        << "The datatype is not supported";
+
+    RETURN_CALL(Round, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), decimals);
+}
+
+void TiledRound(Function &function, const TileShape &tileShape, size_t cur, Input &input,
+    const LogicalTensorPtr &result, const int &decimals = 0) {
+    if (cur == input.tensor.GetShape().size()) {
+        auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        std::vector<int64_t> srcTileShape(input.tileInfo.shape);
+        auto tileShapeLen = srcTileShape.size();
+        ASSERT(SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4) << "Length of tile shape only support 2~4";
+        std::vector<int64_t> tmpShape(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+        if (result->Datatype() == DT_FP32) {
+            tmpShape = {BLOCK_SIZE / sizeof(float)};
+        }
+        auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
+        auto &newOp = function.AddOperation(Opcode::OP_ROUND, {tile}, {resultTile, tmpTensor});
+        float powDecimals = std::pow(static_cast<float>(10), static_cast<float>(decimals));
+        const int32_t maxFp32Len = 38;
+        if (decimals > maxFp32Len) {
+            powDecimals = INFINITY;
+        }
+        newOp.SetAttribute(OP_ATTR_PREFIX + "decimals", decimals);
+        newOp.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, powDecimals));
+        return;
+    }
+    auto &vecTile = tileShape.GetVecTile();
+    for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
+        input.tileInfo.offset[cur] = i;
+        TiledRound(function, tileShape, cur + 1, input, result, decimals);
+    }
+}
+
+void TiledRound(Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand,
+    const LogicalTensorPtr &result, const int &decimals = 0) {
+    ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset must be equal";
+
+    TileInfo tileInfo(result->shape.size(), result->offset.size());
+    auto input = Input{operand, tileInfo};
+
+    TiledRound(function, tileShape, 0, input, result, decimals);
+}
+
+void RoundOperationTileFunc(Function &function, const TileShape &tileShape,
+    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
+    [[maybe_unused]] const Operation &op) {
+    int decimals = op.GetIntAttribute(OP_ATTR_PREFIX + "decimals");
+    TiledRound(function, tileShape, iOperand[0], oOperand[0], decimals);
+}
+
 REGISTER_OPERATION_TILED_FUNC(OP_LOGICALNOT, Opcode::OP_LOGICALNOT, LogicNotOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ONEHOT, Opcode::OP_ONEHOT, OneHotOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ROUND, Opcode::OP_ROUND, RoundOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_LOGICALAND, Opcode::OP_LOGICALAND, LogicAndOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_CUM_SUM, Opcode::OP_CUM_SUM, CumSumOperationTileFunc);
 } // namespace npu::tile_fwk
