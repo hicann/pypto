@@ -23,6 +23,7 @@ template <unsigned axis, typename T0, typename T1>
 TILEOP void TExpand(T0 dst, T1 src) {
     constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
+    
     auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
     auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
     auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
@@ -81,16 +82,14 @@ TILEOP void TExpand(T0 dst, T1 src) {
                     auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                     auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                     using dstTileDefine =
-                        pto::Tile<pto::TileType::Vec, DstDtype, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                        pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                     using srcTileDefine =
-                        pto::Tile<pto::TileType::Vec, SrcDtype, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
-                    dstTileDefine dstTile(1, dstShape4);
-                    srcTileDefine srcTile(1, srcShape4);
+                        pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                    dstTileDefine dstTile(dstShape3, dstShape4);
+                    srcTileDefine srcTile(srcShape3, srcShape4);
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
-                    for (unsigned i = 0; i < dstShape3; i++) {
-                        pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + (dstOffset + i * dstTileW) * typeSize));
-                        pto::TMOV(dstTile, srcTile);
-                    }
+                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
+                    pto::TCOLEXPAND(dstTile, srcTile);
                 }
             }
         }
