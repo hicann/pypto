@@ -88,7 +88,7 @@ public:
         return DEVICE_MACHINE_OK;
     }
 
-    inline int32_t TaskPoll(AiCoreManager &aiCoreManager) {
+    inline int32_t TaskPoll(AiCoreManager *aiCoreManager) {
         return shmemWaitUntil_.PollCompleted(aiCoreManager);
     }
 
@@ -96,7 +96,7 @@ public:
         return shmemWaitUntil_.runingTaskQueue_.IsEmpty();
     }
 
-    inline int32_t SyncAicpuTaskFinish(AiCoreManager &aiCoreManager) {
+    inline int32_t SyncAicpuTaskFinish(AiCoreManager *aiCoreManager) {
         int64_t start_cycles = GetCycles();
         while(!Finished()) {
             auto ret = TaskPoll(aiCoreManager);

@@ -46,14 +46,14 @@ inline bool SignalTileOp::PollCompleted() const
     return true;
 }
 
-int32_t ShmemWaitUntil::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager &aicoreManager)
+int32_t ShmemWaitUntil::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager *aicoreManager)
 {
     return runingTaskQueue_.PollCompleted([&](SignalTileOp* task) {
-        if constexpr (!npu::tile_fwk::dynamic::IsDeviceMode()) {
-            (void)task;
-            return dynamic::DEVICE_MACHINE_OK;
+        if (aicoreManager == nullptr) {
+            DEV_ERROR("AicoreManager is nullptr");
+            return dynamic::DEVICE_MACHINE_ERROR;
         }
-        return aicoreManager.ProcessCompletedAicpuTask(task->taskId_);
+        return aicoreManager->ProcessCompletedAicpuTask(task->taskId_);
     });
 }
 

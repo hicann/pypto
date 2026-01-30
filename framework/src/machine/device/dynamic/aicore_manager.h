@@ -673,7 +673,7 @@ private:
 
     inline int32_t SyncAicpuTaskFinish() {
         if (IsNeedProcAicpuTask()) {
-            auto ret = aicpuTaskManager_.SyncAicpuTaskFinish(*this);
+            auto ret = aicpuTaskManager_.SyncAicpuTaskFinish(this);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 return ret;
             }
@@ -907,7 +907,7 @@ private:
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
             return ret;
         }
-        return aicpuTaskManager_.TaskPoll(*this);
+        return aicpuTaskManager_.TaskPoll(this);
     }
 
     inline int32_t ResolveWhenSyncMode(CoreType type, uint32_t finTaskId, uint32_t finTaskState, int coreIdx)  {
