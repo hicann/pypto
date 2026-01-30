@@ -152,7 +152,8 @@ public:
     }
 
     // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
-    static void PrepareDevProgArgs(DevAscendProgram *devProg, DeviceLauncherConfig &config, bool isDevice) {
+    static void PrepareDevProgArgs(DevAscendProgram *devProg, DeviceLauncherConfig &config,
+                                  [[maybe_unused]]bool isDevice) {
         ASSERT(config.blockdim != 0) << "Invalid blockdim: " << config.blockdim << ", must not be zero";
         devProg->devArgs.taskId = 0;
         devProg->devArgs.nrAic = kDefaultAicNum;

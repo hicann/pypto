@@ -17,6 +17,7 @@
 #include "machine/runtime/device_runner.h"
 #include "machine/runtime/machine_agent.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/runtime/host_prof.h"
 #include "interface/tensor/logical_tensor.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
@@ -143,6 +144,8 @@ TEST_F(TestDynamicDeviceRunner, test_kernel_dump) {
     }
 
     auto function = Program::GetInstance().GetFunctionByRawName("TENSOR_ADD0");
+    HostProf hostProf;
+    hostProf.SetProfFunction(function);
     auto task_1 = std::make_shared<MachineTask>(0, function);
     auto deviceMachineTask = std::make_shared<MachineTask>(task_1->GetTaskId(), task_1->GetFunction());
     auto deviceAgentTask = std::make_shared<DeviceAgentTask>(deviceMachineTask);

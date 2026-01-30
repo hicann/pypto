@@ -23,7 +23,7 @@
 
 
 namespace npu::tile_fwk {
-const std::string OpType = "pyPto";
+const std::string OpType = "PyPTO";
 HostProf::~HostProf() {}
 
 uint64_t HostProf::GetProfSwitch() {
@@ -198,7 +198,7 @@ void HostProf::SetProfFunction(Function *function)
     return;
   }
   // current using functionHashId as opName;
-  opName_ = function->GetFunctionHash().Data();
+  opName_ = function->GetRawName();
   profFunction_ = function;
   inputsSize_ = profFunction_->inCasts_.size();
 }

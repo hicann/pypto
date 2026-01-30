@@ -29,7 +29,7 @@ using Json = nlohmann::json;
 namespace {
 const std::string CustomOpCtrolRunFuncName = "PyptoKernelCtrlServer";
 const std::string CustomOpCtrolInitFuncName = "PyptoKernelCtrlServerInit";
-const std::string CustomKerneLib = "CUSTAICPUKernel";
+const std::string CustomKerneLib = "CUSTKFCKernel";
 
 std::string GetMachineCompilerPath() {
     // ARM arch compiler
