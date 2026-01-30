@@ -830,7 +830,12 @@ void AssembleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& 
     }
     std::vector<SymbolicScalar> outShape;
     for (size_t i = 0U; i < inputShapes.size(); i++) {
-        SymbolicScalar actualDim = std::max(outDynShape[i], (inputShapes[i] + offset[i]) * (inputShapes[i] != 0));
+        SymbolicScalar actualDim;
+        if (offset[i] == 0) {
+            actualDim = std::max(outDynShape[i], inputShapes[i]);
+        } else {
+            actualDim = std::max(outDynShape[i], (inputShapes[i] + offset[i]) * (inputShapes[i] != 0));
+        }
         outShape.push_back(actualDim);
     }
     for (auto output : op->GetOOperands()) {
