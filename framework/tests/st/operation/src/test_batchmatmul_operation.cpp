@@ -104,8 +104,6 @@ static Tensor CallBatchMatmulOp(const Tensor &tensorA, const Tensor &tensorB, co
 
 static void BatchMatmulOperationExeFuncNoSplit(
     const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
-
     auto args = static_cast<const BatchMatmulOpFuncArgs *>(opArgs);
     BatchMatmulTileParam tileParam;
     GetBatchMatmulTileParam(inputs, opArgs, tileParam);
@@ -133,8 +131,6 @@ static void BatchMatmulOperationExeFuncNoSplit(
 
 static void BatchMatmulOperationExeFuncSplitM(
     const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
-
     auto args = static_cast<const BatchMatmulOpFuncArgs *>(opArgs);
     BatchMatmulTileParam tileParam;
     GetBatchMatmulTileParam(inputs, opArgs, tileParam);
@@ -175,8 +171,6 @@ static void BatchMatmulOperationExeFuncSplitM(
 
 static void BatchMatmulOperationExeFuncSplitN(
     const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
-
     auto args = static_cast<const BatchMatmulOpFuncArgs *>(opArgs);
     BatchMatmulTileParam tileParam;
     GetBatchMatmulTileParam(inputs, opArgs, tileParam);
@@ -215,8 +209,6 @@ static void BatchMatmulOperationExeFuncSplitN(
 
 static void BatchMatmulOperationExeFuncSplitMN(
     const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
-
     auto args = static_cast<const BatchMatmulOpFuncArgs *>(opArgs);
     BatchMatmulTileParam tileParam;
     GetBatchMatmulTileParam(inputs, opArgs, tileParam);

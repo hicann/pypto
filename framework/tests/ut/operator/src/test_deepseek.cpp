@@ -50,7 +50,7 @@ TEST_F(FunctionTest, TestAddTensorFunctionDim4) {
     Tensor a(DT_FP32, shape, "a");
     Tensor b(DT_FP32, shape, "b");
     Tensor c;
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(1, 1, 16, 16);
 
@@ -69,7 +69,7 @@ TEST_F(FunctionTest, TestAddTensorFunctionDim2) {
     Tensor a(DT_FP32, shape, "a");
     Tensor b(DT_FP32, shape, "b");
     Tensor c;
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(8, 16);
 
@@ -101,7 +101,7 @@ TEST_F(FunctionTest, TestOperationRopeV2Deepseekv3B32) {
     Tensor qEmbed(DT_FP32, qEmbedShape, "qEmbed");
     Tensor kEmbed(DT_FP32, kEmbedShape, "kEmbed");
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     RoPETileShapeConfigNew ropeTileConfig{
         {32, 1, 64}, // (b,s,d)
         {1, 1, 32, 64}, // Q (b,s,n,d)
@@ -135,7 +135,7 @@ TEST_F(FunctionTest, test_fa_new) {
     std::vector<float> max_golden_data(capacity_reduce);
     std::vector<float> sum_golden_data(capacity_reduce);
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     Tensor Q(DataType::DT_FP16, shape, "Q");
     Tensor K(DataType::DT_FP16, shape, "K");
     Tensor V(DataType::DT_FP16, shape, "V");
@@ -156,7 +156,7 @@ TEST_F(FunctionTest, TestSubTensorFunctionDim2) {
     Tensor a(DT_FP32, shape, "a");
     Tensor b(DT_FP32, shape, "b");
     Tensor c;
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -175,7 +175,7 @@ TEST_F(FunctionTest, TestMulTensorFunctionDim2) {
     Tensor a(DT_FP32, shape, "a");
     Tensor b(DT_FP32, shape, "b");
     Tensor c;
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -194,7 +194,7 @@ TEST_F(FunctionTest, TestDivTensorFunctionDim2) {
     Tensor a(DT_FP32, shape, "a");
     Tensor b(DT_FP32, shape, "b");
     Tensor c;
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -214,7 +214,7 @@ TEST_F(FunctionTest, TestAddScalarFunctionDim2) {
     Element value(DataType::DT_FP32, 1.5);
     Tensor d;
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -234,7 +234,7 @@ TEST_F(FunctionTest, TestAddScalarFunctionDim3) {
     Element value(DataType::DT_FP32, 1.5);
     Tensor d;
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32, 32);
 
@@ -254,7 +254,7 @@ TEST_F(FunctionTest, TestSubScalarFunctionDim2) {
     Element value(DataType::DT_FP32, 1.5);
     Tensor d;
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -274,7 +274,7 @@ TEST_F(FunctionTest, TestMulScalarFunctionDim2) {
     Element value(DataType::DT_FP32, 1.5);
     Tensor d;
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -294,7 +294,7 @@ TEST_F(FunctionTest, TestDivScalarFunctionDim2) {
     Element value(DataType::DT_FP32, 1.5);
     Tensor d;
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -312,7 +312,7 @@ TEST_F(FunctionTest, TestExpTensorFunctionDim2) {
 
     Tensor a(DT_FP32, shape, "a");
     Tensor c;
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(32, 32);
 
@@ -325,7 +325,7 @@ TEST_F(FunctionTest, TestExpTensorFunctionDim2) {
 
 TEST_F(FunctionTest, TestSin) {
     TileShape::Current().SetVecTile({1, 1, 4, 4});
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {1, 2, 8, 8};
     Tensor input(DT_FP16, shape1, "input");
@@ -341,7 +341,7 @@ TEST_F(FunctionTest, TestSin) {
 
 TEST_F(FunctionTest, TestCos) {
     TileShape::Current().SetVecTile({1, 1, 4, 4});
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {1, 2, 8, 8};
     Tensor input(DT_FP32, shape1, "input");
@@ -359,7 +359,7 @@ TEST_F(FunctionTest, TestGatherAxis0Indices2_1) {
     TileShape::Current().SetVecTile(32, 128);
     // TileShape::Current().SetVecTile(1, 32, 64);
     // tile graph
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {16, 1024};
     // std::vector<int64_t> shape1 = {16, 256};
@@ -382,7 +382,7 @@ TEST_F(FunctionTest, TestGatherAxis1Indices2_1) {
     TileShape::Current().SetVecTile(32, 128);
     // TileShape::Current().SetVecTile(1, 32, 64);
     // tile graph
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {1024, 16};
     // std::vector<int64_t> shape1 = {16, 256};
@@ -403,7 +403,7 @@ TEST_F(FunctionTest, TestGatherAxis1Indices2_1) {
 
 TEST_F(FunctionTest, TestGatherAxis3Indices4_2) {
     TileShape::Current().SetVecTile(4, 3, 8, 8, 8);
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {8, 8, 17, 20};
     std::vector<int64_t> shape2 = {32, 15};
@@ -422,7 +422,7 @@ TEST_F(FunctionTest, TestGatherAxis3Indices4_2) {
 
 TEST_F(FunctionTest, TestGatherElementAxis1Indices2) {
     TileShape::Current().SetVecTile(8, 64);
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {32, 512};
     std::vector<int64_t> shape2 = {16,64};
@@ -443,7 +443,7 @@ TEST_F(FunctionTest, TestGatherElementAxis1Indices2) {
 
 TEST_F(FunctionTest, TestGatherElementAxis0Indices2) {
     TileShape::Current().SetVecTile(16, 32);
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {32, 512};
     std::vector<int64_t> shape2 = {16,64};
@@ -471,7 +471,7 @@ TEST_F(FunctionTest, TestScatter) {
 
     Tensor res;
 
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     FUNCTION("A") {
         res = Scatter(cnts, topk_ids, Element(DataType::DT_FP32, 1.0), 1); // (b*s, nRoutedExperts)
@@ -488,7 +488,7 @@ TEST_F(FunctionTest, TestScatterUpdate2) {
     Tensor res;
     Tensor key_states(DT_FP32, {b,1,s, kvLoraRank + qkRopeHeadDim}, "past_key_states");
     Tensor past_key_states_new(DT_FP32, {b,1,s2, kvLoraRank + qkRopeHeadDim}, "past_key_states_new");
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     FUNCTION("A") {
         TileShape::Current().SetVecTile(1, 1, 256, 128);
@@ -497,7 +497,7 @@ TEST_F(FunctionTest, TestScatterUpdate2) {
 }
 
 TEST_F(FunctionTest, testRowSumSingle) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(1, 1, 32, 32);
     std::vector<int64_t> tshape = {2, 2, 64, 64};
@@ -518,7 +518,7 @@ TEST_F(FunctionTest, testRowSumSingle) {
 }
 
 TEST_F(FunctionTest, testRowMaxSingle) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(1, 1, 32, 32);
     std::vector<int64_t> tshape = {1, 4, 64, 64};
@@ -535,7 +535,7 @@ TEST_F(FunctionTest, testRowMaxSingle) {
 }
 
 TEST_F(FunctionTest, testSoftmax) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     TileShape::Current().SetVecTile(1, 1, 32, 32);
     std::vector<int64_t> tshape = {2, 2, 64, 64};
@@ -552,7 +552,7 @@ TEST_F(FunctionTest, testSoftmax) {
 }
 
 TEST_F(FunctionTest, TestRoPE) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     RoPETileShapeConfig ropeTileConfig{
         {64, 64}, // for cos/sin->cast
@@ -588,7 +588,7 @@ TEST_F(FunctionTest, TestRoPE) {
 }
 
 TEST_F(FunctionTest, TestRoPEDeepseekV3) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     RoPETileShapeConfig ropeTileConfig{
         {64, 64}, // for cos/sin->cast
@@ -637,7 +637,7 @@ TEST_F(FunctionTest, TestRoPEDeepseekV3) {
 }
 
 TEST_F(FunctionTest, testRmsNormNewMultiDims) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     TileShape::Current().SetVecTile(1, 1, 8, 8);
     // Create some tensors (these would be created from elsewhere in your code)
     std::vector<int64_t> tshape = {2, 2, 24, 24};
@@ -653,7 +653,7 @@ TEST_F(FunctionTest, testRmsNormNewMultiDims) {
 
 TEST_F(FunctionTest, TestConcat) {
     TileShape::Current().SetVecTile(16, 6, 6, 8);
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {10, 10, 10, 10};
     std::vector<int64_t> shape2 = {20, 10, 10, 10};
@@ -678,7 +678,7 @@ static std::map<std::string, std::variant<bool, int, float, std::string>> attnPo
 };
 
 TEST_F(FunctionTest, TestAttentionPost) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     int b = 1;
     int n = 2;
     int s = 128;
@@ -717,7 +717,7 @@ TEST_F(FunctionTest, TestAttentionPost) {
 }
 
 TEST_F(FunctionTest, Test_qkvPre) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     int b = 2;
     int s = 128;
     int h = std::get<int>(deepseekConfig1["hiddenSize"]);
@@ -751,7 +751,7 @@ TEST_F(FunctionTest, Test_qkvPre) {
 }
 
 TEST_F(FunctionTest, Test_qkvPre2) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int& h = std::get<int>(g_deepseekConfig["hiddenSize"]);
     int& num_heads = std::get<int>(g_deepseekConfig["numAttentionHeads"]);
@@ -794,7 +794,7 @@ TEST_F(FunctionTest, Test_qkvPre2) {
 }
 
 TEST_F(FunctionTest, Test_deepseekAttention_pre) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int b = 2; //  32
     int s = 1;
@@ -842,7 +842,7 @@ TEST_F(FunctionTest, Test_deepseekAttention_pre) {
 }
 
 TEST_F(FunctionTest, TestBMMtest) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     std::vector<int64_t> shape_a{2, 1, 256};
     std::vector<int64_t> shape_b{1, 256, 512};
     Tensor a(DT_FP16, shape_a, "a");
@@ -857,7 +857,7 @@ TEST_F(FunctionTest, TestBMMtest) {
 }
 
 TEST_F(FunctionTest, TestBMMtest2) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     std::vector<int64_t> shape_a{2, 1, 256};
     std::vector<int64_t> shape_b{1, 512, 256};
     Tensor a(DT_FP16, shape_a, "a");
@@ -872,7 +872,7 @@ TEST_F(FunctionTest, TestBMMtest2) {
 }
 
 TEST_F(FunctionTest, Test_deepseekMoEGate) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int b = 2; //  32
     int s = 1; //  1, optimize set_tile
@@ -897,7 +897,7 @@ TEST_F(FunctionTest, Test_deepseekMoEGate) {
 }
 
 TEST_F(FunctionTest, Test_deepseekMoEInfer) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int b = 2;   //  32
     int s = 1; //  1, optimize set_tile
@@ -923,7 +923,7 @@ TEST_F(FunctionTest, Test_deepseekMoEInfer) {
 }
 
 TEST_F(FunctionTest, Test_deepseekMoEInfer_singleout) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int32_t nRoutedExperts = 256;
     int b = 4;   // 32
@@ -955,7 +955,7 @@ TEST_F(FunctionTest, Test_deepseekMoEInfer_singleout) {
 }
 
 TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_2) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int32_t nRoutedExperts = 256;
     int b = 4; // 32
@@ -993,7 +993,7 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_2) {
 }
 
 TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int32_t nRoutedExperts = 256;
     int b = 4;
@@ -1027,7 +1027,7 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp) {
 }
 
 TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp_withquant) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int32_t nRoutedExperts = 256;
     int b = 4;
@@ -1064,7 +1064,7 @@ TEST_F(FunctionTest, test_deepseekMoEInfer_singleout_singlemlp_withquant) {
 }
 
 TEST_F(FunctionTest, Test_quant) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> vecTileShape  = {128, 128};
     int b = 32;  // 32
@@ -1086,7 +1086,7 @@ TEST_F(FunctionTest, Test_quant) {
 }
 
 TEST_F(FunctionTest, Test_ScalarOp) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape = {128, 32};
     TileShape::Current().SetVecTile({128, 32});
@@ -1105,7 +1105,7 @@ TEST_F(FunctionTest, Test_ScalarOp) {
 }
 
 TEST_F(FunctionTest, TestPad) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     std::vector<int64_t> shape{8, 16};
     std::vector<int64_t> newShape{8, 24};
     Tensor a(DT_FP32, shape, "a");
@@ -1120,7 +1120,7 @@ TEST_F(FunctionTest, TestPad) {
 }
 
 TEST_F_WITH_COST(FunctionTest, Test_quantMM, 95) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> vecTileShape  = {32, 512};
     int m = 128;
@@ -1155,7 +1155,7 @@ TEST_F(FunctionTest, TestRmsNorm) {
 }
 
 TEST_F(FunctionTest, dynamic_pa_low_lantency) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     std::vector<int64_t> input_param = {4, 1, 32, 1, 512, 64, 128, 32};
     int b = input_param[0];
     int sq = input_param[1];
@@ -1254,9 +1254,8 @@ template <typename T = npu::tile_fwk::float16, bool codegen = true, typename wDt
     bool isSmooth = true, bool usePrefetch = true>
 void TestMlaPrologV2(const SimpleParams &params) {
     if constexpr (codegen) {
-        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     } else {
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     }
 
     int b = params.b;
@@ -1354,7 +1353,6 @@ TEST_F(FunctionTest, low_PAND) {
 }
 
 TEST_F(FunctionTest, dynamic_page_attention_adds) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
     std::vector<uint8_t> devProgBinary;
@@ -1402,7 +1400,6 @@ TEST_F(FunctionTest, dynamic_page_attention_adds) {
 }
 
 TEST_F(FunctionTest, dynamic_page_attention_adds_single_single_out) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
     std::vector<uint8_t> devProgBinary;

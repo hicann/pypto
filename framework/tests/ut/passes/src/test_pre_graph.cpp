@@ -109,7 +109,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "PreGraphTestStrategy");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
@@ -328,7 +328,7 @@ TEST_F(PreGraphTest, TestAssemble) {
 }
 
 TEST_F(PreGraphTest, TestView) {
-config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1{128, 128};
     std::vector<int64_t> shape2{64, 64};

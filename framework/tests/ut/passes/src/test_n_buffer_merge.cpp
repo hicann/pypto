@@ -38,7 +38,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
         config::SetPassOption(VEC_NBUFFER_MODE, 2);
         config::SetPassOption(VEC_NBUFFER_SETTING, std::map<int64_t, int64_t>{{-1, 2}});

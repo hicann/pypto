@@ -37,7 +37,7 @@ public:
     void SetUp() override {
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, true);
         config::SetSimConfig(KEY_BUILD_TASK_BASED_TOPO, true);
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         Program::GetInstance().Reset();
     }
 
@@ -90,7 +90,7 @@ void RunMatrixCostModel() {
 
 void RunAttentionPostCostModel()
 {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     int b = 1;
     int n = 2;
     int s = 128;
@@ -286,7 +286,7 @@ TEST_F(CostModelTest, TestReplaceGMStr)
 void RunCat()
 {
     TileShape::Current().SetVecTile(16, 6, 6, 16);
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     std::vector<int64_t> shape1 = {10, 10, 10, 10};
     std::vector<int64_t> shape2 = {20, 10, 10, 10};
@@ -387,7 +387,6 @@ void CostModelTestLoopViewAssemble(const Tensor &t0, const Tensor &t1, const Ten
 }
 
 TEST_F(CostModelDynTest, TestDD) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     constexpr int tilingX = 32;
     constexpr int tilingY = 32;
     TileShape::Current().SetVecTile(tilingX, tilingY);

@@ -19,9 +19,12 @@ from . import pypto_impl
 
 
 class CompStage(enum.Enum):
-    CODEGEN = 1
-    HOST = 2
-    FUNCTION = 3
+    ALL_COMPLETE = 0
+    TENSOR_GRAPH = 1
+    TILE_GRAPH = 2
+    EXECUTE_GRAPH = 3
+    CODEGEN_INSTRUCTION = 4
+    CODEGEN_BINARY = 5
 
 
 def set_print_options(*,

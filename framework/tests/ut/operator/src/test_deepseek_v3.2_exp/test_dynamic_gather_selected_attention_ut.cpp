@@ -48,7 +48,6 @@ SaTileShapeConfig GetDefaultSaTileShapeConfig(const int gTile, const int sTile) 
 }
 
 void TestSaUT(const std::vector<int64_t> &input_param, SaTileShapeConfig& tileConfig) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     int b = input_param.at(0);
     int sq = input_param.at(1);
     int nq = input_param.at(2);

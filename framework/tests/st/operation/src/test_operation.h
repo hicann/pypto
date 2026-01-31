@@ -90,7 +90,6 @@ public:
 private:
     static inline bool gmClearFlag = true;
     static void init() {
-        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     }
 
     static void verifyOpResults(const TestCaseDesc& testCase) {
@@ -235,8 +234,6 @@ private:
     static void init() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
         config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
-
-        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     }
 
     static void verifyOpResults(const TestCaseDesc& testCase) {

@@ -2558,7 +2558,6 @@ TEST_F(OnBoardTest, test_matmul_add_dynamic) {
     const int k = 256;
     const int n = 512;
     SetInterpreterConfig();
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     Tensor tensor_a = Tensor(DataType::DT_FP16, {m, k}, "tensor_a", TileOpFormat::TILEOP_ND);
     Tensor tensor_b = Tensor(DataType::DT_FP16, {k, n}, "tensor_b", TileOpFormat::TILEOP_ND);

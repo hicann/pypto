@@ -26,7 +26,6 @@ using namespace npu::tile_fwk::dynamic;
 class DynamicDatamoveTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 TEST_F(DynamicDatamoveTest, TestDynamicDatamove) {
     SetInterpreterConfig();
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(1, 32, 64);
 
     int n = 1;

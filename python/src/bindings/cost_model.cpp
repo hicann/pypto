@@ -26,9 +26,8 @@ using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
 
-static std::string InitInputOutputData(
-    const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
-    Function *func = Program::GetInstance().GetLastFunction();
+static std::string ValidateFunctionAndIO(Function *func, const std::vector<DeviceTensorData> &inputs,
+                                   const std::vector<DeviceTensorData> &outputs) {
     if (!func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH)) {
         return "Invalid function format";
     }
@@ -38,20 +37,35 @@ static std::string InitInputOutputData(
         return "Invalid function format";
     }
 
-    auto inputSize = attr->startArgsInputLogicalTensorList.size();
     auto outputSize = attr->startArgsOutputLogicalTensorList.size();
+    auto inputSize = attr->startArgsInputLogicalTensorList.size();
     if (inputSize != inputs.size() || outputSize != outputs.size()) {
         return "mismatch input/output";
     }
+    return "";
+}
 
-    for (size_t i = 0; i < inputs.size(); i++) {
-        auto rawData = RawTensorData::CreateTensor(inputs[i].GetDataType(), inputs[i].GetShape(), (uint8_t *)inputs[i].GetAddr());
-        ProgramData::GetInstance().AppendInput(rawData);
-    }
+static void InitializeInputOutputData(const std::vector<DeviceTensorData> &inputs,
+                               const std::vector<DeviceTensorData> &outputs) {
     for (size_t i = 0; i < outputs.size(); i++) {
         auto rawData = std::make_shared<RawTensorData>(outputs[i].GetDataType(), outputs[i].GetShape());
         ProgramData::GetInstance().AppendOutput(rawData);
     }
+    for (size_t i = 0; i < inputs.size(); i++) {
+        auto rawData = RawTensorData::CreateTensor(inputs[i].GetDataType(), inputs[i].GetShape(), (uint8_t *)inputs[i].GetAddr());
+        ProgramData::GetInstance().AppendInput(rawData);
+    }
+}
+
+static std::string InitInputOutputData(
+    const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
+    Function *func = Program::GetInstance().GetLastFunction();
+    auto errorMsg = ValidateFunctionAndIO(func, inputs, outputs);
+    if (!errorMsg.empty()) {
+        return errorMsg;
+    }
+
+    InitializeInputOutputData(inputs, outputs);
     return "";
 }
 
@@ -69,6 +83,9 @@ static void CopyTensorFromModel(const std::vector<DeviceTensorData> &inputs, con
 
 std::string CostModelRunOnceDataFromHost(
     const std::vector<DeviceTensorData> &inputs, const std::vector<DeviceTensorData> &outputs) {
+    if (config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_ALL_COMPLETE) {
+        return "";
+    }
     std::string initResult = InitInputOutputData(inputs, outputs);
     if (!initResult.empty()) {
         return initResult;

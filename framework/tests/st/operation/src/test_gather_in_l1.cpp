@@ -242,7 +242,6 @@ struct NSASimpleParams {
 class GatherInL1Test : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {
     void SetUp() override {
         TestSuite_STest_Ops_Aihac::SetUp();
-        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
         rtSetDevice(GetDeviceIdByEnvVar());
     }
     void TearDown() override {

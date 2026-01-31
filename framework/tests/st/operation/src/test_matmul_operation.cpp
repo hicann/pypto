@@ -297,8 +297,6 @@ static void MatmulOperationExeFuncSplitMN(
 
 static void MatmulOperationExeFunc(
     const std::vector<Tensor> &inputs, std::vector<Tensor> &outputs, const OpFuncArgs *opArgs) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
-
     auto args = static_cast<const MatmulOpFuncArgs *>(opArgs);
     if (args->param_.hasScale || args->param_.hasBias) {
         int64_t nTile =

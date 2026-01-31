@@ -65,7 +65,6 @@ template <typename T = npu::tile_fwk::float16,  typename wDtype = int8_t, bool i
     bool isSmooth = true, bool nz = true, bool usePrefetch = true>
 void TestDynamicMlaProlog(
     const TestShapeParams &params, const MlaTileConfig &tileConfig, std::string cacheMode = "PA_NZ") {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     SetInterpreterConfig();
 
     int b = params.b;

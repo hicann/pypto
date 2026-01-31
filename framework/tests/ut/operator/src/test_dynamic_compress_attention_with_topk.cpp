@@ -26,12 +26,10 @@
 using namespace npu::tile_fwk;
 
 class CmpAttnTopk : public testing::Test {
-    void SetUp() override { config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE); }
 };
 
 template <typename T = npu::tile_fwk::bfloat16>
 void TestCmpAttnTopk(CmpAttnTopkTile &tileConfig, std::vector<int> input_param, std::vector<int> actSeqLen) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     DataType dType = DT_FP32;
     if (std::is_same<T, npu::tile_fwk::bfloat16>::value) {

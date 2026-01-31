@@ -61,10 +61,12 @@ const int64_t CFG_RUN_MODE_SIM = 1;
 
 // host
 constexpr const char *COMPILE_STAGE = "compile_stage";
-constexpr const int ALL_COMPLETE = 0;
-constexpr const int GEN_KERNEL_CODE = 1;
-constexpr const int HOST_COMPILE_END = 2;
-constexpr const int GEN_TENSOR_GRAPH = 3;
+const int64_t CS_ALL_COMPLETE = 0;
+const int64_t CS_TENSOR_GRAPH = 1;
+const int64_t CS_TILE_GRAPH = 2;
+const int64_t CS_EXECUTE_GRAPH = 3;
+const int64_t CS_CODEGEN_INSTRUCTION = 4;
+const int64_t CS_CODEGEN_BINARY = 5;
 
 // codegen
 constexpr const char *SUPPORT_DYNAMIC_ALIGNED = "support_dynamic_aligned";

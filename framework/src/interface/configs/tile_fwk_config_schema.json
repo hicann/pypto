@@ -307,7 +307,7 @@
                 "compile_stage": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 3,
+                    "maximum": 5,
                     "label": {
                         "zh": "控制编译执行的阶段",
                         "en": "Set the stage of compile."

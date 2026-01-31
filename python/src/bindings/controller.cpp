@@ -28,7 +28,6 @@ void bind_controller_config(py::module &m) {
 
     m.def("ResetOptions", []() {
         config::Reset();
-        ConfigManagerNg::GetInstance().SetScope(std::map<std::string, Any>({{"host.compile_stage", (int64_t)GEN_KERNEL_CODE}}));
     });
 
 
@@ -347,7 +346,5 @@ void bind_controller(py::module &m) {
 
     // disable cpp mode
     SourceLocation::SetCppMode(false);
-    // set default compile stage to codegen
-    ConfigManagerNg::GetInstance().SetScope(std::map<std::string, Any>({{"host.compile_stage", (int64_t)GEN_KERNEL_CODE}}));
 }
 } // namespace pypto

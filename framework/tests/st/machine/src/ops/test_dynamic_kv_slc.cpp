@@ -34,7 +34,6 @@ class DynamicSlcTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {}
 template <typename T = npu::tile_fwk::float16, DataType tensorType = DataType::DT_FP16>
 void testSlc(KvSlcTileShapeConfig& tileConfig) {
     SetInterpreterConfig();
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     int paramsSize = 10;
     std::vector<int> input_param(paramsSize);
     readInput<int>(GetGoldenDir() + "/input_param.bin", input_param);

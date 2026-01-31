@@ -160,9 +160,7 @@ void RecordFunc::EndFunction() {
             MergeAllFuncDupIocast(nullptr);
             PassManager::Instance().RunPass(Program::GetInstance(),
                 *Program::GetInstance().GetFunctionByMagicName(PROGRAM_ENTRY_FUNCTION_NAME), "FunctionUnroll");
-            if (config::GetHostOption<int64_t>(COMPILE_STAGE) != GEN_TENSOR_GRAPH) {
-                Program::GetInstance().UpdateCompileTask();
-            }
+            Program::GetInstance().UpdateCompileTask();
         }
         Program::GetInstance().SetCurrentDynamicFunction(nullptr);
         dynFunc_->SetUnderDynamicFunction(false);

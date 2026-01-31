@@ -28,7 +28,6 @@ class DynamicUnalignTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aiha
 public:
     void SetUp() override {
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
-        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
         TileShape::Current().SetVecTile(32, 32);
         TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32}, true);
         rtSetDevice(GetDeviceIdByEnvVar());

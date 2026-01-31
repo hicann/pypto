@@ -37,7 +37,6 @@ struct SaConfig {
 template <typename T = npu::tile_fwk::float16>
 void TestSa(SaTileShapeConfig& tileConfig, SaConfig config) {
     SetInterpreterConfig();
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     DataType dType = DT_FP32;
     if (std::is_same<T, npu::tile_fwk::float16>::value) {

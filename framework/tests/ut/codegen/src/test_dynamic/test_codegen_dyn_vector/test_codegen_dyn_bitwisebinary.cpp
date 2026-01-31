@@ -39,8 +39,8 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
     }
 

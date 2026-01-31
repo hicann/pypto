@@ -25,7 +25,7 @@ class FunctionUtilsTest : public testing::Test {
 public:
     static void SetUpTestCase() {
         std::cout << "FunctionUtilsTest SetUpTestCase" << std::endl;
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     }
 
     static void TearDownTestCase() {

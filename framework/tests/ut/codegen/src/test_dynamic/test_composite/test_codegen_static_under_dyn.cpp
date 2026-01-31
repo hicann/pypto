@@ -51,7 +51,6 @@ void TestStaticLoop(const Tensor &t0, const Tensor &t1, const Tensor &t2, Tensor
 }
 
 TEST_F(TestCodegenStaticUnderDyn, TestStaticFuncUnderDyn) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
     std::vector<uint8_t> devProgBinary;

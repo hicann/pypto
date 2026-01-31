@@ -37,7 +37,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "PVC2_OOO");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetSimConfig(KEY_BUILD_TASK_BASED_TOPO, false);
@@ -127,7 +127,7 @@ TEST_F(GraphTest, deepseek_qkvPre) {
 }
 
 TEST_F(GraphTest, TestAttentionPost) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     int b = 1;
     int n = 2;
     int s = 128;
@@ -165,7 +165,7 @@ TEST_F(GraphTest, TestAttentionPost) {
 }
 
 TEST_F(GraphTest, Test_deepseekAttention_s_1) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int b = 2; //  32
     int s = 1;
@@ -211,7 +211,7 @@ TEST_F(GraphTest, Test_deepseekAttention_s_1) {
 }
 
 TEST_F(GraphTest, Test_deepseekAttention_pre) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
 
     int b = 2; //  32
     int s = 1;

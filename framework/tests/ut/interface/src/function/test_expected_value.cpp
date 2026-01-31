@@ -38,7 +38,7 @@ public:
 };
 
 TEST_F(ExpectedValueTest, TestCheck) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     TileShape::Current().SetVecTile(16, 16);
 
     std::vector<int64_t> shape{32, 32};

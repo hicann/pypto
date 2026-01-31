@@ -54,7 +54,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetPassGlobalConfig(KEY_VF_OPT_MARK_FOR, true);
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "ExpandFunctionTestStrategy");
         config::SetPlatformConfig("ENABLE_COST_MODEL", false);
     }

@@ -43,7 +43,6 @@ public:
 };
 
 void TestLightningIndexerTopkQuant(IndexerTile &tileConfig) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     const int b = 4;
     const int s1 = 2;
@@ -95,7 +94,6 @@ void TestLightningIndexerTopkQuant(IndexerTile &tileConfig) {
 }
 
 void TestLightningIndexer(LightningIndexerConfigs &tileConfig) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     const int b = 4;
     const int s1 = 2;

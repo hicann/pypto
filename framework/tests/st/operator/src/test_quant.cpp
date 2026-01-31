@@ -45,7 +45,7 @@ using namespace npu::tile_fwk;
 class QuantTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 TEST_F(QuantTest, Test_quant) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     std::vector<int64_t> vecTileShape = {128, 128};
     int b = 2; // 32
     int s = 1; // 1, optimize set_tile

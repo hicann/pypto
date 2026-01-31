@@ -26,7 +26,6 @@ using namespace npu::tile_fwk::dynamic;
 class DynamicGatherTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 TEST_F(DynamicGatherTest, TestDynamicGatherDim2) {
     SetInterpreterConfig();
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(64, 64);
 
     int s1 = 128;
@@ -84,7 +83,6 @@ TEST_F(DynamicGatherTest, TestDynamicGatherDim2) {
 
 TEST_F(DynamicGatherTest, TestDynamicGatherDim3) {
     SetInterpreterConfig();
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(1, 1, 64);
 
     int s1 = 32;

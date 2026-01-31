@@ -33,9 +33,9 @@ def test_pass_option():
 
 
 def test_host_option():
-    pypto.set_host_options(compile_stage=pypto.CompStage.HOST)
+    pypto.set_host_options(compile_stage=pypto.CompStage.EXECUTE_GRAPH)
     host_option = pypto.get_host_options()
-    assert host_option["compile_stage"] == pypto.CompStage.HOST.value
+    assert host_option["compile_stage"] == pypto.CompStage.EXECUTE_GRAPH.value
 
 
 def test_runtime_option():
@@ -48,14 +48,14 @@ def test_reset_option():
     pypto.set_runtime_options(stitch_function_num_initial=23)
     runtime_option = pypto.get_runtime_options()
     assert runtime_option["stitch_function_num_initial"] == 23
-    pypto.set_host_options(compile_stage=pypto.CompStage.FUNCTION)
+    pypto.set_host_options(compile_stage=pypto.CompStage.EXECUTE_GRAPH)
     host_option = pypto.get_host_options()
-    assert host_option["compile_stage"] == pypto.CompStage.FUNCTION.value
+    assert host_option["compile_stage"] == pypto.CompStage.EXECUTE_GRAPH.value
     pypto.reset_options()
     runtime_option = pypto.get_runtime_options()
     host_option = pypto.get_host_options()
     assert runtime_option["stitch_function_num_initial"] == 128
-    assert host_option["compile_stage"] == pypto.CompStage.CODEGEN.value
+    assert host_option["compile_stage"] == pypto.CompStage.ALL_COMPLETE.value
 
 
 

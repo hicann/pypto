@@ -32,7 +32,6 @@ public:
 
     void SetUp() override {
         DeviceLauncherContext::Get().DeviceInit();
-        config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
         rtSetDevice(GetDeviceIdByEnvVar());
      }
 

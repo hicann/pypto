@@ -40,7 +40,6 @@ public:
 void DynamicFunction(const std::string &funcName,
     void (*execFunc)(const Tensor &x, const Tensor &, const Tensor &, Tensor &)) {
     std::vector<int64_t> bnsh = {4, 128, 4, 7168};
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
 
     int64_t b = bnsh[0];
     int64_t n = bnsh[1];

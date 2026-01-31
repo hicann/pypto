@@ -212,7 +212,7 @@ TEST_F(DynamicFunctionTest, MopCall) {
 }
 
 TEST_F(DynamicFunctionTest, TestLoopRange) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     TileShape::Current().SetVecTile(16, 16);
 
     std::vector<int64_t> shape{16, 64};
@@ -258,7 +258,7 @@ TEST_F(DynamicFunctionTest, TestLoopRange) {
 }
 
 TEST_F(DynamicFunctionTest, TestOnlyExpression) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     TileShape::Current().SetVecTile(16, 16);
 
     std::vector<int64_t> shape{16, 64};
@@ -292,7 +292,7 @@ TEST_F(DynamicFunctionTest, TestOnlyExpression) {
 }
 
 TEST_F(DynamicFunctionTest, TestOnlySymbol) {
-    config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
     TileShape::Current().SetVecTile(1, 64);
 
     std::vector<int64_t> shape{4, 64};
@@ -436,7 +436,6 @@ void TestStaticLoopStatic(const Tensor &t0, const Tensor &t1, const Tensor &t2, 
 }
 
 TEST_F(DynamicFunctionTest, TestStaticLoopStatic) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
 
@@ -1006,7 +1005,6 @@ TEST_F(DynamicFunctionTest, HiddenLoopNestedWithIfComplex){
 #endif
 
 TEST_F(DynamicFunctionTest, TestGetInputDataInt32Dim3) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(32, 32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
 
@@ -1037,7 +1035,6 @@ TEST_F(DynamicFunctionTest, TestGetInputDataInt32Dim3) {
 }
 
 TEST_F(DynamicFunctionTest, TestGetInputDataInt32Dim4) {
-    config::SetHostOption(COMPILE_STAGE, GEN_KERNEL_CODE);
     TileShape::Current().SetVecTile(16, 16, 16, 16);
 
     int s = 16;

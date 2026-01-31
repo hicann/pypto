@@ -44,7 +44,7 @@ def set_scope_options(a, c, tiling=None):
 
     for _ in pypto.loop(1, name="s0", idx_name="k"):
         c.move(pypto.add(a, 1.0))
-        assert pypto.CompStage.CODEGEN.value == get_options("host.compile_stage")
+        assert pypto.CompStage.ALL_COMPLETE.value == get_options("host.compile_stage")
 
         # 隐式 scope
         pypto.set_options(pass_options={"pg_upper_bound": 1024})

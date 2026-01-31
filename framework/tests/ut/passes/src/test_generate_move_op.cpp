@@ -44,7 +44,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetHostOption(COMPILE_STAGE, HOST_COMPILE_END);
+        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "GenerateMoveOpPassTestStrategy");
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
