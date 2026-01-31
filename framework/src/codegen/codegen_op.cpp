@@ -69,7 +69,7 @@ void CodeGenOp::CombineAxis(const Operation &oper, int operandIdx, bool isInput,
         CombineLastTwoAxis(rawShape[operandIdx], dim);
         CombineLastTwoAxis(originShape[operandIdx], dim);
         CombineLastTwoAxis(dynamicValidShape[operandIdx], dim);
-        ALOG_INFO_F("op code %s, operanIdx: %d, after CombineAxis shape is %s, raw shape is %s, originShape is %s, "
+        ALOG_INFO_F("op code %s, operandIdx: %d, after CombineAxis shape is %s, raw shape is %s, originShape is %s, "
                     "dynamicValidShape is %s",
             oper.GetOpcodeStr().c_str(), operandIdx, IntVecToStr(shape[operandIdx]).c_str(),
             IntVecToStr(rawShape[operandIdx]).c_str(), IntVecToStr(originShape[operandIdx]).c_str(),
@@ -253,7 +253,7 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
     operandWithMagic[operandIdx] = tensor->GetMagic();
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
     auto value = tensor->GetAttr<bool>("isPartialMem");
-    isPartialMem[operandIdx] = (value != nullptr) && (*value == true);
+    isPartialMem[operandIdx] = (value != nullptr) && (*value);
     UpdateShape(ops, *tensor, operandIdx, isInput, ioIdx);
     if (isInput) {
         UpdateOffsetForInput(ops, *tensor, operandIdx);
