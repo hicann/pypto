@@ -746,7 +746,7 @@ std::string CodeGenOpCloudNPU::PrintTensorForCopyBetweenGM(
 }
 
 std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0CParam &param) const {
-    std::vector<std::string> gmOffsetExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_OFFSET);
+    std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(param.gmIdx);
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = PrintCoord(rawShape[param.gmIdx].size(), coordCp);
@@ -758,13 +758,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::string src1Tensor = srcTensor;
     int64_t nzValue = 0;
     int64_t isAcc = 0;
-    int64_t outerValue = 0;
-    int64_t innerValue = 0;
-    GetAttr("op_attr_curH", outerValue);
-    GetAttr("op_attr_curW", innerValue);
-    auto gmShapeExprByIndex = GenParamIdxExprByIndex(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
-    std::string outerValueStr = outerValue == 0 ? gmShapeExprByIndex[0] : std::to_string(outerValue);
-    std::string innerValueStr = innerValue == 0 ? gmShapeExprByIndex[1] : std::to_string(innerValue);
+    auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape);
     GetAttr(OP_ATTR_PREFIX + "atomic_add", isAcc);
     GetAttr("op_attr_is_nz", nzValue);
     std::string nzVar = nzValue ? "CopyOutMode::NZ2NZ" : "CopyOutMode::NZ2ND";
@@ -916,8 +910,22 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWith
     return PrintL0CCopyOutDynamicUnalign(param, gmShapeExpr, gmOffsetExpr);
 }
 
-std::string CodeGenOpCloudNPU::PrintL1CopyInTileTensor(const PrintMemCopyWithL1Param &param) const {
-    std::vector<std::string> gmOffsetExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_OFFSET);
+std::pair<std::string, std::string> CodeGenOpCloudNPU::GetOuterInnerValueStr(
+    unsigned gmIdx, const std::vector<int64_t> &gmShape) const {
+    int64_t outerValue = 0;
+    int64_t innerValue = 0;
+    GetAttr("op_attr_outer_value", outerValue);
+    GetAttr("op_attr_inner_value", innerValue);
+    auto gmShapeExprByIndex = GenParamIdxExprByIndex(gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
+    std::string outerFromGmShape = isDynamicFunction ? gmShapeExprByIndex[0] : std::to_string(gmShape[0]);
+    std::string innerFromGmShape = isDynamicFunction ? gmShapeExprByIndex[1] : std::to_string(gmShape[1]);
+    std::string outerValueStr = outerValue == 0 ? outerFromGmShape : std::to_string(outerValue);
+    std::string innerValueStr = innerValue == 0 ? innerFromGmShape : std::to_string(innerValue);
+    return {outerValueStr, innerValueStr};
+}
+
+std::string CodeGenOpCloudNPU::PrintMemCopyWithL1TileTensor(const PrintMemCopyWithL1Param &param) const {
+    std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(param.gmIdx);
     // constructor call parameter ((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
@@ -925,13 +933,7 @@ std::string CodeGenOpCloudNPU::PrintL1CopyInTileTensor(const PrintMemCopyWithL1P
     std::string gmVarName = GenGmParamVar(param.gmIdx);
     std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
-    int64_t outerValue = 0;
-    int64_t innerValue = 0;
-    GetAttr("op_attr_outer_value", outerValue);
-    GetAttr("op_attr_inner_value", innerValue);
-    auto gmShapeExprByIndex = GenParamIdxExprByIndex(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
-    std::string outerValueStr = outerValue == 0 ? gmShapeExprByIndex[0] : std::to_string(outerValue);
-    std::string innerValueStr = innerValue == 0 ? gmShapeExprByIndex[1] : std::to_string(innerValue);
+    auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape);
 
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord, outerValueStr, innerValueStr};
     int64_t copyInMode = -1;
@@ -961,7 +963,7 @@ std::string CodeGenOpCloudNPU::PrintL1CopyInTileTensor(const PrintMemCopyWithL1P
 
 std::string CodeGenOpCloudNPU::PrintMemCopyWithL1(const PrintMemCopyWithL1Param &param) const {
     if (isSupportLayout) {
-        return PrintL1CopyInTileTensor(param);
+        return PrintMemCopyWithL1TileTensor(param);
     }
     if (isDynamicFunction) {
         return PrintMemCopyWithL1Dynamic(param);
@@ -987,25 +989,23 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1
 
     int printRet = sprintf_s(addrBuffer, BUFFER_SIZE_1024, "%s", addrExpr[ID1].c_str());
     ASSERT(printRet >= 0) << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
-    int64_t nzValue = 0, outerValue = 0, innerValue = 0;
+    int64_t nzValue = 0;
     auto ret = GetAttr("op_attr_is_nz", nzValue);
     if (ret && nzValue == 1) {
         opName = "TileOp::L1CopyInNZ2NZ";
-        ret = GetAttr("op_attr_outer_value", outerValue);
-        ret = GetAttr("op_attr_inner_value", innerValue);
         std::string curAddrBuffer =
             "((__gm__ GMTensorInfo*)(oriAddrParam) + " + std::to_string(paramLocation[gmIdx]) + ")->Addr";
         printRet = sprintf_s(
             oriAddrBuffer, BUFFER_SIZE_1024, "(__gm__ %s*)%s", dataTypeExpr[ID1].c_str(), curAddrBuffer.c_str());
         ASSERT(printRet >= 0) << "sprintf_s failed in PrintMemCopyWithL1Static, return value:" << printRet;
         printRet = sprintf_s(addrBuffer, BUFFER_SIZE_1024, "%s", addrExpr[ID1].c_str());
-        outerValue = outerValue == 0 ? gmShape[ID0] : outerValue;
-        innerValue = innerValue == 0 ? gmShape[ID1] : innerValue;
-        printRet = sprintf_s(buffer, BUFFER_SIZE_1024,
-            "%s<%s, %s, %u, %u, %d, %d, %d, %d>((%s %s*)%s, (%s %s*)%s, %s, %u);\n", opName.c_str(),
-            dataTypeExpr[gmIdx].c_str(), dataTypeExpr[localIdx].c_str(), tileShapeForMT[ID0], tileShapeForMT[ID1],
-            gmShape[ID0], gmShape[ID1], outerValue, innerValue, addrTypeHead[ID0].c_str(), dataTypeExpr[ID0].c_str(),
-            addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(), dataTypeExpr[ID1].c_str(), addrBuffer, oriAddrBuffer, uf);
+        auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(gmIdx, gmShape);
+        printRet =
+            sprintf_s(buffer, BUFFER_SIZE_1024, "%s<%s, %s, %u, %u, %d, %d, %s, %s>((%s %s*)%s, (%s %s*)%s, %s, %u);\n",
+                opName.c_str(), dataTypeExpr[gmIdx].c_str(), dataTypeExpr[localIdx].c_str(), tileShapeForMT[ID0],
+                tileShapeForMT[ID1], gmShape[ID0], gmShape[ID1], outerValueStr.c_str(), innerValueStr.c_str(),
+                addrTypeHead[ID0].c_str(), dataTypeExpr[ID0].c_str(), addrExpr[ID0].c_str(), addrTypeHead[ID1].c_str(),
+                dataTypeExpr[ID1].c_str(), addrBuffer, oriAddrBuffer, uf);
         ASSERT(printRet >= 0) << "sprintf_s failed in genMemCopyVar, return value:" << printRet;
     } else {
         std::vector<SymbolicScalar> gmOffset = this->offsetFromAttr[gmIdx];
@@ -1047,15 +1047,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL
     auto ret = GetAttr(OP_ATTR_PREFIX + "is_nz", nzValue);
     if (ret && nzValue == 1) {
         opName = tileOpName + "NZ2NZ";
-        int64_t outerValue = 0;
-        int64_t innerValue = 0;
-        ret = GetAttr("op_attr_outer_value", outerValue);
-        ret = GetAttr("op_attr_inner_value", innerValue);
-
-        auto gmShapeExprByIndex = GenParamIdxExprByIndex(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
-        std::string outerValueStr = outerValue == 0 ? gmShapeExprByIndex[ID0] : std::to_string(outerValue);
-        std::string innerValueStr = innerValue == 0 ? gmShapeExprByIndex[ID1] : std::to_string(innerValue);
-
+        auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(gmIdx, param.gmShape);
         if (isSupportDynamicAligned) {
             oss << opName << "<" << dataTypeExpr[gmIdx] << ", " << dataTypeExpr[localIdx] << ", " << tileShapeForMT[ID0]
                 << ", " << tileShapeForMT[ID1] << ">"

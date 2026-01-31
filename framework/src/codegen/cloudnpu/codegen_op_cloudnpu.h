@@ -291,10 +291,12 @@ private:
         std::vector<std::string> &gmShapeExpr, std::vector<std::string> &gmOffsetExpr) const;
     std::string PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0CParam &param) const;
 
+    std::pair<std::string, std::string> GetOuterInnerValueStr(
+        unsigned gmIdx, const std::vector<int64_t> &gmShape) const;
     std::string PrintMemCopyWithL1(const PrintMemCopyWithL1Param &param) const;
     std::string PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param &param) const;
     std::string PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL1Param &param) const;
-    std::string PrintL1CopyInTileTensor(const PrintMemCopyWithL1Param &param) const;
+    std::string PrintMemCopyWithL1TileTensor(const PrintMemCopyWithL1Param &param) const;
 
     std::string PrintMemCopyWithUB(PrintMemCopyWithUBParam &param) const;
     std::string PrintMemCopyWithUBStatic(const PrintMemCopyWithUBParam &param) const;
