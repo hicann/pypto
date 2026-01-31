@@ -329,6 +329,7 @@ private:
     Die die_;
     SocVersion soc_version_;
     NPUArch version_;
+    std::string short_soc_ver_;
     size_t dies_cnt_;
     size_t ai_core_cnt_;
     size_t cube_core_cnt_;
@@ -340,6 +341,7 @@ public:
     void SetSocVersion(const std::string& soc_version);
     void SetNPUArch(NPUArch version) { version_ = version; }
     void SetNPUArch(const std::string& version);
+    void SetShortSocVersion(const std::string& version) { short_soc_ver_ = version;}
     void SetDiesNum(size_t cnt) { dies_cnt_ = cnt; }
     void SetCoreVersion(const std::unordered_map<std::string, std::string>& ver);
     void SetCCECVersion(const std::unordered_map<std::string, std::string>& ver);
@@ -348,6 +350,7 @@ public:
     SocVersion GetSocVersion() const { return soc_version_; }
     NPUArch GetNPUArch() const { return version_; }
     size_t GetDiesNum() const { return dies_cnt_; }
+    std::string GetShortSocVersion() const { return short_soc_ver_; }
     std::string GetCoreVersion(std::string CoreType);
     std::string GetCCECVersion(std::string CoreType);
 

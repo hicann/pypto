@@ -18,6 +18,7 @@
 #include "interface/utils/file_utils.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/tilefwk.h"
+#include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "machine/platform/platform_manager.h"
@@ -55,7 +56,7 @@ bool CacheManager::Initialize() {
         return false;
     }
     std::string homeEnvPath(envPath);
-    cacheDirPath_ = homeEnvPath + "/ast_data/" + PlatformManager::Instance().GetShortSocVersion();
+    cacheDirPath_ = homeEnvPath + "/ast_data/" + Platform::Instance().GetSoc().GetShortSocVersion();
     ALOG_DEBUG_F("Begin to initialize cache manager, cache dir path is [%s].", cacheDirPath_.c_str());
     if (RealPath(cacheDirPath_).empty() && !CreateMultiLevelDir(cacheDirPath_)) {
         ALOG_ERROR_F("Failed to create cache dir[%s].", cacheDirPath_.c_str());
