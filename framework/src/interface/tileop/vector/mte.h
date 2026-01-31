@@ -46,9 +46,9 @@ __aicore__ inline void TLoad(T dst, U src, C coordinate) {
 
         auto dstTile = PtoTile<T>(dst);
         auto srcGlobal = PtoGlobal<T, typename T::Shape, typename U::Stride, true>(dst.GetShape(), src.GetStride());
-        for (size_t index0 = 0; index0 < dstShape0; ++index0) {
-            for (size_t index1 = 0; index1 < dstShape1; ++index1) {
-                for (size_t index2 = 0; index2 < dstShape2; ++index2) {
+        for (LoopVar index0 = 0; index0 < dstShape0; ++index0) {
+            for (LoopVar index1 = 0; index1 < dstShape1; ++index1) {
+                for (LoopVar index2 = 0; index2 < dstShape2; ++index2) {
                     srcGlobal.Assign(
                         src.GetAddr() + gmOffset + index0 * srcStride0 + index1 * srcStride1 + index2 * srcStride2);
                     auto tileOffsets = TileOffset(index0, index1, index2);
@@ -88,9 +88,9 @@ __aicore__ inline void TStore(T dst, U src, C coordinate) {
 
         auto srctTile = PtoTile<U>(src);
         auto dstGlobal = PtoGlobal<T, typename U::Shape, typename T::Stride, true>(src.GetShape(), dst.GetStride());
-        for (size_t index0 = 0; index0 < srcShape0; ++index0) {
-            for (size_t index1 = 0; index1 < srcShape1; ++index1) {
-                for (size_t index2 = 0; index2 < srcShape2; ++index2) {
+        for (LoopVar index0 = 0; index0 < srcShape0; ++index0) {
+            for (LoopVar index1 = 0; index1 < srcShape1; ++index1) {
+                for (LoopVar index2 = 0; index2 < srcShape2; ++index2) {
                     dstGlobal.Assign(
                         dst.GetAddr() + gmOffset + index0 * dstStride0 + index1 * dstStride1 + index2 * dstStride2);
                     auto tileOffsets = TileOffset(index0, index1, index2);
@@ -115,10 +115,10 @@ template <typename GMType, typename UBType, bool copyIn, int tileW>
 __aicore__ inline void DoTransMove(size_t *srcShape, size_t gmShape4,
     size_t *gmStride, size_t *ubStride, GMType *gmAddr, size_t gmOffset, uint64_t ubAddr) {
     using GlobalData = pto::GlobalTensor<GMType, pto::Shape<-1, -1, -1, -1, -1>, pto::Stride<-1, -1, -1, -1, -1>>;
-    for (size_t index0 = 0; index0 < srcShape[0]; ++index0) {
-        for (size_t index1 = 0; index1 < srcShape[1]; ++index1) {
-            for (size_t index2 = 0; index2 < srcShape[2]; ++index2) {
-                for (size_t index3 = 0; index3 < srcShape[3]; ++index3) {
+    for (LoopVar index0 = 0; index0 < srcShape[0]; ++index0) {
+        for (LoopVar index1 = 0; index1 < srcShape[1]; ++index1) {
+            for (LoopVar index2 = 0; index2 < srcShape[2]; ++index2) {
+                for (LoopVar index3 = 0; index3 < srcShape[3]; ++index3) {
                     GlobalData globalData(gmAddr + gmOffset + index0 * gmStride[0] +
                         index1 * gmStride[1] + index2 * gmStride[2] + index3 * gmStride[3],
                         pto::Shape(1, 1, 1, 1, gmShape4), pto::Stride(0, 0, 0, 0, 0));
@@ -203,7 +203,7 @@ __aicore__ inline void IndexPutCopyOut(int nBurst, int lenBurst, size_t valuesSt
     ValuesTileDefine valuesData(1, lenBurst);
     set_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
     wait_flag(PIPE_S, PIPE_MTE3, EVENT_ID7);
-    for (size_t i = 0; i < repeat; ++i) {
+    for (LoopVar i = 0; i < repeat; ++i) {
         pto::TASSIGN(valuesData, ubAddr);
         ubAddr += MAX_N_BURST * valuesStrides[2] * sizeof(ValuesDtype);
         DstData dstData(dstAddr, pto::Shape(1, 1, 1, MAX_N_BURST, lenBurst), pto::Stride(0, 0, 0, lenBurst, 0));
@@ -236,7 +236,7 @@ __aicore__ inline void DoIndexPut(size_t indicesShape, size_t dstShapes[], size_
     constexpr auto tileW = Std::tuple_element<valuesSize - 1, typename VAL::TileShape>::type::value;
     using ValuesTileDefine = pto::Tile<pto::TileType::Vec, ValuesDtype, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
     constexpr size_t indicesSize = dstShapeSize - valuesSize + 1;
-    for (size_t i = 0; i < indicesShape; ++i) {
+    for (LoopVar i = 0; i < indicesShape; ++i) {
         uint64_t dstOffset = 0;
         if constexpr (indicesSize >= 1) {
             dstOffset += ((__ubuf__ IndicesDtype *) indices0.GetAddr())[i] * IndexPutGetStride<4 - dstShapeSize>(dstShapes);

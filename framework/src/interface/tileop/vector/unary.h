@@ -70,9 +70,9 @@ TILEOP void UnaryCompute(T0 dst, T1 src) {
 
     auto dstTile = PtoTile<T0>(dst);
     auto srcTile = PtoTile<T1>(src);
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
@@ -109,9 +109,9 @@ TILEOP void BrcbCompute(T0 dst, T1 src) {
 
     SrcTileDefine srcTile;
     DstTileDefine dstTile;
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto dstTileOffsets = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcTileOffsets = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstTileOffsets * sizeof(typename T0::Type)));
@@ -181,9 +181,9 @@ TILEOP void TCeil(T0 dst, T1 src) {
     auto dstTile = PtoTile<T0>(dst);
     auto srcTile = PtoTile<T1>(src);
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
@@ -217,9 +217,9 @@ TILEOP void TFloor(T0 dst, T1 src) {
     auto dstTile = PtoTile<T0>(dst);
     auto srcTile = PtoTile<T1>(src);
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
@@ -253,9 +253,9 @@ TILEOP void TTrunc(T0 dst, T1 src) {
     auto dstTile = PtoTile<T0>(dst);
     auto srcTile = PtoTile<T1>(src);
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
@@ -276,9 +276,9 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
     auto dstTile = PtoTile<T0>(dst);
     auto tmpTile = PtoTile<T1>(tmp);
     auto srcTile = PtoTile<T2>(src);
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);

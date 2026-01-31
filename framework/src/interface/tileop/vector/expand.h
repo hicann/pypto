@@ -58,9 +58,9 @@ TILEOP void TExpand(T0 dst, T1 src) {
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
 
     if constexpr (axis == 3) {
-        for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-            for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-                for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
+        for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+            for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+                for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                     using dstTileDefine =
                         pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                     using srcTileDefine =
@@ -76,9 +76,9 @@ TILEOP void TExpand(T0 dst, T1 src) {
             }
         }
     } else if constexpr (axis == 2) {
-        for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-            for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-                for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
+        for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+            for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+                for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                     auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                     auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                     using dstTileDefine =
@@ -94,8 +94,8 @@ TILEOP void TExpand(T0 dst, T1 src) {
             }
         }
     } else if constexpr (axis == 1) {
-        for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-            for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
+        for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+            for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1;
                 using dstTileDefine =
@@ -105,14 +105,14 @@ TILEOP void TExpand(T0 dst, T1 src) {
                 dstTileDefine dstTile(dstShape3, dstShape4);
                 srcTileDefine srcTile(srcShape3, srcShape4);
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
-                for (unsigned i = 0; i < dstShape2; i++) {
+                for (LoopVar i = 0; i < dstShape2; i++) {
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + (dstOffset + i * dstTileH * dstTileW) * typeSize));
                     pto::TMOV(dstTile, srcTile);
                 }
             }
         }
     } else if constexpr (axis == 0) {
-        for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             auto dstOffset = n0Index * dstStride0;
             auto srcOffset = n0Index * srcStride0;
             using dstTileDefine =
@@ -124,8 +124,8 @@ TILEOP void TExpand(T0 dst, T1 src) {
 
             constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
             dstShape2 = shapeSize > 2 ? TileOp::GetTensorTileShapeDim<T0, shapeSize - 3>() : dstShape2;
-            for (unsigned i = 0; i < dstShape1; ++i) {
-                for (unsigned j = 0; j < dstShape2; j++) {
+            for (LoopVar i = 0; i < dstShape1; ++i) {
+                for (LoopVar j = 0; j < dstShape2; j++) {
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + (srcOffset + j * srcTileH * srcTileW) * typeSize));
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + (dstOffset + i * dstShape2 * dstTileH * dstTileW
                                                                         + j * dstTileH * dstTileW) * typeSize));

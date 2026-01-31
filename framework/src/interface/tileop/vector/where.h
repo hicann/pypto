@@ -108,12 +108,12 @@ TILEOP void TWhereTT(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     unsigned numCountPerLine = shape4 / elementsPerCount;
     unsigned elementsRemainPerLine = shape4 % elementsPerCount;
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < shape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;
@@ -209,12 +209,12 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     unsigned numCountPerLine = shape4 / elementsPerCount;
     unsigned elementsRemainPerLine = shape4 % elementsPerCount;
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < shape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;
@@ -242,7 +242,7 @@ TILEOP void TWhereTS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                                                 elementsRemainPerLine);
                         }
                     } else {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;
@@ -314,12 +314,12 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     unsigned numCountPerLine = shape4 / elementsPerCount;
     unsigned elementsRemainPerLine = shape4 % elementsPerCount;
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < shape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;
@@ -347,7 +347,7 @@ TILEOP void TWhereST(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                                                 elementsRemainPerLine);
                         }
                     } else {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;
@@ -422,12 +422,12 @@ TILEOP void TWhereSS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
     unsigned numCountPerLine = shape4 / elementsPerCount;
     unsigned elementsRemainPerLine = shape4 % elementsPerCount;
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < shape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < shape3; ++n3Index) {
                     if constexpr (std::is_same_v<typename TCond::Type, bool>) {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;
@@ -455,7 +455,7 @@ TILEOP void TWhereSS(TDst dst, TTmp tmpbuf, TCond condition, TSrc0 src0, TSrc1 s
                                                                                 elementsRemainPerLine);
                         }
                     } else {
-                        for (int j = 0; j < numCountPerLine; j++) {
+                        for (LoopVar j = 0; j < numCountPerLine; j++) {
                             auto conditionOffset = n0Index * conditionStride0 + n1Index * conditionStride1 + 
                                                 n2Index * conditionStride2 + n3Index * conditionStride3 + j * elementsPerCount;
                             auto offset = n0Index * stride0 + n1Index * stride1 + n2Index * stride2 + n3Index * stride3 + j * elementsPerCount;

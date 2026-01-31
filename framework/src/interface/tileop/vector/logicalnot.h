@@ -157,13 +157,13 @@ TILEOP void TLogicalNot(T0 dst, T1 src, T2 tmp)
     unsigned numLoop = dstShape4 / COUNT_MAX;
     unsigned remainAfterLoop = dstShape4 % COUNT_MAX;
 
-    for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < dstShape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2 + n3Index * dstStride3;
                     auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2 + n3Index * srcStride3;
-                    for (int j = 0; j < numLoop; j++) {
+                    for (LoopVar j = 0; j < numLoop; j++) {
                         auto dstOffsetLoop = dstOffset + j * COUNT_MAX;
                         auto srcOffsetLoop = srcOffset + j * COUNT_MAX;
                         DstTile dstTile(1, COUNT_MAX);

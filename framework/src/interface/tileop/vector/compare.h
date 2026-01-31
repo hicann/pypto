@@ -203,10 +203,10 @@ TILEOP void TCompare(TDst dst, T src0, T src1, TTmp tmpbuf) {
     using Types = CompareTileTypes<T>;
     using SrcTile = typename Types::SrcTile; using DstTile = typename Types::DstTile;
     using CmpTile = typename Types::CmpTile; using TmpTile = typename Types::TmpTile;
-    for (size_t n0Index = 0; n0Index < info.shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < info.shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < info.shape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < info.shape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < info.shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < info.shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < info.shape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < info.shape3; ++n3Index) {
                     size_t srcOffset, dstOffset;
                     CalcOffsets(info, n0Index, n1Index, n2Index, n3Index, srcOffset, dstOffset);
                     uint64_t dstAddr = dst.GetAddr() + dstOffset * dstTypeSize;
@@ -238,10 +238,10 @@ TILEOP void TCompare(TDst dst, T src, TTmp tmpbuf, TVal scalarVal) {
     using Types = CompareTileTypes<T>;
     using DstTile = typename Types::DstTile; using CmpTile = typename Types::CmpTile;
     using SrcTile = typename Types::SrcTile; using TmpTile = typename Types::TmpTile;
-    for (size_t n0Index = 0; n0Index < info.shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < info.shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < info.shape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < info.shape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < info.shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < info.shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < info.shape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < info.shape3; ++n3Index) {
                     size_t srcOffset, dstOffset;
                     CalcOffsets(info, n0Index, n1Index, n2Index, n3Index, srcOffset, dstOffset);
                     uint64_t dstAddr = dst.GetAddr() + dstOffset * dstTypeSize;

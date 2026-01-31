@@ -65,9 +65,9 @@ TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
-    for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                 using DstTileDefine = typename std::conditional<(dstTileW == 1),
                     pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::ColMajor, -1, -1>,
                     pto::Tile<pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>
@@ -148,10 +148,10 @@ TILEOP void TRowMaxMinLineDynamic(T0 dst, T1 src) {
         static_cast<size_t>(srcLayout.template GetStrideDim<2, expectSize>()),
         static_cast<size_t>(srcLayout.template GetStrideDim<3, expectSize>())
     };
-    for (size_t n0Index = 0, n0Size = (axis == 0 ? (size_t) 1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
-        for (size_t n1Index = 0, n1Size = (axis == 1 ? (size_t) 1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
-            for (size_t n2Index = 0, n2Size = (axis == 2 ? (size_t) 1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
-                for (size_t n3Index = 0, n3Size = (axis == 3 ? (size_t) 1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
+    for (LoopVar n0Index = 0, n0Size = (axis == 0 ? (size_t) 1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
+        for (LoopVar n1Index = 0, n1Size = (axis == 1 ? (size_t) 1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
+            for (LoopVar n2Index = 0, n2Size = (axis == 2 ? (size_t) 1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
+                for (LoopVar n3Index = 0, n3Size = (axis == 3 ? (size_t) 1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
                     DstTileDefine dstTile(dstShape[axis], dstShape[4]);
                     SrcTileDefine srcTile(srcShape[axis], srcShape[4]);
                     auto dstOffset = n0Index * dstStride[0] + n1Index * dstStride[1] +
@@ -216,10 +216,10 @@ TILEOP void TRowSumLineDynamic(T0 dst, T1 src, T2 tmp) {
         static_cast<size_t>(srcLayout.template GetStrideDim<2, expectSize>()),
         static_cast<size_t>(srcLayout.template GetStrideDim<3, expectSize>())
     };
-    for (size_t n0Index = 0, n0Size = (axis == 0 ? (size_t) 1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
-        for (size_t n1Index = 0, n1Size = (axis == 1 ? (size_t) 1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
-            for (size_t n2Index = 0, n2Size = (axis == 2 ? (size_t) 1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
-                for (size_t n3Index = 0, n3Size = (axis == 3 ? (size_t) 1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
+    for (LoopVar n0Index = 0, n0Size = (axis == 0 ? (size_t) 1 : dstShape[0]); n0Index < n0Size; ++n0Index) {
+        for (LoopVar n1Index = 0, n1Size = (axis == 1 ? (size_t) 1 : dstShape[1]); n1Index < n1Size; ++n1Index) {
+            for (LoopVar n2Index = 0, n2Size = (axis == 2 ? (size_t) 1 : dstShape[2]); n2Index < n2Size; ++n2Index) {
+                for (LoopVar n3Index = 0, n3Size = (axis == 3 ? (size_t) 1 : dstShape[3]); n3Index < n3Size; ++n3Index) {
                     DstTileDefine dstTile(dstShape[axis], dstShape[4]);
                     SrcTileDefine srcTile(srcShape[axis], srcShape[4]);
                     TmpTileDefine tmpTile;

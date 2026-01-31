@@ -104,9 +104,9 @@ TILEOP void BitwiseShiftCompute(T0 dst, T1 src0, T2 src1, T3 tmp) {
     auto src1Tile = PtoTile<T2>(src1);
     auto tmpTile = PtoTile<T3>(tmp);
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 src0Tile.Assign(src0, tileOffsets);
@@ -130,9 +130,9 @@ TILEOP void BitwiseShiftScalarCompute(T0 dst, T1 src0, Scalar src1) {
     if (src1 < 0 || src1 > MAX_SHIFT_NUM) {
         src1 = MAX_SHIFT_NUM;
     }
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 src0Tile.Assign(src0, tileOffsets);
@@ -166,9 +166,9 @@ TILEOP void ScalarBitwiseShiftCompute(T0 dst, Scalar src0, T1 src1, T2 tmp) {
     auto src1Tile = PtoTile<T1>(src1);
     auto tmpTile = PtoTile<T2>(tmp);
 
-    for (size_t n0Index = 0; n0Index < shape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < shape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 src1Tile.Assign(src1, tileOffsets);

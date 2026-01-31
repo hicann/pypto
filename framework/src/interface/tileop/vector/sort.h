@@ -49,9 +49,9 @@ TILEOP void TBitSort(T0 dst, T1 src) {
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, expectSize>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
-    for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                 using IdxTileDefine =
                     pto::Tile<pto::TileType::Vec, uint32_t, 1, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
                 IdxTileDefine idxTile(1, srcShape4);
@@ -59,7 +59,7 @@ TILEOP void TBitSort(T0 dst, T1 src) {
                 pto::TCI<IdxTileDefine, uint32_t, 0>(idxTile, offset);
                 set_flag(PIPE_S, PIPE_V, EVENT_ID7);
                 wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
-                for (size_t n3Index = 0; n3Index < dstShape3; ++n3Index) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     using DstTileDefine =
                         pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                     using SrcTileDefine =
@@ -136,10 +136,10 @@ TILEOP void TMrgSort(T0 dst, T1 src) {
     } else {
         srcShape4 = srcShape4 - (srcShape4 + 31) / 32 * 32 / 3 * 2;
     }
-    for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < dstShape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     using DstTileDefine =
                         pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                     using SrcTileDefine =
@@ -156,7 +156,7 @@ TILEOP void TMrgSort(T0 dst, T1 src) {
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * srcTypeSize));
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TASSIGN(tmpTile, (uint64_t)(src.GetAddr() + (srcOffset + srcTileW) * srcTypeSize));
-                    uint32_t z = 32;
+                    LoopVar z = 32;
                     for (; z * 4 <= srcShape4; z *= 4) {
                         uint32_t repeat_mrg = srcShape4 / (z * 4);
                         pto::TMRGSORT(tmpTile, srcTile, z * 2);
@@ -180,7 +180,7 @@ TILEOP void TMrgSort(T0 dst, T1 src) {
                         int32_t arrayCount = 0;
                         int32_t mrgArray[15] = {0};
                         int32_t tmpInner = srcShape4;
-                        for (int32_t i = z; i >= 32; i /= 4) {
+                        for (LoopVar i = z; i >= 32; i /= 4) {
                             int32_t count;
                             for (count = 0; count < tmpInner / i; count++) {
                                 mrgArray[arrayCount++] = i;
@@ -191,7 +191,7 @@ TILEOP void TMrgSort(T0 dst, T1 src) {
                             mrgArray[arrayCount++] = tmpInner;
                         }
                         uint16_t mrgSortedLen = 0;
-                        for (int32_t i = 0; i < arrayCount - 1; ++i) {
+                        for (LoopVar i = 0; i < arrayCount - 1; ++i) {
                             mrgSortedLen += static_cast<uint16_t>(mrgArray[i]);
                             uint64_t tmpMrgSortedLen = mrgSortedLen;
                             uint64_t tmpMrgArray = mrgArray[i + 1];
@@ -304,10 +304,10 @@ TILEOP void TTiledMrgSort(T0 dst, T1 src1, T2 src2, T3 src3, T4 src4, T5 tmp) {
     if (k * 2 > src4Shape4) {
         kLast = src4Shape4;
     }
-    for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < dstShape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     using DstTileDefine =
                         pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                     using Src1TileDefine =

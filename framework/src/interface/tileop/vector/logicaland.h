@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -183,15 +183,15 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
         pto::TEXPANDS(remainZeroTile.Data(), 0.0);
     }
 
-    for (size_t n0Index = 0; n0Index < dstShape0; ++n0Index) {
-        for (size_t n1Index = 0; n1Index < dstShape1; ++n1Index) {
-            for (size_t n2Index = 0; n2Index < dstShape2; ++n2Index) {
-                for (size_t n3Index = 0; n3Index < dstShape3; ++n3Index) {
+    for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; ++n3Index) {
                     auto tileOffsets = TileOffset4Dim(n0Index, n1Index, n2Index, n3Index);
                     auto dstOffset = GenTileOffset(dst, tileOffsets);
                     auto src1Offset = GenTileOffset(src1, tileOffsets);
                     auto src2Offset = GenTileOffset(src2, tileOffsets);
-                    for (int j = 0; j < numLoop; j++) {
+                    for (LoopVar j = 0; j < numLoop; j++) {
                         loopDstTile.Assign(dst.GetAddr(), dstOffset + j * COUNT_MAX);
                         loopSrc1Tile.Assign(src1.GetAddr(), src1Offset + j * COUNT_MAX);
                         loopSrc2Tile.Assign(src2.GetAddr(), src2Offset + j * COUNT_MAX);

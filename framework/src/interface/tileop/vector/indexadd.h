@@ -82,11 +82,11 @@ TILEOP void IndexAddLastAxisCompute(T0 dst, T2 src1, T3 src2, Scalar alpha, size
     uint64_t dstOffset = 0;
     uint64_t src1Offset = 0;
     if (abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
-        for (size_t i = 0; i < src1Shape0; ++i) {
-            for (size_t j = 0; j < src1Shape1; ++j) {
-                for (size_t k = 0; k < src1Shape2; ++k) {
-                    for (size_t l = 0; l < src1Shape3; ++l) {
-                        for (size_t idx = 0; idx < src1Shape4; ++idx) {
+        for (LoopVar i = 0; i < src1Shape0; ++i) {
+            for (LoopVar j = 0; j < src1Shape1; ++j) {
+                for (LoopVar k = 0; k < src1Shape2; ++k) {
+                    for (LoopVar l = 0; l < src1Shape3; ++l) {
+                        for (LoopVar idx = 0; idx < src1Shape4; ++idx) {
                             auto index = *(idxAddr + idx);
                             auto dstOffset = i * dstStride0 + j * dstStride1 + k * dstStride2 + l * dstStride3 + index;
                             auto src1Offset =
@@ -109,11 +109,11 @@ TILEOP void IndexAddLastAxisCompute(T0 dst, T2 src1, T3 src2, Scalar alpha, size
             }
         }
     }
-    for (size_t i = 0; i < src1Shape0; ++i) {
-        for (size_t j = 0; j < src1Shape1; ++j) {
-            for (size_t k = 0; k < src1Shape2; ++k) {
-                for (size_t l = 0; l < src1Shape3; ++l) {
-                    for (size_t idx = 0; idx < src1Shape4; ++idx) {
+    for (LoopVar i = 0; i < src1Shape0; ++i) {
+        for (LoopVar j = 0; j < src1Shape1; ++j) {
+            for (LoopVar k = 0; k < src1Shape2; ++k) {
+                for (LoopVar l = 0; l < src1Shape3; ++l) {
+                    for (LoopVar idx = 0; idx < src1Shape4; ++idx) {
                         auto index = *(idxAddr + idx);
                         auto dstOffset = i * dstStride0 + j * dstStride1 + k * dstStride2 + l * dstStride3 + index;
                         auto src1Offset = i * src1Stride0 + j * src1Stride1 + k * src1Stride2 + l * src1Stride3 + idx;
@@ -187,7 +187,7 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, Scalar alpha) {   // T0
         using src1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, src1TileW, pto::BLayout::RowMajor>;
         dstTileDefine dstTile;
         src1TileDefine src1Tile;
-        for (size_t i = 0; i < src1Shape0; ++i) {
+        for (LoopVar i = 0; i < src1Shape0; ++i) {
             set_flag(PIPE_V, PIPE_S, EVENT_ID7);
             wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
             auto index = *(idxAddr + i);
@@ -205,8 +205,8 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, Scalar alpha) {   // T0
         using src1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, src1TileW, pto::BLayout::RowMajor>;
         dstTileDefine dstTile;
         src1TileDefine src1Tile;
-        for (size_t i = 0; i < src1Shape0; ++i) {
-            for (size_t j = 0; j < src1Shape1; ++j) {
+        for (LoopVar i = 0; i < src1Shape0; ++i) {
+            for (LoopVar j = 0; j < src1Shape1; ++j) {
                 set_flag(PIPE_V, PIPE_S, EVENT_ID7);
                 wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
                 auto index = *(idxAddr + j);
@@ -225,9 +225,9 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, Scalar alpha) {   // T0
         using src1TileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, src1TileW, pto::BLayout::RowMajor>;
         dstTileDefine dstTile;
         src1TileDefine src1Tile;
-        for (size_t i = 0; i < src1Shape0; ++i) {
-            for (size_t j = 0; j < src1Shape1; ++j) {
-                for (size_t k = 0; k < src1Shape2; ++k) {
+        for (LoopVar i = 0; i < src1Shape0; ++i) {
+            for (LoopVar j = 0; j < src1Shape1; ++j) {
+                for (LoopVar k = 0; k < src1Shape2; ++k) {
                     set_flag(PIPE_V, PIPE_S, EVENT_ID7);
                     wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
                     auto index = *(idxAddr + k);
@@ -247,10 +247,10 @@ TILEOP void TIndexAdd(T0 dst, T1 src0, T2 src1, T3 src2, Scalar alpha) {   // T0
             pto::Tile<pto::TileType::Vec, typename T2::Type, 1, src1TileW, pto::BLayout::RowMajor, -1, -1>;
         dstTileDefine dstTile(1, dstShape4);
         src1TileDefine src1Tile(1, src1Shape4);
-        for (size_t i = 0; i < src1Shape0; ++i) {
-            for (size_t j = 0; j < src1Shape1; ++j) {
-                for (size_t k = 0; k < src1Shape2; ++k) {
-                    for (size_t l = 0; l < src1Shape3; ++l) {
+        for (LoopVar i = 0; i < src1Shape0; ++i) {
+            for (LoopVar j = 0; j < src1Shape1; ++j) {
+                for (LoopVar k = 0; k < src1Shape2; ++k) {
+                    for (LoopVar l = 0; l < src1Shape3; ++l) {
                         set_flag(PIPE_V, PIPE_S, EVENT_ID7);
                         wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
                         auto index = *(idxAddr + l);

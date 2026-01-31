@@ -27,7 +27,7 @@ TILEOP void CumSumTool(T0 dst, T1 src, uint64_t tileH, uint64_t tmpStride) {
     pto::TASSIGN(tmpSrcTile, (uint64_t)(src.GetAddr() + tmpStride));
     pto::TMOV(tmpDstTile, tmpSrcTile);
 
-    for (int i = 1; i < tileH; i++) {
+    for (LoopVar i = 1; i < tileH; i++) {
         pipe_barrier(PIPE_V);
         using TileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, 1, tileW>;
         TileDefine dst0Tile, dst1Tile, src1Tile;
@@ -68,7 +68,7 @@ TILEOP void TCumSum(T0 dst, T1 src) {
         constexpr auto dst3RawShape = Std::tuple_element<shapeSize - 3, typename T0::TileShape>::type::value;
         constexpr int tileW = dst3RawShape * dst2RawShape * dst1RawShape;
 
-        for (int loop = 0; loop < loops; loop++) {
+        for (LoopVar loop = 0; loop < loops; loop++) {
             uint64_t tmpStride = loop * n0DstStride * dstTypeSize;
             CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
         }
@@ -79,8 +79,8 @@ TILEOP void TCumSum(T0 dst, T1 src) {
         constexpr int tileH = dst3RawShape;
         constexpr int tileW = dst2RawShape * dst1RawShape;
 
-        for (int j = 0; j < n0DstShape; j++) {
-            for (int k = 0; k < n1DstShape; k++) {
+        for (LoopVar j = 0; j < n0DstShape; j++) {
+            for (LoopVar k = 0; k < n1DstShape; k++) {
                 uint64_t tmpStride = (j * n0DstStride + k * n1DstStride) * dstTypeSize;
                 CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
             }
@@ -91,9 +91,9 @@ TILEOP void TCumSum(T0 dst, T1 src) {
         constexpr int tileH = dst2RawShape;
         constexpr int tileW = dst1RawShape;
 
-        for (int m = 0; m < n0DstShape; m++) {
-            for (int j = 0; j < n1DstShape; j++) {
-                for (int k = 0; k < n2DstShape; k++) {
+        for (LoopVar m = 0; m < n0DstShape; m++) {
+            for (LoopVar j = 0; j < n1DstShape; j++) {
+                for (LoopVar k = 0; k < n2DstShape; k++) {
                     uint64_t tmpStride = (m * n0DstStride + j * n1DstStride + k * n2DstStride) * dstTypeSize;
                     CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
                 }
@@ -106,13 +106,13 @@ TILEOP void TCumSum(T0 dst, T1 src) {
         auto srcAddr = (__ubuf__ typename T1::Type *)((uint64_t)(src.GetAddr()));
         auto dstAddr = (__ubuf__ typename T0::Type *)((uint64_t)(dst.GetAddr()));
 
-        for (int n = 0; n < n0DstShape; n++) {
-            for (int j = 0; j < n1DstShape; j++) {
-                for (int k = 0; k < n2DstShape; k++) {
-                    for (int m = 0; m < n3DstShape; m++) {
+        for (LoopVar n = 0; n < n0DstShape; n++) {
+            for (LoopVar j = 0; j < n1DstShape; j++) {
+                for (LoopVar k = 0; k < n2DstShape; k++) {
+                    for (LoopVar m = 0; m < n3DstShape; m++) {
                         int tmpStride = n * n0DstStride + j * n1DstStride + k * n2DstStride + m * n3DstStride;
                         dstAddr[tmpStride] = srcAddr[tmpStride];
-                        for (int i = 1; i < n4DstShape; i++) {
+                        for (LoopVar i = 1; i < n4DstShape; i++) {
                             dstAddr[tmpStride + i] = srcAddr[tmpStride + i] + dstAddr[tmpStride + i - 1];
                         }
                     }

@@ -403,4 +403,11 @@ using StaticLayout5Dim = TileOp::Layout<TileOp::Shape<Std::Int<S>, Std::Int<N>, 
     TileOp::Stride<Std::Int<TileN * TileD * TileH * TileW>, Std::Int<TileD * TileH * TileW>, Std::Int<TileH * TileW>,
         Std::Int<TileW>, Std::Int<1>>,
     TileOp::TileShape<Std::Int<TileS>, Std::Int<TileN>, Std::Int<TileD>, Std::Int<TileH>, Std::Int<TileW>>>;
+
+// used to loop dim of tensor
+#ifdef __DAV_V310
+using LoopVar = uint16_t;
+#else // A2 A3
+using LoopVar = size_t;
+#endif
 #endif // TILEOP_UTILS_LAYOUT_H

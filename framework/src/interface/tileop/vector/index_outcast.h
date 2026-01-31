@@ -32,8 +32,8 @@ TILEOP void TIndexOutcastMode2(T0 dst, T1 src, T2 src1, unsigned b, unsigned s, 
 
     constexpr auto srcNdAligned = srcTileW;
 
-    for (unsigned i = 0; i < b; ++i) {
-        for (unsigned j = 0; j < s; ++j) {
+    for (LoopVar i = 0; i < b; ++i) {
+        for (LoopVar j = 0; j < s; ++j) {
             unsigned targetRow = static_cast<unsigned>(*dstIdx);
             __gm__ DstDtype* curDst = dstBase + targetRow * srcShape4;
 
@@ -102,9 +102,9 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate){
     __gm__ DstDtype* dstBase = reinterpret_cast<__gm__ DstDtype*>(dst.GetAddr());
     dstBase += offset;
 
-    for (int i = 0; i < srcShape1; ++i) {
-        for (int j = 0; j < srcShape2; ++j) {
-            for (auto k = 0; k < src1Shape4; ++k) {
+    for (LoopVar i = 0; i < srcShape1; ++i) {
+        for (LoopVar j = 0; j < srcShape2; ++j) {
+            for (LoopVar k = 0; k < src1Shape4; ++k) {
                 set_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
                 wait_flag(PIPE_MTE3, PIPE_S, EVENT_ID7);
                 set_flag(PIPE_MTE2, PIPE_S, EVENT_ID7);

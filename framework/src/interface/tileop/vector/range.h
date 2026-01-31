@@ -26,7 +26,7 @@
  	 TILEOP inline void TRangePropagate(__ubuf__ T* base, int32_t loopN, int32_t tailSize, T offset) {
  	     if (loopN > 0) {
  	         using VecTile = pto::Tile<pto::TileType::Vec, T, 1, Unit, pto::BLayout::RowMajor, -1, -1>;
- 	         for (int32_t i = 0; i < loopN; ++i) {
+ 	         for (LoopVar i = 0; i < loopN; ++i) {
  	             VecTile src(1, Unit), dst(1, Unit);
  	             pto::TASSIGN(src, reinterpret_cast<uint64_t>(base + i * Unit));
  	             pto::TASSIGN(dst, reinterpret_cast<uint64_t>(base + (i + 1) * Unit));
