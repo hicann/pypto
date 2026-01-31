@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 #include "interface/utils/file_utils.h"
 #include "machine/platform/platform_manager.h"
+#include "tilefwk/platform.h"
 
 using namespace npu::tile_fwk;
 
@@ -102,4 +103,20 @@ TEST_F(PlatformTest, TestPlatfromCase1) {
     EXPECT_EQ(aicoreDtypeVec.size(), 8);
 
     PlatformManager::Instance().Finalize();
+}
+
+TEST_F(PlatformTest, TestPlatformA5Stub) {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    Platform::Instance().GetDie().SetMemoryPath({});
+    std::vector<MemoryType> path;
+    const int Num2 = 2;
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_L0C, MemoryType::MEM_UB, path);
+    EXPECT_EQ(path.size(), Num2);
+    path.clear();
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_L1, MemoryType::MEM_UB, path);
+    EXPECT_EQ(path.size(), Num2);
+    path.clear();
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_UB, MemoryType::MEM_L1, path);
+    EXPECT_EQ(path.size(), Num2);
+    path.clear();
 }
