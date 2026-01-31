@@ -1044,3 +1044,25 @@ TEST_F(TestPadLocalBuffer, axiscombine3) {
     EXPECT_EQ(shape[shape.size()-2], K_1);
     EXPECT_EQ(shape[shape.size()-3], K_1);
 }
+
+// deepseek lightning_indexer_prolog_quant case
+TEST_F(TestPadLocalBuffer, axiscombine4) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 1}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {2, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"t1"}, {"t2"}, "cast", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {2, 1, 1, 1}, MemoryType::MEM_UB, "index-t0"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_RESHAPE, {"t2"}, {"index-t0"}, "reshape", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 1}, MemoryType::MEM_UB, "index-t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 128, 1, 1}, MemoryType::MEM_UB, "index-t2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 128, 1, 1}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_INDEX_OUTCAST, {"index-t0", "index-t1", "index-t2"}, {"t3"}, "index", true), true);
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    auto *rootFuncPtr = graph.GetFunction();
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    // ================== Verify Pass Effect ==================
+    EXPECT_EQ(graph.GetTensor("index-t0")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>({2, 1, 1, 16})));
+    EXPECT_EQ(graph.GetTensor("t2")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>({16, 1})));
+}
