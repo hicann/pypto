@@ -27,7 +27,7 @@ target_compile_options(tile_fwk_intf_pub
             # 告警增强选项
             -Wextra
             -Wundef
-            $<$<BOOL:${BUILD_WITH_CANN}>:-Wunused>
+            -Wunused
             -Wcast-qual
             -Wpointer-arith
             -Wdate-time
@@ -71,12 +71,12 @@ target_compile_options(tile_fwk_intf_pub
             -fno-common
             -fno-strict-aliasing
             # 放在最后
-            $<$<CONFIG:Release>:-Wno-return-type>
-            $<$<CONFIG:Release>:-Wno-array-bounds>
+            -Wno-return-type
+            -Wno-array-bounds
             $<$<CXX_COMPILER_ID:GNU>:-Wno-maybe-uninitialized>
             $<$<CXX_COMPILER_ID:GNU>:-Wno-unused-but-set-variable>
-            $<$<CONFIG:Release>:-Wno-unused-variable>
-            $<$<CONFIG:Release>:-Wno-unused-parameter>
+            -Wno-unused-variable
+            -Wno-unused-parameter
             -Wno-unused-result
             # Clang
             $<$<CXX_COMPILER_ID:Clang>:-Wno-mismatched-tags>
