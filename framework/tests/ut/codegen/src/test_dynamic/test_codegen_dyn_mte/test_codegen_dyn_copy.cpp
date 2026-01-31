@@ -502,6 +502,7 @@ std::string TestCopyL1Body(Opcode opcode, MemoryType inputType, MemoryType outpu
             std::make_shared<CopyOpAttribute>(MEM_L0C, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
         copyAttr->SetToDynValidShape(OpImmediate::Specified(shape));
+        copyAttr->SetFromOffset(OpImmediate::Specified({0, 0}));
     }
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();

@@ -389,18 +389,23 @@ std::string CodeGenOpCloudNPU::GenIndexOutCastOp() const {
 }
 
 std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const {
-    std::vector<int64_t> dstOffset = this->offset[ID0];
-    std::string coordCp = WrapParamByParentheses(dstOffset);
-    // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
-    std::string coord = PrintCoord(rawShape[ID0].size(), coordCp);
-    bool vquantFlag = false;
-    GetAttr(OpAttributeKey::quantFlag, vquantFlag);
+    auto l1Offset = offsetFromAttr[ID0];
+    std::vector<std::string> dstOffset;
+    for (auto tmpOffset : l1Offset) {
+        dstOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
+    }
+    auto l0cOffset = offsetFromAttr[ID1];
+    std::vector<std::string> srcOffset;
+    for (auto tmpOffset : l0cOffset) {
+        srcOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
+    }
+    std::string coordCpDst = WrapParamByParentheses(dstOffset);
+    std::string coordDst = PrintCoord(rawShape[ID0].size(), coordCpDst);
+    std::string coordCpSrc = WrapParamByParentheses(srcOffset);
+    std::string coordSrc = PrintCoord(rawShape[ID1].size(), coordCpSrc);
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string src1Tensor = srcTensor;
-    if (vquantFlag) {
-        src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
-    }
     int64_t isAcc = 0;
     int64_t reluMode = 0;
 
@@ -409,10 +414,14 @@ std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const {
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
     std::string storeConfig = PrintParams({"<", ">"}, storeConfigList, ", ");
     npu::tile_fwk::Element scaleValue = npu::tile_fwk::Element(DataType::DT_UINT64, 0);
-    GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
-    std::vector<std::string> tileOpParamList = {
-        dstTensor, srcTensor, src1Tensor, coord, std::to_string(scaleValue.GetUnsignedData())};
 
+    GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
+    if ((!scaleValue.GetUnsignedData()) &&
+        ((operandDtype[ID1] == DT_INT32) && (operandDtype[ID0] == DT_FP16))) {
+        src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+    }
+    std::vector<std::string> tileOpParamList = {
+        dstTensor, srcTensor, src1Tensor, coordDst, coordSrc, std::to_string(scaleValue.GetUnsignedData())};
     std::ostringstream oss;
     oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");

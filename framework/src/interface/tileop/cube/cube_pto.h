@@ -205,49 +205,101 @@ TILEOP void TExtract(T &dst, U &src, const Coord &coord) {
     pto::TEXTRACT(l1Tile, UBTile);
 }
 
+template <typename V>
+INLINE auto CreateScaleTileData(V &fixbuf) {
+    constexpr int64_t shapeSize = Std::tuple_size<typename V::Shape>::value;
+    constexpr int64_t scaleTileH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename V::TileShape>::type::value;
+    constexpr int64_t scaleTileW = Std::tuple_element<shapeSize - 1, typename V::TileShape>::type::value;
+    int64_t scaleShape0 = GetShape<0>(fixbuf);
+    int64_t scaleShape1 = GetShape<1>(fixbuf);
+    using scaleTileData =
+        pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor, -1, -1>;
+    return scaleTileData(scaleShape0, scaleShape1);
+}
+
+template <typename config, typename l1Data, typename l0cData, typename V>
+TILEOP void TExtractL0CToL1(
+    l1Data &dstL1, l0cData &srcL0C, V &fixbuf, uint16_t l0cOffset0, uint16_t l0cOffset1, uint64_t scaleValue = 0) {
+    if constexpr (std::is_same<typename l0cData::DType, int32_t>::value &&
+                  std::is_same<typename l1Data::DType, half>::value) {
+        if (scaleValue != 0) {
+            constexpr pto::ReluPreMode relu_mode =
+                (config::kReluMode == 0) ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu;
+            pto::TEXTRACT<l1Data, l0cData, relu_mode>(dstL1, srcL0C, scaleValue, l0cOffset0, l0cOffset1);
+        } else {
+            auto scaleData = CreateScaleTileData(fixbuf);
+            pto::TASSIGN(scaleData, (uint64_t)fixbuf.GetAddr());
+            pto::TEXTRACT_FP<l1Data, l0cData, decltype(scaleData),
+                config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
+                dstL1, srcL0C, scaleData, l0cOffset0, l0cOffset1);
+        }
+    } else {
+        pto::TEXTRACT<l1Data, l0cData,
+            config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
+            dstL1, srcL0C, l0cOffset0, l0cOffset1);
+    }
+}
+
+template <typename config, typename l1Data, typename l0cData, typename V>
+TILEOP void TInsertL0CToL1(
+    l1Data &dstL1, l0cData &srcL0C, V &fixbuf, uint16_t l1Offset0, uint16_t l1Offset1, uint64_t scaleValue = 0) {
+    if constexpr (std::is_same<typename l0cData::DType, int32_t>::value &&
+                  std::is_same<typename l1Data::DType, half>::value) {
+        if (scaleValue != 0) {
+            constexpr pto::ReluPreMode relu_mode =
+                (config::kReluMode == 0) ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu;
+            pto::TINSERT<l1Data, l0cData, relu_mode>(dstL1, srcL0C, scaleValue, l1Offset0, l1Offset1);
+        } else {
+            auto scaleData = CreateScaleTileData(fixbuf);
+            pto::TASSIGN(scaleData, (uint64_t)fixbuf.GetAddr());
+            pto::TINSERT_FP<l1Data, l0cData, decltype(scaleData),
+                config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
+                dstL1, srcL0C, scaleData, l1Offset0, l1Offset1);
+        }
+    } else {
+        pto::TINSERT<l1Data, l0cData, config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(
+            dstL1, srcL0C, l1Offset0, l1Offset1);
+    }
+}
+
 // Copy data from L0C to L1 with quantization ability
 template <typename config, typename Coord, typename T, typename U, typename V>
-TILEOP void TExtract(T &dst, U &src, V &fixbuf, const Coord &coord, uint64_t scaleValue = 0) {
+TILEOP void TExtract(T &dst, U &src, V &fixbuf, const Coord &l1Coord, const Coord &l0cCoord, uint64_t scaleValue = 0) {
     constexpr int64_t shapeSize = Std::tuple_size<typename T::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     static_assert(U::FORMAT == Hardware::L0C && T::FORMAT == Hardware::L1);
-    int64_t offset0 = coord.GetValue();
-    int64_t offset1 = static_cast<const Std::tuple<size_t> &>(coord).GetValue();
+
+    uint16_t l1Offset0 = l1Coord.GetValue();
+    uint16_t l1Offset1 = static_cast<const Std::tuple<size_t> &>(l1Coord).GetValue();
+    uint16_t l0cOffset0 = l0cCoord.GetValue();
+    uint16_t l0cOffset1 = static_cast<const Std::tuple<size_t> &>(l0cCoord).GetValue();
+
     constexpr int64_t c0Size = BLOCK_ALIGN_BYTE / sizeof(typename T::Type);
     int64_t dstShape0 = GetShape<0>(dst);
     int64_t dstShape1 = GetShape<1>(dst);
     int64_t srcShape0 = GetShape<0>(src);
     int64_t srcShape1 = GetShape<1>(src);
 
-    constexpr int64_t tileH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename U::TileShape>::type::value;
-    constexpr int64_t tileW = Std::tuple_element<shapeSize - 1, typename U::TileShape>::type::value;
+    constexpr int64_t tileL1H = Std::tuple_element<shapeSize - SHAPE_DIM2, typename T::TileShape>::type::value;
+    constexpr int64_t tileL1W = Std::tuple_element<shapeSize - 1, typename T::TileShape>::type::value;
+    constexpr int64_t tileL0CH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename U::TileShape>::type::value;
+    constexpr int64_t tileL0CW = Std::tuple_element<shapeSize - 1, typename U::TileShape>::type::value;
 
-    int64_t l0cOffset = CalNZOffset(srcShape0, srcShape1, offset0, offset1, c0Size);
-    using l1TileData = pto::Tile<pto::TileType::Mat, typename T::Type, tileH, tileW,
+    using l1TileData = pto::Tile<pto::TileType::Mat, typename T::Type, tileL1H, tileL1W,
         config::kMode == CopyOutMode::NZ2ND ? pto::BLayout::RowMajor : pto::BLayout::ColMajor, -1, -1,
         config::kMode == CopyOutMode::NZ2ND ? pto::SLayout::NoneBox : pto::SLayout::RowMajor>;
-    using l0cTileData = pto::Tile<pto::TileType::Acc, typename U::Type, tileH, tileW, pto::BLayout::ColMajor, -1, -1,
-        pto::SLayout::RowMajor>;
-    l0cTileData srcL0C(srcShape0, srcShape1);
+    using l0cTileData = pto::Tile<pto::TileType::Acc, typename U::Type, tileL0CH, tileL0CW, pto::BLayout::ColMajor, -1,
+        -1, pto::SLayout::RowMajor>;
+
     l1TileData dstL1(dstShape0, dstShape1);
-    pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr() + l0cOffset);
+    l0cTileData srcL0C(srcShape0, srcShape1);
+    pto::TASSIGN(srcL0C, (uint64_t)src.GetAddr());
     pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
-    if constexpr (std::is_same<typename U::Type, int32_t>::value && std::is_same<typename T::Type, half>::value) {
-        if (scaleValue != 0) {
-            pto::TMOV(dstL1, srcL0C, scaleValue);
-        } else {
-            constexpr int64_t scaleTileH =
-                Std::tuple_element<shapeSize - SHAPE_DIM2, typename V::TileShape>::type::value;
-            constexpr int64_t scaleTileW = Std::tuple_element<shapeSize - 1, typename V::TileShape>::type::value;
-            int64_t scaleShape0 = GetShape<0>(fixbuf);
-            int64_t scaleShape1 = GetShape<1>(fixbuf);
-            using scaleTileData =
-                pto::Tile<pto::TileType::Scaling, uint64_t, scaleTileH, scaleTileW, pto::BLayout::RowMajor, -1, -1>;
-            scaleTileData scaleData(scaleShape0, scaleShape1);
-            pto::TMOV_FP(dstL1, srcL0C, scaleData);
-        }
+
+    if (dstShape0 < srcShape0 || dstShape1 < srcShape1) {
+        TExtractL0CToL1<config, l1TileData, l0cTileData, V>(dstL1, srcL0C, fixbuf, l0cOffset0, l0cOffset1, scaleValue);
     } else {
-        pto::TMOV(dstL1, srcL0C);
+        TInsertL0CToL1<config, l1TileData, l0cTileData, V>(dstL1, srcL0C, fixbuf, l1Offset0, l1Offset1, scaleValue);
     }
     return;
 }
@@ -454,8 +506,8 @@ INLINE void TStoreExecute(globalData dstGlobal, tileData srcL0C, V &fixbuf, uint
                 dstGlobal, srcL0C, fpData);
         }
     } else {
-        pto::TSTORE<tileData, globalData, config::kIsAcc ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone,
-            config::kReluMode == 0 ? pto::ReluPreMode::NoRelu : pto::ReluPreMode::NormalRelu>(dstGlobal, srcL0C);
+        pto::TSTORE<tileData, globalData, config::kIsAcc ? pto::AtomicType::AtomicAdd : pto::AtomicType::AtomicNone>(
+            dstGlobal, srcL0C);
     }
 }
 
