@@ -695,6 +695,9 @@ struct FunctionInterpreter {
         ScalarImmediateType begin = EvaluateSymbolicScalar(loop->Begin());
         ScalarImmediateType end = EvaluateSymbolicScalar(loop->End());
         ScalarImmediateType step = EvaluateSymbolicScalar(loop->Step());
+        if (begin == end) {
+            ALOG_EVENT("Function ", func->GetMagicName(), " skip execute due to idx range = 0");
+        }
         for (ScalarImmediateType idx = begin; idx < end; idx += step) {
             UpdateSymbolDict(loop->IterSymbolName(), idx);
             loopSymbolDict[loop->IterSymbolName()] = idx;
