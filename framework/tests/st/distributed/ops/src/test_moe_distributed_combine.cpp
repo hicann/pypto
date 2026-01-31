@@ -76,7 +76,7 @@ void TestMoeDistributedCombine(OpTestParam& testParam)
 
     int64_t outEleNum = outShape[0] * outShape[1];
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/out_rank_", outEleNum, outPtr, testParam, 0));
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/out_rank_", outEleNum, outPtr, testParam));
 }
 
 template void TestMoeDistributedCombine<int32_t>(OpTestParam& testParam);
