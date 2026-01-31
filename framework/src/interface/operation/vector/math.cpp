@@ -550,6 +550,100 @@ void CumSumOperationTileFunc(Function &function, const TileShape &tileShape,
     TiledCumSum(function, tileShape, {iOperand[0], oOperand[0], axis, flag});
 }
 
+struct TriULTileInfoPara {
+    TileInfo inputTileInfo;
+    TileInfo dstTileInfo;
+};
+
+struct TriULPara {
+    const LogicalTensorPtr &input;
+    const LogicalTensorPtr &dstTensor;
+    const SymbolicScalar diagonal;
+    const bool isUpper;
+};
+
+void InnerTiledTriUL(size_t cur, Function &function, const TileShape &tileShape, const TriULPara &triULPara,
+    TriULTileInfoPara &triULTileInfo) {
+    const LogicalTensorPtr &input = triULPara.input;
+    const LogicalTensorPtr &dstTensor = triULPara.dstTensor;
+    SymbolicScalar realDiagonal = triULPara.diagonal;
+    const bool isUpper = triULPara.isUpper;
+    auto &vecTile = tileShape.GetVecTile();
+
+    if (cur == dstTensor->GetShape().size()) {
+        auto dstTile = dstTensor->View(function, triULTileInfo.dstTileInfo.shape, triULTileInfo.dstTileInfo.offset);
+        auto inputTile = input->View(function, triULTileInfo.inputTileInfo.shape, triULTileInfo.inputTileInfo.offset);
+        auto &op = function.AddOperation(Opcode::OP_TRIUL, {inputTile}, {dstTile});
+        realDiagonal = realDiagonal+dstTile->GetOffset()[cur - 2]-dstTile->GetOffset()[cur - 1];
+        op.SetAttribute(OpAttributeKey::dynScalar, realDiagonal);
+        op.SetAttribute(OpAttributeKey::isUpper, isUpper);
+        return;
+    }
+    int64_t tmpTile = vecTile[cur];
+
+    for (int i = 0; i < input->GetShape()[cur]; i += tmpTile) {
+        triULTileInfo.dstTileInfo.offset[cur] = i;
+        triULTileInfo.dstTileInfo.shape[cur] = std::min(dstTensor->GetShape()[cur] - i, tmpTile);
+        triULTileInfo.inputTileInfo.offset[cur] = i;
+        triULTileInfo.inputTileInfo.shape[cur] = std::min(input->GetShape()[cur] - i, tmpTile);
+        InnerTiledTriUL(cur + 1, function, tileShape, triULPara, triULTileInfo);
+    }
+}
+
+void TiledTriUL(Function &function, const TileShape &tileShape, const TriULPara &triULPara) {
+    TriULTileInfoPara triULTileInfo{
+        TileInfo(triULPara.input->GetShape().size(), triULPara.input->GetOffset().size()),
+        TileInfo(triULPara.dstTensor->GetShape().size(), triULPara.dstTensor->GetOffset().size())};
+
+    InnerTiledTriUL(0, function, tileShape, triULPara, triULTileInfo);
+}
+
+void TensorTriUL(Function &function, const TriULPara &triULPara) {
+    auto shapeSize = triULPara.input->GetShape().size();
+    auto dataType = triULPara.input->Datatype();
+    ASSERT(SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM5) << "This operation's input only support 2-5 dims";
+    std::unordered_set<DataType> TRIUL_SUPPORT_DATATYPES = {DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32,
+        DataType::DT_INT16, DataType::DT_INT8, DataType::DT_BF16};
+    ASSERT(TRIUL_SUPPORT_DATATYPES.count(dataType))<< "This datatype is not supported";
+
+    if (triULPara.input->Datatype() == DT_INT8) {
+        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.input->GetShape());
+        auto &castinputOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {triULPara.input}, {inputConverted});
+        castinputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.dstTensor->GetShape());
+        auto &op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {inputConverted}, {dstConverted});
+        op.SetAttribute(OpAttributeKey::dynScalar, triULPara.diagonal);
+        op.SetAttribute(OpAttributeKey::isUpper, triULPara.isUpper);
+        auto &castDstOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {dstConverted}, {triULPara.dstTensor});
+        castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
+    } else {
+        auto &op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {triULPara.input}, {triULPara.dstTensor});
+        op.SetAttribute(OpAttributeKey::dynScalar, triULPara.diagonal);
+        op.SetAttribute(OpAttributeKey::isUpper, triULPara.isUpper);
+    }
+}
+
+Tensor TriU(const Tensor &input, const SymbolicScalar &diagonal) {
+    DECLARE_TRACER();
+    Tensor result(input.GetDataType(), input.GetShape());
+    CALL(TriUL, *Program::GetInstance().GetCurrentFunction(), {input.GetStorage(), result.GetStorage(), diagonal, true});
+    return result;
+}
+
+Tensor TriL(const Tensor &input, const SymbolicScalar &diagonal) {
+    DECLARE_TRACER();
+    Tensor result(input.GetDataType(), input.GetShape());
+    CALL(TriUL, *Program::GetInstance().GetCurrentFunction(), {input.GetStorage(), result.GetStorage(), diagonal, false});
+    return result;
+}
+
+void TriULOperationTileFunc(Function &function, const TileShape &tileShape,
+    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand, const Operation &op) {
+    SymbolicScalar diagonal = op.GetSymbolicScalarAttribute(OpAttributeKey::dynScalar);
+    bool isUpper = op.GetBoolAttribute(OpAttributeKey::isUpper);
+    TiledTriUL(function, tileShape, {iOperand[0], oOperand[0], diagonal, isUpper});
+}
+
 // beginregin: Clip
 
 Tensor Clip(const Tensor &self, const Element &min, const Element &max) {
@@ -685,4 +779,5 @@ REGISTER_OPERATION_TILED_FUNC(OP_ONEHOT, Opcode::OP_ONEHOT, OneHotOperationTileF
 REGISTER_OPERATION_TILED_FUNC(OP_ROUND, Opcode::OP_ROUND, RoundOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_LOGICALAND, Opcode::OP_LOGICALAND, LogicAndOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_CUM_SUM, Opcode::OP_CUM_SUM, CumSumOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_TRIUL, Opcode::OP_TRIUL, TriULOperationTileFunc);
 } // namespace npu::tile_fwk

@@ -420,6 +420,10 @@ void OpcodeManager::RegisterVector() {
     RegisterInfo(Opcode::OP_CUM_SUM, OpCoreType::AIV, "CUM_SUM", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TcumSum", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "flag", OpAttributeKey::excludeBufferReuse});
+    RegisterInfo(Opcode::OP_TRIUL, OpCoreType::AIV, "TRIUL", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TTriUL", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OpAttributeKey::dynScalar, OpAttributeKey::isUpper, OpAttributeKey::excludeBufferReuse},
+        TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_LOGICALAND, OpCoreType::AIV, "LOGICALAND", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TlogicalAnd", PIPE_V, PIPE_V, CoreType::AIV},
         OpCalcType::ELMWISE, {}, TileShapeVerifier::Verify);
@@ -796,6 +800,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {                Opcode::OP_ADD,           "TAdd"},
     {            Opcode::OP_CUM_SUM,        "TCumSum"},
     {                Opcode::OP_SUB,           "TSub"},
+    {              Opcode::OP_TRIUL,         "TTriUL"},
     {                Opcode::OP_DIV,           "TDiv"},
     {                Opcode::OP_MOD,           "TMod"},
     {                Opcode::OP_MUL,           "TMul"},

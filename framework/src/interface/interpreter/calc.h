@@ -243,6 +243,12 @@ inline void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logica
     LogicalTensorDataPtr indices, int axis, const Element &alpha = Element(DT_FP32, 1.0)) {
     GetCalcOps()->IndexAdd(out, self, src, indices, axis, alpha);
 }
+inline void TriU(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal) {
+    GetCalcOps()->TriU(out, in, diagonal);
+}
+inline void TriL(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal) {
+    GetCalcOps()->TriL(out, in, diagonal);
+}
 inline void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
     GetCalcOps()->CumSum(out, in, axis);
 }

@@ -965,6 +965,31 @@ std::string CodeGenOpCloudNPU::GenCumSumOp() const {
     }
 }
 
+std::string CodeGenOpCloudNPU::PrintTriULTileTensor(const std::string &diagonal, bool isUpper) const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::vector<std::string> paramList = {dstTensor, srcTensor, diagonal};
+
+    std::ostringstream oss;
+    oss << tileOpName << "<" << isUpper << ">" << WrapParamByParentheses(paramList) << ";\n";
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenTriULOp() const {
+    ASSERT(opAttrs.count(OpAttributeKey::dynScalar)) << "cannot get diagonal attr";
+    ASSERT(opAttrs.count(OpAttributeKey::isUpper)) << "cannot get isUpper attr";
+    auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
+    ASSERT((scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
+        << npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny).IsValid() << "diagonal must have symbolic value.";
+    auto scalarExpr = npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny);
+    
+    std::string diagonal = "(int)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + ")";
+    bool isUpper = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OpAttributeKey::isUpper));
+
+    ASSERT(isSupportLayout) << "TriU or TriL only support TileTensor mode";
+    return PrintTriULTileTensor(diagonal, isUpper);
+}
+
 std::string CodeGenOpCloudNPU::PrintScatterElementSOpStatic(const PrintScatterElemParam &param) const {
     // Static only support 2Dim
     int dstRank = shape[ToUnderlying(MISOIdx::DST_IDX)].size();

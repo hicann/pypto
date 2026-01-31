@@ -15,6 +15,7 @@ from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
+from ..symbolic_scalar import SymbolicScalar, SymInt
 
 
 @op_wrapper
@@ -913,7 +914,6 @@ def cumsum(
     Examples
     ---------
     x = pypto.tensor([2, 3], pypto.data_type.DT_INT32) 
-    y = pypto.tensor([2, 3], pypto.data_type.DT_INT32) 
     dim = 0
     out = pypto.cumsum(x, dim)
     Input  x : [[0 1 2],
@@ -1048,3 +1048,69 @@ def bitwise_not(self: Tensor) -> Tensor:
 
     """
     return pypto_impl.BitwiseNot(self)
+
+
+@op_wrapper
+def triu(
+    input: Tensor,
+    diagonal: SymInt
+) -> Tensor:
+    """
+    Return the upper traingular part of a matrix or a banch of matrices `input`, the other elements of 
+    the result are set to 0.
+    Parameters
+    ---------
+    input: Tensor
+        The tensor to be calculated.
+    diagonal : SymInt
+        The diagonal to consider.
+    out: Tensor
+        The tensor after calculation.
+    Examples
+    ---------
+    x = pypto.tensor([3, 3], pypto.data_type.DT_INT32) 
+    diagonal = 0
+    out = pypto.triu(x, diagonal)
+    Input  x : [[1 2 3],
+                [4 5 6],
+                [7 8 9]]
+    Output out:[[1 2 3],
+                [0 5 6],
+                [0 0 9]]
+    """
+    if isinstance(diagonal, int):
+        diagonal = SymbolicScalar(diagonal).base()
+    return pypto_impl.TriU(input, diagonal)
+
+
+@op_wrapper
+def tril(
+    input: Tensor,
+    diagonal: SymInt
+) -> Tensor:
+    """
+    Return the lower traingular part of a matrix or a banch of matrices `input`, the other elements of
+    the result are set to 0.
+    Parameters
+    ---------
+    input: Tensor
+        The tensor to be calculated.
+    diagonal : SymInt
+        The diagonal to consider.
+    out: Tensor
+        The tensor after calculation.
+    Examples
+    ---------
+    x = pypto.tensor([3, 3], pypto.data_type.DT_INT32) 
+    diagonal = 0
+    out = pypto.tril(x, diagonal)
+    Input  x : [[1 2 3],
+                [4 5 6],
+                [7 8 9]]
+    Output out:[[1 0 0],
+                [4 5 0],
+                [7 8 9]]
+    """
+    if isinstance(diagonal, int):
+        diagonal = SymbolicScalar(diagonal).base()
+    return pypto_impl.TriL(input, diagonal)

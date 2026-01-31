@@ -1716,6 +1716,40 @@ def gen_cumsum_op_golden(case_name: str, output: Path, case_index: int = None) -
     return gen_op_golden("CumSum", cumsum_golden_func, output, case_index)
 
 
+def triu_golden_func(inputs: list, config: dict):
+    params = config.get("params")
+    diagonal = params["diagonal"]
+    input_tensor = from_numpy(inputs[0])
+    res = torch.triu(input_tensor, diagonal)
+    return [to_numpy(res)]
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestTriU/TriUOperationTest.TestTriU",
+    ]
+)
+def gen_triu_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("TriU", triu_golden_func, output, case_index)
+
+
+def tril_golden_func(inputs: list, config: dict):
+    params = config.get("params")
+    diagonal = params["diagonal"]
+    input_tensor = from_numpy(inputs[0])
+    res = torch.tril(input_tensor, diagonal)
+    return [to_numpy(res)]
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestTriL/TriLOperationTest.TestTriL",
+    ]
+)
+def gen_tril_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("TriL", tril_golden_func, output, case_index)
+
+
 def from_numpy(array: np.array):
     is_bfloat16 = array.dtype == bfloat16
     if is_bfloat16:

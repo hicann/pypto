@@ -857,6 +857,20 @@ void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensor
     torch::index_add_out(output, inputSelf, axis, inputIndices, inputSrc, From(alpha));
 }
 
+void TriU(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal) {
+    torch::Tensor output = From(out);
+    torch::Tensor input = From(in);
+
+    torch::triu_out(output, input, diagonal);
+}
+
+void TriL(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal) {
+    torch::Tensor output = From(out);
+    torch::Tensor input = From(in);
+
+    torch::tril_out(output, input, diagonal);
+}
+
 void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
     torch::Tensor output = From(out);
     torch::Tensor input = From(in);
@@ -1482,6 +1496,8 @@ static struct CalcOps calcOps = {
     .Expand = Expand,
     .GatherElements = GatherElements,
     .IndexAdd = IndexAdd,
+    .TriU = TriU,
+    .TriL = TriL,
     .CumSum = CumSum,
     .IndexPut = IndexPut,
     .Reshape = Reshape,

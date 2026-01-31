@@ -321,6 +321,14 @@ void bind_operation(py::module &m) {
         "Tensor concat.");
     m.def("cumsum", [](const Tensor &input, int axis) { return npu::tile_fwk::CumSum(input, axis); }, "Tensor cumsum.");
     m.def(
+        "TriU",
+        [](const Tensor &input, const SymbolicScalar &diagonal) { return npu::tile_fwk::TriU(input, diagonal); },
+        "Tensor triu.");
+    m.def(
+        "TriL",
+        [](const Tensor &input, const SymbolicScalar &diagonal) { return npu::tile_fwk::TriL(input, diagonal); },
+        "Tensor tril.");
+    m.def(
         "Pad",
         [](const Tensor &old, const std::vector<int64_t> &newShape) { return npu::tile_fwk::Pad(old, newShape); },
         "Tensor pad.");

@@ -203,6 +203,9 @@ stest:
       - TestMinimum/MinimumOperationTest.TestMinimum/19
       - TestMaximum/MaximumOperationTest.TestMaximum/19
       - TestClip/ClipOperationTest.TestClip/29
+      - TestTriU/TriUOperationTest.TestTriU/8
+      - TestTriU/TriUOperationTest.TestTriU/10
+      - TestTriL/TriLOperationTest.TestTriL/1
       - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/20
       - TestIndexAdd/IndexAddOperationTest.TestIndexAdd/21
       - TestLogicalAnd/LogicalAndOperationTest.TestLogicalAnd/0

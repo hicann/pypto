@@ -708,6 +708,35 @@ TEST_F(DynamicOpsTest, Round) {
     }
 }
 
+TEST_F(DynamicOpsTest, TriU) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 8;
+    int64_t s = 8;
+    int64_t diagonal = 0;
+    Tensor input(DT_INT8, {b, s}, "input");
+    Tensor out(DT_INT8, {b, s}, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<int8_t>(input, 1),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<int8_t>(out, 2),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<int8_t>(out, 2),
+    });
+
+    FUNCTION("main", {input}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(input, {b, s}, {0, 0});
+            out = TriU(t0, diagonal);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, ScatterElement) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
