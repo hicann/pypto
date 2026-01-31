@@ -1066,3 +1066,45 @@ TEST_F(TestPadLocalBuffer, axiscombine4) {
     EXPECT_EQ(graph.GetTensor("index-t0")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>({2, 1, 1, 16})));
     EXPECT_EQ(graph.GetTensor("t2")->GetRawTensor()->GetRawShape(), (std::vector<int64_t>({16, 1})));
 }
+
+TEST_F(TestPadLocalBuffer, L1toBt1) {
+    ComputationalGraphBuilder graph;
+    // bias
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 15}, MemoryType::MEM_DEVICE_DDR, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1, 15}, MemoryType::MEM_L1, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "COPY1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 15}, MemoryType::MEM_BT, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_BT, {"t2"}, {"t3"}, "L1TOBT", true), true);
+    // a
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 32}, MemoryType::MEM_DEVICE_DDR, "t1a"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 32}, MemoryType::MEM_L1, "t2a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1a"}, {"t2a"}, "COPYA", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {1, 32}, MemoryType::MEM_L0A, "t3a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_L0A, {"t2a"}, {"t3a"}, "L1TOL0A", true), true);
+    // b
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 15}, MemoryType::MEM_DEVICE_DDR, "t1b"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 15}, MemoryType::MEM_L1, "t2b"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1b"}, {"t2b"}, "COPYB", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {1, 15}, MemoryType::MEM_L0B, "t3b"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_L0_BT, {"t2b"}, {"t3b"}, "L1TOL0B", true), true);
+    // fix
+    EXPECT_EQ(graph.AddTensor(DataType::DT_UINT64, {1, 15}, MemoryType::MEM_DEVICE_DDR, "t1f"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_UINT64, {1, 15}, MemoryType::MEM_L1, "t2f"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1f"}, {"t2f"}, "COPYFIX", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_UINT64, {1, 15}, MemoryType::MEM_FIX_QUANT_PRE, "t3f"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_FIX_QUANT_PRE, {"t2f"}, {"t3f"}, "L1TOFIX", true), true);
+    // amulb
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {32, 15}, MemoryType::MEM_L0C, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_A_MUL_B, {"t3a", "t3b", "t3f", "t3"}, {"out"}, "AMULB", true), true);
+
+    auto *currFunctionPtr = graph.GetFunction();
+    PadLocalBuffer padLocalBufferTest;
+    padLocalBufferTest.RunOnFunction(*currFunctionPtr);
+    std::vector<int64_t> expectShape{1, 32};
+    auto t2 = graph.GetTensor("t2");
+    EXPECT_EQ(t2->GetShape(), expectShape);
+    EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
+    auto t3 = graph.GetTensor("t3");
+    EXPECT_EQ(t3->GetShape(), expectShape);
+    EXPECT_EQ(t3->tensor->GetRawShape(), expectShape);
+}

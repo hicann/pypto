@@ -33,6 +33,7 @@ constexpr size_t LOW_INDEX = 1;
 constexpr uint32_t LEFT_SHIFT32 = 32;
 constexpr int64_t CUBE_PAD_VALUE = 16;
 constexpr int64_t CUBE_PAD_INT8_VALUE = 32;
+constexpr int64_t BT_PAD_BASE = 64;
 const std::vector<bool> AXIS_COMBINED = {true};
 const std::vector<bool> BROADCAST_AXIS_COMBINED = {true, true};
 const int64_t BRCB_SECOND_LAST_BASE = 8;
@@ -77,6 +78,28 @@ bool PadLocalBuffer::IsInputInt8(const Operation &op, const LogicalTensorPtr &in
     return false;
 }
 
+void PadMatmulL1ConvertScene(Operation &op, LogicalTensorPtr &in, size_t lowIndex, bool padRawShape) {
+    const auto &producers = in->GetProducers();
+    auto bytes = BytesOf(in->Datatype());
+    auto &padShape = padRawShape ? in->tensor->rawshape : in->shape;
+    auto &padShapeBase = padRawShape ? in->tensor->oriRawshape : in->shape;
+    if ((*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_BT) { // Opcode::OP_L1_TO_BT input 和 output shape 一致
+        auto preInput = (*producers.begin())->GetIOperands().front();
+        padShape = padRawShape ? preInput->tensor->rawshape : preInput->shape;
+        return;
+    }
+    if (in->Datatype() != DataType::DT_UINT64) { // Opcode::OP_L1_TO_BT
+        if (bytes == 0 || BT_PAD_BASE % bytes != 0) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "Matmul Op %d %s input %d type is not valid.", op.opmagic,
+                op.GetOpcodeStr().c_str(), in->magic);
+            return;
+        }
+        padShape[lowIndex] = Pad(padShapeBase[lowIndex], BT_PAD_BASE / bytes);
+    } else { // Opcode::OP_L1_TO_FIX_QUANT_PRE
+        padShape[lowIndex] = Pad(padShapeBase[lowIndex], CUBE_PAD_VALUE);
+    }
+}
+
 void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
     if (in == nullptr || in->tensor == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "logical tensor pointer is null.");
@@ -86,7 +109,6 @@ void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Matmul Op %d %s input %d shape size is less than 2; Please check the input size. %s", op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
         return;
     }
-
     auto highIndex = in->shape.size() - 2; // matmul高轴
     auto lowIndex = in->shape.size() - 1;  // matmul低轴
     const auto &producers = in->GetProducers();
@@ -118,7 +140,7 @@ void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
         L1_TO_BT --> bias_BT (shape:[1, 16]) --> A_MUL_B --> output(shape:[32, 16])
         L1_TO_L0B --> L0B (shape:[400, 16])  -->   /
         */
-        in->shape[lowIndex] = Pad(in->shape[lowIndex], CUBE_PAD_VALUE);
+        PadMatmulL1ConvertScene(op, in, lowIndex, false);
     } else if (isInt8Input) {
         in->shape[highIndex] = Pad(in->shape[highIndex], CUBE_PAD_INT8_VALUE);
         in->shape[lowIndex] = Pad(in->shape[lowIndex], CUBE_PAD_INT8_VALUE);
@@ -126,17 +148,15 @@ void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
         in->shape[highIndex] = Pad(in->shape[highIndex], CUBE_PAD_VALUE);
         in->shape[lowIndex] = Pad(in->shape[lowIndex], CUBE_PAD_VALUE);
     }
-
-    APASS_LOG_DEBUG_F(Elements::Tensor, "####### %d original shape is %s\n", in->magic, IntVecToStr(in->oriShape).c_str());
-    APASS_LOG_DEBUG_F(Elements::Tensor, "####### %d #current shape is %s\n", in->magic, IntVecToStr(in->shape).c_str());
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor %d original shape is %s, current shape is %s.", in->magic,
+        IntVecToStr(in->oriShape).c_str(), IntVecToStr(in->shape).c_str());
     if (in->tensor->rawshape.size() < MATMUL_MIN_SHAPE_SIZE) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Matmul Op %d %s input %d raw shape size is less than 2; Please check the input size.", op.opmagic, op.GetOpcodeStr().c_str(), in->magic);
         return;
     }
     in->tensor->oriRawshape = in->tensor->rawshape;
-
     if (isL1ConvertScene) {
-        in->tensor->rawshape[lowIndex] = Pad(in->tensor->oriRawshape[lowIndex], CUBE_PAD_VALUE);
+        PadMatmulL1ConvertScene(op, in, lowIndex, true);
     } else if (isInt8Input) {
         in->tensor->rawshape[highIndex] = Pad(in->tensor->oriRawshape[highIndex], CUBE_PAD_INT8_VALUE);
         in->tensor->rawshape[lowIndex] = Pad(in->tensor->oriRawshape[lowIndex], CUBE_PAD_INT8_VALUE);
