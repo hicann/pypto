@@ -62,11 +62,6 @@ static void BitwiseOpOperationExeFunc2Dims(
 
         SymbolicScalar firstDim, secondDim;
 
-        bool input0_no_broadcast = (inputs[0].GetShape()[0] != broadcastFlag) && 
-                                   (inputs[0].GetShape()[1] != broadcastFlag);
-        bool input1_no_broadcast = (inputs[1].GetShape()[0] != broadcastFlag) && 
-                                   (inputs[1].GetShape()[1] != broadcastFlag);
-
         firstDim = outputs[0].GetShape()[0];
         secondDim = outputs[0].GetShape()[1];
 
@@ -130,13 +125,6 @@ static void BitwiseOpOperationExeFunc3Dims(
         const int broadcastFlag = 1;
 
         SymbolicScalar firstDim, secondDim, thirdDim;
-
-        bool input0_no_broadcast = (inputs[0].GetShape()[0] != broadcastFlag) &&
-                                   (inputs[0].GetShape()[1] != broadcastFlag) &&
-                                   (inputs[0].GetShape()[2] != broadcastFlag);
-        bool input1_no_broadcast = (inputs[1].GetShape()[0] != broadcastFlag) &&
-                                   (inputs[1].GetShape()[1] != broadcastFlag) &&
-                                   (inputs[1].GetShape()[2] != broadcastFlag);
 
         firstDim = outputs[0].GetShape()[0];
         secondDim = outputs[0].GetShape()[1];
@@ -214,13 +202,6 @@ static void BitwiseOpOperationExeFunc4Dims(
         const int broadcastFlag = 1;
 
         SymbolicScalar firstDim, secondDim, thirdDim, fourthDim;
-
-        bool input0_no_broadcast =
-            (inputs[0].GetShape()[0] != broadcastFlag) && (inputs[0].GetShape()[1] != broadcastFlag) &&
-            (inputs[0].GetShape()[2] != broadcastFlag) && (inputs[0].GetShape()[3] != broadcastFlag);
-        bool input1_no_broadcast = 
-            (inputs[1].GetShape()[0] != broadcastFlag) && (inputs[1].GetShape()[1] != broadcastFlag) &&
-            (inputs[1].GetShape()[2] != broadcastFlag) && (inputs[1].GetShape()[3] != broadcastFlag);
 
         firstDim = outputs[0].GetShape()[0];
         secondDim = outputs[0].GetShape()[1];
