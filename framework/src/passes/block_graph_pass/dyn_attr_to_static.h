@@ -95,7 +95,8 @@ public:
         // 步骤2：更新候选索引组（首次调用初始化，后续调用筛选）
         if (callCount_ == 0) {
             // 首次调用：所有非空索引列表都作为候选组（去重+排序）
-            for (auto& [_, values] : currValIdxs) {
+            for (auto& pair : currValIdxs) {
+                const auto& values = pair.second;
                 if (!values.empty()) {
                     // 索引组排序（保证相同索引组合的一致性，避免重复）
                     std::vector<size_t> vec{values.begin(), values.end()};
@@ -184,7 +185,8 @@ private:
         // 步骤1：查找第一个索引在当前args所在的索引组
         if (candidate.empty()) return false;
         size_t firstIdx = candidate[0];
-        for (const auto& [_, values] : currValIdxs) {
+        for (const auto& pair : currValIdxs) {
+            const auto& values = pair.second;
             if (values.count(firstIdx)) {
                 // 步骤2：校验候选组中的索引在新的索引组中是否全部存在
                 for (size_t idx : candidate) {
@@ -209,7 +211,7 @@ private:
             std::sort(group.begin(), group.end());
         }
         // 步骤2：对索引组列表排序，便于去重
-        std::sort(groups.begin(), groups.end(), 
+        std::sort(groups.begin(), groups.end(),
             [](const std::vector<size_t>& a, const std::vector<size_t>& b) {
                 if (a.size() != b.size()) return a.size() < b.size();
                 for (size_t i = 0; i < a.size(); ++i) {

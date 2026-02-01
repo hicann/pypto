@@ -236,7 +236,7 @@ std::string OperatorEnd(uintptr_t opAddr) {
 }
 
 int64_t BuildCache(uintptr_t opAddr, const std::vector<DeviceTensorData> &inputList,
-        const std::vector<DeviceTensorData> &outputList, bool isCapturing) {
+        const std::vector<DeviceTensorData> &outputList, [[maybe_unused]] bool isCapturing) {
     ExportedOperator *op = reinterpret_cast<ExportedOperator *>(opAddr);
     if (config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE) != 0) {
         DeviceLauncherConfig config;

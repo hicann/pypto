@@ -501,7 +501,8 @@ void AssignMemoryType::ProcesSmallTileToLargeTile(Function &function) {
         if(iOperand->GetMemoryTypeOriginal() == MEM_L0C) {
             bool isToL1 = true;
             auto toBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
-            for (const auto &[_, toBeType] : toBeMap) {
+            for (const auto &pair : toBeMap) {
+                const auto &toBeType = pair.second;
                 if (toBeType != MemoryType::MEM_L1) {
                     isToL1 = false;
                     break;

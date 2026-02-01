@@ -71,13 +71,13 @@ target_compile_options(tile_fwk_intf_pub
             -fno-common
             -fno-strict-aliasing
             # 放在最后
-            -Wno-return-type
-            -Wno-array-bounds
+            -Wreturn-type
+            -Warray-bounds
             $<$<CXX_COMPILER_ID:GNU>:-Wno-maybe-uninitialized>
             $<$<CXX_COMPILER_ID:GNU>:-Wno-unused-but-set-variable>
-            -Wno-unused-variable
-            -Wno-unused-parameter
-            -Wno-unused-result
+            -Wunused-variable
+            -Wunused-parameter
+            -Wunused-result
             # Clang
             $<$<CXX_COMPILER_ID:Clang>:-Wno-mismatched-tags>
             $<$<CXX_COMPILER_ID:Clang>:-Wno-non-pod-varargs>

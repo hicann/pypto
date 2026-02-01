@@ -97,8 +97,7 @@ struct CompareTensorPtr {
     }
 };
 
-std::string DynloopFunctionPathNode::Dump() const
-{
+std::string DynloopFunctionPathNode::Dump() const {
     int indent = 2;
     std::ostringstream oss;
     std::function<void(const DynloopFunctionPathNode *, int)> dump =
@@ -305,13 +304,11 @@ bool Function::IsCube() const {
     return false;
 }
 
-OperationsViewer Function::OperationsAfterOOO()
-{
+OperationsViewer Function::OperationsAfterOOO() {
     return OperationsViewer(operationsAfterOOO_, opPositionAfterOOO_);
 }
 
-void Function::RecordOOOSeq()
-{
+void Function::RecordOOOSeq() {
     operationsAfterOOO_ = operations_;
     opPositionAfterOOO_ = opPosition_;
 }
@@ -818,8 +815,7 @@ void Function::OperationLoopCheck(const std::string &errorMsg) {
     }
 }
 
-bool Function::OperationLoopCheck()
-{
+bool Function::OperationLoopCheck() {
     std::unordered_map<Operation*, int> inLinkNum;
     std::unordered_set<Operation*> visitedOp;
     std::vector<Operation*> visitStack;

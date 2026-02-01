@@ -56,7 +56,7 @@ void ExecuteOpView(ExecuteOperationContext *ctx) {
     auto ret = iop->View(oop->GetShape(), offset);
     calc::Copy(oop, ret);
 }
-REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView); 
+REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView);
 
 void ExecuteOpCopyOut(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);

@@ -247,18 +247,23 @@ std::string LogicalTensorData::ToString(const PrintOptions *options) const {
 }
 
 std::shared_ptr<LogicalTensorData> LogicalTensorData::Load(const std::string &filepath) {
+    std::shared_ptr<LogicalTensorData> dataView = nullptr;
     FILE *fdata = fopen(filepath.c_str(), "rb");
-    LogicalTensorDataHead head;
-    (void)fread(&head, sizeof(head), 1, fdata);
-
-    std::vector<int64_t> shape(head.dimension, 0);
-    for (int i = 0; i < static_cast<int>(head.dimension); i++) {
-        shape[i] = head.shape[i];
+    if (fdata != nullptr) {
+        LogicalTensorDataHead head;
+        if (fread(&head, sizeof(head), 1, fdata) == 1) {
+            std::vector<int64_t> shape(head.dimension, 0);
+            for (int i = 0; i < static_cast<int>(head.dimension); i++) {
+                shape[i] = head.shape[i];
+            }
+            auto data = std::make_shared<RawTensorData>(static_cast<DataType>(head.dataType), shape);
+            if (fread(data->data(), 1, data->size(), fdata) == data->size()) {
+                dataView = std::make_shared<LogicalTensorData>(
+                    data, shape, shape, std::vector<int64_t>(shape.size(), 0));
+            }
+        }
+        fclose(fdata);
     }
-    auto data = std::make_shared<RawTensorData>(static_cast<DataType>(head.dataType), shape);
-    (void)fread(data->data(), 1, data->size(), fdata);
-    auto dataView = std::make_shared<LogicalTensorData>(data, shape, shape, std::vector<int64_t>(shape.size(), 0));
-    fclose(fdata);
     return dataView;
 }
 

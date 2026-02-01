@@ -117,6 +117,9 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1) {
     currFunctionPtr->inCasts_.push_back(inCast2);
     currFunctionPtr->outCasts_.push_back(outCast);
 
+    (void) syncOp;
+    (void) reshape2;
+
     LoopaxesProc loopaxesprocpass;
     EXPECT_EQ(loopaxesprocpass.RunOnFunction(*rootFuncPtr), SUCCESS);
 

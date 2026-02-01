@@ -27,6 +27,7 @@
 #include "interface/utils/serialization.h"
 
 using namespace npu::tile_fwk;
+
 LogicalTensor::LogicalTensor(
     Function &function, DataType t, Shape tshape, TileOpFormat format, std::string tname, NodeType tnodetype)
     : isSubGraphBoundary(false),
@@ -138,35 +139,35 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function &dstFunc, bool crea
 }
 
 Json LogicalTensor::DumpJson(bool dumpRawTensor) const {
-    Json tensorDump;
-    tensorDump[T_FIELD_KIND] = static_cast<int>(Kind::T_KIND_TENSOR);
-    tensorDump["offset"] = offset;
-    tensorDump["shape"] = shape;
-    tensorDump["validshape"] = oriShape;
-    tensorDump["nodetype"] = static_cast<int>(nodetype);
+    Json result;
+    result[T_FIELD_KIND] = static_cast<int>(Kind::T_KIND_TENSOR);
+    result["offset"] = offset;
+    result["shape"] = shape;
+    result["validshape"] = oriShape;
+    result["nodetype"] = static_cast<int>(nodetype);
     if (dumpRawTensor) {
-        tensorDump[T_FIELD_RAWTENSOR] = tensor->DumpJson();
+        result[T_FIELD_RAWTENSOR] = tensor->DumpJson();
     } else {
-        tensorDump[T_FIELD_RAWTENSOR] = tensor->rawmagic;
+        result[T_FIELD_RAWTENSOR] = tensor->rawmagic;
     }
-    tensorDump["magic"] = magic;
+    result["magic"] = magic;
     if (storage_ != nullptr) {
-        tensorDump["storage"] = storage_->DumpJson();
+        result["storage"] = storage_->DumpJson();
     }
     if (HasAttr(OpAttributeKey::needAlloc)) {
         bool allocValue = false;
         GetAttr(OpAttributeKey::needAlloc, allocValue);
-        tensorDump["need_alloc"] = allocValue;
+        result["need_alloc"] = allocValue;
     }
-    tensorDump["subgraph_boundary"] = isSubGraphBoundary;
+    result["subgraph_boundary"] = isSubGraphBoundary;
 
     if (subGraphID != NOT_IN_SUBGRAPH) {
-        tensorDump["subgraphid"] = subGraphID;
+        result["subgraphid"] = subGraphID;
     }
 
-    tensorDump["mem_range"] = Json(std::vector<std::size_t>({memoryrange.start, memoryrange.end}));
-    tensorDump["life_range"] = Json(std::vector<int>({memoryrange.lifeStart, memoryrange.lifeEnd}));
-    tensorDump["mem_id"] = Json(memoryrange.memId);
+    result["mem_range"] = Json(std::vector<std::size_t>({memoryrange.start, memoryrange.end}));
+    result["life_range"] = Json(std::vector<int>({memoryrange.lifeStart, memoryrange.lifeEnd}));
+    result["mem_id"] = Json(memoryrange.memId);
 
     if (GetMemoryTypeOriginal() != MemoryType::MEM_UNKNOWN || GetMemoryTypeToBe() != MemoryType::MEM_UNKNOWN) {
         Json memorytype = Json::object();
@@ -176,7 +177,7 @@ Json LogicalTensor::DumpJson(bool dumpRawTensor) const {
         if (GetMemoryTypeToBe() != MemoryType::MEM_UNKNOWN) {
             memorytype["tobe"] = static_cast<int>(GetMemoryTypeToBe());
         }
-        tensorDump["mem_type"] = memorytype;
+        result["mem_type"] = memorytype;
     }
     Json offsetJson = Json::array();
     for (auto dynOffset : dynOffset_) {
@@ -186,7 +187,7 @@ Json LogicalTensor::DumpJson(bool dumpRawTensor) const {
         }
     }
     if (offsetJson.size() > 0) {
-        tensorDump["dynoffset"] = offsetJson;
+        result["dynoffset"] = offsetJson;
     }
     Json dynValidShapeJson = Json::array();
     for (auto dynValidShape : dynValidShape_) {
@@ -196,9 +197,9 @@ Json LogicalTensor::DumpJson(bool dumpRawTensor) const {
         }
     }
     if (dynValidShapeJson.size() > 0) {
-        tensorDump["dynvalidshape"] = dynValidShapeJson;
+        result["dynvalidshape"] = dynValidShapeJson;
     }
-    return tensorDump;
+    return result;
 }
 
 std::shared_ptr<LogicalTensor> LogicalTensor::LoadJson(Function &function,

@@ -10,7 +10,7 @@
 
 /*!
  * \file test_mix_internal_components_analyzer.cpp
- * \brief Unit test for MixInternalComponentsAnalyzer 
+ * \brief Unit test for MixInternalComponentsAnalyzer
  */
 #include <gtest/gtest.h>
 #include "passes/block_graph_pass/mix_subgraph_split/mix_internal_components_analyzer.h"
@@ -75,7 +75,7 @@ namespace test_utils {
     void VerifyScopeOperands(const InternalComponentInfo& component, int expectedOpCount,
                              bool isCube, AIVCore expectedAivCore);
 
-    bool IsSyncOperation(const Operation* op); 
+    bool IsSyncOperation(const Operation* op);
 
     // 结果校验：L0C_COPY_UB算子的subBlockIdx属性
     void VerifyL0CCopyUbSubBlockIdx(Operation& copyUbOp, int64_t expectedSubBlockIdx);
@@ -293,6 +293,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_SyncSrc_Backward) {
     test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM0}, {ComponentType::V_SCOPE});
     test_utils::VerifyScopeOperands(components[0], MS_NUM2, false, AIVCore::AIV0);
     test_utils::VerifyOpInternalId(syncSrcOp, MS_NUM0);
+
+    (void)vecOp;
 }
 
 // 用例5：同步算子OP_BAR_ALL合并（向后找非同步算子）
@@ -313,6 +315,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_BarAll_Forward) {
     test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM2}, {ComponentType::V_SCOPE});
     test_utils::VerifyScopeOperands(components[0], MS_NUM2, false, AIVCore::AIV1);
     test_utils::VerifyOpInternalId(barAllOp, MS_NUM2);
+
+    (void)vecOp;
 }
 
 // 用例6：同步算子OP_PHASE2合并（向前找COPY_IN算子）
@@ -333,6 +337,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestSyncOpMerge_Phase2_CopyIn) {
     test_utils::VerifyScopeBasicInfo(components, MS_NUM1, {MS_NUM1}, {ComponentType::V_SCOPE});
     test_utils::VerifyScopeOperands(components[0], MS_NUM2, false, AIVCore::AIV0);
     test_utils::VerifyOpInternalId(phase2Op, MS_NUM1);
+
+    (void)copyInOp;
 }
 
 // -------------------------- CubeScope L0C_COPY_UB处理用例  --------------------------
@@ -353,6 +359,8 @@ TEST_F(MixInternalComponentsAnalyzerTest, TestCubeScope_WithL0CCopyUb_AIV1) {
     ASSERT_EQ(status, SUCCESS) << "CubeScope L0C_COPY_UB process failed";
     test_utils::VerifyScopeBasicInfo(components, MS_NUM2, {MS_NUM0, MS_NUM1}, {ComponentType::C_SCOPE, ComponentType::V_SCOPE});
     test_utils::VerifyL0CCopyUbSubBlockIdx(copyUbOp, MS_SUB_BLOCK_IDX1);
+
+    (void)vecOp;
 }
 
 // -------------------------- 异常校验场景用例（覆盖所有失败分支） --------------------------

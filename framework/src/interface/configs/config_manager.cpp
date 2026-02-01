@@ -142,7 +142,7 @@ static std::string CreateLogTopFolder() {
             res = CreateDir(folderPath);
         }
     }
-    folderPath = folderPath + "/" + "output_" + timestamp.str() + "_" + std::to_string(getpid());
+    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid());
 
     res = CreateDir(folderPath);
     ASSERT(res) << "Failed to create directory: " << folderPath;

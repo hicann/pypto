@@ -244,8 +244,7 @@ TEST_F(QuantOnBoardTest, test_Quant_Smooth_32_7168) {
 class QuantMMOnBoardTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 void TestQuantMM(std::vector<int64_t>& shapeA, std::vector<int64_t>& shapeW) {
-    int dimA = shapeA.size();
-    assert (dimA == DIM2);
+    assert (shapeA.size() == DIM2);
     int m = shapeA[0];
     int k = shapeA[1];
     int n = shapeW[1];
@@ -298,8 +297,7 @@ void TestQuantMM(std::vector<int64_t>& shapeA, std::vector<int64_t>& shapeW) {
 }
 
 void TestQuantMM3D(std::vector<int64_t>& shapeA, std::vector<int64_t>& shapeW) {
-    int dimA = shapeA.size();
-    assert (dimA == DIM3);
+    assert (shapeA.size() == DIM3);
     int m = shapeA[1];
     int k = shapeA[2];
     int n = shapeW[2];

@@ -35,7 +35,7 @@ inline void trim(std::string& str) {
     }
 }
 
-Status INIParser::Initialize(const std::string &iniFilePath) {
+Status INIParser::Initialize(const std::string& iniFilePath) {
     ALOG_INFO_F("Start to parse ini_file %s.", iniFilePath.c_str());
     if (ReadINIFile(iniFilePath) != SUCCESS) {
         ALOG_ERROR_F("ReadINIFile failed.");

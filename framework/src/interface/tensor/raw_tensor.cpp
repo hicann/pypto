@@ -23,6 +23,7 @@
 #include <string>
 
 using namespace npu::tile_fwk;
+
 RawTensor::RawTensor(DataType t, std::vector<int64_t> tshape, TileOpFormat tformat, std::string tname, int trawmagic)
     : rawmagic((trawmagic == -1) ? IdGen<IdType::RAW_TENSOR>::Inst().NewId() : trawmagic),
       rawshape(std::move(tshape)),
@@ -34,21 +35,21 @@ RawTensor::RawTensor(DataType t, std::vector<int64_t> tshape, TileOpFormat tform
 }
 
 Json RawTensor::DumpJson() const {
-    Json rawTensorDump;
-    rawTensorDump[T_FIELD_KIND] = static_cast<int>(Kind::T_KIND_RAW_TENSOR);
-    rawTensorDump["datatype"] = datatype;
-    rawTensorDump["format"] = format;
-    rawTensorDump["rawshape"] = rawshape;
-    rawTensorDump["ori_rawshape"] = oriRawshape;
-    rawTensorDump["rawmagic"] = rawmagic;
+    Json result;
+    result[T_FIELD_KIND] = static_cast<int>(Kind::T_KIND_RAW_TENSOR);
+    result["datatype"] = datatype;
+    result["format"] = format;
+    result["rawshape"] = rawshape;
+    result["ori_rawshape"] = oriRawshape;
+    result["rawmagic"] = rawmagic;
     if (actualRawmagic != -1) {
-        rawTensorDump["actual_rawmagic"] = actualRawmagic;
+        result["actual_rawmagic"] = actualRawmagic;
     }
 
     if (symbol != "") {
-        rawTensorDump["symbol"] = symbol;
+        result["symbol"] = symbol;
     }
-    return rawTensorDump;
+    return result;
 }
 
 std::shared_ptr<RawTensor> RawTensor::LoadJson(const Json &rawTensorDump) {
@@ -119,7 +120,6 @@ void RawTensor::AddRefCount(int value) {
 int64_t RawTensor::GetRawDataSize() const {
     return GetRawShapeSize() * BytesOf(datatype);
 }
-
 
 int64_t RawTensor::GetRawShapeSize() const {
     return std::accumulate(rawshape.begin(), rawshape.end(), INT64_C(1), std::multiplies<int64_t>());

@@ -191,8 +191,7 @@ void DumpValue(std::stringstream &os, const std::string &key, const Any &val, co
     }
 }
 
-void DumpValues(std::stringstream &os, const std::map<std::string, Any> &values,
-                const std::string &prefix) {
+void DumpValues(std::stringstream &os, const std::map<std::string, Any> &values, const std::string &prefix) {
     for (const auto &[key, val] : values) {
         DumpValue(os, key, val, prefix);
         os << "\n";
@@ -289,7 +288,8 @@ struct ConfigManagerImpl {
     }
 
     bool IsWithinRange(const std::string &properties, const int64_t &value) const {
-        return IntervalJudge(value, typeInfo.rangeInfos.at(properties).first, typeInfo.rangeInfos.at(properties).second);
+        return IntervalJudge(value, typeInfo.rangeInfos.at(properties).first,
+                             typeInfo.rangeInfos.at(properties).second);
     }
 
     bool IsWithinRange(const std::string &properties, const std::map<int64_t, int64_t> &value) const {

@@ -64,7 +64,11 @@ std::vector<uint8_t> CompileAndLoadSection(const std::string &code, const std::s
     int size = ftell(fbin);
     fseek(fbin, 0, SEEK_SET);
     std::vector<uint8_t> binary(size);
-    fread(binary.data(), 1, size, fbin);
+    size_t readSize = fread(binary.data(), 1, size, fbin);
+    if (readSize != static_cast<size_t>(size)) {
+        fclose(fbin);
+        return {};
+    }
     fclose(fbin);
     return binary;
 }

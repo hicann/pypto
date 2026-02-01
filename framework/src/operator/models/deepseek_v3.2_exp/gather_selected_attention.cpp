@@ -65,7 +65,7 @@ void SelectedAttentionComputeV2(const Tensor &qNope, const Tensor &qRope, const 
                         Assemble(qr, {0, dN}, qi);
 
                         SymbolicScalar bS1Idx = bIdx * s1Sym + s1Idx;
-                        auto curTopKIndcies = View(topKIndcies, {1, curS2Tile}, {1, std::min(curSeq - s2Idx * curS2Tile, curS2Tile)}, {bS1Idx, s2Idx * curS2Tile}); 
+                        auto curTopKIndcies = View(topKIndcies, {1, curS2Tile}, {1, std::min(curSeq - s2Idx * curS2Tile, curS2Tile)}, {bS1Idx, s2Idx * curS2Tile});
                         auto curBlockTable = View(blockTable, {1, maxBlockNumPerBatch}, {bIdx, 0});
                         Tensor kn(dtype, {s2Tile, dN}, "kn");
                         if (knDtype == DataType::DT_INT8) {
@@ -187,7 +187,7 @@ void SelectedAttentionV2(const Tensor &qNope, const Tensor &qRope, const Tensor 
     const Tensor &kNopeScales, const Tensor &topKIndcies, const Tensor &blockTable, const Tensor &kvSlcActSeqs, const int nQ, const int nKv,
     const float softmaxScale, const int topk, const int blockSize, const int maxBlockNumPerBatch, Tensor &attentionOut, SaTileShapeConfig tileConfig) {
     FUNCTION("R2_SA_MAIN_V2", {qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs}, {attentionOut}) {
-        SelectedAttentionComputeV2(qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs, 
+        SelectedAttentionComputeV2(qNope, qRope, kNope2D, kRope2D, kNopeScales, topKIndcies, blockTable, kvSlcActSeqs,
                                 nQ, nKv, softmaxScale, topk, blockSize, maxBlockNumPerBatch, attentionOut, tileConfig);
     }
 }

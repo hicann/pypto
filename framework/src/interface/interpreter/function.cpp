@@ -43,31 +43,33 @@ static std::string HtmlEscape(const std::string &src, bool escapeLineBreak = tru
 }
 
 void FunctionInterpreter::DumpFunctionHead(Function *func) {
-    if (execDumpLevel >= EXEC_DUMP_LEVEL_OPERATION) {
-        int indent = GetFrameSize();
-        auto head = func->DumpSSATitle();
-        auto raw = func->DumpSSARawTensor(indent);
-        auto incast = func->DumpSSAIncast(indent);
-        auto outcast = func->DumpSSAOutcast(indent);
-        auto attr = func->DumpSSAAttribute(indent);
-        auto symbol = DumpSymbolDict();
-        ALOG_INFO_F("%s Function %s\n", execDumpFuncKey.c_str(), head.c_str());
-        ALOG_INFO_F("%s\n", raw.c_str());
-        ALOG_INFO_F("%s\n", incast.c_str());
-        ALOG_INFO_F("%s\n", outcast.c_str());
-        ALOG_INFO_F("%s\n", attr.c_str());
-        ALOG_INFO_F("%s\n", symbol.c_str());
-        if (execDumpFile) {
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, execDumpFuncKey.c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">frameIndex=%s</div>", indent, GetFrameCurrIndex().c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(head).c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(raw).c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(incast).c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(outcast).c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(attr).c_str());
-            fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(symbol).c_str());
-        }
+    if (execDumpLevel < EXEC_DUMP_LEVEL_OPERATION) {
+        return;
     }
+    int indent = GetFrameSize();
+    auto head = func->DumpSSATitle();
+    auto raw = func->DumpSSARawTensor(indent);
+    auto incast = func->DumpSSAIncast(indent);
+    auto outcast = func->DumpSSAOutcast(indent);
+    auto attr = func->DumpSSAAttribute(indent);
+    auto symbol = DumpSymbolDict();
+    ALOG_INFO_F("%s Function %s\n", execDumpFuncKey.c_str(), head.c_str());
+    ALOG_INFO_F("%s\n", raw.c_str());
+    ALOG_INFO_F("%s\n", incast.c_str());
+    ALOG_INFO_F("%s\n", outcast.c_str());
+    ALOG_INFO_F("%s\n", attr.c_str());
+    ALOG_INFO_F("%s\n", symbol.c_str());
+    if (!execDumpFile) {
+        return;
+    }
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, execDumpFuncKey.c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">frameIndex=%s</div>", indent, GetFrameCurrIndex().c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(head).c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(raw).c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(incast).c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(outcast).c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(attr).c_str());
+    fprintf(execDumpFile, "<div class=\"function indent_%d\">%s</div>", indent, HtmlEscape(symbol).c_str());
 }
 
 void FunctionInterpreter::DumpOperation(Operation *op) {
@@ -146,7 +148,7 @@ std::string FunctionInterpreter::GetDumpFilePath(const std::string &lv0, const s
     return baseDirName + "/" + filename;
 }
 
-void FunctionInterpreter::DumpBinary(std::vector<int64_t> &shape, std::vector<int64_t> &stride, std::vector<int64_t> &offset, 
+void FunctionInterpreter::DumpBinary(std::vector<int64_t> &shape, std::vector<int64_t> &stride, std::vector<int64_t> &offset,
         FILE *fdata, uint8_t *data, size_t dtypeSize) {
     if(shape.size() > 1) {
         for (int64_t k = 0; k < shape[0]; k++) {
@@ -191,7 +193,7 @@ void FunctionInterpreter::DumpTensorBinary(
     auto offset = dataView->GetOffset();
     auto stride = dataView->GetData()->GetStride();
     if (offset.size() != validShape.size() || stride.size() != validShape.size()) {
-        return; 
+        return;
     }
     FILE *fdata = fopen(dumpTensorFilePath.c_str(), "wb");
     DumpBinary(validShape, stride, offset, fdata, dataView->GetData()->data(), BytesOf(dataView->GetDataType()));
@@ -210,7 +212,10 @@ std::shared_ptr<LogicalTensorData> FunctionInterpreter::LoadTensorBinary(
     }
     FILE *fdata = fopen(filepath.c_str(), "rb");
     auto data = std::make_shared<RawTensorData>(static_cast<DataType>(tensor->Datatype()), shape);
-    fread(data->data(), 1, data->size(), fdata);
+    if (fread(data->data(), 1, data->size(), fdata) != data->size()) {
+        fclose(fdata);
+        return nullptr;
+    }
     auto dataView = std::make_shared<LogicalTensorData>(data, shape, shape, std::vector<int64_t>(shape.size(), 0));
     fclose(fdata);
     return dataView;
@@ -271,7 +276,7 @@ void FunctionInterpreter::DumpTensorList(const std::string &name, const std::vec
 }
 
 void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *frame, std::vector<std::string> &opInfo) {
-    opInfo[toIndex(OpInfoCsvHeader::rootFuncID)] = std::to_string(frame->rootFuncIndex); 
+    opInfo[toIndex(OpInfoCsvHeader::rootFuncID)] = std::to_string(frame->rootFuncIndex);
     opInfo[toIndex(OpInfoCsvHeader::funcID)] = std::to_string(frame->funcIndex);
     opInfo[toIndex(OpInfoCsvHeader::verifyType)] = execDumpFuncKey;
     opInfo[toIndex(OpInfoCsvHeader::loopInfo)] = GetLoopSymbolString();
@@ -279,7 +284,7 @@ void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *f
     opInfo[toIndex(OpInfoCsvHeader::opMagic)] = std::to_string(op->GetOpMagic());
 }
 
-void FunctionInterpreter::FillOperationOffsetInfo(Operation *op, FunctionFrame *frame, 
+void FunctionInterpreter::FillOperationOffsetInfo(Operation *op, FunctionFrame *frame,
                                                   const std::vector<SymbolicScalar> &linearArgList,
                                                   std::vector<std::string> &opInfo) {
     auto opAttr = std::static_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
@@ -331,7 +336,7 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
             std::string dumpTensorFileName = GetDumpTensorFileName(op->GetOOperands()[k], op, frame);
             DumpTensorBinary(dataView, dumpTensorFileName);
             fprintf(execDumpFile, "<div class=\"detail indent_%d\">%s</a></div>\n", indent, dumpTensorFileName.c_str());
- 
+
             frame->tensorDataBinDict[op->GetOOperands()[k]] = dumpTensorFileName;
             opInfo[toIndex(OpInfoCsvHeader::tensorMagic)] = std::to_string(op->GetOOperands()[k]->GetMagic());
             opInfo[toIndex(OpInfoCsvHeader::rawTensorMagic)] = std::to_string(op->GetOOperands()[k]->GetRawTensor()->GetRawMagic());
@@ -351,7 +356,7 @@ void FunctionInterpreter::DumpOperationTensor(Operation *op, FunctionFrame *fram
     const std::vector<std::shared_ptr<LogicalTensorData>> *ioperandDataViewList) {
     if (execDumpLevel < EXEC_DUMP_LEVEL_TENSOR || !execDumpFile)
         return;
- 
+
     int indent = GetFrameSize();
     std::vector<SymbolicScalar> linearArgList;
     if (frame->callopAttr != nullptr) {

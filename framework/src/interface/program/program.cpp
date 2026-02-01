@@ -32,8 +32,7 @@
 
 namespace npu::tile_fwk {
 const std::string PROGRAM_ENTRY_FUNCTION_NAME = "PROGRAM_ENTRY";
-void GetEnv(const char * const envName, std::string &envValue)
-{
+void GetEnv(const char * const envName, std::string &envValue) {
     const size_t envValueMaxLen = 1024UL * 1024UL;
     const char * const envTemp = std::getenv(envName);
     if ((envTemp == nullptr) || (strnlen(envTemp, envValueMaxLen) >= envValueMaxLen)) {
@@ -101,17 +100,15 @@ Function *Program::GetFunctionByRawName(const std::string &rawName) const {
 }
 
 void Program::SetCurrentFunction(Function *function) {
-    if (function == nullptr) {
-        return;
+    if (function != nullptr) {
+        currentFunctionPtr_ = function;
+        currentFunctionMagicName_ = function->GetMagicName();
     }
-    currentFunctionPtr_ = function;
-    currentFunctionMagicName_ = function->GetMagicName();
 }
 
 void Program::CreateInitFunction() {
     currentFunctionMagicName_ = PROGRAM_ENTRY_FUNCTION_NAME;
-    auto newFunc =
-        std::make_shared<Function>(*this, currentFunctionMagicName_, currentFunctionMagicName_, nullptr);
+    auto newFunc = std::make_shared<Function>(*this, currentFunctionMagicName_, currentFunctionMagicName_, nullptr);
     newFunc->SetFunctionType(FunctionType::EAGER);
     currentFunctionPtr_ = newFunc.get();
     functionmap_.emplace(currentFunctionMagicName_, std::move(newFunc));
@@ -238,8 +235,7 @@ bool Program::BeginFunction(const std::string &funcName,
 
     auto funcMagicName = funcName + "_" + std::to_string(IdGen<IdType::FUNCTION>::Inst().CurId());
     if (functionmap_.find(funcMagicName) == functionmap_.end()) { // new function
-        auto newFunc =
-            std::make_unique<Function>(*this, funcMagicName, funcName, currentFunctionPtr_);
+        auto newFunc = std::make_unique<Function>(*this, funcMagicName, funcName, currentFunctionPtr_);
         newFunc->SetFunctionType(funcType);
         newFunc->SetGraphType(graphType);
         newFunc->SetHiddenFunction(isHiddenFunction);

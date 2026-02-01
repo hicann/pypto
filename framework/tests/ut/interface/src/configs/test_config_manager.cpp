@@ -250,7 +250,7 @@ TEST_F(TestConfigManager, GlobalConfig) {
 
     std::map<std::string, Any> empty_values = {};
     ConfigManagerNg::GetInstance().SetGlobalConfig(std::move(empty_values), "default", 1);
-    
+
     PrintOptions p = config::GetPrintOptions();
-    
+
 }

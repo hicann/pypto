@@ -45,23 +45,20 @@ class GenCoverage:
     def __init__(self, args):
         self.src_root: Optional[Path] = Path(args.source[0]).resolve() if args.source else None
         self.data_dir: Path = Path(args.data[0]).resolve()
+        self.result_dir: Path = Path(args.result[0]).resolve() if args.result else Path(self.data_dir, 'cov_result')
         self.job_num: int = self.get_job_num(args=args)
 
-        # 生成路径
-        info_file = Path(args.info[0]).resolve() if args.info else Path(self.data_dir, 'cov_result/coverage.info')
-        report = Path(args.html[0]).resolve() if args.html else Path(info_file.parent, "html")
-
         # 全量覆盖率
-        self.full_cov_info_file: Path = info_file
-        self.full_html_report_path: Path = report
+        self.full_cov_info_file: Path = Path(self.result_dir, 'coverage.info')
+        self.full_html_report_path: Path = Path(self.result_dir, "html")
         self.filter_lst: List[str] = args.filter
 
         # 增量覆盖率
         self.incr_flag: bool = self.get_increment_flag(args)
-        self.incr_root = Path(info_file.parent, "increment")
-        self.incr_cov_info_file: Path = Path(self.incr_root, f"{info_file.name}")
-        self.incr_html_report_path: Path = Path(self.incr_root, report.name)
-        self.incr_text_report_file: Path = Path(self.incr_root, "coverage_report.txt")
+        incr_root = Path(self.result_dir, "increment")
+        self.incr_cov_info_file: Path = Path(incr_root, f"{self.full_cov_info_file.name}")
+        self.incr_html_report_path: Path = Path(incr_root, self.full_html_report_path.name)
+        self.incr_text_report_file: Path = Path(incr_root, "coverage_report.txt")
 
         # 合法性检查
         self.lcov_version: str = ""
@@ -71,10 +68,10 @@ class GenCoverage:
             raise ValueError(f"The dir({self.data_dir}) required to find the .da files not exist.")
 
         # 输出路径准备
-        self.full_cov_info_file.parent.mkdir(parents=True, exist_ok=True)
+        self.result_dir.mkdir(parents=True, exist_ok=True)
         self.full_html_report_path.mkdir(parents=True, exist_ok=True)
         if self.incr_flag:
-            self.incr_cov_info_file.parent.mkdir(parents=True, exist_ok=True)
+            incr_root.mkdir(parents=True, exist_ok=True)
             self.incr_html_report_path.mkdir(parents=True, exist_ok=True)
 
         # 增量覆盖率计算相关数据
@@ -87,10 +84,11 @@ class GenCoverage:
 
     def __str__(self) -> str:
         desc = f"\nGenerateCoverage"
+        desc += f"\n    lcov         : {self.lcov_version} ({self.lcov_version_new})"
         desc += f"\n    SrcRoot      : {self.src_root}"
         desc += f"\n    DataDir      : {self.data_dir}"
+        desc += f"\n    ResultDir    : {self.result_dir}"
         desc += f"\n    JobNum       : {self.job_num}"
-        desc += f"\n    lcov         : {self.lcov_version} ({self.lcov_version_new})"
 
         desc += f"\n    Full"
         desc += f"\n      FilterList : {self.filter_lst}"
@@ -113,19 +111,16 @@ class GenCoverage:
         parser.add_argument("-d", "--data",
                             required=True, nargs=1, type=Path,
                             help="Specify the *.da's base directory.")
-        parser.add_argument("-i", "--info_file", dest="info",
+        parser.add_argument("-r", "--result",
                             required=False, nargs=1, type=Path,
-                            help="Specify coverage info file path.")
+                            help="Specify the result output directory.")
         parser.add_argument("-f", "--filter",
                             required=False, action=cls.FilterPathAction, type=str,
                             help="Specify filter file/dir in coverage info.")
-        parser.add_argument("--html_report", dest="html",
-                            required=False, nargs=1, type=Path,
-                            help="Specify coverage html report dir.")
         parser.add_argument("-j", "--job_num",
                             nargs="?", type=int, default=None,
                             help="Specify parallel job num.")
-        parser.add_argument("--increment",
+        parser.add_argument("-i", "--increment",
                             action="store", type=str, default=None,
                             choices=["true", "false", "TRUE", "FALSE", "True", "False", "1", "0"],
                             help="Enable increment coverage calculation based on latest commit.")
@@ -155,10 +150,7 @@ class GenCoverage:
         if args.increment is not None:
             return args.increment.lower() in true_list
         else:
-            if env_val.lower() in true_list:
-                return True
-            else:
-                return False
+            return env_val.lower() in true_list
 
     @classmethod
     def get_file_stats(cls, file_cov_info: Dict[str, Dict[int, int]],
@@ -291,8 +283,9 @@ class GenCoverage:
                 self.detect_incr_cov_rst()
                 # 生成文本报告
                 self.gen_inc_cov_text_report()
-                # 压缩增量覆盖率目录
-                self.compress_incr_root()
+
+        # 压缩结果路径
+        self.compress_result_root()
 
     def gen_full_cov_info_file(self):
         """生成过滤后的全量覆盖率文件
@@ -326,9 +319,10 @@ class GenCoverage:
         prefix = f"-p {self.src_root}" if self.src_root else ""
         cmd = f'genhtml {cov_file} {prefix} -o {dest}'
         if self.lcov_version_new:
+            cmd += f" --hierarchical"
             cmd += f" --rc check_data_consistency=0"  # 关闭数据一致性校验
             cmd += f" -j {self.job_num}"
-        ret = subprocess.run(cmd.split(), capture_output=True, check=True, encoding='utf-8')
+        ret = subprocess.run(cmd.split(), capture_output=True, check=False, encoding='utf-8')
         ret.check_returncode()
         logging.info("Generated %s coverage html report in %s, cmd: %s", scene, dest, cmd)
 
@@ -629,29 +623,29 @@ class GenCoverage:
             f.write(report)
         logging.info("\n" + report)
 
-    def compress_incr_root(self):
-        """压缩增量覆盖率目录为 zip 格式
+    def compress_result_root(self):
+        """压缩结果目录为 zip 格式
         """
-        def add_files_to_zip(zipf, incr_root):
+        def add_files_to_zip(zipf, result_root):
             """将文件添加到 zip 文件中
             """
-            for root, _, files in os.walk(incr_root):
+            for root, _, files in os.walk(result_root):
                 for file in files:
                     file_path = Path(root, file)
-                    arcname = f"{incr_root.name}/{file_path.relative_to(incr_root)}"
+                    arcname = f"{result_root.name}/{file_path.relative_to(result_root)}"
                     zipf.write(file_path, arcname)
 
-        if not self.incr_root.exists():
-            logging.warning(f"Increment root directory {self.incr_root} does not exist, skipping compression.")
+        if not self.result_dir.exists():
+            logging.warning(f"Result directory {self.result_dir} does not exist, skipping compression.")
             return
 
-        zip_file = self.incr_root.with_suffix('.zip')
+        zip_file = self.result_dir.with_suffix('.zip')
         try:
             with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                add_files_to_zip(zipf, self.incr_root)
-            logging.info("Compressed increment coverage directory to %s", zip_file)
+                add_files_to_zip(zipf, self.result_dir)
+            logging.info("Compressed result directory to %s", zip_file)
         except Exception as e:
-            logging.error("Failed to compress increment coverage directory: %s", e)
+            logging.error("Failed to compress result directory: %s", e)
             raise
 
 

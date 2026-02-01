@@ -107,7 +107,7 @@ static void BitwiseOpOperationExeFunc2Dims(
                 }
 
                 TileShape::Current().SetVecTile(args->tileShape_);
-                auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1); 
+                auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1);
                 Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
             }
         }
@@ -183,7 +183,7 @@ static void BitwiseOpOperationExeFunc3Dims(
                     }
 
                     TileShape::Current().SetVecTile(args->tileShape_);
-                    auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1); 
+                    auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1);
                     Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape}, outputs[0]);
                 }
             }
@@ -291,7 +291,7 @@ static void BitwiseOpOperationExeFunc4Dims(
                         }
 
                         TileShape::Current().SetVecTile(args->tileShape_);
-                        auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1); 
+                        auto res = ApplyBitwiseOp(args->op_, tileTensor0, tileTensor1);
                         Assemble(res,
                             {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape, nIdx * fourthViewShape},
                             outputs[0]);
@@ -302,7 +302,7 @@ static void BitwiseOpOperationExeFunc4Dims(
     }
 }
 
-class BitwiseAndOperationTest 
+class BitwiseAndOperationTest
     : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(
@@ -322,7 +322,7 @@ TEST_P(BitwiseAndOperationTest, TestBitwiseAnd) {
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
 
-class BitwiseOrOperationTest 
+class BitwiseOrOperationTest
     : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(
@@ -342,7 +342,7 @@ TEST_P(BitwiseOrOperationTest, TestBitwiseOr) {
     tile_fwk::test_operation::TestExecutor::runTest(testCase);
 }
 
-class BitwiseXorOperationTest 
+class BitwiseXorOperationTest
     : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<BitwiseOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(

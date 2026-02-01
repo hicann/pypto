@@ -28,17 +28,38 @@
 #include "runtime/base.h"
 std::string CaptureStdout(std::function<void()> func) {
     int pipefd[2];
-    pipe(pipefd);
+    if (pipe(pipefd) != 0) {
+        return "";
+    }
+
     int old_stdout = dup(STDOUT_FILENO);
-    dup2(pipefd[1], STDOUT_FILENO);
+    if (old_stdout == -1) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return "";
+    }
+
+    if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        close(old_stdout);
+        return "";
+    }
+
     close(pipefd[1]);
     func();
     fflush(stdout);
-    dup2(old_stdout, STDOUT_FILENO);
-    close(old_stdout);
+
+    if (dup2(old_stdout, STDOUT_FILENO) == -1) {
+        close(pipefd[0]);
+        close(old_stdout);
+        return "";
+    }
+
     char buffer[4096] = {0};
     ssize_t len = read(pipefd[0], buffer, sizeof(buffer) - 1);
     close(pipefd[0]);
+    close(old_stdout);
 
     return std::string(buffer, len);
 }
@@ -68,7 +89,7 @@ TEST(DeviceErrorTrackingTest, AicpuErrorCallBackOutputsCorrectInfo) {
     exceptionInfo.deviceid = 0;
     exceptionInfo.retcode = 1;
     exceptionInfo.expandInfo.type = RT_EXCEPTION_AICORE;
-    
+
     char kernelName[] = "test_kernel";
     exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = kernelName;
 
