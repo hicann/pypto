@@ -17,6 +17,8 @@
 #define PASS_EXPAND_FUNCTION_H_
 
 #include "passes/pass_interface/pass.h"
+#include "interface/operation/opcode.h"
+
 namespace npu::tile_fwk {
 class ExpandFunction : public Pass {
 public:
@@ -27,7 +29,10 @@ public:
 private:
     Status RunOnFunction(Function &function) override;
     Status Expandfunction(Function &function) const;
+    Status ExpandOperation(Function &function, Operation &op) const;
     void DoHealthCheckBefore(Function &function, const std::string &folderPath) override;
+
+    mutable std::unordered_map<int, std::unordered_set<CoreType>> scopeMap_;
 };
 }
 #endif // PASS_EXPAND_FUNCTION_H_

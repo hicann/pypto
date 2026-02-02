@@ -289,9 +289,6 @@ Status PassManager::RunPass(Program &program, Function &function, const std::str
         if (passDfxCfg.dumpPassTimeCost) {
             LogPassRuntime(identifier, program, function, start);
         }
-        if (pass->GetName() == PassNameStr(PassName::EXPAND_FUNCTION)) {
-            ALOG_INFO_F("Function operation size is: %zu after expansion.", function.Operations().size());
-        }
         if (config::GetVerifyOption<bool>(KEY_ENABLE_PASS_VERIFY)) {
             Program::GetInstance().VerifyPass(&function, i, identifier);
         }

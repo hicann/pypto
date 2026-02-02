@@ -324,7 +324,7 @@ Status StaticSubgraphProcessor::SetESGGraphType(int32_t cubeOpCnt, int32_t vecOp
         return SUCCESS;
     }
     esgGraphType = CoreType::MIX;
-    if (IsCVSeparatePlatform() == true) {
+    if (!GraphUtils::IsCVMixPlatform()) {
         APASS_LOG_ERROR_F(Elements::Graph, "Get CoreType::MIX in C-V separate platform.");
         return FAILED;
     }
@@ -420,13 +420,5 @@ Status StaticSubgraphProcessor::HandleReadyStates(Function* rootFunc) {
         }
     }
     return SUCCESS;
-}
-
-bool StaticSubgraphProcessor::IsCVSeparatePlatform() {
-    auto socVersion = Platform::Instance().GetSoc().GetNPUArch();
-    if (socVersion == NPUArch::DAV_2201) {
-        return true;
-    }
-    return false;
 }
 }

@@ -21,6 +21,7 @@
 #include "ut_json/ut_json_tool.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
+#include "passes/pass_utils/graph_utils.h"
 
 #define private public
 #include "interface/operation/operation.h"
@@ -120,6 +121,53 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest1) {
     EXPECT_EQ(nop_num, kNumOne);
 }
 
+
+TEST_F(TestExpandFunctionPass, TestCVSeperate1) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestExpandFunction", "TestExpandFunction", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    EXPECT_TRUE(GraphUtils::IsCVMixPlatform());
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    EXPECT_FALSE(GraphUtils::IsCVMixPlatform());
+}
+
+TEST_F(TestExpandFunctionPass, TestCVSeperate2) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestExpandFunction", "TestExpandFunction", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> tile_shape = {kNumExpFive, kNumExpFive};
+    std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};    
+    TileShape::Current().SetVecTile(kNumExpFive, kNumExpFive);
+    TileShape::Current().SetCubeTile({kNumExpFive, kNumExpFive}, {kNumExpFive, kNumExpFive}, {kNumExpFive, kNumExpFive}, false, false);
+
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto L1Tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto L1Tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto out1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto out2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    auto& opAdd = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor1, ubTensor2}, {out1});
+    auto& opMatmul = currFunctionPtr->AddOperation(Opcode::OP_A_MUL_B, {L1Tensor1, L1Tensor2}, {out2});
+
+    currFunctionPtr->inCasts_.push_back(ubTensor1);
+    currFunctionPtr->inCasts_.push_back(ubTensor2);
+    currFunctionPtr->inCasts_.push_back(L1Tensor1);
+    currFunctionPtr->inCasts_.push_back(L1Tensor2);
+    currFunctionPtr->outCasts_.push_back(out1);
+    currFunctionPtr->outCasts_.push_back(out2);
+
+    opAdd.tileShape_.SetVecTile(tile_shape);
+    opAdd.SetScopeId(1);
+    opMatmul.SetScopeId(1);
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, FAILED);
+
+}
 /*
 TESTExpandFunctionNOP
 inCast{8,16}->pad->ubTensor1{8,16}->nop->ubTensor2{8,16}->view->outCast{8,16}

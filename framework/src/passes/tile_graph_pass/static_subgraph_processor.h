@@ -25,6 +25,7 @@
 #include "tilefwk/platform.h"
 #include "tilefwk/data_type.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/graph_utils.h"
 #include "passes/statistics/execute_graph_statistic.h"
 
 namespace npu::tile_fwk {
@@ -42,7 +43,6 @@ public:
     Status SetCallAttrGraphType(Function* rootFunc, size_t i, const CoreType &esgGraphType);
     
     Status HandleReadyStates(Function* rootFunc);
-    bool IsCVSeparatePlatform();
     Status BuildGraph(Function &function);
     Status BuildInGraph(Function &function);
     Status EdgeIndexCheck(const bool found, const int newIndex, const size_t graphSize) const;

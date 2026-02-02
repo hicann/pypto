@@ -22,6 +22,7 @@
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "pass_common_defs.h"
+#include "tilefwk/platform.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -177,6 +178,10 @@ public:
      * @param copy AssembleOp, consisting of input, output, fromtype, toOffset.
      */
     static void SetAssembleAttr(Operation &op, const AssembleOp &assemble);
+    /**
+     * @brief Determine it is a CV seperate or CV mix platform.
+     */
+    static bool IsCVMixPlatform();
 };
 }
 }
