@@ -1271,6 +1271,7 @@ static void TopkSort(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outTemp
 }
 
 static void TopkMerge(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mergeSize) {
+    (void) mergeSize;
     auto tself = From(self);
     auto tout = From(out);
 

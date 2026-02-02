@@ -108,17 +108,14 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1) {
 
     auto &expand = currFunctionPtr->AddOperation(Opcode::OP_EXPAND, {inCast2}, {ubTensor2});
     expand.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", kNum3);
-    auto &syncOp = currFunctionPtr->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {inCast1}, {ubTensor2});
+    currFunctionPtr->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {inCast1}, {ubTensor2});
     auto &add = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor2, ubTensor3}, {ubTensor4});
     auto &mul = currFunctionPtr->AddOperation(Opcode::OP_MUL, {ubTensor2, ubTensor4}, {ubTensor5});
     auto &sub = currFunctionPtr->AddOperation(Opcode::OP_SUB, {ubTensor6, ubTensor7}, {ubTensor8});
-    auto &reshape2 = currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor5}, {outCast});
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor5}, {outCast});
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
     currFunctionPtr->outCasts_.push_back(outCast);
-
-    (void) syncOp;
-    (void) reshape2;
 
     LoopaxesProc loopaxesprocpass;
     EXPECT_EQ(loopaxesprocpass.RunOnFunction(*rootFuncPtr), SUCCESS);
