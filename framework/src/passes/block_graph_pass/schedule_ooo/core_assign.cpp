@@ -290,6 +290,31 @@ void CoreScheduler::Schedule(TaskGraph &taskGraph, int bruteForceThreshold) {
     }
 }
 
+// Alloc op需要与其同级的op处于同一个子图中, Convert的alloc应跟随其后op
+void TaskSpliter::BuildSameLayerConnectionWithBack() {
+    for (size_t i = 0; i < opList_.size(); i++) {
+        if (ALLOC_OPCODE.count(opList_[i]->GetOpcode()) == 0) {
+            continue;
+        }
+    ScheduleCoreType srcCoreType = opCoreTypes_[i];
+    APASS_LOG_DEBUG_F(Elements::Operation, "Found alloc op %s[%d].", opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic());
+        for (auto & oop : opList_[i]->GetOOperands()) {
+            for (auto &sameLayerOpPtr : oop->GetProducers()) {
+                int dstOpMagic = sameLayerOpPtr->GetOpMagic();
+                if (opMagicToIdx_.count(dstOpMagic) == 0) {
+                    continue;
+                }
+                if (opCoreTypes_[opMagicToIdx_[dstOpMagic]] != srcCoreType) {
+                    continue;
+                }
+            APASS_LOG_DEBUG_F(Elements::Operation, "-- add %s[%d] to same layer connection because of the alloc op.",
+                sameLayerOpPtr->GetOpcodeStr().c_str(), sameLayerOpPtr->GetOpMagic());
+            sameLayerConnection_.push_back({i, opMagicToIdx_[sameLayerOpPtr->GetOpMagic()]});
+            }
+        }
+    }
+}
+
 // Alloc op需要与其同级的op处于同一个子图中, Convert的alloc应跟随其前op
 void TaskSpliter::BuildSameLayerConnectionWithFront() {
     for (size_t i = 0; i < opList_.size(); i++) {
@@ -353,7 +378,7 @@ void TaskSpliter::SplitGraph(const std::vector<Operation *> &opList) {
     APASS_LOG_INFO_F(Elements::Operation, "Start to split mix graph with op num %d.", opList.size());
     opList_ = opList;
     BuildOpGraph();
-    BuildSameLayerConnectionWithFront();
+    BuildSameLayerConnectionWithBack();
     std::vector<int> clusterIds;
     std::vector<ScheduleCoreType> clusterCoreTypes;
     int clusterNum = BuildCluster(clusterIds, clusterCoreTypes);

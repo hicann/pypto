@@ -748,7 +748,13 @@ void OoOScheduler::InitIssueQueuesAndBufferManager() {
     bufferManagerMap.clear();
     for (auto [coreType, idxVec] : CORE_INIT_CONFIGS) {
         for (auto idx : idxVec) {
-            for (size_t i = 0; i < static_cast<int>(MemoryType::MEM_DEVICE_DDR); i++) {
+            if (coreType == OpCoreType::AIV) {
+                allocIssueQueue[coreType][idx][MemoryType::MEM_UB] = IssueQueue();
+                bufferManagerMap[coreType][idx].insert({MemoryType::MEM_UB,
+                        BufferPool(MemoryType::MEM_UB, localMemorySize[MemoryType::MEM_UB])});
+                continue;
+            }
+            for (size_t i = 1; i < static_cast<int>(MemoryType::MEM_DEVICE_DDR); i++) {
                 allocIssueQueue[coreType][idx][static_cast<MemoryType>(i)] = IssueQueue();
                 if (localMemorySize.find(static_cast<MemoryType>(i)) != localMemorySize.end()) {
                     bufferManagerMap[coreType][idx].insert({static_cast<MemoryType>(i),

@@ -37,6 +37,7 @@ public:
     uint64_t numTotalIssues{0};
     std::vector<Operation*> taskList;
     std::vector<Operation*> operations;
+    std::set<int> spillblockMemIds;
 
     void LaunchReadyIssue();
     Status FreeBuffer(Operation* op);
