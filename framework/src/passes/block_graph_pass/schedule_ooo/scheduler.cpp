@@ -150,9 +150,6 @@ Status OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue) {
     APASS_LOG_ERROR_F(Elements::Operation, "======== OoO Spill failed info ===========");
     APASS_LOG_ERROR_F(Elements::Operation, "Spill failed memoryType: %s. %s", 
         MemoryTypeToString(localBufferMap[allocIssue->reqMemIds[0]]->memType).c_str(), GetFormatBacktrace(allocIssue->tileOp).c_str());
-    if (localBufferMap[allocIssue->reqMemIds[0]]->memType == MemoryType::MEM_L1) {
-        APASS_LOG_ERROR_F(Elements::Operation, "A5 is not support L1 spill.");
-    }
     if (localBufferMap.find(allocIssue->reqMemIds[0]) != localBufferMap.end()) {
         APASS_LOG_ERROR_F(Elements::Operation, "%s alloc buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(), 
             localBufferMap[allocIssue->reqMemIds[0]]->size, GetFormatBacktrace(allocIssue->tileOp).c_str());
@@ -173,9 +170,6 @@ Status OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue) {
 void OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue, MemoryType bufferType) {
     APASS_LOG_ERROR_F(Elements::Operation, "======== OoO Spill failed info ===========");
     APASS_LOG_ERROR_F(Elements::Operation, "Spill failed memoryType: %s. %s", MemoryTypeToString(bufferType).c_str(), GetFormatBacktrace(allocIssue->tileOp).c_str());
-    if (bufferType == MemoryType::MEM_L1) {
-        APASS_LOG_ERROR_F(Elements::Operation, "A5 is not support L1 spill.");
-    }
     if (localBufferMap.find(allocIssue->reqMemIds[0]) != localBufferMap.end()) {
         APASS_LOG_ERROR_F(Elements::Operation, "---- alloc request ----");
         APASS_LOG_ERROR_F(Elements::Operation, "op:%s need buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(),
@@ -319,7 +313,7 @@ Status OoOScheduler::SpillOnCoreBlock(OpCoreType coreType, int idx) {
     MemoryType spillMemType;
     if (!allocIssueQueue[coreType][idx][MemoryType::MEM_UB].Empty()) {
         spillMemType = MemoryType::MEM_UB;
-    } else if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510  && !allocIssueQueue[coreType][idx][MemoryType::MEM_L1].Empty()) {
+    } else if (!allocIssueQueue[coreType][idx][MemoryType::MEM_L1].Empty()) {
         spillMemType = MemoryType::MEM_L1;
     } else {
         for (auto memType: allocIssueQueue[coreType][idx]) {
@@ -328,8 +322,8 @@ Status OoOScheduler::SpillOnCoreBlock(OpCoreType coreType, int idx) {
             }
             PrintSpillFailedInfo(memType.second.Front(), memType.first);
         }
-        APASS_LOG_WARN_F(Elements::Operation, "Buffer[L1/L0A/B/C] is Full. Possible causes: incorrect memory reuse, memory fragmentation, lack alloc. "
-            "Please check tile shape, OOO spill failed info and alloc location.");
+        APASS_LOG_ERROR_F(Elements::Operation, "Buffer[L0A/B/C] is Full. Possible causes: incorrect memory reuse, memory fragmentation. "
+            "Please check tile shape and OOO spill failed info.");
         return FAILED;
     }
     if (GenBufferSpill(allocIssueQueue[coreType][idx][spillMemType].Front()) != SUCCESS) {

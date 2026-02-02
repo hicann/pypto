@@ -310,13 +310,13 @@ private:
 
     // gen spill
     Status GenSpillOp(LocalBufferPtr allocBuffer, size_t &pcIdx);
-    Status CanSpill(LocalBufferPtr allocBuffer, size_t &pcIdx);
     Status GenBufferSpill(IssueEntryPtr allocIssue);
     Status SelectSpillBuffers(LocalBufferPtr allocBuffer, IssueEntryPtr issue, 
         std::vector<int> &spillGroup, bool isGenSpill);
     Status GetGroupNextUseOrder(std::vector<int> group, IssueEntryPtr allocIssue, 
         std::vector<int> &groupNextUseTime, std::unordered_map<int, size_t> &nextUseTimeCache, bool isGenSpill);
     IssueEntryPtr GetSpillIssue(IssueEntryPtr allocIssue, int memId, bool isGenSpill);
+    bool CheckMachineAndL1(IssueEntryPtr spillIssue, IssueEntryPtr allocIssue);
     bool IsBelongSpillBlackList(IssueEntryPtr spillIssue, IssueEntryPtr issue);
     void FindFilterLtags(IssueEntryPtr allocIssue, std::set<IssueEntryPtr> &filterLtags);
     Status SpillMultiBuffer(IssueEntryPtr allocIssue, std::vector<int> spillGroup, size_t &pcIdx, 
