@@ -118,8 +118,15 @@ Status InsertOpForViewAssemble::JudgedViewAssemble(Function &function) {
             continue;
         }
         auto &prodOp = *op.GetIOperands()[0]->GetProducers().begin();
+        if (op.GetOOperands()[0]->GetMemoryTypeOriginal() != op.GetIOperands()[0]->GetMemoryTypeOriginal()) {
+            if (notProcessOut_.find(op.GetOOperands()[0]) == notProcessOut_.end()) {
+                notProcessOut_.insert(op.GetOOperands()[0]);
+            }
+            continue;
+        }
         if (prodOp->GetOpcode() == Opcode::OP_VIEW && assembleOutSet_.find(op.GetOOperands()[0]) == assembleOutSet_.end() &&
-            prodOp->GetIOperands()[0]->GetMemoryTypeOriginal() == prodOp->GetOOperands()[0]->GetMemoryTypeOriginal()) {
+            prodOp->GetIOperands()[0]->GetMemoryTypeOriginal() == prodOp->GetOOperands()[0]->GetMemoryTypeOriginal() && 
+            notProcessOut_.find(op.GetOOperands()[0]) == notProcessOut_.end()) {
             assembleOutSet_.insert(op.GetOOperands()[0]);
             APASS_LOG_INFO_F(Elements::Operation, "assembleOutSet_ insert oOperand %d", op.GetOOperands()[0]->GetMagic());
         }
