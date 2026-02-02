@@ -159,8 +159,6 @@ private:
 
     std::unordered_map<OpCoreType, std::vector<int>> CORE_INIT_CONFIGS;
 
-    std::unordered_map<OpCoreType, std::unordered_map<int, bool>> usedCore;
-
     std::unordered_map<int, LocalBufferPtr> localBufferMap;
     // 分核数据结构
     std::unordered_map<OpCoreType, std::map<int, std::map<npu::tile_fwk::MemoryType, BufferPool>>> bufferManagerMap;
@@ -207,8 +205,6 @@ private:
     Status InitIssueEntry(Operation* op, const std::unordered_map<Operation*, std::pair<OpCoreType, int>> &opCoreMap);
     void InitCoreConfig(const std::vector<Operation *> &operations);
     Status InitIssueCoreType(IssueEntryPtr issue, Operation* op, const std::unordered_map<Operation*, std::pair<OpCoreType, int>> &opCoreMap);
-    void InitUsedCore();
-    void UpdateUsedCore(IssueEntryPtr issue);
     void InitMemorySize();
     Status CheckOpBufferSize(Operation *op);
     std::string dumpOpInfo(Operation &op);
@@ -230,10 +226,9 @@ private:
     Status ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx);
     Status RetireIssue(IssueEntryPtr issue);
     bool IsInissueEntries(Operation* op);
-    Status InitMemWithoutAlloc();
     Status ScheduleMainLoop();
     void LaunchReadyIssue();
-    Status RetireUsedCoreIssue(OpCoreType coreType, int idx, uint64_t& commitCnt, int& nextCycle);
+    Status RetireCoreIssue(OpCoreType coreType, int idx, uint64_t& commitCnt, int& nextCycle);
     Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle);
     Status RetireOpAndAwakeSucc(IssueEntryPtr issue, uint64_t& commitCnt);
     Status FreeBuffer(IssueEntryPtr issue);
@@ -314,6 +309,7 @@ private:
 
     // gen spill
     Status GenSpillOp(LocalBufferPtr allocBuffer, size_t &pcIdx);
+    Status CanSpill(LocalBufferPtr allocBuffer, size_t &pcIdx);
     Status GenBufferSpill(IssueEntryPtr allocIssue);
     Status SelectSpillBuffers(LocalBufferPtr allocBuffer, IssueEntryPtr issue, 
         std::vector<int> &spillGroup, bool isGenSpill);
