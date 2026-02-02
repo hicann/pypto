@@ -91,6 +91,7 @@ def test_onboard():
     torch.npu.set_device(device_id) #显式设置device id
     ....
 ```
+
 ## CANN包不兼容
 
 ### 问题现象描述
@@ -208,6 +209,7 @@ for b_idx in pypto.loop(B, name="b_loop", idx_name="b"):
     a1 = a0 + 1.0
     out[b_idx:, :, :] = a1
 ```
+
 ## set_xxx_tile_shapes最后一维没有32字节对齐校验报错
 
 ### 问题现象描述
@@ -345,6 +347,7 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
     ```
 
     loop_unroll 大概会产生如下代码
+
     ```python
     new_start = start
     for k in unroll_list:
@@ -354,7 +357,7 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
         new_start = stop - left
     ```
 
-原则上如果可以一次处理多个i， 使用loop_unroll会更高效； 如果一次只能处理1个i， 则需要使用loop
+    原则上如果可以一次处理多个i， 使用loop_unroll会更高效； 如果一次只能处理1个i， 则需要使用loop
 
 5. submit_before_loop 表示是否在循环开始前提交任务，默认值为False。如果设置为True，则循环前的任务会先提交到调度队列中，等待后续任务完成后再开始执行， *过多的设置submit_before_loop会增加调度开销*， 建议仅在必要时设置为True
 
@@ -387,4 +390,5 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
         for i in pypto.loop(1):
             c[:] = t + b
     ```
+
    框架当前不会自动进行loop(1)合并，因此在实际使用中，建议用户手动合并loop(1)，以提高效率

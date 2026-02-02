@@ -42,7 +42,7 @@ index_add_(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Uni
 
 4. input.shape和source.shape的dim轴viewshape不可切，要求viewshape\[dim\]\>=max\(input.shape\[dim\], source.shape\[dim\]\)，其余维度的Shape大小不做限制；
 
-4. TileShape的维度与result相同，用于切分input和source，TileShape\[dim\] = viewshape\[dim\]，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
+5. TileShape的维度与result相同，用于切分input和source，TileShape\[dim\] = viewshape\[dim\]，所有输入和输出的TileShape大小总和不能超过UB内存的大小。
 
 ## 调用示例
 

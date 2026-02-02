@@ -7,6 +7,7 @@
 IRBuilder 采用显式上下文（Explicit Context）设计，所有构建状态存储在 `IRBuilderContext` 对象中，通过栈式作用域管理实现嵌套作用域。
 
 IRBuilder 的使用流程：
+
 ```
 IRBuilder
 ├── 创建模块和函数
@@ -28,6 +29,7 @@ IRBuilder
 ```
 
 示例：
+
 ```cpp
 // ===== Module =====
 auto module = std::make_shared<ProgramModule>("main");
@@ -76,6 +78,7 @@ ctx.PopScope();
 IRBuilder 是无状态的工具类，所有构建状态存储在显式的 `IRBuilderContext` 对象中。通过栈式作用域管理（`PushScope`/`PopScope`）实现嵌套作用域。
 
 ### Syntax
+
 ```cpp
 IRBuilder builder;
 IRBuilderContext ctx;  // 显式上下文对象
@@ -86,6 +89,7 @@ ctx.PopScope();  // 手动退出作用域
 ```
 
 ### 数据结构
+
 ```cpp
 class IRBuilder {
     std::shared_ptr<ProgramModule> module_;  // 唯一的状态
@@ -104,6 +108,7 @@ struct IRBuilderContext {
 ```
 
 ### 约束
+
 - IRBuilder 必须关联一个 ProgramModule
 - 所有构建方法都需要传入 `IRBuilderContext& ctx` 参数
 - 使用显式的 `PushScope`/`PopScope` 管理作用域，确保作用域正确嵌套
@@ -115,6 +120,7 @@ struct IRBuilderContext {
 创建新函数并添加到模块中。
 
 #### Syntax
+
 ```cpp
 auto func = builder.CreateFunction(
     "test_value",
@@ -125,6 +131,7 @@ auto func = builder.CreateFunction(
 ```
 
 #### 数据结构
+
 ```cpp
 std::shared_ptr<Function> CreateFunction(
     std::string name,
@@ -143,6 +150,7 @@ std::shared_ptr<Function> CreateFunction(
 **返回**：创建的 Function 对象
 
 #### 约束
+
 - 函数名在模块内必须唯一
 - 函数签名中的参数类型必须是 Tensor、Tile 或 Scalar
 
@@ -151,6 +159,7 @@ std::shared_ptr<Function> CreateFunction(
 进入函数体作用域，将函数体的 CompoundStatement 推入作用域栈。
 
 #### Syntax
+
 ```cpp
 
 builder.EnterFunctionBody(ctx, func);
@@ -161,11 +170,13 @@ ctx.PopScope();  // 手动退出作用域
 ```
 
 #### 数据结构
+
 ```cpp
 void EnterFunctionBody(IRBuilderContext& ctx, std::shared_ptr<Function> func);
 ```
 
 #### 约束
+
 - 进入作用域后必须手动调用 `ctx.PopScope()` 退出
 - `EnterFunctionBody` 会调用 `ctx.PushScope()`，将当前状态保存到栈中并切换到函数体作用域
 
@@ -176,12 +187,14 @@ void EnterFunctionBody(IRBuilderContext& ctx, std::shared_ptr<Function> func);
 创建 Tensor 值对象，并自动添加到传入的作用域的环境表中。
 
 #### Syntax
+
 ```cpp
 std::vector<ScalarValuePtr> shape = { batch, std::make_shared<ScalarValue>(int64_t(128)) };
 auto tensor = builder.CreateTensor(ctx, shape, DataType::FP32, "input");
 ```
 
 #### 数据结构
+
 ```cpp
 std::shared_ptr<TensorValue> CreateTensor(
     IRBuilderContext& ctx,
@@ -192,6 +205,7 @@ std::shared_ptr<TensorValue> CreateTensor(
 ```
 
 #### 约束
+
 - shape 中的 ScalarValue 可以是常量或符号值
 - 必须在函数体作用域内调用（`ctx.compound` 不能为空）
 - 创建的值会自动添加到当前 ctx 作用域的环境表中
@@ -201,12 +215,14 @@ std::shared_ptr<TensorValue> CreateTensor(
 创建符号标量（Symbolic Scalar）值对象，并自动添加到当前穿拖鞋、作用域的环境表中。
 
 #### Syntax
+
 ```cpp
 auto scalar = builder.CreateScalar(ctx, DataType::FP32, "scale1");
 auto iv = builder.CreateScalar(ctx, DataType::INT32, "i");
 ```
 
 #### 数据结构
+
 ```cpp
 std::shared_ptr<ScalarValue> CreateScalar(
     IRBuilderContext& ctx,
@@ -216,6 +232,7 @@ std::shared_ptr<ScalarValue> CreateScalar(
 ```
 
 #### 约束
+
 - 创建的标量是符号值（Symbolic），运行时确定
 - 必须在函数体作用域内调用（`ctx.compound` 不能为空）
 - 创建的值会自动添加到当前 ctx 作用域的环境表中
@@ -225,6 +242,7 @@ std::shared_ptr<ScalarValue> CreateScalar(
 创建常量标量值对象，并自动添加到当前 ctx 作用域的环境表中。
 
 #### Syntax
+
 ```cpp
 auto const0 = builder.CreateConst(ctx, int64_t(0), "const_0");
 auto const1 = builder.CreateConst(ctx, int64_t(1), "const_1");
@@ -232,12 +250,14 @@ auto pi = builder.CreateConst(ctx, 3.14, "const_pi");
 ```
 
 #### 数据结构
+
 ```cpp
 std::shared_ptr<ScalarValue> CreateConst(IRBuilderContext& ctx, int64_t v, std::string name = "");
 std::shared_ptr<ScalarValue> CreateConst(IRBuilderContext& ctx, double v, std::string name = "");
 ```
 
 #### 约束
+
 - 支持 int64_t 和 double 类型的常量
 - 类型自动推断（int64_t → INT64，double → FP64）
 - 必须在函数体作用域内调用（`ctx.compound` 不能为空）
@@ -250,6 +270,7 @@ std::shared_ptr<ScalarValue> CreateConst(IRBuilderContext& ctx, double v, std::s
 操作通过 Schema 系统统一处理。使用 `CreateBinaryOp`、`CreateUnaryOp` 等方法创建操作对象，然后通过 `Emit` 方法添加到指定 ctx 的 OpStatement。
 
 #### Syntax
+
 ```cpp
 // 创建二元操作
 auto result = builder.CreateTensor(ctx, tensorShape, DataType::FP32, "result");
@@ -263,6 +284,7 @@ builder.Emit(ctx, negOp);
 ```
 
 #### 数据结构
+
 ```cpp
 // 通过 DEFOP 宏生成的操作创建方法
 OperationPtr CreateBinaryOp(Opcode opcode, ValuePtr lhs, ValuePtr rhs, ValuePtr output);
@@ -282,6 +304,7 @@ OperationPtr Emit(IRBuilderContext& ctx, OperationPtr op);
 **返回**：创建的 Operation 对象
 
 #### 约束
+
 - 所有操作必须通过 `Emit` 方法添加，才会添加到指定 ctx 的 OpStatement
 - 输出值必须预先创建（通过 `CreateTensor`、`CreateScalar` 等）
 - 如果当前没有活动的 OpStatement，`Emit` 会自动创建一个
@@ -295,17 +318,20 @@ OperationPtr Emit(IRBuilderContext& ctx, OperationPtr op);
 创建操作语句，作为操作的容器，并设置为当前活动的 OpStatement。
 
 #### Syntax
+
 ```cpp
 auto opStmt = builder.CreateOpStmt(ctx);
 // 后续的 Emit 调用会将操作添加到这个 OpStatement 中
 ```
 
 #### 数据结构
+
 ```cpp
 OpStatementPtr CreateOpStmt(IRBuilderContext& ctx);
 ```
 
 #### 约束
+
 - 如果当前没有活动的 OpStatement，`Emit` 会自动创建一个
 - OpStatement 中可以包含多个操作，按顺序执行
 - 必须在函数体作用域内调用（`ctx.compound` 不能为空）
@@ -315,6 +341,7 @@ OpStatementPtr CreateOpStmt(IRBuilderContext& ctx);
 创建 for 循环语句。
 
 #### Syntax
+
 ```cpp
 auto i = builder.CreateScalar(ctx, DataType::INT32, "i");
 auto constant0 = builder.CreateConst(ctx, int64_t(0), "const_0");
@@ -331,6 +358,7 @@ builder.ExitForStatement(ctx, fs);  // 处理循环携带变量
 ```
 
 #### 数据结构
+
 ```cpp
 ForStatementPtr CreateForStmt(
     IRBuilderContext& ctx,
@@ -349,6 +377,7 @@ ForStatementPtr CreateForStmt(
 - `step`: 步长
 
 #### 约束
+
 - 循环变量、起始值、结束值、步长都必须是 ScalarValue 类型
 - 必须使用 `EnterForBody()` 进入循环体作用域
 - 循环体末尾必须手动调用 `ctx.PopScope()` 退出作用域
@@ -361,6 +390,7 @@ ForStatementPtr CreateForStmt(
 创建 if 条件语句。
 
 #### Syntax
+
 ```cpp
 auto cond = builder.CreateScalar(ctx, DataType::BOOL, "cond");
 auto ifs = builder.CreateIfStmt(ctx, cond);
@@ -382,6 +412,7 @@ builder.ExitIfStatement(ctx, ifs);  // 处理分支合并
 ```
 
 #### 数据结构
+
 ```cpp
 IfStatementPtr CreateIfStmt(IRBuilderContext& ctx, ScalarValuePtr cond);
 ```
@@ -391,6 +422,7 @@ IfStatementPtr CreateIfStmt(IRBuilderContext& ctx, ScalarValuePtr cond);
 - `cond`: 条件表达式（必须是 ScalarValue 类型）
 
 #### 约束
+
 - 条件必须是 ScalarValue 类型
 - 必须使用 `EnterIfThen()` 和 `EnterIfElse()` 分别进入 then 和 else 分支
 - 每个分支结束时必须手动调用 `ctx.PopScope()` 退出作用域
@@ -404,16 +436,19 @@ IfStatementPtr CreateIfStmt(IRBuilderContext& ctx, ScalarValuePtr cond);
 创建返回语句。
 
 #### Syntax
+
 ```cpp
 builder.CreateReturn(ctx, { scalar });
 ```
 
 #### 数据结构
+
 ```cpp
 ReturnStatementPtr CreateReturn(IRBuilderContext& ctx, ValuePtrs values);
 ```
 
 #### 约束
+
 - 返回值必须是可通过寄存器传递的值（Scalar）
 - 输出 tensor 通过参数方式传递，不在返回值中
 - 目前 ReturnStatement 必须且仅能在函数尾出现
@@ -424,16 +459,19 @@ ReturnStatementPtr CreateReturn(IRBuilderContext& ctx, ValuePtrs values);
 创建 yield 语句（用于循环和条件分支的值传递）。
 
 #### Syntax
+
 ```cpp
 builder.CreateYield(ctx, { new_acc0, new_acc1 });
 ```
 
 #### 数据结构
+
 ```cpp
 YieldStatementPtr CreateYield(IRBuilderContext& ctx, ValuePtrs values);
 ```
 
 #### 约束
+
 - 在 for 循环体中，yield 用于提供更新后的循环传递值
 - 在 if 的 then/else 分支中，yield 用于将分支结果回传给 if 语句
 - IRBuilder 通常会在 `ExitForStatement()` 和 `ExitIfStatement()` 中自动添加 yield，一般不需要手动调用
@@ -448,6 +486,7 @@ IRBuilder 使用显式的栈式作用域管理，通过 `IRBuilderContext` 的 `
 `IRBuilderContext` 存储所有构建状态，包括当前函数、复合语句、活动操作语句和作用域栈。
 
 #### Syntax
+
 ```cpp
 IRBuilderContext ctx;  // 创建上下文对象
 
@@ -471,11 +510,13 @@ ctx.PopScope();  // 手动退出函数体作用域
 - `activeOpStmt`: 之前的活跃的操作语句集合
 
 #### 作用域层次
+
 1. **函数输入作用域（InputCompound）**：存储函数参数
 2. **函数体作用域（Compound）**：函数体的主作用域，是输入作用域的子作用域
 3. **嵌套作用域**：For、If 等语句创建嵌套的作用域
 
 #### 约束
+
 - 作用域之间通过 `GetAncestorValues()` 查找父作用域中的变量，实现词法作用域语义
 - 必须手动调用 `ctx.PopScope()` 退出作用域，确保作用域栈的正确性
 - `EnterFunctionBody`、`EnterForBody`、`EnterIfThen`、`EnterIfElse` 只负责 push scope

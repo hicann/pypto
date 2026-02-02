@@ -60,7 +60,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
     手工准备第三方开源源码包的方法:
 
-    > 方法一：手工下载
+    方法一：手工下载
     >
     > ```bash
     > # 创建用于存放第三方开源软件源码包的目录path-to-your-thirdparty
@@ -69,7 +69,7 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
     > # 将上述三方库源码压缩包，下载到本地并上传到开发环境对应的`path-to-your-thirdparty`目录中
     > ```
 
-    > 方法二：通过辅助脚本下载
+    方法二：通过辅助脚本下载
     >
     > ```bash
     > # 创建用于存放第三方开源软件源码包的目录path-to-your-thirdparty
@@ -100,13 +100,15 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 #### 使用安装脚本
 
 toolkit包、ops包、PTO-inst包的下载与安装可通过项目tools目录下prepare_env.sh一键执行，命令如下，若遇到不支持系统，请参考该文件自行适配
+
 ```
 bash tools/prepare_env.sh --type=cann --device-type=a2
 ```
+
 | 全写                    | 类型   | 是否必须 | 说明                                       |
 |:----------------------|:-----|:-----|:-----------------------------------------|
-| --type                | str  | 是    | 脚本安装类型，可选[deps, cann, third_party, all] |
-| --device-type         | str  | 是    | 指定 NPU 型号，可选 [a2, a3]               |
+| --type                | str  | 是    | 脚本安装类型，可选：deps, cann, third_party, all |
+| --device-type         | str  | 是    | 指定 NPU 型号，可选：a2, a3              |
 | --install-path        | str  | 否    | 指定 CANN 包安装路径                            |
 | --download-path       | str  | 否    | 指定 CANN 包以及三方依赖包下载路径                     |
 | --with-install-driver | bool | 否    | 指定是否下载 NPU 驱动和固件包，默认为 false             |
@@ -139,6 +141,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
     - A2、aarch64：[CANN_A2-OPS-8.5.0.aarch64](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/aarch64/Ascend-cann-910b-ops_8.5.0_linux-aarch64.run)
     - A3、x86：[CANN_A3-OPS-8.5.0.x86](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/x86/Ascend-cann-A3-ops_8.5.0_linux-x86_64.run)
     - A3、aarch64：[CANN_A3-OPS-8.5.0.aarch64](https://ascend-cann.obs.cn-north-4.myhuaweicloud.com/pypto/cann/8.5.0/aarch64/Ascend-cann-A3-ops_8.5.0_linux-aarch64.run)
+
     ```
     # 确保安装包有可执行权限
     chmod +x Ascend-cann-${device_type}-ops_8.5.0_linux-${arch}.run
@@ -156,6 +159,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
     > 根据实际环境下载对应的安装包，下载链接如下(如果浏览器不支持自动下载，请选择右键，"链接另存为...")：
     > - x86：[cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/ubuntu_x86/cann-pto-isa_linux-x86_64.run)
     > - aarch64：[cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/ubuntu_aarch64/cann-pto-isa_linux-aarch64.run)
+>
     > ```
     > # 确保安装包有可执行权限
     > chmod +x cann-pto-isa_8.5.0_linux-${arch}.run
@@ -167,6 +171,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
     > - \$\{install-path\}：表示指定安装路径，默认安装在`/usr/local/Ascend`目录.
 
     > 方法二：下载源码方式
+>
     > ```bash
     > # 创建用于存放第三方开源软件源码包的目录path-to-your-pto-isa
     > mkdir -p ${path-to-your-pto-isa}
@@ -200,7 +205,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
 
  3. 选择已下载的.vsix插件文件，完成安装。
 
- ## 安装MPI依赖（可选）
+## 安装MPI依赖（可选）
 
   PyPTO的分布式用例依赖MPI：
 

@@ -26,7 +26,7 @@
 
         当E全为1时，若M全为0，表示的结果为±inf（取决于符号位）；若M不全为0，表示的结果为nan。
 
-        ![](../figures/流水任务运行示意图.png)
+        ![](../figures/pypto.cast.png)
 
         上图中S=0，E=15，M = 2<sup>-1</sup>  + 2<sup>-2</sup>，表示的结果为1.75。
 
@@ -42,7 +42,7 @@
 
         当E全为1时，若M全为0，表示的结果为±inf（取决于符号位）；若M不全为0，表示的结果为nan。
 
-        ![](../figures/流水任务运行示意图-0.png)
+        ![](../figures/pypto.cast-0.png)
 
         上图中S = 0，E = 127，M = 2<sup>-1</sup>  + 2<sup>-2</sup>，最终表示的结果为1.75 。
 
@@ -58,13 +58,13 @@
 
         当E全为1时，若M全为0，表示的结果为±inf（取决于符号位）；若M不全为0，表示的结果为nan。
 
-        ![](../figures/流水任务运行示意图-1.png)
+        ![](../figures/pypto.cast-1.png)
 
         上图中S = 0，E = 127，M = 2<sup>-1</sup>  + 2<sup>-2</sup>，最终表示的结果为1.75。
 
 -   二进制的舍入规则和十进制类似，具体如下：
 
-    ![](../figures/流水任务运行示意图-2.png)
+    ![](../figures/pypto.cast-2.png)
 
     -   CAST\_RINT模式下，若待舍入部分的第一位为0，则不进位；若第一位为1且后续位不全为0，则进位；若第一位为1且后续位全为0，当M的最后一位为0则不进位，当M的最后一位为1则进位。
 
@@ -87,7 +87,7 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE) -> Ten
 |------------|-----------|----------------------------------------------------------------------|
 | input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_BF16。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dtype      | 输入      | 精度转换后的数据类型。 <br> 支持的数据类型为：DT_FP32, DT_FP16, DT_INT32, DT_BF16, DT_INT8。 |
-| CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：<a href="../datatype/CastMode.md>CastMode</a> <br> 默认为 CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
+| CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md) 。<br> 默认为 CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
 
 ## 约束说明
 

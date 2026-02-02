@@ -9,8 +9,9 @@
   git fetch upstream master
   git rebase FETCH_HEAD
   ```
+
 * Add test cases for feat or fix done in the pull request
-* Document the code in the pull request, see more in [Document](document.md)
+* Document the code in the pull request
 * Request code reviews from committer or other contributors by @-ing them in the pull request comment
 
 ## Commit Message
@@ -49,6 +50,7 @@ Commit:
 * If multiple commits exist in the pull request, following order is recommended: `fixup` -> `refactor` -> `feat` -> `test`
 
 ## CI
+
 * Send `compile` in pull request comment to trigger CI compilation
 * The pull request can be merged after CI compilation and `approve` label from committer and `lgtm` label from other contributor
 * `code-check` warnings should be fixed before merging, or shielded by the rules defined in [Code Check Rule](./code-check-rule.yaml), New rules can be added in the rule file, and the PR of rules changes should be reviewed and approved by maintainer.
@@ -60,7 +62,9 @@ Commit:
 * The title of commit-msg and PR should follow the rule defined in [Commit Message](#commit-message)
 
 ### cla 签署
+
 * CLA 签署请参考 [CLA 使用指南](https://gitcode.com/cann/infrastructure/blob/main/docs/cla/CLA使用指南.md)
 
 ### robot 命令使用
+
 * `compile` 等相关命令请参考 [robot 使用指南](https://gitcode.com/cann/infrastructure/blob/main/docs/robot/robot使用指南.md)

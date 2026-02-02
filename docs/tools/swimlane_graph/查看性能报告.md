@@ -26,14 +26,14 @@
 
     **表 1**  参数说明
 
-   |参数|说明|
-   |--|--|
-   |Task Time|执行总时间，即第一个Task执行开始到最后一个Task执行完的时间。|
-   |iCache命中率（暂不支持）|iCache缓存命中率。|
-   |AICore Time|所有AI Core泳道中的任务总耗时。|
-   |AICore利用率|AI Core Time / (时间轴总时长 * AICore泳道的个数)。|
-   |Cube Cycles（暂不支持）|Cube占用的时钟周期。|
-   |Vector Cycles（暂不支持）|Vector占用的时钟周期。|
+    |参数|说明|
+    |--|--|
+    |Task Time|执行总时间，即第一个Task执行开始到最后一个Task执行完的时 间。|
+    |iCache命中率（暂不支持）|iCache缓存命中率。|
+    |AICore Time|所有AI Core泳道中的任务总耗时。|
+    |AICore利用率|AI Core Time / (时间轴总时长 * AICore泳道的个数)。|
+    |Cube Cycles（暂不支持）|Cube占用的时钟周期。|
+    |Vector Cycles（暂不支持）|Vector占用的时钟周期。|
 
 
 3.  查看某时间范围内的性能数据。

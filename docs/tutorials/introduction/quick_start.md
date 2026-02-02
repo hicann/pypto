@@ -193,7 +193,7 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
 
 3.  通过PyPTO Toolkit插件查看泳道图。
 
-    右键单击merged\_swimlane.json，在弹出的菜单中选择“使用PyPTO Toolkit打开”，如[图1](#fig19287173812306)所示。
+    右键单击merged\_swimlane.json，在弹出的菜单中选择“使用PyPTO Toolkit打开”，如下图所示。
 
     **图 1**  泳道图界面  
     ![](../figures/swimlane_graph.png "泳道图界面")

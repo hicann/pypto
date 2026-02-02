@@ -12,8 +12,8 @@ ffn\_shared\_expert\_quant算子对应GLM4.5网络中MoE共享专家的计算逻
 
 首先可以通过查看Tensor Graph进行问题的定位，主要步骤如下：
 
-1.  按照[开启调试模式](NPU上板调试.md)所述步骤开启调试模式，重新运行用例后获取ffn\_shared\_expert\_quant算子计算图。
-2.  按照[查看计算图](NPU上板调试.md)所述，使用PyPTO Toolkit可视化工具打开Tensor Graph阶段的计算图文件，例如：Before\_004\_ExpandFunction\_TENSOR\_share\_loop\_idx\_Unroll1\_PATH0\_4.json：
+1.  按照[开启调试模式](debug.md)所述步骤开启调试模式，重新运行用例后获取ffn\_shared\_expert\_quant算子计算图。
+2.  按照[查看计算图](debug.md)所述，使用PyPTO Toolkit可视化工具打开Tensor Graph阶段的计算图文件，例如：Before\_004\_ExpandFunction\_TENSOR\_share\_loop\_idx\_Unroll1\_PATH0\_4.json：
 
     ![](../figures/zh-cn_image_0000002500534720.png)
 
