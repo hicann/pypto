@@ -257,5 +257,24 @@ TEST_F(CommonOperationEliminateTest, IgnoreSpecialOp) {
     const int validOpNum = 6;
     EXPECT_EQ(function->Operations().size(), validOpNum);
 }
+
+TEST_F(CommonOperationEliminateTest, TestShmemGetGm2UBChecker){
+    ComputationalGraphBuilder G;
+    EXPECT_EQ(G.AddTensors(DataType::DT_INT32, {1, 1}, {"dummy"}), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_INT32, {1, 1, 4, 64}, {"shmemData"}), true);
+    EXPECT_EQ(G.AddTensors(DataType::DT_INT32, {4, 64}, {"out"}), true);
+    std::vector<Opcode> opCodes{Opcode::OP_SHMEM_GET_GM2UB};
+    std::vector<std::vector<std::string>> ioperands{{"dummy", "shmemData"}};
+    std::vector<std::vector<std::string>> ooperands{{"out"}};
+    std::vector<std::string> opNames{"TILE_SHMEM_GET_GM2UB"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"dummy", "shmemData"}), true);
+    EXPECT_EQ(G.SetOutCast({"out"}), true);
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    CommonOperationEliminate COE;
+    Status preCheckStatus = COE.PreCheck(*function);
+    EXPECT_EQ(preCheckStatus, SUCCESS) << "COE Precheck failed for OP_SHMEM_GET_GM2UB!";
+}
 } // namespace tile_fwk
 } // namespace npu

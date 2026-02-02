@@ -20,6 +20,9 @@ namespace tile_fwk {
 Status CommonOperationEliminateChecker::DoPreCheck(Function &function) {
     ALOG_INFO_F("PreCheck for CommonOperationEliminate.");
     for (auto &op : function.Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_SHMEM_GET_GM2UB) {
+            continue;
+        }
         if (op->GetOpAttribute() != nullptr) {
             size_t fromOffsetSize = -1;
             if (auto viewOpAttribute = dynamic_cast<ViewOpAttribute*>(op->GetOpAttribute().get())) {
