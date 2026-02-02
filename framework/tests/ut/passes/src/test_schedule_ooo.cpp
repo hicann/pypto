@@ -1055,7 +1055,7 @@ TEST_F(ScheduleOoOTest, TestDelBufCount) {
 TEST_F(ScheduleOoOTest, TestDelBufCount_1) {
     Function function(Program::GetInstance(), "", "", nullptr);
     OoOScheduler oooSchedule(function);
-    oooSchedule.bufRefCount[1] = -1;
+    oooSchedule.bufRefCount_[1] = -1;
     oooSchedule.DelBufRefCount(1);
 }
 

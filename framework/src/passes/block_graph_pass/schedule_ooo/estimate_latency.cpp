@@ -34,13 +34,13 @@ void LatencyEstimator::LaunchReadyIssue() {
 }
 
 Status LatencyEstimator::FreeBuffer(Operation* op) {
-    for (auto tensor : GetInOutOperand(op)) {
+    for (auto tensor : GetInOutOperandCached(op)) {
         auto memId = tensor->memoryrange.memId;
         if (DelBufRefCount(memId) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Tensor, "DelBufRefCount tensor [%d] failed.", memId);
             return FAILED;
         }
-        if (bufRefCount[memId] == 0) {
+        if (bufRefCount_[memId] == 0) {
             auto freeMemSize = localBufferMap[memId]->size;
             localMemoryCurrentSize[localBufferMap[memId]->memType] += freeMemSize;
             APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, currentSize %d, memId: %d.",
@@ -116,7 +116,7 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
             break;
         }
         Operation* op = pipe.Front();
-        auto memId = GetInOutOperand(op)[0]->memoryrange.memId;
+        auto memId = GetInOutOperandCached(op)[0]->memoryrange.memId;
         auto needMemSize = localBufferMap[memId]->size;
         if (localMemoryCurrentSize[memType] >= static_cast<long int>(needMemSize)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
@@ -124,7 +124,7 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
             APASS_LOG_DEBUG_F(Elements::Operation, "ExecuteAllocIssue memType: %d, currentSize %d, memId: %d.", memType, localMemoryCurrentSize[memType], memId);
             if (localMemoryCurrentSize[memType] > localMemSize[memType] ||
                 localMemoryCurrentSize[memType] < 0) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", GetInOutOperand(op)[0]);
+                APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", GetInOutOperandCached(op)[0]);
                 return FAILED;
             }
             pipe.PopFront();
@@ -134,7 +134,7 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
             }
         } else {
             canAlloc = false;
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot alloc Tensor[%d] ", GetInOutOperand(op)[0]);
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot alloc Tensor[%d] ", GetInOutOperandCached(op)[0]);
             break;
         }
     }
@@ -187,7 +187,7 @@ Status LatencyEstimator::SpillOnBlock() {
     }
 
     Operation* op = allocIssueQueue[spillMemType].Front();
-    size_t needMemSize = GetInOutOperand(op)[0]->MemorySize();
+    size_t needMemSize = GetInOutOperandCached(op)[0]->MemorySize();
     localMemoryCurrentSize[spillMemType] += static_cast<long int>(needMemSize);
     if (localMemoryCurrentSize[spillMemType] < 0 || localMemoryCurrentSize[spillMemType] > localMemSize[spillMemType]){
         APASS_LOG_ERROR_F(Elements::Operation, "Buffer[%d] is valid. Please check", spillMemType);

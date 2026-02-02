@@ -192,6 +192,9 @@ void OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue, MemoryType buf
 }
 
 void OoOScheduler::PrintDependencies() {
+    if (static_cast<int>(LoggerManager::GetManager().level) > static_cast<int>(LoggerLevel::DEBUG)) {
+        return;
+    }
     for (const auto &issue : issueEntries) {
         APASS_LOG_DEBUG_F(Elements::Operation, "%s, latency: %d.", issue->GetOpInfo().c_str(), issue->tileOp.GetLatency());
         for (const auto &preId : issue->predecessors) {
@@ -226,12 +229,12 @@ void OoOScheduler::UpdateBufferUsage(MemoryType bufferType, int memId, bool isFr
 }
 
 Status OoOScheduler::DelBufRefCount(const int memId) {
-    if (bufRefCount.find(memId) == bufRefCount.end()) {
+    if (bufRefCount_.find(memId) == bufRefCount_.end()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d].", memId);
         return FAILED;
     }
-    bufRefCount[memId]--;
-    if (bufRefCount[memId] < 0) {
+    bufRefCount_[memId]--;
+    if (bufRefCount_[memId] < 0) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] bufRefCount cannot less than 0.", memId);
         return FAILED;
     }
@@ -262,6 +265,7 @@ void OoOScheduler::InsertIssueEntries(IssueEntryPtr insertIssue) {
         }
     }
     auto insertPos = issueEntries.insert(it++, insertIssue);
+    issueEntriesOpMagic.insert(insertIssue->tileOp.GetOpMagic());
     for (auto adjustIt = insertPos + 1; adjustIt != issueEntries.end(); adjustIt++) {
         if ((*adjustIt)->execOrder >= insertIssue->execOrder) {
             (*adjustIt)->execOrder++;
@@ -508,7 +512,7 @@ Status OoOScheduler::FreeBuffer(IssueEntryPtr issue) {
             APASS_LOG_ERROR_F(Elements::Tensor, "DelBufRefCount tensor [%d] failed.", memId); 
             return FAILED; 
         }
-        if (bufRefCount[memId] == 0) {
+        if (bufRefCount_[memId] == 0) {
             auto corePair = tensorAllocCoreMap[memId];
             if (bufferManagerMap[corePair.first][corePair.second][localBufferMap[memId]->memType].Free(localBufferMap[memId]->id) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor [%d] failed.", memId); 
@@ -609,13 +613,8 @@ void OoOScheduler::LaunchReadyIssue() {
     }
 }
 
-bool OoOScheduler::IsInissueEntries(Operation* op) {
-    for (auto &issue : issueEntries) {
-        if (issue->tileOp.GetOpMagic() == op->GetOpMagic()) {
-            return true;
-        }
-    }
-    return false;
+bool OoOScheduler::IsInIssueEntries(Operation* op) {
+    return issueEntriesOpMagic.count(op->GetOpMagic());
 }
 
 Status OoOScheduler::ScheduleMainLoop() {
@@ -669,7 +668,7 @@ Status OoOScheduler::RetireIssue(IssueEntryPtr issue) {
             APASS_LOG_ERROR_F(Elements::Tensor, "DelBufRefCount tensor[%d] failed.", memId); 
             return FAILED; 
         }
-        if (bufRefCount[memId] == 0) {
+        if (bufRefCount_[memId] == 0) {
         // 加载时的核信息
             auto corePair =  tensorAllocCoreMap[memId];
             if (bufferManagerMap[corePair.first][corePair.second][localBufferMap[memId]->memType].Free(localBufferMap[memId]->id) != SUCCESS) {
@@ -720,7 +719,7 @@ Status OoOScheduler::GenSpillSchedule() {
         }
         pcIdx += 1;
     }
-    for (auto bufRef : bufRefCount) {
+    for (auto bufRef : bufRefCount_) {
         if (bufRef.second != 0) { 
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] bufRefCount not equal to 0!", bufRef.first); 
             return FAILED; 
@@ -824,13 +823,13 @@ void OoOScheduler::InitLocalBuffer(LogicalTensorPtr oOperand, int memId) {
 void OoOScheduler::UpdateBufRefCount(IssueEntryPtr issue, LogicalTensorPtr tensor) {
     int memId = tensor->memoryrange.memId;
     if (tensor->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
-        bufRefCount[memId]++;
+        bufRefCount_[memId]++;
         issue->reqMemIds.push_back(memId);
     }
 }
 
 void OoOScheduler::InitBufRefCount() {
-    bufRefCount.clear();
+    bufRefCount_.clear();
     for (const auto &issue : issueEntries) {
         issue->Clear();
         for (auto &tensor : issue->tileOp.GetIOperands()) {
@@ -1076,6 +1075,7 @@ Status OoOScheduler::InitIssueEntry(Operation* op, const std::unordered_map<Oper
         return FAILED;
     }
     issueEntries.emplace_back(issue);
+    issueEntriesOpMagic.insert(issue->tileOp.GetOpMagic());
     if (InitIssueCoreType(issue, op, opCoreMap) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "IssueEntry %s init coreType failed!", issue->GetOpInfo().c_str());
         return FAILED;
@@ -1173,11 +1173,11 @@ Status OoOScheduler::Schedule(const std::vector<Operation *> &operations, const 
 
 // UpdateRemainOpBufId函数不能直接用
 Status OoOScheduler::UpdateMemId(int oldMemId, int newMemId) {
-    if (bufRefCount.find(oldMemId) == bufRefCount.end()) {
+    if (bufRefCount_.find(oldMemId) == bufRefCount_.end()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d]", oldMemId);
         return FAILED;
     }
-    bufRefCount[newMemId] = 0;
+    bufRefCount_[newMemId] = 0;
     for (auto &issue : issueEntries) {
         if (issue->isRetired) {
             continue;
@@ -1185,8 +1185,8 @@ Status OoOScheduler::UpdateMemId(int oldMemId, int newMemId) {
         for (auto &memId : issue->reqMemIds) {
             if (memId == oldMemId) {
                 memId = newMemId;
-                bufRefCount[oldMemId] -= 1;
-                bufRefCount[newMemId] += 1;
+                bufRefCount_[oldMemId] -= 1;
+                bufRefCount_[newMemId] += 1;
             }
         }
         for (auto &outTensor : issue->tileOp.GetOOperands()) {
@@ -1195,7 +1195,7 @@ Status OoOScheduler::UpdateMemId(int oldMemId, int newMemId) {
             }
         }
     }
-    if (bufRefCount[oldMemId] != 0) {
+    if (bufRefCount_[oldMemId] != 0) {
         APASS_LOG_ERROR_F(Elements::Tensor, "oldMemId %d bufRefCount is not 0, UpdateMemId failed.", oldMemId);
         return FAILED;
     }

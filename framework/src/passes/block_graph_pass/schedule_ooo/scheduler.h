@@ -155,6 +155,7 @@ struct SpillInfo {
 class OoOScheduler {
 private:
     std::vector<IssueEntryPtr> issueEntries;
+    std::unordered_set<int> issueEntriesOpMagic;
     std::unordered_map<int, IssueEntryPtr> issueEntryMap;
 
     std::unordered_map<OpCoreType, std::vector<int>> CORE_INIT_CONFIGS;
@@ -163,7 +164,7 @@ private:
     // 分核数据结构
     std::unordered_map<OpCoreType, std::map<int, std::map<npu::tile_fwk::MemoryType, BufferPool>>> bufferManagerMap;
 
-    std::unordered_map<int, int> bufRefCount;
+    std::unordered_map<int, int> bufRefCount_;
     std::unordered_map<MemoryType, std::map<int, IssueEntryPtr>> tensorOccupyMap;
     // tensor和其初始化时对应的alloc的core类型 memId-core类型
     std::unordered_map<int, std::pair<OpCoreType, int>> tensorAllocCoreMap;
@@ -225,7 +226,7 @@ private:
     Status GenSpillSchedule();
     Status ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx);
     Status RetireIssue(IssueEntryPtr issue);
-    bool IsInissueEntries(Operation* op);
+    bool IsInIssueEntries(Operation* op);
     Status ScheduleMainLoop();
     void LaunchReadyIssue();
     Status RetireCoreIssue(OpCoreType coreType, int idx, uint64_t& commitCnt, int& nextCycle);

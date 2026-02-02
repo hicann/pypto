@@ -574,7 +574,7 @@ Status OoOScheduler::UpdateOOperandPreDependence(size_t startIndex, std::vector<
 // 回溯后，将队列 startIndex 位置之后的 issue 的 visitedIssue 状态还原回 false
 void OoOScheduler::RecoverSymbol(size_t startIndex, std::vector<IssueEntryPtr> curIssueEntries) {
     APASS_LOG_DEBUG_F(Elements::Operation, "RecoverSymbol  startIdx: %d, curIssue: %s", startIndex, curIssueEntries[startIndex]->GetOpInfo().c_str());
-    bufRefCount = recordBufRefCount[curIssueEntries[startIndex]];
+    bufRefCount_ = recordBufRefCount[curIssueEntries[startIndex]];
     for (size_t i = 0; i < curIssueEntries.size(); i++) {
         if (i > startIndex) {
             visitedIssue[curIssueEntries[i]] = false;
@@ -700,7 +700,7 @@ Status OoOScheduler::RetireIssueBuffer(std::map<MemoryType, int64_t> &curMemoryM
             APASS_LOG_ERROR_F(Elements::Operation, "DelBufRefCount tensor[%d] failed.", memId);
             return FAILED;
         }
-        if (bufRefCount[memId] == 0) {
+        if (bufRefCount_[memId] == 0) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Start to free memory:");
             if (ModifyBuffer(curMemoryMap, localBufferMap[memId]->memType, localBufferMap[memId]->size, false) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "Free tensor[%d] failed.", memId);
@@ -716,7 +716,7 @@ void OoOScheduler::issueMemoryUpdate(IssueEntryPtr issue, size_t startIndex, std
     recordIssueEntries[issue] = make_pair(startIndex, curIssueEntries);
     recordBufferAllocate[issue] = curMemoryMap;
     recordIssueBuffer[issue] = issue->tileOp.GetOutputOperand(0)->GetMemoryTypeOriginal();
-    recordBufRefCount[issue] = bufRefCount;
+    recordBufRefCount[issue] = bufRefCount_;
 }
 
 Status OoOScheduler::AllocExecute(IssueEntryPtr issue, std::vector<IssueEntryPtr> &curIssueEntries,

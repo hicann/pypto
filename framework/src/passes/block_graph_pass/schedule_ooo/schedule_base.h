@@ -71,18 +71,23 @@ public:
 
     std::unordered_map<Operation*, std::unordered_set<Operation*>> inGraph;
     std::unordered_map<Operation*, std::unordered_set<Operation*>> outGraph;
-    std::unordered_map<int, int> bufRefCount;
+    std::unordered_map<int, int> bufRefCount_;
     std::unordered_map<MemoryType, int64_t> localMemSize; //内存剩余情况
     std::unordered_map<MemoryType, int64_t> localMemoryCurrentSize;
     std::unordered_map<int, LocalBufferPtr> localBufferMap; //memid:local
     std::unordered_map<Operation*, std::unordered_set<Operation*>> opConsumers;
     std::unordered_map<Operation*, std::unordered_set<Operation*>> opProducers;
+    std::unordered_map<Operation*, LogicalTensors> inOutOperandsCache_;
 
     //  初始依赖的list序列
     std::vector<Operation*> operations;
 
-    LogicalTensors GetInOutOperand(Operation* op) {
+    const LogicalTensors& GetInOutOperandCached(Operation* op) {
+        auto it = inOutOperandsCache_.find(op);
+        if (it != inOutOperandsCache_.end()) return it->second;
+
         LogicalTensors inOutOperand;
+        inOutOperand.reserve(op->GetOOperands().size() + op->GetIOperands().size());
         for (auto o : op->GetOOperands()) {
             if (o->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
                 inOutOperand.push_back(o);
@@ -93,7 +98,8 @@ public:
                 inOutOperand.push_back(i);
             }
         }
-        return inOutOperand;
+        auto cacheIt = inOutOperandsCache_.emplace(op, std::move(inOutOperand)).first;
+        return cacheIt->second;
     }
 
     void InitMemorySize() {
@@ -150,13 +156,13 @@ public:
     }
 
     Status DelBufRefCount(const int memId) {
-        if (bufRefCount.find(memId) == bufRefCount.end()) {
+        if (bufRefCount_.find(memId) == bufRefCount_.end()) {
             APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d].", memId);
             return FAILED;
         }
-        bufRefCount[memId]--;
-        APASS_LOG_DEBUG_F(Elements::Tensor, "DelBufRefCount: memId [%d], refcount [%d].", memId, bufRefCount[memId]);
-        if (bufRefCount[memId] < 0) {
+        bufRefCount_[memId]--;
+        APASS_LOG_DEBUG_F(Elements::Tensor, "DelBufRefCount: memId [%d], refcount [%d].", memId, bufRefCount_[memId]);
+        if (bufRefCount_[memId] < 0) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] bufRefCount cannot less than 0.", memId);
             return FAILED;
         }
@@ -186,12 +192,12 @@ public:
     void UpdateBufRefCount(LogicalTensorPtr tensor) {
         int memId = tensor->memoryrange.memId;
         if (tensor->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
-            bufRefCount[memId]++;
+            bufRefCount_[memId]++;
         }
     }
 
     void InitBufRefCount() {
-        bufRefCount.clear();
+        bufRefCount_.clear();
         for (const auto &op : operations) {
             inGraph[op].clear();
             outGraph[op].clear();
@@ -380,7 +386,7 @@ public:
         std::map<int, Operation*> tensorAllocMap;
         for (const auto &op : list) {
             if (IsOpAlloc(op)) {
-                if (GetInOutOperand(op).size() != 1) {
+                if (GetInOutOperandCached(op).size() != 1) {
                     APASS_LOG_ERROR_F(Elements::Operation, "%s InOutOperand size not equal to 1.",
                         GetOpInfo(op).c_str());
                     return FAILED;

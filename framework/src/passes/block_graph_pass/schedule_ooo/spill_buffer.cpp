@@ -160,12 +160,12 @@ void OoOScheduler::ReplaceTensorMemId(IssueEntryPtr &issue, int oldMemId, int ne
 }
 
 Status OoOScheduler::UpdateRemainOpBufId(int oldMemId, int newMemId) {
-    if (bufRefCount.find(oldMemId) == bufRefCount.end()) {
+    if (bufRefCount_.find(oldMemId) == bufRefCount_.end()) {
         APASS_LOG_ERROR_F(Elements::Tensor, "bufRefCount cannot find Tensor[%d].", oldMemId);
         return FAILED;
     }
-    bufRefCount[newMemId] = bufRefCount[oldMemId] + TWO_ISSUE;
-    bufRefCount[oldMemId] = 0;
+    bufRefCount_[newMemId] = bufRefCount_[oldMemId] + TWO_ISSUE;
+    bufRefCount_[oldMemId] = 0;
     for (auto& issue : issueEntries) {
         if (issue->isRetired) {
             continue;
@@ -552,14 +552,14 @@ Status OoOScheduler::UpdateAssembleBuffer(SpillInfo &spillInfo, LocalBufferPtr a
         APASS_LOG_ERROR_F(Elements::Operation, "UpdateRemainOpBufId failed.");
         return FAILED;
     }
-    bufRefCount[assembleTensor->memoryrange.memId] = 0;
+    bufRefCount_[assembleTensor->memoryrange.memId] = 0;
     for (auto issue: issueEntries) {
         if (issue->isRetired) {
             continue;
         }
         for (auto memId : issue->reqMemIds) {
             if (memId == assembleTensor->memoryrange.memId) {
-                bufRefCount[assembleTensor->memoryrange.memId]++;
+                bufRefCount_[assembleTensor->memoryrange.memId]++;
             }
         } 
     }
