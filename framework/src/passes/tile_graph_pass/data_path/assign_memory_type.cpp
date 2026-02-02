@@ -23,6 +23,7 @@
 #include "interface/configs/config_manager.h"
 #include "passes/pass_check/assign_memory_type_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/checker_utils.h"
 
 #define MODULE_NAME "AssignMemoryType"
 
@@ -99,7 +100,7 @@ void AssignMemoryType::RunOnOperation(Operation &operation) {
         APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] input %d mem original %s --> %s.", operation.GetOpcodeStr().c_str(),
             operation.GetOpMagic(), tensor->magic, BriefMemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str(),
             BriefMemoryTypeToString(inputsMemType[i]).c_str());
-        if(opcode == Opcode::OP_A_MUL_B || opcode == Opcode::OP_A_MULACC_B) {
+        if (OpChecker::check(operation, OpChecker::CalcTypeChecker(OpCalcType::MATMUL))) {
             //对A_MUL_B的输入tensor的mem设置做特殊处理
             ProcessAmulBInput(operation, tensor);
             continue;
@@ -142,7 +143,7 @@ void AssignMemoryType::ProcessAmulBInput(Operation &operation, LogicalTensorPtr 
     auto &producerOps = tensor->GetProducers();
     for(const auto &producerOp : producerOps) {
         auto producerOpcode = producerOp->GetOpcode();
-        if (producerOpcode == Opcode::OP_A_MUL_B || producerOpcode == Opcode::OP_A_MULACC_B) {
+        if (OpChecker::check(producerOp, OpChecker::CalcTypeChecker(OpCalcType::MATMUL))) {
             tensor->SetMemoryTypeOriginal(MemoryType::MEM_L0C, true);
             inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0C);
             continue;
@@ -152,11 +153,13 @@ void AssignMemoryType::ProcessAmulBInput(Operation &operation, LogicalTensorPtr 
             tensor->SetMemoryTypeOriginal(attrToType, true);
             inserter.UpdateTensorTobeMap(tensor,operation, attrToType);
             continue;
-        }else if (producerOpcode == Opcode::OP_L1_TO_L0A || producerOpcode == Opcode::OP_L1_TO_L0_AT) {
+        } else if (OpChecker::check(producerOp, OpChecker::CalcTypeChecker(OpCalcType::MOVE_LOCAL),
+            OpChecker::InputMemTypeChecker(MemoryType::MEM_L1), OpChecker::OutputMemTypeChecker(MemoryType::MEM_L0A))) {
             tensor->SetMemoryTypeOriginal(MemoryType::MEM_L0A, true);
             inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0A);
             continue;
-        }else if (producerOpcode == Opcode::OP_L1_TO_L0B || producerOpcode == Opcode::OP_L1_TO_L0_BT) {
+        } else if (OpChecker::check(producerOp, OpChecker::CalcTypeChecker(OpCalcType::MOVE_LOCAL),
+            OpChecker::InputMemTypeChecker(MemoryType::MEM_L1), OpChecker::OutputMemTypeChecker(MemoryType::MEM_L0B)))  {
             tensor->SetMemoryTypeOriginal(MemoryType::MEM_L0B, true);
             inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0B);
             continue;
