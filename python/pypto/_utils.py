@@ -34,10 +34,8 @@ def to_syms(value: Union[Sequence[int], Sequence[SymbolicScalar]]) -> List[pypto
     return [to_sym(v) for v in value]
 
 
-def ceildiv(cur_s: SymInt, block_size: SymInt) -> SymInt:
-    result = math.ceil(float(cur_s) / float(block_size))
-    return SymInt(result) 
-
+def ceildiv(a: SymInt, b: SymInt) -> SymInt:	 
+    return (a + b - 1) // b
 
 # only outer takes effect void avoid tensor.py hide source_location of user code
 _source_location_depth = 0

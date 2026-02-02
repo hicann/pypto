@@ -91,6 +91,11 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil) {
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TCeil(ubTensor_1, ubTensor_1);
+)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor) {
@@ -131,6 +136,11 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor) {
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TFloor(ubTensor_1, ubTensor_1);
+)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenDynCalcInteger, TestDynOpTrunc) {
@@ -171,5 +181,10 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpTrunc) {
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TTrunc(ubTensor_1, ubTensor_1);
+)!!!";
+    CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk
