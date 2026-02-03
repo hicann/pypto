@@ -25,7 +25,9 @@ namespace npu {
 namespace tile_fwk {
 class LoopaxesProc : public Pass {
 public:
-    LoopaxesProc() : Pass("LoopaxesProc") {}
+    LoopaxesProc() : Pass("LoopaxesProc") {
+        SetSupportedArches({NPUArch::DAV_3510});
+    }
     ~LoopaxesProc() override = default;
     Status RunOnFunction(Function &function) override;
 private:

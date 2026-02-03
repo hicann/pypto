@@ -28,6 +28,7 @@
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
+#include "passes/pass_mgr/pass_manager.cpp"
 
 namespace npu::tile_fwk {
 class TestCodegenForLoop : public ::testing::Test {
@@ -42,6 +43,7 @@ public:
         config::SetPassGlobalConfig(KEY_VF_OPT_MARK_FOR, true);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        config::SetHostConfig(KEY_STRATEGY, "LoopAxesPassTestStrategy");
         IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
         IdGen<IdType::CG_USING_NAME>::Inst().SetId(DummyFuncMagic);
         IdGen<IdType::CG_VAR_NAME>::Inst().SetId(DummyFuncMagic);
@@ -55,6 +57,35 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
     std::vector<int64_t> tile_shape = {2, 2, 2, 8};
 
     TileShape::Current().SetVecTile(tile_shape);
+    PassManager &passManager = PassManager::Instance();
+    passManager.RegisterStrategy(
+        "LoopAxesPassTestStrategy", {
+                                              {"RemoveRedundantReshape",         PassName::REMOVE_REDUNDANT_RESHAPE},
+                                              {        "ExpandFunction",                  PassName::EXPAND_FUNCTION},
+                                              {           "DuplicateOp",                     PassName::DUPLICATE_OP},
+                                              {     "MergeViewAssemble",              PassName::MERGE_VIEW_ASSEMBLE},
+                                              {      "AssignMemoryType",               PassName::ASSIGN_MEMORY_TYPE},
+                                              {"SplitLargeFanoutTensor",        PassName::SPLIT_LARGE_FANOUT_TENSOR},
+                                              {          "SplitReshape",                    PassName::SPLIT_RESHAPE},
+                                              {     "RemoveRedundantOp",              PassName::REMOVE_REDUNDANT_OP},
+                                              {        "GenerateMoveOp",                 PassName::GENERATE_MOVE_OP},
+                                              { "CommonOperationEliminate",    PassName::COMMON_OPERATION_ELIMINATE},
+                                              {              "AxisCombine",                  PassName::AXIS_COMBINE},
+                                              {           "PadLocalBuffer",              PassName::PAD_LOCAL_BUFFER},
+                                              {   "RemoveUnalignedReshape",      PassName::REMOVE_UNALIGNED_RESHAPE},
+                                              {            "ReplaceTensor",                PassName::REPLACE_TENSOR},
+                                              {          "PreGraphProcess",             PassName::PRE_GRAPH_PROCESS},
+                                              {            "InferDynShape",               PassName::INFER_DYN_SHAPE},
+                                              {       "SubgraphToFunction",          PassName::SUBGRAPH_TO_FUNCTION},
+                                              {          "InferParamIndex",             PassName::INFER_PARAM_INDEX},
+                                              {        "SrcDstBufferMerge",          PassName::SRC_DST_BUFFER_MERGE},
+                                              {                 "AddAlloc",                     PassName::ADD_ALLOC},
+                                              {              "OoOSchedule",                  PassName::OOO_SCHEDULE},
+                                              {        "GlobalMemoryReuse",           PassName::GLOBAL_MEMORY_REUSE},
+                                              {              "RemoveAlloc",                  PassName::REMOVE_ALLOC},
+                                              {           "CopyOutResolve",              PassName::COPY_OUT_RESOLVE},
+                                              {               "InsertSync",                   PassName::INSERT_SYNC},
+    });
     Tensor input_a(DT_FP32, shape, "A");
     Tensor input_b(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "Output");
@@ -73,6 +104,10 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     function->SetUnderDynamicFunction(true);
+    LoopaxesProc lpPass;
+    lpPass.RunOnFunction(*function);
+    CodegenPreproc cpPass;
+    cpPass.RunOnFunction(*function); 
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -82,8 +117,8 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
 
     // 定义第一个待检查的目标代码片段
     const std::string expect1 = R"(for (uint16_t idx0 = 0; idx0 < 1; ++idx0) {
-  for (uint16_t idx1 = 0; idx1 < sym_84_dim_0; ++idx1) {
-    for (uint16_t idx2 = 0; idx2 < sym_84_dim_1; ++idx2) {
+  for (uint16_t idx1 = 0; idx1 < sym_82_dim_0; ++idx1) {
+    for (uint16_t idx2 = 0; idx2 < sym_82_dim_1; ++idx2) {
         auto tileOffsets = TileOffset(idx0, idx1, idx2);
         ubTensor_11_low2DimInLoop.SetAddr(ubTensor_11.GetLinearAddr(tileOffsets));
         ubTensor_3_low2DimInLoop.SetAddr(ubTensor_3.GetLinearAddr(tileOffsets));
@@ -97,8 +132,8 @@ TEST_F(TestCodegenForLoop, TestForLoop) {
     CheckStringExist(expect1, res);
 
     const std::string expect2 = R"(for (uint16_t idx0 = 0; idx0 < 1; ++idx0) {
-  for (uint16_t idx1 = 0; idx1 < sym_84_dim_0; ++idx1) {
-    for (uint16_t idx2 = 0; idx2 < sym_84_dim_1; ++idx2) {
+  for (uint16_t idx1 = 0; idx1 < sym_82_dim_0; ++idx1) {
+    for (uint16_t idx2 = 0; idx2 < sym_82_dim_1; ++idx2) {
         auto tileOffsets = TileOffset(idx0, idx1, idx2);
         ubTensor_11_low2DimInLoop.SetAddr(ubTensor_11.GetLinearAddr(tileOffsets));
         ubTensor_5_low2DimInLoop.SetAddr(ubTensor_5.GetLinearAddr(tileOffsets));
