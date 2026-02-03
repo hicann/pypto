@@ -175,7 +175,7 @@ def moe_fusion_kernel(hidden_states_shape, mm_weight_shape, e_score_bias_shape, 
             pypto.set_vec_tile_shapes(view_first, ne)
             tile_logits_fp32 = pypto.cast(tile_logits, pypto.DT_FP32)
             e_score_bias_2d_tile = pypto.tensor([tile_batch, ne], e_score_bias_2d.dtype, "e_score_bias_2d_tile")
-            for tmp_idx in pypto.loop(tile_batch):
+            for tmp_idx in range(tile_batch):
                 pypto.assemble(e_score_bias_2d, [tmp_idx, 0], e_score_bias_2d_tile)
             e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 

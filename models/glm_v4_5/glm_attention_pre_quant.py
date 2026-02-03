@@ -365,7 +365,7 @@ def quant_attention_pre(bs, hidden_size, total_head_size, head_size, q_size, kv_
             residual_bf16 = pypto.cast(x_f32, input_dtype)
             x_int8 = pypto.tensor([bs_tile, hidden_size], pypto.DT_INT8, "x_int8")
 
-            for tmp_idx in pypto.loop(bs_tile):
+            for tmp_idx in range(bs_tile):
                 pypto.set_vec_tile_shapes(1, vec_tile_value)
                 x_gamma_2d_fp32 = pypto.cast(x_gamma_2d, calc_dtype)
                 x_bias_2d_fp32 = pypto.cast(x_bias_2d, calc_dtype)
