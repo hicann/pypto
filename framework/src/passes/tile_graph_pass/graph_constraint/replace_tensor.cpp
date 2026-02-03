@@ -223,7 +223,7 @@ void ReplaceTensor::UniteTensor(Function &function, UnionFind &uf) {
     }
 }
 
-Status ReplaceTensor::FindBaseTensor(Function &function, std::unordered_map<LogicalTensorPtr, int> &tensorToOrderIndex, LogicalTensors &group, LogicalTensorPtr &baseTensor) {
+Status ReplaceTensor::FindBaseTensor(Function &function, const std::unordered_map<LogicalTensorPtr, int> &tensorToOrderIndex, LogicalTensors &group, LogicalTensorPtr &baseTensor) {
     for (const auto &curTensor : group) {
         if (function.IsFromInCast(curTensor) || function.IsFromOutCast(curTensor)) {
             if (baseTensor == nullptr) {
@@ -251,9 +251,9 @@ Status ReplaceTensor::FindBaseTensor(Function &function, std::unordered_map<Logi
                                 curTensor->GetMagic(), curShape, baseTensor->GetMagic(), baseShape);
                 baseTensor = curTensor;
                 baseShape = curShape;
-            } else if (curShape == baseShape && tensorToOrderIndex[curTensor] < tensorToOrderIndex[baseTensor]) {
+            } else if (curShape == baseShape && tensorToOrderIndex.at(curTensor) < tensorToOrderIndex.at(baseTensor)) {
                 APASS_LOG_INFO_F(Elements::Tensor, "Replace curTensor %d idx %d to baseTensor %d idx %d.",
-                                curTensor->GetMagic(), tensorToOrderIndex[curTensor], baseTensor->GetMagic(), tensorToOrderIndex[baseTensor]);
+                                curTensor->GetMagic(), tensorToOrderIndex.at(curTensor), baseTensor->GetMagic(), tensorToOrderIndex.at(baseTensor));
                 baseTensor = curTensor;
             }
         }

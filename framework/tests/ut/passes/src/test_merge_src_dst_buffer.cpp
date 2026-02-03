@@ -563,7 +563,7 @@ TEST_F(MergeSrcDstBufferTest, UnReusePreMulL0BMemoryForMultiConsumers) {
     }
 }
 
-void ConstructGrapgForOnlyOneSubPathReuse(ComputationalGraphBuilder& G) {
+void ConstructGraphForDisableReuseMultiPath(ComputationalGraphBuilder& G) {
     // add tensor
     DataType dateType = DataType::DT_FP16;
     Shape shape = {16, 16};
@@ -589,9 +589,9 @@ void ConstructGrapgForOnlyOneSubPathReuse(ComputationalGraphBuilder& G) {
     EXPECT_EQ(G.SetOutCast({"outcast1", "outcast2"}), true);
 }
 
-TEST_F(MergeSrcDstBufferTest, OnlyOneSubPathMemoryReuse) {
+TEST_F(MergeSrcDstBufferTest, DisableReuseWhenMultiSubPath) {
     ComputationalGraphBuilder G;
-    ConstructGrapgForOnlyOneSubPathReuse(G);
+    ConstructGraphForDisableReuseMultiPath(G);
     Function *function = G.GetFunction();
     EXPECT_NE(function, nullptr);
 
@@ -625,7 +625,7 @@ TEST_F(MergeSrcDstBufferTest, OnlyOneSubPathMemoryReuse) {
             thirdMemId = inputTensor->memoryrange.memId;
         }
     }
-    EXPECT_TRUE(((firstMemId == secondMemId) || (firstMemId == thirdMemId)));
+    EXPECT_TRUE(((firstMemId != secondMemId) && (firstMemId != thirdMemId)));
     EXPECT_NE(secondMemId, thirdMemId);
 }
 
