@@ -21,6 +21,7 @@
 #include "interface/utils/serialization.h"
 #include "raw_tensor.h"
 #include <string>
+#include <cstdint>
 
 using namespace npu::tile_fwk;
 
@@ -118,7 +119,8 @@ void RawTensor::AddRefCount(int value) {
 }
 
 int64_t RawTensor::GetRawDataSize() const {
-    return GetRawShapeSize() * BytesOf(datatype);
+    int64_t shapeSize = GetRawShapeSize();
+    return shapeSize >= 0 ? shapeSize * BytesOf(datatype) : INT64_MAX;
 }
 
 int64_t RawTensor::GetRawShapeSize() const {

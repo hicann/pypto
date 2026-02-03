@@ -34,7 +34,7 @@ public:
     T Get(int index) const;
 
     void Append(uint64_t hash) {
-        char32_t l = hash;
+        char32_t l = hash & 0xFFFFFFFF;
         char32_t h = hash >> 32;
         this->push_back(l);
         this->push_back(h);

@@ -48,7 +48,7 @@ struct IdListKey {
 
     friend uint32_t HashValue(const IdListKey& k) {
         uint32_t shift = 16;
-        return k.hash ^ (k.len << shift);
+        return (k.hash & 0xFFFFFFFF) ^ (k.len << shift);
     }
 };
 
@@ -118,7 +118,8 @@ private:
         }
     }
 
-    void ConnectVirtualTopo(std::vector<CoreFunctionTopo*>& oldTopoVec, uint64_t& virtualTopoId, bool isPure) {
+    void ConnectVirtualTopo(
+        std::vector<CoreFunctionTopo*>& oldTopoVec, uint64_t& virtualTopoId, bool isPure) __NO_UBSAN {
         CoreFunctionTopo* oldTopo = oldTopoVec.front();
 
         // new virtual topo node
@@ -283,7 +284,7 @@ private:
         };
     }
 
-    uint64_t IdListHash(const void* key, int len, unsigned int seed) {
+    uint64_t IdListHash(const void* key, int len, unsigned int seed) __NO_UBSAN {
         const uint64_t m = 0xc6a4a7935bd1e995;
         const int r = 47;
         uint64_t h = seed ^ (len * m);

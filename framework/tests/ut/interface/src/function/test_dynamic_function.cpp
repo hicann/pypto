@@ -177,10 +177,10 @@ TEST_F(DynamicFunctionTest, TestDynOffset) {
 }
 
 struct MopCall {
-    static int64_t func() { return 0; }
-    static int64_t func1(int64_t arg0) { return arg0; }
-    static int64_t func2(int64_t arg0, int64_t arg1) { return arg0 + arg1; }
-    static int64_t func3(int64_t arg0, int64_t arg1, int64_t arg2) { return arg0 + arg1 + arg2; }
+    static long long func() { return 0; }
+    static long long func1(long long arg0) { return arg0; }
+    static long long func2(long long arg0, long long arg1) { return arg0 + arg1; }
+    static long long func3(long long arg0, long long arg1, long long arg2) { return arg0 + arg1 + arg2; }
 };
 
 #define PTR_TO_ULONG(p) reinterpret_cast<int64_t>(reinterpret_cast<void *> (p))

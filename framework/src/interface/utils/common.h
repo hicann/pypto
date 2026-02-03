@@ -37,6 +37,13 @@
 
 namespace npu::tile_fwk {
 using Status = uint32_t;
+
+#ifdef __clang__
+#define __NO_UBSAN __attribute__((no_sanitize("unsigned-integer-overflow")))
+#else
+#define __NO_UBSAN
+#endif
+
 #define SUCCESS 0
 #define FAILED 1
 #define CACHELINE_SIZE_FOR_B64 64
@@ -101,7 +108,7 @@ inline constexpr std::underlying_type_t<T> ToUnderlying(T value) {
 }
 
 template <typename T>
-inline void HashCombine(std::size_t &seed, const T &val) {
+inline void HashCombine(std::size_t &seed, const T &val) __NO_UBSAN {
     seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 0x6) + (seed >> 0x2);
 }
 
