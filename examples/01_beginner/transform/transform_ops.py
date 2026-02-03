@@ -57,7 +57,7 @@ def get_device_id():
     
 def assemble_wrapper(mode: pypto.RunMode, input_shape: tuple, out_shape: tuple, offsets: list):
 
-    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def assemble_kernel(
         x: pypto.Tensor(input_shape, pypto.DT_FP32),
         out: pypto.Tensor(out_shape, pypto.DT_FP32),
@@ -163,7 +163,7 @@ def test_assemble_different_offsets_shapes(device_id: int = None, run_mode: str 
 
 
 def gather_wrapper(mode: pypto.RunMode, dim: int, input_shape: tuple, index_shape: tuple):
-    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def gather_kernel(
         input_tensor: pypto.Tensor(input_shape, pypto.DT_INT32),
         index_tensor: pypto.Tensor(index_shape, pypto.DT_INT32)
@@ -424,7 +424,7 @@ def concat_op(a_shape: tuple, b_shape: tuple, dim: int, run_mode: str = "npu", d
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
-    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def concat_kernel(a: pypto.Tensor(a_shape, pypto.DT_FP32),
                           b: pypto.Tensor(b_shape, pypto.DT_FP32)
                         ) -> pypto.Tensor(out_shape, pypto.DT_FP32):

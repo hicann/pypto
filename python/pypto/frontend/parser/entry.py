@@ -319,7 +319,7 @@ class JitCallableWrapper:
             out_tensor = torch.empty(shape, dtype=dtype, device=device)
             out_tensors.append(out_tensor)
 
-        self._compile_if_needed(concrete_input_shapes, in_tensors, out_tensors)
+        self._compile_if_needed(concrete_input_shapes, in_tensors, out_tensors, input_tensor_defs)
 
         # Execute the function using dispatch based on run mode
         def convert_tensors_with_metadata(torch_tensors, tensor_defs):
@@ -422,24 +422,58 @@ class JitCallableWrapper:
                         raise
         return nonlocal_vars
 
-    def _get_compilation_cache_key(self) -> Optional[tuple]:
+    def _get_compilation_cache_key(
+        self,
+        input_tensor_defs: Optional[list] = None,
+        concrete_input_shapes: Optional[list[list[int]]] = None,
+    ) -> Optional[tuple]:
         """Generate a cache key for compiled functions.
 
         This enables automatic caching of compilation results for factory function patterns.
-        Functions with identical source code and options can reuse compilation results,
-        avoiding redundant compilation overhead.
+        Functions with identical source code, input shapes, and options can reuse compilation
+        results, avoiding redundant compilation overhead.
+
+        The cache key is generated based on:
+        1. Source code
+        2. Normalized input shapes (dynamic dimensions replaced with -1)
+        3. Compilation options
+        4. Closure variables (nonlocals captured by the function)
+
+        Parameters
+        ----------
+        input_tensor_defs : Optional[list], optional
+            Tensor definitions from the parser signature, containing shape information
+            that may include SymbolicScalar for dynamic dimensions.
+        concrete_input_shapes : Optional[list[list[int]]], optional
+            Actual concrete shapes of input tensors at runtime.
 
         Returns
         -------
         Optional[tuple]
             A hashable cache key, or None if caching is not applicable.
-            The key consists of: (source_code, options_hash)
+            The key consists of: (source_code, normalized_shapes, options_hash, closure_hash)
         """
         try:
-            # Use the code object's identity as the primary key
+            # Use the source code as the primary key
             # For factory functions, each call creates a new code object,
             # so we need to use source code string instead
             source_code = inspect.getsource(self._original_func)
+
+            # Normalize shapes: replace dynamic dimensions with -1
+            normalized_shapes = None
+            if input_tensor_defs is not None and concrete_input_shapes is not None:
+                normalized_shapes = []
+                for tensor_def, concrete_shape in zip(input_tensor_defs, concrete_input_shapes):
+                    normalized_shape = []
+                    for dim, concrete_dim in zip(tensor_def.shape, concrete_shape):
+                        if isinstance(dim, pypto.SymbolicScalar):
+                            # Dynamic dimension: use -1 as placeholder
+                            normalized_shape.append(-1)
+                        else:
+                            # Static dimension: use concrete value
+                            normalized_shape.append(concrete_dim)
+                    normalized_shapes.append(tuple(normalized_shape))
+                normalized_shapes = tuple(normalized_shapes)
 
             # Create a hashable representation of options
             def make_hashable(obj):
@@ -464,7 +498,14 @@ class JitCallableWrapper:
                 make_hashable(self._debug_options),
             )
 
-            return (source_code, options_hash)
+            # Include closure variables in the cache key
+            # This ensures that functions with different closure variable values
+            # (e.g., different offsets in assemble_wrapper) don't incorrectly share
+            # the same cached compilation result
+            closure_vars = self._get_func_nonlocals(self._original_func)
+            closure_hash = make_hashable(closure_vars) if closure_vars else None
+
+            return (source_code, normalized_shapes, options_hash, closure_hash)
         except (OSError, TypeError):
             # If we can't generate a cache key (e.g., source not available),
             # disable caching for this function
@@ -560,6 +601,7 @@ class JitCallableWrapper:
         concrete_input_shapes: list[list[int]],
         in_tensors: list[torch.Tensor],
         out_tensors: list[torch.Tensor],
+        input_tensor_defs: Optional[list] = None,
     ) -> None:
         """Compile the function on first call if not already compiled (lazy compilation).
 
@@ -570,12 +612,12 @@ class JitCallableWrapper:
         3. Avoiding backend initialization during module load
 
         Additionally, it uses a global compilation cache to reuse compilation results
-        for functions with identical source code and options. This is particularly
-        useful for factory function patterns where the same function is created multiple
-        times with identical implementations.
+        for functions with identical source code, input shapes, and options. This is
+        particularly useful for factory function patterns where the same function is created
+        multiple times with identical implementations.
 
         The compilation process:
-        1. Check global cache for existing compilation result
+        1. Check global cache for existing compilation result (based on source code + shapes)
         2. If cache hit, reuse the compiled function and handler
         3. If cache miss:
            a. Create parser and parse the function AST
@@ -594,12 +636,16 @@ class JitCallableWrapper:
             Input tensors for verification setup.
         out_tensors : list[torch.Tensor]
             Output tensors for verification setup.
+        input_tensor_defs : Optional[list], optional
+            Tensor definitions from the parser signature, containing shape information
+            that may include SymbolicScalar for dynamic dimensions. Used to generate
+            cache keys based on normalized shapes.
         """
         if self._is_compiled:
             return
 
         # Try to get from compilation cache (only if caching is enabled)
-        cache_key = self._get_compilation_cache_key()
+        cache_key = self._get_compilation_cache_key(input_tensor_defs, concrete_input_shapes)
         if self._use_cache and cache_key is not None and cache_key in JitCallableWrapper._compilation_cache:
             cached_result = JitCallableWrapper._compilation_cache[cache_key]
             self._pto_function = cached_result["pto_function"]
