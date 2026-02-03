@@ -76,7 +76,7 @@ def sum_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = Fal
         out_shape.pop(dim)
         out_shape = tuple(out_shape)
 
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
     def sum_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
         tile_shapes = [8 for _ in range(len(a.shape))]
         pypto.set_vec_tile_shapes(*tile_shapes)
@@ -199,7 +199,8 @@ def amax_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = Fa
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(
-        runtime_options={"run_mode": mode}
+        runtime_options={"run_mode": mode},
+        use_cache=False
         )
     def amax_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
         tile_shapes = [8 for _ in range(len(a.shape))]
@@ -328,7 +329,8 @@ def amin_op(a: torch.Tensor, dim: int, run_mode: str = "npu", keepdim: bool = Fa
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
         
     @pypto.frontend.jit(
-        runtime_options={"run_mode": mode}
+        runtime_options={"run_mode": mode}, 
+        use_cache=False
     )
     def amin_kernel(a: pypto.Tensor(shape, dtype)) -> pypto.Tensor(out_shape, dtype):
         tile_shapes = [8 for _ in range(len(a.shape))]
@@ -455,7 +457,7 @@ def maximum_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
         
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
     def maximum_kernel(a: pypto.Tensor(shape1, dtype), b: pypto.Tensor(shape2, dtype)) -> pypto.Tensor(shape1, dtype):
         tile_shapes = [8 for _ in range(len(a.shape))]
         pypto.set_vec_tile_shapes(*tile_shapes)
@@ -519,7 +521,7 @@ def minimum_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
         
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
     def minimum_kernel(a: pypto.Tensor(shape, dtype), b: pypto.Tensor(shape, dtype)) -> pypto.Tensor(shape, dtype):
         tile_shapes = [8 for _ in range(len(a.shape))]
         pypto.set_vec_tile_shapes(*tile_shapes)

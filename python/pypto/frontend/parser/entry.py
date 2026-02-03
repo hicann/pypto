@@ -149,7 +149,12 @@ class JitCallableWrapper:
         Options for verification.
     _debug_options : Optional[dict[str, Any]]
         Options for debugging (including runtime_debug_mode).
+    _use_cache : bool
+        Whether to use compilation caching. If False, force recompilation.
     """
+
+    # Global compilation cache
+    _compilation_cache: dict[tuple, dict[str, Any]] = {}
 
     def __init__(
         self,
@@ -163,6 +168,7 @@ class JitCallableWrapper:
         verify_options: Optional[dict[str, Any]] = None,
         debug_options: Optional[dict[str, Any]] = None,
         captured_locals: Optional[dict[str, Any]] = None,
+        use_cache: bool = True,
     ):
         """Initialize the JIT callable wrapper.
 
@@ -186,6 +192,9 @@ class JitCallableWrapper:
             Options for verification during compilation.
         debug_options : Optional[dict[str, Any]], optional
             Options for debugging (e.g., runtime_debug_mode).
+        use_cache : bool, optional
+            Whether to use compilation caching. If False, force recompilation.
+            Defaults to True.
         """
         self._pto_function = pto_function
         self._original_func = original_func
@@ -195,6 +204,7 @@ class JitCallableWrapper:
         self._captured_locals = (
             None if captured_locals is None else dict(captured_locals)
         )
+        self._use_cache = use_cache
 
         # Handling options
         self._codegen_options = (
@@ -411,6 +421,54 @@ class JitCallableWrapper:
                         raise
         return nonlocal_vars
 
+    def _get_compilation_cache_key(self) -> Optional[tuple]:
+        """Generate a cache key for compiled functions.
+
+        This enables automatic caching of compilation results for factory function patterns.
+        Functions with identical source code and options can reuse compilation results,
+        avoiding redundant compilation overhead.
+
+        Returns
+        -------
+        Optional[tuple]
+            A hashable cache key, or None if caching is not applicable.
+            The key consists of: (source_code, options_hash)
+        """
+        try:
+            # Use the code object's identity as the primary key
+            # For factory functions, each call creates a new code object,
+            # so we need to use source code string instead
+            source_code = inspect.getsource(self._original_func)
+
+            # Create a hashable representation of options
+            def make_hashable(obj):
+                """Convert dict/list to hashable tuple representation."""
+                if obj is None:
+                    return None
+                if isinstance(obj, dict):
+                    return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
+                if isinstance(obj, (list, tuple)):
+                    return tuple(make_hashable(item) for item in obj)
+                if isinstance(obj, (str, int, float, bool)):
+                    return obj
+                # For non-hashable types, use their string representation
+                return str(obj)
+
+            options_hash = (
+                make_hashable(self._codegen_options),
+                make_hashable(self._host_options),
+                make_hashable(self._pass_options),
+                make_hashable(self._runtime_options),
+                make_hashable(self._verify_options),
+                make_hashable(self._debug_options),
+            )
+
+            return (source_code, options_hash)
+        except (OSError, TypeError):
+            # If we can't generate a cache key (e.g., source not available),
+            # disable caching for this function
+            return None
+
     def _set_run_mode(self) -> None:
         """Configure the runtime execution mode (NPU or SIM).
 
@@ -510,20 +568,42 @@ class JitCallableWrapper:
         2. Cost model evaluation before compilation
         3. Avoiding backend initialization during module load
 
+        Additionally, it uses a global compilation cache to reuse compilation results
+        for functions with identical source code and options. This is particularly
+        useful for factory function patterns where the same function is created multiple
+        times with identical implementations.
+
         The compilation process:
-        1. Create parser and parse the function AST
-        2. Initialize backend (DeviceInit, OperatorBegin)
-        3. Apply configuration options
-        4. Bind dynamic dimensions from concrete input shapes
-        5. Execute parsing to generate PTO IR
-        6. Finalize compilation (OperatorEnd)
+        1. Check global cache for existing compilation result
+        2. If cache hit, reuse the compiled function and handler
+        3. If cache miss:
+           a. Create parser and parse the function AST
+           b. Initialize backend (DeviceInit, OperatorBegin)
+           c. Apply configuration options
+           d. Bind dynamic dimensions from concrete input shapes
+           e. Execute parsing to generate PTO IR
+           f. Finalize compilation (OperatorEnd)
+           g. Store result in global cache
 
         Parameters
         ----------
         concrete_input_shapes : list[list[int]]
             The actual shapes of input tensors, used to bind dynamic dimensions.
+        in_tensors : list[torch.Tensor]
+            Input tensors for verification setup.
+        out_tensors : list[torch.Tensor]
+            Output tensors for verification setup.
         """
         if self._is_compiled:
+            return
+
+        # Try to get from compilation cache (only if caching is enabled)
+        cache_key = self._get_compilation_cache_key()
+        if self._use_cache and cache_key is not None and cache_key in JitCallableWrapper._compilation_cache:
+            cached_result = JitCallableWrapper._compilation_cache[cache_key]
+            self._pto_function = cached_result["pto_function"]
+            self._handler = cached_result["handler"]
+            self._is_compiled = True
             return
 
         # Re-create parser for compilation
@@ -547,6 +627,13 @@ class JitCallableWrapper:
         pypto_impl.OperatorEnd(handler)
         self._handler = handler
         self._is_compiled = True
+
+        # Store in global cache for future reuse (only if caching is enabled)
+        if self._use_cache and cache_key is not None:
+            JitCallableWrapper._compilation_cache[cache_key] = {
+                "pto_function": self._pto_function,
+                "handler": self._handler,
+            }
 
         # Reset golden data after compilation, similar to pypto.jit
         _pto_verify_datas.reset()
@@ -792,6 +879,7 @@ def jit(
     runtime_options: Optional[dict[str, Any]] = None,
     verify_options: Optional[dict[str, Any]] = None,
     debug_options: Optional[dict[str, Any]] = None,
+    use_cache: bool = True,
 ) -> Union[Callable, Callable[[Callable], JitCallableWrapper]]:
     """JIT decorator for compiling Python functions to PTO IR.
 
@@ -817,6 +905,9 @@ def jit(
         Options to configure the verify.
     debug_options : Optional[dict[str, Any]], optional
         Options to configure the debug.
+    use_cache : bool, optional
+        Whether to use compilation caching. If False, force recompilation
+        even if a cached version exists. Defaults to True.
 
     Returns
     -------
@@ -874,6 +965,7 @@ def jit(
             verify_options=verify_options,
             debug_options=debug_options,
             captured_locals=captured_locals,
+            use_cache=use_cache,
         )
         return wrapper
 

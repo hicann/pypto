@@ -67,7 +67,7 @@ def matmul_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
     
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
     def matmul_kernel(
         a: pypto.Tensor(a_shape, pypto.DT_FP32),
         b: pypto.Tensor(b_shape, pypto.DT_FP32),

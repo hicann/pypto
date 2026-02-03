@@ -80,7 +80,7 @@ def create_add_scalar_loop_dyn_axis_static_cond_kernel(shape: tuple, val: int, f
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
     
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
     def add_scalar_loop_dyn_axis_static_cond_kernel(
         input0: pypto.Tensor((w, h, c, n), pypto.DT_FP32),
         input1: pypto.Tensor((w, h, c, n), pypto.DT_FP32),

@@ -58,7 +58,7 @@ def get_device_id():
     
 def create_cube_tile_kernel(m, k, n, run_mode, set_shapes: list):
 
-    @pypto.frontend.jit(runtime_options={"run_mode": run_mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": run_mode}, use_cache=False)
     def compute_with_cube_tile_shapes(
         a: pypto.Tensor((m, k), pypto.DT_FP32),
         b: pypto.Tensor((k, n), pypto.DT_FP32),

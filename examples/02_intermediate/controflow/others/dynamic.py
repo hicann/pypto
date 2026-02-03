@@ -108,7 +108,7 @@ def scaled_dot_product_attention(q_shape: tuple, k_shape: tuple, config: Attenti
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
     
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    @pypto.frontend.jit(runtime_options={"run_mode": mode}, use_cache=False)
     def scaled_dot_product_attention_kernel(
         q: pypto.Tensor((bs, head, q_len, dim), pypto.DT_FP32),
         k: pypto.Tensor((bs, head, kv_len, dim), pypto.DT_FP32),
