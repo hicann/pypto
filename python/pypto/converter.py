@@ -23,19 +23,19 @@ def _count_calls(func):
 
     @wraps(func)
     def wrapper(tensor, name: str = "", *, dynamic_axis: Optional[List[int]] = None,
-                tensor_format: Optional[TileOpFormat] = None):
+                tensor_format: Optional[TileOpFormat] = None, dtype: Optional[DataType] = None):
         nonlocal count
         count += 1
         if name == "":
             name = f"TENSOR_{count}"
-        return func(tensor, name, dynamic_axis, tensor_format)
+        return func(tensor, name, dynamic_axis, tensor_format, dtype)
 
     return wrapper
 
 
 @_count_calls
 def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
-               tensor_format: Optional[TileOpFormat] = None):
+               tensor_format: Optional[TileOpFormat] = None, dtype: Optional[DataType] = None):
     """
     convert the input into a PyPTO Tensor
 
@@ -47,6 +47,10 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
         The name of the resulting PyPTO Tensor.
     dynamic_axis: List[int]
         Specifies which axes of the tensor should be marked as dynamic.
+    tensor_format: TileOpFormat
+        Specifies the format of the resulting PyPTO Tensor.
+    dtype: DataType
+        Specifies the data type of the resulting PyPTO Tensor.
 
     Returns
     -------
@@ -55,7 +59,8 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
         - shape: The dimensions of the tensor.
         - name: The specified name of the tensor.
         - data_ptr: The memory address of the tensor data.
-        - format: The format of the tensor (e.g., TILEOP_ND or  TILEOP_NZ).
+        - format: The format of the tensor (e.g., TILEOP_ND or TILEOP_NZ).
+        - dtype: The dtype of the tensor.
 
     Examples
     --------
@@ -71,6 +76,10 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
     >>> y_pto = pypto.from_torch(y, "input_tensor", tensor_format=pypto.TileOpFormat.TILEOP_NZ)
     >>> print(y_pto.format)
     TileOpFormat.TILEOP_NZ
+    >>> y = torch.randn(2, 3)
+    >>> y_pto = pypto.from_torch(y, "input_tensor", dtype=pypto.DataType.DT_INT32)
+    >>> print(y_pto.dtype)
+    DataType.DT_INT32
     """
     import torch
 
@@ -88,7 +97,7 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
             if torch_npu.get_npu_format(tensor) == 29:
                 tensor_format = TileOpFormat.TILEOP_NZ
 
-    dtype = _dtype_from(tensor.dtype)
+    dtype = _dtype_from(tensor.dtype) if dtype is None else dtype
     if tensor.dim() == 0:
         return Tensor(
             shape=tuple([1]),
@@ -127,7 +136,6 @@ _dtype_dict = {
     "torch.int64": DataType.DT_INT64,
     "torch.uint64": DataType.DT_UINT64,
     "torch.bool": DataType.DT_BOOL,
-    "torch.hifloat8": DataType.DT_HF8,
     "torch.float8_e4m3fn": DataType.DT_FP8E4M3,
     "torch.float8_e5m2": DataType.DT_FP8E5M2,
 }

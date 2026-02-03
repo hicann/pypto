@@ -15,7 +15,7 @@
 
 ```python
 from_torch(tensor: torch.Tensor, name: str="", *, dynamic_axis: Optional[List[int]] = None,
-           tensor_format: Optional[TileOpFormat] = None) -> pypto.Tensor
+           tensor_format: Optional[TileOpFormat] = None, dtype: Optional[DataType] = None) -> pypto.Tensor
 ```
 
 ## 参数说明
@@ -27,6 +27,7 @@ from_torch(tensor: torch.Tensor, name: str="", *, dynamic_axis: Optional[List[in
 | name           | 输入      | pypto.Tensor的名称。默认为空字符串，表示由from_torch自动为其命名。 |
 | dynamic_axis   | 输入      | 要标记为动态的维度索引列表。默认为None，表示不标记任何维度。 |
 | tensor_format  | 输入      | 要指定的pypto.TileOpFormat格式。为None时根据Tensor NPU Fromat 自动推导。 |
+| dtype      | 输入      | 要指定的pypto.DataType类型。为None时根据torch.Tensor的dtype自动推导。 |
 
 ## 返回值说明
 
@@ -63,6 +64,9 @@ print(y_pto.shape)
 z = torch.randn(2, 3)
 z_pto = pypto.from_torch(z, "z", tensor_format=pypto.TileOpFormat.TILEOP_NZ)
 print(z_pto.format)
+k = torch.randn(2, 3)
+k_pto = pypto.from_torch(k, "k", dtype=pypto.DataType.DT_HF8)
+print(k_pto.dtype)
 ```
 
 结果示例如下：
@@ -71,5 +75,6 @@ print(z_pto.format)
 [2, 3]
 [SymbolicScalar(RUNTIME_GetInputShapeDim(ARG_input_tensor,0)), 3]
 TileOpFormat.TILEOP_NZ
+DataType.DT_HF8
 ```
 

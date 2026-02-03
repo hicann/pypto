@@ -339,6 +339,7 @@ class JitCallableWrapper:
                         name=name,
                         dynamic_axis=dynamic_axis if dynamic_axis else None,
                         tensor_format=tensor_def.format,
+                        dtype=tensor_def.dtype,
                     )
                 )
             return pto_tensors
