@@ -129,6 +129,13 @@ void DeviceRunner::InitMetaData(DeviceArgs &devArgs) {
     devArgs.corePmuAddr = args_.corePmuAddr;
     devArgs.taskWastTime = args_.taskWastTime;
     devArgs.pmuEventAddr = args_.pmuEventAddr;
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+        args_.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(DevAlloc(sizeof(MetricPerf)));
+        if (args_.aicpuPerfAddr == 0) {
+            ALOG_WARN_F("Aicpu per addr malloc failed");
+        }
+    }
+    devArgs.aicpuPerfAddr = args_.aicpuPerfAddr;
     InitAiCpuSoBin(devArgs);
 }
 
@@ -519,13 +526,6 @@ int DeviceRunner::RunPrepare() {
                        reinterpret_cast<uint8_t *>(&perfData_[i]),
                        sizeof(uint64_t),
                        RT_MEMCPY_HOST_TO_DEVICE);
-        }
-    }
-        
-    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
-        args_.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(DevAlloc(sizeof(MetricPerf)));
-        if (args_.aicpuPerfAddr == 0) {
-            ALOG_WARN_F("Aicpu per addr malloc failed");
         }
     }
     return ret;
