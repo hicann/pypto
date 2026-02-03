@@ -23,10 +23,12 @@
 
 #include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
+#include "cost_model/simulation/arch/A5/PostSimulatorA5.h"
 
 namespace CostModel
 {
     template class PipeSimulatorFast<PostSimulatorA2A3>;
+    template class PipeSimulatorFast<PostSimulatorA5>;
     static const std::unordered_map<std::string, std::unordered_map<DataType, int>> INHERENT_LATENCY_IN_OP{
         // Vector
         {"UB_ADD",

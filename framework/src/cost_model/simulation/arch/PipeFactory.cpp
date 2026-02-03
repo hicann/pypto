@@ -22,6 +22,8 @@
 #include "PipeSimulatorFast.h"
 #include "cost_model/simulation/arch/A2A3/L2CacheImplA2A3.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
+#include "cost_model/simulation/arch/A5/L2CacheImplA5.h"
+#include "cost_model/simulation/arch/A5/PostSimulatorA5.h"
 
 namespace CostModel
 {
@@ -52,9 +54,11 @@ namespace CostModel
             } else {
                 return CreatePipeSimulator("SimulatorA2A3");
             }
-        } else {
-            throw std::invalid_argument("unknown arch type " + archType);
-        }
+        } else if (archType == "A5" && accLevel == 1) {
+ 	        return CreatePipeSimulatorFast<PostSimulatorA5>();
+ 	    } else {
+ 	        throw std::invalid_argument("unknown arch type " + archType);
+ 	    }
     }
 
     UnifiedPipeMachinePtr PipeFactory::Create(CorePipeType pipeType, std::string archType, int accLevel) {
@@ -77,7 +81,9 @@ namespace CostModel
         if (type == CacheType::L2CACHE) {
             if (archType == "A2A3") {
                 return std::make_unique<L2CacheImplA2A3>();
-            } else {
+            } else if (archType == "A5") {
+ 	            return std::make_unique<L2CacheImplA5>();
+ 	        } else {
                 throw std::invalid_argument("unknown arch type " + archType);
             }
         } else {

@@ -25,6 +25,8 @@
 #include "cost_model/simulation/pv/PvModelFactory.h"
 #include "interface/configs/config_manager.h"
 #include "cost_model/simulation_ca/PipeSimulator.h"
+#include "cost_model/simulation/arch/PipeFactory.h"
+#include "cost_model/simulation/arch/CacheMachineImpl.h"
 
 using namespace npu::tile_fwk;
 
@@ -411,4 +413,22 @@ TEST_F(CostModelDynTest, TestDD) {
     auto func = Program::GetInstance().GetLastFunction();
     auto pv = CostModel::PvModelFactory::CreateDyn();
     pv->Codegen(func);
+}
+
+TEST_F(CostModelTest, TestUnknownArchType)
+{
+    EXPECT_THROW(CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_MTE_IN, "A0", 1), std::invalid_argument);
+}
+
+TEST_F(CostModelTest, TestCreateA5Cache)
+{
+    std::unique_ptr<CostModel::CacheMachineImpl> cacheImpl = CostModel::PipeFactory::CreateCache(CostModel::CacheType::L2CACHE, "A5");
+    CostModel::CachePacket packet;
+    cacheImpl->Simulate(packet);
+}
+
+TEST_F(CostModelTest, TestA5ArchType)
+{
+    auto simulator =CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_MTE_IN, "A5", 1);
+    EXPECT_TRUE(simulator != nullptr);
 }
