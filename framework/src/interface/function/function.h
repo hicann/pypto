@@ -486,6 +486,11 @@ public:
     pto::ProgramModulePtr programModule_ = nullptr;
     Function *rootFunc_ = nullptr; // TileGraph和RootGraph都需要保留，且需要映射关系
     ParamConfigs paramConfigs_;
+    // vf融合适配需要pass间传递的参数
+    std::unordered_map<PipeType, int> pipeEndTime; // function中每个pipe执行结束的时间
+    std::unordered_map<Operation *, Operation *> setOpMap;
+    std::unordered_map<Operation *, Operation *> waitOpMap;
+    std::vector<Operation *> oriOpList;
 
     Function(const Program &belongTo, const std::string &funcMagicName, const std::string &funcRawName,
         Function *parentFunc);

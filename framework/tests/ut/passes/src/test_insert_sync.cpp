@@ -245,6 +245,7 @@ void CheckDependencyForTestFindDep(PipeSync &ps, std::set<int> dataDependencySet
 }
 
 void ProcessOpList(PipeSync &ps, DataDependencySearcher &dataDependencySearcher, std::vector<Operation *> &opLogPtr) {
+    ps.oriOpList_ = opLogPtr;
     for (auto &op : opLogPtr) {
         bool isCubeComponent = op->HasAttr(OpAttributeKey::isCube) && op->GetAttr<bool>(OpAttributeKey::isCube);
         if (!isCubeComponent) {

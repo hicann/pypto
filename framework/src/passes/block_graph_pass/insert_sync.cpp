@@ -722,6 +722,8 @@ Status PipeSync::InjectWaitFlag(Function &function, size_t idx, std::vector<Inde
         if (setPipeReal.core != currPipeReal.core) {
             crossCoreFreeEventId_[{setWaitCoreType.second, setWaitCoreType.first}].push_back(eventId);
         }
+        // 记录 set op 和 waitflag的对应关系
+        waitOpMap.emplace(&syncOp, oriOpList_[ele]);
     }
     return SUCCESS;
 }
@@ -749,6 +751,8 @@ Status PipeSync::InjectSetFlag(Function &function, size_t idx, std::vector<Index
                 syncOp.GetOpMagic(), syncOp.GetOpcodeStr().c_str(), GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
                 GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_);
             setWaitPairMap_[{idx, ele}] = eventId;
+            // 记录wait op 和 setflag的对应关系
+            setOpMap.emplace(&syncOp, oriOpList_[ele]);
             continue;
         }
         syncOp.SetAsDeleted();
@@ -1615,6 +1619,7 @@ void InsertSync::InsertPipeAll(Function *subGraphFunc) {
         newOpList.push_back(&syncOp);
     }
     subGraphFunc->ScheduleBy(newOpList, true);
+    subGraphFunc->oriOpList = oriOpList;
 }
 
 Status InsertSync::CheckNewOpListSeq(const std::vector<Operation *> &oriOpList, const std::vector<Operation *> &opListNew) {
@@ -1652,6 +1657,9 @@ Status InsertSync::GenNewOpList(Function *subGraphFunc, std::vector<Operation *>
         APASS_LOG_ERROR_F(Elements::Operation, "GenNewOpList failed at function CheckNewOpListSeq.");
         return FAILED;
     }
+    subGraphFunc->setOpMap = ps.setOpMap;
+    subGraphFunc->waitOpMap = ps.waitOpMap;
+    subGraphFunc->oriOpList = ps.GetOriOpList();
     return SUCCESS;
 }
 

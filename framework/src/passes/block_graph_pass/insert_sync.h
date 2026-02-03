@@ -102,8 +102,14 @@ public:
     Status ProcessViewOrder(Operation &op, std::vector<Operation *> &opLog, std::unordered_map<Operation *, Operation *> &changeMap);
     Status ProcessAssembleOrder(Operation &op, std::vector<Operation *> &opLog, std::unordered_map<Operation *, Operation *> &changeMap);
     Status ProcessViewAssembleOrder(std::vector<Operation *> &opLog, std::vector<Operation *> &opListNew);
+    std::vector<Operation *> GetOriOpList() { return oriOpList_; }
+    std::unordered_map<Operation *, Operation *> setOpMap;
+    std::unordered_map<Operation *, Operation *> waitOpMap;
 
 private:
+    friend class TuneTileOpSeqForVF;
+    friend class TuneSyncForVF;
+    
     struct PipeCoreReal {
         PipeCoreReal(PipeType p, CoreType c) :pipe(p), core(c) {}
         PipeType pipe;

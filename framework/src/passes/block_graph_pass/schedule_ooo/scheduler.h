@@ -380,6 +380,7 @@ public:
     int clock{0};
     OoOSchedulerCheck oooCheck;
     bool isCombineAxis_{false};
+    std::unordered_map<PipeType, int> pipeEndTime;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_SCHEDULER_H
