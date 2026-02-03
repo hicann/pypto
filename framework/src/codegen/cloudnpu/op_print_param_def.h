@@ -116,7 +116,7 @@ struct PrintMemCopyWithL0CParam {
     const std::vector<std::string> &addrTypeHead;
     const std::vector<std::string> &addrExpr;
     const std::vector<int64_t> &gmShape;
-    const std::vector<int64_t> &tileShapeForMT;
+    const std::vector<int64_t> &localRawShape;
     const std::vector<std::string> &dataTypeExpr;
 };
 
@@ -127,7 +127,7 @@ struct PrintMemCopyWithL1Param {
     const std::vector<std::string> &addrTypeHead;
     const std::vector<std::string> &addrExpr;
     const std::vector<int64_t> &gmShape;
-    const std::vector<int64_t> &tileShapeForMT;
+    const std::vector<int64_t> &localRawShape;
     const std::vector<std::string> &dataTypeExpr;
 };
 

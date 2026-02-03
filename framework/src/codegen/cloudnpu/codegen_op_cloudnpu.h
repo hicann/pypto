@@ -223,8 +223,6 @@ private:
         int paramIdx, TileTensor &tileTensor, bool isSpillToGm, const ShapeInLoop &shapeInLoop = {});
     std::vector<std::string> BuildStride(const std::vector<int64_t> &input);
 
-    std::vector<int64_t> GetTileShapeForMemTransfer(
-        OperandType localType, std::vector<int64_t> gmShape, unsigned localIdx) const;
     std::string GenMemCopyVar(bool isCopyLocalToGM, unsigned uf = 0) const;
 
     std::string GenGMAddrExprWithOffset(const std::string &addrExpr, unsigned gmIdx) const;
