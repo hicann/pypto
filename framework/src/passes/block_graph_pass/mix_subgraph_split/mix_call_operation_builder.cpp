@@ -97,6 +97,7 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(Function& rootFunc,
     // 用于跟踪已经处理过的tensor
     std::set<LogicalTensorPtr> processedTensors;
     // 处理直接外部依赖的IOperands
+    ALOG_INFO_F("===> FindIOperandsAndOOperands start.");
     FindNewIOperandsInOriginalIncast(originalIOperands, originalIncasts, invokeInfo, newIOperands, processedTensors);
     // 处理直接外部依赖的OOperands
     FindNewOOperandsInOriginalOutcast(originalOOperands, originalOutcasts, invokeInfo, newOOperands, processedTensors);
@@ -108,6 +109,7 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(Function& rootFunc,
                                                      originalIncasts, originalOutcasts,
                                                      actualIncasts, actualOutcasts,
                                                      newIOperands, newOOperands, processedTensors);
+    ALOG_INFO_F("===> FindIOperandsAndOOperands end.");
     auto& callOp = rootFunc.AddRawOperation(Opcode::OP_CALL, newIOperands, newOOperands, false);
     ALOG_INFO_F("Created operands for new callOp %d: %zu inputs, %zu outputs",
                 callOp.GetOpMagic(), newIOperands.size(), newOOperands.size());
@@ -266,6 +268,7 @@ void MixCallOperationBuilder::FindIOpAttrOffsetAndOOpAttrOffset(
     auto actualIncasts = leafFunc.GetIncast();
     auto actualOutcasts = leafFunc.GetOutcast();
 
+    ALOG_INFO_F("===> FindIOpAttrOffsetAndOOpAttrOffset start.");
     ALOG_DEBUG_F("Leaf function %s has %zu actual incasts, %zu actual outcasts after dependency propagation",
                  leafFunc.GetRawName().c_str(), actualIncasts.size(), actualOutcasts.size());
     std::set<LogicalTensorPtr> processedTensors;
@@ -291,6 +294,7 @@ void MixCallOperationBuilder::FindIOpAttrOffsetAndOOpAttrOffset(
     if (!FindOOpAttrOffsetFromActualOutcasts(actualOutcasts, extractInfo, originalMixFunc)) {
         return;
     }
+    ALOG_INFO_F("===> FindIOpAttrOffsetAndOOpAttrOffset end.");
 }
 
 
@@ -305,6 +309,8 @@ bool MixCallOperationBuilder::FindIOpAttrOffsetFromIncast(const SubfuncInvokeInf
         }
         int offset = GetOffsetFromOp(in.opMagic, in.operandIdx, leafFunc, false);
         if (offset == -1) {
+            ALOG_ERROR_F("Failed to get offset for incast (op=%d, idx=%d)!",
+                         in.opMagic, in.operandIdx);
             continue;
         }
         extractInfo.iOffsets.push_back(offset);
@@ -350,19 +356,11 @@ int MixCallOperationBuilder::GetOffsetFromOp(int opMagic, int operandIdx,
         if (isOutput) {
             if (operandIdx >= 0 && static_cast<size_t>(operandIdx) < op.GetOOperands().size()) {
                 int offset = op.GetOOpAttrOffset(operandIdx);
-                if (offset != -1) {
-                    ALOG_DEBUG_F("Found output offset %d for op %d idx %d",
-                                 offset, opMagic, operandIdx);
-                }
                 return offset;
             }
         } else {
             if (operandIdx >= 0 && static_cast<size_t>(operandIdx) < op.GetIOperands().size()) {
                 int offset = op.GetIOpAttrOffset(operandIdx);
-                if (offset != -1) {
-                    ALOG_DEBUG_F("Found input offset %d for op %d idx %d",
-                                 offset, opMagic, operandIdx);
-                }
                 return offset;
             }
         }
@@ -389,11 +387,11 @@ bool MixCallOperationBuilder::FindIOOpAttrOffsetGlobalTensor(const SubfuncInvoke
         }
         if (tensor.isOutputToGM) {
             extractInfo.oOffsets.push_back(offset);
-            ALOG_DEBUG_F("Global tensor -> Outcast: op=%d, idx=%d -> oOffset=%d",
+            ALOG_DEBUG_F("Global tensor -> Outcast: opmagic=%d, idx=%d -> oOpAttrOffset=%d",
                          tensor.opMagic, tensor.operandIdx, offset);
         } else {
             extractInfo.iOffsets.push_back(offset);
-            ALOG_DEBUG_F("Global tensor -> Incast: op=%d, idx=%d -> iOffset=%d",
+            ALOG_DEBUG_F("Global tensor -> Incast: opmagic=%d, idx=%d -> iOpAttrOffset=%d",
                          tensor.opMagic, tensor.operandIdx, offset);
         }
         extractInfo.processedTensors.insert(tensor.tensor);
@@ -413,8 +411,6 @@ bool MixCallOperationBuilder::FindIOpAttrOffsetFromActualIncasts(
         }
 
         // 这是传播依赖添加的参数，需要特殊处理
-        ALOG_DEBUG_F("Processing propagated incast: tensor=%d", incast->GetRawMagic());
-
         // 在原始Mix function中查找这个tensor的offset
         int offset = FindOriginalOffsetInMixFunction(incast, originalMixFunc);
         if (offset == -1) {
@@ -423,7 +419,7 @@ bool MixCallOperationBuilder::FindIOpAttrOffsetFromActualIncasts(
         }
         extractInfo.iOffsets.push_back(offset);
         extractInfo.processedTensors.insert(incast);
-        ALOG_DEBUG_F("Extracted propagated incast: tensor=%d, offset=%d",
+        ALOG_DEBUG_F("Extracted propagated incast: tensor rawmagic = %d, offset = %d",
                      incast->GetRawMagic(), offset);
     }
     return true;
@@ -439,7 +435,6 @@ bool MixCallOperationBuilder::FindOOpAttrOffsetFromActualOutcasts(
         if (outcast == nullptr || extractInfo.processedTensors.count(outcast) > 0) {
             continue;
         }
-        ALOG_DEBUG_F("Processing propagated outcast: tensor=%d", outcast->GetRawMagic());
         auto shape = outcast->GetShape();
         if (shape.empty()) {
             ALOG_ERROR_F("Propagated outcast tensor %d has empty shape!", outcast->GetRawMagic());
@@ -452,8 +447,8 @@ bool MixCallOperationBuilder::FindOOpAttrOffsetFromActualOutcasts(
         }
         extractInfo.oOffsets.push_back(offset);
         extractInfo.processedTensors.insert(outcast);
-            ALOG_DEBUG_F("Propagated outcast tensor %d -> original offset=%d",
-                         outcast->GetRawMagic(), offset);
+        ALOG_DEBUG_F("Extracted propagated outcast: tensor rawmagic = %d -> original offset = %d",
+                        outcast->GetRawMagic(), offset);
     }
     return true;
 }
