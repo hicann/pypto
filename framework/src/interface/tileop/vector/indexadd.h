@@ -12,8 +12,8 @@
  * \file indexadd.h
  * \brief
  */
-#ifndef TILEOP_TILE_OPERATOR_INDEXADD__H
-#define TILEOP_TILE_OPERATOR_INDEXADD__H
+#ifndef TILEOP_TILE_OPERATOR_INDEXADD_H
+#define TILEOP_TILE_OPERATOR_INDEXADD_H
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 

@@ -254,7 +254,7 @@ static void IndexAddOperationExeFunc5Dims(
                             auto idxTensor = View(inputs[2], {viewShape[axis]}, {srcValidShape[axis]},
                                 {offset[axis]}); // idxshape只有在axis轴才切
                             TileShape::Current().SetVecTile(args->tileShape_);
-                            auto dst = IndexAdd_(selfTensor, srcTensor, idxTensor, args->axis_, args->alpha_);
+                            auto dst = IndexAdd(selfTensor, srcTensor, idxTensor, args->axis_, args->alpha_);
                             Assemble(dst, offset, outputs[0]); // offset[axis]=0
                         }
                     }

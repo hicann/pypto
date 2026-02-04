@@ -587,12 +587,12 @@ class Tensor:
 
     @source_location
     def index_add_(self, dim: int, index: 'Tensor', source: 'Tensor', *,
-                    alpha: Optional[List[Union[int, float]]] = 1) -> 'Tensor':
+                    alpha: Union[int, float] = 1) -> 'Tensor':
         return pypto.index_add_(self, dim, index, source, alpha=alpha)
 
     @source_location
     def index_add(self, dim: int, index: 'Tensor', source: 'Tensor', *,
-                    alpha: Optional[List[Union[int, float]]] = 1) -> 'Tensor':
+                    alpha: Union[int, float] = 1) -> 'Tensor':
         return pypto.index_add(self, dim, index, source, alpha=alpha)
 
     @source_location
@@ -604,8 +604,18 @@ class Tensor:
         return pypto.triu(self, diagonal)
 
     @source_location
+    def triu_(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
+        self.move(pypto.triu(self, diagonal))
+        return self
+    
+    @source_location
     def tril(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
         return pypto.tril(self, diagonal)
+
+    @source_location
+    def tril_(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
+        self.move(pypto.tril(self, diagonal))
+        return self
 
     @source_location
     def expand_clone(self, shape: List[int], *,

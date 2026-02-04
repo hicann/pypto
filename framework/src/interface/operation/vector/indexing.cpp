@@ -63,29 +63,35 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
     if (selfTile->Datatype() == DT_INT8) { // vector指令不支持int8的直接计算
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, selfTile->GetShape());
         Operation &castSelfOp = function.AddOperation(Opcode::OP_CAST, {selfTile}, {selfConvertedTile});
+        selfConvertedTile->UpdateDynValidShape(selfTile->GetDynValidShape());
         castSelfOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr srcConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, srcTile->GetShape());
         Operation &castSrcOp = function.AddOperation(Opcode::OP_CAST, {srcTile}, {srcConvertedTile});
+        srcConvertedTile->UpdateDynValidShape(srcTile->GetDynValidShape());
         castSrcOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, dstTile->GetShape());
 
         auto &op = function.AddOperation(
             Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
+        dstConvertedTile->UpdateDynValidShape(dstTile->GetDynValidShape());
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
-        castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
+        castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
     } else if (selfTile->Datatype() == DT_BF16) { // vector和scalar均不支持BF16直接计算
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, selfTile->GetShape());
         Operation &castSelfOp = function.AddOperation(Opcode::OP_CAST, {selfTile}, {selfConvertedTile});
+        selfConvertedTile->UpdateDynValidShape(selfTile->GetDynValidShape());
         castSelfOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr srcConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, srcTile->GetShape());
         Operation &castSrcOp = function.AddOperation(Opcode::OP_CAST, {srcTile}, {srcConvertedTile});
+        srcConvertedTile->UpdateDynValidShape(srcTile->GetDynValidShape());
         castSrcOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, dstTile->GetShape());
 
         auto &op = function.AddOperation(
             Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
+        dstConvertedTile->UpdateDynValidShape(dstTile->GetDynValidShape());
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
@@ -200,12 +206,6 @@ void CheckIndexAddParamsInvalid(
 
 Tensor IndexAdd(const Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha) {
     DECLARE_TRACER();
-    Tensor result = self;
-    return IndexAdd_(result, src, indices, axis, alpha);
-}
-
-Tensor IndexAdd_(const Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha) {
-    DECLARE_TRACER();
     CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     DataType selfDataType = self.GetDataType();
@@ -213,7 +213,6 @@ Tensor IndexAdd_(const Tensor &self, const Tensor &src, const Tensor &indices, i
     Tensor result(selfDataType, self.GetShape());
     CALL(IndexAdd, *Program::GetInstance().GetCurrentFunction(),
         {self.GetStorage(), src.GetStorage(), indices.GetStorage(), result.GetStorage(), axis, alpha_});
-
     return result;
 }
 

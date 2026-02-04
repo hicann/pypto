@@ -1795,18 +1795,6 @@ def gen_indexadd_op_golden(
     return gen_op_golden("IndexAdd", indexadd_golden_func, output, case_index)
 
 
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        "TestIndexAdd_/IndexAdd_OperationTest.TestIndexAdd_",
-    ]
-)
-def gen_indexadd__op_golden(
-    case_name: str, output: Path, case_index: int = None
-) -> bool:
-    logging.debug("Case(%s), Golden creating...", case_name)
-    return gen_op_golden("IndexAdd_", indexadd_golden_func, output, case_index)
-
-
 def indexput_dfs(indices_range, deep, max_count, cur_indices, all_indices):
     if deep == max_count:
         all_indices.append([i for i in cur_indices])

@@ -23,6 +23,7 @@ TORCH_TO_PTO_TYPES = {
     torch.int32: pypto.DT_INT32,
     torch.float16: pypto.DT_FP16,
     torch.float32: pypto.DT_FP32,
+    torch.bfloat16: pypto.DT_BF16
 }
 
 

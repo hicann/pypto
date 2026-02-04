@@ -165,8 +165,7 @@ Tensor Scatter(const Tensor &self, const Tensor &indices, const Element &src, in
 Tensor Scatter(const Tensor &self, const Tensor &indices, const Tensor &src, int axis,
     ScatterMode reduce = ScatterMode::NONE);
 void IndexPut_(Tensor &self, const std::vector<Tensor> &indices, const Tensor &values, bool accumulate = false);
-Tensor IndexAdd(const Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha = Element{DT_FP32, 1.0});
-Tensor IndexAdd_(const Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha = Element{DT_FP32, 1.0});
+Tensor IndexAdd(const Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha = Element(DT_FP32, 1.0f));
 Tensor RowSumExpand(const Tensor &operand);
 Tensor RowMaxExpand(const Tensor &operand);
 

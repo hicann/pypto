@@ -1053,7 +1053,7 @@ def bitwise_not(self: Tensor) -> Tensor:
 @op_wrapper
 def triu(
     input: Tensor,
-    diagonal: SymInt
+    diagonal: SymInt = 0
 ) -> Tensor:
     """
     Return the upper traingular part of a matrix or a banch of matrices `input`, the other elements of 
@@ -1086,7 +1086,7 @@ def triu(
 @op_wrapper
 def tril(
     input: Tensor,
-    diagonal: SymInt
+    diagonal: SymInt = 0
 ) -> Tensor:
     """
     Return the lower traingular part of a matrix or a banch of matrices `input`, the other elements of

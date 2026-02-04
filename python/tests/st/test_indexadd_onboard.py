@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -8,105 +8,95 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
+
 import os
 import math
-import torch
-import torch_npu
+from typing import List
 import pypto
+import torch
 
 
-class IndexaAddParamInfo:
-    def __init__(self, axis: int, alpha, b1, s1, b2, s2):
-        self.self_shape = (b1, s1)
-        self.src_shape = (b2, s1)
-        self.index_shape = (self.src_shape[axis],)
-        self.view_shape = (max(b1, b2), s2)
-        self.tile_shape = (max(b1, b2), s2)
+TORCH_TO_PTO_TYPES = {
+    torch.int8: pypto.DT_INT8,
+    torch.int16: pypto.DT_INT16,
+    torch.int32: pypto.DT_INT32,
+    torch.float16: pypto.DT_FP16,
+    torch.float32: pypto.DT_FP32,
+    torch.bfloat16: pypto.DT_BF16
+}
+
+
+class IndexAddArgs:
+    def __init__(self, axis: int, alpha, view_shape, tile_shape):
+        self.view_shape = view_shape
+        self.tile_shape = tile_shape
         self.value = alpha
         self.axis = axis
 
 
-def indexadd_2dim_comm_test_body(indexadd_para, test_func):
-    self_shape = indexadd_para.self_shape
-    src_shape = indexadd_para.src_shape
-    index_shape = indexadd_para.index_shape
-    view_shape = indexadd_para.view_shape
-    tile_shape = indexadd_para.tile_shape
-    axis = indexadd_para.axis
-    value = indexadd_para.value
-    pypto.runtime._device_init()
-
-    src_tensor = pypto.tensor(src_shape, pypto.DT_FP32, "PTO_TENSOR_SRC")
-    index_tensor = pypto.tensor(index_shape, pypto.DT_INT32, "PTO_TENSOR_INDEX")
-    self_tensor = pypto.tensor(self_shape, pypto.DT_FP32, "PTO_TENSOR_SELF")
-    dst_tensor = pypto.tensor(self_shape, pypto.DT_FP32, "PTO_TENSOR_DST")
+def indexadd_2dim_build(inputs: List[pypto.Tensor], outputs: List[pypto.Tensor], args: IndexAddArgs):
+    self_shape = inputs[0].shape
+    src_shape = inputs[1].shape
+    view_shape = args.view_shape
+    tile_shape = args.tile_shape
+    axis = args.axis
+    value = args.value
 
     b_loop_num = math.ceil(src_shape[0] / view_shape[0])
     s_loop_num = math.ceil(src_shape[1] / view_shape[1])
-    with pypto.function("INDEXADD", self_tensor, src_tensor, index_tensor, dst_tensor):
+    with pypto.function("INDEXADD", inputs[0], inputs[1], inputs[2], outputs[0]):
         for b_idx in pypto.loop(b_loop_num, name="LOOP_B0", idx_name="b_idx"):
             for s_idx in pypto.loop(s_loop_num, name="LOOP_S0", idx_name="s_idx"):
                 pypto.set_vec_tile_shapes(tile_shape[0], tile_shape[1])
-                view_self = pypto.view(self_tensor, view_shape, [b_idx * view_shape[0], s_idx * view_shape[1]],
-                                        valid_shape=[
-                                            pypto.min(pypto.symbolic_scalar(self_shape[0]) - b_idx * view_shape[0],
-                                                    pypto.symbolic_scalar(view_shape[0])),
-                                            pypto.min(pypto.symbolic_scalar(self_shape[1]) - s_idx * view_shape[1],
-                                                    pypto.symbolic_scalar(view_shape[1]))])
-                view_src = pypto.view(src_tensor, view_shape, [b_idx * view_shape[0], s_idx * view_shape[1]],
-                                        valid_shape=[
-                                            pypto.min(pypto.symbolic_scalar(src_shape[0]) - b_idx * view_shape[0],
-                                                    pypto.symbolic_scalar(view_shape[0])),
-                                            pypto.min(pypto.symbolic_scalar(src_shape[1]) - s_idx * view_shape[1],
-                                                    pypto.symbolic_scalar(view_shape[1]))])
-                view_index = pypto.view(index_tensor, [view_shape[axis]], [b_idx * view_shape[0]],
-                                        valid_shape=[
-                                            pypto.min(pypto.symbolic_scalar(src_shape[0]) - b_idx * view_shape[0],
-                                                    pypto.symbolic_scalar(view_shape[0]))])
-                tmp_dst_tensor = pypto.tensor()
-                tmp_dst_tensor.move(test_func(view_self, axis, view_index, view_src, alpha=value))
-                pypto.assemble(tmp_dst_tensor, [b_idx * view_shape[0], s_idx * view_shape[1]], dst_tensor)
-                del view_self, view_src, view_index, tmp_dst_tensor
-    assert isinstance(dst_tensor, pypto.tensor)
+                offsets = [b_idx * view_shape[0], s_idx * view_shape[1]]
+                self_valid_shape = [pypto.min(self_shape[0] - b_idx * view_shape[0], view_shape[0]),
+                                    pypto.min(self_shape[1] - s_idx * view_shape[1], view_shape[1])]
+                src_valid_shape = [pypto.min(src_shape[0] - b_idx * view_shape[0], view_shape[0]),
+                                    pypto.min(src_shape[1] - s_idx * view_shape[1], view_shape[1])]                 
+                view_self = pypto.view(inputs[0], view_shape, offsets, valid_shape=self_valid_shape)
+                view_src = pypto.view(inputs[1], view_shape, offsets, valid_shape=src_valid_shape)
+                view_index = pypto.view(inputs[2], [view_shape[axis]], [offsets[axis]], 
+                                        valid_shape=[src_valid_shape[axis]])
 
-    self_input = torch.rand(self_shape, dtype=torch.float32) * 200 - 100
-    src_input = torch.rand(src_shape, dtype=torch.float32) * 200 - 100
-    index_input = torch.randint(0, self_shape[axis], index_shape, dtype=torch.int32)
-    result_tensor = torch.zeros(self_shape, dtype=torch.float32)
+                view_self.index_add_(axis, view_index, view_src, alpha=value)
+                pypto.assemble(view_self, offsets, outputs[0])
+                del view_self, view_src, view_index
 
-    pto_x1_tensor = pypto.from_torch(self_input, "x1_tensor")
-    pto_x2_tensor = pypto.from_torch(src_input, "x2_tensor")
-    pto_x3_tensor = pypto.from_torch(index_input, "x3_tensor")
-    pto_res_tensor = pypto.from_torch(result_tensor, "res_tensor")
+
+def run_indexadd(inputs: List[torch.Tensor], outputs: List[torch.Tensor], args: IndexAddArgs) -> None:
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 3))
+    torch.npu.set_device(device_id)
+    pypto.runtime._device_init()
+
+    inputs_tensors = [pypto.tensor(x.shape, TORCH_TO_PTO_TYPES[x.dtype]) for x in inputs]
+    outputs_tensors = [pypto.tensor(y.shape, TORCH_TO_PTO_TYPES[y.dtype]) for y in outputs]
+    indexadd_2dim_build(inputs_tensors, outputs_tensors, args)
+
+    pto_x1_tensor = pypto.from_torch(inputs[0], "x1_tensor")
+    pto_x2_tensor = pypto.from_torch(inputs[1], "x2_tensor")
+    pto_x3_tensor = pypto.from_torch(inputs[2], "x3_tensor")
+    pto_res_tensor = pypto.from_torch(outputs[0], "res_tensor")
 
     pypto.runtime._device_run_once_data_from_host(pto_x1_tensor, pto_x2_tensor, pto_x3_tensor, pto_res_tensor)
-
-    expect = self_input.index_add(axis, index_input, src_input, alpha=value)
-    assert torch.allclose(result_tensor, expect, rtol=1e-4, atol=1e-5)
-    pypto.runtime._device_fini
+    pypto.runtime._device_fini()
 
 
-def test_index_add_onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    b1 = 7
-    s1 = 8
-    b2 = 9
-    s2 = 4
+def test_indexadd__onboard():
+    axis = 0
     alpha = 1.3
-    indexadd_para = IndexaAddParamInfo(0, alpha, b1, s1, b2, s2)
+    self_shape = [7, 8]
+    src_shape = [8, 8]
+    index_shape = [src_shape[axis]]
+    view_shape = [8, 16]
+    tile_shape = [8, 32]
+    args = IndexAddArgs(axis, alpha, view_shape, tile_shape)
 
-    indexadd_2dim_comm_test_body(indexadd_para, pypto.index_add)
+    inputs = [torch.rand(self_shape, dtype=torch.float32) * 200 - 100,
+            torch.rand(src_shape, dtype=torch.float32) * 200 - 100,
+            torch.randint(0, self_shape[axis], index_shape, dtype=torch.int32)]
+    outputs = [torch.zeros(self_shape, dtype=torch.float32)]
 
-
-def test_index_add__onboard():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
-    b1 = 7
-    s1 = 8
-    b2 = 9
-    s2 = 4
-    alpha = 1.3
-    indexadd_para = IndexaAddParamInfo(0, alpha, b1, s1, b2, s2)
-
-    indexadd_2dim_comm_test_body(indexadd_para, pypto.index_add_)
+    run_indexadd(inputs, outputs, args)
+    golden = inputs[0].index_add(axis, inputs[2], inputs[1], alpha=alpha)
+    pypto_out = outputs[0]
+    assert torch.allclose(pypto_out.flatten(), golden.flatten(), rtol=1e-4, atol=1e-5)
