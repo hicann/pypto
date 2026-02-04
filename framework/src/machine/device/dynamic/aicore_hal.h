@@ -446,11 +446,12 @@ public:
                 args_[coreIdx] = reinterpret_cast<KernelArgs*>((static_cast<uint64_t>(sharedBuffer_)) + SHARED_BUFFER_SIZE * coreIdx);
             }
             volatile KernelArgs *arg = args_[coreIdx];
-            arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = funcdata;
-            arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
 #if ENABLE_AICORE_PRINT
             arg->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = buffer;
+            __sync_synchronize();
 #endif
+            arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = funcdata;
+            arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
         } else {
             if (costModel_) {
                 costModel_->InitData(coreIdx, funcdata);
