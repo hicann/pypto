@@ -88,7 +88,11 @@ struct TileTensor {
         } else {
             // cast local buffer pointer to uint64_t to adapt TileTensor mode
             oss << "uint64_t)";
-            int64_t linearOffset = CalcLinearOffset(rawShape, localBufOffset);
+            int64_t linearOffset{0};
+            if (shapeInLoop.loopDepth == 0) { // only calc linear offset in the outermost loop
+                // tensor in loop use base addr from tensor out of loop
+                linearOffset = CalcLinearOffset(rawShape, localBufOffset);
+            }
             if (linearOffset != 0) {
                 // append linear offset, e.g. UBTileTensorFP32Dim2_1 ubTensor_1((uint64_t)((float *)UB_S0_E4096 + 32))
                 oss << "((" << DataType2CCEStr(dtype) << " *)" << bufVar << " + " << linearOffset << ")";
