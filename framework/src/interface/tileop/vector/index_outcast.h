@@ -34,17 +34,18 @@ TILEOP void TIndexOutcastMode2(T0 dst, T1 src, T2 src1, unsigned b, unsigned s, 
 
     for (LoopVar i = 0; i < b; ++i) {
         for (LoopVar j = 0; j < s; ++j) {
-            unsigned targetRow = static_cast<unsigned>(*dstIdx);
-            __gm__ DstDtype* curDst = dstBase + targetRow * srcShape4;
-
-            using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
-            SrcTileDefine srcTile(srcShape3, srcShape4);
-            pto::TASSIGN(srcTile, reinterpret_cast<uint64_t>(curSrc));
-            using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
-            using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
-            using DstGlobal = pto::GlobalTensor<DstDtype, ShapeDim5, StrideDim5>;
-            DstGlobal dstGlobal(curDst, pto::Shape(1, 1, 1, 1, srcShape4), pto::Stride(1, 1, 1, 1, 1));
-            pto::TSTORE(dstGlobal, srcTile);
+            int64_t targetRow = static_cast<int64_t>(*dstIdx);
+            if (targetRow >= 0) {
+                __gm__ DstDtype* curDst = dstBase + targetRow * srcShape4;
+                using SrcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                SrcTileDefine srcTile(srcShape3, srcShape4);
+                pto::TASSIGN(srcTile, reinterpret_cast<uint64_t>(curSrc));
+                using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
+                using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
+                using DstGlobal = pto::GlobalTensor<DstDtype, ShapeDim5, StrideDim5>;
+                DstGlobal dstGlobal(curDst, pto::Shape(1, 1, 1, 1, srcShape4), pto::Stride(1, 1, 1, 1, 1));
+                pto::TSTORE(dstGlobal, srcTile);
+            }
             curSrc += srcNdAligned;
             dstIdx++;
         }
@@ -113,7 +114,10 @@ TILEOP void TIndexOutcast(T0 dst, T1 src, T2 src1, C coordinate){
                 wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
 
                 auto curValue = *(reinterpret_cast<__ubuf__ IdxDtype*>(src1Base + k));
-
+                int64_t idxVal = static_cast<int64_t>(curValue);
+                if (idxVal < 0) {
+                    continue;
+                }
                 __ubuf__ SrcDtype* srcPtr = srcBase + k * srcrawShape1;
                 
                 if constexpr (cacheMode == 1) {
