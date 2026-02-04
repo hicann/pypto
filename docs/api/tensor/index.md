@@ -10,7 +10,9 @@ pypto-Tensor-amax
 pypto-Tensor-amin
 pypto-Tensor-assemble
 pypto-Tensor-clone
+pypto-Tensor-concat
 pypto-Tensor-cos
+pypto-Tensor-cumsum
 pypto-Tensor-dim
 pypto-Tensor-div
 pypto-Tensor-dtype
