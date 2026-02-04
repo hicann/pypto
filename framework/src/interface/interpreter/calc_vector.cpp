@@ -463,7 +463,7 @@ void ExecuteOpGatherINUB(ExecuteOperationContext *ctx) {
     auto parmas = ctx->ioperandDataViewList->at(0);
     auto indices = ctx->ioperandDataViewList->at(1);
     auto pageTable = ctx->ioperandDataViewList->at(2);
-    int blocksize = ctx->op->GetIntAttribute("op_attr_blocksize");
+    int blocksize = ctx->op->GetIntAttribute(OpAttributeKey::blockSize);
     calc::GatherINUB(output, parmas, indices, pageTable, blocksize, -2);
 }
 REGISTER_CALC_OP(OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_UB, ExecuteOpGatherINUB);

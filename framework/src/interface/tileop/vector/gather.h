@@ -282,4 +282,111 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate) 
     }
 }
 
+/**
+ * 辅助函数，计算 token id 对应物理偏移
+ */
+template <typename T2, typename T3, unsigned blockSize>
+INLINE T2 CalaOffset2PageAttention(__gm__ T3 *blockTable, T2 index) {
+    T2 blockID = index / blockSize;            // 这个token对应第几个块，逻辑块
+    blockID = blockTable[blockID];             // 页表中存放这个逻辑块到物理块的映射，得到物理块
+    T2 blockOffset = index % blockSize;        // token在块内偏移
+    index = blockID * blockSize + blockOffset; // 物理块*blockSize 得到物理块的偏移，加上token在块中的偏移
+    return index;
+}
+/**
+ * 定制版本，只支持 ds v3.2，使用之前请仔细确认
+ * param 2维
+ * indices 2维
+ * axis -2
+ * result 2维 {和标准实现不同}
+ * [a,b] [1,c] -2  [c,b]
+ *
+ * 模板参数
+ * T input 参数类型
+ * T2 indices 参数类型
+ * UBOutputS*  output在ub上的步长
+ *
+ * 运行时参数
+ * dst result，ub上
+ * param 输入，在gm上
+ * indices 输入索引，在gm上
+ * GMParamShape* ,param validshape，用于指导拷贝长度
+ * GMParamStride*,param 的步长，用于计算偏移
+ * GMParamOffset*,param 的偏移，用于确定分块
+ * GMIndicesShape* ,indices 的 validshape ，用于指导循环，
+ * GMIndicesStride* ,步长，用于计算偏移
+ * blocktable[e,f] e batch的维度  f ceil(maxtoken/blockSize)
+ */
+template <unsigned blockSize,typename T0, typename T1, typename T2, typename T3, typename C1, typename C2, typename C3>
+TILEOP void TgatherInUB(
+    T0 dst, T1 param, T2 indices, T3 blockTable, C1 paramCoordinate, C2 indicesCoordinate, C3 blockTableCoordinate) {
+    constexpr size_t paramExpectSize = 2;
+    constexpr size_t indicesExpectSize = 2;
+    constexpr size_t blockTableExpectSize = 2;
+    constexpr size_t dstExpectSize = 2;
+    const auto paramLayout = param.GetLayout();
+    auto n0ParamLayoutStride = paramLayout.template GetStrideDim<0, paramExpectSize>();
+    auto n1ParamLayoutStride = paramLayout.template GetStrideDim<1, paramExpectSize>();
+
+    const auto indicesLayout = indices.GetLayout();
+    auto n0IndicesLayoutStride = indicesLayout.template GetStrideDim<0, indicesExpectSize>();
+    auto n1IndicesLayoutStride = indicesLayout.template GetStrideDim<1, indicesExpectSize>();
+
+    const auto blockTableLayout = blockTable.GetLayout();
+    auto n0BlockTableLayoutStride = blockTableLayout.template GetStrideDim<0, blockTableExpectSize>();
+    auto n1BlockTableLayoutStride = blockTableLayout.template GetStrideDim<1, blockTableExpectSize>();
+
+    const auto dstLayout = dst.GetLayout();
+    auto n0DstLayoutStride = dstLayout.template GetStrideDim<0, dstExpectSize>();
+    auto n1DstLayoutStride = dstLayout.template GetStrideDim<1, dstExpectSize>();
+    auto n0DstShape = dstLayout.template GetShapeDim<0, dstExpectSize>();
+    auto n1DstShape = dstLayout.template GetShapeDim<1, dstExpectSize>();
+
+    auto paramOffset = paramLayout.template GetGmOffset<C1, 5>(paramCoordinate);
+    auto indicesOffset = indicesLayout.template GetGmOffset<C2, 5>(indicesCoordinate);
+    auto blockTableOffset = blockTableLayout.template GetGmOffset<C3, 5>(blockTableCoordinate);
+    using dstType = typename T0::Type;
+    using paramType = typename T1::Type;
+    using indicesType = typename T2::Type;
+    using blockTableType = typename T3::Type;
+    __gm__ paramType *paramAddr = (__gm__ paramType *)((uint64_t)(param.GetAddr()));
+    __gm__ indicesType *indicesAddr = (__gm__ indicesType *)((uint64_t)(indices.GetAddr()));
+    __gm__ blockTableType *blockTableAddr = (__gm__ blockTableType *)((uint64_t)(blockTable.GetAddr()));
+    paramAddr += paramOffset;
+    indicesAddr += indicesOffset;
+    blockTableAddr += blockTableOffset;
+    /**
+     * 思路
+     * [token_size,dim]
+     * [1,topk]
+     * [1,pagetable]
+     * 主要是这个遍历indices 的1轴，
+     */
+    __ubuf__ dstType *dstAddr = (__ubuf__ dstType *)((uint64_t)(dst.GetAddr()));
+    auto n1IndicesShape = indicesLayout.template GetShapeDim<1, indicesExpectSize>();
+    // auto n0ParamStride = paramLayout.template GetStrideDim<index0, paramExpectSize>();
+
+    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
+    constexpr auto tileH = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
+    constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
+    using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
+    using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
+    using GlobalData = pto::GlobalTensor<paramType, ShapeDim5, StrideDim5>;
+    using TileDefine = pto::Tile<pto::TileType::Vec, dstType, tileH, tileW, pto::BLayout::RowMajor, -1, -1>;
+    __gm__ paramType *paramTmp = paramAddr;
+
+    for (int j = 0; j < n0DstShape; j++) {
+        uint64_t index_1 = indicesAddr[j];
+        index_1 = CalaOffset2PageAttention<uint64_t, blockTableType, blockSize>(blockTableAddr, index_1);
+        paramTmp = paramAddr + index_1 * n0ParamLayoutStride; // 得到了实际的地址
+
+        TileDefine dstTile(1, n1DstShape);
+        GlobalData srcGlobal(paramTmp, pto::Shape(1, 1, 1, 1, n1DstShape),
+            pto::Stride(0, 0, 0, n0ParamLayoutStride, n1ParamLayoutStride));
+        pto::TASSIGN(dstTile, (uint64_t)dstAddr);
+        pto::TLOAD(dstTile, srcGlobal);
+
+        dstAddr += n0DstLayoutStride;
+    }
+}
 #endif

@@ -1602,7 +1602,42 @@ std::string CodeGenOpCloudNPU::GenGatherOp() const {
     ASSERT(false) << "Gather operator does not support static graph";
     return "";
 }
-std::string CodeGenOpCloudNPU::GenGatherInUB() const {
+
+std::string CodeGenOpCloudNPU::PrintGatherInUBLayout() const {
+    constexpr int paramIndex = 1;
+    constexpr int indicesIndex = 2;
+    constexpr int blockTableIndex = 3;
+    constexpr int paramDim = 2;
+    constexpr int indicesDim = 2;
+    constexpr int blockTableDim = 2;
+
+    auto paramOffsetSymbol = GenGetParamMacroPacked(paramIndex, paramDim, PREFIX_STR_OFFSET);
+    auto indicesOffsetSymbol = GenGetParamMacroPacked(indicesIndex, indicesDim, PREFIX_STR_OFFSET);
+    auto blockTableOffsetSymbol = GenGetParamMacroPacked(blockTableIndex, blockTableDim, PREFIX_STR_OFFSET);
+
+    std::string coordCpparamOffset = WrapParamByParentheses(paramOffsetSymbol);
+    std::string coordCpindicesOffset = WrapParamByParentheses(indicesOffsetSymbol);
+    std::string coordCpblockTableOffset = WrapParamByParentheses(blockTableOffsetSymbol);
+    std::string coord4Param = PrintCoord(paramDim, coordCpparamOffset);
+    std::string coord4Indices = PrintCoord(indicesDim, coordCpindicesOffset);
+    std::string coord4BlockTable = PrintCoord(blockTableDim, coordCpblockTableOffset);
+    std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string paramTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ToUnderlying(MISOIdx::SRC0_IDX)));
+    std::string indicesTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ToUnderlying(MISOIdx::SRC1_IDX)));
+    std::string pageTableTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ToUnderlying(MISOIdx::SRC2_IDX)));
+    std::vector<std::string> paramList;
+    ASSERT(opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end()) << "GenGatherOp: There is nop axis attribute here";
+    const int64_t blockSize = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OpAttributeKey::blockSize));
+    paramList.emplace_back(std::to_string(blockSize));
+    std::string templateParam = JoinString(paramList, CONN_COMMA);
+
+    std::vector<std::string> tileOpParamList = {
+        outputTensor, paramTensor, indicesTensor, pageTableTensor, coord4Param, coord4Indices, coord4BlockTable};
+    std::ostringstream oss;
+    oss << tileOpName << "<" << templateParam << ">" << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    return oss.str();
+}
+std::string CodeGenOpCloudNPU::PrintGatherInUBDynamicUnaligned() const {
     std::vector dstShape = this->rawShape[0];
     std::vector src0Shape = this->rawShape[1];
 
@@ -1611,15 +1646,17 @@ std::string CodeGenOpCloudNPU::GenGatherInUB() const {
     std::string indicesDtypeStr = DataType2CCEStr(operandDtype[ID2]);
     std::string blockTableDtypeStr = DataType2CCEStr(operandDtype[ID3]);
     ASSERT(resultDtypeStr == paramDtypeStr);
-    ASSERT(opAttrs.find("op_attr_blocksize") != opAttrs.end()) << "GenGatherOp: There is nop axis attribute here";
-    const int64_t blockSize = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at("op_attr_blocksize"));
+    ASSERT(opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end()) << "GenGatherOp: There is nop axis attribute here";
+    const int64_t blockSize = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OpAttributeKey::blockSize));
     auto outputRawShapes = rawShape[ID0];
     auto paramRawShapes = rawShape[ID1];
     auto indicesRawShapes = rawShape[ID2];
     auto outputValidShapes = dynamicValidShape[ID0];
     auto paramValidShapes = dynamicValidShape[ID1];
     auto indicesValidShapes = dynamicValidShape[ID2];
-
+    constexpr int paramDim = 2;
+    constexpr int indicesDim = 2;
+    constexpr int blockTableDim = 2;
     std::ostringstream os;
     std::vector<std::string> paramList;
     paramList.emplace_back(paramDtypeStr);
@@ -1630,10 +1667,12 @@ std::string CodeGenOpCloudNPU::GenGatherInUB() const {
     paramList.emplace_back(std::to_string(blockSize));
     std::string templateParam = JoinString(paramList, ", ");
     paramList.clear();
-
-    std::string paramVar = GenGmParamVar(0);
-    std::string indicesVar = GenGmParamVar(1);
-    std::string blockTableVar = GenGmParamVar(2);
+    constexpr int paramIndex = 1;
+    constexpr int indicesIndex = 2;
+    constexpr int blockTableIndex = 3;
+    std::string paramVar = GenGmParamVar(paramIndex);
+    std::string indicesVar = GenGmParamVar(indicesIndex);
+    std::string blockTableVar = GenGmParamVar(blockTableIndex);
     std::string outputVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
     std::string outputParamStr = "(__ubuf__ " + resultDtypeStr + "*)" + outputVar;
     std::string paramParamStr = "(__gm__ " + paramDtypeStr + "*)" + paramVar;
@@ -1645,20 +1684,20 @@ std::string CodeGenOpCloudNPU::GenGatherInUB() const {
     paramList.emplace_back(blockTableParamStr);
     paramList.emplace_back(SymbolicExpressionTable::BuildExpression(outputValidShapes[1]));
 
-    auto paramGMStride = GenParamIdxExprByIndex(0, 2, PREFIX_STR_RAW_SHAPE);
-    auto paramStartOffsets = GenParamIdxExprByIndex(0, 2, PREFIX_STR_OFFSET);
+    auto paramGMStride = GenParamIdxExprByIndex(paramIndex, paramDim, PREFIX_STR_RAW_SHAPE);
+    auto paramStartOffsets = GenParamIdxExprByIndex(paramIndex, paramDim, PREFIX_STR_OFFSET);
     paramList.emplace_back(paramGMStride[1]);
     paramList.emplace_back(paramStartOffsets[0]);
     paramList.emplace_back(paramStartOffsets[1]);
 
     paramList.emplace_back(SymbolicExpressionTable::BuildExpression(outputValidShapes[0]));
-    auto indicesGMStride = GenParamIdxExprByIndex(1, 2, PREFIX_STR_RAW_SHAPE);
-    auto indicesStartOffsets = GenParamIdxExprByIndex(1, 2, PREFIX_STR_OFFSET);
+    auto indicesGMStride = GenParamIdxExprByIndex(indicesIndex, indicesDim, PREFIX_STR_RAW_SHAPE);
+    auto indicesStartOffsets = GenParamIdxExprByIndex(indicesIndex, indicesDim, PREFIX_STR_OFFSET);
     paramList.emplace_back(indicesGMStride[1]);
     paramList.emplace_back(indicesStartOffsets[0]);
     paramList.emplace_back(indicesStartOffsets[1]);
-    auto blockTableGMStride = GenParamIdxExprByIndex(2, 2, PREFIX_STR_RAW_SHAPE);
-    auto blockTableStartOffsets = GenParamIdxExprByIndex(2, 2, PREFIX_STR_OFFSET);
+    auto blockTableGMStride = GenParamIdxExprByIndex(blockTableIndex, blockTableDim, PREFIX_STR_RAW_SHAPE);
+    auto blockTableStartOffsets = GenParamIdxExprByIndex(blockTableIndex, blockTableDim, PREFIX_STR_OFFSET);
     paramList.emplace_back(blockTableGMStride[1]);
     paramList.emplace_back(blockTableStartOffsets[0]);
     paramList.emplace_back(blockTableStartOffsets[1]);
@@ -1669,5 +1708,16 @@ std::string CodeGenOpCloudNPU::GenGatherInUB() const {
        << "(" << tiloOpCallParam << ");\n";
 
     return os.str();
+}
+
+std::string CodeGenOpCloudNPU::GenGatherInUB() const {
+    if (isSupportLayout) {
+        return PrintGatherInUBLayout();
+    }
+    if (isDynamicFunction) {
+        return PrintGatherInUBDynamicUnaligned();
+    }
+    ASSERT(false) << "Gather operator does not support static graph";
+    return "";
 }
 } // namespace npu::tile_fwk

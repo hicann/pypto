@@ -105,4 +105,15 @@ TEST_F(TestCodegenGatherInUB, gather_in_a_) {
     cfg.block_size = 4;         // 每个块的 token 数
     GatherInUBUT(cfg);
 }
+TEST_F(TestCodegenGatherInUB, gather_in_a_tile_tensor) {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    using Config = PageAttentionTestConfig<int32_t, float16>;
+    Config cfg;
+    cfg.topk_count = 8;         // topk结果
+    cfg.num_logical_blocks = 3; // 逻辑块个数
+    cfg.num_buffer_tokens = 32; // buffer token 维度（物理 token 容量）
+    cfg.hidden_dim = 4;         // 隐藏维度大小
+    cfg.block_size = 4;         // 每个块的 token 数
+    GatherInUBUT(cfg);
+}
 } // namespace npu::tile_fwk

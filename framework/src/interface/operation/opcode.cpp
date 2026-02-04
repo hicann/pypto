@@ -807,6 +807,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {          Opcode::OP_INDEX_ADD,      "TIndexAdd"},
     {     Opcode::OP_GATHER_ELEMENT, "TgatherElement"},
     {             Opcode::OP_GATHER,        "Tgather"},
+    {       Opcode::OP_GATHER_IN_UB,    "TgatherInUB"},
     {            Opcode::OP_SCATTER,       "Tscatter"},
     {  Opcode::OP_SCATTER_ELEMENT, "TscatterElementS"},
     {             Opcode::OP_EXPAND,        "TExpand"},

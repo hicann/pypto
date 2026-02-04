@@ -1414,7 +1414,7 @@ void TiledGatherInUB(Function &function, const TileShape &tileShape, const Logic
             auto resultTile = result->View(function, {shape0, shape1}, {i, j});
             auto &op =
                 function.AddOperation(Opcode::OP_GATHER_IN_UB, {paramTile, indicesTile, blockTableTile}, {resultTile});
-            op.SetAttribute(OP_ATTR_PREFIX + "blocksize", blockSize);
+            op.SetAttribute(OpAttributeKey::blockSize, blockSize);
             (void)op;
         }
     }
@@ -1440,7 +1440,7 @@ Tensor experimental::GatherInUB(
     }
     auto &op = Program::GetInstance().GetCurrentFunction()->AddOperation(Opcode::OP_GATHER_IN_UB,
         {params.GetStorage(), indices.GetStorage(), blockTable.GetStorage()}, {result.GetStorage()});
-    op.SetAttribute(OP_ATTR_PREFIX + "blocksize", blockSize);
+    op.SetAttribute(OpAttributeKey::blockSize, blockSize);
     (void)op;
     return result;
 }
@@ -1486,7 +1486,7 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
             break;
         }
         case Opcode::OP_GATHER_IN_UB: {
-            int blocksize = op.GetIntAttribute(OP_ATTR_PREFIX + "blocksize");
+            int blocksize = op.GetIntAttribute(OpAttributeKey::blockSize);
             TiledGatherInUB(function, tileShape, iOperand[0], iOperand[1], iOperand[2], oOperand[0], blocksize);
             break;
         }
