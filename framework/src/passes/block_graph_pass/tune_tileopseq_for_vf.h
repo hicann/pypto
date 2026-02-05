@@ -34,7 +34,7 @@ public:
 
 private:
     void ChangeOpSeq(PipeSync &ps, bool isAIV1);
-    bool IsGroupMergeable(PipeSync &ps, size_t left, size_t k, int groupNum, const std::unordered_set<Operation *> &moveFrontOp);
+    bool IsGroupMergeable(PipeSync &ps, size_t left, size_t k, int groupNum);
     bool IsMergeable(std::unordered_set<Operation *> &moveFrontOp, size_t left, size_t right, PipeSync &ps, int groupNum);
     void MoveOpsForMerge(const std::unordered_set<Operation *> &moveFrontOp, size_t left, size_t right, int groupNum);
     void FindPipeVIdx(std::vector<size_t> &pipeVIdx, AIVCore coreType);
