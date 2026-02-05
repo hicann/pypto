@@ -34,10 +34,10 @@ int64_t GenerateMoveOp::PadUB(int64_t dim, int64_t padValue) {
 }
 
 Status GenerateMoveOp::RunOnFunction(Function &function) {
-    ASLOGI("===> Start GenerateMoveOp");
+    ALOG_INFO_F("===> Start GenerateMoveOp");
     Status status = CreateMoveOp(function);
     if(status != SUCCESS) {return status;}
-    ASLOGI("===> End GenerateMoveOp");
+    ALOG_INFO_F("===> End GenerateMoveOp");
     return SUCCESS;
 }
 
@@ -142,7 +142,7 @@ void GenerateMoveOp::SetL0C2L1CopyAttr(Operation &op, const Shape &realShape,
     );
     copyAttr->SetToOffset(toOffset);
     op.SetOpAttribute(copyAttr);
-} 
+}
 
 Status GenerateMoveOp::SetOpcodeByMemPath(Operation &op,MemoryType from,MemoryType to) const {
     std::pair<MemoryType,MemoryType> memPathPair = {from,to};
@@ -210,7 +210,7 @@ void GenerateMoveOp::ProcessUB2L1(Function &function, Operation &op) const {
         std::shared_ptr<LogicalTensor> ubNdTensor = inputTensor;
         std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(ubNdTensor->Datatype(), ubNdTensor->GetShape(), TileOpFormat::TILEOP_NZ);
         std::vector<int64_t> newoffset(inputTensor->GetShape().size(),0);
-        std::shared_ptr<LogicalTensor> ubNzTensor = std::make_shared<LogicalTensor>(function, newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape()); 
+        std::shared_ptr<LogicalTensor> ubNzTensor = std::make_shared<LogicalTensor>(function, newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape());
         //ND转NZ时shape对齐
         auto innerIndex = ubNzTensor->shape.size() - 2; // matmul高轴
         auto outerIndex = ubNzTensor->shape.size() - 1;  // matmul低轴
@@ -229,7 +229,7 @@ void GenerateMoveOp::ProcessUB2L1(Function &function, Operation &op) const {
         op.iOperand = {ubNzTensor};
         inputTensor->RemoveConsumer(op);
         ubNzTensor->AddConsumer(op);
-    }   
+    }
 }
 
 Status GenerateMoveOp::CreateMoveOp(Function &function) const {

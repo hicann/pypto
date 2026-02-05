@@ -11,6 +11,7 @@
 import typing
 from typing import Union, List, Optional, Tuple
 
+import sympy
 import pypto
 
 from .enum import *  # noqa
@@ -386,7 +387,10 @@ class Tensor:
             if stop is None:
                 stop = shape[axis]
             offsets.append(start)
-            shapes.append(int(stop - start))  # shape should be concrete
+            tshape = stop - start
+            if isinstance(tshape, SymbolicScalar):
+                tshape = int(sympy.sympify(str(tshape)))
+            shapes.append(tshape)  # shape should be concrete
         return offsets, shapes
 
     @classmethod
@@ -552,7 +556,7 @@ class Tensor:
     @source_location
     def round(self, decimals: int = 0) -> 'Tensor':
         return pypto.round(self, decimals)
-    
+
     @source_location
     def rsqrt(self) -> 'Tensor':
         return pypto.rsqrt(self)
@@ -572,7 +576,7 @@ class Tensor:
     @source_location
     def trunc(self) -> 'Tensor':
         return pypto.trunc(self)
-        
+
     @source_location
     def reciprocal(self) -> 'Tensor':
         return pypto.reciprocal(self)
@@ -598,7 +602,7 @@ class Tensor:
     @source_location
     def cumsum(self: 'Tensor', dim: int) -> 'Tensor':
         return pypto.cumsum(self, dim)
-    
+
     @source_location
     def triu(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
         return pypto.triu(self, diagonal)
@@ -607,7 +611,7 @@ class Tensor:
     def triu_(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
         self.move(pypto.triu(self, diagonal))
         return self
-    
+
     @source_location
     def tril(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
         return pypto.tril(self, diagonal)
@@ -629,7 +633,7 @@ class Tensor:
         return pypto.scatter_update(self, dim, index, src)
 
     @source_location
-    def scatter_(self, dim: int, index: 'Tensor', 
+    def scatter_(self, dim: int, index: 'Tensor',
                  src: Union[float, Element, 'Tensor'], *, reduce: str = None) -> 'Tensor':
         return pypto.scatter_(self, dim, index, src, reduce=reduce)
 

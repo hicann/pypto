@@ -144,19 +144,6 @@ def test_binary_ops():
         assert expr3.is_concrete() == True
 
 
-def test_simplify():
-    t = pypto.Tensor([-1, 10], pypto.DT_BF16, "t")
-    y = t.shape[0] + 10 - t.shape[0]
-    assert isinstance(y, pypto.symbolic_scalar)
-    assert y.concrete() == 10
-
-    a = pypto.SymbolicScalar("a")
-    print(a.min(a + 1))
-    print(a.min(a + 1) == a)
-    assert (a.min(a + 1) == a)
-    assert (a.max(a + 1) == a + 1)
-
-
 def test_symbolic_scalar_add():
     ten = pypto.symbolic_scalar("10", 10)
     twenty = pypto.symbolic_scalar("20", 20)

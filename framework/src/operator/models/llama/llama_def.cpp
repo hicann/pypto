@@ -79,7 +79,7 @@ Tensor FlashAttention(const Tensor &q, const Tensor &k, const Tensor &v, const T
                 auto vj = View(v, {singleN, d}, {bIdx * s + s2Idx * singleN, nIdx * d});
 
                 for (int s1Idx = 0; s1Idx < s1Loop; s1Idx++) {
-                    ASLOGI("inner fa %d %d %d %d", s2Idx, s1Idx, s2Loop, s1Loop);
+                    ALOG_INFO_F("inner fa %d %d %d %d", s2Idx, s1Idx, s2Loop, s1Loop);
                     // LLAMA_FUNCTION(FlashAttention_L0) {
                     auto qi = View(q, {singleM, d}, {bIdx * s + s1Idx * singleM, nIdx * d});
                     std::vector<int64_t> oiOffset = {bIdx * s + s1Idx * singleM, nIdx * d};

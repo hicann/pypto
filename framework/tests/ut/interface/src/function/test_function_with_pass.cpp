@@ -15,6 +15,7 @@
 
 #include "gtest/gtest.h"
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <climits>
 #include "interface/tensor/logical_tensor.h"
@@ -884,9 +885,9 @@ TEST_F(FunctionWithPass, DumpBuffer) {
     RawSymbolicScalarPtr operand2 = std::make_shared<RawSymbolicImmediate>(3);
     RawSymbolicExpression expr(SymbolicOpcode::T_BOP_ADD, {operand1, operand2});
 
-    std::string buffer;
+    std::stringstream buffer;
     expr.DumpBuffer(buffer);
-    EXPECT_EQ(buffer, "(5+3)");
+    EXPECT_EQ(buffer.str(), "(5+3)");
 }
 
 TEST_F(FunctionWithPass, CalculateHashTest) {

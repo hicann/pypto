@@ -31,24 +31,6 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
-
-class TTYCmd {
-public:
-    unsigned char code;
-
-    explicit TTYCmd(int codeIn) : code(codeIn) {}
-    std::string Str() const { return "\033[" + std::to_string(code) + "m"; }
-};
-
-#define TTY_COLOR(n, ...) TTYCmd(n), ##__VA_ARGS__, TTYCmd(0)
-#define TTY_RED(...) TTY_COLOR(31, __VA_ARGS__)
-#define TTY_GREEN(...) TTY_COLOR(32, __VA_ARGS__)
-#define TTY_YELLOW(...) TTY_COLOR(33, __VA_ARGS__)
-#define TTY_BLUE(...) TTY_COLOR(34, __VA_ARGS__)
-#define TTY_MAGENTA(...) TTY_COLOR(35, __VA_ARGS__)
-#define TTY_CYAN(...) TTY_COLOR(36, __VA_ARGS__)
-#define TTY_WHITE(...) TTY_COLOR(37, __VA_ARGS__)
-
 enum class LoggerLevel {
     DEBUG = 0,
     INFO,
@@ -61,10 +43,6 @@ enum class LoggerLevel {
 
 class StdLogger {
 public:
-    StdLogger &Log(TTYCmd &&cmd) {
-        std::cout << cmd.Str();
-        return *this;
-    }
     template <typename T>
     StdLogger &Log(T &&t) {
         std::cout << (std::forward<T>(t));
@@ -93,8 +71,6 @@ public:
         }
     }
 
-    FileLogger &Log([[maybe_unused]] TTYCmd &&cmd) { return *this; }
-
     template <typename T>
     FileLogger &Log(T &&t) {
         std::call_once(hasOpenFile_, &FileLogger::Init, this);
@@ -112,7 +88,6 @@ private:
 
 class LineLogger : public std::vector<std::string> {
 public:
-    LineLogger &Log([[maybe_unused]] TTYCmd &&cmd) { return *this; }
     LineLogger &Log(std::string &&t) {
         this->emplace_back(t);
         return *this;
@@ -213,11 +188,6 @@ public:
         }
     }
 
-    Logger &Log(TTYCmd &&val) {
-        ssRich << val.Str();
-        return *this;
-    }
-
     template <typename T>
     Logger &Log(T &&val) {
         ss << (std::forward<T>(val));
@@ -273,8 +243,5 @@ public:
 #define ALOG_WARN_F(fmt, args...) ALOG_F(WARN, fmt, ##args)
 #define ALOG_ERROR_F(fmt, args...) ALOG_F(ERROR, fmt, ##args)
 #define ALOG_EVENT_F(fmt, args...) ALOG_F(EVENT, fmt, ##args)
-
-#define ASLOGI ALOG_INFO_F
-#define ASLOGE ALOG_ERROR_F
 
 #endif

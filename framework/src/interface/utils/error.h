@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include "tilefwk/error.h"
+#include "interface/utils/log.h"
 
 namespace npu::tile_fwk {
 struct TerminateHandler {
@@ -34,15 +35,20 @@ struct TerminateHandler {
                     std::rethrow_exception(eptr);
                 }
             } catch (const std::exception &e) {
-                std::cout << "Caught exception: '" << e.what() << "'\n";
+                ALOG_ERROR("Caught exception: ", e.what());
+                std::cerr << "Caught exception: '" << e.what() << "'\n";
             }
+            fflush(nullptr);
             _Exit(1);
         });
     }
 
     static void SigAction(int signo) {
         (void)signo;
-        std::cerr << "segment fault!!!\n" << GetBacktrace(0x2, 0x10)->Get() << std::endl;
+        auto &backtrace = GetBacktrace(0x2, 0x10)->Get();
+        ALOG_ERROR("segment fault!!!\n", backtrace);
+        std::cerr << "segment fault!!!\n" << backtrace << std::endl;
+        fflush(nullptr);
         _Exit(1);
     }
 

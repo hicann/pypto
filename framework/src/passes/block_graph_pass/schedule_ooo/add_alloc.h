@@ -43,11 +43,11 @@ public:
 
 private:
     Status RunOnFunction(Function &function) override {
-        ASLOGI("===> Start AddAlloc.");
+        ALOG_INFO_F("===> Start AddAlloc.");
         for (auto &program : function.rootFunc_->programs_) {
             if (AddAndCheckAlloc(*program.second) != SUCCESS) { ALOG_ERROR_F("AddAndCheckAlloc failed."); return FAILED; }
         }
-        ASLOGI("===> End AddAlloc.");
+        ALOG_INFO_F("===> End AddAlloc.");
         return SUCCESS;
     }
     // 按color去判断是否需要插入alloc

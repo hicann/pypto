@@ -62,7 +62,7 @@ const nlohmann::json *ConfigManager::GetJsonNode(const nlohmann::json &root, con
 
 Status ConfigManager::Initialize() {
     if (isInit_) {
-        ASLOGI("ConfigManager has been initialized.");
+        ALOG_INFO_F("ConfigManager has been initialized.");
         return SUCCESS;
     }
     /* 环境变量优先生效 */
@@ -73,9 +73,9 @@ Status ConfigManager::Initialize() {
 
     config::SetRunDataOption(KEY_PTO_CONFIG_FILE, jsonFilePath);
     config::SetRunDataOption(KEY_RUNTYPE, "npu");
-    ASLOGI("Start to parse op_json_file %s", jsonFilePath.c_str());
+    ALOG_INFO_F("Start to parse op_json_file %s", jsonFilePath.c_str());
     if (!ReadJsonFile(jsonFilePath, json_)) {
-        ASLOGE("ReadJsonFile failed.");
+        ALOG_ERROR_F("ReadJsonFile failed.");
         return FAILED;
     }
 

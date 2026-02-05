@@ -30,7 +30,6 @@ def test_init_tensor():
     assert b.dtype == dtype
     assert b.name == "b"
     assert b.format == pypto.TileOpFormat.TILEOP_NZ
-    assert [x.concrete() if x.is_concrete() else x for x in b.valid_shape] == b.shape
     with pytest.raises(ValueError):
         # dynamic shape could not be compared
         assert b.shape == [-1, 32]

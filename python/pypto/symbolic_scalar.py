@@ -181,18 +181,6 @@ class SymbolicScalar:
             else:
                 out = self.from_base(sym_bop(self._base, other._base))
 
-        if not out.is_concrete():
-            expr = _expr_preprocess(str(out))
-            try:
-                expr = sympy.simplify(expr)
-                if isinstance(expr, sympy.Integer):
-                    out = SymbolicScalar(int(expr))
-                elif expr == sympy.true:
-                    out = SymbolicScalar(1)
-                elif expr == sympy.false:
-                    out = SymbolicScalar(0)
-            except Exception:
-                pass
         return out
 
     def _unary_ops(self, uop, sym_uop):
