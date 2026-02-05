@@ -276,6 +276,9 @@ public:
         std::vector<uint8_t> &devProgData = dynAttr->devProgBinary;
         auto *devProg = reinterpret_cast<DevAscendProgram *>(devProgData.data());
         Evaluator eval{dynAttr->inputSymbolDict, inputs, outputs};
+        if (devProg == nullptr) {
+            return 0;
+        }
         devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
         return devProg->memBudget.Total();
     }

@@ -14,7 +14,7 @@
 ## 函数原型
 
 ```python
-set_host_options(*, compile_stage: CompStage = pypto.CompStage.EXECUTE_GRAPH) -> None
+set_host_options(*, compile_stage: Optional[CompStage] = None) -> None
 ```
 
 ## 参数说明
