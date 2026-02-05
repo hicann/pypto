@@ -448,22 +448,22 @@
         "operation": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "operation相关配置",
+                "en": "Operation-related configuration"
             },
             "properties": {
                 "force_combine_axis": {
                     "type": "boolean",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "broadcast inline 早期版本，有很多功能约束，后续会逐步下线，请保持默认值",
+                        "en": "The early version of broadcast inline has many functional constraints and will be gradually offline in the future. Please keep the default value."
                     }
                 },
                 "combine_axis": {
                     "type": "boolean",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "在代码生成阶段实现尾轴broadcast inline",
+                        "en": "Implement tail axis broadcast inline during code generation phase."
                     }
                 }
             }
