@@ -66,6 +66,7 @@ enum class ArchInfo {
 #define DEVICE_TASK_TYPE_STATIC  0
 #define DEVICE_TASK_TYPE_DYN     1
 #define DEVICE_TASK_TYPE_INVALID 0xf
+#define PYPTO                    76
 
 template <typename DerivedType, typename UnderlyingType>
 class BitmaskBase {
@@ -155,6 +156,7 @@ struct DeviceArgs {
     uint64_t generalAddr{0};     // aicpu meta addr
     uint64_t stitchPoolAddr{0};  // aicpu meta addr
     uint64_t aicpuPerfAddr{0};    // aicpuPer Gm addr
+    uint64_t devDfxArgAddr{0};   // devDfx
     uint64_t GetBlockNum() { return nrValidAic * (nrAiv / nrAic + 1); }
     ArchInfo archInfo{ArchInfo::DAV_2201};
     ToSubMachineConfig toSubMachineConfig;
@@ -184,6 +186,10 @@ struct TaskStat {
     int64_t execStart;
     int64_t execEnd;
     int64_t waitStart; // 2.0 dfx 当前未使用
+};
+
+struct DevDfxArgs {
+    int32_t logLevel{-1};
 };
 
 constexpr uint32_t PERF_TRACE_INST_MAX_NUM_EVERY_TYPE = 10;

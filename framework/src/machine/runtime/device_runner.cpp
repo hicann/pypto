@@ -41,6 +41,7 @@
 #include "nlohmann/json.hpp"
 #include "dump_device_perf.h"
 #include "machine/host/perf_analysis.h"
+#include "log_types.h"
 
 using json = nlohmann::json;
 extern char _binary_kernel_o_start[];
@@ -58,7 +59,10 @@ constexpr uint32_t HIGHT_BIT = 16;
 constexpr uint32_t SUB_CORE = 3;
 constexpr uint32_t AIV_PER_AICORE = 2;
  
-extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
+extern "C"{
+    __attribute__((weak)) int AdxDataDumpServerUnInit();
+    __attribute__((weak)) int dlog_getlevel(int32_t moduled, int32_t *enableEvent);
+}
 namespace npu::tile_fwk {
 
 namespace {
@@ -92,6 +96,27 @@ void *DeviceRunner::DevAlloc(int size) {
         return nullptr;
     }
     return devPtr;
+}
+
+void DeviceRunner::GetModuleLogLevel(DeviceArgs &args) {
+    int logLevel= -1;
+    if (dlog_getlevel != nullptr) {
+        int32_t enableLog = -1;
+        logLevel = dlog_getlevel(PYPTO, &enableLog);
+    }
+    args.devDfxArgAddr = reinterpret_cast<uint64_t>(DevAlloc(sizeof(DevDfxArgs)));
+    if (args.devDfxArgAddr == 0) {
+        ALOG_WARN_F("Alloc devDfx info failed");
+        return;
+    }
+    DevDfxArgs devDfxArg;
+    devDfxArg.logLevel = logLevel;
+    ALOG_INFO_F("Get PYPTO log level is %d", logLevel);
+    auto size = sizeof(DevDfxArgs);
+    auto ret = rtMemcpy(reinterpret_cast<void *>(args.devDfxArgAddr), size, &devDfxArg, size, RT_MEMCPY_HOST_TO_DEVICE);
+    if (ret != 0) {
+        ALOG_WARN_F("Rt mem cpy failed, so couldn't get device log");
+    }
 }
 
 void DeviceRunner::InitDynamicArgs(DeviceArgs &args) {
@@ -137,6 +162,7 @@ void DeviceRunner::InitMetaData(DeviceArgs &devArgs) {
     }
     devArgs.aicpuPerfAddr = args_.aicpuPerfAddr;
     InitAiCpuSoBin(devArgs);
+    GetModuleLogLevel(devArgs);
 }
 
 int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t> &regs, const std::vector<int64_t> &regsPmu) {

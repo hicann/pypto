@@ -24,10 +24,15 @@
 #include "machine/utils/dynamic/dev_tensor_creator.h"
 #include "machine/utils/machine_ws_intf.h"
 #include "machine/utils/device_log.h"
+#ifdef __DEVICE__
+#include "log_types.h"
+#endif
 
 #ifdef __USE_CUSTOM_CTRLFLOW__
 extern "C" __attribute__((visibility("default"))) void* GetCtrlFlowFunc();
 #endif
+
+extern "C" __attribute__((weak)) int dlog_setlevel(int32_t moduled, int32_t level,  int32_t enableEvent);
 
 namespace npu::tile_fwk::dynamic {
 
@@ -266,7 +271,20 @@ public:
         return ret;
     }
 
+    void SetModuleLogLevel([[maybe_unused]]DeviceKernelArgs *kargs) {
+#ifdef __DEVICE__
+        DeviceArgs *devArgs = reinterpret_cast<DeviceArgs*>(kargs->cfgdata);
+        if (devArgs->devDfxArgAddr != 0) {
+            DevDfxArgs *devDfxArgs = reinterpret_cast<DevDfxArgs*>(devArgs->devDfxArgAddr);
+            if (devDfxArgs->logLevel != -1 && dlog_setlevel != nullptr) {
+                (void)dlog_setlevel(PYPTO, devDfxArgs->logLevel, 1);
+            }
+        }
+#endif
+    }
+
     int EntryInit(DeviceKernelArgs *kargs) {
+        SetModuleLogLevel(kargs);
         PerfBegin(PERF_EVT_DEVICE_MACHINE_INIT_DYN);
 #if DEBUG_PLOG && defined(__DEVICE__)
         InitLogSwitch();

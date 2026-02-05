@@ -81,6 +81,7 @@ public:
 private:
     DeviceRunner() = default;
     void *DevAlloc(int size);
+    void GetModuleLogLevel(DeviceArgs &args);
     int InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t> &regs, const std::vector<int64_t> &regsPmu);
     int InitDeviceArgs(DeviceArgs &args);
     int Init();
