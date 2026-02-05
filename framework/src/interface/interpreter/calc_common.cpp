@@ -13,6 +13,7 @@
  * \brief
  */
 
+#include "utils/string_utils.h"
 #include "interface/interpreter/function.h"
 #include "interface/utils/log.h"
 #include "interface/interpreter/operation.h"
@@ -235,7 +236,14 @@ void ExecuteOpReshape(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ioperandDataViewList->size() == 1);
     auto &oop = ctx->ooperandInplaceDataViewList->at(0);
     auto &iop = ctx->ioperandDataViewList->at(0);
-    calc::Reshape(oop, iop);
+    auto actualIop = std::make_shared<LogicalTensorData>(iop->GetData());
+    if (oop->GetSize() > iop->GetSize()) {
+        ALOG_EVENT("iop validShape: ", iop->GetShape(), " ---> oop validShape: ", oop->GetShape());
+        ALOG_EVENT("Reshape: input tensor is not enough to reshape to output tensor");
+        calc::Reshape(oop, actualIop);
+    } else {
+        calc::Reshape(oop, iop);
+    }
 }
 REGISTER_CALC_OP(OP_RESHAPE, Opcode::OP_RESHAPE, ExecuteOpReshape);
 }

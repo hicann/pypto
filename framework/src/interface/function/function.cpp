@@ -179,7 +179,7 @@ std::vector<DynloopFunctionPathCondition> DynloopFunctionAttribute::GenCondWithB
             std::vector<RawSymbolicScalarPtr> operandList{
                 expr->OperandList()[0],
                 expr->OperandList()[1],
-                RawSymbolicExpression::CreateBopSub(expr->OperandList()[2], loopRange.Step().Raw())
+                RawSymbolicExpression::CreateBopSub(expr->OperandList()[2], originalRange.Step().Raw())
             };
             auto newExpr = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL, operandList);
             cond.cond_ = SymbolicScalar(newExpr);
