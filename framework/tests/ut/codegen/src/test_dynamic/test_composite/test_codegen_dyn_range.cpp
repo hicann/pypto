@@ -100,7 +100,7 @@ TEST_F(TestCodegenDynRange, RangeTileTensor) {
     TileShape::Current().SetVecTile(rangeShape);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
-    InsertTileTensorOp(Opcode::OP_RANGE, "TRange");
+    
     Tensor inputA(DT_FP32, rangeShape, "A");
     Tensor inputB(DT_FP32, rangeShape, "B");
     Tensor output(DT_FP32, rangeShape, "C");

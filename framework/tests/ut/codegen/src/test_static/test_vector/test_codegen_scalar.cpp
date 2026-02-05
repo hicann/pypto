@@ -115,7 +115,6 @@ TEST_F(TestCodegenScalar, TestScalarOp) {
 
 TEST_F(TestCodegenScalar, TestPipeAll) {
     const std::vector<int64_t> shape = {64, 64};
-    auto shapeImme = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);
 
     Tensor inputA(DT_FP32, shape, "A");
@@ -129,12 +128,9 @@ TEST_F(TestCodegenScalar, TestPipeAll) {
 
     auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
 
-    std::shared_ptr<RawTensor> ddrRawTensor =
-        std::make_shared<RawTensor>(DataType::DT_FP32, shape, TileOpFormat::TILEOP_ND, "UBSpillOut", SYMBOL_STACK_BASE);
-    const std::vector<int64_t> offset = {0, 0};
-    auto ddrTensor = std::make_shared<LogicalTensor>(*function, ddrRawTensor, offset, shape);
-    ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
-    ddrTensor->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
+    std::vector<SymbolicScalar> dynValidShape = {64, 64};
+    auto ddrTensor =
+        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, dynValidShape});
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
     Operation &syncOp = function->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {ddrTensor}, {ubTensor});
     syncOp.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1};
@@ -154,7 +150,6 @@ TEST_F(TestCodegenScalar, TestPipeAll) {
 
 TEST_F(TestCodegenScalar, TestAicpuCallOp) {
     const std::vector<int64_t> shape = {64, 64};
-    auto shapeImme = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);
 
     Tensor inputA(DT_FP32, shape, "A");
@@ -187,7 +182,6 @@ TEST_F(TestCodegenScalar, TestAicpuCallOp) {
 
 void TestCVSyncBody(Opcode syncOpcode) {
     std::vector<int64_t> shape = {64, 64};
-    auto shapeImme = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);
     TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {128, 128});
     Tensor inputA(DT_FP32, shape, "A");

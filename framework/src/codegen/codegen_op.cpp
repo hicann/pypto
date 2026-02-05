@@ -143,7 +143,7 @@ void CodeGenOp::UpdateOffsetForInput(const Operation &oper, const LogicalTensor 
     bool cubeMDLCondition = cubeMDLOpCode.count(opCode) && (attr != nullptr);
     bool useAttrShapeOffsetForInputGM = OpcodeManager::Inst().IsCopyIn(opCode);
     if (cubeMDLCondition || (useAttrShapeOffsetForInputGM && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
-        // only used for 1. L1 Copy; 2. spilling into gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
+        // only used for 1. L1 Copy; 2. spilling to gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         ALOG_INFO_F("start update offset for GM input");
         ASSERT(attr != nullptr) << ": missing OpAttr in copy in op: \n" << oper.Dump();
         UpdateOffsetValueFromAttr(attr->GetCopyInAttr().first, operandIdx);
@@ -161,7 +161,7 @@ void CodeGenOp::UpdateOffsetForOutput(const Operation &oper, const LogicalTensor
     bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode) && (attr != nullptr);
     if (cubeMDLCondition ||
         (useAttrShapeOffsetForOutputGM && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
-        // only used for 1. L1 Copy; 2. spilling into gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
+        // only used for 1. L1 Copy; 2. spilling to gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         ALOG_INFO_F("start update offset for GM output");
         ASSERT(attr != nullptr) << ": missing OpAttr in copy in op: \n" << oper.Dump();
         UpdateOffsetValueFromAttr(attr->GetCopyOutAttr().second, operandIdx);

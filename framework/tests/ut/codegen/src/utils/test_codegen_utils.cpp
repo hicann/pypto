@@ -21,7 +21,7 @@ namespace npu::tile_fwk {
 std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo &info) {
     if (info.memType == MemoryType::MEM_DEVICE_DDR) {
         std::shared_ptr<RawTensor> ddrRawTensor =
-            std::make_shared<RawTensor>(info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName);
+            std::make_shared<RawTensor>(info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName, info.magic);
         std::vector<int64_t> offset = std::vector<int64_t>(info.shape.size(), 0);
         auto ddrTensor = std::make_shared<LogicalTensor>(info.function, ddrRawTensor, offset, info.shape);
         ddrTensor->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);

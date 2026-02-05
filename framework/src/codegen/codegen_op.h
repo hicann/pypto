@@ -97,7 +97,7 @@ protected:
     std::vector<int64_t> originShape[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicOffset[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynamicValidShape[MAX_OPERANDS] = {}; // valid shape
-    std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {};    // for spilling into GM scene
+    std::vector<SymbolicScalar> offsetFromAttr[MAX_OPERANDS] = {};    // for spilling to GM scene
     bool isPartialMem[MAX_OPERANDS] = {};
     std::vector<SymbolicScalar> dynValidShapeFromOpAttr[MAX_OPERANDS] = {};
     // if operand is an variable, record its related argument location

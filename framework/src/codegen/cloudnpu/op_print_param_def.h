@@ -121,6 +121,8 @@ struct PrintMemCopyWithL0CParam {
 };
 
 struct PrintMemCopyWithL1Param {
+    const bool isCopyLocalToGM;
+    const bool isSpillingToGM;
     const unsigned uf;
     const unsigned gmIdx;
     const unsigned localIdx;
@@ -137,7 +139,7 @@ struct PrintMemCopyWithUBParam {
     const std::vector<std::string> &addrTypeHead;
     std::vector<std::string> &addrExpr;
     std::vector<std::string> &dataTypeExpr;
-    const bool isSpillIntoGM;
+    const bool isSpillingToGM;
 };
 
 struct PrintGatherParam {

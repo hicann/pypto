@@ -38,6 +38,15 @@ struct LogicalTensorInfo {
           shape(tShape),
           magic(magicVal),
           dynValidShape(dynShape) {};
+    LogicalTensorInfo(Function &func, DataType dataType, MemoryType memoryType, const std::vector<int64_t> &tShape,
+        std::string tName, int magicVal, const std::vector<SymbolicScalar> &dynShape)
+        : function(func),
+          dType(dataType),
+          memType(memoryType),
+          shape(tShape),
+          tensorName(std::move(tName)),
+          magic(magicVal),
+          dynValidShape(dynShape) {};
 
     Function &function;
     DataType dType;
