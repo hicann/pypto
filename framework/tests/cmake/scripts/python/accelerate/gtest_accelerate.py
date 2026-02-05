@@ -114,7 +114,7 @@ class GTestAccelerate(ABC):
             return desc
 
         @staticmethod
-        def save_case_duration_to_json(sorted_datas: List[List[Any]], 
+        def save_case_duration_to_json(sorted_datas: List[List[Any]],
                                        dump_item_num: int = 100, dump_min_duration: float = 5,
                                        path: Optional[Path] = None):
             # 路径处理
@@ -241,9 +241,11 @@ class GTestAccelerate(ABC):
                 brief += f"\nIdx:{idx}/{len(datas)}\n{data}"
             return f"\n\nCase Exception Brief({len(datas)}):{brief}", len(datas)
 
-        def get_case_exec_duration_info(self, case_dict: Dict[str, CaseDesc], 
+        def get_case_exec_duration_info(self, case_dict: Dict[str, CaseDesc],
                                         min_print_cnt: Optional[int] = None,
-                                        dump_json_path: Optional[Path] = None) -> str:
+                                        dump_json_path: Optional[Path] = None,
+                                        dump_item_num: int = 100,
+                                        dump_min_duration: float = 5) -> str:
             """获取 Case 执行耗时统计信息.
 
             :return: Case 执行耗时统计信息.
@@ -277,7 +279,8 @@ class GTestAccelerate(ABC):
                 for item in datas:
                     item[duration_idx] = f"{item[duration_idx]:.2f}"
                 # 结果落盘, 常用于本地重复执行时加速
-                self.save_case_duration_to_json(sorted_datas=datas, path=dump_json_path)
+                self.save_case_duration_to_json(sorted_datas=datas, path=dump_json_path,
+                                                dump_item_num=dump_item_num, dump_min_duration=dump_min_duration)
                 # 缩略功能
                 if min_print_cnt:
                     print_cnt = min_print_cnt + 50  # 除已配置预估耗时的用例外, 再额外打印 50 个用例
@@ -380,8 +383,9 @@ class GTestAccelerate(ABC):
         self.exe_halt_on_error: bool = args.halt_on_error  # 失败时终止后续 Case 执行
 
         # 用例管理
-        tagert = Path(args.target[0])
-        self.case_duration_json: Path = Path(tagert.parent, f"{tagert.stem}_duration.json").resolve()
+        self.case_duration_json: Path = self._init_get_case_duration_json(args=args)
+        self.case_duration_max_num: int = self._init_get_case_duration_max_num(args=args)
+        self.case_duration_min_sec: float = self._init_get_case_duration_min_sec(args=args)
         self.case_dict: Dict[str, CaseDesc] = {}
         self.case_list: List[CaseDesc] = []
         self.case_ordered_cnt: int = 0
@@ -470,6 +474,13 @@ class GTestAccelerate(ABC):
         # 其他
         parser.add_argument("--cpu_rank_size", nargs="?", type=int, default=None,
                             help="Specify the rank size for CPU affinity grouping.")
+        # 用例耗时缓存相关参数
+        parser.add_argument("--dump_case_duration_json", nargs="?", type=Path, default=None,
+                            help="Specify the path to the case duration json cache file.")
+        parser.add_argument("--dump_case_duration_max_num", nargs="?", type=int, default=None,
+                            help="Maximum number of cases to dump to duration json cache.")
+        parser.add_argument("--dump_case_duration_min_secends", nargs="?", type=int, default=None,
+                            help="Minimum duration (in seconds) for cases to dump to duration json cache.")
 
     @staticmethod
     def _init_get_cpu_rank_size(args) -> Optional[int]:
@@ -483,6 +494,58 @@ class GTestAccelerate(ABC):
         if cpu_rank_size and cpu_rank_size > 0:
             return cpu_rank_size
         return None
+
+    @staticmethod
+    def _init_get_case_duration_json(args) -> Path:
+        """初始化 case_duration_json
+
+        命令行参数优先, 然后是环境变量, 最后是默认值
+        """
+        if args.dump_case_duration_json:
+            return args.dump_case_duration_json.resolve()
+
+        # 从环境变量获取
+        env_json_path = os.environ.get("PYPTO_TESTS_DUMP_CASE_DURATION_JSON", None)
+        if env_json_path:
+            return Path(env_json_path).resolve()
+
+        # 默认值
+        tagert = Path(args.target[0])
+        return tagert.parent / f"{tagert.stem}_duration.json"
+
+    @staticmethod
+    def _init_get_case_duration_max_num(args) -> int:
+        """初始化 case_duration_max_num
+
+        命令行参数优先, 然后是环境变量, 最后是默认值
+        """
+        if args.dump_case_duration_max_num is not None:
+            return args.dump_case_duration_max_num
+
+        # 从环境变量获取
+        env_max_num = os.environ.get("PYPTO_TESTS_DUMP_CASE_DURATION_MAX_NUM", None)
+        if env_max_num:
+            return int(env_max_num)
+
+        # 默认值
+        return 100
+
+    @staticmethod
+    def _init_get_case_duration_min_sec(args) -> float:
+        """初始化 case_duration_min_sec
+
+        命令行参数优先, 然后是环境变量, 最后是默认值
+        """
+        if args.dump_case_duration_min_secends is not None:
+            return float(args.dump_case_duration_min_secends)
+
+        # 从环境变量获取
+        env_min_sec = os.environ.get("PYPTO_TESTS_DUMP_CASE_DURATION_MIN_SECONDS", None)
+        if env_min_sec:
+            return float(env_min_sec)
+
+        # 默认值
+        return 5.0
 
     @staticmethod
     def _move(src: JoinableQueue, dst: JoinableQueue):
@@ -571,7 +634,7 @@ class GTestAccelerate(ABC):
         self.ExecResult.load_case_duration_from_json(desc_dict=self.case_dict, path=self.case_duration_json)
         # 重排用例
         self.case_list = self.case_dict.values()
-        self.case_list = sorted(self.case_list, 
+        self.case_list = sorted(self.case_list,
                                 key=lambda x: x.duration_estimate if x.duration_estimate is not None else float('-inf'),
                                 reverse=True)
         self.case_ordered_cnt = 0
@@ -616,7 +679,7 @@ class GTestAccelerate(ABC):
             else:
                 self.cpu_affinity_policy = 2  # 策略2: 循环复用核心组(期望 CPU 数超出 CPU 总数场景)
         logging.info("Determine CpuAffinity, Policy=%s(%s), CntrNum=%s, CpuNum=%s, CpuRankSize=%s",
-                     self.cpu_affinity_policy_str, self.cpu_affinity_policy, 
+                     self.cpu_affinity_policy_str, self.cpu_affinity_policy,
                      self.cntr_num, cpu_count(), self.cpu_rank_size)
 
     def _prepare_get_params(self) -> List[ExecParam]:
@@ -632,9 +695,10 @@ class GTestAccelerate(ABC):
         """
         terminate_brief, terminate_count = self.exe_result.get_case_exec_terminate_info()
         exception_brief, exception_count = self.exe_result.get_case_exec_exception_info()
-        duration_brief = self.exe_result.get_case_exec_duration_info(case_dict=self.case_dict, 
-                                                                     min_print_cnt=self.case_ordered_cnt,
-                                                                     dump_json_path=self.case_duration_json)
+        duration_brief = self.exe_result.get_case_exec_duration_info(
+            case_dict=self.case_dict, min_print_cnt=self.case_ordered_cnt,
+            dump_json_path=self.case_duration_json, dump_item_num=self.case_duration_max_num,
+            dump_min_duration=self.case_duration_min_sec)
 
         # Case 执行总体情况汇总
         remaining_count = 0
@@ -883,7 +947,7 @@ class GTestAccelerate(ABC):
         ctx.exit_code = process.exitcode
         logging.info("%s Recv Case[%s] upload terminate event.", self._get_process_desc(), gtest_filter)
         return False
-    
+
     def _execute_case(self, ctx: CaseContext, param: ExecParam,
                     gtest_filter: str) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
         """统一的用例执行入口 - 由子类重写此方法实现不同模式"""

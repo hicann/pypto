@@ -13,6 +13,9 @@ set(_Target ${PTO_Fwk_UTestNamePrefix}_interface)
 file(GLOB_RECURSE _Sources
         src/*.cpp
 )
+if (NOT ENABLE_TORCH_VERIFIER)
+    list(FILTER _Sources EXCLUDE REGEX "interpreter/")
+endif ()
 
 set(LinkLibraries)
 if (TARGET tile_fwk_calculator)

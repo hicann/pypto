@@ -65,7 +65,7 @@ TEST_F(CalcCommonTest, UnalignedReshape) {
         nullptr,
         &ooperandInplaceDataViewList
     };
-    ASSERT_GT(outputDataView->GetSize(), inputDataView->GetSize()) 
+    ASSERT_GT(outputDataView->GetSize(), inputDataView->GetSize())
         << "Output size should be greater than input size to trigger the new branch";
     opInter.ExecuteOperation(&ctx);
 
