@@ -307,8 +307,7 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         src = Path(__file__).parent.resolve()
         env = os.environ.copy()
         env["CCACHE_BASEDIR"] = str(src)  # 在 ccache 场景支持路径归一化
-        # 准备构建目录, 使用扩展名创建唯一的构建目录
-        build_dir = Path(self.build_temp).resolve()
+        build_dir = self._get_cmake_build_prefix()
         build_dir.mkdir(parents=True, exist_ok=True)
         # 获取 cmake install prefix
         cmake_install_prefix = self._get_cmake_install_prefix()
@@ -359,6 +358,15 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
             cmake_install_prefix = Path(src_root, "python")
             logging.warning("Run in editable mode, use %s as cmake install prefix.", cmake_install_prefix)
         return cmake_install_prefix.resolve()
+
+    def _get_cmake_build_prefix(self) -> Path:
+        """ In editable mode have a non-temporary build directory.
+        """
+        build_dir = Path(self.build_temp)
+        if self._edit_mode():
+            src_root = Path(__file__).parent.resolve()
+            build_dir = src_root / "build"
+        return build_dir.resolve()
 
 
 class SetupCtrl:
