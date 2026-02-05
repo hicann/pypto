@@ -33,6 +33,9 @@ public:
     void HanldeForMultiAssemble(Function &function, std::unordered_set<Operation *>& concurrentAssembles) const;
     Status HanldeForSingleAssemble(Function &function, LogicalTensorPtr input, LogicalTensorPtr output, Operation &op) const;
     Status ProcessView(Function &function) const;
+
+private:
+    void UpdateReshapeShape(Operation &reshapeOp, const Shape &newRawShape) const;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_REMOVE_REDUNDANT_ASSEMBLE_H

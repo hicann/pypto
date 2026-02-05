@@ -134,6 +134,13 @@ bool MatchReshapePattern(const LogicalTensorPtr &reshapeInput, const LogicalTens
     return removeAllOnes(inputShape) == removeAllOnes(outputShape);
 }
 
+void RemoveRedundantAssemble::UpdateReshapeShape(Operation &reshapeOp, const Shape &newRawShape) const {
+    reshapeOp.GetOOperands().front()->dynValidShape_ = SymbolicScalar::FromConcrete(newRawShape);
+    reshapeOp.SetAttr(OP_ATTR_PREFIX + "validShape", reshapeOp.GetOOperands().front()->dynValidShape_);
+    reshapeOp.GetOOperands().front()->shape = newRawShape;
+    reshapeOp.GetOOperands().front()->tensor->UpdateRawShape(newRawShape);
+}
+
 /*
 删除冗余的VIEW处理场景:
 Brfore：
@@ -165,7 +172,7 @@ Status RemoveRedundantAssemble::ProcessView(Function &function) const {
             continue;;
         }
         auto &offset = opAttr->GetFromDynOffset();
-        std::vector<int64_t> newRawShape = reshapeOp.GetOOperands().front()->shape;
+        Shape newRawShape = reshapeOp.GetOOperands().front()->shape;
         if (!CalculateNewRawShape(reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetRawShape(), newRawShape)) return SUCCESS;
         std::vector<SymbolicScalar> newDynOffset;
         GetDynOffsetBeforeReshape(offset, viewInput->shape, newRawShape, newDynOffset);
@@ -186,8 +193,7 @@ Status RemoveRedundantAssemble::ProcessView(Function &function) const {
             copyAttr->SetFromOffset(newOffset);
             copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
         }
-        reshapeOp.GetOOperands().front()->shape = newRawShape;
-        reshapeOp.GetOOperands().front()->tensor->UpdateRawShape(newRawShape);
+        UpdateReshapeShape(reshapeOp, newRawShape);
         reshapeOp.ReplaceIOperand(0, viewInput);
         producerOp->SetAsDeleted();
     }
