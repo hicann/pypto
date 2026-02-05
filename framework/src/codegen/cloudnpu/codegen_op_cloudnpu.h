@@ -410,6 +410,8 @@ private:
     std::string PrintVectorScalarOpDynamicUnalign(const PrintUnaryParam &param) const;
     std::string PrintMemL1ToL0TileTensor() const;
     std::string PrintMatmulTileTensor(bool isAcc) const;
+    std::string PrintMatmulTileTensor(
+        bool isAcc, std::unordered_map<OperandType, std::string> &tensorWithMemType) const;
     std::string PrintTmove() const;
     std::string PrintL0CToL1TileTensor() const;
 

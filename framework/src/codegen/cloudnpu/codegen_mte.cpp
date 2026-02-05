@@ -177,8 +177,12 @@ std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const {
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coord = PrintCoord(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), coordCp);
     std::ostringstream oss;
-    oss << tileOpName << "<" << std::to_string(isTrans) << ">" << "(" << dstTensor << ", " << src0Tensor << ", "
-        << coord << ");\n";
+    oss << tileOpName;
+    if (opCode != Opcode::OP_L1_TO_L0A_SCALE && opCode != Opcode::OP_L1_TO_L0B_SCALE) {
+        oss << WrapParamByAngleBrackets({std::to_string(isTrans)});
+    }
+    oss << WrapParamByParentheses({dstTensor, src0Tensor, coord});
+    oss << ";\n";
     return oss.str();
 }
 
@@ -906,20 +910,25 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1TileTensor(const PrintMemCopyWi
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
     auto [outerValueStr, innerValueStr] = GetOuterInnerValueStr(param.gmIdx, param.gmShape);
 
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord, outerValueStr, innerValueStr};
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, coord};
+    if(opCode != Opcode::OP_L1_COPY_IN_A_SCALE && opCode != Opcode::OP_L1_COPY_IN_B_SCALE){
+        tileOpParamList.insert(tileOpParamList.end(), {outerValueStr, innerValueStr});
+    }
     int64_t copyInMode = -1;
     std::string cpModeStr = "";
-    const int64_t ND2ND = 0;
-    const int64_t ND2NZ = 1;
     if (opAttrs.count(OP_ATTR_PREFIX + "copy_in_mode")) {
         copyInMode = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "copy_in_mode"));
     }
+    CopyInMode copyMode = static_cast<CopyInMode>(copyInMode);
+
     int64_t nzValue = 0;
     auto ret = GetAttr(OP_ATTR_PREFIX + "is_nz", nzValue);
-    if (copyInMode == ND2ND) {
+    if (copyMode == CopyInMode::COPY_MOD_ND2ND) {
         cpModeStr = "CopyInMode::ND2ND";
-    } else if (copyInMode == ND2NZ) {
-        cpModeStr = "CopyInMode::ND2NZ";
+    } else if (copyMode == CopyInMode::COPY_MOD_DN2NZ) {
+        cpModeStr = "CopyInMode::DN2NZ";
+    } else if (copyMode == CopyInMode::COPY_MOD_NZ2NZ) {
+        cpModeStr = "CopyInMode::NZ2NZ";
     } else if (ret && nzValue) {
         cpModeStr = "CopyInMode::NZ2NZ";
     } else {

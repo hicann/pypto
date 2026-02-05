@@ -44,6 +44,8 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           {             Opcode::OP_GATHER,              [this]() { return GenGatherOp(); }},
           // L1 <-> GM/BT/L1
           {         Opcode::OP_L1_COPY_IN,           [this]() { return GenMemL1CopyIn(); }},
+          { Opcode::OP_L1_COPY_IN_A_SCALE,           [this]() { return GenMemL1CopyIn(); }},
+          { Opcode::OP_L1_COPY_IN_B_SCALE,           [this]() { return GenMemL1CopyIn(); }},
           {        Opcode::OP_L1_COPY_OUT,          [this]() { return GenMemL1CopyOut(); }},
           {       Opcode::OP_GATHER_IN_L1,            [this]() { return GenGatherInL1(); }},
 
@@ -57,6 +59,8 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           {          Opcode::OP_L1_TO_L0B,             [this]() { return GenMemL1ToL0(); }},
           {        Opcode::OP_L1_TO_L0_BT,             [this]() { return GenMemL1ToL0(); }},
           {        Opcode::OP_L1_TO_L0_AT,             [this]() { return GenMemL1ToL0(); }},
+          {    Opcode::OP_L1_TO_L0A_SCALE,             [this]() { return GenMemL1ToL0(); }},
+          {    Opcode::OP_L1_TO_L0B_SCALE,             [this]() { return GenMemL1ToL0(); }},
           {           Opcode::OP_L1_TO_BT,             [this]() { return GenMemL1ToBt(); }},
 
           // load op

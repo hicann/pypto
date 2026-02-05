@@ -214,6 +214,10 @@ std::string TestL1CopyInBody(
         op.SetAttribute(OP_ATTR_PREFIX + "inner_value", innerValueForNz);
     }
 
+    if (isTileTensor) {
+        op.SetAttribute(OP_ATTR_PREFIX + "copy_in_mode", 2);
+    }
+
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
@@ -238,7 +242,7 @@ TEST_F(TestCodegenDynCopy, L1CopyIn) {
 TEST_F(TestCodegenDynCopy, L1CopyInTileTensor) {
     std::string res = TestL1CopyInBody(false, 0, 0, true);
     std::string expect =
-        R"!!!(TLoad<CopyInMode::ND2NZ>(l1Tensor_1, gmTensor_2, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, 0)), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 1));
+        R"!!!(TLoad<CopyInMode::NZ2NZ>(l1Tensor_1, gmTensor_2, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, 0)), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 1));
 )!!!";
     EXPECT_EQ(res, expect);
 }

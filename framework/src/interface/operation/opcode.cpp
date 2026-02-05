@@ -620,6 +620,14 @@ void OpcodeManager::RegisterCube() {
     RegisterInfo(Opcode::OP_GATHER_IN_L1, OpCoreType::ANY, "GATHER_IN_L1",
         {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_L1},
         {"TileOp::GatherInL1", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::OTHER, {OpAttributeKey::startOffset});
+    RegisterInfo(Opcode::OP_L1_COPY_IN_A_SCALE, OpCoreType::AIC, "L1_COPY_IN_A_SCALE", {MemoryType::MEM_DEVICE_DDR},
+        {MemoryType::MEM_L1}, {"TileOp::TLoadAMX", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::MOVE_IN);
+    RegisterInfo(Opcode::OP_L1_COPY_IN_B_SCALE, OpCoreType::AIC, "L1_COPY_IN_B_SCALE", {MemoryType::MEM_DEVICE_DDR},
+        {MemoryType::MEM_L1}, {"TileOp::TLoadAMX", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::MOVE_IN);
+    RegisterInfo(Opcode::OP_L1_TO_L0A_SCALE, OpCoreType::AIC, "L1_TO_L0A_SCALE", {MemoryType::MEM_L1},
+        {MemoryType::MEM_L0AMX}, {"TileOp::TEXtractMX", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL);
+    RegisterInfo(Opcode::OP_L1_TO_L0B_SCALE, OpCoreType::AIC, "L1_TO_L0B_SCALE", {MemoryType::MEM_L1},
+        {MemoryType::MEM_L0BMX}, {"TileOp::TEXtractMX", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL);
 }
 
 void OpcodeManager::RegisterDistribute() {

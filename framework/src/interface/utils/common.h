@@ -140,7 +140,9 @@ enum OperandType {
     BUF_DDR = 7,
     BUF_REG = 8,
     SCALAR = 9,
-    TOTAL_BUF_TYPE = 9
+    BUF_L0AMX = 10,
+    BUF_L0BMX = 11,
+    TOTAL_BUF_TYPE,
 };
 
 inline std::string OperandTypeToStr(OperandType t) {
