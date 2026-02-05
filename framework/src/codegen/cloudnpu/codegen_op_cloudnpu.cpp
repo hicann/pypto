@@ -738,4 +738,17 @@ std::string CodeGenOpCloudNPU::GenOpCode() const {
     return ret;
 }
 
+std::string CodeGenOpCloudNPU::GetLastUse() const{
+    if(!opAttrs.count(OpAttributeKey::lastUse)){
+        return "";
+    }
+    std::vector<int64_t> val = GetVectorIntAttribute(OpAttributeKey::lastUse);
+    int valSize = val.size();
+    ASSERT(valSize != 0) << "GetLastUse error!!!";
+    std::ostringstream oss;
+    oss << "LastUse" << valSize << "Dim";
+    oss << WrapParamByAngleBrackets(val);
+    return oss.str();
+}
+
 } // namespace npu::tile_fwk

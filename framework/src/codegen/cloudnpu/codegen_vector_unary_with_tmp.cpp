@@ -156,7 +156,14 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxisTileTensor() const {
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     std::ostringstream oss;
-    oss << tileOpName << "(" << dstTensor << ", " << src0Tensor << ", " << tmpTensor << ");\n";
+    std::vector<std::string> templateParamList;
+    std::string lastUse = GetLastUse();
+    oss << tileOpName;
+    if (!lastUse.empty()) {
+        oss << WrapParamByAngleBrackets({lastUse});
+    }
+    oss << WrapParamByParentheses({dstTensor, src0Tensor, tmpTensor});
+    oss << ";\n";
     return oss.str();
 }
 

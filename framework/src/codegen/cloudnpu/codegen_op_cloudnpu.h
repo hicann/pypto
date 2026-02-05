@@ -221,6 +221,23 @@ private:
         return false;
     }
 
+    template <typename T = int64_t>
+    std::vector<T> GetVectorIntAttribute(const std::string &key) const {
+        static_assert(std::is_integral_v<T>);
+        std::vector<int64_t> val;
+        GetAttr(key, val);
+        if constexpr (std::is_same_v<T, int64_t>) {
+            return val;
+        }
+        std::vector<T> ret;
+        for (auto &x : val) {
+            ret.emplace_back(static_cast<T>(x));
+        }
+        return ret;
+    }
+
+    std::string GetLastUse() const;
+
     TileTensor BuildTileTensor(int paramIdx, const std::string &usingType, const ShapeInLoop &shapeInLoop = {});
     void UpdateTileTensorShapeAndStride(
         int paramIdx, TileTensor &tileTensor, bool isSpillToGm, const ShapeInLoop &shapeInLoop = {});

@@ -26,6 +26,7 @@
 #include "codegen/codegen.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
 
@@ -359,5 +360,49 @@ TStore(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)
 #endif
 
     EXPECT_EQ(res, expect);
+}
+
+TEST_F(TestCodegenDynBinary, TestAddTileTensor) {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+
+    std::vector<int64_t> addShape = {64, 64};
+    TileShape::Current().SetVecTile(addShape);
+    Tensor inputA(DT_FP16, addShape, "A");
+    Tensor inputB(DT_FP16, addShape, "B");
+    Tensor output(DT_FP16, addShape, "C");
+
+    std::string addFuncName = "TestAddTileTensor";
+    FUNCTION(addFuncName, {inputA, inputB, output}) {
+        LOOP(addFuncName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + addFuncName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+    std::vector<SymbolicScalar> dynValidShape = {64, 64};
+    auto localTensorA = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
+    auto localTensorB = CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
+    auto localOutTensor =
+        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, addShape, dynValidShape});
+
+    auto &op =
+        function->AddOperation(Opcode::OP_ADD, {localTensorA, localTensorB}, {localOutTensor});
+    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    std::vector<int> initVec(addShape.size(), false);
+    op.SetAttribute(OpAttributeKey::lastUse, initVec);
+
+    function->GetTensorMap().inverseMap_[localTensorA->GetMagic()] = localTensorA;
+    function->GetTensorMap().inverseMap_[localTensorB->GetMagic()] = localTensorB;
+    function->GetTensorMap().inverseMap_[localOutTensor->GetMagic()] = localOutTensor;
+
+    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
+    CodeGenCtx ctx;
+    CodeGenCloudNPU cga(ctx);
+    cga.GenAllocForLocalBuffer(op, symbolManager);
+    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
+    cop.GenOpCode();
 }
 } // namespace npu::tile_fwk

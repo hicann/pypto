@@ -62,8 +62,16 @@ std::string CodeGenOpCloudNPU::PrintCastTileTensor() const {
         modeEnum = npu::tile_fwk::AnyCast<int64_t>(mode);
     }
     std::ostringstream oss;
-    oss << tileOpName << "<" << modeEnum << ">"
-        << "(" << dstTensor << ", " << srcTensor << ");\n";
+    std::vector<std::string> templateParamList;
+    std::string lastUse = GetLastUse();
+    oss << tileOpName;
+    if (!lastUse.empty()) {
+        templateParamList.emplace_back(lastUse);
+    }
+    templateParamList.emplace_back(std::to_string(modeEnum));
+    oss << WrapParamByAngleBrackets(templateParamList);
+    oss << WrapParamByParentheses({dstTensor, srcTensor});
+    oss << ";\n";
     return oss.str();
 }
 
@@ -312,8 +320,16 @@ std::string CodeGenOpCloudNPU::PrintExpandLayout(int expandAxis) const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::ostringstream oss;
-    oss << tileOpName << "<" << expandAxis << ">"
-        << "(" << dstTensor << ", " << srcTensor << ");\n";
+    std::vector<std::string> templateParamList;
+    std::string lastUse = GetLastUse();
+    oss << tileOpName;
+    if (!lastUse.empty()) {
+        templateParamList.emplace_back(lastUse);
+    }
+    templateParamList.emplace_back(std::to_string(expandAxis));
+    oss << WrapParamByAngleBrackets(templateParamList);
+    oss << WrapParamByParentheses({dstTensor, srcTensor});
+    oss << ";\n";
     return oss.str();
 }
 
@@ -497,7 +513,14 @@ std::string CodeGenOpCloudNPU::PrintUnaryTileTensor() const {
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
 
     std::ostringstream oss;
-    oss << tileOpName << "(" << dstTensor << ", " << srcTensor << ");\n";
+    std::vector<std::string> templateParamList;
+    std::string lastUse = GetLastUse();
+    oss << tileOpName;
+    if (!lastUse.empty()) {
+        oss << WrapParamByAngleBrackets({lastUse});
+    }
+    oss << WrapParamByParentheses({dstTensor, srcTensor});
+    oss << ";\n";
     return oss.str();
 }
 
