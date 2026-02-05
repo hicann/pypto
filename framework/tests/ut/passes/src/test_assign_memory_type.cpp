@@ -13,6 +13,8 @@
  * \brief Unit test for assign_memory_type pass.
  */
 
+#include <fstream>
+#include <vector>
 #include <gtest/gtest.h>
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
@@ -21,8 +23,7 @@
 #include "interface/configs/config_manager.h"
 #include "passes/tile_graph_pass/data_path/assign_memory_type.h"
 #include "passes/pass_mgr/pass_manager.h"
-#include <fstream>
-#include <vector>
+#include "computational_graph_builder.h"
 
 using namespace npu::tile_fwk;
 
@@ -797,6 +798,7 @@ void AssignViewTensorWithAttr (std::shared_ptr<Function> &currFunctionPtr) {
     currFunctionPtr->inCasts_.push_back(view_in4);
     currFunctionPtr->outCasts_.push_back(output);
 }
+
 TEST_F(AssignMemoryTypeTest, TestViewWithAttr) {
     auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestViewWithAttr", "TestViewWithAttr", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
@@ -833,6 +835,51 @@ TEST_F(AssignMemoryTypeTest, TestViewWithAttr) {
             EXPECT_EQ(attrToType,outputMemTobe);
         }
     }
+}
+
+TEST_F(AssignMemoryTypeTest, TestPostcheckFailWhenTensorMemUnknown) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(),
+        "TestPostcheckFailWhenTensorMemUnknown", "TestPostcheckFailWhenTensorMemUnknown", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestPostcheckFailWhenTensorMemUnknown", currFunctionPtr);
+    AssignViewTensorWithAttr(currFunctionPtr);
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PostCheck(*currFunctionPtr), FAILED);
+}
+
+TEST_F(AssignMemoryTypeTest, TestPostcheckFailWhenPathUnreachable) {
+    std::vector<int64_t> shape1{NUM_32, NUM_32};
+    std::vector<int64_t> shape2{NUM_64, NUM_64};
+    std::vector<int64_t> shape3{NUM_128, NUM_128};
+    ComputationalGraphBuilder G;
+    
+    G.AddTensor(DataType::DT_FP32, shape3, "input");
+    auto tensorInput = G.GetTensor("input");
+    tensorInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(DataType::DT_FP32, shape2, "a");
+    auto tensorA = G.GetTensor("a");
+    tensorA->SetMemoryTypeBoth(MemoryType::MEM_L0C, true);
+    G.AddTensor(DataType::DT_FP32, shape1, "b");
+    auto tensorB= G.GetTensor("b");
+    tensorB->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(DataType::DT_FP32, shape3, "output");
+    auto tensorOutput = G.GetTensor("output");
+    tensorOutput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    G.AddOp(Opcode::OP_VIEW, {"input"}, {"a"}, "view1");
+    G.GetOp("view1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(shape3, MemoryType::MEM_L0C));
+    G.AddOp(Opcode::OP_VIEW, {"a"}, {"b"}, "view2");
+    G.GetOp("view2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(shape2, MemoryType::MEM_DEVICE_DDR));
+    G.AddOp(Opcode::OP_ASSEMBLE, {"b"}, {"output"}, "assemble1");
+    G.GetOp("assemble1")->SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_DEVICE_DDR, shape2));
+    
+    G.SetInCast({"input"});
+    G.SetOutCast({"output"});
+
+    Function *function = G.GetFunction();
+
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PostCheck(*function), FAILED);
 }
 }
 } // namespace npu::tile_fwk

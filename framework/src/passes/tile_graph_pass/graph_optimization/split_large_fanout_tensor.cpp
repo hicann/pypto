@@ -674,4 +674,10 @@ void SplitLargeFanoutTensor::EraseRedundantViewOp(Function &function) {
     }
 }
 
+Status SplitLargeFanoutTensor::PreCheck(Function &function){
+    return checker.DoPreCheck(function);
+}
+Status SplitLargeFanoutTensor::PostCheck(Function &function){
+    return checker.DoPostCheck(function);
+}
 } // namespace npu::tile_fwk

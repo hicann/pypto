@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -22,15 +22,34 @@
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
 #include "interface/tensor/logical_tensor.h"
+#include "tilefwk/data_type.h"
 
 namespace npu {
 namespace tile_fwk {
 class AssignMemoryTypeChecker : Checker {
 public:
     Status DoPreCheck(Function &function) override;
+    Status DoPostCheck(Function &function) override;
 private:
     void CheckPattern(Operation *operation, std::queue<std::pair<Operation*, int>> &opQueue, int depth, std::unordered_set<Operation*> &visited);
     Status CheckAmulBInputProducers(Operation &operation);
+    Status CheckTensorNotMemUnknown(Function &function);
+    Status CheckMoveOpReachable(Function &function);
+};
+static const std::set<std::pair<MemoryType, MemoryType>> ALL_DEFINED_PATHS = {
+    {MEM_L0C, MEM_L1},
+    {MEM_L0C, MEM_UB},
+    {MEM_L0C, MEM_DEVICE_DDR},
+    {MEM_L1, MEM_L0A},
+    {MEM_L1, MEM_L0B},
+    {MEM_L1, MEM_UB},
+    {MEM_L1, MEM_BT},
+    {MEM_L1, MEM_FIX_QUANT_PRE},
+    {MEM_L1, MEM_DEVICE_DDR},
+    {MEM_UB, MEM_L1},
+    {MEM_UB, MEM_DEVICE_DDR},
+    {MEM_DEVICE_DDR, MEM_L1},
+    {MEM_DEVICE_DDR, MEM_UB},
 };
 } // namespace tile_fwk
 } // namespace npu

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -101,6 +101,60 @@ void AssignMemoryTypeChecker::CheckPattern(Operation *operation, std::queue<std:
             }
         }
     }
+}
+
+Status AssignMemoryTypeChecker::DoPostCheck(Function &function) {
+    APASS_LOG_INFO_F(Elements::Function, "===> Start Postcheck for AssignMemoryType.");
+    if (CheckTensorNotMemUnknown(function) == FAILED){
+        APASS_LOG_ERROR_F(Elements::Function, "Postcheck for AssignMemoryType failed since tensor has improper memoryType."); 
+        return FAILED;
+    }
+    if (CheckMoveOpReachable(function) == FAILED){
+        APASS_LOG_ERROR_F(Elements::Function, "Postcheck for AssignMemoryType failed since view/assemble has unreachable input-to-output memoryType."); 
+        return FAILED;
+    }
+    APASS_LOG_INFO_F(Elements::Function, "End Postcheck for AssignMemoryType.");
+    return SUCCESS;
+}
+
+Status AssignMemoryTypeChecker::CheckTensorNotMemUnknown(Function &function) {
+    for (const auto &tMap : function.GetTensorMap().tensorMap_) {
+        for (const auto &tensor : tMap.second) {
+            if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UNKNOWN) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d]'s memoryType is still unknown.", tensor->GetMagic());
+                return FAILED;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+Status AssignMemoryTypeChecker::CheckMoveOpReachable(Function &function) {
+    auto operations = function.Operations();
+    for (const auto &operation : operations) {
+        if (OpcodeManager::Inst().GetOpCalcType(operation.GetOpcode()) != OpCalcType::MOVE_LOCAL) {
+            continue;
+        }
+        for (const auto &input : operation.GetIOperands()){
+            for (const auto &output : operation.GetOOperands()){
+                auto inMemType = input->GetMemoryTypeOriginal();
+                auto outMemType = output->GetMemoryTypeOriginal();
+                if (inMemType == outMemType) {
+                    continue;
+                }
+                std::pair<MemoryType, MemoryType> moveOpPath = {inMemType, outMemType};
+                if (ALL_DEFINED_PATHS.find(moveOpPath) == ALL_DEFINED_PATHS.end()) {
+                    APASS_LOG_ERROR_F(Elements::Tensor,
+                        "OP[%d] has inputTensor[%d] with memoryType %s and "
+                        "outputTensor[%d] with memoryType %s; The path is not reachable.",
+                        operation.GetOpMagic(), input->GetMagic(), BriefMemoryTypeToString(inMemType).c_str(),
+                        output->GetMagic(), BriefMemoryTypeToString(outMemType).c_str());
+                    return FAILED;
+                }
+            }
+        }
+    }
+    return SUCCESS;
 }
 } // namespace tile_fwk
 } // namespace npu

@@ -22,6 +22,7 @@
 #include "passes/tile_graph_pass/data_path/convert_op_inserter.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/data_type.h"
+#include "passes/pass_check/assign_memory_type_checker.h"
 
 namespace npu::tile_fwk {
 class AssignMemoryType : public Pass {
@@ -31,7 +32,8 @@ public:
         RunOnFunction(function);
     }
 private:
-    Status PreCheck(Function &function) override;    
+    Status PreCheck(Function &function) override;  
+    Status PostCheck(Function &function) override;  
     Status RunOnFunction(Function &function) override;
     void AssignMoveOp(Operation &operation);
     void AssignMoveOpForAssemble(Operation &operation);
@@ -52,6 +54,7 @@ private:
     bool IsDimMultiple(const Shape &shape1, const Shape &shape2);
     std::string PrintTensorMem(std::shared_ptr<LogicalTensor>& tensor) const;
     ConvertInserter inserter;
+    AssignMemoryTypeChecker checker;
 };
 } // namespace npu::tile_fwk
 

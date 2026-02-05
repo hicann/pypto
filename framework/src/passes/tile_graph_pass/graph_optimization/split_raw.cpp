@@ -177,5 +177,8 @@ Status SplitRawTensor::RunOnFunction(Function &function) {
     APASS_LOG_INFO_F(Elements::Function, "===> End SplitRaw.");
     return SUCCESS;
 }
+Status SplitRawTensor::PostCheck(Function &function){
+    return checker.DoPostCheck(function);
+}
 } // namespace tile_fwk
 } // namespace npu

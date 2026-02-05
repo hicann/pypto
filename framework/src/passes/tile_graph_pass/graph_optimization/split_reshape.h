@@ -22,6 +22,7 @@
 #include "passes/pass_utils/pass_common_defs.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_interface/pass.h"
+#include "passes/pass_check/split_reshape_checker.h"
 
 namespace npu::tile_fwk {
 using InputMaigc = int;
@@ -174,6 +175,10 @@ private:
     Status ShapeAlign(std::vector<int64_t> shape1, std::vector<int64_t> shape2, std::vector<int64_t> &alignedShape);
     Status RawToAlign(const ReshapeTilePara &shapePara, std::vector<int64_t> &newOffset, std::vector<int64_t> &newShape);
     Status AlignToRaw(const ReshapeTilePara &shapePara, std::vector<int64_t> &newOffset, std::vector<int64_t> &newShape);
+
+    Status PreCheck(Function &function) override;
+    Status PostCheck(Function &function) override;
+    SplitReshapeChecker checker;
     
     std::unordered_map<int, std::set<LogicalTensorPtr, TensorPtrComparator>> AssembleOutToInput;
     std::unordered_map<InputMaigc, std::unordered_map<OutputMaigc, std::vector<int64_t>>> mapOffset;

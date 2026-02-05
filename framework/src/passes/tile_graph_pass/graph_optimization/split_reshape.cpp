@@ -1232,4 +1232,11 @@ Status SplitReshape::SetMemoryType(Function &function) {
     }
     return SUCCESS;
 }
+
+Status SplitReshape::PreCheck(Function &function){
+    return checker.DoPreCheck(function);
+}
+Status SplitReshape::PostCheck(Function &function){
+    return checker.DoPostCheck(function);
+}
 } // namespace npu::tile_fwk
