@@ -586,5 +586,32 @@ TILEOP void TStore(
         }
     }
 }
+// L1 spill
+// When L1 space is insufficient, spill to GM. (Supported on A2/A3 only.)
+template <typename config, typename Coord, typename T, typename U>
+TILEOP void TStore(T &dst, U &src, const Coord &coord)
+{
+    constexpr auto shapeSize = Std::tuple_size<typename U::Shape>::value;
+    constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM2, typename U::TileShape>::type::value;
+    constexpr auto staticL1W = Std::tuple_element<shapeSize - 1, typename U::TileShape>::type::value;
+    int64_t dstShape0 = GetShape<0>(dst);
+    int64_t dstShape1 = GetShape<1>(dst);
+    int64_t dstStride0 = GetStride<0>(dst);
+    int64_t dstStride1 = GetStride<1>(dst);
+    int64_t srcShape0 = GetShape<0>(src);
+    int64_t srcShape1 = GetShape<1>(src);
+    using shapeDim2 = pto::Shape<1, 1, 1, -1, -1>;
+    using strideDim2 = pto::Stride<1, 1, 1, -1, -1>;
+    if constexpr (config::kMode == CopyOutMode::ND2ND) {
+        using globalData = pto::GlobalTensor<typename T::Type, shapeDim2, strideDim2, pto::Layout::ND>;
+        using tileData = 
+            pto::Tile<pto::TileType::Mat, typename U::Type, staticL1H, staticL1W, pto::BLayout::RowMajor, -1, -1>;
+        globalData dstGlobal((__gm__ typename T::Type *)(dst.GetAddr()),
+            shapeDim2(srcShape0, srcShape1), strideDim2(dstStride0, dstStride1));
+        tileData srcL1(srcShape0, srcShape1);
+        pto::TASSIGN(srcL1, (uint64_t)src.GetAddr());
+        pto::TSTORE<tileData, globalData>(dstGlobal, srcL1);
+    }
+}
 } // namespace TileOp
 #endif // TILEOP_TILE_OPERATOR_CUBE_PTO__H
