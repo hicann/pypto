@@ -296,7 +296,7 @@ if ((ENABLE_ASAN OR ENABLE_UBSAN) AND ENABLE_TESTS_EXECUTE)
         # strict_init_order, 动态初始化器永远不能访问来自其他模块的全局变量, 及时或者已经初始化
         # strict_string_checks, 检查字符串参数是否正确以 null 终止
         # detect_leaks=1, 内存泄漏检测
-        set(ASAN_OPTIONS "ASAN_OPTIONS=halt_on_error=0,detect_stack_use_after_return=1,check_initialization_order=1,strict_init_order=1,strict_string_checks=1,detect_leaks=1")
+        set(ASAN_OPTIONS "ASAN_OPTIONS=halt_on_error=1,detect_stack_use_after_return=1,check_initialization_order=1,strict_init_order=1,strict_string_checks=1,detect_leaks=1")
     endif ()
 
     set(UBSAN_OPTIONS)

@@ -1094,13 +1094,13 @@ class BuildCtrl(CMakeParam):
         self.py_tests_run_pytest(dist=dist, params=[(self.tests.models, "models"),
                                                     (self.tests.stest, "python/tests/st")],
                                  ext=ext_str)
-        
+
         # 执行用例, Examples
         dev_ext_comma = ",".join(f"{d}" for d in dev_lst)
         self.py_run_examples(dist=dist, tests=self.tests.example,
                              def_filter=str(Path(self.src_root, "examples")),
                              dev_ext_comma=dev_ext_comma, n_workers=n_workers)
-        
+
     def py_tests_run_pytest(self, dist: Optional[Path], params: List[Tuple[TestsFilterParam, str]], ext: str = ""):
         """
         调用 pytest 执行用例
@@ -1122,7 +1122,7 @@ class BuildCtrl(CMakeParam):
             return
         # 执行 pytest
         self._py_tests_run_pytest(dist=dist, filter_str=filter_str, ext=ext)
-        
+
     def py_run_examples(self, dist: Optional[Path], tests: TestsFilterParam, def_filter: str,
                         dev_ext_comma: str = "0", n_workers: str = "auto"):
         if not tests.enable:
