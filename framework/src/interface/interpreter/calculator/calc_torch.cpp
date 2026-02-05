@@ -1346,7 +1346,6 @@ bool ScatterDateCopy(const std::vector<int64_t> &loopIdx, torch::Tensor &src, to
     if (ret.dim() == 2) { // 2 dim
         int64_t srcIdx = i * s + j;
         if ((dataIdx < 0 || dataIdx >= ret.size(0)) || (srcIdx < 0 || srcIdx >= src.size(0))) {
-            printf("index out of range. i:%ld, j:%ld, dst_idx:%ld, srcIdx:%ld\n", i, j, dataIdx, srcIdx);
             return flag;
         }
         ret[dataIdx] = src[srcIdx];
@@ -1355,7 +1354,6 @@ bool ScatterDateCopy(const std::vector<int64_t> &loopIdx, torch::Tensor &src, to
         int64_t bIdx = dataIdx / blockSize;
         int64_t sIdx = dataIdx % blockSize;
         if ((bIdx < 0 || bIdx >= ret.size(0)) || (sIdx < 0 || sIdx >= ret.size(1))) {
-            printf("index out of range. i:%ld, j:%ld, dst_idx:%ld, blockSize:%d\n", i, j, dataIdx, blockSize);
             return flag;
         }
         ret[bIdx][sIdx] = src[i][j];

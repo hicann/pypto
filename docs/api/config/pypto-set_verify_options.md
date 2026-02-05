@@ -32,7 +32,7 @@ set_verify_options(*,
 | pass_verify_save_tensor         | 输入      | 含义：配置是否将模拟计算数据存盘。 <br> 说明：True：代表存盘。 <br> 类型：bool <br> 取值范围：True/False <br> 默认值：False |
 | pass_verify_save_tensor_dir     | 输入      | 含义：配置检测结果及数据的保存路径。 <br> 说明：设定绝对路径的字符串。 <br> 类型：str <br> 默认值：<br> "{RUNNING_DIR}/output/output_{TS}" |
 | pass_verify_pass_filter         | 输入      | 含义：配置待自检的Pass名称列表。 <br> 说明：合法的Pass名称。不指定则自检所有Pass；指定非法名称则忽略。 <br> 类型：List[str] <br> 默认值：空 |
-| pass_verify_error_tol           | 输入      | 含义：配置精度工具对比精度需要用到的rtol和atol。 <br> 说明：List中的第一个值是rtol，第二个值为atol；List长度不等于2时，使用默认值。 <br> 类型：List[float] <br> 默认值：[1e-3, 1.5e-3] |
+| pass_verify_error_tol           | 输入      | 含义：配置精度工具对比精度需要用到的rtol和atol。 <br> 说明：List中的第一个值是rtol，第二个值为atol；List长度不等于2时，使用默认值。 <br> 类型：List[float] <br> 默认值：[1e-3, 1e-3] |
 
 ## 返回值说明
 
