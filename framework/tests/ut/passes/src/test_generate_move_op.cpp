@@ -116,20 +116,20 @@ TEST_F(GenerateMoveOpPassTest, AssembleViewToCopy) {
         int copy_out_num = 0;
         for (const auto &updatedOperation : updatedOperations) {
             switch (updatedOperation.GetOpcode()){
-                case Opcode::OP_ASSEMBLE: {
-                    assemble_num++;
-                    break;
-                }
-                case Opcode::OP_VIEW: {
-                    view_num++;
-                    break;
-                }
                 case Opcode::OP_COPY_IN: {
                     copy_in_num++;
                     break;
                 }
+                case Opcode::OP_ASSEMBLE: {
+                    assemble_num++;
+                    break;
+                }
                 case Opcode::OP_COPY_OUT: {
                     copy_out_num++;
+                    break;
+                }
+                case Opcode::OP_VIEW: {
+                    view_num++;
                     break;
                 }
                 default: break;
@@ -184,7 +184,7 @@ TEST_F(GenerateMoveOpPassTest, ConvertToCopy) {
 
         // ================== Verify Pass Effect ==================
         auto updatedOperations = Program::GetInstance().GetFunctionByRawName("TENSOR_ADD")->Operations();
-        constexpr int expectedOperations = 6;
+        constexpr int expectedOperations = 4;
         EXPECT_EQ(updatedOperations.size(), expectedOperations) << "8 operations should remain View + Convert + Add + Assemble";
         int assemble_num = 0;
         int view_num = 0;
@@ -200,23 +200,23 @@ TEST_F(GenerateMoveOpPassTest, ConvertToCopy) {
                     view_num++;
                     break;
                 }
-                case Opcode::OP_COPY_IN: {
-                    copy_in_num++;
-                    break;
-                }
                 case Opcode::OP_COPY_OUT: {
                     copy_out_num++;
+                    break;
+                }
+                case Opcode::OP_COPY_IN: {
+                    copy_in_num++;
                     break;
                 }
                 default: break;
             }
         }
+        constexpr int expectedView = 0;
         constexpr int expectedAssemble = 0;
-        constexpr int expectedView = 2;
         constexpr int expectedCopyIn = 2;
         constexpr int expectedCopyOut = 1;
-        EXPECT_EQ(assemble_num, expectedAssemble) << "0 operations should be OP_ASSEMBLE";
         EXPECT_EQ(view_num, expectedView) << "0 operations should be OP_VIEW";
+        EXPECT_EQ(assemble_num, expectedAssemble) << "0 operations should be OP_ASSEMBLE";
         EXPECT_EQ(copy_in_num, expectedCopyIn) << "4 operations should be OP_COPY_IN";
         EXPECT_EQ(copy_out_num, expectedCopyOut) << "3 operations should be OP_COPY_OUT";
     }
@@ -274,10 +274,6 @@ TEST_F(GenerateMoveOpPassTest, Transpose) {
         int transpose_datamove_num = 0;
         for (const auto &updatedOperation : updatedOperations) {
             switch (updatedOperation.GetOpcode()){
-                case Opcode::OP_ASSEMBLE: {
-                    assemble_num++;
-                    break;
-                }
                 case Opcode::OP_VIEW: {
                     view_num++;
                     break;
@@ -286,20 +282,24 @@ TEST_F(GenerateMoveOpPassTest, Transpose) {
                     copy_in_num++;
                     break;
                 }
+                case Opcode::OP_TRANSPOSE_MOVEOUT: {
+                    transpose_datamove_num++;
+                    break;
+                }
                 case Opcode::OP_COPY_OUT: {
                     copy_out_num++;
                     break;
                 }
-                case Opcode::OP_TRANSPOSE_MOVEOUT: {
-                    transpose_datamove_num++;
+                case Opcode::OP_ASSEMBLE: {
+                    assemble_num++;
                     break;
                 }
                 default: break;
             }
         }
-        constexpr int expectedAssemble = 4;
         constexpr int expectedView = 0;
         constexpr int expectedCopyIn = 4;
+        constexpr int expectedAssemble = 4;
         constexpr int expectedCopyOut = 0;
         EXPECT_EQ(assemble_num, expectedAssemble) << "4 operations should be OP_ASSEMBLE";
         EXPECT_EQ(assemble_num, transpose_datamove_num) << "num of OP_ASSEMBLE and OP_TRANSPOSE_MOVEOUT should be equal";
@@ -357,12 +357,12 @@ TEST_F(GenerateMoveOpPassTest, ScatterUpdate) {
         int index_outcast_num = 0;
         for (const auto &updatedOperation : updatedOperations) {
             switch (updatedOperation.GetOpcode()){
-                case Opcode::OP_ASSEMBLE: {
-                    assemble_num++;
+                case Opcode::OP_INDEX_OUTCAST: {
+                    index_outcast_num++;
                     break;
                 }
-                case Opcode::OP_VIEW: {
-                    view_num++;
+                case Opcode::OP_ASSEMBLE: {
+                    assemble_num++;
                     break;
                 }
                 case Opcode::OP_COPY_IN: {
@@ -373,8 +373,8 @@ TEST_F(GenerateMoveOpPassTest, ScatterUpdate) {
                     copy_out_num++;
                     break;
                 }
-                case Opcode::OP_INDEX_OUTCAST: {
-                    index_outcast_num++;
+                case Opcode::OP_VIEW: {
+                    view_num++;
                     break;
                 }
                 default: break;
