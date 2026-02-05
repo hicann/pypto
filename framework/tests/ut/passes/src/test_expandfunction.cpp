@@ -550,5 +550,17 @@ TEST_F(TestExpandFunctionPass, ExpandFunctionUTest6) {
     currFunctionPtr->SetGraphType(GraphType::TILE_GRAPH);
     EXPECT_EQ(expandfunctionpass.PostCheck(*currFunctionPtr), FAILED);
 }
+
+TEST_F(TestExpandFunctionPass, DisableCombineAxisOnA5) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestExpandFunction", "TestExpandFunction", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    currFunctionPtr->paramConfigs_.combineAxis = true;
+    ExpandFunction expandfunctionpass;
+    auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    EXPECT_EQ(currFunctionPtr->paramConfigs_.combineAxis, false);
+}
+
 }
 }

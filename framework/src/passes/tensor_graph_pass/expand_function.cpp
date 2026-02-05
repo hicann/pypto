@@ -114,6 +114,13 @@ Status ExpandFunction::PostCheck(Function &function) {
 }
 
 Status ExpandFunction::RunOnFunction(Function &function) {
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        if (function.paramConfigs_.combineAxis || function.paramConfigs_.forceCombineAxis) {
+            APASS_LOG_INFO_F(Elements::Function, "Current platform does not support combine axis");
+        }
+        function.paramConfigs_.combineAxis = false;
+        function.paramConfigs_.forceCombineAxis = false;
+    }
     APASS_LOG_INFO_F(Elements::Function, "Start ExpandFunction function [%s].", function.GetRawName().c_str());
     std::ostringstream oss;
     scopeMap_.clear();
