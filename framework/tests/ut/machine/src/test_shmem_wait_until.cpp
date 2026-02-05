@@ -106,10 +106,9 @@ auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr) {
     funcData->rawTensorAddr = rawTensorAddrHolder.get();
     funcData->rawTensorDesc = rawTensorDescHolder.get();
 
-    constexpr size_t opAttrsLength = 5;
+    constexpr size_t opAttrsLength = 17;
     auto opAttrs = std::make_unique<uint64_t[]>(opAttrsLength);
-    uint64_t initAttrs[opAttrsLength] = {0, 0, 0, 0, 0};
-    std::copy(initAttrs, initAttrs + opAttrsLength, opAttrs.get());
+    std::fill_n(opAttrs.get(), opAttrsLength, 0);
 
     return std::make_tuple(std::move(exprTbl), std::move(hcclParam),
                           std::move(rawTensorAddrHolder), std::move(rawTensorDescHolder),
