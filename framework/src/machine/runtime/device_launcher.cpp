@@ -18,6 +18,10 @@
 #include "machine/host/backend.h"
 #include "machine/runtime/host_prof.h"
 #include "machine/host/perf_analysis.h"
+
+extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
+extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
+
 namespace npu::tile_fwk::dynamic {
 namespace {
     constexpr uint32_t kMinDefaultDim = 20;
@@ -191,6 +195,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     HOST_PERF_TRACE(TracePhase::RunDevRegistKernelBin);
 
+    DataDumpInit();
     rc = DeviceRunner::Get().DynamicLaunch(aicpuStream, nullptr, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum);
     if (rc < 0) {
         return rc;
@@ -205,6 +210,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     ALOG_INFO_F("finish Kernel Launch.");
 
     HOST_PERF_TRACE(TracePhase::RunDevRunProfile);
+    DataDumpUnInit();
     return rc;
 }
 
@@ -378,6 +384,34 @@ ExportedOperator *ExportedOperatorBegin() {
 
 void ExportedOperatorEnd(ExportedOperator *op) {
     op->ResetFunction(Program::GetInstance().GetLastFunction());
+}
+
+void DataDumpInit() {
+    if (IsPtoDataDumpEnabled()) {
+        if (!AdxDataDumpServerInit) {
+            ALOG_ERROR_F("AdxDataDumpServerInit function not found.");
+            return;
+        }
+        ALOG_DEBUG_F("DataDumpServerInit is called \n");
+        int sf = AdxDataDumpServerInit();
+        if (sf != 0) {
+            ALOG_ERROR_F("ERROR AdxDataDumpServerInit failed \n");
+        }
+    }
+}
+
+void DataDumpUnInit() {
+    if (IsPtoDataDumpEnabled()) {
+        if (!AdxDataDumpServerUnInit) {
+            ALOG_ERROR_F("AdxDataDumpServerUnInit function not found.");
+            return;
+        }
+        ALOG_DEBUG_F("DataDumpServerUnInit is called \n");
+        int sf = AdxDataDumpServerUnInit();
+        if (sf != 0) {
+            ALOG_ERROR_F("AdxDataDumpServerUnInit is failed %d \n", sf);
+        }
+    }
 }
 
 void CopyDevToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor) {

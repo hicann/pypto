@@ -73,10 +73,11 @@ struct DevAscendProgram {
         } metadata;
         struct {
             uint64_t dumpTensor;
+            uint64_t leafDump;
         } debug;
 
         uint64_t Total() const {
-            return tensor.Total() + aicoreSpilled + debug.dumpTensor;
+            return tensor.Total() + aicoreSpilled + debug.dumpTensor + debug.leafDump;
         }
     } memBudget;
     const void *controlFlowBinaryAddr{nullptr};

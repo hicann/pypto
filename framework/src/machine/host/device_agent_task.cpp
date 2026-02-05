@@ -110,7 +110,7 @@ void DeviceAgentTask::SetDumpTensorInfo(const InvokeParaOffset &elm, TensorInfo 
     tensorInfo.dims = elm.tensorShape.size();
     tensorInfo.paramType = elm.paramType;
     tensorInfo.idx = elm.ioIndex;
-    if (IsAstDataDumpEnabled()) {
+    if (IsPtoDataDumpEnabled()) {
         tensorInfo.hostpid = getpid();
     }
     tensorInfo.subgraphId = task->GetFunction()->Operations()[0].GetSubgraphID();

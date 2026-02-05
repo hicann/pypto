@@ -463,5 +463,7 @@ using aclmdlRI = void *;
  public:
     static std::vector<uint8_t> tensorInfo_;
 };
+void DataDumpInit();
+void DataDumpUnInit();
 }
 #endif//SRC_MACHINE_DEVICE_LAUNCHER_H

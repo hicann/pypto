@@ -282,6 +282,9 @@ void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *f
     opInfo[toIndex(OpInfoCsvHeader::loopInfo)] = GetLoopSymbolString();
     opInfo[toIndex(OpInfoCsvHeader::opCode)] = op->GetOpcodeStr();
     opInfo[toIndex(OpInfoCsvHeader::opMagic)] = std::to_string(op->GetOpMagic());
+    if (frame->callop != nullptr) {
+        opInfo[toIndex(OpInfoCsvHeader::callopMagic)] = std::to_string(frame->callop->GetOpMagic());
+    }
 }
 
 void FunctionInterpreter::FillOperationOffsetInfo(Operation *op, FunctionFrame *frame,

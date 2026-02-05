@@ -2308,6 +2308,15 @@ static uint64_t DumpTensorWorkspace() {
 #endif
 }
 
+static uint64_t LeafDumpWorkspace() {
+    if (IsPtoDataDumpEnabled()){
+        static constexpr uint64_t LEAFDUMP_WORKSPACE = 12 * MEBI;
+        return LEAFDUMP_WORKSPACE;
+    } else {
+        return 0;
+    }
+}
+
 void EncodeDevAscendProgram(Function *func, uint64_t &offset, DevAscendProgram *base) {
     EncodeDevAscendProgramInfo encodeInfo(func);
 
@@ -2339,6 +2348,7 @@ void EncodeDevAscendProgram(Function *func, uint64_t &offset, DevAscendProgram *
         base->memBudget.metadata.general += CalcGeneralMetadataSlabWorkspace(base);
         base->memBudget.metadata.stitchPool = CalcStitchWorkspace(*base);
         base->memBudget.debug.dumpTensor = DumpTensorWorkspace();
+        base->memBudget.debug.leafDump = LeafDumpWorkspace();
 
         func->GetDyndevAttribute()->maxDynamicAssembleOutcastMem = tensorWsRes.maxDynamicAssembleOutcastMem;
     }

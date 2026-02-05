@@ -56,6 +56,9 @@ namespace npu::tile_fwk {
 
 #define ENABLE_AICORE_PRINT 0
 
+// for tensor dump
+#define ENABLE_TENSOR_DUMP 1
+
 #define PERF_AICPU_TEST_SWITCH 0 //性能AICPU数据测试
 
 // ready quene mode for aicore task : Last-in-first-out(LIFO stack mode) or first-in-first-out(FIFO quene mode)

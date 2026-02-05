@@ -45,7 +45,7 @@ void MachineAgent::AgentProc(DeviceAgentTask *task) {
     aclInit(nullptr);
     CheckDeviceId();
     // 使能了dump功能
-    if (IsAstDataDumpEnabled()) {
+    if (IsPtoDataDumpEnabled()) {
         int sf = AdxDataDumpServerInit();
         if (sf != 0) {
             printf("ERROR AdxDataDumpServerInit failed \n");
