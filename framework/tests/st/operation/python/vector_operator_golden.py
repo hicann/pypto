@@ -1534,6 +1534,8 @@ def gen_numpy_op_golden(case_name: str, output: Path, case_index: int = None) ->
         if inputdata_type == bfloat16:
             result = torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float32)
             return [result.numpy().astype(bfloat16)]
+        elif inputdata_type == np.int16:
+            return [torch.arange(np.int16(start), np.int16(end), np.int16(step), dtype=torch.int16).numpy()]
         elif inputdata_type == np.float16:
             return [torch.arange(np.float32(start), np.float32(end), np.float32(step), dtype=torch.float16).numpy()]
         elif inputdata_type == np.float32:

@@ -61,6 +61,9 @@ Element GetElementByType(DataType dataType, nlohmann::json test_data, string nam
     if (dataType == DT_FP32 || dataType == DT_BF16 || dataType == DT_FP16) {
         Element element(dataType, GetValueByName<float>(test_data, name));
         return element;
+    } else if (dataType == DT_INT16) {
+        Element element(dataType, GetValueByName<int16_t>(test_data, name));
+        return element;
     } else if (dataType == DT_INT32) {
         Element element(dataType, GetValueByName<int32_t>(test_data, name));
         return element;
