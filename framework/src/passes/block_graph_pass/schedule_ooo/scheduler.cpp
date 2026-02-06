@@ -309,14 +309,25 @@ Status OoOScheduler::CheckAndUpdateLifecycle() {
     return SUCCESS;
 }
 
-Status OoOScheduler::SpillOnCoreBlock(OpCoreType coreType, int idx) {
+Status OoOScheduler::SpillOnCoreBlock(OpCoreType coreType, int idx, bool &didSpill) {
+    bool anyNotEmpty = false;
+    for (auto &kv : allocIssueQueue[coreType][idx]) {
+        if (!kv.second.Empty()) {
+            anyNotEmpty = true;
+            break;
+        }
+    }
+    if (!anyNotEmpty) {
+        return FAILED;
+    }
+
     MemoryType spillMemType;
     if (!allocIssueQueue[coreType][idx][MemoryType::MEM_UB].Empty()) {
         spillMemType = MemoryType::MEM_UB;
     } else if (!allocIssueQueue[coreType][idx][MemoryType::MEM_L1].Empty()) {
         spillMemType = MemoryType::MEM_L1;
     } else {
-        for (auto memType: allocIssueQueue[coreType][idx]) {
+        for (auto &memType: allocIssueQueue[coreType][idx]) {
             if (memType.second.Empty()) {
                 continue;
             }
@@ -330,21 +341,20 @@ Status OoOScheduler::SpillOnCoreBlock(OpCoreType coreType, int idx) {
         APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
         return FAILED;
     }
+    didSpill = true;
     return SUCCESS;
 }
 
 Status OoOScheduler::SpillOnBlock() {
-    bool flag = false;
-    for (auto [coreType, idxVec] : CORE_INIT_CONFIGS) {
+    bool didSpill = false;
+    for (const auto &[coreType, idxVec] : CORE_INIT_CONFIGS) {
         for (auto idx : idxVec) {
-            if (SpillOnCoreBlock(coreType, idx) != SUCCESS) {
-                APASS_LOG_WARN_F(Elements::Operation, "SpillOnBlock failed at idx: %d, coreType: %s", idx, coreTypeToString(coreType).c_str());
-            } else {
-                flag = true;
+            if (SpillOnCoreBlock(coreType, idx, didSpill) != SUCCESS) {
+                APASS_LOG_WARN_F(Elements::Operation, "SpillOnBlock failed/skipped at idx: %d, coreType: %s", idx, coreTypeToString(coreType).c_str());
             }
         }
     }
-    if (!flag) {
+    if (!didSpill) {
         APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at all coreType.");
         return FAILED;
     }

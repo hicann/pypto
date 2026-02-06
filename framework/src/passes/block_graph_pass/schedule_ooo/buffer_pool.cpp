@@ -114,8 +114,8 @@ Status BufferPool::GetSpillGroup(size_t sizeNeedSpill, std::vector<std::vector<i
     return SUCCESS;
 }
 
-std::vector<uint32_t> BufferPool::GetBufferSlices() {
-    std::vector<uint32_t> res;
+std::vector<int> BufferPool::GetBufferSlices() {
+    std::vector<int> res;
     for (auto bufferSlice : bufferSlices) {
         res.push_back(bufferSlice.first);
     }
@@ -212,14 +212,14 @@ uint64_t BufferPool::GetMemSize() {
     return memSize_;
 }
 
-bool BufferPool::isAllocate(const uint32_t tensorId) {
+bool BufferPool::isAllocate(const int tensorId) {
     if (bufferSlices.find(tensorId) == bufferSlices.end()) {
         return false;
     }
     return true;
 }
 
-Status BufferPool::Free(const uint32_t tensorId) {
+Status BufferPool::Free(const int tensorId) {
     if (bufferSlices.find(tensorId) == bufferSlices.end()) { 
         APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] not in bufferSlices.", tensorId); 
         return FAILED; 
@@ -315,12 +315,12 @@ Status BufferPool::ModifyBufferRange(LocalBufferPtr localBuffer, size_t offset) 
     return SUCCESS;
 }
 
-Status BufferPool::CompactBufferSlices() {
+Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr> &localBufferMap) {
     if (bufferSlices.empty()) {
         return SUCCESS;
     }
     // 收集并按原 size 从大到小排序
-    std::vector<std::pair<uint32_t, BufferSlice>> items(bufferSlices.begin(), bufferSlices.end());
+    std::vector<std::pair<int, BufferSlice>> items(bufferSlices.begin(), bufferSlices.end());
     std::sort(items.begin(), items.end(),
               [](const auto &a, const auto &b) {
                   return a.second.size > b.second.size;
@@ -338,7 +338,18 @@ Status BufferPool::CompactBufferSlices() {
 
     // 写回
     for (const auto &it : items) {
-        bufferSlices[it.first].offset = it.second.offset;
+        auto memId = it.first;
+        auto newOff = it.second.offset;
+        bufferSlices[memId].offset = newOff;
+
+        auto localBufferIt = localBufferMap.find(memId);
+        if (localBufferIt != localBufferMap.end() && localBufferIt->second) {
+            auto &localBuffer = localBufferIt->second;
+            localBuffer->start = newOff;
+            localBuffer->end = newOff + localBuffer->size;
+        } else {
+            APASS_LOG_WARN_F(Elements::Tensor, "CompactBufferSlices: missing LocalBufferPtr for memId=%d, only updated bufferSlices offset", memId);
+        }
     }
     if (CheckBufferSlicesOverlap()) {
         return FAILED;

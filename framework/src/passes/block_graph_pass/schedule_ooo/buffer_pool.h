@@ -22,7 +22,7 @@
 
 namespace npu::tile_fwk {
 struct LocalBuffer {
-    uint32_t id{0};
+    int id{0};
     uint64_t retireCycle{0};
     uint64_t startCycle{0};
     size_t start{0};
@@ -39,7 +39,7 @@ struct LocalBuffer {
         return false;
     }
 
-    LocalBuffer(uint32_t tensorId, uint64_t shapeSize, MemoryType type) {
+    LocalBuffer(int tensorId, uint64_t shapeSize, MemoryType type) {
        id = tensorId;
        size = shapeSize; 
        memType = type;
@@ -71,15 +71,15 @@ class BufferPool {
     std::map<uint64_t, std::map<uint64_t, uint64_t>> FindFreeIntervals();
     bool IsFull(const LocalBufferPtr tensor);
     bool IsFullWithoutRearrange(const size_t size);
-    Status Free(const uint32_t tensorId);
+    Status Free(const int tensorId);
     uint64_t GetMemSize();
 
     size_t ObtainStartAddr(size_t i, const std::vector<std::tuple<int, size_t, size_t>> &allocatedBufs);
     size_t UpdateIdx(size_t &i, size_t sizeNeedSpill, size_t startAddr, const std::vector<std::tuple<int, size_t, size_t>> &allocatedBufs);
     Status GetSpillGroup(size_t sizeNeedSpill, std::vector<std::vector<int>> &canSpillGroups);
-    std::vector<uint32_t> GetBufferSlices();
+    std::vector<int> GetBufferSlices();
     std::vector<int> GetAddrSortedBufs();
-    bool isAllocate(const uint32_t tensorId);
+    bool isAllocate(const int tensorId);
     uint64_t GetAllocatedSize();
     uint64_t GetBufferOffset(int memId);
     uint64_t GetBufferSize(int memId);
@@ -88,13 +88,13 @@ class BufferPool {
     void PrintStatus();
     Status MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice);
     void SelectHeadAndTail(LocalBufferPtr tensor, bool &head, bool &tail, std::map<uint64_t, std::map<uint64_t, uint64_t>> freeIntervals);
-    Status CompactBufferSlices();
+    Status CompactBufferSlices(std::unordered_map<int, LocalBufferPtr> &localBufferMap);
 
   private:
     MemoryType memType_{MemoryType::MEM_UNKNOWN};
     uint64_t memSize_{0};
-    std::map<uint32_t, BufferSlice> bufferSlices;
-    std::unordered_map<uint32_t, uint32_t> tensorIdToBuffer_;
+    std::map<int, BufferSlice> bufferSlices;
+    std::unordered_map<int, int> tensorIdToBuffer_;
 };
 }  // namespace npu::tile_fwk
 

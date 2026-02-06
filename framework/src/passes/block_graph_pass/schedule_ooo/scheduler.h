@@ -241,7 +241,7 @@ private:
     Status AllocTensorMemRange(IssueEntryPtr issue);
     Status AllocViewTensorMemRange(Operation &operation);
     Status SpillOnBlock();
-    Status SpillOnCoreBlock(OpCoreType coreType, int idx);
+    Status SpillOnCoreBlock(OpCoreType coreType, int idx, bool &didSpill);
     Status CheckAndUpdateLifecycle();
     
     void InsertIssueEntries(IssueEntryPtr insertIssue);
