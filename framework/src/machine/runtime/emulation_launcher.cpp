@@ -17,6 +17,7 @@
 
 #include <thread>
 #include "machine/host/backend.h"
+#include "machine/runtime/device_launcher.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
 
@@ -28,8 +29,9 @@ static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
     int aicpuResultList[threadNum] = {0};
     std::atomic<int> idx{0};
     auto *devProg = (DevAscendProgram *)(kArgs.cfgdata);
-    size_t shmSize = DEVICE_TASK_CTRL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
-    (void)memset_s(reinterpret_cast<void*>(devProg->devArgs.taskQueue), shmSize, 0, shmSize);
+    size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+    auto deviceTaskCtrlPoolAddr = devProg->GetRuntimeDataList()->GetRuntimeData() + DEV_ARGS_SIZE;
+    (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
     for (int i = 0; i < static_cast<int>(devProg->devArgs.nrAicpu); i++) {
         aicpuThreadList[i] = std::thread([&](int threadIndex) {
             int tidx = idx++;
@@ -64,12 +66,11 @@ int EmulationLauncher::EmulationLaunchOnceWithHostTensorData(
         DevControlFlowCache* ctrlCache, const DeviceLauncherConfig &config) {
     ALOG_DEBUG_F("!!! Emulation Launch\n");
     DeviceKernelArgs kArgs;
-    DeviceLauncher::DeviceInitDistributedContextToHost(function->GetDyndevAttribute()->commGroupNames,
- 	    function->GetDyndevAttribute()->devProgBinary);
-    DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, function->GetDyndevAttribute()->devProgBinary,
-                                         ctrlCache, config, nullptr);
-    DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList,
-        function->GetDyndevAttribute()->disableL2List);
+    auto dynAttr = function->GetDyndevAttribute();
+    auto devProg = DeviceLauncher::GetDevProg(function);
+    DeviceLauncher::DeviceInitDistributedContextToHost(dynAttr->commGroupNames, devProg);
+    DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, dynAttr->devProgBinary, ctrlCache, config, nullptr);
+    DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList, dynAttr->disableL2List);
     int rc = EmulationLaunchOnce(kArgs);
     return rc;
 }
@@ -114,16 +115,14 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
         CachedOperator *cachedOperator,  DevControlFlowCache **outCtrlFlowCache,
         const DeviceLauncherConfig &config) {
     (void)cachedOperator;
-    std::vector<uint8_t> &devProgData = DeviceLauncher::GetDevProg(function);
-    DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(devProgData.data()));
+    auto dynAttr = function->GetDyndevAttribute();
+    DevAscendProgram *devProg = DeviceLauncher::GetDevProg(function);
     DevControlFlowCache* hostCtrlFlowCache = CreateHostCtrlFlowCache(devProg, function);
     hostCtrlFlowCache->isRecording = true;
     DeviceKernelArgs kArgs;
-    DeviceLauncher::DeviceInitDistributedContextToHost(function->GetDyndevAttribute()->commGroupNames,
- 	         function->GetDyndevAttribute()->devProgBinary);
-    DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, devProgData, hostCtrlFlowCache, config, nullptr);
-    DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList,
-        function->GetDyndevAttribute()->disableL2List);
+    DeviceLauncher::DeviceInitDistributedContextToHost(dynAttr->commGroupNames, devProg);
+    DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, dynAttr->devProgBinary, hostCtrlFlowCache, config, nullptr);
+    DeviceLauncher::DeviceInitKernelInOuts(EmulationMemoryUtils(), kArgs, inputList, outputList, dynAttr->disableL2List);
     int rc = EmulationLaunchOnce(kArgs);
 
     hostCtrlFlowCache->isRecording = false;
@@ -163,7 +162,7 @@ int EmulationLauncher::BuildControlFlowCache(
         std::stringstream ss;
         for (size_t i = 0; i < inputTensor.size(); ++i) {
             const auto &shape = inputTensor[i].GetShape();
-            
+
             ss << "[";
             for (size_t j = 0; j < shape.size(); ++j) {
                 ss << shape[j];
@@ -172,7 +171,7 @@ int EmulationLauncher::BuildControlFlowCache(
                 }
             }
             ss << "]";
-            
+
             if (i != inputTensor.size() - 1) {
                 ss << " ";
             }
@@ -180,7 +179,7 @@ int EmulationLauncher::BuildControlFlowCache(
         return ss.str();
     };
     ALOG_INFO_F("!!! Emulation ControlFlowCache shape {%s}\n", getShapeString(inputList).c_str());
- 
+
     /* python front end use inputs/output as unified tensors, outputList is always null */
     if (inputList.size() == 0 && outputList.size() == 0) {
         return BuildControlFlowCache(function, outCtrlFlowCache, config);

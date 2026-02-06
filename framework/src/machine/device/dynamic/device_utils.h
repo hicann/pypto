@@ -48,6 +48,7 @@ inline constexpr bool IsDeviceMode() {
 #endif // __DEVICE__
 }
 
+constexpr int32_t DEVICE_MACHINE_INVALID_RUN_MODE = -40;
 constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH = -6;
 constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH = -5;
 constexpr int32_t DEVICE_MACHINE_TIMEOUT_AIV = -4;

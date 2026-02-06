@@ -246,6 +246,12 @@ rtError_t rtRegisterAllKernel(const rtDevBinary_t *bin, void **handle) {
     return RT_ERROR_NONE;
 }
 
+rtError_t rtDevBinaryUnRegister(void *hdl)
+{
+    (void)hdl;
+    return RT_ERROR_NONE;
+}
+
 rtError_t rtGetDevice(int32_t *device)
 {
     *device = 0;

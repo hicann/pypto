@@ -33,12 +33,12 @@ public:
     DeviceWorkspaceAllocator() = default;
     explicit DeviceWorkspaceAllocator(DevAscendProgram *base) : devProg_(base) {}
     ~DeviceWorkspaceAllocator() = default;
-    void Init(DevStartArgs *args) {
-        uintdevptr_t baseAddr = args->contextWorkspaceAddr;
-        DevAscendProgram *devProg = args->devProg;
+    void Init(DevStartArgs *devStartArgs) {
+        uintdevptr_t baseAddr = devStartArgs->contextWorkspaceAddr;
+        DevAscendProgram *devProg = devStartArgs->devProg;
 
         // Host coherent allocators MUST be initialized EARLIEST since some other allocators might depend on them
-        InitMetadataAllocators(devProg);
+        InitMetadataAllocators(devProg, devStartArgs);
 
         InitAICoreSpilledMemory(baseAddr, devProg);
         baseAddr += devProg->memBudget.aicoreSpilled;
@@ -560,7 +560,7 @@ public:
 
     static uint64_t CalcMetadataItemPoolMemSize(const DevAscendProgram* devProg) {
         size_t itemBlockSize = sizeof(ItemPool<RuntimeOutcastTensor>::ItemBlock);
-        DEV_DEBUG("itemBlockSize is: %zu, OutcastPoolSize is %u", 
+        DEV_DEBUG("itemBlockSize is: %zu, OutcastPoolSize is %u",
                    itemBlockSize, devProg->runtimeOutcastPoolSize);
         uint64_t itemPoolMemSize = itemBlockSize * devProg->runtimeOutcastPoolSize;
         return itemPoolMemSize;
@@ -577,14 +577,14 @@ public:
         DEV_DEBUG("slotListMemory is %lu,", slotListMemory);
         // 3. slotInfosInDecidingSlotMem_
         uint64_t slotInfosCapacity = CalculateVectorCapacity(devProg->slotSize);
-        uint64_t slotInfosMemory = slotInfosCapacity * sizeof(ItemPoolIter); 
+        uint64_t slotInfosMemory = slotInfosCapacity * sizeof(ItemPoolIter);
         DEV_DEBUG("slotInfosMemory is %lu,", slotInfosMemory);
         // 4. rtBoundaryOutcastToBeFree_
         uint64_t boundaryOutcastToFreeListSize = CalculateVectorCapacity(devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
         uint64_t boundaryOutcastToFreeMemory = boundaryOutcastToFreeListSize * sizeof(RuntimeOutcastTensor);
         DEV_DEBUG("Memory of list for Boundary outcast to free is %lu,", boundaryOutcastToFreeMemory);
         // total
-        uint64_t totalSetupVectorMemory = symbolTableMemory + slotListMemory + 
+        uint64_t totalSetupVectorMemory = symbolTableMemory + slotListMemory +
                                           slotInfosMemory + boundaryOutcastToFreeMemory;
         return totalSetupVectorMemory;
     }
@@ -595,7 +595,7 @@ public:
         DEV_DEBUG("slotNum of boundary outcast is %lu", slotNum);
         return slotNum * blockHeaderSize;
     }
-    
+
     uint32_t CalcSlabMemObjmaxSize () {
         uint32_t slabMemObjmaxSize = CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize();
         DEV_DEBUG ("slabMemObjmaxSize is: %u", slabMemObjmaxSize);
@@ -679,13 +679,15 @@ public:
     void Deallocate(WsAllocation) {} // just for support vector allocator,so need have this fucntion member
 
 private:
-    void InitMetadataAllocators(DevAscendProgram *devProg) {
+    void InitMetadataAllocators(DevAscendProgram *devProg, DevStartArgs *devStartArgs) {
         // Initialize aicpu memory
-        metadataAllocators_.general.InitMetadataAllocator(devProg->devArgs.generalAddr, devProg->memBudget.metadata.general);
-        DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceMetadataGeneral(Range(devProg->devArgs.generalAddr, devProg->devArgs.generalAddr + devProg->memBudget.metadata.general))));
+        uint64_t generalAddr = devStartArgs->deviceRuntimeDataDesc.generalAddr;
+        metadataAllocators_.general.InitMetadataAllocator(generalAddr, devProg->memBudget.metadata.general);
+        DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceMetadataGeneral(Range(generalAddr, generalAddr + devProg->memBudget.metadata.general))));
 
-        InitAicpuStitchSlabAllocator(reinterpret_cast<void*>(devProg->devArgs.stitchPoolAddr), devProg->memBudget.metadata.stitchPool);
-        DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceMetadataStitch(Range(devProg->devArgs.stitchPoolAddr, devProg->devArgs.stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));
+        uint64_t stitchPoolAddr = devStartArgs->deviceRuntimeDataDesc.stitchPoolAddr;
+        InitAicpuStitchSlabAllocator(reinterpret_cast<void*>(stitchPoolAddr), devProg->memBudget.metadata.stitchPool);
+        DEV_TRACE_DEBUG(CtrlEvent(none(), WorkspaceMetadataStitch(Range(stitchPoolAddr, stitchPoolAddr + devProg->memBudget.metadata.stitchPool))));
     }
 
     void InitTensorAllocators(uintdevptr_t workspaceAddr,

@@ -110,7 +110,7 @@ struct DeviceKernelArgs {
     uint64_t taskWastTime{0};
     uint8_t machineConfig;
     ToSubMachineConfig toSubMachineConfig;
-    OpMetaAddrs opMetaAddrs;
+    DeviceKernelArgsParameter parameter;
 };
 
 struct LogHead {

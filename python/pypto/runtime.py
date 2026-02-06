@@ -16,6 +16,7 @@ from enum import IntEnum
 from typing import List, overload
 
 import pypto
+import torch
 
 from . import pypto_impl
 from .converter import _gen_pto_tensor, from_torch
@@ -58,26 +59,11 @@ _pto_verify_datas = _CachedVerifyData()
 
 
 def _current_stream():
-    import torch
-    return torch.npu.current_stream().npu_stream
-
-
-def _is_current_stream_capturing():
-    import torch
-    return torch.npu.is_current_stream_capturing()
-
-
-@contextmanager
-def _change_device(device):
-    import torch
-    ori_device = torch.npu.current_device()
-    try:
-        if device.index != ori_device:
-            torch.npu.set_device(device.index)
-        yield
-    finally:
-        if device.index != ori_device:
-            torch.npu.set_device(ori_device)
+    npu = getattr(torch, 'npu', None)
+    if npu:
+        return npu.current_stream().npu_stream
+    else:
+        return 0
 
 
 def _pto_to_tensor_data(tensors: List[pypto.Tensor]) -> List[pypto_impl.DeviceTensorData]:
@@ -102,42 +88,6 @@ def _device_run_once_data_from_host(*args):
         _pto_to_tensor_data(args), [])
 
 
-class _ArgType:
-
-    def __init__(self):
-        self.argtype = []
-        self.hash = 0
-
-    def __eq__(self, other: '_ArgType') -> bool:
-        return (self.hash == other.hash) and (self.argtype == other.argtype)
-
-    def __hash__(self):
-        return self.hash
-
-    def __str__(self):
-        return str(self.argtype)
-
-    def append(self, shape, dtype):
-        self.argtype.append((tuple(shape), dtype))
-        self.hash = self.hash ^ hash(self.argtype[-1])
-
-
-class _ControlflowShape:
-
-    def __init__(self, shapes=None):
-        self.shapes = [list(shape) for shape in shapes]
-        self.hash = hash(tuple([tuple(shape) for shape in shapes]))
-
-    def __eq__(self, other: '_ControlflowShape') -> bool:
-        return (self.hash == other.hash) and (self.shapes == other.shapes)
-
-    def __hash__(self):
-        return self.hash
-
-    def __str__(self):
-        return str(self.shapes)
-
-
 class _JIT:
     def __init__(self, dyn_func, codegen_options=None, host_options=None,
                  pass_options=None, runtime_options=None, verify_options=None,
@@ -147,88 +97,35 @@ class _JIT:
         self.host_options = host_options
         self.pass_options = pass_options
         self.runtime_options = runtime_options or {}
-        self.verify_options = verify_options
+        self.verify_options = verify_options or {}
         self.debug_options = debug_options
         self.infer_controlflow_shape = infer_controlflow_shape
-        self.kernel_cache = {}
-        self.controlflow_cache = {}
+        self.run_mode = self.init_run_mode()
+        self.kwargs = None
 
         # if infer cache shape supported, also use full cache mode
         if self.infer_controlflow_shape:
             # set to max cfgcache size 100000000
             self.runtime_options['stitch_cfgcache_size'] = 100000000
 
+        self.kmodule = pypto_impl.KernelModule(self)
+
     def __call__(self, *args, **kwargs):
         if len(args) < 1:
             raise ValueError("at least one tensor is required")
-
-        # all tensor must be on same device
-        tensors = [item for item in args if isinstance(item, pypto.Tensor)]
-        device = None
-        for t in tensors:
-            if device is None:
-                device = t.device
-            elif device != t.device:
-                raise RuntimeError("not all tensors are on the same device")
-
-        # if not set npu mode if cann available else cpu mode
-        run_mode = self.set_run_mode()
-        # kernel ptoto type
-        argtype = self.get_argtype(tensors)
-        # shape for build control_flow_cache
-        cfshape = self.get_controlflow_shape(tensors)
-        # kernel launch args
-        start_args = _pto_to_tensor_data(tensors)
-
-        with pypto.options("jit_scope"):
-            self._set_config_option()
-            self.kernel_warmup(device, tensors, argtype, *args, **kwargs)
-            kernel, ctrcache = self.get_cached_kernel(device, tensors, argtype, cfshape, *args, **kwargs)
-            if run_mode == RunMode.NPU:
-                self.run_npu(device, kernel, ctrcache, start_args)
-            else:
-                self.run_cpu(kernel, tensors)
-
-    @staticmethod
-    def run_npu(device, kernel, ctrl_cache, start_args):
-        import torch
-        with _change_device(device):
-            if device.type == 'npu':
-                workspace_size = pypto_impl.GetWorkSpaceSize(kernel, start_args, [])
-                workspace_tensor = torch.empty(workspace_size, dtype=torch.uint8, device=device)
-                pypto_impl.OperatorDeviceRunOnceDataFromDevice(kernel,
-                    start_args, [], _current_stream(), workspace_tensor.data_ptr(), ctrl_cache)
-            else:
-                pypto_impl.DeviceRunOnceDataFromHost(start_args, [])
-
-    @staticmethod
-    def run_cpu(kernel, tensors):
-        # call cost_model interface
-        from .cost_model import _cost_model_run_once_data_from_host
-        _cost_model_run_once_data_from_host(tensors, [])
-
-    @staticmethod
-    def get_argtype(tensors: List[pypto.Tensor]):
-        argtype = _ArgType()
-        for tensor in tensors:
-            shape = [dim if isinstance(
-                dim, int) else -1 for dim in tensor.shape]
-            argtype.append(shape, tensor.dtype)
-        return argtype
+        self.kwargs = kwargs
+        if self.run_mode == RunMode.NPU:
+            pypto_impl.LaunchKernel(self, _current_stream(), *args)
+        else:
+            self.run_cpu(*args)
 
     @staticmethod
     def verify_end():
         _pto_verify_datas.reset()
 
-    def get_controlflow_shape(self, tensors: List[pypto.Tensor]):
-        if self.infer_controlflow_shape:
-            inferred = self.infer_controlflow_shape(
-                *[t.ori_shape for t in tensors])
-            return _ControlflowShape(inferred) if inferred else None
-        elif self.runtime_options.get('stitch_cfgcache_size', 0):
-            return _ControlflowShape([t.ori_shape for t in tensors])
-        else:
-            return None
+    @staticmethod
+    def alloc(size):
+        return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
 
     def verify_begin(self, tensors):
         if isinstance(self.verify_options, dict) and self.verify_options.get("enable_pass_verify"):
@@ -239,27 +136,27 @@ class _JIT:
             pypto_impl.SetVerifyData(
                 host_pto_t_datas, [], _pto_verify_datas.get_data())
 
-    def compile(self, tensors, *args, **kwargs):
-        pypto_impl.DeviceInit()
-        # config is reset DeviceInit
-        self._set_config_option()
-        # flowverify begin
+    def compile(self, args):
+        tensors = [item for item in args if isinstance(item, pypto.Tensor)]
         self.verify_begin(tensors)
 
-        handler = pypto_impl.OperatorBegin()
-        with pypto.function(self.dyn_func.__name__, *tensors) as rlf:
-            for _ in rlf:
-                self.dyn_func(*args, **kwargs)
-            del rlf
-        pypto_impl.OperatorEnd(handler)
+        with pypto.options("jit_scope"):
+            self._set_config_option()
+            # flowverify begin
+            self.verify_begin(tensors)
+
+            with pypto.function(self.dyn_func.__name__, *tensors) as rlf:
+                for _ in rlf:
+                    self.dyn_func(*args, **self.kwargs)
+                del rlf
 
         # flowverify begin
         self.verify_end()
         # suspicious code?
-        pypto_impl.ResetLog(pypto_impl.LogTopFolder())
-        return handler
+        if self.debug_options and self.debug_options.get("compile_debug_mode", 0) != 1:
+            pypto_impl.ResetLog(pypto_impl.LogTopFolder())
 
-    def set_run_mode(self):
+    def init_run_mode(self):
         is_cann_enable = bool(os.environ.get("ASCEND_HOME_PATH"))
         if "run_mode" in self.runtime_options:
             run_mode = RunMode(self.runtime_options["run_mode"])
@@ -271,28 +168,15 @@ class _JIT:
         self.runtime_options["run_mode"] = int(run_mode)
         return RunMode(run_mode)
 
-    def kernel_warmup(self, device, tensors: List[pypto.Tensor], argtype, *args, **kwargs):
-        if self.infer_controlflow_shape and not self.kernel_cache:
-            for shape in self.infer_controlflow_shape():
-                cfshape = _ControlflowShape(shape)
-                self.get_cached_kernel(device, tensors, argtype, cfshape, *args, **kwargs)
-
-    def get_cached_kernel(self, device, tensors: List[pypto.Tensor], argtype: _ArgType,
-                          cfshape: _ControlflowShape, *args, **kwargs):
-        kernel = self.kernel_cache.get(argtype)
-        if kernel is None:
-            kernel = self.compile(tensors, *args, **kwargs)
-            self.kernel_cache[argtype] = kernel
-
-        if not cfshape:
-            return kernel, 0
-
-        cfcache = None
-        if device.type == 'npu':
-            cfdata = [pypto_impl.DeviceTensorData(t.dtype, 0, shape) for t, shape in zip(tensors, cfshape.shapes)]
-            cfcache = pypto_impl.BuildCache(kernel, cfdata, [], _is_current_stream_capturing())
-
-        return kernel, cfcache
+    def run_cpu(self, *args):
+        # call cost_model interface
+        from .cost_model import _cost_model_run_once_data_from_host
+        tensors = [item for item in args if isinstance(item, pypto.Tensor)]
+        with pypto.options("jit_scope"):
+            self._set_config_option()
+            pypto_impl.DeviceInit()
+            self.compile(args)
+            _cost_model_run_once_data_from_host(tensors, [])
 
     def _set_config_option(self):
         if isinstance(self.codegen_options, dict):

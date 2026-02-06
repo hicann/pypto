@@ -26,3 +26,5 @@
 #else
 #error "unsupported arch"
 #endif
+
+#define memBarrier() asm volatile("" ::: "memory")

@@ -170,10 +170,11 @@ private:
             return;
         }
         DeviceKernelArgs kArgs;
+        auto dynAttr = function_->GetDyndevAttribute();
+        auto devProg = GetDevProg(function_);
         DeviceLauncherConfigFillDeviceInfo(config_);
-        DeviceInitDistributedContextToHost(function_->GetDyndevAttribute()->commGroupNames,
- 	        function_->GetDyndevAttribute()->devProgBinary);
-        DeviceInitTilingData(MemoryHelper(true), kArgs, function_->GetDyndevAttribute()->devProgBinary, nullptr, config_, nullptr);
+        DeviceInitDistributedContextToHost(dynAttr->commGroupNames, devProg);
+        DeviceInitTilingData(MemoryHelper(true), kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
         for (int i = 0; i < (config_.controlFlowCache ? 1 : config_.repeatNum); i++) {
             InitKernelInOuts(kArgs, inputs, outputs, true, {});
             std::cout << "!!! Run CostModel " << i << "\n";
@@ -185,8 +186,7 @@ private:
     }
 
     bool IsDumpTensorEnable() const {
-        auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(GetDevProg(function_).data()));
-        return devProg->memBudget.debug.dumpTensor != 0;
+        return GetDevProg(function_)->memBudget.debug.dumpTensor != 0;
     }
 
     static void DumpDevDataBinary(std::ostream &os, const uint8_t *hostData, uint64_t size, const uint8_t *devptr) {
@@ -218,7 +218,7 @@ private:
     void DumpTensorContents(const DeviceKernelArgs &kArgs,
                             const std::vector<RawTensorDataPtr> &inputs,
                             const std::vector<RawTensorDataPtr> &outputs) {
-        auto *devProg = reinterpret_cast<DevAscendProgram *>(const_cast<uint8_t*>(GetDevProg(function_).data()));
+        auto *devProg = GetDevProg(function_);
         uint8_t *dumpTensorWsPtr = reinterpret_cast<uint8_t *>(kArgs.workspace) + devProg->memBudget.Total() - devProg->memBudget.debug.dumpTensor;
         uint64_t dumpTensorWsUsed = 0;
         rtMemcpy(&dumpTensorWsUsed, sizeof(uint64_t), dumpTensorWsPtr, sizeof(uint64_t), RT_MEMCPY_DEVICE_TO_HOST);
@@ -267,15 +267,15 @@ private:
         }
         CheckDeviceId();
         DeviceKernelArgs kArgs;
+        auto dynAttr = function_->GetDyndevAttribute();
         DeviceLauncherConfigFillDeviceInfo(config_);
-        DeviceInitDistributedContext(function_->GetDyndevAttribute()->commGroupNames,
- 	        function_->GetDyndevAttribute()->devProgBinary);
-        DeviceInitTilingData(MemoryHelper(false), kArgs, function_->GetDyndevAttribute()->devProgBinary, nullptr, config_, nullptr);
+        DeviceInitDistributedContext(dynAttr->commGroupNames, DeviceLauncher::GetDevProg(function_));
+        DeviceInitTilingData(MemoryHelper(false), kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
         auto aicpuStream = machine::GetRA()->GetScheStream();
         auto aicoreStream = machine::GetRA()->GetStream();
         auto ctrlStream = config_.cpuSeparate ? machine::GetRA()->GetCtrlStream() : nullptr;
         for (int i = 0; i < config_.repeatNum; i++) {
-            InitKernelInOuts(kArgs, inputs, outputs, false, function_->GetDyndevAttribute()->disableL2List);
+            InitKernelInOuts(kArgs, inputs, outputs, false, dynAttr->disableL2List);
             rc = DeviceRunner::Get().DynamicRun(aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config_.blockdim, config_.aicpuNum);
             EXPECT_EQ(rc, 0);
             DeviceRunner::Get().SynchronizeDeviceToHostProfData();
@@ -334,8 +334,9 @@ private:
         std::thread aicpus[DEVICE_MAX_AICPU_NUM];
         std::atomic<int> idx{0};
         auto *devProg = (DevAscendProgram *)(kArgs->cfgdata);
-        size_t shmSize = DEVICE_TASK_CTRL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
-        (void)memset_s(reinterpret_cast<void*>(devProg->devArgs.taskQueue), shmSize, 0, shmSize);
+        size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+        auto deviceTaskCtrlPoolAddr = devProg->GetRuntimeDataList()->GetRuntimeData() + DEV_ARGS_SIZE;
+        (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
         auto threadNum = static_cast<int>(devProg->devArgs.nrAicpu);
         threadNum = (devProg->devArgs.enableCtrl == 1) ? threadNum : threadNum + 1;
         for (int i = 0; i < threadNum; i++) {

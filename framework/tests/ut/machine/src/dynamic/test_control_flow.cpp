@@ -243,8 +243,7 @@ TEST_F(ControlFlowTest, CtrlFlowPartialCache) {
     config.blockdim = 24; // 24:max aicore num
     DevControlFlowCache* ctrolCache = nullptr;
     EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), inputList, outputList, &ctrolCache, config));
-    DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(
-        const_cast<uint8_t*>(DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction()).data()));
+    DevAscendProgram *devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
 
     EXPECT_EQ(0x3, ctrolCache->deviceTaskCount);
     EXPECT_EQ(0x1, ctrolCache->deviceTaskSkippedCount);

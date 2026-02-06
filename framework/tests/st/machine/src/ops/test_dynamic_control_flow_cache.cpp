@@ -144,9 +144,8 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape) {
     DevControlFlowCache* ctrlFlowCache = nullptr;
     EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), {}, {}, &ctrlFlowCache, config));
 
-    DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(
-        const_cast<uint8_t*>(DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction()).data()));
-    EXPECT_NE(devProg->ctrlFlowCacheAnchor->deviceTaskCount, 0);
+    DevAscendProgram *devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
+    EXPECT_NE(devProg->controlFlowCache.deviceTaskCount, 0);
 
     devProg->RelocProgram(0, (intptr_t)devProg);
     ctrlFlowCache->TaskAddrRelocProgramAndCtrlCache(0, 0, (intptr_t)devProg, (intptr_t)ctrlFlowCache);
@@ -340,9 +339,9 @@ TEST_F(DynamicControlFlowCacheTest, PartialCache) {
     DeviceLauncherConfig config;
     config.blockdim = 24; // 24:max aicore num
     DevControlFlowCache* ctrlFlowCache = nullptr;
-    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), inputList, outputList, &ctrlFlowCache, config));
-    DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(
-        const_cast<uint8_t*>(DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction()).data()));
+    EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(),
+        inputList, outputList, &ctrlFlowCache, config));
+    DevAscendProgram *devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
 
     EXPECT_EQ(0x3, ctrlFlowCache->deviceTaskCount);
     EXPECT_EQ(0x1, ctrlFlowCache->deviceTaskSkippedCount);
@@ -451,9 +450,7 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheChangeWorkspaceAddress) {
     DevControlFlowCache* ctrlFlowCache = nullptr;
     EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), inputList, outputList, &ctrlFlowCache, config));
 
-    DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(
-        const_cast<uint8_t*>(DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction()).data()));
-
+    DevAscendProgram *devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
     EXPECT_EQ(0x1, ctrlFlowCache->deviceTaskCount);
     EXPECT_EQ(0x1, ctrlFlowCache->deviceTaskSkippedCount);
 
@@ -531,8 +528,7 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependData) {
     DevControlFlowCache* ctrlCache = nullptr;
     EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), {}, {}, &ctrlCache, config));
 
-    DevAscendProgram *devProgram = reinterpret_cast<DevAscendProgram *>(
-        const_cast<uint8_t*>(DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction()).data()));
+    DevAscendProgram *devProgram = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
 
     EXPECT_EQ(0x1, ctrlCache->deviceTaskCount);
     EXPECT_EQ(0x0, ctrlCache->deviceTaskSkippedCount);
@@ -593,9 +589,7 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependControl) {
     DevControlFlowCache *ctrlFlowCache = nullptr;
     EXPECT_EQ(0, EmulationLauncher::BuildControlFlowCache(Program::GetInstance().GetLastFunction(), inputList, outputList, &ctrlFlowCache, config));
 
-    DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(
-        const_cast<uint8_t*>(DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction()).data()));
-
+    DevAscendProgram *devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
     EXPECT_EQ(0x1, ctrlFlowCache->deviceTaskCount);
     EXPECT_EQ(0x0, ctrlFlowCache->deviceTaskSkippedCount);
 

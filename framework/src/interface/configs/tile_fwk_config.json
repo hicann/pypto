@@ -23,6 +23,7 @@
         "stitch_function_num_step": 0,
         "stitch_cfgcache_size": 0,
         "stitch_function_size": 20000,
+        "triple_stream_sched": false,
         "run_mode": 0,
         "valid_shape_optimize": 0
     },

@@ -23,11 +23,13 @@ class DyndevFunctionAttribute;
 }
 
 namespace npu::tile_fwk::dynamic {
+
 struct DevAscendProgramSymbol {
     DevRelocVector<char> name;
     uint64_t index;
 };
 
+struct RuntimeDataRingBufferHead;
 struct DevAscendProgram {
     // shadow definition in `aicore_runtime_manager.h`, make sure the first 4 members are the same
     DeviceArgs devArgs;
@@ -80,7 +82,9 @@ struct DevAscendProgram {
             return tensor.Total() + aicoreSpilled + debug.dumpTensor + debug.leafDump;
         }
     } memBudget;
+    DeviceRuntimeOffset deviceRuntimeOffset;
     const void *controlFlowBinaryAddr{nullptr};
+    std::atomic<bool> runtimeDataRingBufferInited{false};
     uint64_t hcclContext[HCCL_GROUP_NUM];
     uint64_t commGroupNum{0};
     uint16_t stitchFunctionNumInitial{0};
@@ -137,6 +141,8 @@ struct DevAscendProgram {
      *      DevAscendProgramPartialUpdate partialUpdateList[]
      *      DevAscendProgramSlot slotList[]
      */
+
+    RuntimeDataRingBufferHead *GetRuntimeDataList() { return reinterpret_cast<RuntimeDataRingBufferHead *>(devArgs.runtimeDataRingBufferAddr); }
 
     template <typename T>
     const T &At(const DevRelocVector<T> &localvec, int index) const {
@@ -301,6 +307,7 @@ struct DevAscendProgram {
     void ResetFromLaunch() {
         memset_s(&devArgs, sizeof(devArgs), 0, sizeof(devArgs));
         controlFlowBinaryAddr = nullptr;
+        runtimeDataRingBufferInited = false;
         workspaceSize = 0;
         ctrlFlowCacheAnchor = nullptr;
         RelocProgram(reinterpret_cast<int64_t>(this), 0);
@@ -386,6 +393,8 @@ struct DevAscendProgram {
     }
 
     uint64_t GetSize() const { return reinterpret_cast<uintptr_t>(programLastField.End()) - reinterpret_cast<uintptr_t>(this); }
+
+    const DeviceRuntimeOffset &GetDeviceRuntimeOffset() const { return deviceRuntimeOffset; }
 
 private:
     friend struct EncodeDevAscendProgramInfo;

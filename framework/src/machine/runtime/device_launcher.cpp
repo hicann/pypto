@@ -18,6 +18,7 @@
 #include "machine/host/backend.h"
 #include "machine/runtime/host_prof.h"
 #include "machine/host/perf_analysis.h"
+#include "interface/utils/op_info_manager.h"
 
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
 extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
@@ -169,20 +170,19 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
             cachedOperator = DeviceRunCacheOperatorGet(function);
         }
     }
+
+    auto dynAttr = function->GetDyndevAttribute();
     CheckDeviceId();
     DeviceKernelArgs kArgs;
     DeviceLauncherConfigFillDeviceInfo(config);
-    DeviceInitDistributedContext(function->GetDyndevAttribute()->commGroupNames, function->GetDyndevAttribute()->devProgBinary);
+    DeviceInitDistributedContext(dynAttr->commGroupNames, GetDevProg(function));
 
     HOST_PERF_TRACE(TracePhase::RunDevEnvReady);
-
-    DeviceInitTilingData(DeviceMemoryUtils(), kArgs, function->GetDyndevAttribute()->devProgBinary,
-        inputDevCtrlCache, config, cachedOperator);
-
+    DeviceInitTilingData(DeviceMemoryUtils(), kArgs, dynAttr->devProgBinary, inputDevCtrlCache, config, cachedOperator);
     HOST_PERF_TRACE(TracePhase::RunDevInitTiling);
 
     DeviceRunCacheKernelSet(function, (uint8_t *)kArgs.cfgdata);
-    DeviceInitKernelInOuts(DeviceMemoryUtils(), kArgs, inputList, outputList, function->GetDyndevAttribute()->disableL2List);
+    DeviceInitKernelInOuts(DeviceMemoryUtils(), kArgs, inputList, outputList, dynAttr->disableL2List);
 
     HOST_PERF_TRACE(TracePhase::RunDevInitInOutTensor);
 
@@ -442,4 +442,213 @@ uint8_t* CopyHostToDev(uint8_t* data, uint64_t size) {
 #endif
 }
 
+DeviceGuard::DeviceGuard(int32_t devId) : nDevId(devId) {
+#ifdef BUILD_WITH_CANN
+    (void)rtGetDevice(&oDevId);
+    if (nDevId != oDevId) {
+        rtSetDevice(nDevId);
+    }
+#endif
+}
+
+DeviceGuard::~DeviceGuard() {
+#ifdef BUILD_WITH_CANN
+    if (nDevId != oDevId) {
+        rtSetDevice(oDevId);
+    }
+#endif
+}
+
+AclModeGuard::AclModeGuard(aclmdlRICaptureMode tmode) : mode(tmode) {
+#ifdef BUILD_WITH_CANN
+    aclmdlRICaptureThreadExchangeMode(&mode);
+#endif
+}
+AclModeGuard::~AclModeGuard() {
+#ifdef BUILD_WITH_CANN
+    aclmdlRICaptureThreadExchangeMode(&mode);
+#endif
+}
+
+void DeviceLauncher::FillDeviceKernelArgs(std::vector<uint8_t> &devProgData, DeviceKernelArgs &kargs) {
+#ifdef BUILD_WITH_CANN
+    DeviceLauncherConfig config;
+    CachedOperator cache;
+    DeviceLauncherConfigFillDeviceInfo(config);
+    DeviceInitTilingData(DeviceMemoryUtils(), kargs, devProgData, nullptr, config, &cache);
+#else
+    (void)devProgData;
+    (void)kargs;
+#endif
+}
+
+int64_t DeviceLauncher::GetL2Offset() {
+#ifdef BUILD_WITH_CANN
+    return machine::GetRA()->GetL2Offset();
+#else
+    return 0;
+#endif
+}
+
+uint8_t *DeviceLauncher::CopyControlFlowCache(DevControlFlowCache *ctrlCache) {
+#ifdef BUILD_WITH_CANN
+    uint8_t *devCache = nullptr;
+    auto cacheSize = ctrlCache->allCacheSize;
+    auto bufNum = DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT;
+
+    int ret = rtMalloc((void **)&devCache, cacheSize * bufNum, RT_MEMORY_HBM, 0);
+    if (devCache == nullptr) {
+        ALOG_ERROR("control flow cache malloc failed");
+        return nullptr;
+    }
+
+    for (int i = 0; i < bufNum; ++i) {
+        ret = rtMemcpy(devCache + i * cacheSize, cacheSize, ctrlCache, cacheSize, RT_MEMCPY_HOST_TO_DEVICE);
+        if (ret != 0) {
+            ALOG_ERROR("control flow cache memcpy failed", ret);
+            rtFree(devCache);
+            return nullptr;
+        }
+    }
+    return devCache;
+#else
+    (void)ctrlCache;
+    return nullptr;
+#endif
+}
+
+void DeviceLauncher::FreeControlFlowCache(uint8_t *ctrlCache) {
+#ifdef BUILD_WITH_CANN
+    if (ctrlCache != nullptr) {
+        rtFree(ctrlCache);
+    }
+#else
+    (void)ctrlCache;
+#endif
+}
+
+bool DeviceLauncher::AddAicpuStream(aclrtStream aicoreStream, bool tripleStream) {
+#ifdef BUILD_WITH_CANN
+    auto ctrlStream = (aclrtStream)machine::GetRA()->GetCtrlStream();
+    auto schedtream = (aclrtStream)machine::GetRA()->GetScheStream();
+    aclmdlRI rtModel;
+    aclmdlRICaptureStatus status = aclmdlRICaptureStatus::ACL_MODEL_RI_CAPTURE_STATUS_NONE;
+    auto ret = aclmdlRICaptureGetInfo(aicoreStream, &status, &rtModel);
+    if (ret == ACL_ERROR_RT_FEATURE_NOT_SUPPORT) {
+        return false;
+    } else if (ret != ACL_SUCCESS) {
+        ALOG_ERROR("get capture info failed: ", ret);
+        return false;
+    }
+    if (status == aclmdlRICaptureStatus::ACL_MODEL_RI_CAPTURE_STATUS_ACTIVE) {
+        if (tripleStream) {
+            rtStreamAddToModel(ctrlStream, rtModel);
+        }
+        rtStreamAddToModel(schedtream, rtModel);
+        return true;
+    }
+    return false;
+#else
+    (void)aicoreStream;
+    (void)tripleStream;
+    return false;
+#endif
+}
+
+void *DeviceLauncher::RegisterKernelBin(const std::vector<uint8_t> &kernelBinary) {
+#ifdef BUILD_WITH_CANN
+    void *hdl = nullptr;
+    rtDevBinary_t binary = {
+        .magic = RT_DEV_BINARY_MAGIC_ELF,
+        .version = 0,
+        .data = kernelBinary.data(),
+        .length = kernelBinary.size(),
+    };
+
+    int ret = rtRegisterAllKernel(&binary, &hdl);
+    if (ret != RT_ERROR_NONE) {
+        ALOG_ERROR_F("register kernel failed, ret: %d", ret);
+    }
+    return hdl;
+#else
+    (void)kernelBinary;
+    return nullptr;
+#endif
+}
+
+void DeviceLauncher::UnregisterKernelBin(void *hdl) {
+#ifdef BUILD_WITH_CANN
+    int ret = rtDevBinaryUnRegister(hdl);
+    if (ret != RT_ERROR_NONE) {
+        ALOG_ERROR_F("unregister kernel failed, ret: %d", ret);
+    }
+#else
+    (void)hdl;
+#endif
+}
+
+int DeviceLauncher::LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream, bool debugEnable) {
+#ifdef BUILD_WITH_CANN
+    auto ctrlStream = (aclrtStream)machine::GetRA()->GetCtrlStream();
+    auto schedStream = (aclrtStream)machine::GetRA()->GetScheStream();
+    auto &devRunner = DeviceRunner::Get();
+    if (debugEnable) {
+        devRunner.SetDebugEnable();
+    }
+    int ret = 0;
+    auto args = (AiCpuArgs *)rtArgs.args;
+    if (tripleStream) {
+        auto startTime = MsprofSysCycleTime();
+        args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
+        ret = rtAicpuKernelLaunchExWithArgs(
+            rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 2, &rtArgs, nullptr, ctrlStream, 0);
+        devRunner.ReportHostProfInfo(startTime, 2, MSPROF_GE_TASK_TYPE_AI_CPU, false);
+        if (ret != RT_ERROR_NONE) {
+            return ret;
+        }
+        args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
+        startTime = MsprofSysCycleTime();
+        ret = rtAicpuKernelLaunchExWithArgs(
+            rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 3, &rtArgs, nullptr, schedStream, 0);
+        devRunner.ReportHostProfInfo(startTime, 3, MSPROF_GE_TASK_TYPE_AI_CPU, false);
+        return ret;
+    } else {
+        const int nrAicpu = 5; // see also device_runner.cpp
+        args->kArgs.parameter.runMode = RUN_UNIFIED_STREAM;
+        auto startTime = MsprofSysCycleTime();
+        ret = rtAicpuKernelLaunchExWithArgs(
+            rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream, 0);
+        devRunner.ReportHostProfInfo(startTime, nrAicpu, MSPROF_GE_TASK_TYPE_AI_CPU, false);
+        return ret;
+    }
+#else
+    (void)rtArgs;
+    (void)tripleStream;
+    (void)debugEnable;
+    return 0;
+#endif
+}
+
+int DeviceLauncher::LaunchAicoreKernel(
+    aclrtStream aicoreStream, void *kernel, rtArgsEx_t &rtArgs, rtTaskCfgInfo_t &rtTaskCfg, bool debugEnable) {
+#ifdef BUILD_WITH_CANN
+    auto &devRunner = DeviceRunner::Get();
+    auto tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
+    auto blockDim = dynamic::GetCfgBlockdim();
+    auto startTime = MsprofSysCycleTime();
+    auto ret = rtKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
+    devRunner.ReportHostProfInfo(startTime, blockDim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
+    if (debugEnable) {
+        devRunner.SynchronizeDeviceToHostProfData();
+    }
+    return ret;
+#else
+    (void)aicoreStream;
+    (void)kernel;
+    (void)rtArgs;
+    (void)rtTaskCfg;
+    (void)debugEnable;
+    return 0;
+#endif
+}
 }

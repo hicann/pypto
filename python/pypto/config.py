@@ -200,6 +200,7 @@ def set_runtime_options(*,
                         stitch_function_num_step: Optional[int] = None,
                         stitch_function_size: int = None,
                         stitch_cfgcache_size: Optional[int] = None,
+                        triple_stream_sched: Optional[bool] = None,
                         run_mode: Optional[int] = None,
                         valid_shape_optimize: Optional[int] = None
                         ) -> None:

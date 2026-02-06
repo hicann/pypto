@@ -10,10 +10,11 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
+import contextlib
 import os
-import pypto
 
-import numpy as np
+import pypto
+import pytest
 import torch
 import torch_npu
 import pytest
@@ -251,9 +252,14 @@ class InferControlflowShape:
 
 
 @pypto.jit(
-    infer_controlflow_shape=InferControlflowShape()
+    infer_controlflow_shape=InferControlflowShape(),
+    runtime_options={
+        "triple_stream_sched": True,
+        "stitch_cfgcache_size": 1024 * 1024,
+    }
 )
-def infer_shape_kenrel(a, b, c):
+def infer_shape_kenrel(a, b, c, eps):
+    assert eps == 1.0
     pypto.set_vec_tile_shapes(16, 16)
     for i in pypto.loop(0, a.shape[0], 32):
         ta = a[i: i + 32, :]
@@ -261,22 +267,78 @@ def infer_shape_kenrel(a, b, c):
         c[i:, 0:] = ta + tb
 
 
-def test_infer_shape():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
+@pypto.jit(
+    runtime_options={
+        "stitch_cfgcache_size": 1024 * 1024,
+    }
+)
+def infer_shape_kenrel1(a, b, c, eps):
+    assert eps == 1.0
+    pypto.set_vec_tile_shapes(16, 16)
+    for i in pypto.loop(0, a.shape[0], 32):
+        ta = a[i: i + 32, :]
+        tb = b[i: i + 32, :]
+        c[i:, 0:] = ta + tb
 
-    device = f'npu:{device_id}'
 
-    for b in [2048, 1024, 512, 256, 128, 64, 32]:
-        a = torch.randn((b, 32), device=device)
-        b = torch.randn((b, 32), device=device)
-        c = torch.zeros_like(a, device=device)
-        g = a + b
+def infer_shape_common(device, s=1, n=2, mix=False):
+    for bs in [2048, 1024, 512, 256, 128, 64, 32]:
+        a = [torch.randn((bs, 32 * s), device=device) for _ in range(n)]
+        b = [torch.randn((bs, 32 * s), device=device) for _ in range(n)]
+        c = [torch.zeros_like(a[0], device=device) for _ in range(n)]
 
-        infer_shape_kenrel(
-            pypto.from_torch(a, dynamic_axis=[0]),
-            pypto.from_torch(b, dynamic_axis=[0]),
-            pypto.from_torch(c, dynamic_axis=[0]),
-        )
-        torch.npu.synchronize()
-        torch.testing.assert_close(c, g)
+        for i in range(n):
+            ta = pypto.from_torch(a[i], dynamic_axis=[0])
+            tb = pypto.from_torch(b[i], dynamic_axis=[0])
+            tc = pypto.from_torch(c[i], dynamic_axis=[0])
+            if mix:
+                if i % 3 == 0:
+                    infer_shape_kenrel(ta, tb, tc, 1.0)
+                else:
+                    infer_shape_kenrel1(ta, tb, tc, 1.0)
+            else:
+                infer_shape_kenrel(ta, tb, tc, 1.0)
+
+
+@contextlib.contextmanager
+def aclgraph_enable():
+    s = torch.npu.Stream()
+    with torch.npu.stream(s):
+        g = torch_npu.npu.NPUGraph()
+        torch_npu.npu.empty_cache()
+        assert not torch_npu.npu.is_current_stream_capturing()
+        g.capture_begin()
+        yield
+        assert torch_npu.npu.is_current_stream_capturing()
+        g.capture_end()
+    torch_npu.npu.current_stream().wait_stream(s)
+    # 执行
+    for _ in range(10):
+        g.replay()
+        stream = torch_npu.npu.current_stream()
+        stream.synchronize()
+    g.reset()
+
+
+class TestTripleStream:
+
+    def __init__(self):
+        self.device = None
+
+    def setup_method(self):
+        device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+        torch.npu.set_device(device_id)
+        self.device = f'npu:{device_id}'
+
+    def test_aclgraph(self):
+        with aclgraph_enable():
+            infer_shape_common(self.device)
+
+    def test_two_kernel(self):
+        # one jit multi kernel
+        infer_shape_common(self.device, s=2)
+        infer_shape_common(self.device, s=1)
+
+    @pytest.mark.skip(reason="mix two and triple stream sched not support")
+    def test_mix_unify_split_stream(self):
+        infer_shape_common(self.device, mix=True)

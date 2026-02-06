@@ -21,6 +21,7 @@
 #include <atomic>
 #include <array>
 #include <semaphore.h>
+#include "machine/utils/dynamic/dev_start_args.h"
 #include "securec.h"
 #include "device_common.h"
 #include "tilefwk/config.h"
@@ -326,14 +327,14 @@ public:
                  aicpuIdx_, ret, procAicCoreFunctionCnt_, procAivCoreFunctionCnt_);
     }
 
-    inline int Run(int threadIdx, DeviceArgs *deviceArgs, int schedIdx) {
+    inline int RunManager(int threadIdx, DevStartArgs *devStartArgs, DeviceArgs *deviceArgs, int schedIdx) {
         int ret = DEVICE_MACHINE_OK;
         DEV_DEBUG("schedule run threadIdx:%d", threadIdx);
-        Init(threadIdx, deviceArgs, schedIdx);
+        Init(threadIdx, devStartArgs, deviceArgs, schedIdx);
         PerfMtTrace(PERF_TRACE_INIT, threadIdx);
         DEV_DEBUG("Schedule run init succ");
         DeviceTaskCtrl *taskCtrl = nullptr;
-        taskQueue_ = &(reinterpret_cast<SPSCQueue<DeviceTaskCtrl *, DEFAULT_QUEUE_SIZE>*>(deviceArgs->taskQueue)[schedIdx_]);
+        taskQueue_ = &(devStartArgs->deviceRuntimeDataDesc.taskQueueList[schedIdx_]);
         if constexpr (IsDeviceMode()) {
             ret = HandShake();
             PerfMtTrace(PERF_TRACE_CORE_HAND_SHAKE, threadIdx);
@@ -345,7 +346,7 @@ public:
                 }
                 return ret;
             }
-            reinterpret_cast<DevStartArgs *>(deviceArgs->startArgsAddr)->syncFlag = 1;
+            devStartArgs->syncFlag = 1;
             aicoreProf_.ProfStart();
         }
         DEV_DEBUG("Schedule run start succ");
@@ -503,9 +504,6 @@ private:
     inline bool PreFetchNextDevTask() {
         preFetchNextDevTaskCtrl_ = nullptr;
         preFetchSuccess_ = taskQueue_->TryDequeue(preFetchNextDevTaskCtrl_);
-
-        DEV_INFO("Prefetch next dev task : success:%d, devtaskid:%lu.",
-            preFetchSuccess_, preFetchNextDevTaskCtrl_ != nullptr ? preFetchNextDevTaskCtrl_->taskId : INVALID_DEV_TASK_ID);
         return preFetchSuccess_;
     }
 
@@ -1318,7 +1316,7 @@ private:
         }
     }
 
-    inline void Init(int threadIdx, DeviceArgs *deviceArgs, int schedIdx) {
+    inline void Init(int threadIdx, DevStartArgs *startArgs, DeviceArgs *deviceArgs, int schedIdx) {
         aicNum_ = static_cast<int32_t>(deviceArgs->nrAic);
         aivNum_ = static_cast<int32_t>(deviceArgs->nrAiv);
         aicpuNum_ = deviceArgs->scheCpuNum;
@@ -1339,7 +1337,7 @@ private:
 
         wrapManager_.InitArchInfo(deviceArgs->archInfo);
 #if ENABLE_TENSOR_DUMP
-        aicoreDump_.Init(deviceArgs, schedIdx);
+        aicoreDump_.Init(startArgs, schedIdx);
 #endif
 
         if (deviceArgs->machineConfig != static_cast<uint8_t>(MachineScheduleConfig::DEFAULT_SCH)) {

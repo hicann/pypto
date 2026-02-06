@@ -15,10 +15,9 @@
 #ifndef AICORE_DUMP_H
 #define AICORE_DUMP_H
 #include <string>
-#include <mutex>
 #include <sstream>
-#include "machine/utils/machine_ws_intf.h"
 #include "securec.h"
+#include "machine/utils/dynamic/dev_start_args.h"
 #include "machine/utils/device_log.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -116,12 +115,13 @@ public:
     AicoreDump(){};
     ~AicoreDump(){};
     uint64_t dataSize_{0};
-    void Init(DeviceArgs *deviceArgs, int schedIdx) {
+    void Init(DevStartArgs *startArgs, int schedIdx) {
+        auto devProg = startArgs->devProg;
+        auto deviceArgs = &devProg->devArgs;
         SetHostPid(deviceArgs->hostPid);
         if (enableDump_) {
             deviceId_ = deviceArgs->deviceId;
-            uint64_t baseAddr = reinterpret_cast<DevStartArgs *>(deviceArgs->startArgsAddr)->contextWorkspaceAddr;
-            DevAscendProgram *devProg = reinterpret_cast<DevStartArgs *>(deviceArgs->startArgsAddr)->devProg;
+            uint64_t baseAddr = startArgs->contextWorkspaceAddr;
             baseAddr += devProg->memBudget.aicoreSpilled + devProg->memBudget.tensor.Total() + devProg->memBudget.debug.dumpTensor;
 
             dataAddr = baseAddr + schedIdx * DEV_DUMP_DATA_SIZE;
@@ -144,7 +144,7 @@ public:
         timeStamp_ = GetTimeMonotonic();
     }
 
-    void SetHostPid(uint32_t hostPid) { 
+    void SetHostPid(uint32_t hostPid) {
         hostPid_ = hostPid;
         DEV_DEBUG("hostPid is %u.", hostPid_);
         enableDump_ = (hostPid_ != 0);
@@ -198,7 +198,7 @@ public:
     }
 
     uint64_t GetRawTensorAddr(DevAscendRawTensor* rawTensor, DevAscendFunctionDuppedData* dupData) const {
-        
+
         uint64_t addr = 0ULL;
         if (rawTensor->ioProperty == DevIOProperty::ROOT_INCAST) {
             AddressDescriptor incast = dupData->GetIncastAddress(rawTensor->ioIndex);
@@ -233,7 +233,7 @@ public:
             dumpTensorInfo.exeEnd = execEnd_;
             dumpTensorInfo.rootHash = func->rootHash;
             dumpTensorInfo.funcHash = dyntask->cceBinary[func->GetOperationAttrCalleeIndex(opIdx)].funcHash;
-            GetTensorOffsetAndShape<false>(func, dumpTensorInfo.offset, dumpTensorInfo.shape, 
+            GetTensorOffsetAndShape<false>(func, dumpTensorInfo.offset, dumpTensorInfo.shape,
                     &(dupData->GetExpression(0)), dimSize, opIdx, idx, isIOperand);
             dumpTensorInfo.tensorAddr = GetRawTensorAddr(rawTensor, dupData);
             for (uint32_t i = 0; i < dimSize; i++) {
@@ -244,11 +244,11 @@ public:
         if (iOinfo == "input") {
             uint64_t rawIdx = func->GetOperationIOperand(opIdx, tensorIdx)->rawIndex;
             auto *rawTensor = func->GetRawTensor(rawIdx);
-            setDumpTensorInfo(rawTensor, tensorIdx, true);    
+            setDumpTensorInfo(rawTensor, tensorIdx, true);
         } else {
             uint64_t rawIdx = func->GetOperationOOperand(opIdx, tensorIdx)->rawIndex;
             auto *rawTensor = func->GetRawTensor(rawIdx);
-            setDumpTensorInfo(rawTensor, tensorIdx, false); 
+            setDumpTensorInfo(rawTensor, tensorIdx, false);
         }
         return dumpTensorInfo;
     }
@@ -257,13 +257,13 @@ public:
         auto dyntask = reinterpret_cast<DynDeviceTask *>(devTask);
         auto func = dyntask->dynFuncDataCacheList[FuncID(taskId_)].devFunc;
         auto opIdx = TaskID(taskId_);
-        int32_t tensorNum = (iOinfo == "input") ? func->GetOperationIOperandSize(opIdx) : 
+        int32_t tensorNum = (iOinfo == "input") ? func->GetOperationIOperandSize(opIdx) :
             func->GetOperationOOperandSize(opIdx);
         if (!IdeDumpStart || !IdeDumpData || !IdeDumpEnd) {
             DEV_ERROR("IdeDumpStart, IdeDumpData, IdeDumpEnd function not found.");
             return;
         }
-        
+
         std::string dumpPath = "output/dump_tensor/device_" + std::to_string(deviceId_) + "/";
         // ip: port only matches parameter rules with code, without communication funciton
         const std::string privateInfo =

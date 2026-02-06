@@ -159,15 +159,11 @@ private:
         size_t shmSize = DEVICE_SHM_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum +
             generalSize + stitchPoolSize;
         uint64_t shmAddr = (uint64_t)h.AllocDev(shmSize);
-        devProg->devArgs.startArgsAddr = shmAddr;
+        devProg->devArgs.runtimeDataRingBufferAddr = shmAddr;
         shmAddr += DEV_ARGS_SIZE;
-        devProg->devArgs.taskCtrl = shmAddr;
-        shmAddr += DEVICE_TASK_CTRL_SIZE;
-        devProg->devArgs.taskQueue = shmAddr;
+        shmAddr += DEVICE_TASK_CTRL_POOL_SIZE;
         shmAddr += DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
-        devProg->devArgs.generalAddr = shmAddr;
         shmAddr += generalSize;
-        devProg->devArgs.stitchPoolAddr = shmAddr;
         return;
     }
 
@@ -250,7 +246,7 @@ private:
         devProg->devArgs.nrAicpu = 6;
         devProg->devArgs.nrValidAic = 24;
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
-        devProg->devArgs.startArgsAddr = (uint64_t)pv_->AllocWorkspaceDev(DEV_ARGS_SIZE);
+        devProg->devArgs.runtimeDataRingBufferAddr = (uint64_t)pv_->AllocWorkspaceDev(DEV_ARGS_SIZE);
         for (auto &input: inputs) {
             if (input)
                 input->SetDevPtr(nullptr);

@@ -120,9 +120,28 @@ struct ToSubMachineConfig {
     ProfConfig profConfig{ProfConfig::OFF};
 };
 
-struct OpMetaAddrs {
-    uint64_t generalAddr{0};     // aicpu meta addr
-    uint64_t stitchPoolAddr{0};  // aicpu meta addr
+enum DeviceKernelRunMode : uint32_t {
+    RUN_INVALID = 0,
+    RUN_UNIFIED_STREAM = 1,
+    RUN_SPLITTED_STREAM_CTRL = 2,
+    RUN_SPLITTED_STREAM_SCHE = 3,
+};
+
+struct DeviceKernelArgsParameter {
+    uint32_t runMode{RUN_UNIFIED_STREAM};
+    uint32_t p1;
+    uint64_t globalRound{0};
+};
+static_assert(sizeof(DeviceKernelArgsParameter) == sizeof(uint64_t) * 0x2, "Invalid parameter size");
+
+struct DeviceRuntimeOffset {
+    uint64_t startArgsOffset{0};
+    uint64_t taskCtrlPoolOffset{0};
+    uint64_t taskQueueOffset{0};
+    uint64_t generalOffset{0};
+    uint64_t stitchPoolOffset{0};
+    uint64_t size{0};
+    uint64_t count{0};
 };
 
 struct DeviceArgs {
@@ -145,16 +164,12 @@ struct DeviceArgs {
     uint64_t aicpuSoBin{0};    // server so Bin
     uint64_t aicpuSoLen{0};    // server so len
     uint64_t deviceId{0};      // for device copy fileName
-    uint64_t startArgsAddr{0}; // DevStartArgs addr
-    uint64_t taskQueue{0};     // task queue between ctrl and sche
-    uint64_t taskCtrl{0};      // task ctrl between ctrl and sche
+    uint64_t runtimeDataRingBufferAddr{0}; // DevStartArgs addr
     uint32_t hostPid{0};       // for dump tensor
     uint32_t scheCpuNum{0};    // sche cpu num calc by host
     uint32_t enableCtrl : 2;    // if enable builtin ctrl
     uint32_t validGetPgMask : 2; // mark pgmask is invalid
     uint32_t disableSync : 28;    // close ctrl and sche soft sync
-    uint64_t generalAddr{0};     // aicpu meta addr
-    uint64_t stitchPoolAddr{0};  // aicpu meta addr
     uint64_t aicpuPerfAddr{0};    // aicpuPer Gm addr
     uint64_t devDfxArgAddr{0};   // devDfx
     uint64_t GetBlockNum() { return nrValidAic * (nrAiv / nrAic + 1); }
