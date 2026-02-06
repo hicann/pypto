@@ -300,8 +300,8 @@
         "host": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "主机端相关配置",
+                "en": "host-related configuration"
             },
             "properties": {
                 "compile_stage": {
@@ -388,43 +388,6 @@
                 "en": "..."
             },
             "properties": {
-                "print": {
-                    "type": "object",
-                    "label": {
-                        "zh": "...",
-                        "en": "..."
-                    },
-                    "properties": {
-                        "edgeitems": {
-                            "type": "integer",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "precision": {
-                            "type": "integer",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "threshold": {
-                            "type": "integer",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
-                        "linewidth": {
-                            "type": "integer",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        }
-                    }
-                },
                 "compile_debug_mode": {
                     "type": "integer",
                     "label": {
@@ -823,6 +786,43 @@
                             "label": {
                                 "zh": "是否需要将生成的设备侧代码编译为二进制",
                                 "en": "Whether it is necessary to compile the generated device-side code into binaries"
+                            }
+                        }
+                    }
+                },
+                "tensor_print": {
+                    "type": "object",
+                    "label": {
+                        "zh": "张量的打印参数",
+                        "en": "tensor print configuration"
+                    },
+                    "properties": {
+                        "edgeitems": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "张量头部和尾部打印的最大元素数量",
+                                "en": "print max items in tensor head and tail"
+                            }
+                        },
+                        "precision": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "打印的精度",
+                                "en": "print precision"
+                            }
+                        },
+                        "threshold": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "触发省略打印（使用...）的阈值",
+                                "en": "threshold to use ..."
+                            }
+                        },
+                        "linewidth": {
+                            "type": "integer",
+                            "label": {
+                                "zh": "打印的最大行宽",
+                                "en": "max line width"
                             }
                         }
                     }
