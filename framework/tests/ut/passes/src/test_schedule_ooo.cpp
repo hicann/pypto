@@ -1673,6 +1673,7 @@ TEST_F(ScheduleOoOTest, TestOoO1C2V) {
     EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes, tensorNames, 0), true);
     EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {16, 16}, tensorMemTypes_L0AB, tensorNames_L0, 0), true);
     EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    subGraph.GetOp("ADDS1")->SetAttribute(OpAttributeKey::isCube, false);
     Function *function = subGraph.GetFunction();
     auto op1 = subGraph.GetOp("ADDS3");
     auto op2 = subGraph.GetOp("ADDS2");

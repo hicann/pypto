@@ -356,6 +356,12 @@ void TaskSpliter::BuildOpGraph() {
             auto prevOp = *opList_[i]->ProducerOps().begin();
             opCoreTypes_[i] = opCoreTypes_[opMagicToIdx_[prevOp->GetOpMagic()]];
         }
+        if (opList_[i]->HasAttribute(OpAttributeKey::isCube)) {
+            bool isCube = opList_[i]->GetBoolAttribute(OpAttributeKey::isCube);
+            opCoreTypes_[i] = isCube ? ScheduleCoreType::AIC : ScheduleCoreType::AIV;
+        }
+        APASS_LOG_DEBUG_F(Elements::Operation, "Mark %s[%d] as %s core type.", opList_[i]->GetOpcodeStr().c_str(), opList_[i]->GetOpMagic(),
+            opCoreTypes_[i] == ScheduleCoreType::AIC ? "AIC" : "AIV");
     }
     APASS_LOG_INFO_F(Elements::Operation, "Mark core type finished.");
     opInGraph_.resize(opNum);
