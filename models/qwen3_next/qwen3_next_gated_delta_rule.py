@@ -155,25 +155,11 @@ def gen_zero_tensor(t):
 
 def pypto_chunk_gated_delta_rule_dyn(inputs: dict, outputs: dict):
     """Dynamic wrapper for PyPTO chunk gated delta rule."""
-    input_tensors = {
-        inputs["query"]: [0],
-        inputs["key"]: [0],
-        inputs["value"]: [0],
-        inputs["beta"]: [0],
-        inputs["gate"]: [0],
-        inputs["states"]: [],
-        inputs["mask"]: [],
-        inputs["tril_mask"]: [],
-        inputs["eye"]: [],
-        inputs["act_seq_len"]: [0],
-    }
-    output_tensors = {
-        outputs["core_attn_out"]: [0],
-        outputs["final_state"]: [],
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in input_tensors.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in output_tensors.items()]
-    chunk_gated_delta_rule(*pto_inputs, *pto_outputs)
+    chunk_gated_delta_rule(
+        inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], 
+        inputs["states"], inputs["mask"], inputs["tril_mask"], inputs["eye"], inputs["act_seq_len"], 
+        outputs["core_attn_out"], outputs["final_state"]
+    )
     torch_npu.npu.synchronize()
 
 

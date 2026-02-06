@@ -322,97 +322,112 @@ def recurrent_state_attn_all(**kwargs) -> tuple[pypto.Tensor, pypto.Tensor]:
     return chunk_attn_out, state_new
 
 
-@pypto.jit(
-    runtime_options={
-        "stitch_function_inner_memory": 128 * 32,
-        "stitch_function_num_initial": 128,
-        "stitch_function_outcast_memory": 128 * 32,
-    },
-)
-def chunk_gated_delta_rule(*args):
-    """
-    Chunk Gated Delta Rule fused operator.
+def chunk_gated_delta_rule(query, key, value, beta, gate, states, mask, 
+    tril_mask, eye, act_seq_len, core_attn_out, last_state_data):
+    
+    t = pypto.frontend.dynamic("t")
+    query_shape = (t, query.shape[1], query.shape[2])
+    key_shape = (t, key.shape[1], key.shape[2])
+    value_shape = (t, value.shape[1], value.shape[2])
+    beta_shape = (t, beta.shape[1])
+    gate_shape = (t, gate.shape[1])
+    core_attn_out_shape = (t, core_attn_out.shape[1], core_attn_out.shape[2])
+    
+    @pypto.frontend.jit(
+        runtime_options={
+            "stitch_function_inner_memory": 128 * 32,
+            "stitch_function_num_initial": 128,
+            "stitch_function_outcast_memory": 128 * 32,
+        },
+    )
+    def kernel(
+            query: pypto.Tensor(query_shape, pypto.DT_FP32), 
+            key: pypto.Tensor(key_shape, pypto.DT_FP32), 
+            value: pypto.Tensor(value_shape, pypto.DT_FP32), 
+            beta: pypto.Tensor(beta_shape, pypto.DT_FP32), 
+            gate: pypto.Tensor(gate_shape, pypto.DT_FP32), 
+            states: pypto.Tensor(states.shape, pypto.DT_FP32), 
+            mask: pypto.Tensor(mask.shape, pypto.DT_FP32), 
+            tril_mask: pypto.Tensor(tril_mask.shape, pypto.DT_FP32), 
+            eye: pypto.Tensor(eye.shape, pypto.DT_FP32), 
+            act_seq_len: pypto.Tensor(act_seq_len.shape, pypto.DT_INT32), 
+            core_attn_out: pypto.Tensor(core_attn_out_shape, pypto.DT_FP32), 
+            last_state_data: pypto.Tensor(last_state_data.shape, pypto.DT_FP32)
+        ):
+        """
+        Chunk Gated Delta Rule fused operator.
 
-    This is the main entry point for the Gated Delta Rule attention computation.
-    It processes input sequences in chunks of size L=128, maintaining recurrent
-    state across chunks for efficient long sequence modeling.
+        This is the main entry point for the Gated Delta Rule attention computation.
+        It processes input sequences in chunks of size L=128, maintaining recurrent
+        state across chunks for efficient long sequence modeling.
 
-    Parameters
-    ----------
-    query : Input query tensor, shape [T, Nqk, D], dtype float32
-    key : Input key tensor, shape [T, Nqk, D], dtype float32
-    value : Input value tensor, shape [T, Nv, D], dtype float32
-    beta : Beta scaling factor, shape [T, Nv], dtype float32
-    gate : Gate signal, shape [T, Nv], dtype float32
-    states : Initial recurrent states, shape [B, Nv, D, D], dtype float32
-    mask : Attention mask (lower triangular negative), shape [L, L], dtype float32
-    tril_mask : Lower triangular mask, shape [L, L], dtype float32
-    eye : Identity matrix (specially processed), shape [16, 128], dtype float32
-    act_seq_len : Cumulative sequence length indices, shape [B+1], dtype int32
-    core_attn_out : Output attention tensor, shape [T, Nv, D], dtype float32
-    last_state_data : Output updated states, shape [B, Nv, D, D], dtype float32
-    """
-    query = args[0]
-    key = args[1]
-    value = args[2]
-    beta = args[3]
-    gate = args[4]
-    states = args[5]
-    mask = args[6]
-    tril_mask = args[7]
-    eye = args[8]
-    act_seq_len = args[9]
-    core_attn_out = args[10]
-    last_state_data = args[11]
-
-    _, nqk, d = query.shape
-    _, nv, d = value.shape
-    b = states.shape[0]
-    l, l = mask.shape
-    group = nv // nqk
-    for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
-        s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
-        b_ofs = act_seq_len[b_idx]
-        for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx"):
-            nqk_idx = nv_idx // group
-            pypto.set_vec_tile_shapes(16, 16, 128, 128)
-            last_state = states[b_idx, nv_idx]
-            for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx"):
-                bs_ofs = b_ofs + s_idx
-                actual_l = (s - s_idx).min(l)
-                ## view
-                query_view = pypto.view(query, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
-                key_view = pypto.view(key, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
-                value_view = pypto.view(value, [l, 1, d], [bs_ofs, nv_idx, 0], valid_shape=[actual_l, 1, d])
-                beta_view = pypto.view(beta, [l, 1], [bs_ofs, nv_idx], valid_shape=[actual_l, 1])
-                gate_view = pypto.view(gate, [l, 1], [bs_ofs, nv_idx], valid_shape=[actual_l, 1])
-
-                pypto.set_vec_tile_shapes(128, 128, 128)
-                query_view_2d = pypto.reshape(query_view, [l, d], valid_shape=[actual_l, d])
-                key_view_2d = pypto.reshape(key_view, [l, d], valid_shape=[actual_l, d])
-                value_view_2d = pypto.reshape(value_view, [l, d], valid_shape=[actual_l, d])
-
-                # compute
-                # qk_l2norm
-                query_norm, key_norm = l2norm(query_view_2d, key_view_2d)
-                scale = 1 / d**0.5
-                query_scale = query_norm * scale
-
-                # kv_beta & g_cumsum & decay_mask & pre_attn
-                gate_cum, decay_mask, a_block, key_beta = pre_attn(gate_view, key_norm, beta_view, tril_mask, mask)
-
-                # inverse
-                a_block_inverse = inverse_pto(a_block, eye, 128)
-
-                # cal_value_and_keycumdecay
-                value_out, key_cum_out = cal_value_and_key_cumdecay(a_block_inverse, value_view_2d,
-                    beta_view, key_beta, gate_cum)
-
-                chunk_attn_out, cur_state = recurrent_state_attn_all(query=query_scale, key=key_norm, value=value_out,
-                    k_cumdecay=key_cum_out, gate=gate_cum, state=last_state, decay_mask=decay_mask, tril=tril_mask)
-
-                # assemble
+        Parameters
+        ----------
+        query : Input query tensor, shape [T, Nqk, D], dtype float32
+        key : Input key tensor, shape [T, Nqk, D], dtype float32
+        value : Input value tensor, shape [T, Nv, D], dtype float32
+        beta : Beta scaling factor, shape [T, Nv], dtype float32
+        gate : Gate signal, shape [T, Nv], dtype float32
+        states : Initial recurrent states, shape [B, Nv, D, D], dtype float32
+        mask : Attention mask (lower triangular negative), shape [L, L], dtype float32
+        tril_mask : Lower triangular mask, shape [L, L], dtype float32
+        eye : Identity matrix (specially processed), shape [16, 128], dtype float32
+        act_seq_len : Cumulative sequence length indices, shape [B+1], dtype int32
+        core_attn_out : Output attention tensor, shape [T, Nv, D], dtype float32
+        last_state_data : Output updated states, shape [B, Nv, D, D], dtype float32
+        """
+        _, nqk, d = query.shape
+        _, nv, d = value.shape
+        b = states.shape[0]
+        l, l = mask.shape
+        group = nv // nqk
+        for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
+            s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
+            b_ofs = act_seq_len[b_idx]
+            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx"):
+                nqk_idx = nv_idx // group
                 pypto.set_vec_tile_shapes(16, 16, 128, 128)
-                last_state[:] = cur_state
-                core_attn_out[bs_ofs:bs_ofs + l, nv_idx] = chunk_attn_out
-                last_state_data[b_idx, nv_idx] = last_state
+                last_state = states[b_idx, nv_idx]
+                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx"):
+                    bs_ofs = b_ofs + s_idx
+                    actual_l = (s - s_idx).min(l)
+                    ## view
+                    query_view = pypto.view(query, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
+                    key_view = pypto.view(key, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
+                    value_view = pypto.view(value, [l, 1, d], [bs_ofs, nv_idx, 0], valid_shape=[actual_l, 1, d])
+                    beta_view = pypto.view(beta, [l, 1], [bs_ofs, nv_idx], valid_shape=[actual_l, 1])
+                    gate_view = pypto.view(gate, [l, 1], [bs_ofs, nv_idx], valid_shape=[actual_l, 1])
+
+                    pypto.set_vec_tile_shapes(128, 128, 128)
+                    query_view_2d = pypto.reshape(query_view, [l, d], valid_shape=[actual_l, d])
+                    key_view_2d = pypto.reshape(key_view, [l, d], valid_shape=[actual_l, d])
+                    value_view_2d = pypto.reshape(value_view, [l, d], valid_shape=[actual_l, d])
+
+                    # compute
+                    # qk_l2norm
+                    query_norm, key_norm = l2norm(query_view_2d, key_view_2d)
+                    scale = 1 / d**0.5
+                    query_scale = query_norm * scale
+
+                    # kv_beta & g_cumsum & decay_mask & pre_attn
+                    gate_cum, decay_mask, a_block, key_beta = pre_attn(gate_view, key_norm, beta_view, tril_mask, mask)
+
+                    # inverse
+                    a_block_inverse = inverse_pto(a_block, eye, 128)
+
+                    # cal_value_and_keycumdecay
+                    value_out, key_cum_out = cal_value_and_key_cumdecay(a_block_inverse, value_view_2d,
+                        beta_view, key_beta, gate_cum)
+
+                    chunk_attn_out, cur_state = recurrent_state_attn_all(query=query_scale, key=key_norm, 
+                    value=value_out, k_cumdecay=key_cum_out, gate=gate_cum, state=last_state, 
+                    decay_mask=decay_mask, tril=tril_mask)
+
+                    # assemble
+                    pypto.set_vec_tile_shapes(16, 16, 128, 128)
+                    last_state[:] = cur_state
+                    core_attn_out[bs_ofs:bs_ofs + l, nv_idx] = chunk_attn_out
+                    last_state_data[b_idx, nv_idx] = last_state
+                    
+    kernel(query, key, value, beta, gate, states, mask, tril_mask, eye, 
+        act_seq_len, core_attn_out, last_state_data)
