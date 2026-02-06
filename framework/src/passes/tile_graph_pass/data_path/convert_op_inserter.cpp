@@ -46,6 +46,9 @@ void ConvertInserter::UpdateTensorTobeMap(const LogicalTensorPtr &tensor, Operat
         std::map<Operation *, MemoryType> tobeMap;
         tobeMap.emplace(&operation, t);
         tensorTobeMap[tensor] = tobeMap;
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor %d first set toBeMap(%s[%d]) as %s",
+            tensor->GetMagic(), operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+            BriefMemoryTypeToString(t).c_str());
         return;
     }
     if (tensorTobeMap[tensor].count(&operation) == 0) {
@@ -62,10 +65,11 @@ void ConvertInserter::UpdateTensorTobeMap(const LogicalTensorPtr &tensor, Operat
     if (tensorTobeMap[tensor][&operation] == t) {
         return;
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Update magic: %d, old: %s, new: %s.",
-        tensor->GetMagic(), BriefMemoryTypeToString(tensorTobeMap[tensor][&operation]).c_str(),
-        BriefMemoryTypeToString(t).c_str());
     tensorTobeMap[tensor][&operation] = t;
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Update tensor %d toBeMap(%s[%d]) from %s to %s,",
+        tensor->GetMagic(), operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
+        BriefMemoryTypeToString(tensorTobeMap[tensor][&operation]).c_str(),
+        BriefMemoryTypeToString(t).c_str());
 }
 
 // 将指定tensor的tobe map中的unknown项更新为指定的mem类型
