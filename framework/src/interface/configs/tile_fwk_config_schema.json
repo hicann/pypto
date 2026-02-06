@@ -485,15 +485,15 @@
                         "enable_cost_model": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否启用静态shape场景下的costModel仿真",
+                                "en": "Whether to enable costModel simulation in static shape scenarios"
                             }
                         },
                         "enable_dyn_cost_model": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否启用动态shape场景下的costModel仿真，且为每个leafFunc构建一个task",
+                                "en": "Whether to enable costModel simulation in dynamic shape scenarios and build a task for each leafFunc"
                             }
                         },
                         "enable_aihac_backend": {
