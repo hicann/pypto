@@ -441,6 +441,19 @@ TEST_F(OperationImplTest, test_Range_INT32) {
     }
 }
 
+TEST_F(OperationImplTest, Test_Round_FP16) {
+    PROGRAM("Round") {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP16, shape, "operand1");
+        auto output = Tensor(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Round_FP16") {
+            output = Round(input_a, 1);
+        }
+    }
+}
+
 TEST_F(OperationImplTest, Test_Round_FP32) {
     PROGRAM("Round") {
         std::vector<int64_t> shape = {128, 32};

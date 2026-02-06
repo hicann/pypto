@@ -289,18 +289,13 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    pto::TCVT(srcTile.Data(), srcTile.Data(), pto::RoundMode::CAST_ROUND);
+                    pto::TCVT(srcTile.Data(), srcTile.Data(), pto::RoundMode::CAST_RINT);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
                     pto::TDIVS(dstTile.Data(), srcTile.Data(), powDecimals);
                 } else {
-                    if constexpr (std::is_same_v<typename T2::Type, half> ||
-                                  std::is_same_v<typename T2::Type, bfloat16_t>) {
-                        pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_NONE);
-                    } else {
-                        pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_RINT);
-                    }
+                    pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_NONE);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
@@ -308,7 +303,7 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    pto::TCVT(tmpTile.Data(), tmpTile.Data(), pto::RoundMode::CAST_ROUND);
+                    pto::TCVT(tmpTile.Data(), tmpTile.Data(), pto::RoundMode::CAST_RINT);
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
@@ -316,11 +311,7 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
 #ifdef __DAV_V220
                     pipe_barrier(PIPE_V);
 #endif
-                    if constexpr (std::is_same_v<typename T0::Type, half>) {
-                        pto::TCVT(dstTile.Data(), tmpTile.Data(), pto::RoundMode::CAST_NONE);
-                    } else {
-                        pto::TCVT(dstTile.Data(), tmpTile.Data(), pto::RoundMode::CAST_RINT);
-                    }
+                    pto::TCVT(dstTile.Data(), tmpTile.Data(), pto::RoundMode::CAST_RINT);
                 }
             }
         }
