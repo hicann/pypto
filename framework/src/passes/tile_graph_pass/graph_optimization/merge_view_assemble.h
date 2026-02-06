@@ -28,6 +28,7 @@ public:
     ~MergeViewAssemble() override = default;
 
 private:
+    Status PreCheck(Function &function) override;
     Status RunOnFunction(Function &function) override;
 };
 } // using namespace npu::tile_fwk

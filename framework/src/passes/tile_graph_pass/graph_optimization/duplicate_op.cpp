@@ -14,6 +14,7 @@
  */
 
 #include "duplicate_op.h"
+#include "passes/pass_check/duplicate_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
@@ -22,6 +23,11 @@
 #define MODULE_NAME "DuplicateOp"
 
 namespace npu::tile_fwk {
+Status DuplicateOp::PreCheck(Function &function) {
+    DuplicateOpChecker checker;
+    return checker.DoPreCheck(function);
+}
+
 Status DuplicateOp::RunOnFunction(Function &function) {
     APASS_LOG_INFO_F(Elements::Function,
     "===> Start %s for function [%s].", MODULE_NAME, function.GetRawName().c_str());
@@ -32,6 +38,11 @@ Status DuplicateOp::RunOnFunction(Function &function) {
     APASS_LOG_INFO_F(Elements::Function,
     "===> End %s for function [%s].", MODULE_NAME, function.GetRawName().c_str());
     return SUCCESS;
+}
+
+Status DuplicateOp::PostCheck(Function &function) {
+    DuplicateOpChecker checker;
+    return checker.DoPostCheck(function);
 }
 
 Status DuplicateOp::ProcessGatherIn(Function &function, Operation &operation) const {

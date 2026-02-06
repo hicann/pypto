@@ -27,6 +27,8 @@ public:
     ~DuplicateOp() override = default;
 
 private:
+    Status PreCheck(Function &function) override;
+    Status PostCheck(Function &function) override;
     Status RunOnFunction(Function &function) override;
     Status ProcessOp(Function &function, Operation &operation) const;
     Status Process(Function &function) const;
