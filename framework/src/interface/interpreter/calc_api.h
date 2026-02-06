@@ -131,7 +131,7 @@ struct CalcOps {
     void (*FormatNZ2ND)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*MatMul)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, MatMulParam &);
 
-    void (*BitSort)(LogicalTensorDataPtr, LogicalTensorDataPtr, int64_t, bool);
+    void (*BitSort)(LogicalTensorDataPtr, LogicalTensorDataPtr, int64_t, bool, int64_t);
     void (*TiledMrgSort)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int, int);
     void (*Extract)(LogicalTensorDataPtr, LogicalTensorDataPtr, int, bool);
     void (*Topk)(LogicalTensorDataPtr, LogicalTensorDataPtr, int64_t, int64_t, bool);
@@ -139,6 +139,8 @@ struct CalcOps {
     void (*TopkSort)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int);
     void (*TopkMerge)(LogicalTensorDataPtr, LogicalTensorDataPtr, int);
     void (*TopkExtract)(LogicalTensorDataPtr, LogicalTensorDataPtr, int, bool);
+    void (*TwoTileMrgSort)(LogicalTensorDataPtr, LogicalTensorDataPtr);
+    void (*Sort)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int64_t, bool);
     void (*Gather)(LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int64_t);
     void (*GatherINUB)(
         LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, LogicalTensorDataPtr, int64_t, int64_t);

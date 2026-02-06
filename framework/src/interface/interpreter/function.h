@@ -507,8 +507,8 @@ struct FunctionInterpreter {
             ASSERT(opAttr != nullptr);
             Offset iopOffsets = iOpDataList[index]->GetOffset();
             Offset viewOffsets = EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset());
-            auto validShape = EvaluateValidShape(oop->GetDynValidShape());
-            auto rawShape = EvaluateValidShape(oop->GetRawTensor()->GetDynRawShape());
+            auto validShape = EvaluateValidShape(oop->GetDynValidShape(), (frame.callopAttr != nullptr) ? frame.callopAttr->GetLinearArgList() : std::vector<SymbolicScalar>{});
+            auto rawShape = EvaluateValidShape(oop->GetRawTensor()->GetDynRawShape(), (frame.callopAttr != nullptr) ? frame.callopAttr->GetLinearArgList() : std::vector<SymbolicScalar>{});
             std::shared_ptr<LogicalTensorData> ret;
             if (IsViewInplace(iop, oop)) {
                 ret = frame.AllocateDataView(oop, viewOffsets, validShape, rawShape, oop->GetRawTensor()->GetDataType(), iop);

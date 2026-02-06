@@ -7,6 +7,7 @@ pypto-add
 pypto-amax
 pypto-amin
 pypto-arange
+pypto-argsort
 pypto-assemble
 pypto-cast
 pypto-concat

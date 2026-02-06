@@ -777,6 +777,28 @@ TEST_F(OperationImplTest, Test_TopK_04) {
     }
 }
 
+TEST_F(OperationImplTest, Test_ArgSort_01) {
+    std::vector<int64_t> inputShape = {16, 128};
+    std::vector<int64_t> outputShape = {16, 128};
+    TileShape::Current().SetVecTile({4, 32});
+    Tensor input_a(DT_FP32, inputShape, "A");
+    Tensor output(DT_INT32, outputShape, "res");
+    FUNCTION("ArgSort_T") {
+        output = ArgSort(input_a, 1, true);
+    }
+}
+
+TEST_F(OperationImplTest, Test_ArgSort_02) {
+    std::vector<int64_t> inputShape = {1, 9000};
+    std::vector<int64_t> outputShape = {1, 9000};
+    TileShape::Current().SetVecTile({1, 5024});
+    Tensor input_a(DT_FP32, inputShape, "A");
+    Tensor output(DT_INT32, outputShape, "res");
+    FUNCTION("ArgSort_T") {
+        output = ArgSort(input_a, 1, false);
+    }
+}
+
 TEST_F(OperationImplTest, Test_BitwiseRightShift) {
     TileShape::Current().SetVecTile({16, 16});
     Tensor self(DT_INT16, {16, 16}, "self");

@@ -2204,6 +2204,31 @@ def gen_clip_op_golden(case_name: str, output: Path, case_index: int = None) -> 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Clip", golden_func, output, case_index)
 
+
+@TestCaseLoader.reg_params_handler(ops=["ArgSort"])
+def topk_params_func(params: dict):
+    params["dims"] = parse_list_str(params.get("dims"))
+    params["descending"] = [bool(x) for x in parse_list_str(params.get("descending"))]
+    return params
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        'TestArgSort/ArgSortOperationTest.TestArgSort'
+    ]
+)
+def gen_argsort_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs: list, config: dict):
+        params = config.get("params")
+        x = torch.from_numpy(inputs[0])
+        dims = params["dims"]
+        descending = params["descending"]
+        idx = torch.argsort(x, dim=dims[0], descending=descending[0], stable=True)
+        return [idx.numpy()]
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("ArgSort", golden_func, output, case_index)
+
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestBitwiseRightShift/BitwiseRightShiftOperationTest.TestBitwiseRightShift",

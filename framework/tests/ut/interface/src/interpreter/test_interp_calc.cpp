@@ -1164,7 +1164,7 @@ TEST_F(TorchAdaptorTest, BitSortDescending) {
     auto self = makeTensorData(DT_FP32, {2, 32}, sdata);
     auto out = makeTensorData(DT_FP32, {2, 128}, 0.0f);
     auto golden = makeTensorData(DT_FP32, {2, 64}, gdata);
-    calc::BitSort(out, self, -1, true);
+    calc::BitSort(out, self, -1, true, 0);
     ASSERT_ALLCLOSE(out->View({2, 64}, {0, 0}), golden);
 }
 
@@ -1197,7 +1197,7 @@ TEST_F(TorchAdaptorTest, BitSortAscending) {
     auto self = makeTensorData(DT_FP32, {2, 32}, sdata);
     auto out = makeTensorData(DT_FP32, {2, 128}, 0.0f);
     auto golden = makeTensorData(DT_FP32, {2, 64}, gdata);
-    calc::BitSort(out, self, -1, false);
+    calc::BitSort(out, self, -1, false, 0);
     ASSERT_ALLCLOSE(out->View({2, 64}, {0, 0}), golden);
 }
 
@@ -1219,7 +1219,7 @@ TEST_F(TorchAdaptorTest, TopkDescending) {
                                     110.0, 11.0, 100.0, 10.0, 90.0, 9.0, 80.0, 8.0,
                                     70.0, 7.0, 60.0, 6.0, 50.0, 5.0, 40.0, 4.0,
                                     30.0, 3.0, 20.0, 2.0, 10.0, 1.0, 0.0, 0.0};
-    const int64_t OUTPUT_AXIS_SIZE = 64;
+    const int64_t OUTPUT_AXIS_SIZE = 32;
     const int64_t TOPK_VAL = 32;
     std::vector<float> gdata = sdata1;
     gdata.insert(gdata.end(), sdata2.begin(), sdata2.end());
@@ -1228,7 +1228,7 @@ TEST_F(TorchAdaptorTest, TopkDescending) {
     sdata.insert(sdata.end(), OUTPUT_AXIS_SIZE, 0.0f);
     sdata.insert(sdata.end(), sdata2.begin(), sdata2.end());
     sdata.insert(sdata.end(), OUTPUT_AXIS_SIZE, 0.0f);
-    auto self = makeTensorData(DT_FP32, {2, 128}, sdata);
+    auto self = makeTensorData(DT_FP32, {2, 96}, sdata);
     auto out = makeTensorData(DT_FP32, {2, 64}, 0.0f);
 
     calc::Topk(out, self, -1, TOPK_VAL, true);
@@ -1253,15 +1253,15 @@ TEST_F(TorchAdaptorTest, TopkAscending) {
                                     -200.0, 20.0, -210.0, 21.0, -220.0, 22.0, -230.0, 23.0,
                                     -240.0, 24.0, -250.0, 25.0, -260.0, 26.0, -270.0, 27.0,
                                     -280.0, 28.0, -290.0, 29.0, -300.0, 30.0, -310.0, 31.0};
-    const int64_t OUTPUT_AXIS_SIZE = 64;
+    const int64_t OUTPUT_AXIS_SIZE = 32;
     std::vector<float> gdata = sdata1;
     gdata.insert(gdata.end(), sdata2.begin(), sdata2.end());
     auto golden = makeTensorData(DT_FP32, {2, 64}, gdata);
     std::vector<float> sdata = sdata1;
-    sdata.insert(sdata.end(), OUTPUT_AXIS_SIZE, 0.0f);
+    sdata.insert(sdata.end(), OUTPUT_AXIS_SIZE, -10000.0f);
     sdata.insert(sdata.end(), sdata2.begin(), sdata2.end());
-    sdata.insert(sdata.end(), OUTPUT_AXIS_SIZE, 0.0f);
-    auto self = makeTensorData(DT_FP32, {2, 128}, sdata);
+    sdata.insert(sdata.end(), OUTPUT_AXIS_SIZE, -10000.0f);
+    auto self = makeTensorData(DT_FP32, {2, 96}, sdata);
     auto out = makeTensorData(DT_FP32, {2, 64}, 0.0f);
     const int64_t TOPK_VAL = 32;
 
@@ -1376,6 +1376,46 @@ TEST_F(TorchAdaptorTest, ExtractAscending) {
     calc::Extract(out1, self, 1, false);
     ASSERT_ALLCLOSE(out0, golden0);
     ASSERT_ALLCLOSE(out1, golden1);
+}
+
+TEST_F(TorchAdaptorTest, TwoTileMrgSort) {
+    std::vector<float> sdata = {15.0, 15.0, 14.0, 14.0, 13.0, 13.0, 12.0, 12.0,
+                                    11.0, 11.0, 10.0, 10.0, 9.0, 9.0, 8.0, 8.0,
+                                    7.0, 7.0, 6.0, 6.0, 5.0, 5.0, 4.0, 4.0,
+                                    3.0, 3.0, 2.0, 2.0, 1.0, 1.0, 0.0, 0.0,
+                                    31.0, 31.0, 30.0, 30.0, 29.0, 29.0, 28.0, 28.0,
+                                    27.0, 27.0, 26.0, 26.0, 25.0, 25.0, 24.0, 24.0,
+                                    23.0, 23.0, 22.0, 22.0, 21.0, 21.0, 20.0, 20.0,
+                                    19.0, 19.0, 18.0, 18.0, 17.0, 17.0, 16.0, 16.0};
+    std::vector<float> gdata = {31.0, 31.0, 30.0, 30.0, 29.0, 29.0, 28.0, 28.0,
+                                    27.0, 27.0, 26.0, 26.0, 25.0, 25.0, 24.0, 24.0,
+                                    23.0, 23.0, 22.0, 22.0, 21.0, 21.0, 20.0, 20.0,
+                                    19.0, 19.0, 18.0, 18.0, 17.0, 17.0, 16.0, 16.0,
+                                    15.0, 15.0, 14.0, 14.0, 13.0, 13.0, 12.0, 12.0,
+                                    11.0, 11.0, 10.0, 10.0, 9.0, 9.0, 8.0, 8.0,
+                                    7.0, 7.0, 6.0, 6.0, 5.0, 5.0, 4.0, 4.0,
+                                    3.0, 3.0, 2.0, 2.0, 1.0, 1.0, 0.0, 0.0};
+    auto self = makeTensorData(DT_FP32, {1, 64}, sdata);
+    auto golden = makeTensorData(DT_FP32, {1, 64}, gdata);
+    auto out = makeTensorData(DT_FP32, {1, 64}, 0.0f);
+
+    calc::TwoTileMrgSort(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, SortUB) {
+    std::vector<float> sdata = {3.0, 7.0, 1.0, 5.0, 9.0, 2.0, 8.0, 4.0};
+    std::vector<float> gdata0 = {9.0, 8.0, 7.0, 5.0, 4.0, 3.0, 2.0, 1.0};
+    std::vector<int> gdata1 = {4, 6, 1, 3, 7, 0, 5, 2};
+    auto self = makeTensorData(DT_FP32, {1, 8}, sdata);
+    auto goldenValue = makeTensorData(DT_FP32, {1, 8}, gdata0);
+    auto goldenIndex = makeTensorData(DT_INT32, {1, 8}, gdata1);
+    auto outValue = makeTensorData(DT_FP32, {1, 8}, 0.0f);
+    auto outIndex = makeTensorData(DT_INT32, {1, 8}, 0);
+
+    calc::Sort(outValue, outIndex, self, 1, true);
+    ASSERT_ALLCLOSE(outValue, goldenValue);
+    ASSERT_ALLCLOSE(outIndex, goldenIndex);
 }
 
 TEST_F(TorchAdaptorTest, TopkSort) {

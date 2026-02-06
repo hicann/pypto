@@ -240,7 +240,7 @@ Tensor Clip(const Tensor &self, const Tensor &min = {}, const Tensor &max = {});
 Tensor Clip(const Tensor &self, const Element &min = {}, const Element &max = {});
 
 std::tuple<Tensor, Tensor> TopK(const Tensor &self, int k, int axis = -1, bool isLargest = true);
-Tensor ArgSort(const Tensor &operand, int axis, bool isLargest = true);
+Tensor ArgSort(const Tensor &self, int axis = -1, bool descending = false);
 
 /**
  * @brief Sort a tensor with shape (1, n) along the last dimension, n must be orders of 2.

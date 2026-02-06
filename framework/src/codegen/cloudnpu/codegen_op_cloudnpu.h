@@ -143,6 +143,9 @@ public:
     std::string GenTopKMergeOp() const;
     std::string GenTopKExtractOp() const;
 
+    std::string GenTwoTileMrgSort() const;
+    std::string GenExtractSingleOp() const;
+
     std::string GenParamsStr(const std::unordered_set<int32_t> &skipOperands = {}) const;
 
     std::string GenDistOp() const;
@@ -352,6 +355,7 @@ private:
     std::string PrintBitSortStatic(const SortParam &param) const;
     std::string PrintMrgSortDynamicUnaligned(const SortParam &param) const;
     std::string PrintMrgSortStatic(const SortParam &param) const;
+    std::string PrintSortUBDynamicUnaligned(bool containDstType) const;
 
     std::string PrintBinaryStatic(const PrintBinaryParam &param) const;
     std::string PrintBinaryDynamicUnaligned(const PrintBinaryParam &param) const;

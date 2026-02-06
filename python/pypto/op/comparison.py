@@ -340,3 +340,39 @@ def topk(
     """
 
     return pypto_impl.TopK(input, k, (-1 if dim is None else dim), largest)
+
+
+@op_wrapper
+def argsort(
+    input: Tensor, dim: Optional[int] = None, descending: bool = False
+) -> Tensor:
+    """
+    Returns the indices that sort a tensor along a given dimension.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+    dim : int, optional
+        The dimension to sort along, if dim is not given, the last dimension of the input is chosen.
+    descending : bool
+        Controls the order of sorting. 
+        If `True`, the tensor will be sorted in descending order; 
+        if `False`, it will be sorted in ascending order.
+
+    Returns
+    -------
+    Tensor
+        The indices tensor along a given dimension in descending or ascending.
+
+    Examples
+    --------
+    x = pypto.tensor([2, 3], pypto.DT_FP32)
+    y = pypto.argsort(x, -1, True)
+
+    Input x:     [[1.0 2.0 3.0],
+                  [1.0 2.0 3.0]]
+    Output y: [[2 1 0],
+               [2 1 0]]
+    """
+    return pypto_impl.ArgSort(input, (-1 if dim is None else dim), descending)
