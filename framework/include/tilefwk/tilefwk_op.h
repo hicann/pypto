@@ -199,6 +199,7 @@ Tensor Compare(const Tensor &self, const Tensor &other, OpType op, OutType mode)
 Tensor Compare(const Tensor &self, const Element &other, OpType op, OutType mode);
 Tensor Compare(const Element &self, const Tensor &other, OpType op, OutType mode);
 Tensor Pow(const Tensor &self, const Element &other);
+Tensor CopySign(const Tensor &self, const Tensor &other);
 
 Tensor BitwiseRightShift(const Tensor &self, const Tensor &other);
 Tensor BitwiseRightShift(const Tensor &self, const Element &other);

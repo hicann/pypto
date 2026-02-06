@@ -73,11 +73,6 @@ void CheckBitwiseShiftDtype(const DataType &selfType, const DataType &otherType)
     ASSERT(selfSupport && otherSupport) << "Inputs datatype not supported";
 }
 
-struct LogicalInput {
-    const LogicalTensorPtr tensor;
-    TileInfo tileInfo;
-};
-
 template <BitwiseShiftOpType T>
 void TiledBitwiseShiftOperation(Function &function, const TileShape &tileShape, size_t cur, LogicalInput &input1,
     LogicalInput &input2, const LogicalTensorPtr &result, TileInfo &resultTileInfo) {

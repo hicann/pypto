@@ -208,17 +208,6 @@ Tensor Expand(const Tensor &self, const std::vector<int64_t> &dstShape, std::vec
     }
 }
 
-void BroadcastOperandTensor(LogicalTensorPtr &operand, LogicalTensorPtr &other, LogicalTensorPtr result,
-                                      Function& function, const TileShape& tileShape) {
-    auto dstShape = result->shape;
-    if (operand->shape == dstShape) {
-        return;
-    }
-    auto expanded = std::make_shared<LogicalTensor>(function, operand->Datatype(), dstShape);
-    Expand(function, tileShape, operand, {other}, expanded);
-    operand = expanded;
-}
-
 enum class TransposeOpType {
     TRANSPOSE_MOVEIN,
     TRANSPOSE_MOVEOUT,

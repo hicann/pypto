@@ -1114,3 +1114,33 @@ def tril(
     if isinstance(diagonal, int):
         diagonal = SymbolicScalar(diagonal).base()
     return pypto_impl.TriL(input, diagonal)
+
+
+@op_wrapper
+def copysign(input: Tensor, other: Tensor) -> Tensor:
+    """
+    Create a new floating-point tensor with the magnitude of input and the sign of other, elementwise.
+    Parameters
+    ---------
+    input: Tensor
+        The tensor of magnitudes.
+    other : Tensor
+         The tensor that contains value(s) whose signbit(s) are applied to the magnitudes in input.
+    out: Tensor
+        The output tensor.
+    Examples
+    ---------
+    x = pypto.tensor([3, 3], pypto.data_type.DT_FP32)
+    y = pypto.tensor([3, 3], pypto.data_type.DT_FP32)
+    out = pypto.copysign(x, y)
+    Input  x : [[1 -2  3],
+                [4  5 -6],
+                [-7 8  9]]
+    Input  y : [[-1 6 -8],
+                [1 -1  0],
+                [7 -8  9]]
+    Output out:[[-1 2 -3],
+                [4 -5  6],
+                [7 -8  9]]
+    """
+    return pypto_impl.CopySign(input, other)

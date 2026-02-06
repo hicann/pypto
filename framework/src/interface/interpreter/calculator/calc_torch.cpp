@@ -382,6 +382,11 @@ static void BitwiseXor(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logi
     torch::bitwise_xor_out(tout, From(self), From(other));
 }
 
+static void CopySign(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    auto tout = From(out);
+    torch::copysign_out(tout, From(self), From(other));
+}
+
 static void BitwiseRightShift(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     auto tout = From(out);
     torch::bitwise_right_shift_out(tout, From(self), From(other));
@@ -1475,6 +1480,7 @@ static struct CalcOps calcOps = {
     .BitwiseAnd = BitwiseAnd,
     .BitwiseOr = BitwiseOr,
     .BitwiseXor = BitwiseXor,
+    .CopySign = CopySign,
     .PairSum = PairSum,
     .PairMax = PairMax,
     .PairMin = PairMin,

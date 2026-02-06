@@ -64,6 +64,17 @@ void CheckBinaryInputTensors(const LogicalTensorPtr &tensor1, const LogicalTenso
     }
 }
 
+void BroadcastOperandTensor(LogicalTensorPtr &operand, LogicalTensorPtr &other, LogicalTensorPtr result,
+                                      Function& function, const TileShape& tileShape) {
+    auto dstShape = result->shape;
+    if (operand->shape == dstShape) {
+        return;
+    }
+    auto expanded = std::make_shared<LogicalTensor>(function, operand->Datatype(), dstShape);
+    Expand(function, tileShape, operand, {other}, expanded);
+    operand = expanded;
+}
+
 void BinaryOperationOperandCheck(
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand) {
     constexpr size_t inOpSize = 2;
@@ -85,11 +96,6 @@ bool CallBrcBinOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2) {
     return ((operand1->shape[shapeSize - 1] != 1) && (operand2->shape[shapeSize - 1] == 1)) ||
            ((operand1->shape[shapeSize - 1] == 1) && (operand2->shape[shapeSize - 1] != 1));
 }
-
-struct LogicalInput {
-    const LogicalTensorPtr tensor;
-    TileInfo tileInfo;
-};
 
 template <BinaryOpType T>
 void TiledBinaryOperation(Function &function, const TileShape &tileShape, size_t cur, LogicalInput &input1,
@@ -141,12 +147,12 @@ void TiledBinaryOperation(Function &function, const TileShape &tileShape, size_t
             function.AddOperation(
                 GetBinaryOpNameCode<T, false, true>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
         } else {
-            if (GetBinaryOpNameCode<T, false, false>() == Opcode::OP_BITWISEXOR) {
+            if (opName == "BITWISEXOR" || opName == "COPYSIGN") {
                 std::vector<int64_t> tmpShape(resultTileInfo.shape);
                 auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
                 tmpShape[resultTileInfo.shape.size() - 1] = 
                     AlignUp(tmpShape[resultTileInfo.shape.size() - 1], alignSize);
-                auto tempTensor = std::make_shared<LogicalTensor>(function, input2.tensor->Datatype(), tmpShape);
+                auto tempTensor = std::make_shared<LogicalTensor>(function, result->Datatype(), tmpShape);
                 function.AddOperation(
                     GetBinaryOpNameCode<T, false, false>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
             } else {
@@ -178,19 +184,8 @@ void TiledBinaryOperation(Function &function, const TileShape &tileShape, Logica
                        function.paramConfigs_.combineAxis);
     // nolast brc will be inline
     if (!withBrc) {
-        if (operand1->shape != result->shape) {
-            auto targetShape = result->shape;
-            auto tmp = std::make_shared<LogicalTensor>(function, operand1->Datatype(), targetShape);
-            Expand(function, tileShape, operand1, {operand2}, tmp);
-            operand1 = tmp;
-        }
-
-        if (operand2->shape != result->shape) {
-            auto targetShape = result->shape;
-            auto tmp = std::make_shared<LogicalTensor>(function, operand2->Datatype(), targetShape);
-            Expand(function, tileShape, operand2, {operand1}, tmp);
-            operand2 = tmp;
-        }
+        BroadcastOperandTensor(operand1, operand2, result, function, tileShape);
+        BroadcastOperandTensor(operand2, operand1, result, function, tileShape);
     }
 
     TileInfo tileInfo1(result->shape.size(), result->offset.size());
@@ -559,6 +554,12 @@ Tensor ScalarMax(const Tensor &operand1, const Tensor &operand2) {
         operand1.GetStorage(), operand2.GetStorage());
 }
 
+Tensor CopySign(const Tensor &self, const Tensor &other) {
+    DECLARE_TRACER();
+
+    RETURN_CALL(BinaryOperation<BinaryOpType::COPYSIGN>, *Program::GetInstance().GetCurrentFunction(), self, other);
+}
+
 // OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX OP_BITWISEAND OP_BITWISEOR OP_BITWISEXOR
 template <BinaryOpType T>
 void BinaryOperationTileFunc(Function &function, const TileShape &tileShape,
@@ -606,6 +607,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_MOD, Opcode::OP_MOD, BinaryOperationTileFunc<Bi
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEAND, Opcode::OP_BITWISEAND, BinaryOperationTileFunc<BinaryOpType::BITWISEAND>);
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEOR, Opcode::OP_BITWISEOR, BinaryOperationTileFunc<BinaryOpType::BITWISEOR>);
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, BinaryOperationTileFunc<BinaryOpType::BITWISEXOR>);
+REGISTER_OPERATION_TILED_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, BinaryOperationTileFunc<BinaryOpType::COPYSIGN>);
 
 REGISTER_OPERATION_TILED_FUNC(OP_ADDS, Opcode::OP_ADDS, BinaryOperationScalarTileFunc<BinaryOpType::ADD>);
 REGISTER_OPERATION_TILED_FUNC(OP_SUBS, Opcode::OP_SUBS, BinaryOperationScalarTileFunc<BinaryOpType::SUB>);

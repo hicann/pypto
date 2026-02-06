@@ -654,6 +654,18 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
         calc::BitwiseXor(out, self, other);
         ASSERT_ALLCLOSE(out, golden);
     }
+    {
+        // copysign
+        std::vector<float> s0data = {1.0f, -1.0f, 1.0f, -1.0f};
+        std::vector<float> s1data = {1.0f, 2.0f, -3.0f, 4.0f};
+        std::vector<float> gdata = {1.0f, 1.0f, -1.0f, 1.0f};
+        auto self = makeTensorData(DT_FP32, {1, 4}, s0data);
+        auto other = makeTensorData(DT_FP32, {1, 4}, s1data);
+        auto out = makeTensorData(DT_FP32, {1, 4}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {1, 4}, gdata);
+        calc::CopySign(out, self, other);
+        ASSERT_ALLCLOSE(out, golden);
+    }
 }
 
 TEST_F(TorchAdaptorTest, BinaryOpsS) {

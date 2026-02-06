@@ -52,6 +52,7 @@ enum class BinaryOpType {
     BITWISEAND,
     BITWISEOR,
     BITWISEXOR,
+    COPYSIGN,
 };
 
 template <BinaryOpType T>
@@ -77,6 +78,7 @@ std::string GetBinaryOpName() {
         case BinaryOpType::BITWISEAND: return "BITWISEAND";
         case BinaryOpType::BITWISEOR: return "BITWISEOR";
         case BinaryOpType::BITWISEXOR: return "BITWISEXOR";
+        case BinaryOpType::COPYSIGN: return "COPYSIGN";
         default: ASSERT(false && "unknown binary op type"); return "";
     }
 }
@@ -143,10 +145,16 @@ Opcode GetBinaryOpNameCode() {
         CASE(BITWISEAND);
         CASE(BITWISEOR);
         CASE(BITWISEXOR);
+        CASE(COPYSIGN);
         default: ASSERT(false && "unknown binary op type");
     }
 #undef CASE
 }
+
+struct LogicalInput {
+    const LogicalTensorPtr tensor;
+    TileInfo tileInfo;
+};
 
 std::vector<int64_t> BinaryOperationResultShape(LogicalTensorPtr operand1, LogicalTensorPtr operand2);
 LogicalTensorPtr BinaryOperationBroadCast(const LogicalTensorPtr &operand, const std::vector<int> &broadCastShape);
@@ -154,6 +162,8 @@ void CheckBinOpOperandsValid(const LogicalTensorPtr &operand1, const LogicalTens
 void BinaryOperationOperandCheck(
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand);
 void CheckBinaryInputTensors(const LogicalTensorPtr &tensor1, const LogicalTensorPtr &tensor2, std::string &op);
+void BroadcastOperandTensor(LogicalTensorPtr &operand, LogicalTensorPtr &other, LogicalTensorPtr result,
+                                      Function& function, const TileShape& tileShape);
 
 // OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX OP_BITWISEAND OP_BITWISEOR OP_BITWISEXOR
 template <BinaryOpType T>

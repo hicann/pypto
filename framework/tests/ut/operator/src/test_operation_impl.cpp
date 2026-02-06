@@ -860,3 +860,13 @@ TEST_F(OperationImplTest, Test_SBitwiseLeftShift) {
         result = BitwiseLeftShift(self, other);
     }
 }
+
+TEST_F(OperationImplTest, Test_CopySign) {
+    TileShape::Current().SetVecTile({16, 16});
+    Tensor self(DT_FP32, {16, 16}, "self");
+    Tensor other(DT_FP32, {16, 16}, "other");
+    Tensor result;
+    FUNCTION("TestBitwiseRightShift") {
+        result = CopySign(self, other);
+    }
+}

@@ -94,6 +94,9 @@ void OpcodeManager::RegisterVectorBinary() {
     RegisterInfo(Opcode::OP_BITWISEXOR, OpCoreType::AIV, "BITWISEXOR", {MemoryType::MEM_UB, MemoryType::MEM_UB}, 
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TbitwiseXor", PIPE_V, PIPE_V, CoreType::AIV}, 
         OpCalcType::BROADCAST, {OpAttributeKey::inputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_COPYSIGN, OpCoreType::AIV, "COPYSIGN", {MemoryType::MEM_UB, MemoryType::MEM_UB}, 
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Tcopysign", PIPE_V, PIPE_V, CoreType::AIV}, 
+        OpCalcType::BROADCAST, {OpAttributeKey::inputCombineAxis}, TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_S_ADD, OpCoreType::AIV, "S_ADD", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB}, {"TileOp::TSadd", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::BROADCAST,
         {OpAttributeKey::inputCombineAxis});
@@ -878,6 +881,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {         Opcode::OP_BITWISEORS,    "TBitwiseOrS"},
     {        Opcode::OP_BITWISEXORS,   "TBitwiseXorS"},
     {         Opcode::OP_BITWISENOT,    "TBitwiseNot"},
+    {           Opcode::OP_COPYSIGN,      "TCopysign"},
 };
 
 std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS{

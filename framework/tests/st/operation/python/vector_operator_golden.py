@@ -2306,6 +2306,22 @@ def gen_s_bitwise_left_shift_op_golden(case_name: str, output: Path, case_index:
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("SBitwiseLeftShift", golden_func, output, case_index)
 
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestCopySign/CopySignOperationTest.TestCopySign",
+    ]
+)
+def gen_bitwise_right_shift_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        x0 = from_numpy(inputs[0])
+        x1 = from_numpy(inputs[1])
+        y = torch.copysign(x0, x1)
+        return [to_numpy(y)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("CopySign", golden_func, output, case_index)
+
 
 def main() -> bool:
     # 用例名称
