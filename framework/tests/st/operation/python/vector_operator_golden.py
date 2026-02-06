@@ -703,7 +703,9 @@ def gen_matmulverify_op_golden(
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestBatchMatmul/BatchMatmulOperationTest.TestBatchMatmul",
-    ]
+    ],
+    version=0,
+    timeout=0
 )
 def gen_batchmatmul_op_golden(
     case_name: str, output: Path, case_index: int = None

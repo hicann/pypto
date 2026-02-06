@@ -48,7 +48,7 @@
                         160
                     ],
                     "dtype": "fp16",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [
@@ -79,7 +79,7 @@
                 "transB": false,
                 "isAMatrixNz": true,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp16",
                 "enableKSplit": false
             }
@@ -293,7 +293,7 @@
                         464
                     ],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [
@@ -323,7 +323,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false
             }

@@ -186,7 +186,7 @@ typename Config::IndexType compute_physical_index(typename Config::IndexType log
 template <typename Config>
 void gather_golden(const std::vector<typename Config::IndexType> &topk_indices,
     const std::vector<typename Config::IndexType> &page_table, const std::vector<typename Config::DataType> &buffer,
-    const Config &cfg, std::vector<typename Config::DataType> &result) {
+    const Config &cfg, std::vector<typename Config::DataType> &result, bool isTrans) {
     using IndexType = typename Config::IndexType;
     // using DataType = typename Config::DataType;
 
@@ -218,7 +218,11 @@ void gather_golden(const std::vector<typename Config::IndexType> &topk_indices,
 
         // 拷贝 hidden 维：buffer[physical_index, :] -> result[j, :]
         for (int h = 0; h < cfg.hidden_dim; ++h) {
-            result[j * cfg.hidden_dim + h] = buffer[static_cast<int>(physical_index) * cfg.hidden_dim + h];
+            if (!isTrans) {
+                result[j * cfg.hidden_dim + h] = buffer[static_cast<int>(physical_index) * cfg.hidden_dim + h];
+            } else {
+                result[h * cfg.topk_count + j] = buffer[static_cast<int>(physical_index) * cfg.hidden_dim + h];
+            }
         }
     }
 }
@@ -303,7 +307,7 @@ void BasicGatherTest(Config &cfg, bool isB, bool isTrans) {
     }
     // 4. 用 pageattention 逻辑做 gather，生成 golden 结果
     std::vector<typename Config::DataType> golden;
-    gather_golden<Config>(offsetsData, pageTableData, srcData, cfg, golden);
+    gather_golden<Config>(offsetsData, pageTableData, srcData, cfg, golden, isTrans);
     std::cout << "simu finished" << std::endl;
 
     FUNCTION("test", {src, offsets, unit, pageTable}, {dst}) {

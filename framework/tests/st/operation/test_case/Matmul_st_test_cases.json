@@ -74,7 +74,7 @@
                     "name": "output0",
                     "shape": [224, 160],
                     "dtype": "fp16",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [160, 192],
@@ -86,7 +86,7 @@
                 "transB": true,
                 "isAMatrixNz": true,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp16",
                 "enableKSplit": false
             }
@@ -118,7 +118,7 @@
                     "name": "output0",
                     "shape": [272, 336],
                     "dtype": "fp16",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [-1, 256],
@@ -130,7 +130,7 @@
                 "transB": false,
                 "isAMatrixNz": true,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp16",
                 "enableKSplit": false
             }
@@ -206,7 +206,7 @@
                     "name": "output0",
                     "shape": [240, 752],
                     "dtype": "bf16",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [119, 208],
@@ -218,7 +218,7 @@
                 "transB": false,
                 "isAMatrixNz": false,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "bf16",
                 "enableKSplit": false
             }
@@ -338,7 +338,7 @@
                     "name": "output0",
                     "shape": [384, 368],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [-1, 272],
@@ -350,7 +350,7 @@
                 "transB": true,
                 "isAMatrixNz": true,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false
             }
@@ -426,7 +426,7 @@
                     "name": "output0",
                     "shape": [352, 592],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [20, 192],
@@ -438,7 +438,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false
             }
@@ -470,7 +470,7 @@
                     "name": "output0",
                     "shape": [432, 272],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [63, -1],
@@ -482,7 +482,7 @@
                 "transB": false,
                 "isAMatrixNz": false,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false
             }
@@ -602,7 +602,7 @@
                     "name": "output0",
                     "shape": [257, 464],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [201, -1],
@@ -614,7 +614,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false
             }
@@ -646,7 +646,7 @@
                     "name": "output0",
                     "shape": [168, 592],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [-1, 160],
@@ -658,7 +658,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false
             }
@@ -940,7 +940,7 @@
                     "name": "output0",
                     "shape": [224, 992],
                     "dtype": "fp16",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [64, 128],
@@ -957,7 +957,7 @@
                 "transB": true,
                 "isAMatrixNz": true,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp16",
                 "enableKSplit": false,
                 "scale_tensors": {
@@ -1128,7 +1128,7 @@
                         160
                     ],
                     "dtype": "fp16",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [
@@ -1158,7 +1158,7 @@
                 "transB": true,
                 "isAMatrixNz": true,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp16",
                 "enableKSplit": false,
                 "scale_tensors": {
@@ -1336,7 +1336,7 @@
                         448
                     ],
                     "dtype": "fp32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [
@@ -1366,7 +1366,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "fp32",
                 "enableKSplit": false,
                 "scale_tensors": {
@@ -1470,7 +1470,7 @@
                     "name": "output0",
                     "shape": [292, 128],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [249, 64],
@@ -1483,7 +1483,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }
@@ -1650,7 +1650,7 @@
                     "name": "output0",
                     "shape": [80, 256],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [32, 208],
@@ -1663,7 +1663,7 @@
                 "transB": true,
                 "isAMatrixNz": true,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }
@@ -1740,7 +1740,7 @@
                     "name": "output0",
                     "shape": [48, 512],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [32, 96],
@@ -1753,7 +1753,7 @@
                 "transB": false,
                 "isAMatrixNz": true,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }
@@ -1785,7 +1785,7 @@
                     "name": "output0",
                     "shape": [176, 256],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [80, 112],
@@ -1798,7 +1798,7 @@
                 "transB": true,
                 "isAMatrixNz": true,
                 "isBMatrixNz": false,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }
@@ -1920,7 +1920,7 @@
                     "name": "output0",
                     "shape": [374, 512],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [231, 128],
@@ -1933,7 +1933,7 @@
                 "transB": false,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }
@@ -1965,7 +1965,7 @@
                     "name": "output0",
                     "shape": [448, 256],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [112, 80],
@@ -1978,7 +1978,7 @@
                 "transB": true,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }
@@ -2010,7 +2010,7 @@
                     "name": "output0",
                     "shape": [385, 256],
                     "dtype": "int32",
-                    "format": "NZ"
+                    "format": "ND"
                 }
             ],
             "view_shape": [176, 96],
@@ -2023,7 +2023,7 @@
                 "transB": false,
                 "isAMatrixNz": false,
                 "isBMatrixNz": true,
-                "isCMatrixNz": true,
+                "isCMatrixNz": false,
                 "outDtype": "int32",
                 "enableKSplit": false
             }

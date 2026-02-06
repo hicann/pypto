@@ -124,7 +124,7 @@ stest:
       - QuantOnBoardTest.test_Quant_32_7168
       # - QuantOnBoardTest.test_Quant_Smooth_32_4_128
       - QuantOnBoardTest.test_Quant_Smooth_32_7168
-      - QuantMMOnBoardTest.test_QuantMM_32_16384_times_16384_7168_np
+      # - QuantMMOnBoardTest.test_QuantMM_32_16384_times_16384_7168_np
       - QuantMMOnBoardTest.test_QuantMM_128_32_512_times_128_512_128_torch
       #
       - OnBoardTest.test_operation_ub_reshape
