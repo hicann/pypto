@@ -20,6 +20,7 @@
 #include "interface/configs/config_manager.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_interface/pass_type.h"
+#include "passes/pass_utils/pass_log_util.h"
 #include "pass_registry.h"
 #include "interface/tensor/expected_value.h"
 #include "tilefwk/error.h"
@@ -273,13 +274,7 @@ Status PassManager::RunPass(Program &program, Function &function, const std::str
             ALOG_ERROR_F("Pass [%s] does not exist.", PassNameStr(passName));
             return FAILED;
         }
-        std::string originLogOutPath = config::LogFile();
-        std::string logFolder = pass->LogFolder(config::LogTopFolder(), i);
-        std::string logfilePath = logFolder + "/" + (pass->GetName() + function.GetMagicName() + ".log");
-        LoggerManager::FileLoggerReplace(originLogOutPath, logfilePath, true);
-        Defer rollback([logfilePath, originLogOutPath]() {
-            LoggerManager::FileLoggerReplace(logfilePath, originLogOutPath, true);
-        });
+        PassLogUtil logUtil(*pass, function, i);
         auto passDfxCfg = ConfigManager::Instance().GetPassConfigs(strategy, identifier);
         if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL) {
             passDfxCfg.printGraph = true;
