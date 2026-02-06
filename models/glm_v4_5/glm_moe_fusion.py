@@ -57,7 +57,7 @@ def check_args(
     check_cond(gate_weight.shape[0] == 160, "invalid gate weight shape.")
     check_cond(gate_weight.shape[1] == 5120, "invalid gate weight shape.")
     check_cond(get_format(gate_weight) == 'ND', "invalid gate weight format.")
-    check_cond((gate_weight.dtype == torch.float32) or (gate_weight.dtype == torch.bfloat16), "invalid gate weight dtype.")
+    check_cond((gate_weight.dtype == torch.float32), "invalid gate weight dtype.")
     check_cond(hidden_states.dim() == 2, "invalid hidden states dim.")
     check_cond(hidden_states.shape[1] == 5120, "invalid hidden states shape.")
     check_cond(get_format(hidden_states) == 'ND', "invalid hidden states format.")
@@ -124,7 +124,7 @@ def moe_fusion_kernel(hidden_states_shape, mm_weight_shape, e_score_bias_shape, 
     )
     def kernel(
         hidden_states: pypto.tensor(hidden_states_shape, dtype=pypto.DT_BF16),
-        mm_weight: pypto.tensor(mm_weight_shape, dtype=pypto.DT_BF16),
+        mm_weight: pypto.tensor(mm_weight_shape, dtype=pypto.DT_FP32),
         e_score_bias_input: pypto.tensor(e_score_bias_shape, dtype=pypto.DT_BF16),
         w13: pypto.tensor(w13_shape, dtype=pypto.DT_INT8, format=pypto.TileOpFormat.TILEOP_NZ),
         w13_scale: pypto.tensor(w13_scale_shape, dtype=pypto.DT_BF16),
@@ -309,7 +309,7 @@ def test_moe_fusion():
         w2_scale = w2_scale.reshape(-1).to(x_dtype)
         ffn_res = torch.empty((bs, hidden_size), dtype=x_dtype, device=f'npu:{device_id}')
 
-        mm_weight = torch.rand((ne, h_num), dtype=torch.bfloat16, device=f'npu:{device_id}')
+        mm_weight = torch.rand((ne, h_num), dtype=torch.float32, device=f'npu:{device_id}')
         e_score_bias = torch.rand(
             (ne), dtype=torch.bfloat16, device=f'npu:{device_id}')
         topk_weights = torch.empty(
