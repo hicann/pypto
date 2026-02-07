@@ -560,10 +560,8 @@ TileTensor CodeGenOpCloudNPU::BuildTileTensor(
         }
     }
     UpdateTileTensorShapeAndStride(paramIdx, tileTensor, isSpillToGm, shapeInLoop);
-    
-    if (!offset[paramIdx].empty()) {
-        tileTensor.localBufOffset = offset[paramIdx];
-    }
+
+    tileTensor.localBufOffset = offset[paramIdx];
 
     return tileTensor;
 }

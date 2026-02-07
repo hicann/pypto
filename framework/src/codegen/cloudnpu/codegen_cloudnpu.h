@@ -135,9 +135,9 @@ private:
     void DumpCCE(const std::string &name, const std::string &code) const;
 
     void DoCompileCCE(const CompileInfo &compileInfo, const std::string &compileOptions) const;
-    std::string BuildCompileOptions(const CompileInfo &compileInfo, const std::string &compileOptions) const;
+    void BuildArchOptions(std::ostringstream &oss, const CompileInfo &compileInfo) const;
     void BuildIncludes(std::ostringstream &oss) const;
-    void BuildLLVMParams(std::ostringstream &oss) const;
+    void BuildExtraOptions(std::ostringstream &oss, const std::string &compileOptions) const;
 
     std::string GenAlloc(const std::shared_ptr<SymbolManager> &manager, BufferType bufferType,
         npu::tile_fwk::DataType dataType, const npu::tile_fwk::TileRange &range) const;

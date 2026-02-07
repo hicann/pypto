@@ -473,11 +473,10 @@ std::string CodeGenCloudNPU::GetPtoTileLibPathByEnv() const {
     return "";
 }
 
-std::string CodeGenCloudNPU::BuildCompileOptions(
-    const CompileInfo &compileInfo, const std::string &compileOptions) const {
+void CodeGenCloudNPU::BuildArchOptions(std::ostringstream &oss, const CompileInfo &compileInfo) const {
     const std::string corePredefine = compileInfo.IsCube() ? "-D__AIC__" : "-D__AIV__";
 
-    std::vector<std::string> compileOpts{compileOptions, corePredefine};
+    std::vector<std::string> compileOpts{corePredefine};
     if (ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false)) {
         compileOpts.emplace_back("-DSUPPORT_TILE_TENSOR");
     }
@@ -489,8 +488,12 @@ std::string CodeGenCloudNPU::BuildCompileOptions(
         compileOpts.emplace_back("-DREGISTER_BASE");
     }
 
+    compileOpts.emplace_back("--cce-aicore-only");
+    std::string coreArch = GetCoreArch(compileInfo);
+    compileOpts.emplace_back("--cce-aicore-arch=" + coreArch);
+
     std::string allCompileOpts = JoinString(compileOpts, " ");
-    return allCompileOpts;
+    oss << allCompileOpts << " ";
 }
 
 void CodeGenCloudNPU::BuildIncludes(std::ostringstream &oss) const {
@@ -507,12 +510,14 @@ void CodeGenCloudNPU::BuildIncludes(std::ostringstream &oss) const {
     }
 }
 
-void CodeGenCloudNPU::BuildLLVMParams(std::ostringstream &oss) const {
+void CodeGenCloudNPU::BuildExtraOptions(std::ostringstream &oss, const std::string &compileOptions) const {
     oss << "-mllvm -cce-aicore-stack-size=0x8000 "
         << "-mllvm -cce-aicore-function-stack-size=0x8000 "
         << "-mllvm -cce-aicore-record-overflow=false "
         << "-mllvm -cce-aicore-addr-transform "
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false ";
+
+    oss << compileOptions << " ";
 }
 
 std::string CodeGenCloudNPU::GetCoreArch(const CompileInfo &compileInfo) const {
@@ -526,20 +531,14 @@ std::string CodeGenCloudNPU::GetCoreArch(const CompileInfo &compileInfo) const {
 
 std::pair<int, std::string> CodeGenCloudNPU::CompileCCE(
     const CompileInfo &compileInfo, const std::string &compileOptions) const {
+    std::ostringstream oss;
+    oss << "bisheng -c -O3 -g -x cce -std=c++17 ";
+    BuildArchOptions(oss, compileInfo);
+    BuildIncludes(oss);
+    BuildExtraOptions(oss, compileOptions);
+
     const std::string srcFile = compileInfo.GetCCEAbsPath();
     const std::string objFile = compileInfo.GetBinAbsPath();
-
-    std::string coreArch = GetCoreArch(compileInfo);
-    std::string allCompileOpts = BuildCompileOptions(compileInfo, compileOptions);
-
-    std::ostringstream oss;
-    oss << "bisheng " << allCompileOpts << " -c -O3 -g -x cce -std=c++17 "
-        << "--cce-aicore-only "
-        << "--cce-aicore-arch=" << coreArch << " ";
-
-    BuildIncludes(oss);
-    BuildLLVMParams(oss);
-
     oss << "-o " << objFile << " " << srcFile;
 
     std::string ccecCmd = oss.str();

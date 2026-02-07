@@ -89,8 +89,8 @@ struct TileTensor {
             // cast local buffer pointer to uint64_t to adapt TileTensor mode
             oss << "uint64_t)";
             int64_t linearOffset{0};
-            if (shapeInLoop.loopDepth == 0) { // only calc linear offset in the outermost loop
-                // tensor in loop use base addr from tensor out of loop
+            if (!localBufOffset.empty() && shapeInLoop.loopDepth == 0) {
+                // only calc linear offset in the outermost loop, tensor in loop use base addr from tensor out of loop
                 linearOffset = CalcLinearOffset(rawShape, localBufOffset);
             }
             if (linearOffset != 0) {
