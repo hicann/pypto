@@ -81,7 +81,7 @@ class Tensor:
 
         # Negative index
         a = pypto.tensor((4, 4), pypto.DT_FP32)
-        b = pypto.tensor(2), pypto.DT_FP32)
+        b = pypto.tensor((2), pypto.DT_FP32)
         a[-1, -3:-1] = b # equivalent to a[3, 1:3]
 
         # Ellipsis index

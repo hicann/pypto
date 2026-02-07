@@ -50,7 +50,7 @@ private:
         LogicalTensorPtr needReplacedTensor, bool& hasFound);
 
     std::map<int, std::set<int>> tensorConsumers_;
-    std::map<int, int> tensorMaxSize_;
+    std::map<int, int64_t> tensorMaxSize_;
     std::set<int> hasReusedL0Tensors_;
 };
 

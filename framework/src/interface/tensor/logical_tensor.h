@@ -173,7 +173,7 @@ public:
 
     void operator<<(LogicalTensor &right);
 
-    int GetDataSize() const;
+    int64_t GetDataSize() const;
 
     bool IsOffsetAllZero() const {
         return std::all_of(offset.begin(), offset.end(), [](int value) { return value == 0; });

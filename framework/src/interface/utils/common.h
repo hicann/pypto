@@ -595,4 +595,8 @@ private:
     uint64_t startTime;
 };
 
+template <typename T>
+inline bool HasNegativeNum(const std::vector<T> &vec) {
+    return std::any_of(vec.begin(), vec.end(), [](T num) { return num < 0; });
+}
 } // namespace npu::tile_fwk
