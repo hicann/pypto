@@ -30,7 +30,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_INT16, DT_INT32。 <br> 不支持空 Tensor，Shape 支持2-4维，且shape size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32。 <br> 不支持空 Tensor，Shape 支持2-4维，且shape size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 源操作数。 <br> 支持任意合法的维度索引 ，范围为：-input.dim 到 input.dim - 1。 |
 | index   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT32, DT_INT64。 <br> 不支持空 Tensor，Shape 支持2-4维，需保证 index 所有轴上的 Shape 大小不超过 input 的对应 Shape 大小，且值为合法索引，即不超过 input 在 dim 轴上的 Shape 大小。 |
 
@@ -47,6 +47,16 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 3. input.shape 的 dim 轴不可切，要求 viewshape\[dim\] \>= max\( input.shape\[dim\], index.shape\[dim\] \)，其余维度的 Shape 大小不做限制；
 
 4. TileShape的维度与 result 相同，用于切分 result 和 index，TileShape\[dim\] = viewshape\[dim\]，所有输入和输出的 TileShape 大小总和不能超过UB内存的大小。
+
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入input为[m, n, p], dim为1，输入index为[m, t, p]，输出为[m, t, p], TileShape设置为[m1, t1, p1], 则m1, t1, p1分别用于切分m, t, p轴。 n轴不可切，必须保证n轴全载。
+
+```python
+pypto.set_vec_tile_shapes(m1, t1, p1)
+```
 
 ## 调用示例
 

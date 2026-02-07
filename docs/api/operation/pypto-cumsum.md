@@ -19,19 +19,29 @@ cumsum(input: Tensor, dim: int) -> Tensor:
 
 ## 参数说明
 
-
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_INT16, DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16, DT_INT16，DT_INT32，DT_FP32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim    | 输入      | 源操作数，指定累加维度。 <br> int 类型。                              |
 
 ## 返回值说明
 
-输出Shape、数据类型与输入input一致的Tensor。
+输出Tensor Shape与输入input一致。
+input为DT_FP16，DT_BF16，DT_FP32等类型时，输出数据类型和输入input一致，input为DT_INT16，DT_INT32时，输出数据类型为DT_INT64。
 
 ## 约束说明
 
-1. dim：指定计算累积和的维度，必须在输入Tensor input的有效维度范围内，其值需满足-input.dim <= dim < input.dim，对应轴不切分。
+1. dim：指定计算累积和的维度，必须在输入Tensor input的有效维度范围内，其值需满足-input.dim <= dim < input.dim。
+
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入tensors维度为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
 
 ## 调用示例
 

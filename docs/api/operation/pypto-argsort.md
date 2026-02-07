@@ -38,6 +38,16 @@ argsort(input: Tensor, dim: Optional[int]=None, descending: bool=True) -> Tensor
 4. 对于四维输入, 暂不支持在第0轴上进行排序。
 5. 排序时遇到相同值时, 采用稳定排序返回对应的索引。
 
+## TileShape设置示例
+
+TileShape维度应和输入input一致。
+
+如输入intput shape为[m, n, p]，dim为2，descending为True，输出为[m, n, p], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1, p1)
+```
+
 ## 调用示例
 
 ```python

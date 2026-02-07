@@ -30,6 +30,16 @@ round(input: Tensor, decimals: int) -> Tensor
 
 返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素四舍五入到指定位数的结果。
 
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入intput shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
+
 ## 调用示例
 
 ```python

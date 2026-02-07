@@ -50,6 +50,16 @@ sum(input: Tensor,  dim: int, keepdim: bool = False) -> Tensor:
 
 3. TileShape次尾轴要小于等于255，即 TileShape\[-2\]<=255.
 
+## TileShape设置示例
+
+TileShape维度应和输入input一致。
+
+如输入intput shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
+
 ## 调用示例
 
 ```python

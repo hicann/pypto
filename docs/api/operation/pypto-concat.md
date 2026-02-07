@@ -39,6 +39,16 @@ concat(tensors: List[Tensor], dim: int = 0) -> Tensor
 
 4.设置viewshape时，dim对应维度不切块（即viewshape对应值\>=tensors 任一tensor的对应值）。
 
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入tensors维度为[m, c1, p], [m, c2, p]，输出为[m, c1+c2, p], TileShape设置为[m1, n1, p1], 则m1, p1分别用于切分m, p轴, n1用于切分c1和c2轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1, p1)
+```
+
 ## 调用示例
 
 ```python

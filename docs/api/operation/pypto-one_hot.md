@@ -33,6 +33,16 @@ one_hot(input: Tensor, num_classes: int) -> Tensor
 
 TileShape 对输出切分，TileShape 的维度与输出一致，TileShape 的尾轴需等于 num\_classes 。
 
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入intput shape为[m, n]，输出为[m, n, t], 其中t=num\_classes，TileShape设置为[m1, n1, t1], 则m1, n1分别用于切分m, n轴。t1必须等于 num\_classes, t轴不可切，必须保证t轴全载。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1, t1)
+```
+
 ## 调用示例
 
 ```python

@@ -9,7 +9,7 @@
 
 ## 功能说明
 
-改变Tensor形状， 改变valid\_shape部分的形状\(Shape\)
+改变Tensor形状，改变valid\_shape部分的形状\(Shape\)
 
 ## 函数原型
 

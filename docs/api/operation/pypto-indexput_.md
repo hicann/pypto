@@ -22,9 +22,9 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 |   参数名   | 输入/输出 | 说明                                                                  |
 |------------|-----------|----------------------------------------------------------------------|
-|   input    |    输入   | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32。 <br> 不支持空Tensor，Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
-|  indices   |   输入    | Tensor类型的元组，每个Tensor表示一个维度的索引。 <br> 支持的类型为：tuple\[Tensor\], 每个Tensor均为一维，且维度相同。 <br> Tensor支持的数据类型为：INT64, INT32。 <br> 不支持空Tensor，tuple中Tensor的个数不大于input的维数。 |
-|   values   |   输入    | 待更新到input中的值。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32。 <br> 不支持空Tensor，维数不大于input的维数。 |
+|   input    |    输入   | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BF16, DT_FP16, DT_FP32。 <br> 不支持空Tensor，Shape仅支持1-4维，Shape Size不大于2147483647（即INT32_MAX）。 |
+|  indices   |   输入    | Tensor类型的元组，每个Tensor表示一个维度的索引。 <br> 支持的类型为：tuple\[Tensor\], 每个Tensor均为一维，且维度相同。 <br> Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64。 <br> 不支持空Tensor，tuple中Tensor的个数不大于input的维数。 |
+|   values   |   输入    | 待更新到input中的值。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8，DT_UINT8，DT_INT16，DT_UINT16，DT_INT32，DT_UINT32，DT_INT64，DT_UINT64，DT_BF16, DT_FP16, DT_FP32。 <br> 不支持空Tensor，维数不大于input的维数。 |
 | accumulate |   输入    | 累加参数，默认为False。 <br> 支持的类型为：bool。 |
 
 ## 返回值说明
@@ -44,6 +44,20 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 5. viewshape为一维，针对indices中的每个一维Tensor和values的第0维进行切分，values的其它维度不做切分。
 
 6. TileShape为一维，针对indices中的每个一维Tensor和values的第0维进行切分，values的其它维度不做切分。indices和values的TileShape大小总和不能超过UB内存的大小。
+
+## TileShape设置示例
+
+TileShape维度应为一维。
+
+输入input和输出均在gm上，不涉及tile切分。输入indices和输入values需要搬入ub，涉及tile切分。
+
+如输入input为[m, n, p]，输入indices为([t])，输入values为[t, n, p]，输出为[m, n, p], TileShape设置为[t1], 则t1用于切分t轴。输入values的n轴和p轴不可切，必须保证n轴p轴全载。
+
+如输入input为[m, n, p]，输入indices为([t], [t])，输入values为[t, p]，输出为[m, n, p], TileShape设置为[t1], 则t1用于切分t轴。输入values的p轴不可切，必须保证p轴全载。
+
+```python
+pypto.set_vec_tile_shapes(t1)
+```
 
 ## 调用示例
 

@@ -107,6 +107,16 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE) -> Ten
 
 4.  当 cast 前后类型相同的时候，某些场景下会产生空操作，不保证精度。
 
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入intput shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
+
 ## 调用示例
 
 ```python

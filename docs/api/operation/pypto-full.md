@@ -23,8 +23,8 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
 | 参数名       | 输入/输出 | 说明                                                                 |
 |--------------|-----------|----------------------------------------------------------------------|
 | size         | 输入      | 源操作数，用于定义输出Tensor的Shape。 <br> 支持的数据类型为：List[int]。 |
-| fill_value   | 输入      | 源操作数，用于填充输出Tensor的值。 <br> 支持的数据类型为：int, float, Element。 <br> 当为 int 或者 float 类型时会自动转换为 Element 类型，其中 int 对应 DT_INT_32，float 对应 DT_FP32。当需要使用其他数据类型时，可以通过 Element 构建。 <br> Element 支持的数据类型为：DT_FP32, DT_INT32, DT_FP16, DT_BF16。 <br> 输入需要和 dtype 类型相同，不支持隐式转化。 |
-| dtype        | 输入      | 源操作数，用于定义输出Tensor的类型。 <br> 支持的数据类型为：DT_FP32, DT_INT32, DT_FP16, DT_BF16。 <br> 输入需要和 fill_value 类型相同，不支持隐式转化。 |
+| fill_value   | 输入      | 源操作数，用于填充输出Tensor的值。 <br> 支持的数据类型为：int, float, Element。 <br> 当为 int 或者 float 类型时会自动转换为 Element 类型，其中 int 对应 DT_INT_32，float 对应 DT_FP32。当需要使用其他数据类型时，可以通过 Element 构建。 <br> Element 支持的数据类型为：DT_FP32, DT_INT32, DT_INT16, DT_FP16, DT_BF16。 <br> 输入需要和 dtype 类型相同，不支持隐式转化。 |
+| dtype        | 输入      | 源操作数，用于定义输出Tensor的类型。 <br> 支持的数据类型为：DT_FP32, DT_INT32, DT_INT16, DT_FP16, DT_BF16。 <br> 输入需要和 fill_value 类型相同，不支持隐式转化。 |
 | valid_shape  | 输入      | 源操作数，用于定义输出Tensor的动态Shape，关键字参数，用于动态图，静态图可以省略。 <br> 支持的类型为 List[SymbolicScalar], List[int]。 |
 
 ## 返回值说明
@@ -42,6 +42,16 @@ full(size: List[int], fill_value: Union[int, float, Element], dtype: DataType, *
     pypto.full\(\[2, 2\], 1, pypto.DT\_INT32, valid\_shape=\[pypto.min\(2, 5 - 2 \* b\_idx\), pypto.min\(2, 5 - 2 \* s\_idx\)\]\), 其中b\_idx 和 s\_idx 表示循环索引。
 
 2.  tileshape的维度与result 维度相同，用于切分 result。
+
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入size为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
 
 ## 调用示例
 

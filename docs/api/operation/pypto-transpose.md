@@ -22,7 +22,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32\DT_FP16\DT_BF16。<br> 不支持空Tensor；Shape仅支持2-5维；Shape Size不大于2147483647（即INT32_MAX）。<br> 算子对不同 Shape 支持不同，详见约束说明。 |
+| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_UINT16，DT_FP32，DT_INT32，DT_UINT32。<br> 不支持空Tensor；Shape仅支持2-5维；Shape Size不大于2147483647（即INT32_MAX）。<br> 算子对不同 Shape 支持不同，详见约束说明。 |
 | dim0    | 输入      | 源操作数，要交换的第一个维度的索引，从0开始计数。 |
 | dim1    | 输入      | 源操作数，要交换的第二个维度的索引，从0开始计数。 |
 
@@ -41,7 +41,7 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 -   2维：任意轴
 -   3维：任意轴
 -   4维：支持：0轴和2轴，1轴和 3轴，2轴和3轴, 1轴和 2轴,  不支持：0轴和3轴,  0轴和1轴
--   5维：支持：3轴和 4轴， 其他不支持
+-   5维：支持：3轴和 4轴，其他不支持
 
 4.涉及尾轴转置的场景，需要预留一块临时空间，用来搬运。
 
@@ -54,6 +54,16 @@ dim0: 2
 dim1: 3
 
 预留的临时空间为：t0 \* t1 \* align\(t2, 16\) \* align\(t3, 32 / sizeof\(DT\_FP32\)\)
+
+## TileShape设置示例
+
+TileShape维度应和输入input一致。
+
+如输入intput shape为[m, n, p]，dim0为1，dim1为2，输出为[m, p, n], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1, p1)
+```
 
 ## 调用示例
 

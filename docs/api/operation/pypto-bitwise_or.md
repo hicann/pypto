@@ -39,6 +39,18 @@ bitwise_or(input: Tensor, other: Union[Tensor, int]) -> Tensor
 2.  other 为数字的时候，不支持隐式转化。
 3.  other 不支持nan、inf等特殊值
 
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如非广播场景，输入intput shape为[m, n]，other为[m, n]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+广播场景，输入intput shape为[m, n]，other为[m, 1]，输出为[m, n]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
+
 ## 调用示例
 
 ```python

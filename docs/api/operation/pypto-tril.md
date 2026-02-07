@@ -30,7 +30,17 @@ tril(input: Tensor, diagonal: Union[int, SymbolicScalar]) -> Tensor:
 
 ## 约束说明
 
-1. diagonal：需要考虑的对角线， 整型（正数、0、负数）、SymbolicScalar类型。
+1. diagonal：需要考虑的对角线，整型（正数、0、负数）、SymbolicScalar类型。
+
+## TileShape设置示例
+
+TileShape维度应和输出一致。
+
+如输入intput shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+
+```python
+pypto.set_vec_tile_shapes(m1, n1)
+```
 
 ## 调用示例
 
