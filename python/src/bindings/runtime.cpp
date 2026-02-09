@@ -510,16 +510,24 @@ public:
         return nullptr;
     }
 
-    uint8_t *FindCtrlFlowCache(
-        KernelBinary *kernel, py::object &module, py::args &args, std::vector<DeviceTensorData> &tensors) {
-        std::vector<std::vector<int64_t>> shape;
-        auto devCache = kernel->FindCtrlFlowCache(tensors);
-        if (devCache == nullptr && InferCacheShape(module, args, shape)) {
-            devCache = kernel->FindCtrlFlowCache(shape);
+    uint8_t *FindCtrlFlowCache(KernelBinary *kernel, py::object &module, py::args &args,
+        std::vector<DeviceTensorData> &tensors, bool isCaptureMode) {
+        if (!IsCacheEnabled()) {
+            return nullptr;
         }
-        if (devCache == nullptr && IsCacheEnabled()) {
-            AclModeGuard guard(ACL_MODEL_RI_CAPTURE_MODE_RELAXED);
-            devCache = kernel->BuildControlFlowCache(tensors, stitchCfgCacheSize);
+
+        auto devCache = kernel->FindCtrlFlowCache(tensors);
+        if (devCache == nullptr) {
+            std::vector<std::vector<int64_t>> shape;
+            if (isCaptureMode) {
+                AclModeGuard guard(ACL_MODEL_RI_CAPTURE_MODE_RELAXED);
+                devCache = kernel->BuildControlFlowCache(tensors, stitchCfgCacheSize);
+            } else if (InferCacheShape(module, args, shape)) {
+                devCache = kernel->FindCtrlFlowCache(shape);
+            } else {
+                AclModeGuard guard(ACL_MODEL_RI_CAPTURE_MODE_RELAXED);
+                devCache = kernel->BuildControlFlowCache(tensors, stitchCfgCacheSize);
+            }
         }
 #if ENABALE_VERBOSE_LOG
         std::stringstream ss;
@@ -735,7 +743,7 @@ void LaunchKernel(py::object &module, int64_t stream, py::args &args) {
     }
 
     bool isCaptureMode = DeviceLauncher::AddAicpuStream(aicoreStream, kmodule->IsTripleStream());
-    uint8_t *ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, args, tensors);
+    uint8_t *ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, args, tensors, isCaptureMode);
     kmodule->Launch(kbinary, isCaptureMode, aicoreStream, tensors, ctrlFlowCache, wsAddr);
 }
 #else
