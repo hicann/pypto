@@ -197,7 +197,6 @@ def create_full_op_kernel(shape: tuple, fill_value: float, run_mode: str = "npu"
     
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def full_kernel(
-        dummy_input: pypto.Tensor(shape, pypto.DT_FP32),
     ) -> pypto.Tensor(shape, pypto.DT_FP32):
         pypto.set_vec_tile_shapes(2, 8)
         output = pypto.full(shape, fill_value, pypto.DT_FP32)
@@ -205,7 +204,6 @@ def create_full_op_kernel(shape: tuple, fill_value: float, run_mode: str = "npu"
 
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def full_symbolic_scalar_kernel(
-        dummy_input: pypto.Tensor(shape, pypto.DT_INT32),
     ) -> pypto.Tensor(shape, pypto.DT_INT32):
         pypto.set_vec_tile_shapes(2, 8)
         output = pypto.full(shape, fill_value, pypto.DT_INT32)
@@ -231,7 +229,7 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.float32
     expected_a = torch.tensor([[1.0, 1.0], [1.0, 1.0]], dtype=dtype, device=device)
 
-    out_torch = create_full_op_kernel(shape, fill_value, run_mode)(torch.tensor([0], dtype=dtype, device=device))
+    out_torch = create_full_op_kernel(shape, fill_value, run_mode)()
     print(f"Output a: {out_torch}")
     print(f"Expected a: {expected_a}")
     if run_mode == "npu":
@@ -243,7 +241,7 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
     dtype = torch.int32
     expected_b = torch.tensor([[1, 1], [1, 1]], dtype=dtype, device=device)
 
-    out_torch = create_full_op_kernel(shape, fill_value, run_mode)(torch.tensor([0], dtype=dtype, device=device))
+    out_torch = create_full_op_kernel(shape, fill_value, run_mode)()
     print(f"Output b: {out_torch}")
     print(f"Expected b: {expected_b}")
     if run_mode == "npu":
