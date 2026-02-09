@@ -28,6 +28,19 @@
 #include "passes/pass_check/split_large_fanout_tensor_checker.h"
 
 namespace npu::tile_fwk {
+struct ShapeDimComparator {
+    bool operator()(const Shape& a, const Shape& b) const {
+        if (a.size() != b.size()) {
+            return a.size() < b.size();
+        }
+        for (size_t i = 0; i < a.size(); ++i) {
+            if (a[i] != b[i]) {
+                return a[i] < b[i];
+            }
+        }
+        return false;
+    }
+};
 /*
  * SplitLargeFanoutTensor:
  本pass主要用于处理assemble被多个消费者消费时，如果每人都消费的是部分数据，因为assemble导致需要等待全部数据产生，影响并行度的问题
@@ -75,6 +88,7 @@ private:
         std::vector<std::pair<LogicalTensorPtr, Offset>> toTensorInfos);
     bool HasDuplicateToTile(std::vector<std::pair<LogicalTensorPtr, Offset>> toTensorInfos);
     void TryToSplitLargeTensor(Function &function, const Shape &lcmShape, const LogicalTensorPtr &largeTensor);
+    void GetOffsets(std::set<Shape, ShapeDimComparator> &tileOffsets, const Shape &lcmShape, const LogicalTensorPtr &largeTensor);
     std::unordered_map<int, std::vector<std::pair<LogicalTensorPtr, Offset>>> toInfoMap;
     std::unordered_map<int, std::vector<std::pair<LogicalTensorPtr, Offset>>> fromInfoMap;
     std::unordered_set<LogicalTensorPtr> largeTensors;

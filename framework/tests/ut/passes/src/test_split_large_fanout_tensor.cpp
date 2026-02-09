@@ -1364,8 +1364,9 @@ TEST_F(SplitLargeFanoutTensorTest, ComplexOverlap) {
     std::cout << "Run Pass Done." << std::endl;
 
     // 验证：
-    // 拆分后除了两个incast分别各cover一个outcast的场景会被单独拆出以外
-    // 其余场景均不会被拆分，依旧走原largeTensor
+    // 拆分后除了两个incast分别各cover一个outcast的场景会被单独拆出
+    // 中间的[16, 32]会被拆除形成对两个[8, 32]的多对多 
+    // 剩余两个会被保留
     std::unordered_map<int, int> recordAssemble;
     std::unordered_map<int, int> recordView;
     for (auto &op: function->Operations()) {
@@ -1377,7 +1378,8 @@ TEST_F(SplitLargeFanoutTensorTest, ComplexOverlap) {
         }
     }
     for (auto &[k, v]: recordAssemble) {
-        EXPECT_EQ(recordView[k], (v == 1) ? 1 : 4); //6个output，排除两个被input包含的，剩余4个
+        //6个output，两个1对1，两个被拆成合到[16, 32]的4对2，两个保留不动。
+        EXPECT_EQ(recordView[k], (v == 1) ? 1 : 2);
     }
 }
 
