@@ -805,23 +805,37 @@ void ReplaceTensor::InsertCopyDDROp(Function &function, Operation *needInsertCop
     needInsertCopyAssOp->ReplaceInput(copyOutOutputPtr, input);
 }
 
+void ReplaceTensor::FindNeedToCopyAssemble(std::unordered_set<Operation*> &needInsertCopyAssOps, std::unordered_set<int> &visitedAssOps, Operation &op) {
+    visitedAssOps.insert(op.GetOpMagic());
+    auto assembleIn = op.GetIOperands()[0];
+    auto producers = assembleIn->GetProducers();
+    if ((!producers.empty()) && (*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) {
+        return;
+    }
+    auto consumers = assembleIn->GetConsumers();
+    bool sameAssembleOut = true;
+    for (const auto &con : consumers) {
+        if (con->GetOOperands()[0]->GetMagic() != op.GetOOperands()[0]->GetMagic()) {
+            sameAssembleOut = false;
+            break;
+        }
+    }
+    if (!sameAssembleOut) {
+        for (const auto &con : consumers) {
+            if (con->GetOpMagic() != op.GetOpMagic() && con->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                visitedAssOps.insert(con->GetOpMagic());
+                needInsertCopyAssOps.insert(con);
+            }
+        }
+    }
+}
+
 void ReplaceTensor::InsertAssembleCopy(Function &function) {
     std::unordered_set<int> visitedAssOps;
     std::unordered_set<Operation*> needInsertCopyAssOps;
     for (auto &op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE && (!visitedAssOps.count(op.GetOpMagic()))) {
-            visitedAssOps.insert(op.GetOpMagic());
-            auto assembleIn = op.GetIOperands()[0];
-            auto consumers = assembleIn->GetConsumers();
-            if (consumers.size() <= 1) { 
-                continue;
-            }
-            for (auto &con : consumers) {
-                if (con->GetOpcode() == Opcode::OP_ASSEMBLE) {
-                    visitedAssOps.insert(con->GetOpMagic());
-                    needInsertCopyAssOps.insert(con);
-                }
-            }
+            FindNeedToCopyAssemble(needInsertCopyAssOps, visitedAssOps, op);
         }
     }
     for (auto &needInsertCopyAssOp : needInsertCopyAssOps) {
