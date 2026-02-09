@@ -538,14 +538,9 @@ class JitCallableWrapper:
                 make_hashable(self._debug_options),
             )
 
-            # Include closure variables in the cache key
-            # This ensures that functions with different closure variable values
-            # (e.g., different offsets in assemble_wrapper) don't incorrectly share
-            # the same cached compilation result
-            closure_vars = self._get_func_nonlocals(self._original_func)
-            closure_hash = make_hashable(closure_vars) if closure_vars else None
+            captured_locals_hash = make_hashable(self._captured_locals) if self._captured_locals else None
 
-            return (source_code, normalized_shapes, options_hash, closure_hash)
+            return (source_code, normalized_shapes, options_hash, captured_locals_hash)
         except (OSError, TypeError):
             # If we can't generate a cache key (e.g., source not available),
             # disable caching for this function
