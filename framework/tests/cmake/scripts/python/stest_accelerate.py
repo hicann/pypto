@@ -17,10 +17,10 @@ import re
 import subprocess
 from typing import List, Any, Optional, Dict
 
-from accelerate.gtest_accelerate import GTestAccelerate
+from accelerate.tests_accelerate import TestsAccelerate
 
 
-class STestAccelerate(GTestAccelerate):
+class STestAccelerate(TestsAccelerate):
     """STest 执行加速
 
     通过多进程并行执行, 以提升 STest 执行效率.
@@ -59,9 +59,9 @@ class STestAccelerate(GTestAccelerate):
     def reg_args(parser: argparse.ArgumentParser) -> None:
         """注册STest加速器参数
 
-        先调用父类(GTestAccelerate)的参数注册, 再添加STest特有参数
+        先调用父类(TestsAccelerate)的参数注册, 再添加STest特有参数
         """
-        GTestAccelerate.reg_args(parser)
+        TestsAccelerate.reg_args(parser)
         parser.add_argument("-d", "--device", nargs="?", type=int, action="append",
                             help="Specific parallel accelerate device, "
                                  "If this parameter is not specified, 0 device will be used by default.")
@@ -162,10 +162,10 @@ class STestAccelerate(GTestAccelerate):
 
         return cost_cases_sorted + no_cost_cases
 
-    def _prepare_get_params(self) -> List[GTestAccelerate.ExecParam]:
+    def _prepare_get_params(self) -> List[TestsAccelerate.ExecParam]:
         params = []
         for _id in self.device_list:
-            p = GTestAccelerate.ExecParam(cntr_id=_id, envs_func=STestAccelerate.get_case_exec_update_envs)
+            p = TestsAccelerate.ExecParam(cntr_id=_id, envs_func=STestAccelerate.get_case_exec_update_envs)
             params.append(p)
         return params
 

@@ -8,7 +8,30 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""GTest 执行加速
+"""Tests 执行加速
+
+本模块提供测试用例并行执行加速功能, 支持多进程并发运行测试用例, 主要功能包括:
+
+- 多容器/进程并行执行测试用例, 提高测试效率
+- 智能用例排序, 基于历史耗时预估进行负载均衡
+- 用例耗时缓存机制, 优化重复执行场景
+- 实时执行状态监控与异常处理
+- 详细的执行报告与统计信息(包括容器执行摘要, 用例耗时统计, 异常信息等)
+- CPU亲和性配置, 优化多CPU环境下的性能
+
+主要类:
+- TestsAccelerate: 测试加速的主类, 提供完整的并行执行框架
+- CaseDesc: 测试用例描述, 包含名称和预估耗时
+- ExecParam: 执行参数配置
+- ExecResult: 执行结果统计与报告生成
+- CntrContext: 容器/进程执行上下文
+- CaseContext: 用例执行上下文
+
+使用示例:
+1. 继承 TestsAccelerate 类并实现 _prepare_get_params 方法
+2. 调用 prepare() 进行准备工作
+3. 调用 process() 执行测试
+4. 调用 post() 获取执行结果
 """
 import argparse
 import dataclasses
@@ -43,23 +66,23 @@ class CaseDesc:
         self.duration_estimate = duration_estimate
 
 
-class ArgsGTestFilterListAction(argparse.Action):
-    """解析命令行参数传入的 GTestFilter 字段(适配自定义元信息参数)
+class ArgsCaseListAction(argparse.Action):
+    """解析命令行参数传入的 cases 字段(适配自定义元信息参数)
     """
 
     def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: List[str],
                  option_string: Optional[str] = None) -> None:
-        # 解析每个字符串，按冒号分隔并展平
+        # 解析每个字符串, 按冒号分隔并展平
         case_list = []
         for value in values:
-            cases = [cs.strip() for cs in value.split(':') if cs.strip()]  # 分割每个字符串，并过滤空字符串
+            cases = [cs.strip() for cs in value.split(':') if cs.strip()]  # 分割每个字符串, 并过滤空字符串
             case_list.extend(cases)
         # 将结果设置到命名空间
         setattr(namespace, self.dest, case_list)
 
 
-class GTestAccelerate(ABC):
-    """GTest 加速
+class TestsAccelerate(ABC):
+    """Tests 加速
     """
 
     @dataclasses.dataclass
@@ -326,17 +349,17 @@ class GTestAccelerate(ABC):
         cntr_id: int = 0
         exec_param: Optional[Any] = None
         ts: Optional[datetime] = None
-        gtest_filter: str = ""
+        case_name: str = ""
 
-        def __init__(self, cntr_id: int, exec_param, gtest_filter):
+        def __init__(self, cntr_id: int, exec_param, case_name):
             self.cntr_id = cntr_id
             self.exec_param = exec_param
-            self.gtest_filter = gtest_filter
+            self.case_name = case_name
             self.ts = datetime.now(tz=timezone.utc)
 
         @property
         def brief(self) -> List[Any]:
-            return [self.cntr_id, self.gtest_filter, (datetime.now(tz=timezone.utc) - self.ts)]
+            return [self.cntr_id, self.case_name, (datetime.now(tz=timezone.utc) - self.ts)]
 
     @dataclasses.dataclass
     class MoveContext:
@@ -377,8 +400,8 @@ class GTestAccelerate(ABC):
 
         # 用例执行参数, 执行行为控制参数
         self.exe: Executable = Executable(file=args.target[0], envs=args.envs, timeout=args.timeout_case)
-        self.exe_params: List[GTestAccelerate.ExecParam] = []
-        self.exe_result: GTestAccelerate.ExecResult = GTestAccelerate.ExecResult(cntr_name=cntr_name)
+        self.exe_params: List[TestsAccelerate.ExecParam] = []
+        self.exe_result: TestsAccelerate.ExecResult = TestsAccelerate.ExecResult(cntr_name=cntr_name)
         self.exe_timeout: Optional[int] = args.timeout
         self.exe_halt_on_error: bool = args.halt_on_error  # 失败时终止后续 Case 执行
 
@@ -391,7 +414,7 @@ class GTestAccelerate(ABC):
         self.case_ordered_cnt: int = 0
         self._init_case_info(args=args)
         self.case_queue: JoinableQueue = JoinableQueue()
-        self.case_execution_queue: JoinableQueue = JoinableQueue()  # Case 正常执行结束时，收集相关信息
+        self.case_execution_queue: JoinableQueue = JoinableQueue()  # Case 正常执行结束时, 收集相关信息
         self.case_exception_queue: JoinableQueue = JoinableQueue()  # Case 执行失败时, 用于收集错误信息
         self.case_terminate_queue: JoinableQueue = JoinableQueue()  # Case 被终止执行时, 收集相关信息
         self.case_exec_count = Value('i', 0)  # DFX, 统计 Case 完成进度
@@ -451,7 +474,7 @@ class GTestAccelerate(ABC):
 
         注意事项:
             1. 本函数应与 get_container_manager 函数协同使用;
-            2. 本函数注册了 'gtest_filter' 字段, 但 get_container_manager 内不会解析处理, 该字段应由使用者解析处理;
+            2. 本函数注册了 'cases' 字段, 但 get_container_manager 内不会解析处理, 该字段应由使用者解析处理;
 
         :param parser: ArgumentParser 外部创建
         """
@@ -468,9 +491,9 @@ class GTestAccelerate(ABC):
         parser.add_argument("--halt_on_error", action="store_true", default=False,
                             help="If any case failed, subsequent cases are not executed.")
         # 用例参数
-        parser.add_argument("--gtest_filter",
-                            nargs='*', action=ArgsGTestFilterListAction, default=[], required=False, dest="cases",
-                            help="GTestFilter, multiple cases are separated by ':'")
+        parser.add_argument("-c", "--cases",
+                            nargs='*', action=ArgsCaseListAction, default=[], required=False,
+                            help="Cases, multiple cases are separated by ':'")
         # 其他
         parser.add_argument("--cpu_rank_size", nargs="?", type=int, default=None,
                             help="Specify the rank size for CPU affinity grouping.")
@@ -549,12 +572,12 @@ class GTestAccelerate(ABC):
 
     @staticmethod
     def _move(src: JoinableQueue, dst: JoinableQueue):
-        GTestAccelerate._set_process_desc()
-        ctx = GTestAccelerate.MoveContext(src=src, dst=dst)
+        TestsAccelerate._set_process_desc()
+        ctx = TestsAccelerate.MoveContext(src=src, dst=dst)
         while True:
             if not ctx.move():
                 break
-        logging.info("%s Exist, Move %s elements.", GTestAccelerate._get_process_desc(), ctx.ele_count)
+        logging.info("%s Exist, Move %s elements.", TestsAccelerate._get_process_desc(), ctx.ele_count)
 
     @staticmethod
     def _get_process_desc() -> str:
@@ -565,7 +588,7 @@ class GTestAccelerate(ABC):
     def _set_process_desc():
         try:
             import setproctitle
-            setproctitle.setproctitle(GTestAccelerate._get_process_desc())
+            setproctitle.setproctitle(TestsAccelerate._get_process_desc())
         except ModuleNotFoundError:
             pass
 
@@ -865,16 +888,16 @@ class GTestAccelerate(ABC):
         """
         self._set_process_desc()
         self._cntr_set_cpu_affinity(cntr_id=cntr_id)
-        ctx = GTestAccelerate.CntrContext(cntr_id=cntr_id, exec_param=exec_param)
+        ctx = TestsAccelerate.CntrContext(cntr_id=cntr_id, exec_param=exec_param)
         try:
             time.sleep(delay)
             while not self.cntr_terminate_event.is_set():
                 # 用例获取
-                gtest_filter = self._cntr_get_case()
-                if gtest_filter is None:
+                case_name = self._cntr_get_case()
+                if case_name is None:
                     break
                 # 用例处理
-                need_next = self._cntr_deal_case(gtest_filter=gtest_filter, ctx=ctx)
+                need_next = self._cntr_deal_case(case_name=case_name, ctx=ctx)
                 if not need_next:
                     break  # 不需处理下一个 Case, 退出处理
         except KeyboardInterrupt:
@@ -886,7 +909,7 @@ class GTestAccelerate(ABC):
         logging.info("%s Exist[%s] %s %s",
                      self._get_process_desc(), ctx.exit_code,
                      self._cntr_progress(update=True), self._case_progress(update=False))
-        exit(ctx.exit_code)
+        exit(ctx.exit_code)  # 通过 exit_code 传递 Container 执行结果, 触发上层感知
 
     def _cntr_get_case(self) -> Optional[str]:
         """获取待执行用例
@@ -894,44 +917,44 @@ class GTestAccelerate(ABC):
         :return: 待执行用例名, None 表示无待执行用例
         """
         try:
-            gtest_filter = self.case_queue.get()
+            case_name = self.case_queue.get()
             self.case_queue.task_done()
         except queue.Empty:
-            gtest_filter = None  # 队列为空, 正常退出
+            case_name = None  # 队列为空, 正常退出
         except KeyboardInterrupt:
-            gtest_filter = None  # 等待获取待执行用例过程中, 强制终止时, 正常退出
-        return gtest_filter
+            case_name = None  # 等待获取待执行用例过程中, 强制终止时, 正常退出
+        return case_name
 
-    def _cntr_deal_case(self, gtest_filter: str, ctx: CntrContext) -> Optional[bool]:
+    def _cntr_deal_case(self, case_name: str, ctx: CntrContext) -> Optional[bool]:
         """处理单个 Case
 
-        :param gtest_filter: GTestFilter
+        :param case_name: 用例名称
         :param ctx: Cntr 处理上下文
         :return: 需要继续处理下个 Case
         """
         process = None
         try:
             # 用例进程启动
-            process = Process(name=f"CaseProcess({self.cntr_name}[{ctx.cntr_id}] Case[{gtest_filter}])",
-                              target=self._case, args=(ctx.cntr_id, ctx.exec_param, gtest_filter,))
+            process = Process(name=f"CaseProcess({self.cntr_name}[{ctx.cntr_id}] Case[{case_name}])",
+                              target=self._case, args=(ctx.cntr_id, ctx.exec_param, case_name,))
             process.start()
             process.join()
         except KeyboardInterrupt:
             if process and process.is_alive():
                 # 用例执行过程中, 强制终止时, 杀停子进程
                 logging.info("%s Recv terminate event download, stop running Case[%s]",
-                             self._get_process_desc(), gtest_filter)
+                             self._get_process_desc(), case_name)
                 os.kill(process.pid, signal.SIGINT)
                 process.join()  # 等待 Case 进程结束
         finally:
-            need_next = self._cntr_deal_case_finally(process=process, gtest_filter=gtest_filter, ctx=ctx)
+            need_next = self._cntr_deal_case_finally(process=process, case_name=case_name, ctx=ctx)
         return need_next
 
-    def _cntr_deal_case_finally(self, process: Process, gtest_filter: str, ctx: CntrContext) -> bool:
+    def _cntr_deal_case_finally(self, process: Process, case_name: str, ctx: CntrContext) -> bool:
         """处理单个 Case 结束
 
         :param process: CaseProcess
-        :param gtest_filter: GTestFilter
+        :param case_name: 用例名称
         :param ctx: Cntr 处理上下文
         :return: 需要继续处理下个 Case
         """
@@ -945,13 +968,13 @@ class GTestAccelerate(ABC):
             return True
         self.cntr_terminate_event.set()
         ctx.exit_code = process.exitcode
-        logging.info("%s Recv Case[%s] upload terminate event.", self._get_process_desc(), gtest_filter)
+        logging.info("%s Recv Case[%s] upload terminate event.", self._get_process_desc(), case_name)
         return False
 
     def _execute_case(self, ctx: CaseContext, param: ExecParam,
-                    gtest_filter: str) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
+                      case_name: str) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
         """统一的用例执行入口 - 由子类重写此方法实现不同模式"""
-        return self.exe.run(gtest_filter=gtest_filter, envs=param.get_envs())
+        return self.exe.run(params=[f"--gtest_filter={case_name}"], envs=param.get_envs())
 
     def _cntr_set_cpu_affinity(self, cntr_id: int):
         """在 Cntr 启动初期, 设置 CPU 亲和性
@@ -972,27 +995,27 @@ class GTestAccelerate(ABC):
         cpu_core_list = [int(i) for i in range(start_core, end_core)]
         try:
             os.sched_setaffinity(0, cpu_core_list)  # 0代表当前进程PID
-            # 验证设置结果（可选）
+            # 验证设置结果(可选)
         except OSError as e:
             # CPU 亲和性设置失败不影响用例执行
             logging.error("%s[%s] Failed to set CPU affinity: %s", self.cntr_name, cntr_id, e)
         current_affinity = os.sched_getaffinity(0)  # 0代表当前进程PID
         logging.debug("%s[%s] cpu affinity cores: %s", self.cntr_name, cntr_id, current_affinity)
 
-    def _case(self, cntr_id: int, param: ExecParam, gtest_filter: str):
+    def _case(self, cntr_id: int, param: ExecParam, case_name: str):
         """具体用例执行进程
 
         通过子进程实现各 Case 执行上下文隔离, 避免 Case 间相互影响
 
         :param cntr_id: Container ID
-        :param gtest_filter: GTestFilter
+        :param case_name: 用例名称
         """
         self._set_process_desc()
-        ctx = GTestAccelerate.CaseContext(cntr_id=cntr_id, exec_param=param, gtest_filter=gtest_filter)
-        run_desc = f"Run {self.mark}{self.exe.brief} GTestFilter({gtest_filter})"
+        ctx = TestsAccelerate.CaseContext(cntr_id=cntr_id, exec_param=param, case_name=case_name)
+        run_desc = f"Run {self.mark}{self.exe.brief} Case({case_name})"
         try:
             logging.info("%s[%s] [BGN] %s", self.cntr_name, cntr_id, run_desc)
-            ret, cmd, _ = self._execute_case(ctx, param, gtest_filter)
+            ret, cmd, _ = self._execute_case(ctx, param, case_name)
             if ret.returncode:
                 self._case_exception_exit(cntr_id=cntr_id, cmd=cmd,
                                           ret_code=ret.returncode, out=ret.stdout, err=ret.stderr)

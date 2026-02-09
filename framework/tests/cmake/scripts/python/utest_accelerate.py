@@ -17,10 +17,10 @@ import os
 from multiprocessing import cpu_count
 from typing import List
 
-from accelerate.gtest_accelerate import GTestAccelerate
+from accelerate.tests_accelerate import TestsAccelerate
 
 
-class UTestAccelerate(GTestAccelerate):
+class UTestAccelerate(TestsAccelerate):
     """UTest 执行加速
 
     通过多进程并行执行, 以提升 UTest 执行效率.
@@ -59,10 +59,10 @@ class UTestAccelerate(GTestAccelerate):
         job_num = min(max(int(job_num), 1), cpu_count(), 32, self.case_num)  # 32 表示最大并发度
         return job_num
 
-    def _prepare_get_params(self) -> List[GTestAccelerate.ExecParam]:
+    def _prepare_get_params(self) -> List[TestsAccelerate.ExecParam]:
         params = []
         for cntr_id in range(self.job_num):
-            params.append(GTestAccelerate.ExecParam(cntr_id=cntr_id))
+            params.append(TestsAccelerate.ExecParam(cntr_id=cntr_id))
         return params
 
 

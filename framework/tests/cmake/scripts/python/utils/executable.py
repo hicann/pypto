@@ -43,14 +43,11 @@ class Executable:
         ubsan = "ON" if "UBSAN_OPTIONS" in self.envs.keys() else "OFF"
         return f"({self.file.name}) XSAN(ASAN:{asan} UBSAN:{ubsan})"
 
-    def run(self, gtest_filter: Optional[str] = None, params: Optional[List[str]] = None, 
-            check: bool = False, capture_output: bool = True,
+    def run(self, params: Optional[List[str]] = None, check: bool = False, capture_output: bool = True,
             envs: Optional[Dict[str, str]] = None) -> Tuple[subprocess.CompletedProcess, str, timedelta]:
         """
         执行可执行文件
 
-        :param gtest_filter: GTestFilter
-        :type gtest_filter: Optional[str]
         :param params: 额外配置的命令参数
         :type params: Optional[List[str]]
         :param check: 透传至 subprocess.run 的 check 参数
@@ -63,7 +60,6 @@ class Executable:
         :rtype: Tuple[CompletedProcess, str, timedelta]
         """
         cmd = (f"{sys.executable} " if self.file.name.endswith(".py") else "./") + f"{self.file.name}"
-        cmd += f" --gtest_filter={gtest_filter}" if gtest_filter else ""
         cmd += (" " + " ".join(params)) if params else ""
         # 环境变量优先级: 函数参数指定 > 类内环境变量(命令行参数指定) > 系统内已有的
         envs = envs if envs is not None else {}

@@ -86,7 +86,7 @@ function(PTO_Fwk_UTest_RunExe)
         if (ARG_GTEST_FILTER_LIST)
             # 使能并行执行
             set(_File $<TARGET_FILE:${ARG_TARGET}>)
-            set(_Args "-t=${_File}" "--gtest_filter=${GtestFilterStr}" "--halt_on_error")
+            set(_Args "-t=${_File}" "--cases=${GtestFilterStr}" "--halt_on_error")
             if (PyEnvLines)
                 list(APPEND _Args "--env" "${PyEnvLines}")
             endif ()
