@@ -58,6 +58,39 @@ struct MixSubgraphInfo {
           originalCallOps(std::move(ops)), hashValue(hash), isLocalFunction(isLocal) {}
 };
 
+// 全局拆分记录结构
+struct GlobalSplitRecord {
+    Function* originalLeafFunc;                // 原始leaf function
+    std::vector<Function*> splitFunctions;     // 拆分后的子leafFunction
+    std::vector<uint64_t> programIDs;          // 原始programID列表
+    std::vector<InternalComponentInfo> components; // scope信息
+    uint64_t mixId;                           
+    std::shared_ptr<AnalyzerOutput> analyzerOutput; 
+    
+    GlobalSplitRecord() : originalLeafFunc(nullptr), mixId(0) {}
+    ~GlobalSplitRecord() = default;
+    // 获取记录摘要信息
+    std::string GetSummary() const {
+        std::stringstream ss;
+        ss << "GlobalSplitRecord{";
+        ss << "originalFunc=" << (originalLeafFunc ? originalLeafFunc->GetRawName() : "null");
+        ss << ", subFuncs=" << splitFunctions.size();
+        ss << ", components=" << components.size();
+        ss << ", mixId=" << mixId;
+        ss << ", hasAnalyzerOutput=" << (analyzerOutput ? "true" : "false");
+        ss << "}";
+        return ss.str();
+    }
+    
+    // 检查记录是否有效
+    bool IsValid() const {
+        if (originalLeafFunc == nullptr) return false;
+        if (splitFunctions.empty()) return false;
+        if (splitFunctions.size() != components.size()) return false;
+        return true;
+    }
+};
+
 class MixSubgraphSplit : public Pass {
 public:
     MixSubgraphSplit() : Pass("MixSubgraphSplit"), nextMixId_(0) {
@@ -72,6 +105,11 @@ private:
     MixInternalComponentsAnalyzer componentsAnalyzer_;
     MixDependencyAnalyzer dependencyAnalyzer_;
     MixCallOperationBuilder callOpBuilder_;
+
+    // 全局拆分记录
+    static std::unordered_map<FunctionHash, GlobalSplitRecord> globalSplitRecords_;
+    // 当前处理的root function
+    Function* currentRootFunc_ = nullptr;
     
     void DisplayComponents(const std::vector<InternalComponentInfo>& components);
     Status GenNewFunctions(Function& rootFunc,
@@ -99,15 +137,18 @@ private:
     Status GatherSubGraphInfo(Function &function, std::vector<MixSubgraphInfo> &mixSubgraphs, std::set<uint64_t> &mixSubgraphIDsToDelete, std::vector<Operation*> &callOpsToDelete);
     Status CalculateSplit(Function &function, std::vector<MixSubgraphInfo> &mixSubgraphs, std::set<uint64_t> &mixSubgraphIDsToDelete, std::unordered_map<uint64_t, std::vector<uint64_t>> &mixSubgraphNewIDs, std::unordered_map<uint64_t, uint64_t> &programIDRemap);
     Status ExecuteSplit(Function &function, std::vector<MixSubgraphInfo> &mixSubgraphs, std::vector<Operation*> callOpsToDelete, std::unordered_map<uint64_t, std::vector<uint64_t>> &mixSubgraphNewIDs, std::unordered_map<uint64_t, uint64_t> &programIDRemap);
-    // 处理单个leaf function
+    // 统一的leafFunction处理（处理本地和非本地function）
     Status ProcessLeafFunction(Function& rootFunc,
-                              uint64_t programID,
-                              Function* originalMixFunc,
-                              const std::vector<InternalComponentInfo>& components,
+                              const MixSubgraphInfo& mixInfo,
                               const std::vector<uint64_t>& newProgramIDs,
-                              const std::vector<Operation*>& originalCallOps,
                               std::vector<MixSubgraphSplitResult>& splitResults);
-
+    // 记录拆分结果到全局
+    void RecordSplitResult(Function* leafFunc,
+                          const std::vector<Function*>& newFunctions,
+                          const std::vector<uint64_t>& newProgramIDs,
+                          const std::vector<InternalComponentInfo>& components,
+                          uint64_t mixId,
+                          const std::shared_ptr<AnalyzerOutput>& analyzerOutput);
     void ApplyFinalDependencies(
         const std::vector<Function*>& newFunctions,
         const std::unordered_map<int, std::vector<SimpleTensorParam>>& allIncasts,

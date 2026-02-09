@@ -19,6 +19,8 @@
 
 namespace npu {
 namespace tile_fwk {
+// 初始化静态成员
+std::unordered_map<FunctionHash, GlobalSplitRecord> MixSubgraphSplit::globalSplitRecords_;
 Status MixSubgraphSplit::RunOnFunction(Function &function) {
     ALOG_INFO_F("===============================================================> Start MixSubgraphSplit.");
     // 获取rootFunc和programs
@@ -176,7 +178,10 @@ Status MixSubgraphSplit::ExecuteSplit(Function &function, std::vector<MixSubgrap
             auto it = mixSubgraphNewIDs.find(mixInfo.programID);
             if (it != mixSubgraphNewIDs.end()) {
                 newProgramIDs = it->second;
-            } 
+            } else {
+                ALOG_ERROR_F("No programIDs allocated for local mix subgraph %lu", mixInfo.programID);
+                return FAILED;
+            }
         } else {
             // 跨function：创建虚拟的programID（不添加到programs中）
             static uint64_t tempIDBase = 0xFFFFFFFF00000000ULL;
@@ -184,8 +189,12 @@ Status MixSubgraphSplit::ExecuteSplit(Function &function, std::vector<MixSubgrap
                 newProgramIDs.push_back(tempIDBase++);
             }
         }
-        ProcessLeafFunction(*rootFunc, mixInfo.programID, mixInfo.function, mixInfo.components, 
-                            newProgramIDs, mixInfo.originalCallOps, splitResults);
+        // 统一调用ProcessLeafFunction
+        if (ProcessLeafFunction(*rootFunc, mixInfo, newProgramIDs, splitResults) != SUCCESS) {
+            ALOG_ERROR_F("ProcessLeafFunction failed for function %s", 
+                        mixInfo.function->GetRawName().c_str());
+            return FAILED;
+        }
     }
     // 删除原始Mix子图的callOp
     DeleteOriginalMixCallOps(*rootFunc, callOpsToDelete);
@@ -295,7 +304,7 @@ Status MixSubgraphSplit::ApplySplitResultsWithRemap(Function& function,
     ALOG_INFO_F("Program mapping completed: original count=%d, new count=%d",
             originalCount, rootFunc->programs_.size());
     return SUCCESS;
-}
+}       
 
 void MixSubgraphSplit::DisplayComponents(const std::vector<InternalComponentInfo>& components) {
     for (size_t i = 0; i < components.size(); i++) {
@@ -353,61 +362,153 @@ Status MixSubgraphSplit::SetMixIdResourceType(std::vector<Function*> &newFunctio
 
 // 每个mixLeafFunction的处理
 Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
-                                            uint64_t programID,
-                                            Function* originalMixFunc,
-                                            const std::vector<InternalComponentInfo>& components,
+                                            const MixSubgraphInfo& mixInfo,
                                             const std::vector<uint64_t>& newProgramIDs,
-                                            const std::vector<Operation*>& originalCallOps,
                                             std::vector<MixSubgraphSplitResult>& splitResults) {
-    ALOG_INFO_F("Processing mix subgraph: programID=%d, callOps=%d, components=%d", programID, originalCallOps.size(), components.size());
+    auto* originalMixFunc = mixInfo.function;
+    const auto& components = mixInfo.components;
+    const auto& originalCallOps = mixInfo.originalCallOps;
+    bool isLocalFunction = mixInfo.isLocalFunction;
+    uint64_t programID = mixInfo.programID;
+    ALOG_INFO_F("Processing %s function %s (programID=%lu, components=%zu)", 
+               isLocalFunction ? "local" : "non-local",
+               originalMixFunc->GetRawName().c_str(), programID, components.size());
     ALOG_DEBUG_F("=== Component Details ===");
     DisplayComponents(components);
-
-    MixResourceType resourceType = GetMixResourceType(*originalMixFunc);
-    ALOG_DEBUG_F("Mix resource type: %d for programID=%d", static_cast<int>(resourceType), programID);
-    
-    uint64_t mixId = nextMixId_++;
-    ALOG_DEBUG_F("Assigning mixId=%lu for original mix function programID=%d", mixId, programID);
-   
-    AnalyzerInput analyzerInput(components, originalMixFunc);
-    AnalyzerOutput analyzerOutput(
-        SubgraphToFunction{},
-        std::vector<InternalDependencyInfo>(),
-        std::unordered_map<int, std::vector<SimpleTensorParam>>(),
-        std::unordered_map<int, std::vector<SimpleTensorParam>>()
-    );
-    dependencyAnalyzer_.ProcessDependencyAnalyzer(analyzerInput, analyzerOutput);
-   
-    // 为每个scope创建leaf function
+    // 1. 准备分析器输出和子leafFunction列表
+    std::shared_ptr<AnalyzerOutput> analyzerOutput = nullptr;
     std::vector<Function*> newFunctions;
-    if (GenNewFunctions(rootFunc, originalMixFunc, components, newProgramIDs, analyzerOutput.subgraphToFunction, newFunctions) != SUCCESS) {
-        return FAILED;
+    SubgraphToFunction subgraphToFunction;
+    if (isLocalFunction) {
+        AnalyzerInput analyzerInput(components, originalMixFunc);
+        analyzerOutput = std::make_shared<AnalyzerOutput>(
+            SubgraphToFunction{},
+            std::vector<InternalDependencyInfo>(),
+            std::unordered_map<int, std::vector<SimpleTensorParam>>(),
+            std::unordered_map<int, std::vector<SimpleTensorParam>>()
+        );
+        dependencyAnalyzer_.ProcessDependencyAnalyzer(analyzerInput, *analyzerOutput);
+        // 为每个scope创建leaf function
+        if (GenNewFunctions(rootFunc, originalMixFunc, components, newProgramIDs, analyzerOutput->subgraphToFunction, newFunctions) != SUCCESS) {
+            return FAILED;
+        }
+        uint64_t mixId = nextMixId_++;
+        ALOG_DEBUG_F("Assigning mixId=%lu for original mix function programID=%d", mixId, programID);
+        MixResourceType resourceType = GetMixResourceType(*originalMixFunc);
+        ALOG_DEBUG_F("Mix resource type: %d for programID=%d", static_cast<int>(resourceType), programID);
+        // 应用最终的依赖到leaf functions（外部依赖）
+        ALOG_INFO_F("Applying final dependencies to leaf functions...");
+        ApplyFinalDependencies(newFunctions, analyzerOutput->allIncasts, analyzerOutput->allOutcasts);
+        // 设置mixId和resourceType
+        if (SetMixIdResourceType(newFunctions, mixId, resourceType) != SUCCESS) {
+            return FAILED;
+        }
+        // 记录到全局（仅本地function）
+        RecordSplitResult(originalMixFunc, newFunctions, newProgramIDs, components, mixId, analyzerOutput);
+        subgraphToFunction = analyzerOutput->subgraphToFunction;
+    } else {
+        // 非本地function：从全局记录获取
+        // 2.1 从全局记录获取
+        auto it = globalSplitRecords_.find(mixInfo.hashValue);
+        if (it == globalSplitRecords_.end()) {
+            ALOG_ERROR_F("No global split record found for non-local function %s", 
+                            originalMixFunc->GetRawName().c_str());        
+            return FAILED;
+        }
+        const auto& splitRecord = it->second;
+        newFunctions = splitRecord.splitFunctions;
+        analyzerOutput = splitRecord.analyzerOutput;
+        if (analyzerOutput) {
+            subgraphToFunction = analyzerOutput->subgraphToFunction;
+        }      
     }
-    
-    // 应用最终的依赖到leaf functions（外部依赖）
-    ALOG_INFO_F("Applying final dependencies to leaf functions...");
-    ApplyFinalDependencies(newFunctions, analyzerOutput.allIncasts, analyzerOutput.allOutcasts);
-    
+    std::vector<InternalDependencyInfo> internalDeps;
+    if (analyzerOutput) {
+        internalDeps = analyzerOutput->internalDeps;
+    }
     // 为每个原始CallOp创建一组新的callOp, 每个原始callOp使用不同的wrapId（包含dummyTensor依赖）
-    ALOG_INFO_F("Creating call operations...");
-    if (callOpBuilder_.CreateCallOps(rootFunc, originalCallOps, originalMixFunc, components, newProgramIDs, analyzerOutput.subgraphToFunction, newFunctions, analyzerOutput.internalDeps) != SUCCESS) {
+    ALOG_DEBUG_F("Creating call operations for %zu components", components.size());
+    if (callOpBuilder_.CreateCallOps(rootFunc, originalCallOps, originalMixFunc, components, newProgramIDs, subgraphToFunction, newFunctions, internalDeps) != SUCCESS) {
+        ALOG_ERROR_F("Failed to create call ops for function %s", 
+                originalMixFunc->GetRawName().c_str());
         return FAILED;
     }
-    
-    // 设置mixId和resourceType
-    if (SetMixIdResourceType(newFunctions, mixId, resourceType) != SUCCESS) {
-        return FAILED;
-    }
-    // 保存拆分结果
+    // 4. 保存结果
     MixSubgraphSplitResult result;
-    result.originalProgramID = programID;
+    result.originalProgramID = isLocalFunction ? programID : INVALID_PROGRAM_ID;
     result.originalFunction = originalMixFunc;
     result.newProgramIDs = newProgramIDs;
     result.newFunctions = newFunctions;
     result.components = components;
+    result.originalCallOps = originalCallOps;
     splitResults.push_back(result);
-    ALOG_INFO_F("Successfully split mix subgraph programID=%d: created %d program instances and %d callOps", programID, newFunctions.size(), originalCallOps.size() * components.size());
+   
+    ALOG_INFO_F("Successfully processed %s function %s: %zu sub-functions", 
+            isLocalFunction ? "local" : "non-local",
+            originalMixFunc->GetRawName().c_str(), newFunctions.size());
     return SUCCESS;
+}
+
+void MixSubgraphSplit::RecordSplitResult(Function* leafFunc,
+                                        const std::vector<Function*>& newFunctions,
+                                        const std::vector<uint64_t>& newProgramIDs,
+                                        const std::vector<InternalComponentInfo>& components,
+                                        uint64_t mixId,
+                                        const std::shared_ptr<AnalyzerOutput>& analyzerOutput) {
+    // 检查输入参数的有效性
+    if (leafFunc == nullptr) {
+        ALOG_ERROR_F("Cannot record split result: leafFunc is null");
+        return;
+    }
+    // 计算函数的哈希值
+    FunctionHash funcHash = leafFunc->ComputeHash();
+    auto existingIt = globalSplitRecords_.find(funcHash);
+    if (existingIt != globalSplitRecords_.end()) {
+         // 已经存在记录，检查是否是同一个函数
+        if (existingIt->second.originalLeafFunc == leafFunc) {
+            ALOG_WARN_F("Split result already recorded for function %s (hash: %lu), overwriting",
+                       leafFunc->GetRawName().c_str(), funcHash.GetHash());
+        } else {
+            // 哈希冲突：不同函数有相同哈希值
+            ALOG_ERROR_F("Hash collision for function %s (hash: %lu) with existing function %s",
+                        leafFunc->GetRawName().c_str(), funcHash.GetHash(),
+                        existingIt->second.originalLeafFunc ? 
+                        existingIt->second.originalLeafFunc->GetRawName().c_str() : "null");    
+        }
+    }
+    // 创建记录
+    GlobalSplitRecord record;
+    record.originalLeafFunc = leafFunc;
+    record.splitFunctions = newFunctions;
+    record.programIDs = newProgramIDs;
+    record.components = components;
+    record.mixId = mixId;
+    record.analyzerOutput = analyzerOutput;
+    // 记录到全局映射
+    globalSplitRecords_[funcHash] = record;
+    // 打印详细信息
+    ALOG_INFO_F("Recorded split result for leaf function %s", leafFunc->GetRawName().c_str());
+    ALOG_INFO_F("  - Hash: %lu", funcHash.GetHash());
+    ALOG_INFO_F("  - MixId: %lu", mixId);
+    ALOG_INFO_F("  - Sub-functions: %zu", newFunctions.size());
+    ALOG_INFO_F("  - Components: %zu", components.size());
+    ALOG_INFO_F("  - Has analyzer output: %s", analyzerOutput ? "yes" : "no");
+    // 记录子函数的详细信息
+    for (size_t i = 0; i < newFunctions.size(); i++) {
+        Function* subFunc = newFunctions[i];
+        if (subFunc) {
+            uint64_t programID = (i < newProgramIDs.size()) ? newProgramIDs[i] : INVALID_PROGRAM_ID;
+            ALOG_DEBUG_F("  Sub-function[%zu]: %s (programID=%lu)", 
+                        i, subFunc->GetRawName().c_str(), programID);
+        }
+    }
+    // 记录scope信息
+    for (size_t i = 0; i < components.size(); i++) {
+        const auto& component = components[i];
+        ALOG_DEBUG_F("  Component[%zu]: internalID=%d, aivCore=%d, ops=%zu",
+                    i, component.internalSubgraphID, 
+                    static_cast<int>(component.aivCore), component.operations.size());
+    }
 }
 
 void MixSubgraphSplit::ApplyFinalDependencies(
