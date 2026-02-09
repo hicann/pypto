@@ -44,6 +44,7 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
     }
     void TearDown() override {}
 };
@@ -149,6 +150,13 @@ TEST_F(TuneSyncForVFTest, TestMainProcess) {
     auto funcPtr = it->second;
     std::vector<Operation *> opList(funcPtr->Operations(false).DuplicatedOpList());
     EXPECT_EQ(opList.size(), TS_NUM5);
+}
+
+TEST_F(TuneSyncForVFTest, TestSkip) {
+    config::SetPassGlobalConfig(KEY_ENABLE_VF, false);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestMainSchedule", "TestMainSchedule", nullptr);
+    TuneSyncForVF tuneSync;
+    EXPECT_EQ(tuneSync.RunOnFunction(*rootFuncPtr.get()), SUCCESS);
 }
 
 } // namespace tile_fwk

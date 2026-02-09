@@ -254,6 +254,10 @@ void CodegenPreproc::SetNeedAllocAttr(Function &function) {
 }
 
 Status CodegenPreproc::RunOnFunction(Function &function) {
+    if (config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
+        config::SetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE, 1);
+        APASS_LOG_INFO_F(Elements::Operation, "Set valid_shape_optimize as 1 for vf is enabled.");
+    }
     combineAxis = function.paramConfigs_.combineAxis;
     forceCombineAxis = function.paramConfigs_.forceCombineAxis;
     APASS_LOG_INFO_F(Elements::Operation, "===============================================================> Start CodegenPreproc.");

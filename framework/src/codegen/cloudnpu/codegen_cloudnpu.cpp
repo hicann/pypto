@@ -510,13 +510,24 @@ void CodeGenCloudNPU::BuildIncludes(std::ostringstream &oss) const {
     }
 }
 
+void CodeGenCloudNPU::AppendVFLLVMParams(std::ostringstream &oss) {
+    if (config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
+        oss << "--enable-pto-tile-fusion "
+            << "-mllvm --tile-fusion-skip-shape-inference=true "
+            << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
+            << "-mllvm --tile-fusion-skip-legality-check=false "
+            << "-Rpass=tile-fusion "
+            << "-Rpass-missed=tile-fusion ";
+    }
+}
+
 void CodeGenCloudNPU::BuildExtraOptions(std::ostringstream &oss, const std::string &compileOptions) const {
     oss << "-mllvm -cce-aicore-stack-size=0x8000 "
         << "-mllvm -cce-aicore-function-stack-size=0x8000 "
         << "-mllvm -cce-aicore-record-overflow=false "
         << "-mllvm -cce-aicore-addr-transform "
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false ";
-
+    AppendVFLLVMParams(oss);   
     oss << compileOptions << " ";
 }
 

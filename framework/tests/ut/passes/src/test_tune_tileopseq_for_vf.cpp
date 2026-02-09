@@ -43,6 +43,7 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
     }
     void TearDown() override {}
 };
@@ -207,7 +208,13 @@ TEST_F(TuneTileopseqForVFTest, TestNonGroupCase) {
     tuneTileop.ChangeOpSeq(ps, false);
     EXPECT_EQ(tuneTileop.opList_[0]->GetOpcode(), Opcode::OP_RECIPROCAL);
     EXPECT_EQ(tuneTileop.opList_[3]->GetOpcode(), Opcode::OP_EXPAND);
+}
 
+TEST_F(TuneTileopseqForVFTest, TestSkip) {
+    config::SetPassGlobalConfig(KEY_ENABLE_VF, false);
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestSkip", "TestSkip", nullptr);
+    TuneTileOpSeqForVF tuneSync;
+    EXPECT_EQ(tuneSync.RunOnFunction(*rootFuncPtr.get()), SUCCESS);
 }
 
 } // namespace tile_fwk

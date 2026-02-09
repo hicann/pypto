@@ -27,7 +27,8 @@
 namespace npu {
 namespace tile_fwk {
 Status LoopaxesProc::RunOnFunction(Function &function) {
-    bool useMarkFor = config::GetPassGlobalConfig(KEY_VF_OPT_MARK_FOR, false);
+    bool enableVF = config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
+    bool useMarkFor = enableVF || config::GetPassGlobalConfig(KEY_VF_OPT_MARK_FOR, false);
     if (!useMarkFor) {
         return SUCCESS;
     }

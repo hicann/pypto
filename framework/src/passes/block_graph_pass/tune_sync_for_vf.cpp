@@ -360,6 +360,10 @@ Status TuneSyncForVF::ChangeOpSeq(Function *subGraphFunc, bool isAIV1) {
 }
 
 Status TuneSyncForVF::RunOnFunction(Function &function) {
+    if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
+        APASS_LOG_DEBUG_F(Elements::Function, "TuneSyncForVF is skipped for ENABLE_VF is false.");
+        return SUCCESS;
+    }
     size_t funcId = 0;
     for (auto &program : function.rootFunc_->programs_) {
         std::vector<Operation *> opList(program.second->Operations(false).DuplicatedOpList());

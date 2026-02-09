@@ -82,6 +82,7 @@ const std::string KEY_SET_SCOPE = "SCOPE";
 const std::string KEY_ENABLE_CV_FUSE = "enable_cv_fuse";
 const std::string KEY_PASS_THREAD_NUM = "pass_thread_num";
 const std::string KEY_VF_OPT_MARK_FOR = "vf_opt_mark_for";
+const std::string KEY_ENABLE_VF = "enable_vf";
 
 
 /* CodeGen KEYs */

@@ -119,6 +119,7 @@ public:
         const std::shared_ptr<SymbolManager> &sm, const std::shared_ptr<LogicalTensor> &tensor) const;
     std::string GenAllocForLocalBuffer(const Operation &op, const std::shared_ptr<SymbolManager> &sm) const;
     std::string GetCoreArch(const CompileInfo &compileInfo) const;
+    static void AppendVFLLVMParams(std::ostringstream &oss);
 
 private:
     std::string GenFuncBodyBefore(

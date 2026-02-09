@@ -18,6 +18,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "interface/configs/config_manager_ng.h"
+#include "codegen/cloudnpu/codegen_cloudnpu.h"
 
 using namespace npu::tile_fwk;
 
@@ -88,6 +89,22 @@ TEST_F(TestConfigRunmode, COMPILE_STAGE_CODEGEN_BINARY) {
     Tensor inputB(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "C");
     config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_BINARY);
+    FUNCTION("ADD", {inputA, inputB, output}) {
+        output = Add(inputA, inputB);
+    }
+}
+
+TEST_F(TestConfigRunmode, COMPILE_VF) {
+    config::SetPassGlobalConfig(KEY_ENABLE_VF, true);
+    std::ostringstream oss;
+    CodeGenCloudNPU::AppendVFLLVMParams(oss);
+    EXPECT_EQ(oss.str().size() > 0, true);
+    const std::vector<int64_t> shape = {4, 4};
+    TileShape::Current().SetVecTile(shape);
+    Tensor inputA(DT_FP32, shape, "D");
+    Tensor inputB(DT_FP32, shape, "E");
+    Tensor output(DT_FP32, shape, "F");
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     FUNCTION("ADD", {inputA, inputB, output}) {
         output = Add(inputA, inputB);
     }
