@@ -106,8 +106,8 @@ TEST_F(ReduceCopyTest, TestCase0) {
     const double upperBound = 10.0;
     runner.mergeThresholds = {{lowerBound, upperBound}};
     EXPECT_EQ(runner.ReduceCopy(*function), SUCCESS);
-    const int Num2 = 2;
-    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
+    const int Num6 = 6;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num6);
 }
 
 void BuildConnectMatmul(ComputationalGraphBuilder &G, int brId, std::vector<std::string>& incasts,

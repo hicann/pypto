@@ -46,13 +46,15 @@ class ReduceCopyRunner {
 public:
     Status ReduceCopy(Function &func);
     Status Init(Function &func); 
-    Status MergePrepare(std::map<std::pair<int, int>, std::set<int>> &superGraphEdges, 
-        std::vector<std::tuple<int, int, size_t>> &candidates, std::map<int, int> &rootToDense);
+    Status MergePrepare(std::vector<std::tuple<int, int, size_t>> &candidates, std::map<int, int> &rootToDense);
     Status MergeLoop(std::vector<std::tuple<int, int, size_t>> &candidates, const std::pair<double, double> &thres,
     bool &mergedInLoop, std::map<int, int> &rootToDense);
     Status RemarkInternalSubgraphID(Function &func);
+    void BuildGraph(const OperationsViewer opOriList);
+    void BuildGraphInner(const OperationsViewer &opOriList, int opIdx, int opColor);
     std::map<int, size_t> magic2Size;
     std::map<std::pair<int, int>, std::set<int>> originalEdges;
+    std::set<std::pair<int, int>> crossEdges;
     std::vector<std::set<int>> superNodeInGraph;
     std::vector<std::set<int>> superNodeOutGraph;
     std::vector<bool> isReshape;

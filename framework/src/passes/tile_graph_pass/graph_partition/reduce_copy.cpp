@@ -226,25 +226,44 @@ inline void UpdateDSUForLowerBound(DSU &dsu, std::unordered_set<int> &updatedGra
     }
 }
 
-inline void BuildGraphInner(const OperationsViewer &opOriList, int opIdx, int opColor,
-        std::map<std::pair<int, int>, std::set<int>> &originalEdges, std::map<int, size_t> &magic2Size) {
+inline bool isCrossTensor(LogicalTensorPtr tensor) {
+    std::unordered_set<int> inOutSubgraph;
+    for (auto &parentOpPtr : tensor->GetProducers()) {
+        auto producerColor = parentOpPtr->GetSubgraphID();
+        inOutSubgraph.insert(producerColor);
+    }
+    for (auto &childOpPtr : tensor->GetConsumers()) {
+        auto consumerColor = childOpPtr->GetSubgraphID();
+        inOutSubgraph.insert(consumerColor);
+    }
+    const int singleLinkNum = 2;
+    if (inOutSubgraph.size() > singleLinkNum) {
+        return true;
+    }
+    return false;
+}
+
+void ReduceCopyRunner::BuildGraphInner(const OperationsViewer &opOriList, int opIdx, int opColor) {
     for (auto tensor : opOriList[opIdx].GetIOperands()) {
         for (auto &parentOpPtr : tensor->GetProducers()) {
             auto producerColor = parentOpPtr->GetSubgraphID();
-            if (producerColor != opColor && producerColor > -1) {
-                originalEdges[std::make_pair(producerColor, opColor)].insert(tensor->magic);
-                magic2Size[tensor->magic] = tensor->MemorySize();
+            if (producerColor == opColor || producerColor == -1) {
+                continue;
+            }
+            originalEdges[std::make_pair(producerColor, opColor)].insert(tensor->magic);
+            magic2Size[tensor->magic] = tensor->MemorySize();
+            if (isCrossTensor(tensor)) {
+                crossEdges.insert(std::make_pair(producerColor, opColor));
             }
         }
     }
 }
 
-inline void BuildGraph(const OperationsViewer opOriList, std::vector<std::vector<size_t>> &colorNode, std::map<std::pair<int, int>, std::set<int>> &originalEdges,
-        std::map<int, size_t> &magic2Size) {
+void ReduceCopyRunner::BuildGraph(const OperationsViewer opOriList) {
     for (size_t i = 0; i < colorNode.size(); i++) {
         for (size_t opIdx : colorNode[i]) {
             auto opColor = opOriList[opIdx].GetSubgraphID();
-            BuildGraphInner(opOriList, opIdx, opColor, originalEdges, magic2Size);
+            BuildGraphInner(opOriList, opIdx, opColor);
         }
     }
 }
@@ -339,7 +358,7 @@ Status ReduceCopyRunner::Init(Function &func) {
         colorNode[opColor].push_back(i);
         nodeWeights[opColor] += opOriList[i].GetLatency();
     }
-    BuildGraph(opOriList, colorNode, originalEdges, magic2Size);
+    BuildGraph(opOriList);
     colorCoreType.resize(color);
     isReshape.resize(color);
     GetCoreType(opOriList, colorNode, originalEdges, colorCoreType, isReshape);
@@ -348,8 +367,8 @@ Status ReduceCopyRunner::Init(Function &func) {
     return SUCCESS;
 }
 
-Status ReduceCopyRunner::MergePrepare(std::map<std::pair<int, int>, std::set<int>> &superGraphEdges, 
-    std::vector<std::tuple<int, int, size_t>> &candidates, std::map<int, int> &rootToDense) {
+Status ReduceCopyRunner::MergePrepare(std::vector<std::tuple<int, int, size_t>> &candidates, 
+        std::map<int, int> &rootToDense) {
     std::set<int> activeRootSet;
     for (int i=0; i< color; i++) {
         activeRootSet.insert(dsu.Find(i));
@@ -362,7 +381,7 @@ Status ReduceCopyRunner::MergePrepare(std::map<std::pair<int, int>, std::set<int
     superNodeOutGraph.resize(activeRootVec.size());
     superNodeInGraph.clear();
     superNodeInGraph.resize(activeRootVec.size());
-    superGraphEdges.clear();
+    std::map<std::pair<int, int>, std::set<int>> superGraphEdges;
     for (const auto &edge : originalEdges) {
         int uRoot = dsu.Find(std::get<0>(edge.first));
         int vRoot = dsu.Find(std::get<1>(edge.first));
@@ -371,6 +390,8 @@ Status ReduceCopyRunner::MergePrepare(std::map<std::pair<int, int>, std::set<int
             int vDense = rootToDense[vRoot];
             superNodeOutGraph[uDense].insert(vDense);
             superNodeInGraph[vDense].insert(uDense);
+        }
+        if (uRoot != vRoot && crossEdges.count(edge.first) == 0) {
             superGraphEdges[{uRoot, vRoot}].insert(edge.second.begin(), edge.second.end());
         }
     }
@@ -449,10 +470,9 @@ Status ReduceCopyRunner::ReduceCopy(Function &func) {
             mergedInLoop = false;
             superNodeInGraph.clear();
             superNodeOutGraph.clear();
-            std::map<std::pair<int, int> , std::set<int>> superGraphEdges;
             std::vector<std::tuple<int, int, size_t>> candidates;
             std::map<int, int> rootToDense;
-            if (MergePrepare(superGraphEdges, candidates, rootToDense) != SUCCESS) {
+            if (MergePrepare(candidates, rootToDense) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "Prepare for mix graph failed.");
                 return FAILED;
             }
