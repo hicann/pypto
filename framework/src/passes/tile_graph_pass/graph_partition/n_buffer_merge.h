@@ -23,6 +23,7 @@
 #include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
+#include "passes/pass_utils/dfs_sort_utils.h"
 namespace npu::tile_fwk {
 
 constexpr int64_t VEC_NBUFFER_SETTING_DEFAULT_MERGE_NUM_KEY = -1; // manualMerge模式配置默认合并粒度的key值，n个子图合并为一个
@@ -60,6 +61,10 @@ private:
                        size_t &numDBmerge);
     std::map<uint64_t, size_t> SetNumDB(std::map<uint64_t, std::vector<int>> &hashMap);
     Status CheckVecNBufferSettingForManualMerge();
+    Status MergeProcessForMulityInOut(const OperationsViewer &opOriList,
+                        const std::map<uint64_t, std::vector<int>> &hashMap,
+                        const std::map<uint64_t, size_t> &hashMergeNum,
+                        std::vector<uint64_t> &hashColor);
 private:
     int color_{0};
     std::vector<std::vector<int>> inGraph_;
@@ -67,6 +72,7 @@ private:
     std::vector<std::vector<int>> inColor_;
     std::vector<std::vector<int>> outColor_;
     std::vector<std::vector<int>> colorNode_;
+    std::unordered_map<int, int> dfsColorOrder_;
     std::vector<int> colorCycles_;
     int vecNBuffermode;
     int mgVecParallelLb;
@@ -75,7 +81,9 @@ private:
     enum ModeType {
         noMerge = 0,
         autoMerge = 1,
-        manualMerge = 2
+        manualMerge = 2,
+        autoMulityInOutMerge = 3,
+        manualMulityInOutMerge = 4
     };
 };
 }  // namespace npu::tile_fwk
