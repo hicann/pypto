@@ -477,84 +477,6 @@ class STestExecuteParam(CMakeParam):
         return cmd
 
 
-@dataclasses.dataclass
-class STestToolsParam(CMakeParam):
-    cases_csv_file: Optional[Path] = None
-    intercept_flag: bool = False
-    output_clean: bool = False
-
-    prof_enable: bool = False
-    prof_level: str = "l1"
-    prof_warn_up_cnt: Optional[int] = None
-    prof_try_cnt: Optional[int] = None
-    prof_max_cnt: Optional[int] = None
-
-    @staticmethod
-    def reg_args(parser, ext: Optional[Any] = None):
-        # Tools
-        parser_tools = parser.add_parser('tools', help="Tools")
-        parser_tools.add_argument("--cases_csv_file", nargs=1, type=Path, default=None,
-                                  help="Specify cases.csv")
-        parser_tools.add_argument("--intercept", action="store_true", default=False,
-                                  help="intercept, Intercept if have failed case result")
-        parser_tools.add_argument("--tools_output_clean", action="store_true", default=False,
-                                  help="clean, Specify clean flag, clean tools output dir")
-        # Tools.Profiling
-        sub_parser_prof = parser_tools.add_subparsers(dest="Tolls SubCommand")
-        parser_prof = sub_parser_prof.add_parser('profiling', help="Profiling", aliases=['prof'])
-        parser_prof.add_argument("-l", "--level", "--prof_level", dest="prof_level",
-                                 nargs="?", type=str, default="l1", choices=["l1", "l2"],
-                                 help="Specify profiling level")
-        parser_prof.add_argument("-w", "--warn_up_cnt", "--prof_warn_up_cnt", dest="prof_warn_up_cnt",
-                                 nargs=1, type=int, default=None,
-                                 help="Specify profiling warn up cnt")
-        parser_prof.add_argument("-t", "--try_cnt", "--prof_try_cnt", dest="prof_try_cnt",
-                                 nargs=1, type=int, default=None,
-                                 help="Specify profiling try cnt")
-        parser_prof.add_argument("-m", "--max_cnt", "--prof_max_cnt", dest="prof_max_cnt",
-                                 nargs=1, type=int, default=None,
-                                 help="Specify profiling max cnt")
-        parser_prof.set_defaults(func=SubCommandMgr.init_param_tools_profiling)
-
-    def init_param(self, args):
-        self.cases_csv_file = Path(args.cases_csv_file[0]).resolve() if args.cases_csv_file else None
-        self.intercept_flag = args.intercept
-        self.output_clean = args.tools_output_clean
-
-    def init_param_profiling(self, args):
-        self.prof_enable = True
-        self.prof_level = args.prof_level
-        self.prof_warn_up_cnt = args.prof_warn_up_cnt[0] if args.prof_warn_up_cnt else None
-        self.prof_try_cnt = args.prof_try_cnt[0] if args.prof_try_cnt else None
-        self.prof_max_cnt = args.prof_max_cnt[0] if args.prof_max_cnt else None
-
-    def get_cfg_cmd(self, ext: Optional[Any] = None) -> str:
-        cmd = self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF", ctr=self.prof_enable)
-
-        # 当前 tools 下仅支持 prof 工具, 当其未使能时, 不需设置其他 option
-        if not self.prof_enable:
-            return cmd
-
-        # 公共参数
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_CASE_FILE", ctr=bool(self.cases_csv_file),
-                                 tv=str(self.cases_csv_file))
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_INTERCEPT", ctr=self.intercept_flag)
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_OUTPUT_CLEAN", ctr=self.output_clean)
-
-        # Profiling 工具参数
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF_LEVEL", tv=self.prof_level)
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF_WARN_UP_CNT",
-                                 ctr=self.prof_warn_up_cnt is not None,
-                                 tv=f"{self.prof_warn_up_cnt}")
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF_TRY_CNT",
-                                 ctr=self.prof_try_cnt is not None,
-                                 tv=f"{self.prof_try_cnt}")
-        cmd += self._cfg_require(opt="ENABLE_STEST_TOOLS_PROF_MAX_CNT",
-                                 ctr=self.prof_max_cnt is not None,
-                                 tv=f"{self.prof_max_cnt}")
-        return cmd
-
-
 class TestsParam(CMakeParam):
 
     def __init__(self, args):
@@ -563,7 +485,6 @@ class TestsParam(CMakeParam):
         self.utest: TestsFilterParam = TestsFilterParam(argv=args.utest, opt="ENABLE_UTEST")
         self.utest_module: TestsFilterParam = TestsFilterParam(argv=args.utest_module, opt="ENABLE_UTEST_MODULE")
         self.stest_exec: STestExecuteParam = STestExecuteParam(args=args, enable_binary_cache=False)
-        self.stest_tools: STestToolsParam = STestToolsParam()
         self.stest: TestsFilterParam = TestsFilterParam(argv=args.stest, opt="ENABLE_STEST")
         self.stest_group: TestsFilterParam = TestsFilterParam(argv=args.stest_group, opt="ENABLE_STEST_GROUP")
         self.stest_distributed: TestsFilterParam = TestsFilterParam(argv=args.stest_distributed,
@@ -594,17 +515,6 @@ class TestsParam(CMakeParam):
             desc += f"\n                     Enable : {self.stest.enable}"
             desc += f"\n                     Filter : {self.stest.filter_str}"
             desc += f"\n                     Group  : {self.stest_group.filter_str}"
-            if self.stest_tools.prof_enable:
-                desc += f"\n        Tools"
-                desc += f"\n              Case Csv File : {self.stest_tools.cases_csv_file}"
-                desc += f"\n             Intercept Flag : {self.stest_tools.intercept_flag}"
-                desc += f"\n               Output Clean : {self.stest_tools.output_clean}"
-                desc += f"\n        Tools Profiling"
-                desc += f"\n                     Enable : {self.stest_tools.prof_enable}"
-                desc += f"\n                      Level : {self.stest_tools.prof_level}"
-                desc += f"\n                Warn Up Cnt : {self.stest_tools.prof_warn_up_cnt}"
-                desc += f"\n                    Try Cnt : {self.stest_tools.prof_try_cnt}"
-                desc += f"\n                    Max Cnt : {self.stest_tools.prof_max_cnt}"
         if self.stest_distributed.enable:
             desc += f"\n    Stest Distributed"
             desc += f"\n                     Enable : {self.stest_distributed.enable}"
@@ -631,7 +541,6 @@ class TestsParam(CMakeParam):
         TestsFilterParam.reg_args(parser=parser, ext="utest")
         TestsFilterParam.reg_args(parser=parser, ext="utest_module")
         STestExecuteParam.reg_args(parser=parser)
-        STestToolsParam.reg_args(parser=ext)
         TestsFilterParam.reg_args(parser=parser, ext="stest")
         TestsFilterParam.reg_args(parser=parser, ext="stest_group")
         TestsFilterParam.reg_args(parser=parser, ext="stest_distributed")
@@ -653,7 +562,6 @@ class TestsParam(CMakeParam):
                 cmd += self.stest_exec.get_cfg_cmd()
             if self.stest.enable:
                 cmd += self.stest_group.get_cfg_cmd()
-                cmd += self.stest_tools.get_cfg_cmd()
         return cmd
 
 
@@ -1253,13 +1161,6 @@ class BuildCtrl(CMakeParam):
             self.remain_timeout = max(self.remain_timeout - duration, 0)
             duration_str += f" Remain {self.remain_timeout} secs"
         return duration_str
-
-
-class SubCommandMgr:
-    @classmethod
-    def init_param_tools_profiling(cls, args, ctrl: BuildCtrl):
-        ctrl.tests.stest_tools.init_param(args=args)
-        ctrl.tests.stest_tools.init_param_profiling(args=args)
 
 
 if __name__ == "__main__":

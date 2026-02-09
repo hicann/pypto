@@ -57,16 +57,6 @@ option(ENABLE_STEST "Enable STest" OFF)
 option(ENABLE_STEST_GROUP "Enable STest Group" OFF)
 option(ENABLE_STEST_DISTRIBUTED "Enable STest(Distributed)" OFF)
 
-# 公开编译开关(stest.tools)
-option(ENABLE_STEST_TOOLS_CASE_FILE "Specify STest Tools Case file path" OFF)
-option(ENABLE_STEST_TOOLS_INTERCEPT "Enable STest Tools Intercept if has any failed case" OFF)
-option(ENABLE_STEST_TOOLS_OUTPUT_CLEAN "Clean STest Tools Output Directory" OFF)
-option(ENABLE_STEST_TOOLS_PROF "Enable STest Tools(Profiling)" OFF)
-option(ENABLE_STEST_TOOLS_PROF_LEVEL "Specify STest Tools Profiling Level" OFF)
-option(ENABLE_STEST_TOOLS_PROF_WARN_UP_CNT "Specify STest Tools Profiling Warn-up cnt" OFF)
-option(ENABLE_STEST_TOOLS_PROF_TRY_CNT "Specify STest Tools Profiling Try cnt" OFF)
-option(ENABLE_STEST_TOOLS_PROF_MAX_CNT "Specify STest Tools Profiling Max cnt" OFF)
-
 # 缺省编译配置, 编译函数
 find_package(Threads REQUIRED)
 include(ExternalProject)

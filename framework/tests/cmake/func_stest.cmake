@@ -70,90 +70,6 @@ function(PTO_Fwk_STest_GetGTestFilterList GTEST_FILTER_LIST)
     message(STATUS "GetSTestFilterList: Yaml(${YamlGTestFilterListLen}), Total(${RstGTestFilterListLen})")
 endfunction()
 
-# STest 执行可执行程序 (性能工具)
-function(PTO_Fwk_STest_RunExe_ToolsProf)
-    cmake_parse_arguments(
-            ARG
-            ""
-            "TARGET"
-            "LD_LIBRARIES_EXT;ENV_LINES_EXT;GTEST_FILTER_LIST"
-            ""
-            ${ARGN}
-    )
-    if (ENABLE_STEST_TOOLS_PROF)
-        # 命令行参数处理
-        PTO_Fwk_GTest_RunExe_GetPreExecSetup(PyCmdSetup PyEnvLines BashCmdSetup
-                TARGET              ${ARG_TARGET}
-                ENV_LINES_EXT       ${ARG_ENV_LINES_EXT}
-                LD_LIBRARIES_EXT    ${ARG_LD_LIBRARIES_EXT}
-        )
-        set(_Args)
-        set(_CommentExt)
-        # 脚本参数组织(主命令)
-        if (ENABLE_STEST_TOOLS_OUTPUT_CLEAN)
-            list(APPEND _Args "--clean")
-        endif ()
-        if (ENABLE_STEST_TOOLS_INTERCEPT)
-            list(APPEND _Args "--intercept")
-        endif ()
-        # 脚本参数组织(子命令 run)
-        list(APPEND _Args "run")
-        set(_Target $<TARGET_FILE:${ARG_TARGET}>)
-        list(APPEND _Args "--target=${_Target}")
-        if (NOT "${PyEnvLines}x" STREQUAL "x")
-            list(APPEND _Args "--env" "${PyEnvLines}")
-        endif ()
-        foreach (DevId ${PTO_Fwk_StestExecuteDeviceIdList})
-            list(APPEND _Args "--device=${DevId}")
-        endforeach ()
-        if (ENABLE_STEST_TOOLS_CASE_FILE)
-            get_filename_component(_CsvFile "${ENABLE_STEST_TOOLS_CASE_FILE}" REALPATH)
-            list(APPEND _Args "--cases_csv_file=${_CsvFile}")
-            set(_CommentExt "CsvFile(${_CsvFile})")
-        elseif (ARG_GTEST_FILTER_LIST)
-            list(LENGTH ARG_GTEST_FILTER_LIST GtestFilterListLen)
-            string(REPLACE ";" ":" GtestFilterStr "${ARG_GTEST_FILTER_LIST}")
-            list(APPEND _Args "--cases=${GtestFilterStr}")
-            set(_CommentExt "GTestFilter(${GtestFilterListLen})=${GtestFilterStr}")
-        else ()
-            set(_CommentExt "")
-        endif ()
-        list(REMOVE_DUPLICATES PTO_Fwk_STestCaseGoldenScriptPathList)
-        foreach (_Path ${PTO_Fwk_STestCaseGoldenScriptPathList})
-            list(APPEND _Args "--golden_impl_path=${_Path}")
-        endforeach ()
-        list(APPEND _Args "--golden_output_path=${ENABLE_STEST_GOLDEN_PATH}")
-        if (ENABLE_STEST_GOLDEN_PATH_CLEAN)
-            list(APPEND _Args "--golden_output_clean")
-        endif ()
-        # 脚本参数组织(子命令 run.profiling)
-        list(APPEND _Args "profiling")
-        if (ENABLE_STEST_TOOLS_PROF_LEVEL)
-            list(APPEND _Args "--level=${ENABLE_STEST_TOOLS_PROF_LEVEL}")
-        endif ()
-        if (NOT "${ENABLE_STEST_TOOLS_PROF_WARN_UP_CNT}" STREQUAL "OFF")
-            list(APPEND _Args "--warn_up_cnt=${ENABLE_STEST_TOOLS_PROF_WARN_UP_CNT}")
-        endif ()
-        if (NOT "${ENABLE_STEST_TOOLS_PROF_TRY_CNT}" STREQUAL "OFF")
-            list(APPEND _Args "--try_cnt=${ENABLE_STEST_TOOLS_PROF_TRY_CNT}")
-        endif ()
-        if (NOT "${ENABLE_STEST_TOOLS_PROF_MAX_CNT}" STREQUAL "OFF")
-            list(APPEND _Args "--max_cnt=${ENABLE_STEST_TOOLS_PROF_MAX_CNT}")
-        endif ()
-
-        # 脚本调用
-        message(STATUS "Run GTest(${ARG_TARGET}) XSAN(ASAN:${ENABLE_ASAN} UBSAN:${ENABLE_UBSAN}) With Tools.run.profiling, ${_CommentExt}")
-        get_filename_component(ToolsPy    "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/tools.py" REALPATH)
-        get_filename_component(ToolsPyCwd "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python" REALPATH)
-        add_custom_command(
-                TARGET ${ARG_TARGET} POST_BUILD
-                COMMAND ${PyCmdSetup} ${Python3_EXECUTABLE} ${ToolsPy} ARGS ${_Args}
-                COMMENT "Run GTest(${ARG_TARGET}) XSAN(ASAN:${ENABLE_ASAN} UBSAN:${ENABLE_UBSAN}) With Tools.run.profiling"
-                WORKING_DIRECTORY ${ToolsPyCwd}
-        )
-    endif ()
-endfunction()
-
 # STest 生成 Golden 数据
 #[[
 Parameters:
@@ -335,14 +251,6 @@ function(PTO_Fwk_STest_AddExe_RunExe)
     if ("${GTestFilterList}x" STREQUAL "x")
         message(STATUS "No Case to Execute")
     else ()
-        # 性能用例
-        PTO_Fwk_STest_RunExe_ToolsProf(
-                TARGET              ${ARG_TARGET}
-                ENV_LINES_EXT       ${EnvLinesExt}
-                LD_LIBRARIES_EXT    ${PTO_Fwk_STestCaseLdLibrariesExt}
-                GTEST_FILTER_LIST   ${GTestFilterList}
-        )
-
         # 精度用例
         PTO_Fwk_STest_RunExe_GenerateGolden(TARGET ${ARG_TARGET} GTEST_FILTER_LIST ${GTestFilterList})
         PTO_Fwk_STest_RunExe(
