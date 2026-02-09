@@ -152,6 +152,12 @@ class Context:
     ) -> None:
         """Register or update a variable in the current context frame.
 
+        This method handles variable assignment and updates across nested scopes.
+        When updating a variable that exists in an outer frame (e.g., in a loop body),
+        it updates the outer frame's value rather than creating a new variable in the
+        current frame. This ensures Python-like scoping behavior where loop bodies can
+        modify outer variables.
+
         Parameters
         ----------
         var : str
@@ -162,13 +168,40 @@ class Context:
             The AST node for this variable, used for error reporting.
         allow_update : bool
             Whether updates to existing variables in the current frame are permitted.
+
+        Behavior
+        --------
+        1. If variable exists in current frame: update its value directly.
+        2. If variable exists in outer frame(s): update the innermost visible outer variable.
+        3. If variable doesn't exist: create it in the current frame.
+
+        Examples
+        --------
+        >>> ctx = Context()
+        >>> with ctx.with_frame():
+        ...     ctx.add("x", 1)  # Frame 0: x = 1
+        ...     with ctx.with_frame():
+        ...         ctx.add("x", 2, allow_update=True)  # Updates Frame 0: x = 2
+        ...     # After inner frame exits, x is still 2 in Frame 0
         """
+        # Case 1: Variable exists in current frame - update directly
         if allow_update and var in self.frames[-1].vars:
-            # Modify existing variable value
             self.name2value[var][-1] = value
-        else:
-            self.frames[-1].add(var, node)
-            self.name2value[var].append(value)
+            return
+
+        # Case 2: allow_update=False - always create new variable
+        if not allow_update:
+            self._create_variable_in_current_frame(var, value, node)
+            return
+
+        # Case 3: Variable not in current frame - check outer frames
+        outer_frame_index = self._find_outer_frame_with_variable(var)
+        if outer_frame_index is not None:
+            self._update_outer_frame_variable(var, value, outer_frame_index)
+            return
+
+        # Case 4: Variable doesn't exist in any frame - create in current frame
+        self._create_variable_in_current_frame(var, value, node)
 
     def get(self) -> dict[str, Any]:
         """Retrieve a dictionary containing the most recent value for each variable.
@@ -233,3 +266,74 @@ class Context:
                             break
         # Reset the marked set
         self.marked_for_deletion.clear()
+
+    def _update_outer_frame_variable(self, var: str, value: Any, frame_index: int) -> None:
+        """Update a variable in an outer frame.
+
+        Parameters
+        ----------
+        var : str
+            The variable identifier.
+        value : Any
+            The new value to assign.
+        frame_index : int
+            The index of the frame containing the variable.
+
+        Raises
+        ------
+        RuntimeError
+            If the value stack is out of sync with frames.
+        """
+        # Calculate value_index: count how many frames up to frame_index contain var
+        value_index = sum(1 for j in range(frame_index + 1) if var in self.frames[j].vars)
+
+        # Update the value at the correct index in the value stack
+        if value_index > 0 and value_index <= len(self.name2value[var]):
+            self.name2value[var][value_index - 1] = value
+        else:
+            # Safety check: value stack should always be in sync with frames
+            raise RuntimeError(
+                f"Value stack out of sync: variable '{var}' exists in frame {frame_index} "
+                f"but value stack has only {len(self.name2value[var])} entries"
+            )
+
+    def _find_outer_frame_with_variable(self, var: str) -> Optional[int]:
+        """Find the innermost outer frame containing the variable.
+
+        Searches from innermost to outermost outer frame (excluding current frame).
+
+        Parameters
+        ----------
+        var : str
+            The variable identifier to search for.
+
+        Returns
+        -------
+        Optional[int]
+            The index of the innermost outer frame containing the variable,
+            or None if not found in any outer frame.
+        """
+        num_frames = len(self.frames)
+        if num_frames <= 1:
+            return None
+
+        # Search from innermost outer frame to outermost frame
+        for i in range(num_frames - 2, -1, -1):
+            if var in self.frames[i].vars:
+                return i
+        return None
+
+    def _create_variable_in_current_frame(self, var: str, value: Any, node: Optional[AST]) -> None:
+        """Create a new variable in the current frame.
+
+        Parameters
+        ----------
+        var : str
+            The variable identifier.
+        value : Any
+            The value to associate with the variable.
+        node : Optional[AST]
+            The AST node for error reporting.
+        """
+        self.frames[-1].add(var, node)
+        self.name2value[var].append(value)
