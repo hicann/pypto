@@ -79,14 +79,14 @@ std::string CodeGenOpCloudNPU::GenExtraTemplateParamsForMoeDistributedCombine(in
 std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
 {
     std::ostringstream oss;
-    static const std::unordered_map<Opcode, std::array<int32_t, 3>> opcodeIndexMap = {
-        {Opcode::OP_SHMEM_PUT, {3, 4, 3}},
-        {Opcode::OP_SHMEM_GET, {0, 3, 3}},
-        {Opcode::OP_SHMEM_PUT_UB2GM, {1, GM2UB_SHMEMDATA_INDEX, 1}},
-        {Opcode::OP_SHMEM_GET_GM2UB, {0, 3, 3}}
+    static const std::unordered_map<Opcode, std::array<int32_t, 2>> opcodeIndexMap = {
+        {Opcode::OP_SHMEM_PUT, {3, 4}},
+        {Opcode::OP_SHMEM_GET, {0, 3}},
+        {Opcode::OP_SHMEM_PUT_UB2GM, {1, GM2UB_SHMEMDATA_INDEX}},
+        {Opcode::OP_SHMEM_GET_GM2UB, {0, 3}}
     };
-    auto [nonShmemDataIndex, shmemDataIndex, shapeIndex] = opcodeIndexMap.at(opCode);
-    const std::vector<int64_t>& tileShape = originShape[shapeIndex];
+    auto [nonShmemDataIndex, shmemDataIndex] = opcodeIndexMap.at(opCode);
+    const std::vector<int64_t>& tileShape = originShape[shmemDataIndex];
     int64_t tileRowShape = tileShape[tileShape.size() - 2];
     int64_t tileColShape = tileShape[tileShape.size() - 1];
 
@@ -95,7 +95,7 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
     int64_t bufferRowShape = distOpAttr.copyBufferShape[0];
     int64_t bufferColShape = distOpAttr.copyBufferShape[1];
 
-    const std::vector<int64_t>& shmemTensorRawShape = rawShape[shapeIndex];
+    const std::vector<int64_t>& shmemTensorRawShape = rawShape[shmemDataIndex];
     const std::vector<int64_t>& nonShmemTensorRawShape = rawShape[nonShmemDataIndex];
     int64_t srcStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
     int64_t dstStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
