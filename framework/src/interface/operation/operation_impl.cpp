@@ -1353,10 +1353,17 @@ Tensor Reshape(const Tensor &operand, const std::vector<int64_t> &dstshape, cons
         return operand;
     }
     std::vector<SymbolicScalar> validShapeDefault = validShape;
-    if (validShape.empty()) {
-        validShapeDefault = SymbolicScalar::FromConcrete(dstshape);
-    }
     auto newShape = CheckAndInferShape(operand.GetShape(), dstshape);
+    if (validShape.empty()) {
+        validShapeDefault = SymbolicScalar::FromConcrete(newShape);
+    } else {
+        for (auto validShapeItem : validShape) {
+            if (validShapeItem.IsImmediate() && validShapeItem == -1) {
+                ASSERT(false) << "Not supported: validShape contains -1";
+            }
+        }
+    }
+
     if (ReshapeNeedCopy(operand) && !MatchBatchMatMulPattern(operand.GetShape(), dstshape)) {
         Tensor copyOperand(operand.GetStorage()->Datatype(), operand.GetShape(), "", operand.Format());
         copyOperand.GetStorage()->UpdateDynValidShape(operand.GetStorage()->GetDynValidShape());

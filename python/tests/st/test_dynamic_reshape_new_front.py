@@ -69,3 +69,27 @@ def test_reshape():
     assert_allclose(np.array(output_cpu),
                     np.array(output_golde),
                     rtol=1e-3, atol=1e-3)
+
+
+def reshape_infer_shape(x_shape: tuple):
+    @pypto.frontend.jit()
+    def kernel(x: pypto.Tensor(x_shape, pypto.DT_FP32),) -> (pypto.Tensor([4, 2, 4], pypto.DT_FP32)):
+        pypto.set_vec_tile_shapes(4, 8)
+        y = pypto.reshape(x, [x.shape[0], 2, -1])
+        return y
+    return kernel
+
+
+def test_reshape_infer_shape():
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
+    x = torch.rand((4, 8), dtype=torch.float32)
+    x_tensor = x.npu()
+    y_pypto = reshape_infer_shape(x_tensor.shape)(x_tensor)
+    torch_npu.npu.synchronize()
+    y = y_pypto.cpu()
+    assert_allclose(np.array(y.flatten()), np.array(x.flatten()), rtol=1e-6, atol=1e-6)
+
+
+if __name__ == "__main__":
+    test_reshape_infer_shape()
