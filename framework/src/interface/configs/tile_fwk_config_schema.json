@@ -5,8 +5,8 @@
         "pass": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "通过编译Pass处理与优化函数计算，将其承载的计算图转换为执行图，同时提供可扩展的编译与优化框架，达成差异化的优化效果。",
+                "en": "By processing and optimizing function computations, compilation passes transform their underlying computational graphs into execution graphs, providing an extensible compilation and optimization framework to deliver differentiated optimization outcomes."
             },
             "properties": {
                 "pg_parallel_lower_bound": {
@@ -128,8 +128,8 @@
                 "copyout_resolve_coalescing": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "手动控制片上内存拷贝输出优化策略。置0时关闭合并优化；非0时筛选离散copyout指令，合并为连续大粒度操作并完成地址规整。",
+                        "en": "Manual control for on-chip copyout optimization. 0 disables merging; non-zero values aggregate discrete copyout instructions into continuous large-grain operations with address alignment."
                     },
                     "minimum": 0,
                     "maximum": 1000000
@@ -519,12 +519,16 @@
                 },
                 "host": {
                     "type": "object",
+                    "label": {
+                        "zh": "主机端相关参数集合，包含运行管控、资源调度与通信规则配置。",
+                        "en": "A parameter set for host-side configuration, encompassing runtime governance, resource scheduling, and communication rules."
+                    },
                     "properties": {
                         "strategy": {
                             "type": "string",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "主机端运行调度策略。",
+                                "en": "Host-side Execution and Scheduling Policy"
                             }
                         }
                     }
@@ -830,110 +834,134 @@
                 "pass": {
                     "type": "object",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "通过编译Pass处理与优化函数计算，将其承载的计算图转换为执行图，同时提供可扩展的编译与优化框架，达成差异化的优化效果。",
+                        "en": "By processing and optimizing function computations, compilation passes transform their underlying computational graphs into execution graphs, providing an extensible compilation and optimization framework to deliver differentiated optimization outcomes."
                     },
                     "properties": {
                         "enable_binary_cache": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "二进制缓存开关，通过复用预编译产物以加速构建过程。",
+                                "en": "Binary cache switch, which reuses pre-compiled artifacts to accelerate the build process."
                             }
                         },
                         "enable_pass_configs": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "Pass模块专属配置加载开关，加载该模块配置并使其相关参数生效。",
+                                "en": "Pass config loader, which loads the module‘s dedicated configurations to activate its parameters."
                             }
                         },
                         "enable_cv_fuse": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "CV融合开关，执行Cube/Vector（矩阵/向量）混合计算融合，通过协同调度以提升硬件利用率和计算性能。",
+                                "en": "CV fusion switch, performing Cube/Vector hybrid computation fusion to enhance hardware utilization and computational performance through co-scheduling."
                             }
                         },
                         "pass_thread_num": {
                             "type": "integer",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "Pass模块工作线程数开关，设置该模块的工作线程数量以控制其并发处理能力。",
+                                "en": "Pass module worker thread count switch, which sets the number of worker threads to control the module's concurrent processing capability."
                             },
                             "minimum": 1
+                        },
+                        "vf_opt_mark_for": {
+                            "type": "boolean",
+                            "label": {
+                                "zh": "VF融合优化支撑开关，通过标记For循环来保障向量化函数融合优化流程的执行。",
+                                "en": "VF fusion optimization enabler switch, ensuring the execution of the Vector Function fusion process by marking for-loops"
+                            }
                         },
                         "default_pass_configs": {
                             "type": "object",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "Pass模块默认配置集，定义该模块的系统默认配置，无自定义配置时自动生效。",
+                                "en": "Pass module default configuration set, which defines the system-default configurations for the module and takes effect automatically in the absence of custom configurations."
                             },
                             "properties": {
                                 "print_graph": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "计算图IR打印开关，输出计算图的中间表示结构及节点关系等调试信息。",
+                                        "en": "Computational Graph IR Printer, outputs debugging information including the IR structure and node relationships of the graph."
                                     }
                                 },
                                 "print_program": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "框架计算图JSON导出开关，将程序中所有算子抽象为统一的CallOp中间表示，并导出为包含函数级输入输出依赖关系的标准JSON文件。",
+                                        "en": "Framework Computational Graph JSON Export Switch, which abstracts all operators into a unified CallOp intermediate representation and exports it as a standard JSON file containing function-level I/O dependencies."
                                     }
                                 },
                                 "dump_graph": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "计算图序列化转储开关，将独立编译Pass的计算图结构与节点信息导出为独立的JSON文件。",
+                                        "en": "Computational Graph Serialization Dump Switch, exports the graph structure and node information of independently compiled passes into separate JSON files."
                                     }
                                 },
                                 "dump_pass_time_cost": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "编译Pass耗时统计转储开关，导出各独立编译Pass的执行耗时数据。",
+                                        "en": "Compilation Pass Timing Statistics Dump Switch, exports the execution time cost data of each independent compilation pass."
                                     }
                                 },
                                 "pre_check": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "前置校验开关，在核心流程执行前完成参数合法性、格式规范及依赖完整性等检查。",
+                                        "en": "Pre-check Switch, performs checks on parameter validity, format compliance, and dependency integrity before core process execution."
                                     }
                                 },
                                 "post_check": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "后置校验开关，在核心流程执行后完成参数合法性、格式规范及依赖完整性等校验。",
+                                        "en": "Post-check Switch, performs validation of parameter legality, format compliance, and dependency integrity after core process execution."
                                     }
                                 },
                                 "expected_value_check": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "期望值校验开关，在核心流程执行前完成对输入参数及中间结果的固定值、范围与枚举校验。",
+                                        "en": "Expected Value Validation Switch, performs validation of fixed values, ranges, and enumerations for input parameters and intermediate results prior to core process execution."
                                     }
                                 },
                                 "disable_pass": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "Pass排除开关，将目标Pass模块从编译优化流程中排除，使其不参与执行。",
+                                        "en": "Pass Exclusion Switch, excludes the target pass module from the compilation and optimization workflow, preventing its execution."
                                     }
                                 },
                                 "health_check": {
                                     "type": "boolean",
                                     "label": {
-                                        "zh": "...",
-                                        "en": "..."
+                                        "zh": "编译过程健康检查开关，对编译进程资源、Pass间依赖关系及中间表示状态进行检测。",
+                                        "en": "Compilation Health Check Switch, inspects the status of compiler process resources, inter-pass dependencies, and intermediate representation."
+                                    }
+                                },
+                                "use_max_freq_label": {
+                                    "type": "boolean",
+                                    "label": {
+                                        "zh": "最高频标签统一标记开关，在子图转函数时，复用全局统计的最高频标签。",
+                                        "en": "Most-Frequent Tag Unification Switch, reuses the globally most frequent tag when converting subgraphs to functions."
                                     }
                                 }
                             }
+
+                        }
+                    }
+                },
+                "pass_strategies": {
+                    "PVC2_OOO":{
+                        "type": "object",
+                        "label": {
+                            "zh": "PVC2_OOO调度策略。",
+                            "en": "PVC2_OOO Pass Scheduling Strategy."
                         }
                     }
                 }

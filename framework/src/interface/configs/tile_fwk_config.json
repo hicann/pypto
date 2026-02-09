@@ -13,7 +13,7 @@
         "sg_set_scope": -1,
         "cube_l1_reuse_setting": [],
         "cube_nbuffer_setting": [],
-        "vec_nbuffer_setting":[]
+        "vec_nbuffer_setting": []
     },
     "runtime": {
         "device_sched_mode": 0,
@@ -114,7 +114,8 @@
                 "post_check": false,
                 "expected_value_check": false,
                 "disable_pass": false,
-                "health_check": false
+                "health_check": false,
+                "use_max_freq_label": false
             }
         },
         "pass_strategies": {
