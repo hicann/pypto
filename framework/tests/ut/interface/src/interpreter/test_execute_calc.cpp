@@ -14,6 +14,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <limits>
 
 #include "interface/utils/log.h"
 #include "interface/interpreter/raw_tensor_data.h"
@@ -69,5 +70,44 @@ TEST_F(CalcCommonTest, UnalignedReshape) {
         << "Output size should be greater than input size to trigger the new branch";
     opInter.ExecuteOperation(&ctx);
 
+}
+
+// 測試 OP_VEC_DUP 在 scalar 為極大 double 時對 FP32 類型輸出進行 32 位飽和截斷
+TEST_F(CalcCommonTest, VecDupClampFp32FromLargeDouble) {
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestVecDupClampFp32",
+        "TestVecDupClampFp32", nullptr);
+
+    std::vector<int64_t> outputShape = {2, 2};
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape);
+    auto &vecDupOp = func->AddOperation(Opcode::OP_VEC_DUP, {}, {outputTensor});
+    double largeNegDouble = -std::numeric_limits<double>::max();
+    Element scalar(DT_FP32, largeNegDouble);
+    vecDupOp.SetAttribute(OpAttributeKey::scalar, scalar);
+    Tensor outputTensorData(DT_FP32, outputShape);
+    auto outputData = RawTensorData::CreateConstantTensor(outputTensorData, 0.0f);
+    auto outputDataView = std::make_shared<LogicalTensorData>(outputData);
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList; 
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputDataView};
+
+    ExecuteOperationContext ctx = {
+        &frame,
+        &opInter,
+        &vecDupOp,
+        &ioperandDataViewList,
+        nullptr,
+        &ooperandInplaceDataViewList
+    };
+
+    opInter.ExecuteOperation(&ctx);
+
+    // 期望所有輸出元素都被截斷為 -FLT_MAX，而不是 -inf
+    float expected = -std::numeric_limits<float>::max();
+    for (int i = 0; i < outputDataView->GetSize(); ++i) {
+        float value = outputDataView->Get<float>(i);
+        ASSERT_FLOAT_EQ(value, expected);
+    }
 }
 } // namespace npu::tile_fwk

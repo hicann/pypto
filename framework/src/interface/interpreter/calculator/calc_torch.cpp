@@ -14,6 +14,7 @@
  */
 
 #include <torch/torch.h>
+#include <limits>
 #include "tilefwk/error.h"
 #include "../calc_api.h"
 
@@ -57,9 +58,20 @@ static at::Scalar From(const Element &elem) {
         case DT_INT32:
         case DT_INT64: return at::Scalar(elem.GetSignedData());
         case DT_FP16:
-        case DT_FP32:
         case DT_BF16:
-        case DT_DOUBLE: return at::Scalar(elem.GetFloatData());
+        case DT_DOUBLE:
+            return at::Scalar(elem.GetFloatData());
+        case DT_FP32: {
+            // Clamp FP32 scalar into finite FP32 range to avoid INF
+            double data = elem.GetFloatData();
+            constexpr double kMaxF32 = static_cast<double>(std::numeric_limits<float>::max());
+            if (data > kMaxF32) {
+                data = kMaxF32;
+            } else if (data < -kMaxF32) {
+                data = -kMaxF32;
+            }
+            return at::Scalar(static_cast<float>(data));
+        }
         case DT_UINT8:
         case DT_UINT16:
         case DT_UINT32:
