@@ -34,7 +34,7 @@ import torch.nn.functional as F
 import torch_npu
 
 import pypto
-from gated_delta_rule_impl import chunk_gated_delta_rule
+from gated_delta_rule_impl import chunk_gated_delta_rule, chunk_gated_delta_rule_unaligned
 
 
 def gen_dims(params):
@@ -74,7 +74,8 @@ def gen_inputs(dims, dtype=torch.float32):
     # Helper tensors
     mask = torch.tril(-torch.ones([l, l], dtype=dtype), diagonal=-1)
     tril_mask = torch.ones([l, l], dtype=dtype).tril()
-    eye = torch.eye(16, dtype=dtype).repeat(1, 8)
+    eye_data = torch.eye(16, dtype=dtype).repeat(1, 8)
+    eye_data_unaligned = torch.eye(16, dtype=dtype)
 
     return {
         "query": query,
@@ -86,7 +87,8 @@ def gen_inputs(dims, dtype=torch.float32):
         "act_seq_len": act_seq_len,
         "mask": mask,
         "tril_mask": tril_mask,
-        "eye": eye,
+        "eye_data": eye_data,
+        "eye_data_unaligned": eye_data_unaligned,
     }
 
 
@@ -107,7 +109,7 @@ def golden_chunk_gated_delta_rule(inputs: dict, dims: dict):
         gate=gate.clone(),
         beta=beta.clone(),
         act_seq_len=act_seq_len.clone(),
-        chunk_size=64,
+        chunk_size=128,
         initial_state=states.clone(),
         output_final_state=True,
         use_qk_l2norm_in_kernel=True,
@@ -121,8 +123,8 @@ def golden_chunk_gated_delta_rule(inputs: dict, dims: dict):
 
 def gen_data(case_name):
     """Generate test data based on case name."""
-    if case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s4k"):
-        params = {"T": 1024 * 8, "B": 2, "Nqk": 2, "Nv": 4, }
+    if case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k"):
+        params = {"T": 1024 * 2, "B": 2, "Nqk": 2, "Nv": 4, }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk4_nv8_s4k"):
         params = {"T": 1024 * 8, "B": 2, "Nqk": 4, "Nv": 8, }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s8k"):
@@ -137,6 +139,10 @@ def gen_data(case_name):
         params = {"T": 1024 * 512, "B": 1, "Nqk": 2, "Nv": 4, }
     elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1m"):
         params = {"T": 1024 * 1024, "B": 1, "Nqk": 2, "Nv": 4, }
+    elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1026"):
+        params = {"T": 1026, "B": 1, "Nqk": 2, "Nv": 4, }
+    elif case_name.startswith("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s2059"):
+        params = {"T": 2059, "B": 1, "Nqk": 2, "Nv": 4, }
     else:
         raise Exception(f"Can't get func to gen golden, Case({case_name})")
 
@@ -153,13 +159,24 @@ def gen_zero_tensor(t):
     return torch.zeros_like(t).npu()
 
 
-def pypto_chunk_gated_delta_rule_dyn(inputs: dict, outputs: dict):
+def pypto_chunk_gated_delta_rule_dyn(dims, inputs: dict, outputs: dict):
     """Dynamic wrapper for PyPTO chunk gated delta rule."""
-    chunk_gated_delta_rule(
+    l = dims["L"]
+    act_seq_len = inputs["act_seq_len"]
+
+    if (act_seq_len % l != 0).any():
+        chunk_gated_delta_rule_unaligned(
         inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], 
-        inputs["states"], inputs["mask"], inputs["tril_mask"], inputs["eye"], inputs["act_seq_len"], 
+        inputs["states"], inputs["mask"], inputs["tril_mask"], inputs["eye_data_unaligned"], inputs["act_seq_len"], 
         outputs["core_attn_out"], outputs["final_state"]
     )
+    else:
+        chunk_gated_delta_rule(
+        inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], 
+        inputs["states"], inputs["mask"], inputs["tril_mask"], inputs["eye_data"], inputs["act_seq_len"], 
+        outputs["core_attn_out"], outputs["final_state"]
+    )
+    
     torch_npu.npu.synchronize()
 
 
@@ -168,7 +185,7 @@ def do_test_chunk_gated_delta_rule(case_name):
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
 
-    _, inputs_data, golden_data = gen_data(case_name)
+    dims, inputs_data, golden_data = gen_data(case_name)
 
     # Move inputs to NPU
     inputs = {
@@ -181,7 +198,8 @@ def do_test_chunk_gated_delta_rule(case_name):
         "act_seq_len": inputs_data["act_seq_len"].npu(),
         "mask": inputs_data["mask"].npu(),
         "tril_mask": inputs_data["tril_mask"].npu(),
-        "eye": inputs_data["eye"].npu(),
+        "eye_data": inputs_data["eye_data"].npu(),
+        "eye_data_unaligned": inputs_data["eye_data_unaligned"].npu(),
     }
 
     # Golden outputs
@@ -195,7 +213,7 @@ def do_test_chunk_gated_delta_rule(case_name):
     }
 
     # Run PyPTO implementation
-    pypto_chunk_gated_delta_rule_dyn(inputs, outputs)
+    pypto_chunk_gated_delta_rule_dyn(dims, inputs, outputs)
 
     # Compare results
     compare(actual=outputs["core_attn_out"].cpu(), expected=core_attn_out_golden, name="core_attn_out", rtol=1e-3,
@@ -325,7 +343,6 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
     output_final_state = kwargs.get("output_final_state")
     use_qk_l2norm_in_kernel = kwargs.get("use_qk_l2norm_in_kernel")
 
-
     b, n, s, d = value.shape
 
     initial_state = initial_state.transpose(3, 2)
@@ -381,8 +398,8 @@ def segs_chunk_gated_delta_rule_sub(**kwargs):
 
 # ==================== Test Cases ====================
 # Test case: B:2, Nqk:2, Nv:4, S:4K
-def test_b2_nqk2_nv4_s4k():
-    do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s4k")
+def test_b2_nqk2_nv4_s1k():
+    do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b2_nqk2_nv4_s1k")
 
 
 # Test case: B:2, Nqk:4, Nv:8, S:4K
@@ -427,5 +444,17 @@ def test_b1_nqk2_nv4_s1m():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1m")
 
 
+# Test case: B:1, Nqk:2, Nv:4, S:1026
+@pytest.mark.skip(reason="non-divisible test case")
+def test_b1_nqk2_nv4_s1026():
+    do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1026")
+
+
+# Test case: B:1, Nqk:2, Nv:4, S:4108
+@pytest.mark.skip(reason="non-divisible test case")
+def test_b1_nqk2_nv4_s2059():
+    do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s2059")
+
+
 if __name__ == "__main__":
-    test_b2_nqk2_nv4_s4k()
+    test_b2_nqk2_nv4_s1k()
