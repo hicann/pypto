@@ -509,7 +509,7 @@ void StrongConnectionComponentFinder::Find(std::vector<std::set<int>> &inGraph,
     stack_.clear();
     APASS_LOG_INFO_F(Elements::Operation, "Start finding strongly connected components using TarJan Algorithm.");
     for (int i = 0; i < static_cast<int>(inGraph.size()); i++) {
-        if (inGraph[i].size() == 0) {
+        if (dfn_[i] == 0) {
             TarJanAlg(i, outGraph, sccResult);
         }
     }
