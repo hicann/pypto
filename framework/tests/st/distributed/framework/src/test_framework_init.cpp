@@ -15,6 +15,9 @@
 
 #include <string>
 #include <future>
+#include <vector>
+#include <sstream>
+#include <mutex>
 #include <dlfcn.h>
 #include "hccl/hccl.h"
 #include "machine/runtime/runtime.h"
@@ -24,6 +27,54 @@
 namespace npu::tile_fwk {
 namespace Distributed {
 namespace {
+
+// Thread-safe environment variable accessor
+class ThreadSafeEnv {
+private:
+    static std::once_flag init_flag;
+    static std::string mpi_lib_path;
+    static std::string device_id_list;
+
+    static void initialize() {
+        const char* envPath = std::getenv("MPI_LIB_PATH");
+        if (envPath) {
+            mpi_lib_path = envPath;
+        }
+        
+        const char* envDeviceList = std::getenv("TILE_FWK_DEVICE_ID_LIST");
+        if (envDeviceList) {
+            device_id_list = envDeviceList;
+        }
+    }
+
+public:
+    static const std::string& getMPILibPath() {
+        std::call_once(init_flag, initialize);
+        return mpi_lib_path;
+    }
+    
+    static const std::string& getDeviceIdList() {
+        std::call_once(init_flag, initialize);
+        return device_id_list;
+    }
+};
+
+std::once_flag ThreadSafeEnv::init_flag;
+std::string ThreadSafeEnv::mpi_lib_path;
+std::string ThreadSafeEnv::device_id_list;
+
+std::vector<std::string> getMPILibraryCandidates() {
+    std::vector<std::string> candidates;
+    const std::string& libPath = ThreadSafeEnv::getMPILibPath();
+    
+    if (!libPath.empty()) {
+        candidates.push_back(libPath + "/libmpi.so");
+        candidates.push_back(libPath + "/libmpich.so");
+    }
+    
+    return candidates;
+}
+
 // 定义MPI类型
 using MPI_Comm = int;
 #define MPI_COMM_WORLD ((MPI_Comm)0x44000000)
@@ -39,15 +90,76 @@ using MpiBarrierFunc = int(*)(MPI_Comm);
 using MpiAbortFunc = int (*)(MPI_Comm, int);
 using MpiFinalizeFunc = int (*)();
 
-const std::string MPI_LIB_PATH = "/usr/local/mpich/lib";
-const std::string MPI_LIB_NAME = "libmpi.so";
- 
+// Try several common MPI library paths/names so the test can find MPICH/MPILib without
+// requiring system-level changes (e.g., no sudo inside container).
+static void* TryOpen(const std::string& path, int flags = RTLD_NOW) {
+    void* h = dlopen(path.c_str(), flags);
+    if (h) return h;
+    return nullptr;
+}
+
+std::vector<std::string> BuildMpiCandidatePaths()
+{
+    std::vector<std::string> candidates;
+    
+    // First, try paths from MPI_LIB_PATH environment variable (highest priority)
+    auto envCandidates = getMPILibraryCandidates();
+    candidates.insert(candidates.end(), envCandidates.begin(), envCandidates.end());
+    
+    // Then add hardcoded paths (backwards compatibility and fallback)
+    const std::vector<std::string> hardcodedCandidates = {
+        // Original default path - try first for backwards compatibility
+        "/usr/local/mpich/lib/libmpi.so",
+        
+        // Automatic discovery - common installation paths as fallback
+        "/lib/aarch64-linux-gnu/libmpich.so",
+        "/lib/x86_64-linux-gnu/libmpich.so",
+        "/usr/lib/libmpi.so",
+        "/usr/lib/libmpich.so",
+        "/lib/libmpi.so",
+        "/lib/libmpich.so",
+        "/usr/lib/x86_64-linux-gnu/libmpi.so",
+        "/usr/lib/aarch64-linux-gnu/libmpi.so",
+        
+        // Last resort: let dynamic loader search LD_LIBRARY_PATH
+        "libmpi.so",
+        "libmpich.so"
+    };
+    
+    candidates.insert(candidates.end(), hardcodedCandidates.begin(), hardcodedCandidates.end());
+    
+    return candidates;
+}
+
 void* GetLibHandle()
 {
-    static auto handle = []() {
-        const auto libPath = MPI_LIB_PATH + "/" + MPI_LIB_NAME;
-        auto handler = dlopen(libPath.c_str(), RTLD_NOW | RTLD_NOLOAD);
-        return handler ? handler : dlopen(libPath.c_str(), RTLD_LAZY);
+    static std::vector<std::string> candidates = BuildMpiCandidatePaths();
+    static auto handle = []() -> void* {
+        for (const auto& path : candidates) {
+            // If absolute path, try RTLD_NOW|RTLD_NOLOAD first to see if already loaded via that path
+            if (!path.empty() && path.front() == '/') {
+                void* h = TryOpen(path, RTLD_NOW | RTLD_NOLOAD);
+                if (h) {
+                    ALOG_INFO_F("Found already-loaded MPI library: %s", path.c_str());
+                    return h;
+                }
+                h = TryOpen(path, RTLD_NOW);
+                if (h) {
+                    ALOG_INFO_F("Loaded MPI library from path: %s", path.c_str());
+                    return h;
+                }
+            } else {
+                // symbolic name: let the dynamic loader resolve it using standard search paths
+                void* h = TryOpen(path, RTLD_NOW);
+                if (h) {
+                    ALOG_INFO_F("Loaded MPI library by name: %s", path.c_str());
+                    return h;
+                }
+            }
+        }
+
+        ALOG_ERROR("Failed to load MPI library from common candidate paths/names");
+        return static_cast<void*>(nullptr);
     }();
     return handle;
 }
@@ -105,9 +217,9 @@ void TestFrameworkInit(OpTestParam &testParam, HcomTestParam &hcomTestParam, int
     mpiCommSize(MPI_COMM_WORLD, &testParam.rankSize);
     mpiCommRank(MPI_COMM_WORLD, &testParam.rankId);
 
-    // 获取物理卡id
-    const char* dev_list_str = getenv("TILE_FWK_DEVICE_ID_LIST");
-    if (dev_list_str != nullptr) {
+    // 获取物理卡id - 使用线程安全的环境变量访问
+    const std::string& dev_list_str = ThreadSafeEnv::getDeviceIdList();
+    if (!dev_list_str.empty()) {
         std::vector<int> device_list;
         std::stringstream ss(dev_list_str);
         std::string id;
