@@ -130,8 +130,10 @@ std::string CodeGenOpCloudNPU::PrintDupTileTensor(const PrintDupOpParam &param) 
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
 
     std::ostringstream oss;
-    oss << tileOpName << "<" << dstDtypeStr << ">"
-        << "(" << dstTensor << ", " << dupV << ");\n";
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets({dstDtypeStr});
+    oss << WrapParamByParentheses({dstTensor, dupV});
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -1474,8 +1476,8 @@ std::string CodeGenOpCloudNPU::PrintCmpTileTensor() const {
     }
     std::ostringstream oss;
     oss << tileOpName;
-    oss << PrintParams({"<", ">"}, templateParamList, ", ");
-    oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
+    oss << WrapParamByAngleBrackets(templateParamList);
+    oss << WrapParamByParentheses(tileOpParamList);
     oss << STMT_END;
     return oss.str();
 }

@@ -163,7 +163,10 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor) {
 
     cop.Init(indexoutOp);
     cop.UpdateTileTensorInfo();
-    cop.GenOpCode();
+    std::string res = cop.GenOpCode();
+    std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_0, ubTensor_1, ubTensor_1, Coord2Dim(0, 0));
+)!!!";
+    EXPECT_EQ(res, expect);
 }
 
 TEST_F(TestCodegenDynIndexOutCast, DynIndexOutUnaligned) {

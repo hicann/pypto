@@ -180,16 +180,21 @@ std::string TestLogicalBody(Opcode opcode) {
 
     cop.Init(op);
     cop.UpdateTileTensorInfo();
-    std::string tmp = cop.GenOpCode();
-    return tmp;
+    return cop.GenOpCode();
 }
 
 TEST_F(TestCodegenDynLogical, LogicalAndTileTensor) {
-    TestLogicalBody(Opcode::OP_LOGICALAND);
+    std::string res = TestLogicalBody(Opcode::OP_LOGICALAND);
+    std::string expect = R"!!!(TLogicalAnd(ubTensor_0, ubTensor_0, ubTensor_0, ubTensor_0);
+)!!!";
+    EXPECT_EQ(res, expect);
 }
 
 TEST_F(TestCodegenDynLogical, LogicalNotTileTensor) {
-    TestLogicalBody(Opcode::OP_LOGICALNOT);
+    std::string res = TestLogicalBody(Opcode::OP_LOGICALNOT);
+    std::string expect = R"!!!(TLogicalNot(ubTensor_0, ubTensor_0, ubTensor_0);
+)!!!";
+    EXPECT_EQ(res, expect);
 }
 
 } // namespace npu::tile_fwk

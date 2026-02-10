@@ -163,7 +163,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxisTileTensor() const {
         oss << WrapParamByAngleBrackets({lastUse});
     }
     oss << WrapParamByParentheses({dstTensor, src0Tensor, tmpTensor});
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -293,8 +293,9 @@ std::string CodeGenOpCloudNPU::PrintRoundLayout() const {
     std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
 
     std::ostringstream oss;
-    oss << tileOpName.c_str() << "<float>" << "(" << dstTensor << ", " << tmpTensor << ", " << srcTensor << ", "
-        << scalarTmpBuffer << ");\n";
+    oss << tileOpName << "<float>";
+    oss << WrapParamByParentheses({dstTensor, tmpTensor, srcTensor, scalarTmpBuffer});
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -408,8 +409,10 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineTileTensor() const {
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1)))) << "unsupported reduce axis";
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();
     std::ostringstream oss;
-    oss << tileOpName << "<" << reduceAxis << ">"
-        << "(" << dstTensor << ", " << src0Tensor << ", " << tmpTensor << ");\n";
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets({std::to_string(reduceAxis)});
+    oss << WrapParamByParentheses({dstTensor, src0Tensor, tmpTensor});
+    oss << STMT_END;
     return oss.str();
 }
 

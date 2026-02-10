@@ -215,7 +215,7 @@ std::string CodeGenOpCloudNPU::GenBinaryOpWithTmp() const {
     std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
     std::ostringstream oss;
     oss << tileOpName;
-    oss << WrapParamByParentheses(tileOpCallParamList) << ";\n";
+    oss << WrapParamByParentheses(tileOpCallParamList) << STMT_END;
     return oss.str();
 }
 
@@ -485,7 +485,7 @@ std::string CodeGenOpCloudNPU::PrintVectorScalarTileTensor(const PrintUnaryParam
     oss << tileOpName;
     oss << WrapParamByAngleBrackets(templateParamList);
     oss << WrapParamByParentheses(tileOpParamList);
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 

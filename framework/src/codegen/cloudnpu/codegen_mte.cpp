@@ -155,8 +155,10 @@ std::string CodeGenOpCloudNPU::GenL0CToUBTileTensor() const {
     std::ostringstream oss;
     int64_t aivId = 0;
     GetAttr(OpAttributeKey::subBlockIdx, aivId);
-    oss << tileOpName << "<" << nzVar << ">" << "(" << dstTensor << ", " << src0Tensor << ", " << coord << ", " << aivId
-        << ");\n";
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets({nzVar});
+    oss << WrapParamByParentheses({dstTensor, src0Tensor, coord, std::to_string(aivId)});
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -188,7 +190,7 @@ std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const {
         oss << WrapParamByAngleBrackets({std::to_string(isTrans)});
     }
     oss << WrapParamByParentheses({dstTensor, src0Tensor, coord});
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -247,8 +249,10 @@ std::string CodeGenOpCloudNPU::PrintTmove() const {
     std::string coord = PrintCoord(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), coordCp);
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-
-    oss << tileOpName << "<" << 0 << ">" << "(" << dstTensor << ", " << src0Tensor << ", " << coord << ");\n";
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets({"0"});
+    oss << WrapParamByParentheses({dstTensor, src0Tensor, coord});
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -354,7 +358,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastTileTensor() const {
     oss << tileOpName;
     oss << WrapParamByAngleBrackets({std::to_string(cacheModeFlag), std::to_string(blockSize)});
     oss << WrapParamByParentheses(tileOpParamList);
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 
@@ -741,7 +745,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     GetAttr("op_attr_is_nz", nzValue);
     std::string nzVar = nzValue ? "CopyOutMode::NZ2NZ" : "CopyOutMode::NZ2ND";
     std::vector<std::string> storeConfigList = {nzVar, std::to_string(isAcc), std::to_string(reluMode)};
-    std::string storeConfig = PrintParams({"<", ">"}, storeConfigList, ", ");
+    std::string storeConfig = WrapParamByAngleBrackets(storeConfigList);
 
     Element scaleValue = Element(DataType::DT_UINT64, 0);
     if (!isAcc) {
@@ -1404,7 +1408,7 @@ std::string CodeGenOpCloudNPU::PrintGatherInL1TileTensor() const {
     oss << tileOpName;
     oss << WrapParamByAngleBrackets({std::to_string(blockSize)});
     oss << WrapParamByParentheses({dstVar, srcVar, blockTableVar, offsetsVar, srcCoord, offsetCoord, blockTableCoord});
-    oss << ";\n";
+    oss << STMT_END;
     return oss.str();
 }
 

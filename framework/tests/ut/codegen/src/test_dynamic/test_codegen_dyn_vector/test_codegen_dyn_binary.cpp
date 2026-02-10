@@ -403,6 +403,9 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor) {
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    cop.GenOpCode();
+    std::string res = cop.GenOpCode();
+    std::string expect = R"!!!(TAdd<LastUse2Dim<0, 0>>(ubTensor_1, ubTensor_2, ubTensor_2);
+)!!!";
+    EXPECT_EQ(res, expect);
 }
 } // namespace npu::tile_fwk

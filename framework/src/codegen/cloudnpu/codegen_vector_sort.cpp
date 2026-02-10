@@ -158,7 +158,8 @@ std::string CodeGenOpCloudNPU::PrintSortTileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::ostringstream oss;
-    oss << tileOpName << "<" << GenOpAttr(false) << ">" << "(" << dstTensor << ", " << srcTensor << ");\n";
+    oss << tileOpName << WrapParamByAngleBrackets({GenOpAttr(false)});
+    oss << WrapParamByParentheses({dstTensor, srcTensor}) << STMT_END;
     return oss.str();
 }
 
@@ -300,8 +301,8 @@ std::string CodeGenOpCloudNPU::PrintExtractTileTensor() const {
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
 
     std::ostringstream oss;
-    oss << tileOpName << "<" << GenOpAttr(false) << ">"
-        << "(" << dstTensor << ", " << src0Tensor << ");\n";
+    oss << tileOpName << WrapParamByAngleBrackets({GenOpAttr(false)});
+    oss << WrapParamByParentheses({dstTensor, src0Tensor}) << STMT_END;
     return oss.str();
 }
 
@@ -352,9 +353,9 @@ std::string CodeGenOpCloudNPU::PrintTileSortTileTensor() const {
     std::string src3Tensor = QueryTileTensorNameByIdx(ID4);
     std::string src4Tensor = QueryTileTensorNameByIdx(ID5);
     std::ostringstream oss;
-    oss << tileOpName << "<" << GenOpAttr(false) << ">"
-        << "(" << dstTensor << ", " << src1Tensor << ", " << src2Tensor << ", " << src3Tensor << ", " << src4Tensor
-        << ", " << tmpTensor << ");\n";
+    oss << tileOpName << WrapParamByAngleBrackets({GenOpAttr(false)});
+    oss << WrapParamByParentheses({dstTensor, src1Tensor, src2Tensor, src3Tensor, src4Tensor, tmpTensor})
+        << STMT_END;
     return oss.str();
 }
 
