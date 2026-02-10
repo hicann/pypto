@@ -15,6 +15,7 @@
 
 #ifndef DISTRIBUTED_OP_TEST_SUITE_H
 #define DISTRIBUTED_OP_TEST_SUITE_H
+#include <string>
 
 namespace npu::tile_fwk {
 namespace Distributed {
@@ -26,17 +27,17 @@ struct OpTestParam {
 };
 
 template<typename T>
-void TestMoeDistributedCombine(OpTestParam &testParam);
-void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam);
+void TestMoeDistributedCombine(OpTestParam &testParam, std::string& goldenDir);
+void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam, std::string& goldenDir);
 template<typename T>
-void TestAllGather(OpTestParam &testParam);
+void TestAllGather(OpTestParam &testParam, std::string& goldenDir);
 template<typename T>
-void TestReduceScatter(OpTestParam &testParam);
+void TestReduceScatter(OpTestParam &testParam, std::string& goldenDir);
 template<typename T>
-void TestAllReduce(OpTestParam &testParam);
-void TestShmemMoeDispatch(OpTestParam &testParam);
+void TestAllReduce(OpTestParam &testParam, std::string& goldenDir);
+void TestShmemMoeDispatch(OpTestParam &testParam, std::string& goldenDir);
 template<typename T>
-void TestAllReduceAddAllReduce(OpTestParam &testParam);
+void TestAllReduceAddAllReduce(OpTestParam &testParam, std::string& goldenDir);
 } // namespace Distributed
 } // namespace npu::tile_fwk
 

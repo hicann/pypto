@@ -22,10 +22,10 @@
 
 namespace npu::tile_fwk::Distributed {
 
-void TestShmemMoeDispatch(OpTestParam &testParam)
+void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 5;
-    auto [batchSize, hiddenSize, routedNum, topK, typeNum] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [batchSize, hiddenSize, routedNum, topK, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dType = GetDataTypeNum(typeNum);
     int32_t totalExpertNum = routedNum;
     int32_t expertNumPerRank = totalExpertNum / testParam.rankSize;
@@ -47,9 +47,9 @@ void TestShmemMoeDispatch(OpTestParam &testParam)
 
     using T = npu::tile_fwk::bfloat16;
 
-    std::string xPath = GetGoldenDir() + "/x_rank_" + std::to_string(testParam.rankId) + ".bin";
+    std::string xPath = goldenDir+ "/x_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<T> tokenTensorPtr = ReadToVector<T>(xPath, tokenTensorShape);
-    std::string expertIdsPath = GetGoldenDir() + "/expert_ids_rank_" + std::to_string(testParam.rankId) + ".bin";
+    std::string expertIdsPath = goldenDir + "/expert_ids_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<int32_t> tokenExpertTablePtr = ReadToVector<int32_t>(expertIdsPath, tokenExpertTableShape);
 
     MoeConfig moeConfig{routedNum, expertNumPerRank, testParam.rankSize};
@@ -72,11 +72,11 @@ void TestShmemMoeDispatch(OpTestParam &testParam)
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
 
     auto expandXOutPut = ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(CompareWithGolden<uint8_t *>(dType, "/y_rank_", expandXEleNum, expandXOutPut->GetDevPtr(), testParam));
+    EXPECT_TRUE(CompareWithGolden<uint8_t *>(dType, goldenDir + "/y_rank_", expandXEleNum, expandXOutPut->GetDevPtr(), testParam));
     auto validCntOutPut = ProgramData::GetInstance().GetOutputData(1);
-    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, "/valid_count_rank_", validCntEleNum, validCntOutPut->GetDevPtr(), testParam));
+    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/valid_count_rank_", validCntEleNum, validCntOutPut->GetDevPtr(), testParam));
     auto combineInfoOutPut = ProgramData::GetInstance().GetOutputData(2);
-    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, "/combine_info_rank_", combineInfoEleNum, combineInfoOutPut->GetDevPtr(), testParam));
+    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/combine_info_rank_", combineInfoEleNum, combineInfoOutPut->GetDevPtr(), testParam));
 }
 
 } // namespace npu::tile_fwk::Distributed

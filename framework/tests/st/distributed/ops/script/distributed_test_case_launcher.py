@@ -12,6 +12,7 @@
 """ """
 from pathlib import Path
 import sys
+import os
 
 helper_path: Path = Path(
     Path(__file__).parent.parent.parent.parent.parent, "cmake/scripts/helper"
@@ -29,7 +30,7 @@ class OperationTestCase(TestCase):
         test_case_info: dict,
     ):
         super().__init__(
-            test_case_info.get("case_index"),
+            test_case_info.get("index"),
             test_case_info.get("case_name"),
             test_case_info.get("operation"),
             test_case_info.get("input_tensors"),
@@ -46,14 +47,25 @@ class OperationTestCase(TestCase):
 
     def run_in_dyn_func(self, _inputs, _params: dict) -> dict:
         return None
-
-    def golden_func(self, inputs, _params: dict) -> list:
-        op = self._info.get("operation")
-        test_case = f"Test{op}/DistributedTest.Test{op}/{self._info.get('index')}"
+    
+    def run_golden_ctrl(self, test_case: str):
         cmd = f"{sys.executable} {self._root_path}/framework/tests/cmake/scripts/golden_ctrl.py "
         cmd += f"-o={self._root_path}/build/output/bin/golden -c={test_case} "
         cmd += f"--path={self._root_path}/framework/tests/st/distributed/ops/script"
         TestCaseShellActuator.run(cmd)
+        return None
+
+    def golden_func(self, inputs, _params: dict) -> list:
+        case_file = os.environ.get('JSON_PATH')
+        if not case_file:
+            raise ValueError("JSON_PAHT environment variable is not set.")
+        case_path = Path(case_file)
+        if case_path.is_file():
+            test_case = f"TestDistributedOps/DistributedTest.TestOps/{self._info.get('index')}"
+            self.run_golden_ctrl(test_case)
+        if case_path.is_dir() and self._info.get('index') == 0:
+            test_case = f"TestDistributedOps/DistributedTest.TestOps"
+            self.run_golden_ctrl(test_case)
         return None
 
     def golden_func_params(self) -> dict:

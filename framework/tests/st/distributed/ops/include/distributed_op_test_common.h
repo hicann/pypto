@@ -77,7 +77,7 @@ bool DoCompare(const std::string &goldenFilename, const uint64_t outSize, const 
         }
     }
     // 读取Golden数据并比较
-    readInput<T>(GetGoldenDir() + goldenFilename + std::to_string(testParam.rankId) + ".bin", resGolden);
+    readInput<T>(goldenFilename + std::to_string(testParam.rankId) + ".bin", resGolden);
     return resultCmp<T>(resGolden, res, threshold);
 }
 

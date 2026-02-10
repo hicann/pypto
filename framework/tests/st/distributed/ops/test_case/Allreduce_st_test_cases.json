@@ -2,8 +2,8 @@
     "test_cases": [
         {
             "case_index": 0,
-            "case_name": "Allreduce_test_1",
-            "operation": "Allreduce",
+            "case_name": "AllReduce_test_1",
+            "operation": "AllReduce",
             "input_tensors": [
                 {
                     "name": "input0",
@@ -36,12 +36,11 @@
                 ""
             ],
             "tile_shape": [
-                ""
+                16,
+                64
             ],
             "params": {
-                "rank_size": 4,
-                "tile_row_shape": 16,
-                "tile_col_shape": 256,
+                "world_size": 4,
                 "use_two_shot": true,
                 "on_board": true,
                 "func_id": -1
@@ -50,8 +49,8 @@
         },
         {
             "case_index": 1,
-            "case_name": "Allreduce_test_2",
-            "operation": "Allreduce",
+            "case_name": "AllReduce_test_2",
+            "operation": "AllReduce",
             "input_tensors": [
                 {
                     "name": "input0",
@@ -84,12 +83,11 @@
                 ""
             ],
             "tile_shape": [
-                ""
+                50,
+                256
             ],
             "params": {
-                "rank_size": 4,
-                "tile_row_shape": 50,
-                "tile_col_shape": 256,
+                "world_size": 4,
                 "use_two_shot": false,
                 "on_board": true,
                 "func_id": -1

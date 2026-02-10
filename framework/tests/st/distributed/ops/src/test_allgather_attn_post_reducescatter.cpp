@@ -21,9 +21,9 @@
 
 namespace npu::tile_fwk {
 namespace Distributed {
-std::tuple<Tensor, Tensor, Tensor, Tensor> InitializeTestData(OpTestParam &testParam) {
+std::tuple<Tensor, Tensor, Tensor, Tensor> InitializeTestData(OpTestParam& testParam, std::string& goldenDir) {
     constexpr size_t paramsSize = 7;
-    auto [b, s, n, kvLoraRank, vHeadDim, h, typeNum] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [b, s, n, kvLoraRank, vHeadDim, h, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dtype = GetDataTypeNum(typeNum);
 
     Shape agInShape = {b * n * s / testParam.rankSize, kvLoraRank};
@@ -37,11 +37,11 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> InitializeTestData(OpTestParam &testP
     Tensor out(dtype, outShape, "out");
 
     std::vector<bfloat16> agInPtr =
-        ReadToVector<bfloat16>(GetGoldenDir() + "/ag_in_rank_" + std::to_string(testParam.rankId) + ".bin", agInShape);
+        ReadToVector<bfloat16>(goldenDir + "/ag_in_rank_" + std::to_string(testParam.rankId) + ".bin", agInShape);
     std::vector<bfloat16> wLoraPtr =
-        ReadToVector<bfloat16>(GetGoldenDir() + "/w_lora_rank_" + std::to_string(testParam.rankId) + ".bin", wLoraShape);
+        ReadToVector<bfloat16>(goldenDir + "/w_lora_rank_" + std::to_string(testParam.rankId) + ".bin", wLoraShape);
     std::vector<bfloat16> wOutPtr =
-        ReadToVector<bfloat16>(GetGoldenDir() + "/w_out_rank_" + std::to_string(testParam.rankId) + ".bin", wOutShape);
+        ReadToVector<bfloat16>(goldenDir + "/w_out_rank_" + std::to_string(testParam.rankId) + ".bin", wOutShape);
 
     ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<bfloat16>(agIn, agInPtr)});
     ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<bfloat16>(wLora, wLoraPtr)});
@@ -61,11 +61,11 @@ std::tuple<Tensor, Tensor> CreateShmemTensors(OpTestParam& testParam, DataType d
     return {shmemData, shmemSignal};
 }
 
-void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
+void TestAllGatherAttentionPostReducescatter(OpTestParam& testParam, std::string& goldenDir) {
     constexpr size_t paramsSize = 7;
-    auto [b, s, n, kvLoraRank, vHeadDim, h, typeNum] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [b, s, n, kvLoraRank, vHeadDim, h, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dtype = GetDataTypeNum(typeNum);
-    auto [agIn, wLora, wOut, out] = InitializeTestData(testParam);
+    auto [agIn, wLora, wOut, out] = InitializeTestData(testParam, goldenDir);
     ASSERT(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
     int32_t outRow = b * s / testParam.rankSize;
     FUNCTION("ALLGATHER_ATTNPOST_REDUCESCATTER", {agIn, wLora, wOut}, {out}) {
@@ -110,7 +110,7 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam &testParam) {
     }
     RunTest();
     auto output = ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dtype, "/rs_out_rank_", outRow * h, output->GetDevPtr(), testParam, 0.1f));
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dtype, goldenDir + "/rs_out_rank_", outRow * h, output->GetDevPtr(), testParam, 0.1f));
 }
 
 } // namespace Distributed

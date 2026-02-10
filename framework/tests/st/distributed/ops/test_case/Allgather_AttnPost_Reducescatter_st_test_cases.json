@@ -2,8 +2,8 @@
     "test_cases": [
         {
             "case_index": 0,
-            "case_name": "Allgather_AttnPost_Reducescatter_test_1",
-            "operation": "Allgather_AttnPost_Reducescatter",
+            "case_name": "AllGatherAttnPostReduceScatter_test_1",
+            "operation": "AllGatherAttnPostReduceScatter",
             "input_tensors": [
                 {
                     "name": "input0",
@@ -45,7 +45,7 @@
                 "kv_lora_rank": 256,
                 "value_head_dim": 128,
                 "output_hidden_size": 128,
-                "rank_size": 4,
+                "world_size": 4,
                 "on_board": true,
                 "func_id": -1
             },

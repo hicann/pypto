@@ -23,10 +23,10 @@
 namespace npu::tile_fwk::Distributed {
 
 template<typename T>
-void TestMoeDistributedCombine(OpTestParam& testParam)
+void TestMoeDistributedCombine(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 6;
-    auto [batchSize, hiddenSize, moeExpertNum, topK, dtype_num, useV2] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [batchSize, hiddenSize, moeExpertNum, topK, dtype_num, useV2] = GetParams<paramsSize>(goldenDir  + "/params.bin");
 
     DataType dType = GetDataTypeNum(dtype_num);
 
@@ -43,7 +43,7 @@ void TestMoeDistributedCombine(OpTestParam& testParam)
     Tensor expertScales(DataType::DT_FP32, scaleShape, "expertScales");
     Tensor out(dType, outShape, "out");
 
-    std::string dispatchPath = GetGoldenDir() + "/dispatch";
+    std::string dispatchPath = goldenDir + "/dispatch";
     std::vector<T> expandXPtr = ReadToVector<T>(
         dispatchPath + "/y_rank_" + std::to_string(testParam.rankId) + ".bin", inShape);
     std::vector<int32_t> assistInfoForCombinePtr = ReadToVector<int32_t>(
@@ -76,12 +76,13 @@ void TestMoeDistributedCombine(OpTestParam& testParam)
 
     int64_t outEleNum = outShape[0] * outShape[1];
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/out_rank_", outEleNum, outPtr, testParam));
+
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/out_rank_", outEleNum, outPtr, testParam));
 }
 
-template void TestMoeDistributedCombine<int32_t>(OpTestParam& testParam);
-template void TestMoeDistributedCombine<float>(OpTestParam& testParam);
-template void TestMoeDistributedCombine<float16>(OpTestParam& testParam);
-template void TestMoeDistributedCombine<bfloat16>(OpTestParam& testParam);
+template void TestMoeDistributedCombine<int32_t>(OpTestParam& testParam, std::string& goldenDir);
+template void TestMoeDistributedCombine<float>(OpTestParam& testParam, std::string& goldenDir);
+template void TestMoeDistributedCombine<float16>(OpTestParam& testParam, std::string& goldenDir);
+template void TestMoeDistributedCombine<bfloat16>(OpTestParam& testParam, std::string& goldenDir);
 
 } // namespace tile_fwk::Distributed

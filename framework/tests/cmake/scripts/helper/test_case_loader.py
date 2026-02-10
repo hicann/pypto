@@ -12,6 +12,7 @@
 import logging
 import os
 import json
+import pathlib
 from typing import Callable, Dict, List, Union
 from dataclasses import dataclass
 import pandas as pd
@@ -259,24 +260,28 @@ class FileReader:
 
 
 class JsonWriter:
-    def __init__(self, data_frame: pd.DataFrame, json_path: str):
+    def __init__(self, data_frame: pd.DataFrame, json_path: str, cur_index: int):
         self._data = data_frame
         self._json = json_path
+        self._cur_index = cur_index
 
     def run(self) -> list:
         if len(self._data) == 0:
             return []
-        if not os.path.exists(self._json):
-            os.makedirs(self._json, exist_ok=True)
 
         test_cases = []
         for index, row_data in self._data.iterrows():
             creator = TestCaseCreator(row_data["case_index"], row_data, self._json)
             case_info = creator.dump_to_json(False)
-            case_info["test_case"]["index"] = index
+            case_info["test_case"]["index"] = self._cur_index + index
             test_cases.append(case_info["test_case"])
         test_cases.sort(key=lambda x: (x["operation"], x["case_index"]))
-        json_file = f"{self._json}/{test_cases[0]['operation']}_st_test_cases.json"
+        path = pathlib.Path(self._json)
+        if path.suffix == "":
+            path.mkdir(parents=True, exist_ok=True)
+            json_file = path / f"{test_cases[0]['operation']}_st_test_cases.json"
+        else:
+            json_file = path
         row_data = {"test_cases": test_cases}
         with open(json_file, "w", encoding="utf-8") as outfile:
             json.dump(row_data, outfile, ensure_ascii=False, indent=4)
@@ -285,9 +290,9 @@ class JsonWriter:
 
 class TestCaseLoader:
     def __init__(
-        self, file_name: str, op: str, index_range: list, model: bool, json_path: str
+        self, file_path: str, op: str, index_range: list, model: bool, json_path: str
     ):
-        self._file = file_name
+        self._path = file_path
         self._op = op
         self._index_range = index_range
         self._model = model
@@ -312,12 +317,28 @@ class TestCaseLoader:
         return cls._REG_MAP.get(op, lambda params: params)
 
     def run(self) -> list:
-        data_frame = FileReader(
-            self._file, self._op, self._index_range, self._json_path
-        ).run()
+        all_test_cases = []
+        cur_index = 0
+        if os.path.isdir(self._path):
+            files = sorted(
+                [f for f in os.listdir(self._path) if f.endswith((".csv", ".xlsx", ".xls"))],
+                key=lambda x: x.lower(),
+            )
+            for file in files:
+                file_path = os.path.join(self._path, file)
+                json_path = os.path.join(self._json_path, f"{os.path.splitext(os.path.basename(file_path))[0]}.json")
+                test_cases = self.__process_file_to_json(file_path, json_path, cur_index)
+                all_test_cases.extend(test_cases)
+                cur_index += len(test_cases)
+        else:
+            test_cases = self.__process_file_to_json(self._path, self._json_path, cur_index)
+            all_test_cases.extend(test_cases)
+        return all_test_cases
+    
+    def __process_file_to_json(self, file_path: str, json_path: str, cur_index: int) -> List[dict]:
+        data_frame = FileReader(file_path, self._op, self._index_range, self._json_path).run()
         if data_frame is None or len(data_frame) == 0:
             return []
-
         data_frame["on_board"] = not self._model
-
-        return JsonWriter(data_frame, self._json_path).run()
+        test_cases = JsonWriter(data_frame, json_path, cur_index).run()
+        return test_cases

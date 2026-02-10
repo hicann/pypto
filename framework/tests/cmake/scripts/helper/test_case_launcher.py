@@ -56,6 +56,7 @@ class TestCaseLauncher:
 
         os.environ["TILE_FWK_DEVICE_ID"] = f"{self.device}"
         os.environ["ASCEND_PROCESS_LOG_PATH"] = self.plog_cache_path
+        os.environ["JSON_PATH"] = self.json_path
 
         if not self.python:
             golden_dir = str(self.golden_script.parent)
@@ -70,6 +71,7 @@ class TestCaseLauncher:
     def tear_down(self):
         del os.environ["TILE_FWK_DEVICE_ID"]
         del os.environ["ASCEND_PROCESS_LOG_PATH"]
+        del os.environ["JSON_PATH"]
 
     def compile_if_need(self):
         clean_str = "-c" if self.clean else ""
@@ -79,7 +81,7 @@ class TestCaseLauncher:
         elif not self.distributed_op:
             cmd += " -f=cpp -s='TestAdd/AddOperationTest.TestAdd/*' --disable_auto_execute"
         else:
-            cmd += " -f=cpp --stest_distributed='TestAllgather/DistributedTest.TestAllgather/*' --disable_auto_execute"
+            cmd += " -f=cpp --stest_distributed='TestDistributedOps/DistributedTest.TestOps/*' --disable_auto_execute"
         TestCaseShellActuator.run(cmd)
 
         if self.python:
@@ -177,7 +179,7 @@ class TestCaseLauncher:
             if not self.distributed_op:
                 test_case = f"Test{case_op}/{case_op}OperationTest.Test{case_op}/{index}"
             else:
-                test_case = f"Test{case_op}/DistributedTest.Test{case_op}/{index}"
+                test_case = f"TestDistributedOp/{case_op}"
             golden_path = f"{self.work_path}/build/output/bin/golden/{test_case}"
             if os.path.exists(golden_path + "/golden_desc.json"):
                 os.remove(golden_path + "/golden_desc.json")

@@ -2,8 +2,8 @@
     "test_cases": [
         {
             "case_index": 0,
-            "case_name": "Allreduce_Add_Allreduce_test_1",
-            "operation": "Allreduce_Add_Allreduce",
+            "case_name": "AllReduceAddAllReduce_test_1",
+            "operation": "AllReduceAddAllReduce",
             "input_tensors": [
                 {
                     "name": "input0",
@@ -36,12 +36,11 @@
                 ""
             ],
             "tile_shape": [
-                ""
+                4096,
+                8192
             ],
             "params": {
-                "rank_size": 4,
-                "tile_row_shape": 4096,
-                "tile_col_shape": 8192,
+                "world_size": 4,
                 "on_board": true,
                 "func_id": -1
             },

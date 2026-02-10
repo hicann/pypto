@@ -24,10 +24,10 @@ namespace npu::tile_fwk {
 namespace Distributed {
 
 template<typename T>
-void TestAllGather(OpTestParam& testParam)
+void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 5;
-    auto [row, col, typeNum, tileRow, tileCol] = GetParams<paramsSize>(GetGoldenDir() + "/params.bin");
+    auto [row, col, typeNum, tileRow, tileCol] = GetParams<paramsSize>(goldenDir + "/params.bin");
 
     DataType dType = GetDataTypeNum(typeNum);
 
@@ -38,7 +38,7 @@ void TestAllGather(OpTestParam& testParam)
     Tensor in(dType, shape, "in");
     Tensor out(dType, outShape, "out");
 
-    std::vector<T> inPtr = ReadToVector<T>(GetGoldenDir() + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
+    std::vector<T> inPtr = ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
     
     Shape shmemDataShape{testParam.rankSize, row, col};
     FUNCTION("ALLGATHER", {in}, {out}) {
@@ -62,14 +62,14 @@ void TestAllGather(OpTestParam& testParam)
 
     RunTest();
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, "/output_rank_", outSize, outPtr, testParam));
+    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_rank_", outSize, outPtr, testParam));
 
 }
 
-template void TestAllGather<int32_t>(OpTestParam& testParam);
-template void TestAllGather<float>(OpTestParam& testParam);
-template void TestAllGather<float16>(OpTestParam& testParam);
-template void TestAllGather<bfloat16>(OpTestParam& testParam);
+template void TestAllGather<int32_t>(OpTestParam &testParam, std::string& goldenDir);
+template void TestAllGather<float>(OpTestParam &testParam, std::string& goldenDir);
+template void TestAllGather<float16>(OpTestParam &testParam, std::string& goldenDir);
+template void TestAllGather<bfloat16>(OpTestParam &testParam, std::string& goldenDir);
 
 } // namespace Distributed
 } // namespace npu::tile_fwk

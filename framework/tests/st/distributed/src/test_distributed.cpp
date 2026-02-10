@@ -12,160 +12,20 @@
  * \file test_distributed.cpp
  * \brief
  */
-#include <nlohmann/json.hpp>
-#include <fstream>
-#include <vector>
-#include <string>
 #include <gtest/gtest.h>
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
-#include "interface/configs/config_manager.h"
-#include "test_common.h"
-#include "distributed_op_test_suite.h"
 #include "distributed_test_framework.h"
-#include <filesystem>
+#include "test_distributed.h"
 
 namespace npu::tile_fwk::Distributed {
-
-struct OpMetaData {
-    explicit OpMetaData(const nlohmann::json &testData)
-        : testData_(testData) {}
-    nlohmann::json testData_;
-};
-
-// 算子注册表
-struct DisOpRegistry {
-    std::unordered_map<std::string, std::function<void(OpTestParam&, const std::string&)>> registry;
-    template <typename TFunc>
-    void RegisterOp(const std::string& opName, TFunc func)
-    {
-        registry[opName] = [func](OpTestParam &testParam, const std::string &dtype)
-        {
-            if (dtype == "int32") func.template operator()<int32_t>(testParam);
-            else if (dtype == "float16") func.template operator()<float16>(testParam);
-            else if (dtype == "bfloat16") func.template operator()<bfloat16>(testParam);
-            else if (dtype == "float32") func.template operator()<float>(testParam);
-            else FAIL() << "Unsupported dtype: " << dtype;
-        };
-    }
-    void Run(const std::string &opName, OpTestParam &testParam, const std::string &dtype)
-    {
-        if (!registry.count(opName)) {
-            FAIL() << "Unsupported op: " << opName;
-        }
-        registry[opName](testParam, dtype);
-    }
-};
-
-
-DisOpRegistry& GetRegistry()
-{
-    static DisOpRegistry registry;
-    return registry;
-}
-
-
-// 各模板算子的Func
-struct AllgatherFunc {
-    template <typename T>
-    void operator()(OpTestParam &testParam) const
-    {
-        Distributed::TestAllGather<T>(testParam);
-    }
-};
-
-struct ReducescatterFunc {
-    template <typename T>
-    void operator()(OpTestParam &testParam) const
-    {
-        Distributed::TestReduceScatter<T>(testParam);
-    }
-};
-
-struct AllreduceFunc {
-    template <typename T>
-    void operator()(OpTestParam &testParam) const
-    {
-        Distributed::TestAllReduce<T>(testParam);
-    }
-};
-
-struct Allreduce_Add_AllreduceFunc {
-    template <typename T>
-    void operator()(OpTestParam &testParam) const
-    {
-        Distributed::TestAllReduceAddAllReduce<T>(testParam);
-    }
-};
-
-struct MoeDistributedCombineFunc {
-    template <typename T>
-    void operator()(OpTestParam& testParam) const
-    {
-        Distributed::TestMoeDistributedCombine<T>(testParam);
-    }
-};
-
-// 注册所有算子
-void GegisterAllOps()
-{
-    auto& reg = GetRegistry();
-    reg.RegisterOp("Allgather", AllgatherFunc{});  // 模板算子
-    reg.RegisterOp("Reducescatter", ReducescatterFunc{});
-    reg.RegisterOp("Allreduce", AllreduceFunc{});
-    reg.RegisterOp("Allreduce_Add_Allreduce", Allreduce_Add_AllreduceFunc{});
-    reg.RegisterOp("MoeDistributedCombine", MoeDistributedCombineFunc{});
-    reg.registry["MoeDispatch"] = [](OpTestParam &testParam, const std::string&) {
- 	    Distributed::TestShmemMoeDispatch(testParam);
-    };
-    reg.registry["Allgather_AttnPost_Reducescatter"] = [](OpTestParam &testParam, const std::string&) {
-        Distributed::TestAllGatherAttentionPostReducescatter(testParam);
-    };
-    // 后续按照上面格式增加算子
-}
-
-
-template <typename T>
-std::vector<T> GetOpMetaData(const std::string &op)
-{
-    std::string filename = op + "_st_test_cases.json";
-    std::filesystem::path caseFile;
-#ifdef TEST_CASE_RELATIVE_PATH
-    caseFile = std::filesystem::path(TEST_CASE_EXE_DIR) / TEST_CASE_RELATIVE_PATH / filename;
-#else
-    caseFile = "../../../framework/tests/st/distributed/ops/test_case/" + op + "_st_test_cases.json";
-#endif
-    if (!std::filesystem::exists(caseFile)) {
-        ALOG_ERROR_F("File not found: %s, absolute path: %s", caseFile.string().c_str(),
-            std::filesystem::absolute(caseFile).string().c_str());
-        return {};
-    }
-    std::ifstream jsonFile(caseFile);
-    if (!jsonFile.is_open()) {
-        ALOG_ERROR_F("Failed to open JSON file for op %s. Path: %s", op.c_str(),
-            std::filesystem::absolute(caseFile).string().c_str());
-        return {};
-    }
-    nlohmann::json jsonData = nlohmann::json::parse(jsonFile);
-    std::vector<T> testCaseList;
-    for (auto &tc : jsonData.at("test_cases")) {
-        testCaseList.emplace_back(tc);
-    }
-    if (testCaseList.empty()) {
-        ALOG_ERROR_F("No test cases found in json for op: %s. File: %s", op.c_str(),
-            std::filesystem::absolute(caseFile).string().c_str());
-    }
-    return testCaseList;
-}
-
-
 class DistributedTest : public testing::TestWithParam<OpMetaData> {
 public:
     static void TearDownTestCase() {}
 
-    static void SetUpTestCase()
+    static void SetUpTestCase() 
     {
-        GegisterAllOps();
+        GegisterOps();
     }
 
     void SetUp() override
@@ -190,13 +50,18 @@ public:
     }
 
     // 通用测试入口
-    void RunDistributedTestGeneric(const std::string& opName, const nlohmann::json& testData)
+    void RunDistributedTestGeneric(const nlohmann::json& testData, const std::string& fileName)
     {
         if (!testData.contains("input_tensors") || testData["input_tensors"].empty()) {
             FAIL() << "No input tensors in testData: " << testData.dump();
         }
-        std::string dtype = testData["input_tensors"][0]["dtype"];
-        GetRegistry().Run(opName, testParam, dtype);
+        std::string opName = testData["operation"].get<std::string>();
+        std::string dtype = testData["input_tensors"][0]["dtype"].get<std::string>();
+        std::string caseName = testData["case_name"].get<std::string>();
+        std::string goldenDir = GetGoldenDirPath(testData, fileName);
+        DisOpRegister::GetRegister().Run(opName, testParam, dtype, goldenDir);
+        ALOG_INFO("test case finished successfully: op=%s, case=%s, json file=%s.", 
+            opName.c_str(), caseName.c_str(), fileName.c_str());
     }
 
 protected:
@@ -217,57 +82,43 @@ protected:
 };
 
 
-INSTANTIATE_TEST_SUITE_P(TestAllgather, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("Allgather")));
-TEST_P(DistributedTest, TestAllgather)
+// 注册所有算子
+void GegisterOps()
 {
-    RunDistributedTestGeneric("Allgather", GetParam().testData_);
+    auto& reg = DisOpRegister::GetRegister();
+    // 模板算子
+    reg.RegisterOp("AllGather", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::TestAllGather<T>(testParam, goldenDir);
+    });
+    reg.RegisterOp("ReduceScatter", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::TestReduceScatter<T>(testParam, goldenDir);
+    });
+    reg.RegisterOp("AllReduce", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::TestAllReduce<T>(testParam, goldenDir);
+    });
+    reg.RegisterOp("AllReduceAddAllReduce", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::TestAllReduceAddAllReduce<T>(testParam, goldenDir);
+    });
+    reg.RegisterOp("MoeDistributedCombine", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::TestMoeDistributedCombine<T>(testParam, goldenDir);
+    });
+
+    // 非模板算子
+    reg.disRegisterMap["MoeDispatch"] = [](OpTestParam& testParam, const std::string&, std::string& goldenDir) {
+ 	    Distributed::TestShmemMoeDispatch(testParam, goldenDir);
+    };
+    reg.disRegisterMap["AllGatherAttnPostReduceScatter"] = [](OpTestParam& testParam, const std::string&, std::string& goldenDir) {
+        Distributed::TestAllGatherAttentionPostReducescatter(testParam, goldenDir);
+    };
+    // 后续按照上面格式增加算子
+
 }
 
-INSTANTIATE_TEST_SUITE_P(TestReducescatter, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("Reducescatter")));
-TEST_P(DistributedTest, TestReducescatter)
-{
-    RunDistributedTestGeneric("Reducescatter", GetParam().testData_);
-}
 
-INSTANTIATE_TEST_SUITE_P(TestAllreduce, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("Allreduce")));
-TEST_P(DistributedTest, TestAllreduce)
+INSTANTIATE_TEST_SUITE_P(TestDistributedOps, DistributedTest,
+    ::testing::ValuesIn(GetOpMetaData<OpMetaData>()));
+TEST_P(DistributedTest, TestOps)
 {
-    RunDistributedTestGeneric("Allreduce", GetParam().testData_);
-}
-
-INSTANTIATE_TEST_SUITE_P(TestMoeDispatch, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("MoeDispatch")));
-TEST_P(DistributedTest, TestMoeDispatch)
-{
-    RunDistributedTestGeneric("MoeDispatch", GetParam().testData_);
-}
-
-INSTANTIATE_TEST_SUITE_P(TestMoeDistributedCombine, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("MoeDistributedCombine")));
-TEST_P(DistributedTest, TestMoeDistributedCombine)
-{
-    RunDistributedTestGeneric("MoeDistributedCombine", GetParam().testData_);
-}
-
-INSTANTIATE_TEST_SUITE_P(TestAllreduce_Add_Allreduce, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("Allreduce_Add_Allreduce")));
-TEST_P(DistributedTest, TestAllreduce_Add_Allreduce)
-{
-    RunDistributedTestGeneric("Allreduce_Add_Allreduce", GetParam().testData_);
-}
-
-INSTANTIATE_TEST_SUITE_P(TestAllgather_AttnPost_Reducescatter, DistributedTest,
-    ::testing::ValuesIn(GetOpMetaData<OpMetaData>("Allgather_AttnPost_Reducescatter")));
-TEST_P(DistributedTest, TestAllgather_AttnPost_Reducescatter)
-{
-    RunDistributedTestGeneric("Allgather_AttnPost_Reducescatter", GetParam().testData_);
-}
-
-TEST_F(DistributedTest, shmem_allreduce_add_allreduce_bfloat16_256_102400_4)
-{
-    Distributed::TestAllReduceAddAllReduce<bfloat16>(testParam);
+    RunDistributedTestGeneric(GetParam().testData_, GetParam().fileName_);
 }
 } // namespace npu::tile_fwk::Distributed

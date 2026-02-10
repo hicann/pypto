@@ -11,6 +11,7 @@
 
 import dataclasses
 import logging
+import os
 import sys
 import json
 from pathlib import Path
@@ -70,9 +71,8 @@ class ValueRange:
 class BaseCase:
     dtype: torch.dtype
     shape: Tuple[int, ...]
-    rank_size: int
-    tile_row_shape: int
-    tile_col_shape: int
+    world_size: int
+    tile_shape: Tuple[int, ...]
     value_range: ValueRange
 
 
@@ -80,7 +80,7 @@ class BaseCase:
 class GenTensorCase:
     dtype: torch.dtype
     shape: Tuple[int, ...]
-    rank_size: int
+    world_size: int
     value_range: ValueRange
 
 
@@ -92,7 +92,7 @@ class MoeCase:
     shared_expert_num: int
     routed_expert_num: int
     top_k: int
-    rank_size: int
+    world_size: int
     value_range: ValueRange
 
     def __post_init__(self):
@@ -109,7 +109,7 @@ class AllGatherAttnPostReducescatterCase:
     kv_lora_rank: int
     value_head_dim: int
     output_hidden_size: int
-    rank_size: int
+    world_size: int
     value_range: ValueRange
 
 
@@ -127,21 +127,21 @@ def get_dtype_num(dtype: torch.dtype) -> int:
 
 def parse_base_case(config: dict) -> BaseCase:
     params = config['params']
-    rank_size = params['rank_size']
+    world_size = params['world_size']
     input_tensor = config['input_tensors'][0]
     shape = tuple(input_tensor['shape'])
     dtype = get_dtype(input_tensor['dtype'])
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
-    tile_row_shape, tile_col_shape = params['tile_row_shape'], params['tile_col_shape']
+    tile_shape = tuple(config['tile_shape'])
     value_range = ValueRange(min_val=min_val, max_val=max_val)
-    case = BaseCase(dtype=dtype, shape=shape, rank_size=rank_size, 
-    tile_row_shape=tile_row_shape, tile_col_shape=tile_col_shape, value_range=value_range)
+    case = BaseCase(dtype=dtype, shape=shape, world_size=world_size, tile_shape=tile_shape, 
+        value_range=value_range)
     return case
 
 
-def validate_rank_size(rank_size: int) -> None:
-    if rank_size <= 1:
-        raise ValueError(f'rank_size must be greater than 1, got {rank_size}')
+def validate_world_size(world_size: int) -> None:
+    if world_size <= 1:
+        raise ValueError(f'world_size must be greater than 1, got {world_size}')
 
 
 def save_params(params: Tuple[int, ...], save_dir: Path) -> None:
@@ -166,10 +166,20 @@ def save_tensor_list(tensors: List[torch.Tensor], save_dir: Path, filename_prefi
 def generate_random_tensor(
     shape: Tuple[int, ...], dtype: torch.dtype, value_range: ValueRange
 ) -> torch.Tensor:
+    spec_value_map = {
+        'nan': np.nan,
+        'inf': np.inf,
+        '-inf': -np.inf
+    }
+    if value_range.min_val in spec_value_map:
+        return torch.full(
+            shape, 
+            spec_value_map[value_range.min_val],
+            dtype=dtype)
     if dtype in (torch.int32, torch.int16, torch.int8):
         return torch.randint(
-            low=value_range.min_val, 
-            high=value_range.max_val, 
+            low=int(value_range.min_val), 
+            high=int(value_range.max_val), 
             size=shape, 
             dtype=dtype
         )
@@ -180,7 +190,7 @@ def generate_random_tensor(
 def generate_random_tensor_list(gen_tensor_case: GenTensorCase) -> List[torch.Tensor]:
     return [generate_random_tensor(
         gen_tensor_case.shape, gen_tensor_case.dtype, gen_tensor_case.value_range
-    ) for _ in range(gen_tensor_case.rank_size)]
+    ) for _ in range(gen_tensor_case.world_size)]
 
 
 def generate_random_tensor_list_and_save(
@@ -196,40 +206,43 @@ def load_test_cases_from_json(json_file: str) -> list:
         json_data = json.load(data_file)
     if json_data is None:
         raise ValueError(f'Json file {json_file} is invalid.')
+    file_name = json_file.stem
     if 'test_cases' in json_data:
         test_cases = json_data['test_cases']
     else:
         test_cases = [json_data]
+    for tc in test_cases:
+        tc['file_name'] = file_name
     test_cases.sort(key=lambda x: x['case_index'])
     return test_cases
 
 
 def all_gather_and_save(
-    inputs: List[torch.Tensor], rank_size: int, save_dir: Path, filename_prefix: str,
+    inputs: List[torch.Tensor], world_size: int, save_dir: Path, filename_prefix: str,
 ) -> torch.Tensor:
     gathered_output = torch.cat(inputs, dim=0)
-    outputs = [gathered_output] * rank_size
+    outputs = [gathered_output] * world_size
     save_tensor_list(outputs, save_dir, filename_prefix)
     return outputs
 
 
 def reduce_scatter_and_save(
-    inputs: List[torch.Tensor], row: int, rank_size: int, save_dir: Path, filename_prefix: str,
+    inputs: List[torch.Tensor], row: int, world_size: int, save_dir: Path, filename_prefix: str,
 ) -> torch.Tensor:
     stacked_output = torch.stack(inputs, dim=0)
     reduced_output = torch.sum(stacked_output, dim=0).to(inputs[0].dtype)
-    row_per_rank = row // rank_size
-    outputs = [reduced_output[rank * row_per_rank: (rank + 1) * row_per_rank] for rank in range(rank_size)]
+    row_per_rank = row // world_size
+    outputs = [reduced_output[rank * row_per_rank: (rank + 1) * row_per_rank] for rank in range(world_size)]
     save_tensor_list(outputs, save_dir, filename_prefix)
     return outputs
 
 
 def all_reduce_and_save(
-    inputs: List[torch.Tensor], rank_size: int, save_dir: Path, filename_prefix: str,
+    inputs: List[torch.Tensor], world_size: int, save_dir: Path, filename_prefix: str,
 ) -> torch.Tensor:
     stacked_output = torch.stack(inputs, dim=0)
     reduced_output = torch.sum(stacked_output, dim=0).to(inputs[0].dtype)
-    outputs = [reduced_output for _ in range(rank_size)]
+    outputs = [reduced_output for _ in range(world_size)]
     save_tensor_list(outputs, save_dir, filename_prefix)
     return outputs
 
@@ -243,11 +256,11 @@ def parse_moe_case(config: dict) -> MoeCase:
     shared_expert_num = params['shared_expert_num']
     routed_expert_num = params['routed_expert_num']
     top_k = params['top_k']
-    rank_size = params['rank_size']
+    world_size = params['world_size']
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
     value_range = ValueRange(min_val=min_val, max_val=max_val)
     case = MoeCase(dtype=dtype, batch_size=batch_size, hidden_size=hidden_size, shared_expert_num=shared_expert_num,
-        routed_expert_num=routed_expert_num, top_k=top_k, rank_size=rank_size, value_range=value_range)
+        routed_expert_num=routed_expert_num, top_k=top_k, world_size=world_size, value_range=value_range)
     return case
 
 
@@ -255,18 +268,18 @@ def generate_moe_dispatch_input_data(case: MoeCase, save_dir: Path) \
     -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
     gen_tensor_case = GenTensorCase(
         dtype=case.dtype, shape=(case.batch_size, case.hidden_size),
-        rank_size=case.rank_size, value_range=case.value_range
+        world_size=case.world_size, value_range=case.value_range
     )
     x_list = generate_random_tensor_list_and_save(gen_tensor_case, save_dir, 'x',)
     gen_tensor_case = GenTensorCase(
         dtype=torch.float32, shape=(case.batch_size, case.routed_expert_num),
-        rank_size=case.rank_size, value_range=case.value_range
+        world_size=case.world_size, value_range=case.value_range
     )
     scores_list = generate_random_tensor_list(gen_tensor_case)
     scores_list = [scores.sigmoid() for scores in scores_list]
 
     routed_expert_ids_list = []
-    for rank in range(case.rank_size):
+    for rank in range(case.world_size):
         scores = scores_list[rank]
         _, routed_expert_ids = torch.topk(scores, k=case.top_k)
 
@@ -299,7 +312,7 @@ def send_to_shared_experts(
     combine_info_list: List[List[List[torch.Tensor]]],
 ) -> None:
     expert_offset = 0
-    for rank_id in range(case.rank_size):
+    for rank_id in range(case.world_size):
         x = x_list[rank_id]
         target_shared_expert_rank_id = get_shared_expert_rank_id(case, rank_id)
         for token_id in range(case.batch_size):
@@ -313,7 +326,7 @@ def send_to_shared_experts(
 def get_routed_expert_capacity(case: MoeCase) -> int:
     if case.shared_expert_num > 0:
         return 1
-    return math.ceil(case.routed_expert_num / case.rank_size)
+    return math.ceil(case.routed_expert_num / case.world_size)
 
 
 def get_routed_expert_rank_id_and_expert_offset(case: MoeCase, expert_id: int) -> Tuple[int, int]:
@@ -330,7 +343,7 @@ def send_to_routed_experts(
     y_list: List[List[List[torch.Tensor]]],
     combine_info_list: List[List[List[torch.Tensor]]],
 ) -> None:
-    for source_rank_id in range(case.rank_size):
+    for source_rank_id in range(case.world_size):
         x = x_list[source_rank_id]
         routed_expert_ids = routed_expert_ids_list[source_rank_id]
         for token_id in range(case.batch_size):
@@ -347,9 +360,9 @@ def send_to_routed_experts(
 
 def get_dispatch_output_row(case: MoeCase) -> int:
     if case.shared_expert_num > 0:
-        return case.batch_size * case.rank_size
+        return case.batch_size * case.world_size
     else:
-        max_send_token_num = case.batch_size * case.top_k * case.rank_size
+        max_send_token_num = case.batch_size * case.top_k * case.world_size
         max_receive_token_num = case.batch_size * case.routed_expert_num
         return min(max_send_token_num, max_receive_token_num)
 
@@ -362,7 +375,7 @@ def collect_and_save(
 ) -> None:
     row = get_dispatch_output_row(case)
     routed_expert_capacity = get_routed_expert_capacity(case)
-    for rank_id in range(case.rank_size):
+    for rank_id in range(case.world_size):
         fixed_shape_y = torch.zeros((row, case.hidden_size), dtype=case.dtype)
         fixed_shape_combine_info = torch.full((row, 3), -1, dtype=torch.int32)
         valid_count = torch.zeros([routed_expert_capacity], dtype=torch.int32)
@@ -392,8 +405,8 @@ def generate_moe_dispatch_case(case: MoeCase, save_dir: Path) -> None:
     x_list, routed_expert_ids_list = generate_moe_dispatch_input_data(case, save_dir)
 
     routed_expert_capacity = get_routed_expert_capacity(case)
-    y_list = [[[] for _ in range(routed_expert_capacity)] for _ in range(case.rank_size)]
-    combine_info_list = [[[] for _ in range(routed_expert_capacity)] for _ in range(case.rank_size)]
+    y_list = [[[] for _ in range(routed_expert_capacity)] for _ in range(case.world_size)]
+    combine_info_list = [[[] for _ in range(routed_expert_capacity)] for _ in range(case.world_size)]
     if case.shared_expert_num > 0:
         send_to_shared_experts(case, x_list, y_list, combine_info_list)
     send_to_routed_experts(case, x_list, routed_expert_ids_list, y_list, combine_info_list)
@@ -406,7 +419,7 @@ def get_moe_distributed_combine_input_data(dispatch_save_dir: Path, case: MoeCas
     assist_info_for_combine_list = []
     expert_scales_list = []
     row = get_dispatch_output_row(case)
-    for rank in range(case.rank_size):
+    for rank in range(case.world_size):
         expand_x = torch.from_numpy(np.fromfile(dispatch_save_dir / f'y_rank_{rank}.bin'))
         expand_x = expand_x.view(dtype=case.dtype).view([row, case.hidden_size])
         expand_x_list.append(expand_x)
@@ -431,7 +444,7 @@ def get_shared_out_and_save(
     save_dir: Path,
 ) -> List[torch.Tensor]:
     shared_out_list = []
-    for rank_id in range(case.rank_size):
+    for rank_id in range(case.world_size):
         source_shared_expert_rank_id = get_shared_expert_rank_id(case, rank_id)
         expand_x = expand_x_list[source_shared_expert_rank_id]
         assist_info_for_combine = assist_info_for_combine_list[source_shared_expert_rank_id]
@@ -451,15 +464,15 @@ def get_routed_out_and_save(
 ) -> List[torch.Tensor]:
     routed_out_list = [
         torch.zeros([case.batch_size, case.top_k, case.hidden_size], dtype=case.dtype)
-        for _ in range(case.rank_size)
+        for _ in range(case.world_size)
     ]
-    for source_rank_id in range(case.shared_expert_num, case.rank_size):
+    for source_rank_id in range(case.shared_expert_num, case.world_size):
         expand_x = expand_x_list[source_rank_id]
         assist_info_for_combine = assist_info_for_combine_list[source_rank_id]
         for token, (target_rank_id, token_id, k_offset) in zip(expand_x, assist_info_for_combine):
             if target_rank_id != -1:
                 routed_out_list[target_rank_id][token_id, k_offset] = token
-    for source_rank_id in range(case.rank_size):
+    for source_rank_id in range(case.world_size):
         routed_out = routed_out_list[source_rank_id]
         save_tensor(routed_out, save_dir / f'moe_y_rank_{source_rank_id}.bin')
         expert_scales = expert_scales_list[source_rank_id]
@@ -485,7 +498,7 @@ def generate_moe_distributed_combine_case(case: MoeCase, save_dir: Path, dispatc
         save_dir,
     )
 
-    for rank_id in range(case.rank_size):
+    for rank_id in range(case.world_size):
         routed_out = routed_out_list[rank_id]
         out = routed_out.to(dtype=torch.float32)
         if case.shared_expert_num > 0:
@@ -503,218 +516,235 @@ def generate_allgather_attn_post_reducescatter_case(config: dict) -> AllGatherAt
     kv_lora_rank = params['kv_lora_rank']
     value_head_dim = params['value_head_dim']
     output_hidden_size = params['output_hidden_size']
-    rank_size = params['rank_size']
+    world_size = params['world_size']
     min_val, max_val = input_tensor['data_range']['min'], input_tensor['data_range']['max']
     value_range = ValueRange(min_val=min_val, max_val=max_val)
     case = AllGatherAttnPostReducescatterCase(dtype=dtype, batch_size=batch_size, seq_len=seq_len, 
         num_heads=num_heads, kv_lora_rank=kv_lora_rank, value_head_dim=value_head_dim, 
-        output_hidden_size=output_hidden_size, rank_size=rank_size, value_range=value_range)
+        output_hidden_size=output_hidden_size, world_size=world_size, value_range=value_range)
     return case
 
 
-def gen_op_golden(op: str, golden_func, output_path: Path, case_index: int = None) -> bool:
-    case_path: Path = Path(Path(__file__).parent.parent, 'test_case').resolve()
-    case_file: Path = Path(case_path, op + '_st_test_cases.json').resolve()
-    test_configs = load_test_cases_from_json(str(case_file))
-    if len(test_configs) == 0:
-        raise ValueError('Not find test cases, please check.')
+def generate_all_gather_golden(config: dict, output: Path) -> bool:
+    case = parse_base_case(config)
+    validate_world_size(case.world_size)
+    params = (*case.shape, get_dtype_num(case.dtype), *case.tile_shape)
+    save_params(params, output)
+    gen_tensor_case = GenTensorCase(
+        dtype=case.dtype, shape=case.shape, world_size=case.world_size, value_range=case.value_range
+    )
+    inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
+    all_gather_and_save(inputs, case.world_size, output, 'output')
 
-    if case_index is None:
-        for index, test_config in enumerate(test_configs):
-            output_path1 = Path(output_path, str(index))
-            output_path1.mkdir(parents=True, exist_ok=True)
-            golden_func(test_config)
+
+def generate_reduce_scatter_golden(config: dict, output: Path) -> bool:
+    case = parse_base_case(config)
+    validate_world_size(case.world_size)
+    row = case.shape[0]
+    if row % case.world_size != 0:
+        raise ValueError(
+            'The first dimension of the input tensor must be an integer multiple of the world size, '
+            f'got row={row}, world_size={case.world_size}'
+        )
+    params = (*case.shape, get_dtype_num(case.dtype), *case.tile_shape)
+    save_params(params, output)
+    gen_tensor_case = GenTensorCase(
+        dtype=case.dtype, shape=case.shape, world_size=case.world_size, value_range=case.value_range
+    )
+    inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
+    reduce_scatter_and_save(inputs, row, case.world_size, output, 'output')
+
+
+def generate_all_reduce_golden(config: dict, output: Path) -> bool:
+    case = parse_base_case(config)
+    validate_world_size(case.world_size)
+    row = case.shape[0]
+    if row == 0:
+        raise ValueError(
+            'The first dimension of the input tensor must not be zero, '
+            f'got row={row}, world_size={case.world_size}'
+        )
+    params = config['params']
+    use_two_shot = params['use_two_shot']
+    params = (*case.shape, get_dtype_num(case.dtype), *case.tile_shape, use_two_shot)
+    save_params(params, output)
+    gen_tensor_case = GenTensorCase(
+        dtype=case.dtype, shape=case.shape, world_size=case.world_size, value_range=case.value_range
+    )
+    inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
+    all_reduce_and_save(inputs, case.world_size, output, 'output')
+
+
+def generate_allreduce_add_allreduce_golden(config: dict, output: Path) -> bool:
+    case = parse_base_case(config)
+    validate_world_size(case.world_size)
+    params = (*case.shape, get_dtype_num(case.dtype))
+    save_params(params, output)
+    gen_tensor_case = GenTensorCase(
+        dtype=case.dtype, shape=case.shape, world_size=case.world_size, value_range=case.value_range
+    )
+    inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
+    all_reduce_outs = all_reduce_and_save(inputs, case.world_size, output, 'all_reduce_out')
+    add_outs = [all_reduce_outs[0] + all_reduce_outs[0] for _ in range(case.world_size)]
+    save_tensor_list(add_outs, output, 'add_out')
+    all_reduce_and_save(add_outs, case.world_size, output, 'out')
+
+
+def generate_moe_dispatch_golden(config: dict, output: Path) -> bool:
+    case = parse_moe_case(config)
+    generate_moe_dispatch_case(case, output)
+
+
+def generate_moe_distributed_combine_golden(config: dict, output: Path) -> bool:
+    case = parse_moe_case(config)
+    params = config['params']   # 整理一下
+    use_v2 = params['use_v2']
+    params = (case.batch_size, case.hidden_size, case.routed_expert_num, case.top_k, get_dtype_num(case.dtype),
+        use_v2)
+    save_params(params, output)
+    dispatch_save_dir = output / 'dispatch'
+    dispatch_save_dir.mkdir(parents=True, exist_ok=True)
+    generate_moe_dispatch_case(case, dispatch_save_dir)
+    generate_moe_distributed_combine_case(case, output, dispatch_save_dir)
+
+
+def prepare_attention_input(case, output: Path):
+    all_gather_input_shape = (
+        case.batch_size * case.seq_len * case.num_heads // case.world_size,
+        case.kv_lora_rank,
+    )
+    gen_tensor_case = GenTensorCase(
+        dtype=case.dtype, shape=all_gather_input_shape, world_size=case.world_size, value_range=case.value_range
+    )
+    all_gather_inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'ag_in')
+    attention_input = torch.cat(all_gather_inputs, dim=0)
+    attention_input = attention_input.reshape([case.batch_size, case.num_heads, case.seq_len, case.kv_lora_rank])
+    attention_input = torch.transpose(attention_input, 1, 2)
+    attention_input = attention_input.reshape([case.batch_size * case.seq_len, case.num_heads, case.kv_lora_rank])
+    attention_input = torch.transpose(attention_input, 0, 1)
+    return attention_input
+
+
+def compute_attention_outputs(attention_input, case, output: Path):
+    reduce_scatter_inputs = []
+    for rank in range(case.world_size):
+        lora_weight = generate_random_tensor(
+            (case.num_heads, case.kv_lora_rank, case.value_head_dim), case.dtype, case.value_range
+        )
+        save_tensor(lora_weight, output / f'w_lora_rank_{rank}.bin')
+        attention_output = torch.bmm(
+            attention_input.to(torch.float32), lora_weight.to(torch.float32)).to(dtype=case.dtype
+        )
+        attention_output = torch.transpose(attention_output, 0, 1)
+        attention_output = torch.reshape(
+            attention_output, [case.batch_size * case.seq_len, case.num_heads * case.value_head_dim]
+        )
+        output_weight = generate_random_tensor(
+            (case.num_heads * case.value_head_dim, case.output_hidden_size), case.dtype, case.value_range
+        )
+        save_tensor(output_weight, output / f'w_out_rank_{rank}.bin')
+        attention_output = torch.matmul(
+            attention_output.to(dtype=torch.float32), output_weight.to(dtype=torch.float32)
+        ).to(dtype=case.dtype)
+        reduce_scatter_inputs.append(attention_output)
+    return reduce_scatter_inputs
+
+
+def gen_allgather_attnpost_reducescatter_case(config: dict, output: Path) -> bool:
+    case = generate_allgather_attn_post_reducescatter_case(config)
+    params = (
+        case.batch_size,
+        case.seq_len,
+        case.num_heads,
+        case.kv_lora_rank,
+        case.value_head_dim,
+        case.output_hidden_size,
+        get_dtype_num(case.dtype),
+    )
+    save_params(params, output)
+    attention_input = prepare_attention_input(case, output)
+    reduce_scatter_inputs = compute_attention_outputs(attention_input, case, output)
+    reduce_scatter_and_save(reduce_scatter_inputs, case.batch_size * case.seq_len, case.world_size, output, 'rs_out')
+
+
+def get_case_files() -> list[Path]:
+    case_file = os.environ.get('JSON_PATH')
+    case_path = Path(case_file) if case_file else Path(Path(__file__).parent.parent, 'test_case').resolve()
+    if case_path.is_file():
+        logging.info('loading single JSON file: %s', case_path)
+        return [case_path]
+    if case_path.is_dir():
+        logging.info('loading all JSON files form directory: %s', case_path)
+        files = list(case_path.glob("*.json"))
+        files.sort(key=lambda x: x.name.lower())
+        if not files:
+            raise ValueError(f'JSON files found in the directory: %s', case_path)
+        return files
+    raise ValueError(f'Invalid path: %s. It must be either a valid file or a directory.', case_path)
+
+
+def load_all_test_configs(case_files: list[Path]) -> list[dict]:
+    all_test_configs = []
+    for json_file in case_files:
+        test_configs = load_test_cases_from_json(json_file)
+        if test_configs:
+            all_test_configs.extend(test_configs)
+    if not all_test_configs:
+        raise ValueError('No test cases loaded.')
+    return all_test_configs
+
+
+def generate_output_path(output: Path, test_config: dict, index: int = None) -> Path:
+    case_str = f"{test_config['case_index']}_{test_config['case_name']}"
+    operation = test_config['operation']
+    file_name = test_config['file_name']
+    if index is None:
+        output_path = output.parent / operation / file_name / case_str 
     else:
-        golden_func(test_configs[case_index])
+        output_path = Path(*output.parts[:-2]) / operation / file_name / case_str 
+    return output_path
+
+
+OPERATOR_DISPATCHERS = {
+    'AllGather': generate_all_gather_golden,
+    'ReduceScatter': generate_reduce_scatter_golden,
+    'AllReduce': generate_all_reduce_golden,
+    'MoeDispatch': generate_moe_dispatch_golden,
+    'MoeDistributedCombine': generate_moe_distributed_combine_golden,
+    'AllReduceAddAllReduce': generate_allreduce_add_allreduce_golden,
+    'AllGatherAttnPostReduceScatter': gen_allgather_attnpost_reducescatter_case,
+}
+
+
+def generate_single_golden(config: dict, output: Path):
+    op_name = config['operation']
+    if not op_name:
+        raise ValueError(f'No operation field: {config}')
+    handler = OPERATOR_DISPATCHERS[op_name]
+    if handler is None:
+        raise ValueError(f"Unsupported operation: {op_name}")
+    handler(config, output)
+    logging.info('Generate golden for success op: %s (case_name: %s)', op_name, config['case_name'])
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        'TestDistributedOps/DistributedTest.TestOps',
+    ]
+)
+def generate_golden_case(case_name: str, output: Path, case_index: int = None) -> bool:
+    case_files = get_case_files()
+    all_test_configs = load_all_test_configs(case_files)
+    if case_index is None:
+        for test_config in all_test_configs:
+            output_path1 = generate_output_path(output, test_config)
+            output_path1.mkdir(parents=True, exist_ok=True)
+            generate_single_golden(test_config, output_path1)
+    else:
+        if case_index >= len(all_test_configs):
+            raise IndexError(f'case_index {case_index} out of range')
+        test_config = all_test_configs[case_index]
+        output = generate_output_path(output, test_config, case_index)
+        output.mkdir(parents=True, exist_ok=True)
+        generate_single_golden(test_config, output)
     return True
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestAllgather/DistributedTest.TestAllgather',
-    ]
-)
-def generate_all_gather_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = parse_base_case(config)
-        validate_rank_size(case.rank_size)
-        params = (*case.shape, get_dtype_num(case.dtype), case.tile_row_shape, case.tile_col_shape)
-        save_params(params, output)
-        gen_tensor_case = GenTensorCase(
-            dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range
-        )
-        inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
-        all_gather_and_save(inputs, case.rank_size, output, 'output')
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('Allgather', golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestReducescatter/DistributedTest.TestReducescatter',
-    ]
-)
-def generate_reduce_scatter_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = parse_base_case(config)
-        validate_rank_size(case.rank_size)
-        row = case.shape[0]
-        if row % case.rank_size != 0:
-            raise ValueError(
-                'The first dimension of the input tensor must be an integer multiple of the rank size, '
-                f'got row={row}, rank_size={case.rank_size}'
-            )
-        params = (*case.shape, get_dtype_num(case.dtype), case.tile_row_shape, case.tile_col_shape)
-        save_params(params, output)
-        gen_tensor_case = GenTensorCase(
-            dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range
-        )
-        inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
-        reduce_scatter_and_save(inputs, row, case.rank_size, output, 'output')
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('Reducescatter', golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestAllreduce/DistributedTest.TestAllreduce',
-    ]
-)
-def generate_all_reduce_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = parse_base_case(config)
-        validate_rank_size(case.rank_size)
-        row = case.shape[0]
-        if row == 0:
-            raise ValueError(
-                'The first dimension of the input tensor must not be zero, '
-                f'got row={row}, rank_size={case.rank_size}'
-            )
-        params = config['params']
-        use_two_shot = params['use_two_shot']
-        params = (*case.shape, get_dtype_num(case.dtype), case.tile_row_shape, case.tile_col_shape, use_two_shot)
-        save_params(params, output)
-        gen_tensor_case = GenTensorCase(
-            dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range
-        )
-        inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
-        all_reduce_and_save(inputs, case.rank_size, output, 'output')
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('Allreduce', golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestAllreduce_Add_Allreduce/DistributedTest.TestAllreduce_Add_Allreduce',
-    ]
-)
-def generate_allreduce_add_allreduce_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = parse_base_case(config)
-        validate_rank_size(case.rank_size)
-        params = (*case.shape, get_dtype_num(case.dtype))
-        save_params(params, output)
-        gen_tensor_case = GenTensorCase(
-            dtype=case.dtype, shape=case.shape, rank_size=case.rank_size, value_range=case.value_range
-        )
-        inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'input')
-        all_reduce_outs = all_reduce_and_save(inputs, case.rank_size, output, 'all_reduce_out')
-        add_outs = [all_reduce_outs[0] + all_reduce_outs[0] for _ in range(case.rank_size)]
-        save_tensor_list(add_outs, output, 'add_out')
-        all_reduce_and_save(add_outs, case.rank_size, output, 'out')
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('Allreduce_Add_Allreduce', golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestMoeDispatch/DistributedTest.TestMoeDispatch',
-    ]
-)
-def generate_moe_dispatch_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = parse_moe_case(config)
-        generate_moe_dispatch_case(case, output)
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('MoeDispatch', golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestMoeDistributedCombine/DistributedTest.TestMoeDistributedCombine',
-    ]
-)
-def generate_moe_distributed_combine_golden(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = parse_moe_case(config)
-        params = config['params']
-        use_v2 = params['use_v2']
-        params = (case.batch_size, case.hidden_size, case.routed_expert_num, case.top_k, get_dtype_num(case.dtype),
-            use_v2)
-        save_params(params, output)
-        dispatch_save_dir = output / 'dispatch'
-        dispatch_save_dir.mkdir(parents=True, exist_ok=True)
-        generate_moe_dispatch_case(case, dispatch_save_dir)
-        generate_moe_distributed_combine_case(case, output, dispatch_save_dir)
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('MoeDistributedCombine', golden_func, output, case_index)
-
-
-@GoldenRegister.reg_golden_func(
-    case_names=[
-        'TestAllgather_AttnPost_Reducescatter/DistributedTest.TestAllgather_AttnPost_Reducescatter',
-    ]
-)
-def gen_allgather_attnpost_reducescatter_case(case_name: str, output: Path, case_index: int = None) -> bool:
-    def golden_func(config: dict):
-        case = generate_allgather_attn_post_reducescatter_case(config)
-        params = (
-            case.batch_size,
-            case.seq_len,
-            case.num_heads,
-            case.kv_lora_rank,
-            case.value_head_dim,
-            case.output_hidden_size,
-            get_dtype_num(case.dtype),
-        )
-        save_params(params, output)
-        all_gather_input_shape = (case.batch_size * case.seq_len * case.num_heads // case.rank_size, case.kv_lora_rank)
-        gen_tensor_case = GenTensorCase(
-            dtype=case.dtype, shape=all_gather_input_shape, rank_size=case.rank_size, value_range=case.value_range
-        )
-        all_gather_inputs = generate_random_tensor_list_and_save(gen_tensor_case, output, 'ag_in')
-        attention_input = torch.cat(all_gather_inputs, dim=0)
-        attention_input = attention_input.reshape([case.batch_size, case.num_heads, case.seq_len, case.kv_lora_rank])
-        attention_input = torch.transpose(attention_input, 1, 2)
-        attention_input = torch.reshape(
-            attention_input, [case.batch_size * case.seq_len, case.num_heads, case.kv_lora_rank]
-        )
-        attention_input = torch.transpose(attention_input, 0, 1)
-
-        reduce_scatter_inputs = []
-        for rank in range(case.rank_size):
-            lora_weight = generate_random_tensor(
-                (case.num_heads, case.kv_lora_rank, case.value_head_dim), case.dtype, case.value_range
-            )
-            save_tensor(lora_weight, output / f'w_lora_rank_{rank}.bin')
-
-            attention_output = torch.bmm(
-                attention_input.to(torch.float32), lora_weight.to(torch.float32)).to(dtype=case.dtype
-            )
-            attention_output = torch.transpose(attention_output, 0, 1)
-            attention_output = torch.reshape(
-                attention_output, [case.batch_size * case.seq_len, case.num_heads * case.value_head_dim]
-            )
-
-            output_weight = generate_random_tensor(
-                (case.num_heads * case.value_head_dim, case.output_hidden_size), case.dtype, case.value_range
-            )
-            save_tensor(output_weight, output / f'w_out_rank_{rank}.bin')
-
-            attention_output = torch.matmul(
-                attention_output.to(dtype=torch.float32), output_weight.to(dtype=torch.float32)
-            ).to(dtype=case.dtype)
-            reduce_scatter_inputs.append(attention_output)
-        reduce_scatter_and_save(reduce_scatter_inputs, case.batch_size * case.seq_len, case.rank_size, output, 'rs_out') 
-    logging.debug('Case(%s), Golden creating...', case_name)
-    return gen_op_golden('Allgather_AttnPost_Reducescatter', golden_func, output, case_index)
