@@ -246,23 +246,6 @@ def softmax(x, is_fp16=False):
     return ans, x_max, x_sum
 
 
-def c2_compute(args):
-    v, tmp_k_2d_shape, s2_tile, dn, block_num, block_table, b_idx, idx, k, act, c2_tile, tilda_pij_fp16 = args
-    # c2
-    tmp_v_2d = pypto.reshape(v, tmp_k_2d_shape, inplace=True)
-    vj_assemble = pypto.tensor([s2_tile, dn], tmp_v_2d.dtype, "vj_assemble")
-    for i in pypto.loop(block_num):
-        block_idx = block_table[b_idx, idx + i]
-        block_idx_valid = block_idx.max(0)
-        vj_assemble[i * k.shape[1]:(i + 1) * k.shape[1], 0:] = \
-            pypto.view(tmp_v_2d, [k.shape[1], dn], [block_idx_valid * k.shape[1], 0])
-    vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
-                            [0, 0], valid_shape=[act, dn])
-    pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
-    oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
-    return oi_tmp
-
-
 def ifa_func(q_shape, kv_shape, block_table_shape):
     """
     JIT compiled kernel implementing Incremental Flash Attention (IFA) with Attention.
@@ -406,9 +389,18 @@ def ifa_func(q_shape, kv_shape, block_table_shape):
                                 sum_update[:] = pypto.sum(tilda_pij, dim=-1, keepdim=True)
                                 max_update[:] = tilda_mij
 
-                                args = v, tmp_k_2d_shape, s2_tile, dn, block_num, block_table, b_idx, \
-                                    idx, k, actual_s2_tile, c2_tile, tilda_pij_fp16
-                                oi_tmp = c2_compute(args)
+                                # c2
+                                tmp_v_2d = pypto.reshape(v, tmp_k_2d_shape, inplace=True)
+                                vj_assemble = pypto.tensor([s2_tile, dn], tmp_v_2d.dtype, "vj_assemble")
+                                for i in pypto.loop(block_num):
+                                    block_idx = block_table[b_idx, idx + i]
+                                    block_idx_valid = block_idx.max(0)
+                                    vj_assemble[i * k.shape[1]:(i + 1) * k.shape[1], 0:] = \
+                                        pypto.view(tmp_v_2d, [k.shape[1], dn], [block_idx_valid * k.shape[1], 0])
+                                vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
+                                                        [0, 0], valid_shape=[actual_s2_tile, dn])
+                                pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
+                                oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
                                 pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
                                 oi_update[:] = oi_tmp
                             else:
@@ -429,9 +421,18 @@ def ifa_func(q_shape, kv_shape, block_table_shape):
                                 sum_update[:] = sum_update * update_mul + sum_local
                                 pypto.set_pass_options(sg_set_scope=-1)
 
-                                args = v, tmp_k_2d_shape, s2_tile, dn, block_num, block_table, b_idx, \
-                                    idx, k, actual_s2_tile, c2_tile, tilda_pij_fp16
-                                oi_tmp = c2_compute(args)
+                                # c2
+                                tmp_v_2d = pypto.reshape(v, tmp_k_2d_shape, inplace=True)
+                                vj_assemble = pypto.tensor([s2_tile, dn], tmp_v_2d.dtype, "vj_assemble")
+                                for i in pypto.loop(block_num):
+                                    block_idx = block_table[b_idx, idx + i]
+                                    block_idx_valid = block_idx.max(0)
+                                    vj_assemble[i * k.shape[1]:(i + 1) * k.shape[1], 0:] = \
+                                        pypto.view(tmp_v_2d, [k.shape[1], dn], [block_idx_valid * k.shape[1], 0])
+                                vj_assemble = pypto.view(vj_assemble, [s2_tile, dn],
+                                                        [0, 0], valid_shape=[actual_s2_tile, dn])
+                                pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
+                                oi_tmp = pypto.matmul(tilda_pij_fp16, vj_assemble, pypto.DT_FP32)
 
                                 # v2
                                 pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
