@@ -604,20 +604,20 @@ class Tensor:
         return pypto.cumsum(self, dim)
 
     @source_location
-    def triu(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
+    def triu(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> 'Tensor':
         return pypto.triu(self, diagonal)
 
     @source_location
-    def triu_(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
+    def triu_(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> 'Tensor':
         self.move(pypto.triu(self, diagonal))
         return self
 
     @source_location
-    def tril(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
+    def tril(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> 'Tensor':
         return pypto.tril(self, diagonal)
 
     @source_location
-    def tril_(self: 'Tensor', diagonal: 'int | SymbolicScalar') -> 'Tensor':
+    def tril_(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> 'Tensor':
         self.move(pypto.tril(self, diagonal))
         return self
 

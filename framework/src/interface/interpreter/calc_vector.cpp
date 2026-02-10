@@ -689,7 +689,8 @@ REGISTER_CALC_OP(OP_S_MAXS, Opcode::OP_S_MAXS, ExecuteOpBinaryScalar<Opcode::OP_
 REGISTER_CALC_OP(OP_S_MINS, Opcode::OP_S_MINS, ExecuteOpBinaryScalar<Opcode::OP_S_MINS>);
 
 void ExecuteOpGatherElement(ExecuteOperationContext *ctx) {
-    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
+    ASSERT(ctx->ioperandDataViewList->size() == SIZE_TWO);
     auto &ret = ctx->ooperandInplaceDataViewList->at(0);
     auto &params = ctx->ioperandDataViewList->at(0);
     auto &indices = ctx->ioperandDataViewList->at(1);

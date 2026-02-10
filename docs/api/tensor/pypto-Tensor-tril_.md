@@ -1,4 +1,4 @@
-# pypto.Tensor.triu
+# pypto.Tensor.tril_
 
 ## 产品支持情况
 
@@ -10,9 +10,9 @@
 ## 函数原型
 
 ```python
-triu(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> Tensor:
+tril_(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> Tensor:
 ```
 
 ## 详细说明
 
-请参见[pypto.triu](../operation/pypto-triu.md)。
+tril的原地操作方法，请参见[pypto.Tensor.tril](pypto-Tensor-tril.md)。

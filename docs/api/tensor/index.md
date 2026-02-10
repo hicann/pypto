@@ -51,7 +51,9 @@ pypto-Tensor-sum
 pypto-Tensor-topk
 pypto-Tensor-transpose
 pypto-Tensor-tril
+pypto-Tensor-tril_
 pypto-Tensor-triu
+pypto-Tensor-triu_
 pypto-Tensor-unsqueeze
 pypto-Tensor-view
 pypto-Tensor-where

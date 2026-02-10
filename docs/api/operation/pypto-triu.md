@@ -14,7 +14,7 @@
 ## 函数原型
 
 ```python
-triu(input: Tensor, diagonal: Union[int, SymbolicScalar]) -> Tensor:
+triu(input: Tensor, diagonal: SymInt = 0) -> Tensor:
 ```
 
 ## 参数说明
@@ -22,7 +22,7 @@ triu(input: Tensor, diagonal: Union[int, SymbolicScalar]) -> Tensor:
 | 参数名   | 输入/输出 | 说明                                                                                                                                                                                                                        |
 | -------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | input    | 输入      | 源操作数。`<br>` 支持的类型为：Tensor。 `<br>` Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_INT8。 `<br>` 不支持空Tensor；Shape仅支持2-5维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| diagonal | 输入      | 源操作数，指定需要考虑的对角线。`<br>` int 类型、SymbolicScalar类型。                                                                                                                                                     |
+| diagonal | 输入      | 源操作数，指定需要考虑的对角线，默认为0。`<br>` SymInt类型。                                                                                                                                                     |
 
 ## 返回值说明
 
@@ -30,7 +30,7 @@ triu(input: Tensor, diagonal: Union[int, SymbolicScalar]) -> Tensor:
 
 ## 约束说明
 
-1. diagonal：需要考虑的对角线，整型（正数、0、负数）、SymbolicScalar类型。
+详见参数说明。
 
 ## TileShape设置示例
 
