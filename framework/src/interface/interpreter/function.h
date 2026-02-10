@@ -154,6 +154,7 @@ struct FunctionFrame {
         const std::vector<int64_t> &rawShape, DataType dtype,
         const std::shared_ptr<LogicalTensor> &inplaceTensor = nullptr) {
         if (tensorDataViewDict.count(tensor)) {
+            tensorDataViewDict[tensor]->UpdateValidShape(validShape);
             return tensorDataViewDict[tensor];
         }
 

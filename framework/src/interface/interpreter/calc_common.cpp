@@ -238,6 +238,7 @@ void ExecuteOpReshape(ExecuteOperationContext *ctx) {
     auto &iop = ctx->ioperandDataViewList->at(0);
     auto actualIop = std::make_shared<LogicalTensorData>(iop->GetData());
     if (oop->GetSize() > iop->GetSize()) {
+        ALOG_EVENT(ctx->op->Dump());
         ALOG_EVENT("iop validShape: ", iop->GetShape(), " ---> oop validShape: ", oop->GetShape());
         ALOG_EVENT("Reshape: input tensor is not enough to reshape to output tensor");
         calc::Reshape(oop, actualIop);

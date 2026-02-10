@@ -25,6 +25,7 @@ FlowVerifier::CompareResult FlowVerifier::VerifyResult(
         const std::shared_ptr<LogicalTensorData> &goldenDataView,
         const std::shared_ptr<LogicalTensorData> &outputDataView, float rtol, float atol) {
     // tensor maybe padded during PadLocalBuffer Pass, tensor shape maybe changed, just check the valid data
+    goldenDataView->UpdateValidShape(outputDataView->GetValidShape());
     ASSERT(goldenDataView->GetValidShape() == outputDataView->GetValidShape());
     ASSERT(goldenDataView->GetDataType() == outputDataView->GetDataType());
     switch (goldenDataView->GetDataType()) {

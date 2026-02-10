@@ -307,6 +307,7 @@ struct LogicalTensorData {
     int GetSize() const { return size_; }
     DataType GetDataType() const { return GetData()->GetDataType(); }
 
+    void UpdateValidShape(std::vector<int64_t> shape) {validShape_ = shape;}
     int64_t GetStorageOffset() const {
         auto &strides = data_->GetStride();
         int64_t offset = 0;
