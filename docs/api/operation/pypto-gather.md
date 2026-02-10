@@ -40,7 +40,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 ## 约束说明
 
-1. index.dim = input.dim，且 index.shape\[i\] <= input.shap\[i\]，值为合法索引，即不能超出 input.shape\[dim\]；
+1. index.dim = input.dim，且 index.shape\[i\] <= input.shape\[i\] (i != dim)，值为合法索引，即不能超出 input.shape\[dim\]；
 
 2. dim: -input.dim <= dim < input.dim；
 
@@ -52,7 +52,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入input为[m, n, p], dim为1，输入index为[m, t, p]，输出为[m, t, p], TileShape设置为[m1, t1, p1], 则m1, t1, p1分别用于切分m, t, p轴。 n轴不可切，必须保证n轴全载。
+如输入input为[x, y, z], dim为1，输入index为[m, t, p]，输出为[m, t, p], 其中 m <= x, p <= z, TileShape设置为[m1, t1, p1], 则m1, t1, p1分别用于切分m, t, p轴。 y轴不可切，必须保证y轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(m1, t1, p1)
