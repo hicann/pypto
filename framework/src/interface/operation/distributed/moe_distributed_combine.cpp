@@ -412,7 +412,6 @@ void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForC
     }
 
     SymbolicScalar recvCountsScalar = GetTensorData(recvCounts, {0});
-    Tensor sendOut(DT_INT32, {recvCountsScalar, 1}, "sendOut");
     std::set<int> unrollList = {64, 32, 16, 8, 4, 2, 1};
     LOOP("MoeDistributedCombineSend", FunctionType::DYNAMIC_LOOP, rowIndex, LoopRange(recvCountsScalar), unrollList) {
         SymbolicScalar rankId = GetTensorData(assistInfoForCombine, {rowIndex, 0});
@@ -422,19 +421,19 @@ void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForC
         Tensor expandXTile = View(expandX, {1, hiddenSize}, {rowIndex, 0});
         Tensor shmemDataTile = View(shmemData, {1, 1, 1, hiddenSize}, {rankId, 0, topK * tokenId + kOffset, 0});
         TileShape::Current().SetVecTile({1, hiddenSize});
-        Tensor predToken(DT_INT32, {1, 1}, "predToken");
+        Tensor predToken(DT_INT32, {1, 1}, "sendPredToken");
         Tensor shmemPutOut = ShmemPut(predToken, expandXTile, shmemDataTile);
 
         Tensor shmemSignalTile = View(shmemSignal, {1, 1, 1, 1, hiddenSize}, {rankId, 0, 0, tokenId, 0});
-        Tensor shmemSignalOut = ShmemSignal(shmemPutOut, shmemSignalTile, AtomicType::ADD);
-        Assemble(shmemSignalOut, {rowIndex, 0}, sendOut);
+        ShmemSignal(shmemPutOut, shmemSignalTile, AtomicType::ADD);
     }
 
     SymbolicScalar thisRank = GetHcclRankId(group);
     LOOP("MoeDistributedCombineReceive", FunctionType::DYNAMIC_LOOP, tokenId, LoopRange(batchSize)) {
         Tensor shmemSignalTile = View(shmemSignal, {1, 1, 1, 1, hiddenSize}, {thisRank, 0, 0, tokenId, 0});
         TileShape::Current().SetVecTile({1, hiddenSize});
-        Tensor waitUntilOut = WaitUntil(sendOut, shmemSignalTile, topK);
+        Tensor predToken(DT_INT32, {1, 1}, "receivePredToken");
+        Tensor waitUntilOut = WaitUntil(predToken, shmemSignalTile, topK);
 
         TileShape::Current().SetVecTile({topK, hiddenSize});
         Tensor shmemDataTile = View(shmemData, {1, 1, topK, hiddenSize}, {thisRank, 0, topK * tokenId, 0});
