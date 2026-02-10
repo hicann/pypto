@@ -384,15 +384,15 @@
         "debug": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "设置调试模式",
+                "en": "Set debug mode"
             },
             "properties": {
                 "compile_debug_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "设置编译阶段调试模式。0：不使能；1：使能，一键开启图编译相关配置（如计算图）。",
+                        "en": "Set debug mode during compilation stage. 0: disabled; 1: enabled, one-click to enable graph compilation related configurations (e.g. compute graph)."
                     },
                     "minimum": 0,
                     "maximum": 1
@@ -400,8 +400,8 @@
                 "runtime_debug_mode": {
                     "type": "integer",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "设置执行阶段调试模式。0：不使能；1：使能，一键开启图执行相关配置（如泳道图）。",
+                        "en": "Set debug mode during execution stage. 0: disabled; 1: enabled, one-click to enable execution-related configs (e.g. swimlane graph)."
                     },
                     "minimum": 0,
                     "maximum": 2
