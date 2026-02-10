@@ -217,10 +217,10 @@ private:
             return false;
         }
         if (it->second.Type() == typeid(T)) {
-            value = npu::tile_fwk::AnyCast<T>(it->second);
+            value = AnyCast<T>(it->second);
             return true;
         }
-        ALOG_ERROR_F("Type mismatch: %s != %s", it->second.Type().name(), typeid(T).name());
+        ALOG_ERROR_F("Type of attribute %s from PASS is mismatch: %s != %s", key.c_str(), it->second.Type().name(), typeid(T).name());
         return false;
     }
 

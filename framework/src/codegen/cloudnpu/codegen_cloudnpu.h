@@ -141,11 +141,11 @@ private:
     void BuildExtraOptions(std::ostringstream &oss, const std::string &compileOptions) const;
 
     std::string GenAlloc(const std::shared_ptr<SymbolManager> &manager, BufferType bufferType,
-        npu::tile_fwk::DataType dataType, const npu::tile_fwk::TileRange &range) const;
+        DataType dataType, const TileRange &range) const;
 
     std::string GetParamType(const Function &func, bool isUnderDynFunc) const;
 
-    std::string GenDynParamForExpr(const npu::tile_fwk::Function &func) const;
+    std::string GenDynParamForExpr(const Function &func) const;
 
     bool HandleForAICpuSubFunc(Function &subFunc);
 

@@ -307,7 +307,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffPara
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
-        reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
         << "unsupported reduce axis" << reduceAxis;
@@ -344,7 +344,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryT
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
-        reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1))))
         << "unsupported reduce axis" << reduceAxis;
@@ -403,7 +403,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineTileTensor() const {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
-        reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[ID2].size()) - 1)))) << "unsupported reduce axis";
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();

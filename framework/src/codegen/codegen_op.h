@@ -111,7 +111,7 @@ protected:
     std::vector<long> convParams;
     std::vector<int> poolParams;
 
-    std::map<std::string, npu::tile_fwk::Any> opAttrs;
+    std::map<std::string, Any> opAttrs;
 
     std::shared_ptr<SymbolManager> sm{nullptr};
 
@@ -142,8 +142,8 @@ private:
     void UpdateOffsetForOutput(const Operation &oper, const LogicalTensor &logicalTensor, int operandIdx);
     void UpdateShapeFromAttr(const std::vector<OpImmediate> &toValidShape, int operandIdx);
     void UpdateOffsetValueFromAttr(const std::vector<OpImmediate> &offsets, int operandIdx);
-    void UpdateScalarValue(const npu::tile_fwk::Operation &ops);
-    void UpdateOpAttribute(const npu::tile_fwk::Operation &ops);
+    void UpdateScalarValue(const Operation &ops);
+    void UpdateOpAttribute(const Operation &ops);
     void CombineAxis(const Operation &oper, int operandIdx, bool isInput, size_t ioIdx);
 };
 } // namespace npu::tile_fwk

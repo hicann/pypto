@@ -59,7 +59,7 @@ std::string CodeGenOpCloudNPU::PrintCastTileTensor() const {
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "mode");
     int64_t modeEnum{0};
     if (mode.HasValue()) {
-        modeEnum = npu::tile_fwk::AnyCast<int64_t>(mode);
+        modeEnum = AnyCast<int64_t>(mode);
     }
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
@@ -79,7 +79,7 @@ std::string CodeGenOpCloudNPU::PrintRowMaxlineStatic(const PrintUnaryParam &para
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
-        reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1))))
         << "unsupported reduce axis: " << reduceAxis;
@@ -113,7 +113,7 @@ std::string CodeGenOpCloudNPU::PrintRowMaxlineDynamicUnaligned(const PrintUnaryP
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
-        reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1))))
         << "unsupported reduce axis" << reduceAxis;
@@ -163,7 +163,7 @@ std::string CodeGenOpCloudNPU::PrintRowMaxlineTileTensor() const {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
     if (axis.HasValue()) {
-        reduceAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        reduceAxis = AnyCast<int64_t>(axis);
     }
     ASSERT(((reduceAxis >= 0) && (reduceAxis < (int(rawShape[1].size()) - 1)))) << "unsupported reduce axis";
     reduceAxis += SHAPE_DIM5 - rawShape[0].size();

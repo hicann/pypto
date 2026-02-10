@@ -125,7 +125,8 @@ std::string CodeGenCloudNPU::GenLimitValue(FloatSaturateStatus &fs) const {
 std::string CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc) const {
     OperationsViewer operationList = subFunc.Operations(false);
     if (operationList.IsEmpty()) {
-        ALOG_ERROR("operationList is empty");
+        ALOG_ERROR("operationList from PASS is empty, func magic name: %s, func hash: %s",
+            subFunc.GetMagicName().c_str(), subFunc.GetFunctionHash().c_str());
         return {};
     }
 
@@ -153,7 +154,8 @@ std::string CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc) c
         // update fs
         cop.UpdateSaturateStatus(fs);
         std::string tileOpSourceCode = cop.GenOpCode();
-        ASSERT(tileOpSourceCode.find("CG_ERROR") == tileOpSourceCode.npos) << "gen op invalid" << op.Dump();
+        ASSERT(tileOpSourceCode.find("CG_ERROR") == tileOpSourceCode.npos)
+            << "Generate code of op failed, op is " << op.Dump();
 
         allocSourceRegion += allocSourceCode;
 
@@ -330,8 +332,8 @@ std::optional<std::string> CodeGenCloudNPU::GenExtraAlloc(
     const std::shared_ptr<SymbolManager> &symbolMgr, const std::shared_ptr<LogicalTensor> &tensor) const {
     auto memType = tensor->GetMemoryTypeOriginal();
     if (OPERAND_TYPE_TO_MEMORY_TYPE.find(memType) == OPERAND_TYPE_TO_MEMORY_TYPE.end()) {
-        ALOG_ERROR_F("%s: invalid memory type(%d) of tensor tensor: ", __FUNCTION__, static_cast<size_t>(memType));
-        ALOG_ERROR_F("    %s", tensor->Dump().c_str());
+        ALOG_ERROR_F("%s: memory type(%d) of tensor from PASS is invalid, tensor is: %s", __FUNCTION__,
+            static_cast<size_t>(memType), tensor->Dump().c_str());
         return std::nullopt;
     }
 
@@ -561,7 +563,7 @@ std::pair<int, std::string> CodeGenCloudNPU::CompileCCE(
 
     ret = std::system(ccecCmd.c_str());
     if (ret != 0) {
-        ALOG_ERROR_F("CompileCce ccec failed %d: %s", ret, ccecCmd.c_str());
+        ALOG_ERROR_F("Compile cce kernel failed, ret = %d\ncompile cmd is:\n %s", ret, ccecCmd.c_str());
     }
 
     return {ret, ccecCmd};
@@ -591,12 +593,11 @@ void EncodeWaitUntilInfo(const Operation &op, std::vector<int32_t> &code) {
         code.push_back(dimShape);
     }
     // 编码waitUntil的attr属性
-    std::map<std::string, npu::tile_fwk::Any> map = op.GetAllAttribute();
+    std::map<std::string, Any> map = op.GetAllAttribute();
     auto it = map.find(OpAttributeKey::distOpAttr);
     std::vector<int64_t> attrs;
     if (it != map.end()) {
-        npu::tile_fwk::Distributed::DistOpAttr distOpAttr =
-            npu::tile_fwk::AnyCast<npu::tile_fwk::Distributed::DistOpAttr>(it->second);
+        Distributed::DistOpAttr distOpAttr = AnyCast<Distributed::DistOpAttr>(it->second);
         attrs = distOpAttr.aicpuOpParams;
     }
     if (attrs.size() != 0) {

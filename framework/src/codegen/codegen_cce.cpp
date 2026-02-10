@@ -23,7 +23,7 @@
 namespace npu::tile_fwk {
 std::string CodeGenCCE::GetEmitPath(const std::string &name) {
     std::string dirPath;
-    if (npu::tile_fwk::ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
+    if (ConfigManager::Instance().GetCodeGenConfig(KEY_FIXED_OUTPUT_PATH, false)) {
         dirPath = name;
     } else {
         dirPath = config::LogTopFolder() + "/" + name;

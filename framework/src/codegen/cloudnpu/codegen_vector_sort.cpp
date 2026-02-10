@@ -496,9 +496,9 @@ std::string CodeGenOpCloudNPU::GenTopKSortOp() const {
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalar = opAttrs.at(OpAttributeKey::dynScalar);
         ASSERT((scalar.HasValue()) && (scalar.Type() == typeid(SymbolicScalar)))
-            << npu::tile_fwk::AnyCast<SymbolicScalar>(scalar).IsValid()
+            << AnyCast<SymbolicScalar>(scalar).IsValid()
             << "SCALAR attribute has to have symbolic value.";
-        auto scalarExpr = npu::tile_fwk::AnyCast<SymbolicScalar>(scalar);
+        auto scalarExpr = AnyCast<SymbolicScalar>(scalar);
         startIdx = SymbolicExpressionTable::BuildExpression(scalarExpr);
     }
 

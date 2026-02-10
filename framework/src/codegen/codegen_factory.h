@@ -35,7 +35,7 @@ public:
         if (platform == NPUArch::DAV_2201 || platform == NPUArch::DAV_3510) {
             return std::make_shared<CodeGenCloudNPU>(ctx);
         }
-        ASSERT(false) << "can not support this platform";
+        ASSERT(false) << "can not support this platform: " << ToUnderlying(platform) << ", please check environment";
         return nullptr;
     }
 };

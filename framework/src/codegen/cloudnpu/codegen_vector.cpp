@@ -154,20 +154,20 @@ std::string CodeGenOpCloudNPU::GenDupOp() const {
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalar = opAttrs.at(OpAttributeKey::dynScalar);
         ASSERT((scalar.HasValue()) && (scalar.Type() == typeid(SymbolicScalar)))
-            << npu::tile_fwk::AnyCast<SymbolicScalar>(scalar).IsValid()
+            << AnyCast<SymbolicScalar>(scalar).IsValid()
             << "SCALAR attribute has to have symbolic value.";
-        auto scalarExpr = npu::tile_fwk::AnyCast<SymbolicScalar>(scalar);
+        auto scalarExpr = AnyCast<SymbolicScalar>(scalar);
         dupV = SymbolicExpressionTable::BuildExpression(scalarExpr);
     } else if (dstDtypeStr == "float" || dstDtypeStr == "half" || dstDtypeStr == "bfloat16_t") {
         auto scalar = opAttrs.at(OpAttributeKey::scalar);
         ASSERT((scalar.HasValue()) && (scalar.Type() == typeid(Element)))
-            << npu::tile_fwk::AnyCast<Element>(scalar).IsFloat() << "SCALAR attribute has to have float value.";
-        dupV = std::to_string(npu::tile_fwk::AnyCast<Element>(scalar).Cast<float>());
+            << AnyCast<Element>(scalar).IsFloat() << "SCALAR attribute has to have float value.";
+        dupV = std::to_string(AnyCast<Element>(scalar).Cast<float>());
     } else if (dstDtypeStr == "int32_t") {
         auto scalar = opAttrs.at(OpAttributeKey::scalar);
         ASSERT((scalar.HasValue()) && (scalar.Type() == typeid(Element)))
-            << npu::tile_fwk::AnyCast<Element>(scalar).IsSigned() << "SCALAR attribute has to have int value.";
-        dupV = std::to_string(npu::tile_fwk::AnyCast<Element>(scalar).Cast<int>());
+            << AnyCast<Element>(scalar).IsSigned() << "SCALAR attribute has to have int value.";
+        dupV = std::to_string(AnyCast<Element>(scalar).Cast<int>());
     } else {
         ASSERT(false) << "unsupported type";
     }
@@ -214,7 +214,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveLayout(const PrintTranspose
     std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
     std::vector<int64_t> transposeAxis =
-        npu::tile_fwk::AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM5 - originShape[param.localIdx].size();
     std::vector<std::string> uselessVector0;
     std::vector<std::string> uselessVector1;
@@ -252,7 +252,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveStatic(const PrintTranspose
         paramList.emplace_back(std::to_string(srcShape[i]));
     }
     std::vector<int64_t> transposeAxis =
-        npu::tile_fwk::AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM4 - originShape[0].size();
     for (auto &axis : transposeAxis) {
         axis += correctionAxis;
@@ -298,7 +298,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveDynamic(const PrintTranspos
         paramList.emplace_back(std::to_string(srcShape[i]));
     }
     std::vector<int64_t> transposeAxis =
-        npu::tile_fwk::AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM4 - originShape[1].size();
     for (auto &axis : transposeAxis) {
         axis += correctionAxis;
@@ -346,7 +346,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveDynamicUnaligned(const Prin
         paramList.emplace_back(std::to_string(localShape[i]));
     }
     std::vector<int64_t> transposeAxis =
-        npu::tile_fwk::AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM5 - originShape[localIdx].size();
     for (auto &axis : transposeAxis) {
         axis += correctionAxis;
@@ -492,7 +492,7 @@ std::string CodeGenOpCloudNPU::GenGatherFromUBOp() const {
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
     ASSERT(opAttrs.find("op_attr_axis") != opAttrs.end()) << "GenGatherOp: There is nop axis attribute here";
-    const int64_t axis = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at("op_attr_axis"));
+    const int64_t axis = AnyCast<int64_t>(opAttrs.at("op_attr_axis"));
     // shape: dst, src0, src1
     int src0Rank = shape[ID1].size();
     ASSERT(src0Rank <= RANK4) << "GenGatherOp: src0 shape rank is not supported!";
@@ -620,7 +620,7 @@ std::string CodeGenOpCloudNPU::GenGatherElementOp() const {
     int gatherEleAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "axis");
     if (axis.HasValue()) {
-        gatherEleAxis = npu::tile_fwk::AnyCast<int64_t>(axis);
+        gatherEleAxis = AnyCast<int64_t>(axis);
     }
     if (isSupportLayout) {
         return PrintGatherElementTileTensor({gatherEleAxis, dVar, s0Var, s1Var, dos, ds, s0s, s1s, dataTypeExpr});
@@ -698,8 +698,8 @@ std::string CodeGenOpCloudNPU::PrintIndexPutLayout(size_t indicesSize, bool accu
 std::string CodeGenOpCloudNPU::GenIndexPutOp() const {
     ASSERT(opAttrs.count(OpAttributeKey::accumulate)) << "cannot get accumulate attr";
     ASSERT(opAttrs.count(OpAttributeKey::indicesSize)) << "cannot get indicesSize attr";
-    bool accumulate = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OpAttributeKey::accumulate));
-    int64_t indicesSize = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OpAttributeKey::indicesSize));
+    bool accumulate = AnyCast<bool>(opAttrs.at(OpAttributeKey::accumulate));
+    int64_t indicesSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::indicesSize));
     if (isSupportLayout) {
         return PrintIndexPutLayout(indicesSize, accumulate);
     }
@@ -750,25 +750,25 @@ std::string CodeGenOpCloudNPU::GenRangeOp() const {
 
     switch (operandDtype[ID0]) {
         case DataType::DT_FP32:
-            startVal = std::to_string(npu::tile_fwk::AnyCast<Element>(start).Cast<float>());
-            stepVal = std::to_string(npu::tile_fwk::AnyCast<Element>(step).Cast<float>());
+            startVal = std::to_string(AnyCast<Element>(start).Cast<float>());
+            stepVal = std::to_string(AnyCast<Element>(step).Cast<float>());
             break;
         case DataType::DT_INT32:
-            startVal = std::to_string(npu::tile_fwk::AnyCast<Element>(start).Cast<int>());
-            stepVal = std::to_string(npu::tile_fwk::AnyCast<Element>(step).Cast<int>());
+            startVal = std::to_string(AnyCast<Element>(start).Cast<int>());
+            stepVal = std::to_string(AnyCast<Element>(step).Cast<int>());
             break;
         case DataType::DT_INT64:
-            startVal = std::to_string(npu::tile_fwk::AnyCast<Element>(start).Cast<int64_t>());
-            stepVal = std::to_string(npu::tile_fwk::AnyCast<Element>(step).Cast<int64_t>());
+            startVal = std::to_string(AnyCast<Element>(start).Cast<int64_t>());
+            stepVal = std::to_string(AnyCast<Element>(step).Cast<int64_t>());
             break;
-        default: ALOG_ERROR_F("GenRangeOp: Unsupport type: DataType=%d", operandDtype[ID0]); return "CG_ERROR";
+        default: ALOG_ERROR_F("RangeOp from PASS occured unsupport DataType: %d", operandDtype[ID0]); return "CG_ERROR";
     }
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
         ASSERT((scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
-            << npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny).IsValid()
+            << AnyCast<SymbolicScalar>(scalarAny).IsValid()
             << "SCALAR attribute has to have symbolic value.";
-        auto scalarExpr = npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny);
+        auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
         tileIdxExpr = "((int64_t)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + "))";
     }
     if (isSupportLayout) {
@@ -881,7 +881,7 @@ std::string CodeGenOpCloudNPU::GenIndexAddOp() const {
     AppendLocalBufVarOffsetInOrder(dstVar, selfVar, srcVar, indicesVar);
 
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
-    int axis = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+    int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
     if (isSupportLayout) {
         return PrintIndexAddTileTensor({axis, dstVar, srcVar, indicesVar, dstRawShape, srcRawShape, dataTypeExpr});
     }
@@ -952,11 +952,11 @@ std::string CodeGenOpCloudNPU::GenCumSumOp() const {
     AppendLocalBufVarOffsetInOrder(dstVar, inputVar);
 
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
-    int axis = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+    int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
     axis = axis + SHAPE_DIM4 - inputRawShape.size(); // 调用4维tileop需要切换axis
 
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "flag")) << "cannot get flag attr";
-    bool flag = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OP_ATTR_PREFIX + "flag"));
+    bool flag = AnyCast<bool>(opAttrs.at(OP_ATTR_PREFIX + "flag"));
 
     if (isSupportLayout) {
         return PrintCumSumTileTensor(axis);
@@ -980,11 +980,11 @@ std::string CodeGenOpCloudNPU::GenTriULOp() const {
     ASSERT(opAttrs.count(OpAttributeKey::isUpper)) << "cannot get isUpper attr";
     auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
     ASSERT((scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
-        << npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny).IsValid() << "diagonal must have symbolic value.";
-    auto scalarExpr = npu::tile_fwk::AnyCast<SymbolicScalar>(scalarAny);
-    
+        << AnyCast<SymbolicScalar>(scalarAny).IsValid() << "diagonal must have symbolic value.";
+    auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
+
     std::string diagonal = "(int)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + ")";
-    bool isUpper = npu::tile_fwk::AnyCast<bool>(opAttrs.at(OpAttributeKey::isUpper));
+    bool isUpper = AnyCast<bool>(opAttrs.at(OpAttributeKey::isUpper));
 
     ASSERT(isSupportLayout) << "TriU or TriL only support TileTensor mode";
     return PrintTriULTileTensor(diagonal, isUpper);
@@ -1096,8 +1096,8 @@ std::string CodeGenOpCloudNPU::PrintScatterElementSTileTensor(const PrintScatter
 std::string CodeGenOpCloudNPU::GenScatterElementSOp() const {
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "scatter_mode")) << "cannot get scatter mode attr";
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
-    int axis = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
-    int scatterMode = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "scatter_mode"));
+    int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+    int scatterMode = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "scatter_mode"));
     const DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
     const DataType src0Dtype = operandDtype[ToUnderlying(MISOIdx::SRC0_IDX)];
     const DataType src1Dtype = operandDtype[ToUnderlying(MISOIdx::SRC1_IDX)];
@@ -1191,8 +1191,8 @@ std::string CodeGenOpCloudNPU::PrintScatterTileTensor(const PrintScatterParam &p
 std::string CodeGenOpCloudNPU::GenScatterOp() const {
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "scatter_mode")) << "cannot get scatter mode attr";
     ASSERT(opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
-    int axis = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
-    int scatterMode = npu::tile_fwk::AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "scatter_mode"));
+    int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
+    int scatterMode = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "scatter_mode"));
     const DataType dstDtype = operandDtype[ID0];
     const DataType src1Dtype = operandDtype[ID3];
     const DataType src2Dtype = operandDtype[ID4];
@@ -1454,14 +1454,14 @@ std::string CodeGenOpCloudNPU::PrintCmpTileTensor() const {
 
     auto cmpOp = opAttrs.at(OP_ATTR_PREFIX + "cmp_operation");
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "cmp_mode");
-    std::string cmpOpVal = std::to_string(npu::tile_fwk::AnyCast<int64_t>(cmpOp));
-    std::string modeVal = std::to_string(npu::tile_fwk::AnyCast<int64_t>(mode));
+    std::string cmpOpVal = std::to_string(AnyCast<int64_t>(cmpOp));
+    std::string modeVal = std::to_string(AnyCast<int64_t>(mode));
 
     std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
     std::vector<std::string> templateParamList = {cmpOpVal, modeVal};
     if (opCode == Opcode::OP_CMPS) {
         auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
-        auto scalarElement = npu::tile_fwk::AnyCast<npu::tile_fwk::Element>(scalarAttr);
+        auto scalarElement = AnyCast<Element>(scalarAttr);
         float scalarValue = static_cast<float>(scalarElement.GetFloatData());
         auto scalarType = scalarElement.GetDataType();
         if (scalarType == DataType::DT_FP16) {
@@ -1519,13 +1519,13 @@ std::string CodeGenOpCloudNPU::GenCmpOp() const {
 
     auto cmpOp = opAttrs.at(OP_ATTR_PREFIX + "cmp_operation");
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "cmp_mode");
-    std::string cmpOpVal = std::to_string(npu::tile_fwk::AnyCast<int64_t>(cmpOp));
-    std::string modeVal = std::to_string(npu::tile_fwk::AnyCast<int64_t>(mode));
+    std::string cmpOpVal = std::to_string(AnyCast<int64_t>(cmpOp));
+    std::string modeVal = std::to_string(AnyCast<int64_t>(mode));
 
     float scalarValue = 0.0f;
     if (isScalarMode) {
         auto scalarAttr = opAttrs.at(OpAttributeKey::scalar);
-        auto scalarElement = npu::tile_fwk::AnyCast<npu::tile_fwk::Element>(scalarAttr);
+        auto scalarElement = AnyCast<Element>(scalarAttr);
         scalarValue = static_cast<float>(scalarElement.GetFloatData());
     }
 
