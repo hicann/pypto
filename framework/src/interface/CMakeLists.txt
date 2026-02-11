@@ -66,6 +66,7 @@ if (ENABLE_TORCH_VERIFIER)
     target_sources(tile_fwk_calculator
             PRIVATE
                 interpreter/calculator/calc_torch.cpp
+                interpreter/calculator/fp8_convert.cpp
     )
     target_compile_options(tile_fwk_calculator
             PRIVATE
