@@ -957,12 +957,17 @@
                     }
                 },
                 "pass_strategies": {
-                    "PVC2_OOO":{
-                        "type": "object",
-                        "label": {
-                            "zh": "PVC2_OOO调度策略。",
-                            "en": "PVC2_OOO Pass Scheduling Strategy."
-                        }
+                    "type": "object",
+                    "properties": {
+                        "PVC2_OOO": {
+                            "type": "object",
+                            "label": {
+                                "zh": "PVC2_OOO调度策略。",
+                                "en": "PVC2_OOO Pass Scheduling Strategy."
+                            },
+                            "properties": {     
+                            }
+                        }   
                     }
                 }
             }
