@@ -52,18 +52,8 @@ from typing import List, Any, Optional, Tuple, Dict, Callable
 from pathlib import Path
 
 from utils.args_action import ArgsEnvDictAction
-from utils.executable import Executable
+from utils.executable import Exec
 from utils.table import Table
-
-
-@dataclasses.dataclass
-class CaseDesc:
-    name: Optional[str] = None
-    duration_estimate: Optional[float] = None
-
-    def __init__(self, name: str, duration_estimate: Optional[float] = None):
-        self.name = name
-        self.duration_estimate = duration_estimate
 
 
 class ArgsCaseListAction(argparse.Action):
@@ -162,25 +152,6 @@ class TestsAccelerate(ABC):
             with path.open("w", encoding="utf-8") as f:
                 json.dump(duration_dict, f, indent=4)
 
-        @staticmethod
-        def load_case_duration_from_json(desc_dict: Dict[str, CaseDesc], path: Optional[Path] = None):
-            if path is None:
-                return
-            if not path.exists():
-                return
-            try:
-                with path.open("r", encoding="utf-8") as f:
-                    case_duration_dict = json.load(f)
-            except json.JSONDecodeError:
-                return
-            update_cnt = 0
-            for case_name, duration in case_duration_dict.items():
-                desc = desc_dict.get(case_name, None)
-                if desc:
-                    desc.duration_estimate = float(duration)
-                    update_cnt += 1
-            logging.info("Determine TestCase Order, %s case's estimate update by local cache file", update_cnt)
-
         def get_cntr_exec_info(self) -> Tuple[str, str]:
             """获取 Container 执行信息统计.
 
@@ -264,7 +235,7 @@ class TestsAccelerate(ABC):
                 brief += f"\nIdx:{idx}/{len(datas)}\n{data}"
             return f"\n\nCase Exception Brief({len(datas)}):{brief}", len(datas)
 
-        def get_case_exec_duration_info(self, case_dict: Dict[str, CaseDesc],
+        def get_case_exec_duration_info(self, case_dict: Dict[str, Exec.CaseDesc],
                                         min_print_cnt: Optional[int] = None,
                                         dump_json_path: Optional[Path] = None,
                                         dump_item_num: int = 100,
@@ -282,8 +253,8 @@ class TestsAccelerate(ABC):
                 case_duration = _brief[2]
                 case_desc = case_dict.get(case_name, None)
                 case_estimate = ""
-                if case_desc and case_desc.duration_estimate:
-                    case_estimate = timedelta(seconds=case_desc.duration_estimate).total_seconds()
+                if case_desc and case_desc.duration:
+                    case_estimate = timedelta(seconds=case_desc.duration).total_seconds()
                 cntr_duration = self.cntr_duration_dict[cntr_id]
                 ratio_cntr = float(case_duration / cntr_duration) * 100
                 ratio_process = float(case_duration / self.act_duration) * 100
@@ -399,7 +370,7 @@ class TestsAccelerate(ABC):
         self.mark: str = scene_mark
 
         # 用例执行参数, 执行行为控制参数
-        self.exe: Executable = Executable(file=args.target[0], envs=args.envs, timeout=args.timeout_case)
+        self.exe: Exec = Exec(file=args.target[0], envs=args.envs, timeout=args.timeout_case)
         self.exe_params: List[TestsAccelerate.ExecParam] = []
         self.exe_result: TestsAccelerate.ExecResult = TestsAccelerate.ExecResult(cntr_name=cntr_name)
         self.exe_timeout: Optional[int] = args.timeout
@@ -409,10 +380,13 @@ class TestsAccelerate(ABC):
         self.case_duration_json: Path = self._init_get_case_duration_json(args=args)
         self.case_duration_max_num: int = self._init_get_case_duration_max_num(args=args)
         self.case_duration_min_sec: float = self._init_get_case_duration_min_sec(args=args)
-        self.case_dict: Dict[str, CaseDesc] = {}
-        self.case_list: List[CaseDesc] = []
+        self.case_list: List[Exec.CaseDesc] = []
+        self.case_dict: Dict[str, Exec.CaseDesc] = {}
         self.case_ordered_cnt: int = 0
-        self._init_case_info(args=args)
+        self.case_ordered_cnt, self.case_list, self.case_dict = self.exe.get_case_name_info(
+            case_name_list=args.cases, duration_json=self.case_duration_json
+        )
+
         self.case_queue: JoinableQueue = JoinableQueue()
         self.case_execution_queue: JoinableQueue = JoinableQueue()  # Case 正常执行结束时, 收集相关信息
         self.case_exception_queue: JoinableQueue = JoinableQueue()  # Case 执行失败时, 用于收集错误信息
@@ -440,13 +414,14 @@ class TestsAccelerate(ABC):
             [f"{self.cntr_name}List", [p.cntr_id for p in self.exe_params]],
             ["CaseNum", self.case_num],
             ["CaseTimeout", self.exe.timeout],
+            ["CaseDurationFile", self.case_duration_json],
+            ["CaseDurationMaxNum", self.case_duration_max_num],
+            ["CaseDurationMinSecs", self.case_duration_min_sec],
             ["Executable", self.exe.file],
         ]
         if self.cpu_rank_size:
             lst.append(["CpuRankSize", self.cpu_rank_size])
             lst.append(["CpuAffinityPolicy", f"{self.cpu_affinity_policy_str}({self.cpu_affinity_policy})"])
-        for k, v in self.exe.envs.items():
-            lst.append([k, v])
         return lst
 
     @property
@@ -551,7 +526,7 @@ class TestsAccelerate(ABC):
             return int(env_max_num)
 
         # 默认值
-        return 100
+        return 500
 
     @staticmethod
     def _init_get_case_duration_min_sec(args) -> float:
@@ -635,60 +610,6 @@ class TestsAccelerate(ABC):
         else:
             logging.error(out)
         return case_exec_result
-
-    def _init_case_info(self, args):
-        # 确定用例名列表
-        case_name_list = args.cases  # 其内容为用例名列表
-        if len(case_name_list) == 0 or "*" in case_name_list:
-            case_name_list = self._init_get_case_name_list_from_exe()
-            logging.info("Determine TestCase from executable, get %s cases", len(case_name_list))
-        else:
-            logging.info("Determine TestCase from args, get %s cases", len(case_name_list))
-        # 补充刷新预估耗时信息(由用例内)
-        self.case_dict = {name: CaseDesc(name=name) for name in case_name_list}
-        ret, _, _, = self.exe.run(params=["--gtest_list_tests_with_meta"], check=True)  # 自定义参数
-        pattern = re.compile(r'^([\w\.]+)\|(\d+\.?\d*)$', re.MULTILINE)
-        matches = pattern.findall(ret.stdout)
-        for test_name, cost_str in matches:
-            case_desc = self.case_dict.get(test_name, None)
-            if case_desc:
-                case_desc.duration_estimate = float(cost_str.strip())
-        # 补充刷新预估耗时信息(由本地缓存)
-        self.ExecResult.load_case_duration_from_json(desc_dict=self.case_dict, path=self.case_duration_json)
-        # 重排用例
-        self.case_list = self.case_dict.values()
-        self.case_list = sorted(self.case_list,
-                                key=lambda x: x.duration_estimate if x.duration_estimate is not None else float('-inf'),
-                                reverse=True)
-        self.case_ordered_cnt = 0
-        for desc in self.case_list:
-            if desc.duration_estimate:
-                self.case_ordered_cnt += 1
-            else:
-                break  # 排序后, 有耗时预估的会排在前面
-        normal_cnt = len(self.case_list) - self.case_ordered_cnt
-        logging.info("Determine TestCase Order, OrderdCase(%s), NormalCase(%s)", self.case_ordered_cnt, normal_cnt)
-
-    def _init_get_case_name_list_from_exe(self) -> List[str]:
-        """
-        从可执行文件中获取测试用例列表:
-
-        :return: 用例名列表
-        :rtype: List[str]
-        """
-        case_name_list = []
-        ret, _, _, = self.exe.run(params=["--gtest_list_tests"], check=True)  # GoogleTest 原生参数
-        for line in ret.stdout.split('\n'):
-            line = line.rstrip()
-            if not line or line.startswith('#') or "GoogleTestVerification" in line:
-                continue
-            if line.endswith('.'):
-                current_suite = line[:-1]
-            elif line.startswith('  '):
-                test_name = line.strip()
-                full_name = f"{current_suite}.{test_name}"
-                case_name_list.append(full_name)
-        return case_name_list
 
     def _prepare_determine_cpu_affinity_policy(self):
         """初始化 CPU 亲和性策略

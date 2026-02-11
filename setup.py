@@ -8,7 +8,13 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-"""集成 CMake 处理的 setuptools 配置.
+"""PyPTO setuptools 配置模块
+
+本模块提供了集成 CMake 构建系统的 setuptools 配置, 支持:
+    - 使用 CMake 进行扩展模块的构建
+    - 支持可编辑安装模式 (editable install)
+    - 支持自定义 CMake 生成器、构建类型和选项
+    - 支持 CMake 安装文件的自动追踪
 """
 import argparse
 import importlib
@@ -35,17 +41,37 @@ from setuptools.command.build_ext import build_ext
 
 
 class CMakeExtension(Extension):
+    """CMake 扩展模块的占位类
+
+    本类不执行实际的扩展构建工作, 仅作为 setuptools 扩展模块的占位符. 实际的构建工作由 CMakeBuild 类通过调用 CMake 完成.
+    """
+
     def __init__(self):
+        """初始化 CMakeExtension 实例
+
+        创建空的 Extension 对象, 实际构建由 CMake 处理.
+        """
         super().__init__(name="", sources=[])  # 源文件列表为空, 因为实际构建由 CMake 处理
 
 
 class EditModeHelper:
+    """可编辑安装模式的辅助工具类
+
+    提供获取 pip 可编辑模式实际安装路径的工具方法.
+    """
+
     @staticmethod
     def get_pip_edit_mode_install_path() -> Path:
-        """获取 pip edit 模式实际安装包的路径
+        """获取 pip 可编辑模式下的实际安装包路径
 
-        以 editable 模式执行时, editable_wheel 结束后, whl 包的安装由 pip 接管.
-        无法在通过自定义 setuptools 子命令('install') 的方式获取 whl 安装路径.
+        以可编辑模式 (editable) 执行时, editable_wheel 命令结束后,
+        whl 包的安装由 pip 接管, 无法通过自定义 setuptools 子命令 ('install') 的方式获取 whl 安装路径.
+
+        本方法通过遍历 site-packages 路径, 优先返回包含 "dist-packages" 的路径
+        (Debian/Ubuntu 系统) , 否则返回第一个 site-packages 路径.
+
+        :return: pip 可编辑模式下的安装路径
+        :rtype: Path
         """
         # 优先取用户级路径, 再取系统级路径
         site_paths = site.getsitepackages()
@@ -60,15 +86,26 @@ class EditModeHelper:
 class CustomEditableWheel(editable_wheel, EditModeHelper):
     """自定义 editable_wheel 命令
 
-    1. 感知 -e 模式, 传递给 build_ext 以便其处理 CMake install 路径;
-    2. 接收 build_ext 传递的 CMake install files 并回写入 whl 包的 RECORD 文件, 以便 -e 模式下对应文件可以随 uninstall 流程删除;
+    继承自 setuptools 的 editable_wheel 命令, 提供以下功能:
 
-    回写 RECORD 文件功能暂未使能, 因插入 RECORD 记录内对应的文件本质未受 whl 包管理.
-    在多次执行 pip install -e 的场景下, 会执行先编译(Install 或 Rewrite对应 CMake Install 文件), 再卸载, 再安装的流程.
-    卸载阶段因 RECORD 文件内有相关文件记录, 会导致对应文件被删除, 进而导致重复 pip install -e 结束后, 对应文件被删除的问题.
+    1. 感知 -e (可编辑) 模式, 传递标记给 build_ext 以便其处理 CMake 安装路径
+    2. 接收 build_ext 传递的 CMake 安装文件列表, 并将其写入 whl 包的 RECORD 文件
+       以便在 -e 模式下对应文件可以随 uninstall 流程删除
+
+    关于 RECORD 文件写入:
+        RECORD 文件回写功能暂未使能, 原因如下:
+        - 插入到 RECORD 记录内的 CMake 安装文件本质不受 whl 包管理
+        - 在多次执行 "pip install -e" 的场景下, 会执行:
+          先编译 (Install 或 Rewrite 对应 CMake 安装文件) -> 再卸载 -> 再安装 的流程
+        - 卸载阶段因 RECORD 文件内有相关文件记录, 会导致对应文件被删除,
+          从而导致重复 "pip install -e" 结束后, 对应文件被删除的问题
     """
 
     def run(self):
+        """执行 editable_wheel 命令
+
+        传递 -e 模式标记给 build_ext 命令, 然后继续执行标准的命令流程. 这会触发 build_ext、egg_info 等子命令.
+        """
         # 传递 -e 模式标记给 build_ext 命令
         build_ext_cmd = self.distribution.get_command_obj("build_ext")
         build_ext_cmd.pypto_editable_mode = True  # 设置标记
@@ -76,14 +113,20 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
         super().run()
 
     def _insert_cmake_install_files_to_whl_record_file(self):
-        """接收 build_ext 传递的 CMake install files 并回写入 whl 包的 RECORD 文件
+        """接收 build_ext 传递的 CMake 安装文件并写入 whl 包的 RECORD 文件
+
+        该方法会:
+        1. 获取 CMake 安装文件列表
+        2. 为每个文件计算 SHA256 哈希和文件大小
+        3. 生成符合 setuptools 标准格式的 RECORD 条目
+        4. 将新增条目插入 whl 包的 RECORD 文件
         """
         # 获取 RECORD 新增条目字符串
         record_str, record_num = self._get_cmake_install_files_record_info()
         if not record_str:
             return
 
-        # 获取 setuptools 内置的 wheel 包, 避免直接使用 wheel 包, 减少因与 setuptools 内置的 wheel 包版本不一致导致兼容性问题的
+        # 获取 setuptools 内置的 wheel 包, 避免直接使用 wheel 包, 减少因与 setuptools 内置的 wheel 包版本不一致导致兼容性问题
         try:
             vendor_wheel = importlib.import_module('setuptools._vendor.wheel.wheelfile')
             setuptools_wheel = getattr(vendor_wheel, 'WheelFile')
@@ -104,6 +147,16 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
             wf.writestr(str(record_file), record_str.encode("utf-8"))
 
     def _get_cmake_install_files_record_info(self) -> Tuple[str, int]:
+        """获取 CMake 安装文件的 RECORD 条目信息
+
+        生成符合 setuptools 标准格式的 RECORD 条目字符串, 包括:
+        1. 相对于 site-packages 的路径
+        2. SHA256 哈希值
+        3. 文件大小
+
+        :return: RECORD 条目字符串和条目数量
+        :rtype: Tuple[str, int]
+        """
         # 获取 cmake install 文件列表
         install_files = self._get_cmake_install_files()
         if not install_files:
@@ -130,6 +183,13 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
         return "\n".join(record_entries), len(record_entries)
 
     def _get_cmake_install_files(self) -> List[Path]:
+        """获取 CMake 安装文件列表
+
+        从 build_ext 命令传递的 manifest 中读取 CMake 安装的文件列表.
+
+        :return: CMake 安装文件路径列表
+        :rtype: List[Path]
+        """
         install_files = []
         if not (hasattr(self, 'pypto_install_manifest_lst') and self.pypto_install_manifest_lst):
             logging.warning("Can't get any CMake install manifest.")
@@ -138,6 +198,14 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
         return install_files
 
     def _get_editable_whl_file(self) -> Path:
+        """获取可编辑模式的 whl 文件路径
+
+        根据分布信息名称查找对应 editable whl 文件.
+
+        :return: 可编辑模式的 whl 文件路径
+        :rtype: Path
+        :raises RuntimeError: 如果找不到对应的 whl 文件
+        """
         dist_info = self.get_finalized_command("dist_info")
         dist_name = getattr(dist_info, "name", "pypto")
         whl_pattern = f"{dist_name}-*.editable-*.whl"
@@ -148,6 +216,24 @@ class CustomEditableWheel(editable_wheel, EditModeHelper):
 
 
 class CMakeUserOption:
+    """CMake 用户选项配置类
+
+    管理从命令行或环境变量传递的 CMake 配置选项.
+
+    支持的配置选项:
+        - cmake-generator: CMake 生成器 (如 "Unix Makefiles" 或 "Ninja")
+        - cmake-build-type: 构建类型 (如 "Debug" 或 "Release")
+        - cmake-options: 额外的 CMake 选项
+        - cmake-verbose: 是否启用 CMake 详细输出
+
+    配置来源:
+        1. 命令行参数
+        2. 环境变量 PYPTO_BUILD_EXT_ARGS
+
+    优先级:
+        命令行配置优先于环境变量配置.
+        --cmake-generator 和 --cmake-build-type 优先于 --cmake-options 中冲突的选项.
+    """
     # 额外的命令行配置, 格式: 长选项, 短选项, 描述, 默认值
     USER_OPTION = [
         ('cmake-generator=', None, 'CMake Generator', None),
@@ -157,6 +243,7 @@ class CMakeUserOption:
     ]
 
     def __init__(self):
+        """初始化 CMakeUserOption 实例"""
         self.cmake_generator: Optional[str] = None
         self.cmake_build_type: Optional[str] = None
         self.cmake_options: Optional[str] = None
@@ -164,7 +251,12 @@ class CMakeUserOption:
         # 获取 CMake 路径
         self.cmake: Optional[Path] = None
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """返回 CMake 配置的字符串表示
+
+        :return: 格式化的配置信息字符串
+        :rtype: str
+        """
         ver = sys.version_info
         ver1 = metadata.version("setuptools")
         ver2 = metadata.version("pybind11")
@@ -187,7 +279,10 @@ class CMakeUserOption:
     def which_cmake() -> Optional[Path]:
         """查找系统级 CMake 可执行文件路径
 
-        排除 cmake pip 包的干扰
+        排除 cmake pip 包的干扰, 通过遍历 PATH 环境变量查找 ELF 格式的 CMake 可执行文件.
+
+        :return: 系统 CMake 可执行文件路径, 找不到则返回 None
+        :rtype: Optional[Path]
         """
         # 拆分 PATH 环境变量为单个目录列表(排除空目录)
         path_dir_lst = [d.strip() for d in os.environ.get("PATH", "").split(os.pathsep) if d.strip()]
@@ -216,6 +311,12 @@ class CMakeUserOption:
         return None
 
     def initialize_options_cmake(self):
+        """初始化 CMake 选项
+
+        赋初值, 从环境变量 PYPTO_BUILD_EXT_ARGS 中获取配置值作为默认值. 环境变量中的配置会被后续命令行参数覆盖.
+
+        :raises RuntimeError: 如果找不到 CMake 可执行文件
+        """
         # 赋初值, 此处需赋初值, 否则 setuptools 会丢失对应参数
         self.cmake_generator = None
         self.cmake_build_type = None
@@ -243,6 +344,12 @@ class CMakeUserOption:
         self.cmake_verbose = args.cmake_verbose
 
     def finalize_options_cmake(self):
+        """处理并修正 CMake 选项
+
+        处理命令行传递的参数值, 修正冲突的选项:
+        - --cmake-generator 和 --cmake-build-type 优先于 --cmake-options 中冲突的选项
+        - 为生成器名称添加引号以支持带空格的名称
+        """
         # 赋传参值
         self.cmake_generator = None if not self.cmake_generator else self.cmake_generator
         if self.cmake_generator:
@@ -269,19 +376,55 @@ class CMakeUserOption:
 
 
 class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
-    """自定义构建命令, 调用 CMake 构建系统
+    """自定义 build_ext 命令, 调用 CMake 构建系统
+
+    继承自 setuptools 的 build_ext 命令, 重写构建流程以使用 CMake.
+
+    主要功能:
+        - 调用 CMake 执行 Configure、Build、Install 流程
+        - 支持可编辑安装模式 (editable mode)
+        - 支持自定义 CMake 生成器、构建类型和选项
+        - 将 CMake 安装的文件列表传递给 editable_wheel 命令
+
+    流程:
+        1. CMake Configure: 配置构建参数
+        2. CMake Build: 执行编译
+        3. CMake Install: 安装文件到目标目录
+        4. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
     """
     user_options = build_ext.user_options + CMakeUserOption.USER_OPTION
 
     @staticmethod
     def _get_job_num(job_num: Optional[int], generator: Optional[str]) -> Optional[int]:
+        """获取构建并行任务数
+
+        根据系统 CPU 核数和构建生成器类型确定合适的并行任务数. 如果使用 Ninja 生成器, 则由 Ninja 自动决定并行度.
+
+        :param job_num: 用户指定的并行任务数
+        :type job_num: Optional[int]
+        :param generator: 构建生成器名称
+        :type generator: Optional[str]
+        :return: 并行任务数, None 表示由构建工具自动决定
+        :rtype: Optional[int]
+        """
         def_job_num = min(int(math.ceil(float(multiprocessing.cpu_count()) * 0.9)), 128)  # 128 为缺省最大核数
-        def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 由其自身决定缺省核数
+        def_job_num = None if generator and generator.lower() in ["ninja", ] else def_job_num  # ninja 自身决定缺省核数
         job_num = job_num if job_num and job_num > 0 else def_job_num
         return job_num
 
     @staticmethod
     def _get_cmake_install_manifest(build_dir: Path, file_name: str = "install_manifest.txt") -> List[str]:
+        """获取 CMake 安装文件清单
+
+        从指定文件中读取 CMake 安装的文件列表.
+
+        :param build_dir: 构建目录
+        :type build_dir: Path
+        :param file_name: 清单文件名称
+        :type file_name: str
+        :return: 安装文件列表
+        :rtype: List[str]
+        """
         installed_files = []
         install_manifest_file = Path(build_dir, file_name)
         if install_manifest_file.exists():
@@ -290,17 +433,31 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         return installed_files
 
     def initialize_options(self):
-        """通过控制命令行选项初始化顺序, 实现实际命令行选项优先生效.
+        """初始化构建选项
+
+        通过控制命令行选项初始化顺序, 实现实际命令行选项优先生效.
+
+        先调用父类的 initialize_options(), 再初始化 CMake 特定选项.
         """
         super().initialize_options()
         self.initialize_options_cmake()
 
     def finalize_options(self):
+        """处理并最终确定构建选项
+
+        先调用父类的 finalize_options(), 再处理 CMake 特定选项.
+        """
         super().finalize_options()
         self.finalize_options_cmake()
 
     def run(self):
         """执行构建流程
+
+        执行完整的 CMake 构建流程:
+        1. CMake Configure: 配置构建参数
+        2. CMake Build: 执行编译
+        3. CMake Install: 安装文件到目标目录
+        4. 如果是可编辑模式, 传递安装文件清单给 editable_wheel
         """
         logging.info("%s", self)
         # 源码根目录
@@ -346,11 +503,23 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
                              len(editable_wheel_cmd.pypto_install_manifest_lst))
 
     def _edit_mode(self) -> bool:
+        """判断是否为可编辑安装模式
+
+        :return: 如果是可编辑模式则返回 True
+        :rtype: bool
+        """
         if hasattr(self, 'pypto_editable_mode') and self.pypto_editable_mode:
             return True
         return False
 
     def _get_cmake_install_prefix(self) -> Path:
+        """获取 CMake 安装前缀路径
+
+        在可编辑安装模式下, 设置为源码相关路径；否则使用构建库路径.
+
+        :return: CMake 安装前缀路径
+        :rtype: Path
+        """
         cmake_install_prefix = Path(self.build_lib)
         if self._edit_mode():
             # 可编辑安装模式下, 设置 CMake Install Prefix 为源码相关路径
@@ -360,7 +529,12 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
         return cmake_install_prefix.resolve()
 
     def _get_cmake_build_prefix(self) -> Path:
-        """ In editable mode have a non-temporary build directory.
+        """获取 CMake 构建前缀路径
+
+        在可编辑模式下使用源码目录下的 build 目录, 否则使用临时构建目录.
+
+        :return: CMake 构建前缀路径
+        :rtype: Path
         """
         build_dir = Path(self.build_temp)
         if self._edit_mode():
@@ -370,12 +544,27 @@ class CMakeBuild(build_ext, CMakeUserOption, EditModeHelper):
 
 
 class SetupCtrl:
-    """SetupTools 流程控制
+    """Setuptools 配置流程控制器
+
+    负责配置和启动 setuptools 的构建流程.
+
+    主要功能:
+        - 配置自定义的命令类 (editable_wheel、build_ext)
+        - 配置扩展模块 (CMakeExtension)
+        - 过滤 setuptools 的警告信息
     """
 
     @classmethod
     def main(cls):
         """主处理流程
+
+        配置并启动 setuptools 构建流程.
+
+        配置项:
+        - 扩展模块: CMakeExtension (占位类)
+        - 自定义命令:
+            - editable_wheel: CustomEditableWheel, 处理可编辑安装模式
+            - build_ext: CMakeBuild, 调用 CMake 进行构建
         """
         warnings.filterwarnings("ignore", category=UserWarning, module="setuptools.command.build_py")
         # Setuptools 配置

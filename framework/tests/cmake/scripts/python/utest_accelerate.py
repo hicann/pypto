@@ -56,7 +56,7 @@ class UTestAccelerate(TestsAccelerate):
                 job_num = int(os.environ.get("PYPTO_TESTS_PARALLEL_NUM", 0))
             else:
                 job_num = int(math.ceil(float(cpu_count()) * 0.8))  # use 0.8 cpu
-        job_num = min(max(int(job_num), 1), cpu_count(), 32, self.case_num)  # 32 表示最大并发度
+        job_num = min(max(int(job_num), 1), cpu_count(), 16, self.case_num)  # 16 表示最大并发度
         return job_num
 
     def _prepare_get_params(self) -> List[TestsAccelerate.ExecParam]:

@@ -11,6 +11,7 @@ dist/
 *.trace
 .clion.source.upload.marker
 *~
+.arts/
 
 pre-commit
 compile_commands.json

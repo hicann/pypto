@@ -34,7 +34,7 @@ function(PTO_Fwk_UTest_AddCaseLib)
             ""
             ${ARGN}
     )
-    add_Library(${ARG_TARGET} STATIC)
+    add_library(${ARG_TARGET} STATIC)
     target_sources(${ARG_TARGET} PRIVATE ${ARG_SOURCES})
     target_include_directories(${ARG_TARGET} PRIVATE ${ARG_PRIVATE_INCLUDE_DIRECTORIES})
     target_link_libraries(${ARG_TARGET}
