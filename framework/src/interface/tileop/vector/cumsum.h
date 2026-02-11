@@ -28,7 +28,9 @@ TILEOP void CumSumTool(T0 dst, T1 src, uint64_t tileH, uint64_t tmpStride) {
     pto::TMOV(tmpDstTile, tmpSrcTile);
 
     for (LoopVar i = 1; i < tileH; i++) {
+        #ifdef __DAV_V220
         pipe_barrier(PIPE_V);
+        #endif
         using TileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, 1, tileW>;
         TileDefine dst0Tile, dst1Tile, src1Tile;
         pto::TASSIGN(dst0Tile, (uint64_t)(dst.GetAddr() + tmpStride + (i - 1) * tileW * dstTypeSize));
