@@ -100,9 +100,16 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1) {
     auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
     auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
 
+    constexpr auto src0TileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
+    constexpr auto src1TileW = TileOp::GetTensorTileShapeDim<T2, DIM_5TH, MAX_DIMS>();
+    using Src0PtoTile = typename std::conditional<(src0TileW == 1 && operand == TileOp::BroadcastOperand::LEFT_OPERAND), 
+        PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
+    using Src1PtoTile = typename std::conditional<(src1TileW == 1 && operand == TileOp::BroadcastOperand::RIGHT_OPERAND), 
+        PtoTile<T2, pto::BLayout::ColMajor>, PtoTile<T2>>::type;
+
     auto dstTile = PtoTile<T0>(dst);
-    auto src0Tile = PtoTile<T1>(src0);
-    auto src1Tile = PtoTile<T2>(src1);
+    auto src0Tile = Src0PtoTile(src0);
+    auto src1Tile = Src1PtoTile(src1);
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
