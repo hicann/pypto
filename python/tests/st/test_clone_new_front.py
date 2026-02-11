@@ -27,7 +27,7 @@ D = 64
 def create_kernel(shape_out):
     @pypto.frontend.jit()
     def kernel_func(
-        in_tensor: pypto.Tensor((B, S, N1, D), pypto.DT_FP32), 
+        in_tensor: pypto.Tensor((B, S, N1, D), pypto.DT_FP32),
     ) -> pypto.Tensor(shape_out, pypto.DT_FP32):
         pypto.set_vec_tile_shapes(1, 1, 64, 64)
         out_tensor = pypto.Tensor(shape_out, pypto.DT_FP32)
@@ -44,10 +44,11 @@ def create_kernel(shape_out):
 
 def test_clone():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
+    torch.npu.set_device(device_id)
     torch.manual_seed(42)
     # prepare data
     input_data = torch.rand((B, S, N1, D), dtype=torch.float32, device=f'npu:{device_id}')
-    
+
     output_shape = (B, S, N1 * D)
     kernel_func = create_kernel(output_shape)
     # compute on npu
@@ -60,4 +61,3 @@ def test_clone():
     golden = input_data.cpu().reshape((B, S, N1 * D)) + 1
 
     assert torch.allclose(output_cpu, golden, atol=1e-3, rtol=1e-3)
-

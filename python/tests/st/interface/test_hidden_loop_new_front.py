@@ -53,6 +53,7 @@ def test_hidden_loop_with_if_jit_function():
     使用jit装饰器测试
     """
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
 
     tiling = 32
     n, m = 1, 1
@@ -76,6 +77,7 @@ def test_hidden_loop_with_if_multiple_shapes():
     测试不同形状
     """
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
 
     test_cases = [
         {"tiling": 16, "n": 1, "m": 1, "s": 32},

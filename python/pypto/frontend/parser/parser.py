@@ -155,29 +155,9 @@ class Parser(doc.NodeVisitor):
         self._lowered_signature_cache = None
         self._bound_dim_values: Optional[dict[str, int]] = None
 
-    @_catch_parser_errors
-    def parse(self) -> "Parser":
-        """The main parse method for parser (lazy mode).
 
-        Prepares the AST but defers actual parsing until execute() is called.
-
-        Returns
-        -------
-        res : Parser
-            Returns self for chaining.
-        """
-        node = self.diag.source.as_ast()
-        analyzer = LivenessAnalyzer()
-        exempt_vars = set(self._parsed_extra_vars.keys())
-        self.delete_after = analyzer.analyze(node, exempt_vars)
-
-        # Store for later execution (lazy mode)
-        self._parsed_node = node
-        return self
-
-    @_catch_parser_errors
+    @staticmethod
     def match_input_shapes(
-        self,
         input_shapes: list[list[int]],
         input_tensor_defs: Optional[list[pypto.Tensor]] = None,
     ) -> dict[str, int]:
@@ -202,8 +182,6 @@ class Parser(doc.NodeVisitor):
         dim_value_map = {}
 
         # Get the signature to know which inputs have symbolic dimensions
-        if input_tensor_defs is None:
-            input_tensor_defs, _ = self.get_signature()
 
         def _assign_dim_value(dim: pypto.SymbolicScalar, actual_value: int) -> None:
             if dim_value_map.get(str(dim), actual_value) != actual_value:
@@ -226,8 +204,29 @@ class Parser(doc.NodeVisitor):
                 raise TypeError(
                     f"Invalid input shape type: {type(actual_input_shape)}, expected list"
                 )
-
         return dim_value_map
+
+
+    @_catch_parser_errors
+    def parse(self) -> "Parser":
+        """The main parse method for parser (lazy mode).
+
+        Prepares the AST but defers actual parsing until execute() is called.
+
+        Returns
+        -------
+        res : Parser
+            Returns self for chaining.
+        """
+        node = self.diag.source.as_ast()
+        analyzer = LivenessAnalyzer()
+        exempt_vars = set(self._parsed_extra_vars.keys())
+        self.delete_after = analyzer.analyze(node, exempt_vars)
+
+        # Store for later execution (lazy mode)
+        self._parsed_node = node
+        return self
+
 
     @_catch_parser_errors
     def bind_dynamic_dims_from_inputs(self, inputs: list[list[int]]) -> None:
@@ -241,7 +240,9 @@ class Parser(doc.NodeVisitor):
 
         """
 
-        self._bound_dim_values = self.match_input_shapes(inputs)
+        input_tensor_defs, output_tensor_defs = self.get_signature()
+        self._bound_dim_values = Parser.match_input_shapes(inputs, [*input_tensor_defs, *output_tensor_defs])
+
 
     @_catch_parser_errors
     def get_signature(

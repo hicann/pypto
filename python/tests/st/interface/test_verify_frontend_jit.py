@@ -73,6 +73,7 @@ def test_verify_dyn():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
 
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    torch.npu.set_device(device_id)
     a = torch.rand(shape, dtype=torch.float16, device=device)
     b = torch.rand(shape, dtype=torch.float16, device=device)
     golden = ((a * (a + b)) - b) * b
