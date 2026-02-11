@@ -515,14 +515,8 @@ void GetInvalidPatternGraph(std::shared_ptr<Function> &currFunctionPtr) {
     currFunctionPtr->inCasts_.push_back(input_cast);
     currFunctionPtr->outCasts_.push_back(output_cast);
 }
-TEST_F(AssignMemoryTypeTest, InValidOpPattern) {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "InValidOpPattern", "InValidOpPattern", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
 
-    Program::GetInstance().InsertFuncToFunctionMap("InValidOpPattern", currFunctionPtr);
-
-    GetInvalidPatternGraph(currFunctionPtr);
-
+void CallAndVerify(std::shared_ptr<Function> &currFunctionPtr, const MemoryType type) {
     std::stringstream ssBefore;
     ssBefore << "Before_AssignMemoryType";
 
@@ -535,7 +529,7 @@ TEST_F(AssignMemoryTypeTest, InValidOpPattern) {
     std::stringstream ss;
     ss << "After_AssignMemoryType";
 
-    std::string josnFilePath = "/config/pass/json/assign_mem_type_invalidpattern.json";
+    std::string josnFilePath = "./config/pass/json/assign_mem_type_invalidpattern.json";
     currFunctionPtr->DumpJsonFile(josnFilePath);
 
     // Validate the results
@@ -544,15 +538,26 @@ TEST_F(AssignMemoryTypeTest, InValidOpPattern) {
         std::cout << op.GetOpcodeStr() << " " << op.GetOpMagic() << std::endl;
         for (auto &input : op.GetIOperands()) {
             std::cout << "\t|--- iOperand " << input->magic;
-            EXPECT_EQ(input->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR) << " Unexpected memory type.";
+            EXPECT_EQ(input->GetMemoryTypeOriginal(), type) << " Unexpected memory type.";
             EXPECT_EQ(input->GetMemoryTypeOriginal(), input->GetMemoryTypeToBe()) << " iOperand has two memory type.";
         }
         for (auto &output : op.GetOOperands()) {
             std::cout << "\t|--- oOperand " << output->magic << std::endl;
-            EXPECT_EQ(output->GetMemoryTypeOriginal(), MemoryType::MEM_DEVICE_DDR) << " Unexpected memory type.";
+            EXPECT_EQ(output->GetMemoryTypeOriginal(), type) << " Unexpected memory type.";
             EXPECT_EQ(output->GetMemoryTypeOriginal(), output->GetMemoryTypeToBe()) << " oOperand has two memory type.";
         }
     }
+}
+
+TEST_F(AssignMemoryTypeTest, InValidOpPattern) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "InValidOpPattern", "InValidOpPattern", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    Program::GetInstance().InsertFuncToFunctionMap("InValidOpPattern", currFunctionPtr);
+
+    GetInvalidPatternGraph(currFunctionPtr);
+
+    CallAndVerify(currFunctionPtr, MemoryType::MEM_DEVICE_DDR);
 }
 
 void GetViewReshapeGraph (std::shared_ptr<Function> &currFunctionPtr) {
@@ -617,36 +622,7 @@ TEST_F(AssignMemoryTypeTest, ViewReshape) {
 
     GetViewReshapeGraph(currFunctionPtr);
 
-    std::stringstream ssBefore;
-    ssBefore << "Before_AssignMemoryType";
-
-    // Call the pass
-    AssignMemoryType assignMemoryType;
-    assignMemoryType.PreCheck(*currFunctionPtr);
-    assignMemoryType.RunOnFunction(*currFunctionPtr);
-    assignMemoryType.PostCheck(*currFunctionPtr);
-
-    std::stringstream ss;
-    ss << "After_AssignMemoryType";
-
-    std::string josnFilePath = "/config/pass/json/assign_mem_type_invalidpattern.json";
-    currFunctionPtr->DumpJsonFile(josnFilePath);
-
-    // Validate the results
-    std::cout << "========== op size: " << currFunctionPtr->Operations().size() << std::endl;
-    for (auto &op : currFunctionPtr->Operations()) {
-        std::cout << op.GetOpcodeStr() << " " << op.GetOpMagic() << std::endl;
-        for (auto &input : op.GetIOperands()) {
-            std::cout << "\t|--- iOperand " << input->magic;
-            EXPECT_EQ(input->GetMemoryTypeOriginal(), MemoryType::MEM_UB) << " Unexpected memory type.";
-            EXPECT_EQ(input->GetMemoryTypeOriginal(), input->GetMemoryTypeToBe()) << " iOperand has two memory type.";
-        }
-        for (auto &output : op.GetOOperands()) {
-            std::cout << "\t|--- oOperand " << output->magic << std::endl;
-            EXPECT_EQ(output->GetMemoryTypeOriginal(), MemoryType::MEM_UB) << " Unexpected memory type.";
-            EXPECT_EQ(output->GetMemoryTypeOriginal(), output->GetMemoryTypeToBe()) << " oOperand has two memory type.";
-        }
-    }
+    CallAndVerify(currFunctionPtr, MemoryType::MEM_UB);
 }
 void L1DataMoveGraph (std::shared_ptr<Function> &currFunctionPtr) {
     std::shared_ptr<LogicalTensor> input_cast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, std::vector<int64_t>{32,64});

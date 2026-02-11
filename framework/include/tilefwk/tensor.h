@@ -301,14 +301,6 @@ const std::vector<SymbolicScalar> &GetInputShape(const Tensor &tensor);
 SymbolicScalar GetTensorData(const Tensor &t, const std::vector<SymbolicScalar> &offset);
 
 /**
- * \brief Mark the tensor axis as dynamic.
- *
- * \param t input tensor
- * \param axis axis to mark as dynamic
- */
-void MarkDynamic(Tensor &t, int axis);
-
-/**
  * @brief Determines if the current iteration is the start of loop
  *
  * @param symbol current loop index

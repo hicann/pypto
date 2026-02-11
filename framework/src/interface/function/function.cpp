@@ -90,13 +90,6 @@ std::vector<Operation *> OperationsViewer::DuplicatedOpList() const {
     return opList;
 }
 
-struct CompareTensorPtr {
-    bool operator()(const std::shared_ptr<LogicalTensor> &a,
-                    const std::shared_ptr<LogicalTensor> &b) const {
-        return a->offset < b->offset;
-    }
-};
-
 std::string DynloopFunctionPathNode::Dump() const {
     int indent = 2;
     std::ostringstream oss;
@@ -369,6 +362,7 @@ int Function::GetParamIndex(const std::shared_ptr<RawTensor> &rawTensor) {
 }
 
 void *Function::GetParamAddress(int index) {
+    ASSERT(explicitArgAddrs_.size() > static_cast<uint64_t>(index)) << "The param address is not stored.";
     return explicitArgAddrs_[index];
 }
 
@@ -439,13 +433,8 @@ GetTensorDataIODescDict Function::GetTensorDataForTensorGraph() {
             iodescDict[getTensorDataIndex] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST, outcastIndex, 0);
         } else {
             int incastIndex = GetTensorDataLookupIncast(this, import);
-            if (incastIndex != INVALID_IOINDEX) {
-                iodescDict[getTensorDataIndex] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, incastIndex, 0);
-            } else {
-                // Impossible
-                ASSERT(false)
-                    << "Both outcast and incast indices are invalid";
-            }
+            ASSERT(incastIndex != INVALID_IOINDEX) << "Both outcast and incast indices are invalid";
+            iodescDict[getTensorDataIndex] = GetTensorDataIODesc(GET_TENSOR_DATA_OPERAND_IOTYPE_INCAST, incastIndex, 0);
         }
     }
     return iodescDict;
@@ -2048,6 +2037,7 @@ void Function::DumpJsonFile(std::string fileName) {
         filePath = fileName;
     }
     std::ofstream file(filePath);
+    CHECK(file.is_open()) << "Failed to open file: " << filePath;
     Json progDump;
     progDump["version"] = T_VERSION;
     progDump["functions"].push_back(DumpJson());
@@ -3028,6 +3018,7 @@ std::string Function::Dump() const {
 
 void Function::DumpFile(const std::string &filePath) const {
     std::ofstream fout(filePath);
+    CHECK(fout.is_open()) << "Failed to open file: " << filePath;
     fout << Dump();
     fout.close();
 }

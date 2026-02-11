@@ -221,7 +221,7 @@ bool Program::BeginFunction(const std::string &funcName,
     bool isHiddenFunction) {
     if (currentFunctionPtr_->IsFlattening() && (funcType == FunctionType::STATIC && (graphType == GraphType::TENSOR_GRAPH || graphType == GraphType::TILE_GRAPH))) {
         // Static function's subfunction should be ignored
-        ASSERT(funcName != currentFunctionPtr_->GetRawName());
+        CHECK(funcName != currentFunctionPtr_->GetRawName());
         return false;
     }
 
@@ -595,6 +595,7 @@ void Program::DumpJsonFile(const std::string &fileName, Function *mainFunc) {
     }
 
     std::ofstream file(filePath);
+    ASSERT(file.is_open()) << "Failed to open file: " << filePath;
     file << DumpJson(mainFunc).dump(1) << std::endl;
     file.close();
 }
@@ -611,76 +612,6 @@ std::string Program::Dump() const {
 
     ss << "Program End\n";
     return ss.str();
-}
-
-void Program::GraphCheck() const {
-    for (const auto &[tmpName, functionPtr] : functionmap_) {
-        (void)tmpName;
-        auto &function = *functionPtr;
-        auto opsView = function.Operations();
-        int opMagic = -1000000;
-        for (auto &op : opsView) {
-            opMagic = std::max(opMagic, op.GetOpMagic());
-        }
-        ASSERT(opMagic + 1 == function.opSeed_);
-        std::unordered_set<const Operation *> opMap;
-        for (auto &op : opsView) {
-            opMap.emplace(&op);
-        }
-
-        for (auto &op : opsView) {
-            if (op.GetOpcode() == Opcode::OP_VIEW || op.GetOpcode() == Opcode::OP_ASSEMBLE ||
-                op.GetOpcode() == Opcode::OP_CALL) {
-                ASSERT(op.GetOpAttribute() != nullptr);
-            } else {
-                ASSERT(op.GetOpAttribute() == nullptr);
-            }
-
-            ASSERT(op.opmagic >= 0 && op.opmagic < function.opSeed_)
-                << "function opSeed_ is: " << function.opSeed_ << ", opmagic is: " << op.opmagic;
-            if (!op.IsCall()) { // call 允许多输出，其余操作目前不允许
-                ASSERT(op.oOperand.size() == 1) << "size: " << op.oOperand.size();
-            } else {
-                // Call Op
-                std::size_t bracketPos = op.GetCalleeBracketName().find('[');
-                std::string calleeName = op.GetCalleeBracketName().substr(0, bracketPos);
-                auto it = functionmap_.find(calleeName);
-                ASSERT(it != functionmap_.end());
-                ASSERT(op.iOperand.size() == it->second->inCasts_.size())
-                    << "operation \"" << op.GetOpcodeStr() << "\" iOperand size: " << op.iOperand.size()
-                    << ", function \"" << it->second->GetMagicName() << "\" inCasts_ size: " << it->second->inCasts_.size();
-                ASSERT(op.oOperand.size() == it->second->outCasts_.size())
-                    << "operation \"" << op.GetOpcodeStr() << "\" oOperand size: " << op.oOperand.size()
-                    << ", function \"" << it->second->GetMagicName()
-                    << "\" outCasts_ size: " << it->second->outCasts_.size();
-            }
-            for (auto &oOperand : op.oOperand) {
-                if (!oOperand->HasProducer(op)) {
-                    std::cout << "ASSERT FAILED: " << oOperand->HasProducer(op)
-                              << "  opmagic: " << op.opmagic << " oOperand:" << oOperand->magic << std::endl;
-                }
-            }
-            for (auto &iOperand : op.iOperand) {
-                for (auto producer : iOperand->GetProducers()) {
-                    ASSERT(producer->BelongTo() == &function);
-                    ASSERT(producer->GetOpMagic() >= 0 && producer->GetOpMagic() < function.opSeed_)
-                        << "function opSeed_ is: " << function.opSeed_ << ", producer in tensor(" << iOperand->magic
-                        << "," << iOperand->tensor->rawmagic << ") is: " << producer;
-                    if (opMap.find(producer) == opMap.end()) {
-                        ASSERT(opMap.find(producer) != opMap.end());
-                    }
-                }
-            }
-        }
-
-        for (auto &[magic, tensor] : function.GetTensorMap().inverseMap_) {
-            (void)magic;
-            for (auto producer : tensor->GetProducers()) {
-                ASSERT(producer->BelongTo() == &function);
-                ASSERT(opMap.find(producer) != opMap.end());
-            }
-        }
-    }
 }
 
 bool Program::QueryAndUpdateCurrentFunction() {

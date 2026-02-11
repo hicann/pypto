@@ -150,11 +150,8 @@ class _JIT:
                     self.dyn_func(*args, **self.kwargs)
                 del rlf
 
-        # flowverify begin
+        # flowverify end
         self.verify_end()
-        # suspicious code?
-        if self.debug_options and self.debug_options.get("compile_debug_mode", 0) != 1:
-            pypto_impl.ResetLog(pypto_impl.LogTopFolder())
 
     def init_run_mode(self):
         is_cann_enable = bool(os.environ.get("ASCEND_HOME_PATH"))

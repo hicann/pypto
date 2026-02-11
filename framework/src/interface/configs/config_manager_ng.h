@@ -56,17 +56,17 @@ constexpr const char *STITCH_FUNCTION_SIZE = "stitch_function_size";
 constexpr const char *STITCH_CFGCACHE_SIZE = "stitch_cfgcache_size";
 constexpr const char *CFG_RUN_MODE = "run_mode";
 constexpr const char *CFG_VALID_SHAPE_OPTIMIZE = "valid_shape_optimize";
-const int64_t CFG_RUN_MODE_NPU = 0;
-const int64_t CFG_RUN_MODE_SIM = 1;
+constexpr int64_t CFG_RUN_MODE_NPU = 0;
+constexpr int64_t CFG_RUN_MODE_SIM = 1;
 
 // host
 constexpr const char *COMPILE_STAGE = "compile_stage";
-const int64_t CS_ALL_COMPLETE = 0;
-const int64_t CS_TENSOR_GRAPH = 1;
-const int64_t CS_TILE_GRAPH = 2;
-const int64_t CS_EXECUTE_GRAPH = 3;
-const int64_t CS_CODEGEN_INSTRUCTION = 4;
-const int64_t CS_CODEGEN_BINARY = 5;
+constexpr int64_t CS_ALL_COMPLETE = 0;
+constexpr int64_t CS_TENSOR_GRAPH = 1;
+constexpr int64_t CS_TILE_GRAPH = 2;
+constexpr int64_t CS_EXECUTE_GRAPH = 3;
+constexpr int64_t CS_CODEGEN_INSTRUCTION = 4;
+constexpr int64_t CS_CODEGEN_BINARY = 5;
 
 // codegen
 constexpr const char *SUPPORT_DYNAMIC_ALIGNED = "support_dynamic_aligned";
@@ -81,9 +81,9 @@ const std::string KEY_PASS_VERIFY_ERROR_TOL = "pass_verify_error_tol";
 // debug
 constexpr const char *CFG_COMPILE_DBEUG_MODE = "compile_debug_mode";
 constexpr const char *CFG_RUNTIME_DBEUG_MODE = "runtime_debug_mode";
-const int64_t CFG_DEBUG_NONE = 0;
-const int64_t CFG_DEBUG_ALL = 1;
-const int64_t CFG_DEBUG_NO_DEVICE_TENSOR_DEPEND = 2;
+constexpr int64_t CFG_DEBUG_NONE = 0;
+constexpr int64_t CFG_DEBUG_ALL = 1;
+constexpr int64_t CFG_DEBUG_NO_DEVICE_TENSOR_DEPEND = 2;
 
 // operation
 const std::string KEY_FORCE_COMBINE_AXIS = "force_combine_axis";

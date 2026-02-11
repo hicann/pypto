@@ -81,7 +81,6 @@ public: // public api for torch
     void LoadJson(Json &programJson);
     void DumpJsonFile(const std::string &fileName, Function *mainFunc = nullptr);
     std::string Dump() const; // Serialize Program briefly
-    void GraphCheck() const;
     std::string DumpStack(const std::string &funcName = "") const;
     void PopStackAndUpdateCurrent();
 

@@ -132,18 +132,17 @@ static std::string CreateLogTopFolder() {
     timestamp << "_" << std::setw(NUM_SIX) << std::setfill('0') << us;
 
     std::string folderPath = "output";
-    bool res = CreateDir(folderPath);
-    ASSERT(res) << "Failed to create directory: " << folderPath;
     const char* envDir = std::getenv("TILE_FWK_OUTPUT_DIR");
     if (envDir != nullptr) {
         std::string envStr(envDir);
         if (!envStr.empty()) {
             folderPath = std::move(envStr);
-            res = CreateDir(folderPath);
         }
     }
-    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid());
+    bool res = CreateDir(folderPath);
+    CHECK(res) << "Failed to create directory: " << folderPath;
 
+    folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid());
     res = CreateDir(folderPath);
     ASSERT(res) << "Failed to create directory: " << folderPath;
     config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, RealPath(folderPath));

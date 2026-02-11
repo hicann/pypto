@@ -57,7 +57,7 @@ void static MergeAllFuncDupIocast(Function* func) {
 void RecordFunc::RecordDynFuncInner(const std::vector<std::reference_wrapper<const Tensor>> &startArgsInputTensorList,
     const std::vector<std::reference_wrapper<const Tensor>> &startArgsOutputTensorList,
     const std::vector<std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>> &inplaceArgs) {
-        ASSERT(config::GetFunctionType() == FunctionType::DYNAMIC);
+        CHECK(config::GetFunctionType() == FunctionType::DYNAMIC);
 
 #if ENABLE_HIDDENLOOP
         recordLoopFunc_ = std::make_unique<RecordLoopFunc>(
@@ -206,7 +206,7 @@ RecordLoopFunc::RecordLoopFunc(const std::string &name, FunctionType funcType, c
         loopRange_(std::make_shared<LoopRange>(range)),
         submitBeforeLoop_(submitBeforeLoop),
         funcType_(funcType) {
-    ASSERT(funcType == FunctionType::STATIC || funcType == FunctionType::DYNAMIC_LOOP);
+    CHECK(funcType == FunctionType::STATIC || funcType == FunctionType::DYNAMIC_LOOP);
     Program::GetInstance().GetLoopStack().emplace_back(*this);
 
     GenDefaultUnrollTimes(unrollList);
@@ -233,7 +233,7 @@ void RecordLoopFunc::BeginLoopFunction() {
     auto loopFuncName = name_ + "_Unroll" + std::to_string(CurUnrollTimes());
     Program::GetInstance().BeginFunction(loopFuncName, FunctionType::DYNAMIC_LOOP);
     currentLoopFunc_ = Program::GetInstance().GetCurrentFunction();
-    ASSERT(currentLoopFunc_->InsertLoopIdxNameList(iterName_)) << "Forbid duplicate name of loop idx. It names " << iterName_;
+    CHECK(currentLoopFunc_->InsertLoopIdxNameList(iterName_)) << "Forbid duplicate name of loop idx. It names " << iterName_;
     auto currentStep = CurUnrollTimes() == 1 ? loopRange_->Step() : loopRange_->Step() * CurUnrollTimes();
     if (rangeOfEaceUnroll_.empty()) {
         auto newRangeEnd = (UnrollTimesSize() == 1 ? loopRange_->End() : loopRange_->End() / currentStep * currentStep);
@@ -259,7 +259,7 @@ void RecordLoopFunc::EndLoopFunction() {
 }
 
 bool RecordLoopFunc::MatchUnrollTimes(int unrollTimes) {
-    ASSERT(unrollTimes > 0) << "unrollTimes must larger than zero!";
+    CHECK(unrollTimes > 0) << "unrollTimes must larger than zero!";
     auto &curRlf = Program::GetInstance().GetLoopStack().back().get();
     curRlf.customUnrollTimes_.emplace(unrollTimes);
     if (!curRlf.hasManualUnroll_) {
