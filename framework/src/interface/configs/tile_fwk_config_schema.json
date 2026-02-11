@@ -494,25 +494,18 @@
                                 "en": "..."
                             }
                         },
-                        "enable_prof_func": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "...",
-                                "en": "..."
-                            }
-                        },
                         "enable_prof_aicore_time": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否使能采集泳道图性能数据, 可以采集每个leafFuntion的执行耗时",
+                                "en": "Enable PMU data collection, collect each leafFunction's execution latency"
                             }
                         },
                         "enable_prof_aicore_pmu": {
                             "type": "boolean",
                             "label": {
-                                "zh": "...",
-                                "en": "..."
+                                "zh": "是否使能采集pmu数据, 可以采集每个leafFuntion的执行耗时以及对应leafFunction的pmu值",
+                                "en": "Enable PMU data collection, collect each leafFunction's execution latency and PMU values."
                             }
                         }
                     }

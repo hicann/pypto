@@ -439,6 +439,7 @@ public:
 
     void *GetKernelBin() { return kernelBin; }
     auto &GetArgTypes() { return argTypes; }
+    Function *GetFunction() { return dynFunc.get(); }
 
     ~KernelBinary() {
         DeviceLauncher::UnregisterKernelBin(kernelBin);
@@ -582,6 +583,17 @@ public:
         kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
         ret = DeviceLauncher::LaunchAicoreKernel(aicoreStream, kernel->GetKernelBin(), rtAicoreArgs, rtTaskCfg, debugEnable);
         ASSERT(ret == RT_ERROR_NONE) << "launch aicore failed: " << ret;
+    }
+
+    void EmulationLaunch(KernelBinary *kernel, std::vector<DeviceTensorData> &tensors) {
+        if (!isDebugMode) {
+            return;
+        }
+
+        DeviceLauncherConfig config;
+        DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
+        int ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config);
+        ASSERT(ret == RT_ERROR_NONE) << "emulation run failed: " << ret;
     }
 
 private:
@@ -731,6 +743,7 @@ void LaunchKernel(py::object &module, int64_t stream, py::args &args) {
 #endif
         kbinary = kmodule->Compile(module, args);
     }
+    kmodule->EmulationLaunch(kbinary, tensors);
 
 #if ENABALE_VERBOSE_LOG
     ALOG_ERROR("alloc workspace");

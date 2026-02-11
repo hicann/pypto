@@ -639,6 +639,12 @@ int DeviceLauncher::LaunchAicoreKernel(
     auto ret = rtKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &rtTaskCfg);
     devRunner.ReportHostProfInfo(startTime, blockDim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
     if (debugEnable) {
+        auto scheStream = (aclrtStream)machine::GetRA()->GetScheStream();
+        int rc = DeviceRunner::Get().DynamicLaunchSynchronize(scheStream, nullptr, aicoreStream);
+        if (rc != 0) {
+            ALOG_ERROR("sync failed");
+            return rc;
+        }
         devRunner.SynchronizeDeviceToHostProfData();
     }
     return ret;

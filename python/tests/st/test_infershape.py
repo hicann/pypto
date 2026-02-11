@@ -47,8 +47,6 @@ def sigmoid(x: pypto.Tensor) -> pypto.Tensor:
 
 @pypto.jit
 def kernel(x: pypto.Tensor, scale: pypto.Tensor, base_: pypto.Tensor, y: pypto.Tensor):
-    pypto.set_debug_options(runtime_debug_mode=1)
-
     pypto.set_vec_tile_shapes(64, 64)
     pypto.set_cube_tile_shapes([16, 16], [256, 512], [128, 128])
 

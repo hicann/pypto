@@ -189,6 +189,7 @@ struct DynMachineManager {
 
         SchduleContext local_context;
         machine_.SetStachSchduleContext(schedIdx, &local_context);
+        devArgs->toSubMachineConfig = kargs->toSubMachineConfig;
         DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(kargs->cfgdata);
         DevStartArgs *devStartArgs = reinterpret_cast<DevStartArgs *>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         int ret = machine_.RunThread(schedIdx, devStartArgs, devArgs, schedIdx);
@@ -253,10 +254,12 @@ struct DynMachineManager {
     }
 
     int RunCtrlInitNoLock(DeviceKernelArgs *kargs, const KernelCtrlEntry &entry) {
+#ifdef __DEVICE__
         auto devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
         if (devArgs->aicpuPerfAddr != 0) {
             PerfEvtMgr::Instance().SetIsOpenProf(true, devArgs->aicpuPerfAddr);
         }
+#endif
         int ret = entry.kernelCtrlServerInit(kargs);
         return ret;
     }

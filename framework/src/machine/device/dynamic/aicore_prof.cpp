@@ -102,16 +102,17 @@ void AiCoreProf::ProInitAiCpuTaskStat() {
 }
 
 void AiCoreProf::ProfInit([[maybe_unused]]int64_t *regAddrs, [[maybe_unused]]int64_t *pmuEventAddrs,
-    ProfConfig profConfig, ArchInfo archInfo) {
+    ProfConfig profConfig, [[maybe_unused]]ArchInfo archInfo) {
     DEV_DEBUG("Begin Prof init");
     profLevel_ = CreateProfLevel(profConfig);
     coreNum_ = hostAicoreMng_.GetAllAiCoreNum();
-    if (archInfo == ArchInfo::DAV_2201) {
+    if (AdprofReportAdditionalInfo != nullptr) {
+        DEV_DEBUG("Pypto config prof level is %d, current env support api is AdprofReportAdditionalInfo", profLevel_);
         profReportAdditionalInfoFunc_ = AdprofReportAdditionalInfo;
     } else {
         profReportAdditionalInfoFunc_ = MsprofReportAdditionalInfo;
     }
-    DEV_DEBUG("Pypto config prof level is %d", profLevel_);
+    DEV_DEBUG("Pypto config prof level is %d, profFuncPtr: %p", profLevel_, profReportAdditionalInfoFunc_);
     archInfo_ = archInfo;
     if ((ProfCheckLevel(PROF_TASK_TIME_L2) == true) || (profLevel_ == PROF_LEVEL_FUNC_LOG) || (profLevel_ == PROF_LEVEL_FUNC_LOG_PMU)) {
         profLevel_ = PROF_LEVEL_FUNC_LOG;
@@ -172,7 +173,8 @@ void AiCoreProf::ProGetHandShake(int &threadIdx, const struct AiCpuHandShakeSta 
 }
 
 void AiCoreProf::ProfGet(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat) {
-    if (profLevel_ == PROF_LEVEL_OFF) {
+    DEV_DEBUG("Start to Get prof data.");
+    if (profLevel_ == PROF_LEVEL_OFF || profReportAdditionalInfoFunc_ == nullptr) {
         return;
     }
 
