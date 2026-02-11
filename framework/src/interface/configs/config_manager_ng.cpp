@@ -105,8 +105,6 @@ struct TypeInfo {
             } else {
                 ALOG_ERROR("invalid type: ", type, " at ", prefix);
             }
-        } else {
-            ALOG_ERROR("type field missing");
         }
     }
 

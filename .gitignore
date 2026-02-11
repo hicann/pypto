@@ -1,5 +1,6 @@
 cmake-build-*
 .idea
+.arts
 .vscode
 .codemate
 build/

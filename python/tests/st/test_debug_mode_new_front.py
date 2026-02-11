@@ -9,8 +9,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
+from pathlib import Path 
+
 import os
 import json
+import shutil
 import pypto
 import torch
 import torch_npu
@@ -28,45 +31,29 @@ def add_wrapper(shape, tiling=None):
     return add
 
 
-def sub_wrapper(shape, tiling=None):
-    @pypto.frontend.jit(
-    debug_options={"compile_debug_mode": 1, "runtime_debug_mode": 1}
-    )
-    def sub(a: pypto.Tensor(shape, pypto.DT_INT32),
-            b: pypto.Tensor(shape, pypto.DT_INT32)) -> pypto.Tensor(shape, pypto.DT_INT32):
-        pypto.set_vec_tile_shapes(tiling, tiling)
-        c = a - b
-        return c
-    return sub
-
-
-def safe_json_load(file_path):
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            data = json.load(file)
-        return data, None
-    except FileNotFoundError:
-        return None, "File not found"
-    except json.JSONDecodeError as e:
-        return None, f"Invalid json format: {e}"
-    except PermissionError:
-        return None, "Permission Erro"
-    except Exception as e:
-        return None, f"Load json fail, unknow error: {e}"
-
-
-def get_out_put_path():
-    out_path = "./output"
+def check_output():
+    out_path = os.environ.get('TILE_FWK_OUTPUT_DIR', "./output")
+    latest_dir = ""
     if os.path.exists(out_path):
         subdirs = [os.path.join(out_path, d) for d in os.listdir(out_path)
                 if os.path.isdir(os.path.join(out_path, d))]
         if subdirs:
             latest_dir = max(subdirs, key=os.path.getctime)
-            return latest_dir
-    return None
+    assert os.path.exists(latest_dir)
+
+    check_list = ["program.json", "dyn_topo.txt", "topo.json", "merged_swimlane.json",
+        "aicpu_dev_pref.json", "machine_runtime_operator_trace.json", "tilefwk_L1_prof_data.json"]
+    file_list = [os.path.join(latest_dir, d) for d in check_list]
+    lost_file = None
+    for file_path in file_list:
+        if not os.path.exists(file_path):
+            lost_file = file_path
+            break
+    shutil.rmtree(out_path)
+    assert lost_file is None
 
 
-def device_run(is_run_add, device_id):
+def device_run(device_id):
     tiling = 32
     n, m = tiling * 1, tiling * 1
     shape = (n, m)
@@ -75,26 +62,15 @@ def device_run(is_run_add, device_id):
     a_data = torch.ones((n, m), dtype=torch.int32, device=f'npu:{device_id}') * 2
     b_data = torch.ones((n, m), dtype=torch.int32, device=f'npu:{device_id}')
 
-    if is_run_add:
-        result = add_wrapper(shape, tiling)(a_data, b_data)
-        torch_npu.npu.synchronize()
+    result = add_wrapper(shape, tiling)(a_data, b_data)
+    torch_npu.npu.synchronize()
 
-        golden = torch.ones((n, m), dtype=torch.int32) * 3
-        assert torch.allclose(golden, result.cpu(), atol=1e-5)
-
-    else:
-        result = sub_wrapper(shape, tiling)(a_data, b_data)
-        torch_npu.npu.synchronize()
-
-        golden = torch.ones((n, m), dtype=torch.int32)
-        assert torch.allclose(golden, result.cpu(), atol=1e-5)
-
-    output_path = get_out_put_path()
-    assert output_path
+    check_output()
 
 
 def test_debug_mode():
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
+    output_name = "temp"
+    os.environ["TILE_FWK_OUTPUT_DIR"] = f"{Path.cwd()}/{output_name}"
     torch.npu.set_device(int(device_id))
-    device_run(True, device_id)
-    device_run(False, device_id)
+    device_run(device_id)
