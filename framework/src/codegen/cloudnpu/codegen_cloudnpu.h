@@ -44,11 +44,6 @@ public:
 
     std::string GetBinAbsPath() const { return binAbsPath_; }
     void SetBinAbsPath(const std::string &binAbsPath) { binAbsPath_ = binAbsPath; }
-    static bool IsNeedCompileCCE() {
-        bool isNeedCompile = ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, true);
-        return isNeedCompile;
-    }
-
     void SetKernelName(const std::string &kernelName) { kernelName_ = kernelName; }
     std::string GetKernelName() const { return kernelName_; }
     void SetFuncDeclare(const std::string &funcDeclare) { funcDeclare_ = funcDeclare; }
@@ -119,16 +114,16 @@ public:
         const std::shared_ptr<SymbolManager> &sm, const std::shared_ptr<LogicalTensor> &tensor) const;
     std::string GenAllocForLocalBuffer(const Operation &op, const std::shared_ptr<SymbolManager> &sm) const;
     std::string GetCoreArch(const CompileInfo &compileInfo) const;
-    static void AppendVFLLVMParams(std::ostringstream &oss);
+    static void AppendVFOptions(std::ostringstream &oss);
 
 private:
-    std::string GenFuncBodyBefore(
-        const std::pair<uint64_t, Function *> &subFuncPair, Function &topFunc, CompileInfo &compileInfo) const;
+    void GenFuncBodyBefore(const std::pair<uint64_t, Function *> &subFuncPair, Function &topFunc,
+        CompileInfo &compileInfo, std::ostringstream &oss) const;
     std::string GenInclude(const Function &topFunc) const;
     static std::string GenCommentBeforeFuncHeader(Function &subFunc);
     std::string GenFuncHeader(uint64_t programId, Function &topFunc, CompileInfo &compileInfo) const;
-    std::string GenFuncBody(Function &subFunc, Function &topFunc) const;
-    static std::string GenFuncEnd();
+    void GenFuncBody(Function &subFunc, Function &topFunc, std::ostringstream &oss) const;
+    void GenFuncEnd(std::ostringstream &oss) const;
     static std::string GenKernelName(Function &topFunc, uint64_t programId);
     std::string GenLimitValue(FloatSaturateStatus &fs) const;
 
@@ -140,8 +135,8 @@ private:
     void BuildIncludes(std::ostringstream &oss) const;
     void BuildExtraOptions(std::ostringstream &oss, const std::string &compileOptions) const;
 
-    std::string GenAlloc(const std::shared_ptr<SymbolManager> &manager, BufferType bufferType,
-        DataType dataType, const TileRange &range) const;
+    std::string GenAlloc(const std::shared_ptr<SymbolManager> &manager, BufferType bufferType, DataType dataType,
+        const TileRange &range) const;
 
     std::string GetParamType(const Function &func, bool isUnderDynFunc) const;
 

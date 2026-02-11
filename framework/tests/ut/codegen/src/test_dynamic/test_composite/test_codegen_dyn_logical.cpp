@@ -145,18 +145,21 @@ std::string TestLogicalBody(Opcode opcode) {
     std::vector<int64_t> shape = {64, 64};
     auto shapeImmen = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     Tensor inputA(DT_FP32, shape, "A");
     Tensor inputB(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "C");
 
-    std::string logicalFuncName = "ADD";
-    config::SetBuildStatic(true);
-    FUNCTION(logicalFuncName, {inputA, inputB, output}) {
-        output = Add(inputA, inputB);
+    std::string funcName = "TestLogicalBody";
+    FUNCTION(funcName, {inputA, inputB, output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + logicalFuncName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto logicalInTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
@@ -185,14 +188,14 @@ std::string TestLogicalBody(Opcode opcode) {
 
 TEST_F(TestCodegenDynLogical, LogicalAndTileTensor) {
     std::string res = TestLogicalBody(Opcode::OP_LOGICALAND);
-    std::string expect = R"!!!(TLogicalAnd(ubTensor_0, ubTensor_0, ubTensor_0, ubTensor_0);
+    std::string expect = R"!!!(TLogicalAnd(ubTensor_9, ubTensor_9, ubTensor_9, ubTensor_9);
 )!!!";
     EXPECT_EQ(res, expect);
 }
 
 TEST_F(TestCodegenDynLogical, LogicalNotTileTensor) {
     std::string res = TestLogicalBody(Opcode::OP_LOGICALNOT);
-    std::string expect = R"!!!(TLogicalNot(ubTensor_0, ubTensor_0, ubTensor_0);
+    std::string expect = R"!!!(TLogicalNot(ubTensor_9, ubTensor_9, ubTensor_9);
 )!!!";
     EXPECT_EQ(res, expect);
 }

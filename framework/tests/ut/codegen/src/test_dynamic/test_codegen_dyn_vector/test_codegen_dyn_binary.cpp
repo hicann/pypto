@@ -189,7 +189,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle) {
 }
 TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
 
     constexpr const int32_t nRoutedExperts = 256;
     constexpr const int32_t numExpertsPerTopk = 8;
@@ -230,7 +230,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
     codeGen.GenCode(*function, {});
 
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TgatherElement<4>(ubTensor_5, ubTensor_1, ubTensor_3, ubTensor_6);
+    std::string expect = R"!!!(TgatherElement<4>(ubTensor_15, ubTensor_11, ubTensor_13, ubTensor_16);
 )!!!";
     CheckStringExist(expect, res);
 }
@@ -238,8 +238,6 @@ TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
 TEST_F(TestCodegenDynBinary, AddUnalignTileTensor) {
     TileShape::Current().SetVecTile(64, 64);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    // NEXTNEXT: delete after tileop adapted layout mode
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
 
     int b = 1;
     int sq = 128;
@@ -364,7 +362,6 @@ TStore(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)
 
 TEST_F(TestCodegenDynBinary, TestAddTileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
 
     std::vector<int64_t> addShape = {64, 64};
     TileShape::Current().SetVecTile(addShape);

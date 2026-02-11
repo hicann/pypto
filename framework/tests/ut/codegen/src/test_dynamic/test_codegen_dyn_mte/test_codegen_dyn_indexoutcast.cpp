@@ -119,7 +119,7 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor) {
     TileShape::Current().SetVecTile(scaterShape);
     TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {128, 128});
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     Tensor inputA(DT_FP32, scaterShape, "A");
     Tensor inputB(DT_FP32, scaterShape, "B");
     Tensor output(DT_FP32, scaterShape, "C");
@@ -164,7 +164,7 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor) {
     cop.Init(indexoutOp);
     cop.UpdateTileTensorInfo();
     std::string res = cop.GenOpCode();
-    std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_0, ubTensor_1, ubTensor_1, Coord2Dim(0, 0));
+    std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_9, ubTensor_10, ubTensor_10, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }

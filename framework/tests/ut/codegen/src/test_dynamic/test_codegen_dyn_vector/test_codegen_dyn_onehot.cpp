@@ -39,8 +39,7 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetBuildStatic(true);
-        config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
@@ -54,10 +53,16 @@ TEST_F(TestCodegenDynOneHot, OneHotLayout) {
     TileShape::Current().SetVecTile(outputShape);
     Tensor inputStub(DT_INT32, indicesShape, "input");
     Tensor outputStub(DT_INT32, outputShape, "output");
-    FUNCTION("ONEHOT", {inputStub, outputStub}) {
-        outputStub = OneHot(inputStub, 1);
+
+    std::string funcName = "OneHotLayout";
+    FUNCTION(funcName, {inputStub}, {outputStub}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            outputStub = OneHot(inputStub, 1);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + "ONEHOT");
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

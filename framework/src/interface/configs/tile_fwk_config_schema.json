@@ -784,13 +784,6 @@
                                 "zh": "生成的设备侧代码是否支持PTO-ISA指令",
                                 "en": "Whether the generated device-side code supports PTO-ISA instruction"
                             }
-                        },
-                        "codegen_need_compile": {
-                            "type": "boolean",
-                            "label": {
-                                "zh": "是否需要将生成的设备侧代码编译为二进制",
-                                "en": "Whether it is necessary to compile the generated device-side code into binaries"
-                            }
                         }
                     }
                 },

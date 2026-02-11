@@ -68,7 +68,8 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutUnaligned) {
             IndexPut_(input, {indices1}, values);
         }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + "_hiddenfunc0");
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, true);
 
     npu::tile_fwk::CodeGenCtx ctx;

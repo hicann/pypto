@@ -33,10 +33,8 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
-        config::SetBuildStatic(true);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     }
 
     void TearDown() override {}
@@ -60,12 +58,15 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAdd) {
     Tensor output(DT_FP32, shape0, "output");
     Element alphaVal(DataType::DT_FP32, 1.0);
 
-    ConfigManager::Instance();
-    std::string funcName = "IndexAdd";
-    FUNCTION(funcName, {inputSrc0, inputSrc1, inputIndex, output}) {
-        output = IndexAdd(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
+    std::string funcName = "TestIndexAdd";
+    FUNCTION(funcName, {inputSrc0, inputSrc1, inputIndex}, {output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = IndexAdd(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
@@ -91,10 +92,14 @@ TEST_F(TestCodegenDynIndexAdd, TestIndexAddLayout) {
 
     ConfigManager::Instance();
     std::string funcName = "IndexAddLayout";
-    FUNCTION(funcName, {inputSrc0, inputSrc1, inputIndex, output}) {
-        output = IndexAdd(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
+    FUNCTION(funcName, {inputSrc0, inputSrc1, inputIndex}, {output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = IndexAdd(inputSrc0, inputSrc1, inputIndex, axis, alphaVal);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

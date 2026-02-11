@@ -95,7 +95,7 @@ TEST_F(TestCodegenSpillOut, UBSpillOut) {
 
 TEST_F(TestCodegenSpillOut, UBSpillOutTileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    
     const std::vector<int64_t> shape = {64, 64};
     auto shapeImme = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);

@@ -99,18 +99,22 @@ TEST_F(TestCodegenDynRange, RangeTileTensor) {
     auto shapeImme = OpImmediate::Specified(rangeShape);
     TileShape::Current().SetVecTile(rangeShape);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
-    
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
+
     Tensor inputA(DT_FP32, rangeShape, "A");
     Tensor inputB(DT_FP32, rangeShape, "B");
     Tensor output(DT_FP32, rangeShape, "C");
 
     std::string funcName = "RangeTileTensor";
-    config::SetBuildStatic(true);
+
     FUNCTION(funcName, {inputA, inputB, output}) {
-        output = Add(inputA, inputB);
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, rangeShape});

@@ -75,7 +75,6 @@ void TestAddBody(std::vector<int64_t> shape, std::vector<int64_t> tile_shape, st
 }
 
 TEST_F(TestCodegenBinary, TestCodegenAddDim2) {
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE,false);
     TestAddBody({64, 64}, {64, 64}, "ADD_DIM2", true);
 }
 
@@ -116,7 +115,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddSDim4) {
 
 TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    
     TileShape::Current().SetVecTile(1, 1, 16, 16);
     std::vector<int64_t> shape = {1, 1, 16, 16};
     Tensor input_a(DT_FP32, shape, "A");

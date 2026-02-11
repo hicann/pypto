@@ -30,17 +30,14 @@
 namespace npu::tile_fwk {
 class TestCodegenWhere : public ::testing::Test {
 public:
-    static void SetUpTestCase() {
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-    }
+    static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
 
-    static void TearDownTestCase() {
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    }
+    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetBuildStatic(true);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
@@ -77,13 +74,11 @@ Operation &GetWhereOp(Function *function, Opcode opCode, const LogicalTensors &i
     return op;
 }
 
-void TestWhereBody(const Opcode opCode, const std::string &caseName,
-                   const std::string &expect, bool isSupportTileTensor = false) {
+void TestWhereBody(
+    const Opcode opCode, const std::string &caseName, const std::string &expect, bool isSupportTileTensor = false) {
     if (isSupportTileTensor) {
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     }
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
-    config::SetBuildStatic(true);
 
     std::vector<int64_t> shape = {64, 64};
     auto shapeImme = OpImmediate::Specified(shape);

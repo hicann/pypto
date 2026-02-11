@@ -150,17 +150,20 @@ TEST_F(TestCodegenDynCmp, CmpTileTensor) {
     auto shapeImme = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
+    config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
     Tensor inputA(DT_FP32, shape, "A");
     Tensor inputB(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "C");
 
-    std::string cmpFuncName = "CmpTileTensor";
-    config::SetBuildStatic(true);
-    FUNCTION(cmpFuncName, {inputA, inputB, output}) {
-        output = Add(inputA, inputB);
+    std::string funcName = "CmpTileTensor";
+    FUNCTION(funcName, {inputA, inputB, output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + cmpFuncName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
@@ -189,7 +192,7 @@ TEST_F(TestCodegenDynCmp, CmpTileTensor) {
     cop.UpdateTileTensorInfo();
     std::string res = cop.GenOpCode();
     std::string expect =
-        R"!!!(TCompare<0, 0>(ubTensor_0, ubTensor_0, ubTensor_0, ubTensor_0);
+        R"!!!(TCompare<0, 0>(ubTensor_9, ubTensor_9, ubTensor_9, ubTensor_9);
 )!!!";
     EXPECT_EQ(res, expect);
 }

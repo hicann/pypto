@@ -42,9 +42,9 @@ public:
     void SetUp() override {
         Program::GetInstance().Reset();
         config::Reset();
+        config::SetBuildStatic(true);
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         IdGen<IdType::CG_USING_NAME>::Inst().SetId(DummyFuncMagic);
         IdGen<IdType::CG_VAR_NAME>::Inst().SetId(DummyFuncMagic);
     }
@@ -59,10 +59,7 @@ struct TopKParams {
     bool isLargest;
 };
 void TopKOnBoardFunc(TopKParams &params) {
-    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    config::SetCodeGenConfig(KEY_CODEGEN_NEED_COMPILE, false);
     config::SetPassOption(CUBE_L1_REUSE_MODE, 0);
-    config::SetBuildStatic(true);
 
     int32_t shape0 = params.shape0;
     int32_t shape1 = params.shape1;
