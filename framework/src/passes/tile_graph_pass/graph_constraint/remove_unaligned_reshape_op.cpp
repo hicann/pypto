@@ -158,9 +158,9 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOps(Function &function) {
                 auto tmpWorkSpaceIn = std::make_shared<LogicalTensor>(function, input->Datatype(), input->oriShape, input->Format());
                 auto tmpWorkSpaceOut = std::make_shared<LogicalTensor>(function, input->Datatype(), output->oriShape, output->Format());
 
-                tmpWorkSpaceIn->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+                tmpWorkSpaceIn->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
                 tmpWorkSpaceIn->UpdateDynValidShape(inDynValidShape);
-                tmpWorkSpaceOut->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR);
+                tmpWorkSpaceOut->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
                 tmpWorkSpaceOut->UpdateDynValidShape(outDynValidShape);
 
                 auto &reshapeCopyOutOp = function.AddOperation(Opcode::OP_RESHAPE_COPY_OUT, {input}, {tmpWorkSpaceIn});

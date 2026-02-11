@@ -55,17 +55,19 @@ bool ReplaceTensor::CheckAssembleConflict(const Operation& op) {
 用于校验index_outcast节点的输入输出是否存在冲突
 注意，若输出后接assemble节点，则不会出现冲突
 */
-bool ReplaceTensor::CheckIndexOutcastConflict(const Operation& op) {
+bool ReplaceTensor::CheckIndexOutcastConflict(const Operation& op, Function& function) {
     int index = 2;
     auto indexIn = op.GetInputOperand(index);
     auto indexOut = op.GetOOperands().front();
-    auto &inOp = *indexIn->GetProducers().begin();
-    auto &outOp = *indexOut->GetConsumers().begin();
-    if (inOp == nullptr && outOp == nullptr) {
-        return false;
+    if (forwardOps.find(op.GetOpMagic()) != forwardOps.end()) {
+        if (function.IsFromInCast(indexIn) && function.IsFromOutCast(indexOut)) {
+            return false;
+        }
     }
-    if (indexIn->GetRawMagic() != indexOut->GetRawMagic()) {
-        return true;
+    if (backwardOps.find(op.GetOpMagic()) != backwardOps.end()) {
+        if (indexIn->GetRawMagic() != indexOut->GetRawMagic()) {
+            return true;
+        }
     }
     return false;
 }
@@ -75,11 +77,19 @@ bool ReplaceTensor::CheckIndexOutcastConflict(const Operation& op) {
 需要校验的场景：
     shape输入输出的rawtensor除了首轴之外都一致
 */
-bool ReplaceTensor::CheckReshapeConflict(const Operation& op) {
+bool ReplaceTensor::CheckReshapeConflict(const Operation& op, Function& function) {
     if (op.GetBoolAttribute(OP_ATTR_PREFIX + "isInplace"))
         return false;
-    if (CheckAddrConflict(op)) {
-        return true;
+    if (forwardOps.find(op.GetOpMagic()) != forwardOps.end()) {
+        auto tensorOut = op.GetOOperands().front();
+        if (function.IsFromOutCast(tensorOut)) {
+            return false;
+        }
+    }
+    if (backwardOps.find(op.GetOpMagic()) != backwardOps.end()) {
+        if (CheckAddrConflict(op)) {
+            return true;
+        }
     }
     return false;
 }
@@ -105,24 +115,30 @@ bool ReplaceTensor::CheckAMulAccBConflict(const Operation& op) {
 Status ReplaceTensor::InplaceCheck(Function& function) {
     struct OpValidator {
         std::function<bool(const Operation&)> validate;
+        std::function<bool(const Operation&, Function&)> validateWithFunc;
         std::function<bool(size_t)> inputCountValidator;
         std::function<bool(size_t)> outputCountValidator;
     };
     
     std::unordered_map<Opcode, OpValidator> opValidators = {
         {Opcode::OP_VIEW, {[this](const Operation& op) { return this->CheckAddrConflict(op); },
+            nullptr,
             [](size_t inputCount) { return inputCount == OperandCount::VIEW_INPUT; },
             [](size_t outputCount) { return outputCount == OperandCount::VIEW_OUTPUT; }}},
         {Opcode::OP_ASSEMBLE, {[this](const Operation& op) { return this->CheckAssembleConflict(op); },
+            nullptr,
             [](size_t inputCount) { return inputCount == OperandCount::ASSEMBLE_INPUT; },
             [](size_t outputCount) { return outputCount == OperandCount::ASSEMBLE_OUTPUT; }}},
-        {Opcode::OP_INDEX_OUTCAST, {[this](const Operation& op) { return this->CheckIndexOutcastConflict(op); },
+        {Opcode::OP_INDEX_OUTCAST, {nullptr,
+            [this](const Operation& op, Function& func) { return this->CheckIndexOutcastConflict(op, func); },
             [](size_t inputCount) { return inputCount == OperandCount::INDEX_OUTCAST_INPUTS; },
             [](size_t outputCount) { return outputCount == OperandCount::INDEX_OUTCAST_OUTPUT; }}},
-        {Opcode::OP_RESHAPE, {[this](const Operation& op) { return this->CheckReshapeConflict(op); },
+        {Opcode::OP_RESHAPE, {nullptr,
+            [this](const Operation& op, Function& func) { return this->CheckReshapeConflict(op, func); },
             [](size_t inputCount) { return inputCount == OperandCount::RESHAPE_INPUT; },
             [](size_t outputCount) { return outputCount == OperandCount::RESHAPE_OUTPUT; }}},
         {Opcode::OP_A_MULACC_B, {[this](const Operation& op) { return this->CheckAMulAccBConflict(op); },
+            nullptr,
             [](size_t inputCount) { return inputCount == OperandCount::A_MULACC_B_MIN_INPUTS || inputCount == OperandCount::A_MULACC_B_MAX_INPUTS; },
             [](size_t outputCount) { return outputCount == OperandCount::A_MULACC_B_OUTPUT; }}},
     };
@@ -133,9 +149,11 @@ Status ReplaceTensor::InplaceCheck(Function& function) {
         const auto& validator = it->second;
         size_t inputCount = op.GetInputOperandSize();
         size_t outputCount = op.GetOutputOperandSize();
-        if (!validator.inputCountValidator(inputCount) || 
-            !validator.outputCountValidator(outputCount) || 
-            validator.validate(op)) {
+        bool checkFaild = !validator.inputCountValidator(inputCount) || 
+                          !validator.outputCountValidator(outputCount) || 
+                          (validator.validate && validator.validate(op)) ||
+                          (validator.validateWithFunc && validator.validateWithFunc(op, function));
+        if (checkFaild) {
             APASS_LOG_ERROR_F(Elements::Operation, "%s op[%d] invalid or conflict.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
             return FAILED;
         }
@@ -267,6 +285,7 @@ Status ReplaceTensor::ForwardView(Operation *op, LogicalTensorPtr &rootTensor, F
     }
     processedOp.insert(op->GetOpMagic());
     op->GetOOperands()[0]->tensor = rootTensor->tensor;
+    forwardOps.insert(op->GetOpMagic());
     forRoots.push(op->GetOOperands()[0]);
     if (!function.IsFromOutCast(op->GetOOperands()[0])) {
         function.UpdateLinkMap(op->GetOOperands()[0], op->GetIOperands()[0]);
@@ -282,6 +301,7 @@ Status ReplaceTensor::ForwardReshape(Operation *op, LogicalTensorPtr &rootTensor
         return SUCCESS;
     }
     op->GetOOperands()[0]->tensor->actualRawmagic = rootTensor->GetRawMagic();
+    forwardOps.insert(op->GetOpMagic());
     forRoots.push(op->GetOOperands()[0]);
     return SUCCESS;
 }
@@ -305,6 +325,7 @@ Status ReplaceTensor::ForwardInplaceOp(Operation *op, LogicalTensorPtr &rootTens
             return SUCCESS;
         }
         tensorOut->tensor = tensorIn->tensor;
+        forwardOps.insert(op->GetOpMagic());
         forRoots.push(tensorOut);
         tensorOut->UpdateOffset(tensorIn->GetOffset());
     }
@@ -320,6 +341,7 @@ Status ReplaceTensor::ForwardViewType(Operation *op, LogicalTensorPtr &rootTenso
     }
     processedOp.insert(op->GetOpMagic());
     viewTypeOut->tensor->actualRawmagic = viewTypeIn->GetRawMagic();
+    forwardOps.insert(op->GetOpMagic());
     if(AdjustOffsetAndRawShape(viewTypeIn, viewTypeOut) == FAILED) {
         return FAILED;
     }
@@ -363,6 +385,7 @@ Status ReplaceTensor::ForwardAssemble(Operation *op, LogicalTensorPtr &rootTenso
             return SUCCESS;
         }
         assembleOut->tensor = assembleIn->tensor;
+        forwardOps.insert(op->GetOpMagic());
         for (auto prodOp : assembleOut->GetProducers()) {
             if (prodOp->GetOpMagic() != op->GetOpMagic()) {
                 backRoots.push(assembleOut);
@@ -422,6 +445,7 @@ Status ReplaceTensor::ForwardInputIdx(Operation *op, LogicalTensorPtr &rootTenso
 Status ReplaceTensor::BackwardReshape(Operation *op, LogicalTensorPtr &rootTensor) {
     processedOp.insert(op->GetOpMagic());
     op->GetIOperands()[0]->tensor->actualRawmagic = rootTensor->GetRawMagic();
+    backwardOps.insert(op->GetOpMagic());
     backRoots.push(op->GetIOperands()[0]);
     return SUCCESS;
 }
@@ -440,6 +464,7 @@ Status ReplaceTensor::BackwardInplaceOp(Operation *op, LogicalTensorPtr &rootTen
         }
         processedOp.insert(op->GetOpMagic());
         tensorIn->tensor = tensorOut->tensor;
+        backwardOps.insert(op->GetOpMagic());
         backRoots.push(tensorIn);
         tensorOut->UpdateOffset(tensorIn->GetOffset());
     }
@@ -453,6 +478,7 @@ Status ReplaceTensor::BackwardView(Operation *op, LogicalTensorPtr &rootTensor) 
     processedOp.insert(op->GetOpMagic());
     backRoots.push(viewIn);
     viewIn->tensor = viewOut->tensor;
+    backwardOps.insert(op->GetOpMagic());
     return SUCCESS;
 }
 
@@ -465,6 +491,7 @@ Status ReplaceTensor::BackwardViewType(Operation *op, LogicalTensorPtr &rootTens
     }
     processedOp.insert(op->GetOpMagic());
     viewTypeIn->tensor->actualRawmagic = viewTypeOut->GetRawMagic();
+    backwardOps.insert(op->GetOpMagic());
     if (AdjustOffsetAndRawShape(viewTypeOut, viewTypeIn) == FAILED) {
         return FAILED;
     }
@@ -484,7 +511,7 @@ Status ReplaceTensor::BackwardAssemble(Operation *op, LogicalTensorPtr &rootTens
         return FAILED;
     }
     op->GetIOperands()[0]->tensor = rootTensor->tensor;
-
+    backwardOps.insert(op->GetOpMagic());
     if (op->GetIOperands()[0]->GetConsumers().size() > 1) {
         forRoots.push(op->GetIOperands()[0]);
     }

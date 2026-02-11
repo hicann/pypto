@@ -524,5 +524,41 @@ TEST_F(ReplaceTensorTest, TestSameAssembleOut) {
     EXPECT_EQ(currFunctionPtr->Operations().size(), opSumBefore + 4);
     EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
 }
+
+TEST_F(ReplaceTensorTest, TestNotInplaceReshape) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestNotInplaceReshape", "TestNotInplaceReshape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumFour, kNumEight};
+    std::vector<int64_t> shape1 = {kNumEight, kNumFour};
+    std::vector<int64_t> shape2 = {kNumFour, kNumFour};
+    std::vector<int64_t> shape3 = {kNumOne, kNumFour, kNumFour};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+    // init RawTensor
+    std::shared_ptr<RawTensor> reshapeRawTensor0 = std::make_shared<RawTensor>(DT_FP32, shape);
+    std::shared_ptr<RawTensor> viewRawTensor = std::make_shared<RawTensor>(DT_FP32, shape);
+    // init LogicalTensor
+    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto reshapeOut0 = std::make_shared<LogicalTensor>(*currFunctionPtr, reshapeRawTensor0, offset0, shape1);
+    auto viewOut = std::make_shared<LogicalTensor>(*currFunctionPtr, viewRawTensor, offset0, shape2);
+    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
+    /* Init Graph
+        incast0 -> Reshape -> View -> Reshape -> outcast
+    */
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {incast}, {reshapeOut0});
+    auto &viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {reshapeOut0}, {viewOut});
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {viewOut}, {outcast});
+
+    auto view_Attr = std::make_shared<ViewOpAttribute>(offset0, MEM_DEVICE_DDR);
+    viewOp.SetOpAttribute(view_Attr);
+    // Run the Pass
+    ReplaceTensor pass;
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_NE(viewOut->GetRawMagic(), outcast->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
 }
 }

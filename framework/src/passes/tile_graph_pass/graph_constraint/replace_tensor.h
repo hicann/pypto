@@ -122,8 +122,8 @@ private:
     bool CheckAddrConflict(const Operation& op);
     bool CheckIndexProducer(const Operation& op);
     bool CheckAssembleConflict(const Operation& op);
-    bool CheckIndexOutcastConflict(const Operation& op);
-    bool CheckReshapeConflict(const Operation& op);
+    bool CheckIndexOutcastConflict(const Operation& op, Function& function);
+    bool CheckReshapeConflict(const Operation& op, Function& function);
     bool CheckAMulAccBConflict(const Operation& op);
     Status InplaceCheck(Function &function);
     bool CheckInplace(const Operation &op);
@@ -172,6 +172,8 @@ private:
     std::queue<LogicalTensorPtr> backRoots;
     std::queue<LogicalTensorPtr> forRoots;
     std::unordered_set<int> processedOp;
+    std::unordered_set<int> backwardOps;
+    std::unordered_set<int> forwardOps;
 };
 } // namespace tile_fwk
 } // namespace npu

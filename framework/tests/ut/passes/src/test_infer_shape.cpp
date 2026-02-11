@@ -507,5 +507,45 @@ TEST_F(InferShapeTest, TestReshape) {
     std::cout << reshape_op.GetOOperands()[0]->Dump() << std::endl;
     EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
 }
+
+TEST_F(InferShapeTest, TestSHMEM_GET_GM2UB) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestSHMEM_GET_GM2UB", "TestSHMEM_GET_GM2UB", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inshape0 = {1, 1};
+    std::vector<int64_t> inshape1 = {1, 1, 8, 16};
+    std::vector<int64_t> outshape = {8, 16};
+    auto shapeImme = OpImmediate::Specified(outshape);
+
+    auto incast0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape0);
+    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape1);
+    auto shmemGetGm2UBOut0 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+    auto shmemGetGm2UBOut1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+
+    auto &shmemGetGm2UB_op = currFunctionPtr->AddOperation(Opcode::OP_SHMEM_GET_GM2UB, {incast0, incast1}, {shmemGetGm2UBOut0, shmemGetGm2UBOut1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {shmemGetGm2UBOut0}, {outcast});
+    
+    auto shmemGetGm2UB_Attr = std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}),
+                                                         MEM_UB,
+                                                         shapeImme,
+                                                         shapeImme,
+                                                         std::vector<OpImmediate>());
+
+    std::vector<OpImmediate> toValidShape = {OpImmediate(SymbolicScalar("Input_0_Dim_0")),
+                                             OpImmediate(SymbolicScalar("Input_0_Dim_1"))};
+    shmemGetGm2UB_Attr->SetToDynValidShape(toValidShape);
+    shmemGetGm2UB_op.SetOpAttribute(shmemGetGm2UB_Attr);
+    
+    currFunctionPtr->inCasts_.push_back(incast0);
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast);
+
+    InferDynShape inferShapeTest;
+    inferShapeTest.RunOnFunction(*currFunctionPtr);
+    std::cout << currFunctionPtr->Dump() << std::endl;
+    EXPECT_NE(shmemGetGm2UBOut1->GetDynValidShape().size(), 0);
+    EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
+}
 }
 }
