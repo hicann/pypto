@@ -603,6 +603,7 @@ public:
     bool IsExplicit() const { return explicitArgSlots_.empty(); }
     const std::string &GetMagicName() const { return funcMagicName_; }
     const std::string &GetRawName() const { return funcRawName_; }
+    std::string GetOriginalRawName() const;
     void AppendCalleeMagicName(const std::string &name) { calleeMagicNameList_.push_back(name); }
     const std::vector<std::string> &GetCalleeMagicNameList() const { return calleeMagicNameList_; }
     int GetFuncMagic() const { return functionMagic_; }

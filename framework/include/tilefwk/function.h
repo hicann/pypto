@@ -96,6 +96,7 @@ enum class FunctionType {
 };
 
 const std::string FUNCTION_PREFIX = "TENSOR_";
+const std::string PROFILING_PREFIX = "PYPTO_";
 
 class LoopRange {
 public:
@@ -233,13 +234,13 @@ public:
         Iterator operator++();
         bool operator!=(const IteratorEnd &rhs);
         bool operator==(const IteratorEnd &rhs) { return !this->operator!=(rhs); }
-        const SymbolicScalar &operator*() const { 
+        const SymbolicScalar &operator*() const {
             if (wrappedIter_.has_value()) {
                 return wrappedIter_->operator*();
             }
             return cur_;
         }
-        SymbolicScalar &operator*() { 
+        SymbolicScalar &operator*() {
             if (wrappedIter_.has_value()) {
                 return wrappedIter_->operator*();
             }

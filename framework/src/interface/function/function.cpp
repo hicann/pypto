@@ -304,6 +304,16 @@ bool Function::IsCube() const {
     return false;
 }
 
+std::string Function::GetOriginalRawName() const {
+    const std::string& OriginalRawName = funcRawName_;
+    size_t prefixLen = FUNCTION_PREFIX.length();
+
+    if (OriginalRawName.substr(0, prefixLen) == FUNCTION_PREFIX) {
+        return OriginalRawName.substr(prefixLen);
+    }
+    return OriginalRawName;
+}
+
 OperationsViewer Function::OperationsAfterOOO() {
     return OperationsViewer(operationsAfterOOO_, opPositionAfterOOO_);
 }
