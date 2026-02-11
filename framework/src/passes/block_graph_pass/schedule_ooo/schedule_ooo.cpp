@@ -69,7 +69,7 @@ void OoOSchedule::OoOHealthCheck(OoOScheduler &oooSchedule, Function &function, 
 Status OoOSchedule::NonMixSchedule(std::vector<Operation*> &opList, Function &function,
     std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize) {
     // 直接对oplist进行GenSpill和mainLoop
-    OoOScheduler oooSchedule(*program.second, combineAxis);
+    OoOScheduler oooSchedule(*program.second);
     if (oooSchedule.Schedule(opList) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
         return FAILED;
@@ -204,8 +204,6 @@ Status OoOSchedule::RecordLastUseMemory(Function &function) {
 }
 
 Status OoOSchedule::RunOnFunction(Function &function) {
-    combineAxis = function.paramConfigs_.combineAxis;
-    forceCombineAxis = function.paramConfigs_.forceCombineAxis;
     APASS_LOG_INFO_F(Elements::Operation, "=============== START 2CoreSplit ===============");
     int maxWorkeSpaceSize = 0;
     for (auto &program : function.rootFunc_->programs_) {

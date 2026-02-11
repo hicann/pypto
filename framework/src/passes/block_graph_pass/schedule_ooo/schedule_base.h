@@ -74,7 +74,7 @@ public:
     std::unordered_map<int, int> bufRefCount_;
     std::unordered_map<MemoryType, int64_t> localMemSize; //内存剩余情况
     std::unordered_map<MemoryType, int64_t> localMemoryCurrentSize;
-    std::unordered_map<int, LocalBufferPtr> localBufferMap; //memid:local
+    std::unordered_map<int, LocalBufferPtr> localBufferMap_; //memid:local
     std::unordered_map<Operation*, std::unordered_set<Operation*>> opConsumers;
     std::unordered_map<Operation*, std::unordered_set<Operation*>> opProducers;
     std::unordered_map<Operation*, LogicalTensors> inOutOperandsCache_;
@@ -138,17 +138,23 @@ public:
         }
     }
 
-    void InitLocalBuffer(LogicalTensorPtr operand, int memId) {
-        if (operand->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
-            return;
+    Status InitLocalBuffer(LogicalTensorPtr oOperand, int memId) {
+        if (oOperand->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
+            return SUCCESS;
         }
-        if (localBufferMap.find(memId) == localBufferMap.end()) {
-            localBufferMap[memId] = std::make_shared<LocalBuffer>(
-                memId, ShapeCeilAlign(operand->tensor->rawshape, operand->Datatype()), operand->GetMemoryTypeOriginal());
+        if (static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()) != ShapeCeilAlign(oOperand->tensor->rawshape, oOperand->tensor->datatype)) {
+            APASS_LOG_ERROR_F(Elements::Tensor, "InitLocalBuffer Failed at ShapeCeilAlign! "
+                "Please ensure that the rawTensor[%d] shapes are aligned.", oOperand->GetRawMagic());
+            return FAILED;
+        }
+        if (localBufferMap_.find(memId) == localBufferMap_.end()) {
+            localBufferMap_[memId] = std::make_shared<LocalBuffer>(
+                memId, oOperand->tensor->GetRawDataSize(), oOperand->GetMemoryTypeOriginal());
         } else {
-            localBufferMap[memId]->size =
-                std::max(localBufferMap[memId]->size, ShapeCeilAlign(operand->tensor->rawshape, operand->Datatype()));
+            localBufferMap_[memId]->size = 
+                std::max(localBufferMap_[memId]->size, static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()));
         }
+        return SUCCESS;
     }
 
     std::string GetOpInfo(Operation* op) {
@@ -196,7 +202,7 @@ public:
         }
     }
 
-    void InitBufRefCount() {
+    Status InitBufRefCount() {
         bufRefCount_.clear();
         for (const auto &op : operations) {
             inGraph[op].clear();
@@ -204,14 +210,21 @@ public:
             for (auto &tensor : op->GetIOperands()) {
                 UpdateBufRefCount(tensor);
                 int memId = tensor->memoryrange.memId;
-                InitLocalBuffer(tensor, memId);
+                if (InitLocalBuffer(tensor, memId) != SUCCESS) {
+                    APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
+                    return FAILED;
+                }
             }
             for (auto &tensor : op->GetOOperands()) {
                 UpdateBufRefCount(tensor);
                 int memId = tensor->memoryrange.memId;
-                InitLocalBuffer(tensor, memId);
+                if (InitLocalBuffer(tensor, memId) != SUCCESS) {
+                    APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
+                    return FAILED;
+                }
             }
         }
+        return SUCCESS;
     }
 
     void PrintDependencies() {
@@ -294,13 +307,23 @@ public:
         return SUCCESS;
     }
 
-    void CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t> &bufferSize, std::set<int> &memIdMap) {
-        for (auto logicalTensor : tensors) {
-            if (memIdMap.find(logicalTensor->memoryrange.memId) == memIdMap.end()) {
-                bufferSize[logicalTensor->GetMemoryTypeOriginal()] += logicalTensor->GetDataSize();
-                memIdMap.insert(logicalTensor->memoryrange.memId);
+    Status CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t> &bufferSize, std::set<int> &memIdMap) {
+        for (auto tensor : tensors) {
+            if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+                continue;
+            }
+            const auto &shape = tensor->tensor->GetRawShape();
+            if (std::any_of(shape.begin(), shape.end(), [](int64_t d) {return d <= 0;})) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Dynamic axis detected in %s, "
+                    "OoOSchedule requires static rawShape!", tensor->Dump().c_str());
+                return FAILED;
+            }
+            if (memIdMap.find(tensor->memoryrange.memId) == memIdMap.end()) {
+                bufferSize[tensor->GetMemoryTypeOriginal()] += tensor->tensor->GetRawDataSize();
+                memIdMap.insert(tensor->memoryrange.memId);
             }
         }
+        return SUCCESS;
     }
 
     std::string DumpOpInfo(Operation &op) {
@@ -308,8 +331,8 @@ public:
         os << "op: " << op.GetOpcodeStr().c_str() << "[" << op.GetOpMagic() << "] | ";
         os << "inputs: { ";
         for (size_t i = 0; i < op.iOperand.size(); i++) {
-            os << "Tensor [" << op.GetInputOperand(i)->GetMagic() << "] ";
-            os << op.iOperand[i]->DumpSSA(false, true, true);
+            os << "RawTensor [" << op.GetInputOperand(i)->tensor->GetRawMagic() << "] ";
+            os << op.iOperand[i]->tensor->DumpSSA(true, true);
             if (i != op.iOperand.size() - 1) {
                 os << ", ";
             }
@@ -317,8 +340,8 @@ public:
         os << " }" << " | ";
         os << "outputs: { ";
         for (size_t i = 0; i < op.oOperand.size(); i++) {
-            os << "Tensor [" << op.GetOutputOperand(i)->GetMagic() << "] ";
-            os << op.oOperand[i]->DumpSSA(false, true, true);
+            os << "RawTensor [" << op.GetOutputOperand(i)->tensor->GetRawMagic() << "] ";
+            os << op.oOperand[i]->tensor->DumpSSA(true, true);
             if (i != op.oOperand.size() - 1) {
                 os << ", ";
             }
@@ -330,8 +353,9 @@ public:
     Status CheckOpBufferSize(Operation *op) {
         std::map<MemoryType, int64_t> bufferSizeMap;
         std::set<int> memIdMap;
-        CalcBufferSize(op->GetIOperands(), bufferSizeMap, memIdMap);
-        CalcBufferSize(op->GetOOperands(), bufferSizeMap, memIdMap);
+        if (CalcBufferSize(op->GetIOperands(), bufferSizeMap, memIdMap) != SUCCESS || CalcBufferSize(op->GetOOperands(), bufferSizeMap, memIdMap) != SUCCESS) {
+            return FAILED;
+        }
         for (auto &bufferPair : bufferSizeMap) {
             if (localMemSize.find(bufferPair.first) == localMemSize.end()) {
                 continue;

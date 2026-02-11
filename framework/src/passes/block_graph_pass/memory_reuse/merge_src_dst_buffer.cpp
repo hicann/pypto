@@ -37,11 +37,11 @@ void SrcDstBufferMergeImpl::InitTensorMaxSize(const LogicalTensorPtr &output) {
     for (auto &consumer : output->GetConsumers()) {
         tensorConsumers_[output->memoryrange.memId].insert(consumer->GetOpMagic());
         if (tensorMaxSize_.find(output->memoryrange.memId) == tensorMaxSize_.end()) {
-            tensorMaxSize_[output->memoryrange.memId] = output->GetDataSize();
+            tensorMaxSize_[output->memoryrange.memId] = output->tensor->GetRawDataSize();
             continue;
         }
         tensorMaxSize_[output->memoryrange.memId] =
-            std::max(tensorMaxSize_[output->memoryrange.memId], output->GetDataSize());
+            std::max(tensorMaxSize_[output->memoryrange.memId], output->tensor->GetRawDataSize());
     }
 }
 
@@ -234,7 +234,7 @@ bool SrcDstBufferMergeImpl::CanSrcDstReuse(const Operation &ops, std::shared_ptr
         return false;
     }
     if (tensorMaxSize_[oOperand->memoryrange.memId] != tensorMaxSize_[iOperand->memoryrange.memId]) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Output tensor (memId=%d, size=%d) != input tensor (memId=%d, size=%d), op:%s[%d]", oOperand->memoryrange.memId, 
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Output tensor (memId=%d, size=%ld) != input tensor (memId=%d, size=%ld), op:%s[%d]", oOperand->memoryrange.memId, 
             tensorMaxSize_[oOperand->memoryrange.memId], iOperand->memoryrange.memId, tensorMaxSize_[iOperand->memoryrange.memId], ops.GetOpcodeStr().c_str(), ops.GetOpMagic());
         return false;
     }
@@ -363,7 +363,7 @@ Status SrcDstBufferMergeImpl::FindReuseableL0Tensor(const Operation& op, std::un
             continue;
         }
         if (tensorMaxSize_[inputTensor->memoryrange.memId] != tensorMaxSize_[needReplacedTensor->memoryrange.memId]) {
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Matmul input tensor (memId=%d, size=%d) != needReplaced tensor (memId=%d, size=%d), op:%s[%d].", inputTensor->memoryrange.memId, 
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Matmul input tensor (memId=%d, size=%ld) != needReplaced tensor (memId=%d, size=%ld), op:%s[%d].", inputTensor->memoryrange.memId, 
                 tensorMaxSize_[inputTensor->memoryrange.memId], needReplacedTensor->memoryrange.memId, tensorMaxSize_[needReplacedTensor->memoryrange.memId], op.GetOpcodeStr().c_str(), op.GetOpMagic());
             return SUCCESS;
         }

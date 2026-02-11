@@ -60,8 +60,6 @@ private:
     std::map<uint64_t, OoOScheduler> schedulerMap;
     std::unordered_map<LogicalTensorPtr, Operation *> lastUseMap_;
     OoOScheduleChecker checker;
-    bool combineAxis{false};
-    bool forceCombineAxis{false};
 };
 } // namespace npu::tile_fwk
 #endif // PASS_SCHEDULE_OOO_H

@@ -801,7 +801,10 @@ Status OoOScheduler::ExecuteIssue() {
     }
     issueEntries = curIssueEntries;
     // 初始化修改了的 refcount
-    InitBufRefCount();
+    if (InitBufRefCount() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "InitBufRefCount failed at ExecuteIssue!");
+        return FAILED;
+    }
     if (InitDependencies() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "InitDependencies failed!");
         return FAILED;

@@ -28,7 +28,7 @@ void LatencyEstimator::LaunchReadyIssue() {
         if (IsOpAlloc(op)) {
             auto tensor = op->GetOOperands()[0];
             auto memId = tensor->memoryrange.memId;
-            allocIssueQueue[localBufferMap[memId]->memType].Insert(op);
+            allocIssueQueue[localBufferMap_[memId]->memType].Insert(op);
         }
     }
 }
@@ -41,18 +41,18 @@ Status LatencyEstimator::FreeBuffer(Operation* op) {
             return FAILED;
         }
         if (bufRefCount_[memId] == 0) {
-            auto freeMemSize = localBufferMap[memId]->size;
+            auto freeMemSize = localBufferMap_[memId]->size;
             if (spillblockMemIds.find(memId) == spillblockMemIds.end()) {
-                localMemoryCurrentSize[localBufferMap[memId]->memType] += freeMemSize;
+                localMemoryCurrentSize[localBufferMap_[memId]->memType] += freeMemSize;
                 APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, currentSize %d, memId: %d, freeMemSize: %d.",
-                    localBufferMap[memId]->memType, localMemoryCurrentSize[localBufferMap[memId]->memType], memId, freeMemSize);
+                    localBufferMap_[memId]->memType, localMemoryCurrentSize[localBufferMap_[memId]->memType], memId, freeMemSize);
             } else {
                 APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, memId: %d free in spillblock",
-                    localBufferMap[memId]->memType, memId);
+                    localBufferMap_[memId]->memType, memId);
             }
 
-            if (localMemoryCurrentSize[localBufferMap[memId]->memType] > localMemSize[localBufferMap[memId]->memType]
-                || localMemoryCurrentSize[localBufferMap[memId]->memType] < 0) {
+            if (localMemoryCurrentSize[localBufferMap_[memId]->memType] > localMemSize[localBufferMap_[memId]->memType]
+                || localMemoryCurrentSize[localBufferMap_[memId]->memType] < 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor [%d] failed.", memId);
                 return FAILED;
             }
@@ -123,7 +123,7 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
         }
         Operation* op = pipe.Front();
         auto memId = GetInOutOperandCached(op)[0]->memoryrange.memId;
-        auto needMemSize = localBufferMap[memId]->size;
+        auto needMemSize = localBufferMap_[memId]->size;
         if (localMemoryCurrentSize[memType] >= static_cast<long int>(needMemSize)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
             localMemoryCurrentSize[memType] -= needMemSize;

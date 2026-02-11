@@ -209,14 +209,13 @@ private:
     void InitMemorySize();
     Status CheckOpBufferSize(Operation *op);
     std::string dumpOpInfo(Operation &op);
-    void CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t> &bufferSize, std::set<int> &memIdMap);
+    Status CalcBufferSize(LogicalTensors tensors, std::map<MemoryType, int64_t> &bufferSize, std::set<int> &memIdMap);
     Status InitDependencies();
     void FindDependencies(IssueEntryPtr issue, std::unordered_map<Operation*, IssueEntryPtr> &op2IssueEntryMap);
     void AddDependency(IssueEntryPtr preIssue, IssueEntryPtr postIssue, bool isAlloc);
     Status InitAllocDependencies(IssueEntryPtr issue, std::unordered_map<int, IssueEntryPtr> &tensor2AllocMap);
-    void InitLocalBuffer(LogicalTensorPtr oOperand, int memId);
-    void InitLocalBufferForAxisCombine(LogicalTensorPtr oOperand, int memId);
-    void InitBufRefCount();
+    Status InitLocalBuffer(LogicalTensorPtr oOperand, int memId);
+    Status InitBufRefCount();
     void UpdateBufRefCount(IssueEntryPtr issue, LogicalTensorPtr tensor);
     Status CheckAllocIssue();
     void InitTensorCoreMap();
@@ -373,13 +372,12 @@ public:
     Status Schedule(const std::vector<Operation *> &operations,
         const std::unordered_map<Operation*, std::pair<OpCoreType, int>> &opCoreMap = std::unordered_map<Operation*, std::pair<OpCoreType, int>>(),
         const std::unordered_map<OpCoreType, std::vector<int>> fixCoreConfig = CORE_INIT_CONFIGS_HARDWARE_ONE);
-    OoOScheduler(Function &function, bool combineAxis=false) : function_(function), isCombineAxis_(combineAxis) {}
+    OoOScheduler(Function &function) : function_(function) {}
 
     std::vector<Operation *> GetNewOperations() { return newOperations_; }
     int workspaceOffset{0};
     int clock{0};
     OoOSchedulerCheck oooCheck;
-    bool isCombineAxis_{false};
     std::unordered_map<PipeType, int> pipeEndTime;
 };
 } // namespace npu::tile_fwk
