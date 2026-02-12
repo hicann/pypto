@@ -58,9 +58,6 @@ private:
 };
 static constexpr double UB_THRESHOLD = 0.35;
 static constexpr double L1_THRESHOLD = 0.5;
-static constexpr int MATMUL_DIM_NUM = 2;
-static constexpr int L0C2L1_DIM1_SHAPE_RESTICT = 16; // l0c2l1要求输入的外轴（第一轴）元素数量必须是16的倍数
-static constexpr int L0C2L1_DIM2_BYTE_RESTICT = 32; // l0c2l1要求输入的内轴（第二轴）必须是32Byte对齐
 } // namespace npu::tile_fwk
 
 #endif // TILE_FWK_ASSIGN_MEMORY_TYPE_H
