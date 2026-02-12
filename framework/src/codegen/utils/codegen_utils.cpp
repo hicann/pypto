@@ -65,7 +65,7 @@ std::string GetAddrTypeByOperandType(OperandType type) {
 
 int64_t CalcLinearOffset(const std::vector<int64_t> &shape, const std::vector<int64_t> &offset) {
     if (shape.empty() || offset.empty() || shape.size() != offset.size()) {
-        ALOG_ERROR_F("Invalid Input! shape: %s, offset: %s", IntVecToStr(shape).c_str(), IntVecToStr(offset).c_str());
+        CODEGEN_LOGE("Invalid Input! shape: %s, offset: %s", IntVecToStr(shape).c_str(), IntVecToStr(offset).c_str());
         return 0;
     }
 

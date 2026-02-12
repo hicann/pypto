@@ -48,7 +48,7 @@ void ForNode::PrintUpdate(std::ostringstream &os) const {
 void ForBlockManager::UpdateAxesList(const std::vector<SymbolicScalar> &axesList) {
     axesList_ = axesList;
     FillIntVecWithDummyInHead<SymbolicScalar>(axesList_, MAX_LOOP_DEPTH - axesList.size(), 1);
-    ALOG_INFO_F("axesList_ after fill is : %s, ", IntVecToStr(axesList_).c_str());
+    CODEGEN_LOGI("axesList_ after fill is : %s, ", IntVecToStr(axesList_).c_str());
     for (size_t i = 0; i < axesList_.size(); ++i) {
         std::string loopVar = "idx" + std::to_string(i);
         ForNode forNode{loopVar, 0, axesList_[i], 1};
@@ -109,7 +109,7 @@ void ForBlockManager::PrintSetAddrSingle(std::ostringstream &os, const std::stri
 
 void ForBlockManager::PrintTileOps(std::ostringstream &os) const {
     for (const auto &tileOp : opList_) {
-        ALOG_INFO_F("tileOp is : %s", tileOp.c_str());
+        CODEGEN_LOGI("tileOp is : %s", tileOp.c_str());
         PrintIndent(os, MAX_LOOP_DEPTH + 1);
         os << tileOp;
     }

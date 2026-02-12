@@ -34,7 +34,7 @@ DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
         pack.gmShapeExpr = GenGetParamMacroPacked(dynShapeIdx, dim, PREFIX_STR_RAW_SHAPE);
     }
     FillIntVecWithDummyInHead<std::string>(pack.gmShapeExpr, shapeDim - dim, "1");
-    ALOG_INFO_F("dynamic gmShape param: %s", IntVecToStr(pack.gmShapeExpr).c_str());
+    CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(pack.gmShapeExpr).c_str());
 
     if (offsetFromAttr[dynShapeIdx][ID0].IsValid()) {
         pack.gmOffsetExpr = GenSymbolicArgument(offsetFromAttr[dynShapeIdx]);
@@ -42,7 +42,7 @@ DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
         pack.gmOffsetExpr = GenGetParamMacroPacked(dynShapeIdx, dim, PREFIX_STR_OFFSET);
     }
     FillIntVecWithDummyInHead<std::string>(pack.gmOffsetExpr, shapeDim - dim, "0");
-    ALOG_INFO_F("dynamic gmOffset param: %s", IntVecToStr(pack.gmOffsetExpr).c_str());
+    CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(pack.gmOffsetExpr).c_str());
 
     for (const auto &gs : pack.gmShapeExpr) {
         pack.paramList.emplace_back(gs);
@@ -95,10 +95,10 @@ std::string CodeGenOpCloudNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned int 
     });
 
     std::vector<int64_t> gmShape = rawShape[gmIdx];
-    ALOG_INFO_F("GenMemOpL1 op: %s, gmShape: %s", tileOpName.c_str(), IntVecToStr(gmShape).c_str());
+    CODEGEN_LOGI("GenMemOpL1 op: %s, gmShape: %s", tileOpName.c_str(), IntVecToStr(gmShape).c_str());
 
     std::vector<int64_t> l1Shape = rawShape[l1Idx];
-    ALOG_INFO_F("GenMemOpL1 op: %s, l1Shape: %s", tileOpName.c_str(), IntVecToStr(l1Shape).c_str());
+    CODEGEN_LOGI("GenMemOpL1 op: %s, l1Shape: %s", tileOpName.c_str(), IntVecToStr(l1Shape).c_str());
 
     // Spilling out scene only support 2-dim shape
     ASSERT(l1Shape.size() == SHAPE_DIM2) << "L1 shape must be 2-dim!";
@@ -202,10 +202,10 @@ std::string CodeGenOpCloudNPU::GenMemL1ToL0() const {
     std::string paramStr = GenParamsStr();
 
     std::vector<int64_t> l1Shape = this->rawShape[ID1];
-    ALOG_INFO_F("GenMemL1ToL0 %s, l1Shape is %s", tileOpName.c_str(), IntVecToStr(l1Shape).c_str());
+    CODEGEN_LOGI("GenMemL1ToL0 %s, l1Shape is %s", tileOpName.c_str(), IntVecToStr(l1Shape).c_str());
 
     std::vector<int64_t> l0Shape = this->rawShape[ID0];
-    ALOG_INFO_F("GenMemL1ToL0 %s, l0Shape is %s", tileOpName.c_str(), IntVecToStr(l0Shape).c_str());
+    CODEGEN_LOGI("GenMemL1ToL0 %s, l0Shape is %s", tileOpName.c_str(), IntVecToStr(l0Shape).c_str());
 
     unsigned srcOffset0 = 0;
     unsigned srcOffset1 = 0;
@@ -390,7 +390,7 @@ std::string CodeGenOpCloudNPU::GenIndexOutCastOp() const {
     });
 
     std::vector gmShape = this->rawShape[gmIdx];
-    ALOG_INFO_F("genIndexOutCastOp gm shape: %s", IntVecToStr(gmShape).c_str());
+    CODEGEN_LOGI("genIndexOutCastOp gm shape: %s", IntVecToStr(gmShape).c_str());
 
     std::vector<int64_t> s0os = NormalizeShape(src0OriginShape, SHAPE_DIM4);
     std::vector<int64_t> gms = NormalizeShape(gmShape, SHAPE_DIM4);
@@ -694,9 +694,9 @@ std::string CodeGenOpCloudNPU::GenMemCopyVar(bool isCopyLocalToGM, unsigned uf) 
     addrTypeHead[localIdx] = GetAddrTypeByOperandType(localType);
 
     std::vector<int64_t> gmShape = this->rawShape[gmIdx];
-    ALOG_INFO_F("gmShape is %s", IntVecToStr(gmShape).c_str());
+    CODEGEN_LOGI("gmShape is %s", IntVecToStr(gmShape).c_str());
     std::vector<int64_t> localRawShape = this->rawShape[localIdx];
-    ALOG_INFO_F("localRawShape is %s", IntVecToStr(localRawShape).c_str());
+    CODEGEN_LOGI("localRawShape is %s", IntVecToStr(localRawShape).c_str());
 
     std::vector<std::string> addrExpr(ID2);
     addrExpr[localIdx] = sm->QueryVarNameByTensorMagic(operandWithMagic[localIdx]);
@@ -885,10 +885,10 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWith
     int oriTileShape1 = std::min(originShape[localIdx][ID1], localRawShape[ID1]);
 
     std::vector<std::string> gmShapeExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
-    ALOG_INFO_F("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
+    CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
 
     std::vector<std::string> gmOffsetExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_OFFSET);
-    ALOG_INFO_F("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
+    CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
 
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
 
@@ -1067,10 +1067,10 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL
     const std::vector<std::string> &dataTypeExpr = param.dataTypeExpr;
 
     std::vector<std::string> gmShapeExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_RAW_SHAPE);
-    ALOG_INFO_F("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
+    CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
 
     std::vector<std::string> gmOffsetExpr = GenGetParamMacroPacked(param.gmIdx, SHAPE_DIM2, PREFIX_STR_OFFSET);
-    ALOG_INFO_F("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
+    CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
 
     std::string opName = tileOpName;
     std::string addrBuffer = addrExpr[ID1];

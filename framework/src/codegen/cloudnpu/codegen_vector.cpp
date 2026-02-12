@@ -30,10 +30,10 @@ std::string CodeGenOpCloudNPU::GenCastOp() const {
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
     std::vector srcShape = this->rawShape[ID1];
-    ALOG_INFO_F("genCastOp %s, srcShape is %s", tileOpName.c_str(), IntVecToStr(srcShape).c_str());
+    CODEGEN_LOGI("genCastOp %s, srcShape is %s", tileOpName.c_str(), IntVecToStr(srcShape).c_str());
 
     std::vector dstShape = this->rawShape[ID0];
-    ALOG_INFO_F("genCastOp %s, dstShape is %s", tileOpName.c_str(), IntVecToStr(dstShape).c_str());
+    CODEGEN_LOGI("genCastOp %s, dstShape is %s", tileOpName.c_str(), IntVecToStr(dstShape).c_str());
 
     std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID1]);
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
@@ -185,9 +185,9 @@ std::string CodeGenOpCloudNPU::GenTransposeDataMove() const {
     std::string gmVar = GenGmParamVar(gmIdx);
 
     std::vector<int64_t> srcShape = this->rawShape[localIdx];
-    ALOG_INFO_F("GenTransposeDataMove: srcShape is %s", IntVecToStr(srcShape).c_str());
+    CODEGEN_LOGI("GenTransposeDataMove: srcShape is %s", IntVecToStr(srcShape).c_str());
     std::vector<int64_t> gmShape = this->rawShape[gmIdx];
-    ALOG_INFO_F("GenTransposeDataMove: gmShape is %s", IntVecToStr(gmShape).c_str());
+    CODEGEN_LOGI("GenTransposeDataMove: gmShape is %s", IntVecToStr(gmShape).c_str());
 
     AppendLocalBufferVarOffset({
         {   gmIdx,    std::ref(gmVar)},
@@ -282,11 +282,11 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveDynamic(const PrintTranspos
     int dim = static_cast<int>(rawShape[ID0].size());
     std::vector<std::string> gmShapeExpr = GenGetParamMacroPacked(ID0, dim, PREFIX_STR_RAW_SHAPE);
     FillIntVecWithDummyInHead<std::string>(gmShapeExpr, SHAPE_DIM4 - dim, "1");
-    ALOG_INFO_F("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
+    CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
 
     std::vector<std::string> gmOffsetExpr = GenGetParamMacroPacked(ID0, dim, PREFIX_STR_OFFSET);
     FillIntVecWithDummyInHead<std::string>(gmOffsetExpr, SHAPE_DIM4 - dim, "0");
-    ALOG_INFO_F("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
+    CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
 
     std::vector<int64_t> os = NormalizeShape(originShape[1], SHAPE_DIM4);
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[1], SHAPE_DIM4);
@@ -332,11 +332,11 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveDynamicUnaligned(const Prin
     int dim = static_cast<int>(rawShape[gmIdx].size());
     std::vector<std::string> gmShapeExpr = GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_RAW_SHAPE);
     FillIntVecWithDummyInHead<std::string>(gmShapeExpr, SHAPE_DIM5 - dim, "1");
-    ALOG_INFO_F("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
+    CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(gmShapeExpr).c_str());
 
     std::vector<std::string> gmOffsetExpr = GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
     FillIntVecWithDummyInHead<std::string>(gmOffsetExpr, SHAPE_DIM5 - dim, "0");
-    ALOG_INFO_F("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
+    CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(gmOffsetExpr).c_str());
     auto newDynLocalValidShape = dynamicValidShape[localIdx];
     FillIntVecWithDummyInHead<SymbolicScalar>(newDynLocalValidShape, SHAPE_DIM5 - dim, 1);
 
@@ -502,7 +502,7 @@ std::string CodeGenOpCloudNPU::GenGatherFromUBOp() const {
     std::vector dstShape = this->rawShape[0];
 
     std::vector src0Shape = this->rawShape[1];
-    ALOG_INFO_F("GenGatherOp, src0 Shape is [%d,%d]", src0Shape[0], src0Shape[1]);
+    CODEGEN_LOGI("GenGatherOp, src0 Shape is [%d,%d]", src0Shape[0], src0Shape[1]);
 
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
     std::string src0DtypeStr = DataType2CCEStr(operandDtype[ID1]);
@@ -763,7 +763,7 @@ std::string CodeGenOpCloudNPU::GenRangeOp() const {
             startVal = std::to_string(AnyCast<Element>(start).Cast<int64_t>());
             stepVal = std::to_string(AnyCast<Element>(step).Cast<int64_t>());
             break;
-        default: ALOG_ERROR_F("RangeOp from PASS occured unsupport DataType: %d", operandDtype[ID0]); return "CG_ERROR";
+        default: CODEGEN_LOGE("RangeOp from PASS occured unsupport DataType: %d", operandDtype[ID0]); return "CG_ERROR";
     }
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
@@ -1114,8 +1114,8 @@ std::string CodeGenOpCloudNPU::GenScatterElementSOp() const {
     std::string dstDtypeStr = DataType2CCEStr(dstDtype);
     std::string src0DtypeStr = DataType2CCEStr(src0Dtype);
     std::string src1DtypeStr = DataType2CCEStr(src1Dtype);
-    ALOG_INFO_F("GenScatterElementSOp, dstDtypeStr%s", dstDtypeStr.c_str());
-    ALOG_INFO_F("GenScatterElementSOp, src1DtypeStr%s", src1DtypeStr.c_str());
+    CODEGEN_LOGI("GenScatterElementSOp, dstDtypeStr%s", dstDtypeStr.c_str());
+    CODEGEN_LOGI("GenScatterElementSOp, src1DtypeStr%s", src1DtypeStr.c_str());
 
     AppendLocalBufVarOffsetInOrder(dstVar, src0Var, src1Var);
 

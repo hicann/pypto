@@ -129,7 +129,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam 
     std::vector<int64_t> srcRawShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> dstRawShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
     std::vector<int64_t> tmpRawShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
-    ALOG_INFO_F("rawShape[2] is %s", IntVecToStr(rawShape[ID2]).c_str());
+    CODEGEN_LOGI("rawShape[2] is %s", IntVecToStr(rawShape[ID2]).c_str());
 
     if (isSupportLayout) {
         return PrintReduceLastAxisTileTensor();
@@ -433,10 +433,10 @@ std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const {
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
     std::vector srcShape = this->rawShape[2];
-    ALOG_INFO_F("GenUnaryOpWithTmpBuff %s src raw shape: %s", tileOpName.c_str(), IntVecToStr(srcShape).c_str());
+    CODEGEN_LOGI("GenUnaryOpWithTmpBuff %s src raw shape: %s", tileOpName.c_str(), IntVecToStr(srcShape).c_str());
 
     std::vector dstShape = this->rawShape[0];
-    ALOG_INFO_F("GenUnaryOpWithTmpBuff %s dst raw shape: %s", tileOpName.c_str(), IntVecToStr(dstShape).c_str());
+    CODEGEN_LOGI("GenUnaryOpWithTmpBuff %s dst raw shape: %s", tileOpName.c_str(), IntVecToStr(dstShape).c_str());
 
     std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID2]);
     std::string tmpDtypeStr = DataType2CCEStr(operandDtype[ID1]);

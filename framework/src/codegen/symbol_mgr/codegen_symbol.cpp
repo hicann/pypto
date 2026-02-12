@@ -34,7 +34,7 @@ AllocKey SymbolManager::CreateAllocKey(const std::shared_ptr<LogicalTensor> &ten
 AllocKey SymbolManager::CreateAllocKey(int tensorMagicNum) const {
     std::shared_ptr<LogicalTensor> tensor = SymbolManager::GetTensorByMagic(tensorMagicNum);
     if (!tensor) {
-        ALOG_ERROR_F("%s: can not query tensor object from tensor magicnum: %d", __FUNCTION__, tensorMagicNum);
+        CODEGEN_LOGE("%s: can not query tensor object from tensor magicnum: %d", __FUNCTION__, tensorMagicNum);
         return {};
     }
 
@@ -73,7 +73,7 @@ std::string SymbolManager::FormatAllocKey(const AllocKey &key) {
 }
 
 std::string SymbolManager::QueryVariableName(const AllocKey &key) {
-    ALOG_INFO_F("%s: query varname by identifier: %s", __FUNCTION__, FormatAllocKey(key).c_str());
+    CODEGEN_LOGI("%s: query varname by identifier: %s", __FUNCTION__, FormatAllocKey(key).c_str());
     auto iter = key2VariableName_.find(key);
     ASSERT(iter != key2VariableName_.end())
         << "QueryVariableName Failed: UNDEFINED_VAR !!! AllocKey: " << FormatAllocKey(key);
@@ -81,21 +81,21 @@ std::string SymbolManager::QueryVariableName(const AllocKey &key) {
 }
 
 std::string SymbolManager::QueryVariableNameTileTensor(const AllocKey &key) {
-    ALOG_INFO_F("%s: query varname TileTensor mode by identifier: %s", __FUNCTION__, FormatAllocKey(key).c_str());
+    CODEGEN_LOGI("%s: query varname TileTensor mode by identifier: %s", __FUNCTION__, FormatAllocKey(key).c_str());
 
     auto iter = key2VariableNameTileTensor_.find(key);
     if (iter != key2VariableNameTileTensor_.end()) {
         return iter->second;
     }
 
-    ALOG_ERROR_F("%s: failed to query by identifier: %s", __FUNCTION__, FormatAllocKey(key).c_str());
+    CODEGEN_LOGE("%s: failed to query by identifier: %s", __FUNCTION__, FormatAllocKey(key).c_str());
     ASSERT(false) << "QueryVariableNameTileTensor Failed: UNDEFINED_VAR !!! AllocKey: " << FormatAllocKey(key);
     return "UNDEFINED_VAR";
 }
 
 // NEXTNEXT: after TileTensor Mode is applied to all tensor, just retain TileTensor Mode
 std::string SymbolManager::QueryVarNameByTensorMagic(int magic, bool isTileTensor) {
-    ALOG_INFO_F("QueryVarNameByTensorMagic: magic is %d", magic);
+    CODEGEN_LOGI("QueryVarNameByTensorMagic: magic is %d", magic);
     AllocKey key = CreateAllocKey(magic);
     std::string varName = isTileTensor ? QueryVariableNameTileTensor(key) : QueryVariableName(key);
     return varName;
@@ -113,13 +113,13 @@ std::string SymbolManager::FindUsingName(const TileTensorUsing &tileTensorUsing)
 std::string SymbolManager::AddTileTensorUsing(const TileTensorUsing &tileTensorUsing) {
     std::string tensorUsingType = FindUsingName(tileTensorUsing);
     if (!tensorUsingType.empty()) {
-        ALOG_INFO_F("found tensorUsingType %s", tensorUsingType.c_str());
+        CODEGEN_LOGI("found tensorUsingType %s", tensorUsingType.c_str());
         return tensorUsingType;
     }
     tensorUsingType = tileTensorUsing.GenName();
-    ALOG_INFO_F("Add tensorUsingType %s", tensorUsingType.c_str());
+    CODEGEN_LOGI("Add tensorUsingType %s", tensorUsingType.c_str());
     tileTensorUsing_.insert({tensorUsingType, tileTensorUsing});
-    ALOG_INFO_F("insert tensorUsingType %s = %s", tensorUsingType.c_str(), tileTensorUsing.ToString().c_str());
+    CODEGEN_LOGI("insert tensorUsingType %s = %s", tensorUsingType.c_str(), tileTensorUsing.ToString().c_str());
     return tensorUsingType;
 }
 
@@ -134,7 +134,7 @@ std::string SymbolManager::AddTileTensor(const TileTensor &tileTensor) {
         } else {
             tileTensorByMagic_.insert({tileTensor.magic, result.first->first});
         }
-        ALOG_INFO_F(
+        CODEGEN_LOGI(
             "tileTensor_.insert result is %d Add TileTensor --> tensor magic: %d, tensor name: %s, tile tensor: %s",
             result.second, tileTensor.magic, tensorName.c_str(), tileTensor.ToString().c_str());
         return tensorName;
@@ -146,13 +146,13 @@ std::string SymbolManager::AddTileTensor(const TileTensor &tileTensor) {
     } else {
         tileTensorByMagicInLoop_.insert({tileTensor.magic, result.first->first});
     }
-    ALOG_INFO_F("tileTensor_.insert result is %d, tileTensor in loop insert tensor magic: %d, tensor name in loop: %s",
+    CODEGEN_LOGI("tileTensor_.insert result is %d, tileTensor in loop insert tensor magic: %d, tensor name in loop: %s",
         result.second, tileTensor.magic, tensorName.c_str());
     return tensorName;
 }
 
 std::vector<TileTensor> SymbolManager::QueryTileTensorByMagic(int magic) {
-    ALOG_INFO_F("QueryTileTensorByMagic magic is %d", magic);
+    CODEGEN_LOGI("QueryTileTensorByMagic magic is %d", magic);
     std::vector<TileTensor> res;
     auto [start, end] = tileTensorByMagic_.equal_range(magic);
     for (auto it = start; it != end; ++it) {
@@ -164,20 +164,20 @@ std::vector<TileTensor> SymbolManager::QueryTileTensorByMagic(int magic) {
 }
 
 std::vector<TileTensor> SymbolManager::QueryTileTensorInLoopByMagic(int magic) {
-    ALOG_INFO_F("QueryTileTensorInLoopByMagic magic is %d", magic);
+    CODEGEN_LOGI("QueryTileTensorInLoopByMagic magic is %d", magic);
     std::vector<TileTensor> res;
     auto [start, end] = tileTensorByMagicInLoop_.equal_range(magic);
     for (auto it = start; it != end; ++it) {
         res.emplace_back(it->second);
     }
-    ALOG_INFO_F("TileTensor magic %d not found in loop", magic);
+    CODEGEN_LOGI("TileTensor magic %d not found in loop", magic);
     return res;
 }
 
 void SymbolManager::InsertTensorNameInLoopToFullDim(
     const std::string &tensorName, const std::string &fullDimTensorName) {
     auto res = tensorNameInLoopToFullDim_.insert({tensorName, fullDimTensorName});
-    ALOG_INFO_F("res is %d, InsertTensorNameInLoopToFullDim %s -> %s", res.second, tensorName.c_str(),
+    CODEGEN_LOGI("res is %d, InsertTensorNameInLoopToFullDim %s -> %s", res.second, tensorName.c_str(),
         fullDimTensorName.c_str());
 }
 
@@ -185,7 +185,7 @@ std::string SymbolManager::QueryTileTensorFullDimByTensorInLoop(const std::strin
     std::string fullDimTensorName;
     auto iter = tensorNameInLoopToFullDim_.find(tensorName);
     if (iter != tensorNameInLoopToFullDim_.end()) {
-        ALOG_INFO_F("QueryTileTensorFullDimByTensorInLoop found tensor in loop %s, full dim tensor is %s",
+        CODEGEN_LOGI("QueryTileTensorFullDimByTensorInLoop found tensor in loop %s, full dim tensor is %s",
             tensorName.c_str(), iter->second.c_str());
         fullDimTensorName = iter->second;
     }

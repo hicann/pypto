@@ -51,22 +51,22 @@ std::map<int, int> GenRealizeIdMap(const SubfuncParam &subFuncParam) {
 
     std::map<int, int> idMap;
     auto f = [&idMap](size_t offset, auto &invokeArgs) {
-        ALOG_INFO_F("start offset is %d, arg size is %d", offset, invokeArgs.size());
+        CODEGEN_LOGI("start offset is %d, arg size is %d", offset, invokeArgs.size());
         for (size_t i = 0; i < invokeArgs.size(); i++) {
             size_t paramOff = (offset + i);
             uint32_t paramLoc = invokeArgs[i].paramLoc;
             ALOG_DEBUG("paramLoc ", paramLoc, " --> offset ", paramOff);
-            ALOG_INFO_F(" paramLoc is %d, paramOff is %d, SymDDRId is %d, SymName is %s", paramLoc, paramOff,
+            CODEGEN_LOGI(" paramLoc is %d, paramOff is %d, SymDDRId is %d, SymName is %s", paramLoc, paramOff,
                 invokeArgs[i].symDDRId, invokeArgs[i].symName.c_str());
             idMap.insert({paramLoc, paramOff});
         }
     };
 
-    ALOG_INFO_F("---  start tensorInvokeArgs paramLoc map ---- ");
+    CODEGEN_LOGI("---  start tensorInvokeArgs paramLoc map ---- ");
     f(0, tensorInvokeArgs);
-    ALOG_INFO_F("---  start incastInvokeArgs paramLoc map ---- ");
+    CODEGEN_LOGI("---  start incastInvokeArgs paramLoc map ---- ");
     f(tensorInvokeArgs.size(), incastInvokeArgs);
-    ALOG_INFO_F("---  start outcastInvokeArgs paramLoc map ---- ");
+    CODEGEN_LOGI("---  start outcastInvokeArgs paramLoc map ---- ");
     f(tensorInvokeArgs.size() + incastInvokeArgs.size(), outcastInvokeArgs);
     return idMap;
 }

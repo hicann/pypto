@@ -36,9 +36,9 @@ const std::string ENV_PTO_TILE_LIB_CODE_PATH = "PTO_TILE_LIB_CODE_PATH";
 constexpr const int64_t CODE_RESERVED_SIZE = 1024 * 1024;
 
 void PrintOperand(const std::string &operIO, std::shared_ptr<LogicalTensor> operand) {
-    ALOG_INFO_F("insert %s magic: %d, tensor: %s, memory map is: ", operIO.c_str(), operand->GetMagic(),
+    CODEGEN_LOGI("insert %s magic: %d, tensor: %s, memory map is: ", operIO.c_str(), operand->GetMagic(),
         operand->Dump().c_str());
-    ALOG_INFO_F(
+    CODEGEN_LOGI(
         "range is [%d, %d, %d]\n", operand->memoryrange.start, operand->memoryrange.end, operand->memoryrange.memId);
 }
 
@@ -67,7 +67,7 @@ std::string CodeGenCloudNPU::GenInclude(const Function &topFunc) const {
 std::string CodeGenCloudNPU::GenCommentBeforeFuncHeader(Function &subFunc) {
     std::ostringstream comment;
     comment << "// funcHash: " << subFunc.GetFunctionHash() << "\n\n";
-    ALOG_INFO_F("function hash is: %s", subFunc.GetFunctionHash().c_str());
+    CODEGEN_LOGI("function hash is: %s", subFunc.GetFunctionHash().c_str());
     return comment.str();
 }
 
@@ -128,7 +128,7 @@ void CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc, std::ost
             subFunc.GetMagicName().c_str(), subFunc.GetFunctionHash().c_str());
     }
 
-    ALOG_INFO_F("TopFunc Type is %s\nFunction to codegen:\n %s\n", topFunc.GetFunctionTypeStr().c_str(),
+    CODEGEN_LOGI("TopFunc Type is %s\nFunction to codegen:\n %s\n", topFunc.GetFunctionTypeStr().c_str(),
         topFunc.Dump().c_str());
 
     std::shared_ptr<SymbolManager> symbolMgr = std::make_shared<SymbolManager>();
@@ -140,11 +140,11 @@ void CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc, std::ost
     auto locToOffsetMap = GenRealizeIdMap(subFunc.GetParameter());
     FloatSaturateStatus fs;
     for (const auto &op : operationList) {
-        ALOG_INFO_F(
+        CODEGEN_LOGI(
             "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
         Opcode opcode = op.GetOpcode();
         if (SKIP_OPCODE_FOR_CODEGEN.find(opcode) != SKIP_OPCODE_FOR_CODEGEN.end()) {
-            ALOG_INFO_F("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
+            CODEGEN_LOGI("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
             continue;
         }
 
@@ -165,10 +165,10 @@ void CodeGenCloudNPU::GenFuncBody(Function &subFunc, Function &topFunc, std::ost
         tileOpSourceRegion.append(tileOpSourceCode);
 
         if (!allocSourceCode.empty()) {
-            ALOG_INFO_F(": extra alloc generated(moved up to alloc region): %s", allocSourceCode.c_str());
+            CODEGEN_LOGI(": extra alloc generated(moved up to alloc region): %s", allocSourceCode.c_str());
         }
-        ALOG_INFO_F(": op codegen result: \n, %s", tileOpSourceCode.c_str());
-        ALOG_INFO_F("------------------------ Op CodeGenNPU Finish -----------------------");
+        CODEGEN_LOGI(": op codegen result: \n, %s", tileOpSourceCode.c_str());
+        CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
 
     oss << GenLimitValue(fs) << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList()
@@ -180,7 +180,7 @@ std::string CodeGenCloudNPU::GenAllocForLocalBuffer(
     std::string allocSourceCode{};
     auto genExtraAllocForTensor = [this, &symbolMgr](const std::shared_ptr<LogicalTensor> &operand) -> std::string {
         if (HasAllocAttr(operand)) {
-            ALOG_INFO_F("operand has an alloc attr, need to gen extra alloc\n%s", operand->Dump().c_str());
+            CODEGEN_LOGI("operand has an alloc attr, need to gen extra alloc\n%s", operand->Dump().c_str());
             std::optional<std::string> allocCodeMaybe = GenExtraAlloc(symbolMgr, operand);
             if (allocCodeMaybe.has_value()) {
                 return allocCodeMaybe.value();
@@ -255,7 +255,7 @@ void CodeGenCloudNPU::GenCode(
     std::deque<std::function<void(void)>> tasks;
     for (auto &subFuncPair : topFunc.rootFunc_->programs_) {
         std::function task = [this, subFuncPair, &topFunc]() {
-            ALOG_INFO_F(" ----- subprogram id [%d] -----", subFuncPair.first);
+            CODEGEN_LOGI(" ----- subprogram id [%d] -----", subFuncPair.first);
             auto subFunc = subFuncPair.second;
             if (HandleForAICpuSubFunc(*subFunc)) {
                 return;
@@ -329,7 +329,7 @@ std::optional<std::string> CodeGenCloudNPU::GenExtraAlloc(
     const std::shared_ptr<SymbolManager> &symbolMgr, const std::shared_ptr<LogicalTensor> &tensor) const {
     auto memType = tensor->GetMemoryTypeOriginal();
     if (OPERAND_TYPE_TO_MEMORY_TYPE.find(memType) == OPERAND_TYPE_TO_MEMORY_TYPE.end()) {
-        ALOG_ERROR_F("%s: memory type(%d) of tensor from PASS is invalid, tensor is: %s", __FUNCTION__,
+        CODEGEN_LOGE("%s: memory type(%d) of tensor from PASS is invalid, tensor is: %s", __FUNCTION__,
             static_cast<size_t>(memType), tensor->Dump().c_str());
         return std::nullopt;
     }
@@ -371,7 +371,7 @@ std::string CodeGenCloudNPU::GenAlloc(
         return "";
     }
 
-    ALOG_INFO_F("%s: bind key to name: %s->%s", __FUNCTION__, sm->FormatAllocKey(key).c_str(), allocVarName.c_str());
+    CODEGEN_LOGI("%s: bind key to name: %s->%s", __FUNCTION__, sm->FormatAllocKey(key).c_str(), allocVarName.c_str());
 
     std::string dataTypeStr = DataType2CCEStr(dataType);
 
@@ -422,7 +422,7 @@ std::string GetIncludePathByLib() {
     }
 
     std::string includePath = libPath + "/include";
-    ALOG_INFO_F("includePath by lib is %s", includePath.c_str());
+    CODEGEN_LOGI("includePath by lib is %s", includePath.c_str());
 
     if (IsPathExist(includePath)) {
         return includePath;
@@ -433,12 +433,12 @@ std::string GetIncludePathByLib() {
 
 std::string CodeGenCloudNPU::GetIncludePathForCompileCCE() const {
     if (!ctx.IsIncludePathEmpty()) {
-        ALOG_INFO_F("include path from ctx is %s", ctx.includePath.c_str());
+        CODEGEN_LOGI("include path from ctx is %s", ctx.includePath.c_str());
         return ctx.includePath;
     }
 
     std::string includePathByLib = GetIncludePathByLib();
-    ALOG_INFO_F("includePathByLib is %s", includePathByLib.c_str());
+    CODEGEN_LOGI("includePathByLib is %s", includePathByLib.c_str());
     if (!includePathByLib.empty()) {
         return includePathByLib;
     }
@@ -553,14 +553,14 @@ std::pair<int, std::string> CodeGenCloudNPU::CompileCCE(
 
     std::string ccecCmd = oss.str();
 
-    ALOG_INFO_F("compile kernel...\n%s", ccecCmd.c_str());
+    CODEGEN_LOGI("compile kernel...\n%s", ccecCmd.c_str());
 
     int ret = CheckInjectStr(ccecCmd.c_str(), ccecCmd.length());
     ASSERT(ret == 0) << "CheckInjectStr failed. errCode = " << ret;
 
     ret = std::system(ccecCmd.c_str());
     if (ret != 0) {
-        ALOG_ERROR_F("Compile cce kernel failed, ret = %d\ncompile cmd is:\n %s", ret, ccecCmd.c_str());
+        CODEGEN_LOGE("Compile cce kernel failed, ret = %d\ncompile cmd is:\n %s", ret, ccecCmd.c_str());
     }
 
     return {ret, ccecCmd};

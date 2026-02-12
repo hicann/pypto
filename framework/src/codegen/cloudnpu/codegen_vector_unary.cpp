@@ -569,7 +569,7 @@ std::string CodeGenOpCloudNPU::GenUnaryOp() const {
     } else if (opCode == Opcode::OP_BITWISENOT) {
         return PrintBitwiseNot();
     }
-    ALOG_INFO_F("unsupported tileop: %s", opCodeStr.c_str());
+    CODEGEN_LOGI("unsupported tileop: %s", opCodeStr.c_str());
     return "CG_ERROR";
 }
 

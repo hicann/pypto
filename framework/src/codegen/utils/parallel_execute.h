@@ -17,6 +17,7 @@
 
 #include <deque>
 #include <functional>
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 using Task = std::function<void(void)>;

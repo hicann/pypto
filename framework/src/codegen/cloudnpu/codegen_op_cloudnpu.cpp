@@ -361,7 +361,7 @@ void CodeGenOpCloudNPU::AppendLocalBufferVarOffset(
         std::string &var = kv.second.get();
 
         ASSERT(!var.empty()) << "operandIdx: " << operandIdx << ", var is empty !!";
-        ALOG_INFO_F("var: %s, varRawShape: %s, varOffset: %s, resOffset: %lld", var.c_str(),
+        CODEGEN_LOGI("var: %s, varRawShape: %s, varOffset: %s, resOffset: %lld", var.c_str(),
             IntVecToStr(varRawShape).c_str(), IntVecToStr(varOffset).c_str(), resOffset);
 
         var.append(" + ").append(std::to_string(resOffset));
@@ -389,9 +389,9 @@ SymbolicScalar CodeGenOpCloudNPU::GetOperandStartOffset(int operandIdx) const {
         }
 
         ASSERT(operandIdx < operandCnt) << "operandIdx: " << operandIdx << ", operandCnt: " << operandCnt;
-        ALOG_DEBUG_F(" varRawShape: %s", IntVecToStr(varRawShape).c_str());
-        ALOG_DEBUG_F(" varOffset: %s", SymbolicVecToStr(dynOffset).c_str());
-        ALOG_DEBUG_F(" resOffset: %s", resOffset.Dump().c_str());
+        CODEGEN_LOGD(" varRawShape: %s", IntVecToStr(varRawShape).c_str());
+        CODEGEN_LOGD(" varOffset: %s", SymbolicVecToStr(dynOffset).c_str());
+        CODEGEN_LOGD(" resOffset: %s", resOffset.Dump().c_str());
         if (resOffset.ConcreteValid()) {
             return resOffset.Concrete();
         }
@@ -410,9 +410,9 @@ SymbolicScalar CodeGenOpCloudNPU::GetOperandStartOffset(int operandIdx) const {
     }
 
     ASSERT(operandIdx < operandCnt) << "operandIdx: " << operandIdx << ", operandCnt: " << operandCnt;
-    ALOG_DEBUG_F(" varRawShape: %s", IntVecToStr(varRawShape).c_str());
-    ALOG_DEBUG_F(" varOffset: %s", IntVecToStr(varOffset).c_str());
-    ALOG_DEBUG_F(" resOffset: %d", resOffset);
+    CODEGEN_LOGD(" varRawShape: %s", IntVecToStr(varRawShape).c_str());
+    CODEGEN_LOGD(" varOffset: %s", IntVecToStr(varOffset).c_str());
+    CODEGEN_LOGD(" resOffset: %d", resOffset);
     return resOffset;
 }
 
@@ -487,7 +487,7 @@ void CodeGenOpCloudNPU::UpdateTileTensorShapeAndStride(
     auto newOriginShape = shapeInLoop.loopDepth > 0 ? shapeInLoop.originShape : originShape[paramIdx];
     auto newRawShape = shapeInLoop.loopDepth > 0 ? shapeInLoop.rawShape : rawShape[paramIdx];
     auto newDynValidShape = shapeInLoop.loopDepth > 0 ? shapeInLoop.dynamicValidShape : dynamicValidShape[paramIdx];
-    ALOG_INFO_F("newOriginShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newOriginShape).c_str(),
+    CODEGEN_LOGI("newOriginShape is %s, newRawShape is %s, newDynValidShape is %s", IntVecToStr(newOriginShape).c_str(),
         IntVecToStr(newRawShape).c_str(), IntVecToStr(newDynValidShape).c_str());
 
     tileTensor.rawShape = newRawShape;
@@ -650,14 +650,14 @@ void CodeGenOpCloudNPU::UpdateLoopInfo() {
     }
 
     // Add TileTensor info in loop
-    ALOG_INFO_F("opCode %s has loopAxes: %s", opCodeStr.c_str(), IntVecToStr(loopAxes).c_str());
+    CODEGEN_LOGI("opCode %s has loopAxes: %s", opCodeStr.c_str(), IntVecToStr(loopAxes).c_str());
     size_t loopDepth = loopAxes.size();
     for (int i = 0; i < operandCnt; ++i) {
         if (ShouldSkipProcInLoop(i)) {
             continue;
         }
         ShapeInLoop shapeInLoop = BuildShapeInLoop(i, loopDepth);
-        ALOG_INFO_F("shapeInLoop: loopDepth is %d newOriginShape is %s, newRawShape is %s, newDynValidShape is %s",
+        CODEGEN_LOGI("shapeInLoop: loopDepth is %d newOriginShape is %s, newRawShape is %s, newDynValidShape is %s",
             loopDepth, IntVecToStr(shapeInLoop.originShape).c_str(), IntVecToStr(shapeInLoop.rawShape).c_str(),
             IntVecToStr(shapeInLoop.dynamicValidShape).c_str());
         TileTensorUsing tileTensorUsing{operandDtype[i], operandType[i], static_cast<int>(shapeInLoop.rawShape.size()),
@@ -706,7 +706,7 @@ std::string CodeGenOpCloudNPU::QueryTileTensorNameByIdx(int paramIdx) const {
     if (res.size() == 1) {
         return res[0].tensorName;
     }
-    ALOG_INFO_F("paramIdx is %d, tensor magic is %d, res size is %d", paramIdx, operandWithMagic[paramIdx], res.size());
+    CODEGEN_LOGI("paramIdx is %d, tensor magic is %d, res size is %d", paramIdx, operandWithMagic[paramIdx], res.size());
 
     for (const auto &tileTensor : res) {
         auto targetRawShape =

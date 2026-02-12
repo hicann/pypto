@@ -63,14 +63,14 @@ public:
     bool IsInLoop() { return isInLoop_; }
 
     void AddTensorInLoopBody(const std::string& tensorFullDim, const TileTensor &tileTensor) {
-        ALOG_INFO_F("AddTensorInLoopBody : %s", tileTensor.tensorName.c_str());
+        CODEGEN_LOGI("AddTensorInLoopBody : %s", tileTensor.tensorName.c_str());
         std::string tensorNameInLoop = sm_->AddTileTensor(tileTensor);
         sm_->InsertTensorNameInLoopToFullDim(tensorNameInLoop, tensorFullDim);
         tensorNeedSetAddr_.insert(tensorNameInLoop);
     }
 
     void AddOpInLoopBody(std::string &op) {
-        ALOG_INFO_F("AddOpInLoopBody add op : %s", op.c_str());
+        CODEGEN_LOGI("AddOpInLoopBody add op : %s", op.c_str());
         opList_.emplace_back(op);
     }
 

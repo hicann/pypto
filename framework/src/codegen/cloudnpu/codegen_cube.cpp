@@ -161,7 +161,7 @@ std::string CodeGenOpCloudNPU::GenParamsStr(const std::unordered_set<int32_t> &s
             }
 
             std::ostringstream oss;
-            ALOG_DEBUG_F("GenParamsStr var: %s", var.c_str());
+            CODEGEN_LOGD("GenParamsStr var: %s", var.c_str());
             oss << "(" << prefix << " " << dtypeStr << "*)" << var;
             params.emplace_back(oss.str());
         }

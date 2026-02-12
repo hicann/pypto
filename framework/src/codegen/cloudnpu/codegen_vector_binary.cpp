@@ -21,7 +21,7 @@
 
 namespace npu::tile_fwk {
 std::string GetBrcOprandIdxStr(int64_t brcbOperandIdx) {
-    ALOG_INFO_F("input brcbOperandIdx is %d", brcbOperandIdx);
+    CODEGEN_LOGI("input brcbOperandIdx is %d", brcbOperandIdx);
     std::string ret = "TileOp::";
     switch (brcbOperandIdx) {
         case ToUnderlying(BroadcastOperand::NONE): ret.append("BroadcastOperand::NONE"); break;
@@ -184,7 +184,7 @@ std::string CodeGenOpCloudNPU::GenBinaryOp() const {
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
     std::vector src0RawShape = this->rawShape[ID1];
-    ALOG_INFO_F("genBinaryOp %s, src0RawShape is %s", tileOpName.c_str(), IntVecToStr(src0RawShape).c_str());
+    CODEGEN_LOGI("genBinaryOp %s, src0RawShape is %s", tileOpName.c_str(), IntVecToStr(src0RawShape).c_str());
 
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
     std::string src0DtypeStr = DataType2CCEStr(operandDtype[ID1]);
@@ -352,7 +352,7 @@ std::string CodeGenOpCloudNPU::GenBinaryWithBrc() const {
 
     std::vector src0RawShape = this->rawShape[ID2];
     std::vector src1RawShape = this->rawShape[ID3];
-    ALOG_INFO_F("GenBinaryWithBrc %s, src0RawShape is %s", tileOpName.c_str(), IntVecToStr(src0RawShape).c_str());
+    CODEGEN_LOGI("GenBinaryWithBrc %s, src0RawShape is %s", tileOpName.c_str(), IntVecToStr(src0RawShape).c_str());
 
     char buffer[256] = "CG_ERROR";
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);

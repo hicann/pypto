@@ -26,6 +26,10 @@
 #define PYPTO 76
 
 #ifndef __DEVICE__
+#ifndef __FILE_NAME__
+#define __FILE_NAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#endif
+
 namespace npu::tile_fwk {
 class TilefwkLogFuncInfo {
 public:
