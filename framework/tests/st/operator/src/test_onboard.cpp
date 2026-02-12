@@ -32,6 +32,7 @@ const int capacity_2_1_8_8 = 2 * 1 * 8 * 8;
 const int capacity_4_4_16_16 = 4 * 4 * 16 * 16;
 const int capacity_4_1_16_16 = 4 * 1 * 16 * 16;
 const int capacity_16_16_64_64 = 16 * 16 * 64 * 64;
+const int capacity_16_8_64_64 = 16 * 8 * 64 * 64;
 const int capacity_8_32_32 = 8 * 32 * 32;
 const int capacity_8_8_32_32 = 8 * 8 * 32 * 32;
 const int capacity_4_4_4_16_16 = 4 * 4 * 4 * 16 * 16;
@@ -1886,6 +1887,34 @@ TEST_F(OnBoardTest, test_unary_operation_16_16_64_64_tileop_reciprocal) {
 
     std::vector<float> golden(capacity_16_16_64_64);
     std::vector<float> res(capacity_16_16_64_64);
+    machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
+    readInput(GetGoldenDir() + "/res.bin", golden);
+
+    int ret = resultCmp(golden, res, 0.003f);
+    EXPECT_EQ(ret, true);
+}
+
+TEST_F(OnBoardTest, test_unary_operation_16_8_64_64_tileop_relu) {
+    aclInit(nullptr);
+    rtSetDevice(GetDeviceIdByEnvVar());
+    uint64_t outputSize = capacity_16_8_64_64 * sizeof(float);
+    uint8_t* out_ptr = allocDevAddr(outputSize);
+    PROGRAM("RELU") {
+        std::vector<int64_t> shape = {16, 8, 64, 64};
+        void *x_ptr = readToDev(GetGoldenDir() + "/x.bin", capacity_16_16_64_64);
+        TileShape::Current().SetVecTile({2, 8, 16, 16});
+        Tensor input_a(DataType::DT_FP32, shape, (uint8_t *)x_ptr, "A");
+        Tensor output(DataType::DT_FP32, shape, out_ptr, "C");
+
+        config::SetBuildStatic(true);
+        FUNCTION("RELU_T", {input_a, output}) {
+            output = Relu(input_a);
+        }
+    }
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+
+    std::vector<float> golden(capacity_16_8_64_64);
+    std::vector<float> res(capacity_16_8_64_64);
     machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
     readInput(GetGoldenDir() + "/res.bin", golden);
 

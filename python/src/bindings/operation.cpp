@@ -87,6 +87,7 @@ void bind_operation(py::module &m) {
         "Tensor transpose.");
     m.def("Abs", [](const Tensor &self) { return npu::tile_fwk::Abs(self); }, "Tensor abs.");
     m.def("Reciprocal", [](const Tensor &operand) { return npu::tile_fwk::Reciprocal(operand); }, "Tensor reciprocal.");
+    m.def("Relu", [](const Tensor &operand) { return npu::tile_fwk::Relu(operand); }, "Tensor relu.");
     m.def(
         "Round", [](const Tensor &self, int decimals) { return npu::tile_fwk::Round(self, decimals); }, py::arg("self"),
         py::arg("decimals") = 0, "Tensor round.");
@@ -95,7 +96,6 @@ void bind_operation(py::module &m) {
     m.def("Ceil", [](const Tensor &self) { return npu::tile_fwk::Ceil(self); }, "Tensor ceil.");
     m.def("Floor", [](const Tensor &self) { return npu::tile_fwk::Floor(self); }, "Tensor floor.");
     m.def("Trunc", [](const Tensor &self) { return npu::tile_fwk::Trunc(self); }, "Tensor trunc.");
-    m.def("Reciprocal", [](const Tensor &self) { return npu::tile_fwk::Reciprocal(self); }, "Tensor Reciprocal.");
     m.def("BitwiseNot", [](const Tensor &self) { return npu::tile_fwk::BitwiseNot(self); }, "Tensor bitwisenot.");
     m.def("Neg", [](const Tensor &self) { return npu::tile_fwk::Neg(self); }, "Tensor neg.");
     m.def(

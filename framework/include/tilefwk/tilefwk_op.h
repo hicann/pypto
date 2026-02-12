@@ -129,6 +129,7 @@ Tensor Exp(const Tensor &self);
 Tensor Neg(const Tensor &self);
 Tensor Round(const Tensor &self, const int &decimals = 0);
 Tensor Rsqrt(const Tensor &self);
+Tensor Relu(const Tensor &self);
 Tensor BitwiseNot(const Tensor &self);
 Tensor Sqrt(const Tensor &self);
 Tensor Ceil(const Tensor &self);

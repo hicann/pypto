@@ -51,6 +51,10 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src) {
         pto::TNOT(dst, src);
         return;
     }
+    if constexpr (op == UnaryOp::RELU) {
+        pto::TMAXS(dst, src, 0.0f);
+        return;
+    }
 }
 
 template <UnaryOp op, typename T0, typename T1>
@@ -322,5 +326,11 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
 template <typename T0, typename T1>
 TILEOP void TReciprocal(T0 dst, T1 src) {
     UnaryCompute<UnaryOp::RECIPROCAL>(dst, src);
+}
+
+#define OP_TILE_OP_RELU TRelu
+template <typename T0, typename T1>
+TILEOP void TRelu(T0 dst, T1 src) {
+    UnaryCompute<UnaryOp::RELU>(dst, src);
 }
 #endif

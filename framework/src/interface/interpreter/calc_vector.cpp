@@ -207,6 +207,7 @@ void ExecuteOpUnary(ExecuteOperationContext *ctx) {
         case Opcode::OP_RSQRT: calc::Rsqrt(ret, iop); break;
         case Opcode::OP_SQRT: calc::Sqrt(ret, iop); break;
         case Opcode::OP_RECIPROCAL: calc::Reciprocal(ret, iop); break;
+        case Opcode::OP_RELU: calc::Relu(ret, iop); break;
         case Opcode::OP_BITWISENOT: calc::BitwiseNot(ret, iop); break;
         case Opcode::OP_ABS: calc::Abs(ret, iop); break;
         case Opcode::OP_BRCB: calc::Brcb(ret, iop); break;
@@ -219,6 +220,7 @@ REGISTER_CALC_OP(OP_NEG, Opcode::OP_NEG, ExecuteOpUnary<Opcode::OP_NEG>);
 REGISTER_CALC_OP(OP_RSQRT, Opcode::OP_RSQRT, ExecuteOpUnary<Opcode::OP_RSQRT>);
 REGISTER_CALC_OP(OP_SQRT, Opcode::OP_SQRT, ExecuteOpUnary<Opcode::OP_SQRT>);
 REGISTER_CALC_OP(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ExecuteOpUnary<Opcode::OP_RECIPROCAL>);
+REGISTER_CALC_OP(OP_RELU, Opcode::OP_RELU, ExecuteOpUnary<Opcode::OP_RELU>);
 REGISTER_CALC_OP(OP_BITWISENOT, Opcode::OP_BITWISENOT, ExecuteOpUnary<Opcode::OP_BITWISENOT>);
 REGISTER_CALC_OP(OP_ABS, Opcode::OP_ABS, ExecuteOpUnary<Opcode::OP_ABS>);
 REGISTER_CALC_OP(OP_BRCB, Opcode::OP_BRCB, ExecuteOpUnary<Opcode::OP_BRCB>);

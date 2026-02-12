@@ -517,6 +517,35 @@ def reciprocal(a: Tensor) -> Tensor:
 
 
 @op_wrapper
+def relu(a: Tensor) -> Tensor:
+    """
+    Returns a new tensor with the rectified linear unit function applied element-wise.
+    
+    The function is defined as:
+    y = max(0, x)
+    
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise relu result.
+
+    Examples
+    --------
+    x = pypto.tensor([-1.0, 2.0, 0.0, -0.5], pypto.DT_FP32)
+    y = pypto.relu(x)
+
+    Input x:  [-1.0, 2.0, 0.0, -0.5]
+    Output y: [ 0.0, 2.0, 0.0,  0.0]
+    """
+    return pypto_impl.Relu(a)
+
+
+@op_wrapper
 def logical_not(input: Tensor) -> Tensor:
     """
     Computes the element-wise logical NOT of 'input'

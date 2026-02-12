@@ -230,6 +230,14 @@ TEST_F(TorchAdaptorTest, UnaryOps) {
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        // relu
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        calc::Relu(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // abs
         auto self = makeTensorData(DT_FP32, {16, 16}, -4.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);

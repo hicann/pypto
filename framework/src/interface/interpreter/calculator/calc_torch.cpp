@@ -196,6 +196,13 @@ static void Reciprocal(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
 }
 
+static void Relu(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    auto tout = From(out);
+    auto tself = From(self);
+    torch::relu_out(tout.second, tself.second);
+    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+}
+
 static void BitwiseNot(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     auto tout = From(out);
     auto tself = From(self);
@@ -1691,6 +1698,7 @@ static struct CalcOps calcOps = {
     .Trunc = Trunc,
     .Round = Round,
     .Reciprocal = Reciprocal,
+    .Relu = Relu,
     .BitwiseNot = BitwiseNot,
     .Abs = Abs,
     .Brcb = Brcb,

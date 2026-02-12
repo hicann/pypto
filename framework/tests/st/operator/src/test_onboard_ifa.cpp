@@ -312,6 +312,36 @@ TEST_F(OnBoardIFATest, test_32_1_reciprocal) {
     EXPECT_EQ(ret, true);
 }
 
+// RELU (32, 1)
+TEST_F(OnBoardIFATest, test_32_1_relu) {
+    aclInit(nullptr);
+    rtSetDevice(GetDeviceIdByEnvVar());
+    int outCap = 32 * 1;
+    uint64_t outputSize = outCap * sizeof(float);
+    uint8_t* out_ptr = allocDevAddr(outputSize);
+    PROGRAM("Relu") {
+        std::vector<int64_t> shape1 = {32, 1};
+        void *x_ptr = readToDev(GetGoldenDir() + "/x.bin", outCap);
+        TileShape::Current().SetVecTile({8, 1});
+        Tensor input_a(DataType::DT_FP32, shape1, (uint8_t *)x_ptr, "A");
+        Tensor output(DataType::DT_FP32, shape1, out_ptr, "C");
+        ConfigManager::Instance();
+
+        config::SetBuildStatic(true);
+        FUNCTION("Relu_T", {input_a, output}) {
+            output = Relu(input_a);
+        }
+    }
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+
+    std::vector<float> golden(outCap);
+    std::vector<float> res(outCap);
+    machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
+    readInput(GetGoldenDir() + "/res.bin", golden);
+    int ret = resultCmp(golden, res, 0.002f);
+    EXPECT_EQ(ret, true);
+}
+
 // rowmaxsingle (32, 128)
 TEST_F(OnBoardIFATest, test_operation_32_128_row_max_single) {
     aclInit(nullptr);

@@ -54,6 +54,7 @@ struct CalcOps {
     void (*Trunc)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*Round)(LogicalTensorDataPtr, LogicalTensorDataPtr, int);
     void (*Reciprocal)(LogicalTensorDataPtr, LogicalTensorDataPtr);
+    void (*Relu)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*BitwiseNot)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*Abs)(LogicalTensorDataPtr, LogicalTensorDataPtr);
     void (*Brcb)(LogicalTensorDataPtr, LogicalTensorDataPtr);  

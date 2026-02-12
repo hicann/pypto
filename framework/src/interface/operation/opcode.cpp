@@ -226,6 +226,9 @@ void OpcodeManager::RegisterVectorUnary() {
     RegisterInfo(Opcode::OP_RSQRT, OpCoreType::AIV, "RSQRT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Trsqrt", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_RELU, OpCoreType::AIV, "RELU", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::Trelu", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_SQRT, OpCoreType::AIV, "SQRT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Tsqrt", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
@@ -858,6 +861,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {               Opcode::OP_MULS,          "TMulS"},
     {               Opcode::OP_DIVS,          "TDivS"},
     {              Opcode::OP_RSQRT,         "TRsqrt"},
+    {              Opcode::OP_RELU,           "TRelu"},
     {               Opcode::OP_SQRT,          "TSqrt"},
     {               Opcode::OP_CEIL,          "TCeil"},
     {               Opcode::OP_FLOOR,        "TFloor"},

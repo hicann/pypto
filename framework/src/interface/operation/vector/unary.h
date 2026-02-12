@@ -26,6 +26,7 @@ namespace npu::tile_fwk {
 enum class UnaryOpType {
     EXP,
     RSQRT,
+    RELU,
     SQRT,
     CEIL,
     FLOOR,
@@ -43,6 +44,7 @@ std::string GetUnaryOpName() {
     switch (T) {
         case UnaryOpType::EXP: return "EXP";
         case UnaryOpType::RSQRT: return "RSQRT";
+        case UnaryOpType::RELU: return "RELU";
         case UnaryOpType::SQRT: return "SQRT";
         case UnaryOpType::CEIL: return "CEIL";
         case UnaryOpType::FLOOR: return "FLOOR";
@@ -64,6 +66,7 @@ Opcode GetUnaryOpNameCode() {
     switch (T) {
         CASE(EXP);
         CASE(RSQRT);
+        CASE(RELU);
         CASE(SQRT);
         CASE(CEIL);
         CASE(FLOOR);
