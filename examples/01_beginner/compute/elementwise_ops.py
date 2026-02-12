@@ -1032,20 +1032,20 @@ def floor_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> t
     a_shape = a.shape
 
     if run_mode == "npu":
- 	    mode = pypto.RunMode.NPU
+        mode = pypto.RunMode.NPU
     elif run_mode == "sim":
- 	    mode = pypto.RunMode.SIM
- 	else:
- 	    raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
-    
- 	@pypto.frontend.jit(runtime_options={"run_mode": mode})
- 	def floor_kernel(a: pypto.Tensor(a_shape, pypto.DT_FP32)) -> pypto.Tensor(a_shape, pypto.DT_FP32):
- 	    pypto.set_vec_tile_shapes(2, 8)
- 	    out = pypto.floor(a)
- 	    return out
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
 
- 	out = floor_kernel(a)
- 	return out
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def floor_kernel(a: pypto.Tensor(a_shape, pypto.DT_FP32)) -> pypto.Tensor(a_shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(2, 8)
+        out = pypto.floor(a)
+        return out
+
+    out = floor_kernel(a)
+    return out
 
 
 def test_floor_basic(device_id: int = None, run_mode: str = "npu"):
@@ -1059,8 +1059,8 @@ def test_floor_basic(device_id: int = None, run_mode: str = "npu"):
  	dtype = torch.float32
  	a = torch.tensor([[1.2, 4.7],
  	                [-1.1, 9.0]], dtype=dtype, device=device)
- 	expected = torch.tensor([[2.0, 5.0],
- 	                        [-1.0, 9.0]], dtype=dtype, device=device)
+ 	expected = torch.tensor([[1.0, 4.0],
+ 	                        [-2.0, 9.0]], dtype=dtype, device=device)
 
  	out = floor_op(a, run_mode)
  	if run_mode == "npu":
@@ -1103,9 +1103,9 @@ def test_trunc_basic(device_id: int = None, run_mode: str = "npu"):
 
     dtype = torch.float32
     a = torch.tensor([[1.2, 4.1],
-                     [16.6, 9.3]], dtype=dtype, device=device)
+                     [16.8, 9.3]], dtype=dtype, device=device)
     expected = torch.tensor([[1.0, 4.0],
-                             [17.0, 9.0]], dtype=dtype, device=device)
+                             [16.0, 9.0]], dtype=dtype, device=device)
 
     out = trunc_op(a, run_mode)
     if run_mode == "npu":
