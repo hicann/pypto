@@ -172,5 +172,21 @@
         "framework/src/interface/tileop/"
       ]
     }
+  },
+  "libtile_fwk_utils.so": {
+    "Source-Header": {
+      "Self": [
+        "framework/src/utils"
+      ],
+      "Area": [
+      ],
+      "Include": [
+        "framework/include/"
+      ],
+      "WhiteList": [
+      ],
+      "BlackList": [
+      ]
+    }
   }
 }

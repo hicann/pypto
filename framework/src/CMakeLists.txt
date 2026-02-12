@@ -12,6 +12,7 @@ if (NOT ENABLE_FEATURE_PYTHON_FRONT_END)
     add_subdirectory(operator)
 endif ()
 
+add_subdirectory(utils)
 add_subdirectory(interface)
 add_subdirectory(passes)
 add_subdirectory(codegen)

@@ -49,6 +49,7 @@ target_link_directories(tile_fwk_compiler
 )
 target_link_libraries(tile_fwk_compiler
         PRIVATE
+            $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_interface>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_codegen>
             json

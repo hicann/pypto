@@ -20,6 +20,7 @@ include framework/CMakeLists.txt
 include framework/src/CMakeLists.txt
 recursive-include framework/include *.h
 recursive-include framework/include *.def
+recursive-include framework/src/utils *
 recursive-include framework/src/codegen *
 recursive-include framework/src/cost_model/simulation *
 recursive-include framework/src/cost_model/simulation_ca *

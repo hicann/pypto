@@ -22,6 +22,7 @@ target_link_libraries(tile_fwk_operator
             intf_pub_cxx17
             tile_fwk_intf_pub
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_interface>
+            $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>
 )
 PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_operator)
 PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_operator)

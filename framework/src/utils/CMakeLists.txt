@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------------------------------------
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -8,22 +8,27 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 
-file(GLOB_RECURSE _Platform_Srcs *.cpp)
-#PTO_Fwk_Debug_Source_List(NAME "_Platform_Srcs" LIST ${_Platform_Srcs} DETAIL OFF)
+file(GLOB_RECURSE _Utils_Srcs
+        host_log/*.cpp)
 
-add_library(tile_fwk_simulation_platform SHARED)
-target_sources(tile_fwk_simulation_platform PRIVATE ${_Platform_Srcs})
-target_include_directories(tile_fwk_simulation_platform
+add_library(tile_fwk_utils SHARED)
+target_sources(tile_fwk_utils PRIVATE ${_Utils_Srcs})
+target_include_directories(tile_fwk_utils
+        PUBLIC  # 编译 CANN 场景依赖
+            $<BUILD_INTERFACE:$<$<NOT:$<BOOL:${BUILD_OPEN_PROJECT}>>:${TOP_DIR}/inc>>
+            $<BUILD_INTERFACE:$<$<NOT:$<BOOL:${BUILD_OPEN_PROJECT}>>:${TOP_DIR}/abl/slog/inc/toolchaind>>
+        PUBLIC  # 使用 CANN 场景依赖
+            $<BUILD_INTERFACE:$<$<AND:$<BOOL:${BUILD_OPEN_PROJECT}>,$<BOOL:${BUILD_WITH_CANN}>>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/base>>
         PRIVATE
-            ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
+            ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_link_libraries(tile_fwk_simulation_platform
+target_link_libraries(tile_fwk_utils
         PRIVATE
-            $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>
             intf_pub_cxx17
             tile_fwk_intf_pub
+            dl
             c_sec
-            dl       
 )
-PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_simulation_platform)
-PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_simulation_platform)
+
+PTO_Fwk_AnalysisTargetHeaderFiles(TARGET tile_fwk_utils)
+PTO_Fwk_AnalysisTargetSymbols(TARGET tile_fwk_utils)

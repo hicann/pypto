@@ -20,6 +20,7 @@ target_include_directories(tile_fwk_simulation_pv
 )
 target_link_libraries(tile_fwk_simulation_pv
         PUBLIC
+            $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_utils>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_codegen>
             $<$<BOOL:${ENABLE_COMPILE_DEPENDENCY_CHECK}>:tile_fwk_simulation>
             json
