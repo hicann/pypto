@@ -1371,25 +1371,13 @@ private:
             (void *)aicoreHal_.GetSharedBuffer(), static_cast<uint8_t>(deviceArgs->machineConfig));
     }
 
-    inline int HandShakeByGm() {
-        int rc = ForEachManageAicoreWithRet([this](int coreIdx) -> int {
-            int ret = aicoreHal_.HandShakeByGm(coreIdx, dotStatus_);
-            DEV_VERBOSE_DEBUG("coreidx %d handshake by gm phycorid %d.",
-                coreIdx, aicoreHal_.GetPhyIdByBlockId(coreIdx));
-            return ret;
-        });
-
-        return rc;
-    }
-
     inline void HandShakeTryPreFetchDevTask(bool &needSendAic, bool &needSendAiv) {
         if (!preFetchSuccess_ && PreFetchNextDevTask()) {
             preFetchNextDevTaskCtrl_->isFirstDevTask = true;
-            readyAicCoreFunctionQue_ =  reinterpret_cast<ReadyCoreFunctionQueue*>(preFetchNextDevTaskCtrl_->devTask->readyAicCoreFunctionQue);
-            readyAivCoreFunctionQue_ =  reinterpret_cast<ReadyCoreFunctionQueue*>(preFetchNextDevTaskCtrl_->devTask->readyAivCoreFunctionQue);
+            SendDevTaskModel(preFetchNextDevTaskCtrl_->devTask);
+            InitDevTask(preFetchNextDevTaskCtrl_);
             needSendAic = (readyAicCoreFunctionQue_->tail != readyAicCoreFunctionQue_->head);
             needSendAiv = (readyAivCoreFunctionQue_->tail != readyAivCoreFunctionQue_->head);
-            SendDevTaskModel(preFetchNextDevTaskCtrl_->devTask);
             DEV_DEBUG("hand shake prefetch dev task success :needsendaic %d needsend aiv %d", needSendAic, needSendAiv);
         }
     }

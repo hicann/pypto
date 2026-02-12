@@ -233,7 +233,7 @@ int DeviceLauncher::DeviceRunOnce(Function *function, DevControlFlowCache* hostC
     uint8_t* devCtrlCache = nullptr;
     DeviceMemoryUtils devMemory(false);
     if (hostCtrlCache) {
-        devCtrlCache = devMemory.CopyToDev(reinterpret_cast<uint8_t *>(hostCtrlCache), hostCtrlCache->allCacheSize, nullptr);
+        devCtrlCache = devMemory.CopyToDev(reinterpret_cast<uint8_t *>(hostCtrlCache), hostCtrlCache->usedCacheSize, nullptr);
     }
 
     int rc = DeviceLaunchOnceWithDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList,
@@ -493,7 +493,7 @@ int64_t DeviceLauncher::GetL2Offset() {
 uint8_t *DeviceLauncher::CopyControlFlowCache(DevControlFlowCache *ctrlCache) {
 #ifdef BUILD_WITH_CANN
     uint8_t *devCache = nullptr;
-    auto cacheSize = ctrlCache->allCacheSize;
+    auto cacheSize = ctrlCache->usedCacheSize;
     auto bufNum = DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT;
 
     int ret = rtMalloc((void **)&devCache, cacheSize * bufNum, RT_MEMORY_HBM, 0);

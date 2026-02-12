@@ -451,29 +451,11 @@ public:
             __sync_synchronize();
 #endif
             arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = funcdata;
-            arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
         } else {
             if (costModel_) {
                 costModel_->InitData(coreIdx, funcdata);
             }
         }
-    }
-
-    int HandShakeByGm(int coreIdx, int64_t dotStatus) {
-        auto args =
-            reinterpret_cast<KernelArgs*>((static_cast<uint64_t>(sharedBuffer_)) + SHARED_BUFFER_SIZE * coreIdx);
-        args->taskEntry.reserved[0] = static_cast<uint32_t>(dotStatus);
-        volatile int64_t *shakeBuffer = args->shakeBuffer;
-        uint64_t cycles_start = GetCycles();
-        while ((*shakeBuffer & 0xFFFFFFFF) != AICORE_SAY_HELLO) {
-            if (GetCycles() - cycles_start > HAND_SHAKE_TIMEOUT) {
-                DEV_ERROR("hand shake %d timeout.\n", coreIdx);
-                return -1;
-            }
-        }
-        args_[coreIdx] = args;
-        GetPhyIdByBlockId(coreIdx) = (*shakeBuffer >> NUM_THIRTY_TWO) & AICORE_COREID_MASK;
-        return DEVICE_MACHINE_OK;
     }
 
     bool TryHandShakeByGm(int coreIdx, int64_t dotStatus) {
@@ -491,6 +473,8 @@ public:
             WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_OPEN);
         }
         SetReadyQueue(coreIdx, (uint64_t)0);
+        // make sure reset wave goodbye flag after hand shake ,orelse impact last aicore exit through wavegoodbye flag
+        args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = 0;
         DEV_VERBOSE_DEBUG("hand shake success coreidex:%d", coreIdx);
         return true;
     }

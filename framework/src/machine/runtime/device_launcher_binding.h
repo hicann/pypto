@@ -64,6 +64,7 @@ struct DeviceLauncherConfig {
     bool controlFlowCache{false};
     bool cpuSeparate{false};
     uint64_t workspaceAddr{0};
+    bool isCacheOriginShape{true}; // infer cache shape or origin shape
 
     DeviceLauncherConfig() = default;
     DeviceLauncherConfig(bool onboard, int tblockdim, int taicpunum)

@@ -34,6 +34,12 @@ namespace npu::tile_fwk{
     PERF_DEFINE(RunDevKernelLaunchAicpuRun)         \
     PERF_DEFINE(RunDevKernelLaunchAIcore)           \
     PERF_DEFINE(RunDevRunProfile)                   \
+    PERF_DEFINE(LaunchInit)                         \
+    PERF_DEFINE(LaunchGetKernel)                    \
+    PERF_DEFINE(LaunchAllocWorkSpace)               \
+    PERF_DEFINE(LaunchAttachStream)                 \
+    PERF_DEFINE(FindCtrlFlowCache)                  \
+    PERF_DEFINE(Launch)                             \
     PERF_DEFINE(MAX_TRACE_PHASES)                   \
 
 enum class TracePhase {
@@ -52,6 +58,7 @@ inline const std::string g_perfTraceName[] = {
     PERF_DEFINE(INVALID)                      \
     PERF_DEFINE(BuildCtrlFlowCache)           \
     PERF_DEFINE(RunDevice)                    \
+    PERF_DEFINE(LaunchKernel)                 \
     PERF_DEFINE(MAX_EVENT_PHASES)             \
 
 enum class EventPhase {

@@ -84,9 +84,9 @@ int EmulationLauncher::EmulationRunOnce(Function *function, DevControlFlowCache*
     std::tie(inputDeviceDataList, outputDeviceDataList) = DeviceLauncher::BuildInputOutputFromHost(EmulationMemoryUtils(), inputDataList, outputDataList);
     DevControlFlowCache* launchCtrlFlowCache = nullptr;
     if (inputCtrlCache) {
-        launchCtrlFlowCache = reinterpret_cast<DevControlFlowCache*>(RuntimeHostAgent::GetAgent()->AllocHostAddr(inputCtrlCache->allCacheSize, false, false));
+        launchCtrlFlowCache = reinterpret_cast<DevControlFlowCache*>(RuntimeHostAgent::GetAgent()->AllocHostAddr(inputCtrlCache->usedCacheSize, false, false));
         if (launchCtrlFlowCache) {
-            memcpy_s(launchCtrlFlowCache, inputCtrlCache->allCacheSize, inputCtrlCache, inputCtrlCache->allCacheSize);
+            memcpy_s(launchCtrlFlowCache, inputCtrlCache->usedCacheSize, inputCtrlCache, inputCtrlCache->usedCacheSize);
         }
     }
     int rc = EmulationLaunchOnceWithHostTensorData(function, inputDeviceDataList, outputDeviceDataList, launchCtrlFlowCache, config);
@@ -120,6 +120,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     DevAscendProgram *devProg = DeviceLauncher::GetDevProg(function);
     DevControlFlowCache* hostCtrlFlowCache = CreateHostCtrlFlowCache(devProg, function);
     hostCtrlFlowCache->isRecording = true;
+    hostCtrlFlowCache->isCacheOriginShape = config.isCacheOriginShape;
     DeviceKernelArgs kArgs;
     DeviceLauncher::DeviceInitDistributedContextToHost(dynAttr->commGroupNames, devProg);
     DeviceLauncher::DeviceInitTilingData(EmulationMemoryUtils(), kArgs, dynAttr->devProgBinary, hostCtrlFlowCache, config, nullptr);
@@ -127,6 +128,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     int rc = EmulationLaunchOnce(kArgs);
 
     hostCtrlFlowCache->isRecording = false;
+    hostCtrlFlowCache->CalcUsedCacheSize();
     uint64_t contextWorkspaceAddr = hostCtrlFlowCache->contextWorkspaceAddr;
     hostCtrlFlowCache->IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
     hostCtrlFlowCache->RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr);

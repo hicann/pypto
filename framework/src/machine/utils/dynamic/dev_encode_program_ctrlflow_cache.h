@@ -158,6 +158,8 @@ inline T *RelocControlFlowCachePointer(T *&ptrRef, const RelocRange &relocProgra
 
 struct DevControlFlowCache {
     uint64_t allCacheSize{0};
+    /* actual used cache size */
+    uint64_t usedCacheSize{0};
     /* Filled by user, true means try to allocate in cache. */
     bool isRecording{false};
     /* Filled by user, true means activate in cache. */
@@ -166,6 +168,8 @@ struct DevControlFlowCache {
     bool isRelocMetaDev{false};
     /* reloc data at device */
     bool isRelocDataDev{false};
+    /* cache shape is origin or infer shape */
+    bool isCacheOriginShape{true};
     /* Filled in caching */
     DevRelocVector<DevTensorData> inputTensorDataList;
     /* Filled in caching */
@@ -206,8 +210,16 @@ struct DevControlFlowCache {
         return isRecordingStopped;
     }
 
+    bool inline IsCacheOriginShape() const {
+        return isCacheOriginShape;
+    }
+
     void inline StopRecording() {
         isRecordingStopped = true;
+    }
+
+    void inline CalcUsedCacheSize() {
+        usedCacheSize = reinterpret_cast<uintptr_t>(&cacheData[cacheDataOffset]) - reinterpret_cast<uintptr_t>(this);
     }
 
     void Init(void *dyndevAttrPtr, uint64_t cacheSize, uint64_t runtimeOutcastPoolSize, uint64_t &initOffset);

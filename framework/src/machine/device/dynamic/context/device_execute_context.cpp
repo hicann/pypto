@@ -347,7 +347,12 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
         DEV_ERROR("Build device task data failed.");
         return DEVICE_MACHINE_ERROR;
     }
-    dynTask->SetLastTask(isLastTask);
+
+    if (!devProg->ctrlFlowCacheAnchor->IsRecording() ||
+        (devProg->ctrlFlowCacheAnchor->IsRecording() && devProg->ctrlFlowCacheAnchor->IsCacheOriginShape())) {
+        dynTask->SetLastTask(isLastTask);
+    }
+
     PROF_STAGE_END(PERF_EVT_STAGE_BUILD_TASK, "BuildDeviceTaskData.after\n");
 
     PROF_STAGE_BEGIN(PERF_EVT_DEALLOCATE_WORKSPACE, "RecycleTensorWorkspace.before\n");
