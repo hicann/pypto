@@ -434,15 +434,16 @@ Tensor Transpose(const Tensor &self, std::vector<int> perm) {
     std::vector<int64_t> newVecTileShape;
     std::vector<int> newTransposeShape = perm;
     std::vector<SymbolicScalar> newValidShape = oldValidShapes;
+    std::swap(oldValidShapes[perm[0]], oldValidShapes[perm[1]]);
     std::vector<int64_t> resultShape(self.GetShape());
     std::swap(resultShape[perm[0]], resultShape[perm[1]]);
     if (!MergeTransposeAxis(self, newInputShape, newVecTileShape, newValidShape, newTransposeShape)) {
         Tensor result(self.GetStorage()->Datatype(), resultShape);
+        result.GetStorage()->UpdateDynValidShape(oldValidShapes);
         CALL(
             InnerTranspose, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), result.GetStorage(), perm);
         return result;
     }
-    std::swap(oldValidShapes[perm[0]], oldValidShapes[perm[1]]);
 
     auto tmpInputTensor = Reshape(self, newInputShape, newValidShape);
     TileShape::Current().SetVecTile(newVecTileShape);
