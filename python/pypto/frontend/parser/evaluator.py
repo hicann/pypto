@@ -37,7 +37,6 @@ from typing import Any
 
 import pypto
 
-from . import doc
 from .diagnostics import Diagnostics
 from .error import ParserError
 
@@ -53,7 +52,7 @@ class ExprEvaluator:
         self.diag = diag
 
     @staticmethod
-    def eval(node: doc.expr, var_table: dict[str, Any], diag: Diagnostics) -> Any:
+    def eval(node: ast.expr, var_table: dict[str, Any], diag: Diagnostics) -> Any:
         """Evaluate an expression node using the provided variable table.
 
         This is the main entry point for expression evaluation during parsing.
@@ -62,7 +61,7 @@ class ExprEvaluator:
 
         Parameters
         ----------
-        node : doc.expr
+        node : ast.expr
             The expression AST node to evaluate.
         var_table : dict[str, Any]
             Variable table containing available names and their values.
@@ -83,12 +82,12 @@ class ExprEvaluator:
         result = self.visit(node)
         return result
 
-    def visit(self, node: doc.expr) -> Any:
+    def visit(self, node: ast.expr) -> Any:
         """Visit and evaluate an expression node.
 
         Parameters
         ----------
-        node : doc.expr
+        node : ast.expr
             The expression node to visit.
 
         Returns
@@ -98,8 +97,7 @@ class ExprEvaluator:
         """
         return self._eval_by_python(node, self.var_table)
 
-    def _eval_by_python(self, node: doc.expr, var_table: dict[str, Any]) -> Any:
-        node = doc.from_doc(node)
+    def _eval_by_python(self, node: ast.expr, var_table: dict[str, Any]) -> Any:
         if isinstance(node, ast.expr):
             # Case 1: a simple expression
             mod = ast.fix_missing_locations(ast.Expression(body=node))
@@ -123,7 +121,7 @@ class ExprEvaluator:
                 if isinstance(value, pypto.SymbolicScalar) and value.is_concrete():
                     dict_locals[key] = value.concrete()
             try:
-                exec(exe, {}, dict_locals)  # pylint: disable=exec-used
+                return exec(exe, {}, dict_locals)  # pylint: disable=exec-used
             except Exception as e:
                 raise ParserError(node, f"{type(e).__name__}: {e}") from e
         else:

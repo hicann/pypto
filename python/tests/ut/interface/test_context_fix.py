@@ -20,12 +20,12 @@ def test_loop_variable_update():
     with ctx.with_frame():
         # Define num_batch in the outer frame
         ctx.add("num_batch", 1)
-        
+
         # Simulate loop body frame
         with ctx.with_frame():
             # Update num_batch in the loop body
             # This should update the value in the outer frame, not create a new variable
-            ctx.add("num_batch", 2, allow_update=True)
+            ctx.add("num_batch", 2)
 
         # After the loop ends, the updated value should be retained
         assert ctx.get()['num_batch'] == 2, f"Expected 2, actual {ctx.get()['num_batch']}"

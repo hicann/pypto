@@ -16,7 +16,6 @@ for the PTO Script Parser. It handles:
 
 1. Source Code Management:
    - Reading and caching source code from functions, strings, or files
-   - Converting source to Python AST and PTO doc AST
    - Tracking line numbers and source locations
 
 2. Diagnostic Reporting:
@@ -32,15 +31,14 @@ Key Classes:
 The diagnostic system provides rich error messages with source context,
 making it easier for users to identify and fix issues in their PTO scripts.
 """
-
+import ast
 import inspect
 import enum
 import linecache
 import sys
 from typing import NoReturn, Union
 
-from . import doc
-from .error import ParserError, RenderedParserError
+from .error import RenderedParserError
 
 PRIOR_CONTEXT_LINES = 2
 SUBSEQUENT_CONTEXT_LINES = 4
@@ -85,7 +83,7 @@ class Source:
     source: str
     full_source: str
 
-    def __init__(self, program: Union[str, doc.AST]):
+    def __init__(self, program: Union[str, ast.AST]):
         if isinstance(program, str):
             self.source_name = "<str>"
             self.start_line = 1
@@ -122,15 +120,15 @@ class Source:
             source_content, _ = inspect.findsource(program)  # type: ignore
             self.full_source = "".join(source_content)
 
-    def as_ast(self) -> doc.AST:
+    def as_ast(self) -> ast.AST:
         """Convert the source code string into an AST representation.
 
         Returns
         -------
-        result : doc.AST
+        result : ast.AST
             The abstract syntax tree representation of the source code.
         """
-        return doc.parse(self.source)
+        return ast.parse(self.source)
 
 
 _original_getfile = inspect.getfile  # pylint: disable=invalid-name
@@ -424,13 +422,13 @@ class Diagnostics:
         self._render()
 
     def emit(
-        self, node: doc.AST, message: str, level: DiagnosticLevel = DiagnosticLevel.INFO
+        self, node: ast.AST, message: str, level: DiagnosticLevel = DiagnosticLevel.INFO
     ) -> None:
         """Generate and record a diagnostic message.
 
         Parameters
         ----------
-        node : doc.AST
+        node : ast.AST
             The AST node containing location information for the diagnostic.
 
         message : str
@@ -461,12 +459,12 @@ class Diagnostics:
             )
         )
 
-    def bug(self, node: doc.AST, message: str) -> NoReturn:
+    def bug(self, node: ast.AST, message: str) -> NoReturn:
         """Generate a bug-level diagnostic and raise an exception.
 
         Parameters
         ----------
-        node : doc.AST
+        node : ast.AST
             The AST node associated with the bug.
 
         message : str
@@ -474,19 +472,19 @@ class Diagnostics:
 
         Raises
         ------
-        ParserError
+        RenderedParserError
             Always raises RenderedParserError after displaying the diagnostic.
         """
         self.emit(node, message, DiagnosticLevel.BUG)
         self._render()
         raise RenderedParserError(node, message)
 
-    def error(self, node: doc.AST, message: str) -> NoReturn:
+    def error(self, node: ast.AST, message: str) -> NoReturn:
         """Generate an error-level diagnostic and raise an exception.
 
         Parameters
         ----------
-        node : doc.AST
+        node : ast.AST
             The AST node associated with the error.
 
         message : str
@@ -494,29 +492,29 @@ class Diagnostics:
 
         Raises
         ------
-        ParserError
+        RenderedParserError
             Always raises RenderedParserError after displaying the diagnostic.
         """
         self.emit(node, message, DiagnosticLevel.ERROR)
         self._render()
         raise RenderedParserError(node, message)
 
-    def warning(self, node: doc.AST, message: str) -> None:
+    def warning(self, node: ast.AST, message: str) -> None:
         """Generate a warning-level diagnostic message.
 
         Parameters
         ----------
-        node : doc.AST
+        node : ast.AST
             The AST node associated with the warning.
         """
         self.emit(node, message, DiagnosticLevel.WARNING)
 
-    def info(self, node: doc.AST, message: str) -> None:
+    def info(self, node: ast.AST, message: str) -> None:
         """Generate an info-level diagnostic message.
 
         Parameters
         ----------
-        node : doc.AST
+        node : ast.AST
             The AST node associated with the informational message.
 
         message : str
@@ -524,12 +522,12 @@ class Diagnostics:
         """
         self.emit(node, message, DiagnosticLevel.INFO)
 
-    def debug(self, node: doc.AST, message: str) -> None:
+    def debug(self, node: ast.AST, message: str) -> None:
         """Generate a debug-level diagnostic message.
 
         Parameters
         ----------
-        node : doc.AST
+        node : ast.AST
             The AST node associated with the debug message.
 
         message : str

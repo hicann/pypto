@@ -31,21 +31,14 @@ Environment Variables:
 The exception hook automatically cleans up multiprocessing child processes
 when the parser is interrupted, preventing orphaned processes.
 """
-import logging
-import multiprocessing
-import os
-import sys
+import ast
 from typing import Union
-
-from . import doc
-
-PTO_BACKTRACE_ENV_VAR = "PTO_BACKTRACE"
 
 
 class ParserError(Exception):
     """Error class for diagnostics."""
 
-    def __init__(self, node: doc.AST, msg: Union[str, Exception]):
+    def __init__(self, node: ast.AST, msg: Union[str, Exception]):
         if isinstance(msg, Exception):
             msg = f"{type(msg).__name__}: {msg}"
         super().__init__(msg)
@@ -54,42 +47,3 @@ class ParserError(Exception):
 
 class RenderedParserError(ParserError):
     """Error class for diagnostics with rendered message."""
-
-
-def _should_print_backtrace():
-    pto_backtrace = os.environ.get(PTO_BACKTRACE_ENV_VAR, "0")
-
-    try:
-        pto_backtrace = bool(int(pto_backtrace))
-    except ValueError as exc:
-        raise ValueError(
-            f"invalid value for {PTO_BACKTRACE_ENV_VAR} {pto_backtrace}, please set to 0 or 1."
-        ) from exc
-
-    return pto_backtrace
-
-
-def pto_wrap_excepthook(exception_hook):
-    """Wrap given excepthook with PTO additional work."""
-
-    def wrapper(exc_type, value, trbk):
-        """Clean subprocesses when PTO is interrupted."""
-
-        if exc_type is RenderedParserError:
-            if not _should_print_backtrace():
-                logging.info(
-                    f"note: run with `{PTO_BACKTRACE_ENV_VAR}=1` environment variable to display a backtrace."
-                )
-            else:
-                exception_hook(exc_type, value, trbk)
-        else:
-            exception_hook(exc_type, value, trbk)
-
-        if hasattr(multiprocessing, "active_children"):
-            for p in multiprocessing.active_children():
-                p.terminate()
-
-    return wrapper
-
-
-sys.excepthook = pto_wrap_excepthook(sys.excepthook)
