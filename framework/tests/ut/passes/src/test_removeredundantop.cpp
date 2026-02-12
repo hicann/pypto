@@ -988,5 +988,58 @@ TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleSpecialCase) {
     }
     EXPECT_EQ(assembleNum, kNumTwo);
 }
+
+/*
+TestRemoveAssembleDynSpecialCase
+inCast{8,16}->exp->Tensor1{8,16} ->Reshape->Tensor2{8,16} ->assemble-> outCast{8,16}
+            
+inCast{8,16}->exp->Tensor1{8,16} ->Reshape->Tensor2{16,8} ->assemble-> outCast{8,16}
+*/
+TEST_F(TestRemoveRedundantOpPass, TestRemoveMoreAssembleDynSpecialCase) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape1 = {kNumExpFour, kNumEight};
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1,
+        TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->UpdateDynValidShape({SymbolicScalar("output_0_Dim_0"), SymbolicScalar("output_0_Dim_1")});
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    ubTensor1->UpdateDynValidShape({SymbolicScalar("Reshape_0_Dim_0"), SymbolicScalar("Reshape_0_Dim_1")});
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    ubTensor2->UpdateDynValidShape({SymbolicScalar("Reshape_0_Dim_0"), SymbolicScalar("Reshape_0_Dim_1")});
+
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {ubTensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor1}, {ubTensor2});
+    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
+    
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    RemoveRedundantOp RemoveRedundantOpPass;
+
+    EXPECT_EQ(RemoveRedundantOpPass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(RemoveRedundantOpPass.PostCheck(*currFunctionPtr), SUCCESS);
+
+    uint32_t viewNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    for (const auto &op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(currFunctionPtr->GetOutcast()[0]->GetDynValidShape()[0].Dump(), SymbolicScalar("Reshape_0_Dim_0").Dump());
+    EXPECT_EQ(currFunctionPtr->GetOutcast()[0]->GetDynValidShape()[1].Dump(), SymbolicScalar("Reshape_0_Dim_1").Dump());
+    EXPECT_EQ(viewNum, kNumZero);
+    EXPECT_EQ(assembleNum, kNumZero);
+}
 }
 }
