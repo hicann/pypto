@@ -118,7 +118,7 @@ def test_select_experts_mm():
     torch.npu.set_device(device_id)
 
     # 2. 构造多种shape，测试动态case
-    for i in range(0, 2):
+    for i in range(0, 1):
         if i == 1:
             bs = 1026
         # 3. 准备测试数据

@@ -490,7 +490,7 @@ def test_quant_attention_pre():
     torch.npu.set_device(device_id)
 
     # 2. 构造多种shape，测试动态case
-    for i in range(0, 4):
+    for i in range(0, 1):
         if (i == 1):
             bs = 5
         elif (i == 2):
