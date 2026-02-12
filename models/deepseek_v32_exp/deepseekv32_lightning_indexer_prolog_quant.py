@@ -329,39 +329,6 @@ def gen_zero_tensor(t):
     return torch.zeros_like(t).npu()
 
 
-def lighting_indexer_prolog_quant_dyn(inputs: IndexerPrologQuantInput, outputs: IndexerPrologQuantOutput,
-                                      attrs: IndexerPrologQuantAttr, configs: IndexerPrologQuantConfigs):
-    input_tensors = {
-        inputs.x: [0],
-        inputs.q_norm: [0],
-        inputs.q_norm_scale: [0],
-        inputs.w_qb: [],
-        inputs.w_qb_scale: [],
-        inputs.wk: [],
-        inputs.w_proj: [],
-        inputs.ln_gamma_k: [],
-        inputs.ln_beta_k: [],
-        inputs.cos_idx_rope: [0],
-        inputs.sin_idx_rope: [0],
-        inputs.hadamard_q: [],
-        inputs.hadamard_k: [],
-        inputs.k_cache: [0],
-        inputs.k_cache_scale: [0],
-        inputs.k_cache_index: [0],
-    }
-    output_tensors = {
-        outputs.q_int8: [0],
-        outputs.q_scale: [0],
-        outputs.k_int8: [0],
-        outputs.k_scale: [0],
-        outputs.weights: [0]
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in input_tensors.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in output_tensors.items()]
-    lightning_indexer_prolog_quant(*pto_inputs, *pto_outputs, attrs, configs)
-    torch_npu.npu.synchronize()
-
-
 def do_test_lighting_indexer_prolog_quant(case_name, configs):
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -420,8 +387,20 @@ def do_test_lighting_indexer_prolog_quant(case_name, configs):
         layerout_key="PA_BSND",
     )
 
-    lighting_indexer_prolog_quant_dyn(inputs, outputs, attrs, configs)
+    shapes = [tensor.shape for _, tensor in vars(inputs).items()] + \
+             [tensor.shape for _, tensor in vars(outputs).items()]
+    tensors = [tensor for _, tensor in vars(inputs).items()] + \
+              [tensor for _, tensor in vars(outputs).items()]
+    lightning_indexer_prolog_quant(*shapes, configs, attrs)(*tensors)
 
+    outputs = IndexerPrologQuantOutput(
+        q_int8=tensors[16],
+        q_scale=tensors[17],
+        k_int8=tensors[18],
+        k_scale=tensors[19],
+        weights=tensors[20]
+    )
+    
     compare(outputs.q_int8.cpu(), q_int8_golden, "q_int8", 1, 0, 0)
     compare(outputs.q_scale.cpu(), q_scale_golden, "q_scale", 0.000025, 0, 0.005)
     compare(outputs.k_int8.cpu(), k_cache_golden, "k_int8", 1, 0, 0)

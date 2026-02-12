@@ -419,43 +419,28 @@ def do_test_sparse_attention_func(bn1n2s1, actual_seq, input_params, input_data,
     q_nope, q_rope, kn, kr, kn_scales, topk_indices, block_table, kv_actual_seqs = input_data
     kv_act_seqs = torch.tensor(actual_seq, dtype=torch.int32)
 
-    calc_attention_out = torch.zeros([b, s1, n_q, kv_lora_rank], dtype=torch.bfloat16)
-
     q_nope_npu = q_nope.npu()
-    q_nope_pto = pypto.from_torch(q_nope_npu, dynamic_axis=[0], name="q_nope")
     q_rope_npu = q_rope.npu()
-    q_rope_pto = pypto.from_torch(q_rope_npu, dynamic_axis=[0], name="q_rope")
     kn_npu = kn.npu()
-    kn_pto = pypto.from_torch(kn_npu, name="kn")
     kr_npu = kr.npu()
-    kr_pto = pypto.from_torch(kr_npu, name="kr")
     kn_scales_npu = kn_scales.npu()
-    kn_scales_pto = pypto.from_torch(kn_scales_npu, name="kn_scales")
     topk_indices_npu = topk_indices.npu()
-    topk_indices_pto = pypto.from_torch(topk_indices_npu, dynamic_axis=[0], name="topk_indices")
     block_table_npu = block_table.npu()
-    block_table_pto = pypto.from_torch(block_table_npu, dynamic_axis=[0], name="block_table")
     kv_act_seqs_npu = kv_act_seqs.npu()
-    kv_act_seqs_pto = pypto.from_torch(kv_act_seqs_npu, dynamic_axis=[0], name="kv_act_seqs")
-
-    calc_attention_out_npu = calc_attention_out.npu()
-    calc_attention_out_pto = pypto.from_torch(calc_attention_out_npu, dynamic_axis=[0], name="calc_attention_out")
-
-    pto_inputs = [q_nope_pto, q_rope_pto, kn_pto, kr_pto, kn_scales_pto, topk_indices_pto, block_table_pto,
-                  kv_act_seqs_pto]
-    pto_outputs = [calc_attention_out_pto]
+    pto_inputs = [q_nope_npu, q_rope_npu, kn_npu, kr_npu, kn_scales_npu, topk_indices_npu, block_table_npu,
+                  kv_act_seqs_npu]
 
     max_blocknum_perbatch = math.ceil(max_kv_seq / block_size)
 
     if is_p:
-        sparse_flash_attention_quant_p(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk, block_size,
-                                           max_blocknum_perbatch, tile_config)
+        attecalc_attention_out_pton_out = sparse_flash_attention_quant_p(b, s1, block_num, max_kv_seq, block_size,\
+             max_blocknum_perbatch, kv_lora_rank, qk_rope_dim, n_q, n_kv, softmax_scale, topk, tile_config)(*pto_inputs)
     else:
-        sparse_flash_attention_quant_d(*pto_inputs, *pto_outputs, n_q, n_kv, softmax_scale, topk,
-                                           block_size, max_blocknum_perbatch, tile_config)
+        attecalc_attention_out_pton_out = sparse_flash_attention_quant_d(b, s1, block_num, max_kv_seq, block_size,\
+             max_blocknum_perbatch, kv_lora_rank, qk_rope_dim, n_q, n_kv, softmax_scale, topk, tile_config)(*pto_inputs)
 
     torch_npu.npu.synchronize()
-    compare(calc_attention_out_npu.cpu(), atten_out, "atten_out", atol=0.0001, rtol=0.005, max_error_count=100)
+    compare(attecalc_attention_out_pton_out.cpu(), atten_out, "atten_out", atol=0.0001, rtol=0.005, max_error_count=100)
 
 
 def get_case_config(case_name: str):
