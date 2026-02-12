@@ -21,7 +21,7 @@
 #include "utils/host_log/dlog_handler.h"
 
 namespace npu::tile_fwk {
-class TestLogManager : public testing::Test {
+class TestHostLog : public testing::Test {
 public:
     void SetUp() override {
         unsetenv("ASCEND_GLOBAL_LOG_LEVEL");
@@ -43,7 +43,13 @@ public:
     }
 };
 
-TEST_F(TestLogManager, test_log_manager_case0) {
+TEST_F(TestHostLog, test_tilefwk_log) {
+    INNER_PYPTO_LOG(DLOG_ERROR, "TEST", "I'm a space-bound %s and your heart's the moon", "rocketship");
+    INNER_PYPTO_LOG(DLOG_ERROR, "TEST", "And I aiming it right at you, right at you %f", 3.14f);
+    INNER_PYPTO_LOG(DLOG_ERROR, "TEST", "%d miles on a clear night in %s", 250000, "June");
+    INNER_PYPTO_LOG(DLOG_ERROR, "TEST", "And I'm so lost without you, without you %x", 626);
+}
+TEST_F(TestHostLog, test_log_manager_case0) {
     EXPECT_EQ(LogManager::Instance().CheckLevel(LogLevel::ERROR), true);
     EXPECT_EQ(LogManager::Instance().CheckLevel(LogLevel::WARN), false);
     EXPECT_EQ(LogManager::Instance().CheckLevel(LogLevel::INFO), false);
@@ -61,7 +67,7 @@ TEST_F(TestLogManager, test_log_manager_case0) {
     RecoreLog(log_manager, LogLevel::INFO, "And I'm so lost without you, without you %x", 626);
 }
 
-TEST_F(TestLogManager, test_log_manager_case1) {
+TEST_F(TestHostLog, test_log_manager_case1) {
     setenv("ASCEND_GLOBAL_LOG_LEVEL", "1", 1);
     LogManager log_manager;
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::ERROR), true);
@@ -71,7 +77,7 @@ TEST_F(TestLogManager, test_log_manager_case1) {
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::EVENT), false);
 }
 
-TEST_F(TestLogManager, test_log_manager_case2) {
+TEST_F(TestHostLog, test_log_manager_case2) {
     setenv("ASCEND_GLOBAL_LOG_LEVEL", "1", 1);
     setenv("ASCEND_MODULE_LOG_LEVEL", "PYPTO=2", 1);
     LogManager log_manager;
@@ -82,7 +88,7 @@ TEST_F(TestLogManager, test_log_manager_case2) {
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::EVENT), false);
 }
 
-TEST_F(TestLogManager, test_log_manager_case3) {
+TEST_F(TestHostLog, test_log_manager_case3) {
     setenv("ASCEND_GLOBAL_EVENT_ENABLE", "1", 1);
     LogManager log_manager;
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::ERROR), true);
@@ -92,7 +98,7 @@ TEST_F(TestLogManager, test_log_manager_case3) {
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::EVENT), true);
 }
 
-TEST_F(TestLogManager, test_log_manager_case4) {
+TEST_F(TestHostLog, test_log_manager_case4) {
     setenv("ASCEND_GLOBAL_LOG_LEVEL", "abc", 1);
     LogManager log_manager;
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::ERROR), true);
@@ -102,7 +108,7 @@ TEST_F(TestLogManager, test_log_manager_case4) {
     EXPECT_EQ(log_manager.CheckLevel(LogLevel::EVENT), false);
 }
 
-TEST_F(TestLogManager, test_log_construct_case0) {
+TEST_F(TestHostLog, test_log_construct_case0) {
     LogManager log_manager;
     int32_t int32_val = -234;
     uint32_t uint32_val = 432;
@@ -118,7 +124,7 @@ TEST_F(TestLogManager, test_log_construct_case0) {
     RecoreLog(log_manager, LogLevel::INFO, "[%c%s]", 'H', "ello world");
 }
 
-TEST_F(TestLogManager, test_log_construct_case1) {
+TEST_F(TestHostLog, test_log_construct_case1) {
     LogManager log_manager;
     RecoreLog(log_manager, LogLevel::INFO, "Hello world!", 123, "morgan");
     RecoreLog(log_manager, LogLevel::INFO, "[%u][%lu]", -123, -456);
@@ -132,7 +138,7 @@ TEST_F(TestLogManager, test_log_construct_case1) {
     RecoreLog(log_manager, LogLevel::INFO, oss.str().c_str());
 }
 
-TEST_F(TestLogManager, test_dlog_handler_case0) {
+TEST_F(TestHostLog, test_dlog_handler_case0) {
     DLogHandler log_handler;
     EXPECT_EQ(log_handler.IsAvailable(), true);
     EXPECT_NE(log_handler.checkLevelFunc_, nullptr);
