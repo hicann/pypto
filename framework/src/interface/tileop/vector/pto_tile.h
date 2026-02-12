@@ -20,6 +20,12 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
+#ifdef __DAV_V220
+#define PTO_WITH_LAST_USE(OP, ...) OP
+#else
+#define PTO_WITH_LAST_USE(OP, ...) [[pto::last_use(__VA_ARGS__)]]OP
+#endif
+
 template <typename Tuple, size_t index, size_t default_value = 1, bool use_default = false>
 __aicore__ inline constexpr size_t GetTupleElement(const Tuple &t) {
     static_assert(index < MAX_DIMS, "The index of tuple is out of range.");

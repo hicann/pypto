@@ -314,7 +314,7 @@ TLoad(ubTensor_3, gmTensor_4, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 1, 0)),
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TAdd(ubTensor_1, ubTensor_1, ubTensor_3);
+TAdd<LastUse3Dim<0, 1, 1>>(ubTensor_1, ubTensor_1, ubTensor_3);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 TStore(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));
@@ -349,7 +349,7 @@ TLoad(ubTensor_3, gmTensor_4, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 1, 0)),
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TAdd(ubTensor_1, ubTensor_1, ubTensor_3);
+TAdd<LastUse3Dim<0, 1, 1>>(ubTensor_1, ubTensor_1, ubTensor_3);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 TStore(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));

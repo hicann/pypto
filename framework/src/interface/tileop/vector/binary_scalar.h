@@ -19,35 +19,37 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-template <BinaryScalarOp op, typename T0, typename T1, typename Scalar>
+template <BinaryScalarOp op, typename LastUse, typename T0, typename T1, typename Scalar>
 TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1) {
+    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
+    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     if constexpr (op == BinaryScalarOp::ADD) {
-        pto::TADDS(dst, src0, src1);
+        PTO_WITH_LAST_USE(pto::TADDS(dst, src0, src1), n1, n2);
         return;
     }
 
     if constexpr (op == BinaryScalarOp::SUB) {
-        pto::TADDS(dst, src0, -src1);
+        PTO_WITH_LAST_USE(pto::TADDS(dst, src0, -src1), n1, n2);
         return;
     }
 
     if constexpr (op == BinaryScalarOp::MUL) {
-        pto::TMULS(dst, src0, src1);
+        PTO_WITH_LAST_USE(pto::TMULS(dst, src0, src1), n1, n2);
         return;
     }
 
     if constexpr (op == BinaryScalarOp::DIV) {
-        pto::TDIVS(dst, src0, src1);
+        PTO_WITH_LAST_USE(pto::TDIVS(dst, src0, src1), n1, n2);
         return;
     }
 
     if constexpr (op == BinaryScalarOp::MAX) {
-        pto::TMAXS(dst, src0, src1);
+        PTO_WITH_LAST_USE(pto::TMAXS(dst, src0, src1), n1, n2);
         return;
     }
 
     if constexpr (op == BinaryScalarOp::MIN) {
-        pto::TMINS(dst, src0, src1);
+        PTO_WITH_LAST_USE(pto::TMINS(dst, src0, src1), n1, n2);
         return;
     }
 
@@ -62,7 +64,7 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1) {
     }
 }
 
-template <BinaryScalarOp op, typename T0, typename T1, typename Scalar>
+template <BinaryScalarOp op, typename LastUse, typename T0, typename T1, typename Scalar>
 TILEOP void BinaryScalarCompute(T0 dst, T1 src0, Scalar src1) {
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
@@ -77,57 +79,57 @@ TILEOP void BinaryScalarCompute(T0 dst, T1 src0, Scalar src1) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 src0Tile.Assign(src0, tileOffsets);
-                BinaryScalarComputeImpl<op>(dstTile.Data(), src0Tile.Data(), src1);
+                BinaryScalarComputeImpl<op, LastUse>(dstTile.Data(), src0Tile.Data(), src1);
             }
         }
     }
 }
 #define OP_TILE_OP_ADDS TAddS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TAddS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::ADD>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::ADD, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_SUBS TSubS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TSubS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::SUB>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::SUB, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MULS TMulS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TMulS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::MUL>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::MUL, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_DIVS TDivS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TDivS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::DIV>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::DIV, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MAXS TMaxS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TMaxS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::MAX>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::MAX, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MINS TMinS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TMinS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::MIN>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::MIN, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEANDS TBitwiseAndS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TBitwiseAndS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::BITWISEAND>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::BITWISEAND, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEORS TBitwiseOrS
-template <typename Scalar, typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TBitwiseOrS(T0 dst, T1 src0, Scalar src1) {
-    BinaryScalarCompute<BinaryScalarOp::BITWISEOR>(dst, src0, src1);
+    BinaryScalarCompute<BinaryScalarOp::BITWISEOR, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_MODS TModS

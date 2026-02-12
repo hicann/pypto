@@ -156,9 +156,9 @@ TLoad(ubTensor_3, gmTensor_4, Coord4Dim(0, 0, 0, 0));
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TAdd(ubTensor_3, ubTensor_1, ubTensor_3);
+TAdd<LastUse3Dim<0, 0, 1>>(ubTensor_3, ubTensor_1, ubTensor_3);
 pipe_barrier(PIPE_V);
-TMul(ubTensor_3, ubTensor_1, ubTensor_3);
+TMul<LastUse3Dim<0, 1, 1>>(ubTensor_3, ubTensor_1, ubTensor_3);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 TStore(gmTensor_11, ubTensor_3, Coord4Dim(0, 0, 0, 0));

@@ -21,34 +21,36 @@
 
 #include <cmath>
 
-template <UnaryOp op, typename T0, typename T1>
+template <UnaryOp op, typename LastUse, typename T0, typename T1>
 TILEOP void UnaryComputeImpl(T0 dst, T1 src) {
+    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
+    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     if constexpr (op == UnaryOp::EXP) {
-        pto::TEXP(dst, src);
+        PTO_WITH_LAST_USE(pto::TEXP(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::RSQRT) {
-        pto::TRSQRT(dst, src);
+        PTO_WITH_LAST_USE(pto::TRSQRT(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::SQRT) {
-        pto::TSQRT(dst, src);
+        PTO_WITH_LAST_USE(pto::TSQRT(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::BRCB) {
-        pto::TROWEXPAND(dst, src);
+        PTO_WITH_LAST_USE(pto::TROWEXPAND(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::ABS) {
-        pto::TABS(dst, src);
+        PTO_WITH_LAST_USE(pto::TABS(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::RECIPROCAL) {
-        pto::TRECIP(dst, src);
+        PTO_WITH_LAST_USE(pto::TRECIP(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::BITWISENOT) {
-        pto::TNOT(dst, src);
+        PTO_WITH_LAST_USE(pto::TNOT(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::RELU) {
@@ -57,14 +59,14 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src) {
     }
 }
 
-template <UnaryOp op, typename T0, typename T1>
+template <UnaryOp op, typename LastUse, typename T0, typename T1>
 TILEOP void UnaryCompute(T0 dst, T1 src) {
     if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
         auto dstTile = PtoTile<T0, pto::BLayout::RowMajor, true>().Data();
         auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
-        UnaryComputeImpl<op>(dstTile, srcTile);
+        UnaryComputeImpl<op, LastUse>(dstTile, srcTile);
         return;
     }
     const auto dstLayout = dst.GetLayout();
@@ -80,14 +82,14 @@ TILEOP void UnaryCompute(T0 dst, T1 src) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
-                UnaryComputeImpl<op>(dstTile.Data(), srcTile.Data());
+                UnaryComputeImpl<op, LastUse>(dstTile.Data(), srcTile.Data());
             }
         }
     }
 }
 
 #define OP_TILE_OP_EXP TExp
-template <typename T0, typename T1>
+template <typename LastUse, typename T0, typename T1>
 TILEOP void BrcbCompute(T0 dst, T1 src) {
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
@@ -120,45 +122,45 @@ TILEOP void BrcbCompute(T0 dst, T1 src) {
                 auto srcTileOffsets = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstTileOffsets * sizeof(typename T0::Type)));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcTileOffsets * sizeof(typename T1::Type)));
-                UnaryComputeImpl<UnaryOp::BRCB>(dstTile, srcTile);
+                UnaryComputeImpl<UnaryOp::BRCB, LastUse>(dstTile, srcTile);
             }
         }
     }
 }
 
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TExp(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::EXP>(dst, src);
+    UnaryCompute<UnaryOp::EXP, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_RSQRT TRsqrt
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TRsqrt(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::RSQRT>(dst, src);
+    UnaryCompute<UnaryOp::RSQRT, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_SQRT TSqrt
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TSqrt(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::SQRT>(dst, src);
+    UnaryCompute<UnaryOp::SQRT, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_BRCB Tbrcb
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void Tbrcb(T0 dst, T1 src) {
-    BrcbCompute(dst, src);
+    BrcbCompute<LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_ABS TAbs
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TAbs(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::ABS>(dst, src);
+    UnaryCompute<UnaryOp::ABS, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_BITWISENOT TBitwiseNot
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TBitwiseNot(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::BITWISENOT>(dst, src);
+    UnaryCompute<UnaryOp::BITWISENOT, LastUse>(dst, src);
 }
 
 template <typename Ttemp, typename T0, typename T1>
@@ -323,14 +325,14 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
 }
 
 #define OP_TILE_OP_RECIPROCAL TReciprocal
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TReciprocal(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::RECIPROCAL>(dst, src);
+    UnaryCompute<UnaryOp::RECIPROCAL, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_RELU TRelu
-template <typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TRelu(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::RELU>(dst, src);
+    UnaryCompute<UnaryOp::RELU, LastUse>(dst, src);
 }
 #endif

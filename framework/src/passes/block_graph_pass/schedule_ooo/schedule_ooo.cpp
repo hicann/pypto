@@ -237,8 +237,7 @@ Status OoOSchedule::RunOnFunction(Function &function) {
         }
         programRef.second = program.second;
     }
-    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
-            config::GetPassGlobalConfig(KEY_ENABLE_VF, false) && RecordLastUseMemory(function) == FAILED) {
+    if (RecordLastUseMemory(function) == FAILED) {
         APASS_LOG_ERROR_F(Elements::Function, "Run RecordLastUseMemory Failed.");
         return FAILED;
     }

@@ -205,7 +205,7 @@ TEST_F(TestCodegenUnary, CastDim1) {
 TEST_F(TestCodegenUnary, CastDim1TileTensor) {
     Function &func = TestCastBody({128}, {128}, {64}, "CastDim1TileTensor", true);
     std::string res = GetResultFromCpp(func);
-    std::string expect = R"!!!(TCast<0>(ubTensor_3, ubTensor_1);
+    std::string expect = R"!!!(TCast<LastUse2Dim<0, 1>, 0>(ubTensor_3, ubTensor_1);
 )!!!";
     CheckStringExist(expect, res);
 }
@@ -234,7 +234,7 @@ Function &TestExpandBody(std::vector<int64_t> shape, std::vector<int64_t> outSha
 TEST_F(TestCodegenUnary, ExpandDim2Axis0TileTensor) {
     Function &func = TestExpandBody({1, 22}, {22, 22}, {2, 2}, "ExpandDim2Axis0TileTensor", true);
     std::string res = GetResultFromCpp(func);
-    std::string expect = R"!!!(TExpand<2>(ubTensor_3, ubTensor_1);
+    std::string expect = R"!!!(TExpand<LastUse2Dim<0, 1>, 2>(ubTensor_3, ubTensor_1);
 )!!!";
     CheckStringExist(expect, res);
 }

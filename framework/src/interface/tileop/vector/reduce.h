@@ -15,21 +15,25 @@
 
 #ifndef TILEOP_TILE_OPERATOR_REDUCE__H
 #define TILEOP_TILE_OPERATOR_REDUCE__H
+#include "pto_tile.h"
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-template <ReduceOp op, typename T0, typename T1, typename T2>
+template <ReduceOp op, typename LastUse, typename T0, typename T1, typename T2>
 TILEOP void ReduceComputeImpl(T0 dst, T1 src, T2 tmp) {
+    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
+    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
+    constexpr auto n3 = Std::tuple_element<DIM_3RD, LastUse>::type::value;
     if constexpr (op == ReduceOp::SUM) {
-        pto::TROWSUM(dst, src, tmp);
+        PTO_WITH_LAST_USE(pto::TROWSUM(dst, src, tmp), n1, n2, n3);
     } else if constexpr (op == ReduceOp::MAX) {
-        pto::TROWMAX(dst, src, tmp);
+        PTO_WITH_LAST_USE(pto::TROWMAX(dst, src, tmp), n1, n2, n3);
     } else if constexpr (op == ReduceOp::MIN) {
-        pto::TROWMIN(dst, src, tmp);
+        PTO_WITH_LAST_USE(pto::TROWMIN(dst, src, tmp), n1, n2, n3);
     }
 }
 
-template <ReduceOp op, typename T0, typename T1, typename T2>
+template <ReduceOp op, typename LastUse, typename T0, typename T1, typename T2>
 TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp) {
     constexpr auto srcShapeSize = Std::tuple_size<typename T1::Shape>::value;
     constexpr auto dstShapeSize = Std::tuple_size<typename T0::Shape>::value;
@@ -84,28 +88,28 @@ TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp) {
                 if (srcShape3 == 0 || srcShape4 == 0){
                     return;
                 }
-                ReduceComputeImpl<op>(dstTile, srcTile, tmpTile);
+                ReduceComputeImpl<op, LastUse>(dstTile, srcTile, tmpTile);
             }
         }
     }
 }
 
 #define OP_TILE_OP_ROWSUMSINGLE TRowSumSingle
-template <typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, typename T0, typename T1, typename T2>
 TILEOP void TRowSumSingle(T0 dst, T1 src, T2 tmp) {
-    ReduceLastAxisCompute<ReduceOp::SUM>(dst, src, tmp);
+    ReduceLastAxisCompute<ReduceOp::SUM, LastUse>(dst, src, tmp);
 }
 
 #define OP_TILE_OP_ROWMAXSINGLE TRowMaxSingle
-template <typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, typename T0, typename T1, typename T2>
 TILEOP void TRowMaxSingle(T0 dst, T1 src, T2 tmp) {
-    ReduceLastAxisCompute<ReduceOp::MAX>(dst, src, tmp);
+    ReduceLastAxisCompute<ReduceOp::MAX, LastUse>(dst, src, tmp);
 }
 
 #define OP_TILE_OP_ROWMINSINGLE TRowMinSingle
-template <typename T0, typename T1, typename T2>
+template <typename LastUse = LastUse3Dim<0, 0, 0>, typename T0, typename T1, typename T2>
 TILEOP void TRowMinSingle(T0 dst, T1 src, T2 tmp) {
-    ReduceLastAxisCompute<ReduceOp::MIN>(dst, src, tmp);
+    ReduceLastAxisCompute<ReduceOp::MIN, LastUse>(dst, src, tmp);
 }
 
 template <ReduceOp op, int axis, typename T0, typename T1>
