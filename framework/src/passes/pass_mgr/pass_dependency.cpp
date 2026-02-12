@@ -43,6 +43,11 @@ void PassDependency::RegisterPreDependencies() {
     registerDependency(PassName::SUBGRAPH_TO_FUNCTION,
         {PassName::GRAPH_PARTITION, PassName::REPLACE_TENSOR, PassName::PRE_GRAPH_PROCESS, PassName::INFER_DYN_SHAPE});
     registerDependency(PassName::INSERT_SYNC, {PassName::OOO_SCHEDULE, PassName::COPY_OUT_RESOLVE});
+    registerDependency(PassName::REDUCE_COPY_MERGE, {PassName::GRAPH_PARTITION});
+    registerDependency(PassName::N_BUFFER_MERGE, {PassName::GRAPH_PARTITION});
+    registerDependency(PassName::L1_COPY_IN_REUSE_MERGE, {PassName::GRAPH_PARTITION});
+    registerDependency(PassName::INTRA_SUBGRAPH_ADAPTER, {PassName::GRAPH_PARTITION});
+    registerDependency(PassName::GENERATE_MOVE_OP, {PassName::GRAPH_PARTITION});
 }
 
 void PassDependency::RegisterSequenceDependencies() {
@@ -117,10 +122,9 @@ Status PassDependency::CheckSequenceDependency(
 
     for (size_t i = 0; i < expectedPasses.size(); i++) {
         if (index + i >= passes.size() || passes[index + i] != expectedPasses[i]) {
-            size_t end = std::min(passes.size(), index + expectedPasses.size());
-            actualPasses.assign(passes.begin() + index, passes.begin() + end);
+            actualPasses.assign(passes.begin() + index, passes.end());
             APASS_LOG_WARN_F(Elements::Manager,
-                "In strategy %s, %s has mismatched sequence dependencies. Expected sequence: %s, but actual sequence "
+                "In strategy %s, %s has mismatched sequence dependencies. Expected ordered prefix starting at this pass: %s, but actual sequence from this pass onward "
                 "is: %s.",
                 strategyName.c_str(), PassNameStr(passes[index]),
                 CommonUtils::ContainerToStr<std::vector<PassName>>(expectedPasses).c_str(),
