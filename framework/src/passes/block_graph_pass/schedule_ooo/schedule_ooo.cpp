@@ -69,6 +69,7 @@ void OoOSchedule::OoOHealthCheck(OoOScheduler &oooSchedule, Function &function, 
 Status OoOSchedule::NonMixSchedule(std::vector<Operation*> &opList, Function &function,
     std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize) {
     // 直接对oplist进行GenSpill和mainLoop
+    APASS_LOG_INFO_F(Elements::Operation, "=============== START NonMixSchedule ===============");
     OoOScheduler oooSchedule(*program.second);
     if (oooSchedule.Schedule(opList) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
@@ -84,8 +85,51 @@ Status OoOSchedule::NonMixSchedule(std::vector<Operation*> &opList, Function &fu
     return SUCCESS;
 }
 
+bool OoOSchedule::IsBoundary(Operation* op) {
+    if (op->GetOpcode() == Opcode::OP_L0C_COPY_UB || op->GetOpcode() == Opcode::OP_L1_COPY_UB || op->GetOpcode() == Opcode::OP_UB_COPY_L1) {
+        return true;
+    }
+    return false;
+}
+
+Status OoOSchedule::AdvanceAlloc(std::vector<Operation*> &opList, Operation* op, size_t &index) {
+    APASS_LOG_DEBUG_F(Elements::Operation, "Advance alloc of op: %s[%d]", op->GetOpcodeStr().c_str(), op->GetOpMagic());
+    for (auto& preOp : op->GetOutputOperand(0)->GetProducers()) {
+        if (preOp->GetOpcodeStr().find("ALLOC") != std::string::npos) {
+            auto it = std::find(opList.begin(), opList.end(), preOp);
+            if (it == opList.end()) {
+                APASS_LOG_ERROR_F(Elements::Operation, "Cannot find the alloc of boundaryop.");
+                return FAILED;
+            }
+            size_t allocIndex = std::distance(opList.begin(), it);
+            if (allocIndex > index) {
+                APASS_LOG_DEBUG_F(Elements::Operation, "alloc index: %d, op index: %d", allocIndex, index);
+                std::rotate(opList.begin() + index, opList.begin() + allocIndex, opList.begin() + allocIndex + 1);
+                index++;
+                return SUCCESS;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+Status OoOSchedule::ModifyBoundaryOrder(std::vector<Operation*> &opList) {
+    size_t i = 0;
+    while (i < opList.size()) {
+        if (IsBoundary(opList[i])) {
+            if (AdvanceAlloc(opList, opList[i], i) != SUCCESS) {
+                APASS_LOG_ERROR_F(Elements::Operation, "AdvanceAlloc failed.");
+                return FAILED;
+            }
+        }
+        i++;
+    }
+    return SUCCESS;
+}
+
 Status OoOSchedule::MixSchedule(std::vector<Operation*> &opList, Function &function,
     std::pair<uint64_t, Function*> &program, int &maxWorkeSpaceSize) {
+    APASS_LOG_INFO_F(Elements::Operation, "=============== START MixSchedule ===============");
     std::unordered_map<TargetCoreType, std::string>  targetToString{{TargetCoreType::AIC, "AIC"}, {TargetCoreType::AIV0, "AIV0"}, {TargetCoreType::AIV1, "AIV1"}, {TargetCoreType::UNKNOWN, "UNKNOWN"}};
     TaskSpliter spliter;
     spliter.SplitGraph(opList);
@@ -116,6 +160,10 @@ Status OoOSchedule::MixSchedule(std::vector<Operation*> &opList, Function &funct
         operations.insert(operations.end(), taskNode.opList_.begin(), taskNode.opList_.end());
     }
     opList = operations;
+    if (ModifyBoundaryOrder(opList) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ModifyBoundaryOrder failed.");
+        return FAILED;
+    }
     OoOScheduler oooSchedule(*program.second);
     if (oooSchedule.Schedule(opList, opCoreMap, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Schedule failed.");
