@@ -56,11 +56,14 @@ class TestCaseArgsParser:
         if args.golden_script is None:
             args.golden_script = default_golden
         if args.json_path is None:
-            input_file_path = pathlib.Path(args.input_file)
-            if input_file_path.is_file():
-                args.json_path = input_file_path.with_suffix(".json")
+            if args.distributed_op:
+                input_file_path = pathlib.Path(args.input_file)
+                if input_file_path.is_file():
+                    args.json_path = input_file_path.with_suffix(".json")
+                else:
+                    args.json_path = input_file_path
             else:
-                args.json_path = input_file_path
+                args.json_path = f"{op_path}/test_case/"
 
     def add_test_case_args(self):
         # 参数注册
