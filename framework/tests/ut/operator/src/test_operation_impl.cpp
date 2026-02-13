@@ -234,9 +234,44 @@ TEST_F(OperationImplTest, Test_IndexAdd_FP16) {
     }
 }
 
-void TestPow(DataType dataType, double exponent) {
+void TestPow(DataType selfType, DataType otherType, DataType resultType) {
+    std::vector<int64_t> shape = {32, 32};
+    PROGRAM("POW") {
+        TileShape::Current().SetVecTile({32, 32});
+        Tensor input_a(selfType, shape, "input_a");
+        Tensor input_b(otherType, shape, "input_b");
+        auto output = Tensor(resultType, shape, "res");
+        FUNCTION("POW_FUC") {
+            output = Pow(input_a, input_b);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Pow) {
+    TestPow(DataType::DT_FP32, DataType::DT_FP32, DataType::DT_FP32);
+    TestPow(DataType::DT_FP16, DataType::DT_FP16, DataType::DT_FP16);
+    TestPow(DataType::DT_BF16, DataType::DT_FP16, DataType::DT_FP32);
+    TestPow(DataType::DT_FP16, DataType::DT_BF16, DataType::DT_FP32);
+    TestPow(DataType::DT_INT32, DataType::DT_FP32, DataType::DT_FP32);
+    TestPow(DataType::DT_FP32, DataType::DT_INT32, DataType::DT_FP32);
+    TestPow(DataType::DT_INT32, DataType::DT_INT32, DataType::DT_INT32);
+}
+
+TEST_F(OperationImplTest, Test_Pow_FP32_Broadcast) {
+    PROGRAM("POW") {
+        TileShape::Current().SetVecTile({32, 32});
+        Tensor input_a(DataType::DT_FP32, {1, 32}, "input_a");
+        Tensor input_b(DataType::DT_FP32, {32, 32}, "input_b");
+        auto output = Tensor(DataType::DT_FP32, {32, 32}, "res");
+        FUNCTION("POW_FUC") {
+            output = Pow(input_a, input_b);
+        }
+    }
+}
+
+void TestPows(DataType dataType, double exponent) {
+    std::vector<int64_t> shape = {32, 32};
     PROGRAM("POWS") {
-        std::vector<int64_t> shape = {32, 32};
         TileShape::Current().SetVecTile({32, 32});
         Tensor input_a(dataType, shape, "input");
         auto output = Tensor(dataType, shape, "res");
@@ -246,29 +281,30 @@ void TestPow(DataType dataType, double exponent) {
     }
 }
 
-TEST_F(OperationImplTest, Test_Pows__1_5_FP32) {
-    constexpr double EXP = -1.5;
-    TestPow(DataType::DT_FP32, EXP);
+TEST_F(OperationImplTest, Test_Pows_0) {
+    constexpr double EXP0 = 0;
+    TestPows(DataType::DT_FP32, EXP0);
+    constexpr double EXP_1_5 = -1.5;
+    TestPows(DataType::DT_FP32, EXP_1_5);
+    constexpr double EXP1_5 = 1.5;
+    TestPows(DataType::DT_FP16, EXP1_5);
+    constexpr double EXP2 = 2;
+    TestPows(DataType::DT_FP32, EXP2);
+    constexpr double EXP3 = 3;
+    TestPows(DataType::DT_FP32, EXP3);
 }
 
-TEST_F(OperationImplTest, Test_Pows_1_5_FP32) {
-    constexpr double EXP = 1.5;
-    TestPow(DataType::DT_FP32, EXP);
-}
-
-TEST_F(OperationImplTest, Test_Pows_1_5_FP16) {
-    constexpr double EXP = 1.5;
-    TestPow(DataType::DT_FP16, EXP);
-}
-
-TEST_F(OperationImplTest, Test_Pows_2_FP32) {
-    constexpr double EXP = 2;
-    TestPow(DataType::DT_FP32, EXP);
-}
-
-TEST_F(OperationImplTest, Test_Pows_3_FP32) {
-    constexpr double EXP = 3;
-    TestPow(DataType::DT_FP32, EXP);
+TEST_F(OperationImplTest, Test_Pows_1) {
+    constexpr double EXP1_5 = 1.5;
+    std::vector<int64_t> shape = {32, 32};
+    PROGRAM("POWS") {
+        TileShape::Current().SetVecTile({32, 32});
+        Tensor input_a(DataType::DT_INT32, shape, "input");
+        auto output = Tensor(DataType::DT_FP32, shape, "res");
+        FUNCTION("POWS_FUC") {
+            output = Pow(input_a, Element(DataType::DT_FP32, EXP1_5));
+        }
+    }
 }
 
 TEST_F(OperationImplTest, Test_LogicalNot_BF16) {

@@ -169,6 +169,31 @@ INLINE float Bf16ToFp32(const bfloat16_t bVal) {
     return fp32Union.fVal;
 }
 
+TILEOP bool IsInteger(float f) {
+    union {
+        float f;
+        uint32_t u;
+    } converter;
+    converter.f = f;
+    uint32_t bits = converter.u;
+    uint32_t exponent = (bits >> 23) & 0xFF;
+    uint32_t fraction = bits & 0x7FFFFF;
+    //NaN or Inf
+    if (exponent == 0xFF) {
+        return false;
+    }
+    int32_t e = static_cast<int32_t>(exponent) - 127;
+    if (e < 0) {
+        // +0 or -0
+        return bits == 0 || bits == 0x80000000;
+    }
+    if (e >= 23) {
+        return true;
+    }
+    uint32_t mask = (1u << (23 - e)) - 1;
+    return (fraction & mask) == 0;
+}
+
 inline TILEOP void SetContinuousMask(unsigned n) {
     set_vector_mask(static_cast<uint64_t>(
                         (n > MASK_LEN) ? (((static_cast<uint64_t>(1)) << static_cast<uint32_t>(n - MASK_LEN)) - 1) : 0),

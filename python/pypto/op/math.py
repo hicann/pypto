@@ -15,6 +15,7 @@ from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
+from ..enum import DataType
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
 
@@ -400,7 +401,7 @@ def bitwise_xor(first: Tensor, second: Union[Tensor, int]) -> Tensor:
 
 
 @op_wrapper
-def pow(input: Tensor, other: Union[int, float]) -> Tensor:
+def pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor:
     """Computes the element-wise power of `input` raised to `other`.
 
     This function calculates the formula: `out = input ** other`.
@@ -409,7 +410,7 @@ def pow(input: Tensor, other: Union[int, float]) -> Tensor:
     ----------
     input : Tensor
         The base input tensor.
-    other : Number
+    other : Tensor or Number
         The exponent to which each element in `input` will be raised.
 
     Returns
@@ -421,16 +422,26 @@ def pow(input: Tensor, other: Union[int, float]) -> Tensor:
     --------
     x = pypto.tensor([2, 2], pypto.DT_FP32)
     a = 2
+    b = pypto.tensor([2, 2], pypto.DT_FP32)
     y = pypto.pow(x, a)
+    z = pypto.pow(x, b)
 
-    Input x:[[1.0 2.0],
-             [3.0 4.0]]
+    Input x:[[ 1.0 2.0],
+             [-3.0 4.0]]
+          b:[[2.0 2.0],
+             [1.0 1.0]]
     Output y:[[1.0  4.0],
               [9.0 16.0]]
+           z:[[ 1.0 4.0],
+              [-3.0 4.0]]
     """
-    if not isinstance(other, (int, float)):
-        raise TypeError(f"other must be int or float, but got {type(other)}.")
-    return pypto_impl.Pow(input, pypto_impl.Element(input.dtype, other))
+    if not isinstance(other, (pypto_impl.Tensor, int, float)):
+        raise TypeError(f"other must be Tensor, int or float but got {type(other)}.")
+    if isinstance(other, pypto_impl.Tensor):
+        return pypto_impl.Pow(input, other)
+    if isinstance(other, int):
+        return pypto_impl.Pow(input, pypto_impl.Element(DataType.DT_INT32, other))
+    return pypto_impl.Pow(input, pypto_impl.Element(DataType.DT_FP32, other))
 
 
 @op_wrapper

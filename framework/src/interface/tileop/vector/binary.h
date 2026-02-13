@@ -314,10 +314,132 @@ TILEOP void TMod(T0 dst, T1 src0, T2 src1, T3 tmp) {
     }
 }
 
+template <typename T0, typename T1, typename T2, typename T3>
+TILEOP void SwitchPowResult(const size_t offset, T0 dst, T1 src0, T2 src1, T3 tmp) {
+    float a = src0.GetValue(offset);
+    float b = src1.GetValue(offset);
+    if (b == 0) {
+        dst.SetValue(offset, static_cast<float>(1));
+        return;
+    }
+    if (a == 0) {
+        if (b > 0) {
+            dst.SetValue(offset, static_cast<float>(0));
+            return;
+        }
+        dst.SetValue(offset, static_cast<float>(1) / static_cast<float>(0));
+        return;
+    }
+    if (TileOp::IsInteger(b)) {
+        if (static_cast<int>(b) % 2 != 0 && a < 0) {
+            dst.SetValue(offset, -tmp.GetValue(offset));
+        } else {
+            dst.SetValue(offset, tmp.GetValue(offset));
+        }
+    }
+}
+
+template <typename T0, typename T1, typename T2, typename T3>
+TILEOP void SwitchPowResult(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    constexpr size_t rowStride = src0.RowStride;
+    constexpr size_t colStride = src0.ColStride;
+    for (size_t n0 = 0, validRow = src0.GetValidRow(); n0 < validRow; ++n0) {
+        for (size_t n1 = 0, validCol = src0.GetValidCol(); n1 < validCol; ++n1) {
+            auto offset = n0 * rowStride + n1 * colStride;
+            SwitchPowResult(offset, dst, src0, src1, tmp);
+        }
+    }
+}
+
+TILEOP int QuickPow(int a, int b) {
+    if (b == 0) {
+        return 1;
+    }
+    if (a == 0) {
+        return 0;
+    }
+    if (a == 1) {
+        return 1;
+    }
+    if (a == -1) {
+        if ((b & 1) == 0) {
+            return 1;
+        }
+        return -1;
+    }
+    if (b < 0) {
+        return 0;
+    }
+    int result = 1;
+    int tmp = a;
+    while (b != 0) {
+        if ((b & 1) != 0) {
+            result *= tmp;
+        }
+        b /= 2;
+        tmp *= tmp;
+    }
+    return result;
+}
+
+template <typename T0, typename T1, typename T2>
+TILEOP void IntegerPow(T0 dst, T1 src0, T2 src1) {
+    constexpr size_t rowStride = src0.RowStride;
+    constexpr size_t colStride = src0.ColStride;
+    for (size_t n0 = 0, validRow = src0.GetValidRow(); n0 < validRow; ++n0) {
+        for (size_t n1 = 0, validCol = src0.GetValidCol(); n1 < validCol; ++n1) {
+            auto offset = n0 * rowStride + n1 * colStride;
+            int a = src0.GetValue(offset);
+            int b = src1.GetValue(offset);
+            dst.SetValue(offset, QuickPow(a, b));
+        }
+    }
+}
+
+template <typename T0, typename T1, typename T2, typename T3>
+TILEOP void CalcPow(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    if constexpr (std::is_same_v<typename T1::DType, int32_t>) {
+        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        IntegerPow(dst, src0, src1);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    } else {
+        pto::TABS(tmp, src0);
+        #ifdef __DAV_V220
+            pipe_barrier(PIPE_V);
+        #endif
+        pto::TLOG(tmp, tmp);
+        pto::TLOG(dst, src0);
+        #ifdef __DAV_V220
+            pipe_barrier(PIPE_V);
+        #endif
+        pto::TMUL(tmp, tmp, src1);
+        pto::TMUL(dst, dst, src1);
+        #ifdef __DAV_V220
+            pipe_barrier(PIPE_V);
+        #endif
+        pto::TEXP(tmp, tmp);
+        pto::TEXP(dst, dst);
+        #ifdef __DAV_V220
+            pipe_barrier(PIPE_V);
+        #endif
+        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+        SwitchPowResult(dst, src0, src1, tmp);
+        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    }
+}
+
 template <BinaryOp op, TileOp::BroadcastOperand operand, typename T0, typename T1, typename T2, typename T3>
 TILEOP void BinaryTmpComputeImpl(T0 dst, T1 src0, T2 src1, T3 tmp) {
     if constexpr (op == BinaryOp::BITWISEXOR) {
         pto::TXOR(dst, src0, src1, tmp);
+        return;
+    }
+    if constexpr (op == BinaryOp::POW) {
+        CalcPow(dst, src0, src1, tmp);
         return;
     }
 }
@@ -365,4 +487,12 @@ template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typ
 TILEOP void TBitwiseXor(T0 dst, T1 src0, T2 src1, T3 tmp) {
     BinaryTmpCompute<BinaryOp::BITWISEXOR, operand>(dst, src0, src1, tmp);
 }
+
+#define OP_TILE_OP_POW TPow
+template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2,  typename T3>
+TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    static_assert(std::is_same_v<typename T1::Type, float> || std::is_same_v<typename T1::Type, int32_t>);
+    BinaryTmpCompute<BinaryOp::POW, operand>(dst, src0, src1, tmp);
+}
+
 #endif

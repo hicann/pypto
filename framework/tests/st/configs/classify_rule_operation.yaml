@@ -161,6 +161,8 @@ stest:
       - TestPows/PowsOperationTest.TestPows/13
       - TestPows/PowsOperationTest.TestPows/14
       - TestPows/PowsOperationTest.TestPows/15
+      - TestPow/PowOperationTest.TestPow/0
+      - TestPow/PowOperationTest.TestPow/1
       - TestOneHot/OneHotOperationTest.TestOneHot/7
       - TestOneHot/OneHotOperationTest.TestOneHot/14
       - TestOneHot/OneHotOperationTest.TestOneHot/16
