@@ -20,7 +20,7 @@
 #include <string>
 #include <iterator>
 namespace npu::tile_fwk {
-const std::string TSTORE_CONF = "TileOp::TStoreConfig";
+const std::string TSTORE_CONF = "TStoreConfig";
 
 DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
     int dynShapeIdx, int shapeDim, bool isGmSpill) const {
@@ -760,7 +760,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord, outerValueStr, innerValueStr,
         std::to_string(scaleValue.GetUnsignedData())};
     std::ostringstream oss;
-    oss << tileOpName << "<" << "TileOp::TStoreConfig" << storeConfig << ">";
+    oss << tileOpName << "<" << "TStoreConfig" << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
     oss << STMT_END;
     return oss.str();

@@ -169,7 +169,7 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor) {
     codegen.GenCode(*function, {});
     const std::string res = GetResultFromCpp(*function);
     std::string expect =
-        R"!!!(TStore<TileOp::TStoreConfig<CopyOutMode::ND2ND, 0, 0>>(gmTensor_18, l1Tensor_19, Coord2Dim(0, 0));)!!!";
+        R"!!!(TStore<TStoreConfig<CopyOutMode::ND2ND, 0, 0>>(gmTensor_18, l1Tensor_19, Coord2Dim(0, 0));)!!!";
     CheckStringExist(expect, res);
 
     expect = R"!!!(TLoad<CopyInMode::ND2ND>(l1Tensor_19, gmTensor_18, Coord2Dim(0, 0), 64, 64);)!!!";

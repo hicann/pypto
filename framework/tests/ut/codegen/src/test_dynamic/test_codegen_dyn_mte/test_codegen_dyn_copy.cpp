@@ -458,14 +458,14 @@ TEST_F(TestCodegenDynCopy, L1CopyBTTensor) {
 TEST_F(TestCodegenDynCopy, L0CopyOutTensor) {
     std::string res = TestMatmulMteBody(Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR);
     std::string expect =
-        R"!!!(TStore<TileOp::TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_10, l0cTensor_11, l0cTensor_11, Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1), 0);
+        R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_10, l0cTensor_11, l0cTensor_11, Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
 TEST_F(TestCodegenDynCopy, L0CopyOutTensorTileTensor) {
     std::string res = TestMatmulMteBody(Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR, true);
     std::string expect =
-        R"!!!(TStore<TileOp::TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_10, l0cTensor_11, l0cTensor_11, Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1), 0);
+        R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_10, l0cTensor_11, l0cTensor_11, Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -555,7 +555,7 @@ TEST_F(TestCodegenDynCopy, UB2UBND2NZTileTensor) {
 TEST_F(TestCodegenDynCopy, L0CToL1TileTensor) {
     std::string res = TestCopyL1Body(Opcode::OP_L0C_TO_L1, MemoryType::MEM_L0C, MemoryType::MEM_L1);
     std::string expect =
-        R"!!!(TExtract<TileOp::TStoreConfig<CopyOutMode::NZ2NZ, 0, 0>>(l1Tensor_10, l0cTensor_11, l0cTensor_11, Coord2Dim(0, 0), Coord2Dim(0, 0), 0);
+        R"!!!(TExtract<TStoreConfig<CopyOutMode::NZ2NZ, 0, 0>>(l1Tensor_10, l0cTensor_11, l0cTensor_11, Coord2Dim(0, 0), Coord2Dim(0, 0), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }

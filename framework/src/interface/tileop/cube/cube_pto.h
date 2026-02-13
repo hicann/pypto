@@ -18,8 +18,9 @@
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 
-namespace TileOp {
 constexpr int16_t SHAPE_DIM2 = 2;
+constexpr uint16_t BLOCK_CUBE_M_N = 16;
+constexpr uint16_t BLOCK_ALIGN_BYTE = 32;
 
 template <CopyOutMode mode, bool isAcc, uint8_t reluMode>
 struct TStoreConfig {
@@ -717,6 +718,5 @@ TILEOP void TGatherInL1(DstT dst, SrcT src, BlockT block, OffsetT offset, SrcCoo
         GatherExecute<blockSize, globalData, tileData>(dst, src, block, offset, offsetsStartOffset, srcColumnStartOffset, GMBlockTableOffset,
             dstShape1 / c0Size, c0Size, c0Size, 1, dstShape1 / c0Size, c0Size, srcShape1, dstShape0, c0Size);
     }
-}
 } // namespace TileOp
 #endif // TILEOP_TILE_OPERATOR_CUBE_PTO__H
