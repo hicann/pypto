@@ -37,6 +37,12 @@ void UpdateCopyOutAttr(Operation &op, Operation &opNext) {
         } else {
             opAttr->SetToOffset(SumOffset(OpImmediate::Specified(opNextAttr->GetToDynOffset()), opAttr->GetToOffset()));
         }
+    } else {
+        if (op.GetOpcode() != Opcode::OP_COPY_OUT) {
+            opAttr->SetToOffset(OpImmediate::Specified(opNextAttr->GetToOffset()));
+        } else {
+            opAttr->SetToOffset(SumOffset(OpImmediate::Specified(opNextAttr->GetToOffset()), opAttr->GetToOffset()));
+        } 
     }
     opAttr->SetRawShape(OpImmediate::Specified(op.GetOOperands().front()->tensor->GetDynRawShape()));
 }
