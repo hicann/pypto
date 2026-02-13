@@ -906,9 +906,11 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {           Opcode::OP_L1_TO_BT,       "TExtract"},
     {         Opcode::OP_UB_COPY_L1,       "TExtract"},
     {        Opcode::OP_L0C_COPY_UB,       "TExtract"},
+    {          Opcode::OP_L0C_TO_L1,       "TExtract"},
     {      Opcode::OP_UB_COPY_ND2NZ,     "TMoveND2NZ"},
     {         Opcode::OP_L1_COPY_IN,          "TLoad"},
     {       Opcode::OP_L0C_COPY_OUT,         "TStore"},
+    {        Opcode::OP_L1_COPY_OUT,         "TStore"},
     {       Opcode::OP_GATHER_IN_L1,    "TGatherInL1"},
 };
 
