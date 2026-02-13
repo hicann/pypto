@@ -304,8 +304,40 @@ struct DevAscendProgram {
         RelocOffset(shift, offset, controlFlowCache.cacheData);
     }
 
+    struct DevArgsPreservedParams {
+        uint32_t nrAic;
+        uint32_t nrAiv;
+        uint32_t nrAicpu;
+        uint32_t nrValidAic;
+        uint32_t scheCpuNum;
+        ArchInfo archInfo;
+    };
+
+    DevArgsPreservedParams BackupDevArgsParams(const DeviceArgs& src) {
+        DevArgsPreservedParams params;
+        params.nrAic = src.nrAic;
+        params.nrAiv = src.nrAiv;
+        params.nrAicpu = src.nrAicpu;
+        params.nrValidAic = src.nrValidAic;
+        params.scheCpuNum = src.scheCpuNum;
+        params.archInfo = src.archInfo;
+        return params;
+    }
+
+    void RestoreDevArgsParams(DeviceArgs& dst, const DevArgsPreservedParams& params) {
+        dst.nrAic = params.nrAic;
+        dst.nrAiv = params.nrAiv;
+        dst.nrAicpu = params.nrAicpu;
+        dst.nrValidAic = params.nrValidAic;
+        dst.scheCpuNum = params.scheCpuNum;
+        dst.archInfo = params.archInfo;
+    }
+
     void ResetFromLaunch() {
+        DevArgsPreservedParams preservedParams = BackupDevArgsParams(devArgs);
         memset_s(&devArgs, sizeof(devArgs), 0, sizeof(devArgs));
+        RestoreDevArgsParams(devArgs, preservedParams);
+
         controlFlowBinaryAddr = nullptr;
         runtimeDataRingBufferInited = false;
         workspaceSize = 0;

@@ -615,7 +615,7 @@ int DeviceLauncher::LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream
         devRunner.ReportHostProfInfo(startTime, 3, MSPROF_GE_TASK_TYPE_AI_CPU, false);
         return ret;
     } else {
-        const int nrAicpu = 5; // see also device_runner.cpp
+        const int nrAicpu = DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu;
         args->kArgs.parameter.runMode = RUN_UNIFIED_STREAM;
         auto startTime = MsprofSysCycleTime();
         ret = rtAicpuKernelLaunchExWithArgs(
