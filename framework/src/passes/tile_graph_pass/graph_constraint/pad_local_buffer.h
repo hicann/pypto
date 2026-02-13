@@ -23,6 +23,7 @@
 #include "interface/program/program.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "axis_combine_marker.h"
 
 namespace npu::tile_fwk {
 /*
@@ -62,6 +63,7 @@ private:
     std::unordered_map<int64_t, int64_t> broadcastLastAxis_;
     bool combineAxis{false};
     bool forceCombineAxis{false};
+    AxisCombineMarker axisCombineMarker;
 };
 } // namespace
 #endif  // PAD_LOCAL_BUFFER_H

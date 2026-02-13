@@ -27,6 +27,7 @@
 #include "interface/program/program.h"
 #include "interface/function/function.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "axis_combine_marker.h"
 
 namespace npu::tile_fwk {
 class AxisCombine : public Pass {
@@ -36,6 +37,10 @@ public:
 
     Status RunOnFunction(Function &function) override;
     Status Process(Function &function);
+private:
+    Status AlignBroadCastOpInputs(Function &function, Operation &op);
+    bool enableBrcb_{true};
+    AxisCombineMarker axisCombineMarker;
 };
 }
 #endif // AXIS_COMBINE_H
