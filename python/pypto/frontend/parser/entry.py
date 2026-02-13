@@ -312,25 +312,7 @@ class JitCallableWrapper:
                 "pypto.frontend.jit requires that all arguments must be tensors. "
                 "Keyword arguments are not supported."
             )
-
-        for i, arg in enumerate(args):
-            if not isinstance(arg, torch.Tensor):
-                raise RuntimeError(
-                    f"pypto.frontend.jit requires that all arguments must be pypto.tensor. "
-                    f"Argument at position {i} is {type(arg).__name__}, not a tensor."
-                )
-
         in_tensors = list(args)
-
-        # Validate input tensors are contiguous
-        for in_tensor in in_tensors:
-            if not in_tensor.is_contiguous():
-                raise RuntimeError(
-                    "pypto.frontend.jit requires that all input tensors "
-                    "must be contiguous."
-                )
-
-
         # Create output tensors with the same device as input tensors
         if in_tensors:
             device = in_tensors[0].device
@@ -642,14 +624,10 @@ class JitCallableWrapper:
             # Create a hashable representation of options
             def make_hashable(obj):
                 """Convert dict/list to hashable tuple representation."""
-                if obj is None:
-                    return None
                 if isinstance(obj, dict):
                     return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
                 if isinstance(obj, (list, tuple)):
                     return tuple(make_hashable(item) for item in obj)
-                if isinstance(obj, (str, int, float, bool)):
-                    return obj
                 # For non-hashable types, use their string representation
                 return str(obj)
 
