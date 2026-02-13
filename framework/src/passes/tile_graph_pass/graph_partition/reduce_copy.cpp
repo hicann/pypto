@@ -312,25 +312,6 @@ Status ReduceCopyRunner::RemarkInternalSubgraphID(Function &func) {
     }
     func.SetTotalSubGraphCount(currColor);
     APASS_LOG_INFO_F(Elements::Operation, "Subgraph num: %d -> %d.", color, currColor);
-
-    std::set<std::pair<int,int>> internalIsCube;
-    std::unordered_set<int> subgraphHasCube;
-    for (auto &op : func.Operations()) {
-        int subId = op.GetSubgraphID();
-        int internalId = op.GetInternalSubgraphID();
-        if (OpcodeManager::Inst().GetCoreType(op.GetOpcode()) == OpCoreType::AIC) {
-            internalIsCube.insert({subId, internalId});
-            subgraphHasCube.insert(subId);
-        }
-    }
-    for (auto &op : func.Operations()) {
-        int subId = op.GetSubgraphID();
-        int internalId = op.GetInternalSubgraphID();
-        bool hasCube = (subgraphHasCube.count(subId) > 0);
-        bool isCube = (internalIsCube.count({subId, internalId}) > 0);
-        int newInternalId = isCube ? 0 : (hasCube ? 1 : 0);
-        op.UpdateInternalSubgraphID(newInternalId);
-    }
     return SUCCESS;
 }
 
@@ -340,7 +321,6 @@ Status ReduceCopyRunner::Init(Function &func) {
             APASS_LOG_ERROR_F(Elements::Config, "Op %d does not belong to any subgraph before ReduceCopy.", op.GetOpMagic());
             return FAILED;
         }
-        op.UpdateInternalSubgraphID(op.GetSubgraphID());
     }
     int colorMax{0};
     auto opOriList = func.Operations();

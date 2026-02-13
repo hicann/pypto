@@ -237,10 +237,16 @@ Status OoOScheduler::DelBufRefCount(const int memId) {
 
 void OoOScheduler::PrintOpList(std::vector<Operation *> operations) {
     APASS_LOG_INFO_F(Elements::Operation, "==================== OP_LIST =====================");
+    bool needMark = false;
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 || !IsMixGraph(operations)) {
+        needMark = true;
+    }
     for (auto &op : operations) {
-        bool isCubeComponent = op->HasAttribute(OpAttributeKey::isCube) && op->GetBoolAttribute(OpAttributeKey::isCube);
-        if (!isCubeComponent) {
-            op->SetAIVCore(AIVCore::AIV0);
+        if (needMark) {
+            bool isCubeComponent = op->HasAttribute(OpAttributeKey::isCube) && op->GetBoolAttribute(OpAttributeKey::isCube);
+            if (!isCubeComponent) {
+                op->SetAIVCore(AIVCore::AIV0);
+            }
         }
         if (!op->oOperand.empty()) {
             APASS_LOG_INFO_F(Elements::Operation, "%s[%d], range[%zu, %zu]", op->GetOpcodeStr().c_str(), 
