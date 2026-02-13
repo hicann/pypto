@@ -631,16 +631,10 @@ def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, is_
         mla_prolog_quant_p(h, q_lora_rank, n1, qk_nope_head_dim, kv_lora_rank, qk_rope_head_dim,
                             block_num_value, block_size, n_kv, n_q, 1e-5, 1e-5, 
                             cache_mode, tile_config, rope_tile_shape)(*input_data, *output_data)
-        mla_prolog_quant_p(h, q_lora_rank, n1, qk_nope_head_dim, kv_lora_rank, qk_rope_head_dim,
-                            block_num_value, block_size, n_kv, n_q, 1e-5, 1e-5, 
-                            cache_mode, tile_config, rope_tile_shape)(*input_data, *output_data)
     else:
         from mla_prolog_quant_impl import RopeTileShapeConfig
         rope_tile_shape = RopeTileShapeConfig(two_dim=[128, 128],
             three_dim=[128, 128, 128], four_dim=[16, 128, 128, 128])
-        mla_prolog_quant_d(h, q_lora_rank, n1, qk_nope_head_dim, kv_lora_rank, qk_rope_head_dim,
-                            block_num_value, block_size, n_kv, n_q, 1e-5, 1e-5, 
-                            cache_mode, tile_config, rope_tile_shape)(*input_data, *output_data)
         mla_prolog_quant_d(h, q_lora_rank, n1, qk_nope_head_dim, kv_lora_rank, qk_rope_head_dim,
                             block_num_value, block_size, n_kv, n_q, 1e-5, 1e-5, 
                             cache_mode, tile_config, rope_tile_shape)(*input_data, *output_data)
