@@ -830,7 +830,7 @@ std::string CodeGenOpCloudNPU::PrintIndexAddDynamicUnaligned(const PrintIndexAdd
     paramList.insert(paramList.end(), {dst, src, indices});
     std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
     paramList.emplace_back("(" + DataType2CCEStr(alpha.GetDataType()) + ")" + scalarTmpBuffer);
-    auto validShape = dynamicValidShape[ID2]; // srcvalidshape
+    auto validShape = dynamicValidShape[ID3]; // srcvalidshape
     FillIntVecWithDummyInHead<SymbolicScalar>(validShape, SHAPE_DIM4 - validShape.size(), 1);
     for (int i = 0; i < SHAPE_DIM4; ++i) {
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(validShape[i]));
@@ -844,10 +844,11 @@ std::string CodeGenOpCloudNPU::PrintIndexAddDynamicUnaligned(const PrintIndexAdd
 }
 
 std::string CodeGenOpCloudNPU::PrintIndexAddTileTensor(const PrintIndexAddParam &param) const {
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
-    std::string idxTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC2_IDX));
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
+    std::string src0Tensor = QueryTileTensorNameByIdx(ID2);
+    std::string src1Tensor = QueryTileTensorNameByIdx(ID3);
+    std::string idxTensor = QueryTileTensorNameByIdx(ID4);
     std::vector<std::string> paramList;
     int axis = param.axis + SHAPE_DIM5 - param.srcRawShape.size();
     paramList.emplace_back(std::to_string(axis));
@@ -855,7 +856,7 @@ std::string CodeGenOpCloudNPU::PrintIndexAddTileTensor(const PrintIndexAddParam 
 
     paramList.clear();
 
-    paramList.insert(paramList.end(), {dstTensor, src0Tensor, src1Tensor, idxTensor});
+    paramList.insert(paramList.end(), {dstTensor, src0Tensor, src1Tensor, idxTensor, tmpTensor});
     const Element &alpha = extOperandVal;
     std::string scalarTmpBuffer = FormatFloat(alpha.Cast<float>());
     paramList.emplace_back("(" + DataType2CCEStr(alpha.GetDataType()) + ")" + scalarTmpBuffer);
@@ -868,16 +869,16 @@ std::string CodeGenOpCloudNPU::PrintIndexAddTileTensor(const PrintIndexAddParam 
 
 std::string CodeGenOpCloudNPU::GenIndexAddOp() const {
     std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
-    std::string selfVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
-    std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
-    std::string indicesVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
+    std::string selfVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
+    std::string srcVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID3]);
+    std::string indicesVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID4]);
 
     std::vector dstRawShape = this->rawShape[ID0];
-    std::vector srcRawShape = this->rawShape[ID2];
+    std::vector srcRawShape = this->rawShape[ID3];
 
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
-    std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID2]);
-    std::string indicesDtypeStr = DataType2CCEStr(operandDtype[ID3]);
+    std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID3]);
+    std::string indicesDtypeStr = DataType2CCEStr(operandDtype[ID4]);
     const std::vector<std::string> dataTypeExpr = {dstDtypeStr, srcDtypeStr, indicesDtypeStr};
 
     AppendLocalBufVarOffsetInOrder(dstVar, selfVar, srcVar, indicesVar);

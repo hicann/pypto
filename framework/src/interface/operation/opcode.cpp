@@ -456,7 +456,7 @@ void OpcodeManager::RegisterVector() {
         {MemoryType::MEM_DEVICE_DDR}, {"TileOp::UBCopyOut", PIPE_MTE3, PIPE_MTE3, CoreType::AIV}, OpCalcType::MOVE_OUT,
         {OpAttributeKey::excludeBufferReuse});
     RegisterInfo(Opcode::OP_INDEX_ADD, OpCoreType::AIV, "INDEX_ADD",
-        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::TindexAdd", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis", OpAttributeKey::scalar}, TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_WHERE_TT, OpCoreType::AIV, "WHERE_TT",

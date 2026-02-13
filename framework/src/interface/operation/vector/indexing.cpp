@@ -42,6 +42,16 @@ struct IndexAddTileInfoPara {
     TileInfo dstTileInfo;
 };
 
+Shape GetTempShape(Shape shape, size_t axis) {
+    Shape newShape(shape.size(), 1);
+    for (size_t i = axis + 1; i < shape.size(); ++i) {
+        newShape[i] = shape[i];
+    }
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_BF16);
+    newShape[shape.size() - 1] = (newShape[shape.size() - 1] + alignSize - 1) / alignSize * alignSize;
+    return newShape;
+}
+
 void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, IndexAddTileInfoPara &indexaddTileInfo) {
     const LogicalTensorPtr &selfInput = indexaddPara.selfInput;
     const LogicalTensorPtr &srcInput = indexaddPara.srcInput;
@@ -59,6 +69,11 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
     indexaddTileInfo.indicesTileInfo.shape = {indexaddTileInfo.srcTileInfo.shape[axis]};
     auto indexTile =
         indicesInput->View(function, indexaddTileInfo.indicesTileInfo.shape, indexaddTileInfo.indicesTileInfo.offset);
+    Shape tempShape(dstTile->GetShape().size(), 1);
+    auto alignSize = BLOCK_SIZE / BytesOf(DT_BF16);
+    tempShape[dstTile->GetShape().size() - 1] =
+        (tempShape[dstTile->GetShape().size() - 1] + alignSize - 1) / alignSize * alignSize;
+    auto tempBuffer = std::make_shared<LogicalTensor>(function, DT_BF16, tempShape);
 
     if (selfTile->Datatype() == DT_INT8) { // vector指令不支持int8的直接计算
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, selfTile->GetShape());
@@ -72,13 +87,15 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
         LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP16, dstTile->GetShape());
 
         auto &op = function.AddOperation(
-            Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
+            Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile, tempBuffer});
         dstConvertedTile->UpdateDynValidShape(dstTile->GetDynValidShape());
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
-    } else if (selfTile->Datatype() == DT_BF16) { // vector和scalar均不支持BF16直接计算
+    } else if (selfTile->Datatype() == DT_BF16 ||
+               (selfTile->Datatype() == DT_FP16 &&
+                   indexTile->Datatype() == DT_INT64)) { // vector和scalar均不支持BF16直接计算, INT64逻辑不一样
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, selfTile->GetShape());
         Operation &castSelfOp = function.AddOperation(Opcode::OP_CAST, {selfTile}, {selfConvertedTile});
         selfConvertedTile->UpdateDynValidShape(selfTile->GetDynValidShape());
@@ -88,16 +105,16 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
         srcConvertedTile->UpdateDynValidShape(srcTile->GetDynValidShape());
         castSrcOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         LogicalTensorPtr dstConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, dstTile->GetShape());
-
+        tempBuffer = std::make_shared<LogicalTensor>(function, DT_BF16, GetTempShape(dstTile->GetShape(), axis));
         auto &op = function.AddOperation(
-            Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile});
+            Opcode::OP_INDEX_ADD, {selfConvertedTile, srcConvertedTile, indexTile}, {dstConvertedTile, tempBuffer});
         dstConvertedTile->UpdateDynValidShape(dstTile->GetDynValidShape());
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_RINT);
     } else {
-        auto &op = function.AddOperation(Opcode::OP_INDEX_ADD, {selfTile, srcTile, indexTile}, {dstTile});
+        auto &op = function.AddOperation(Opcode::OP_INDEX_ADD, {selfTile, srcTile, indexTile}, {dstTile, tempBuffer});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
         op.SetAttribute(OpAttributeKey::scalar, alpha);
     }
