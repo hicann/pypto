@@ -1299,22 +1299,6 @@ Tensor ConstructTensorGraph(DataType dataType, const Tensor &aMatrix, const Tens
     return cMatrix;
 }
 
-static Tensor AssembleGmAccumulationTensor(DataType outType, const Tensor gmAccumulationTensor,
-    std::vector<int64_t> outSize, std::vector<SymbolicScalar> validShape, bool isCMatrixNZ) {
-    OP_CHECK(true, {
-        ASSERT(outSize.size() == SHAPE_DIM2 && validShape.size() == SHAPE_DIM2)
-            << "Both outSize and validShape must be 2-element vectors" << std::endl;
-    });
-    OP_CHECK(true, { ASSERT(outSize[0] != 0 && outSize[1] != 0) << "Matrix size cannot be 0 " << std::endl; });
-    Tensor assembleTensor(
-        outType, {outSize[0], outSize[1]}, "", isCMatrixNZ ? TileOpFormat::TILEOP_NZ : TileOpFormat::TILEOP_ND);
-    OP_CHECK(true,
-        { ASSERT(assembleTensor.GetStorage() != nullptr) << "Can not get assembleTensor's storage" << std::endl; });
-    assembleTensor.GetStorage()->UpdateDynValidShape({validShape[0], validShape[1]});
-    Assemble(gmAccumulationTensor, {0, 0}, assembleTensor);
-    return assembleTensor;
-}
-
 static Tensor ConstructGmAccumulationTensorGraph(
     DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, const MatmulAttrParam &attrParam) {
     auto &cubeTile = TileShape::Current().GetCubeTile();
@@ -1330,9 +1314,7 @@ static Tensor ConstructGmAccumulationTensorGraph(
     int64_t mSize = attrParam.transA ? aMatrix.GetShape()[1] : aMatrix.GetShape()[0];
     int64_t kSize = attrParam.transA ? aMatrix.GetShape()[0] : aMatrix.GetShape()[1];
     int64_t nSize = attrParam.transB ? bMatrix.GetShape()[0] : bMatrix.GetShape()[1];
-    TileShape::Current().SetVecTile({cubeTile.m[0], cubeTile.n[0]});
-    Tensor gmAccumulationTensor =
-        Full(Element(outType, static_cast<int64_t>(0)), outType, {mSize, nSize}, {mValidShape, nValidShape});
+    TileShape::Current().SetVecTile({128, 128});
     std::vector<Tensor> gmPartialSums;
     OP_CHECK(true, { ASSERT(kL1TileShape != 0) << "kL1TileShape can not be 0" << std::endl; });
     const int64_t kLoop = (kSize + kL1TileShape - 1) / kL1TileShape;
@@ -1351,12 +1333,14 @@ static Tensor ConstructGmAccumulationTensorGraph(
         } else {
             tensorB = View(bMatrix, {kL1Size, nSize}, {kValidshape, nValidShape}, {kL1Size * kIdx, 0});
         }
-        Tensor gmPartialSum = ConstructTensorGraph(outType, tensorA, tensorB, gmAccumulationTensor, attrParam);
+        Tensor gmPartialSum =
+            ConstructTensorGraph(outType, tensorA, tensorB, Tensor(), attrParam);
         gmPartialSums.emplace_back(gmPartialSum);
     }
-    gmAccumulationTensor = npu::tile_fwk::Reduce(gmPartialSums, ReduceMode::ATOMIC_ADD);
-    return AssembleGmAccumulationTensor(
-        outType, gmAccumulationTensor, {mSize, nSize}, {mValidShape, nValidShape}, attrParam.isCMatrixNZ);
+    for (int64_t kIdx = 1; kIdx < kLoop; ++kIdx) {
+        gmPartialSums[0] = npu::tile_fwk::Add(gmPartialSums[0], gmPartialSums[kIdx]);
+    }
+    return gmPartialSums[0];
 }
 
 Tensor Matmul(
