@@ -14,7 +14,6 @@ set(PTO_Fwk_STestCaseGoldenScriptPathList  "" CACHE INTERNAL "" FORCE)     # STe
 
 # 切换完成前, 增加原有目录
 set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/deepseekv3/mla CACHE INTERNAL "" FORCE)
-set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/deepseekv3/moe CACHE INTERNAL "" FORCE)
 set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/deepseekv3/quant CACHE INTERNAL "" FORCE)
 set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/llama CACHE INTERNAL "" FORCE)
 set(PTO_Fwk_STestCaseGoldenScriptPathList ${PTO_Fwk_STestCaseGoldenScriptPathList} ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden/net/deepseekv3/nsa CACHE INTERNAL "" FORCE)
@@ -102,8 +101,8 @@ function(PTO_Fwk_STest_RunExe_GenerateGolden)
             list(APPEND _Args "--clean")
         endif ()
 
-        get_filename_component(GoldenCtrlPy    "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/golden_ctrl.py" REALPATH)
-        get_filename_component(GoldenCtrlPyCwd "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts" REALPATH)
+        get_filename_component(GoldenCtrlPy    "${PTO_FWK_SRC_ROOT}/cmake/scripts/golden_ctrl.py" REALPATH)
+        get_filename_component(GoldenCtrlPyCwd "${PTO_FWK_SRC_ROOT}/cmake/scripts" REALPATH)
         list(LENGTH ARG_GTEST_FILTER_LIST GTestFilterListLen)
         add_custom_command(
                 TARGET ${ARG_TARGET} POST_BUILD
@@ -161,8 +160,8 @@ function(PTO_Fwk_STest_RunExe)
                 if (PyEnvLines)
                     list(APPEND _Args "--env" "${PyEnvLines}")
                 endif ()
-                get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/stest_accelerate.py" REALPATH)
-                get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python" REALPATH)
+                get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/cmake/scripts/stest_accelerate.py" REALPATH)
+                get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/cmake/scripts" REALPATH)
                 add_custom_command(
                         TARGET ${ARG_TARGET} POST_BUILD
                         COMMAND ${PyCmdSetup} ${Python3_EXECUTABLE} ${ParallelPy} ARGS ${_Args}
@@ -404,8 +403,8 @@ function(PTO_Fwk_STest_Distributed_RunExe)
                     list(APPEND _Args "--env" "${PyEnvLines}")
                 endif ()
                 list(APPEND _Args "--rank_size" "${MaxRankSize}")
-                get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/distributed_stest_accelerate.py" REALPATH)
-                get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python" REALPATH)
+                get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/cmake/scripts/distributed_stest_accelerate.py" REALPATH)
+                get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/cmake/scripts" REALPATH)
                 add_custom_command(
                         TARGET ${ARG_TARGET} POST_BUILD
                         COMMAND ${PyCmdSetup} ${Python3_EXECUTABLE} ${ParallelPy} ARGS ${_Args}

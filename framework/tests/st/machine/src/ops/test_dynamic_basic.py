@@ -25,7 +25,7 @@ if __name__ == "__main__":
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
-    g_ctrl_path: Path = Path(g_src_root, "tests/cmake/scripts")
+    g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
     if str(g_ctrl_path) not in sys.path:
         sys.path.append(str(g_ctrl_path))
     # 单独调试 import 失败, 需确认上文中 '系统 import 路径' 配置正确

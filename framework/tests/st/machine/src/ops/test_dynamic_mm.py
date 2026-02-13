@@ -11,7 +11,7 @@
 """
 
 本脚本有 2 种执行模式:
-1. CI批跑时, 由 tests/cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
+1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 """
 import sys
 import math
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
-    g_ctrl_path: Path = Path(g_src_root, "tests/cmake/scripts")
+    g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
     if str(g_ctrl_path) not in sys.path:
         sys.path.append(str(g_ctrl_path))
     from golden_register import GoldenRegister
@@ -212,67 +212,67 @@ def gen_mm_data(input_config: ShapeConfig, output_dir: Path):
 )
 def gen_dynamic_mm_golden(case_name: str, output: Path) -> bool:
     if case_name == "DynamicMatmulTest.mm_A_Bt_ND_fp16_BIAS":
-        input_config = ShapeConfig(128, 257, 511, FP16, FP16, False, True, False, False, False, True, FP16, NO_QUANT, 
+        input_config = ShapeConfig(128, 257, 511, FP16, FP16, False, True, False, False, False, True, FP16, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_NZ_fp16_BIAS":
-        input_config = ShapeConfig(1, 512, 256, FP16, FP32, False, True, False, True, False, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(1, 512, 256, FP16, FP32, False, True, False, True, False, True, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_B_NZ_fp32_BIAS":
-        input_config = ShapeConfig(16, 32, 512, FP32, FP32, False, False, False, True, False, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(16, 32, 512, FP32, FP32, False, False, False, True, False, True, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_NZ_int8_BIAS":
-        input_config = ShapeConfig(1, 512, 256, INT8, INT32, False, True, False, True, False, True, INT32, NO_QUANT, 
+        input_config = ShapeConfig(1, 512, 256, INT8, INT32, False, True, False, True, False, True, INT32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_B_ND_bf16_BIAS":
-        input_config = ShapeConfig(129, 257, 513, BF16, FP32, False, True, False, False, False, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(129, 257, 513, BF16, FP32, False, True, False, False, False, True, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_ND_int8_channel":
-        input_config = ShapeConfig(240, 512, 64, INT8, FP16, False, True, False, False, False, False, FP32, 
+        input_config = ShapeConfig(240, 512, 64, INT8, FP16, False, True, False, False, False, False, FP32,
         PER_CHAHNNEL, RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_B_NZ_int8_tensor":
-        input_config = ShapeConfig(16, 32, 512, INT8, FP16, False, True, False, True, False, False, FP32, PER_TENSOR, 
+        input_config = ShapeConfig(16, 32, 512, INT8, FP16, False, True, False, True, False, False, FP32, PER_TENSOR,
         RELU, 2.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_ND_fp16":
-        input_config = ShapeConfig(128, 257, 511, FP16, FP16, False, True, False, False, False, False, FP32, NO_QUANT, 
+        input_config = ShapeConfig(128, 257, 511, FP16, FP16, False, True, False, False, False, False, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_NZ_fp16":
-        input_config = ShapeConfig(1, 512, 256, FP16, FP32, False, True, False, True, False, False, FP32, NO_QUANT, 
+        input_config = ShapeConfig(1, 512, 256, FP16, FP32, False, True, False, True, False, False, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_B_NZ_fp32":
-        input_config = ShapeConfig(16, 32, 512, FP32, FP32, False, False, False, True, False, False, FP32, NO_QUANT, 
+        input_config = ShapeConfig(16, 32, 512, FP32, FP32, False, False, False, True, False, False, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_NZ_int8":
-        input_config = ShapeConfig(1, 512, 256, INT8, INT32, False, True, False, True, False, False, FP32, NO_QUANT, 
+        input_config = ShapeConfig(1, 512, 256, INT8, INT32, False, True, False, True, False, False, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_B_ND_bf16":
-        input_config = ShapeConfig(129, 257, 513, BF16, FP32, False, True, False, False, False, False, FP32, NO_QUANT, 
+        input_config = ShapeConfig(129, 257, 513, BF16, FP32, False, True, False, False, False, False, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_A_Bt_NZ_int8_tile4":
-        input_config = ShapeConfig(1, 512, 256, INT8, INT32, False, True, False, True, False, False, FP32, NO_QUANT, 
+        input_config = ShapeConfig(1, 512, 256, INT8, INT32, False, True, False, True, False, False, FP32, NO_QUANT,
         NO_RELU, 0.0)
         gen_mm_data(input_config, output)
         return True
@@ -295,32 +295,32 @@ def gen_dynamic_mm_golden(case_name: str, output: Path) -> bool:
 )
 def gen_dynamic_mm_golden(case_name: str, output: Path) -> bool:
     if case_name == "DynamicMatmulTest.mm_A_ND_B_ND_C_NZ":
-        input_config = ShapeConfig(16, 192, 128, FP16, FP32, False, False, False, False, True, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(16, 192, 128, FP16, FP32, False, False, False, False, True, True, FP32, NO_QUANT,
         0, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_AT_B_ANZ_BND_bf16":
-        input_config = ShapeConfig(128, 256, 512, BF16, FP32, True, False, True, False, True, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(128, 256, 512, BF16, FP32, True, False, True, False, True, True, FP32, NO_QUANT,
         0, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_AT_BT_AND_BND_bf16":
-        input_config = ShapeConfig(128, 256, 512, BF16, FP32, True, True, False, False, True, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(128, 256, 512, BF16, FP32, True, True, False, False, True, True, FP32, NO_QUANT,
         0, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_AT_B_AND_BND_fp32_UNALIGN":
-        input_config = ShapeConfig(127, 255, 511, FP32, FP32, True, False, False, False, False, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(127, 255, 511, FP32, FP32, True, False, False, False, False, True, FP32, NO_QUANT,
         0, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.mm_AT_BT_AND_BND_fp32":
-        input_config = ShapeConfig(128, 256, 512, FP32, FP32, True, True, False, False, True, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(128, 256, 512, FP32, FP32, True, True, False, False, True, True, FP32, NO_QUANT,
         0, 0.0)
         gen_mm_data(input_config, output)
         return True
     if case_name == "DynamicMatmulTest.test1_fp32":
-        input_config = ShapeConfig(128, 256, 513, FP32, FP32, True, False, True, False, True, True, FP32, NO_QUANT, 
+        input_config = ShapeConfig(128, 256, 513, FP32, FP32, True, False, True, False, True, True, FP32, NO_QUANT,
         0, 0.0)
         gen_mm_data(input_config, output)
         return True

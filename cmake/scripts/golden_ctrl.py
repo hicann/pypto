@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import List, Any, Tuple
 
 from golden_register import GoldenRegister, GoldenRegInfo
-from python.utils.table import Table
+from utils.table import Table
 
 
 class GoldenCtrl:

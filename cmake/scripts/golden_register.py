@@ -65,7 +65,7 @@ class GoldenRegister:
             TestInstanceName/TestSuiteName.TestCaseName/
             TestInstanceName/TestSuiteName.TestCaseName/*
             TestInstanceName/TestSuiteName.TestCaseName*
-            TestInstanceName/TestSuiteName.TestCaseName/{int}
+            TestInstanceName/TestSuiteName.TestCaseName/数字标号
 
         对应注册用例名支持以下场景
 

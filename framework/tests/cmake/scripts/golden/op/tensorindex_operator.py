@@ -11,7 +11,7 @@
 """ TensorIndex Operator 相关用例 Golden 生成逻辑.
 
 本脚本有 2 种执行模式:
-1. CI批跑时, 由 tests/cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
+1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
 import sys
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
-    g_ctrl_path: Path = Path(g_src_root, "tests/cmake/scripts")
+    g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
     if str(g_ctrl_path) not in sys.path:
         sys.path.append(str(g_ctrl_path))
     from golden_register import GoldenRegister  # 单独调试 import 失败, 需确认上文中 '系统 import 路径' 配置正确

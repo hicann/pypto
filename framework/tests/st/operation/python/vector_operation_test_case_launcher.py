@@ -50,7 +50,7 @@ class OperationTestCase(TestCase):
     def golden_func(self, inputs, _params: dict) -> list:
         op = self._info.get("operation")
         test_case = f"Test{op}/{op}OperationTest.Test{op}/{self._info.get('index')}"
-        cmd = f"{sys.executable} {self._root_path}/framework/tests/cmake/scripts/golden_ctrl.py "
+        cmd = f"{sys.executable} {self._root_path}/cmake/scripts/golden_ctrl.py "
         cmd += f"-o={self._root_path}/build/output/bin/golden -c={test_case} "
         cmd += f"--path={self._root_path}/framework/tests/st/operation/python"
         TestCaseShellActuator.run(cmd)

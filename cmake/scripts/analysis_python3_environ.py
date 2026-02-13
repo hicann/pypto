@@ -15,7 +15,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional, List
 
 
 class Analysis:

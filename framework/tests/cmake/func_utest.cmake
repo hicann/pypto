@@ -90,8 +90,8 @@ function(PTO_Fwk_UTest_RunExe)
             if (PyEnvLines)
                 list(APPEND _Args "--env" "${PyEnvLines}")
             endif ()
-            get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/utest_accelerate.py" REALPATH)
-            get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python" REALPATH)
+            get_filename_component(ParallelPy    "${PTO_FWK_SRC_ROOT}/cmake/scripts/utest_accelerate.py" REALPATH)
+            get_filename_component(ParallelPyCwd "${PTO_FWK_SRC_ROOT}/cmake/scripts" REALPATH)
             add_custom_command(
                     TARGET ${ARG_TARGET} POST_BUILD
                     COMMAND ${PyCmdSetup} ${Python3_EXECUTABLE} ${ParallelPy} ARGS ${_Args}

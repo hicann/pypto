@@ -12,7 +12,7 @@
 """
 
 本脚本有 2 种执行模式:
-1. CI批跑时, 由 tests/cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
+1. CI批跑时, 由 cmake/scripts/golden_ctrl.py 调用, 为避免日志过多, 此时 logging 级别为 logging.INFO;
 2. 单独调试时, 本脚本单独被调用, 此时 logging 级别为 logging.DEBUG;
 """
 import math
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # 系统 import 路径
     g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
     logging.debug("SrcRoot: %s", g_src_root)
-    g_ctrl_path: Path = Path(g_src_root, "tests/cmake/scripts")
+    g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
     if str(g_ctrl_path) not in sys.path:
         sys.path.append(str(g_ctrl_path))
     from golden_register import GoldenRegister  # 单独调试 import 失败, 需确认上文中 '系统 import 路径' 配置正确
@@ -162,7 +162,7 @@ def compute_attention(input_data, params):
                     slc_kn[cur_s2_idx, :] = kn[slc_idx, :]
                     slc_kr[cur_s2_idx, :] = kr[slc_idx, :]
                     slc_kn_scales[cur_s2_idx, :] = kn_scales[slc_idx, :]
-                
+
                 qn_tmp = qi[..., :dk]
                 qr_tmp = qi[..., dk:]
                 if is_kn_quant:
@@ -280,7 +280,7 @@ def gen_dsa_gather_sa_entry(dtype, bn1n2s1, is_kn_quant, actual_seq, output):
 
     q_bsnd = gen_uniform_data(shape_q, -1, 1, dtype)
     kn_bsnd_tmp = gen_uniform_data(shape_kn, -1, 1, dtype)
-    
+
     kn_bsnd_reshape = kn_bsnd_tmp.reshape(block_num * block_size, 4, 128).to(torch.float32)
     kn_scales = kn_bsnd_reshape.abs().amax(dim=-1, keepdim=True).clamp(min=1e-8) / 127.0
     if is_kn_quant == 1:

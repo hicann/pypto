@@ -350,7 +350,6 @@ stest:
       # - TopkOnBoardTest.test_operation_tensor_4_32_8_topk
       # - TopkOnBoardTest.test_operation_tensor_2_288_15_topk
       # - TopkOnBoardTest.test_operation_tensor_2_288_15_topk_reverse
-      # - MlpTest.test_256_512_tileop
       # - ArgsortOnBoardTest.test_operation_tensor_128_32_argsort
       # - ArgsortOnBoardTest.test_operation_tensor_4_32_argsort
       # - ArgsortOnBoardTest.test_operation_tensor_2_16_argsort

@@ -41,7 +41,7 @@ function(PTO_Fwk_GTest_GenerateCoverage)
 
         # 参数组织
         find_program(LCOV lcov REQUIRED)
-        get_filename_component(GenCoveragePy ${PTO_FWK_SRC_ROOT}/framework/tests/cmake/scripts/python/gen_coverage.py REALPATH)
+        get_filename_component(GenCoveragePy ${PTO_FWK_SRC_ROOT}/cmake/scripts/gen_coverage.py REALPATH)
         get_filename_component(GenCoverageDataDir "${PTO_FWK_BIN_ROOT}" REALPATH)
         set(_Args "-s=${PTO_FWK_SRC_ROOT}" "-d=${GenCoverageDataDir}")
 

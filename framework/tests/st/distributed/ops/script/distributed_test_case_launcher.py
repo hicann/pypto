@@ -47,9 +47,9 @@ class OperationTestCase(TestCase):
 
     def run_in_dyn_func(self, _inputs, _params: dict) -> dict:
         return None
-    
+
     def run_golden_ctrl(self, test_case: str):
-        cmd = f"{sys.executable} {self._root_path}/framework/tests/cmake/scripts/golden_ctrl.py "
+        cmd = f"{sys.executable} {self._root_path}/cmake/scripts/golden_ctrl.py "
         cmd += f"-o={self._root_path}/build/output/bin/golden -c={test_case} "
         cmd += f"--path={self._root_path}/framework/tests/st/distributed/ops/script"
         TestCaseShellActuator.run(cmd)

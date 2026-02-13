@@ -1541,54 +1541,9 @@ class BuildCtrl(CMakeParam):
                     continue
                 k, v = line.split("=", 1)
                 update_env[k] = v
-        self._py_tests_mdf_xsan_env(update_env=update_env)
         for k, v in update_env.items():
             logging.info("%s=%s", k, v)
         return update_env
-
-    def _py_tests_mdf_xsan_env(self, update_env: Dict[str, str]):
-        # 特殊处理
-        ld_preload = update_env.get("LD_PRELOAD", None)
-        asan_options = update_env.get("ASAN_OPTIONS", None)
-        if not ld_preload or not asan_options:
-            return
-        ld_preload_so_list = ld_preload.split(":")
-
-        asan_version = None
-        for so_path in ld_preload_so_list:
-            so_path_str = str(so_path)
-            match = re.search(r'libasan\.so\.([\d.]+)$', so_path_str)
-            if not match:
-                continue
-            asan_version = match.group(1)
-            break
-        if not asan_version:
-            return
-
-        def version_to_tuple(version_str):
-            return tuple(map(int, version_str.split('.')))
-
-        enable_detect_leaks = True
-        try:
-            current_version = version_to_tuple(asan_version)
-            min_version = version_to_tuple("6.0.0")
-            if current_version < min_version:
-                logging.warning("libasan version %s is < 6.0.0, auto turn off detect_leaks", asan_version)
-                enable_detect_leaks = False
-        except ValueError:
-            logging.warning("Failed to parse libasan version: %s", asan_version)
-            return
-
-        asan_option_list = [op for op in asan_options.split(",") if not op.startswith("detect_leaks")]
-        if enable_detect_leaks:
-            asan_option_list.append("detect_leaks=1")
-            # 添加 suppressions 文件
-            suppressions_file = str(Path(self.src_root, "cmake/asan_suppressions.txt"))
-            update_env["LSAN_OPTIONS"] = f"suppressions={suppressions_file}"
-        else:
-            asan_option_list.append("detect_leaks=0")
-        asan_options = ",".join(asan_option_list)
-        update_env["ASAN_OPTIONS"] = asan_options
 
     def _tests_enable(self) -> bool:
         return self.tests.utest.enable or self.tests.stest.enable
