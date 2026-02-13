@@ -23,6 +23,7 @@
 
 #include "codegen/codegen_common.h"
 #include "tilefwk/data_type.h"
+#include "interface/tensor/symbolic_scalar.h"
 #include "interface/utils/common.h"
 #include "interface/operation/opcode.h"
 
@@ -46,6 +47,10 @@ std::enable_if_t<std::is_arithmetic_v<T>, std::string> ToStringHelper(const T &v
 }
 inline std::string ToStringHelper(const std::string &value) {
     return value;
+}
+
+inline std::string ToStringHelper(const SymbolicScalar &value) {
+    return SymbolicExpressionTable::BuildExpression(value);
 }
 
 template <typename T = std::string>

@@ -92,7 +92,8 @@ void CodeGenOp::UpdateShape(
             isMainBlock ? SymbolicScalar::FromConcrete(logicalTensor.shape) : logicalTensor.GetDynValidShape();
     }
 
-    ASSERT(logicalTensor.shape.size() <= MAX_DIM) << "only support max dim: " << MAX_DIM;
+    ASSERT(logicalTensor.shape.size() <= MAX_DIM)
+        << "only support max dim: " << MAX_DIM << ", Tensor is " << logicalTensor.Dump();
 
     Opcode opcode = oper.GetOpcode();
     if (logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR && IsOpShapeFromAttr(opcode)) {
@@ -197,7 +198,7 @@ bool ShouldSkipIOperand(const std::shared_ptr<LogicalTensor> &tensor, const Oper
 void CodeGenOp::Init(const Operation &ops) {
     ASSERT(ops.iOperand.size() + ops.oOperand.size() <= MAX_OPERANDS)
         << "can not support ops.iOperand.size: " << ops.iOperand.size()
-        << ", ops.oOperand.size: " << ops.oOperand.size();
+        << ", ops.oOperand.size: " << ops.oOperand.size() << ", Op is " << ops.Dump();
 
     isDynamicFunction = functionType == FunctionType::DYNAMIC_LOOP_PATH;
     isSupportDynamicAligned = config::GetCodeGenOption<bool>(SUPPORT_DYNAMIC_ALIGNED);
@@ -262,7 +263,8 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
     operandDtype[operandIdx] = tensor->tensor->datatype;
     auto it = OPERAND_TYPE_TO_MEMORY_TYPE.find(tensor->GetMemoryTypeOriginal());
     ASSERT(it != OPERAND_TYPE_TO_MEMORY_TYPE.end())
-        << "can not support memory type: " << static_cast<size_t>(tensor->GetMemoryTypeOriginal());
+        << "can not support memory type: " << static_cast<size_t>(tensor->GetMemoryTypeOriginal()) << ", Tensor is "
+        << tensor->Dump();
     operandType[operandIdx] = it->second;
     ++operandIdx;
 }
@@ -328,7 +330,7 @@ void CodeGenOp::ConvertPoolAttribute(const Operation &operation) {
 void CodeGenOp::ConvertAttribute(const Operation &operation) {
     ASSERT(operation.iOperand.size() + operation.oOperand.size() <= MAX_OPERANDS)
         << "can not support operation.iOperand.size: " << operation.iOperand.size()
-        << ", operation.oOperand.size: " << operation.oOperand.size();
+        << ", operation.oOperand.size: " << operation.oOperand.size() << ", Op is " << operation.Dump();
     if (opCode == Opcode::OP_CONV || opCode == Opcode::OP_CONV_ADD) {
         std::vector<std::string> intAttrStrList{
             ConvOpAttributeKey::cin,
@@ -437,9 +439,10 @@ void CodeGenOp::GetGmParamIdx(const Operation &oper) {
 
         // Ops like UB_ALLOC have output operands, but does not have output
         // param locs, so here we should not assert 'outParamLocSize == outputTensors.size()' !
-        ASSERT(inParamLocSize <= oper.iOperand.size()) << "size of Op.inParamLocation_ is larger than input operands";
+        ASSERT(inParamLocSize <= oper.iOperand.size())
+            << "size of Op.inParamLocation_ is larger than input operands, Op is " << oper.Dump();
         ASSERT(outParamLocSize <= oper.oOperand.size())
-            << "size of Op.outParamLocation_ is larger than output operands";
+            << "size of Op.outParamLocation_ is larger than output operands, Op is " << oper.Dump();
 
         CODEGEN_LOGI("%d: inParamLocation = %s", __FUNCTION__, IntVecToStr(oper.inParamLocation_).c_str());
         CODEGEN_LOGI("%d: outParamLocation = %s", __FUNCTION__, IntVecToStr(oper.outParamLocation_).c_str());
@@ -490,7 +493,7 @@ void CodeGenOp::GetGmParamIdx(const Operation &oper) {
 
     if (OpcodeManager::Inst().IsCopyIn(oper.GetOpcode())) {
         const std::shared_ptr<OpAttribute> &attr = oper.GetOpAttribute();
-        ASSERT(attr != nullptr) << "Copy In attr is null";
+        ASSERT(attr != nullptr) << "Copy In attr is null, Op is " << oper.Dump();
         std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
         paramLocation[1] = oper.GetIOpAttrOffset(0);
         CODEGEN_LOGI("Gm Param Index of Copy In Op %s is %d", tileOpName.c_str(), paramLocation[1]);
@@ -501,7 +504,7 @@ void CodeGenOp::GetGmParamIdx(const Operation &oper) {
 
     if (OpcodeManager::Inst().IsCopyOut(oper.GetOpcode())) {
         const std::shared_ptr<OpAttribute> &attr = oper.GetOpAttribute();
-        ASSERT(attr != nullptr) << "Copy In attr is null";
+        ASSERT(attr != nullptr) << "Copy Out attr is null, Op is " << oper.Dump();
         std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
         paramLocation[0] = oper.GetOOpAttrOffset(0);
         CODEGEN_LOGI("Gm Param Index of Copy Out Op %s is %d", tileOpName.c_str(), paramLocation[0]);

@@ -119,8 +119,8 @@ public:
 private:
     void GenFuncBodyBefore(const std::pair<uint64_t, Function *> &subFuncPair, Function &topFunc,
         CompileInfo &compileInfo, std::ostringstream &oss) const;
-    std::string GenInclude(const Function &topFunc) const;
-    static std::string GenCommentBeforeFuncHeader(Function &subFunc);
+    void GenInclude(const Function &topFunc, std::ostringstream &oss) const;
+    void GenCommentBeforeFuncHeader(Function &subFunc, std::ostringstream &oss) const;
     std::string GenFuncHeader(uint64_t programId, Function &topFunc, CompileInfo &compileInfo) const;
     void GenFuncBody(Function &subFunc, Function &topFunc, std::ostringstream &oss) const;
     void GenFuncEnd(std::ostringstream &oss) const;
@@ -128,7 +128,7 @@ private:
     std::string GenLimitValue(FloatSaturateStatus &fs) const;
 
     bool IsNeedDumpCCE(const std::string &inputFile) const;
-    void DumpCCE(const std::string &name, const std::string &code) const;
+    void DumpCCE(const std::string &name, std::ostringstream &oss) const;
 
     void DoCompileCCE(const CompileInfo &compileInfo, const std::string &compileOptions) const;
     void BuildArchOptions(std::ostringstream &oss, const CompileInfo &compileInfo) const;

@@ -12,13 +12,14 @@
  * \file codegen_mte.cpp
  * \brief
  */
+#include <iterator>
+#include <string>
 
 #include "codegen_op_cloudnpu.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/utils/codegen_utils.h"
 #include "securec.h"
-#include <string>
-#include <iterator>
+
 namespace npu::tile_fwk {
 const std::string TSTORE_CONF = "TStoreConfig";
 
@@ -467,23 +468,15 @@ std::string CodeGenOpCloudNPU::GenMemL0CToL1() const {
     std::string dst = "(" + GetAddrTypeByOperandType(BUF_L1) + " " + dstDtypeStr + "*)" + dstVar;
     std::string src = "(" + GetAddrTypeByOperandType(BUF_L0C) + " " + srcDtypeStr + "*)" + srcVar;
     paramList.insert(paramList.end(), {dst, src});
-    for (const auto &realShape : dynValidShapeFromAttr) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(realShape));
-    }
-    for (const auto &dstShape : dstValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstShape));
-    }
+    
+    FillParamWithFullShape(paramList, dynValidShapeFromAttr);
+    FillParamWithFullShape(paramList, dstValidShape);
     auto l1Offset = offsetFromAttr[ID0];
-    for (auto dstOffset : l1Offset) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(dstOffset));
-    }
-    for (auto srcShape : srcValidShape) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(srcShape));
-    }
+    FillParamWithFullShape(paramList, l1Offset);
+    FillParamWithFullShape(paramList, srcValidShape);
     auto l0COffset = offsetFromAttr[ID1];
-    for (auto srcOffset : l0COffset) {
-        paramList.emplace_back(SymbolicExpressionTable::BuildExpression(srcOffset));
-    }
+    FillParamWithFullShape(paramList, l0COffset);
+
     Element scaleValue = Element(DataType::DT_UINT64, 0);
     GetAttr(OP_ATTR_PREFIX + "scale_value", scaleValue);
     paramList.emplace_back(std::to_string(scaleValue.GetUnsignedData()));
