@@ -1184,3 +1184,32 @@ def copysign(input: Tensor, other: Tensor) -> Tensor:
                 [7 -8  9]]
     """
     return pypto_impl.CopySign(input, other)
+
+
+@op_wrapper
+def cbrt(self: Tensor) -> Tensor:
+    """
+    Computes the element-wise cube root of 'self'
+
+    This function calculates the formula: 'out = self^(1/3)'.
+    For each element in the self tensor, performs a cube root operation.
+
+    Parameters
+    ----------
+    self : Tensor
+        The input tensor
+
+    Returns
+    -------
+    Tensor
+        A tensor with the same shape and dtype as input
+
+    Examples
+    --------
+    x = pypto.tensor([1, 2], pypto.DT_FP32)
+    out = pypto.cbrt(x)
+
+    Input  x:[[8, -8]]
+    Output y:[[2, -2]]
+    """
+    return copysign(pow(abs(self), 1.0 / 3.0), self)

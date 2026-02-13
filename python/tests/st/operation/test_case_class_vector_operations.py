@@ -527,3 +527,43 @@ class LogicalAndTestCase(TestCase):
 
     def golden_func_params(self) -> dict:
         return {}
+
+
+class CbrtTestCase(TestCase):
+    def __init__(
+        self,
+        case_index: str,
+        case_name: str,
+        input_tensors: list,
+        output_tensors: list,
+        view_shape: tuple,
+        tile_shape: tuple,
+        params: dict,
+    ):
+        super().__init__(
+            case_index,
+            case_name,
+            "Cbrt",
+            input_tensors,
+            output_tensors,
+            view_shape,
+            tile_shape,
+            params,
+            PTOTestCaseRunner(
+                "Cbrt",
+                input_tensors,
+                output_tensors,
+                view_shape,
+                tile_shape,
+                params,
+            ),
+        )
+
+    def run_in_dyn_func(self, inputs, _params: dict) -> dict:
+        return pypto.cbrt(*inputs)
+
+    def golden_func(self, inputs, _params: dict) -> list:
+        return [torch._prims.cbrt(*inputs)]
+
+    def golden_func_params(self) -> dict:
+        return {}

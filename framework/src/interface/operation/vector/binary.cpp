@@ -557,7 +557,19 @@ Tensor ScalarMax(const Tensor &operand1, const Tensor &operand2) {
 Tensor CopySign(const Tensor &self, const Tensor &other) {
     DECLARE_TRACER();
 
-    RETURN_CALL(BinaryOperation<BinaryOpType::COPYSIGN>, *Program::GetInstance().GetCurrentFunction(), self, other);
+    DataType selfDType = self.GetDataType();
+    DataType otherDType = other.GetDataType();
+    Tensor castSelf = self;
+    Tensor castOther = other;
+    if (selfDType == DT_INT16 || selfDType == DT_INT32) {
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    if (otherDType == DT_INT16 || otherDType == DT_INT32) {
+        castOther = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            other.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    RETURN_CALL(BinaryOperation<BinaryOpType::COPYSIGN>, *Program::GetInstance().GetCurrentFunction(), castSelf, castOther);
 }
 
 // OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX OP_BITWISEAND OP_BITWISEOR OP_BITWISEXOR

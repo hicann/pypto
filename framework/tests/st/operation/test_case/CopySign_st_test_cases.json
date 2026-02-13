@@ -248,6 +248,126 @@
                 {
                     "name": "input0",
                     "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 4
+        },
+        {
+            "case_index": 5,
+            "case_name": "CopySign_test_5",
+            "operation": "CopySign",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -100,
+                        "max": 100
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        32
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                16,
+                16
+            ],
+            "tile_shape": [
+                16,
+                16
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 5
+        },
+        {
+            "case_index": 6,
+            "case_name": "CopySign_test_6",
+            "operation": "CopySign",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
                         107,
                         128,
                         512
@@ -290,9 +410,9 @@
                 }
             ],
             "view_shape": [
-                64,
-                107,
-                128
+                1,
+                32,
+                32
             ],
             "tile_shape": [
                 32,
@@ -303,11 +423,11 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 4
+            "index": 6
         },
         {
-            "case_index": 5,
-            "case_name": "CopySign_test_5",
+            "case_index": 7,
+            "case_name": "CopySign_test_7",
             "operation": "CopySign",
             "input_tensors": [
                 {
@@ -347,7 +467,7 @@
                     "shape": [
                         107,
                         145,
-                        64
+                        128
                     ],
                     "dtype": "fp16",
                     "format": "ND",
@@ -355,8 +475,9 @@
                 }
             ],
             "view_shape": [
-                107,
-                145
+                1,
+                32,
+                32
             ],
             "tile_shape": [
                 16,
@@ -367,11 +488,141 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 5
+            "index": 7
         },
         {
-            "case_index": 6,
-            "case_name": "CopySign_test_6",
+            "case_index": 8,
+            "case_name": "CopySign_test_8",
+            "operation": "CopySign",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        107,
+                        128,
+                        512
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        107,
+                        128,
+                        512
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        107,
+                        128,
+                        512
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                32,
+                32
+            ],
+            "tile_shape": [
+                32,
+                32,
+                32
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 8
+        },
+        {
+            "case_index": 9,
+            "case_name": "CopySign_test_9",
+            "operation": "CopySign",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        107,
+                        128,
+                        512
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        107,
+                        128,
+                        512
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        107,
+                        128,
+                        512
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                32,
+                32
+            ],
+            "tile_shape": [
+                32,
+                32,
+                32
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 9
+        },
+        {
+            "case_index": 10,
+            "case_name": "CopySign_test_10",
             "operation": "CopySign",
             "input_tensors": [
                 {
@@ -437,11 +688,11 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 6
+            "index": 10
         },
         {
-            "case_index": 7,
-            "case_name": "CopySign_test_7",
+            "case_index": 11,
+            "case_name": "CopySign_test_11",
             "operation": "CopySign",
             "input_tensors": [
                 {
@@ -507,7 +758,147 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 7
+            "index": 11
+        },
+        {
+            "case_index": 12,
+            "case_name": "CopySign_test_12",
+            "operation": "CopySign",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        128,
+                        1,
+                        1
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        128,
+                        1,
+                        1
+                    ],
+                    "dtype": "int16",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        128,
+                        1,
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                49,
+                2,
+                2
+            ],
+            "tile_shape": [
+                31,
+                2,
+                3,
+                40
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 12
+        },
+        {
+            "case_index": 13,
+            "case_name": "CopySign_test_13",
+            "operation": "CopySign",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32,
+                        128,
+                        1,
+                        1
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        32,
+                        128,
+                        1,
+                        1
+                    ],
+                    "dtype": "int32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -10,
+                        "max": 10
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        32,
+                        128,
+                        1,
+                        1
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                1,
+                49,
+                2,
+                2
+            ],
+            "tile_shape": [
+                31,
+                2,
+                3,
+                40
+            ],
+            "params": {
+                "on_board": true,
+                "func_id": -1
+            },
+            "index": 13
         }
     ]
 }
