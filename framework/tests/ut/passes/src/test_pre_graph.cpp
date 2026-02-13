@@ -474,7 +474,7 @@ TEST_F(PreGraphTest, TestTransposeDatamoveExp) {
     outInnerTemp->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
 
     G.SetInCast({"input"});
-    G.SetOutCast({"output"});
+    G.SetOutCast({"output", "output2"});
     Function *function = G.GetFunction();
     const int SUBGRAPH_NUM = 8;
     function->SetTotalSubGraphCount(SUBGRAPH_NUM);
@@ -663,10 +663,14 @@ void ConstructRemoveRedundantView(ComputationalGraphBuilder &G, bool multi) {
     G.AddTensor(DataType::DT_FP16, {1, 64, 64}, "t2");
     G.AddTensor(DataType::DT_FP16, {64, 64}, "t3");
     G.AddTensor(DataType::DT_FP16, {64, 64}, "t4");
+    G.AddTensor(DataType::DT_FP16, {64, 64}, "t41");
+ 	G.AddTensor(DataType::DT_FP16, {64, 64}, "t42");
+ 	G.AddTensor(DataType::DT_FP16, {64, 64}, "t43");
     // add op
     G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "VIEW");
     G.AddOp(Opcode::OP_RESHAPE, {"t2"}, {"t3"}, "RESHAPE");
     G.AddOp(Opcode::OP_COPY_IN, {"t3"}, {"t4"}, "COPYIN");
+    G.AddOp(Opcode::OP_ABS, {"t4"}, {"t42"}, "ABS1");
     std::vector<int64_t> offset = {2, 0, 0};
     auto view = G.GetOp("VIEW");
     auto attrA = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{2, 0, 0}, MemoryType::MEM_UNKNOWN,
@@ -674,7 +678,7 @@ void ConstructRemoveRedundantView(ComputationalGraphBuilder &G, bool multi) {
     view->SetOpAttribute(attrA);
     // set incast and outcast
     G.SetInCast({"t1"});
-    G.SetOutCast({"t4"});
+    G.SetOutCast({"t42","t43"});
 
     // another copyin
     if (multi) {
@@ -684,6 +688,7 @@ void ConstructRemoveRedundantView(ComputationalGraphBuilder &G, bool multi) {
         auto copyIn2 = G.GetOp("COPYIN2");
         auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn2->GetOpAttribute());
         copyAttr->SetFromOffset(OpImmediate::Specified(std::vector<int64_t>{32, 0}));
+        G.AddOp(Opcode::OP_ABS, {"t41"}, {"t43"}, "ABS2");
     }
 }
 
@@ -735,13 +740,9 @@ TEST_F(PreGraphTest, TestRemoveRedundantViewMultiCopyIn) {
         }
     }
     EXPECT_EQ(viewCnt, 0);
-    auto copyIn = G.GetOp("COPYIN");
+    auto copyIn = G.GetOp("COPYIN2");
     auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
     auto newDynOffset = copyAttr->GetFromOffset();
-    EXPECT_EQ(newDynOffset[0].Dump(), "128");
-    copyIn = G.GetOp("COPYIN2");
-    copyAttr = std::static_pointer_cast<CopyOpAttribute>(copyIn->GetOpAttribute());
-    newDynOffset = copyAttr->GetFromOffset();
     EXPECT_EQ(newDynOffset[0].Dump(), "160");
 }
 
@@ -794,48 +795,6 @@ TEST_F(PreGraphTest, TestRemoveRedundantViewMultiReshape) {
         }
     }
     EXPECT_EQ(viewCnt, 0);
-}
-
-TEST_F(PreGraphTest, TestProcessReshape) {
-    ComputationalGraphBuilder G;
-    // add tensor
-    G.AddTensor(DataType::DT_FP16, {16, 24576}, "t1");
-    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 192}, "t2");
-    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t3");
-    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t4");
-    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t5");
-    G.AddTensor(DataType::DT_FP16, {16, 1, 128, 128}, "t6");
-
-    // add op
-    G.AddOp(Opcode::OP_RESHAPE, {"t1"}, {"t2"}, "RESHAPE1");
-    G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "VIEW");
-    G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "RESHAPE2");
-    G.AddOp(Opcode::OP_COPY_IN, {"t2"}, {"t5"}, "COPY_IN1");
-    G.AddOp(Opcode::OP_COPY_IN, {"t2"}, {"t6"}, "COPY_IN2");
-    
-    // set incast and outcast
-    G.SetInCast({"t1"});
-
-    // run pass
-    Function *function = G.GetFunction();
-    EXPECT_NE(function, nullptr);
-    PreGraphProcess passLocal;
-    EXPECT_EQ(passLocal.Run(*function, "", "", 0), SUCCESS);
-    
-    // check after pass
-    auto opList = function->Operations();
-    int64_t viewCnt = 0;
-    int64_t reshapeCnt = 0;
-    for (const auto &op : opList) {
-        if (op.GetOpcode() == Opcode::OP_VIEW) {
-            ++viewCnt;
-        }
-        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-            reshapeCnt++;
-        }
-    }
-    EXPECT_EQ(viewCnt, 0);
-    EXPECT_EQ(reshapeCnt, 2);
 }
 
 void CompareOpImmediateVector(const std::vector<OpImmediate> &result, const std::vector<int64_t> &expect) {

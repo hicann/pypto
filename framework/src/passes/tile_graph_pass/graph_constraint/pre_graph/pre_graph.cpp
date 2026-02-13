@@ -15,6 +15,7 @@
 
 #include "pre_graph.h"
 #include "passes/pass_check/pre_graph_checker.h"
+#include "passes/pass_utils/merge_view_assemble_utils.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "PreGraphProcess"
@@ -77,6 +78,11 @@ Status PreGraphProcess::RunOnFunction(Function &function) {
     if (cubeProcess.UpdateCubeOp(function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Update Cube attr failed.");
         return FAILED;
+    }
+    Status status = MergeViewAssembleUtils::MergeViewAssemble(function);
+    if (status != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
+        return status;
     }
     APASS_LOG_INFO_F(Elements::Operation, "===> End PreGraph.");
     return SUCCESS;
