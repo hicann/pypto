@@ -18,6 +18,8 @@
 
 #include "tilefwk/aikernel_data.h"
 
+constexpr int MAIN_BLOCK_INDEX = 1;
+
 #ifdef __TILE_FWK_AICPU__
 
 #define RuntimeGetStartArgs()                   startArgs
@@ -26,7 +28,7 @@
 #else
 
 #define RuntimeGetStartArgs()                   AiCoreRuntimeGetStartArgs(param)
-#define RuntimeGetSymbol(idx)                   (param->exprTbl[idx])
+#define RuntimeGetSymbol(idx)                   (param->exprTbl[(idx) + MAIN_BLOCK_INDEX])  // inserted the mainBlock expression at position 0 of the expressionSet
 
 #endif
 
