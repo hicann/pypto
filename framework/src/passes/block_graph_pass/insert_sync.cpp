@@ -513,7 +513,8 @@ void PipeSync::InitIssueQueue() {
 
 void PipeSync::EnqueueOp(DepOp &op, const std::vector<Operation *> opLogPtr, std::vector<IndexOp> &syncedOpLog) {
    if (opLogPtr[op.idx]->GetOpcode() == Opcode::OP_ASSEMBLE || opLogPtr[op.idx]->GetOpcode() == Opcode::OP_VIEW ||
-        opLogPtr[op.idx]->GetOpcode() == Opcode::OP_NOP || opLogPtr[op.idx]->GetOpcode() == Opcode::OP_HUB) {
+        opLogPtr[op.idx]->GetOpcode() == Opcode::OP_NOP || opLogPtr[op.idx]->GetOpcode() == Opcode::OP_HUB ||
+        opLogPtr[op.idx]->GetOpcode() == Opcode::OP_VIEW_TYPE) {
         syncedOpLog.emplace_back(std::make_pair(op.idx * SEQUENCE_IDX, std::ref(*opLogPtr[op.idx])));
         return;
     }
@@ -1316,6 +1317,7 @@ bool PipeSync::IgnorableIntraPipeDep(size_t prev, size_t curr, const std::vector
     // true表示依赖关系可忽略，false表示依赖关系不可忽略
     // VIEW or ASSEMBLE data dependency can be ignored
     if (opLogPtr[prev]->GetOpcode() == Opcode::OP_VIEW || opLogPtr[curr]->GetOpcode() == Opcode::OP_VIEW ||
+        opLogPtr[prev]->GetOpcode() == Opcode::OP_VIEW_TYPE || opLogPtr[curr]->GetOpcode() == Opcode::OP_VIEW_TYPE ||
         opLogPtr[prev]->GetOpcode() == Opcode::OP_ASSEMBLE || opLogPtr[curr]->GetOpcode() == Opcode::OP_ASSEMBLE ||
         opLogPtr[prev]->GetOpcode() == Opcode::OP_NOP || opLogPtr[curr]->GetOpcode() == Opcode::OP_NOP ||
         opLogPtr[prev]->GetOpcode() == Opcode::OP_HUB || opLogPtr[curr]->GetOpcode() == Opcode::OP_HUB) {
@@ -1609,7 +1611,8 @@ void InsertSync::InsertPipeAll(Function *subGraphFunc) {
     std::vector<Operation*> newOpList;
     for (auto op : oriOpList) {
         newOpList.push_back(op);
-        if (op->GetOpcode() == Opcode::OP_RESHAPE || op->GetOpcode() == Opcode::OP_VIEW || op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+        if (op->GetOpcode() == Opcode::OP_RESHAPE || op->GetOpcode() == Opcode::OP_VIEW ||
+            op->GetOpcode() == Opcode::OP_VIEW_TYPE || op->GetOpcode() == Opcode::OP_ASSEMBLE) {
             continue;
         }
         std::vector<std::shared_ptr<LogicalTensor>> input;
