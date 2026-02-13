@@ -1164,6 +1164,7 @@ Status SplitReshape::AddOperation(Function &function) {
             return FAILED;
         }
         auto &newReshape = GraphUtils::AddReshapeOperation(function, b.second->input, b.second->output, *b.second, dynValidShape);
+        function.GetTensorMap().Insert(newReshape.GetOOperands()[0], false);
         APASS_LOG_INFO_F(Elements::Operation, "ADD OP_RESHAPE, magic %d, IOperand tensor magic %d OOperand tensor magic %d, dynValidShape %s.", newReshape.opmagic,
             b.second->input->GetMagic(), b.second->output->GetMagic(), GetStr(b.second->output->GetDynValidShape()).c_str());
     }
