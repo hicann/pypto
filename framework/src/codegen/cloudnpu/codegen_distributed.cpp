@@ -225,11 +225,30 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapes(int32_t operandIndex, int3
     return GenOffsets(operandIndex, dim) + ", " + GenRawShapes(operandIndex, dim);
 }
 
-std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemPutAndGet() const
+std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemPut() const
 {
     std::ostringstream oss;
-    int32_t nonShmemDataIndex = (opCode == Opcode::OP_SHMEM_PUT) ? 3 : 0;
-    int32_t shmemDataIndex = (opCode == Opcode::OP_SHMEM_PUT) ? 4 : 3;
+    int32_t nonShmemDataIndex = 3;
+    int32_t shmemDataIndex = 4;
+    int32_t nonShmemDataDim = originShape[nonShmemDataIndex].size();
+    int32_t shmemDataDim = 4;
+    std::string viewOffsetStr = dynamicValidShape[shmemDataIndex][2].Dump();
+    size_t firstComma = viewOffsetStr.find(",");
+    size_t lastComma = viewOffsetStr.rfind(",");
+    std::string viewOffset = viewOffsetStr.substr(firstComma + 1, lastComma - firstComma - 1);
+    if (viewOffset.find("RUNTIME_GetTensorDataInt32Dim2") != std::string::npos) {
+        oss << ", " << GenOffsetsAndRawShapes(nonShmemDataIndex, nonShmemDataDim) << ", " << GenOffsetsAndRawShapes(shmemDataIndex, shmemDataDim) << ", " << viewOffset;
+    } else {
+        oss << ", " << GenOffsetsAndRawShapes(nonShmemDataIndex, nonShmemDataDim) << ", " << GenOffsetsAndRawShapes(shmemDataIndex, shmemDataDim) << ", " << -1;
+    }
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemGet() const
+{
+    std::ostringstream oss;
+    int32_t nonShmemDataIndex = 0;
+    int32_t shmemDataIndex = 3;
     int32_t nonShmemDataDim = originShape[nonShmemDataIndex].size();
     int32_t shmemDataDim = 4;
     oss << ", " << GenOffsetsAndRawShapes(nonShmemDataIndex, nonShmemDataDim) << ", " << GenOffsetsAndRawShapes(shmemDataIndex, shmemDataDim);
@@ -361,10 +380,10 @@ std::string CodeGenOpCloudNPU::GenExtraParamsStr() const
 {
     static const std::unordered_map<Opcode,
         std::function<std::string(CodeGenOpCloudNPU const*)>> offsetsAndRawShapesHandlers = {
-        {Opcode::OP_SHMEM_PUT, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGet(); }},
-        {Opcode::OP_SHMEM_GET, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGet(); }},
+        {Opcode::OP_SHMEM_PUT, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPut(); }},
+        {Opcode::OP_SHMEM_GET, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemGet(); }},
         {Opcode::OP_SHMEM_PUT_UB2GM, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGetUB(); }},
-        {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemPutAndGet(); }},
+        {Opcode::OP_SHMEM_GET_GM2UB, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemGet(); }},
         {Opcode::OP_SHMEM_SIGNAL, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForShmemSignal(); }},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForMoeDistributedCombineSend(); }},
         {Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE, [](const CodeGenOpCloudNPU* self) { return self->GenOffsetsAndRawShapesForMoeDistributedCombineReceive(); }},

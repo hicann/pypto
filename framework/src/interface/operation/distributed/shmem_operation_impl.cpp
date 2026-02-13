@@ -181,6 +181,11 @@ Tensor ShmemGetGm2Ub(const Tensor &dummy, const Tensor &shmemDataTile, DataType 
     auto tempOutTile = std::make_shared<LogicalTensor>(function, nonShmemDataType, shape);
     auto &op = function.AddOperation(Opcode::OP_SHMEM_GET_GM2UB, {dummy.GetStorage(), shmemDataTile.GetStorage()},
         {tempOutTile});
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_UB,
+        OpImmediate::Specified({shmemDataTile.GetShape()[2], shmemDataTile.GetShape()[3]}), 
+        OpImmediate::Specified({tempOutTile->shape[0], tempOutTile->shape[1]}),
+        OpImmediate::Specified(std::vector<SymbolicScalar>{shmemDataTile.GetValidShape()[2], shmemDataTile.GetValidShape()[3]})));
+    function.UpdateTensorDataUsage(op);
     DistOpAttr distOpAttr;
     distOpAttr.atomicType = atomicType;
     op.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);

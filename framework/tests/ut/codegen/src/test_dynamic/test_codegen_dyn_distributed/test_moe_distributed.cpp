@@ -54,8 +54,48 @@ std::string MoeDistributedGetFunctionRawName(const std::string& functionName)
     return functionRawName;
 }
 
-TEST_F(TestMoeDistributed, TestMoeDispatchMultipyExperts) {
-    const char *group = "hcom123";
+TEST_F(TestMoeDistributed, MoeDistributedDispatchV2) {
+    const char *group = "hcom1";
+    DataType dType = DT_BF16;
+    int routingExpertNum = 160;
+    int topK = 8;
+    int batchSize = 8;
+    int hiddenSize = 5120;
+    int rankSize = 4;
+
+    int32_t expandXRowShape = topK * rankSize < routingExpertNum ?
+        static_cast<int32_t>(batchSize) * static_cast<int32_t>(topK) * rankSize :
+        static_cast<int32_t>(batchSize) * routingExpertNum;
+    
+    Shape xShape{batchSize, hiddenSize};
+    Shape expertIdsShape{batchSize, topK};
+    Shape expandXShape{expandXRowShape, hiddenSize};
+    Shape recvCountsShape{1};
+    Shape assistInfoForCombineShape{expandXRowShape, 64};
+    Shape expertTokenNumsShape{routingExpertNum / rankSize};
+
+    Tensor x(dType, xShape, "x");
+    Tensor expertIds(DataType::DT_INT32, expertIdsShape, "expertIds");
+    Tensor expertTokenNums(DataType::DT_INT32, expertTokenNumsShape, "expertTokenNums");
+    Tensor expandX(dType, expandXShape, "expandX");
+    Tensor assistInfoForCombine(DataType::DT_INT32, assistInfoForCombineShape, "assistInfoForCombine");
+    Tensor recvCounts(DataType::DT_INT32, recvCountsShape, "recvCounts");
+
+
+    FUNCTION("DISPATCH_F", {x, expertIds}, {expandX, assistInfoForCombine, expertTokenNums, recvCounts}) {
+        Distributed::MoeDistributedDispatchV2(x, expertIds, group,
+            rankSize, routingExpertNum, 0, 0, expandX, assistInfoForCombine, expertTokenNums, recvCounts);
+    }
+
+    auto functionRawName = MoeDistributedGetFunctionRawName("MoeDistributedDispatchSendData");
+    auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+}
+
+TEST_F(TestMoeDistributed, MoeDistributedDispatch) {
+    const char *group = "hcom12";
     DataType dType = DT_BF16;
     int routingExpertNum = 160;
     int topK = 8;
@@ -82,7 +122,7 @@ TEST_F(TestMoeDistributed, TestMoeDispatchMultipyExperts) {
     MoeConfig moeConfig{routingExpertNum, routingExpertNum / rankSize, rankSize};
 
     FUNCTION("DISPATCH_F", {tokenTensor, tokenExpertTable}, {expandX, validCnt, combineInfo}) {
-        Distributed::MoeDispatch(tokenTensor, tokenExpertTable, expandX, validCnt, combineInfo, group, moeConfig);
+        Distributed::MoeDistributedDispatch(tokenTensor, tokenExpertTable, expandX, validCnt, combineInfo, group, moeConfig);
     }
 
     auto functionRawName = MoeDistributedGetFunctionRawName("L0");

@@ -1012,6 +1012,19 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
                     }
                 }
             } break;
+        case Opcode::OP_SHMEM_GET_GM2UB:
+            {
+                auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
+                if (copyAttr == nullptr) {
+                    break;
+                }
+                for (auto &shape : copyAttr->GetToDynValidShape()) {
+                    if (!shape.IsSpecified()) {
+                        continue;
+                    }
+                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                }
+            } break;
         default:
             break;
     }

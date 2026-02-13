@@ -105,11 +105,9 @@ void GegisterOps()
     reg.RegisterOp("MoeDistributedCombine", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
         Distributed::TestMoeDistributedCombine<T>(testParam, goldenDir);
     });
-
-    // 非模板算子
-    reg.disRegisterMap["MoeDispatch"] = [](OpTestParam& testParam, const std::string&, std::string& goldenDir) {
- 	    Distributed::TestShmemMoeDispatch(testParam, goldenDir);
-    };
+    reg.RegisterOp("MoeDispatch", []<typename T>(OpTestParam& testParam, std::string& goldenDir) {
+        Distributed::TestShmemMoeDispatch<T>(testParam, goldenDir);
+    });
     reg.disRegisterMap["AllGatherAttnPostReduceScatter"] = [](OpTestParam& testParam, const std::string&, std::string& goldenDir) {
         Distributed::TestAllGatherAttentionPostReducescatter(testParam, goldenDir);
     };

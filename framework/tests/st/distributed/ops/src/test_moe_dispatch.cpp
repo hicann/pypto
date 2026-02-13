@@ -21,62 +21,61 @@
 #include "test_dev_func_runner.h"
 
 namespace npu::tile_fwk::Distributed {
-
+template<typename T>
 void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 5;
     auto [batchSize, hiddenSize, routedNum, topK, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dType = GetDataTypeNum(typeNum);
-    int32_t totalExpertNum = routedNum;
-    int32_t expertNumPerRank = totalExpertNum / testParam.rankSize;
+    int32_t expertNumPerRank = routedNum / testParam.rankSize;
     Shape tokenTensorShape{batchSize, hiddenSize};
     Shape tokenExpertTableShape{batchSize, topK};
     int32_t expandXRowShape = std::min(static_cast<int32_t>(batchSize) *
-        static_cast<int32_t>(topK) * testParam.rankSize, static_cast<int32_t>(batchSize) * totalExpertNum);
+        static_cast<int32_t>(topK) * testParam.rankSize, static_cast<int32_t>(batchSize) * routedNum);
     Shape expandXShape{expandXRowShape, hiddenSize};
-    Shape validCntShape{expertNumPerRank};
-    Shape combineInfoShape{expandXRowShape, 3};
+    Shape combineInfoShape{expandXRowShape, 64};
     Tensor tokenTensor(dType, tokenTensorShape, "tokenTensor");
     Tensor tokenExpertTable(DataType::DT_INT32, tokenExpertTableShape, "tokenExpertTable");
-    Tensor validCnt(DataType::DT_INT32, validCntShape, "validCnt");
+    Tensor expertTokenNums(DataType::DT_INT32, {expertNumPerRank}, "expertTokenNums");
     Tensor expandX(dType, expandXShape, "expandX");
     Tensor combineInfo(DataType::DT_INT32, combineInfoShape, "combineInfo");
+    Tensor recvCounts(DataType::DT_INT32, {1}, "recvCounts");
     int64_t expandXEleNum = expandXShape[0] * expandXShape[1];
-    int64_t validCntEleNum = validCntShape[0];
     int64_t combineInfoEleNum = combineInfoShape[0] * combineInfoShape[1];
-
-    using T = npu::tile_fwk::bfloat16;
-
     std::string xPath = goldenDir+ "/x_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<T> tokenTensorPtr = ReadToVector<T>(xPath, tokenTensorShape);
     std::string expertIdsPath = goldenDir + "/expert_ids_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<int32_t> tokenExpertTablePtr = ReadToVector<int32_t>(expertIdsPath, tokenExpertTableShape);
-
-    MoeConfig moeConfig{routedNum, expertNumPerRank, testParam.rankSize};
-    FUNCTION("MoeDispatch", {tokenTensor, tokenExpertTable}, {expandX, validCnt, combineInfo}) {
-        Distributed::MoeDispatch(tokenTensor, tokenExpertTable, expandX, validCnt, combineInfo, testParam.group, moeConfig);
+    FUNCTION("MoeDispatch", {tokenTensor, tokenExpertTable}, {expandX, expertTokenNums, combineInfo, recvCounts}) {
+        Distributed::MoeDistributedDispatchV2(tokenTensor, tokenExpertTable, testParam.group,
+            static_cast<uint32_t>(testParam.rankSize), routedNum, 0, 0, expandX, combineInfo, expertTokenNums, recvCounts);
     }
-
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateTensor<T>(tokenTensor, tokenTensorPtr),
         RawTensorData::CreateTensor<int32_t>(tokenExpertTable, tokenExpertTablePtr),
     });
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateTensorZero(expandX),
-        RawTensorData::CreateTensorZero(validCnt),
-        RawTensorData::CreateTensor(combineInfo, std::vector<int32_t>(combineInfoEleNum, -1))
+        RawTensorData::CreateTensorZero(expertTokenNums),
+        RawTensorData::CreateTensorZero(combineInfo),
+        RawTensorData::CreateTensorZero(recvCounts),
     });
-
     DeviceLauncherConfig config;
     config.runModel = false;
     DevFuncRunner::Run(Program::GetInstance().GetLastFunction(), config);
-
     auto expandXOutPut = ProgramData::GetInstance().GetOutputData(0);
     EXPECT_TRUE(CompareWithGolden<uint8_t *>(dType, goldenDir + "/y_rank_", expandXEleNum, expandXOutPut->GetDevPtr(), testParam));
-    auto validCntOutPut = ProgramData::GetInstance().GetOutputData(1);
-    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/valid_count_rank_", validCntEleNum, validCntOutPut->GetDevPtr(), testParam));
+    auto expertTokenNumsOutPut = ProgramData::GetInstance().GetOutputData(1);
+    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/valid_count_rank_", expertNumPerRank, expertTokenNumsOutPut->GetDevPtr(), testParam));
     auto combineInfoOutPut = ProgramData::GetInstance().GetOutputData(2);
     EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/combine_info_rank_", combineInfoEleNum, combineInfoOutPut->GetDevPtr(), testParam));
+    auto recvCountsOutPut = ProgramData::GetInstance().GetOutputData(3);
+    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/recv_counts_rank_", 1, recvCountsOutPut->GetDevPtr(), testParam));
 }
+
+template void TestShmemMoeDispatch<int32_t>(OpTestParam& testParam, std::string& goldenDir);
+template void TestShmemMoeDispatch<float>(OpTestParam& testParam, std::string& goldenDir);
+template void TestShmemMoeDispatch<float16>(OpTestParam& testParam, std::string& goldenDir);
+template void TestShmemMoeDispatch<bfloat16>(OpTestParam& testParam, std::string& goldenDir);
 
 } // namespace npu::tile_fwk::Distributed

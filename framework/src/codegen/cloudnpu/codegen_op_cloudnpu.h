@@ -176,7 +176,8 @@ private:
     std::string GenTemplateParamsForSet() const;
     std::string GenTemplateParamsDefault() const;
 
-    std::string GenOffsetsAndRawShapesForShmemPutAndGet() const;
+    std::string GenOffsetsAndRawShapesForShmemPut() const;
+    std::string GenOffsetsAndRawShapesForShmemGet() const;
     std::string GenOffsetsAndRawShapesForShmemPutAndGetUB() const;
     std::string GenOffsetsAndRawShapesForShmemSignal() const;
     std::string GenOffsetsAndRawShapesForMoeDistributedCombineSend() const;
