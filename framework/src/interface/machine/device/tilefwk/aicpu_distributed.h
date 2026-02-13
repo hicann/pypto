@@ -15,10 +15,10 @@
 
 #pragma once
 #include "aicpu_runtime.h"
-#include "tileop/distributed/hccl_context.h"
+#include "tileop/distributed/comm_context.h"
 
 #define RUNTIME_GetHcclRankId(groupIndex) \
-     ((TileOp::HcclCombinOpParam *)(startArgs->hcclContextAddr[groupIndex]))->rankId
+     ((TileOp::CommContext *)(startArgs->hcclContextAddr[groupIndex]))->rankId
 
 #define RUNTIME_BindTensor(groupIndex, memType, size) \
     [&](void *ctx, uint64_t tgroupIndex, uint64_t tmemType, uint64_t tsize) -> uint64_t { \

@@ -17,8 +17,6 @@
 #define __DISTRIBUTED_DISPATCH__
 
 #include "common.h"
-#include "hccl_context.h"
-
 #include <type_traits>
 
 namespace TileOp::Distributed {
@@ -36,7 +34,7 @@ TILEOP void SendToRoutingExpert(__gm__ int32_t *syncTensor, __ubuf__ T *tokenBuf
     copy_gm_to_ubuf(expertTableUb, expertTable, 0, 1, lenBurst, 0, 0);
     set_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
     wait_flag(PIPE_MTE2, PIPE_S, EVENT_ID0);
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[groupIndex]);
     uint64_t localUsrRankId = static_cast<uint64_t>(winContext->rankId);
     const int32_t hOutSize = axisH * sizeof(T); // 如有量化，需要量化后通信
     int32_t shmemDataLength = AlignUp<int32_t>(axisH, 512) + 512; // 512对齐，预留512三元组存储
@@ -79,7 +77,7 @@ TILEOP void SendToSharedExpert(__gm__ int32_t *syncTensor, __ubuf__ T *tokenBuff
     uint32_t shmemDataRawShape0, uint32_t shmemDataRawShape1, uint32_t shmemDataRawShape2, uint32_t shmemDataRawShape3,
     __gm__ int64_t *hcclContext)
 {
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[groupIndex]);
     int32_t localUsrRankId = static_cast<int32_t>(winContext->rankId);
     int32_t rankSize = static_cast<int32_t>(winContext->rankNum);
     
@@ -138,7 +136,7 @@ TILEOP void DispatchSetFlag(__gm__ int32_t *syncDummy, __ubuf__ int32_t *statusT
     (void) shmemFlagOffset2;
     (void) shmemFlagOffset3;
     (void) shmemFlagRawShape0;
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[groupIndex]);
     int32_t localUsrRankId = static_cast<int32_t>(winContext->rankId);
     constexpr int32_t expertTblSize = bs * topK;
     constexpr int32_t lenBurst = AlignUp<int32_t>(expertTblSize * sizeof(int32_t), 32) / 32;
@@ -235,7 +233,7 @@ TILEOP void FFNSched(__gm__ T *out, __ubuf__ int32_t *buffer, __gm__ int32_t *du
     uint32_t flagShmemOffset0, uint32_t flagShmemOffset1, uint32_t flagShmemOffset2, uint32_t flagShmemOffset3,
     uint32_t flagShmemShape0, uint32_t flagShmemShape1, uint32_t flagShmemShape2, uint32_t flagShmemShape3, __gm__ int64_t *hcclContext)
 {
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[groupIndex]);
     DispatchInfo dispatchInfo = {tileIndex, groupIndex, 0, 0, rankShape, 
         static_cast<int32_t>(flagShmemOffset2), 0, 0, 0, 0, totalTileNum, shareRankCnt, expertNum,
         static_cast<int32_t>(winContext->rankNum), static_cast<int32_t>(flagShmemOffset1)};
@@ -320,7 +318,7 @@ TILEOP void CombineInfoCopyOut(__gm__ int32_t *combineInfo, __ubuf__ uint8_t *co
     __gm__ int64_t *hcclContext, __gm__ T *shmemDataBaseAddr, __gm__ int32_t *shmemFlagBaseAddr,
     uint32_t rankSize, uint32_t bs, uint32_t shmemLength)
 {
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[dispatchInfo.groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[dispatchInfo.groupIndex]);
     uint32_t localUsrRankId = winContext->rankId;
     GM_ADDR localShmemBaseAddr = (GM_ADDR)MapVirtualAddr<T>(hcclContext, shmemDataBaseAddr, localUsrRankId);
     __ubuf__ int32_t *combineBuffer = reinterpret_cast<__ubuf__ int32_t *>(combineInfoBuffer);
@@ -371,7 +369,7 @@ TILEOP void MoeRankWinCopyOut(__gm__ T *expandX, __gm__ uint32_t *validCnt, __ub
     uint32_t flagSize = 32; // 读取的一张卡的 flag，一共两个 int 有效数字，32B 即可存放
     offset = offset + flagSize;
 
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[dispatchInfo.groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[dispatchInfo.groupIndex]);
     uint32_t localUsrRankId = winContext->rankId;
     GM_ADDR localShmemBaseAddr = (GM_ADDR)MapVirtualAddr<T>(hcclContext, shmemDataBaseAddr, localUsrRankId);
 
@@ -442,7 +440,7 @@ TILEOP void ShareRankWinCopyOut(__gm__ T *expandX, __ubuf__ uint8_t *buffer, uin
     if (processTokenCnt == 0) { // bs 泛化场景下可能存在不够 48 个 op 切分的场景
         return;
     }
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[dispatchInfo.groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[dispatchInfo.groupIndex]);
     uint32_t localUsrRankId = winContext->rankId;
     GM_ADDR winTokenAddr = (GM_ADDR)MapVirtualAddr<T>(hcclContext, shmemDataAddr, localUsrRankId);
     uint32_t shareRankCnt = dispatchInfo.shareRankCnt;
@@ -483,7 +481,7 @@ template<typename T>
 TILEOP void ShareRankCopyOut(__gm__ T *expandX, __ubuf__ uint8_t *buffer, DispatchInfo &dispatchInfo,
     __gm__ int64_t *hcclContext, __gm__ T*shmemDataBaseAddr, uint32_t shmemDataRawShape2, uint32_t shmemDataRawShape3)
 {
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[dispatchInfo.groupIndex]);
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[dispatchInfo.groupIndex]);
  
     // 理论上不需要切分 TileOp, 但是为了和 moe 专家切分保持一致，按照 token cnt 切分
     uint32_t vectorCnt = dispatchInfo.totalTileNum; // 理论上的核数，device 实际核数不是 48 也不影响

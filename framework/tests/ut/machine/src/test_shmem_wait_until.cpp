@@ -18,7 +18,7 @@
 #include "machine/device/distributed/common.h"
 #include "machine/device/distributed/shmem_wait_until.h"
 #include "machine/utils/dynamic/dev_workspace.h"
-#include "tileop/distributed/hccl_context.h"
+#include "machine/runtime/distributed/hccl_context.h"
 #include "machine/device/dynamic/aicore_manager.h"
 
 namespace {
@@ -94,7 +94,7 @@ auto ConfigureFuncData(npu::tile_fwk::DynFuncData* funcData, uint64_t rawAddr) {
     auto exprTbl = std::make_unique<uint64_t[]>(exprTblSize);
     funcData->exprTbl = exprTbl.get();
 
-    auto hcclParam = std::make_unique<TileOp::HcclCombinOpParam>();
+    auto hcclParam = std::make_unique<npu::tile_fwk::HcclCombinOpParam>();
     hcclParam->rankNum = 0;
     hcclParam->windowsIn[0] = rawAddr;
     funcData->hcclContext[0] = reinterpret_cast<uint64_t>(hcclParam.get());

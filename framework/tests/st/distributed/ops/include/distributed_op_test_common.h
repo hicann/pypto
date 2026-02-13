@@ -22,7 +22,7 @@
 #include <array>
 #include "test_common.h"
 #include "distributed_op_test_suite.h"
-#include "tileop/distributed/hccl_context.h"
+#include "tileop/distributed/comm_context.h"
 #include "tilefwk/tilefwk_op.h"
 #include "test_dev_func_runner.h"
 
@@ -151,16 +151,16 @@ private:
         uint64_t winSize = 0UL;
         switch(winType) {
             case WinType::WIN_EXP:
-                devAddr = param_.windowsExp[param_.rankId];
-                winSize = param_.winExpSize;
+                devAddr = param_.winAddr[param_.statusIndex + param_.rankId];
+                winSize = param_.winStatusSize;
                 break;
             case WinType::WIN_OUT:
-                devAddr = param_.windowsOut[param_.rankId];
-                winSize = param_.winSize;
+                devAddr = param_.winAddr[param_.debugIndex + param_.rankId];
+                winSize = param_.winDebugSize;
                 break;
             case WinType::WIN_IN:
-                devAddr = param_.windowsIn[param_.rankId];
-                winSize = param_.winSize;
+                devAddr = param_.winAddr[param_.rankId];
+                winSize = param_.winDataSize;
                 break;
             default:
                 break;
@@ -168,7 +168,7 @@ private:
         return std::tie(devAddr, winSize);
     }
 private:
-    TileOp::HcclCombinOpParam param_;
+    TileOp::CommContext param_;
 };
 
 std::vector<uint64_t> GetHcclContext(const std::vector<std::string> &groupNames);

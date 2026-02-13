@@ -17,8 +17,6 @@
 #define __DISTRIBUTED_SHMEM__
 
 #include "common.h"
-#include "hccl_context.h"
-
 #include <type_traits>
 
 namespace TileOp::Distributed {
@@ -511,7 +509,7 @@ TILEOP void ShmemReduce(__gm__ T* out, __ubuf__ T* ubTensor, __gm__ T* in, __gm_
     int64_t rowOffset, int64_t colOffset, int64_t rowPerRank, int64_t colPerRank, __gm__ int64_t *hcclContext)
 {
     // 暂时只支持二维的in和out
-    __gm__ HcclCombinOpParam *winContext = (__gm__ HcclCombinOpParam *)(hcclContext[0]);    // 需要 hcclGroupIndex
+    __gm__ CommContext *winContext = (__gm__ CommContext *)(hcclContext[0]);    // 需要 hcclGroupIndex
     uint32_t localRankId = winContext->rankId;
     uint32_t rankSize = winContext->rankNum;
 

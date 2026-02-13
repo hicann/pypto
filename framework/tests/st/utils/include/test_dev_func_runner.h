@@ -27,7 +27,7 @@
 #include "machine/runtime/device_launcher.h"
 #include "cost_model/simulation/backend.h"
 #include "machine/runtime/host_prof.h"
-#include "machine/runtime/distributed_context.h"
+#include "machine/runtime/distributed/distributed_context.h"
 
 using namespace npu::tile_fwk::dynamic;
 

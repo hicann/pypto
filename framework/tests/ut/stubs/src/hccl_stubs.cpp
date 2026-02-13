@@ -47,4 +47,22 @@ HcclResult HcclCommInitAll(uint32_t ndev, int32_t *devices, HcclComm *comms)
     return HCCL_SUCCESS;
 }
 
+aclError aclrtMemcpy(void *dst, size_t destMax, const void *src, size_t count, aclrtMemcpyKind kind)
+{
+    (void)dst;
+    (void)destMax;
+    (void)src;
+    (void)count;
+    (void)kind;
+    return ACL_SUCCESS;
+}
+
+HcclResult HcomGetL0TopoTypeEx(const char *group, CommTopo *topoType, uint32_t flag)
+{
+    (void)group;
+    (void)topoType;
+    (void)flag;
+    return HCCL_SUCCESS;
+}
+
 }

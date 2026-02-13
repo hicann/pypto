@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 #include <type_traits>
 
-namespace TileOp {
+namespace npu::tile_fwk {
 constexpr uint32_t LOCAL_NOTIFY_MAX_NUM = 64;
 constexpr uint32_t LOCAL_STREAM_MAX_NUM = 19;
 constexpr uint32_t AICPU_OP_NOTIFY_MAX_NUM = 2;
@@ -179,6 +179,18 @@ struct HcclOpResParam {
     uint64_t zeroCopyDevicePhyId[16];            // 保存每个rank对应的物理卡Id
 };
 
+struct HcclOpResParamHead {
+    uint32_t localUsrRankId; // usrrankid
+    uint32_t rankSize;       // 通信域内total rank个数
+    uint64_t winSize; // 每个win大小，静态图时，可能是0，如果通信域内也有动态图，则可能为非0
+    uint64_t localWindowsIn; // 全F为无效值
+    uint64_t localWindowsOut; // 全F为无效值
+    char hcomId[128];
+    // aicore识别remote window
+    uint64_t winExpSize;
+    uint64_t localWindowsExp;
+};
+
 // TP8卡
 struct HcclCombinOpSignalParam {
     HcclSignalInfo noIpcNotifys[AICPU_MAX_RANK_NUM_V1*2];
@@ -214,6 +226,73 @@ struct HcclCombinOpParam {
     uint64_t ibverbsData = 0; // TransportDeviceNormalIbverbsData数组的首地址
     uint64_t ibverbsDataSize = 0; // TransportDeviceNormalIbverbsData数组的字节长度
 };
-} // namespace TileOp
+
+#pragma pack(push, 8)
+struct Mc2ServerCfg {
+    uint32_t version = 0;
+    uint8_t debugMode = 0;
+    uint8_t sendArgIndex = 0;
+    uint8_t recvArgIndex = 0;
+    uint8_t commOutArgIndex = 0;
+    uint8_t reserved[8] = {};
+};
+#pragma pack(pop)
+
+#pragma pack(push, 8)
+struct Mc2HcommCfg {
+    uint8_t skipLocalRankCopy = 0;
+    uint8_t skipBufferWindowCopy = 0;
+    uint8_t stepSize = 0;
+    char reserved[13] = {};
+    char groupName[128] = {};
+    char algConfig[128] = {};
+    uint32_t opType = 0;
+    uint32_t reduceType = 0;
+};
+#pragma pack(pop)
+
+struct Mc2CommConfig {
+    uint32_t version;
+    uint32_t hcommCnt;
+    struct Mc2ServerCfg serverCfg;
+    struct Mc2HcommCfg hcommCfg;
+};
+
+constexpr uint32_t INIT_TILING_VERSION = 100U;
+constexpr uint32_t MAX_CC_TILING_NUM = 8U;
+struct Mc2InitTilingInner {
+    uint32_t version;
+    uint32_t mc2HcommCnt;
+    uint32_t offset[MAX_CC_TILING_NUM];
+    uint8_t debugMode;
+    uint8_t preparePosition;
+    uint16_t queueNum;
+    uint16_t commBlockNum;
+    uint8_t devType;
+    char reserved[17];
+};
+
+constexpr uint32_t GROUP_NAME_SIZE = 128U;
+constexpr uint32_t ALG_CONFIG_SIZE = 128U;
+struct Mc2cCTilingInner {
+    uint8_t skipLocalRankCopy;
+    uint8_t skipBufferWindowCopy;
+    uint8_t stepSize;
+    uint8_t version;
+    char reserved[9];
+    uint8_t commEngine;
+    uint8_t srcDataType;
+    uint8_t dstDataType;
+    char groupName[GROUP_NAME_SIZE];
+    char algConfig[ALG_CONFIG_SIZE];
+    uint32_t opType;
+    uint32_t reduceType;
+};
+
+struct Mc2CommConfigV2 {
+    Mc2InitTilingInner init;
+    Mc2cCTilingInner inner;
+};
+} //namespace npu::tile_fwk
 
 #endif

@@ -20,7 +20,7 @@
 
 #include "tilefwk/aikernel_data.h"
 #include "tilefwk/aikernel_runtime.h"
-#include "tileop/distributed/hccl_context.h"
+#include "tileop/distributed/comm_context.h"
 
 using CoreFuncParam = npu::tile_fwk::CoreFuncParam;
 
@@ -242,7 +242,7 @@ int64_t RuntimeGetViewValidShapeDim(int64_t validshape, int64_t viewOffset, int6
 
 INLINE uint64_t GetShmemTensorAddr(CoreFuncParam *ctx, int idx, int groupIndex, uint64_t offset) {
     auto dstRankId = GetCoa(ctx, idx + 1);
-    return ((__gm__ TileOp::HcclCombinOpParam *)ctx->funcData->hcclContext[groupIndex])->windowsIn[dstRankId] + offset;
+    return ((__gm__ TileOp::CommContext *)ctx->funcData->hcclContext[groupIndex])->winAddr[dstRankId] + offset;
 }
 
 #define RUNTIME_GetViewValidShapeDim(validShape, viewOffset, viewShape) RuntimeGetViewValidShapeDim(validShape, viewOffset, viewShape)

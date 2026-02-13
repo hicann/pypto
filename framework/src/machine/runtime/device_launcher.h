@@ -36,7 +36,7 @@
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/platform.h"
-#include "machine/runtime/distributed_context.h"
+#include "machine/runtime/distributed/distributed_context.h"
 
 #ifndef BUILD_WITH_CANN
 enum aclmdlRICaptureMode {};
@@ -243,13 +243,13 @@ public:
         if (devProg->hcclContext[0] != 0) {
             return;
         }
-        auto hcclContext = DistributedContext::GetHcclContextToHost(groupNames);
+        auto hcclContext = DistributedContext::GetCommContextToHost(groupNames);
         PrepareHcclContext(hcclContext, devProg);
     }
 
     static void DeviceInitDistributedContext(const std::vector<std::string> &groupNames,
         DevAscendProgram *devProg) {
-        auto hcclContext = DistributedContext::GetHcclContext(groupNames);
+        auto hcclContext = DistributedContext::GetCommContext(groupNames);
         if ((hcclContext.size() == 0) || (devProg->hcclContext[0] == hcclContext[0])) {
             return;
         }
