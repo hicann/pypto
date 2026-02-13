@@ -401,18 +401,27 @@ void ExecuteOpRange(ExecuteOperationContext *ctx) {
     auto start = ctx->op->GetElementAttribute(OP_ATTR_PREFIX + "START");
     auto size = ctx->op->GetElementAttribute(OP_ATTR_PREFIX + "SIZE");
     auto step = ctx->op->GetElementAttribute(OP_ATTR_PREFIX + "STEP");
+    Element curStart = start;
+    if (ctx->op->HasAttr(OpAttributeKey::dynScalar)) {
+        SymbolicScalar tileIdx = ctx->op->GetSymbolicScalarAttribute(OpAttributeKey::dynScalar);
+        if (tileIdx.ConcreteValid()) {
+            int64_t tileIdxVal = tileIdx.Concrete();
+            Element tileIdxElem = Element(start.GetDataType(), tileIdxVal);
+            curStart = start + step * tileIdxElem;
+        }
+    }
     Element end;
     if (start.GetDataType() == DT_INT32) {
-        end = GetEndBySize<int32_t, DT_INT32>(start, size, step);
+        end = GetEndBySize<int32_t, DT_INT32>(curStart, size, step);
     } else if (start.GetDataType() == DT_INT64) {
-        end = GetEndBySize<int64_t, DT_INT64>(start, size, step);
+        end = GetEndBySize<int64_t, DT_INT64>(curStart, size, step);
     } else if (start.GetDataType() == DT_FP32) {
-        end = GetEndBySize<float, DT_FP32>(start, size, step);
+        end = GetEndBySize<float, DT_FP32>(curStart, size, step);
     } else {
         std::string errorMessage = "Unsupported DataType " + DataType2String(start.GetDataType());
         throw std::invalid_argument(errorMessage.c_str());
     }
-    calc::Range(oop, start, end, step);
+    calc::Range(oop, curStart, end, step);
 }
 REGISTER_CALC_OP(OP_RANGE, Opcode::OP_RANGE, ExecuteOpRange);
 

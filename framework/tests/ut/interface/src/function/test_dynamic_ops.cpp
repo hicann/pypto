@@ -1398,3 +1398,28 @@ TEST_F(DynamicOpsTest, CopySign) {
         }
     }
 }
+
+TEST_F(DynamicOpsTest, Range) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t size = 5;  
+    Element start(DT_INT32, 1);
+    Element end(DT_INT32, 10);
+    Element step(DT_INT32, 2);
+    
+    Tensor out(DT_INT32, {size}, "out");
+    ProgramData::GetInstance().AppendInputs({});
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<int32_t>(out, 0),
+    });
+
+    std::vector<int32_t> expected_data = {1, 3, 5, 7, 9};
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<int32_t>(out, expected_data),
+    });
+
+    FUNCTION("main", {}, {out}) {
+        out = Range(start, end, step);
+    }
+}
