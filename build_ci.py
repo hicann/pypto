@@ -1500,7 +1500,6 @@ class BuildCtrl(CMakeParam):
         cmd = f"{sys.executable} -m pytest {filter_str} -v --durations=0 -s --capture=no"
         cmd += f" --rootdir={self.src_root} {ext} --forked"
         if self.check_pip_dependencies(deps={"pytest-xdist": ">=3.8.0"}, raise_err=False, log_err=False):
-            cmd += " --dist=loadscope"
             cmd += " --no-loadscope-reorder"
         # cmd 执行
         update_env = self._get_py_tests_update_env(dist=dist)
