@@ -430,6 +430,9 @@ public:
             if (unlikely(t.GetDataType() != type.GetDataType())) {
                 return false;
             }
+            if (unlikely(t.Format() != type.Format())) {
+                return false;
+            }
             auto &shape1 = type.GetShape();
             auto &shape2 = t.GetShape();
             if (unlikely(shape1.size() != shape2.size())) {
@@ -477,10 +480,10 @@ private:
         l2Offset = DeviceLauncher::GetL2Offset();
 
         for (auto &t : dynAttr->startArgsInputLogicalTensorList) {
-            argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape());
+            argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape(), t->Format());
         }
         for (auto &t : dynAttr->startArgsOutputLogicalTensorList) {
-            argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape());
+            argTypes.emplace_back(t->Datatype(), nullptr, t->GetShape(), t->Format());
         }
     }
 
@@ -721,7 +724,7 @@ static int GetInputTensors(py::args &args, std::vector<DeviceTensorData> &tensor
             auto &t = base.cast<Tensor &>();
             auto data_ptr = py::cast<int64_t>(py::getattr(pt, "data_ptr"));
             auto shape = py::cast<std::vector<int64_t>>(py::getattr(pt, "ori_shape"));
-            tensors.emplace_back(t.GetDataType(), data_ptr, shape);
+            tensors.emplace_back(t.GetDataType(), data_ptr, shape, t.Format());
             if (device.is_none()) {
                 device = py::getattr(pt, "device");
             } else if (!device.equal(py::getattr(pt, "device"))) {

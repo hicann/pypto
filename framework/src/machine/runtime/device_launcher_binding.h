@@ -32,16 +32,20 @@ DeviceStream DeviceGetAicoreStream();
 class DeviceTensorData {
 public:
     DeviceTensorData() = default;
-    DeviceTensorData(DataType dtype, void *addr, const std::vector<int64_t> &shape)
-        : dtype_(dtype), addr_(addr), shape_(shape) {}
-    DeviceTensorData(DataType dtype, uintptr_t addr, const std::vector<int64_t> &shape)
-        : dtype_(dtype), addr_((void *)addr), shape_(shape) {}
+    DeviceTensorData(DataType dtype, void *addr, const std::vector<int64_t> &shape,
+        TileOpFormat format = TileOpFormat::TILEOP_ND)
+        : dtype_(dtype), addr_(addr), shape_(shape), format_(format) {}
+    DeviceTensorData(DataType dtype, uintptr_t addr, const std::vector<int64_t> &shape,
+        TileOpFormat format = TileOpFormat::TILEOP_ND)
+        : dtype_(dtype), addr_((void *)addr), shape_(shape), format_(format) {}
 
     void *GetAddr() const { return addr_; }
 
     const std::vector<int64_t> &GetShape() const { return shape_; }
 
     DataType GetDataType() const { return dtype_; }
+
+    TileOpFormat Format() const { return format_; }
 
     int64_t GetDataSize() const {
         return std::accumulate(shape_.begin(), shape_.end(), BytesOf(dtype_), std::multiplies<>());
@@ -51,6 +55,7 @@ private:
     DataType dtype_;
     void *addr_;
     std::vector<int64_t> shape_;
+    TileOpFormat format_;
 };
 
 struct DeviceLauncherConfig {

@@ -248,6 +248,8 @@ class DeviceTensorData:
 
     def GetShape(self) -> List[int]: ...
 
+    def Format(self) -> TileOpFormat: ...
+
 
 class RecordIfBranch:
 
