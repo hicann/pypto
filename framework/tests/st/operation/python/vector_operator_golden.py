@@ -623,7 +623,10 @@ def matmul_golden_func(inputs: list, config: dict):
     if params.get("relu_type") == 1:
         tensor_c = F.relu(tensor_c)
     if params.get("scale_value"):
-        tensor_c = tensor_c * params.get("scale_value")
+        mask = 0xFFFFE000
+        scale_value_data = np.float32([params.get("scale_value")]).view(np.uint32) & mask
+        fp32_scale_modified = scale_value_data.view(np.float32)[0]
+        tensor_c = tensor_c * fp32_scale_modified
     if params.get("quant_type") is not None and params.get("quant_type") == 2:
         # quant type中no quant为0, pertensor为1, perchannel为2.
         tensor_c = tensor_c * inputs[2]

@@ -40,6 +40,11 @@ inline bool AllClose(LogicalTensorDataPtr self, LogicalTensorDataPtr other, doub
 inline void Cast(LogicalTensorDataPtr out, LogicalTensorDataPtr self, CastMode mode = CAST_NONE) {
     GetCalcOps()->Cast(out, self, mode);
 }
+inline void QuantPreCompute(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr scalePtr, uint64_t scale, int relu) {
+    CalcOps *ops = GetCalcOps();
+    ASSERT(ops != nullptr);
+    ops->QuantPreCompute(out, self, scalePtr, scale, relu);
+}
 inline void Exp(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Exp(out, self);
 }
@@ -308,6 +313,12 @@ inline void GatherINUB(LogicalTensorDataPtr out, LogicalTensorDataPtr params, Lo
     LogicalTensorDataPtr pageTable, int64_t blockSize, int64_t axis) {
     GetCalcOps()->GatherINUB(out, params, indices, pageTable, blockSize, axis);
 }
+inline void GatherInL1(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices,
+    LogicalTensorDataPtr pageTable, int64_t blockSize) {
+    CalcOps *ops = GetCalcOps();
+    ASSERT(ops != nullptr);
+    ops->GatherInL1(out, params, indices, pageTable, blockSize);
+}
 
 inline void Extract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mod, bool descending) {
     GetCalcOps()->Extract(out, self, mod, descending);
@@ -351,12 +362,16 @@ inline void FormatND2NZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 }
 
 inline void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other, 
-    MatMulParam param = {false, false, 0}) {
-    GetCalcOps()->MatMul(out, self, other, nullptr, param);
+    MatMulParam param = {false, false, 0, 0, 0, nullptr, nullptr}) {
+    CalcOps *ops = GetCalcOps();
+    ASSERT(ops != nullptr);
+    ops->MatMul(out, self, other, nullptr, param);
 }
 
 inline void AccMatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other,
-    LogicalTensorDataPtr acc = nullptr, MatMulParam param = {false, false, 0}) {
-    GetCalcOps()->MatMul(out, self, other, acc, param);
+    LogicalTensorDataPtr acc = nullptr, MatMulParam param = {false, false, 0, 0, 0, nullptr, nullptr}) {
+    CalcOps *ops = GetCalcOps();
+    ASSERT(ops != nullptr);
+    ops->MatMul(out, self, other, acc, param);
 }
 } // namespace npu::tile_fwk::calc

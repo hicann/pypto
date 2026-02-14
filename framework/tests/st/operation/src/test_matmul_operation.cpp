@@ -401,26 +401,28 @@ TEST_P(MatmulVerifyOperationTest, TestMatmulVerify) {
     testCase.opFunc = GetParam().opFunc_;
     testCase.inputPaths = {GetGoldenDir() + "/" + testCase.inputTensors[0].GetStorage()->Symbol() + ".bin",
         GetGoldenDir() + "/" + testCase.inputTensors[1].GetStorage()->Symbol() + ".bin"};
-    if (!args.param_.enableKSplit) {
-        // scale and bias tensor
-        Tensor scaleTensor = GetParamTensor(test_data, "scale_tensors");
-        Tensor biasTensor = GetParamTensor(test_data, "bias_tensors");
-        testCase.inputTensors.push_back(scaleTensor);
-        testCase.inputTensors.push_back(biasTensor);
-        if (scaleTensor.GetStorage() != nullptr) {
-            testCase.inputPaths.push_back(GetGoldenDir() + "/" + scaleTensor.GetStorage()->Symbol() + ".bin");
-        } else {
-            testCase.inputPaths.push_back("");
-        }
-        if (biasTensor.GetStorage() != nullptr) {
-            testCase.inputPaths.push_back(GetGoldenDir() + "/" + biasTensor.GetStorage()->Symbol() + ".bin");
-        } else {
-            testCase.inputPaths.push_back("");
-        }
+    Tensor biasTensor = GetParamTensor(test_data, "bias_tensors");
+    Tensor scaleTensor = GetParamTensor(test_data, "scale_tensors");
+    if (scaleTensor.GetStorage() == nullptr) {
+        testCase.inputPaths.push_back("");
+    } else {
+        testCase.inputPaths.push_back(GetGoldenDir() + "/" + scaleTensor.GetStorage()->Symbol() + ".bin");
     }
-    testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
+    if (biasTensor.GetStorage() == nullptr) {
+        testCase.inputPaths.push_back("");
+    } else {
+        testCase.inputPaths.push_back(GetGoldenDir() + "/" + biasTensor.GetStorage()->Symbol() + ".bin");
+    }
+    testCase.inputTensors.push_back(scaleTensor);
+    testCase.inputTensors.push_back(biasTensor);
     CheckBTransNZUnaligned(
         args.param_.transB, args.param_.isCMatrixNz, testCase.inputTensors[1], testCase.outputTensors[0]);
+    testCase.goldenPaths = {GetGoldenDir() + "/" + testCase.outputTensors[0].GetStorage()->Symbol() + ".bin"};
+    if (args.param_.enable_l0c2l1) {
+        Tensor l0c2L1Tensor = GetParamTensor(test_data, "l0c2l1_tensor");
+        testCase.inputPaths.push_back(GetGoldenDir() + "/" + l0c2L1Tensor.GetStorage()->Symbol() + ".bin");
+        testCase.inputTensors.push_back(l0c2L1Tensor);
+    }
     TestFlowVerifier::runTest(testCase);
 }
 } // namespace

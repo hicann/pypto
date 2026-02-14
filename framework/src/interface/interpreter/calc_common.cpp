@@ -17,6 +17,7 @@
 #include "interface/interpreter/function.h"
 #include "interface/utils/log.h"
 #include "interface/interpreter/operation.h"
+#include "interface/operation/operation_impl.h"
 
 namespace npu::tile_fwk {
 void ExecuteOpAssemble(ExecuteOperationContext *ctx) {
@@ -43,10 +44,13 @@ REGISTER_CALC_OP(OP_SYNC_DST, Opcode::OP_SYNC_DST, ExecuteOpNone);
 REGISTER_CALC_OP(OP_BAR_V, Opcode::OP_BAR_V, ExecuteOpNone);
 REGISTER_CALC_OP(OP_BAR_M, Opcode::OP_BAR_M, ExecuteOpNone);
 REGISTER_CALC_OP(OP_NOP, Opcode::OP_NOP, ExecuteOpNone);
+REGISTER_CALC_OP(OP_CV_SYNC_SRC, Opcode::OP_CV_SYNC_SRC, ExecuteOpNone);
+REGISTER_CALC_OP(OP_CV_SYNC_DST, Opcode::OP_CV_SYNC_DST, ExecuteOpNone);
 
 void ExecuteOpView(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
     ASSERT(ctx->ioperandDataViewList->size() == 1);
+    ASSERT(ctx != nullptr && ctx->op != nullptr);
     auto &oop = ctx->ooperandInplaceDataViewList->at(0);
     auto &iop = ctx->ioperandDataViewList->at(0);
     auto opAttr = std::static_pointer_cast<ViewOpAttribute>(ctx->op->GetOpAttribute());
@@ -54,16 +58,26 @@ void ExecuteOpView(ExecuteOperationContext *ctx) {
     if (oop->GetData() == iop->GetData()) {
         return;
     }
-    auto ret = iop->View(oop->GetShape(), offset);
-    calc::Copy(oop, ret);
+    bool trans =
+        (ctx->op->HasAttr(Matrix::L1_TO_L0_TRANSPOSE)) ? ctx->op->GetBoolAttribute(Matrix::L1_TO_L0_TRANSPOSE) : false;
+    if (trans) {
+        std::vector<int64_t> oop_trans = {oop->GetShape()[1], oop->GetShape()[0]};
+        auto ret = iop->View(oop_trans, offset);
+        calc::Copy(oop, ret, trans);
+    } else {
+        auto ret = iop->View(oop->GetShape(), offset);
+        calc::Copy(oop, ret);
+    }
 }
 REGISTER_CALC_OP(OP_VIEW, Opcode::OP_VIEW, ExecuteOpView);
 
 void ExecuteOpCopyOut(ExecuteOperationContext *ctx) {
+    ASSERT(ctx != nullptr && ctx->op != nullptr);
     ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
     ASSERT(ctx->ioperandDataViewList->size() <= NUM_VALUE_2);
     auto &oop = ctx->ooperandInplaceDataViewList->at(0);
     auto iop = ctx->ioperandDataViewList->at(0);
+    ASSERT(iop != nullptr && oop != nullptr);
 
     auto copyout = std::static_pointer_cast<CopyOpAttribute>(ctx->op->GetOpAttribute());
     auto [from, toOffsetAttr] = copyout->GetCopyOutAttr();
@@ -78,8 +92,20 @@ void ExecuteOpCopyOut(ExecuteOperationContext *ctx) {
 
     bool axisCombine = ctx->op->GetBoolAttribute("input_combine_axis");
     auto oopValid = std::make_shared<LogicalTensorData>(oop->GetData(), iopShape, toOffset);
-
+    ASSERT(oopValid != nullptr);
     if (from == MemoryType::MEM_L0C) {
+        if (iop->GetDataType() == DataType::DT_INT32 && oop->GetDataType() == DataType::DT_FP16) {
+            uint64_t scale = (ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_ATTR)) ? 
+                ctx->op->GetElementAttribute(Matrix::A_MUL_B_SCALE_ATTR).GetUnsignedData() : 0;
+            int relu = (ctx->op->HasAttr(Matrix::A_MUL_B_RELU_ATTR)) ? 
+                ctx->op->GetIntAttribute(Matrix::A_MUL_B_RELU_ATTR) : 0;
+            LogicalTensorDataPtr scalePtr = nullptr;
+            if (ctx->ioperandDataViewList->size() > 1) {
+                scalePtr = ctx->ioperandDataViewList->at(1);
+            }
+            calc::QuantPreCompute(oopValid, iop, scalePtr, scale, relu);
+            return;
+        }
         if (ctx->op->HasAttribute(OP_ATTR_PREFIX + "atomic_add")) {
             calc::Add(oopValid, iop, oopValid);
         } else {
