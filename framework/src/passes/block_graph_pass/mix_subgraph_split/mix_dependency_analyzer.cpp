@@ -54,7 +54,8 @@ void MixDependencyAnalyzer::InOutCastRecord(Function* originalMixFunc) {
     }
 }
 
-std::unordered_map<int, std::set<int>> MixDependencyAnalyzer::AnalyzeComponentDependencies(Function &mixFunc) {
+std::unordered_map<int, std::set<int>> MixDependencyAnalyzer::AnalyzeComponentDependencies(Function &mixFunc,
+    std::map<std::pair<int, int>, std::vector<LogicalTensorPtr>>& crossComponentTensors) {
     std::unordered_map<int, std::set<int>> dependencies;
     // 分析子图的所有的op
     for (auto &op : mixFunc.Operations(false)) {
@@ -81,6 +82,11 @@ std::unordered_map<int, std::set<int>> MixDependencyAnalyzer::AnalyzeComponentDe
                 int consumerID = consumer->GetInternalSubgraphID();
                 if (producerInternalID != consumerID) {
                     dependencies[producerInternalID].insert(consumerID);
+                    std::pair<int, int> edge = {producerInternalID, consumerID};
+                    crossComponentTensors[edge].push_back(oOperand);
+                    ALOG_DEBUG_F("Recorded cross-component tensor: raw=%d, magic=%d, %d->%d",
+                            oOperand->GetRawMagic(), oOperand->magic,
+                            producerInternalID, consumerID);
                 }
             }
         }
@@ -353,15 +359,21 @@ void MixDependencyAnalyzer::EliminateRedundantDependencies() {
     EliminateRedundantInnerDeps(innerDeps);
 }
 
-void MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput &input, AnalyzerOutput &output) {
+Status MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput &input, AnalyzerOutput &output) {
     Reset();
     InitSubgraphToFunction(input.components);
     // 步骤1：记录直接的incast/outcast(Mix子图整体与外部的依赖)
     ALOG_INFO_F("Step 1: Recording direct incast/outcast...");
     InOutCastRecord(input.originalMixFunc);
     // 步骤2：分析组件间直接依赖（scope与scope之间的依赖）
-    ALOG_INFO_F("Step 2: Analyzing inter-component dependencies...");
-    auto directDeps = AnalyzeComponentDependencies(*input.originalMixFunc);
+    ALOG_INFO_F("Step 2: Analyzing inter-component dependencies and recording cross-component tensors...");
+    std::map<std::pair<int, int>, std::vector<LogicalTensorPtr>> crossComponentTensors;
+    auto directDeps = AnalyzeComponentDependencies(*input.originalMixFunc, crossComponentTensors);
+    ALOG_INFO_F("Found %zu cross-component tensor dependencies:", crossComponentTensors.size());
+    for (const auto& [edge, tensors] : crossComponentTensors) {
+        ALOG_INFO_F("  Component %d -> %d: %zu tensor(s)", 
+                   edge.first, edge.second, tensors.size());
+    }   
     // 步骤3：计算依赖传递闭包
     ALOG_INFO_F("Step 3: Computing dependency closure...");
     ComputeDependencyClosure(directDeps);    
@@ -369,6 +381,12 @@ void MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput &input
     ALOG_INFO_F("Step 4: Computing all dependencies...");
     // 4.1：提取外部依赖（从subgraphToFunction）
     ExtractExternalDependencies(subgraphToFunction.subFuncInvokeInfos);
+    // 验证循环依赖是否合法
+    Status validationStatus = ValidateCrossComponentDependencies(input, directDeps, crossComponentTensors);
+    if (validationStatus != SUCCESS) {
+        ALOG_ERROR_F("Cross-component dependency validation failed, aborting ProcessDependencyAnalyzer...");
+        return FAILED;  // 立即返回，不继续执行
+    }
     // 4.2：基于传递闭包传播外部依赖到内部scope
     PropagateExternalDependenciesWithClosure(directDeps);
     // 4.3：添加内部同类型scope之间的依赖（只收集C-C、V-V的依赖）
@@ -380,12 +398,99 @@ void MixDependencyAnalyzer::ProcessDependencyAnalyzer(const AnalyzerInput &input
     output.internalDeps = internalDeps;
     output.allIncasts = allIncasts;
     output.allOutcasts = allOutcasts;
+    return SUCCESS;
 }
 
 void MixDependencyAnalyzer::Reset() {
     internalDeps.clear();
     allIncasts.clear();
     allOutcasts.clear();
+}
+
+Status MixDependencyAnalyzer::ValidateCrossComponentDependencies(
+    const AnalyzerInput &input,
+    const std::unordered_map<int, std::set<int>>& directDeps,
+    const std::map<std::pair<int, int>, std::vector<LogicalTensorPtr>>& crossComponentTensors) {
+    ALOG_INFO_F("=== VALIDATING CROSS-COMPONENT DEPENDENCY CYCLES ===");
+    // 收集双向依赖
+    std::vector<std::pair<int, int>> bidirectionalDeps;
+    for (const auto& [src, dsts] : directDeps) {
+        for (int dst : dsts) {
+            auto it = directDeps.find(dst);      
+            if (it != directDeps.end() && it->second.count(src) > 0) {  
+                bidirectionalDeps.emplace_back(src, dst);
+            }
+        }
+    }
+    if (bidirectionalDeps.empty()) {
+        ALOG_INFO_F("No bidirectional dependencies detected - safe");
+        return SUCCESS;
+    }  
+    ALOG_INFO_F("=== CHECKING BIDIRECTIONAL DEPENDENCIES ===");
+    for (const auto& [comp1, comp2] : bidirectionalDeps) {
+        ALOG_INFO_F("Checking component %d <-> component %d:", comp1, comp2);
+        // 获取两个方向的tensor
+        auto it1 = crossComponentTensors.find({comp1, comp2});
+        auto it2 = crossComponentTensors.find({comp2, comp1});
+        bool hasValid1to2 = false;
+        bool hasValid2to1 = false;
+        
+        if (it1 != crossComponentTensors.end()) {
+            CheckDirectionAndCollectValid(it1->second, comp1, comp2, hasValid1to2);
+        }
+        
+        if (it2 != crossComponentTensors.end()) {
+            CheckDirectionAndCollectValid(it2->second, comp2, comp1, hasValid2to1);
+        }
+        if (hasValid1to2 && hasValid2to1) {
+            LogIllegalBidirectionalDependency(comp1, comp2, input);
+            return FAILED;
+        }
+    }
+    ALOG_INFO_F("=== VALIDATION PASSED ===");   
+    return SUCCESS; 
+}
+
+bool MixDependencyAnalyzer::IsTensorInComponentIncasts(int compId, const LogicalTensorPtr& tensor) const {
+    auto incastIt = allIncasts.find(compId);
+    if (incastIt == allIncasts.end()) return false;
+    for (const auto& param : incastIt->second) {
+        if (param.tensor == tensor) return true;
+    }
+    return false;
+}
+
+bool MixDependencyAnalyzer::CheckDirectionAndCollectValid(
+    const std::vector<LogicalTensorPtr>& tensors, int src, int dst, bool& hasValid) const {
+    
+    if (tensors.empty()) return false;
+    
+    ALOG_INFO_F("  Component %d -> %d tensors (%zu):", src, dst, tensors.size());
+    bool directionValid = false;
+    for (auto& tensor : tensors) {
+        bool isInIncast = IsTensorInComponentIncasts(dst, tensor);
+        ALOG_INFO_F("    - tensor magic=%d (raw=%d), in comp%d.incasts=%s",
+                  tensor->magic, tensor->GetRawMagic(), dst,
+                  isInIncast ? "YES" : "NO");
+        if (isInIncast) {
+            directionValid = true;
+            hasValid = true;
+        }
+    }
+    return directionValid;
+}
+
+void MixDependencyAnalyzer::LogIllegalBidirectionalDependency(
+    int comp1, int comp2, const AnalyzerInput& input) const {
+    
+    ALOG_ERROR_F("ILLEGAL BIDIRECTIONAL DEPENDENCY DETECTED!");
+    ALOG_ERROR_F("==========================================================");
+    ALOG_ERROR_F("Component %d <-> Component %d", comp1, comp2);
+    ALOG_ERROR_F("Component types: %s <-> %s",
+               input.components[comp1].componentType == ComponentType::C_SCOPE ? "CUBE" :
+               input.components[comp1].componentType == ComponentType::V_SCOPE ? "VECTOR" : "UNKNOWN",
+               input.components[comp2].componentType == ComponentType::C_SCOPE ? "CUBE" :
+               input.components[comp2].componentType == ComponentType::V_SCOPE ? "VECTOR" : "UNKNOWN");
 }
 }
 }

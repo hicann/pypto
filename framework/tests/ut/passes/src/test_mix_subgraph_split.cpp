@@ -46,6 +46,59 @@ public:
     }
 
     void TearDown() override {}
+protected:
+    // 单个辅助函数：构建Mix子图的所有内容
+    std::shared_ptr<Function> BuildMixFunction(Function* rootFunc, std::vector<int64_t>& tensorShape) {
+        auto mixFuncPtr = std::make_shared<Function>(
+            Program::GetInstance(), "mix_func_illegal", "mix_func_illegal", rootFunc);
+        mixFuncPtr->SetGraphType(GraphType::BLOCK_GRAPH);
+        mixFuncPtr->SetFunctionType(FunctionType::STATIC);
+        
+        // 创建tensors
+        auto inputTensor = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+        auto outputTensor = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+        auto tensor1 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+        auto tensor2 = std::make_shared<LogicalTensor>(*mixFuncPtr, DT_FP32, tensorShape);
+        
+        // 设置边界tensor
+        mixFuncPtr->inCasts_.push_back(inputTensor);
+        mixFuncPtr->inCasts_.push_back(tensor1);
+        mixFuncPtr->inCasts_.push_back(tensor2);
+        mixFuncPtr->outCasts_.push_back(outputTensor);
+        mixFuncPtr->outCasts_.push_back(tensor1);
+        mixFuncPtr->outCasts_.push_back(tensor2);
+        
+        // 构建内部结构
+        auto shapeImme = OpImmediate::Specified(tensorShape);
+        std::vector<int64_t> offsetVec = {0, 0};
+        auto offsetImme = OpImmediate::Specified(offsetVec);
+        std::vector<OpImmediate> emptyVec;
+        
+        // Component 1 (CUBE)
+        auto& copyout1 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_OUT, {inputTensor}, {tensor1});
+        copyout1.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            MemoryType::MEM_UB, offsetImme, shapeImme, shapeImme, emptyVec));
+        copyout1.SetOOpAttrOffset(0, 0);
+        copyout1.UpdateInternalSubgraphID(1);
+        copyout1.SetAttr(OpAttributeKey::isCube, true);
+        
+        auto& copyin3 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor2}, {outputTensor});
+        copyin3.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
+        copyin3.SetIOpAttrOffset(0, 0);
+        copyin3.UpdateInternalSubgraphID(1);
+        copyin3.SetAttr(OpAttributeKey::isCube, true);
+        
+        // Component 0 (VECTOR)
+        auto& copyin2 = mixFuncPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor2});
+        copyin2.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            offsetImme, MemoryType::MEM_UB, shapeImme, shapeImme, emptyVec));
+        copyin2.SetIOpAttrOffset(0, 0);
+        copyin2.UpdateInternalSubgraphID(0);
+        copyin2.SetAIVCore(AIVCore::AIV0);
+        
+        return mixFuncPtr;
+    }
 };
 
 // 辅助函数实现
@@ -123,6 +176,7 @@ void VerifyScopeTypes(Function& rootFunc, int expectedCubeCount, int expectedVec
     int vectorCount = 0;
     
     for (const auto& [progId, func] : programs) {
+        (void)progId;
         auto leafAttr = func->GetLeafFuncAttribute();
         if (leafAttr) {
             if (leafAttr->aivCore == AIVCore::UNSPECIFIED) {
@@ -142,6 +196,7 @@ void VerifyCleanup(Function& rootFunc, Function* originalMixFunc, Operation* ori
     // 原始Mix子图验证
     bool originalMixFuncStillExists = false;
     for (const auto& [progId, func] : programs) {
+        (void)progId;
         if (func == originalMixFunc) {
             originalMixFuncStillExists = true;
             break;
@@ -168,6 +223,7 @@ void VerifyCleanup(Function& rootFunc, Function* originalMixFunc, Operation* ori
         }
     }
     for (const auto& [progId, func] : programs) {
+        (void)func; 
         EXPECT_NE(programIdsFromCallOps.find(progId), programIdsFromCallOps.end())
             << "Program ID " << progId << " should have corresponding callOp";
     }
@@ -602,15 +658,12 @@ void VerifyMultipleMixSplitResults(std::shared_ptr<Function>& rootFuncPtr,
     }
     
     auto& programs = rootFuncPtr->programs_;
-    EXPECT_EQ(programs.size(), expectedNewProgramCount)
-        << "Program count mismatch. Expected: " << expectedNewProgramCount
-        << ", Actual: " << programs.size();
+    EXPECT_EQ(programs.size(), expectedNewProgramCount) << "Program count mismatch. Expected: " << expectedNewProgramCount << ", Actual: " << programs.size();
     
     // ID连续性验证
     uint64_t expectedMaxId = expectedNewProgramCount - 1;
     for (uint64_t i = 0; i <= expectedMaxId; i++) {
-        EXPECT_NE(programs.find(i), programs.end())
-            << "Missing continuous program ID: " << i;
+        EXPECT_NE(programs.find(i), programs.end()) << "Missing continuous program ID: " << i;
     }
     
     // 非Mix子图ID重映射验证
@@ -629,26 +682,25 @@ void VerifyMultipleMixSplitResults(std::shared_ptr<Function>& rootFuncPtr,
     // Mix子图scope验证
     int totalSplitFunctions = 0;
     for (const auto& [progId, func] : programs) {
+        (void)progId;
         auto leafAttr = func->GetLeafFuncAttribute();
         if (leafAttr && leafAttr->mixId != -1) {
             totalSplitFunctions++;
         }
     }
     
-    EXPECT_EQ(totalSplitFunctions, 2 + 3 + 4)
-        << "Should have " << (2+3+4) << " split functions from 3 mix subgraphs";
+    EXPECT_EQ(totalSplitFunctions, 2 + 3 + 4) << "Should have " << (2+3+4) << " split functions from 3 mix subgraphs";
     
     // callOp数量验证
     auto newCallOps = rootFuncPtr->GetCallopList();
     size_t expectedNewCallOpCount = 2 * 1 + 1 * 2 + 2 * 3 + 1 * 4;
-    EXPECT_EQ(newCallOps.size(), expectedNewCallOpCount)
-        << "CallOp count mismatch. Expected: " << expectedNewCallOpCount
-        << ", Actual: " << newCallOps.size();
+    EXPECT_EQ(newCallOps.size(), expectedNewCallOpCount) << "CallOp count mismatch. Expected: " << expectedNewCallOpCount << ", Actual: " << newCallOps.size();
     
     // 资源清理验证
     for (const auto& mixFunc : mixFunctions) {
         bool stillExists = false;
         for (const auto& [progId, func] : programs) {
+            (void)progId;
             if (func == mixFunc.get()) {
                 stillExists = true;
                 break;
@@ -1125,6 +1177,7 @@ TEST_F(MixSubgraphSplitTest, TestDependencyRebuilding) {
     // 1. 验证Mix子图已被删除
     bool mixFuncStillExists = false;
     for (const auto& [progId, func] : programs) {
+        (void)progId;
         if (func == mixFunc3Ptr.get()) {
             mixFuncStillExists = true;
             break;
@@ -1137,6 +1190,7 @@ TEST_F(MixSubgraphSplitTest, TestDependencyRebuilding) {
 
     std::vector<Function*> mixSplitFunctions;
     for (const auto& [progId, func] : programs) {
+        (void)progId;
         auto leafAttr = func->GetLeafFuncAttribute();
         if (!leafAttr) continue;
         
@@ -1343,6 +1397,56 @@ TEST_F(MixSubgraphSplitTest, TestDependOperand) {
     copyin2->SetAsDeleted();
     function->EraseOperations();
     EXPECT_EQ(tensor4->GetDependOps().size(), 0);
+}
+
+TEST_F(MixSubgraphSplitTest, TestDependencyAnalyzerFailed) {
+    // ==================== 创建root function ====================
+    auto rootFuncPtr = std::make_shared<Function>(
+        Program::GetInstance(), "test_root", "test_root", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    // ==================== 创建Mix子图 ====================
+    uint64_t mixProgramId = 0;   
+    std::vector<int64_t> tensorShape = {MS_NUM16, MS_NUM16};
+    auto mixFuncPtr = BuildMixFunction(rootFuncPtr.get(), tensorShape);
+    rootFuncPtr->programs_[mixProgramId] = mixFuncPtr.get();
+    // ==================== 设置hash和cache ====================
+    mixFuncPtr->ComputeHash();
+    Program::GetInstance().GetFunctionCache().Insert(mixFuncPtr->GetFunctionHash(), *mixFuncPtr);
+    // ==================== 创建CallOp ====================
+    auto createLinearArgList = [&](const std::shared_ptr<LogicalTensor>& tensor) {
+        (void)tensor;
+        std::vector<SymbolicScalar> args(9, SymbolicScalar(0));
+        args[0] = SymbolicScalar(1);
+        args[3] = SymbolicScalar(16);
+        args[6] = SymbolicScalar(16);
+        return args;
+    };
+    auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {}, {});
+    auto callAttr = std::make_shared<CallOpAttribute>();
+    auto invokeInfo = std::make_shared<SubfuncInvokeInfoTy>();
+    invokeInfo->UpdateProgramSubgraphId(mixProgramId);
+    std::vector<SymbolicScalar> linearArgs;
+    auto inputArgs = createLinearArgList(nullptr);
+    linearArgs.insert(linearArgs.end(), inputArgs.begin(), inputArgs.end());
+    auto outputArgs = createLinearArgList(nullptr);
+    linearArgs.insert(linearArgs.end(), outputArgs.begin(), outputArgs.end());
+    callAttr->linearArgList_ = linearArgs;
+    callAttr->SetCalleeHash(mixFuncPtr->GetFunctionHash());
+    callAttr->invokeInfo_ = invokeInfo;
+    callOp.SetOpAttribute(callAttr);
+
+    // ==================== 执行MixSubgraphSplit ====================
+    MixSubgraphSplit splitter;
+    Status status = splitter.RunOnFunction(*rootFuncPtr);
+    // 预期返回FAILED，因为存在非法的跨component循环依赖
+    EXPECT_EQ(status, FAILED);
+    // 验证原始Mix子图没有被拆分
+    EXPECT_EQ(rootFuncPtr->programs_.size(), 1);
+    EXPECT_TRUE(rootFuncPtr->programs_[mixProgramId] == mixFuncPtr.get());
+    // 验证原始CallOp没有被删除
+    auto callOps = rootFuncPtr->GetCallopList();
+    EXPECT_EQ(callOps.size(), 1);
+    EXPECT_FALSE(callOps[0]->IsDeleted());
 }
 } // namespace tile_fwk
 } // namespace npu

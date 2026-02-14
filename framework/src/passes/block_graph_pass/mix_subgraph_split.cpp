@@ -331,12 +331,12 @@ Status MixSubgraphSplit::GenNewFunctions(Function& rootFunc, Function* originalM
     for (size_t i = 0; i < components.size(); i++) {
         FunctionClone functionClone(rootFunc, originalMixFunc);
         auto newFunc = functionClone.CloneFunctionByComponent(components[i], newProgramIDs[i], i);
+        subgraphToFunction.InsertParameter(i, *newFunc);
         newFunc->ComputeHash();
         FunctionHash funcHash = newFunc->GetFunctionHash();
         ALOG_DEBUG_F("Function %s computed hash: %lu", newFunc->GetMagicName(), funcHash.GetHash());
         Program::GetInstance().GetFunctionCache().Insert(funcHash, *newFunc);
-        Program::GetInstance().InsertFuncToFunctionMap(newFunc->GetMagicName(), functionClone.cloneFunc);
-        subgraphToFunction.InsertParameter(i, *newFunc);
+        Program::GetInstance().InsertFuncToFunctionMap(newFunc->GetMagicName(), functionClone.cloneFunc);        
         if (newFunc == nullptr) {
             return FAILED;
         }
@@ -387,7 +387,12 @@ Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
             std::unordered_map<int, std::vector<SimpleTensorParam>>(),
             std::unordered_map<int, std::vector<SimpleTensorParam>>()
         );
-        dependencyAnalyzer_.ProcessDependencyAnalyzer(analyzerInput, *analyzerOutput);
+        Status depStatus = dependencyAnalyzer_.ProcessDependencyAnalyzer(analyzerInput, *analyzerOutput);
+        if (depStatus != SUCCESS) {
+            ALOG_ERROR_F("Dependency analyzer failed for function %s", 
+                        originalMixFunc->GetRawName().c_str());
+            return FAILED;  
+        }
         // 为每个scope创建leaf function
         if (GenNewFunctions(rootFunc, originalMixFunc, components, newProgramIDs, analyzerOutput->subgraphToFunction, newFunctions) != SUCCESS) {
             return FAILED;

@@ -54,7 +54,12 @@ public:
     void InitSubgraphToFunction(const std::vector<InternalComponentInfo>& components);
     void InOutCastRecord(Function* originalMixFunc);
     // 1.分析组件间直接依赖
-    std::unordered_map<int, std::set<int>> AnalyzeComponentDependencies(Function &mixFunc);
+    std::unordered_map<int, std::set<int>> AnalyzeComponentDependencies(Function &mixFunc,
+        std::map<std::pair<int, int>, std::vector<LogicalTensorPtr>>& crossComponentTensors);
+    Status ValidateCrossComponentDependencies(
+        const AnalyzerInput &input,
+        const std::unordered_map<int, std::set<int>>& directDeps,
+        const std::map<std::pair<int, int>, std::vector<LogicalTensorPtr>>& crossComponentTensors);
     // 2.计算依赖传递闭包
     void ComputeDependencyClosure(std::unordered_map<int, std::set<int>> &dependencies);
     // 3.提取外部依赖
@@ -83,7 +88,7 @@ public:
     // 基于可达性移除冗余的内部依赖
     void EliminateRedundantInnerDeps(std::vector<std::vector<bool>> &innerDeps);
     // 外部接口
-    void ProcessDependencyAnalyzer(const AnalyzerInput &input, AnalyzerOutput &output);
+    Status ProcessDependencyAnalyzer(const AnalyzerInput &input, AnalyzerOutput &output);
 private:
     // 完成闭包信息的初始化处理
     void InitDependencies(std::unordered_map<int, std::set<int>> &dependencies);
@@ -101,7 +106,9 @@ private:
     
     void Reset();
     std::vector<std::vector<bool>> Transpose(const std::vector<std::vector<bool>> &matrix);
-
+    bool IsTensorInComponentIncasts(int compId, const LogicalTensorPtr& tensor) const;
+    bool CheckDirectionAndCollectValid(const std::vector<LogicalTensorPtr>& tensors, int src, int dst, bool& hasValid) const;
+    void LogIllegalBidirectionalDependency(int comp1, int comp2, const AnalyzerInput& input) const;
     int maxComponent;
     SubgraphToFunction subgraphToFunction;
     std::vector<InternalDependencyInfo> internalDeps;
