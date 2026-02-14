@@ -156,8 +156,7 @@ std::string CodeGenOpCloudNPU::GenDupOp() const {
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalar = opAttrs.at(OpAttributeKey::dynScalar);
         ASSERT((scalar.HasValue()) && (scalar.Type() == typeid(SymbolicScalar)))
-            << AnyCast<SymbolicScalar>(scalar).IsValid()
-            << "SCALAR attribute has to have symbolic value.";
+            << AnyCast<SymbolicScalar>(scalar).IsValid() << "SCALAR attribute has to have symbolic value.";
         auto scalarExpr = AnyCast<SymbolicScalar>(scalar);
         dupV = SymbolicExpressionTable::BuildExpression(scalarExpr);
     } else if (dstDtypeStr == "float" || dstDtypeStr == "half" || dstDtypeStr == "bfloat16_t") {
@@ -215,8 +214,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveLayout(const PrintTranspose
     std::string gmVarName = GenGmParamVar(param.gmIdx);
     std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
     std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
-    std::vector<int64_t> transposeAxis =
-        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+    std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM5 - originShape[param.localIdx].size();
     std::vector<std::string> uselessVector0;
     std::vector<std::string> uselessVector1;
@@ -253,8 +251,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveStatic(const PrintTranspose
     for (int i = 1; i < SHAPE_DIM4; i++) {
         paramList.emplace_back(std::to_string(srcShape[i]));
     }
-    std::vector<int64_t> transposeAxis =
-        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+    std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM4 - originShape[0].size();
     for (auto &axis : transposeAxis) {
         axis += correctionAxis;
@@ -299,8 +296,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveDynamic(const PrintTranspos
     for (int i = 1; i < SHAPE_DIM4; i++) {
         paramList.emplace_back(std::to_string(srcShape[i]));
     }
-    std::vector<int64_t> transposeAxis =
-        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+    std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM4 - originShape[1].size();
     for (auto &axis : transposeAxis) {
         axis += correctionAxis;
@@ -347,8 +343,7 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMoveDynamicUnaligned(const Prin
     for (int i = 1; i < SHAPE_DIM5; i++) {
         paramList.emplace_back(std::to_string(localShape[i]));
     }
-    std::vector<int64_t> transposeAxis =
-        AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
+    std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM5 - originShape[localIdx].size();
     for (auto &axis : transposeAxis) {
         axis += correctionAxis;
@@ -768,8 +763,7 @@ std::string CodeGenOpCloudNPU::GenRangeOp() const {
     if (opAttrs.count(OpAttributeKey::dynScalar)) {
         auto scalarAny = opAttrs.at(OpAttributeKey::dynScalar);
         ASSERT((scalarAny.HasValue()) && (scalarAny.Type() == typeid(SymbolicScalar)))
-            << AnyCast<SymbolicScalar>(scalarAny).IsValid()
-            << "SCALAR attribute has to have symbolic value.";
+            << AnyCast<SymbolicScalar>(scalarAny).IsValid() << "SCALAR attribute has to have symbolic value.";
         auto scalarExpr = AnyCast<SymbolicScalar>(scalarAny);
         tileIdxExpr = "((int64_t)(" + SymbolicExpressionTable::BuildExpression(scalarExpr) + "))";
     }
@@ -1223,42 +1217,58 @@ std::string CodeGenOpCloudNPU::GenScatterOp() const {
         {axis, scatterMode, dstVar, src1Var, src2Var, dstRawShape, src1RawShape, src2RawShape, dataTypeExpr});
 }
 
-void CodeGenOpCloudNPU::GetVarAndTypeParam(
+void CodeGenOpCloudNPU::GetWhereVarAndType(
     std::vector<std::string> &varExpr, std::vector<std::string> &dataTypeExpr) const {
-    std::string dstVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::resIdx)]);
-    std::string tempVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::tempIdx)]);
-    std::string condVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::condIdx)]);
+    varExpr.clear();
+    dataTypeExpr.clear();
 
-    varExpr = {dstVar, tempVar, condVar};
-    std::map<unsigned, std::reference_wrapper<std::string>> varMap;
-    const unsigned idxs[] = {
-        ToUnderlying(WhereOpIdx::resIdx), ToUnderlying(WhereOpIdx::tempIdx), ToUnderlying(WhereOpIdx::condIdx)};
-    for (unsigned idx : idxs) {
-        varMap.emplace(idx, std::ref(varExpr[idx]));
-    }
+    const int paramCnt = 5;
+    varExpr.reserve(paramCnt);
+
+    varExpr.emplace_back(
+        sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::resIdx)])); // 0: dstVar
+    varExpr.emplace_back(
+        sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::tempIdx)])); // 1: tempVar
+    varExpr.emplace_back(
+        sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::condIdx)])); // 2: condVar
+
+    const int inValidIdx = -1;
+    int src0Idx = inValidIdx, src1Idx = inValidIdx;
     if (opCode == Opcode::OP_WHERE_ST || opCode == Opcode::OP_WHERE_TS || opCode == Opcode::OP_WHERE_TT) {
-        std::string src0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::src0Idx)]);
-        varExpr.emplace_back(src0Var);
-        varMap.emplace(ToUnderlying(WhereOpIdx::src0Idx), std::ref(src0Var));
+        // 3: src0Var
+        varExpr.emplace_back(sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::src0Idx)]));
+        src0Idx = varExpr.size() - 1;
     }
     if (opCode == Opcode::OP_WHERE_TT) {
-        std::string src1Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::src1Idx)]);
-        varExpr.emplace_back(src1Var);
-        varMap.emplace(ToUnderlying(WhereOpIdx::src1Idx), std::ref(src1Var));
+        // 4: src1Var
+        varExpr.emplace_back(sm->QueryVarNameByTensorMagic(operandWithMagic[ToUnderlying(WhereOpIdx::src1Idx)]));
+        src1Idx = varExpr.size() - 1;
+    }
+
+    std::map<unsigned, std::reference_wrapper<std::string>> varMap;
+    std::vector<unsigned> idxs = {
+        ToUnderlying(WhereOpIdx::resIdx), ToUnderlying(WhereOpIdx::tempIdx), ToUnderlying(WhereOpIdx::condIdx)};
+    for (unsigned i = 0; i < idxs.size(); ++i) {
+        varMap.emplace(idxs[i], std::ref(varExpr[i]));
+    }
+    if (src0Idx != inValidIdx) {
+        varMap.emplace(ToUnderlying(WhereOpIdx::src0Idx), std::ref(varExpr[src0Idx]));
+    }
+    if (src1Idx != inValidIdx) {
+        varMap.emplace(ToUnderlying(WhereOpIdx::src1Idx), std::ref(varExpr[src1Idx]));
     }
 
     AppendLocalBufferVarOffset(varMap);
 
-    std::string dstDtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::resIdx)]);
-    std::string tempDtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::tempIdx)]);
-    std::string condDtypeStr = DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::condIdx)]);
-    dataTypeExpr = {dstDtypeStr, tempDtypeStr, condDtypeStr};
+    dataTypeExpr = {DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::resIdx)]),
+        DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::tempIdx)]),
+        DataType2CCEStr(operandDtype[ToUnderlying(WhereOpIdx::condIdx)])};
 }
 
 WhereParam CodeGenOpCloudNPU::PrepareWhereParam() const {
     std::vector<std::string> varExpr;
     std::vector<std::string> dataTypeExpr;
-    GetVarAndTypeParam(varExpr, dataTypeExpr);
+    GetWhereVarAndType(varExpr, dataTypeExpr);
     std::vector<int64_t> ds = NormalizeShape(this->rawShape[ToUnderlying(WhereOpIdx::resIdx)], SHAPE_DIM4);
     std::vector<int64_t> c0s = NormalizeShape(this->rawShape[ToUnderlying(WhereOpIdx::condIdx)], SHAPE_DIM4);
     std::vector<int64_t> s0s = NormalizeShape(this->rawShape[ToUnderlying(WhereOpIdx::src0Idx)], SHAPE_DIM4);

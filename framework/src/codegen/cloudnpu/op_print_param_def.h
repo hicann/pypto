@@ -69,7 +69,7 @@ struct PrintIndexPutParam {
     const bool accumulate;
 };
 
-enum class WhereOpIdx : int { resIdx = 0, tempIdx, condIdx, src0Idx, src1Idx };
+enum class WhereOpIdx : unsigned { resIdx = 0, tempIdx, condIdx, src0Idx, src1Idx };
 struct WhereParam {
     std::vector<std::string> templateList;
     std::vector<std::string> paramList;
