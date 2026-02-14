@@ -59,7 +59,7 @@ void TensorMap::Insert(std::shared_ptr<LogicalTensor> tobject, bool checkOverlap
     if (checkOverlap) {
         auto match = Find(tobject);
         if (!match.empty()) {
-            ALOG_INFO_F("Tensor %d is full coverd in function %s", tobject->magic, belongTo.GetRawName().c_str());
+            FUNCTION_LOGI("Tensor %d is full coverd in function %s", tobject->magic, belongTo.GetRawName().c_str());
             return;
         }
     }

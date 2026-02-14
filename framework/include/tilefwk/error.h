@@ -20,6 +20,7 @@
 #include <sstream>
 #include <string>
 #include <memory>
+#include <vector>
 #include <cstring>
 #include <cassert>
 
@@ -37,6 +38,19 @@ public:
     template <typename T>
     ErrorMessage &operator<<(const T &value) {
         ss << value;
+        return *this;
+    }
+
+    template <typename T>
+    ErrorMessage &operator<<(const std::vector<T> &vec) {
+        ss << "[";
+        for (auto iter = vec.begin(); iter != vec.end(); ++iter) {
+            if (iter != vec.begin()) {
+                ss << ", ";
+            }
+            ss << *iter;
+        }
+        ss << "]";
         return *this;
     }
 

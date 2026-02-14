@@ -27,12 +27,12 @@
 
 #include "interface/inner/any.h"
 #include "interface/utils/common.h"
-#include "interface/utils/log.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/string_utils.h"
 
 #include "config_manager_ng.h"
 #include "tilefwk/tile_shape.h"
+#include "tilefwk/tilefwk_log.h"
 
 
 namespace npu::tile_fwk {
@@ -47,64 +47,65 @@ struct TypeInfo {
     void LoadConf(const std::string &path) {
         std::ifstream infile(path);
         ASSERT(infile.is_open()) << "Open file " << path << " failed";
-        nlohmann::json jdata;
-        infile >> jdata;
+        nlohmann::json jData;
+        infile >> jData;
 
-        build_type_infos(jdata, "");
+        build_type_infos(jData, "");
     }
 
-    void build_type_infos(const nlohmann::json &jdata, const std::string &prefix) {
-        if (jdata.contains("properties")) {
-            auto &properties = jdata["properties"];
-            for (auto &it : properties.items()) {
-                const std::string &key = it.key();
-                const nlohmann::json &value = it.value();
-                if (prefix.empty()) {
-                    build_type_infos(value, key);
-                } else {
-                    build_type_infos(value, prefix + "." + key);
-                }
+    void build_type_infos(const nlohmann::json &jData, const std::string &prefix) {
+        if (jData.contains("properties")) {
+            // 递归解析properties字段
+            const auto &properties = jData["properties"];
+            for (const auto &[key, value] : properties.items()) {
+                const std::string new_prefix = prefix.empty() ? key : prefix + "." + key;
+                build_type_infos(value, new_prefix);
             }
-        } else if (jdata.contains("type")) {
-            const std::string &type = jdata["type"];
+        } else if (jData.contains("type")) {
+            // 处理type字段
+            const std::string &type = jData["type"];
             if (type == "string") {
                 typeInfos.insert({prefix, typeid(std::string)});
             } else if (type == "integer") {
                 typeInfos.insert({prefix, typeid(int64_t)});
-                int64_t minBound =
-                    jdata.contains("minimum") ? jdata["minimum"].get<int64_t>() : INT_MIN;
-                int64_t maxBound =
-                    jdata.contains("maximum") ? jdata["maximum"].get<int64_t>() : INT_MAX;
-                rangeInfos.insert({prefix, {minBound, maxBound}});
+                parse_range_info(jData, prefix, "minimum", "maximum");
             } else if (type == "boolean") {
                 typeInfos.insert({prefix, typeid(bool)});
             } else if (type == "array") {
-                auto &jitem_type = jdata["items"]["type"];
-                if (jitem_type == "string") {
-                    typeInfos.insert({prefix, typeid(std::vector<std::string>)});
-                } else if (jitem_type == "integer") {
-                    typeInfos.insert({prefix, typeid(std::vector<int64_t>)});
-                } else if (jitem_type == "double") {
-                    typeInfos.insert({prefix, typeid(std::vector<double>)});
-                }
+                parse_array_type(jData, prefix);
             } else if (type == "object") {
-                const std::string &typeHints = jdata["typeHints"];
-                if (typeHints == "intmap") {
-                    typeInfos.insert({prefix, typeid(std::map<int64_t, int64_t>)});
-                    int64_t minBound =
-                        jdata.contains("key_minimum") ? jdata["key_minimum"].get<int64_t>() : INT_MIN;
-                    int64_t maxBound =
-                        jdata.contains("key_maximum") ? jdata["key_maximum"].get<int64_t>() : INT_MAX;
-                    rangeInfos.insert({prefix + "_key", {minBound, maxBound}});
-                    minBound =
-                        jdata.contains("value_minimum") ? jdata["value_minimum"].get<int64_t>() : INT_MIN;
-                    maxBound =
-                        jdata.contains("value_maximum") ? jdata["value_maximum"].get<int64_t>() : INT_MAX;
-                    rangeInfos.insert({prefix + "_val", {minBound, maxBound}});
-                }
+                parse_object_type(jData, prefix);
             } else {
-                ALOG_ERROR("invalid type: ", type, " at ", prefix);
+                FUNCTION_LOGE("invalid type: %s at %s", type.c_str(), prefix.c_str());
             }
+        } else {
+            FUNCTION_LOGE("Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json", prefix.c_str());
+        }
+    }
+
+    void parse_range_info(const nlohmann::json &jData, const std::string &prefix, const std::string &min_key, const std::string &max_key) {
+        int64_t minBound = jData.contains(min_key) ? jData[min_key].get<int64_t>() : INT_MIN;
+        int64_t maxBound = jData.contains(max_key) ? jData[max_key].get<int64_t>() : INT_MAX;
+        rangeInfos.insert({prefix, {minBound, maxBound}});
+    }
+
+    void parse_array_type(const nlohmann::json &jData, const std::string &prefix) {
+        const std::string &jitem_type = jData["items"]["type"];
+        if (jitem_type == "string") {
+            typeInfos.insert({prefix, typeid(std::vector<std::string>)});
+        } else if (jitem_type == "integer") {
+            typeInfos.insert({prefix, typeid(std::vector<int64_t>)});
+        } else if (jitem_type == "double") {
+            typeInfos.insert({prefix, typeid(std::vector<double>)});
+        }
+    }
+
+    void parse_object_type(const nlohmann::json &jData, const std::string &prefix) {
+        const std::string &typeHints = jData["typeHints"];
+        if (typeHints == "intmap") {
+            typeInfos.insert({prefix, typeid(std::map<int64_t, int64_t>)});
+            parse_range_info(jData, prefix + "_key", "key_minimum", "key_maximum");
+            parse_range_info(jData, prefix + "_val", "value_minimum", "value_maximum");
         }
     }
 
@@ -158,34 +159,41 @@ ConfigScope::~ConfigScope() {
     }
 }
 
+void DumpMap(std::stringstream &os, const std::map<int64_t, int64_t> &map) {
+    os << '{';
+    bool is_first = true;
+    for (const auto &[k, v] : map) {
+        if (!is_first) {
+            os << ", ";
+        }
+        os << "{" << k << ", " << v << "}";
+        is_first = false;
+    }
+    os << '}';
+}
+
 void DumpValue(std::stringstream &os, const std::string &key, const Any &val, const std::string &prefix) {
     os << prefix << key << ": ";
-    if (val.Type() == typeid(int64_t)) {
-        os << (AnyCast<int64_t>(val));
-    } else if (val.Type() == typeid(bool)) {
+    const auto &type = val.Type();
+
+    if (type == typeid(int64_t)) {
+        os << AnyCast<int64_t>(val);
+    } else if (type == typeid(bool)) {
         os << AnyCast<bool>(val);
-    } else if (val.Type() == typeid(std::string)) {
-        os << (AnyCast<std::string>(val));
-    } else if (val.Type() == typeid(std::vector<int64_t>)) {
-        os << (AnyCast<std::vector<int64_t>>(val));
-    } else if (val.Type() == typeid(std::vector<std::string>)) {
-        os << (AnyCast<std::vector<std::string>>(val));
-    } else if (val.Type() == typeid(std::map<int64_t, int64_t>)) {
-        os << '{';
-        bool is_first = true;
-        for (auto &[k, v] : AnyCast<std::map<int64_t, int64_t>>(val)) {
-            if (!is_first)
-                os << ", ";
-            os << "{" << k << ", " << v << "}";
-            is_first = false;
-        }
-        os << '}';
-    } else if (val.Type() == typeid(CubeTile)) {
-        os << (AnyCast<CubeTile>(val).ToString());
-    } else if (val.Type() == typeid(DistTile)) {
-        os << (AnyCast<DistTile>(val).ToString());
+    } else if (type == typeid(std::string)) {
+        os << AnyCast<std::string>(val);
+    } else if (type == typeid(std::vector<int64_t>)) {
+        os << AnyCast<std::vector<int64_t>>(val);
+    } else if (type == typeid(std::vector<std::string>)) {
+        os << AnyCast<std::vector<std::string>>(val);
+    } else if (type == typeid(std::map<int64_t, int64_t>)) {
+        DumpMap(os, AnyCast<std::map<int64_t, int64_t>>(val));
+    } else if (type == typeid(CubeTile)) {
+        os << AnyCast<CubeTile>(val).ToString();
+    } else if (type == typeid(DistTile)) {
+        os << AnyCast<DistTile>(val).ToString();
     } else {
-        os << "unknow type: " << val.Type().name();
+        os << "unknow type: " << type.name();
     }
 }
 
@@ -253,7 +261,7 @@ void ConfigScope::UpdateValueWithAny(const std::string &key, Any value) {
     }
     std::stringstream oss;
     DumpValue(oss, key, value, "");
-    ALOG_DEBUG_F("Set option successfully: %s ", oss.str().c_str());
+    FUNCTION_LOGD("Set option successfully: %s ", oss.str().c_str());
     std::lock_guard<std::mutex> lock(mtx);
     values_[key] = value;
 }
@@ -335,18 +343,18 @@ struct ConfigManagerImpl {
 
     void SetGlobalConfig(std::map<std::string, Any> &&values, const char *file, int lino) {
         if (values.empty()) {
-            ALOG_WARN_F("No values provided to set in global config. Locations: %s:%d", file, lino);
+            FUNCTION_LOGW("No values provided to set in global config. Locations: %s:%d", file, lino);
             return;
         }
         for (auto &it : values) {
             try {
                 root->AddValue(it.first, it.second);
-                ALOG_DEBUG_F("Set option successfully. Key: %s", it.first.c_str());
+                FUNCTION_LOGD("Set option successfully. Key: %s", it.first.c_str());
             } catch (const std::exception &e) {
-                ALOG_ERROR_F("Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
+                FUNCTION_LOGE("Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
             }
         }
-        ALOG_DEBUG_F("Set locations: %s:%d", file, lino);
+        FUNCTION_LOGD("Set locations: %s:%d", file, lino);
     }
 
     void Dump(std::stringstream &os, ConfigScope *node, const std::string &prefix) {
@@ -376,30 +384,30 @@ struct ConfigManagerImpl {
 private:
     std::string GetConfDir() { return GetCurrentSharedLibPath() + "/configs/"; }
 
-    void LoadConf(const nlohmann::json &jdata, const std::string &prefix) {
-        if (jdata.is_string()) {
-            root->AddValue(prefix, jdata.get<std::string>());
-        } else if (jdata.is_number()) {
-            root->AddValue(prefix, jdata.get<int64_t>());
-        } else if (jdata.is_boolean()) {
-            root->AddValue(prefix, jdata.get<bool>());
+    void LoadConf(const nlohmann::json &jData, const std::string &prefix) {
+        if (jData.is_string()) {
+            root->AddValue(prefix, jData.get<std::string>());
+        } else if (jData.is_number()) {
+            root->AddValue(prefix, jData.get<int64_t>());
+        } else if (jData.is_boolean()) {
+            root->AddValue(prefix, jData.get<bool>());
         } else if (typeInfo.Type(prefix) == typeid(std::map<int64_t, int64_t>)) {
             std::map<int64_t, int64_t> mapJson;
-            auto arr = jdata.get<std::vector<int64_t>>();
+            auto arr = jData.get<std::vector<int64_t>>();
             for (size_t i = 0; i + 1 < arr.size(); i += 2) {
                 mapJson[arr[i]] = arr[i + 1];
             }
             root->AddValue(prefix, mapJson);
-        } else if (jdata.is_array()) {
+        } else if (jData.is_array()) {
             if (typeInfo.Type(prefix) == typeid(std::vector<int64_t>)) {
-                root->AddValue(prefix, jdata.get<std::vector<int64_t>>());
+                root->AddValue(prefix, jData.get<std::vector<int64_t>>());
             } else if (typeInfo.Type(prefix) == typeid(std::vector<double>)) {
-                root->AddValue(prefix, jdata.get<std::vector<double>>());
+                root->AddValue(prefix, jData.get<std::vector<double>>());
             } else {
-                root->AddValue(prefix, jdata.get<std::vector<std::string>>());
+                root->AddValue(prefix, jData.get<std::vector<std::string>>());
             }
-        } else if (jdata.is_object()) {
-            for (auto &it : jdata.items()) {
+        } else if (jData.is_object()) {
+            for (auto &it : jData.items()) {
                 const std::string &key = it.key();
                 if (prefix.empty()) {
                     LoadConf(it.value(), key);
@@ -417,9 +425,9 @@ private:
         }
         std::ifstream ifs(confPath);
         CHECK(ifs.is_open()) << "Open file " << confPath << " failed";
-        nlohmann::json jdata;
-        ifs >> jdata;
-        LoadConf(jdata, "");
+        nlohmann::json jData;
+        ifs >> jData;
+        LoadConf(jData, "");
     }
 
     void InitTileShape() {
@@ -469,7 +477,7 @@ bool ConfigManagerNg::IsWithinRange(const std::string &properties, Any &value) c
             return impl_->IsWithinRange(properties, AnyCast<int64_t>(value));
         }
     } catch (const std::out_of_range &e) {
-        ALOG_ERROR_F("key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
+        FUNCTION_LOGE("key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
         return false;
     }
     return true;

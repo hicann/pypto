@@ -26,6 +26,7 @@
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/utils/id_gen.h"
 
 using namespace npu::tile_fwk;
 
@@ -188,6 +189,22 @@ TEST_F(FunctionCoverageTest, ConverageCase4) {
             EXPECT_EQ(func->InsertLoopIdxNameList("n"), true);
         }
     }
+}
+
+TEST_F(FunctionCoverageTest, ConverageCase5) {
+    config::SetHostOption(COMPILE_STAGE, CS_TENSOR_GRAPH);
+
+    // duplicate funcname
+    config::SetBuildStatic(true);
+    FUNCTION("ConverageFunc") {
+        IdGen<IdType::FUNCTION>::Inst().SetId(2);
+        Program::GetInstance().BeginFunction(
+            "TENSOR_ConverageFunc", FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH, {}, false);
+    }
+    EXPECT_EQ(Program::GetInstance().GetFunctionMap().size(), 2);
+    Program::GetInstance().GetCurrentFunction()->SetFunctionType(FunctionType::STATIC);
+    auto ret = Program::GetInstance().EndFunction("TENSOR_ConverageFunc1", false);
+    EXPECT_EQ(ret, std::make_tuple(nullptr, nullptr, false));
 }
 
 TEST_F(FunctionCoverageTest, TestReuseTensorCase1) {

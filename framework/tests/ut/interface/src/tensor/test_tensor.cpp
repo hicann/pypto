@@ -151,3 +151,10 @@ TEST_F(TestTensor, GetCachePolicyTest) {
     EXPECT_TRUE(t1.GetCachePolicy(CachePolicy::PREFETCH));
     EXPECT_FALSE(t1.GetCachePolicy(CachePolicy::NONE_CACHEABLE));
 }
+
+TEST_F(TestTensor, RawTensorNegative) {
+    RawTensor t(DT_INT8, {});
+    t.SetRefCount(-2);
+    t.AddRefCount(1);
+    EXPECT_EQ(t.GetRefCount(), -1);
+}

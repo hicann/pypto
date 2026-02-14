@@ -249,7 +249,6 @@ public:
     void ResetLog(const std::string &path = "");
 
 private:
-    bool isInit_ = false;
     GlobalPassConfigs globalPassConfigs_;
     InternalGlobalConfig globalConfigs_;
     nlohmann::json json_;

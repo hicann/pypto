@@ -66,7 +66,7 @@ MemoryType StringToMemoryType(const std::string& memType) {
 SocVersion StringToSocVersion(const std::string& soc_version) {
     auto it = socVersionMap.find(soc_version);
     if (it != socVersionMap.end()) {
-        ALOG_DEBUG_F("Set SocVersion as %s.", soc_version.c_str());
+        FUNCTION_LOGD("Set SocVersion as %s.", soc_version.c_str());
         return it->second;
     }
     return SocVersion::ASCEND_910B1;
@@ -75,7 +75,7 @@ SocVersion StringToSocVersion(const std::string& soc_version) {
 NPUArch StringToNPUArch(const std::string& npuArch) {
     auto it = npuArchMap.find(npuArch);
     if (it != npuArchMap.end()) {
-        ALOG_DEBUG_F("Set NpuArch as %s.", npuArch.c_str());
+        FUNCTION_LOGD("Set NpuArch as %s.", npuArch.c_str());
         return it->second;
     }
     return NPUArch::DAV_2201;
@@ -328,7 +328,7 @@ void Platform::ObtainPlatformInfo() {
     std::string srcPath;
     srcPath = HostMachine::GetInstance().GetPlatformInfo();
     if (srcPath.empty()) {
-        ALOG_WARN_F("Cannot obtain ini from the device, using default ini file.");
+        FUNCTION_LOGW("Cannot obtain ini from the device, using default ini file.");
         CostModel::CostModelPlatform costModelPlatform;
         costModelPlatform.GetCostModelPlatformRealPath(srcPath);
     }

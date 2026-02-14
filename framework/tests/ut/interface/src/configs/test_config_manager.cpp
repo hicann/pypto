@@ -17,7 +17,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
-#include "interface/configs/config_manager_ng.h"
+#include "interface/configs/config_manager_ng.cpp"
 
 using namespace npu::tile_fwk;
 
@@ -253,4 +253,20 @@ TEST_F(TestConfigManager, GlobalConfig) {
 
     PrintOptions p = config::GetPrintOptions();
 
+}
+
+TEST_F(TestConfigManager, LoadJson) {
+    nlohmann::json jdata = {
+        {"test_label", "field"},
+    };
+    TypeInfo test;
+    test.build_type_infos(jdata, "");
+    EXPECT_EQ(test.typeInfos.size(), 0);
+    jdata = {
+        {
+            "type", "none",
+        }
+    };
+    test.build_type_infos(jdata, "");
+    EXPECT_EQ(test.typeInfos.size(), 0);
 }

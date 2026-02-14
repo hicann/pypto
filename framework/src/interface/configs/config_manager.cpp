@@ -21,9 +21,10 @@
 #include <sstream>
 #include <shared_mutex>
 
+#include "tilefwk/tilefwk_log.h"
 #include "interface/utils/common.h"
-#include "interface/utils/log.h"
 #include "interface/utils/file_utils.h"
+#include "interface/utils/log.h"
 #include <unistd.h>
 namespace npu::tile_fwk {
 
@@ -61,10 +62,6 @@ const nlohmann::json *ConfigManager::GetJsonNode(const nlohmann::json &root, con
 }
 
 Status ConfigManager::Initialize() {
-    if (isInit_) {
-        ALOG_INFO_F("ConfigManager has been initialized.");
-        return SUCCESS;
-    }
     /* 环境变量优先生效 */
     std::string jsonFilePath = GetEnvVar(tilefwkConfigEnvName);
     if (jsonFilePath.empty()) {
@@ -73,9 +70,9 @@ Status ConfigManager::Initialize() {
 
     config::SetRunDataOption(KEY_PTO_CONFIG_FILE, jsonFilePath);
     config::SetRunDataOption(KEY_RUNTYPE, "npu");
-    ALOG_INFO_F("Start to parse op_json_file %s", jsonFilePath.c_str());
+    FUNCTION_LOGI("Start to parse op_json_file %s", jsonFilePath.c_str());
     if (!ReadJsonFile(jsonFilePath, json_)) {
-        ALOG_ERROR_F("ReadJsonFile failed.");
+        FUNCTION_LOGE("ReadJsonFile failed.");
         return FAILED;
     }
 
@@ -111,7 +108,6 @@ Status ConfigManager::Initialize() {
         globalPassConfigs_ = InternalGetGlobalConfigs(*node);
     }
 
-    isInit_ = true;
     return SUCCESS;
 }
 
@@ -136,15 +132,16 @@ static std::string CreateLogTopFolder() {
     if (envDir != nullptr) {
         std::string envStr(envDir);
         if (!envStr.empty()) {
+            FUNCTION_LOGD("Get env TILE_FWK_OUTPUT_DIR[%s] successfully.", envStr.c_str());
             folderPath = std::move(envStr);
         }
     }
-    bool res = CreateDir(folderPath);
-    CHECK(res) << "Failed to create directory: " << folderPath;
+    bool ret = CreateDir(folderPath);
+    CHECK(ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
     folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid());
-    res = CreateDir(folderPath);
-    ASSERT(res) << "Failed to create directory: " << folderPath;
+    ret = CreateDir(folderPath);
+    ASSERT(ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";;
     config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, RealPath(folderPath));
 
     return folderPath;
@@ -196,8 +193,8 @@ void ConfigManager::PassConfigsDebugInfo(
     const std::string &strategy, const std::vector<std::string> &identifiers) const {
     auto *node = GetJsonNode(json_, {"global", "pass_strategies", strategy});
     if (!node) {
-        ALOG_INFO("[ConfigManager] Missing custom pass strategy <", strategy, "> configs. ",
-                    "You may add your own custom strategy configs in 'tile_fwk_config.json'.");
+        FUNCTION_LOGI("[ConfigManager] Missing custom pass strategy < %s > configs. ",
+                    "You may add your own custom strategy configs in 'tile_fwk_config.json'.", strategy.c_str());
         return;
     }
 
@@ -206,14 +203,15 @@ void ConfigManager::PassConfigsDebugInfo(
         maxLength = std::max(maxLength, identifier.size());
     }
 
-    ALOG_INFO("[ConfigManager] Strategy <", strategy, "> is found. Custom pass strategy will be used.");
+    FUNCTION_LOGI("[ConfigManager] Strategy < %s > is found. Custom pass strategy will be used.", strategy.c_str());
     for (auto &&identifier : identifiers) {
         std::string spaces(maxLength - identifier.size(), ' ');
         if (node->find(identifier) != node->end()) {
-            ALOG_INFO("[ConfigManager] Pass instance ", spaces, "<", identifier, "> configs loaded.");
+            FUNCTION_LOGI("[ConfigManager] Pass instance %s<%s> configs loaded.", spaces.c_str(), identifier.c_str());
         } else {
-            ALOG_INFO("[ConfigManager] Pass instance ", spaces, "<", identifier, "> configs for pass strategy <",
-            strategy, "> is missing. You may add your own custom strategy configs in 'tile_fwk_config.json'.");
+            FUNCTION_LOGI("[ConfigManager] Pass instance %s<%s> configs for pass strategy <%s> is missing. \
+            You may add your own custom strategy configs in 'tile_fwk_config.json'.",
+            spaces.c_str(), identifier.c_str(), strategy.c_str());
         }
     }
 }
@@ -333,6 +331,7 @@ void Reset() {
 
 void SetBuildStatic(bool isStatic) {
     g_config.funcType = isStatic ? FunctionType::STATIC : FunctionType::DYNAMIC;
+    FUNCTION_LOGD("Set functionType[%s] successfully.", (isStatic ? "STATIC" : "DYNAMIC"));
 }
 
 FunctionType GetFunctionType() {
@@ -341,6 +340,7 @@ FunctionType GetFunctionType() {
 
 void SetSemanticLabel(const std::string &label, const char *filename , int lineno) {
     g_config.semanticLabel = std::make_shared<SemanticLabel>(label, filename, lineno);
+    FUNCTION_LOGD("Set semanticLabel[%s] successfully.", label.c_str());
 }
 
 void SetSemanticLabel(std::shared_ptr<SemanticLabel> label) {
@@ -387,6 +387,7 @@ void SetPrintOptions(int edgeItems, int precision, int threshold, int linewidth)
     g_config.printOption.precision = precision;
     g_config.printOption.threshold = threshold;
     g_config.printOption.linewidth = linewidth;
+    FUNCTION_LOGD("Set print option [%d %d %d %d] successfully.", edgeItems, precision, threshold, linewidth);
 }
 
 PrintOptions &GetPrintOptions() {

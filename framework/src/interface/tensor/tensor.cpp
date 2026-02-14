@@ -42,7 +42,8 @@ Tensor::~Tensor() {
 }
 
 Tensor::Tensor(std::shared_ptr<LogicalTensor> s) : storage_(std::move(s)), index_(IdGen<IdType::TENSOR_INDEX>::Inst().NewId()) {
-    ASSERT(storage_ != nullptr && storage_->tensor != nullptr);
+    ASSERT(storage_ != nullptr);
+    ASSERT(storage_->tensor != nullptr);
     Program::GetInstance().InsertAliveTensor(this);
     storage_->tensor->AddRefCount(1);
 
@@ -230,7 +231,7 @@ bool Tensor::IsEmpty() const {
 
 int32_t Tensor::GetShape(int axis) const {
     const size_t dimCount = storage_->shape.size();
-    ASSERT(dimCount > 0) << "Tensor has no dimensions!";
+    ASSERT(dimCount > 0) << "Tensor has no dimensions! disCount: " << dimCount;
     if (axis < 0) {
         axis += static_cast<int>(dimCount);
     }
@@ -360,8 +361,8 @@ SymbolicScalar GetInputDataInt32Dim4(const Tensor &t, SymbolicScalar off0, Symbo
 }
 
 SymbolicScalar GetInputData(const Tensor &t, const std::vector<SymbolicScalar> &offset) {
-    ASSERT(t.Dim() == offset.size());
-    ASSERT(t.Dim() >0 && t.Dim() <= 0x4);
+    ASSERT(t.Dim() == offset.size()) << "t.Dim(): " << t.Dim() << ", offset.size(): " << offset.size();
+    ASSERT(t.Dim() >0 && t.Dim() <= 0x4) << "t.Dim(): " << t.Dim();
     if (t.Dim() == 0x1) {
         return GetInputDataInt32Dim1(t, offset[0]);
     }
@@ -424,10 +425,11 @@ SymbolicScalar GetTensorData(const Tensor &t, const std::vector<SymbolicScalar> 
     if (funcPtr) {
         auto inputTensorList = funcPtr->GetDyndevAttribute()->startArgsInputTensorList;
         if (FindTensor(t, inputTensorList) != inputTensorList.end()) {
+            FUNCTION_LOGD("Tensor[%s] already exists in inputTensorList", t.GetName().c_str());
             return GetInputData(t, offset);
         }
     }
-
+    FUNCTION_LOGD("Tensor[%s] has not been found in inputTensorList.", t.GetName().c_str());
     CHECK(offset.size() <= MAX_GET_TENSOR_DATA_DIM);
     SymbolHandlerId handlerId = static_cast<SymbolHandlerId>(static_cast<int>(SymbolHandlerId::GetTensorDataInt32Dim1) + offset.size() - 1) ;
     return DoGetTensorDataInt32(handlerId, t, offset);
@@ -448,6 +450,7 @@ void DoSetTensorDataInt32(const SymbolicScalar &v, const std::vector<SymbolicSca
 
 void SetTensorData(const SymbolicScalar &v, const std::vector<SymbolicScalar> &off, Tensor &dst) {
     CHECK(dst.GetDataType() == DT_INT32);
+    FUNCTION_LOGD("Set tensor[%s] data.", dst.GetName().c_str());
     return DoSetTensorDataInt32(v, off, dst);
 }
 

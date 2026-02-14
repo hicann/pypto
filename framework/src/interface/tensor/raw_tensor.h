@@ -24,7 +24,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/pre_def.h"
 #include "tilefwk/data_type.h"
-#include "interface/utils/log.h"
+#include "tilefwk/tilefwk_log.h"
 
 using Json = nlohmann::json;
 
@@ -89,7 +89,7 @@ public:
       cachePolicy_[static_cast<int>(policy)] = value;
       if (value && (cachePolicy_[static_cast<int>(CachePolicy::PREFETCH)] ==
           cachePolicy_[static_cast<int>(CachePolicy::NONE_CACHEABLE)])) {
-          ALOG_WARN_F("Prefetch and none cacheable can not apply at same time, use the first config policy.");
+          FUNCTION_LOGW("Prefetch and none cacheable can not apply at same time, use the first config policy.");
           cachePolicy_[static_cast<int>(policy)] = false;
       }
     }

@@ -22,24 +22,24 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <ftw.h>
-#include "interface/utils/log.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {
 const int FILE_AUTHORITY = 0640;
 }
 
-bool FileExist(const std::string &filePath) {
-    return !RealPath(filePath).empty();
+bool FileExist(const std::string &fPath) {
+    return !RealPath(fPath).empty();
 }
 
 std::string RealPath(const std::string &path) {
     if (path.empty()) {
-        ALOG_INFO("path string is nullptr.");
+        FUNCTION_LOGI("path string is nullptr.");
         return "";
     }
     if (path.size() >= PATH_MAX) {
-        ALOG_INFO("file path ", path.c_str(), " is too long.");
+        FUNCTION_LOGI("file path %s is too long.", path.c_str());
         return "";
     }
 
@@ -54,16 +54,16 @@ std::string RealPath(const std::string &path) {
     if (realpath(path.c_str(), resovedPath) != nullptr) {
         res = resovedPath;
     } else {
-        ALOG_INFO("path ", path.c_str(), " is not exist.");
+        FUNCTION_LOGI("path %s is not exist.", path.c_str());
     }
     return res;
 }
 
-bool GetFileSize(const std::string& filePath, uint32_t &fileSize) {
-    if (RealPath(filePath).empty()) {
+bool GetFileSize(const std::string& fPath, uint32_t &fileSize) {
+    if (RealPath(fPath).empty()) {
         return false;
     }
-    std::ifstream file(filePath, std::ios::binary | std::ios::ate); // 打开文件，定位到文件末尾
+    std::ifstream file(fPath, std::ios::binary | std::ios::ate); // 打开文件，定位到文件末尾
     if (!file.is_open()) {
         return false;
     }
@@ -72,16 +72,16 @@ bool GetFileSize(const std::string& filePath, uint32_t &fileSize) {
     return true;
 }
 
-uint32_t GetFileSize(const std::string& filePath) {
+uint32_t GetFileSize(const std::string& fPath) {
     uint32_t fileSize = 0;
-    (void) GetFileSize(filePath, fileSize);
+    (void) GetFileSize(fPath, fileSize);
     return fileSize;
 }
 
 bool CreateDir(const std::string &directoryPath) {
     int32_t ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // 755
     if (ret != 0 && errno != EEXIST) {
-        ALOG_WARN("Creat dir[", directoryPath.c_str(), "] failed, reason is ", strerror(errno));
+        FUNCTION_LOGW("Create dir[%s] failed, reason is %s", directoryPath.c_str(), strerror(errno));
         return false;
     }
     return true;
@@ -93,7 +93,7 @@ bool JudgeEmptyAndCreateDir(char tmpDirPath[], const std::string &directoryPath)
         int32_t ret = 0;
         ret = mkdir(tmpDirPath, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // 755
         if (ret != 0 && errno != EEXIST) {
-            ALOG_WARN("Creat dir[", directoryPath.c_str(), "] failed, reason is ", strerror(errno));
+            FUNCTION_LOGW("Create dir[%s] failed, reason is %s", directoryPath.c_str(), strerror(errno));
             return false;
         }
     }
@@ -103,7 +103,7 @@ bool JudgeEmptyAndCreateDir(char tmpDirPath[], const std::string &directoryPath)
 bool CreateMultiLevelDir(const std::string &directoryPath) {
     auto dirPathLen = directoryPath.length();
     if (dirPathLen >= PATH_MAX) {
-        ALOG_WARN("Path[", directoryPath.c_str(), "] is too long, it must be less than ", PATH_MAX);
+        FUNCTION_LOGW("Path[%s] is too long, it must be less than %d", directoryPath.c_str(), PATH_MAX);
         return false;
     }
     char tmpDirPath[PATH_MAX] = {0};
@@ -122,52 +122,52 @@ bool CreateMultiLevelDir(const std::string &directoryPath) {
 
     ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // 755
     if (ret != 0 && errno != EEXIST) {
-        ALOG_WARN("Creat dir[", directoryPath.c_str(), "] failed, reason is: ", strerror(errno));
+        FUNCTION_LOGW("Create dir[%s] failed, reason is: %s", directoryPath.c_str(), strerror(errno));
         return false;
     }
 
-    ALOG_DEBUG("Create multi level dir [", directoryPath.c_str(), "] successfully.");
+    FUNCTION_LOGD("Create multi level dir [%s] successfully.", directoryPath.c_str());
     return true;
 }
 
 void DeleteFile(const std::string &path)
 {
     if (path.empty()) {
-        ALOG_WARN("File name is empty.");
+        FUNCTION_LOGW("File name is empty.");
         return;
     }
     struct stat statBuf;
     if (lstat(path.c_str(), &statBuf) != 0) {
-        ALOG_WARN("Stat file[", path.c_str(), "] failed.");
+        FUNCTION_LOGW("Stat file[%s] failed.", path.c_str());
         return;
     }
     if (S_ISREG(statBuf.st_mode) == 0) {
-        ALOG_WARN("[", path.c_str(), "] is not a file.");
+        FUNCTION_LOGW("[%s] is not a file.", path.c_str());
         return;
     }
     int res = remove(path.c_str());
     if (res != 0) {
-        ALOG_WARN("Delete file[", path.c_str(), "] failed.");
+        FUNCTION_LOGW("Delete file[%s] failed.", path.c_str());
     }
 }
 
 bool ReadJsonFile(const std::string &file, nlohmann::json &jsonObj) {
     std::string path = RealPath(file);
     if (path.empty()) {
-        ALOG_WARN("File path [", file.c_str(), "] does not exist");
+        FUNCTION_LOGW("File path [%s] does not exist", file.c_str());
         return false;
     }
     std::ifstream ifStream(path);
     try {
         if (!ifStream.is_open()) {
-            ALOG_WARN("Open ", file.c_str(), " failed, file is already open");
+            FUNCTION_LOGW("Open %s failed, file is already open", file.c_str());
             return false;
         }
 
         ifStream >> jsonObj;
         ifStream.close();
     } catch (const std::exception &e) {
-        ALOG_WARN("Fail to convert file[", path.c_str(), "] to Json. Exception message is .", e.what());
+        FUNCTION_LOGW("Fail to convert file[%s] to Json. Exception message is .%s", path.c_str(), e.what());
         ifStream.close();
         return false;
     }
@@ -175,24 +175,24 @@ bool ReadJsonFile(const std::string &file, nlohmann::json &jsonObj) {
     return true;
 }
 
-bool ReadBytesFromFile(const std::string &filePath, std::vector<char> &buffer)
+bool ReadBytesFromFile(const std::string &fPath, std::vector<char> &buffer)
 {
-    std::string realPath = RealPath(filePath);
+    std::string realPath = RealPath(fPath);
     if (realPath.empty()) {
-        ALOG_WARN_F("Bin file path[%s] is not valid.", filePath.c_str());
+        FUNCTION_LOGW("Bin file path[%s] is not valid.", fPath.c_str());
         return false;
     }
 
     std::ifstream ifStream(realPath.c_str(), std::ios::binary | std::ios::ate);
     if (!ifStream.is_open()) {
-        ALOG_WARN_F("read file %s failed.", filePath.c_str());
+        FUNCTION_LOGW("read file %s failed.", fPath.c_str());
         return false;
     }
     try {
         std::streamsize size = ifStream.tellg();
         if (size <= 0 || size > INT_MAX) {
             ifStream.close();
-            ALOG_WARN_F("File size %ld is not within the range: (0, %d].", size, INT_MAX);
+            FUNCTION_LOGW("File size %ld is not within the range: (0, %d].", size, INT_MAX);
             return false;
         }
 
@@ -200,11 +200,11 @@ bool ReadBytesFromFile(const std::string &filePath, std::vector<char> &buffer)
 
         buffer.resize(size);
         ifStream.read(&buffer[0], size);
-        ALOG_DEBUG_F("Release file(%s) handle.", realPath.c_str());
+        FUNCTION_LOGD("Release file(%s) handle.", realPath.c_str());
         ifStream.close();
-        ALOG_DEBUG_F("Read size: %ld.", size);
+        FUNCTION_LOGD("Read size: %ld.", size);
     } catch (const std::ifstream::failure& e) {
-        ALOG_WARN_F("Fail to read file %s. Exception: %s.", filePath.c_str(), e.what());
+        FUNCTION_LOGW("Fail to read file %s. Exception: %s.", fPath.c_str(), e.what());
         ifStream.close();
         return false;
     }
@@ -225,7 +225,7 @@ std::vector<std::string> GetFiles(const std::string& path, const std::string& ex
     std::vector<std::string> files;
     DIR* dir = opendir(path.c_str());
     if (dir == nullptr) {
-        ALOG_WARN("Open directory [", path.c_str(), "] failed");
+        FUNCTION_LOGW("Open directory [%s] failed", path.c_str());
         return files;
     }
 
@@ -260,20 +260,20 @@ std::vector<std::string> GetFiles(const std::string& path, const std::string& ex
     return files;
 }
 
-void SaveFile(const std::string &filePath, const std::vector<uint8_t> &data) {
-    FILE *file = fopen(filePath.c_str(), "wb");
+void SaveFile(const std::string &fPath, const std::vector<uint8_t> &data) {
+    FILE *file = fopen(fPath.c_str(), "wb");
     if (file == nullptr) {
-        ALOG_WARN_F("Open file [%s] failed.", filePath.c_str());
+        FUNCTION_LOGW("Open file [%s] failed.", fPath.c_str());
         return;
     }
     fwrite(data.data(), 1, data.size(), file);
     fclose(file);
 }
 
-bool SaveFile(const std::string &filePath, const uint8_t *data, size_t size) {
-    FILE *file = fopen(filePath.c_str(), "wb");
+bool SaveFile(const std::string &fPath, const uint8_t *data, size_t size) {
+    FILE *file = fopen(fPath.c_str(), "wb");
     if (file == nullptr) {
-        ALOG_WARN_F("Open file [%s] failed.", filePath.c_str());
+        FUNCTION_LOGW("Open file [%s] failed.", fPath.c_str());
         return false;
     }
     fwrite(data, 1, size, file);
@@ -281,49 +281,49 @@ bool SaveFile(const std::string &filePath, const uint8_t *data, size_t size) {
     return true;
 }
 
-void SaveFileSafe(const std::string &filePath, const uint8_t *data, size_t size) {
-    auto tmpfile = filePath + ".tmp";
+void SaveFileSafe(const std::string &fPath, const uint8_t *data, size_t size) {
+    auto tmpfile = fPath + ".tmp";
     if (SaveFile(tmpfile, data, size)) {
-        Rename(tmpfile, filePath);
+        Rename(tmpfile, fPath);
     }
 }
 
 void Rename(const std::string &oldPath, const std::string &newPath) {
     if (rename(oldPath.c_str(), newPath.c_str()) != 0) {
-        ALOG_WARN_F("Rename file %s to %s failed.", oldPath.c_str(), newPath.c_str());
+        FUNCTION_LOGW("Rename file %s to %s failed.", oldPath.c_str(), newPath.c_str());
     }
 }
 
-bool DumpFile(const char *data, const size_t size, const std::string &filePath) {
+bool DumpFile(const char *data, const size_t size, const std::string &fPath) {
     // dump bin file
-    std::ofstream outFile(filePath, std::ios::binary);
+    std::ofstream outFile(fPath, std::ios::binary);
     if (!outFile) {
-        ALOG_ERROR_F("Failed open file %s.", filePath.c_str());
+        FUNCTION_LOGE("Failed open file %s.", fPath.c_str());
         return false;
     }
     outFile.write(data, size);
     outFile.close();
-    ALOG_INFO_F("Bin file[%s] has been dumped.", filePath.c_str());
+    FUNCTION_LOGI("Bin file[%s] has been dumped.", fPath.c_str());
     return true;
 }
 
-bool DumpFile(const std::vector<uint8_t> &data, const std::string &filePath) {
-    return DumpFile(reinterpret_cast<const char *>(data.data()), data.size(), filePath);
+bool DumpFile(const std::vector<uint8_t> &data, const std::string &fPath) {
+    return DumpFile(reinterpret_cast<const char *>(data.data()), data.size(), fPath);
 }
 
-bool DumpFile(const std::string &text, const std::string &filePath) {
-    return DumpFile(text.data(), text.size(), filePath);
+bool DumpFile(const std::string &text, const std::string &fPath) {
+    return DumpFile(text.data(), text.size(), fPath);
 }
 
-std::vector<uint8_t> LoadFile(const std::string &filePath) {
+std::vector<uint8_t> LoadFile(const std::string &fPath) {
     std::vector<uint8_t> binary;
-    std::string realPath = RealPath(filePath);
+    std::string realPath = RealPath(fPath);
     if (realPath.empty()) {
-        ALOG_WARN_F("Bin file path[%s] is not valid.", filePath.c_str());
+        FUNCTION_LOGW("Bin file path[%s] is not valid.", fPath.c_str());
         return binary;
     }
 
-    FILE *file = fopen(filePath.c_str(), "rb");
+    FILE *file = fopen(fPath.c_str(), "rb");
     if (file != nullptr) {
         fseek(file, 0, SEEK_END);
         int size = ftell(file);
@@ -353,7 +353,7 @@ bool DeleteDir(const std::string& directoryPath) {
     constexpr int limit = 64;
     int ret = nftw(directoryPath.c_str(), RemoveFile, limit, FTW_DEPTH | FTW_PHYS);
     if (ret != 0) {
-        ALOG_WARN("Delete dir[", directoryPath.c_str(), "] failed, reason is ", ret);
+        FUNCTION_LOGW("Delete dir[%s] failed, reason is %d", directoryPath.c_str(), ret);
         return false;
     }
     return true;
@@ -377,11 +377,11 @@ FILE* LockAndOpenFile(const std::string &lockFilePath) {
     }
     (void)chmod(lockFilePath.c_str(), FILE_AUTHORITY);
     if (!FcntlLockFile(fileno(fp), F_WRLCK)) {
-        ALOG_WARN("Fail to lock file:", lockFilePath.c_str());
+        FUNCTION_LOGW("Fail to lock file:", lockFilePath.c_str());
         fclose(fp);
         return nullptr;
     }
-    ALOG_INFO("Lock file successfully.", lockFilePath.c_str());
+    FUNCTION_LOGI("Lock file successfully.", lockFilePath.c_str());
     return fp;
 }
 
@@ -399,7 +399,7 @@ bool CopyFile(const std::string &srcPath, const std::string &dstPath) {
     std::ofstream dst(dstPath, std::ios::binary);
 
     if (!src.is_open() || !dst.is_open()) {
-        ALOG_WARN("Fail to open file:", srcPath.c_str(), ", ", dstPath.c_str());
+        FUNCTION_LOGW("Fail to open file:", srcPath.c_str(), ", ", dstPath.c_str());
         return false;
     }
 
@@ -431,7 +431,7 @@ std::string GetCurRunningPath() {
     char buffer[size] = {};
     std::string cwd = getcwd(buffer, size);
     if (cwd.empty()) {
-        ALOG_ERROR_F("failed to call getcwd()");
+        FUNCTION_LOGE("failed to call getcwd()");
         return "";
     }
     return cwd;
@@ -440,7 +440,7 @@ std::string GetCurRunningPath() {
 void RemoveOldestDirs(const std::string &path, const std::string &prefix, int left) {
     DIR *dir = opendir(path.c_str());
     if (dir == nullptr) {
-        ALOG_WARN_F("failed to opendir: %s", path.c_str());
+        FUNCTION_LOGW("failed to opendir: %s", path.c_str());
         return;
     }
 

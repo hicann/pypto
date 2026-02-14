@@ -115,27 +115,27 @@ public:
 
     // memcpy_s内部限制了待拷贝目的buffer的字节数，若大于SECUREC_MEM_MAX_LEN（int32最大值0x7fffffff），会报错返回错误码ERANGE
     static void DataCopy(void *dest, size_t destMax, const void *src, size_t count) {
-        ASSERT(destMax >= count);
+        ASSERT(destMax >= count) << "destMax: " << destMax << ", count: " << count;
 
         size_t offset = 0;
         while (offset < count) {
             size_t copyLen = std::min(count - offset, MAX_DATA_LEN);
             auto err = memcpy_s(static_cast<char*>(dest) + offset, copyLen,
                                    static_cast<const char*>(src) + offset, copyLen);
-            ASSERT(err == 0);
+            ASSERT(err == 0) << "errCode: " << err;
             offset +=copyLen;
         }
     }
 
     // memset_s内部限制了待拷贝目的buffer的字节数，若大于SECUREC_MEM_MAX_LEN（int32最大值0x7fffffff），会报错返回错误码ERANGE
     static void DataSet(void *dest, size_t destMax, int c, size_t count) {
-        ASSERT(destMax >= count);
+        ASSERT(destMax >= count) << "destMax: " << destMax << ", count: " << count;
 
         size_t offset = 0;
         while (offset < count) {
             size_t copyLen = std::min(count - offset, MAX_DATA_LEN);
             auto err = memset_s(static_cast<char*>(dest) + offset, copyLen, c, copyLen);
-            ASSERT(err == 0);
+            ASSERT(err == 0) << "errCode: " << err;
             offset +=copyLen;
         }
     }

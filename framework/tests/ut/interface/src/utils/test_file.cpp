@@ -20,6 +20,8 @@
 
 using namespace npu::tile_fwk;
 
+#define PATH_MAX 4096
+
 class FileTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
@@ -35,6 +37,9 @@ TEST(FileTest, NullptrTest) {
 
     bool ret = SaveFile("", &a, 1);
     EXPECT_EQ(ret, false);
+
+    EXPECT_FALSE(CopyFile("", ""));
+    EXPECT_EQ(LockAndOpenFile(""), nullptr);
 }
 
 constexpr const char* TEST_LOG_PATH = "/tmp/test_file.log";
@@ -48,6 +53,10 @@ TEST(FileTest, ReadBytesFromFileTest) {
     ret = ReadBytesFromFile(TEST_LOG_PATH, data);
     EXPECT_EQ(ret, false);
     DeleteFile(TEST_LOG_PATH);
+
+    // for code coverage
+    DeleteFile("");
+    DeleteFile("/nonexistent/file");
 }
 
 TEST(FileTest, LoadFileTest) {
@@ -56,8 +65,21 @@ TEST(FileTest, LoadFileTest) {
 
     data = LoadFile("");
     EXPECT_EQ(data.size(), 0);
+
+    nlohmann::json jsonObj;
+    EXPECT_FALSE(ReadJsonFile("", jsonObj));
+    EXPECT_FALSE(ReadJsonFile("/tmp/", jsonObj));
 }
 
+TEST(FileTest, RealPathTest) {
+    EXPECT_TRUE(RealPath("").empty());
+    EXPECT_TRUE(RealPath("/nonexitent/file").empty());
+    EXPECT_FALSE(RealPath("/tmp").empty());
+    EXPECT_TRUE(RealPath(std::string(PATH_MAX, 'a')).empty());
+
+    EXPECT_FALSE(CreateMultiLevelDir(std::string(PATH_MAX, 'a')));
+    EXPECT_FALSE(DeleteDir(""));
+}
 TEST(FileTest, CreateDirFailedWhenParentNotExist) {
     // 父目录不存在 -> mkdir 返回 -1，errno=ENOENT -> CreateDir 返回 false
     std::string path = "/tmp/no_such_parent_dir" + std::to_string(::getpid()) + "/child";
