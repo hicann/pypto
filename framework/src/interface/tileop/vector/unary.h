@@ -58,7 +58,7 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src) {
         return;
     }
     if constexpr (op == UnaryOp::LN) {
-        PTO_WITH_LAST_USE(pto::TLOG(dst, src), n1, n2);
+        pto::TLOG(dst, src);
         return;
     }
 }
@@ -167,10 +167,10 @@ TILEOP void TBitwiseNot(T0 dst, T1 src) {
     UnaryCompute<UnaryOp::BITWISENOT, LastUse>(dst, src);
 }
 
-#define OP_TILE_OP_BITWISENOT TLog
-template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+#define OP_TILE_OP_LOG TLog
+template <typename T0, typename T1>
 TILEOP void TLog(T0 dst, T1 src) {
-    UnaryCompute<UnaryOp::LN, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::LN, LastUse2Dim<0, 0>>(dst, src);
 }
 
 template <typename Ttemp, typename T0, typename T1>
