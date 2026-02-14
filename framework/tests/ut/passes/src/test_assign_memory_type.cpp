@@ -64,6 +64,16 @@ public:
         ConfigManager::Instance();
     }
 
+    void SetTestStrategy() {
+        PassManager &passManager = PassManager::Instance();
+        passManager.RegisterStrategy("AssignMemoryTypeTestStrategy", {
+            {   "InferMemoryConflict",    PassName::INFER_MEMORY_CONFLICT},
+            {        "ExpandFunction",          PassName::EXPAND_FUNCTION},
+            {      "AssignMemoryType",       PassName::ASSIGN_MEMORY_TYPE},
+        });
+        ConfigManager::Instance();
+    }
+
     void CheckConvertOp(const Operation &op, bool verbose = false) {
         /*
         1. 单输入单输出
@@ -856,6 +866,40 @@ TEST_F(AssignMemoryTypeTest, TestPostcheckFailWhenPathUnreachable) {
 
     AssignMemoryType assignMemoryType;
     EXPECT_EQ(assignMemoryType.PostCheck(*function), FAILED);
+}
+
+TEST_F(AssignMemoryTypeTest, AssembleAndReshapeAfterAssemble) {
+    config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
+    std::vector<int64_t> shape0 = {NUM_64, NUM_32};
+    std::vector<int64_t> shape1 = {NUM_32, NUM_64};
+    PROGRAM("AssignMemoryTest") {
+        Tensor input1(DataType::DT_FP32, shape0, "In1");
+        Tensor input2(DataType::DT_FP32, shape0, "In2");
+        Tensor input3(DataType::DT_FP32, shape1, "In3");
+        Tensor output1(DataType::DT_FP32, shape1, "Out1");
+        Tensor output2(DataType::DT_FP32, shape0, "Out2");
+        SetTestStrategy();
+        Function* originFunction = nullptr;
+        config::SetBuildStatic(true);
+        FUNCTION("AssembleAndReshapeAfterAssemble", {input1, input2, output1, output2}) {
+            TileShape::Current().SetVecTile(NUM_256, NUM_128);
+            Tensor t1 = Add(input1, input2);
+            Tensor t2(DT_FP32, shape0, "t2");
+            Tensor t3(DT_FP32, shape0, "t2");
+            Assemble(t1, {0, 0}, t2);
+            Assemble(t2, {0, 0}, t3);
+            Assemble(t3, {0, 0}, output2);
+            Tensor r1 = Reshape(t2, shape1);
+            output1 = Add(r1, input3);
+        }
+        originFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_AssembleAndReshapeAfterAssemble"); // Tensor_{Function名字}
+        ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
+        for (auto &op : originFunction->Operations()) {
+            if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+                EXPECT_EQ(op.iOperand[0]->GetMemoryTypeOriginal(), op.oOperand[0]->GetMemoryTypeOriginal());
+            }
+        }
+    }
 }
 }
 } // namespace npu::tile_fwk

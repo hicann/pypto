@@ -288,7 +288,11 @@ void ConvertInserter::ProcessSpecialProducersOrConsumers(const Operation &op, co
     //case1:当tensor的生产者都是assemble，并且tensor的mem路径需要经过DDR，则将tensor的ori刷成DDR
     APASS_LOG_DEBUG_F(Elements::Operation, "Operation %s[%d] has output %d ori and tobe conflict.",
         op.GetOpcodeStr().c_str(), op.GetOpMagic(), oOperand->magic);
-    bool crossCore = CrossCore(oOperand->GetMemoryTypeOriginal(), requiredMemoryType);
+    const auto &items = tensorTobeMap.at(oOperand);
+    bool crossCore = std::all_of(items.begin(), items.end(),
+        [this, &oOperand](const auto &item) {
+            return CrossCore(oOperand->GetMemoryTypeOriginal(), item.second);
+        });
     bool producedByAssemble = isAllProducerAssemble(oOperand);
     if (producedByAssemble && crossCore) {
         oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
