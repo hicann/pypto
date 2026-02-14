@@ -641,11 +641,13 @@ class JitCallableWrapper:
             # Create a hashable representation of options
             def make_hashable(obj):
                 """Convert dict/list to hashable tuple representation."""
-                if isinstance(obj, dict):
-                    return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))
-                if isinstance(obj, (list, tuple)):
+                if obj is None:
+                    return None
+                t = type(obj)
+                if t is dict:
+                    return frozenset((k, make_hashable(v)) for k, v in obj.items())
+                if t is list or t is tuple:
                     return tuple(make_hashable(item) for item in obj)
-                # For non-hashable types, use their string representation
                 return str(obj)
 
             options_hash = (
