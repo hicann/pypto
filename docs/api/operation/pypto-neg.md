@@ -28,17 +28,21 @@ neg(input: Tensor) -> Tensor
 
 返回一个与输入形状相同、数据类型一致的Tensor，其元素为输入Tensor对应元素的负数。
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
+
+说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输出一致。
 
-如输入intput shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
-pypto.set_vec_tile_shapes(m1, n1)
+pypto.set_vec_tile_shapes(4, 16)
 ```
 
-## 调用示例
+### 接口调用示例
 
 ```python
 x = pypto.tensor([5], pypto.DT_FP32)

@@ -28,17 +28,21 @@ reciprocal(input: Tensor) -> Tensor
 
 返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的倒数。
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
+
+说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输出一致。
 
-如输入intput shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
-pypto.set_vec_tile_shapes(m1, n1)
+pypto.set_vec_tile_shapes(4, 16)
 ```
 
-## 调用示例
+### 接口调用示例
 
 ```python
 x = pypto.tensor([1, 4], pypto.DT_FP32)
@@ -49,6 +53,6 @@ y = pypto.reciprocal(x)
 
 ```python
 输入数据x: [1.0, 2.0, 3.0, 4.0, 5.0]
-输出数据y: [1.0, 0.5, 0.33,0.25,0.2]
+输出数据y: [1.0, 0.5, 0.33, 0.25, 0.2]
 ```
 

@@ -52,7 +52,11 @@ TileShape 约束：2维场景下TileShape为\[tileS, d\]，4维场景下TileShap
 二维示例：
 input：[15, 8]，index：[5, 2]，src:[10, 8], viewShape: [viewB \* s, 8], viewB需要是整数，即第0维是s的倍数，tileShape:[tileS, 8], tileS需要是s的约数即1或者2。
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
+
+调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输入src一致。
 
@@ -61,11 +65,10 @@ TileShape维度应和输入src一致。
 如输入input为[t, d], dim为-2，输入index为[b, s]，输入src为[bs, d], 其中bs=b*s，输出为[t, d], TileShape设置为[bs1, d1], 则bs1用于切分bs轴, d轴不允许切分, d1必须和d相等。
 
 ```python
-pypto.set_vec_tile_shapes(bs1, d1)
+pypto.set_vec_tile_shapes(16, 64)
 ```
 
-
-## 调用示例
+### 接口调用示例
 
 -   将2维 src 根据2维index更新到2维input上, 注意原地操作的写法, 即等号左边的输出应和输入input相同: 
 

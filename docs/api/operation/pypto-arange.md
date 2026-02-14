@@ -22,9 +22,9 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| start  | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16, DT_INT16，DT_INT32，DT_FP32。 <br> 默认值为 0。 |
-| end    | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16, DT_INT16，DT_INT32，DT_FP32。 <br> 该参数不能省略。 |
-| step   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16, DT_INT16，DT_INT32，DT_FP32。 <br> 默认值为 1。 |
+| start  | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。 <br> 默认值为 0。 |
+| end    | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。 <br> 该参数不能省略。 |
+| step   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32。 <br> 默认值为 1。 |
 
 ## 返回值说明
 
@@ -32,23 +32,27 @@ arange(start: Union[int, float] = 0, end: Union[int, float], step: Union[int, fl
 
 ## 约束说明
 
-1. step不能为0，作为浮点数，abs\(step\)\>1e-8;
+1. step不能为0，作为浮点数，abs\(step\)\>1e-8；
 
-2. \(end-start\)/step需大于0;
+2. \(end-start\)/step需大于0；
 
 3. 如果 start, end, step 均为 int 输入，则三者均不能超出 int32 范围
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
+
+调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape和输出output维度一致，均为一维。
 
 如输入start为m，end为n, step为p, 输出shape为[q], TileShape设置为[q1], 则q1分别用于切分q轴。
 
 ```python
-pypto.set_vec_tile_shapes(q1)
+pypto.set_vec_tile_shapes(16)
 ```
 
-## 调用示例
+### 接口调用示例
 
 ```python
 y1 = pypto.arange(1.0, 4.0, 0.5)

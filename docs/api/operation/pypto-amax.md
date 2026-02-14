@@ -30,7 +30,7 @@ amax(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16, DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dim     | 输入      | 源操作数。 <br> 支持任意单轴。                                       |
 | keepdim | 输入      | 源操作数 <br> 控制在进行归约后，是否保持被压缩的维度。 <br> 默认值为False。 |
 
@@ -46,23 +46,27 @@ amax(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 1. TileShape大小不超过 64KB；
 
-2. 尾轴要 32bytes 对齐;
+2. 尾轴要 32bytes 对齐；
 
 3. TileShape次尾轴要小于等于255，即 TileShape\[-2\]<=255.
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
+
+调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输入input一致。
 
 如输入intput shape为[m, n]，输出为[m, 1]，TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
-pypto.set_vec_tile_shapes(m1, n1)
+pypto.set_vec_tile_shapes(4, 16)
 ```
 
 注意：如果keepdim设置为false，框架会自动删除tileshape中dim对应的维度。
 
-## 调用示例
+### 接口调用示例
 
 ```python
 x = pypto.tensor([2, 3], pypto.DT_FP32)
