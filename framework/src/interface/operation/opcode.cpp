@@ -632,7 +632,7 @@ void OpcodeManager::RegisterCube() {
         {"TileOp::L1ToBT", PIPE_MTE1, PIPE_MTE1, CoreType::AIC}, OpCalcType::MOVE_LOCAL);
     RegisterInfo(Opcode::OP_UB_COPY_ND2NZ, OpCoreType::AIV, "UB_COPY_ND2NZ", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::UBCopyUB", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::MOVE_LOCAL);
-    RegisterInfo(Opcode::OP_GATHER_IN_L1, OpCoreType::ANY, "GATHER_IN_L1",
+    RegisterInfo(Opcode::OP_GATHER_IN_L1, OpCoreType::AIC, "GATHER_IN_L1",
         {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {MemoryType::MEM_L1},
         {"TileOp::GatherInL1", PIPE_MTE2, PIPE_MTE2, CoreType::AIC}, OpCalcType::OTHER, {OpAttributeKey::startOffset});
     RegisterInfo(Opcode::OP_L1_COPY_IN_A_SCALE, OpCoreType::AIC, "L1_COPY_IN_A_SCALE", {MemoryType::MEM_DEVICE_DDR},

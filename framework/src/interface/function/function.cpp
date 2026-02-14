@@ -282,15 +282,8 @@ OperationsViewer Function::Operations(bool sorted) {
 }
 
 bool Function::IsCube() const {
-    auto isL1CopyIn = [](const Operation &op) {
-        return (op.GetOpcode() == Opcode::OP_COPY_IN &&
-                !(op.oOperand.empty()) &&
-                op.oOperand[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1) ||
-                op.GetOpcode() == Opcode::OP_GATHER_IN_L1;
-    };
-
     for (const auto &oper : OperationsViewer(operations_, opPosition_)) {
-        if (isL1CopyIn(oper)) {
+        if (oper.HasAttr(OpAttributeKey::isCube) && oper.GetBoolAttribute(OpAttributeKey::isCube)) {
             return true;
         }
     }
