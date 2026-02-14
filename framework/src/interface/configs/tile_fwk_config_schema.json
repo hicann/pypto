@@ -334,29 +334,29 @@
         "verify": {
             "type": "object",
             "label": {
-                "zh": "...",
-                "en": "..."
+                "zh": "精度工具参数信息",
+                "en": "Verification tool parameter information"
             },
             "properties": {
                 "enable_pass_verify": {
                     "type": "boolean",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "是否开启Pass验证",
+                        "en": "Enable Pass verification"
                     }
                 },
                 "pass_verify_save_tensor": {
                     "type": "boolean",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "是否开启Pass验证时保存Tensor",
+                        "en": "Enable saving tensors when Pass verification is enabled"
                     }
                 },
                 "pass_verify_save_tensor_dir": {
                     "type": "string",
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "指定Pass验证时保存Tensor的目录",
+                        "en": "Specify the directory to save tensors when Pass verification is enabled"
                     }
                 },
                 "pass_verify_pass_filter": {
@@ -365,8 +365,8 @@
                         "type": "string"
                     },
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "指定Pass验证时需要验证的Pass名称列表",
+                        "en": "Specify the list of Pass names to filter when Pass verification is enabled"
                     }
                 },
                 "pass_verify_error_tol": {
@@ -375,8 +375,8 @@
                         "type": "double"
                     },
                     "label": {
-                        "zh": "...",
-                        "en": "..."
+                        "zh": "指定Pass验证时的误差阈值列表",
+                        "en": "Specify the error tolerance list when Pass verification is enabled"
                     }
                 }
             }

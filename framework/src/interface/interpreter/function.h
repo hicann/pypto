@@ -82,6 +82,7 @@ struct FunctionFrame {
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<RawTensor>> spillRawTensorDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::shared_ptr<LogicalTensorData>> tensorDataViewDict;
     std::unordered_map<std::shared_ptr<LogicalTensor>, std::string> tensorDataBinDict;
+    std::unordered_map<std::shared_ptr<LogicalTensorData>, std::shared_ptr<LogicalTensor>> callopDataViewTensorDict;  // Record the relationship between the callop data view and the tensor
     int frameIndex;
     int funcIndex;
     int rootFuncIndex{-1};
@@ -110,6 +111,7 @@ struct FunctionFrame {
             for (size_t i = 0; i < inoutDataPair->outcastDataViewList.size(); i++) {
                 AddDataView(func->GetOutcast()[i], inoutDataPair->outcastDataViewList[i]);
             }
+            DoAddCallopInOutDataView();
         }
     }
 
@@ -204,6 +206,17 @@ private:
         ASSERT(!spillRawTensorDict.count(tensor));
         spillRawTensorDict[tensor] = rawtensor;
     }
+    void DoAddCallopInOutDataView() {
+        if (callop == nullptr) {
+            return;
+        }
+        for (size_t i = 0; i < inoutDataPair->incastDataViewList.size(); i++) {
+            callopDataViewTensorDict[inoutDataPair->incastDataViewList[i]] = callop->GetIOperands()[i];
+        }
+        for (size_t i = 0; i < inoutDataPair->outcastDataViewList.size(); i++) {
+            callopDataViewTensorDict[inoutDataPair->outcastDataViewList[i]] = callop->GetOOperands()[i];
+        }
+    }
 };
 
 struct FunctionCaptureExecution {
@@ -266,6 +279,7 @@ enum class OpInfoCsvHeader {
     opCode,
     rawTensorMagic,
     tensorMagic,
+    callopRawMagic,
     offset,
     inputShape,
     inputValidShape,
@@ -306,7 +320,7 @@ struct FunctionInterpreter {
         std::string dumpFilePath = dumpPath + "verify_result.csv";
         execResultFile = fopen(dumpFilePath.c_str(), "w");
         std::vector<std::string> csvHeader = {"No.", "rootFuncID", "funcID", "verifyType", "callopMagic", "loopInfo", "opMagic",
-            "opCode", "rawTensorMagic", "tensorMagic", "offset", "inputShape", "inputValidShape", "inputDtype", "inputTensors", 
+            "opCode", "rawTensorMagic", "tensorMagic", "callopRawMagic", "offset", "inputShape", "inputValidShape", "inputDtype", "inputTensors", 
             "outputShape", "outputValidShape", "outputDynValidShape", "outputDtype",
             "outputTensor", "verifyResult", "maxAbsDiff", "maxRelDiff", "errorCount", "errorRatio"};
         WriteCsvRow(csvHeader);

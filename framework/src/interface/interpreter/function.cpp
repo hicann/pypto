@@ -22,6 +22,7 @@ namespace npu::tile_fwk {
 constexpr int MAX_IDENT_LEVEL = 20;
 const std::unordered_set<std::string> copyOpCode = {"COPY_IN", "COPY_OUT", "L1_TO_L0A",
     "L1_TO_L0B", "L1_TO_L0_AT", "L1_TO_L0_BT", "TRANSPOSE_MOVEIN", "TRANSPOSE_MOVEOUT", "INDEX_OUTCAST"};
+const std::unordered_set<std::string> convertOpCode = {"CONVERT", "UB_COPY_L1"};
 
 static std::string HtmlEscape(const std::string &src, bool escapeLineBreak = true) {
     std::string ret;
@@ -290,6 +291,9 @@ void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *f
 void FunctionInterpreter::FillOperationOffsetInfo(Operation *op, FunctionFrame *frame,
                                                   const std::vector<SymbolicScalar> &linearArgList,
                                                   std::vector<std::string> &opInfo) {
+    if (convertOpCode.count(op->GetOpcodeStr())) {  // convert op has no offset
+        return;
+    }
     auto opAttr = std::static_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());
     if (opAttr) {
         if (copyOpCode.count(op->GetOpcodeStr())) {
@@ -309,20 +313,27 @@ void FunctionInterpreter::FillOperationInputInfo(Operation *op, FunctionFrame *f
                                                  std::vector<std::string> &opInfo) {
     auto iopSize = op->GetIOperands().size();
     for (size_t k = 0; k < iopSize; k++) {
-        if (k < ioperandDataViewList->size()) {
-            auto dataView = ioperandDataViewList->at(k);
-            if (k > 0) {
-                opInfo[toIndex(OpInfoCsvHeader::inputShape)] += ", ";
-                opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ", ";
-                opInfo[toIndex(OpInfoCsvHeader::inputDtype)] += ", ";
-                opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += ", ";
-            }
-            opInfo[toIndex(OpInfoCsvHeader::inputShape)] += ShapeToString(dataView->GetShape());
-            opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ShapeToString(dataView->GetValidShape());
-            opInfo[toIndex(OpInfoCsvHeader::inputDtype)] += DataType2String(dataView->GetDataType());
-            auto it = frame->tensorDataBinDict.find(op->GetIOperands()[k]);
-            if (it != frame->tensorDataBinDict.end()) {
-                opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += it->second;
+        if (k >= ioperandDataViewList->size()) {
+            return;
+        }
+        auto dataView = ioperandDataViewList->at(k);
+        if (k > 0) {
+            opInfo[toIndex(OpInfoCsvHeader::inputShape)] += ", ";
+            opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ", ";
+            opInfo[toIndex(OpInfoCsvHeader::inputDtype)] += ", ";
+            opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += ", ";
+        }
+        opInfo[toIndex(OpInfoCsvHeader::inputShape)] += ShapeToString(dataView->GetShape());
+        opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ShapeToString(dataView->GetValidShape());
+        opInfo[toIndex(OpInfoCsvHeader::inputDtype)] += DataType2String(dataView->GetDataType());
+        auto it = frame->tensorDataBinDict.find(op->GetIOperands()[k]);
+        if (it != frame->tensorDataBinDict.end()) {
+            opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += it->second;
+        }
+        if (op->GetOpcode() == Opcode::OP_COPY_IN) {
+            auto itTmp = frame->callopDataViewTensorDict.find(dataView);
+            if (itTmp != frame->callopDataViewTensorDict.end()) {
+                opInfo[toIndex(OpInfoCsvHeader::callopRawMagic)] = std::to_string(itTmp->second->GetRawTensor()->GetRawMagic());
             }
         }
     }
@@ -349,6 +360,13 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
             opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = DataType2String(dataView->GetDataType());
             opInfo[toIndex(OpInfoCsvHeader::outputTensor)] = dumpTensorFileName;
             opInfo[toIndex(OpInfoCsvHeader::verifyResult)] = "-";
+
+            if (op->GetOpcode() == Opcode::OP_COPY_OUT) {
+                auto itTmp = frame->callopDataViewTensorDict.find(dataView);
+                if (itTmp != frame->callopDataViewTensorDict.end()) {
+                    opInfo[toIndex(OpInfoCsvHeader::callopRawMagic)] = std::to_string(itTmp->second->GetRawTensor()->GetRawMagic());
+                }
+            }
         }
         WriteCsvRow(opInfo);
     }
