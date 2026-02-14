@@ -79,9 +79,6 @@ uint32_t GetFileSize(const std::string& filePath) {
 }
 
 bool CreateDir(const std::string &directoryPath) {
-    if (!RealPath(directoryPath).empty()) {
-        return true;
-    }
     int32_t ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // 755
     if (ret != 0 && errno != EEXIST) {
         ALOG_WARN("Creat dir[", directoryPath.c_str(), "] failed, reason is ", strerror(errno));
@@ -123,13 +120,10 @@ bool CreateMultiLevelDir(const std::string &directoryPath) {
         }
     }
 
-    std::string path = RealPath(directoryPath);
-    if (path.empty()) {
-        ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // 755
-        if (ret != 0 && errno != EEXIST) {
-            ALOG_WARN("Creat dir[", directoryPath.c_str(), "] failed, reason is: ", strerror(errno));
-            return false;
-        }
+    ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // 755
+    if (ret != 0 && errno != EEXIST) {
+        ALOG_WARN("Creat dir[", directoryPath.c_str(), "] failed, reason is: ", strerror(errno));
+        return false;
     }
 
     ALOG_DEBUG("Create multi level dir [", directoryPath.c_str(), "] successfully.");
