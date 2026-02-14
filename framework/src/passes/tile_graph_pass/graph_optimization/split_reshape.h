@@ -29,6 +29,14 @@ using InputMaigc = int;
 using OutputMaigc = int;
 using OverlaprawMagic = int;
 
+struct PairHash {
+    size_t operator()(const std::pair<int, int>& p) const noexcept {
+        // 把两个32-bit打包到64-bit,再进行hash
+        uint64_t key = (uint64_t(uint32_t(p.first)) << 32) | uint64_t(uint32_t(p.second));
+        return std::hash<uint64_t>{}(key);
+    }
+};
+
 struct UpdatePara {
     int64_t ShapeVal;
     int64_t OffsetVal;
@@ -50,6 +58,7 @@ struct CheckParam {
 
 struct copyOutTilePara {
     LogicalTensorPtr reshapeSource;
+    int reshapeOpMagic;
     LogicalTensorPtr inputView;
     LogicalTensorPtr newInputView;
     std::vector<int64_t> alignedShape;
@@ -127,6 +136,11 @@ struct ReshapeSourcePara {
     std::vector<int64_t> newReshapeSourceTileOffset;
 };
 
+struct AlignResult {
+    Status st = SUCCESS;
+    LogicalTensorPtr newCopyOutSource;
+};
+
 class SplitReshape : public Pass, public DeadOperationEliminator {
 public:
     SplitReshape() : Pass("SplitReshape") {}
@@ -178,23 +192,26 @@ private:
 
     Status PreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
-    SplitReshapeChecker checker;
+    SplitReshapeChecker checker_;
     
-    std::unordered_map<int, std::set<LogicalTensorPtr, TensorPtrComparator>> AssembleOutToInput;
-    std::unordered_map<InputMaigc, std::unordered_map<OutputMaigc, std::vector<int64_t>>> mapOffset;
-    std::unordered_map<int, LogicalTensorPtr> reshapeSources;
-    std::unordered_map<int, std::vector<SymbolicScalar>> reshapeDynOutput;
-    std::vector<AssembleOp> assembles;
-    std::unordered_map<unsigned long, std::shared_ptr<ReshapeOp>> reshapes;
-    std::unordered_map<std::shared_ptr<ReshapeOp>, std::vector<int64_t>> viewOffset;
-    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> reshapeOffset;
-    std::unordered_set<Operation *> redundantViewops;
-    std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs;
-    std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs;
+    std::unordered_map<int, std::set<LogicalTensorPtr, TensorPtrComparator>> assembleOutToInput_;
+    std::unordered_map<std::pair<int, int>, std::vector<int64_t>, PairHash> mapOffset_;
+    std::unordered_map<std::pair<int, int>, int, PairHash> mapAssembleOpMagic_;
+    std::unordered_map<int, LogicalTensorPtr> reshapeSources_;
+    std::unordered_map<int, std::vector<SymbolicScalar>> reshapeDynOutput_;
+    std::vector<AssembleOp> assembles_;
+    std::unordered_map<unsigned long, std::shared_ptr<ReshapeOp>> reshapes_;
+    std::unordered_map<std::shared_ptr<ReshapeOp>, std::vector<int64_t>> viewOffset_;
+    std::unordered_map<LogicalTensorPtr, std::vector<int64_t>> reshapeOffset_;
+    std::unordered_set<Operation *> redundantViewops_;
+    std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawOutputs_;
+    std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>> reshapeRawInputs_;
     // 记录所有op_reshape的指针，键值为reshape的输出Operand的magic。
-    std::unordered_map<int, const Operation *> reshapeOpPtrs;
+    std::unordered_map<int, const Operation *> reshapeOpPtrs_;
     // 记录满足后续op为reshape的op_assemble的指针，第一个map的键值为assemble输入Operand的magic, 第二个map的键值为后续op_reshape的输出Operand的magic。
-    std::unordered_map<int, std::unordered_map<int, const Operation *>> assembleOpPtrs;
+    std::unordered_map<int, std::unordered_map<int, const Operation *>> assembleOpPtrs_;
+    std::unordered_map<std::pair<int, int>, AlignResult, PairHash> rawToAlignCache_;
+    std::unordered_map<LogicalTensorPtr, bool> sameRawInputCache_;
 };
 
 } // namespace npu::tile_fwk
