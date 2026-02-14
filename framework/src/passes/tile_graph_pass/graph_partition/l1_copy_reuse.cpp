@@ -325,6 +325,9 @@ Status L1CopyInReuseRunner::L1MergeProcess(OperationsViewer &opOriList, std::vec
                                            std::map<std::vector<uint64_t>, int> &l1InputList, int &tmpColor,
                                            std::vector<int> &mergedNum, int &i) {
     for (auto opIdx : colorNode[i]) {
+        if (opOriList[opIdx].HasAttribute(OpAttributeKey::isCube) && !opOriList[opIdx].GetBoolAttribute(OpAttributeKey::isCube)) {
+            return SUCCESS;
+        }
         if (!CanReuse(opOriList[opIdx])) {
             continue;
         }
