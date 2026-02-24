@@ -42,7 +42,8 @@ public:
  	    return supportedArches_;
  	}
  	void SetSupportedArches(const std::vector<NPUArch> &supportedArches) {
- 	    supportedArches_ = supportedArches;
+        supportedArches_.clear();
+        supportedArches_.insert(supportedArches_.end(), supportedArches.begin(), supportedArches.end());
  	}
 
 protected:
