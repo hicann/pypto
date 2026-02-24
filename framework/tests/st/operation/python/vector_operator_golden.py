@@ -26,18 +26,23 @@ import torch
 import torch.nn.functional as F
 import copy
 
-g_src_root: Path = Path(Path(__file__).parent, "../../../../").resolve()
+g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
 g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
 if str(g_ctrl_path) not in sys.path:
     sys.path.append(str(g_ctrl_path))
 from golden_register import GoldenRegister
 
-import_path: Path = Path(g_ctrl_path, "helper").resolve()
+import_path: Path = Path(g_src_root, "framework/tests/cmake/scripts/helper").resolve()
 if str(import_path) not in sys.path:
     sys.path.append(str(import_path))
 from test_case_loader import TestCaseLoader
 from test_case_desc import TensorDesc
-from test_case_tools import parse_list_str, get_dtype_by_name, parse_dict_str, str_to_bool
+from test_case_tools import (
+    parse_list_str,
+    get_dtype_by_name,
+    parse_dict_str,
+    str_to_bool,
+)
 
 bfloat16 = get_dtype_by_name("bf16", False, False)
 
@@ -1052,7 +1057,6 @@ def gen_logical_and_op_golden(case_name: str, output: Path, case_index: int = No
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("LogicalAnd", golden_func, output, case_index)
-
 
 
 @GoldenRegister.reg_golden_func(
