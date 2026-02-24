@@ -300,7 +300,7 @@ private:
     std::string PrintVnchwconv(const PrintUnaryTmpBuffParam &param) const;
     std::string PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuffParam &param) const;
     std::string PrintVnchwconvStatic(const PrintUnaryTmpBuffParam &param) const;
-    std::string PrintVnchwconvTileTensor() const;
+    std::string PrintUnaryWithTmpTileTensor() const;
 
     std::string PrintCompact(const PrintUnaryTmpBuffParam &param) const;
     std::string PrintCompactStatic(const PrintUnaryTmpBuffParam &param) const;

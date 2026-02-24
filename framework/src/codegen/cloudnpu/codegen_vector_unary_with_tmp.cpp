@@ -94,7 +94,7 @@ std::string CodeGenOpCloudNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuf
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintVnchwconvTileTensor() const {
+std::string CodeGenOpCloudNPU::PrintUnaryWithTmpTileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -105,7 +105,7 @@ std::string CodeGenOpCloudNPU::PrintVnchwconvTileTensor() const {
 
 std::string CodeGenOpCloudNPU::PrintVnchwconv(const PrintUnaryTmpBuffParam &param) const {
     if (isSupportLayout) {
-        return PrintVnchwconvTileTensor();
+        return PrintUnaryWithTmpTileTensor();
     }
     if (isDynamicFunction) {
         return PrintVnchwconvDynUnaligned(param);
@@ -447,6 +447,10 @@ std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const {
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
     if (opCode == Opcode::OP_TRANSPOSE_VNCHWCONV) {
         return PrintVnchwconv({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
+    }
+
+    if (opCode == Opcode::OP_SIGN) {
+        return PrintUnaryWithTmpTileTensor();
     }
 
     if (opCode == Opcode::OP_ROUND) {

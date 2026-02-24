@@ -216,6 +216,7 @@ def unary_operator_func_sin_cos(case_name: str, output: Path) -> bool:
         "OnBoardTest.test_unary_operation_16_32_32_tileop_sqrt",
         "OnBoardTest.test_unary_operation_16_16_64_64_tileop_sqrt",
         "OnBoardTest.test_unary_operation_16_16_64_70_tileop_sqrt",
+        "OnBoardTest.test_unary_operation_16_16_64_64_tileop_sign",
         "OnBoardTest.test_unary_operation_32_32_tileop_reciprocal",
         "OnBoardTest.test_unary_operation_16_32_32_tileop_reciprocal",
         "OnBoardTest.test_unary_operation_16_16_64_64_tileop_reciprocal",
@@ -306,6 +307,17 @@ def unary_operator_gen_data(case_name: str, output: Path) -> bool:
             x = np.random.uniform(0, 1, shape_16_16_64_70_i).astype(dtype)
             x.tofile(x_path)
             x = np.sqrt(x)
+            x.tofile(o_path)
+    elif case_name == "OnBoardTest.test_unary_operation_16_16_64_64_tileop_sign":
+        x_path = Path(output, 'x.bin')
+        o_path = Path(output, 'res.bin')
+        complete = x_path.exists() and o_path.exists()
+        if complete:
+            logging.debug("Case(%s), Golden complete.", case_name)
+        else:
+            x = np.random.uniform(-1, 1, shape_16_16_64_64_i).astype(dtype)
+            x.tofile(x_path)
+            x = np.sign(x)
             x.tofile(o_path)
     elif case_name == "OnBoardTest.test_unary_operation_32_32_tileop_reciprocal":
         x_path = Path(output, 'x.bin')

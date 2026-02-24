@@ -88,6 +88,37 @@ TEST_F(OnBoardTest, test_sin_dim2_float32) {
     EXPECT_EQ(ret, true);
 }
 
+TEST_F(OnBoardTest, test_sign_dim2_float32) {
+    aclInit(nullptr);
+    rtSetDevice(GetDeviceIdByEnvVar());
+    std::vector<int64_t> shape = {64, 64};
+    DataType dtype = DataType::DT_FP32;
+    int cap = shape[0] * shape[1];
+    uint64_t outputSize = cap * sizeof(float);
+    uint8_t* out_ptr = allocDevAddr(outputSize);
+    PROGRAM("Sign") {
+        void *x_ptr = readToDev(GetGoldenDir() + "/x_dim2_fp32.bin", cap); // true means no cut
+        TileShape::Current().SetVecTile({32, 32});
+        Tensor input_x(dtype, shape, (uint8_t *)x_ptr, "x");
+        Tensor output(dtype, shape, out_ptr, "sign");
+
+        config::SetBuildStatic(true);
+        FUNCTION("SIGN_T", {input_x, output}) {
+            output = Sign(input_x);
+        }
+    }
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+
+    std::vector<float> x(cap);
+    std::vector<float> golden(cap);
+    std::vector<float> res(cap);
+    machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
+    readInput(GetGoldenDir() + "/sign_golden_fp32.bin", golden);
+    readInput(GetGoldenDir() + "/x_dim2_fp32.bin", x);
+    int ret = resultCmpUnary(x, golden, res, 0.001f);
+    EXPECT_EQ(ret, true);
+}
+
 TEST_F(OnBoardTest, test_cos_dim4_float16) {
     aclInit(nullptr);
     rtSetDevice(GetDeviceIdByEnvVar());

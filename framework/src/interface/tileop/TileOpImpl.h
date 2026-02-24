@@ -37,6 +37,7 @@
 #include "vector/binary.h"
 #include "vector/binary_scalar.h"
 #include "vector/cast.h"
+#include "vector/sign.h"
 #include "vector/reduce.h"
 #include "vector/sort.h"
 #include "vector/mte.h"

@@ -206,6 +206,7 @@ void ExecuteOpUnary(ExecuteOperationContext *ctx) {
     switch (opcode) {
         case Opcode::OP_EXP: calc::Exp(ret, iop); break;
         case Opcode::OP_NEG: calc::Neg(ret, iop); break;
+        case Opcode::OP_SIGN: calc::Sign(ret, iop); break;
         case Opcode::OP_RSQRT: calc::Rsqrt(ret, iop); break;
         case Opcode::OP_SQRT: calc::Sqrt(ret, iop); break;
         case Opcode::OP_RECIPROCAL: calc::Reciprocal(ret, iop); break;
@@ -219,6 +220,7 @@ void ExecuteOpUnary(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_EXP, Opcode::OP_EXP, ExecuteOpUnary<Opcode::OP_EXP>);
 REGISTER_CALC_OP(OP_NEG, Opcode::OP_NEG, ExecuteOpUnary<Opcode::OP_NEG>);
+REGISTER_CALC_OP(OP_SIGN, Opcode::OP_SIGN, ExecuteOpUnary<Opcode::OP_SIGN>);
 REGISTER_CALC_OP(OP_RSQRT, Opcode::OP_RSQRT, ExecuteOpUnary<Opcode::OP_RSQRT>);
 REGISTER_CALC_OP(OP_SQRT, Opcode::OP_SQRT, ExecuteOpUnary<Opcode::OP_SQRT>);
 REGISTER_CALC_OP(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ExecuteOpUnary<Opcode::OP_RECIPROCAL>);

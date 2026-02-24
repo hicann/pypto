@@ -68,6 +68,7 @@ pypto-scatter
 pypto-scatter_
 pypto-scatter_update
 pypto-sigmoid
+pypto-sign
 pypto-sin
 pypto-softmax
 pypto-sqrt
