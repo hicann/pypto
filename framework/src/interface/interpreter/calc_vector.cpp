@@ -489,14 +489,14 @@ void ExecuteOpGatherINUB(ExecuteOperationContext *ctx) {
 REGISTER_CALC_OP(OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_UB, ExecuteOpGatherINUB);
 
 void ExecuteOpIndexAdd(ExecuteOperationContext *ctx) {
-    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
     ASSERT(ctx->ioperandDataViewList->size() == SIZE_THREE);
     auto &ret = ctx->ooperandInplaceDataViewList->at(0);
     auto &self = ctx->ioperandDataViewList->at(0);
     auto &src = ctx->ioperandDataViewList->at(1);
     auto &indices = ctx->ioperandDataViewList->at(2);
     auto alpha = Element(DT_FP32, 1.0);
-    if (ctx->op->HasAttribute(OpAttributeKey::scalar)){
+    if (ctx->op->HasAttribute(OpAttributeKey::scalar)) {
         alpha = ctx->op->GetElementAttribute(OpAttributeKey::scalar);
     }
     int axis = ctx->op->GetIntAttribute(OP_ATTR_PREFIX + "axis");

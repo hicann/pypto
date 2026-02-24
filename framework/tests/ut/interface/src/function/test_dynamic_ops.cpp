@@ -924,7 +924,7 @@ TEST_F(DynamicOpsTest, GatherElement) {
         RawTensorData::CreateConstantTensor<float>(out, 2.0),
     });
     ProgramData::GetInstance().AppendGoldens({
-        RawTensorData::CreateConstantTensor<float>(out, 2.0),
+        RawTensorData::CreateConstantTensor<float>(out, 1.0),
     });
 
     FUNCTION("main", {source, index}, {out}) {
@@ -933,6 +933,42 @@ TEST_F(DynamicOpsTest, GatherElement) {
             auto t0 = View(source, {b, s}, {0, 0});
             auto t1 = View(index, {b, s}, {0, 0});
             out = GatherElements(t0, t1, axis);
+        }
+    }
+}
+
+TEST_F(DynamicOpsTest, IndexAdd) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 2;
+    int64_t s = 8;
+    Tensor self(DT_FP32, {b, s}, "self");
+    Tensor source(DT_FP32, {b, s}, "source");
+    Tensor index(DT_INT32, {b}, "index");
+    int axis = 0;
+    Element alpha(DT_FP32, 2.0);
+    Tensor out(DT_FP32, {b, s}, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(self, 1.0),
+        RawTensorData::CreateConstantTensor<float>(source, 1.0),
+        RawTensorData::CreateConstantTensor<int32_t>(index, 0)
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 3.0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<float>(out, 3.0),
+    });
+
+    FUNCTION("main", {self, source, index}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, s}, {0, 0});
+            auto t1 = View(source, {b, s}, {0, 0});
+            auto t2 = View(index, {b}, {0});
+            out = IndexAdd(t0, t1, t2, axis, alpha);
         }
     }
 }
