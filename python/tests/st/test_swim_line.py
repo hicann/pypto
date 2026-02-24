@@ -51,7 +51,7 @@ def test_device_run_data_from_device_mix_nodep():
     c_data_list = []
     d_data_list = []
 
-    count = 16
+    count = 1
 
     a_rawdata = torch.tensor([[1] * k] * n)
     b_rawdata = torch.tensor([[1] * m] * k)

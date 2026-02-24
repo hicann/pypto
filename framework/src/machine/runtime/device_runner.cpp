@@ -103,15 +103,14 @@ void DeviceRunner::GetModuleLogLevel(DeviceArgs &args) {
         int32_t enableLog = -1;
         logLevel = dlog_getlevel(PYPTO, &enableLog);
     }
-    args.devDfxArgAddr = reinterpret_cast<uint64_t>(DevAlloc(sizeof(DevDfxArgs)));
-    if (args.devDfxArgAddr == 0) {
-        ALOG_WARN_F("Alloc devDfx info failed");
-        return;
-    }
     DevDfxArgs devDfxArg;
     devDfxArg.logLevel = logLevel;
-    ALOG_INFO_F("Get PYPTO log level is %d", logLevel);
+    if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
+        devDfxArg.isOpenSwim = PRO_LEVEL2;
+    }
+    ALOG_INFO_F("Get PYPTO log level is: %d, openSwimLevel: %d", logLevel, devDfxArg.isOpenSwim);
     auto size = sizeof(DevDfxArgs);
+    args.devDfxArgAddr = args_.devDfxArgAddr;
     auto ret = rtMemcpy(reinterpret_cast<void *>(args.devDfxArgAddr), size, &devDfxArg, size, RT_MEMCPY_HOST_TO_DEVICE);
     if (ret != 0) {
         ALOG_WARN_F("Rt mem cpy failed, so couldn't get device log");
@@ -179,6 +178,12 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t
     args.runtimeDataRingBufferAddr = shmAddr;
     PmuCommon::InitPmuEventType(args.archInfo, pmuEvtType_);
     args.pmuEventAddr = reinterpret_cast<uint64_t>(DevAlloc(pmuEvtType_.size() * sizeof(int64_t)));
+    args.devDfxArgAddr = reinterpret_cast<uint64_t>(DevAlloc(sizeof(DevDfxArgs)));
+
+    if (args.devDfxArgAddr == 0) {
+        ALOG_ERROR_F("Alloc devDfx info failed");
+        return -1;
+    }
 
     if (args.sharedBuffer == 0 || args.coreRegAddr == 0 || args.corePmuAddr == 0 || args.corePmuRegAddr == 0) {
         return -1;
