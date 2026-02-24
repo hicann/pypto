@@ -133,9 +133,6 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor) {
     auto shapeImme = OpImmediate::Specified(shape);
     TileShape::Current().SetVecTile(shape);
 
-    InsertTileTensorOp(Opcode::OP_L1_COPY_IN, "TLoad");
-    InsertTileTensorOp(Opcode::OP_L1_COPY_OUT, "TStore");
-
     Tensor inputA(DT_FP32, shape, "A");
     Tensor inputB(DT_FP32, shape, "B");
     Tensor output(DT_FP32, shape, "C");
