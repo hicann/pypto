@@ -461,6 +461,14 @@ void ExecuteOpCmps(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_CMPS, Opcode::OP_CMPS, ExecuteOpCmps);
 
+void ExecuteOpHypot(ExecuteOperationContext *ctx) {
+    auto oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto iop_self = ctx->ioperandDataViewList->at(0);
+    auto iop_other = ctx->ioperandDataViewList->at(1);
+    calc::Hypot(oop, iop_self, iop_other);
+}
+REGISTER_CALC_OP(OP_HYPOT, Opcode::OP_HYPOT, ExecuteOpHypot);
+
 void ExecuteOpExtract(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ioperandDataViewList->size() == 1);
     auto oop = ctx->ooperandInplaceDataViewList->at(0);

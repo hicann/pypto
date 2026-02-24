@@ -230,6 +230,48 @@ def div(input: Tensor, other: Union[Tensor, float]) -> Tensor:
 
 
 @op_wrapper
+def hypot(self: Tensor, other: Tensor) -> Tensor:
+    """Computes the hypotenuse of a right-angled triangle given its legs.
+
+    This function calculates the element-wise operation: `out = sqrt(self^2 + other^2)`.
+    It supports broadcasting between the input tensors.
+
+    Parameters
+    ----------
+    self : Tensor
+        The first input tensor.
+    other : Tensor or Number
+        The second input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the hypotenuse values.
+
+    Raises
+    ------
+    RuntimeError
+        If the two tensors are not broadcastable to a common shape.
+
+    See Also
+    --------
+    sqrt : Element-wise square root.
+    pow : Element-wise power.
+
+    Examples
+    --------
+    a = pypto.tensor([3.0, 4.0], pypto.DT_FP32)
+    b = pypto.tensor([4.0, 3.0], pypto.DT_FP32)
+    out = pypto.hypot(a, b)
+
+    Input a:    [3.0 4.0]
+    Input b:    [4.0 3.0]
+    Output out: [5.0 5.0]
+    """
+    return pypto_impl.Hypot(self, other)
+
+
+@op_wrapper
 def fmod(input: Tensor, other: Union[Tensor, float]) -> Tensor:
     """Computes the element-wise modulus of `input` and `other`.
 

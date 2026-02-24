@@ -159,6 +159,28 @@ TEST_F(OperationImplTest, test_Cmps_BF16) {
     }
 }
 
+TEST_F(OperationImplTest, test_Hypot_FP32) {
+    TileShape::Current().SetVecTile({4, 4});
+    Tensor operand1(DT_FP32, {8, 8}, "operand1");
+    Tensor operand2(DT_FP32, {8, 8}, "operand2");
+    std::vector<int64_t> dstShape = {8, 8};
+    Tensor result;
+    FUNCTION("TestHypot") {
+        result = Hypot(operand1, operand2);
+    }
+}
+
+TEST_F(OperationImplTest, test_Hypot_FP16) {
+    TileShape::Current().SetVecTile({4, 4});
+    Tensor operand1(DT_FP16, {8, 8}, "operand1");
+    Tensor operand2(DT_FP16, {8, 8}, "operand2");
+    std::vector<int64_t> dstShape = {8, 8};
+    Tensor result;
+    FUNCTION("TestHypot") {
+        result = Hypot(operand1, operand2);
+    }
+}
+
 TEST_F(OperationImplTest, Test_IndexAdd_BF16) {
     float scalar = 1.2f;
     int axis = 0;

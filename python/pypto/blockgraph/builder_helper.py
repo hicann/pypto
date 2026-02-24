@@ -211,6 +211,11 @@ class BlockBuilderHelper:
         self.builder.emit(self.ctx, op)
         return op
 
+    def hypot(self, a, b, out):
+        op = self.builder.create_binary_op(ir.Opcode.OP_HYPOT, a, b, out)
+        self.builder.emit(self.ctx, op)
+        return op
+
     def fmod(self, a, b, out):
         op = self.builder.create_binary_op(ir.Opcode.OP_MOD, a, b, out)
         self.builder.emit(self.ctx, op)

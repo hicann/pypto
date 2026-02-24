@@ -31,6 +31,8 @@ void bind_operation(py::module &m) {
     m.def(
         "Div", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Div(self, other); }, "Tensor div.");
     m.def(
+        "Hypot", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Hypot(self, other); }, "Tensor hypot.");
+    m.def(
         "Fmod", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Fmod(self, other); }, "Tensor fmod.");
     m.def(
         "BitwiseAnd", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseAnd(self, other); }, "Tensor bitwise and.");

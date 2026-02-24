@@ -204,6 +204,9 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           // cmp op
           {Opcode::OP_CMP, [this]() { return GenCmpOp(); }},
           {Opcode::OP_CMPS, [this]() { return GenCmpOp(); }},
+
+          // hypot op
+          {Opcode::OP_HYPOT, [this]() { return GenHypotOp(); }},
       }),
       sortOps_({
           // sort

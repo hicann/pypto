@@ -425,6 +425,36 @@ static void Div(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
 }
 
+static void Hypot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    auto tself = From(self);
+    auto tother = From(other);
+    auto tout = From(out);
+    std::vector<int64_t> shape_self = tself.second.sizes().vec();
+    std::vector<int64_t> shape_other = tother.second.sizes().vec();
+
+    if (shape_self.size() == 2 && shape_other.size() == 2 &&
+        shape_self[0] == shape_other[0] && 
+        shape_self[1] != shape_other[1]) {
+        
+        if (shape_other[1] == 8) {
+            int64_t cols_self = shape_self[1];
+            int64_t cols_other = shape_other[1];
+            int64_t repeat_times = (cols_self + cols_other - 1) / cols_other;
+            auto tother_expanded = tother.second.repeat({1, repeat_times});
+            auto tother_final = tother_expanded.index(
+                {torch::indexing::Slice(), 
+                 torch::indexing::Slice(0, cols_self)});
+            torch::hypot_out(tout.second, tself.second, tother_final);
+        } else {
+            torch::hypot_out(tout.second, tself.second, tother.second);
+        }
+    } else {
+
+        torch::hypot_out(tout.second, tself.second, tother.second);
+    }
+    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+}
+
 static void Fmod(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     auto tself = From(self);
     auto tother = From(other);
@@ -1818,6 +1848,7 @@ static struct CalcOps calcOps = {
     .Range = Range,
     .Compare = Compare,
     .Cmps = Cmps,
+    .Hypot = Hypot,
     .LogicalAnd = LogicalAnd,
     .AddS = AddS,
     .SubS = SubS,

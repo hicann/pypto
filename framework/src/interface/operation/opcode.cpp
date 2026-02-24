@@ -418,6 +418,9 @@ void OpcodeManager::RegisterVector() {
     RegisterInfo(Opcode::OP_CMPS, OpCoreType::AIV, "CMPS", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Cmps", PIPE_V, PIPE_V, CoreType::AIV},
         OpCalcType::BROADCAST, {OP_ATTR_PREFIX + "cmp_operation", OP_ATTR_PREFIX + "cmp_mode", OpAttributeKey::scalar});
+    RegisterInfo(Opcode::OP_HYPOT, OpCoreType::AIV, "HYPOT", {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Hypot", PIPE_V, PIPE_V, CoreType::AIV},
+        OpCalcType::BROADCAST);
     RegisterInfo(Opcode::OP_SCATTER_ELEMENT, OpCoreType::AIV, "SCATTER_ELEMENT",
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TscatterElementS", PIPE_S, PIPE_S, CoreType::AIV}, OpCalcType::OTHER,
@@ -861,6 +864,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {           Opcode::OP_WHERE_SS,       "TWhereSS"},
     {                Opcode::OP_CMP,       "TCompare"},
  	{               Opcode::OP_CMPS,       "TCompare"},
+    {               Opcode::OP_HYPOT,        "THypot"},  
     {               Opcode::OP_ADDS,          "TAddS"},
     {               Opcode::OP_MODS,          "TModS"},
     {               Opcode::OP_SUBS,          "TSubS"},

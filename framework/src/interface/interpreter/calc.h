@@ -120,6 +120,9 @@ inline void Cmps(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Elem
     CmpOperationType operation, CmpModeType mode) {
     GetCalcOps()->Cmps(out, self, scalar, operation, mode);
 }
+inline void Hypot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    GetCalcOps()->Hypot(out, self, other);
+}
 inline void LogicalAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     GetCalcOps()->LogicalAnd(out, self, other);
 }

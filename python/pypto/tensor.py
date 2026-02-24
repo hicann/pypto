@@ -425,6 +425,10 @@ class Tensor:
     @source_location
     def mul(self, other: 'Tensor | int | float') -> 'Tensor':
         return pypto.mul(self, other)
+    
+    @source_location
+    def hypot(self, other: 'Tensor') -> 'Tensor':
+        return pypto.hypot(self, other)
 
     @source_location
     def div(self, other: 'Tensor | int | float') -> 'Tensor':

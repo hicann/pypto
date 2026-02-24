@@ -1587,6 +1587,28 @@ std::string CodeGenOpCloudNPU::GenCmpOp() const {
     return oss.str();
 }
 
+
+std::string CodeGenOpCloudNPU::PrintHypotTileTensor() const {
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
+
+    std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
+
+    std::ostringstream oss;
+    oss << tileOpName;
+    oss << WrapParamByParentheses(tileOpParamList);
+    oss << STMT_END;
+    
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenHypotOp() const {
+    ASSERT(isSupportLayout) << "Hypot only support tile tensor";
+    return PrintHypotTileTensor();
+}
+
 std::string CodeGenOpCloudNPU::PrintLogicalAndTileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
