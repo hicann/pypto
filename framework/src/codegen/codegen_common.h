@@ -137,6 +137,12 @@ enum class CopyInMode : int {
     COPY_MOD_DN2NZ
 };
 
+enum class PadMod : int {
+    NO_PADDING = 0,
+    PADDING_OUTER = 1,
+    PADDING_INNER = 2
+};
+
 struct CodeGenCtx {
     std::string includePath;
     std::string cceDir;

@@ -172,7 +172,8 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor) {
         R"!!!(TStore<TStoreConfig<CopyOutMode::ND2ND, 0, 0>>(gmTensor_18, l1Tensor_19, Coord2Dim(0, 0));)!!!";
     CheckStringExist(expect, res);
 
-    expect = R"!!!(TLoad<CopyInMode::ND2ND>(l1Tensor_19, gmTensor_18, Coord2Dim(0, 0), 64, 64);)!!!";
+    expect =
+       R"!!!(TLoad<CopyInMode::ND2ND, PaddingMode::NO_PADDING>(l1Tensor_19, gmTensor_18, Coord2Dim(0, 0), 64, 64);)!!!";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk

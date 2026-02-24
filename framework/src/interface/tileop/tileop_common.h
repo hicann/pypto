@@ -63,11 +63,11 @@
     wait_flag(PIPE_MTE1, PIPE_MTE2, EVENT_ID7)
 #endif
 
-enum class CopyInMode : int64_t
-{
+enum class CopyInMode : int64_t {
     ND2ND = 0,
     ND2NZ = 1,
-    NZ2NZ = 2
+    NZ2NZ = 2,
+    DN2NZ = 3
 };
 
 enum class CopyOutMode : int64_t
@@ -75,6 +75,12 @@ enum class CopyOutMode : int64_t
     NZ2ND = 0,
     NZ2NZ = 1,
     ND2ND = 2
+};
+
+enum class PaddingMode : int64_t {
+    NO_PADDING = 0,
+    PADDING_OUTER = 1,
+    PADDING_INNER = 2
 };
 
 enum class ReLuType : int64_t

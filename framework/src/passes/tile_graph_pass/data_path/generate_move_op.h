@@ -41,6 +41,8 @@ const std::map<std::pair<MemoryType, MemoryType>,Opcode> platformPathMap = {
     {{MEM_L1, MEM_FIX_QUANT_PRE},Opcode::OP_L1_TO_FIX_QUANT_PRE},
     {{MEM_L0C, MEM_UB},Opcode::OP_L0C_COPY_UB},
     {{MEM_UB, MEM_L1},Opcode::OP_UB_COPY_L1},
+    {{MEM_L1, MEM_L0AMX},Opcode::OP_L1_TO_L0A_SCALE},
+    {{MEM_L1, MEM_L0BMX},Opcode::OP_L1_TO_L0B_SCALE},
 };
 
 class GenerateMoveOp : public Pass {
@@ -57,7 +59,14 @@ private:
     Status SetOpcodeByMemPath(Operation &op,MemoryType from,MemoryType to) const;
     bool HasSpecificConsumer(const Operation &op) const;
     void ConvertViewToCopyInWhenInputGm(Operation &op, ViewOpAttribute *viewOpAttribute) const;
-    Status CreateMoveOpForView(Function &function, Operation &op) const;
+    Status A23CreateMoveOpForView(Function &function, Operation &op) const;
+    Status A5CreateMoveOpForView(Function &function, Operation &op) const;
+    Status ProcessGmInput(bool &isGmOutput, Operation &op, ViewOpAttribute *viewOpAttribute) const;
+    Status ProcessL0A(Operation &op, ViewOpAttribute *viewOpAttribute) const;
+    Status ProcessL0B(Operation &op, ViewOpAttribute *viewOpAttribute) const;
+    Status ProcessL0AMX(Operation &op, ViewOpAttribute *viewOpAttribute) const;
+    Status ProcessL0BMX(Operation &op, ViewOpAttribute *viewOpAttribute) const;
+    Status ProcessDefault(Function &function, Operation &op, ViewOpAttribute *viewOpAttribute) const;
     void CreateMoveOpForAssemble(Operation &op) const;
     Status CreateMoveOpForConvert(Function &function, Operation &op) const;
     void ProcessUB2L1(Function &function, Operation &op) const;

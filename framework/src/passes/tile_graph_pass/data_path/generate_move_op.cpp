@@ -64,57 +64,131 @@ bool GenerateMoveOp::HasSpecificConsumer(const Operation &op) const {
     return false;
 }
 
-Status GenerateMoveOp::CreateMoveOpForView(Function &function, Operation &op) const {
+Status GenerateMoveOp::A23CreateMoveOpForView(Function &function, Operation &op) const {
     auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(op.GetOpAttribute().get());
     bool isGmInput = op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
     bool isGmOutput = op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
     if (isGmInput) {
         //case1: VIEW转copyIn
-        if (isGmOutput && HasSpecificConsumer(op)) {
-            return SUCCESS;
-        }
-        if ((!isGmOutput)) {
-            op.SetOpCode(Opcode::OP_COPY_IN);
-            SetCopyAttr(op,viewOpAttribute);
-        }
-    }else if(op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
+        return ProcessGmInput(isGmOutput, op, viewOpAttribute);
+    } else if (op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
         //case2: VIEW转L0A/L0AT
-        auto isTrans = (op.HasAttr("op_attr_l1_to_l0_transpose")) ? op.GetBoolAttribute("op_attr_l1_to_l0_transpose") : 0;
-        if(isTrans) {
-            op.SetOpCode(Opcode::OP_L1_TO_L0_AT);
-        }else {
-            op.SetOpCode(Opcode::OP_L1_TO_L0A);
-        }
-        SetCopyAttr(op,viewOpAttribute);
-    }else if(op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
+        return ProcessL0A(op, viewOpAttribute);
+    } else if (op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
         //case3: VIEW转L0B/L0BT
-       auto isTrans = (op.HasAttr("op_attr_l1_to_l0_transpose")) ? op.GetBoolAttribute("op_attr_l1_to_l0_transpose") : 0;
-        if(isTrans) {
-            op.SetOpCode(Opcode::OP_L1_TO_L0_BT);
-        }else {
-            op.SetOpCode(Opcode::OP_L1_TO_L0B);
-        }
-        SetCopyAttr(op,viewOpAttribute);
-    }else {
+       return ProcessL0B(op, viewOpAttribute);
+    } else {
         //case4: VIEW转其他搬运op
-        auto from = op.iOperand.front()->GetMemoryTypeOriginal();
-        auto to = op.oOperand.front()->GetMemoryTypeOriginal();
-        if (from == to) {
-            return SUCCESS;
-        }
-        Status status = SetOpcodeByMemPath(op,from,to);
-        if(status != SUCCESS) {return status;}
-        if(op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
-            ProcessUB2L1(function, op);
-        }
-        if(op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
-            SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
-        } else {
-            SetCopyAttr(op,viewOpAttribute);
+        return ProcessDefault(function, op, viewOpAttribute);
+    }
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessGmInput(bool &isGmOutput, Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    if (isGmOutput && HasSpecificConsumer(op)) {
+        return SUCCESS;
+    }
+    if ((!isGmOutput)) {
+        op.SetOpCode(Opcode::OP_COPY_IN);
+        SetCopyAttr(op, viewOpAttribute);
+    }
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessL0A(Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    auto isTrans = (op.HasAttr("op_attr_l1_to_l0_transpose")) ? op.GetBoolAttribute("op_attr_l1_to_l0_transpose") : 0;
+    if(isTrans) {
+        op.SetOpCode(Opcode::OP_L1_TO_L0_AT);
+    } else {
+        op.SetOpCode(Opcode::OP_L1_TO_L0A);
+    }
+    op.SetCoreType(CoreType::AIC);
+    SetCopyAttr(op,viewOpAttribute);
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessL0B(Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    auto isTrans = (op.HasAttr("op_attr_l1_to_l0_transpose")) ? op.GetBoolAttribute("op_attr_l1_to_l0_transpose") : 0;
+    if (isTrans) {
+        op.SetOpCode(Opcode::OP_L1_TO_L0_BT);
+    } else {
+        op.SetOpCode(Opcode::OP_L1_TO_L0B);
+    }
+    op.SetCoreType(CoreType::AIC);
+    SetCopyAttr(op,viewOpAttribute);
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessL0AMX(Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    op.SetOpCode(Opcode::OP_L1_TO_L0A_SCALE);
+    op.SetCoreType(CoreType::AIC);
+    auto input = op.GetIOperands()[0];
+    auto prodOp = *input->GetProducers().begin();
+    if (prodOp->GetOpcode() == Opcode::OP_COPY_IN && input->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+        prodOp->SetOpCode(Opcode::OP_L1_COPY_IN_A_SCALE);
+        prodOp->SetCoreType(CoreType::AIC);
+    }
+    SetCopyAttr(op,viewOpAttribute);
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessL0BMX(Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    op.SetOpCode(Opcode::OP_L1_TO_L0B_SCALE);
+    op.SetCoreType(CoreType::AIC);
+    auto input = op.GetIOperands()[0];
+    auto prodOp = *input->GetProducers().begin();
+    if (prodOp->GetOpcode() == Opcode::OP_COPY_IN && input->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+        prodOp->SetOpCode(Opcode::OP_L1_COPY_IN_B_SCALE);
+        prodOp->SetCoreType(CoreType::AIC);
+    }
+    SetCopyAttr(op,viewOpAttribute);
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::ProcessDefault(Function &function, Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    auto from = op.iOperand.front()->GetMemoryTypeOriginal();
+    auto to = op.oOperand.front()->GetMemoryTypeOriginal();
+    if (from == to) {
+        return SUCCESS;
+    }
+    Status status = SetOpcodeByMemPath(op,from,to);
+    if(status != SUCCESS) {return status;}
+    if(op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
+        ProcessUB2L1(function, op);
+    }
+    if(op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
+        SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
+    } else {
+        SetCopyAttr(op,viewOpAttribute);
+    }
+    return SUCCESS;
+}
+
+Status GenerateMoveOp::A5CreateMoveOpForView(Function &function, Operation &op) const {
+    auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(op.GetOpAttribute().get());
+    bool isGmInput = op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
+    bool isGmOutput = op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
+    if (isGmInput) {
+        //case1: VIEW转copyIn
+        return ProcessGmInput(isGmOutput, op, viewOpAttribute);
+    } else {
+        auto dstMemType = op.oOperand.front()->GetMemoryTypeOriginal();
+        switch (dstMemType) {
+            case MemoryType::MEM_L0A:
+                return ProcessL0A(op, viewOpAttribute);
+            case MemoryType::MEM_L0B:
+                return ProcessL0B(op, viewOpAttribute);
+            case MemoryType::MEM_L0AMX:
+                return ProcessL0AMX(op, viewOpAttribute);
+            case MemoryType::MEM_L0BMX:
+                return ProcessL0BMX(op, viewOpAttribute);
+            default:
+                return ProcessDefault(function, op, viewOpAttribute);
         }
     }
     return SUCCESS;
 }
+
 void GenerateMoveOp::SetCopyAttr(Operation &op,ViewOpAttribute *viewOpAttribute) const {
     auto copyAttr = std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
@@ -241,7 +315,12 @@ Status GenerateMoveOp::CreateMoveOp(Function &function) const {
                 break;
             }
             case Opcode::OP_VIEW: {
-                Status status = CreateMoveOpForView(function, op);
+                if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+                    Status status = A5CreateMoveOpForView(function, op);
+                    if(status != SUCCESS) {return status;}
+                    break;
+                }
+                Status status = A23CreateMoveOpForView(function, op);
                 if(status != SUCCESS) {return status;}
                 break;
             }

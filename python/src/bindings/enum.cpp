@@ -33,6 +33,7 @@ void bind_enum(py::module &m){
         .value("DT_HF8", DataType::DT_HF8)
         .value("DT_FP8E4M3", DataType::DT_FP8E4M3)
         .value("DT_FP8E5M2", DataType::DT_FP8E5M2)
+        .value("DT_FP8E8M0", DataType::DT_FP8E8M0)
         .value("DT_UINT8", DataType::DT_UINT8)
         .value("DT_UINT16", DataType::DT_UINT16)
         .value("DT_UINT32", DataType::DT_UINT32)

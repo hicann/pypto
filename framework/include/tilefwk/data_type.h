@@ -80,17 +80,17 @@ enum MemoryType {
     MEM_FIX_QUANT_POST = 9,
     MEM_FIX_ELT_ANTIQ = 10,
     MEM_FIX_MTE2_ANTIQ = 11,
-    MEM_L0AMX = 12,
-    MEM_L0BMX = 13,
-    MEM_BT = 14,
-    MEM_L2 = 15,
-    MEM_L3 = 16,
-    MEM_DEVICE_DDR = 17,
-    MEM_HOST1 = 18,
-    MEM_FAR1 = 19,
-    MEM_FAR2 = 20,
-    MEM_WORKSPACE = 21,
-    MEM_VECTOR_REG = 22,
+    MEM_BT = 12,
+    MEM_L2 = 13,
+    MEM_L3 = 14,
+    MEM_DEVICE_DDR = 15,
+    MEM_HOST1 = 16,
+    MEM_FAR1 = 17,
+    MEM_FAR2 = 18,
+    MEM_WORKSPACE = 19,
+    MEM_VECTOR_REG = 20,
+    MEM_L0AMX = 21,
+    MEM_L0BMX = 22,
     MEM_UNKNOWN
 };
 
@@ -238,6 +238,8 @@ inline std::string MemoryTypeToString(MemoryType mt) {
         case MEM_L1: return "MEM_L1";
         case MEM_L0A: return "MEM_L0A";
         case MEM_L0B: return "MEM_L0B";
+        case MEM_L0AMX: return "MEM_L0AMX";
+        case MEM_L0BMX: return "MEM_L0BMX";
         case MEM_L0C: return "MEM_L0C";
         case MEM_L2: return "MEM_L2";
         case MEM_L3: return "MEM_L3";
@@ -265,6 +267,8 @@ inline std::string MemoryTypeToString(MemoryType mt) {
         case MEM_L1: return "L1";
         case MEM_L0A: return "L0A";
         case MEM_L0B: return "L0B";
+        case MEM_L0AMX: return "L0AMX";
+        case MEM_L0BMX: return "L0BMX";
         case MEM_L0C: return "L0C";
         case MEM_L2: return "L2";
         case MEM_L3: return "L3";

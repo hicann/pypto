@@ -229,7 +229,7 @@ TEST_F(TestCodegenDynCopy, L1CopyIn) {
 TEST_F(TestCodegenDynCopy, L1CopyInTileTensor) {
     std::string res = TestL1CopyInBody(false, 0, 0, true);
     std::string expect =
-        R"!!!(TLoad<CopyInMode::NZ2NZ>(l1Tensor_10, gmTensor_11, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, 0)), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 1));
+        R"!!!(TLoad<CopyInMode::NZ2NZ, PaddingMode::NO_PADDING>(l1Tensor_10, gmTensor_11, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, 0)), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 0, 2, 1));
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -433,7 +433,7 @@ std::string TestMatmulMteBody(Opcode opcode, MemoryType inType, MemoryType outTy
 TEST_F(TestCodegenDynCopy, L1CopyInTensor) {
     std::string res = TestMatmulMteBody(Opcode::OP_L1_COPY_IN, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1);
     std::string expect =
-        R"!!!(TLoad<CopyInMode::ND2NZ>(l1Tensor_10, gmTensor_11, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, -1)), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1));
+        R"!!!(TLoad<CopyInMode::ND2NZ, PaddingMode::NO_PADDING>(l1Tensor_10, gmTensor_11, Coord2Dim(GET_PARAM_OFFSET_2(param, 0, -1)), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1));
 )!!!";
     EXPECT_EQ(res, expect);
 }

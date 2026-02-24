@@ -16,7 +16,7 @@
 #ifndef TILEOP_UTILS_COMMON_TYPE_H
 #define TILEOP_UTILS_COMMON_TYPE_H
 
-enum class Hardware : uint8_t { GM = 0, UB, L1, L0A, L0B, L0C, BIAS, FIXBUF, MAX };
+enum class Hardware : uint8_t { GM = 0, UB, L1, L0A, L0B, L0C, BIAS, FIXBUF, MAX, L0A_MX, L0B_MX };
 
 enum class UnaryOp : uint8_t { ABS = 0, EXP, NEG, REC, RSQRT, SQRT, BRCB, CEIL, FLOOR, TRUNC, ROUND, RECIPROCAL, BITWISENOT, RELU, LN };
 

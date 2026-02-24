@@ -35,8 +35,11 @@ constexpr uint32_t LEFT_SHIFT32 = 32;
 constexpr int64_t CUBE_PAD_VALUE = 16;
 constexpr int64_t CUBE_PAD_INT8_VALUE = 32;
 constexpr int64_t BT_PAD_BASE = 64;
+constexpr int64_t mxHighAxis = 0;
+constexpr int64_t mxLowAxis = 1;
 const std::vector<bool> AXIS_COMBINED = {true};
 const std::vector<bool> BROADCAST_AXIS_COMBINED = {true, true};
+const std::unordered_set<DataType> inDataSupport = {DataType::DT_INT8, DataType::DT_FP8E5M2, DataType::DT_FP8E4M3, DataType::DT_HF8};
 const int64_t BRCB_SECOND_LAST_BASE = 8;
 const size_t LAST_SECOND_AXIS = 2;
 const std::string REDUCE_AXIS = OP_ATTR_PREFIX + "AXIS";
@@ -57,11 +60,10 @@ bool PadLocalBuffer::IsInputInt8(const Operation &op, const LogicalTensorPtr &in
     bool matmulOp = std::find(cubeOps.begin(), cubeOps.end(), op.GetOpcode()) != cubeOps.end();
     bool opsInputInt8 = false;
     if (op.GetIOperands().size() > 0 && op.GetIOperands()[0] != nullptr && op.GetIOperands()[0]->tensor != nullptr) {
-        opsInputInt8 = op.GetIOperands()[0]->tensor->GetDataType() == DataType::DT_INT8;
+        opsInputInt8 = inDataSupport.find(op.GetIOperands()[0]->tensor->GetDataType()) != inDataSupport.end();
     }
 
-    if (in->tensor->GetDataType() == DataType::DT_INT8 ||
-        (matmulOp && opsInputInt8)) {
+    if (inDataSupport.find(in->tensor->GetDataType()) != inDataSupport.end() || (matmulOp && opsInputInt8)) {
         // 检查op的输入数据类型是不是int8类型或者in的数据类型是否为int8
         // 包括matmul系列和GM->L1->L0系列
         return true;
@@ -73,7 +75,7 @@ bool PadLocalBuffer::IsInputInt8(const Operation &op, const LogicalTensorPtr &in
             inProducerPtr->GetIOperands()[0] != nullptr && inProducerPtr->GetIOperands()[0]->tensor != nullptr) {
             // 检查in的前置op节点的输入是否为int8。
             // iOperands (dtype:int8) --> A_MULACC_B --> in (dtype:fp16/int32), iOperands (dtype:fp16/int32) --> COPY_OUT
-            return inProducerPtr->GetIOperands()[0]->tensor->GetDataType() == DataType::DT_INT8;
+            return inDataSupport.find(inProducerPtr->GetIOperands()[0]->tensor->GetDataType()) != inDataSupport.end();
         }
     }
     return false;
@@ -101,6 +103,12 @@ void PadMatmulL1ConvertScene(Operation &op, LogicalTensorPtr &in, size_t lowInde
     }
 }
 
+void PadForMatMulMX(LogicalTensorPtr &in, const int64_t &axisNum) {
+    in->shape[axisNum] = Pad(in->shape[axisNum], CUBE_PAD_INT8_VALUE);
+    in->tensor->oriRawshape = in->tensor->rawshape;
+    in->tensor->rawshape[axisNum] = Pad(in->tensor->oriRawshape[axisNum], CUBE_PAD_INT8_VALUE);
+}
+
 void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
     if (in == nullptr || in->tensor == nullptr) {
         APASS_LOG_ERROR_F(Elements::Tensor, "logical tensor pointer is null.");
@@ -126,6 +134,13 @@ void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
     第二种：iOperands (dtype:int8) -> Matmul系列(A_MUL_B, AT_MUL_B, A_MUL_BT, AT_MUL_BT, A_MULACC_B) -> in (dtype:fp16/int32) -> iOperands (dtype:fp16/int32) -> COPY_OUT
     这种情况是COPY_OUT需要根据in的producer的iOperands来进行判断，所以会需要获取到in的producer的iOperands的数据类型。
     */
+    if (op.GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE || (*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE) {
+        PadForMatMulMX(in, mxHighAxis);
+        return;
+    } else if (op.GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE || (*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE) {
+        PadForMatMulMX(in, mxLowAxis);
+        return;
+    }
     if (isL1ConvertScene) {
         /*
         输入带bias或fixpipe场景，切分tileShape为[1, N]，在L1_TO_BT和L1_TO_FIX_QUANT_PRE时，BT统一为FP32，BT BUFFER要求64B对齐，FixPipe为uint64，FB BUFFER为128B对齐，均要求N满足16元素对齐，否则会出现address misalign异常
@@ -392,7 +407,9 @@ bool PadLocalBuffer::IsMatmul(const LogicalTensorPtr &tensor) const {
         (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) ||
         (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) ||
         (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_FIX_QUANT_PRE) ||
-        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_BT)) {
+        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_BT) ||
+        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0AMX) ||
+        (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0BMX)) {
         return true;
     }
     return false;

@@ -78,6 +78,7 @@ constexpr const int SHAPE_DIM3 = 3;
 constexpr const int SHAPE_DIM4 = 4;
 constexpr const int SHAPE_DIM5 = 5;
 constexpr const int ALIGN_SIZE_512 = 512;
+constexpr const int ALIGN_SIZE_64 = 64;
 constexpr const int ALIGN_SIZE_32 = 32;
 constexpr const int ALIGN_SIZE_16 = 16;
 constexpr const int VNCHWCONV_REPEAT = 16;
@@ -157,6 +158,8 @@ inline std::string OperandTypeToStr(OperandType t) {
         {BUF_REG,    "REG"},
         { SCALAR, "SCALAR"},
         { BUF_BT, "BiasTable"},
+        {BUF_L0AMX,"L0A_MX"},
+        {BUF_L0BMX,"L0B_MX"},
     };
 
     if (strMap.count(t)) {
@@ -599,4 +602,24 @@ template <typename T>
 inline bool HasNegativeNum(const std::vector<T> &vec) {
     return std::any_of(vec.begin(), vec.end(), [](T num) { return num < 0; });
 }
+
+namespace Matrix {
+const std::string OP_ATTR_PREFIX = "op_attr_";
+const std::string L1_TO_L0_OFFSET = OP_ATTR_PREFIX + "l1_to_l0_offset";
+const std::string L1_TO_L0_TILE = OP_ATTR_PREFIX + "l1_to_l0_tile";
+const std::string A_MUL_B_COPY_IN_MODE = OP_ATTR_PREFIX + "copy_in_mode";
+
+enum class CopyInMode : int64_t {
+    ND2ND = 0,
+    ND2NZ = 1,
+    NZ2NZ = 2,
+    DN2NZ = 3
+};
+
+enum class PaddingMode : int64_t {
+    NO_PADDING = 0,
+    PADDING_OUTER = 1,
+    PADDING_INNER = 2
+};
+} // namespace Matrix
 } // namespace npu::tile_fwk

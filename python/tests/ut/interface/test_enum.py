@@ -28,6 +28,7 @@ def test_dtype():
     assert pypto.bytes_of(pypto.DT_HF8) == 1
     assert pypto.bytes_of(pypto.DT_FP8E4M3) == 1
     assert pypto.bytes_of(pypto.DT_FP8E5M2) == 1
+    assert pypto.bytes_of(pypto.DT_FP8E8M0) == 1
     assert pypto.bytes_of(pypto.DT_UINT8) == 1
     assert pypto.bytes_of(pypto.DT_UINT16) == 2
     assert pypto.bytes_of(pypto.DT_UINT32) == 4

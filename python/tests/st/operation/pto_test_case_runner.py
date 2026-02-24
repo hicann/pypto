@@ -43,6 +43,7 @@ def get_pto_dtype_by_name(name: str):
         "hf8": pypto.DT_HF8,
         "fp8e4m3": pypto.DT_FP8E4M3,
         "fp8e5m2": pypto.DT_FP8E5M2,
+        "fp8e8m0": pypto.DT_FP8E8M0,
         "uint8": pypto.DT_UINT8,
         "uint16": pypto.DT_UINT16,
         "uint32": pypto.DT_UINT32,

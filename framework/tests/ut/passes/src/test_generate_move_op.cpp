@@ -779,7 +779,7 @@ TEST_F(GenerateMoveOpPassTest, CreateMoveOpForViewUB2L1) {
 
         // 执行CreateMoveOpForView
         GenerateMoveOp generateMoveOp;
-        Status status = generateMoveOp.CreateMoveOpForView(*func, *viewOp);
+        Status status = generateMoveOp.A23CreateMoveOpForView(*func, *viewOp);
 
         // ================== 验证核心逻辑 ==================
         EXPECT_EQ(status, SUCCESS);

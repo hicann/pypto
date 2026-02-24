@@ -87,7 +87,7 @@ Status AddAlloc::UpdateTensorAllocMsg(Operation &op, size_t i, std::unordered_ma
 
 Status AddAlloc::SetTensorAllocMsg(Operation &op, std::unordered_map<int, TensorAllocMsg> &tensorAllocMsgMap) const {
     for (size_t i = 0; i < op.GetOOperands().size(); i++) {
-        if (op.GetOutputOperand(i)->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+        if (op.GetOutputOperand(i)->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
             continue;
         }
         if (UpdateTensorAllocMsg(op, i, tensorAllocMsgMap) != SUCCESS) {

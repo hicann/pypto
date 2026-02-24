@@ -171,20 +171,24 @@ std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
 
-    unsigned srcOffset0 = 0;
-    unsigned srcOffset1 = 0;
-    auto dynoffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
-    if (!dynoffset.empty()) {
-        ASSERT(dynoffset.size() == SHAPE_DIM2) << "GenMemL1ToL0 only support 2-dim!";
-        srcOffset0 = dynoffset[ID0];
-        srcOffset1 = dynoffset[ID1];
+    auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
+    size_t coordSize = rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size();
+    std::vector<std::string> l0Offset;
+    if (!dynOffset.empty()) {
+        ASSERT(dynOffset.size() == SHAPE_DIM2 || dynOffset.size() == SHAPE_DIM3)
+            << "GenMemL1ToL0 only support 2-dim or 3-dim!";
+        for (auto &srcOffset : dynOffset) {
+            l0Offset.push_back(SymbolicExpressionTable::BuildExpression(srcOffset));
+        }
+    } else {
+        for (size_t i = 0; i < coordSize; ++i) {
+            l0Offset.push_back("0");
+        }
     }
-    std::vector<std::string> l0Offset = {
-        SymbolicExpressionTable::BuildExpression(srcOffset0), SymbolicExpressionTable::BuildExpression(srcOffset1)};
     // constructor call parameter ((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
     std::string coordCp = WrapParamByParentheses(l0Offset);
     // e.g. Coord4Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
-    std::string coord = PrintCoord(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), coordCp);
+    std::string coord = PrintCoord(coordSize, coordCp);
     std::ostringstream oss;
     oss << tileOpName;
     if (opCode != Opcode::OP_L1_TO_L0A_SCALE && opCode != Opcode::OP_L1_TO_L0B_SCALE) {
@@ -753,7 +757,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, src1Tensor, coord, outerValueStr, innerValueStr,
         std::to_string(scaleValue.GetUnsignedData())};
     std::ostringstream oss;
-    oss << tileOpName << "<" << "TStoreConfig" << storeConfig << ">";
+    oss << tileOpName << "<" << TSTORE_CONF << storeConfig << ">";
     oss << PrintParams({"(", ")"}, tileOpParamList, ", ");
     oss << STMT_END;
     return oss.str();
@@ -966,8 +970,23 @@ std::string CodeGenOpCloudNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopy
     } else {
         cpModeStr = "CopyInMode::ND2NZ";
     }
+    int64_t paddingMode = 0;
+    std::string padModStr = "";
+    GetAttr(OP_ATTR_PREFIX + "copy_in_l1_padding_mode", paddingMode);
+    switch (static_cast<PadMod>(paddingMode)) {
+        case PadMod::NO_PADDING: padModStr = "PaddingMode::NO_PADDING"; break;
+        case PadMod::PADDING_OUTER: padModStr = "PaddingMode::PADDING_OUTER"; break;
+        case PadMod::PADDING_INNER: padModStr = "PaddingMode::PADDING_INNER"; break;
+        default: padModStr = "PaddingMode::NO_PADDING"; break;
+    }
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByAngleBrackets({cpModeStr}) << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    if (opCode == Opcode::OP_L1_COPY_IN_A_SCALE || opCode == Opcode::OP_L1_COPY_IN_B_SCALE) {
+        oss << tileOpName << WrapParamByAngleBrackets({cpModeStr}) << WrapParamByParentheses(tileOpParamList)
+            << STMT_END;
+    } else {
+        oss << tileOpName << WrapParamByAngleBrackets({cpModeStr, padModStr}) << WrapParamByParentheses(tileOpParamList)
+        << STMT_END;
+    }
     return oss.str();
 }
 

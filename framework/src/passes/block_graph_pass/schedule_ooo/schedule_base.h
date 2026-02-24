@@ -89,12 +89,12 @@ public:
         LogicalTensors inOutOperand;
         inOutOperand.reserve(op->GetOOperands().size() + op->GetIOperands().size());
         for (auto o : op->GetOOperands()) {
-            if (o->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+            if (o->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
                 inOutOperand.push_back(o);
             }
         }
         for (auto i : op->GetIOperands()) {
-            if (i->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+            if (i->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
                 inOutOperand.push_back(i);
             }
         }
@@ -143,9 +143,8 @@ public:
             return SUCCESS;
         }
         if (static_cast<uint64_t>(oOperand->tensor->GetRawDataSize()) != ShapeCeilAlign(oOperand->tensor->rawshape, oOperand->tensor->datatype)) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "InitLocalBuffer Failed at ShapeCeilAlign! "
+            APASS_LOG_WARN_F(Elements::Tensor, "InitLocalBuffer Failed at ShapeCeilAlign! "
                 "Please ensure that the rawTensor[%d] shapes are aligned.", oOperand->GetRawMagic());
-            return FAILED;
         }
         if (localBufferMap_.find(memId) == localBufferMap_.end()) {
             localBufferMap_[memId] = std::make_shared<LocalBuffer>(
@@ -197,7 +196,7 @@ public:
 
     void UpdateBufRefCount(LogicalTensorPtr tensor) {
         int memId = tensor->memoryrange.memId;
-        if (tensor->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        if (tensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
             bufRefCount_[memId]++;
         }
     }
@@ -210,7 +209,7 @@ public:
             for (auto &tensor : op->GetIOperands()) {
                 UpdateBufRefCount(tensor);
                 int memId = tensor->memoryrange.memId;
-                if (InitLocalBuffer(tensor, memId) != SUCCESS) {
+                if (InitLocalBuffer(tensor, memId) == FAILED) {
                     APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
                     return FAILED;
                 }
@@ -218,7 +217,7 @@ public:
             for (auto &tensor : op->GetOOperands()) {
                 UpdateBufRefCount(tensor);
                 int memId = tensor->memoryrange.memId;
-                if (InitLocalBuffer(tensor, memId) != SUCCESS) {
+                if (InitLocalBuffer(tensor, memId) == FAILED) {
                     APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
                     return FAILED;
                 }
@@ -245,7 +244,7 @@ public:
     Status InitAllocDependencies(Operation* op, std::unordered_map<int, Operation*> &tensor2AllocMap) {
         for (auto &tensor : op->GetOOperands()) {
             int memId = tensor->memoryrange.memId;
-            if (tensor->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+            if (tensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
                 if (tensor2AllocMap.find(memId) == tensor2AllocMap.end()) {
                     APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d] must have alloc. magic: %d, op: %s", memId, tensor->GetMagic(), GetOpInfo(op).c_str());
                     return FAILED;
@@ -387,7 +386,7 @@ public:
 
     void UpdateAllocMap(Operation* op, std::map<int, Operation*> &tensorAllocMap) {
         for (auto outTensor : op->GetOOperands()) {
-            if (outTensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+            if (outTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
                 continue;
             }
             int memId = outTensor->memoryrange.memId;
@@ -396,7 +395,7 @@ public:
             }
         }
         for (auto inTensor : op->GetIOperands()) {
-            if (inTensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+            if (inTensor->GetMemoryTypeOriginal() >= MemoryType::MEM_DEVICE_DDR) {
                 continue;
             }
             int memId = inTensor->memoryrange.memId;

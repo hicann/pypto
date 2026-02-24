@@ -392,6 +392,14 @@ Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, bo
 Tensor Matmul(DataType outType, const Tensor &aMatrix, const Tensor &bMatrix, const MatmulExtendParam &extendParam,
     bool isATrans = false, bool isBTrans = false, bool isCMatrixNZ = false);
 
+Tensor MatmulMX(DataType outType, const Tensor &aMatrix, const Tensor &aScale, const Tensor &bMatrix,
+    const Tensor &bScale, bool isATrans = false, bool isAScaleTrans = false, bool isBTrans = false,
+    bool isBScaleTrans = false, bool isCMatrixNZ = false);
+
+Tensor MatmulMX(DataType outType, const Tensor &aMatrix, const Tensor &aScale, const Tensor &bMatrix,
+    const Tensor &bScale, const MatmulExtendParam &extendParam, bool isATrans = false, bool isAScaleTrans = false,
+    bool isBTrans = false, bool isBScaleTrans = false, bool isCMatrixNZ = false);
+
 Tensor BatchMatmul(DataType dataType, const Tensor &aMatrix, const Tensor &bMatrix, bool isATrans = false,
     bool isBTrans = false, bool isCMatrixNZ = false);
 
