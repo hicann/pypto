@@ -84,6 +84,8 @@ class GenAttentionTest(TestBase):
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_FP16",
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_FP32",
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_BF16",
+        "TestGenAtten.test_mem_check_ok",
+        "TestGenAtten.test_mem_check_fail",
     ]
 )
 def gen_gen_atten_data(case_name: str, output: Path) -> bool:
@@ -94,6 +96,8 @@ def gen_gen_atten_data(case_name: str, output: Path) -> bool:
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_FP16": (16, 2, 128, 512, torch.float16),
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_FP32": (16, 2, 128, 512, torch.float32),
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_BF16": (16, 2, 128, 512, torch.bfloat16),
+        "TestGenAtten.test_mem_check_ok": (16, 1, 128, 512, torch.float16),
+        "TestGenAtten.test_mem_check_fail": (16, 1, 128, 512, torch.float16),
     }
 
     test = GenAttentionTest()
@@ -115,6 +119,8 @@ def main() -> bool:
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_FP16",
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_FP32",
         "TestGenAtten.TestDynamicGenAtten_B_16_S1_2_BF16",
+        "TestGenAtten.test_mem_check_ok",
+        "TestGenAtten.test_mem_check_fail",
     ]
     # 函数调用
     ret: bool = True
