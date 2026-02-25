@@ -25,6 +25,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import copy
+from typing import List, Dict, Any
 
 g_src_root: Path = Path(Path(__file__).parent, "../../../../../").resolve()
 g_ctrl_path: Path = Path(g_src_root, "cmake/scripts")
@@ -2418,6 +2419,20 @@ def gen_bitwise_right_shift_op_golden(case_name: str, output: Path, case_index: 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("CopySign", golden_func, output, case_index)
 
+
+@GoldenRegister.reg_golden_func(case_names=["TestIsFinite/IsFiniteOperationTest.TestIsFinite"])
+def gen_isfinite_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],    # noqa
+    ) -> List[np.ndarray]:
+        result = torch.isfinite(from_numpy(inputs[0]))
+        return [to_numpy(result)]
+    
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("IsFinite", generate_wrapper, output, case_index)
+    
 
 def main() -> bool:
     # 用例名称

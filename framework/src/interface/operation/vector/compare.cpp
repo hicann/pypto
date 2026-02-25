@@ -239,7 +239,7 @@ void TiledCmpsOperationImpl(Function &function, const TileShape &tileShape, size
         }
         ASSERT(element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
-        int64_t vcmp_bits_size = (elements_per_chunk + 7) / 8;
+        int64_t vcmp_bits_size = (elements_per_chunk + 8 - 1) / 8;
 
         const size_t ALIGN_SIZE = 32;
 

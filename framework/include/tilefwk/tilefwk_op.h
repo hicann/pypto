@@ -236,7 +236,7 @@ Tensor Pad(const Tensor &old, const std::vector<int64_t> &newShape);
 Tensor LogicalNot(const Tensor &self);
 Tensor Range(const Element &start, const Element &end, const Element &step);
 Tensor LogicalAnd(const Tensor &self, const Tensor &other);
-
+Tensor IsFinite(const Tensor &self);
 Tensor Assign(const Tensor &operand);
 
 // Implementation of `Tensor` type should be placed at first, so that it can be routed when only single input.

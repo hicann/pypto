@@ -407,6 +407,8 @@ private:
     std::string PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuffParam &param) const;
     std::string PrintRowSumlineStatic(const PrintUnaryTmpBuffParam &param) const;
 
+    std::string PrintIsFinite([[maybe_unused]] const PrintUnaryTmpBuffParam &param) const;
+
     std::string PrintExtractStatic() const;
     std::string PrintExtractDynamicUnaligned() const;
     std::string PrintExtractTileTensor() const;

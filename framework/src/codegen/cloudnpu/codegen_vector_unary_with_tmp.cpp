@@ -426,6 +426,16 @@ std::string CodeGenOpCloudNPU::PrintRowSumline(const PrintUnaryTmpBuffParam &par
     return PrintRowSumlineStatic(param);
 }
 
+std::string CodeGenOpCloudNPU::PrintIsFinite([[maybe_unused]] const PrintUnaryTmpBuffParam &param) const {
+    ASSERT(isSupportLayout) << "`IsFinite` only supports `codegen_support_tile_tensor`==true! Please modify `tile_fwk_config.json`!";
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
+    std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
+    std::ostringstream oss;
+    oss << tileOpName << "(" << JoinString({dstTensor, srcTensor, tmpTensor}, CONN_COMMA) << ");\n";
+    return oss.str();
+}
+
 std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const {
     // In this scenario, frontend set tmp buffer in output to optimize ooo schedule result.
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
@@ -471,6 +481,10 @@ std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const {
 
     if (opCode == Opcode::OP_COMPACT) {
         return PrintCompact({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
+    }
+
+    if (opCode == Opcode::OP_ISFINITE) {
+        return PrintIsFinite({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 
     std::string ostring(buffer);

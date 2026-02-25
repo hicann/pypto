@@ -28,29 +28,34 @@ void UnaryOperationOperandCheck(
 
 template <UnaryOpType T>
 void TiledUnaryOperation(
-    Function &function, const TileShape &tileShape, size_t cur, Input &input, const LogicalTensorPtr &result) {
+    Function &function, const TileShape &tileShape, size_t cur, Input &input, const LogicalTensorPtr &result, uint32_t workspaceSize = 0) {
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile});
+        if (workspaceSize == 0) {
+            function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile});
+        } else {
+            LogicalTensorPtr workspace = std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
+            function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile, workspace});
+        }
         return;
     }
     auto &vecTile = tileShape.GetVecTile();
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
-        TiledUnaryOperation<T>(function, tileShape, cur + 1, input, result);
+        TiledUnaryOperation<T>(function, tileShape, cur + 1, input, result, workspaceSize);
     }
 }
 
 template <UnaryOpType T>
 void TiledUnaryOperation(
-    Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
+    Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand, const LogicalTensorPtr &result, int32_t workspaceSize = 0) {
     ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
-    TiledUnaryOperation<T>(function, tileShape, 0, input, result);
+    TiledUnaryOperation<T>(function, tileShape, 0, input, result, workspaceSize);
 }
 
 Tensor Exp(const Tensor &self) {
@@ -63,6 +68,23 @@ Tensor Ln(const Tensor &operand) {
     DECLARE_TRACER();
 
     RETURN_CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+}
+
+Tensor IsFinite(const Tensor &self) {
+    DECLARE_TRACER();
+    std::vector<DataType> SUPPORT_FLOAT_TYPES = {DT_FP16, DT_FP32, DT_BF16};
+    std::vector<DataType> SUPPORT_INT_TYPES = {DT_INT16, DT_INT4, DT_INT8, DT_INT32, DT_UINT16, DT_UINT32, DT_UINT8, DT_UINT64, DT_INT64};
+
+    if (std::find(SUPPORT_INT_TYPES.begin(), SUPPORT_INT_TYPES.end(), self.GetDataType()) !=
+           SUPPORT_INT_TYPES.end()) {
+        Tensor halfResult = Full(Element(DT_FP16, 1.0f), DT_FP16, self.GetShape(), self.GetValidShape());
+        Tensor result = Cast(halfResult, DT_UINT8, CastMode::CAST_NONE);
+        return result;
+    }
+
+    ASSERT(std::find(SUPPORT_FLOAT_TYPES.begin(), SUPPORT_FLOAT_TYPES.end(), self.GetDataType()) !=
+           SUPPORT_FLOAT_TYPES.end()) << "`IsFinite` only supports FP16/BF16/FP32 in float datatypes!";
+    RETURN_CALL(UnaryOperation<UnaryOpType::ISFINITE>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), DT_BOOL);
 }
 
 Tensor Rsqrt(const Tensor &self) {
@@ -254,6 +276,16 @@ void LnOperationTileFunc(Function &function, const TileShape &tileShape, const s
     return TiledUnaryOperation<UnaryOpType::LN>(function, tileShape, iOperand[0], oOperand[0]);
 }
 
+void IsFiniteOperationTileFunc(Function &function, const TileShape &tileShape, const std::vector<LogicalTensorPtr> &iOperand,
+    const std::vector<LogicalTensorPtr> &oOperand, [[maybe_unused]] const Operation &op) {
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    // tileShape 对应的中间变量结果，类型为 FP16
+    uint32_t intermediateBytes = static_cast<int64_t>(BytesOf(DT_FP16)) * std::accumulate(shape.begin(), shape.end(), 1LL, std::multiplies<int64_t>());
+    uint32_t workspaceSize = intermediateBytes;
+    return TiledUnaryOperation<UnaryOpType::ISFINITE>(function, tileShape, iOperand[0], oOperand[0], workspaceSize);
+}
+
 void HubOperationTileFunc(Function &function, const TileShape &tileShape, const std::vector<LogicalTensorPtr> &iOperand,
     const std::vector<LogicalTensorPtr> &oOperand, [[maybe_unused]] const Operation &op) {
     UnaryOperationOperandCheck(iOperand, oOperand);
@@ -271,6 +303,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_BITWISENOT, Opcode::OP_BITWISENOT, BitwiseNotOp
 REGISTER_OPERATION_TILED_FUNC(OP_RECIPROCAL, Opcode::OP_RECIPROCAL, ReciprocalOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ABS, Opcode::OP_ABS, AbsOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_LN, Opcode::OP_LN, LnOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, IsFiniteOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
 
 } // namespace npu::tile_fwk

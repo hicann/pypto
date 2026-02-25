@@ -1256,6 +1256,31 @@ def copysign(input: Tensor, other: Tensor) -> Tensor:
 
 
 @op_wrapper
+def isfinite(self: Tensor) -> Tensor:
+    """
+    Judge whether the value in Tensor `self` is inf/nan/-inf, if it is, the
+        return value will be false, otherwise it will be true.
+
+    Parameters
+    --------
+    self: Tensor
+        The input tensor
+    
+    Examples
+    --------
+    self = pypto.tensor([3, 3], pypto.data_type.DT_FP32)
+    out = pypto.isfinite(self)
+    Input  self: [[1 nan 3],
+                  [inf 1 1],
+                  [1, 1, -inf]]
+    Output out:  [[True False True],
+                  [False True True],
+                  [True True False]]
+    """
+    return pypto_impl.isfinite(self)
+
+
+@op_wrapper
 def cbrt(self: Tensor) -> Tensor:
     """
     Computes the element-wise cube root of 'self'

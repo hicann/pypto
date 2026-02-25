@@ -69,6 +69,7 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE {
     {"TRANSPOSE_VNCHWCONV", CorePipeType::PIPE_VECTOR_ALU},
     {"ABS", CorePipeType::PIPE_VECTOR_ALU},
     {"LN", CorePipeType::PIPE_VECTOR_ALU},
+    {"ISFINITE", CorePipeType::PIPE_VECTOR_ALU},
     {"HUB", CorePipeType::PIPE_VECTOR_ALU},
     {"BRCB", CorePipeType::PIPE_VECTOR_ALU},
     // Binary Vector

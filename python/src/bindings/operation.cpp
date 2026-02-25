@@ -569,5 +569,8 @@ void bind_operation(py::module &m) {
 
     m.def(
         "CopySign", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::CopySign(self, other); }, "Tensor copysign.");
+
+    m.def(
+        "isfinite", [](const Tensor &self) { return npu::tile_fwk::IsFinite(self); }, "Judge whether the value is inf/nan/-inf. If it is, the value will be false.");
 }
 } // namespace pypto

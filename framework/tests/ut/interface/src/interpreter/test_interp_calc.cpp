@@ -463,6 +463,13 @@ TEST_F(TorchAdaptorTest, BinaryOps) {
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        auto out = makeTensorData(DT_BOOL, {16, 16}, true);
+        auto golden = makeTensorData(DT_BOOL, {16, 16}, true);
+        calc::IsFinite(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // pow
         auto self = makeTensorData(DT_FP32, {16, 16}, 2.0f);
         auto other = makeTensorData(DT_FP32, {16, 16}, 2.0f);

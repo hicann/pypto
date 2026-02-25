@@ -87,6 +87,24 @@ TEST_F(OperationImplTest, test_CumSum_dim4) {
     }
 }
 
+TEST_F(OperationImplTest, test_IsFinite_fp32) {
+    TileShape::Current().SetVecTile(4, 32);
+    Tensor input(DT_FP32, {11, 32}, "input");
+    Tensor result;
+    FUNCTION("TestIsFinite") {
+        result = IsFinite(input);
+    }
+}
+
+TEST_F(OperationImplTest, test_IsFinite_int32) {
+    TileShape::Current().SetVecTile(4, 32);
+    Tensor input(DT_INT32, {11, 32}, "input");
+    Tensor result;
+    FUNCTION("TestIsFinite") {
+        result = IsFinite(input);
+    }
+}
+
 TEST_F(OperationImplTest, test_Compare_BOOL) {
     TileShape::Current().SetVecTile({4, 4});
     Tensor operand1(DT_FP32, {8, 8}, "operand1");
