@@ -21,7 +21,7 @@ import math
 import numpy as np
 import torch
 
-root_path: Path = Path(__file__).parent.parent.parent.parent.parent.parent.resolve()
+root_path: Path = Path(Path(__file__).parent, "../../../../../").resolve()
 scripts_path: Path = Path(root_path, 'tests/cmake/scripts')
 if str(scripts_path) not in sys.path:
     sys.path.append(str(scripts_path))
