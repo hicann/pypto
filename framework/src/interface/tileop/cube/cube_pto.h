@@ -502,8 +502,8 @@ TILEOP void TExtractMX(T &dst, U &src, const Coord &coord)
     static_assert(shapeSize == SHAPE_DIM3 && Std::tuple_size<Coord>::value == SHAPE_DIM3,
                   "[TExtractMX Error]: L0A_MX scale or L0B_MX scale Shape Size should be 3 Dim");
     static_assert((T::FORMAT == Hardware::L0A_MX || T::FORMAT == Hardware::L0B_MX) && U::FORMAT == Hardware::L1);
-    int64_t offset0 = GetTupleElement<Coord, DIM_1ST, SHAPE_DIM3, 0>(coord);
-    int64_t offset1 = GetTupleElement<Coord, DIM_2ND, SHAPE_DIM3, 0>(coord);
+    int64_t offset0 = TileOp::GetTupleElement<Coord, DIM_1ST, SHAPE_DIM3, 0>(coord);
+    int64_t offset1 = TileOp::GetTupleElement<Coord, DIM_2ND, SHAPE_DIM3, 0>(coord);
     constexpr auto staticL1H = Std::tuple_element<shapeSize - SHAPE_DIM3, typename U::TileShape>::type::value;
     constexpr auto staticL1W = Std::tuple_element<shapeSize - SHAPE_DIM2, typename U::TileShape>::type::value;
     constexpr auto staticL0H = Std::tuple_element<shapeSize - SHAPE_DIM3, typename T::TileShape>::type::value;
