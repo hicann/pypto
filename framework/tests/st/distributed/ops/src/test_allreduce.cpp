@@ -48,7 +48,7 @@ void TestAllReduce(OpTestParam &testParam, std::string &goldenDir)
     int32_t rowPerRank = row;
     Shape shmemDataShape{1, rowPerRank, col};
     if (useTwoShot) {
-        ASSERT(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
+        CHECK(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
         rowPerRank /= testParam.rankSize;
         shmemDataShape = {testParam.rankSize, rowPerRank, col};
     }

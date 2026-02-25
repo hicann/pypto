@@ -63,7 +63,7 @@ public:
         std::string caseName = testData["case_name"].get<std::string>();
         std::string goldenDir = GetGoldenDirPath(testData, fileName);
         DisOpRegister::GetRegister().Run(opName, testParam, dtype, goldenDir);
-        ALOG_INFO("test case finished successfully: op=%s, case=%s, json file=%s.", 
+        DISTRIBUTED_LOGI("test case finished successfully: op=%s, case=%s, json file=%s.", 
             opName.c_str(), caseName.c_str(), fileName.c_str());
     }
 
@@ -71,11 +71,11 @@ protected:
     void DistributedTestDestroy()
     {
         // 销毁集合通信域
-        ASSERT(HcclCommDestroy(hcomTestParam.hcclComm) == 0);
+        CHECK(HcclCommDestroy(hcomTestParam.hcclComm) == 0) << "HcclCommDestroy failed";
         // 重置设备
-        ASSERT(aclrtResetDevice(physicalDeviceId) == 0);
+        CHECK(aclrtResetDevice(physicalDeviceId) == 0) << "aclResetDevice failed";
         // 设备去初始化
-        ASSERT(aclFinalize() == 0);
+        CHECK(aclFinalize() == 0) << "aclFinalize failed";
     }
 
     Distributed::OpTestParam testParam;

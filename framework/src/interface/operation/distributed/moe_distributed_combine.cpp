@@ -34,14 +34,14 @@ void MoeDistributedCombineValidateExpandX(
     int32_t moeExpertNum)
 {
     uint32_t supportedDim = 2;
-    ASSERT(expandX.GetShape().size() == supportedDim) << "The dim of \"expandX\" only supports " << supportedDim
+    CHECK(expandX.GetShape().size() == supportedDim) << "The dim of \"expandX\" only supports " << supportedDim
         << ", but got " << expandX.GetShape().size();
 
     int32_t expandXRow = expandX.GetShape(0);
     int32_t topK = expertScales.GetShape(1);
     int32_t batchSize = expertScales.GetShape(0);
     int32_t expectedRow = std::min(topK * batchSize * epWorldSize, batchSize * moeExpertNum);
-    ASSERT(expandXRow == expectedRow) << "The first axis of \"expandX\" must be the smaller value between topK (the "
+    CHECK(expandXRow == expectedRow) << "The first axis of \"expandX\" must be the smaller value between topK (the "
         << "second axis of \"expertScales\") * batchSize (the first axis of \"expertScales\") * epWorldSize and "
         << "batchSize * moeExpertNum, topK=" << topK << ", batchSize=" << batchSize << ", epWorldSize=" << epWorldSize
         << ", moeExpertNum=" << moeExpertNum << ", the expected first axis of \"expandX\" should be " << expectedRow
@@ -49,111 +49,111 @@ void MoeDistributedCombineValidateExpandX(
 
     int32_t expandXCol = expandX.GetShape(1);
     int32_t supportedHiddenSize = 5120;
-    ASSERT(expandXCol == supportedHiddenSize) << "The second axis of \"expandX\" only supports " << supportedHiddenSize
+    CHECK(expandXCol == supportedHiddenSize) << "The second axis of \"expandX\" only supports " << supportedHiddenSize
         << ", but got " << expandXCol;
 
-    ASSERT(expandX.GetDataType() == DT_BF16) << "The data type of \"expandX\" only supports DT_BF16, but got "
+    CHECK(expandX.GetDataType() == DT_BF16) << "The data type of \"expandX\" only supports DT_BF16, but got "
         << DataType2String(expandX.GetDataType());
 
-    ASSERT(expandX.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"expandX\" only supports ND, "
+    CHECK(expandX.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"expandX\" only supports ND, "
         << "but got NZ";
 }
 
 void MoeDistributedCombineValidateAssistInfoForCombine(const Tensor& assistInfoForCombine, const Tensor& expandX)
 {
     uint32_t supportedDim = 2;
-    ASSERT(assistInfoForCombine.GetShape().size() == supportedDim) << "The dim of \"assistInfoForCombine\" only "
+    CHECK(assistInfoForCombine.GetShape().size() == supportedDim) << "The dim of \"assistInfoForCombine\" only "
         << "supports " << supportedDim << ", but got " << assistInfoForCombine.GetShape().size();
 
     int32_t assistInfoForCombineRow = assistInfoForCombine.GetShape(0);
     int32_t expandXRow = expandX.GetShape(0);
-    ASSERT(assistInfoForCombineRow == expandXRow) << "The first axis of \"assistInfoForCombine\" must be consistent "
+    CHECK(assistInfoForCombineRow == expandXRow) << "The first axis of \"assistInfoForCombine\" must be consistent "
         << "with that of \"expandX\", but expandXRow=" << expandXRow << ", assistInfoForCombineRow="
         << assistInfoForCombineRow;
 
     int32_t assistInfoForCombineCol = assistInfoForCombine.GetShape(1);
     int32_t supportedAssistInfoForCombineCol = 3;
-    ASSERT(assistInfoForCombineCol == supportedAssistInfoForCombineCol) << "The second axis of "
+    CHECK(assistInfoForCombineCol == supportedAssistInfoForCombineCol) << "The second axis of "
         << "\"assistInfoForCombine\" must be " << supportedAssistInfoForCombineCol << ", but got "
         << assistInfoForCombineCol;
 
-    ASSERT(assistInfoForCombine.GetDataType() == DT_INT32) << "The data type of \"assistInfoForCombine\" only supports "
+    CHECK(assistInfoForCombine.GetDataType() == DT_INT32) << "The data type of \"assistInfoForCombine\" only supports "
         << "DT_INT32, but got " << DataType2String(assistInfoForCombine.GetDataType());
 
-    ASSERT(assistInfoForCombine.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of "
+    CHECK(assistInfoForCombine.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of "
         << "\"assistInfoForCombine\" only supports ND, but got NZ";
 }
 
 void MoeDistributedCombineValidateRecvCounts(const Tensor& recvCounts)
 {
-    ASSERT(recvCounts.GetShape().size() == 1) << "The dim of \"recvCounts\" only supports 1, but got "
+    CHECK(recvCounts.GetShape().size() == 1) << "The dim of \"recvCounts\" only supports 1, but got "
         << recvCounts.GetShape().size();
 
     int32_t recvCountsSize = recvCounts.GetShape(0);
-    ASSERT(recvCountsSize == 1) << "The size of \"recvCounts\" must be 1, but recvCountsSize=" << recvCountsSize;
+    CHECK(recvCountsSize == 1) << "The size of \"recvCounts\" must be 1, but recvCountsSize=" << recvCountsSize;
 
-    ASSERT(recvCounts.GetDataType() == DT_INT32) << "The data type of \"recvCounts\" only supports DT_INT32, but got "
+    CHECK(recvCounts.GetDataType() == DT_INT32) << "The data type of \"recvCounts\" only supports DT_INT32, but got "
         << DataType2String(recvCounts.GetDataType());
 
-    ASSERT(recvCounts.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"recvCounts\" only "
+    CHECK(recvCounts.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"recvCounts\" only "
         << "supports ND, but got NZ";
 }
 
 void MoeDistributedCombineValidateExpertScales(const Tensor& expertScales)
 {
     uint32_t supportedDim = 2;
-    ASSERT(expertScales.GetShape().size() == supportedDim) << "The dim of \"expertScales\" only supports "
+    CHECK(expertScales.GetShape().size() == supportedDim) << "The dim of \"expertScales\" only supports "
         << supportedDim << ", but got " << expertScales.GetShape().size();
 
     int32_t expertScalesRow = expertScales.GetShape(0);
     int32_t supportedExpertScalesRow1 = 8;
     int32_t supportedExpertScalesRow2 = 256;
-    ASSERT((expertScalesRow == supportedExpertScalesRow1) || (expertScalesRow == supportedExpertScalesRow2)) << "The "
+    CHECK((expertScalesRow == supportedExpertScalesRow1) || (expertScalesRow == supportedExpertScalesRow2)) << "The "
         << "first axis of \"expertScales\" only supports " << supportedExpertScalesRow1 << " or "
         << supportedExpertScalesRow2 << ", but got " << expertScalesRow;
 
     int32_t expertScalesCol = expertScales.GetShape(1);
     int32_t supportedExpertScalesCol = 8;
-    ASSERT(expertScalesCol == supportedExpertScalesCol) << "The second axis of \"expertScales\" only supports "
+    CHECK(expertScalesCol == supportedExpertScalesCol) << "The second axis of \"expertScales\" only supports "
         << supportedExpertScalesCol << ", but got " << expertScalesCol;
 
-    ASSERT(expertScales.GetDataType() == DT_FP32) << "The data type of \"expertScales\" only supports DT_FP32, but got "
+    CHECK(expertScales.GetDataType() == DT_FP32) << "The data type of \"expertScales\" only supports DT_FP32, but got "
         << DataType2String(expertScales.GetDataType());
 
-    ASSERT(expertScales.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"expertScales\" only "
+    CHECK(expertScales.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"expertScales\" only "
         << "supports ND, but got NZ";
 }
 
 void MoeDistributedCombineValidateOut(const Tensor& out, const Tensor& expertScales, const Tensor& expandX)
 {
     uint32_t supportedDim = 2;
-    ASSERT(out.GetShape().size() == supportedDim) << "The dim of \"out\" only supports " << supportedDim << ", but got "
+    CHECK(out.GetShape().size() == supportedDim) << "The dim of \"out\" only supports " << supportedDim << ", but got "
         << out.GetShape().size();
 
     int32_t outRow = out.GetShape(0);
     int32_t expertScalesRow = expertScales.GetShape(0);
-    ASSERT(outRow == expertScalesRow) << "The first axis of \"out\" must be consistent with that of \"expertScales\", "
+    CHECK(outRow == expertScalesRow) << "The first axis of \"out\" must be consistent with that of \"expertScales\", "
         << "but expertScalesRow=" << expertScalesRow << ", outRow=" << outRow;
 
     int32_t outCol = out.GetShape(1);
     int32_t expandXCol = expandX.GetShape(1);
-    ASSERT(outCol == expandXCol) << "The second axis of \"out\" must be consistent with that of \"expandX\", but "
+    CHECK(outCol == expandXCol) << "The second axis of \"out\" must be consistent with that of \"expandX\", but "
         << "expandXCol=" << expandXCol << ", outCol=" << outCol;
 
-    ASSERT(out.GetDataType() == expandX.GetDataType()) << "The data type of \"out\" must be consistent with that of "
+    CHECK(out.GetDataType() == expandX.GetDataType()) << "The data type of \"out\" must be consistent with that of "
         << "\"expandX\",  but the data type of \"expandX\" is "<< DataType2String(expandX.GetDataType()) << " and the "
         << "data type of \"out\" is " << DataType2String(out.GetDataType());
 
-    ASSERT(out.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"out\" only supports ND, but got "
+    CHECK(out.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"out\" only supports ND, but got "
         << "NZ";
 }
 
 void MoeDistributedCombineValidateGroup(const char* group)
 {
-    ASSERT(group != nullptr) << "\"group\" cannot be nullptr";
+    CHECK(group != nullptr) << "\"group\" cannot be nullptr";
     int32_t groupLen = std::strlen(group);
     int32_t maxGroupLen = 128;
-    ASSERT((groupLen >= 1) && (groupLen < maxGroupLen)) << "The length of \"group\" only supports [1, " << maxGroupLen
+    CHECK((groupLen >= 1) && (groupLen < maxGroupLen)) << "The length of \"group\" only supports [1, " << maxGroupLen
         << "), but got " << groupLen;
 }
 
@@ -161,14 +161,14 @@ void MoeDistributedCombineValidateMoeEpWorldSize(int32_t epWorldSize)
 {
     int32_t supportedEpWorldSize1 = 4;
     int32_t supportedEpWorldSize2 = 8;
-    ASSERT((epWorldSize == supportedEpWorldSize1) || (epWorldSize == supportedEpWorldSize2)) << "epWorldSize only "
+    CHECK((epWorldSize == supportedEpWorldSize1) || (epWorldSize == supportedEpWorldSize2)) << "epWorldSize only "
         << "supports " << supportedEpWorldSize1 << " or " << supportedEpWorldSize2 << ", but got " << epWorldSize;
 }
 
 void MoeDistributedCombineValidateMoeExpertNum(int32_t moeExpertNum)
 {
     int32_t supportedMoeExpertNum = 160;
-    ASSERT(moeExpertNum == supportedMoeExpertNum) << "moeExpertNum only supports " << supportedMoeExpertNum << ", but "
+    CHECK(moeExpertNum == supportedMoeExpertNum) << "moeExpertNum only supports " << supportedMoeExpertNum << ", but "
         << "got " << moeExpertNum;
 }
 
@@ -190,7 +190,7 @@ void TiledMoeDistributedCombineSend(
     int64_t hiddenSize = expandX->shape[1];
 
     int64_t dataByteSize = BytesOf(expandX->Datatype());
-    ASSERT(dataByteSize != 0);
+    ASSERT(dataByteSize != 0) << "iOperand expandX dType size cannot be zero";
     int64_t paddedColShape = AlignUp(dataByteSize * hiddenSize, COPY_BLOCK_BYTE_SIZE) / dataByteSize;
     Shape assistInfoForCombineShape = Shape{
         static_cast<int64_t>(COPY_BLOCK_BYTE_SIZE) / static_cast<int64_t>(BytesOf(DT_INT32))};
@@ -238,10 +238,10 @@ void TiledMoeDistributedCombineReceive(
     int64_t hiddenSize = out->shape[1];
 
     int64_t dataByteSize = BytesOf(out->Datatype());
-    ASSERT(dataByteSize != 0);
+    ASSERT(dataByteSize != 0) << "oOperand out dType size cannot be zero";
     int64_t paddedColShape = AlignUp(dataByteSize * hiddenSize, COPY_BLOCK_BYTE_SIZE) / dataByteSize;
     int64_t floatByteSize = BytesOf(DataType::DT_FP32);
-    ASSERT(floatByteSize != 0);
+    ASSERT(floatByteSize != 0) << "floatByteSize cannot be zero";
     int64_t floatEleNum = AlignUp(floatByteSize * paddedColShape, REPEAT_BYTE) / floatByteSize;
 
     DistOpAttr distOpAttr;
@@ -445,7 +445,7 @@ void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForC
         Tensor expertScalesTile = View(expertScales, {1, topK}, {tokenId, 0});
         int64_t kTileShape = AlignUp(topK, 16);
         int64_t l0bSize = 65536;
-        ASSERT((BytesOf(DT_FP32) != 0) && (kTileShape != 0));
+        ASSERT((BytesOf(DT_FP32) != 0) && (kTileShape != 0)) << "Divisor kTileShape cannot be zero";
         int64_t nTileShape = l0bSize / BytesOf(DT_FP32) / kTileShape;
         TileShape::Current().SetCubeTile({1, 1}, {kTileShape, kTileShape}, {nTileShape, nTileShape});
         Tensor matmulOutFp32 = Matrix::Matmul(DT_FP32, expertScalesTile, shmemGetOutFp32);

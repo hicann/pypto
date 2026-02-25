@@ -22,7 +22,7 @@
 #include "hccl/hccl.h"
 #include "machine/runtime/runtime.h"
 #include "distributed_test_framework.h"
-#include "interface/utils/log.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {
@@ -140,25 +140,25 @@ void* GetLibHandle()
             if (!path.empty() && path.front() == '/') {
                 void* h = TryOpen(path, RTLD_NOW | RTLD_NOLOAD);
                 if (h) {
-                    ALOG_INFO_F("Found already-loaded MPI library: %s", path.c_str());
+                    DISTRIBUTED_LOGI("Found already-loaded MPI library: %s", path.c_str());
                     return h;
                 }
                 h = TryOpen(path, RTLD_NOW);
                 if (h) {
-                    ALOG_INFO_F("Loaded MPI library from path: %s", path.c_str());
+                    DISTRIBUTED_LOGI("Loaded MPI library from path: %s", path.c_str());
                     return h;
                 }
             } else {
                 // symbolic name: let the dynamic loader resolve it using standard search paths
                 void* h = TryOpen(path, RTLD_NOW);
                 if (h) {
-                    ALOG_INFO_F("Loaded MPI library by name: %s", path.c_str());
+                    DISTRIBUTED_LOGI("Loaded MPI library by name: %s", path.c_str());
                     return h;
                 }
             }
         }
 
-        ALOG_ERROR("Failed to load MPI library from common candidate paths/names");
+        DISTRIBUTED_LOGE("Failed to load MPI library from common candidate paths/names");
         return static_cast<void*>(nullptr);
     }();
     return handle;
@@ -184,13 +184,13 @@ auto GetFunction(const std::string& funcName) -> FuncType
 {
     auto handle = GetLibHandle();
     if (!handle) {
-        ALOG_ERROR("Failed to load MPI library");
+        DISTRIBUTED_LOGE("Failed to load MPI library");
         return nullptr;
     }
     
     auto func = dlsym(handle, funcName.c_str());
     if (!func) {
-        ALOG_ERROR("Failed to find function %s: %s", funcName.c_str(), dlerror());
+        DISTRIBUTED_LOGE("Failed to find function %s: %s", funcName.c_str(), dlerror());
         return nullptr;
     }
     return FunctionConverter<FuncType>::Convert(func);
@@ -201,15 +201,15 @@ void TestFrameworkInit(OpTestParam &testParam, HcomTestParam &hcomTestParam, int
 {
     // 获取MPI函数指针（类型安全）
     auto mpiInit = GetFunction<MpiInitFunc>("MPI_Init");
-    ASSERT(mpiInit != nullptr);
+    CHECK(mpiInit != nullptr) << "MpiInitFunc ptr not found";
     auto mpiCommSize = GetFunction<MpiCommSizeFunc>("MPI_Comm_size");
-    ASSERT(mpiCommSize != nullptr);
+    CHECK(mpiCommSize != nullptr) << "MpiCommSizeFunc ptr not found";
     auto mpiCommRank = GetFunction<MpiCommRankFunc>("MPI_Comm_rank");
-    ASSERT(mpiCommRank != nullptr);
+    CHECK(mpiCommRank != nullptr) << "MpiCommRankFunc ptr not found";
     auto mpiBcast = GetFunction<MpiBcastFunc>("MPI_Bcast");
-    ASSERT(mpiBcast != nullptr);
+    CHECK(mpiBcast != nullptr) << "MpiBcastFunc ptr not found";
     auto mpiBarrier = GetFunction<MpiBarrierFunc>("MPI_Barrier");
-    ASSERT(mpiBarrier != nullptr);
+    CHECK(mpiBarrier != nullptr) << "MpiBarrierFunc ptr not found";
     
     mpiInit(NULL, NULL);
 
@@ -226,37 +226,37 @@ void TestFrameworkInit(OpTestParam &testParam, HcomTestParam &hcomTestParam, int
         while (std::getline(ss, id, ',')) {
             device_list.push_back(std::stoi(id));
         }
-        ASSERT(testParam.rankId < static_cast<int>(device_list.size()));
+        CHECK(testParam.rankId < static_cast<int>(device_list.size())) << "RankID out of range";
         physicalDeviceId = device_list[testParam.rankId];
     } else {
         physicalDeviceId = testParam.rankId;
     }
 
     // ACL、NPU初始化与绑定
-    ASSERT(aclInit(NULL) == 0);   // 设备资源初始化
+    CHECK(aclInit(NULL) == 0) << "aclInit falied";   // 设备资源初始化
     if (testParam.rankId == 0) {
-        ASSERT(rtSetDevice(physicalDeviceId) == 0);   // 将当前进程绑定到指定的物理NPU
+        CHECK(rtSetDevice(physicalDeviceId) == 0) << "Set device falied";   // 将当前进程绑定到指定的物理NPU
     }
-    ASSERT(aclrtSetDevice(physicalDeviceId) == 0);   // 指定集合通信操作使用的设备
+    CHECK(aclrtSetDevice(physicalDeviceId) == 0) << "Set device falied";   // 指定集合通信操作使用的设备
 
     // 在 rootRank 获取 rootInfo
     hcomTestParam.rootRank = 0;
     if (testParam.rankId == hcomTestParam.rootRank) {
-        ASSERT(HcclGetRootInfo(&hcomTestParam.rootInfo) == 0);
+        CHECK(HcclGetRootInfo(&hcomTestParam.rootInfo) == 0) << "HcclGetRootInfo failed";
     }
     // 将root_info广播到通信域内的其他rank, 初始化集合通信域
     mpiBcast(&hcomTestParam.rootInfo, HCCL_ROOT_INFO_BYTES, MPI_CHAR, hcomTestParam.rootRank, MPI_COMM_WORLD);
     mpiBarrier(MPI_COMM_WORLD);
-    ASSERT(HcclCommInitRootInfo(testParam.rankSize, &hcomTestParam.rootInfo, testParam.rankId,
-        &hcomTestParam.hcclComm) == 0);
+    CHECK(HcclCommInitRootInfo(testParam.rankSize, &hcomTestParam.rootInfo, testParam.rankId,
+        &hcomTestParam.hcclComm) == 0) << "HcclCommInitRootInfo failed";
 
     // 获取 group name
-    ASSERT(HcclGetCommName(hcomTestParam.hcclComm, testParam.group) == 0);
+    CHECK(HcclGetCommName(hcomTestParam.hcclComm, testParam.group) == 0) << "HcclGetCommName failed";
 
-    ALOG_INFO_F("testParam.rankSize %d\n", testParam.rankSize);
-    ALOG_INFO_F("testParam.rankId %d\n", testParam.rankId);
-    ALOG_INFO_F("testParam.group %s\n", testParam.group);
-    ALOG_INFO_F("rootInfo.internal %s\n", hcomTestParam.rootInfo.internal);
+    DISTRIBUTED_LOGI("testParam.rankSize %d\n", testParam.rankSize);
+    DISTRIBUTED_LOGI("testParam.rankId %d\n", testParam.rankId);
+    DISTRIBUTED_LOGI("testParam.group %s\n", testParam.group);
+    DISTRIBUTED_LOGI("rootInfo.internal %s\n", hcomTestParam.rootInfo.internal);
 
     return;
 }
@@ -264,16 +264,16 @@ void TestFrameworkInit(OpTestParam &testParam, HcomTestParam &hcomTestParam, int
 void TestFrameworkDestroy(int32_t timeout)
 {
     auto mpiAbort = GetFunction<MpiAbortFunc>("MPI_Abort");
-    ASSERT(mpiAbort != nullptr);
+    CHECK(mpiAbort != nullptr) << "MpiAbortFunc ptr not found";
     std::future<void> finalizeTask = std::async(
         [] {
             auto mpiFinalize = GetFunction<MpiFinalizeFunc>("MPI_Finalize");
-            ASSERT(mpiFinalize != nullptr);
+            CHECK(mpiFinalize != nullptr) << "MpiFinalizeFunc ptr not found";
             mpiFinalize();
         }
     );
     if (finalizeTask.wait_for(std::chrono::seconds(timeout)) == std::future_status::timeout) {
-        ALOG_ERROR_F("MPI_Finalize timeout, forcing exit");
+        DISTRIBUTED_LOGE("MPI_Finalize timeout, forcing exit");
         mpiAbort(MPI_COMM_WORLD, 1);
     }
 }

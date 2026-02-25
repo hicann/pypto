@@ -28,7 +28,7 @@ LogicalTensorPtr View2DTile(const LogicalTensorPtr dummy, int32_t tileIndex, int
     Function& function)
 {
     Shape dummyShape = dummy->shape;
-    ASSERT(tileRowNum > 0 && tileColNum > 0) << "TileRowNum and tileColNum can not be 0";
+    CHECK(tileRowNum > 0 && tileColNum > 0) << "TileRowNum and tileColNum cannot be zero";
     int32_t rowIndex = tileIndex / tileColNum;
     int32_t colIndex = tileIndex % tileColNum;
 
@@ -102,9 +102,9 @@ void DfsTiling(const Shape& shmemTensorTileShape, Input& input, size_t curDim, u
     std::vector<int64_t>& tileShape = input.tileInfo.shape;
     std::vector<int64_t>& tileOffset = input.tileInfo.offset;
     if (curDim == tileShape.size()) {
-        ASSERT(tileIndex < MAX_TILE_NUM) << "tileIndex must be < " << MAX_TILE_NUM << ", but got " << tileIndex;
+        CHECK(tileIndex < MAX_TILE_NUM) << "tileIndex must be < " << MAX_TILE_NUM << ", but got " << tileIndex;
         for (int64_t shape : tileShape) {
-            ASSERT(shape != 0) << "view shape should not be 0, but got " << IntVecToStr(tileShape);
+            CHECK(shape != 0) << "view shape should not be 0, but got " << IntVecToStr(tileShape);
         }
         addTileOp(tileIndex, input);
         tileIndex++;

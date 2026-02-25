@@ -25,6 +25,7 @@
 #include "tileop/distributed/comm_context.h"
 #include "tilefwk/tilefwk_op.h"
 #include "test_dev_func_runner.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {
@@ -43,7 +44,7 @@ std::array<DstT, N> GetParams(const std::string &filePath)
 inline DataType GetDataTypeNum(const int64_t typeNum)
 {
     if ((typeNum < 0) || (typeNum >= static_cast<int64_t>(DataType::DT_BOTTOM))) {
-        ALOG_ERROR_F("Invalid type code: %d (Valid range: [0-%d])", typeNum, static_cast<int64_t>(DataType::DT_BOTTOM));
+        DISTRIBUTED_LOGE("Invalid type code: %d (Valid range: [0-%d])", typeNum, static_cast<int64_t>(DataType::DT_BOTTOM));
         return DataType::DT_BOTTOM;
     }
     return static_cast<DataType>(typeNum);
@@ -85,8 +86,8 @@ template <typename PtrType>
 bool CompareWithGolden(const DataType dType, const std::string &goldenFilename, const uint64_t outSize,
     const PtrType &outPtrs, const OpTestParam &testParam, float threshold = 0.001f)
 {
-    static_assert((std::is_same_v<PtrType, uint8_t *>) || (std::is_same_v<PtrType, std::vector<uint8_t *>>),
-        "PtrType must be either uint8_t* or std::vector<uint8_t*>");
+    CHECK((std::is_same_v<PtrType, uint8_t *>) || (std::is_same_v<PtrType, std::vector<uint8_t *>>))
+        << "PtrType must be either uint8_t* or std::vector<uint8_t*>";
 
     const size_t dTypeSize = BytesOf(dType);
     bool result = false;
@@ -105,7 +106,7 @@ bool CompareWithGolden(const DataType dType, const std::string &goldenFilename, 
             result = DoCompare<int32_t>(goldenFilename, outSize, dTypeSize, outPtrs, testParam, threshold);
             break;
         default:
-            ALOG_ERROR_F("Unsupported dType: %lu", static_cast<uint64_t>(dType));
+            DISTRIBUTED_LOGE("Unsupported dType: %lu", static_cast<uint64_t>(dType));
             break;
     }
     return result;
@@ -134,7 +135,7 @@ public:
     std::vector<T> GetWinValue(WinType winType, size_t count = 0UL, size_t offset = 0UL)
     {
         auto [devAddr, winSize] = GetWinAddrAndSize(winType);
-        ASSERT((devAddr != 0) && (winSize != 0));
+        CHECK((devAddr != 0) && (winSize != 0)) << "devAddr and winSize must not be 0";
         auto maxDataCnt = winSize / sizeof(T);
         offset = offset % maxDataCnt;
         if ((count == 0UL) || (count > maxDataCnt - offset)) {

@@ -66,7 +66,7 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam& testParam, std::string
     auto [b, s, n, kvLoraRank, vHeadDim, h, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dtype = GetDataTypeNum(typeNum);
     auto [agIn, wLora, wOut, out] = InitializeTestData(testParam, goldenDir);
-    ASSERT(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
+    CHECK(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
     int32_t outRow = b * s / testParam.rankSize;
     FUNCTION("ALLGATHER_ATTNPOST_REDUCESCATTER", {agIn, wLora, wOut}, {out}) {
         Tensor agOut(dtype, {b * n * s, kvLoraRank}, "agOut");

@@ -32,9 +32,9 @@ inline void CreateTileOp(const TileShape& tileShape,
     const auto& tileCol = tileShape.GetDistTileCol();
     int32_t rowCount = tileRow[1] + (tileRow[2] == 0 ? 0 : 1);
     int32_t colCount = tileCol[1] + (tileCol[2] == 0 ? 0 : 1);
-    ASSERT(tileRow[0] > 0) << "Invalid tiling strategy of the row axis: the first number must be greater than 0, but "
+    CHECK(tileRow[0] > 0) << "Invalid tiling strategy of the row axis: the first number must be greater than 0, but "
         << "got " << tileRow[0];
-    ASSERT(tileCol[0] > 0) << "Invalid tiling strategy of the col axis: the first number must be greater than 0, but "
+    CHECK(tileCol[0] > 0) << "Invalid tiling strategy of the col axis: the first number must be greater than 0, but "
         << "got " << tileCol[0];
 
     int32_t tileIndex = 0;

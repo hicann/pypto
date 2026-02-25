@@ -21,6 +21,7 @@
 #include "interface/configs/config_manager.h"
 #include "distributed_op_test_suite.h"
 #include <filesystem>
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk::Distributed {
 
@@ -75,7 +76,7 @@ std::vector<T> GetOpMetaDataFromFile(const std::filesystem::path& filePath)
 {
     std::ifstream jsonFile(filePath);
     if (!jsonFile.is_open()) {
-        ALOG_ERROR_F("Failed to open Json file for Path: %s", 
+        DISTRIBUTED_LOGE("Failed to open Json file for Path: %s", 
             std::filesystem::absolute(filePath).string().c_str());
         return {};
     }
@@ -86,7 +87,7 @@ std::vector<T> GetOpMetaDataFromFile(const std::filesystem::path& filePath)
         testCaseList.emplace_back(tc, fileName);
     }
     if (testCaseList.empty()) {
-        ALOG_ERROR_F("No test cases found in json for File: %s", 
+        DISTRIBUTED_LOGE("No test cases found in json for File: %s", 
             std::filesystem::absolute(filePath).string().c_str());
     }
     return testCaseList;
@@ -127,7 +128,7 @@ std::vector<T> GetOpMetaData()
         casePath = std::filesystem::path(TEST_CASE_EXE_DIR) / TEST_CASE_RELATIVE_PATH;
     }
     if (!std::filesystem::exists(casePath)) {
-        ALOG_ERROR_F("JSON path does not exist: %s", casePath.string().c_str());
+        DISTRIBUTED_LOGE("JSON path does not exist: %s", casePath.string().c_str());
         return {};
     }
     if (std::filesystem::is_regular_file(casePath)) {

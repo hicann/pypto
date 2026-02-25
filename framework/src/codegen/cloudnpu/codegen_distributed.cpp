@@ -57,7 +57,7 @@ std::string CodeGenOpCloudNPU::GetTemplateDType() const
         {Opcode::OP_DISPATCH_SET_FLAG, 4},
     };
     auto it = dTypeOperandIndexMap.find(opCode);
-    ASSERT(it != dTypeOperandIndexMap.end());
+    ASSERT(it != dTypeOperandIndexMap.end()) << "Opcode is out of range";
     int32_t operandIndex = it->second;
     return DataType2CCEStr(operandDtype[operandIndex]);
 }
