@@ -444,7 +444,7 @@ struct DynMachineManager {
                 if (unlikely(!machine_.CheckAndResetReg())) {
                     DEV_WARN("Some registers force closed!");
                 }
-                ReleaseRuntimeDataRingBuffer(devProg);
+                RunPost(devProg);
                 DEV_INFO("All schedule exited, destroy the machine.");
                 return DEVICE_MACHINE_OK;
             }

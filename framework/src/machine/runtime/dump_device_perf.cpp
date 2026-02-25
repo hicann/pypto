@@ -178,7 +178,7 @@ inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const
         ALOG_WARN_F("aicpu meter copy failed ret: %d", ret);
         return;
     }
-    for (uint32_t i = 0; i < args.nrAicpu; i++) {
+    for (uint32_t i = 0; i < args.nrAicpu - 1; i++) {
         json aicpu;
         std::string coreType = "AICPU";
         if (i == 0) {
