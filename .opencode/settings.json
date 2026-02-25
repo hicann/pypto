@@ -1,0 +1,55 @@
+{
+    "permissions": {
+      "allow": [
+        "Skill(pypto-skill-creator)",
+        "Skill(pypto-operator-develop-workflow)",
+        "Skill(pypto-operator-perf-autotune)",
+        "Task(subagent_type=Explore)",
+        "Task(subagent_type=Plan)",
+        "WebSearch",
+        "WebFetch(domain:support.huawei.com)",
+        "WebFetch(domain:www.huawei.com)",
+        "WebFetch(domain:github.com)",
+        "WebFetch(domain:www.hiascend.com)",
+        "WebFetch(domain:gitee.com)",
+        "WebFetch(domain:gitcode.com)",
+        "Edit",
+        "Write",
+        "Read",
+        "Glob",
+        "Grep",
+        "LSP",
+        "NotebookEdit",
+        "MultiEdit",
+        "AskUserQuestion",
+        "TodoWrite",
+        "EnterPlanMode",
+        "ExitPlanMode",
+        "Bash",
+        "KillShell",
+        "TaskOutput"
+      ],
+      "deny": [],
+      "ask": []
+    },
+    "hooks": {
+      "Stop": [
+        {
+          "matcher": "",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/session_stop_handle.py"
+            }
+          ]
+        }
+      ]
+    },
+    "sandbox": {
+      "enabled": false,
+      "autoAllowBashIfSandboxed": false
+    },
+    "enabledPlugins": {
+    }
+  }
+  
