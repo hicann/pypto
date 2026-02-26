@@ -288,13 +288,18 @@ MLA Indexer Prolog 模块将MLA Prolog和Lightning Indexer Prolog两个算子进
 
 ## 函数原型
 ```
-def mla_indexer_prolog_quant_d(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale, mla_w_uk, mla_w_dkv_kr, mla_gamma_cq,
-					mla_gamma_ckv, cos, sin, cache_index, mla_kv_cache, mla_kr_cache, mla_k_scale_cache, ip_w_qb_in, 
-                    ip_w_qb_scale_in, ip_wk_in, ip_w_proj_in, ip_ln_gamma_k_in, ip_ln_beta_k_in, ip_hadamard_q_in, 
-                    ip_hadamard_k_in, ip_k_cache, ip_k_cache_scale, mla_query_nope_out, mla_query_rope_out, 
-                    mla_kv_cache_out, mla_kr_cache_out, mla_k_scale_cache_out, ip_q_int8_out, ip_q_scale_out, 
-                    ip_k_int8_out, ip_k_scale_out, ip_weights_out, mla_epsilon_cq, mla_epsilon_ckv, mla_cache_mode, 
-                    mla_tile_config, ip_attrs, ip_configs, rope_cfg):
+def mla_indexer_prolog_quant_compute(
+    token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale, mla_w_uk, mla_w_dkv_kr, mla_gamma_cq,
+    mla_gamma_ckv, cos, sin, cache_index, mla_kv_cache, mla_kr_cache,
+    mla_k_scale_cache, ip_w_qb_in, ip_w_qb_scale_in, ip_wk_in, ip_w_proj_in,
+    ip_ln_gamma_k_in, ip_ln_beta_k_in, ip_hadamard_q_in, ip_hadamard_k_in,
+    ip_k_cache, ip_k_cache_scale, mla_query_nope_out, mla_query_rope_out,
+    mla_q_norm_out, mla_q_norm_scale_out, mla_kv_cache_out, mla_kr_cache_out,
+    mla_k_scale_cache_out, ip_q_int8_out, ip_q_scale_out, ip_k_int8_out,
+    ip_k_scale_out, ip_weights_out, mla_epsilon_cq, mla_epsilon_ckv,
+    mla_cache_mode, mla_tile_config,
+    ip_attrs, ip_configs, rope_cfg
+):
 ```
 
 ## 参数说明
@@ -337,6 +342,8 @@ def mla_indexer_prolog_quant_d(token_x, mla_w_dq, mla_w_uq_qr, mla_dequant_scale
 ## 返回值说明
 -   **mla_query_nope_out**（`Tensor`）：公式中Query的输出tensor（对应$q^N$），不支持非连续的 Tensor。数据格式支持ND，数据类型支持`bfloat16`，shape为[t, n_q, kv_lora_rank]。
 -   **mla_query_rope_out**（`Tensor`）：公式中Query位置编码的输出tensor（对应$q^R$），不支持非连续的 Tensor。数据格式支持ND，数据类型支持`bfloat16`，shape为[t, n_q, rope_dim]。
+-   **mla_q_norm_out**（`Tensor`）：对公式中Query位置编码的输出tensor做rmsnorm转换并量化后的输出，不支持非连续的 Tensor。数据格式支持ND，数据类型支持`int8`，shape为[t, q_lora_rank]。
+-   **mla_q_norm_scale_out**（`Tensor`）：对公式中Query位置编码的输出tensor做rmsnorm转换并量化后的反量化系数输出，不支持非连续的 Tensor。数据格式支持ND，数据类型支持`float32`，shape为[t, 1]。
 -   **mla_kv_cache_out**（`Tensor`）：Key输出到`kv_cache`中的tensor（对应$k^C$），不支持非连续的 Tensor。数据格式支持ND，cache_mode为"PA_BSND"，数据类型支持`int8`，shape为[block_num, block_size, n_kv, kv_lora_rank]。
 -   **mla_kr_cache_out**（`Tensor`）：Key的位置编码输出到`kr_cache`中的tensor（对应$k^R$），不支持非连续的 Tensor。数据格式支持ND，cache_mode为"PA_BSND"，数据类型支持`bfloat16`，shape为[block_num, block_size, n_kv, qk_rope_dim]。
 -   **mla_k_scale_cache_out**（`Tensor`）：Key做反量化后输出的反量化参数，不支持非连续的 Tensor。数据格式支持ND，cache_mode为"PA_BSND"，数据类型支持`float`，shape为[block_num, block_size, n_kv, 4]。
