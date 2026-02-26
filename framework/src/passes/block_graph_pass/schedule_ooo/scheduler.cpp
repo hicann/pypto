@@ -910,6 +910,26 @@ void OoOScheduler::AddDependency(IssueEntryPtr preIssue, IssueEntryPtr postIssue
 }
 
 void OoOScheduler::FindDependencies(IssueEntryPtr issue, std::unordered_map<Operation*, IssueEntryPtr> &op2IssueEntryMap) {
+    if (issue->tileOp.GetOpcode() == Opcode::OP_L1_TO_L0A_SCALE) {
+        auto matmulOp = *(issue->tileOp.GetOOperands()[0])->GetConsumers().begin();
+        for (auto &input : matmulOp->GetIOperands()) {
+            if (input->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
+                auto prodOp = *input->GetProducers().begin();
+                auto prodIssue = op2IssueEntryMap[prodOp];
+                AddDependency(prodIssue, issue, false);
+            }
+        }
+    }
+    if (issue->tileOp.GetOpcode() == Opcode::OP_L1_TO_L0B_SCALE) {
+        auto matmulOp = *(issue->tileOp.GetOOperands()[0])->GetConsumers().begin();
+        for (auto &input : matmulOp->GetIOperands()) {
+            if (input->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
+                auto prodOp = *input->GetProducers().begin();
+                auto prodIssue = op2IssueEntryMap[prodOp];
+                AddDependency(prodIssue, issue, false);
+            }
+        }
+    }
     for (auto &producer : issue->tileOp.ProducerOps()) {
         if (IsViewOp(*producer)) {
             for (auto viewProducer : producer->ProducerOps()) {
