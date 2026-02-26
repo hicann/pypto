@@ -455,7 +455,7 @@ SymbolicScalar SymbolicScalar::operator()(const std::vector<SymbolicScalar> &arg
         args.push_back(a.raw_);
     }
     auto raw = RawSymbolicExpression::CreateMopCall(args);
-    if (AllConcreteValid({*this}) && AllConcreteValid(argList)) {
+    if (this->ConcreteValid() && AllConcreteValid(argList)) {
         std::vector<ScalarImmediateType> calcArgList = {Concrete()};
         for (auto &a : argList) {
             calcArgList.push_back(a.Concrete());
