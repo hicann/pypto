@@ -34,11 +34,6 @@ protected:
         ProgramData::GetInstance().Reset();
 
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-
-        testing::UnitTest *ut = testing::UnitTest::GetInstance();
-        const testing::TestInfo *testInfo = ut->current_test_info();
-        std::string logFilePrefix = std::string(testInfo->test_suite_name()) + "." + testInfo->name() + "_";
-        SetLogFilePrefix(logFilePrefix);
     }
 
     void TearDown() override {

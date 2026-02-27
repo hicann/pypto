@@ -550,9 +550,6 @@ void *DeviceExecuteContext::DeviceExecuteRuntimeCallRootStitch(void *ctx_, uint6
 void *DeviceExecuteContext::DeviceExecuteRuntimeCallLog(void *ctx_, uint64_t value) {
     (void)ctx_;
     DEV_DEBUG("DeviceExecuteRuntimeCallLog -> Value: %lu", value);
-#if DEBUG_PLOG
-    (void)value;
-#endif
     return nullptr;
 }
 

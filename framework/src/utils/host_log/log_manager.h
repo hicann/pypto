@@ -19,6 +19,7 @@
 #include <mutex>
 #include <queue>
 #include <cstdarg>
+#include <fstream>
 
 namespace npu::tile_fwk {
 enum class LogLevel {
@@ -34,12 +35,20 @@ struct LogMsg {
     char msg[kMsgMaxLen];
     size_t length;
 };
+struct LogAttr {
+    bool isDevice{false};
+    int32_t deviceId{0};
+};
 class LogManager {
 public:
     static LogManager &Instance();
     bool CheckLevel(const LogLevel logLevel) const;
     void Record(const LogLevel logLevel, const char *fmt, va_list list);
-
+    void EnableHostLog() { attr_.isDevice = false; }
+    void EnableDeviceLog(const int32_t deviceId = 0) {
+        attr_.isDevice = true;
+        attr_.deviceId = deviceId;
+    }
 private:
     LogManager();
     ~LogManager();
@@ -49,13 +58,24 @@ private:
     static void ConstructMsgTail(LogMsg &logMsg);
     void WriteMessage(const LogMsg &logMsg);
     void WriteToStdOut(const LogMsg &logMsg);
-
+    void WriteToFile(const LogMsg &logMsg);
+    void CreateAndOpenNewLogFile();
+    static void CheckAndCloseLogFile(std::ofstream &currentFileStream, std::queue<std::string> &logFilesQueue);
+    const std::string& GetLogDir() const { return attr_.isDevice ? deviceLogDir_ : hostLogDir_; }
+    std::ofstream& GetCurrentFileStream() { return attr_.isDevice ? devFileStream_ : hostFileStream_; }
+    std::queue<std::string>& GetLogFilesQueue() { return attr_.isDevice ? devLogFiles_ : hostLogFiles_; }
+    const std::queue<std::string>& GetLogFilesQueue() const { return attr_.isDevice ? devLogFiles_ : hostLogFiles_; }
 private:
     LogLevel level_{LogLevel::ERROR};
     bool enableEvent_{false};
     bool enableStdOut_{true};
-    std::string fileDir_;
-    std::queue<std::string> logFiles_;
+    std::string hostLogDir_;
+    std::string deviceLogDir_;
+    std::ofstream hostFileStream_;
+    std::ofstream devFileStream_;
+    std::queue<std::string> hostLogFiles_;
+    std::queue<std::string> devLogFiles_;
     std::mutex writeMutex_;
+    LogAttr attr_;
 };
 }

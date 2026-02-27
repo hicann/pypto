@@ -52,7 +52,7 @@ __attribute__((visibility("default"))) uint32_t StaticPyptoKernelServer(void *ar
 }
 
 __attribute__((visibility("default"))) uint32_t DynPyptoKernelServerNull(void *args) {
-#if DEBUG_PLOG && defined(__DEVICE__)
+#ifdef __DEVICE__
     InitLogSwitch();
 #endif
     if (args == nullptr) {

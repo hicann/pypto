@@ -36,6 +36,7 @@
 #include "prof_common.h"
 #include "load_aicpu_op.h"
 #include "tilefwk/platform.h"
+#include "tilefwk/tilefwk_log.h"
 #include "machine/platform/platform_manager.h"
 #include "machine/runtime/device_error_tracking.h"
 #include "nlohmann/json.hpp"

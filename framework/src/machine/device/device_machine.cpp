@@ -58,19 +58,15 @@ struct MachineManager {
 
         int threadIdx = allocThreadIdx(args->nrAicpu);
         if (threadIdx != -1) {
-            CreateLogFile(LogType::LOG_TYPE_SCHEDULER, threadIdx);
             DEV_INFO("ThreadIdx %d aicNum %u aivNum %u aicpuNum %u validAicNum%u \n", threadIdx, args->nrAic,
                 args->nrAiv, args->nrAicpu, args->nrValidAic);
             DEV_INFO("SharedBuffer %lx coreRegAddr %lx corePmuAdr %lx\n",
                 args->sharedBuffer, args->coreRegAddr, args->corePmuAddr);
             ret = machine.Run(threadIdx, args);
             DEV_INFO("threadIdx %d finished, ret %d\n", threadIdx, ret);
-            GetLogger().Flush();
         } else {
-            CreateLogFile(LogType::LOG_TYPE_PREFETCH, 0);
             auto devTask = reinterpret_cast<DeviceTask *>(args->taskData);
             SdmaPrefetch(devTask);
-            GetLogger().Flush();
         }
         if (++finished == static_cast<std::atomic<int>>(args->nrAicpu)) {
             return DEVICE_MACHINE_FINISHED;
@@ -116,9 +112,6 @@ extern "C" __attribute__((visibility("default"))) int StaticTileFwkBackendKernel
         machine->GetTaskTotalWastTime((uint64_t *)args->taskWastTime);
         wmb();
         DEV_INFO("Total wast time is %lu\n", *(uint64_t *)args->taskWastTime);
-#if !DEBUG_PLOG
-        GetLogger().Flush();
-#endif
         delete machine;
         return 0;
     }
