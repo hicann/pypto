@@ -404,7 +404,7 @@
                         "en": "Set debug mode during execution stage. 0: disabled; 1: enabled, one-click to enable execution-related configs (e.g. swimlane graph)."
                     },
                     "minimum": 0,
-                    "maximum": 2
+                    "maximum": 3
                 }
             }
         },

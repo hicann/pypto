@@ -48,6 +48,13 @@ class RunMode(IntEnum):
     SIM = 1
 
 
+class DebugMode(IntEnum):
+    OFF = 0
+    SWIM = 1
+    TENSOR_NODEPEND = 2
+    CHECKATTR = 3
+
+
 def parse(program: Source, extra_vars: Optional[dict[str, Any]] = None) -> Any:
     """Parse a PTO script program.
 
@@ -671,7 +678,11 @@ class JitCallableWrapper:
         device: torch.device,
     ) -> list:
         """Allocate output tensors based on output defs and resolved dynamic dims."""
-        self._check_input_defs_match_tensors(in_tensors, input_tensor_defs)
+        if self._debug_options is not None:
+            debug_mode = self._debug_options.get("runtime_debug_mode", None)
+            if debug_mode is not None:
+                if debug_mode == DebugMode.CHECKATTR:
+                    self._check_input_defs_match_tensors(in_tensors, input_tensor_defs)
         symbolic_dim_value_map = None
         out_tensors = []
         for out_tensor_def in output_tensor_defs:

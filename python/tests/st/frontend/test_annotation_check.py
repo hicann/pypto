@@ -22,7 +22,7 @@ def create_compute_func(shape, dtype):
     """Factory function that creates a new compute function with annotations."""
     tiling = 16
 
-    @pypto.frontend.jit(use_cache=False)
+    @pypto.frontend.jit(use_cache=False, debug_options={"runtime_debug_mode": 3})
     def compute_add(
         a: pypto.Tensor(shape, dtype),
         b: pypto.Tensor(shape, dtype),
