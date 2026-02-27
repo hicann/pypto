@@ -348,42 +348,58 @@ def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_sc
                                                scale2_valid_shape[shape_dim_2]) \
     if not b_scale_trans else (scale2_valid_shape[1], scale2_valid_shape[0], scale2_valid_shape[shape_dim_2])
 
-    if k_a_scale0_dim != k_b_scale0_dim:
+    __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim)
+    __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2)
+    __validate_scale_m_dimensions(m_dim, m_scale_dim)
+    __validate_scale_n_dimensions(n_dim, n_scale_dim)
+    __validate_scale_k_alignment(ka_dim, k_a_scale0_dim, align_64)
+
+
+def __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim):
+    if (k_a_scale0_dim.is_concrete() and k_b_scale0_dim.is_concrete() and k_a_scale0_dim != k_b_scale0_dim):
         raise RuntimeError(
             "Scale Matrix Kscale0 dimension mismatch. Expect scale_ka_size == scale_kb_size, "
             f"got scale_ka_size: {k_a_scale0_dim}, scale_kb_size: {k_b_scale0_dim}."
         )
 
-    if k_a_scale1_dim != k_b_scale1_dim or k_a_scale1_dim != shape_dim_2:
+
+def __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2):
+    is_value_concrete = (k_a_scale1_dim.is_concrete() and k_b_scale1_dim.is_concrete())
+    if is_value_concrete and k_a_scale1_dim != k_b_scale1_dim and k_a_scale1_dim != shape_dim_2:
         raise RuntimeError(
-            "Scale Matrix Kscale1 dimension mismatch. Expect scale_a_shape[2] == scale_b_shape[2] and both equal to 2, "
-            f"got scale_a_shape[2]: {k_a_scale1_dim}, scale_b_shape[2]: {k_b_scale1_dim}."
+            "Scale Matrix Kscale1 dimension mismatch. Expect scale_a_shape[2] == scale_b_shape[2] "
+            f"and both equal to 2, got scale_a_shape[2]: {k_a_scale1_dim}, "
+            f"scale_b_shape[2]: {k_b_scale1_dim}."
         )
 
-    if m_dim != m_scale_dim:
+
+def __validate_scale_m_dimensions(m_dim, m_scale_dim):
+    if (m_dim.is_concrete() and m_scale_dim.is_concrete() and m_dim != m_scale_dim):
         raise RuntimeError(
             "Matrix M dimension mismatch. Expect m_scale_size == m_size, "
             f"got m_scale_size: {m_scale_dim}, m_size: {m_dim}."
         )
 
-    if n_dim != n_scale_dim:
+
+def __validate_scale_n_dimensions(n_dim, n_scale_dim):
+    if (n_dim.is_concrete() and n_scale_dim.is_concrete() and n_dim != n_scale_dim):
         raise RuntimeError(
             "Matrix N dimension mismatch. Expect n_scale_size == n_size, "
             f"got n_scale_size: {n_scale_dim}, n_size: {n_dim}."
         )
 
-    if ka_dim % align_64 != 0:
+
+def __validate_scale_k_alignment(ka_dim, k_a_scale0_dim, align_64):
+    if ka_dim.is_concrete() and ka_dim % align_64 != 0:
         raise RuntimeError(
             "Matrix K dimension mismatch. Expect k_size be aligned to 64 element, "
             f"k_size: {ka_dim}."
         )
-
-    if k_a_scale0_dim != ka_dim // align_64:
+    if (k_a_scale0_dim.is_concrete() and ka_dim.is_concrete() and k_a_scale0_dim != ka_dim // align_64):
         raise RuntimeError(
-            "Matrix K dimension is not a multiple of 64 of the Scale Matrix K0 dimemsion. "
+            "Matrix K dimension is not a multiple of 64 of the Scale Matrix K0 dimension. "
             f"k_size: {ka_dim}, k_scale_size0: {k_a_scale0_dim}"
         )
-
 
 
 def __convert_matmul_extend_params(extend_params) -> dict:

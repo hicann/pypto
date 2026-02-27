@@ -4,6 +4,7 @@
 
 | 产品             | 是否支持 |
 |:-----------------|:--------:|
+| Ascend 950PR/Ascend 950DT |    √     |
 | Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
 | Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
 
@@ -29,6 +30,9 @@ class DataType(enum.Enum):
  DT_BF16 = ...     # 16位Brain Float格式，占用2字节内存
  DT_HF4 = ...      # 4位Half Float格式，占用1字节内存
  DT_HF8 = ...      # 8位Half Float格式，占用1字节内存
+ DT_FP8E4M3 = ...  # 8位浮点数，4位指数，3位尾数，占用1字节内存
+ DT_FP8E5M2 = ...  # 8位浮点数，5位指数，2位尾数，占用1字节内存
+ DT_FP8E8M0 = ...  # 8位浮点数，8位指数，0位尾数，占用1字节内存
  DT_UINT8 = ...    # 8位无符号整数，占用1字节内存
  DT_UINT16 = ...   # 16位无符号整数，占用2字节内存
  DT_UINT32 = ...   # 32位无符号整数，占用4字节内存
@@ -36,4 +40,8 @@ class DataType(enum.Enum):
  DT_BOOL = ...     # 布尔类型，占用1字节内存
  DT_DOUBLE = ...   # 64位双精度浮点数，占用8字节内存
 ```
+
+## 约束说明
+
+-   仅Ascend 950PR/Ascend 950DT支持DT_FP8E4M3，DT_FP8E5M2和DT_FP8E8M0类型
 

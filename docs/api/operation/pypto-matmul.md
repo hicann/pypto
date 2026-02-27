@@ -4,6 +4,7 @@
 
 | 产品             | 是否支持 |
 |:-----------------|:--------:|
+| Ascend 950PR/Ascend 950DT |    √     |
 | Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
 | Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
 
@@ -25,8 +26,8 @@ matmul(input, mat2, out_dtype, *, a_trans = False, b_trans = False, c_matrix_nz 
 
 | 参数名            | 输入/输出 | 说明                                                                 |
 |-------------------|-----------|----------------------------------------------------------------------|
-| input             | 输入      | 表示输入左矩阵。不支持输入空Tensor。 <br> 支持的数据类型为：DT_INT8, DT_FP16, DT_BF16，DT_FP32，且左右矩阵数据类型需保持一致。 <br> 支持的矩阵维度：2维、3维、4维，且左右矩阵维度需保持一致。 <br> 输入矩阵支持的Format为：TILEOP_ND, TILEOP_NZ（DT_FP32输入不支持TILEOP_NZ格式）。 <br> 当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。 <br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐（当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐。 <br> 内轴外轴：当输入矩阵input非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K；当输入矩阵input转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M； <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐（当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐 <br> 当矩阵维度为3维或者4维时，不支持pypto.view场景。 |
-| mat2              | 输入      | 表示输入右矩阵。不支持输入空Tensor。 <br> 支持的数据类型为：DT_INT8, DT_FP16, DT_BF16，DT_FP32，且左右矩阵数据类型需保持一致。 <br> 支持的矩阵维度：2维、3维、4维，且左右矩阵维度需保持一致。 <br> 输入矩阵支持的Format为：TILEOP_ND, TILEOP_NZ（DT_FP32输入不支持TILEOP_NZ格式）。 <br> 当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。 <br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐（当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐。 <br> 内轴外轴：当输入矩阵mat2非转置时，对应数据排布为[K, N]，此时外轴为K，内轴为N；当输入矩阵mat2转置时，对应数据排布为[N, K]，此时外轴为N，内轴为K； <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐（其中当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐。 <br> 当矩阵维度为3维或者4维时，不支持pypto.view场景。 |
+| input             | 输入      | 表示输入左矩阵。不支持输入空Tensor。 <br> 支持的数据类型为：DT_INT8, DT_FP16, DT_BF16，DT_FP32，DT_HF8，且左右矩阵数据类型需保持一致。 <br> 支持的矩阵维度：2维、3维、4维，且左右矩阵维度需保持一致。 <br> 输入矩阵支持的Format为：TILEOP_ND, TILEOP_NZ（DT_FP32输入不支持TILEOP_NZ格式）。 <br> 当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。 <br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐（当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐。 <br> 内轴外轴：当输入矩阵input非转置时，对应数据排布为[M, K]，此时外轴为M，内轴为K；当输入矩阵input转置时，对应数据排布为[K, M]，此时外轴为K，内轴为M； <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐（当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐 <br> 当矩阵维度为3维或者4维时，不支持pypto.view场景。 |
+| mat2              | 输入      | 表示输入右矩阵。不支持输入空Tensor。 <br> 支持的数据类型为：DT_INT8, DT_FP16, DT_BF16，DT_FP32，DT_HF8，且左右矩阵数据类型需保持一致。 <br> 支持的矩阵维度：2维、3维、4维，且左右矩阵维度需保持一致。 <br> 输入矩阵支持的Format为：TILEOP_ND, TILEOP_NZ（DT_FP32输入不支持TILEOP_NZ格式）。 <br> 当Format为TILEOP_ND（ND格式）时，外轴范围为[1, 2^31 - 1]，内轴范围为[1, 65535]。 <br> 当Format为TILEOP_NZ（NZ格式）时，其Shape维度需满足内轴32字节对齐（当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐。 <br> 内轴外轴：当输入矩阵mat2非转置时，对应数据排布为[K, N]，此时外轴为K，内轴为N；当输入矩阵mat2转置时，对应数据排布为[N, K]，此时外轴为N，内轴为K； <br> 在使用pypto.view接口的场景，应保证传入View的Shape维度也满足内轴32字节对齐（其中当输出矩阵数据类型为DT_INT32时，内轴为16元素对齐），外轴16元素对齐。 <br> 当矩阵维度为3维或者4维时，不支持pypto.view场景。 |
 | out_dtype         | 输出      | 表示输出矩阵数据类型，支持DT_FP32，DT_FP16，DT_BF16, DT_INT32。 <br> - 输入矩阵数据类型为DT_FP16时，out_dtype可选DT_FP32, DT_FP16。 <br> - 输入矩阵数据类型为DT_BF16时，out_dtype可选DT_FP32, DT_BF16。 <br> - 输入矩阵数据类型为DT_INT8时，out_dtype可选DT_INT32。 <br> - 输入矩阵数据类型为DT_FP32时，out_dtype可选DT_FP32。 |
 | a_trans           | 输入      | 参数a_trans表示输入左矩阵是否转置，默认为False。 |
 | b_trans           | 输入      | 参数b_trans表示输入右矩阵是否转置，默认为False。 |
@@ -64,7 +65,7 @@ b = pypto.tensor((32, 64), pypto.DT_FP16, "tensor_b")
 bias = pypto.tensor((1, 64), pypto.DT_FP16, "tensor_bias")
 extend_params = {'bias_tensor': bias}
 pypto.matmul(a, b, pypto.DT_FP32, a_trans=False, b_trans=False, c_matrix_nz=False, extend_params=extend_params)
-   
+
 a = pypto.tensor((16, 32), pypto.DT_INT8, "tensor_a")
 b = pypto.tensor((32, 64), pypto.DT_INT8, "tensor_b")
 extend_params = {'scale': 0.2}

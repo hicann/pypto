@@ -65,6 +65,7 @@ pypto-reshape
 pypto-rms_norm
 pypto-round
 pypto-rsqrt
+pypto-scaled_mm
 pypto-scatter
 pypto-scatter_
 pypto-scatter_update

@@ -197,6 +197,7 @@ class JitCallableWrapper:
         "torch.bfloat16": pypto.DataType.DT_BF16,
         "torch.float8_e4m3fn": pypto.DataType.DT_FP8E4M3,
         "torch.float8_e5m2": pypto.DataType.DT_FP8E5M2,
+        "torch.float8_e8m0fnu": pypto.DataType.DT_FP8E8M0,
 
         "torch.uint8": pypto.DataType.DT_UINT8,
         "torch.uint16": pypto.DataType.DT_UINT16,

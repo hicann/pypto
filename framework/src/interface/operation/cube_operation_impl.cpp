@@ -1210,7 +1210,7 @@ LogicalTensorPtr LinkTensorB(Function &function, const MatmulGraphNodes &tensorG
             paddingMode = attrParam.transB ? static_cast<int64_t>(PaddingMode::PADDING_INNER) :
                                              static_cast<int64_t>(PaddingMode::PADDING_OUTER);
         }
-        bL1TensorPtr = AddOpView<bool>(function, tensorGraphNodes.bTensorPtr, bL1TensorInfo,
+        bL1TensorPtr = AddOpView<int64_t>(function, tensorGraphNodes.bTensorPtr, bL1TensorInfo,
                                        {{COPY_IN_L1_PADDING_MODE, paddingMode}});
     }
     std::vector<int64_t> bL0Shape = (attrParam.transB) ? std::vector<int64_t>{iterInfo.nL0Size, iterInfo.kL0Size}
