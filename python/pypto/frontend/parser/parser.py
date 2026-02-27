@@ -1004,59 +1004,43 @@ class Parser(ast.NodeVisitor):
 
         return pypto.functions.get_last_function()
 
-    def _visit_arg(self, node: ast.arg) -> pypto.Tensor:
+    def _visit_arg(
+        self, node: ast.arg, default_value: Any = None
+    ) -> Union[pypto.Tensor, tuple[str, Any]]:
         """The general arg visiting method.
 
         Parameters
         ----------
         node : ast.arg
             The AST arg node.
+        default_value : Any, optional
+            Default value for non-tensor parameters (from node.defaults).
 
         Returns
         -------
-        res : pypto.Tensor
-            The tensor argument.
+        res : pypto.Tensor or tuple[str, Any]
+            The tensor argument, or (param_name, default_value) for non-tensor params.
 
         Note
         ----
-        arg node structure:
-            arg: str
-            annotation: expr
+        Non-tensor parameters must come after all tensor parameters.
         """
         if isinstance(node, (ast.Tuple, ast.List)):
             return [self._visit_arg(arg) for arg in node.elts]
         name = node.arg
         if node.annotation is None:
-            raise ParserError(
-                node, ValueError("Annotation is required for function arguments.")
-            )
+            # Non-tensor parameter (no annotation)
+            return (name, default_value)
         anno = self._visit_expr(node.annotation)
         if isinstance(anno, pypto.Tensor):
             anno.name = name
             return anno
         else:
-            raise ParserError(
-                node,
-                TypeError(
-                    f"All function arguments must be pypto.Tensor, but got {type(anno).__name__}."
-                ),
-            )
+            # Non-tensor parameter (annotation is not pypto.Tensor)
+            return (name, default_value)
 
-    def _parse_arguments_with_specs(
-        self, node: ast.arguments
-    ) -> tuple[list[pypto.Tensor], list[ParamSpec]]:
-        """The general arguments visiting method.
-
-        Parameters
-        ----------
-        node : ast.arguments
-            The AST arguments node.
-
-        Returns
-        -------
-        res : list[pypto.Tensor], list[ParamSpec]]
-            List of Tensor arguments, list of ParamSpec arguments
-        """
+    def _validate_arguments_node(self, node: ast.arguments) -> None:
+        """Validate that arguments node has no unsupported features."""
         if node.vararg is not None:
             raise ParserError(
                 node,
@@ -1089,12 +1073,12 @@ class Parser(ast.NodeVisitor):
                     "Please use explicit keyword arguments."
                 ),
             )
-        if len(node.defaults) > 0:
+        n_defaults = len(node.defaults)
+        if n_defaults > len(node.args):
             raise ParserError(
                 node,
-                NotImplementedError(
-                    "Default argument values are not supported. "
-                    "All arguments must be explicitly provided."
+                ValueError(
+                    "Number of default values exceeds number of arguments."
                 ),
             )
         if len(node.posonlyargs) > 0:
@@ -1106,21 +1090,81 @@ class Parser(ast.NodeVisitor):
                 ),
             )
 
-        # Process all arguments (only tensors allowed)
-        tensor_args = []
-        param_specs: list[ParamSpec] = []
+    def _build_arg_default_values(self, node: ast.arguments) -> list[Any]:
+        """Build default value list for each argument. args[-n_defaults:] get defaults."""
+        n_defaults = len(node.defaults)
+        default_values = [None] * len(node.args)
+        if n_defaults > 0:
+            for i, default in enumerate(node.defaults):
+                default_val = self._visit_expr(default)
+                default_values[len(node.args) - n_defaults + i] = default_val
+        return default_values
 
-        for arg in node.args:
-            result = self._visit_arg(arg)
+    def _raise_if_tensor_after_non_tensor(self, arg: ast.arg) -> None:
+        """Raise if tensor param appears after non-tensor param."""
+        raise ParserError(
+            arg,
+            ValueError(
+                "Non-tensor parameters must come after all tensor "
+                "parameters. "
+                f"Found tensor parameter '{arg.arg}' after "
+                "non-tensor parameter(s)."
+            ),
+        )
+
+    def _raise_if_tensor_has_default(self, arg: ast.arg) -> None:
+        """Raise if tensor param has default value."""
+        raise ParserError(
+            arg,
+            ValueError(
+                "Default values are only allowed for non-tensor "
+                f"parameters. Parameter '{arg.arg}' is a tensor."
+            ),
+        )
+
+    def _parse_arguments_with_specs(
+        self, node: ast.arguments
+    ) -> tuple[list[pypto.Tensor], list[ParamSpec]]:
+        """Parse function arguments into tensor args and param specs.
+
+        Returns
+        -------
+        tensor_args : list[pypto.Tensor]
+            List of tensor arguments.
+        param_specs : list[ParamSpec]
+            List of (name, is_tensor, value) for all parameters.
+        """
+        self._validate_arguments_node(node)
+        default_values = self._build_arg_default_values(node)
+        n_defaults = len(node.defaults)
+        first_default_idx = (
+            len(node.args) - n_defaults if n_defaults > 0 else len(node.args)
+        )
+
+        tensor_args: list[pypto.Tensor] = []
+        param_specs: list[ParamSpec] = []
+        seen_non_tensor = False
+
+        for idx, arg in enumerate(node.args):
+            result = self._visit_arg(arg, default_values[idx])
             if isinstance(result, pypto.Tensor):
+                if idx >= first_default_idx:
+                    self._raise_if_tensor_has_default(arg)
+                if seen_non_tensor:
+                    self._raise_if_tensor_after_non_tensor(arg)
                 tensor_args.append(result)
                 param_specs.append((arg.arg, True, result))
             elif isinstance(result, list):
-                # Handle nested tuples/lists if needed
+                if seen_non_tensor:
+                    self._raise_if_tensor_after_non_tensor(arg)
                 for item in result:
                     if isinstance(item, pypto.Tensor):
                         tensor_args.append(item)
                         param_specs.append((arg.arg, True, item))
+            else:
+                name, default = result
+                seen_non_tensor = True
+                param_specs.append((name, False, default))
 
         return tensor_args, param_specs
 
@@ -1258,7 +1302,7 @@ class Parser(ast.NodeVisitor):
             )
 
         # Validate argument count matches the signature.
-        expected_arg_count = len(tensor_input_args)
+        expected_arg_count = len(param_specs)
         if len(call_args) != expected_arg_count:
             raise ParserError(
                 node,
