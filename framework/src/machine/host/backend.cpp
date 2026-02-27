@@ -894,7 +894,7 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
 #ifdef __x86_64__
     std::string cflags = "-mno-sse2 -mno-sse";
 #else
-    std::string cflags = "";
+    std::string cflags = "-mgeneral-regs-only";
 #endif
 
     std::string aicpuDirPath = GetEmitPath("kernel_aicpu");

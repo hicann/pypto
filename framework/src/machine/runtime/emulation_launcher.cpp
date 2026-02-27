@@ -24,7 +24,7 @@ extern "C" int DynTileFwkBackendKernelServer(void *targ);
 namespace npu::tile_fwk::dynamic {
 
 static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
-    constexpr int threadNum = 6;
+    constexpr int threadNum = 7;
     std::thread aicpuThreadList[threadNum];
     int aicpuResultList[threadNum] = {0};
     std::atomic<int> idx{0};

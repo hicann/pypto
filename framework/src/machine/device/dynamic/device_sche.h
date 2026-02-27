@@ -433,7 +433,7 @@ struct DynMachineManager {
 
         DevStartArgs *runtimeDataCurrent = reinterpret_cast<DevStartArgs *>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         auto devArgs = devProg->devArgs;
-        int threadIdx = AllocThreadIdx(LAUNCH_AICPU_NUM, devArgs.scheCpuNum, runtimeDataCurrent->devScheState.threadIdx);
+        int threadIdx = AllocThreadIdx(devArgs.nrAicpu, devArgs.scheCpuNum, runtimeDataCurrent->devScheState.threadIdx);
         int ret = DEVICE_MACHINE_OK;
         if (threadIdx != -1 && threadIdx <= static_cast<int>(devArgs.scheCpuNum)) {
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
