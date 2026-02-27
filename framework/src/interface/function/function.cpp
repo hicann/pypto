@@ -1305,16 +1305,16 @@ unsigned long Function::ComputeHashOrderless() const {
             MagicLookup(this, operations_[i]->GetIOperands(), operations_[0]->GetSubgraphID(), index, magic2index, ss);
         }
     }
-    index = 0;
+
     for (auto &i : inCasts_) {
-        ss << "(i" << index++ << ")";
+        ss << "(i" << magic2index[i->GetMagic()] << ")";
         bool isGlobal = (globalTensors_.count(i) != 0);
         if (isGlobal) {
             ss << "(Global)";
         }
     }
     for (auto &o : outCasts_) {
-        ss << "(o" << index++ << ")";
+        ss << "(o" << magic2index[o->GetMagic()] << ")";
         bool isGlobal = (globalTensors_.count(o) != 0);
         if (isGlobal) {
             ss << "(Global)";

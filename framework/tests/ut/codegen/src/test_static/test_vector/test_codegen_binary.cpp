@@ -115,7 +115,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddSDim4) {
 
 TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    
+
     TileShape::Current().SetVecTile(1, 1, 16, 16);
     std::vector<int64_t> shape = {1, 1, 16, 16};
     Tensor input_a(DT_FP32, shape, "A");
@@ -136,7 +136,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor) {
     std::string res = GetResultFromCpp(*function);
     std::string expect = R"!!!(#include "TileOpImpl.h"
 
-// funcHash: 16047418710607905819
+// funcHash: 11664662471222470415
 
 extern "C" [aicore] void TENSOR_AddMulDim4_TILETENSOR_2_0_4503599627370496(__gm__ GMTensorInfo* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ GMTensorInfo* oriAddrParam) {
 float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400
