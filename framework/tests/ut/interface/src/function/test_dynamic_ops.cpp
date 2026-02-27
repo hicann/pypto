@@ -22,6 +22,7 @@
 #include "interface/inner/tilefwk.h"
 
 using namespace npu::tile_fwk;
+using namespace npu::tile_fwk::calc;
 
 class DynamicOpsTest : public testing::Test {
 public:
@@ -732,8 +733,9 @@ TEST_F(DynamicOpsTest, MatMulPerchannel) {
     auto scaleTensorRaw =
         RawTensorData::CreateConstantTensor<uint64_t>(scaleTensor, scaleValueTmp);
     auto logicScale = LogicalTensorData::Create(*scaleTensorRaw);
+    auto logicScaleData = Trans(logicScale);
     calc::MatMul(golden, logicTensor0, logicTensor1,
-        {false, true, 0, 0, 0, logicScale, nullptr});
+        {false, true, 0, 0, 0, &logicScaleData, nullptr});
 
     ProgramData::GetInstance().PrepareData({logicTensor0->GetData(), logicTensor1->GetData(),
         logicScale->GetData()}, {out0->GetData()}, {golden->GetData()});
@@ -760,8 +762,9 @@ TEST_F(DynamicOpsTest, MatMulBias) {
     auto out0 = Random(DT_FP16, out.GetShape());
     auto golden = Random(DT_FP16, out.GetShape());
     auto logicBias = Random(DT_FP16, biasTensor.GetShape());
+    auto logicBiasData = Trans(logicBias);
     calc::MatMul(golden, d0, d1,
-        {false, false, 0, 0, 0, nullptr, logicBias});
+        {false, false, 0, 0, 0, nullptr, &logicBiasData});
 
     ProgramData::GetInstance().PrepareData({d0->GetData(), d1->GetData(),
         logicBias->GetData()}, {out0->GetData()}, {golden->GetData()});
@@ -797,8 +800,9 @@ TEST_F(DynamicOpsTest, MatMulL0CToL1Fixpipe) {
     auto scaleTensorRaw =
         RawTensorData::CreateConstantTensor<uint64_t>(scaleTensor, scaleValueTmp);
     auto logicScale = LogicalTensorData::Create(*scaleTensorRaw);
+    auto logicScaleData = Trans(logicScale);
     calc::MatMul(golden, logicTensor0, logicTensor1,
-        {false, false, 0, 0, 0, logicScale, nullptr});
+        {false, false, 0, 0, 0, &logicScaleData, nullptr});
     calc::MatMul(golden, golden, l0c2L1Data);
 
     ProgramData::GetInstance().PrepareData({logicTensor0->GetData(), logicTensor1->GetData(),

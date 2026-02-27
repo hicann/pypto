@@ -101,16 +101,15 @@ static void ToOperand(const torch::Tensor &src, const torch::Tensor &dst, DataTy
     }
 }
 
-static std::pair<torch::Tensor, torch::Tensor> From(LogicalTensorDataPtr data) {
-    RawTensorDataPtr raw = data->GetData();
-    auto ScalarDataType = FromDataType(raw->GetDataType());
-    auto tensor = torch::from_blob(raw->data(), raw->GetShape(), ScalarDataType);
-    auto view = tensor.as_strided(data->GetShape(), raw->GetStride(), data->GetStorageOffset());
-    if (data->IsAxisCombine())
+static std::pair<torch::Tensor, torch::Tensor> From(const TensorData &data) {
+    auto ScalarDataType = FromDataType(data.dtype);
+    auto tensor = torch::from_blob(data.dataPtr, data.rawShape, ScalarDataType);
+    auto view = tensor.as_strided(data.shape, data.stride, data.storageOffset);
+    if (data.isAxisCombine)
         view = view.transpose_(-1, AXIS_TO_LAST);
     auto actualView = view;
     if (ScalarDataType == torch::kUInt8) {
-        actualView = Fp8ToFloat32(view, raw->GetDataType());
+        actualView = Fp8ToFloat32(view, data.dtype);
     }
     // view == actualView if ScalarDataType != torch::kUInt8
     return {view, actualView};
@@ -124,183 +123,183 @@ static torch::Tensor View(const torch::Tensor &self, const std::vector<int64_t> 
     return self.as_strided(shape, self.strides(), storageOffset);
 }
 
-static bool AllClose(LogicalTensorDataPtr self, LogicalTensorDataPtr other, double atol, double rtol) {
+static bool AllClose(const TensorData &self, const TensorData &other, double atol, double rtol) {
     return From(self).second.allclose(From(other).second, atol, rtol);
 }
 
-static void Random(LogicalTensorDataPtr out) {
+static void Random(const TensorData &out) {
     auto tout = From(out);
     torch::rand_out(tout.second, tout.second.sizes());
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Exp(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Exp(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::exp_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Neg(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Neg(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::neg_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Sign(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Sign(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::sign_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Ceil(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Ceil(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::ceil_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Floor(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Floor(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::floor_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Trunc(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Trunc(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::trunc_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Round(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int decimals) {
+static void Round(const TensorData &out, const TensorData &self, int decimals) {
     auto tout = From(out);
     auto tself = From(self);
     tout.second.copy_(torch::round(tself.second, decimals));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Rsqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Rsqrt(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::rsqrt_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Sqrt(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Sqrt(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::sqrt_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Reciprocal(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Reciprocal(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::reciprocal_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Relu(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Relu(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::relu_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseNot(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void BitwiseNot(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::bitwise_not_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void LogicalNot(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void LogicalNot(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::logical_not_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void LogicalAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void LogicalAnd(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::logical_and_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Abs(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Abs(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::abs_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void WhereTT(LogicalTensorDataPtr out, LogicalTensorDataPtr condition, LogicalTensorDataPtr input, LogicalTensorDataPtr other) {
+static void WhereTT(const TensorData &out, const TensorData &condition, const TensorData &input, const TensorData &other) {
     auto tout = From(out);
     auto tcondition = From(condition);
     auto tinput = From(input);
     auto tother = From(other);
     torch::where_out(tout.second, tcondition.second, tinput.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void WhereTS(LogicalTensorDataPtr out, LogicalTensorDataPtr condition, LogicalTensorDataPtr input, const Element &other) {
+static void WhereTS(const TensorData &out, const TensorData &condition, const TensorData &input, const Element &other) {
     auto tout = From(out);
     auto tcondition = From(condition);
     auto tinput = From(input);
     torch::Tensor tother = torch::tensor(static_cast<float>(other.GetFloatData()), torch::kFloat32);
     torch::where_out(tout.second, tcondition.second, tinput.second, tother);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void WhereST(LogicalTensorDataPtr out, LogicalTensorDataPtr condition, const Element &input, LogicalTensorDataPtr other) {
+static void WhereST(const TensorData &out, const TensorData &condition, const Element &input, const TensorData &other) {
     auto tout = From(out);
     auto tcondition = From(condition);
     torch::Tensor tinput = torch::tensor(static_cast<float>(input.GetFloatData()), torch::kFloat32);
     auto tother = From(other);
     torch::where_out(tout.second, tcondition.second, tinput, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void WhereSS(LogicalTensorDataPtr out, LogicalTensorDataPtr condition, const Element &input, const Element &other) {
+static void WhereSS(const TensorData &out, const TensorData &condition, const Element &input, const Element &other) {
     auto tout = From(out);
     auto tcondition = From(condition);
     torch::Tensor tinput = torch::tensor(static_cast<float>(input.GetFloatData()), torch::kFloat32);
     torch::Tensor tother = torch::tensor(static_cast<float>(other.GetFloatData()), torch::kFloat32);
     torch::where_out(tout.second, tcondition.second, tinput, tother);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Ln(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Ln(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     torch::log_out(tout.second, tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void IsFinite(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void IsFinite(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
     tout.second = torch::isfinite(tself.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 #define DEFINE_BINARY_S_OPS(Name, op_out)                                                                 \
-    static void Name(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar, bool reverse) { \
+    static void Name(const TensorData &out, const TensorData &self, const Element &scalar, bool reverse) { \
         auto tout = From(out);                                                                            \
         auto tself = From(self);                                                                          \
         if (reverse) {                                                                                    \
-            torch::full_out(tout.second, out->GetShape(), From(scalar));                                  \
+            torch::full_out(tout.second, out.shape, From(scalar));                                        \
             torch::op_out(tout.second, tout.second, tself.second);                                        \
         } else {                                                                                          \
             torch::op_out(tout.second, tself.second, From(scalar));                                       \
         }                                                                                                 \
-        ToOperand(tout.second, tout.first, out->GetData()->GetDataType());                                  \
+        ToOperand(tout.second, tout.first, out.dtype);                                                    \
     }
 
 DEFINE_BINARY_S_OPS(AddS, add_out)
@@ -312,7 +311,7 @@ DEFINE_BINARY_S_OPS(BitwiseAndS, bitwise_and_out)
 DEFINE_BINARY_S_OPS(BitwiseOrS, bitwise_or_out)
 DEFINE_BINARY_S_OPS(BitwiseXorS, bitwise_xor_out)
 
-static void Add(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Add(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -339,10 +338,10 @@ static void Add(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     } else {
         torch::add_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Sub(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Sub(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -369,10 +368,10 @@ static void Sub(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     } else {
         torch::sub_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Mul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Mul(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -399,10 +398,10 @@ static void Mul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     } else {
         torch::mul_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Div(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Div(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -429,10 +428,10 @@ static void Div(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     } else {
         torch::div_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Hypot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Hypot(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -459,10 +458,10 @@ static void Hypot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTe
 
         torch::hypot_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Fmod(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Fmod(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -489,114 +488,114 @@ static void Fmod(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTen
     } else {
         torch::fmod_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Pow(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Pow(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::pow_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void BitwiseAnd(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::bitwise_and_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseOr(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void BitwiseOr(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::bitwise_or_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseXor(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void BitwiseXor(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::bitwise_xor_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void CopySign(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void CopySign(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::copysign_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseRightShift(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void BitwiseRightShift(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::bitwise_right_shift_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseLeftShift(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void BitwiseLeftShift(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tout = From(out);
     auto tself = From(self);
     auto tother = From(other);
     torch::bitwise_left_shift_out(tout.second, tself.second, tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseRightShiftS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar) {
+static void BitwiseRightShiftS(const TensorData &out, const TensorData &self, const Element &scalar) {
     auto tout = From(out);
     auto tself = From(self);
     torch::bitwise_right_shift_out(tout.second, tself.second, From(scalar));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void BitwiseLeftShiftS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &scalar) {
+static void BitwiseLeftShiftS(const TensorData &out, const TensorData &self, const Element &scalar) {
     auto tout = From(out);
     auto tself = From(self);
     torch::bitwise_left_shift_out(tout.second, tself.second, From(scalar));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void SBitwiseRightShift(LogicalTensorDataPtr out, const Element &scalar, LogicalTensorDataPtr other) {
+static void SBitwiseRightShift(const TensorData &out, const Element &scalar, const TensorData &other) {
     auto tout = From(out);
     auto tother = From(other);
     torch::bitwise_right_shift_out(tout.second, From(scalar), tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void SBitwiseLeftShift(LogicalTensorDataPtr out, const Element &scalar, LogicalTensorDataPtr other) {
+static void SBitwiseLeftShift(const TensorData &out, const Element &scalar, const TensorData &other) {
     auto tout = From(out);
     auto tother = From(other);
     torch::bitwise_left_shift_out(tout.second, From(scalar), tother.second);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Cast(LogicalTensorDataPtr out, LogicalTensorDataPtr self, CastMode mode) {
+static void Cast(const TensorData &out, const TensorData &self, CastMode mode) {
     auto tout = From(out);
     auto tself = From(self);
     if (mode == CastMode::CAST_ROUND) {
-        ToOperand(tself.second.round(), tout.first, out->GetData()->GetDataType());
+        ToOperand(tself.second.round(), tout.first, out.dtype);
     } else if (mode == CastMode::CAST_FLOOR) {
-        ToOperand(tself.second.floor(), tout.first, out->GetData()->GetDataType());
+        ToOperand(tself.second.floor(), tout.first, out.dtype);
     } else if (mode == CastMode::CAST_CEIL) {
-        ToOperand(tself.second.ceil(), tout.first, out->GetData()->GetDataType());
+        ToOperand(tself.second.ceil(), tout.first, out.dtype);
     } else if (mode == CastMode::CAST_TRUNC) {
-        ToOperand(tself.second.trunc(), tout.first, out->GetData()->GetDataType());
+        ToOperand(tself.second.trunc(), tout.first, out.dtype);
     } else {
-        if (IsFloat(out->GetDataType())) {
-            ToOperand(tself.second, tout.first, out->GetData()->GetDataType());
+        if (IsFloat(out.dtype)) {
+            ToOperand(tself.second, tout.first, out.dtype);
         } else {
-            ToOperand(tself.second.round(), tout.first, out->GetData()->GetDataType());
+            ToOperand(tself.second.round(), tout.first, out.dtype);
         }
     }
 }
 
-static void Min(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Min(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -623,10 +622,10 @@ static void Min(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     } else {
         torch::min_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Max(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+static void Max(const TensorData &out, const TensorData &self, const TensorData &other) {
     auto tself = From(self);
     auto tother = From(other);
     auto tout = From(out);
@@ -653,37 +652,37 @@ static void Max(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTens
     } else {
         torch::max_out(tout.second, tself.second, tother.second);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void MinS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &elem) {
+static void MinS(const TensorData &out, const TensorData &self, const Element &elem) {
     auto tout = From(out);
     auto tself = From(self);
     torch::clamp_max_out(tout.second, tself.second, From(elem));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void MaxS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &elem) {
+static void MaxS(const TensorData &out, const TensorData &self, const Element &elem) {
     auto tout = From(out);
     auto tself = From(self);
     torch::clamp_min_out(tout.second, tself.second, From(elem));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Range(LogicalTensorDataPtr out, const Element &start, const Element &end, const Element &step) {
+static void Range(const TensorData &out, const Element &start, const Element &end, const Element &step) {
     auto tmp = torch::arange(From(start), From(end), From(step));
     int64_t expected_numel = 1;
-    for (int64_t dim : out->GetShape()) {
+    for (int64_t dim : out.shape) {
         expected_numel *= dim;
     }
     ASSERT(tmp.numel() == expected_numel) << "Range numel mismatch: generated " << tmp.numel() << ", expected " << expected_numel;
     auto tout = From(out);
     tout.second.copy_(tmp);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 template <typename T>
-static void CompareImpl(LogicalTensorDataPtr out, const torch::Tensor& tself, const T& other_op,
+static void CompareImpl(const TensorData &out, const torch::Tensor& tself, const T& other_op,
                         CmpOperationType operation, CmpModeType mode) {
     auto tout = From(out);
     torch::Tensor tmp_result;
@@ -735,37 +734,37 @@ static void CompareImpl(LogicalTensorDataPtr out, const torch::Tensor& tself, co
                 packed_data[i] = byte;
             }
             tout.second.copy_(packed);
-            ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+            ToOperand(tout.second, tout.first, out.dtype);
         }
     } else {
         tout.second.copy_(tmp_result);
-        ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+        ToOperand(tout.second, tout.first, out.dtype);
     }
 }
 
-static void Compare(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other,
+static void Compare(const TensorData &out, const TensorData &self, const TensorData &other,
              CmpOperationType operation, CmpModeType mode) {
     CompareImpl(out, From(self).second, From(other).second, operation, mode);
 }
 
-static void Cmps(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element &elem,
+static void Cmps(const TensorData &out, const TensorData &self, const Element &elem,
              CmpOperationType operation, CmpModeType mode) {
     CompareImpl(out, From(self).second, From(elem), operation, mode);
 }
 
 #define DEFINE_BINARY_PAIR_OPS(Name, bop)                                                              \
-    static void Pair##Name(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) { \
+    static void Pair##Name(const TensorData &out, const TensorData &self, const TensorData &other) {   \
         auto big = self, small = other;                                                                \
-        if (self->GetShape() < other->GetShape()) {                                                    \
+        if (self.shape < other.shape) {                                                                \
             big = other, small = self;                                                                 \
         }                                                                                              \
         auto tout = From(out);                                                                         \
-        std::vector<int64_t> offset(self->GetShape().size(), 0);                                       \
-        auto tbig = View(tout.second, big->GetShape(), offset);                                        \
+        std::vector<int64_t> offset(self.shape.size(), 0);                                             \
+        auto tbig = View(tout.second, big.shape, offset);                                              \
         tbig.copy_(From(big).second);                                                                  \
-        auto tsmall = View(tout.second, small->GetShape(), offset);                                    \
+        auto tsmall = View(tout.second, small.shape, offset);                                          \
         torch::bop(tsmall, tsmall, From(small).second);                                                \
-        ToOperand(tout.second, tout.first, out->GetData()->GetDataType());                               \
+        ToOperand(tout.second, tout.first, out.dtype);                                                 \
     }
 
 DEFINE_BINARY_PAIR_OPS(Sum, add_out)
@@ -787,8 +786,8 @@ static inline int64_t alignup(int64_t x, int64_t align) {
     return (x + (align - 1)) & ~(align - 1);
 }
 
-static void FormatND2NZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
-    auto &shape = self->GetShape();
+static void FormatND2NZ(const TensorData &out, const TensorData &self) {
+    auto &shape = self.shape;
     ASSERT(shape.size() >= 0x2) << "Input tensor must have at least 2 dimensions";
 
     int64_t ndim = shape.size();
@@ -796,7 +795,7 @@ static void FormatND2NZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     int64_t m0 = 16; // m0 16
     int64_t padm = alignup(m, m0);
     int64_t n = shape[ndim - 1];
-    int64_t n0 = BLOCK_SIZE / BytesOf(self->GetDataType());
+    int64_t n0 = BLOCK_SIZE / BytesOf(self.dtype);
     int64_t padn = alignup(n, n0);
     int64_t n1 = padn / n0;
 
@@ -814,18 +813,18 @@ static void FormatND2NZ(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     nzShape.push_back(padn);
     tself = tself.reshape(nzShape); // [b, padm, padn]
     auto tout = From(out);
-    ToOperand(tself, tout.first, out->GetData()->GetDataType());
+    ToOperand(tself, tout.first, out.dtype);
 }
 
-static void FormatNZ2ND(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
-    auto &shape = self->GetShape();
+static void FormatNZ2ND(const TensorData &out, const TensorData &self) {
+    auto &shape = self.shape;
     ASSERT(shape.size() >= 0x2) << "Input tensor must have at least 2 dimensions";
 
     auto tself_pair = From(self);
     auto tself = tself_pair.second; // [b, m1*m0, n1*n0]
     int64_t ndim = shape.size();
     int64_t m = shape[ndim - 0x2];
-    int64_t n0 = BLOCK_SIZE / BytesOf(self->GetDataType());
+    int64_t n0 = BLOCK_SIZE / BytesOf(self.dtype);
     int64_t n1 = shape[ndim - 1] / n0;
 
     tself = tself.reshape({-1, n1, m, n0});  // [b, n1, m1*m0, n0]
@@ -834,9 +833,9 @@ static void FormatNZ2ND(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 
     std::vector<int64_t> offset(ndim, 0);
     auto tout = From(out);
-    auto view = View(tself, out->GetShape(), offset);
+    auto view = View(tself, out.shape, offset);
     tout.second.copy_(view);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 static void MatmulMultiDataLoad(torch::Tensor &out, const torch::Tensor &lhs, const torch::Tensor &rhs, const torch::Tensor &bias, int64_t kstep) {
@@ -862,7 +861,7 @@ static void MatmulMultiDataLoad(torch::Tensor &out, const torch::Tensor &lhs, co
     }
 }
 
-static void QuantExecute(torch::Tensor &tout, LogicalTensorDataPtr scalePtr, uint64_t scale, int relu) {
+static void QuantExecute(torch::Tensor &tout, const TensorData *scalePtr, uint64_t scale, int relu) {
     if (relu == 1) {
         tout.relu_();
     }
@@ -872,7 +871,7 @@ static void QuantExecute(torch::Tensor &tout, LogicalTensorDataPtr scalePtr, uin
         memcpy_s(&scaleValue, sizeof(float), &low32, sizeof(float));
         tout.mul_(scaleValue);
     } else {
-        auto scaleTensor = From(scalePtr);
+        auto scaleTensor = From(*scalePtr);
         auto scaleU32 = scaleTensor.second.to(torch::kInt32);
         auto* u32Data = scaleU32.data_ptr<int32_t>();
         auto scaleF32 = torch::from_blob(
@@ -884,12 +883,12 @@ static void QuantExecute(torch::Tensor &tout, LogicalTensorDataPtr scalePtr, uin
     }
 }
 
-static void QuantPreCompute(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr scalePtr, uint64_t scale, int relu) {
-    ASSERT(out != nullptr && self != nullptr && out->GetData() != nullptr && self->GetData() != nullptr);
+static void QuantPreCompute(const TensorData &out, const TensorData &self, const TensorData *scalePtr, uint64_t scale, int relu) {
+    ASSERT(out.dataPtr != nullptr && self.dataPtr != nullptr);
     ALOG_DEBUG_F("Quant input data type: %s, output data type: %s, relu: %d, scale: %llu.\n",
-        DataType2CCEStr(self->GetData()->GetDataType()).c_str(), DataType2CCEStr(out->GetData()->GetDataType()).c_str(),
+        DataType2CCEStr(self.dtype).c_str(), DataType2CCEStr(out.dtype).c_str(),
         relu, scale);
-    ASSERT(out->GetData()->GetDataType() == DataType::DT_FP16 && self->GetData()->GetDataType() == DataType::DT_INT32);
+    ASSERT(out.dtype == DataType::DT_FP16 && self.dtype == DataType::DT_INT32);
     auto tself = From(self);
     auto tout = From(out);
     auto dtype = tout.second.scalar_type();
@@ -903,11 +902,11 @@ static void QuantPreCompute(LogicalTensorDataPtr out, LogicalTensorDataPtr self,
     if (calcType != dtype) {
         tout.second = tout.second.to(dtype);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other,
-    LogicalTensorDataPtr acc, MatMulParam &param) {
+static void MatMul(const TensorData &out, const TensorData &self, const TensorData &other,
+    const TensorData *acc, MatMulParam &param) {
     auto tout = From(out);
     auto dtype = tout.second.scalar_type();
     auto calcType = dtype;
@@ -920,10 +919,10 @@ static void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalT
     auto tother = From(other);
     std::pair<torch::Tensor, torch::Tensor> bias_tensor;
     if (param.biasPtr != nullptr) {
-        bias_tensor = From(param.biasPtr);
+        bias_tensor = From(*param.biasPtr);
     }
     if (acc) {
-        tout.second.copy_(From(acc).second);
+        tout.second.copy_(From(*acc).second);
     } else {
         tout.second.zero_();
     }
@@ -939,7 +938,7 @@ static void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalT
     if (tother.second.scalar_type() != calcType) {
         tother.second = tother.second.to(calcType);
     }
-    if (!param.kStep || param.kStep == self->GetShape(-1)) {
+    if (!param.kStep || param.kStep == self.shape[self.shape.size() - 1]) {
         if (param.biasPtr != nullptr) {
             tout.second.add_(torch::matmul(tself.second, tother.second) + bias_tensor.second);
         } else {
@@ -948,42 +947,42 @@ static void MatMul(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalT
     } else {
         MatmulMultiDataLoad(tout.second, tself.second, tother.second, bias_tensor.second, param.kStep);
     }
-    if (self->GetDataType() == DataType::DT_INT8 && out->GetDataType() == DataType::DT_FP16) {
+    if (self.dtype == DataType::DT_INT8 && out.dtype == DataType::DT_FP16) {
         QuantExecute(tout.second, param.scalePtr, param.scale, param.relu);
     }
     if (calcType != dtype) {
         tout.second = tout.second.to(dtype);
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void OneHot(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int numClasses) {
+void OneHot(const TensorData &out, const TensorData &self, int numClasses) {
     auto ret = From(out);
     auto src = From(self);
     ret.second.copy_(torch::nn::functional::one_hot(src.second.to(torch::kInt64), numClasses));
-    ToOperand(ret.second, ret.first, out->GetData()->GetDataType());
+    ToOperand(ret.second, ret.first, out.dtype);
 }
 
-static void ExpandS(LogicalTensorDataPtr out, const Element &elem) {
+static void ExpandS(const TensorData &out, const Element &elem) {
     auto tout = From(out);
-    torch::full_out(tout.second, out->GetShape(), From(elem));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    torch::full_out(tout.second, out.shape, From(elem));
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void Expand(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Expand(const TensorData &out, const TensorData &self) {
     auto tself = From(self);
-    if (self->GetShape(-1) != out->GetShape(-1) && self->GetShape(-1) != 1) {
+    if (self.shape[self.shape.size() - 1] != out.shape[out.shape.size() - 1] && self.shape[self.shape.size() - 1] != 1) {
         // possible block align
         tself.second = tself.second.slice(tself.second.dim() - 1, 0, 1);
     }
     auto tout = From(out);
-    ToOperand(tself.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tself.second, tout.first, out.dtype);
 }
-void Gather(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices, int64_t axis) {
+void Gather(const TensorData &out, const TensorData &params, const TensorData &indices, int64_t axis) {
     auto tout = From(out);
     auto tparams = From(params);
     auto tindices = From(indices);
-    auto paramsRank = params->GetShape().size();
+    auto paramsRank = params.shape.size();
     if (axis < 0) {
         axis += paramsRank;
     }
@@ -996,7 +995,7 @@ void Gather(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensor
     outSize.insert(outSize.end(), tparams.second.sizes().begin() + axis + 1, tparams.second.sizes().end());
     tout.second = tout.second.view(outSize);
     tout.second.copy_(gathered.reshape(outSize));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 void GatherINUBGolden(torch::Tensor &out, const torch::Tensor &params, const torch::Tensor &indices,
     const torch::Tensor &pageTable, int64_t blockSize, int64_t axis) {
@@ -1069,22 +1068,21 @@ void GatherINUBGolden(torch::Tensor &out, const torch::Tensor &params, const tor
     // 写到 out（不要求 out contiguous；copy_ 会处理）
     out.copy_(selected);
 }
-static torch::Tensor From4GatherINUB(LogicalTensorDataPtr data) {
-    RawTensorDataPtr raw = data->GetData();
-    auto tensor = torch::from_blob(raw->data(), raw->GetShape(), FromDataType(raw->GetDataType()));
-    auto view = tensor.as_strided({raw->GetShape()[0],data->GetShape()[1]}, raw->GetStride(), data->GetStorageOffset());
-    if (data->IsAxisCombine())
+static torch::Tensor From4GatherINUB(const TensorData &data) {
+    auto tensor = torch::from_blob(data.dataPtr, data.rawShape, FromDataType(data.dtype));
+    auto view = tensor.as_strided({data.shape[0], data.shape[1]}, data.stride, data.storageOffset);
+    if (data.isAxisCombine)
         view = view.transpose_(-1, AXIS_TO_LAST);
     return view;
 }
-void GatherINUB(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices,
-    LogicalTensorDataPtr pageTable, int64_t blockSize, int64_t axis) {
+void GatherINUB(const TensorData &out, const TensorData &params, const TensorData &indices,
+    const TensorData &pageTable, int64_t blockSize, int64_t axis) {
     auto tout = From(out);
     auto tparams = From4GatherINUB(params);
     auto tindices = From(indices);
     auto tpageTable = From(pageTable);
     GatherINUBGolden(tout.second, tparams, tindices.second, tpageTable.second, blockSize, axis);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 void GatherInL1Golden(torch::Tensor &out, const torch::Tensor &params, const torch::Tensor &indices,
@@ -1099,172 +1097,171 @@ void GatherInL1Golden(torch::Tensor &out, const torch::Tensor &params, const tor
     out.copy_(selected);
 }
 
-static torch::Tensor FromGatherInL1(LogicalTensorDataPtr data) {
-    RawTensorDataPtr raw = data->GetData();
-    auto tensor = torch::from_blob(raw->data(), raw->GetShape(), FromDataType(raw->GetDataType()));
-    auto view = tensor.as_strided({raw->GetShape()[0],data->GetShape()[1]}, raw->GetStride(), data->GetStorageOffset());
-    if (data->IsAxisCombine()) {
+static torch::Tensor FromGatherInL1(const TensorData &data) {
+    auto tensor = torch::from_blob(data.dataPtr, data.rawShape, FromDataType(data.dtype));
+    auto view = tensor.as_strided({data.shape[0], data.shape[1]}, data.stride, data.storageOffset);
+    if (data.isAxisCombine) {
         view = view.transpose_(-1, AXIS_TO_LAST);
     }
     return view;
 }
 
-void GatherInL1(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices,
-    LogicalTensorDataPtr pageTable, int64_t blockSize) {
+void GatherInL1(const TensorData &out, const TensorData &params, const TensorData &indices,
+    const TensorData &pageTable, int64_t blockSize) {
     auto tout = From(out);
     auto tparams = FromGatherInL1(params);
     auto tindices = From(indices);
     auto tpageTable = From(pageTable);
     GatherInL1Golden(tout.second, tparams, tindices.second, tpageTable.second, blockSize);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void GatherElements(LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices, int axis) {
+void GatherElements(const TensorData &out, const TensorData &params, const TensorData &indices, int axis) {
     auto ret = From(out);
     auto src = From(params);
     auto index = From(indices).second.to(torch::kInt64);
     torch::gather_out(ret.second, src.second, axis, index);
-    ToOperand(ret.second, ret.first, out->GetData()->GetDataType());
+    ToOperand(ret.second, ret.first, out.dtype);
 }
 
-void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr src, LogicalTensorDataPtr indices, int axis, const Element &alpha) {
+void IndexAdd(const TensorData &out, const TensorData &self, const TensorData &src, const TensorData &indices, int axis, const Element &alpha) {
     auto tout = From(out);
     auto inputSelf = From(self);
     auto inputSrc = From(src);
     auto inputIndices = From(indices);
     torch::index_add_out(tout.second, inputSelf.second, axis, inputIndices.second, inputSrc.second, From(alpha));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void TriU(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal) {
+void TriU(const TensorData &out, const TensorData &in, int diagonal) {
     auto output = From(out);
     auto input = From(in);
 
     torch::triu_out(output.second, input.second, diagonal);
-    ToOperand(output.second, output.first, out->GetData()->GetDataType());
+    ToOperand(output.second, output.first, out.dtype);
 }
 
-void TriL(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal) {
+void TriL(const TensorData &out, const TensorData &in, int diagonal) {
     auto output = From(out);
     auto input = From(in);
 
     torch::tril_out(output.second, input.second, diagonal);
-    ToOperand(output.second, output.first, out->GetData()->GetDataType());
+    ToOperand(output.second, output.first, out.dtype);
 }
 
-void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
+void CumSum(const TensorData &out, const TensorData &in, int axis) {
     auto tout = From(out);
     auto input = From(in);
     torch::cumsum_out(tout.second, input.second, axis);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void IndexPut(LogicalTensorDataPtr out, LogicalTensorDataPtr self, std::vector<LogicalTensorDataPtr> indices, LogicalTensorDataPtr values, bool accumulate) {
+void IndexPut(const TensorData &out, const TensorData &self, const std::vector<TensorData> &indices, const TensorData &values, bool accumulate) {
     c10::List<c10::optional<at::Tensor>> indicesList;
     for (const auto idx : indices) {
         indicesList.push_back(From(idx).second);
     }
     auto tout = From(out);
     auto result = torch::index_put(From(self).second, indicesList, From(values).second, accumulate);
-    ToOperand(result, tout.first, out->GetData()->GetDataType());
+    ToOperand(result, tout.first, out.dtype);
 }
 
-static void Copy(LogicalTensorDataPtr out, LogicalTensorDataPtr self, bool trans) {
+static void Copy(const TensorData &out, const TensorData &self, bool trans) {
     auto tout = From(out);
     auto tself = From(self);
     if (trans) {
         auto res = tself.second.transpose(-1, AXIS_TO_LAST);
-        ToOperand(res, tout.first, out->GetData()->GetDataType());
+        ToOperand(res, tout.first, out.dtype);
     } else {
-        ToOperand(tself.second, tout.first, out->GetData()->GetDataType());
+        ToOperand(tself.second, tout.first, out.dtype);
     }
 }
 
-static void RowSumExpand(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowSumExpand(const TensorData &out, const TensorData &self, int dim) {
     auto tout = From(out);
     auto tself = From(self);
     auto res = torch::sum(tself.second, {dim}, true);
-    ToOperand(res, tout.first, out->GetData()->GetDataType());
+    ToOperand(res, tout.first, out.dtype);
 }
 
-static void RowSumSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowSumSingle(const TensorData &out, const TensorData &self, int dim) {
     auto tout = From(out);
     auto tself = From(self);
     torch::sum_out(tout.second, tself.second, {dim}, true);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void RowMinExpand(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowMinExpand(const TensorData &out, const TensorData &self, int dim) {
     auto tself = From(self);
     auto ret = torch::min(tself.second, dim, true);
     auto tout = From(out);
-    ToOperand(std::get<0>(ret), tout.first, out->GetData()->GetDataType());
+    ToOperand(std::get<0>(ret), tout.first, out.dtype);
 }
 
-static void RowMaxExpand(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowMaxExpand(const TensorData &out, const TensorData &self, int dim) {
     auto tself = From(self);
     auto ret = torch::max(tself.second, dim, true);
     auto tout = From(out);
-    ToOperand(std::get<0>(ret), tout.first, out->GetData()->GetDataType());
+    ToOperand(std::get<0>(ret), tout.first, out.dtype);
 }
 
-static void RowMinSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowMinSingle(const TensorData &out, const TensorData &self, int dim) {
     auto tself = From(self);
     auto ret = torch::min(tself.second, dim, true);
     auto tout = From(out);
-    ToOperand(std::get<0>(ret), tout.first, out->GetData()->GetDataType());
+    ToOperand(std::get<0>(ret), tout.first, out.dtype);
 }
 
-static void RowMinLine(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowMinLine(const TensorData &out, const TensorData &self, int dim) {
     auto tself = From(self);
     auto tout = From(out);
     auto ret = torch::min(tself.second, dim, true);
-    ToOperand(std::get<0>(ret), tout.first, out->GetData()->GetDataType());
+    ToOperand(std::get<0>(ret), tout.first, out.dtype);
 }
 
-static void RowMaxSingle(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowMaxSingle(const TensorData &out, const TensorData &self, int dim) {
     auto tself = From(self);
     auto ret = torch::max(tself.second, dim, true);
     auto tout = From(out);
-    ToOperand(std::get<0>(ret), tout.first, out->GetData()->GetDataType());
+    ToOperand(std::get<0>(ret), tout.first, out.dtype);
 }
 
-static void RowMaxLine(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int dim) {
+static void RowMaxLine(const TensorData &out, const TensorData &self, int dim) {
     auto tself = From(self);
     auto tout = From(out);
     auto ret = torch::max(tself.second, dim, true);
-    ToOperand(std::get<0>(ret), tout.first, out->GetData()->GetDataType());
+    ToOperand(std::get<0>(ret), tout.first, out.dtype);
 }
 
-static void Reshape(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Reshape(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
-    auto res = torch::reshape(tself.second, out->GetShape());
-    ToOperand(res, tout.first, out->GetData()->GetDataType());
+    auto res = torch::reshape(tself.second, out.shape);
+    ToOperand(res, tout.first, out.dtype);
 }
 
-static void Transpose(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t dim0, int64_t dim1) {
+static void Transpose(const TensorData &out, const TensorData &self, int64_t dim0, int64_t dim1) {
     auto tout = From(out);
     auto tself = From(self);
     torch::transpose_copy_out(tout.second, tself.second, dim0, dim1);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void Permute(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const std::vector<int64_t> &dim) {
+void Permute(const TensorData &out, const TensorData &self, const std::vector<int64_t> &dim) {
     auto tout = From(out);
     auto tself = From(self);
     torch::permute_copy_out(tout.second, tself.second, dim);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void ReduceAcc(LogicalTensorDataPtr out, const std::vector<LogicalTensorDataPtr> &tdatas) {
+static void ReduceAcc(const TensorData &out, const std::vector<TensorData> &tdatas) {
     auto tout = From(out);
     std::vector<torch::Tensor> tensors;
     for (auto &tdata : tdatas) {
         tensors.push_back(From(tdata).second);
     }
     torch::sum_out(tout.second, torch::stack(tensors, 0), 0);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 /**
@@ -1285,7 +1282,7 @@ static void ReduceAcc(LogicalTensorDataPtr out, const std::vector<LogicalTensorD
  * @param axis Indicate on which axis of self for grouping and sorting
  * @param descending Indicate whether the sorting direction is ascending or descending
  */
-static void BitSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t axis, bool descending, int64_t offset) {
+static void BitSort(const TensorData &out, const TensorData &self, int64_t axis, bool descending, int64_t offset) {
     auto tself = From(self);
     auto tout = From(out);
     constexpr int DIM_SIZE_TWO = 2;
@@ -1341,7 +1338,7 @@ static void BitSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t
     torch::Tensor expanded = torch::cat({tres, torch::zeros_like(tself.second)}, axis);
     torch::Tensor dstSubview = View(tout.second, expanded.sizes().vec(), viewOffset);
     dstSubview.copy_(expanded);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 /**
@@ -1356,7 +1353,7 @@ static void BitSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t
  * @param descending Indicate whether the obtained k values are the maximum or minimum k values,
  *                   and true returns the maximum k values
  */
-static void Extract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mod, bool descending) {
+static void Extract(const TensorData &out, const TensorData &self, int mod, bool descending) {
     auto tself = From(self);
     auto tout = From(out);
     constexpr int INDICE_STEP = 2;
@@ -1378,7 +1375,7 @@ static void Extract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mod
     if (!descending && mod == 0) {
         tout.second.neg_();
     }
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
 /**
@@ -1400,7 +1397,7 @@ static void Extract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mod
  * @param descending Indicate whether the obtained k values are the maximum or minimum k values,
  *                   and true returns the maximum k values
  */
-static void Topk(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t axis, int64_t k, bool descending) {
+static void Topk(const TensorData &out, const TensorData &self, int64_t axis, int64_t k, bool descending) {
     auto tself = From(self);
     auto tout = From(out);
     constexpr int DIM_SIZE_TWO = 2;
@@ -1451,11 +1448,11 @@ static void Topk(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t ax
     }
     torch::Tensor dstSubview = View(tout.second, dstShape, {0, 0});
     dstSubview.copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void TiledMrgSort(LogicalTensorDataPtr out, LogicalTensorDataPtr src1, LogicalTensorDataPtr src2,
-    LogicalTensorDataPtr src3, LogicalTensorDataPtr src4, int validBit, int kvalue) {
+static void TiledMrgSort(const TensorData &out, const TensorData &src1, const TensorData &src2,
+    const TensorData &src3, const TensorData &src4, int validBit, int kvalue) {
     auto self1 = From(src1);
     auto self2 = From(src2);
     auto self3 = From(src3);
@@ -1510,11 +1507,11 @@ static void TiledMrgSort(LogicalTensorDataPtr out, LogicalTensorDataPtr src1, Lo
     }
     torch::Tensor dstSubview = View(tout.second, dstShape, {0, 0});
     dstSubview.copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void TopK(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex,
-                 LogicalTensorDataPtr self, int k, int axis, bool descending) {
+static void TopK(const TensorData &outValue, const TensorData &outIndex,
+                 const TensorData &self, int k, int axis, bool descending) {
     auto tself = From(self);
     auto toutValue = From(outValue);
     auto toutIndex = From(outIndex);
@@ -1523,12 +1520,12 @@ static void TopK(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex,
     torch::topk_out(toutValue.second, tempIdxInt64, tself.second, k, axis, descending);
     auto tempIdxInt32 = tempIdxInt64.to(torch::kInt32);
     toutIndex.second.copy_(tempIdxInt32);
-    ToOperand(toutValue.second, toutValue.first, outValue->GetData()->GetDataType());
-    ToOperand(toutIndex.second, toutIndex.first, outIndex->GetData()->GetDataType());
+    ToOperand(toutValue.second, toutValue.first, outValue.dtype);
+    ToOperand(toutIndex.second, toutIndex.first, outIndex.dtype);
 }
 
-static void TopkSort(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outTemp,
-                     LogicalTensorDataPtr self, int startIndex) {
+static void TopkSort(const TensorData &outValue, const TensorData &outTemp,
+                     const TensorData &self, int startIndex) {
     auto tself = From(self);
     auto toutValue = From(outValue);
     auto toutTemp = From(outTemp);
@@ -1589,11 +1586,11 @@ static void TopkSort(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outTemp
     tempView.copy_(packed);
     torch::Tensor valView = View(toutValue.second, packed.sizes().vec(), {0, 0});
     valView.copy_(packed);
-    ToOperand(toutTemp.second, toutTemp.first, outTemp->GetData()->GetDataType());
-    ToOperand(toutValue.second, toutValue.first, outValue->GetData()->GetDataType());
+    ToOperand(toutTemp.second, toutTemp.first, outTemp.dtype);
+    ToOperand(toutValue.second, toutValue.first, outValue.dtype);
 }
 
-static void TopkMerge(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mergeSize) {
+static void TopkMerge(const TensorData &out, const TensorData &self, int mergeSize) {
     (void) mergeSize;
     auto tself = From(self);
     auto tout = From(out);
@@ -1624,10 +1621,10 @@ static void TopkMerge(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int m
 
     torch::Tensor outView = View(tout.second, sorted.sizes().vec(), {0, 0});
     outView.copy_(sorted);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-static void TopkExtract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int k, bool isIndex) {
+static void TopkExtract(const TensorData &out, const TensorData &self, int k, bool isIndex) {
     auto tself = From(self);
     auto tout = From(out);
 
@@ -1656,10 +1653,10 @@ static void TopkExtract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int
 
     torch::Tensor outView = View(tout.second, extracted.sizes().vec(), {0, 0});
     outView.copy_(extracted);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void TwoTileMrgSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+void TwoTileMrgSort(const TensorData &out, const TensorData &self) {
     auto tself = From(self);
     auto tout = From(out);
     constexpr int SIZE_TWO = 2;
@@ -1696,10 +1693,10 @@ void TwoTileMrgSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     }
     torch::Tensor dstSubview = View(tout.second, dstShape, viewOffset);
     dstSubview.copy_(sortedGroups.reshape(torch::IntArrayRef(dstShape)));
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void Sort(LogicalTensorDataPtr value, LogicalTensorDataPtr index, LogicalTensorDataPtr self, int64_t axis, bool descending) {
+void Sort(const TensorData &value, const TensorData &index, const TensorData &self, int64_t axis, bool descending) {
     auto tself = From(self);
     auto tvalue = From(value);
     auto tindex = From(index);
@@ -1713,8 +1710,8 @@ void Sort(LogicalTensorDataPtr value, LogicalTensorDataPtr index, LogicalTensorD
     torch::Tensor outIndex = View(tindex.second, dstShape, viewOffset);
     outValue.copy_(sortValue);
     outIndex.copy_(sortIndex);
-    ToOperand(tvalue.second, tvalue.first, value->GetData()->GetDataType());
-    ToOperand(tindex.second, tindex.first, index->GetData()->GetDataType());
+    ToOperand(tvalue.second, tvalue.first, value.dtype);
+    ToOperand(tindex.second, tindex.first, index.dtype);
 }
 
 bool ScatterDateCopy(const std::vector<int64_t> &loopIdx, torch::Tensor &src, torch::Tensor &indices,
@@ -1746,7 +1743,7 @@ bool ScatterDateCopy(const std::vector<int64_t> &loopIdx, torch::Tensor &src, to
     return flag;
 }
 
-static void ScatterUpdate(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index, LogicalTensorDataPtr dst, int axis,
+static void ScatterUpdate(const TensorData &out, const TensorData &self, const TensorData &index, const TensorData &dst, int axis,
    std::string cacheMode, int blockSize) {
     (void)axis;
     (void)cacheMode;
@@ -1771,30 +1768,30 @@ static void ScatterUpdate(LogicalTensorDataPtr out, LogicalTensorDataPtr self, L
             }
         }
     }
-    ToOperand(ret.second, ret.first, out->GetData()->GetDataType());
+    ToOperand(ret.second, ret.first, out.dtype);
 }
 
 static const std::vector<std::string> scatterModeString = {"add", "multiply"};
 
-static void ScatterElement(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index,
+static void ScatterElement(const TensorData &out, const TensorData &self, const TensorData &index,
     const Element &src, int axis, int reduce) {
     auto output = From(out);
     auto inputSelf = From(self);
     auto inputIndices = From(index);
 
-    if (index->GetDataType() == DT_INT32) {
+    if (index.dtype == DT_INT32) {
         inputIndices.second = inputIndices.second.to(torch::kInt64);
     }
     if (reduce == 0) {
         auto res = torch::scatter(inputSelf.second, axis, inputIndices.second, From(src));
-        ToOperand(res, output.first, out->GetData()->GetDataType());
+        ToOperand(res, output.first, out.dtype);
     } else {
         auto res = torch::scatter(inputSelf.second, axis, inputIndices.second, From(src), scatterModeString.at(reduce - 1));
-        ToOperand(res, output.first, out->GetData()->GetDataType());
+        ToOperand(res, output.first, out.dtype);
     }
 }
 
-static void Brcb(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+static void Brcb(const TensorData &out, const TensorData &self) {
     auto tself = From(self);
     auto tout = From(out);
     
@@ -1806,25 +1803,25 @@ static void Brcb(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     auto first_col = tself.second.index({torch::indexing::Slice(), 0}); 
     auto expanded = first_col.unsqueeze(1).expand({M, N}); 
     tout.second.copy_(expanded);
-    ToOperand(tout.second, tout.first, out->GetData()->GetDataType());
+    ToOperand(tout.second, tout.first, out.dtype);
 }
     
-static void Scatter(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr index,
-    LogicalTensorDataPtr src, int axis, int reduce) {
+static void Scatter(const TensorData &out, const TensorData &self, const TensorData &index,
+    const TensorData &src, int axis, int reduce) {
     auto output = From(out);
     auto inputSelf = From(self);
     auto inputIndices = From(index);
     auto inputSrc = From(src);
 
-    if (index->GetDataType() == DT_INT32) {
+    if (index.dtype == DT_INT32) {
         inputIndices.second = inputIndices.second.to(torch::kInt64);
     }
     if (reduce == 0) {
         output.second = torch::scatter(inputSelf.second, axis, inputIndices.second, inputSrc.second);
-        ToOperand(output.second, output.first, out->GetData()->GetDataType());
+        ToOperand(output.second, output.first, out.dtype);
     } else {
         output.second = torch::scatter(inputSelf.second, axis, inputIndices.second, inputSrc.second, scatterModeString.at(reduce - 1));
-        ToOperand(output.second, output.first, out->GetData()->GetDataType());
+        ToOperand(output.second, output.first, out.dtype);
     }
 }
 

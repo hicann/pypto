@@ -19,6 +19,8 @@
 #include "calc.h"
 #include "interface/operation/operation_impl.h"
 
+using namespace npu::tile_fwk::calc;
+
 namespace npu::tile_fwk {
 
 void ExecuteOpAMulB(ExecuteOperationContext *ctx) {
@@ -44,7 +46,17 @@ void ExecuteOpAMulB(ExecuteOperationContext *ctx) {
             }
         }
     }
-    MatMulParam param = {transA, transB, kStep, scale, relu, scalePtr, bias};
+    MatMulParam param = {transA, transB, kStep, scale, relu, nullptr, nullptr};
+    TensorData tempScale;
+    if (scalePtr != nullptr) {
+        tempScale = Trans(scalePtr);
+        param.scalePtr = &tempScale;
+    }
+    TensorData tempBias;
+    if (bias != nullptr) {
+        tempBias = Trans(bias);
+        param.biasPtr = &tempBias;
+    }
     switch (ctx->op->GetOpcode()) {
         case Opcode::OP_A_MUL_B: {
             calc::MatMul(ret, lhs, rhs, param);
@@ -129,15 +141,21 @@ void ExecuteL0CToL1(ExecuteOperationContext *ctx) {
             LogicalTensorDataPtr scaleOp = nullptr;
             if (scalePtr != nullptr) {
                 scaleOp = scalePtr->View({1, ret->GetShape()[1]}, {0, fromOffset[1]});
+                calc::QuantPreCompute(ret, iop, scaleOp, scale, relu);
+            } else {
+                calc::QuantPreCompute(ret, iop, nullptr, scale, relu);
             }
-            calc::QuantPreCompute(ret, iop, scaleOp, scale, relu);
         } else {
             calc::Copy(ret, iop);
         }
     } else {
         auto iop = ret->View(oper->GetShape(), toOffset);
         if (quantFlag) {
-            calc::QuantPreCompute(iop, oper, scalePtr, scale, relu);
+            if (scalePtr != nullptr) {
+                calc::QuantPreCompute(iop, oper, scalePtr, scale, relu);
+            } else {
+                calc::QuantPreCompute(iop, oper, nullptr, scale, relu);
+            }
         } else {
             calc::Copy(iop, oper);
         }
