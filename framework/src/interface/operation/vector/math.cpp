@@ -640,12 +640,18 @@ Tensor CumSum(const Tensor &input, const int &axis) {
         tmpVectile.tile[n_1] = tmp;
         TileShape::Current().SetVecTile(tmpVectile);
 
+        auto tmpValidShape = input.GetStorage()->dynValidShape_;
+        SymbolicScalar tmpValid = tmpValidShape[n_2];
+        tmpValidShape[n_2] = tmpValidShape[n_1];
+        tmpValidShape[n_1] = tmpValid;
+
         Tensor result(tmpInput.GetDataType(), tmpInput.GetShape());
         CALL(CumSum, *Program::GetInstance().GetCurrentFunction(),
             {tmpInput.GetStorage(), result.GetStorage(), transposedAxis, flag});
-        TileShape::Current().SetVecTile(oriVectile);
+        result.GetStorage()->UpdateDynValidShape(tmpValidShape);
         Tensor tmpresult = Transpose(result, {n_2, n_1});
         tmpresult.GetStorage()->UpdateDynValidShape(input.GetStorage()->dynValidShape_);
+        TileShape::Current().SetVecTile(oriVectile);
         return tmpresult;
     } else {
         Tensor result(resultDType, input.GetShape());
