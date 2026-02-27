@@ -12,6 +12,8 @@
 """
 from typing import List
 
+import os
+import pytest
 import pypto
 import torch
 import torch_npu
@@ -49,7 +51,8 @@ def test_is_finite():
     ids = torch.randint(32 * 128, (30,))
     x_pt.view(-1, 1)[ids] = -torch.inf
 
-    torch_npu.npu.set_device(0)
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch_npu.npu.set_device(device_id)
     x = x_pt.npu()
     golden = torch.isfinite(x_pt)
     out = isfinite_2d(view_shape, tile_shape)(x)

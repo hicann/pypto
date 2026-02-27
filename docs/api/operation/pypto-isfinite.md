@@ -39,12 +39,14 @@ isfinite(self: Tensor) -> Tensor
 
 ## TileShape设置示例
 
-TileShape 维度应和输出一致。
+说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
+
+TileShape维度应和输出一致。
 
 假设，输入形状为 [m, n]，输出为 [m, n]，TileShape 设置为 [m1, n1], 则 m1, n1 分别用于切分 m, n 轴。
 
 ```python
-pypto.set_vec_tile_shapes(m1, n1)
+pypto.set_vec_tile_shapes(4, 32)
 ```
 
 ## 调用示例
@@ -59,7 +61,7 @@ out = pypto.isfinite(self)
 ```python
 输入数据 self: [[1 nan 3],
                [inf 1 1],
-               [1, 1, -inf]]
+               [1 1 -inf]]
 输出数据 out: [[True False True],
              [False True True],
              [True True False]]
