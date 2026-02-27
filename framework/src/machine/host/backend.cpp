@@ -32,8 +32,6 @@
 #include "machine/compile/compile_control_bin.h"
 #include "tilefwk/comm_group_recorder.h"
 #include "passes/pass_mgr/pass_manager.h"
-#include "ir/program.h"
-#include "ir/function.h"
 #include "tilefwk/op_registry.h"
 #include "main_block.h"
 #include <dlfcn.h>
@@ -698,9 +696,8 @@ std::vector<SymbolicExpressionTable *> GetAllExpressionTable(DyndevFunctionAttri
 
 static void ConstructCodeInfo(struct EncodeDevAscendFunctionParam &encodeDevAscendFunctionParam,
     std::map<uint64_t, Function *> &leafDict,
-    std::map<uint64_t, std::shared_ptr<pto::Function>> irLeafDict,
      std::shared_ptr<DyndevFunctionAttribute> attr) {
-    attr->cceCodeInfo.resize(leafDict.size() + irLeafDict.size() + 1);
+    attr->cceCodeInfo.resize(leafDict.size() + 1);
     /* cceIdx 0 for dummy callop */
     attr->cceCodeInfo[0].coreType = static_cast<uint32_t>(CoreType::HUB);
     attr->cceCodeInfo[0].psgId = 0;
@@ -723,25 +720,6 @@ static void ConstructCodeInfo(struct EncodeDevAscendFunctionParam &encodeDevAsce
       attr->cceCodeInfo[leafIndex].wrapVecId = static_cast<int32_t>(leafFuncAttr->aivCore);
       attr->cceCodeInfo[leafIndex].mixResourceType = static_cast<uint32_t>(leafFuncAttr->mixResourceType);
       leafIndex++;
-    }
-
-    for (auto &[hash, leaf] : irLeafDict) {
-        encodeDevAscendFunctionParam.calleeHashIndexDict[hash] = leafIndex;
-        attr->devLeafIndex2Hash[leafIndex] = hash;
-        auto blockLeaf = std::dynamic_pointer_cast<pto::BlockFunction>(leaf);
-        if (blockLeaf == nullptr) {
-            ALOG_ERROR_F("block leaf is nullptr, func name %s", leaf->GetName().c_str());
-            continue;
-        }
-        auto leafAttr = blockLeaf->GetLeafFuncAttribute();
-        if (leafAttr == nullptr) {
-            ALOG_ERROR_F("LeafFuncAttribute is nullptr, func name %s", leaf->GetName().c_str());
-            continue;
-        }
-        attr->cceCodeInfo[leafIndex].coreType = static_cast<uint32_t>(leafAttr->coreType);
-        attr->cceCodeInfo[leafIndex].psgId = blockLeaf->GetID();
-        attr->cceCodeInfo[leafIndex].funcHash = hash;
-        leafIndex++;
     }
     encodeDevAscendFunctionParam.cceCodeInfoList = attr->cceCodeInfo;
     return;
@@ -927,7 +905,6 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
     }
     AlignUpTo(attr->devControlFlowBinary, 0x8, 0);
     std::map<uint64_t, Function *> leafDict;
-    std::map<uint64_t, std::shared_ptr<pto::Function>> irLeafDict;
     for (auto &devRoot : attr->funcGroup.devRootList) {
         Function *devTile = attr->rootTileDict[devRoot];
         config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, devTile->paramConfigs_.dynamicAlignedOps);
@@ -946,23 +923,10 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
                 ALOG_ERROR(" Duplicate func hash ", hash, " name ", leaf->GetRawName());
             }
         }
-        if (devRoot->programModule_ != nullptr) {
-            auto callOps = devRoot->Operations();
-            for (size_t i = 0; i < devRoot->programModule_->GetFunctions().size(); i++) {
-                auto hash = callOps[i].GetCalleeHash().GetHash();
-                auto leaf = devRoot->programModule_->GetFunctions()[i];
-                if (!irLeafDict.count(hash)) {
-                    irLeafDict[hash] = leaf;
-                    ALOG_INFO("Dyndev.codegen: ", leaf->GetName());
-                } else {
-                    ALOG_ERROR("Duplicate func hash ", hash, " name ", leaf->GetName());
-                }
-            }
-        }
     }
 
     struct EncodeDevAscendFunctionParam encodeDevAscendFunctionParam = {};
-    ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, irLeafDict, attr);
+    ConstructCodeInfo(encodeDevAscendFunctionParam, leafDict, attr);
 
     encodeDevAscendFunctionParam.inoutLink = &attr->inoutLink;
 

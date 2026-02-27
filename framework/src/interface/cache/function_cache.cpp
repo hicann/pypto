@@ -212,11 +212,6 @@ void FunctionCache::Insert(const HashKey& key, Function &func) {
     Insert(key, cacheVal);
 }
 
-void FunctionCache::Insert(const HashKey& key, pto::Function *func) {
-    CacheValue cacheVal;
-    cacheVal.SetCacheFunction(func);
-    Insert(key, cacheVal);
-}
 void FunctionCache::Insert(const HashKey& key, CacheValue value) {
     std::lock_guard<std::mutex> cLockGuard(lock_);
     cache_[key] = value;
@@ -239,28 +234,6 @@ Function *FunctionCache::GetCacheFunction(const HashKey &key) {
     if (auto it = cache_.find(key); it != cache_.end()) {
         hitCnt_++;
         return it->second.GetFunction();
-    } else {
-        return nullptr;
-    }
-}
-
-pto::Function *FunctionCache::GetCacheIrFunction(const HashKey &key) {
-    std::lock_guard<std::mutex> cLockGuard(lock_);
-    getCnt_++;
-    if (auto it = cache_.find(key); it != cache_.end()) {
-        hitCnt_++;
-        return it->second.GetIrFunction();
-    } else {
-        return nullptr;
-    }
-}
-
-pto::BlockFunction *FunctionCache::GetCacheIrBlockFunction(const HashKey &key) {
-    std::lock_guard<std::mutex> cLockGuard(lock_);
-    getCnt_++;
-    if (auto it = cache_.find(key); it != cache_.end()) {
-        hitCnt_++;
-        return dynamic_cast<pto::BlockFunction *>(it->second.GetIrFunction());
     } else {
         return nullptr;
     }

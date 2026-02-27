@@ -29,5 +29,4 @@ void BindRuntime(py::module &m);
 void BindCostModelRuntime(py::module &m);
 void bind_pass(py::module &m);
 void BindFunction(py::module &m);
-void BindIr(py::module &m);
 } // namespace pypto

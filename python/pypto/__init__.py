@@ -68,7 +68,6 @@ from . import experimental
 from .config import *  # noqa
 from ._controller import *  # noqa
 from .converter import from_torch
-from .converter import ir_from_tensor
 from .enum import *  # noqa
 from .op import *  # noqa
 from .operation import *  # noqa
