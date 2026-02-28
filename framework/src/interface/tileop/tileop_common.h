@@ -117,7 +117,7 @@ constexpr uint64_t REPEAT_STRIDE_MAX = 255;
 constexpr uint64_t DUP_REPEAT_STRIDE_MAX = 4095;
 constexpr uint64_t BLOCK_NUM_ONE_REPEAT = 8;
 constexpr uint32_t BF16_FP32_MAN_LEN = 16;
-constexpr float EPSILON = 1e-5f;
+constexpr float EPSILON = 1e-6f;
 
 // fp32->bf16, rint mode
 INLINE bfloat16_t Fp32ToBf16R(const float fVal) {

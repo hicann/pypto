@@ -1,7 +1,7 @@
 case_name,input_shape,input_dtype,input_format,input_datarange,output_shape,output_dtype,output_format,view_shape,tile_shape,axis,alpha
 IndexAddNotInplace_test_0,"[10, 10], [5, 10], [5]","fp32, fp32, int32","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",fp32, ND,"[10, 10]","[10, 16]", 0, 1.2
 IndexAddNotInplace_test_1,"[10, 10], [10, 5], [5]","fp32, fp32, int32","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",fp32, ND,"[10, 10]","[10, 16]", 1, 1
-IndexAddNotInplace_test_2,"[10, 10], [8, 10], [8]","fp16, fp16, int32","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",fp16, ND,"[10, 10]","[10, 16]", 1, 1.2
+IndexAddNotInplace_test_2,"[10, 10], [8, 10], [8]","fp16, fp16, int32","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",fp16, ND,"[10, 10]","[10, 16]", 0, 1.2
 IndexAddNotInplace_test_3,"[10, 10], [10, 9], [9]","int32, int32, int64","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",int32, ND,"[10, 10]","[10, 16]", 1, 1.2
 IndexAddNotInplace_test_4,"[10, 10], [10, 10], [10]","int16, int16, int32","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",int16, ND,"[10, 10]","[10, 16]", 1, 1
 IndexAddNotInplace_test_5,"[10, 10], [15, 10], [15]","fp32, fp32, int32","ND, ND, ND","[-1, 1], [-10, 10], [0, 10]","[10, 10]",fp32, ND,"[15, 10]","[10, 16]", 0, 1

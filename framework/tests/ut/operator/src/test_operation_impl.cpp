@@ -260,13 +260,13 @@ TEST_F(OperationImplTest, Test_IndexAdd_FP32) {
 }
 
 TEST_F(OperationImplTest, Test_IndexAdd_FP16) {
-    float scalar = 1.2f;
+    float scalar = 1.0f;
     int axis = 0;
 
     TileShape::Current().SetVecTile({8, 8, 8, 16});
     Tensor self(DT_FP16, {10, 10, 10, 16}, "operand0");
     Tensor src(DT_FP16, {8, 10, 10, 16}, "operand1");
-    Tensor index(DT_INT32, {8}, "operand2");
+    Tensor index(DT_INT64, {8}, "operand2");
     Element alpha(DT_FP16, scalar);
     Tensor result;
     FUNCTION("TestIndxAdd") {

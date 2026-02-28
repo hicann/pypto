@@ -44,6 +44,7 @@ TILEOP void IndexAddNotLastAxisCompute(dstTileDefine dstTile, tempTileDefine tem
             #endif
         }
         pto::TADD(dstTile, dstTile, src1Tile);
+        // 当alpha不为1或index为int32类型时，需要在每一步运算后转换为bf16类型
         if (Std::is_same_v<typename T3::Type, int32_t> || abs(static_cast<float>(alpha) - 1) > TileOp::EPSILON) {
             #ifdef __DAV_V220
             pipe_barrier(PIPE_V);
@@ -117,13 +118,21 @@ TILEOP void IndexAddLastAxisCompute(T0 dst, T2 src1, T3 src2, Scalar alpha, size
                         if constexpr (Std::is_same_v<Scalar, half>) {
                             float addResult =
                                 static_cast<float>(dstAddr[dstOffset]) + static_cast<float>(src1Addr[src1Offset]);
-                            dstAddr[dstOffset] =
-                                Std::is_same_v<typename T3::Type, int32_t> ? static_cast<half>(addResult) : addResult;
+                            if (abs(static_cast<float>(alpha) - 1) < TileOp::EPSILON &&
+                                Std::is_same_v<typename T3::Type, int64_t>) {
+                                dstAddr[dstOffset] = addResult; // 不需要转换
+                            } else {
+                                dstAddr[dstOffset] = static_cast<half>(addResult);
+                            }
                         } else if constexpr (Std::is_same_v<Scalar, bfloat16_t>) {
                             float addResult = dstAddr[dstOffset] + src1Addr[src1Offset];
-                            bfloat16_t addResBf16 = TileOp::Fp32ToBf16R(addResult);
-                            dstAddr[dstOffset] =
-                                Std::is_same_v<typename T3::Type, int32_t> ? TileOp::Bf16ToFp32(addResBf16) : addResult;
+                            if (abs(static_cast<float>(alpha) - 1) < TileOp::EPSILON &&
+                                Std::is_same_v<typename T3::Type, int64_t>) {
+                                dstAddr[dstOffset] = addResult; // 不需要转换
+                            } else {
+                                bfloat16_t addResBf16 = TileOp::Fp32ToBf16R(addResult);
+                                dstAddr[dstOffset] = TileOp::Bf16ToFp32(addResBf16);
+                            }
                         } else { // int8,int16,int32,float32
                             Scalar addResult =
                                 static_cast<Scalar>(dstAddr[dstOffset]) + static_cast<Scalar>(src1Addr[src1Offset]);

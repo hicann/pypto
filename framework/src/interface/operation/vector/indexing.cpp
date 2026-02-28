@@ -94,8 +94,9 @@ void IndexAddExpandFunc(Function &function, const IndexAddPara indexaddPara, Ind
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConvertedTile}, {dstTile});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_TRUNC);
     } else if (selfTile->Datatype() == DT_BF16 ||
-               (selfTile->Datatype() == DT_FP16 &&
-                   indexTile->Datatype() == DT_INT64)) { // vector和scalar均不支持BF16直接计算, INT64逻辑不一样
+               (selfTile->Datatype() == DT_FP16 && indexTile->Datatype() == DT_INT64 &&
+                   (std::abs(alpha.Cast<float>() - 1) < 1e-6f))) {
+        // vector和scalar均不支持BF16直接计算; alpha=1,且index类型为int64时逻辑不一样
         LogicalTensorPtr selfConvertedTile = std::make_shared<LogicalTensor>(function, DT_FP32, selfTile->GetShape());
         Operation &castSelfOp = function.AddOperation(Opcode::OP_CAST, {selfTile}, {selfConvertedTile});
         selfConvertedTile->UpdateDynValidShape(selfTile->GetDynValidShape());
