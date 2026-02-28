@@ -27,6 +27,7 @@ OpType = pypto_impl.OpType
 OutType = pypto_impl.OutType
 ReLuType = pypto_impl.ReLuType
 ScatterMode = pypto_impl.ScatterMode
+AtomicType = pypto_impl.AtomicType
 
 DataType.__repr__ = _enum_repr
 TileOpFormat.__repr__ = _enum_repr

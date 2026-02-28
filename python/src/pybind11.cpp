@@ -31,5 +31,6 @@ PYBIND11_MODULE(pypto_impl, m) {
     BindCostModelRuntime(m);
     bind_pass(m);
     BindFunction(m);
+    BindDistributed(m);
 };
 } // namespace pypto

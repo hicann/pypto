@@ -41,5 +41,6 @@
 #include "interface/configs/config_manager.h"
 #include "interface/interpreter/calc.h"
 #include "interface/configs/config_manager_ng.h"
+#include "tilefwk/symbolic_distributed.h"
 
 namespace py = pybind11;

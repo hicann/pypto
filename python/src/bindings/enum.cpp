@@ -145,5 +145,10 @@ void bind_enum(py::module &m){
         .value("LOG_2", LogBaseType::LOG_2)
         .value("LOG_10", LogBaseType::LOG_10)
         .export_values();
+
+    py::enum_<Distributed::AtomicType>(m, "AtomicType")
+        .value("SET", Distributed::AtomicType::SET)
+        .value("ADD", Distributed::AtomicType::ADD)
+        .export_values();
 }
 }
