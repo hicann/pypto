@@ -18,6 +18,7 @@
 #include "interface/utils/log.h"
 #include "interface/utils/string_utils.h"
 #include "interface/utils/file_utils.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 #ifdef PROCESSOR_SUBPATH
@@ -84,15 +85,15 @@ bool PlatformManager::Initialize(const std::string &socVersion) {
     if (isInit_) {
         return true;
     }
-    ALOG_INFO("Begin to initialize PlatformManager with soc version[" + socVersion + "].");
+    MACHINE_LOGI("Begin to initialize PlatformManager with soc version[%s].", socVersion.c_str());
     if (socVersion.empty()) {
-        ALOG_WARN("Soc version is empty.");
+        MACHINE_LOGW("Soc version is empty.");
         return false;
     }
     // get platform file path
     const char *envPath = std::getenv(HOME_PATH_ENV_NAME.c_str());
     if (envPath == nullptr) {
-        ALOG_WARN("Env[" + HOME_PATH_ENV_NAME + "] is not existed or empty.");
+        MACHINE_LOGW("Env[%s] is not existed or empty.", HOME_PATH_ENV_NAME.c_str());
         return false;
     }
 
@@ -103,13 +104,13 @@ bool PlatformManager::Initialize(const std::string &socVersion) {
 
     std::string platformFile = platformConfDir + socVersion + ".ini";
     if (RealPath(platformFile).empty()) {
-        ALOG_WARN("Platform file[" + platformFile + "] is not existed.");
+        MACHINE_LOGW("Platform file[%s] is not existed.", platformFile.c_str());
         return false;
     }
 
     std::map<std::string, std::map<std::string, std::string>> contentMap;
     if (!ReadFileContent(platformFile, contentMap)) {
-        ALOG_WARN("Fail to read platform file[" + platformFile + "].");
+        MACHINE_LOGW("Fail to read platform file[%s].", platformFile.c_str());
         return false;
     }
 
@@ -118,7 +119,7 @@ bool PlatformManager::Initialize(const std::string &socVersion) {
     ParseInstrDtypeMap(contentMap);
     isInit_ = true;
     platformFile_ = platformFile;
-    ALOG_INFO("PlatformManager has been initialized successfully with soc version[" + socVersion + "].");
+    MACHINE_LOGI("PlatformManager has been initialized successfully with soc version[%s].", socVersion.c_str());
     return true;
 }
 
@@ -186,8 +187,8 @@ void PlatformManager::ParseStrItem(const std::map<std::string, std::map<std::str
             continue;
         }
         pmStrItemArray_[static_cast<size_t>(item.first)] = iterSecondLayer->second;
-        ALOG_INFO("[" + std::get<0>(item.second) + "] [" + std::get<1>(item.second) + "] is [" +
-                  pmStrItemArray_[static_cast<size_t>(item.first)] + "]");
+        MACHINE_LOGI("[%s] [%s] is [%lld]", std::get<0>(item.second).c_str(), std::get<1>(item.second).c_str(),
+                     pmStrItemArray_[static_cast<size_t>(item.first)]);
     }
 }
 
@@ -203,8 +204,8 @@ void PlatformManager::ParseIntItem(const std::map<std::string, std::map<std::str
             continue;
         }
         pmIntItemArray_[static_cast<size_t>(item.first)] = std::get<FUNC_POS>(item.second)(iterSecondLayer->second);
-        ALOG_INFO("[" + std::get<0>(item.second) + "] [" + std::get<1>(item.second) + "] is [" +
-                  std::to_string(pmIntItemArray_[static_cast<size_t>(item.first)]) + "]");
+        MACHINE_LOGI("[%s] [%s] is [%lld]", std::get<0>(item.second).c_str(), std::get<1>(item.second).c_str(),
+                     pmIntItemArray_[static_cast<size_t>(item.first)]);
     }
 }
 

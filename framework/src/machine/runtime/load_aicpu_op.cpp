@@ -24,6 +24,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "runtime.h"
 #include "machine/utils/machine_utils.h"
+#include "tilefwk/tilefwk_log.h"
 using Json = nlohmann::json;
 
 namespace {
@@ -65,7 +66,7 @@ void LoadAicpuOp::GenBuiltInOpInfo(const std::string &jsonPath) {
     builtInOp.dump(DUMP_LEVEL_FOUR);
     builtInOpJsonPath_ = jsonPath + "/pypto_op_info.json";
     if (!DumpFile(builtInOp.dump(DUMP_LEVEL_FOUR), builtInOpJsonPath_)) {
-        ALOG_ERROR_F("Contrust custom op json failed");
+        MACHINE_LOGE("Contrust custom op json failed");
         return;
     }
     return;
@@ -82,7 +83,7 @@ void LoadAicpuOp::CustomAiCpuSoLoad() {
     optionCfg.numOpt = 1;
     std::string customOpJsonPath = OpInfoManager::GetInstance().GetCustomOpJsonPath();
     if (RealPath(customOpJsonPath).empty()) {
-        ALOG_ERROR_F("Custom op json path is empty");
+        MACHINE_LOGE("Custom op json path is empty");
         return;
     }
     customBinHandle_ = OpInfoManager::GetInstance().GetControlBinHandle(customOpJsonPath);
@@ -91,7 +92,7 @@ void LoadAicpuOp::CustomAiCpuSoLoad() {
     }
     auto ret = rtsBinaryLoadFromFile(customOpJsonPath.c_str(), &optionCfg, reinterpret_cast<void**>(&customBinHandle_));
     if (ret != 0) {
-        ALOG_ERROR_F("Load aicpu json failed ret is %d", ret);
+        MACHINE_LOGE("Load aicpu json failed ret is %d", ret);
     }
     OpInfoManager::GetInstance().SetControlBinHandle(customBinHandle_);
 #endif
@@ -124,7 +125,7 @@ int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unuse
     rtFuncHandle custFuncHandle;
     auto ret = rtsFuncGetByName(customBinHandle_, OpType.c_str(), &custFuncHandle);
     if (ret != 0) {
-        ALOG_ERROR_F("Get OpType[%s] funcHandle failed ret[%d]", OpType.c_str(), ret);
+        MACHINE_LOGE("Get OpType[%s] funcHandle failed ret[%d]", OpType.c_str(), ret);
         return ret;
     }
     return AicpuKernelLaunch(custFuncHandle, stream, kArgs, 1);
@@ -136,7 +137,7 @@ int LoadAicpuOp::LaunchCustomOp([[maybe_unused]]rtStream_t stream, [[maybe_unuse
 int LoadAicpuOp::GetBuiltInOpBinHandle() {
 #ifdef BUILD_WITH_NEW_CANN
     if (RealPath(builtInOpJsonPath_).empty()) {
-        ALOG_ERROR_F("JsonPath is empty");
+        MACHINE_LOGE("JsonPath is empty");
         return -1;
     }
     rtLoadBinaryConfig_t optionCfg;
@@ -149,7 +150,7 @@ int LoadAicpuOp::GetBuiltInOpBinHandle() {
     void *binHandle;
     auto ret = rtsBinaryLoadFromFile(builtInOpJsonPath_.c_str(), &optionCfg, reinterpret_cast<void**>(&binHandle));
     if (ret != 0) {
-        ALOG_ERROR_F("Get built in bin handle failed");
+        MACHINE_LOGE("Get built in bin handle failed");
         return -1;
     }
 
@@ -157,7 +158,7 @@ int LoadAicpuOp::GetBuiltInOpBinHandle() {
         rtFuncHandle funcHandle;
         ret = rtsFuncGetByName(binHandle, BuiltInFunName[i].c_str(), &funcHandle);
         if (ret != 0) {
-            ALOG_ERROR_F("Get BuiltIn FuncName[%s] funcHandle failed ret[%d]", BuiltInFunName[i].c_str(), ret);
+            MACHINE_LOGE("Get BuiltIn FuncName[%s] funcHandle failed ret[%d]", BuiltInFunName[i].c_str(), ret);
             return ret;
         }
         builtInFuncMap_[BuiltInFunName[i]] = funcHandle;
@@ -174,7 +175,7 @@ int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]]rtStream_t stream, [[maybe_unus
     if (it != builtInFuncMap_.end()) {
         funcHandle = it->second;
     } else {
-        ALOG_ERROR_F("The func name[%s] is invalid", funcName.c_str());
+        MACHINE_LOGE("The func name[%s] is invalid", funcName.c_str());
         return -1;
     }
     return AicpuKernelLaunch(funcHandle, stream, kArgs, aicpuNum);

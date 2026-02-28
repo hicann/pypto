@@ -37,6 +37,7 @@
 #include "interface/configs/config_manager.h"
 #include "tilefwk/platform.h"
 #include "machine/runtime/distributed/distributed_context.h"
+#include "tilefwk/tilefwk_log.h"
 
 #ifndef BUILD_WITH_CANN
 enum aclmdlRICaptureMode {};
@@ -145,7 +146,7 @@ public:
 
         uint64_t generalSize = devProg->memBudget.metadata.general;
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;
-        ALOG_DEBUG_F("generalSize:%lu stitchPoolSize:%lu generalOffset:%lx stitchPoolOffset:%lx.", generalSize, stitchPoolSize,
+        MACHINE_LOGD("generalSize:%lu stitchPoolSize:%lu generalOffset:%lx stitchPoolOffset:%lx.", generalSize, stitchPoolSize,
             devProg->deviceRuntimeOffset.generalOffset, devProg->deviceRuntimeOffset.stitchPoolOffset);
         return;
     }
@@ -171,11 +172,11 @@ public:
         }
 #endif
         devProg->devArgs.disableSync = config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_NO_DEVICE_TENSOR_DEPEND ? 1 : 0;
-        ALOG_DEBUG_F("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
+        MACHINE_LOGD("Set aicore blockdim:%d aicpu blockdim:%d.", config.blockdim, config.aicpuNum);
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {
-            ALOG_ERROR_F("[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
+            MACHINE_LOGE("[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
             devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = std::max(
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
@@ -186,10 +187,10 @@ public:
         }
 #endif
         devProg->workspaceSize = devProg->memBudget.Total();
-        ALOG_INFO_F("workspaceSize=%lu, tensor=%lu, metadata=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu",
+        MACHINE_LOGI("workspaceSize=%lu, tensor=%lu, metadata=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu",
             devProg->workspaceSize, devProg->memBudget.tensor.Total(), devProg->memBudget.metadata.Total(),
             devProg->memBudget.aicoreSpilled, devProg->memBudget.debug.dumpTensor);
-        ALOG_INFO_F("Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
+        MACHINE_LOGI("Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
             devProg->memBudget.tensor.rootInner,
             devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts, devProg->memBudget.tensor.MaxOutcastMem(),
             devProg->memBudget.tensor.devTaskBoundaryOutcastNum);
@@ -291,7 +292,7 @@ public:
                 auto &tensorData = tensorDataList[k];
                 uint64_t addr = reinterpret_cast<uint64_t>(tensorData.GetAddr());
                 if (unlikely(addr != 0 && tensorIdx < l2InfoSize && disableL2List[tensorIdx] == 1)) {
-                    ALOG_INFO_F("Tneosr[%zu] ori:%lx, l2offset[%lu].", tensorIdx, addr, devMem.GetL2Offset());
+                    MACHINE_LOGI("Tneosr[%zu] ori:%lx, l2offset[%lu].", tensorIdx, addr, devMem.GetL2Offset());
                     addr += devMem.GetL2Offset();
                 }
                 DevAscendTensorDataCreator::Init(data, addr, tensorData.GetShape().data(), tensorData.GetShape().size());
@@ -325,7 +326,7 @@ public:
             kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data() + sizeof(AiCpuArgs));
             kArgs.outputs = kArgs.inputs + 1;
         }
-        ALOG_DEBUG_F("Inputs %p outputs %p workspace %p cfgdata %p tensorSize %zu", kArgs.inputs, kArgs.outputs, kArgs.workspace,
+        MACHINE_LOGD("Inputs %p outputs %p workspace %p cfgdata %p tensorSize %zu", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata, tensorSize);
     }
 

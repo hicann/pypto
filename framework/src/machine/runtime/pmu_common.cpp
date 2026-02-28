@@ -17,6 +17,7 @@
 #include <string>
 #include "interface/utils/common.h"
 #include "interface/utils/log.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 
@@ -46,7 +47,7 @@ void SetPmuEventTypeDAV2201(int32_t profPmuType, std::vector<int64_t> &pmuEvtTyp
             pmuEvtType = {0x500, 0x502, 0x504, 0x506, 0x508, 0x50a, 0x0, 0x0};
             break;
         default:
-            ALOG_WARN_F("Invalid profPmuType %d, only support [1,2,4,5,6,7,8].\n", profPmuType);
+            MACHINE_LOGW("Invalid profPmuType %d, only support [1,2,4,5,6,7,8].\n", profPmuType);
     }
 }
 
@@ -75,7 +76,7 @@ void SetPmuEventTypeDAV3510(int32_t profPmuType, std::vector<int64_t> &pmuEvtTyp
             pmuEvtType = {0x424, 0x425, 0x426, 0x42a, 0x42b, 0x42c, 0x0, 0x0, 0x0, 0x0};
             break;
         default:
-            ALOG_WARN_F("Invalid profPmuType %d, only support [1,2,4,5,6,7,8].\n", profPmuType);
+            MACHINE_LOGW("Invalid profPmuType %d, only support [1,2,4,5,6,7,8].\n", profPmuType);
     }
 }
 }
@@ -86,14 +87,14 @@ void PmuCommon::InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>&
     // 获取pmu事件类型环境变量获取方式
     std::string eventTypeStr = GetEnvVar("PROF_PMU_EVENT_TYPE");
     if (eventTypeStr.empty()) {
-        ALOG_WARN_F("Dont support PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
+        MACHINE_LOGW("Dont support PROF_PMU_EVENT_TYPE env, use default pmu event type PIPE_UTILIZATION.\n");
         eventTypeStr = "2";
     }
     int32_t profPmuType = PIPE_UTILIZATION;
     try {
         profPmuType = std::stoi(eventTypeStr);
     } catch (const std::exception &e) {
-        ALOG_WARN_F("Invalid PROF_PMU_EVENT_TYPE value [%s], use default PIPE_UTILIZATION. error: %s",
+        MACHINE_LOGW("Invalid PROF_PMU_EVENT_TYPE value [%s], use default PIPE_UTILIZATION. error: %s",
                     eventTypeStr.c_str(), e.what());
     }
     

@@ -18,6 +18,7 @@
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
 #include "tilefwk/comm_group_recorder.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 constexpr int64_t AICORE_NUM = 75;
@@ -45,7 +46,7 @@ struct MachineCompileInfo {
     std::vector<uint64_t> coreFunctionTensorInfoOffset;
     std::vector<uint64_t> coreTensorNum;
     void Print() {
-        ALOG_DEBUG_F(
+        MACHINE_LOGD(
             "programFunctionCnt =  %lu, coreFunctionCnt = %lu, workSpaceStackSize = %lu, invokeParaWorkSpaceSize = %lu",
             programFunctionCnt, coreFunctionCnt, workSpaceStackSize, invokeParaWorkSpaceSize);
     }

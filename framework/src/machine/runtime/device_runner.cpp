@@ -43,6 +43,7 @@
 #include "dump_device_perf.h"
 #include "machine/host/perf_analysis.h"
 #include "log_types.h"
+#include "tilefwk/tilefwk_log.h"
 
 using json = nlohmann::json;
 extern char _binary_kernel_o_start[];
@@ -71,7 +72,32 @@ void ExchangeCaputerMode(const bool &isCapture) {
     if (isCapture) {
         aclmdlRICaptureMode mode = ACL_MODEL_RI_CAPTURE_MODE_GLOBAL;
         aclmdlRICaptureThreadExchangeMode(&mode);
-        ALOG_INFO_F("captureMode is: %d", mode);
+        MACHINE_LOGI("captureMode is: %d", mode);
+    }
+}
+
+void SyncStreams(rtStream_t aicpuStream, rtStream_t aicoreStream, bool useSyncFlag) {
+    aclrtEvent event;
+    int rc;
+
+    if (useSyncFlag) {
+        rc = aclrtCreateEventExWithFlag(&event, ACL_EVENT_SYNC);
+    } else {
+        rc = aclrtCreateEvent(&event);
+    }
+    
+    if (rc < 0) {
+        MACHINE_LOGI("CreateEvent failed rc=%d, useSyncFlag=%d", rc, useSyncFlag);
+    }
+
+    rc = aclrtRecordEvent(event, aicpuStream);
+    if (rc < 0) {
+        MACHINE_LOGI("RecordEvent failed rc=%d", rc);
+    }
+
+    rc = aclrtStreamWaitEvent(aicoreStream, event);
+    if (rc < 0) {
+        MACHINE_LOGI("StreamWaitEvent failed rc=%d", rc);
     }
 }
 }
@@ -92,7 +118,7 @@ void *DeviceRunner::DevAlloc(int size) {
     int rc = rtMemset(devPtr, size, 0, size);
     if (rc != 0) {
         machine::GetRA()->FreeTensor(devPtr);
-        ALOG_ERROR_F("rtMemset failed size=%d rc=%d\n", size, rc);
+        MACHINE_LOGE("rtMemset failed size=%d rc=%d\n", size, rc);
         return nullptr;
     }
     return devPtr;
@@ -109,12 +135,12 @@ void DeviceRunner::GetModuleLogLevel(DeviceArgs &args) {
     if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
         devDfxArg.isOpenSwim = PRO_LEVEL2;
     }
-    ALOG_INFO_F("Get PYPTO log level is: %d, openSwimLevel: %d", logLevel, devDfxArg.isOpenSwim);
+    MACHINE_LOGI("Get PYPTO log level is: %d, openSwimLevel: %d", logLevel, devDfxArg.isOpenSwim);
     auto size = sizeof(DevDfxArgs);
     args.devDfxArgAddr = args_.devDfxArgAddr;
     auto ret = rtMemcpy(reinterpret_cast<void *>(args.devDfxArgAddr), size, &devDfxArg, size, RT_MEMCPY_HOST_TO_DEVICE);
     if (ret != 0) {
-        ALOG_WARN_F("Rt mem cpy failed, so couldn't get device log");
+        MACHINE_LOGW("Rt mem cpy failed, so couldn't get device log");
     }
 }
 
@@ -133,7 +159,7 @@ void DeviceRunner::ResetPerData() {
     for (uint64_t i = 0; i < args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS; i++) {
         int rc = rtMemset(perfData_[i], size, 0, size);
         if (rc != 0) {
-            ALOG_WARN_F("CoreId %lu, rtMemSet failed, rc: %d", i, rc);
+            MACHINE_LOGW("CoreId %lu, rtMemSet failed, rc: %d", i, rc);
         }
     }
 }
@@ -152,7 +178,7 @@ void DeviceRunner::InitMetaData(DeviceArgs &devArgs) {
     if (config::GetDebugOption<int64_t>(CFG_RUNTIME_DBEUG_MODE) == CFG_DEBUG_ALL) {
         args_.aicpuPerfAddr = npu::tile_fwk::dynamic::PtrToValue(DevAlloc(sizeof(MetricPerf)));
         if (args_.aicpuPerfAddr == 0) {
-            ALOG_WARN_F("Aicpu per addr malloc failed");
+            MACHINE_LOGW("Aicpu per addr malloc failed");
         }
     }
     devArgs.aicpuPerfAddr = args_.aicpuPerfAddr;
@@ -194,7 +220,7 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t
     rtMemcpy(reinterpret_cast<void *>(args.corePmuRegAddr), size, regsPmu.data(), size, RT_MEMCPY_HOST_TO_DEVICE);
     size = pmuEvtType_.size() * sizeof(int64_t);
     rtMemcpy(reinterpret_cast<void *>(args.pmuEventAddr), size, pmuEvtType_.data(), size, RT_MEMCPY_HOST_TO_DEVICE);
-    ALOG_INFO_F("aic %u aiv %u  blockDim_ %d sharedBuffer %lx coreRegAddr %lx corePmuRegAddr %lx\n", args.nrAic,
+    MACHINE_LOGI("aic %u aiv %u  blockDim_ %d sharedBuffer %lx coreRegAddr %lx corePmuRegAddr %lx\n", args.nrAic,
         args.nrAiv, blockDim_, args.sharedBuffer, args.coreRegAddr, args.corePmuRegAddr);
     InitDynamicArgs(args);
 
@@ -269,22 +295,22 @@ int DeviceRunner::Run(rtStream_t aicpuStream, rtStream_t aicoreStream, int64_t t
     }
     rc = rtStreamSynchronize(aicoreStream);
     if (rc != 0) {
-        ALOG_INFO_F("aicore stream sync failed");
+        MACHINE_LOGI("aicore stream sync failed");
     }
     rc = rtStreamSynchronize(aicpuStream);
     if (rc != 0) {
-        ALOG_INFO_F("aicpu stream sync failed");
+        MACHINE_LOGI("aicpu stream sync failed");
     }
     ASSERT(rc == 0);
     if (IsPtoDataDumpEnabled()) {
-        ALOG_DEBUG_F("DataDumpServerInit is called \n");
+        MACHINE_LOGD("DataDumpServerInit is called \n");
         rc = AdxDataDumpServerUnInit();
         if (rc != 0) {
-            ALOG_ERROR_F("AdxDataDumpServerUnInit is failed %d \n", rc);
+            MACHINE_LOGE("AdxDataDumpServerUnInit is failed %d \n", rc);
         }
     }
     uint64_t taskWastTime = GetTasksTime();
-    ALOG_INFO_F("task wast time %lu\n", taskWastTime);
+    MACHINE_LOGI("task wast time %lu\n", taskWastTime);
     return rc;
 }
 
@@ -303,12 +329,12 @@ int DeviceRunner::LaunchAiCore(rtStream_t aicoreStream, int taskType) {
     auto size = sizeof(args_);
     localArgs.taskType = taskType;
     if (devArgs_ == nullptr) {
-        ALOG_ERROR_F("devArgs_ is null..");
+        MACHINE_LOGE("devArgs_ is null..");
         return -1;
     }
     int rc = rtMemcpy(devArgs_, size, &localArgs, size, RT_MEMCPY_HOST_TO_DEVICE);
     if (rc != 0) {
-        ALOG_ERROR_F("rtmemcpy failed %p rc %d\n", devArgs_, rc);
+        MACHINE_LOGE("rtmemcpy failed %p rc %d\n", devArgs_, rc);
         return rc;
     }
     Args args{nullptr, nullptr, nullptr, nullptr, nullptr, devArgs_};
@@ -351,28 +377,13 @@ void DeviceRunner::AllocDfxMetricMemory() {
             reinterpret_cast<int64_t>(DevAlloc(MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics)));
         rtMemcpy((reinterpret_cast<uint8_t *>(args_.sharedBuffer)) + i * SHARED_BUFFER_SIZE, sizeof(kernelArgs),
             reinterpret_cast<uint8_t *>(&kernelArgs), sizeof(kernelArgs), RT_MEMCPY_HOST_TO_DEVICE);
-        ALOG_INFO_F("aicore %u , dfxaddr 0x%ld \n", i, kernelArgs.shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+        MACHINE_LOGI("aicore %u , dfxaddr 0x%ld \n", i, kernelArgs.shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
     }
 }
 
 int DeviceRunner::RunAsync(rtStream_t aicpuStream, rtStream_t aicoreStream, int64_t taskId, uint64_t taskData, int taskType) {
     int rc;
-
-    aclrtEvent event;
-    rc = aclrtCreateEvent(&event);
-    if (rc < 0) {
-        ALOG_INFO_F("aclrtCreateEvent failed %d\n", rc);
-    }
-
-    rc = aclrtRecordEvent(event, aicpuStream);
-    if (rc < 0) {
-        ALOG_INFO_F("aclrtRecordEvent failed %d\n", rc);
-    }
-
-    rc = aclrtStreamWaitEvent(aicoreStream, event);
-    if (rc < 0) {
-        ALOG_INFO_F("aclrtStreamWaitEvent failed %d\n", rc);
-    }
+    SyncStreams(aicpuStream, aicoreStream, false);
 
 #if PROF_DFX_HOST_PREPARE_MEMORY_MODE
     AllocDfxMetricMemory();
@@ -384,14 +395,14 @@ int DeviceRunner::RunAsync(rtStream_t aicpuStream, rtStream_t aicoreStream, int6
     std::lock_guard<FileLock> lock(lock_);
     rc = LaunchAiCore(aicoreStream, DEVICE_TASK_TYPE_STATIC);
     if (rc < 0) {
-        ALOG_INFO_F("launch aicpu failed %d\n", rc);
+        MACHINE_LOGI("launch aicpu failed %d\n", rc);
         return rc;
     }
 
     InitAiCpuSoBin(args_);
     rc = LaunchAiCpu(aicpuStream, taskId, taskData, taskType);
     if (rc < 0) {
-        ALOG_INFO_F("launch aicpu failed %d\n", rc);
+        MACHINE_LOGI("launch aicpu failed %d\n", rc);
         return rc;
     }
 
@@ -399,7 +410,7 @@ int DeviceRunner::RunAsync(rtStream_t aicpuStream, rtStream_t aicoreStream, int6
 }
 
 void DeviceRunner::Dump() {
-    ALOG_INFO_F("======== aicore status ========");
+    MACHINE_LOGI("======== aicore status ========");
 
     int coreNum = args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS;
     uint64_t size = coreNum * SHARED_BUFFER_SIZE;
@@ -407,19 +418,19 @@ void DeviceRunner::Dump() {
     int rc =
         rtMemcpy(buffer.data(), size, reinterpret_cast<void *>(args_.sharedBuffer), size, RT_MEMCPY_DEVICE_TO_HOST);
     if (rc != 0) {
-        ALOG_INFO_F("rtmemcpy failed");
+        MACHINE_LOGI("rtmemcpy failed");
         return;
     }
 
     uint64_t buffAddr = reinterpret_cast<uint64_t>(buffer.data());
     for (int i = 0; i < coreNum; i++) {
         KernelArgs *arg = reinterpret_cast<KernelArgs *>(buffAddr + i * SHARED_BUFFER_SIZE);
-        ALOG_INFO_F("aicore %d hello status %ld", i, arg->shakeBuffer[0]);
-        ALOG_INFO_F("last_taskId %ld", arg->shakeBuffer[1]);
-        ALOG_INFO_F("task status %ld", arg->shakeBuffer[2]);
+        MACHINE_LOGI("aicore %d hello status %ld", i, arg->shakeBuffer[0]);
+        MACHINE_LOGI("last_taskId %ld", arg->shakeBuffer[1]);
+        MACHINE_LOGI("task status %ld", arg->shakeBuffer[2]);
 
         for (int k = 0; k < static_cast<int>(sizeof(arg->taskStat) / sizeof(TaskStat)); k++) {
-            ALOG_INFO_F("task rsp index %d: taskId %d, subGraphID %d execStart %ld execEnd %ld\n", k,
+            MACHINE_LOGI("task rsp index %d: taskId %d, subGraphID %d execStart %ld execEnd %ld\n", k,
                 arg->taskStat[k].taskId, arg->taskStat[k].subGraphId, arg->taskStat[k].execStart,
                 arg->taskStat[k].execEnd);
         }
@@ -432,7 +443,7 @@ void DeviceRunner::DumpAiCoreExecutionTimeData() {
 }
 
 void DeviceRunner::DumpAiCorePmuData() {
-    ALOG_INFO_F("TODO: DumpAiCorePmuData");
+    MACHINE_LOGI("TODO: DumpAiCorePmuData");
 }
 
 void DeviceRunner::SynchronizeDeviceToHostProfData() {
@@ -449,11 +460,11 @@ int DeviceRunner::DynamicLaunchSynchronize(rtStream_t aicpuStream, rtStream_t ct
         rcCtrl = rtStreamSynchronize(aicpuStream);
     }
     if (IsPtoDataDumpEnabled()) {
-        ALOG_DEBUG_F("DataDumpServerInit is called \n");
+        MACHINE_LOGD("DataDumpServerInit is called \n");
         AdxDataDumpServerUnInit();
     }
     if (rcAicore != 0 || rcAicpu != 0 || rcCtrl != 0) {
-        ALOG_WARN_F("sync stream failed aicpu:%d aicore:%d ctrl cpu:%d", rcAicpu, rcAicore, rcCtrl);
+        MACHINE_LOGW("sync stream failed aicpu:%d aicore:%d ctrl cpu:%d", rcAicpu, rcAicore, rcCtrl);
     }
     return rcAicore + rcAicpu + rcCtrl;
 }
@@ -490,7 +501,7 @@ int DeviceRunner::launchDynamicAiCpu(rtStream_t aicpuStream, DeviceKernelArgs *k
     hostInputInfo.addrOffset = reinterpret_cast<int8_t*>(&args->kArgs.inputs) - reinterpret_cast<int8_t*>(args);
     hostInputInfo.dataOffset = sizeof(dynamic::AiCpuArgs);
     rtArgs.hostInputInfoPtr = &hostInputInfo;
-    ALOG_INFO_F("Copy flow addrOffset %u argsSize %u", hostInputInfo.addrOffset, hostInputInfo.dataOffset);
+    MACHINE_LOGI("Copy flow addrOffset %u argsSize %u", hostInputInfo.addrOffset, hostInputInfo.dataOffset);
     return rtAicpuKernelLaunchExWithArgs(
         rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", aicpuNum_, &rtArgs, nullptr, aicpuStream, 0);
 }
@@ -499,7 +510,7 @@ void DeviceRunner::InitAiCpuSoBin(DeviceArgs &devArgs) {
     std::vector<char> buffer;
     std::string fileName = GetCurrentSharedLibPath() + "/libtilefwk_backend_server.so";
     if (!ReadBytesFromFile(fileName, buffer)) {
-        ALOG_ERROR_F("Read bin form tilefwk_backend_server.so failed, please check the so[%s]", fileName.c_str());
+        MACHINE_LOGE("Read bin form tilefwk_backend_server.so failed, please check the so[%s]", fileName.c_str());
         return;
     }
     size_t aicpuDataLength = buffer.size();
@@ -538,7 +549,7 @@ int DeviceRunner::InitAicpuServer() {
     int ret = rtAicpuKernelLaunchExWithArgs(rtKernelType_t::KERNEL_TYPE_AICPU_KFC,
         "AST_DYN_AICPU", 1, &rtArgs, nullptr, aicpuStream, 0);
     if (ret != RT_ERROR_NONE) {
-        ALOG_ERROR_F("Aicpu server init failed %d", ret);
+        MACHINE_LOGE("Aicpu server init failed %d", ret);
         return ret;
     }
     // for triple stream schedule, must wait aicpu server init done
@@ -576,43 +587,26 @@ int DeviceRunner::RunPreSync(rtStream_t aicpuStream, rtStream_t aicoreStream) {
     aclrtEvent event;
     int rc = aclrtCreateEventExWithFlag(&event, ACL_EVENT_SYNC);
     if (rc < 0) {
-        ALOG_ERROR_F("aclrtCreateEvent failed %d\n", rc);
+        MACHINE_LOGE("aclrtCreateEvent failed %d\n", rc);
         return rc;
     }
 
     rc = aclrtRecordEvent(event, aicoreStream);
     if (rc < 0) {
-        ALOG_ERROR_F("aclrtRecordEvent failed %d\n", rc);
+        MACHINE_LOGE("aclrtRecordEvent failed %d\n", rc);
         return rc;
     }
 
     rc = aclrtStreamWaitEvent(aicpuStream, event);
     if (rc < 0) {
-        ALOG_ERROR_F("aclrtStreamWaitEvent failed %d\n", rc);
+        MACHINE_LOGE("aclrtStreamWaitEvent failed %d\n", rc);
         return rc;
     }
     return 0;
 }
 
 int DeviceRunner::RunPost(rtStream_t aicpuStream, rtStream_t aicoreStream) {
-    int rc;
-
-    aclrtEvent event;
-    rc = aclrtCreateEventExWithFlag(&event, ACL_EVENT_SYNC);
-    if (rc < 0) {
-        ALOG_INFO_F("aclrtCreateEvent failed %d\n", rc);
-    }
-
-    rc = aclrtRecordEvent(event, aicpuStream);
-    if (rc < 0) {
-        ALOG_INFO_F("aclrtRecordEvent failed %d\n", rc);
-    }
-
-    rc = aclrtStreamWaitEvent(aicoreStream, event);
-    if (rc < 0) {
-        ALOG_INFO_F("aclrtStreamWaitEvent failed %d\n", rc);
-    }
-
+    SyncStreams(aicpuStream, aicoreStream, true);
     return 0;
 }
 
@@ -621,7 +615,7 @@ int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreS
     uint64_t startTime = MsprofSysCycleTime();
     auto rc = launchDynamicAiCpu(aicpuStream, kernelArgs);
     if (rc < 0) {
-        ALOG_ERROR_F("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE("launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, aicpuNum_, MSPROF_GE_TASK_TYPE_AI_CPU);
@@ -631,7 +625,7 @@ int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreS
     startTime = MsprofSysCycleTime();
     rc = launchDynamicAiCore(aicoreStream, kernelArgs);
     if (rc < 0) {
-        ALOG_ERROR_F("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE("launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
@@ -648,21 +642,21 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     uint64_t startTime = MsprofSysCycleTime();
     int rc = LoadAicpuOp::GetInstance().LaunchCustomOp(ctrlStream, kernelArgs, initKernel);
     if (rc < 0) {
-        ALOG_ERROR_F("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE("launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
 
     rc = RunPreSync(ctrlStream, aicoreStream);
     if (rc < 0) {
-        ALOG_ERROR_F("prepare failed %d\n", rc);
+        MACHINE_LOGE("prepare failed %d\n", rc);
         return rc;
     }
 
     startTime = MsprofSysCycleTime();
     rc = LoadAicpuOp::GetInstance().LaunchCustomOp(ctrlStream, kernelArgs, mainKernel);
     if (rc < 0) {
-        ALOG_ERROR_F("launch custom aicpu failed %d\n", rc);
+        MACHINE_LOGE("launch custom aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
@@ -670,7 +664,7 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     startTime = MsprofSysCycleTime();
     rc = launchDynamicAiCpu(aicpuStream, kernelArgs);
     if (rc < 0) {
-        ALOG_ERROR_F("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE("launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, aicpuNum_, MSPROF_GE_TASK_TYPE_AI_CPU);
@@ -678,7 +672,7 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     startTime = MsprofSysCycleTime();
     rc = launchDynamicAiCore(aicoreStream, kernelArgs);
     if (rc < 0) {
-        ALOG_ERROR_F("launch aicore failed %d\n", rc);
+        MACHINE_LOGE("launch aicore failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
@@ -693,7 +687,7 @@ int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, r
     if (!g_IsNullLaunched) {
         auto ret = LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kernelArgs, 1, "PyptoNull");
         if (ret != 0) {
-            ALOG_ERROR_F("launch built null failed");
+            MACHINE_LOGE("launch built null failed");
             return ret;
         }
         g_IsNullLaunched = true;
@@ -701,7 +695,7 @@ int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, r
     #endif
     int rc = RunPrepare();
     if (rc < 0) {
-        ALOG_ERROR_F("Prepare failed.");
+        MACHINE_LOGE("Prepare failed.");
         return rc;
     }
     HOST_PERF_TRACE(TracePhase::RunDevKernelInitRunPrepare);
@@ -753,14 +747,14 @@ std::vector<uint8_t> g_binBuf;
 
 void DeviceRunner::SetBinData(const std::vector<uint8_t> &binBuf) {
   g_binBuf = binBuf;
-  ALOG_DEBUG_F("Set kernel size:%zu", g_binBuf.size());
+  MACHINE_LOGD("Set kernel size:%zu", g_binBuf.size());
   return;
 }
 
 int DeviceRunner::RegisterKernelBin(void **hdl, std::vector<uint8_t> *funcBinBuf) {
     if (*hdl) {
         binHdl_ = *hdl;
-        ALOG_DEBUG_F("RegisterKernelBin reuse cache.");
+        MACHINE_LOGD("RegisterKernelBin reuse cache.");
         return 0;
     }
     void *bin = nullptr;
@@ -769,19 +763,19 @@ int DeviceRunner::RegisterKernelBin(void **hdl, std::vector<uint8_t> *funcBinBuf
     if (binBuf->size() != 0) {
         bin = binBuf->data();
         binSize = binBuf->size();
-        ALOG_DEBUG_F("Reg dynamic bin size %zu.", binSize);
+        MACHINE_LOGD("Reg dynamic bin size %zu.", binSize);
     } else {
         bin = _binary_kernel_o_start;
         binSize = _binary_kernel_o_end - _binary_kernel_o_start;
-        ALOG_DEBUG_F("Reg static bin size %zu.", binSize);
+        MACHINE_LOGD("Reg static bin size %zu.", binSize);
     }
     rtDevBinary_t binary{.magic = RT_DEV_BINARY_MAGIC_ELF, .version = 0, .data = bin, .length = binSize};
     int rc = rtRegisterAllKernel(&binary, hdl);
     if (rc != 0) {
-        ALOG_ERROR("RegisterKernelBin failed\n");
+        MACHINE_LOGE("RegisterKernelBin failed\n");
     }
     binHdl_ = *hdl;
-    ALOG_DEBUG_F("finish RegisterKernelBin.");
+    MACHINE_LOGD("finish RegisterKernelBin.");
     return rc;
 }
 
@@ -793,18 +787,18 @@ int DeviceRunner::Init(void) {
     CreateMultiLevelDir(builtInOpPath);
     LoadAicpuOp::GetInstance().GenBuiltInOpInfo(builtInOpPath);
     if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle() != 0) {
-        ALOG_ERROR("Get builtInOp Funchandle failed\n");
+        MACHINE_LOGE("Get builtInOp Funchandle failed\n");
         return -1;
     }
 
     InitializeErrorCallback();
 
     if (InitDeviceArgs(args_) != 0) {
-        ALOG_ERROR("prepareArgs failed\n");
+        MACHINE_LOGE("prepareArgs failed\n");
         return -1;
     }
     if (RegisterKernelBin(&binHdl_) != 0) {
-        ALOG_ERROR("RegisterKernelBin failed\n");
+        MACHINE_LOGE("RegisterKernelBin failed\n");
         return -1;
     }
     InitAicpuServer();

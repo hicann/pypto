@@ -15,10 +15,10 @@
 namespace npu::tile_fwk {
 void RunAsync(const void *stream, const void *workSpaceGmAddr, void *handle,
               const std::vector<void *> &opOriginArgs, const std::vector<size_t> &argsSize) {
-    ALOG_INFO("Program::Run stream = ", stream);
+    MACHINE_LOGI("Program::Run stream = %p", stream);
     DeviceAgentTask *deviceAgentTask = reinterpret_cast<DeviceAgentTask *>(handle);
     int ret = Run(stream, workSpaceGmAddr, deviceAgentTask, opOriginArgs, argsSize, true);
-    ALOG_INFO("End run: func name = ", deviceAgentTask->compileTask->GetFunction()->GetRawName(), " ret = ", ret);
+    MACHINE_LOGI("End run: func name = %s, ret = %d", deviceAgentTask->compileTask->GetFunction()->GetRawName().c_str(), ret);
 }
 
 int32_t TileFwkRunAsync(void *handle, const void *workspace, const void *stream, const std::vector<void *> &opArgs,

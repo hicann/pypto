@@ -41,7 +41,7 @@ static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
             CPU_SET(tidx, &cpuset);
             char name[64];
             (void)sprintf_s(name, sizeof(name), "aicput%d", tidx);
-            ALOG_DEBUG_F("start thread: %s ", name);
+            MACHINE_LOGD("start thread: %s ", name);
             pthread_setname_np(pthread_self(), name);
             pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
             aicpuResultList[threadIndex] = DynTileFwkBackendKernelServer(&kArgs);
@@ -65,7 +65,7 @@ static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
 int EmulationLauncher::EmulationLaunchOnceWithHostTensorData(
         Function *function, const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
         DevControlFlowCache* ctrlCache, const DeviceLauncherConfig &config) {
-    ALOG_DEBUG_F("!!! Emulation Launch\n");
+    MACHINE_LOGD("!!! Emulation Launch\n");
     DeviceKernelArgs kArgs;
     auto dynAttr = function->GetDyndevAttribute();
     DeviceLauncher::DeviceInitDistributedContext(EmulationMemoryUtils(), dynAttr->commGroupNames, kArgs);
@@ -180,7 +180,7 @@ int EmulationLauncher::BuildControlFlowCache(
         }
         return ss.str();
     };
-    ALOG_INFO_F("!!! Emulation ControlFlowCache shape {%s}\n", getShapeString(inputList).c_str());
+    MACHINE_LOGI("!!! Emulation ControlFlowCache shape {%s}\n", getShapeString(inputList).c_str());
 
     /* python front end use inputs/output as unified tensors, outputList is always null */
     if (inputList.size() == 0 && outputList.size() == 0) {

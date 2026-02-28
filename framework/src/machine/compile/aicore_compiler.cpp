@@ -26,6 +26,7 @@
 #include "machine/compile/gen_aicore_code.h"
 #include "machine/host/main_block.h"
 #include "tilefwk/platform.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {
@@ -37,7 +38,7 @@ constexpr const char* BISHENG_LD_CMD = "ld.lld";
 
 static int CompileCoreMachine(const std::string &objFile, bool isCube, uint64_t tilingKey,
                               const std::string &headFile, const std::string &aicoreSrcFile) {
-  ALOG_INFO_F("Compile src file is [%s], kernel type[%d].", aicoreSrcFile.c_str(), isCube);
+  MACHINE_LOGI("Compile src file is [%s], kernel type[%d].", aicoreSrcFile.c_str(), isCube);
   std::string ccecAicVersion = Platform::Instance().GetSoc().GetCCECVersion("AIC");
   std::string ccecAivVersion = Platform::Instance().GetSoc().GetCCECVersion("AIV");
   const std::string cc_opt = isCube ? ccecAicVersion : ccecAivVersion;
@@ -73,13 +74,13 @@ static int CompileCoreMachine(const std::string &objFile, bool isCube, uint64_t 
                    GetCurrentSharedLibPath().c_str(), GetCurrentSharedLibPath().c_str(),
                    objFile.c_str(), aicoreSrcFile.c_str());
   if (ret < 0) {
-    ALOG_ERROR_F("Compile aicore construct cmd failed.");
+    MACHINE_LOGE("Compile aicore construct cmd failed.");
     return ret;
   }
-  ALOG_DEBUG_F("Compile ccec command:[%s].", ccecCmd.c_str());
+  MACHINE_LOGD("Compile ccec command:[%s].", ccecCmd.c_str());
   ret = std::system(ccecCmd.c_str());
   if (ret != 0) {
-    ALOG_ERROR_F("Compile ccec failed.");
+    MACHINE_LOGE("Compile ccec failed.");
   }
   return ret;
 }
@@ -108,7 +109,7 @@ std::string GenSubFuncCall(std::map<uint64_t, Function *> &leafDict, CoreType co
         code << leafFuncAttr->kernelDeclareMainBlock << std::endl;
         idxNameMap[baseIdx + 1] = leafFuncAttr->kernelNameMainBlock;
       }
-      ALOG_DEBUG_F("Func[%d] kernel_name[%s].", leafIndex, leafFuncAttr->kernelName.c_str());
+      MACHINE_LOGD("Func[%d] kernel_name[%s].", leafIndex, leafFuncAttr->kernelName.c_str());
   }
   if (idxNameMap.empty()) {
     return "";
@@ -118,7 +119,7 @@ std::string GenSubFuncCall(std::map<uint64_t, Function *> &leafDict, CoreType co
   code << "CoreFuncParam *param, int64_t gmStackAddr, __gm__ int64_t *hcclContext) {\n";
   code << "    switch (funcIdx) {\n";
   for (const auto &iter : idxNameMap) {
-    ALOG_DEBUG_F("Call sub func id[%d] kernel_name[%s].", iter.first, iter.second.c_str());
+    MACHINE_LOGD("Call sub func id[%d] kernel_name[%s].", iter.first, iter.second.c_str());
     code << "        case " << std::to_string(iter.first) << ": {\n";
     code << "            " << iter.second <<  "(param, gmStackAddr, hcclContext, nullptr);\n";
     code << "            break;\n";
@@ -127,13 +128,13 @@ std::string GenSubFuncCall(std::map<uint64_t, Function *> &leafDict, CoreType co
   code << "        default:\n";
   code << "            return;\n";
   code << "    };\n    return;\n}\n";
-  ALOG_DEBUG_F("Sub func call code[\n%s\n].", code.str().c_str());
+  MACHINE_LOGD("Sub func call code[\n%s\n].", code.str().c_str());
 
   std::string head_file = (coreType == CoreType::AIC) ? "sub_func_aic_call_" : "sub_func_aiv_call_";
   head_file = ccePath + head_file + std::to_string(tilingKey) + ".h";
   FILE *fsrc = fopen(head_file.c_str(), "w");
   if (fsrc == nullptr) {
-    ALOG_ERROR_F("Fail to open call.h.");
+    MACHINE_LOGE("Fail to open call.h.");
     return "";
   }
   (void)fprintf(fsrc, "%s", code.str().c_str());
@@ -151,10 +152,10 @@ static int LinkObject(const std::string &src_objs, std::string &objPath, const s
                        "%s "
                        "%s", BISHENG_LD_CMD, relocate ? "-r" : "" , objPath.c_str(), src_objs.c_str());
   if (ret < 0) {
-    ALOG_ERROR_F("LinkCoreMachine construct cmd failed.");
+    MACHINE_LOGE("LinkCoreMachine construct cmd failed.");
     return ret;
   }
-  ALOG_DEBUG_F("Link ccec command:[%s].", ccecCmd.c_str());
+  MACHINE_LOGD("Link ccec command:[%s].", ccecCmd.c_str());
   const std::string linkScript = ccePath + "link_" + key + "_" + std::to_string(getpid()) + ".sh";
   std::ofstream script(linkScript.c_str());
   script << "#!/bin/bash\n";
@@ -163,7 +164,7 @@ static int LinkObject(const std::string &src_objs, std::string &objPath, const s
   const std::string ldCmd = "bash " + linkScript;
   ret = std::system(ldCmd.c_str());
   if (ret != 0) {
-    ALOG_ERROR_F("Link kernel failed.");
+    MACHINE_LOGE("Link kernel failed.");
   }
   return ret;
 }
@@ -171,7 +172,7 @@ static int LinkObject(const std::string &src_objs, std::string &objPath, const s
 int CompileAICoreKernel(std::map<uint64_t, Function *> &leafDict, dynamic::EncodeDevAscendFunctionParam &param,
                         const std::string &ccePath, const std::string &funcHash, std::string &kernelPath) {
   if (ccePath.empty()) {
-    ALOG_ERROR_F("No cce path.");
+    MACHINE_LOGE("No cce path.");
     return -1;
   }
   uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
@@ -179,7 +180,7 @@ int CompileAICoreKernel(std::map<uint64_t, Function *> &leafDict, dynamic::Encod
   std::string aiv_obj = ccePath + "dy_kernel_" + funcHash + "_aiv_" + std::to_string(tilingKey) + ".o";
   std::string aicoreSrcFile = ccePath + "aicore.cpp";
   if (!GenAicoreSrcFile(aicoreSrcFile, funcHash)) {
-    ALOG_ERROR_F("Fail to generate aicore src file.");
+    MACHINE_LOGE("Fail to generate aicore src file.");
     return -1;
   }
   std::deque<std::function<void(void)>> tasks;
@@ -214,7 +215,7 @@ int CompileAICoreKernel(std::map<uint64_t, Function *> &leafDict, dynamic::Encod
   std::stringstream src_obj;
   src_obj << " " << aic_obj << " " << aiv_obj;
   kernelPath = ccePath + "dy_kernel_" + funcHash + "_" + std::to_string(tilingKey) + ".o";
-  ALOG_DEBUG_F("Compile dynamic kernel to %s.", kernelPath.c_str());
+  MACHINE_LOGD("Compile dynamic kernel to %s.", kernelPath.c_str());
   auto ret = LinkObject(src_obj.str(), kernelPath, ccePath, false, "mix");
   return ret;
 }

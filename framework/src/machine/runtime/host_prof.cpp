@@ -20,6 +20,7 @@
 #include "toolchain/prof_api.h"
 #include "log_types.h"
 #include "prof_common.h"
+#include "tilefwk/tilefwk_log.h"
 
 
 namespace npu::tile_fwk {
@@ -39,21 +40,21 @@ uint32_t HostProf::profType_ = 0;
 
 int32_t HostProf::HostProfInit(uint32_t type, void *data, uint32_t len) {
   if (data == nullptr || len == 0) {
-    ALOG_WARN_F("Para is invalid");
+    MACHINE_LOGW("Para is invalid");
     return -1;
   }
   if (type != RT_PROF_CTRL_SWITCH) {
-    ALOG_WARN_F("Prof type [%u] is invalid", type);
+    MACHINE_LOGW("Prof type [%u] is invalid", type);
     return -1;
   }
   if (len < sizeof(MsprofCommandHandle)) {
-    ALOG_WARN_F("Prof CommandHandle len [%u] is invalid", len);
+    MACHINE_LOGW("Prof CommandHandle len [%u] is invalid", len);
     return -1;
   }
   MsprofCommandHandle *hostProfHandleConfig = reinterpret_cast<MsprofCommandHandle*>(data);
   profSwitch_ = hostProfHandleConfig->profSwitch;
   profType_ = hostProfHandleConfig->type;
-  ALOG_DEBUG_F("Host prof profSwitch is %lu profType is %u", profSwitch_, profType_);
+  MACHINE_LOGD("Host prof profSwitch is %lu profType is %u", profSwitch_, profType_);
   return 0;
 }
 
@@ -71,7 +72,7 @@ bool HostProf::HostProfReportApi(const uint64_t &startTime, const uint64_t &endT
   apiInfo.threadId = syscall(SYS_gettid);
   auto ret = MsprofReportApi(true, &apiInfo);
   if (ret != 0) {
-    ALOG_WARN_F("Report Api not success");
+    MACHINE_LOGW("Report Api not success");
     return false;
   }
   return true;
@@ -97,7 +98,7 @@ void HostProf::HostProfReportBasicInfo(const uint64_t &endTime, const uint32_t b
   auto ret = MsprofReportCompactInfo(static_cast<uint32_t>(true), &nodeBasicInfo,
                           static_cast<uint32_t>(sizeof(MsprofCompactInfo)));
   if (ret != 0) {
-    ALOG_WARN_F("Compact node[%s] basic info failed", opName_.c_str());
+    MACHINE_LOGW("Compact node[%s] basic info failed", opName_.c_str());
   }
 }
 
@@ -114,17 +115,17 @@ void HostProf::HostProfReportContextInfo(const uint64_t &endTime) const {
   memcpy_s(contextInfo.data, MSPROF_ADDTIONAL_INFO_DATA_LENGTH, &ctxId, sizeof(MsprofContextIdInfo));
   auto ret = MsprofReportAdditionalInfo(false,reinterpret_cast<void*>(&contextInfo), sizeof(MsprofAdditionalInfo));
   if (ret != 0) {
-    ALOG_WARN_F("Op[%s] Msprof report context info not success", opName_.c_str());
+    MACHINE_LOGW("Op[%s] Msprof report context info not success", opName_.c_str());
   }
 }
 
 void HostProf::HostProfReportTensorInfo(const uint64_t &endTime) const {
   if (profFunction_ == nullptr) {
-    ALOG_WARN_F("Op [%s] is null", opName_.c_str());
+    MACHINE_LOGW("Op [%s] is null", opName_.c_str());
     return;
   }
   uint32_t iONums = profFunction_->inCasts_.size() + profFunction_->outCasts_.size();
-  ALOG_DEBUG_F("Op [%s] with inputs[%zu], outputs[%zu]", opName_.c_str(),
+  MACHINE_LOGD("Op [%s] with inputs[%zu], outputs[%zu]", opName_.c_str(),
               profFunction_->inCasts_.size(), profFunction_->outCasts_.size());
   uint32_t groupNums = iONums / MSPROF_GE_TENSOR_DATA_NUM;
   uint32_t modulus = iONums % MSPROF_GE_TENSOR_DATA_NUM;
@@ -151,7 +152,7 @@ void HostProf::ReportTensoInfo(const uint32_t &groupId, const uint32_t mods, con
   }
   auto ret = MsprofReportAdditionalInfo(false, reinterpret_cast<void*>(&tensorInfo), sizeof(MsprofAdditionalInfo));
   if (ret != 0) {
-    ALOG_WARN_F("Op[%s] Msprof report tensor info not success", opName_.c_str());
+    MACHINE_LOGW("Op[%s] Msprof report tensor info not success", opName_.c_str());
   }
 }
 
@@ -175,7 +176,7 @@ void HostProf::PackTensorInfo(MsprofTensorInfo *profTensorData, const uint32_t g
   }
   size_t shapeLen = iOTensor->shape.size();
   if (iOTensor->shape.size() > MSPROF_GE_TENSOR_DATA_SHAPE_LEN) {
-    ALOG_WARN_F("Op [%s] tensor[%u] size[%zu] len over [%d]", opName_.c_str(), iOIdx, shapeLen,
+    MACHINE_LOGW("Op [%s] tensor[%u] size[%zu] len over [%d]", opName_.c_str(), iOIdx, shapeLen,
                 MSPROF_GE_TENSOR_DATA_SHAPE_LEN);
     shapeLen = MSPROF_GE_TENSOR_DATA_SHAPE_LEN;
   }
@@ -188,13 +189,13 @@ void HostProf::PackTensorInfo(MsprofTensorInfo *profTensorData, const uint32_t g
     profTensorData->tensorData[modId].shape[j] = 0;
   }
   iOtensorInfo << "\n";
-  ALOG_DEBUG_F("tensorInfo %s", iOtensorInfo.str().c_str());
+  MACHINE_LOGD("tensorInfo %s", iOtensorInfo.str().c_str());
 }
 
 void HostProf::SetProfFunction(Function *function)
 {
   if (function == nullptr) {
-    ALOG_WARN_F("Function is invalid, please check function");
+    MACHINE_LOGW("Function is invalid, please check function");
     return;
   }
   // current using functionHashId as opName;

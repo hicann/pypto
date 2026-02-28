@@ -22,6 +22,7 @@
 #include "machine/device/dynamic/device_utils.h"
 #include "interface/configs/config_manager.h"
 #include "machine/device/distributed/common.h"
+#include "tilefwk/tilefwk_log.h"
 namespace npu::tile_fwk::dynamic {
 constexpr int DUMP_LEVEL_FOUR = 4;
 
@@ -61,7 +62,7 @@ void ConstructTaskInfo(const uint32_t &index, json &rootTaskStats, const std::ve
 void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfData) {
     json rootTaskStatus = json::array();
     auto blockNum = args.GetBlockNum();
-    ALOG_INFO("GetBlockNum : %lu",  blockNum);
+    MACHINE_LOGI("GetBlockNum : %lu",  blockNum);
     for (uint32_t i = 0; i < blockNum; i++) {
         std::string coreType = (i < args.nrValidAic) ? "AIC" : "AIV";
         ConstructTaskInfo(i, rootTaskStatus, perfData, coreType);
@@ -72,10 +73,10 @@ void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfDa
     }
     std::string jsonFilePath = npu::tile_fwk::config::LogTopFolder() + "/tilefwk_L1_prof_data.json";
     if (!DumpFile(rootTaskStatus.dump(DUMP_LEVEL_FOUR), jsonFilePath)) {
-        ALOG_WARN_F("Contrust custom op json failed");
+        MACHINE_LOGW("Contrust custom op json failed");
         return;
     }
-    ALOG_DEBUG_F("tilefwk_L1_prof_data have saved in: %s",  jsonFilePath.c_str());
+    MACHINE_LOGD("tilefwk_L1_prof_data have saved in: %s",  jsonFilePath.c_str());
     std::string topo_txt_path = npu::tile_fwk::config::LogTopFolder() + "/dyn_topo.txt";
     std::string program_json_path = npu::tile_fwk::config::LogTopFolder() + "/program.json";
     std::string draw_swim_lane_py_path = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
@@ -84,17 +85,17 @@ void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfDa
     uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ? FREQ_DAV_2201 : FREQ_DAV_3510;
 
     if (FileExist(program_json_path) && FileExist(topo_txt_path)) {
-        ALOG_INFO("The files program.json and dyn_topo.txt exist. Start merging the swimlane.");
+        MACHINE_LOGI("The files program.json and dyn_topo.txt exist. Start merging the swimlane.");
         std::string command = "python3 "+ draw_swim_lane_py_path + " \""
                                 + jsonFilePath + "\" \""
                                 + topo_txt_path + "\" \""
                                 + program_json_path + "\" --label_type=1 --time_convert_denominator="
                                 + std::to_string(freq);
         if (system(command.c_str()) != 0) {
-           ALOG_WARN("Failed to execute draw_swim_lane.py. Stop merging the swimlane.");
+           MACHINE_LOGW("Failed to execute draw_swim_lane.py. Stop merging the swimlane.");
         }
     } else {
-        ALOG_WARN("program.json or dyn_topo.txt missing. Stop merging the swimlane.");
+        MACHINE_LOGW("program.json or dyn_topo.txt missing. Stop merging the swimlane.");
     }
     DumpAicpuPerfInfo(args, perfData, freq);
 }
@@ -168,14 +169,14 @@ inline void DumpAicoreDevTask(DeviceArgs &args, json &aicpuPrefArray,
 inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const uint32_t &freq) {
     auto aicpuPer = (ValueToPtr(args.aicpuPerfAddr));
     if (aicpuPer == nullptr) {
-        ALOG_ERROR_F("Aicpu per ptr is null");
+        MACHINE_LOGW("Aicpu per ptr is null");
         return;
     }
     MetricPerf aicpuMetric;
     auto ret = rtMemcpy(PtrToPtr<MetricPerf, void>(&aicpuMetric), sizeof(MetricPerf), aicpuPer,
                         sizeof(MetricPerf), RT_MEMCPY_DEVICE_TO_HOST);
     if (ret != 0) {
-        ALOG_WARN_F("aicpu meter copy failed ret: %d", ret);
+        MACHINE_LOGW("aicpu meter copy failed ret: %d", ret);
         return;
     }
     for (uint32_t i = 0; i < args.nrAicpu - 1; i++) {
@@ -215,7 +216,7 @@ void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, co
     DumpAicoreDevTask(args, aicpuPrefArray, perfData, freq);
     std::string aicpuPerfilePath = npu::tile_fwk::config::LogTopFolder() + "/aicpu_dev_pref.json";
     if (!DumpFile(aicpuPrefArray.dump(DUMP_LEVEL_FOUR), aicpuPerfilePath)) {
-        ALOG_WARN_F("Contrust custom op json failed");
+        MACHINE_LOGW("Contrust custom op json failed");
         return;
     }
 
@@ -224,7 +225,7 @@ void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, co
     std::string cmd = "python3 " + scriptPath + " gen_perfetto " + aicpuPerfilePath + " "
                         + npu::tile_fwk::config::LogTopFolder() + "/machine_runtime_operator_trace.json";
     if (system(cmd.c_str()) != 0) {
-        ALOG_WARN("Failed to execute machine_perf_trace.py, cannot get aicpu perfetto.json.");
+        MACHINE_LOGW("Failed to execute machine_perf_trace.py, cannot get aicpu perfetto.json.");
     }
     npu::tile_fwk::config::SetRunDataOption(KEY_AICPU_PERF_GRAPH_PATH,
             npu::tile_fwk::config::GetAbsoluteTopFolder() + "/machine_runtime_operator_trace.json");

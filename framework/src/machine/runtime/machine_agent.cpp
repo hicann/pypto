@@ -33,7 +33,7 @@ namespace npu::tile_fwk {
 void MachineAgent::DumpData(const std::string &fileName,const char *data, size_t len) {
     std::ofstream fout(fileName, std::ios::binary);
     if (!fout) {
-        ALOG_INFO_F("can not open file.");
+        MACHINE_LOGI("can not open file.");
         return;
     }
     fout.write(data, len);
@@ -93,12 +93,12 @@ int MachineAgent::PrepareWorkSpace(DeviceAgentTask *task) {
     uint64_t workSpaceSize =
         task->compileInfo.invokeParaWorkSpaceSize +
         task->compileInfo.aicoreCnt * task->compileInfo.workSpaceStackSize;
-    ALOG_EVENT_F("[DEVICE AGENT] workSpaceSize: %lu, stacksize: %lu", workSpaceSize,
+    MACHINE_EVENT("[DEVICE AGENT] workSpaceSize: %lu, stacksize: %lu", workSpaceSize,
         task->compileInfo.workSpaceStackSize);
 
     if (workSpaceSize == 0) {
         task->deviceInfo.workspaceGmAddr = nullptr;
-        ALOG_INFO_F("no need alloc workspace memory .");
+        MACHINE_LOGI("no need alloc workspace memory .");
         return MACHINE_OK;
     }
 
@@ -112,7 +112,7 @@ int MachineAgent::PrepareWorkSpace(DeviceAgentTask *task) {
 #endif
     task->deviceInfo.workspaceGmAddr = workSpaceAddr;
 
-    ALOG_INFO_F("[DEVICE AGENT] Allocated workSpaceAddr: %lu", reinterpret_cast<uint64_t>(workSpaceAddr));
+    MACHINE_LOGI("[DEVICE AGENT] Allocated workSpaceAddr: %lu", reinterpret_cast<uint64_t>(workSpaceAddr));
     return MACHINE_OK;
 }
 
@@ -126,36 +126,36 @@ void ProcessInvokeParaOffset(DeviceAgentTask *task, InvokeParaOffset &elm,
         /* rawTensorAddr 不为空，插入 rawTensorAddr + offset ,直接使用op层传入的workspace地址*/
         value = reinterpret_cast<uint64_t>(elm.rawTensorAddr) + elm.offset;
         oriValue = reinterpret_cast<uint64_t>(elm.rawTensorAddr);
-        ALOG_INFO_F("[DEVICE AGENT] Added op rawTensorAddr offset: %lu", value);
+        MACHINE_LOGI("[DEVICE AGENT] Added op rawTensorAddr offset: %lu", value);
     } else if (elm.isTensorParam) {
         if (elm.opOriginArgsSeq != INVALID_IN_OUT_INDEX) {
             elm.rawTensorAddr = task->GetOpOriginArgsRawTensorAddr(elm.opOriginArgsSeq);
             MACHINE_ASSERT(elm.rawTensorAddr != nullptr);
             value = reinterpret_cast<uint64_t>(elm.rawTensorAddr) + elm.offset;
             oriValue = reinterpret_cast<uint64_t>(elm.rawTensorAddr);
-            ALOG_INFO_F("[DEVICE AGENT] Get op origin args raw tensor addr:segno %zu, base addr %p, offset "
+            MACHINE_LOGI("[DEVICE AGENT] Get op origin args raw tensor addr:segno %zu, base addr %p, offset "
                         "%lu, addr+offset %lx",
                 elm.opOriginArgsSeq, elm.rawTensorAddr, elm.offset, value);
         } else {
-            ALOG_INFO_F("prepare stub output rawtensor gm addr, rawMagic = %d symbol %s", elm.rawMagic,
+            MACHINE_LOGI("prepare stub output rawtensor gm addr, rawMagic = %d symbol %s", elm.rawMagic,
                 elm.rawSymbol.c_str());
             auto addr = task->deviceInfo.stubOutRawTensorAddr.find(elm.rawMagic);
             if (addr == task->deviceInfo.stubOutRawTensorAddr.end()) {
                 elm.rawTensorAddr = paraWorkSpaceAddr + elm.rawTensorOffset;
                 task->deviceInfo.stubOutRawTensorAddr[elm.rawMagic] = elm.rawTensorAddr;
-                ALOG_INFO_F("[DEVICE AGENT] alloc stub workspace raw tensor addr: rawmagic = %d", elm.rawMagic);
+                MACHINE_LOGI("[DEVICE AGENT] alloc stub workspace raw tensor addr: rawmagic = %d", elm.rawMagic);
             } else {
-                ALOG_INFO_F("Use exist stub out raw tensor addr.");
+                MACHINE_LOGI("Use exist stub out raw tensor addr.");
             }
             value = reinterpret_cast<uint64_t>(paraWorkSpaceAddr) + elm.offset;
             oriValue = reinterpret_cast<uint64_t>(paraWorkSpaceAddr);
-            ALOG_INFO_F("[DEVICE AGENT] Added stub op rawTensorAddr offset: %lx", value);
+            MACHINE_LOGI("[DEVICE AGENT] Added stub op rawTensorAddr offset: %lx", value);
         }
     } else {
         /* raw_tensor_addr_ 为空代表是incast outcast，插入新申请的workspace地址偏移 */
         value = reinterpret_cast<uint64_t>(paraWorkSpaceAddr) + elm.offset;
         oriValue = reinterpret_cast<uint64_t>(paraWorkSpaceAddr);
-        ALOG_INFO_F("[DEVICE AGENT] Added incast outcast workSpaceAddr: %lx", value);
+        MACHINE_LOGI("[DEVICE AGENT] Added incast outcast workSpaceAddr: %lx", value);
     }
     invokeOffsetVec.push_back(value);
     invokeOffsetOriVec.push_back(oriValue);
@@ -168,11 +168,11 @@ void ProcessCoreFunction(DeviceAgentTask *task, uint8_t *paraWorkSpaceAddr,
     for (auto &mapEntry : invokeParaOffsetMap) {
         uint64_t coreFuncId = mapEntry.first;
         std::list<InvokeParaOffset> &invokeParaOffsetList = mapEntry.second;
-        ALOG_INFO_F("[DEVICE AGENT] Processing core function: %lu", coreFuncId);
+        MACHINE_LOGI("[DEVICE AGENT] Processing core function: %lu", coreFuncId);
         /* 写入corefunction入参地址 */
         int i = 0;
         for (auto &elm : invokeParaOffsetList) {
-            ALOG_INFO_F("idx is %d, ele rawMagic: %d, rawSymbol %s, offset: %lu", i++, elm.rawMagic,
+            MACHINE_LOGI("idx is %d, ele rawMagic: %d, rawSymbol %s, offset: %lu", i++, elm.rawMagic,
                 elm.rawSymbol.c_str(), elm.offset);
                 ProcessInvokeParaOffset(task, elm, paraWorkSpaceAddr, invokeOffsetVec, invokeOffsetOriVec);
         }
@@ -230,17 +230,17 @@ void CopyDataToDevice(uint8_t* invokeEntyDev, uint8_t* invokeEntyDevOri, uint8_t
         reinterpret_cast<uint8_t *>(coreTensorInfoVec.data()),invokeTensorsInfoSize);
     machine::GetRA()->CopyToDev(invokeEntyDevOri,
         reinterpret_cast<uint8_t *>(invokeOffsetOriVec.data()), invokeOffsetOriVec.size() * sizeof(uint64_t));
-    ALOG_INFO_F("[DEVICE AGENT] Copied invokeOffsetVec data to invokeEntyDev, size: %lu bytes", invokeOffsetVecSize);
+    MACHINE_LOGI("[DEVICE AGENT] Copied invokeOffsetVec data to invokeEntyDev, size: %lu bytes", invokeOffsetVecSize);
 #endif  
 }
 
 int MachineAgent::PrepareInvokeEntry(DeviceAgentTask *task) {
     uint8_t *paraWorkSpaceAddr = task->deviceInfo.workspaceGmAddr;
-    ALOG_INFO_F("paraWorkSpaceAddr base addr %p", paraWorkSpaceAddr);
+    MACHINE_LOGI("paraWorkSpaceAddr base addr %p", paraWorkSpaceAddr);
     std::vector<uint64_t> invokeOffsetVec;
     std::vector<uint64_t> invokeOffsetOriVec;
     ProcessCoreFunction(task, paraWorkSpaceAddr, invokeOffsetVec, invokeOffsetOriVec);
-    ALOG_INFO_F("[DEVICE AGENT] invokeOffsetVec size: %zu", invokeOffsetVec.size());
+    MACHINE_LOGI("[DEVICE AGENT] invokeOffsetVec size: %zu", invokeOffsetVec.size());
     size_t invokeOffsetVecSize = invokeOffsetVec.size() * sizeof(uint64_t);
     size_t invokeOffsetOriSize = invokeOffsetOriVec.size() * sizeof(uint64_t);
     size_t invokeTensorsInfoSize = task->compileInfo.coreTensorInfoVec.size() * sizeof(TensorInfo);
@@ -252,8 +252,8 @@ int MachineAgent::PrepareInvokeEntry(DeviceAgentTask *task) {
             return MACHINE_ERROR;
     }
     task->deviceInfo.invokeEntryOffsetsGmAddr = invokeEntyDev;
-    ALOG_INFO_F("[DEVICE AGENT] Allocated invokeEntyDev: %lx", reinterpret_cast<uint64_t>(invokeEntyDev));
-    ALOG_INFO_F("PrepareInvokeEntry invokeEntyDev: %p, invokeTensorsInfoDev: %p", invokeEntyDev, invokeTensorsInfoDev);
+    MACHINE_LOGI("[DEVICE AGENT] Allocated invokeEntyDev: %lx", reinterpret_cast<uint64_t>(invokeEntyDev));
+    MACHINE_LOGI("PrepareInvokeEntry invokeEntyDev: %p, invokeTensorsInfoDev: %p", invokeEntyDev, invokeTensorsInfoDev);
     DumpData("invokeEntyDev.data", reinterpret_cast<const char *>(&invokeEntyDev), sizeof(uint8_t *));
     DumpData("invokeOffsetVec.data", reinterpret_cast<const char *>(invokeOffsetVec.data()), invokeOffsetVecSize);
     CopyDataToDevice(invokeEntyDev, invokeEntyDevOri, invokeTensorsInfoDev, invokeOffsetVecSize, 
@@ -308,7 +308,7 @@ int MachineAgent::PrepareCoreFunctionBin(DeviceAgentTask *task) {
         std::cerr << "[DEVICE AGENT] Error: Failed to allocate function bin memory!" << std::endl;
         return MACHINE_ERROR;
     }
-    ALOG_INFO_F("PrepareCoreFunctionBin binGmAddr: %p", binGmAddr);
+    MACHINE_LOGI("PrepareCoreFunctionBin binGmAddr: %p", binGmAddr);
     DumpData("binGmAddr.data", reinterpret_cast<const char *>(&binGmAddr), sizeof(uint8_t *));
     DumpData("cacheBin.data", reinterpret_cast<const char *>(cacheBin), allocSize);
     machine::GetRA()->CopyToDev(binGmAddr, reinterpret_cast<uint8_t *>(cacheBin), allocSize);
@@ -318,7 +318,7 @@ int MachineAgent::PrepareCoreFunctionBin(DeviceAgentTask *task) {
         uint64_t curBinAddr =
             reinterpret_cast<uint64_t>(binGmAddr + task->compileInfo.coreFuncBinOffset[i]);
         task->deviceInfo.coreFuncBinAddr.push_back(curBinAddr);
-        ALOG_INFO_F("[DEVICE AGENT] core function: %lu binAddr %lx ", i, curBinAddr);
+        MACHINE_LOGI("[DEVICE AGENT] core function: %lu binAddr %lx ", i, curBinAddr);
     }
 
     return MACHINE_OK;
@@ -364,7 +364,7 @@ int MachineAgent::PrepareReadyCoreFunction(DeviceAgentTask *task) {
         rq.elem = reinterpret_cast<uint64_t *>(elm);
         rq.lock = 0;
         machine::GetRA()->CopyToDev(que, reinterpret_cast<uint8_t *>(&rq), sizeof(rq));
-        ALOG_INFO_F("[DEVICE AGENT] set que ready function cnt: %lu", elmCnt);
+        MACHINE_LOGI("[DEVICE AGENT] set que ready function cnt: %lu", elmCnt);
     };
     funcSetQue(task->deviceInfo.readyAicQueElmGmAddr, task->deviceInfo.readyAicQueGmAddr,
         task->compileInfo.readyAicIdVec.size());
@@ -404,18 +404,18 @@ void MachineAgent::FillL2PrefetchInfo(DeviceAgentTask *task, DeviceTask &devTask
     size_t num = 0;
     for (size_t i = 0; i < task->opOriginArgs_.size(); ++i) {
       if (num >= MAX_PREFETCH_NUM) {
-        ALOG_WARN_F("Prefetch max num is 4.");
+        MACHINE_LOGW("Prefetch max num is 4.");
         break;
       }
       if (task->opOriginArgs_[i].needPrefetch && (task->opOriginArgs_[i].size != 0)) {
         devTask.l2Info.prefetchAddrs[num] = reinterpret_cast<uint64_t>(task->opOriginArgs_[i].addr);
         devTask.l2Info.prefetchSizes[num] = task->opOriginArgs_[i].size;
-        ALOG_INFO_F("Prefetch addr:%lx size:%lu", devTask.l2Info.prefetchAddrs[num], devTask.l2Info.prefetchSizes[num]);
+        MACHINE_LOGI("Prefetch addr:%lx size:%lu", devTask.l2Info.prefetchAddrs[num], devTask.l2Info.prefetchSizes[num]);
         ++num;
       }
     }
     devTask.l2Info.prefetchNum = num;
-    ALOG_INFO_F("prefetchNum:%lu", devTask.l2Info.prefetchNum);
+    MACHINE_LOGI("prefetchNum:%lu", devTask.l2Info.prefetchNum);
 }
 
 void MachineAgent::FillDeviceTask(DeviceAgentTask *task, DeviceTask &devTask, MachineDeviceAgentInfo &devInfo) {
@@ -432,15 +432,15 @@ void MachineAgent::FillDeviceTask(DeviceAgentTask *task, DeviceTask &devTask, Ma
 
 void MachineAgent::DumpDeviceTaskInfo(
     const DeviceAgentTask *task, uint8_t *deviceTaskGmAddr, const DeviceTask &devTask) {
-    ALOG_INFO_F("DeviceTask: %lu", task->GetTaskId());
-    ALOG_INFO_F(" deviceTaskGmAddr: %lx", reinterpret_cast<uint64_t>(deviceTaskGmAddr));
-    ALOG_INFO_F(" coreFunctionCnt: %lu", devTask.coreFunctionCnt);
-    ALOG_INFO_F(" coreFunctionReadyStateAddr:  %lx", devTask.coreFunctionReadyStateAddr);
-    ALOG_INFO_F(" readyAicQueAddr:  %lx", devTask.readyAicCoreFunctionQue);
-    ALOG_INFO_F(" readyAivQueAddr:  %lx", devTask.readyAivCoreFunctionQue);
-    ALOG_INFO_F(" coreFunctionWsAddr:  %lx", devTask.coreFuncData.coreFunctionWsAddr);
-    ALOG_INFO_F(" stackWorkSpaceAddr:  %lx", devTask.coreFuncData.stackWorkSpaceAddr);
-    ALOG_INFO_F(" stackWorkSpaceSize:  %lu", devTask.coreFuncData.stackWorkSpaceSize);
+    MACHINE_LOGI("DeviceTask: %lu", task->GetTaskId());
+    MACHINE_LOGI(" deviceTaskGmAddr: %lx", reinterpret_cast<uint64_t>(deviceTaskGmAddr));
+    MACHINE_LOGI(" coreFunctionCnt: %lu", devTask.coreFunctionCnt);
+    MACHINE_LOGI(" coreFunctionReadyStateAddr:  %lx", devTask.coreFunctionReadyStateAddr);
+    MACHINE_LOGI(" readyAicQueAddr:  %lx", devTask.readyAicCoreFunctionQue);
+    MACHINE_LOGI(" readyAivQueAddr:  %lx", devTask.readyAivCoreFunctionQue);
+    MACHINE_LOGI(" coreFunctionWsAddr:  %lx", devTask.coreFuncData.coreFunctionWsAddr);
+    MACHINE_LOGI(" stackWorkSpaceAddr:  %lx", devTask.coreFuncData.stackWorkSpaceAddr);
+    MACHINE_LOGI(" stackWorkSpaceSize:  %lu", devTask.coreFuncData.stackWorkSpaceSize);
 }
 
 void MachineAgent::FillVirtualFunction(DeviceAgentTask *task) {
@@ -450,7 +450,7 @@ void MachineAgent::FillVirtualFunction(DeviceAgentTask *task) {
         i < cacheValue.header.coreFunctionNum + cacheValue.header.virtualFunctionNum; i++) {
         devInfo.coreFunctionWsAddr.push_back(
             CoreFunctionWsAddr(0, 0, 0xFFFFFFF, devInfo.coreFunctionTopoAddr.at(i), 0, 0));
-        ALOG_INFO_F("virtual function ws addr : coreFuncID:%lu, topoAddr: %lx", i, devInfo.coreFunctionTopoAddr.at(i));
+        MACHINE_LOGI("virtual function ws addr : coreFuncID:%lu, topoAddr: %lx", i, devInfo.coreFunctionTopoAddr.at(i));
     }
 }
 
@@ -465,7 +465,7 @@ int MachineAgent::ConstructDeviceTask(DeviceAgentTask *task) {
                 task->compileInfo.coreFunctionIdToProgramId[i], devInfo.coreFunctionTopoAddr.at(i),
                 devInfo.coreFunctionInvokeEntryInfo.at(i), task->compileInfo.coreTensorNum.at(i),
                 devInfo.coreFunctionInvokeEntryOriAddr.at(i)));
-        ALOG_INFO_F(
+        MACHINE_LOGI(
             "function ws addr : coreFuncID:%lu, binaddr: %lx, invokeEntryAddr: %lx, topoAddr: %lx, Num: %lu, psgid:%lu",
             i, devInfo.coreFuncBinAddr.at(i), devInfo.coreFunctionInvokeEntryAddr.at(i),
             devInfo.coreFunctionTopoAddr.at(i), task->compileInfo.coreTensorNum.at(i),
@@ -535,7 +535,7 @@ void MachinePipe::PipeProc(DeviceAgentTask *task) {
         runner.Run(aicpuStream, aicoreStream, task->GetTaskId(), reinterpret_cast<int64_t>(task->GetDeviceTaskGmAddr()));
     }
 #endif
-    ALOG_INFO_F("Recv task id: %lu", task->GetTaskId());
+    MACHINE_LOGI("Recv task id: %lu", task->GetTaskId());
 }
 
 int Run(const void *stream, const void *workSpaceGmAddr, DeviceAgentTask *deviceAgentTask, const std::vector<void *> &opOriginArgs,

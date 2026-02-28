@@ -126,3 +126,9 @@ void TestMlaProlog(std::vector<int> &params) {
         }
     }
 }
+
+TEST(TestMachineCompilerLog, CalcFunctionInvokeWorkespace_NullFunction) {
+    MachineCompileInfo compileInfo;
+    CalcFunctionInvokeWorkespace(nullptr, nullptr, compileInfo);
+    EXPECT_EQ(compileInfo.invokeParaWorkSpaceSize, 0);
+}

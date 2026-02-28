@@ -30,7 +30,7 @@ static bool GetPgMask(uint64_t &valid, int32_t &deviceId) {
     auto halFuncDevInfo = (int (*)(uint32_t deviceId, int32_t moduleType, int32_t infoType,
                            void* buf, int32_t *size))dlsym(nullptr, "halGetDeviceInfoByBuff");
     if (halFuncDevInfo == nullptr) {
-        ALOG_WARN_F("Hal function not found.");
+        MACHINE_LOGW("Hal function not found.");
         return false;
     }
     auto ret = halFuncDevInfo(static_cast<uint32_t>(deviceId), MODULE_TYPE_AI_CORE, INFO_TYPE_OCCUPY,
@@ -56,11 +56,11 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t> &aic, std::vector<
     int32_t deviceId = 0;
     uint64_t valid = 0;
     if (!GetPgMask(valid, deviceId)) {
-        ALOG_WARN_F("Get Device Info failed or no valid core exists.");
+        MACHINE_LOGW("Get Device Info failed or no valid core exists.");
         valid = 0xFFFFFFFF;
         validGetPgMask = false;
     }
-    ALOG_INFO_F("The valid cores are: %ld.", valid);
+    MACHINE_LOGI("The valid cores are: %ld.", valid);
     uint64_t coreStride = 8 * 1024 * 1024; // 8M
     uint64_t subCoreStride = 0x100000ULL;
 
@@ -71,7 +71,7 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t> &aic, std::vector<
     auto halFunc = (int (*)(int type, void *paramValue, size_t paramValueSize, void *outValue,
         size_t *outSizeRet))dlsym(nullptr, "halMemCtl");
     if (halFunc == nullptr) {
-        ALOG_ERROR_F("Hal function not found.");
+        MACHINE_LOGE("Hal function not found.");
         return -1;
     }
     struct AddrMapInPara inMapPara;
@@ -81,7 +81,7 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t> &aic, std::vector<
     auto ret = halFunc(0, reinterpret_cast<void *>(&inMapPara), sizeof(struct AddrMapInPara),
         reinterpret_cast<void *>(&outMapPara), nullptr);
     if (ret != 0) {
-        ALOG_ERROR_F("Map reg addr fail, maybe others are using current device. (ret=%d).", ret);
+        MACHINE_LOGE("Map reg addr fail, maybe others are using current device. (ret=%d).", ret);
         return ret;
     }
     for (uint32_t i = 0; i < DAV_2201::MAX_CORE; i++) {
@@ -165,17 +165,17 @@ void *RuntimeAgentMemory::MapAiCoreReg() {
     size_t regAddrSize = sizeof(void *) * regAddr.size();
     int rc = rtMalloc(&devAddr, regAddrSize, RT_MEMORY_HBM, 0);
     if (rc != 0) {
-        ALOG_ERROR_F("rtMalloc failed. size: %zu", regAddrSize);
+        MACHINE_LOGE("rtMalloc failed. size: %zu", regAddrSize);
         return nullptr;
     }
 
     rc = rtMemcpy(devAddr, regAddrSize, regAddr.data(), regAddrSize, RT_MEMCPY_HOST_TO_DEVICE);
     if (rc != 0) {
-        ALOG_ERROR_F("rtMemcpy failed. size: %zu", regAddrSize);
+        MACHINE_LOGE("rtMemcpy failed. size: %zu", regAddrSize);
         return nullptr;
     }
 
-    ALOG_INFO_F("All AiCore Reg mapped: %p. size: %zu", devAddr, regAddrSize);
+    MACHINE_LOGI("All AiCore Reg mapped: %p. size: %zu", devAddr, regAddrSize);
     allocatedDevAddr.emplace_back((uint8_t *)devAddr);
     return devAddr;
 }
