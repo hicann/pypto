@@ -58,7 +58,7 @@ def compute_matrix_small_value(input_data, golden_data, dtype, small_mask):
 def compute_matrix_large_value(input_data, golden_data, large_mask):
     if not torch.any(large_mask):
         return 0, 0, 0, 0, 0
-    
+
     input_large = input_data[large_mask]
     golden_large = golden_data[large_mask]
     
@@ -68,7 +68,7 @@ def compute_matrix_large_value(input_data, golden_data, large_mask):
     mare = torch.max(relative_error).item()
     mere = torch.mean(relative_error).item()
     rmse = torch.sqrt(torch.mean((input_large - golden_large) ** 2)).item()
-    
+
     return mare, mere, rmse
 
 
