@@ -314,18 +314,7 @@ class Parser(ast.NodeVisitor):
         elif self._lowered_signature_cache is not None and lower_symbolic_dims:
             return self._lowered_signature_cache
 
-        node = self.diag.source.as_ast()
-
-        # Find the function definition node
-        if isinstance(node, ast.Module):
-            for item in node.body:
-                if isinstance(item, ast.FunctionDef):
-                    function_node = item
-                    break
-            else:
-                raise RuntimeError("No function definition found in parsed AST")
-        else:
-            raise RuntimeError("Expected Module AST node")
+        function_node = self.diag.source.as_ast()
 
         # Temporarily set up context to parse signature
         with self.context.with_frame():
@@ -473,7 +462,7 @@ class Parser(ast.NodeVisitor):
     # ==========================================================================================
     # Private APIs (implementation details)
     # ==========================================================================================
-    def _get_function_def_from_func(self, func: Any) -> Optional[ast.FunctionDef]:
+    def _get_function_def_from_func(self, func: Any) -> ast.FunctionDef:
         """Get FunctionDef AST node from a function object.
 
         Parameters
@@ -490,27 +479,8 @@ class Parser(ast.NodeVisitor):
         # Check for _original_func attribute to identify NestedFunctionMarker instances
         if hasattr(func, "_original_func"):
             func = func._original_func
+        return Source(func).as_ast()
 
-        # Get the function source code
-        try:
-            source = Source(func)
-            ast_node = source.as_ast()
-
-            # Find the FunctionDef node in the AST
-            if isinstance(ast_node, ast.Module):
-                for stmt in ast_node.body:
-                    if isinstance(stmt, ast.FunctionDef):
-                        # Check if this is the function we're looking for
-                        if stmt.name == func.__name__:
-                            return stmt
-            elif isinstance(ast_node, ast.FunctionDef):
-                if ast_node.name == func.__name__:
-                    return ast_node
-        except Exception:  # pylint: disable=broad-except
-            # If we can't get the AST, return None
-            return None
-
-        return None
 
     def _collect_function_environment(self, func: Any) -> dict[str, Any]:
         """Extract globals and nonlocals referenced by the function."""

@@ -34,9 +34,8 @@ making it easier for users to identify and fix issues in their PTO scripts.
 import ast
 import inspect
 import enum
-import linecache
-import sys
-from typing import NoReturn, Union
+import typing
+from typing import NoReturn, Callable
 
 from .error import RenderedParserError
 
@@ -55,169 +54,26 @@ class DiagnosticLevel(enum.IntEnum):
 
 
 class Source:
-    """Represents source code for PTO Script parsing.
+    def __init__(self, program: Callable):
+        self.source_name = inspect.getfile(program)  # type: ignore
+        source_lines, start_line = inspect.getsourcelines(program)  # type: ignore
+        indent_lines = "if True:\n " + " ".join(source_lines)
+        mod = ast.parse(indent_lines)
+        if_stmt = typing.cast(ast.If, mod.body[0])
+        self.tree = typing.cast(ast.FunctionDef, if_stmt.body[0])
+        self._fix_line_numbers(self.tree, start_line)
 
-    Can be instantiated from either a source code string or a doc AST tree object.
+    @staticmethod
+    def _fix_line_numbers(tree: ast.AST, lineno: int) -> int:
+        for node in ast.walk(tree):
+            if hasattr(node, "lineno"):
+                node.lineno += lineno - 2
+                node.end_lineno += lineno - 2
+                node.col_offset -= 1
+                node.end_col_offset -= 1
 
-    Parameters
-    ----------
-    source_name : str
-        The file path where the source code resides.
-
-    start_line : int
-        The initial line number of the source code segment.
-
-    start_column : int
-        The initial column position on the first line of the source code.
-
-    source : str
-        The actual source code content string.
-
-    full_source : str
-        The entire source code content of the file containing this source segment.
-    """
-
-    source_name: str
-    start_line: int
-    start_column: int
-    source: str
-    full_source: str
-
-    def __init__(self, program: Union[str, ast.AST]):
-        if isinstance(program, str):
-            self.source_name = "<str>"
-            self.start_line = 1
-            self.start_column = 0
-            self.source = program
-            self.full_source = program
-            return
-
-        self.source_name = inspect.getsourcefile(program)  # type: ignore
-        source_lines, self.start_line = getsourcelines(program)  # type: ignore
-        if source_lines:
-            self.start_column = len(source_lines[0]) - len(source_lines[0].lstrip())
-        else:
-            self.start_column = 0
-        if self.start_column and source_lines:
-            self.source = "\n".join(
-                [line_content[self.start_column:].rstrip() for line_content in source_lines]
-            )
-        else:
-            self.source = "".join(source_lines)
-        try:
-            # Handling Jupyter Notebook compatibility issue.
-            # When running in Jupyter, `mod` becomes <module '__main__'>, a built-in module
-            # which causes `getsource` to raise a TypeError
-            module_obj = inspect.getmodule(program)
-            if module_obj:
-                self.full_source = inspect.getsource(module_obj)
-            else:
-                self.full_source = self.source
-        except TypeError:
-            # Fallback approach for Jupyter compatibility.
-            # Using `findsource` as an alternative since it's an internal inspect API
-            # that can handle this edge case.
-            source_content, _ = inspect.findsource(program)  # type: ignore
-            self.full_source = "".join(source_content)
-
-    def as_ast(self) -> ast.AST:
-        """Convert the source code string into an AST representation.
-
-        Returns
-        -------
-        result : ast.AST
-            The abstract syntax tree representation of the source code.
-        """
-        return ast.parse(self.source)
-
-
-_original_getfile = inspect.getfile  # pylint: disable=invalid-name
-_original_findsource = inspect.findsource  # pylint: disable=invalid-name
-
-
-def _custom_inspect_getfile(target_obj):
-    """Determine the source file or compiled file location where an object was defined."""
-    if not inspect.isclass(target_obj):
-        return _original_getfile(target_obj)
-    module_name = getattr(target_obj, "__module__", None)
-    if module_name is not None:
-        file_path = getattr(sys.modules[module_name], "__file__", None)
-        if file_path is not None:
-            return file_path
-    for _, method_member in inspect.getmembers(target_obj):
-        if inspect.isfunction(method_member):
-            if (
-                target_obj.__qualname__ + "." + method_member.__name__
-                == method_member.__qualname__
-            ):
-                return inspect.getfile(method_member)
-    raise TypeError("Source for {!r} not found".format(target_obj))
-
-
-def findsource(target_obj):
-    """Retrieve the complete source file content and the starting line number for an object."""
-
-    if not inspect.isclass(target_obj):
-        return _original_findsource(target_obj)
-
-    file_path = inspect.getsourcefile(target_obj)
-    if file_path:
-        linecache.checkcache(file_path)
-    else:
-        file_path = inspect.getfile(target_obj)
-        if not (file_path.startswith("<") and file_path.endswith(">")):
-            raise OSError("source code not available")
-
-    module_obj = inspect.getmodule(target_obj, file_path)
-    if module_obj:
-        file_lines = linecache.getlines(file_path, module_obj.__dict__)
-    else:
-        file_lines = linecache.getlines(file_path)
-    if not file_lines:
-        raise OSError("could not get source code")
-    qualified_name_parts = target_obj.__qualname__.replace(".<locals>", "<locals>").split(".")
-    comment_state = 0
-    nesting_stack = []
-    indentation_map = {}
-    for line_index, current_line in enumerate(file_lines):
-        docstring_count = current_line.count('"""')
-        if docstring_count:
-            # Toggle comment state based on docstring markers
-            comment_state = comment_state ^ (docstring_count & 1)
-            continue
-        if comment_state:
-            # Ignore lines that are inside multi-line docstrings
-            continue
-        line_indent = len(current_line) - len(current_line.lstrip())
-        line_tokens = current_line.split()
-        if len(line_tokens) > 1:
-            identifier = None
-            if line_tokens[0] == "def":
-                identifier = (
-                    line_tokens[1].split(":")[0].split("(")[0] + "<locals>"
-                )
-            elif line_tokens[0] == "class":
-                identifier = line_tokens[1].split(":")[0].split("(")[0]
-            # Remove scopes that are at equal or greater indentation
-            while nesting_stack and indentation_map[nesting_stack[-1]] >= line_indent:
-                nesting_stack.pop()
-            if identifier:
-                nesting_stack.append(identifier)
-                indentation_map[identifier] = line_indent
-                if nesting_stack == qualified_name_parts:
-                    return file_lines, line_index
-
-    raise OSError("could not find class definition")
-
-
-def getsourcelines(target_obj):
-    """Extract the code block starting from the top of the provided lines list."""
-    unwrapped_obj = inspect.unwrap(target_obj)
-    source_lines, line_number = findsource(unwrapped_obj)
-    return inspect.getblock(source_lines[line_number:]), line_number + 1
-
-
-inspect.getfile = _custom_inspect_getfile
+    def as_ast(self) -> ast.FunctionDef:
+        return self.tree
 
 
 class Span:
@@ -438,13 +294,9 @@ class Diagnostics:
             The severity level of the diagnostic.
         """
         line_number = getattr(node, "lineno", 1)
-        column_position = getattr(node, "col_offset", self.source.start_column)
+        column_position = getattr(node, "col_offset", 0)
         ending_line = getattr(node, "end_lineno", line_number)
         ending_column = getattr(node, "end_col_offset", column_position)
-        line_number = line_number + (self.source.start_line - 1)
-        ending_line = ending_line + (self.source.start_line - 1)
-        column_position = column_position + self.source.start_column + 1
-        ending_column = ending_column + self.source.start_column + 1
         self.context.emit(
             DiagnosticItem(
                 level=level,
