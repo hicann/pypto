@@ -380,7 +380,6 @@ def do_test_sfa_entry(case_name: str, is_p: bool):
     return True
 
 
-@pytest.mark.skip(reason="large test case")
 def test_sfa_bf16_b4_s2_seq64k_total_int8_d():
     '''
     sfa decode测试函数
