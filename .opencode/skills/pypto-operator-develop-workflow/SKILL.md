@@ -76,6 +76,7 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 - 如果设置TILE_FWK_DEVICE_ID=0执行失败了，报错为`Invalid Device`时，再检查npu设备
 - 运行 `npu-smi info` 查看可用的NPU chip，进行设置`export TILE_FWK_DEVICE_ID=x`
 - 未设置此环境变量会导致运行时提示："If no NPU environment is available"
+- 处理动态轴时，遇到计算loop次数时，可以参考pypto/models/glm_v4_5/glm_attention_pre_quant.py的实现
 
 如果以上信息未检查通过或者有疑问，请参考`docs/install`中的参考资料进行环境准备。
 
