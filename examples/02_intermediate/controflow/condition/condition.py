@@ -65,9 +65,9 @@ def create_nested_loops_with_conditions_kernel(shape: tuple, dynamic: bool = Fal
     def nested_loops_with_conditions_kernel(
         a: pypto.Tensor((w, h), pypto.DT_FP32),
         b: pypto.Tensor((w, h), pypto.DT_FP32),
-    ) -> pypto.Tensor((w, h), pypto.DT_FP32):
+        y: pypto.Tensor((w, h), pypto.DT_FP32)
+    ):
         pypto.set_vec_tile_shapes(2, 8)
-        y = pypto.full((w, h), 0.0, pypto.DT_FP32)
         for i in pypto.loop(2):
             for j in pypto.loop(2):
                 a_view = a[i:i + 1, j:j + 1]
@@ -76,7 +76,6 @@ def create_nested_loops_with_conditions_kernel(shape: tuple, dynamic: bool = Fal
                     y[i:i + 1, j:j + 1] = a_view + b_view
                 else:
                     y[i:i + 1, j:j + 1] = a_view - b_view
-        return y
 
     return nested_loops_with_conditions_kernel
     
@@ -93,7 +92,8 @@ def test_nested_loops_with_conditions(device_id = None, run_mode: str = "npu", d
     dtype = torch.float
     a = torch.rand(shape, dtype=dtype, device=device)
     b = torch.rand(shape, dtype=dtype, device=device)
-    y = create_nested_loops_with_conditions_kernel(shape, dynamic, run_mode)(a, b)
+    y = torch.zeros(shape, dtype=dtype, device=device)
+    create_nested_loops_with_conditions_kernel(shape, dynamic, run_mode)(a, b, y)
     golden = torch.zeros(shape, dtype=dtype, device=device)
     golden[0] = a[0] + b[0]
     golden[1] = a[1] - b[1]

@@ -546,9 +546,7 @@ class JitCallableWrapper:
         self._set_config_option()
 
         # Bind dynamic dimensions from concrete inputs
-        concrete_input_shapes = [list(in_tensor.ori_shape) for in_tensor in args]
-        if concrete_input_shapes:
-            self._parser.bind_dynamic_dims_from_inputs(concrete_input_shapes)
+        self._parser.bind_dynamic_dims_to_input_tensors()
 
         # Execute the deferred parsing (happens on first __call__)
         self._pto_function = self._parser.execute()
