@@ -24,6 +24,7 @@ import random
 import numpy as np
 import torch
 import torch.nn.functional as F
+import torch._prims as prims
 import copy
 from typing import List, Dict, Any
 
@@ -2133,6 +2134,39 @@ def scatter_tensor_golden_func(inputs, config: dict):
 def gen_scatter_tensor_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("ScatterTensor", scatter_tensor_golden_func, output, case_index)
+
+
+@TestCaseLoader.reg_params_handler(ops=["Var"])
+def params_dim_correction_keepdim_func(params: dict):
+    params["dim"] = [] if params.get("dim") is None else parse_list_str(str(params.get("dim")))
+    params["correction"] = float(params.get("correction"))
+    params["keepDim"] = params.get("keepDim")
+    assert isinstance(params["keepDim"], bool), "keepDim must be bool"
+    return params
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestVar/VarOperationTest.TestVar",
+    ]
+)
+def gen_var_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs, config: dict):
+        params = config.get("params")
+        dim_list = params["dim"]
+        correction = params["correction"]
+        keepdim = params["keepDim"]
+
+        if inputs[0].dtype == bfloat16:
+            input = torch.from_numpy(inputs[0].astype(np.float32))
+        else:
+            input = torch.from_numpy(inputs[0])
+
+        res = prims.var(input, dim_list, correction)
+
+        return [res.numpy().astype(inputs[0].dtype)]
+
+    return gen_op_golden("Var", golden_func, output, case_index)
 
 
 @GoldenRegister.reg_golden_func(

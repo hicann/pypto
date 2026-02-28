@@ -218,6 +218,7 @@ Tensor Where(const Tensor &condition, const Element &input, const Tensor &other)
 Tensor Where(const Tensor &condition, const Element &input, const Element &other);
 
 Tensor Unsqueeze(const Tensor &old, int unsqueezeDimNum);
+Tensor Squeeze(const Tensor &input, const std::vector<int> &dim = {});
 
 Tensor TensorIndex(const Tensor &params, const Tensor &indices);
 Tensor ScatterUpdate(const Tensor &dst, const Tensor &index, const Tensor &src, int axis = -2,
@@ -227,6 +228,7 @@ Tensor Expand(const Tensor &self, const std::vector<int64_t> &dstShape, std::vec
 
 Tensor Sin(Tensor operand);
 Tensor Cos(Tensor operand);
+Tensor Var(const Tensor &input, const std::vector<int> &dim = {}, float correction = 1.0f, bool keepDim = false);
 Tensor Softmax(const Tensor &operand);
 Tensor RmsNorm(const Tensor &operand);
 Tensor RmsNorm(const Tensor &operand, const Tensor &gamma, float epsilon = 1e-05f);

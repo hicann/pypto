@@ -147,6 +147,8 @@ stest:
       - TestScatterTensor/ScatterTensorOperationTest.TestScatterTensor/16
       - TestScatterUpdate/ScatterUpdateOperationTest.TestScatterUpdate/0
       - TestScatterUpdate/ScatterUpdateOperationTest.TestScatterUpdate/1
+      - TestVar/VarOperationTest.TestVar/0
+      - TestVar/VarOperationTest.TestVar/1
       - TestRsqrt/RsqrtOperationTest.TestRsqrt/0
       - TestRsqrt/RsqrtOperationTest.TestRsqrt/2
       - TestRsqrt/RsqrtOperationTest.TestRsqrt/3

@@ -76,6 +76,7 @@ pypto-sigmoid
 pypto-sign
 pypto-sin
 pypto-softmax
+pypto-var
 pypto-sqrt
 pypto-sub
 pypto-sum

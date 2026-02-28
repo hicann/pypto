@@ -343,6 +343,13 @@ void bind_operation(py::module &m) {
         },
         py::arg("operand"), py::arg("k"), py::arg("axis"), py::arg("islargest") = true, "Tensor topk.");
     m.def(
+        "Var",
+        [](const Tensor &input, const std::vector<int> &dim, float correction, bool keepDim) {
+            return npu::tile_fwk::Var(input, dim, correction, keepDim);
+        },
+        py::arg("input"), py::arg("dim") = std::vector<int>{}, py::arg("correction") = 1.0f,
+        py::arg("keepDim") = false, "Tensor Var.");
+    m.def(
         "ArgSort",
         [](const Tensor &self, int axis, bool descending) {
             return npu::tile_fwk::ArgSort(self, axis, descending);

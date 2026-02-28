@@ -269,6 +269,72 @@ Tensor Unsqueeze(const Tensor &old, int unsqueezeDimNum) {
     return Reshape(old, newShape, validShape);
 }
 
+static void SqueezeParamsValidCheck(const Tensor &input, std::vector<int> &dim)
+{
+    Shape oriShape = input.GetShape();
+    size_t shapeSize = oriShape.size();
+    ASSERT(shapeSize <= SHAPE_DIM4) << "The input dimension only support 1~4. Cur dimension is " << shapeSize;
+
+    if (dim.empty()) {
+        for (size_t i = 0; i < shapeSize; i++) {
+            dim.push_back(static_cast<int>(i));
+        }
+    }
+    ASSERT(dim.size() <= shapeSize) << "The dim.size <= input.dim is not matched. dim.size is " << dim.size()
+        << ", input.dim is " << shapeSize;
+    std::set<int> dupDimSet(dim.begin(), dim.end());
+    ASSERT(dupDimSet.size() == dim.size()) << "There is duplicates elements in dim";
+    for (size_t i = 0; i < dim.size(); i++) {
+        ASSERT(dim[i] < static_cast<int>(shapeSize) && dim[i] >= -(static_cast<int>(shapeSize))) << "dim " << i <<
+            " in dim is out of range";
+        if (dim[i] < 0) {
+            dim[i] = dim[i] + static_cast<int>(shapeSize);
+        }
+    }
+    std::sort(dim.begin(), dim.end());
+}
+
+Tensor Squeeze(const Tensor &input, const std::vector<int> &dim)
+{
+    DECLARE_TRACER();
+
+    Shape oriShape = input.GetShape();
+    Shape dstShape(oriShape.begin(), oriShape.end());
+    size_t shapeSize = oriShape.size();
+    std::vector<SymbolicScalar> validShape;
+    std::vector<int> innerDim(dim.begin(), dim.end());
+
+    if (shapeSize == 1) {
+        return input;
+    }
+    SqueezeParamsValidCheck(input, innerDim);
+    for (auto shape : input.GetStorage()->GetDynValidShape()){
+        validShape.push_back(shape);
+    }
+
+    ASSERT(!validShape.empty()) << "The input validshape should not be empty.";
+
+    for (auto it = innerDim.rbegin(); it != innerDim.rend(); ++it) {
+        int axis = *it;
+        if (oriShape[axis] == 1) {
+            dstShape.erase(dstShape.begin() + axis);
+            validShape.erase(validShape.begin() + axis);
+        }
+    }
+    if (dstShape.empty()) {
+        dstShape.push_back(1);
+    }
+    if (validShape.empty()) {
+        validShape.push_back(1);
+    }
+
+    if (dstShape.size() == shapeSize) {
+        return input;
+    } else {
+        return Reshape(input, dstShape, validShape);
+    }
+}
+
 void TensorInnerAssign(Function &function, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
     function.AddOperation(Opcode::OP_REGISTER_COPY, {operand}, {result});
 }

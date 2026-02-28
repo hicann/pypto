@@ -9,7 +9,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """PyPTO"""
-from typing import Optional, Union
+from typing import Optional, Union, List, Tuple, overload
 
 from .. import pypto_impl
 from .._element import Element
@@ -1432,3 +1432,133 @@ def gcd(
         return pypto_impl.Gcd(input, other)
     else:
         return pypto_impl.Gcd(input, pypto_impl.Element(input.dtype, other))
+
+
+@overload
+def var(
+    input: Tensor,
+    dim: List[int],
+    correction: float
+) -> Tensor:
+    """
+    Computes the variance  of 'input' over the dimensions.
+
+    This function calculates the formula: 'out = 1 / max(0, N - correction) * sum((x_i - (sum(x_i) / N))^2)'.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input Tensor to be calculated.
+    dim : List
+        Dimensions involved in calculating variance.
+    correction : float
+        The difference between sample size and sample degree if freedom. Usually take 0 or 1.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the input shape of the dimensions after reduce
+
+    Examples
+    --------
+    x = pypto.tensor([[2, 3], pypto.DT_FP32)
+    y = pypto.var(x, [1], 0)
+
+    Input  x:[[1., 2., 3.],
+              [4., 5., 6.]]
+    Output y:[0.6667, 0.6667]
+    """
+    ...
+
+
+@overload
+def var(
+    input: Tensor, 
+    dim: Union[int, List[int], Tuple[int]] = None,
+    *, 
+    correction: float = 1,
+    keepdim: bool = False
+) -> Tensor:
+    """
+    Computes the variance  of 'input' over the dimensions.
+
+    This function calculates the formula: 'out = 1 / max(0, N - correction) * sum((x_i - (sum(x_i) / N))^2)'.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input Tensor to be calculated.
+    dim : Union[int, List[int], Tuple[int]]
+        Dimensions involved in calculating variance. Default is None, means all demensions.
+    correction : float, optional
+        The difference between sample size and sample degree if freedom. Default take 1.
+    keepdim : bool, optional
+        whether the output tensor has dim retained or not. Default: False.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the input shape of the dimensions after reduce
+
+    Examples
+    --------
+    x = pypto.tensor([[2, 3], pypto.DT_FP32)
+    y = pypto.var(x, 1, correction=1, keepdim=True)
+
+    Input  x:[[1., 2., 3.],
+              [4., 5., 6.]]
+    Output y:[[1.], 
+              [1.]]
+    """
+    ...
+
+
+@op_wrapper
+def var(
+    input: Tensor, 
+    dim: Union[int, List[int], Tuple[int]] = None,
+    correction: float = 1,
+    keepdim: bool = False
+) -> Tensor:
+    """
+    Computes the variance  of 'input' over the dimensions.
+
+    This function calculates the formula: 'out = 1 / max(0, N - correction) * sum((x_i - (sum(x_i) / N))^2)'.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input Tensor to be calculated.
+    dim : Union[int, List[int], Tuple[int]]
+        Dimensions involved in calculating variance. Default is None, means all demensions.
+    correction : float, optional
+        The difference between sample size and sample degree if freedom. Default take 1.
+    keepdim : bool, optional
+        whether the output tensor has dim retained or not. Default: False.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the input shape of the dimensions after reduce
+
+    Examples
+    --------
+    x = pypto.tensor([[2, 3], pypto.DT_FP32)
+    y = pypto.var(x, 1, correction=1, keepdim=True)
+
+    Input  x:[[1., 2., 3.],
+              [4., 5., 6.]]
+    Output y:[[1.], 
+              [1.]]
+    """
+    inner_dim = None
+    if isinstance(dim, int):
+        inner_dim = [dim]
+    elif dim is None or len(dim) == 0:
+        inner_dim = []
+    elif isinstance(dim, (list, tuple)):
+        inner_dim = list(dim)
+    else:
+        raise TypeError(f"the type of dim is not supported. 'int' or 'Lise[int]' or 'Tuple[int]' is needed.")
+
+    return pypto_impl.Var(input, inner_dim, correction, keepdim)
