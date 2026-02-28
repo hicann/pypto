@@ -52,7 +52,7 @@ private:
         ReadyCoreFunctionQueue* queue[READY_QUEUE_SIZE]);
     void UpdateDeviceTaskQueueInfo(DynDeviceTask *dyntask, ReadyCoreFunctionQueue *aicpuQueue, ReadyCoreFunctionQueue *aivQueue,
         ReadyCoreFunctionQueue *aicQueue, WrapInfoQueue *wrapQueue, uint32_t *wrapTasklistAddr);
-    int BuildDynFuncData(DynDeviceTask *dyntask, uint32_t taskId, DevAscendProgram *devProg,
+    int BuildDynFuncData(DynDeviceTask *dyntask, uint32_t taskId,
         DevAscendFunctionDupped *stitchedList, uint64_t stitchedSize);
 
     // mix subgraph schedule

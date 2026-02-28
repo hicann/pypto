@@ -227,33 +227,23 @@ public:
         devProg->devArgs.toSubMachineConfig = kArgs.toSubMachineConfig;
     }
 
-    static void PrepareHcclContext(const std::vector<uint64_t> &hcclContext, DevAscendProgram *devProg) {
-        ASSERT(devProg->commGroupNum == hcclContext.size())
-            << "commGroupNum mismatch. commGroupNum = "
-            <<devProg->commGroupNum << ", hcclContext size = " << hcclContext.size();
-        ASSERT(devProg->commGroupNum <= (sizeof(devProg->hcclContext) / sizeof(uint64_t)))
-            << "commGroupNum exceeds array size. commGroupNum = "
-            << devProg->commGroupNum << ", max allowed = " << sizeof(devProg->hcclContext) / sizeof(uint64_t);
-        for (size_t i = 0; i < devProg->commGroupNum; i++) {
-            devProg->hcclContext[i] = hcclContext[i];
-        }
-    }
-
-     static void DeviceInitDistributedContextToHost(const std::vector<std::string> &groupNames, DevAscendProgram *devProg) {
-        if (devProg->hcclContext[0] != 0) {
+    template<typename DeviceMemoryTy>
+    static void DeviceInitDistributedContext(DeviceMemoryTy devMem, const std::vector<std::string> &groupNames,
+        DeviceKernelArgs &kArgs) {
+        using groupsKey = std::vector<std::string>;
+        static std::map<groupsKey, int64_t*> hostCommContextsMap;
+        static std::map<groupsKey, int64_t*> deviceCommContextsMap;
+        auto &commContextsMap = devMem.IsDevice() ? deviceCommContextsMap : hostCommContextsMap;
+        auto it = commContextsMap.find(groupNames);
+        if (it != commContextsMap.end()) {
+            kArgs.commContexts = it->second;
             return;
         }
-        auto hcclContext = DistributedContext::GetCommContextToHost(groupNames);
-        PrepareHcclContext(hcclContext, devProg);
-    }
-
-    static void DeviceInitDistributedContext(const std::vector<std::string> &groupNames,
-        DevAscendProgram *devProg) {
-        auto hcclContext = DistributedContext::GetCommContext(groupNames);
-        if ((hcclContext.size() == 0) || (devProg->hcclContext[0] == hcclContext[0])) {
-            return;
-        }
-        PrepareHcclContext(hcclContext, devProg);
+        std::vector<uint64_t> commContexts = devMem.IsDevice() ? DistributedContext::GetCommContext(groupNames) :
+            DistributedContext::GetCommContextToHost(groupNames);
+        commContexts.insert(commContexts.begin(), commContexts.size());
+        kArgs.commContexts = reinterpret_cast<int64_t*>(devMem.CopyToDev(commContexts, nullptr));
+        commContextsMap[groupNames] = kArgs.commContexts;
     }
 
     template<typename DeviceMemoryTy>
@@ -412,7 +402,8 @@ public:
     }
     static int DeviceSynchronize(rtStream_t, rtStream_t) { return 0; }
 #endif
-    static void FillDeviceKernelArgs(std::vector<uint8_t> &devProgData, DeviceKernelArgs &kargs);
+    static void FillDeviceKernelArgs(std::vector<uint8_t> &devProgData, DeviceKernelArgs &kargs,
+        const std::vector<std::string> &groupNames);
     static int64_t GetL2Offset();
     static uint8_t *CopyControlFlowCache(DevControlFlowCache *ctrlCache);
     static void FreeControlFlowCache(uint8_t *ctrlCache);

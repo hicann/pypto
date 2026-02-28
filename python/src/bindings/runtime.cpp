@@ -330,7 +330,7 @@ public:
         workspaceSize = devProg->memBudget.Total();
         InitCachedArgs();
         auto aicpuArgs = (AiCpuArgs *)aicpuArgBuf.data();
-        DeviceLauncher::FillDeviceKernelArgs(dynAttr->devProgBinary, aicpuArgs->kArgs);
+        DeviceLauncher::FillDeviceKernelArgs(dynAttr->devProgBinary, aicpuArgs->kArgs, dynAttr->commGroupNames);
     }
 
     uint8_t *FindCtrlFlowCache(std::vector<std::vector<int64_t>> &inputs, bool isOriginShape) {

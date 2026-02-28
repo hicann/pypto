@@ -157,12 +157,12 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape) {
             {0, {2, {n1, n1}}},
             {0, {2, {n1, n1}}},
         };
-        DevStartArgsBase arg = {devTensorList, 2, 1, nullptr};
+        DevStartArgsBase arg = {devTensorList, 2, 1, nullptr, 0};
         EXPECT_TRUE(ctrlFlowCache->MatchInputOutput(&arg));
     }
     {
         // check failed for count
-        DevStartArgsBase arg = {nullptr, 0, 0, nullptr};
+        DevStartArgsBase arg = {nullptr, 0, 0, nullptr, 0};
         EXPECT_FALSE(ctrlFlowCache->MatchInputOutput(&arg));
     }
     {
@@ -172,7 +172,7 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape) {
             {0, {2, {n1, n1}}},
             {0, {3, {n1, n1, n1}}},
         };
-        DevStartArgsBase arg = {devTensorList, 2, 1, nullptr};
+        DevStartArgsBase arg = {devTensorList, 2, 1, nullptr, 0};
         EXPECT_FALSE(ctrlFlowCache->MatchInputOutput(&arg));
     }
     {
@@ -182,7 +182,7 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape) {
             {0, {2, {n1, n1}}},
             {0, {2, {n1, n1 + n1}}},
         };
-        DevStartArgsBase arg = {devTensorList, 2, 1, nullptr};
+        DevStartArgsBase arg = {devTensorList, 2, 1, nullptr, 0};
         EXPECT_FALSE(ctrlFlowCache->MatchInputOutput(&arg));
     }
 

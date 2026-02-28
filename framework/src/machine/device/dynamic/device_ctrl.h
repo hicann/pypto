@@ -249,7 +249,8 @@ public:
 
         devStartArgs->inputSymbolList = nullptr;
         devStartArgs->inputSymbolSize = 0;
-        devStartArgs->hcclContextAddr = (uint64_t*)&devProg->hcclContext[0];
+        devStartArgs->commGroupNum = (kargs->commContexts == nullptr) ? 0 : static_cast<uint64_t>(*kargs->commContexts);
+        devStartArgs->commContexts = (devStartArgs->commGroupNum == 0) ? nullptr : kargs->commContexts + 1;
 
         DevControlFlowCache *ctrlFlowCacheBase = reinterpret_cast<DevControlFlowCache *>(kargs->ctrlFlowCache);
         DevControlFlowCache *ctrlFlowCache;

@@ -175,7 +175,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     CheckDeviceId();
     DeviceKernelArgs kArgs;
     DeviceLauncherConfigFillDeviceInfo(config);
-    DeviceInitDistributedContext(dynAttr->commGroupNames, GetDevProg(function));
+    DeviceInitDistributedContext(DeviceMemoryUtils(), dynAttr->commGroupNames, kArgs);
 
     HOST_PERF_TRACE(TracePhase::RunDevEnvReady);
     DeviceInitTilingData(DeviceMemoryUtils(), kArgs, dynAttr->devProgBinary, inputDevCtrlCache, config, cachedOperator);
@@ -471,15 +471,18 @@ AclModeGuard::~AclModeGuard() {
 #endif
 }
 
-void DeviceLauncher::FillDeviceKernelArgs(std::vector<uint8_t> &devProgData, DeviceKernelArgs &kargs) {
+void DeviceLauncher::FillDeviceKernelArgs(std::vector<uint8_t> &devProgData, DeviceKernelArgs &kargs,
+    const std::vector<std::string> &groupNames) {
 #ifdef BUILD_WITH_CANN
     DeviceLauncherConfig config;
     CachedOperator cache;
     DeviceLauncherConfigFillDeviceInfo(config);
     DeviceInitTilingData(DeviceMemoryUtils(), kargs, devProgData, nullptr, config, &cache);
+    DeviceInitDistributedContext(DeviceMemoryUtils(), groupNames, kargs);
 #else
     (void)devProgData;
     (void)kargs;
+    (void)groupNames;
 #endif
 }
 

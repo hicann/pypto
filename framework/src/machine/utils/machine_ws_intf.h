@@ -104,6 +104,7 @@ struct DeviceKernelArgs {
     int64_t *workspace{nullptr};
     int64_t *tilingdata{nullptr};
     int64_t *cfgdata{nullptr};
+    int64_t *commContexts{nullptr};
     // following 4 paras need remove to binary
     void *costmodeldata{nullptr};
     void *aicoreModel{nullptr};

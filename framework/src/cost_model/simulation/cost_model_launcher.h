@@ -214,7 +214,7 @@ private:
         config_.onBoard = false;
         auto dynAttr = function_->GetDyndevAttribute();
         DeviceLauncherConfigFillDeviceInfo(config_);
-        DeviceInitDistributedContextToHost(dynAttr->commGroupNames, GetDevProg(function_));
+        DeviceInitDistributedContext(MemoryHelper(true), dynAttr->commGroupNames, kArgs);
         DeviceInitTilingData(MemoryHelper(true), kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
         InitKernelInOuts(kArgs, inputs, outputs, true);
         RunCostModel(&kArgs);

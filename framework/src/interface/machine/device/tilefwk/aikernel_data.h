@@ -65,7 +65,8 @@ struct DevStartArgsBase {
     __gm__ DevTensorData *devTensorList;
     uint64_t inputTensorSize;
     uint64_t outputTensorSize;
-    uint64_t *hcclContextAddr;
+    __gm__ int64_t *commContexts;
+    uint64_t commGroupNum;
 
 #ifdef __TILE_FWK_HOST__
     int GetInputTensorSize() const { return inputTensorSize; }
@@ -96,8 +97,6 @@ struct DynFuncData {
     uint64_t workspaceAddr;
     uint64_t stackWorkSpaceAddr;
     uint64_t stackWorkSpaceSize;
-    uint64_t hcclContext[HCCL_GROUP_NUM]{0, 0};
-    uint64_t commGroupNum{0};
     __gm__ DevStartArgsBase *startArgs;
 };
 

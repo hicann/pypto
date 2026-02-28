@@ -1966,7 +1966,6 @@ struct EncodeDevAscendProgramInfo {
                 dyndevAttr->inoutLink.partialUpdateSlotIdexList,
                 fillContent);
         devProg->InitPrefetchInfoList(initOffset, dyndevAttr->l2InfoList, fillContent);
-        devProg->commGroupNum = static_cast<uint64_t>(dyndevAttr->commGroupNames.size());
         devProg->InitDisableL2List(initOffset, dyndevAttr->disableL2List, fillContent);
 
         // control flow cache is always at the back of the program. So it should be the last.
