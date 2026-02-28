@@ -53,6 +53,7 @@ constexpr int64_t DEFAULT_CACHE_DEVICE_TASK_NUM = 10000;
 constexpr int32_t MAX_CELLMATCHSSTRIDE = 20000000;
 static constexpr uint64_t GENERAL_METADATA_SIZE_MIN = 4 * MEBI;
 constexpr uint32_t FRIENDLY_CACHE_ALIGN_U64_SIZE = 2; // 友好的cache对齐是2个u64
+static uint32_t MAX_UNROLL_TIMES = 1; // the max num of unroll_list
 
 void DevAscendFunction::InitIncastOutcastAttr(
         uintdevptr_t &initOffset,
@@ -1899,12 +1900,20 @@ struct ControlFlowCacheFactor {
 };
 
 static int EstimatedStitchingCount() {
+    uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
+    if (stitchNum > 0) {
+        return stitchNum * MAX_UNROLL_TIMES;
+    }
     int value = config::GetRuntimeOption<int>(STITCH_FUNCTION_OUTCAST_MEMORY);
     ASSERT(value > 0) << "Invalid value for STITCH_FUNCTION_OUTCAST_MEMORY: " << value << ", must be greater than 0";
     return value;
 }
 
 static int WorkspaceRecyclePeriod() {
+    uint16_t stitchNum = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
+    if (stitchNum > 0) {
+        return stitchNum * MAX_UNROLL_TIMES;
+    }
     int value = config::GetRuntimeOption<int>(STITCH_FUNCTION_INNER_MEMORY);
     ASSERT(value > 0) << "Invalid value for STITCH_FUNCTION_INNER_MEMORY: " << value << ", must be greater than 0";
     return value;
@@ -1920,6 +1929,22 @@ void DevAscendProgram::InitControlFlowCache(
     controlFlowCache.Init(dyndevAttr.get(), ctrlFlowCacheSize, runtimeOutcastPoolSize, initOffset);
 }
 
+static int ParseUnrollTimes(const std::string &rawName) {
+    const static std::string UNROLL_MARKS[2] = {"_LoopUnroll", "_Unroll"};
+    int unrollTimes = 1;
+    for (auto& unrollMask : UNROLL_MARKS) {
+        auto unrollPos = rawName.rfind(unrollMask);
+        if (unrollPos == std::string::npos) {
+            continue;
+        }
+        std::string suffix = rawName.substr(unrollPos + unrollMask.length());
+        if (std::isdigit(suffix.front())) {
+            unrollTimes *= std::stoi(suffix);
+        }
+    }
+    return unrollTimes;
+}
+
 struct EncodeDevAscendProgramInfo {
     Function *func;
     std::shared_ptr<DyndevFunctionAttribute> dyndevAttr;
@@ -1929,6 +1954,10 @@ struct EncodeDevAscendProgramInfo {
     explicit EncodeDevAscendProgramInfo(Function *tfunc) : func(tfunc) {
         ASSERT(func->GetDyndevAttribute() != nullptr) << "DyndevAttribute is null for function: " << func;
         dyndevAttr = func->GetDyndevAttribute();
+        for (auto &devRoot : dyndevAttr->funcGroup.devRootList) {
+            int unroll = ParseUnrollTimes(devRoot->GetRawName());
+            MAX_UNROLL_TIMES = std::max(MAX_UNROLL_TIMES, (uint32_t)unroll);
+        }
     }
 
     void Init(DevAscendProgram *devProg, bool fillContent) {
@@ -2075,22 +2104,6 @@ static bool IsAssembleSlot(std::vector<SlotInfo> &slots, DevAscendFunction *func
     }
     return isAssemble;
 };
-
-static int ParseUnrollTimes(const std::string &rawName) {
-    const static std::string UNROLL_MARKS[2] = {"_LoopUnroll", "_Unroll"};
-    int unrollTimes = 1;
-    for (auto& unrollMask : UNROLL_MARKS) {
-        auto unrollPos = rawName.rfind(unrollMask);
-        if (unrollPos == std::string::npos) {
-            continue;
-        }
-        std::string suffix = rawName.substr(unrollPos + unrollMask.length());
-        if (std::isdigit(suffix.front())) {
-            unrollTimes *= std::stoi(suffix);
-        }
-    }
-    return unrollTimes;
-}
 
 static uint64_t CalcUnrolledRootBudget(uint64_t budget, int unrollTimes, int configMultiplier) {
     ASSERT(unrollTimes > 0) << "Invalid unrollTimes:  " << unrollTimes << ", must be greater than 0";
@@ -2336,6 +2349,10 @@ void EncodeDevAscendProgram(Function *func, uint64_t &offset, DevAscendProgram *
         base->memBudget.aicoreSpilled = tensorWsRes.perCoreSpilledMem * maxCoreNum;
         base->devArgs.machineConfig = func->paramConfigs_.machineConfig_;
         base->stitchFunctionNumInitial = func->paramConfigs_.stitchFunctionNumInitial_;
+        uint16_t value = config::GetRuntimeOption<uint16_t>(STITCH_FUNCTION_MAX_NUM);
+        if (value > 0) {
+            base->stitchFunctionNumInitial = value;
+        }
         base->stitchFunctionNumStep = func->paramConfigs_.stitchFunctionNumStep_;
         base->stitchFunctionsize = config::GetRuntimeOption<uint32_t>(STITCH_FUNCTION_SIZE);
         base->memBudget.metadata.general = CalcGeneralMetadataSlotWorkspace(base);

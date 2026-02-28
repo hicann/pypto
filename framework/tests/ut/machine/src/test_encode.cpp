@@ -40,6 +40,7 @@ TEST_F(TestDevEncode, DevSymShape) {
 }
 
 TEST_F(TestDevEncode, test_dev_encode_program) {
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 64);
     config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
     TileShape::Current().SetVecTile(32, 32);
     TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
@@ -70,6 +71,7 @@ TEST_F(TestDevEncode, test_dev_encode_program) {
     ASSERT_NE(funcDynDev, nullptr);
     DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(funcDynDev->devProgBinary.data());
     ASSERT_NE(devProg, nullptr);
+    EXPECT_EQ(devProg->stitchFunctionNumInitial, 64);
     devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg), true);
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;

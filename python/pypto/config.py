@@ -197,6 +197,7 @@ def set_runtime_options(*,
                         stitch_function_inner_memory: Optional[int] = None,
                         stitch_function_outcast_memory: Optional[int] = None,
                         stitch_function_num_initial: Optional[int] = None,
+                        stitch_function_max_num: Optional[int] = None,
                         stitch_function_num_step: Optional[int] = None,
                         stitch_function_size: int = None,
                         stitch_cfgcache_size: Optional[int] = None,
@@ -223,6 +224,11 @@ def set_runtime_options(*,
 
     stitch_function_num_initial : int
         The amount of computation tasks for the first stitch task submitted to
+        the scheduling AICPU for processing, controlled in the ctrlflow AICPU
+        during machine runtime.
+
+    stitch_function_max_num : int
+        The amount of computation tasks for the stitch task submitted to
         the scheduling AICPU for processing, controlled in the ctrlflow AICPU
         during machine runtime.
 
