@@ -71,6 +71,7 @@ struct CalcOps {
     void (*Round)(const TensorData &, const TensorData &, int);
     void (*Reciprocal)(const TensorData &, const TensorData &);
     void (*Relu)(const TensorData &, const TensorData &);
+    void (*Log1p)(const TensorData &, const TensorData &);
     void (*BitwiseNot)(const TensorData &, const TensorData &);
     void (*Abs)(const TensorData &, const TensorData &);
     void (*Brcb)(const TensorData &, const TensorData &);  

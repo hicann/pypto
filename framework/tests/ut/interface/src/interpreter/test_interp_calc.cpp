@@ -204,6 +204,15 @@ TEST_F(TorchAdaptorTest, Trunc) {
     ASSERT_ALLCLOSE(out, golden);
 }
 
+TEST_F(TorchAdaptorTest, Log1p) {
+    // ceil
+    auto self = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    calc::Log1p(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
 TEST_F(TorchAdaptorTest, UnaryOps) {
     {
         // rsqrt

@@ -139,6 +139,9 @@ inline void Ln(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 inline void IsFinite(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->IsFinite(Trans(out), Trans(self));
 }
+inline void Log1p(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Log1p(Trans(out), Trans(self));
+}
 inline void LogicalNot(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->LogicalNot(Trans(out), Trans(self));
 }

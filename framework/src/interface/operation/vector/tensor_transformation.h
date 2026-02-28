@@ -29,7 +29,7 @@ void ExpandWithResultValidShape(Function &function, const TileShape &tileShape, 
     const LogicalTensorPtr &result, const std::vector<SymbolicScalar> resultValidShape);
 Tensor TensorFullOperation(Function &function, const Element &src, const SymbolicScalar &dynValue,
     DataType dtype, const std::vector<int64_t> &dstShape, const std::vector<SymbolicScalar> &validShape);
-
+    
 enum class CastOpType {
     CAST,
     // FLOOR,

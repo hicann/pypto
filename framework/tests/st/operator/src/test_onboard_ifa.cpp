@@ -248,6 +248,35 @@ TEST_F(OnBoardIFATest, test_32_1_tileop_exp) {
     int ret = resultCmp(golden, res, 0.001f);
     EXPECT_EQ(ret, true);
 }
+// LOG1P (32, 1)
+TEST_F(OnBoardIFATest, test_32_1_tileop_log1p) {
+    aclInit(nullptr);
+    rtSetDevice(GetDeviceIdByEnvVar());
+    int outCap = 32 * 1;
+    uint64_t outputSize = outCap * sizeof(float);
+    uint8_t* out_ptr = allocDevAddr(outputSize);
+    PROGRAM("Log1p") {
+        std::vector<int64_t> shape = {32, 1};
+        void *x_ptr = readToDev(GetGoldenDir() + "/x.bin", outCap);
+        TileShape::Current().SetVecTile({8, 1});
+        Tensor input_a(DataType::DT_FP32, shape, (uint8_t *)x_ptr, "A");
+        Tensor output(DataType::DT_FP32, shape, out_ptr, "C");
+
+        config::SetBuildStatic(true);
+        FUNCTION("Log1p_T", {input_a, output}) {
+            output = Log1p(input_a);
+        }
+    }
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+
+    std::vector<float> golden(outCap);
+    std::vector<float> res(outCap);
+    machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
+    readInput(GetGoldenDir() + "/res.bin", golden);
+
+    int ret = resultCmp(golden, res, 0.001f);
+    EXPECT_EQ(ret, true);
+}
 
 // MAX (32, 1)
 TEST_F(OnBoardIFATest, test_32_1_maximum) {

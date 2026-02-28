@@ -317,6 +317,7 @@ enum class LogBaseType {
     LOG_10,
 };
 Tensor Log(const Tensor &self, LogBaseType base = LogBaseType::LOG_E);
+Tensor Log1p(const Tensor &self);
 
 Tensor OneHot(const Tensor &self, int numClasses);
 

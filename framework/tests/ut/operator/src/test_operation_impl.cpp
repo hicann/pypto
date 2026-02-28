@@ -399,6 +399,45 @@ TEST_F(OperationImplTest, Test_Sign_INT16) {
     }
 }
 
+TEST_F(OperationImplTest, Test_Log1p_FP16) {
+    PROGRAM("Log1p") {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP16, shape, "A");
+        auto output = Tensor(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Log1p_FP16") {
+            output = Log1p(input_a);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Log1p_FP32) {
+    PROGRAM("Log1p") {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP32, shape, "A");
+        auto output = Tensor(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Log1p_FP32") {
+            output = Log1p(input_a);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Log1p_BF16) {
+    PROGRAM("Log1p") {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_BF16, shape, "A");
+        auto output = Tensor(DT_BF16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Log1p_BF16") {
+            output = Log1p(input_a);
+        }
+    }
+}
+
 TEST_F(OperationImplTest, Test_WhereTT_BF16) {
     PROGRAM("Where") {
         std::vector<int64_t> shape = {128, 32};

@@ -303,6 +303,7 @@ def gen_gather_data_3d(
         "OnBoardIFATest.test_32_128_tileop_exp",
         "OnBoardIFATest.test_32_1_tileop_exp",
         "OnBoardIFATest.test_32_1_maximum",
+        "OnBoardIFATest.test_32_1_tileop_log1p",
         "OnBoardIFATest.test_32_1_reciprocal",
         "OnBoardIFATest.test_operation_32_128_row_max_single",
         "OnBoardIFATest.test_operation_32_128_row_sum_single",
@@ -589,6 +590,21 @@ def gen_ifa_op_golden(case_name: str, output: Path) -> bool:
             x = np.random.uniform(-1, 1, shape).astype(dtype)
             x.tofile(x_path)
             x = np.reciprocal(x)
+            x.tofile(o_path)
+            return True
+    elif case_name == "OnBoardIFATest.test_32_1_tileop_log1p":
+        dtype = np.float32
+        shape = [32, 1]
+        x_path = Path(output, 'x.bin')
+        o_path = Path(output, 'res.bin')
+        complete = x_path.exists() and o_path.exists()
+        if complete:
+            logging.debug("Case(%s), Golden complete.", case_name)
+            return True
+        else:
+            x = np.random.uniform(-1, 1, shape).astype(dtype)
+            x.tofile(x_path)
+            x = np.log1p(x)
             x.tofile(o_path)
             return True
     elif case_name == "OnBoardIFATest.test_operation_32_128_row_max_single":

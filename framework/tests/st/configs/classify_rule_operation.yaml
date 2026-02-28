@@ -173,6 +173,8 @@ stest:
       - TestSqrt/SqrtOperationTest.TestSqrt/0
       - TestLog/LogOperationTest.TestLog/2
       - TestLog/LogOperationTest.TestLog/5
+      - TestLog1p/Log1pOperationTest.TestLog1p/0
+      - TestLog1p/Log1pOperationTest.TestLog1p/7
       - TestSub/SubOperationTest.TestSub/2
       - TestSub/SubOperationTest.TestSub/3
       - TestSubs/SubsOperationTest.TestSubs/0

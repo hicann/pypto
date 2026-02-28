@@ -546,6 +546,18 @@ class Tensor:
         return pypto.log(self)
 
     @source_location
+    def log1p(self) -> 'Tensor':
+        return pypto.log1p(self)
+
+    @source_location
+    def log10(self) -> 'Tensor':
+        return pypto.log10(self)
+        
+    @source_location
+    def log2(self) -> 'Tensor':
+        return pypto.log2(self)
+
+    @source_location
     def logical_not(self) -> 'Tensor':
         return pypto.logical_not(self)
 

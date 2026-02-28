@@ -106,6 +106,7 @@ void bind_operation(py::module &m) {
     m.def(
         "Log", [](const Tensor &self, const LogBaseType base) { return npu::tile_fwk::Log(self, base); },
         "Tensor log.");
+    m.def("Log1p", [](const Tensor &self) { return npu::tile_fwk::Log1p(self); }, "Tensor log1p.");
     m.def(
         "Pow", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Pow(self, other); }, "Tensor pow.");
     m.def(
