@@ -35,6 +35,8 @@ void bind_operation(py::module &m) {
     m.def(
         "Fmod", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Fmod(self, other); }, "Tensor fmod.");
     m.def(
+        "Gcd", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::Gcd(self, other); }, "Tensor gcd.");
+    m.def(
         "BitwiseAnd", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseAnd(self, other); }, "Tensor bitwise and.");
     m.def(
         "BitwiseOr", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseOr(self, other); }, "Tensor bitwise or.");
@@ -130,6 +132,9 @@ void bind_operation(py::module &m) {
     m.def(
         "Fmod", [](const Tensor &self, const Element &other) { return npu::tile_fwk::Fmod(self, other); },
         "Tensor mod scalar.");
+    m.def(
+        "Gcd", [](const Tensor &self, const Element &other) { return npu::tile_fwk::Gcd(self, other); },
+        "Tensor gcd scalar.");
     m.def(
         "BitwiseRightShift", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseRightShift(self, other); },
         "Tensor bitwise right shift.");

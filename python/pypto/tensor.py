@@ -616,6 +616,10 @@ class Tensor:
         return pypto.cumsum(self, dim)
 
     @source_location
+    def gcd(self: 'Tensor', other: 'Tensor | int') -> 'Tensor':
+        return pypto.gcd(self, other)
+
+    @source_location
     def triu(self: 'Tensor', diagonal: 'int | SymbolicScalar' = 0) -> 'Tensor':
         return pypto.triu(self, diagonal)
 

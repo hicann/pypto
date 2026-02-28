@@ -137,6 +137,57 @@ TILEOP void TBitwiseOrS(T0 dst, T1 src0, Scalar src1) {
     BinaryScalarCompute<BinaryScalarOp::BITWISEOR, LastUse>(dst, src0, src1);
 }
 
+TILEOP int gcds(int a, int b) {
+    if (a < 0) {
+        a = 0 - a;
+    }
+    if (b < 0) {
+        b = 0 - b;
+    }
+    while (a % b != 0) {
+        int c = a % b;
+        a = b;
+        b = c;
+    }
+    return b;
+}
+
+#define OP_TILE_OP_GCDS TGcdS
+template <typename Scalar, typename T0, typename T1>
+TILEOP void TGcdS(T0 dst, T1 src0, Scalar src1) {
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto shape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto shape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
+    auto src0Addr = (__ubuf__ typename T1::Type *)((uint64_t)(src0.GetAddr()));
+    auto dstAddr = (__ubuf__ typename T0::Type *)((uint64_t)(dst.GetAddr()));
+
+    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    for (LoopVar n = 0; n < shape0; n++) {
+        for (LoopVar j = 0; j < shape1; j++) {
+            for (LoopVar k = 0; k < shape2; k++) {
+                for (LoopVar m = 0; m < shape3; m++) {
+                    for (LoopVar i = 0; i < shape4; i++) {
+                        int tmpStride = n * dstStride0 + j * dstStride1 + k * dstStride2 + m * dstStride3 + i;
+                        dstAddr[tmpStride] = gcds(src0Addr[tmpStride], src1);
+                    }
+                }
+            }
+        }
+    }
+    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+}
+
 #define OP_TILE_OP_MODS TModS
 template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TModS(T0 dst, T1 src0, Scalar src1) {

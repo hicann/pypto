@@ -228,6 +228,27 @@ Tensor BitwiseXor(const Tensor &self, const Tensor &other) {
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEXOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
+Tensor Gcd(const Tensor &self, const Tensor &other) {
+    DECLARE_TRACER();
+    auto shapeSize = self.GetShape().size();
+    auto dataType = self.GetDataType();
+    ASSERT(dataType == other.GetDataType()) << "Inputs must have the same dataType.";
+    ASSERT(SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5) << "This operation's input only support 1-5 dims";
+    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
+    ASSERT(GCD_SUPPORT_DATATYPES.count(dataType))<< "This datatype is not supported";
+    RETURN_CALL(BinaryOperation<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self, other);
+}
+
+Tensor Gcd(const Tensor &self, const Element &other) {
+    DECLARE_TRACER();
+    auto shapeSize = self.GetShape().size();
+    auto dataType = self.GetDataType();
+    ASSERT(SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5) << "This operation's input only support 1-5 dims";
+    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
+    ASSERT(GCD_SUPPORT_DATATYPES.count(dataType))<< "This datatype is not supported";
+    RETURN_CALL(BinaryOperationScalar<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), other);
+}
+
 template <BinaryOpType T>
 void TiledBinaryOperationScalar(Function &function, const TileShape &tileShape, size_t cur, LogicalInput &input1,
     Element &value, const LogicalTensorPtr &result, TileInfo &resultTileInfo, bool reverseOperand) {
@@ -565,6 +586,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_BITWISEAND, Opcode::OP_BITWISEAND, BinaryOperat
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEOR, Opcode::OP_BITWISEOR, BinaryOperationTileFunc<BinaryOpType::BITWISEOR>);
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, BinaryOperationTileFunc<BinaryOpType::BITWISEXOR>);
 REGISTER_OPERATION_TILED_FUNC(OP_COPYSIGN, Opcode::OP_COPYSIGN, BinaryOperationTileFunc<BinaryOpType::COPYSIGN>);
+REGISTER_OPERATION_TILED_FUNC(OP_GCD, Opcode::OP_GCD, BinaryOperationTileFunc<BinaryOpType::GCD>);
 
 REGISTER_OPERATION_TILED_FUNC(OP_ADDS, Opcode::OP_ADDS, BinaryOperationScalarTileFunc<BinaryOpType::ADD>);
 REGISTER_OPERATION_TILED_FUNC(OP_SUBS, Opcode::OP_SUBS, BinaryOperationScalarTileFunc<BinaryOpType::SUB>);
@@ -576,6 +598,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_MODS, Opcode::OP_MODS, BinaryOperationScalarTil
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEANDS, Opcode::OP_BITWISEANDS, BinaryOperationScalarTileFunc<BinaryOpType::BITWISEAND>);
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEORS, Opcode::OP_BITWISEORS, BinaryOperationScalarTileFunc<BinaryOpType::BITWISEOR>);
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEXORS, Opcode::OP_BITWISEXORS, BinaryOperationScalarTileFunc<BinaryOpType::BITWISEXOR>);
+REGISTER_OPERATION_TILED_FUNC(OP_GCDS, Opcode::OP_GCDS, BinaryOperationScalarTileFunc<BinaryOpType::GCD>);
 
 REGISTER_OPERATION_TILED_FUNC(OP_S_ADDS, Opcode::OP_S_ADDS, BinaryOperationAllScalarResTileFunc<BinaryOpType::S_ADD>);
 REGISTER_OPERATION_TILED_FUNC(OP_S_SUBS, Opcode::OP_S_SUBS, BinaryOperationAllScalarResTileFunc<BinaryOpType::S_SUB>);

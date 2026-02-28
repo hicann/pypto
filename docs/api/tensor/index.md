@@ -23,6 +23,7 @@ pypto-Tensor-index_add
 pypto-Tensor-index_add_
 pypto-Tensor-format
 pypto-Tensor-gather
+pypto-Tensor-gcd
 pypto-Tensor-get_cache_policy
 pypto-Tensor-log
 pypto-Tensor-logical_not

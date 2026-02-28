@@ -102,6 +102,10 @@ stest:
       - TestFmod/FmodOperationTest.TestFmod/1
       - TestConcat/ConcatOperationTest.TestConcat/0
       - TestConcat/ConcatOperationTest.TestConcat/1
+      - TestGcd/GcdOperationTest.TestGcd/3
+      - TestGcd/GcdOperationTest.TestGcd/4
+      - TestGcds/GcdsOperationTest.TestGcds/1
+      - TestGcds/GcdsOperationTest.TestGcds/2
       - TestCumSum/CumSumOperationTest.TestCumSum/2
       - TestCumSum/CumSumOperationTest.TestCumSum/3
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/0

@@ -95,6 +95,7 @@ struct CalcOps {
     void (*BitwiseAndS)(const TensorData &, const TensorData &, const Element &, bool);
     void (*BitwiseOrS)(const TensorData &, const TensorData &, const Element &, bool);
     void (*BitwiseXorS)(const TensorData &, const TensorData &, const Element &, bool);
+    void (*GcdS)(const TensorData &, const TensorData &, const Element &);
 
     void (*Add)(const TensorData &, const TensorData &, const TensorData &);
     void (*Sub)(const TensorData &, const TensorData &, const TensorData &);
@@ -106,6 +107,7 @@ struct CalcOps {
     void (*BitwiseOr)(const TensorData &, const TensorData &, const TensorData &);
     void (*BitwiseXor)(const TensorData &, const TensorData &, const TensorData &);
     void (*CopySign)(const TensorData &, const TensorData &, const TensorData &);
+    void (*Gcd)(const TensorData &, const TensorData &, const TensorData &);
 
     void (*PairSum)(const TensorData &, const TensorData &, const TensorData &);
     void (*PairMax)(const TensorData &, const TensorData &, const TensorData &);

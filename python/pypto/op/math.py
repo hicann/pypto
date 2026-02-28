@@ -1307,3 +1307,36 @@ def cbrt(self: Tensor) -> Tensor:
     Output y:[[2, -2]]
     """
     return copysign(pow(abs(self), 1.0 / 3.0), self)
+
+
+@op_wrapper
+def gcd(
+    input: Tensor,
+    other: Union[Tensor, int]
+) -> Tensor:
+    """
+    This function returns the greatest common divisor of the corresponding elements of input and other.
+    Parameters
+    ---------
+    input: Tensor
+        tensor to be calculated.
+    other: Tensor or int
+        tensor to be calculated.
+    out: Tensor
+        The tensor after calculating the greatest common divisor of the corresponding elements of input and other.
+    Examples
+    ---------
+    x = pypto.tensor([2, 3], pypto.data_type.DT_INT32) 
+    y = pypto.tensor([2, 3], pypto.data_type.DT_INT32) 
+    out = pypto.gcd(x, y)
+    Input  x : [[1 1 2],
+                [3 4 5]]
+           y : [[6 6 6],
+                [6 6 6]]
+    Output out:[[1 1 2],
+                [3 2 1]]
+    """
+    if isinstance(other, pypto_impl.Tensor):
+        return pypto_impl.Gcd(input, other)
+    else:
+        return pypto_impl.Gcd(input, pypto_impl.Element(input.dtype, other))

@@ -1764,6 +1764,39 @@ def gen_gatherelement_op_golden(
     return gen_op_golden("GatherElement", golden_func, output, case_index)
 
 
+def gcd_golden_func(inputs: list, config: dict):
+    input = from_numpy(inputs[0])
+    other = from_numpy(inputs[1])
+    res = torch.gcd(input, other)
+    return [to_numpy(res)]
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestGcd/GcdOperationTest.TestGcd",
+    ]
+)
+def gen_gcd_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Gcd", gcd_golden_func, output, case_index)
+
+
+def gcds_golden_func(inputs: list, config: dict):
+    input = from_numpy(inputs[0])
+    params = config.get("params")
+    other = int(params["scalar"])
+    res = torch.gcd(input, torch.tensor(other))
+    return [to_numpy(res)]
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestGcds/GcdsOperationTest.TestGcds",
+    ]
+)
+def gen_gcds_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Gcds", gcds_golden_func, output, case_index)
+
+
 def cumsum_golden_func(inputs: list, config: dict):
     params = config.get("params")
     axis = params["axis"]
