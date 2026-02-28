@@ -9,7 +9,8 @@
 
 ## 功能说明
 
-设置cube计算中的TileShape大小。
+在调用`pypto.matmul`前必须调用本接口设置矩阵运算的切分大小，具体切分配置可参考[Matmul高性能编程](https://gitcode.com/cann/pypto/blob/master/docs/tutorials/debug/matmul_performance_guide.md)。
+
 
 ## 函数原型
 
