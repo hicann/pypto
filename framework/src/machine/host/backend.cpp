@@ -802,6 +802,9 @@ static void OverCallOpMaxNum(Function *devRoot, DevAscendFunction *funcBin){
 
 static void CompileControlFlow(const std::string &aicpuDirPath,
                                const std::string &funcName, const std::string &constrolFlow, std::string express) {
+    if (std::getenv("ENABLE_CTRLFLOW_COMPILE") == nullptr) {
+        return;
+    }
     std::string controlFlowCompilepath = aicpuDirPath + "/" + funcName + "/aicpu";
     MACHINE_LOGD("Dumpath is %s, functionName %s, path is %s",
                  aicpuDirPath.c_str(), funcName.c_str(), controlFlowCompilepath.c_str());
