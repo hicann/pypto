@@ -74,7 +74,6 @@ def pre_attn(
     tril: [L, L]
     mask: [L, L]
 
-    Return
     ---------
     gate_cum: [L, 1]
     decay_mask: [L, L]
@@ -465,16 +464,21 @@ def recurrent_state_attn_all(**kwargs) -> tuple[pypto.Tensor, pypto.Tensor]:
     return chunk_attn_out, state_new
 
 
-def chunk_gated_delta_rule(query, key, value, beta, gate, states, mask, 
-    tril_mask, eye, act_seq_len, core_attn_out, last_state_data):
+def chunk_gated_delta_rule(b, nqk, nv, d, l):
     
     t = pypto.frontend.dynamic("t")
-    query_shape = (t, query.shape[1], query.shape[2])
-    key_shape = (t, key.shape[1], key.shape[2])
-    value_shape = (t, value.shape[1], value.shape[2])
-    beta_shape = (t, beta.shape[1])
-    gate_shape = (t, gate.shape[1])
-    core_attn_out_shape = (t, core_attn_out.shape[1], core_attn_out.shape[2])
+    query_shape = (t, nqk, d)
+    key_shape = (t, nqk, d)
+    value_shape = (t, nv, d)
+    beta_shape = (t, nv)
+    gate_shape = (t, nv)
+    states_shape = (b, nv, d, d)
+    mask_shape = (l, l)
+    tril_mask_shape = (l, l)
+    eye_shape = (16, l)
+    act_seq_len_shape = (b + 1,)
+    core_attn_out_shape = (t, nv, d)
+    last_state_data_shape = (b, nv, d, d)
     
     @pypto.frontend.jit(
         runtime_options={
@@ -489,13 +493,13 @@ def chunk_gated_delta_rule(query, key, value, beta, gate, states, mask,
             value: pypto.Tensor(value_shape, pypto.DT_FP32), 
             beta: pypto.Tensor(beta_shape, pypto.DT_FP32), 
             gate: pypto.Tensor(gate_shape, pypto.DT_FP32), 
-            states: pypto.Tensor(states.shape, pypto.DT_FP32), 
-            mask: pypto.Tensor(mask.shape, pypto.DT_FP32), 
-            tril_mask: pypto.Tensor(tril_mask.shape, pypto.DT_FP32), 
-            eye: pypto.Tensor(eye.shape, pypto.DT_FP32), 
-            act_seq_len: pypto.Tensor(act_seq_len.shape, pypto.DT_INT32), 
+            states: pypto.Tensor(states_shape, pypto.DT_FP32), 
+            mask: pypto.Tensor(mask_shape, pypto.DT_FP32), 
+            tril_mask: pypto.Tensor(tril_mask_shape, pypto.DT_FP32), 
+            eye: pypto.Tensor(eye_shape, pypto.DT_FP32), 
+            act_seq_len: pypto.Tensor(act_seq_len_shape, pypto.DT_INT32), 
             core_attn_out: pypto.Tensor(core_attn_out_shape, pypto.DT_FP32), 
-            last_state_data: pypto.Tensor(last_state_data.shape, pypto.DT_FP32)
+            last_state_data: pypto.Tensor(last_state_data_shape, pypto.DT_FP32)
         ):
         """
         Chunk Gated Delta Rule fused operator.
@@ -533,7 +537,7 @@ def chunk_gated_delta_rule(query, key, value, beta, gate, states, mask,
                 nqk_idx = nv_idx // group
                 pypto.set_vec_tile_shapes(16, 16, 128, 128)
                 last_state = states[b_idx, nv_idx]
-                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx"):
+                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx", unroll_list=[16, 1]):
                     bs_ofs = b_ofs + s_idx
                     actual_l = (s - s_idx).min(l)
                     ## view
@@ -580,20 +584,24 @@ def chunk_gated_delta_rule(query, key, value, beta, gate, states, mask,
                     core_attn_out[bs_ofs:bs_ofs + l, nv_idx] = chunk_attn_out
                     last_state_data[b_idx, nv_idx] = last_state
                     
-    kernel(query, key, value, beta, gate, states, mask, tril_mask, eye, 
-        act_seq_len, core_attn_out, last_state_data)
+    return kernel
 
 
-def chunk_gated_delta_rule_unaligned(query, key, value, beta, gate, states, mask, tril_mask, 
-    eye, act_seq_len, core_attn_out, last_state_data):
+def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
     
     t_unaligned = pypto.frontend.dynamic("t")
-    query_shape = (t_unaligned, query.shape[1], query.shape[2])
-    key_shape = (t_unaligned, key.shape[1], key.shape[2])
-    value_shape = (t_unaligned, value.shape[1], value.shape[2])
-    beta_shape = (t_unaligned, beta.shape[1])
-    gate_shape = (t_unaligned, gate.shape[1])
-    core_attn_out_shape = (t_unaligned, core_attn_out.shape[1], core_attn_out.shape[2])
+    query_shape = (t_unaligned, nqk, d)
+    key_shape = (t_unaligned, nqk, d)
+    value_shape = (t_unaligned, nv, d)
+    beta_shape = (t_unaligned, nv)
+    gate_shape = (t_unaligned, nv)
+    states_shape = (b, nv, d, d)
+    mask_shape = (l, l)
+    tril_mask_shape = (l, l)
+    eye_shape = (16, 16)
+    act_seq_len_shape = (b + 1,)
+    core_attn_out_shape = (t_unaligned, nv, d)
+    last_state_data_shape = (b, nv, d, d)
     
     @pypto.frontend.jit(
         runtime_options={
@@ -608,13 +616,13 @@ def chunk_gated_delta_rule_unaligned(query, key, value, beta, gate, states, mask
             value: pypto.Tensor(value_shape, pypto.DT_FP32), 
             beta: pypto.Tensor(beta_shape, pypto.DT_FP32), 
             gate: pypto.Tensor(gate_shape, pypto.DT_FP32), 
-            states: pypto.Tensor(states.shape, pypto.DT_FP32), 
-            mask: pypto.Tensor(mask.shape, pypto.DT_FP32), 
-            tril_mask: pypto.Tensor(tril_mask.shape, pypto.DT_FP32), 
-            eye: pypto.Tensor(eye.shape, pypto.DT_FP32), 
-            act_seq_len: pypto.Tensor(act_seq_len.shape, pypto.DT_INT32), 
+            states: pypto.Tensor(states_shape, pypto.DT_FP32), 
+            mask: pypto.Tensor(mask_shape, pypto.DT_FP32), 
+            tril_mask: pypto.Tensor(tril_mask_shape, pypto.DT_FP32), 
+            eye: pypto.Tensor(eye_shape, pypto.DT_FP32), 
+            act_seq_len: pypto.Tensor(act_seq_len_shape, pypto.DT_INT32), 
             core_attn_out: pypto.Tensor(core_attn_out_shape, pypto.DT_FP32), 
-            last_state_data: pypto.Tensor(last_state_data.shape, pypto.DT_FP32)
+            last_state_data: pypto.Tensor(last_state_data_shape, pypto.DT_FP32)
         ):
         """
         Chunk Gated Delta Rule fused operator.
@@ -701,5 +709,4 @@ def chunk_gated_delta_rule_unaligned(query, key, value, beta, gate, states, mask
                     pypto.set_vec_tile_shapes(16, 16, 128, 128)
                     last_state_data[b_idx, nv_idx] = last_state
 
-    kernel(query, key, value, beta, gate, states, mask, tril_mask, eye, 
-        act_seq_len, core_attn_out, last_state_data)
+    return kernel

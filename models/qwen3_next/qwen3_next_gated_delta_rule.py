@@ -161,21 +161,23 @@ def gen_zero_tensor(t):
 
 def pypto_chunk_gated_delta_rule_dyn(dims, inputs: dict, outputs: dict):
     """Dynamic wrapper for PyPTO chunk gated delta rule."""
+    b = dims["B"]
+    nqk = dims["Nqk"]
+    nv = dims["Nv"]
+    d = dims["D"]
     l = dims["L"]
-    act_seq_len = inputs["act_seq_len"]
+    act_seq_len = inputs["act_seq_len"]  
 
     if (act_seq_len % l != 0).any():
-        chunk_gated_delta_rule_unaligned(
-        inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], 
-        inputs["states"], inputs["mask"], inputs["tril_mask"], inputs["eye_data_unaligned"], inputs["act_seq_len"], 
-        outputs["core_attn_out"], outputs["final_state"]
-    )
+        input_data = [inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], inputs["states"], 
+                inputs["mask"], inputs["tril_mask"], inputs["eye_data_unaligned"], inputs["act_seq_len"]]
+        output_data = [outputs["core_attn_out"], outputs["final_state"]]
+        chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l)(*input_data, *output_data)
     else:
-        chunk_gated_delta_rule(
-        inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], 
-        inputs["states"], inputs["mask"], inputs["tril_mask"], inputs["eye_data"], inputs["act_seq_len"], 
-        outputs["core_attn_out"], outputs["final_state"]
-    )
+        input_data = [inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], inputs["states"], 
+                inputs["mask"], inputs["tril_mask"], inputs["eye_data"], inputs["act_seq_len"]]
+        output_data = [outputs["core_attn_out"], outputs["final_state"]]
+        chunk_gated_delta_rule(b, nqk, nv, d, l)(*input_data, *output_data)
     
     torch_npu.npu.synchronize()
 
@@ -240,9 +242,7 @@ def compare(**kwargs):
     total = actual.numel()
 
     if out_of_tolerance > 0:
-        ratio = out_of_tolerance / total
-        if ratio > 0.01:  # More than 1% out of tolerance
-            raise AssertionError(f"{name} comparison failed: {out_of_tolerance}/{total} elements out of tolerance")
+        raise AssertionError(f"{name} comparison failed: {out_of_tolerance} elements out of tolerance")
 
 
 def segs_chunk_gated_delta_rule(**kwargs):

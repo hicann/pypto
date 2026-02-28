@@ -436,7 +436,7 @@ def recurrent_state_attn_all(
 
 ## 调用示例
 
-- 详见 [test_gated_delta_rule.py](./test_gated_delta_rule.py)
+- 详见 [gated_delta_rule_impl.py](./gated_delta_rule_impl.py)
 
 ## 参考文献
 
