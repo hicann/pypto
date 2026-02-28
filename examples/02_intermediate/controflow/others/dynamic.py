@@ -9,10 +9,27 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 """
-Dynamic Axis Example for PyPTO
+Dynamic Shape Examples for PyPTO
 
-This example demonstrates:
-- Run attention module with dynamic shapes.
+This file demonstrates the usage of PyPTO's dynamic shape feature, which allows
+kernels to handle inputs with shapes that are not known at compile time.
+
+Key Concepts:
+  1. Define dynamic dimensions at module level using pypto.frontend.dynamic()
+  2. Only make necessary dimensions dynamic; keep others as concrete values
+  3. Use pypto.view / pypto.assemble with pypto.loop for explicit tiling and
+     boundary management on dynamic dimensions
+
+Examples included:
+  - dynamic_mul:       Basic dynamic batch dimension with view/assemble tiling
+  - dynamic_partial:   Partial dynamic dimensions (only batch is dynamic, others concrete)
+  - dynamic_attention: Multi-head attention with dynamic batch size
+  - dynamic_multi_dim: Multiple dynamic dimensions in a single kernel
+
+Usage:
+    python dynamic.py                                   # Run all examples
+    python dynamic.py --list                            # List all available examples
+    python dynamic.py dynamic_mul::test_dynamic_mul     # Run a specific case
 """
 
 import os
@@ -48,37 +65,230 @@ def get_device_id():
         return None
 
 
+# ============================================================================
+# Example 1: Basic Dynamic Batch Dimension (mul with view/assemble)
+# ============================================================================
+#
+# This example shows the fundamental pattern for dynamic shapes:
+#   - Define dynamic dimension at MODULE LEVEL (outside any function)
+#   - Use pypto.view to slice tiles from the input along the dynamic axis
+#   - Use pypto.assemble to write computed tiles back to the output
+#   - Use pypto.min for boundary management on the last tile
+#
+# IMPORTANT: Dynamic dimensions MUST be defined at module level using
+#            pypto.frontend.dynamic(), never inside kernel functions.
+
+# Module-level dynamic dimension definition
+batch_size_dyn = pypto.frontend.dynamic("batch_size")
+
+
+def create_dynamic_mul_kernel(batch_shape: int, run_mode: str = "npu"):
+    """Create a kernel with dynamic batch dimension that multiplies input by 2.
+
+    Args:
+        batch_shape: Actual batch size of the input (used for tiling step size).
+        run_mode: Execution mode ('npu' or 'sim').
+
+    Returns:
+        JIT-compiled kernel that handles any batch size.
+    """
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    tile_b = batch_shape  # Tile step equals the actual batch size
+
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def dynamic_mul_kernel(
+        x: pypto.Tensor((batch_size_dyn, 128), pypto.DT_FP16)
+    ) -> pypto.Tensor((batch_size_dyn, 128), pypto.DT_FP16):
+        # Create output tensor with dynamic shape
+        output = pypto.Tensor((batch_size_dyn, 128), pypto.DT_FP16)
+
+        # Compute loop count: ceil(batch_size / tile_b)
+        b_loop = (batch_size_dyn + tile_b - 1) // tile_b
+
+        for idx in pypto.loop(b_loop):
+            b_offset = idx * tile_b
+            # Boundary management: clamp end offset to actual batch size
+            b_offset_end = pypto.min(b_offset + tile_b, batch_size_dyn)
+            valid_shape = [b_offset_end - b_offset, 128]
+
+            # View a tile from the input
+            x_view = pypto.view(x, [tile_b, 128], [b_offset, 0],
+                                valid_shape=valid_shape)
+            pypto.set_vec_tile_shapes(1, 128)
+            result = pypto.mul(x_view, 2.0)
+
+            # Assemble the result back into the output
+            pypto.assemble(result, [b_offset, 0], output)
+
+        return output
+
+    return dynamic_mul_kernel
+
+
+def test_dynamic_mul(device_id: int = None, run_mode: str = "npu"):
+    """Test dynamic mul with different batch sizes - same kernel, no recompilation."""
+    print("=" * 60)
+    print("Test: Dynamic Mul (basic view/assemble tiling)")
+    print("=" * 60)
+
+    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+
+    test_batch_sizes = [8, 16]
+    for bs in test_batch_sizes:
+        x = torch.randn(bs, 128, dtype=torch.float16, device=device)
+        kernel = create_dynamic_mul_kernel(x.shape[0], run_mode)
+        result = kernel(x)
+
+        if run_mode == "npu":
+            torch.npu.synchronize()
+
+        golden = x * 2.0
+        if run_mode == "npu":
+            assert_allclose(
+                np.array(result.cpu()), np.array(golden.cpu()),
+                rtol=1e-3, atol=1e-3
+            )
+        print(f"  batch_size={bs}: Input shape {x.shape} -> Output shape {result.shape}")
+
+    print("✓ Dynamic mul passed for all batch sizes")
+    print()
+
+
+# ============================================================================
+# Example 2: Partial Dynamic Dimensions (softmax-style)
+# ============================================================================
+#
+# Pattern: Only make the batch dimension dynamic; keep seqlen, head, dim as
+# concrete values. This is the recommended approach - avoid making all
+# dimensions dynamic unless truly necessary.
+
+# Module-level: only batch is dynamic
+bs_dyn = pypto.frontend.dynamic("bs")
+
+
+def softmax_core(input_tensor: pypto.Tensor) -> pypto.Tensor:
+    """Compute softmax along the last dimension."""
+    return pypto.softmax(input_tensor, dim=-1)
+
+
+def create_dynamic_softmax_kernel(shape: tuple, run_mode: str = "npu"):
+    """Create a softmax kernel where only the batch dimension is dynamic.
+
+    Args:
+        shape: (batch_size, seqlen, head, dim) - concrete shape for tiling.
+        run_mode: Execution mode ('npu' or 'sim').
+    """
+    _, seqlen, head, dim = shape  # seqlen, head, dim stay concrete
+
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def softmax_kernel(
+        input_tensor: pypto.Tensor((bs_dyn, seqlen, head, dim), pypto.DT_FP32),
+    ) -> pypto.Tensor((bs_dyn, seqlen, head, dim), pypto.DT_FP32):
+        output_tensor = pypto.Tensor((bs_dyn, seqlen, head, dim), pypto.DT_FP32)
+        tile_b = 1
+        b_loop = bs_dyn // tile_b
+
+        pypto.set_vec_tile_shapes(1, 4, 1, 64)
+
+        for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
+            b_offset = idx * tile_b
+            b_offset_end = (idx + 1) * tile_b
+            # Use slicing to extract a tile (concrete dims stay as-is)
+            input_view = input_tensor[b_offset:b_offset_end, :seqlen, :head, :dim]
+            softmax_out = softmax_core(input_view)
+            output_tensor[b_offset:, ...] = softmax_out
+
+        return output_tensor
+
+    return softmax_kernel
+
+
+def test_dynamic_partial(device_id: int = None, run_mode: str = "npu"):
+    """Test softmax with partial dynamic dimensions (only batch is dynamic)."""
+    print("=" * 60)
+    print("Test: Partial Dynamic Dimensions (softmax)")
+    print("=" * 60)
+
+    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+
+    # Fixed non-batch dimensions
+    seqlen, head, dim = 32, 1, 256
+
+    test_batch_sizes = [8, 32]
+    for bs in test_batch_sizes:
+        shape = (bs, seqlen, head, dim)
+        x = torch.rand(shape, dtype=torch.float32, device=device)
+
+        kernel = create_dynamic_softmax_kernel(shape, run_mode)
+        y = kernel(x)
+
+        if run_mode == "npu":
+            torch.npu.synchronize()
+
+        golden = torch.softmax(x, dim=-1)
+        if run_mode == "npu":
+            assert_allclose(
+                np.array(y.cpu()), np.array(golden.cpu()),
+                rtol=1e-3, atol=1e-3
+            )
+        print(f"  batch_size={bs}: Input shape {x.shape} -> Output shape {y.shape}")
+
+    print("✓ Partial dynamic softmax passed for all batch sizes")
+    print()
+
+
+# ============================================================================
+# Example 3: Dynamic Attention (scaled dot-product attention)
+# ============================================================================
+#
+# A more complex example: scaled dot-product attention where the batch
+# dimension is dynamic. Demonstrates view/assemble on multi-dimensional
+# tensors with dynamic batch axis.
+
+# Reuse bs_dyn from Example 2
+
+
 @dataclass
 class AttentionConfig:
     """Configuration for attention operations."""
     num_heads: int = 8
     head_dim: int = 64
-    scale: Optional[float] = None  # If None, uses 1/sqrt(head_dim)
+    scale: Optional[float] = None
     dtype: pypto.DataType = pypto.DT_FP32
-    use_dynamic_shape: bool = False
 
 
 def scaled_dot_product_attention_golden(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    scale: float,
-    attn_mask: Optional[torch.Tensor] = None
+    q: torch.Tensor, k: torch.Tensor, v: torch.Tensor,
+    scale: float, attn_mask: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
     """PyTorch reference implementation of scaled dot-product attention."""
-    # Compute attention scores: Q @ K^T
-    scores = torch.matmul(q, k.transpose(-2, -1))  # [batch, num_heads, seq_len_q, seq_len_kv]
+    scores = torch.matmul(q, k.transpose(-2, -1))
     scores = scores * scale
-    # Apply attention mask if provided
     if attn_mask is not None:
         scores = scores + attn_mask
-    attn_weights = torch.softmax(scores, dim=-1)  # [batch, num_heads, seq_len_q, seq_len_kv]
-    output = torch.matmul(attn_weights, v)  # [batch, num_heads, seq_len_q, head_dim]
+    attn_weights = torch.softmax(scores, dim=-1)
+    output = torch.matmul(attn_weights, v)
     return output
 
 
-def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor,
-                                      scale: float, dtype: pypto.DataType) -> pypto.Tensor:
+def scaled_dot_product_attention_core(
+    q: pypto.Tensor, k: pypto.Tensor, v: pypto.Tensor,
+    scale: float, dtype: pypto.DataType
+) -> pypto.Tensor:
+    """Core attention computation in PyPTO."""
     k_t = pypto.transpose(k, 2, 3)
     scores = pypto.matmul(q, k_t, out_dtype=dtype)
     scores_scaled = scores * scale
@@ -87,65 +297,80 @@ def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto
     return res
 
 
-def scaled_dot_product_attention(q_shape: tuple, k_shape: tuple, config: AttentionConfig, run_mode: str = "npu",
-                                 dynamic: bool = True):
-    if dynamic:
-        bs = pypto.frontend.dynamic("bs")
-    else:
-        bs = q_shape[0]
-    head = 8
-    dim = 64
+def create_dynamic_attention_kernel(
+    q_shape: tuple, k_shape: tuple, config: AttentionConfig,
+    run_mode: str = "npu"
+):
+    """Create an attention kernel with dynamic batch dimension.
+
+    Args:
+        q_shape: Shape of query tensor (batch, heads, q_len, dim).
+        k_shape: Shape of key tensor (batch, heads, kv_len, dim).
+        config: Attention configuration.
+        run_mode: Execution mode ('npu' or 'sim').
+    """
+    head = config.num_heads
+    dim = config.head_dim
     q_len = q_shape[2]
     kv_len = k_shape[2]
+    tile = q_shape[0]  # Tile step equals actual batch size
+    scale = config.scale if config.scale is not None else (1.0 / (dim ** 0.5))
 
-    tile = q_shape[0]
-    scale = config.scale if config.scale is not None else (1.0 / (dim**0.5))
-        
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":
         mode = pypto.RunMode.SIM
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
-    
+
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
-    def scaled_dot_product_attention_kernel(
-        q: pypto.Tensor((bs, head, q_len, dim), pypto.DT_FP32),
-        k: pypto.Tensor((bs, head, kv_len, dim), pypto.DT_FP32),
-        v: pypto.Tensor((bs, head, kv_len, dim), pypto.DT_FP32),
-    ) -> pypto.Tensor((bs, head, q_len, dim), pypto.DT_FP32):
-        """Scaled dot-product attention with dynamic bsatch size."""
-        cubse_tiling = 64
+    def attention_kernel(
+        q: pypto.Tensor((bs_dyn, head, q_len, dim), pypto.DT_FP32),
+        k: pypto.Tensor((bs_dyn, head, kv_len, dim), pypto.DT_FP32),
+        v: pypto.Tensor((bs_dyn, head, kv_len, dim), pypto.DT_FP32),
+    ) -> pypto.Tensor((bs_dyn, head, q_len, dim), pypto.DT_FP32):
+        """Scaled dot-product attention with dynamic batch size."""
+        cube_tiling = 64
         pypto.set_cube_tile_shapes(
-            [cubse_tiling, cubse_tiling],
-            [cubse_tiling, cubse_tiling],
-            [cubse_tiling, cubse_tiling],
+            [cube_tiling, cube_tiling],
+            [cube_tiling, cube_tiling],
+            [cube_tiling, cube_tiling],
         )
 
-        output_tensor = pypto.tensor((bs, head, q_len, dim), pypto.DT_FP32)
-        bs_loop = (bs + tile - 1) // tile
+        output_tensor = pypto.tensor((bs_dyn, head, q_len, dim), pypto.DT_FP32)
+        bs_loop = (bs_dyn + tile - 1) // tile
 
         for bss_idx in pypto.loop(bs_loop):
             bs_offset = bss_idx * tile
-            bs_offset_end = pypto.min(bs_offset + tile, bs)
-            q_view = pypto.view(q, [tile, head, q_len, dim], [bs_offset, 0, 0, 0], 
-                                valid_shape=[bs_offset_end - bs_offset, head, q_len, dim])
-            k_view = pypto.view(k, [tile, head, kv_len, dim], [bs_offset, 0, 0, 0], 
-                                valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim])
-            v_view = pypto.view(v, [tile, head, kv_len, dim], [bs_offset, 0, 0, 0], 
-                                valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim])
+            bs_offset_end = pypto.min(bs_offset + tile, bs_dyn)
+
+            # View tiles along the dynamic batch axis
+            q_view = pypto.view(
+                q, [tile, head, q_len, dim], [bs_offset, 0, 0, 0],
+                valid_shape=[bs_offset_end - bs_offset, head, q_len, dim]
+            )
+            k_view = pypto.view(
+                k, [tile, head, kv_len, dim], [bs_offset, 0, 0, 0],
+                valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim]
+            )
+            v_view = pypto.view(
+                v, [tile, head, kv_len, dim], [bs_offset, 0, 0, 0],
+                valid_shape=[bs_offset_end - bs_offset, head, kv_len, dim]
+            )
+
             pypto.set_vec_tile_shapes(1, 8, 16, 64)
             res = scaled_dot_product_attention_core(
                 q_view, k_view, v_view, scale, config.dtype
             )
             pypto.assemble(res, [bs_offset, 0, 0, 0], output_tensor)
+
         return output_tensor
-    
-    return scaled_dot_product_attention_kernel
+
+    return attention_kernel
 
 
-def test_dynamic_shape(device_id: int = None, run_mode: str = "npu", dynamic: bool = True) -> None:
-    """Test attention function with dynamic shapes."""
+def test_dynamic_attention(device_id: int = None, run_mode: str = "npu"):
+    """Test attention with dynamic batch sizes."""
     print("=" * 60)
     print("Test: Dynamic Scaled Dot-Product Attention")
     print("=" * 60)
@@ -153,8 +378,10 @@ def test_dynamic_shape(device_id: int = None, run_mode: str = "npu", dynamic: bo
     device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
 
     num_heads, head_dim = 8, 64
+    config = AttentionConfig(
+        num_heads=num_heads, head_dim=head_dim, dtype=pypto.DT_FP32
+    )
 
-    # Test with different batch sizes and sequence lengths (dynamic shapes)
     test_cases = [
         (2, 16, 16),
         (4, 32, 32),
@@ -162,62 +389,167 @@ def test_dynamic_shape(device_id: int = None, run_mode: str = "npu", dynamic: bo
     ]
     for batch_size, seq_len_q, seq_len_kv in test_cases:
         dtype = torch.float32
-        q_torch = torch.randn(batch_size, num_heads, seq_len_q, head_dim,
-                                dtype=dtype, device=device)
-        k_torch = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
-                                dtype=dtype, device=device)
-        v_torch = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
-                                dtype=dtype, device=device)
-        config = AttentionConfig(num_heads=num_heads, head_dim=head_dim,
-                                dtype=pypto.DT_FP32, use_dynamic_shape=True)
+        q = torch.randn(batch_size, num_heads, seq_len_q, head_dim,
+                         dtype=dtype, device=device)
+        k = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
+                         dtype=dtype, device=device)
+        v = torch.randn(batch_size, num_heads, seq_len_kv, head_dim,
+                         dtype=dtype, device=device)
 
-        # Execute
-        out_torch = scaled_dot_product_attention(
-                q_torch.shape, k_torch.shape, config, run_mode, dynamic
-            )(q_torch, k_torch, v_torch).cpu()
-        
+        kernel = create_dynamic_attention_kernel(
+            q.shape, k.shape, config, run_mode
+        )
+        out = kernel(q, k, v).cpu()
+
         if run_mode == "npu":
             torch.npu.synchronize()
 
-        # Verify
         scale = 1.0 / (head_dim ** 0.5)
-        golden = scaled_dot_product_attention_golden(q_torch, k_torch, v_torch, scale).cpu()
+        golden = scaled_dot_product_attention_golden(q, k, v, scale).cpu()
 
-        max_diff = (out_torch - golden).abs().max().item()
         if run_mode == "npu":
-            print(f"Batch={batch_size}, SeqQ={seq_len_q}, SeqKV={seq_len_kv}, Max diff: {max_diff:.6f}")
-            assert_allclose(np.array(out_torch), np.array(golden), rtol=3e-3, atol=3e-3)
-        print(f"Input shape: {q_torch.shape}")
-        print(f"Output shape: {out_torch.shape}")
+            max_diff = (out - golden).abs().max().item()
+            print(f"  Batch={batch_size}, SeqQ={seq_len_q}, SeqKV={seq_len_kv}, "
+                  f"Max diff: {max_diff:.6f}")
+            assert_allclose(np.array(out), np.array(golden), rtol=3e-3, atol=3e-3)
+        print(f"  Input shape: {q.shape} -> Output shape: {out.shape}")
 
-    print("✓ Attention (dynamic) passed for the test case")
+    print("✓ Dynamic attention passed for all test cases")
     print()
 
 
+# ============================================================================
+# Example 4: Multiple Dynamic Dimensions
+# ============================================================================
+#
+# When multiple dimensions are dynamic. Here both batch_size and hidden_size
+# are dynamic. This pattern is useful for layer normalization or similar
+# operations where both dimensions may vary.
+
+batch_dyn = pypto.frontend.dynamic("batch_dyn")
+hidden_dyn = pypto.frontend.dynamic("hidden_dyn")
+
+
+def create_dynamic_add_kernel(batch_shape: int, hidden_shape: int,
+                              run_mode: str = "npu"):
+    """Create an element-wise add kernel with two dynamic dimensions.
+
+    Args:
+        batch_shape: Actual batch size (used as tile step).
+        hidden_shape: Actual hidden size (used as tile step).
+        run_mode: Execution mode ('npu' or 'sim').
+    """
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    tile_b = batch_shape
+    tile_h = hidden_shape
+
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def dynamic_add_kernel(
+        x: pypto.Tensor((batch_dyn, hidden_dyn), pypto.DT_FP16),
+        y: pypto.Tensor((batch_dyn, hidden_dyn), pypto.DT_FP16),
+    ) -> pypto.Tensor((batch_dyn, hidden_dyn), pypto.DT_FP16):
+        output = pypto.Tensor((batch_dyn, hidden_dyn), pypto.DT_FP16)
+
+        b_loop = (batch_dyn + tile_b - 1) // tile_b
+
+        for b_idx in pypto.loop(b_loop):
+            b_offset = b_idx * tile_b
+            b_offset_end = pypto.min(b_offset + tile_b, batch_dyn)
+            valid_b = b_offset_end - b_offset
+
+            h_loop = (hidden_dyn + tile_h - 1) // tile_h
+
+            for h_idx in pypto.loop(h_loop):
+                h_offset = h_idx * tile_h
+                h_offset_end = pypto.min(h_offset + tile_h, hidden_dyn)
+                valid_h = h_offset_end - h_offset
+
+                x_view = pypto.view(
+                    x, [tile_b, tile_h], [b_offset, h_offset],
+                    valid_shape=[valid_b, valid_h]
+                )
+                y_view = pypto.view(
+                    y, [tile_b, tile_h], [b_offset, h_offset],
+                    valid_shape=[valid_b, valid_h]
+                )
+
+                pypto.set_vec_tile_shapes(tile_b, tile_h)
+                result = pypto.add(x_view, y_view)
+                pypto.assemble(result, [b_offset, h_offset], output)
+
+        return output
+
+    return dynamic_add_kernel
+
+
+def test_dynamic_multi_dim(device_id: int = None, run_mode: str = "npu"):
+    """Test kernel with multiple dynamic dimensions."""
+    print("=" * 60)
+    print("Test: Multiple Dynamic Dimensions (add)")
+    print("=" * 60)
+
+    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+
+    test_cases = [
+        (8, 64),
+        (16, 128),
+    ]
+    for bs, hs in test_cases:
+        x = torch.randn(bs, hs, dtype=torch.float16, device=device)
+        y = torch.randn(bs, hs, dtype=torch.float16, device=device)
+
+        kernel = create_dynamic_add_kernel(bs, hs, run_mode)
+        result = kernel(x, y)
+
+        if run_mode == "npu":
+            torch.npu.synchronize()
+
+        golden = x + y
+        if run_mode == "npu":
+            assert_allclose(
+                np.array(result.cpu()), np.array(golden.cpu()),
+                rtol=1e-3, atol=1e-3
+            )
+        print(f"  batch={bs}, hidden={hs}: "
+              f"Input shapes {x.shape}, {y.shape} -> Output shape {result.shape}")
+
+    print("✓ Multiple dynamic dimensions passed for all test cases")
+    print()
+
+
+# ============================================================================
+# Main Function
+# ============================================================================
+
 def main():
-    """Run dynamic examples.
+    """Run dynamic shape examples.
 
     Usage:
-        python dynamic.py          # Run all examples
-        python dynamic.py 1         # Run example 1 only
-        python dynamic.py --list   # List all available examples
+        python dynamic.py                                  # Run all examples
+        python dynamic.py dynamic_mul::test_dynamic_mul    # Run a specific case
+        python dynamic.py --list                           # List all available examples
     """
     parser = argparse.ArgumentParser(
-        description="PyPTO Full Function Examples",
+        description="PyPTO Dynamic Shape Examples",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s              Run all examples
-  %(prog)s dynamic_shape::test_dynamic_shape
-            Run example dynamic_shape::test_dynamic_shape
-  %(prog)s --list       List all available examples
+  %(prog)s                                       Run all examples
+  %(prog)s dynamic_mul::test_dynamic_mul         Run a specific case
+  %(prog)s --list                                List all available examples
         """
     )
     parser.add_argument(
         'example_id',
         type=str,
         nargs='?',
-        help='Example ID to run (1-2). If not specified, all examples will run.'
+        help='Example ID to run. If not specified, all examples will run.'
     )
     parser.add_argument(
         '--list',
@@ -237,11 +569,26 @@ Examples:
 
     # Define available examples
     examples = {
-        'dynamic_shape::test_dynamic_shape': {
-            'name': 'Test dynamic function',
-            'description': 'Usage of dynamic function example',
-            'function': test_dynamic_shape,
-        }
+        'dynamic_mul::test_dynamic_mul': {
+            'name': 'Basic dynamic batch mul',
+            'description': 'Demonstrates basic view/assemble tiling with a single dynamic batch dimension',
+            'function': test_dynamic_mul,
+        },
+        'dynamic_partial::test_dynamic_partial': {
+            'name': 'Partial dynamic dimensions (softmax)',
+            'description': 'Only batch is dynamic; seqlen, head, dim stay concrete',
+            'function': test_dynamic_partial,
+        },
+        'dynamic_attention::test_dynamic_attention': {
+            'name': 'Dynamic attention',
+            'description': 'Scaled dot-product attention with dynamic batch size, view/assemble on 4D tensors',
+            'function': test_dynamic_attention,
+        },
+        'dynamic_multi_dim::test_dynamic_multi_dim': {
+            'name': 'Multiple dynamic dimensions',
+            'description': 'Both batch and hidden dimensions are dynamic, nested view/assemble loops',
+            'function': test_dynamic_multi_dim,
+        },
     }
 
     # List examples if requested
@@ -259,23 +606,21 @@ Examples:
     if args.example_id is not None:
         if args.example_id not in examples:
             print(f"ERROR: Invalid example ID: {args.example_id}")
-            print(f"Valid example IDs are: {', '.join(map(str, sorted(examples.keys())))}")
+            print(f"Valid example IDs are: {', '.join(sorted(examples.keys()))}")
             print("\nUse --list to see all available examples.")
             sys.exit(1)
 
     print("\n" + "=" * 60)
-    print("PyPTO Dynamic Function Examples")
+    print("PyPTO Dynamic Shape Examples")
     print("=" * 60 + "\n")
 
-    # Get and validate device ID (needed for NPU examples)
+    # Get and validate device ID
     device_id = None
     examples_to_run = []
 
     if args.example_id is not None:
-        # Run single example
         examples_to_run = [(args.example_id, examples[args.example_id])]
     else:
-        # Run all examples
         examples_to_run = list(examples.items())
 
     if args.run_mode == "npu":
@@ -294,7 +639,7 @@ Examples:
 
         if len(examples_to_run) > 1:
             print("=" * 60)
-            print("All dynamic tests passed!")
+            print("All dynamic shape tests passed!")
             print("=" * 60)
 
     except Exception as e:

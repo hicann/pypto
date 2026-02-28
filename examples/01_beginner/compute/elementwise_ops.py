@@ -99,14 +99,7 @@ def test_abs_basic(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_add_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
-    if dynamic:
-        a_shape = pypto.frontend.dynamic("a_shape")
-        b_shape = pypto.frontend.dynamic("b_shape")
-    else:
-        a_shape = a_shape
-        b_shape = b_shape
-
+def create_add_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu"):
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
     elif run_mode == "sim":
@@ -120,8 +113,8 @@ def create_add_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", 
         b: pypto.Tensor(b_shape, pypto.DT_FP32),
     ) -> pypto.Tensor(a_shape, pypto.DT_FP32):
         pypto.set_vec_tile_shapes(2, 8)
-        out = pypto.add(a, b)
-        return out
+        output = pypto.add(a, b)
+        return output
 
     return add_kernel
 
@@ -147,16 +140,10 @@ def test_add_basic(device_id: int = None, run_mode: str = "npu"):
     print("✓ Basic usage of add function completed successfully")
 
 
-def create_add_broadcast_op_kernel(a_shape: tuple, b_shape: tuple, 
-                                   run_mode: str = "npu", 
-                                   dynamic: bool = False):
-    if dynamic:
-        m = pypto.frontend.dynamic("m")
-        n = a_shape[1]
-        b_shape = pypto.frontend.dynamic("b_shape")
-    else:
-        m, n = a_shape
-        b_shape = b_shape
+def create_add_broadcast_op_kernel(a_shape: tuple, b_shape: tuple,
+                                   run_mode: str = "npu"):
+    m, n = a_shape
+    b_shape = b_shape
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -198,12 +185,7 @@ def test_add_broadcast(device_id: int = None, run_mode: str = "npu"):
     print("✓ Test Broadcasting Between Tensors completed successfully")
 
 
-def create_add_scalar_op_kernel(shape: tuple, scalar: float, run_mode: str = "npu",
-                                dynamic: bool = False):
-    if dynamic:
-        shape = pypto.frontend.dynamic("shape")
-    else:
-        shape = shape
+def create_add_scalar_op_kernel(shape: tuple, scalar: float, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -244,14 +226,8 @@ def test_add_scalar(device_id: int = None, run_mode: str = "npu"):
     print("✓ Test Adding a scalar to a tensor completed successfully")
 
 
-def create_add_with_alpha_op_kernel(a_shape: tuple, b_shape: tuple, 
-                                    alpha: float, run_mode: str = "npu", dynamic: bool = False):
-    if dynamic:
-        a_shape = pypto.frontend.dynamic("a_shape")
-        b_shape = pypto.frontend.dynamic("b_shape")
-    else:
-        a_shape = a_shape
-        b_shape = b_shape
+def create_add_with_alpha_op_kernel(a_shape: tuple, b_shape: tuple,
+                                    alpha: float, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -299,20 +275,11 @@ def test_add_with_alpha(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_clip_op_kernel(a_shape: tuple, min_shape: tuple, 
-                          max_shape: tuple, run_mode: str = "npu", 
-                          dynamic: bool = False):
-    if dynamic:
-        m = pypto.frontend.dynamic("m")
-        n = a_shape[1]
-        min_m = pypto.frontend.dynamic("min_m")
-        min_n = min_shape[1]
-        max_m = pypto.frontend.dynamic("max_m")
-        max_n = max_shape[1]
-    else:
-        m, n = a_shape
-        min_m, min_n = min_shape
-        max_m, max_n = max_shape
+def create_clip_op_kernel(a_shape: tuple, min_shape: tuple,
+                          max_shape: tuple, run_mode: str = "npu"):
+    m, n = a_shape
+    min_m, min_n = min_shape
+    max_m, max_n = max_shape
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -355,17 +322,10 @@ def test_clip_basic(device_id: int = None, run_mode: str = "npu"):
     print("✓ Basic usage of clip function completed successfully")
 
 
-def create_clip_broadcast_op_kernel(a_shape: tuple, min_shape: tuple, 
-                                    max_shape: tuple, run_mode: str = "npu", 
-                                    dynamic: bool = False):
-    if dynamic:
-        m = pypto.frontend.dynamic("m")
-        n = a_shape[1]
-        min_shape = pypto.frontend.dynamic("min_shape")
-        max_shape = pypto.frontend.dynamic("max_shape")
-    else:
-        m, n = a_shape
-        min_shape, max_shape = min_shape, max_shape
+def create_clip_broadcast_op_kernel(a_shape: tuple, min_shape: tuple,
+                                    max_shape: tuple, run_mode: str = "npu"):
+    m, n = a_shape
+    min_shape, max_shape = min_shape, max_shape
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -414,13 +374,7 @@ def test_clip_broadcast(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_div_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
-    if dynamic:
-        a_shape = pypto.frontend.dynamic("a_shape")
-        b_shape = pypto.frontend.dynamic("b_shape")
-    else:
-        a_shape = a_shape
-        b_shape = b_shape
+def create_div_op_kernel(a_shape: tuple, b_shape: tuple, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -462,16 +416,10 @@ def test_div_basic(device_id: int = None, run_mode: str = "npu"):
     print("✓ Basic usage of div function completed successfully")
 
 
-def create_div_broadcast_op_kernel(a_shape: tuple, b_shape: tuple, 
-                                   run_mode: str = "npu", 
-                                   dynamic: bool = False):
-    if dynamic:
-        n = a_shape[1]
-        m = pypto.frontend.dynamic("m")
-        b_shape = pypto.frontend.dynamic("b_shape")
-    else:
-        b_shape = b_shape
-        m, n = a_shape
+def create_div_broadcast_op_kernel(a_shape: tuple, b_shape: tuple,
+                                   run_mode: str = "npu"):
+    b_shape = b_shape
+    m, n = a_shape
 
     mode = pypto.RunMode.SIM if run_mode != "npu" else pypto.RunMode.NPU
 
@@ -508,12 +456,8 @@ def test_div_broadcast(device_id: int = None, run_mode: str = "npu"):
     print("✓ Test Broadcasting Between Tensors completed successfully")
 
 
-def create_div_scalar_op_kernel(a_shape: tuple, scalar: float, 
-                                run_mode: str = "npu", dynamic: bool = False):
-    if dynamic:
-        a_shape = pypto.frontend.dynamic("a_shape")
-    else:
-        a_shape = a_shape
+def create_div_scalar_op_kernel(a_shape: tuple, scalar: float,
+                                run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -559,11 +503,7 @@ def test_div_scalar(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_exp_op_kernel(x_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
-    if dynamic:
-        x_shape = pypto.frontend.dynamic("x_shape")
-    else:
-        x_shape = x_shape
+def create_exp_op_kernel(x_shape: tuple, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -608,11 +548,7 @@ def test_exp_basic(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def create_log_op_kernel(a_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
-    if dynamic:
-        a_shape = pypto.frontend.dynamic("a_shape")
-    else:
-        a_shape = a_shape
+def create_log_op_kernel(a_shape: tuple, run_mode: str = "npu"):
 
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -656,7 +592,7 @@ def test_log_basic(device_id: int = None, run_mode: str = "npu"):
 # MUL Examples
 # ============================================================================
 
-def mul_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def mul_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape, b_shape = a.shape, b.shape
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -701,7 +637,7 @@ def test_mul_basic(device_id: int = None, run_mode: str = "npu"):
     print("✓ Basic usage of mul function completed successfully")
 
 
-def mul_broadcast_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def mul_broadcast_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape, b_shape = a.shape, b.shape
 
     if run_mode == "npu":
@@ -748,7 +684,7 @@ def test_mul_broadcast(device_id: int = None, run_mode: str = "npu"):
     print("✓ Test Broadcasting Between Tensors completed successfully")
 
 
-def mul_scalar_op(a: torch.Tensor, scalar: float, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def mul_scalar_op(a: torch.Tensor, scalar: float, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
 
     if run_mode == "npu":
@@ -798,7 +734,7 @@ def test_mul_scalar(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def neg_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def neg_op(a: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -844,7 +780,7 @@ def test_neg_basic(device_id: int = None, run_mode: str = "npu"):
 # POW Examples
 # ============================================================================
 
-def pow_op(a: torch.Tensor, b: float, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def pow_op(a: torch.Tensor, b: float, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
 
     if run_mode == "npu":
@@ -889,7 +825,7 @@ def test_pow_basic(device_id: int = None, run_mode: str = "npu"):
 # ROUND Examples
 # ============================================================================
 
-def round_op(a: torch.Tensor, b: int, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def round_op(a: torch.Tensor, b: int, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
 
     if run_mode == "npu":
@@ -936,7 +872,7 @@ def test_round_basic(device_id: int = None, run_mode: str = "npu"):
 # RSQRT Examples
 # ============================================================================
 
-def rsqrt_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def rsqrt_op(a: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
     
     if run_mode == "npu":
@@ -982,7 +918,7 @@ def test_rsqrt_basic(device_id: int = None, run_mode: str = "npu"):
 # CEIL Examples
 # ============================================================================
 
-def ceil_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def ceil_op(a: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
 
     if run_mode == "npu":
@@ -1028,7 +964,7 @@ def test_ceil_basic(device_id: int = None, run_mode: str = "npu"):
 # FLOOR Examples
 # ============================================================================
 
-def floor_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def floor_op(a: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
 
     if run_mode == "npu":
@@ -1074,7 +1010,7 @@ def test_floor_basic(device_id: int = None, run_mode: str = "npu"):
 # TRUNC Examples
 # ============================================================================
 
-def trunc_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def trunc_op(a: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -1119,7 +1055,7 @@ def test_trunc_basic(device_id: int = None, run_mode: str = "npu"):
 # SQRT Examples
 # ============================================================================
 
-def sqrt_op(a: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def sqrt_op(a: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -1165,7 +1101,7 @@ def test_sqrt_basic(device_id: int = None, run_mode: str = "npu"):
 # ============================================================================
 
 
-def sub_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def sub_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape, b_shape = a.shape, b.shape
 
     if run_mode == "npu":
@@ -1211,7 +1147,7 @@ def test_sub_basic(device_id: int = None, run_mode: str = "npu"):
     print("✓ Basic usage of sub function completed successfully")
 
 
-def sub_broadcast_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def sub_broadcast_op(a: torch.Tensor, b: torch.Tensor, run_mode: str = "npu") -> torch.Tensor:
     a_shape, b_shape = a.shape, b.shape
     
     if run_mode == "npu":
@@ -1257,7 +1193,7 @@ def test_sub_broadcast(device_id: int = None, run_mode: str = "npu"):
     print("✓ Test Broadcasting Between Tensors completed successfully")
 
 
-def sub_scalar_op(a: torch.Tensor, scalar: float, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def sub_scalar_op(a: torch.Tensor, scalar: float, run_mode: str = "npu") -> torch.Tensor:
     a_shape = a.shape
     if run_mode == "npu":
         mode = pypto.RunMode.NPU
@@ -1298,7 +1234,7 @@ def test_sub_scalar(device_id: int = None, run_mode: str = "npu"):
 
 
 
-def sub_with_alpha_op(a: torch.Tensor, b: torch.Tensor, alpha: float, run_mode: str = "npu", dynamic: bool = False) -> torch.Tensor:
+def sub_with_alpha_op(a: torch.Tensor, b: torch.Tensor, alpha: float, run_mode: str = "npu") -> torch.Tensor:
     a_shape, b_shape = a.shape, b.shape
 
     if run_mode == "npu":
