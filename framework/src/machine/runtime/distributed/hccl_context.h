@@ -24,6 +24,7 @@ constexpr uint32_t LOCAL_STREAM_MAX_NUM = 19;
 constexpr uint32_t AICPU_OP_NOTIFY_MAX_NUM = 2;
 constexpr uint32_t AICPU_MAX_RANK_NUM = 128 * 1024;
 constexpr uint32_t AICPU_MAX_RANK_NUM_V1 = 32;
+constexpr uint32_t HCCL_MTE_MAX_RANK_NUM = 64;
 
 struct HcclSignalInfo {
     uint64_t resId; // 在代表event时为eventid，notify时为notifyid
@@ -101,7 +102,7 @@ struct HcclOpConfig {
     uint8_t retryEnable;   // 是否重执行
     uint8_t highPerfEnable;
     uint8_t padding[5];    // 大小需要64By对齐，未来添加参数时减小padding
-    uint8_t linkTimeOut[8]; // 发送超时时长 
+    uint8_t linkTimeOut[8]; // 发送超时时长
     uint64_t notifyWaitTime; // 超时时长，同HCCL_EXEC_TIMEOUT
     uint32_t retryHoldTime;
     uint32_t retryIntervalTime;
@@ -198,6 +199,22 @@ struct HcclCombinOpSignalParam {
     HcclSignalInfo noIpcEvents[AICPU_MAX_RANK_NUM_V1];
     HcclSignalInfo aicpuNotify;
     HcclSignalInfo aicpuOpNotify[2]; // 集合通信AICPU展开资源
+};
+
+struct HcclCombinOpParamA5 {
+    uint64_t workSpace; // client和server之间通信的地址
+    uint64_t workSpaceSize; // client和server之间通信的空间大小
+    uint32_t rankId; // 当前卡rankId
+    uint32_t rankNum; // 总卡数
+    uint64_t winSize; // ccu不使用
+    uint64_t windowsIn[HCCL_MTE_MAX_RANK_NUM]; // ccu不使用, MTE 数据区
+    uint64_t windowsOut[HCCL_MTE_MAX_RANK_NUM]; // ccu不使用，MTE 状态区
+
+    // for ccu
+    uint64_t xnAddr; // Xn寄存器起始地址
+    uint64_t ckeAddr; // CKE寄存器起始地址
+    uint64_t msAddr; // MS地址，预留
+    uint64_t msSize; // 可写的MS个数，预留
 };
 
 struct HcclCombinOpParam {
