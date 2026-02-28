@@ -21,7 +21,7 @@
 #include <sstream>
 #include <shared_mutex>
 
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/log.h"

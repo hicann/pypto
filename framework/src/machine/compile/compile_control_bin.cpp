@@ -24,7 +24,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/utils/machine_utils.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 using Json = nlohmann::json;
 
 namespace {

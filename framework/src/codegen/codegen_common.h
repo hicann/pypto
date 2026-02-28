@@ -20,7 +20,7 @@
 
 #include "interface/utils/common.h"
 #include "tilefwk/data_type.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 const std::string GM_TENSOR_PARAM_STR = "param";

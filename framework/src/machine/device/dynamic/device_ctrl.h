@@ -18,7 +18,6 @@
 #include "device_common.h"
 #include <cstdint>
 #include <cstdlib>
-#include "tilefwk/tilefwk_log.h"
 #include "device_utils.h"
 #include "device_perf.h"
 #include "machine/device/dynamic/context/device_execute_context.h"

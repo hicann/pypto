@@ -20,7 +20,7 @@
 #include "toolchain/prof_api.h"
 #include "log_types.h"
 #include "prof_common.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 
 namespace npu::tile_fwk {

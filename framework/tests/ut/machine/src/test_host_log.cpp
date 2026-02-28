@@ -19,7 +19,7 @@
 #define private public
 #include "utils/host_log/log_manager.h"
 #undef private
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 #include "utils/host_log/dlog_handler.h"
 
 namespace npu::tile_fwk {

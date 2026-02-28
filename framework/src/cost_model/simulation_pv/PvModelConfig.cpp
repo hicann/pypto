@@ -16,7 +16,7 @@
 #include <iostream>
 #include <fstream>
 #include "PvModelConfig.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
 void PvModelSystemConfig::Dump(std::string path) {

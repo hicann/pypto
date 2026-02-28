@@ -18,7 +18,7 @@
 #include "cost_model/simulation/common/ISA.h"
 #include "cost_model/simulation/arch/TileAllocPipeImpl.h"
 #include "cost_model/simulation/value/TileCalculator.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
 

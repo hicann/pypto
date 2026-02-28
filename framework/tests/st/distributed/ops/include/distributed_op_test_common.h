@@ -25,7 +25,7 @@
 #include "tileop/distributed/comm_context.h"
 #include "tilefwk/tilefwk_op.h"
 #include "test_dev_func_runner.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {

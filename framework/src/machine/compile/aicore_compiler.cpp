@@ -26,7 +26,7 @@
 #include "machine/compile/gen_aicore_code.h"
 #include "machine/host/main_block.h"
 #include "tilefwk/platform.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {

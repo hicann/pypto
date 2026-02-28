@@ -16,7 +16,7 @@
 #include "cost_model/simulation/common/ISA.h"
 #include "nlohmann/json.hpp"
 #include "interface/operation/opcode.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
 

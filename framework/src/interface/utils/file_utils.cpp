@@ -22,7 +22,7 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <ftw.h>
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {

@@ -17,7 +17,7 @@
 #include <sys/mman.h>
 #include <sstream>
 #include "interface/utils/file_utils.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 constexpr uint64_t IMMEDIATE = 0;
 constexpr uint64_t SYMBOL = 1;

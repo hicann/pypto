@@ -23,7 +23,7 @@
 #include "interface/program/program.h"
 #include "machine/platform/platform_manager.h"
 #include "interface/utils/op_info_manager.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {

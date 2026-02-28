@@ -15,7 +15,7 @@
 
 #include <cstdarg>
 
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 #include "host_log/log_manager.h"
 #include "host_log/dlog_handler.h"
 

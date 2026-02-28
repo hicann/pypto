@@ -19,7 +19,7 @@
 #include "interface/utils/common.h"
 #include "machine/runtime/runtime.h"
 #include "machine/device/dynamic/device_utils.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 #ifdef BUILD_WITH_CANN
 #include "hcom.h"

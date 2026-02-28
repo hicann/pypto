@@ -24,7 +24,7 @@
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "interface/machine/host/host_machine.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {

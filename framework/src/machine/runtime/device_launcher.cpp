@@ -19,7 +19,7 @@
 #include "machine/runtime/host_prof.h"
 #include "machine/host/perf_analysis.h"
 #include "interface/utils/op_info_manager.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
 extern "C" __attribute__((weak)) int AdxDataDumpServerInit();

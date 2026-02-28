@@ -20,7 +20,7 @@
 #include "interface/utils/file_utils.h"
 #include "cost_model/simulation/tools/ParseArgs.h"
 #include "cost_model/simulation/base/ModelTop.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
 using namespace std;

@@ -18,7 +18,7 @@
 #include "interface/utils/log.h"
 #include "interface/utils/string_utils.h"
 #include "interface/utils/file_utils.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 #ifdef PROCESSOR_SUBPATH

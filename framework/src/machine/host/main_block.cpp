@@ -15,7 +15,7 @@
 
 #include "main_block.h"
 #include "codegen/codegen.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 MainBlockCondBulider::MainBlockCondBulider() = default;

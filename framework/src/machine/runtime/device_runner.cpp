@@ -36,14 +36,14 @@
 #include "prof_common.h"
 #include "load_aicpu_op.h"
 #include "tilefwk/platform.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 #include "machine/platform/platform_manager.h"
 #include "machine/runtime/device_error_tracking.h"
 #include "nlohmann/json.hpp"
 #include "dump_device_perf.h"
 #include "machine/host/perf_analysis.h"
 #include "log_types.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using json = nlohmann::json;
 extern char _binary_kernel_o_start[];

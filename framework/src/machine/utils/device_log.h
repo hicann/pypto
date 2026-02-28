@@ -34,7 +34,7 @@
 #ifdef __DEVICE__
 #include "dlog_pub.h"
 #else
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 #endif
 
 namespace npu::tile_fwk {

@@ -22,7 +22,7 @@
 #include "hccl/hccl.h"
 #include "machine/runtime/runtime.h"
 #include "distributed_test_framework.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {

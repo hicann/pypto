@@ -29,7 +29,7 @@
 #include "tilefwk/core_func_data.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/platform.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
 

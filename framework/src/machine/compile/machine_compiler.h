@@ -18,7 +18,7 @@
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
 #include "tilefwk/comm_group_recorder.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 constexpr int64_t AICORE_NUM = 75;

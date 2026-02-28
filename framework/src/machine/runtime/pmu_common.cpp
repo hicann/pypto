@@ -17,7 +17,7 @@
 #include <string>
 #include "interface/utils/common.h"
 #include "interface/utils/log.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 

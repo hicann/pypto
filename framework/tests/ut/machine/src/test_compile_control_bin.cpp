@@ -22,7 +22,7 @@
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/utils/machine_utils.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using namespace npu::tile_fwk;
 using Json = nlohmann::json;

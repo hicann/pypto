@@ -39,7 +39,7 @@
 #include "interface/configs/config_manager.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/platform.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 #ifdef BUILD_WITH_CANN
 #include "acl/acl.h"

@@ -23,7 +23,7 @@
 #include "interface/program/program.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/host/perf_analysis.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 extern "C" {
 using RunPassFunc = int (*)(npu::tile_fwk::Program &, npu::tile_fwk::Function &, const std::string &);

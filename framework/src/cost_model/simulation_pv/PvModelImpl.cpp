@@ -20,7 +20,7 @@
 #include "codegen/codegen.h"
 #include "PvModelImpl.h"
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using namespace npu::tile_fwk;
 

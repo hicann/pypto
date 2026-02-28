@@ -20,7 +20,7 @@
 
 #include "cost_model/simulation/base/ModelTop.h"
 #include "cost_model/simulation/statistics/DeviceStats.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
 void AICPUMachine::Step()

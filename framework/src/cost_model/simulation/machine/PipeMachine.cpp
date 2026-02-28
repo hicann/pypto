@@ -18,7 +18,7 @@
 #include "cost_model/simulation/cache/CacheMachine.h"
 #include "cost_model/simulation/base/ModelTop.h"
 #include "cost_model/simulation/common/ISA.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
 PipeMachine::PipeMachine()

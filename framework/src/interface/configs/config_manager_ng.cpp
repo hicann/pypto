@@ -32,7 +32,7 @@
 
 #include "config_manager_ng.h"
 #include "tilefwk/tile_shape.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 
 namespace npu::tile_fwk {

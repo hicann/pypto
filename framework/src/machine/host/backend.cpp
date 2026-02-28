@@ -35,7 +35,7 @@
 #include "tilefwk/op_registry.h"
 #include "main_block.h"
 #include <dlfcn.h>
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using namespace npu::tile_fwk::dynamic;
 namespace npu::tile_fwk {

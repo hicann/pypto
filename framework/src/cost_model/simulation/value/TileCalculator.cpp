@@ -16,7 +16,7 @@
 #include "cost_model/simulation/value/TileCalculator.h"
 #include <vector>
 #include "interface/inner/hash_buffer.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 
 namespace CostModel {

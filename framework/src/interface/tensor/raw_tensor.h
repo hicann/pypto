@@ -24,7 +24,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/pre_def.h"
 #include "tilefwk/data_type.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using Json = nlohmann::json;
 

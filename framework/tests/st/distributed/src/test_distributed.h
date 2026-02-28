@@ -21,7 +21,7 @@
 #include "interface/configs/config_manager.h"
 #include "distributed_op_test_suite.h"
 #include <filesystem>
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk::Distributed {
 

@@ -26,7 +26,7 @@
 #include "cost_model/simulation/value/TileCalculator.h"
 #include "interface/function/function.h"
 #include "simulation/tools/ParseInput.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using Json = nlohmann::json;
 using namespace std::string_literals;

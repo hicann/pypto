@@ -19,7 +19,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 #define private public
 #include "machine/cache_manager/cache_manager.h"

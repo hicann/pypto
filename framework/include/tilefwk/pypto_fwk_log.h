@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file tilefwk_log.h
+ * \file pypto_fwk_log.h
  * \brief
  */
 

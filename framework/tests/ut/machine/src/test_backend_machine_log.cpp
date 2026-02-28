@@ -29,7 +29,7 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/platform.h"
 #include "interface/program/program.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 using namespace npu::tile_fwk;
 

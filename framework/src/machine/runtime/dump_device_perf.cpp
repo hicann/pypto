@@ -22,7 +22,7 @@
 #include "machine/device/dynamic/device_utils.h"
 #include "interface/configs/config_manager.h"
 #include "machine/device/distributed/common.h"
-#include "tilefwk/tilefwk_log.h"
+#include "tilefwk/pypto_fwk_log.h"
 namespace npu::tile_fwk::dynamic {
 constexpr int DUMP_LEVEL_FOUR = 4;
 
