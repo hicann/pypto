@@ -25,11 +25,11 @@
 #include "interface/utils/file_utils.h"
 #include "cost_model/simulation/pv/PvModel.h"
 #include "cost_model/simulation_pv/PvMemAllocator.h"
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
 #include "tilefwk/core_func_data.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/platform.h"
+#include "tilefwk/tilefwk_log.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
 
@@ -379,7 +379,7 @@ public:
 
                 int ret = std::system(cmd);
                 if (ret != 0) {
-                    MLOG_ERROR("cmd error: ", cmd);
+                    SIMULATION_LOGE("cmd error: %s", cmd);
                 }
 
                 cceBin.emplace_back(
@@ -402,7 +402,6 @@ public:
         uint64_t devPtr = allocator_->AllocArg(size);
         DataMap m = {reinterpret_cast<uint64_t>(hostPtr), devPtr, size};
         data_.emplace_back(m);
-        std::cout << "[PVMODEL]tensor map host: " << std::hex << m.hostPtr << ", dev: " << std::hex << m.devPtr << ", size: " << m.size << std::endl;
         return hostPtr;
     }
 
@@ -415,7 +414,6 @@ public:
         uint64_t devPtr = allocator_->AllocWorkspace(size);
         DataMap m = {reinterpret_cast<uint64_t>(hostPtr), devPtr, size};
         workspace_ = m;
-        std::cout << "[PVMODEL]workspace map host: " << std::hex << m.hostPtr << ", dev: " << std::hex << m.devPtr << ", size: " << m.size << std::endl;
         return hostPtr;
     }
 

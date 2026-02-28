@@ -18,9 +18,9 @@
 #include <iostream>
 
 #include "interface/utils/file_utils.h"
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation/tools/ParseArgs.h"
 #include "cost_model/simulation/base/ModelTop.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 using namespace std;
@@ -52,7 +52,6 @@ int CostModelInterface::BuildCostModel(std::vector<std::string> &inputConfigs)
 
     argParser.Parse(inputConfigs);
 
-    CostModel::LoggerManager::ResetLevel(CostModel::LoggerManager::ConvertLevel(logLevel));
     for (auto &path : configFilePath) {
         std::vector<std::string> conf;
         if (path.find(".json") != std::string::npos) {
@@ -64,9 +63,9 @@ int CostModelInterface::BuildCostModel(std::vector<std::string> &inputConfigs)
     }
 
     if (!configs.empty()) {
-        MLOG_WARN("Override configurations:");
+        SIMULATION_LOGW("Override configurations:");
         for (auto &cfg : configs) {
-            MLOG_WARN(cfg);
+            SIMULATION_LOGW("%s", cfg.c_str());
         }
     }
 
@@ -167,9 +166,9 @@ void CostModelInterface::RunPerformance()
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
     if (sim->IsDeadlock()) {
-        MLOG_ERROR("Simulation is deadlock at cycle ", sim->globalCycles, "!!!!!!!!!");
+        SIMULATION_LOGE("Simulation is deadlock at cycle %llu !!!!!!!!!", sim->globalCycles);
     }
-    MLOG_WARN("CostModel Simulation Runtime: ", duration.count(), "(s)");
+    SIMULATION_LOGW("CostModel Simulation Runtime: %ld(s)", duration.count());
 }
 
 void CostModelInterface::RunFunctional()
@@ -178,7 +177,7 @@ void CostModelInterface::RunFunctional()
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
-    MLOG_WARN("CostModel Functional Simulation Runtime: ", duration.count(), "(s)");
+    SIMULATION_LOGW("CostModel Functional Simulation Runtime: %ld(s)", duration.count());
 }
 
 void CostModelInterface::Report()

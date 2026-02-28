@@ -21,20 +21,17 @@
 #include <mutex>
 
 #include "nlohmann/json.hpp"
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation/base/ModelTop.h"
 #include "cost_model/simulation/common/ISA.h"
 #include "cost_model/simulation/value/TileCalculator.h"
 #include "interface/function/function.h"
 #include "simulation/tools/ParseInput.h"
+#include "tilefwk/tilefwk_log.h"
 
 using Json = nlohmann::json;
 using namespace std::string_literals;
 using namespace std::chrono_literals;
 
-#define EXPVAL_LOG MLOG_DEBUG
-
-#define TOPO_LOG MLOG_DEBUG
 
 namespace CostModel {
 
@@ -67,7 +64,7 @@ void DeviceMachine::RunAtBegin()
             if (!core->localReadyQueues.Empty()) {
                 uint64_t taskId = -1;
                 core->localReadyQueues.Dequeue(taskId);
-                MLOG_INFO("Dequeued task ID:", taskId);
+                SIMULATION_LOGI("Dequeued task ID: %llu", taskId);
                 PushReadyQueue(taskMap.at(taskId)->machineType, taskId);
             }
         }
@@ -86,7 +83,7 @@ void DeviceMachine::RunPVModelDeviceTask()
         GetSim()->pv->Run(taskId, function->pSgId);
     }
     taskMap.clear();
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][Device ", machineId, "] run pvmodel execute tasks", taskMap.size());
+    SIMULATION_LOGI("[Cycle: %llu][Device %llu] run pvmodel execute tasks %zu", GetSim()->GetCycles(), machineId, taskMap.size());
 }
 
 void DeviceMachine::SubmitDeviceTask()
@@ -110,14 +107,15 @@ void DeviceMachine::SubmitDeviceTask()
             PushReadyQueue(task->machineType, taskId);
         }
     }
-    MLOG_WARN("[Cycle:", GetSim()->GetCycles(), "][Device ", machineId, "] submit a new device task to AICPUs, size = ",
+    SIMULATION_LOGW("[Cycle: %llu][Device %llu] submit a new device task to AICPUs, size = %zu", GetSim()->GetCycles(), machineId, 
               taskMap.size());
+
 }
 
 // Device Init
 void DeviceMachine::Build()
 {
-    MLOG_INFO("DeviceMachine start Building-----");
+    SIMULATION_LOGI("DeviceMachine start Building-----");
     config.OverrideDefaultConfig(&sim->cfgs);
     std::string queueId = "DeviceReadyQ";
     readyQueuePid = GetSim()->RegisterQueuePid(queueId);
@@ -154,7 +152,7 @@ void DeviceMachine::Xfer()
     lastCycles = GetSim()->GetCycles();
     currentHeartModulo = GetSim()->GetCycles() % (GetSim()->config.heartInterval);
     if (currentHeartModulo < lastHeartModulo) {
-        MLOG_WARN("@CostModel Heart Cycle:", GetSim()->GetCycles(), ", submit tasks: ", stats->totalSubmitNum);
+        SIMULATION_LOGW("@CostModel Heart Cycle: %llu, submit tasks: %llu", GetSim()->GetCycles(), stats->totalSubmitNum);
     }
     lastHeartModulo = currentHeartModulo;
 }
@@ -202,7 +200,6 @@ void DeviceMachine::InitFunctions()
         BuildSubtasksFromRootFuncTopo();
         return;
     }
-    ASSERT(0 && "Unexpected init functions mode");
 }
 
 void DeviceMachine::BuildLeafFunctionTasks() {
@@ -224,8 +221,9 @@ void DeviceMachine::BuildLeafFunctionTasks() {
     }
     taskMapQueue.push_back(taskM);
     GetSim()->ProcessTaskMap(taskM);
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][DeviceMachine][BuildLeafFunctionTasks] ", "Machine ", machineId,
+    SIMULATION_LOGI("[Cycle:", GetSim()->GetCycles(), "][DeviceMachine][BuildLeafFunctionTasks] ", "Machine ", machineId,
     " build subtasks done");
+    SIMULATION_LOGI("[Cycle: %llu][DeviceMachine][BuildLeafFunctionTasks] Machine %llu  build subtasks done", GetSim()->GetCycles(), machineId);
 }
 
 void DeviceMachine::BuildSubtasksFromRootFuncTopo()
@@ -263,20 +261,19 @@ void DeviceMachine::BuildSubtasksFromRootFuncTopo()
     }
 
     for (const auto &it : taskM) {
-        MLOG_INFO("Task ID: ", it.second->taskId);
-        MLOG_INFO("  Remaing task num: ", it.second->remainingPredecessors);
+        SIMULATION_LOGI("Task ID: %llu", it.second->taskId);
+        SIMULATION_LOGI("  Remaining task num: %d", it.second->remainingPredecessors);
         for (auto &pre : it.second->predecessors) {
-            MLOG_INFO("  Predecessor:", pre);
+            SIMULATION_LOGI("  Predecessor: %llu", pre);
         }
         for (auto &suc : it.second->successors) {
-            MLOG_INFO("  Predecessor:", suc);
+            SIMULATION_LOGI("  Successor: %llu", suc);
         }
     }
     taskMapQueue.push_back(taskM);
     GetSim()->ProcessTaskMap(taskM);
 
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][DeviceMachine][build_subtasks_from_topo] Machine ", machineId,
-              " build subtasks done");
+    SIMULATION_LOGI("[Cycle: %llu][DeviceMachine][build_subtasks_from_topo] Machine %llu  build subtasks done", GetSim()->GetCycles(), machineId);
 }
 
 void DeviceMachine::BuildSubTasksFromTopoJson()
@@ -287,13 +284,13 @@ void DeviceMachine::BuildSubTasksFromTopoJson()
 
     CostModel::ParseInput parser;
     parser.ParseTopoJson(config.submitTopoPath, taskMapQueue);
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][DeviceMachine][BuildSubTasksFromTopoJson] Machine ", machineId,
-              " build subtasks done, taskMapQueue size = ", taskMapQueue.size());
+    SIMULATION_LOGI("[Cycle: %llu][DeviceMachine][BuildSubTasksFromTopoJson] Machine %llu  build subtasks done, taskMapQueue size = %zu", 
+            GetSim()->GetCycles(), machineId, taskMapQueue.size());
     uint64_t cnt = 0;
     for (auto &taskM : taskMapQueue) {
         GetSim()->ProcessTaskMap(taskM, std::to_string(cnt));
         cnt++;
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][DeviceMachine] taskMap Size:", taskM.size());
+        SIMULATION_LOGI("[Cycle: %llu][DeviceMachine] taskMap Size: %zu", GetSim()->GetCycles(), taskM.size());
     }
     return;
 }
@@ -318,27 +315,27 @@ void DeviceMachine::BuildSingleFuncTask()
 
 void DeviceMachine::PrintFunctionTopo(FunctionPtr func) {
     auto cache = GetSim()->functionCache.cache;
-    TOPO_LOG("Function -> " + func->funcName);
-    TOPO_LOG("incast:");
+    SIMULATION_LOGI("Function -> %s", func->funcName.c_str());
+    SIMULATION_LOGI("incast:");
     for (const auto &incast : func->incastMagic) {
-        TOPO_LOG(func->tileMap[incast]->Dump());
+        SIMULATION_LOGI("%s", func->tileMap[incast]->Dump().c_str());
     }
 
-    TOPO_LOG("outcast:");
+    SIMULATION_LOGI("outcast:");
     for (const auto &outcast : func->outcastMagic) {
-        TOPO_LOG(func->tileMap[outcast]->Dump());
+        SIMULATION_LOGI("%s", func->tileMap[outcast]->Dump().c_str());
     }
 
     for (const auto &op: func->tileOps) {
-        TOPO_LOG(op->opcode);
-        TOPO_LOG("incast:");
+        SIMULATION_LOGI("%s", op->opcode.c_str());
+        SIMULATION_LOGI("incast:");
         for (auto &incast : op->iOperand) {
-            TOPO_LOG(incast->Dump());
+            SIMULATION_LOGI("%s", incast->Dump().c_str());
         }
 
-        TOPO_LOG("outcast:");
+        SIMULATION_LOGI("outcast:");
         for (auto &outcast : op->oOperand) {
-            TOPO_LOG(outcast->Dump());
+            SIMULATION_LOGI("%s", outcast->Dump().c_str());
         }
 
         if (op->IsCall()) {
@@ -360,9 +357,9 @@ void DeviceMachine::PrintTopo() {
     if (func->parentFunction) {
         auto topo = func->parentFunction->topoInfo_;
         for (auto &e : topo.topology_) {
-            TOPO_LOG("[TOPO] " + std::to_string(e.esgId) + ", " + std::to_string(e.readyState));
+            SIMULATION_LOGI("[TOPO] %s, %s", std::to_string(e.esgId).c_str(), std::to_string(e.readyState).c_str());
             for (auto &o : e.outGraph) {
-                TOPO_LOG("[TOPO] out -> " + std::to_string(o));
+                SIMULATION_LOGI("[TOPO] out -> %s", std::to_string(o).c_str());
             }
         }
     }
@@ -383,8 +380,7 @@ void DeviceMachine::PrintFunctionOutputTile(FunctionPtr func, std::shared_ptr<Ti
         auto tile = func->tileMap[outcast];
         auto k = TileState::TileKey(tile->rawMagic, tile->bufType,
                             tile->shape, tile->offset);
-        auto value = state->Load(k);
-        EXPVAL_LOG("[EXPVAL] outcast -> " + std::to_string(tile->magic) + "-" + k.Dump() + " : " + std::to_string(value));
+        state->Load(k);
     }
 }
 
@@ -394,28 +390,19 @@ void DeviceMachine::CalculateFunctionTileGolden(FunctionPtr func, std::shared_pt
     for (const auto &op: func->tileOps) {
         if (op->IsCall()) {
             auto callee = cache[op->calleeHash];
-            EXPVAL_LOG(std::string("[EXPVAL] function") + " -> [" + callee->funcName + ", " + std::to_string(op->magic) + "] incast");
             for (auto &incast : op->iOperand) {
                 auto k = TileState::TileKey(incast->rawMagic, incast->bufType, incast->shape, incast->offset);
-                auto value = global->Load(k);
-                EXPVAL_LOG("[EXPVAL] incast -> " + std::to_string(incast->magic) + "-" + k.Dump() + " : " + std::to_string(value));
+                global->Load(k);
             }
-            EXPVAL_LOG("{");
 
             std::shared_ptr<TileState> l = std::make_shared<TileState>();
             CalculateFunctionTileGolden(callee, l, global, esgId);
             esgId++;
 
-            EXPVAL_LOG("}");
-
-            EXPVAL_LOG(std::string("[EXPVAL] function") + " -> [" + callee->funcName + ", " + std::to_string(op->magic) + "] outcast");
             for (auto &outcast : op->oOperand) {
                 auto k = TileState::TileKey(outcast->rawMagic, outcast->bufType, outcast->shape, outcast->offset);
-                auto value = global->Load(k);
-                EXPVAL_LOG("[EXPVAL] outcast -> " + std::to_string(outcast->magic) + "-" + k.Dump() + " : " + std::to_string(value));
+                global->Load(k);
             }
-
-            EXPVAL_LOG("[EXPVAL] ###########################");
         }
         else {
             TileCalculator::Self().Calculate(op, func->invoke[esgId], local, global);
@@ -431,15 +418,11 @@ void DeviceMachine::CalculateTileGolden() {
     auto cache = sim->functionCache.cache;
     auto startFuncHash = GetSim()->startFuncHash;
 
-    EXPVAL_LOG("[EXPVAL] Function Root Golden");
     TileCalculator::Self().Reset();
     CalculateFunctionArgTile(cache[startFuncHash], tileStateGolden);
     CalculateFunctionTileGolden(cache[startFuncHash], nullptr, tileStateGolden, 0);
-    EXPVAL_LOG("[EXPVAL] Function Root Golden Output:");
     PrintFunctionOutputTile(cache[startFuncHash], tileStateGolden);
-    EXPVAL_LOG("[EXPVAL] ###########################");
 
-    EXPVAL_LOG("[EXPVAL] Function Root");
     TileCalculator::Self().Reset();
     CalculateFunctionArgTile(cache[startFuncHash], tileState);
 }

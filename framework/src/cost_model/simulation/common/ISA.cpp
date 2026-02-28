@@ -16,6 +16,7 @@
 #include "cost_model/simulation/common/ISA.h"
 #include "nlohmann/json.hpp"
 #include "interface/operation/opcode.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 
@@ -75,7 +76,7 @@ void Tile::GetPipeType()
 
 void Tile::Print()
 {
-    std::cout << Dump() << std::endl;
+    SIMULATION_LOGI("%s",  Dump().c_str());
 }
 
 std::string Tile::Dump()
@@ -119,8 +120,7 @@ void TileOp::GetPipeType()
 {
     auto coreTypeQuery = SCHED_CORE_PIPE_TYPE.find(opcode);
     if (coreTypeQuery == SCHED_CORE_PIPE_TYPE.end() && !IsCall() && opcode != "LOOP") {
-        std::cout << opcode << std::endl;
-        ASSERT(0 && "No pipe type corresponding to opcode is found. ");
+        ASSERT(false) << "[SIMULATION]: " << "No pipe type corresponding to opcode is found. opcode=" << opcode;
     }
     if (IsCall()) {
         pipeType = CorePipeType::PIPE_CALL;
@@ -138,8 +138,7 @@ uint64_t TileOp::GetAddress()
     } else if (IsWriteCache(pipeType)) {
         tile = oOperand[0];
     } else {
-        std::cout << Dump() << CorePipeName(pipeType) << std::endl;
-        ASSERT(0 && "PipeType Unrecognized. ");
+        ASSERT(false) << "[SIMULATION]: " << "PipeType Unrecognized." << Dump() << CorePipeName(pipeType);
     }
     addr = tile->rawMagic * RAW_MAGIC_MAX_SIZE;
     // calculate addr based on rawShape and offset
@@ -158,8 +157,7 @@ uint64_t TileOp::GetSize()
     } else if (IsWriteCache(pipeType)) {
         tile = oOperand[0];
     } else {
-        std::cout << Dump() << CorePipeName(pipeType) << std::endl;
-        ASSERT(0 && "PipeType Unrecognized. ");
+        ASSERT(false) << "[SIMULATION]: " << "PipeType Unrecognized." << Dump() << CorePipeName(pipeType);
     }
     uint64_t shapeSize = 1;
     for (auto &s : tile->shape) {
@@ -190,7 +188,7 @@ bool TileOp::IsSpecial()
 
 void TileOp::Print()
 {
-    std::cout << Dump() << std::endl;
+    SIMULATION_LOGI("%s",  Dump().c_str());
 }
 
 std::string TileOp::Dump(bool outDetail)

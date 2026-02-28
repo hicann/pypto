@@ -16,10 +16,8 @@
 #include "cost_model/simulation/value/TileCalculator.h"
 #include <vector>
 #include "interface/inner/hash_buffer.h"
-#include "cost_model/simulation/base/ModelLogger.h"
+#include "tilefwk/tilefwk_log.h"
 
-
-#define EXPVAL_LOG MLOG_DEBUG
 
 namespace CostModel {
     TileCalculator TileCalculator::instance;
@@ -96,7 +94,6 @@ namespace CostModel {
     {
         auto value = CalculateInputHash(tile);
         auto key = TileState::TileKey(tile->rawMagic, tile->bufType, tile->shape, tile->offset);
-        EXPVAL_LOG("[EXPVAL] input incast -> " + std::to_string(tile->magic) + "-" + key.Dump() + " : " + std::to_string(value));
         global->Store(key, value);
     }
 
@@ -111,8 +108,6 @@ namespace CostModel {
 
     void TileCalculator::Calculate(TileOpPtr op, FunctionInvokeInfo &invoke,
                                    std::shared_ptr<TileState> local, std::shared_ptr<TileState> global) {
-        EXPVAL_LOG("[EXPVAL] op" + std::to_string(seq) + " -> [" + op->opcode + ", " + std::to_string(op->subgraphId) +
-                   ", " + std::to_string(op->magic) + "]");
         seq++;
 
         if (op->opcode == "RESHAPE") {
@@ -130,10 +125,8 @@ namespace CostModel {
             auto sk = TileState::TileKey(bind->rawMagic, bind->bufType,
                                          bind->shape, bind->offset);
             global->Ref(dk, sk);
-            auto s = global->Load(sk);
-            auto d = global->Load(dk);
-            EXPVAL_LOG("[EXPVAL] incast -> " + sk.Dump() + " : " + std::to_string(s));
-            EXPVAL_LOG("[EXPVAL] outcast -> " + dk.Dump() + " : " + std::to_string(d));
+            global->Load(sk);
+            global->Load(dk);
         }
         else {
             for (auto &incast: op->iOperand) {
@@ -143,8 +136,7 @@ namespace CostModel {
                 }
                 auto k = TileState::TileKey(bind->rawMagic, bind->bufType,
                                             bind->shape, bind->offset);
-                auto value = LoadTile(k, local, global);
-                EXPVAL_LOG("[EXPVAL] incast -> " + std::to_string(bind->magic) + "-" + k.Dump() + " : " + std::to_string(value));
+                LoadTile(k, local, global);
             }
 
             for (size_t i = 0; i < op->oOperand.size(); i++) {
@@ -155,7 +147,6 @@ namespace CostModel {
                 }
                 auto k = TileState::TileKey(bind->rawMagic, bind->bufType, bind->shape, bind->offset);
                 auto value = CalculateOutputHash(op, i, invoke, local, global);
-                EXPVAL_LOG("[EXPVAL] outcast -> " + std::to_string(bind->magic) + "-" + k.Dump() + " : " + std::to_string(value));
                 StoreTile(k, value, local, global);
             }
         }

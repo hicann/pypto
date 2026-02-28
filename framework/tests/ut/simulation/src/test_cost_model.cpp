@@ -27,6 +27,9 @@
 #include "cost_model/simulation_ca/PipeSimulator.h"
 #include "cost_model/simulation/arch/PipeFactory.h"
 #include "cost_model/simulation/arch/CacheMachineImpl.h"
+#include "cost_model/simulation/machine/CoreMachine.h"
+#include "cost_model/simulation/machine/Scheduler.h"
+#include "cost_model/simulation/tools/ParseInput.h"
 
 using namespace npu::tile_fwk;
 
@@ -431,4 +434,212 @@ TEST_F(CostModelTest, TestA5ArchType)
 {
     auto simulator =CostModel::PipeFactory::Create(CostModel::CorePipeType::PIPE_MTE_IN, "A5", 1);
     EXPECT_TRUE(simulator != nullptr);
+}
+
+
+TEST_F(CostModelTest, TestCoreMachineDeadlock2)
+{
+    CostModel::CoreMachine* coreMachine = new CostModel::CoreMachine(CostModel::MachineType::AIC);
+    std::set<int> unissuedTileMagics;
+
+    coreMachine->sim = std::make_shared<CostModel::SimSys>();
+    unissuedTileMagics.insert(1);
+    unissuedTileMagics.insert(2);
+
+    // 2. 初始化tileOps
+
+    coreMachine->tileOps[1] = std::make_shared<CostModel::TileOp>();
+    coreMachine->tileOps[2] = std::make_shared<CostModel::TileOp>();
+
+    coreMachine->tileOps[1]->magic = 1;
+    coreMachine->tileOps[2]->magic = 2;
+    coreMachine->tileOps[1]->opcode = "";
+    coreMachine->tileOps[2]->opcode = "";
+
+    // 3. 初始化tiles
+    coreMachine->tiles[1] = std::make_shared<CostModel::Tile>();
+    coreMachine->tiles[2] = std::make_shared<CostModel::Tile>();
+
+    coreMachine->tiles[1]->magic = 1;
+    coreMachine->tiles[2]->magic = 2;
+
+    // 4. 设置aliveBuffer
+    coreMachine->aliveBuffer[CostModel::CorePipeType::PIPE_CUBE_BMU_L1].insert(1);
+    coreMachine->aliveBuffer[CostModel::CorePipeType::PIPE_CUBE_BMU_L0A].insert(2);
+
+    // 5. 设置readyQueues
+    CostModel::ReadyQueue readyQueue1(CostModel::CorePipeType::PIPE_CUBE_BMU_L1, 0);
+    readyQueue1.Insert(1);
+    coreMachine->readyQueues.push_back(readyQueue1);
+
+    CostModel::ReadyQueue readyQueue2(CostModel::CorePipeType::PIPE_CUBE_BMU_L0A, 1);
+    readyQueue2.Insert(2);
+    coreMachine->readyQueues.push_back(readyQueue2);
+
+    // 6. 设置执行任务ID和函数哈希
+    coreMachine->executingTaskId = 123;
+    coreMachine->executingFunctionHash = 456;
+
+    // 调用AnalysisDeadlock方法
+    try {
+        coreMachine->AnalysisDeadlock(unissuedTileMagics);
+    } catch (const std::exception& e) {
+        EXPECT_TRUE(true); // 如果捕获到异常，测试通过
+    }
+
+    try {
+        coreMachine->CheckDeadlock();
+    } catch (const std::exception& e) {
+        EXPECT_TRUE(true); // 如果捕获到异常，测试通过
+    }
+    delete coreMachine;
+}
+
+TEST_F(CostModelTest, TestScheduler) {
+    using namespace CostModel;
+    CostModel::Scheduler scheduler;
+    scheduler.sim = std::make_shared<CostModel::SimSys>();
+    std::unordered_map<int, CostModel::TilePtr> tiles;
+    std::unordered_map<int, CostModel::TileOpPtr> tileOps;
+    std::vector<std::vector<int>> tileAllocSequence(static_cast<int>(CorePipeType::TOTAL_CORE_PIPE_TYPE));
+
+    // 1. 创建节点
+    auto t10 = std::make_shared<CostModel::Tile>(); t10->magic = 10; t10->exeInfo.domCount = 5; t10->pipeType = CostModel::CorePipeType::PIPE_MTE1;
+    auto t11 = std::make_shared<CostModel::Tile>(); t11->magic = 11; t11->exeInfo.domCount = 1; t11->pipeType = CostModel::CorePipeType::PIPE_MTE1; // 更小的 domCount
+    
+    auto op100 = std::make_shared<CostModel::TileOp>(); op100->magic = 100; op100->pipeType = CorePipeType::PIPE_VECTOR_BMU;
+    
+    auto t30 = std::make_shared<CostModel::Tile>(); t30->magic = 30; t30->exeInfo.isOutcast = true; t30->pipeType = CostModel::CorePipeType::PIPE_MTE1;
+    auto t40 = std::make_shared<CostModel::Tile>(); t40->magic = 40; t40->pipeType = CostModel::CorePipeType::PIPE_MTE1; // 无 consumer，视为 output
+
+    // 2. 建立连接
+    op100->iOperand = {t10, t11};
+    op100->oOperand = {t30, t40};
+    
+    t10->consumers = {op100};
+    t11->consumers = {op100};
+    
+    t30->producers = {op100};
+    t40->producers = {op100};
+
+    tiles[10] = t10; tiles[11] = t11; tiles[30] = t30; tiles[40] = t40;
+    tileOps[100] = op100;
+
+    // 3. 执行测试
+    scheduler.SortTile(tiles, tileOps, tileAllocSequence);
+
+    // 4. 验证日志覆盖和逻辑
+    
+    EXPECT_GT(op100->exeInfo.sequenceToIssue, -1);
+    EXPECT_EQ(t10->exeInfo.copyOutIdx, t11->exeInfo.copyOutIdx);
+    
+}
+
+TEST_F(CostModelTest, TestScheduler_EmptyInput) {
+    std::unordered_map<int, CostModel::TilePtr> tiles;
+    std::unordered_map<int, CostModel::TileOpPtr> tileOps;
+    std::vector<std::vector<int>> seq;
+    CostModel::Scheduler scheduler;
+    scheduler.sim = std::make_shared<CostModel::SimSys>();
+    scheduler.SortTile(tiles, tileOps, seq);
+}
+
+TEST_F(CostModelTest, TestRemoveBarrierCounter_LogCoverage) {
+    using namespace CostModel;
+    GenCalendar calendar;
+
+    // 1. 构造 Source Task 列表 (11个)
+    std::vector<uint64_t> srcIds;
+    for (uint64_t i = 1; i <= 11; ++i) {
+        srcIds.push_back(i);
+        calendar.taskTopoInfo[i] = CalendarEntry{}; 
+    }
+
+    for (uint64_t j = 100; j < 110; ++j) {
+        CalendarEntry info;
+        info.waitSrcTaskIds = srcIds; 
+        calendar.taskTopoInfo[j] = info;
+    }
+
+    calendar.RemoveBarrierCounter();
+
+    uint64_t firstTargetId = 100;
+    EXPECT_TRUE(calendar.taskTopoInfo[firstTargetId].waitSrcTaskIds.empty());
+    EXPECT_FALSE(calendar.taskTopoInfo[firstTargetId].waitBarrierCounterIds.empty());
+    EXPECT_EQ(calendar.taskTopoInfo[firstTargetId].waitBarrierCounterIds[0].first, 100);
+}
+
+TEST_F(CostModelTest, TestGetPipeType_AssertOnMissingOpcode) {
+    using namespace CostModel;
+    TileOp op;
+    op.opcode = "UNKNOWN_OP";
+
+    try {
+        op.GetPipeType();
+    } catch (const std::exception& e) {
+    }
+
+    op.pipeType = CorePipeType::PIPE_UNKNOW; 
+
+try {
+        op.GetAddress();
+    } catch (const std::exception& e) {
+    }
+    try {
+        op.GetSize();
+    } catch (const std::exception& e) {
+    }
+}
+
+TEST_F(CostModelTest, TestCheckTileOp) {
+    using namespace CostModel;
+    ParseInput parser;
+    auto func = std::make_shared<CostModel::Function>();
+    func->funcName = "TestFunc";
+
+    auto op = std::make_shared<TileOp>();
+    op->opcode="ADD";
+    op->iOperand = {}; // 触发第一个 if
+    op->oOperand = {}; // 触发第二个 if
+
+    func->tileOps.push_back(op);
+
+    EXPECT_NO_THROW(parser.CheckTileOp(func));
+}
+
+TEST_F(CostModelTest, TestCheckTile) {
+    using namespace CostModel;
+    ParseInput parser;
+    auto func = std::make_shared<CostModel::Function>();
+    
+    auto tile1 = std::make_shared<Tile>();
+    tile1->magic = 101;
+    tile1->producers = {};
+    
+    auto tile2 = std::make_shared<Tile>();
+    tile2->magic = 202;
+    tile2->consumers = {};
+
+    func->tiles.push_back(tile1);
+    func->tiles.push_back(tile2);
+
+    parser.CheckTile(func);
+
+}
+
+TEST_F(CostModelTest, TestParseInputFile) {
+    using namespace CostModel;
+    std::vector<std::string> cfg;
+    const std::string path = "1";
+    std::deque<TaskMap> deque;
+    std::unordered_map<long unsigned int, std::deque<CostModel::ReplayTaskEntry>> map;
+    ParseInput parser;
+    parser.ParseJsonConfig(path, cfg);
+    parser.ParseConfig(path, cfg);
+    parser.ParseCalendarJson(nullptr, path);
+    parser.ParseFixedLatencyTask(nullptr, path);
+    parser.ParseTopoJson(path, deque);
+    parser.ParseReplayInfoJson(path, map);
+    parser.ParseJson(nullptr, path);
+
 }

@@ -23,6 +23,7 @@
 #include <memory>
 #include <deque>
 #include "cost_model/simulation/common/CommonType.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 
@@ -500,9 +501,9 @@ inline uint32_t GetParam(string param)
         unsigned long num = std::stoul(param);
         return static_cast<uint32_t>(num);
     } catch (const std::invalid_argument& e) {
-        std::cerr << "无效的参数: " << e.what() << std::endl;
+        SIMULATION_LOGE("invalid parameter: %s", e.what());
     } catch (const std::out_of_range& e) {
-        std::cerr << "超出范围: " << e.what() << std::endl;
+        SIMULATION_LOGE("out of range: %s", e.what());
     }
     return 0;
 }
@@ -513,9 +514,9 @@ inline uint64_t GetLongParam(string param)
         uint64_t num = std::stoull(param);
         return static_cast<uint64_t>(num);
     } catch (const std::invalid_argument& e) {
-        std::cerr << "无效的参数: " << e.what() << std::endl;
+        SIMULATION_LOGE("invalid parameter: %s", e.what());
     } catch (const std::out_of_range& e) {
-        std::cerr << "超出范围: " << e.what() << std::endl;
+        SIMULATION_LOGE("out of range: %s", e.what());
     }
     return 0;
 }

@@ -21,7 +21,6 @@
 
 #include "cost_model/simulation/config/EnvConfig.h"
 #include "SimulatorAdaptor.h"
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation_ca/A2A3/SimulatorA2A3.h"
 #include "interface/function/function.h"
 #include "codegen/codegen.h"
@@ -33,6 +32,7 @@
 #include "cost_model/simulation/arch/PipeSimulatorFast.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
 #include "interface/utils/file_utils.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel
 {
@@ -70,7 +70,7 @@ namespace CostModel
     {
         std::ofstream os(fileName);
         if (!os.is_open()) {
-            MLOG_ERROR("can't open ", fileName);
+            SIMULATION_LOGE("can't open %s", fileName.c_str());
             return false;
         }
 
@@ -100,7 +100,7 @@ namespace CostModel
         std::vector<std::string> outputLines;
         FILE* pipe = popen(exePath.c_str(), "r");
         if (!pipe) {
-            MLOG_ERROR("run error");
+            SIMULATION_LOGE("run error");
             return outputLines;
         }
 
@@ -150,12 +150,12 @@ namespace CostModel
     uint64_t PipeSimulator<Simulator>::Simulate(const TileOpPtr& tileOp)
     {
         if(tileOp->opcode == "RESHAPE" || tileOp->opcode == "VIEW" || tileOp->opcode == "ASSEMBLE" || tileOp->opcode == "NOP") {
-            MLOG_INFO("ignore reshape op");
+            SIMULATION_LOGI("ignore reshape op");
             return 0;
         }
         std::string buf = GenerateBuf(tileOp);
         if (buf == "" || buf == "CODEGEN_ERROR") {
-            MLOG_ERROR("can't generate buf");
+            SIMULATION_LOGE("can't generate buf");
             return 0;
         }
         int notSize = 3;
@@ -167,13 +167,13 @@ namespace CostModel
 
         auto it = tileopLatencyCacheMp.find(buf);
         if (it != tileopLatencyCacheMp.end()) {
-            MLOG_INFO("sim: ", it->first, "latency: ", it->second, "\n");
+            SIMULATION_LOGI("sim: %s latency: %llu\n", it->first.c_str(), it->second);
             return it->second;
         }
 
         std::string simulatorDir = "simulator";
         if (!CreateDir(simulatorDir)) {
-            MLOG_ERROR("can't create simulator dir");
+            SIMULATION_LOGE("can't create simulator dir");
             return 0;
         }
         auto func = tileOp->funcPtr;
@@ -181,14 +181,14 @@ namespace CostModel
         std::string fileName(fileHeader + ".cpp");
         bool success = GenerateCode(buf, fileName);
         if (!success) {
-            MLOG_ERROR("can't generate code, buf:%s", buf.c_str());
+            SIMULATION_LOGE("can't generate code, buf: %s", buf.c_str());
             return tileopLatencyCacheMp[buf] = 0;
         }
 
         EnvConfig config;
         std::vector<std::string> program = CompileAndRunCode(fileName, config);
         if (program.empty()) {
-            MLOG_ERROR("can't run code, buf:", buf.c_str());
+            SIMULATION_LOGE("can't run code, buf: %s", buf.c_str());
             return tileopLatencyCacheMp[buf] = 1;
         }
 
@@ -208,7 +208,7 @@ namespace CostModel
 
         tileopLatencyCacheMp[buf] = sm.Run(np) + gmLatency;
         it = tileopLatencyCacheMp.find(buf);
-        MLOG_INFO("sim: ", it->first, "latency: ", it->second);
+        SIMULATION_LOGI("sim: %s latency: %llu", it->first.c_str(), it->second);
         return it->second;
     }
 

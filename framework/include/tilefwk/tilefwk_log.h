@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 
 #define DLOG_DEBUG 0x0
 #define DLOG_INFO  0x1

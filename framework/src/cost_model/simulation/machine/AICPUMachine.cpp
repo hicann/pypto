@@ -18,9 +18,9 @@
 #include <queue>
 #include <mutex>
 
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation/base/ModelTop.h"
 #include "cost_model/simulation/statistics/DeviceStats.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 void AICPUMachine::Step()
@@ -109,7 +109,7 @@ void AICPUMachine::Xfer()
     lastCycles = GetSim()->GetCycles();
     nextCycles = INT_MAX;
     nextCycles = std::min(nextCycles, GetQueueNextCycles());
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][Xfer] ", nextCycles);
+    SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][Xfer] %llu", GetSim()->GetCycles(), machineId, nextCycles);
     GetSim()->UpdateNextCycles(nextCycles);
 }
 
@@ -178,13 +178,12 @@ void AICPUMachine::UpdatePollingStates(std::vector<bool> &threadGroupActive)
 {
     for (uint64_t threadId = 0; threadId < threadsNum; threadId++) {
         if (GetSim()->GetCycles() < threadState->currentCompletionEnd[threadId]) {
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][updatepolling] ",
-                      pollingTimeAxe);
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][updatepolling] %llu", GetSim()->GetCycles(), machineId, pollingTimeAxe);
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, pollingTimeAxe));
         } else {
             pollingTimeAxe = INT_MAX;
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][updatepolling] ",
-                      pollingTimeAxe);
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][updatepolling] %llu", GetSim()->GetCycles(), machineId, pollingTimeAxe);
+
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, pollingTimeAxe));
         }
         // 检查submission和scheduler状态
@@ -202,13 +201,11 @@ void AICPUMachine::UpdateDispatchStates(std::vector<bool> &threadGroupActive, st
 {
     for (uint64_t threadId = 0; threadId < threadsNum; threadId++) {
         if (GetSim()->GetCycles() < threadState->currentSchedulerEnd[threadId]) {
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][updatedispatch] ",
-                      dispatchTimeAxe);
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][updatedispatch] %llu", GetSim()->GetCycles(), machineId, dispatchTimeAxe);
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, dispatchTimeAxe));
         } else {
             dispatchTimeAxe = INT_MAX;
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][updatedispatch] ",
-                      dispatchTimeAxe);
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][updatedispatch] %llu", GetSim()->GetCycles(), machineId, dispatchTimeAxe);
             GetSim()->UpdateNextCycles(std::min<uint64_t>(INT_MAX, dispatchTimeAxe));
         }
         currentCycle.at(threadId) = std::max<uint64_t>(
@@ -267,9 +264,8 @@ void AICPUMachine::ResolveDependence(const std::shared_ptr<CoreMachine> &core, u
 
     auto funcHash = top->taskMap[taskId]->functionHash;
     GetSim()->leafFunctionTime[funcHash] = taskExeCycle;
-
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine][AnalysisPacket] ",
-              "  Processing completed taskId: ", taskId, " from core ", core->machineId);
+    SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][AnalysisPacket] Processing completed taskId: %llu from core %llu", 
+        GetSim()->GetCycles(), machineId, taskId, core->machineId);
 
     std::shared_ptr<Task> task;
     std::vector<uint64_t> successors;
@@ -280,7 +276,7 @@ void AICPUMachine::ResolveDependence(const std::shared_ptr<CoreMachine> &core, u
     }
     task = taskIt->second;
     successors = task->successors;  // 复制successors以减少持锁时间
-    ASSERT(task->status == true);
+    ASSERT(task->status == true) << "[SIMULATION]: " << "task status is false. taskId=" << task->taskId;
     RecordDependency(task);
 
     // 如果没有successor，则不需要解依赖耗时
@@ -295,7 +291,7 @@ void AICPUMachine::ResolveDependence(const std::shared_ptr<CoreMachine> &core, u
     top->taskMap.erase(taskId);
 
     resolveTimeAxe = std::min<uint64_t>(INT_MAX, resCycles);
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][resolve] ", resolveTimeAxe);
+    SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][resolve] %llu", GetSim()->GetCycles(), machineId, resolveTimeAxe);
     GetSim()->UpdateNextCycles(resolveTimeAxe);
 
     // 如果没有successor，则不需要解依赖耗时
@@ -309,29 +305,28 @@ void AICPUMachine::WakeupSuccessors(uint64_t threadId, uint64_t &resCycles, std:
                                     std::vector<uint64_t> &threadCompletionCycles)
 {
     // Process successors
-    MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine][AnalysisPacket] ", "Found ", successors.size(),
-              " successors");
+    SIMULATION_LOGI("[Cycle: %llu][AICPUMachine][AnalysisPacket] Found %zu successors", GetSim()->GetCycles(), successors.size());
     for (uint64_t successorTaskId : successors) {
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine][AnalysisPacket] ",
-                  "Processing successor taskId: ", successorTaskId);
+        SIMULATION_LOGI("[Cycle: %llu][AICPUMachine][AnalysisPacket] Processing successor taskId: %llu", GetSim()->GetCycles(), successorTaskId);
+
         auto &successor = top->taskMap.at(successorTaskId);
         if (successor->remainingPredecessors == 0) {
             continue;
         }
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine][AnalysisPacket] ",
-                  "Remaining before: ", successor->remainingPredecessors);
+        SIMULATION_LOGI("[Cycle: %llu][AICPUMachine][AnalysisPacket] Remaining before: %d", GetSim()->GetCycles(), successor->remainingPredecessors);
+
         successor->remainingPredecessors--;
         resCycles += config.resolveCycles;
         stats->threadResolveNum[threadId]++;
         stats->resolveNum++;
         top->stats->resolveNum++;
         threadCompletionCycles[threadId] += config.resolveCycles;
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine][AnalysisPacket] ",
-                  "Remaining after: ", successor->remainingPredecessors);
+        SIMULATION_LOGI("[Cycle: %llu][AICPUMachine][AnalysisPacket] Remaining after: %d", GetSim()->GetCycles(), successor->remainingPredecessors);
+
 
         if (successor->remainingPredecessors == 0) {
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine][AnalysisPacket] ",
-                      "Successor is now READY, pushing to ready queue");
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine][AnalysisPacket] Successor is now READY, pushing to ready queue", GetSim()->GetCycles());
+
             lastCycles = GetSim()->GetCycles();
             localReadyQueues.Enqueue(successorTaskId, resCycles - GetSim()->GetCycles());
         }
@@ -386,7 +381,8 @@ void AICPUMachine::PollingMachine()
             GetSim()->GetCycles() + threadCompletionCycles[threadId];
 
         pollingTimeAxe  = std::min<uint64_t>(INT_MAX, threadState->currentCompletionEnd[threadId]);
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][polling] ", pollingTimeAxe);
+        SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][polling] %llu", GetSim()->GetCycles(), machineId, pollingTimeAxe);
+
         GetSim()->UpdateNextCycles(pollingTimeAxe);
     }
 }
@@ -418,8 +414,8 @@ void AICPUMachine::SendTask(uint64_t taskId, std::shared_ptr<Machine> subMachine
         task->status = true;
         top->executingTaskMap[subMachine->machineId]++;
         subMachine->SubmitTask(packet, delay);
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPU][DispatchPacket] submit task ", taskId,
-                  " to Machine ", subMachine->machineId);
+        SIMULATION_LOGI("[Cycle: %llu][AICPU][DispatchPacket] submit task %llu to Machine %llu", GetSim()->GetCycles(), taskId, subMachine->machineId);
+
         StatTaskType(subMachine->machineType, threadId);
     }
 }
@@ -554,7 +550,7 @@ void AICPUMachine::DispatchHUBTask()
         if (taskIt == top->taskMap.end()) {
             continue;
         }
-        MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPU][DispatchHUBTask] process Hub task ", taskId);
+        SIMULATION_LOGI("[Cycle: %llu][AICPU][DispatchHUBTask] process Hub task %llu", GetSim()->GetCycles(), taskId);
         task = taskIt->second;
         successors = task->successors;
         LogHUBTask(task, hubStartCycle);
@@ -643,11 +639,10 @@ void AICPUMachine::DispatchPacket()
 
         dispatchTimeAxe = std::min<uint64_t>(INT_MAX, threadState->currentSchedulerEnd[threadId]);
         if (threadSchedulerCycles[threadId] != 0) {
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][dispatch] ", dispatchTimeAxe);
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][dispatch] %llu", GetSim()->GetCycles(), machineId, dispatchTimeAxe);
             GetSim()->UpdateNextCycles(dispatchTimeAxe);
         } else {
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][AICPUMachine:", machineId, "][dispatch] ",
-                      GetSim()->GetCycles() + 1);
+            SIMULATION_LOGI("[Cycle: %llu][AICPUMachine: %llu][dispatch] %llu", GetSim()->GetCycles(), machineId, GetSim()->GetCycles() + 1);
             GetSim()->UpdateNextCycles(GetSim()->GetCycles() + 1);
         }
     }

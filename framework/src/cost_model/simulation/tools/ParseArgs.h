@@ -24,6 +24,7 @@
 #include <map>
 #include <sstream>
 #include <functional>
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 class ParseArgs {
@@ -66,7 +67,7 @@ public:
             params_[index](args[currentIndex + 1]);
             ++currentIndex;  // 跳过下一个参数
         } else {
-            std::cerr << "Missing argument for " << args[currentIndex] << std::endl;
+            SIMULATION_LOGE("Missing argument for %d", args[currentIndex]);
         }
     }
     
@@ -79,7 +80,7 @@ public:
                 ++currentIndex;  // 跳过下一个参数
             }
         } else {
-            std::cerr << "Unknown parameter: " << args[currentIndex] << std::endl;
+            SIMULATION_LOGE("Unknown parameter: %d", args[currentIndex]);
         }
     }
 

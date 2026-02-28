@@ -20,6 +20,7 @@
 #include "codegen/codegen.h"
 #include "PvModelImpl.h"
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
+#include "tilefwk/tilefwk_log.h"
 
 using namespace npu::tile_fwk;
 
@@ -54,7 +55,7 @@ void PvModelBinHelper::ReadBin(std::string path, std::vector<uint8_t> &bytes)
     std::ifstream inFile(path, std::ios::binary);
 
     if (!inFile.is_open()) {
-        std::cerr << "open bin file error: " << path << std::endl;
+        SIMULATION_LOGE("open bin file error: %s", path.c_str());
         return;
     }
 
@@ -73,7 +74,7 @@ void PvModelBinHelper::ReadBin(std::string path, std::vector<uint8_t> &bytes)
 uint64_t PvModelBinHelper::GetBinSize(std::string path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file) {
-        std::cerr << "open file error: " << path << std::endl;
+        SIMULATION_LOGE("open file error: %s", path.c_str());
         return 0;
     }
 
@@ -300,7 +301,7 @@ void PvModelImpl<SystemConfig, CaseConfig>::BinGen(npu::tile_fwk::Function *func
 
             int ret = std::system(cmd);
             if (ret != 0) {
-                MLOG_ERROR("cmd error: ", cmd);
+                SIMULATION_LOGE("cmd error: %s", cmd);
             }
 
             auto size = PvModelBinHelper::GetBinSize(task_.binPath[subFuncPair.first]);
@@ -425,7 +426,7 @@ void PvModelImpl<SystemConfig, CaseConfig>::SetUp(int esgId, int psgId, std::str
 template <typename SystemConfig, typename CaseConfig>
 void PvModelImpl<SystemConfig, CaseConfig>::Run(int esgId, int psgId) {
     if (level_ > 0) {
-        std::cout << "[PVMODEL]Run esgId: " << esgId << ", psgId: " << psgId << std::endl;
+        SIMULATION_LOGI("[PVMODEL]Run esgId: %d,psgId: %d", esgId, psgId);
         std::string esgDir = funcDir_ + "/esg" + std::to_string(esgId);
         (void)npu::tile_fwk::CreateDir(esgDir);
         SetUp(esgId, psgId, esgDir);
@@ -440,11 +441,11 @@ void PvModelImpl<SystemConfig, CaseConfig>::RunModel(std::string esgDir)
     char cmd[2048];
     (void)snprintf_s(cmd, sizeof(cmd), sizeof(cmd) - 1,
     "cd %s/ && ../../../../../../../../PvModel%s --gtest_filter=test_st_case.test_st_pv --spec=spec.toml", esgDir.c_str(), arch_.c_str());
-    std::cout << "[PVMODEL]" << std::string(cmd) << std::endl;
+    SIMULATION_LOGI("[PVMODEL] %s", cmd);
 
     int result = std::system(cmd);
     if (result != 0) {
-        MLOG_ERROR("cmd error: ", cmd);
+        SIMULATION_LOGE("cmd error: %s", cmd);
     }
 }
 
@@ -463,7 +464,7 @@ void PvModelImpl<SystemConfig, CaseConfig>::TearDown(std::string esgDir)
 template <typename SystemConfig, typename CaseConfig>
 void DynPvModelImpl<SystemConfig, CaseConfig>::Run(DynFuncData *funcdata, int coreId, int funcId, int taskId)
 {
-    std::cout << "[AICORE] core " << coreId << ", func " << funcId << ", task " << taskId << std::endl;
+    SIMULATION_LOGI("[AICORE] core  %d, func %d, task %d", coreId, funcId, taskId);
     auto data = &funcdata[funcId];
     auto opAttrs = &data->opAttrs[data->opAtrrOffsets[taskId]];
     auto psgId = opAttrs[0];
@@ -537,7 +538,7 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::BuildFuncData(DynFuncData *funcda
         }
     }
     auto err = memcpy_s(ref.data() + offset, rawTensorSize, tensorAddr.data(), rawTensorSize);
-    ASSERT(err == 0);
+    ASSERT(err == 0) << "[SIMULATION]: tensorAddr copy failed. error=" << err;
     *ref_data = ref;
 
     auto addr = allocator_->AllocArg(*refSize);
@@ -716,7 +717,7 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::LoadPvConfig(DynFuncData *funcdat
 template <typename SystemConfig, typename CaseConfig>
 void DynPvModelImpl<SystemConfig, CaseConfig>::RunModel(std::string dir) {
     step_status_t step_status;
-    std::cout << "RunModel here" << std::endl;
+    SIMULATION_LOGI("RunModel here");
     do {
         step_status = (step_status_t)pv_step_(PV_STEP_PIPE_ID, caseConfig->GetCoreType(), 0, 0);
     } while (step_status != step_status_t::END && step_status != step_status_t::TIME_OUT);

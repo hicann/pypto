@@ -125,7 +125,6 @@ void CacheMachine::ReceivePacket()
     dataRequestQueue.Dequeue(packet);
     auto addr = packet.addr;
     auto curCycle = GetSim()->GetCycles();
-    MLOG_INFO("[Cycle:", curCycle, "][Cache:", machineId, "][RecvReq] Packet ", packet.Dump());
     packet.cycleInfo.cacheRecvCycle = curCycle;
     if (packet.requestType == CacheRequestType::DATA_READ_REQ) {
         stats->totalReadNum++;
@@ -154,7 +153,6 @@ void CacheMachine::ProcessMSHR()
             // We are ready.
             for (const auto &req : mshr.inflyMisses) {
                 uint64_t cycle = curCycle + config.l2HitLatency;
-                MLOG_INFO("[Cycle:", curCycle, "][Cache][PushRespQ] packet: ", req.Dump(), ", ", cycle);
                 responseQueue.emplace_back(req, cycle);
             }
             iter = misses.erase(iter);
@@ -171,7 +169,6 @@ void CacheMachine::ProcessResp()
     while (!responseQueue.empty() && responseQueue.front().second <= curCycle) {
         // We have a response to send.
         auto &req = responseQueue.front().first;
-        MLOG_INFO("[Cycle:", curCycle, "][Cache][finish] packet: ", req.Dump());
         auto machine = GetSim()->pidToMachineMp.at(req.pid);
         req.cycleInfo.cacheRespCycle = GetSim()->GetCycles();
         stats->totalResponseLatency += (req.cycleInfo.cacheRespCycle - req.cycleInfo.cacheRecvCycle);

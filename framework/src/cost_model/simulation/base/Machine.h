@@ -20,7 +20,6 @@
 #include <climits>
 #include <map>
 
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation/common/Packet.h"
 #include "cost_model/simulation/common/BaseQueue.h"
 

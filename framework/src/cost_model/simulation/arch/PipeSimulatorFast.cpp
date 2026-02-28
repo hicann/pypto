@@ -21,7 +21,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "cost_model/simulation/base/ModelLogger.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
 #include "cost_model/simulation/arch/A5/PostSimulatorA5.h"
 
@@ -316,7 +315,7 @@ namespace CostModel
             shape.emplace_back(dstTile->shape);
         }
 
-        ASSERT(!shape.empty() && !shape[0].empty() && "shape is invalid");
+        ASSERT(!shape.empty() && !shape[0].empty()) << "[SIMULATION]: " << "shape is invalid";
 
         int shapeSize = GetMinShapeSize(shape);
         int shapeCnt = GetShapeCntSize(shape);

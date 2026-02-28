@@ -29,6 +29,7 @@
 #include "machine/runtime/device_launcher.h"
 #include "cost_model/simulation/backend.h"
 #include "machine/runtime/host_prof.h"
+#include "tilefwk/tilefwk_log.h"
 
 
 namespace npu::tile_fwk::dynamic {
@@ -45,7 +46,7 @@ public:
 
     uint8_t* AllocHostAddr(uint64_t size) {
         if (size == 0) {
-            ALOG_ERROR_F("malloc size is 0!");
+            SIMULATION_LOGE("malloc size is 0!");
             return nullptr;
         }
         auto hostPtr = (uint8_t *)malloc(size);
@@ -216,13 +217,12 @@ private:
         DeviceInitDistributedContextToHost(dynAttr->commGroupNames, GetDevProg(function_));
         DeviceInitTilingData(MemoryHelper(true), kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
         InitKernelInOuts(kArgs, inputs, outputs, true);
-        std::cout << "Run CostModel " << "\n";
         RunCostModel(&kArgs);
-        std::cout << "Run TestModel " << "\n";
+        SIMULATION_LOGI("Run TestModel");
         RunTestMode(&kArgs, DEVICE_MAX_AICPU_NUM);
-        std::cout << "Run DynCostModel " << "\n";
+        SIMULATION_LOGI("Run DynCostModel");
         RunDynCostModel();
-        std::cout << "Run PvModel " << "\n";
+        SIMULATION_LOGI("Run PvModel");
         RunPvModel(kArgs, inputs, outputs);
     }
 
@@ -261,7 +261,7 @@ private:
         auto *devProg = GetDevProg(function_);
         uint8_t *dumpTensorWsPtr = reinterpret_cast<uint8_t *>(kArgs.workspace) + devProg->memBudget.tensor.Total() + devProg->memBudget.metadata.Total();
         uint64_t dumpTensorWsUsed = 0;
-        ALOG_ERROR_F("[DumpTensor] dumpTensorWsPtr=%p, memory used=%lu\n", dumpTensorWsPtr, dumpTensorWsUsed);
+        SIMULATION_LOGE("[DumpTensor] dumpTensorWsPtr=%p, memory used=%lu\n", dumpTensorWsPtr, dumpTensorWsUsed);
 
         std::string path = config::LogTopFolder() + "/dump_tensor.txt";
         std::ofstream fout(path, std::ios::out | std::ios::binary);
@@ -272,15 +272,15 @@ private:
             int idx = 0;
             for (auto &ptr : ptrs) {
                 uint64_t devPtr = ptr ? reinterpret_cast<uint64_t>(ptr->GetDevPtr()) : 0;
-                ALOG_ERROR_F("[DumpTensor] devPtr %d = %lu\n", idx++, devPtr);
+                SIMULATION_LOGE("[DumpTensor] devPtr %d = %lu\n", idx++, devPtr);
                 fout.write(reinterpret_cast<const char *>(&devPtr), sizeof(devPtr));
             }
         };
 
         // write input/output devAddr list
-        ALOG_ERROR_F("[DumpTensor] #inputs=%zu\n", inputs.size());
+        SIMULATION_LOGE("[DumpTensor] #inputs=%zu\n", inputs.size());
         printIODevAddrs(inputs);
-        ALOG_ERROR_F("[DumpTensor] #outputs=%zu\n", outputs.size());
+        SIMULATION_LOGE("[DumpTensor] #outputs=%zu\n", outputs.size());
         printIODevAddrs(outputs);
 
         DumpDevDataBinary(fout, nullptr, dumpTensorWsUsed, dumpTensorWsPtr);
@@ -347,7 +347,7 @@ private:
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
         } catch (const std::runtime_error &e) {
-            std::cerr<< "pv init fail." << std::endl;
+            SIMULATION_LOGE("pv init fail.");
             return;
         }
 
@@ -454,7 +454,6 @@ private:
                 CPU_ZERO(&cpuset);
                 CPU_SET(tidx, &cpuset);
                 std::string name = "aicput" + std::to_string(tidx);
-                std::cout << "start thread: " << name << std::endl;
                 pthread_setname_np(pthread_self(), name.c_str());
                 pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
                 if ((devProg->devArgs.enableCtrl == 0) && (uint32_t)tidx == devProg->devArgs.scheCpuNum) {
@@ -478,7 +477,7 @@ private:
         std::vector<DeviceTensorData> outputList;
         std::tie(inputList, outputList) = BuildInputOutputFromHost(MemoryHelper(isTest), inputTensors, outputTensors);
         DeviceInitKernelInOuts(MemoryHelper(isTest), kArgs, inputList, outputList, {});
-        ALOG_INFO_F("Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
+        SIMULATION_LOGI("Inputs %p outputs %p workspace %p cfgdata %p", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata);
     }
 

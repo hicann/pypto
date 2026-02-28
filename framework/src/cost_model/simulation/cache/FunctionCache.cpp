@@ -17,7 +17,7 @@
 
 #include <utility>
 #include "cost_model/simulation/base/ModelTop.h"
-#include "cost_model/simulation/base/ModelLogger.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 
@@ -41,8 +41,8 @@ void FunctionCache::CountFunctionCache(uint64_t key, CostModel::Pid pid, CostMod
             GetSim()->GetLogger()->AddCounterEvent(pid, tid, CostModel::CounterType::CACHE_HIT);
         } else {
             GetSim()->GetLogger()->AddCounterEvent(pid, tid, CostModel::CounterType::CACHE_MISS);
-            MLOG_INFO("[Cycle:", GetSim()->GetCycles(), "][CoreMachine][ReceivePacket] ", "CoreMachine: ", key,
-                      " Function Not Exist In Function Cache.");
+            
+            SIMULATION_LOGI("[Cycle: %llu][CoreMachine][ReceivePacket] CoreMachine: %llu Function Not Exist In Function Cache.", GetSim()->GetCycles(), key);
         }
     }
 }

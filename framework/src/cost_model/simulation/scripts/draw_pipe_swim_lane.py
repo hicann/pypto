@@ -128,7 +128,6 @@ def build_swim_info(swim_data):
                 total_pipe_events[pipe_name].append(entry)
 
         total_cores[core_idx] = core_entry
-    print("Parse Pipe Swim json End")
 
 
 def sample_work_data():
@@ -325,8 +324,6 @@ if __name__ == '__main__':
     # 绘制包含pipe信息的泳道图
     output_path = os.path.join(dir_name, 'pipe_swimlane.png')
     draw_pipe_swim_lane_png(output_path)
-    print("Generated Pipe Swimlane png:", output_path)
 
     output_path = os.path.join(dir_name, 'pipe_swimlane.html')
     draw_pipe_swim_lane_html(output_path)
-    print("Generated Pipe Swimlane html:", output_path)

@@ -19,6 +19,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/cache/function_cache.h"
 #include "interface/machine/host/machine_task.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace {
 const std::string PROGRAM_ENTRY_FUNCTION_NAME = "PROGRAM_ENTRY";
@@ -28,8 +29,8 @@ namespace npu::tile_fwk {
 
 void CostModelAgent::BuildCostModel()
 {
-    ALOG_INFO("Init CostModel Simulation.");
-    ALOG_INFO("Using Config A2A3.");
+    SIMULATION_LOGI("Init CostModel Simulation.");
+    SIMULATION_LOGI("Using Config A2A3.");
     costModel = std::make_shared<CostModel::CostModelInterface>();
     std::vector<std::string> inputArgs = config::GetSimConfig(KEY_ARGS, inputArgs);
     int mode = config::GetSimConfig(KEY_SIM_MODE, 0);
@@ -91,7 +92,7 @@ void CostModelAgent::SubmitToCostModel(Function *rootFunc)
         GetFunctionFromJson(agentJsonPath);
         rootFunc = Program::GetInstance().GetCurrentFunction()->rootFunc_;
     }
-    ALOG_INFO("Submit to CostModel: ", rootFunc->GetMagicName());
+    SIMULATION_LOGI("Submit to CostModel: %s", rootFunc->GetMagicName().c_str());
     std::vector<npu::tile_fwk::Function *> funcs;
     if (config::GetSimConfig(KEY_BUILD_TASK_BASED_TOPO, true)) {
         funcs.push_back(rootFunc);
@@ -111,7 +112,7 @@ void CostModelAgent::SubmitLeafFunctionsToCostModel() {
     if (costModel == nullptr) {
         BuildCostModel();
     }
-    ALOG_INFO("Submit Leaf Functions to CostModel");
+    SIMULATION_LOGI("Submit Leaf Functions to CostModel");
     std::vector<npu::tile_fwk::Function *> funcs;
     for (auto &func : Program::GetInstance().GetFunctionMap()) {
         if (func.second->GetMagicName().find("leaf") == std::string::npos) {
@@ -141,7 +142,7 @@ Json CostModelAgent::ParseDynTopo(std::string &path)
             } catch (const std::invalid_argument& e) {
                 // ignore
             } catch (const std::out_of_range& e) {
-                std::cerr << "Out of range: " << e.what() << std::endl;
+                SIMULATION_LOGE("Out of range: %s", e.what());
             }
         }
         uint64_t seqNo = fields[seqPos];
@@ -194,7 +195,7 @@ void CostModelAgent::SubmitSingleFuncToCostModel(Function *func)
     if (costModel == nullptr) {
         BuildCostModel();
     }
-    ALOG_INFO("Submit Single Function to CostModel: ", func->GetMagicName());
+    SIMULATION_LOGI("Submit Single Function to CostModel: %s", func->GetMagicName().c_str());
     costModel->SubmitSingleFunction(func);
 }
 
@@ -203,9 +204,9 @@ void CostModelAgent::RunCostModel()
     if (costModel == nullptr) {
         return;
     }
-    ALOG_INFO("Start CostModel Run Simulation");
+    SIMULATION_LOGI("Start CostModel Run Simulation");
     costModel->Run();
-    ALOG_INFO("End CostModel Run Simulation");
+    SIMULATION_LOGI("End CostModel Run Simulation");
 }
 
 void CostModelAgent::TerminateCostModel()
@@ -220,13 +221,11 @@ void CostModelAgent::DebugSingleFunc(Function *func)
 {
     auto debugFuncName = config::GetSimConfig(KEY_DEBUG_SINGLE_FUNCNAME, "");
     for (auto &leafFunc : func->programs_) {
-        std::cout << "Func: " << leafFunc.second->GetMagicName() << std::endl;
         if (leafFunc.second->GetMagicName() == debugFuncName) {
             CostModelAgent costModelAgent;
             costModelAgent.SubmitSingleFuncToCostModel(leafFunc.second);
             costModelAgent.RunCostModel();
             costModelAgent.TerminateCostModel();
-            std::cout << "match" << std::endl;
         }
     }
 }
@@ -234,12 +233,12 @@ void CostModelAgent::DebugSingleFunc(Function *func)
 void CostModelAgent::GetFunctionFromJson(const std::string &jsonPath)
 {
     std::ifstream file(jsonPath);
-    ASSERT(file.good()) << "Json file: " << jsonPath << " open failed!!!";
+    CHECK(file.good()) << "[SIMULATION]: " << "Json file: " << jsonPath << " open failed!!!";
     Json jsonData;
     try {
         file >> jsonData;
     } catch (const std::exception &e) {
-        ASSERT(false) << "Json file: " << jsonPath << " parsing error: " << e.what();
+        CHECK(false) << "[SIMULATION]: " << "Json file: " << jsonPath << " parsing error: " << e.what();
     }
     Program::GetInstance().LoadJson(jsonData);
 }

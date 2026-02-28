@@ -16,8 +16,7 @@
 #include "cost_model/simulation/arch/GenCalendar/GenCalendar.h"
 
 #include <fstream>
-
-#include "cost_model/simulation/base/ModelLogger.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 void GenCalendar::InitTaskTopoInfo(TaskMap &taskMap)
@@ -173,13 +172,13 @@ void GenCalendar::RemoveBarrierCounter()
     uint64_t maxCounterId = 128;
     for (auto &x : waitToTaskMap) {
         for (auto w : x.first) {
-            MLOG_INFO(w,' ');
+            SIMULATION_LOGI("%llu ", w);
         }
-        MLOG_INFO("\n -- > ");
+        SIMULATION_LOGI("\n -- > ");
         for (auto w : x.second) {
-            MLOG_INFO(w,' ');
+            SIMULATION_LOGI("%llu ", w);
         }
-        MLOG_INFO("\n");
+        SIMULATION_LOGI("\n");
         auto total_send_wait = x.first.size() * x.second.size();
         auto total_wait_task = x.second.size();
         auto saved_send_wait = total_send_wait - total_wait_task;
@@ -187,7 +186,7 @@ void GenCalendar::RemoveBarrierCounter()
             // This is not our case.
             continue;
         }
-        MLOG_INFO(saved_send_wait, " !!!!\n");
+        SIMULATION_LOGI("%d !!!!\n", saved_send_wait);
         if (barrierCounterId == maxCounterId) {
             // I have used all my barrier counters.
             break;

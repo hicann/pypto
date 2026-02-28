@@ -16,6 +16,7 @@
 #include <iostream>
 #include <fstream>
 #include "PvModelConfig.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 void PvModelSystemConfig::Dump(std::string path) {
@@ -142,7 +143,7 @@ void PvModelCaseConfig::Dump(std::string path) {
     std::fstream file(path, std::ios::out);
 
     if (!file.is_open()) {
-        std::cerr << "[PVMODEL]open config file error: " << path << std::endl;
+        SIMULATION_LOGE("[PVMODEL]open config file error: %s", path.c_str());
         return;
     }
 

@@ -23,6 +23,7 @@
 #include "cost_model/simulation/arch/PipeFactory.h"
 #include "cost_model/simulation/pv/PvModelFactory.h"
 #include "interface/utils/file_utils.h"
+#include "tilefwk/tilefwk_log.h"
 
 namespace CostModel {
 
@@ -100,7 +101,7 @@ void SimSys::BuildCaches()
 {
     functionCache.SetSim(GetShared());
     functionCache.SetMaxCacheSize(config.functionCacheSize);
-    MLOG_INFO("[ModelTop][BuildCache] FunctionCache max size: ", functionCache.GetMaxCacheSize());
+    SIMULATION_LOGI("[ModelTop][BuildCache] FunctionCache max size: %llu", functionCache.GetMaxCacheSize());
 
     // Create the L2 cache.
     auto l2BankId = 0;
@@ -177,7 +178,7 @@ void SimSys::CalendarDispatchTasksToCore(int key, std::shared_ptr<CoreMachine> c
         TaskPack packet;
         packet.taskId = task.first;
         packet.task.taskPtr = calendarTaskMap[task.first];
-        assert(packet.task.taskPtr != nullptr);
+        ASSERT(packet.task.taskPtr != nullptr) << "[SIMULATION]: " << "task does not exist. taskId=" << packet.taskId;
         packet.task.functionHash = task.second;
         coreMachine->SubmitTask(packet);
     }
@@ -252,7 +253,8 @@ void SimSys::BuildAICPU(DevicePtr device, uint64_t idInDevice)
     uint64_t aicNum = config.cubeMachineNumberPerAICPU;
     uint64_t aivNum = config.vecMachineNumberPerAICPU;
     uint64_t mixedCoreNum = 0;
-    ASSERT(config.coreMachineNumberPerAICPU == (aicNum + aivNum));
+    ASSERT(config.coreMachineNumberPerAICPU == (aicNum + aivNum)) << "[SIMULATION]: " 
+        << "The number of cores must be equal to the sum of the aic and aiv. Please reconfigure them.";
     if (config.cubeVecMixMode) {
         mixedCoreNum = config.coreMachineNumberPerAICPU;
         aicNum = 0;
@@ -404,7 +406,7 @@ void SimSys::AddMachine(std::shared_ptr<Machine> m)
 
 void SimSys::Step()
 {
-    MLOG_INFO("[ModelTop][Step] ========== ", globalCycles, " ========== [ModelTop][Step]");
+    SIMULATION_LOGI("[ModelTop][Step] ========== %llu ========== [ModelTop][Step]", globalCycles);
     for (const auto &machine : machines) {
         machine->Step();
     }
@@ -444,7 +446,7 @@ bool SimSys::IsTerminate() const
 void SimSys::ReportDeadlock(size_t machineId)
 {
     deadlock = true;
-    MLOG_ERROR("[ReportDeadlock] Machine ", machineId, " is deadlock at cycle ", globalCycles);
+    SIMULATION_LOGE("[ReportDeadlock] Machine %d is deadlock at cycle %llu", machineId, globalCycles);
 }
 
 bool SimSys::IsDeadlock() const
@@ -499,7 +501,7 @@ void SimSys::DrawTasks(const TaskMap &taskMap, std::string prefix)
         ModelVisualizer visualizer;
         std::string outPath = GetFileName(graphsOutdir, jsonPath, prefix, startFuncName + ".taskGraph.dot");
         visualizer.DrawTasks(taskMap, true, outPath);
-        MLOG_WARN("Task Graph Path:", outPath);
+        SIMULATION_LOGW("Task Graph Path: %s", outPath.c_str());
     }
 }
 
@@ -532,7 +534,7 @@ void SimSys::DumpTasksTopo(const TaskMap &taskMap, std::string prefix)
 
     std::string fileName = GetFileName(outdir, jsonPath, prefix, "topo.json");
     topoOutFile = fileName;
-    MLOG_WARN("Topo File Path:", fileName);
+    SIMULATION_LOGW("Topo File Path: %s", fileName.c_str());
     std::ofstream ofs(fileName);
     ofs << totalTopoJson.dump(1) << std::endl;
     ofs.close();
@@ -544,8 +546,8 @@ void SimSys::OutputTrace(std::string prefix)
     std::ofstream os(outPath);
     totalTraceLogger->ToTrace(os);
     os.close();
-    MLOG_WARN("Please Use Smartperf For Visualization:");
-    MLOG_WARN("Trace Path:", outPath, "\n");
+    SIMULATION_LOGW("Please Use Smartperf For Visualization:");
+    SIMULATION_LOGW("Trace Path: %s \n", outPath.c_str());
 }
 
 void SimSys::OutputPerfettoTrace(std::string prefix)
@@ -555,8 +557,8 @@ void SimSys::OutputPerfettoTrace(std::string prefix)
     Json trace = totalTraceLogger->ToJson();
     os << trace.dump(1) << std::endl;
     os.close();
-    MLOG_WARN("Please Use Perfetto For Visualization:");
-    MLOG_WARN("Perfetto Trace Path:", outPath, "\n");
+    SIMULATION_LOGW("Please Use Perfetto For Visualization:");
+    SIMULATION_LOGW("Perfetto Trace Path: %s \n", outPath.c_str());
 }
 
 void SimSys::DumpFunctionExecuteTime(std::string prefix)
@@ -581,12 +583,12 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
     totalTraceLogger->ToPipeTrace(osPipeSwim);
     osPipeSwim.close();
 
-    MLOG_WARN("Pipe SwimLane Graph Generated (PNG & HTML):", pipeDetailPath);
+    SIMULATION_LOGW("Pipe SwimLane Graph Generated (PNG & HTML): %s", pipeDetailPath.c_str());
     std::string drawScriptPath =  GetCurrentSharedLibPath() + "/scripts/draw_pipe_swim_lane.py";
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
     int ret = system(cmd.c_str());
     if (ret != 0) {
-        MLOG_ERROR("cmd error: ", cmd.c_str());
+        SIMULATION_LOGE("cmd error: %s", cmd.c_str());
     }
 }
 
@@ -612,33 +614,33 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     if (globalCycles > config.drawPngThresholdCycle) {
         return;
     }
-    MLOG_WARN("SwimLane Graph Generated (PNG):", outSwimPath);
+    SIMULATION_LOGW("SwimLane Graph Generated (PNG): %s", outSwimPath.c_str());
     std::string drawScriptPath =  GetCurrentSharedLibPath() + "/scripts/print_swim_lane.py";
     std::string cmd = "python3 " + drawScriptPath + " " + outSwimPath + " -t";
     int result1 = system(cmd.c_str());
     if (result1 != 0) {
-        MLOG_ERROR("cmd error: ", cmd.c_str());
+        SIMULATION_LOGE("cmd error: %s", cmd.c_str());
     }
 
     std::string mergeScriptPath =  GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
     auto devicePtr = std::dynamic_pointer_cast<DeviceMachine>(machineGroup[int(MachineType::DEVICE)][0]);
-    MLOG_WARN("devicePtr->config.submitTopo: ", devicePtr->config.submitTopo);
+    SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
     std::string topo_txt_path = outdir + "/../" + "dyn_topo.txt";
-    MLOG_INFO("topo_txt_path: ", topo_txt_path);
+    SIMULATION_LOGI("topo_txt_path: %s", topo_txt_path.c_str());
     std::string program_json_path = outdir + "/../" + "program.json";
-    MLOG_INFO("program_json_path: ", program_json_path);
+    SIMULATION_LOGI("program_json_path: %s", program_json_path.c_str());
     std::string label_type = "--label_type=1 --time_convert_denominator=1800"; // default 1.8GHz
-    MLOG_INFO("label_type: ", label_type);
+    SIMULATION_LOGI("label_type: %s", label_type.c_str());
     if (devicePtr->config.submitTopo) {
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topo_txt_path + " " + program_json_path + " " + label_type;
     } else {
-        MLOG_WARN("devicePtr->config.submitTopo: ", devicePtr->config.submitTopo);
+        SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topoOutFile;
     }
-    MLOG_INFO("cmd: ", cmd);
+    SIMULATION_LOGI("cmd: %s", cmd.c_str());
     int result2 = system(cmd.c_str());
     if (result2 != 0) {
-        MLOG_ERROR("cmd error: ", cmd.c_str());
+        SIMULATION_LOGE("cmd error: %s", cmd.c_str());
     }
 }
 
@@ -649,13 +651,13 @@ void SimSys::OutputCalendarScheduleCpp(std::string prefix)
     }
     std::string outPath = GetFileName(outdir, jsonPath, prefix, ".calendar.cpp");
     calendarGenerator->GenCalendarCpp(outPath);
-    MLOG_WARN("Genearte Calendar File:", outPath);
+    SIMULATION_LOGW("Genearte Calendar File: %s", outPath.c_str());
 }
 
 void SimSys::OutputConfig(std::string prefix)
 {
     std::string outPath = GetFileName(outdir, jsonPath, prefix, "config.ini");
-    MLOG_WARN("Config Path:", outPath);
+    SIMULATION_LOGW("Config Path: %s", outPath.c_str());
     std::ofstream os(outPath);
     os << config.DumpParameters() << std::endl;
     if (!machineGroup[int(MachineType::DEVICE)].empty()) {
@@ -777,7 +779,7 @@ void SimSys::PrintStat()
     std::streambuf *coutBuf = nullptr;
     if (config.statisticReportToFile) {
         std::string outPath = GetFileName(outdir, jsonPath, "", "stat.report.txt");
-        MLOG_WARN("Statistic Path:", outPath);
+        SIMULATION_LOGW("Statistic Path: %s", outPath.c_str());
         coutBuf = reporter.ReportSetOutStreamFile(outPath);
     }
     if (deadlock) {
@@ -809,7 +811,8 @@ uint64_t SimSys::GetCycles() const
 }
 
 void SimSys::UpdateNextCycles(uint64_t nextCycle) {
-    ASSERT(nextCycle > globalCycles);
+    ASSERT(nextCycle > globalCycles) << "[SIMULATION]: " 
+        << "nextCycle is less than or equels to globalCycles. nextCycles=" << nextCycle << ", globalCycles=" << globalCycles;
     nextSimulationCycles = std::min(nextSimulationCycles, nextCycle);
 }
 
