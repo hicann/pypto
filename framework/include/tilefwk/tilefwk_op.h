@@ -146,6 +146,7 @@ Tensor Sign(const Tensor &operand);
 Tensor Duplicate(const Tensor &operand);
 Tensor Gather(const Tensor &params, const Tensor &indices, int axis);
 Tensor GatherElements(const Tensor &params, const Tensor &indices, int axis);
+Tensor GatherMask(const Tensor &self, const uint8_t patternMode);
 
 enum class ScatterMode {
     NONE,

@@ -113,6 +113,8 @@ stest:
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/0
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/4
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/14
+      - TestGatherMask/GatherMaskOperationTest.TestGatherMask/19
+      - TestGatherMask/GatherMaskOperationTest.TestGatherMask/18
       - TestAdds/AddsOperationTest.TestAdds/20
       - TestAdds/AddsOperationTest.TestAdds/21
       - TestAdds/AddsOperationTest.TestAdds/22

@@ -1860,6 +1860,54 @@ def gen_gcds_op_golden(case_name: str, output: Path, case_index: int = None) -> 
     return gen_op_golden("Gcds", gcds_golden_func, output, case_index)
 
 
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestGatherMask/GatherMaskOperationTest.TestGatherMask",
+    ]
+)
+def gen_gathermask_op_golden(
+    case_name: str, output: Path, case_index: int = None
+) -> bool:
+    def golden_func(inputs: list, config: dict):
+        input_tensor = torch.from_numpy(inputs[0])
+        params = config.get("params")
+        pattern_mode = int(params.get("patternMode"))
+        last_dim = input_tensor.shape[-1]
+        if last_dim % 2 != 0 and pattern_mode in [1, 2]:
+            raise ValueError("The last axis should be divisible by 2 when ptternMode is 1 or 2")
+        if last_dim % 4 != 0 and pattern_mode in [3, 4, 5, 6]:
+            raise ValueError("The last axis should be divisible by 4 when ptternMode is 3,4,5 or 6")
+        # 获取索引
+        indices = torch.arange(last_dim)
+
+        if pattern_mode == 7:
+            return [inputs[0]]
+        else:
+            if pattern_mode == 1:
+                # 每两个取第一个
+                selected_indices = indices[::2]
+            elif pattern_mode == 2:
+                # 每两个取第二个
+                selected_indices = indices[1::2]
+            elif pattern_mode == 3:
+                # 每四个取第一个
+                selected_indices = indices[::4]
+            elif pattern_mode == 4:
+                # 每四个取第二个
+                selected_indices = indices[1::4]
+            elif pattern_mode == 5:
+                # 每四个取第三个
+                selected_indices = indices[2::4]
+            elif pattern_mode == 6:
+                # 每四个取第四个
+                selected_indices = indices[3::4]
+            #使用索引选择元素
+            output = input_tensor.index_select(-1, selected_indices)
+            return [output.numpy()]
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("GatherMask", golden_func, output, case_index)
+        
+
 def cumsum_golden_func(inputs: list, config: dict):
     params = config.get("params")
     axis = params["axis"]

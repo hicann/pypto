@@ -919,6 +919,24 @@ TEST_F(OperationImplTest, test_Gather) {
     }
 }
 
+TEST_F(OperationImplTest, test_GatherMask_1) {
+    TileShape::Current().SetVecTile(8, 8);
+    Tensor operand1(DT_FP16, {8, 16}, "operand1");
+    Tensor result;
+    FUNCTION("TestGatherMask") {
+        result = GatherMask(operand1, 1);
+    }
+}
+
+TEST_F(OperationImplTest, test_GatherMask_3) {
+    TileShape::Current().SetVecTile(8, 8);
+    Tensor operand1(DT_FP16, {8, 16}, "operand1");
+    Tensor result;
+    FUNCTION("TestGatherMask") {
+        result = GatherMask(operand1, 3);
+    }
+}
+
 TEST_F(OperationImplTest, test_Scatter_FP16) {
     TileShape::Current().SetVecTile(8, 16);
     Tensor operand1(DT_FP16, {8, 16}, "operand1");

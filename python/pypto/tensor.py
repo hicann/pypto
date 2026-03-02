@@ -643,6 +643,10 @@ class Tensor:
         return pypto.gather(self, dim, index)
 
     @source_location
+    def gathermask(self, pattern_mode: int) -> 'Tensor':
+        return pypto.gathermask(self, pattern_mode)
+
+    @source_location
     def index_add_(self, dim: int, index: 'Tensor', source: 'Tensor', *,
                     alpha: Union[int, float] = 1) -> 'Tensor':
         return pypto.index_add_(self, dim, index, source, alpha=alpha)

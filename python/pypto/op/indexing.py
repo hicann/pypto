@@ -482,3 +482,62 @@ def scatter(
     if isinstance(src, float):
         return pypto_impl.Scatter(input, index, pypto_impl.Element(input.dtype, src), dim, scatter_mode)
     return pypto_impl.Scatter(input, index, src, dim, scatter_mode)
+
+
+@op_wrapper
+def gathermask(self: Tensor, pattern_mode: int) -> Tensor:
+    """
+    Based on the built-in Mask selected by PatternMode, 
+    the positions in the self Tensor where the corresponding Bit is 1 form the output Tensor, 
+    and the values where the Bit is 0 are directly discarded. 
+    There are 7 modes for PatternMode:
+    - PatternMode=1: Take the first element of every two elements in the last axis.
+    - PatternMode=2: Take the second element of every two elements in the last axis.
+    - PatternMode=3: Take the first element of every four elements in the last axis.
+    - PatternMode=4: Take the second element of every four elements in the last axis.
+    - PatternMode=5: Take the third element of every four elements in the last axis.
+    - PatternMode=6: Take the fourth element of every four elements in the last axis.
+    - PatternMode=7: Take all elements in the last axis.
+
+    Parameters
+    ----------
+    self : Tensor
+        Source tensor from which to gather values.
+    pattern_mode : int
+        Only supports 1 to 7.
+
+    Returns
+    -------
+    Tensor
+        A new tensor, with the same dtype as `self`, and the Shape of the output Tensor is as follows: 
+        - pattern_mode <= 2, the output shape's trailing axis is self.shape's trailing axis / 2, 
+            while other axes match the self shape.
+        - When 2 < pattern_mode < 7, the output shape's trailing axis is self.shape's trailing axis divided by 4, 
+            while other axes remain consistent with the self shape.
+        - pattern_mode = 7, output shape = self shape.
+    Raises
+    ------
+    patterModeError
+        If any value in `pattern_mode` is outside the inclusive range [1, 7].
+    RuntimeError
+        If 1 <= pattern_mode <= 2, self.shape[self.shape.size()-1] % 2 == 0.
+        If 3 <= pattern_mode <= 6, self.shape[self.shape.size()-1] % 4 == 0.
+
+    Examples
+    --------
+    x = pypto.tensor([3, 6], pypto.DT_INT32)        # shape (3, 6)
+    pattern_mode = 1
+    y = pypto.gathermask(x, pattern_mode)
+
+    Self x:  [[0 1 2 3 4 5],
+               [6 7 8 9 10 11],
+               [12 13 14 15 16 17]]
+    pattern_mode:  1,
+
+    Output y: [[0 2 4],
+               [6 8 10],
+               [12 14 16]]               # shape (3, 3)
+
+    """
+
+    return pypto_impl.GatherMask(self, pattern_mode)
