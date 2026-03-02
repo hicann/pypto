@@ -579,6 +579,33 @@ TEST_F(DynamicOpsTest, ElementScalar) {
     EXPECT_EQ(BoolRes, true);
 }
 
+TEST_F(DynamicOpsTest, Expm1) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 2;
+    int64_t n = 2;
+    Tensor self(DT_FP32, {b, n}, "self");
+    Tensor outValue(DT_FP32, {b, n}, "outValue");
+
+    std::vector<float> inputData = {1.0f, 2.0f, 3.0f, 4.0f};
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor(self, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(outValue, 0.0f),
+    });
+
+    FUNCTION("main", {self}, {outValue}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(self, {b, n}, {0, 0});
+            outValue = Expm1(t0);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, MatmulAcc) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);

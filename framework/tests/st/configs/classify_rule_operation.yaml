@@ -128,6 +128,11 @@ stest:
       - TestExp/ExpOperationTest.TestExp/19
       - TestExp/ExpOperationTest.TestExp/0
       - TestExp/ExpOperationTest.TestExp/5
+      - TestExpm1/Expm1OperationTest.TestExpm1/19
+      - TestExpm1/Expm1OperationTest.TestExpm1/20
+      - TestExpm1/Expm1OperationTest.TestExpm1/21
+      - TestExpm1/Expm1OperationTest.TestExpm1/22
+      - TestExpm1/Expm1OperationTest.TestExpm1/23
       - TestMul/MulOperationTest.TestMul/21
       - TestMul/MulOperationTest.TestMul/22
       - TestMul/MulOperationTest.TestMul/25

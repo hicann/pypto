@@ -591,6 +591,56 @@ def test_exp2_basic(device_id: int = None, run_mode: str = "npu"):
     print(f"Expected: {expected}")
     print("✓ Basic usage of exp2 function completed successfully")
 
+
+    # ============================================================================
+    # EXPM1 Examples
+    # ============================================================================
+
+
+    def create_expm1_op_kernel(x_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
+        if dynamic:
+            x_shape = pypto.frontend.dynamic("x_shape")
+        else:
+            x_shape = x_shape
+
+        if run_mode == "npu":
+            mode = pypto.RunMode.NPU
+        elif run_mode == "sim":
+            mode = pypto.RunMode.SIM
+        else:
+            raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+        @pypto.frontend.jit(runtime_options={"run_mode": mode})
+        def expm1_kernel(
+                x: pypto.Tensor(x_shape, pypto.DT_FP32),
+        ) -> pypto.Tensor(x_shape, pypto.DT_FP32):
+            pypto.set_vec_tile_shapes(2, 8)
+            out = pypto.expm1(x)
+            return out
+
+        return expm1_kernel
+
+
+    def test_expm1_basic(device_id: int = None, run_mode: str = "npu"):
+        """Test basic usage of exp function"""
+        print("=" * 60)
+        print("Test: Basic Usage of expm1 Function")
+        print("=" * 60)
+
+        device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+
+        dtype = torch.float32
+        x = torch.tensor([0, 1, 2], dtype=dtype, device=device)
+        expected = torch.tensor([0.0000, 1.7183, 6.3891], dtype=dtype, device=device)
+
+        out = create_expm1_op_kernel(x.shape, run_mode)(x)
+        if run_mode == "npu":
+            assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
+        print(f"Output: {out}")
+        print(f"Expected: {expected}")
+        print("✓ Basic usage of expm1 function completed successfully")
+
+
 # ============================================================================
 # LOG Examples
 # ============================================================================

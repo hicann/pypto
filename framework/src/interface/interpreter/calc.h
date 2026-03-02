@@ -81,6 +81,9 @@ inline void Exp(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
 inline void Exp2(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Exp2(Trans(out), Trans(self));
 }
+inline void Expm1(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
+    GetCalcOps()->Expm1(Trans(out), Trans(self));
+}
 inline void Neg(LogicalTensorDataPtr out, LogicalTensorDataPtr self) {
     GetCalcOps()->Neg(Trans(out), Trans(self));
 }

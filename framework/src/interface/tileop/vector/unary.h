@@ -525,6 +525,56 @@ TILEOP void TRound(T0 dst, T1 tmp, T2 src, Scalar powDecimals) {
     }
 }
 
+#define OP_TILE_OP_EXPM1 TExpm1
+template <typename T0, typename T1, typename T2>
+TILEOP void TExpm1(T0 dst, T1 tmp, T2 src) {
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+
+    auto dstTile = PtoTile<T0>(dst);
+    auto tmpTile = PtoTile<T1>(tmp);
+    auto srcTile = PtoTile<T2>(src);
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                dstTile.Assign(dst, tileOffsets);
+                tmpTile.Assign(tmp, tileOffsets);
+                srcTile.Assign(src, tileOffsets);
+
+                if constexpr (std::is_same_v<typename T2::Type, float>) {
+                    pto::TEXP(dstTile.Data(), srcTile.Data());
+#ifdef __DAV_V220
+                    pipe_barrier(PIPE_V);
+#endif
+                    pto::TADDS(dstTile.Data(), dstTile.Data(), -1.0f);
+                } else {
+                    pto::TCVT(tmpTile.Data(), srcTile.Data(), pto::RoundMode::CAST_NONE);
+#ifdef __DAV_V220
+                    pipe_barrier(PIPE_V);
+#endif
+                    pto::TEXP(tmpTile.Data(), tmpTile.Data());
+#ifdef __DAV_V220
+                    pipe_barrier(PIPE_V);
+#endif
+                    if constexpr (std::is_same_v<typename T2::Type, half> ||
+                                  std::is_same_v<typename T2::Type, bfloat16_t>) {
+                        pto::TADDS(tmpTile.Data(), tmpTile.Data(), -1.0f);
+#ifdef __DAV_V220
+                        pipe_barrier(PIPE_V);
+#endif
+                        pto::TCVT(dstTile.Data(), tmpTile.Data(), pto::RoundMode::CAST_RINT);
+                    } else {
+                        pto::TADDS(dstTile.Data(), tmpTile.Data(), -1.0f);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #define OP_TILE_OP_RECIPROCAL TReciprocal
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TReciprocal(T0 dst, T1 src) {

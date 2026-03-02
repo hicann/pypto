@@ -22,6 +22,7 @@ enum class UnaryOp : uint8_t {
     ABS = 0,
     EXP,
     EXP2,
+    EXPM1,
     NEG,
     REC,
     RSQRT,

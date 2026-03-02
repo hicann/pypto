@@ -680,6 +680,26 @@ def gen_exp_op_golden(case_name: str, output: Path, case_index: int = None) -> b
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Exp", golden_func, output, case_index)
 
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestExpm1/Expm1OperationTest.TestExpm1",
+    ]
+)
+def gen_expm1_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        x = safe_tensor_conversion(inputs[0])
+        input_dtype = inputs[0].dtype
+        y = torch.expm1(x)
+        if input_dtype == bfloat16:
+            y = y.to(torch.float32).numpy().astype(bfloat16)
+        return [np.array(y)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Expm1", golden_func, output, case_index)
+
+
 @GoldenRegister.reg_golden_func(
     case_names=[
         "TestExp2/Exp2OperationTest.TestExp2",

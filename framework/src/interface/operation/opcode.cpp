@@ -227,6 +227,10 @@ void OpcodeManager::RegisterVectorUnary() {
     RegisterInfo(Opcode::OP_EXP, OpCoreType::AIV, "EXP", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Texp", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_EXPM1, OpCoreType::AIV, "EXPM1", {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Texpm1", PIPE_V, PIPE_V, CoreType::AIV},
+        OpCalcType::ELMWISE, {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis},
+        TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_NEG, OpCoreType::AIV, "NEG", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Tneg", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
@@ -907,6 +911,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {         Opcode::OP_RECIPROCAL,    "TReciprocal"},
     {                Opcode::OP_EXP,           "TExp"},
     {               Opcode::OP_EXP2,          "TExp2"},
+    {              Opcode::OP_EXPM1,         "TExpm1"},
     {                Opcode::OP_ABS,           "TAbs"},
     {         Opcode::OP_LOGICALNOT,    "TLogicalNot"},
     {            Opcode::OP_MAXIMUM,           "TMax"},
