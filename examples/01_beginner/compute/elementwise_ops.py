@@ -544,6 +544,54 @@ def test_exp_basic(device_id: int = None, run_mode: str = "npu"):
 
 
 # ============================================================================
+# EXP2 Examples
+# ============================================================================
+
+
+def create_exp2_op_kernel(x_shape: tuple, run_mode: str = "npu", dynamic: bool = False):
+    if dynamic:
+        x_shape = pypto.frontend.dynamic("x_shape")
+    else:
+        x_shape = x_shape
+
+    if run_mode == "npu":
+        mode = pypto.RunMode.NPU
+    elif run_mode == "sim":
+        mode = pypto.RunMode.SIM
+    else:
+        raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
+
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def exp2_kernel(
+        x: pypto.Tensor(x_shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(x_shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(2, 8)
+        out = pypto.exp2(x)
+        return out
+
+    return exp2_kernel
+
+
+def test_exp2_basic(device_id: int = None, run_mode: str = "npu"):
+    """Test basic usage of exp2 function"""
+    print("=" * 60)
+    print("Test: Basic Usage of exp2 Function")
+    print("=" * 60)
+    
+    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    
+    dtype = torch.float32
+    x = torch.tensor([0, 1, 2], dtype=dtype, device=device)
+    expected = torch.tensor([1.0000, 2.0000, 4.0000], dtype=dtype, device=device)
+
+    out = create_exp2_op_kernel(x.shape, run_mode)(x)
+    if run_mode == "npu":
+        assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    print(f"Output: {out}")
+    print(f"Expected: {expected}")
+    print("✓ Basic usage of exp2 function completed successfully")
+
+# ============================================================================
 # LOG Examples
 # ============================================================================
 

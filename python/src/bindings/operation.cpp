@@ -85,6 +85,8 @@ void bind_operation(py::module &m) {
 
     m.def("Exp", [](const Tensor &self) { return npu::tile_fwk::Exp(self); }, "Tensor exp.");
 
+    m.def("Exp2", [](const Tensor &self) { return npu::tile_fwk::Exp2(self); }, "Tensor exp2.");
+
     m.def(
         "Transpose",
         [](const Tensor &self, const std::vector<int> &perm) { return npu::tile_fwk::Transpose(self, perm); },

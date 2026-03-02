@@ -518,6 +518,37 @@ def exp(input: Tensor) -> Tensor:
 
 
 @op_wrapper
+def exp2(input: Tensor) -> Tensor:
+    """Computes the element-wise exponential of `input`.
+
+    This function calculates the formula: `out = e ** input`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise exponential.
+
+    See Also
+    -------
+    sqrt : Element-wise square-root
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.exp2(x)
+
+    Input x: [0.0    1.0    2.0]
+    Output y:[1.0000 2.0000 4.0000]
+    """
+    return pypto_impl.Exp2(input)
+
+
+@op_wrapper
 def sign(a: Tensor) -> Tensor:
     """Computes the element-wise exponential of `input`.
 

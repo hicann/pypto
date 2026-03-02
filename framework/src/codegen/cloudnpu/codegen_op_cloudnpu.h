@@ -394,6 +394,8 @@ private:
     std::string PrintOneHotLayout() const;
     std::string PrintRound() const;
     std::string PrintRoundLayout() const;
+    std::string PrintExp2() const;
+    std::string PrintExp2Layout() const;
 
     DynamicParamPackMTE PrepareDynamicShapeInfoForMTE(
         int dynShapeIdx, int ShapeDim = SHAPE_DIM4, bool isGmSpill = false) const;

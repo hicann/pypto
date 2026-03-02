@@ -126,6 +126,8 @@ stest:
       - TestDivs/DivsOperationTest.TestDivs/2
       - TestExp/ExpOperationTest.TestExp/18
       - TestExp/ExpOperationTest.TestExp/19
+      - TestExp/ExpOperationTest.TestExp/0
+      - TestExp/ExpOperationTest.TestExp/5
       - TestMul/MulOperationTest.TestMul/21
       - TestMul/MulOperationTest.TestMul/22
       - TestMul/MulOperationTest.TestMul/25

@@ -76,6 +76,14 @@ enum class MIMOIdx : unsigned {
     SRC1_IDX = 3,
 };
 
+// multi input latched output
+enum class MILOIdx : unsigned {
+    DST_IDX = 0,
+    TMP_IDX = 1,
+    TMP2_IDX = 2,
+    SRC0_IDX = 3,
+};
+
 const std::unordered_map<OperandType, std::string> OPERAND_TYPE_TO_ADDR_TYPE{
     {  BUF_DDR,   "__gm__"},
     {   BUF_UB, "__ubuf__"},

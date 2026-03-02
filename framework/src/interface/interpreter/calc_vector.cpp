@@ -263,6 +263,15 @@ void ExecuteOpTrunc(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_TRUNC, Opcode::OP_TRUNC, ExecuteOpTrunc);
 
+void ExecuteOpExp2(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ioperandDataViewList->size() == 1);
+    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto &iop = ctx->ioperandDataViewList->at(0);
+    calc::Exp2(ret, iop);
+}
+REGISTER_CALC_OP(OP_EXP2, Opcode::OP_EXP2, ExecuteOpExp2);
+
 void ExecuteOpRound(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
     ASSERT(ctx->ioperandDataViewList->size() == 1);

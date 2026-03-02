@@ -606,6 +606,32 @@ TEST_F(OperationImplTest, test_Range_INT32) {
     }
 }
 
+TEST_F(OperationImplTest, Test_Exp2_FP16) {
+    PROGRAM("Exp2") {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP16, shape, "operand1");
+        auto output = Tensor(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Exp2_FP16") {
+            output = Exp2(input_a);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Exp2_FP32) {
+    PROGRAM("Exp2") {
+        std::vector<int64_t> shape = {128, 32};
+        TileShape::Current().SetVecTile({128, 32});
+        Tensor input_a(DT_FP32, shape, "operand1");
+        auto output = Tensor(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Exp2_FP32") {
+            output = Exp2(input_a);
+        }
+    }
+}
+
 TEST_F(OperationImplTest, Test_Round_FP16) {
     PROGRAM("Round") {
         std::vector<int64_t> shape = {128, 32};
