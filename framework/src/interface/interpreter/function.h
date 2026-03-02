@@ -272,6 +272,7 @@ enum class OpInfoCsvHeader {
     num = 0,
     rootFuncID,
     funcID,
+    passName,
     verifyType,
     callopMagic,
     loopInfo,
@@ -286,6 +287,7 @@ enum class OpInfoCsvHeader {
     inputDtype,
     inputTensors,
     outputShape,
+    tensorOffset,
     outputValidShape,
     outputDynValidShape,
     outputDtype,
@@ -319,9 +321,9 @@ struct FunctionInterpreter {
 
         std::string dumpFilePath = dumpPath + "verify_result.csv";
         execResultFile = fopen(dumpFilePath.c_str(), "w");
-        std::vector<std::string> csvHeader = {"No.", "rootFuncID", "funcID", "verifyType", "callopMagic", "loopInfo", "opMagic",
+        std::vector<std::string> csvHeader = {"No.", "rootFuncID", "funcID", "passName", "verifyType", "callopMagic", "loopInfo", "opMagic",
             "opCode", "rawTensorMagic", "tensorMagic", "callopRawMagic", "offset", "inputShape", "inputValidShape", "inputDtype", "inputTensors", 
-            "outputShape", "outputValidShape", "outputDynValidShape", "outputDtype",
+            "outputShape", "tensorOffset", "outputValidShape", "outputDynValidShape", "outputDtype",
             "outputTensor", "verifyResult", "maxAbsDiff", "maxRelDiff", "errorCount", "errorRatio"};
         WriteCsvRow(csvHeader);
     }
@@ -346,6 +348,8 @@ struct FunctionInterpreter {
     FILE *execResultFile{nullptr};
     FILE *execDumpStyleFile{nullptr};
     std::string execDumpFuncKey;
+    std::string execDumpPassName;
+    std::string execDumpFunPath;
     std::vector<ElementDump> execDumpElementList;
     std::vector<std::shared_ptr<FunctionFrame>> execDumpStack;
     int frameCount{0};
@@ -745,6 +749,7 @@ struct FunctionInterpreter {
             if (callopList.size() != 0) {
                 ExecuteFunctionDynamic(func, controlFlowExecution);
             } else {
+                execDumpFunPath = "function_" + func->GetMagicName();
                 auto &incastSlot = func->GetSlotScope()->ioslot.incastSlot;
                 auto &outcastSlot = func->GetSlotScope()->ioslot.outcastSlot;
                 auto &partialSlot = func->GetSlotScope()->ioslot.partialUpdateOutcastList;
@@ -1043,7 +1048,7 @@ public:
     }
 
     std::shared_ptr<FunctionCaptureExecution> RunForPass(
-            const std::string &funcKey,
+            std::string &funcKey,
             Function *func,
             const std::shared_ptr<FunctionCaptureExecution> &capture) {
         execDumpFuncKey = funcKey;

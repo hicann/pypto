@@ -22,3 +22,6 @@ PyYAML
 matplotlib
 pandas
 plotly
+
+# 精度工具pass间数据对比脚本
+tabulate

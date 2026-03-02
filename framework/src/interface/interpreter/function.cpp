@@ -281,7 +281,8 @@ void FunctionInterpreter::DumpTensorList(const std::string &name, const std::vec
 void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *frame, std::vector<std::string> &opInfo) {
     opInfo[toIndex(OpInfoCsvHeader::rootFuncID)] = std::to_string(frame->rootFuncIndex);
     opInfo[toIndex(OpInfoCsvHeader::funcID)] = std::to_string(frame->funcIndex);
-    opInfo[toIndex(OpInfoCsvHeader::verifyType)] = execDumpFuncKey;
+    opInfo[toIndex(OpInfoCsvHeader::passName)] = execDumpPassName;
+    opInfo[toIndex(OpInfoCsvHeader::verifyType)] = execDumpFunPath;
     opInfo[toIndex(OpInfoCsvHeader::loopInfo)] = GetLoopSymbolString();
     opInfo[toIndex(OpInfoCsvHeader::opCode)] = op->GetOpcodeStr();
     opInfo[toIndex(OpInfoCsvHeader::opMagic)] = std::to_string(op->GetOpMagic());
@@ -360,6 +361,7 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
             opInfo[toIndex(OpInfoCsvHeader::outputValidShape)] = ShapeToString(dataView->GetValidShape());
             opInfo[toIndex(OpInfoCsvHeader::outputDynValidShape)] = ShapeToString(EvaluateValidShape((op->GetOOperands()[k]->GetDynValidShape()), linearArgList));
             opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = DataType2String(dataView->GetDataType());
+            opInfo[toIndex(OpInfoCsvHeader::tensorOffset)] = ShapeToString(dataView->GetOffset());
             opInfo[toIndex(OpInfoCsvHeader::outputTensor)] = dumpTensorFileName;
             opInfo[toIndex(OpInfoCsvHeader::verifyResult)] = "-";
 

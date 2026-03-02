@@ -187,6 +187,7 @@ void FlowVerifier::VerifyTensorGraph(Function *entry,
     functionInterpreter_ = std::make_shared<FunctionInterpreter>();
     functionInterpreter_->Initialize(entry, inoutDataViewList);
     functionInterpreter_->verifyType = VerifyType::TENSOR_GRAPH;
+    functionInterpreter_->execDumpPassName = "tensor_graph";
     UpdateInterpreterCache();
 
     if (config::GetVerifyOption<bool>(KEY_PASS_VERIFY_SAVE_TENSOR)) {
@@ -228,6 +229,8 @@ static std::string ToString(const T &val, size_t totalSize) {
 void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &passIdentifier) {
     functionInterpreter_->verifyType = VerifyType::PASS;
     functionInterpreter_->passIndex = passIndex;
+    functionInterpreter_->execDumpPassName = "pass_" + ToString(passIndex, 2) + "_" + passIdentifier;
+    functionInterpreter_->execDumpFunPath = "function_" + func->GetMagicName();
     UpdateInterpreterCache();
     if (controlFlowExecution_->executionListDict.count(func) == 0) {
         return;
@@ -250,8 +253,7 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
         functionInterpreter_->DumpSetLevelTensor();
     }
     for (size_t captureIndex = 0; captureIndex < captureList.size(); captureIndex++) {
-        const std::string key = "function_" + func->GetMagicName() + ".pass_" + ToString(passIndex, 2) + "_" +
-                                passIdentifier;
+        const std::string key = functionInterpreter_->execDumpFunPath + "_" + functionInterpreter_->execDumpPassName;
         ALOG_INFO(key, ": Verify");
         functionInterpreter_->captureIndex = captureIndex;
 
@@ -260,7 +262,7 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
 
         std::shared_ptr<FunctionCaptureExecution> captureExecution = nullptr;
         try {
-            captureExecution = functionInterpreter_->RunForPass(key, func, capture);
+            captureExecution = functionInterpreter_->RunForPass(functionInterpreter_->execDumpPassName, func, capture);
         } catch (std::exception &e) {
             ALOG_ERROR_F("VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
                          func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex, e.what());
