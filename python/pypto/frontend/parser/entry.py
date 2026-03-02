@@ -324,13 +324,9 @@ class JitCallableWrapper:
         out_tensors = self._allocate_output_tensors(
             in_tensors, input_tensor_defs, output_tensor_defs, device
         )
-        pto_in_tensors = self._convert_tensors_with_metadata(
-            in_tensors, input_tensor_defs
-        )
-        pto_out_tensors = self._convert_tensors_with_metadata(
-            out_tensors, output_tensor_defs
-        )
-        self._execute_kernel(pto_in_tensors, pto_out_tensors)
+        torch_tensors = [*in_tensors, *out_tensors]
+        tensor_defs = [*input_tensor_defs, *output_tensor_defs]
+        self._execute_kernel(torch_tensors, tensor_defs)
         if not out_tensors:
             return None
         if len(out_tensors) == 1:
@@ -520,26 +516,31 @@ class JitCallableWrapper:
 
     def compile(
         self,
-        args
+        tensors,
+        tensor_defs=None,
     ) -> None:
         """Lazily compile function using PTO tensors for dynamic shape binding & verification.
 
-        Compiles the wrapped function on first call (lazy mode), using input PTO tensors to:
-        1. Bind dynamic dimensions from concrete shapes (ori_shape)
-        2. Set up verification data
-        3. Generate PTO IR via deferred parsing
+        Compiles the wrapped function on first call (lazy mode).
 
         Parameters
         ----------
-        pto_tensors : list[pypto.Tensor]
-            PTO tensors with concrete shapes for dynamic dim binding & verification setup
+        tensors : list
+            Either list[pypto.Tensor] (PTO tensors) or list[torch.Tensor] (torch tensors).
+        tensor_defs : list[pypto.Tensor], optional
+            When provided, tensors are torch tensors and will be converted to PTO via from_torch
+            using name/dynamic_axis/dtype from each tensor_def. When None, tensors are PTO tensors.
         """
+        if tensor_defs is not None:
+            args = self._convert_tensors_with_metadata(tensors, tensor_defs)
+        else:
+            args = tensors
+
         # Re-create parser for compilation
         self._parser = self._create_parser()
         self._parser.parse()
 
         # Initialize backend for compilation
-
         self._setup_verify_data(args)
 
         # Set options AFTER OperatorBegin() to match @pypto.jit behavior
@@ -694,20 +695,23 @@ class JitCallableWrapper:
 
     def _execute_kernel(
         self,
-        pto_in_tensors: list,
-        pto_out_tensors: list,
+        torch_tensors: list,
+        tensor_defs: list,
     ) -> None:
         """Run kernel on NPU or CPU (SIM)."""
         if self._runtime_options.get("run_mode", None) == RunMode.NPU:
-            pypto_impl.LaunchKernel(
-                self, _current_stream(), *pto_in_tensors, *pto_out_tensors
+            pypto_impl.LaunchKernelTorch(
+                self, _current_stream(), torch_tensors, tensor_defs
             )
         else:
+            pto_tensors = self._convert_tensors_with_metadata(
+                torch_tensors, tensor_defs
+            )
             with pypto.options("jit_scope"):
                 self._set_config_option()
                 pypto_impl.DeviceInit()
-                self.compile([*pto_in_tensors, *pto_out_tensors])
-                self._run_with_cpu([*pto_in_tensors, *pto_out_tensors], [])
+                self.compile([*pto_tensors])
+                self._run_with_cpu([*pto_tensors], [])
 
     def _check_input_defs_match_tensors(self, in_tensors: list, input_tensor_defs: list[pypto.Tensor]) -> None:
         """Check if the input tensor definitions match the input tensors.

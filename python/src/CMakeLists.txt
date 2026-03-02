@@ -11,6 +11,7 @@
 pybind11_add_module(pypto_impl
         MODULE
             pybind11.cpp
+            bindings/torch_tensor_converter.cpp
             bindings/enum.cpp
             bindings/element.cpp
             bindings/tensor.cpp
