@@ -280,20 +280,44 @@ void TiledReduceSingle(Function &function, const TileShape &tileShape, const std
     return result;
 }
 
-Tensor Amax(const Tensor &self, int axis, bool keepDim) {
-    DECLARE_TRACER();
-    auto resultShape = self.GetShape();
+static void ValidateReductionAxis(const Tensor& self, int axis) {
     CheckAxisRange(self, axis);
-
-    resultShape[axis] = 1;
-    std::vector<int64_t> outShape(resultShape.begin(), resultShape.end());
 
     const int lastDim = self.GetShape().size() - 1;
     const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
     auto vecTile = TileShape::Current().GetVecTile();
+
     if (axis == lastDim) {
-        ASSERT(vecTile[lastDim] % alignNum == 0) << "Amax op: the tileShape of last axis need to 32Byte align!";
+        ASSERT(vecTile[lastDim] % alignNum == 0) 
+        << "Reduce op: the tileShape of last axis need to 32Byte align!";
     }
+}
+
+static Tensor ProcessResultShape(const Tensor &result, const Tensor &self, int axis, bool keepDim){
+    const int lastDim = self.GetShape().size() - 1;
+    if (keepDim || lastDim == 0) {
+        return result;
+    } else {
+        std::vector<SymbolicScalar> outValidShape;
+        for (auto shape : self.GetStorage()->GetDynValidShape()){
+            outValidShape.push_back(shape);
+        }
+
+        auto outShape = result.GetShape();
+        outShape.erase(outShape.begin() + axis);
+        outValidShape.erase(outValidShape.begin() + axis);
+        
+        return Reshape(result, outShape, outValidShape);
+    }
+}
+
+Tensor Amax(const Tensor &self, int axis, bool keepDim) {
+    DECLARE_TRACER();
+    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    ValidateReductionAxis(self, axis);
+
+    auto resultShape = self.GetShape();
+    resultShape[axis] = 1;
 
     Tensor result(self.GetStorage()->tensor->datatype, resultShape);
     int shapeSize = static_cast<int>(resultShape.size());
@@ -304,75 +328,36 @@ Tensor Amax(const Tensor &self, int axis, bool keepDim) {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "MAX", self, result, axis);
     }
 
-    if (keepDim || lastDim == 0) {
-        return result;
-    } else {
-        std::vector<SymbolicScalar> outValidShape;
-        for (auto shape : self.GetStorage()->GetDynValidShape()){
-            outValidShape.push_back(shape);
-        }
-        outShape.erase(outShape.begin() + axis);
-        outValidShape.erase(outValidShape.begin() + axis);
-        vecTile.tile.erase(vecTile.tile.begin() + axis);
-        TileShape::Current().SetVecTile(vecTile.tile);
-        return Reshape(result, outShape, outValidShape);
-    }
+    return ProcessResultShape(result, self, axis, keepDim);
 }
 
 Tensor Amin(const Tensor &self, int axis, bool keepDim) {
     DECLARE_TRACER();
-    auto resultShape = self.GetShape();
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    ValidateReductionAxis(self, axis);
 
+    auto resultShape = self.GetShape();
     resultShape[axis] = 1;
-    std::vector<int64_t> outShape(resultShape.begin(), resultShape.end());
-
-    const int lastDim = self.GetShape().size() - 1;
-    const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
-    auto vecTile = TileShape::Current().GetVecTile();
-    if (axis == lastDim) {
-        ASSERT(vecTile[lastDim] % alignNum == 0) << "Amin op: the tileShape of last axis need to 32Byte align!";
-    }
 
     Tensor result(self.GetStorage()->tensor->datatype, resultShape);
     int shapeSize = static_cast<int>(resultShape.size());
     if (config::GetOperationOption<bool>(KEY_FORCE_COMBINE_AXIS) && axis == shapeSize - 1 &&
-        shapeSize >= NUM2 &&
-        (resultShape[shapeSize - NUM2] % NUM_VALUE_8 == 0 && vecTile[vecTile.size() - NUM2] % NUM_VALUE_8 == 0)) {
+        shapeSize >= NUM2) {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "MIN_COMBINE_AXIS", self, result, axis);
     } else {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "MIN", self, result, axis);
     }
 
-    if (keepDim || lastDim == 0) {
-        return result;
-    } else {
-        std::vector<SymbolicScalar> outValidShape;
-        for (auto shape : self.GetStorage()->GetDynValidShape()){
-            outValidShape.push_back(shape);
-        }
-        outShape.erase(outShape.begin() + axis);
-        outValidShape.erase(outValidShape.begin() + axis);
-        vecTile.tile.erase(vecTile.tile.begin() + axis);
-        TileShape::Current().SetVecTile(vecTile.tile);
-        return Reshape(result, outShape, outValidShape);
-    }
+    return ProcessResultShape(result, self, axis, keepDim);
 }
 
 Tensor Sum(const Tensor &self, int axis, bool keepDim) {
     DECLARE_TRACER();
+    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    ValidateReductionAxis(self, axis);
+
     auto resultShape = self.GetShape();
-    CheckAxisRange(self, axis);
-
     resultShape[axis] = 1;
-    std::vector<int64_t> outShape(resultShape.begin(), resultShape.end());
-
-    const int lastDim = self.GetShape().size() - 1;
-    const int alignNum = BLOCK_SIZE / BytesOf(self.GetStorage()->tensor->datatype);
-    auto vecTile = TileShape::Current().GetVecTile();
-    if (axis == lastDim) {
-        ASSERT(vecTile[lastDim] % alignNum == 0) << "Sum op: the tileShape of last axis need to 32Byte align!";
-    }
 
     Tensor result(self.GetStorage()->tensor->datatype, resultShape);
     int shapeSize = static_cast<int>(resultShape.size());
@@ -383,19 +368,7 @@ Tensor Sum(const Tensor &self, int axis, bool keepDim) {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "SUM", self, result, axis);
     }
 
-    if (keepDim || lastDim == 0) {
-        return result;
-    } else {
-        std::vector<SymbolicScalar> outValidShape;
-        for (auto shape : self.GetStorage()->GetDynValidShape()){
-            outValidShape.push_back(shape);
-        }
-        outShape.erase(outShape.begin() + axis);
-        outValidShape.erase(outValidShape.begin() + axis);
-        vecTile.tile.erase(vecTile.tile.begin() + axis);
-        TileShape::Current().SetVecTile(vecTile.tile);
-        return Reshape(result, outShape, outValidShape);
-    }
+    return ProcessResultShape(result, self, axis, keepDim);
 }
 
 void TiledReduceExpand(Function &function, const TileShape &tileShape, const std::string &op,

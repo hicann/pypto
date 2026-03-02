@@ -39,6 +39,14 @@ struct SumOpMetadata {
     nlohmann::json test_data_;
 };
 
+void AdjustTileShapeForReduce(const int dim, const Tensor &result, std::vector<int64_t> tileshape) {
+    tileshape.erase(tileshape.begin() + dim);
+    const int alignNum = BLOCK_SIZE / BytesOf(result.GetStorage()->tensor->datatype);
+    tileshape[tileshape.size() - 1] = (tileshape[tileshape.size() - 1] + alignNum - 1
+        ) / alignNum * alignNum;
+    TileShape::Current().SetVecTile(tileshape);
+}
+
 void SumOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs,
                                 const OpFuncArgs* opArgs) {
     auto args = static_cast<const SumOpFuncArgs *>(opArgs);
@@ -66,10 +74,11 @@ void SumOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor>&
                 {bIdx * viewShape[0], bIdx * viewShape[1]});
             TileShape::Current().SetVecTile(args->tileShape_);
             std::vector<SymbolicScalar> offset = {bIdx * viewShape[0], bIdx * viewShape[1]};
-            if (!keepDim){
-                offset.erase(offset.begin() + dim);
-            }
             auto res = Sum(viewTensor, args->dims_[0], keepDim);
+            if (!keepDim) {
+                offset.erase(offset.begin() + dim);
+                AdjustTileShapeForReduce(dim, res, args->tileShape_);
+            }
             Assemble(res, offset, outputs[0]);
         }
     }
@@ -120,10 +129,11 @@ void Sum3DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor
                         {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2]});
                     TileShape::Current().SetVecTile(args->tileShape_);
                     std::vector<SymbolicScalar> offset = {bIdx * viewShape[0], sIdx * viewShape[1], nIdx * viewShape[2]};
-                    if (!keepDim){
-                        offset.erase(offset.begin() + dim);
-                    }
                     auto res = Sum(viewTensor, args->dims_[0], keepDim);
+                    if (!keepDim) {
+                        offset.erase(offset.begin() + dim);
+                        AdjustTileShapeForReduce(dim, res, args->tileShape_);
+                    }
                     Assemble(res, offset, outputs[0]);  
                 }
             }
@@ -178,10 +188,11 @@ void Sum4DOperationExeFunc(const std::vector<Tensor>& inputs, std::vector<Tensor
                             },
                             offset);
                         TileShape::Current().SetVecTile(args->tileShape_);
-                        if (!keepDim){
-                            offset.erase(offset.begin() + dim);
-                        }
                         auto res = Sum(viewTensor, args->dims_[0], keepDim);
+                        if (!keepDim) {
+                            offset.erase(offset.begin() + dim);
+                            AdjustTileShapeForReduce(dim, res, args->tileShape_);
+                        }
                         Assemble(res, offset, outputs[0]);
                     }
                 }
