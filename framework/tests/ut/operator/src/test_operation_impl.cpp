@@ -116,6 +116,17 @@ TEST_F(OperationImplTest, test_Compare_BOOL) {
     }
 }
 
+TEST_F(OperationImplTest, test_Sort) {
+    TileShape::Current().SetVecTile({6, 64});
+    Tensor operand1(DT_FP32, {6, 64}, "operand1");
+    Tensor sort32Result;
+    Tensor mrgsortResult;
+    FUNCTION("TestSort") {
+        sort32Result = Sort32(operand1, 0);
+        mrgsortResult = MrgSort(sort32Result, 32);
+    }
+}
+
 TEST_F(OperationImplTest, test_Compare_BIT) {
     TileShape::Current().SetVecTile({8, 8});
     Tensor operand1(DT_FP16, {16, 16}, "operand1");

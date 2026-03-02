@@ -376,3 +376,57 @@ def argsort(
                [2 1 0]]
     """
     return pypto_impl.ArgSort(input, (-1 if dim is None else dim), descending)
+
+
+@op_wrapper
+def sort32(
+    input: Tensor, index: Optional[int] = None
+) -> Tensor:
+    """
+    Returns interleaved the values and indices that sort every 32 numbers.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+    index : int, optional
+        The start index of the sorting dimension.
+
+    Returns
+    -------
+    Tensor
+        The output tensor.
+
+    Examples
+    --------
+    x = pypto.tensor([2, 3], pypto.DT_FP32)
+    y = pypto.sort32(x, 0)
+
+    Input x:     [[1.0 2.0 3.0],
+                  [1.0 2.0 3.0]]
+    Output y: [[3.0 2 2.0 1 1.0 0],
+               [3.0 2 2.0 1 1.0 0]]
+    """
+    return pypto_impl.Sort32(input, (0 if index is None else index))
+
+
+@op_wrapper
+def mrgsort(
+    input: Tensor, mergesize: int
+) -> Tensor:
+    """
+    Returns the tensor that merge sort base on merge size.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+    mergesize : int
+        The start index of the sorting dimension.
+
+    Returns
+    -------
+    Tensor
+        The output tensor.
+    """
+    return pypto_impl.MrgSort(input, mergesize)

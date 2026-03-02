@@ -532,6 +532,14 @@ class Tensor:
     @source_location
     def topk(self, k: int, dim: Optional[int] = None, largest: bool = True) -> Tuple['Tensor', 'Tensor']:
         return pypto.topk(self, k, dim, largest)
+    
+    @source_location
+    def sort32(self, index: Optional[int] = None) -> 'Tensor':
+        return pypto.sort32(self, index)
+
+    @source_location
+    def mrgsort(self, mergesize: int) -> 'Tensor':
+        return pypto.mrgsort(self, mergesize)
 
     @source_location
     def exp(self) -> 'Tensor':

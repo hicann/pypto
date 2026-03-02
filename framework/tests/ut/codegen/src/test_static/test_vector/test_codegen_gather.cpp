@@ -87,7 +87,7 @@ TEST_F(TestCodegenGather, TestGatherEle) {
 TEST_F(TestCodegenGather, TestGatherEleTileTensor) {
     Function &func = testGatherEle(true, "GATHER_ELEMET_TILETENSOR");
     std::string res = GetResultFromCpp(func);
-    std::string expect = R"!!!(TgatherElement<4>(ubTensor_11, ubTensor_5, ubTensor_9, ubTensor_12);
+    std::string expect = R"!!!(TgatherElement<4>(ubTensor_13, ubTensor_6, ubTensor_11, ubTensor_14);
 )!!!";
     CheckStringExist(expect, res);  
 }

@@ -920,13 +920,6 @@ void TiledTopKExtract(Function &function, const LogicalTensorPtr &x, const Logic
     op.SetAttribute(TOPK_INDEX, static_cast<int>(isIndex));
 }
 
-Tensor TopKExtract(const Tensor &x, int k, bool isIndex) {
-    DataType dType = isIndex ? DataType::DT_INT32 : x.GetStorage()->tensor->datatype;
-    auto y = Tensor(dType, {1, k});
-    TiledTopKExtract(*Program::GetInstance().GetCurrentFunction(), x.GetStorage(), y.GetStorage(), k, isIndex);
-    return y;
-}
-
 // view op
 Tensor View(const Tensor &operand, const std::vector<int64_t> &shapes, const std::vector<int64_t> &offsets) {
     DECLARE_TRACER();

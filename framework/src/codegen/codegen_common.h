@@ -156,11 +156,14 @@ struct CodeGenCtx {
 
 struct SortParam {
     std::vector<int64_t> dstShape{4, 1};
+    std::vector<int64_t> tmpShape{4, 1};
     std::vector<int64_t> srcShape{4, 1};
     const std::string s0Var;
     const std::string dVar;
+    const std::string tVar;
     const std::string srcDtypeStr;
     const std::string dstDtypeStr;
+    const std::string tmpDtypeStr;
 };
 
 struct TiledSortParam {
