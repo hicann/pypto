@@ -794,6 +794,14 @@ TEST_F(TorchAdaptorTest, BinaryOpsS) {
     }
     {
         auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        auto elem = Element(DT_FP32, 0.01f);
+        auto out = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        auto golden = makeTensorData(DT_FP32, {16, 16}, 5.0f);
+        calc::LReLU(out, self, elem);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        auto self = makeTensorData(DT_FP32, {16, 16}, 5.0f);
         auto elem = Element(DT_FP32, 2.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
         auto golden = makeTensorData(DT_FP32, {16, 16}, 1.0f);

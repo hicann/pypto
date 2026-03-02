@@ -375,7 +375,7 @@ std::string CodeGenOpCloudNPU::GenBinaryWithBrc() const {
 
 std::string CodeGenOpCloudNPU::GenVectorScalarOp() const {
     return GenVectorScalarOpByMode(VecScalMode::VEC_MODE);
-}
+} 
 
 std::string CodeGenOpCloudNPU::GenVectorScalarOpScalarMode() const {
     return GenVectorScalarOpByMode(VecScalMode::SCALAR_MODE);

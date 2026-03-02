@@ -67,6 +67,11 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1) {
         pto::TFMODS(dst, src0, src1);
         return;
     }
+
+    if constexpr (op == BinaryScalarOp::LRELU) {
+        pto::TLRELU(dst, src0, src1);
+        return;
+    }
 }
 
 template <BinaryScalarOp op, typename LastUse, typename T0, typename T1, typename Scalar>
@@ -123,6 +128,12 @@ TILEOP void TMaxS(T0 dst, T1 src0, Scalar src1) {
 template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
 TILEOP void TMinS(T0 dst, T1 src0, Scalar src1) {
     BinaryScalarCompute<BinaryScalarOp::MIN, LastUse>(dst, src0, src1);
+}
+
+#define OP_TILE_OP_LRELU TLReLU
+template <typename LastUse = LastUse2Dim<0, 0>, typename Scalar, typename T0, typename T1>
+TILEOP void TLReLU(T0 dst, T1 src0, Scalar src1) {
+    BinaryScalarCompute<BinaryScalarOp::LRELU, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEANDS TBitwiseAndS

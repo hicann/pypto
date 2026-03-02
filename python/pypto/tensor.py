@@ -530,8 +530,17 @@ class Tensor:
         return pypto.maximum(self, other)
 
     @source_location
-    def where(self, condition: 'Tensor', y: Union['Tensor', float]) -> 'Tensor':
-        return pypto.where(condition, self, y)
+    def where(
+        self,
+        condition: 'Tensor',
+        x: Union['Tensor', Element, float],
+        y: Union['Tensor', Element, float]
+    ) -> 'Tensor':
+        return pypto.where(self, condition, x, y)
+
+    @source_location
+    def lrelu(self, other: 'Tensor', negative_slope: Union[float, Element] = 0.01) -> 'Tensor':
+        return pypto.lrelu(self, other, negative_slope)
 
     @source_location
     def topk(self, k: int, dim: Optional[int] = None, largest: bool = True) -> Tuple['Tensor', 'Tensor']:

@@ -151,6 +151,9 @@ void OpcodeManager::RegisterVectorBinary() {
         {OpAttributeKey::scalar, OP_ATTR_PREFIX + "reverseOperand", OP_ATTR_PREFIX + "reverseOperand",
             OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis},
         TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_LRELU, OpCoreType::AIV, "LReLU", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TLReLU", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,{OpAttributeKey::scalar},
+        TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_BITWISERIGHTSHIFTS, OpCoreType::AIV, "BITWISERIGHTSHIFTS", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::Tbitwiserightshifts", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::scalar, OP_ATTR_PREFIX + "reverseOperand", OP_ATTR_PREFIX + "reverseOperand",
@@ -901,6 +904,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {               Opcode::OP_MAXS,          "TMaxS"},
     {               Opcode::OP_MINS,          "TMinS"},
     {               Opcode::OP_MULS,          "TMulS"},
+    {               Opcode::OP_LRELU,        "TLReLU"},
     {               Opcode::OP_DIVS,          "TDivS"},
     {               Opcode::OP_GCDS,          "TGcdS"},
     {              Opcode::OP_RSQRT,         "TRsqrt"},

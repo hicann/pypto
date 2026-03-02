@@ -721,6 +721,13 @@ static void MaxS(const TensorData &out, const TensorData &self, const Element &e
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void LReLU(const TensorData &out, const TensorData &self, const Element &negative_slope = Element(DataType::DT_FP32, 0.01)) {
+    auto tout = From(out);
+    auto tself = From(self);
+    torch::leaky_relu_out(tout.second, tself.second, From(negative_slope));
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void Range(const TensorData &out, const Element &start, const Element &end, const Element &step) {
     auto tmp = torch::arange(From(start), From(end), From(step));
     int64_t expected_numel = 1;
@@ -1902,6 +1909,7 @@ static struct CalcOps calcOps = {
     .WhereTS = WhereTS,
     .WhereST = WhereST,
     .WhereSS = WhereSS,
+    .LReLU = LReLU,
     .Ln = Ln,
     .IsFinite = IsFinite,
     .LogicalNot = LogicalNot,

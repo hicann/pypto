@@ -161,6 +161,7 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbo
           {Opcode::OP_DIVS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_MAXS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_MINS, [this]() { return GenVectorScalarOp(); }},
+          {Opcode::OP_LRELU, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_BITWISEANDS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_BITWISEORS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_BITWISERIGHTSHIFTS, [this]() { return GenVectorScalarOp(); }},

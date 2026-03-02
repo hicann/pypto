@@ -100,6 +100,8 @@ stest:
       - TestAdd/AddOperationTest.TestAdd/11
       - TestFmod/FmodOperationTest.TestFmod/0
       - TestFmod/FmodOperationTest.TestFmod/1
+      - TestLReLU/LReLUOperationTest.TestLReLU/0
+      - TestLReLU/LReLUOperationTest.TestLReLU/1
       - TestConcat/ConcatOperationTest.TestConcat/0
       - TestConcat/ConcatOperationTest.TestConcat/1
       - TestGcd/GcdOperationTest.TestGcd/3
