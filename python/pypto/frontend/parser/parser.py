@@ -799,12 +799,7 @@ class Parser(ast.NodeVisitor):
             return names
         else:
             # Return contains an expression, not just variable names
-            raise ParserError(
-                node,
-                ValueError(
-                    "Return value must be a variable name or a tuple/list of variable names."
-                ),
-            )
+            return None
 
     def _validate_output_args(
         self, output_args: list[pypto.Tensor], node: ast.FunctionDef
@@ -944,8 +939,64 @@ class Parser(ast.NodeVisitor):
                 output_var_mapping[name] = output_tensor
                 # Add to context so the variable refers to the pre-defined tensor
                 self.context.add(name, output_tensor)
+        elif output_args:
+            # Expression return: store pre-allocated signature outputs for writeback in _visit_return
+            self.context.add("__signature_output_args__", output_args)
 
         return output_var_mapping
+
+    def _finalize_return_outputs(
+        self, node: ast.Return, returned: list[pypto.Tensor], func_name: str
+    ) -> Optional[Any]:
+        """Finalize return values and optionally write them into preallocated outputs.
+
+        Parameters
+        ----------
+        node : ast.Return
+            The return AST node (used for error reporting).
+        returned : list[pypto.Tensor]
+            Normalized and validated list of returned tensors.
+        func_name : str
+            Function name (used for stable output naming).
+
+        Returns
+        -------
+        res : Optional[Any]
+            The preallocated output(s) to return if writeback happened, otherwise None.
+
+        Notes
+        -----
+        Writes into __func_output_args__ (nested inline call) if present, otherwise into
+        __signature_output_args__ (top-level implicit outputs for `return foo()`).
+        """
+        outputs = self.context.get().get("__func_output_args__")
+        kind = "nested"
+        if outputs is None:
+            outputs = self.context.get().get("__signature_output_args__")
+            kind = "signature"
+        if outputs is None:
+            return None
+
+        if len(returned) != len(outputs):
+            msg = (
+                f"Return value count {len(returned)} does not match expected {len(outputs)}."
+                if kind == "nested"
+                else f"Return value count {len(returned)} does not match function signature "
+                    f"({len(outputs)} outputs)."
+            )
+            raise ParserError(node, ValueError(msg))
+
+        for i, tensor in enumerate(returned):
+            if kind == "signature" and not getattr(outputs[i], "name", ""):
+                outputs[i].name = (
+                    f"output_{func_name}" if len(outputs) == 1 else f"output_{func_name}_{i}"
+                )
+            if isinstance(outputs[i], pypto.Tensor) and isinstance(tensor, pypto.Tensor):
+                outputs[i][:] = tensor
+            else:
+                outputs[i] = tensor
+
+        return outputs if len(outputs) > 1 else outputs[0]
 
     def _add_metadata_to_context(
         self, func_name: str, output_var_mapping: dict[str, pypto.Tensor]
@@ -1856,16 +1907,14 @@ class Parser(ast.NodeVisitor):
         if expr is None:
             return None
 
-        # Get function name and output variable mapping from context
         func_name = self.context.get().get("__func_name__", "")
 
-        # Case 3: return a single tensor
+        # Normalize expr to a validated list of tensors
         if isinstance(expr, pypto.Tensor):
             expr.name = f"output_{func_name}"
-            result = expr
-        # Case 4: return a tuple or list of tensors
+            returned = [expr]
         elif isinstance(expr, (list, tuple)):
-            result = []
+            returned = []
             for idx, elem in enumerate(expr):
                 if not isinstance(elem, pypto.Tensor):
                     raise ParserError(
@@ -1875,11 +1924,9 @@ class Parser(ast.NodeVisitor):
                             f"but got {type(elem).__name__}."
                         ),
                     )
-                # Name each tensor in the list for better traceability
                 if elem.name is None or elem.name == "":
                     elem.name = f"output_{func_name}_{idx}"
-                result.append(elem)
-        # Case 5: invalid return type
+                returned.append(elem)
         else:
             raise ParserError(
                 node,
@@ -1889,29 +1936,10 @@ class Parser(ast.NodeVisitor):
                 ),
             )
 
-        # If this return belongs to an inlined nested function, write back
-        nested_outputs = self.context.get().get("__func_output_args__")
-        if nested_outputs is not None:
-            # Write results into the preallocated output tensors so callers reuse them.
-            result_list = result if isinstance(result, list) else [result]
-            if len(result_list) != len(nested_outputs):
-                raise ParserError(
-                    node,
-                    ValueError(
-                        f"Return value count {len(result_list)} does not match expected "
-                        f"{len(nested_outputs)}."
-                    ),
-                )
-            for i, tensor in enumerate(result_list):
-                if isinstance(nested_outputs[i], pypto.Tensor) and isinstance(
-                    tensor, pypto.Tensor
-                ):
-                    nested_outputs[i][:] = tensor
-                else:
-                    nested_outputs[i] = tensor
-            return nested_outputs if len(nested_outputs) > 1 else nested_outputs[0]
-
-        return result
+        finalized = self._finalize_return_outputs(node, returned, func_name)
+        if finalized is not None:
+            return finalized
+        return returned[0] if len(returned) == 1 else returned
 
     def _visit_delete(self, node: ast.Delete) -> None:
         """The general delete visiting method.

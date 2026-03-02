@@ -28,9 +28,7 @@ def test_add_with_kwargs():
         scalar=0,
     ) -> pypto.Tensor((32, 32), pypto.DT_INT32):
         pypto.set_vec_tile_shapes(16, 16)
-        c = a + b
-        out = c + scalar
-        return out
+        return a + b + scalar
 
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch.npu.set_device(int(device_id))
@@ -53,9 +51,7 @@ def test_add_npu_with_tiling():
         scalar=1,
     ) -> pypto.Tensor((32, 32), pypto.DT_INT32):
         pypto.set_vec_tile_shapes(tiling, tiling)
-        c = a + b
-        d = c + scalar
-        return d
+        return a + b + scalar
 
     device_id = os.environ.get("TILE_FWK_DEVICE_ID", 0)
     torch.npu.set_device(int(device_id))

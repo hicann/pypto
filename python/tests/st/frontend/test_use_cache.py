@@ -27,8 +27,7 @@ def create_compute_func_with_cache(shape, tiling):
         b: pypto.Tensor(shape, pypto.DT_FP32),
     ) -> pypto.Tensor(shape, pypto.DT_FP32):
         pypto.set_cube_tile_shapes([tiling, tiling], [tiling, tiling], [tiling, tiling])
-        c = pypto.matmul(a, b, a.dtype)
-        return c
+        return pypto.matmul(a, b, a.dtype)
     return compute_add
 
 
@@ -40,8 +39,7 @@ def create_compute_func_without_cache(shape, tiling):
         b: pypto.Tensor(shape, pypto.DT_FP32),
     ) -> pypto.Tensor(shape, pypto.DT_FP32):
         pypto.set_cube_tile_shapes([tiling, tiling], [tiling, tiling], [tiling, tiling])
-        c = pypto.matmul(a, b, a.dtype)
-        return c
+        return pypto.matmul(a, b, a.dtype)
     return compute_add
 
 
