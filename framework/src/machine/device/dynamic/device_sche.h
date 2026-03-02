@@ -135,6 +135,7 @@ private:
 
 constexpr int CPUS_PER_CLUSTER = 4;
 static constexpr uint64_t SIGNAL_DELAY_SECONDS = 2;
+constexpr int SCHE_THREAD_START_IDX = 1;
 
 struct DynMachineManager {
     struct KernelCtrlEntry {
@@ -143,33 +144,69 @@ struct DynMachineManager {
         int (*kernelCtrlServer)(void *targ);
     };
 
-    int AllocThreadIdx(int nrAicpu, uint32_t scheCpuNum, std::atomic<int> &threadIdx) { 
-        if (scheCpuNum == 1) { 
-            return ++threadIdx; 
-        } 
-        int cpu = sched_getcpu(); 
-        cpumask_.fetch_or(1 << cpu, std::memory_order_release); 
-        while (__builtin_popcount(cpumask_.load(std::memory_order_acquire)) != nrAicpu) { 
-            sched_yield(); 
-        } 
-        auto maskval = cpumask_.load(std::memory_order_relaxed); 
-        int cpuoff = 0; 
-        int clus_id = -1; 
-        for (int index = 0; index < static_cast<int>(sizeof(uint64_t)); ++index) { 
-            int mask = (maskval >> cpuoff) & 0xF; 
-            if (__builtin_popcount(static_cast<uint32_t>(mask)) >= static_cast<int>(scheCpuNum)) { 
-                clus_id = index; 
-                break; 
-            } 
-            cpuoff += CPUS_PER_CLUSTER; 
-        } 
-        if (clus_id == -1) { 
-            return ++threadIdx; 
-        } 
-        if (cpu < cpuoff || cpu >= (cpuoff + CPUS_PER_CLUSTER)) { 
-            return -1; 
-        } 
-        return ++threadIdx; 
+    int AllocThreadIdxForDav3510(DeviceArgs *devArgs, int cpu, std::atomic<int> &threadIdx) {
+        int maxCpuId = static_cast<int>(devArgs->maxAicpuNum);
+        int die0MaxCpuid = (maxCpuId >> 1);
+        int scheCpuNum = static_cast<int>(devArgs->scheCpuNum);
+        int die0MaxCpuNum = (scheCpuNum >> 1);
+        int die1MaxCpuNum = scheCpuNum - die0MaxCpuNum;
+        int unuseThreadIdx = scheCpuNum + SCHE_THREAD_START_IDX;
+
+        if (die0ThreadIdx_.load() < die0MaxCpuNum && cpu <= die0MaxCpuid) {
+            int curDie0ThreadIdx = die0ThreadIdx_.fetch_add(1) + SCHE_THREAD_START_IDX;
+            threadIdx = curDie0ThreadIdx;
+            return curDie0ThreadIdx;
+        }
+
+        if (die1ThreadIdx_.load() < die1MaxCpuNum && cpu > die0MaxCpuid) {
+            int curDie1ThreadIdx = die1ThreadIdx_.fetch_add(1) + die0MaxCpuNum + SCHE_THREAD_START_IDX;
+            threadIdx = curDie1ThreadIdx;
+            return curDie1ThreadIdx;
+        }
+
+        threadIdx = unuseThreadIdx;
+        return unuseThreadIdx;
+    }
+
+    int AllocThreadIdxForDav2201(DeviceArgs *devArgs, int cpu, std::atomic<int> &threadIdx) {
+        cpumask_.fetch_or(1 << cpu, std::memory_order_release);
+        while (__builtin_popcount(cpumask_.load(std::memory_order_acquire)) != static_cast<int>(devArgs->nrAicpu)) {
+            sched_yield();
+        }
+
+        auto maskval = cpumask_.load(std::memory_order_relaxed);
+        int cpuoff = 0;
+        int clus_id = -1;
+        for (int index = 0; index < static_cast<int>(sizeof(uint64_t)); ++index) {
+            int mask = (maskval >> cpuoff) & 0xF;
+            if (__builtin_popcount(static_cast<uint32_t>(mask)) >= static_cast<int>(devArgs->scheCpuNum)) {
+                clus_id = index;
+                break;
+            }
+            cpuoff += CPUS_PER_CLUSTER;
+        }
+        if (clus_id == -1) {
+            return ++threadIdx;
+        }
+        if (cpu < cpuoff || cpu >= (cpuoff + CPUS_PER_CLUSTER)) {
+            return -1;
+        }
+        return ++threadIdx;
+    }
+
+    int AllocThreadIdx(DeviceArgs *devArgs, std::atomic<int> &threadIdx) {
+        if (devArgs->scheCpuNum == 1) {
+            return ++threadIdx;
+        }
+
+        int cpu = sched_getcpu();
+        if (devArgs->archInfo == ArchInfo::DAV_3510) {
+            return AllocThreadIdxForDav3510(devArgs, cpu, threadIdx);
+        } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
+            return AllocThreadIdxForDav2201(devArgs, cpu, threadIdx);
+        }
+
+        return ++threadIdx;
     }
 
     void SignalReg(const KernelCtrlEntry &entry) {
@@ -218,7 +255,7 @@ struct DynMachineManager {
 
         devArgs->toSubMachineConfig = kargs->toSubMachineConfig;
         SchduleContext localContext;
-        int schedIdx = threadIdx - 1;
+        int schedIdx = threadIdx - SCHE_THREAD_START_IDX;
         machine_.SetStachSchduleContext(schedIdx, &localContext);
         DevAscendProgram *devProg = reinterpret_cast<DevAscendProgram *>(kargs->cfgdata);
         DevStartArgs *devStartArgs = reinterpret_cast<DevStartArgs *>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
@@ -253,19 +290,19 @@ struct DynMachineManager {
             DEV_ERROR("Aicpu num[%u] less than sche num[%u].", devArgs->nrAicpu, devArgs->scheCpuNum);
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
-        int threadIdx = AllocThreadIdx(devArgs->nrAicpu, devArgs->scheCpuNum, threadIdx_);	 
+        int threadIdx = AllocThreadIdx(devArgs, threadIdx_);
         uint64_t allocThreadCycle = GetCycles();
 
-        if ((threadIdx != -1) && threadIdx <= static_cast<int>(devArgs->scheCpuNum)) {	 
-             ret = RunSche(kargs, entry, threadIdx);
+        if ((threadIdx != -1) && threadIdx <= static_cast<int>(devArgs->scheCpuNum)) {
+            ret = RunSche(kargs, entry, threadIdx);
         } else {
-            threadIdx = ctrlcpuIdx_.fetch_add(1);	 
-            DEV_INFO("TaskType %d.",  static_cast<int>(devArgs->taskType)); 
-            if (devArgs->enableCtrl == 1 && threadIdx == CTRL_CPU_THREAD_IDX) { 
+            threadIdx = ctrlcpuIdx_.fetch_add(1);
+            DEV_INFO("TaskType %d.",  static_cast<int>(devArgs->taskType));
+            if (devArgs->enableCtrl == 1 && threadIdx == CTRL_CPU_THREAD_IDX) {
                 ret = RunCtrl(kargs, entry, threadIdx);
             } else {
                 threadIdx += devArgs->scheCpuNum;
-                SignalReg(entry); 
+                SignalReg(entry);
             }
         }
 
@@ -314,7 +351,6 @@ struct DynMachineManager {
         init_.store(true);
         ctrlcpuIdx_.store(0);
         machine_.init(args->scheCpuNum);
-        schRunFailed_ = false;
     }
 
     void DeInit() {
@@ -322,6 +358,8 @@ struct DynMachineManager {
         finished_ = 0;
         cpumask_ = 0;
         ctrlcpuIdx_ = 0;
+        die0ThreadIdx_ = 0;
+        die1ThreadIdx_ = 0;
         init_.store(false);
         initCtrl_.store(false);
     }
@@ -430,7 +468,7 @@ struct DynMachineManager {
 
         DevStartArgs *runtimeDataCurrent = reinterpret_cast<DevStartArgs *>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         auto devArgs = devProg->devArgs;
-        int threadIdx = AllocThreadIdx(devArgs.nrAicpu, devArgs.scheCpuNum, runtimeDataCurrent->devScheState.threadIdx);
+        int threadIdx = AllocThreadIdx(&devArgs, runtimeDataCurrent->devScheState.threadIdx);
         int ret = DEVICE_MACHINE_OK;
         if (threadIdx != -1 && threadIdx <= static_cast<int>(devArgs.scheCpuNum)) {
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
@@ -472,6 +510,8 @@ struct DynMachineManager {
     std::atomic<int> finished_{0};
     std::atomic<uint64_t> cpumask_{0};
     std::atomic<int> ctrlcpuIdx_{0};
+    std::atomic<int> die0ThreadIdx_{0};
+    std::atomic<int> die1ThreadIdx_{0};
     DeviceSchedMachine machine_;
     bool sigReg_{false};
     struct sigaction oriFPEAct_;

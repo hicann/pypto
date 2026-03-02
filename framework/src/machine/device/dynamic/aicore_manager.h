@@ -1337,8 +1337,8 @@ private:
         if (IsNeedProcAicpuTask()) {
             aicpuTaskManager_.InitDeviceArgs(deviceArgs);
         }
+        wrapManager_.InitDeviceInfo(deviceArgs);
 
-        wrapManager_.InitArchInfo(deviceArgs->archInfo);
 #if ENABLE_TENSOR_DUMP
         aicoreDump_.Init(startArgs, schedIdx);
 #endif

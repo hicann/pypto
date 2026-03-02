@@ -28,6 +28,13 @@ enum class MixResourceType {
     MIX_1C2V = 2
 };
 
+enum class DieId {
+    DIE_0 = 0,
+    DIE_1 = 1,
+    DIE_MIX = 2,
+    DIE_UNKNOW
+};
+
 inline void WrapInfoQueueLock(WrapInfoQueue* rq) {
     while (!__sync_bool_compare_and_swap(&rq->lock, 0, 1)) {
     }
@@ -61,6 +68,7 @@ public:
     uint32_t* runningIds_;
 
     int aicValidNum_{0};
+    int curDie0MaxCpuId_{0};
     WrapInfoQueue* readyWrapCoreFunctionQue_{nullptr};
     // Queue managed by each thread, elem is wrapInfo's addr
     StaticReadyCoreFunctionQueue wrapQueueForThread_{0, 0, nullptr, 0};
@@ -69,8 +77,30 @@ public:
     SendTaskToAiCoreFunc SendTaskToAiCore;
     bool isSupportMixSche {false};
 
+    inline void InitDeviceInfo(DeviceArgs *deviceArgs) {
+        InitArchInfo(deviceArgs->archInfo);
+        InitDieMaxCpuId(static_cast<int>(deviceArgs->scheCpuNum));
+    }
+
     inline void InitArchInfo(ArchInfo info) {
         isSupportMixSche = (info == ArchInfo::DAV_3510);
+    }
+
+    inline void InitDieMaxCpuId(int scheCpuNum) {
+        curDie0MaxCpuId_ = scheCpuNum >> 1;
+    }
+
+    inline DieId GetDieId(int scheCpuIdx, int scheCpuNum) {
+        if (scheCpuIdx < curDie0MaxCpuId_) {
+            return DieId::DIE_0;
+        }
+
+        if (scheCpuIdx > curDie0MaxCpuId_) {
+            return DieId::DIE_1;
+        }
+
+        // In odd scenes, scheCpuIdx = curDie0MaxCpuId_ is DIE_MIX, else is DIE_1
+        return (scheCpuNum & 1) ? DieId::DIE_MIX : DieId::DIE_1;
     }
 
     inline void Init(DeviceTask* curDevTask, uint32_t* coreRunReadyCnt, uint32_t* runReadyCoreIdxZero,

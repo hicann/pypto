@@ -179,12 +179,12 @@ inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const
         MACHINE_LOGW("aicpu meter copy failed ret: %d", ret);
         return;
     }
-    for (uint32_t i = 0; i < args.nrAicpu - 1; i++) {
+    for (uint32_t i = 0; i < (args.scheCpuNum + 1); i++) {
         json aicpu;
         std::string coreType = "AICPU";
         if (i == 0) {
             coreType = "AICPU-CTRL";
-        } else if (i <= args.scheCpuNum){
+        } else if (i <= args.scheCpuNum) {
             coreType = "AICPU-SCHED";
         }
         aicpu["blockIdx"] = i;
