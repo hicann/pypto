@@ -279,6 +279,8 @@ private:
         }
     };
     std::vector<PvModelCceBin> cceBin;
+    uint64_t subcoreId_ = 0;
+    uint64_t coreId_ = 0;
 
 public:
     using PvInitFunc = void (*)(
@@ -291,8 +293,7 @@ public:
         uint32_t mem_type, uint64_t addr, uint64_t size, uint8_t *buf, uint32_t sub_core_id, uint32_t core_id);
     using PvRegWriteFunc = void (*)(
         uint32_t reg_type, uint32_t reg_id, uint8_t *buf, uint32_t sub_core_id, uint32_t core_id);
-    using PvSetTomalFunc = void(*)(const char *toml_name);
-    CaseConfig *caseConfig;
+    using PvSetTomalFunc = void (*)(const char *toml_name);
 
     explicit DynPvModelImpl() {
         allocator_ = std::make_unique<PvMemAllocator>();
@@ -317,7 +318,7 @@ public:
         this->pv_mem_write_ = (PvMemWriteFunc)load_symbol(handle, "pv_mem_write");
         this->pv_mem_read_ = (PvMemReadFunc)load_symbol(handle, "pv_mem_read");
         this->pv_reg_write_ = (PvRegWriteFunc)load_symbol(handle, "pv_reg_write");
-        this->pv_set_toml = (PvSetTomalFunc)load_symbol(handle, "set_toml");
+        this->pv_set_toml_ = (PvSetTomalFunc)load_symbol(handle, "set_toml");
     }
 
     void* load_symbol(void* handle, std::string symbol) {
@@ -420,11 +421,11 @@ public:
     void Run(npu::tile_fwk::DynFuncData *funcdata, int coreId, int funcId, int taskId);
 
 private:
-    void LoadPvConfig(npu::tile_fwk::DynFuncData *funcdata, uint64_t opAttrOffset, std::string dir, npu::tile_fwk::DynFuncData *dupData, uint64_t hbm_para_start_addr);
+    void LoadPvConfig(npu::tile_fwk::DynFuncData *funcdata, uint64_t opAttrOffset, npu::tile_fwk::DynFuncData *dupData, uint64_t hbm_para_start_addr);
     void SetUp(PvModelCceBin *cce, npu::tile_fwk::DynFuncData *funcdata, uint64_t opAttrOffset, std::string dir, npu::tile_fwk::DynFuncData *dupData);
-    void RunModel(std::string dir);
-    void readHbmData(std::string dir, std::string name, uint64_t addr, uint64_t size);
-    void TearDown(std::string dir, npu::tile_fwk::DynFuncData *fundata);
+    void RunModel();
+    void CopyToHost(uint64_t hostAddr, uint64_t devAddr, uint64_t size);
+    void TearDown();
     void BuildFuncData(npu::tile_fwk::DynFuncData *funcdata, npu::tile_fwk::DynFuncData *dupData, uint64_t *refAddr, uint64_t *refSize, std::vector<uint8_t> *ref_data);
     void BuildFuncDataWorkSpace(npu::tile_fwk::DynFuncData *funcdata, npu::tile_fwk::DynFuncData *dupData);
     uint64_t LookupWorkspace(uint64_t addr);
@@ -436,7 +437,7 @@ private:
     PvMemWriteFunc pv_mem_write_;
     PvMemReadFunc pv_mem_read_;
     PvRegWriteFunc pv_reg_write_;
-    PvSetTomalFunc pv_set_toml;
+    PvSetTomalFunc pv_set_toml_;
     enum class step_status_t { END = 0, NORMAL = 1, TIME_OUT = 2, CONTINUE = 3, UNDEF };
 };
 } // namespace CostModel

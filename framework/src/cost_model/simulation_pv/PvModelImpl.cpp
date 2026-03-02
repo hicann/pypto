@@ -30,7 +30,6 @@ const uint32_t PV_REG_PARA_BASE = 4;
 const uint32_t PV_REG_BLOCK_DIM = 9;
 const uint32_t PV_REG_TASK_CFG = 163;
 const uint32_t PV_STEP_PIPE_ID = 2;
-const int VECTOR_SIZE = 20;
 const uint64_t HBM_SATRT_ADDR = 0xffff8000;
 
 void PvModelBinHelper::DumpBin(std::vector<uint8_t> &bytes, uint64_t size, std::string path)
@@ -481,8 +480,8 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::Run(DynFuncData *funcdata, int co
     DynFuncData dupData;
     memset_s(&dupData, sizeof(dupData), 0, sizeof(dupData));
     SetUp(cce, data, static_cast<uint64_t>(data->opAtrrOffsets[taskId]), dir, &dupData);
-    RunModel(dir);
-    TearDown(dir, &dupData);
+    RunModel();
+    TearDown();
 }
 
 template <typename SystemConfig, typename CaseConfig>
@@ -587,10 +586,6 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::SetUp(PvModelCceBin *cce, DynFunc
 {
     SystemConfig sconfig;
     sconfig.Dump(dir + "/spec.toml");
-    CaseConfig config;
-    caseConfig = &config;
-
-    caseConfig->SetTitle(std::string("func_") + std::to_string(cce->funcHash));
 
     // program
     auto binName = FileName(cce->binPath);
@@ -599,32 +594,30 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::SetUp(PvModelCceBin *cce, DynFunc
     (void)CopyFile(cce->srcPath, dir + "/" + srcName);
     auto binSize = PvModelBinHelper::GetBinSize(cce->binPath);
     auto binAddr = allocator_->AllocCode(binSize);
-    caseConfig->SetBin(binAddr, "./" + binName);
 
-    // aic/aic flag
-    uint64_t aicFlag = 0;
+    // AIC/AIV flag
     if (binName.find("aiv") != std::string::npos) {
-        aicFlag = static_cast<uint64_t>(1);
+        this->subcoreId_ = static_cast<uint64_t>(1);
+    } else {
+        this->subcoreId_ = static_cast<uint64_t>(0);
     }
-    caseConfig->SetCoreType(aicFlag);
-    pv_set_toml((dir + "/spec.toml").c_str());
-    pv_init_(0, 0, 1, (dir + std::string("/../pvlog/")).c_str(), 0);
-    pv_launch_sub_core_(binAddr, (dir + "/" + binName).c_str(), caseConfig->GetCoreType(), 0);
+    pv_set_toml_((dir + "/spec.toml").c_str());
+    pv_init_(0, 0, 1, (dir + std::string("/../pvlog/")).c_str(), coreId_);
+    pv_launch_sub_core_(binAddr, (dir + "/" + binName).c_str(), subcoreId_, coreId_);
 
     uint64_t hbm_para_start_addr = HBM_SATRT_ADDR;
     uint8_t value_1_ = 1;
     uint8_t *value_1_ptr = &value_1_;
-    pv_reg_write_((uint32_t)1, PV_REG_PC, (uint8_t *)&binAddr, caseConfig->GetCoreType(), 0);
-    pv_reg_write_((uint32_t)1, PV_REG_PARA_BASE, (uint8_t *)&hbm_para_start_addr, caseConfig->GetCoreType(), 0);
-    pv_reg_write_((uint32_t)1, PV_REG_BLOCK_DIM, value_1_ptr, caseConfig->GetCoreType(), 0);
-    pv_reg_write_((uint32_t)1, PV_REG_TASK_CFG, value_1_ptr, caseConfig->GetCoreType(), 0);
-    LoadPvConfig(funcdata, opAttrOffset, dir, dupData, hbm_para_start_addr);
+    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PC, (uint8_t *)&binAddr, subcoreId_, coreId_);
+    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t *)&hbm_para_start_addr, subcoreId_, coreId_);
+    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_BLOCK_DIM, value_1_ptr, subcoreId_, coreId_);
+    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_TASK_CFG, value_1_ptr, subcoreId_, coreId_);
+    LoadPvConfig(funcdata, opAttrOffset, dupData, hbm_para_start_addr);
 }
 
 template <typename SystemConfig, typename CaseConfig>
-void DynPvModelImpl<SystemConfig, CaseConfig>::LoadPvConfig(DynFuncData *funcdata, uint64_t opAttrOffset, std::string dir, DynFuncData *dupData, uint64_t hbm_para_start_addr) {
-    std::vector<uint64_t> para_arg(VECTOR_SIZE, 0);
-    uint32_t para_offset = 0;
+void DynPvModelImpl<SystemConfig, CaseConfig>::LoadPvConfig(DynFuncData *funcdata, uint64_t opAttrOffset, DynFuncData *dupData, uint64_t hbm_para_start_addr) {
+    std::vector<uint64_t> para_args;
 
     // funcdata
     uint64_t refAddr;
@@ -633,145 +626,74 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::LoadPvConfig(DynFuncData *funcdat
     BuildFuncData(funcdata,  dupData, &refAddr, &refSize, &ref_data);
     std::vector<uint8_t> dup(reinterpret_cast<uint8_t *>(dupData), reinterpret_cast<uint8_t *>(dupData) + sizeof(DynFuncData));
     auto addr = allocator_->AllocArg(dup.size());
-    PvModelBinHelper::DumpBin(dup, dup.size(), dir + "/funcdata.bin");
-    caseConfig->AddInputArg(addr, dup.size(), "funcdata.bin");
-    pv_mem_write_(0, addr, dup.size(), dup.data(), caseConfig->GetCoreType(), 0);
-    para_arg[para_offset] = addr;
-    para_offset++;
+    pv_mem_write_(0, addr, dup.size(), dup.data(), subcoreId_, coreId_);
+    para_args.push_back(addr);
 
     // attr offset
     std::vector<uint8_t> offset(sizeof(uint64_t), 0);
     memcpy_s(offset.data(), sizeof(uint64_t), &opAttrOffset, sizeof(uint64_t));
     addr = allocator_->AllocArg(offset.size());
-    PvModelBinHelper::DumpBin(offset, offset.size(), dir + "/offset.bin");
-    caseConfig->AddInputArg(addr, offset.size(), "offset.bin");
-    pv_mem_write_(0, addr, offset.size(), offset.data(), caseConfig->GetCoreType(), 0);
-    para_arg[para_offset] = addr;
-    para_offset++;
+    pv_mem_write_(0, addr, offset.size(), offset.data(), subcoreId_, coreId_);
+    para_args.push_back(addr);
 
     // ref
-    PvModelBinHelper::DumpBin(ref_data, ref_data.size(), dir + "/ref.bin");
-    caseConfig->AddInputArg(refAddr, ref_data.size(), "ref.bin");
-    pv_mem_write_(0, refAddr, refSize, ref_data.data(), caseConfig->GetCoreType(), 0);
-    para_arg[para_offset] = refAddr;
-    para_offset++;
+    pv_mem_write_(0, refAddr, refSize, ref_data.data(), subcoreId_, coreId_);
+    para_args.push_back(refAddr);
 
     // input tensor
     for (size_t i = 0; i < data_.size(); i++) {
         std::string name = std::string("tensor_") + std::to_string(i) + ".bin";
         std::vector<uint8_t> tensorData(reinterpret_cast<uint8_t *>(data_[i].hostPtr), reinterpret_cast<uint8_t *>(data_[i].hostPtr) + data_[i].size);
-        PvModelBinHelper::DumpBin(tensorData, data_[i].size, dir + "/" + name);
-        caseConfig->AddInputArg(data_[i].devPtr, data_[i].size, name);
-        pv_mem_write_(0, data_[i].devPtr, data_[i].size, tensorData.data(), caseConfig->GetCoreType(), 0);
-        para_arg[para_offset] = data_[i].devPtr;
-        para_offset++;
+        pv_mem_write_(0, data_[i].devPtr, data_[i].size, tensorData.data(), subcoreId_, coreId_);
+        para_args.push_back(data_[i].devPtr);
     }
 
     // input workspace
     if (workspace_.size) {
         std::vector<uint8_t> workspaceData(reinterpret_cast<uint8_t *>(workspace_.hostPtr), reinterpret_cast<uint8_t *>(workspace_.hostPtr) + workspace_.size);
-        PvModelBinHelper::DumpBin(workspaceData, workspaceData.size(), dir+"/workspace.bin");
-        caseConfig->AddInputArg(workspace_.devPtr, workspace_.size, "workspace.bin");
-        pv_mem_write_(0, workspace_.devPtr, workspace_.size, workspaceData.data(), caseConfig->GetCoreType(), 0);
-        para_arg[para_offset] = dupData->stackWorkSpaceAddr;
-        para_offset++;
+        pv_mem_write_(0, workspace_.devPtr, workspace_.size, workspaceData.data(), subcoreId_, coreId_);
+        para_args.push_back(workspace_.devPtr);
     }
 
-    // input stack workspace
-    if (funcdata->stackWorkSpaceSize) {
-        std::vector<uint8_t> stackData(reinterpret_cast<uint8_t *>(funcdata->stackWorkSpaceAddr), reinterpret_cast<uint8_t *>(funcdata->stackWorkSpaceAddr) + funcdata->stackWorkSpaceSize);
-        PvModelBinHelper::DumpBin(stackData, stackData.size(), dir + "/stack.bin");
-        caseConfig->AddInputArg(dupData->stackWorkSpaceAddr, dupData->stackWorkSpaceSize, "stack.bin");
-        pv_mem_write_(0, dupData->stackWorkSpaceAddr, dupData->stackWorkSpaceSize, stackData.data(), caseConfig->GetCoreType(), 0);
-        para_arg[para_offset] = dupData->stackWorkSpaceAddr;
-        para_offset++;
-    }
-
-    // output tensor
-    for (size_t i = 0; i < data_.size(); i++) {
-        std::string name = std::string("tensor_") + std::to_string(i) + "_out.bin";
-        caseConfig->AddOutputArg(data_[i].devPtr, data_[i].size, name);
-        para_arg[para_offset] = data_[i].devPtr;
-        para_offset++;
-    }
-
-    // output stack
-    if (funcdata->stackWorkSpaceSize) {
-        caseConfig->AddOutputArg(dupData->stackWorkSpaceAddr, dupData->stackWorkSpaceSize, "stack_out.bin");
-        para_arg[para_offset] = dupData->stackWorkSpaceAddr;
-        para_offset++;
-    }
-
-    if (workspace_.size) {
-        caseConfig->AddOutputArg(workspace_.devPtr, workspace_.size, "workspace_out.bin");
-        para_arg[para_offset] = workspace_.devPtr;
-        para_offset++;
-    }
-
-    caseConfig->Dump(dir + "/config.toml");
-
-    pv_mem_write_(uint32_t(0), hbm_para_start_addr, para_arg.size() * sizeof(uint64_t), (uint8_t *)(&para_arg[0]),
-        caseConfig->GetCoreType(), 0);
+    pv_mem_write_(uint32_t(0), hbm_para_start_addr, para_args.size() * sizeof(uint64_t), (uint8_t *)(&para_args[0]),
+        subcoreId_, coreId_);
 }
 
 template <typename SystemConfig, typename CaseConfig>
-void DynPvModelImpl<SystemConfig, CaseConfig>::RunModel(std::string dir) {
+void DynPvModelImpl<SystemConfig, CaseConfig>::RunModel()
+{
     step_status_t step_status;
-    SIMULATION_LOGI("RunModel here");
+    SIMULATION_LOGI("subcoreId: %d , coreId: %d ", subcoreId_, coreId_);
     do {
-        step_status = (step_status_t)pv_step_(PV_STEP_PIPE_ID, caseConfig->GetCoreType(), 0, 0);
+        step_status = static_cast<step_status_t>(pv_step_(PV_STEP_PIPE_ID, subcoreId_, coreId_, 0));
     } while (step_status != step_status_t::END && step_status != step_status_t::TIME_OUT);
 
     for (size_t i = 0; i < data_.size(); i++) {
-        std::string name = std::string("tensor_") + std::to_string(i) + "_out.bin";
-        uint64_t addr = data_[i].devPtr;
-        uint64_t size = data_[i].size;
-        readHbmData(dir, name, addr, size);
+        CopyToHost(data_[i].hostPtr, data_[i].devPtr, data_[i].size);
     }
-
-    readHbmData(dir, "workspace_out.bin", workspace_.devPtr, workspace_.size);
 }
 
 template <typename SystemConfig, typename CaseConfig>
-void DynPvModelImpl<SystemConfig, CaseConfig>::readHbmData(
-    std::string dir, std::string name, uint64_t addr, uint64_t size) {
+void DynPvModelImpl<SystemConfig, CaseConfig>::CopyToHost(uint64_t hostAddr, uint64_t devAddr, uint64_t size)
+{
     const uint64_t MAX_READ_SIZE = 2048;
     std::vector<uint8_t> model_data(MAX_READ_SIZE);
-    std::ofstream outFile(dir + "/" + name, std::ios::binary);
-    if (!outFile.is_open()) {
-        return;
-    }
     for (uint64_t i = 0; i < size; i += MAX_READ_SIZE) {
         const uint32_t read_size = std::min(MAX_READ_SIZE, (size - i));
-        pv_mem_read_(0, addr + i, read_size, model_data.data(), caseConfig->GetCoreType(), 0);
-        outFile.write(reinterpret_cast<const char *>(model_data.data()), read_size);
+        pv_mem_read_(0, devAddr + i, read_size, model_data.data(), subcoreId_, coreId_);
+        memcpy_s(reinterpret_cast<void *>(hostAddr + i), read_size, model_data.data(), read_size);
     }
-    outFile.close();
 }
 
 template <typename SystemConfig, typename CaseConfig>
-void DynPvModelImpl<SystemConfig, CaseConfig>::TearDown(std::string dir, DynFuncData *fundata)
+void DynPvModelImpl<SystemConfig, CaseConfig>::TearDown()
 {
-    // update tensor
     for (size_t i = 0; i < data_.size(); i++) {
-        std::string name = std::string("tensor_") + std::to_string(i) + "_out.bin";
-        std::vector<uint8_t> d(reinterpret_cast<uint8_t *>(data_[i].hostPtr), reinterpret_cast<uint8_t *>(data_[i].hostPtr) + data_[i].size);
-        PvModelBinHelper::ReadBin(dir + "/" + name, d);
-        memcpy_s(reinterpret_cast<void *>(data_[i].hostPtr), data_[i].size, d.data(), data_[i].size);
-    }
-
-    // update stack
-    if (fundata->stackWorkSpaceSize) {
-        std::vector<uint8_t> s(reinterpret_cast<uint8_t *>(fundata->stackWorkSpaceAddr), reinterpret_cast<uint8_t *>(fundata->stackWorkSpaceAddr) + fundata->stackWorkSpaceSize);
-        PvModelBinHelper::ReadBin(dir + "/stack_out.bin", s);
-        memcpy_s(reinterpret_cast<void*>(fundata->stackWorkSpaceAddr), fundata->stackWorkSpaceSize, s.data(), fundata->stackWorkSpaceSize);
+        CopyToHost(data_[i].hostPtr, data_[i].devPtr, data_[i].size);
     }
 
     if (workspace_.size) {
-        std::vector<uint8_t> s(reinterpret_cast<uint8_t *>(workspace_.hostPtr),
-        reinterpret_cast<uint8_t *>(workspace_.hostPtr) + workspace_.size);
-        PvModelBinHelper::ReadBin(dir + "/workspace_out.bin", s);
-        memcpy_s(reinterpret_cast<void*>(workspace_.hostPtr), workspace_.size, s.data(), workspace_.size);
+        CopyToHost(workspace_.hostPtr, workspace_.devPtr, workspace_.size);
     }
 }
 

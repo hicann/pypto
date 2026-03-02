@@ -20,7 +20,6 @@
 #include "operator/models/llama/llama_def.h"
 #include "cost_model/simulation/common/CommonType.h"
 #include "test_common.h"
-#include "test_cost_model.h"
 #include "test_dev_func_runner.h"
 #include "cost_model/simulation/cost_model_launcher.h"
 
@@ -133,9 +132,6 @@ public:
         oriEnableAihacBackend = config::GetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, oriEnableAihacBackend);
         config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
         Program::GetInstance().Reset();
-        constexpr int level = 2;
-        EnablePVModel(level);
-        rtSetDevice(GetDeviceIdByEnvVar());
     }
 
     void TearDown() override {
