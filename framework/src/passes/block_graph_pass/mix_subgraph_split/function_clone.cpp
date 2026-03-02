@@ -36,8 +36,6 @@ void FunctionClone::ProcessOperations(const InternalComponentInfo& component){
         if (belongsToComponent) {
             std::shared_ptr<Operation> opPtr = originalOp->shared_from_this();
             programOps.push_back(opPtr);
-            int originalMagic = originalOp->GetOpMagic();
-            ALOG_DEBUG_F("Reuse op %d in leaf function ", originalMagic);
         }
     }
 }

@@ -117,9 +117,9 @@ private:
                             const std::vector<InternalComponentInfo>& components,
                             const std::vector<uint64_t>& newProgramIDs,
                             SubgraphToFunction& subgraphToFunction,
-                            std::vector<Function*>& newFunctions);
-    Status SetMixIdResourceType(std::vector<Function*> &newFunctions, uint64_t mixId, MixResourceType resourceType);
-                                      
+                            std::vector<Function*>& newFunctions,
+                            uint64_t mixId,
+                            MixResourceType resourceType);
     // 应用拆分结果到全局programs
     Status ApplySplitResultsWithRemap(Function& function,
                                      const std::vector<MixSubgraphSplitResult>& splitResults,
