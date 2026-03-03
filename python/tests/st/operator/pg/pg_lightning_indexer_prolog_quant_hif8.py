@@ -474,7 +474,6 @@ def lightning_indexer_prolog_quant_dyn(inputs: IndexerPrologQuantInput, outputs:
     pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis, dtype=dtype) \
         for tensor, (axis, dtype) in output_tensors.items()]
     lightning_indexer_prolog_quant(*pto_inputs, *pto_outputs, attrs, configs)
-    torch_npu.npu.synchronize()
 
 
 def do_test_lightning_indexer_prolog_quant(case_name, configs):
