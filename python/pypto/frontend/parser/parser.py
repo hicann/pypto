@@ -94,7 +94,7 @@ class Parser(ast.NodeVisitor):
     Parsing Workflow
     ----------------
     1. parse(): Prepare AST and run liveness analysis
-    2. bind_dynamic_dims_from_inputs(): Optionally bind symbolic dimensions
+    2. bind_dynamic_dims_to_input_tensors(): Optionally bind symbolic dimensions
     3. execute(): Traverse AST and generate PTO IR
     4. Result: pypto.Function ready for compilation and execution
 
@@ -127,7 +127,7 @@ class Parser(ast.NodeVisitor):
     >>> source = Source(my_function)
     >>> parser = Parser(source, captured_vars)
     >>> parser.parse()
-    >>> parser.bind_dynamic_dims_from_inputs([[1024, 1024]])
+    >>> parser.bind_dynamic_dims_to_input_tensors([[1024, 1024]])
     >>> pto_func = parser.execute()
     """
 
@@ -228,22 +228,6 @@ class Parser(ast.NodeVisitor):
         # Store for later execution (lazy mode)
         self._parsed_node = node
         return self
-
-
-    @_catch_parser_errors
-    def bind_dynamic_dims_from_inputs(self, inputs: list[list[int]]) -> None:
-        """Bind symbolic dimensions to concrete values using sample inputs.
-
-        Parameters
-        ----------
-        inputs : list[list[int]]
-            Concrete sample inputs whose shapes/values are used to resolve
-            dynamic (symbolic) dimensions.
-
-        """
-
-        input_tensor_defs, output_tensor_defs = self.get_signature()
-        self._bound_dim_values = Parser.match_input_shapes(inputs, [*input_tensor_defs, *output_tensor_defs])
 
 
     @_catch_parser_errors
@@ -602,6 +586,14 @@ class Parser(ast.NodeVisitor):
         if not self.context.frames:
             return
 
+        def get_tuple_runtime_value(current_value: tuple):
+            current_value_list = list(current_value)
+            for axis, dim in enumerate(current_value):
+                if isinstance(dim, pypto.SymbolicScalar):
+                    dim = self._bound_dim_values[str(dim)]
+                    current_value_list[axis] = dim
+            return current_value_list
+
         current_frame = self.context.frames[-1]
         for var_name in list(current_frame.vars):
             values_stack = self.context.name2value.get(var_name, [])
@@ -609,6 +601,10 @@ class Parser(ast.NodeVisitor):
                 continue
             current_value = values_stack[-1]
             if (
+                isinstance(current_value, tuple)
+            ):
+                self.context.add(var_name, tuple(get_tuple_runtime_value(current_value)))
+            elif (
                 isinstance(current_value, SymbolicScalar)
                 and str(current_value) in self._bound_dim_values
             ):
