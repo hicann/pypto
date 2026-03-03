@@ -11,7 +11,7 @@
 1.  启动性能数据采集功能。
 
     ```python
-    @pypto.jit(
+    @pypto.frontend.jit(
         debug_options={"runtime_debug_mode": 1}
     )
     ```

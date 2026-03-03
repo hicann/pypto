@@ -41,7 +41,7 @@ verify_options = {
         "enable_pass_verify": True,
       }
 
-@pypto.jit(verify_options=verify_options)
+@pypto.frontend.jit(verify_options=verify_options)
 def user_kernel(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor):
     ...
     for idx in pypto.loop(10):

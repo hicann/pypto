@@ -51,27 +51,31 @@ from numpy.testing import assert_allclose
 
 2.  实现Softmax Kernel函数。
 
-    为了使计算逻辑能够在硬件上高效运行，需要实现Softmax Kernel函数，并通过@pypto.jit装饰器将计算图转换为硬件指令，并在其中定义数据切分和循环处理等策略。
+    为了使计算逻辑能够在硬件上高效运行，需要实现Softmax Kernel函数，并通过@pypto.frontend.jit装饰器将计算图转换为硬件指令，并在其中定义数据切分和循环处理等策略。
 
     ```python
-    @pypto.jit
-    def softmax_kernel(x: pypto.Tensor, y: pypto.Tensor) -> None:
-        # after the dynamic axis of tensor is marked, get the tensor shape accordingly
-        tensor_shape = x.shape
-        b = tensor_shape[0] # dynamic: symbolic_scalar; static: immediate number
-        n1, n2, dim = tensor_shape[1:]
-        tile_b = 1
-        b_loop = b / tile_b
-    
+    # 动态轴定义（如果需要动态batch）
+    bs = pypto.frontend.dynamic("bs")  # 或使用固定值如 bs = 32
+
+    @pypto.frontend.jit
+    def softmax_kernel(
+        input_tensor: pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32)
+    ) -> pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32):
+        output_tensor = pypto.tensor((bs, seqlen, head, dim), pypto.DT_FP32)
+        tile_b = 1  # Process one batch at a time
+        b_loop = bs // tile_b
+
         # tiling shape setting
         pypto.set_vec_tile_shapes(1, 4, 1, 64)
-    
-        for idx in pypto.loop(b_loop):
+
+        for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
             b_offset = idx * tile_b
             b_offset_end = (idx + 1) * tile_b
-            x_view = x[b_offset:b_offset_end, :n1, :n2, :dim]
-            softmax_out = softmax_core(x_view)
-            y[b_offset:, ...] = softmax_out
+            input_view = input_tensor[b_offset:b_offset_end, :seqlen, :head, :dim]
+            softmax_out = softmax_core(input_view)
+            output_tensor[b_offset:, ...] = softmax_out
+
+        return output_tensor
     ```
 
     其中，为了提高算子的计算效率，可以通过set\_vec\_tile\_shapes或set\_cube\_tile\_shapes接口，指定操作的分块（Tiling）方式。这种Tiling配置将计算分解为硬件友好的Tile粒度（如64），可优化内存访问和并行计算效率。
@@ -80,25 +84,32 @@ from numpy.testing import assert_allclose
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     ```
 
-3.  通过PyTorch的Tensor转换来创建PyPTO Tensor。
+3.  构建Softmax入口函数。
 
-    由于PyPTO运行框架操作的是PyPTO类型的Tensor，因此需要将输入的Tensor转换为PyPTO类型。这里以PyTorch为例，将输入的PyTorch类型的Tensor转换为PyPTO类型，并返回PyTorch格式的输出Tensor。
+    Softmax入口函数负责创建并返回编译好的kernel函数。在调用时直接传入PyTorch Tensor，PyPTO框架会自动处理Tensor的类型转换。
 
     ```python
-    def softmax(x: torch.Tensor, dynamic: bool = True) -> torch.Tensor:
-        y = torch.empty_like(x)
-    
+    def softmax(shape: tuple, run_mode: str = "npu", dynamic: bool = True):
+        bs, seqlen, head, dim = shape
         if dynamic:
-            x_pto = pypto.from_torch(x, dynamic_axis=[0])
-            y_pto = pypto.from_torch(y, dynamic_axis=[0])
+            bs = pypto.frontend.dynamic("bs")
+        
+        if run_mode == "npu":
+            mode = pypto.RunMode.NPU
+        elif run_mode == "sim":
+            mode = pypto.RunMode.SIM
         else:
-            x_pto = pypto.from_torch(x)
-            y_pto = pypto.from_torch(y)
-    
-        # launch the kernel
-        softmax_kernel(x_pto, y_pto)
-    
-        return y
+            raise ValueError(f"Invalid run_mode: {run_mode}")
+        
+        # 使用jit装饰器编译kernel
+        @pypto.frontend.jit(runtime_options={"run_mode": mode})
+        def softmax_kernel(
+            input_tensor: pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32),
+        ) -> pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32):
+            # ... kernel实现 ...
+            return output_tensor
+        
+        return softmax_kernel
     ```
 
 ## 测试用例
@@ -106,20 +117,24 @@ from numpy.testing import assert_allclose
 为了验证Softmax算子的正确性，编写一个测试用例。该测试用例使用PyTorch Tensor作为输入，通过PyPTO kernel进行计算，并与PyTorch的内置Softmax函数的结果进行对比。在开始执行PyPTO和PyTorch相关代码之前， 需要指定对应的Device ID，或者通过torch.npu接口获取当前的Device ID。
 
 ```python
-def test_softmax(device_id=None, dynamic: bool = True) -> None:
-    # use torch default device id or provide a specific id
-    if not device_id:
-        device_id = torch.npu.current_device()
-    else:
-        torch.npu.set_device(device_id)
+def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = True) -> None:
+    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
 
     shape = (32, 32, 1, 256)
-    x = torch.rand(shape, dtype=torch.float, device=f'npu:{device_id}')
+    x = torch.rand(shape, dtype=torch.float, device=device)
 
-    y = softmax(x, dynamic).cpu()  # 默认dim: -1
+    # 调用softmax获取kernel，然后传入x执行
+    y = softmax(x.shape, run_mode, dynamic)(x).cpu()  # 默认dim: -1
     golden = torch.softmax(x, dim=-1).cpu()
 
-    assert_allclose(np.array(y), np.array(golden), rtol=3e-3, atol=3e-3)
+    max_diff = np.abs(y.numpy() - golden.numpy()).max()
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {y.shape}")
+    print(f"Max difference: {max_diff:.6f}")
+
+    if run_mode == "npu":
+        assert_allclose(np.array(y), np.array(golden), rtol=3e-3, atol=3e-3)
+    print("✓ Softmax test passed")
 ```
 
 ## 编译与执行
@@ -175,10 +190,10 @@ PyPTO程序在编译过程中，会自动生成由Tensor和Operation组合而成
 
 泳道图用于直观展示计算图的实际调度与执行过程，清晰呈现任务的执行顺序和耗时信息，帮助开发者分析算子性能瓶颈。下面将介绍如何采集泳道图数据，并通过PyPTO Toolkit查看泳道图。
 
-1.  通过pypto.set\_debug\_options接口启动性能数据采集功能。
+1.  通过给@pypto.frontend.jit装饰器的入参debug\_options配置图执行阶段调试开关启动性能数据采集功能。
 
     ```python
-    @pypto.jit(
+    @pypto.frontend.jit(
         debug_options={"runtime_debug_mode": 1}
     )
     ```

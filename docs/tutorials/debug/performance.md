@@ -14,10 +14,10 @@
 
 ### 采集泳道图数据
 
-1.  通过给@pypto.jit装饰器的入参debug_options配置图执行阶段调试开关启动性能数据采集功能。
+1.  通过给@pypto.frontend.jit装饰器的入参debug_options配置图执行阶段调试开关启动性能数据采集功能。
 
     ```python
-    @pypto.jit(
+    @pypto.frontend.jit(
         debug_options={"runtime_debug_mode": 1}
     )
     ```

@@ -7,15 +7,22 @@
 ## 基础循环结构
 
 ```python
-@pypto.jit
-def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    tensor_shape = input0.shape
+SHAPE = (32, 32, 1, 256)
+
+@pypto.frontend.jit
+def add_kernel(
+    input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
+    input1: pypto.Tensor(SHAPE, pypto.DT_FP32),
+    val: int
+) -> pypto.Tensor(SHAPE, pypto.DT_FP32):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     #calculate the loop parameters
-    b = tensor_shape[0]
+    b, n, s, d = SHAPE
     tile_b = 1
     b_loop = b // tile_b
+
+    output = pypto.tensor(SHAPE, pypto.DT_FP32)
 
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
@@ -24,6 +31,8 @@ def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor,
         t1_sub = input1[b_offset:b_offset_end, ...]
         t3_sub = t0_sub + t1_sub
         output[b_offset:b_offset_end, ...] = t3_sub + val
+
+    return output
 ```
 
 循环使用的pypto.loop的全接口入参如下：
@@ -52,24 +61,30 @@ slicing语法糖的完整样例请参考：[loop.py](../../../examples/02_interm
 上述示例展示了如何在循环中使用Python的切片操作 \[:, :, :\] 来提取小块数据进行计算。计算完成后，数据会被输出。此外，也可以利用pypto.view接口提取小块数据进行计算，计算完成后，再通过pypto.assemble将数据组装并输出。
 
 ```python
-@pypto.jit
-def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor):
-    tensor_shape = input0.shape
+SHAPE = (32, 32, 1, 256)
+
+@pypto.frontend.jit
+def add_kernel(
+    input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
+    input1: pypto.Tensor(SHAPE, pypto.DT_FP32)
+) -> pypto.Tensor(SHAPE, pypto.DT_FP32):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     #calculate the loop parameters
-    b = tensor_shape[0]
-    n, s, d = tensor_shape[1:]
+    b, n, s, d = SHAPE
     tile_b = 1
     b_loop = b // tile_b
 
+    output = pypto.tensor(SHAPE, pypto.DT_FP32)
+
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
-        b_offset_end = (idx + 1) * tile_b
-        t0_sub = pypto.view(input0, [1, n, s, d], [b_offset, 0, 0, 0])
-        t1_sub = pypto.view(input1, [1, n, s, d], [b_offset, 0, 0, 0])
+        t0_sub = pypto.view(input0, [tile_b, n, s, d], [b_offset, 0, 0, 0])
+        t1_sub = pypto.view(input1, [tile_b, n, s, d], [b_offset, 0, 0, 0])
         t3_sub = t0_sub + t1_sub
         pypto.assemble(t3_sub, [b_offset, 0, 0, 0], output)
+
+    return output
 ```
 
 view/assemble接口完整样例请参考：[add_scalar_loop_view_assemble.py](../../../examples/01_beginner/transform/add_scalar_loop_view_assemble.py)。

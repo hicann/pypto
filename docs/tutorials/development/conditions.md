@@ -8,29 +8,38 @@
 ## 静态条件分支
 
 ```python
+B = pypto.frontend.dynamic("B")
+
 #使用入参add1_flag=False生成kernel
-@pypto.jit
-def add_kernel_false(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    add_core(input0, input1, output, val, False)
+@pypto.frontend.jit
+def add_kernel_false(input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+                     input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+                     val: int) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
+    output = add_core(input0, input1, val, False)
+    return output
 
 #使用入参add1_flag=True生成kernel
-@pypto.jit
-def add_kernel_true(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
-    add_core(inputs, outputs, add1_flag=True)
+@pypto.frontend.jit
+def add_kernel_true(input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+                    input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+                    val: int) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
+    output = add_core(input0, input1, val, True)
+    return output
 ```
 
 代码示例：
 
 ```python
-def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int, add1_flag: bool = False):
+def add_core(input0: pypto.Tensor, input1: pypto.Tensor, val: int, add1_flag: bool = False) -> pypto.Tensor:
     # Tiling配置与循环逻辑
-    tensor_shape = input0.shape
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     #calculate the loop parameters
-    b = tensor_shape[0]
+    b = input0.shape[0]
     tile_b = 1
     b_loop = b // tile_b
+
+    output = pypto.zeros(input0.shape, pypto.DT_FP32)
 
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
@@ -42,6 +51,8 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
             output[b_offset:b_offset_end, ...] = t3_sub + val
         else:
             output[b_offset:b_offset_end, ...] = t3_sub
+    
+    return output
 ```
 
 该用例在add\_kernel函数中增加了一个可选参数add1\_flag，并使用该参数进行不同的处理。如果add1\_flag为True，则在输出结果上加1；反之，则直接输出前一个处理的结果。
@@ -57,23 +68,30 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
 -   `pypto.is_loop_end`\(idx\)：判断是否为循环最后一个迭代。
 
 ```python
-@pypto.jit
-def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int):
+@pypto.frontend.jit
+def add_kernel(
+    input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+    input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+    val: int
+) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
     ...
+    output = pypto.zeros((B, 4, 1, 64), pypto.DT_FP32)
     for idx in pypto.loop(b_loop):
         t3_sub = t0_sub + t1_sub
-        if pypto.cond(idx < 2):  # 动态条件判断
-            t2[b_offset:b_offset_end, ...] = t3_sub + val
+        if idx < 2:  # 动态条件判断
+            output[b_offset:b_offset_end, ...] = t3_sub + val
         else:
-            t2[b_offset:b_offset_end, ...] = t3_sub
+            output[b_offset:b_offset_end, ...] = t3_sub
 
         # 或者基于循环位置的条件
-        if pypto.cond(pypto.is_loop_begin(idx)):
+        if pypto.is_loop_begin(idx):
             output[b_offset:b_offset_end, ...] = t3_sub + val
-        elif pypto.cond(pypto.is_loop_end(idx)):
+        elif pypto.is_loop_end(idx):
             output[b_offset:b_offset_end, ...] = t3_sub + val + 1
         else:
             output[b_offset:b_offset_end, ...] = t3_sub
+
+    return output
 ```
 
 完整样例请参考：

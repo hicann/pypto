@@ -60,13 +60,13 @@ pypto.set_runtime_options(device_sched_mode=1,
                           stitch_function_outcast_memory=128,
                           stitch_function_num_initial=128,
                           stitch_function_num_step=20)
-@pypto.jit(
- 	     runtime_options={
- 	     "stitch_function_inner_memory": 128,
- 	     "stitch_function_outcast_memory": 128,
- 	     "stitch_function_num_initial": 128,
- 	     "device_sched_mode": 1
- 	     }
+@pypto.frontend.jit(
+        runtime_options={
+        "stitch_function_inner_memory": 128,
+        "stitch_function_outcast_memory": 128,
+        "stitch_function_num_initial": 128,
+        "device_sched_mode": 1
+        }
 )
 ```
 

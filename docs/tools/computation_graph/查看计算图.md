@@ -11,7 +11,7 @@
 1.  开启图编译阶段调试模式开关：
 
     ```python
-    @pypto.jit(
+    @pypto.frontend.jit(
         debug_options={"compile_debug_mode": 1}
     )
     ```
