@@ -67,7 +67,6 @@ class MlaTileConfig:
         self.k_vec_tile0 = 16
         self.k_vec_tile1 = 16
         self.cube_l1_reuse_setting = {-1: 4}
-        self.mg_copyin_upper_bound = 2 * 1024 * 1024
         self.pg_upper_bound = 8192
         self.vec_nbuffer_mode = 1
         self.cube_nbuffer_setting = {3: 4}
@@ -732,7 +731,6 @@ def mla_prolog_quant_p(h, q_lora_rank, n, qk_nope_head_dim, kv_lora_rank, qk_rop
             "vec_nbuffer_mode": 1,
             "cube_nbuffer_mode": 1,
             "cube_l1_reuse_setting": {-1: 4},
-            "mg_copyin_upper_bound": 2 * 1024 * 1024
         },
         runtime_options={
             "stitch_function_inner_memory": 512,
@@ -846,7 +844,6 @@ def mla_prolog_quant_d(h, q_lora_rank, n, qk_nope_head_dim, kv_lora_rank, qk_rop
             "vec_nbuffer_mode": 1,
             "cube_nbuffer_mode": 1,
             "cube_l1_reuse_setting": {-1: 4},
-            "mg_copyin_upper_bound": 2 * 1024 * 1024
         },
     )
     def mla_prolog_quant_kernel(

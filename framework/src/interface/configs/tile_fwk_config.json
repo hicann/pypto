@@ -5,7 +5,7 @@
         "pg_lower_bound": 512,
         "cube_l1_reuse_mode": 1,
         "cube_nbuffer_mode": 0,
-        "mg_copyin_upper_bound": 1048576,
+        "mg_copyin_upper_bound": 2097152,
         "vec_nbuffer_mode": 1,
         "mg_vec_parallel_lb": 48,
         "pg_skip_partition": false,

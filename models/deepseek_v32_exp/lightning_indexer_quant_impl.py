@@ -80,7 +80,6 @@ def lightning_indexer_decode_compute(
     """
 
     # graph fuse/split thresold
-    pypto.set_pass_options(mg_copyin_upper_bound=configs.mg_copy_in_upper_bound)
     pypto.set_pass_options(pg_upper_bound=configs.pg_upper_bound)
 
     # vector graph fuse optimization
@@ -202,14 +201,14 @@ def lightning_indexer_decode_compute(
                 length_is_gt2k = eff_seq > length_2k
                 for _ in pypto.loop(length_is_le2k, name="2K_TOPK", idx_name="un_used"):
                     pad_x2k = pypto.tensor([1, length_2k], xdtype, "pad_x2k")
-                    pypto.set_pass_options(pg_skip_partition=True)
+                    pypto.set_pass_options(sg_set_scope=1)
                     pypto.set_vec_tile_shapes(1, length_2k)
                     eff_2k = pypto.view(max_tensor, [1, length_2k], [src_offset, 0], valid_shape=[1, eff_seq])
                     ax = pypto.view(eff_2k, [1, length_2k], [0, 0], valid_shape=[1, eff_seq])
                     bx = pypto.full([1, length_2k], pad_value, pypto.DT_FP32, valid_shape=[1, length_2k - eff_seq])
                     pypto.assemble(pypto.clone(ax), [0, 0], pad_x2k)
                     pypto.assemble(bx, [0, eff_seq], pad_x2k)
-                    pypto.set_pass_options(pg_skip_partition=False)
+                    pypto.set_pass_options(sg_set_scope=-1)
                     res, _ = topk_sort(pad_x2k, 0)
                     res_idx = topk_extract(res, selected_count, True)
                     pypto.set_vec_tile_shapes(1, 1, selected_count)
@@ -226,14 +225,14 @@ def lightning_indexer_decode_compute(
                 pypto.set_vec_tile_shapes(1, topk_tile)
 
                 for _ in pypto.loop(length_is_gt2k * length_is_le8k, name="8K_TOPK", idx_name="unused"):
-                    pypto.set_pass_options(pg_skip_partition=True)
+                    pypto.set_pass_options(sg_set_scope=2)
                     pypto.set_vec_tile_shapes(1, length_2k)
                     eff_8k = pypto.view(max_tensor, [1, length_8k], [src_offset, 0], valid_shape=[1, eff_seq])
                     ax = pypto.view(eff_8k, [1, length_8k], [0, 0], valid_shape=[1, eff_seq])
                     bx = pypto.full([1, length_8k], pad_value, pypto.DT_FP32, valid_shape=[1, length_8k - eff_seq])
                     pypto.assemble(pypto.clone(ax), [0, 0], pad_x8k)
                     pypto.assemble(bx, [0, eff_seq], pad_x8k)
-                    pypto.set_pass_options(pg_skip_partition=False)
+                    pypto.set_pass_options(sg_set_scope=-1)
 
                     res, _ = topk_sort(pypto.view(pad_x8k, [1, length_8k], [0, 0]), 0)
                     res_idx = topk_extract(res, selected_count, True)
@@ -278,7 +277,7 @@ def lightning_indexer_decode_compute(
                                        name="128K_TO_32K_TAIL", idx_name="unused"):
                     x_start_offset = num_of_8k_full_block * length_8k
                     tail_block_length = eff_seq - x_start_offset
-                    pypto.set_pass_options(pg_skip_partition=True)
+                    pypto.set_pass_options(sg_set_scope=3)
                     pypto.set_vec_tile_shapes(1, topk_tile)
                     cur_in = pypto.view(max_tensor, [1, MAX_LI_S2], [src_offset, 0], valid_shape=[1, eff_seq])
                     ax = pypto.view(cur_in, [1, length_8k], [0, x_start_offset],
@@ -287,7 +286,7 @@ def lightning_indexer_decode_compute(
                         valid_shape=[1, length_8k - tail_block_length])
                     pypto.assemble(pypto.clone(ax), [0, 0], pad_x8k)
                     pypto.assemble(bx, [0, tail_block_length], pad_x8k)
-                    pypto.set_pass_options(pg_skip_partition=False)
+                    pypto.set_pass_options(sg_set_scope=-1)
                     for _ in pypto.loop(0, 1, 1, name="128K_TO_32K_TAIL_SORT", idx_name="un_used0"):
                         res, _ = topk_sort(pypto.view(pad_x8k, [1, length_8k], [0, 0]), num_of_8k_full_block)
                         pypto.assemble(pypto.clone(pypto.view(res, [1, selected_count * 2], [0, 0])),

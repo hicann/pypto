@@ -527,8 +527,7 @@ def lightning_indexer_prolog_inner(args: LightningIndexerPrologArgs):
 def setup_lightning_indexer_prolog_config():
     pypto.set_pass_options(vec_nbuffer_mode=NUM_1,
                          cube_l1_reuse_setting={-1: NUM_4},
-                         cube_nbuffer_setting={NUM_3: NUM_4},
-                         mg_copyin_upper_bound=NUM_2 * NUM_1024 * NUM_1024)
+                         cube_nbuffer_setting={NUM_3: NUM_4})
 
 
 def build_lightning_indexer_prolog_args(

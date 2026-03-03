@@ -91,7 +91,6 @@ class IndexerPrologQuantConfigs:
     unroll_list: List[int]
 
     cube_l1_reuse_setting: dict[int, int]
-    mg_copyin_upper_bound: int
     pg_upper_bound: int
     block_size: int
     t_sub_tile: int
@@ -523,7 +522,6 @@ def lightning_indexer_prolog_quant(x_in, q_norm_in, q_norm_scale_in, w_qb_in,
     """
     pypto.set_pass_options(vec_nbuffer_mode=configs.vec_nbuffer_mode)
     pypto.set_pass_options(cube_l1_reuse_setting=configs.cube_l1_reuse_setting)
-    pypto.set_pass_options(mg_copyin_upper_bound=configs.mg_copyin_upper_bound)
     pypto.set_pass_options(pg_upper_bound=configs.pg_upper_bound)
 
     pypto.set_runtime_options(device_sched_mode=1)

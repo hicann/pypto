@@ -323,7 +323,6 @@ def mla_indexer_prolog_quant_p(h, n_q, q_lora_rank, kv_lora_rank, qk_nope_head_d
             "vec_nbuffer_mode": 1,
             "cube_nbuffer_mode": 1,
             "cube_l1_reuse_setting": {-1: 4},
-            "mg_copyin_upper_bound": 2 * 1024 * 1024,
             "pg_upper_bound": 8192,
         },
         runtime_options={"stitch_function_inner_memory": 512, 
@@ -501,7 +500,6 @@ def mla_indexer_prolog_quant_d(h, n_q, q_lora_rank, kv_lora_rank, qk_nope_head_d
             "vec_nbuffer_mode": 1,
             "cube_nbuffer_mode": 1,
             "cube_l1_reuse_setting": {-1: 4},
-            "mg_copyin_upper_bound": 2 * 1024 * 1024,
             "pg_upper_bound": 8192,
         },
         runtime_options={"device_sched_mode": 2}
