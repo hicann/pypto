@@ -600,9 +600,7 @@ class Parser(ast.NodeVisitor):
             if not values_stack:
                 continue
             current_value = values_stack[-1]
-            if (
-                isinstance(current_value, tuple)
-            ):
+            if isinstance(current_value, tuple):
                 self.context.add(var_name, tuple(get_tuple_runtime_value(current_value)))
             elif (
                 isinstance(current_value, SymbolicScalar)
