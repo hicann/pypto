@@ -489,7 +489,7 @@ def rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tens
 
     n = x.shape[-1]
 
-    y = pypto.sqrt(pypto.sum(x * x * (1.0 / n), -1, keepdim=True)) + epsilon
+    y = pypto.sqrt(pypto.sum(x * x * (1.0 / n), -1, keepdim=True) + epsilon)
 
     ones = pypto.full(y.shape, 1.0, pypto.DT_FP32)
     y = x * ones / y
