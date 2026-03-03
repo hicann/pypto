@@ -39,6 +39,6 @@ void：Set方法无返回值。设置操作成功即生效。
 ## 调用示例
 
 ```python
-pypto.set_operation_options(combine_axis=True)
-pypto.set_operation_options(force_combine_axis=False)
+pypto.experimental.set_operation_options(combine_axis=True)
+pypto.experimental.set_operation_options(force_combine_axis=False)
 ```
