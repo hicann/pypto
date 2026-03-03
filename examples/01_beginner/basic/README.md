@@ -6,11 +6,11 @@
 
 本样例涵盖了 PyPTO 编程中的核心概念，包括：
 - 张量的创建与属性访问。
-- 基础的逐元素算术运算（加法、乘法等）。
+- 基础的逐元素算术运算（加法、标量乘法等）。
 - 矩阵乘法（Matmul）操作。
-- 激活函数（如 Sigmoid）的使用。
-- 用于分块（Tiling）的 View 操作。
-- 多个算子的组合使用。
+- 归约运算（如 Sum）。
+- Tiling（分块）配置（Vec / Cube Tile Shapes）。
+- 变换操作（View + Assemble）。
 
 ## 样例代码特性
 
@@ -22,15 +22,20 @@
 
 ## 代码结构
 
-- **`basic_ops.py`**: 包含所有示例的主脚本。
+- **`basic_ops.py`**: 包含所有示例的主脚本，作为快速上手的总览入口。
   - `test_tensor_creation()`: 示例 1 - 张量创建。
-  - `test_element_wise_operations()`: 示例 2 - 逐元素运算。
-  - `test_matrix_multiplication()`: 示例 3 - 矩阵乘法。
-  - `test_activation_functions()`: 示例 4 - 激活函数。
-  - `test_view_operations()`: 示例 5 - View 与分块操作。
-  - `test_combined_operations()`: 示例 6 - 组合运算（构建简单的线性层）。
+  - `test_elementwise_ops()`: 示例 2 - 逐元素运算（加法、标量乘法）。
+  - `test_matmul()`: 示例 3 - 矩阵乘法。
+  - `test_reduce_ops()`: 示例 4 - 归约运算（Sum）。
+  - `test_tiling_config()`: 示例 5 - Tiling 配置。
+  - `test_transform_ops()`: 示例 6 - 变换操作（View + Assemble）。
 - **`tensor_creation.py`**: 张量创建操作示例，包含 Arange、Full、数据类型等创建方法。
 - **`symbolic_scalar.py`**: 符号标量（Symbolic Scalar）的使用示例。
+
+更详细的各类算子用法，请参考同级目录：
+- `../compute/`: 逐元素算子、矩阵乘法、归约算子。
+- `../tiling/`: Tiling 配置策略。
+- `../transform/`: 变换算子。
 
 ## 运行方法
 
@@ -51,7 +56,7 @@ export TILE_FWK_DEVICE_ID=0
 python3 basic_ops.py
 
 # 运行特定示例（例如示例 2：逐元素运算）
-python3 basic_ops.py element_wise_operations::test_element_wise_operations
+python3 basic_ops.py elementwise_ops::test_elementwise_ops
 
 # 查看所有可用示例列表
 python3 basic_ops.py --list
@@ -63,23 +68,22 @@ python3 basic_ops.py --list
 
 ```python
 @pypto.frontend.jit()
-def element_wise_ops_kernel( # 设置输入张量及其属性
+def elementwise_kernel(
     a: pypto.Tensor(shape, pypto.DT_FP16),
     b: pypto.Tensor(shape, pypto.DT_FP16),
-) -> pypto.Tensor(shape, pypto.DT_FP16): # 设置输出张量属性
+) -> pypto.Tensor(shape, pypto.DT_FP16):
     # 设置向量计算的分块形状
     pypto.set_vec_tile_shapes(8, 8)
     # 算子组合
-    add_result = pypto.add(a, b)
-    mul_result = pypto.mul(add_result, 2.0)
-    return mul_result
+    out = pypto.mul(pypto.add(a, b), 2.0)
+    return out
 ```
 
 ### 2. 执行JIT函数
 
 ```python
 # 执行 JIT 函数
-result = element_wise_ops_kernel(a, b)
+result = elementwise_kernel(a, b)
 ```
 
 ## 注意事项

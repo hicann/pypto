@@ -18,11 +18,11 @@
 
 ## 代码结构
 
-- **`condition/`**: 条件分支示例目录。
-- **`others/`**: 其他运行时特性示例目录。
+- **`condition/`**: 条件分支示例目录，详见 [condition/README.md](condition/README.md)。
+- **`loop/`**: 循环控制专题目录，详见 [loop/README.md](loop/README.md)。
+- **`others/`**: 其他运行时特性示例目录，详见 [others/README.md](others/README.md)。
   - `dynamic.py`: 动态形状处理示例。
   - `kernel_input.py`: 输入顺序灵活性示例。
-- **`loop/`**: 循环控制专题目录。
 
 ## 运行方法
 

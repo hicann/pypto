@@ -20,8 +20,7 @@
 - **`layer_normalization/`**: 
   - `layer_norm.py`: 包含 LayerNorm 和 RMSNorm 的核心实现及其精度验证。
 - **`ffn/`**:
-  - `ffn_module_impl.py`: FFN 模块的逻辑定义与配置类。
-  - `ffn_module.py`: FFN 模块的各种场景测试。
+  - `ffn_module.py`: FFN 模块的核心实现与各种场景测试。
 
 ## 运行方法
 

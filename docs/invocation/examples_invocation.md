@@ -22,50 +22,52 @@ python3 hello_world.py --run_mode=npu
 
 ## 快速开始
 
-以下是一个简单的 PyPTO 使用示例, 可以通过 `sim` 和 `npu` 参数指定运行仿真示例或者真实环境示例:
+以下是一个简单的 PyPTO 使用示例，可以通过 `--run_mode` 参数指定运行仿真示例或者真实环境示例:
 
 ```python
 import pypto
 import torch
 import argparse
 
-# 定义计算函数
-@pypto.jit
-def add_kernel_npu(x0, x1, y):
-    pypto.set_vec_tile_shapes(4, 4)
-    y[:] = x0 + x1
+shape = (1, 4, 1, 64)
 
+# 根据运行模式创建计算内核
+def create_add_kernel(run_mode: str):
+    mode = pypto.RunMode.NPU if run_mode == "npu" else pypto.RunMode.SIM
 
-@pypto.jit(runtime_options={"run_mode": 1})
-def add_kernel_sim(x0, x1, y):
-    pypto.set_vec_tile_shapes(4, 4)
-    y[:] = x0 + x1
+    @pypto.frontend.jit(runtime_options={"run_mode": mode})
+    def add_kernel(
+        x: pypto.Tensor(shape, pypto.DT_FP32),
+        y: pypto.Tensor(shape, pypto.DT_FP32),
+    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        pypto.set_vec_tile_shapes(1, 4, 1, 64)
+        out = x + y
+        return out
+
+    return add_kernel
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Add kernel example")
-    parser.add_argument("--run_mode", type=str, default="npu", choices=["npu", "sim"],
-                        help="Running mode: npu or sim (default: npu)")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run_mode", type=str, default="npu", choices=["npu", "sim"])
     args = parser.parse_args()
-    run_mode = args.run_mode.lower()
 
-    # 创建 Tensor
-    x0 = torch.ones(4, 4, dtype=torch.float32)
-    x1 = torch.ones(4, 4, dtype=torch.float32)
-    y = torch.empty(4, 4, dtype=torch.float32)
-
-    # 执行计算
-    if run_mode == "npu":
+    # 准备输入数据
+    device = "cpu"
+    if args.run_mode == "npu":
+        import torch_npu
         torch.npu.set_device(0)
-        add_kernel_npu(pypto.from_torch(x0), pypto.from_torch(x1), pypto.from_torch(y))
-        print(y)
-    elif run_mode == "sim":
-        add_kernel_sim(pypto.from_torch(x0), pypto.from_torch(x1), pypto.from_torch(y))
-        print("Simulation completed, please view the results through the swimlane diagram.")
-    else:
-        print("Invalid parameters")
+        device = "npu:0"
 
+    x = torch.rand(shape, dtype=torch.float32, device=device)
+    y = torch.rand(shape, dtype=torch.float32, device=device)
+
+    # 执行计算并查看结果
+    output = create_add_kernel(args.run_mode)(x, y)
+    print(f"Output shape: {output.shape}")
 ```
 
-- 对于真实环境，可以直接通过查看输出 `y` 的值查看运行结果
+- 对于真实环境，可以直接通过查看输出张量的值查看运行结果
 - 对于仿真环境，通过 `output/` 下的泳道图查看仿真结果
+
+完整样例请参考：[hello_world.py](../../examples/00_hello_world/hello_world.py)。
 

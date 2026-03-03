@@ -17,6 +17,7 @@
   - `test_residual_connection`: 残差连接示例。
   - `test_transformer_block`: 综合示例，构建完整的 Transformer 块。
   - `test_function_reuse`: 函数复用示例。
+- **`multi_jit.py`**: 多 JIT 函数组合创建示例，展示如何将多个独立编译的 JIT 函数串联使用。
 
 ## 运行方法
 

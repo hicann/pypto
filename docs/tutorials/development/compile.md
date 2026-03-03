@@ -41,7 +41,7 @@ JIT编译流程为：
 -   首次调用时，函数以“记录模式”执行，操作被记录并优化为计算图，经编译器生成针对NPU的优化代码后缓存二进制文件；
 -   后续调用时，函数直接调用缓存的二进制文件在NPU上执行，无需重复编译。
 
-完整样例请参考：[add_direct.py](../../../examples/01_beginner/basic/add_direct.py)。
+完整样例请参考：[hello_world](../../../examples/00_hello_world/hello_world.py)。
 
 
 ## 条件编译
@@ -114,5 +114,5 @@ add_add1flag_false(input_data0, input_data1, output_data, val, True)
 add_add1flag_true(input_data0, input_data1, output_data1, val, True)
 ```
 
-完整样例请参考：[add_scalar_loop_multi_jit.py](../../../examples/03_advanced/patterns/add_scalar_loop_multi_jit.py)
+完整样例请参考：[multi_jit.py](../../../examples/03_advanced/patterns/function/multi_jit.py)
 

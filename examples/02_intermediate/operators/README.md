@@ -19,7 +19,7 @@
 - **`activation/`**:
   - `activation.py`: 实现了 SiLU, GELU, SwiGLU, GeGLU 等多种复杂激活函数。
 - **`softmax/`**:
-  - `softmax.py.py`: 详细展示了 Softmax 算子的分步实现与优化。
+  - `softmax.py`: 详细展示了 Softmax 算子的分步实现与优化。
 
 ## 运行方法
 

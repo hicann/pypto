@@ -11,9 +11,13 @@
 - **算子位置规则**: 算子通常必须放置在最内层循环中以确保正确生成代码。
 - **编译期打印特性**: 了解内核循环中的 `print` 行为（仅在编译期执行）。
 
-## 代码文件说明
+## 代码结构
 
 - **`loop.py`**: 包含循环特性的详细示例和验证逻辑。
+  - `test_loop_basic`: 基础循环用法（start/stop/step）。
+  - `test_loop_compile_phase_print`: 编译期打印特性。
+  - `test_add_scalar_loop`: 标量加法循环示例。
+  - `test_add_scalar_loop_dyn_axis`: 动态轴下的标量加法循环示例。
 
 ## 运行方法
 

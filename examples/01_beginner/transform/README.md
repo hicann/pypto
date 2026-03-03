@@ -17,6 +17,7 @@
   - `test_gather_basic`: 基础 Gather 操作。
   - `test_concat_basic`: 基础 Concat 操作。
   - `test_view_basic`: 基础 View 操作。
+- **`add_scalar_loop_view_assemble.py`**: 标量加法结合 View 与 Assemble 的循环分块示例。
 
 ## 运行方法
 

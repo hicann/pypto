@@ -33,7 +33,7 @@ export TILE_FWK_DEVICE_ID=0
 ### 执行脚本
 
 ```bash
-cd nn/attention
+cd attention
 python3 attention.py
 ```
 

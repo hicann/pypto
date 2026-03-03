@@ -35,12 +35,13 @@ Usage:
 import os
 import sys
 import argparse
+from dataclasses import dataclass
+from typing import Optional
+
 import pypto
 import torch
 import numpy as np
 from numpy.testing import assert_allclose
-from dataclasses import dataclass
-from typing import Optional
 
 
 def get_device_id():

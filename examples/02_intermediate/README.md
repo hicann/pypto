@@ -22,14 +22,14 @@
     - 深入展示 Softmax 算子的手动分步实现。
     - 涉及 `exp` 计算和跨维度的 `sum` 归约。
 
-### 3. 运行时特性 ([controflow](controflow/))
-- **Dynamic Shapes ([dynamic.py](controflow/others/dynamic.py))**:
+### 3. 运行时特性 ([controlflow](controlflow/))
+- **Dynamic Shapes ([dynamic.py](controlflow/others/dynamic.py))**:
     - 展示如何处理动态 Batch Size 或序列长度。
     - 使用 `dynamic_axis` 参数进行标记。
 - **Condition & Loop**:
     - `condition/condition.py`: 展示算子内部的条件分支逻辑。
     - `loop/`: 展示复杂的循环控制逻辑。
-- **Kernel Input Order ([kernel_input.py](controflow/others/kernel_input.py))**:
+- **Kernel Input Order ([kernel_input.py](controlflow/others/kernel_input.py))**:
     - 展示 JIT 内核对输入顺序的灵活性。
 
 ## 核心特性
@@ -54,4 +54,4 @@ export TILE_FWK_DEVICE_ID=0
 
 1. 首先学习 `operators/activation`，了解如何通过基础算子组合出新算子。
 2. 学习 `basic_nn/layer_normalization`，掌握涉及归约运算的规范化层实现。
-3. 深入 `controflow` 目录，理解 PyPTO 在处理真实世界复杂逻辑时的强大能力。
+3. 深入 `controlflow` 目录，理解 PyPTO 在处理真实世界复杂逻辑时的强大能力。

@@ -45,7 +45,7 @@ for idx in pypto.loop(start, end)         # 默认step=1
 for idx in pypto.loop(end)                # 默认start=0， step=1 
 ```
 
-slicing语法糖的完整样例请参考：[add_scalar_loop.py](../../../examples/02_intermediate/controflow/loop/add_scalar_loop.py)。
+slicing语法糖的完整样例请参考：[loop.py](../../../examples/02_intermediate/controlflow/loop/loop.py)。
 
 ## 使用view/assemble接口处理循环结构
 
