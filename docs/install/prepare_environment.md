@@ -207,18 +207,23 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
 
 ## 安装MPI依赖（可选）
 
-  PyPTO的分布式用例依赖MPI：
+  PyPTO的分布式用例依赖MPI，推荐版本 >= 3.2.1：
+
+ ### 软件包安装
 
     ```bash
-    # 源码安装
-    https://www.mpich.org/static/downloads/3.2.1/
+    # 以3.2.1版本为例
+    version='3.2.1'
+    wget https://www.mpich.org/static/downloads/${version}/mpich-${version}.tar.gz
     tar -xzf mpich-${version}.tar.gz
     cd mpich-${version}
     ./configure --prefix=/usr/local/mpich --disable-fortran
     make && make install
+    ```
 
-    # 设置环境变量
+ ### 设置环境变量
+
+    ```bash
     export MPI_HOME=/usr/local/mpich
-    export MPI_BIN_PATH=$MPI_HOME/bin
-    export PATH=$MPI_BIN_PATH:$PATH
+    export PATH=${MPI_HOME}/bin:${PATH}
     ```

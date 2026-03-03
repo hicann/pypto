@@ -111,7 +111,7 @@ class DistributedSTestAccelerate(STestAccelerate):
 
     def _execute_case(self, ctx: STestAccelerate.CaseContext,
                     param: STestAccelerate.ExecParam,
-                    gtest_filter: str) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
+                    case_name: str) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
         """多卡模式执行 - 重写父类方法"""
         rank_size = param.custom.get("rank_size")
         if rank_size is None:
@@ -119,11 +119,12 @@ class DistributedSTestAccelerate(STestAccelerate):
         if rank_size <= 1:
             raise ValueError("Distribute case rank size need greater than 1, run distribute case failed.")
         device_group = param.custom.get("device_group", [param.cntr_id])
-        return self._run_multi_device_case(ctx, device_group, rank_size)
+        return self._run_multi_device_case(ctx, device_group, rank_size, case_name)
 
     def _run_multi_device_case(self, ctx: STestAccelerate.CaseContext,
                             device_group: List[int],
-                            rank_size: int) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
+                            rank_size: int,
+                            case_name: str) -> Tuple[subprocess.CompletedProcess, str, datetime.timedelta]:
         """执行多卡分布式测试用例
 
         :param ctx: Case上下文
@@ -137,10 +138,10 @@ class DistributedSTestAccelerate(STestAccelerate):
         command = [
             "mpirun", "-n", str(rank_size),
             str(self.exe.file),
-            f"--gtest_filter={ctx.gtest_filter}",
+            f"--gtest_filter={case_name}",
         ]
         device_info = f"DeviceGroup{device_group}"
-        logging.info(f"Executing {ctx.gtest_filter} on {device_info} with rank_size {rank_size}.")
+        logging.info(f"Executing {case_name} on {device_info} with rank_size {rank_size}.")
         ts = datetime.datetime.now(tz=datetime.timezone.utc)
         completed_process = subprocess.run(
             command,

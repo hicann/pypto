@@ -57,11 +57,11 @@ endif ()
 set(_num_ranks "4")
 set(_num_cases "10")
 set(_DistributedGTestCaseFilterConfig "")
-# foreach(i RANGE 0 ${_num_cases})
-#     list(APPEND _DistributedGTestCaseFilterConfig 
-#         "TestDistributedOps/DistributedTest.TestOps/${i}" "${_num_ranks}"
-#     )
-# endforeach()
+foreach(i RANGE 0 ${_num_cases})
+    list(APPEND _DistributedGTestCaseFilterConfig
+        "TestDistributedOps/DistributedTest.TestOps/${i}" "${_num_ranks}"
+    )
+endforeach()
 
 
 set(_LdLibrariesExt

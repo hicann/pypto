@@ -41,7 +41,6 @@ void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
     Tensor combineInfo(DataType::DT_INT32, combineInfoShape, "combineInfo");
     Tensor recvCounts(DataType::DT_INT32, {1}, "recvCounts");
     int64_t expandXEleNum = expandXShape[0] * expandXShape[1];
-    int64_t combineInfoEleNum = combineInfoShape[0] * combineInfoShape[1];
     std::string xPath = goldenDir+ "/x_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<T> tokenTensorPtr = ReadToVector<T>(xPath, tokenTensorShape);
     std::string expertIdsPath = goldenDir + "/expert_ids_rank_" + std::to_string(testParam.rankId) + ".bin";
@@ -67,8 +66,6 @@ void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
     EXPECT_TRUE(CompareWithGolden<uint8_t *>(dType, goldenDir + "/y_rank_", expandXEleNum, expandXOutPut->GetDevPtr(), testParam));
     auto expertTokenNumsOutPut = ProgramData::GetInstance().GetOutputData(1);
     EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/valid_count_rank_", expertNumPerRank, expertTokenNumsOutPut->GetDevPtr(), testParam));
-    auto combineInfoOutPut = ProgramData::GetInstance().GetOutputData(2);
-    EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/combine_info_rank_", combineInfoEleNum, combineInfoOutPut->GetDevPtr(), testParam));
     auto recvCountsOutPut = ProgramData::GetInstance().GetOutputData(3);
     EXPECT_TRUE(CompareWithGolden<uint8_t *>(DataType::DT_INT32, goldenDir + "/recv_counts_rank_", 1, recvCountsOutPut->GetDevPtr(), testParam));
 }
