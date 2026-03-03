@@ -169,6 +169,8 @@ def shmem_put(
         pred=None,
     )
     """
+    if dst.Id() not in shmem_id_to_group:
+        raise TypeError("dst tensor of shmem_put must be created by create_shmem_tensor interface.")
     dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
     dst_tile = pypto_impl.View(dst, [1, 1] + src.shape, to_syms([dst_pe] + offsets))
     return pypto_impl.ShmemPut(dummy, src, dst_tile, put_op)
@@ -220,6 +222,8 @@ def shmem_get(
         pred=None,
     )
     """
+    if src.Id() not in shmem_id_to_group:
+        raise TypeError("src tensor of shmem_get must be created by create_shmem_tensor interface.")
     dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
     if valid_shape is None:
         src_tile = pypto_impl.View(src, [1] + shape, to_syms([src_pe] + offset))
@@ -276,6 +280,8 @@ def shmem_signal(
         pred=None,
     )
     """
+    if dst.Id() not in shmem_id_to_group:
+        raise TypeError("dst tensor of shmem_signal must be created by create_shmem_tensor interface.")
     dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
     dst_tile = pypto_impl.View(dst, shape, to_syms(offset))
     out_dummy = pypto_impl.ShmemSignal(dummy, dst_tile, sig_op)
@@ -329,10 +335,11 @@ def shmem_wait_until(
         pred=None,
     )
     """
+    if src.Id() not in shmem_id_to_group:
+        raise TypeError("dst tensor of shmem_wait_until must be created by create_shmem_tensor interface.")
+    if cmp != OpType.EQ:
+        raise TypeError("shmem_wait_until only support OpType.EQ currently.")
     dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
-    group_name = shmem_id_to_group[src.Id()]
-    comm_config = comm_configs[group_name]
-
     src_tile = pypto_impl.View(src, shape, to_syms(offset))
     out_dummy = pypto_impl.WaitUntil(dummy, src_tile, cmp_value, clear_signal)
     return out_dummy

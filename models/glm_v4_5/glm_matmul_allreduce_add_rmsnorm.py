@@ -105,8 +105,8 @@ def matmul_allreduce_add_rmsnorm_kernel(batch_size, attn_dim_per_tp, hidden_size
                         put_op=pypto.AtomicType.ADD, pred=[barrier_dummy])
                     pypto.distributed.shmem_signal(shmem_signal, dyn_idx, 1, [1, 1] + shmem_shape, 
                         [dyn_idx, dyn_idx, 0, 0, 0], sig_op=pypto.AtomicType.ADD, pred=[put_dummy])
-                wait_dummy = pypto.distributed.shmem_wait_until(shmem_signal, 1, WORLD_SIZE, [1, 1] + shmem_shape, 
-                    [my_pe, my_pe, 0, 0, 0], clear_signal=True, pred=[tile_in_tensor])
+                wait_dummy = pypto.distributed.shmem_wait_until(shmem_signal, pypto.OpType.EQ, WORLD_SIZE, 
+                    [1, 1] + shmem_shape, [my_pe, my_pe, 0, 0, 0], clear_signal=True, pred=[tile_in_tensor])
                 pypto.set_vec_tile_shapes(1, hidden_size)
                 reduce_out = pypto.experimental.shmem_load(
                     shmem_data, my_pe, shmem_shape, [0, 0, 0], pred=[wait_dummy]
