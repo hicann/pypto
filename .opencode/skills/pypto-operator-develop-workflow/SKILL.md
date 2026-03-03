@@ -11,7 +11,7 @@ tag: [PyPTO，算子开发]
 ## 工作流程概览
 
 ```
-需求检查 → 环境准备 → Plan 模式 → 开发实现 → 测试验证
+需求检查 → 环境准备 → Plan 模式 → 开发实现 → 测试验证 → 高阶参数使能
 ```
 
 ## 核心原则
@@ -31,6 +31,19 @@ tag: [PyPTO，算子开发]
 
 4. **环境兼容性验证**
    - 确认 API/方法适用于 A3 服务器，CANN 8.5.0
+
+## 常见问题与解决方案
+
+### 最常见错误 TOP 5
+
+1. **BFloat16 转 NumPy 失败**：必须先 `.float()` 再 `.numpy()`
+2. **环境变量未设置**：第一步就要 `export TILE_FWK_DEVICE_ID=0`
+3. **动态轴定义位置错误**：必须在 jit 函数外部定义
+4. **Tile Shape 未设置**：matmul 前必须调用 `set_cube_tile_shapes`
+5. **精度标准不合理**：bfloat16 使用 atol=0.0001, rtol=0.0078125
+6. **使用 PyTorch 作为 Golden 函数**：使用 NumPy 实现 golden 函数时，bfloat16 数据类型转换不够准确
+
+详细的错误示例、正确做法和经验教训请查看：**[common_issues.md](./common_issues.md)**
 
 ## 开发阶段
 
@@ -109,7 +122,7 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 ### 阶段五：测试验证
 优先使用npu模式进行验证
 验证步骤：
-1. 编译whl包并安装
+1. 没有安装pypto的话，编译whl包并安装，有的话，则不需要反复编译
    python3 build_ci.py -f python3 --disable_auto_execute
 2. 执行算子进行验证
    **检查到存在npu卡的时候，直接使用run_mode=npu执行**
@@ -123,6 +136,12 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 **⚠️ 重要提示**：
 - 有npu卡的情况下，不要使用run_mode=sim
 - 为了节省时间，编译一次whl包并安装即可
+- **完成阶段五后，必须继续执行阶段六：高阶参数使能**
+
+### 阶段六：高阶参数使能 ⭐
+当阶段五保证算子基础版本正确后，请做以下高阶参数的使能
+1. 涉及loop的话，请使能loop_unroll
+2. 设置stich相关参数,比如stitch_function_inner_memory，stitch_function_outcast_memory，stitch_function_num_initial等参数
 
 ## 环境兼容性
 

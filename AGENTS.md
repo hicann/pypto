@@ -14,6 +14,20 @@
 - 支持批量生成
 ---
 
+## Skills目录说明
+
+本项目使用的skills位于 `.opencode/skills/` 目录下，每个skill包含一个SKILL.md文件。
+由于Skill工具无法直接从项目目录加载skills，开发时应：
+1. 直接读取对应skill的SKILL.md文件内容
+2. 将skill内容作为指导文档使用
+3. 使用Task工具调用Explore和Plan Agent来执行相应任务
+
+可用skills：
+- pypto-operator-develop-workflow: 算子开发流程
+- pypto-operator-perf-autotune: 性能调优
+
+---
+
 ## 集成的技能列表
 | 技能  | 触发时机  | 说明  |
 | :------------ | :------------ | :------------ |
@@ -320,6 +334,13 @@ Level 3: 大数据量    ──▶ 性能验证
 ### 当用户提出查看文档/代码时
 
 直接使用 **Read**、**Grep**、**Glob** 工具进行文档和代码查看。
+
+### 文件查找规则
+
+当需要查找文件时：
+1. 优先使用 **Glob** 工具通过文件名模式搜索整个代码仓库
+2. 文档中提到的路径可能是相对路径，需要使用Glob在整个项目中搜索
+3. 例如：查找 `scripts/environment_prepare.sh` 时，使用 `Glob` 搜索 `**/environment_prepare.sh`
 
 ### Agent使用规则
 1. 使用`Explore Agent`查找资料
