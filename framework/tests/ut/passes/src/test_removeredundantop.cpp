@@ -1111,5 +1111,59 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewSpecialCase) {
     EXPECT_EQ(viewNum, kNumTwo);
     EXPECT_EQ(assembleNum, kNumThree);
 }
+
+/*
+TestGenerateViewDynOffsetCase
+inCast{8,16}->view->Tensor1{4,16}->assemble->Tensor2{4,16}->exp->outCast{4,16}
+  
+inCast{8,16}->view->Tensor1{4,16}->exp->outCast{4,16}
+*/
+TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    uint32_t dynOffset = 0;
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape1 = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+    std::vector<SymbolicScalar> newDynOffset{dynOffset,dynOffset};
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1,
+        TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+
+    auto &viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset, newDynOffset));
+    auto &assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor2}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    uint32_t viewNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(viewOp.GetOpAttribute().get());
+    for (const auto &op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+    EXPECT_EQ(viewNum, kNumOne);
+    EXPECT_EQ(assembleNum, kNumZero);
+    EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[0].Dump(), SymbolicScalar("0").Dump());
+    EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[1].Dump(), SymbolicScalar("0").Dump());
+}
 }
 }

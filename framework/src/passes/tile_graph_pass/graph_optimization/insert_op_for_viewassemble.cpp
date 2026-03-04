@@ -45,6 +45,14 @@ void InsertOpForViewAssemble::InsertViewAssemble(Function &function, Operation *
 Status InsertOpForViewAssemble::InsertCopy(Function &function, Operation *viewOp, Operation *assOp) {
     if (assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
         assOp->GetIOperands()[0]->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+        auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(viewOp->GetOpAttribute());
+        if (viewOpAttr != nullptr) {
+            viewOpAttr->SetToType(MemoryType::MEM_UB);
+        }
+        auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(assOp->GetOpAttribute());
+        if (assembleOpAttr != nullptr) {
+            assembleOpAttr->SetFromType(MemoryType::MEM_UB);
+        }
         APASS_LOG_INFO_F(Elements::Operation, "Set Assemble Op[%d] iOperand MEM_DDR.", assOp->GetOpMagic());
     } else if (assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||
             assOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {

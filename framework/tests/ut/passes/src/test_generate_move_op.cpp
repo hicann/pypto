@@ -184,8 +184,8 @@ TEST_F(GenerateMoveOpPassTest, ConvertToCopy) {
 
         // ================== Verify Pass Effect ==================
         auto updatedOperations = Program::GetInstance().GetFunctionByRawName("TENSOR_ADD")->Operations();
-        constexpr int expectedOperations = 4;
-        EXPECT_EQ(updatedOperations.size(), expectedOperations) << "8 operations should remain View + Convert + Add + Assemble";
+        constexpr int expectedOperations = 6;
+        EXPECT_EQ(updatedOperations.size(), expectedOperations) << "6 operations should remain View + Convert + Add + Assemble";
         int assemble_num = 0;
         int view_num = 0;
         int copy_in_num = 0;
@@ -211,11 +211,11 @@ TEST_F(GenerateMoveOpPassTest, ConvertToCopy) {
                 default: break;
             }
         }
-        constexpr int expectedView = 0;
+        constexpr int expectedView = 2;
         constexpr int expectedAssemble = 0;
         constexpr int expectedCopyIn = 2;
         constexpr int expectedCopyOut = 1;
-        EXPECT_EQ(view_num, expectedView) << "0 operations should be OP_VIEW";
+        EXPECT_EQ(view_num, expectedView) << "2 operations should be OP_VIEW";
         EXPECT_EQ(assemble_num, expectedAssemble) << "0 operations should be OP_ASSEMBLE";
         EXPECT_EQ(copy_in_num, expectedCopyIn) << "4 operations should be OP_COPY_IN";
         EXPECT_EQ(copy_out_num, expectedCopyOut) << "3 operations should be OP_COPY_OUT";

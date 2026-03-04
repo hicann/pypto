@@ -313,7 +313,7 @@ bool RemoveRedundantOp::IsValidViewAssemble(LogicalTensorPtr &startTensor, Logic
     return true;
 }
 
-void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor, std::vector<long> &newoffset) {
+void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor, std::vector<long> &newoffset, std::vector<SymbolicScalar> &newDynoffset) {
     for (size_t m = 0; m < op.iOperand[0]->offset.size(); m++) {
         for (auto &comsumerView : startTensor->GetConsumers()) {
             auto opcode = comsumerView->GetOpcode();
@@ -339,8 +339,12 @@ void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &sta
             }
             //只处理satrtTensor->view->tempTensor->assemble->endTensor
             auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(comsumerView->GetOpAttribute().get());
-            auto viewOffset = viewOpAttribute->GetFromOffset();
-            newoffset[m] = std::min(newoffset[m], viewOffset[m]);
+            if (viewOpAttribute != nullptr) {
+                auto viewOffset = viewOpAttribute->GetFromOffset();
+                auto viewDynOffset = viewOpAttribute->GetFromDynOffset();
+                newoffset[m] = std::min(newoffset[m], viewOffset[m]);
+                newDynoffset[m] = std::min(newDynoffset[m], viewDynOffset[m]);
+            }
         }
     }
 }
@@ -352,7 +356,8 @@ void RemoveRedundantOp::GenerateNewView(Function &function, Operation &op, Logic
         return; 
     }
     std::vector<long> newoffset(op.iOperand[0]->offset.size(),INT_MAX);
-    CalculateViewOffset(op, startTensor, endTensor, newoffset);
+    std::vector<SymbolicScalar> newDynoffset(op.iOperand[0]->offset.size(),INT_MAX);
+    CalculateViewOffset(op, startTensor, endTensor, newoffset, newDynoffset);
     //新建一个logical tensor并更新图链接关系:清除endTensor的消费者，清除endTensor，将assemble的消费者连接到newView
     LogicalTensorPtr newViewTensor;
     if (endTensor->GetConsumers().empty()) {
@@ -371,8 +376,10 @@ void RemoveRedundantOp::GenerateNewView(Function &function, Operation &op, Logic
     }
     //新建一个view op
     auto &newViewOp = function.AddOperation(Opcode::OP_VIEW, {startTensor}, {newViewTensor});
-    auto viewAttribute = std::make_shared<ViewOpAttribute>(
-        newoffset, SymbolicScalar::FromConcrete(newoffset), newViewTensor->GetDynValidShape());
+    //获取view上的dynoffset属性
+    std::shared_ptr<ViewOpAttribute> viewAttribute = std::make_shared<ViewOpAttribute>(
+            newoffset, newDynoffset, newViewTensor->GetDynValidShape());
+    viewAttribute->SetToType(endTensor->GetMemoryTypeToBe());
     newViewOp.SetOpAttribute(viewAttribute);
     operationUpdated = true;
 }
