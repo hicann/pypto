@@ -28,6 +28,7 @@ from torch._subclasses.fake_tensor import FakeTensor
 from torch._dynamo import allow_in_graph
 import pypto
 from utils.get_format import get_format
+import pytest
 
 
 def check_args(
@@ -108,6 +109,7 @@ def select_experts_mm(bs, ne, h_num):
     return select_experts_mm_kernel
 
 
+@pytest.mark.soc("950", "910")
 def test_select_experts_mm():
     # 1. 设置参数
     bs = 64

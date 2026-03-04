@@ -95,14 +95,14 @@ def kernel_func(device_id):
     return aic_count, aiv_count
 
 
-@pytest.mark.forked
+@pytest.mark.soc("910")
 def test_not_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     kernel_func(device_id)
 
 
-@pytest.mark.forked
+@pytest.mark.soc("910")
 def test_rts_stream_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -112,7 +112,7 @@ def test_rts_stream_control_cores():
     aic_count, aiv_count = kernel_func(device_id)
 
 
-@pytest.mark.forked
+@pytest.mark.soc("910")
 def test_rts_device_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
@@ -121,7 +121,7 @@ def test_rts_device_control_cores():
     aic_count, aiv_count = kernel_func(device_id)
 
 
-@pytest.mark.forked
+@pytest.mark.soc("910")
 def test_rts_device_stream_control_cores():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)

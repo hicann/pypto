@@ -520,6 +520,7 @@ def IFA(atten_cfg):
                     rtol=0.0078125, atol=0.0001)
 
 
+@pytest.mark.soc("950", "910")
 @pytest.mark.skip(reason="large test case")
 def test_ifa():
     # 1. 设置参数

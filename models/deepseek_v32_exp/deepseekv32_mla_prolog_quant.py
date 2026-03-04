@@ -712,6 +712,7 @@ def test_b128_s4k4_pa_nd_bf16_quantb_p():
                         is_quant_a, is_quant_b, is_nz, tile_config, cache_mode, is_p=True)
 
 
+@pytest.mark.soc("950", "910")
 def test_b4_s64k2_pa_nd_bf16_quantb_d():
     '''
     mla_prolog decode测试函数
