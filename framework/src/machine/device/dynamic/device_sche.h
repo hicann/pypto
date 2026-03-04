@@ -66,9 +66,9 @@ public:
 
     int RunThread(int threadIdx, DevStartArgs *devStartArgs, DeviceArgs *args, int schedIdx) {
         int ret = 0;
-        if (args->nrAic == 0 || args->nrValidAic == 0 || args->nrAicpu < NEED_LAUNCH_AICPU_MINNUM) {
-            DEV_ERROR("Device machinr run invalid args aicnum:%u, blockdim:%u, launchAicpu num:%u",
-                args->nrAic, args->nrValidAic, args->nrAicpu);
+        if (args->nrAic == 0 || args->nrValidAic == 0 || args->nrAicpu < args->scheCpuNum) {
+            DEV_ERROR("Device machinr run invalid args aicnum:%u, blockdim:%u, launchAicpu num:%u, launchScheAicpu num:%u",
+                args->nrAic, args->nrValidAic, args->nrAicpu, args->scheCpuNum);
             return DEVICE_MACHINE_ERROR;
         }
 

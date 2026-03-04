@@ -67,7 +67,6 @@ constexpr uint64_t NSEC_PER_USEC = 1000;
 constexpr uint64_t NSEC_PER_SEC = 1000000000;
 constexpr uint64_t HAND_SHAKE_TIMEOUT = 48000000000; // aicpu stream wait hccl finish
 constexpr int32_t MAX_MNG_AICORE_AVG_NUM = 8;
-constexpr uint32_t NEED_LAUNCH_AICPU_MINNUM = 3;
 constexpr uint32_t CORE_IDX_AIV = 0;
 constexpr uint32_t CORE_IDX_AIC = 1;
 const uint32_t AIV_NUM_PER_AI_CORE = 2;
