@@ -61,9 +61,10 @@ void ValidateTilingSize(const VecTile& vecTile, const Tensor& in, int32_t worldS
     int32_t tileColShape = vecTile[1];
     int32_t tileRowNum = in.GetShape(0) / tileRowShape + (in.GetShape(0) % tileRowShape == 0 ? 0 : 1);
     int32_t tileColNum = in.GetShape(1) / tileColShape + (in.GetShape(1) % tileColShape == 0 ? 0 : 1);
-    CHECK(worldSize > 0) << "WorldSize is invalid, worldSize should be less than 0, but got " << worldSize;
+    CHECK(worldSize > 0) << "WorldSize is invalid, worldSize should be more than 0, but got " << worldSize;
     CHECK(tileRowNum * tileColNum <= MAX_TILE_NUM / worldSize) <<
-        "TotalTileNum is invalid, totalTileNum shoule be less than " << MAX_TILE_NUM / worldSize << ", but got " << tileRowNum * tileColNum;
+        "TotalTileNum is invalid, totalTileNum shoule be less than or equal to" << MAX_TILE_NUM / worldSize <<
+        ", but got " << tileRowNum * tileColNum;
 }
 
 void ValidateDataType(const Tensor& tensor, const std::string& tensorDesc, const std::unordered_set<DataType>& allowedTypes)
