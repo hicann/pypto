@@ -140,7 +140,7 @@ void DeviceRunner::GetModuleLogLevel(DeviceArgs &args) {
     args.devDfxArgAddr = args_.devDfxArgAddr;
     auto ret = rtMemcpy(reinterpret_cast<void *>(args.devDfxArgAddr), size, &devDfxArg, size, RT_MEMCPY_HOST_TO_DEVICE);
     if (ret != 0) {
-        MACHINE_LOGW("Rt mem cpy failed, so couldn't get device log");
+        MACHINE_LOGW("rtmemcpy failed, so couldn't get device log");
     }
 }
 
@@ -209,7 +209,7 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t
     args.devDfxArgAddr = reinterpret_cast<uint64_t>(DevAlloc(sizeof(DevDfxArgs)));
 
     if (args.devDfxArgAddr == 0) {
-        ALOG_ERROR_F("Alloc devDfx info failed");
+        MACHINE_LOGE("Alloc devDfx info failed");
         return -1;
     }
 
@@ -305,10 +305,10 @@ int DeviceRunner::Run(rtStream_t aicpuStream, rtStream_t aicoreStream, int64_t t
     }
     ASSERT(rc == 0);
     if (IsPtoDataDumpEnabled()) {
-        MACHINE_LOGD("DataDumpServerInit is called \n");
+        MACHINE_LOGD("DataDumpServerInit is called\n");
         rc = AdxDataDumpServerUnInit();
         if (rc != 0) {
-            MACHINE_LOGE("AdxDataDumpServerUnInit is failed %d \n", rc);
+            MACHINE_LOGE("AdxDataDumpServerUnInit is failed %d\n", rc);
         }
     }
     uint64_t taskWastTime = GetTasksTime();
