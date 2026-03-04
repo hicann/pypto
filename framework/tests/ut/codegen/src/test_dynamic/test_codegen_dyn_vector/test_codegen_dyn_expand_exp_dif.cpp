@@ -42,19 +42,18 @@ public:
     void TearDown() override {}
 };
 
-TEST_F(TestCodegenDynExpandExpDif, TestExpandExpDif) {
-    std::vector<int64_t> shape = {16, 128};
-    TileShape::Current().SetVecTile(shape);
-    Tensor input_a(DT_FP32, shape, "input_a");
-    Tensor input_b(DT_FP32, {1, 128}, "input_b");
-    Tensor output(DT_FP32, shape, "output");
+void TestExpandExpDif(const Shape &shape_x, const Shape &shape_y, const std::string &expect) {
+    TileShape::Current().SetVecTile(shape_x);
+    Tensor input_x(DT_FP32, shape_x, "input_x");
+    Tensor input_y(DT_FP32, shape_y, "input_y");
+    Tensor output(DT_FP32, shape_x, "output");
 
     ConfigManager::Instance();
     std::string funcName = "TestExpandExpDif";
-    FUNCTION(funcName, {input_a, input_b, output}) {
+    FUNCTION(funcName, {input_x, input_y, output}) {
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
             (void)i;
-            output = ExpandExpDif(input_a, input_b);
+            output = ExpandExpDif(input_x, input_y);
         }
     }
 
@@ -65,5 +64,22 @@ TEST_F(TestCodegenDynExpandExpDif, TestExpandExpDif) {
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+
+    CheckStringExist(expect, GetResultFromCpp(*function));
+}
+
+TEST_F(TestCodegenDynExpandExpDif, TestExpandExpDifLastAxis) {
+    const Shape shape_x = {16, 128};
+    const Shape shape_y = {16, 1};
+    std::string expect =
+        R"!!!(TExpandExpDif<TileOp::BroadcastOperand::RIGHT_OPERAND>(ubTensor_15, ubTensor_15, ubTensor_13);)!!!";
+    TestExpandExpDif(shape_x, shape_y, expect);
+}
+
+TEST_F(TestCodegenDynExpandExpDif, TestExpandExpDifSecondaryLastAxis) {
+    const Shape shape_x = {16, 128};
+    const Shape shape_y = {1, 128};
+    std::string expect = R"!!!(TExpandExpDif(ubTensor_9, ubTensor_9, ubTensor_11);)!!!";
+    TestExpandExpDif(shape_x, shape_y, expect);
 }
 } // namespace npu::tile_fwk

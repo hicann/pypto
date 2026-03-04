@@ -161,7 +161,7 @@ def expand_exp_dif(input: Tensor, other: Tensor) -> Tensor:
     Raises
     ------
     RuntimeError
-        If the last axis and second last axis of `other` are both not 1.
+        If neither the last axis nor secondary last axis of other is 1.
 
     Examples
     --------
@@ -183,4 +183,9 @@ def expand_exp_dif(input: Tensor, other: Tensor) -> Tensor:
     Output z :    [[ 1.       ,  2.718282 ,  7.3890557],
                    [ 7.3890557, 20.085537 , 54.59815  ]]
     """
+    shape = other.shape
+    if len(shape) > 1 and shape[-1] != 1 and shape[-2] != 1:
+        raise RuntimeError(
+            "Neither the last axis nor secondary last axis of other is 1."
+        )
     return pypto_impl.ExpandExpDif(input, other)

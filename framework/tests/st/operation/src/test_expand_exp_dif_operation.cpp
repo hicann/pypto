@@ -80,15 +80,18 @@ static void ExpandExpDifOperationExeFunc2Dims(
                         std::min(firstTensorDim1 - sIdx * secondViewShape, secondViewShape)},
                     {bIdx * firstViewShape, sIdx * secondViewShape});
                 Tensor tileTensor1;
-                IF(secondTensorDim0 == 1) {
+                IF(secondTensorDim0 == 1 && secondTensorDim1 != 1) {
                     tileTensor1 = View(inputs[1], {1, secondViewShape},
                         {1, std::min(secondTensorDim1 - sIdx * secondViewShape, secondViewShape)},
                         {0, sIdx * secondViewShape});
                 }
-                ELSE {
+                ELSE IF(secondTensorDim0 != 1 && secondTensorDim1 == 1) {
                     tileTensor1 = View(inputs[1], {firstViewShape, 1},
                         {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape), 1},
                         {bIdx * firstViewShape, 0});
+                }
+                ELSE {
+                    tileTensor1 = View(inputs[1], {1, 1}, {1, 1}, {0, 0});
                 }
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = ExpandExpDif(tileTensor0, tileTensor1);
@@ -125,17 +128,22 @@ static void ExpandExpDifOperationExeFunc3Dims(
                             std::min(firstTensorDim2 - nIdx * thirdViewShape, thirdViewShape)},
                         {bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape});
                     Tensor tileTensor1;
-                    IF(secondTensorDim1 == 1) {
+                    IF(secondTensorDim1 == 1 && secondTensorDim2 != 1) {
                         tileTensor1 = View(inputs[1], {firstViewShape, 1, thirdViewShape},
                             {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape), 1,
                                 std::min(secondTensorDim2 - nIdx * thirdViewShape, thirdViewShape)},
                             {bIdx * firstViewShape, 0, nIdx * thirdViewShape});
                     }
-                    ELSE {
+                    ELSE IF(secondTensorDim1 != 1 && secondTensorDim2 == 1) {
                         tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, 1},
                             {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape),
                                 std::min(secondTensorDim1 - sIdx * secondViewShape, secondViewShape), 1},
                             {bIdx * firstViewShape, sIdx * secondViewShape, 0});
+                    }
+                    ELSE {
+                        tileTensor1 = View(inputs[1], {firstViewShape, 1, 1},
+                            {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape), 1, 1},
+                            {bIdx * firstViewShape, 0, 0});
                     }
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = ExpandExpDif(tileTensor0, tileTensor1);
@@ -181,19 +189,25 @@ static void ExpandExpDifOperationExeFunc4Dims(
                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape,
                                     nIdx * fourthViewShape});
                         Tensor tileTensor1;
-                        IF(secondTensorDim2 == 1) {
+                        IF(secondTensorDim2 == 1 && secondTensorDim3 != 1) {
                             tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, 1, fourthViewShape},
                                 {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape),
                                     std::min(secondTensorDim1 - sIdx * secondViewShape, secondViewShape), 1,
                                     std::min(secondTensorDim3 - nIdx * fourthViewShape, fourthViewShape)},
                                 {bIdx * firstViewShape, sIdx * secondViewShape, 0, nIdx * fourthViewShape});
                         }
-                        ELSE {
+                        ELSE IF(secondTensorDim2 != 1 && secondTensorDim3 == 1) {
                             tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, thirdViewShape, 1},
                                 {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape),
                                     std::min(secondTensorDim1 - sIdx * secondViewShape, secondViewShape),
                                     std::min(secondTensorDim2 - mIdx * thirdViewShape, thirdViewShape), 1},
                                 {bIdx * firstViewShape, sIdx * secondViewShape, mIdx * thirdViewShape, 0});
+                        }
+                        ELSE {
+                            tileTensor1 = View(inputs[1], {firstViewShape, secondViewShape, 1, 1},
+                                {std::min(secondTensorDim0 - bIdx * firstViewShape, firstViewShape),
+                                    std::min(secondTensorDim1 - sIdx * secondViewShape, secondViewShape), 1, 1},
+                                {bIdx * firstViewShape, sIdx * secondViewShape, 0, 0});
                         }
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = ExpandExpDif(tileTensor0, tileTensor1);
