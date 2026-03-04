@@ -10,12 +10,13 @@
 # -----------------------------------------------------------------------------------------------------------
 
 """
-GLM-4.5 Distributed MoE Combine Module
+GLM-4.5 Distributed MoE Dispatch And Combine Module
 
-This module implements the distributed token combine stage for
+This module implements the distributed token dispatch and combine stage for
 MoE in an expert parallel setting, based on open shared memory.
 
 Main Functions:
+    - moe_distributed_dispatch_kernel: JIT compiled dispatch kernel
     - moe_distributed_combine_kernel: JIT compiled combine kernel
 """
 
@@ -74,6 +75,15 @@ def assert_allclose_with_eps(expected: torch.Tensor, actual: torch.Tensor, eps: 
     check_cond(err_count <= numel * eps and zero_count <= 1000, 'Allclose failed')
 
 
+def assert_allcolse_whit_rtol_and_atol(out, act):
+    np.testing.assert_allclose(
+        np.array(out.cpu().flatten().tolist()),
+        np.array(act.cpu().flatten().tolist()),
+        rtol=0,
+        atol=0,
+    )
+
+
 def init_hccl_comm(logical_rank_id: int) -> list[str, ...]:
     physical_device_id = PHYSICAL_START_DEVICE_ID + logical_rank_id
     torch_npu.npu.set_device(physical_device_id)
@@ -94,9 +104,8 @@ class MoeCase:
     hidden_size: int
     moe_expert_num: int
     topk: int
-    pypto_data_type: pypto.DataType
-    torch_data_type: torch.dtype
-    world_size: int
+    data_type: pypto.DataType
+    ep_world_size: int
 
     def __post_init__(self):
         check_cond(
@@ -106,21 +115,41 @@ class MoeCase:
 
 
 @dataclasses.dataclass(frozen=True)
-class MoeDispatchGolden:
-    x_list: TensorList
-    expert_ids_list: TensorList
-    expand_x_list: TensorList
-    assist_info_for_combine_list: TensorList
-    expert_token_nums_list: TensorList
-    recv_counts_list: TensorList
+class MoeDispatchOperands:
+    x: torch.Tensor
+    expert_ids: torch.Tensor
+    expand_x_golden: torch.Tensor
+    assist_info_for_combine_golden: torch.Tensor
+    expert_token_nums_golden: torch.Tensor
+    recv_counts_golden: torch.Tensor
 
 
 @dataclasses.dataclass(frozen=True)
-class MoeCombineInputOperands:
+class MoeDispatchOperandLists:
+    x_list: TensorList
+    expert_ids_list: TensorList
+    expand_x_golden_list: TensorList
+    assist_info_for_combine_golden_list: TensorList
+    expert_token_nums_golden_list: TensorList
+    recv_counts_golden_list: TensorList
+
+
+@dataclasses.dataclass(frozen=True)
+class MoeCombineOperands:
     expand_x: torch.Tensor
     assist_info_for_combine: torch.Tensor
     recv_counts: torch.Tensor
     expert_scales: torch.Tensor
+    out_golden: torch.Tensor
+
+
+@dataclasses.dataclass(frozen=True)
+class MoeCombineOperandLists:
+    expand_x_list: TensorList
+    assist_info_for_combine_list: TensorList
+    recv_counts_list: TensorList
+    expert_scales_list: TensorList
+    out_golden_list: TensorList = None
 
 
 def generate_random_tensor(shape: tuple[int, ...], dtype: torch.dtype) -> torch.Tensor:
@@ -134,15 +163,15 @@ def generate_random_tensor(shape: tuple[int, ...], dtype: torch.dtype) -> torch.
         raise ValueError(f'Unsupported dtype: {dtype}. Supported: {float_dtypes + int_dtypes}')
 
 
-def generate_inputs(moe_case: MoeCase) -> tuple[TensorList, TensorList, TensorList]:
+def generate_inputs(moe_case: MoeCase, torch_data_type: torch.dtype) -> tuple[TensorList, TensorList, TensorList]:
     x_list = [
-        generate_random_tensor((moe_case.batch_size, moe_case.hidden_size), moe_case.torch_data_type)
-        for _ in range(moe_case.world_size)
+        generate_random_tensor((moe_case.batch_size, moe_case.hidden_size), torch_data_type)
+        for _ in range(moe_case.ep_world_size)
     ]
     moe_expert_ids_list = []
     topk_expert_scales_list = []
 
-    for _ in range(moe_case.world_size):
+    for _ in range(moe_case.ep_world_size):
         expert_scores = generate_random_tensor((moe_case.batch_size, moe_case.moe_expert_num), torch.float32)
         topk_expert_scores, moe_expert_ids = expert_scores.topk(k=moe_case.topk)
         topk_expert_scales = topk_expert_scores.softmax(dim=-1)
@@ -154,7 +183,7 @@ def generate_inputs(moe_case: MoeCase) -> tuple[TensorList, TensorList, TensorLi
 
 
 def get_moe_expert_num_per_rank(moe_case: MoeCase) -> int:
-    return (moe_case.moe_expert_num + moe_case.world_size - 1) // moe_case.world_size
+    return (moe_case.moe_expert_num + moe_case.ep_world_size - 1) // moe_case.ep_world_size
 
 
 def get_moe_expert_rank_id_and_expert_offset(expert_id: int, moe_expert_num_per_rank: int) -> tuple[int, int]:
@@ -162,23 +191,24 @@ def get_moe_expert_rank_id_and_expert_offset(expert_id: int, moe_expert_num_per_
 
 
 def get_dispatch_output_row(moe_case: MoeCase) -> int:
-    max_send_token_num = moe_case.topk * moe_case.batch_size * moe_case.world_size
+    max_send_token_num = moe_case.topk * moe_case.batch_size * moe_case.ep_world_size
     max_receive_token_num = moe_case.batch_size * moe_case.moe_expert_num
     return min(max_send_token_num, max_receive_token_num)
 
 
 def dispatch_tokens(
     moe_case: MoeCase,
+    torch_data_type: torch.dtype,
     x_list: TensorList,
     moe_expert_ids_list: TensorList,
     generate_for_dispatch: bool,
 ) -> tuple[TensorList, TensorList, TensorList, TensorList]:
     # 初始化变量
     moe_expert_num_per_rank = get_moe_expert_num_per_rank(moe_case)
-    expand_x_per_expert = [[[] for _ in range(moe_expert_num_per_rank)] for _ in range(moe_case.world_size)]
+    expand_x_per_expert = [[[] for _ in range(moe_expert_num_per_rank)] for _ in range(moe_case.ep_world_size)]
     assist_info_for_combine_per_expert = [
         [[] for _ in range(moe_expert_num_per_rank)]
-        for _ in range(moe_case.world_size)
+        for _ in range(moe_case.ep_world_size)
     ]
 
     # 发送 token
@@ -199,8 +229,8 @@ def dispatch_tokens(
     assist_info_for_combine_per_rank = []
     expert_token_nums_per_rank = []
     recv_counts_per_rank = []
-    for logical_rank_id in range(moe_case.world_size):
-        fixed_shape_expand_x = torch.zeros((row, moe_case.hidden_size), dtype=moe_case.torch_data_type)
+    for logical_rank_id in range(moe_case.ep_world_size):
+        fixed_shape_expand_x = torch.zeros((row, moe_case.hidden_size), dtype=torch_data_type)
         fixed_shape_assist_info_for_combine = torch.zeros((row, combine_info_col), dtype=torch.int32)
         expert_token_nums = torch.zeros([moe_expert_num_per_rank], dtype=torch.int32)
         offset = 0
@@ -229,21 +259,19 @@ def dispatch_tokens(
 
 def combine_tokens(
     moe_case: MoeCase,
-    expand_x_list: TensorList,
-    assist_info_for_combine_list: TensorList,
-    recv_counts_list: TensorList,
-    expert_scales_list: TensorList,
+    torch_data_type: torch.dtype,
+    operand_lists: MoeCombineOperandLists
 ) -> TensorList:
     # 初始化变量
     out_golden_list = []
     moe_expert_tokens_list = [
-        torch.zeros([moe_case.batch_size, moe_case.topk, moe_case.hidden_size], dtype=moe_case.torch_data_type)
-        for _ in range(moe_case.world_size)
+        torch.zeros([moe_case.batch_size, moe_case.topk, moe_case.hidden_size], dtype=torch_data_type)
+        for _ in range(moe_case.ep_world_size)
     ]
 
     # 发送 token
     for expand_x, assist_info_for_combine, recv_counts in zip(
-        expand_x_list, assist_info_for_combine_list, recv_counts_list
+        operand_lists.expand_x_list, operand_lists.assist_info_for_combine_list, operand_lists.recv_counts_list
     ):
         for row_index in range(recv_counts.item()):
             token = expand_x[row_index]
@@ -251,7 +279,7 @@ def combine_tokens(
             moe_expert_tokens_list[dispatch_sending_rank_id][token_id, k_offset] = token
 
     # 接收 token
-    for moe_expert_tokens, expert_scales in zip(moe_expert_tokens_list, expert_scales_list):
+    for moe_expert_tokens, expert_scales in zip(moe_expert_tokens_list, operand_lists.expert_scales_list):
         out_golden = (
             expert_scales.unsqueeze(1).
             matmul(moe_expert_tokens.to(torch.float32))
@@ -263,42 +291,365 @@ def combine_tokens(
     return out_golden_list
 
 
-def generate_dispatch_golden(moe_case: MoeCase) -> MoeDispatchGolden:
-    x_list, moe_expert_ids_list, _ = generate_inputs(moe_case)
+def generate_dispatch_golden(moe_case: MoeCase, torch_data_type: torch.dtype) -> MoeDispatchOperandLists:
+    x_list, moe_expert_ids_list, _ = generate_inputs(moe_case, torch_data_type)
     (
-        expand_x_list,
-        assist_info_for_combine_list,
-        expert_token_nums_list,
-        recv_counts_list,
-    ) = dispatch_tokens(moe_case, x_list, moe_expert_ids_list, True)
-    return MoeDispatchGolden(
+        expand_x_golden_list,
+        assist_info_for_combine_golden_list,
+        expert_token_nums_golden_list,
+        recv_counts_golden_list,
+    ) = dispatch_tokens(moe_case, torch_data_type, x_list, moe_expert_ids_list, True)
+    return MoeDispatchOperandLists(
         x_list,
         moe_expert_ids_list,
-        expand_x_list,
-        assist_info_for_combine_list,
-        expert_token_nums_list,
-        recv_counts_list,
+        expand_x_golden_list,
+        assist_info_for_combine_golden_list,
+        expert_token_nums_golden_list,
+        recv_counts_golden_list,
     )
 
 
 def generate_combine_golden(
     moe_case: MoeCase,
-) -> tuple[TensorList, TensorList, TensorList, TensorList, TensorList]:
-    x_list, moe_expert_ids_list, expert_scales_list = generate_inputs(moe_case)
+    torch_data_type: torch.dtype,
+) -> MoeCombineOperandLists:
+    x_list, moe_expert_ids_list, expert_scales_list = generate_inputs(moe_case, torch_data_type)
     (
         expand_x_list,
         assist_info_for_combine_list,
         _,
         recv_counts_list,
-    ) = dispatch_tokens(moe_case, x_list, moe_expert_ids_list, False)
-    out_golden_list = combine_tokens(
-        moe_case,
+    ) = dispatch_tokens(moe_case, torch_data_type, x_list, moe_expert_ids_list, False)
+    operand_lists = MoeCombineOperandLists(
         expand_x_list,
         assist_info_for_combine_list,
         recv_counts_list,
         expert_scales_list,
     )
-    return expand_x_list, assist_info_for_combine_list, recv_counts_list, expert_scales_list, out_golden_list
+    out_golden_list = combine_tokens(moe_case, torch_data_type, operand_lists)
+    return MoeCombineOperandLists(
+        expand_x_list,
+        assist_info_for_combine_list,
+        recv_counts_list,
+        expert_scales_list,
+        out_golden_list,
+    )
+
+
+def dispatch_calc_occurrences(
+    expert_ids: pypto.Tensor, expert_id: pypto.SymbolicScalar, calc_index: int,
+) -> pypto.Tensor:
+    expert_ids_dup = pypto.full(expert_ids.shape, expert_id, pypto.DT_INT32)
+    sub_result = pypto.sub(expert_ids_dup, expert_ids)
+    sub_result_fp32 = pypto.cast(sub_result, pypto.DT_FP32, pypto.CastMode.CAST_TRUNC)
+    abs_sub_result = pypto.abs(sub_result_fp32)
+    abs_sub_result_int32 = pypto.cast(abs_sub_result, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
+    count_of_equals = pypto.clip(abs_sub_result_int32, 0, 1)
+    cum_sum_offset = pypto.cumsum(count_of_equals, 1)
+    cum_sum_offset_int32 = pypto.cast(cum_sum_offset, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
+    expert_offset_result = pypto.sub(cum_sum_offset_int32, calc_index)
+    expert_offset_result_fp32 = pypto.cast(expert_offset_result, pypto.DT_FP32, pypto.CastMode.CAST_TRUNC)
+    expert_offset_abs_fp32 = pypto.abs(expert_offset_result_fp32)
+    expert_offset = pypto.cast(expert_offset_abs_fp32, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
+    return expert_offset
+
+
+def moe_distributed_dispatch_kernel(
+    moe_case: MoeCase,
+    group_name: str,
+) -> Callable[[pypto.Tensor, pypto.Tensor], tuple[pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor]]:
+    batch_size = moe_case.batch_size
+    hidden_size = moe_case.hidden_size
+    moe_expert_num = moe_case.moe_expert_num
+    topk = moe_case.topk
+    data_type = moe_case.data_type
+    ep_world_size = moe_case.ep_world_size
+
+    check_cond(batch_size == 8, f'batch_size must be 8, but got {batch_size}')
+    check_cond(hidden_size == 5120, f'hidden_size must be 5120, but got {hidden_size}')
+    check_cond(moe_expert_num == 160, f'moe_expert_num must be 160, but got {moe_expert_num}')
+    check_cond(topk == 8, f'topk must be 8, but got {topk}')
+    check_cond(data_type == pypto.DT_BF16, f'data_type must be pypto.DT_BF16, but got {data_type}')
+    check_cond(ep_world_size in (2, 4, 8), f'ep_world_size must be 2, 4 or 8, but got {ep_world_size}')
+    check_cond(isinstance(group_name, str), f'type of group_name must be str, but got {type(group_name)}')
+    check_cond(group_name.strip(), f"group_name can't be empty string")
+    check_cond(
+        1 <= len(group_name) < 128,
+        f'the length of group_name only supports [1, 128), but got {len(group_name)}',
+    )
+
+    expand_x_row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)
+    expert_num_per_rank = moe_expert_num // ep_world_size
+    info_size = 64
+    cum_sum_row_size = align_up(moe_expert_num, 256)
+    count_size = 8
+
+    @pypto.frontend.jit()
+    def kernel(
+        x: pypto.Tensor([batch_size, hidden_size], data_type, format=pypto.TileOpFormat.TILEOP_ND),
+        expert_ids: pypto.Tensor([batch_size, topk], pypto.DT_INT32, format=pypto.TileOpFormat.TILEOP_ND),
+    ) -> (
+        pypto.Tensor([expand_x_row, hidden_size], data_type),
+        pypto.Tensor([expand_x_row, info_size], pypto.DT_INT32),
+        pypto.Tensor([expert_num_per_rank], pypto.DT_INT32),
+        pypto.Tensor([1], pypto.DT_INT32),
+    ):
+        expand_x = pypto.Tensor([expand_x_row, hidden_size], x.dtype)
+        assist_info_for_combine = pypto.Tensor([expand_x_row, info_size], pypto.DT_INT32)
+        expert_token_nums = pypto.Tensor([expert_num_per_rank], pypto.DT_INT32)
+        recv_counts = pypto.Tensor([1], pypto.DT_INT32)
+        this_rank = pypto.distributed.my_symbolic_pe(group_name)
+
+        # 创建通信共享区域
+        shmem_data, shmem_data_signal = pypto.distributed.create_shmem_tensor(
+            group_name, ep_world_size, x.dtype, [moe_expert_num, batch_size, hidden_size])
+        shmem_info, _ = pypto.distributed.create_shmem_tensor(
+            group_name, ep_world_size, pypto.DT_INT32, [moe_expert_num, batch_size, info_size])
+        shmem_count, shmem_count_signal = pypto.distributed.create_shmem_tensor(
+            group_name, ep_world_size, pypto.DT_INT32, [1, cum_sum_row_size, count_size])
+
+        # 根据专家表计算发送偏移
+        pypto.set_vec_tile_shapes(1, batch_size * topk)
+        expert_ids_vec = pypto.reshape(expert_ids, [1, batch_size * topk])
+        offset_table = pypto.Tensor([batch_size, topk], pypto.DT_INT32)
+        for _ in pypto.loop(1, name='MOE_DISTRIBUTED_DISPATCH_PREPARE', idx_name='_'):
+            for index in range(1, batch_size * topk):
+                row_index, col_index = divmod(index, topk)
+                pypto.set_vec_tile_shapes(1, info_size)
+                remote_expert_id = expert_ids[row_index, col_index]
+                token_offset_result = dispatch_calc_occurrences(expert_ids_vec, remote_expert_id, index)
+                token_index = max(index - 1, 0)
+                token_offset = token_offset_result[0, token_index]
+                offset_table[row_index, col_index] = token_offset
+
+        # 发送 token 与 info 信息
+        for _ in pypto.loop(1, name='MOE_DISTRIBUTED_DISPATCH_SEND_DATA', idx_name='_'):
+            for index in range(batch_size * topk):
+                moe_info = pypto.Tensor([1, info_size], pypto.DT_INT32)
+                row_index, col_index = divmod(index, topk)
+                tensor_tile = x[row_index:row_index + 1, :]
+                pypto.set_vec_tile_shapes(1, info_size)
+                moe_info[0, info_size - 3] = this_rank
+                moe_info[0, info_size - 2] = row_index
+                moe_info[0, info_size - 1] = col_index
+                remote_expert_id = expert_ids[row_index, col_index]
+                remote_rank_id = remote_expert_id // pypto.SymbolicScalar(expert_num_per_rank)
+                remote_expert_offset = remote_expert_id % expert_num_per_rank
+                token_offset = offset_table[row_index, col_index]
+                pypto.set_vec_tile_shapes(1, hidden_size)
+                shmem_data_out_put = pypto.distributed.shmem_put(
+                    tensor_tile,
+                    [remote_expert_offset * ep_world_size + this_rank, token_offset, 0],
+                    shmem_data,
+                    remote_rank_id,
+                    pred=[offset_table],
+                )
+                pypto.set_vec_tile_shapes(1, info_size)
+                shmem_info_out_put = pypto.distributed.shmem_put(
+                    moe_info,
+                    [remote_expert_offset * ep_world_size + this_rank, token_offset, 0],
+                    shmem_info,
+                    remote_rank_id,
+                    pred=[offset_table],
+                )
+                pypto.set_vec_tile_shapes(1, hidden_size)
+                pypto.distributed.shmem_signal(
+                    shmem_data_signal,
+                    ep_world_size,
+                    1,
+                    [ep_world_size, 1, 1, 1, hidden_size],
+                    [0, 0, 0, 0, 0],
+                    sig_op=pypto.AtomicType.ADD,
+                    pred=[shmem_data_out_put, shmem_info_out_put],
+                )
+
+        # 发送每个专家的 token 有效发送数目
+        for expert_id in pypto.loop(moe_expert_num, name='MOE_DISTRIBUTED_DISPATCH_SEND_COUNT', idx_name='expert_id'):
+            expert_offset = dispatch_calc_occurrences(expert_ids_vec, expert_id, batch_size * topk)
+            remote_rank_id = expert_id // pypto.SymbolicScalar(expert_num_per_rank)
+            remote_expert_offset = expert_id % expert_num_per_rank
+            total_offset_tile = expert_offset[:, -1:]
+            pypto.set_vec_tile_shapes(1, 1)
+            shmem_put_out = pypto.distributed.shmem_put(
+                total_offset_tile,
+                [0, remote_expert_offset * ep_world_size + this_rank + 1, 0],
+                shmem_count,
+                remote_rank_id,
+                pred=[total_offset_tile],
+            )
+            pypto.set_vec_tile_shapes(1, count_size)
+            pypto.distributed.shmem_signal(
+                shmem_count_signal,
+                remote_rank_id,
+                1,
+                [1, 1, 1, 1, count_size],
+                [remote_rank_id, 0, 0, 0, 0],
+                sig_op=pypto.AtomicType.ADD, pred=[shmem_put_out],
+            )
+
+        # 接收 count 值，计算专家接收数据在输出上的偏移
+        cum_sum_result = pypto.tensor([cum_sum_row_size, count_size], pypto.DT_INT32, 'cumSumResult')
+        local_expert_recv_count = pypto.tensor([cum_sum_row_size, count_size], pypto.DT_INT32, 'localExpertRecvCount')
+        for _ in pypto.loop(1, name='MOE_DISTRIBUTED_DISPATCH_CUM_SUM', idx_name='_'):
+            pypto.set_vec_tile_shapes(1, hidden_size)
+            shmem_data_wait_out = pypto.distributed.shmem_wait_until(
+                shmem_data_signal,
+                pypto.OpType.EQ,
+                batch_size * topk * ep_world_size,
+                [1, 1, 1, 1, hidden_size],
+                [this_rank, 0, 0, 0, 0],
+                clear_signal=True,
+                pred=[cum_sum_result],
+            )
+            pypto.set_vec_tile_shapes(1, count_size)
+            shmem_count_wait_out = pypto.distributed.shmem_wait_until(
+                shmem_count_signal,
+                pypto.OpType.EQ,
+                moe_expert_num,
+                [1, 1, 1, 1, count_size],
+                [this_rank, 0, 0, 0, 0],
+                clear_signal=True,
+                pred=[cum_sum_result],
+            )
+            pypto.set_vec_tile_shapes(cum_sum_row_size, count_size)
+            local_expert_recv_count = pypto.distributed.shmem_get(
+                shmem_count,
+                this_rank,
+                [1, cum_sum_row_size, count_size],
+                [0, 0, 0],
+                pred=[shmem_data_wait_out, shmem_count_wait_out],
+            )
+            pypto.set_vec_tile_shapes(cum_sum_row_size, count_size)
+            cum_sum_input = pypto.distributed.shmem_get(
+                shmem_count,
+                this_rank,
+                [1, cum_sum_row_size, count_size],
+                [0, 0, 0],
+                pred=[shmem_data_wait_out, shmem_count_wait_out],
+            )
+            cum_sum_current = pypto.cumsum(cum_sum_input, 0)
+            cum_sum_result = pypto.cast(cum_sum_current, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
+
+            recv_count_result = cum_sum_result[expert_num_per_rank * ep_world_size, 0]
+            recv_counts[0] = recv_count_result
+            for expert_id in range(expert_num_per_rank):
+                cum_sum_start_row = expert_id * ep_world_size + 1
+                cum_sum_end_row = cum_sum_start_row + ep_world_size
+                expert_valid_cnt = cum_sum_input[cum_sum_start_row:cum_sum_end_row, :]
+                expert_valid_cum_sum = pypto.cumsum(expert_valid_cnt, 0)
+                expert_valid_cum_sum_int32 = pypto.cast(expert_valid_cum_sum, pypto.DT_INT32, pypto.CastMode.CAST_TRUNC)
+                recv_valid_result = expert_valid_cum_sum_int32[ep_world_size - 1, 0]
+                expert_token_nums[expert_id] = recv_valid_result
+
+        # 根据偏移值，做 token 与 info 的数据接收
+        for _ in pypto.loop(1, name='MOE_DISTRIBUTED_DISPATCH_RECEIVE', idx_name='_'):
+            for index in range(expert_num_per_rank * ep_world_size):
+                cur_count = local_expert_recv_count[index + 1, 0]
+                offset = cum_sum_result[index, 0]
+                pypto.set_vec_tile_shapes(batch_size, hidden_size)
+                local_data_recv_count = pypto.experimental.shmem_load(
+                    shmem_data,
+                    this_rank,
+                    [1, batch_size, hidden_size],
+                    [index, 0, 0],
+                    pred=[cum_sum_result],
+                    valid_shape=[1, 1, cur_count, hidden_size],
+                )
+                expand_x[offset:offset + cur_count, :hidden_size] = local_data_recv_count
+                pypto.set_vec_tile_shapes(batch_size, info_size)
+                local_info_recv_count = pypto.experimental.shmem_load(
+                    shmem_info,
+                    this_rank,
+                    [1, batch_size, info_size],
+                    [index, 0, 0],
+                    pred=[cum_sum_result],
+                    valid_shape=[1, 1, cur_count, info_size],
+                )
+                assist_info_for_combine[offset:offset + cur_count, :info_size] = local_info_recv_count
+
+        return expand_x, assist_info_for_combine, expert_token_nums, recv_counts
+
+    return kernel
+
+
+def moe_distributed_dispatch(moe_case: MoeCase, operands: MoeDispatchOperands, logical_rank_id: int) -> None:
+    groups = init_hccl_comm(logical_rank_id)
+
+    x = operands.x
+    expert_ids = operands.expert_ids
+    expand_x_golden = operands.expand_x_golden
+    assist_info_for_combine_golden = operands.assist_info_for_combine_golden
+    expert_token_nums_golden = operands.expert_token_nums_golden
+    recv_counts_golden = operands.recv_counts_golden
+
+    x.share_memory_()
+    expert_ids.share_memory_()
+    expand_x_golden.share_memory_()
+    assist_info_for_combine_golden.share_memory_()
+    expert_token_nums_golden.share_memory_()
+    recv_counts_golden.share_memory_()
+
+    physical_device_id = PHYSICAL_START_DEVICE_ID + logical_rank_id
+    x = x.to(f'npu:{physical_device_id}')
+    expert_ids = expert_ids.to(f'npu:{physical_device_id}')
+    expand_x_golden = expand_x_golden.to(f'npu:{physical_device_id}')
+    assist_info_for_combine_golden = assist_info_for_combine_golden.to(f'npu:{physical_device_id}')
+    expert_token_nums_golden = expert_token_nums_golden.to(f'npu:{physical_device_id}')
+    recv_counts_golden = recv_counts_golden.to(f'npu:{physical_device_id}')
+
+    kernel = moe_distributed_dispatch_kernel(moe_case=moe_case, group_name=groups[0])
+    (
+        expand_x_actual,
+        assist_info_for_combine_actual,
+        expert_token_nums_actual,
+        recv_counts_actual,
+    ) = kernel(x, expert_ids)
+
+    for out, act in [
+        (expand_x_actual, expand_x_golden),
+        (assist_info_for_combine_actual, assist_info_for_combine_golden),
+        (expert_token_nums_actual, expert_token_nums_golden),
+        (recv_counts_actual, recv_counts_golden),
+    ]:
+        assert_allcolse_whit_rtol_and_atol(out, act)
+
+
+def test_moe_distributed_dispatch() -> None:
+    mp.set_start_method('spawn', force=True)
+    processes = []
+    moe_case = MoeCase(8, 5120, 160, 8, pypto.DT_BF16, WORLD_SIZE)
+
+    operand_lists = generate_dispatch_golden(moe_case, torch.bfloat16)
+    for (
+        x,
+        moe_expert_ids,
+        expand_x_golden,
+        assist_info_for_combine_golden,
+        expert_token_nums_golden,
+        recv_counts_golden,
+        logical_rank_id,
+    ) in zip(
+        operand_lists.x_list,
+        operand_lists.expert_ids_list,
+        operand_lists.expand_x_golden_list,
+        operand_lists.assist_info_for_combine_golden_list,
+        operand_lists.expert_token_nums_golden_list,
+        operand_lists.recv_counts_golden_list,
+        LOGICAL_RANK_IDS,
+    ):
+        operands = MoeDispatchOperands(
+            x,
+            moe_expert_ids,
+            expand_x_golden,
+            assist_info_for_combine_golden,
+            expert_token_nums_golden,
+            recv_counts_golden,
+        )
+        p = mp.Process(target=moe_distributed_dispatch, args=(moe_case, operands, logical_rank_id))
+        p.start()
+        processes.append(p)
+    for p in processes:
+        p.join()
 
 
 def moe_distributed_combine_kernel(
@@ -309,16 +660,16 @@ def moe_distributed_combine_kernel(
     hidden_size = moe_case.hidden_size
     moe_expert_num = moe_case.moe_expert_num
     topk = moe_case.topk
-    data_type = moe_case.pypto_data_type
-    world_size = moe_case.world_size
-    row = min(topk * batch_size * world_size, batch_size * moe_expert_num)
+    data_type = moe_case.data_type
+    ep_world_size = moe_case.ep_world_size
+    row = min(topk * batch_size * ep_world_size, batch_size * moe_expert_num)
 
     check_cond(batch_size == 8 or batch_size == 256, f'batch_size must be 8 or 256, but got {batch_size}')
     check_cond(hidden_size == 5120, f'hidden_size must be 5120, but got {hidden_size}')
     check_cond(moe_expert_num == 160, f'moe_expert_num must be 160, but got {moe_expert_num}')
     check_cond(topk == 8, f'topk must be 8, but got {topk}')
     check_cond(data_type == pypto.DT_BF16, f'data_type must be pypto.DT_BF16, but got {data_type}')
-    check_cond(world_size == 4 or world_size == 8, f'world_size must be 4 or 8, but got {world_size}')
+    check_cond(ep_world_size in (2, 4, 8), f'ep_world_size must be 2, 4 or 8, but got {ep_world_size}')
     check_cond(isinstance(group_name, str), f'type of group_name must be str, but got {type(group_name)}')
     check_cond(group_name.strip(), f"group_name can't be empty string")
     check_cond(
@@ -336,7 +687,7 @@ def moe_distributed_combine_kernel(
         # 创建 shmem_data 和 shmem_signal
         shmem_data, shmem_signal = pypto.distributed.create_shmem_tensor(
             group_name,
-            world_size,
+            ep_world_size,
             expand_x.dtype,
             [1, topk * batch_size, hidden_size],
         )
@@ -415,16 +766,16 @@ def moe_distributed_combine_kernel(
 
 def moe_distributed_combine(
     moe_case: MoeCase,
-    input_operands: MoeCombineInputOperands,
-    out_golden: torch.Tensor,
+    operands: MoeCombineOperands,
     logical_rank_id: int,
 ) -> None:
     groups = init_hccl_comm(logical_rank_id)
 
-    expand_x = input_operands.expand_x
-    assist_info_for_combine = input_operands.assist_info_for_combine
-    recv_counts = input_operands.recv_counts
-    expert_scales = input_operands.expert_scales
+    expand_x = operands.expand_x
+    assist_info_for_combine = operands.assist_info_for_combine
+    recv_counts = operands.recv_counts
+    expert_scales = operands.expert_scales
+    out_golden = operands.out_golden
 
     expand_x.share_memory_()
     assist_info_for_combine.share_memory_()
@@ -448,37 +799,19 @@ def moe_distributed_combine(
 def test_moe_distributed_combine() -> None:
     mp.set_start_method('spawn', force=True)
     processes = []
+    moe_case = MoeCase(8, 5120, 160, 8, pypto.DT_BF16, WORLD_SIZE)
 
-    moe_case = MoeCase(
-        batch_size=8,
-        hidden_size=5120,
-        moe_expert_num=160,
-        topk=8,
-        pypto_data_type=pypto.DT_BF16,
-        torch_data_type=torch.bfloat16,
-        world_size=WORLD_SIZE,
-    )
-
-    (
-        expand_x_list,
-        assist_info_for_combine_list,
-        recv_counts_list,
-        expert_scales_list,
-        out_golden_list,
-    ) = generate_combine_golden(moe_case)
-    for expand_x, assist_info_for_combine, recv_counts, expert_scales, out_actual, logical_rank_id in zip(
-        expand_x_list,
-        assist_info_for_combine_list,
-        recv_counts_list,
-        expert_scales_list,
-        out_golden_list,
+    operand_lists = generate_combine_golden(moe_case, torch.bfloat16)
+    for expand_x, assist_info_for_combine, recv_counts, expert_scales, out_golden, logical_rank_id in zip(
+        operand_lists.expand_x_list,
+        operand_lists.assist_info_for_combine_list,
+        operand_lists.recv_counts_list,
+        operand_lists.expert_scales_list,
+        operand_lists.out_golden_list,
         LOGICAL_RANK_IDS,
     ):
-        input_operands = MoeCombineInputOperands(expand_x, assist_info_for_combine, recv_counts, expert_scales)
-        p = mp.Process(
-            target=moe_distributed_combine,
-            args=(moe_case, input_operands, out_actual, logical_rank_id),
-        )
+        operands = MoeCombineOperands(expand_x, assist_info_for_combine, recv_counts, expert_scales, out_golden)
+        p = mp.Process(target=moe_distributed_combine, args=(moe_case, operands, logical_rank_id))
         p.start()
         processes.append(p)
     for p in processes:
@@ -487,3 +820,4 @@ def test_moe_distributed_combine() -> None:
 
 if __name__ == '__main__':
     test_moe_distributed_combine()
+    test_moe_distributed_dispatch()
