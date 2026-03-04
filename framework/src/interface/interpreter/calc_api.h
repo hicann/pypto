@@ -146,6 +146,7 @@ struct CalcOps {
     void (*ExpandS)(const TensorData &, const Element &);
     void (*Expand)(const TensorData &, const TensorData &);
     void (*GatherElements)(const TensorData &, const TensorData &, const TensorData &, int);
+    void (*GatherMask)(const TensorData &, const TensorData &, int);
     void (*IndexAdd)(const TensorData &, const TensorData &, const TensorData &, const TensorData &, int, const Element &);
     void (*TriU)(const TensorData &, const TensorData &, int);
     void (*TriL)(const TensorData &, const TensorData &, int);

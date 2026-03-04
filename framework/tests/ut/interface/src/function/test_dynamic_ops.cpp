@@ -1296,6 +1296,54 @@ TEST_F(DynamicOpsTest, GatherElement) {
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
 
+TEST_F(DynamicOpsTest, GatherMask) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int64_t b = 16;
+    int64_t s = 32;
+    Tensor source(DT_FP32, {b, s}, "source");
+    Tensor out1(DT_FP32, {b, s / 2}, "out");
+    Tensor out2(DT_FP32, {b, s / 2}, "out");
+    Tensor out3(DT_FP32, {b, s / 4}, "out");
+    Tensor out4(DT_FP32, {b, s / 4}, "out");
+    Tensor out5(DT_FP32, {b, s / 4}, "out");
+    Tensor out6(DT_FP32, {b, s / 4}, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(source, 1.0),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out1, 2.0),
+        RawTensorData::CreateConstantTensor<float>(out2, 2.0),
+        RawTensorData::CreateConstantTensor<float>(out3, 2.0),
+        RawTensorData::CreateConstantTensor<float>(out4, 2.0),
+        RawTensorData::CreateConstantTensor<float>(out5, 2.0),
+        RawTensorData::CreateConstantTensor<float>(out6, 2.0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<float>(out1, 1.0),
+        RawTensorData::CreateConstantTensor<float>(out2, 1.0),
+        RawTensorData::CreateConstantTensor<float>(out3, 1.0),
+        RawTensorData::CreateConstantTensor<float>(out4, 1.0),
+        RawTensorData::CreateConstantTensor<float>(out5, 1.0),
+        RawTensorData::CreateConstantTensor<float>(out6, 1.0),
+    });
+
+    FUNCTION("main", {source}, {out1,out2,out3,out4,out5,out6}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0 = View(source, {b, s}, {0, 0});
+            out1 = GatherMask(t0, 1);
+            out2 = GatherMask(t0, 2);
+            out3 = GatherMask(t0, 3);
+            out4 = GatherMask(t0, 4);
+            out5 = GatherMask(t0, 5);
+            out6 = GatherMask(t0, 6);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, IndexAdd) {
     std::string logOutput = CaptureStdoutAndEcho([]() {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);

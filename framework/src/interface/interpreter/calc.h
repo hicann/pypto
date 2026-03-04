@@ -336,6 +336,10 @@ inline void GatherElements(
     LogicalTensorDataPtr out, LogicalTensorDataPtr params, LogicalTensorDataPtr indices, int axis) {
     GetCalcOps()->GatherElements(Trans(out), Trans(params), Trans(indices), axis);
 }
+inline void GatherMask(
+    LogicalTensorDataPtr out, LogicalTensorDataPtr self, int patternMode) {
+    GetCalcOps()->GatherMask(Trans(out), Trans(self), patternMode);
+}
 inline void IndexAdd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr src,
     LogicalTensorDataPtr indices, int axis, const Element &alpha = Element(DT_FP32, 1.0)) {
     GetCalcOps()->IndexAdd(Trans(out), Trans(self), Trans(src), Trans(indices), axis, alpha);

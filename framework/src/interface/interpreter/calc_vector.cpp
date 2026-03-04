@@ -785,6 +785,17 @@ void ExecuteOpGatherElement(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_GATHER_ELEMENT, Opcode::OP_GATHER_ELEMENT, ExecuteOpGatherElement);
 
+void ExecuteOpGatherMask(ExecuteOperationContext *ctx) {
+    ASSERT(ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ctx->ioperandDataViewList->size() == 1);
+    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto &self = ctx->ioperandDataViewList->at(0);
+    int patternMode = ctx->op->GetIntAttribute("op_attr_patternMode");
+    calc::GatherMask(ret, self, patternMode);
+}
+REGISTER_CALC_OP(OP_GATHER_MASK, Opcode::OP_GATHER_MASK, ExecuteOpGatherMask);
+REGISTER_CALC_OP(OP_GATHER_MASK_BUILDIN, Opcode::OP_GATHER_MASK_BUILDIN, ExecuteOpGatherMask);
+
 template <Opcode opcode>
 void ExecuteOpBitwiseShift(ExecuteOperationContext *ctx) {
     ASSERT(ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
