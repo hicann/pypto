@@ -30,6 +30,7 @@ include framework/src/cost_model/CMakeLists.txt
 recursive-include framework/src/interface *
 recursive-include framework/src/machine *
 recursive-include framework/src/passes *
+recursive-include framework/src/cann_host_runtime *
 
 # python
 include python/CMakeLists.txt

@@ -17,6 +17,7 @@
 #define AXIS_COMBINE_MARKER_H
 
 #include <vector>
+#include <queue>
 
 #include "interface/operation/opcode.h"
 #include "tilefwk/data_type.h"

@@ -89,6 +89,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END AND BUILD_OPEN_PROJECT)
     # 安装 二进制文件
     set(InstallExport ${PROJECT_NAME}Targets)
     set(InstallTargets
+            tile_fwk_cann_host_runtime
             tile_fwk_simulation_platform
             tile_fwk_utils
             tile_fwk_interface

@@ -17,10 +17,9 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
+#include "tilefwk/file.h"
 
 namespace npu::tile_fwk {
-bool FileExist(const std::string &filePath);
-std::string RealPath(const std::string& path);
 bool GetFileSize(const std::string &filePath, uint32_t &fileSize);
 uint32_t GetFileSize(const std::string& filePath);
 bool CreateDir(const std::string &directoryPath);
@@ -29,7 +28,6 @@ bool CreateMultiLevelDir(const std::string &directoryPath);
 void DeleteFile(const std::string &path);
 bool ReadJsonFile(const std::string& file, nlohmann::json& jsonObj);
 bool ReadBytesFromFile(const std::string &filePath, std::vector<char> &buffer);
-bool IsPathExist(const std::string& path);
 std::vector<std::string> GetFiles(const std::string& path, const std::string& ext);
 void SaveFile(const std::string &filePath, const std::vector<uint8_t> &data);
 bool SaveFile(const std::string &filePath, const uint8_t *data, size_t size) __attribute__ ((warn_unused_result));

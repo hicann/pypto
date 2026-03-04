@@ -58,19 +58,6 @@ public:
     }
 };
 
-TEST_F(TestHostMachineLog, GetPlatformInfo_BackendNotFound) {
-    auto &backend = Backend::GetBackend();
-    void *savedPlatform = backend.platform;
-
-    backend.platform = nullptr;
-
-    auto &hm = HostMachine::GetInstance();
-    std::string result = hm.GetPlatformInfo();
-    EXPECT_TRUE(result.empty());
-
-    backend.platform = savedPlatform;
-}
-
 TEST_F(TestHostMachineLog, SubTask_CurTaskAlreadyRunning) {
     auto &hm = HostMachine::GetInstance();
     hm.mode_ = HostMachineMode::API;

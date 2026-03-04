@@ -29,36 +29,6 @@ namespace {
 const int FILE_AUTHORITY = 0640;
 }
 
-bool FileExist(const std::string &fPath) {
-    return !RealPath(fPath).empty();
-}
-
-std::string RealPath(const std::string &path) {
-    if (path.empty()) {
-        FUNCTION_LOGI("path string is nullptr.");
-        return "";
-    }
-    if (path.size() >= PATH_MAX) {
-        FUNCTION_LOGI("file path %s is too long.", path.c_str());
-        return "";
-    }
-
-    // PATH_MAX is the system marco, indicate the maximum length for file path
-    // pclint check one param in stack can not exceed 1K bytes
-    char resovedPath[PATH_MAX] = {0x00};
-
-    std::string res;
-
-    // path not exists or not allowed to read return nullptr
-    // path exists and readable, return the resoved path
-    if (realpath(path.c_str(), resovedPath) != nullptr) {
-        res = resovedPath;
-    } else {
-        FUNCTION_LOGI("path %s is not exist.", path.c_str());
-    }
-    return res;
-}
-
 bool GetFileSize(const std::string& fPath, uint32_t &fileSize) {
     if (RealPath(fPath).empty()) {
         return false;
@@ -209,16 +179,6 @@ bool ReadBytesFromFile(const std::string &fPath, std::vector<char> &buffer)
         return false;
     }
     return true;
-}
-
-bool IsPathExist(const std::string& path)
-{
-    if (path.empty()) {
-        return false;
-    }
-
-    struct stat buffer;
-    return (stat(path.c_str(), &buffer) == 0);
 }
 
 std::vector<std::string> GetFiles(const std::string& path, const std::string& ext) {

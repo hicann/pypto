@@ -33,67 +33,16 @@
 
 using namespace npu::tile_fwk;
 
-extern "C" std::string GetPlatformFile(const std::string &socVersion);
-extern "C" std::string GetPlatformInfo();
 extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache);
-
-namespace {
-const std::string TEST_TMP_DIR = "/tmp/test_backend_ml";
-}
 
 class TestBackendMachineLog : public testing::Test {
 public:
-    static void SetUpTestCase() {
-        CreateMultiLevelDir(TEST_TMP_DIR);
-    }
-
-    static void TearDownTestCase() {
-        std::string cmd = "rm -rf " + TEST_TMP_DIR;
-        [[maybe_unused]]int ret = system(cmd.c_str());
-    }
+    static void SetUpTestCase() {}
+    static void TearDownTestCase() {}
 
     void SetUp() override {}
     void TearDown() override {}
 };
-
-TEST_F(TestBackendMachineLog, GetPlatformFile_NoAscendHomePath) {
-    std::string savedEnv;
-    const char *env = std::getenv("ASCEND_HOME_PATH");
-    if (env != nullptr) {
-        savedEnv = env;
-    }
-    unsetenv("ASCEND_HOME_PATH");
-
-    std::string result = GetPlatformFile("Ascend910B1");
-    EXPECT_EQ(result, "");
-
-    if (!savedEnv.empty()) {
-        setenv("ASCEND_HOME_PATH", savedEnv.c_str(), 1);
-    }
-}
-
-TEST_F(TestBackendMachineLog, GetPlatformFile_EmptySocVersion) {
-    std::string result = GetPlatformFile("");
-    EXPECT_EQ(result, "");
-}
-
-TEST_F(TestBackendMachineLog, GetPlatformFile_NonExistentPlatformFile) {
-    std::string savedEnv;
-    const char *env = std::getenv("ASCEND_HOME_PATH");
-    if (env != nullptr) {
-        savedEnv = env;
-    }
-    setenv("ASCEND_HOME_PATH", TEST_TMP_DIR.c_str(), 1);
-
-    std::string result = GetPlatformFile("NonExistentSocVersion");
-    EXPECT_EQ(result, "");
-
-    if (!savedEnv.empty()) {
-        setenv("ASCEND_HOME_PATH", savedEnv.c_str(), 1);
-    } else {
-        unsetenv("ASCEND_HOME_PATH");
-    }
-}
 
 TEST_F(TestBackendMachineLog, Execute_CacheRecoverFails) {
     Program::GetInstance().Reset();

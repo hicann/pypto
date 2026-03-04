@@ -64,7 +64,6 @@ private:
         runPass = (RunPassFunc)GetSymbol(progHandle, "RunPass");
         getResumePath = (GetResumePathFunc)GetSymbol(progHandle, "GetResumePath");
         execute = (ExecuteFunc)GetSymbol(compilerHandle, "Execute");
-        platform = (PlatformFunc)GetSymbol(compilerHandle, "GetPlatformInfo");
         matchCache = (MatchCacheFunc)GetSymbol(compilerHandle, "MatchCache");
         simuExecute = (ExecuteFunc)GetSymbol(simuHandle, "ExecuteSimulation");
 
@@ -369,14 +368,5 @@ void HostMachine::AgentThreadFunc() {
         }
         PushFinishQueue(std::move(task));
     }
-}
-
-std::string HostMachine::GetPlatformInfo() const {
-    auto &backend = Backend::GetBackend();
-    if (backend.platform == nullptr) {
-        MACHINE_LOGE("Backend platform symbol GetPlatformInfo not found.");
-        return "";
-    }
-    return backend.platform();
 }
 } // namespace npu::tile_fwk

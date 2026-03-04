@@ -331,7 +331,10 @@ void Platform::ObtainPlatformInfo() {
     }
 
     std::string srcPath;
-    srcPath = HostMachine::GetInstance().GetPlatformInfo();
+    std::string socVersion;
+    if (CannHostRuntime::Instance().GetSocVersion(socVersion)) {
+        srcPath = CannHostRuntime::Instance().GetPlatformFile(socVersion);
+    }
     if (srcPath.empty()) {
         FUNCTION_LOGW("Cannot obtain ini from the device, using default ini file.");
         CostModel::CostModelPlatform costModelPlatform;
