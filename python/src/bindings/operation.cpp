@@ -111,6 +111,7 @@ void bind_operation(py::module &m) {
     m.def("Rsqrt", [](const Tensor &self) { return npu::tile_fwk::Rsqrt(self); }, "Tensor rsqrt.");
     m.def("Sqrt", [](const Tensor &self) { return npu::tile_fwk::Sqrt(self); }, "Tensor sqrt.");
     m.def("Sign", [](const Tensor &self) { return npu::tile_fwk::Sign(self); }, "Tensor sign.");
+    m.def("Signbit", [](const Tensor &self) { return npu::tile_fwk::Signbit(self); }, "Tensor signbit.");
     m.def("Ceil", [](const Tensor &self) { return npu::tile_fwk::Ceil(self); }, "Tensor ceil.");
     m.def("Floor", [](const Tensor &self) { return npu::tile_fwk::Floor(self); }, "Tensor floor.");
     m.def("Trunc", [](const Tensor &self) { return npu::tile_fwk::Trunc(self); }, "Tensor trunc.");

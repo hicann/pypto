@@ -291,6 +291,9 @@ void OpcodeManager::RegisterVectorUnary() {
     RegisterInfo(Opcode::OP_SIGN, OpCoreType::AIV, "SIGN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tsign", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_SIGNBIT, OpCoreType::AIV, "SIGNBIT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::Tsignbit", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorSort() {
@@ -947,6 +950,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {              Opcode::OP_LOG1P,         "TLog1p"},
     {               Opcode::OP_SQRT,          "TSqrt"},
     {               Opcode::OP_SIGN,          "TSign"},
+    {            Opcode::OP_SIGNBIT,       "TSignbit"},
     {               Opcode::OP_CEIL,          "TCeil"},
     {               Opcode::OP_FLOOR,        "TFloor"},
     {               Opcode::OP_TRUNC,        "TTrunc"},

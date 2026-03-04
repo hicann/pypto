@@ -263,6 +263,22 @@ TEST_F(TorchAdaptorTest, UnaryOps) {
         ASSERT_ALLCLOSE(out, golden);
     }
     {
+        // signbit positive
+        auto self = makeTensorData(DT_FP32, {16, 16}, 4.0f);
+        auto out = makeTensorData(DT_BOOL, {16, 16}, false);
+        auto golden = makeTensorData(DT_BOOL, {16, 16}, false);
+        calc::Signbit(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        // signbit negative
+        auto self = makeTensorData(DT_FP32, {16, 16}, -4.0f);
+        auto out = makeTensorData(DT_BOOL, {16, 16}, false);
+        auto golden = makeTensorData(DT_BOOL, {16, 16}, true);
+        calc::Signbit(out, self);
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
         // abs
         auto self = makeTensorData(DT_FP32, {16, 16}, -4.0f);
         auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);

@@ -142,6 +142,7 @@ Tensor Abs(const Tensor &self);
 Tensor Ln(const Tensor &operand);
 Tensor Hub(const Tensor &operand);
 Tensor Sign(const Tensor &operand);
+Tensor Signbit(const Tensor &operand);
 
 Tensor Duplicate(const Tensor &operand);
 Tensor Gather(const Tensor &params, const Tensor &indices, int axis);

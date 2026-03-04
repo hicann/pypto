@@ -478,6 +478,37 @@ TEST_F(OnBoardIFATest, test_32_1_sign) {
     EXPECT_EQ(ret, true);
 }
 
+// SIGNBIT (32, 1)
+TEST_F(OnBoardIFATest, test_32_1_signbit) {
+    aclInit(nullptr);
+    rtSetDevice(GetDeviceIdByEnvVar());
+    int outCapa = 32 * 1;
+    uint64_t outputSize = outCapa * sizeof(bool);
+    uint8_t* out_ptr = allocDevAddr(outputSize);
+    PROGRAM("Signbit") {
+        std::vector<int64_t> shape1 = {32, 1};
+        void *x_ptr = readToDev(GetGoldenDir() + "/x.bin", outCapa);
+        TileShape::Current().SetVecTile({8, 1});
+        Tensor input_a(DataType::DT_FP32, shape1, (uint8_t *)x_ptr, "A");
+        Tensor output(DataType::DT_BOOL, shape1, out_ptr, "C");
+        ConfigManager::Instance();
+
+        config::SetBuildStatic(true);
+        FUNCTION("Signbit_T", {input_a, output}) {
+            output = Signbit(input_a);
+        }
+    }
+    DevFuncRunner::Run(Program::GetInstance().GetLastFunction());
+
+    std::vector<uint8_t> golden(outCapa);
+    std::vector<uint8_t> res(outCapa);
+    machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, outputSize);
+    
+    readInput(GetGoldenDir() + "/res.bin", golden);
+    int ret = resultCmp(golden, res, 0.0f);
+    EXPECT_EQ(ret, true);
+}
+
 // concat ((32, 512), (32, 64))
 TEST_F(OnBoardIFATest, test_concat_32_512_32_64) {
     aclInit(nullptr);

@@ -66,6 +66,7 @@ struct CalcOps {
     void (*Neg)(const TensorData &, const TensorData &);
     void (*Rsqrt)(const TensorData &, const TensorData &);
     void (*Sign)(const TensorData &, const TensorData &);
+    void (*Signbit)(const TensorData &, const TensorData &);
     void (*Sqrt)(const TensorData &, const TensorData &);
     void (*Ceil)(const TensorData &, const TensorData &);
     void (*Floor)(const TensorData &, const TensorData &);
