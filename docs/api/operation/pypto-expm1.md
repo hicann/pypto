@@ -31,17 +31,21 @@ expm1(input: Tensor) -> Tensor
 
 返回Tensor类型。其Shape与输入Tensor一致。当输入数据类型为DT_FP32, DT_FP16, DT_BF16时，其数据类型与输入Tensor一致；当输入数据类型为DT_INT32, DT_INT16时，其数据类型为DT_FP32。其元素为输入Tensor对应元素进行自然指数计算后减1。
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
+
+说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输出一致。
 
-如输入intput shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
-pypto.set_vec_tile_shapes(m1, n1)
+pypto.set_vec_tile_shapes(4, 16)
 ```
 
-## 调用示例
+### 接口调用示例
 
 ```python
 x = pypto.tensor([2, 2], pypto.DT_FP32)

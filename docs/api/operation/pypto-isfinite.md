@@ -37,19 +37,21 @@ isfinite(self: Tensor) -> Tensor
 1. 仅支持 DT_FP16，DT_BF16，DT_FP32，DT_UINT8，DT_INT8，DT_UINT16，DT_INT16，DT_UINT32，DT_INT32，DT_UINT64，DT_INT64 等数据类型。
 2. TileShape 以及 ViewShape 的尾轴必须按照输出张量的类型 32B 对齐，由于输出张量为布尔类型，因此 TileShape 以及 ViewShape 的尾轴必须是 32 的倍数。
 
-## TileShape设置示例
+## 调用示例
+
+### TileShape设置示例
 
 说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输出一致。
 
-假设，输入形状为 [m, n]，输出为 [m, n]，TileShape 设置为 [m1, n1], 则 m1, n1 分别用于切分 m, n 轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 32)
 ```
 
-## 调用示例
+### 接口调用示例
 
 ```python
 self = pypto.tensor([3, 3], pypto.data_type.DT_FP32)

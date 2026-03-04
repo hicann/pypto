@@ -42,7 +42,7 @@ argsort(input: Tensor, dim: Optional[int]=None, descending: bool=True) -> Tensor
 
 ### TileShape设置示例
 
-调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
+说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
 
 TileShape维度应和输入input一致。
 

@@ -1,4 +1,4 @@
-# pypto.LReLU
+# pypto.lrelu
 
 ## 产品支持情况
 
@@ -25,7 +25,7 @@ $$
 ## 函数原型
 
 ```python
-LReLU(input: Tensor, negative_slope: float = 0.01) -> Tensor
+lrelu(input: Tensor, negative_slope: float = 0.01) -> Tensor
 ```
 
 ## 参数说明
@@ -45,22 +45,25 @@ LReLU(input: Tensor, negative_slope: float = 0.01) -> Tensor
 2.  negative_slope 必须为非负浮点数（≥ 0），且不能为 `nan` 或 `inf`。
 3.  不支持 in-place 操作（即输出不能与输入共享内存）。
 
-## TileShape设置示例
+## 调用示例
 
-TileShape维度应和输出一致（与输入相同）。
+### TileShape设置示例
 
-例如，输入 shape 为 `[m, n]`，输出也为 `[m, n]`，TileShape 设置为 `[m1, n1]`，则 `m1`、`n1` 分别用于切分 `m`、`n` 轴。
+说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
+
+TileShape维度应和输出一致。
+
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
-pypto.set_vec_tile_shapes(m1, n1)
+pypto.set_vec_tile_shapes(4, 16)
 ```
 
-
-## 调用示例
+### 接口调用示例
 
 ```python
 a = pypto.tensor([[-1.0, 0.0, 1.0]], pypto.DT_FP32)
-out = pypto.LReLU(a)
+out = pypto.lrelu(a)
 ```
 
 结果示例如下：
