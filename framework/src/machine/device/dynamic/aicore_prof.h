@@ -333,7 +333,7 @@ private:
     std::vector<volatile uint32_t *> pmuCnt8Plain_;
     std::vector<volatile uint32_t *> pmuCnt9Plain_;
     // pmu data
-    uint32_t pmuDataMaxNum_ = 4;
+    uint32_t pmuDataMaxNum_ = 3;
     uint32_t pmuMsgSize_ = 0;
     uint32_t pmuDataSize_ = 0;
     uint32_t pmuHeadSize_ = 0;
