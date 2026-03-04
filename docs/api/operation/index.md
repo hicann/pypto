@@ -29,6 +29,7 @@ pypto-div
 pypto-eq
 pypto-exp
 pypto-expand_clone
+pypto-expand_exp_dif
 pypto-experimental-gather_in_l1
 pypto-experimental-gather_in_ub
 pypto-experimental-get_operation_options

@@ -488,7 +488,6 @@ class TopKTestCase(TestCase):
         }
 
 
-
 class LogicalAndTestCase(TestCase):
     def __init__(
         self,
@@ -564,6 +563,52 @@ class CbrtTestCase(TestCase):
 
     def golden_func(self, inputs, _params: dict) -> list:
         return [torch._prims.cbrt(*inputs)]
+
+    def golden_func_params(self) -> dict:
+        return {}
+
+
+class ExpandExpDifTestCase(TestCase):
+    def __init__(
+        self,
+        case_index: str,
+        case_name: str,
+        input_tensors: list,
+        output_tensors: list,
+        view_shape: tuple,
+        tile_shape: tuple,
+        params: dict,
+    ):
+        super().__init__(
+            case_index,
+            case_name,
+            "ExpandExpDif",
+            input_tensors,
+            output_tensors,
+            view_shape,
+            tile_shape,
+            params,
+            PTOTestCaseRunner(
+                "ExpandExpDif",
+                input_tensors,
+                output_tensors,
+                view_shape,
+                tile_shape,
+                params,
+            ),
+        )
+
+    def run_in_dyn_func(self, inputs, _params: dict) -> dict:
+        return pypto.expand_exp_dif(*inputs)
+
+    def golden_func(self, inputs, _params: dict) -> list:
+        dtype_out = inputs[0].dtype
+        dtype_in = torch.float32 if dtype_out == torch.bfloat16 else dtype_out
+        return [
+            torch.exp(torch.sub(inputs[0].to(dtype_in), inputs[1].to(dtype_in))).to(
+                dtype_out
+            )
+        ]
 
     def golden_func_params(self) -> dict:
         return {}

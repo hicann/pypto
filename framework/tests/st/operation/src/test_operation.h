@@ -509,7 +509,7 @@ T2 GetMapValByName(const std::map<T1, T2> &map_data, const T1 &name) {
     return param;
 }
 
-template <typename T>
+template <typename T, size_t func_offset = 2>
 std::vector<T> GetOpMetaData(const std::vector<OpFunc> &opFuncs, const std::string &op) {
     auto case_file = "../../../framework/tests/st/operation/test_case/" + op + "_st_test_cases.json";
     std::ifstream json_file(case_file);
@@ -528,7 +528,7 @@ std::vector<T> GetOpMetaData(const std::vector<OpFunc> &opFuncs, const std::stri
             if (GetViewShape(test_case).size() < 2) { // cut function start from 2 dim
                 func_id = 0;
             } else {
-                func_id = GetViewShape(test_case).size() - 2;
+                func_id = GetViewShape(test_case).size() - func_offset;
             }
         }
         test_case_list.push_back(T(opFuncs[func_id], test_case));

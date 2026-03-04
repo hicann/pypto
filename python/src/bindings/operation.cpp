@@ -49,6 +49,10 @@ void bind_operation(py::module &m) {
     m.def(
         "BitwiseXor", [](const Tensor &self, const Tensor &other) { return npu::tile_fwk::BitwiseXor(self, other); }, "Tensor bitwise xor.");
     m.def(
+        "ExpandExpDif",
+        [](const Tensor &input, const Tensor &other) { return npu::tile_fwk::ExpandExpDif(input, other); },
+        "Tensor expand exp dif.");
+    m.def(
         "View",
         [](const Tensor &operand, const std::vector<int64_t> &shapes, const py::sequence &offsets) {
             bool has_symbolic = false;

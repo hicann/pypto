@@ -25,6 +25,7 @@ from test_case_class_vector_operations import (
     TopKTestCase,
     TransposeTestCase,
     CbrtTestCase,
+    ExpandExpDifTestCase,
 )
 
 _op_to_cls = {
@@ -39,6 +40,7 @@ _op_to_cls = {
     "Transpose": TransposeTestCase,
     "TopK": TopKTestCase,
     "Cbrt": CbrtTestCase,
+    "ExpandExpDif": ExpandExpDifTestCase,
 }
 
 need_binary_compare = ("Cast", "ScalarMaxS", "Transpose", "TopK")

@@ -61,6 +61,7 @@ void ExecuteOpBinary(ExecuteOperationContext *ctx) {
         case Opcode::OP_BITWISEAND: calc::BitwiseAnd(ret, lhs, rhs); break;
         case Opcode::OP_BITWISEOR: calc::BitwiseOr(ret, lhs, rhs); break;
         case Opcode::OP_BITWISEXOR: calc::BitwiseXor(ret, lhs, rhs); break;
+        case Opcode::OP_EXPANDEXPDIF: calc::ExpandExpDif(ret, lhs, rhs); break;
         case Opcode::OP_COPYSIGN: calc::CopySign(ret, lhs, rhs); break;
         case Opcode::OP_GCD: calc::Gcd(ret, lhs, rhs); break;
         case Opcode::OP_GCD_BRC: calc::Gcd(ret, lhs, rhs); break;
@@ -92,6 +93,7 @@ REGISTER_CALC_OP(OP_MINIMUM, Opcode::OP_MINIMUM, ExecuteOpBinary<Opcode::OP_S_MI
 REGISTER_CALC_OP(OP_BITWISEAND, Opcode::OP_BITWISEAND, ExecuteOpBinary<Opcode::OP_BITWISEAND>);
 REGISTER_CALC_OP(OP_BITWISEOR, Opcode::OP_BITWISEOR, ExecuteOpBinary<Opcode::OP_BITWISEOR>);
 REGISTER_CALC_OP(OP_BITWISEXOR, Opcode::OP_BITWISEXOR, ExecuteOpBinary<Opcode::OP_BITWISEXOR>);
+REGISTER_CALC_OP(OP_EXPANDEXPDIF, Opcode::OP_EXPANDEXPDIF, ExecuteOpBinary<Opcode::OP_EXPANDEXPDIF>);
 REGISTER_CALC_OP(OP_COPYSIGN, Opcode::OP_COPYSIGN, ExecuteOpBinary<Opcode::OP_COPYSIGN>);
 REGISTER_CALC_OP(OP_GCD, Opcode::OP_GCD, ExecuteOpBinary<Opcode::OP_GCD>);
 REGISTER_CALC_OP(OP_GCD_BRC, Opcode::OP_GCD_BRC, ExecuteOpBinary<Opcode::OP_GCD_BRC>);

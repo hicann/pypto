@@ -235,6 +235,9 @@ void OpcodeManager::RegisterVectorBinary() {
         {OpAttributeKey::scalar, OP_ATTR_PREFIX + "reverseOperand", OP_ATTR_PREFIX + "reverseOperand",
             OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse},
         TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_EXPANDEXPDIF, OpCoreType::AIV, "EXPANDEXPDIF", {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {MemoryType::MEM_UB}, {"TileOp::TExpandExpDif", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis}, TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorUnary() {
@@ -979,6 +982,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {         Opcode::OP_BITWISEORS,    "TBitwiseOrS"},
     {        Opcode::OP_BITWISEXORS,   "TBitwiseXorS"},
     {         Opcode::OP_BITWISENOT,    "TBitwiseNot"},
+    {       Opcode::OP_EXPANDEXPDIF,  "TExpandExpDif"},
     {           Opcode::OP_COPYSIGN,      "TCopysign"},
     {          Opcode::OP_L1_TO_L0A,       "TExtract"},
     {          Opcode::OP_L1_TO_L0B,       "TExtract"},

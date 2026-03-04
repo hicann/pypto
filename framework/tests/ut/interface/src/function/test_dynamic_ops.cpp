@@ -129,6 +129,35 @@ TEST_F(DynamicOpsTest, FmodSFp32) {
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
 
+TEST_F(DynamicOpsTest, ExpandExpDifFp32) {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+    std::vector<int64_t> shape = {16, 128};
+    Tensor a(DT_FP32, shape, "a");
+    Tensor b(DT_FP32, {1, 128}, "b");
+    Tensor out(DT_FP32, shape, "out");
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateConstantTensor<float>(a, 3.0),
+        RawTensorData::CreateConstantTensor<float>(b, 2.0),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 0.0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateConstantTensor<float>(out, 1.0),
+    });
+
+    FUNCTION("main", {a, b}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto a0 = View(a, shape, {0, 0});
+            auto b0 = View(b, {1, 128}, {0, 0});
+            out = ExpandExpDif(a0, b0);
+        }
+    }
+}
+
 TEST_F(DynamicOpsTest, RemainderFp32) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);

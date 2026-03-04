@@ -29,6 +29,7 @@ const std::unordered_set<Opcode> NEED_BRC_OPS{
     Opcode::OP_DIV,
     Opcode::OP_MAXIMUM,
     Opcode::OP_MINIMUM,
+    Opcode::OP_EXPANDEXPDIF,
 };
 
 bool InsertCondition(const Opcode &code) {

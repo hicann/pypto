@@ -271,6 +271,9 @@ inline void BitwiseOr(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logic
 inline void BitwiseXor(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     GetCalcOps()->BitwiseXor(Trans(out), Trans(self), Trans(other));
 }
+inline void ExpandExpDif(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
+    GetCalcOps()->ExpandExpDif(Trans(out), Trans(self), Trans(other));
+}
 inline void CopySign(LogicalTensorDataPtr out, LogicalTensorDataPtr self, LogicalTensorDataPtr other) {
     GetCalcOps()->CopySign(Trans(out), Trans(self), Trans(other));
 }

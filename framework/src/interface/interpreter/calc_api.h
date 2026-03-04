@@ -114,6 +114,7 @@ struct CalcOps {
     void (*BitwiseAnd)(const TensorData &, const TensorData &, const TensorData &);
     void (*BitwiseOr)(const TensorData &, const TensorData &, const TensorData &);
     void (*BitwiseXor)(const TensorData &, const TensorData &, const TensorData &);
+    void (*ExpandExpDif)(const TensorData &, const TensorData &, const TensorData &);
     void (*CopySign)(const TensorData &, const TensorData &, const TensorData &);
     void (*Gcd)(const TensorData &, const TensorData &, const TensorData &);
 
