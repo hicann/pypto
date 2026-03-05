@@ -94,4 +94,5 @@ pypto-unsqueeze
 pypto-var
 pypto-view
 pypto-where
+pypto-gathermask
 ```

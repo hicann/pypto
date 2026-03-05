@@ -1340,19 +1340,33 @@ Tensor GatherMask(const Tensor &self, const uint8_t patternMode) {
     if (patternMode == 1 || patternMode == 2) {
         ASSERT(shape[shape.size() - 1] % 2 == 0) 
             << "The last axis of input shape should be divisible by 2 when ptternMode is 1 or 2";
-        ASSERT(vecTile[shape.size() - 1] % 2 == 0) 
+        ASSERT(vecTile.tile[vecTile.tile.size() - 1] % 2 == 0) 
             << "The last axis of tileshape should be divisible by 2 when ptternMode is 1 or 2";
         shape[shape.size() - 1] = shape[shape.size() - 1] / 2;
     } else if (patternMode == 3 || patternMode == 4 || patternMode == 5 || patternMode == 6) {
         ASSERT(shape[shape.size() - 1] % 4 == 0) 
             << "The last axis of input shape should be divisible by 4 when ptternMode is 3, 4, 5 or 6";
-        ASSERT(shape[shape.size() - 1] % 4 == 0) 
+        ASSERT(vecTile.tile[vecTile.tile.size() - 1] % 4 == 0) 
             << "The last axis of tileshape should be divisible by 4 when ptternMode is 3, 4, 5 or 6";
         shape[shape.size() - 1] = shape[shape.size() - 1] / 4;
     } else {
         ASSERT(patternMode == 7) << "Just support patternMode is 1, 2, 3, 4, 5, 6, 7";
     }
     auto result = Tensor(self.GetStorage()->tensor->datatype, shape);
+
+    if (!self.GetStorage()->GetDynValidShape().empty()) {
+        std::vector<SymbolicScalar> outValidShape;
+        for (auto dim : self.GetStorage()->GetDynValidShape()) {
+            outValidShape.push_back(dim);
+        }
+        if (patternMode == 1 || patternMode == 2){
+            outValidShape[outValidShape.size() - 1] = outValidShape[outValidShape.size() - 1] / 2;
+        } else if (patternMode == 3 || patternMode == 4 || patternMode == 5 || patternMode == 6) {
+            outValidShape[outValidShape.size() - 1] = outValidShape[outValidShape.size() - 1] / 4;
+        }
+        result.GetStorage()->UpdateDynValidShape(outValidShape);
+    }
+
     CALL(GatherMask, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), result.GetStorage(), patternMode);
     return result;
 }
