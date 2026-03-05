@@ -113,6 +113,12 @@ struct MixTaskData {
     uint64_t opWrapTaskNumList[MAX_CACHED_FUNC_NUM]; // 指针数组，指向每个function的callop对应的wrapTaskNum
 };
 
+inline constexpr size_t DIE_NUM = 2UL;
+struct DieReadyQueueData {
+    uint64_t readyDieAivCoreFunctionQue[DIE_NUM]; // die内Aic readyqueue, 指针指向ReadyCoreFunctionQueue 结构
+    uint64_t readyDieAicCoreFunctionQue[DIE_NUM]; // die内Aiv readyqueue, 指针指向ReadyCoreFunctionQueue 结构
+};
+
 // host machine 发给device machine的task数据
 // 暂时放在此位置
 struct DeviceTask {
@@ -121,6 +127,7 @@ struct DeviceTask {
     uint64_t readyAicCoreFunctionQue; // 指针指向ReadyCoreFunctionQueue 结构
     uint64_t readyAivCoreFunctionQue; // 指针指向ReadyCoreFunctionQueue 结构
     uint64_t readyAicpuFunctionQue; // 指针指向ReadyCoreFunctionQueue 结构
+    DieReadyQueueData dieReadyFunctionQue; // 跨die调度readyQueue
     MixTaskData mixTaskData; // mix调度相关信息
     CoreFunctionData coreFuncData;
     L2PreInfo l2Info;
