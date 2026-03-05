@@ -38,7 +38,7 @@ torch.manual_seed(0)
 
 MASTER_IP = '127.0.0.1'
 MASTER_PORT = '50001'
-WORLD_SIZE = 2
+WORLD_SIZE = 4
 PHYSICAL_START_DEVICE_ID = 0
 LOGICAL_RANK_IDS = list(range(WORLD_SIZE))
 
@@ -370,7 +370,7 @@ def moe_distributed_dispatch_kernel(
     check_cond(moe_expert_num == 160, f'moe_expert_num must be 160, but got {moe_expert_num}')
     check_cond(topk == 8, f'topk must be 8, but got {topk}')
     check_cond(data_type == pypto.DT_BF16, f'data_type must be pypto.DT_BF16, but got {data_type}')
-    check_cond(ep_world_size in (2, 4, 8), f'ep_world_size must be 2, 4 or 8, but got {ep_world_size}')
+    check_cond(ep_world_size in (4, 8), f'ep_world_size must be 4 or 8, but got {ep_world_size}')
     check_cond(isinstance(group_name, str), f'type of group_name must be str, but got {type(group_name)}')
     check_cond(group_name.strip(), f"group_name can't be empty string")
     check_cond(
@@ -614,7 +614,7 @@ def moe_distributed_dispatch(moe_case: MoeCase, operands: MoeDispatchOperands, l
         assert_allcolse_whit_rtol_and_atol(out, act)
 
 
-def test_moe_distributed_dispatch() -> None:
+def run_moe_distributed_dispatch() -> None:
     mp.set_start_method('spawn', force=True)
     processes = []
     moe_case = MoeCase(8, 5120, 160, 8, pypto.DT_BF16, WORLD_SIZE)
@@ -669,7 +669,7 @@ def moe_distributed_combine_kernel(
     check_cond(moe_expert_num == 160, f'moe_expert_num must be 160, but got {moe_expert_num}')
     check_cond(topk == 8, f'topk must be 8, but got {topk}')
     check_cond(data_type == pypto.DT_BF16, f'data_type must be pypto.DT_BF16, but got {data_type}')
-    check_cond(ep_world_size in (2, 4, 8), f'ep_world_size must be 2, 4 or 8, but got {ep_world_size}')
+    check_cond(ep_world_size in (4, 8), f'ep_world_size must be 4 or 8, but got {ep_world_size}')
     check_cond(isinstance(group_name, str), f'type of group_name must be str, but got {type(group_name)}')
     check_cond(group_name.strip(), f"group_name can't be empty string")
     check_cond(
@@ -796,7 +796,7 @@ def moe_distributed_combine(
     assert_allclose_with_eps(out_golden.cpu(), out_actual.cpu())
 
 
-def test_moe_distributed_combine() -> None:
+def run_moe_distributed_combine() -> None:
     mp.set_start_method('spawn', force=True)
     processes = []
     moe_case = MoeCase(8, 5120, 160, 8, pypto.DT_BF16, WORLD_SIZE)
@@ -819,5 +819,5 @@ def test_moe_distributed_combine() -> None:
 
 
 if __name__ == '__main__':
-    test_moe_distributed_combine()
-    test_moe_distributed_dispatch()
+    run_moe_distributed_combine()
+    run_moe_distributed_dispatch()
