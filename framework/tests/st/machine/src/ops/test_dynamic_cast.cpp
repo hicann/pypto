@@ -24,7 +24,6 @@ using namespace npu::tile_fwk::dynamic;
 class DynamicCastTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 
 TEST_F(DynamicCastTest, testDynCastUnalign) {
-    setenv("ENABLE_CTRLFLOW_COMPILE", "1", 0);
     TileShape::Current().SetVecTile(1, 16);
     int b = 1;
     int sq = 32;

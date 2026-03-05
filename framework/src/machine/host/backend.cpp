@@ -14,6 +14,7 @@
  */
 
 #include "machine/host/backend.h"
+#include "machine/host/expr_generator.h"
 #include "tilefwk/tilefwk.h"
 #include "codegen/codegen.h"
 #include "interface/inner/tilefwk.h"
@@ -42,7 +43,6 @@ namespace npu::tile_fwk {
 
 void ForceLinkLibraryCompiler() {}
 
-static constexpr size_t TABSIZE = 2;
 constexpr int ALIGN_SIZE_8 = 8;
 constexpr uint32_t STITCH_FUNCTION_MAX_SIZE = 65535;
 extern "C" int32_t Initialize() {
@@ -368,14 +368,24 @@ static std::string BuildControlFlowCallee(Function *func, int ident) {
     return oss.str();
 }
 
+static void GenerateExpression(SymbolicExpressionTable *exprTable, int devRootKey, const std::string &expName,
+    std::vector<std::string> &exprSrcFiles, std::ostringstream &controlFlowOss, std::ostringstream &exprHeaderOss, int indent) {
+    const auto &primaryExprs = exprTable->GetPrimaryExpressionSet();
+    size_t totalExprs = primaryExprs.size();
+    std::string outputDir = GetEmitPath("kernel_aicpu");
+    ExprBatchGenerator generator(outputDir, devRootKey, totalExprs);
+    generator.GenerateBatchFile(controlFlowOss, exprHeaderOss, expName, primaryExprs, exprSrcFiles, indent, devRootKey,
+            [&exprTable](const auto& expr) { return exprTable->BuildExpression(expr); });
+}
+
 static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::string &sectionName,
     Function *func,
     std::unordered_map<int, int> &slotIdxMapping,
     DyndevFunctionAttribute::FunctionGroup &group,
     std::unordered_map<Function *, Function *> &rootTileDict,
     std::ostringstream &controlFlowOss,
-    std::ostringstream &expressionOss,
-    int indent, const std::string &expName) {
+    std::ostringstream &expressionOss, std::ostringstream &exprHeaderOss,
+    int indent, const std::string &expName, std::vector<std::string> &exprSrcFiles) {
     auto funcType = func->GetFunctionType();
         if (funcType == FunctionType::DYNAMIC) {
         controlFlowOss
@@ -384,7 +394,10 @@ static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::st
             << "#include \"" << expName << "\"\n"
             << "#include \"tilefwk/aikernel_data.h\"\n"
             << "#include \"tilefwk/aicpu_runtime.h\"\n"
-            << "#include \"tilefwk/aicpu_distributed.h\"\n";
+            << "#include \"tilefwk/aicpu_distributed.h\"\n"
+            << "#include \"control_flow_expr_table.h\"\n";
+        ExprBatchGenerator generator(GetEmitPath("kernel_aicpu"), 0, 0);
+        generator.HeaderFileBegin(exprHeaderOss);
         expressionOss
             << "\n/* Symbol table list */\n"
             << linker.GetSymbolTable()->BuildSymbolList();
@@ -404,22 +417,25 @@ static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::st
         controlFlowOss << "#define LOOP(idx, b, e, s) for (int64_t idx = (b), idxEnd = (e), idxStep = (s); idx < idxEnd; idx += idxStep)\n"
             << "namespace npu::tile_fwk {\n"
             << BuildControlFlowCallee(func, 0)
-            << "__attribute__((section(\"" << sectionName
+            << "__attribute__((section(\"" << sectionName << ".entry"
             << "\")))\n"
             << "uint64_t ControlFlowEntry(void *ctx, int64_t *symbolTable, RuntimeCallEntryType runtimeCallList[], DevStartArgsBase *startArgs) {\n";
         for (auto &callee : GetCalleeList(cache, func)) {
-            BuildControlFlow(cache, linker, sectionName, callee, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss, indent + 1, expName);
+            BuildControlFlow(cache, linker, sectionName, callee, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss,
+                exprHeaderOss, indent + 1, expName, exprSrcFiles);
         }
         controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_FINISH); // Notify finish \n";
         controlFlowOss << std::setw((indent + 1) * TABSIZE) << ' ' << "return 0;\n";
         controlFlowOss << "}\n";
         controlFlowOss << "} // namespace npu::tile_fwk\n";
+        generator.HeaderFileEnd(exprHeaderOss);
     } else if (func->IsFunctionTypeAndGraphType(FunctionType::DYNAMIC_LOOP, GraphType::TENSOR_GRAPH)) {
         std::function<void(const std::shared_ptr<DynloopFunctionPathNode> &, int)> condBuilder =
-            [&cache, &linker, &sectionName, &slotIdxMapping, &group, &rootTileDict, &controlFlowOss, &expressionOss, &condBuilder,
-             &expName] (const std::shared_ptr<DynloopFunctionPathNode> &node, int condIndent) {
+            [&cache, &linker, &sectionName, &slotIdxMapping, &group, &rootTileDict, &controlFlowOss, &expressionOss, &exprHeaderOss, &condBuilder,
+             &expName, &exprSrcFiles] (const std::shared_ptr<DynloopFunctionPathNode> &node, int condIndent) {
                 if (!node->cond.IsValid()) {
-                    BuildControlFlow(cache, linker, sectionName, node->root, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss, condIndent, expName);
+                    BuildControlFlow(cache, linker, sectionName, node->root, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss,
+                        exprHeaderOss, condIndent, expName, exprSrcFiles);
                 } else {
                     std::string cond = SymbolicExpressionTable::BuildExpression(node->cond);
                     if (node->branchNodeList[1] != nullptr) {
@@ -486,13 +502,15 @@ static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::st
             controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SlotMarkNeedAlloc(" << slotIdxMapping.at(slot) << ");\n";
         }
         for (auto &callee : GetCalleeList(cache, func)) {
-            BuildControlFlow(cache, linker, sectionName, callee, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss, indent + 1, expName);
+            BuildControlFlow(cache, linker, sectionName, callee, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss,
+                exprHeaderOss, indent + 1, expName, exprSrcFiles);
         }
     } else if (func->GetGraphType() == GraphType::TILE_GRAPH) {
         controlFlowOss << BuildControlFlowCallee(func, indent * TABSIZE);
         Function *root = func->GetRootFunction();
         rootTileDict[root] = func;
-        BuildControlFlow(cache, linker, sectionName, root, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss, indent, expName);
+        BuildControlFlow(cache, linker, sectionName, root, slotIdxMapping, group, rootTileDict, controlFlowOss, expressionOss,
+            exprHeaderOss, indent, expName, exprSrcFiles);
     } else if (func->GetGraphType() == GraphType::EXECUTE_GRAPH) {
         if (group.devRootList.count(func) <= 0) {
             return;
@@ -514,11 +532,7 @@ static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::st
 
         SymbolicExpressionTable *exprTable = linker.LookupDevRootCoa(func);
         if (exprTable != nullptr) {
-            for (auto &expr : exprTable->GetPrimaryExpressionSet()) {
-                auto index = exprTable->GetPrimaryExpressionSet().GetIndex(expr);
-                auto exprStr = exprTable->BuildExpression(expr);
-                controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_SetExpr(exprList" << devRootKey << ", " << index << ", " << exprStr << ");\n";
-            }
+            GenerateExpression(exprTable, devRootKey, expName, exprSrcFiles, controlFlowOss, exprHeaderOss, indent);
         }
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_RootStitch(" << devRootKey << "ULL);\n";
     } else {
@@ -798,8 +812,12 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
     uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     const std::string expName = "expression_" + std::to_string(tilingKey) + ".h";
     std::unordered_map<int, int> slotIdxMapping;
-    BuildControlFlow(cache, linker, "ast2", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict, controlFlowOss,
-                     expressionOss, 0, expName);
+    std::string aicpuDirPath = GetEmitPath("kernel_aicpu");
+    npu::tile_fwk::CreateMultiLevelDir(aicpuDirPath);
+    std::vector<std::string> exprSrcFiles;
+    std::ostringstream exprHeaderOss;
+    BuildControlFlow(cache, linker, ".pypto", function, slotIdxMapping, attr->funcGroup, attr->rootTileDict, controlFlowOss,
+                     expressionOss, exprHeaderOss, 0, expName, exprSrcFiles);
     expressionOss << "#endif/*TILE_FWK_EXPRESSION_H*/" << "\n";
     std::string controlFlowSource = controlFlowOss.str();
     std::string expressionSource = expressionOss.str();
@@ -813,9 +831,6 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
     std::string cflags = "-mgeneral-regs-only";
 #endif
 
-    std::string aicpuDirPath = GetEmitPath("kernel_aicpu");
-    npu::tile_fwk::CreateMultiLevelDir(aicpuDirPath);
-
     std::string expressionFilePath = aicpuDirPath + "/" + expName;
     if (IsNeedDumpAicpuKernel(expressionFilePath)) {
         DumpFile(expressionSource, expressionFilePath);
@@ -823,19 +838,20 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
 
     std::string funcHash = function->GetFunctionHash().Data();
     std::string controlFlowHostFilePath = aicpuDirPath + "/controlFlow_host_" + funcHash + ".cpp";
-    attr->hostControlFlowBinary = CompileAndLoadSection(controlFlowSource, controlFlowHostFilePath,
-        "g++", "objcopy", "ast2", IsNeedDumpAicpuKernel(controlFlowHostFilePath), cflags);
+    attr->hostControlFlowBinary = CompileAndLoadSection(controlFlowSource, controlFlowHostFilePath, aicpuDirPath, exprSrcFiles,
+        "g++", "ld", "objcopy", ".pypto", IsNeedDumpAicpuKernel(controlFlowHostFilePath), cflags);
     AlignUpTo(attr->hostControlFlowBinary, 0x8, 0);
     std::string funcName = function->GetMagicName() + function->GetFunctionHash().Data();
     CompileControlFlow(aicpuDirPath, funcName, controlFlowSource, expressionSource);
     std::string arm64TargetToolPath = Arm64TargetTool("g++");
     if (FileExist(arm64TargetToolPath)) {
+        static const std::string BISHENG_LD_CMD = "ld.lld";
         std::string controlFlowDevFilePath = aicpuDirPath + "/controlFlow_dev_" + funcHash + ".cpp";
         MACHINE_LOGI("Compile control flow src file[%s] with arm64 target tool[%s].",
                     controlFlowDevFilePath.c_str(), arm64TargetToolPath.c_str());
         attr->devControlFlowBinary = CompileAndLoadSection(
-            controlFlowSource, controlFlowDevFilePath,
-            arm64TargetToolPath, Arm64TargetTool("objcopy"), "ast2", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
+            controlFlowSource, controlFlowDevFilePath, aicpuDirPath, exprSrcFiles,
+            arm64TargetToolPath, BISHENG_LD_CMD, Arm64TargetTool("objcopy"), ".pypto", IsNeedDumpAicpuKernel(controlFlowDevFilePath));
     } else {
         // brk #0
         MACHINE_LOGW("Arm64 target tool is not found.");

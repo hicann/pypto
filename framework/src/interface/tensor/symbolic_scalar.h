@@ -916,8 +916,9 @@ private:
     }
 };
 
-std::vector<uint8_t> CompileAndLoadSection(const std::string &code, const std::string &sourceFilePath,
-    const std::string &gcc, const std::string &objcopy, const std::string &sectionName, bool needDump, const std::string &extraCflag="");
+std::vector<uint8_t> CompileAndLoadSection(const std::string &code, const std::string &sourceFilePath, const std::string &aicpuPath,
+    std::vector<std::string> &exprSrcFiles, const std::string &gcc, const std::string &ld, const std::string &objcopy,
+    const std::string &sectionName, bool needDump, const std::string &extraCflag="");
 
 void CompileAndLink(const std::string &code, const std::string &sourceFilePath,
         const std::string &gcc, bool isStaticLink, bool isBenchmark, bool useMakefile);
