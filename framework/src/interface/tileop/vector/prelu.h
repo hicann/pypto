@@ -66,9 +66,11 @@ TILEOP void TPRelu(T0 dst, T1 src, T2 weight, T3 tmp) {
             pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
         using SrcTileDefine =
             pto::Tile<pto::TileType::Vec, typename T1::Type, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+        using TmpTileDefine =
+            pto::Tile<pto::TileType::Vec, uint8_t, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
         DstTileDefine dstTile(1, dstShape4);
         SrcTileDefine srcTile(1, srcShape4);
-        SrcTileDefine tmpTile(1, srcShape4);
+        TmpTileDefine tmpTile(1, srcShape4);
         SrcTileDefine weightTile(1, srcShape4);
         pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
         
