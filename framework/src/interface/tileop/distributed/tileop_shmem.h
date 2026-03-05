@@ -21,7 +21,6 @@
 #include <type_traits>
 
 #ifdef SUPPORT_TILE_TENSOR
-#include "pto/pto-inst.hpp"
 #include "pto/comm/pto_comm_inst.hpp"
 #endif
 
@@ -225,38 +224,32 @@ TILEOP void CopyGmToGmByTRowSliced(__gm__ DataType* target, __ubuf__ DataType* b
     constexpr uint32_t kMaxTileRows = 4095;
     constexpr uint32_t kEffectiveRows = bufferRowShape < kMaxTileRows ? bufferRowShape : kMaxTileRows;
     constexpr uint32_t kChunkRows = tileRowShape < kEffectiveRows ? tileRowShape : kEffectiveRows;
-    constexpr uint32_t kChunkCount = (tileRowShape + kChunkRows - 1) / kChunkRows;
 
-    __gm__ DataType* srcPtr = source;
-    __gm__ DataType* dstPtr = target;
-    for (uint32_t chunkIdx = 0; chunkIdx < kChunkCount; ++chunkIdx) {
-        uint32_t remainingRows = tileRowShape - chunkIdx * kChunkRows;
-        if (remainingRows == 0) {
-            break;
-        }
-        uint32_t currentRows = remainingRows < kChunkRows ? remainingRows : kChunkRows;
+    constexpr uint32_t kAlignedCols =
+        AlignUp<uint32_t>(tileColShape * sizeof(DataType), COPY_BLOCK_BYTE_SIZE) / sizeof(DataType);
+    constexpr uint32_t kHalfBufferEleCount = bufferRowShape * kAlignedCols;
 
-        ShapeDyn shape = MakeShape(currentRows, tileColShape);
-        StrideDyn srcStrideDyn = MakeStride(currentRows, srcStride);
-        StrideDyn dstStrideDyn = MakeStride(currentRows, dstStride);
-        ShmemGlobalTensor<DataType, kChunkRows, tileColShape> srcGlobal(srcPtr, shape, srcStrideDyn);
-        ShmemGlobalTensor<DataType, kChunkRows, tileColShape> dstGlobal(dstPtr, shape, dstStrideDyn);
-        ShmemUbTile<DataType, kChunkRows, tileColShape> ubTile(currentRows, tileColShape);
-        pto::TASSIGN(ubTile, reinterpret_cast<uintptr_t>(buffer));
+    ShapeDyn shape = MakeShape(tileRowShape, tileColShape);
+    StrideDyn srcStrideDyn = MakeStride(tileRowShape, srcStride);
+    StrideDyn dstStrideDyn = MakeStride(tileRowShape, dstStride);
+    ShmemGlobalTensor<DataType, kChunkRows, tileColShape> srcGlobal(source, shape, srcStrideDyn);
+    ShmemGlobalTensor<DataType, kChunkRows, tileColShape> dstGlobal(target, shape, dstStrideDyn);
 
-        if constexpr (useTPut) {
-            if constexpr (atomicType == AtomicType::ADD) {
-                pto::comm::TPUT<pto::AtomicType::AtomicAdd>(dstGlobal, srcGlobal, ubTile);
-            } else {
-                pto::comm::TPUT<pto::AtomicType::AtomicNone>(dstGlobal, srcGlobal, ubTile);
-            }
+    ShmemUbTile<DataType, kChunkRows, tileColShape> pingTile(kChunkRows, tileColShape);
+    ShmemUbTile<DataType, kChunkRows, tileColShape> pongTile(kChunkRows, tileColShape);
+    pto::TASSIGN(pingTile, reinterpret_cast<uintptr_t>(buffer));
+    pto::TASSIGN(pongTile, reinterpret_cast<uintptr_t>(buffer + kHalfBufferEleCount));
+
+    if constexpr (useTPut) {
+        if constexpr (atomicType == AtomicType::ADD) {
+            pto::comm::TPUT<pto::AtomicType::AtomicAdd>(dstGlobal, srcGlobal, pingTile, pongTile);
         } else {
-            pto::comm::TGET(dstGlobal, srcGlobal, ubTile);
+            pto::comm::TPUT<pto::AtomicType::AtomicNone>(dstGlobal, srcGlobal, pingTile, pongTile);
         }
-
-        srcPtr += currentRows * srcStride;
-        dstPtr += currentRows * dstStride;
+    } else {
+        pto::comm::TGET(dstGlobal, srcGlobal, pingTile, pongTile);
     }
+    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
 }
 
 // Full tile copy with row/column chunking. Ping-pong layout: same type bufferA|bufferB; with conversion bufferA|castUbA|bufferB|castUbB.
