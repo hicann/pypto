@@ -23,6 +23,7 @@
 #include "codegen/codegen_common.h"
 #include "tilefwk/data_type.h"
 #include "interface/operation/operation.h"
+#include "interface/operation/operation_impl.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -61,9 +62,14 @@ public:
     std::string GenMemL1ToBt() const;
     std::string GenMemL1CopyIn() const;
     std::string GenMemL1CopyOut() const;
+    std::string GetConvCopyInMode() const;
+    std::string GenMemL1CopyInConv() const;
+    std::string GenMemL1CopyOutConv() const;
     std::string GenMemL1ToFB() const;
     std::string GenMemL0CCopyOut() const;
     std::string GenMemL0CToL1() const;
+    std::string GenMemL1ToL0Load3D() const;
+    std::string GenMemL1ToL0Load2D() const;
 
     std::string GenMemL1ToL0() const;
 

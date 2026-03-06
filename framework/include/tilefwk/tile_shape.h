@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <sstream>
+#include "tilefwk/tilefwk_op.h"
 
 #define MAX_DIST_DIM_SIZE 3
 
@@ -57,6 +58,19 @@ struct CubeTile {
 
     std::string ToString() const;
 };
+/**
+ * @brief ConvTile tile for conv operation
+ *
+ */
+struct ConvTile {
+    npu::tile_fwk::Conv::TileL1Info tileL1Info;
+    npu::tile_fwk::Conv::TileL0Info tileL0Info;
+    bool setL0Tile{false};
+        
+    bool valid() const;
+
+    std::string ToString() const;
+};
 
 /**
  * \brief DistTile tile for distributed operation
@@ -76,6 +90,7 @@ struct DistTile {
 enum class TileType {
     VEC,
     CUBE,
+    CONV,
     DIST,
     MAX,
 };
@@ -90,6 +105,7 @@ struct TileShape {
     TileShape(
         const std::vector<int64_t>& vTile,
         const CubeTile& cTile,
+        const ConvTile& cvTile,
         const DistTile& dTile,
         const std::vector<int64_t>& mSize
     );
@@ -127,11 +143,25 @@ struct TileShape {
 
     /**
      * \brief Get the Cube Tile
-     *
-     * \return const std::vector<int64_t>&
      */
     const CubeTile &GetCubeTile() const { return cubeTile; }
     CubeTile &GetCubeTile() { return cubeTile; }
+
+    /**
+     * \brief Set the Conv Tile
+     *
+     * \param tileL1Info
+     * \param tileL0Info
+     * \param setL0Tile
+     */
+    void SetConvTile(const npu::tile_fwk::Conv::TileL1Info &tileL1Info, 
+        const npu::tile_fwk::Conv::TileL0Info &tileL0Info, bool setL0Tile = false) ;
+
+    /**
+     * \brief Get the Conv Tile
+     */
+    const ConvTile &GetConvTile() const { return convTile; }
+    ConvTile &GetConvTile() { return convTile; }
 
     /**
      * \brief Set the Dist Tile
@@ -237,6 +267,7 @@ struct TileShape {
 private:
     VecTile vecTile;
     CubeTile cubeTile;
+    ConvTile convTile;
     DistTile distTile;
     std::vector<int64_t> matrixSize;
 };

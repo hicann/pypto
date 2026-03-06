@@ -48,6 +48,10 @@ std::enable_if_t<std::is_arithmetic_v<T>, std::string> ToStringHelper(const T &v
 inline std::string ToStringHelper(const std::string &value) {
     return value;
 }
+template <typename... Ts>
+std::string ToStringHelper(const std::variant<Ts...>& value) {
+    return std::visit([](const auto& arg) { return ToStringHelper(arg); }, value);
+}
 
 inline std::string ToStringHelper(const SymbolicScalar &value) {
     return SymbolicExpressionTable::BuildExpression(value);

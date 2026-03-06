@@ -63,6 +63,7 @@
 #include "vector/bitwise_shift.h"
 #include "vector/copysign.h"
 #include "cube/cube_pto.h"
+#include "conv/conv_pto.h"
 #endif
 
 #endif

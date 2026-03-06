@@ -61,13 +61,13 @@ Status CubeProcess::AddL1CopyInAttr(
     }
     L1CopyInOp->SetAttribute(COPY_IS_NZ, nzValue);
     APASS_LOG_DEBUG_F(Elements::Operation, "Update %s[%d] attr is_Nz: %d", L1CopyInOp->GetOpcodeStr().c_str(), L1CopyInOp->GetOpMagic(), nzValue);
-    if (copyInOp->GetOpcode() == Opcode::OP_L1_TO_L0A) {
+    if (copyInOp->GetOpcode() == Opcode::OP_L1_TO_L0A || copyInOp->GetOpcode() == Opcode::OP_LOAD3D_CONV) {
         L1CopyInOp->SetAttribute(L1_COPY_IN_OUTER, mValue);
         L1CopyInOp->SetAttribute(L1_COPY_IN_INNER, kValue);
         APASS_LOG_DEBUG_F(Elements::Operation, "OP_L1_TO_L0A: Outer: %d, Inner: %d.", mValue, kValue);
         return SUCCESS;
     }
-    if (copyInOp->GetOpcode() == Opcode::OP_L1_TO_L0B) {
+    if (copyInOp->GetOpcode() == Opcode::OP_L1_TO_L0B || copyInOp->GetOpcode() == Opcode::OP_LOAD2D_CONV) {
         L1CopyInOp->SetAttribute(L1_COPY_IN_OUTER, kValue);
         L1CopyInOp->SetAttribute(L1_COPY_IN_INNER, nValue);
         APASS_LOG_DEBUG_F(Elements::Operation, "OP_L1_TO_L0B: Outer: %d, Inner: %d.", kValue, nValue);

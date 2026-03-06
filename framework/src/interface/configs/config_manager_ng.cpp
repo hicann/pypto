@@ -147,9 +147,10 @@ ConfigScope::ConfigScope(ConfigScopePtr parent) : parent_(parent) {
 TileShape ConfigScope::GenerateTileShape() const {
     std::vector<int64_t> vecTile = GetConfig<std::vector<int64_t>>("vec_tile_shapes");
     CubeTile cubeTile = GetConfig<CubeTile>("cube_tile_shapes");
+    ConvTile convTile = GetConfig<ConvTile>("conv_tile_shapes");
     DistTile distTile = GetConfig<DistTile>("dist_tile_shapes");
     std::vector<int64_t> matrixSize = GetConfig<std::vector<int64_t>>("matrix_size");
-    TileShape tileShape(vecTile, cubeTile, distTile, matrixSize);
+    TileShape tileShape(vecTile, cubeTile, convTile, distTile, matrixSize);
     return tileShape;
 }
 
@@ -434,6 +435,7 @@ private:
         tileShape.Reset();
         root->AddValue("cube_tile_shapes", tileShape.GetCubeTile());
         root->AddValue("vec_tile_shapes", tileShape.GetVecTile().tile);
+        root->AddValue("conv_tile_shapes", tileShape.GetConvTile());
         root->AddValue("matrix_size", tileShape.GetMatrixSize());
         root->AddValue("dist_tile_shapes", tileShape.GetDistTile());
     }

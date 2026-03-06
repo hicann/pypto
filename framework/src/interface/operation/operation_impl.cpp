@@ -1568,6 +1568,10 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
             Matrix::ConstructTileGraph(function, tileShape, iOperand, oOperand[0], op);
             break;
         }
+        case Opcode::OP_CONV: {
+            Conv::ConstructTileGraph(function, tileShape, iOperand, oOperand[0], op);
+            break;
+        }
         case Opcode::OP_TOPK_SORT: {
             int idxStart = op.GetIntAttribute(TOPK_START_INDEX);
             SymbolicScalar dynIdxStart;

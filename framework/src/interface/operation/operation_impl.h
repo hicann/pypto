@@ -175,4 +175,204 @@ struct MatmulAttrParam {
 void ConstructTileGraph(Function &function, const TileShape &tileShape, const std::vector<LogicalTensorPtr> &operandVec,
                         const LogicalTensorPtr &cTensorPtr, const Operation &op);
 }  // namespace Matrix
+
+namespace Conv {
+constexpr const int NCHW_N_IDX = 0;
+constexpr const int NCHW_C_IDX = 1;
+constexpr const int NCHW_H_IDX = 2;
+constexpr const int NCHW_W_IDX = 3;
+constexpr const int NCDHW_N_IDX = 0;
+constexpr const int NCDHW_C_IDX = 1;
+constexpr const int NCDHW_D_IDX = 2;
+constexpr const int NCDHW_H_IDX = 3;
+constexpr const int NCDHW_W_IDX = 4;
+constexpr const int NC1HWC0_N_IDX = 1;
+constexpr const int NC1HWC0_C1_IDX = 1;
+constexpr const int NC1HWC0_H_IDX = 2;
+constexpr const int NC1HWC0_W_IDX = 3;
+constexpr const int NC1HWC0_C0_IDX = 4;
+constexpr const int FRACTALZ_CO1_IDX = 1;
+constexpr const int INPUT_FMAP_IDX = 0;
+constexpr const int INPUT_WEIGHT_IDX = 1;
+constexpr const int INPUT_BIAS_IDX = 2;
+constexpr const int CONV1D_INPUT_DIM = 3;
+constexpr const int CONV3D_INPUT_DIM = 5;
+constexpr const int MKN_N_VALUE = 16;
+constexpr const int MKN_M_VALUE = 16;
+constexpr uint32_t PAD_TOP_INDEX = 0;
+constexpr uint32_t PAD_BOTTOM_INDEX = 1;
+constexpr uint32_t PAD_LEFT_INDEX = 2;
+constexpr uint32_t PAD_RIGHT_INDEX = 3;
+constexpr uint32_t PAD_HEAD_INDEX = 4;
+constexpr uint32_t PAD_TAIL_INDEX = 5;
+constexpr uint32_t PAD_STRIDE_H = 0;
+constexpr uint32_t PAD_STRIDE_W = 1;
+constexpr uint32_t PAD_STRIDE_D = 2;
+
+const std::string OP_ATTR_PREFIX = "op_attr_";
+const std::string CONV_PADDINGS_ATTR = OP_ATTR_PREFIX + "paddings";
+const std::string CONV_DILATIONS_ATTR = OP_ATTR_PREFIX + "dilations";
+const std::string CONV_STRIDES_ATTR = OP_ATTR_PREFIX + "strides";
+const std::string CONV_GROUPS_ATTR = OP_ATTR_PREFIX + "groups";
+const std::string CONV_ORI_FMAP_SHAPE_ATTR = OP_ATTR_PREFIX + "ori_fmap_shape";
+const std::string CONV_ORI_WEIGHT_SHAPE_ATTR = OP_ATTR_PREFIX + "ori_weight_shape";
+const std::string CONV_ORI_RES_SHAPE_ATTR = OP_ATTR_PREFIX + "ori_res_shape";
+const std::string CONV_BIAS_ATTR = OP_ATTR_PREFIX + "bias_flag";
+const std::string CONV_3D_FLAG = OP_ATTR_PREFIX + "is_conv3d";
+const std::string MATMUL_NZ_ATTR = OP_ATTR_PREFIX + "matmul_nz_attr";
+const std::string A_MUL_B_ACT_M = OP_ATTR_PREFIX + "act_m";
+const std::string A_MUL_B_ACT_K = OP_ATTR_PREFIX + "act_k";
+const std::string A_MUL_B_ACT_N = OP_ATTR_PREFIX + "act_n";
+const std::string A_MUL_B_BIAS_ATTR = OP_ATTR_PREFIX + "has_bias";
+const std::vector<int64_t> CONV2D_ATTR_DEFAULT_LIST = {1, 1};
+const std::vector<int64_t> CONV3D_ATTR_DEFAULT_LIST = {1, 1, 1};
+const std::vector<int64_t> CONV2D_PAD_ATTR_DEFAULT_LIST = {0, 0, 0, 0};
+const std::vector<int64_t> CONV3D_PAD_ATTR_DEFAULT_LIST = {0, 0, 0, 0, 0, 0};
+
+class L12L0ConvOpAttributeKey {
+public:
+    static const std::string postK;
+    static const std::string postM;
+    static const std::string postN;
+    static const std::string filterH;
+    static const std::string filterW;
+    static const std::string strideH;
+    static const std::string strideW;
+    static const std::string dilationH;
+    static const std::string dilationW;
+    static const std::string paddingLeft;
+    static const std::string paddingRight;
+    static const std::string paddingTop;
+    static const std::string paddingBottom;
+    static const std::string padValue;
+};
+
+class LoadStoreConvOpAttributeKey {
+public:
+    static const std::string copyInMode;
+    static const std::string copyOutMode;
+    static const std::string isFmap;
+    static const std::string isConv3D;
+};
+
+enum class CopyInMode : int {
+    COPY_MOD_INVALID = -1,
+    COPY_MOD_ND2ND = 0,
+    COPY_MOD_ND2NZ,
+    COPY_MOD_NZ2NZ,
+    COPY_MOD_DN2NZ
+};
+
+enum class CopyOutMode : int {
+    COPY_MOD_INVALID = -1,
+    COPY_MOD_NZ2ND = 0,
+    COPY_MOD_NZ2NZ,
+    COPY_MOD_ND2ND,
+    COPY_MOD_NZ2DN
+};
+
+struct ConvAttrParam {
+    std::vector<int64_t> paddings = {0, 0, 0, 0};
+    std::vector<int64_t> strides = {1, 1};
+    std::vector<int64_t> dilations = {1, 1};
+    std::vector<int64_t> oriFmapShape = {0, 0, 0, 0};
+    std::vector<int64_t> oriWeightShape = {0, 0, 0, 0};
+    std::vector<int64_t> oriResShape = {0, 0, 0, 0};
+    int64_t groups = 0;
+    int64_t offsetX = 0;
+    bool isConv1D = false;
+    bool isConv3D = false;
+    bool hasBias = false;
+    bool isInOutTensorNZ = false;
+
+    ConvAttrParam() = default;
+
+    ConvAttrParam(std::vector<int64_t> paddingsList, std::vector<int64_t> stridesList, std::vector<int64_t> dilationsList,
+                  int64_t groupsValue) {
+        paddings = paddingsList;
+        strides = stridesList;
+        dilations = dilationsList;
+        groups = groupsValue;
+    }
+};
+
+struct ConvGraphNodes {
+    LogicalTensorPtr fmapTensorPtr = nullptr;
+    LogicalTensorPtr weightTensorPtr = nullptr;
+    LogicalTensorPtr cL0PartialSumPtr = nullptr;
+    LogicalTensorPtr biasTensorPtr = nullptr;
+    LogicalTensorPtr resTensorPtr = nullptr;
+};
+
+struct ConvTileInfo {
+    int64_t orgBatch = 0;
+    int64_t orgCout = 0;
+    int64_t orgDin = 0;
+    int64_t orgDout = 0;
+    int64_t orgHin = 0;
+    int64_t orgWin = 0;
+    int64_t orgHout = 0;
+    int64_t orgWout = 0;
+    int64_t orgHoutWout = 0;
+    int64_t orgKh = 0;
+    int64_t orgKw = 0;
+    int64_t orgKd = 0;
+    int64_t orgCin = 0;
+    int64_t kPerGroup = 0;
+    int64_t coutPerGroup = 0;
+    int64_t kAL1 = 0;
+    int64_t kBL1 = 0;
+    int64_t nBL1 = 0;
+    int64_t hAL1In = 0;
+    int64_t wAL1In = 0;
+    int64_t hAL1Out = 0;
+    int64_t wAL1Out = 0;
+    int64_t kL0 = 0;
+    int64_t hL0 = 0;
+    int64_t wL0 = 0;
+    int64_t nL0 = 0;
+    int64_t cin0 = 0;
+};
+
+struct ConvIterInfo {
+    int64_t groupOffset = 0;
+    int64_t batchOffset = 0;
+    int64_t dinL1Offset = 0;
+    int64_t doL1Offset = 0;
+    int64_t hL1InOffset = 0;
+    int64_t hL1OutOffset = 0;
+    int64_t wL1InOffset = 0;
+    int64_t wL1OutOffset = 0;
+    int64_t dkL1Size = 0;
+    int64_t dkAL1Size = 0;
+    int64_t dkBL1Size = 0;
+    int64_t nL1Offset = 0;
+    int64_t hL0Offset = 0;
+    int64_t wL0Offset = 0;
+    int64_t nL0Offset = 0;
+    int64_t kAL1Offset = 0;
+    int64_t kBL1Offset = 0;
+    int64_t kL0Offset = 0;
+    int64_t hinL1Size = 0;
+    int64_t winL1Size = 0;
+    int64_t houtL1Size = 0;
+    int64_t woutL1Size = 0;
+    int64_t kAL1Size = 0;
+    int64_t kBL1Size = 0;
+    int64_t mL0Size = 0;
+    int64_t nL1Size = 0;
+    int64_t nL0Size = 0;
+    int64_t kL0Size = 0;
+    int64_t dkBL1SrcOffset = 0;
+    bool aL1UpadateFlag = false;
+    bool bL1UpadateFlag = false;
+    bool isFirstK = false;
+    bool isLastK = false;
+};
+
+void ConstructTileGraph(Function &function, const TileShape &tileShape, const std::vector<LogicalTensorPtr> &operandVec,
+                        const LogicalTensorPtr &cTensorPtr, const Operation &op);
+
+} // namespace Conv
+
 }  // namespace npu::tile_fwk

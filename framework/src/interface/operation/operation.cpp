@@ -163,7 +163,9 @@ Operation::Operation(
     if (function_->IsGraphType({GraphType::TENSOR_GRAPH, GraphType::TILE_GRAPH})) {
         tileShape_ = TileShape::Current();
         if (coreType_ == CoreType::AIC) {
-            ASSERT(tileShape_.GetCubeTile().valid())
+            auto &cubeTile = tileShape_.GetCubeTile();
+            auto &convTile = tileShape_.GetConvTile();
+            ASSERT(cubeTile.valid() || convTile.valid())
                 << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
         }
         OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(opcode);

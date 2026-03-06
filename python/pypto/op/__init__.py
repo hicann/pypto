@@ -17,6 +17,7 @@ from .indexing import *  # noqa
 from .joining import *  # noqa
 from .math import *  # noqa
 from .matmul import *  # noqa
+from .conv import *  # noqa
 from .mutating import *  # noqa
 from .other import *  # noqa
 from .verify import *  # noqa

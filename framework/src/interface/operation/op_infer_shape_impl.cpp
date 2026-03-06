@@ -684,6 +684,72 @@ void LoadL0MXInferFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &
 REGISTER_INFER_SHAPE_FUNC(OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0A_SCALE, LoadL0MXInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_L1_TO_L0B_SCALE, Opcode::OP_L1_TO_L0B_SCALE, LoadL0MXInferFunc);
 
+// conv infer
+void L1CopyInConvInferFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outValidShapes)
+{
+    ASSERT(op != nullptr);
+    const std::string L1_TILE_SHAPE = "l1_tile_shape";
+    const std::string IS_FMAP_FLAG = "IS_FMAP";
+    ASSERT(op->HasAttr(L1_TILE_SHAPE));
+    std::vector<SymbolicScalar> tile;
+    op->GetAttr(L1_TILE_SHAPE, tile);
+    ASSERT(op->HasAttr(IS_FMAP_FLAG));
+    bool isFmap = false;
+    op->GetAttr(IS_FMAP_FLAG, isFmap);
+    if (isFmap) {
+        // fmap l1 has 5/6 dim
+        ASSERT(tile.size() == SHAPE_DIM5 || tile.size() == SHAPE_DIM6);
+    } else {
+        ASSERT(tile.size() == SHAPE_DIM4);
+    }
+    std::vector<SymbolicScalar> outShape;
+    for (size_t i = 0; i < tile.size(); i++) {
+        outShape.push_back(tile[i]);
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outShape);
+    }
+}
+
+void L1ToL0ConvInferFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outValidShapes)
+{
+    ASSERT(op != nullptr);
+    const std::string L0_TILE_SHAPE = "l0_tile_shape";
+    ASSERT(op->HasAttr(L0_TILE_SHAPE));
+    // img2col，无法通过input推出tile out shape，通过传入的tile shape配置
+    // load2d, L1 大包搬运，无法通过input推出tile out shape，通过传入的tile shape配置
+    std::vector<SymbolicScalar> tile;
+    op->GetAttr(L0_TILE_SHAPE, tile);
+    std::vector<SymbolicScalar> outShape;
+    for (size_t i = 0; i < tile.size(); i++) {
+        outShape.push_back(tile[i]);
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outShape);
+    }
+}
+
+void L0CCopyOutConvInferFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outValidShapes)
+{
+    ASSERT(op != nullptr);
+    const std::string RES_TILE_SHAPE = "res_tile_shape";
+    ASSERT(op->HasAttr(RES_TILE_SHAPE));
+    std::vector<SymbolicScalar> tile;
+    op->GetAttr(RES_TILE_SHAPE, tile);
+    std::vector<SymbolicScalar> outShape;
+    for (size_t i = 0; i < tile.size(); i++) {
+        outShape.push_back(tile[i]);
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outShape);
+    }
+}
+
+REGISTER_INFER_SHAPE_FUNC(OP_L1_COPY_IN_CONV, Opcode::OP_L1_COPY_IN_CONV, L1CopyInConvInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_LOAD3D_CONV, Opcode::OP_LOAD3D_CONV, L1ToL0ConvInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_LOAD2D_CONV, Opcode::OP_LOAD2D_CONV, L1ToL0ConvInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_OUT_CONV, Opcode::OP_L0C_COPY_OUT_CONV, L0CCopyOutConvInferFunc);
+
 void CopyInInferFunc(Operation* op,
                      std::vector<std::vector<SymbolicScalar>>& outValidShapes) {
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());

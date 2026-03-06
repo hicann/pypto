@@ -282,7 +282,8 @@ OperationsViewer Function::Operations(bool sorted) {
 
 bool Function::IsCube() const {
     for (const auto &oper : OperationsViewer(operations_, opPosition_)) {
-        if (oper.HasAttr(OpAttributeKey::isCube) && oper.GetBoolAttribute(OpAttributeKey::isCube)) {
+        if ((oper.HasAttr(OpAttributeKey::isCube) && oper.GetBoolAttribute(OpAttributeKey::isCube))
+            || oper.GetOpcode() == Opcode::OP_L1_COPY_IN_CONV) {
             return true;
         }
     }

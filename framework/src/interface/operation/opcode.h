@@ -168,6 +168,10 @@ enum class Opcode {
     OP_L1_TO_L0A,
     OP_L1_TO_L0B,
     OP_L1_TO_BT,
+    OP_L1_COPY_IN_CONV,
+    OP_LOAD3D_CONV,
+    OP_LOAD2D_CONV,
+    OP_L0C_COPY_OUT_CONV,
     // ANY
     OP_DUPLICATE,
     // View
@@ -450,7 +454,8 @@ public:
                opCode == Opcode::OP_TRANSPOSE_MOVEIN || opCode == Opcode::OP_RESHAPE_COPY_IN ||
                opCode == Opcode::OP_L1_TO_FIX_QUANT_PRE || opCode == Opcode::OP_L1_TO_BT ||
                opCode == Opcode::OP_SHMEM_GET_GM2UB ||
-               opCode == Opcode::OP_L1_COPY_IN_A_SCALE || opCode == Opcode::OP_L1_COPY_IN_B_SCALE;
+               opCode == Opcode::OP_L1_COPY_IN_A_SCALE || opCode == Opcode::OP_L1_COPY_IN_B_SCALE ||
+               opCode == Opcode::OP_L1_COPY_IN_CONV;
     }
 
     inline bool IsCopyOut(Opcode opCode) const {
@@ -465,7 +470,7 @@ public:
                opCode == Opcode::OP_SHMEM_REDUCE || opCode == Opcode::OP_RESHAPE_COPY_OUT ||
                opCode == Opcode::OP_SHMEM_PUT_UB2GM  ||
                opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND ||
-               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE;
+               opCode == Opcode::OP_MOE_DISTRIBUTED_COMBINE_RECEIVE || opCode == Opcode::OP_L0C_COPY_OUT_CONV;
     }
 
     inline bool IsCopyInOrOut(Opcode opCode) const { return IsCopyIn(opCode) || IsCopyOut(opCode); }

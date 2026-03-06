@@ -36,6 +36,9 @@ const std::unordered_set<Opcode> OP_SHAPE_FROM_ATTR{
     Opcode::OP_TRANSPOSE_MOVEIN,
     // index outcast
     Opcode::OP_INDEX_OUTCAST,
+    // conv Load
+    Opcode::OP_L1_COPY_IN_CONV,
+    Opcode::OP_L0C_COPY_OUT_CONV,
 };
 bool IsOpShapeFromAttr(Opcode opcode) {
     return OP_SHAPE_FROM_ATTR.find(opcode) != OP_SHAPE_FROM_ATTR.end();
@@ -92,8 +95,8 @@ void CodeGenOp::UpdateShape(
             isMainBlock ? SymbolicScalar::FromConcrete(logicalTensor.shape) : logicalTensor.GetDynValidShape();
     }
 
-    ASSERT(logicalTensor.shape.size() <= MAX_DIM)
-        << "only support max dim: " << MAX_DIM << ", Tensor is " << logicalTensor.Dump();
+    ASSERT(logicalTensor.shape.size() <= UPDATE_SHAPE_MAX_DIM)
+        << "only support max dim: " << UPDATE_SHAPE_MAX_DIM << ", Tensor is " << logicalTensor.Dump();
 
     Opcode opcode = oper.GetOpcode();
     if (logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR && IsOpShapeFromAttr(opcode)) {

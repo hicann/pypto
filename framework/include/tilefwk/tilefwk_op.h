@@ -431,6 +431,65 @@ Tensor TransposedBatchMatmul(DataType dataType, const Tensor &aMatrix, const Ten
 Tensor QuantMM(const Tensor &operand1, const Tensor &operand2, const Tensor &dequantScaleW);
 } // namespace Matrix
 
+namespace Conv {
+
+struct TileL1Info {
+    int64_t tileHin{0};
+    int64_t tileHout{0};
+    int64_t tileWin{0};
+    int64_t tileWout{0};
+    int64_t tileCinFmap{0};
+    int64_t tileCinWeight{0};
+    int64_t tileN{0};
+    int64_t tileBatch{0};
+
+    TileL1Info(int64_t hin, int64_t hout, int64_t win, int64_t wout, 
+                int64_t cinFmap, int64_t cinWeight, int64_t cout, int64_t n)
+        : tileHin(hin), tileHout(hout), tileWin(win), tileWout(wout), 
+            tileCinFmap(cinFmap), tileCinWeight(cinWeight), tileN(cout), tileBatch(n) {}
+    
+    TileL1Info() = default;
+};
+
+struct TileL0Info{
+    int64_t tileH{0};
+    int64_t tileW{0};
+    int64_t tileK{0};
+    int64_t tileN{0};
+
+    TileL0Info(int64_t h, int64_t w, int64_t k, int64_t n)
+        : tileH(h), tileW(w), tileK(k), tileN(n) {}
+        
+    TileL0Info() = default;
+};
+
+enum class ReLuType : int64_t
+{
+    NoReLu = 0,
+    ReLu = 1
+};
+
+struct ConvExtendParam {
+    Tensor biasTensor{Tensor()};
+    Tensor scaleTensor{Tensor()};
+    float scaleValue{0.0f};
+    ReLuType reluType{ReLuType::NoReLu};
+
+    ConvExtendParam(Tensor bias, Tensor scale, float scaleVal, ReLuType relu)
+        : biasTensor(std::move(bias)),
+          scaleTensor(std::move(scale)),
+          scaleValue(scaleVal),
+          reluType(relu) {}
+
+    ConvExtendParam() = default;
+};
+
+Tensor Conv(DataType outType, const Tensor &inputTensor, const Tensor &weightTensor, const std::vector<int64_t> &strides, 
+            const std::vector<int64_t> &paddings, const std::vector<int64_t> &dilations, const ConvExtendParam &extendParam, 
+            const int64_t groups = 1);
+
+}
+
 namespace Distributed {
 enum class DistReduceType {
     DIST_REDUCE_ADD,

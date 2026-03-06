@@ -51,11 +51,9 @@ void SortedProducer(std::vector<Operation*>& sortedProducers) {
     });
 }
 
-unsigned long ComputeHash(const std::vector <Operation*>& producers, LogicalTensorPtr curTensor) {
-    std::vector<std::string> opStrList;
-    std::stringstream ss;
-    std::vector<Operation*> sortedProducers = producers;
-    SortedProducer(sortedProducers);
+void CollectProducerInfo(const std::vector<Operation*> &sortedProducers, const LogicalTensorPtr &curTensor,
+                         std::vector<std::string> &opStrList, std::stringstream &ss)
+{
     for (const auto& op: sortedProducers) {
         if (op == nullptr) {
             continue;
@@ -89,6 +87,9 @@ unsigned long ComputeHash(const std::vector <Operation*>& producers, LogicalTens
         if (op->GetOpAttribute() != nullptr) {
             ss << " " << op->GetOpAttribute()->Dump();
         }
+        if (!op->DumpAttr().empty()) {
+            ss << " " << op->DumpAttr();
+        }
         for (const auto &attr : OpcodeManager::Inst().GetAttrs(op->GetOpcode())) {
             ss << " attr: [" << attr << " : " << op->DumpAttr(attr) << "]";
         }
@@ -99,6 +100,14 @@ unsigned long ComputeHash(const std::vector <Operation*>& producers, LogicalTens
     for (const auto& str: opStrList) {
         ss << str;
     }
+}
+
+unsigned long ComputeHash(const std::vector <Operation*>& producers, LogicalTensorPtr curTensor) {
+    std::vector<std::string> opStrList;
+    std::stringstream ss;
+    std::vector<Operation*> sortedProducers = producers;
+    SortedProducer(sortedProducers);
+    CollectProducerInfo(sortedProducers, curTensor, opStrList, ss);
     std::hash<std::string> hasher;
     return hasher(ss.str());
 }

@@ -176,6 +176,14 @@ public:
     }
 
     /**
+     * \brief Retrieves the ConvTile configuration.
+     */
+    ConvTile GetConvTile() const {
+        const Any& value = GetAnyConfig("conv_tile_shapes");
+        return AnyCast<ConvTile>(value);
+    }
+
+    /**
      * \brief Retrieves the VecTile configuration as a VecTile structure.
      */
     VecTile GetVecTile() const {

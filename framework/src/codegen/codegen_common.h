@@ -28,6 +28,7 @@ const std::string PREFIX_STR_RAW_SHAPE = "RAWSHAPE";
 const std::string PREFIX_STR_STRIDE = "STRIDE";
 const std::string PREFIX_STR_OFFSET = "OFFSET";
 constexpr const int MAX_DIM = 5;
+constexpr const int UPDATE_SHAPE_MAX_DIM = 6;
 
 const std::string GET_PARAM_VALID_SHAPE_BY_IDX = "GET_PARAM_VALID_SHAPE_BY_IDX";
 const std::string GET_PARAM_OFFSET_BY_IDX = "GET_PARAM_OFFSET_BY_IDX";
@@ -153,6 +154,14 @@ enum class CopyInMode : int {
 };
 
 enum class PadMod : int { NO_PADDING = 0, PADDING_OUTER = 1, PADDING_INNER = 2 };
+
+enum class CopyOutMode : int {
+    COPY_MOD_INVALID = -1,
+    COPY_MOD_NZ2ND = 0,
+    COPY_MOD_NZ2NZ,
+    COPY_MOD_ND2ND,
+    COPY_MOD_NZ2DN
+};
 
 struct CodeGenCtx {
     std::string includePath;

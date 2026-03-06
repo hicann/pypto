@@ -74,7 +74,8 @@ enum class CopyOutMode : int64_t
 {
     NZ2ND = 0,
     NZ2NZ = 1,
-    ND2ND = 2
+    ND2ND = 2,
+    NZ2DN = 3
 };
 
 enum class PaddingMode : int64_t {
