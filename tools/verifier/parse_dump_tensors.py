@@ -119,13 +119,13 @@ class VerifyRes:
         df_clean = df.dropna(subset=["rawTensorMagic"]).copy()
         df_clean["rawTensorMagic"] = df_clean["rawTensorMagic"].astype(int)
 
-        codegen_filter = df_clean["verifyType"].str.contains("CodegenPreproc", na=False)
+        codegen_filter = df_clean["passName"].str.contains("CodegenPreproc", na=False)
         df_codegen = df_clean[codegen_filter]
         df_codegen = df_codegen.dropna(subset=["callopMagic"]).copy()
         df_codegen["callopMagic"] = df_codegen["callopMagic"].astype(int)
         self.verify_codegen_op_info_list = df_codegen
 
-        tensor_graph_filter = df_clean["verifyType"].str.contains("tensor_graph", na=False)
+        tensor_graph_filter = df_clean["passName"].str.contains("tensor_graph", na=False)
         self.verify_tensorgraph_op_info_list = df_clean[tensor_graph_filter]
 
 
@@ -161,7 +161,7 @@ class VerifyRes:
                     loop_info = op_info.get("loopInfo")
 
         if verify_dup_tensor:
-            verify_dup_tensor = os.path.join(self.verify_path, op_info.get("verifyType"), verify_dup_tensor)
+            verify_dup_tensor = os.path.join(self.verify_path, op_info.get("passName"), verify_dup_tensor)
         tensor_info["verify_dup_tensor"] = verify_dup_tensor
         tensor_info["valid_shape"], tensor_info["loop_info"] = valid_shape, loop_info
 
@@ -222,7 +222,7 @@ class VerifyRes:
         verify_dup_tensor = last_op_info.get("outputTensor")
         valid_shape = json.loads(last_op_info.get("outputValidShape"))
         if verify_dup_tensor:
-            verify_dup_tensor = os.path.join(self.verify_path, last_op_info.get("verifyType"), verify_dup_tensor)
+            verify_dup_tensor = os.path.join(self.verify_path, last_op_info.get("passName"), verify_dup_tensor)
         
         return verify_dup_tensor, valid_shape
 

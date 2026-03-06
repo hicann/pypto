@@ -2317,7 +2317,7 @@ static uint64_t DumpTensorWorkspace() {
 }
 
 static uint64_t LeafDumpWorkspace() {
-    if (IsPtoDataDumpEnabled()){
+    if (IsPtoDataDumpEnabled()) {
         static constexpr uint64_t LEAFDUMP_WORKSPACE = 12 * MEBI;
         return LEAFDUMP_WORKSPACE;
     } else {

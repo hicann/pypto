@@ -150,8 +150,6 @@ void ExecuteOpCopyIn(ExecuteOperationContext *ctx) {
         iopValid = std::make_shared<LogicalTensorData>(iopValid->GetData(), dynvalidshape, fromOffset);
         if (outputCombineAxisDone && oopShape.size() == SIZE_TWO) {
             oopTrans = oopTrans->View(dynvalidshape, std::vector<int64_t>(fromOffset.size(), 0));
-        } else {
-            oopValid = oop->View(dynvalidshape, std::vector<int64_t>(fromOffset.size(), 0));
         }
     }
 

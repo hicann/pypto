@@ -24,6 +24,15 @@
 
 namespace npu::tile_fwk {
 
+struct PairHash {
+    template <class T1, class T2>
+    std::size_t operator()(const std::pair<T1, T2> &p) const {
+        auto hash1 = std::hash<T1>{}(p.first);
+        auto hash2 = std::hash<T2>{}(p.second);
+        return hash1 ^ (hash2 << 1);
+    }
+};
+
 struct FunctionIODataPair {
     std::vector<std::shared_ptr<LogicalTensorData>> incastDataViewList;
     std::vector<std::shared_ptr<LogicalTensorData>> outcastDataViewList;
@@ -267,6 +276,10 @@ struct FunctionControlFlowExecution {
 
 constexpr int EXEC_DUMP_LEVEL_OPERATION = 1;
 constexpr int EXEC_DUMP_LEVEL_TENSOR = 2;
+const std::unordered_set<Opcode> MIX_PATH_OPS = {
+    Opcode::OP_UB_COPY_L1,
+    Opcode::OP_L0C_COPY_UB
+};
 
 enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
 enum class OpInfoCsvHeader {
@@ -340,6 +353,7 @@ struct FunctionInterpreter {
     std::unordered_map<int, std::shared_ptr<LogicalTensorData>> slotDataViewDict_;
     std::vector<std::shared_ptr<FunctionFrame>> *captureFrameList{nullptr};
     std::unordered_map<std::string, ScalarImmediateType> loopSymbolDict;
+    std::unordered_map<std::pair<std::shared_ptr<LogicalTensor>, int32_t>, std::shared_ptr<LogicalTensorData>, PairHash> mixGlobalTensorDict;
 
     int execDumpLevel{0};
 
@@ -556,6 +570,12 @@ struct FunctionInterpreter {
         for (size_t index = 0; index < iOpDataList.size(); index++) {
             if (iOpDataList[index] == nullptr) {
                 auto iop = op->GetIOperands()[index];
+                if (frame.callop != nullptr) {
+                    ALOG_INFO("ExecuteOperation: iop ", index, " is null, try to find in mixGlobalTensorDict.");
+                    auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+                    iOpDataList[index] = mixGlobalTensorDict[{iop, callopAttr->wrapId}];
+                    if (iOpDataList[index] != nullptr) {continue;}
+                }
                 ASSERT(op->GetOpcode() == Opcode::OP_CALL);
                 iOpDataList[index] = AllocateDataView(frame, iop);
             }
@@ -575,6 +595,11 @@ struct FunctionInterpreter {
                     oOpDataList.push_back(AllocateDataView(frame, oop, dtype));
                 } else {
                     auto ret = AllocateDataView(frame, oop);
+                    if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0) {
+                        auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+                        mixGlobalTensorDict[{oop, callopAttr->wrapId}] = ret;
+                    }
+
                     oOpDataList.push_back(ret);
                 }
             }
@@ -1056,6 +1081,7 @@ public:
 
         DumpBegin();
         TimeStamp ts;
+        mixGlobalTensorDict.clear();
         std::shared_ptr<FunctionCaptureExecution> unitCapture = ExecuteUnit(func, capture);
         DumpEnd();
         TimeStamp ts1;

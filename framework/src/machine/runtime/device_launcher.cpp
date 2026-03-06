@@ -21,8 +21,14 @@
 #include "interface/utils/op_info_manager.h"
 #include "tilefwk/pypto_fwk_log.h"
 
+struct process_sign {
+    pid_t tgid;
+    char sign[49];   // 49 is PROCESS_SIGN_LENGTH
+    char resv[4];    // 4 is PROCESS_RESV_LENGTH
+};
 extern "C" __attribute__((weak)) int AdxDataDumpServerUnInit();
 extern "C" __attribute__((weak)) int AdxDataDumpServerInit();
+extern "C" __attribute__((weak)) int drvGetProcessSign(process_sign *sign);
 
 namespace npu::tile_fwk::dynamic {
 namespace {
@@ -447,6 +453,28 @@ void DataDumpUnInit() {
             MACHINE_LOGE("AdxDataDumpServerUnInit is failed %d \n", sf);
         }
     }
+}
+
+uint32_t GetProcessId() {
+#ifdef BUILD_WITH_CANN
+    if (drvGetProcessSign != nullptr) {
+        process_sign processSign;
+        auto ret = drvGetProcessSign(&processSign);
+        if (ret == 0) {
+            ALOG_DEBUG_F("Got process sign from drv: tgid=%d", processSign.tgid);
+            return static_cast<uint32_t>(processSign.tgid);
+        }
+        ALOG_WARN_F("drvGetProcessSign failed, ret=%d, falling back to getpid()", ret);
+    } else {
+        ALOG_WARN_F("drvGetProcessSign is nullptr, falling back to getpid()");
+    }
+    
+    uint32_t pid = static_cast<uint32_t>(getpid());
+    ALOG_DEBUG_F("Using getpid(): pid=%d", pid);
+    return pid;
+#else
+    return 0;
+#endif
 }
 
 void CopyDevToHost(const DeviceTensorData &devTensor, DeviceTensorData &hostTensor) {
