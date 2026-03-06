@@ -216,7 +216,10 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
     }
 
     std::vector<std::string> passFilter = config::GetVerifyOption<std::vector<std::string>>(KEY_PASS_VERIFY_FILTER);
-    if (!passFilter.empty()) {
+    if (passFilter.empty()) {
+ 	         return;
+ 	}
+ 	if (passFilter[0] != "all") {
         auto it = std::find(passFilter.begin(), passFilter.end(), passIdentifier);
         if (it == passFilter.end()) {
             return;

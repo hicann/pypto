@@ -35,7 +35,7 @@
         "enable_pass_verify": false,
         "pass_verify_save_tensor": false,
         "pass_verify_save_tensor_dir": "",
-        "pass_verify_pass_filter": [],
+        "pass_verify_pass_filter": ["ExpandFunction", "SplitK", "L1CopyInReuseMerge", "InferDynShape", "InferParamIndex", "CodegenPreproc"],
         "pass_verify_error_tol": [1e-3, 1e-3]
     },
     "debug": {
