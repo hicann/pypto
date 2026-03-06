@@ -90,8 +90,16 @@ PyPTO支持在具备NPU硬件的**真实环境**和仅有CPU硬件的**仿真环
 
    详细安装指导详见《[CANN 软件安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)》。
 
-    - 推荐版本：Ascend HDK 25.3.0
-    - 支持版本：Ascend HDK 25.3.0、Ascend HDK 25.2.0
+    CANN-8.5.0 社区版:
+
+    - 推荐版本：Ascend HDK 25.5.0
+    - 支持版本：Ascend HDK 25.5.0
+
+    CANN-8.5.0 商发版:
+
+    - 推荐版本：Ascend HDK 25.5.0
+    - 支持版本：Ascend HDK 25.5.0、Ascend HDK 25.3.0、Ascend HDK 25.2.0
+
 
 ### 安装工具包
 
@@ -159,7 +167,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
     > 根据实际环境下载对应的安装包，下载链接如下(如果浏览器不支持自动下载，请选择右键，"链接另存为...")：
     > - x86：[cann-pto-isa_8.5.0_linux-x86_64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/ubuntu_x86/cann-pto-isa_linux-x86_64.run)
     > - aarch64：[cann-pto-isa_8.5.0_linux-aarch64.run](http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/ubuntu_aarch64/cann-pto-isa_linux-aarch64.run)
->
+
     > ```
     > # 确保安装包有可执行权限
     > chmod +x cann-pto-isa_8.5.0_linux-${arch}.run
@@ -171,7 +179,7 @@ bash tools/prepare_env.sh --type=cann --device-type=a2
     > - \$\{install-path\}：表示指定安装路径，默认安装在`/usr/local/Ascend`目录.
 
     > 方法二：下载源码方式
->
+
     > ```bash
     > # 创建用于存放第三方开源软件源码包的目录path-to-your-pto-isa
     > mkdir -p ${path-to-your-pto-isa}
