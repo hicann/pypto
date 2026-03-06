@@ -114,7 +114,7 @@ public:
         const std::shared_ptr<SymbolManager> &sm, const std::shared_ptr<LogicalTensor> &tensor) const;
     std::string GenAllocForLocalBuffer(const Operation &op, const std::shared_ptr<SymbolManager> &sm) const;
     std::string GetCoreArch(const CompileInfo &compileInfo) const;
-    static void AppendVFOptions(std::ostringstream &oss);
+    static void AppendVFOptions(NPUArch platform, std::ostringstream &oss);
 
 private:
     void GenFuncBodyBefore(const std::pair<uint64_t, Function *> &subFuncPair, Function &topFunc,

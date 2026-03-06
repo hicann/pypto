@@ -497,8 +497,8 @@ void CodeGenCloudNPU::BuildIncludes(std::ostringstream &oss) const {
     }
 }
 
-void CodeGenCloudNPU::AppendVFOptions(std::ostringstream &oss) {
-    if (config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
+void CodeGenCloudNPU::AppendVFOptions(NPUArch platform, std::ostringstream &oss) {
+    if (platform == NPUArch::DAV_3510 && config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
         oss << "--enable-pto-tile-fusion "
             << "-mllvm --tile-fusion-skip-shape-inference=true "
             << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
@@ -514,7 +514,7 @@ void CodeGenCloudNPU::BuildExtraOptions(std::ostringstream &oss, const std::stri
         << "-mllvm -cce-aicore-record-overflow=false "
         << "-mllvm -cce-aicore-addr-transform "
         << "-mllvm -cce-aicore-dcci-insert-for-scalar=false ";
-    AppendVFOptions(oss);
+    AppendVFOptions(platform_, oss);
     oss << compileOptions << " ";
 }
 
