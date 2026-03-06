@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 namespace npu::tile_fwk {
 namespace test {
@@ -23,7 +24,7 @@ namespace test {
 class TestExprBatchGenerator : public testing::Test {
 protected:
     void SetUp() override {
-        testDir_ = "test_expr_generator_temp";
+        testDir_ = "expr_generator_temp_" + std::to_string(getpid());
         mkdir(testDir_.c_str(), 0755);
     }
 
