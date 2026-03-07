@@ -683,6 +683,8 @@ install_single_package() {
         install_cmd="$filename --quiet --install --force --install-path=$INSTALL_PATH "
     elif [[ "$filename" =~ "toolkit" ]]; then
         install_cmd="$filename --quiet --install --force --install-path=$INSTALL_PATH "
+    elif [[ "$filename" =~ "pto-isa" ]]; then
+        install_cmd="$filename --quiet --full --install-path=$INSTALL_PATH "
     else
         install_cmd="$filename --full --install-path=$INSTALL_PATH "
     fi

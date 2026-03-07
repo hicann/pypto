@@ -1,15 +1,15 @@
 ---
 name: pypto-pr-creator
-description: "PyPTO 项目 Pull Request 创建全流程指南。当需要为 cann/pypto 仓库创建 PR、编写 commit message、准备代码提交、检查 PR 规范时使用。覆盖：(1) 仓库发现与 fork 验证, (2) 用户确认检查点（mandatory blocking confirmation）, (3) 分支创建与 commit, (4) 通过 GitCode MCP 创建/更新 PR, (5) Post-PR 结构化报告。触发词：创建PR、提交PR、PR规范、commit message、pypto贡献、代码提交到pypto、更新PR。"
+description: "PyPTO 项目 PR 创建全流程指南。当需要为 cann/pypto 仓库创建 PR、编写 commit 信息、准备代码提交、检查 PR 规范时使用。覆盖：(1) 仓库发现与 fork 验证，(2) 用户确认检查点（强制阻塞确认），(3) 分支创建与 commit，(4) 通过 GitCode MCP 创建/更新 PR，(5) PR 创建后结构化报告。触发词：创建PR、提交PR、PR规范、commit message、pypto贡献、代码提交到pypto、更新PR。"
 ---
 
 # PyPTO PR Creator
 
 ---
 
-## ⚠️ 核心概念：Cross-Fork PR
+## ⚠️ 核心概念：跨 Fork PR
 
-> **本 skill 的目标是创建从用户 fork 仓库到上游仓库 `cann/pypto` 的 Pull Request**
+> **本 skill 的目标是创建从用户 fork 仓库到上游仓库 `cann/pypto` 的 PR**
 
 ```
 ┌─────────────────────┐      PR       ┌─────────────────────┐
@@ -36,7 +36,7 @@ description: "PyPTO 项目 Pull Request 创建全流程指南。当需要为 can
 
 | 规则 | 说明 |
 |------|------|
-| **Cross-Fork PR** | PR 目标必须是 `cann/pypto`，不是用户 fork |
+| **跨 Fork PR** | PR 目标必须是 `cann/pypto`，不是用户 fork |
 | **远程操作** | 所有远程操作必须通过 GitCode MCP，禁止直接使用 `GITCODE_TOKEN` |
 | **Origin 配置** | `origin` 必须指向用户 fork（如 `<username>/pypto`），不能是 `cann/pypto` |
 | **隐私保护** | ⚠️ **禁止打印 `GITCODE_TOKEN`，包括屏幕、日志、调试信息** |
@@ -52,9 +52,9 @@ description: "PyPTO 项目 Pull Request 创建全流程指南。当需要为 can
 
 ---
 
-## 完整工作流（8 Phase）
+## 完整工作流（9 个阶段）
 
-### Phase 1: 仓库发现与验证
+### 阶段 1：仓库发现与验证
 
 **目标**：找到用户的 pypto fork 仓库，验证 origin 配置正确。
 
@@ -65,7 +65,7 @@ description: "PyPTO 项目 Pull Request 创建全流程指南。当需要为 can
 3. 若当前目录不符合，在工作区搜索（`find` 搜索 `.git` 目录，检查 remote）
 4. 检测浅克隆：`git rev-parse --is-shallow-repository`（若 true，后续需 `git fetch --unshallow origin`）
 
-### Phase 2: Git 认证检查（关键）
+### 阶段 2：Git 认证检查（关键）
 
 > ⚠️ **Push 需要 Git 认证，必须检查并配置认证方式**
 
@@ -174,7 +174,7 @@ result = gitcode_get_repository(owner="<username>", repo="pypto")
 # 验证: result.parent.full_name == "cann/pypto"
 ```
 
-### Phase 3: 用户确认（强制阻塞）
+### 阶段 3：用户确认（强制阻塞）
 
 > **在获得用户明确确认之前，禁止执行任何 git 操作。**
 
@@ -188,7 +188,7 @@ result = gitcode_get_repository(owner="<username>", repo="pypto")
 - PR 目标（`cann/pypto` → `master`）
 - PR 标题与 Body 预览
 
-### Phase 4: 预检修复
+### 阶段 4：预检修复
 
 用户确认后执行：
 
@@ -201,7 +201,7 @@ result = gitcode_get_repository(owner="<username>", repo="pypto")
 
 > ⚠️ **分支落后于 upstream 是 PR 创建失败（pre-receive hook）的常见原因**
 
-**Step 1: 添加 upstream remote（如不存在）**
+**步骤 1：添加 upstream remote（如不存在）**
 ```bash
 # 检查是否已有 upstream
 git remote -v | grep upstream
@@ -210,12 +210,12 @@ git remote -v | grep upstream
 git remote add upstream https://gitcode.com/cann/pypto.git
 ```
 
-**Step 2: 获取 upstream 最新状态**
+**步骤 2：获取 upstream 最新状态**
 ```bash
 git fetch upstream master
 ```
 
-**Step 3: 检查分支是否落后**
+**步骤 3：检查分支是否落后**
 ```bash
 # 检查当前分支落后于 upstream 多少个 commit
 git log --oneline HEAD..upstream/master | wc -l
@@ -223,7 +223,7 @@ git log --oneline HEAD..upstream/master | wc -l
 # 若输出 > 0，说明分支落后，需要 rebase
 ```
 
-**Step 4: Rebase 到 upstream（如落后）**
+**步骤 4：rebase 到 upstream（如落后）**
 ```bash
 # 确保 origin 配置了认证（避免 push 时失败）
 git remote set-url origin https://oauth2:${GITCODE_TOKEN}@gitcode.com/<username>/pypto.git
@@ -234,7 +234,7 @@ git rebase upstream/master
 # Force push 更新 fork 分支
 git push -f origin <branch_name>
 ```
-### Phase 5: 创建分支、Commit、Push
+### 阶段 5：创建分支、Commit、Push
 
 ```bash
 git -C "$PYPTO_REPO" checkout -b <branch_name>
@@ -245,11 +245,13 @@ git -C "$PYPTO_REPO" push origin <branch_name>
 
 > **认证说明**：push 依赖 git credential helper 或 `.gitconfig` 中已配置的凭据。
 
+> **⚠️ Commit Message 格式（Pre-receive Hook 强制验证）**：`^(feat|fix|docs|style|refactor|perf|test)(.*): [A-Z].{10,200}` — Tag 必须是这 7 种之一，冒号后必须有空格，Summary 首字母必须大写且长度 10-200 字符。验证：`git log -1 --format="%s" | grep -E '^(feat|fix|docs|style|refactor|perf|test)(.*): [A-Z].{10,200}'`
+
 #### Push 失败诊断与修复
 
 若 push 报认证错误（401/403），按以下步骤排查：
 
-**Step 1: 检查 http.extraheader 配置**
+**步骤 1：检查 http.extraheader 配置**
 
 ```bash
 git config --local --get http.extraheader
@@ -258,7 +260,7 @@ git config --local --get http.extraheader
 
 **原因**：GitCode 不支持 Bearer token 认证，只支持 HTTP Basic Auth。若配置了 `http.extraheader=Authorization: Bearer <token>`，git 会强制使用 Bearer token 导致认证失败。
 
-**Step 2: 删除错误的配置并修复认证**
+**步骤 2：删除错误的配置并修复认证**
 
 ```bash
 # 删除错误的 Bearer token 配置
@@ -276,7 +278,7 @@ password=<your_token>
 EOF
 ```
 
-**Step 3: 调试认证问题（可选）**
+**步骤 3：调试认证问题（可选）**
 
 ```bash
 # 查看实际发送的认证头
@@ -284,7 +286,7 @@ GIT_CURL_VERBOSE=1 git push origin <branch_name> 2>&1 | grep -i authorization
 # 正确: Authorization: Basic <base64>
 # 错误: Authorization: Bearer <token>
 ```
-### Phase 6: 创建或更新 PR
+### 阶段 6：创建或更新 PR
 
 #### 5.1 判断创建还是更新
 
@@ -315,7 +317,7 @@ gitcode_create_pull_request(
 - `owner`/`repo` 指向**上游仓库**（`cann/pypto`），不是 fork
 - 所有参数名必须**小写**
 
-> 完整参数说明和示例见 @references/pr-spec.md。
+> 完整参数说明和示例见 [references/pr-spec.md](references/pr-spec.md)。
 
 #### 5.3 更新现有 PR
 
@@ -330,11 +332,11 @@ gitcode_update_pull_request(
 )
 ```
 
-#### 5.4 MCP 失败后的 curl Fallback
+#### 5.4 MCP 失败后的 curl 兜底方案
 
 > ⚠️ GitCode MCP 的 `create_pull_request` 可能返回 400 错误，即使参数正确。此时使用 curl 直接调用 API。
 
-**Fallback 步骤**：
+**兜底步骤**：
 
 ```bash
 # 直接调用 GitCode API 创建 PR
@@ -355,9 +357,9 @@ curl -s -X POST "https://api.gitcode.com/api/v5/repos/cann/pypto/pulls" \
 - `pre receive hook check failed` → 检查 commit message 格式和 upstream 同步
 - `400 Unknown` → 检查参数格式
 
-> 注意：此 fallback 仅在 MCP 工具失败时使用，正常情况优先使用 MCP。
+> 注意：此兜底方案仅在 MCP 工具失败时使用，正常情况优先使用 MCP。
 
-### Phase 7: Post-PR 报告
+### 阶段 7：PR 创建后报告
 
 PR 操作成功后，向用户展示结构化报告，包含：
 
@@ -376,7 +378,7 @@ pr_url = result["html_url"]
 assert "cann/pypto" in pr_url, f"PR 链接错误：{pr_url}，应为 cann/pypto"
 ```
 
-### Phase 8: CLA 检查（关键）
+### 阶段 8：CLA 检查（关键）
 
 > ⚠️ **CLA (Contributor License Agreement) 检查是 PR 合并的前置条件**
 
@@ -408,7 +410,7 @@ else:
 
 若 CLA 检查失败（标签含 `cann-cla/no` 或类似），执行以下诊断和修复步骤：
 
-**Step 1: 检查本地 Git 配置**
+**步骤 1：检查本地 Git 配置**
 
 ```bash
 # 检查当前 commit 作者信息
@@ -419,7 +421,7 @@ git config --global user.name
 git config --global user.email
 ```
 
-**Step 2: 验证邮箱与 GitCode 账户一致**
+**步骤 2：验证邮箱与 GitCode 账户一致**
 
 > ⚠️ **CLA 检查基于 commit 作者邮箱，必须与 GitCode 账户主邮箱一致**
 
@@ -428,7 +430,7 @@ git config --global user.email
 - 使用了公司邮箱（如 `@hisilicon.com`）但 GitCode 账户未添加该邮箱
 - Commit 由多人协作，存在不同作者的 commit
 
-**Step 3: 修复邮箱配置**
+**步骤 3：修复邮箱配置**
 
 ```bash
 # 方式 1: 修改全局配置（推荐）
@@ -444,7 +446,7 @@ git push -f origin <branch_name>
 # 添加 commit 中使用的邮箱并验证
 ```
 
-**Step 4: 重新触发 CLA 检查**
+**步骤 4：重新触发 CLA 检查**
 
 ```bash
 # 修改作者信息后，添加空 commit 触发重新检查
@@ -491,14 +493,14 @@ CLA 失败时，向用户展示诊断信息并询问：
 3. 跳过，稍后处理
 ```
 
-### Phase 9: 追加修改（可选）
+### 阶段 9：追加修改（可选）
 
 若需修改已有 PR：在同一分支追加 commit 并 push，PR 自动更新。如需修改标题/描述，用 `gitcode_update_pull_request`。
 ---
 
 ## PR 标题与 Body 规范
 
-详见 @references/pr-spec.md。
+详见 [references/pr-spec.md](references/pr-spec.md)。
 
 ### 速查
 
@@ -524,11 +526,12 @@ CLA 失败时，向用户展示诊断信息并询问：
 - 整个 commit message 控制在 **10 行以内**
 - 格式：`tag(scope): Summary` + Body（可选多行）
 
+
 ---
 
 ## 提交前检查清单
 
-详见 @references/checklist.md。
+详见 [references/checklist.md](references/checklist.md)。
 
 ---
 
@@ -546,15 +549,16 @@ CLA 失败时，向用户展示诊断信息并询问：
 | `head` 只有分支名 | 必须是 `<username>:<branch_name>` |
 | `owner` 指向了 fork | `owner` 应为 `cann`（上游仓库） |
 || **PR 链接指向 fork** | PR 链接必须是 `cann/pypto/merge_requests/<id>`，不是 `<username>/pypto/...` |
-|| MCP 创建 PR 返回 400 但参数正确 | 使用 curl fallback（见 Phase 5.4） |
+|| MCP 创建 PR 返回 400 但参数正确 | 使用 curl 兜底方案（见阶段 5.4） |
 | commit message 超过 10 行 | 精简内容，控制在 10 行以内 |
 | commit message 使用中文 | **必须使用英文** |
-| **无 Git 认证配置** | 按 Phase 2 配置 credential.helper 或 SSH Key |
+
+| **无 Git 认证配置** | 按阶段 2 配置 credential.helper 或 SSH Key |
 | **SSH Key 未添加到 GitCode** | 将公钥添加到 GitCode → Settings → SSH Keys |
 | **Token 权限不足** | 创建 Token 时勾选 `repo`、`read:user` 权限 |
 | **credential.helper 未生效** | 检查 `git config --global credential.helper` 输出 |
 | **cache 超时失效** | 重新 push 输入凭证，或增大 `--timeout` |
-|| **CLA 检查失败 (cann-cla/no)** | 检查 `git config user.email` 是否与 GitCode 账户邮箱一致，见 Phase 8 |
+|| **CLA 检查失败 (cann-cla/no)** | 检查 `git config user.email` 是否与 GitCode 账户邮箱一致，见阶段 8 |
 || **Git 邮箱与 GitCode 不一致** | 修改 `git config
 --global user.email` 或在 GitCode → Settings → Emails 添加邮箱 |
 

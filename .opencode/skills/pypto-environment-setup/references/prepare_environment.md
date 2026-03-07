@@ -1,133 +1,113 @@
-# 环境准备（CANN + pto-isa + 第三方依赖）
+# 环境准备与编译安装
 
 ## 安装顺序
 
-官方顺序（来源：`prepare_environment.md`）：
-1. 驱动/固件（见官方 CANN 安装指南，本技能不执行）
-2. CANN toolkit 包
-3. CANN ops 包（按芯片型号选 A2/A3）
-4. pto-isa 源码
-5. 加载环境变量
-6. PyTorch + Ascend Extension for PyTorch
+1. 驱动/固件（见[官方 CANN 安装指南](https://www.hiascend.com/document/redirect/CannCommunityInstSoftware)，本技能不执行）
+2. CANN toolkit + ops 包
+3. pto-isa 源码
+4. 加载环境变量
+5. PyTorch + torch_npu
+6. PyPTO 编译安装
 
-⚠️ 本技能不执行驱动/固件操作，仅提供官方指南链接：https://www.hiascend.com/document/redirect/CannCommunityInstSoftware
+## CANN 环境加载（通用模板）
 
-## 使用 prepare_env.sh 完整安装（推荐）
+> 以下代码块在本文件中只出现一次，其他文件统一引用此处。
 
-> CANN 包安装推荐使用 `prepare_env.sh` 进行完整安装，它会自动处理 toolkit、ops、第三方依赖等全部组件。
+```bash
+ASCEND_INSTALL_PATH=${ASCEND_INSTALL_PATH:-/usr/local/Ascend}
+CANN_ENV_SH=$(ls -1 "${ASCEND_INSTALL_PATH}"/*/set_env.sh "${ASCEND_INSTALL_PATH}"/*/*/set_env.sh 2>/dev/null | head -1)
+test -n "$CANN_ENV_SH" && source "$CANN_ENV_SH" || echo "CANN set_env.sh not found"
+```
+
+加载后关键变量：
+
+| 变量 | 说明 |
+|------|------|
+| `ASCEND_HOME_PATH` | CANN 版本根目录（PyPTO 主要依赖此变量） |
+| `ASCEND_OPP_PATH` | OPP 算子包路径 |
+
+
+> 诊断脚本路径探测优先级：`ASCEND_HOME_PATH` → `ASCEND_OPP_PATH` 反推 → 兜底扫描 `cann-*`
+
+## 使用 prepare_env.sh 安装（推荐）
 
 ```bash
 cd "$PYPTO_REPO"
 
-# 完整安装（推荐，包含 CANN + 第三方依赖）
-bash tools/prepare_env.sh --quiet --type=all --device-type=a2 --install-path=${ASCEND_INSTALL_PATH:-/usr/local/Ascend}  # 或 a3
+> ⏱️ **说明**：该脚本大约需要 15 分钟执行完成。
 
-# 仅安装 CANN（toolkit + ops）
-bash tools/prepare_env.sh --quiet --type=cann --device-type=a2 --install-path=${ASCEND_INSTALL_PATH:-/usr/local/Ascend}  # 或 a3
+# 分步安装（禁止 --type=all）
+bash tools/prepare_env.sh --quiet --type=deps --device-type=<a2|a3>
+bash tools/prepare_env.sh --quiet --type=third_party
+bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2|a3> --install-path=$ASCEND_INSTALL_PATH 2>&1 | tee prepare_env.cann.log
+
+# 仅 CANN
+bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2|a3> --install-path=$ASCEND_INSTALL_PATH 2>&1 | tee prepare_env.cann.log
+
+# 仅编译工具链
+bash tools/prepare_env.sh --quiet --type=deps
+
+# 仅第三方源码包
+bash tools/prepare_env.sh --quiet --type=third_party
 ```
 
-| 参数 | 类型 | 必须 | 说明 |
-|------|------|------|------|
-| --type | str | 是 | deps, cann, third_party, all |
-| --device-type | str | 是 | a2, a3 |
-| --install-path | str | 否 | CANN 安装路径 |
-| --download-path | str | 否 | 下载路径 |
-| --with-install-driver | bool | 否 | 是否下载驱动固件，默认 false |
-| --quiet | bool | 否 | 静默模式，减少输出（执行prepare_env.sh脚本时必须加上此参数） |
+| 参数 | 说明 |
+|------|------|
+| `--type` | `deps` / `cann` / `third_party` |
+| `--device-type` | `a2`(910B) / `a3`(910C) |
+| `--install-path` | CANN 安装路径，默认 `/usr/local/Ascend` |
+| `--quiet` | 静默模式，强烈建议始终加上 |
 
-## 手动安装 CANN
-
-> 手动安装步骤（toolkit 包和 ops 包的下载 URL、安装命令、芯片选型）详见：
-> `$PYPTO_REPO/docs/install/prepare_environment.md` § "手动安装"
->
-> 版本：CANN 8.5.0，需按芯片型号选择 A2(910B) 或 A3(910C) 的 ops 包。
-> 安装路径统一使用 `--install-path=${ASCEND_INSTALL_PATH:-/usr/local/Ascend}`。
+> 手动安装 CANN 的详细步骤见 `$PYPTO_REPO/docs/install/prepare_environment.md`
 
 ## pto-isa 获取
 
-### 方法一：git clone 源码（推荐，优先）
-
-原因：PyPTO 编译/代码生成优先使用环境变量 `PTO_TILE_LIB_CODE_PATH` 指定的 pto-isa；当 pto-isa 与 PyPTO 头文件版本不匹配时，常见现象是出现 `pto::TROWEXPANDADD`/`pto::TROWEXPANDMAX` 等符号缺失的编译错误（见 `references/troubleshooting.md`）。
+### 源码方式（推荐）
 
 ```bash
 PTO_ISA_DIR=${PTO_ISA_DIR:-$PWD/pto-isa}
-mkdir -p "$PTO_ISA_DIR"
-
-# 建议使用源码方式，便于和 PyPTO 分支同步升级
 git clone https://gitcode.com/cann/pto-isa.git "$PTO_ISA_DIR"
-
 export PTO_TILE_LIB_CODE_PATH="$PTO_ISA_DIR"
 test -d "$PTO_TILE_LIB_CODE_PATH/include/pto" && echo OK
 ```
 
-### 方法二：安装 .run 包（备用）
+### .run 包方式（备用）
 
-> .run 包下载地址和安装命令详见：
-> `$PYPTO_REPO/docs/install/prepare_environment.md` § "获取pto-isa源码"
->
-> 注：使用 .run 包安装时，头文件位置可能不在一个固定路径；如遇到头文件版本不匹配，优先切换到"源码方式"。
+> 下载地址和安装命令见 `$PYPTO_REPO/docs/install/prepare_environment.md` § "获取pto-isa源码"
+> 如遇头文件版本不匹配，切换到源码方式。
 
-## 环境变量配置
 
-### set_env.sh 导出的变量
 
-CANN 安装完成后，`source set_env.sh` 会导出以下关键变量：
+## PyPTO 编译安装
 
-| 变量 | 示例值 | 说明 |
-|------|--------|------|
-| `ASCEND_HOME_PATH` | `${ASCEND_INSTALL_PATH}/cann-<version>` | CANN 版本根目录（PyPTO 项目主要依赖此变量） |
-| `ASCEND_TOOLKIT_HOME` | `${ASCEND_INSTALL_PATH}/cann-<version>` | 与 HOME_PATH 相同 |
-| `ASCEND_OPP_PATH` | `${ASCEND_INSTALL_PATH}/cann-<version>/opp` | OPP 算子包路径 |
-| `ASCEND_AICPU_PATH` | `${ASCEND_INSTALL_PATH}/cann-<version>` | AICPU 路径 |
-| `TOOLCHAIN_HOME` | `${ASCEND_INSTALL_PATH}/cann-<version>/toolkit` | 工具链路径 |
+> 官方完整文档：`$PYPTO_REPO/docs/install/build_and_install.md`
 
-> **PyPTO 约定**：项目代码（Python/C++/CMake）统一通过 `ASCEND_HOME_PATH` 判断 CANN 是否可用并定位安装路径。
+### 前提
 
-### 诊断脚本路径探测优先级
+- CANN 已安装且环境已加载
+- `pip3 install -r $PYPTO_REPO/python/requirements.txt`
+- 第三方源码包已准备（网络可达时自动下载；否则 `export PYPTO_THIRD_PARTY_PATH=<path>` 或 `prepare_env.sh --type=third_party`）
 
-`diagnose_env.py` 按以下顺序定位 CANN 安装路径：
-
-1. `ASCEND_HOME_PATH` — 最高优先级，PyPTO 项目标准
-2. `ASCEND_TOOLKIT_HOME` — 备选，与 HOME_PATH 通常相同
-3. `ASCEND_OPP_PATH` — 取其父目录反推版本根
-4. Fallback — 扫描 `${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/cann-*` 目录
-
-### source 命令
+### 安装
 
 ```bash
-# 默认路径（root 用户）
-source "${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh"
+cd "$PYPTO_REPO"
 
-# 指定路径
-source "${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/cann/set_env.sh"
+# 编译安装（推荐）
+python3 build_ci.py -f python3 --clean --disable_auto_execute
+pip install build_out/pypto-*.whl --force-reinstall -q
+
+# PyPI
+pip install pypto
 ```
 
-```bash
-CANN_ENV_SH=${CANN_ENV_SH:-$(ls -1 ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/*/set_env.sh ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/*/*/set_env.sh 2>/dev/null | head -1)}
-test -n "$CANN_ENV_SH" && source "$CANN_ENV_SH" || echo "CANN set_env.sh not found"
-```
+> 高级编译选项（Debug、CMake Generator 等）见 `$PYPTO_REPO/docs/install/build_and_install.md`
 
-## 版本兼容
+## 环境变量速查
 
-<!-- last_verified: 2026-02-28 -->
-<!-- 权威源: $PYPTO_REPO/docs/install/prepare_environment.md § "安装驱动与固件" + https://github.com/Ascend/pytorch -->
-
-### 快照：已验证兼容组合
-
-| CANN 版本 | torch | torch_npu | Python | 芯片 |
-|-----------|-------|-----------|--------|------|
-| 8.5.0 | 2.5.1 | 2.5.1.post1 | 3.10 | A2(910B) / A3(910C) |
-| 8.5.0 | 2.4.0 | 2.4.0.post2 | 3.10 | A2(910B) / A3(910C) |
-| 8.5.0 | 2.3.1 | 2.3.1.post1 | 3.9/3.10 | A2(910B) / A3(910C) |
-
-> ⚠️ 此快照可能滞后于上游。**安装前务必核对权威源**：
-> - PyPTO 官方矩阵：`$PYPTO_REPO/docs/install/prepare_environment.md` § "安装驱动与固件"
-> - torch/torch_npu 配对：https://github.com/Ascend/pytorch
-
-### 验证当前版本
-
-```bash
-python3 -c "import torch; print('torch', torch.__version__)"
-python3 -c "import torch_npu; print('torch_npu', getattr(torch_npu, '__version__', 'unknown'))"
-python3 -c "import os; print('ASCEND_HOME_PATH', os.environ.get('ASCEND_HOME_PATH'))"
-```
+| 变量 | 设置方式 | 必须性 |
+|------|----------|--------|
+| CANN 环境 | `source set_env.sh`（见上方"CANN 环境加载"） | 每次新 shell |
+| `PTO_TILE_LIB_CODE_PATH` | 优先 `$ASCEND_HOME_PATH/aarch64-linux`，备用 pto-isa 源码目录 | 编译/运行 |
+| `TILE_FWK_DEVICE_ID` | `export TILE_FWK_DEVICE_ID=1` | NPU 模式 |
+| `PYTHONPATH` | `export PYTHONPATH="${PYPTO_REPO}/python:$PYTHONPATH"` | 仅源码调试（不推荐日常使用） |

@@ -19,6 +19,7 @@ SoC 版本映射数据来源：
 """
 from __future__ import annotations
 
+import argparse
 import ctypes
 import glob
 import json
@@ -27,11 +28,9 @@ import os
 import re
 import subprocess
 import sys
-import argparse
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
-
 
 logging.basicConfig(level=logging.INFO)
 
@@ -83,11 +82,13 @@ CHIP_FAMILIES: list[tuple[str, str, str, str]] = [
 
 # Known Huawei PCI device IDs -> (generation, chip family prefix)
 KNOWN_PCI_DEVICE_IDS: dict[str, tuple[str, str]] = {
+    "0xd802": ("A2", "Ascend910B"),
+    "0xd803": ("A3", "Ascend910_93"),
+}
 
 
 # ---------------------------------------------------------------------------
 # Data Classes
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -167,7 +168,6 @@ def _classify_chip(chip_name: str) -> tuple[Optional[str], Optional[str], Option
         if re.match(pattern, chip_name):
             return family, gen, use
     return None, None, None
-
 
 
 def _detect_lspci(result: NPUDetectionResult) -> None:
@@ -306,7 +306,6 @@ def _detect_driver_version(result: NPUDetectionResult) -> None:
                 return
         except (OSError, IOError):
             continue
-
 
 
 def _detect_cann_version(result: NPUDetectionResult) -> None:
@@ -555,7 +554,7 @@ def _detect_torch_npu(result: NPUDetectionResult) -> None:
 def _detect_python_acl(result: NPUDetectionResult) -> None:
     """Level 4: 通过 Python acl 包检测。"""
     try:
-        import acl  # type: ignore  # pyright: ignore[reportMissingImports]
+        import acl  # type: ignore  # pyright: ignore[reportMissingImports]  # noqa: PLC0415
     except ImportError:
         return
 
@@ -651,6 +650,7 @@ def main() -> int:
     else:
         logging.info(result.summary())
     return 0
+
 
 if __name__ == '__main__':
     raise SystemExit(main())
