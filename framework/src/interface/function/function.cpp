@@ -3655,6 +3655,9 @@ std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<Logi
 
             auto assembleResult = std::make_shared<LogicalTensor>(*this, matches[0]->Datatype(), maximumShape,
                 iOperand->Format(), "Assemble_" + matches[0]->Symbol(), iOperand->nodetype);
+            if (!iOperand->GetDynValidShape().empty()) {
+                assembleResult->UpdateDynValidShape(iOperand->GetDynValidShape());
+            }
             ASSERT(assembleResult->GetProducers().empty()) "Assemble result should have no producers";
             for (size_t idx = 0; idx < matches.size(); idx++) {
                 auto &assembleOp = AddRawOperation(Opcode::OP_ASSEMBLE, {matches[idx]}, {assembleResult});
@@ -3663,6 +3666,9 @@ std::shared_ptr<LogicalTensor> Function::ConnectWithOverlap(std::shared_ptr<Logi
 
             auto viewResult = std::make_shared<LogicalTensor>(*this, assembleResult->Datatype(), iOperand->shape,
                 iOperand->Format(), "View_" + assembleResult->Symbol(), assembleResult->nodetype);
+            if (!iOperand->GetDynValidShape().empty()) {
+                viewResult->UpdateDynValidShape(iOperand->GetDynValidShape());
+            }
             auto &viewOp = AddRawOperation(Opcode::OP_VIEW, {assembleResult}, {viewResult});
             std::vector<int64_t> newOffset = TensorOffset::Sub(iOperand->GetOffset(), minimumOffset);
             std::vector<SymbolicScalar> newDynOffset = TensorOffset::Sub(iOperand->GetDynOffset(), minimumOffset);
