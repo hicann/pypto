@@ -567,8 +567,7 @@ void SetTensorGraphNodes(const std::vector<LogicalTensorPtr> &operandVec, const 
     size_t mxScaleSize = static_cast<size_t>(param.hasMXScale) * SHAPE_DIM2;
     size_t operandVecSize =
         SHAPE_DIM2 + static_cast<size_t>(param.hasScale + param.hasBias + param.gmAccumulationFlag) + mxScaleSize;
-    OP_CHECK(true, {
-        ASSERT(operandVec.size() == operandVecSize)
+    OP_CHECK(true, {ASSERT(operandVec.size() == operandVecSize)
             << "Operand vector size mismatch: "
             << "Expected size: " << operandVecSize << ", actual size: " << operandVec.size()
             << ", SHAPE_DIM2: " << SHAPE_DIM2 << ", hasScale: " << param.hasScale << ", hasBias: " << param.hasBias
@@ -604,9 +603,14 @@ void SetTensorGraphNodes(const std::vector<LogicalTensorPtr> &operandVec, const 
         case 4:  // 4含义：有gmTensor
             tensorGraphNodes.gmAccumulationTensorPtr = operandVec[SHAPE_DIM2];
             break;
-        case 8:
+        case 8: // 8含义: mxmatmul场景
             tensorGraphNodes.aScaleTensorPtr = operandVec[SHAPE_DIM2];
             tensorGraphNodes.bScaleTensorPtr = operandVec[SHAPE_DIM3];
+            break;
+        case 10: // 10含义: mxmatmul场景，有bias
+            tensorGraphNodes.aScaleTensorPtr = operandVec[SHAPE_DIM2];
+            tensorGraphNodes.bScaleTensorPtr = operandVec[SHAPE_DIM3];
+            tensorGraphNodes.biasTensorPtr = operandVec[SHAPE_DIM4];
             break;
         default:
             OP_CHECK(true, { ASSERT(false) << "Invalid tensor graph\n";});
