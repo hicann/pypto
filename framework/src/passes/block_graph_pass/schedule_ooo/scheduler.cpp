@@ -147,43 +147,43 @@ std::string IssueEntry::GetOpInfo() {
     return tileOp.GetOpcodeStr() + "[" + std::to_string(tileOp.GetOpMagic()) + "]";
 }
 
-Status OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue) {
+Status OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue, bool isGenSpill) {
+    auto memType = localBufferMap[allocIssue->reqMemIds[0]]->memType;
     APASS_LOG_ERROR_F(Elements::Operation, "======== OoO Spill failed info ===========");
-    APASS_LOG_ERROR_F(Elements::Operation, "Spill failed memoryType: %s. %s", 
-        MemoryTypeToString(localBufferMap[allocIssue->reqMemIds[0]]->memType).c_str(), GetFormatBacktrace(allocIssue->tileOp).c_str());
-    if (localBufferMap.find(allocIssue->reqMemIds[0]) != localBufferMap.end()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "%s alloc buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(), 
-            localBufferMap[allocIssue->reqMemIds[0]]->size, GetFormatBacktrace(allocIssue->tileOp).c_str());
-    }
-    auto bufferSlices = bufferManagerMap[allocIssue->coreLocation.first][allocIssue->coreLocation.second][localBufferMap[allocIssue->reqMemIds[0]]->memType].GetBufferSlices();
-    for (auto memId : bufferSlices) {
-        auto occupyIssue = GetBufLastWriteIssue(allocIssue, memId);
-        if (occupyIssue == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] last write time.", memId);
-            return FAILED;
+    APASS_LOG_ERROR_F(Elements::Operation, "Spill failed memoryType: %s. %s",
+        MemoryTypeToString(memType).c_str(), GetFormatBacktrace(allocIssue->tileOp).c_str());
+
+    APASS_LOG_ERROR_F(Elements::Operation, "---- alloc request ----");
+    APASS_LOG_ERROR_F(Elements::Operation, "op:%s need buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(), 
+        localBufferMap[allocIssue->reqMemIds[0]]->size, GetFormatBacktrace(allocIssue->tileOp).c_str());
+
+    APASS_LOG_ERROR_F(Elements::Operation, "---- current buffer occupancy ----");
+    if (isGenSpill) {
+        auto bufferSlices = bufferManagerMap[allocIssue->coreLocation.first][allocIssue->coreLocation.second][memType].GetBufferSlices();
+        for (auto memId : bufferSlices) {
+            auto occupyIssue = GetBufLastWriteIssue(allocIssue, memId);
+            if (occupyIssue == nullptr) {
+                APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] last write time.", memId);
+                return FAILED;
+            }
+            APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d], size:%lu, range[%lu,%lu], last writer:%s. %s", memId, localBufferMap[memId]->size, 
+                localBufferMap[memId]->start, localBufferMap[memId]->end, occupyIssue->GetOpInfo().c_str(), GetFormatBacktrace(occupyIssue->tileOp).c_str());
         }
-        APASS_LOG_ERROR_F(Elements::Operation, "%s, range[%lu, %lu], Tensor[%d] size: %lu.", occupyIssue->GetOpInfo().c_str(), 
-            localBufferMap[memId]->start, localBufferMap[memId]->end, memId, localBufferMap[memId]->size);
+    } else {
+        if (tensorOccupyMap.find(memType) != tensorOccupyMap.end()) {
+            for (auto &occupy : tensorOccupyMap[memType]) {
+                int memId = occupy.first;
+                auto occupyIssue = occupy.second;
+                if (occupyIssue == nullptr) {
+                    APASS_LOG_ERROR_F(Elements::Tensor, "Cannot find spill Tensor[%d] last write time.", memId);
+                    return FAILED;
+                }
+                APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d], size:%lu, range[%lu,%lu], last writer:%s. %s", memId, localBufferMap[memId]->size, 
+                    localBufferMap[memId]->start, localBufferMap[memId]->end, occupyIssue->GetOpInfo().c_str(), GetFormatBacktrace(occupyIssue->tileOp).c_str());
+            }
+        }
     }
     return SUCCESS;
-}
-
-void OoOScheduler::PrintSpillFailedInfo(IssueEntryPtr allocIssue, MemoryType bufferType) {
-    APASS_LOG_ERROR_F(Elements::Operation, "======== OoO Spill failed info ===========");
-    APASS_LOG_ERROR_F(Elements::Operation, "Spill failed memoryType: %s. %s", MemoryTypeToString(bufferType).c_str(), GetFormatBacktrace(allocIssue->tileOp).c_str());
-    if (localBufferMap.find(allocIssue->reqMemIds[0]) != localBufferMap.end()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "---- alloc request ----");
-        APASS_LOG_ERROR_F(Elements::Operation, "op:%s need buffer size: %lu. %s", allocIssue->GetOpInfo().c_str(),
-            localBufferMap[allocIssue->reqMemIds[0]]->size, GetFormatBacktrace(allocIssue->tileOp).c_str());
-    }
-    if (tensorOccupyMap.find(bufferType) != tensorOccupyMap.end()) {
-        APASS_LOG_ERROR_F(Elements::Operation, "---- current buffer occupancy ----");
-        for (auto occupyIssue : tensorOccupyMap[bufferType]) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d], size: %lu, range[%lu, %lu], last writer:%s. %s", occupyIssue.first, localBufferMap[occupyIssue.first]->size,
-                localBufferMap[occupyIssue.first]->start, localBufferMap[occupyIssue.first]->end, 
-                occupyIssue.second->GetOpInfo().c_str(), GetFormatBacktrace(occupyIssue.second->tileOp).c_str());
-        }
-    }
 }
 
 void OoOScheduler::PrintDependencies() {
@@ -338,7 +338,7 @@ Status OoOScheduler::SpillOnCoreBlock(OpCoreType coreType, int idx, bool &didSpi
             if (memType.second.Empty()) {
                 continue;
             }
-            PrintSpillFailedInfo(memType.second.Front(), memType.first);
+            PrintSpillFailedInfo(memType.second.Front(), false);
         }
         APASS_LOG_ERROR_F(Elements::Operation, "Buffer[L0A/B/C] is Full. Possible causes: incorrect memory reuse, memory fragmentation. "
             "Please check tile shape and OOO spill failed info.");
@@ -707,7 +707,7 @@ Status OoOScheduler::ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx) {
     LocalBufferPtr allocBuffer = localBufferMap[issue->reqMemIds[0]];
     auto corePair = issue->coreLocation;
     if (bufferManagerMap[corePair.first][corePair.second][allocBuffer->memType].IsFull(allocBuffer)) {
-        if (GenSpillOp(allocBuffer, pcIdx) != SUCCESS) {
+        if (GenSpillOp(pcIdx) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s", GetFormatBacktrace(issueEntries[pcIdx]->tileOp).c_str());
             return FAILED;
         }
