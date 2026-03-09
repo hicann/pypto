@@ -71,7 +71,7 @@ TEST_F(TestMoeDistributed, MoeDistributedDispatchV2) {
     Shape expertIdsShape{batchSize, topK};
     Shape expandXShape{expandXRowShape, hiddenSize};
     Shape recvCountsShape{1};
-    Shape assistInfoForCombineShape{expandXRowShape, 64};
+    Shape assistInfoForCombineShape{expandXRowShape, 3};
     Shape expertTokenNumsShape{routingExpertNum / rankSize};
 
     Tensor x(dType, xShape, "x");
