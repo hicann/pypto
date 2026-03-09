@@ -20,6 +20,7 @@
 #include "tilefwk/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
+#include "computational_graph_builder.h"
 
 #define private public
 #include "passes/tensor_graph_pass/infer_memory_conflict.h"
@@ -1019,6 +1020,51 @@ TEST_F(InferMemoryConflictTest, STest4) {
         }
     }
     EXPECT_EQ(cnt, 0);
+}
+
+/*
+STest5
+动态tensor->view->reshape->matmul 需插入 register copy
+       t5  -----------------------------------|
+                                                +-> A_MUL_B -> o1
+t1 -> VIEW -> t2 -> VIEW -> t3 -> RESHAPE -> t4
+                                                +-> A_MUL_B -> o2
+       t6   ----------------------------------|
+*/
+TEST_F(InferMemoryConflictTest, STest5) {
+    ComputationalGraphBuilder G;
+    // add tensor
+    G.AddTensor(DataType::DT_FP32, {-1, -1, 128}, "t1");
+    G.AddTensor(DataType::DT_FP32, {-1, -1, 128}, "t2");
+    G.AddTensor(DataType::DT_FP32, {1, 64, 128}, "t3");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "t4");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "t5");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "t6");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "o1");
+    G.AddTensor(DataType::DT_FP32, {64, 128}, "o2");
+
+    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "V1");
+    G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "V2");
+    G.AddOp(Opcode::OP_RESHAPE, {"t3"}, {"t4"}, "R1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t4", "t5"}, {"o1"}, "MUL1");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t4", "t6"}, {"o2"}, "MUL2");
+
+    // set incast and outcast
+    G.SetInCast({"t1", "t5", "t6"});
+    G.SetOutCast({"o1", "o2"});
+
+    auto currFunctionPtr = G.GetFunction();
+    InferMemoryConflict pass;
+    auto status = pass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+
+    int cnt = 0;
+    for (auto &op : currFunctionPtr->Operations().DuplicatedOpList()) {
+        if (op->GetOpcode() == Opcode::OP_REGISTER_COPY) {
+            cnt += 1;
+        }
+    }
+    EXPECT_EQ(cnt, NUM_ONE);
 }
 
 } // namespace tile_fwk
