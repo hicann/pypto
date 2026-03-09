@@ -978,10 +978,6 @@ void CheckOperandDtype(DataType outType, const Tensor &operand1, const Tensor &o
     const DataType operand2Dtype = operand2.GetDataType();
     const bool isOperand1Fp8 = (operand1Dtype == DataType::DT_FP8E5M2 || operand1Dtype == DataType::DT_FP8E4M3);
     OP_CHECK(true, {
-        ASSERT(!isOperand1Fp8 || Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
-            << "Float8 is only supported on 950PR and 950DT platform.";
-    });
-    OP_CHECK(true, {
         ASSERT(!isOperand1Fp8 || (operand2Dtype == DataType::DT_FP8E5M2 || operand2Dtype == DataType::DT_FP8E4M3))
             << "When operand1 is of type DT_FP8E4M3 or DT_FP8E5M2, operand2 must be DT_FP8E4M3 or DT_FP8E5M2. "
             << "operand1 dataType: " << DataType2String(operand1Dtype)
