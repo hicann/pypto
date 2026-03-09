@@ -17,6 +17,7 @@
 #define PASS_DYNATTR_TO_STATIC_H_
 
 #include <vector>
+#include <unordered_set>
 #include <unordered_map>
 #include <regex>
 #include "interface/operation/opcode.h"
@@ -251,6 +252,9 @@ private:
         std::reference_wrapper<SymbolicScalar>& dynScalar,
         std::vector<std::vector<SymbolicScalar>>& callopArglistOneDim);
     Status TryRemoveDynAttr(Function* leafFunc, std::vector<Operation*> callList);
+    Status GetTileFunction(Function* function, std::unordered_set<Function*> &tileFunctionSet);
+    Status DumpFunctionJson(Function& function, const std::string &logFolder, bool beforeFunction = true) override;
+    Status PrintFunction(Function& function, const std::string &logFolder, bool beforeFunction = true) override;
 };
 } // namespace tile_fwk
 } // namespace npu

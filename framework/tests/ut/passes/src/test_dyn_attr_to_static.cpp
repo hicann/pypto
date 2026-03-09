@@ -313,3 +313,57 @@ TEST_F(DynAttrToStaticTest, IntBasicCases) {
         "}";
     EXPECT_EQ(output, expected);
 }
+
+TEST_F(DynAttrToStaticTest, DumpAndPrintFunction) {
+    int tiling = 16;
+    TileShape::Current().SetVecTile(tiling, tiling, tiling);
+
+    int n = tiling * 2;
+    Tensor outcast(DT_INT32, {n, n, n}, "outcast");
+    std::vector<int32_t> outputGolden(n * n * n);
+
+    ProgramData::GetInstance().AppendInputs({
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<int32_t>(outcast, 0),
+    });
+
+    FUNCTION("test_dump_and_print", {}, {outcast}) {
+        LOOP("Step0", FunctionType::DYNAMIC_LOOP, i, LoopRange(n)) {
+            LOOP("Step1", FunctionType::DYNAMIC_LOOP, j, LoopRange(n)) {
+                for (int k = 0; k < n; k++) {
+                    SetTensorData(i * tiling * tiling + j * tiling + k, {i, j, k}, outcast);
+                }
+            }
+        }
+    }
+
+    Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_test_dump_and_print");
+    ASSERT_NE(func, nullptr);
+    npu::tile_fwk::DynAttrToStatic passDynAttrToStatic;
+
+    auto dir = "/tmp/dyn_attr_to_static_test" + std::to_string(::getpid());
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+
+    // RAII 清理
+    struct Cleanup {
+        std::filesystem::path p;
+        ~Cleanup() { std::error_code ec; std::filesystem::remove_all(p, ec); }
+    } cleanup{dir};
+
+    EXPECT_EQ(passDynAttrToStatic.DumpFunctionJson(*func, dir, true), SUCCESS);
+    EXPECT_EQ(passDynAttrToStatic.PrintFunction(*func, dir, true), SUCCESS);
+
+    size_t jsonCnt = 0;
+    size_t tifwkgrCnt = 0;
+    for (const auto& it : std::filesystem::directory_iterator(dir)) {
+        if (!it.is_regular_file()) continue;
+        const auto ext = it.path().extension().string();
+        if (ext == ".json") jsonCnt++;
+        else if (ext == ".tifwkgr") tifwkgrCnt++;
+    }
+
+    EXPECT_EQ(jsonCnt, 3u);
+    EXPECT_EQ(tifwkgrCnt, 3u);
+}
