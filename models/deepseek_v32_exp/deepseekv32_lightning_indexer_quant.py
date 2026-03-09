@@ -274,7 +274,7 @@ def topk_idx_compare(t: torch.Tensor, t_ref: torch.Tensor, name, atol, error_cou
     err_msg = None
 
     # 按元素遍历比较
-    for idx, (exp, act) in enumerate(zip(t.flatten().tolist(), t_ref.flatten().tolist())):
+    for idx, (act, exp) in enumerate(zip(t.flatten().tolist(), t_ref.flatten().tolist())):
         # 按误差阈值分组（每组包含error_count_threshold个元素）
         part_index = idx // error_count_threshold
         # 记录不匹配的索引
