@@ -374,7 +374,7 @@ class Parser(ast.NodeVisitor):
 
         function_node = self.diag.source.as_ast()
 
-        def __is_enum_dyn(tensor_input_args: List[pypto.Tensor]) -> bool:
+        def _is_enum_dyn(tensor_input_args: List[pypto.Tensor]) -> bool:
             return any(
                 len(tensor_def.shape) == 0 or
                 any(
@@ -394,7 +394,7 @@ class Parser(ast.NodeVisitor):
             # Get input arguments (only tensors allowed)
             tensor_input_args = self._visit_arguments(function_node.args)
 
-            if __is_enum_dyn(tensor_input_args):
+            if _is_enum_dyn(tensor_input_args):
                 tensor_input_args_def = self._visit_arguments(function_node.args)
                 tensor_input_args = self.input_pto_tensor[:len(tensor_input_args_def)]  # ensure len equal
                 
