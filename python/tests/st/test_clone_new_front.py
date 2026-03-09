@@ -24,22 +24,19 @@ N1 = 64
 D = 64
 
 
-def create_kernel(shape_out):
-    @pypto.frontend.jit()
-    def kernel_func(
-        in_tensor: pypto.Tensor((B, S, N1, D), pypto.DT_FP32),
-    ) -> pypto.Tensor(shape_out, pypto.DT_FP32):
-        pypto.set_vec_tile_shapes(1, 1, 64, 64)
-        out_tensor = pypto.Tensor(shape_out, pypto.DT_FP32)
-        for b_idx in pypto.loop(B, name="b_loop", idx_name="b_idx"):
-            for s_idx in pypto.loop(S, name="s_loop", idx_name="s_idx"):
-                a0 = pypto.view(in_tensor, [1, 1, N1, D], [b_idx, s_idx, 0, 0])
-                a1 = pypto.add(a0, 1.0)
-                a2 = pypto.reshape(a1, [1, 1, N1 * D])
-                a3 = a2.clone()
-                pypto.assemble(a3, [b_idx, s_idx, 0], out_tensor)
-        return out_tensor
-    return kernel_func
+@pypto.frontend.jit()
+def clone_kernel_func(
+    in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
+    pypto.set_vec_tile_shapes(1, 1, 64, 64)
+    for b_idx in pypto.loop(B, name="b_loop", idx_name="b_idx"):
+        for s_idx in pypto.loop(S, name="s_loop", idx_name="s_idx"):
+            a0 = pypto.view(in_tensor, [1, 1, N1, D], [b_idx, s_idx, 0, 0])
+            a1 = pypto.add(a0, 1.0)
+            a2 = pypto.reshape(a1, [1, 1, N1 * D])
+            a3 = a2.clone()
+            pypto.assemble(a3, [b_idx, s_idx, 0], out_tensor)
 
 
 def test_clone():
@@ -50,9 +47,9 @@ def test_clone():
     input_data = torch.rand((B, S, N1, D), dtype=torch.float32, device=f'npu:{device_id}')
 
     output_shape = (B, S, N1 * D)
-    kernel_func = create_kernel(output_shape)
+    output_result = torch.zeros(output_shape, dtype=torch.float32, device=f'npu:{device_id}')
     # compute on npu
-    output_result = kernel_func(input_data)
+    clone_kernel_func(input_data, output_result)
     torch_npu.npu.synchronize()
 
     output_cpu = output_result.cpu()

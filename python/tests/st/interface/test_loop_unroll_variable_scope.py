@@ -42,28 +42,26 @@ def test_loop_unroll_variable_scope():
         runtime_options={"run_mode": pypto.RunMode.NPU}
     )
     def loop_unroll_kernel(
-        input_tensor: pypto.Tensor((bs, ne), pypto.DT_FP32),
-        bias_input: pypto.Tensor((ne,), pypto.DT_FP32)
-    ) -> pypto.Tensor((bs, ne), pypto.DT_FP32):
+        input_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+        bias_input: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
+        output: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+    ):
         pypto.set_vec_tile_shapes(16, 16)
         # Define variable outside loop_unroll
         # This variable should remain accessible throughout all unroll blocks
-        bias_2d = pypto.reshape(bias_input, [1, ne], inplace=True)
-
-        # Initialize output tensor
-        output = pypto.tensor([bs, ne], pypto.DT_FP32, "output")
+        bias_2d = pypto.reshape(bias_input, [1, input_tensor.shape[1]], inplace=True)
 
         # Use loop_unroll with multiple unroll factors
         # This will split the loop into multiple blocks (e.g., [2, 1] = 2 blocks)
         for bs_idx, tile_batch in pypto.loop_unroll(
-            0, bs, 1,
+            0, input_tensor.shape[0], 1,
             name="LOOP_UNROLL_TEST",
             idx_name="bs_idx",
             unroll_list=[2, 1]  # Multiple blocks to test the bugfix
         ):
             # Use bias_2d in the outer loop (first use)
             tile_input = input_tensor[bs_idx:bs_idx + tile_batch, :]
-            tile_bias = pypto.tensor([tile_batch, ne], bias_2d.dtype, "tile_bias")
+            tile_bias = pypto.tensor([tile_batch, input_tensor.shape[1]], bias_2d.dtype, "tile_bias")
             
             # Nested loop that also uses bias_2d (second use)
             for tmp_idx in pypto.loop(tile_batch):
@@ -76,17 +74,16 @@ def test_loop_unroll_variable_scope():
             tile_result = pypto.add(tile_input, tile_bias)
             output[bs_idx:bs_idx + tile_batch, :] = tile_result
 
-        return output
-
     # Create test inputs
     input_tensor = torch.randn((bs, ne), dtype=torch.float32, device=device_id)
     bias_input = torch.randn((ne,), dtype=torch.float32, device=device_id)
+    output = torch.zeros((bs, ne), dtype=torch.float32, device=device_id)
 
     # Expected output: input + bias broadcasted
     expected = input_tensor + bias_input.unsqueeze(0)
 
     # Run kernel - should not raise NameError
-    output = loop_unroll_kernel(input_tensor, bias_input)
+    loop_unroll_kernel(input_tensor, bias_input, output)
 
     # Verify output
     assert_allclose(

@@ -19,28 +19,24 @@ import torch
 logging.basicConfig(level=logging.INFO, format='', force=True)
 
 
-def create_compute_func_with_cache(shape, tiling):
-    """Factory function that creates a new compute function with cache disabled."""
-    @pypto.frontend.jit(use_cache=True)
-    def compute_add(
-        a: pypto.Tensor(shape, pypto.DT_FP32),
-        b: pypto.Tensor(shape, pypto.DT_FP32),
-    ) -> pypto.Tensor(shape, pypto.DT_FP32):
-        pypto.set_cube_tile_shapes([tiling, tiling], [tiling, tiling], [tiling, tiling])
-        return pypto.matmul(a, b, a.dtype)
-    return compute_add
+@pypto.frontend.jit(use_cache=True)
+def compute_add_with_cache(
+    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+):
+    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
+    c.move(pypto.matmul(a, b, a.dtype))
 
 
-def create_compute_func_without_cache(shape, tiling):
-    """Factory function that creates a new compute function with cache disabled."""
-    @pypto.frontend.jit(use_cache=False)
-    def compute_add(
-        a: pypto.Tensor(shape, pypto.DT_FP32),
-        b: pypto.Tensor(shape, pypto.DT_FP32),
-    ) -> pypto.Tensor(shape, pypto.DT_FP32):
-        pypto.set_cube_tile_shapes([tiling, tiling], [tiling, tiling], [tiling, tiling])
-        return pypto.matmul(a, b, a.dtype)
-    return compute_add
+@pypto.frontend.jit(use_cache=False)
+def compute_add_without_cache(
+    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+):
+    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
+    c.move(pypto.matmul(a, b, a.dtype))
 
 
 def test_use_cache_false_compiles_twice():
@@ -57,15 +53,15 @@ def test_use_cache_false_compiles_twice():
 
     # First call - will compile
     start_time = time.perf_counter()
-    kernel_1 = create_compute_func_without_cache(shape, tiling)
-    c = kernel_1(a, b)
+    c = torch.zeros(shape, dtype=torch.float32, device=f'npu:{device_id}')
+    compute_add_without_cache(a, b, c)
     first_call_time = time.perf_counter() - start_time
     logging.info(f"First call time: {first_call_time:.4f}s")
 
     # Second call - should compile again (cache disabled)
     start_time = time.perf_counter()
-    kernel_2 = create_compute_func_without_cache(shape, tiling)
-    d = kernel_2(a, b)
+    d = torch.zeros(shape, dtype=torch.float32, device=f'npu:{device_id}')
+    compute_add_without_cache(a, b, d)
     second_call_time = time.perf_counter() - start_time
     logging.info(f"Second call time: {second_call_time:.4f}s")
 
@@ -97,13 +93,15 @@ def test_use_cache_true_compiles_once():
 
     # First call - will compile
     start_time = time.perf_counter()
-    c = create_compute_func_with_cache(shape, tiling)(a, b)
+    c = torch.zeros(shape, dtype=torch.float32, device=f'npu:{device_id}')
+    compute_add_with_cache(a, b, c)
     first_call_time = time.perf_counter() - start_time
     logging.info(f"First call time: {first_call_time:.4f}s")
 
     # Second call - should reuse cache (no compilation)
     start_time = time.perf_counter()
-    d = create_compute_func_with_cache(shape, tiling)(a, b)
+    d = torch.zeros(shape, dtype=torch.float32, device=f'npu:{device_id}')
+    compute_add_with_cache(a, b, d)
     second_call_time = time.perf_counter() - start_time
     logging.info(f"Second call time: {second_call_time:.4f}s")
 

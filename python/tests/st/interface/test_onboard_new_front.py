@@ -18,21 +18,18 @@ import torch
 import torch_npu
 
 
-# def dynamic function
-def create_cust_dyn_func(shape, tiling=None):
-    @pypto.frontend.jit()
-    def cust_dyn_func(
-        a: pypto.Tensor(shape, pypto.DT_INT32),
-        b: pypto.Tensor(shape, pypto.DT_INT32)
-    ):
-        pypto.set_vec_tile_shapes(tiling, tiling)
+@pypto.frontend.jit()
+def cust_dyn_func(
+    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)
+):
+    pypto.set_vec_tile_shapes(32, 32)
 
-        for k in pypto.loop(10, name="s0", idx_name="k"):
-            if k == 0:
-                b.move(pypto.add(a, a))
-            else:
-                b.move(pypto.add(a, b))
-    return cust_dyn_func
+    for k in pypto.loop(10, name="s0", idx_name="k"):
+        if k == 0:
+            b.move(pypto.add(a, a))
+        else:
+            b.move(pypto.add(a, b))
 
 
 def test_device_run_data_from_device():
@@ -50,8 +47,7 @@ def test_device_run_data_from_device():
     a_data = a_rawdata.to(device=f'npu:{device_id}')
     b_data = torch.zeros(shape, dtype=torch.int32, device=f'npu:{device_id}')
 
-    kernel = create_cust_dyn_func(shape, tiling=tiling)
-    kernel(a_data, b_data)
+    cust_dyn_func(a_data, b_data)
 
     torch_npu.npu.synchronize()
     # get data and compare result
@@ -69,7 +65,7 @@ def test_device_run_data_from_device():
     c_data = c_rawdata.to(device=f'npu:{device_id}')
     d_data = torch.zeros(shape, dtype=torch.int32, device=f'npu:{device_id}')
 
-    kernel(c_data, d_data)
+    cust_dyn_func(c_data, d_data)
 
     torch_npu.npu.synchronize()
 
@@ -78,30 +74,19 @@ def test_device_run_data_from_device():
     assert d_data_list == [v * 11 for v in c_data_list]
 
 
-# def dynamic function
-def create_matmul_add(m, k, n, tiling=None):
-    shape_a = (n, k)
-    shape_b = (k, m)
-    shape_c = (n, m)
-    shape_d = (n, m)
-
-    @pypto.frontend.jit()
-    def matmul_add(
-        a: pypto.Tensor(shape_a, pypto.DT_INT8),
-        b: pypto.Tensor(shape_b, pypto.DT_INT8),
-        c: pypto.Tensor(shape_c, pypto.DT_INT32)
-    ) -> pypto.Tensor(shape_d, pypto.DT_INT32):
-        pypto.set_vec_tile_shapes(tiling, tiling)
-        pypto.set_cube_tile_shapes(
-            [tiling, tiling], [tiling, tiling], [tiling, tiling])
-        d = pypto.tensor(shape_d, pypto.DT_INT32)
-        for _ in pypto.loop(1, name="s0", idx_name="i"):
-            a0 = pypto.view(a, [n, k], [0, 0])
-            b0 = pypto.view(b, [k, m], [0, 0])
-            d.move(pypto.add(pypto.matmul(a0, b0, pypto.DT_INT32), c))
-        return d
-
-    return matmul_add
+@pypto.frontend.jit()
+def matmul_add(
+    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
+    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+    d: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)
+):
+    pypto.set_vec_tile_shapes(32, 32)
+    pypto.set_cube_tile_shapes([32, 32], [32, 32], [32, 32])
+    for _ in pypto.loop(1, name="s0", idx_name="i"):
+        a0 = pypto.view(a, [a.shape[0], a.shape[1]], [0, 0])
+        b0 = pypto.view(b, [b.shape[0], b.shape[1]], [0, 0])
+        d.move(pypto.add(pypto.matmul(a0, b0, pypto.DT_INT32), c))
 
 
 def test_device_run_data_from_device_mix_nodep():
@@ -120,13 +105,11 @@ def test_device_run_data_from_device_mix_nodep():
     a_data = torch.tensor([[1] * k] * n, dtype=torch.int8, device=f'npu:{device_id}')
     b_data = torch.tensor([[1] * m] * k, dtype=torch.int8, device=f'npu:{device_id}')
 
-    # Create kernel once
-    kernel = create_matmul_add(m, k, n, tiling=tiling)
-
     for idx in range(count):
         c_data = torch.tensor([[idx] * m] * n, dtype=torch.int32, device=f'npu:{device_id}')
+        d_data = torch.zeros((n, m), dtype=torch.int32, device=f'npu:{device_id}')
 
-        d_data = kernel(a_data, b_data, c_data)
+        matmul_add(a_data, b_data, c_data, d_data)
         d_data_list.append(d_data)
 
     torch_npu.npu.synchronize()

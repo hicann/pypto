@@ -19,31 +19,29 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
-def create_cust_dyn_func(shape_a, shape_b, shape_c, tiling=None):
-    @pypto.frontend.jit()
-    def cust_dyn_func(
-        a: pypto.Tensor(shape_a, pypto.DT_INT32),
-        b: pypto.Tensor(shape_b, pypto.DT_INT32),
-        c: pypto.tensor(shape_c, pypto.DT_INT32)
-    ):
-        pypto.set_vec_tile_shapes(tiling, tiling)
-        for _ in pypto.loop(1, name="s0", idx_name="k"):
-            c.move(pypto.add(a, b))
-    return cust_dyn_func
+@pypto.frontend.jit()
+def cust_dyn_func(
+    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+    tiling=32
+):
+    pypto.set_vec_tile_shapes(tiling, tiling)
+    for _ in pypto.loop(1, name="s0", idx_name="k"):
+        c.move(pypto.add(a, b))
 
 
 class Network(torch.nn.Module):
     def forward(self, data1, data2, shape, tiling=32):
-        kernel = create_cust_dyn_func(shape, shape, shape, tiling=tiling)
         add_01 = torch.add(data1, data2)
         c1 = torch.zeros(shape, dtype=torch.int32, device=data2.device)
-        kernel(add_01, data2, c1)
+        cust_dyn_func(add_01, data2, c1, tiling=tiling)
         data2 = c1
         data2 = torch.sub(data2, add_01)
         data2 = torch.add(data2, add_01)
 
         c2 = torch.zeros(shape, dtype=torch.int32, device=data2.device)
-        kernel(data2, data1, c2)
+        cust_dyn_func(data2, data1, c2, tiling=tiling)
         data2 = c2
         return data2
 

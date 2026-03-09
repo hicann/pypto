@@ -95,19 +95,14 @@ def _kernel_details_contains_pypto(csv_file: str) -> bool:
         return False
 
 
-def _create_add_direct_kernel(shape: tuple):
-    mode = pypto.RunMode.NPU
-
-    @pypto.frontend.jit(runtime_options={"run_mode": mode})
-    def add_direct_kernel(
-        x: pypto.Tensor(shape, pypto.DT_FP32),
-        y: pypto.Tensor(shape, pypto.DT_FP32),
-    ) -> pypto.Tensor(shape, pypto.DT_FP32):
-        pypto.set_vec_tile_shapes(1, 4, 1, 64)
-        z = x + y
-        return z
-
-    return add_direct_kernel
+@pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
+def add_direct_kernel(
+    x: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    y: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    z: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32)
+):
+    pypto.set_vec_tile_shapes(1, 4, 1, 64)
+    z.move(x + y)
 
 
 def _build_experimental_config():
@@ -123,8 +118,8 @@ def _build_experimental_config():
 def _run_add_direct_profiler(device_id: int, shape: tuple, profiler_output_dir: str) -> None:
     input_data0 = torch.rand(shape, dtype=torch.float, device=f"npu:{device_id}")
     input_data1 = torch.rand(shape, dtype=torch.float, device=f"npu:{device_id}")
+    output_data = torch.zeros(shape, dtype=torch.float, device=f"npu:{device_id}")
     experimental_config = _build_experimental_config()
-    add_direct_kernel = _create_add_direct_kernel(shape)
 
     with torch_npu.profiler.profile(
         activities=[torch_npu.profiler.ProfilerActivity.NPU],
@@ -140,7 +135,7 @@ def _run_add_direct_profiler(device_id: int, shape: tuple, profiler_output_dir: 
         ),
     ) as prof:
         for _ in range(10):
-            _ = add_direct_kernel(input_data0, input_data1)
+            add_direct_kernel(input_data0, input_data1, output_data)
             torch_npu.npu.synchronize()
             prof.step()
 

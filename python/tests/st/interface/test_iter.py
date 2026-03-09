@@ -15,45 +15,30 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
-def add_op_range(b: torch.Tensor) -> torch.Tensor:
-    b_shape = b.shape
-
-    @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU}
-    )
-    def add_kernel_range(
-        b: pypto.Tensor(b_shape, pypto.DT_FP32)
-    ) -> pypto.Tensor((16, 16), pypto.DT_FP32):
-        pypto.set_vec_tile_shapes(16, 16)
-        c = b[0:16, 0:16]
-        for i in range(1, 4):
-            c = pypto.add(c, b[i * 16:(i + 1) * 16, i * 16:(i + 1) * 16])
-        return c
-
-    out_range = add_kernel_range(b)
-    return out_range
+@pypto.frontend.jit(
+    runtime_options={"run_mode": pypto.RunMode.NPU}
+)
+def add_kernel_range(
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    c: pypto.Tensor([16, 16], pypto.DT_FP32)
+):
+    pypto.set_vec_tile_shapes(16, 16)
+    c.move(b[0:16, 0:16])
+    for i in range(1, 4):
+        c.move(pypto.add(c, b[i * 16:(i + 1) * 16, i * 16:(i + 1) * 16]))
 
 
-def add_op_list(b: torch.Tensor) -> torch.Tensor:
-    b_shape = b.shape
-    out_shape = (16, 16)
-    mode = pypto.RunMode.NPU
-
-    @pypto.frontend.jit(
-        runtime_options={"run_mode": mode}
-    )
-    def add_kernel_list(
-        b: pypto.Tensor(b_shape, pypto.DT_FP32)
-    ) -> pypto.Tensor(out_shape, pypto.DT_FP32):
-        pypto.set_vec_tile_shapes(16, 16)
-        c = b[0:16, 0:16]
-        for i in [1, 2, 3]:
-            c = pypto.add(c, b[i * 16:(i + 1) * 16, i * 16:(i + 1) * 16])
-
-        return c
-
-    out_list = add_kernel_list(b)
-    return out_list
+@pypto.frontend.jit(
+    runtime_options={"run_mode": pypto.RunMode.NPU}
+)
+def add_kernel_list(
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    c: pypto.Tensor([16, 16], pypto.DT_FP32)
+):
+    pypto.set_vec_tile_shapes(16, 16)
+    c.move(b[0:16, 0:16])
+    for i in [1, 2, 3]:
+        c.move(pypto.add(c, b[i * 16:(i + 1) * 16, i * 16:(i + 1) * 16]))
 
 
 def test_range_list_iterate():
@@ -64,8 +49,11 @@ def test_range_list_iterate():
     b = torch.rand((64, 64), dtype=torch.float32, device=device_id)
     expected = b[:16, :16] + b[16:32, 16:32] + b[32:48, 32:48] + b[48:, 48:]
 
-    out_range = add_op_range(b)
-    out_list = add_op_list(b)
+    out_range = torch.zeros((16, 16), dtype=torch.float32, device=device_id)
+    out_list = torch.zeros((16, 16), dtype=torch.float32, device=device_id)
+
+    add_kernel_range(b, out_range)
+    add_kernel_list(b, out_list)
 
     assert_allclose(out_range.cpu().float().numpy(), expected.cpu().float().numpy(), rtol=1e-3, atol=1e-3)
     assert_allclose(out_list.cpu().float().numpy(), expected.cpu().float().numpy(), rtol=1e-3, atol=1e-3)

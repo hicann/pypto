@@ -17,23 +17,19 @@ import torch_npu
 import pypto
 
 
-def loop_scope_wrapper(shape, tiling=None):
-    @pypto.frontend.jit()
-    def loop_scope(a: pypto.Tensor(shape, pypto.DT_INT32),
-                   b: pypto.Tensor(shape, pypto.DT_INT32)) -> pypto.Tensor(shape, pypto.DT_INT32):
-        pypto.set_vec_tile_shapes(tiling * 2, tiling * 2)
+@pypto.frontend.jit()
+def loop_scope(a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+               b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+               result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)):
+    pypto.set_vec_tile_shapes(64, 64)
 
-        for _ in pypto.loop(1, name="s0", idx_name="k"):
-            pypto.set_vec_tile_shapes(tiling, tiling)
-            result = a + b
+    for _ in pypto.loop(1, name="s0", idx_name="k"):
+        pypto.set_vec_tile_shapes(32, 32)
+        result.move(a + b)
 
-        for _ in pypto.loop(1, name="s0", idx_name="k"):
-            assert [tiling * 2, tiling * 2] == pypto.get_vec_tile_shapes()
-            result = result + b
-
-        return result
-
-    return loop_scope
+    for _ in pypto.loop(1, name="s0", idx_name="k"):
+        assert [64, 64] == pypto.get_vec_tile_shapes()
+        result.move(result + b)
 
 
 def test_loop_scope():
@@ -46,8 +42,9 @@ def test_loop_scope():
     # prepare data
     a_data = torch.ones((n, m), dtype=torch.int32, device=f'npu:{device_id}') * 2
     b_data = torch.ones((n, m), dtype=torch.int32, device=f'npu:{device_id}')
+    result = torch.zeros(shape, dtype=torch.int32, device=f'npu:{device_id}')
 
-    result = loop_scope_wrapper(shape, tiling)(a_data, b_data)
+    loop_scope(a_data, b_data, result)
     torch_npu.npu.synchronize()
 
     golden = torch.ones((n, m), dtype=torch.int32) * 4

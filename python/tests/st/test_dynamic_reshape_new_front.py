@@ -19,30 +19,28 @@ from numpy.testing import assert_allclose
 import torch_npu
 
 
-def reshape_kernel_wrapper(shape):
-    @pypto.frontend.jit()
-    def reshape_kernel(in_tensor: pypto.Tensor(shape, pypto.DT_FP32)) -> pypto.Tensor(shape, pypto.DT_FP32):
-        b = 3
-        n1 = 64
-        d = 64
+@pypto.frontend.jit()
+def reshape_kernel(
+    in_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
+    b = 3
+    n1 = 64
+    d = 64
 
-        pypto.set_vec_tile_shapes(64, 64)
+    pypto.set_vec_tile_shapes(64, 64)
 
-        tile_b = 1
-        real_b = in_tensor.shape[0]
-        loop_b_times = (real_b + tile_b - 1) // tile_b
+    tile_b = 1
+    real_b = in_tensor.shape[0]
+    loop_b_times = (real_b + tile_b - 1) // tile_b
 
-        tmp = pypto.Tensor([real_b * n1, d], dtype=pypto.DT_FP32)
-        for b_idx in pypto.loop(loop_b_times, name="b_loop", idx_name="b_idx"):
-            in_2d = pypto.reshape(in_tensor, [real_b * n1, d], inplace=True)
-            a0 = pypto.view(in_2d, [tile_b * n1, d], [b_idx * n1, 0])
-            a1 = a0 + 1.0
-            pypto.assemble(a1, [b_idx * n1, 0], tmp)
-            result = pypto.reshape(tmp, [real_b, n1, d], inplace=True)
-
-        return result
-
-    return reshape_kernel
+    tmp = pypto.Tensor([real_b * n1, d], dtype=pypto.DT_FP32)
+    for b_idx in pypto.loop(loop_b_times, name="b_loop", idx_name="b_idx"):
+        in_2d = pypto.reshape(in_tensor, [real_b * n1, d], inplace=True)
+        a0 = pypto.view(in_2d, [tile_b * n1, d], [b_idx * n1, 0])
+        a1 = a0 + 1.0
+        pypto.assemble(a1, [b_idx * n1, 0], tmp)
+        out_tensor.move(pypto.reshape(tmp, [real_b, n1, d], inplace=True))
 
 
 def test_reshape():
@@ -57,11 +55,12 @@ def test_reshape():
     # prepare data
     input_cpu = torch.rand((b, n1, d), dtype=torch.float32)
     input_npu = input_cpu.to(device=f'npu:{device_id}')
+    output_npu = torch.zeros((b, n1, d), dtype=torch.float32, device=f'npu:{device_id}')
 
-    result = reshape_kernel_wrapper(shape)(input_npu)
+    reshape_kernel(input_npu, output_npu)
     torch_npu.npu.synchronize()
 
-    output_cpu = result.cpu()
+    output_cpu = output_npu.cpu()
 
     ## golden
     output_golde = (input_cpu + 1)
@@ -71,13 +70,14 @@ def test_reshape():
                     rtol=1e-3, atol=1e-3)
 
 
-def reshape_infer_shape(x_shape: tuple):
-    @pypto.frontend.jit()
-    def kernel(x: pypto.Tensor(x_shape, pypto.DT_FP32),) -> (pypto.Tensor([4, 2, 4], pypto.DT_FP32)):
-        pypto.set_vec_tile_shapes(4, 8)
-        y = pypto.reshape(x, [x.shape[0], 2, -1])
-        return y
-    return kernel
+@pypto.frontend.jit()
+def reshape_infer_shape_kernel(
+    x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+):
+    pypto.set_vec_tile_shapes(4, 8)
+    y = pypto.reshape(x, [x.shape[0], 2, -1])
+    out_tensor.move(y)
 
 
 def test_reshape_infer_shape():
@@ -85,11 +85,13 @@ def test_reshape_infer_shape():
     torch.npu.set_device(device_id)
     x = torch.rand((4, 8), dtype=torch.float32)
     x_tensor = x.npu()
-    y_pypto = reshape_infer_shape(x_tensor.shape)(x_tensor)
+    y_tensor = torch.zeros((4, 2, 4), dtype=torch.float32, device=f'npu:{device_id}')
+    reshape_infer_shape_kernel(x_tensor, y_tensor)
     torch_npu.npu.synchronize()
-    y = y_pypto.cpu()
+    y = y_tensor.cpu()
     assert_allclose(np.array(y.flatten()), np.array(x.flatten()), rtol=1e-6, atol=1e-6)
 
 
 if __name__ == "__main__":
     test_reshape_infer_shape()
+    test_reshape()
