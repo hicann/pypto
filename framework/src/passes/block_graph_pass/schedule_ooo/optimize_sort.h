@@ -17,6 +17,7 @@
 #define PASS_OPTIMIZE_SORT_H
 
 #include "schedule_base.h"
+#include <functional>
 #include <vector>
 
 namespace npu::tile_fwk {
@@ -52,6 +53,8 @@ public:
     Status PriorDFS(std::unordered_map<Opcode, int> preNodePriority);
     Status DFSFromOutNode(std::vector<Operation*> outNodeQueue, std::unordered_map<Opcode, int> preNodePriority,
         std::map<Operation*, bool> &visited);
+    int ClassifyPromoteOp(Operation* op) const;
+    void PromoteOps();
     void DFSFromSingleNode(Operation* op, std::map<Operation*, bool>& visited,
         std::vector<Operation*>& newOpList, std::unordered_map<Opcode, int> preNodePriority);
     void ForwardDfs(Operation* curOp, std::vector<Operation*>& newOpList, std::map<Operation*, bool>& visited,

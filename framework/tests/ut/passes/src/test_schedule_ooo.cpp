@@ -1726,8 +1726,8 @@ TEST_F(ScheduleOoOTest, TestOoO1C2V) {
     res = oooSchedule.MixSchedule(opList, *function, functionPair, size);
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(op1->GetInternalSubgraphID(), 1);
-    EXPECT_EQ(op2->GetInternalSubgraphID(), 0);
-    EXPECT_EQ(op3->GetInternalSubgraphID(), 1);
+    EXPECT_EQ(op2->GetInternalSubgraphID(), 1);
+    EXPECT_EQ(op3->GetInternalSubgraphID(), 0);
     EXPECT_EQ(op4->GetInternalSubgraphID(), 2);
 }
 
@@ -1835,7 +1835,7 @@ TEST_F(ScheduleOoOTest, TestL1SpillBuffer) {
     OoOScheduler oooSchedule(*function);
     res = oooSchedule.Init(opList);
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_EQ(oooSchedule.issueEntries[5]->tileOp.GetOpcodeStr(), "L0A_ALLOC");
+    EXPECT_EQ(oooSchedule.issueEntries[4]->tileOp.GetOpcodeStr(), "L0A_ALLOC");
     IssueEntryPtr ubCopyL1 = nullptr;
     IssueEntryPtr alloc3 = nullptr;
     SetAttribute(subGraph, oooSchedule, ubCopyL1, alloc3);
@@ -1847,9 +1847,9 @@ TEST_F(ScheduleOoOTest, TestL1SpillBuffer) {
     res = oooSchedule.SpillBuffer(spillInfo, alloc3, pcIdx, localBuffer2, true);
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(oooSchedule.issueEntries.size(), 18);
-    EXPECT_EQ(oooSchedule.issueEntries[5]->tileOp.GetOpcodeStr(), "COPY_OUT");
-    EXPECT_EQ(oooSchedule.issueEntries[5]->tileOp.GetInternalSubgraphID(), 0);
-    EXPECT_EQ(oooSchedule.issueEntries[5]->tileOp.GetAIVCore(), AIVCore::AIV0);
+    EXPECT_EQ(oooSchedule.issueEntries[4]->tileOp.GetOpcodeStr(), "COPY_OUT");
+    EXPECT_EQ(oooSchedule.issueEntries[4]->tileOp.GetInternalSubgraphID(), 0);
+    EXPECT_EQ(oooSchedule.issueEntries[4]->tileOp.GetAIVCore(), AIVCore::AIV0);
     EXPECT_EQ(oooSchedule.issueEntries[12]->tileOp.GetOpcodeStr(), "L1_ALLOC");
     EXPECT_EQ(oooSchedule.issueEntries[13]->tileOp.GetOpcodeStr(), "COPY_IN");
     EXPECT_EQ(oooSchedule.issueEntries[12]->tileOp.GetInternalSubgraphID(), 1);
@@ -1985,7 +1985,7 @@ TEST_F(ScheduleOoOTest, TestL1ReshapeSpillBuffer1) {
     res = ooOSchedule.Init(optimizeSort.operations);
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(ooOSchedule.issueEntries.size(), 16);
-    EXPECT_TRUE(CheckOrderExists(GetIssueEntry("COPY_IN1", subGraph, ooOSchedule)->predecessors, ooOSchedule.issueEntries[5], ooOSchedule.issueEntryMap));
+    EXPECT_TRUE(CheckOrderExists(GetIssueEntry("COPY_IN1", subGraph, ooOSchedule)->predecessors, ooOSchedule.issueEntries[4], ooOSchedule.issueEntryMap));
     EXPECT_EQ(ooOSchedule.issueEntries[15]->tileOp.GetOpcodeStr(), "COPY_OUT");
     IssueEntryPtr reshape = nullptr;
     IssueEntryPtr alloc3 = nullptr;

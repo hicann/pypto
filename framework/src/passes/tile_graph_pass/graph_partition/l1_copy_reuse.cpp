@@ -231,7 +231,7 @@ void L1CopyInReuseRunner::GetOpHash(std::vector<uint64_t> &hashList, const std::
 void L1CopyInReuseRunner::GetColorHash(const OperationsViewer &opOriList, std::vector<uint64_t> &hashColor) {
     std::vector<uint64_t> hashTileOp(opOriList.size(), 0);
     for (size_t i = 0; i < opOriList.size(); i++) {
-            GetOpHash(hashTileOp, opOriList[i].GetOpcodeStr(), i);
+        GetOpHash(hashTileOp, opOriList[i].GetOpcodeStr(), i);
     }
     uint64_t a = 0x12345678;
     uint64_t p = 23;

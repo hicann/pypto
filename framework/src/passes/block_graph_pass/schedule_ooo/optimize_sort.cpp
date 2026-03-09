@@ -14,11 +14,15 @@
  */
 
 #include "optimize_sort.h"
+#include <queue>
 #include "passes/pass_log/pass_log.h"
 
 
 namespace npu::tile_fwk {
 static constexpr size_t invalidIndex = std::numeric_limits<size_t>::max();
+static constexpr int kPromoteAssemble = 0;
+static constexpr int kPromoteDdrCopyOut = 1;
+static constexpr int kPromoteNormal = 2;
 
 void OptimizeSort::UpdatePreNodeQueue(std::unordered_set<Operation*> &curr,
     std::unordered_set<Operation*> &preNodeTotal, std::map<Operation*, bool>& visited) {
@@ -183,20 +187,97 @@ Status OptimizeSort::DFSFromOutNode(std::vector<Operation*> outNodeQueue,
     return SUCCESS;
 }
 
+int OptimizeSort::ClassifyPromoteOp(Operation* op) const {
+    if (!op) {
+        return kPromoteNormal;
+    }
+    if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+        return kPromoteAssemble;
+    }
+    if (OpcodeManager::Inst().IsCopyOut(op->GetOpcode()) && op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+        return kPromoteDdrCopyOut;
+    }
+    return kPromoteNormal;
+}
+
+struct PromoteCmp {
+    const std::unordered_map<Operation*, size_t>& pos;
+    const std::unordered_map<Operation*, int>& cls;
+
+    bool operator()(Operation* a, Operation* b) const {
+        int ca = cls.at(a);
+        int cb = cls.at(b);
+
+        if (ca != cb)
+            return ca > cb;
+
+        return pos.at(a) > pos.at(b);
+    }
+};
+
+void OptimizeSort::PromoteOps() {
+    if (operations.empty()) return;
+
+    std::unordered_map<Operation*, int> indegree;
+    std::unordered_map<Operation*, size_t> pos;
+    std::unordered_map<Operation*, int> cls;
+
+    indegree.reserve(operations.size());
+    pos.reserve(operations.size());
+    cls.reserve(operations.size());
+
+    for (size_t i = 0; i < operations.size(); ++i) {
+        auto* op = operations[i];
+        pos[op] = i;
+        cls[op] = ClassifyPromoteOp(op);
+        auto it = inGraph.find(op);
+        indegree[op] = (it == inGraph.end()) ? 0 : it->second.size();
+    }
+
+    std::priority_queue<Operation*, std::vector<Operation*>, PromoteCmp> ready(PromoteCmp{pos, cls});
+
+    for (auto* op : operations) {
+        if (indegree[op] == 0) ready.push(op);
+    }
+
+    std::vector<Operation*> reordered;
+    reordered.reserve(operations.size());
+
+    while (!ready.empty()) {
+        auto* cur = ready.top();
+        ready.pop();
+        reordered.push_back(cur);
+        auto it = outGraph.find(cur);
+        if (it == outGraph.end()) continue;
+
+        for (auto* succ : it->second) {
+            if (--indegree[succ] == 0) ready.push(succ);
+        }
+    }
+
+    if (reordered.size() == operations.size())
+        operations.swap(reordered);
+}
+
 Status OptimizeSort::PriorDFS(std::unordered_map<Opcode, int> preNodePriority) {
     std::map<Operation*, bool> visited;
     std::vector<Operation*> outNodeQueue;
+    depthCache_.clear();
     for (size_t i = 0; i < operations.size(); i++) {
         visited[operations[i]] = false;
         if (outGraph[operations[i]].empty()) {
             outNodeQueue.emplace_back(operations[i]);
         }
     }
+    std::stable_sort(outNodeQueue.begin(), outNodeQueue.end(), [&](Operation* a, Operation* b) {
+        return GetMaxDepthSimple(a) > GetMaxDepthSimple(b);
+    });
 
     if (DFSFromOutNode(outNodeQueue, preNodePriority, visited) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "DFSFromOutNode failed.");
         return FAILED;
     }
+    PromoteOps();
     return SUCCESS;
 }
 
