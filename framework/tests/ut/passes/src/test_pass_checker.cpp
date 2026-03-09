@@ -142,10 +142,10 @@ TEST_F(PassCheckTest, TestPublicCheck) {
 
     std::vector<int64_t> shape = {8, 16};
 
-    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
     auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {incast1}, {tensor1});
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
     currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
 
     currFunctionPtr->inCasts_.push_back(incast1);
@@ -207,4 +207,21 @@ TEST_F(PassCheckTest, TestCheckToDynOffsetForAssemble) {
     currFunctionPtr->outCasts_.push_back(outcast1);
     Checker checker;
     EXPECT_EQ(checker.CheckToDynOffsetForAssemble(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckLocalTensor) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestCheckLocalTensor", "TestCheckLocalTensor", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+
+    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto localTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1, localTensor}, {outcast1});
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckLocalTensor(*currFunctionPtr), FAILED);
 }

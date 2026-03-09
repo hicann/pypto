@@ -30,6 +30,10 @@ Status RemoveRedundantReshapeChecker::DoPreCheck(Function &function) {
         APASS_LOG_ERROR_F(Elements::Operation, "Found invalid input/output in the function [%s].", function.GetRawName().c_str());
         return FAILED;
     }
+    if (CheckLocalTensor(function) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Found invalid tensor in the function [%s].", function.GetRawName().c_str());
+        return FAILED;
+    }
     for (const auto &op : function.Operations().DuplicatedOpList()) {
         if (ProcessPreCheck(*op)) {
             APASS_LOG_ERROR_F(Elements::Operation, "Precheck RemoveRedundantShape failed. %s", GetFormatBacktrace(*op).c_str());

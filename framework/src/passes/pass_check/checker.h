@@ -94,6 +94,12 @@ protected:
      * \return Status, indicating whether the toDynOffset_ of OP_ASSEMBLE is empty.
      */
     Status CheckToDynOffsetForAssemble(Function &function);
+    /**
+     * \brief Check whether locally defined tensors are valid.
+     * \param function : This parameter indicates the function to be checked.
+     * \return Status, indicating whether the local tensors have valid producers.
+     */
+    Status CheckLocalTensor(Function &function);
 };
 } // namespace tile_fwk
 } // namespace npu

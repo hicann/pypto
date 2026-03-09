@@ -140,6 +140,10 @@ Status Checker::PublicCheck(Function &function) {
         ALOG_ERROR_F("CheckGraphLoop for function[%d] failed!", function.GetFuncMagic());
         return FAILED;
     }
+    if (CheckLocalTensor(function) != SUCCESS) {
+        ALOG_ERROR_F("CheckLocalTensor for function[%d] failed!", function.GetFuncMagic());
+        return FAILED;
+    }
     return SUCCESS;
 }
 
@@ -192,5 +196,23 @@ Status Checker::CheckToDynOffsetForAssemble(Function &function) {
     }
     return SUCCESS;
 }
+
+Status Checker::CheckLocalTensor(Function &function) {
+    auto opList = function.Operations().DuplicatedOpList();
+    for (const auto &op : opList) {
+        for (auto &iOperand : op->GetIOperands()) {
+            if (iOperand == nullptr) {
+                ALOG_ERROR_F("The iOperand of op[%d][%s] is null", op->GetOpMagic(), op->GetOpcodeStr().c_str());
+                return FAILED;
+            }
+            if (iOperand->GetProducers().empty() && iOperand->nodetype != NodeType::INCAST) {
+                ALOG_ERROR_F("A locally defined temporary tensor[%d] cannot be used as an input to an operation[%d].", iOperand->GetMagic(), op->GetOpMagic());
+                return FAILED;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
 } // namespace tile_fwk
 } // namespace npu
