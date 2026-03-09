@@ -74,9 +74,10 @@ struct MemoryBlock {
             if (used_size == 0 && block_size >= alignSize) {
                 used_size = block_size;
                 return base_addr;
+            } else {
+                MACHINE_LOGE("Logic Error: 2MB block allocation failed. (used_size: %zu, block_size: %zu, req: %lu)", used_size, block_size, alignSize);
+                return nullptr;
             }
-            MACHINE_LOGE("Logic Error: 2MB block allocation failed. (used_size: %zu, block_size: %zu, req: %lu)", used_size, block_size, alignSize);
-            return nullptr;
         }
 
         for (auto it = free_map.begin(); it != free_map.end(); ++it) {
