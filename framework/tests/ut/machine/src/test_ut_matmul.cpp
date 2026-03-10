@@ -130,7 +130,7 @@ TEST_F(DynamicMatmulUTest, mm_A_NZ_B_NZ_int8_C_NZ) {
 }
 
 TEST_F(DynamicMatmulUTest, mm_A_B_ND_KSplit_bf16) {
-    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128}, true, true);
+    TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128}, true);
     int m = 128;
     int k = 256;
     int n = 512;

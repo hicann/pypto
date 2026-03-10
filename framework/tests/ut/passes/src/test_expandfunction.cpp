@@ -139,7 +139,7 @@ TEST_F(TestExpandFunctionPass, TestCVSeperate2) {
     std::vector<int64_t> tile_shape = {kNumExpFive, kNumExpFive};
     std::vector<int64_t> shape = {kNumExpSix, kNumExpSix};    
     TileShape::Current().SetVecTile(kNumExpFive, kNumExpFive);
-    TileShape::Current().SetCubeTile({kNumExpFive, kNumExpFive}, {kNumExpFive, kNumExpFive}, {kNumExpFive, kNumExpFive}, false, false);
+    TileShape::Current().SetCubeTile({kNumExpFive, kNumExpFive}, {kNumExpFive, kNumExpFive}, {kNumExpFive, kNumExpFive}, false);
 
     currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
 

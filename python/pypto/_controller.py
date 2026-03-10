@@ -117,8 +117,7 @@ def get_vec_tile_shapes() -> List[int]:
     return scope.get_vec_tile_shapes()
 
 
-def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_data_load: bool = False,
-                        enable_split_k: bool = False):
+def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_split_k: bool = False):
     """ set the tile shapes in cube computation
 
     This operation sets the value of the tile shapes
@@ -139,10 +138,6 @@ def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_
         the value of the tile shape in n dimension
         The length of the list must be 2.
 
-    enable_multi_data_load: bool
-        whether the process of moving L1 to L0 is multi data load.
-        default is false (i.e. not multi data load)
-
     enable_split_k: bool
         whether the matmul result accumulated in the GM.
         default is false (i.e. not GM ACC)
@@ -159,11 +154,11 @@ def set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_
 
     """
     # implementation
-    cube_tile = CubeTile(m, k, n, enable_multi_data_load, enable_split_k)
+    cube_tile = CubeTile(m, k, n, enable_split_k)
     pypto_impl.SetScope({"cube_tile_shapes": cube_tile.impl()})
 
 
-def get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool, bool]:
+def get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool]:
     """ get the tile shapes in cube computation
 
     This operation gets the value of the tile shapes
@@ -180,13 +175,13 @@ def get_cube_tile_shapes() -> Tuple[List[int], List[int], List[int], bool, bool]
     --------
     >>> pypto.set_cube_tile_shapes([16, 16], [256, 512], [128, 128], True)
     >>> print(pypto.get_cube_tile_shapes())
-    [[16, 16], [256, 512], [128, 128], True, False]
+    [[16, 16], [256, 512], [128, 128], True]
 
     """
     # implementation
     scope = get_current_scope()
     cube_tile = scope.get_cube_tile_shapes()
-    return tuple([cube_tile.m, cube_tile.k, cube_tile.n, cube_tile.enableMultiDataLoad, cube_tile.enableSplitK])
+    return tuple([cube_tile.m, cube_tile.k, cube_tile.n, cube_tile.enableSplitK])
 
 
 def set_conv_tile_shapes(tile_l1_info: pypto_impl.TileL1Info, tile_l0_info: pypto_impl.TileL0Info = None):

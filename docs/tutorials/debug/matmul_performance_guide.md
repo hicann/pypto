@@ -30,7 +30,7 @@ $$
 
 记切分大小为：
 ```
-pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kL1], [nL0, nL1], enable_multi_data_load=True, enable_split_k=False)
+pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kL1], [nL0, nL1], enable_split_k=False)
 ```
 其中，mL0、kL0和nL0表示在L0 Buffer的切分大小，mL1、kL1和nL1表示在L1 Buffer的切分大小。
 
@@ -38,9 +38,9 @@ pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kL1], [nL0, nL1], enable_multi_data
 
 以A2/A3平台为例，对于A、B矩阵均为FP16类型的场景，满足Buffer空间约束的推荐Tile配置为：
 ```
-pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_multi_data_load=True, enable_split_k=False)
-pypto.set_cube_tile_shapes([256, 256], [64, 256], [128, 128], enable_multi_data_load=True, enable_split_k=False)
-pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128], enable_multi_data_load=True, enable_split_k=False)
+pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_split_k=False)
+pypto.set_cube_tile_shapes([256, 256], [64, 256], [128, 128], enable_split_k=False)
+pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128], enable_split_k=False)
 ```
 
 以上Tile配置的优点：
@@ -50,7 +50,7 @@ AI = \frac{M \cdot N \cdot K \cdot 2}{M \cdot K \cdot \frac{N}{nL1} \cdot aByte 
 $$
 根据上式，显然$mL1 = nL1$时AI取到极大值，又由于$mL1 * nL1 * sizeof(float) <= L0C\_SIZE = 131072$，则当$mL1 = nL1 = sqrt(L0C\_SIZE / sizeof(float)) = 181$ 时，AI极大值成立。但是由于Tile大小需要满足分型格式的对齐要求，同时要考虑切分大小对于写入、写出带宽的影响，一般取128-256的组合。
  - MTE2、MTE1搬运均可以开启double buffer，可以使能流水并行；
- 上述配置下，L0A、L0B的空间占用为32KB，刚好可以使能MTE1 double buffer，同理，上述tile配置下MTE2也可以使能double buffer；同时由于kL1 > kL0并使能了大包搬运（enable_multi_data_load=True），单次MTE2的搬运量可以进一步增加，这有利于提高MTE2的带宽利用率。
+ 上述配置下，L0A、L0B的空间占用为32KB，刚好可以使能MTE1 double buffer，同理，上述tile配置下MTE2也可以使能double buffer；同时由于kL1 > kL0并使能了大包搬运，单次MTE2的搬运量可以进一步增加，这有利于提高MTE2的带宽利用率。
  不过需要注意，当mL1与nL1取128-256组合时，L0C上无法开启nbuffer，因此这种tile配置适用于K轴较大（即搬出次数相对较少）的场景。当需要频繁搬出时，可以考虑选择128-128组合。
 
 需要特别说明的是，上述Tile配置并非一成不变，需要用户根据计算场景（考虑输入shape、dtype、format等）以及硬件平台进行综合考虑。实际上，如果把Matmul看作一个算法，那么Tile的配置（Tiling）则是这个算法中最核心的部分。
@@ -71,10 +71,10 @@ $$
 综上，此时的Tile配置求解就转化为一个约束条件下的极值求解问题。
 
 举例，对于输入规格为 M = 96，K = 1536，N = 3072，数据类型为FP16的场景。
-为了避免B矩阵的MTE2重复载入，一种较好的切分方式是设置mL1 = M = 96；另外，为了分满核，推荐设置nL1 = N / coreNum = 128。在此基础上，进一步考虑MTE2、MTE1的流水并行以及MTE2带宽利用率，推荐开启大包搬运，并设置kL1 = 4kL0。
+为了避免B矩阵的MTE2重复载入，一种较好的切分方式是设置mL1 = M = 96；另外，为了分满核，推荐设置nL1 = N / coreNum = 128。在此基础上，进一步考虑MTE2、MTE1的流水并行以及MTE2带宽利用率，设置kL1 = 4kL0。
 综上，一个较好的Tile配置是：
 ```
-pypto.set_cube_tile_shapes([96, 96], [64, 256], [128, 128], enable_multi_data_load=True, enable_split_k=False)
+pypto.set_cube_tile_shapes([96, 96], [64, 256], [128, 128], enable_split_k=False)
 ```
 
 进一步优化，可以将A矩阵一次性搬入L1中，然后一直驻留并反复使用。这样MTE2总载入量可以进一步减小至：
@@ -83,11 +83,11 @@ MTE2\_LOAD\_SIZE = M \cdot K \cdot aByte + K \cdot N \cdot bByte
 $$
 这样可以完全消除MTE2重复载入，进一步优化整体性能。此时的Tile配置如下：
 ```
-pypto.set_cube_tile_shapes([96, 96], [64, 1536, 256], [128, 128], enable_multi_data_load=True, enable_split_k=False)
+pypto.set_cube_tile_shapes([96, 96], [64, 1536, 256], [128, 128], enable_split_k=False)
 ```
 这里使用了一个相对高级的Tile配置用法，即独立设置kAL1与kBL1，形式如下：
 ```
-pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kAL1, kBL1], [nL0, nL1], enable_multi_data_load=True, enable_split_k=False)
+pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kAL1, kBL1], [nL0, nL1], enable_split_k=False)
 ```
 此处kAL1核kBL1分别表示A矩阵和B矩阵的K轴在L1上的切分大小。当K轴只设置两个切分值时，表示kAL1 = kBL1 = kL1。
 
@@ -96,7 +96,7 @@ pypto.set_cube_tile_shapes([mL0, mL1], [kL0, kAL1, kBL1], [nL0, nL1], enable_mul
 
 举例，对于输入规格为 M = 128，K = 8192，N = 256，数据类型为FP16的场景。可以采用以下Tile配置实现K轴分核，将`enable_split_k`置True以使能K轴分核，同时保留K轴上的大包搬运配置以实现流水并行：
 ```
-pypto.set_cube_tile_shapes([128, 128], [64, 256], [128, 128], enable_multi_data_load=True, enable_split_k=True)
+pypto.set_cube_tile_shapes([128, 128], [64, 256], [128, 128], enable_split_k=True)
 ```
 
 K轴切分的实现伪码如下：
@@ -157,7 +157,7 @@ def create_mm_kernel(M, K, N):
         a: pypto.Tensor([M, K], pypto.DT_FP16),
         b: pypto.Tensor([K, N], pypto.DT_FP16),
     ) -> pypto.Tensor([M, N], pypto.DT_FP16):
-        pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_multi_data_load=True, enable_split_k=False)
+        pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_split_k=False)
         tensorC = pypto.matmul(a, b, out_dtype=pypto.DT_FP16)
         return tensorC
 
@@ -190,7 +190,7 @@ def create_mm_kernel_with_l2_split(M, K, N, m_view, n_view):
         a: pypto.Tensor([M, K], pypto.DT_FP16, format=pypto.TileOpFormat.TILEOP_ND),
         b: pypto.Tensor([K, N], pypto.DT_FP16, format=pypto.TileOpFormat.TILEOP_ND),
     ) -> pypto.Tensor([M, N], pypto.DT_FP16):
-        pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_multi_data_load=True, enable_split_k=False)
+        pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_split_k=False)
 
         m_loop = (M + m_view - 1) // m_view
         n_loop = (N + n_view - 1) // n_view

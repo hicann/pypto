@@ -64,7 +64,7 @@ void IncreFlashAttention(Tensor &qNope, Tensor &kNopeCache, Tensor &vNopeCache, 
                 auto vj = View(vNopeCache, {s2TileCur, dN}, {curBlockIdx * blockSize, 0});
 
                 TileShape::Current().SetCubeTile(
-                    {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, false);
+                    {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
                 // (nTileCur, dN+dR), (s2TileCur, dN+dR) -> (nTileCur, s2TileCur)
                 TileShape::Current().SetMatrixSize({qi.GetShape()[0], 0, kj.GetShape()[0]});
                 auto sij = Matrix::Matmul(DataType::DT_FP32, qi, kj, false, true);
@@ -79,7 +79,7 @@ void IncreFlashAttention(Tensor &qNope, Tensor &kNopeCache, Tensor &vNopeCache, 
 
                 if (bn == 0) {
                     TileShape::Current().SetCubeTile(
-                        {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, false);
+                        {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
                     TileShape::Current().SetMatrixSize(
                         {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
                     auto oiTmp = Matrix::Matmul(DataType::DT_FP32, tildaPijF16, vj, false, false);
@@ -105,7 +105,7 @@ void IncreFlashAttention(Tensor &qNope, Tensor &kNopeCache, Tensor &vNopeCache, 
                 auto liNew = Add(t6, t5);    // (nTileCur, 1), (nTileCur, 1) -> (nTileCur, 1)
                 auto q3 = Mul(oi, t2); // (nTileCur, dN), (nTileCur, 1) -> (nTileCur, dN)
                 TileShape::Current().SetCubeTile(
-                    {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, false);
+                    {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
                 // (nTileCur, s2TileCur), (s2TileCur, dN) -> (nTileCur, dN)
                 TileShape::Current().SetMatrixSize(
                     {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});

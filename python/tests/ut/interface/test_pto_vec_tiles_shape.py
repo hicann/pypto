@@ -35,14 +35,14 @@ def test_tile_shape_set_vec_tiles_shape_4d():
 
 
 def test_cube_tile_shapes():
-    expected = ([16, 16], [256, 512, 512], [128, 128], True, False)
+    expected = ([16, 16], [256, 512, 512], [128, 128], False)
     pypto.set_cube_tile_shapes(*expected[:3], expected[3])
     actual = pypto.get_cube_tile_shapes()
     assert actual == expected
 
 
 def test_cube_tile_shapes_l1():
-    expected = ([16, 16], [256, 512, 512], [128, 128], False, False)
+    expected = ([16, 16], [256, 512, 512], [128, 128], False)
     pypto.set_cube_tile_shapes(*expected[:3], expected[3])
     actual = pypto.get_cube_tile_shapes()
     assert actual == expected

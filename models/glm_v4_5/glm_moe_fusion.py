@@ -240,7 +240,7 @@ def moe_fusion_kernel(
         # up_proj的matmul计算
         pypto.set_cube_tile_shapes([tile_batch, tile_batch],
                                 [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
-                                [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
+                                [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True)
         up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
 
         # dequant
@@ -255,7 +255,7 @@ def moe_fusion_kernel(
         # down_proj
         pypto.set_cube_tile_shapes([tile_batch, tile_batch],
                                 [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
-                                [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, False)
+                                [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], False)
         down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
 
         # dequant

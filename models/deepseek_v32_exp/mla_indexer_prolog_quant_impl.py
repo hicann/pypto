@@ -179,7 +179,7 @@ def mla_indexer_prolog_quant_compute(
         pypto.set_semantic_label("Query-Linear")
         pypto.set_cube_tile_shapes([q_linear[L0M_INDEX], q_linear[L1M_INDEX]],
                                 [q_linear[L0K_INDEX], q_linear[L1K_INDEX]],
-                                [q_linear[L0N_INDEX], q_linear[L1N_INDEX]], True)
+                                [q_linear[L0N_INDEX], q_linear[L1N_INDEX]])
         q_s32 = pypto.matmul(q_norm, ip_w_qb_in, pypto.DT_INT32)  # (tile_bs, head_num * head_dim)
 
         pypto.set_semantic_label("Query-Dequant")
@@ -223,7 +223,7 @@ def mla_indexer_prolog_quant_compute(
         pypto.set_semantic_label("Key-Linear")
         pypto.set_cube_tile_shapes([k_linear[L0M_INDEX], k_linear[L1M_INDEX]],
                                 [k_linear[L0K_INDEX], k_linear[L1K_INDEX]],
-                                [k_linear[L0N_INDEX], k_linear[L1N_INDEX]], True)
+                                [k_linear[L0N_INDEX], k_linear[L1N_INDEX]])
         k = pypto.matmul(x_view, ip_wk_in, pypto.DT_FP32)  # (tile_bs, head_dim)
 
         if tile_bs <= 32:

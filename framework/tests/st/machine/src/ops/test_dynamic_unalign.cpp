@@ -29,7 +29,7 @@ public:
     void SetUp() override {
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
         TileShape::Current().SetVecTile(32, 32);
-        TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32}, true);
+        TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
         rtSetDevice(GetDeviceIdByEnvVar());
     }
 };
@@ -174,7 +174,7 @@ TEST_F(DynamicUnalignTest, test_mm_unalign) {
 
 TEST_F(DynamicUnalignTest, test_mm2_unalign) {
     SetInterpreterConfig();
-    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64}, true);
+    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64});
 
     int b = 1;
     int nq = 32;

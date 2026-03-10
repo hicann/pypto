@@ -124,7 +124,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
 
             int c0 = NUM_16;
             int m = (std::min(NUM_32, tileBS) + c0 - 1) / c0 * c0;
-            TileShape::Current().SetCubeTile({m, m}, {NUM_256, NUM_256}, {NUM_128, NUM_128}, true);
+            TileShape::Current().SetCubeTile({m, m}, {NUM_256, NUM_256}, {NUM_128, NUM_128});
             config::SetSemanticLabel("BatchMatmul");
             Tensor qNopeNew = Matrix::BatchMatmul(dtype, qNopeTrans, wUk);
 
@@ -275,7 +275,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
 
                     IF (IsLoopBegin(bn, 0)) {
                         TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
+                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
                         config::SetSemanticLabel("paKvMm");
                         TileShape::Current().SetMatrixSize(
                             {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
@@ -307,7 +307,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
 
                         auto q3 = Mul(oi, t2); // (curNTile, dN), (curNTile, 1) -> (curNTile, dN)
                         TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, true);
+                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
                         config::SetSemanticLabel("paUpdateMM2");
                         TileShape::Current().SetMatrixSize(
                             {tildaPijF16.GetShape()[0], tildaPijF16.GetShape()[1], vj.GetShape()[1]});
@@ -345,8 +345,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
             auto t1Res = Transpose(cast1, {0, 1}); // (n, tileB * s, kvLoraRank)    // 128个
 
             TileShape::Current().SetCubeTile({std::min(NUM_32, tileB * s), std::min(NUM_32, tileB * s)},
-                {std::min(256, kvLoraRank), std::min(512, kvLoraRank)}, {vHeadDim, vHeadDim},
-                true);                                                 // raw tileB*1  512   128   // 128/4个
+                {std::min(256, kvLoraRank), std::min(512, kvLoraRank)}, {vHeadDim, vHeadDim}); // raw tileB*1  512   128   // 128/4个
             auto bmmRes = Matrix::BatchMatmul(dtype, t1Res, weightUV); // (n, tileB, kvLoraRank) * (n, kvLoraRank, vHeadDim) -> (n, tileB, vHeadDim)
 
             TileShape::Current().SetVecTile(NUM_4, std::min(NUM_32, tileB * s), vHeadDim); // raw (128, tileB*1, 128)
@@ -359,8 +358,7 @@ void Attention(const Tensor &tokenX, const Tensor &wDq, const Tensor &wUqQr, con
             auto dequantScaleA = std::get<1>(quantA); //(tileB * s, 1)
 
             TileShape::Current().SetCubeTile({std::min(32, tileB * s), std::min(32, tileB * s)},
-                {std::min(512, n * vHeadDim), std::min(512, n * vHeadDim)}, {std::min(64, h), std::min(64, h)},
-                true); // raw  tileB*1  16k  7168
+                {std::min(512, n * vHeadDim), std::min(512, n * vHeadDim)}, {std::min(64, h), std::min(64, h)}); // raw  tileB*1  16k  7168
             Tensor res = npu::tile_fwk::Matrix::Matmul(DataType::DT_INT32, quantizedA, weightO);
 
             TileShape::Current().SetVecTile(std::min(NUM_32, tileB * s), std::min(NUM_32, h)); // raw (tileB*1, 7168)

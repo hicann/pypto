@@ -65,7 +65,7 @@ void bind_controller_set_tile(py::module &m) {
     m.def(
         "SetCubeTile",
         [](const std::vector<int64_t> &mvec, const std::vector<int64_t> &kvec, const std::vector<int64_t> &nvec,
-            bool enableMultiDataLoad, bool enableSplitK) {
+            bool enableSplitK) {
             if (mvec.size() > MAX_M_DIM_SIZE) {
                 throw py::value_error(
                     "Parameter 'm' must have exactly " + std::to_string(MAX_M_DIM_SIZE) + " elements");
@@ -86,13 +86,13 @@ void bind_controller_set_tile(py::module &m) {
             std::copy(mvec.begin(), mvec.end(), marr.begin());
             std::copy(kvec.begin(), kvec.end(), karr.begin());
             std::copy(nvec.begin(), nvec.end(), narr.begin());
-            TileShape::Current().SetCubeTile(marr, karr, narr, enableMultiDataLoad, enableSplitK);
+            TileShape::Current().SetCubeTile(marr, karr, narr, enableSplitK);
         },
-        py::arg("m"), py::arg("k"), py::arg("n"), py::arg("enable_multi_data_load"), py::arg("enable_split_k"), 
+        py::arg("m"), py::arg("k"), py::arg("n"), py::arg("enable_split_k"), 
         "Set cube tile shapes with specified dimensions");
     m.def("GetCubeTile", []() {
         auto cubeTile = TileShape::Current().GetCubeTile();
-        return std::tuple(cubeTile.m, cubeTile.k, cubeTile.n, cubeTile.enableMultiDataLoad, cubeTile.enableSplitK);
+        return std::tuple(cubeTile.m, cubeTile.k, cubeTile.n, cubeTile.enableSplitK);
     });
     py::class_<Conv::TileL1Info>(m, "TileL1Info")
         .def(py::init<>())
@@ -352,16 +352,14 @@ void bind_controller_scope_classes(py::module &m) {
     .def(py::init<const std::array<int64_t, MAX_M_DIM_SIZE>&,
                    const std::array<int64_t, MAX_K_DIM_SIZE>&,
                    const std::array<int64_t, MAX_N_DIM_SIZE>&,
-                   bool, bool>(),
+                   bool>(),
          py::arg("m"),
          py::arg("k"),
          py::arg("n"),
-         py::arg("enableMultiDataLoad") = false,
          py::arg("enableSplitK") = false)
     .def_readwrite("m", &CubeTile::m)
     .def_readwrite("k", &CubeTile::k)
     .def_readwrite("n", &CubeTile::n)
-    .def_readwrite("enableMultiDataLoad", &CubeTile::enableMultiDataLoad)
     .def_readwrite("enableSplitK", &CubeTile::enableSplitK)
     .def("valid", &CubeTile::valid)
     .def("ToString", &CubeTile::ToString)

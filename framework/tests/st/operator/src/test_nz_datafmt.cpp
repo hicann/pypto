@@ -189,7 +189,7 @@ void TestNZFormatACC(int bs, int m, int k, int n) {
 
     config::SetBuildStatic(true);
     FUNCTION("Matmul_T", {mat_a, mat_b, mat_c}) {
-        TileShape::Current().SetCubeTile({16, 16}, {128, 128}, {128, 128}, false, true);
+        TileShape::Current().SetCubeTile({16, 16}, {128, 128}, {128, 128}, true);
         Tensor tmpC = Matrix::Matmul(outputType, mat_a, mat_b, false, false);
         TileShape::Current().SetVecTile(16, 128);
         mat_c = Add(tmpC, Element(DataType::DT_FP32, 0.0));

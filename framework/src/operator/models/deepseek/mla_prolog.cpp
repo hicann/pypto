@@ -42,7 +42,7 @@ std::vector<Tensor> QkvPre(const Tensor &tokenX, const Tensor &wDq, const Tensor
     // [b*s,h] * [h,q_lora_rank] = [b*s,q_lora_rank]
     Tensor qMmRes;
     if (splitK) {
-        TileShape::Current().SetCubeTile({tieM, tieM}, {NUM_256, NUM_256}, {NUM_64, NUM_64}, false, true);
+        TileShape::Current().SetCubeTile({tieM, tieM}, {NUM_256, NUM_256}, {NUM_64, NUM_64}, true);
         Tensor qMmResF32 = Matrix::Matmul(DT_FP32, input, wDq);
         TileShape::Current().SetVecTile(std::min(NUM_32, bs), NUM_128);
         qMmRes = Cast(qMmResF32, dType);

@@ -218,7 +218,6 @@ void AssignMemoryType::ProcessAssemblewithSpecificMem(Operation &operation) {
     for (const auto &consumerOp : output->GetConsumers()) {
         auto consumerOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
         // 大包搬运场景：assemble后接view且view的toAttr为L1
-        // 非大包搬运场景：assemble后的op预期输入为L1
         if (consumerOpAttribute && consumerOpAttribute->GetTo() != MemoryType::MEM_UNKNOWN) {
             if (consumerOpAttribute->GetTo() != MemoryType::MEM_L1) {
                 return;

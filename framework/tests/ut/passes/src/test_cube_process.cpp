@@ -615,7 +615,7 @@ TEST_F(SplitKTest, Test_MM_FP16_Atomic_On) {
         Tensor final_out(outputAstDtype, shape_c, "final_out");
         config::SetBuildStatic(true);
         FUNCTION("MM_FP16_Atomic_On", {mat_a, mat_b, final_out}) {
-            TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64}, false, true);
+            TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {64, 64}, true);
             auto tmpC = Matrix::Matmul(outputAstDtype, mat_a, mat_b, false, false);
             TileShape::Current().SetVecTile(32, 32);
             final_out = Add(tmpC, Element(DataType::DT_FP32, 0.0));

@@ -380,8 +380,7 @@ void PageAttentionPost(Tensor &qNope, Tensor &kNopeCache, Tensor &vNopeCache, Te
             // (bTile*S, N*vHeadDim) @ (N*vHeadDim, H) = (bTile*S, H)
             // int8 @ int8 = int32
             TileShape::Current().SetCubeTile({std::min(32L, bTile * S), std::min(32L, bTile * S)},
-                {std::min(128L, N * vHeadDim), std::min(128L, N * vHeadDim)}, {std::min(512L, H), std::min(512L, H)},
-                false, true); // raw  bTile*1  16k  7168
+                {std::min(128L, N * vHeadDim), std::min(128L, N * vHeadDim)}, {std::min(512L, H), std::min(512L, H)}, true); // raw  bTile*1  16k  7168
             Tensor res =
                 npu::tile_fwk::Matrix::Matmul(DT_INT32, quantizedA, weightO); // (bTile*S, H) // 14*8=112个
 

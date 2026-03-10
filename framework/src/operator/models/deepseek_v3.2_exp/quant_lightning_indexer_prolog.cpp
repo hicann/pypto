@@ -183,7 +183,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
                 auto qNormScale = View(inputs.qNormScale, {tTile, 1}, {tTile, 1}, {tIdx, 0});
                 config::SetSemanticLabel("Query-Linear");
                 TileShape::Current().SetCubeTile({qLinear[L0M_INDEX], qLinear[L1M_INDEX]},
-                    {qLinear[L0K_INDEX], qLinear[L1K_INDEX]}, {qLinear[L0N_INDEX], qLinear[L1N_INDEX]}, true);
+                    {qLinear[L0K_INDEX], qLinear[L1K_INDEX]}, {qLinear[L0N_INDEX], qLinear[L1N_INDEX]});
                 auto qS32 = Matrix::Matmul(DT_INT32, qNorm, wQb, false, false); // (tTile, headNum * headDim)
 
                 config::SetSemanticLabel("Query-Dequant");
@@ -227,7 +227,7 @@ void QuantLightningIndexerPrologCompute(const QuantIndexerPrologInput &inputs, Q
                 auto kLinear = configs.kLinear;
                 config::SetSemanticLabel("Key-Linear");
                 TileShape::Current().SetCubeTile({kLinear[L0M_INDEX], kLinear[L1M_INDEX]},
-                    {kLinear[L0K_INDEX], kLinear[L1K_INDEX]}, {kLinear[L0N_INDEX], kLinear[L1N_INDEX]}, true);
+                    {kLinear[L0K_INDEX], kLinear[L1K_INDEX]}, {kLinear[L0N_INDEX], kLinear[L1N_INDEX]});
                 auto x = View(inputs.x, {tTile, h}, {tTile, h}, {tIdx, 0}); // 这里将tTile分档，offset不需要乘tTile
                 auto k = Matrix::Matmul(DT_FP32, x, wk, false, false);      // (tTile, headDim)
 

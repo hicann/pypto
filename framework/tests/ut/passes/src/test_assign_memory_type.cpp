@@ -272,8 +272,8 @@ TEST_F(AssignMemoryTypeTest, TestVecToCubeV2) {
                 CheckConvertOp(op, true);
             }
         }
-        constexpr int expextedConvertNum = 12;
-        EXPECT_EQ(convertNum, expextedConvertNum) << "12 operations should be Convert";
+        constexpr int expextedConvertNum = 4;
+        EXPECT_EQ(convertNum, expextedConvertNum) << "4 operations should be Convert";
     }
 }
 
@@ -389,8 +389,8 @@ TEST_F(AssignMemoryTypeTest, TestCubeToCubeV2) {
             CheckConvertOp(op, true);
             convertNum++;
         }
-        constexpr int expextedConvertNum = 32;
-        EXPECT_EQ(convertNum, expextedConvertNum) << "32 operations should be Convert";
+        constexpr int expextedConvertNum = 16;
+        EXPECT_EQ(convertNum, expextedConvertNum) << "16 operations should be Convert";
     }
 }
 
@@ -439,7 +439,9 @@ TEST_F(AssignMemoryTypeTest, TestCubeToVec) {
             if (op.GetOpcode() == Opcode::OP_VIEW) {
                 ++afterViewNum;
                 auto viewOpAttr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
-                EXPECT_TRUE(viewOpAttr->GetTo() == MemoryType::MEM_L1 || viewOpAttr->GetTo() == MemoryType::MEM_UB) << "View to either l1 or ub";
+                EXPECT_TRUE(viewOpAttr->GetTo() == MemoryType::MEM_L1 || viewOpAttr->GetTo() == MemoryType::MEM_UB
+                 || viewOpAttr->GetTo() == MemoryType::MEM_L0A || viewOpAttr->GetTo() == MemoryType::MEM_L0B) << 
+                    "View to either l1, ub, l0a or l0b";
             }
         }
         EXPECT_EQ(afterViewNum, beforeViewNum + 1) << "Should insert one view after assemble and transfter data to DDR before to UB";

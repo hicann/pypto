@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_data_load: bool = False, enable_split_k: bool = False) -> None
+set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_split_k: bool = False) -> None
 ```
 
 ## 参数说明
@@ -26,7 +26,6 @@ set_cube_tile_shapes(m: List[int], k: List[int], n: List[int], enable_multi_data
 | m                      | 输入      | m维度在L0和L1上的TileShape（切片形状）的切分大小，分别对应mL0和mL1的切分大小 |
 | k                      | 输入      | k维度在L0和L1上的TileShape（切片形状）的切分大小，分别对应kL0和kL1的切分大小 |
 | n                      | 输入      | n维度在L0和L1上的TileShape（切片形状）的切分大小，分别对应nL0和nL1的切分大小 |
-| enable_multi_data_load | 输入      | 设置True表示使能matmul的L1大包搬运功能，False表示未使能L1的大包搬运，默认为False |
 | enable_split_k         | 输入      | 设置True表示使能matmul的多核切K功能，False表示未使能多核切K，默认为False |
 
 ## 返回值说明
@@ -105,7 +104,7 @@ Output需要满足以下约束条件：
 
 -   格式约束：当输出为NZ格式时，需要满足内轴（N轴）32字节对齐
 
-当输入矩阵维度为3维或4维时，set\_l1\_tile、enable\_split\_k参数仅支持False，即不支持使能L1大包搬运及多核切K功能。
+当输入矩阵维度为3维或4维时，enable\_split\_k参数仅支持False，不支持使能多核切K功能。
 
 多核切K场景支持数据类型：
 
@@ -117,6 +116,6 @@ Output需要满足以下约束条件：
 ## 调用示例
 
 ```python
-pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128], False, True)
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128], True)
 ```
 

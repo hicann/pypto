@@ -303,11 +303,11 @@ static void MatmulOperationExeFunc(
             (args->tileShape_[2][0] < args->tileShape_[2][1]) ? args->tileShape_[2][0] : args->tileShape_[2][1];
         TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
                                          {args->tileShape_[1][0], args->tileShape_[1][1]},
-                                         {nTile, nTile}, true, args->param_.enableKSplit);
+                                         {nTile, nTile}, args->param_.enableKSplit);
     } else {
         TileShape::Current().SetCubeTile({args->tileShape_[0][0], args->tileShape_[0][1]},
                                          {args->tileShape_[1][0], args->tileShape_[1][1]},
-                                         {args->tileShape_[2][0], args->tileShape_[2][1]}, true, args->param_.enableKSplit);
+                                         {args->tileShape_[2][0], args->tileShape_[2][1]}, args->param_.enableKSplit);
     }
 
     const size_t MM_VIEW_SHAPE_DIM = 2;

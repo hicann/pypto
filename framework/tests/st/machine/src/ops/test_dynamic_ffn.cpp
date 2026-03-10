@@ -82,7 +82,7 @@ TEST_F(DynamicFFNTest, TestOnbroadDynamicFFN) {
 
 TEST_F(DynamicFFNTest, TestOnbroadDynamicFFNQuant) {
     TileShape::Current().SetVecTile(32, 256);
-    TileShape::Current().SetCubeTile({32, 32}, {256, 256}, {128, 128}, true);
+    TileShape::Current().SetCubeTile({32, 32}, {256, 256}, {128, 128});
     config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 2}});
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 10*1024*1024);
     config::SetCodeGenOption(SUPPORT_DYNAMIC_ALIGNED, true);

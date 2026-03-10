@@ -89,11 +89,11 @@ void SelectedAttentionComputeV2(const Tensor &qNope, const Tensor &qRope, const 
                             auto curKnFp32 = View(knF32Reshape, {curS2Tile, dN}, {std::min(curSeq - s2Idx * curS2Tile, curS2Tile), dN}, {0, 0});
                             kn = Cast(curKnFp32, dtype);
                         } else {
-                            TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, false);
+                            TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
                             kn = experimental::GatherInL1<true, true>(kNope2D, curTopKIndcies, curBlockTable, blockSize, dN);
                         }
                         // C1
-                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, false);
+                        TileShape::Current().SetCubeTile({c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
                         auto kr = experimental::GatherInL1<true, true>(kRope2D, curTopKIndcies, curBlockTable, blockSize, dR);
                         Tensor kj(dtype, {curS2Tile, dN + dR}, "kj");
                         Assemble(kn, {0, 0}, kj);

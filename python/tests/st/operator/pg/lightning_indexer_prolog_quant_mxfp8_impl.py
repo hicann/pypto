@@ -388,7 +388,7 @@ def lightning_indexer_prolog_quant_compute(x_in, q_norm_in, q_norm_scale_in, w_q
         pypto.set_semantic_label("Query-Dequant-Linear")
         pypto.set_cube_tile_shapes([q_linear[L0M_INDEX], q_linear[L1M_INDEX]],
                                    [q_linear[L0K_INDEX], q_linear[L1K_INDEX]],
-                                   [q_linear[L0N_INDEX], q_linear[L1N_INDEX]], True)
+                                   [q_linear[L0N_INDEX], q_linear[L1N_INDEX]])
         pypto.set_vec_tile_shapes(8, head_num * head_dim)
 
         q_cast = pypto.scaled_mm(q_norm, w_qb_in, pypto.DT_BF16, q_norm_scale, w_qb_scale_in, scale_b_trans=True)
@@ -426,7 +426,7 @@ def lightning_indexer_prolog_quant_compute(x_in, q_norm_in, q_norm_scale_in, w_q
         pypto.set_semantic_label("Key-Linear")
         pypto.set_cube_tile_shapes([k_linear[L0M_INDEX], k_linear[L1M_INDEX]],
                                    [k_linear[L0K_INDEX], k_linear[L1K_INDEX]],
-                                   [k_linear[L0N_INDEX], k_linear[L1N_INDEX]], True)
+                                   [k_linear[L0N_INDEX], k_linear[L1N_INDEX]])
         x = pypto.view(x_in, [t_tile, h], [t_idx, 0])  # 这里将t_tile分档，offset不需要乘t_tile
         k = pypto.matmul(x, wk_in, pypto.DT_FP32)  # (t_tile, head_dim)
 

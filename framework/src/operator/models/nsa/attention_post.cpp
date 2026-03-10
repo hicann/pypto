@@ -73,7 +73,7 @@ void PostCompute(Tensor &input, PostTensors &postTensors, const PostTileConfig &
             int c0 = 16;
             int m = (std::min(32, tileBS) + c0 - 1) / c0 * c0;
             TileShape::Current().SetCubeTile(
-                {m, m}, {std::min(256L, kvLoraRank), std::min(512L, kvLoraRank)}, {vHeadDim, vHeadDim}, true);
+                {m, m}, {std::min(256L, kvLoraRank), std::min(512L, kvLoraRank)}, {vHeadDim, vHeadDim});
 
             Tensor bmm;
             if (isQuantWUv) {
@@ -110,7 +110,7 @@ void PostCompute(Tensor &input, PostTensors &postTensors, const PostTileConfig &
 
             Tensor mmRes;
             TileShape::Current().SetCubeTile({m, m}, {std::min(512L, n * vHeadDim), std::min(512L, n * vHeadDim)},
-                {std::min(64L, h), std::min(64L, h)}, true);
+                {std::min(64L, h), std::min(64L, h)});
             if (isQuantWo) {
                 config::SetSemanticLabel("postQuantWo");
                 TileShape::Current().SetVecTile({1, n * vHeadDim});

@@ -51,7 +51,6 @@ struct CubeTile {
     std::array<int64_t, MAX_M_DIM_SIZE> m;
     std::array<int64_t, MAX_K_DIM_SIZE> k;
     std::array<int64_t, MAX_N_DIM_SIZE> n;
-    bool enableMultiDataLoad {false};
     bool enableSplitK {false};
 
     bool valid() const;
@@ -139,7 +138,7 @@ struct TileShape {
      * \param n
      */
     void SetCubeTile(const std::array<int64_t, MAX_M_DIM_SIZE> &m, const std::array<int64_t, MAX_K_DIM_SIZE> &k,
-        const std::array<int64_t, MAX_N_DIM_SIZE> &n, bool enableMultiDataLoad = false, bool enableSplitK = false) ;
+        const std::array<int64_t, MAX_N_DIM_SIZE> &n, bool enableSplitK = false) ;
 
     /**
      * \brief Get the Cube Tile

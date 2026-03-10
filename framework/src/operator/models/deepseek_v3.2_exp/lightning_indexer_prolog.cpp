@@ -164,7 +164,7 @@ void LightningIndexerPrologCompute(
 
                 config::SetSemanticLabel("QMatmul");
                 TileShape::Current().SetCubeTile({c1Tile[NUM_VALUE_0], c1Tile[NUM_VALUE_1]},
-                    {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]}, {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]}, true);
+                    {c1Tile[NUM_VALUE_2], c1Tile[NUM_VALUE_3]}, {c1Tile[NUM_VALUE_4], c1Tile[NUM_VALUE_5]});
                 auto qrBlock = View(qr2D, {tileBS, qLoraRank}, {actBS, qLoraRank}, {bsIdx, 0});
                 // {tileBS, qLoraRank} * {qLoraRank, headNum * headDim} = {tileBS, headNum * headDim}
                 auto q32 = Matrix::Matmul(DT_FP32, qrBlock, inputs.qW, false, false);
@@ -180,7 +180,7 @@ void LightningIndexerPrologCompute(
                 config::SetSemanticLabel("KMatmul");
                 auto c2Tile = params.indexerTileConfigs.c2TileShape;
                 TileShape::Current().SetCubeTile({c2Tile[NUM_VALUE_0], c2Tile[NUM_VALUE_1]},
-                    {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]}, {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]}, true);
+                    {c2Tile[NUM_VALUE_2], c2Tile[NUM_VALUE_3]}, {c2Tile[NUM_VALUE_4], c2Tile[NUM_VALUE_5]});
                 TileShape::Current().SetVecTile(v1Tile[NUM_VALUE_0], v1Tile[NUM_VALUE_1], v1Tile[NUM_VALUE_1]);
                 auto xBlock = View(x2D, {tileBS, dim}, {actBS, dim}, {bsIdx, 0});
                 // {tileBS, dim} * {dim, headNum} = {tileBS, headNum}

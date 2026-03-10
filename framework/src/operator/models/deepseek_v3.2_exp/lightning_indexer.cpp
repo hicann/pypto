@@ -123,7 +123,7 @@ void LightningIndexerTopkImpl(const Tensor &query, const Tensor &key, bool isQua
                             {curBlockIdx * blockSize, n2Idx * indexD});
 
                         TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, false);
+                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
                         auto mmRes = Matrix::Matmul(DataType::DT_FP32, curQ, curK, false, true); // (group, blockSize)
                         concatSrcs.emplace_back(mmRes); // Matches tile size, no extra Assign needed (?)
                     }
@@ -162,7 +162,7 @@ void LightningIndexerTopkImpl(const Tensor &query, const Tensor &key, bool isQua
                             {curBlockIdx * blockSize, n2Idx * indexD});
 
                         TileShape::Current().SetCubeTile(
-                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, false);
+                            {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
 
                         auto mmRes = Matrix::Matmul(DataType::DT_INT32, curQ, curK, false, true); // (group, blockSize)
                         mmResQuantConcatSrcs.emplace_back(mmRes);
@@ -424,7 +424,7 @@ void LightningIndexerImpl(const Tensor &idxQuery, const Tensor &idxQueryScale, c
                             auto kBlock = View(key2D, {blockSize, indexD}, {tailSeq, indexD},
                                 {curBlockIdx * blockSize, 0}); // (blockSize, indexD)
                             TileShape::Current().SetCubeTile(
-                                {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]}, false);
+                                {c1Tile[0], c1Tile[1]}, {c1Tile[2], c1Tile[3]}, {c1Tile[4], c1Tile[5]});
                             if (false) {
                                 // use fixpipe
                                 auto qkDot = Matrix::Matmul(DataType::DT_FP16, curQ, kBlock,
@@ -467,7 +467,7 @@ void LightningIndexerImpl(const Tensor &idxQuery, const Tensor &idxQueryScale, c
                         auto qk3D = Reshape(firstMmCat, {s1Tile, idxNHeads, unrollLoop * blockSize},
                             {s1Tile, idxNHeads, std::min(unrollLoop * blockSize, validCatShape)});
                         TileShape::Current().SetCubeTile(
-                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]}, false);
+                            {c2Tile[0], c2Tile[1]}, {c2Tile[2], c2Tile[3]}, {c2Tile[4], c2Tile[5]});
                         auto wQk = Matrix::BatchMatmul(
                             DT_FP32, wScale, qk3D, false, false); // (s1Tile, 1, unrollLoop * blockSize);
                         auto secondMm = Reshape(wQk, {s1Tile, unrollLoop * blockSize},

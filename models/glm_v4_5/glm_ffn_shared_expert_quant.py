@@ -194,7 +194,7 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     # up_proj的matmul计算
     pypto.set_cube_tile_shapes([unroll_level, unroll_level],
                                [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2],
-                               [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
+                               [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True)
     up_proj = pypto.matmul(hidden_states_quant, w13, pypto.DT_INT32)
 
     # dequant
@@ -209,7 +209,7 @@ def expert_infer_base(hidden_states, w13_params, w2_params, ffn_res, tiling_para
     # down_proj
     pypto.set_cube_tile_shapes([unroll_level, unroll_level],
                                [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2],
-                               [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, False)
+                               [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], False)
     down_proj = pypto.matmul(down_proj_quant, w2, pypto.DT_INT32)
 
     # dequant

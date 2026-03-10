@@ -349,7 +349,7 @@ def expert_infer_base(
 
     # up_proj的matmul计算
     pypto.set_cube_tile_shapes([unroll_level, unroll_level], [mm1_cube_tile_shape[1], mm1_cube_tile_shape[1] * 2], \
-                               [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True, True)
+                               [mm1_cube_tile_shape[2], mm1_cube_tile_shape[2]], True)
     pypto.set_matrix_size([unroll_level, w13_weight_2d.shape[0], w13_weight_2d.shape[1]])
     up_proj = pypto.matmul(x, w13_weight_2d, pypto.DT_INT32)
 
@@ -363,7 +363,7 @@ def expert_infer_base(
     down_proj_quant, down_proj_scale = symmetric_quantization_per_token(swiglu_out)
 
     pypto.set_cube_tile_shapes([unroll_level, unroll_level], [mm2_cube_tile_shape[1], mm2_cube_tile_shape[1] * 2], \
-                               [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True, True)
+                               [mm2_cube_tile_shape[2], mm2_cube_tile_shape[2]], True)
     pypto.set_matrix_size([unroll_level, w2_weight_2d.shape[0], w2_weight_2d.shape[1]])
     down_proj = pypto.matmul(down_proj_quant, w2_weight_2d, pypto.DT_INT32)
 

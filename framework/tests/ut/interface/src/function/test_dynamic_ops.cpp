@@ -897,7 +897,7 @@ TEST_F(DynamicOpsTest, MatMulPertensor) {
     ProgramData::GetInstance().PrepareData({logicTensor0->GetData(), logicTensor1->GetData()},
         {out0->GetData()}, {golden->GetData()});
 
-    TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64}, true, false);
+    TileShape::Current().SetCubeTile({64, 64}, {64, 64}, {64, 64}, false);
     FUNCTION("main", {t0, t1}, {out}) {
         LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
             (void)i;

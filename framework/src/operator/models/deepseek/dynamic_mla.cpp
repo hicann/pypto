@@ -42,7 +42,7 @@ std::vector<Tensor> mlaPre(const Tensor &tokenX, const Tensor &wDq, const Tensor
     // [b*s,h] * [h,q_lora_rank] = [b*s,q_lora_rank]
     Tensor qMmRes;
     if (splitK) {
-        TileShape::Current().SetCubeTile({tieM, tieM}, {256, 256}, {64, 64}, false, true); // 256, 64
+        TileShape::Current().SetCubeTile({tieM, tieM}, {256, 256}, {64, 64}, true); // 256, 64
         Tensor qMmResF32 = Matrix::Matmul(DT_FP32, input, wDq);
         TileShape::Current().SetVecTile(std::min(32, bs), 128); // 32, 128
         qMmRes = Cast(qMmResF32, dType);
@@ -78,7 +78,7 @@ std::vector<Tensor> mlaPre(const Tensor &tokenX, const Tensor &wDq, const Tensor
     // [b*s,h] * [h,kvLoraRank+qkRopeHeadDim] = [b*s,kvLoraRank+qkRopeHeadDim]
     Tensor compressedKv;
     if (splitK) {
-        TileShape::Current().SetCubeTile({m, m}, {256, 256}, {64, 64}, false, true);
+        TileShape::Current().SetCubeTile({m, m}, {256, 256}, {64, 64}, true);
         Tensor kvMmResF32 = Matrix::Matmul(DT_FP32, input, wDkvKr);
         TileShape::Current().SetVecTile(std::min(32, bs), 64); // 32, 64
         compressedKv = Cast(kvMmResF32, dType);

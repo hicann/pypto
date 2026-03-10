@@ -40,7 +40,7 @@ def set_scope_options(a, c, tiling=None):
     pypto.set_vec_tile_shapes(32, 32)
     pypto.set_cube_tile_shapes([16, 16], [32, 32], [64, 64])
     assert [32, 32] == get_options("vec_tile_shapes")
-    assert check_cube_tile_shapes([16, 16], [32, 32], [64, 64], False)
+    assert check_cube_tile_shapes([16, 16], [32, 32], [64, 64])
 
     for _ in pypto.loop(1, name="s0", idx_name="k"):
         c.move(pypto.add(a, 1.0))
@@ -60,13 +60,13 @@ def set_scope_options(a, c, tiling=None):
                                           "cube_nbuffer_setting": {3: 4}},
                             vec_tile_shapes=[64, 64],
                             matrix_size=[64, 32],
-                            cube_tile_shapes=[[16, 16], [256, 512, 128], [128, 128], True]
+                            cube_tile_shapes=[[16, 16], [256, 512, 128], [128, 128]]
                             ): # scope 3
             assert 100 == get_options("pass.pg_upper_bound")
             assert {3: 4} == get_options("pass.cube_nbuffer_setting")
             assert [64, 64] == get_options("vec_tile_shapes")
             assert [64, 32] == get_options("matrix_size")
-            assert check_cube_tile_shapes([16, 16], [256, 512, 128], [128, 128], True)
+            assert check_cube_tile_shapes([16, 16], [256, 512, 128], [128, 128])
             assert 1048 == get_options("pass.pg_lower_bound") # 当前scope未设置，依然是上层scope值
             print(pypto.get_options_tree())
 
@@ -74,8 +74,7 @@ def set_scope_options(a, c, tiling=None):
         assert [32, 32] == get_options("vec_tile_shapes")
 
 
-def check_cube_tile_shapes(expected_m, expected_k, expected_n, expected_enable_multi_data_load=False, 
-                        expected_enable_split_k=False):
+def check_cube_tile_shapes(expected_m, expected_k, expected_n, expected_enable_split_k=False):
     """Check if cube_tile_shapes matches expected values"""
     cube_tile = get_options("cube_tile_shapes")
     # Expand k to 3 elements if needed
@@ -84,7 +83,6 @@ def check_cube_tile_shapes(expected_m, expected_k, expected_n, expected_enable_m
     return (list(cube_tile.m) == expected_m and
             list(cube_tile.k) == expected_k and
             list(cube_tile.n) == expected_n and
-            cube_tile.enableMultiDataLoad == expected_enable_multi_data_load and
             cube_tile.enableSplitK == expected_enable_split_k)
 
 
