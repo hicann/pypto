@@ -600,3 +600,29 @@ TEST_F(TestAxisCombineMarker, unhandled_op) {
     auto t3 = graph.GetTensor("t3");
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(t3), false);   // Unhandled op should be unknown
 }
+
+TEST_F(TestAxisCombineMarker, cast_op) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 32}, MemoryType::MEM_DEVICE_DDR, "gm"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 32}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm"}, {"t1"}, "copy_in", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 1}, MemoryType::MEM_UB, "r1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUM_SINGLE, {"t1"}, {"r1"}, "reduce", true), true);
+    auto reduceOp = graph.GetOp("reduce");
+    reduceOp->SetAttribute(OP_ATTR_PREFIX + "AXIS", 2);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_VEC_DUP, {}, {"t2"}, "vec_dup", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 1}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_DIV, {"r1", "t2"}, {"t3"}, "div", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_CAST, {"t3"}, {"t4"}, "cast", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 32, 1}, MemoryType::MEM_DEVICE_DDR, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t4"}, {"out"}, "copyout", true), true);
+    
+    auto *rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+    auto t4 = graph.GetTensor("t4");
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(t4), true);
+}

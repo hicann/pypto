@@ -201,7 +201,8 @@ void AxisCombineMarker::UpdateOpACEnableForward(uint16_t opIdx) {
         return;
     }
     if (OpcodeManager::Inst().GetOpCalcType(op->GetOpcode()) == OpCalcType::ELMWISE ||
-        OpcodeManager::Inst().GetOpCalcType(op->GetOpcode()) == OpCalcType::BROADCAST) {
+        OpcodeManager::Inst().GetOpCalcType(op->GetOpcode()) == OpCalcType::BROADCAST ||
+        OpcodeManager::Inst().GetOpCalcType(op->GetOpcode()) == OpCalcType::CAST) {
         UpdateElewiseStatus(op, tensorStatus_);
         return;
     }

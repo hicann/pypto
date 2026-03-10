@@ -609,10 +609,11 @@ void PadLocalBuffer::PadVectorForAxisCombine(Operation &op, LogicalTensorPtr &in
             AlignedRawTensorIfNeed(out, lastIdx, paddingValue);
             visitedRaw.emplace(out->tensor);
         }
+        return;
     }
     if (calcType == OpCalcType::BROADCAST) {
         auto dimIdx = lastIdx;
-        if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510 && axisCombineMarker.IsTensorEnableAxisCombine(in)) {
+        if (axisCombineMarker.IsTensorEnableAxisCombine(in)) {
             dimIdx = ProcessBroadcastForAxisCombine(in);
         }
         AlignedRawTensorIfNeed(in, dimIdx, paddingValue);
