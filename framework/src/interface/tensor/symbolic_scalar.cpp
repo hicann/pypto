@@ -32,7 +32,7 @@ std::string CompileSourceCode(const std::string &sourceFilePath, const std::stri
     std::string objectFilePath = sourceFilePath + "_t.o";
     std::string LD_PRELOAD = "LD_PRELOAD= ";
     std::string includePath = GetCurrentSharedLibPath() + "/../include/tile_fwk";
-    std::string cmdGcc = LD_PRELOAD + gcc + " -fPIC -O2 " + extraCflag +
+    std::string cmdGcc = LD_PRELOAD + gcc + " -fPIC -fno-stack-protector -O2 " + extraCflag +
         " -I" + includePath + " " +
         " -I" + GetCurrentSharedLibPath() + "/include/" +
         " -I" + includePath + "/tilefwk " +
@@ -40,7 +40,7 @@ std::string CompileSourceCode(const std::string &sourceFilePath, const std::stri
     FUNCTION_LOGI("[RunCmd] %s", cmdGcc.c_str());
     ASSERT(system(cmdGcc.c_str()) == 0);
 
-    std::string cmdAs = LD_PRELOAD + gcc + " -O2 -c " + assembleFilePath + " -o " + objectFilePath;
+    std::string cmdAs = LD_PRELOAD + gcc + " -fno-stack-protector -O2 -c " + assembleFilePath + " -o " + objectFilePath;
     FUNCTION_LOGI("[RunCmd] %s", cmdAs.c_str());
     ASSERT(system(cmdAs.c_str()) == 0);
     return objectFilePath;

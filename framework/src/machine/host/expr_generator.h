@@ -80,7 +80,7 @@ public:
             }
             // Write file header
             out << "#define __TILE_FWK_AICPU__ 1\n"
-                << "#include <cstdint>\n\n"
+                << "#include <stdint.h>\n\n"
                 << "#include \"" << expName << "\"\n"
                 << "#include \"tilefwk/aikernel_data.h\"\n"
                 << "#include \"tilefwk/aicpu_runtime.h\"\n"
@@ -131,6 +131,7 @@ private:
         }
         file << "SECTIONS\n{\n"
              << "    . = 0x10000;\n"  // align 4K
+             << "    _start = .;\n"
              << "    .pypto : { *(.pypto.entry) *(.pypto.func) *(.rodata.*) }\n}\n";
         file.close();
     }
