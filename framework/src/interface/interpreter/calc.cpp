@@ -28,7 +28,7 @@ struct CalcOps *GetCalcOps() {
 #ifndef ENABLE_TESTS
         auto handle = dlopen(nullptr, RTLD_LAZY | RTLD_NOLOAD);
         if (handle == nullptr) {
-            VERIFY_LOGE("Can't get program handle");
+            VERIFY_LOGE_FULL("Can't get program handle");
             return;
         }
 #else

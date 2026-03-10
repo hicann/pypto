@@ -245,13 +245,13 @@ void ExecutePrint(ExecuteOperationContext *ctx) {
             csv << "element_count," << oop->GetData()->GetDataSize() / oop->GetData()->GetElementSize() << "\n";
             csv.close();
         } else {
-            VERIFY_LOGE("open csv file %s failed!!!!", csvPath.c_str());
+            VERIFY_LOGE_FULL("open csv file %s failed!!!!", csvPath.c_str());
         }
     }
 
     std::string format;
     if (ctx->op->GetAttr(OP_ATTR_PREFIX + "format", format)) {
-        VERIFY_LOGI("%s", FormatString(format, ctx->opInter, ctx->ioperandDataViewList, scalars).c_str());
+        std::cout << FormatString(format, ctx->opInter, ctx->ioperandDataViewList, scalars) << std::endl;
     }
 }
 REGISTER_CALC_OP(OP_PRINT, Opcode::OP_PRINT, ExecutePrint);
