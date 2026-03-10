@@ -83,10 +83,9 @@ TEST_F(TestCodegenDynRange, TestDynOpRange) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, FunctionType::DYNAMIC_LOOP_PATH, {}, true);
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
-
-    cop.Init(op);
     std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TileOp::DynRange<float, 64>((__ubuf__ float*)UB_S0_E0, 64, 1, 2, ((int64_t)(0)));
@@ -136,11 +135,11 @@ TEST_F(TestCodegenDynRange, RangeTileTensor) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, rangeSymbolManager);
-    CodeGenOpCloudNPU cop(rangeSymbolManager, FunctionType::DYNAMIC_LOOP_PATH, {}, true);
+    CodeGenOpCloudNPUCtx opCtx(rangeSymbolManager, *function, *function->rootFunc_->programs_[0], op, {}, true);
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[localOutTensor->GetMagic()] = localOutTensor;
     function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
 
-    cop.Init(op);
     cop.UpdateTileTensorInfo();
     cop.GenOpCode();
 }

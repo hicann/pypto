@@ -72,9 +72,13 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast) {
 
     std::string funcName = "ScatterUpdate";
     FUNCTION(funcName, {kv_len, key_states, past_key_states}) {
-        past_key_states = ScatterUpdate(past_key_states, kv_len, key_states, -2);
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            past_key_states = ScatterUpdate(past_key_states, kv_len, key_states, -2);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
 
     auto ddrTensor =
@@ -100,11 +104,10 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, FunctionType::DYNAMIC_LOOP_PATH, {}, true);
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[localTensorSrc0->GetMagic()] = localTensorSrc0;
     function->GetTensorMap().inverseMap_[localTensorSrc1->GetMagic()] = localTensorSrc1;
-
-    cop.Init(op);
 
     std::string res = cop.GenOpCode();
     std::string expect =
@@ -125,10 +128,14 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor) {
     Tensor output(DT_FP32, scaterShape, "C");
 
     std::string funcName = "IndexoutTileTensor";
-    FUNCTION(funcName, {inputA, inputB, output}) {
-        output = Add(inputA, inputB);
+    FUNCTION(funcName, {inputA, inputB}, {output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
     }
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName);
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     std::vector<SymbolicScalar> dynValidShape = {64, 64};
     auto indexoutTensor =
@@ -157,12 +164,11 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(indexoutOp, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, FunctionType::DYNAMIC_LOOP_PATH, {}, true);
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], indexoutOp, {}, true);
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[indexoutTensor->GetMagic()] = indexoutTensor;
     function->GetTensorMap().inverseMap_[localOutTensor->GetMagic()] = localOutTensor;
 
-    cop.Init(indexoutOp);
-    cop.UpdateTileTensorInfo();
     std::string res = cop.GenOpCode();
     std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_9, ubTensor_10, ubTensor_10, Coord2Dim(0, 0));
 )!!!";

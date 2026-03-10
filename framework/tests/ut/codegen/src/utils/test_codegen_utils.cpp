@@ -16,6 +16,8 @@
 
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
+#include "tilefwk/tilefwk.h"
+#include "interface/inner/tilefwk.h"
 
 namespace npu::tile_fwk {
 std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo &info) {
@@ -65,6 +67,25 @@ std::string GetResultFromCpp(const Function &function) {
 void CheckStringExist(const std::string &target, const std::string &content) {
     bool res = content.find(target) != std::string::npos;
     EXPECT_TRUE(res) << "target: \n" << target << "\n\n ---- not found in content ---- \n\n" << content << std::endl;
+}
+
+Function *GenMockFuncDyn(const std::string &funcName, const std::vector<int64_t> &shape) {
+    TileShape::Current().SetVecTile(shape);
+    TileShape::Current().SetCubeTile({32, 32}, {128, 128}, {128, 128});
+    Tensor inputA(DT_FP32, shape, "A");
+    Tensor inputB(DT_FP32, shape, "B");
+    Tensor output(DT_FP32, shape, "C");
+
+    FUNCTION(funcName, {inputA, inputB}, {output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Add(inputA, inputB);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+    return function;
 }
 
 } // namespace npu::tile_fwk

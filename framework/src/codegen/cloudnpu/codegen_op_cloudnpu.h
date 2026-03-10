@@ -34,23 +34,20 @@
 
 namespace npu::tile_fwk {
 struct CodeGenOpCloudNPUCtx : public CodeGenOpCtx {
-    const Operation &operation;
     std::shared_ptr<ForBlockManager> forBlockManager{nullptr};
 
     CodeGenOpCloudNPUCtx(std::shared_ptr<SymbolManager> sm, Function &tf, Function &sf, const Operation &op,
         const std::map<int, int> &lto = {}, bool isMainBlk = false)
-        : CodeGenOpCtx(std::move(sm), tf, sf, lto, isMainBlk), operation(op) {}
+        : CodeGenOpCtx(std::move(sm), tf, sf, op, lto, isMainBlk) {}
 
     CodeGenOpCloudNPUCtx(std::shared_ptr<SymbolManager> sm, std::shared_ptr<ForBlockManager> fbm, Function &tf,
         Function &sf, const Operation &op, const std::map<int, int> &lto = {}, bool isMainBlk = false)
-        : CodeGenOpCtx(std::move(sm), tf, sf, lto, isMainBlk), operation(op), forBlockManager(std::move(fbm)) {}
+        : CodeGenOpCtx(std::move(sm), tf, sf, op, lto, isMainBlk), forBlockManager(std::move(fbm)) {}
 };
 
 class CodeGenOpCloudNPU : public CodeGenOp {
 public:
     explicit CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx);
-    CodeGenOpCloudNPU(const std::shared_ptr<SymbolManager> &symbolManager, FunctionType funcType,
-        const std::map<int, int> &locToOffset = {}, bool isUnderDynamicFunc = false, bool isMainBlk = false);
 
     ~CodeGenOpCloudNPU() override = default;
 
@@ -367,9 +364,6 @@ private:
     std::string PrintBinaryDynamicUnaligned(const PrintBinaryParam &param) const;
     std::string PrintBinaryTileTensor() const;
     std::string PrintBinary(const PrintBinaryParam &param) const;
-
-    std::string PrintBinaryTmpTileTensor() const;
-    std::string PrintBinaryTmp(const PrintBinaryTmpParam &param) const;
 
     std::string PrintBinaryBrcStatic(const PrintBinaryBrcParam &param) const;
     std::string PrintBinaryBrcDynamicUnaligned(const PrintBinaryBrcParam &param) const;

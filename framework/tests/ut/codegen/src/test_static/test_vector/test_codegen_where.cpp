@@ -105,14 +105,14 @@ void TestWhereBody(
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, FunctionType::STATIC, {}, true);
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[localTensorCond->GetMagic()] = localTensorCond;
     function->GetTensorMap().inverseMap_[localTensorInput->GetMagic()] = localTensorInput;
     function->GetTensorMap().inverseMap_[localTensorOther->GetMagic()] = localTensorOther;
     function->GetTensorMap().inverseMap_[localTensorResult->GetMagic()] = localTensorResult;
     function->GetTensorMap().inverseMap_[localTensorTmp->GetMagic()] = localTensorTmp;
 
-    cop.Init(op);
     if (isSupportTileTensor) {
         cop.UpdateTileTensorInfo();
     }

@@ -78,10 +78,10 @@ TEST_F(TestCodegenSpillOut, UBSpillOut) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, function->GetFunctionType());
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
 
-    cop.Init(op);
     cop.originShape[0] = shape;
     cop.originShape[1] = shape;
 
@@ -124,10 +124,10 @@ TEST_F(TestCodegenSpillOut, UBSpillOutTileTensor) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, function->GetFunctionType());
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
 
-    cop.Init(op);
     cop.originShape[0] = shape;
     cop.originShape[1] = shape;
     cop.UpdateTileTensorInfo();
@@ -172,10 +172,10 @@ TEST_F(TestCodegenSpillOut, L1SpillOut) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, function->GetFunctionType());
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[l1Tensor->GetMagic()] = l1Tensor;
 
-    cop.Init(op);
     cop.originShape[0] = shape;
     cop.originShape[1] = shape;
 

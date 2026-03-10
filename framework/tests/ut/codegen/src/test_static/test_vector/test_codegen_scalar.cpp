@@ -205,10 +205,10 @@ void TestCVSyncBody(Opcode syncOpcode) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, function->GetFunctionType());
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
 
-    cop.Init(op);
     cop.originShape[0] = shape;
     cop.originShape[1] = shape;
 

@@ -40,7 +40,7 @@ public:
         Program::GetInstance().Reset();
         config::Reset();
         config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-        config::SetHostOption(COMPILE_STAGE, CS_TENSOR_GRAPH);
+        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
 
@@ -48,30 +48,13 @@ public:
 };
 
 void TestTransposeDataMoveBody(int dim = 3) {
-    std::vector<int64_t> shape = {64, 64, 64};
-    std::vector<SymbolicScalar> dynValidShape = {64, 64, 64};
+    std::vector<int64_t> shape = {2, 2, 8};
+    std::vector<SymbolicScalar> dynValidShape = {2, 2, 8};
     if (dim == SHAPE_DIM4) {
-        shape = {64, 64, 64, 64};
-        dynValidShape = {64, 64, 64, 64};
+        shape = {2, 2, 2, 8};
+        dynValidShape = {2, 2, 2, 8};
     }
-    auto shapeImme = OpImmediate::Specified(shape);
-    TileShape::Current().SetVecTile(shape);
-
-    Tensor inputA(DT_FP32, shape, "A");
-    Tensor inputB(DT_FP32, shape, "B");
-    Tensor output(DT_FP32, shape, "C");
-
-    std::string funcName = "ADD";
-    FUNCTION(funcName, {inputA, inputB, output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = Add(inputA, inputB);
-        }
-    }
-    auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
-
+    auto function = GenMockFuncDyn("TestCodegenDynTransposeDataMove_dim" + std::to_string(dim), shape);
     auto ddrTensor =
         CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, "TransposeDataMove"});
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
@@ -82,6 +65,7 @@ void TestTransposeDataMoveBody(int dim = 3) {
     if (dim == SHAPE_DIM4) {
         to_offset = OpImmediate::Specified({0, 0, 0, 0});
     }
+    auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, to_offset, shapeImme, shapeImme));
     op.SetOOpAttrOffset(0, 0);
     op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
@@ -90,10 +74,10 @@ void TestTransposeDataMoveBody(int dim = 3) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPU cop(symbolManager, FunctionType::DYNAMIC_LOOP_PATH, {}, true);
+    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
+    CodeGenOpCloudNPU cop(opCtx);
     function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
 
-    cop.Init(op);
     cop.GenOpCode();
 }
 
