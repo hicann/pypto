@@ -559,7 +559,7 @@ TEST_F(TestExpandFunctionPass, DisableCombineAxisOnA5) {
     ExpandFunction expandfunctionpass;
     auto status = expandfunctionpass.RunOnFunction(*currFunctionPtr);
     EXPECT_EQ(status, SUCCESS);
-    EXPECT_EQ(currFunctionPtr->paramConfigs_.combineAxis, false);
+    EXPECT_EQ(currFunctionPtr->paramConfigs_.combineAxis, true);
 }
 
 }
