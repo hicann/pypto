@@ -26,19 +26,19 @@ Status SubGraphToFuncChecker::NOPCheck(const Operation &op) const {
         return FAILED;
     }
     if (op.GetIOperands().size() > 0) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "NOP[%d] has IOperands size %zu. %s", op.GetIOperands().size(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor, "NOP[%d] has IOperands size %zu. %s", op.GetOpMagic(), op.GetIOperands().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetInCtrlOperations().size() > 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "NOP[%d] has InCtrlOperations size %zu. %s", op.GetInCtrlOperations().size(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "NOP[%d] has InCtrlOperations size %zu. %s", op.GetOpMagic(), op.GetInCtrlOperations().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetOOperands().size() > 0) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "NOP[%d] has OOperands size %zu. %s", op.GetOOperands().size(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Tensor, "NOP[%d] has OOperands size %zu. %s", op.GetOpMagic(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetOutCtrlOperations().size() > 0) {
-        APASS_LOG_ERROR_F(Elements::Operation, "NOP[%d] has OutCtrlOperations size %zu. %s", op.GetOutCtrlOperations().size(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_F(Elements::Operation, "NOP[%d] has OutCtrlOperations size %zu. %s", op.GetOpMagic(), op.GetOutCtrlOperations().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     return SUCCESS;
@@ -56,11 +56,11 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function &function) const {
         auto &op = operations[i];
         int subGraphId = op.GetSubgraphID();
         if (subGraphId < 0 && NOPCheck(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "operation %d has negative subGraphID %d and failed NOP check. %s", i, subGraphId, GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "operation %zu has negative subGraphID %d and failed NOP check. %s", i, subGraphId, GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         if (subGraphId >= totalSubGraphNum) {
-            APASS_LOG_ERROR_F(Elements::Operation, "operation %d has subGraphID %d that exceeds totalSubGraphNum %d. %s", i, subGraphId, totalSubGraphNum, GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "operation %zu has subGraphID %d that exceeds totalSubGraphNum %d. %s", i, subGraphId, totalSubGraphNum, GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         hitSubgraph[subGraphId] = true;
@@ -69,7 +69,7 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function &function) const {
             for (auto parentOp : inOperand->GetProducers()) {
                 int parentSubGraphId = parentOp->GetSubgraphID();
                 if (parentSubGraphId > subGraphId) {
-                    APASS_LOG_ERROR_F(Elements::Operation, "operation %d has subGraphId %d and parent subGraphId %d, parent subGraphId should be less than or equal to subGraphId. %s", i, subGraphId, parentSubGraphId, GetFormatBacktrace(op).c_str());
+                    APASS_LOG_ERROR_F(Elements::Operation, "operation %zu has subGraphId %d and parent subGraphId %d, parent subGraphId should be less than or equal to subGraphId. %s", i, subGraphId, parentSubGraphId, GetFormatBacktrace(op).c_str());
                     return FAILED;
                 }
             }
@@ -185,13 +185,13 @@ Status SubGraphToFuncChecker::InAndOutGraphConsistencyCheck(
         for (size_t j = 0; j < inEdgeGraph[i].size(); j++) {
             size_t parentSeqNo = static_cast<size_t>(inEdgeGraph[i][j]);
             if (nodeColIdx[parentSeqNo] >= outEdgeGraph[parentSeqNo].size()) {
-                APASS_LOG_ERROR_F(Elements::Graph, "node %zu, %zu th parentSeqNo %d exceeds outgraph[%d] size %zu",
+                APASS_LOG_ERROR_F(Elements::Graph, "node %zu, %zu th parentSeqNo %zu exceeds outgraph[%zu] size %zu",
                     i, j, parentSeqNo, parentSeqNo, outEdgeGraph[parentSeqNo].size());
                 return FAILED;
             }
             // inEdgeGraph和outEdgeGraph都是按顺序排列的
             if (static_cast<size_t>(outEdgeGraph[parentSeqNo][nodeColIdx[parentSeqNo]++]) != i) {
-                APASS_LOG_ERROR_F(Elements::Graph, "node %zu, %zu th parentSeqNo %d is not found in outgraph[%d]",
+                APASS_LOG_ERROR_F(Elements::Graph, "node %zu, %zu th parentSeqNo %zu is not found in outgraph[%zu]",
                     i, j, parentSeqNo, parentSeqNo);
                 return FAILED;
             }
@@ -353,7 +353,7 @@ Status SubGraphToFuncChecker::ColorOutGraphCheck(Function &function) const {
                 continue;
             }
             if (VerifyRedundantEdge(iSubGraphId, jSubGraphId) != SUCCESS) { // check whether is redundant edge
-                APASS_LOG_ERROR_F(Elements::Graph, "edge between original operator %d with subgraph ID %d and operator %d with subgraph ID %d is missed in colorOutGraph_", i, iSubGraphId, j, jSubGraphId);
+                APASS_LOG_ERROR_F(Elements::Graph, "edge between original operator %zu with subgraph ID %d and operator %d with subgraph ID %d is missed in colorOutGraph_", i, iSubGraphId, static_cast<int>(j), jSubGraphId);
                 return FAILED;
             }
         }
@@ -363,7 +363,7 @@ Status SubGraphToFuncChecker::ColorOutGraphCheck(Function &function) const {
     for (size_t i = 0; i < hitEdgeMark.size(); i++) {
         for (size_t j = 0; j < hitEdgeMark[i].size(); j++) {
             if (hitEdgeMark[i][j] == false) {
-                APASS_LOG_ERROR_F(Elements::Graph, "edge between %d and %d on colorOutGraph_ has no correspondent edge in outGraph_", i, colorOutGraph_[i][j]);
+                APASS_LOG_ERROR_F(Elements::Graph, "edge between %zu and %d on colorOutGraph_ has no correspondent edge in outGraph_", i, colorOutGraph_[i][j]);
                 return FAILED;
             }
         }
@@ -474,7 +474,7 @@ Status SubGraphToFuncChecker::CheckReadyStateConsistency(Function &function, siz
         }
     }
     // readyState should equal negative predecessor counts
-    if (topology[opIdx].readyState != -actualPredCount) { APASS_LOG_ERROR_F(Elements::Graph, "Subgraph %zu has inconsistent readyState: actual=%d, expected=%d", opIdx, topology[opIdx].readyState, -actualPredCount); return FAILED; }
+    if (topology[opIdx].readyState != -actualPredCount) { APASS_LOG_ERROR_F(Elements::Graph, "Subgraph %zu has inconsistent readyState: actual=%d, expected=%zu", opIdx, topology[opIdx].readyState, static_cast<size_t>(-actualPredCount)); return FAILED; }
     return SUCCESS;
 }
 
@@ -489,6 +489,10 @@ void SubGraphToFuncChecker::SetColorGraph(const std::vector<std::vector<int>> &c
     colorInGraph_ = colorInGraph;
     colorOutGraph_ = colorOutGraph;
 }
+
+template Status SubGraphToFuncChecker::InAndOutGraphConsistencyCheck<size_t>(
+    const std::vector<std::vector<size_t>> &,
+    const std::vector<std::vector<size_t>> &);
 
 } // namespace tile_fwk
 } // namespace npu

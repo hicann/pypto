@@ -368,7 +368,7 @@ Status TuneSyncForVF::RunOnFunction(Function &function) {
     for (auto &program : function.rootFunc_->programs_) {
         std::vector<Operation *> opList(program.second->Operations(false).DuplicatedOpList());
         opList_ = opList;
-        APASS_LOG_DEBUG_F(Elements::Function, "=======================function %d ======================", funcId);
+        APASS_LOG_DEBUG_F(Elements::Function, "=======================function %zu ======================", funcId);
         for (const auto &op : opList_) {
             if (op->GetOpcodeStr().find("SYNC_SRC") != std::string::npos || op->GetOpcodeStr().find("SYNC_DST") != std::string::npos
                 || op->GetOpcode() == Opcode::OP_BAR_V || op->GetOpcode() == Opcode::OP_BAR_M) {

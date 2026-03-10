@@ -121,7 +121,7 @@ Status LoopaxesProc::UpdateOpLoopAxes(Operation &op, Function &subFunc) {
         op.SetAttribute(OpAttributeKey::loopAxes, loopAxes);
         lastOpInLoop = op.shared_from_this();
         previousOutputMagic = output->GetMagic();
-        APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] groupIdx is %d, loopAxes is %s",
+        APASS_LOG_INFO_F(Elements::Operation, "Op Code %s, Op[%d] groupIdx is %ld, loopAxes is %s",
             op.GetOpcodeStr().c_str(), op.GetOpMagic(), groupIdx, IntVecToStr(loopAxes).c_str());
     }
     return SUCCESS;
@@ -137,7 +137,7 @@ Status LoopaxesProc::UpdateFuncLoopAxes(Function &function) {
         lastGroupIdx = groupIdx;
         lastOpInLoop.reset();
         if (subProgram.second == nullptr) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "subProgram[%d] of Function[%s] is nullptr.", subProgram.first,
+            APASS_LOG_DEBUG_F(Elements::Operation, "subProgram[%lu] of Function[%s] is nullptr.", subProgram.first,
                 function.GetMagicName().c_str());
             continue;
         }

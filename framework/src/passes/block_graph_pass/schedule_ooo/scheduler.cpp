@@ -383,7 +383,7 @@ Status OoOScheduler::AllocViewTensorMemRange(Operation &operation) {
 Status OoOScheduler::AllocTensorMemRange(IssueEntryPtr issue) {
     for (auto& op : issue->viewOps) {
         if (!IsViewOp(*op)) {
-            APASS_LOG_ERROR_F(Elements::Operation, "op[%s] is not OP_VIEW.", op->GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "op[%d] is not OP_VIEW.", op->GetOpMagic());
             return FAILED;
         }
         if (AllocViewTensorMemRange(*op) != SUCCESS) {
@@ -411,7 +411,7 @@ Status OoOScheduler::AllocTensorMemRange(IssueEntryPtr issue) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] cannot find in localBufferMap.", memId);
             return FAILED;
         }
-        APASS_LOG_DEBUG_F(Elements::Tensor, "REALLOC Tensor[%u] %s --> %s.", 
+        APASS_LOG_DEBUG_F(Elements::Tensor, "REALLOC Tensor[%d] %s --> %s.", 
             memId, tensorOccupyMap[memType][memId]->GetOpInfo().c_str(), issue->GetOpInfo().c_str());
         tensorOccupyMap[memType][memId] = issue;
         outTensor->memoryrange =
@@ -598,7 +598,7 @@ Status OoOScheduler::RetireCoreIssue(OpCoreType coreType, int idx, uint64_t& com
             }
             continue;
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "EXECUTING[%ld]: %s", pipe.curOpRetireCycle, pipe.curIssue->GetOpInfo().c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "EXECUTING[%d]: %s", pipe.curOpRetireCycle, pipe.curIssue->GetOpInfo().c_str());
         if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
             nextCycle = pipe.curOpRetireCycle;
         }
@@ -713,7 +713,7 @@ Status OoOScheduler::ExecuteAllocIssue(IssueEntryPtr issue, size_t &pcIdx) {
         }
     }
     if (bufferManagerMap[corePair.first][corePair.second][allocBuffer->memType].Allocate(allocBuffer) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Allocate tensor[%u] failed.", allocBuffer->id); 
+        APASS_LOG_ERROR_F(Elements::Tensor, "Allocate tensor[%d] failed.", allocBuffer->id); 
         return FAILED; 
     }
     return SUCCESS;
@@ -1042,7 +1042,7 @@ Status OoOScheduler::CheckOpBufferSize(Operation *op) {
             continue;
         }
         if (op->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Alloc tensor[%d] size[%d] exceeds %s size[%d]! %s", 
+            APASS_LOG_ERROR_F(Elements::Operation, "Alloc tensor[%d] size[%ld] exceeds %s size[%ld]! %s", 
                 op->GetOutputOperand(0)->GetMagic(), buffer.second, MemoryTypeToString(buffer.first).c_str(), 
                 localMemorySize[buffer.first], GetFormatBacktrace(*op).c_str());
             APASS_LOG_ERROR_F(Elements::Operation, "Tensor[%d] producer info:", op->GetOutputOperand(0)->GetMagic());
@@ -1053,7 +1053,7 @@ Status OoOScheduler::CheckOpBufferSize(Operation *op) {
                 APASS_LOG_ERROR_F(Elements::Operation, "    %s.", dumpOpInfo(*producer).c_str());
             }
         } else {
-            APASS_LOG_ERROR_F(Elements::Operation, "OP %s[%d] in/output total size[%ld] exceeds %s size[%d]!", 
+            APASS_LOG_ERROR_F(Elements::Operation, "OP %s[%d] in/output total size[%ld] exceeds %s size[%ld]!",
                 op->GetOpcodeStr().c_str(), op->GetOpMagic(), buffer.second, MemoryTypeToString(buffer.first).c_str(),
                 localMemorySize[buffer.first]);
             APASS_LOG_ERROR_F(Elements::Operation, "%s.", dumpOpInfo(*op).c_str());
@@ -1421,7 +1421,7 @@ Status OoOScheduler::GenRearrangeCopyOp(IssueEntryPtr AllocIssue, MemoryType mem
     ProcessMoveIssue(moveIssuePtr, AllocIssue, memType, oldMemId, newMemId);
     // 更新memId
     if (UpdateMemId(oldMemId, newMemId) != SUCCESS) {
-        APASS_LOG_WARN_F(Elements::Operation, "GenRearrangeCopyOp failed at UpdateMemId.", GetFormatBacktrace(moveOp).c_str());
+        APASS_LOG_WARN_F(Elements::Operation, "GenRearrangeCopyOp failed at UpdateMemId. %s", GetFormatBacktrace(moveOp).c_str());
         return FAILED;
     }
     // Free oldMemId

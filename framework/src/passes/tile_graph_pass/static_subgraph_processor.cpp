@@ -198,7 +198,7 @@ void StaticSubgraphProcessor::EraseRedundantColorEdges(const Function &function)
     // Erase redundant edges
     for (size_t i = 0; i < colorNum; i++) {
         std::sort(redundantColorOutGraph[i].begin(), redundantColorOutGraph[i].end());
-        APASS_LOG_INFO_F(Elements::Operation, "Redundant outgraph of %d is %s.", i, IntVecToStr(redundantColorOutGraph[i]).c_str());
+        APASS_LOG_INFO_F(Elements::Operation, "Redundant outgraph of %zu is %s.", i, IntVecToStr(redundantColorOutGraph[i]).c_str());
         std::vector<int> newGraph;
         // update color_in_graph
         size_t j = 0U;

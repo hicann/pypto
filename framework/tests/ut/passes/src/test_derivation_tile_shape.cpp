@@ -307,5 +307,39 @@ TEST_F(DerivationTileShapeTest, DerivationDiffSizeFail1) {
     BuildShapeAndCheckFail(G.GetFunction(), inShape, outShape, inTileShape);
 }
 
+TEST_F(DerivationTileShapeTest, DerivationCheckTileShapeSizeMismatch) {
+    ComputationalGraphBuilder G;
+    BuildGraphAndCheck(G);
+
+    Shape inShape = {2, 4};
+    Shape outShape = {1, 2, 2, 2};
+    std::vector<int64_t> inTileShape = {2, 33};
+    BuildShapeAndCheckFail(G.GetFunction(), inShape, outShape, inTileShape);
+}
+
+TEST_F(DerivationTileShapeTest, DerivationCheckTileShapeDistanceMismatch) {
+    ComputationalGraphBuilder G;
+    BuildGraphAndCheck(G);
+
+    Shape inShape = {2, 2, 6};
+    Shape outShape = {2, 4, 3};
+    std::vector<int64_t> inTileShape = {2, 2, 2};
+    BuildShapeAndCheckFail(G.GetFunction(), inShape, outShape, inTileShape);
+}
+
+TEST_F(DerivationTileShapeTest, DerivationReshapeTileShapeNonReshapeOp) {
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP32, {8, 8}, "a");
+    G.AddTensor(DataType::DT_FP32, {8, 8}, "b");
+    G.AddOp(Opcode::OP_ADD, {"a"}, {"b"}, "add1");
+    G.SetInCast({"a"});
+    G.SetOutCast({"b"});
+    Function *function = G.GetFunction();
+    DerivationTileShape pass;
+    std::vector<int64_t> outTileShape;
+    auto addOp = function->Operations().DuplicatedOpList()[0];
+    EXPECT_EQ(pass.DerivationReshapeTileShape(addOp, {8, 8}, {8, 8}, {4, 4}, outTileShape), WARNING);
+}
+
 } // namespace tile_fwk
 } // namespace npu

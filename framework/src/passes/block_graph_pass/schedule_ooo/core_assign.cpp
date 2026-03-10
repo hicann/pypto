@@ -381,7 +381,7 @@ void TaskSpliter::BuildOpGraph() {
 
 // mix子图切分主函数
 void TaskSpliter::SplitGraph(const std::vector<Operation *> &opList) {
-    APASS_LOG_INFO_F(Elements::Operation, "Start to split mix graph with op num %d.", opList.size());
+    APASS_LOG_INFO_F(Elements::Operation, "Start to split mix graph with op num %zu.", opList.size());
     opList_ = opList;
     BuildOpGraph();
     BuildSameLayerConnectionWithBack();

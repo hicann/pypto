@@ -419,7 +419,7 @@ static void TiledReshape(const int dimIdx, const std::vector<int64_t> &inShape, 
 {
     if (static_cast<size_t>(dimIdx) == inShape.size()) {
         tileCnt++;
-        APASS_LOG_DEBUG_F(Elements::Tensor, "tileCnt:%lld, actOffset%s, actTileShape%s",
+        APASS_LOG_DEBUG_F(Elements::Tensor, "tileCnt:%ld, actOffset%s, actTileShape%s",
             tileCnt, GetStr(actOffset).c_str(), GetStr(actTileShape).c_str());
         allActTileShape.push_back(actTileShape);
         allActOffset.push_back(actOffset);
@@ -453,13 +453,13 @@ static int64_t calcTileSubDistance(int64_t currSub, const std::vector<int64_t> &
         currTileSub[k] = tempSize / currStride[k];
         tempSize = tempSize % currStride[k];
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "currSub:%lld, currTileSub%s in tile",
+    APASS_LOG_DEBUG_F(Elements::Tensor, "currSub:%ld, currTileSub%s in tile",
         currSub, GetStr(currTileSub).c_str());
     /* 将tile块上的坐标，转移到整个shape上的坐标，进行坐标的偏移 */
     for (k = 0; k < currTile.size(); k++) {
         currTileSub[k] = currTileSub[k] + actOffset[k];
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "currSub:%lld, currTileSub%s in tensor",
+    APASS_LOG_DEBUG_F(Elements::Tensor, "currSub:%ld, currTileSub%s in tensor",
         currSub, GetStr(currTileSub).c_str());
 
     /* 根据在shape上的坐标，计算距离Tensor起点的位置，即使用stride来计算线性的距离 */
@@ -508,7 +508,7 @@ static Status CheckTileShape(const std::vector<int64_t> &inShape, const std::vec
     int64_t ouTileCnt = TiledReshape(outShape, outTile, outActTileShape, outActOffset);
     if (inTileCnt != ouTileCnt || inTileCnt <= 0 || ouTileCnt <= 0) {
         /* 检查tile展开后的个数是否相等 */
-        APASS_LOG_WARN_F(Elements::Operation, "inTileCnt:%lld is not same as ouTileCnt:%lld",
+        APASS_LOG_WARN_F(Elements::Operation, "inTileCnt:%ld is not same as ouTileCnt:%ld",
             inTileCnt, ouTileCnt);
         return WARNING;
     }
@@ -523,7 +523,7 @@ static Status CheckTileShape(const std::vector<int64_t> &inShape, const std::vec
 
     for (int64_t i = 0; i < inTileCnt; ++i) {
         if (!IsVertex(inTileCntShape, i) && !IsVertex(outTileCntShape, i)) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "inTileCntShape:%s, outTileCntShape:%s, i=%lld",
+            APASS_LOG_DEBUG_F(Elements::Operation, "inTileCntShape:%s, outTileCntShape:%s, i=%ld",
                 GetStr(inTileCntShape).c_str(), GetStr(outTileCntShape).c_str(), i);
             continue;
         }
@@ -532,7 +532,7 @@ static Status CheckTileShape(const std::vector<int64_t> &inShape, const std::vec
         int64_t inTileSize = GetShapeSize(inActTileShape[i]);
         int64_t outTileSize = GetShapeSize(outActTileShape[i]);
         if (inTileSize != outTileSize) {
-            APASS_LOG_WARN_F(Elements::Tensor, "tileCnt:%lld, inTileSize:%lld is not equal to outTileSize:%lld",
+            APASS_LOG_WARN_F(Elements::Tensor, "tileCnt:%ld, inTileSize:%ld is not equal to outTileSize:%ld",
                 i, inTileSize, outTileSize);
             return WARNING;
         }
@@ -548,7 +548,7 @@ static Status CheckTileShape(const std::vector<int64_t> &inShape, const std::vec
             int64_t outDistance = calcTileSubDistance(j, outTile, outTileStride, outActOffset[i], outStride);
             /* 如果输入输出上的对应元素距离起点的距离不相等，说明tile异常 */
             if (inDistance != outDistance) {
-                APASS_LOG_WARN_F(Elements::Tensor, "Cnt:%lld %lld, inDistance:%lld is not same as outDistance:%lld",
+                APASS_LOG_WARN_F(Elements::Tensor, "Cnt:%ld %ld, inDistance:%ld is not same as outDistance:%ld",
                     i, j, inDistance, outDistance);
                 return WARNING;
             }

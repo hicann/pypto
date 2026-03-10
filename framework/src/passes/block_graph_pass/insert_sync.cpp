@@ -272,7 +272,7 @@ Status PipeSync::InsertSync(Function &function, std::vector<Operation *> &synced
     uint64_t idxInput = 0;
     for (const auto &op : opLogPtr) {
         BuildTensorRangeMap(op);
-        APASS_LOG_DEBUG_F(Elements::Operation, "Input operation %d %d: %s.", idxInput, op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Input operation %lu %lu: %s.", static_cast<unsigned long>(idxInput), static_cast<unsigned long>(op->GetOpMagic()), op->GetOpcodeStr().c_str());
         idxInput++;
     }
     if (PipeDispatch(opLogPtr, synced) != SUCCESS) { 
@@ -1072,7 +1072,7 @@ Status PipeSync::GetDepInfo(std::vector<IndexOp> &syncedOpLog, const PipePair &p
     std::reverse(depInfo.setOpIdList.begin(), depInfo.setOpIdList.end());
     std::reverse(depInfo.setOpEventIdList.begin(), depInfo.setOpEventIdList.end());
     if (depInfo.opDepList.size() != eventNum || depInfo.setOpIdList.size() != eventNum || depInfo.setOpEventIdList.size() != eventNum) {
-        APASS_LOG_ERROR_F(Elements::Operation, "dep size should be %d, RelaxFakeDataDep failed.", eventNum);
+        APASS_LOG_ERROR_F(Elements::Operation, "dep size should be %zu, RelaxFakeDataDep failed.", eventNum);
         return FAILED;
     }
     return SUCCESS;
@@ -1714,7 +1714,7 @@ Status InsertSync::RunOnFunction(Function &function) {
         workers.emplace_back([&subPrograms, &nextIdx, leafFuncSize, &index, this, &status] {
             for (size_t idx = nextIdx.fetch_add(1, std::memory_order_relaxed); idx < leafFuncSize; idx = nextIdx.fetch_add(1, std::memory_order_relaxed)) {
                 auto program = subPrograms[idx];
-                APASS_LOG_DEBUG_F(Elements::Operation, "====================================Program %d ===========================================", index);
+                APASS_LOG_DEBUG_F(Elements::Operation, "====================================Program %zu ===========================================", index);
                 if (InsertSyncMainLoop(program.second) != SUCCESS) {
                     status = false;
                     break;

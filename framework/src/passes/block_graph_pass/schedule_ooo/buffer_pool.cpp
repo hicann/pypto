@@ -125,13 +125,13 @@ std::vector<int> BufferPool::GetBufferSlices() {
 Status BufferPool::MakeBufferSlice(LocalBufferPtr tensor, BufferSlice& newSlice) {
     newSlice.size = tensor->size;
     if (bufferSlices.find(tensor->id) != bufferSlices.end()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%u] already alloc in bufferSlices.", tensor->id);
+        APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] already alloc in bufferSlices.", tensor->id);
         return FAILED;
     }
     bufferSlices[tensor->id] = newSlice;
     tensor->start = newSlice.offset;
     tensor->end = newSlice.offset + newSlice.size;
-    APASS_LOG_DEBUG_F(Elements::Tensor, " Allocate Tensor[%u], range [%lu, %lu].",
+    APASS_LOG_DEBUG_F(Elements::Tensor, " Allocate Tensor[%d], range [%lu, %lu].",
         tensor->id, newSlice.offset, newSlice.size + newSlice.offset);
     return SUCCESS;
 }
@@ -192,7 +192,7 @@ Status BufferPool::Allocate(LocalBufferPtr tensor) {
             }
         }
     }
-    APASS_LOG_ERROR_F(Elements::Tensor, "Buffer doesnot have enough memory to allocate Tensor[%u].", tensor->id);
+    APASS_LOG_ERROR_F(Elements::Tensor, "Buffer doesnot have enough memory to allocate Tensor[%d].", tensor->id);
     return FAILED;
 }
 
@@ -224,7 +224,7 @@ Status BufferPool::Free(const int tensorId) {
         APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] not in bufferSlices.", tensorId); 
         return FAILED; 
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "    Free tensor[%u], range:[%lu, %lu]", tensorId,
+    APASS_LOG_DEBUG_F(Elements::Tensor, "    Free tensor[%d], range:[%lu, %lu]", tensorId,
         bufferSlices[tensorId].offset, bufferSlices[tensorId].size + bufferSlices[tensorId].offset);
     bufferSlices.erase(tensorId);
     return SUCCESS;
@@ -373,15 +373,15 @@ void BufferPool::PrintStatus() {
     for (auto memId : memIdList) {
         auto &slice = bufferSlices[memId];
         if (slice.offset != lastEnd) {
-            APASS_LOG_DEBUG_F(Elements::Tensor, "      |--- Space : [%llu, %llu], Size : %llu",
+            APASS_LOG_DEBUG_F(Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu",
                 lastEnd, slice.offset, slice.offset - lastEnd);
         }
-        APASS_LOG_DEBUG_F(Elements::Tensor, "  |--- MemId : %d, Span : [%llu, %llu], Size : %llu", memId,
+        APASS_LOG_DEBUG_F(Elements::Tensor, "  |--- MemId : %d, Span : [%lu, %lu], Size : %lu", memId,
             slice.offset, slice.offset + slice.size, slice.size);
         lastEnd = slice.offset + slice.size;
     }
     if (lastEnd != memSize_) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "      |--- Space : [%llu, %llu], Size : %llu",
+        APASS_LOG_DEBUG_F(Elements::Tensor, "      |--- Space : [%lu, %lu], Size : %lu",
             lastEnd, memSize_, memSize_ - lastEnd);
     }
 }

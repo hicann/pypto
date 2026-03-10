@@ -41,14 +41,14 @@ Status checkAssemble(const std::unordered_map<LogicalTensorPtr, int64_t> &tensor
             rawMagicToRawOffset[rawMagic] = rawOffset;
         } else if (rawMagicToRawOffset[rawMagic] != rawOffset) {
             APASS_LOG_ERROR_F(Elements::Tensor,
-                "LogicTensor(%d) relative position to rawTensor(%d) changed after the assemble op.",
-                logicTensor->GetMagic(), rawMagic);
+                "LogicTensor(%d) relative position to rawTensor(%ld) changed after the assemble op.",
+                logicTensor->GetMagic(), static_cast<long>(rawMagic));
             return FAILED;
         }
     }
     for (auto &[rawMagic, shape] : rawTensorSize) {
         if (shape != 0) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "RawTensor(%d) is not fully covered.", rawMagic);
+            APASS_LOG_ERROR_F(Elements::Tensor, "RawTensor(%ld) is not fully covered.", static_cast<long>(rawMagic));
             return FAILED;
         }
     }

@@ -37,7 +37,6 @@ function(PTO_Fwk_UTest_AddCaseLib)
     add_library(${ARG_TARGET} STATIC)
     target_sources(${ARG_TARGET} PRIVATE ${ARG_SOURCES})
     target_include_directories(${ARG_TARGET} PRIVATE ${ARG_PRIVATE_INCLUDE_DIRECTORIES})
-    target_compile_definitions(${ARG_TARGET} PRIVATE IGNORE_LOG_FORMAT_CHECK)
     target_link_libraries(${ARG_TARGET}
             PRIVATE
                 ${PTO_Fwk_UTestNamePrefix}_utils

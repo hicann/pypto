@@ -21,8 +21,10 @@
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
+#define private public
 #include "passes/block_graph_pass/schedule_ooo/schedule_ooo.h"
 #include "passes/block_graph_pass/schedule_ooo/core_assign.h"
+#include "passes/block_graph_pass/schedule_ooo/buffer_rearrange.h"
 #include "operator/models/deepseek/deepseek_mla.h"
 #include "computational_graph_builder.h"
 
@@ -1637,6 +1639,46 @@ TEST_F(ScheduleOoOTest, TestBufferPollRearrange) {
     EXPECT_EQ(ubPool.GetBufferSize(2), 98304);
     EXPECT_EQ(ubPool.GetBufferOffset(1), 98304);
     EXPECT_EQ(ubPool.GetBufferOffset(2), 0);
+}
+
+TEST_F(ScheduleOoOTest, TestBufferPoolMakeBufferSliceAlreadyAlloc) {
+    BufferPool pool(MemoryType::MEM_UB, 1024);
+    auto tensor = std::make_shared<LocalBuffer>(1, 64, MemoryType::MEM_UB);
+    BufferSlice slice1(0, 64);
+    EXPECT_EQ(pool.MakeBufferSlice(tensor, slice1), SUCCESS);
+    BufferSlice slice2(128, 64);
+    EXPECT_EQ(pool.MakeBufferSlice(tensor, slice2), FAILED);
+}
+
+TEST_F(ScheduleOoOTest, TestBufferPoolAllocateNoFreeSpace) {
+    BufferPool pool(MemoryType::MEM_UB, 256);
+    auto tensor1 = std::make_shared<LocalBuffer>(1, 256, MemoryType::MEM_UB);
+    EXPECT_EQ(pool.Allocate(tensor1), SUCCESS);
+    auto tensor2 = std::make_shared<LocalBuffer>(2, 64, MemoryType::MEM_UB);
+    EXPECT_EQ(pool.Allocate(tensor2), FAILED);
+}
+
+TEST_F(ScheduleOoOTest, TestBufferRearrangeSingleBubble) {
+    BufferPool pool(MemoryType::MEM_UB, 100);
+    auto tensor = std::make_shared<LocalBuffer>(1, 50, MemoryType::MEM_UB);
+    BufferSlice s1(0, 50);
+    EXPECT_EQ(pool.MakeBufferSlice(tensor, s1), SUCCESS);
+    RearrangeScheme scheme = GetRearrangeScheme(pool, 50);
+    EXPECT_EQ(scheme.cost, static_cast<size_t>(INT_MAX));
+}
+
+TEST_F(ScheduleOoOTest, TestSchedulerAllocTensorMemRangeNonViewOp) {
+    ComputationalGraphBuilder subGraph;
+    subGraph.AddTensor(DataType::DT_FP32, {8, 8}, "a");
+    subGraph.AddTensor(DataType::DT_FP32, {8, 8}, "b");
+    subGraph.AddTensor(DataType::DT_FP32, {8, 8}, "c");
+    subGraph.AddOp(Opcode::OP_ADD, {"a", "b"}, {"c"}, "add1");
+    Function *function = subGraph.GetFunction();
+    OoOScheduler oooSchedule(*function);
+    auto addOp = subGraph.GetOp("add1");
+    auto issue = std::make_shared<IssueEntry>(*addOp, 1);
+    issue->viewOps.push_back(addOp);
+    EXPECT_EQ(oooSchedule.AllocTensorMemRange(issue), FAILED);
 }
 
 TEST_F(ScheduleOoOTest, TestSpillOnBlockFailedAtL0) {

@@ -24,6 +24,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "passes/pass_check/checker.h"
+#include "passes/pass_check/pre_graph_checker.h"
 
 using namespace npu::tile_fwk;
 using namespace std;
@@ -224,4 +225,51 @@ TEST_F(PassCheckTest, TestCheckLocalTensor) {
     currFunctionPtr->outCasts_.push_back(outcast1);
     Checker checker;
     EXPECT_EQ(checker.CheckLocalTensor(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestPreGraphCheckerAssembleViewReshapeInvalidIO) {
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "PreGraphCheckerTest", "PreGraphCheckerTest", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {8, 16};
+    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1, incast2}, {outcast1});
+    currFunctionPtr->Operations().back().UpdateSubgraphID(0);
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->inCasts_.push_back(incast2);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+
+    PreGraphProcessChecker checker;
+    EXPECT_EQ(checker.DoPreCheck(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestPreGraphCheckerTensorNotInSubgraph) {
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "PreGraphCheckerTest2", "PreGraphCheckerTest2", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {8, 16};
+    auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1}, {tensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_ADD, {tensor1}, {outcast1});
+    currFunctionPtr->Operations()[0].UpdateSubgraphID(0);
+    currFunctionPtr->Operations()[1].UpdateSubgraphID(1);
+    incast1->subGraphID = 0;
+    outcast1->subGraphID = 1;
+    tensor1->subGraphID = NOT_IN_SUBGRAPH;
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    currFunctionPtr->SetTotalSubGraphCount(2);
+
+    PreGraphProcessChecker checker;
+    EXPECT_EQ(checker.DoPreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(checker.DoPostCheck(*currFunctionPtr), FAILED);
 }

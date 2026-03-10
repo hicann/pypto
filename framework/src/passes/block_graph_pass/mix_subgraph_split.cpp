@@ -39,7 +39,7 @@ Status MixSubgraphSplit::RunOnFunction(Function &function) {
         APASS_LOG_ERROR_F(Elements::Function, "GatherSubGraphInfo failed");
         return FAILED;
     }
-    APASS_LOG_INFO_F(Elements::Function, "Found %d leaf function to process", programs.size());
+    APASS_LOG_INFO_F(Elements::Function, "Found %zu leaf function to process", programs.size());
 
     if (mixSubgraphs.empty()) {
         APASS_LOG_INFO_F(Elements::Function, "No mix subgraph found, jump MixSubgraphSplit.");
@@ -140,7 +140,7 @@ Status MixSubgraphSplit::CalculateSplit(Function &function, std::vector<MixSubgr
         }
     }
     size_t finalCount = originalCount - deleteCount + newSubgraphCount;
-    APASS_LOG_INFO_F(Elements::Function, "Program count: original= %d, delete=%d, new=%d, final=%d", originalCount, deleteCount, newSubgraphCount, finalCount);
+    APASS_LOG_INFO_F(Elements::Function, "Program count: original= %zu, delete=%zu, new=%zu, final=%zu", originalCount, deleteCount, newSubgraphCount, finalCount);
     // 构建programID重映射表
     uint64_t nextProgramID = 0; // 从0开始重新分配连续ID
 
@@ -148,7 +148,7 @@ Status MixSubgraphSplit::CalculateSplit(Function &function, std::vector<MixSubgr
     for (auto &program : rootFunc->programs_) {
         if (mixSubgraphIDsToDelete.find(program.first) == mixSubgraphIDsToDelete.end()) {
             programIDRemap[program.first] = nextProgramID++;
-            APASS_LOG_DEBUG_F(Elements::Function, "Remap preserved program: %d ->  %d", program.first, programIDRemap[program.first]);
+            APASS_LOG_DEBUG_F(Elements::Function, "Remap preserved program: %lu ->  %lu", program.first, programIDRemap[program.first]);
         }
     }
     // 为新创建的子图分配连续的ID
@@ -198,7 +198,7 @@ Status MixSubgraphSplit::ExecuteSplit(Function &function, std::vector<MixSubgrap
     }
     // 删除原始Mix子图的callOp
     DeleteOriginalMixCallOps(*rootFunc, callOpsToDelete);
-    APASS_LOG_INFO_F(Elements::Function, "Found %d mix subgraphs to split", mixSubgraphs.size());
+    APASS_LOG_INFO_F(Elements::Function, "Found %zu mix subgraphs to split", mixSubgraphs.size());
 
     // 应用拆分结果并重新映射所有programID
     auto status = ApplySplitResultsWithRemap(function, splitResults, programIDRemap, mixSubgraphNewIDs);
@@ -271,7 +271,7 @@ Status MixSubgraphSplit::ApplySplitResultsWithRemap(Function& function,
             // 更新function的programID
             if (program.second != nullptr) {
                 program.second->SetProgramId(newID);
-                APASS_LOG_DEBUG_F(Elements::Function, "Updated preserved program: oldID=%d -> newID=%d", program.first, newID);
+                APASS_LOG_DEBUG_F(Elements::Function, "Updated preserved program: oldID=%lu -> newID=%lu", program.first, newID);
             }
         }
     }
@@ -294,14 +294,14 @@ Status MixSubgraphSplit::ApplySplitResultsWithRemap(Function& function,
             if (newFunc != nullptr) {
                 newPrograms[newProgramID] = newFunc;
                 newFunc->SetProgramId(newProgramID);
-                APASS_LOG_DEBUG_F(Elements::Function, "Added new subgraph: programID=%d, function=%s",
+                APASS_LOG_DEBUG_F(Elements::Function, "Added new subgraph: programID=%lu, function=%s",
                         newProgramID, newFunc->GetRawName().c_str());
             }
         }
     }
     // 更新rootFunc的programs
     rootFunc->programs_ = std::move(newPrograms);
-    APASS_LOG_INFO_F(Elements::Function, "Program mapping completed: original count=%d, new count=%d",
+    APASS_LOG_INFO_F(Elements::Function, "Program mapping completed: original count=%lu, new count=%zu",
             originalCount, rootFunc->programs_.size());
     return SUCCESS;
 }
@@ -394,9 +394,9 @@ Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
             return FAILED;
         }
         uint64_t mixId = nextMixId_++;
-        APASS_LOG_DEBUG_F(Elements::Function, "Assigning mixId=%lu for original mix function programID=%d", mixId, programID);
+        APASS_LOG_DEBUG_F(Elements::Function, "Assigning mixId=%lu for original mix function programID=%lu", mixId, programID);
         MixResourceType resourceType = GetMixResourceType(*originalMixFunc);
-        APASS_LOG_DEBUG_F(Elements::Function, "Mix resource type: %d for programID=%d", static_cast<int>(resourceType), programID);
+        APASS_LOG_DEBUG_F(Elements::Function, "Mix resource type: %d for programID=%lu", static_cast<int>(resourceType), programID);
         // 为每个scope创建leaf function
         if (GenNewFunctions(rootFunc, originalMixFunc, components, newProgramIDs,
                             analyzerOutput->subgraphToFunction, newFunctions,
@@ -621,7 +621,7 @@ void MixSubgraphSplit::DeleteOriginalMixCallOps(Function& rootFunc, const std::v
     }
     // 执行实际删除
     rootFunc.EraseOperations(false);
-    APASS_LOG_INFO_F(Elements::Operation, "Deleted %d original mix subgraph callOps", callOpsToDelete.size());
+    APASS_LOG_INFO_F(Elements::Operation, "Deleted %zu original mix subgraph callOps", callOpsToDelete.size());
 }
 }
 }

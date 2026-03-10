@@ -409,7 +409,7 @@ void OoOScheduler::ReplaceIndex(std::vector<IssueEntryPtr> &curIssueEntries,
     std::set<size_t> advanceIndexList, size_t rollBackIndex) {
     std::vector<IssueEntryPtr> moveIssueEntries;
     for (auto i : advanceIndexList) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "advance index: %d, issue: %s",
+        APASS_LOG_DEBUG_F(Elements::Operation, "advance index: %zu, issue: %s",
                 i, curIssueEntries[i]->GetOpInfo().c_str());
         moveIssueEntries.push_back(curIssueEntries[i]);
     }
@@ -422,7 +422,7 @@ void OoOScheduler::ReplaceIndex(std::vector<IssueEntryPtr> &curIssueEntries,
 void OoOScheduler::GetPreNode(size_t i, std::vector<IssueEntryPtr> curIssueEntries, size_t rollBackIndex,
     size_t backTraceIndex, std::set<size_t> &dependencyIndexList) {
     dependencyIndexList.insert(i);
-    APASS_LOG_DEBUG_F(Elements::Operation, "dependencyIndexList push index: %d, issue: %s",
+    APASS_LOG_DEBUG_F(Elements::Operation, "dependencyIndexList push index: %zu, issue: %s",
         i, curIssueEntries[i]->GetOpInfo().c_str());
     for (auto preId : curIssueEntries[i]->predecessors) {
         auto issue = issueEntryMap[preId];
@@ -446,7 +446,7 @@ void OoOScheduler::GetListToAdvance(size_t rollBackIndex, size_t backTraceIndex,
     for (size_t i = rollBackIndex + 1; i <= backTraceIndex; i++) {
         if (dependencyIndexList.count(i) == 0) {
             advanceIndexList.insert(i);
-            APASS_LOG_DEBUG_F(Elements::Operation, "advanceIndexList push index: %d, issue: %s",
+            APASS_LOG_DEBUG_F(Elements::Operation, "advanceIndexList push index: %zu, issue: %s",
                 i, curIssueEntries[i]->GetOpInfo().c_str());
         }
     }
@@ -461,8 +461,8 @@ Status OoOScheduler::RollBack(size_t &startIndex,
     size_t backTraceIndex = backTraceIssueEntries[backTraceIssue].first + 1;
     backTraceIssue = curIssueEntries[backTraceIndex];
     size_t rollBackIndex = backTraceIndex;
-    APASS_LOG_DEBUG_F(Elements::Operation, "backTraceIssue: %s, backTraceIndex: %d, memType: %d",
-        backTraceIssue->GetOpInfo().c_str(), backTraceIndex, memType);
+    APASS_LOG_DEBUG_F(Elements::Operation, "backTraceIssue: %s, backTraceIndex: %zu, memType: %d",
+        backTraceIssue->GetOpInfo().c_str(), backTraceIndex, static_cast<int>(memType));
     while (rollBackIndex < curIssueEntries.size() && rollBackIndex > 0) {
         rollBackIndex--;
         IssueEntryPtr rollBackIssue = curIssueEntries[rollBackIndex];
@@ -470,7 +470,7 @@ Status OoOScheduler::RollBack(size_t &startIndex,
             continue;
         }
         rollBackNodeIssue = rollBackIssue;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Select rollBackIssue: %s, rollBackIndex: %d",
+        APASS_LOG_DEBUG_F(Elements::Operation, "Select rollBackIssue: %s, rollBackIndex: %zu",
             rollBackIssue->GetOpInfo().c_str(), rollBackIndex);
         recordBufferAllocate = backTraceBufferAllocate;
         recordIssueEntries = backTraceIssueEntries;
@@ -479,7 +479,7 @@ Status OoOScheduler::RollBack(size_t &startIndex,
         GetListToAdvance(rollBackIndex, backTraceIndex, curIssueEntries, advanceIndexList);
         ReplaceIndex(curIssueEntries, advanceIndexList, rollBackIndex);
         startIndex = rollBackIndex;
-        APASS_LOG_DEBUG_F(Elements::Operation, "RollBack==>change startIndex: %d", startIndex);
+        APASS_LOG_DEBUG_F(Elements::Operation, "RollBack==>change startIndex: %zu", startIndex);
         if (rollBackIndex != 0) {
             curMemoryMap = recordBufferAllocate[curIssueEntries[rollBackIndex-1]];
             RecoverSymbol(startIndex - 1, curIssueEntries);
@@ -503,9 +503,9 @@ void OoOScheduler::ReorderIssue(std::vector<size_t> &preIdx, std::vector<IssueEn
     // 对 perIssue 排序，再进行插入
     std::sort(preIdx.begin(), preIdx.end());
     std::vector<IssueEntryPtr> moveIssueEntries;
-    APASS_LOG_DEBUG_F(Elements::Operation, "current index: %d, preIdx size: %d", startIndex, preIdx.size());
+    APASS_LOG_DEBUG_F(Elements::Operation, "current index: %zu, preIdx size: %zu", startIndex, preIdx.size());
     for (auto i : preIdx) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "preidx : %d, curIssue: %s", i, curIssueEntries[i]->GetOpInfo().c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "preidx : %zu, curIssue: %s", i, curIssueEntries[i]->GetOpInfo().c_str());
         moveIssueEntries.push_back(curIssueEntries[i]);
     }
     for (auto it = preIdx.rbegin(); it != preIdx.rend(); ++it) {
@@ -535,13 +535,13 @@ Status OoOScheduler::FindConsumerList(size_t consumerIndex, std::vector<size_t> 
     }
     visitedIssue[curIssueEntries[consumerIndex]] = true;
     preIssue.push_back(consumerIndex);
-    APASS_LOG_DEBUG_F(Elements::Operation, "unvisited consumer idx: %d, issue: %s", consumerIndex, curIssueEntries[consumerIndex]->GetOpInfo().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "unvisited consumer idx: %zu, issue: %s", consumerIndex, curIssueEntries[consumerIndex]->GetOpInfo().c_str());
     for (auto preId : curIssueEntries[consumerIndex]->predecessors) {
         auto issue =  issueEntryMap[preId];
         if (visitedIssue[issue] == false) {
             size_t index;
             FindIndex(issue, curIssueEntries, index);
-            APASS_LOG_DEBUG_F(Elements::Operation, "consumer preIdx: %d, issue: %s", index, issue->GetOpInfo().c_str());
+            APASS_LOG_DEBUG_F(Elements::Operation, "consumer preIdx: %zu, issue: %s", index, issue->GetOpInfo().c_str());
             if (FindConsumerList(index, preIssue, curIssueEntries) != SUCCESS) {
                 APASS_LOG_WARN_F(Elements::Operation, "FindConsumerList failed");
                 return FAILED;
@@ -559,7 +559,7 @@ Status OoOScheduler::UpdateOOperandPreDependence(size_t startIndex, std::vector<
     size_t index = startIndex;
     while (index < curIssueEntries.size()) {
         if (std::find(consumersGroup.begin(), consumersGroup.end(), curIssueEntries[index]) != consumersGroup.end()) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "consumer Idx: %d", index);
+            APASS_LOG_DEBUG_F(Elements::Operation, "consumer Idx: %zu", index);
             if (FindConsumerList(index, preIssue, curIssueEntries) != SUCCESS) {
                 APASS_LOG_WARN_F(Elements::Operation, "FindConsumerList failed");
                 return FAILED;
@@ -573,7 +573,7 @@ Status OoOScheduler::UpdateOOperandPreDependence(size_t startIndex, std::vector<
 
 // 回溯后，将队列 startIndex 位置之后的 issue 的 visitedIssue 状态还原回 false
 void OoOScheduler::RecoverSymbol(size_t startIndex, std::vector<IssueEntryPtr> curIssueEntries) {
-    APASS_LOG_DEBUG_F(Elements::Operation, "RecoverSymbol  startIdx: %d, curIssue: %s", startIndex, curIssueEntries[startIndex]->GetOpInfo().c_str());
+    APASS_LOG_DEBUG_F(Elements::Operation, "RecoverSymbol  startIdx: %zu, curIssue: %s", startIndex, curIssueEntries[startIndex]->GetOpInfo().c_str());
     bufRefCount_ = recordBufRefCount[curIssueEntries[startIndex]];
     for (size_t i = 0; i < curIssueEntries.size(); i++) {
         if (i > startIndex) {
@@ -617,7 +617,7 @@ Status OoOScheduler::BacktraceOnMemoryExceeded(size_t &startIndex,
             continue;
         }
         std::vector<IssueEntryPtr> consumers;
-        APASS_LOG_DEBUG_F(Elements::Operation, "=====>start to find unvisited consumer, current index： %d", startIndex);
+        APASS_LOG_DEBUG_F(Elements::Operation, "=====>start to find unvisited consumer, current index： %zu", startIndex);
         for (auto succIdx : issue->successors) {
             consumers.push_back(issueEntryMap[succIdx]);
             APASS_LOG_DEBUG_F(Elements::Operation, "consumer: %s", issueEntryMap[succIdx]->GetOpInfo().c_str());
@@ -638,7 +638,7 @@ Status OoOScheduler::BacktraceOnMemoryExceeded(size_t &startIndex,
             continue;
         }
         startIndex++;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Backtrace==>change startIndex: %d", startIndex);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Backtrace==>change startIndex: %zu", startIndex);
         return SUCCESS;
     }
     if (needFreeIssueStack.empty()) {
@@ -662,8 +662,8 @@ bool OoOScheduler::IsBufferFull(std::map<MemoryType, int64_t> curMemoryMap, Memo
         return false;
     }
     if (curMemoryMap[memType] + size > localMemorySize[memType]) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "The %d-memType memory is full, current memory: %d, memory to add: %d",
-            memType, curMemoryMap[memType], size);
+        APASS_LOG_DEBUG_F(Elements::Operation, "The %d-memType memory is full, current memory: %ld, memory to add: %ld",
+            static_cast<int>(memType), static_cast<long>(curMemoryMap[memType]), static_cast<long>(size));
         return true;
     }
     return false;
@@ -681,7 +681,7 @@ Status OoOScheduler::ModifyBuffer(std::map<MemoryType, int64_t> &curMemoryMap, M
             return FAILED;
         }
         curMemoryMap[memType] = curMemoryMap[memType] + size;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Increase %d-memType memory, size: %d, total memory %d", memType, size, curMemoryMap[memType]);
+        APASS_LOG_DEBUG_F(Elements::Operation, "Increase %d-memType memory, size: %ld, total memory %ld", static_cast<int>(memType), static_cast<long>(size), static_cast<long>(curMemoryMap[memType]));
         return SUCCESS;
     }
     if (curMemoryMap[memType] - size < 0) {
@@ -689,7 +689,7 @@ Status OoOScheduler::ModifyBuffer(std::map<MemoryType, int64_t> &curMemoryMap, M
         return FAILED;
     }
     curMemoryMap[memType] = curMemoryMap[memType] - size;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Reduce %d-memType memory, size: %d, total memory %d", memType, size, curMemoryMap[memType]);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Reduce %d-memType memory, size: %ld, total memory %ld", static_cast<int>(memType), static_cast<long>(size), static_cast<long>(curMemoryMap[memType]));
     return SUCCESS;
 }
 
@@ -729,8 +729,8 @@ Status OoOScheduler::AllocExecute(IssueEntryPtr issue, std::vector<IssueEntryPtr
         backTraceBufferAllocate = recordBufferAllocate;
         backTraceIssueEntries = recordIssueEntries;
         backTraceBufRefCount = recordBufRefCount;
-        APASS_LOG_DEBUG_F(Elements::Operation, "backTraceIssue: %s, backTraceIndex: %d, memType: %d",
-            backTraceIssue->GetOpInfo().c_str(), backTraceIssueEntries[backTraceIssue].first, recordIssueBuffer[backTraceIssue]);
+        APASS_LOG_DEBUG_F(Elements::Operation, "backTraceIssue: %s, backTraceIndex: %zu, memType: %d",
+            backTraceIssue->GetOpInfo().c_str(), backTraceIssueEntries[backTraceIssue].first, static_cast<int>(recordIssueBuffer[backTraceIssue]));
         APASS_LOG_DEBUG_F(Elements::Operation, "=====> Need backtrace.");
         if (BacktraceOnMemoryExceeded(startIndex, curIssueEntries, curMemoryMap) != SUCCESS) {
             if (RollBack(startIndex, curIssueEntries, curMemoryMap) != SUCCESS) {
@@ -748,14 +748,14 @@ Status OoOScheduler::AllocExecute(IssueEntryPtr issue, std::vector<IssueEntryPtr
 
 Status OoOScheduler::IssueEntriesExecute(std::vector<IssueEntryPtr> &curIssueEntries,
     std::map<MemoryType, int64_t> &curMemoryMap, size_t &startIndex) {
-    APASS_LOG_DEBUG_F(Elements::Operation, "===>Start issueEntriesExecute, startIndex: %d", startIndex);
+    APASS_LOG_DEBUG_F(Elements::Operation, "===>Start issueEntriesExecute, startIndex: %zu", startIndex);
     if (curIssueEntries.empty()) {
         curIssueEntries = issueEntries;
     }
     while (startIndex < curIssueEntries.size()) {
         auto issue = curIssueEntries[startIndex];
         issueMemoryUpdate(issue, startIndex, curIssueEntries, curMemoryMap);
-        APASS_LOG_DEBUG_F(Elements::Operation, "execute issue: %s, index: %d", issue->GetOpInfo().c_str(), startIndex);
+        APASS_LOG_DEBUG_F(Elements::Operation, "execute issue: %s, index: %zu", issue->GetOpInfo().c_str(), startIndex);
         if (issue->isAlloc) {
             bool isContinue = false;
             if (AllocExecute(issue, curIssueEntries, curMemoryMap,  startIndex, isContinue) != SUCCESS) {
@@ -768,7 +768,7 @@ Status OoOScheduler::IssueEntriesExecute(std::vector<IssueEntryPtr> &curIssueEnt
             auto allocBuffer = localBufferMap[issue->reqMemIds[0]];
             APASS_LOG_DEBUG_F(Elements::Operation, "Start to increase memory:");
             if (ModifyBuffer(curMemoryMap, allocBuffer->memType, allocBuffer->size, true) != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Allocate tensor[%u] failed.", allocBuffer->id);
+                APASS_LOG_ERROR_F(Elements::Operation, "Allocate tensor[%d] failed.", allocBuffer->id);
                 return FAILED;
             }
         }

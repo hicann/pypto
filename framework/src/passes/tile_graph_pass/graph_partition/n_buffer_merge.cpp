@@ -371,7 +371,7 @@ void NBufferMerge::MergePingPong(std::vector<std::vector<int>> &sortedColors,
                                      size_t &numDBmerge) {
     int pingColor = -1;
     for (auto &input2Color : sortedColors) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "NBuffer %d Number of subgraphs %d SubGraphIDs %s", numDBmerge, input2Color.size(), IntVecToStr(input2Color).c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "NBuffer %zu Number of subgraphs %zu SubGraphIDs %s", numDBmerge, input2Color.size(), IntVecToStr(input2Color).c_str());
         if (vecNBuffermode_ == autoMulityInOutMerge || vecNBuffermode_ == manualMulityInOutMerge) {
             std::sort(input2Color.begin(), input2Color.end(), [&](int x, int y) { return dfsColorOrder_[x] < dfsColorOrder_[y]; });
         }
@@ -393,7 +393,7 @@ void NBufferMerge::MergePingPong(std::vector<std::vector<int>> &sortedColors,
             colorCycles_[pongColor] = 0;
             colorNode_[pongColor].clear();
             hashColor[pongColor] = 0;
-            APASS_LOG_DEBUG_F(Elements::Operation, "SubGraph Merge: %lu, %lu.", pingColor, pongColor);
+            APASS_LOG_DEBUG_F(Elements::Operation, "SubGraph Merge: %d, %d.", pingColor, pongColor);
         }
     }
 }

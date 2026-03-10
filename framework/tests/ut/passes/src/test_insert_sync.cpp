@@ -14,9 +14,9 @@
  */
 #include <gtest/gtest.h>
 #include "tilefwk/platform.h"
+#define private public
 #include "passes/block_graph_pass/insert_sync.h"
 #include "ut_json/ut_json_tool.h"
-#define private public
 
 namespace npu {
 namespace tile_fwk {
@@ -734,6 +734,14 @@ TEST_F(InsertSyncTest, TestRelaxFakeDataDep) {
         eventIdDeadlockEnterTimes = static_cast<size_t>(0);
         break;
     }
+}
+
+TEST_F(InsertSyncTest, TestGetDepInfoSizeMismatch) {
+    PipeSync ps;
+    std::vector<IndexOp> emptySyncedOpLog;
+    auto pipePair = PipeSync::dataDepPair[0];
+    PipeSync::DataDepInfo depInfo;
+    EXPECT_EQ(ps.GetDepInfo(emptySyncedOpLog, pipePair, depInfo), FAILED);
 }
 } // namespace tile_fwk
 } // namespace npu

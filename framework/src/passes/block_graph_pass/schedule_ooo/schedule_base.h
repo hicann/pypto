@@ -363,7 +363,7 @@ public:
                 continue;
             }
             if (op->GetOpcodeStr().find("ALLOC") != std::string::npos) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Alloc tensor [%d] size [%d] exceeds %s size [%d]! %s",
+                APASS_LOG_ERROR_F(Elements::Operation, "Alloc tensor [%d] size [%ld] exceeds %s size [%ld]! %s",
                     op->GetOutputOperand(0)->GetMagic(), bufferPair.second, MemoryTypeToString(bufferPair.first).c_str(),
                     localMemSize[bufferPair.first], GetFormatBacktrace(*op).c_str());
                 APASS_LOG_ERROR_F(Elements::Operation, "Tensor [%d] producer info:", op->GetOutputOperand(0)->GetMagic());
@@ -374,7 +374,7 @@ public:
                     APASS_LOG_ERROR_F(Elements::Operation, "      %s.", DumpOpInfo(*producer).c_str());
                 }
             } else {
-                APASS_LOG_ERROR_F(Elements::Operation, "OP %s[%d] in/output total size [%ld] exceeds %s size [%d]!",
+                APASS_LOG_ERROR_F(Elements::Operation, "OP %s[%d] in/output total size [%ld] exceeds %s size [%ld]!",
                     op->GetOpcodeStr().c_str(), op->GetOpMagic(), bufferPair.second, MemoryTypeToString(bufferPair.first).c_str(),
                     localMemSize[bufferPair.first]);
                 APASS_LOG_ERROR_F(Elements::Operation, " %s.", DumpOpInfo(*op).c_str());

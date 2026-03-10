@@ -21,6 +21,10 @@
 #include "interface/configs/config_manager.h"
 #include "interface/tensor/symbolic_scalar.h"
 #include "interface/interpreter/raw_tensor_data.h"
+#define private public
+#include "passes/tensor_graph_pass/loop_unroll.h"
+#undef private
+#include "computational_graph_builder.h"
 
 #include <fstream>
 #include <vector>
@@ -108,6 +112,21 @@ TEST_F(LoopUnrollTest, test_only_reshape2) {
             Assemble(tmp, {batchId * sq, 0}, out);
         }
     }
+}
+
+TEST_F(LoopUnrollTest, IsNoOverlapWAWAssembleAttrNull) {
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP32, {8, 8}, "a");
+    G.AddTensor(DataType::DT_FP32, {8, 8}, "b");
+    G.AddTensor(DataType::DT_FP32, {8, 8}, "c");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"a"}, {"b"}, "assemble1");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"b"}, {"c"}, "assemble2");
+    G.SetInCast({"a"});
+    G.SetOutCast({"c"});
+    LoopUnroll pass;
+    pass.lastWriteMap_[0] = std::make_pair(G.GetTensor("b"), true);
+    std::unordered_map<Operation *, std::vector<int64_t>> opDynOffsetMap;
+    EXPECT_FALSE(pass.IsNoOverlapWAW(0, G.GetTensor("c"), opDynOffsetMap));
 }
 
 // Test IF and nested FUNCTION

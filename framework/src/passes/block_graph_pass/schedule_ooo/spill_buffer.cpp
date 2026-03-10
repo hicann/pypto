@@ -643,8 +643,8 @@ Status OoOScheduler::FindAssembleWithSpillTensor(SpillInfo &spillInfo, std::vect
     for (auto producer : spillInfo.spillTensor_->GetProducers()) {
         if (producer->GetOpcode() != Opcode::OP_ASSEMBLE) {
             APASS_LOG_ERROR_F(Elements::Operation, 
-                "All producer of Tensor[%d] must be assemble, now has %s[%d].", 
-                spillInfo.spillTensor_->GetMagic(), producer->GetOpcodeStr(), producer->GetOpMagic());
+                "All producer of Tensor[%d] must be assemble, now has %s[%d].",
+                spillInfo.spillTensor_->GetMagic(), producer->GetOpcodeStr().c_str(), producer->GetOpMagic());
             return FAILED;
         }
         for (auto issue : issueEntries) {

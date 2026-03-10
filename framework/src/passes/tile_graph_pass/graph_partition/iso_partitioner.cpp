@@ -553,7 +553,7 @@ Status IsoPartitioner::IsomorphismGroupMergeStep(bool nonIsoGraphsMerge)
         for (int32_t mergeColor : mergeColors) {
             if (SuitableForMergeCheck(currColor, mergeColor, nonIsoGraphsMerge) &&
                 IsomorphismGraphGroup::IsoGraphMerge(isoSubGroups_[currColor], isoSubGroups_[mergeColor], isoSubIdxs)) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "Merge current group %d with %d succeed.", currColor, mergeColor);
+                APASS_LOG_DEBUG_F(Elements::Operation, "Merge current group %zu with %d succeed.", currColor, mergeColor);
                 for (int32_t mergeNodeIdx : isoNodeList[mergeColor]) {
                     isoIdx2color[mergeNodeIdx] = currColor;
                 }

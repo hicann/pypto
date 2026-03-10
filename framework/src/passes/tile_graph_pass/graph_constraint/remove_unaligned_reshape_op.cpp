@@ -150,8 +150,8 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOps(Function &function) {
 
         for (const auto &dim : changedDims) {
             if (dim + 1 > (int)outDynValidShape.size()) {
-                APASS_LOG_WARN_F(Elements::Operation, "The dynValidShape of output[%d] of op[%d] has no [%d] index.",
-                output->GetMagic(), op.GetOpMagic(), dim);
+                APASS_LOG_WARN_F(Elements::Operation, "The dynValidShape of output[%d] of op[%d] has no [%ld] index.",
+                output->GetMagic(), op.GetOpMagic(), static_cast<long>(dim));
                 break;
             } else if (!outDynValidShape[dim].IsImmediate()) {
                 op.SetAsDeleted();

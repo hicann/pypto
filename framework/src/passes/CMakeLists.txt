@@ -12,8 +12,3 @@ file(GLOB_RECURSE _Passes_Srcs *.cpp)
 #PTO_Fwk_Debug_Source_List(NAME "_Passes_Srcs" LIST ${_Passes_Srcs} DETAIL OFF)
 
 target_sources(tile_fwk_interface PRIVATE ${_Passes_Srcs})
-
-target_compile_definitions(tile_fwk_interface
-        PRIVATE
-            IGNORE_LOG_FORMAT_CHECK
-)

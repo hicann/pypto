@@ -227,7 +227,7 @@ Status InplaceProcess::ValidMeaninglessOp(const Operation &op) const {
     if ((op.GetIOperands().size() != 1) || (op.GetOOperands().size() != 1) ||
         (op.GetIOperands().front() == nullptr) || (op.GetOOperands().front() == nullptr) ||
         (op.GetIOperands().front()->GetMemoryTypeOriginal() != op.GetOOperands().front()->GetMemoryTypeOriginal())) {
-        APASS_LOG_ERROR_F(Elements::Operation, "InplaceProcess %s[%d] Invalid: IOperands.size is %d; OOperands.size is %d; "
+        APASS_LOG_ERROR_F(Elements::Operation, "InplaceProcess %s[%d] Invalid: IOperands.size is %zu; OOperands.size is %zu; "
             "IOperands.front is nullptr (%d); OOperands.front is nullptr (%d); IOperands.front.MemoryType is %d; "
             "OOperands.front.MemoryType is %d. %s",
             (op.GetOpcodeStr().c_str()), (op.GetOpMagic()), (op.GetIOperands().size()), (op.GetOOperands().size()),
@@ -459,8 +459,8 @@ Status InplaceProcess::ProcessInplaceOp(Function &function, Operation &op) const
         if (inputIdx >= op.GetIOperands().size() || outputIdx >= op.GetOOperands().size()) {
             APASS_LOG_ERROR_F(Elements::Operation, "Invalid inplace op info for %s[%d]. Please check op inputs&outputs, supported inplace info "
                 "can be found in inplace_process.h."
-                "\n|----detect input size: %d, recorded inplace input idx: %d."
-                "\n|----detect output size: %d, recorded inplace output idx: %d. %s",
+                "\n|----detect input size: %zu, recorded inplace input idx: %zu."
+                "\n|----detect output size: %zu, recorded inplace output idx: %zu. %s",
                 op.GetOpcodeStr().c_str(), op.GetOpMagic(), op.GetIOperands().size(), inputIdx,
                 op.GetOOperands().size(), outputIdx, GetFormatBacktrace(op).c_str());
             return FAILED;
@@ -476,7 +476,7 @@ Status InplaceProcess::ProcessInplaceOp(Function &function, Operation &op) const
                         "tensor[%d] is outCast.", tensorIn->GetMagic(), tensorOut->GetMagic());
             continue;
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] output %d reuses input %d.", op.GetOpcodeStr().c_str(), op.GetOpMagic(), outputIdx, inputIdx);
+        APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] output %zu reuses input %zu.", op.GetOpcodeStr().c_str(), op.GetOpMagic(), outputIdx, inputIdx);
         if (function.IsFromOutCast(tensorOut)) {
             if ((tensorIn->tensor->symbol != "") && (tensorOut->tensor->symbol == "")) {
                 tensorOut->tensor->symbol = tensorIn->tensor->symbol;

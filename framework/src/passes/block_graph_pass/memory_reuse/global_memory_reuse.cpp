@@ -315,7 +315,7 @@ void Allocator::ProcessLeafGlobalMemoryReuse(Function &leafFunc) {
     // 处理每个输出tensor的内存复用
     for (auto &wspInfo : outWspInfo) {
         ProcessOutputForGlobalMemoryReuse(leafFunc, wspInfo, inputWorkspaceInfoMap, leafFuncReuseMap);
-        APASS_LOG_DEBUG_F(Elements::Tensor, "End reuse check for output: magic=%d rawmagic=%d size=%lu count=%d.",
+        APASS_LOG_DEBUG_F(Elements::Tensor, "End reuse check for output: magic=%d rawmagic=%d size=%lu count=%ld.",
             wspInfo.tensor->magic, wspInfo.tensor->tensor->rawmagic, wspInfo.size, wspInfo.count);
     }
 }
@@ -498,7 +498,7 @@ TensorBucket &Allocator::HandleNewBuckets(const TensorsDesc &tensorsDesc, int64_
     buckets_.emplace_back();
     UpdateTensorMagicToBucketIdx(tensorsDesc.tensors, buckets_.size() - 1);
     bucketsIdxToSize_[buckets_.size() - 1] = rawDataSize;
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Creating new bucket %d for tensor magic=%d.", buckets_.size(), magic);
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Creating new bucket %zu for tensor magic=%d.", buckets_.size(), magic);
     return buckets_.back();
 }
 
@@ -679,7 +679,7 @@ bool Allocator::TryReuseInputForOutput(
         APASS_LOG_WARN_F(Elements::Tensor, "Invalid offset for input %d.", candidateInput->magic);
         return false;
     }
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Callop %d leaf function %s (hash %lu) output %zu reuses input %d.",
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Callop %d leaf function %s (hash %lu) output %zu reuses input %zu.",
         callOp.opmagic, leafProgram->GetMagicName().c_str(), leafProgram->GetFunctionHash().GetHash(), outputIdx,
         incastIdx);
     return true;
@@ -984,14 +984,14 @@ Status Allocator::UpdateIncastOutCast() {
         auto &outcasts = callAttr->invokeInfo_->outcastTensorParamList_;
         if (incasts.size() > callOp.iOperand.size()) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                "Op incasts.size:%ld, is larger than iOperand.size:%ld, opCode:%d.%s", incasts.size(),
-                callOp.iOperand.size(), callOp.GetOpcode(), GetFormatBacktrace(callOp).c_str());
+                "Op incasts.size:%zu, is larger than iOperand.size:%zu, opCode:%d.%s", incasts.size(),
+                callOp.iOperand.size(), static_cast<int>(callOp.GetOpcode()), GetFormatBacktrace(callOp).c_str());
             return FAILED;
         }
         if (outcasts.size() > callOp.oOperand.size()) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                "Op incasts.size:%ld, is larger than iOperand.size:%ld, opCode:%d.%s", incasts.size(),
-                callOp.iOperand.size(), callOp.GetOpcode(), GetFormatBacktrace(callOp).c_str());
+                "Op outcasts.size:%zu, is larger than oOperand.size:%zu, opCode:%d.%s", outcasts.size(),
+                callOp.oOperand.size(), static_cast<int>(callOp.GetOpcode()), GetFormatBacktrace(callOp).c_str());
             return FAILED;
         }
         for (size_t i = 0; i < incasts.size(); ++i) {
@@ -1022,8 +1022,8 @@ Status Allocator::Allocate() {
                 Elements::Tensor, "TensorsDesc.tensors is empty, Cannot add empty tensor group to bucket.");
             return FAILED;
         }
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Allocating storage for tensor: rawmagic=%d size=%ld.",
-            tensor->GetRawMagic(), tensor->storage_->length_);
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Allocating storage for tensor: rawmagic=%d size=%lu.",
+            tensor->GetRawMagic(), static_cast<unsigned long>(tensor->storage_->length_));
     }
     for (auto &bucket : buckets_) {
         bucket.UpdateOffset(size_);
@@ -1059,7 +1059,7 @@ Status GlobalMemoryReuse::RunOnFunction(Function &function) {
     Allocator allocator(function.rootFunc_);
     allocator.Init();
     Status status = allocator.Allocate();
-    APASS_LOG_INFO_F(Elements::Operation, "===> Completed GlobalMemoryReuse, Status: %d.", status);
+    APASS_LOG_INFO_F(Elements::Operation, "===> Completed GlobalMemoryReuse, Status: %u.", status);
     return status;
 }
 } // namespace tile_fwk

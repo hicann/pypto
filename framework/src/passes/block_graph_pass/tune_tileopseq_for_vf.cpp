@@ -170,7 +170,7 @@ Status TuneTileOpSeqForVF::RunOnFunction(Function &function) {
         std::vector<Operation *> opList(program.second->Operations(false).DuplicatedOpList());
         opList_ = opList;
         PipeSync ps;
-        APASS_LOG_DEBUG_F(Elements::Function, "=======================function %d ======================", funcId);
+        APASS_LOG_DEBUG_F(Elements::Function, "=======================function %zu ======================", funcId);
         for (const auto &op : opList_) {
             APASS_LOG_DEBUG_F(Elements::Operation, "Input Operation %d %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
             ps.BuildTensorRangeMap(op);

@@ -686,7 +686,7 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function &function) {
         for (auto &[index, callList] : usageDict) {
             std::shared_ptr<LogicalTensor> copyInTensor;
             if (callList.size() == 0) {
-                APASS_LOG_ERROR_F(Elements::Function, "Call list is empty in funciton %s. Please check whether the input graph is complete.", function.GetRawName()); return FAILED;
+                APASS_LOG_ERROR_F(Elements::Function, "Call list is empty in funciton %s. Please check whether the input graph is complete.", function.GetRawName().c_str()); return FAILED;
             }
             // For the same index, only one copyin is necessary.
             auto getTensorDataIOType = callList[0]->GetExpressionOperandList()[GET_TENSOR_DATA_OPERAND_INDEX_IOTYPE]->GetImmediateValue();
@@ -704,7 +704,7 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function &function) {
                 copyInAttr = std::make_shared<CopyOpAttribute>(copyInOffset, MemoryType::MEM_UB, copyInShape, copyInRawShape);
             } else if (getTensorDataIOType == GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST) {
                 if (!getTensorDataOutcastDescDict.count(index)) {
-                    APASS_LOG_ERROR_F(Elements::Function, "Index %d is not found in function %s. Please check whether the input graph is complete.", index, function.GetRawName()); return FAILED;
+                    APASS_LOG_ERROR_F(Elements::Function, "Index %d is not found in function %s. Please check whether the input graph is complete.", index, function.GetRawName().c_str()); return FAILED;
                 }
                 auto &outcastDesc = getTensorDataOutcastDescDict[index];
                 auto outcastAttr = std::static_pointer_cast<CopyOpAttribute>(outcastDesc.copyout->GetOpAttribute());
@@ -715,7 +715,7 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function &function) {
                 copyInAttr = std::make_shared<CopyOpAttribute>(outcastAttr->GetToOffset(), MemoryType::MEM_UB, outcastAttr->GetShape(), outcastAttr->GetRawShape());
             } else {
                 // Impossible
-                APASS_LOG_ERROR_F(Elements::Function, "The operation is neither MOVE_IN nor MOVE_OUT in function %s. Please check whether the input graph is valid.", function.GetRawName()); return FAILED;
+                APASS_LOG_ERROR_F(Elements::Function, "The operation is neither MOVE_IN nor MOVE_OUT in function %s. Please check whether the input graph is valid.", function.GetRawName().c_str()); return FAILED;
             }
 
             copyInTensor->UpdateSubgraphID(subgraphID);
@@ -805,7 +805,7 @@ Status SubgraphToFunction::TransViewToCopyInBeforeGenSubgraph(Function &function
             continue;
         }
         if (op.GetOOperands().size() != 1) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Operation[%d] is OP_VIEW. We Expect it has one OOperand but get %d instead. %s", op.GetOpMagic(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_F(Elements::Operation, "Operation[%d] is OP_VIEW. We Expect it has one OOperand but get %zu instead. %s", op.GetOpMagic(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         auto oOperand = op.GetOutputOperand(0);

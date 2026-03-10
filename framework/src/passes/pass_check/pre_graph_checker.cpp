@@ -38,7 +38,7 @@ Status PreGraphProcessChecker::DoPreCheck(Function &function) {
         }
         if ((op.GetIOperands().size() != 1) || (op.GetOOperands().size() != 1)) {
             // 校验非空单输入单输出
-            APASS_LOG_ERROR_F(Elements::Operation, "Invalid %s[%d], input num: %d, output num: %d .%s",
+            APASS_LOG_ERROR_F(Elements::Operation, "Invalid %s[%d], input num: %zu, output num: %zu .%s",
                 op.GetOpcodeStr().c_str(), op.opmagic, op.GetIOperands().size(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
@@ -120,7 +120,7 @@ Status PreGraphProcessChecker::PostCheckHelpFunc(const LogicalTensor &singleTens
     }
     if (singleTensor.MemorySize() < 1 && !singleTensor.IsDummy()) {
         // 是否存在 dummy tensor
-        APASS_LOG_INFO_F(Elements::Tensor, "Tensor magic: %d, its memory size %d should be over than 0, but not.",
+        APASS_LOG_INFO_F(Elements::Tensor, "Tensor magic: %d, its memory size %zu should be over than 0, but not.",
             singleTensor.GetMagic(), singleTensor.MemorySize());
     }
     return SUCCESS;

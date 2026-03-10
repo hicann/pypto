@@ -36,7 +36,7 @@ Status Process(Function &function) {
         auto iOperand = op.GetInputOperand(inplaceIdx);
         if (iOperand->GetProducers().size() != 1) {
             APASS_LOG_ERROR_F(Elements::Operation, 
-                              "Invalid producer count for ASSEMBLE_SSA [%d]. Expected 1, got %d. %s", 
+                              "Invalid producer count for ASSEMBLE_SSA [%d]. Expected 1, got %zu. %s", 
                               op.GetOpMagic(), iOperand->GetProducers().size(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }

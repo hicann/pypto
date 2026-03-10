@@ -86,7 +86,7 @@ Status DuplicateOpChecker::PostCheckView(const Operation &op) {
         }
         if (oOperand->GetConsumers().size() > kNumOne) {
             APASS_LOG_ERROR_F(Elements::Operation,
-                "View output operand[%d] exceeded consumer limit (expected 1, got %d)", oOperand->magic,
+                "View output operand[%d] exceeded consumer limit (expected 1, got %zu)", oOperand->magic,
                 oOperand->GetConsumers().size());
             return FAILED;
         }

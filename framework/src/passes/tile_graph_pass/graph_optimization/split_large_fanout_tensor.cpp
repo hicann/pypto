@@ -60,17 +60,17 @@ Status SplitLargeFanoutTensor::LCM(int64_t x, int64_t y, int64_t &lcm) {
 // 求两个shape的最小公倍数shape
 Status SplitLargeFanoutTensor::CalLcmShape(const Shape &toShape, const Shape &fromShape, Shape &lcmShape) {
     if (toShape.size() != fromShape.size()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect shapes dim, toShape dim is %d, fromShape dim is %d; "
+        APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect shapes dim, toShape dim is %zu, fromShape dim is %zu; "
             "Please make sure they are the same.", toShape.size(), fromShape.size());
         return FAILED;
     }
     for (size_t i = 0; i < toShape.size(); i++) {
         if(LCM(toShape[i], fromShape[i], lcmShape[i]) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Shape's dim %d, %d and %d cal LCM failed; "
+            APASS_LOG_ERROR_F(Elements::Tensor, "Shape's dim %zu, %ld and %ld cal LCM failed; "
                 "LCM is calculated to be zero, please check.", i, toShape[i], fromShape[i]);
             return FAILED;
         } else {
-            APASS_LOG_INFO_F(Elements::Tensor, "Shape's dim %d, shape: %d and %d, LCM is %d.",
+            APASS_LOG_INFO_F(Elements::Tensor, "Shape's dim %zu, shape: %ld and %ld, LCM is %ld.",
                 i, toShape[i], fromShape[i], lcmShape[i]);
         }
     }
@@ -80,13 +80,13 @@ Status SplitLargeFanoutTensor::CalLcmShape(const Shape &toShape, const Shape &fr
 // 求两个shape的最大公约数shape
 Status SplitLargeFanoutTensor::CalGcdShape(const Shape &toShape, const Shape &fromShape, Shape &lcmShape) {
     if (toShape.size() != fromShape.size()) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect shapes dim, toShape dim is %d, fromShape dim is %d.",
+        APASS_LOG_ERROR_F(Elements::Tensor, "Incorrect shapes dim, toShape dim is %zu, fromShape dim is %zu.",
             toShape.size(), fromShape.size());
         return FAILED;
     }
     for (size_t i = 0; i < toShape.size(); i++) {
         lcmShape[i] = GCD(toShape[i], fromShape[i]);
-        APASS_LOG_INFO_F(Elements::Tensor, "Shape's dim is %d, toShape is %d, fromShape is %d, GCD is %d.",
+        APASS_LOG_INFO_F(Elements::Tensor, "Shape's dim is %zu, toShape is %ld, fromShape is %ld, GCD is %ld.",
             i, toShape[i], fromShape[i], lcmShape[i]);
     }
     return SUCCESS;
@@ -497,8 +497,8 @@ void SplitLargeFanoutTensor::TryToSplitLargeTensor(Function &function, const Sha
         LogicalTensors dualOverlaps;
         CollectOverlaps(lcmTileShape, tileOffset, toInfoMap_[largeTensor->tensor->rawmagic], fromInfoMap_[largeTensor->tensor->rawmagic], overlaps, dualOverlaps);
         if (overlaps.size() == 0 || dualOverlaps.size() == 0) {
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Split large tensor miss, this lcmTile does NOT have both overlaps([%d]) "
-                "and dualOverlaps([%d]) simultaneously.", overlaps.size(), dualOverlaps.size());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Split large tensor miss, this lcmTile does NOT have both overlaps([%zu]) "
+                "and dualOverlaps([%zu]) simultaneously.", overlaps.size(), dualOverlaps.size());
             continue;
         }
         
@@ -515,7 +515,7 @@ void SplitLargeFanoutTensor::TryToSplitLargeTensor(Function &function, const Sha
                 CommonUtils::ContainerToStr(lcmShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(), largeTensor->GetMagic());
             continue;
         }
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Split large tensor hit, this lcmTile(shape %s, offset %s) has [%d] overlaps and [%d] dualOverlaps.",
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Split large tensor hit, this lcmTile(shape %s, offset %s) has [%zu] overlaps and [%zu] dualOverlaps.",
             CommonUtils::ContainerToStr(lcmShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(), overlaps.size(), dualOverlaps.size());
         // 对于是否有[多个tensor聚合到一个Tensor]的情况进行不同处理
         if (overlaps.size() == 1) {

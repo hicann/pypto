@@ -44,8 +44,8 @@ Status LatencyEstimator::FreeBuffer(Operation* op) {
             auto freeMemSize = localBufferMap_[memId]->size;
             if (spillblockMemIds.find(memId) == spillblockMemIds.end()) {
                 localMemoryCurrentSize[localBufferMap_[memId]->memType] += freeMemSize;
-                APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, currentSize %d, memId: %d, freeMemSize: %d.",
-                    localBufferMap_[memId]->memType, localMemoryCurrentSize[localBufferMap_[memId]->memType], memId, freeMemSize);
+                APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, currentSize %ld, memId: %d, freeMemSize: %lu.",
+                    localBufferMap_[memId]->memType, static_cast<long>(localMemoryCurrentSize[localBufferMap_[memId]->memType]), memId, static_cast<unsigned long>(freeMemSize));
             } else {
                 APASS_LOG_DEBUG_F(Elements::Operation, "FreeBuffer memType: %d, memId: %d free in spillblock",
                     localBufferMap_[memId]->memType, memId);
@@ -105,7 +105,7 @@ Status LatencyEstimator::RetireIssueStage(uint64_t& commitCnt, int& nextCycle) {
                 return FAILED;
             }
         } else {
-            APASS_LOG_DEBUG_F(Elements::Operation, "EXECUTING[%ld]: %s", pipe.curOpRetireCycle, GetOpInfo(pipe.curOp).c_str());
+            APASS_LOG_DEBUG_F(Elements::Operation, "EXECUTING[%d]: %s", pipe.curOpRetireCycle, GetOpInfo(pipe.curOp).c_str());
             if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
                 nextCycle = pipe.curOpRetireCycle;
             }
@@ -127,10 +127,10 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
         if (localMemoryCurrentSize[memType] >= static_cast<long int>(needMemSize)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
             localMemoryCurrentSize[memType] -= needMemSize;
-            APASS_LOG_DEBUG_F(Elements::Operation, "ExecuteAllocIssue memType: %d, currentSize %d, memId: %d.", memType, localMemoryCurrentSize[memType], memId);
+            APASS_LOG_DEBUG_F(Elements::Operation, "ExecuteAllocIssue memType: %d, currentSize %ld, memId: %d.", memType, static_cast<long>(localMemoryCurrentSize[memType]), memId);
             if (localMemoryCurrentSize[memType] > localMemSize[memType] ||
                 localMemoryCurrentSize[memType] < 0) {
-                APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", GetInOutOperandCached(op)[0]);
+                APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", GetInOutOperandCached(op)[0]->GetMagic());
                 return FAILED;
             }
             pipe.PopFront();
@@ -140,7 +140,7 @@ Status LatencyEstimator::ExecuteAllocIssue(uint64_t &commitCnt, MemoryType memTy
             }
         } else {
             canAlloc = false;
-            APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot alloc Tensor[%d] ", GetInOutOperandCached(op)[0]);
+            APASS_LOG_DEBUG_F(Elements::Tensor, "Cannot alloc Tensor[%d] ", GetInOutOperandCached(op)[0]->GetMagic());
             break;
         }
     }

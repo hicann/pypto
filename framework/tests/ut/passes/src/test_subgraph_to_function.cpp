@@ -991,5 +991,23 @@ TEST_F(SubgraphToFunctionTest, ReshapeDependencyHandling) {
     }
     EXPECT_TRUE(found) << "ABS_SG1 subgraph entry not found in topology";
 }
+
+TEST_F(SubgraphToFunctionTest, TransViewToCopyIn_ViewWithTwoOOperands_Fail) {
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> shape = {16, 16};
+    EXPECT_TRUE(G.AddTensor(DataType::DT_FP32, shape, "v_in"));
+    EXPECT_TRUE(G.AddTensor(DataType::DT_FP32, shape, "v_out1"));
+    EXPECT_TRUE(G.AddTensor(DataType::DT_FP32, shape, "v_out2"));
+    EXPECT_TRUE(G.AddOp(Opcode::OP_VIEW, {"v_in"}, {"v_out1", "v_out2"}, "view_two_out"));
+    Operation* viewOp = G.GetOp("view_two_out");
+    ASSERT_NE(viewOp, nullptr);
+    viewOp->SetAttribute(OpAttributeKey::inplaceIdx, 0);
+    viewOp->UpdateSubgraphID(0);
+    Function* function = G.GetFunction();
+    function->SetTotalSubGraphCount(1);
+    SubgraphToFunction pass;
+    Status status = pass.RunOnFunction(*function);
+    EXPECT_NE(status, SUCCESS);
+}
 } // namespace tile_fwk
 } // namespace npu

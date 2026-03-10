@@ -23,7 +23,9 @@
 #include "passes/pass_mgr/pass_manager.h"
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
+#define private public
 #include "passes/tile_graph_pass/graph_optimization/split_large_fanout_tensor.h"
+#undef private
 #include "computational_graph_builder.h"
 
 using namespace npu::tile_fwk;
@@ -298,6 +300,30 @@ TEST_F(SplitLargeFanoutTensorTest, TestLCM) {
     EXPECT_EQ(status, SUCCESS);
     EXPECT_EQ(gcd, NUM_16);
     EXPECT_EQ(lcm, NUM_96);
+}
+
+TEST_F(SplitLargeFanoutTensorTest, CalLcmShape_DimMismatch) {
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    std::vector<int64_t> toShape = {16, 32};
+    std::vector<int64_t> fromShape = {8, 16, 4};
+    std::vector<int64_t> lcmShape;
+    EXPECT_NE(pass.CalLcmShape(toShape, fromShape, lcmShape), SUCCESS);
+}
+
+TEST_F(SplitLargeFanoutTensorTest, CalLcmShape_LcmFail) {
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    std::vector<int64_t> toShape = {0, 32};
+    std::vector<int64_t> fromShape = {0, 16};
+    std::vector<int64_t> lcmShape(2);
+    EXPECT_NE(pass.CalLcmShape(toShape, fromShape, lcmShape), SUCCESS);
+}
+
+TEST_F(SplitLargeFanoutTensorTest, CalGcdShape_DimMismatch) {
+    npu::tile_fwk::SplitLargeFanoutTensor pass;
+    std::vector<int64_t> toShape = {16, 32};
+    std::vector<int64_t> fromShape = {8};
+    std::vector<int64_t> gcdShape;
+    EXPECT_NE(pass.CalGcdShape(toShape, fromShape, gcdShape), SUCCESS);
 }
 
 TEST_F(SplitLargeFanoutTensorTest, BeCovered_Full) {

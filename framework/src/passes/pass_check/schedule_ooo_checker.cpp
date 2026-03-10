@@ -95,11 +95,11 @@ Status OoOScheduleChecker::DoPreCheck(Function &function) {
     int programSize = function.rootFunc_->programs_.size();
     tensorListBeforePass_.resize(programSize);
     for (auto &program : function.rootFunc_->programs_) { // 对每个子图分别进行precheck
-        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OoOSchedule Precheck begin.", program.first);
+        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OoOSchedule Precheck begin.", program.first);
         auto opList = program.second->Operations().DuplicatedOpList();
         if (opList.empty()) {
             APASS_LOG_INFO_F(Elements::Operation, "Operation List is empty!");
-            APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OoOSchedule Precheck end.", program.first);
+            APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OoOSchedule Precheck end.", program.first);
             continue;
         }
         for (auto &op : opList) {
@@ -129,7 +129,7 @@ Status OoOScheduleChecker::DoPreCheck(Function &function) {
         }
         tensorListBeforePass_[programIdx] = tensorList;
         programIdx++;
-        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OoOSchedule Precheck end.", program.first);
+        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OoOSchedule Precheck end.", program.first);
     }
     APASS_LOG_INFO_F(Elements::Operation, "OoOSchedule Precheck completed successfully!");
     return SUCCESS;
@@ -175,7 +175,7 @@ bool OoOScheduleChecker::PostCheckNewOpConnection(const std::vector<Operation *>
         for (auto &copyin : copyins) {
             auto opPtr = *(copyin->GetIOperands()[0]->GetProducers().begin());
             if (opPtr->GetOpcode() != Opcode::OP_COPY_OUT) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Program %d: %d op's successors include unexpected op %s, OoOSchedule Postcheck failed!", programIdx, copyin->GetOpMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Program %d: %d op's successors include unexpected op %s, OoOSchedule Postcheck failed!", programIdx, copyin->GetOpMagic(), opPtr->GetOpcodeStr().c_str());
                 return false; }
         }
         std::set<Operation *, LogicalTensor::CompareOp> mainres;
@@ -316,7 +316,7 @@ Status OoOScheduleChecker::PostCheckTensor(const LogicalTensorPtr &tensor, const
 Status OoOScheduleChecker::PostCheckSubGraph(const std::pair<uint64_t, Function*> &program, int programIdx) {
     auto opList = program.second->Operations().DuplicatedOpList();
     if (opList.empty()) {
-        APASS_LOG_INFO_F(Elements::Operation, "Operation List is empty! \nSubgraph[%d] OoOSchedule Precheck end.", program.first);
+        APASS_LOG_INFO_F(Elements::Operation, "Operation List is empty! \nSubgraph[%zu] OoOSchedule Precheck end.", program.first);
         return SUCCESS;
     }
     for (auto &op : opList) {
@@ -373,13 +373,13 @@ Status OoOScheduleChecker::DoPostCheck(Function &function) {
     tensorListAfterPass_.resize(programSize);
     int programIdx = 0;
     for (auto &program : function.rootFunc_->programs_) { // 对每个子图分别进行postcheck
-        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OoOSchedule Postcheck begin.", program.first);
+        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OoOSchedule Postcheck begin.", program.first);
         if (PostCheckSubGraph(program, programIdx) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "Subgraph[%d] OoOSchedule Postcheck failed!", programIdx);
             return FAILED;
         }
         programIdx++;
-        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OoOSchedule Postcheck end.", program.first);
+        APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OoOSchedule Postcheck end.", program.first);
     }
     APASS_LOG_INFO_F(Elements::Operation, "OoOSchedule Postcheck completed successfully!");
     return SUCCESS;

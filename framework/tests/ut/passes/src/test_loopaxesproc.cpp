@@ -140,5 +140,17 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1) {
     EXPECT_TRUE(sub.HasAttr(OpAttributeKey::loopAxes));
     EXPECT_TRUE(EqualSymShape(sub.GetVectorSymbolicScalarAttribute(OpAttributeKey::loopAxes), expectedLoopAxis2));
 }
+
+TEST_F(TestLoopaxesProcPass, LoopaxesProcSubProgramNullptr) {
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "LoopaxesProcNullTest", "LoopaxesProcNullTest", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->programs_[0] = nullptr;
+    rootFuncPtr->programs_[1] = rootFuncPtr.get();
+
+    LoopaxesProc loopaxesprocpass;
+    EXPECT_EQ(loopaxesprocpass.RunOnFunction(*rootFuncPtr), SUCCESS);
+}
 } // namespace tile_fwk
 } // namespace npu

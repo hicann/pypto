@@ -129,14 +129,14 @@ bool InferMemoryConflict::CheckRawShapeConflict(
     }
     for (size_t i = 0; i < inShape.size(); ++i) {
         if (inShape[i] < 0) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "inShape[%d] = %d, dynamic shape should trigger conflict", i, inShape[i]);
+            APASS_LOG_DEBUG_F(Elements::Operation, "inShape[%zu] = %ld, dynamic shape should trigger conflict", i, static_cast<long>(inShape[i]));
             return true;
         }
         inRawSize *= inShape[i];
     }
     for (size_t i = 0; i < outShape.size(); ++i) {
         if (outShape[i] < 0) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "outShape[%d] = %d, dynamic shape should trigger conflict", i, outShape[i]);
+            APASS_LOG_DEBUG_F(Elements::Operation, "outShape[%zu] = %ld, dynamic shape should trigger conflict", i, static_cast<long>(outShape[i]));
             return true;
         }
         outRawSize *= outShape[i];
@@ -147,7 +147,7 @@ bool InferMemoryConflict::CheckRawShapeConflict(
         return false;
     }
     if (inRawSize > 0 && outRawSize > 0 && inRawSize != outRawSize) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "The raw size of input is %d, the raw size of output is %d", inRawSize, outRawSize);
+        APASS_LOG_DEBUG_F(Elements::Operation, "The raw size of input is %ld, the raw size of output is %ld", inRawSize, outRawSize);
         return true;
     }
     return false;

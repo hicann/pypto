@@ -73,7 +73,7 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(Function& rootFunc,
                                                            SubgraphToFunction& subgraphToFunction,
                                                            CallOpCreationInfo& info)
 {
-    APASS_LOG_DEBUG_F(Elements::Operation, "Creating callOp in root function for leaf: %s, programID=%d, component=%d, wrapId=%lu",
+    APASS_LOG_DEBUG_F(Elements::Operation, "Creating callOp in root function for leaf: %s, programID=%lu, component=%lu, wrapId=%lu",
                  leafFunc.GetRawName().c_str(), newProgramID, componentIndex, info.wrapId);
     auto originalCallAttr = dynamic_cast<CallOpAttribute*>(originalCallOp->GetOpAttribute().get());
     if (originalCallAttr == nullptr) {
@@ -122,7 +122,7 @@ Status MixCallOperationBuilder::CreateCallOpInRootFunction(Function& rootFunc,
                        newProgramID, componentIndex, subgraphToFunction, info);
     // 将创建的call op记录到info中
     info.createdCallOp = &callOp;
-    APASS_LOG_INFO_F(Elements::Operation, "Successfully created callOp %d in root function for programID=%d, leaf=%s",
+    APASS_LOG_INFO_F(Elements::Operation, "Successfully created callOp %d in root function for programID=%lu, leaf=%s",
                 callOp.GetOpMagic(), newProgramID, leafFunc.GetRawName().c_str());
     return SUCCESS;
 }
@@ -520,7 +520,7 @@ void MixCallOperationBuilder::SetCallOpAttribute(Function& leafFunc,
     auto callOpAttr = std::dynamic_pointer_cast<CallOpAttribute>(callAttr);
     if (callOpAttr != nullptr) {
         callOpAttr->wrapId = info.wrapId;
-        APASS_LOG_DEBUG_F(Elements::Operation, "Set wrapId=%lu to callOp attribute for programID=%d (from original callOp %d)",
+        APASS_LOG_DEBUG_F(Elements::Operation, "Set wrapId=%lu to callOp attribute for programID=%lu (from original callOp %d)",
                      info.wrapId, newProgramID, originalCallOp->GetOpMagic());
     }
     callOp.SetOpAttribute(callAttr);
@@ -571,7 +571,7 @@ void MixCallOperationBuilder::ProcessInternalDependenciesForWrap(
     for (const auto& info : infos) {
         if (info->createdCallOp) {
             componentToCallOp[info->componentIndex] = info->createdCallOp;
-            APASS_LOG_DEBUG_F(Elements::Operation, "Wrap %lu: map component %d -> call op %d",
+            APASS_LOG_DEBUG_F(Elements::Operation, "Wrap %lu: map component %lu -> call op %d",
                          wrapId, info->componentIndex, info->createdCallOp->GetOpMagic());
         }
     }

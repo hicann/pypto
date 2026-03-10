@@ -265,7 +265,7 @@ Status ReplaceTensor::FindBaseTensor(Function &function, const std::unordered_ma
         for (auto &curTensor : group) {
             int64_t curShape = abs(curTensor->tensor->GetRawDataSize());
             if (curShape > baseShape) {
-                APASS_LOG_INFO_F(Elements::Tensor, "Replace curTensor %d size %d to baseTensor %d size %d.",
+                APASS_LOG_INFO_F(Elements::Tensor, "Replace curTensor %d size %ld to baseTensor %d size %ld.",
                                 curTensor->GetMagic(), curShape, baseTensor->GetMagic(), baseShape);
                 baseTensor = curTensor;
                 baseShape = curShape;

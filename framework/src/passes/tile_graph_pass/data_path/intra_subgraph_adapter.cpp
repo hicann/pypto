@@ -164,7 +164,7 @@ Status IntraSubgraphAdapter::SplitBoundaryTensor(Function &function, LogicalTens
     // For consumers from other subgraph, we insert a new ASSEMBLE before them,
     // the intermediate tensor become a new boundary tensor.
     if (subsidiaryConsumers.size() != 0) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "=========== multi subsidiaryConsumers size: %d ==========", subsidiaryConsumers.size());
+        APASS_LOG_DEBUG_F(Elements::Operation, "=========== multi subsidiaryConsumers size: %zu ==========", subsidiaryConsumers.size());
         LogicalTensorPtr newTensor =
             InsertOpBetween(function, Opcode::OP_ASSEMBLE, tensor, subsidiaryConsumers, mainSubgraphID);
         newBoundaryTensors.push_back(newTensor);

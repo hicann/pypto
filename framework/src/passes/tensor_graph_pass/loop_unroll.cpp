@@ -365,7 +365,7 @@ Status LoopUnroll::TopFunctionUnroll(Function *function, std::vector<Operation *
     }
     for (auto incast : function->GetIncast()) {
         if (function->GetInCastSlot(incast).size() != 1) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Incast[%d] has multi slot[%d], not support now.", incast->GetMagic(),
+            APASS_LOG_ERROR_F(Elements::Operation, "Incast[%d] has multi slot[%zu], not support now.", incast->GetMagic(),
                 function->GetInCastSlot(incast).size());
             return FAILED;
         }
@@ -391,7 +391,7 @@ Status LoopUnroll::UpdateTopFuncInoutCast(Function *function) {
         function->GetDyndevAttribute()->startArgsInputTensorList);
     for (auto &incast : function->GetIncast()) {
         if (function->GetInCastSlot(incast).size() != 1) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Incast[%d] has multi slot[%d], not support now.", incast->GetMagic(),
+            APASS_LOG_ERROR_F(Elements::Operation, "Incast[%d] has multi slot[%zu], not support now.", incast->GetMagic(),
                 function->GetInCastSlot(incast).size());
             return FAILED;
         }
@@ -411,7 +411,7 @@ Status LoopUnroll::UpdateTopFuncInoutCast(Function *function) {
     int idx = 0;
     for (auto &outcast : function->GetOutcast()) {
         if (function->GetOutCastSlot(outcast).size() != 1) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Outcast[%d] has multi slot[%d], not support now.", outcast->GetMagic(),
+            APASS_LOG_ERROR_F(Elements::Operation, "Outcast[%d] has multi slot[%zu], not support now.", outcast->GetMagic(),
                 function->GetOutCastSlot(outcast).size());
             return FAILED;
         }
@@ -538,7 +538,7 @@ Status LoopUnroll::CreateGlobalTensor(std::unordered_map<Operation *, std::vecto
                 return FAILED;
             }
         } else {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] has multi slot[%d], not support now.", inTensor->GetMagic(), slots.size());
+            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] has multi slot[%zu], not support now.", inTensor->GetMagic(), slots.size());
             return FAILED;
         }
         input2Global.insert(tensor2Global[inTensor->GetMagic()]);
@@ -556,7 +556,7 @@ Status LoopUnroll::CreateGlobalTensor(std::unordered_map<Operation *, std::vecto
                 return FAILED;
             }
         } else {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] has multi slot[%d], not support now.", outTensor->GetMagic(), slots.size());
+            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor[%d] has multi slot[%zu], not support now.", outTensor->GetMagic(), slots.size());
             return FAILED;
         }
     }
@@ -639,7 +639,7 @@ bool LoopUnroll::IsNoOverlapWAW(int slotIdx, LogicalTensorPtr tensor,
         }
         auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
         if (!assembleAttr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Cannot get %s[%d] assemble attr.", producer->GetOpcodeStr(), producer->GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "Cannot get %s[%d] assemble attr.", producer->GetOpcodeStr().c_str(), producer->GetOpMagic());
             return false;
         }
         assembleList.push_back({producer->GetInputOperand(0)->GetShape(), assembleAttr->GetToOffset()});
@@ -654,7 +654,7 @@ bool LoopUnroll::IsNoOverlapWAW(int slotIdx, LogicalTensorPtr tensor,
         } else {
             auto assembleAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
             if (!assembleAttr) {
-                APASS_LOG_ERROR_F(Elements::Operation, "Cannot get %s[%d] assemble attr.", producer->GetOpcodeStr(), producer->GetOpMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Cannot get %s[%d] assemble attr.", producer->GetOpcodeStr().c_str(), producer->GetOpMagic());
                 return false;
             }
             assembleList.push_back({producer->GetInputOperand(0)->GetShape(), assembleAttr->GetToOffset()});

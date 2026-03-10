@@ -76,7 +76,7 @@ Status OoOSchedule::NonMixSchedule(std::vector<Operation*> &opList, Function &fu
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
         return FAILED;
     }
-    APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OOOSchedule end.", program.first);
+    APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);
@@ -104,7 +104,7 @@ Status OoOSchedule::AdvanceAlloc(std::vector<Operation*> &opList, Operation* op,
             }
             size_t allocIndex = std::distance(opList.begin(), it);
             if (allocIndex > index) {
-                APASS_LOG_DEBUG_F(Elements::Operation, "alloc index: %d, op index: %d", allocIndex, index);
+                APASS_LOG_DEBUG_F(Elements::Operation, "alloc index: %zu, op index: %zu", allocIndex, index);
                 std::rotate(opList.begin() + index, opList.begin() + allocIndex, opList.begin() + allocIndex + 1);
                 index++;
                 return SUCCESS;
@@ -172,7 +172,7 @@ Status OoOSchedule::MixSchedule(std::vector<Operation*> &opList, Function &funct
         return FAILED;
     }
     OoOHealthCheck(oooSchedule, function, program);
-    APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%d] OOOSchedule end.", program.first);
+    APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
     program.second->ScheduleBy(oooSchedule.GetNewOperations());
     program.second->RecordOOOSeq();
     RescheduleUtils::UpdateTensorConsProd(program.second);

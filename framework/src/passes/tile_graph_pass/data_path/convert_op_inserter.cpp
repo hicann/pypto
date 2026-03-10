@@ -99,7 +99,7 @@ void ConvertInserter::PrintTensorTobeMap(LogicalTensorPtr &tensor) const {
             "Please make sure tensor in the tobe map.", tensor->GetMagic());
         return;
     }
-    APASS_LOG_INFO_F(Elements::Tensor, "Size: %d.", tensorTobeMap.at(tensor).size());
+    APASS_LOG_INFO_F(Elements::Tensor, "Size: %zu.", tensorTobeMap.at(tensor).size());
     for (const auto &item : tensorTobeMap.at(tensor)) {
         APASS_LOG_INFO_F(Elements::Tensor, "\t|--- TensorTobeMap: %s --> %s[%d].", BriefMemoryTypeToString(item.second).c_str(),
             item.first->GetOpcodeStr().c_str(), item.first->GetOpMagic());
@@ -172,7 +172,7 @@ void ConvertInserter::FilterConflictTensor() {
         }
         conflictMap[tensorLocal->magic] = tobeMap;
     }
-    APASS_LOG_INFO_F(Elements::Tensor, "--- ConflictMap size: %d ---", conflictMap.size());
+    APASS_LOG_INFO_F(Elements::Tensor, "--- ConflictMap size: %zu ---", conflictMap.size());
 }
 
 // 将 tensor tobe map初始化当前tensor的memory type original
@@ -499,7 +499,7 @@ void ConvertInserter::CreateMoveOpForConvert(Operation &op) {
 
 // 根据已记录的converts插入OP_CONVERT
 void ConvertInserter::InsertConvertOps(Function &function) {
-    APASS_LOG_INFO_F(Elements::Operation, "--- Need to insert %d convert operations ---", converts.size());
+    APASS_LOG_INFO_F(Elements::Operation, "--- Need to insert %zu convert operations ---", converts.size());
     for (const auto &c : converts) {
         GraphUtils::CopyDynStatus(c.output, c.input);
         auto &convertOp = function.AddRawOperation(Opcode::OP_CONVERT, {c.input}, {c.output});
@@ -515,7 +515,7 @@ Status ConvertInserter::DoInsertion(Function &function) {
     if(status != SUCCESS) { return status; }
     InsertConvertOps(function);
     CheckUnknown(function);
-    APASS_LOG_INFO_F(Elements::Function, "After Insert Convert, total op Num: %d.",
+    APASS_LOG_INFO_F(Elements::Function, "After Insert Convert, total op Num: %zu.",
         function.Operations().size());
     return SUCCESS;
 }

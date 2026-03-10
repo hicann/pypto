@@ -54,8 +54,8 @@ bool PadLocalBuffer::IsInputInt8(const Operation &op, const LogicalTensorPtr &in
         return false;
     }
 
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor", "Matmul Op %d is %s\n", op.opmagic, op.GetOpcodeStr().c_str());
-    APASS_LOG_DEBUG_F(Elements::Tensor, "Tensor", "####### %d data type is %s\n", in->magic, DataType2VectorRegStr(in->tensor->GetDataType()).c_str());
+    APASS_LOG_DEBUG_F(Elements::Tensor, "Matmul Op %d is %s\n", op.opmagic, op.GetOpcodeStr().c_str());
+    APASS_LOG_DEBUG_F(Elements::Tensor, "####### %d data type is %s\n", in->magic, DataType2VectorRegStr(in->tensor->GetDataType()).c_str());
 
     bool matmulOp = std::find(cubeOps.begin(), cubeOps.end(), op.GetOpcode()) != cubeOps.end();
     bool opsInputInt8 = false;
@@ -476,7 +476,7 @@ Status PadLocalBuffer::ProcessTranspose(Function &function) {
         }
         auto transposeAxis = op.GetVectorIntAttribute<int>(OP_ATTR_PREFIX + "shape");
         if (transposeAxis.size() != TRANSPOSE_MIN_SHAPE_SIZE) {
-            APASS_LOG_DEBUG_F(Elements::Tensor, "transpose op %d %s's shape size %d is not two, skip.", op.opmagic, op.GetOpcodeStr().c_str(), transposeAxis.size());
+            APASS_LOG_DEBUG_F(Elements::Tensor, "transpose op %d %s's shape size %zu is not two, skip.", op.opmagic, op.GetOpcodeStr().c_str(), transposeAxis.size());
             continue;
         }
         if (op.iOperand.size() <= 0 || op.oOperand.size() <= 0) {
@@ -503,7 +503,7 @@ Status PadLocalBuffer::ProcessTranspose(Function &function) {
         auto &inLastDim = inTensor->shape[lastDimIdx];
         auto &outFirstDim = outTensor->shape[nonLastDimIdx];
         if (inLastDim != outFirstDim) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "tune transpose output dim %d to %d.", inLastDim, outFirstDim);
+            APASS_LOG_DEBUG_F(Elements::Operation, "tune transpose output dim %ld to %ld.", static_cast<long>(inLastDim), static_cast<long>(outFirstDim));
             outTensor->shape[nonLastDimIdx] = inLastDim;
             outTensor->tensor->rawshape[nonLastDimIdx] = inLastDim;
         }

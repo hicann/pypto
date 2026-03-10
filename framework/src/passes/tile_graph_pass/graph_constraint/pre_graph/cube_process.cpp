@@ -113,8 +113,8 @@ Status CubeProcess::UpdateCopyAttr(Operation &op) const {
     int aIsNz = nzAttr % 2;
     int bIsNz = (nzAttr >> 1) % 2;
     int cIsNz = (nzAttr >> 2) % 2;
-    APASS_LOG_DEBUG_F(Elements::Operation, "Retrive %s[%d] attr done, aIsNz: %d, bIsNz: %d, cIsNz: %d, mValue: %d, kValue: %d, nValue: %d.",
-            op.GetOpcodeStr().c_str(), op.GetOpMagic(), aIsNz, bIsNz, cIsNz, mValue, kValue, nValue);
+    APASS_LOG_DEBUG_F(Elements::Operation, "Retrive %s[%d] attr done, aIsNz: %d, bIsNz: %d, cIsNz: %d, mValue: %ld, kValue: %ld, nValue: %ld.",
+            op.GetOpcodeStr().c_str(), op.GetOpMagic(), aIsNz, bIsNz, cIsNz, static_cast<long>(mValue), static_cast<long>(kValue), static_cast<long>(nValue));
     for (auto &input : op.GetIOperands()) {
         if (input->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
             if (AddL1CopyInAttr(input, aIsNz, mValue, kValue, nValue) != SUCCESS) {
