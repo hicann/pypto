@@ -182,7 +182,7 @@ class BuildOnlineManager:
             cmd = f"{self.cmake} --build {build_dir}" + (f" -j {ctx.build_job_num}" if ctx.build_job_num else "")
             subprocess.run(shlex.split(cmd), capture_output=ctx.capture_output, check=True, text=True, encoding='utf-8')
             # CMake Install
-            cmd = f"{self.cmake} --install {build_dir} --prefix={install_dir}"
+            cmd = f"{self.cmake} --install {build_dir} --prefix {install_dir}"
             subprocess.run(shlex.split(cmd), capture_output=ctx.capture_output, check=True, text=True, encoding='utf-8')
             return install_dir
 
