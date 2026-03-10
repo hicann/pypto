@@ -227,7 +227,7 @@ Level 3: 大数据量    ──▶ 性能验证
    ```bash
    # 设置NPU Chip ID（使用实际可用的chip）
    export TILE_FWK_DEVICE_ID=0
-   export PTO_TILE_LIB_CODE_PATH=/mnt/workspace/pto_isa/pto-isa/
+   export PTO_TILE_LIB_CODE_PATH=/mnt/workspace/pto-isa/
    ```
     **⚠️ 重要提示**：
     - **先设置 `export TILE_FWK_DEVICE_ID=0`**
@@ -290,7 +290,7 @@ Level 3: 大数据量    ──▶ 性能验证
 2. **更新当前状态至plan中**：`custom/plan/{算子名称}.md`
 
 ### 阶段六：性能数据采集及优化建议
-加载`pypto-operator-perf-autotune`技能进行性能分析。
+加载`pypto-operator-perf-autotuner`技能进行性能分析。
 1. **采集性能数据，并进行性能分析**
 2. **生成性能分析报告**
 **⚠️ 重要提示**：

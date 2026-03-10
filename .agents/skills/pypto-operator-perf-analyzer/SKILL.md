@@ -139,8 +139,8 @@ AicoreTime = 核心总工作时间 - 总等待时间
 
 - 算子实际执行时间（所有核心最大工作时间）
 - 各核心的AicoreTime
-- 各核心的等待时间
 - 各核心的气泡时间
+- 各核心的等待时间
 
 #### 6.2 性能指标统计
 
@@ -196,30 +196,54 @@ python3 .opencode/skills/pypto-operator-perf-analyzer/scripts/analyze_perf.py ou
 - stich参数过小
 
 **优化建议：**
-1. **对于循环类任务动态轴范围较广时开启loop_unroll（优先级中）**
-   ```python
-   for b, k in pypto.loop_unroll(A.shape[0] // 64, unroll_list=[64, 16, 4], name="A", idx_name='b'):
-      # 支持在不同的展开档位设置不同调优参数
-      if k <= 16:
-         pypto.set_vec_tile_shapes(16, 64)
-      else :
-         pypto.set_vec_tile_shapes(64, 64)
-      
-      tile_a = A[b * 64:(b + k) * 64, :]
-      tile_a = tile_a + 2
-      B[b * 64:, :] = tile_a
-   ```
-
-   **⚠️ 重要提示**：loop_unroll必须放在最内存循环！loop_unroll必须放在最内存循环！loop_unroll必须放在最内存循环！
-
-2. **Stitch 调优（优先级高）**
+1. **Stitch 调优（优先级高）**
    ```python
    @pypto.frontend.jit(
-      runtime_options={"stitch_function_num_initial": 128,
-                     "stitch_function_outcast_memory": 1024,
-                     "stitch_function_inner_memory": 1024
-                     }
+      runtime_options={"stitch_function_max_num": 128}
    )
+   ```
+
+2. **对于循环类任务动态轴范围较广时开启loop_unroll（优先级高）**
+   ```python
+   for idx in pypto.loop(A.shape[0] // 64, unroll_list=[8, 4, 2, 1], name="A", idx_name='b'):
+       offset = idx * s2_tile
+   ```
+
+   **参数说明：**
+   - `loop_count`: 循环迭代次数
+   - `unroll_list`: 展开因子列表，按优先级从高到低排列
+   - `[8, 4, 2, 1]`: 常用配置，适应性强
+   - `[16, 8, 4, 2, 1]`: 适用于更大循环
+   - `[4, 2, 1]`: 适用于较小循环
+   - `name`: 循环名称（用于调试）
+   - `idx_name`: 循环索引变量名
+
+   **⚠️ 重要原则：**
+   - **loop_unroll 必须放在最内层循环！**
+   - **不要在外层循环使用 unroll_list**
+   - **循环迭代次数应足够大（建议 > 8）**
+
+   **优化案例对比：**
+
+   **原始代码（无优化）：**
+   ```python
+   for b_idx in pypto.loop(b_scalar, name="LOOP_b", idx_name="b_idx"):
+      for s1_idx in pypto.loop(s1_scalar, name="LOOP_s1", idx_name="s1_idx"):
+         for n2_idx in pypto.loop(n2_sym, name="LOOP_n2", idx_name="n2_idx"):
+               for g_idx in pypto.loop(g_loop, name="LOOP_g", idx_name="g_idx"):
+                  for s2_idx in pypto.loop(s2_loop, name="LOOP_s2", idx_name="s2_idx"):
+                     # 计算逻辑
+   ```
+
+   **优化后代码（添加 loop_unroll）：**
+   ```python
+   for b_idx in pypto.loop(b_scalar, name="LOOP_b", idx="b_idx"):
+      for s1_idx in pypto.loop(s1_scalar, name="LOOP_s1", idx_name="s1_idx"):
+         for n2_idx in pypto.loop(n2_sym, name="LOOP_n2", idx_name="n2_idx"):
+               for g_idx in pypto.loop(g_loop, name="LOOP_g", idx_name="g_idx"):
+                  # 最内层循环添加 unroll_list
+                  for s2_idx in pypto.loop(s2_loop, unroll_list=[8, 4, 2, 1], name="LOOP_s2", idx_name="s2_idx"):
+                     # 计算逻辑
    ```
 
 3. **调整任务粒度**
@@ -280,13 +304,7 @@ python3 .opencode/skills/pypto-operator-perf-analyzer/scripts/analyze_perf.py ou
 2. **优化任务粒度**
    - 调整 tile size 使任务更均匀
 
-**优化建议：**
-
-1. **减少任务依赖**
-   - 优化算子计算图
-   - 减少不必要的依赖
-
-2. **调整任务执行顺序**
+3. **调整任务执行顺序**
    - 使用 sg_set_scope 合并子图
    ```python
    pypto.set_pass_options(sg_set_scope=1)
