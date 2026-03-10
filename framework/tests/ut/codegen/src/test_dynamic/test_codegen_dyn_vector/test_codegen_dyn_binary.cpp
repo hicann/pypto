@@ -146,19 +146,19 @@ TEST_F(TestCodegenDynBinary, TestAddSDynamic) {
 
 TEST_F(TestCodegenDynBinary, TestAddSTileTensorInfPos) {
     std::vector<std::string> expect = {R"!!!(union {float f; uint32_t u;} float_inf_pos = {.u = 0x7F800000};)!!!",
-        R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_1, ubTensor_1, float_inf_pos.f);)!!!"};
+        R"!!!(TAddS<LastUse2Dim<0, 1>, float>(ubTensor_1, ubTensor_1, float_inf_pos.f);)!!!"};
     TestAddSDynBody("TestAddSTileTensorInfPos", 1.0f / 0.0f, true, expect);
 }
 
 TEST_F(TestCodegenDynBinary, TestAddSTileTensorInfNeg) {
     std::vector<std::string> expect = {R"!!!(union {float f; uint32_t u;} float_inf_neg = {.u = 0xFF800000};)!!!",
-        R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_1, ubTensor_1, float_inf_neg.f);)!!!"};
+        R"!!!(TAddS<LastUse2Dim<0, 1>, float>(ubTensor_1, ubTensor_1, float_inf_neg.f);)!!!"};
     TestAddSDynBody("TestAddSTileTensorInfNeg", -1.0f / 0.0f, true, expect);
 }
 
 TEST_F(TestCodegenDynBinary, TestAddSTileTensorNAN) {
     std::vector<std::string> expect = {R"!!!(union {float f; uint32_t u;} float_nan = {.u = 0x7FC00000};)!!!",
-        R"!!!(TAddS<LastUse2Dim<0, 0>, float>(ubTensor_1, ubTensor_1, float_nan.f);)!!!"};
+        R"!!!(TAddS<LastUse2Dim<0, 1>, float>(ubTensor_1, ubTensor_1, float_nan.f);)!!!"};
     TestAddSDynBody("TestAddSTileTensorNAN", 0.0f / 0.0f, true, expect);
 }
 
@@ -333,7 +333,7 @@ TLoad(ubTensor_3, gmTensor_4, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 1, 0)),
 SUBKERNEL_PHASE2
 set_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
 wait_flag(PIPE_MTE2, PIPE_V, EVENT_ID0);
-TAdd<LastUse3Dim<0, 0, 0>>(ubTensor_1, ubTensor_1, ubTensor_3);
+TAdd<LastUse3Dim<0, 1, 1>>(ubTensor_1, ubTensor_1, ubTensor_3);
 set_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 wait_flag(PIPE_V, PIPE_MTE3, EVENT_ID0);
 TStore(gmTensor_8, ubTensor_1, Coord2Dim((RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 0)), (RUNTIME_COA_GET_PARAM_OFFSET(2, 19, 1))));

@@ -212,13 +212,11 @@ Status OoOSchedule::RecordLastUseMemory(Function &function) {
         auto opList = program.second->Operations(false);
         for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
             Operation *op = &opList[opIdx];
-            if (LASTUSE_OPS.find(op->GetOpcode()) == LASTUSE_OPS.end()) {
-                APASS_LOG_INFO_F(Elements::Operation, "Op %s[%d] is not in LASTUSE_OPS, skip record last_use Attribute.", op->GetOpcodeStr().c_str(), op->GetOpMagic());
-                continue;
+            if (LASTUSE_OPS.find(op->GetOpcode()) != LASTUSE_OPS.end()) {
+                int tensorSize = op->GetIOperands().size() + op->GetOOperands().size();
+                std::vector<int> initVec(tensorSize, false);
+                op->SetAttribute(OpAttributeKey::lastUse, initVec);
             }
-            int tensorSize = op->GetIOperands().size() + op->GetOOperands().size();
-            std::vector<int> initVec(tensorSize, false);
-            op->SetAttribute(OpAttributeKey::lastUse, initVec);
             for (size_t inputIdx = 0; inputIdx < op->GetIOperands().size(); inputIdx++) {
                 auto inTensor = op->GetInputOperand(inputIdx);
                 lastUseMap_[inTensor] = op;
@@ -230,6 +228,9 @@ Status OoOSchedule::RecordLastUseMemory(Function &function) {
     for (auto &entry : lastUseMap_) {
         auto lastUseOp = entry.second;
         auto lastUseTensor = entry.first;
+        if (LASTUSE_OPS.find(lastUseOp->GetOpcode()) == LASTUSE_OPS.end()) {
+            continue; //针对非LASTUSE_OPS中的op不做处理，仅处理LASTUSE_OPS中的op
+        }
         if (opInputIdxMap.find(lastUseOp) == opInputIdxMap.end()) {
             int tensorSize = lastUseOp->GetIOperands().size() + lastUseOp->GetOOperands().size();
             std::vector<int> tensorIdxVec(tensorSize, false);
@@ -247,7 +248,6 @@ Status OoOSchedule::RecordLastUseMemory(Function &function) {
     }
     for (auto &entry : opInputIdxMap) {
         auto op = entry.first;
-        std::fill(opInputIdxMap[op].begin(), opInputIdxMap[op].end(), 0); // disable LastUse
         op->SetAttribute(OpAttributeKey::lastUse, opInputIdxMap[op]);
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End RecordLastUseMemory.");

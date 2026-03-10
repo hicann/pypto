@@ -196,7 +196,7 @@ TEST_F(TestCodegenDynRowReduceLine, TestOperationRowProdSingleTileTensor) {
     codeGen.GenCode(*function, {});
 
     std::string res = GetResultFromCpp(*function);
-    const std::string expect = R"(TRowProdSingle<LastUse3Dim<0, 0, 0>>(ubTensor_20, ubTensor_17, ubTensor_21);)";
+    const std::string expect = R"(TRowProdSingle<LastUse3Dim<0, 0, 1>>(ubTensor_20, ubTensor_17, ubTensor_21);)";
     CheckStringExist(expect, res);
 }
 } // namespace npu::tile_fwk
