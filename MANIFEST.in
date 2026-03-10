@@ -25,12 +25,12 @@ recursive-include framework/src/codegen *
 recursive-include framework/src/cost_model/simulation *
 recursive-include framework/src/cost_model/simulation_ca *
 recursive-include framework/src/cost_model/simulation_pv *
-recursive-include framework/src/cost_model/simulation_platform *
 include framework/src/cost_model/CMakeLists.txt
 recursive-include framework/src/interface *
 recursive-include framework/src/machine *
 recursive-include framework/src/passes *
 recursive-include framework/src/cann_host_runtime *
+recursive-include framework/src/platform *
 
 # python
 include python/CMakeLists.txt

@@ -87,9 +87,9 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     # 安装 二进制文件
     set(InstallExport ${PROJECT_NAME}Targets)
     set(InstallTargets
-            tile_fwk_cann_host_runtime
-            tile_fwk_simulation_platform
             tile_fwk_utils
+            tile_fwk_cann_host_runtime
+            tile_fwk_platform
             tile_fwk_interface
             tile_fwk_codegen
             tile_fwk_compiler
@@ -121,7 +121,8 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 framework/src/interface/configs/tile_fwk_config.json
                 framework/src/interface/configs/tile_fwk_types.json
                 framework/src/interface/configs/tile_fwk_config_schema.json
-                framework/src/cost_model/simulation_platform/platform_config/A2A3.ini
+                framework/src/platform/simulation_platform/platform_config/A2A3.ini
+                framework/src/platform/parser/platforminfo.ini
             DESTINATION ${PyPTO_WhlName}/lib/configs
     )
 

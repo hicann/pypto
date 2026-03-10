@@ -9,29 +9,29 @@
  */
 
 /*!
- * \file platform.h
+ * \file simulation_platform.h
  * \brief
  */
 
 #pragma once
-#ifndef COSTMODEL_PLATFORM_H
-#define COSTMODEL_PLATFORM_H
+#ifndef SIMULATION_PLATFORM_H
+#define SIMULATION_PLATFORM_H
 
 #include <string>
 #include <cstdint>
+#include "tilefwk/file.h"
 
-namespace CostModel {
-class CostModelPlatform {
+namespace npu {
+namespace tile_fwk {
+class SimulationPlatform {
 public:
-    CostModelPlatform() = default;
-    ~CostModelPlatform() = default;
+    SimulationPlatform() = default;
+    ~SimulationPlatform() = default;
 
-    uint32_t GetCostModelPlatformRealPath(std::string &realPath);
-
+    bool GetCostModelPlatformRealPath(std::string &realPath);
 private:
-    std::string RealPath(const std::string &path);
-
     static std::string GetCurrentSharedLibPath();
 };
-} // namespace CostModel
+} // namespace tile_fwk
+} // namespace npu
 #endif

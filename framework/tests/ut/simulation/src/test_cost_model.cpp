@@ -17,7 +17,6 @@
 #include <dlfcn.h>
 
 #include "cost_model/simulation/backend.h"
-#include "cost_model/simulation_platform/platform.h"
 #include "operator/models/llama/llama_def.h"
 #include "cost_model/simulation/common/CommonType.h"
 #include "tilefwk/tilefwk.h"

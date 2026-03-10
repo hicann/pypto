@@ -9,34 +9,30 @@
  */
 
 /*!
- * \file cann_host_runtime.h
+ * \file internal_parser.h
  * \brief
  */
 
 #pragma once
 
-#include <cstdint>
-#include "file.h"
+#include <map>
+#include <vector>
+#include <limits>
+#include <fstream>
+#include <sys/stat.h>
+#include "tilefwk/file.h"
+#include "tilefwk/data_type.h"
 
 namespace npu {
 namespace tile_fwk {
-using GetSocVerFunc = int (*)(char *, const uint32_t);
-
-class CannHostRuntime {
+class InternalParser {
 public:
-    static CannHostRuntime& Instance();
-    bool GetSocVersion(std::string& socVersion);
-    std::string GetPlatformFile(const std::string &socVersion);
-    CannHostRuntime(const CannHostRuntime&) = delete;
-    CannHostRuntime& operator=(const CannHostRuntime&) = delete;
+    InternalParser(const std::string &archType) : archType_(archType) {}
+    bool LoadInternalInfo();
+    bool GetDataPath(std::vector<std::pair<MemoryType, MemoryType>> &dataPath);
 private:
-    CannHostRuntime();
-    ~CannHostRuntime();
-    void *GetSymbol(const std::string &sym);
-
-    GetSocVerFunc socVerFunc_ = nullptr;
-    void *handleDep_ = nullptr;	 
-    void *handle_ = nullptr;
+    std::string archType_;
+    std::map<std::string, std::string> data_;
 };
-}  // namespace tile_fwk
-}  // namespace npu
+}
+}

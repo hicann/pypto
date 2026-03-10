@@ -17,38 +17,38 @@
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
 #include "interface/utils/file_utils.h"
-#include "interface/configs/ini_parser.h"
+#include "platform/parser/platform_parser.h"
+#include "platform/parser/internal_parser.h"
 
 using namespace npu::tile_fwk;
+const size_t Num2 = 2UL;
+const std::string archInfo = "ArchInfo";
+const std::string version = "version";
+const std::string socInfo = "SoCInfo";
+const std::string aiCoreSpec = "AICoreSpec";
+const std::string shortSocVer = "Short_SoC_version";
+const std::string aiCoreCnt = "ai_core_cnt";
+const std::string cubeCoreCnt = "cube_core_cnt";
+const std::string vectorCoreCnt = "vector_core_cnt";
+const std::string aiCpuCnt = "ai_cpu_cnt";
+const std::string l0aSize = "l0_a_size";
+const std::string l0bSize = "l0_b_size";
+const std::string l0cSize = "l0_c_size";
+const std::string l1Size = "l1_size";
+const std::string ubSize = "ub_size";
+const std::string aic = "AIC";
+const std::string aiv = "AIV";
+const std::string INI_PATH = "/../../../framework/tests/ut/machine/stubs/compiler/data/platform_config/Ascend910_9572.ini";
 
-class TestINIParser : public testing::Test {
+class TestPlatform : public testing::Test {
 public:
     static void SetUpTestCase() {}
     static void TearDownTestCase() {}
-    void SetUp() override {
-        std::string src = GetCurRunningPath() + "/../../../framework/tests/ut/machine/stubs/compiler/data/platform_config/Ascend910_9572.ini";
-        std::string dst = RealPath(GetCurrentSharedLibPath() + "/configs") + "/Soc_version.ini";
-        std::string command = "cp " + src + " " + dst;
-        ASSERT(std::system(command.c_str()) == 0) << "Failed to copy config file: " << command;
-    }
+    void SetUp() override {}
     void TearDown() override {}
 };
 
-TEST_F(TestINIParser, TestParser) {
-    const std::string archInfo = "ArchInfo";
-    const std::string version = "version";
-    const std::string socInfo = "SoCInfo";
-    const std::string aiCoreSpec = "AICoreSpec";
-    const std::string shortSocVer = "Short_SoC_version";
-    const std::string aiCoreCnt = "ai_core_cnt";
-    const std::string cubeCoreCnt = "cube_core_cnt";
-    const std::string vectorCoreCnt = "vector_core_cnt";
-    const std::string aiCpuCnt = "ai_cpu_cnt";
-    const std::string l0aSize = "l0_a_size";
-    const std::string l0bSize = "l0_b_size";
-    const std::string l0cSize = "l0_c_size";
-    const std::string l1Size = "l1_size";
-    const std::string ubSize = "ub_size";
+TEST_F(TestPlatform, TestParser) {
     const size_t expectAICoreCnt = 28UL;
     const size_t expectCubeCoreCnt = 28UL;
     const size_t expectVectorCoreCnt = 56UL;
@@ -60,52 +60,44 @@ TEST_F(TestINIParser, TestParser) {
     const size_t expectubSize = 253952UL;
 
     INIParser parser;
-    std::string iniPath = RealPath(GetCurrentSharedLibPath() + "/configs/Soc_version.ini");
-    EXPECT_EQ(parser.Initialize(iniPath), SUCCESS);
+    std::string iniPath = RealPath(GetCurrentSharedLibPath() + INI_PATH);
+    EXPECT_TRUE(parser.Initialize(iniPath));
 
     std::string socVersion;
-    EXPECT_EQ(parser.GetStringVal(version, shortSocVer, socVersion), SUCCESS);
+    EXPECT_TRUE(parser.GetStringVal(version, shortSocVer, socVersion));
     EXPECT_EQ(socVersion, "Ascend910_95");
 
-    // std::string archVal;
-    // EXPECT_EQ(parser.GetStringVal(version, archInfo, socVersion), FAILED);
-
     std::unordered_map<std::string, std::string> ccecVersion;
-    EXPECT_EQ(parser.GetCCECVersion(ccecVersion), SUCCESS);
+    EXPECT_TRUE(parser.GetCCECVersion(ccecVersion));
     EXPECT_NE(ccecVersion.find("AIC"), ccecVersion.end());
     EXPECT_EQ(ccecVersion["AIC"], "dav-c310");
     EXPECT_NE(ccecVersion.find("AIV"), ccecVersion.end());
     EXPECT_EQ(ccecVersion["AIV"], "dav-c310");
 
     size_t coreNum;
-    EXPECT_EQ(parser.GetSizeVal(socInfo, aiCoreCnt, coreNum), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(socInfo, aiCoreCnt, coreNum));
     EXPECT_EQ(coreNum, expectAICoreCnt);
-    EXPECT_EQ(parser.GetSizeVal(socInfo, cubeCoreCnt, coreNum), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(socInfo, cubeCoreCnt, coreNum));
     EXPECT_EQ(coreNum, expectCubeCoreCnt);
-    EXPECT_EQ(parser.GetSizeVal(socInfo, vectorCoreCnt, coreNum), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(socInfo, vectorCoreCnt, coreNum));
     EXPECT_EQ(coreNum, expectVectorCoreCnt);
-    EXPECT_EQ(parser.GetSizeVal(socInfo, aiCpuCnt, coreNum), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(socInfo, aiCpuCnt, coreNum));
     EXPECT_EQ(coreNum, expectAICpuCnt);
 
     size_t memoryLimit;
-    EXPECT_EQ(parser.GetSizeVal(aiCoreSpec, l0aSize, memoryLimit), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0aSize, memoryLimit));
     EXPECT_EQ(memoryLimit, expectl0aSize);
-    EXPECT_EQ(parser.GetSizeVal(aiCoreSpec, l0bSize, memoryLimit), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0bSize, memoryLimit));
     EXPECT_EQ(memoryLimit, expectl0bSize);
-    EXPECT_EQ(parser.GetSizeVal(aiCoreSpec, l0cSize, memoryLimit), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l0cSize, memoryLimit));
     EXPECT_EQ(memoryLimit, expectl0cSize);
-    EXPECT_EQ(parser.GetSizeVal(aiCoreSpec, l1Size, memoryLimit), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, l1Size, memoryLimit));
     EXPECT_EQ(memoryLimit, expectl1Size);
-    EXPECT_EQ(parser.GetSizeVal(aiCoreSpec, ubSize, memoryLimit), SUCCESS);
+    EXPECT_TRUE(parser.GetSizeVal(aiCoreSpec, ubSize, memoryLimit));
     EXPECT_EQ(memoryLimit, expectubSize);
-
-    std::vector<std::vector<std::string>> dataPath;
-    EXPECT_EQ(parser.GetDataPath(dataPath), SUCCESS);
 }
 
-TEST_F(TestINIParser, TestObtainPlatformInfo) {
-    const std::string aic = "AIC";
-    const std::string aiv = "AIV";
+TEST_F(TestPlatform, TestObtainPlatformInfo) {
     const size_t expectAICoreCnt = 24UL;
     const size_t expectCubeCoreCnt = 24UL;
     const size_t expectVectorCoreCnt = 48UL;
@@ -137,26 +129,49 @@ TEST_F(TestINIParser, TestObtainPlatformInfo) {
     EXPECT_EQ(paths.size(), 2UL);
 }
 
-TEST_F(TestINIParser, AbnormalTest) {
+TEST_F(TestPlatform, AbnormalTest) {
     INIParser parser;
-    const std::string version = "version";
-    EXPECT_EQ(parser.Initialize(""), FAILED);
+    EXPECT_FALSE(parser.Initialize(""));
 
     std::unordered_map<std::string, std::string> ccecVersion;
-    EXPECT_EQ(parser.GetCCECVersion(ccecVersion), FAILED);
-    EXPECT_EQ(parser.GetCoreVersion(ccecVersion), FAILED);
+    EXPECT_FALSE(parser.GetCCECVersion(ccecVersion));
+    EXPECT_FALSE(parser.GetCoreVersion(ccecVersion));
 
-    std::vector<std::vector<std::string>> dataPath;
-    EXPECT_EQ(parser.GetDataPath(dataPath), FAILED);
-
-    std::string iniPath = RealPath(GetCurrentSharedLibPath() + "/configs/Soc_version.ini");
-    EXPECT_EQ(parser.Initialize(iniPath), SUCCESS);
+    std::string iniPath = RealPath(GetCurrentSharedLibPath() + INI_PATH);
+    EXPECT_TRUE(parser.Initialize(iniPath));
 
     std::string test;
-    EXPECT_EQ(parser.GetStringVal("none", "", test), FAILED);
-    EXPECT_EQ(parser.GetStringVal(version, "none_other", test), SUCCESS);
+    EXPECT_FALSE(parser.GetStringVal("none", "", test));
+    EXPECT_FALSE(parser.GetStringVal(version, "none_other", test));
 
     size_t testSize;
-    EXPECT_EQ(parser.GetSizeVal("none", "", testSize), FAILED);
+    EXPECT_FALSE(parser.GetSizeVal("none", "", testSize));
 
+    std::vector<std::pair<MemoryType, MemoryType>> dataPath; 
+    InternalParser internalParser1 = InternalParser("");
+    EXPECT_TRUE(internalParser1.LoadInternalInfo());
+    EXPECT_FALSE(internalParser1.GetDataPath(dataPath));
+
+    InternalParser internalParser2 = InternalParser("2201");
+    EXPECT_TRUE(internalParser2.LoadInternalInfo());
+    EXPECT_TRUE(internalParser2.GetDataPath(dataPath));
+}
+
+TEST_F(TestPlatform, A5Stub) {
+    std::vector<std::pair<MemoryType, MemoryType>> dataPath; 
+    InternalParser parser2 = InternalParser("3510");
+    EXPECT_TRUE(parser2.LoadInternalInfo());
+    EXPECT_TRUE(parser2.GetDataPath(dataPath));
+    Platform::Instance().GetDie().SetMemoryPath(dataPath);
+
+    std::vector<MemoryType> path;
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_L0C, MemoryType::MEM_UB, path); 
+    EXPECT_EQ(path.size(), Num2); 
+    path.clear(); 
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_L1, MemoryType::MEM_UB, path); 
+    EXPECT_EQ(path.size(), Num2); 
+    path.clear(); 
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_UB, MemoryType::MEM_L1, path); 
+    EXPECT_EQ(path.size(), Num2); 
+    path.clear();
 }

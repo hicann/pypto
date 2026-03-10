@@ -305,8 +305,12 @@ public:
     }
 
     void InitPv() {
-        auto socVersion = npu::tile_fwk::Platform::Instance().GetSoc().GetSocVersion();
-        std::string soPath = std::string(std::getenv("ASCEND_HOME_PATH")) + "/toolkit/tools/simulator/" + npu::tile_fwk::SocVersionToString(socVersion) + "/lib/libpem_davinci.so";
+        auto archType = npu::tile_fwk::Platform::Instance().GetSoc().GetNPUArch();
+        const char* ascendHome = std::getenv("ASCEND_HOME_PATH");
+        if (ascendHome == nullptr) {
+            throw std::runtime_error("ASCEND_HOME_PATH environment variable not set");
+        }
+        std::string soPath = std::string(ascendHome) + "/toolkit/tools/simulator/dav_" + NPUArchToString(archType) + "/lib/libpem_davinci.so";
         void *handle = dlopen((soPath.c_str()), RTLD_LAZY);
         if (!handle) {
             throw std::runtime_error("can not load library: " + soPath);

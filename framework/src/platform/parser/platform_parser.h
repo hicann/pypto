@@ -9,34 +9,33 @@
  */
 
 /*!
- * \file cann_host_runtime.h
+ * \file platform_parser.h
  * \brief
  */
+#ifndef PLATFORM_PARSER_H_
+#define PLATFORM_PARSER_H_
 
-#pragma once
-
-#include <cstdint>
-#include "file.h"
+#include <map>
+#include <set>
+#include <vector>
+#include <fstream>
+#include <unordered_map>
+#include "tilefwk/file.h"
+#include "tilefwk/platform.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu {
 namespace tile_fwk {
-using GetSocVerFunc = int (*)(char *, const uint32_t);
-
-class CannHostRuntime {
+class INIParser : public PlatformParser {
 public:
-    static CannHostRuntime& Instance();
-    bool GetSocVersion(std::string& socVersion);
-    std::string GetPlatformFile(const std::string &socVersion);
-    CannHostRuntime(const CannHostRuntime&) = delete;
-    CannHostRuntime& operator=(const CannHostRuntime&) = delete;
+    INIParser() = default;
+    ~INIParser() = default;
+    bool Initialize(const std::string &iniFilePath); 
+    bool GetStringVal(const std::string& column, const std::string& key, std::string& val) const override;
 private:
-    CannHostRuntime();
-    ~CannHostRuntime();
-    void *GetSymbol(const std::string &sym);
-
-    GetSocVerFunc socVerFunc_ = nullptr;
-    void *handleDep_ = nullptr;	 
-    void *handle_ = nullptr;
+    bool ReadINIFile(const std::string& filepath);
+    std::map<std::string, std::map<std::string, std::string>> data_;
 };
-}  // namespace tile_fwk
-}  // namespace npu
+} // namespace tile_fwk
+} // namepsace npu 
+#endif
