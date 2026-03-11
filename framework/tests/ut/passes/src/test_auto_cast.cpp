@@ -103,5 +103,27 @@ TEST_F(AutoCastTest, Int32ToFP16Cast) {
     EXPECT_EQ(function->Operations().size(), opNum2);
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
+
+TEST_F(AutoCastTest, InsertFP16Cast) {
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_2201);
+    ComputationalGraphBuilder G;
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, {16, 16}, "t1"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t2"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP16, {16, 16}, "t3"), true);
+    std::vector<Opcode> opCodes{Opcode::OP_MOD};
+    std::vector<std::vector<std::string>> ioperands{{"t1", "t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t3"}};
+    std::vector<std::string> opNames{"Fmod"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    EXPECT_EQ(G.SetInCast({"t1", "t2"}), true);
+    EXPECT_EQ(G.SetOutCast({"t3"}), true);
+    Function *function = G.GetFunction();
+    EXPECT_EQ(function->Operations().size(), 1);
+    AutoCast autoCast;
+    autoCast.RunOnFunction(*function);
+    autoCast.PostCheck(*function);
+    const int opNum = 3;
+    EXPECT_EQ(function->Operations().size(), opNum);
+}
 } // namespace tile_fwk
 } // namespace npu

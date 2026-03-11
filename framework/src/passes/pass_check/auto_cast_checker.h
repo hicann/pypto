@@ -32,6 +32,7 @@ private:
     Status PreCheckReshape(const LogicalTensorPtr &in);
     Status ProcessPreCheck(const Operation *op);
     bool SupportBF16(Operation *op);
+    bool SupportFP16(Operation *op);
 };
 } // namespace tile_fwk
 } // namespace npu

@@ -632,6 +632,8 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{Opcode::OP_RANGE,
     Opcode::OP_SORT_UB, Opcode::OP_GATHER_MASK, Opcode::OP_GATHER_MASK_BUILDIN, Opcode::OP_PAIRPROD, Opcode::OP_ROWPROD_SINGLE, 
     Opcode::OP_ROWPRODLINE};
 
+const std::unordered_set<Opcode> UNSUPPORT_FP16_OPS{Opcode::OP_MOD, Opcode::OP_MODS, Opcode::OP_REMRS, Opcode::OP_REMS, Opcode::OP_REM};
+
 const std::unordered_set<Opcode> UNSUPPORT_BF16_OPS{Opcode::OP_EXP, Opcode::OP_RSQRT, Opcode::OP_SQRT, Opcode::OP_RELU,
     Opcode::OP_RECIPROCAL, Opcode::OP_ABS, Opcode::OP_LN, Opcode::OP_LOGICALNOT, Opcode::OP_TRIUL, Opcode::OP_REMRS,
     Opcode::OP_LOGICALAND, Opcode::OP_ADDS, Opcode::OP_SUBS, Opcode::OP_MULS, Opcode::OP_DIVS, Opcode::OP_REM, Opcode::OP_REMS,

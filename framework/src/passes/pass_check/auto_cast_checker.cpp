@@ -44,22 +44,31 @@ Status AutoCastChecker::DoPostCheck(Function &function) {
     std::vector<Operation *> opList = function.Operations().DuplicatedOpList();
     for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
         Operation *op = opList[opIdx];
-        if (SupportBF16(op)) {
-            continue;
-        }
+        bool supportBF16 = SupportBF16(op);
+        bool supportFP16 = SupportFP16(op);
         auto iOperands = op->GetIOperands();
-        for (auto &iop : iOperands) {
-            if (iop->Datatype() == DataType::DT_BF16) {
+        for (const auto &iop : iOperands) {
+            if (!supportBF16 && iop->Datatype() == DataType::DT_BF16) {
                 ALOG_ERROR_F("Exist unsupported BF16 compute between op %d and tensor %d",
                              op->GetOpMagic(), iop->GetMagic());
                 return FAILED;
             }
+            if (!supportFP16 && iop->Datatype() == DataType::DT_FP16) {
+                ALOG_ERROR_F("Exist unsupported FP16 compute between op %d and tensor %d",
+                            op->GetOpMagic(), iop->GetMagic());
+                return FAILED;
+            }
         }
         auto oOperands = op->GetOOperands();
-        for (auto &oop : oOperands) {
-            if (oop->Datatype() == DataType::DT_BF16) {
+        for (const auto &oop : oOperands) {
+            if (!supportBF16 && oop->Datatype() == DataType::DT_BF16) {
                 ALOG_ERROR_F("Exist unsupported BF16 compute between op %d and tensor %d",
                              op->GetOpMagic(), oop->GetMagic());
+                return FAILED;
+            }
+            if (!supportFP16 && oop->Datatype() == DataType::DT_FP16) {
+                ALOG_ERROR_F("Exist unsupported FP16 compute between op %d and tensor %d",
+                            op->GetOpMagic(), oop->GetMagic());
                 return FAILED;
             }
         }
@@ -69,6 +78,13 @@ Status AutoCastChecker::DoPostCheck(Function &function) {
 
 bool AutoCastChecker::SupportBF16(Operation *op) {
     if (UNSUPPORT_BF16_OPS.count(op->GetOpcode()) > 0) {
+        return false;
+    }
+    return true;
+}
+
+bool AutoCastChecker::SupportFP16(Operation *op) {
+    if (UNSUPPORT_FP16_OPS.count(op->GetOpcode()) > 0) {
         return false;
     }
     return true;

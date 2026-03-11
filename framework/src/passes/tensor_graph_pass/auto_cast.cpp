@@ -76,6 +76,10 @@ Status AutoCast::RunOnFunction(Function &function) {
         ALOG_ERROR_F("Failed to insert CAST for BF16 unsupported Operations.");
         return FAILED;
     }
+    if (InsertFP16Cast(function) != SUCCESS) {
+        ALOG_ERROR_F("Failed to insert CAST for FP16 unsupported Operations.");
+        return FAILED;
+    }
     if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && InsertInt32Fp16Cast(function) != SUCCESS) {
         ALOG_ERROR_F("Failed to insert fp32 between int32 to fp16 cast.");
         return FAILED;
@@ -121,6 +125,16 @@ bool AutoCast::SupportBF16(Operation *op) {
     } else {
         if (UNSUPPORT_BF16_OPS.count(op->GetOpcode()) > 0) {
             ALOG_INFO_F("Op[%d] can find in UNSUPPORT_BF16_OPS.", op->GetOpMagic());
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AutoCast::SupportFP16(Operation *op) {
+    if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+        if (UNSUPPORT_FP16_OPS.count(op->GetOpcode()) > 0) {
+            ALOG_INFO_F("Op[%d] can find in UNSUPPORT_FP16_OPS.", op->GetOpMagic());
             return false;
         }
     }
@@ -178,6 +192,53 @@ Status AutoCast::InsertBF16Cast(Function &function) {
                 if (outCastConnectedTensors_.count(oop->GetMagic()) > 0) {
                     outCastConnectedTensors_.insert(newOutput->GetMagic());
                 }
+            }
+        }
+    }
+    return SUCCESS;
+}
+
+Status AutoCast::InsertFP16Cast(Function &function) {
+    std::vector<Operation *> opList = function.Operations().DuplicatedOpList();
+    std::unordered_map<int, std::shared_ptr<LogicalTensor>> oldMagic2Input;
+    for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
+        Operation *op = opList[opIdx];
+        if (SupportFP16(op)) {
+            continue;
+        }
+        auto iOperands = op->GetIOperands();
+        std::unordered_set<int> visitedIOp;
+        for (auto &iop : iOperands) {
+            if (visitedIOp.count(iop->GetMagic()) > 0 || iop->Datatype() != DataType::DT_FP16) {
+                continue;
+            }
+            visitedIOp.insert(iop->GetMagic());
+            if (oldMagic2Input.count(iop->GetMagic()) > 0) {
+                auto newInput = oldMagic2Input[iop->GetMagic()];
+                op->ReplaceInput(newInput, iop);
+                continue;
+            }
+            auto newInput = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, iop->shape, iop->GetDynValidShape(), iop->Format());
+            InsertCastOp(function, iop, newInput, op->GetTileShape());
+            op->ReplaceInput(newInput, iop);
+            oldMagic2Input[iop->GetMagic()] = newInput;
+            if (inCastConnectedTensors_.count(iop->GetMagic()) > 0) {
+                inCastConnectedTensors_.insert(newInput->GetMagic());
+            }
+        }
+        auto oOperands = op->GetOOperands();
+        std::unordered_set<int> visitedOOp;
+        for (auto &oop : oOperands) {
+            if (visitedOOp.count(oop->GetMagic()) > 0 || oop->Datatype() != DataType::DT_FP16) {
+                continue;
+            }
+            visitedOOp.insert(oop->GetMagic());
+            auto newOutput = std::make_shared<LogicalTensor>(function, DataType::DT_FP32, oop->shape, oop->GetDynValidShape(), oop->Format());
+            op->ReplaceOutput(newOutput, oop);
+            InsertCastOp(function, newOutput, oop, op->GetTileShape());
+            oldMagic2Input[oop->GetMagic()] = newOutput;
+            if (outCastConnectedTensors_.count(oop->GetMagic()) > 0) {
+                outCastConnectedTensors_.insert(newOutput->GetMagic());
             }
         }
     }
