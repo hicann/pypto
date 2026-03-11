@@ -142,13 +142,13 @@ void PassManager::RegDefaultStrategy() {
             {                 "AddAlloc",                     PassName::ADD_ALLOC},
             {              "OoOSchedule",                  PassName::OOO_SCHEDULE},
             {       "TuneTileOpSeqForVF",        PassName::TUNE_TILEOP_SEQ_FOR_VF},
-            {        "GlobalMemoryReuse",           PassName::GLOBAL_MEMORY_REUSE},
             {              "RemoveAlloc",                  PassName::REMOVE_ALLOC},
             {           "CopyOutResolve",              PassName::COPY_OUT_RESOLVE},
             {               "InsertSync",                   PassName::INSERT_SYNC},
             {            "TuneSyncForVF",              PassName::TUNE_SYNC_FOR_VF},
             {         "MixSubgraphSplit",            PassName::MIX_SUBGRAPH_SPLIT},
-            {             "LoopaxesProc",             PassName::LOOPAXES_PROC},
+            {        "GlobalMemoryReuse",           PassName::GLOBAL_MEMORY_REUSE},
+            {             "LoopaxesProc",                 PassName::LOOPAXES_PROC},
             {           "CodegenPreproc",               PassName::CODEGEN_PREPROC},
     });
     RegisterStrategy(
