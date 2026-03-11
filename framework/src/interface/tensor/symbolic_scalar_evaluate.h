@@ -38,6 +38,10 @@ public:
         const std::map<std::string, DynParamInfo> &dynParamTable, const std::vector<SymbolicScalar> &linearArgList) {
         for (auto &paramInfo : dynParamTable) {
             std::string symbolName = paramInfo.first;
+            if (paramInfo.second.dim.IsValid()) {
+                symbolDict_[symbolName] = EvaluateSymbolicScalar(paramInfo.second.dim, linearArgList);
+                continue;
+            }
             int n = paramInfo.second.tensorIndex;
             (void)n;
             int base = paramInfo.second.tensorBaseAddrCoaIndex;

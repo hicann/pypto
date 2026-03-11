@@ -282,7 +282,7 @@ def set_verify_options(*,
         Customize atol and rtol.
     """
     if pass_verify_pass_filter == []:
-        pass_verify_pass_filter = None
+        pass_verify_pass_filter = ["no_verify"]
     if pass_verify_error_tol is None or len(pass_verify_error_tol) != 2:
         pass_verify_error_tol = [1e-3, 1e-3]
     pass_verify_error_tol = [float(x) for x in pass_verify_error_tol]

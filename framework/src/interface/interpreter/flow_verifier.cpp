@@ -219,7 +219,8 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
     if (passFilter.empty()) {
  	         return;
  	}
- 	if (passFilter[0] != "all") {
+
+ 	if (std::find(passFilter.begin(), passFilter.end(), "all") == passFilter.end()) {
         auto it = std::find(passFilter.begin(), passFilter.end(), passIdentifier);
         if (it == passFilter.end()) {
             return;
