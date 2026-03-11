@@ -110,7 +110,6 @@ class LightningIndexerBuildConfig:
 
 def setup_lightning_indexer_topk_config():
     pypto.set_pass_options(
-                         pg_lower_bound=NUM_1024,
                          pg_upper_bound=NUM_1024 * NUM_1024,
                          cube_l1_reuse_setting={-1: NUM_32},
                          vec_nbuffer_setting={NUM_NEG1: NUM_16})

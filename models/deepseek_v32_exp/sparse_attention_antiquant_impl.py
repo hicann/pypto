@@ -261,7 +261,6 @@ def sparse_attention_antiquant_d(block_num, max_kv, kv_lora_rank, qk_rope_dim, n
     @pypto.frontend.jit(
         pass_options={
             "pg_upper_bound": 50000,
-            "pg_lower_bound": 512,
             "vec_nbuffer_setting": {-1: 2, 0: 4},
             "cube_l1_reuse_setting": {-1: 2},
         },
@@ -339,7 +338,6 @@ def sparse_attention_antiquant_p(block_num, max_kv, kv_lora_rank, qk_rope_dim, n
     @pypto.frontend.jit(
         pass_options={
             "pg_upper_bound": 50000,
-            "pg_lower_bound": 512,
             "vec_nbuffer_setting": {-1: 4, 0: 4},
             "cube_l1_reuse_setting": {-1: 4},
         },

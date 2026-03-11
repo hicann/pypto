@@ -3,7 +3,7 @@
         "pg_parallel_lower_bound": 20,
         "pg_upper_bound": 10000,
         "pg_lower_bound": 512,
-        "mg_copyin_upper_bound": 2097152,
+        "mg_copyin_upper_bound": 104857600,
         "mg_vec_parallel_lb": 48,
         "pg_skip_partition": false,
         "copyout_resolve_coalescing": 0,

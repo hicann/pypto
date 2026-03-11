@@ -23,9 +23,9 @@ def test_print_options():
 
 def test_pass_option():
     # int
-    pypto.set_pass_options(mg_vec_parallel_lb=48)
+    pypto.set_pass_options(sg_set_scope=48)
     pass_option = pypto.get_pass_options()
-    assert pass_option["mg_vec_parallel_lb"] == 48
+    assert pass_option["sg_set_scope"] == 48
     # map
     pypto.set_pass_options(cube_nbuffer_setting={3: 4})
     pass_option = pypto.get_pass_options()
