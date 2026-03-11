@@ -9,31 +9,25 @@
  */
 
 /*!
- * \file dlog_handler.h
+ * \file log_module_manager.h
  * \brief
  */
 
 #pragma once
 
-#include <cstdint>
+#include <array>
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
-class DLogHandler {
+class LogModuleManager {
 public:
-    static DLogHandler &Instance();
-    int32_t CheckLogLevel(int32_t moduleId, int32_t logLevel) const;
-    int32_t GetLogLevel(int32_t moduleId, int32_t *enableEvent) const;
-    int32_t SetLogLevel(int32_t moduleId, int32_t logLevel, int32_t enableEvent) const;
-    bool IsAvailable() const { return checkLevelFunc_ != nullptr && logRecordFunc_ != nullptr; }
-    void(*logRecordFunc_)(int32_t, int32_t, const char *, ...);
-
+    static LogModuleManager &Instance();
+    int32_t GetModuleLogLevel(const LogModule logModule) const;
+    int32_t GetLowestLogLevel() const;
 private:
-    DLogHandler();
-    ~DLogHandler();
-    void CloseHandle();
-    void *handle_{nullptr};
-    int32_t(*checkLevelFunc_)(int32_t, int32_t);
-    int32_t(*getLevelFunc_)(int32_t, int32_t*);
-    int32_t(*setLevelFunc_)(int32_t, int32_t, int32_t);
+    LogModuleManager();
+    ~LogModuleManager();
+
+    std::array<int32_t, static_cast<size_t>(LogModule::BOTTOM)> moduleLogLevel_;
 };
 }

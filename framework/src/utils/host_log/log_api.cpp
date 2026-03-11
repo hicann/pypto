@@ -14,14 +14,20 @@
  */
 
 #include <cstdarg>
+#include <array>
 
 #include "tilefwk/pypto_fwk_log.h"
 #include "host_log/log_manager.h"
 #include "host_log/dlog_handler.h"
+#include "host_log/log_module_manager.h"
 
 namespace npu::tile_fwk {
-int32_t TilefwkCheckLogLevel(int32_t moduleId, int32_t logLevel) {
+int32_t TilefwkCheckLogLevel(int32_t moduleId, int32_t logLevel, LogModule logModule) {
     (void)moduleId;
+    int32_t moduleLevel = LogModuleManager::Instance().GetModuleLogLevel(logModule);
+    if (moduleLevel >= 0) {
+        return logLevel >= moduleLevel ? 1 : 0;
+    }
     return LogManager::Instance().CheckLevel(static_cast<LogLevel>(logLevel)) ? 1 : 0;
 }
 
@@ -49,12 +55,14 @@ LogFuncInfo &LogFuncInfo::Instance() {
 LogFuncInfo::LogFuncInfo() {
     checkLevel = TilefwkCheckLogLevel;
     record = TilefwkLogRecord;
+    pyptoRecord = TilefwkLogRecord;
     setAttr = TilefwkSetLogAttr;
 }
 
 LogFuncInfo::~LogFuncInfo() {
     checkLevel = nullptr;
     record = nullptr;
+    pyptoRecord = nullptr;
     setAttr = nullptr;
 }
 #endif

@@ -183,12 +183,12 @@ inline bool IsDebugMode() {
     return true;
 }
 
-#define DEV_VERBOSE_DEBUG(fmt, args...) PYPTO_SIM_LOG(DLOG_DEBUG, "MACHINE", fmt, ##args)
-#define DEV_DEBUG_SPLIT(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, "MACHINE", fmt, ##args)
-#define DEV_DEBUG(fmt, args...)         PYPTO_SIM_LOG(DLOG_DEBUG, "MACHINE", fmt, ##args)
-#define DEV_INFO(fmt, args...)          PYPTO_SIM_LOG(DLOG_INFO, "MACHINE", fmt, ##args)
-#define DEV_WARN(fmt, args...)          PYPTO_SIM_LOG(DLOG_WARN, "MACHINE", fmt, ##args)
-#define DEV_ERROR(fmt, args...)         PYPTO_SIM_LOG(DLOG_ERROR, "MACHINE", fmt, ##args)
+#define DEV_VERBOSE_DEBUG(fmt, args...) PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
+#define DEV_DEBUG_SPLIT(fmt, args...)   PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
+#define DEV_DEBUG(fmt, args...)         PYPTO_SIM_LOG(DLOG_DEBUG, MACHINE, fmt, ##args)
+#define DEV_INFO(fmt, args...)          PYPTO_SIM_LOG(DLOG_INFO, MACHINE, fmt, ##args)
+#define DEV_WARN(fmt, args...)          PYPTO_SIM_LOG(DLOG_WARN, MACHINE, fmt, ##args)
+#define DEV_ERROR(fmt, args...)         PYPTO_SIM_LOG(DLOG_ERROR, MACHINE, fmt, ##args)
 
 #if DEBUG_MEM_DUMP_LEVEL != DEBUG_MEM_DUMP_DISABLE
 #define DEV_MEM_DUMP(fmt, args...) MACHINE_LOGD("[WsMem Statistics] " fmt, ##args)

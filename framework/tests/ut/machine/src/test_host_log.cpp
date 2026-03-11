@@ -20,6 +20,7 @@
 #include <iostream>
 #define private public
 #include "utils/host_log/log_manager.h"
+#include "utils/host_log/log_module_manager.h"
 #undef private
 #include "tilefwk/pypto_fwk_log.h"
 #include "utils/host_log/dlog_handler.h"
@@ -32,14 +33,18 @@ public:
         unsetenv("ASCEND_SLOG_PRINT_TO_STDOUT");
         unsetenv("ASCEND_MODULE_LOG_LEVEL");
         unsetenv("ASCEND_GLOBAL_EVENT_ENABLE");
+        unsetenv("ASCEND_HOST_LOG_FILE_NUM");
         unsetenv("ASCEND_PROCESS_LOG_PATH");
+        unsetenv("ASCEND_WORK_PATH");
     }
     void TearDown() override {
         unsetenv("ASCEND_GLOBAL_LOG_LEVEL");
         unsetenv("ASCEND_SLOG_PRINT_TO_STDOUT");
         unsetenv("ASCEND_MODULE_LOG_LEVEL");
         unsetenv("ASCEND_GLOBAL_EVENT_ENABLE");
+        unsetenv("ASCEND_HOST_LOG_FILE_NUM");
         unsetenv("ASCEND_PROCESS_LOG_PATH");
+        unsetenv("ASCEND_WORK_PATH");
     }
     uint64_t GetTestThreadId() {
         thread_local uint64_t tid = static_cast<uint64_t>(syscall(__NR_gettid));
@@ -105,42 +110,42 @@ public:
 };
 
 TEST_F(TestHostLog, test_tilefwk_log_case0) {
-    PYPTO_HOST_LOG(DLOG_ERROR, "TEST", "I'm a space-bound %s and your heart's the moon", "rocketship");
-    PYPTO_HOST_LOG(DLOG_ERROR, "TEST", "And I aiming it right at you, right at you %f", 3.14f);
-    PYPTO_HOST_LOG(DLOG_ERROR, "TEST", "%d miles on a clear night in %s", 250000, "June");
-    PYPTO_HOST_LOG(DLOG_ERROR, "TEST", "And I'm so lost without you, without you %x", (uint32_t)626);
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "I'm a space-bound %s and your heart's the moon", "rocketship");
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "And I aiming it right at you, right at you %f", 3.14f);
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "%d miles on a clear night in %s", 250000, "June");
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "And I'm so lost without you, without you");
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE, "I'm a space-bound %s and your heart's the moon", "rocketship");
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE, "And I aiming it right at you, right at you %f", 3.14f);
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE, "%d miles on a clear night in %s", 250000, "June");
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE, "And I'm so lost without you, without you %x", (uint32_t)626);
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "I'm a space-bound %s and your heart's the moon", "rocketship");
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "And I aiming it right at you, right at you %f", 3.14f);
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "%d miles on a clear night in %s", 250000, "June");
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "And I'm so lost without you, without you");
 
     std::ostringstream oss;
     for (size_t i = 0; i < 200; i++) {
         oss << "0123456789";
     }
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "Hello %s", oss.str().c_str());
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "Hello %s", oss.str().c_str());
 }
 
 namespace {
 void FunctionWithNoReturn() {
-    PYPTO_HOST_LOG(DLOG_ERROR, "TEST", "In the year of %d assembled here the volunteers in the days when lands were few", 39);
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "In the year of %d assembled here the volunteers in the days when lands were few", 39);
-    PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, "TEST", "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
     std::ostringstream oss;
     for (size_t i = 0; i < 200; i++) {
         oss << "0123456789";
     }
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "Hello %s", oss.str().c_str());
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "Hello %s", oss.str().c_str());
 }
 int FunctionWithReturn() {
-    PYPTO_HOST_LOG(DLOG_ERROR, "TEST", "In the year of %d assembled here the volunteers in the days when lands were few", 39);
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "In the year of %d assembled here the volunteers in the days when lands were few", 39);
-    PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, "TEST", "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_LOG(DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
+    PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, MACHINE, "In the year of %d assembled here the volunteers in the days when lands were few", 39);
     std::ostringstream oss;
     for (size_t i = 0; i < 200; i++) {
         oss << "0123456789";
     }
-    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, "TEST", "Hello %s", oss.str().c_str());
+    PYPTO_HOST_SPLIT_LOG(DLOG_ERROR, MACHINE, "Hello %s", oss.str().c_str());
     return 0;
 }
 }
@@ -165,7 +170,7 @@ TEST_F(TestHostLog, test_log_manager_case0) {
     RecoreLog(log_manager, LogLevel::INFO, "I'm a space-bound %s and your heart's the moon", "rocketship");
     RecoreLog(log_manager, LogLevel::INFO, "And I aiming it right at you, right at you %f", 3.14f);
     RecoreLog(log_manager, LogLevel::INFO, "%d miles on a clear night in %s", 250000, "June");
-    RecoreLog(log_manager, LogLevel::INFO, "And I'm so lost without you, without you %x", 626);
+    RecoreLog(log_manager, LogLevel::INFO, "And I'm so lost without you, without you %x", (uint32_t)626);
 }
 
 TEST_F(TestHostLog, test_log_manager_case1) {
@@ -214,7 +219,8 @@ TEST_F(TestHostLog, test_log_manager_case5) {
     setenv("ASCEND_PROCESS_LOG_PATH", "./temp_pypto_log", 1);
     LogManager log_manager;
     EXPECT_EQ(log_manager.enableStdOut_, false);
-    for (size_t i = 0; i < 100000; ++i) {
+    EXPECT_EQ(log_manager.maxLogFileNum_, 10);
+    for (size_t i = 0; i < 200000; ++i) {
         if (i%2 == 0) {
             log_manager.EnableHostLog();
         } else {
@@ -223,12 +229,71 @@ TEST_F(TestHostLog, test_log_manager_case5) {
         RecoreLog(log_manager, LogLevel::INFO, "I'm a space-bound %s and your heart's the moon", "rocketship");
         RecoreLog(log_manager, LogLevel::INFO, "And I aiming it right at you, right at you %f", 3.14f);
         RecoreLog(log_manager, LogLevel::INFO, "%d miles on a clear night in %s", 250000, "June");
-        RecoreLog(log_manager, LogLevel::INFO, "And I'm so lost without you, without you %x", 626);
+        RecoreLog(log_manager, LogLevel::INFO, "And I'm so lost without you, without you %x", (uint32_t)626);
     }
     std::string hostLogFilePrefix = "pypto-log-" + std::to_string(GetTestThreadId());
     EXPECT_EQ(GetLogFileSizeOfSpecifiedDir(log_manager.hostLogDir_, hostLogFilePrefix), 2);
     std::string devLogFilePrefix = "pypto-simulation-" + std::to_string(GetTestThreadId());
     EXPECT_EQ(GetLogFileSizeOfSpecifiedDir(log_manager.deviceLogDir_, devLogFilePrefix), 2);
+}
+
+TEST_F(TestHostLog, test_log_manager_case6) {
+    setenv("ASCEND_PROCESS_LOG_PATH", "./temp_process_log", 1);
+    setenv("ASCEND_HOST_LOG_FILE_NUM", "15", 1);
+    LogManager log_manager;
+    EXPECT_EQ(log_manager.maxLogFileNum_, 15);
+    EXPECT_NE(log_manager.hostLogDir_.find("/temp_process_log/debug/plog"), std::string::npos);
+    EXPECT_NE(log_manager.deviceLogDir_.find("/temp_process_log/debug/device-0"), std::string::npos);
+}
+
+TEST_F(TestHostLog, test_log_manager_case7) {
+    setenv("ASCEND_WORK_PATH", "./temp_work_log", 1);
+    setenv("ASCEND_HOST_LOG_FILE_NUM", "0", 1);
+    LogManager log_manager;
+    EXPECT_EQ(log_manager.maxLogFileNum_, 10);
+    EXPECT_NE(log_manager.hostLogDir_.find("/temp_work_log/debug/plog"), std::string::npos);
+    EXPECT_NE(log_manager.deviceLogDir_.find("/temp_work_log/debug/device-0"), std::string::npos);
+}
+
+TEST_F(TestHostLog, test_log_manager_case8) {
+    setenv("ASCEND_PROCESS_LOG_PATH", "./temp_process_log", 1);
+    setenv("ASCEND_WORK_PATH", "./temp_work_log", 1);
+    setenv("ASCEND_HOST_LOG_FILE_NUM", "-1", 1);
+    LogManager log_manager;
+    EXPECT_EQ(log_manager.maxLogFileNum_, 10);
+    EXPECT_NE(log_manager.hostLogDir_.find("/temp_process_log/debug/plog"), std::string::npos);
+    EXPECT_NE(log_manager.deviceLogDir_.find("/temp_process_log/debug/device-0"), std::string::npos);
+    EXPECT_EQ(log_manager.hostLogDir_.find("/temp_work_log/debug/plog"), std::string::npos);
+    EXPECT_EQ(log_manager.deviceLogDir_.find("/temp_work_log/debug/device-0"), std::string::npos);
+}
+
+TEST_F(TestHostLog, test_log_manager_case9) {
+    setenv("ASCEND_GLOBAL_LOG_LEVEL", "1", 1);
+    setenv("ASCEND_PROCESS_LOG_PATH", "./temp_pypto_host_log", 1);
+    LogManager log_manager;
+    EXPECT_EQ(log_manager.enableStdOut_, false);
+    EXPECT_EQ(log_manager.maxLogFileNum_, 10);
+    for (size_t i = 0; i < 200000; ++i) {
+        RecoreLog(log_manager, LogLevel::INFO, "I'm a space-bound %s and your heart's the moon", "rocketship");
+        RecoreLog(log_manager, LogLevel::INFO, "And I aiming it right at you, right at you %f", 3.14f);
+        RecoreLog(log_manager, LogLevel::INFO, "%d miles on a clear night in %s", 250000, "June");
+        RecoreLog(log_manager, LogLevel::INFO, "And I'm so lost without you, without you %x", (uint32_t)626);
+    }
+    std::string hostLogFilePrefix = "pypto-log-" + std::to_string(GetTestThreadId());
+    EXPECT_EQ(GetLogFileSizeOfSpecifiedDir(log_manager.hostLogDir_, hostLogFilePrefix), 4);
+
+    setenv("ASCEND_HOST_LOG_FILE_NUM", "2", 1);
+    LogManager log_manager2;
+    EXPECT_EQ(log_manager2.enableStdOut_, false);
+    EXPECT_EQ(log_manager2.maxLogFileNum_, 2);
+    EXPECT_EQ(GetLogFileSizeOfSpecifiedDir(log_manager2.hostLogDir_, "pypto-log-"), 2);
+    for (size_t i = 0; i < 200000; ++i) {
+        RecoreLog(log_manager2, LogLevel::INFO, "I'm a space-bound %s and your heart's the moon", "rocketship");
+        RecoreLog(log_manager2, LogLevel::INFO, "And I aiming it right at you, right at you %f", 3.14f);
+        RecoreLog(log_manager2, LogLevel::INFO, "%d miles on a clear night in %s", 250000, "June");
+        RecoreLog(log_manager2, LogLevel::INFO, "And I'm so lost without you, without you %x", (uint32_t)626);
+    }
+    EXPECT_EQ(GetLogFileSizeOfSpecifiedDir(log_manager2.hostLogDir_, "pypto-log-"), 2);
 }
 
 TEST_F(TestHostLog, test_log_construct_case0) {
@@ -275,12 +340,87 @@ TEST_F(TestHostLog, test_log_construct_case1) {
 
 TEST_F(TestHostLog, test_dlog_handler_case0) {
     DLogHandler log_handler;
-    EXPECT_EQ(log_handler.IsAvailable(), true);
     EXPECT_NE(log_handler.checkLevelFunc_, nullptr);
     EXPECT_NE(log_handler.logRecordFunc_, nullptr);
+    EXPECT_NE(log_handler.getLevelFunc_, nullptr);
+    EXPECT_NE(log_handler.setLevelFunc_, nullptr);
+
+    EXPECT_EQ(log_handler.IsAvailable(), true);
+    EXPECT_EQ(log_handler.CheckLogLevel(PYPTO, DLOG_ERROR), 1);
+    EXPECT_EQ(log_handler.CheckLogLevel(PYPTO, DLOG_WARN), 0);
+    int32_t enableEvent = 0;
+    EXPECT_EQ(log_handler.GetLogLevel(PYPTO, &enableEvent), DLOG_ERROR);
+    EXPECT_EQ(enableEvent, 1);
+    EXPECT_EQ(log_handler.SetLogLevel(PYPTO, DLOG_WARN, enableEvent), 0);
+    EXPECT_EQ(log_handler.CheckLogLevel(PYPTO, DLOG_WARN), 1);
 
     EXPECT_EQ(DLogHandler::Instance().IsAvailable(), true);
     EXPECT_NE(DLogHandler::Instance().checkLevelFunc_, nullptr);
     EXPECT_NE(DLogHandler::Instance().logRecordFunc_, nullptr);
+    EXPECT_NE(DLogHandler::Instance().getLevelFunc_, nullptr);
+    EXPECT_NE(DLogHandler::Instance().setLevelFunc_, nullptr);
+}
+
+TEST_F(TestHostLog, test_log_module_manager_case0) {
+    LogModuleManager log_module_manager;
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::FUNCTION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::PASS), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::CODEGEN), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::MACHINE), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::DISTRIBUTED), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::SIMULATION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::VERIFY), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::COMPILER_MONITOR), -1);
+}
+
+TEST_F(TestHostLog, test_log_module_manager_case1) {
+    setenv("ASCEND_MODULE_LOG_LEVEL", "MACHINE=2", 1);
+    LogModuleManager log_module_manager;
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::FUNCTION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::PASS), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::CODEGEN), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::MACHINE), 2);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::DISTRIBUTED), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::SIMULATION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::VERIFY), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::COMPILER_MONITOR), -1);
+}
+
+TEST_F(TestHostLog, test_log_module_manager_case2) {
+    setenv("ASCEND_MODULE_LOG_LEVEL", " MACHINE = 0 : PASS =1", 1);
+    LogModuleManager log_module_manager;
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::FUNCTION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::PASS), 1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::CODEGEN), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::MACHINE), 0);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::DISTRIBUTED), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::SIMULATION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::VERIFY), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::COMPILER_MONITOR), -1);
+}
+
+TEST_F(TestHostLog, test_log_module_manager_case3) {
+    setenv("ASCEND_MODULE_LOG_LEVEL", " MACHINE =  : CODEGEN =3", 1);
+    LogModuleManager log_module_manager;
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::FUNCTION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::PASS), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::CODEGEN), 3);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::MACHINE), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::DISTRIBUTED), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::SIMULATION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::VERIFY), -1);
+}
+
+TEST_F(TestHostLog, test_log_module_manager_case4) {
+    setenv("ASCEND_MODULE_LOG_LEVEL", " MACHINE: CODEGEN =3", 1);
+    LogModuleManager log_module_manager;
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::FUNCTION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::PASS), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::CODEGEN), 3);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::MACHINE), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::DISTRIBUTED), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::SIMULATION), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::VERIFY), -1);
+    EXPECT_EQ(log_module_manager.GetModuleLogLevel(LogModule::COMPILER_MONITOR), -1);
 }
 }

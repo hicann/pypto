@@ -11,7 +11,7 @@
 /*!
  * \file interpreter_log_test_utils.h
  * \brief Common helpers for interpreter/log related unit tests:
- *        - CaptureStdoutAndEcho: capture log output from log files (落盘形式，与 LogManager 路径一致)
+ *        - CaptureLogFileAndEcho: capture log output from log files (落盘形式，与 LogManager 路径一致)
  *        - VerifyLogContainsFailed: check VERIFY log failures
  *        - VerifyLogContainsIndex0Failed: check VERIFY index 0 failures
  */
@@ -50,12 +50,7 @@ static inline std::string InterpLogTestGetHostLogDir() {
 
 // 与 LogManager 一致：日志文件名形如 pypto-log-<tid>-<timestamp>.log，这里按当前线程 tid 过滤
 static inline std::string InterpLogTestGetThreadLogPrefix() {
-#ifdef __NR_gettid
-    long tid = syscall(__NR_gettid);
-#else
-    long tid = getpid();
-#endif
-    return std::string(kInterpLogTestHostLogFilePrefix) + std::to_string(tid) + "-";
+    return std::string(kInterpLogTestHostLogFilePrefix) + std::to_string(getpid()) + "_";
 }
 
 static inline std::map<std::string, size_t> InterpLogTestListHostLogFilesWithSize(const std::string &dir,
@@ -86,7 +81,7 @@ static inline std::map<std::string, size_t> InterpLogTestListHostLogFilesWithSiz
 }
 
 // 从日志落盘目录捕获本次 func() 执行产生的新增日志内容（与 LogManager 落盘路径一致）
-static inline std::string CaptureStdoutAndEcho(std::function<void()> func) {
+static inline std::string CaptureLogFileAndEcho(std::function<void()> func) {
     std::string logDir = InterpLogTestGetHostLogDir();
     std::string threadPrefix = InterpLogTestGetThreadLogPrefix();
     std::map<std::string, size_t> before = InterpLogTestListHostLogFilesWithSize(logDir, threadPrefix);
@@ -129,6 +124,53 @@ static inline std::string CaptureStdoutAndEcho(std::function<void()> func) {
     ifs.seekg(static_cast<std::streamoff>(targetOldSize));
     std::string captured;
     captured.append(std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>());
+    return captured;
+}
+
+// 捕获 stdout 输出，用于校验日志内容
+static inline std::string CaptureStdoutAndEcho(std::function<void()> func) {
+    int pipefd[2];
+    if (pipe(pipefd) != 0) {
+        return "";
+    }
+
+    int old_stdout = dup(STDOUT_FILENO);
+    if (old_stdout == -1) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return "";
+    }
+
+    if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        close(old_stdout);
+        return "";
+    }
+
+    close(pipefd[1]);
+    func();
+    fflush(stdout);
+
+    if (dup2(old_stdout, STDOUT_FILENO) == -1) {
+        close(pipefd[0]);
+        close(old_stdout);
+        return "";
+    }
+
+    char buffer[8192] = {0};
+    ssize_t len = read(pipefd[0], buffer, sizeof(buffer) - 1);
+    close(pipefd[0]);
+
+    std::string captured(len > 0 ? static_cast<size_t>(len) : 0, '\0');
+    if (len > 0) {
+        captured.assign(buffer, static_cast<size_t>(len));
+        // 同时打印到控制台，便于调试查看
+        ssize_t written = write(old_stdout, buffer, static_cast<size_t>(len));
+        (void)written;
+    }
+    close(old_stdout);
+
     return captured;
 }
 

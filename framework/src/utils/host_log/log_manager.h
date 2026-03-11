@@ -30,9 +30,10 @@ enum class LogLevel {
     EVENT = 4,
     NONE = 5
 };
-const size_t kMsgMaxLen = 1024;
+constexpr size_t MAX_LOG_FILES_NUM = 10;
+constexpr size_t MAX_MSG_LENGTH = 1024;
 struct LogMsg {
-    char msg[kMsgMaxLen];
+    char msg[MAX_MSG_LENGTH];
     size_t length;
 };
 struct LogAttr {
@@ -60,7 +61,8 @@ private:
     void WriteToStdOut(const LogMsg &logMsg);
     void WriteToFile(const LogMsg &logMsg);
     void CreateAndOpenNewLogFile();
-    static void CheckAndCloseLogFile(std::ofstream &currentFileStream, std::queue<std::string> &logFilesQueue);
+    void AddNewLogFile(const std::string &newLogFileName);
+    static void CheckAndCloseLogFile(std::ofstream &currentFileStream);
     const std::string& GetLogDir() const { return attr_.isDevice ? deviceLogDir_ : hostLogDir_; }
     std::ofstream& GetCurrentFileStream() { return attr_.isDevice ? devFileStream_ : hostFileStream_; }
     std::queue<std::string>& GetLogFilesQueue() { return attr_.isDevice ? devLogFiles_ : hostLogFiles_; }
@@ -71,6 +73,7 @@ private:
     bool enableStdOut_{false};
     std::string hostLogDir_;
     std::string deviceLogDir_;
+    size_t maxLogFileNum_{MAX_LOG_FILES_NUM};
     std::ofstream hostFileStream_;
     std::ofstream devFileStream_;
     std::queue<std::string> hostLogFiles_;

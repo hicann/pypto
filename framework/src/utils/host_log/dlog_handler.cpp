@@ -35,6 +35,27 @@ DLogHandler &DLogHandler::Instance() {
     return instance;
 }
 
+int32_t DLogHandler::CheckLogLevel(int32_t moduleId, int32_t logLevel) const {
+    if (checkLevelFunc_ == nullptr) {
+        return 0;
+    }
+    return checkLevelFunc_(moduleId, logLevel);
+}
+
+int32_t DLogHandler::GetLogLevel(int32_t moduleId, int32_t *enableEvent) const {
+    if (getLevelFunc_ == nullptr) {
+        return -1;
+    }
+    return getLevelFunc_(moduleId, enableEvent);
+}
+
+int32_t DLogHandler::SetLogLevel(int32_t moduleId, int32_t logLevel, int32_t enableEvent) const {
+    if (setLevelFunc_ == nullptr) {
+        return -1;
+    }
+    return setLevelFunc_(moduleId, logLevel, enableEvent);
+}
+
 DLogHandler::DLogHandler() {
     std::string homePath;
     if (!GetEnvHomePath(homePath)) {
@@ -55,6 +76,18 @@ DLogHandler::DLogHandler() {
     logRecordFunc_ = reinterpret_cast<void(*)(int32_t, int32_t, const char *, ...)>(dlsym(handle_, "DlogRecord"));
     if (logRecordFunc_ == nullptr) {
         std::cerr << "Fail to dlsym DlogRecord function from " << dLogLibPath << std::endl;
+        CloseHandle();
+        return;
+    }
+    getLevelFunc_ = reinterpret_cast<int32_t(*)(int32_t, int32_t*)>(dlsym(handle_, "dlog_getlevel"));
+    if (getLevelFunc_ == nullptr) {
+        std::cerr << "Fail to dlsym dlog_getlevel function from " << dLogLibPath << std::endl;
+        CloseHandle();
+        return;
+    }
+    setLevelFunc_ = reinterpret_cast<int32_t(*)(int32_t, int32_t, int32_t)>(dlsym(handle_, "dlog_setlevel"));
+    if (setLevelFunc_ == nullptr) {
+        std::cerr << "Fail to dlsym dlog_setlevel function from " << dLogLibPath << std::endl;
         CloseHandle();
         return;
     }

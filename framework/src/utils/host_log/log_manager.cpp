@@ -14,6 +14,7 @@
  */
 
 #include "host_log/log_manager.h"
+
 #include <cstdlib>
 #include <cstdio>
 #include <unistd.h>
@@ -33,14 +34,15 @@ constexpr const char *kEnvGlobalLogLevel = "ASCEND_GLOBAL_LOG_LEVEL";
 constexpr const char *kEnvModuleLogLevel = "ASCEND_MODULE_LOG_LEVEL";
 constexpr const char *kEnvGlobalLogEvent = "ASCEND_GLOBAL_EVENT_ENABLE";
 constexpr const char *kEnvPrintToStdout = "ASCEND_SLOG_PRINT_TO_STDOUT";
+constexpr const char *kEnvHostLogFileNum = "ASCEND_HOST_LOG_FILE_NUM";
 constexpr const char *kEnvProcessLogPath = "ASCEND_PROCESS_LOG_PATH";
+constexpr const char *kEnvWorkPath = "ASCEND_WORK_PATH";
 constexpr const char *kModuleName = "PYPTO";
 constexpr const char *kModulePrefix = "PYPTO=";
 constexpr const char *kHostLogFilePrefix = "pypto-log-";
 constexpr const char *kDevLogFilePrefix = "pypto-simulation-";
 constexpr const char *kLogFileSuffix = ".log";
-const size_t MAX_LOG_FILES_NUM = 10;
-const int64_t MAX_LOG_FILES_SIZE = 10 * 1024 * 1024;  // 10MB
+constexpr int64_t kMaxLogFileSize = 20 * 1024 * 1024;  // 10MB
 
 const std::string kLogLevelNoneStr = "[NONE] ";
 const std::array<std::string, static_cast<size_t>(LogLevel::NONE)> kLogLevelStrArray = {
@@ -50,6 +52,10 @@ const std::array<std::string, static_cast<size_t>(LogLevel::NONE)> kLogLevelStrA
 uint64_t GetTid() {
     thread_local uint64_t tid = static_cast<uint64_t>(syscall(__NR_gettid));
     return tid;
+}
+
+int64_t GetPid() {
+    return getpid();
 }
 
 const std::string& GetLogLevelStr(const LogLevel logLevel) {
@@ -114,6 +120,16 @@ int GetModLogLevel(const std::string &str) {
     }
     return ParseStrToInt(str.substr(posLeft + strlen(kModulePrefix), posRight - posLeft - strlen(kModulePrefix)));
 }
+
+void RemoveRedundantLogFiles(const size_t maxLogFileNum, std::queue<std::string> &logFilesQueue) {
+    if (maxLogFileNum == 0) {
+        return;
+    }
+    while (logFilesQueue.size() > maxLogFileNum) {
+        RemoveFile(logFilesQueue.front());
+        logFilesQueue.pop();
+    }
+}
 }
 LogManager &LogManager::Instance() {
     static LogManager instance;
@@ -145,29 +161,40 @@ LogManager::LogManager() {
         return;
     }
 
-    std::string envProcessLogPath;
-    if (!GetEnvStr(kEnvProcessLogPath, envProcessLogPath)) {
-        if (!GetEnvStr("HOME", envProcessLogPath)) {
-            envProcessLogPath = ".";
-        }
-        envProcessLogPath += "/ascend/log";
+    std::string envHostLogFileNum;
+    if (GetEnvStr(kEnvHostLogFileNum, envHostLogFileNum)) {
+        int maxLogFileNum = ParseStrToInt(envHostLogFileNum);
+        maxLogFileNum_ = maxLogFileNum > 0 ? static_cast<size_t>(maxLogFileNum) : MAX_LOG_FILES_NUM;
     }
 
-    hostLogDir_ = envProcessLogPath + "/debug/plog";
-    deviceLogDir_ = envProcessLogPath + "/debug/device-" + std::to_string(attr_.deviceId);
+    std::string envLogDirPath;
+    if (!GetEnvStr(kEnvProcessLogPath, envLogDirPath)) {
+        if (!GetEnvStr(kEnvWorkPath, envLogDirPath)) {
+            if (!GetEnvStr("HOME", envLogDirPath)) {
+                envLogDirPath = ".";
+            }
+            envLogDirPath += "/ascend/log";
+        }
+    }
+
+    hostLogDir_ = envLogDirPath + "/debug/plog";
+    deviceLogDir_ = envLogDirPath + "/debug/device-" + std::to_string(attr_.deviceId);
     if (CreateMultiLevelDirectory(hostLogDir_) && CreateMultiLevelDirectory(deviceLogDir_)) {
         hostLogDir_ = GetRealPath(hostLogDir_);
         deviceLogDir_ = GetRealPath(deviceLogDir_);
         LoadFileFromDir(hostLogDir_, kHostLogFilePrefix, kLogFileSuffix, hostLogFiles_);
+        RemoveRedundantLogFiles(maxLogFileNum_, hostLogFiles_);
         LoadFileFromDir(deviceLogDir_, kDevLogFilePrefix, kLogFileSuffix, devLogFiles_);
+        RemoveRedundantLogFiles(maxLogFileNum_, devLogFiles_);
     } else {
-        std::cerr << "Fail to create directory: " << envProcessLogPath << std::endl;
+        std::cerr << "Fail to create directory: " << envLogDirPath << std::endl;
     }
 }
 
 LogManager::~LogManager() {
     level_ = LogLevel::ERROR;
     enableStdOut_ = true;
+    maxLogFileNum_ = MAX_LOG_FILES_NUM;
     hostLogDir_.clear();
     deviceLogDir_.clear();
     if (hostFileStream_.is_open()) {
@@ -208,7 +235,7 @@ void LogManager::Record(const LogLevel logLevel, const char *fmt, va_list list) 
 
 void LogManager::ConstructMessage(const LogLevel logLevel, const char *fmt, va_list list, LogMsg &logMsg) {
     ConstructMsgHeader(logLevel, logMsg);
-    int ret = vsnprintf_truncated_s(logMsg.msg + logMsg.length, kMsgMaxLen - logMsg.length, fmt, list);
+    int ret = vsnprintf_truncated_s(logMsg.msg + logMsg.length, MAX_MSG_LENGTH - logMsg.length, fmt, list);
     if (ret < 0) {
         std::cerr << "Constrcut message failed: " << ret << std::endl;
         return;
@@ -219,7 +246,7 @@ void LogManager::ConstructMessage(const LogLevel logLevel, const char *fmt, va_l
 }
 
 void LogManager::ConstructMsgHeader(const LogLevel logLevel, LogMsg &logMsg) {
-    int ret = snprintf_s(logMsg.msg, kMsgMaxLen, kMsgMaxLen - 1, "%s %s(%lu):%s ",
+    int ret = snprintf_s(logMsg.msg, MAX_MSG_LENGTH, MAX_MSG_LENGTH - 1, "%s %s(%lu):%s ",
                          GetLogLevelStr(logLevel).c_str(), kModuleName, GetTid(), GetCurrentTime().c_str());
     if (ret < 0) {
         std::cerr << "Construct log msg hader failed: " << ret << std::endl;
@@ -230,11 +257,11 @@ void LogManager::ConstructMsgHeader(const LogLevel logLevel, LogMsg &logMsg) {
 
 void LogManager::ConstructMsgTail(LogMsg &logMsg) {
     if (logMsg.msg[logMsg.length - 1] != '\n') {
-        if (logMsg.length < kMsgMaxLen) {
+        if (logMsg.length < MAX_MSG_LENGTH) {
             logMsg.msg[logMsg.length] = '\n';
             logMsg.length++;
         } else {
-            logMsg.msg[kMsgMaxLen - 1] = '\n';
+            logMsg.msg[MAX_MSG_LENGTH - 1] = '\n';
         }
     }
 }
@@ -265,36 +292,40 @@ void LogManager::WriteToFile(const LogMsg &logMsg) {
         // init log file stream
         CreateAndOpenNewLogFile();
     }
-    std::queue<std::string> &logFilesQueue = GetLogFilesQueue();
     // write log into file
     if (!currentFileStream.is_open()) {
-        std::cerr << "Failed to open file: " <<  logFilesQueue.back() << std::endl;
+        std::cerr << "Failed to open file: " <<  GetLogFilesQueue().back() << std::endl;
         return;
     }
     currentFileStream << logMsg.msg;
     currentFileStream.flush();
     // check log
-    CheckAndCloseLogFile(currentFileStream, logFilesQueue);
+    CheckAndCloseLogFile(currentFileStream);
 }
 
 void LogManager::CreateAndOpenNewLogFile() {
     std::ostringstream oss;
     const std::string &logFilePrefix = attr_.isDevice ? kDevLogFilePrefix : kHostLogFilePrefix;
-    oss << GetLogDir() << "/" << logFilePrefix << GetTid() << "-" << GetCurrentTimeStr() << kLogFileSuffix;
+    oss << GetLogDir() << "/" << logFilePrefix << GetPid() << "_" << GetCurrentTimeStr() << kLogFileSuffix;
     std::string newLogFileName =  oss.str();
     GetCurrentFileStream().open(newLogFileName);
-    GetLogFilesQueue().push(newLogFileName);
+    AddNewLogFile(newLogFileName);
 }
 
-void LogManager::CheckAndCloseLogFile(std::ofstream &currentFileStream, std::queue<std::string> &logFilesQueue) {
-    std::streamsize fileSize = currentFileStream.tellp();
-    if (fileSize < MAX_LOG_FILES_SIZE) {
-        return;
-    }
-    currentFileStream.close();
-    if (logFilesQueue.size() >= MAX_LOG_FILES_NUM) {
+void LogManager::AddNewLogFile(const std::string &newLogFileName) {
+    std::queue<std::string> &logFilesQueue = GetLogFilesQueue();
+    logFilesQueue.push(newLogFileName);
+    while (logFilesQueue.size() > maxLogFileNum_) {
         RemoveFile(logFilesQueue.front()); //remove file
         logFilesQueue.pop();
     }
+}
+
+void LogManager::CheckAndCloseLogFile(std::ofstream &currentFileStream) {
+    std::streamsize fileSize = currentFileStream.tellp();
+    if (fileSize < kMaxLogFileSize) {
+        return;
+    }
+    currentFileStream.close();
 }
 }
