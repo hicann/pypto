@@ -15,6 +15,7 @@
 
 #include "schedule_ooo.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/dead_operation_eliminate.h"
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "OoOSchedule"
@@ -279,6 +280,8 @@ Status OoOSchedule::RunOnFunction(Function &function) {
                 APASS_LOG_ERROR_F(Elements::Operation, "NonMix OoO schedule failed.");
                 return FAILED;
             }
+            DeadOperationEliminator eliminator;
+            eliminator.EliminateOperation(*program.second, false);
             programRef.second = program.second;
             continue;
         }
@@ -286,6 +289,8 @@ Status OoOSchedule::RunOnFunction(Function &function) {
             APASS_LOG_ERROR_F(Elements::Operation, "Mix OoO schedule failed.");
             return FAILED;
         }
+        DeadOperationEliminator eliminator;
+        eliminator.EliminateOperation(*program.second, false);
         programRef.second = program.second;
     }
     if (RecordLastUseMemory(function) == FAILED) {

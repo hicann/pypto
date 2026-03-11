@@ -89,7 +89,7 @@ void DeadOperationEliminator::EliminateOperation(Function &function, bool sorted
             op.SetAsDeleted();
         }
     }
-    function.EraseOperations(false);
+    function.EraseOperations(false, sorted);
     /* 删除没有生产者和消费者的tensor */
     auto inverseMapCopy = function.GetTensorMap().inverseMap_;
     for (const auto &item : inverseMapCopy) {

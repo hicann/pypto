@@ -2221,4 +2221,38 @@ TEST_F(ScheduleOoOTest, TestL1SpillBuffeFailed2) {
     EXPECT_EQ(res, FAILED);
 }
 
+TEST_F(ScheduleOoOTest, TestMixGraphAndDAV_3510) {
+    auto rootFuncPtr = std::make_shared<Function>(Program::GetInstance(), "TestParams", "TestParams", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestOOO", "TestOOO", rootFuncPtr.get());
+    currFunctionPtr->paramConfigs_.OoOPreScheduleMethod = "PriorDFS";
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    currFunctionPtr->SetGraphType(GraphType::BLOCK_GRAPH);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
+    std::vector<int64_t> shape = {16, 16};
+    auto shapeImme = OpImmediate::Specified(shape);
+
+    auto tensor0 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 0);
+    auto tensor1 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_DEVICE_DDR, 1);
+    auto tensor2 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 2);
+    auto tensor3 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 3);
+    auto tensor4 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_UB, 4);
+    auto tensor5 = CreateTensor(*currFunctionPtr, DataType::DT_FP32, shape, MEM_L0A, 5);
+    CreateAllocOp(*currFunctionPtr, tensor2, 1);
+    CreateAllocOp(*currFunctionPtr, tensor3, 1);
+    CreateAllocOp(*currFunctionPtr, tensor4, 1);
+    currFunctionPtr->AddOperation(Opcode::OP_L0A_ALLOC, {}, LogicalTensors({tensor5}));
+    CreateCopyOp(*currFunctionPtr, Opcode::OP_COPY_IN, tensor0, tensor2, shape);
+    CreateCopyOp(*currFunctionPtr, Opcode::OP_COPY_IN, tensor1, tensor3, shape);
+    CreateAddOp(*currFunctionPtr, tensor2, tensor3, tensor4);
+    currFunctionPtr->AddOperation(Opcode::OP_UB_COPY_L1, LogicalTensors({tensor4}), LogicalTensors({tensor5}));
+    for (auto &program : rootFuncPtr->rootFunc_->programs_) {
+        ReorderOperations(*(program.second));
+    }
+    currFunctionPtr->EndFunction(nullptr);
+    OoOSchedule oooSchedule;
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+    EXPECT_EQ(oooSchedule.RunOnFunction(*rootFuncPtr), SUCCESS);
+    Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+}
 } // namespace npu::tile_fwk
