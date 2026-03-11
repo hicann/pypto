@@ -174,5 +174,26 @@ TEST_F(TestInferDiscontinuousInput, testScenarioInsert_2) {
     // run pass
     check(function, G);
 }
+
+TEST_F(TestInferDiscontinuousInput, testViewAssembleScenario) {
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t1");
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t2");
+    G.AddTensor(DataType::DT_FP16, {16, 128}, MemoryType::MEM_DEVICE_DDR, "t3");
+    G.AddOp(Opcode::OP_VIEW, {"t1"}, {"t2"}, "view");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"t2"}, {"t3"}, "assemble");
+    auto view = G.GetOp("view");
+    view->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto assemble = G.GetOp("assemble");
+    assemble->SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    Function *function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    // run pass
+    InferDiscontinuousInput inferDiscontinuousInput;
+    EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), FAILED);
+    EXPECT_EQ(inferDiscontinuousInput.Run(*function, "", "", 0), SUCCESS);
+    EXPECT_EQ(inferDiscontinuousInput.PostCheck(*function), SUCCESS);
+}
 } // namespace tile_fwk
 } // namespace npu

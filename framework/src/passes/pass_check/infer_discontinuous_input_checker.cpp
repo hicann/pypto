@@ -65,9 +65,10 @@ Status checkView(Operation *op) {
         if (std::any_of(shape.begin(), shape.end(), [](int64_t num) { return num < 0; })) {
             continue;
         }
-        if (logicTensor->GetMemoryTypeOriginal() != MemoryType::MEM_UB ||
-            logicTensor->GetMemoryTypeToBe() != MemoryType::MEM_UB) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Tensor(%d) memory type is not MEM_UB.", logicTensor->GetMagic());
+        if (logicTensor->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
+            APASS_LOG_ERROR_F(Elements::Tensor,
+                "Tensor(%d) memory type is MEM_DEVICE_DDR, which is not supported for VIEW->ASSEMBLE case.",
+                logicTensor->GetMagic());
             return FAILED;
         }
     }
