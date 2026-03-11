@@ -10,7 +10,6 @@
 
 
 if (BUILD_WITH_CANN)
-    add_subdirectory(kernel)
     add_subdirectory(device)
 endif ()
 add_subdirectory(runtime)
@@ -18,7 +17,6 @@ add_subdirectory(runtime)
 file(GLOB_RECURSE _Compiler_Srcs
         host/*.cpp
         compile/*.cpp
-        dump/*.cpp
         platform/*.cpp
         utils/*.cpp
         cache_manager/*.cpp)

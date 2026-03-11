@@ -11,8 +11,6 @@
 #include "machine/host/device_agent_task.h"
 
 namespace npu::tile_fwk {
-DeviceAgentTaskPtr gDeviceAgentTaskPtr = nullptr;
-
 void DeviceAgentTask::ProcessReadyCoreFunctions(const CacheValue &cacheValue) {
     ReadyCoreFunctionCache *readyFunction = cacheValue.readyListCache.get();
     for (uint64_t i = 0; i < cacheValue.header.readyCoreFunctionNum; i++) {

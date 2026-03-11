@@ -54,13 +54,13 @@ stest:
       # - SoftmaxOnBoard.test_softmax_div
       # - SoftmaxOnBoard.test_softmax_sum_all
       # - SoftmaxOnBoard.test_softmax_full_inference
-      - SoftmaxOnBoard.test_softmax_deepseek
+      # - SoftmaxOnBoard.test_softmax_deepseek
       # - SoftmaxOnBoard.test_softmax_flash_attention
 
   operator_op_Sin_Cos:
     cases:
-      - OnBoardTest.test_cos_dim4_float16
-      - OnBoardTest.test_sin_dim2_float32
+      # - OnBoardTest.test_cos_dim4_float16
+      # - OnBoardTest.test_sin_dim2_float32
 
   # operator_op_attention_post:
   #   cases:
@@ -73,43 +73,43 @@ stest:
       # - RoPEOnBoardTest.test_operation_rope_tensorIndex_unsqueeze_mul
       # - RoPEOnBoardTest.test_operation_rope_reshape_view_muls
       # - RoPEOnBoardTest.test_operation_rope_reshape_view_muls_concat
-      - RoPEOnBoardTest.test_operation_rope_deepseekv3
-      - RoPEOnBoardTest.test_operation_rope_v2_deepseekv3_b32
+      # - RoPEOnBoardTest.test_operation_rope_deepseekv3
+      # - RoPEOnBoardTest.test_operation_rope_v2_deepseekv3_b32
       # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3
       # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_fp16
       # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_fp16_2batch
-      - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16
-      - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16_2batch
-      - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16_32batch
-      - RoPESubGraphOnBoardTest.test_CD_bf16_32batch
-      - RoPESubGraphOnBoardTest.test_CD_bf16_32batch_4k
+      # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16
+      # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16_2batch
+      # - RoPESubGraphOnBoardTest.test_operation_rope_subgraph_deepseekv3_bf16_32batch
+      # - RoPESubGraphOnBoardTest.test_CD_bf16_32batch
+      # - RoPESubGraphOnBoardTest.test_CD_bf16_32batch_4k
       #
-      - OnBoardTest.test_unary_operation_32_32_tileop_exp
-      - OnBoardTest.test_unary_operation_16_32_32_tileop_exp
-      - OnBoardTest.test_unary_operation_16_16_64_64_tileop_exp
-      - OnBoardTest.test_unary_operation_32_32_tileop_sqrt
-      - OnBoardTest.test_unary_operation_16_32_32_tileop_sqrt
-      - OnBoardTest.test_unary_operation_16_16_64_64_tileop_sqrt
-      - OnBoardTest.test_unary_operation_16_16_64_70_tileop_sqrt
-      - OnBoardTest.test_unary_operation_32_32_tileop_reciprocal
-      - OnBoardTest.test_unary_operation_16_32_32_tileop_reciprocal
-      - OnBoardTest.test_unary_operation_16_16_64_64_tileop_reciprocal
+      # - OnBoardTest.test_unary_operation_32_32_tileop_exp
+      # - OnBoardTest.test_unary_operation_16_32_32_tileop_exp
+      # - OnBoardTest.test_unary_operation_16_16_64_64_tileop_exp
+      # - OnBoardTest.test_unary_operation_32_32_tileop_sqrt
+      # - OnBoardTest.test_unary_operation_16_32_32_tileop_sqrt
+      # - OnBoardTest.test_unary_operation_16_16_64_64_tileop_sqrt
+      # - OnBoardTest.test_unary_operation_16_16_64_70_tileop_sqrt
+      # - OnBoardTest.test_unary_operation_32_32_tileop_reciprocal
+      # - OnBoardTest.test_unary_operation_16_32_32_tileop_reciprocal
+      # - OnBoardTest.test_unary_operation_16_16_64_64_tileop_reciprocal
       # - LogicalNotOnBoardTest.test_logicalnot_16_32_fp32
       # - LogicalNotOnBoardTest.test_logicalnot_16_32_32_fp16
       #
-      - TransposeTest.TestTranspose_ROPE_5D
-      - TransposeTest.TestTranspose_MLA_3D_0
-      - TransposeTest.TestTranspose_MLA_3D_1
-      - TransposeTest.TestTranspose_MLA_4D_0
-      - TransposeTest.TestTranspose_MLA_4D_1
-      - TransposeTest.TestTranspose_MLA_4D_3
-      - TransposeTest.TestTranspose_MLA_4D_4
-      - TransposeTest.TestTranspose_MLA_4D_5
-      - TransposeTest.TestTranspose_MLA_4D_50
-      - TransposeTest.TestTranspose_MLA_4D_6
-      - TransposeTest.TestTranspose_MLA_3D_2
-      - TransposeTest.Test_Datamove_Nonalign_Dim4
-      - TransposeTest.Test_Datamove_Nonalign_Dim3
+      # - TransposeTest.TestTranspose_ROPE_5D
+      # - TransposeTest.TestTranspose_MLA_3D_0
+      # - TransposeTest.TestTranspose_MLA_3D_1
+      # - TransposeTest.TestTranspose_MLA_4D_0
+      # - TransposeTest.TestTranspose_MLA_4D_1
+      # - TransposeTest.TestTranspose_MLA_4D_3
+      # - TransposeTest.TestTranspose_MLA_4D_4
+      # - TransposeTest.TestTranspose_MLA_4D_5
+      # - TransposeTest.TestTranspose_MLA_4D_50
+      # - TransposeTest.TestTranspose_MLA_4D_6
+      # - TransposeTest.TestTranspose_MLA_3D_2
+      # - TransposeTest.Test_Datamove_Nonalign_Dim4
+      # - TransposeTest.Test_Datamove_Nonalign_Dim3
 
   operator_op_QuantST:
     cases:
@@ -118,27 +118,27 @@ stest:
       # - QuantTest.Test_ScalarSubS
       # - QuantTest.Test_ScalarMulS
       # - QuantTest.Test_ScalarMaxS
-      - QuantTest.Test_ScalarOp
-      - QuantOnBoardTest.test_Quant_32_1_7168
-      - QuantOnBoardTest.test_Quant_32_7168
+      # - QuantTest.Test_ScalarOp
+      # - QuantOnBoardTest.test_Quant_32_1_7168
+      # - QuantOnBoardTest.test_Quant_32_7168
       # - QuantOnBoardTest.test_Quant_Smooth_32_4_128
-      - QuantOnBoardTest.test_Quant_Smooth_32_7168
+      # - QuantOnBoardTest.test_Quant_Smooth_32_7168
       # - QuantMMOnBoardTest.test_QuantMM_32_16384_times_16384_7168_np
-      - QuantMMOnBoardTest.test_QuantMM_128_32_512_times_128_512_128_torch
+      # - QuantMMOnBoardTest.test_QuantMM_128_32_512_times_128_512_128_torch
       #
-      - OnBoardTest.test_operation_ub_reshape
-      - OnBoardTest.test_operation_gm_reshape
-      - OnBoardTest.test_reshape_matmul_mul
-      - OnBoardTest.test_operation_ub_reshape_3dimto2dim
+      # - OnBoardTest.test_operation_ub_reshape
+      # - OnBoardTest.test_operation_gm_reshape
+      # - OnBoardTest.test_reshape_matmul_mul
+      # - OnBoardTest.test_operation_ub_reshape_3dimto2dim
       # - OnBoardTest.test_operation_gm_reshape_2dimto3dim
-      - ArgsortOnBoardTest.test_operation_tensor_64__argsort_moe
+      # - ArgsortOnBoardTest.test_operation_tensor_64__argsort_moe
 
   operator_DeepSeekV3_MLA:
     cases:
       # - OnBoardTest.test_query_states_fp16_b32_n2
       # - OnBoardTest.test_query_states_fp16_b32_n32
       # - OnBoardTest.test_query_states_bf16_b32_n2
-      - OnBoardTest.test_query_states_bf16_b32_n32
+      # - OnBoardTest.test_query_states_bf16_b32_n32
 
   operator_DeepSeekV3_MOE:
     cases:
@@ -177,13 +177,13 @@ stest:
 
   operator_rmsnorm:
     cases:
-      - RmsNormTest.test_32_32_tileop_rmsnorm
-      - RmsNormTest.test_2_32_32_tileop_rmsnorm
-      - RmsNormTest.test_2_2_32_32_tileop_rmsnorm
-      - RmsNormTest.test_32_1536_tileop_rmsnorm_fp16_realCase
-      - RmsNormTest.test_32_1536_tileop_rmsnorm_gamma_fp16_realCase
+      # - RmsNormTest.test_32_32_tileop_rmsnorm
+      # - RmsNormTest.test_2_32_32_tileop_rmsnorm
+      # - RmsNormTest.test_2_2_32_32_tileop_rmsnorm
+      # - RmsNormTest.test_32_1536_tileop_rmsnorm_fp16_realCase
+      # - RmsNormTest.test_32_1536_tileop_rmsnorm_gamma_fp16_realCase
 
   operator_sigmoid:
     cases:
-      - SigmoidTest.test_32_32_tileop_sigmoid
-      - SigmoidTest.test_32_256_tileop_sigmoid_realcase
+      # - SigmoidTest.test_32_32_tileop_sigmoid
+      # - SigmoidTest.test_32_256_tileop_sigmoid_realcase

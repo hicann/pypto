@@ -56,13 +56,7 @@ target_link_libraries(tile_fwk_runtime
             dl
             c_sec
 )
-if ((BUILD_WITH_CANN) AND (NOT PRODUCT_SIDE STREQUAL "device"))
-    add_dependencies(tile_fwk_runtime tile_fwk_core)
-    target_link_libraries(tile_fwk_runtime
-            PRIVATE
-                ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/kernel/kernel_host.o
-    )
-endif ()
+
 if (BUILD_WITH_CANN)
     add_dependencies(tile_fwk_runtime tile_fwk_server)
 endif ()
