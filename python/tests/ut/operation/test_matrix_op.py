@@ -78,3 +78,33 @@ def test_matrix_matmul_with_tensor_interface():
     assert isinstance(c, pypto.tensor)
     assert c.dtype == pypto.DT_INT32
     assert c.shape == [3, 32, 32]
+
+
+def test_matrix_matmul_with_trans_mode_cast_rint():
+    input_dtype = pypto.DT_FP32
+    out_dtype = pypto.DT_FP32
+    a = pypto.tensor((64, 32), input_dtype, "A")
+    b = pypto.tensor((32, 64), input_dtype, "B")
+    c = None
+
+    with pypto.function("MATMUL", a, b):
+        pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
+        c = pypto.matmul(a, b, out_dtype, extend_params={"trans_mode": pypto.TransMode.CAST_RINT})
+
+    assert isinstance(c, pypto.tensor)
+    assert c.shape == [64, 64]
+
+
+def test_matrix_matmul_with_trans_mode_cast_rint():
+    input_dtype = pypto.DT_FP32
+    out_dtype = pypto.DT_FP32
+    a = pypto.tensor((64, 32), input_dtype, "A")
+    b = pypto.tensor((32, 64), input_dtype, "B")
+    c = None
+
+    with pypto.function("MATMUL", a, b):
+        pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
+        c = pypto.matmul(a, b, out_dtype, extend_params={"trans_mode": pypto.TransMode.CAST_ROUND})
+
+    assert isinstance(c, pypto.tensor)
+    assert c.shape == [64, 64]
