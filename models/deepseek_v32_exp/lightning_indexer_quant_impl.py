@@ -165,7 +165,7 @@ def lightning_indexer_decode_compute(
                 for idx in range(unroll_loop):
                     cur_block_idx = block_table[b_idx, bn_idx + idx]
                     k_s_block = pypto.view(k_scale_2d, [1, block_size], [cur_block_idx, 0],
-                            valid_shape=[1, pypto.min(block_size, cur_seq - (cur_block - 1) * block_size)])
+                            valid_shape=[1, pypto.min(block_size, cur_seq - bn_idx * block_size)])
                     pypto.assemble(pypto.clone(k_s_block), [0, idx * block_size], ks_assemble)
                     pypto.set_vec_tile_shapes(1, 16 * block_size)
 
