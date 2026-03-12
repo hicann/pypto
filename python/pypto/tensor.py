@@ -28,24 +28,23 @@ class Tensor:
         self.ori_shape = None
         self.status_shape = None
         self.status_dtype = dtype
-        if shape is None or dtype is None:
-            # init default
-            nshape = shape if shape is not None else []
-            ndtype = dtype if dtype is not None else pypto.DT_FP32
+        ndtype = dtype if dtype is not None else pypto.DT_FP32
+        if shape is None:
+            nshape = []
             self._base = pypto_impl.Tensor(ndtype, nshape, name, format)
         elif shape and all([isinstance(s, int) for s in shape]):
             nshape = typing.cast(List[int], shape)
-            self._base = pypto_impl.Tensor(dtype, nshape, name, format)
+            self._base = pypto_impl.Tensor(ndtype, nshape, name, format)
             self.ori_shape = ori_shape
         elif isinstance(shape, list) and self._validate_status_shape(shape):
             nshape = []
             self.status_shape = shape
-            self._base = pypto_impl.Tensor(dtype, nshape, name, format)
+            self._base = pypto_impl.Tensor(ndtype, nshape, name, format)
         else:
             sym_shape = to_syms(shape)
             assert isinstance(
                 sym_shape, list), "shape must be a list of int or SymbolicScalar"
-            self._base = pypto_impl.Tensor(dtype, sym_shape, name, format)
+            self._base = pypto_impl.Tensor(ndtype, sym_shape, name, format)
         self.data_ptr = data_ptr
         self.device = device
 
