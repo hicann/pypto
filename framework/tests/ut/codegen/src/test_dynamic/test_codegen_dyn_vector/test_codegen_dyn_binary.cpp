@@ -71,22 +71,10 @@ void TestAddDynBody(const std::vector<int64_t> &shape, const std::vector<int64_t
     function->SetUnderDynamicFunction(true);
     for (auto &subFunc : function->rootFunc_->programs_) {
         for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
             if (op.GetOpcode() == Opcode::OP_ADD && isNeedCalcMinForBinaryOperands) {
                 op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
             }
         }
-        DynParamInfo fakeParam = {3, 0, 0, DynParamInfoType::VALID_SHAPE, 0, SymbolicScalar(), false, ""};
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_0", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_1", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_4_dim_0", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_4_dim_1", fakeParam);
     }
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -404,7 +392,7 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor) {
     auto localTensorB =
         CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
     auto localOutTensor =
-        CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, addShape, dynValidShape});
+        CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
 
     auto &op = function->AddOperation(Opcode::OP_ADD, {localTensorA, localTensorB}, {localOutTensor});
     op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
@@ -421,8 +409,15 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
     std::string res = cop.GenOpCode();
-    std::string expect = R"!!!(TAdd<LastUse2Dim<0, 0>>(ubTensor_1, ubTensor_2, ubTensor_2);
+    std::string expect = R"!!!(TAdd<LastUse2Dim<0, 0>>(ubTensor_1, ubTensor_1, ubTensor_1);
 )!!!";
+    EXPECT_EQ(res, expect);
+
+    expect = "UBTileTensorFP16Dim2_1";
+    res = symbolManager->QueryTileTensorTypeByBufVar("UB_S0_E0_T");
+    EXPECT_EQ(res, expect);
+
+    res = cop.QueryTileTensorTypeByIdx(0);
     EXPECT_EQ(res, expect);
 }
 } // namespace npu::tile_fwk

@@ -167,8 +167,11 @@ public:
 
     std::string GenOpCode() const override;
 
-private:
     std::string QueryTileTensorNameByIdx(int paramIdx) const;
+    std::string QueryTileTensorTypeByIdx(int paramIdx) const;
+
+private:
+    TileTensor QueryTileTensorByIdx(int paramIdx) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForSignal() const;

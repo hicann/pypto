@@ -314,7 +314,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastTileTensor() const {
     auto cacheMode = AnyCast<std::string>(opAttrs.at(OpAttributeKey::cacheMode));
     auto blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::panzBlockSize));
     int cacheModeFlag = GetCacheModeFlag(cacheMode);
-    std::string dstTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ID0));
+    std::string dstTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID0));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
 
@@ -686,7 +686,7 @@ std::string CodeGenOpCloudNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillT
 std::string CodeGenOpCloudNPU::PrintTensorForCopyBetweenGM(
     unsigned operandIdx, unsigned gmIdx, const std::string &gmVarName) const {
     std::string tensor =
-        operandIdx == gmIdx ? sm->QueryTileTensorByBufVarName(gmVarName) : QueryTileTensorNameByIdx(operandIdx);
+        operandIdx == gmIdx ? sm->QueryTileTensorNameByBufVar(gmVarName) : QueryTileTensorNameByIdx(operandIdx);
     return tensor;
 }
 
@@ -1368,9 +1368,9 @@ std::string CodeGenOpCloudNPU::GenGMAddrExprWithOffset(const std::string &addrEx
 }
 
 std::string CodeGenOpCloudNPU::PrintGatherInL1TileTensor() const {
-    std::string srcVar = sm->QueryTileTensorByBufVarName(GenGmParamVar(ID1));
-    std::string offsetsVar = sm->QueryTileTensorByBufVarName(GenGmParamVar(ID2));
-    std::string blockTableVar = sm->QueryTileTensorByBufVarName(GenGmParamVar(ID3));
+    std::string srcVar = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID1));
+    std::string offsetsVar = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID2));
+    std::string blockTableVar = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID3));
     std::string dstVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     int64_t blockSize = AnyCast<int64_t>(opAttrs.at("op_attr_blocksize"));
 
@@ -1646,9 +1646,9 @@ std::string CodeGenOpCloudNPU::PrintGatherInUBLayout() const {
     std::string coord4Indices = PrintCoord(indicesDim, coordCpindicesOffset);
     std::string coord4BlockTable = PrintCoord(blockTableDim, coordCpblockTableOffset);
     std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string paramTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ToUnderlying(MISOIdx::SRC0_IDX)));
-    std::string indicesTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ToUnderlying(MISOIdx::SRC1_IDX)));
-    std::string pageTableTensor = sm->QueryTileTensorByBufVarName(GenGmParamVar(ToUnderlying(MISOIdx::SRC2_IDX)));
+    std::string paramTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ToUnderlying(MISOIdx::SRC0_IDX)));
+    std::string indicesTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ToUnderlying(MISOIdx::SRC1_IDX)));
+    std::string pageTableTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ToUnderlying(MISOIdx::SRC2_IDX)));
     std::vector<std::string> paramList;
     ASSERT(opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end()) << "GenGatherOp: There is nop axis attribute here";
     const int64_t blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::blockSize));
@@ -1765,7 +1765,7 @@ std::string CodeGenOpCloudNPU::GetConvCopyInMode() const {
 
 std::string CodeGenOpCloudNPU::GenMemL1CopyInConv() const {
     std::string gmVarName = GenGmParamVar(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string srcTensor = sm->QueryTileTensorByBufVarName(gmVarName);
+    std::string srcTensor = sm->QueryTileTensorNameByBufVar(gmVarName);
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string copyInModeStr = GetConvCopyInMode();
 
@@ -1816,7 +1816,7 @@ std::string CodeGenOpCloudNPU::GenMemL1CopyInConv() const {
 
 std::string CodeGenOpCloudNPU::GenMemL1CopyOutConv() const {
     std::string gmVarName = GenGmParamVar(ToUnderlying(MISOIdx::DST_IDX));
-    std::string dstTensor = sm->QueryTileTensorByBufVarName(gmVarName);
+    std::string dstTensor = sm->QueryTileTensorNameByBufVar(gmVarName);
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     int64_t copyOutMode = -1;
     std::string copyOutModeStr = "";

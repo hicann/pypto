@@ -246,7 +246,9 @@ public:
     std::string QueryTileTensorFullDimByTensorInLoop(const std::string &tensorName);
     // To be compatible with GM Tensor in Static Function Type like same ddr magic number with different parmaIdx &
     // 'GMStackBase' e.g. ((__gm__ GMTensorInfo*)param + 1), ((__gm__ GMTensorInfo*)param + 2)
-    std::string QueryTileTensorByBufVarName(const std::string &bufVarName);
+    const TileTensor& QueryTileTensorByBufVar(const std::string &bufVarName);
+    std::string QueryTileTensorNameByBufVar(const std::string &bufVarName);
+    std::string QueryTileTensorTypeByBufVar(const std::string &bufVarName);
 
     std::string GenUsingList();
     std::string GenTileTensorDefList();
