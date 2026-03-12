@@ -186,4 +186,23 @@ TEST_F(PassManagerTest, TestPassDFX) {
     config::SetPassConfig("TestPassDFX", "RemoveRedundantReshape", KEY_DISABLE_PASS, true);
     PassManager::Instance().RunPass(Program::GetInstance(), *function, "TestPassDFX");
 }
+
+TEST_F(PassManagerTest, TestPassStrategyRepeatRegister) {
+    const std::string testStrategy = "RepeatRegStrategy";
+    PassManager::Instance().RegisterStrategy(testStrategy, {
+                        {   "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE },
+                        {      "InferMemoryConflict",      PassName::INFER_MEMORY_CONFLICT }});
+    auto firstPasses = PassManager::Instance().GetStrategyPasses(testStrategy);
+    EXPECT_TRUE(firstPasses.size() == 2);
+    EXPECT_TRUE(firstPasses[0].identifier == "RemoveRedundantReshape");
+    EXPECT_TRUE(firstPasses[1].identifier == "InferMemoryConflict");
+
+    PassManager::Instance().RegisterStrategy(testStrategy, {
+                        {           "ExpandFunction",           PassName::EXPAND_FUNCTION },
+                        {   "RemoveRedundantReshape",   PassName::REMOVE_REDUNDANT_RESHAPE }});
+    auto updatedPasses = PassManager::Instance().GetStrategyPasses(testStrategy);
+    EXPECT_TRUE(updatedPasses.size() == 2);
+    EXPECT_TRUE(updatedPasses[0].identifier == "ExpandFunction");
+    EXPECT_TRUE(updatedPasses[1].identifier == "RemoveRedundantReshape");
+}
 }
