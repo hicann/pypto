@@ -142,15 +142,16 @@ Shape GetCopyBufferShape(DataType nonShmemDtype, DataType shmemDtype, Shape tile
 {
     const uint32_t copyNum = UB_BUFFER_BYTE_SIZE / BytesOf(nonShmemDtype);
     Shape copyShape;
-    auto tileRowSize = tileShape[0];
-    auto tileColSize = tileShape[1];
+    int64_t tileRowSize = tileShape[0];
+    int64_t tileColSize = tileShape[1];
+    int64_t alignTileColSize = AlignUp(tileColSize * BytesOf(nonShmemDtype), UB_ALIGN_SIZE) / BytesOf(nonShmemDtype);
     if ((nonShmemDtype != shmemDtype) && ((tileColSize * BytesOf(nonShmemDtype)) % UB_ALIGN_SIZE != 0)) {
         uint32_t copyColSize = copyNum > tileColSize ? tileColSize : copyNum;
         copyShape = {1, copyColSize};
-    } else if (copyNum >= tileRowSize * tileColSize) {
+    } else if (copyNum >= tileRowSize * alignTileColSize) {
         copyShape = {tileRowSize, tileColSize};
     } else if (copyNum >= tileColSize) {
-        copyShape = {(copyNum + tileColSize - 1) / tileColSize, tileColSize};
+        copyShape = {(copyNum + alignTileColSize - 1) / alignTileColSize, tileColSize};
     } else {
         copyShape = {1, copyNum};
     }

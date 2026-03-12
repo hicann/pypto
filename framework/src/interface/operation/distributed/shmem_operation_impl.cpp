@@ -77,12 +77,12 @@ void ValidateDataType(const Tensor& tensor, const std::string& tensorDesc, const
         if (!first) {
             oss << ", ";
         }
-        oss << DataType2CCEStr(dtype);
+        oss << DataType2String(dtype);
         first = false;
     }
     oss << "]";
     CHECK(allowedTypes.count(dataType)) << "Invalid data type: " << tensorDesc << " data type only support "
-        << oss.str() << ", but got:" << DataType2CCEStr(dataType);
+        << oss.str() << ", but got:" << DataType2String(dataType);
 }
 
 void ValidateShape(const Tensor& tensor, const std::string& tensorDesc, uint32_t supportedDim) {
