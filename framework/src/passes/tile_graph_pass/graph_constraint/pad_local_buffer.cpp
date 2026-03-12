@@ -197,7 +197,7 @@ void PadLocalBuffer::PadMatmul(Operation &op, LogicalTensorPtr &in) {
         IntVecToStr(in->tensor->rawshape).c_str());
 }
 
-size_t PadLocalBuffer::GetPaddingValue(LogicalTensorPtr &in) {
+size_t GetPaddingValue(LogicalTensorPtr &in) {
     auto bytes = BytesOf(in->Datatype());
     auto paddingIter = BLOCK_PADDING_DIM.find(bytes);
     if (paddingIter == BLOCK_PADDING_DIM.end()) {
@@ -549,11 +549,29 @@ int64_t PadLocalBuffer::ProcessBroadcastForAxisCombine(LogicalTensorPtr &inTenso
     return (dimSize - 1);
 }
 
+// 当前不支持UB上的shape不可能为负数。
+int64_t Gcd(int64_t a, int64_t b) {
+    while (b != 0) {
+        int64_t temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+int64_t Lcm(int64_t a, int64_t b) {
+    return (a / Gcd(a, b)) * b;
+}
+
 int64_t AlignedRawTensorIfNeed(LogicalTensorPtr &in, int64_t pos, const int64_t base) {
     if (in == nullptr || pos < 0 || pos >= static_cast<int64_t>(in->tensor->rawshape.size())) {
         return -1;
     }
     int64_t padDim = Pad(in->tensor->rawshape[pos], base);
+    int64_t paddingValue = GetPaddingValue(in);
+    if (paddingValue != 0 && padDim % paddingValue != 0) {
+        padDim = Lcm(padDim, paddingValue);
+    }
     in->tensor->rawshape[pos] = padDim;
     return padDim;
 }

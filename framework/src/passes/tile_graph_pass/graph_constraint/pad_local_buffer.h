@@ -42,7 +42,6 @@ public:
 private:
     Status RunOnFunction(Function &function) override;
     void PadMatmul(Operation &op, LogicalTensorPtr &in);
-    size_t GetPaddingValue(LogicalTensorPtr &in);
     void PadVector(Operation &op, LogicalTensorPtr &in, std::unordered_set<std::shared_ptr<RawTensor>> &visitedRaw, bool noPadding);
     bool IsExpandLastDim(const Operation &op);
     void TraverseCopyInConsumers(Function &function, Operation &consumer, std::unordered_set<LogicalTensorPtr> &visitedTensors);

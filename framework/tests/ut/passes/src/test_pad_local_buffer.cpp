@@ -1298,3 +1298,18 @@ TEST_F(TestPadLocalBuffer, L1toBt1) {
     EXPECT_EQ(t3->GetShape(), expectShape);
     EXPECT_EQ(t3->tensor->GetRawShape(), expectShape);
 }
+
+TEST_F(TestPadLocalBuffer, padDimTest1) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1,1}, MemoryType::MEM_DEVICE_DDR, "gm"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1,1}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {1,16}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_BRCB, {"t1"}, {"t2"}, "view1", true), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm"}, {"t1"}, "copyin", true), true);
+    config::SetOperationOption(KEY_COMBINE_AXIS, true);
+    auto *rootFuncPtr = graph.GetFunction();
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*rootFuncPtr), SUCCESS);
+    EXPECT_EQ(graph.GetTensor("t1")->GetRawTensor()->GetRawShape()[0], 16);
+}
