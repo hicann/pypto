@@ -148,7 +148,7 @@ struct DynMachineManager {
         int expected = 0;
         while (expected < dieMaxCpuNum) {   // ensure thread security
             int desired = expected + 1;
-            if (dieThreadIdx.compare_exchange_weak(expected, desired, std::memory_order_acq_rel, std::memory_order_acq_rel)) {
+            if (dieThreadIdx.compare_exchange_weak(expected, desired, std::memory_order_acq_rel, std::memory_order_acquire)) {
                 int curDieThreadIdx = expected + startIdx;
                 curThreadIdx = curDieThreadIdx;
                 break;
