@@ -580,6 +580,14 @@ inline bool SuperNodeGraphBuilder::MulAccCombine(const std::shared_ptr<Operation
                              opList[i]->GetOpMagic(), opList[inOp]->GetOpMagic());
             }
         }
+        for (auto outOp : operationInfo->outGraph_[i]) {
+            if (opList[outOp]->GetOpcode() == Opcode::OP_VIEW && !opList[outOp]->GetOOperands().empty() &&
+                opList[outOp]->GetOOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
+                mergePair.emplace_back(i, outOp);
+                APASS_LOG_DEBUG_F(Elements::Operation, "Combine MatMul %d and View %d in building SuperNode.",
+                             opList[i]->GetOpMagic(), opList[outOp]->GetOpMagic());
+            }
+        }
         return true;
     }
     return false;
