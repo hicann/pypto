@@ -338,11 +338,11 @@ struct LogicalTensorData {
 
     template <typename T>
     const T &Get(int index) const {
-        return GetData()->Get<T>(ViewIndexToDataIndex(index));
+        return GetData()->Get<T>(index);
     }
     template <typename T>
     T &Get(int index) {
-        return GetData()->Get<T>(ViewIndexToDataIndex(index));
+        return GetData()->Get<T>(index);
     }
 
     Element GetElement(int index) const { return GetData()->GetElement(ViewIndexToDataIndex(index)); }

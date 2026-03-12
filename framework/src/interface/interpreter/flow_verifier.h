@@ -197,8 +197,8 @@ public:
                 &outputDataView->Get<DataType>(outputOffset));
         } else {
             for (int i = 0; i < validShape[axis]; i++) {
-                int nGoldenOffset = goldenOffset + goldenDataView->GetStride(axis) * i;
-                int nOutputOffset = outputOffset + outputDataView->GetStride(axis) * i;
+                int nGoldenOffset = goldenOffset + goldenDataView->GetData()->GetStride()[axis] * i;
+ 	            int nOutputOffset = outputOffset + outputDataView->GetData()->GetStride()[axis] * i;
                 CompareDataRecursive<DataType, T>(
                     compareResult, axis + 1, nGoldenOffset, nOutputOffset, goldenDataView, outputDataView);
             }
