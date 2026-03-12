@@ -22,7 +22,6 @@
 #include "interface/configs/config_manager.h"
 #include "interface/machine/host/machine_task.h"
 #include "interface/cache/function_cache.h"
-#include "machine/host/device_agent_task.h"
 #include "machine/cache_manager/cache_manager.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/tilefwk_op.h"

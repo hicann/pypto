@@ -37,7 +37,7 @@ public:
     void CollectCallopMainBlockConds(Function *func);
     void CollectCoaMainBlockConds(const std::vector<std::vector<SymbolicScalar>> &argList);
     SymbolicScalar BuildMainBlockExpression();
-    void Gencode(Function *function, const std::map<uint64_t, std::list<InvokeParaOffset>> &invokeParaOffset);
+    static void Gencode(Function *function);
     const std::vector<SymbolicScalar>& GetCondGroup() const;
     const std::unordered_set<std::string>& GetCondStrSet() const;
 

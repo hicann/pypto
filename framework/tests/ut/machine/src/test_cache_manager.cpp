@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 #include "interface/configs/config_manager.h"
+#include "interface/machine/host/machine_task.h"
 #include "operator/models/deepseek/page_attention.h"
 #define private public
 #include "machine/cache_manager/cache_manager.h"
@@ -107,9 +108,8 @@ TEST(CacheManagerUnitTest, test_page_attention) {
     EXPECT_EQ(cacheManager.Initialize(), true);
     auto task = std::make_shared<MachineTask>(111, lastFunc);
     task->SetCacheKey(lastFunc->GetFunctionHash().Data());
-    auto deviceAgentTask = std::make_unique<DeviceAgentTask>(task);
-    cacheManager.SaveTaskFile(deviceAgentTask.get());
+    cacheManager.SaveTaskFile(task->GetCacheKey(), lastFunc);
     EXPECT_EQ(cacheManager.MatchBinCache(task->GetCacheKey()), true);
-    cacheManager.RecoverTask(lastFunc->GetFunctionHash().Data(), deviceAgentTask.get());
+    cacheManager.RecoverTask(lastFunc->GetFunctionHash().Data(), lastFunc);
 }
 }

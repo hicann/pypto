@@ -17,7 +17,7 @@
 
 #include <string>
 #include <mutex>
-#include "machine/host/device_agent_task.h"
+#include "interface/function/function.h"
 
 namespace npu::tile_fwk {
 enum class CacheMode {
@@ -35,9 +35,9 @@ public:
 
     bool MatchBinCache(const std::string &cacheKey) const;
 
-    void SaveTaskFile(const DeviceAgentTask *deviceAgentTask) const;
+    void SaveTaskFile(const std::string &cacheKey, const Function *function) const;
 
-    bool RecoverTask(const std::string &cacheKey, DeviceAgentTask *deviceAgentTask) const;
+    bool RecoverTask(const std::string &cacheKey, const Function *function) const;
 
     CacheMode GetCacheMode() const { return cacheMode_; }
 

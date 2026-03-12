@@ -19,6 +19,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
+#include "interface/machine/host/machine_task.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 #define private public
@@ -100,9 +101,7 @@ TEST_F(TestCacheManagerLog, SaveTaskFile_FilesAlreadyExist) {
 
     auto machineTask = std::make_shared<MachineTask>(1, reinterpret_cast<Function *>(0x1234));
     machineTask->SetCacheKey(cacheKey);
-    auto deviceTask = std::make_unique<DeviceAgentTask>(machineTask);
-
-    cm.SaveTaskFile(deviceTask.get());
+    cm.SaveTaskFile(cacheKey, machineTask->GetFunction());
 
     SUCCEED();
 }

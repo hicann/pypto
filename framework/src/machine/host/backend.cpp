@@ -24,10 +24,8 @@
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
-#include "machine/compile/machine_compiler.h"
 #include "machine/cache_manager/cache_manager.h"
 #include "machine/utils/dynamic/dev_encode.h"
-#include "machine/host/device_agent_task.h"
 #include "machine/compile/aicore_compiler.h"
 #include "machine/compile/compile_control_bin.h"
 #include "tilefwk/comm_group_recorder.h"
@@ -61,24 +59,18 @@ extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache) {
         MACHINE_LOGI("Compile stage terminates after execution graph generation.");
         return 0;
     }
-    auto deviceMachineTask = std::make_shared<MachineTask>(task->GetTaskId(), task->GetFunction());
-    deviceMachineTask->SetCacheReuseType(task->GetCacheReuseType());
-    deviceMachineTask->SetCacheKey(task->GetCacheKey());
-    auto deviceAgentTask = std::make_shared<DeviceAgentTask>(deviceMachineTask);
-    auto function = deviceAgentTask->compileTask->GetFunction();
-    deviceAgentTask->SetAsync(false);
-    deviceAgentTask->SetOpOriginArgsInfo(function->GetOpOriginArgsInfo());
-    deviceAgentTask->compileInfo.commGroups = npu::tile_fwk::Distributed::CommGroupRecorder::GetInstance().Output();
-    std::string kernelPath;
+    if (task == nullptr || task->GetFunction() == nullptr) {
+        MACHINE_LOGE("Machine task or function of machine task is null.");
+        return 0;
+    }
+    Function *function = task->GetFunction();
     // recover task info and bin
     if (task->GetCacheReuseType() == CacheReuseType::Bin) {
-        if (!CacheManager::Instance().RecoverTask(task->GetCacheKey(), deviceAgentTask.get())) {
+        if (!CacheManager::Instance().RecoverTask(task->GetCacheKey(), function)) {
             MACHINE_LOGW("Fail to recover task from cache[%s].", task->GetCacheKey().c_str());
             return 0;
         }
     } else {
-        deviceAgentTask->compileInfo.workSpaceStackSize = function->GetStackWorkespaceSize();
-
         if (function->IsFunctionType(
                 {FunctionType::DYNAMIC, FunctionType::DYNAMIC_LOOP, FunctionType::DYNAMIC_LOOP_PATH})) {
             if (function->GetGraphType() == GraphType::TILE_GRAPH) {
@@ -87,13 +79,11 @@ extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache) {
                 return 0;
             }
         }
-        (void)GenCode(deviceAgentTask->compileTask.get(), deviceAgentTask->compileInfo.invokeParaOffset, cache, kernelPath);
-        function = deviceAgentTask->compileTask->GetFunction();
+        (void)GenCode(task, cache);
         /* finish compile add function cache */
         cache.Insert(function->GetFunctionHash(), *function);
-        deviceAgentTask->SetFunctionCache(cache.Get(function->GetFunctionHash()));
         // save compile result on disk
-        CacheManager::Instance().SaveTaskFile(deviceAgentTask.get());
+        CacheManager::Instance().SaveTaskFile(task->GetCacheKey(), function);
     }
     return 0;
 }
@@ -764,8 +754,7 @@ static void CompileControlFlow(const std::string &aicpuDirPath,
 #endif
 }
 
-static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[maybe_unused]] const std::string &ccePath,
-                                  std::string &kernelPath) {
+static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[maybe_unused]] const std::string &ccePath) {
     ASSERT((PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph") == SUCCESS));
 
     std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();
@@ -789,8 +778,7 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
     std::ostringstream controlFlowOss;
     std::ostringstream expressionOss;
 
-    expressionOss << "#ifndef TILE_FWK_EXPRESSION_H" << "\n"
-                  << "#define TILE_FWK_EXPRESSION_H" << "\n";
+    expressionOss << "#ifndef TILE_FWK_EXPRESSION_H" << "\n" << "#define TILE_FWK_EXPRESSION_H" << "\n";
     auto &exprTableGroup = linker.GetExpressionTableDictGroup();
     std::vector<SymbolicExpressionTable *> exprTableList = GetAllExpressionTable(exprTableGroup);
     linker.GetSymbolTable()->NormalizeForSymbol();
@@ -856,8 +844,7 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
         COMPILER_LOGI("Function :[%s] starts executing codegen and binary compilation",
                       devTile->GetMagicName().c_str());
         codeGen.GenCode(*devTile, {});
-        MainBlockCondBulider builder;
-        builder.Gencode(devTile, {});
+        MainBlockCondBulider::Gencode(devTile);
         for (auto &[psgId, leaf] : devRoot->programs_) {
             (void)psgId;
             auto hash = leaf->GetFunctionHash().GetHash();
@@ -875,6 +862,7 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
 
     encodeDevAscendFunctionParam.inoutLink = &attr->inoutLink;
 
+    std::string kernelPath;
 #ifdef BUILD_WITH_CANN
     if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM &&
         config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION) {
@@ -935,9 +923,7 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
     SetDyndevProgBinary(function);
 }
 
-MachineTask *GenCode(
-    MachineTask *task, const std::map<uint64_t, std::list<InvokeParaOffset>> &invokeParaOffset, FunctionCache &cache,
-    std::string &kernelPath) {
+MachineTask *GenCode(MachineTask *task, FunctionCache &cache) {
     npu::tile_fwk::CodeGenCtx codeGenCtx("", GetEmitPath("kernel_aicore"));
     npu::tile_fwk::CreateMultiLevelDir(codeGenCtx.cceDir);
     npu::tile_fwk::CodeGen codeGen(codeGenCtx);
@@ -948,15 +934,15 @@ MachineTask *GenCode(
     if (function->GetGraphType() == GraphType::TILE_GRAPH) {
         MonitorStageScope codeGenScope("CodeGen");
         COMPILER_LOGI("Start (TILE_GRAPH) CodeGen stage...");
-        codeGen.GenCode(*function, invokeParaOffset);
-        MainBlockCondBulider builder;
-        builder.Gencode(function, invokeParaOffset);
+        std::map<uint64_t, std::list<InvokeParaOffset>> invokeParaOffset;
+        codeGen.GenCode(*function, {});
+        MainBlockCondBulider::Gencode(function);
     } else {
         if (function->IsFunctionType(FunctionType::DYNAMIC)) {
             MonitorStageScope codeGenScope("CodeGen");
             COMPILER_LOGI("Start (DYNAMIC) CodeGen stage...");
             std::string cce_path = RealPath(codeGenCtx.cceDir) + "/";
-            CompileDyndevFunction(function, cache, cce_path, kernelPath);
+            CompileDyndevFunction(function, cache, cce_path);
         } else {
             COMPILER_LOGI("The current function does not need to do codegen");
         }

@@ -14,21 +14,16 @@
  */
 
 #include "cache_manager.h"
-#include "interface/utils/log.h"
 #include "interface/utils/file_utils.h"
 #include "interface/configs/config_manager.h"
-#include "tilefwk/tilefwk.h"
 #include "tilefwk/platform.h"
-#include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
-#include "machine/platform/platform_manager.h"
 #include "interface/utils/op_info_manager.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 namespace {
 const std::string CACHE_FILE_PREFIX = "ast_op_";
-const std::string CACHE_CONTROL_FILE_PREFIX = "pypto_control_";
 const std::string CACHE_BIN_FILE_SUFFIX = ".o";
 const std::string CACHE_CUSTOM_BIN_FILE_SUFFIX = "_control.so";
 const std::string CACHE_CUSTOM_JSON_FILE_SUFFIX = "_control.json";
@@ -95,15 +90,14 @@ bool CacheManager::MatchBinCache(const std::string &cacheKey) const {
     return ret;
 }
 
-void CacheManager::SaveTaskFile(const DeviceAgentTask *deviceAgentTask) const {
+void CacheManager::SaveTaskFile(const std::string &cacheKey, const Function *function) const {
     if (!IsCahceEnable()) {
         return;
     }
-    if (deviceAgentTask == nullptr || deviceAgentTask->GetFunction() == nullptr) {
+    if (function == nullptr) {
         return;
     }
-    Function *function = deviceAgentTask->GetFunction();
-    std::string basePath = cacheDirPath_ + "/" + CACHE_FILE_PREFIX + deviceAgentTask->compileTask->GetCacheKey();
+    std::string basePath = cacheDirPath_ + "/" + CACHE_FILE_PREFIX + cacheKey;
     std::string binFilePath = basePath + CACHE_BIN_FILE_SUFFIX;
     std::string kernelFilePath = basePath + CACHE_KERNEL_FILE_SUFFIX;
     std::string customSoPath = cacheDirPath_ + "/lib" + OpInfoManager::GetInstance().GetOpFuncName() +
@@ -120,7 +114,7 @@ void CacheManager::SaveTaskFile(const DeviceAgentTask *deviceAgentTask) const {
     if (function->IsFunctionType(FunctionType::DYNAMIC) && function->GetDyndevAttribute() != nullptr) {
         MACHINE_LOGI("Save devProgBinary at bin file[%s].", binFilePath.c_str());
         std::string lockFilePath =
-            cacheDirPath_ + "/" + CACHE_FILE_PREFIX + deviceAgentTask->compileTask->GetCacheKey() + CACHE_LOCK_FILE_SUFFIX;
+            cacheDirPath_ + "/" + CACHE_FILE_PREFIX + cacheKey + CACHE_LOCK_FILE_SUFFIX;
         FILE *fp = LockAndOpenFile(lockFilePath);
         if (fp == nullptr) {
             return;
@@ -145,14 +139,13 @@ void CacheManager::SaveTaskFile(const DeviceAgentTask *deviceAgentTask) const {
     }
 }
 
-bool CacheManager::RecoverTask(const std::string &cacheKey, DeviceAgentTask *deviceAgentTask) const {
+bool CacheManager::RecoverTask(const std::string &cacheKey, const Function *function) const {
     if (!IsCahceEnable()) {
         return false;
     }
-    if (deviceAgentTask == nullptr || deviceAgentTask->GetFunction() == nullptr) {
+    if (function == nullptr) {
         return false;
     }
-    Function *function = deviceAgentTask->GetFunction();
     std::string cacheBinFile = cacheDirPath_ + "/" + CACHE_FILE_PREFIX + cacheKey + CACHE_BIN_FILE_SUFFIX;
     std::string cacheKernelFile = cacheDirPath_ + "/" + CACHE_FILE_PREFIX + cacheKey + CACHE_KERNEL_FILE_SUFFIX;
     std::string customJsonPath = cacheDirPath_ + "/lib" + OpInfoManager::GetInstance().GetOpFuncName() +

@@ -15,7 +15,6 @@
 
 #include "gtest/gtest.h"
 #include "machine/runtime/device_runner.h"
-#include "machine/runtime/machine_agent.h"
 #include "machine/runtime/device_launcher.h"
 #include "machine/runtime/host_prof.h"
 #include "interface/tensor/logical_tensor.h"
@@ -80,37 +79,6 @@ TEST_F(TestDynamicDeviceRunner, TestDynamicRun) {
     runner.args_.nrAiv = 2;
     int ret = runner.DynamicRun(0, 0, 0, 0, &taskArgs, 2);
     EXPECT_EQ(ret, 0);
-}
-
-TEST_F(TestDynamicDeviceRunner, TestDynMachineAgent) {
-    npu::tile_fwk::MachinePipe machinePipe;
-    const std::vector<int64_t> shape = {64, 64};
-    auto shapeImme = OpImmediate::Specified(shape);
-    TileShape::Current().SetVecTile(shape);
-
-    Tensor inputA(DT_FP32, shape, "A");
-    Tensor inputB(DT_FP32, shape, "B");
-    Tensor output(DT_FP32, shape, "C");
-
-    config::SetBuildStatic(true);
-    FUNCTION("ADD", {inputA, inputB, output}) {
-        output = Add(inputA, inputB);
-    }
-
-    auto function = Program::GetInstance().GetFunctionByRawName("TENSOR_ADD");
-    auto task_1 = std::make_shared<MachineTask>(0, function);
-    DeviceAgentTask agentTask1(task_1);
-    machinePipe.PipeProc(&agentTask1);
-
-    function->SetFunctionType(FunctionType::DYNAMIC_LOOP);
-    auto task_2 = std::make_shared<MachineTask>(0, function);
-    DeviceAgentTask agentTask2(task_2);
-    machinePipe.PipeProc(&agentTask2);
-
-    function->SetFunctionType(FunctionType::INVALID);
-    auto task_3 = std::make_shared<MachineTask>(0, function);
-    DeviceAgentTask agentTask3(task_3);
-    machinePipe.PipeProc(&agentTask3);
 }
 
 TEST_F(TestDynamicDeviceRunner, TestRegisterDynamicKernel) {
