@@ -9,7 +9,7 @@
         "copyout_resolve_coalescing": 0,
         "sg_set_scope": -1,
         "cube_l1_reuse_setting": [],
-        "cube_nbuffer_setting": [-1, 1],
+        "cube_nbuffer_setting": [[-1, 1]],
         "vec_nbuffer_setting": []
     },
     "runtime": {

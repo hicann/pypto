@@ -399,9 +399,11 @@ private:
             root->AddValue(prefix, jData.get<bool>());
         } else if (typeInfo.Type(prefix) == typeid(std::map<int64_t, int64_t>)) {
             std::map<int64_t, int64_t> mapJson;
-            auto arr = jData.get<std::vector<int64_t>>();
-            for (size_t i = 0; i + 1 < arr.size(); i += 2) {
-                mapJson[arr[i]] = arr[i + 1];
+            for (const auto &pair : jData) {
+                auto arr = pair.get<std::vector<int64_t>>();
+                if (arr.size() >= 2) {
+                    mapJson[arr[0]] = arr[1];
+                }
             }
             root->AddValue(prefix, mapJson);
         } else if (jData.is_array()) {

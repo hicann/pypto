@@ -92,5 +92,11 @@ def test_global_option():
     res = pypto.get_global_config("codegen.parallel_compile")
     assert res == 10
 
+
+def test_option_map():
+    pass_option = pypto.get_pass_options()
+    assert pass_option["cube_nbuffer_setting"] == {-1: 1}
+
+
 if __name__ == "__main__":
-    test_global_option()
+    test_option_map()
