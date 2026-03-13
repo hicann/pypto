@@ -254,12 +254,6 @@ void L1CopyInReuseRunner::GetColorHash(const OperationsViewer &opOriList, std::v
             order++;
         }
     }
-    for (auto& entry : hashMap_) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph hash: %lu, Subgraph ID: %s.", entry.first, IntVecToStr(entry.second).c_str());
-    }
-    for (auto& entry : hashOrder_) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Subgraph hash: %lu, Hash order: %d.", entry.first, entry.second);
-    }
 }
 
 inline void HashUpdate(std::unordered_map<uint64_t, std::vector<int>> &hashMap, 
@@ -558,7 +552,13 @@ Status L1CopyInReuseRunner::Run(Function &func, int color, std::vector<std::vect
     auto opOriList = func.Operations();
     std::vector<uint64_t> hashColor(color, 0);
     hashOrder_.clear();
-    GetColorHash(opOriList, hashColor);   // 计算子图哈希，识别同构子图
+    GetColorHash(opOriList, hashColor); // 计算子图哈希，识别同构子图
+    // print hashorder
+    APASS_LOG_INFO_F(Elements::Operation, "Computation graph [%s] overview.", func.GetRawName().c_str());
+    for (auto &entry : hashMap_) {
+        APASS_LOG_INFO_F(Elements::Operation, "Hash order: %d, Subgraph hash: %lu, Subgraph IDs: %s.", hashOrder_[entry.first], entry.first, IntVecToStr(entry.second).c_str());
+    }
+    APASS_LOG_INFO_F(Elements::Operation, "Computation graph [%s] overview end.", func.GetRawName().c_str());
     auto colorCopyIn = GetCopyIn(opOriList, color, colorNode);   // 记录各子图的大小
     mgCopyInUpperBound_ = func.paramConfigs_.sgMgCopyInUpperBound;
     numLRMap_ = func.paramConfigs_.cubeL1ReuseSetting;
@@ -593,6 +593,7 @@ Status L1CopyInReuseRunner::Run(Function &func, int color, std::vector<std::vect
     }
     RemoveUselessViews(func); //删除节点
     func.EraseOperations(true);
+    APASS_LOG_DEBUG_F(Elements::Operation, "After L1CopyInReuse.");
     RescheduleUtils::PrintColorNode(func);
     return SUCCESS;
 }
