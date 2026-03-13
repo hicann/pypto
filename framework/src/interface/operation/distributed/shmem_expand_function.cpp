@@ -19,7 +19,7 @@
 namespace npu::tile_fwk::Distributed {
 namespace {
 using DummyTileFunc = std::function<LogicalTensorPtr(int32_t tileIndex)>;
-
+int32_t tileNumOfWaitUntil = 0;
 constexpr uint16_t UB_BUFFER_BYTE_SIZE = 16 * 1024;
 constexpr uint16_t DTYPE_CAST_BYTE_SIZE = 256;
 constexpr uint16_t UB_ALIGN_SIZE = 32;
@@ -102,10 +102,6 @@ void DfsTiling(const Shape& shmemTensorTileShape, Input& input, size_t curDim, u
     std::vector<int64_t>& tileShape = input.tileInfo.shape;
     std::vector<int64_t>& tileOffset = input.tileInfo.offset;
     if (curDim == tileShape.size()) {
-        CHECK(tileIndex < MAX_TILE_NUM) << "tileIndex must be < " << MAX_TILE_NUM << ", but got " << tileIndex;
-        for (int64_t shape : tileShape) {
-            CHECK(shape != 0) << "view shape should not be 0, but got " << IntVecToStr(tileShape);
-        }
         addTileOp(tileIndex, input);
         tileIndex++;
         return;
@@ -297,7 +293,9 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
         auto outTile = outTileFunc(tileIndex);
 
         auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_WAIT_UNTIL, {predTokenTile, shmemSignalTile}, {outTile});
-        
+        tileNumOfWaitUntil++;
+        ASSERT(tileNumOfWaitUntil <= MAX_TILE_NUM) <<
+            "WaitUntil tile count exceeds the maximum allowed value: " << MAX_TILE_NUM;
         DistOpAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.aicpuOpParams.push_back(tileRowShape);
