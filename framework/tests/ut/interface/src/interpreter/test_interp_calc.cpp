@@ -1670,6 +1670,40 @@ TEST_F(TorchAdaptorTest, TopkExtractIndices) {
     ASSERT_ALLCLOSE(out, golden);
 }
 
+TEST_F(TorchAdaptorTest, GatherINUB) {
+    // params shape: [num_buffer_tokens, hidden_dim] = [8, 4]
+    std::vector<float> paramsData = {
+        0.0f, 1.0f, 2.0f, 3.0f,      // row 0
+        10.0f, 11.0f, 12.0f, 13.0f,  // row 1
+        20.0f, 21.0f, 22.0f, 23.0f,  // row 2
+        30.0f, 31.0f, 32.0f, 33.0f,  // row 3
+        40.0f, 41.0f, 42.0f, 43.0f,  // row 4
+        50.0f, 51.0f, 52.0f, 53.0f,  // row 5
+        60.0f, 61.0f, 62.0f, 63.0f,  // row 6
+        70.0f, 71.0f, 72.0f, 73.0f   // row 7
+    };
+    // logical indices [0, 2, 5, 3], blockSize=2:
+    // pageTable=[2,0,1] => logical->physical mapping:
+    // 0->4, 2->0, 5->3, 3->1
+    std::vector<int64_t> indicesData = {0, 2, 5, 3};
+    std::vector<int64_t> pageTableData = {2, 0, 1};
+    std::vector<float> goldenData = {
+        40.0f, 41.0f, 42.0f, 43.0f,  // row 4
+        0.0f, 1.0f, 2.0f, 3.0f,      // row 0
+        30.0f, 31.0f, 32.0f, 33.0f,  // row 3
+        10.0f, 11.0f, 12.0f, 13.0f   // row 1
+    };
+
+    auto params = makeTensorData(DT_FP32, {8, 4}, paramsData);
+    auto indices = makeTensorData(DT_INT64, {1, 4}, indicesData);
+    auto pageTable = makeTensorData(DT_INT64, {1, 3}, pageTableData);
+    auto out = makeTensorData(DT_FP32, {4, 4}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {4, 4}, goldenData);
+
+    calc::GatherINUB(out, params, indices, pageTable, 2, 0);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
 TEST_F(TorchAdaptorTest, Print) {
     auto t0 = makeTensorData(DT_FP32, {16, 16}, 4.0f);
     std::cout << t0->ToString() << std::endl;

@@ -60,6 +60,31 @@ int64_t GetMaxShapeSize(const std::vector<std::vector<int64_t>> &shape) {
     return maxTotalSize;
 }
 
+int64_t GetGatherInUBResultShapeSize(const std::vector<std::vector<int64_t>> &shape) {
+    // GatherInUB fixed scenario:
+    // param: [token_size, hidden_dim], indices: [1, k], block_table: [1, ...]
+    // result: [k, hidden_dim]
+    // Use result tile size for sparse gather estimation.
+    if (shape.size() < 2 || shape[0].empty() || shape[1].empty()) {
+        return GetMaxShapeSize(shape);
+    }
+
+    int64_t hiddenDim = shape[0].back();
+    if (hiddenDim <= 0) {
+        return GetMaxShapeSize(shape);
+    }
+
+    int64_t gatheredCount = 1;
+    for (int64_t dimVal : shape[1]) {
+        if (dimVal <= 0) {
+            return GetMaxShapeSize(shape);
+        }
+        gatheredCount *= dimVal;
+    }
+
+    return gatheredCount * hiddenDim;
+}
+
 int64_t CalcCyclesCommon(const std::string &op, int64_t shapeSize, DataType dtype) {
     int64_t totalSize = shapeSize * BytesOf(dtype);
 
@@ -111,6 +136,11 @@ int64_t GetCycles(const std::string &op, const std::vector<std::vector<int64_t>>
     // assume that the cycle of UB_ALLOC, L1_ALLOC, etc. is 1
     if (op.find("_ALLOC") != std::string::npos) {
         return 1;
+    }
+
+    if (op == "GATHER_IN_UB") {
+        int64_t shapeSize = GetGatherInUBResultShapeSize(shape);
+        return CalcCyclesCommon(op, shapeSize, dtype);
     }
 
     auto iterCombineIntrin = COMINE_INTRIN_CYCLES_IN_OP.find(op);

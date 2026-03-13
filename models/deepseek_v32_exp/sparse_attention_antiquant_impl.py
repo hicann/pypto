@@ -133,9 +133,9 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
                         cur_block_table = pypto.view(block_table, [1, max_blocknum_perbatch], [batch_idx, 0])
                         nope_cache_view = pypto.view(
                             nope_cache,
-                            [cur_s2_tile, 672],
+                            [nope_cache.shape[0], 672],
                             [0, 0],
-                            valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 656]
+                            valid_shape=[nope_cache.shape[0], 656]
                         )
 
                         # ---- gather: GM --> UB  ----  UB非连续：shape [16, 672]， vaildshape：[16, 656]
@@ -260,7 +260,7 @@ def sparse_attention_antiquant_d(block_num, max_kv, kv_lora_rank, qk_rope_dim, n
 
     @pypto.frontend.jit(
         pass_options={
-            "pg_upper_bound": 50000,
+            "pg_upper_bound": 5000000,
             "vec_nbuffer_setting": {-1: 2, 0: 4},
             "cube_l1_reuse_setting": {-1: 2},
         },
@@ -337,7 +337,7 @@ def sparse_attention_antiquant_p(block_num, max_kv, kv_lora_rank, qk_rope_dim, n
 
     @pypto.frontend.jit(
         pass_options={
-            "pg_upper_bound": 50000,
+            "pg_upper_bound": 5000000,
             "vec_nbuffer_setting": {-1: 4, 0: 4},
             "cube_l1_reuse_setting": {-1: 4},
         },

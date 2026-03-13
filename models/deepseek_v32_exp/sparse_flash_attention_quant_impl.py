@@ -127,12 +127,12 @@ def sparse_flash_attention_quant_compute(query_nope, query_rope, key_nope_2d, ke
                         if kn_dtype == pypto.DT_INT8:
                             pypto.set_semantic_label("Sa_V0")
                             pypto.set_vec_tile_shapes(16, 1024)
-                            k_nope_scale_view = pypto.view(k_nope_scales, [cur_s2_tile, 8],
-                                [0, 0], valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 4])
+                            k_nope_scale_view = pypto.view(k_nope_scales, [k_nope_scales.shape[0], 8],
+                                [0, 0], valid_shape=[k_nope_scales.shape[0], 4])
                             kn_scale = gather_in_ub(k_nope_scale_view, cur_topk_indices, cur_block_table,
                                                     block_size, -2)
-                            k_nope_2d_view = pypto.view(key_nope_2d, [cur_s2_tile, dn],
-                                [0, 0], valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn])
+                            k_nope_2d_view = pypto.view(key_nope_2d, [key_nope_2d.shape[0], dn],
+                                [0, 0], valid_shape=[key_nope_2d.shape[0], dn])
                             kn_quant = gather_in_ub(k_nope_2d_view, cur_topk_indices, cur_block_table, block_size, -2)
                             kn_quant_fp16 = pypto.cast(kn_quant, pypto.DT_FP16)
                             kn_quant_fp32 = pypto.cast(kn_quant_fp16, pypto.DT_FP32)
@@ -293,10 +293,10 @@ def sparse_flash_attention_quant_compute_flash(query_nope, query_rope, key_nope_
                                                   [batch_idx * s1_sym + slc_idx, s2_idx * cur_s2_tile],
                                                   valid_shape=[1, (cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile)])
                         cur_block_table = pypto.view(block_table, [1, max_blocknum_perbatch], [batch_idx, 0])
-                        k_nope_2d_view = pypto.view(key_nope_2d, [cur_s2_tile, dn],
-                            [0, 0], valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), dn])
-                        k_nope_scale_view = pypto.view(k_nope_scales, [cur_s2_tile, 4],
-                            [0, 0], valid_shape=[(cur_seq - s2_idx * cur_s2_tile).min(cur_s2_tile), 4])
+                        k_nope_2d_view = pypto.view(key_nope_2d, [key_nope_2d.shape[0], dn],
+                            [0, 0], valid_shape=[key_nope_2d.shape[0], dn])
+                        k_nope_scale_view = pypto.view(k_nope_scales, [k_nope_scales.shape[0], 4],
+                            [0, 0], valid_shape=[k_nope_scales.shape[0], 4])
 
                         kn = pypto.tensor([s2_tile, dn], dtype, "kn")
 
@@ -449,7 +449,7 @@ def sparse_flash_attention_quant_d(
 
     @pypto.frontend.jit(
         pass_options={
-            "pg_upper_bound": 50000,
+            "pg_upper_bound": 5000000,
             "vec_nbuffer_setting": {-1: 2, 0: 8},
             "cube_l1_reuse_setting": {-1: 2},
         },
@@ -546,7 +546,7 @@ def sparse_flash_attention_quant_p(
 
     @pypto.frontend.jit(
         pass_options={
-            "pg_upper_bound": 50000,
+            "pg_upper_bound": 5000000,
             "vec_nbuffer_setting": {-1: 4, 0: 16},
             "cube_l1_reuse_setting": {-1: 4},
         },

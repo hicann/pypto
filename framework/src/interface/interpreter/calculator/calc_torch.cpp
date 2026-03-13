@@ -1177,20 +1177,14 @@ void GatherINUBGolden(torch::Tensor &out, const torch::Tensor &params, const tor
     // 写到 out（不要求 out contiguous；copy_ 会处理）
     out.copy_(selected);
 }
-static torch::Tensor From4GatherINUB(const TensorData &data) {
-    auto tensor = torch::from_blob(data.dataPtr, data.rawShape, FromDataType(data.dtype));
-    auto view = tensor.as_strided({data.shape[0], data.shape[1]}, data.stride, data.storageOffset);
-    if (data.isAxisCombine)
-        view = view.transpose_(-1, AXIS_TO_LAST);
-    return view;
-}
+
 void GatherINUB(const TensorData &out, const TensorData &params, const TensorData &indices,
     const TensorData &pageTable, int64_t blockSize, int64_t axis) {
     auto tout = From(out);
-    auto tparams = From4GatherINUB(params);
+    auto tparams = From(params);
     auto tindices = From(indices);
     auto tpageTable = From(pageTable);
-    GatherINUBGolden(tout.second, tparams, tindices.second, tpageTable.second, blockSize, axis);
+    GatherINUBGolden(tout.second, tparams.second, tindices.second, tpageTable.second, blockSize, axis);
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
