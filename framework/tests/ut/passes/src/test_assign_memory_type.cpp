@@ -29,6 +29,7 @@ using namespace npu::tile_fwk;
 
 namespace npu{
 namespace tile_fwk {
+const int NUM_1 = 1;
 const int NUM_32 = 32;
 const int NUM_64 = 64;
 const int NUM_128 = 128;
@@ -901,6 +902,102 @@ TEST_F(AssignMemoryTypeTest, AssembleAndReshapeAfterAssemble) {
             }
         }
     }
+}
+
+void ConstructMultiDataLoadGraphBranch(ComputationalGraphBuilder &G, std::string name) {
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_1, NUM_128}, MemoryType::MEM_UNKNOWN, "in" + name);
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_1, NUM_128}, MemoryType::MEM_UNKNOWN, "t1" + name);
+    G.AddOp(Opcode::OP_VIEW, {"in" + name}, {"t1" + name}, "v1" + name);
+    G.GetOp("v1" + name)
+        ->SetOpAttribute(
+            std::make_shared<ViewOpAttribute>(std::vector<int64_t>{NUM_128, NUM_1, NUM_128}, MemoryType::MEM_UNKNOWN));
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_128}, MemoryType::MEM_UNKNOWN, "t2" + name);
+    G.AddOp(Opcode::OP_RESHAPE, {"t1" + name}, {"t2" + name}, "r" + name);
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_128}, MemoryType::MEM_UNKNOWN, "t4" + name);
+    G.AddOp(Opcode::OP_VIEW, {"t2" + name}, {"t4" + name}, "v2" + name);
+    G.GetOp("v2" + name)
+        ->SetOpAttribute(std::make_shared<ViewOpAttribute>(std::vector<int64_t>{NUM_128, NUM_128}, MemoryType::MEM_L1));
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_128}, MemoryType::MEM_UNKNOWN, "t5" + name);
+    G.AddOp(Opcode::OP_VIEW, {"t4" + name}, {"t5" + name}, "v3" + name);
+}
+
+void ConstructMultiDataLoadGraph(ComputationalGraphBuilder &G) {
+    ConstructMultiDataLoadGraphBranch(G, "a");
+    ConstructMultiDataLoadGraphBranch(G, "b");
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_128}, MemoryType::MEM_UNKNOWN, "t6");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t5a", "t5b"}, {"t6"}, "amulb");
+    G.AddTensor(DataType::DT_FP32, {NUM_128, NUM_128}, MemoryType::MEM_UNKNOWN, "t3b");
+    G.AddOp(Opcode::OP_MUL, {"t2b", "t2b"}, {"t3b"}, "mulb");
+    G.GetOp("v3a")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{NUM_128, NUM_128}, MemoryType::MEM_L0A));
+    G.GetOp("v3b")->SetOpAttribute(
+        std::make_shared<ViewOpAttribute>(std::vector<int64_t>{NUM_128, NUM_128}, MemoryType::MEM_L0B));
+}
+
+void MultiDataLoadCheck(Function *func) {
+    for (const auto &op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            EXPECT_TRUE(op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR);
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            EXPECT_FALSE(op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+                         op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L1);
+        }
+    }
+}
+TEST_F(AssignMemoryTypeTest, TestMultiDataLoad) {
+    ComputationalGraphBuilder G;
+    ConstructMultiDataLoadGraph(G);
+    Function *func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), FAILED);
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+    MultiDataLoadCheck(func);
+}
+TEST_F(AssignMemoryTypeTest, TestMultiDataLoad1) {
+    ComputationalGraphBuilder G;
+    ConstructMultiDataLoadGraph(G);
+    G.GetOp("rb")->SetOpCode(Opcode::OP_ADDS);
+    Function *func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), FAILED);
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+    MultiDataLoadCheck(func);
+}
+TEST_F(AssignMemoryTypeTest, TestMultiDataLoad2) {
+    ComputationalGraphBuilder G;
+    ConstructMultiDataLoadGraph(G);
+    Shape s{NUM_128, NUM_128};
+    G.GetOp("rb")->SetOpCode(Opcode::OP_A_MUL_B);
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "inb2");
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t1b2");
+    G.AddOp(Opcode::OP_VIEW, {"inb2"}, {"t1b2"}, "v1b2");
+    G.GetOp("v1b2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(s, MemoryType::MEM_L1));
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t2b2");
+    G.AddOp(Opcode::OP_VIEW, {"t1b2"}, {"t2b2"}, "v2b2");
+    G.GetOp("v2b2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(s, MemoryType::MEM_L0A));
+    G.GetTensor("t2b2")->AddConsumer(G.GetOp("rb"));
+    G.GetOp("rb")->iOperand = {G.GetTensor("t1b"), G.GetTensor("t2b2")};
+    // rb b
+    G.GetTensor("inb")->shape = s;
+    G.GetTensor("inb")->tensor->rawshape = s;
+    G.GetTensor("t1b")->shape = s;
+    G.GetTensor("t1b")->tensor->rawshape = s;
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t2b22");
+    G.GetOp("v1b")->ReplaceInput(G.GetTensor("t2b22"), G.GetTensor("inb"));
+    G.GetTensor("inb")->RemoveConsumer(G.GetOp("v1b"));
+    G.AddOp(Opcode::OP_VIEW, {"inb"}, {"t2b22"}, "v2b22");
+    G.GetOp("v2b22")->SetOpAttribute(std::make_shared<ViewOpAttribute>(s, MemoryType::MEM_L1));
+    G.GetOp("v1b")->SetOpAttribute(std::make_shared<ViewOpAttribute>(s, MemoryType::MEM_L0B));
+
+    Function *func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), FAILED);
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+    MultiDataLoadCheck(func);
 }
 }
 } // namespace npu::tile_fwk
