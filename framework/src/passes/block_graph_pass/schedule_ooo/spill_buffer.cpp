@@ -921,10 +921,28 @@ bool OoOScheduler::CheckMachineAndL1(IssueEntryPtr spillIssue, IssueEntryPtr all
     return true;
 }
 
+bool OoOScheduler::CheckParallelL0C2L1(IssueEntryPtr spillIssue) {
+    auto &spillOp = spillIssue->tileOp;
+    if (spillOp.GetOpcode() != Opcode::OP_L0C_TO_L1) {
+        return true;
+    }
+    auto tensor = spillOp.GetOutputOperand(0);
+    if (tensor == nullptr) {
+        return true;
+    }
+
+    for (auto *producer : tensor->GetProducers()) {
+        if (producer != &spillOp && producer->GetOpcode() == Opcode::OP_L0C_TO_L1) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool OoOScheduler::IsBelongSpillBlackList(IssueEntryPtr spillIssue, IssueEntryPtr issue) {
     std::set<IssueEntryPtr> filterLtags;
     FindFilterLtags(issue, filterLtags);
-    if (spillIssue->isAlloc || filterLtags.count(spillIssue) != 0 || !CheckMachineAndL1(spillIssue, issue)) {
+    if (spillIssue->isAlloc || filterLtags.count(spillIssue) != 0 || !CheckMachineAndL1(spillIssue, issue) || !CheckParallelL0C2L1(spillIssue)) {
         return true;
     }
     return false;
@@ -1113,7 +1131,7 @@ Status OoOScheduler::SpillAllBuffer(IssueEntryPtr allocIssue, size_t &pcIdx, boo
             return FAILED;
         }
 
-        if (!CheckMachineAndL1(spillIssue, allocIssue) || IsViewOp(spillIssue->tileOp) ||
+        if (!CheckMachineAndL1(spillIssue, allocIssue) || !CheckParallelL0C2L1(spillIssue) || IsViewOp(spillIssue->tileOp) ||
             spillIssue->tileOp.GetOpcode() == Opcode::OP_ASSEMBLE || spillIssue->tileOp.GetOpcodeStr().find("ALLOC") != std::string::npos) {
             continue;
         }
@@ -1142,6 +1160,8 @@ Status OoOScheduler::SpillAllBuffer(IssueEntryPtr allocIssue, size_t &pcIdx, boo
             APASS_LOG_ERROR_F(Elements::Operation, "PrintSpillFailedInfo failed; Please check the PrintSpillFailedInfo method.");
             return FAILED;
         }
+        APASS_LOG_ERROR_F(Elements::Operation, "Possible causes: incorrect memory reuse, memory fragmentation, or spill not supported for L0C_COPY_TO_L1."
+            "Please check tile shape and OOO spill failed info. Consider avoiding cube-aligned matrix sizes.");
         return FAILED;
     }
 
