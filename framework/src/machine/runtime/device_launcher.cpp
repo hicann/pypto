@@ -675,16 +675,28 @@ void DeviceLauncher::UnregisterKernelBin(void *hdl) {
 #endif
 }
 
+void DeviceLauncher::SetDevPerfAddr([[maybe_unused]]const bool &debugEnable, [[maybe_unused]]const bool &isCaptureMode) {
+#ifdef BUILD_WITH_CANN
+        auto &devRunner = DeviceRunner::Get();
+        if (debugEnable || devRunner.GetEnableDumpDevPref()) {
+            if (isCaptureMode) {
+                ChangeCaptureModeRelax();
+            }
+            devRunner.SetDebugEnable();
+            if (isCaptureMode) {
+                ChangeCaptureModeGlobal();
+            }
+        }
+#endif
+}
+
 int DeviceLauncher::LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream,
-                                      bool debugEnable, [[maybe_unused]]Function *function) {
+                                      [[maybe_unused]]bool debugEnable, [[maybe_unused]]Function *function) {
 #ifdef BUILD_WITH_CANN
     auto ctrlStream = (aclrtStream)machine::GetRA()->GetCtrlStream();
     auto schedStream = (aclrtStream)machine::GetRA()->GetScheStream();
     auto &devRunner = DeviceRunner::Get();
     devRunner.GetHostProfInstance().SetProfFunction(function);
-    if (debugEnable) {
-        devRunner.SetDebugEnable();
-    }
     int ret = 0;
     auto args = (AiCpuArgs *)rtArgs.args;
     int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);

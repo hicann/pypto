@@ -25,6 +25,14 @@
 #include "tilefwk/pypto_fwk_log.h"
 namespace npu::tile_fwk::dynamic {
 constexpr int DUMP_LEVEL_FOUR = 4;
+uint32_t g_last_turn_num = 0;
+extern "C" void DumpDevTaskPerfData(DeviceArgs &args, const std::vector<void *> &perfData, bool isLast) {
+    if (GetEnvVar("DUMP_DEVICE_PERF") == "true" && !perfData.empty()) {
+        uint64_t freq = (args.archInfo == ArchInfo::DAV_2201) ?
+                        npu::tile_fwk::dynamic::FREQ_DAV_2201 : npu::tile_fwk::dynamic::FREQ_DAV_3510;
+        npu::tile_fwk::dynamic::DumpAicpuPerfInfo(args, perfData, freq, isLast);
+    }
+}
 
 void ConstructTaskInfo(const uint32_t &index, json &rootTaskStats, const std::vector<void *> &perfData,
     const std::string& coreType) {
@@ -57,6 +65,8 @@ void ConstructTaskInfo(const uint32_t &index, json &rootTaskStats, const std::ve
     if (!tasksArr.empty()) {
         rootTaskStats.push_back(coreObj);
     }
+    aicpuMetric->taskCount = 0;
+    rtMemcpy(perfData[index], sizeof(Metrics), aicpuMetric, sizeof(Metrics), RT_MEMCPY_HOST_TO_DEVICE);
 }
 
 void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfData) {
@@ -97,13 +107,13 @@ void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfDa
     } else {
         MACHINE_LOGW("program.json or dyn_topo.txt missing. Stop merging the swimlane.");
     }
-    DumpAicpuPerfInfo(args, perfData, freq);
 }
 
-inline void DevTaskPerfFormat(uint32_t tid, uint32_t type, json &devTaskJson, const MetricPerf *aicpuPer) {
+inline void DevTaskPerfFormat(uint32_t tid, uint32_t type, json &devTaskJson, const MetricPerf *aicpuPer, const uint32_t &turnIdx) {
     json per_dev_task;
     for (uint32_t i = 0; i < aicpuPer->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)]; i++) {
         std::string name = PerfTraceName[type];
+        name = name + "_" + std::to_string(turnIdx);
         if (type != PERF_TRACE_DEV_TASK_SEND_FIRST_CALLOP_TASK) {
             name = name + "(" + std::to_string(i) + ")";
         }
@@ -123,8 +133,32 @@ inline void SparateCore(int total, int idx, int part, const int &offset, std::ve
     }
 }
 
+inline void ConstructAicorePerfInfo(json &tasksArr, Metrics *aicoreMetric, const uint32_t &turnNum) { 
+    uint64_t curCycle = 0;
+    for (uint32_t type = 0; type < PERF_TRACE_CORE_MAX; type++) {
+        for (uint32_t turnIdx = g_last_turn_num; turnIdx < turnNum; turnIdx++) {
+            for (uint32_t cnt = 0; cnt < aicoreMetric->perfTraceCnt[turnIdx][type]; cnt++) {
+                json aicoreTaskType;
+                curCycle = aicoreMetric->perfTrace[turnIdx][type][cnt];
+                if (curCycle == 0) {
+                    break;
+                }
+                std::string name = AicorePerfTraceName[type];
+                name = name + "_" + std::to_string(turnIdx);
+                if (aicoreMetric->perfTraceDevTaskId[turnIdx][type][cnt] != INVALID_DEV_TASK_ID) {
+                    name = name + "(" + std::to_string(aicoreMetric->perfTraceDevTaskId[turnIdx][type][cnt]) + ")";
+                }
+                aicoreTaskType["name"] = name;
+                aicoreTaskType["end"] = curCycle;
+                tasksArr.push_back(aicoreTaskType);
+            }
+            aicoreMetric->perfTraceCnt[turnIdx][type] = 0;
+        }
+    }
+}
+
 inline void DumpAicoreDevTask(DeviceArgs &args, json &aicpuPrefArray,
-                              const std::vector<void *> &perfData, const uint32_t &freq) {
+                              const std::vector<void *> &perfData, const uint32_t &freq, const uint32_t &turnNum) {
     std::vector<int> coreArray;
     coreArray.resize(args.GetBlockNum());
     for(uint32_t i = 0; i < args.scheCpuNum; i++) {
@@ -136,50 +170,37 @@ inline void DumpAicoreDevTask(DeviceArgs &args, json &aicpuPrefArray,
         size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
         std::vector<uint8_t> hostBuffer(dataSize);
         rtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RT_MEMCPY_DEVICE_TO_HOST);
-        Metrics *aicpuMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
+        Metrics *aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
         std::string coreType = (i < args.nrValidAic) ? "AIC" : "AIV";
         json aicoreTask;
         aicoreTask["blockIdx"] = i;
         aicoreTask["coreType"] = "SCHED" + std::to_string(coreArray[i]) + "-" + coreType;
         aicoreTask["freq"] = freq;
         json tasksArr = json::array();
-        uint64_t curCycle = 0;
-        for (uint32_t type = 0; type < PERF_TRACE_CORE_MAX; type++) {
-            for (uint32_t cnt = 0; cnt < aicpuMetric->perfTraceCnt[type]; cnt++) {
-                json aicoreTaskType;
-                curCycle = aicpuMetric->perfTrace[type][cnt];
-                if (curCycle == 0) {
-                    break;
-                }
-                std::string name = AicorePerfTraceName[type];
-                if (aicpuMetric->perfTraceDevTaskId[type][cnt] != INVALID_DEV_TASK_ID) {
-                    name = name + "(" + std::to_string(aicpuMetric->perfTraceDevTaskId[type][cnt]) + ")";
-                }
-                aicoreTaskType["name"] = name;
-                aicoreTaskType["end"] = curCycle;
-                tasksArr.push_back(aicoreTaskType);
-            }
-            aicpuMetric->perfTraceCnt[type] = 0;
-        }
+        ConstructAicorePerfInfo(tasksArr, aicoreMetric, turnNum);
         aicoreTask["tasks"] = tasksArr;
         aicpuPrefArray.push_back(aicoreTask);
     }
 }
 
-inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const uint32_t &freq) {
-    auto aicpuPer = (ValueToPtr(args.aicpuPerfAddr));
+inline MetricPerf GetAicpuPrefAddr(const DeviceArgs &args, const uint32_t &turnIdx) {
+    MetricPerf aicpuMetric;
+    auto aicpuPer = (ValueToPtr(args.aicpuPerfAddr + turnIdx * sizeof(MetricPerf)));
     if (aicpuPer == nullptr) {
         MACHINE_LOGW("Aicpu per ptr is null");
-        return;
+        return aicpuMetric;
     }
-    MetricPerf aicpuMetric;
+    
     auto ret = rtMemcpy(PtrToPtr<MetricPerf, void>(&aicpuMetric), sizeof(MetricPerf), aicpuPer,
                         sizeof(MetricPerf), RT_MEMCPY_DEVICE_TO_HOST);
     if (ret != 0) {
         MACHINE_LOGW("aicpu meter copy failed ret: %d", ret);
-        return;
     }
-    for (uint32_t i = 0; i < (args.scheCpuNum + 1); i++) {
+    return aicpuMetric;
+}
+
+inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const uint32_t &freq, const uint32_t &turnNum) {
+    for (uint32_t i = 0; i < args.nrAicpu - 1; i++) {
         json aicpu;
         std::string coreType = "AICPU";
         if (i == 0) {
@@ -191,18 +212,22 @@ inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const
         aicpu["coreType"] = coreType;
         aicpu["freq"] = freq;
         json aicpuDevTasks = json::array();
-        for (uint32_t type = 0; type < PERF_TRACE_MAX; type++) {
-            if (PerfTraceIsDevTask[type]) {
-                DevTaskPerfFormat(i, type, aicpuDevTasks, &aicpuMetric);
-                continue;
+        for (uint32_t turnIdx = g_last_turn_num; turnIdx < turnNum; turnIdx++) {
+            MetricPerf aicpuMetric = GetAicpuPrefAddr(args, turnIdx);
+            for (uint32_t type = 0; type < PERF_TRACE_MAX; type++) {
+                if (PerfTraceIsDevTask[type]) {
+                    DevTaskPerfFormat(i, type, aicpuDevTasks, &aicpuMetric, turnIdx);
+                    continue;
+                }
+                if (aicpuMetric.perfAicpuTrace[i][type] == 0) {
+                    continue;
+                }
+                json schCtrAicpu;
+                std::string name = PerfTraceName[type];
+                schCtrAicpu["name"] = name + "_" + std::to_string(turnIdx);
+                schCtrAicpu["end"] = aicpuMetric.perfAicpuTrace[i][type];
+                aicpuDevTasks.push_back(schCtrAicpu);
             }
-            if (aicpuMetric.perfAicpuTrace[i][type] == 0) {
-                continue;
-            }
-            json schCtrAicpu;
-            schCtrAicpu["name"] = PerfTraceName[type];
-            schCtrAicpu["end"] = aicpuMetric.perfAicpuTrace[i][type];
-            aicpuDevTasks.push_back(schCtrAicpu);
         }
         aicpu["tasks"] = aicpuDevTasks;
         aicpuPrefArray.push_back(aicpu);
@@ -210,11 +235,26 @@ inline void DumpAicpuDevTask(const DeviceArgs &args, json &aicpuPrefArray, const
 }
 
 
-void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, const uint32_t &freq) {
+void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, uint32_t freq, bool isLast) {
+    void* devPtr = perfData[0];
+    size_t dataSize = MAX_DFX_TASK_NUM_PER_CORE * sizeof(TaskStat) + sizeof(Metrics);
+    std::vector<uint8_t> hostBuffer(dataSize);
+    rtMemcpy(hostBuffer.data(), dataSize, devPtr, dataSize, RT_MEMCPY_DEVICE_TO_HOST);
+    Metrics *aicoreMetric = reinterpret_cast<Metrics*>(hostBuffer.data());
+    auto sumTurnNum = aicoreMetric->turnNum;
+    MACHINE_LOGD("CoreId 0 devAddr: %p, sumTurnNum: %ld", devPtr, sumTurnNum);
+    if (sumTurnNum == g_last_turn_num) {
+        return;
+    }
+    if ((sumTurnNum < 50 || sumTurnNum % 50 != 0) && !isLast) {
+        return;
+    }
     json aicpuPrefArray = json::array();
-    DumpAicpuDevTask(args, aicpuPrefArray, freq);
-    DumpAicoreDevTask(args, aicpuPrefArray, perfData, freq);
-    std::string aicpuPerfilePath = npu::tile_fwk::config::LogTopFolder() + "/aicpu_dev_pref.json";
+    DumpAicpuDevTask(args, aicpuPrefArray, freq, sumTurnNum);
+    DumpAicoreDevTask(args, aicpuPrefArray, perfData, freq, sumTurnNum);
+    
+    std::string aicpuPerfilePath = npu::tile_fwk::config::LogTopFolder() +
+                                   "/machine_trace_perf_data_" + std::to_string(g_last_turn_num) + ".json";
     if (!DumpFile(aicpuPrefArray.dump(DUMP_LEVEL_FOUR), aicpuPerfilePath)) {
         MACHINE_LOGW("Contrust custom op json failed");
         return;
@@ -223,12 +263,15 @@ void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, co
     // toolkit drawm aicpu preffto
     std::string scriptPath = GetCurrentSharedLibPath() + "/scripts/machine_perf_trace.py";
     std::string cmd = "python3 " + scriptPath + " gen_perfetto " + aicpuPerfilePath + " "
-                        + npu::tile_fwk::config::LogTopFolder() + "/machine_runtime_operator_trace.json";
+                        + npu::tile_fwk::config::LogTopFolder() +
+                        "/machine_runtime_operator_trace_" + std::to_string(g_last_turn_num) + ".json";
     if (system(cmd.c_str()) != 0) {
         MACHINE_LOGW("Failed to execute machine_perf_trace.py, cannot get aicpu perfetto.json.");
     }
+    g_last_turn_num = sumTurnNum;
     npu::tile_fwk::config::SetRunDataOption(KEY_AICPU_PERF_GRAPH_PATH,
-            npu::tile_fwk::config::GetAbsoluteTopFolder() + "/machine_runtime_operator_trace.json");
+            npu::tile_fwk::config::GetAbsoluteTopFolder() +
+            "/machine_runtime_operator_trace_" + std::to_string(g_last_turn_num) + ".json");
 }
 } // namespce
 #endif

@@ -604,13 +604,14 @@ public:
         args->kArgs.ctrlFlowCache = (int64_t *)ctrlFlowCache;
         args->kArgs.workspace = workspace;
         args->kArgs.parameter.globalRound = ++sequence;
-
-        bool debugEnable = !DeviceLauncher::IsCaptureMode() && isDebugMode;
+        auto isCaptureMode = DeviceLauncher::IsCaptureMode();
+        bool debugEnable = !isCaptureMode && isDebugMode;
 
 #if ENABALE_VERBOSE_LOG
         ALOG_ERROR_F("triple stream %d sequence %ld workspace %p cfgcache %p", tripleStream, sequence.load(), workspace,
             ctrlFlowCache);
 #endif
+        DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
         int ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, tripleStream, debugEnable, kernel->GetFunction());
         ASSERT(ret == RT_ERROR_NONE) << "launch aicpu failed: " << ret;
 

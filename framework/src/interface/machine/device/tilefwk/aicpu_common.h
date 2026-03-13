@@ -54,6 +54,8 @@ constexpr const int DEV_SHAPE_DIM_NUM_3 = 3;
 constexpr const int DEV_SHAPE_DIM_NUM_4 = 4;
 constexpr const int DEV_SHAPE_DIM_NUM_5 = 5;
 
+constexpr const uint32_t MAX_TURN_NUM = 200;
+
 enum class ArchInfo {
     DAV_1001 = 1001,
     DAV_2201 = 2201,
@@ -206,7 +208,7 @@ struct TaskStat {
 
 struct DevDfxArgs {
     int32_t logLevel{-1};
-    int32_t isOpenSwim{0};
+    int32_t isOpenPerfTrace{0};
 };
 
 constexpr uint32_t PERF_TRACE_INST_MAX_NUM_EVERY_TYPE = 10;
@@ -226,9 +228,10 @@ enum AicorePerfTrace {
 struct Metrics {
   int64_t isMetricStop;
   int64_t taskCount;
-  int64_t perfTrace[PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
-  uint32_t perfTraceDevTaskId[PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
-  uint32_t perfTraceCnt[PERF_TRACE_CORE_MAX];
+  int64_t turnNum;
+  int64_t perfTrace[MAX_TURN_NUM][PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
+  uint32_t perfTraceDevTaskId[MAX_TURN_NUM][PERF_TRACE_CORE_MAX][PERF_TRACE_INST_MAX_NUM_EVERY_TYPE];
+  uint32_t perfTraceCnt[MAX_TURN_NUM][PERF_TRACE_CORE_MAX];
   TaskStat tasks[];
 };
 

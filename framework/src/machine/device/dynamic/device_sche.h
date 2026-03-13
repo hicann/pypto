@@ -481,8 +481,12 @@ struct DynMachineManager {
             if (ret != 0) {
                 return ret;
             }
+            kargs->taskWastTime = GetCycles();
             ret = RunCtrl(kargs, entry, ctrlThreadIdx);
+            PerfMtTrace(PERF_TRACE_BEGIN, ctrlThreadIdx, kargs->taskWastTime);
+            PerfMtTrace(PERF_TRACE_EXIT, ctrlThreadIdx);
             DEV_INFO("CtrlThreadLeave idx=%d ret=%d", ctrlThreadIdx, ret);
+            PerfEvtMgr::Instance().AddCtrlTurn();
         } else {
             SignalReg(entry);
         }
@@ -494,7 +498,7 @@ struct DynMachineManager {
 
         splittedInfo_.ScheWait(devProg);
         // After wait, the devStartArgs should be ready.
-
+        auto beginTime = GetCycles();
         DevStartArgs *runtimeDataCurrent = reinterpret_cast<DevStartArgs *>(devProg->GetRuntimeDataList()->GetRuntimeDataCurrent());
         auto devArgs = devProg->devArgs;
         int threadIdx = -1;
@@ -502,7 +506,8 @@ struct DynMachineManager {
             DEV_ERROR("Current cpu[%d] alloc thread failed.", sched_getcpu());
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
-
+        PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx);
+        PerfMtTrace(PERF_TRACE_BEGIN, threadIdx, beginTime);
         int ret = DEVICE_MACHINE_OK;
         if (threadIdx != -1 && threadIdx <= static_cast<int>(devArgs.scheCpuNum)) {
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
@@ -514,9 +519,12 @@ struct DynMachineManager {
                     DEV_WARN("Some registers force closed!");
                 }
                 RunPost(devProg);
+                PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
+                PerfEvtMgr::Instance().AddScheduleTurn();
                 DEV_INFO("All schedule exited, destroy the machine.");
                 return DEVICE_MACHINE_OK;
             }
+            PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         }
         return ret;
     }

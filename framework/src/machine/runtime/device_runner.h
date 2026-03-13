@@ -22,6 +22,9 @@
 #include <mutex>
 #include <unistd.h>
 #include <sys/file.h>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
 #include "tilefwk/platform.h"
 #include "machine/runtime/host_prof.h"
 #include "machine/utils/machine_ws_intf.h"
@@ -72,6 +75,7 @@ public:
     }
 
     void SetDebugEnable();
+    void ResetMetrics(const uint32_t &coreId);
     void ResetPerData();
     void DumpAiCoreExecutionTimeData();
     void DumpAiCorePmuData();
@@ -80,9 +84,13 @@ public:
     void InitAiCpuSoBin(DeviceArgs &devArgs);
     bool GetValidGetPgMask() const;
     void ReportHostProfInfo(uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore = false);
+    bool GetEnableDumpDevPref() const;
+    void StartMachinePerfTraceDumpThread();
+    void StopMachinePerfTraceDumpThread();
 
 private:
     DeviceRunner() = default;
+    ~DeviceRunner();
     void *DevAlloc(int size);
     void GetModuleLogLevel(DeviceArgs &args);
     int InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t> &regs, const std::vector<int64_t> &regsPmu);
@@ -104,6 +112,7 @@ private:
     int DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs, int blockdim);
     int DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs, int blockdim);
     int ConstrutDeviceArgs(DeviceArgs &args, const std::vector<int64_t> &regs, const std::vector<int64_t> &regsPmu);
+    void MachinePerfTraceDumpThread();
 private:
     int devId_;
     int aicpuNum_{5};
@@ -120,6 +129,10 @@ private:
     std::unordered_map<ArchInfo, std::function<int(std::vector<int64_t>&, std::vector<int64_t>&)>> addressMappingTable_;
     bool isCapture_{false};
     bool initFlag_{false};
+    bool enableDumpMachinePerfTrace_{false};
+    
+    std::thread dumpThread_;
+    std::atomic<bool> dumpThreadStopFlag_{false};
 };
 }
 #else

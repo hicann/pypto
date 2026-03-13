@@ -142,7 +142,7 @@ def convert_to_perfetto_format(input_json: List[Dict]) -> List[Dict]:
         for task in adjusted_tasks:
             task_name = task.get("name", "UNKNOWN")
             end_time = task.get("end", 0)
-            if prev_end is None:
+            if task_name.startswith("BEGIN"):
                 start_time = end_time - 1
             else:
                 start_time = prev_end

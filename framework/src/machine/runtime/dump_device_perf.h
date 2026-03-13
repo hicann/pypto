@@ -25,6 +25,7 @@ using json = nlohmann::json;
 constexpr uint32_t AICPU_NUM_OF_RUN_AICPU_TASKS = 1;
 namespace npu::tile_fwk::dynamic {
     void DumpAicoreTaskExectInfo(DeviceArgs &args, const std::vector<void *> &perfData);
-    void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, const uint32_t &freq);
+    void DumpAicpuPerfInfo(DeviceArgs &args, const std::vector<void *> &perfData, uint32_t freq, bool isLast);
+    extern "C" void DumpDevTaskPerfData(DeviceArgs &args, const std::vector<void *> &perfData, bool isLast);
 }
 #endif

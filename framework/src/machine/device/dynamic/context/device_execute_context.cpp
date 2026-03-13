@@ -177,8 +177,8 @@ void DeviceExecuteContext::GELaunchRunCached(DevStartArgs *startArgs, PushTaskEn
 
         PROF_STAGE_BEGIN(PERF_EVT_STAGE_PUSH_TASK, "push.before\n");
         DumpDeviceTask(taskId, dynTask);
-        PushTask(dynTask);
         PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, CTRL_CPU_THREAD_IDX);
+        PushTask(dynTask);
         PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
     }
     PerfEnd(PERF_EVT_CONTROL_FLOW);
@@ -370,9 +370,9 @@ int DeviceExecuteContext::SubmitToAicoreAndRecycleMemory(bool withoutTail, bool 
 
     PROF_STAGE_BEGIN(PERF_EVT_STAGE_PUSH_TASK, "push.before\n");
     DumpDeviceTask(taskId, dynTask);
+    PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, CTRL_CPU_THREAD_IDX);
     PushTask(dynTask);
     PROF_STAGE_END(PERF_EVT_STAGE_PUSH_TASK, "push.after\n");
-    PerfMtTrace(PERF_TRACE_DEV_TASK_BUILD, CTRL_CPU_THREAD_IDX);
     return ret;
 }
 
