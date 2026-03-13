@@ -273,3 +273,238 @@ TEST_F(PassCheckTest, TestPreGraphCheckerTensorNotInSubgraph) {
     EXPECT_EQ(checker.DoPreCheck(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(checker.DoPostCheck(*currFunctionPtr), FAILED);
 }
+
+TEST_F(PassCheckTest, TestCheckConsumerProducer_ProducerIsNull) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckConsumerProducer_ProducerIsNull", "TestCheckConsumerProducer_ProducerIsNull", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    
+    tensor->GetProducers().insert(nullptr);
+
+    Checker checker;
+    EXPECT_EQ(checker.CheckConsumerProducer(tensor), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckConsumerProducer_ConsumerIsNull) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckConsumerProducer_ConsumerIsNull", "TestCheckConsumerProducer_ConsumerIsNull", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto tensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    
+    tensor->GetConsumers().insert(nullptr);
+
+    Checker checker;
+    EXPECT_EQ(checker.CheckConsumerProducer(tensor), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckOpIOValid_OutputIsNull) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckOpIOValid_OutputIsNull", "TestCheckOpIOValid_OutputIsNull", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    
+    auto& addOp = currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1}, {outcast1});
+    addOp.oOperand[0] = nullptr; 
+    (void)addOp;
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckOpIOValid(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckCompleteness_IncastEmpty) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckCompleteness_IncastEmpty", "TestCheckCompleteness_IncastEmpty", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    
+    currFunctionPtr->outCasts_.push_back(outcast1);
+
+    Checker checker;
+    EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckCompleteness_IncastIsNull) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckCompleteness_IncastIsNull", "TestCheckCompleteness_IncastIsNull", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    
+    currFunctionPtr->inCasts_.push_back(nullptr);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+
+    Checker checker;
+    EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckCompleteness_OutcastEmpty) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckCompleteness_OutcastEmpty", "TestCheckCompleteness_OutcastEmpty", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    
+    currFunctionPtr->inCasts_.push_back(incast1);
+
+    Checker checker;
+    EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckCompleteness_OutcastIsNull) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckCompleteness_OutcastIsNull", "TestCheckCompleteness_OutcastIsNull", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(nullptr);
+
+    Checker checker;
+    EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckGraphLoop_HasLoop) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckGraphLoop_HasLoop", "TestCheckGraphLoop_HasLoop", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    auto& op1 = currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1, tensor2}, {tensor1});
+    auto& op2 = currFunctionPtr->AddOperation(Opcode::OP_ADD, {tensor1}, {tensor2});
+    (void)op1;
+    (void)op2;
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckGraphLoop(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckDynAttrForView_FromDynOffsetEmpty) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckDynAttrForView_FromDynOffsetEmpty", "TestCheckDynAttrForView_FromDynOffsetEmpty", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {outcast1});
+    auto viewAttr = std::make_shared<ViewOpAttribute>(Offset(0, 0));
+    viewAttr->GetFromDynOffset().clear(); 
+    viewOp.SetOpAttribute(viewAttr);
+    (void)viewAttr;
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckDynAttrForView(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckDynAttrForView_ToDynValidShapeEmpty) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckDynAttrForView_ToDynValidShapeEmpty", "TestCheckDynAttrForView_ToDynValidShapeEmpty", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    
+    auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {incast1}, {outcast1});
+    auto viewAttr = std::make_shared<ViewOpAttribute>(Offset(0, 0));
+    viewAttr->GetToDynValidShape().clear(); 
+    viewOp.SetOpAttribute(viewAttr);
+    (void)viewAttr;
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckDynAttrForView(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckToDynOffsetForAssemble_ToDynOffsetEmpty) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckToDynOffsetForAssemble_ToDynOffsetEmpty", "TestCheckToDynOffsetForAssemble_ToDynOffsetEmpty", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    
+    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {incast1}, {outcast1});
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(Offset(0, 0));
+    assembleAttr->GetToDynOffset().clear(); 
+    assembleOp.SetOpAttribute(assembleAttr);
+    (void)assembleAttr;
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckToDynOffsetForAssemble(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestCheckLocalTensor_LocalInput) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCheckLocalTensor_LocalInput", "TestCheckLocalTensor_LocalInput", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+
+    auto incast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::INCAST);
+    auto localTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    currFunctionPtr->AddOperation(Opcode::OP_ADD, {incast1, localTensor}, {outcast1});
+
+    currFunctionPtr->inCasts_.push_back(incast1);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    Checker checker;
+    EXPECT_EQ(checker.CheckLocalTensor(*currFunctionPtr), FAILED);
+}
+
+TEST_F(PassCheckTest, TestPublicCheck_IncastEmpty) {
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestPublicCheck_IncastEmpty", "TestPublicCheck_IncastEmpty", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape = {32, 32};
+    auto outcast1 = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
+    
+    currFunctionPtr->outCasts_.push_back(outcast1);
+
+    Checker checker;
+    EXPECT_EQ(checker.PublicCheck(*currFunctionPtr), FAILED);
+}

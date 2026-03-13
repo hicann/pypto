@@ -890,5 +890,31 @@ TEST_F(GenerateMoveOpPassTest, ProcessDefault_L0C_UB_SetIsCube) {
             << "isCube should be true for OP_L0C_COPY_UB";
     }
 }
+
+TEST_F(GenerateMoveOpPassTest, SetOpcodeByMemPath) {
+    GenerateMoveOp generateMoveOp;
+    Program& program = Program::GetInstance();
+    std::shared_ptr<Function> testFunc = std::make_shared<Function>(
+        program,
+        "test_func_magic",
+        "test_func_raw",
+        nullptr
+    );
+
+    LogicalTensors emptyIOperands;
+    LogicalTensors emptyOOperands;
+    Operation& testOp = testFunc->AddRawOperation(
+        Opcode::OP_VIEW,
+        emptyIOperands,
+        emptyOOperands,
+        false
+    );
+    Status ret = generateMoveOp.SetOpcodeByMemPath(
+        testOp, 
+        MemoryType::MEM_L0AMX, 
+        MemoryType::MEM_L0BMX
+    );
+    EXPECT_EQ(ret, FAILED);
+}
 }
 } // namespace npu::tile_fwk

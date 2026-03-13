@@ -16,6 +16,9 @@
 #include "reschedule_utils.h"
 #include "interface/utils/common.h"
 #include "interface/utils/log.h"
+#include "passes/pass_log/pass_log.h"
+
+#define MODULE_NAME "RecheduleUtils"
 
 namespace npu::tile_fwk {
 bool RescheduleUtils::isAllocOp(Operation* op) {
@@ -275,7 +278,7 @@ void RescheduleUtils::PrintColorNode(Function &func) {
                          func.Operations()[opIdx].GetOpcodeStr() + ", ";
         }
         colorInfo += "}";
-        ALOG_DEBUG_F("%s", colorInfo.c_str());
+        APASS_LOG_DEBUG_F(Elements::Function, "%s", colorInfo.c_str());
     }
 }
 } // namespace npu::tile_fwk

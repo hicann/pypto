@@ -276,5 +276,52 @@ TEST_F(CommonOperationEliminateTest, TestShmemGetGm2UBChecker){
     Status preCheckStatus = COE.PreCheck(*function);
     EXPECT_EQ(preCheckStatus, SUCCESS) << "COE Precheck failed for OP_SHMEM_GET_GM2UB!";
 }
+
+TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_InvalidInputNum) {
+    ComputationalGraphBuilder G;
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t1"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t2"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t3"), true);
+    std::vector<Opcode> opCodes{Opcode::OP_COPY_IN};
+    std::vector<std::vector<std::string>> ioperands{{"t1", "t2"}};
+    std::vector<std::vector<std::string>> ooperands{{"t3"}};
+    std::vector<std::string> opNames{"COPY_IN_InvalidInput"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function *function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    CommonOperationEliminate COE;
+    Status preCheckStatus = COE.PreCheck(*function);
+    EXPECT_EQ(preCheckStatus, FAILED);
+}
+
+TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_OffsetShapeMismatch) {
+    ComputationalGraphBuilder G;
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t1"), true);
+    EXPECT_EQ(G.AddTensor(DataType::DT_FP32, {16, 16}, "t2"), true);
+    std::vector<Opcode> opCodes{Opcode::OP_COPY_IN};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}};
+    std::vector<std::string> opNames{"COPY_IN_OffsetMismatch"};
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function *function = G.GetFunction();
+    ASSERT_NE(function, nullptr);
+    Operation* copyOp = G.GetOp("COPY_IN_OffsetMismatch");
+    ASSERT_NE(copyOp, nullptr);
+    auto opAttr = copyOp->GetOpAttribute();
+    ASSERT_NE(opAttr, nullptr);
+    auto copyAttr = dynamic_cast<CopyOpAttribute*>(opAttr.get());
+    ASSERT_NE(copyAttr, nullptr);
+    auto [fromOffset, memType] = copyAttr->GetCopyInAttr();
+    (void)memType;
+    std::vector<OpImmediate> newFromOffset;
+    newFromOffset.emplace_back(0);
+    newFromOffset.emplace_back(1);
+    newFromOffset.emplace_back(2);
+    copyAttr->SetFromOffset(newFromOffset);
+    G.GetTensor("t1")->offset = {0, 0};
+    CommonOperationEliminate COE;
+    Status preCheckStatus = COE.PreCheck(*function);
+    EXPECT_EQ(preCheckStatus, FAILED);
+}
 } // namespace tile_fwk
 } // namespace npu
