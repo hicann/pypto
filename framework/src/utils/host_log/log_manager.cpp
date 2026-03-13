@@ -174,6 +174,8 @@ LogManager::LogManager() {
                 envLogDirPath = ".";
             }
             envLogDirPath += "/ascend/log";
+        } else {
+            envLogDirPath += "/log";
         }
     }
 

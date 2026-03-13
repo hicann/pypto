@@ -251,8 +251,8 @@ TEST_F(TestHostLog, test_log_manager_case7) {
     setenv("ASCEND_HOST_LOG_FILE_NUM", "0", 1);
     LogManager log_manager;
     EXPECT_EQ(log_manager.maxLogFileNum_, 10);
-    EXPECT_NE(log_manager.hostLogDir_.find("/temp_work_log/debug/plog"), std::string::npos);
-    EXPECT_NE(log_manager.deviceLogDir_.find("/temp_work_log/debug/device-0"), std::string::npos);
+    EXPECT_NE(log_manager.hostLogDir_.find("/temp_work_log/log/debug/plog"), std::string::npos);
+    EXPECT_NE(log_manager.deviceLogDir_.find("/temp_work_log/log/debug/device-0"), std::string::npos);
 }
 
 TEST_F(TestHostLog, test_log_manager_case8) {
@@ -263,8 +263,8 @@ TEST_F(TestHostLog, test_log_manager_case8) {
     EXPECT_EQ(log_manager.maxLogFileNum_, 10);
     EXPECT_NE(log_manager.hostLogDir_.find("/temp_process_log/debug/plog"), std::string::npos);
     EXPECT_NE(log_manager.deviceLogDir_.find("/temp_process_log/debug/device-0"), std::string::npos);
-    EXPECT_EQ(log_manager.hostLogDir_.find("/temp_work_log/debug/plog"), std::string::npos);
-    EXPECT_EQ(log_manager.deviceLogDir_.find("/temp_work_log/debug/device-0"), std::string::npos);
+    EXPECT_EQ(log_manager.hostLogDir_.find("/temp_work_log/log/debug/plog"), std::string::npos);
+    EXPECT_EQ(log_manager.deviceLogDir_.find("/temp_work_log/log/debug/device-0"), std::string::npos);
 }
 
 TEST_F(TestHostLog, test_log_manager_case9) {
