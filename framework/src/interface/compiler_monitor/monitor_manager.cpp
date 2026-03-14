@@ -28,7 +28,7 @@ MonitorManager::~MonitorManager() {
     Shutdown();
 }
 
-MonitorManager& MonitorManager::Instance() {
+MonitorManager &MonitorManager::Instance() {
     static MonitorManager instance;
     return instance;
 }
@@ -50,13 +50,16 @@ void MonitorManager::Initialize(bool enable, int interval_sec, int timeout_sec, 
     impl_->Start();
     initialized_ = true;
     stage_doing_ = true;
+    stage_elapsed_totals_.clear();
+    stage_timeout_flag_.clear();
     stage_timeout_flag_["Prepare"] = false;
     stage_timeout_flag_["Pass"] = false;
     stage_timeout_flag_["CodeGen"] = false;
     stage_timeout_flag_["Total"] = false;
+    python_stage_ended_ = false;
     stage_elapsed_totals_["Prepare"] = 0.0;
     // Mark that Prepare stage has started (use env var for cross-.so communication)
- 	  (void)setenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED", "1", 1);
+    (void)setenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED", "1", 1);
     impl_->StartMonitoring();
 }
 
@@ -80,7 +83,7 @@ void MonitorManager::MaybeStartTotalClock() {
     }
 }
 
-double MonitorManager::GetCurrentStageElapsed(const std::string& name) {
+double MonitorManager::GetCurrentStageElapsed(const std::string &name) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_) {
         return 0.0;
@@ -97,13 +100,13 @@ void MonitorManager::SetTotalFunctionCount(int n) {
     if (!enable_) {
         return;
     }
-    MonitorImpl* to_start = nullptr;
+    MonitorImpl *to_start = nullptr;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         // Check if Prepare stage was started via Python (env var indicates this)
- 	      bool prepare_started = (std::getenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED") != nullptr);
- 	      if (!initialized_ && enable_ && !prepare_started) {
- 	          // First time initialization (no Prepare stage from Python)
+        bool prepare_started = (std::getenv("PYPTO_COMPILER_MONITOR_PREPARE_STARTED") != nullptr);
+        if (!initialized_ && enable_ && !prepare_started) {
+            // First time initialization (no Prepare stage from Python)
             if (!impl_) {
                 impl_ = new MonitorImpl(this);
             }
@@ -119,7 +122,7 @@ void MonitorManager::SetTotalFunctionCount(int n) {
         total_function_count_ = n;
         next_function_index_ = 1;
         current_function_index_ = 0;
-        (void)setenv("PYPTO_COMPILER_MONITOR_CURRENT", "0", 1);  // 进程内唯一，避免多 .so 多单例
+        (void)setenv("PYPTO_COMPILER_MONITOR_CURRENT", "0", 1); // 进程内唯一，避免多 .so 多单例
     }
     if (to_start != nullptr) {
         to_start->Start();
@@ -162,11 +165,18 @@ void MonitorManager::TryEndPrepareStage() {
     if (current_stage_ == "Prepare" && enable_) {
         double total_elapsed_prepare =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - total_start_).count();
-        std::string msg = "[Compiler Monitor] Stage: " + current_stage_ + "(completed) | Stashed function: " +
-            std::to_string(total_function_count_) + " | Stage elapsed: " + FormatElapsed(elapsed) +
-            " | Total elapsed: " + FormatElapsed(total_elapsed_prepare);
-        COMPILER_LOGI("%s. current thread_id:%s pid:%ld ppid:%ld", msg.c_str(),
-            [](){ std::stringstream ss; ss << std::this_thread::get_id(); return ss.str(); }().c_str(),
+        std::string msg = "[Compiler Monitor] Stage: " + current_stage_ +
+                          "(completed) | Stashed function: " + std::to_string(total_function_count_) +
+                          " | Stage elapsed: " + FormatElapsed(elapsed) +
+                          " | Total elapsed: " + FormatElapsed(total_elapsed_prepare);
+        COMPILER_LOGI(
+            "%s. current thread_id:%s pid:%ld ppid:%ld", msg.c_str(),
+            []() {
+                std::stringstream ss;
+                ss << std::this_thread::get_id();
+                return ss.str();
+            }()
+                .c_str(),
             static_cast<long>(getpid()), static_cast<long>(getppid()));
         (void)fprintf(stdout, "%s\n", msg.c_str());
         (void)fflush(stdout);
@@ -196,7 +206,7 @@ void MonitorManager::PrintCompilationFinished() {
         // Calculate total from all stage elapsed totals (sum of all stages)
         // This ensures Total elapsed includes Prepare time from Python side
         double stage_total = 0.0;
-        for (const auto& kv : stage_elapsed_totals_) {
+        for (const auto &kv : stage_elapsed_totals_) {
             stage_total += kv.second;
         }
         // Use the larger of: clock-based total vs sum of stages
@@ -205,36 +215,39 @@ void MonitorManager::PrintCompilationFinished() {
             total_elapsed = stage_total;
         }
 
-        std::string compilation_msg = "[Compiler Monitor] Compilation finished " +
-            std::to_string(current_function_index_) + "/" +
-            std::to_string(total_function_count_ > 0 ? total_function_count_ : 1) + " | Total functions: " +
+        std::string compilation_msg =
+            "[Compiler Monitor] Compilation finished " + std::to_string(current_function_index_) + "/" +
             std::to_string(total_function_count_ > 0 ? total_function_count_ : 1) +
+            " | Total functions: " + std::to_string(total_function_count_ > 0 ? total_function_count_ : 1) +
             "\n[Compiler Monitor] Stage timing (aggregated by stage):";
         (void)fprintf(stdout, "%s\n", compilation_msg.c_str());
         (void)fflush(stdout);
         COMPILER_LOGI("%s", compilation_msg.c_str());
 
         int n = total_function_count_ > 0 ? total_function_count_ : 1;
-        for (const auto& [stage, sec] : stage_elapsed_totals_) {
+        for (const auto &[stage, sec] : stage_elapsed_totals_) {
             std::ostringstream stage_msg;
             if (stage == "Pass" || stage == "CodeGen") {
-                stage_msg << "  " << std::left << std::setw(8) << stage 
-                          << " " << std::fixed << std::setprecision(1) << sec << "s"
+                stage_msg << "  " << std::left << std::setw(8) << stage << " " << std::fixed << std::setprecision(1)
+                          << sec << "s"
                           << "   (sum over " << n << " functions)\n";
             } else {
-                stage_msg << "  " << std::left << std::setw(8) << stage 
-                          << " " << std::fixed << std::setprecision(1) << sec << "s\n";
+                stage_msg << "  " << std::left << std::setw(8) << stage << " " << std::fixed << std::setprecision(1)
+                          << sec << "s\n";
             }
             COMPILER_LOGI("%s", stage_msg.str().c_str());
             (void)fprintf(stdout, "%s", stage_msg.str().c_str());
             (void)fflush(stdout);
         }
 
-        std::string final_msg = "[Compiler Monitor] Monitoring stopped | Total elapsed: " +
-            FormatElapsed(total_elapsed);
+        std::string final_msg =
+            "[Compiler Monitor] Monitoring stopped | Total elapsed: " + FormatElapsed(total_elapsed);
         COMPILER_LOGI("%s", final_msg.c_str());
         (void)fprintf(stdout, "%s\n", final_msg.c_str());
         (void)fflush(stdout);
+
+        // Save to member variable for GetTotalElapsed() to access
+        last_total_elapsed_ = total_elapsed;
     }
 }
 
@@ -255,14 +268,14 @@ bool MonitorManager::IsEnabled() const {
     return enable_;
 }
 
-void MonitorManager::SetStageTimeoutFlag(const std::string& name) {
+void MonitorManager::SetStageTimeoutFlag(const std::string &name) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stage_timeout_flag_.count(name) > 0) {
         stage_timeout_flag_[name] = true;
     }
 }
 
-bool MonitorManager::GetStageTimeoutFlag(const std::string& name) {
+bool MonitorManager::GetStageTimeoutFlag(const std::string &name) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stage_timeout_flag_.count(name) > 0) {
         return stage_timeout_flag_[name];
@@ -271,7 +284,7 @@ bool MonitorManager::GetStageTimeoutFlag(const std::string& name) {
 }
 
 int MonitorManager::GetIntervalSec() const {
-    const char* v = std::getenv("PYPTO_COMPILER_MONITOR_INTERVAL_SEC");
+    const char *v = std::getenv("PYPTO_COMPILER_MONITOR_INTERVAL_SEC");
     if (v != nullptr) {
         int env_val = std::atoi(v);
         if (env_val > 0) {
@@ -282,7 +295,7 @@ int MonitorManager::GetIntervalSec() const {
 }
 
 int MonitorManager::GetTimeoutSec() const {
-    const char* v = std::getenv("PYPTO_COMPILER_MONITOR_TIMEOUT_SEC");
+    const char *v = std::getenv("PYPTO_COMPILER_MONITOR_TIMEOUT_SEC");
     if (v != nullptr) {
         int env_val = std::atoi(v);
         if (env_val > 0) {
@@ -293,7 +306,7 @@ int MonitorManager::GetTimeoutSec() const {
 }
 
 int MonitorManager::GetTotalTimeoutSec() const {
-    const char* v = std::getenv("PYPTO_COMPILER_MONITOR_TOTAL_TIMEOUT_SEC");
+    const char *v = std::getenv("PYPTO_COMPILER_MONITOR_TOTAL_TIMEOUT_SEC");
     if (v != nullptr) {
         int env_val = std::atoi(v);
         if (env_val > 0) {
@@ -313,7 +326,7 @@ std::string MonitorManager::GetCurrentFunctionName() const {
     return current_function_;
 }
 
-void MonitorManager::SetCurrentFunctionName(const std::string& name) {
+void MonitorManager::SetCurrentFunctionName(const std::string &name) {
     if (!enable_) {
         return;
     }
@@ -337,7 +350,7 @@ int MonitorManager::GetTotalFunctionCount() const {
 }
 
 int MonitorManager::GetCurrentFunctionIndex() const {
-    const char* v = std::getenv("PYPTO_COMPILER_MONITOR_CURRENT");
+    const char *v = std::getenv("PYPTO_COMPILER_MONITOR_CURRENT");
     if (v != nullptr) {
         int env_val = std::atoi(v);
         if (env_val >= 0) {
@@ -353,7 +366,7 @@ std::unordered_map<std::string, double> MonitorManager::GetStageElapsedTotals() 
     return stage_elapsed_totals_;
 }
 
-void MonitorManager::StartStage(const std::string& name) {
+void MonitorManager::StartStage(const std::string &name) {
     COMPILER_LOGI("Stage ==[%s]== begin.", name.c_str());
     std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_ || !impl_ || !enable_) {
@@ -366,7 +379,7 @@ void MonitorManager::StartStage(const std::string& name) {
     stage_doing_ = true;
 }
 
-void MonitorManager::EndStage(const std::string& name) {
+void MonitorManager::EndStage(const std::string &name) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!initialized_ || !impl_ || !enable_) {
         return;
@@ -387,13 +400,14 @@ void MonitorManager::EndStage(const std::string& name) {
 
     std::string stage_finish_msg;
     if (name == "CodeGen") {
-        stage_finish_msg = "[Compiler Monitor] Stage: " + name + "(completed) | Stage elapsed: " +
-            FormatElapsed(elapsed) + " | Total elapsed: " + FormatElapsed(total_elapsed);
+        stage_finish_msg = "[Compiler Monitor] Stage: " + name +
+                           "(completed) | Stage elapsed: " + FormatElapsed(elapsed) +
+                           " | Total elapsed: " + FormatElapsed(total_elapsed);
     } else {
-        stage_finish_msg = "[Compiler Monitor] Function: " + std::to_string(this->GetCurrentFunctionIndex()) +
-            "/" + std::to_string(total_function_count_) + " | Stage: " + name + "(completed) | Stage elapsed: " +
-            FormatElapsed(elapsed) + " | Total elapsed: " + FormatElapsed(total_elapsed) +
-            " | Func:[" + current_function_ + "]";
+        stage_finish_msg = "[Compiler Monitor] Function: " + std::to_string(this->GetCurrentFunctionIndex()) + "/" +
+                           std::to_string(total_function_count_) + " | Stage: " + name +
+                           "(completed) | Stage elapsed: " + FormatElapsed(elapsed) +
+                           " | Total elapsed: " + FormatElapsed(total_elapsed) + " | Func:[" + current_function_ + "]";
     }
 
     (void)fprintf(stdout, "%s\n", stage_finish_msg.c_str());
@@ -401,4 +415,9 @@ void MonitorManager::EndStage(const std::string& name) {
     COMPILER_LOGI("%s", stage_finish_msg.c_str());
 }
 
-}  // namespace npu::tile_fwk
+double MonitorManager::GetTotalElapsed() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return last_total_elapsed_;
+}
+
+} // namespace npu::tile_fwk

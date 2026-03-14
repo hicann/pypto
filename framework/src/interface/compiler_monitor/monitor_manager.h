@@ -22,14 +22,14 @@ class MonitorImpl;
 
 class MonitorManager {
 public:
-    static MonitorManager& Instance();
+    static MonitorManager &Instance();
 
     void Initialize(bool enable, int interval_sec, int timeout_sec, int total_timeout_sec);
     void Shutdown();
 
-    void StartStage(const std::string& name);
-    void EndStage(const std::string& name);
-    double GetCurrentStageElapsed(const std::string& name);
+    void StartStage(const std::string &name);
+    void EndStage(const std::string &name);
+    double GetCurrentStageElapsed(const std::string &name);
 
     void SetTotalFunctionCount(int n);
     int GetAndIncrementNextFunctionIndex();
@@ -51,23 +51,24 @@ public:
     int GetCurrentFunctionIndex() const;
     std::unordered_map<std::string, double> GetStageElapsedTotals() const;
 
-    void SetStageTimeoutFlag(const std::string& name);
-    bool GetStageTimeoutFlag(const std::string& name);
+    void SetStageTimeoutFlag(const std::string &name);
+    bool GetStageTimeoutFlag(const std::string &name);
 
     std::string GetCurrentFunctionName() const;
-    void SetCurrentFunctionName(const std::string& name);
+    void SetCurrentFunctionName(const std::string &name);
+    double GetTotalElapsed() const;
 
     MonitorManager() = default;
     ~MonitorManager();
-    MonitorManager(const MonitorManager&) = delete;
-    MonitorManager& operator=(const MonitorManager&) = delete;
+    MonitorManager(const MonitorManager &) = delete;
+    MonitorManager &operator=(const MonitorManager &) = delete;
 
 private:
     void MaybeStartTotalClock();
     void PrintCompilationFinished();
 
     mutable std::mutex mutex_;
-    MonitorImpl* impl_{nullptr};
+    MonitorImpl *impl_{nullptr};
     bool initialized_{false};
     bool python_stage_ended_{false};
 
@@ -87,6 +88,7 @@ private:
     int total_function_count_{0};
     int current_function_index_{0};
     int next_function_index_{1};
+    double last_total_elapsed_{0.0};
 };
 
-}  // namespace npu::tile_fwk
+} // namespace npu::tile_fwk

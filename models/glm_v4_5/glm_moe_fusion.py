@@ -108,10 +108,10 @@ def gen_quan_per_channel_weight_nz(x):
 
 @pypto.frontend.jit(
     host_options={
-        "compile_monitor_enable": False,
-        "compile_timeout": 120,
-        "compile_timeout_stage": 30,
-        "compile_monitor_print_interval": 5},
+        "compile_monitor_enable": True,
+        "compile_timeout": 10,
+        "compile_timeout_stage": 5,
+        "compile_monitor_print_interval": 2},
     runtime_options={"device_sched_mode": 1,
                     "stitch_function_max_num": 128,
                     "stitch_cfgcache_size": 7700000},
@@ -409,6 +409,11 @@ def test_moe_fusion():
 
         assert_allclose(np.array(ffn_res.cpu().flatten().tolist()), np.array(golden.cpu().flatten().tolist()),
                         rtol=0.0078125, atol=0.0001)
+
+        # 获取编译总耗时
+        import pypto.pypto_impl as pypto_impl
+        total_elapsed = pypto_impl.GetCompilerMonitorTotalElapsed()
+        check_cond(total_elapsed <= 30, f"glm_moe_fusion compile elapsed timeout {total_elapsed}s > 30s.")
 
 
 @allow_in_graph

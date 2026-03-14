@@ -875,6 +875,7 @@ void BindRuntime(py::module &m) {
     m.def("CopyToDev", &CopyToDev);
     m.def("LaunchKernel", &LaunchKernel);
     m.def("LaunchKernelTorch", &LaunchKernelTorch);
+    m.def("GetCompilerMonitorTotalElapsed", []() { return MonitorManager::Instance().GetTotalElapsed(); });
 
     py::class_<DeviceTensorData>(m, "DeviceTensorData")
         .def(py::init<DataType, uintptr_t, const std::vector<int64_t> &>(), py::arg("dtype"), py::arg("addr"),
