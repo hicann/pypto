@@ -54,7 +54,7 @@ void TiledCompareOperationImpl(Function &function, const TileShape &tileShape, s
         size_t array_size = elements_per_chunk * element_size;
         size_t aligned_array_size = ((array_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
 
-        size_t total_bytes = vcmpBitResult_size + 3 * aligned_array_size + ALIGN_SIZE;
+        size_t total_bytes = vcmpBitResult_size + 3 * aligned_array_size + ALIGN_SIZE * 2;
         std::vector<int64_t> tmp_shape({static_cast<int64_t>(total_bytes)});
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 

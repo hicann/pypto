@@ -45,22 +45,22 @@ TILEOP T &StandardizedSrcTile([[maybe_unused]] T &dst, U &src, Cvt &cvt) {
     }
 }
 
-template <typename T, typename U, typename R>
-TILEOP void CalculateLogicalTile(T &dst, U &src, U &zeros, U &ones, R &res) {
+template <typename T, typename U, typename R, typename V>
+TILEOP void CalculateLogicalTile(T &dst, U &src, U &zeros, U &ones, R &res, V &startAddrUBTile) {
     pto::TCMP(res, src, zeros, pto::CmpMode::EQ);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    pto::TSEL(dst, res, zeros, ones);
+    pto::TSEL(dst, res, zeros, ones, startAddrUBTile);
 }
 
-template <typename T, typename U, typename R, typename Cvt>
-TILEOP void CalculateSrcLogicalTile(T &dst, U &src, T &zeros, T &ones, R &res, Cvt &cvt) {
+template <typename T, typename U, typename R, typename Cvt, typename V>
+TILEOP void CalculateSrcLogicalTile(T &dst, U &src, T &zeros, T &ones, R &res, Cvt &cvt, V &startAddrUBTile) {
     auto tile = StandardizedSrcTile(dst, src, cvt);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    CalculateLogicalTile(dst, tile, zeros, ones, res);
+    CalculateLogicalTile(dst, tile, zeros, ones, res, startAddrUBTile);
 }
 
 template <typename T, typename U, typename TMP>
@@ -80,14 +80,14 @@ TILEOP void SelectLogicalResult(T &dst, U &src1, U &src2, TMP &tmp) {
     }
 }
 
-template <typename T, typename U1, typename U2, typename L, typename Res, typename Cvt>
+template <typename T, typename U1, typename U2, typename L, typename Res, typename Cvt, typename V>
 TILEOP void LogicalAndImpl(
-    T &dst, U1 &src1, U2 &src2, L &tmp1, L &tmp2, L &ones, L &zeros, Res &res1, Res &res2, Cvt &cvt) {
-    CalculateSrcLogicalTile(tmp1, src1, zeros, ones, res1, cvt);
+    T &dst, U1 &src1, U2 &src2, L &tmp1, L &tmp2, L &ones, L &zeros, Res &res1, Res &res2, Cvt &cvt, V &startAddrUBTile) {
+    CalculateSrcLogicalTile(tmp1, src1, zeros, ones, res1, cvt, startAddrUBTile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
-    CalculateSrcLogicalTile(tmp2, src2, zeros, ones, res2, cvt);
+    CalculateSrcLogicalTile(tmp2, src2, zeros, ones, res2, cvt, startAddrUBTile);
 #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
 #endif
@@ -121,6 +121,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
     using Src2TileTensor = TileTensor<typename T2::Type, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
     using TmpTileTensor = TileTensor<DType, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
     using CvtTileTensor = TileTensor<half, LocalLayout2Dim<1, COUNT_MAX>, Hardware::UB>;
+    using StartAddrUBTile = TileTensor<uint8_t, LocalLayout2Dim<1, ALIGN_SIZE>, Hardware::UB>;
     // Tile shape of pto tile must 32 byte align
     constexpr auto CMP_TILE = ((CMP_BYTE_SIZE + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
     using CmpBitsTileTensor = TileTensor<uint8_t, StaticLayout2Dim<1, CMP_BYTE_SIZE, 1, CMP_TILE>, Hardware::UB>;
@@ -130,6 +131,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
     using Src2Tile = PtoTile<Src2TileTensor>;
     using TmpTile = PtoTile<TmpTileTensor>;
     using CvtTile = PtoTile<CvtTileTensor>;
+    using SauTile = PtoTile<StartAddrUBTile>;
 
     auto cmp1Addr = (uint64_t)tmp.GetAddr();
     auto cmp2Addr = GenTmpTileAddr(cmp1Addr, CMP_BYTE_SIZE);
@@ -137,7 +139,8 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
     auto oneAddr = GenTmpTileAddr(zeroAddr, TMP_OFFSET);
     auto tmp1Addr = GenTmpTileAddr(oneAddr, TMP_OFFSET);
     auto tmp2Addr = GenTmpTileAddr(tmp1Addr, TMP_OFFSET);
-    auto cvtAddr = GenTmpTileAddr(tmp2Addr, TMP_OFFSET);
+    auto sauAddr = GenTmpTileAddr(tmp2Addr, TMP_OFFSET);
+    auto cvtAddr = GenTmpTileAddr(sauAddr, ALIGN_SIZE);
 
     auto cmp1Tile = PtoTile<CmpBitsTileTensor>(cmp1Addr);
     auto cmp2Tile = PtoTile<CmpBitsTileTensor>(cmp2Addr);
@@ -154,6 +157,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
     auto loopOneTile = TmpTile(1, validCols, oneAddr);
     auto loopZeroTile = TmpTile(1, validCols, zeroAddr);
     auto loopCvtTile = CvtTile(1, validCols, cvtAddr);
+    auto startAddrUBTile = SauTile(1, ALIGN_SIZE, sauAddr);
 
     auto remainDstTile = loopDstTile;
     auto remainSrc1Tile = loopSrc1Tile;
@@ -197,7 +201,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
                         loopSrc2Tile.Assign(src2.GetAddr(), src2Offset + j * COUNT_MAX);
                         LogicalAndImpl(loopDstTile.Data(), loopSrc1Tile.Data(), loopSrc2Tile.Data(),
                             loopTmp1Tile.Data(), loopTmp2Tile.Data(), loopOneTile.Data(), loopZeroTile.Data(),
-                            cmp1Tile.Data(), cmp2Tile.Data(), loopCvtTile.Data());
+                            cmp1Tile.Data(), cmp2Tile.Data(), loopCvtTile.Data(), startAddrUBTile.Data());
                     }
                     if (remainAfterLoop > 0) {
                         remainDstTile.Assign(dst.GetAddr(), dstOffset + numLoop * COUNT_MAX);
@@ -205,7 +209,7 @@ TILEOP void TLogicalAnd(T0 dst, T1 src1, T2 src2, T3 tmp) {
                         remainSrc2Tile.Assign(src2.GetAddr(), src2Offset + numLoop * COUNT_MAX);
                         LogicalAndImpl(remainDstTile.Data(), remainSrc1Tile.Data(), remainSrc2Tile.Data(),
                             remainTmp1Tile.Data(), remainTmp2Tile.Data(), remainOneTile.Data(), remainZeroTile.Data(),
-                            cmp1Tile.Data(), cmp2Tile.Data(), remainCvtTile.Data());
+                            cmp1Tile.Data(), cmp2Tile.Data(), remainCvtTile.Data(), startAddrUBTile.Data());
                     }
                 }
             }
