@@ -14,29 +14,32 @@ import torch
 
 
 def compile_stage(comp_stage):
-    @pypto.jit(
+    @pypto.frontend.jit(
         host_options={"compile_stage": comp_stage},
-        runtime_options={"run_mode": 1}
+        runtime_options={"run_mode": 0}
     )
-    def compile_func(a, b, c):
+    def compile_func(
+        a: pypto.Tensor((4, 4), pypto.DT_FP32),
+        b: pypto.Tensor((4, 4), pypto.DT_FP32),
+        c: pypto.Tensor((4, 4), pypto.DT_FP32),
+    ) -> None:
         pypto.set_vec_tile_shapes(4, 4)
         c[:] = a + b
 
-    a = torch.ones((4, 4), dtype=torch.float32) * 2
-    b = torch.ones((4, 4), dtype=torch.float32) * 3
-    c = torch.ones((4, 4), dtype=torch.float32)
-    input_a = pypto.from_torch(a, "a")
-    input_b = pypto.from_torch(b, "b")
-    output_c = pypto.from_torch(c, "c")
-    compile_func(input_a, input_b, output_c)
+    return compile_func
 
 
 def test_all_compile_stages():
-    compile_stage(pypto.CompStage.TENSOR_GRAPH)
-    compile_stage(pypto.CompStage.TILE_GRAPH)
-    compile_stage(pypto.CompStage.EXECUTE_GRAPH)
-    compile_stage(pypto.CompStage.CODEGEN_INSTRUCTION)
-    compile_stage(pypto.CompStage.CODEGEN_BINARY)
+    device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
+    torch.npu.set_device(device_id)
+    a = torch.ones((4, 4), dtype=torch.float32, device=f"npu:{device_id}") * 2
+    b = torch.ones((4, 4), dtype=torch.float32, device=f"npu:{device_id}") * 3
+    c = torch.ones((4, 4), dtype=torch.float32, device=f"npu:{device_id}")
+    compile_stage(pypto.CompStage.TENSOR_GRAPH)(a, b, c)
+    compile_stage(pypto.CompStage.TILE_GRAPH)(a, b, c)
+    compile_stage(pypto.CompStage.EXECUTE_GRAPH)(a, b, c)
+    compile_stage(pypto.CompStage.CODEGEN_INSTRUCTION)(a, b, c)
+    compile_stage(pypto.CompStage.CODEGEN_BINARY)(a, b, c)
     assert True
 
 

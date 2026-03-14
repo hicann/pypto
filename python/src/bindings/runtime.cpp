@@ -518,6 +518,7 @@ public:
     }
 
     bool IsTripleStream() { return tripleStream; }
+    bool IsCompileStageAllComplete() { return compileStageAllComplete; }
 
     KernelBinary *GetKernelBinary(std::vector<DeviceTensorData> &tensors) {
         for (auto &k : kernels) {
@@ -580,6 +581,10 @@ public:
 
     KernelBinary *RegisterLastCompiledKernel(py::object &module) {
         auto func = Program::GetInstance().GetLastFunction();
+        auto attr = func->GetDyndevAttribute();
+        if (attr->devProgBinary.empty() || attr->kernelBinary.empty()) {
+            return nullptr;
+        }
         auto kernel = new KernelBinary(Program::GetInstance().GetFunctionSharedPtr(func));
         kernels.push_back(kernel);
         if (inferCacheShape) {
@@ -670,6 +675,10 @@ private:
 
         if (!module.attr("_host_options").is_none()) {
             auto host_options = module.attr("_host_options").cast<py::dict>();
+            if (host_options.contains("compile_stage")) {
+                int64_t stageValue = host_options["compile_stage"].attr("value").cast<int64_t>();
+                compileStageAllComplete = (stageValue == CS_ALL_COMPLETE);
+            }
             if (host_options.contains("compile_monitor_enable")) {
                 compileMonitorEnable = host_options["compile_monitor_enable"].cast<bool>();
             }
@@ -736,6 +745,7 @@ private:
     bool tripleStream{true};
     bool isDebugMode{false};
     int64_t stitchCfgCacheSize{0};
+    bool compileStageAllComplete{true};
     bool compileMonitorEnable{true};
     int intervalSec{60};
     int timeoutSec{-1};
@@ -797,6 +807,11 @@ static void DoLaunch(py::object &module, aclrtStream aicoreStream, int devId,
         ALOG_ERROR("compile kernel");
 #endif
         kbinary = compile_fn(kmodule);
+    }
+
+    if (!kmodule->IsCompileStageAllComplete()) {
+        HOST_PERF_EVT_END(EventPhase::LaunchKernel);
+        return;
     }
 
     kmodule->EmulationLaunch(kbinary, tensors);
