@@ -39,8 +39,10 @@ std::string CodeGenOpCloudNPU::PrintCastDynamicUnaligned(const PrintUnaryParam &
     for (int i = ID1; i < SHAPE_DIM4; ++i) {
         paramList.emplace_back(std::to_string(ss[i]));
     }
+    int64_t mode = 0;
+    GetAttr(OP_ATTR_PREFIX + "mode", mode);
+    paramList.emplace_back(std::to_string(mode));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
-    templateParam += GenOpAttr();
     paramList.clear();
     std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
     std::string src = "(__ubuf__ " + srcDtypeStr + "*)" + s0Var;
@@ -55,12 +57,16 @@ std::string CodeGenOpCloudNPU::PrintCastDynamicUnaligned(const PrintUnaryParam &
 
 std::string CodeGenOpCloudNPU::PrintCastTileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));    
     auto mode = opAttrs.at(OP_ATTR_PREFIX + "mode");
     int64_t modeEnum{0};
     if (mode.HasValue()) {
         modeEnum = AnyCast<int64_t>(mode);
     }
+
+    int64_t satModeEnum = 0;
+    GetAttr(OP_ATTR_PREFIX + "mode", satModeEnum);
+
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
     std::string lastUse = GetLastUse();
@@ -69,6 +75,10 @@ std::string CodeGenOpCloudNPU::PrintCastTileTensor() const {
         templateParamList.emplace_back(lastUse);
     }
     templateParamList.emplace_back(std::to_string(modeEnum));
+    std::string satModeStr = (satModeEnum == 0) ? 
+                            "pto::SaturationMode::ON" : 
+                            "pto::SaturationMode::OFF";
+    templateParamList.emplace_back(satModeStr);
     oss << WrapParamByAngleBrackets(templateParamList);
     oss << WrapParamByParentheses({dstTensor, srcTensor});
     oss << ";\n";

@@ -77,7 +77,8 @@
 ## 函数原型
 
 ```python
-cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE) -> Tensor
+cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE, 
+     satmode: SaturationMode = SaturationMode.OFF) -> Tensor
 ```
 
 ## 参数说明
@@ -88,6 +89,7 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE) -> Ten
 | input      | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | dtype      | 输入      | 精度转换后的数据类型。 <br> 支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_INT8，DT_UINT8，DT_INT16，DT_INT32，DT_INT64。 |
 | CastMode   | 输入      | 源操作数枚举类型，用以控制精度转换处理模式，具体定义为：[CastMode](../datatype/CastMode.md) 。<br> 默认为 CAST_NONE，常见类型之间的转换，框架会自动转换，与torch对齐，详见约束说明。 |
+| SaturationMode    | 输入      | 饱和模式枚举类型，用以控制浮点数转整数时的溢出处理方式，具体定义为：[SaturationMode](../datatype/SaturationMode.md) 。<br> 默认为 OFF（截断模式），当设置为 ON 时，超出目标类型范围的数值会被截断到最大值或最小值（饱和截断），详见约束说明。 |
 
 ## 约束说明
 
@@ -110,6 +112,10 @@ cast(input: Tensor, dtype: DataType, mode: CastMode = CastMode.CAST_NONE) -> Ten
     5.  DT\_INT32-\> DT\_FP16 : 与 Torch 对齐。
 
 4.  当 cast 前后类型相同的时候，某些场景下会产生空操作，不保证精度。
+
+5.  饱和模式默认值：
+    1.  FP16→UINT8、FP16→INT8、FP32→INT16、FP16→INT16、INT64→INT32、INT32→INT16 转换默认使用 OFF模式（截断/回绕），以保持PyTorch兼容性;当cast用于量化场景或有其他需求时，上述6种转换场景用户可以根据需要设置为ON模式（饱和）。
+    2.  其他转换默认使用 ON模式（饱和），OFF模式不支持。
 
 ## 调用示例
 
@@ -140,3 +146,16 @@ y = pypto.cast(x, pypto.DT_FP16)
 输出数据y: [2.0, 3.0] # y.dtype: pypto.DT_FP16
 ```
 
+#### 使用饱和模式（推荐用于浮点数转整数）
+
+```python
+# 示例 1：FP16 转 INT8，使用饱和模式防止溢出
+x = pypto.tensor([300.0, -300.0, 50.0], pypto.DT_FP16)
+y = pypto.cast(x, pypto.DT_INT8, satmode=pypto.SaturationMode.ON)
+# 输出：[127, -128, 50] 
+
+# 示例 2：FP16 转 INT8，使用饱和模式防止溢出
+x = pypto.tensor([300.0, -300.0, 50.0], pypto.DT_FP16)
+y = pypto.cast(x, pypto.DT_INT8, satmode=pypto.SaturationMode.OFF)
+# 输出：[44, -44, 50] 
+```

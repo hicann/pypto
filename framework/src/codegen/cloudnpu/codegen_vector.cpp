@@ -48,11 +48,12 @@ std::string CodeGenOpCloudNPU::GenCastOp() const {
     if (isDynamicFunction) {
         return PrintCastDynamicUnaligned({s0Var, dVar, srcDtypeStr, dstDtypeStr});
     }
-
+    int64_t modeEnum = 0;
+    GetAttr(OP_ATTR_PREFIX + "mode", modeEnum );
     ret = sprintf_s(buffer, sizeof(buffer),
-        "%s_<%s, %s, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u %s>((__ubuf__ %s *)%s,  (__ubuf__ %s *)%s);\n",
+        "%s_<%s, %s, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %lld>((__ubuf__ %s *)%s,  (__ubuf__ %s *)%s);\n",
         tileOpName.c_str(), dstDtypeStr.c_str(), srcDtypeStr.c_str(), os[0], os[1], os[2], os[3], ds[1], ds[2], ds[3],
-        ss[1], ss[2], ss[3], GenOpAttr().c_str(), dstDtypeStr.c_str(), dVar.c_str(), srcDtypeStr.c_str(),
+        ss[1], ss[2], ss[3], modeEnum, dstDtypeStr.c_str(), dVar.c_str(), srcDtypeStr.c_str(),
         s0Var.c_str());
     ASSERT(ret >= 0) << "GenCastOp sprintf_s failed " << ret;
     std::string ostring(buffer);

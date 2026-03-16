@@ -424,8 +424,8 @@ void OpcodeManager::RegisterVector() {
     RegisterVectorUnary();
     RegisterVectorSort();
     RegisterVectorReduction();
-    RegisterInfo(Opcode::OP_CAST, OpCoreType::AIV, "CAST", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
-        {"TileOp::Tcast", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::CAST, {OP_ATTR_PREFIX + "mode"},
+    RegisterInfo(Opcode::OP_CAST, OpCoreType::AIV, "CAST", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::Tcast", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::CAST, {OP_ATTR_PREFIX + "mode", OP_ATTR_PREFIX + "satmode"},
         TileShapeVerifier::Verify);
     RegisterInfo(Opcode::OP_LOGICALNOT, OpCoreType::AIV, "LOGICALNOT", {MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::TlogicalNot", PIPE_V, PIPE_V, CoreType::AIV},

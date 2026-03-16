@@ -37,7 +37,7 @@ std::tuple<Tensor, Tensor> Quant(
         auto outFp32 = Mul(inputFp32, scaleQuant);
         auto outInt32 = Cast(outFp32, DataType::DT_INT32, CAST_RINT);
         auto outHalf = Cast(outInt32, DataType::DT_FP16, CAST_ROUND);
-        auto outInt8 = Cast(outHalf, DataType::DT_INT8, CAST_TRUNC);
+        auto outInt8 = Cast(outHalf, DataType::DT_INT8, CAST_TRUNC, SaturationMode::ON);
         auto scaleDeQuant = ScalarDivS(scaleQuant, Element(DataType::DT_FP32, F_1), true);
         return std::tie(outInt8, scaleDeQuant);
     } else {
@@ -53,7 +53,7 @@ std::tuple<Tensor, Tensor> Quant(
         auto outFp32 = Mul(inputFp32, scaleQuant);
         auto outInt32 = Cast(outFp32, DataType::DT_INT32, CAST_RINT);
         auto outHalf = Cast(outInt32, DataType::DT_FP16, CAST_ROUND);
-        auto outInt8 = Cast(outHalf, DataType::DT_INT8, CAST_TRUNC);
+        auto outInt8 = Cast(outHalf, DataType::DT_INT8, CAST_TRUNC, SaturationMode::ON);
         return std::tie(outInt8, scaleDeQuant);
     }
 }

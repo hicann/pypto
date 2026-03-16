@@ -387,7 +387,7 @@ def quant_attention_pre_kernel(
             x_add = pypto.add(x_mul, x_offset_2d_fp32)
             x_int32 = pypto.cast(x_add, pypto.DT_INT32, pypto.CastMode.CAST_RINT) # Align ascendC
             x_fp16 = pypto.cast(x_int32, pypto.DT_FP16)
-            x_int8[tmp_idx:tmp_idx + 1, 0:] = pypto.cast(x_fp16, pypto.DT_INT8)
+            x_int8[tmp_idx:tmp_idx + 1, 0:] = pypto.cast(x_fp16, pypto.DT_INT8, satmode=pypto.SaturationMode.ON)
 
         pypto.set_cube_tile_shapes([32, 32], [256, 512], [256, 256])
         tmp_c = pypto.matmul(x_int8, weight, pypto.DT_INT32)

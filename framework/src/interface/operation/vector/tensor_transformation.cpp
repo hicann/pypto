@@ -519,33 +519,34 @@ Tensor Full(const SymbolicScalar &dynSrc, DataType dtype, const std::vector<int6
 
 template <CastOpType T>
 void TiledCastOperation(Function &function, const TileShape &tileShape, const int cur, Input &input,
-    const LogicalTensorPtr &result, const CastMode &mode) {
+    const LogicalTensorPtr &result, const CastMode &mode, const SaturationMode &satmode) {
     if (cur == static_cast<int>(input.tensor.GetShape().size())) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto &op = function.AddOperation(GetCastOpName<T>(), {tile}, {resultTile});
         op.SetAttribute(OP_ATTR_PREFIX + "mode", mode);
+        op.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(satmode));
         return;
     }
     auto &vecTile = tileShape.GetVecTile();
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
-        TiledCastOperation<T>(function, tileShape, cur + 1, input, result, mode);
+        TiledCastOperation<T>(function, tileShape, cur + 1, input, result, mode, satmode);
     }
 }
 
 template <CastOpType T>
 void TiledCastOperation(Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand,
-    const LogicalTensorPtr &result, const CastMode &mode) {
+    const LogicalTensorPtr &result, const CastMode &mode, const SaturationMode &satmode) {
     ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
-    TiledCastOperation<T>(function, tileShape, 0, input, result, mode);
+    TiledCastOperation<T>(function, tileShape, 0, input, result, mode, satmode);
 }
 
-Tensor Cast(const Tensor &self, DataType dstDataType, CastMode mode) {
+Tensor Cast(const Tensor &self, DataType dstDataType, CastMode mode, SaturationMode satmode) {
     DECLARE_TRACER();
     ASSERT(self.GetShape().size() == self.GetStorage()->offset.size()) << "The shape size of self and offset should be equal";
     // Cast to same dType with no mode will do nothing
@@ -553,7 +554,7 @@ Tensor Cast(const Tensor &self, DataType dstDataType, CastMode mode) {
         return self;
     }
     RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
-        dstDataType, mode);
+        dstDataType, mode, satmode);
 }
 
 void TensorInnerConcatNew(Function &function, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
@@ -659,8 +660,11 @@ inline void CastOperationOperandCheck(
 void CastOperationTileFunc(Function &function, const TileShape &tileShape,
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand, const Operation &op) {
     CastOperationOperandCheck(iOperand, oOperand);
+    int64_t satmodeValue = 1;
+    op.GetAttr(OP_ATTR_PREFIX + "satmode", satmodeValue);
+    SaturationMode satmode = static_cast<SaturationMode>(satmodeValue);
     auto mode = op.GetCastModeAttribute(OP_ATTR_PREFIX + "mode");
-    TiledCastOperation<CastOpType::CAST>(function, tileShape, iOperand[0], oOperand[0], mode);
+    TiledCastOperation<CastOpType::CAST>(function, tileShape, iOperand[0], oOperand[0], mode, satmode);
 }
 
 void FullOperationTileFunc(Function &function, const TileShape &tileShape,

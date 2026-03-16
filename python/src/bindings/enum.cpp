@@ -116,6 +116,11 @@ void bind_enum(py::module &m){
         .value("CAST_ODD", CastMode::CAST_ODD)
         .export_values();
 
+    py::enum_<SaturationMode>(m, "SaturationMode")
+        .value("OFF", SaturationMode::OFF)
+        .value("ON", SaturationMode::ON)
+        .export_values();
+
     py::enum_<TileType>(m, "TileType")
         .value("VEC", TileType::VEC)
         .value("CUBE", TileType::CUBE)
