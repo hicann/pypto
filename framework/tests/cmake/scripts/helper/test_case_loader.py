@@ -240,7 +240,7 @@ class FileReader:
         case_cnt = len(data_frame)
         if self._start_index >= case_cnt:
             logging.info(
-                f"The start index [{self._start_index}] exceeds the max index[{case_cnt}]."
+                f"The start index [{self._start_index}] exceeds the max index[{case_cnt - 1}]."
             )
             return False
         if self._end_index < 0 or self._end_index >= case_cnt:

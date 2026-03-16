@@ -110,6 +110,7 @@ class TestCaseLogAnalyzer:
                     test_result.is_pass = True
                 elif "[  FAILED  ]" in line or "1 failed" in line:
                     test_result.is_pass = False
+                    break
                 elif "ms total" in line:
                     test_result.duration = TestCaseLogAnalyzer.get_duration(line)
 
