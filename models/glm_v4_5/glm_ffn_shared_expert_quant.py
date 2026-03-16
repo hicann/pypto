@@ -30,6 +30,7 @@ from torch._subclasses.fake_tensor import FakeTensor
 from torch._dynamo import allow_in_graph
 import pypto
 from utils.get_format import get_format
+import pytest
 
 
 def check_args(
@@ -289,6 +290,7 @@ def ffn_shared_expert_quant(
     share_expert_moe_main(*inputs)
 
 
+@pytest.mark.soc("950", "910")
 def test_ffn_share() -> None:
     x_dtype = torch.bfloat16
     # parameter config 
