@@ -58,7 +58,7 @@ struct DynDeviceTask : DynDeviceTaskBase {
         return funcDup.DumpDyn(FuncID(id), TaskID(id), cceBinary);
     }
 
-    void DumpTopo() {
+    void DumpTopo(bool enableVFFusion) {
         auto header = GetDynFuncDataList();
 #ifdef __DEVICE__
         std::string path = "./output/dyn_topo.txt";
@@ -79,7 +79,7 @@ struct DynDeviceTask : DynDeviceTaskBase {
             of << "seqNo,taskId,rootIndex,rootHash,opmagic,leafIndex,leafHash,coreType,psgId,successors\n";
         }
         for (size_t funcIdx = 0; funcIdx < stitchedList.size(); funcIdx++) {
-            stitchedList[funcIdx].DumpTopo(of, header->seqNo, funcIdx, cceBinary);
+            stitchedList[funcIdx].DumpTopo(of, header->seqNo, funcIdx, cceBinary, enableVFFusion);
         }
         of.flush();
     }

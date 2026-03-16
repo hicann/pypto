@@ -16,6 +16,7 @@
 #include "machine/utils/dynamic/dev_encode_function_dupped_data.h"
 
 namespace npu::tile_fwk::dynamic {
+constexpr const uint8_t MAIN_BLOCK_SIZE = 2;
 std::string DevAscendFunctionDuppedData::Dump(int indent) const {
     if (GetSource()->GetOperationSize() != GetOperationSize()) {
         DEV_ERROR("GetOperationSize mismatch: source=%zu, self=%u", GetSource()->GetOperationSize(), GetOperationSize());
@@ -55,12 +56,16 @@ std::string DevAscendFunctionDuppedData::Dump(int indent) const {
     return oss.str();
 }
 
-void DevAscendFunctionDupped::DumpTopo(std::ofstream &os, int seqNo, int funcIdx, const DevCceBinary *cceBinary) const {
+void DevAscendFunctionDupped::DumpTopo(std::ofstream &os, int seqNo, int funcIdx, const DevCceBinary *cceBinary, bool enableVFFusion) const {
     auto func = GetSource();
     for (size_t opIdx = 0; opIdx < DupData()->GetSource()->GetOperationSize(); opIdx++) {
-        auto &cceInfo = cceBinary[func->GetOperationAttrCalleeIndex(opIdx)];
+        int cceIndex = func->GetOperationAttrCalleeIndex(opIdx);
+        if (enableVFFusion) {
+            cceIndex = (func->GetOperationAttrCalleeIndex(opIdx) + 1) / MAIN_BLOCK_SIZE;
+        }
+        auto &cceInfo = cceBinary[cceIndex];
         os << seqNo << "," << MakeTaskID(funcIdx, opIdx) << "," << func->funcKey << "," << func->rootHash << ","
-            <<func->GetOperationDebugOpmagic(opIdx) << "," << func->GetOperationAttrCalleeIndex(opIdx) << ","
+            <<func->GetOperationDebugOpmagic(opIdx) << "," << cceIndex << ","
             << cceInfo.funcHash << "," << cceInfo.coreType << "," << cceInfo.psgId << ",";
         auto &succList = func->GetOperationDepGraphSuccList(opIdx);
         for (size_t j = 0; j < succList.size(); j++) {

@@ -316,7 +316,7 @@ struct DevAscendFunctionDupped {
         return oss.str();
     }
 
-    void DumpTopo(std::ofstream &os, int seqNo, int funcIdx, const DevCceBinary *cceBinary) const;
+    void DumpTopo(std::ofstream &os, int seqNo, int funcIdx, const DevCceBinary *cceBinary, bool enableVFFusion) const;
 
 #if DEBUG_INFINITE_LIFETIME
     void DumpTensorAddrInfo(std::vector<std::string> &infos, uint32_t seqNo, uint32_t funcIdx);

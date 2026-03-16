@@ -509,7 +509,7 @@ int DeviceTaskContext::BuildDeviceTaskDataAndReadyQueue(DynDeviceTask *dyntask, 
     DEV_INFO("Finish build a new device task");
 
     DEV_IF_NONDEVICE {
-        dyntask->DumpTopo();
+        dyntask->DumpTopo(devProg->devArgs.enableVFFusion);
     }
 
 #if DEBUG_INFINITE_LIFETIME
