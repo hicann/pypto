@@ -1487,9 +1487,8 @@ static void BitSort(const TensorData &out, const TensorData &self, int64_t axis,
     }
 
     auto tres = sortedGroups.reshape(torch::IntArrayRef(dstShape));
-    torch::Tensor expanded = torch::cat({tres, torch::zeros_like(tself.second)}, axis);
-    torch::Tensor dstSubview = View(tout.second, expanded.sizes().vec(), viewOffset);
-    dstSubview.copy_(expanded);
+    torch::Tensor dstSubview = View(tout.second, tres.sizes().vec(), viewOffset);
+    dstSubview.copy_(tres);
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
@@ -1549,15 +1548,14 @@ static void Extract(const TensorData &out, const TensorData &self, int mod, bool
  * @param descending Indicate whether the obtained k values are the maximum or minimum k values,
  *                   and true returns the maximum k values
  */
-static void Topk(const TensorData &out, const TensorData &self, int64_t axis, int64_t k, bool descending) {
+static void MrgSort(const TensorData &out, const TensorData &self, int64_t axis, int64_t k) {
     auto tself = From(self);
     auto tout = From(out);
     constexpr int DIM_SIZE_TWO = 2;
     constexpr int ACTUAL_VALID_RATIO = 2;
-    (void)descending;
     axis = axis < 0 ? (axis + tself.second.dim()) : axis;
-    int actShape = tself.second.size(axis) - (tself.second.size(axis) + 31) / 32 * 32 / 3 * 2;
-    auto sliceIndices = torch::arange(actShape * 2, torch::dtype(torch::kLong));
+    int actShape = tself.second.size(axis);
+    auto sliceIndices = torch::arange(actShape, torch::dtype(torch::kLong));
     auto tselfHalf = tself.second.index_select(axis, sliceIndices);
 
     ASSERT(axis >= 0 && axis < tselfHalf.dim()) <<
@@ -1598,7 +1596,7 @@ static void Topk(const TensorData &out, const TensorData &self, int64_t axis, in
             dstShape.push_back(topkGroups.size(i));
         }
     }
-    torch::Tensor dstSubview = View(tout.second, dstShape, {0, 0});
+    torch::Tensor dstSubview = View(tout.second, dstShape, viewOffset);
     dstSubview.copy_(topkGroups.reshape(torch::IntArrayRef(dstShape)));
     ToOperand(tout.second, tout.first, out.dtype);
 }
@@ -2081,7 +2079,7 @@ static struct CalcOps calcOps = {
     .BitSort = BitSort,
     .TiledMrgSort = TiledMrgSort,
     .Extract = Extract,
-    .Topk = Topk,
+    .MrgSort = MrgSort,
     .TopK = TopK,
     .TopkSort = TopkSort,
     .TopkMerge = TopkMerge,

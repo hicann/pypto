@@ -825,7 +825,7 @@ Status OoOScheduler::SpillAssembleBuffer(SpillInfo &spillInfo, IssueEntryPtr all
     for (auto assemble : assembleList) {
         if (assemble->isRetired) {
             if (isFirst) {
-                memIdAlloc->UpdateOutputOperand(0, assemble->tileOp.GetOutputOperand(0));
+                memIdAlloc->UpdateOutputOperand(0, assemble->tileOp.GetInputOperand(0));
             }
             SpillParticalBuffer(spillInfo, allocIssue, assemble, assembleTensor, isFirst, isGenSpill);
         } else {

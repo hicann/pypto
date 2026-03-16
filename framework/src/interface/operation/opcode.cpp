@@ -929,6 +929,8 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {            Opcode::OP_MRGSORT,       "TMrgSort"},
     {       Opcode::OP_TILEDMRGSORT,  "TTiledMrgSort"},
     {            Opcode::OP_EXTRACT,       "TExtract"},
+    {     Opcode::OP_TWOTILEMRGSORT,"TTwoTileMrgSort"},
+    {     Opcode::OP_EXTRACT_SINGLE, "TExtractSingle"},
     {        Opcode::OP_GATHER_MASK,    "TGatherMask"},
     {               Opcode::OP_CAST,          "TCast"},
     {      Opcode::OP_ROWSUM_SINGLE,  "TRowSumSingle"},

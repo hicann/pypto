@@ -984,8 +984,10 @@ void ViewInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outV
             inputValidShape.resize(shapeImm.size());
             OpImmediate::NormalizeValue(inputValidShape, 0, shapeImm, 0, false);
         }
+
         auto newDynValidShape = GetViewValidShape(inputValidShape, viewOpAttribute->GetFromOffset(),
                                                     viewOpAttribute->GetFromDynOffset(), op->GetOOperands()[0]->oriShape);
+
         for (auto output : op->GetOOperands()) {
             outValidShapes.push_back(newDynValidShape);
         }
@@ -1049,10 +1051,12 @@ void BitSortFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outVal
     }
     std::vector<SymbolicScalar> res(inputValidShapes[0]);
     auto topk_axis = op->GetIntAttribute(TOPK_AXIS);
-    res[topk_axis] = (res[topk_axis] + blockSize - 1) / blockSize * blockSize;
     res[topk_axis] = res[topk_axis] * NUM2;
-    for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(res);
+    outValidShapes.emplace_back(res);
+    if (inputValidShapes[0].size() == 1) {
+        outValidShapes.emplace_back(std::vector<SymbolicScalar>{res[topk_axis]});
+    } else {
+        outValidShapes.emplace_back(std::vector<SymbolicScalar>{1, res[topk_axis]});
     }
 }
 
@@ -1070,11 +1074,12 @@ void MrgSortFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outVal
     std::vector<SymbolicScalar> res(inputValidShapes[0]);
     auto topk_axis = op->GetIntAttribute(TOPK_AXIS);
     auto topk_kvalue = op->GetIntAttribute(TOPK_KVALUE);
-    SymbolicScalar tmp = (res[topk_axis] + blockSize - 1) / blockSize * blockSize;
-    res[topk_axis] = std::min(res[topk_axis],
-     (topk_kvalue + kBlockFpNum - 1) / kBlockFpNum * kBlockFpNum * NUM2);
-    for (auto output : op->GetOOperands()) {
-        outValidShapes.push_back(res);
+    res[topk_axis] = std::min(res[topk_axis], (topk_kvalue + kBlockFpNum - 1) / kBlockFpNum * kBlockFpNum * NUM2);
+    outValidShapes.emplace_back(res);
+    if (inputValidShapes[0].size() == 1) {
+        outValidShapes.emplace_back(std::vector<SymbolicScalar>{res[topk_axis]});
+    } else {
+        outValidShapes.emplace_back(std::vector<SymbolicScalar>{1, res[topk_axis]});
     }
 }
 

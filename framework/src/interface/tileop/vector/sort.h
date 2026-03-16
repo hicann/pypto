@@ -369,4 +369,94 @@ TILEOP void TTiledMrgSort(T0 dst, T1 src1, T2 src2, T3 src3, T4 src4, T5 tmp) {
         }
     }
 }
+
+#define OP_TILE_OP_TWOTILEMRGSORT TTwoTileMrgSort
+template <unsigned firstShape, typename T0, typename T1>
+TILEOP void TTwoTileMrgSort(T0 dst, T1 src) {
+    constexpr size_t expectSize = 5;
+    
+    const auto dstLayout = dst.GetLayout();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto dstStride3 = dstLayout.template GetStrideDim<3, expectSize>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, expectSize>();
+
+    auto dstShape0 = dstLayout.template GetShapeDim<0, expectSize>();
+    auto dstShape1 = dstLayout.template GetShapeDim<1, expectSize>();
+    auto dstShape2 = dstLayout.template GetShapeDim<2, expectSize>();
+    auto dstShape3 = dstLayout.template GetShapeDim<3, expectSize>();
+    auto dstShape4 = dstLayout.template GetShapeDim<4, expectSize>();
+
+    if (dstShape0 == 0 || dstShape1 == 0 || dstShape2 == 0 || dstShape3 == 0 || dstShape4 == 0) {
+        return;
+    }
+
+    const auto srcLayout = src.GetLayout();
+    auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
+    if (srcShape4 == 0) {
+        return;
+    }
+
+    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride3 = srcLayout.template GetStrideDim<3, expectSize>();
+    auto srcStride4 = srcLayout.template GetStrideDim<4, expectSize>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, expectSize>();
+
+
+    constexpr auto tileW = srcTileW;
+
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+    constexpr auto srcTypeSize = sizeof(typename T1::Type);
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; n3Index ++ ) {
+                    if (srcShape4 <= firstShape) {
+                        using DstTileDefine = 
+                            pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+                        using SrcTileDefine = 
+                            pto::Tile<pto::TileType::Vec, typename T1::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+                        DstTileDefine dstTile(1, dstShape4);
+                        SrcTileDefine srcTile(1, srcShape4);
+                        auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 +
+                            n2Index * dstStride2 + n3Index * dstStride3;
+                        auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + 
+                            n2Index * srcStride2 + n3Index * srcStride3;
+                        pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+                        pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
+                        
+                        pto::TMOV(dstTile, srcTile);
+                    } else {
+                        using DstTileDefine = 
+                            pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                        DstTileDefine dstTile(1, dstShape4);
+                        auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + 
+                            n2Index * dstStride2 + n3Index * dstStride3;
+                        pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+                        using SrcTileDefine = 
+                            pto::Tile<pto::TileType::Vec, typename T1::Type, 1, firstShape, pto::BLayout::RowMajor, -1, -1>;
+                        SrcTileDefine src0Tile(1, firstShape);
+                        SrcTileDefine src1Tile(1, srcShape4 - firstShape);
+                        auto src0Offset = n0Index * srcStride0 + n1Index * srcStride1 + 
+                            n2Index * srcStride2 + n3Index * srcStride3;
+                        auto src1Offset = src0Offset + firstShape;
+                        pto::TASSIGN(src0Tile, (uint64_t)(src.GetAddr() + src0Offset * srcTypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src.GetAddr() + src1Offset * srcTypeSize));
+
+                        pto::MrgSortExecutedNumList executedNumList;
+                        // 直接将dst用作tmp, 节省空间
+                        pto::TMRGSORT<DstTileDefine, DstTileDefine, SrcTileDefine, SrcTileDefine, false>(dstTile,
+                            executedNumList, dstTile, src0Tile, src1Tile);
+                    }
+                    #ifdef __DAV_V220
+                    pipe_barrier(PIPE_V);
+                    #endif
+                }
+            }
+        }
+    }
+}
 #endif

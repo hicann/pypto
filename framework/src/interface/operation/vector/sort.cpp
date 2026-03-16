@@ -525,7 +525,7 @@ bool checkIsExceedUB(const std::vector<int64_t> &tileShape, const std::vector<in
     ASSERT(tileShape[axis] > 0) << "tileShape in axis must greater than 0.";
     ASSERT(blockSize > 0) << "blockSize must greater than 0.";
     tileRowShapeSize = tileRowShapeSize / tileShape[axis] * ((shape[axis] + blockSize - 1) / blockSize * blockSize);
-    int64_t maxShapeSize = tileRowShapeSize * 2 * 4 * 3; // every element is 8B
+    int64_t maxShapeSize = tileRowShapeSize * 2 * 4 * 4; // every element is 8B
     bool isInGM = maxShapeSize >= UBSize ? true : false;
     return isInGM;
 }
@@ -560,10 +560,14 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             bitSortOp.SetAttribute(SORT_AXIS, axis);
             bitSortOp.SetAttribute(SORT_ORDER, static_cast<int>(descending));
             bitSortOp.SetAttribute(SORT_OFFSET, static_cast<int>(0));
-            std::vector<SymbolicScalar> bitSortValidShape(source->GetDynValidShape());
-            bitSortValidShape[axis] = (bitSortValidShape[axis] + kBlockSize - 1) / kBlockSize * kBlockSize;
-            bitSortValidShape[axis] = bitSortValidShape[axis] * NUM2 + source->GetDynValidShape()[axis];
-            bitSortOutputTensor->UpdateDynValidShape(bitSortValidShape);
+            std::vector<SymbolicScalar> bitSortDynValidShape(source->GetDynValidShape());
+            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM2;
+            bitSortOutputTensor->UpdateDynValidShape(bitSortDynValidShape);
+            if (bitSortOutputShape.size() == 1) {
+                tempTensor->UpdateDynValidShape({bitSortDynValidShape[axis]});
+            } else {
+                tempTensor->UpdateDynValidShape({1, bitSortDynValidShape[axis]});
+            }
 
             // 32个元素组成的block之间进行归并
             std::vector<int64_t> mrgSortOutputShape = source->shape;
@@ -576,6 +580,11 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             std::vector<SymbolicScalar> mrgSortDynValidShape(source->GetDynValidShape());
             mrgSortDynValidShape[axis] = source->GetDynValidShape()[axis] * NUM2;
             mrgSortOutputTensor->UpdateDynValidShape(mrgSortDynValidShape);
+            if (bitSortOutputShape.size() == 1) {
+                tempTensor->UpdateDynValidShape({bitSortDynValidShape[axis]});
+            } else {
+                tempTensor->UpdateDynValidShape({1, bitSortDynValidShape[axis]});
+            }
 
             // 提取value和index
             auto valueTile = valueResult->View(function, resultTileInfo.shape, resultTileInfo.offset);
@@ -631,9 +640,13 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             bitSortOp.SetAttribute(SORT_ORDER, descending);
             bitSortOp.SetAttribute(SORT_OFFSET, i);
             std::vector<SymbolicScalar> bitSortDynValidShape(inputTile->GetDynValidShape());
-            bitSortDynValidShape[axis] = (bitSortDynValidShape[axis] + kBlockSize - 1) / kBlockSize * kBlockSize;
-            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM2 + inputTile->GetDynValidShape()[axis];
+            bitSortDynValidShape[axis] = bitSortDynValidShape[axis] * NUM2;
             bitSortTile->UpdateDynValidShape(bitSortDynValidShape);
+            if (tileBitSortShape.size() == 1) {
+                tempTensor->UpdateDynValidShape({bitSortDynValidShape[axis]});
+            } else {
+                tempTensor->UpdateDynValidShape({1, bitSortDynValidShape[axis]});
+            }
             
             tileOutputShape[axis] = (tileSourceShape[axis] + 7) / 8 * 8 * 2; // UB 32B对齐，兼顾了DynMrgSort中的k向8对齐
             tileOutputOffset[axis] = i * 2;
@@ -643,8 +656,13 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             mrgSortOp.SetAttribute(SORT_KVALUE, static_cast<int>(tileSourceShape[axis]));
             mrgSortOp.SetAttribute(TOPK_MERGE_SIZE, NUM_VALUE_32);
             std::vector<SymbolicScalar> mrgSortDynValidShape(inputTile->GetDynValidShape());
-            mrgSortDynValidShape[axis] = inputTile->GetDynValidShape()[axis] * NUM2;
+            mrgSortDynValidShape[axis] = mrgSortDynValidShape[axis] * NUM2;
             tmp->UpdateDynValidShape(mrgSortDynValidShape);
+            if (tileBitSortShape.size() == 1) {
+                tempTensor->UpdateDynValidShape({mrgSortDynValidShape[axis]});
+            } else {
+                tempTensor->UpdateDynValidShape({1, mrgSortDynValidShape[axis]});
+            }
 
             auto &assembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {tmp}, {sortOutputTensor});
             assembleOp.iOperand[0]->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
@@ -768,8 +786,8 @@ std::tuple<Tensor, Tensor> sort(const Tensor &self, int axis = -1, bool descendi
     ASSERT(vecTileShape[axis] % 32 == 0) << "The size of the tile shape along axis " << axis << " must be a multiple of 32. Got " << vecTileShape[axis] << ".\n";
 
     if (checkIsExceedUB(vecTileShape.tile, self.GetShape(), axis, 32)) {
-        int64_t tileNum = (self.GetShape()[axis] + vecTileShape[axis] - 1) / vecTileShape[axis];;
-        ASSERT(tileNum < 128) << "For Large Shape in GM, the number of tile on sort axis must less than 128. Got " << tileNum << ".\n";
+        int64_t tileNum = (self.GetShape()[axis] + vecTileShape[axis] - 1) / vecTileShape[axis];
+        ASSERT(tileNum < 128) << "For Large Shape in GM, the number of tile on sort axis must less than 128.";
     }
 
     auto transposeSelf = Transpose(self, {axis, len - 1});

@@ -606,6 +606,9 @@ std::string CodeGenOpCloudNPU::GenTopKExtractOp() const {
 }
 
 std::string CodeGenOpCloudNPU::GenTwoTileMrgSort() const {
+    if (isSupportLayout) {
+        return PrintExtractTileTensor();
+    }
     return PrintSortUBDynamicUnaligned(false);
 }
 
@@ -652,6 +655,9 @@ std::string CodeGenOpCloudNPU::PrintSortUBDynamicUnaligned(bool containDstType) 
 }
 
 std::string CodeGenOpCloudNPU::GenExtractSingleOp() const {
+    if (isSupportLayout) {
+        return PrintExtractTileTensor();
+    }
     return PrintSortUBDynamicUnaligned(true);
 }
 } // namespace npu::tile_fwk

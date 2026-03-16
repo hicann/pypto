@@ -634,8 +634,7 @@ void ExecuteOpMrgSort(ExecuteOperationContext *ctx) {
     auto src = ctx->ioperandDataViewList->at(0);
     auto topk_axis = ctx->op->GetIntAttribute("op_attr_axis");
     auto kValue = ctx->op->GetIntAttribute("op_attr_kvalue");
-    int descending = ctx->op->GetIntAttribute("op_attr_order");
-    calc::Topk(oop, src, topk_axis, kValue, descending);
+    calc::MrgSort(oop, src, topk_axis, kValue);
 }
 REGISTER_CALC_OP(OP_MRGSORT, Opcode::OP_MRGSORT, ExecuteOpMrgSort);
 

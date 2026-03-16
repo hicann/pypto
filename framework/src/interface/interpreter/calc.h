@@ -414,8 +414,8 @@ inline void Extract(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int mod
     GetCalcOps()->Extract(Trans(out), Trans(self), mod, descending);
 }
 
-inline void Topk(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t axis, int64_t k, bool descending) {
-    GetCalcOps()->Topk(Trans(out), Trans(self), axis, k, descending);
+inline void MrgSort(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int64_t axis, int64_t k) {
+    GetCalcOps()->MrgSort(Trans(out), Trans(self), axis, k);
 }
 
 inline void TopK(LogicalTensorDataPtr outValue, LogicalTensorDataPtr outIndex, LogicalTensorDataPtr self, int k, int axis, bool descending) {
