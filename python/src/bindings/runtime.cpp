@@ -676,7 +676,8 @@ private:
         if (!module.attr("_host_options").is_none()) {
             auto host_options = module.attr("_host_options").cast<py::dict>();
             if (host_options.contains("compile_stage")) {
-                int64_t stageValue = host_options["compile_stage"].attr("value").cast<int64_t>();
+                auto stage = host_options["compile_stage"];
+                int64_t stageValue = py::hasattr(stage, "value") ? stage.attr("value").cast<int64_t>() : stage.cast<int64_t>();
                 compileStageAllComplete = (stageValue == CS_ALL_COMPLETE);
             }
             if (host_options.contains("compile_monitor_enable")) {

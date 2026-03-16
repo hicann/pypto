@@ -644,10 +644,36 @@ class JitCallableWrapper:
                 "runtime_debug_mode", 0
             )
 
+    def _ensure_host_options(self) -> None:
+        """Ensure _host_options is initialized from global config."""
+        if self._host_options is None:
+            self._host_options = {}
+        if "compile_stage" not in self._host_options:
+            self._host_options["compile_stage"] = pypto.get_host_options().get(
+                "compile_stage", pypto.CompStage.ALL_COMPLETE
+            )
+        if "compile_monitor_enable" not in self._host_options:
+            self._host_options["compile_monitor_enable"] = pypto.get_host_options().get(
+                "compile_monitor_enable", True
+            )
+        if "compile_timeout" not in self._host_options:
+            self._host_options["compile_timeout"] = pypto.get_host_options().get(
+                "compile_timeout", 600
+            )
+        if "compile_timeout_stage" not in self._host_options:
+            self._host_options["compile_timeout_stage"] = pypto.get_host_options().get(
+                "compile_timeout_stage", -1
+            )
+        if "compile_monitor_print_interval" not in self._host_options:
+            self._host_options["compile_monitor_print_interval"] = pypto.get_host_options().get(
+                "compile_monitor_print_interval", 60
+            )
+
     def _get_or_create_kmodule(self, non_tensor_values: dict[str, Any]) -> None:
         """Set self.kwargs and resolve kmodule from cache or create new."""
         self.kwargs = non_tensor_values
         self._ensure_debug_options()
+        self._ensure_host_options()
         key = self._get_compilation_cache_key(non_tensor_values)
         if (
             self._use_cache

@@ -13,12 +13,12 @@ import pypto
 import torch
 
 
-def compile_stage(comp_stage):
+def test_comipile_stage(host_options=None):
     @pypto.frontend.jit(
-        host_options={"compile_stage": comp_stage},
-        runtime_options={"run_mode": 0}
+        host_options=host_options,
+        runtime_options={"run_mode": 0},
     )
-    def compile_func(
+    def test_func(
         a: pypto.Tensor((4, 4), pypto.DT_FP32),
         b: pypto.Tensor((4, 4), pypto.DT_FP32),
         c: pypto.Tensor((4, 4), pypto.DT_FP32),
@@ -26,20 +26,34 @@ def compile_stage(comp_stage):
         pypto.set_vec_tile_shapes(4, 4)
         c[:] = a + b
 
-    return compile_func
+    return test_func
 
 
 def test_all_compile_stages():
     device_id = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
     torch.npu.set_device(device_id)
+
     a = torch.ones((4, 4), dtype=torch.float32, device=f"npu:{device_id}") * 2
     b = torch.ones((4, 4), dtype=torch.float32, device=f"npu:{device_id}") * 3
     c = torch.ones((4, 4), dtype=torch.float32, device=f"npu:{device_id}")
-    compile_stage(pypto.CompStage.TENSOR_GRAPH)(a, b, c)
-    compile_stage(pypto.CompStage.TILE_GRAPH)(a, b, c)
-    compile_stage(pypto.CompStage.EXECUTE_GRAPH)(a, b, c)
-    compile_stage(pypto.CompStage.CODEGEN_INSTRUCTION)(a, b, c)
-    compile_stage(pypto.CompStage.CODEGEN_BINARY)(a, b, c)
+
+    stages = [
+        pypto.CompStage.TENSOR_GRAPH,
+        pypto.CompStage.TILE_GRAPH,
+        pypto.CompStage.EXECUTE_GRAPH,
+        pypto.CompStage.CODEGEN_INSTRUCTION,
+        pypto.CompStage.CODEGEN_BINARY,
+    ]
+
+    for stage in stages:
+        func = test_comipile_stage(host_options={"compile_stage": stage})
+        func(a, b, c)
+
+    for stage in stages:
+        pypto.set_host_options(compile_stage=stage)
+        func = test_comipile_stage()
+        func(a, b, c)
+
     assert True
 
 
