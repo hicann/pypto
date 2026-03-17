@@ -402,14 +402,16 @@ class Parser(ast.NodeVisitor):
                 for in_obj, def_obj in zip(tensor_input_args, tensor_input_args_def):
                     in_obj.name = def_obj.name
 
-            # Get and validate output arguments
-            if function_node.returns is None:
-                output_tensors = []
-            else:
-                output_expr = self._visit_expr(function_node.returns)
-                output_tensors = self._normalize_output_annotation(
-                    output_expr, function_node.returns
+            # Return annotation is not allowed; use out parameter and out.move() instead.
+            if function_node.returns is not None:
+                raise ParserError(
+                    function_node.returns,
+                    ValueError(
+                        "Return annotation is not allowed. Use an out parameter and "
+                        "out.move(...) inside the kernel instead."
+                    ),
                 )
+            output_tensors = []
 
             self._signature_cache = (
                 tensor_input_args,
@@ -702,60 +704,6 @@ class Parser(ast.NodeVisitor):
                 self.context.add(var_name, bound_value)
 
 
-    def _normalize_output_annotation(
-        self, output_expr: Any, node: ast.AST
-    ) -> list[pypto.Tensor]:
-        """Validate and normalize return type annotations into a list of tensors.
-
-        Converts various return annotation formats into a normalized list:
-        - Single tensor: pypto.Tensor(...) -> [tensor]
-        - Tuple/list: (tensor1, tensor2) -> [tensor1, tensor2]
-
-        Parameters
-        ----------
-        output_expr : Any
-            The evaluated return type annotation expression.
-        node : ast.AST
-            The AST node for error reporting.
-
-        Returns
-        -------
-        list[pypto.Tensor]
-            Normalized list of output tensor definitions.
-
-        Raises
-        ------
-        ParserError
-            If the annotation is not a valid tensor or collection of tensors.
-        """
-        if output_expr is None:
-            return []
-        if isinstance(output_expr, pypto.Tensor):
-            return [output_expr]
-        if isinstance(output_expr, (list, tuple)):
-            tensors: list[pypto.Tensor] = []
-            for idx, item in enumerate(output_expr):
-                if not isinstance(item, pypto.Tensor):
-                    raise ParserError(
-                        node,
-                        TypeError(
-                            f"Return annotation at index {idx} must be a tensor, "
-                            f"but got {type(item).__name__}."
-                        ),
-                    )
-                tensors.append(item)
-            return tensors
-
-        raise ParserError(
-            node,
-            TypeError(
-                "Return annotation must be a tensor or a list/tuple of tensors, "
-                f"but got {type(output_expr).__name__}."
-            ),
-        )
-
-
-
     def _visit_body(self, node: list[ast.stmt]) -> Any:
         """The general body visiting method.
 
@@ -774,7 +722,7 @@ class Parser(ast.NodeVisitor):
             self._auto_cleanup_after_stmt(stmt)
 
     def _validate_return_statements(self, node: ast.FunctionDef) -> None:
-        """Validate that return statements only appear once at the end of the function.
+        """Forbid return statements; use out parameter and out.move() instead.
 
         Parameters
         ----------
@@ -784,7 +732,7 @@ class Parser(ast.NodeVisitor):
         Raises
         ------
         ParserError
-            If there are multiple return statements or a return statement not at the end.
+            If any return statement is found.
         """
 
         def find_returns(stmts: list[ast.stmt]) -> list[tuple[int, ast.Return]]:
@@ -793,146 +741,29 @@ class Parser(ast.NodeVisitor):
             for idx, stmt in enumerate(stmts):
                 if isinstance(stmt, ast.Return):
                     returns.append((idx, stmt))
-                # Check for returns in nested if statements
                 elif isinstance(stmt, ast.If):
-                    # Check in if body
                     nested_returns = find_returns(stmt.body)
                     if nested_returns:
-                        for _, ret in nested_returns:
-                            returns.append((idx, ret))
-                    # Check in else/elif body
+                        returns.extend(nested_returns)
                     if stmt.orelse:
-                        nested_returns = find_returns(stmt.orelse)
-                        if nested_returns:
-                            for _, ret in nested_returns:
-                                returns.append((idx, ret))
-                # Check for returns in for loops
+                        returns.extend(find_returns(stmt.orelse))
                 elif isinstance(stmt, ast.For):
                     nested_returns = find_returns(stmt.body)
                     if nested_returns:
-                        for _, ret in nested_returns:
-                            returns.append((idx, ret))
+                        returns.extend(nested_returns)
                     if stmt.orelse:
-                        nested_returns = find_returns(stmt.orelse)
-                        if nested_returns:
-                            for _, ret in nested_returns:
-                                returns.append((idx, ret))
+                        returns.extend(find_returns(stmt.orelse))
             return returns
 
         returns = find_returns(node.body)
-
-        if len(returns) > 1:
+        if returns:
             raise ParserError(
-                returns[1][1],
+                returns[0][1],
                 ValueError(
-                    "Only one return statement is allowed in a function. "
-                    f"Found {len(returns)} return statements."
+                    "Return statements are not allowed. Use an out parameter and "
+                    "out.move(...) to write results instead."
                 ),
             )
-
-        if len(returns) == 1:
-            idx, return_node = returns[0]
-            # Check if return is at the last position of the function body
-            if idx != len(node.body) - 1:
-                raise ParserError(
-                    return_node,
-                    ValueError(
-                        "Return statement must be at the last position of the function body. "
-                        f"Found return at position {idx}, but function body has {len(node.body)} statements."
-                    ),
-                )
-
-    def _extract_return_names(self, node: ast.FunctionDef) -> Optional[list[str]]:
-        """Extract the variable names being returned from the function.
-
-        Parameters
-        ----------
-        node : ast.FunctionDef
-            The function definition node.
-
-        Returns
-        -------
-        res : Optional[list[str]]
-            List of variable names being returned, or None if no return statement.
-        """
-        # Find the return statement (should be at the end)
-        if not node.body:
-            return None
-
-        last_stmt = node.body[-1]
-        if not isinstance(last_stmt, ast.Return):
-            return None
-
-        if last_stmt.value is None:
-            return None
-
-        # Extract variable names from the return value
-        return_value = last_stmt.value
-        if isinstance(return_value, ast.Constant) and return_value.value is None:
-            return None
-        if isinstance(return_value, ast.Name):
-            # Single return value: return x
-            return [return_value.id]
-        elif isinstance(return_value, (ast.Tuple, ast.List)):
-            # Multiple return values: return x, y
-            names = []
-            for elt in return_value.elts:
-                if isinstance(elt, ast.Name):
-                    names.append(elt.id)
-                else:
-                    # If return contains expressions (not just names), we can't use this optimization
-                    return None
-            return names
-        else:
-            # Return contains an expression, not just variable names
-            return None
-
-    def _validate_output_args(
-        self, output_args: list[pypto.Tensor], node: ast.FunctionDef
-    ) -> None:
-        """Validate that output arguments are valid tensors.
-
-        Parameters
-        ----------
-        output_args : list[pypto.Tensor]
-            The output arguments to validate.
-        node : ast.FunctionDef
-            The function definition node for error reporting.
-
-        Raises
-        ------
-        ParserError
-            If any output argument is invalid.
-        """
-        for output_arg in output_args:
-            # Valid output includes:
-            # - pypto.Tensor: -> pypto.Tensor(shape, dtype)
-            # - tuple/list of pypto.Tensor: -> tuple/list of pypto.Tensor(shape, dtype)
-            # - TODO: type(pypto.Tensor): -> pypto.Tensor
-
-            if output_arg is None:
-                raise ParserError(
-                    node.returns,
-                    ValueError(
-                        "Return value must be a tensor with shape and dtype specified."
-                    ),
-                )
-
-            if output_arg is pypto.Tensor:
-                raise ParserError(
-                    node.returns,
-                    ValueError(
-                        "Return value must be a tensor with shape and dtype specified."
-                    ),
-                )
-
-            if output_arg is not None and not isinstance(output_arg, pypto.Tensor):
-                raise ParserError(
-                    node.returns,
-                    TypeError(
-                        f"Return value must be a tensor, but got {type(output_arg)}."
-                    ),
-                )
 
     def _mark_dynamic_dimensions(
         self, tensors: list[pypto.Tensor]
@@ -981,127 +812,15 @@ class Parser(ast.NodeVisitor):
             if isinstance(arg, pypto.Tensor):
                 self.context.add(arg.name, arg)
 
-    def _setup_output_var_mapping(
-        self, node: ast.FunctionDef, output_args: list[pypto.Tensor]
-    ) -> dict[str, pypto.Tensor]:
-        """Set up mapping from return variable names to output tensors.
-
-        This method extracts the variable names being returned and maps them to
-        the pre-defined output tensors, then adds them to the context.
-
-        Parameters
-        ----------
-        node : ast.FunctionDef
-            The function definition node.
-        output_args : list[pypto.Tensor]
-            List of output tensors.
-
-        Returns
-        -------
-        dict[str, pypto.Tensor]
-            Mapping from variable names to output tensors.
-
-        Raises
-        ------
-        ParserError
-            If the number of return values doesn't match the number of output tensors.
-        """
-        return_names = self._extract_return_names(node)
-        output_var_mapping = {}
-
-        if return_names is not None:
-            if len(return_names) != len(output_args):
-                raise ParserError(
-                    node.body[-1] if node.body else node,
-                    ValueError(
-                        f"Return statement has {len(return_names)} values but function signature "
-                        f"specifies {len(output_args)} output tensors."
-                    ),
-                )
-            # Map return variable names to pre-defined output tensors
-            # and add them to context so they're used directly
-            for name, output_tensor in zip(return_names, output_args):
-                output_tensor.name = name
-                output_var_mapping[name] = output_tensor
-                # Add to context so the variable refers to the pre-defined tensor
-                self.context.add(name, output_tensor)
-        elif output_args:
-            # Expression return: store pre-allocated signature outputs for writeback in _visit_return
-            self.context.add("__signature_output_args__", output_args)
-
-        return output_var_mapping
-
-    def _finalize_return_outputs(
-        self, node: ast.Return, returned: list[pypto.Tensor], func_name: str
-    ) -> Optional[Any]:
-        """Finalize return values and optionally write them into preallocated outputs.
-
-        Parameters
-        ----------
-        node : ast.Return
-            The return AST node (used for error reporting).
-        returned : list[pypto.Tensor]
-            Normalized and validated list of returned tensors.
-        func_name : str
-            Function name (used for stable output naming).
-
-        Returns
-        -------
-        res : Optional[Any]
-            The preallocated output(s) to return if writeback happened, otherwise None.
-
-        Notes
-        -----
-        Writes into __func_output_args__ (nested inline call) if present, otherwise into
-        __signature_output_args__ (top-level implicit outputs for `return foo()`).
-        """
-        outputs = self.context.get().get("__func_output_args__")
-        kind = "nested"
-        if outputs is None:
-            outputs = self.context.get().get("__signature_output_args__")
-            kind = "signature"
-        if outputs is None:
-            return None
-
-        if len(returned) != len(outputs):
-            msg = (
-                f"Return value count {len(returned)} does not match expected {len(outputs)}."
-                if kind == "nested"
-                else f"Return value count {len(returned)} does not match function signature "
-                    f"({len(outputs)} outputs)."
-            )
-            raise ParserError(node, ValueError(msg))
-
-        for i, tensor in enumerate(returned):
-            if kind == "signature" and not getattr(outputs[i], "name", ""):
-                outputs[i].name = (
-                    f"output_{func_name}" if len(outputs) == 1 else f"output_{func_name}_{i}"
-                )
-            if isinstance(outputs[i], pypto.Tensor) and isinstance(tensor, pypto.Tensor):
-                outputs[i][:] = tensor
-            else:
-                outputs[i] = tensor
-
-        return outputs if len(outputs) > 1 else outputs[0]
-
-    def _add_metadata_to_context(
-        self, func_name: str, output_var_mapping: dict[str, pypto.Tensor]
-    ) -> None:
+    def _add_metadata_to_context(self, func_name: str) -> None:
         """Add function metadata to context for use in other visit methods.
 
         Parameters
         ----------
         func_name : str
-            The function name.
-        output_var_mapping : dict[str, pypto.Tensor]
-            Mapping from variable names to output tensors.
+            The function name (e.g. for error reporting).
         """
-        # Store function name for use in _visit_return
-        # TODO: Move to ir builder context once it is implemented.
         self.context.add("__func_name__", func_name)
-        # Add output variable mapping to context
-        # This tells the parser to use pre-defined output tensors for these variables
-        self.context.add("__output_var_mapping__", output_var_mapping)
 
     def _visit_function_def(self, node: ast.FunctionDef) -> pypto.Function:
         """The general function definition visit method.
@@ -1120,32 +839,25 @@ class Parser(ast.NodeVisitor):
             decorator_list: list[expr]
             returns: Optional[expr]
         """
-        # Validate return statements in function body
+        # Validate return statements in function body (forbid return; use out.move() instead)
         self._validate_return_statements(node)
 
         # Check if function is marked for nested calling (before with block so it can be reused later)
         is_nested = self._is_nested_function(node.decorator_list)
 
         with self.context.with_frame():
-            # Step 1: Extract function signature
+            # Step 1: Extract function signature (no return annotation; output_args always [])
             tensor_input_args, output_args = self.get_signature(
                 lower_symbolic_dims=True
             )
 
-            # Step 2: Validate output arguments
-            self._validate_output_args(output_args, node)
-
-            # Step 3: Set up output variable mapping
-            # Note that the naming process should be done before the dynamic dimension marking,
-            output_var_mapping = self._setup_output_var_mapping(node, output_args)
-
-            # Step 4: Add arguments to parsing context
+            # Step 2: Add arguments to parsing context
             self._add_tensor_args_to_context(tensor_input_args)
 
-            # Step 5: Add metadata to context
-            self._add_metadata_to_context(node.name, output_var_mapping)
+            # Step 3: Add metadata to context
+            self._add_metadata_to_context(node.name)
 
-            # Step 6: Create PTO function and parse body
+            # Step 4: Create PTO function and parse body
             if is_nested:
                 # For nested functions, we don't create a pypto.Function; body will be inlined on call.
                 return None
@@ -1430,16 +1142,16 @@ class Parser(ast.NodeVisitor):
                 func_def_node.args
             )
 
-            if func_def_node.returns is None:
-                output_args = []
-            else:
-                output_args = self._eval_expr(
-                    func_def_node.returns, extra_vars=var_values
+            # Return annotation not allowed; nested functions use out param and out.move().
+            if func_def_node.returns is not None:
+                raise ParserError(
+                    func_def_node.returns,
+                    ValueError(
+                        "Return annotation is not allowed in nested functions. "
+                        "Use an out parameter and out.move(...) instead."
+                    ),
                 )
-                if output_args is None:
-                    output_args = []
-                elif not isinstance(output_args, (list, tuple)):
-                    output_args = [output_args]
+            output_args = []
 
         # Evaluate call-site arguments; keyword arguments are not supported yet.
         # Use merged env (locals + globals of callee + caller extras) so symbols referenced
@@ -1512,18 +1224,6 @@ class Parser(ast.NodeVisitor):
                         )
                     self.context.add(param_name, arg_value)
 
-            # Recreate outputs per return annotation to avoid cross-call interference.
-            nested_output_args: list[Any] = []
-            for out_arg in output_args:
-                if isinstance(out_arg, pypto.Tensor):
-                    nested_output_args.append(
-                        pypto.Tensor(out_arg.shape, out_arg.dtype, name=out_arg.name)
-                    )
-                else:
-                    nested_output_args.append(out_arg)
-
-            # Preserve outputs in context so visit_return can fill them in-place.
-            self.context.add("__func_output_args__", nested_output_args)
             self.context.add("__func_name__", func_name)
 
             # Inline-execute the callee body.
@@ -1548,12 +1248,8 @@ class Parser(ast.NodeVisitor):
             finally:
                 self.diag = old_diag
 
-            # Return aggregation: single tensor returns directly; multiple returns as a list.
-            if not nested_output_args:
-                return None
-            if len(nested_output_args) == 1:
-                return nested_output_args[0]
-            return nested_output_args
+            # No return value; nested functions use out parameter and out.move().
+            return None
 
     def _visit_for(self, node: ast.For) -> Any:
         """The general for visiting method.
@@ -1740,12 +1436,6 @@ class Parser(ast.NodeVisitor):
         """
         if isinstance(target, ast.Name):
             # Simple assignment: a = expr
-            # Handle output tensors first to avoid recreating them
-            output_var_mapping = self.context.get().get("__output_var_mapping__", {})
-            output_tensor = output_var_mapping.get(target.id)
-            if output_tensor is not None:
-                output_tensor[:] = expr
-                return
             # Set the tensor name if expr is a tensor
             if isinstance(expr, pypto.Tensor):
                 expr.name = target.id
@@ -1986,61 +1676,14 @@ class Parser(ast.NodeVisitor):
                 self._visit_body(node.orelse)
 
     def _visit_return(self, node: ast.Return) -> Any:
-        """The general return visiting method.
-
-        Parameters
-        ----------
-        node : ast.Return
-            The AST return node.
-
-        Returns
-        -------
-        res : Union[None, pypto.Tensor, list[pypto.Tensor]]
-            The visiting result: None, a single tensor, or a list of tensors.
-        """
-        if node.value is None:
-            # Case 1: return without any value
-            return None
-
-        expr = self._visit_expr(node.value)
-
-        # Case 2: return None (explicit)
-        if expr is None:
-            return None
-
-        func_name = self.context.get().get("__func_name__", "")
-
-        # Normalize expr to a validated list of tensors
-        if isinstance(expr, pypto.Tensor):
-            expr.name = f"output_{func_name}"
-            returned = [expr]
-        elif isinstance(expr, (list, tuple)):
-            returned = []
-            for idx, elem in enumerate(expr):
-                if not isinstance(elem, pypto.Tensor):
-                    raise ParserError(
-                        node,
-                        TypeError(
-                            f"Return value at index {idx} must be a tensor, "
-                            f"but got {type(elem).__name__}."
-                        ),
-                    )
-                if elem.name is None or elem.name == "":
-                    elem.name = f"output_{func_name}_{idx}"
-                returned.append(elem)
-        else:
-            raise ParserError(
-                node,
-                TypeError(
-                    f"Return value must be None, a tensor, or a list/tuple of tensors, "
-                    f"but got {type(expr).__name__}."
-                ),
-            )
-
-        finalized = self._finalize_return_outputs(node, returned, func_name)
-        if finalized is not None:
-            return finalized
-        return returned[0] if len(returned) == 1 else returned
+        """Forbid return statements; use out parameter and out.move() instead."""
+        raise ParserError(
+            node,
+            ValueError(
+                "Return statements are not allowed. Use an out parameter and "
+                "out.move(...) to write results instead."
+            ),
+        )
 
     def _visit_delete(self, node: ast.Delete) -> None:
         """The general delete visiting method.

@@ -22,7 +22,7 @@ def test_comipile_stage(host_options=None):
         a: pypto.Tensor((4, 4), pypto.DT_FP32),
         b: pypto.Tensor((4, 4), pypto.DT_FP32),
         c: pypto.Tensor((4, 4), pypto.DT_FP32),
-    ) -> None:
+    ):
         pypto.set_vec_tile_shapes(4, 4)
         c[:] = a + b
 
