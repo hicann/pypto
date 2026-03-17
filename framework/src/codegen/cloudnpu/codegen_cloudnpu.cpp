@@ -600,15 +600,18 @@ void EncodeWaitUntilInfo(const Operation &op, std::vector<int32_t> &code) {
     for (auto dimShape : op.GetInputOperand(1)->GetShape()) {
         code.push_back(dimShape);
     }
-    // 编码waitUntil的attr属性
+    // 编码waitUntil的attr属性，顺序固定
     std::map<std::string, Any> map = op.GetAllAttribute();
     auto it = map.find(OpAttributeKey::distOpAttr);
-    std::vector<int64_t> attrs;
     if (it != map.end()) {
-        Distributed::DistOpAttr distOpAttr = AnyCast<Distributed::DistOpAttr>(it->second);
-        attrs = distOpAttr.aicpuOpParams;
-    }
-    if (attrs.size() != 0) {
+        Distributed::ShmemWaitUntilAttr distAttr = AnyCast<Distributed::ShmemWaitUntilAttr>(it->second);
+        std::vector<int32_t> attrs = {
+            static_cast<int32_t>(distAttr.expectedSum),
+            static_cast<int32_t>(distAttr.signalStride),
+            static_cast<int32_t>(distAttr.resetSignal),
+            static_cast<int32_t>(distAttr.tileRowShape),
+            static_cast<int32_t>(distAttr.tileColShape)
+        };
         code.push_back(static_cast<int32_t>(attrs.size()));
         code.insert(code.end(), attrs.begin(), attrs.end());
     }

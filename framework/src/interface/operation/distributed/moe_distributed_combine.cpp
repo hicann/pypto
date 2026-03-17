@@ -196,7 +196,7 @@ void TiledMoeDistributedCombineSend(
         static_cast<int64_t>(COPY_BLOCK_BYTE_SIZE) / static_cast<int64_t>(BytesOf(DT_INT32))};
     Shape signalShape = Shape{static_cast<int64_t>(REPEAT_BYTE) / static_cast<int64_t>(BytesOf(DT_INT32))};
 
-    DistOpAttr distOpAttr;
+    MoeCombineAttr distOpAttr;
     op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
 
     CreateTileOp(tileShape,
@@ -244,7 +244,7 @@ void TiledMoeDistributedCombineReceive(
     ASSERT(floatByteSize != 0) << "floatByteSize cannot be zero";
     int64_t floatEleNum = AlignUp(floatByteSize * paddedColShape, REPEAT_BYTE) / floatByteSize;
 
-    DistOpAttr distOpAttr;
+    MoeCombineAttr distOpAttr;
     distOpAttr.topK = topK;
 
     CreateTileOp(tileShape,
@@ -303,7 +303,7 @@ Tensor MoeDistributedCombineSend(
         {in.GetStorage(), assistInfoForCombine.GetStorage(), recvCounts.GetStorage(), shmemData.GetStorage(),
             shmemSignal.GetStorage()},
         {out});
-    DistOpAttr distOpAttr;
+    MoeCombineAttr distOpAttr;
     distOpAttr.topK = topK;
     op.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
     return out;

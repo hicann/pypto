@@ -1613,10 +1613,6 @@ void ExpandOperationInto(Function &function, const TileShape &tileShape, Opcode 
             npu::tile_fwk::Distributed::TiledShmemWaitUntil(function, tileShape, iOperand, oOperand, op);
             break;
         }
-        case Opcode::OP_SHMEM_REDUCE: {
-            npu::tile_fwk::Distributed::TiledShmemReduce(function, tileShape, iOperand, oOperand, op);
-            break;
-        }
         case Opcode::OP_BIND_TENSOR: {
             npu::tile_fwk::Distributed::TiledShmemBindTensor(function, tileShape, iOperand, oOperand, op);
             break;

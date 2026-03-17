@@ -234,7 +234,6 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE {
     {"SHMEM_WAIT_UNTIL", CorePipeType::PIPE_S},
     {"SHMEM_GET", CorePipeType::PIPE_MTE_IN},
     {"SHMEM_GET_GM2UB", CorePipeType::PIPE_MTE_IN},
-    {"SHMEM_REDUCE", CorePipeType::PIPE_MTE_OUT},
     {"BIND_TENSOR", CorePipeType::PIPE_S},
     {"MOE_DISTRIBUTED_COMBINE_SEND", CorePipeType::PIPE_MTE_OUT},
     {"MOE_DISTRIBUTED_COMBINE_RECEIVE", CorePipeType::PIPE_MTE_IN},

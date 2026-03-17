@@ -24,7 +24,6 @@
 namespace npu::tile_fwk {
 
 using AtomicType = Distributed::AtomicType;
-using DistOpAttr = Distributed::DistOpAttr;
 constexpr int32_t GM2UB_SHMEMDATA_INDEX = 2;
 
 void CheckInRange(int64_t value)
@@ -63,7 +62,8 @@ std::string CodeGenOpCloudNPU::GetTemplateDType() const
 }
 
 std::string CodeGenOpCloudNPU::GenExtraTemplateParamsForMoeDistributedCombine(int32_t operandIndex) const {
-    DistOpAttr distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    Distributed::MoeCombineAttr distOpAttr =
+        AnyCast<Distributed::MoeCombineAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int64_t secondToLastIndex = 2;
     int64_t rowShape = originShape[operandIndex][originShape[operandIndex].size() - secondToLastIndex];
     if (distOpAttr.rowShape != -1) {
@@ -90,10 +90,22 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
     int64_t tileRowShape = tileShape[tileShape.size() - 2];
     int64_t tileColShape = tileShape[tileShape.size() - 1];
 
-    DistOpAttr distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
-
-    int64_t bufferRowShape = distOpAttr.copyBufferShape[0];
-    int64_t bufferColShape = distOpAttr.copyBufferShape[1];
+    int64_t bufferRowShape = 0;
+    int64_t bufferColShape = 0;
+    Distributed::AtomicType atomicType = Distributed::AtomicType::SET;
+    if (opCode == Opcode::OP_SHMEM_PUT || opCode == Opcode::OP_SHMEM_PUT_UB2GM) {
+        Distributed::ShmemPutAttr distOpAttr =
+            AnyCast<Distributed::ShmemPutAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+        bufferRowShape = distOpAttr.copyBufferShape[0];
+        bufferColShape = distOpAttr.copyBufferShape[1];
+        atomicType = distOpAttr.atomicType;
+    } else {
+        Distributed::ShmemGetAttr distOpAttr =
+            AnyCast<Distributed::ShmemGetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+        bufferRowShape = distOpAttr.copyBufferShape[0];
+        bufferColShape = distOpAttr.copyBufferShape[1];
+        atomicType = distOpAttr.atomicType;
+    }
 
     const std::vector<int64_t>& shmemTensorRawShape = rawShape[shmemDataIndex];
     const std::vector<int64_t>& nonShmemTensorRawShape = rawShape[nonShmemDataIndex];
@@ -103,7 +115,6 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
         srcStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
         dstStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
     }
-
     CheckInRange(tileRowShape);
     CheckInRange(tileColShape);
     CheckInRange(bufferRowShape);
@@ -111,17 +122,18 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const
     CheckInRange(srcStride);
     CheckInRange(dstStride);
 
-    oss << "<" << DataType2CCEStr(operandDtype[nonShmemDataIndex]) << ", " << DataType2CCEStr(operandDtype[shmemDataIndex])
-        << ", " << tileRowShape << ", " << tileColShape << ", " << bufferRowShape
-        << ", " << bufferColShape << ", " << srcStride << ", " << dstStride << ", "
-        << Distributed::AtomicTypeToString(distOpAttr.atomicType) << ">";
+    oss << "<" << DataType2CCEStr(operandDtype[nonShmemDataIndex]) << ", " <<
+        DataType2CCEStr(operandDtype[shmemDataIndex]) << ", " << tileRowShape << ", " << tileColShape << ", " <<
+        bufferRowShape << ", " << bufferColShape << ", " << srcStride << ", " << dstStride << ", "
+        << Distributed::AtomicTypeToString(atomicType) << ">";
     return oss.str();
 }
 
 std::string CodeGenOpCloudNPU::GenTemplateParamsForSignal() const
 {
     std::ostringstream oss;
-    DistOpAttr distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    Distributed::ShmemSignalAttr distOpAttr =
+        AnyCast<Distributed::ShmemSignalAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     oss << "<" << std::to_string(distOpAttr.signalValue) << ", "
         << std::to_string(distOpAttr.signalStride) << ", "
         << std::to_string(distOpAttr.tileRowShape) << ", "
@@ -150,7 +162,7 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSet() const
 {
     std::ostringstream oss;
     int32_t shmemTensorIndex = 3;
-    DistOpAttr distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    Distributed::ShmemSetAttr distOpAttr = AnyCast<Distributed::ShmemSetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int64_t bufferEleNum = distOpAttr.setBufferShape[0];
     int32_t rowDimIndex = 2;
     int32_t colDimIndex = 3;
@@ -171,9 +183,9 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSet() const
 std::string CodeGenOpCloudNPU::GenTemplateParamsDefault() const
 {
     std::ostringstream oss;
-    DistOpAttr distOpAttr;
+    Distributed::MoeDispatchAttr distOpAttr;
     if (opAttrs.count(OpAttributeKey::distOpAttr) != 0) {
-        distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+        distOpAttr = AnyCast<Distributed::MoeDispatchAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     }
     if (distOpAttr.extraTemplateParam.empty()) {
         oss << "<" << GetTemplateDType() << ">";
@@ -291,7 +303,8 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForMoeDistributedCombineRec
     std::ostringstream oss;
     int32_t shmemDataIndex = 6;
     int32_t shmemDataDim = 4;
-    DistOpAttr distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    Distributed::MoeCombineAttr distOpAttr =
+        AnyCast<Distributed::MoeCombineAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     oss << ", " << GenOffsets(shmemDataIndex, shmemDataDim) << ", " << distOpAttr.rowOffset;
     return oss.str();
 }
@@ -358,7 +371,8 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForFfnCombineInfo() const
 std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemSet() const
 {
     std::ostringstream oss;
-    DistOpAttr distOpAttr = AnyCast<DistOpAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+    Distributed::ShmemSetAttr distOpAttr =
+        AnyCast<Distributed::ShmemSetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int32_t shmemTensorIndex = 3;
     int32_t shmemTensorDim;
     if (distOpAttr.setType == 0) {

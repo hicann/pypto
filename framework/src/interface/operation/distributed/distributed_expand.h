@@ -50,10 +50,10 @@ inline void CreateTileOp(const TileShape& tileShape,
 
 Tensor SendToRoutingExpert(const Tensor &shmemData, const Tensor &tokenTensor, const Tensor &tokenExpertTable,
     const char *group, const MoeConfig &moeConfig);
-void SendToSharedExpert(const Tensor &shmemData, const Tensor &tokenTensor, 
+void SendToSharedExpert(const Tensor &shmemData, const Tensor &tokenTensor,
     const Tensor &syncTensor, const char *group);
 Tensor CopyToLocalExpert(const Tensor &tokenTensor, const Tensor &syncTensor);
-Tensor DispatchSetFlag(Tensor &shmemFlag, const Tensor &tokenExpertTable, 
+Tensor DispatchSetFlag(Tensor &shmemFlag, const Tensor &tokenExpertTable,
     const Tensor &syncTensor, const char *group, const MoeConfig &moeConfig);
 void TiledSendToRoutingExpert(Function &function, const TileShape &tileShape,
     const std::vector<std::shared_ptr<LogicalTensor>> &iOperand,
@@ -98,9 +98,6 @@ void TiledShmemWaitUntil(Function &function, const TileShape &tileShape,
     const std::vector<std::shared_ptr<LogicalTensor>> &iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>> &oOperand, const Operation &op);
 void TiledShmemSet(Function &function, const TileShape &tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>> &iOperand,
-    const std::vector<std::shared_ptr<LogicalTensor>> &oOperand, const Operation &op);
-void TiledShmemReduce(Function &function, const TileShape &tileShape,
     const std::vector<std::shared_ptr<LogicalTensor>> &iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>> &oOperand, const Operation &op);
 void TiledShmemBindTensor(Function &function, const TileShape &tileShape,
