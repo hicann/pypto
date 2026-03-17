@@ -15,8 +15,8 @@ This file demonstrates the usage of PyPTO's dynamic shape feature, which allows
 kernels to handle inputs with shapes that are not known at compile time.
 
 Key Concepts:
-  1. Define dynamic dimensions at module level using pypto.frontend.dynamic()
-  2. Only make necessary dimensions dynamic; keep others as concrete values
+  1. Define dynamic dimensions using pypto.DYNAMIC
+  2. Only make necessary dimensions dynamic; keep others as concrete values or Ellipsis
   3. Use pypto.view / pypto.assemble with pypto.loop for explicit tiling and
      boundary management on dynamic dimensions
 
@@ -74,8 +74,7 @@ def get_device_id():
 #   - Use pypto.assemble to write computed tiles back to the output
 #   - Use pypto.min for boundary management on the last tile
 #
-# IMPORTANT: Dynamic dimensions MUST be defined at module level using
-#            pypto.frontend.dynamic(), never inside kernel functions.
+# IMPORTANT: Dynamic dimensions MUST be defined at using pypto.DYNAMIC
 
 # Module-level dynamic dimension definition
 

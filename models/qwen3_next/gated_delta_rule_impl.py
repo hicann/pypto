@@ -466,19 +466,19 @@ def recurrent_state_attn_all(**kwargs) -> tuple[pypto.Tensor, pypto.Tensor]:
 
 def chunk_gated_delta_rule(b, nqk, nv, d, l):
     
-    t = pypto.frontend.dynamic("t")
-    query_shape = (t, nqk, d)
-    key_shape = (t, nqk, d)
-    value_shape = (t, nv, d)
-    beta_shape = (t, nv)
-    gate_shape = (t, nv)
-    states_shape = (b, nv, d, d)
-    mask_shape = (l, l)
-    tril_mask_shape = (l, l)
-    eye_shape = (16, l)
-    act_seq_len_shape = (b + 1,)
-    core_attn_out_shape = (t, nv, d)
-    last_state_data_shape = (b, nv, d, d)
+    t = pypto.DYNAMIC
+    query_shape = [t, nqk, d]
+    key_shape = [t, nqk, d]
+    value_shape = [t, nv, d]
+    beta_shape = [t, nv]
+    gate_shape = [t, nv]
+    states_shape = [b, nv, d, d]
+    mask_shape = [l, l]
+    tril_mask_shape = [l, l]
+    eye_shape = [16, l]
+    act_seq_len_shape = [b + 1]
+    core_attn_out_shape = [t, nv, d]
+    last_state_data_shape = [b, nv, d, d]
     
     @pypto.frontend.jit(
         runtime_options={
@@ -589,7 +589,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
 
 def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
     
-    t_unaligned = pypto.frontend.dynamic("t")
+    t_unaligned = pypto.DYNAMIC
     query_shape = (t_unaligned, nqk, d)
     key_shape = (t_unaligned, nqk, d)
     value_shape = (t_unaligned, nv, d)

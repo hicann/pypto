@@ -22,22 +22,21 @@ from pypto import Tensor as PTensor, loop, ceildiv, SymInt
 from pypto.frontend import jit, dynamic
 
 
-def isfinite_2d(view_shape: List[SymInt], tile_shape: List[int]):
-    b, s = dynamic("b"), dynamic("s")
-
-    @jit
-    def isfinite_2d_impl(x: PTensor((b, s), pypto.DT_FP16)) -> PTensor((b, s), pypto.DT_BOOL):
-        out = PTensor(x.shape, pypto.DT_BOOL)
-        pypto.set_vec_tile_shapes(*tile_shape)
-        for i in loop(ceildiv(b, view_shape[0])):
-            for j in loop(ceildiv(s, view_shape[1])):
-                tile = pypto.view(x, view_shape, [i * view_shape[0], j * view_shape[1]])
-                result = pypto.isfinite(tile)
-                pypto.assemble(result, [i * view_shape[0], j * view_shape[1]], out)
-                del tile
-        return out
-
-    return isfinite_2d_impl
+@jit
+def isfinite_2d(
+    x: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
+    out: PTensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_BOOL),
+    view_shape: List[SymInt],
+    tile_shape: List[int],
+):
+    b, s = x.shape
+    pypto.set_vec_tile_shapes(*tile_shape)
+    for i in loop(ceildiv(b, view_shape[0])):
+        for j in loop(ceildiv(s, view_shape[1])):
+            tile = pypto.view(x, view_shape, [i * view_shape[0], j * view_shape[1]])
+            result = pypto.isfinite(tile)
+            pypto.assemble(result, [i * view_shape[0], j * view_shape[1]], out)
+            del tile
 
 
 def test_is_finite():
@@ -55,7 +54,8 @@ def test_is_finite():
     torch_npu.npu.set_device(device_id)
     x = x_pt.npu()
     golden = torch.isfinite(x_pt)
-    out = isfinite_2d(view_shape, tile_shape)(x)
+    out = torch.zeros((32, 128), dtype=torch.bool, device=f"npu:{device_id}")
+    isfinite_2d(x, out, view_shape, tile_shape)
     assert torch.allclose(golden, out.cpu())
 
 

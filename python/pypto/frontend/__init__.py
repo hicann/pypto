@@ -39,13 +39,13 @@ Usage Examples
 --------------
 Basic JIT compilation:
     >>> @pypto.frontend.jit()
-    ... def my_kernel(x: pypto.Tensor((16,), pypto.DT_FP32)):
+    ... def my_kernel(x: pypto.Tensor([16,], pypto.DT_FP32)):
     ...     return pypto.add(x, x)
 
 Dynamic dimensions:
-    >>> N = pypto.frontend.dynamic("N")
+    >>> N = pypto.DYNAMIC
     >>> @pypto.frontend.jit()
-    ... def dynamic_kernel(x: pypto.Tensor((N, 128), pypto.DT_FP32)):
+    ... def dynamic_kernel(x: pypto.Tensor([N, 128], pypto.DT_FP32)):
     ...     return x
 
 Nested functions:
@@ -94,14 +94,14 @@ def dynamic(name: str) -> SymbolicScalar:
     Examples
     --------
     Create a batch-size dimension:
-    >>> BS = pypto.frontend.dynamic("BS")
+    >>> BS = pypto.DYNAMIC
     >>> @pypto.frontend.jit()
     ... def batch_kernel(x: pypto.Tensor((BS, 128), pypto.DT_FP16)):
     ...     return x
 
     Multiple dynamic dimensions:
-    >>> N = pypto.frontend.dynamic("N")
-    >>> M = pypto.frontend.dynamic("M")
+    >>> N = pypto.DYNAMIC
+    >>> M = pypto.DYNAMIC
     >>> @pypto.frontend.jit()
     ... def matmul_kernel(
     ...     a: pypto.Tensor((N, M), pypto.DT_FP32),
