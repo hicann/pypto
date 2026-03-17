@@ -448,13 +448,17 @@ Status InferMemoryConflict::ObtainReshapeTile(Operation &op, Shape &inTileShape,
         if (inTileShape.empty() && outTileShape.empty()) {
             return SUCCESS;
         }
-        Shape inShape = op.GetIOperands().front()->shape;
-        Shape outShape = op.GetOOperands().front()->shape;
-        DerivationTileShape derivationTileShapePass;
-        if (derivationTileShapePass.DerivationReshapeTileShape(&op, inShape, outShape, inTileShape, outTileShape) != SUCCESS) {
-            APASS_LOG_WARN_F(Elements::Operation, "DerivationReshapeTileShape failed. %s", GetFormatBacktrace(op).c_str());
-            // 失败时返回空的tileshape，由InferTileShape自动推导
-            return SUCCESS;
+        if (!inTileShape.empty() && !op.GetOOperands()[0]->GetConsumers().empty()) {
+            auto consumerOp = *op.GetOOperands()[0]->GetConsumers().begin();
+            
+            auto vec = consumerOp->GetTileShape().GetVecTile();
+            outTileShape = vec.tile;
+        }
+        if (!outTileShape.empty() && !op.GetIOperands()[0]->GetProducers().empty()) {
+            auto producerOp = *op.GetIOperands()[0]->GetProducers().begin();
+            
+            auto vec = producerOp->GetTileShape().GetVecTile();
+            inTileShape = vec.tile;
         }
     }
     return SUCCESS;
@@ -480,6 +484,9 @@ Status InferMemoryConflict::InsertPrecededCopys(Function &function) {
         }
         inputTensor->RemoveConsumer(op);
         op->ReplaceInput(newTensor, inputTensor);
+        TileShape finalTile;
+        finalTile.SetVecTile({reshapeTile});
+        copyOp.UpdateTileShape(finalTile);
     }
     return SUCCESS;
 }
@@ -503,6 +510,9 @@ Status InferMemoryConflict::InsertPostCopys(Function &function) {
         }
         outputTensor->RemoveConsumer(op);
         op->ReplaceOutput(newTensor, outputTensor);
+        TileShape finalTile;
+        finalTile.SetVecTile({reshapeTile});
+        copyOp.UpdateTileShape(finalTile);
     }
     return SUCCESS;
 }
