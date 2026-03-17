@@ -65,11 +65,25 @@ python3 scripts/diagnose_env.py --checklist
 
 只修复缺失项，不改动已正常组件。
 
+**⚠️ 重要：NPU 环境 + CANN 缺失时，必须按顺序执行以下 5 步，全部完成后才能进入步骤 4**
+
 | 问题类别 | 修复操作 | 失败回滚 |
 |---------|---------|---------|
-| **NPU 环境 + CANN 缺失** | 分步执行：<br>1. `cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps --device-type=<a2\|a3>`<br>2. `bash tools/prepare_env.sh --quiet --type=third_party`<br>3. `bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2\|a3> --install-path=${ASCEND_INSTALL_PATH:-/usr/local/Ascend} 2>&1 \| tee prepare_env.cann.log` | 检查网络连通性和目录写入权限；见 `troubleshooting.md` |
+| **NPU 环境 + CANN 缺失** | **按顺序执行以下 5 步**：<br><br>**步骤 3.1：安装编译依赖**<br>`cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps --device-type=<a2\|a3>`<br><br>**步骤 3.2：下载安装第三方源码包**<br>`bash tools/prepare_env.sh --quiet --type=third_party`<br><br>**步骤 3.3：下载cann包**<br>`script -q -c "bash tools/prepare_env.sh --quiet --type=cann --only-download --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.download.log`<br><br>**步骤 3.4：安装 CANN**<br>`script -q -c "bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.install.log`<br><br>**步骤 3.5：验证 CANN 安装**<br>检查 CANN 安装日志，未完成则安装（见下方代码块）<br><br>⚠️ **全部 5 步完成后才能进入步骤 4** | 检查网络连通性和目录写入权限；见 `troubleshooting.md` |
 | **编译工具链缺失** (cmake/gcc/make/g++/ninja/pip3) | `cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=deps` | 回退到手动 `apt-get install`；检查 apt 源配置 |
 | **第三方源码包缺失** (json/libboundscheck) | `cd $PYPTO_REPO && bash tools/prepare_env.sh --quiet --type=third_party` | 检查网络对 cann-src-third-party 的可达性 |
+
+**CANN 安装检查脚本**：
+```bash
+cd ${PYPTO_REPO:-$PWD}
+# 检查 CANN 安装日志，未完成则安装
+if ! grep -q "Successfully installed CANN packages." prepare_env.cann.install.log 2>/dev/null; then
+    echo "CANN 未安装完成，正在安装..."
+    script -q -c "bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.install.log
+else
+    echo "CANN 已安装完成"
+fi
+```
 
 > `--device-type` 由步骤 1 检测自动确定（910B→a2，910C→a3）。
 > 手动安装/编译细节见 [📋 prepare_environment.md](references/prepare_environment.md)。
@@ -80,45 +94,78 @@ python3 scripts/diagnose_env.py --checklist
 > pip install torch==2.6.0 torch-npu==2.6.0.post3
 > ```
 
-### 步骤 4：验证（必须执行）
+### 步骤 4：验证和编译（必须执行）
 
 任何安装/修复后必须通过 softmax 验证。
 
+#### 步骤 4.1：加载 CANN 环境
 ```bash
-# 步骤 4.1：加载 CANN 环境
 source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
-
-# 步骤 4.2：检查可用的 NPU 卡
-npu-smi info
-
-# 步骤 4.3：设置 NPU 设备 ID（根据步骤 4.2 选择空闲卡）
-export TILE_FWK_DEVICE_ID=0
-
-# 步骤 4.4：设置 PTO-ISA 路径
-export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/aarch64-linux
-
-# 步骤 4.5：进入 PyPTO 仓库
-cd ${PYPTO_REPO:-$PWD}
 ```
 
-**安装 torch 和 torch_npu**（CANN 安装后执行）：
+#### 步骤 4.2：检查可用的 NPU 卡 (务必在加载cann环境后检查)
+```bash
+npu-smi info
+```
+
+#### 步骤 4.3：设置环境变量
+```bash
+# 设置 NPU 设备 ID（根据步骤 4.2 选择空闲卡）
+export TILE_FWK_DEVICE_ID=0
+
+
+# 设置 PTO-ISA 路径
+arch=$(uname -m)   # 常见值：x86_64 或 aarch64
+
+# 3. 设置 PTO-ISA 库路径
+export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
+
+# 将环境变量写入当前目录文件
+cat > env_setup.sh << "EOF"
+#!/bin/bash
+# 自动生成的环境配置文件
+# 加载 Ascend 基础环境（根据实际安装路径调整）
+source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
+
+# 动态获取当前架构（确保生成的脚本在不同机器上仍正确）
+arch=$(uname -m)
+export TILE_FWK_DEVICE_ID=0
+export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
+
+echo "env_setup.sh 加载完成：TILE_FWK_DEVICE_ID=${TILE_FWK_DEVICE_ID}, PTO_TILE_LIB_CODE_PATH=${PTO_TILE_LIB_CODE_PATH}"
+EOF
+```
+> - \$\{arch\}：CPU架构，如aarch64、x86_64.
+
+#### 步骤 4.4：安装 torch 和 torch_npu
 ```bash
 pip install torch==2.6.0 torch-npu==2.6.0.post3
 ```
 
-**编译安装 PyPTO**：
+#### 步骤 4.5：编译安装 PyPTO
+
 ```bash
-python3 build_ci.py -f python3 --clean --disable_auto_execute
-pip install build_out/pypto-*.whl --force-reinstall -q
+# Source 环境变量文件
+source env_setup.sh
+
+# 如果有pypto先删除本地pypto
+pip uninstall pypto -y
+cd ${PYPTO_REPO:-$PWD}
+rm -rf build_out
+python3 -m pip install . --verbose
 ```
 
-**运行测试**：
+#### 步骤 4.6：运行测试验证
 ```bash
-# NPU 模式
+# Source 环境变量文件
+source env_setup.sh
+
+# NPU 模式（有 NPU 环境时必须使用）
 python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode npu
 
-# SIM 模式（非 NPU 环境）
-python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode sim
+# SIM 模式（非 NPU 环境时使用）
+# python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode sim
+
 ```
 
 ⚠️ **注意**：NPU 环境必须使用 NPU 模式通过验证。
@@ -154,15 +201,6 @@ pypto:      ✅ 已安装
 
 过程问题总结：
   - <问题> -> <解决方案>
-
-持久化配置（可选）：
-cat >> ~/.bashrc << 'EOF'
-source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
-export TILE_FWK_DEVICE_ID=0
-export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/aarch64-linux
-EOF
-source ~/.bashrc
-```
 
 ⚠️ `TILE_FWK_DEVICE_ID` 需根据 `npu-smi info` 输出修改。
 ## 📚 参考文件

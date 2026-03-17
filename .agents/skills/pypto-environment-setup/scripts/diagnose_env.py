@@ -29,6 +29,62 @@ from detect_npu import (  # noqa: E402  # pyright: ignore[reportImplicitRelative
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
+def _setup_environment_variables() -> None:
+    """在诊断前自动配置必要的环境变量，避免错误诊断。"""
+    ascend_install_path = os.environ.get("ASCEND_INSTALL_PATH", "/usr/local/Ascend")
+    # 获取 bash 的绝对路径
+    bash_path = shutil.which('bash')
+    if bash_path is None:
+        # 若找不到，回退到常见路径（可记录警告）
+        bash_path = '/bin/bash'
+    # 1. 尝试加载 CANN 环境变量（source set_env.sh）
+    set_env_candidates = [
+        os.path.join(ascend_install_path, "ascend-toolkit", "set_env.sh"),
+        os.path.join(ascend_install_path, "ascend-toolkit", "latest", "set_env.sh"),
+    ]
+
+    for set_env_path in set_env_candidates:
+        if os.path.isfile(set_env_path):
+            try:
+                result = subprocess.run(
+                    [bash_path, "-c", f"source {set_env_path} && env"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    shell=False
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.splitlines():
+                        if "=" in line:
+                            key, value = line.split("=", 1)
+                            if key.startswith("ASCEND_") or key in (
+                                "LD_LIBRARY_PATH",
+                                "PATH",
+                                "PYTHONPATH",
+                            ):
+                                os.environ[key] = value
+                    logging.info(f"✓ 已加载 CANN 环境变量: {set_env_path}")
+                    break
+            except Exception:
+                logging.error(f" 加载 CANN 环境失败：: {set_env_path}")
+                continue
+
+    # 2. 设置 TILE_FWK_DEVICE_ID（如果未设置）
+    if "TILE_FWK_DEVICE_ID" not in os.environ:
+        os.environ["TILE_FWK_DEVICE_ID"] = "0"
+
+    arch = platform.machine()  
+    # 3. 设置 PTO_TILE_LIB_CODE_PATH（如果未设置）
+    if "PTO_TILE_LIB_CODE_PATH" not in os.environ:
+        ascend_home = os.environ.get("ASCEND_HOME_PATH") or os.environ.get(
+            "ASCEND_TOOLKIT_HOME"
+        )
+        if ascend_home:
+            pto_isa_path = os.path.join(ascend_home, f"{arch}-linux")
+            if os.path.isdir(pto_isa_path):
+                os.environ["PTO_TILE_LIB_CODE_PATH"] = pto_isa_path
+                
+
 def _parse_timeout_env() -> int:
     raw = os.environ.get('DIAG_TIMEOUT', '10')
     try:
@@ -877,6 +933,7 @@ def main() -> int:
     ap.add_argument('--checklist', action='store_true', help='Human-readable confirmation checklist')
     args = ap.parse_args()
 
+    _setup_environment_variables()
     # 环境变量（仅 Ascend 相关条目）
     env: dict[str, Any] = {}
     env_keys = (

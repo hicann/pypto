@@ -39,10 +39,17 @@ cd "$PYPTO_REPO"
 # 分步安装（禁止 --type=all）
 bash tools/prepare_env.sh --quiet --type=deps --device-type=<a2|a3>
 bash tools/prepare_env.sh --quiet --type=third_party
-bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2|a3> --install-path=$ASCEND_INSTALL_PATH 2>&1 | tee prepare_env.cann.log
+# 先下载cann包
+script -q -c "bash tools/prepare_env.sh --quiet --type=cann --only-download --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.log
+# 再安装cann包
+script -q -c "bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.log 
 
-# 仅 CANN
-bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2|a3> --install-path=$ASCEND_INSTALL_PATH 2>&1 | tee prepare_env.cann.log
+
+# 仅 CANN 
+# 先下载cann包
+script -q -c "bash tools/prepare_env.sh --quiet --type=cann --only-download --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.log
+# 再安装cann包
+script -q -c "bash tools/prepare_env.sh --quiet --type=cann --device-type=<a2\|a3> --install-path=$ASCEND_INSTALL_PATH" prepare_env.cann.log 
 
 # 仅编译工具链
 bash tools/prepare_env.sh --quiet --type=deps
@@ -62,21 +69,19 @@ bash tools/prepare_env.sh --quiet --type=third_party
 
 ## pto-isa 获取
 
-### 源码方式（推荐）
 
+### .run 包方式（推荐）
+
+> 下载地址和安装命令见 `$PYPTO_REPO/docs/install/prepare_environment.md` § "获取pto-isa源码"
+> 如遇头文件版本不匹配，切换到源码方式。
+
+### 源码方式（备用）
 ```bash
 PTO_ISA_DIR=${PTO_ISA_DIR:-$PWD/pto-isa}
 git clone https://gitcode.com/cann/pto-isa.git "$PTO_ISA_DIR"
 export PTO_TILE_LIB_CODE_PATH="$PTO_ISA_DIR"
 test -d "$PTO_TILE_LIB_CODE_PATH/include/pto" && echo OK
 ```
-
-### .run 包方式（备用）
-
-> 下载地址和安装命令见 `$PYPTO_REPO/docs/install/prepare_environment.md` § "获取pto-isa源码"
-> 如遇头文件版本不匹配，切换到源码方式。
-
-
 
 ## PyPTO 编译安装
 
