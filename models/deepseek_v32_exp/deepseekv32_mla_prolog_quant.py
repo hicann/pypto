@@ -181,6 +181,8 @@ def mla_prolog_quant_v32_compute(inputs):
         # matmul use float32 for arm, arm平台matmul在bfloat16数据类型下表现与x86平台不一致，通过升精度保证正确性
         q_a_proj = torch.matmul(x_2d.to(torch.float32), w_dq.to(torch.float32))  # [b * s, q_lora_rank]
 
+    q_a_proj = q_a_proj.to(torch.bfloat16)
+    
     q_a_layernorm = rms_norm(q_a_proj, gamma_cq)
 
     # shape is: [b * s, q_lora_rank] @ [q_lora_rank, n * q_head_dim] -> [b * s, n * q_head_dim]

@@ -433,7 +433,7 @@ def mla_prolog_quant_v32_compute(inputs):
         q_a_proj = q_a_proj_fp32_dequant * w_qa_scale
     else:
         q_a_proj = torch.matmul(x_2d.to(torch.float32), w_dq.to(torch.float32))  # [b * s, q_lora_rank]
-
+    q_a_proj = q_a_proj.to(torch.bfloat16)
     q_a_layernorm = rms_norm(q_a_proj, gamma_cq)
 
     # shape is: [b * s, q_lora_rank] @ [q_lora_rank, n * q_head_dim] -> [b * s, n * q_head_dim]
@@ -883,7 +883,7 @@ params_base = {
 }
 
 
-@pytest.mark.skip(reason="prefill test cast")
+@pytest.mark.soc("950", "910")
 def test_b_4_s1_2_tilebs_8_d():
     '''
     mlaLp decode测试函数
@@ -958,8 +958,8 @@ def test_t_32_tilebs_16_p():
     '''
     mlaLp prefill测试函数
     '''
-    seed = 5
-    torch.manual_seed(5)
+    seed = 7
+    torch.manual_seed(seed)
     b = 16
     s1 = 2
     s2 = 1024
@@ -1031,8 +1031,8 @@ def test_t_512_tilebs_128_p():
     '''
     mlaLp prefill测试函数
     '''
-    seed = 5
-    torch.manual_seed(5)
+    seed = 15
+    torch.manual_seed(seed)
     b = 128
     s1 = 4
     s2 = 1024
