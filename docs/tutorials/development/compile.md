@@ -9,19 +9,19 @@ PyPTO通过函数定义在NPU硬件上构建可编译的计算图结构，并利
 -   基础函数定义：
 
     ```python
-    def add_kernel(input: pypto.Tensor) -> pypto.Tensor:
+    def add_kernel(input: pypto.Tensor, out: pypto.Tensor):
         # Tiling setting
         pypto.set_vec_tile_shapes(1, 4, 1, 64)
-        return input + 1
+        out[:] = input + 1
     ```
 
 -   多输入输出函数定义：
 
     ```python
-    def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor) -> pypto.Tensor:
+    def add_kernel(input0: pypto.Tensor, input1: pypto.Tensor, out: pypto.Tensor):
          # Tiling setting
          pypto.set_vec_tile_shapes(1, 4, 1, 64)
-         return input0 + input1
+         out[:] = input0 + input1
     ```
 
 ## JIT编译
@@ -33,10 +33,11 @@ PyPTO通过函数定义在NPU硬件上构建可编译的计算图结构，并利
 def add_kernel(
     input0: pypto.Tensor((1, 4, 1, 64), pypto.DT_FP32),
     input1: pypto.Tensor((1, 4, 1, 64), pypto.DT_FP32),
-) -> pypto.Tensor((1, 4, 1, 64), pypto.DT_FP32):
+    out: pypto.Tensor((1, 4, 1, 64), pypto.DT_FP32),
+):
      # Tiling setting
      pypto.set_vec_tile_shapes(1, 4, 1, 64)
-     return input0 + input1
+     out[:] = input0 + input1
 ```
 
 JIT编译流程为：
@@ -86,8 +87,6 @@ pypto.set_codegen_options(support_dynamic_aligned=True)
 您可以定义多个JIT函数并将它们一起使用：
 
 ```python
-B = pypto.frontend.dynamic("B")
-
 def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int, add1_flag: bool = False):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     if add1_flag:
@@ -98,33 +97,33 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
 
 @pypto.frontend.jit
 def add_kernel_true(
-    input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-    input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+    input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    input1: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    output: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
     val: int
-) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
-    output = pypto.tensor((B, 4, 1, 64), pypto.DT_FP32)
+):
     add_core(input0, input1, output, val, True)
-    return output
 
 
 @pypto.frontend.jit
 def add_kernel_false(
-    input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-    input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+    input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    input1: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    output: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
     val: int
-) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
-    output = pypto.tensor((B, 4, 1, 64), pypto.DT_FP32)
+):
     add_core(input0, input1, output, val, False)
-    return output
 
 
 #使用这两个函数 
 def add_add1flag_false(input_data0, input_data1, val=0):
-    output_data = add_kernel_false(input_data0, input_data1, val)
+    output_data = torch.empty_like(input_data0)
+    add_kernel_false(input_data0, input_data1, output_data, val)
     return output_data
 
 def add_add1flag_true(input_data0, input_data1, val=0):
-    output_data = add_kernel_true(input_data0, input_data1, val)
+    output_data = torch.empty_like(input_data0)
+    add_kernel_true(input_data0, input_data1, output_data, val)
     return output_data
 
 add_add1flag_false(input_data0, input_data1, val)

@@ -39,10 +39,10 @@ def create_add_kernel(run_mode: str):
     def add_kernel(
         x: pypto.Tensor(shape, pypto.DT_FP32),
         y: pypto.Tensor(shape, pypto.DT_FP32),
-    ) -> pypto.Tensor(shape, pypto.DT_FP32):
+        out: pypto.Tensor(shape, pypto.DT_FP32),
+    ):
         pypto.set_vec_tile_shapes(1, 4, 1, 64)
-        out = x + y
-        return out
+        out[:] = x + y
 
     return add_kernel
 

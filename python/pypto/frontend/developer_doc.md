@@ -254,19 +254,13 @@ M = 1024
 def basic_addsub(
     a: pypto.Tensor((N, M), pypto.DT_FP32),
     b: pypto.Tensor((N, M), pypto.DT_FP32),
-) -> (
-    pypto.Tensor((N, M), pypto.DT_FP32),
-    pypto.Tensor((N, M), pypto.DT_FP32),
+    c: pypto.Tensor((N, M), pypto.DT_FP32),
+    d: pypto.Tensor((N, M), pypto.DT_FP32),
 ):
-    c = pypto.tensor((N, M), pypto.DT_FP32)
-    d = pypto.tensor((N, M), pypto.DT_FP32)
-
     pypto.set_vec_tile_shapes(32, 32)
 
     c[:] = pypto.add(a, b)
     d[:] = pypto.sub(a, b)
-
-    return c, d
 ```
 
 **What the parser does:**
@@ -275,35 +269,33 @@ def basic_addsub(
 3. Creates PTO tensor IR nodes for `c` and `d`
 4. Converts `pypto.add(a, b)` and `pypto.sub(a, b)` into PTO operation IR
 5. Handles the slice assignment `c[:] = ...` as tensor fill operations
-6. Generates return statement with proper tensor outputs
 
 ### Dynamic Dimensions
 
 ```python
 import pypto
 
-N = pypto.frontend.dynamic("N")  # Symbolic dimension
+N = pypto.DYNAMIC  # Symbolic dimension
 M = 1024
 
 @pypto.frontend.jit()
 def basic_dynamic(
     a: pypto.Tensor((N, M), pypto.DT_FP32),
     b: pypto.Tensor((N, M), pypto.DT_FP32),
-) -> pypto.Tensor((N, M), pypto.DT_FP32):
+    out: pypto.Tensor((N, M), pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(32, 32)
-    result = pypto.tensor((N, M), pypto.DT_FP32)
 
     # N is symbolic here, resolved at runtime
     for bs_idx in pypto.loop(32):
         tile_a = pypto.view(a, (32, 1024), [bs_idx * 32, 0])
         tile_b = pypto.view(b, (32, 1024), [bs_idx * 32, 0])
-        result[bs_idx * 32: (bs_idx + 1) * 32, :] = pypto.add(tile_a, tile_b)
+        out[bs_idx * 32: (bs_idx + 1) * 32, :] = pypto.add(tile_a, tile_b)
 
-    return result
 ```
 
 **What the parser does:**
-1. Recognizes `N` as a SymbolicScalar (created by `dynamic()`)
+1. Recognizes `N` as a SymbolicScalar (marked by `pypto.DYNAMIC`)
 2. Keeps `N` symbolic during parsing
 3. During first execution, binds `N` to the actual input shape
 4. Validates that all uses of `N` are consistent
@@ -316,15 +308,14 @@ def basic_dynamic(
 def basic_loop(
     a: pypto.Tensor((N, M), pypto.DT_FP32),
     b: pypto.Tensor((N, M), pypto.DT_FP32),
-) -> pypto.Tensor((N, M), pypto.DT_FP32):
-    c = pypto.tensor((N, M), pypto.DT_FP32)
+    out: pypto.Tensor((N, M), pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(32, 32)
 
     for _ in pypto.loop(10):
         a[:] = pypto.add(a, b)
-        c = a
+        out[:] = a
 
-    return c
 ```
 
 **What the parser does:**
@@ -341,18 +332,20 @@ def basic_loop(
 def inner_add(
     x: pypto.Tensor((8,), pypto.DT_FP32),
     bias: pypto.Tensor((8,), pypto.DT_FP32),
-) -> pypto.Tensor((8,), pypto.DT_FP32):
-    tmp = pypto.add(x, bias)
-    return tmp
+    out: pypto.Tensor((8,), pypto.DT_FP32),
+):
+    out[:] = pypto.add(x, bias)
+
 
 @pypto.frontend.jit
 def outer_kernel(
     a: pypto.Tensor((8,), pypto.DT_FP32),
     b: pypto.Tensor((8,), pypto.DT_FP32),
-) -> pypto.Tensor((8,), pypto.DT_FP32):
+    out: pypto.Tensor((8,), pypto.DT_FP32),
+):
     pypto.set_vec_tile_shapes(1, 1, 16, 32)
-    res = inner_add(a, b)  # Inlined during parsing
-    return res
+    inner_add(a, b, out)  # Inlined during parsing
+    
 ```
 
 **What the parser does:**
@@ -369,23 +362,21 @@ def outer_kernel(
 def conditional_kernel(
     a: pypto.Tensor((N, M), pypto.DT_FP32),
     b: pypto.Tensor((N, M), pypto.DT_FP32),
+    out: pypto.Tensor((N, M), pypto.DT_FP32),
     flag: bool,
-) -> pypto.Tensor((N, M), pypto.DT_FP32):
-    result = pypto.tensor((N, M), pypto.DT_FP32)
+):
 
     if flag:
-        result[:] = pypto.add(a, b)
+        out[:] = pypto.add(a, b)
     else:
-        result[:] = pypto.sub(a, b)
-
-    return result
+        out[:] = pypto.sub(a, b)
 ```
 
 **What the parser does:**
 1. Evaluates the condition `flag` at parse time if it's a constant
 2. If the condition is known, can optimize by only generating IR for the taken branch
 3. If the condition is runtime-determined, generates conditional IR
-4. Handles variable scoping properly (result is visible in both branches)
+4. Handles variable scoping properly (out is visible in both branches)
 
 ## Best Practices
 

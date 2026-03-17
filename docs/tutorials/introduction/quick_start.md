@@ -51,21 +51,19 @@ from numpy.testing import assert_allclose
 
 2.  实现Softmax Kernel函数。
 
-    为了使计算逻辑能够在硬件上高效运行，需要实现Softmax Kernel函数，并通过@pypto.frontend.jit装饰器将计算图转换为硬件指令，并在其中定义数据切分和循环处理等策略。
+    为了使计算逻辑能够在硬件上高效运行，需要实现Softmax Kernel函数，并通过@pypto.frontend.jit装饰器将计算图转换为硬件指令，并在其中定义数据切分和循环处理等策略。在调用时直接传入PyTorch Tensor，PyPTO框架会自动处理Tensor的类型转换。
 
     ```python
-    # 动态轴定义（如果需要动态batch）
-    bs = pypto.frontend.dynamic("bs")  # 或使用固定值如 bs = 32
-
     @pypto.frontend.jit
     def softmax_kernel(
-        input_tensor: pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32)
-    ) -> pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32):
-        output_tensor = pypto.tensor((bs, seqlen, head, dim), pypto.DT_FP32)
+        input_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
+        output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
+    ):
+        bs, seqlen, head, dim = input_tensor.shape
         tile_b = 1  # Process one batch at a time
         b_loop = bs // tile_b
 
-        # tiling shape setting
+        # Tiling shape setting for efficient execution
         pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
         for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
@@ -75,7 +73,6 @@ from numpy.testing import assert_allclose
             softmax_out = softmax_core(input_view)
             output_tensor[b_offset:, ...] = softmax_out
 
-        return output_tensor
     ```
 
     其中，为了提高算子的计算效率，可以通过set\_vec\_tile\_shapes或set\_cube\_tile\_shapes接口，指定操作的分块（Tiling）方式。这种Tiling配置将计算分解为硬件友好的Tile粒度（如64），可优化内存访问和并行计算效率。
@@ -84,33 +81,11 @@ from numpy.testing import assert_allclose
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     ```
 
-3.  构建Softmax入口函数。
 
-    Softmax入口函数负责创建并返回编译好的kernel函数。在调用时直接传入PyTorch Tensor，PyPTO框架会自动处理Tensor的类型转换。
 
-    ```python
-    def softmax(shape: tuple, run_mode: str = "npu", dynamic: bool = True):
-        bs, seqlen, head, dim = shape
-        if dynamic:
-            bs = pypto.frontend.dynamic("bs")
+    
 
-        if run_mode == "npu":
-            mode = pypto.RunMode.NPU
-        elif run_mode == "sim":
-            mode = pypto.RunMode.SIM
-        else:
-            raise ValueError(f"Invalid run_mode: {run_mode}")
 
-        # 使用jit装饰器编译kernel
-        @pypto.frontend.jit(runtime_options={"run_mode": mode})
-        def softmax_kernel(
-            input_tensor: pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32),
-        ) -> pypto.Tensor((bs, seqlen, head, dim), pypto.DT_FP32):
-            # ... kernel实现 ...
-            return output_tensor
-
-        return softmax_kernel
-    ```
 
 ## 测试用例
 
@@ -122,11 +97,12 @@ def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = T
 
     shape = (32, 32, 1, 256)
     x = torch.rand(shape, dtype=torch.float, device=device)
+    y = torch.zeros(shape, dtype=torch.float, device=device)
 
-    # 调用softmax获取kernel，然后传入x执行
-    y = softmax(x.shape, run_mode, dynamic)(x).cpu()  # 默认dim: -1
+    softmax_kernel(x, y) # default dim: -1
     golden = torch.softmax(x, dim=-1).cpu()
-
+    y = y.cpu()
+    
     max_diff = np.abs(y.numpy() - golden.numpy()).max()
     print(f"Input shape: {x.shape}")
     print(f"Output shape: {y.shape}")
@@ -135,6 +111,7 @@ def test_softmax(device_id: int = None, run_mode: str = "npu", dynamic: bool = T
     if run_mode == "npu":
         assert_allclose(np.array(y), np.array(golden), rtol=3e-3, atol=3e-3)
     print("✓ Softmax test passed")
+    print()
 ```
 
 ## 编译与执行

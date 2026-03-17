@@ -8,17 +8,17 @@
 在Kernel函数前添加@pypto.frontend.jit装饰器可默认在PyTorch框架中采用单算子模式执行，如需开启图捕获模式可以参考如下代码：
 
 ```python
-B = pypto.frontend.dynamic("B")
+B = pypto.DYNAMIC
 N1, N2, DIM = 32, 1, 256
 
 # enable frontend.jit for softmax
 @pypto.frontend.jit()
 def softmax_kernel(
     input_tensor: pypto.Tensor((B, N1, N2, DIM), pypto.DT_FP32),
-) -> pypto.Tensor((B, N1, N2, DIM), pypto.DT_FP32):
-    output_tensor = pypto.tensor((B, N1, N2, DIM), pypto.DT_FP32)
+    output_tensor: pypto.Tensor((B, N1, N2, DIM), pypto.DT_FP32)
+):
     ...
-    return output_tensor
+    
 
 
 @allow_in_graph
@@ -26,7 +26,8 @@ def softmax(x: torch.Tensor, dynamic: bool = True) -> torch.Tensor:
     if isinstance(x, FakeTensor):
         return torch.zeros(x.shape, dtype=x.dtype, device=f'{x.device}')
     # launch the kernel
-    out = softmax_kernel(x)
+    out = torch.zeros(shape, dtype=x.dtype, device=f'{x.device}')
+    softmax_kernel(x, out)
     return out
 
 

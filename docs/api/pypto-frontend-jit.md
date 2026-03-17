@@ -12,13 +12,13 @@
 
 ## 功能说明
 
-`pypto.frontend.jit` 是新前端架构中的核心装饰器，用于将 Python 函数即时编译（JIT）为高效的计算图并在 NPU 上执行。相比旧版 `pypto.jit`，新前端提供了更现代化的函数式编程范式，支持函数返回值而非 in-place 修改，并且可以直接接受 torch 张量作为输入，无需显式转换。
+`pypto.frontend.jit` 是新前端架构中的核心装饰器，用于将 Python 函数即时编译（JIT）为高效的计算图并在 NPU 上执行。新前端不支持返回值，仅支持 in-place 修改；支持传入 torch 张量及其他类型的变量。
 
 主要特性：
-- **函数式风格**: 内核函数通过返回值传递计算结果，而不是修改输入张量
+- **In-place 修改**: 内核函数通过 in-place 修改输出张量传递计算结果，不支持返回值
 - **类型注解**: 在函数签名中明确指定张量的形状和数据类型
-- **直接调用**: 测试时可直接传入 torch 张量，无需 `pypto.from_torch()` 转换
-- **动态形状支持**: 配合 `pypto.frontend.dynamic()` 支持运行时变化的维度
+- **直接调用**: 测试时可直接传入 torch 张量及其他类型的变量，无需显式转换
+- **动态形状支持**: 配合 `pypto.DYNAMIC` 支持运行时变化的维度
 - **多运行模式**: 支持 NPU 和 SIM（模拟器）两种运行模式
 
 ## 函数原型
@@ -30,7 +30,7 @@
     codegen_options=None,
     pass_options=None
 )
-def kernel_function(...) -> pypto.Tensor:
+def kernel_function(...):
     ...
 ```
 
@@ -50,8 +50,11 @@ def kernel_function(...) -> pypto.Tensor:
 
 ## 约束说明
 
-1. 函数参数必须使用类型注解指定为 `pypto.Tensor` 类型，并明确指定形状和数据类型
-2. 动态维度必须使用 `pypto.frontend.dynamic()` 在模块级别定义
+1. 张量参数，必须使用类型注解指定为 `pypto.Tensor` 类型
+2. 动态维度必须使用 `pypto.DYNAMIC` 或 `pypto.DYN` 在参数注解中标记
+3. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后
+4. 非张量参数支持 keyword 传参、位置参数、使用默认值
+
 
 ## 调用示例
 
@@ -60,12 +63,13 @@ def kernel_function(...) -> pypto.Tensor:
 ```python
 @pypto.frontend.jit
 def add_kernel(
-    a: pypto.Tensor((3,), pypto.DT_FP32),
-    b: pypto.Tensor((3,), pypto.DT_FP32)
-) -> pypto.Tensor((3,), pypto.DT_FP32):
+    a: pypto.Tensor([3], pypto.DT_FP32),
+    b: pypto.Tensor([3], pypto.DT_FP32),
+    out: pypto.Tensor([3], pypto.DT_FP32)
+):
     pypto.set_vec_tile_shapes(2, 8)
-    out = pypto.add(a, b)
-    return out
+    out[:] = pypto.add(a, b)
+    
 
 # 直接传入 torch 张量调用
 x = torch.randn(3, dtype=torch.float32, device='npu:0')
@@ -78,11 +82,11 @@ result = add_kernel(x, y)
 ```python
 # NPU 模式
 @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
-def kernel_npu(x: pypto.Tensor) -> pypto.Tensor:
+def kernel_npu(x: pypto.Tensor):
     ...
 
 # Cost Model 模式
 @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.SIM})
-def kernel_sim(x: pypto.Tensor) -> pypto.Tensor:
+def kernel_sim(x: pypto.Tensor):
     ...
 ```

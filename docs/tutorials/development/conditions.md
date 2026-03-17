@@ -8,30 +8,32 @@
 ## 静态条件分支
 
 ```python
-B = pypto.frontend.dynamic("B")
-
-#使用入参add1_flag=False生成kernel
+# 使用入参 add1_flag=False 生成 kernel
 @pypto.frontend.jit
-def add_kernel_false(input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-                     input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-                     val: int) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
-    output = add_core(input0, input1, val, False)
-    return output
+def add_kernel_false(
+    input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    input1: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    output: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    val: int
+):
+    add_core(input0, input1, output, val, False)
 
 #使用入参add1_flag=True生成kernel
 @pypto.frontend.jit
-def add_kernel_true(input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-                    input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-                    val: int) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
-    output = add_core(input0, input1, val, True)
-    return output
+def add_kernel_true(
+    input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    input1: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    output: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    val: int
+):
+    add_core(input0, input1, output, val, True)
 ```
 
 代码示例：
 
 ```python
-def add_core(input0: pypto.Tensor, input1: pypto.Tensor, val: int, add1_flag: bool = False) -> pypto.Tensor:
-    # Tiling配置与循环逻辑
+def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, val: int, add1_flag: bool = False):
+    # Tiling 配置与循环逻辑
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     #calculate the loop parameters
@@ -39,20 +41,16 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, val: int, add1_flag: bo
     tile_b = 1
     b_loop = b // tile_b
 
-    output = pypto.zeros(input0.shape, pypto.DT_FP32)
-
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
         b_offset_end = (idx + 1) * tile_b
         t0_sub = input0[b_offset:b_offset_end, ...]
         t1_sub = input1[b_offset:b_offset_end, ...]
         t3_sub = t0_sub + t1_sub
-        if add1_flag: 
+        if add1_flag:
             output[b_offset:b_offset_end, ...] = t3_sub + val
         else:
             output[b_offset:b_offset_end, ...] = t3_sub
-    
-    return output
 ```
 
 该用例在add\_kernel函数中增加了一个可选参数add1\_flag，并使用该参数进行不同的处理。如果add1\_flag为True，则在输出结果上加1；反之，则直接输出前一个处理的结果。
@@ -70,12 +68,12 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, val: int, add1_flag: bo
 ```python
 @pypto.frontend.jit
 def add_kernel(
-    input0: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
-    input1: pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32),
+    input0: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    input1: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
+    output: pypto.Tensor([pypto.DYNAMIC, 4, 1, 64], pypto.DT_FP32),
     val: int
-) -> pypto.Tensor((B, 4, 1, 64), pypto.DT_FP32):
+):
     ...
-    output = pypto.zeros((B, 4, 1, 64), pypto.DT_FP32)
     for idx in pypto.loop(b_loop):
         t3_sub = t0_sub + t1_sub
         if idx < 2:  # 动态条件判断
@@ -90,8 +88,6 @@ def add_kernel(
             output[b_offset:b_offset_end, ...] = t3_sub + val + 1
         else:
             output[b_offset:b_offset_end, ...] = t3_sub
-
-    return output
 ```
 
 完整样例请参考：
