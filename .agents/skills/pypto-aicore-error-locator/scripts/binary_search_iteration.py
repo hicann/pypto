@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+# Copyright (c) Huawei Technologies Co., Ltd. 2026. All rights reserved.
+
+import os
+import sys
+import shutil
+import logging
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import (
+    read_file,
+    write_file,
+    get_commentable_lines,
+    comment_lines,
+    uncomment_lines,
+    has_error,
+    run_test,
+    comment_special_lines,
+    validate_path,
+    setup_logging,
+    print_error_info
+)
+
+setup_logging()
+
+logger = logging.getLogger(__name__)
+
+
+def binary_search_iteration(cce_file, test_cmd, run_dir, left, right):
+    logger.info("二分查找迭代: left=%d, right=%d", left, right)
+    logger.info("CCE 文件: %s", cce_file)
+    logger.info("")
+    
+    backup_file = cce_file + ".bak"
+    shutil.copy(cce_file, backup_file)
+    cce_lines = read_file(cce_file)
+    original_lines = cce_lines.copy()
+    
+    commentable_lines = get_commentable_lines(cce_lines)
+    
+    if not commentable_lines:
+        logger.info("错误：没有可注释的行")
+        write_file(cce_file, original_lines)
+        os.remove(backup_file)
+        return None, None, None
+    
+    mid = (left + right) // 2
+    logger.info("mid = (left + right) // 2 = (%d + %d) // 2 = %d", left, right, mid)
+    logger.info("取消注释范围 [0, %d] 的行", mid)
+    logger.info(commentable_lines[0:mid + 1])
+    
+    current_lines = cce_lines.copy()
+    current_lines = comment_lines(current_lines, commentable_lines)
+    
+    lines_to_uncomment = commentable_lines[0:mid + 1]
+    current_lines = uncomment_lines(current_lines, lines_to_uncomment)
+    
+    write_file(cce_file, current_lines)
+    logger.info("运行测试...")
+    returncode, output = run_test(test_cmd, run_dir)
+    error_exists = has_error(returncode, output)
+    
+    write_file(cce_file, original_lines)
+    os.remove(backup_file)
+    
+    if error_exists:
+        print_error_info(output, logger)
+        logger.info("结果: 运行失败（有 error），问题在 [%d, %d] 中", left, mid)
+        new_left = left
+        new_right = mid
+    else:
+        logger.info("结果: 运行成功（无 error），问题在 [%d, %d] 中", mid + 1, right)
+        new_left = mid + 1
+        new_right = right
+    
+    logger.info("下一轮: left=%d, right=%d", new_left, new_right)
+    logger.info("")
+    
+    if new_left == new_right:
+        problem_line = commentable_lines[new_left]
+        logger.info("找到问题代码行: %d", problem_line)
+        return new_left, new_right, problem_line
+    
+    return new_left, new_right, None
+
+
+def print_usage():
+    logger.info("用法: python3 binary_search_iteration.py <cce_file> <test_cmd> <run_dir> <left> <right>")
+    logger.info("")
+    logger.info("参数说明:")
+    logger.info("  cce_file: CCE 文件路径")
+    logger.info("  test_cmd: 触发 aicore error 的测试命令")
+    logger.info("  run_dir: 运行测试命令的目录路径")
+    logger.info("  left: 二分查找左边界")
+    logger.info("  right: 二分查找右边界")
+    logger.info("")
+    logger.info("输出格式:")
+    logger.info("  NEXT_LEFT <next_left>")
+    logger.info("  NEXT_RIGHT <next_right>")
+    logger.info("  FOUND <problem_line>  (可选，当 left == right 时)")
+
+
+def main():
+    if len(sys.argv) < 6:
+        print_usage()
+        sys.exit(1)
+    
+    cce_file = sys.argv[1]
+    test_cmd = sys.argv[2]
+    run_dir = sys.argv[3]
+    left = int(sys.argv[4])
+    right = int(sys.argv[5])
+    
+    cce_file = os.path.abspath(cce_file)
+    run_dir = os.path.abspath(run_dir)
+    
+    valid, error_msg = validate_path(cce_file, "CCE 文件")
+    if not valid:
+        logger.info(error_msg)
+        sys.exit(1)
+    
+    valid, error_msg = validate_path(run_dir, "运行目录")
+    if not valid:
+        logger.info(error_msg)
+        sys.exit(1)
+    
+    new_left, new_right, problem_line = binary_search_iteration(cce_file, test_cmd, run_dir, left, right)
+    
+    if new_left is not None:
+        logger.info(f"NEXT_LEFT {new_left}")
+        logger.info(f"NEXT_RIGHT {new_right}")
+        if problem_line is not None:
+            logger.info(f"FOUND {problem_line}")
+
+
+if __name__ == "__main__":
+    main()
