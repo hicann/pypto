@@ -484,9 +484,6 @@ Status InferMemoryConflict::InsertPrecededCopys(Function &function) {
         }
         inputTensor->RemoveConsumer(op);
         op->ReplaceInput(newTensor, inputTensor);
-        TileShape finalTile;
-        finalTile.SetVecTile({reshapeTile});
-        copyOp.UpdateTileShape(finalTile);
     }
     return SUCCESS;
 }
@@ -510,9 +507,6 @@ Status InferMemoryConflict::InsertPostCopys(Function &function) {
         }
         outputTensor->RemoveConsumer(op);
         op->ReplaceOutput(newTensor, outputTensor);
-        TileShape finalTile;
-        finalTile.SetVecTile({reshapeTile});
-        copyOp.UpdateTileShape(finalTile);
     }
     return SUCCESS;
 }
