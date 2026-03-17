@@ -31,6 +31,7 @@
 #include "cost_model/simulation/arch/SimplifiedMemoryAllocator.h"
 #include "cost_model/simulation/arch/PipeSimulatorFast.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
+#include "cost_model/simulation/utils/simulation_error.h"
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 
@@ -70,7 +71,8 @@ namespace CostModel
     {
         std::ofstream os(fileName);
         if (!os.is_open()) {
-            SIMULATION_LOGE("can't open %s", fileName.c_str());
+            SIMULATION_LOGE("ErrCode: F%u, Error: fail to open file: %s", 
+                            static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), fileName.c_str());
             return false;
         }
 

@@ -232,6 +232,7 @@ namespace CostModel
          }}
     };
 
+    constexpr const int DEFAULT_SHAPE = 256;
     constexpr const int BYTES_PER_REPEAT = 256;
     constexpr const int DEFAULT_LATENCY = 10;
     constexpr const int CORNER_DIM_VAL = 2;
@@ -262,7 +263,7 @@ namespace CostModel
             unsigned int beginVal = shapeVal.size() - CORNER_DIM_VAL;
             for (unsigned int j = beginVal; j < shapeVal.size(); j++)
             {
-                totalSize *= shapeVal[j];
+                totalSize *= shapeVal[j] > 0 ? shapeVal[j] : DEFAULT_SHAPE;
             }
             minTotalSize = std::min(minTotalSize, totalSize);
         }
@@ -277,7 +278,7 @@ namespace CostModel
             if (shapeVal.size() > CORNER_DIM_VAL) {
                 for (unsigned int j = 0; j < shapeVal.size() - CORNER_DIM_VAL; j++)
                 {
-                    totalSize *= shapeVal[j];
+                    totalSize *= shapeVal[j] > 0 ? shapeVal[j] : DEFAULT_SHAPE;
                 }
             }
             minTotalSize = std::min(minTotalSize, totalSize);

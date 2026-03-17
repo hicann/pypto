@@ -21,6 +21,8 @@
 #include "PvModelImpl.h"
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "cost_model/simulation/utils/simulation_error.h"
+#include "cost_model/simulation/common/CommonTools.h"
 
 using namespace npu::tile_fwk;
 
@@ -54,7 +56,8 @@ void PvModelBinHelper::ReadBin(std::string path, std::vector<uint8_t> &bytes)
     std::ifstream inFile(path, std::ios::binary);
 
     if (!inFile.is_open()) {
-        SIMULATION_LOGE("open bin file error: %s", path.c_str());
+        SIMULATION_LOGE("ErrCode: F%u, open bin file error: %s",
+                        static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), path.c_str());
         return;
     }
 
@@ -73,7 +76,8 @@ void PvModelBinHelper::ReadBin(std::string path, std::vector<uint8_t> &bytes)
 uint64_t PvModelBinHelper::GetBinSize(std::string path) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file) {
-        SIMULATION_LOGE("open file error: %s", path.c_str());
+        SIMULATION_LOGE("ErrCode: F%u, open file error: %s",
+                        static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), path.c_str());
         return 0;
     }
 
@@ -464,6 +468,8 @@ template <typename SystemConfig, typename CaseConfig>
 void DynPvModelImpl<SystemConfig, CaseConfig>::Run(DynFuncData *funcdata, int coreId, int funcId, int taskId)
 {
     SIMULATION_LOGI("[AICORE] core  %d, func %d, task %d", coreId, funcId, taskId);
+    CostModel::OutputSilencer silencer;
+    silencer.silence();
     auto data = &funcdata[funcId];
     auto opAttrs = &data->opAttrs[data->opAtrrOffsets[taskId]];
     auto psgId = opAttrs[0];
@@ -482,6 +488,7 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::Run(DynFuncData *funcdata, int co
     SetUp(cce, data, static_cast<uint64_t>(data->opAtrrOffsets[taskId]), dir, &dupData);
     RunModel();
     TearDown();
+    silencer.restore();
 }
 
 template <typename SystemConfig, typename CaseConfig>

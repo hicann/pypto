@@ -20,6 +20,7 @@
 #include "interface/utils/file_utils.h"
 #include "cost_model/simulation/tools/ParseArgs.h"
 #include "cost_model/simulation/base/ModelTop.h"
+#include "cost_model/simulation/utils/simulation_error.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
@@ -166,7 +167,8 @@ void CostModelInterface::RunPerformance()
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
     if (sim->IsDeadlock()) {
-        SIMULATION_LOGE("Simulation is deadlock at cycle %lu !!!!!!!!!", sim->globalCycles);
+        SIMULATION_LOGE("ErrCode: F%u, Simulation is deadlock at cycle %lu !!!!!!!!!", 
+                        static_cast<unsigned>(CostModel::ForwardSimErrorScene::DEAD_LOCK), sim->globalCycles);
     }
     SIMULATION_LOGW("CostModel Simulation Runtime: %ld(s)", duration.count());
 }

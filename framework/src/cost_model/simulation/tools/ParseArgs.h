@@ -25,6 +25,7 @@
 #include <sstream>
 #include <functional>
 #include "tilefwk/pypto_fwk_log.h"
+#include "cost_model/simulation/utils/simulation_error.h"
 
 namespace CostModel {
 class ParseArgs {
@@ -67,7 +68,8 @@ public:
             params_[index](args[currentIndex + 1]);
             ++currentIndex;  // 跳过下一个参数
         } else {
-            SIMULATION_LOGE("Missing argument for %s", args[currentIndex].c_str());
+            SIMULATION_LOGE("ErrCode: F%u, Missing argument for %s",
+                static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG), args[currentIndex].c_str());
         }
     }
     
@@ -80,7 +82,8 @@ public:
                 ++currentIndex;  // 跳过下一个参数
             }
         } else {
-            SIMULATION_LOGE("Unknown parameter: %s", args[currentIndex].c_str());
+            SIMULATION_LOGE("ErrCode: F%u, Unknown parameter: %s",
+                            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG),  args[currentIndex].c_str());
         }
     }
 
@@ -103,13 +106,6 @@ private:
     std::map<std::string, std::function<void(const std::string &)>> params_;
     std::map<std::string, std::vector<std::string> *> paramArrays_;
     std::map<std::string, std::string> descriptions_;
-    void PrintHelp() const
-    {
-        std::cout << "Usage: " << std::endl;
-        for (const auto &description : descriptions_) {
-            std::cout << "  " << description.first << ": " << description.second << std::endl;
-        }
-    }
 };
 }
 #endif

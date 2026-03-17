@@ -23,6 +23,7 @@
 #include <memory>
 #include <deque>
 #include "cost_model/simulation/common/CommonType.h"
+#include "cost_model/simulation/utils/simulation_error.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {
@@ -830,7 +831,7 @@ inline deque<PInstrParam> GetProgram(vector<string> program)
         } else if (funcName == "copy_matrix_cc_to_gm") {
             ret.push_back(FixL0cOut(templates, params));
         } else {
-            cout << funcStr << " not support" << endl;
+            SIMULATION_LOGE("ErrCode: F%u, %s not support.", static_cast<unsigned>(CostModel::ForwardSimErrorScene::FUNC_NOT_SUPPORT), funcStr.c_str());
         }
     }
     return ret;

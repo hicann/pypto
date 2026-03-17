@@ -310,7 +310,9 @@ public:
         if (ascendHome == nullptr) {
             throw std::runtime_error("ASCEND_HOME_PATH environment variable not set");
         }
-        std::string soPath = std::string(ascendHome) + "/toolkit/tools/simulator/dav_" + NPUArchToString(archType) + "/lib/libpem_davinci.so";
+        std::string archTypeStr = NPUArchToString(archType);
+        std::transform(archTypeStr.begin(), archTypeStr.end(), archTypeStr.begin(), ::tolower);
+        std::string soPath = std::string(ascendHome) + "/toolkit/tools/simulator/" + archTypeStr + "/lib/libpem_davinci.so";
         void *handle = dlopen((soPath.c_str()), RTLD_LAZY);
         if (!handle) {
             throw std::runtime_error("can not load library: " + soPath);
