@@ -12,7 +12,7 @@
 """
 validate_skill.py — Static checker for skill directories.
 
-Checks 27 static rules from rules.json against a target skill directory.
+Checks 26 static rules from rules.json against a target skill directory.
 Outputs a JSON array of findings to stdout.
 
 Usage:
@@ -620,30 +620,9 @@ def check_r45(lines, fm_end_line, **_):
     return results if results else None
 
 
-def check_r46(lines, **_):
-    """R46: Fenced code blocks should have a language annotation"""
-    fence_re = re.compile(r"^(`{3,}|~{3,})\s*(\S*)")
-    in_block = False
-    results = []
-    for i, line in enumerate(lines):
-        stripped = line.rstrip("\n\r")
-        m = fence_re.match(stripped)
-        if m:
-            if not in_block:
-                in_block = True
-                lang = m.group(2)
-                if not lang:
-                    results.append(finding("R46", "S3", "D4", "FAIL",
-                                           "代码块缺少语言标注",
-                                           "SKILL.md", i + 1, stripped))
-            else:
-                in_block = False
-    return results if results else None
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def finding(rule_id, *args):
     """Create a standardized finding dict."""
@@ -765,7 +744,6 @@ def validate(skill_dir):
         check_r43(**ctx),
         check_r44(**ctx),
         check_r45(**ctx),
-        check_r46(**ctx),
     ]
 
     findings = flatten(results)

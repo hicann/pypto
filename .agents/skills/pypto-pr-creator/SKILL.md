@@ -188,16 +188,25 @@ result = gitcode_get_repository(owner="<username>", repo="pypto")
 - PR 目标（`cann/pypto` → `master`）
 - PR 标题与 Body 预览
 
+#### 3.1 Commit Message 格式检查
+
+> ⚠️ **Commit message 格式错误是 PR 创建失败的最常见原因**
+
+**快速检查**：
+- Tag 必须是以下之一：`feat / fix / docs / style / refactor / perf / test`（⚠️ `chore` 不在允许列表！）
+- 格式：`tag(scope): Summary`（冒号后空格，首字母大写，10-200 字符，英文）
+- 验证命令：`git log -1 --format="%s" | grep -E '^(feat|fix|docs|style|refactor|perf|test)(.*): [A-Z].{10,200}'`
+
+
+
 ### 阶段 4：预检修复
 
-用户确认后执行：
-
-#### 3.1 基础检查
+#### 4.1 基础检查
 
 - 浅克隆修复：若 `git rev-parse --is-shallow-repository` 为 true → `git fetch --unshallow origin`
 - 再次验证 origin 不是 `cann/pypto`
 
-#### 3.2 Upstream 同步检查（关键）
+#### 4.2 Upstream 同步检查（关键）
 
 > ⚠️ **分支落后于 upstream 是 PR 创建失败（pre-receive hook）的常见原因**
 
@@ -288,7 +297,9 @@ GIT_CURL_VERBOSE=1 git push origin <branch_name> 2>&1 | grep -i authorization
 ```
 ### 阶段 6：创建或更新 PR
 
-#### 5.1 判断创建还是更新
+> ⚠️ **重要：MCP 工具可能吞掉详细错误信息，优先使用 curl 获取详细错误**
+
+#### 6.1 判断创建还是更新
 
 ```python
 # 查询是否已有该分支的 open PR
@@ -299,7 +310,7 @@ prs = gitcode_list_pull_requests(owner="cann", repo="pypto")
 # 如不存在 → 创建新 PR
 ```
 
-#### 5.2 创建新 PR
+#### 6.2 使用 MCP 创建 PR
 
 ```python
 gitcode_create_pull_request(
@@ -312,14 +323,34 @@ gitcode_create_pull_request(
 )
 ```
 
-**关键细节**：
-- `head` 格式为 `<username>:<branch_name>`（冒号分隔），不是纯分支名
-- `owner`/`repo` 指向**上游仓库**（`cann/pypto`），不是 fork
-- 所有参数名必须**小写**
+> ⚠️ **常见错误**：`head` 参数格式错误（应为 `<username>:<branch_name>` 而非 `<branch_name>`）
 
-> 完整参数说明和示例见 [references/pr-spec.md](references/pr-spec.md)。
+#### 6.3 MCP 失败的备选方案：使用 curl
 
-#### 5.3 更新现有 PR
+> **实践经验**：MCP 返回 400 时只显示 "400"，建议使用 curl 获取详细错误信息。
+
+```bash
+response=$(curl -s -w "\n%{http_code}" -X POST "https://api.gitcode.com/api/v5/repos/cann/pypto/pulls" \
+  -H "PRIVATE-TOKEN: ${GITCODE_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "tag(scope): Summary", "head": "<username>:<branch>", "base": "master", "body": "PR 描述"}')
+
+http_code=$(echo "$response" | tail -n1)
+body=$(echo "$response" | sed '$d')
+
+if [ "$http_code" = "201" ]; then
+    echo "✅ PR 创建成功"
+    pr_url=$(echo "$body" | grep -o '"html_url":"[^"]*"' | cut -d'"' -f4)
+    echo "PR 链接: $pr_url"
+else
+    echo "❌ PR 创建失败 (HTTP $http_code): $body"
+fi
+```
+
+
+
+
+#### 6.4 更新现有 PR
 
 ```python
 gitcode_update_pull_request(
@@ -331,33 +362,6 @@ gitcode_update_pull_request(
     state="open"                # 可选: "open" 或 "closed"
 )
 ```
-
-#### 5.4 MCP 失败后的 curl 兜底方案
-
-> ⚠️ GitCode MCP 的 `create_pull_request` 可能返回 400 错误，即使参数正确。此时使用 curl 直接调用 API。
-
-**兜底步骤**：
-
-```bash
-# 直接调用 GitCode API 创建 PR
-curl -s -X POST "https://api.gitcode.com/api/v5/repos/cann/pypto/pulls" \
-  -H "PRIVATE-TOKEN: ${GITCODE_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "tag(scope): Summary",
-    "head": "<username>:<branch_name>",
-    "base": "master",
-    "body": "PR 描述内容"
-  }'
-```
-
-**成功响应**：返回 PR JSON，包含 `html_url` 字段
-
-**失败响应**：
-- `pre receive hook check failed` → 检查 commit message 格式和 upstream 同步
-- `400 Unknown` → 检查参数格式
-
-> 注意：此兜底方案仅在 MCP 工具失败时使用，正常情况优先使用 MCP。
 
 ### 阶段 7：PR 创建后报告
 
@@ -377,6 +381,8 @@ PR 操作成功后，向用户展示结构化报告，包含：
 pr_url = result["html_url"]
 assert "cann/pypto" in pr_url, f"PR 链接错误：{pr_url}，应为 cann/pypto"
 ```
+
+---
 
 ### 阶段 8：CLA 检查（关键）
 
@@ -493,6 +499,8 @@ CLA 失败时，向用户展示诊断信息并询问：
 3. 跳过，稍后处理
 ```
 
+---
+
 ### 阶段 9：追加修改（可选）
 
 若需修改已有 PR：在同一分支追加 commit 并 push，PR 自动更新。如需修改标题/描述，用 `gitcode_update_pull_request`。
@@ -549,7 +557,8 @@ CLA 失败时，向用户展示诊断信息并询问：
 | `head` 只有分支名 | 必须是 `<username>:<branch_name>` |
 | `owner` 指向了 fork | `owner` 应为 `cann`（上游仓库） |
 || **PR 链接指向 fork** | PR 链接必须是 `cann/pypto/merge_requests/<id>`，不是 `<username>/pypto/...` |
-|| MCP 创建 PR 返回 400 但参数正确 | 使用 curl 兜底方案（见阶段 5.4） |
+| **commit tag 不在允许列表（如 chore）** | 使用允许的 tag: `feat / fix / docs / style / refactor / perf / test` |
+| MCP 创建 PR 返回 400 但参数正确 | 优先使用 curl 获取详细错误（见阶段 6.3） |
 | commit message 超过 10 行 | 精简内容，控制在 10 行以内 |
 | commit message 使用中文 | **必须使用英文** |
 

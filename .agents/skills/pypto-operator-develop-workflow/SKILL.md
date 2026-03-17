@@ -37,7 +37,7 @@ tag: [PyPTO，算子开发]
 ### 最常见错误 TOP 5
 
 1. **BFloat16 转 NumPy 失败**：必须先 `.float()` 再 `.numpy()`
-2. **环境变量未设置**：第一步就要 `export TILE_FWK_DEVICE_ID=0`
+2. **环境变量未设置**：先运行 `npu-smi info | grep "No running processes found"` 确认空闲卡，再设置 `export TILE_FWK_DEVICE_ID=<空闲卡号>`
 3. **动态轴定义位置错误**：必须在 jit 函数外部定义
 4. **Tile Shape 未设置**：matmul 前必须调用 `set_cube_tile_shapes`
 5. **精度标准不合理**：bfloat16 使用 atol=0.0001, rtol=0.0078125
@@ -80,16 +80,16 @@ ls examples/            # 示例代码
 ```
 4. 设置device_id
 ```bash
-export TILE_FWK_DEVICE_ID=0
+# 查找空闲卡
+npu-smi info | grep "No running processes found"
+
+# 根据空闲卡设置环境变量（假设卡1空闲）
+export TILE_FWK_DEVICE_ID=1
 export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 ```
 
-**⚠️ 重要提示**：
-- **先设置 `export TILE_FWK_DEVICE_ID=0`**
-- 如果设置TILE_FWK_DEVICE_ID=0执行失败了，报错为`Invalid Device`时，再检查npu设备
-- 运行 `npu-smi info` 查看可用的NPU chip，进行设置`export TILE_FWK_DEVICE_ID=x`
-- 未设置此环境变量会导致运行时提示："If no NPU environment is available"
-- 处理动态轴时，遇到计算loop次数时，可以参考pypto/models/glm_v4_5/glm_attention_pre_quant.py的实现
+-**⚠️ 重要提示**：
+-- 未设置TILE_FWK_DEVICE_ID会导致运行时提示："If no NPU environment is available"
 
 如果以上信息未检查通过或者有疑问，请参考`docs/install`中的参考资料进行环境准备。
 

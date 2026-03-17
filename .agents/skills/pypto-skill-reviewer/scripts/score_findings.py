@@ -177,6 +177,7 @@ def parse_args():
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = parse_args()
     rules_data = load_json(args.rules)
 

@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "meta": {
     "title": "PyPTO Skill Reviewer Rules",
-    "description": "Single source of truth for all 47 review rules across 9 dimensions",
+    "description": "Single source of truth for all 48 review rules across 9 dimensions",
     "sources": [
       { "id": "A1", "title": "Anthropic Docs: Claude Code Skills", "url": "https://docs.anthropic.com/en/docs/claude-code/skills" },
       { "id": "A2", "title": "Anthropic Docs: Subagents", "url": "https://docs.anthropic.com/en/docs/claude-code/subagents" },
@@ -444,13 +444,12 @@
     {
       "id": "R46",
       "severity": "S3",
-      "type": "static",
+      "type": "semantic",
       "dimension": "D4",
-      "rule": "围栏代码块应带有语言标注",
+      "rule": "代码块应带有语言标注，纯文本块除外",
       "source": ["A3"],
-      "check_strategy": "Check opening ``` lines for a language identifier after the fence marker"
+      "check_strategy": "For each code block, determine if content is code (Python, Bash, JSON, YAML, SQL, etc.) or plain text (URLs, simple examples, key-value pairs). Code blocks should have language identifier. Plain text blocks can skip."
     },
-
     {
       "id": "R47",
       "severity": "S2",
@@ -459,6 +458,15 @@
       "rule": "提供多个选项时，应给出默认推荐",
       "source": ["A3"],
       "check_strategy": "Identify sections offering choices/alternatives and check for a recommended default"
+    },
+    {
+      "id": "R48",
+      "severity": "S3",
+      "type": "semantic",
+      "dimension": "D1",
+      "rule": "description 应该 pushy 一些，避免在技能本应发挥作用的场景下却不使用",
+      "source": ["A3"],
+      "check_strategy": "Check if description expands trigger scope beyond explicit keywords. Look for phrases like 'whenever', 'including', 'or any related to'. PASS with expanding phrases, WARN with only explicit triggers."
     }
   ]
 }
