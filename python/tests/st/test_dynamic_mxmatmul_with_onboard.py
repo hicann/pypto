@@ -108,7 +108,6 @@ def create_scaled_mm_kernel_with_mn_split(tile_config: ShapeConfig):
         pypto.set_cube_tile_shapes(tile_config.m_tile_shape, tile_config.k_tile_shape, tile_config.n_tile_shape)
         m_loop = (m + m_view - 1) // m_view
         n_loop = (n + n_view - 1) // n_view
-        out_tensor = pypto.Tensor([m, n], tile_config.out_dtype)
         for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
             for n_idx in pypto.loop(0, n_loop, 1, name="LOOP_L0_nIdx", idx_name="n_idx"):
                 #Get the view tensor of mat_a
@@ -177,9 +176,9 @@ def create_scale_mm_with_bias(tile_config: ShapeConfig):
         mat_a = trans_nd_to_fractal_nz(mat_a, True)
     if tile_config.b_format_nz:
         mat_b = trans_nd_to_fractal_nz(mat_b, True)
-    out = torch.zeros([m, n], dtype=torch.float32, device=mat_a.device)
+    out = torch.zeros([m, n], dtype=torch.float16).npu()
     create_scaled_mm_kernel_with_mn_split(tile_config)(mat_a.npu(), scale_a.npu(), mat_b.npu(), scale_b.npu(),
-                                                            bias.npu(), out.npu())
+                                                            bias.npu(), out)
     assert torch.allclose(out.cpu().to(torch.float32), golden, rtol=1e-3, atol=1e-3), "结果精度不匹配"
 
 
