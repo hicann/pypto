@@ -441,6 +441,10 @@ void PadLocalBuffer::DoPadding(Function &function) {
     for (auto &op : function.Operations()) {
         std::vector<bool> inputAxis;
         op.GetAttr(OpAttributeKey::inputCombineAxis, inputAxis);
+        if(op.GetBoolAttribute("isConv")) {
+            // Conv operation not need to pad
+            continue;
+        }
         for (size_t i = 0; i < op.iOperand.size(); i++) {
             auto &in = op.iOperand[i];
             if (visited.count(in) != 0) continue;
@@ -461,6 +465,10 @@ void PadLocalBuffer::DoPadding(Function &function) {
     for (auto &op : function.Operations()) {
         std::vector<bool> outputAxis;
         op.GetAttr(OpAttributeKey::outputCombineAxis, outputAxis);
+        if(op.GetBoolAttribute("isConv")) {
+            // Conv operation not need to pad
+            continue;
+        }
         for (size_t i = 0; i < op.oOperand.size(); i++) {
             auto &out = op.oOperand[i];
             if (visited.count(out) != 0) continue;
