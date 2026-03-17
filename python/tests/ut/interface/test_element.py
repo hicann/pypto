@@ -14,14 +14,13 @@ import logging
 
 import pypto
 
-from pypto._element import Element
 
 def test_element():
-    a = Element(pypto.DT_FP32, 1.0)
+    a = pypto.element(pypto.DT_FP32, 1.0)
     assert a.dtype == pypto.DT_FP32
     assert a.value == 1.0
 
-    b = Element(pypto.DT_INT32, 1)
+    b = pypto.element(pypto.DT_INT32, 1)
     assert b.dtype == pypto.DT_INT32
     assert b.value == 1
 
