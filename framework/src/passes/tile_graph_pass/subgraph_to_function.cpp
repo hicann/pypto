@@ -24,7 +24,7 @@
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_log/pass_log.h"
 
-
+#undef MODULE_NAME
 #define MODULE_NAME "SubgraphToFunction"
 
 namespace npu::tile_fwk {
