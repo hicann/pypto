@@ -458,6 +458,14 @@ void ConfigManagerNg::EndScope(const char *file, int lino) {
     impl_->EndScope(file, lino);
 }
 
+ConfigManagerNg::ScopedRestore::ScopedRestore(std::shared_ptr<ConfigScope> scope) {
+    ConfigManagerNg::GetInstance().PushScope(std::move(scope));
+}
+
+ConfigManagerNg::ScopedRestore::~ScopedRestore() {
+    ConfigManagerNg::GetInstance().EndScope();
+}
+
 void ConfigManagerNg::SetScope(std::map<std::string, Any> &&values, const char *file, int lino) {
     return impl_->SetScope(std::move(values), file, lino);
 }
@@ -535,13 +543,9 @@ template void SetOptionsNg<std::vector<std::string>>(const std::string &key, con
 template void SetOptionsNg<std::vector<double>>(const std::string &key, const std::vector<double> &value);
 
 
-void Restore(std::shared_ptr<ConfigScope> config) {
-    ConfigManagerNg::GetInstance().PushScope(config);
-}
-
 std::shared_ptr<ConfigScope> Duplicate() {
     return ConfigManagerNg::CurrentScope();
 }
 
-}
+}  // namespace config
 } // namespace npu::tile_fwk

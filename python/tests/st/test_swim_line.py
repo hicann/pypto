@@ -23,12 +23,13 @@ import torch
 import torch_npu
 
 
-@pypto.jit(debug_options=dict(runtime_debug_mode=1))
-def matmul_add(in_tensor0, in_tensor1, in_tensor2, out_tensor):
-    a = in_tensor0	 
-    b = in_tensor1	 
-    c = in_tensor2	 
-    d = out_tensor
+@pypto.frontend.jit(debug_options=dict(runtime_debug_mode=1))
+def matmul_add(
+    a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
+    b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
+    c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+    out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
+):
     tiling = 32
     n, k, m = tiling * 8, tiling * 8, tiling * 8
     pypto.set_vec_tile_shapes(tiling, tiling)
@@ -37,7 +38,7 @@ def matmul_add(in_tensor0, in_tensor1, in_tensor2, out_tensor):
     for _ in pypto.loop(1, name="s0", idx_name="i"):
         a0 = pypto.view(a, [n, k], [0, 0])
         b0 = pypto.view(b, [k, m], [0, 0])
-        d.move(pypto.add(pypto.matmul(a0, b0, pypto.DT_INT32), c))
+        out.move(pypto.add(pypto.matmul(a0, b0, pypto.DT_INT32), c))
 
 
 def device_run_data_from_device_mix_nodep(queue):
@@ -69,13 +70,7 @@ def device_run_data_from_device_mix_nodep(queue):
         d_data_list.append(d_data)
 
         # def inputs and outputs
-        inputs = [a_data, b_data, c_data]
-        outputs = [d_data]
-        pto_inputs = [pypto.from_torch(
-            tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
-        pto_outputs = [pypto.from_torch(
-            tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
-        matmul_add(pto_inputs[0], pto_inputs[1], pto_inputs[2], pto_outputs[0])
+        matmul_add(a_data, b_data, c_data, d_data)
 
     torch_npu.npu.synchronize()
     pref_path = pypto.pypto_impl.LogTopFolder()

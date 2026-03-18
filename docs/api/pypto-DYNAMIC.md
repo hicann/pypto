@@ -50,7 +50,7 @@ def add_bias(
     out: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)
 ):
     # 实现 add 逻辑
-    # [pypto.DYNAMIC, ...]第一维是动态的，省略号表示剩余轴维是静态的
+    # [pypto.DYNAMIC, ...]第一维是动态的，省略号表示剩余维度是静态的
     ...
 
 # 可以用不同的 batch size 调用

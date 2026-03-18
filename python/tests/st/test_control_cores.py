@@ -74,14 +74,7 @@ def kernel_func(device_id):
                              device=f'npu:{device_id}')
         d_data_list.append(d_data)
 
-        # def inputs and outputs
-        inputs = [a_data, b_data, c_data]
-        outputs = [d_data]
-        pto_inputs = [pypto.from_torch(
-            tensor, f"IN_{idx}") for idx, tensor in enumerate(inputs)]
-        pto_outputs = [pypto.from_torch(
-            tensor, f"OUT_{idx}") for idx, tensor in enumerate(outputs)]
-        matmul_add(pto_inputs[0], pto_inputs[1], pto_inputs[2], pto_outputs[0])
+        matmul_add(a_data, b_data, c_data, d_data)
 
     torch_npu.npu.synchronize()
 

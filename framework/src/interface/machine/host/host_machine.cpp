@@ -258,7 +258,7 @@ void HostMachine::SubAllStashedTask() {
     }
     while (!stashedFuncQueue_.Empty()) {
         auto funcData = stashedFuncQueue_.Pop();
-        config::Restore(std::get<static_cast<size_t>(StashType::ProgramConfig)>(funcData));
+        ConfigManagerNg::ScopedRestore scope(std::get<static_cast<size_t>(StashType::ProgramConfig)>(funcData));
         ConfigManager::Instance().SetInternalConfig(std::get<static_cast<size_t>(StashType::InternalConfig)>(funcData));
         ConfigManager::Instance().SetJsonData(std::get<static_cast<size_t>(StashType::ConfigJson)>(funcData));
         SubTask(std::get<0>(funcData));

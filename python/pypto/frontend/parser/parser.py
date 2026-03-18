@@ -868,7 +868,7 @@ class Parser(ast.NodeVisitor):
                 set_source_location(filename=self.source_name(), lineno=node.lineno)
                 with pypto.function(node.name, *tensor_input_args, *output_args):
                     clear_source_location()
-                    for _ in pypto.loop(1):
+                    for _ in pypto.loop(1, name="default_loop_1"):
                         self._visit_body(node.body)
 
         return pypto.functions.get_last_function()

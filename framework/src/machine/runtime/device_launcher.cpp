@@ -754,7 +754,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             MACHINE_LOGE("sync failed");
             return rc;
         }
-        devRunner.SynchronizeDeviceToHostProfData();
+        devRunner.DumpAiCoreExecutionTimeData();
         ASSERT(machine::GetRA()->CheckAllSentinels());
     }
     return ret;
