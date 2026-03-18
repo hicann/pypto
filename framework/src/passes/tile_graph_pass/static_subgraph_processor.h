@@ -65,7 +65,7 @@ public:
 
     std::vector<std::vector<OperationPtr>>& GetNList() {
         if (nLIST_ == nullptr) {
-            ALOG_ERROR_F("nLIST is not initialized in StaticSubgraphProcessor");
+            APASS_LOG_ERROR_F(Elements::Function, "nLIST is not initialized in StaticSubgraphProcessor");
         }
         return *nLIST_;
     }

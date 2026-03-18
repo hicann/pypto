@@ -128,7 +128,6 @@ TEST_F(SubgraphToFunctionCheckTest, TestPrePostCheck) {
     }
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_SimpleTest_2");
     EXPECT_NE(mainFunc, nullptr);
-    ALOG_INFO_F("Pre/Post check test completed");
 }
 
 TEST_F(SubgraphToFunctionCheckTest, NOPCheck_NonNOP_Fail) {

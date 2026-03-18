@@ -415,12 +415,10 @@ TEST_F(InsertSyncTest, TestUpdateDep) {
                 auto setPipeIdx1 = ps.latestPipeDep_[pcCurr].setPipes[pcSet1];
                 auto setPipeIdx2 = ps.latestPipeDep_[pcCurr].setPipes[pcSet2];
                 if (i == IS_NUM4 && k == IS_NUM3) {
-                    ALOG_DEBUG_F("%s", ps.DumpLatestPipeDepMap().c_str());
                     EXPECT_EQ(setPipeIdx1, IS_NUM3);
                     EXPECT_EQ(setPipeIdx2, IS_NUM1);
                 }
                 if (i == IS_NUM4 && k == 0) {
-                    ALOG_DEBUG_F("%s", ps.DumpLatestPipeDepMap().c_str());
                     EXPECT_EQ(setPipeIdx1, IS_NUM3);
                     EXPECT_EQ(setPipeIdx2, IS_NUM1);
                 }
