@@ -14,6 +14,9 @@
  */
 
 #include "ooo_schedule_statistic.h"
+#include "passes/pass_log/pass_log.h"
+
+#define MODULE_NAME "OooScheduleStatistic"
 namespace npu {
 namespace tile_fwk {
 
@@ -50,7 +53,7 @@ Status OoOSchedulerCheck::HealthCheckOoOSchedule() {
     int64_t maxUBSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
     int64_t maxL1Size = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1);
     if (maxL0ASize == 0 || maxL0BSize == 0 || maxL0CSize == 0 || maxUBSize == 0 || maxL1Size == 0) {
-        ALOG_ERROR_F("Max buffer size is 0, HealthCheckOoOSchedule failed!");
+        APASS_LOG_ERROR_F(Elements::Function, "Max buffer size is 0, HealthCheckOoOSchedule failed!");
         return FAILED;
     }
     // Workspace Info
