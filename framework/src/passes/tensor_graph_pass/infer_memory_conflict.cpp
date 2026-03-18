@@ -454,12 +454,6 @@ Status InferMemoryConflict::ObtainReshapeTile(Operation &op, Shape &inTileShape,
             auto vec = consumerOp->GetTileShape().GetVecTile();
             outTileShape = vec.tile;
         }
-        if (!outTileShape.empty() && !op.GetIOperands()[0]->GetProducers().empty()) {
-            auto producerOp = *op.GetIOperands()[0]->GetProducers().begin();
-            
-            auto vec = producerOp->GetTileShape().GetVecTile();
-            inTileShape = vec.tile;
-        }
     }
     return SUCCESS;
 }
@@ -474,9 +468,11 @@ Status InferMemoryConflict::InsertPrecededCopys(Function &function) {
         auto &copyOp = function.AddRawOperation(Opcode::OP_REGISTER_COPY, {inputTensor}, {newTensor});
         APASS_LOG_DEBUG_F(Elements::Operation, "Insert copy op [%d].", copyOp.GetOpMagic());
         Shape reshapeTile;
-        if (ObtainReshapeTile(*op, reshapeTile, ObtainTileShape(op->ConsumerOps()).GetVecTile().tile) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "ObtainReshapeTile failed. %s", GetFormatBacktrace(*op).c_str());
-            return FAILED;
+        if (op->GetOpcode() == Opcode::OP_RESHAPE) {
+            TileShape vecTile = op->GetTileShape();
+            if (vecTile.GetVecTile().size() > 0) {
+                reshapeTile = vecTile.GetVecTile().tile;
+            }
         }
         if (InferTileShape(copyOp, inputTensor, ObtainTileShape(copyOp.ProducerOps()), reshapeTile) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "InferTileShape failed. %s", GetFormatBacktrace(copyOp).c_str());
