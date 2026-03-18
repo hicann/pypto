@@ -224,6 +224,7 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx)
           // hypot op
           {Opcode::OP_HYPOT, [this]() { return GenHypotOp(); }},
           {Opcode::OP_PAD, [this]() { return GenPadOp(); }},
+          {Opcode::OP_FILLPAD, [this]() { return GenPadOp(); }},          
       }),
       sortOps_({
           // sort

@@ -1381,3 +1381,21 @@ TEST_F(OperationImplTest, Test_Matmul_Bias) {
              npu::tile_fwk::Matrix::Matmul(DT_FP32, matA, matB, extendParam, false, false, false); 
      } 
  }
+
+TEST_F(OperationImplTest, test_FillPad_1D) {
+    TileShape::Current().SetVecTile(8);
+    Tensor input(DT_FP32, {10}, "input");
+    Tensor result;
+    FUNCTION("TestFillPad1D") {
+        result = FillPad(input, "constant", 0.0f);
+    }
+}
+
+TEST_F(OperationImplTest, test_FillPad_2D) {
+    TileShape::Current().SetVecTile(4, 4);
+    Tensor input(DT_FP32, {6, 6}, "input");
+    Tensor result;
+    FUNCTION("TestFillPad2D") {
+        result = FillPad(input, "constant", 0.0f);
+    }
+}

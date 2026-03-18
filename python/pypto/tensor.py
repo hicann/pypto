@@ -802,6 +802,10 @@ class Tensor:
     @source_location
     def pad(self, pad: Sequence[int], mode: str = "constant", value: float = 0.0) -> 'Tensor':
         return pypto.pad(self, pad, mode, value)
+        
+    @source_location
+    def fillpad(self, mode: str = "constant", value: float = 0.0) -> 'Tensor':
+        return pypto.fillpad(self, mode, value)
 
     @source_location
     def scatter_update(self, dim: int, index: 'Tensor', src: 'Tensor') -> 'Tensor':

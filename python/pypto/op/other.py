@@ -160,6 +160,57 @@ def pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float 
 
 
 @op_wrapper
+def fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor:
+    """
+    Fills the padding region of the input tensor with a constant value.
+
+    Unlike `pad`, this function does not change the tensor shape. It fills the
+    padding region (the area beyond valid_shape) with the specified value.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor with padding region to be filled.
+    mode : str, optional
+        'constant'. Default: 'constant'
+        Note: Currently only 'constant' is supported.
+    value : float, optional
+        fill value for 'constant' padding. Default: 0.0
+        Note: Currently only 'inf' '-inf' '0.0' is supported.
+
+    Returns
+    -------
+    Tensor
+        Tensor with padding region filled.
+
+    Raises
+    ------
+    TypeError
+        If input is not a Tensor.
+
+    Examples
+    --------
+    # Create a tensor with valid_shape smaller than actual shape
+    a = pypto.tensor([4, 4], pypto.DT_FP32)
+    # Assume valid_shape is [2, 2], the rest [2:4, 2:4] is padding region
+    out = pypto.fillpad(a, "constant", "-inf")
+
+    Input a: [[1.0, 2.0, 0.0, 0.0],
+              [3.0, 4.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0, 0.0],
+              [0.0, 0.0, 0.0, 0.0]]
+    
+    Output out: [[1.0, 2.0, -inf, -inf],
+                 [3.0, 4.0, -inf, -inf],
+                 [-inf, -inf, -inf, -inf],
+                 [-inf, -inf, -inf, -inf]]
+
+    """
+
+    return pypto_impl.FillPad(input, mode, float(value))
+
+
+@op_wrapper
 def one_hot(input: Tensor, num_classes: int) -> Tensor:
     """
     Converts a tensor of indices to one-hot encoded tensor.

@@ -136,6 +136,7 @@ Tensor Round(const Tensor &self, const int &decimals = 0);
 Tensor Rsqrt(const Tensor &self);
 Tensor Relu(const Tensor &self);
 Tensor Pad(const Tensor &self, const std::vector<int64_t> &padding, std::string mode = "constant", float value = 0.0);
+Tensor FillPad(const Tensor &self, std::string mode = "constant", float value = 0.0);
 Tensor BitwiseNot(const Tensor &self);
 Tensor Sqrt(const Tensor &self);
 Tensor Ceil(const Tensor &self);

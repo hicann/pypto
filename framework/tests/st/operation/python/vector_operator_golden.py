@@ -979,6 +979,47 @@ def gen_pad_op_golden(case_name: str, output: Path, case_index: int = None) -> b
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Pad", golden_func, output, case_index)
 
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestFillPad/FillPadOperationTest.TestFillPad",
+    ]
+)
+def gen_fillpad_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs: list, config: dict):
+        input_shape = config["input_tensors"][0]["shape"]
+        valid_shape = config["view_shape"]
+        output_shape = config["output_tensors"][0]["shape"]
+        pad_value_type = config.get("params", {}).get("pad_value_type", "zero")
+        
+        if pad_value_type == "min":
+            pad_value = -np.inf
+        elif pad_value_type == "max":
+            pad_value = np.inf
+        else:
+            pad_value = 0.0
+        
+        input_tensor = inputs[0]
+        result = np.full(output_shape, pad_value, dtype=input_tensor.dtype)
+        
+        ndim = len(input_shape)
+        if ndim == 1:
+            result[:valid_shape[0]] = input_tensor[:valid_shape[0]]
+        elif ndim == 2:
+            result[:valid_shape[0], :valid_shape[1]] = input_tensor[:valid_shape[0], :valid_shape[1]]
+        elif ndim == 3:
+            result[:valid_shape[0], :valid_shape[1], :valid_shape[2]] = (
+                input_tensor[:valid_shape[0], :valid_shape[1], :valid_shape[2]]
+            )
+        elif ndim == 4:
+            result[:valid_shape[0], :valid_shape[1], :valid_shape[2], :valid_shape[3]] = (
+                input_tensor[:valid_shape[0], :valid_shape[1], :valid_shape[2], :valid_shape[3]]
+            )
+        
+        return [result]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("FillPad", golden_func, output, case_index)
+
 
 @GoldenRegister.reg_golden_func(
     case_names=[

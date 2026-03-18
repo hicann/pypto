@@ -117,6 +117,16 @@ void bind_operation(py::module &m) {
         py::arg("value") = 0.0f
     );
     m.def(
+        "FillPad",
+        [](const Tensor &self, const std::string &mode, float value) {
+            return npu::tile_fwk::FillPad(self, mode, value);
+        },
+        "Fills padding region of tensor with constant value.",
+        py::arg("input"),
+        py::arg("mode") = "constant",
+        py::arg("value") = 0.0f
+    );    
+    m.def(
         "Round", [](const Tensor &self, int decimals) { return npu::tile_fwk::Round(self, decimals); }, py::arg("self"),
         py::arg("decimals") = 0, "Tensor round.");
     m.def("Rsqrt", [](const Tensor &self) { return npu::tile_fwk::Rsqrt(self); }, "Tensor rsqrt.");

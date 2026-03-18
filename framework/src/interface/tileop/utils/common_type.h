@@ -37,6 +37,7 @@ enum class UnaryOp : uint8_t {
     RELU,
     LN,
     PAD,
+    FILLPAD,
     SIGN,
     ISFINITE,
     SIGNBIT
