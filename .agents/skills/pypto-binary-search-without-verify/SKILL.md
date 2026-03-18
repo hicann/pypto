@@ -1,10 +1,10 @@
 ---
-name: pypto-precision-multiple-checkpoints
-description: PyPTO 算子不依赖精度工具精度对比技能。通过在kernel函数中添加检查点tensor作为输入参数进行原地修改，对比中间结果的精度，定位导致精度差异的具体op。适用于算子运行通过但精度不满足要求、需要定位具体op导致精度问题、需要对比多个中间结果的场景。
+name: pypto-binary-search-without-verify
+description: PyPTO 算子二分精度对比技能。通过在kernel函数中添加检查点tensor作为输入参数进行原地修改，对比中间结果的精度，定位导致精度差异的具体op。适用于算子运行通过但精度不满足要求、需要定位具体op导致精度问题、需要对比多个中间结果的场景。
 license: 完整条款见 LICENSE.txt
 ---
 
-# PyPTO 算子多检查点精度对比技能
+# PyPTO 算子中间计算点精度对比技能
 
 通过在kernel函数中逐个添加检查点tensor作为输入参数进行原地修改，对比中间结果的精度，定位导致精度不匹配的op。
 
@@ -30,8 +30,9 @@ license: 完整条款见 LICENSE.txt
 - 在测试函数中用torch.empty()初始化检查点tensor（shape需要写在小括号里）
 - kernel函数内部不需要return，因为检查点tensor是原地修改的
 - 算子和golden的检查点必须完全一致，shape和dtype都要相同
-- 对于循环内的变量，在循环外创建大的tensor，在循环内使用切片/view, assemble赋值
+- 对于循环内的变量，可以在循环外创建大的tensor，在循环内使用view, assemble赋值
 - 如果检查点的变量在循环中计算的，用pypto.assemble把中间结果搬运到要输出的大tensor里面
+- 对于多层循环实现很复杂的算子，且算子和golden实现一致，可以不通过搬运比较assemble后的大tensor，只比较循环内的临时变量即可（注：pypto的最后一块数据在非对齐情况下会带有脏数据，导致assert误判，此时可选第一块数据进行对比）
 
 **shape推导方法**：
 - 从变量定义推导：找到产生该变量的赋值语句，分析等号右边的操作对shape的变换
@@ -138,9 +139,9 @@ pypto.assemble要求输入输出tensor的dtype一致，否则编译报错"Source
 
 检查是否在 -> 之后声明了返回值。根据正确的实现方式，检查点tensor应该作为输入参数，而不是返回值。
 
-### 如何在外层wrapper函数中正确处理返回值
+### 如何在正确处理返回值
 
-外层wrapper函数需要返回检查点tensor，但kernel函数内部不需要return。调用kernel函数时不需要接收返回值，因为会原地修改变量。
+不需要return。调用kernel函数时添加中间变量在输出列表，不需要接收返回值，因为会原地修改变量。
 
 ## 参考资料
 
