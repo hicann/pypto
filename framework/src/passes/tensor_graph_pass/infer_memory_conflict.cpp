@@ -460,7 +460,7 @@ Status InferMemoryConflict::ObtainReshapeTile(Operation &op, Shape &inTileShape,
 
 // 在OP_RESHAPE前面插入OP_REGISTER_COPY
 Status InferMemoryConflict::InsertPrecededCopys(Function &function) {
-    for (const auto op : preregcopys) {che
+    for (const auto op : preregcopys) {
         LogicalTensorPtr inputTensor = op->GetIOperands().front();
         std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(inputTensor->Datatype(), inputTensor->GetShape());
         Offset newOffset(inputTensor->GetShape().size(), 0);
