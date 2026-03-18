@@ -2,7 +2,7 @@
 
 说明：本文描述如何快速使用示例 Dockerfile 创建可运行 PyPTO 的 Docker 容器。
 在使用 Docker 容器前，请务必**完成主机 NPU 硬件部署，以及 NPU 驱动和固件安装**，可参考文档
-[Environment README](../docs/install/prepare_environment.md)。
+[Environment README](./prepare_environment.md)。
 建议 Docker 版本：**v27.2.1 及以上**。
 
 ## 版本说明
@@ -35,7 +35,7 @@
 #**************docker info*******************#
 ```
 
-示例 Dockerfile 以 **Ubuntu** 为基础编写，不同操作系统镜像之间存在轻微差异，请根据实际操作系统进行适配调整。
+示例 Dockerfile 以 **Ubuntu** 为基础编写，本地操作系统不影响镜像操作系统的安装，openeuler操作系统镜像存在差异，若需使用openeuler操作系统请根据实际操作系统进行适配调整。
 
 在使用前，请根据 **操作系统 + 硬件类型** 指定 `CANN_VERSION`：
 
@@ -274,7 +274,7 @@ sudo docker run -u root -itd --name <容器名> --ipc=host --net=host --privileg
     <镜像名:版本> \
     /bin/bash
 ```
-
+为确保容器能够正确控制NPU硬件和相关驱动，确保本地目录下相关设置文件存在，并按照实际情况进行设置。
 示例：
 
 ```bash

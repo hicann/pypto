@@ -36,8 +36,6 @@ DynDeviceTask *DeviceTaskContext::BuildDeviceTaskData(DeviceStitchContext &stitc
     int ret = DEVICE_MACHINE_OK;
     PerfBegin(PERF_EVT_ALLOCATE_TASK);
     DynDeviceTask *dynTask = workspace_->MakeDynDeviceTask();
-    AllocOpWrapList (dynTask);
- 	AllocOpWrapTaskNumList (dynTask);
     ret = stitchContext.MoveTo(dynTask);
     if (unlikely(ret != DEVICE_MACHINE_OK)) {
         return nullptr;
@@ -141,15 +139,10 @@ void DeviceTaskContext::UpdateDeviceTaskQueueInfo(DynDeviceTask *dyntask, ReadyC
 }
 
 int DeviceTaskContext::ProcessZeroPredTask(DynDeviceTask *dyntask, uint32_t *wrapTasklistAddr, WrapInfoQueue *wrapQueue, bool isNeedWrap) {
- 	uint64_t *opWrapArrayBase = nullptr;
- 	     /**wraplist**/
- 	if (isNeedWrap && dyntask->devTask.mixTaskData.opWrapListPtr != 0) {
- 	    opWrapArrayBase = reinterpret_cast<uint64_t *>(dyntask->devTask.mixTaskData.opWrapListPtr);
- 	}
     int wrapTaskNum = 0;
     size_t funcSize = dyntask->dynFuncDataCacheListSize;
     for (size_t funcIndex = 0; funcIndex < funcSize; ++funcIndex) {
-        BuildReadyQueueForFunc(dyntask, funcIndex, isNeedWrap, opWrapArrayBase, wrapQueue, wrapTasklistAddr, wrapTaskNum);
+        BuildReadyQueueForFunc(dyntask, funcIndex, isNeedWrap, wrapQueue, wrapTasklistAddr, wrapTaskNum);
     }
     return wrapTaskNum;
 }
@@ -181,15 +174,11 @@ int DeviceTaskContext::BuildReadyQueue(DynDeviceTask *dyntask, DevAscendProgram 
 }
 
 void DeviceTaskContext::BuildReadyQueueForFunc(DynDeviceTask *dyntask, size_t funcIndex, bool isNeedWrap,
-    uint64_t *opWrapArrayBase, WrapInfoQueue *wrapQueue, uint32_t *wrapTasklistAddr, int &wrapTaskNum) {
+     WrapInfoQueue *wrapQueue, uint32_t *wrapTasklistAddr, int &wrapTaskNum) {
     ReadyCoreFunctionQueue *aicpuQueue = dyntask->readyQueue[DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AICPU)];
     ReadyCoreFunctionQueue *aivQueue = dyntask->readyQueue[DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIV)];
     ReadyCoreFunctionQueue *aicQueue = dyntask->readyQueue[DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIC)];
-
-    int32_t* opWrapList = nullptr;
-    if (isNeedWrap && opWrapArrayBase != nullptr) {
-        opWrapList = reinterpret_cast<int32_t *>(opWrapArrayBase[funcIndex]);
-    }
+    int32_t* opWrapList = reinterpret_cast<int32_t *>(dyntask->devTask.mixTaskData.opWrapList[funcIndex]);
     DynFuncDataCache *dynFuncDataCacheList = dyntask->GetDynFuncDataCacheList();
     DevAscendFunctionDuppedData *duppedData = dynFuncDataCacheList->At(funcIndex).duppedData;
     predcount_t *dupPredCountList = &duppedData->GetOperationCurrPredCount(0);

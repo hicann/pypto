@@ -47,7 +47,7 @@ private:
 private:
     int BuildReadyQueue(DynDeviceTask *dyntask, DevAscendProgram *devProg);
     void BuildReadyQueueForFunc(DynDeviceTask *dyntask, size_t funcIndex, bool isNeedWrap,
-        uint64_t *opWrapArrayBase, WrapInfoQueue *wrapQueue, uint32_t *wrapTasklistAddr, int &wrapTaskNum);
+         WrapInfoQueue *wrapQueue, uint32_t *wrapTasklistAddr, int &wrapTaskNum);
     void ProcessAivBatchTasks(ReadyCoreFunctionQueue *aivQueue, size_t totalZeroPredAIVBatchEnd,
         const predcount_t *dupPredCountList, size_t funcIndex);
     void InitReadyCoreFunctionQueue(ReadyCoreFunctionQueue *q, uint32_t capacity);
@@ -70,8 +70,6 @@ private:
         WrapInfoQueue *wrapQueue, uint32_t *wrapTasklistAddr);
     bool IsMixArch(DevAscendProgram *devProg);
     bool IsNeedWrapProcess(DynDeviceTask *dyntask, DevAscendProgram *devProg);
-    void AllocOpWrapList(DynDeviceTask *dyntask);
-    void AllocOpWrapTaskNumList(DynDeviceTask *dyntask);
     inline void doResolve(DynDeviceTask *dyntask, int coreType, size_t funcIdx, size_t succIdx, predcount_t *predList) {
         predList[succIdx] -= 1;
         if (predList[succIdx] != 0)
@@ -80,13 +78,8 @@ private:
         if (coreType == static_cast<int>(CoreType::HUB)) {
             ResolveEarlyDepends(dyntask, funcIdx, succIdx);
         } else {
-                /**wraplist**/
-                auto opWrapArrayBase =
-                     reinterpret_cast<uint64_t *>(dyntask->devTask.mixTaskData.opWrapListPtr);
-                int32_t* opWrapList =
-                    (opWrapArrayBase == nullptr) ? nullptr
-                                                 : reinterpret_cast<int32_t *>(opWrapArrayBase[funcIdx]);
-            if (dyntask->devTask.mixTaskData.wrapIdNum > 0 && opWrapList != nullptr && opWrapList[succIdx] != -1) {
+            int32_t* opWrapList = reinterpret_cast<int32_t *>(dyntask->devTask.mixTaskData.opWrapList[funcIdx]);
+            if (dyntask->devTask.mixTaskData.wrapIdNum > 0 && opWrapList[succIdx] != -1) {
                 ProcessWrapQueue(dyntask, MakeMixWrapID(funcIdx, static_cast<uint32_t>(opWrapList[succIdx])), funcIdx, succIdx,
                     reinterpret_cast<WrapInfoQueue *>(dyntask->devTask.mixTaskData.readyWrapCoreFunctionQue),
                     reinterpret_cast<uint32_t *>(dyntask->devTask.mixTaskData.wrapTasklist));

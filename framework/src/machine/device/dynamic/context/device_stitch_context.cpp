@@ -172,25 +172,13 @@ int DeviceStitchContext::MoveTo(DynDeviceTask *dynTask) {
         return DEVICE_MACHINE_ERROR;
     }
     DEV_ASSERT(dynTask->stitchedList.size() <= MAX_STITCH_FUNC_NUM);
-    uint64_t *opWrapArray = nullptr;
-    uint64_t *opWrapTaskNumArray = nullptr;
-    if (dynTask->devTask.mixTaskData.opWrapListPtr != 0) {
-        opWrapArray = reinterpret_cast<uint64_t *>(dynTask->devTask.mixTaskData.opWrapListPtr);
-    }
-    if (dynTask->devTask.mixTaskData.opWrapTaskNumListPtr != 0) {
-        opWrapTaskNumArray = reinterpret_cast<uint64_t *>(dynTask->devTask.mixTaskData.opWrapTaskNumListPtr);
-    }
     int size = static_cast<int>(dynTask->stitchedList.size());
     for (int i = 0; i < size; ++i) {
         auto &funcDup = dynTask->stitchedList[i];
         dynTask->dynFuncDataCacheList[i] = {
             funcDup.GetSource(), &funcDup.GetOperationCurrPredCount(0), funcDup.GetSource()->GetCalleeIndexAddr(), funcDup.DupDataForDynFuncData()};
-        if (opWrapArray != nullptr) {
-            opWrapArray[i] = PtrToValue(funcDup.GetSource()->GetOpWrapListAddr());
-        }
-        if (opWrapTaskNumArray != nullptr) {
-            opWrapTaskNumArray[i] = PtrToValue(funcDup.GetSource()->GetOpWrapTaskNumListAddr());
-        }
+        dynTask->devTask.mixTaskData.opWrapList[i] = PtrToValue(funcDup.GetSource()->GetOpWrapListAddr());	 
+        dynTask->devTask.mixTaskData.opWrapTaskNumList[i] = PtrToValue(funcDup.GetSource()->GetOpWrapTaskNumListAddr());
     }
     dynTask->dynFuncDataCacheListSize = size;
     return DEVICE_MACHINE_OK;

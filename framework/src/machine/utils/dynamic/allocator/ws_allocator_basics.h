@@ -78,7 +78,16 @@ enum class WsAllocatorProperty {
     TENSOR_MEM,
     METADATA_MEM,
 };
-
+inline constexpr const char *GetWsAllocatorPropertyName(WsAllocatorProperty property) {
+    switch (property) {
+        case WsAllocatorProperty::TENSOR_MEM:
+            return "Tensordata";
+        case WsAllocatorProperty::METADATA_MEM:
+            return "Metadata";
+        default:
+            return "Undefined";
+    }
+}
 enum class WsMemoryState {
     INSIDE,
     OUTSIDE,

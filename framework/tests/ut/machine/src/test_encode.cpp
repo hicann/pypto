@@ -207,3 +207,4 @@ TEST_F(TestDevEncode, test_dev_func_dupped) {
     DevAscendFunctionDupped funcDuppped;
     funcDuppped.DumpRawShape(&rawTensor, 0, lines, oss);
 }
+

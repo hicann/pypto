@@ -22,7 +22,6 @@
 #include "ws_allocator_basics.h"
 
 namespace npu::tile_fwk::dynamic {
-/**wraplist**/
 enum class WsAicpuSlabMemType : uint8_t {
     DUPPED_FUNC_DATA = 0,
     DYN_FUNC_DATA,
@@ -32,8 +31,6 @@ enum class WsAicpuSlabMemType : uint8_t {
     DIE_READY_QUE,
     WRAP_QUEUE,
     WRAP_TASKLIST,
-    WRAP_OPWRAPLIST,
-    WRAP_OPWRAPTASKNUMLIST,
     COHERENT_SLAB_MEM_TYPE_BUTT, //add new slabmemtype should be above this type
 
     DUPPED_STITCH, // stitch pool memory

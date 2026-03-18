@@ -39,23 +39,18 @@ void：Set方法无返回值。设置操作成功即生效。
 
 ## 约束说明
 
-无。
+在JIT外部使用set_runtime_options配置，在JIT执行时并不生效，会恢复成默认配置；在JIT装饰其内配置runtime_options,配置正常生效。
 
 ## 调用示例
 
 ```python
-pypto.set_runtime_options(device_sched_mode=1,
-                          stitch_function_inner_memory=128,
-                          stitch_function_outcast_memory=128,
-                          stitch_function_num_initial=128,
-                          stitch_function_num_step=20)
+pypto.set_runtime_options(device_sched_mode=2,
+                          stitch_function_max_num=256)
 @pypto.frontend.jit(
         runtime_options={
-        "stitch_function_inner_memory": 128,
-        "stitch_function_outcast_memory": 128,
-        "stitch_function_num_initial": 128,
+        "stitch_function_max_num": 128,
         "device_sched_mode": 1
         }
 )
 ```
-
+最终JIT内配置项生效的结果是：stitch_function_max_num=128； device_sched_mode=1。
