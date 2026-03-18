@@ -1178,17 +1178,29 @@ struct EncodeDevAscendFunctionInfo {
         return cceCodeInfoList[leafIndex].coreType;
     }
 
-    void RemoveDeadHubCall(std::vector<Operation *> &/* callOpList */) {
+    void RemoveDeadHubCall(Function *tdevRoot, std::vector<Operation *> &/* callOpList */) {
         std::vector<Operation *> deadCallOps;
         for (auto &[callOp, succOps] : callOpSuccDict) {
-            if (GetCoreType(callOp) == static_cast<int>(CoreType::HUB) && succOps.size() == 0) {
-                /*  Find all hub callop that has no successors, mark it is no need to schedule:
-                 *  1. mark pred to be zero
-                 *  2. remove it from the successor of all callop
-                 */
-                callOpPredDict[callOp] = 0;
-                deadCallOps.push_back(callOp);
+            if (GetCoreType(callOp) != static_cast<int>(CoreType::HUB) || (succOps.size() != 0)) {
+                continue;
             }
+            /* When HUB's oOperands have rootFunc outcast, do not remove it. (eg. Reshape as rootFunc output) */
+            bool needSave = false;
+            for (const auto &out : callOp->oOperand) {
+                if (tdevRoot->IsFromOutCast(out)) {
+                    needSave = true;
+                    break;
+                }
+            }
+            if (needSave) {
+                continue;
+            }
+            /*  Find all hub callop that has no successors, mark it is no need to schedule:
+                *  1. mark pred to be zero
+                *  2. remove it from the successor of all callop
+                */
+            callOpPredDict[callOp] = 0;
+            deadCallOps.push_back(callOp);
         }
 
         for (auto &[callOp, succOps] : callOpSuccDict) {
@@ -1593,7 +1605,7 @@ struct EncodeDevAscendFunctionInfo {
         EraseRedundantColorEdges(callopList);
         PrintColorGraph(callopList.size());
 
-        RemoveDeadHubCall(callopList);
+        RemoveDeadHubCall(tdevRoot, callopList);
         ReplaceSuccessorWithHub(callopList, 10); // add dummp op at least 10 depends can be reduced
 
         AddDummyCallsAtBeginningAndEnding(callopList);
