@@ -626,3 +626,32 @@ TEST_F(TestAxisCombineMarker, cast_op) {
     auto t4 = graph.GetTensor("t4");
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(t4), true);
 }
+
+// QA backward case
+TEST_F(TestAxisCombineMarker, qaCase) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"t1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"t2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {64, 1}, MemoryType::MEM_UB, "b1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_PAIRSUM, {"t1","t2"}, {"b1"}, "pairsum", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "t3"), true);
+
+    EXPECT_EQ(graph.AddOp(Opcode::OP_ROWSUMLINE, {"b1"}, {"t3"}, "rowsumline", true), true);
+    auto reduceOp = graph.GetOp("rowsumline");
+    reduceOp->SetAttribute(OP_ATTR_PREFIX + "AXIS", 0);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t3"}, {"out"}, "copyout", true), true);
+    
+    auto *rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t3")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("b1")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t1")), false);
+}
