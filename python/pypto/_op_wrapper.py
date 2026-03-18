@@ -32,6 +32,8 @@ def _to_base(arg):
 def _from_base(out):
     if isinstance(out, pypto_impl.Tensor):
         return Tensor.from_base(out)
+    elif isinstance(out, pypto_impl.SymbolicScalar):
+        return SymbolicScalar.from_base(out)
     elif isinstance(out, (list, tuple)):
         return [_from_base(a) for a in out]
     elif isinstance(out, dict):
