@@ -16,6 +16,7 @@
 #include "determinism.h"
 #include "interface/schema/schema.h"
 #include "tilefwk/error.h"
+#include "interface/interpreter/verify_error.h"
 
 namespace npu::tile_fwk {
 
@@ -33,9 +34,10 @@ bool TraceCopy::Overlap(const TraceCopy &src, const TraceCopy &dst) {
         return false;
     }
     // memory reuse must happen for full match.
-    ASSERT(srcRange == dstRange);
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC, srcRange == dstRange);
     // memory reuse must happen for same dimension.
-    ASSERT(src.GetOffset().size() == dst.GetOffset().size());
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           src.GetOffset().size() == dst.GetOffset().size());
     for (size_t dim = 0; dim < src.GetOffset().size(); dim++) {
         if (src.GetOffset()[dim] + src.GetShape()[dim] <= dst.GetOffset()[dim]) {
             // not overlap
@@ -97,7 +99,8 @@ static void BuildReachDict(TraceDependGraph &graph, int dependIndex, std::vector
     auto &reachDict = graph.GetReachDict();
     for (auto succUid : leafTask->GetSuccSet()) {
         auto iter = dependIndexDict.find(succUid);
-        ASSERT(iter != dependIndexDict.end());
+        ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+               iter != dependIndexDict.end());
         auto succDependIndex = iter->second;
         BuildReachDict(graph, succDependIndex, visitDict);
         for (int i = 0; i < graph.GetLeafTaskSize(); i++) {
@@ -238,8 +241,10 @@ static std::vector<TraceCoa> LoadTraceCoaList(const std::shared_ptr<SchemaNode> 
 static TraceMemoryRange LoadTraceMemoryRange(const std::shared_ptr<SchemaNode> &node) {
     std::string beginStr = node->at(0)->GetName();
     std::string endStr = node->at(1)->GetName();
-    ASSERT(beginStr.substr(0, 2) == SCHEMA_ADDRESS_PREFIX);
-    ASSERT(endStr.substr(0, 2) == SCHEMA_ADDRESS_PREFIX);
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           beginStr.substr(0, 2) == SCHEMA_ADDRESS_PREFIX);
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           endStr.substr(0, 2) == SCHEMA_ADDRESS_PREFIX);
     uintptr_t begin = std::stoull(beginStr, nullptr, 16);
     uintptr_t end = std::stoull(endStr, nullptr, 16);
     return TraceMemoryRange(begin, end);
@@ -251,7 +256,8 @@ static int64_t LoadTraceInt(const std::shared_ptr<SchemaNode> &node) {
 }
 
 static int64_t LoadTraceRawTensor(const std::shared_ptr<SchemaNode> &node) {
-    ASSERT(node->GetName()[0] == '@');
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           node->GetName()[0] == '@');
     int64_t value = std::stoll(node->GetName().substr(1));
     return value;
 }

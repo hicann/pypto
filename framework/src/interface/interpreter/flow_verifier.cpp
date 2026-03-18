@@ -19,6 +19,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
+#include "interface/interpreter/verify_error.h"
 
 namespace npu::tile_fwk {
 
@@ -27,8 +28,10 @@ FlowVerifier::CompareResult FlowVerifier::VerifyResult(
         const std::shared_ptr<LogicalTensorData> &outputDataView, float rtol, float atol) {
     // tensor maybe padded during PadLocalBuffer Pass, tensor shape maybe changed, just check the valid data
     goldenDataView->UpdateValidShape(outputDataView->GetValidShape());
-    ASSERT(goldenDataView->GetValidShape() == outputDataView->GetValidShape());
-    ASSERT(goldenDataView->GetDataType() == outputDataView->GetDataType());
+    ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF,
+           goldenDataView->GetValidShape() == outputDataView->GetValidShape());
+    ASSERT(VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF,
+           goldenDataView->GetDataType() == outputDataView->GetDataType());
     switch (goldenDataView->GetDataType()) {
         case DT_INT8: return CompareData<int8_t, double>(goldenDataView, outputDataView, rtol, atol);
         case DT_INT16: return CompareData<int16_t, double>(goldenDataView, outputDataView, rtol, atol);
@@ -43,7 +46,9 @@ FlowVerifier::CompareResult FlowVerifier::VerifyResult(
         case DT_UINT64: return CompareData<uint64_t, double>(goldenDataView, outputDataView, rtol, atol);
         case DT_DOUBLE: return CompareData<double, double>(goldenDataView, outputDataView, rtol, atol);
         case DT_BOOL: return CompareData<uint8_t, double>(goldenDataView, outputDataView, rtol, atol);
-        default: ASSERT(false); break;
+        default:
+            ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, false);
+            break;
     }
     return CompareResult();
 }
@@ -80,7 +85,9 @@ bool FlowVerifier::VerifyResult(const std::string &key,
 
         auto tensorGraphResult = VerifyResult(goldenDataViewList[k], tensorDataViewList[k], rtol, atol);
         if (!tensorGraphResult.Check()) {
-            VERIFY_LOGE_FULL("%s Verify for %zu data view list index %zu result FAILED", key.c_str(), goldenDataViewList.size(), k);
+            VERIFY_LOGE_FULL_E(VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                               "%s Verify for %zu data view list index %zu result FAILED",
+                               key.c_str(), goldenDataViewList.size(), k);
             opInfo[toIndex(OpInfoCsvHeader::verifyResult)] = "FAILED";
             result = false;
         } else {
@@ -110,7 +117,7 @@ void FlowVerifier::VerifyTensorGraph(Function *entry,
     outputDataViewList_ = outputDataViewList;
     goldenDataViewList_ = goldenDataViewList;
 
-    ASSERT(calc::IsVerifyEnabled()) << "Verify not supported";
+    ASSERT(VerifyEnableScene::VERIFY_NOT_ENABLE, calc::IsVerifyEnabled()) << "Verify not supported";
     auto attr = entry->GetDyndevAttribute();
     std::vector<int> inputSlotList = slotManager->LookupSlotIndexConst(attr->startArgsInputTensorList);
     std::vector<int> outputSlotList = slotManager->LookupSlotIndexConst(attr->startArgsOutputTensorList);
@@ -119,8 +126,10 @@ void FlowVerifier::VerifyTensorGraph(Function *entry,
     std::unordered_map<int, std::shared_ptr<LogicalTensorData>> slotDataViewDict;
     std::unordered_set<int> outputSlotSet;
 
-    ASSERT(inputSlotList.size() == attr->startArgsInputTensorList.size());
-    ASSERT(inputDataViewList.size() == inputSlotList.size());
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           inputSlotList.size() == attr->startArgsInputTensorList.size());
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           inputDataViewList.size() == inputSlotList.size());
     for (size_t i = 0; i < inputDataViewList.size(); i++) {
         auto inputTensor = attr->startArgsInputTensorList[i].get().GetStorage();
         if (inputTensor == nullptr) {
@@ -129,13 +138,15 @@ void FlowVerifier::VerifyTensorGraph(Function *entry,
         auto tileop = inputTensor->Format();
 
         auto input = inputDataViewList[i];
-        ASSERT(inputTensor->Datatype() == input->GetDataType());
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE,
+               inputTensor->Datatype() == input->GetDataType());
         if (tileop == TileOpFormat::TILEOP_NZ) {
             slotTileOpFormatDict[inputSlotList[i]] = TileOpFormat::TILEOP_NZ;
         }
         slotDataViewDict[inputSlotList[i]] = input;
     }
-    ASSERT(outputDataViewList.size() == outputSlotList.size());
+    ASSERT(ControlFlowScene::INVALID_FUNC_IO_SPEC,
+           outputDataViewList.size() == outputSlotList.size());
     for (size_t i = 0; i < outputDataViewList.size(); i++) {
         slotDataViewDict[outputSlotList[i]] = outputDataViewList[i];
         auto outputTensor = attr->startArgsOutputTensorList[i].get().GetStorage();
@@ -247,7 +258,8 @@ void FlowVerifier::VerifyPass(Function *func, int passIndex, const std::string &
         try {
             captureExecution = functionInterpreter_->RunForPass(functionInterpreter_->execDumpPassName, func, capture);
         } catch (std::exception &e) {
-            VERIFY_LOGE_FULL("VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
+            VERIFY_LOGE_FULL_E(VerifyResultScene::VERIFY_RESULT_MISMATCH,
+                        "VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
                         func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex, e.what());
             checkResult = false;
             continue;

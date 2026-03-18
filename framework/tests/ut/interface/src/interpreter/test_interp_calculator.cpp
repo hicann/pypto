@@ -32,9 +32,9 @@ TEST(ThreadPoolTest, Dispatch) {
     struct Handler {
         static void Entry(void *ctx) {
             int threadIndex = (intptr_t)ctx;
-            ALOG_INFO("Before: ", threadIndex);
+            VERIFY_LOGI("Before: %d", threadIndex);
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            ALOG_INFO("After: ", threadIndex);
+            VERIFY_LOGI("After: %d", threadIndex);
         }
     };
     {

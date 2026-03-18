@@ -27,6 +27,7 @@
 #include "interface/inner/element.h"
 #include "interface/configs/config_manager.h"
 #include "interface/tensor/tensor_offset.h"
+#include "interface/interpreter/verify_error.h"
 
 
 namespace npu::tile_fwk {
@@ -135,13 +136,16 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
             DISPATCH_DATA_TYPE(CASE_DATA_TYPE_DIS, index);
 #undef CASE_DATA_TYPE_DIS
             case DT_BOOL: return Element(DT_BOOL, Get<bool>(index));
-            default: ASSERT(false); return Element();
+            default:
+                ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, false);
+                return Element();
         }
     }
 
     Element GetElement(int64_t *coords, size_t n) const {
         int64_t index = 0;
-        ASSERT(n == shape_.size());
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_SHAPE,
+               n == shape_.size());
         index = std::inner_product(coords, coords + n, stride_.begin(), 0);
         return GetElement(index);
     }
@@ -161,7 +165,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
             case DT_UINT32: return std::to_string(Get<uint32_t>(index));
             case DT_UINT64: return std::to_string(Get<uint64_t>(index));
             case DT_DOUBLE: return std::to_string(Get<double>(index));
-            default: ASSERT(false); return "";
+            default:
+                ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, false);
+                return "";
         }
     }
 
@@ -180,7 +186,8 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
             case DT_UINT32: dump->DumpElement(static_cast<uint64_t>(Get<uint32_t>(index))); break;
             case DT_UINT64: dump->DumpElement(static_cast<uint64_t>(Get<uint64_t>(index))); break;
             case DT_DOUBLE: dump->DumpElement(static_cast<double>(Get<double>(index))); break;
-            default: ASSERT(false);
+            default:
+                ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, false);
         }
     }
 
@@ -189,7 +196,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         auto tensorData = std::make_shared<RawTensorData>(t.GetDataType(), t.GetShape());
 
         T *data = reinterpret_cast<T *>(tensorData->data());
-        ASSERT(sizeof(T) == tensorData->GetElementSize()) << "ConstantTensor's dtype and value's type don't match!";
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE,
+               sizeof(T) == tensorData->GetElementSize())
+            << "ConstantTensor's dtype and value's type don't match!";
         for (size_t i = 0; i < tensorData->nelem; i++) {
             data[i] = value;
         }
@@ -200,7 +209,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
     static std::shared_ptr<RawTensorData> CreateTensor(const Tensor &t, const std::vector<T> &values) {
         auto tensorData = std::make_shared<RawTensorData>(t.GetDataType(), t.GetShape());
         T *data = reinterpret_cast<T *>(tensorData->data());
-        ASSERT(sizeof(T) == tensorData->GetElementSize()) << "CreateTensor's dtype and value's type don't match!";
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE,
+               sizeof(T) == tensorData->GetElementSize())
+            << "CreateTensor's dtype and value's type don't match!";
         StringUtils::DataCopy(data, tensorData->GetDataSize(), values.data(), values.size() * sizeof(T));
         return tensorData;
     }
@@ -210,7 +221,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
         auto tensorData = std::make_shared<RawTensorData>(dType, shape);
 
         T *data = reinterpret_cast<T *>(tensorData->data());
-        ASSERT(sizeof(T) == tensorData->GetElementSize()) << "ConstantTensor's dtype and value's type don't match!";
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE,
+               sizeof(T) == tensorData->GetElementSize())
+            << "ConstantTensor's dtype and value's type don't match!";
         for (size_t i = 0; i < tensorData->nelem; i++) {
             data[i] = value;
         }
@@ -221,7 +234,9 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
     static std::shared_ptr<RawTensorData> CreateTensorData(const Shape &shape, DataType dType, const std::vector<T> &values) {
         auto tensorData = std::make_shared<RawTensorData>(dType, shape);
         T *data = reinterpret_cast<T *>(tensorData->data());
-        ASSERT(sizeof(T) == tensorData->GetElementSize()) << "CreateTensor's dtype and value's type don't match!";
+        ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE,
+               sizeof(T) == tensorData->GetElementSize())
+            << "CreateTensor's dtype and value's type don't match!";
         StringUtils::DataCopy(data, tensorData->GetDataSize(), values.data(), values.size() * sizeof(T));
         return tensorData;
     }
@@ -246,7 +261,8 @@ struct RawTensorData : public std::vector<uint8_t, AlignedAllocator<uint8_t, 64>
     void ToFile(const std::string &path) const {
         std::ofstream ofile(path, std::ios::out | std::ios::binary);
         if (!ofile) {
-            VERIFY_LOGE_FULL("open file %s failed!!!!", path.c_str());
+            VERIFY_LOGE_FULL_E(OpDumpScene::DUMP_OPEN_FILE_FAILED,
+                               "open file %s failed!!!!", path.c_str());
         }
         ofile.write(reinterpret_cast<const char *>(data()), size());
         ofile.close();
@@ -408,12 +424,12 @@ private:
     template <typename T>
     void HandleSave(FILE *fdata, int totalSize, int rowSize) const {
         if(fdata == nullptr){
-            ASSERT(false);
+            ASSERT(OpDumpScene::DUMP_OPEN_FILE_FAILED, false);
         }
         for (int k = 0; k < totalSize / rowSize; k++) {
             size_t result = fwrite(&Get<T>(k), sizeof(T), rowSize, fdata);
             if (result != static_cast<size_t>(rowSize)) {
-            ASSERT(false);
+                ASSERT(OpDumpScene::DUMP_WRITE_FILE_FAILED, false);
         }
         }
     }

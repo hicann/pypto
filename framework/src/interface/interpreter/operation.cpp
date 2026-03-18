@@ -55,7 +55,7 @@ void LogTensorList(const char *role, Operation *op, const LogicalTensors &tensor
         auto offsetStr = DumpShapeVec(tensor->offset);
         auto dynValidShapeStr = DumpSymbolicVec(tensor->GetDynValidShape());
         auto dynOffsetStr = DumpSymbolicVec(tensor->GetDynOffset());
-        VERIFY_LOGE_FULL(
+        VERIFY_LOGE_FULL_E(ExecuteOperationScene::RUNTIME_EXCEPTION,
             "ExecuteOperation error: op %s (magic=%d) %s[%zu] tensorMagic=%d, "
             "shape=%s, offset=%s, dynValidShape=%s, dynOffset=%s",
             op->GetOpcodeStr().c_str(),
