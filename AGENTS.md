@@ -16,25 +16,67 @@
 
 ## Skills目录说明
 
-本项目使用的skills位于 `.opencode/skills/` 目录下，每个skill包含一个SKILL.md文件。
+本项目使用的skills位于 `.agents/skills/` 目录下，每个skill包含一个SKILL.md文件。
 由于Skill工具无法直接从项目目录加载skills，开发时应：
 1. 直接读取对应skill的SKILL.md文件内容
 2. 将skill内容作为指导文档使用
 3. 使用Task工具调用Explore和Plan Agent来执行相应任务
 
-可用skills：
-- pypto-operator-develop-workflow: 算子开发流程
-- pypto-operator-perf-analyzer: 算子性能分析
-- pypto-operator-perf-autotuner: 算子性能自动化调优
+### 可用skills列表
+
+#### 算子开发类
+- `pypto-operator-develop-workflow`: PyPTO 算子开发工作流程
+
+#### 性能分析类
+- `pypto-operator-perf-analyzer`: 分析 PyPTO 算子的性能指标
+- `pypto-operator-perf-autotuner`: PyPTO 算子性能分析和自动调优
+
+#### 精度验证与调试类
+- `pypto-operator-accuracy-verify`: PyPTO 算子精度验证
+- `pypto-binary-search-verify`: 利用精度工具通过二分查找定位算子精度问题
+- `pypto-binary-search-without-verify`: 不依赖精度工具的精度对比技能
+- `pypto-aicore-error-locator`: 定位 aicore error 时的问题 CCE 文件
+
+#### 环境与工具类
+- `pypto-environment-setup`: PyPTO 环境安装与环境问题修复
+- `gitcode-mcp-install`: 安装和配置 GitCode MCP Server
+
+#### PR与代码质量类
+- `pypto-pr-creator`: PyPTO 项目 PR 创建全流程指南
+- `pypto-pr-fixer`: 修复 PyPTO PR 的 CodeCheck CI 失败和 review 评论
+- `pypto-skill-reviewer`: 对 skill 目录进行质量与最佳实践合规性评审
+
+#### Pass 开发类
+- `pypto-pass/pypto-pass-module-analyzer`: PyPTO Pass 模块代码分析
+- `pypto-pass/pypto-pass-ut-generate`: 根据Pass业务描述生成单元测试用例
+- `pypto-pass/pypto-pass-workflow-analyzer`: PyPTO Pass 业务流分析
 
 ---
 
 ## 集成的技能列表
-| 技能  | 触发时机  | 说明  |
-| :------------ | :------------ | :------------ |
-| pypto-skill-creator  | 接收到用户生成skill指令时  | 根据用户需求，自动创建skill，并将其添加到skills中 |
-| pypto-operator-develop-workflow  | 接收到算子开发任务时  | 详细开发流程及环境准备、运行测试等 |
-| pypto-operator-perf-autotuner  | 接收到算子性能统计及调优指令时  | 算子性能自动化调优，会调用pypto-operator-perf-analyzer进行性能分析 |
+| 技能 | 触发时机 | 说明 |
+| :--- | :--- | :--- |
+| **算子开发** |||
+| pypto-operator-develop-workflow | 接收到算子开发任务时 | 详细开发流程及环境准备、运行测试等，确保开发过程规范、高效 |
+| **性能分析** |||
+| pypto-operator-perf-analyzer | 需要分析算子性能指标时 | 从性能数据文件中提取关键指标，计算性能评级，提供优化建议 |
+| pypto-operator-perf-autotuner | 接收到算子性能统计及调优指令时 | 生成泳道图、分析性能数据、查看性能统计和提供优化建议 |
+| **精度验证与调试** |||
+| pypto-operator-accuracy-verify | 需要验证算子精度时 | 验证 PyPTO 算子计算精度，提供多种容差配置和调试方法 |
+| pypto-binary-search-verify | 需要调试算子精度问题时 | 利用精度工具通过二分查找快速定位算子精度问题 |
+| pypto-binary-search-without-verify | 算子精度不满足要求时 | 通过添加检查点tensor进行原地修改，对比中间结果精度 |
+| pypto-aicore-error-locator | 出现 aicore error 时 | 定位测试案例中出现 aicore error 时的问题 CCE 文件 |
+| **环境与工具** |||
+| pypto-environment-setup | 环境安装或环境问题修复时 | 包括CANN、torch_npu、编译工具链、第三方依赖和PyPTO编译运行等 |
+| gitcode-mcp-install | 需要配置 GitCode MCP 时 | 安装和配置 GitCode MCP Server，使 AI 客户端能与 GitCode 平台交互 |
+| **PR与代码质量** |||
+| pypto-pr-creator | 需要创建 PR 时 | PR 创建全流程指南，包括仓库发现、分支创建、commit、PR创建等 |
+| pypto-pr-fixer | PR CI 失败或需要修复评论时 | 修复 CodeCheck CI 失败和 review 评论 |
+| pypto-skill-reviewer | 需要审计 skill 质量时 | 对 skill 目录进行质量与最佳实践合规性评审并评分 |
+| **Pass 开发** |||
+| pypto-pass-module-analyzer | 需要理解 Pass 模块时 | 分析 PyPTO pass 代码，生成模块分析文档 |
+| pypto-pass-ut-generate | 需要生成 Pass 测试用例时 | 根据Pass业务描述，生成单元测试用例 |
+| pypto-pass-workflow-analyzer | 需要理解 Pass 执行流程时 | 分析 PyPTO pass 文档中的业务流，帮助理解执行流程和数据流转 |
 ---
 
 ## 核心原则 ⭐⭐⭐
@@ -223,16 +265,30 @@ Level 3: 大数据量    ──▶ 性能验证
 
 2. **构建与执行**：
 
-   **⚠️ 环境变量设置（非常重要）**
-   ```bash
-   # 设置NPU Chip ID（使用实际可用的chip）
-   export TILE_FWK_DEVICE_ID=0
-   export PTO_TILE_LIB_CODE_PATH=/mnt/workspace/pto-isa/
-   ```
-    **⚠️ 重要提示**：
+    **⚠️ 环境变量设置（非常重要）**
+    ```bash
+    # 设置NPU Chip ID（使用实际可用的chip）
+    export TILE_FWK_DEVICE_ID=0
+    export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/aarch64-linux
+    ```
+     **⚠️ 重要提示**：
     - **先设置 `export TILE_FWK_DEVICE_ID=0`**
     - 如果设置TILE_FWK_DEVICE_ID=0执行失败了，报错为`Invalid Device`时，再检查npu设备
     - 运行 `npu-smi info` 查看可用的NPU chip，进行设置`export TILE_FWK_DEVICE_ID=x`
+    
+    **⚠️ PTO_TILE_LIB_CODE_PATH 配置检查（关键）**：
+    - **必须确保 `$PTO_TILE_LIB_CODE_PATH` 路径存在**
+    - **必须确保 `$PTO_TILE_LIB_CODE_PATH/include/pto` 路径存在**，该路径下应包含 `pto_comm_inst.hpp` 等头文件
+    - **如果路径不存在，需要查找正确的路径**：
+      ```bash
+      # 查找 include/pto 目录所在位置
+      find /usr/local/Ascend -type d -name "pto" 2>/dev/null | grep include
+      # 或者查找 pto_comm_inst.hpp 文件
+      find /usr/local/Ascend -name "pto_comm_inst.hpp" 2>/dev/null
+      ```
+    - **找到正确路径后，设置 PTO_TILE_LIB_CODE_PATH 为包含 `include/pto` 的上级目录**
+      - 例如：如果 `include/pto` 在 `/usr/local/Ascend/cann/aarch64-linux/include/pto`
+      - 则设置：`export PTO_TILE_LIB_CODE_PATH=/usr/local/Ascend/cann/aarch64-linux`
 
    - 编译whl包并安装
      python3 build_ci.py -f python3 --disable_auto_execute
