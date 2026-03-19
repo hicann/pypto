@@ -189,6 +189,12 @@ void TiledPReLUOperation(
         auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmpShape);
         auto &op = function.AddOperation(Opcode::OP_PRELU, {tile, weightTile}, {resultTile, tmpTensor});
         op.SetAttribute(OP_ATTR_PREFIX + "axis", axis);
+        
+        size_t dimSize = input.tensor.GetShape().size();
+        if (dimSize == 2) {
+            std::vector<bool> dimMap({true, false});
+            op.SetAttr(OpAttributeKey::rowPad, dimMap);
+        }
         return;
     }
     auto &vecTile = tileShape.GetVecTile();

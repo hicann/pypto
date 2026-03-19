@@ -59,6 +59,8 @@ void TiledCompareOperationImpl(Function &function, const TileShape &tileShape, s
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
         auto &op = function.AddOperation(Opcode::OP_CMP, {convertedTile1, convertedTile2}, {resultTile, tmp_tensor});
+        std::vector<bool> dimMap({true, true});
+        op.SetAttr(OpAttributeKey::rowPad, dimMap);
 
         op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", static_cast<int64_t>(operation));
         op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", static_cast<int64_t>(mode));
@@ -166,6 +168,8 @@ LogicalTensorPtr TensorCompareOperation(
     }
     auto result = std::make_shared<LogicalTensor>(function, resultType, resultShape, resultValidShape);
     auto &op = function.AddOperation(Opcode::OP_CMP, {operandT1, operandT2}, {result});
+    std::vector<bool> dimMap({true, true});
+    op.SetAttr(OpAttributeKey::rowPad, dimMap);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", static_cast<int64_t>(operation));
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", static_cast<int64_t>(mode));
     return result;
@@ -194,6 +198,8 @@ LogicalTensorPtr TensorCompareOperationScalar(
     }
     auto result = std::make_shared<LogicalTensor>(function, resultType, resultShape, resultValidShape);
     auto &op = function.AddOperation(Opcode::OP_CMPS, {operandT1}, {result});
+    std::vector<bool> dimMap({true});
+    op.SetAttr(OpAttributeKey::rowPad, dimMap);
     op.SetAttribute(OpAttributeKey::scalar, value);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", static_cast<int64_t>(operation));
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", static_cast<int64_t>(mode));
@@ -252,6 +258,8 @@ void TiledCmpsOperationImpl(Function &function, const TileShape &tileShape, size
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
         auto &op = function.AddOperation(Opcode::OP_CMPS, {convertedTile}, {resultTile, tmp_tensor});
+        std::vector<bool> dimMap({true});
+        op.SetAttr(OpAttributeKey::rowPad, dimMap);
 
         op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", static_cast<int64_t>(operation));
         op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", static_cast<int64_t>(mode));

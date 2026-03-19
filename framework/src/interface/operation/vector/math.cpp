@@ -43,7 +43,12 @@ void TiledLogicalNotOperation(
         std::vector<int64_t> tmpShape({total_size});
 
         auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_INT8, tmpShape);
-        function.AddOperation(Opcode::OP_LOGICALNOT, {tile}, {resultTile, tmpTensor});
+        auto &op = function.AddOperation(Opcode::OP_LOGICALNOT, {tile}, {resultTile, tmpTensor});
+        if (input.tensor.GetDataType() == DT_FP32 || input.tensor.GetDataType() == DT_BF16 ||
+            input.tensor.GetDataType() == DT_FP16) {
+            std::vector<bool> dimMap({true});
+            op.SetAttr(OpAttributeKey::rowPad, dimMap);
+        }
         return;
     }
 
