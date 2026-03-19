@@ -1399,3 +1399,25 @@ TEST_F(OperationImplTest, test_FillPad_2D) {
         result = FillPad(input, "constant", 0.0f);
     }
 }
+
+TEST_F(OperationImplTest, Test_Matmul_SFA) { 
+     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128}); 
+     Tensor matA(DT_BF16, {128, 576}, "matA"); 
+     Tensor matB(DT_BF16, {576, 2048}, "matB"); 
+     Tensor result;
+     FUNCTION("TestMatmulSFA") {
+         result = 
+             npu::tile_fwk::Matrix::Matmul(DT_FP32, matA, matB, false, false, false); 
+    } 
+} 
+
+TEST_F(OperationImplTest, Test_Matmul_SFA_T) { 
+     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128}); 
+     Tensor matA(DT_BF16, {576, 128}, "matA"); 
+     Tensor matB(DT_BF16, {576, 2048}, "matB"); 
+     Tensor result;
+     FUNCTION("TestMatmulSFAT") {
+         result = 
+             npu::tile_fwk::Matrix::Matmul(DT_FP32, matA, matB, true, false, false); 
+    } 
+} 
