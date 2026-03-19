@@ -60,9 +60,12 @@ TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp) {
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
 
     const auto srcLayout = src.GetLayout();
+    auto srcShape0 = srcLayout.template GetShapeDim<0, expectSize>();
+    auto srcShape1 = srcLayout.template GetShapeDim<1, expectSize>();
+    auto srcShape2 = srcLayout.template GetShapeDim<2, expectSize>();
     auto srcShape3 = srcLayout.template GetShapeDim<3, expectSize>();
     auto srcShape4 = srcLayout.template GetShapeDim<4, expectSize>();
-    if (srcShape3 == 0 || srcShape4 == 0) {
+    if (srcShape0 == 0 || srcShape1 == 0 || srcShape2 == 0 || srcShape3 == 0 || srcShape4 == 0) {
         return;
     }
     auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();

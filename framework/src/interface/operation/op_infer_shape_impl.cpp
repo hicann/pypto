@@ -342,8 +342,7 @@ void PairReduceInferFunc(Operation* op,
     auto dimSize = op->GetIOperands()[0]->GetDynValidShape().size();
     std::vector<SymbolicScalar> outValidShape;
     for (size_t i = 0; i < dimSize; i++) {
-        outValidShape.push_back(std::max(op->GetIOperands()[0]->GetDynValidShape()[i],
-            op->GetIOperands()[1]->GetDynValidShape()[i]));
+        outValidShape.push_back(op->GetIOperands()[0]->GetDynValidShape()[i]);
     }
     for (auto output : op->GetOOperands()) {
         outValidShapes.push_back(outValidShape);
