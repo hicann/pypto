@@ -20,6 +20,7 @@
 
 namespace CostModel
 {
+    UnifiedPipeMachinePtr CreateSimulator(const std::string &archType, int accLevel);
     class PipeFactory
     {
     public:

@@ -29,6 +29,7 @@
 #include "cost_model/simulation/machine/CoreMachine.h"
 #include "cost_model/simulation/machine/Scheduler.h"
 #include "cost_model/simulation/tools/ParseInput.h"
+#include "cost_model/simulation/arch/PipeSimulatorFast.h"
 
 using namespace npu::tile_fwk;
 
@@ -651,4 +652,78 @@ TEST_F(CostModelTest, TestJsonFileErrorFormat) {
     } catch (const std::exception& e) {
     }
 
+}
+
+TEST_F(CostModelTest, TestGetCyclesForPassA2A3) {
+    const std::string opCode = "ADD";
+    std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
+    DataType dtype = DataType::DT_INT4;
+    config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
+    int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
+    EXPECT_GT(cycle, 0);
+}
+
+TEST_F(CostModelTest, TestGetCyclesForPassA5) {
+    const std::string opCode = "CAST";
+    std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
+    DataType dtype = DataType::DT_INT4;
+    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
+    int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
+    EXPECT_GT(cycle, 0);
+}
+
+TEST_F(CostModelTest, TestGetCyclesForPassCopyIn) {
+    const std::string opCode = "COPY_IN";
+    std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
+    DataType dtype = DataType::DT_INT4;
+    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
+    int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
+    EXPECT_GT(cycle, 0);
+}
+
+TEST_F(CostModelTest, TestGetCyclesForPassCopyOut) {
+    const std::string opCode = "COPY_OUT";
+    std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
+    DataType dtype = DataType::DT_INT4;
+    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
+    int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
+    EXPECT_GT(cycle, 0);
+}
+
+TEST_F(CostModelTest, TestGetCyclesForPassSimulate) {
+    const std::string opCode = "WHERE_TT";
+    std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
+    DataType dtype = DataType::DT_INT4;
+    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
+    int64_t cycle = CostModel::GetCyclesForPass(opCode, shape, dtype);
+    EXPECT_GT(cycle, 0);
+}
+
+TEST_F(CostModelTest, TestGetCyclesForPassSo) {
+    typedef int64_t (*GetCyclesForPassFunc)(const std::string &op, const std::vector<std::vector<int>> &shape, DataType dtype);
+    const std::string opCode = "L1_TO_L0A";
+    std::vector<std::vector<int>> shape = {{1, 1, 1, 1}};
+    DataType dtype = DataType::DT_INT4;
+    config::SetPlatformConfig("device_platform", "ASCEND_950PR_9579");
+    config::SetSimConfig(KEY_ACCURACY_LEVEL, 1);
+    std::string soPath = "libtile_fwk_simulation.so";
+    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
+    EXPECT_NO_THROW(
+        if (!handle) {
+            throw std::runtime_error("can not load library: " + std::string(dlerror()));
+        }
+    );
+
+    GetCyclesForPassFunc get_cycles_func = (GetCyclesForPassFunc) dlsym(handle, "GetCyclesForPass");
+    EXPECT_NO_THROW(
+        if (!get_cycles_func) {
+            throw std::runtime_error("Failed to find symbol GetCyclesForPass: " + std::string(dlerror()));
+        }
+    );
+    int64_t cycle = get_cycles_func(opCode, shape, dtype);
+    EXPECT_GT(cycle, 0);
 }
