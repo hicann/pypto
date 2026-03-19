@@ -207,15 +207,16 @@ void CodeGenOp::Init(const Operation &ops) {
 
     isDynamicFunction = functionType == FunctionType::DYNAMIC_LOOP_PATH;
     isSupportDynamicAligned = isDynamicAligned || config::GetCodeGenOption<bool>(SUPPORT_DYNAMIC_ALIGNED);
-    CODEGEN_LOGI("%s: init CodeGenOp from Operation, isDynamicFunction is %d, isSupportDynamicAligned is %d",
-        __FUNCTION__, isDynamicFunction, isSupportDynamicAligned);
 
+    // update opcode and tileOpName
     UpdateTileOpInfo(ops);
     ASSERT(OperErr::OPERATION_INIT_FAILED, !tileOpName.empty()) << "empty tileOpName for ops: " << ops.Dump();
 
-    // opcode would be refreshed by UpdateTileOpInfo
     isSupportLayout = ConfigManager::Instance().GetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false) &&
                       SUPPORT_TILETENSOR_OPS.find(opCode) != SUPPORT_TILETENSOR_OPS.end();
+    CODEGEN_LOGI(
+        "Init CodeGenOp from Operation, isDynamicFunction: %d, isSupportDynamicAligned: %d, isSupportLayout: %d",
+        isDynamicFunction, isSupportDynamicAligned, isSupportLayout);
 
     opCodeStr = OpcodeManager::Inst().GetOpcodeStr(opCode);
 

@@ -161,7 +161,7 @@ std::string CodeGenCloudNPU::GenAllocForLocalBuffer(
     std::string allocSourceCode;
     auto genExtraAllocForTensor = [this, &symbolMgr](const std::shared_ptr<LogicalTensor> &operand) -> std::string {
         if (HasAllocAttr(operand)) {
-            CODEGEN_LOGI("operand has an alloc attr, need to gen extra alloc\n%s", operand->Dump().c_str());
+            CODEGEN_LOGI("operand has an alloc attr, need to gen extra alloc, operand is: %s", operand->Dump().c_str());
             std::optional<std::string> allocCodeMaybe = GenExtraAlloc(symbolMgr, operand);
             if (allocCodeMaybe.has_value()) {
                 return allocCodeMaybe.value();
@@ -757,14 +757,16 @@ void CodeGenCloudNPU::ExecuteParallelCompile(const Function &topFunc) {
 
     makeCmd << " -f " << makefilePath;
 
-    CODEGEN_LOGI("Starting parallel compilation: %u jobs, %zu tasks", parallelJobs, compileTasks_.size());
+    CODEGEN_LOGI("Top Function magic: %d, hash: %s: Starting parallel compilation: %u jobs, %zu tasks",
+        topFunc.GetFuncMagic(), topFunc.GetFunctionHash().c_str(), parallelJobs, compileTasks_.size());
     CODEGEN_LOGI("Execute: %s", makeCmd.str().c_str());
 
     auto startTime = std::chrono::high_resolution_clock::now();
     int ret = DoCompileCmd(makeCmd.str());
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration<double, std::milli>(endTime - startTime);
-    CODEGEN_LOGI("Parallel compilation finished in %f ms", duration.count());
+    CODEGEN_LOGI("Top Function magic: %d, hash: %s: Parallel compilation finished in %f ms", topFunc.GetFuncMagic(),
+        topFunc.GetFunctionHash().c_str(), duration.count());
 
     ASSERT(CmpCodeErr::COMPILE_CODE_FAILED, ret == 0) << "Parallel compilation failed with return code: " << ret;
 

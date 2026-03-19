@@ -30,12 +30,12 @@ namespace npu::tile_fwk {
 enum class CodeGenErrorCategory {
     FRAMEWORK = 60000U,         // 0: 框架错误
     OPERATION_ADAPTER = 61000U, // 1: OP初始化错误
-    GEN_OP_CODE = 62000U,       // 2: 生成OP代码
-    COMPILE_CODE = 63000U,       // 3: 编译CCE代码
+    GEN_OP_CODE = 62000U,       // 2: 生成OP代码错误
+    COMPILE_CODE = 63000U,       // 3: 编译CCE代码错误
 };
 
 // =============================================================================
-// 二、子流程：各 Category 下的 ErrorScene 枚举（枚举值即错误码 F6xxxx）
+// 二、子流程：各 Category 下的 Error 枚举（枚举值即错误码 F6xxxx）
 // =============================================================================
 
 // Framework error scene
