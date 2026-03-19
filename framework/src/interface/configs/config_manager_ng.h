@@ -306,6 +306,22 @@ public:
     void EndScope(const char *file = __builtin_FILE(), int line = __builtin_LINE());
 
     /**
+    * @brief RAII guard: BeginScope on construction, EndScope on destruction.
+    * Use instead of manual BeginScope + EndScope pair for exception safety.
+    */
+    class JitScopeGuard {
+    public:
+        JitScopeGuard(const std::string &name, std::map<std::string, Any> &&values = {},
+                        const char *file = __builtin_FILE(), int line = __builtin_LINE());
+        ~JitScopeGuard();
+        JitScopeGuard(const JitScopeGuard &) = delete;
+        JitScopeGuard &operator=(const JitScopeGuard &) = delete;
+
+    private:
+        // RAII: ctor does BeginScope, dtor does EndScope
+    };
+
+    /**
      * @brief RAII guard: PushScope on construction, EndScope on destruction.
      * Use instead of manual Restore + EndScope pair for exception safety.
      */

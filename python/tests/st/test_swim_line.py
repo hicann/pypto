@@ -75,7 +75,7 @@ def device_run_data_from_device_mix_nodep(queue):
     torch_npu.npu.synchronize()
     pref_path = pypto.pypto_impl.LogTopFolder()
     queue.put(pref_path)
-    
+
 
 def test_swim():
     mp.set_start_method('spawn', force=True)
@@ -90,7 +90,7 @@ def test_swim():
         assert False, "Could not Get pref path"
     aicpu_json_path = pref_path + "/machine_trace_perf_data_0.json"
     assert os.path.exists(aicpu_json_path), "Could not Get aicpu perf"
-    
+
     with open(aicpu_json_path, 'r', encoding='utf-8') as f:
         core_list: List[Dict] = json.load(f)
         for core in core_list:
@@ -102,3 +102,11 @@ def test_swim():
     swim_lane_json_path = pref_path + "/merged_swimlane.json"
     assert os.path.exists(swim_lane_json_path), "Could not Get swim lane"
     assert os.path.getsize(swim_lane_json_path) > 0, "Get swim lane is null"
+
+    tilefwk_l1_prof_data_path = pref_path + "/tilefwk_L1_prof_data.json"
+    assert os.path.exists(tilefwk_l1_prof_data_path), "Could not Get tilefwk_L1_prof_data"
+
+    # can not be empty list, need to have data
+    with open(tilefwk_l1_prof_data_path, 'r', encoding='utf-8') as f:
+        tilefwk_11_prof_data: List[Dict] = json.load(f)
+        assert len(tilefwk_11_prof_data) > 0, "tilefwk_L1_prof_data is empty"
