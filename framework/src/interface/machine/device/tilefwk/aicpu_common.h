@@ -16,6 +16,7 @@
 #ifndef RUNTIME_COMMON_DEF_H
 #define RUNTIME_COMMON_DEF_H
 
+#include <cstddef>
 #include <cstdint>
 #include "aicpu_perf.h"
 

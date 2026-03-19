@@ -15,6 +15,9 @@
 
 #ifndef AICPU_PREF_H
 #define AICPU_PREF_H
+
+#include <cstdint>
+
 namespace npu::tile_fwk::dynamic {
 constexpr uint32_t MAX_SCHEDULE_AICPU_NUM = 5;          // 真正负责调度aicore的最大aicpu个数
 constexpr uint32_t MAX_OTHER_AICPU_NUM = 2; // 除调度cpu以外的其它aicpu数量
