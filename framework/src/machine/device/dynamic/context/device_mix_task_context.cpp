@@ -56,7 +56,7 @@ void DeviceTaskContext::ProcessWrapQueue(DynDeviceTask *dyntask, uint32_t wrapId
 }
 
 uint32_t* DeviceTaskContext::AllocWrapTasklist(DynDeviceTask *dyntask) {
-    uint32_t size = dyntask->devTask.coreFunctionCnt; // can be optimized by wrapTaskNum
+    uint32_t size = dyntask->devTask.coreFunctionCnt * sizeof(uint32_t);
     WsAllocation qalloc = ControlFlowAllocateSlab(devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::WRAP_TASKLIST));
     uint32_t *wrapTasklistAddr = qalloc.As<uint32_t>();
     return wrapTasklistAddr;

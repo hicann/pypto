@@ -414,7 +414,7 @@ struct DevControlFlowCache {
         if (wrapQueueBackupElem == nullptr) {
             return;
         }
-        size_t tasklistBackupSize = base->devTask.coreFunctionCnt;
+        size_t tasklistBackupSize = base->devTask.coreFunctionCnt * sizeof(uint32_t);
         uint32_t *tasklistAddr = reinterpret_cast<uint32_t *>(AllocateCache(tasklistBackupSize));
         if (tasklistAddr == nullptr) {
             return;
@@ -431,8 +431,8 @@ struct DevControlFlowCache {
             WrapInfo* srcWrapInfo = &wrapInfoQueue->elem[i];
             WrapInfo* dstWrapInfo = &mixTaskDataBackup->queue.elem[i];
             dstWrapInfo->tasklist.elem = tasklistAddr + tasklistOffset;
-            uint32_t tasklistSize = srcWrapInfo->tasklist.capacity;
-            tasklistOffset += tasklistSize;
+            uint32_t tasklistSize = srcWrapInfo->tasklist.capacity * sizeof(uint32_t);
+            tasklistOffset += srcWrapInfo->tasklist.capacity;
             memcpy_s(dstWrapInfo->tasklist.elem, tasklistSize, srcWrapInfo->tasklist.elem, tasklistSize);
         }
 
@@ -447,13 +447,11 @@ struct DevControlFlowCache {
         }
         MixTaskDataCache *mixTaskDataBackup = base->mixTaskDataBackup;
         base->devTask.mixTaskData.wrapIdNum = mixTaskDataBackup->wrapIdNum;
-        base->devTask.mixTaskData.wrapTasklist = PtrToValue(mixTaskDataBackup->wrapTasklist);
 
         WrapInfoQueue *wrapInfoQueue = reinterpret_cast<WrapInfoQueue *>(base->devTask.mixTaskData.readyWrapCoreFunctionQue);
         wrapInfoQueue->head = mixTaskDataBackup->queue.head;
         wrapInfoQueue->tail = mixTaskDataBackup->queue.tail;
         wrapInfoQueue->capacity = mixTaskDataBackup->queue.capacity;
-        wrapInfoQueue->elem = mixTaskDataBackup->queue.elem;
 
         size_t wrapInfoBackupSize = sizeof(WrapInfo) * wrapInfoQueue->capacity;
         memcpy_s(wrapInfoQueue->elem, wrapInfoBackupSize, mixTaskDataBackup->queue.elem, wrapInfoBackupSize);
@@ -462,9 +460,9 @@ struct DevControlFlowCache {
         for (uint32_t i = mixTaskDataBackup->queue.head; i < mixTaskDataBackup->queue.tail; i++) {
             WrapInfo* srcWrapInfo = &mixTaskDataBackup->queue.elem[i];
             WrapInfo* dstWrapInfo = &wrapInfoQueue->elem[i];
-            dstWrapInfo->tasklist.elem = mixTaskDataBackup->wrapTasklist + tasklistOffset;
-            uint32_t tasklistSize = srcWrapInfo->tasklist.capacity;
-            tasklistOffset += tasklistSize;
+            dstWrapInfo->tasklist.elem = reinterpret_cast<uint32_t*>(base->devTask.mixTaskData.wrapTasklist) + tasklistOffset;
+            uint32_t tasklistSize = srcWrapInfo->tasklist.capacity * sizeof(uint32_t);
+            tasklistOffset += srcWrapInfo->tasklist.capacity;
             memcpy_s(dstWrapInfo->tasklist.elem, tasklistSize, srcWrapInfo->tasklist.elem, tasklistSize);
         }
 

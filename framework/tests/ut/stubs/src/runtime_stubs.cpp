@@ -373,4 +373,12 @@ rtError_t rtCpuKernelLaunchWithFlag(const void *soName, const void *kernelName, 
     (void)flags;
     return RT_ERROR_NONE;
 }
+
+rtError_t halResMap(unsigned int devId, struct res_map_info *res_info, unsigned long *va, unsigned int *len) {
+    (void)devId;
+    (void)res_info;
+    (void)va;
+    (void)len;
+    return RT_ERROR_NONE;
+}
 }
