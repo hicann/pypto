@@ -302,64 +302,6 @@ TILEOP void CopyGmToGm(__gm__ TargetType* target, __ubuf__ UBType* buffer, __gm_
 }
 
 // ---------------------------------------------------------------------------
-// Copy: UB → GM
-// ---------------------------------------------------------------------------
-template<typename TargetType, typename SourceType, uint32_t rowShape, uint32_t colShape,
-    uint32_t dstStride, AtomicType atomicType>
-TILEOP void CopyUbToGmBlock(__gm__ TargetType* target, __ubuf__ SourceType* source) {
-    PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE3, EVENT_ID0);
-
-    ShapeDyn shape = MakeShape(rowShape, colShape);
-    StrideDyn dstStrideDyn = MakeStride(rowShape, dstStride);
-
-    ShmemGlobalTensor<TargetType, rowShape, colShape> dstGlobal(target, shape, dstStrideDyn);
-    ShmemUbTile<SourceType, rowShape, colShape> ubTile(rowShape, colShape);
-    pto::TASSIGN(ubTile, reinterpret_cast<uintptr_t>(source));
-
-    AtomicStore<atomicType>(dstGlobal, ubTile);
-
-    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
-}
-
-template<typename TargetType, typename SourceType, uint32_t rowShape, uint32_t colFullBlockCount,
-    uint32_t colTailShape, uint32_t bufferColShape, uint32_t dstStride, AtomicType atomicType>
-TILEOP void CopyUbToGmRow(__gm__ TargetType* dstPtr, __ubuf__ SourceType* srcPtr)
-{
-    uint32_t colOffset = 0;
-    for (uint32_t colIndex = 0; colIndex < colFullBlockCount; ++colIndex, colOffset += bufferColShape) {
-        CopyUbToGmBlock<TargetType, SourceType, rowShape, bufferColShape, dstStride, atomicType>(
-            dstPtr + colOffset, srcPtr + colOffset);
-    }
-    if constexpr (colTailShape > 0) {
-        CopyUbToGmBlock<TargetType, SourceType, rowShape, colTailShape, dstStride, atomicType>(
-            dstPtr + colOffset, srcPtr + colOffset);
-    }
-}
-
-template<typename TargetType, typename SourceType, uint32_t tileRowShape, uint32_t tileColShape, uint32_t bufferRowShape, uint32_t bufferColShape,
-    uint32_t srcStride, uint32_t dstStride, AtomicType atomicType>
-TILEOP void CopyUbToGm(__gm__ TargetType* target, __ubuf__ SourceType* source)
-{
-    constexpr uint32_t rowFullBlockCount = tileRowShape / bufferRowShape;
-    constexpr uint32_t colFullBlockCount = tileColShape / bufferColShape;
-    constexpr uint32_t rowTailShape = tileRowShape % bufferRowShape;
-    constexpr uint32_t colTailShape = tileColShape % bufferColShape;
-    constexpr uint32_t srcRowStride = bufferRowShape * srcStride;
-    constexpr uint32_t dstRowStride = bufferRowShape * dstStride;
-
-    __ubuf__ SourceType* srcPtr = source;
-    __gm__ TargetType* dstPtr = target;
-    for (uint32_t rowIndex = 0; rowIndex < rowFullBlockCount; ++rowIndex, srcPtr += srcRowStride, dstPtr += dstRowStride) {
-        CopyUbToGmRow<TargetType, SourceType, bufferRowShape, colFullBlockCount, colTailShape, bufferColShape, dstStride, atomicType>(
-            dstPtr, srcPtr);
-    }
-    if constexpr (rowTailShape > 0) {
-        CopyUbToGmRow<TargetType, SourceType, rowTailShape, colFullBlockCount, colTailShape, bufferColShape, dstStride, atomicType>(
-            dstPtr, srcPtr);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Copy: GM → UB (single block, optional type conversion)
 // ---------------------------------------------------------------------------
 template<typename TargetType, typename SourceType, uint32_t rowShape, uint32_t colShape,
@@ -441,20 +383,30 @@ TILEOP void ShmemPut(CoreFuncParam* param, __ubuf__ InShmemType* buffer, __gm__ 
 }
 
 // Put UB directly to remote shmem GM.
-template<typename UBType, typename ShmemType, uint32_t tileRowShape, uint32_t tileColShape, uint32_t bufferRowShape,
-    uint32_t bufferColShape, uint32_t srcStride, uint32_t dstStride, AtomicType atomicType>
-TILEOP void ShmemPutUb2Gm(CoreFuncParam* param, __ubuf__ UBType* UBDataBaseAddr, __gm__ ShmemType* shmemDataBaseAddr, uint32_t UBDataOffset0, uint32_t UBDataOffset1, uint32_t UBDataRawShape0,
+template<typename Type, uint32_t tileRowShape, uint32_t tileColShape, uint32_t dstStride, AtomicType atomicType>
+TILEOP void ShmemPutUb2Gm(CoreFuncParam* param, __ubuf__ Type* UBDataBaseAddr, __gm__ Type* shmemDataBaseAddr, uint32_t UBDataOffset0, uint32_t UBDataOffset1, uint32_t UBDataRawShape0,
     uint32_t UBDataRawShape1, uint32_t shmemDataOffset0, uint32_t shmemDataOffset1, uint32_t shmemDataOffset2, uint32_t shmemDataOffset3,
     uint32_t shmemDataRawShape0, uint32_t shmemDataRawShape1, uint32_t shmemDataRawShape2, uint32_t shmemDataRawShape3, __gm__ int64_t *hcclContext)
 {
     (void)UBDataRawShape0;
     (void)shmemDataRawShape0;
-
-    __ubuf__ UBType* UBDataAddr = UBDataBaseAddr + TileOp::CalcLinearOffset(UBDataRawShape1, UBDataOffset0, UBDataOffset1);
-    __gm__ ShmemType* shmemDataAddr = MapVirtualAddr<ShmemType>(hcclContext, shmemDataBaseAddr, shmemDataOffset0) +
+    
+    __ubuf__ Type* UBDataAddr = UBDataBaseAddr + TileOp::CalcLinearOffset(UBDataRawShape1, UBDataOffset0, UBDataOffset1);
+    __gm__ Type* shmemDataAddr = MapVirtualAddr<Type>(hcclContext, shmemDataBaseAddr, shmemDataOffset0) +
         CalcLinearOffset(shmemDataRawShape2, shmemDataRawShape3, shmemDataOffset1, shmemDataOffset2, shmemDataOffset3);
-
-    CopyUbToGm<ShmemType, UBType, tileRowShape, tileColShape, bufferRowShape, bufferColShape, srcStride, dstStride, atomicType>(shmemDataAddr, UBDataAddr);
+    
+    PIPE_SYNC_EVENT(PIPE_S, PIPE_MTE3, EVENT_ID0);
+    
+    ShapeDyn shape = MakeShape(tileRowShape, tileColShape);
+    StrideDyn dstStrideDyn = MakeStride(tileRowShape, dstStride);
+    
+    ShmemGlobalTensor<Type, tileRowShape, tileColShape> dstGlobal(shmemDataAddr, shape, dstStrideDyn);
+    ShmemUbTile<Type, tileRowShape, tileColShape> ubTile(tileRowShape, tileColShape);
+    pto::TASSIGN(ubTile, reinterpret_cast<uintptr_t>(UBDataAddr));
+    
+    AtomicStore<atomicType>(dstGlobal, ubTile);
+    
+    PIPE_SYNC_EVENT(PIPE_MTE3, PIPE_S, EVENT_ID0);
 }
 
 // Signal: write value to remote ranks; S→MTE3 sync so scalar write is visible to TSTORE.

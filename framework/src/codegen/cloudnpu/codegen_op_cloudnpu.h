@@ -172,6 +172,7 @@ private:
     TileTensor QueryTileTensorByIdx(int paramIdx) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
+    std::string GenTemplateParamsForPutUb2Gm() const;
     std::string GenTemplateParamsForSignal() const;
     std::string GenTemplateParamsForMoeDistributedCombineSend() const;
     std::string GenTemplateParamsForMoeDistributedCombineReceive() const;

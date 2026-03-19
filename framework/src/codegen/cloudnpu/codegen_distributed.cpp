@@ -24,7 +24,6 @@
 namespace npu::tile_fwk {
 
 using AtomicType = Distributed::AtomicType;
-constexpr int32_t GM2UB_SHMEMDATA_INDEX = 2;
 
 void CheckInRange(int64_t value) {
     if (value < std::numeric_limits<uint32_t>::min() || value > std::numeric_limits<uint32_t>::max()) {
@@ -79,7 +78,6 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const {
     static const std::unordered_map<Opcode, std::array<int32_t, 2>> opcodeIndexMap = {
         {      Opcode::OP_SHMEM_PUT,                     {3, 4}},
         {      Opcode::OP_SHMEM_GET,                     {0, 3}},
-        {Opcode::OP_SHMEM_PUT_UB2GM, {1, GM2UB_SHMEMDATA_INDEX}},
         {Opcode::OP_SHMEM_GET_GM2UB,                     {0, 3}}
     };
     auto [nonShmemDataIndex, shmemDataIndex] = opcodeIndexMap.at(opCode);
@@ -90,7 +88,7 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const {
     int64_t bufferRowShape = 0;
     int64_t bufferColShape = 0;
     Distributed::AtomicType atomicType = Distributed::AtomicType::SET;
-    if (opCode == Opcode::OP_SHMEM_PUT || opCode == Opcode::OP_SHMEM_PUT_UB2GM) {
+    if (opCode == Opcode::OP_SHMEM_PUT) {
         Distributed::ShmemPutAttr distOpAttr =
             AnyCast<Distributed::ShmemPutAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
         bufferRowShape = distOpAttr.copyBufferShape[0];
@@ -123,6 +121,29 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const {
         << DataType2CCEStr(operandDtype[shmemDataIndex]) << ", " << tileRowShape << ", " << tileColShape << ", "
         << bufferRowShape << ", " << bufferColShape << ", " << srcStride << ", " << dstStride << ", "
         << Distributed::AtomicTypeToString(atomicType) << ">";
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenTemplateParamsForPutUb2Gm() const
+{
+    std::ostringstream oss;
+    int32_t shmemDataIndex = 2;
+
+    int64_t tileRowShape = *(originShape[shmemDataIndex].rbegin() +1);
+    int64_t tileColShape =  originShape[shmemDataIndex].back();
+
+    Distributed::ShmemPutAttr distOpAttr =
+            AnyCast<Distributed::ShmemPutAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
+
+    const std::vector<int64_t>& shmemTensorRawShape = rawShape[shmemDataIndex];
+    int64_t dstStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
+
+    CheckInRange(tileRowShape);
+    CheckInRange(tileColShape);
+    CheckInRange(dstStride);
+
+    oss << "<" << GetTemplateDType() << ", " << tileRowShape << ", " << tileColShape << ", " << dstStride << ", "
+        << Distributed::AtomicTypeToString(distOpAttr.atomicType) << ">";
     return oss.str();
 }
 
@@ -192,7 +213,7 @@ std::string CodeGenOpCloudNPU::GenTemplateParams() const {
             {                      Opcode::OP_SHMEM_PUT,[](const CodeGenOpCloudNPU *self) { return self->GenTemplateParamsForPutAndGet(); }                                                        },
             {                      Opcode::OP_SHMEM_GET, [](const CodeGenOpCloudNPU *self) { return self->GenTemplateParamsForPutAndGet(); }},
             {                Opcode::OP_SHMEM_PUT_UB2GM,
-             [](const CodeGenOpCloudNPU *self) { return self->GenTemplateParamsForPutAndGet(); }                                            },
+             [](const CodeGenOpCloudNPU *self) { return self->GenTemplateParamsForPutUb2Gm(); }                                            },
             {                Opcode::OP_SHMEM_GET_GM2UB,
              [](const CodeGenOpCloudNPU *self) { return self->GenTemplateParamsForPutAndGet(); }                                            },
             {                   Opcode::OP_SHMEM_SIGNAL,    [](const CodeGenOpCloudNPU *self) { return self->GenTemplateParamsForSignal(); }},

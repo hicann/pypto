@@ -157,6 +157,7 @@ Tensor ShmemPut(const Tensor& predToken, const Tensor& in, const Tensor& shmemDa
 Tensor ShmemPutUb2Gm(const Tensor &in, const Tensor &shmemDataTile, const Tensor &barrierDummy,
     AtomicType atomicType)
 {
+    CHECK(in.GetDataType() == shmemDataTile.GetDataType());
     auto &function = *Program::GetInstance().GetCurrentFunction();
     auto dummy = std::make_shared<LogicalTensor>(function, DT_INT32, barrierDummy.GetShape());
     auto &op = function.AddOperation(Opcode::OP_SHMEM_PUT_UB2GM,

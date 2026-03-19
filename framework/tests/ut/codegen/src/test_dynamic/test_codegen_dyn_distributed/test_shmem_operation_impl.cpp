@@ -27,6 +27,7 @@
 #include "codegen/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_common.h"
 #include "tilefwk/tilefwk_op.h"
+#include "test_codegen_utils.h"
 
 namespace npu::tile_fwk::Distributed {
 
@@ -75,7 +76,10 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        std::string folderPath = "output/output_" + getTimeStamp() + "_" + std::to_string(getpid());
+        std::string outputDir = "output";
+        bool res = CreateDir(outputDir);
+        CHECK(res) << "Failed to create directory: " << outputDir;
+        std::string folderPath = outputDir + "/output_" + getTimeStamp() + "_" + std::to_string(getpid());
         setenv("TILE_FWK_OUTPUT_DIR", folderPath.c_str(), 0);
     }
 
@@ -202,6 +206,10 @@ TEST_F(TestDistributedShmemImpl, TestShmemDataSet)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::Distributed::ShmemSet<bfloat16_t, 1, 256, 102400, 8192>)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestDistributedShmemImpl, TestShmemSignalSet)
@@ -224,6 +232,10 @@ TEST_F(TestDistributedShmemImpl, TestShmemSignalSet)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::Distributed::ShmemSet<bfloat16_t, 1, 1024, 8, 8192>)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
@@ -249,6 +261,10 @@ TEST_F(TestDistributedShmemImpl, TestShmemBarrier)
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::Distributed::ShmemSignal<1, 8, 16, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
@@ -266,11 +282,41 @@ TEST_F(TestDistributedShmemImpl, TestShmemGetGm2Ub)
             out = ShmemGetGm2Ub(dummy, shmemData);
         }
     }
-
     std::string functionRawName = GetFunctionRawName(functionName);
     auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::Distributed::ShmemGetGm2Ub<int32_t, int32_t, 4, 64, 4, 64, 64, 64, TileOp::Distributed::AtomicType::SET>)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestDistributedShmemImpl, TestShmemPutUb2Gm)
+{
+    int64_t row = 16;
+    int64_t col = 32;
+    Tensor in(DT_FP32, {row, col}, "in");
+    Tensor shmemData(DT_FP32, {1, 1, row, col}, "shmemData");
+    Tensor predToken(DT_INT32, {1, 1}, "predToken");
+    Tensor out(DT_INT32, {1, 1}, "out");
+    std::string functionName = "ShmemPutUb2Gm";
+    FUNCTION(functionName + "Main", {in, shmemData, predToken}, {out}) {
+        TileShape::Current().SetVecTile({row, col});
+        LOOP(functionName, FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
+            (void) index;
+            out = ShmemPutUb2Gm(in, shmemData, predToken, AtomicType::ADD);
+        }
+    }
+    std::string functionRawName = GetFunctionRawName(functionName);
+    auto function = Program::GetInstance().GetFunctionByRawName(functionRawName);
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+    std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TileOp::Distributed::ShmemPutUb2Gm<float, 16, 32, 32, TileOp::Distributed::AtomicType::ADD>)!!!";
+    CheckStringExist(expect, res);
 }
 }
