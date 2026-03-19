@@ -22,6 +22,7 @@
 template <typename T>
 struct CompareTmpBuffers {
     __ubuf__ uint8_t* vcmpBitResult;
+    __ubuf__ uint8_t *startAddrUB;
     __ubuf__ T* zeroCondition;
     __ubuf__ T* oneCondition;
     __ubuf__ T* vselResult;
@@ -52,6 +53,11 @@ TILEOP CompareTmpBuffers<T> InitCompareTmpBuffers(TTmp tmpbuf) {
     CompareTmpBuffers<T> buffers;
     buffers.vcmpBitResult = currentPtr;
     currentPtr += vcmpBitsSize;
+
+    currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(
+        (reinterpret_cast<uintptr_t>(currentPtr) + ALIGNMENT - 1) & ~(ALIGNMENT - 1));
+    buffers.startAddrUB = reinterpret_cast<__ubuf__ uint8_t*>(currentPtr);
+    currentPtr += ALIGNMENT;
 
     currentPtr = reinterpret_cast<__ubuf__ uint8_t*>(
         (reinterpret_cast<uintptr_t>(currentPtr) + ALIGNMENT - 1) & ~(ALIGNMENT - 1));
@@ -127,13 +133,14 @@ TILEOP void ExecuteCompareScalar(DstTileType& dst0, SrcTileType& srcTile, TVal s
     }
 }
 
-template <typename T, typename SrcTileType, typename DstTileType, typename CmpTileType, typename TmpTileType>
+template <typename T, typename SrcTileType, typename DstTileType, typename CmpTileType, typename TmpTileType, typename AddrUBTileType>
 TILEOP void PostProcessMode0(
     DstTileType& bitResTile,
     CmpTileType& cmpResTile,
     SrcTileType& vselResultTile,
     SrcTileType& oneConditionTile,
     SrcTileType& zeroConditionTile,
+    AddrUBTileType& startAddrUBTile,
     TmpTileType& tmpTile,
     __ubuf__ T* zeroCondition
 ) {
@@ -142,7 +149,7 @@ TILEOP void PostProcessMode0(
     #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
     #endif
-    pto::TSEL(vselResultTile, cmpResTile, oneConditionTile, zeroConditionTile);
+    pto::TSEL(vselResultTile, cmpResTile, oneConditionTile, zeroConditionTile, startAddrUBTile);
     #ifdef __DAV_V220
     pipe_barrier(PIPE_V);
     #endif
@@ -169,9 +176,10 @@ TILEOP void CalcOffsets(
                 n2Index * info.stride2 + n3Index * info.stride3;
 }
 
-template <typename T, typename Types>
+template <typename T, typename Types, typename TileStartAddrUB>
 TILEOP void InitCommonTiles(
     typename Types::SrcTile& vselResultTile,
+    TileStartAddrUB& startAddrUBTile,
     typename Types::SrcTile& oneConditionTile,
     typename Types::SrcTile& zeroConditionTile,
     typename Types::DstTile& bitResTile,
@@ -189,6 +197,7 @@ TILEOP void InitCommonTiles(
 
     pto::TASSIGN(bitResTile, dstAddr);
     pto::TASSIGN(vselResultTile, reinterpret_cast<uint64_t>(buffers.vselResult));
+    pto::TASSIGN(startAddrUBTile, reinterpret_cast<uint64_t>(buffers.startAddrUB));
     pto::TASSIGN(oneConditionTile, reinterpret_cast<uint64_t>(buffers.oneCondition));
     pto::TASSIGN(zeroConditionTile, reinterpret_cast<uint64_t>(buffers.zeroCondition));
     pto::TASSIGN(cmpResTile, reinterpret_cast<uint64_t>(buffers.vcmpBitResult));
@@ -196,32 +205,102 @@ TILEOP void InitCommonTiles(
 
 template <int64_t cmpOp, int64_t mode, typename T, typename TDst, typename TTmp>
 TILEOP void TCompare(TDst dst, T src0, T src1, TTmp tmpbuf) {
-    auto buffers = InitCompareTmpBuffers<T>(tmpbuf);
     auto info = ExtractLayoutInfo(src0, dst);
+    auto buffers = InitCompareTmpBuffers<T>(tmpbuf);
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto srcTypeSize = sizeof(typename T::Type);
+    constexpr unsigned alignUint8 = 32;
+    constexpr unsigned addressUsed = 4;
     using Types = CompareTileTypes<T>;
-    using SrcTile = typename Types::SrcTile; using DstTile = typename Types::DstTile;
-    using CmpTile = typename Types::CmpTile; using TmpTile = typename Types::TmpTile;
+    using SrcTile = typename Types::SrcTile;
+    using DstTile = typename Types::DstTile;
+    using CmpTile = typename Types::CmpTile;
+    using TmpTile = typename Types::TmpTile;
+    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
+
+    constexpr uint64_t countBy4096 = 4096 / sizeof(typename T::Type);
+    constexpr uint64_t elementsPerCount =
+        (countBy4096 < static_cast<uint64_t>(Types::COUNT_MAX)) ?
+        countBy4096 : static_cast<uint64_t>(Types::COUNT_MAX);
+    constexpr uint64_t dstElementsPerCount =
+        (mode == 0) ? elementsPerCount : ((elementsPerCount + 7) / 8);
+
+    uint64_t numCountPerLine = info.shape4 / elementsPerCount;
+    uint64_t elementsRemainPerLine = info.shape4 % elementsPerCount;
+
     for (LoopVar n0Index = 0; n0Index < info.shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < info.shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < info.shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < info.shape3; ++n3Index) {
                     size_t srcOffset, dstOffset;
                     CalcOffsets(info, n0Index, n1Index, n2Index, n3Index, srcOffset, dstOffset);
-                    uint64_t dstAddr = dst.GetAddr() + dstOffset * dstTypeSize;
-                    SrcTile src0Tile(1, info.shape4), src1Tile(1, info.shape4);
-                    SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
-                    DstTile bitResTile; CmpTile cmpResTile; TmpTile tmpTile(1, info.shape4);
-                    InitCommonTiles<T, Types>(vselResultTile, oneConditionTile, zeroConditionTile, bitResTile, 
-                                              cmpResTile, buffers, dstAddr, info.shape4, info.dstShape);
-                    pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + srcOffset * srcTypeSize));
-                    pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + srcOffset * srcTypeSize));
-                    auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
-                    ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);
-                    if constexpr (mode == 0) {
-                        PostProcessMode0<T>(bitResTile, cmpResTile, vselResultTile, oneConditionTile, 
-                        zeroConditionTile, tmpTile, buffers.zeroCondition);
+
+                    for (LoopVar j = 0; j < numCountPerLine; ++j) {
+                        size_t curShape4 = elementsPerCount;
+                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+
+                        size_t curSrcOffset = srcOffset + j * elementsPerCount;
+                        size_t curDstOffset = dstOffset + j * dstElementsPerCount;
+
+                        uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
+
+                        SrcTile src0Tile(1, curShape4), src1Tile(1, curShape4);
+                        SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
+                        DstTile bitResTile;
+                        CmpTile cmpResTile;
+                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TmpTile tmpTile(1, curShape4);
+
+                        InitCommonTiles<T, Types>(
+                            vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
+                            bitResTile, cmpResTile, buffers, dstAddr, curShape4, curDstShape);
+
+                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * srcTypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * srcTypeSize));
+
+                        auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
+                        ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);
+
+                        if constexpr (mode == 0) {
+                            PostProcessMode0<T>(
+                                bitResTile, cmpResTile, vselResultTile,
+                                oneConditionTile, zeroConditionTile, startAddrUBTile,
+                                tmpTile, buffers.zeroCondition);
+                        }
+                    }
+
+                    if (elementsRemainPerLine) {
+                        size_t curShape4 = elementsRemainPerLine;
+                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+
+                        size_t curSrcOffset = srcOffset + numCountPerLine * elementsPerCount;
+                        size_t curDstOffset = dstOffset + numCountPerLine * dstElementsPerCount;
+
+                        uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
+
+                        SrcTile src0Tile(1, curShape4), src1Tile(1, curShape4);
+                        SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
+                        DstTile bitResTile;
+                        CmpTile cmpResTile;
+                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TmpTile tmpTile(1, curShape4);
+
+                        InitCommonTiles<T, Types>(
+                            vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
+                            bitResTile, cmpResTile, buffers, dstAddr, curShape4, curDstShape);
+
+                        pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + curSrcOffset * srcTypeSize));
+                        pto::TASSIGN(src1Tile, (uint64_t)(src1.GetAddr() + curSrcOffset * srcTypeSize));
+
+                        auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
+                        ExecuteCompare<cmpOp>(dst0, src0Tile, src1Tile);
+
+                        if constexpr (mode == 0) {
+                            PostProcessMode0<T>(
+                                bitResTile, cmpResTile, vselResultTile,
+                                oneConditionTile, zeroConditionTile, startAddrUBTile,
+                                tmpTile, buffers.zeroCondition);
+                        }
                     }
                 }
             }
@@ -235,27 +314,96 @@ TILEOP void TCompare(TDst dst, T src, TTmp tmpbuf, TVal scalarVal) {
     auto info = ExtractLayoutInfo(src, dst);
     constexpr auto dstTypeSize = sizeof(typename TDst::Type);
     constexpr auto srcTypeSize = sizeof(typename T::Type);
+    constexpr unsigned alignUint8 = 32;
+    constexpr unsigned addressUsed = 4;
     using Types = CompareTileTypes<T>;
-    using DstTile = typename Types::DstTile; using CmpTile = typename Types::CmpTile;
-    using SrcTile = typename Types::SrcTile; using TmpTile = typename Types::TmpTile;
+    using DstTile = typename Types::DstTile;
+    using CmpTile = typename Types::CmpTile;
+    using SrcTile = typename Types::SrcTile;
+    using TmpTile = typename Types::TmpTile;
+    using TileStartAddrUB = pto::Tile<pto::TileType::Vec, uint8_t, 1, alignUint8, pto::BLayout::RowMajor, -1, -1>;
+
+    constexpr uint64_t countBy4096 = 4096 / sizeof(typename T::Type);
+    constexpr uint64_t elementsPerCount =
+        (countBy4096 < static_cast<uint64_t>(Types::COUNT_MAX)) ?
+        countBy4096 : static_cast<uint64_t>(Types::COUNT_MAX);
+    constexpr uint64_t dstElementsPerCount =
+        (mode == 0) ? elementsPerCount : ((elementsPerCount + 7) / 8);
+
+    uint64_t numCountPerLine = info.shape4 / elementsPerCount;
+    uint64_t elementsRemainPerLine = info.shape4 % elementsPerCount;
+
     for (LoopVar n0Index = 0; n0Index < info.shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < info.shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < info.shape2; ++n2Index) {
                 for (LoopVar n3Index = 0; n3Index < info.shape3; ++n3Index) {
                     size_t srcOffset, dstOffset;
                     CalcOffsets(info, n0Index, n1Index, n2Index, n3Index, srcOffset, dstOffset);
-                    uint64_t dstAddr = dst.GetAddr() + dstOffset * dstTypeSize;
-                    SrcTile srcTile(1, info.shape4);
-                    SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
-                    DstTile bitResTile; CmpTile cmpResTile; TmpTile tmpTile(1, info.shape4);
-                    InitCommonTiles<T, Types>(vselResultTile, oneConditionTile, zeroConditionTile, bitResTile, 
-                                              cmpResTile, buffers, dstAddr, info.shape4, info.dstShape);
-                    pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
-                    auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
-                    ExecuteCompareScalar<cmpOp>(dst0, srcTile, scalarVal);
-                    if constexpr (mode == 0) {
-                        PostProcessMode0<T>(bitResTile, cmpResTile, vselResultTile, oneConditionTile, 
-                        zeroConditionTile, tmpTile, buffers.zeroCondition);
+
+                    for (LoopVar j = 0; j < numCountPerLine; ++j) {
+                        size_t curShape4 = elementsPerCount;
+                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+
+                        size_t curSrcOffset = srcOffset + j * elementsPerCount;
+                        size_t curDstOffset = dstOffset + j * dstElementsPerCount;
+
+                        uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
+
+                        SrcTile srcTile(1, curShape4);
+                        SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
+                        DstTile bitResTile;
+                        CmpTile cmpResTile;
+                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TmpTile tmpTile(1, curShape4);
+
+                        InitCommonTiles<T, Types>(
+                            vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
+                            bitResTile, cmpResTile, buffers, dstAddr, curShape4, curDstShape);
+
+                        pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + curSrcOffset * srcTypeSize));
+
+                        auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
+                        ExecuteCompareScalar<cmpOp>(dst0, srcTile, scalarVal);
+
+                        if constexpr (mode == 0) {
+                            PostProcessMode0<T>(
+                                bitResTile, cmpResTile, vselResultTile,
+                                oneConditionTile, zeroConditionTile, startAddrUBTile,
+                                tmpTile, buffers.zeroCondition);
+                        }
+                    }
+
+                    if (elementsRemainPerLine) {
+                        size_t curShape4 = elementsRemainPerLine;
+                        size_t curDstShape = (mode == 0) ? curShape4 : ((curShape4 + 7) / 8);
+
+                        size_t curSrcOffset = srcOffset + numCountPerLine * elementsPerCount;
+                        size_t curDstOffset = dstOffset + numCountPerLine * dstElementsPerCount;
+
+                        uint64_t dstAddr = dst.GetAddr() + curDstOffset * dstTypeSize;
+
+                        SrcTile srcTile(1, curShape4);
+                        SrcTile vselResultTile, oneConditionTile, zeroConditionTile;
+                        DstTile bitResTile;
+                        CmpTile cmpResTile;
+                        TileStartAddrUB startAddrUBTile(1, addressUsed);
+                        TmpTile tmpTile(1, curShape4);
+
+                        InitCommonTiles<T, Types>(
+                            vselResultTile, startAddrUBTile, oneConditionTile, zeroConditionTile,
+                            bitResTile, cmpResTile, buffers, dstAddr, curShape4, curDstShape);
+
+                        pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + curSrcOffset * srcTypeSize));
+
+                        auto& dst0 = (mode == 0) ? cmpResTile : bitResTile;
+                        ExecuteCompareScalar<cmpOp>(dst0, srcTile, scalarVal);
+
+                        if constexpr (mode == 0) {
+                            PostProcessMode0<T>(
+                                bitResTile, cmpResTile, vselResultTile,
+                                oneConditionTile, zeroConditionTile, startAddrUBTile,
+                                tmpTile, buffers.zeroCondition);
+                        }
                     }
                 }
             }
