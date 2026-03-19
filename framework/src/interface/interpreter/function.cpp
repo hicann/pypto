@@ -281,12 +281,19 @@ void FunctionInterpreter::DumpTensorList(const std::string &name, const std::vec
 
 void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *frame, std::vector<std::string> &opInfo) {
     opInfo[toIndex(OpInfoCsvHeader::rootFuncID)] = std::to_string(frame->rootFuncIndex);
+    opInfo[toIndex(OpInfoCsvHeader::rootFuncHash)] = std::to_string(frame->rootFuncHash);
     opInfo[toIndex(OpInfoCsvHeader::funcID)] = std::to_string(frame->funcIndex);
+    opInfo[toIndex(OpInfoCsvHeader::funcHash)] = std::to_string(frame->funcHash);
     opInfo[toIndex(OpInfoCsvHeader::passName)] = execDumpPassName;
     opInfo[toIndex(OpInfoCsvHeader::verifyType)] = execDumpFunPath;
     opInfo[toIndex(OpInfoCsvHeader::loopInfo)] = GetLoopSymbolString();
     opInfo[toIndex(OpInfoCsvHeader::opCode)] = op->GetOpcodeStr();
     opInfo[toIndex(OpInfoCsvHeader::opMagic)] = std::to_string(op->GetOpMagic());
+    if (execDumpPassName == "tensor_graph") {
+        opInfo[toIndex(OpInfoCsvHeader::referPassName)] = "golden";
+    } else {
+        opInfo[toIndex(OpInfoCsvHeader::referPassName)] = "tensor_graph";
+    }
     if (frame->callop != nullptr) {
         opInfo[toIndex(OpInfoCsvHeader::callopMagic)] = std::to_string(frame->callop->GetOpMagic());
     }
@@ -354,6 +361,9 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
             std::string dumpTensorFileName = GetDumpTensorFileName(op->GetOOperands()[k], op, frame);
             DumpTensorBinary(dataView, dumpTensorFileName);
             fprintf(execDumpFile, "<div class=\"detail indent_%d\">%s</a></div>\n", indent, dumpTensorFileName.c_str());
+            struct timeval tv;
+            gettimeofday(&tv, nullptr);
+            auto ts = tv.tv_sec * 1000000 + tv.tv_usec;
 
             frame->tensorDataBinDict[op->GetOOperands()[k]] = dumpTensorFileName;
             opInfo[toIndex(OpInfoCsvHeader::tensorMagic)] = std::to_string(op->GetOOperands()[k]->GetMagic());
@@ -364,7 +374,10 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
             opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = DataType2String(dataView->GetDataType());
             opInfo[toIndex(OpInfoCsvHeader::tensorOffset)] = ShapeToString(dataView->GetOffset());
             opInfo[toIndex(OpInfoCsvHeader::outputTensor)] = dumpTensorFileName;
-            opInfo[toIndex(OpInfoCsvHeader::verifyResult)] = "-";
+            opInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts);
+            opInfo[toIndex(OpInfoCsvHeader::outputSymbol)] = op->GetOOperands()[k]->GetRawTensor()->GetSymbol();
+            opInfo[toIndex(OpInfoCsvHeader::outputFormat)] = std::to_string(op->GetOOperands()[k]->GetRawTensor()->format);
+            opInfo[toIndex(OpInfoCsvHeader::ioflag)] = "output" + std::to_string(k);
 
             if (op->GetOpcode() == Opcode::OP_COPY_OUT) {
                 auto itTmp = frame->callopDataViewTensorDict.find(dataView);
@@ -373,7 +386,7 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
                 }
             }
         }
-        WriteCsvRow(opInfo);
+        WriteCsvRow(opInfo, opInfoRowNum, execOpResultFile);
     }
 }
 

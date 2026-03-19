@@ -513,8 +513,8 @@ class CompactDumpTensorInfoParser:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Parser dump_tensor.")
-    parser.add_argument("--dump_tensor_path", type=str, default="output/dump_tensor/device_0", 
-                        help="directory like output/dump_tensor/device_x")
+    parser.add_argument("--dump_tensor_path", type=str, default=[], required=True,
+                        help="directory like output/output_2026xxxxx/dump_tensor_device_x")
     parser.add_argument("--verify_path", type=str, default="", help="Path to verify_result.csv")
     return parser.parse_args()
 

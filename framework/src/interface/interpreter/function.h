@@ -99,7 +99,9 @@ struct FunctionFrame {
     std::set<int> indexOutcastOpIndices;
     std::vector<std::set<LogicalTensorPtr>> inplaceTensorSetList;
     int funcIndex;
+    size_t funcHash;
     int rootFuncIndex{-1};
+    size_t rootFuncHash;
     int passIndex{-1};
 
     Operation *currentOperation;
@@ -456,8 +458,11 @@ enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
 enum class OpInfoCsvHeader {
     num = 0,
     rootFuncID,
+    rootFuncHash,
     funcID,
+    funcHash,
     passName,
+    referPassName,
     verifyType,
     callopMagic,
     loopInfo,
@@ -477,15 +482,45 @@ enum class OpInfoCsvHeader {
     outputDynValidShape,
     outputDtype,
     outputTensor,
+    outputSymbol,
+    outputFormat,
+    ioflag,
+    timeStamp,
+    COL_COUNT
+};
+
+enum class ProgrameInfoCsvHeader {
+    funcID,
+    passName,
+    referPassName,
+    verifyType,
+    loopInfo,
+    ioflag,
+    outputShape,
+    outputValidShape,
+    outputDtype,
+    outputTensor,
+    goldenTensor,
     verifyResult,
+    rtol,
+    atol,
     maxAbsDiff,
     maxRelDiff,
+    averageAbsDiff,
+    averageRelDiff,
     errorCount,
     errorRatio,
+    zeroCount,
+    zeroRatio,
+    timeStamp,
     COL_COUNT
 };
 
 constexpr int32_t toIndex(OpInfoCsvHeader e) noexcept {
+    return static_cast<int32_t>(e);
+}
+
+constexpr int32_t toIndex(ProgrameInfoCsvHeader e) noexcept {
     return static_cast<int32_t>(e);
 }
 
@@ -504,17 +539,27 @@ struct FunctionInterpreter {
         dumpPath = dumpPath + "/" + "verify_" + timestamp.str() + "/";
         CreateMultiLevelDir(dumpPath);
 
-        std::string dumpFilePath = dumpPath + "verify_result.csv";
-        execResultFile = fopen(dumpFilePath.c_str(), "w");
-        std::vector<std::string> csvHeader = {"No.", "rootFuncID", "funcID", "passName", "verifyType", "callopMagic", "loopInfo", "opMagic",
-            "opCode", "rawTensorMagic", "tensorMagic", "callopRawMagic", "offset", "inputShape", "inputValidShape", "inputDtype", "inputTensors", 
-            "outputShape", "tensorOffset", "outputValidShape", "outputDynValidShape", "outputDtype",
-            "outputTensor", "verifyResult", "maxAbsDiff", "maxRelDiff", "errorCount", "errorRatio"};
-        WriteCsvRow(csvHeader);
+        std::string dumpOpFilePath = dumpPath + "verify_result_metadata.csv";
+        std::string dumpProgrameFilePath = dumpPath + "verify_result_brief.csv";
+        std::string dumpErrorPath = dumpPath + "verify_exception.log";
+        execOpResultFile = fopen(dumpOpFilePath.c_str(), "w");
+        execProgrameResultFile = fopen(dumpProgrameFilePath.c_str(), "w");
+        execDumpErrorFile = fopen(dumpErrorPath.c_str(), "w");
+        std::vector<std::string> OpcsvHeader = {"No.", "rootFuncID", "rootFuncHash", "funcID", "funcHash", "passName", "referPassName",
+            "verifyType", "callopMagic", "loopInfo", "opMagic", "opCode", "rawTensorMagic", "tensorMagic", "callopRawMagic", "offset",
+            "inputShape", "inputValidShape", "inputDtype", "inputTensors", "outputShape", "tensorOffset", "outputValidShape",
+            "outputDynValidShape", "outputDtype", "outputTensor", "outputSymbol", "outputFormat", "ioflag", "timeStamp"};
+        std::vector<std::string> ProgrameInfoCsvHeader = {"funcID", "passName", "referPassName", "verifyType", "loopInfo", "ioflag", "outputShape",
+            "outputValidShape", "outputDtype", "outputTensor", "goldenTensor", "verifyResult", "rtol", "atol", "maxAbsDiff", "maxRelDiff",
+            "averageAbsDiff", "averageRelDiff", "errorCount", "errorRatio", "zeroCount", "zeroRatio", "timeStamp"};
+        WriteCsvRow(OpcsvHeader, opInfoRowNum, execOpResultFile);
+        WriteCsvRow(ProgrameInfoCsvHeader, ProgrameRowNum, execProgrameResultFile);
     }
 
     ~FunctionInterpreter() {
-        fclose(execResultFile);
+        fclose(execOpResultFile);
+        fclose(execProgrameResultFile);
+        fclose(execDumpErrorFile);
     }
 
     Function *entry_;
@@ -531,15 +576,18 @@ struct FunctionInterpreter {
     std::string execDumpDir;
     std::string dumpPath;
     FILE *execDumpFile{nullptr};
-    FILE *execResultFile{nullptr};
+    FILE *execOpResultFile{nullptr};
+    FILE *execProgrameResultFile{nullptr};
     FILE *execDumpStyleFile{nullptr};
+    FILE *execDumpErrorFile{nullptr};
     std::string execDumpFuncKey;
     std::string execDumpPassName;
     std::string execDumpFunPath;
     std::vector<ElementDump> execDumpElementList;
     std::vector<std::shared_ptr<FunctionFrame>> execDumpStack;
     int frameCount{0};
-    int rowNum{0};
+    int opInfoRowNum{0};
+    int ProgrameRowNum{0};
 
     std::map<std::string, uint64_t> opUsage;
     uint64_t dumpTensorUsage{0};
@@ -832,9 +880,11 @@ struct FunctionInterpreter {
             std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair, frameCount++);
         captureFrameList->push_back(frame);
         frame->funcIndex = func->GetFuncMagic();
+        frame->funcHash = func->GetFunctionHash().GetHash();
         frame->passIndex = passIndex;
         if (func->HasParent()) {
             frame->rootFuncIndex = func->Parent().GetFuncMagic();
+            frame->rootFuncHash = func->Parent().GetFunctionHash().GetHash();
         }
 
         UpdateIODataPair(inoutDataPair);
@@ -1027,7 +1077,7 @@ struct FunctionInterpreter {
             if (callopList.size() != 0) {
                 ExecuteFunctionDynamic(func, controlFlowExecution);
             } else {
-                execDumpFunPath = "function_" + func->GetMagicName();
+                execDumpFunPath = func->GetMagicName();
                 auto &incastSlot = func->GetSlotScope()->ioslot.incastSlot;
                 auto &outcastSlot = func->GetSlotScope()->ioslot.outcastSlot;
                 auto &partialSlot = func->GetSlotScope()->ioslot.partialUpdateOutcastList;
@@ -1225,9 +1275,9 @@ public:
         return oss.str();
     }
  
-    void WriteCsvRow(std::vector<std::string>& row) {
+    void WriteCsvRow(std::vector<std::string>& row, int& rowNum, FILE* file) {
         if (rowNum > 0) {
-            row[toIndex(OpInfoCsvHeader::num)] = std::to_string(rowNum);
+            row[0] = std::to_string(rowNum);
         }
         rowNum += 1;
         std::string textLine = row[0];
@@ -1238,7 +1288,7 @@ public:
                 textLine += "," + row[i];
             }
         }
-        fprintf(execResultFile, "%s\n", textLine.c_str());
+        fprintf(file, "%s\n", textLine.c_str());
     }
 
     std::string DumpStatistics() const {

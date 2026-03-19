@@ -130,7 +130,9 @@ void OperationInterpreter::ExecuteOperation(ExecuteOperationContext *ctx) {
         if (pos != std::string::npos) {
             errMsg = errMsg.substr(0, pos);
         }
-        throw std::runtime_error(ctx->Dump() + errMsg);
+        throw std::runtime_error(std::to_string(ctx->frame->rootFuncHash) + ", " + std::to_string(ctx->frame->funcHash)
+                                + ", " + std::to_string(op->GetOpMagic()) + ", " + op->GetOpcodeStr()
+                                + "OpError\n" + ctx->Dump() + errMsg);
     }
 }
 

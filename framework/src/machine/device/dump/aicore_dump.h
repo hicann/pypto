@@ -264,7 +264,8 @@ public:
             return;
         }
 
-        std::string dumpPath = "output/dump_tensor/device_" + std::to_string(deviceId_) + "/";
+        std::string dumpPath = "output/dump_tensor_" + std::to_string(hostPid_) + "/device_"
+                                + std::to_string(deviceId_) + "/";
         // ip: port only matches parameter rules with code, without communication funciton
         const std::string privateInfo =
             "127.0.0.1:22118;" + std::to_string(deviceId_) + ";" + std::to_string(hostPid_);

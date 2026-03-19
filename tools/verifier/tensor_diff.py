@@ -13,6 +13,7 @@ import os
 import logging
 from typing import NamedTuple, Optional, Tuple, Union
 import torch
+import pandas as pd
 from tabulate import tabulate
 
 
@@ -40,37 +41,37 @@ class TensorComparator:
         )
     
     @staticmethod
-    def print_info(d_detail, d_str, topk):
+    def save_info_to_csv(d_detail, csv_path, topk):
+        os.makedirs(os.path.dirname(os.path.abspath(csv_path)), exist_ok=True)
         num = len(d_detail[0])
+        if num == 0:
+            pd.DataFrame(columns=["No", "off", "a", "b", "ad", "rd", "ad_tol", "off_raw"]).to_csv(csv_path, index=False)
+            return
         if num > 0:
             num_picked = min(topk, num) if topk and topk >= 0 else num
-            
-            table_data = []
-            for i in range(num_picked):
-                info_off = d_detail[0][i].item()
-                off_raw = d_detail[1][i]
-                off_raw = off_raw.tolist() if off_raw.dim() > 0 else [off_raw.item()]
-                info_off_raw = '_'.join([str(s) for s in off_raw])
-                
-                row = [
-                    i + 1,
-                    info_off,
-                    f"{d_detail[2][i].item():.6g}",
-                    f"{d_detail[3][i].item():.6g}",
-                    f"{d_detail[4][i].item():.6g}",
-                    f"{d_detail[5][i].item():.6g}",
-                    f"{d_detail[6][i].item():.6g}",
-                    info_off_raw
-                ]
-                table_data.append(row)
-            
-            headers = ["#", "off", "a", "b", "ad", "rd", "ad_tol", "off_raw"]
-            
-            logging.info(f"-{d_str}({num})")
-            logging.info(tabulate(table_data, headers=headers, tablefmt="grid"))
-            
-            if num_picked < num and num_picked > 0:
-                logging.info(f' ...... {topk+1}~{num} ({num-num_picked}) ......')
+        table_data = []
+        for i in range(num_picked):  # 遍历所有数据，不再受 topk 限制
+            info_off = d_detail[0][i].item()
+            off_raw = d_detail[1][i]
+            off_raw = off_raw.tolist() if off_raw.dim() > 0 else [off_raw.item()]
+            info_off_raw = '_'.join([str(s) for s in off_raw])
+
+            row = [
+                i + 1,
+                info_off,
+                f"{d_detail[2][i].item():.6g}",
+                f"{d_detail[3][i].item():.6g}",
+                f"{d_detail[4][i].item():.6g}",
+                f"{d_detail[5][i].item():.6g}",
+                f"{d_detail[6][i].item():.6g}",
+                info_off_raw
+            ]
+            table_data.append(row)
+
+        headers = ["No", "off", "a", "b", "ad", "rd", "ad_tol", "off_raw"]
+        df = pd.DataFrame(table_data, columns=headers)
+        df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+        logging.info(f"数据已保存到: {csv_path}")
     
     @staticmethod
     def check_isclose(a, b, config: IsCloseConfig = IsCloseConfig()):
@@ -119,6 +120,7 @@ class TensorComparator:
             data_warn_info_list = tuple([*[const_empty_arg] * 2, *[const_empty_value] * 5])
             data_fail_info_list = tuple([*[const_empty_arg] * 2, *[const_empty_value] * 5])
             data_infnan_info_list = tuple([*[const_empty_arg] * 2, *[const_empty_value] * 5])
+            data_diff_info_list = tuple([*[const_empty_arg] * 2, *[const_empty_value] * 4])
         else:
             ab_ad = ab_sub
             ab_rd = ab_sub_abs * 2 / ab_abs_add
@@ -139,6 +141,11 @@ class TensorComparator:
                                      ab_rd.take(arg_fail), tol_fail.take(arg_warn))
             data_infnan_info_list = (arg_infnan, arg_infnan_raw, aa.take(arg_infnan), bb.take(arg_infnan), 
                                         ab_ad.take(arg_infnan), ab_rd.take(arg_infnan), arg_infnan)
+            ab_rd_max = (ab_rd[~torch.isnan(ab_rd)].max().item() if ab_rd[~torch.isnan(ab_rd)].numel() != 0
+                            else float('nan'))
+            data_diff_info_list = (ab_sub_abs.max().item(), ab_rd_max, ab_sub_abs.mean().item(), ab_rd.nanmean().item(),
+                                    cnt_out_warn, cnt_out_warn / ab_sub_abs.numel(), cnt_out_bothzero,
+                                     cnt_out_bothzero / ab_sub_abs.numel())
 
         # weak/strong warning
         if not is_extra:
@@ -173,12 +180,13 @@ class TensorComparator:
             result_reason_str.append(f'cnt_infnan(={cnt_infnan}) > 0)')
         result_reason_str = ','.join(result_reason_str)
 
-        result_info = (diff_cnt, diff_conf, _diff_extra, diff_detail_warn, diff_detail_fail, diff_detail_infnan)
+        result_info = (diff_cnt, diff_conf, _diff_extra, diff_detail_warn, diff_detail_fail,
+                        diff_detail_infnan, data_diff_info_list)
 
         return result_is_close, result_reason_str, result_info
 
-    def print_isclose_info(self, result_is_close, result_reason_str, result_info, topk=16):
-        (d_cnt, d_conf, _d_extra, d_detail_warn, d_detail_fail, d_detail_infnan) = result_info
+    def print_isclose_info(self, result_is_close, result_reason_str, result_info, path, topk=10000):
+        (d_cnt, d_conf, _d_extra, d_detail_warn, d_detail_fail, d_detail_infnan, d_diff_conf) = result_info
         (cnt_all, cnt_picked, cnt_out_bothzero, cnt_out_pass, cnt_out_warn, cnt_fail, cnt_infnan) = d_cnt
         (rtol, atol, fail_factor, tol_cnt) = d_conf
         (cnt_warn_ww, cnt_warn_w, cnt_out_warn, cnt_warn_s, cnt_warn_ss) = _d_extra
@@ -192,6 +200,4 @@ class TensorComparator:
                         {cnt_warn_s}{sep}{cnt_warn_ss}\t(ww/w/warn/s/ss)')
         logging.info(f'is_close : {result_is_close}\t({result_reason_str})')
 
-        self.print_info(d_detail_infnan, 'bad', topk)
-        self.print_info(d_detail_fail, 'fail', topk)
-        self.print_info(d_detail_warn, 'warn', topk)
+        self.save_info_to_csv(d_detail_warn, path, topk)

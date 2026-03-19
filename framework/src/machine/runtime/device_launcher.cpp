@@ -757,6 +757,20 @@ int DeviceLauncher::LaunchAicoreKernel(
         devRunner.DumpAiCoreExecutionTimeData();
         ASSERT(machine::GetRA()->CheckAllSentinels());
     }
+    if (IsPtoDataDumpEnabled()) {
+        auto scheStream = (aclrtStream)machine::GetRA()->GetScheStream();
+        int rc = DeviceRunner::Get().DynamicLaunchSynchronize(scheStream, nullptr, aicoreStream);
+        if (rc != 0) {
+            MACHINE_LOGE("sync failed");
+            return rc;
+        }
+        uint32_t hostPid = GetProcessId();
+        std::string sourceDir = "output/dump_tensor_" + std::to_string(hostPid);
+        std::string targetDir = config::LogTopFolder() + "/dump_tensor_" + std::to_string(hostPid);
+        if (IsPathExist(sourceDir)) {
+            std::rename(sourceDir.c_str(), targetDir.c_str());
+        }
+    }
     return ret;
 #else
     (void)aicoreStream;
