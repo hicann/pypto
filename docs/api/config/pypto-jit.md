@@ -31,7 +31,7 @@ def jit(dyn_func=None,
 | codegen_options   | 输入      | 类型为dict[str, any]，用于设置codegen配置项，配置项参数见[参数说明](pypto-set_codegen_options.md) |
 | host_options      | 输入      | 类型为dict[str, any]，用于设置host配置项，配置项参数见[参数说明](pypto-set_host_options.md) |
 | pass_options      | 输入      | 类型为dict[str, any]，用于设置Pass配置项，配置项参数见[参数说明](pypto-set_pass_options.md) |
-| runtime_options   | 输入      | 类型为dict[str, any]，用于设置runtime配置项，配置项参数见[参数说明](pypto-set_runtime_options.md) |
+| runtime_options   | 输入      | 类型为dict[str, any]，用于设置runtime配置项，配置项参数见[参数说明](pypto-runtime_options.md) |
 
 ## 返回值说明
 

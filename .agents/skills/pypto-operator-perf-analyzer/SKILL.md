@@ -251,9 +251,9 @@ python3 .opencode/skills/pypto-operator-perf-analyzer/scripts/analyze_perf.py ou
    - 减少 loop 层级
 
 4. **优化调度策略**
-   ```python
-   pypto.set_runtime_options(device_sched_mode=1)
-   ```
+    ```python
+    @pypto.jit(runtime_options={"device_sched_mode": 1})
+    ```
 
 5. **使用 L1Reuse 优化**
    ```python
@@ -272,9 +272,9 @@ python3 .opencode/skills/pypto-operator-perf-analyzer/scripts/analyze_perf.py ou
 **优化建议：**
 
 1. **使用 L2 亲和调度**
-   ```python
-   pypto.set_runtime_runtime_options(device_sched_mode=1)
-   ```
+    ```python
+    @pypto.jit(runtime_options={"device_sched_mode": 1})
+    ```
 
 2. **调整 Tilesize 增大算术强度**
    ```python

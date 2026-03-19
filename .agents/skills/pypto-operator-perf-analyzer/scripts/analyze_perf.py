@@ -275,9 +275,9 @@ def generate_optimization_suggestions(metrics: Dict, bottlenecks: List[Dict]) ->
     # 添加具体优化代码示例
     if metrics['avg_core_utilization'] < 50:
         suggestions['high_priority'].append({
-            'type': '使用L2亲和调度',
-            'code': 'pypto.set_runtime_options(device_sched_mode=1)',
-            'description': '启用L2亲和调度，减少核心间通信开销'
+             'type': '使用L2亲和调度',
+             'code': '@pypto.jit(runtime_options={"device_sched_mode": 1})',
+             'description': '启用L2亲和调度，减少核心间通信开销'
         })
         suggestions['high_priority'].append({
             'type': '调整Cube Tilesize',

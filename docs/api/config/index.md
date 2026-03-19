@@ -11,7 +11,6 @@ pypto-get_pass_options
 pypto-get_pass_config
 pypto-get_pass_configs
 pypto-get_pass_default_config
-pypto-get_runtime_options
 pypto-get_vec_tile_shapes
 pypto-get_verify_options
 pypto-jit
@@ -24,7 +23,6 @@ pypto-set_matrix_size
 pypto-set_pass_config
 pypto-set_pass_default_config
 pypto-set_pass_options
-pypto-set_runtime_options
 pypto-set_semantic_label
 pypto-set_vec_tile_shapes
 pypto-set_verify_options

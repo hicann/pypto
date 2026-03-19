@@ -904,7 +904,8 @@ class JitCallableWrapper:
         if self._pass_options:
             pypto.set_pass_options(**self._pass_options)
         if self._runtime_options:
-            pypto.set_runtime_options(**self._runtime_options)
+            options_dict = {k: v for k, v in self._runtime_options.items() if v is not None}
+            pypto.set_options(runtime_options=options_dict)
         if self._verify_options:
             pypto.set_verify_options(**self._verify_options)
         if self._debug_options:
@@ -1044,44 +1045,6 @@ class JitCallableWrapper:
             Output PTO tensors.
         """
         _cost_model_run_once_data_from_host(in_tensors, out_tensors)
-
-
-    def _dispatch_with_run_mode(
-        self,
-        in_tensors: list[pypto.Tensor],
-        out_tensors: list[pypto.Tensor],
-        device: torch.device,
-    ) -> None:
-        """Dispatch kernel execution based on configured run mode (NPU or SIM).
-
-        Routes execution to either NPU hardware or CPU simulation based on the
-        run_mode setting. Validates that CANN environment is configured when
-        attempting NPU execution.
-
-        Parameters
-        ----------
-        in_tensors : list[pypto.Tensor]
-            Input PTO tensors.
-        out_tensors : list[pypto.Tensor]
-            Output PTO tensors.
-        device : torch.device
-            Target device for execution (relevant for NPU mode).
-
-        Raises
-        ------
-        RuntimeError
-            If NPU mode is selected but CANN environment is not configured.
-        """
-        cann_is_configed = bool(os.environ.get("ASCEND_HOME_PATH"))
-        run_mode = pypto.get_runtime_options().get("run_mode", 0)
-        if run_mode == 0:  # NPU mode
-            if not cann_is_configed:
-                raise RuntimeError(
-                    "Please source cann environment while run mode is NPU."
-                )
-            self._run_with_npu(in_tensors, out_tensors, device)
-        else:  # SIM mode
-            self._run_with_cpu(in_tensors, out_tensors)
 
 
 def function(

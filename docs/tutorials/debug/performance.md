@@ -316,7 +316,7 @@ Vector运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_op
 PyPTO算子的核间的流水由AICPU对子图的调度确定，它基于子图间的依赖关系和核间任务的调度策略。可以尝试更改该调度策略以达到更优的算子性能。当上下游子图之间依赖较为简单，或下游子图输入Tensor的L2命中率较为重要时，推荐使用L2亲和调度，配置方式如下：
 
 ```python
-pypto.set_runtime_options(device_sched_mode=1)
+@pypto.jit(runtime_options={"device_sched_mode": 1})
 ```
 
 具体配置时应综合考虑L2复用与负载均衡的影响，不同场景的最佳配置策略不同，应结合泳道图具体分析。

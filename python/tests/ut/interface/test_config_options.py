@@ -50,24 +50,12 @@ def test_host_option():
     assert host_option["compile_timeout"] == 1000
 
 
-def test_runtime_option():
-    pypto.set_runtime_options(stitch_function_size=30000)
-    runtime_option = pypto.get_runtime_options()
-    assert runtime_option["stitch_function_size"] == 30000
-
-
 def test_reset_option():
-    pypto.set_runtime_options(stitch_function_num_initial=23)
-    runtime_option = pypto.get_runtime_options()
-    assert runtime_option["stitch_function_num_initial"] == 23
     pypto.set_host_options(compile_stage=pypto.CompStage.EXECUTE_GRAPH)
     host_option = pypto.get_host_options()
     assert host_option["compile_stage"] == pypto.CompStage.EXECUTE_GRAPH.value
     pypto.reset_options()
-    runtime_option = pypto.get_runtime_options()
     host_option = pypto.get_host_options()
-    assert runtime_option["stitch_function_num_initial"] == 128
-    assert runtime_option["stitch_function_max_num"] == 0
     assert host_option["compile_stage"] == pypto.CompStage.ALL_COMPLETE.value
 
 

@@ -487,7 +487,6 @@ def test_b128_s1_4_s2_8k():
         chunk_size=1,
         vec_nbuffer_setting={-1: 1},
     )
-    pypto.set_runtime_options(stitch_function_max_num=128)
     do_test_lighting_indexer_prolog_quant("QuantLightningIndexerPrologSTest.b128_s1_4_s2_8k", configs)
 
 

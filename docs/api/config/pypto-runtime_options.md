@@ -1,4 +1,4 @@
-# pypto.set\_runtime\_options
+# pypto.runtime\_options
 
 ## 产品支持情况
 
@@ -9,21 +9,9 @@
 
 ## 功能说明
 
-设置runtime的选项。
-
-## 函数原型
-
-```python
-set_runtime_options(*,
-                    device_sched_mode : int = None,
-                    stitch_function_max_num : int = None,
-                    run_mode : int = None,
-                    valid_shape_optimize : int = None,
-                    ) -> None
-```
+runtime 选项配置，通过`@pypto.frontend.jit` 的 `runtime_options` 参数进行配置。
 
 ## 参数说明
-
 
 | 参数名                         | 输入/输出 | 说明                                                         |
 | ------------------------------ | --------- | ------------------------------------------------------------ |
@@ -33,19 +21,9 @@ set_runtime_options(*,
 | valid_shape_optimize           | 输入      | 含义：动态shape场景，validshape编译优化选项，打开该选项后，动态轴的Loop循环中，主块（shape与validshape相等）采用静态shape编译，尾块采用动态shape编译 <br> 说明：<br> 0：默认值，表示关闭validshape编译优化选项，所有Loop循环均采用动态shape进行编译 <br> 1：表示打开validshape编译优化选项 <br> 类型：int <br> 取值范围：0或者1 <br> 默认值：0 <br> 影响pass范围：NA |
 | ready_on_host_tensors          | 输入      | 含义：标记在Host端准备好的Kernel入口函数的输入tensor名称列表，格式为["tensor1", "tensor2", ...]。<br> 说明：如果算子的计算逻辑对某输入tensor有值依赖(即获取了tensor的值)，且此tensor的device数据在Host端已提前准备好，那么cpu的控制流可以提前发射以提升性能。<br> 类型：list of string <br> 默认值：空列表 <br> 影响pass范围：NA |
 
-## 返回值说明
-
-void：Set方法无返回值。设置操作成功即生效。
-
-## 约束说明
-
-在JIT外部使用set_runtime_options配置，在JIT执行时并不生效，会恢复成默认配置；在JIT装饰其内配置runtime_options,配置正常生效。
-
 ## 调用示例
 
 ```python
-pypto.set_runtime_options(device_sched_mode=2,
-                          stitch_function_max_num=256)
 @pypto.frontend.jit(
         runtime_options={
         "stitch_function_max_num": 128,
@@ -53,4 +31,3 @@ pypto.set_runtime_options(device_sched_mode=2,
         }
 )
 ```
-最终JIT内配置项生效的结果是：stitch_function_max_num=128； device_sched_mode=1。

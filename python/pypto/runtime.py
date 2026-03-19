@@ -194,7 +194,8 @@ class _JIT:
             pypto.set_pass_options(**self._pass_options)
 
         if isinstance(self._runtime_options, dict):
-            pypto.set_runtime_options(**self._runtime_options)
+            options_dict = {k: v for k, v in self._runtime_options.items() if v is not None}
+            pypto.set_options(runtime_options=options_dict)
 
         if isinstance(self._verify_options, dict):
             pypto.set_verify_options(**self._verify_options)
