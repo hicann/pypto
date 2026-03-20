@@ -3035,6 +3035,12 @@ void Function::UpdateOperandBeforeRemoveOp(Operation &op, const bool keepOutTens
                 producer->ReplaceOutputOperand(inputTensor, outputTensor);
             }
             inputTensor->GetProducers().clear();
+            inputTensor->RemoveConsumer(op);
+            for (auto &consumer : inputTensor->GetConsumers()) {
+                outputTensor->AddConsumer(*consumer);
+                consumer->ReplaceInputOperand(inputTensor, outputTensor);
+            }
+            inputTensor->GetConsumers().clear();
         } else {
             inputTensor->RemoveConsumer(op);
             for (const auto &consumer : outputTensor->GetConsumers()) {
