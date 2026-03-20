@@ -31,13 +31,9 @@ namespace npu::tile_fwk {
 
 class TestCodegenDynCalcInteger : public ::testing::Test {
 public:
-    static void SetUpTestCase() {
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-    }
+    static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
 
-    static void TearDownTestCase() {
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    }
+    static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 
     void SetUp() override {
         Program::GetInstance().Reset();
@@ -77,17 +73,6 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil) {
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-    }
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
@@ -122,17 +107,6 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor) {
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-    }
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
@@ -167,17 +141,6 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpTrunc) {
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
     auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-    }
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

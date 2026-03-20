@@ -72,7 +72,6 @@ TEST_F(TestCodegenDynRange, TestDynOpRange) {
     auto localTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto &op = function->AddOperation(Opcode::OP_RANGE, {}, {localTensor});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "START", start);
     op.SetAttribute(OP_ATTR_PREFIX + "STEP", step);
     op.SetAttribute(OP_ATTR_PREFIX + "SIZE", size);
@@ -126,7 +125,6 @@ TEST_F(TestCodegenDynRange, RangeTileTensor) {
 
     auto &op = function->AddOperation(Opcode::OP_RANGE, {localTensor}, {localOutTensor});
     Element start(DataType::DT_FP32, 1.0);
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "START", start);
     op.SetAttribute(OP_ATTR_PREFIX + "STEP", start);
     op.SetAttribute(OP_ATTR_PREFIX + "SIZE", start);

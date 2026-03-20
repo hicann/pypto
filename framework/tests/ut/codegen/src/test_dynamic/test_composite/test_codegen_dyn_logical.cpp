@@ -74,7 +74,6 @@ TEST_F(TestCodegenDynLogical, TestDynOpLogicalAnd) {
 
     auto &op = function->AddOperation(
         Opcode::OP_LOGICALAND, {localTensorInput1, localTensorInput2}, {localTensorRes, localTensorTmp});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -121,7 +120,6 @@ TEST_F(TestCodegenDynLogical, TestDynOpLogicalNot) {
         CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto &op = function->AddOperation(Opcode::OP_LOGICALNOT, {localTensorInput}, {localTensorRes, localTensorTmpCond});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -169,7 +167,6 @@ std::string TestLogicalBody(Opcode opcode) {
     logicalInTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
     auto &op = function->AddOperation(opcode, {logicalInTensor, logicalInTensor}, {localOutTensor, localOutTensor});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

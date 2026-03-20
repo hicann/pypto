@@ -68,20 +68,7 @@ void TestCodegenDynCumSumBody(int axis) {
 
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     function->SetUnderDynamicFunction(true);
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-        DynParamInfo fakeParam = {3, 0, 0, DynParamInfoType::VALID_SHAPE, 0, SymbolicScalar(), false, ""};
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_0", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_1", fakeParam);
-    }
+    
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});

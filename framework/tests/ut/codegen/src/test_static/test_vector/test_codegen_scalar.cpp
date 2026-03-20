@@ -201,7 +201,6 @@ void TestCVSyncBody(Opcode syncOpcode) {
     auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_L1, shape, dynValidShape});
 
     auto &op = function->AddOperation(syncOpcode, {localTensor}, {localOutTensor});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

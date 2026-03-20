@@ -77,7 +77,6 @@ TEST_F(TestCodegenDynScatter, TestDynOpScatterElement) {
     auto localTensorDst = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto &op = function->AddOperation(Opcode::OP_SCATTER_ELEMENT, {localTensorSrc, localTensorIdx}, {localTensorDst});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", 0);
@@ -131,7 +130,6 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter) {
     auto &op =
         function->AddOperation(Opcode::OP_SCATTER, {localTensorSelf, localTensorIdx, localTensorSrc},
         {localTensorDst, localTensorTmp});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "scatter_mode", 0);
 

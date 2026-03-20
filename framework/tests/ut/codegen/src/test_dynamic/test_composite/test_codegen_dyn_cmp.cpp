@@ -74,7 +74,6 @@ TEST_F(TestCodegenDynCmp, TestDynOpCmp) {
 
     auto &op = function->AddOperation(
         Opcode::OP_CMP, {localTensorInput1, localTensorInput2}, {localTensorRes, localTensorTmp});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", 0);
 
@@ -122,7 +121,6 @@ TEST_F(TestCodegenDynCmp, TestDynOpCmpS) {
     auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto &op = function->AddOperation(Opcode::OP_CMPS, {localTensorInput1}, {localTensorRes, localTensorTmp});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", 0);
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
@@ -174,7 +172,6 @@ TEST_F(TestCodegenDynCmp, CmpTileTensor) {
 
     auto &op = function->AddOperation(Opcode::OP_CMP, {localTensor, localTensor}, {localOutTensor, localOutTensor});
     int64_t cmpParam = 0;
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_operation", cmpParam);
     op.SetAttribute(OP_ATTR_PREFIX + "cmp_mode", cmpParam);
 

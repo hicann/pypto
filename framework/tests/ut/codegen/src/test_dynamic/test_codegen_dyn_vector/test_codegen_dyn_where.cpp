@@ -81,7 +81,6 @@ TEST_F(TestCodegenDynWhere, TestDynOpWhere) {
 
     auto &op = function->AddOperation(
         Opcode::OP_WHERE_TT, {localTensorCond, localTensorSrc0, localTensorSrc1}, {localTensorRes, localTensorTmp});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

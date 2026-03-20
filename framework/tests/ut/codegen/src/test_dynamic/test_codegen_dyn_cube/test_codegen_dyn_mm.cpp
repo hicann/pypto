@@ -74,7 +74,6 @@ TEST_F(TestCodegenDynMM, TestDynMatmulTileTensor) {
 
     auto &op =
         function->AddOperation(Opcode::OP_A_MUL_B, {localTensorA, localTensorB, localTensorBias}, {localOutTensor});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "has_bias", true);
 
     function->GetTensorMap().inverseMap_[localTensorA->GetMagic()] = localTensorA;
@@ -128,7 +127,6 @@ TEST_F(TestCodegenDynMM, TestMatmulMXTileTensor) {
 
     auto &op =
         function->AddOperation(Opcode::OP_A_MUL_B, {localTensorAMX, localTensorBMX, localTensorBias}, {localOutTensor});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "has_bias", true);
 
     function->GetTensorMap().inverseMap_[localTensorAMX->GetMagic()] = localTensorAMX;

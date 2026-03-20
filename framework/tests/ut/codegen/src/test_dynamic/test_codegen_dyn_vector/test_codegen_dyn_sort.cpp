@@ -125,7 +125,6 @@ TEST_F(TestCodegenDynSort, TestDynBitSort) {
     auto param = prepareSortParamForUT(Opcode::OP_BITSORT);
     param.op->SetAttribute(OP_ATTR_PREFIX + "axis", 1);
     param.op->SetAttribute(OP_ATTR_PREFIX + "order", 1);
-    param.op->SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::string res = generateCodeForOp(param);
     std::string expect =
@@ -139,7 +138,6 @@ TEST_F(TestCodegenDynSort, TestDynMrgSort) {
     param.op->SetAttribute(OP_ATTR_PREFIX + "axis", 1);
     param.op->SetAttribute(OP_ATTR_PREFIX + "order", 1);
     param.op->SetAttribute(OP_ATTR_PREFIX + "kvalue", 1);
-    param.op->SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::string res = generateCodeForOp(param);
     std::string expect =
@@ -153,7 +151,6 @@ TEST_F(TestCodegenDynSort, TestDynExtract) {
     param.op->SetAttribute(OP_ATTR_PREFIX + "kvalue", 1);
     param.op->SetAttribute(OP_ATTR_PREFIX + "mode", 1);
     param.op->SetAttribute(OP_ATTR_PREFIX + "order", 1);
-    param.op->SetAttribute("GmTensorParamIdxInCallFunc", 0);
 
     std::string res = generateCodeForOp(param);
     std::string expect =
@@ -193,7 +190,6 @@ TEST_F(TestCodegenDynSort, TestDynTiledMgrSort) {
 
     auto &op = function->AddOperation(Opcode::OP_TILEDMRGSORT,
         {localTensorInput1, localTensorInput2, localTensorInput3, localTensorInput3}, {localTensorRes, localTensorTmp});
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
     op.SetAttribute(OP_ATTR_PREFIX + "axis", 0);
     op.SetAttribute(OpAttributeKey::scalar, scalaVal);
 

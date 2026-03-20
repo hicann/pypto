@@ -66,23 +66,6 @@ TEST_F(TestCodegenDynDataMove, TestDatamoveUnalignDim3) {
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     function->SetUnderDynamicFunction(true);
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-        DynParamInfo fakeParam = {3, 0, 0, DynParamInfoType::VALID_SHAPE, 0, SymbolicScalar(), true, ""};
-        DynParamInfo replaceParam = {3, 0, 0, DynParamInfoType::VALID_SHAPE, 0, SymbolicScalar(), false, "sym_2_dim_0"};
-        DynParamInfo baseParam = {3, 0, 0, DynParamInfoType::OFFSET, 0, SymbolicScalar(), false, ""};
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_0", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_1", replaceParam);
-        subFunc.second->dynParamTable_.emplace("sym_2_dim_2", baseParam);
-    }
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -112,22 +95,6 @@ TEST_F(TestCodegenDynDataMove, TestDatamoveUnalignDim4) {
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
     function->SetUnderDynamicFunction(true);
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-        DynParamInfo fakeParam = {4, 0, 0, DynParamInfoType::VALID_SHAPE, 0, SymbolicScalar(), false, ""};
-        subFunc.second->dynParamTable_.emplace("sym_13_dim_0", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_13_dim_1", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_13_dim_2", fakeParam);
-        subFunc.second->dynParamTable_.emplace("sym_13_dim_3", fakeParam);
-    }
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -157,17 +124,6 @@ TEST_F(TestCodegenDynDataMove, TestDatamoveAlignDim4) {
         Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
     function->SetUnderDynamicFunction(true);
     function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
-    for (auto &subFunc : function->rootFunc_->programs_) {
-        for (auto &op : subFunc.second->Operations()) {
-            if (OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) || OpcodeManager::Inst().IsCopyOut(op.GetOpcode())) {
-                if (IsCopyIn(op.GetOpcode()))
-                    op.SetIOpAttrOffset(0, 0);
-                else
-                    op.SetOOpAttrOffset(0, 0);
-                op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
-            }
-        }
-    }
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
