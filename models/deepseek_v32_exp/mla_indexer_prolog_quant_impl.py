@@ -397,7 +397,8 @@ def mla_indexer_prolog_quant_p(
 
 @pypto.frontend.jit(
     pass_options={
-        "cube_l1_reuse_setting": {-1: 4},
+        "cube_l1_reuse_setting": {-1: 4, 0: 1, 1: 1, 2: 1},
+        "cube_nbuffer_setting": {-1: 6, 0: 1, 1: 1, 2: 1},
         "pg_upper_bound": 8192,
     },
     runtime_options={"device_sched_mode": 2}
