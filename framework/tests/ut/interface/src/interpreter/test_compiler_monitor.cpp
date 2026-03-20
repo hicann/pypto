@@ -55,4 +55,22 @@ TEST_F(CompilerMonitor, CompilerMonitorImpl) {
     delete impl_;
 }
 
+TEST_F(CompilerMonitor, CompilerMonitorTestPrint) {
+    MonitorImpl* impl_ = new MonitorImpl(&(MonitorManager::Instance()));
+    MonitorManager::Instance().Initialize(true, 2, 4, 5);
+    MonitorManager::Instance().SetTotalFunctionCount(5);
+    MonitorManager::Instance().SetCurrentFunctionIndex(3);
+    MonitorManager::Instance().StartStage("Pass");
+    sleep(1);
+    MonitorManager::Instance().EndStage("Pass");
+    impl_->Start();
+    impl_->StartMonitoring();
+    sleep(1);
+    MonitorManager::Instance().NotifyCompilationFinished();
+    impl_->StopMonitoring();
+    impl_->Stop();
+
+    delete impl_;
+}
+
 } // namespace npu::tile_fwk

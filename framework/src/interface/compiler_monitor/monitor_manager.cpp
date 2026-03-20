@@ -218,27 +218,24 @@ void MonitorManager::PrintCompilationFinished() {
         std::string compilation_msg =
             "[Compiler Monitor] Compilation finished " + std::to_string(current_function_index_) + "/" +
             std::to_string(total_function_count_ > 0 ? total_function_count_ : 1) +
-            " | Total functions: " + std::to_string(total_function_count_ > 0 ? total_function_count_ : 1) +
-            "\n[Compiler Monitor] Stage timing (aggregated by stage):";
+            " | Total functions: " + std::to_string(total_function_count_ > 0 ? total_function_count_ : 1);
         (void)fprintf(stdout, "%s\n", compilation_msg.c_str());
         (void)fflush(stdout);
         COMPILER_LOGI("%s", compilation_msg.c_str());
 
         int n = total_function_count_ > 0 ? total_function_count_ : 1;
+        std::ostringstream stage_msg;
         for (const auto &[stage, sec] : stage_elapsed_totals_) {
-            std::ostringstream stage_msg;
             if (stage == "Pass" || stage == "CodeGen") {
-                stage_msg << "  " << std::left << std::setw(8) << stage << " " << std::fixed << std::setprecision(1)
-                          << sec << "s"
-                          << "   (sum over " << n << " functions)\n";
+                stage_msg << " " << ("[" + stage + "]:") << std::fixed <<std::setprecision(1) << sec << "s" << " ";
             } else {
-                stage_msg << "  " << std::left << std::setw(8) << stage << " " << std::fixed << std::setprecision(1)
-                          << sec << "s\n";
+                stage_msg << " " << ("[" + stage + "]:") << std::fixed << std::setprecision(1) << sec
+                          << "s  (sum over " << n << " functions)\n";
             }
-            COMPILER_LOGI("%s", stage_msg.str().c_str());
-            (void)fprintf(stdout, "%s", stage_msg.str().c_str());
-            (void)fflush(stdout);
         }
+        COMPILER_LOGI("[Compiler Monitor] Stage timing (aggregated by stage):%s", stage_msg.str().c_str());
+        (void)fprintf(stdout, "[Compiler Monitor] Stage timing (aggregated by stage):%s", stage_msg.str().c_str());
+        (void)fflush(stdout);
 
         std::string final_msg =
             "[Compiler Monitor] Monitoring stopped | Total elapsed: " + FormatElapsed(total_elapsed);
