@@ -17,6 +17,7 @@
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "interface/configs/config_manager.h"
+#include "interface/utils/vector_error.h"
 
 namespace npu::tile_fwk {
 
@@ -40,14 +41,15 @@ LogicalTensorPtr BinaryOperationBroadCast(const LogicalTensorPtr &operand, const
 }
 
 void CheckOperandsValid(const LogicalTensorPtr &operand1, const LogicalTensorPtr &operand2) {
-    ASSERT(operand1->shape.size() == operand2->shape.size()) << "The shape size of the two input tensors must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size())
+        << "The shape size of the two input tensors must be equal";
 }
 
 void CheckBinOpOperandsValid(const LogicalTensorPtr &operand1, const LogicalTensorPtr &operand2) {
     CheckOperandsValid(operand1, operand2);
     for (size_t i = 0; i < operand1->shape.size(); ++i) {
         if (operand1->shape[i] != operand2->shape[i] && (operand1->shape[i] != 1 && operand2->shape[i] != 1)) {
-            ASSERT(false && "shape not support binary operation");
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "shape not support binary operation";
         }
     }
 }
@@ -57,10 +59,10 @@ void CheckBinaryInputTensors(const LogicalTensorPtr &tensor1, const LogicalTenso
     CheckTensorShape(tensor2, op);
     CheckBinOpOperandsValid(tensor1, tensor2);
     if (tensor1->Datatype() != tensor2->Datatype()) {
-        ASSERT(false && "The dtype of input tensors are not same.");
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The dtype of input tensors are not same.";
     }
     if (tensor1->Format() != tensor2->Format()) {
-        ASSERT(false && "The format of input tensors are not same.");
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The format of input tensors are not same.";
     }
 }
 
@@ -79,13 +81,13 @@ void BinaryOperationOperandCheck(
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand) {
     constexpr size_t inOpSize = 2;
     constexpr size_t outOpSize = 1;
-    ASSERT(iOperand.size() == inOpSize && "iOperand size should be 2");
-    ASSERT(oOperand.size() == outOpSize && "oOperand size should be 1");
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == inOpSize) << "iOperand size should be 2";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == outOpSize) << "oOperand size should be 1";
 }
 
 // [m,n] + [m, 1]
 bool CallBrcBinOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2) {
-    ASSERT(operand1->shape.size() == operand2->shape.size() && "Dims not match");
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
     size_t shapeSize = operand1->shape.size();
     for (size_t i = 0; i < shapeSize - 1; ++i) {
         if (operand1->shape[i] != operand2->shape[i]) {
@@ -210,10 +212,12 @@ void TiledPReLUOperation(
     }
 }
 
-void TiledPReLUOperation(
-    Function &function, const TileShape &tileShape, const LogicalTensorPtr &input, const LogicalTensorPtr &weight, const LogicalTensorPtr &result) {
-    ASSERT(input->shape.size() == input->offset.size()) << "The shape size of input and offset must be equal";
-    ASSERT(weight->shape.size() == weight->offset.size()) << "The shape size of weight and offset must be equal";
+void TiledPReLUOperation(Function &function, const TileShape &tileShape, const LogicalTensorPtr &input,
+    const LogicalTensorPtr &weight, const LogicalTensorPtr &result) {
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() == input->offset.size())
+        << "The shape size of input and offset must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == weight->offset.size())
+        << "The shape size of weight and offset must be equal";
 
     TileInfo inputTileInfo(input->shape.size(), input->offset.size());
     TileInfo weightTileInfo(weight->shape.size(), weight->offset.size());
@@ -224,32 +228,34 @@ void TiledPReLUOperation(
 
 void PReLUOperationOperandCheck(
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand) {
-    ASSERT(iOperand.size() == 2) << "The input operand size should be 2";
-    ASSERT(oOperand.size() == 1) << "The output operand size should be 1";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 2) << "The input operand size should be 2";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
     
     auto input = iOperand[0];
     auto weight = iOperand[1];
     
-    ASSERT(input->Datatype() == weight->Datatype()) 
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->Datatype() == weight->Datatype()) 
         << "The input and weight should have the same data type";
     
-    ASSERT(input->shape.size() >= 2 && input->shape.size() <= 4) 
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() >= 2 && input->shape.size() <= 4) 
         << "The input shape dimension should be in range [2, 4]";
     
-    ASSERT(weight->shape.size() == 1) 
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == 1) 
         << "The weight should be 1-dimensional";
     
-    ASSERT(weight->shape[0] == input->shape[1]) 
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape[0] == input->shape[1]) 
         << "The weight size should equal to input's second dimension";
     
     int64_t inputSize = 1;
     for (size_t i = 0; i < input->shape.size(); ++i) {
         inputSize *= input->shape[i];
     }
-    ASSERT(inputSize <= INT32_MAX) << "The input shape size should not exceed INT32_MAX";
-    
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, inputSize <= INT32_MAX)
+        << "The input shape size should not exceed INT32_MAX";
+
     int64_t weightSize = weight->shape[0];
-    ASSERT(weightSize <= INT32_MAX) << "The weight shape size should not exceed INT32_MAX";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightSize <= INT32_MAX)
+        << "The weight shape size should not exceed INT32_MAX";
 }
 
 void PReLUOperationTileFunc(Function &function, const TileShape &tileShape,
@@ -340,10 +346,14 @@ Tensor Gcd(const Tensor &self, const Tensor &other) {
     DECLARE_TRACER();
     auto shapeSize = self.GetShape().size();
     auto dataType = self.GetDataType();
-    ASSERT(dataType == other.GetDataType()) << "Inputs must have the same dataType.";
-    ASSERT(SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5) << "This operation's input only support 1-5 dims";
-    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
-    ASSERT(GCD_SUPPORT_DATATYPES.count(dataType))<< "This datatype is not supported";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dataType == other.GetDataType())
+        << "Inputs must have the same dataType.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
+        << "This operation's input only support 1-5 dims";
+    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {
+        DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, GCD_SUPPORT_DATATYPES.count(dataType))
+        << "This datatype is not supported";
     RETURN_CALL(BinaryOperation<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -351,10 +361,14 @@ Tensor Gcd(const Tensor &self, const Element &other) {
     DECLARE_TRACER();
     auto shapeSize = self.GetShape().size();
     auto dataType = self.GetDataType();
-    ASSERT(SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5) << "This operation's input only support 1-5 dims";
-    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
-    ASSERT(GCD_SUPPORT_DATATYPES.count(dataType))<< "This datatype is not supported";
-    RETURN_CALL(BinaryOperationScalar<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), other);
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
+        << "This operation's input only support 1-5 dims";
+    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {
+        DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, GCD_SUPPORT_DATATYPES.count(dataType))
+        << "This datatype is not supported";
+    RETURN_CALL(BinaryOperationScalar<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(),
+        self.GetStorage(), other);
 }
 
 template <BinaryOpType T>
@@ -483,11 +497,13 @@ Tensor BitwiseXor(const Tensor &self, const Element &other) {
 
 Tensor Maximum(const Tensor &operand1, const Element &operand2) {
     DECLARE_TRACER();
-    ASSERT(operand1.GetDataType() == operand2.GetDataType()) << "The datatype of the two input must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
+        << "The datatype of the two input must be equal";
     std::vector<DataType> MAXS_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(std::find(MAXS_SUPPORT_DATATYPES.begin(), MAXS_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
-           MAXS_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(MAXS_SUPPORT_DATATYPES.begin(), MAXS_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
+            MAXS_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
     RETURN_CALL(BinaryOperationScalar<BinaryOpType::MAX>, *Program::GetInstance().GetCurrentFunction(),
         operand1.GetStorage(), operand2);
@@ -495,11 +511,13 @@ Tensor Maximum(const Tensor &operand1, const Element &operand2) {
 
 Tensor Minimum(const Tensor &operand1, const Element &operand2) {
     DECLARE_TRACER();
-    ASSERT(operand1.GetDataType() == operand2.GetDataType()) << "The datatype of the two input must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
+        << "The datatype of the two input must be equal";
     std::vector<DataType> MINS_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(std::find(MINS_SUPPORT_DATATYPES.begin(), MINS_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
-           MINS_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(MINS_SUPPORT_DATATYPES.begin(), MINS_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
+            MINS_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
     RETURN_CALL(BinaryOperationScalar<BinaryOpType::MIN>, *Program::GetInstance().GetCurrentFunction(),
         operand1.GetStorage(), operand2);
@@ -513,9 +531,10 @@ Tensor LReLU(const Tensor &self, const Element &other) {
 
 Tensor CeilDiv(const Tensor &self, const Tensor &other) {
     std::vector<DataType> CEILDIV_SUPPORT_TYPES = {DataType::DT_INT32};
-    ASSERT(
-        self.GetDataType() == other.GetDataType() && 
-        std::find(CEILDIV_SUPPORT_TYPES.begin(), CEILDIV_SUPPORT_TYPES.end(), self.GetDataType()) != CEILDIV_SUPPORT_TYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        self.GetDataType() == other.GetDataType() &&
+            std::find(CEILDIV_SUPPORT_TYPES.begin(), CEILDIV_SUPPORT_TYPES.end(), self.GetDataType()) !=
+                CEILDIV_SUPPORT_TYPES.end())
         << "CeilDiv only supports same data type for self and other! And it should be in DT_INT32.";
 
     Tensor selfFp32 = Cast(self, DataType::DT_FP32);
@@ -528,9 +547,10 @@ Tensor CeilDiv(const Tensor &self, const Tensor &other) {
 
 Tensor CeilDiv(const Tensor &self, const Element &other) {
     std::vector<DataType> CEILDIV_SUPPORT_TYPES = {DataType::DT_INT32};
-    ASSERT(
-        self.GetDataType() == other.GetDataType() && 
-        std::find(CEILDIV_SUPPORT_TYPES.begin(), CEILDIV_SUPPORT_TYPES.end(), self.GetDataType()) != CEILDIV_SUPPORT_TYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        self.GetDataType() == other.GetDataType() &&
+            std::find(CEILDIV_SUPPORT_TYPES.begin(), CEILDIV_SUPPORT_TYPES.end(), self.GetDataType()) !=
+                CEILDIV_SUPPORT_TYPES.end())
         << "CeilDiv only supports same data type for self and other! And it should be in DT_INT32.";
 
     Tensor selfFp32 = Cast(self, DataType::DT_FP32);

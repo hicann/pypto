@@ -61,7 +61,7 @@ std::string GetUnaryOpName() {
         case UnaryOpType::BITWISENOT: return "BITWISENOT";
         case UnaryOpType::SIGN: return "SIGN";
         case UnaryOpType::SIGNBIT: return "SIGNBIT";
-        default: ASSERT(false && "unknown unary op type"); return "";
+        default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type"; return "";
     }
 }
 
@@ -86,7 +86,7 @@ Opcode GetUnaryOpNameCode() {
         CASE(BITWISENOT);
         CASE(SIGN);
         CASE(SIGNBIT);
-        default: ASSERT(false && "unknown unary op type");
+        default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown unary op type";
     }
 #undef CASE
 }

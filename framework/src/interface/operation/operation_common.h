@@ -21,6 +21,7 @@
 #include "tilefwk/tensor.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/operation/opcode.h"
+#include "interface/utils/vector_error.h"
 
 namespace npu::tile_fwk {
 #define CALL(n, ...) Tensor##n(__VA_ARGS__)

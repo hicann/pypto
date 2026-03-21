@@ -24,7 +24,6 @@ class TestTileOpAdd : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac {};
 int CompileCCEForSingleOpTest(const std::string &srcFile, const std::string &objFile, bool isCube) {
     std::string curPath = GetCurRunningPath();
     std::string codeSrcPath = curPath.append("/../../../../");
-    ALOG_INFO_F("codeSrcPath: %s", codeSrcPath.c_str());
 
     std::string coreType = isCube ? "dav-c220-cube" : "dav-c220-vec";
     const std::string envPath = std::string(std::getenv("ASCEND_AICPU_PATH"));
@@ -54,22 +53,13 @@ int CompileCCEForSingleOpTest(const std::string &srcFile, const std::string &obj
         "%s",
         compileOptions.c_str(), coreType.c_str(), lib64Path.c_str(), runtimePath.c_str(), codeSrcPath.c_str(),
         codeSrcPath.c_str(), codeSrcPath.c_str(), codeSrcPath.c_str(), objFile.c_str(), srcFile.c_str());
-    if (ret < 0) {
-        ALOG_INFO << "CompileCCE snprintf_s failed " << ret;
-    }
-
-    ALOG_INFO << "compile kernel...\n" << ccecCmd;
     ret = std::system(ccecCmd);
-    if (ret != 0) {
-        ALOG_INFO << "CompileCce ccec failed " << ret;
-    }
     return ret;
 }
 void CompileTestCCE(const std::string &cceFileName) {
     CodeGenCtx ctx;
     CodeGenCloudNPU codegen(ctx); // used to PrepareDefaultOutputPath
     std::string cwd = GetCurRunningPath();
-    ALOG_INFO_F("cwd is %s", cwd.c_str());
     std::string testDir = "test_add";
     std::string cceFilePath = cwd + "/../../../../" + TEST_TILE_OP_PATH + testDir + "/" + cceFileName + ".cce";
 
@@ -97,14 +87,12 @@ TEST_F(TestTileOpAdd, TestAddDim2) {
 
     void *src0 = readToDev(GetGoldenDir() + "/add_x.bin", capacity);
     void *src1 = readToDev(GetGoldenDir() + "/add_y.bin", capacity);
-    ALOG_INFO_F("src0: %p, src1: %p", src0, src1);
 
     typedef void (*KernelFnPtrTy)(const std::vector<uint64_t> &, rtStream_t &);
     KernelFnPtrTy KernelFn = nullptr;
     void *soHandle = nullptr;
     const std::string kernelSoPath = "./kernel_meta/" + cceFileName + ".o";
     soHandle = dlopen(kernelSoPath.c_str(), RTLD_LAZY);
-    ALOG_INFO_F("soHandle: %p", soHandle);
     *(void **)&KernelFn = dlsym(soHandle, "TestTileOpKernelLaunch");
     printf("KernelFn is %p\n", KernelFn);
 
@@ -116,13 +104,6 @@ TEST_F(TestTileOpAdd, TestAddDim2) {
     std::vector<float> res(capacity);
     machine::GetRA()->CopyFromTensor((uint8_t *)res.data(), (uint8_t *)out_ptr, size);
     readInput(GetGoldenDir() + "/add_res.bin", golden);
-    //    for (int i = 0; i < 4096; ++i) {
-    //        printf("%f, ", golden[i]);
-    //        if (i % 16 == 0) {
-    //            printf("\n");
-    //        }
-    //    }
-    ALOG_INFO_F("golden first: %f, last: %f", golden[0], golden[4095]);
     int ret = resultCmp(golden, res, 0.001f);
     EXPECT_EQ(ret, true);
 }

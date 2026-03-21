@@ -89,7 +89,7 @@ std::string GetBinaryOpName() {
         case BinaryOpType::EXPANDEXPDIF: return "EXPANDEXPDIF";
         case BinaryOpType::COPYSIGN: return "COPYSIGN";
         case BinaryOpType::GCD: return "GCD";
-        default: ASSERT(false && "unknown binary op type"); return "";
+        default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type"; return "";
     }
 }
 
@@ -119,7 +119,7 @@ Opcode GetBinaryOpNameCode() {
             CASE(BITWISEXOR);
             CASE(GCD);
             case BinaryOpType::LRELU: return Opcode::OP_LRELU;
-            default: ASSERT(false && "unknown binary op type");
+            default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
         }
 #undef CASE
     }
@@ -135,7 +135,7 @@ Opcode GetBinaryOpNameCode() {
             CASE(MAX);
             CASE(MIN);
             CASE(GCD);
-            default: ASSERT(false && "unknown binary op type");
+            default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
         }
 #undef CASE
     }
@@ -165,7 +165,7 @@ Opcode GetBinaryOpNameCode() {
         CASE(EXPANDEXPDIF);
         CASE(COPYSIGN);
         CASE(GCD);
-        default: ASSERT(false && "unknown binary op type");
+        default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
     }
 #undef CASE
 }
