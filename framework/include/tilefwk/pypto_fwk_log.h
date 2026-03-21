@@ -45,7 +45,6 @@ enum class LogModule {
     CONV,
     MATMUL,
     VECTOR,
-    CONV,
     BOTTOM
 };
 
