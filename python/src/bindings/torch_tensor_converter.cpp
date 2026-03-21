@@ -100,7 +100,8 @@ int TorchTensorConverter::Convert(py::sequence &tensors, py::sequence &tensor_de
 
     py::object toDlpack = GetTorchToDlpack();
     py::object device = py::none();
-
+    
+    py::module torch_npu;
     for (size_t i = 0; i < n; i++) {
         py::object torchTensor = tensors[py::int_(i)];
         py::object tensorDef = tensor_defs[py::int_(i)];
@@ -112,14 +113,22 @@ int TorchTensorConverter::Convert(py::sequence &tensors, py::sequence &tensor_de
 
         TileOpFormat format = TileOpFormat::TILEOP_ND;
         py::object tensorDevice = torchTensor.attr("device");
-        std::string device_type = py::cast<std::string>(tensorDevice.attr("type"));
-        if (device_type == "npu") {
-            py::module torch_npu = py::module::import("torch_npu");
-            int npu_format = py::cast<int>(torch_npu.attr("get_npu_format")(torchTensor));
-            if (npu_format == 29) {
-                format = TileOpFormat::TILEOP_NZ;
+
+        if (tensorDef.attr("explict_format").cast<bool>()) {
+            format = tensorDef.attr("format").cast<TileOpFormat>();
+        } else {
+            std::string device_type = py::cast<std::string>(tensorDevice.attr("type"));
+            if (device_type == "npu") {
+                if (torch_npu.ptr() == nullptr) {
+                    torch_npu = py::module::import("torch_npu");
+                }
+                int npu_format = py::cast<int>(torch_npu.attr("get_npu_format")(torchTensor));
+                if (npu_format == 29) {
+                    format = TileOpFormat::TILEOP_NZ;
+                }
             }
         }
+        
         tensors_data.emplace_back(dtype, dataPtr, shape, format);
 
         if (device.is_none()) {

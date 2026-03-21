@@ -23,12 +23,17 @@ from ._element import Element
 class Tensor:
 
     def __init__(self, shape=None, dtype: Union[DataType, None] = None,
-                 name: str = "", format: TileOpFormat = TileOpFormat.TILEOP_ND,
+                 name: str = "", format=None,
                  data_ptr: Optional[int] = None, device=None, ori_shape=None):
         self.ori_shape = None
         self.status_shape = None
         self.status_dtype = dtype
         ndtype = dtype if dtype is not None else pypto.DT_FP32
+        # format显式配置标记
+        self.explict_format = format is not None
+        #format没有显式传递用默认值
+        if not self.explict_format:
+            format = TileOpFormat.TILEOP_ND
         if shape is None:
             nshape = []
             self._base = pypto_impl.Tensor(ndtype, nshape, name, format)
