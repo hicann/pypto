@@ -47,7 +47,7 @@ void UpdateCopyOutAttr(Operation &op, Operation &opNext) {
     opAttr->SetRawShape(OpImmediate::Specified(op.GetOOperands().front()->tensor->GetDynRawShape()));
 }
 
-bool CalculateNewRawShape(
+bool CalculateNewRawShapeExpand(
     const std::vector<int64_t> &newShape, const std::vector<int64_t> &oriRawShape, std::vector<int64_t> &newRawShape) {
     newRawShape.resize(newShape.size());
     if (oriRawShape.size() < newShape.size()) {
@@ -67,6 +67,26 @@ bool CalculateNewRawShape(
         return false;
     }
     newRawShape[0] = oriShapeSize / newShapeSize;
+    return true;
+}
+
+bool CalculateNewRawShapeReduce(
+    const std::vector<int64_t> &newShape, const std::vector<int64_t> &oriRawShape, std::vector<int64_t> &newRawShape) {
+    newRawShape.resize(newShape.size());
+    std::copy(newShape.begin(), newShape.end(), newRawShape.begin());
+    int64_t newShapeSize = 
+        std::accumulate(newRawShape.begin(), newRawShape.end(), INT64_C(1), std::multiplies<int64_t>());
+    int64_t oriShapeSize = 
+        std::accumulate(oriRawShape.begin(), oriRawShape.end(), INT64_C(1), std::multiplies<int64_t>());
+    int64_t remainShapeSize = 1;
+    if (newShapeSize > 0) {
+        remainShapeSize = oriShapeSize / newShapeSize;
+    } 
+    if (remainShapeSize <= 0 || oriShapeSize % newShapeSize != 0) {
+        APASS_LOG_INFO_F(Elements::Function, "Cannot calculate NewRawShape as the dimension is not divisible.");
+        return false;
+    }
+    newRawShape.back() = newRawShape.back() * remainShapeSize;
     return true;
 }
 
@@ -200,8 +220,8 @@ Status RemoveRedundantAssemble::RemoveViewSingleReshape(Function &function) cons
         }
         auto &offset = opAttr->GetFromDynOffset();
         Shape newRawShape = reshapeOp.GetOOperands().front()->shape;
-        if (!CalculateNewRawShape(reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetRawShape(), newRawShape)) return SUCCESS;
-        std::vector<SymbolicScalar> newDynOffset;
+        if (!CalculateNewRawShapeExpand(reshapeOp.GetOOperands().front()->shape, viewInput->tensor->GetRawShape(), newRawShape)) return SUCCESS;
+                std::vector<SymbolicScalar> newDynOffset;
         GetDynOffsetBeforeReshape(offset, viewInput->shape, newRawShape, newDynOffset);
         APASS_LOG_DEBUG_F(Elements::Operation, "Process View[%d] Tensor[%d]: newRawshape: %s, newOffset: %s.",
             producerOp->GetOpMagic(), reshapeOp.GetOOperands().front()->GetMagic(), IntVecToStr(newRawShape).c_str(),
@@ -421,9 +441,11 @@ Status RemoveRedundantAssemble::HandleDynOffsetForReshape(
         return SUCCESS;
     }
     auto &assembleOutShape = assembleOp.GetOOperands()[0]->tensor->rawshape;
-    if (!CalculateNewRawShape(producer->GetIOperands()[0]->shape, assembleOutShape, newRawShape)) {
-        return SUCCESS;
-    }
+    bool isReduce = assembleOutShape.size() < producer->GetIOperands()[0]->shape.size();
+    bool isSuccess = isReduce 
+        ? CalculateNewRawShapeReduce(producer->GetIOperands()[0]->shape, assembleOutShape, newRawShape)
+        : CalculateNewRawShapeExpand(producer->GetIOperands()[0]->shape, assembleOutShape, newRawShape);
+    if (!isSuccess) return SUCCESS;
     GetDynOffsetBeforeReshape(dynOffset, assembleOutShape, newRawShape, newDynOffset);
     APASS_LOG_DEBUG_F(Elements::Operation, "Process Assemble %d Tensor[%d]: newRawshape: %s, newOffset: %s.",
         assembleOp.GetOpMagic(), producer->GetIOperands()[0]->GetMagic(), IntVecToStr(newRawShape).c_str(),
@@ -441,7 +463,7 @@ Status RemoveRedundantAssemble::HandleDynOffsetForReshape(
         copyAttr->SetRawShape(OpImmediate::Specified(newRawShape));
         copyAttr->SetToOffset(newOffset);
     }
-    UpdateReshapeShape(*producer, producer->GetIOperands().front(), newRawShape);
+    producer->GetIOperands()[0]->tensor->UpdateRawShape(newRawShape);
     return SUCCESS;
 }
 
