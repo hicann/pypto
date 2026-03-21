@@ -141,7 +141,6 @@ TEST_F(TestCodegenScalar, TestPipeAll) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     CodeGenOpCloudNPU cop({symbolManager, *function, *(function->rootFunc_->programs_[0]), syncOp});
-    function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
 
     std::string res = cop.GenOpCode();
     std::string expect = R"!!!(pipe_barrier(PIPE_ALL);
@@ -173,7 +172,6 @@ TEST_F(TestCodegenScalar, TestAicpuCallOp) {
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     CodeGenOpCloudNPU cop({symbolManager, *function, *(function->rootFunc_->programs_[0]), op});
-    function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
 
     std::string res = cop.GenOpCode();
     std::string expect = R"!!!(TileOp::AicpuCall<0,0>(GET_CURRENT_TASKID());
@@ -208,7 +206,6 @@ void TestCVSyncBody(Opcode syncOpcode) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
 
     std::string res = cop.GenOpCode();
     std::string expect;

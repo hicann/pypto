@@ -106,10 +106,6 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutDynUnaligned) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[input->GetMagic()] = input;
-    function->GetTensorMap().inverseMap_[value->GetMagic()] = value;
-    function->GetTensorMap().inverseMap_[indices->GetMagic()] = indices;
-    function->GetTensorMap().inverseMap_[result->GetMagic()] = result;
     std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TileOp::DynTIndexPut<float, float, 2, 1, 64, 64, 1>((__gm__ float*)GET_PARAM_ADDR(param, 0, -1), (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 64, 1, 1, GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1));

@@ -113,7 +113,6 @@ std::string TestConvL1CopyInBody(const std::string &funcName, const std::vector<
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPU cgop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
     return cgop.GenOpCode();
 }
 
@@ -227,8 +226,6 @@ std::string TestConvLoad3DBody(const std::string &funcName, const bool &isConv3D
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    function->GetTensorMap().inverseMap_[l1Tensor->GetMagic()] = l1Tensor;
-    function->GetTensorMap().inverseMap_[l0Tensor->GetMagic()] = l0Tensor;
 
     return cop.GenOpCode();
 }
@@ -271,8 +268,6 @@ std::string TestConvLoad2DBody(const std::string &funcName) {
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
-    function->GetTensorMap().inverseMap_[l1Tensor->GetMagic()] = l1Tensor;
-    function->GetTensorMap().inverseMap_[l0Tensor->GetMagic()] = l0Tensor;
 
     return cop.GenOpCode();
 }

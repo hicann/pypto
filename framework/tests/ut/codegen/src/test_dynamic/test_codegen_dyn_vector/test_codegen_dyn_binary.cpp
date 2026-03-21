@@ -373,9 +373,6 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor) {
     std::vector<int> initVec(addShape.size(), false);
     op.SetAttribute(OpAttributeKey::lastUse, initVec);
 
-    function->GetTensorMap().inverseMap_[localTensorA->GetMagic()] = localTensorA;
-    function->GetTensorMap().inverseMap_[localTensorB->GetMagic()] = localTensorB;
-    function->GetTensorMap().inverseMap_[localOutTensor->GetMagic()] = localOutTensor;
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

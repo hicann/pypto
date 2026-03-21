@@ -66,7 +66,6 @@ TEST_F(TestCodegenDynSpillOut, UBSpillOut) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
     cop.GenOpCode();
 }
 
@@ -91,7 +90,6 @@ TEST_F(TestCodegenDynSpillOut, L1SpillOut) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[l1Tensor->GetMagic()] = l1Tensor;
     cop.GenOpCode();
 }
 

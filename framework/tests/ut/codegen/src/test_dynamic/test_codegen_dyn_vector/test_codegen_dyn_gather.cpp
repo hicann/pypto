@@ -141,9 +141,6 @@ TEST_F(TestCodegenDynGather, GatherFromUB) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[params->GetMagic()] = params;
-    function->GetTensorMap().inverseMap_[indices->GetMagic()] = indices;
-    function->GetTensorMap().inverseMap_[result->GetMagic()] = result;
     std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TileOp::DynTgatherFromUB_<float, float, /*before*/ 1, /*after*/ 64, /*axis_shape*/ 64, 1, 1, 1, 32, 64>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 1, 32);

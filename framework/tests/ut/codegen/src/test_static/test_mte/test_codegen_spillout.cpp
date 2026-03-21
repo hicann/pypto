@@ -80,7 +80,6 @@ TEST_F(TestCodegenSpillOut, UBSpillOut) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
 
     std::string res = cop.GenOpCode();
     std::string expect =
@@ -124,7 +123,6 @@ TEST_F(TestCodegenSpillOut, UBSpillOutTileTensor) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[ubTensor->GetMagic()] = ubTensor;
 
     std::string res = symbolManager->GenTileTensorDefList();
     std::string expect = R"!!!(UBTileTensorFP32Dim2_2 ubTensor_2((uint64_t)UB_S0_E0_T);
@@ -168,7 +166,6 @@ TEST_F(TestCodegenSpillOut, L1SpillOut) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[l1Tensor->GetMagic()] = l1Tensor;
     
     cop.GenOpCode();
 }

@@ -106,8 +106,6 @@ TEST_F(TestCodegenDynIndexOutCast, IndexOutCast) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[localTensorSrc0->GetMagic()] = localTensorSrc0;
-    function->GetTensorMap().inverseMap_[localTensorSrc1->GetMagic()] = localTensorSrc1;
 
     std::string res = cop.GenOpCode();
     std::string expect =
@@ -166,8 +164,6 @@ TEST_F(TestCodegenDynIndexOutCast, TestIndexOutTileTensor) {
     cga.GenAllocForLocalBuffer(indexoutOp, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], indexoutOp, {}, true);
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[indexoutTensor->GetMagic()] = indexoutTensor;
-    function->GetTensorMap().inverseMap_[localOutTensor->GetMagic()] = localOutTensor;
 
     std::string res = cop.GenOpCode();
     std::string expect = R"!!!(TIndexOutcast<0, 1>(gmTensor_9, ubTensor_10, ubTensor_10, Coord2Dim(0, 0));

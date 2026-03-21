@@ -87,9 +87,6 @@ TEST_F(TestCodegenDynScatter, TestDynOpScatterElement) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[localTensorSrc->GetMagic()] = localTensorSrc;
-    function->GetTensorMap().inverseMap_[localTensorIdx->GetMagic()] = localTensorIdx;
-    function->GetTensorMap().inverseMap_[localTensorDst->GetMagic()] = localTensorDst;
     std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TileOp::DynTscatterElementS<float, float, float, 1, 1, 32, 1, 64, 64, 3, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (float)1, 1, 1, 1, 32);
@@ -139,11 +136,6 @@ TEST_F(TestCodegenDynScatter, TestOpDynScatter) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[localTensorSelf->GetMagic()] = localTensorSelf;
-    function->GetTensorMap().inverseMap_[localTensorSrc->GetMagic()] = localTensorSrc;
-    function->GetTensorMap().inverseMap_[localTensorIdx->GetMagic()] = localTensorIdx;
-    function->GetTensorMap().inverseMap_[localTensorDst->GetMagic()] = localTensorDst;
-    function->GetTensorMap().inverseMap_[localTensorTmp->GetMagic()] = localTensorTmp;
     std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TileOp::DynTscatter<float, float, 1, 1, 32, 1, 64, 64, 1, 64, 64, 3, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 1, 32);

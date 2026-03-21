@@ -115,9 +115,6 @@ TestContext prepareSortParamForUT(Opcode opcode) {
         param.op = &op;
     }
 
-    function->GetTensorMap().inverseMap_[localTensor->GetMagic()] = localTensor;
-    function->GetTensorMap().inverseMap_[localOutTensor->GetMagic()] = localOutTensor;
-    function->GetTensorMap().inverseMap_[localTmpTensor->GetMagic()] = localTmpTensor;
     return param;
 }
 
@@ -199,11 +196,6 @@ TEST_F(TestCodegenDynSort, TestDynTiledMgrSort) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[localTensorInput1->GetMagic()] = localTensorInput1;
-    function->GetTensorMap().inverseMap_[localTensorInput2->GetMagic()] = localTensorInput2;
-    function->GetTensorMap().inverseMap_[localTensorInput3->GetMagic()] = localTensorInput3;
-    function->GetTensorMap().inverseMap_[localTensorRes->GetMagic()] = localTensorRes;
-    function->GetTensorMap().inverseMap_[localTensorTmp->GetMagic()] = localTensorTmp;
     std::string res = cop.GenOpCode();
     std::string expect =
         R"!!!(TileOp::DynTiledMrgSort<float, 1, 1, 64, 64, 1, 1, 64, 64, 64, 0>((__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 1, 1, 64, 64, 64, 64, 64);
@@ -257,9 +249,6 @@ void TestTopkBody(Opcode opCode, const std::string &expect) {
     cga.GenAllocForLocalBuffer(op, symbolManager);
     CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
-    function->GetTensorMap().inverseMap_[yVar->GetMagic()] = yVar;
-    function->GetTensorMap().inverseMap_[tmpVar->GetMagic()] = tmpVar;
-    function->GetTensorMap().inverseMap_[xVar->GetMagic()] = xVar;
     std::string res = cop.GenOpCode();
     EXPECT_EQ(res, expect);
 }
