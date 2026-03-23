@@ -13,6 +13,9 @@
  * \brief Unit test for DynAttrToStatic pass.
  */
 
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk_op.h"
 #include "interface/function/function.h"
@@ -41,6 +44,30 @@ public:
     }
     void TearDown() override {}
 };
+
+struct TempDirCleanup {
+    std::string path;
+    TempDirCleanup(const std::string& p) : path(p) {}
+    ~TempDirCleanup() { (void)!system(("rm -rf " + path).c_str()); }
+};
+
+void CountFilesByExtension(const std::string& dir, size_t& jsonCnt, size_t& tifwkgrCnt) {
+    jsonCnt = 0;
+    tifwkgrCnt = 0;
+    DIR* dirp = opendir(dir.c_str());
+    if (dirp == nullptr) return;
+    struct dirent* entry;
+    while ((entry = readdir(dirp)) != nullptr) {
+        if (entry->d_type != DT_REG) continue;
+        std::string filename = entry->d_name;
+        size_t pos = filename.rfind('.');
+        if (pos == std::string::npos) continue;
+        std::string ext = filename.substr(pos);
+        if (ext == ".json") jsonCnt++;
+        else if (ext == ".tifwkgr") tifwkgrCnt++;
+    }
+    closedir(dirp);
+}
 
 const std::string LEFT_BRACKER = "(";
 
@@ -317,17 +344,11 @@ TEST_F(DynAttrToStaticTest, IntBasicCases) {
 TEST_F(DynAttrToStaticTest, DumpAndPrintFunction) {
     int tiling = 16;
     TileShape::Current().SetVecTile(tiling, tiling, tiling);
-
     int n = tiling * 2;
     Tensor outcast(DT_INT32, {n, n, n}, "outcast");
-    std::vector<int32_t> outputGolden(n * n * n);
-
-    ProgramData::GetInstance().AppendInputs({
-    });
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateConstantTensor<int32_t>(outcast, 0),
     });
-
     FUNCTION("test_dump_and_print", {}, {outcast}) {
         LOOP("Step0", FunctionType::DYNAMIC_LOOP, i, LoopRange(n)) {
             LOOP("Step1", FunctionType::DYNAMIC_LOOP, j, LoopRange(n)) {
@@ -337,33 +358,18 @@ TEST_F(DynAttrToStaticTest, DumpAndPrintFunction) {
             }
         }
     }
-
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_test_dump_and_print");
     ASSERT_NE(func, nullptr);
     npu::tile_fwk::DynAttrToStatic passDynAttrToStatic;
-
-    auto dir = "/tmp/dyn_attr_to_static_test" + std::to_string(::getpid());
-    std::filesystem::remove_all(dir);
-    std::filesystem::create_directories(dir);
-
-    // RAII 清理
-    struct Cleanup {
-        std::filesystem::path p;
-        ~Cleanup() { std::error_code ec; std::filesystem::remove_all(p, ec); }
-    } cleanup{dir};
-
+    std::string dir = "/tmp/dyn_attr_to_static_test" + std::to_string(::getpid());
+    (void)!system(("rm -rf " + dir).c_str());
+    ASSERT_EQ(system(("mkdir -p " + dir).c_str()), 0);
+    TempDirCleanup cleanup(dir);
+    (void)cleanup;
     EXPECT_EQ(passDynAttrToStatic.DumpFunctionJson(*func, dir, true), SUCCESS);
     EXPECT_EQ(passDynAttrToStatic.PrintFunction(*func, dir, true), SUCCESS);
-
-    size_t jsonCnt = 0;
-    size_t tifwkgrCnt = 0;
-    for (const auto& it : std::filesystem::directory_iterator(dir)) {
-        if (!it.is_regular_file()) continue;
-        const auto ext = it.path().extension().string();
-        if (ext == ".json") jsonCnt++;
-        else if (ext == ".tifwkgr") tifwkgrCnt++;
-    }
-
+    size_t jsonCnt = 0, tifwkgrCnt = 0;
+    CountFilesByExtension(dir, jsonCnt, tifwkgrCnt);
     EXPECT_EQ(jsonCnt, 3u);
     EXPECT_EQ(tifwkgrCnt, 3u);
 }

@@ -84,8 +84,8 @@ Status Checker::CheckOpIOValid(Function &function) {
 
 Status Checker::CheckCompleteness(Function &function) {
     if (function.GetIncast().empty()) {
-        APASS_LOG_ERROR_F(Elements::Function, "The incast of function[%d] is empty.", function.GetFuncMagic());
-        return FAILED;
+        APASS_LOG_WARN_F(Elements::Function, "The incast of function[%d] is empty.", function.GetFuncMagic());
+        return SUCCESS;
     }
     for (const auto &incast : function.GetIncast()) {
         if (incast == nullptr) {

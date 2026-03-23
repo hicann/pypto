@@ -39,23 +39,6 @@ public:
     void TearDown() override {}
 };
 
-TEST_F(PassCheckTest, TestCheckCompletenessWithoutIncast) {
-    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "IntraSubGraphAdapterTest", "IntraSubGraphAdapterTest", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    std::vector<int64_t> shape = {8, 16};
-
-    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    auto &exp_op1 = currFunctionPtr->AddOperation(Opcode::OP_EXP, {tensor1}, {outcast1});
-    exp_op1.UpdateSubgraphID(0);
-
-    currFunctionPtr->outCasts_.push_back(outcast1);
-    Checker checker;
-    EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
-    EXPECT_EQ(checker.PublicCheck(*currFunctionPtr), FAILED);
-}
-
 TEST_F(PassCheckTest, TestCheckCompletenessWithNullIncast) {
     auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "IntraSubGraphAdapterTest", "IntraSubGraphAdapterTest", nullptr);
     EXPECT_TRUE(currFunctionPtr != nullptr);
@@ -323,21 +306,6 @@ TEST_F(PassCheckTest, TestCheckOpIOValid_OutputIsNull) {
     EXPECT_EQ(checker.CheckOpIOValid(*currFunctionPtr), FAILED);
 }
 
-TEST_F(PassCheckTest, TestCheckCompleteness_IncastEmpty) {
-    auto currFunctionPtr =
-        std::make_shared<Function>(Program::GetInstance(), "TestCheckCompleteness_IncastEmpty", "TestCheckCompleteness_IncastEmpty", nullptr);
-    EXPECT_TRUE(currFunctionPtr != nullptr);
-
-    std::vector<int64_t> shape = {32, 32};
-    auto outcast1 = std::make_shared<LogicalTensor>(
-        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "", NodeType::OUTCAST);
-    
-    currFunctionPtr->outCasts_.push_back(outcast1);
-
-    Checker checker;
-    EXPECT_EQ(checker.CheckCompleteness(*currFunctionPtr), FAILED);
-}
-
 TEST_F(PassCheckTest, TestCheckCompleteness_IncastIsNull) {
     auto currFunctionPtr =
         std::make_shared<Function>(Program::GetInstance(), "TestCheckCompleteness_IncastIsNull", "TestCheckCompleteness_IncastIsNull", nullptr);
@@ -494,6 +462,7 @@ TEST_F(PassCheckTest, TestCheckLocalTensor_LocalInput) {
     EXPECT_EQ(checker.CheckLocalTensor(*currFunctionPtr), FAILED);
 }
 
+// Some computation graphs may not include incast because they contain operations such as VEC_DUP.
 TEST_F(PassCheckTest, TestPublicCheck_IncastEmpty) {
     auto currFunctionPtr =
         std::make_shared<Function>(Program::GetInstance(), "TestPublicCheck_IncastEmpty", "TestPublicCheck_IncastEmpty", nullptr);
@@ -506,5 +475,5 @@ TEST_F(PassCheckTest, TestPublicCheck_IncastEmpty) {
     currFunctionPtr->outCasts_.push_back(outcast1);
 
     Checker checker;
-    EXPECT_EQ(checker.PublicCheck(*currFunctionPtr), FAILED);
+    EXPECT_EQ(checker.PublicCheck(*currFunctionPtr), SUCCESS);
 }

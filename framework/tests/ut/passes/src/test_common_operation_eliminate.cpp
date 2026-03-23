@@ -311,8 +311,6 @@ TEST_F(CommonOperationEliminateTest, PreCheck_CopyIn_OffsetShapeMismatch) {
     ASSERT_NE(opAttr, nullptr);
     auto copyAttr = dynamic_cast<CopyOpAttribute*>(opAttr.get());
     ASSERT_NE(copyAttr, nullptr);
-    auto [fromOffset, memType] = copyAttr->GetCopyInAttr();
-    (void)memType;
     std::vector<OpImmediate> newFromOffset;
     newFromOffset.emplace_back(0);
     newFromOffset.emplace_back(1);
