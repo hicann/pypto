@@ -17,6 +17,7 @@
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/utils/vector_error.h"
 
 namespace npu::tile_fwk {
 
@@ -44,7 +45,7 @@ void TiledCompareOperationImpl(Function &function, const TileShape &tileShape, s
         if (inputTile1->Datatype() == DT_BF16) {
             element_size = BytesOf(DT_FP32);
         }
-        ASSERT(element_size != 0) << "Element size cannot be zero.";
+        ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
         int64_t vcmp_bits_size = (elements_per_chunk + 7) / 8;
 
@@ -156,9 +157,8 @@ LogicalTensorPtr TensorCompareOperation(
     auto resultType = DT_BOOL;
     if (mode == OutType::BIT) {
         resultType = DT_UINT8;
-        if (!resultShape.empty() && resultShape.back() % NUM_VALUE_8 != 0) {
-            ALOG_ERROR_F("Last dimension must be divisible by 8 in BIT mode");
-        }
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, resultShape.empty() || resultShape.back() % NUM_VALUE_8 == 0)
+            << "Last dimension must be divisible by 8 in BIT mode";
         if (!resultShape.empty()) {
             resultShape.back() /= NUM_VALUE_8;
             if (!resultValidShape.empty()) {
@@ -186,9 +186,8 @@ LogicalTensorPtr TensorCompareOperationScalar(
         resultType = DT_UINT8;
         if (!resultShape.empty()) {
             int64_t lastDim = resultShape.back();
-            if (lastDim % NUM_VALUE_8 != 0) {
-                ALOG_ERROR_F("Last dimension must be divisible by 8 in BIT mode");
-            }
+            ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, lastDim % NUM_VALUE_8 == 0)
+                << "Last dimension must be divisible by 8 in BIT mode";
             resultShape.back() = lastDim / NUM_VALUE_8;
             if (!resultValidShape.empty()) {
                 auto &lastSymDim = resultValidShape.back();
@@ -243,7 +242,7 @@ void TiledCmpsOperationImpl(Function &function, const TileShape &tileShape, size
         if (inputTile->Datatype() == DT_BF16) {
             element_size = BytesOf(DT_FP32);
         }
-        ASSERT(element_size != 0) << "Element size cannot be zero.";
+        ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, element_size != 0) << "Element size cannot be zero.";
         int64_t elements_per_chunk = COUNT_MODE_SIZE / element_size;
         int64_t vcmp_bits_size = (elements_per_chunk + 8 - 1) / 8;
 

@@ -16,6 +16,7 @@
 #include <cmath>
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
+#include "interface/utils/vector_error.h"
 #include "passes/pass_utils/graph_utils.h"
 
 namespace npu::tile_fwk {
@@ -118,7 +119,8 @@ void TiledFillPadOperation(Function &function, const TileShape &tileShape, size_
 
 void TiledFillPadOperation(Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand,
     const LogicalTensorPtr &result, const Element &padValue) {
-    ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
@@ -127,8 +129,9 @@ void TiledFillPadOperation(Function &function, const TileShape &tileShape, const
 
 LogicalTensorPtr TensorPadOperation(
     Function &function, const Tensor &self, const std::vector<int64_t> &padding, const std::string &mode, float value) {
-    ASSERT(mode == "constant") << "Pad: only 'constant' mode is supported.";
-    ASSERT(std::isinf(value) || (std::abs(value) < 1e-6)) << "Pad: pad value must be -inf, inf, or 0.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "Pad: only 'constant' mode is supported.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, std::isinf(value) || (std::abs(value) < 1e-6))
+        << "Pad: pad value must be -inf, inf, or 0.";
 
     auto operand = self.GetStorage();
     std::vector<int64_t> outputShape = operand->shape;
@@ -137,13 +140,15 @@ LogicalTensorPtr TensorPadOperation(
     int64_t padBottom = 0;
 
     if (ndim == 1) {
-        ASSERT(padding.size() == 2) << "Pad: 1D tensor only support 2 padding values.";
-        ASSERT(padding[0] == 0) << "Pad: 1D tensor only support right pad.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 2)
+            << "Pad: 1D tensor only support 2 padding values.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only support right pad.";
         padRight = padding[1];
         outputShape[0] += padRight;
     } else {
-        ASSERT(padding.size() == 4) << "Pad: only support last 2 axis pad.";
-        ASSERT(padding[0] == 0 && padding[2] == 0) << "Pad: only support bottom and right pad.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 4) << "Pad: only support last 2 axis pad.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0 && padding[2] == 0)
+            << "Pad: only support bottom and right pad.";
         padRight = padding[1];
         padBottom = padding[3];
         outputShape[ndim - 1] += padRight;
@@ -175,14 +180,16 @@ Tensor Pad(const Tensor &self, const std::vector<int64_t> &padding, std::string 
 }
 
 LogicalTensorPtr TensorFillPadOperation(Function &function, const Tensor &self, const std::string &mode, float value) {
-    ASSERT(mode == "constant") << "FillPad: only 'constant' mode is supported.";
-    ASSERT(std::isinf(value) || (std::abs(value) < 1e-6)) << "FillPad: pad value must be -inf, inf, or 0.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, mode == "constant") << "FillPad: only 'constant' mode is supported.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, std::isinf(value) || (std::abs(value) < 1e-6))
+        << "FillPad: pad value must be -inf, inf, or 0.";
 
     auto operand = self.GetStorage();
     std::vector<int64_t> outputShape = operand->shape;
-    ASSERT(outputShape.size() == 1 || outputShape.size() == 2) << "FillPad: only support 1 dim or 2 dim.";
-    std::vector<SymbolicScalar> resultValidShape = operand->GetDynValidShape();
-    auto result = std::make_shared<LogicalTensor>(function, operand->Datatype(), outputShape, resultValidShape);
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, outputShape.size() == 1 || outputShape.size() == 2)
+        << "FillPad: only support 1 dim or 2 dim.";
+    auto result = std::make_shared<LogicalTensor>(
+        function, operand->Datatype(), outputShape, SymbolicScalar::FromConcrete(outputShape));
     auto &op = function.AddOperation(Opcode::OP_FILLPAD, {operand}, {result});
     op.SetAttribute(OpAttributeKey::scalar, Element(self.GetDataType(), value));
     return result;

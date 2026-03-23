@@ -46,8 +46,7 @@ public:
         if (it != inferShapeFuncs_.end()) {
             it->second(op, outValidShapes);
         } else {
-            ALOG_WARN_F("Infer shape failed, opcode [%s] doesn't support infer shape.",
-                   op->GetOpcodeStr().c_str());
+            PASS_LOGW("Infer shape failed, opcode [%s] doesn't support infer shape.", op->GetOpcodeStr().c_str());
             // 如果op infershape未注册，那么validshape设置成shape
             for (auto output : op->GetOOperands()) {
                 auto immShape = OpImmediate::Specified(output->GetShape());

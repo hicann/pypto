@@ -18,6 +18,7 @@
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "interface/utils/vector_error.h"
 
 namespace npu::tile_fwk {
 
@@ -26,7 +27,7 @@ void TiledLogicalNotOperation(
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        
+
         constexpr int64_t COUNT_NUM = 2048;
         constexpr int64_t vcmp_bit_size = COUNT_NUM / 8;
         constexpr size_t ALIGN_SIZE = 32;
@@ -37,7 +38,7 @@ void TiledLogicalNotOperation(
         } else {
             select_dtype = DT_FP16;
         }
-        
+
         int64_t total_size = COUNT_NUM * 2 + COUNT_NUM * BytesOf(select_dtype) * 2 + vcmp_bit_size + 8;
         total_size = (total_size + ALIGN_SIZE - 1) / ALIGN_SIZE * ALIGN_SIZE;
         std::vector<int64_t> tmpShape({total_size});
@@ -62,7 +63,8 @@ void TiledLogicalNotOperation(
 
 void TiledLogicalNotOperation(
     Function &function, const TileShape &tileShape, const LogicalTensorPtr &self, const LogicalTensorPtr &result) {
-    ASSERT(self->shape.size() == self->offset.size()) << "Shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{self, tileInfo};
@@ -82,12 +84,12 @@ Tensor LogicalNot(const Tensor &self) {
                         self.GetDataType() == DT_BOOL || self.GetDataType() == DT_BF16;
     if (!dtypeIsValid) {
         std::string errorMessage = "Unsurpported Dtype " + DataType2String(self.GetDataType());
-        ASSERT(false) << errorMessage;
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false) << errorMessage;
     }
     RETURN_CALL(LogicalNotOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
-int64_t MultiplyLastTwoDims(const std::vector<int64_t>& vec) {
+int64_t MultiplyLastTwoDims(const std::vector<int64_t> &vec) {
     constexpr auto ALIGN32HALF = 16;
     int64_t axis2 = (vec[vec.size() - 1] + ALIGN32HALF - 1) / ALIGN32HALF * ALIGN32HALF;
     return axis2 * vec[vec.size() - 2];
@@ -98,7 +100,7 @@ void TiledSignOperation(
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        
+
         constexpr size_t ALIGN_SIZE = 32;
         int64_t tmpSize = ALIGN_SIZE / BytesOf(DT_FP16);
         if (input.tensor.GetDataType() == DT_INT8) {
@@ -121,7 +123,8 @@ void TiledSignOperation(
 
 void TiledSignOperation(
     Function &function, const TileShape &tileShape, const LogicalTensorPtr &self, const LogicalTensorPtr &result) {
-    ASSERT(self->shape.size() == self->offset.size()) << "Shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{self, tileInfo};
@@ -151,7 +154,8 @@ void TiledSignbitOperation(
 
 void TiledSignbitOperation(
     Function &function, const TileShape &tileShape, const LogicalTensorPtr &self, const LogicalTensorPtr &result) {
-    ASSERT(self->shape.size() == self->offset.size()) << "Shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{self, tileInfo};
@@ -159,7 +163,8 @@ void TiledSignbitOperation(
 }
 
 LogicalTensorPtr TensorSignOperation(Function &function, LogicalTensorPtr self) {
-    auto result = std::make_shared<LogicalTensor>(function, self->tensor->datatype, self->shape, self->GetDynValidShape());
+    auto result =
+        std::make_shared<LogicalTensor>(function, self->tensor->datatype, self->shape, self->GetDynValidShape());
     function.AddOperation(Opcode::OP_SIGN, {self}, {result});
     return result;
 }
@@ -196,15 +201,17 @@ Tensor Neg(const Tensor &self) {
 
 Tensor Log(const Tensor &self, LogBaseType base) {
     DECLARE_TRACER();
-    ASSERT(base == LogBaseType::LOG_E || base == LogBaseType::LOG_2 || base == LogBaseType::LOG_10)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        base == LogBaseType::LOG_E || base == LogBaseType::LOG_2 || base == LogBaseType::LOG_10)
         << "base is incorrect";
-    ASSERT(self.GetStorage()->tensor->datatype == DataType::DT_BF16 ||
-           self.GetStorage()->tensor->datatype == DataType::DT_FP16 ||
-           self.GetStorage()->tensor->datatype == DataType::DT_FP32)
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, self.GetStorage()->tensor->datatype == DataType::DT_BF16 ||
+                                                             self.GetStorage()->tensor->datatype == DataType::DT_FP16 ||
+                                                             self.GetStorage()->tensor->datatype == DataType::DT_FP32)
         << "The datatype is not supported";
 
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
-    if (self.GetStorage()->tensor->datatype == DataType::DT_FP16 || self.GetStorage()->tensor->datatype == DataType::DT_BF16) {
+    if (self.GetStorage()->tensor->datatype == DataType::DT_FP16 ||
+        self.GetStorage()->tensor->datatype == DataType::DT_BF16) {
         operandCast = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
             self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
     } else {
@@ -265,8 +272,8 @@ LogicalTensorPtr CastToResultType(const LogicalTensorPtr &tensor, DataType origi
     if (originType == resultType) {
         return tensor;
     }
-    RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), tensor,
-            resultType, CastMode::CAST_NONE);
+    RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), tensor, resultType,
+        CastMode::CAST_NONE);
 }
 
 Tensor Pow(const Tensor &self, const Tensor &other) {
@@ -277,7 +284,8 @@ Tensor Pow(const Tensor &self, const Tensor &other) {
     DataType calcResultType = GetPowCalcResultDataType(selfType, otherType);
     auto selfSt = CastToResultType(self.GetStorage(), selfType, calcResultType);
     auto otherSt = CastToResultType(other.GetStorage(), otherType, calcResultType);
-    auto result = CALL(BinaryOperation<BinaryOpType::POW>, *Program::GetInstance().GetCurrentFunction(), selfSt, otherSt);
+    auto result =
+        CALL(BinaryOperation<BinaryOpType::POW>, *Program::GetInstance().GetCurrentFunction(), selfSt, otherSt);
     if (realResultType != calcResultType) {
         RETURN_CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result,
             realResultType, CastMode::CAST_NONE);
@@ -286,13 +294,14 @@ Tensor Pow(const Tensor &self, const Tensor &other) {
 }
 Tensor Log1p(const Tensor &self) {
     DECLARE_TRACER();
-    ASSERT(self.GetStorage()->tensor->datatype == DataType::DT_BF16 ||
-        self.GetStorage()->tensor->datatype == DataType::DT_FP16 ||
-        self.GetStorage()->tensor->datatype == DataType::DT_FP32)
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, self.GetStorage()->tensor->datatype == DataType::DT_BF16 ||
+                                                             self.GetStorage()->tensor->datatype == DataType::DT_FP16 ||
+                                                             self.GetStorage()->tensor->datatype == DataType::DT_FP32)
         << "The datatype is not supported";
 
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
-    if (self.GetStorage()->tensor->datatype == DataType::DT_FP16 || self.GetStorage()->tensor->datatype == DataType::DT_BF16) {
+    if (self.GetStorage()->tensor->datatype == DataType::DT_FP16 ||
+        self.GetStorage()->tensor->datatype == DataType::DT_BF16) {
         operandCast = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
             self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
     } else {
@@ -300,18 +309,17 @@ Tensor Log1p(const Tensor &self) {
     }
 
     auto tAddOne = CALL(BinaryOperationScalar<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(),
-                        operandCast.GetStorage(), Element(DataType::DT_FP32, 1.0f));
-  
-    auto dSubOne = CALL(BinaryOperationScalar<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(),
-                        tAddOne, Element(DataType::DT_FP32, -1.0f));
+        operandCast.GetStorage(), Element(DataType::DT_FP32, 1.0f));
 
-    auto rDivide = CALL(BinaryOperation<BinaryOpType::DIV>, *Program::GetInstance().GetCurrentFunction(),
-                        operandCast, dSubOne);
+    auto dSubOne = CALL(BinaryOperationScalar<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(), tAddOne,
+        Element(DataType::DT_FP32, -1.0f));
+
+    auto rDivide =
+        CALL(BinaryOperation<BinaryOpType::DIV>, *Program::GetInstance().GetCurrentFunction(), operandCast, dSubOne);
 
     auto lLog = CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), tAddOne);
 
-    auto yRaw = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(),
-                    lLog, rDivide);
+    auto yRaw = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), lLog, rDivide);
 
     auto maskEqOne = Compare(tAddOne, Element(DataType::DT_FP32, 1.0f), OpType::EQ, OutType::BOOL);
     auto maskEqInf = Compare(tAddOne, Element(DataType::DT_FP32, INFINITY), OpType::EQ, OutType::BOOL);
@@ -319,7 +327,7 @@ Tensor Log1p(const Tensor &self) {
     auto ySelect = Where(maskEqOne, operandCast, yRaw);
 
     ySelect = Where(maskEqInf, Element(DataType::DT_FP32, INFINITY), ySelect);
-                
+
     auto resTensorBeforeCast = Tensor(DataType::DT_FP32, self.GetShape());
     resTensorBeforeCast = ySelect;
 
@@ -331,7 +339,7 @@ Tensor Log1p(const Tensor &self) {
             resTensorBeforeCast.GetStorage(), DataType::DT_BF16, CastMode::CAST_NONE);
     }
     return resTensorBeforeCast;
-} 
+}
 
 LogicalTensorPtr GenAllOneTensor(const Shape &shape, std::vector<SymbolicScalar> validShape, const DataType &dataType) {
     auto result = CALL(FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, 1.0),
@@ -370,12 +378,11 @@ LogicalTensorPtr GeneralPow(const Tensor &self, double exponent) {
     if (exponent - intExponent < NUM_VALUE_EPS) {
         result = IntegerPow(self, intExponent);
     } else {
-        auto lnSelf = CALL(UnaryOperation<UnaryOpType::LN>,
-            *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+        auto lnSelf =
+            CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
         auto exponentLnSelf = CALL(BinaryOperationScalar<BinaryOpType::MUL>,
             *Program::GetInstance().GetCurrentFunction(), lnSelf, Element(DataType::DT_FP32, exponent));
-        result = CALL(UnaryOperation<UnaryOpType::EXP>,
-            *Program::GetInstance().GetCurrentFunction(), exponentLnSelf);
+        result = CALL(UnaryOperation<UnaryOpType::EXP>, *Program::GetInstance().GetCurrentFunction(), exponentLnSelf);
     }
 
     // 指数小于零，结果取倒数
@@ -393,8 +400,8 @@ Tensor Pow(const Tensor &self, const Element &other) {
 
     LogicalTensorPtr castSelf = self.GetStorage();
     if ((self.GetDataType() == DT_INT32 || self.GetDataType() == DT_INT16) && other.GetDataType() != DT_INT32) {
-        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            castSelf, DataType::DT_FP32, CastMode::CAST_NONE);
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf,
+            DataType::DT_FP32, CastMode::CAST_NONE);
     }
     double exponent = other.Cast<double>();
     // 指数为0，输出全1
@@ -404,8 +411,8 @@ Tensor Pow(const Tensor &self, const Element &other) {
     DataType dataType = castSelf->Datatype();
     bool shouldUpToFp32 = dataType == DT_FP16 || dataType == DT_BF16;
     if (shouldUpToFp32) {
-        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            castSelf, DataType::DT_FP32, CastMode::CAST_NONE);
+        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf,
+            DataType::DT_FP32, CastMode::CAST_NONE);
     }
     auto result = castSelf;
     if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {
@@ -450,8 +457,9 @@ void TiledOneHot(
 
 void TiledOneHot(Function &function, const TileShape &tileShape, const LogicalTensorPtr &self,
     const LogicalTensorPtr &result, int numClasses) {
-    ASSERT(self->shape.size() == self->offset.size()) << "Shape size and offset size should be equal";
-    ASSERT(numClasses == tileShape.GetVecTile()[result->shape.size() - 1])
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self->shape.size() == self->offset.size())
+        << "Shape size and offset size should be equal";
+    ASSERT(VectorErrorCode::ERR_CONFIG_TILE, numClasses == tileShape.GetVecTile()[result->shape.size() - 1])
         << "The numClasses and last axis of tileshape should be equal";
 
     TileInfo inputTileInfo(self->shape.size(), self->offset.size());
@@ -479,8 +487,8 @@ Tensor OneHot(const Tensor &self, int numClasses) {
     RETURN_CALL(OneHot, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), numClasses);
 }
 
-void TiledLogicalAndOperation(Function& function, const TileShape& tileShape, size_t cur,
-        Input& input0, Input& input1, const LogicalTensorPtr& result, TileInfo &resultTileInfo) {
+void TiledLogicalAndOperation(Function &function, const TileShape &tileShape, size_t cur, Input &input0, Input &input1,
+    const LogicalTensorPtr &result, TileInfo &resultTileInfo) {
     if (cur == input0.tensor.GetShape().size()) {
         auto tile0 = input0.tensor.GetStorage()->View(function, input0.tileInfo.shape, input0.tileInfo.offset);
         auto tile1 = input1.tensor.GetStorage()->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
@@ -494,28 +502,31 @@ void TiledLogicalAndOperation(Function& function, const TileShape& tileShape, si
         size_t vcmpBitResult_size = ((vcmp_bits_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
         size_t aligned_float_array_size = ((float_array_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
         size_t aligned_half_array_size = ((half_array_size + ALIGN_SIZE - 1) / ALIGN_SIZE) * ALIGN_SIZE;
-        size_t total_bytes = vcmpBitResult_size + 4 * aligned_float_array_size + aligned_half_array_size + ALIGN_SIZE * 2;
+        size_t total_bytes =
+            vcmpBitResult_size + 4 * aligned_float_array_size + aligned_half_array_size + ALIGN_SIZE * 2;
         std::vector<int64_t> tmp_shape({static_cast<int64_t>(total_bytes)});
         auto tmp_tensor = std::make_shared<LogicalTensor>(function, DT_UINT8, tmp_shape);
 
-        function.AddOperation(Opcode::OP_LOGICALAND, {tile0, tile1}, 
-                            {resultTile, tmp_tensor});    
+        function.AddOperation(Opcode::OP_LOGICALAND, {tile0, tile1}, {resultTile, tmp_tensor});
         return;
     }
 
-    auto& vecTile = tileShape.GetVecTile();
+    auto &vecTile = tileShape.GetVecTile();
     for (int i = 0; i < result->shape[cur]; i += vecTile[cur]) {
         resultTileInfo.offset[cur] = i;
         input0.tileInfo.offset[cur] = i % input0.tensor.GetShape()[cur];
         input1.tileInfo.offset[cur] = i % input1.tensor.GetShape()[cur];
         resultTileInfo.shape[cur] = std::min(result->shape[cur] - resultTileInfo.offset[cur], vecTile[cur]);
-        input0.tileInfo.shape[cur] = std::min(input0.tensor.GetShape()[cur] - input0.tileInfo.offset[cur], vecTile[cur]);
-        input1.tileInfo.shape[cur] = std::min(input1.tensor.GetShape()[cur] - input1.tileInfo.offset[cur], vecTile[cur]);
+        input0.tileInfo.shape[cur] =
+            std::min(input0.tensor.GetShape()[cur] - input0.tileInfo.offset[cur], vecTile[cur]);
+        input1.tileInfo.shape[cur] =
+            std::min(input1.tensor.GetShape()[cur] - input1.tileInfo.offset[cur], vecTile[cur]);
         TiledLogicalAndOperation(function, tileShape, cur + 1, input0, input1, result, resultTileInfo);
     }
 }
 
-void TiledLogicalAndOperation(Function& function, const TileShape& tileShape, LogicalTensorPtr operand0, LogicalTensorPtr operand1, const LogicalTensorPtr& result) {
+void TiledLogicalAndOperation(Function &function, const TileShape &tileShape, LogicalTensorPtr operand0,
+    LogicalTensorPtr operand1, const LogicalTensorPtr &result) {
     BroadcastOperandTensor(operand0, operand1, result, function, tileShape);
     BroadcastOperandTensor(operand1, operand0, result, function, tileShape);
 
@@ -527,7 +538,7 @@ void TiledLogicalAndOperation(Function& function, const TileShape& tileShape, Lo
     TiledLogicalAndOperation(function, tileShape, 0, input0, input1, result, resultTileInfo);
 }
 
-LogicalTensorPtr TensorLogicalAndOperation(Function& function, const Tensor& self, const Tensor& other) {
+LogicalTensorPtr TensorLogicalAndOperation(Function &function, const Tensor &self, const Tensor &other) {
     auto operandT0 = self.GetStorage();
     auto operandT1 = other.GetStorage();
     if (operandT0->shape.size() != operandT1->shape.size()) {
@@ -555,7 +566,8 @@ LogicalTensorPtr TensorLogicalAndOperation(Function& function, const Tensor& sel
 
 Tensor LogicalAnd(const Tensor &self, const Tensor &other) {
     DECLARE_TRACER();
-    RETURN_CALL(LogicalAndOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), other.GetStorage());
+    RETURN_CALL(
+        LogicalAndOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), other.GetStorage());
 }
 
 void LogicNotOperationTileFunc(Function &function, const TileShape &tileShape,
@@ -641,7 +653,9 @@ void InnerTiledCumSum(size_t cur, Function &function, const TileShape &tileShape
 }
 
 void TiledCumSum(Function &function, const TileShape &tileShape, const CumSumPara &cumSumPara) {
-    assert(cumSumPara.Input->GetShape().size() == cumSumPara.Input->GetOffset().size());
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_INVALID, cumSumPara.Input->GetShape().size() == cumSumPara.Input->GetOffset().size())
+        << "Shape size and offset size should be equal";
 
     CumSumTileInfoPara cumSumTileInfo{
         TileInfo(cumSumPara.Input->GetShape().size(), cumSumPara.Input->GetOffset().size()),
@@ -678,7 +692,8 @@ void TensorCumSum(Function &function, const CumSumPara &cumSumPara) {
         Operation &castDstOp = function.AddOperation(Opcode::OP_CAST, {dstConverted}, {cumSumPara.dstTensor});
         castDstOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
         return;
-    } if (cumSumPara.Input->Datatype() == DT_INT32) {
+    }
+    if (cumSumPara.Input->Datatype() == DT_INT32) {
         LogicalTensorPtr dstConverted =
             std::make_shared<LogicalTensor>(function, DT_INT32, cumSumPara.dstTensor->GetShape());
         auto &op = function.AddOperation(Opcode::OP_CUM_SUM, {cumSumPara.Input}, {dstConverted});
@@ -699,19 +714,22 @@ void CheckCumSum(const Tensor &input, const int &axis) {
     auto shapeSize = input.GetShape().size();
     auto dataType = input.GetDataType();
 
-    ASSERT(SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5) << "The shape.size() only support 1~5";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
+        << "The shape.size() only support 1~5";
     std::vector<DataType> CUMSUM_SUPPORT_DATATYPES = {DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32,
         DataType::DT_INT16, DataType::DT_INT8, DataType::DT_BF16};
-    ASSERT(std::find(CUMSUM_SUPPORT_DATATYPES.begin(), CUMSUM_SUPPORT_DATATYPES.end(), dataType) !=
-           CUMSUM_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(CUMSUM_SUPPORT_DATATYPES.begin(), CUMSUM_SUPPORT_DATATYPES.end(), dataType) !=
+            CUMSUM_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
     int tmpAxis0 = axis;
     CheckAxisRange(input, tmpAxis0);
     bool flag = input.GetShape().size() == 1 ? true : false;
     if (flag) {
-        ASSERT(tmpAxis0 == 0) << "when input.GetShape().size() is 1, axis must be 0";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0)
+            << "when input.GetShape().size() is 1, axis must be 0";
     }
-    ASSERT(tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < shapeSize)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tmpAxis0 == 0 || static_cast<size_t>(tmpAxis0) < shapeSize)
         << "The tmpAxis0 should be 0 and less than shape size";
 }
 
@@ -794,7 +812,7 @@ void InnerTiledTriUL(size_t cur, Function &function, const TileShape &tileShape,
         auto dstTile = dstTensor->View(function, triULTileInfo.dstTileInfo.shape, triULTileInfo.dstTileInfo.offset);
         auto inputTile = input->View(function, triULTileInfo.inputTileInfo.shape, triULTileInfo.inputTileInfo.offset);
         auto &op = function.AddOperation(Opcode::OP_TRIUL, {inputTile}, {dstTile});
-        realDiagonal = realDiagonal+dstTile->GetOffset()[cur - 2]-dstTile->GetOffset()[cur - 1];
+        realDiagonal = realDiagonal + dstTile->GetOffset()[cur - 2] - dstTile->GetOffset()[cur - 1];
         op.SetAttribute(OpAttributeKey::dynScalar, realDiagonal);
         op.SetAttribute(OpAttributeKey::isUpper, isUpper);
         return;
@@ -811,8 +829,7 @@ void InnerTiledTriUL(size_t cur, Function &function, const TileShape &tileShape,
 }
 
 void TiledTriUL(Function &function, const TileShape &tileShape, const TriULPara &triULPara) {
-    TriULTileInfoPara triULTileInfo{
-        TileInfo(triULPara.input->GetShape().size(), triULPara.input->GetOffset().size()),
+    TriULTileInfoPara triULTileInfo{TileInfo(triULPara.input->GetShape().size(), triULPara.input->GetOffset().size()),
         TileInfo(triULPara.dstTensor->GetShape().size(), triULPara.dstTensor->GetOffset().size())};
 
     InnerTiledTriUL(0, function, tileShape, triULPara, triULTileInfo);
@@ -821,16 +838,20 @@ void TiledTriUL(Function &function, const TileShape &tileShape, const TriULPara 
 void TensorTriUL(Function &function, const TriULPara &triULPara) {
     auto shapeSize = triULPara.input->GetShape().size();
     auto dataType = triULPara.input->Datatype();
-    ASSERT(SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM5) << "This operation's input only support 2-5 dims";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM5)
+        << "This operation's input only support 2-5 dims";
     std::unordered_set<DataType> TRIUL_SUPPORT_DATATYPES = {DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32,
         DataType::DT_INT16, DataType::DT_INT8, DataType::DT_BF16};
-    ASSERT(TRIUL_SUPPORT_DATATYPES.count(dataType))<< "This datatype is not supported";
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, TRIUL_SUPPORT_DATATYPES.count(dataType))
+        << "This datatype is not supported";
 
     if (triULPara.input->Datatype() == DT_INT8) {
-        LogicalTensorPtr inputConverted = std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.input->GetShape());
+        LogicalTensorPtr inputConverted =
+            std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.input->GetShape());
         auto &castinputOp = GraphUtils::AddDynOperation(function, Opcode::OP_CAST, {triULPara.input}, {inputConverted});
         castinputOp.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-        LogicalTensorPtr dstConverted = std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.dstTensor->GetShape());
+        LogicalTensorPtr dstConverted =
+            std::make_shared<LogicalTensor>(function, DT_FP16, triULPara.dstTensor->GetShape());
         auto &op = GraphUtils::AddDynOperation(function, Opcode::OP_TRIUL, {inputConverted}, {dstConverted});
         op.SetAttribute(OpAttributeKey::dynScalar, triULPara.diagonal);
         op.SetAttribute(OpAttributeKey::isUpper, triULPara.isUpper);
@@ -846,14 +867,16 @@ void TensorTriUL(Function &function, const TriULPara &triULPara) {
 Tensor TriU(const Tensor &input, const SymbolicScalar &diagonal) {
     DECLARE_TRACER();
     Tensor result(input.GetDataType(), input.GetShape());
-    CALL(TriUL, *Program::GetInstance().GetCurrentFunction(), {input.GetStorage(), result.GetStorage(), diagonal, true});
+    CALL(
+        TriUL, *Program::GetInstance().GetCurrentFunction(), {input.GetStorage(), result.GetStorage(), diagonal, true});
     return result;
 }
 
 Tensor TriL(const Tensor &input, const SymbolicScalar &diagonal) {
     DECLARE_TRACER();
     Tensor result(input.GetDataType(), input.GetShape());
-    CALL(TriUL, *Program::GetInstance().GetCurrentFunction(), {input.GetStorage(), result.GetStorage(), diagonal, false});
+    CALL(TriUL, *Program::GetInstance().GetCurrentFunction(),
+        {input.GetStorage(), result.GetStorage(), diagonal, false});
     return result;
 }
 
@@ -867,23 +890,27 @@ void TriULOperationTileFunc(Function &function, const TileShape &tileShape,
 // beginregin: Clip
 
 Tensor Clip(const Tensor &self, const Element &min, const Element &max) {
-    ASSERT(self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4)
         << "The shape.size() only support 2~4";
     std::vector<DataType> CLIP_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) !=
-           CLIP_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) !=
+            CLIP_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
 
     Element min_ = min, max_ = max;
 
     Tensor result = self;
     if (min_.GetDataType() != DT_BOTTOM) {
-        ASSERT(min_.GetDataType() == self.GetDataType()) << "The datatype of inputs should be same";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, min_.GetDataType() == self.GetDataType())
+            << "The datatype of inputs should be same";
         result = Maximum(result, min_);
     }
     if (max_.GetDataType() != DT_BOTTOM) {
-        ASSERT(max_.GetDataType() == self.GetDataType()) << "The datatype of inputs should be same";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, max_.GetDataType() == self.GetDataType())
+            << "The datatype of inputs should be same";
         result = Minimum(result, max_);
     }
     result.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
@@ -891,24 +918,29 @@ Tensor Clip(const Tensor &self, const Element &min, const Element &max) {
 }
 
 Tensor Clip(const Tensor &self, const Tensor &min, const Tensor &max) {
-    ASSERT(self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4)
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        self.GetShape().size() >= SHAPE_DIM2 && self.GetShape().size() <= SHAPE_DIM4)
         << "The shape.size() only support 2~4";
     std::vector<DataType> CLIP_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16};
-    ASSERT(std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) !=
-           CLIP_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(CLIP_SUPPORT_DATATYPES.begin(), CLIP_SUPPORT_DATATYPES.end(), self.GetDataType()) !=
+            CLIP_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
 
     Tensor result = self;
     if (min.GetStorage() != nullptr) {
-        ASSERT(min.GetDataType() == self.GetDataType()) << "The datatype of inputs should be same";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, min.GetDataType() == self.GetDataType())
+            << "The datatype of inputs should be same";
         std::vector minBroadcastAxes = GetBroadcastAxes(min.GetShape(), self.GetShape());
-        ASSERT(minBroadcastAxes.size() <= 1);
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, minBroadcastAxes.size() <= 1)
+            << "minBroadcastAxes size should be <= 1";
         result = Maximum(result, min);
     }
     if (max.GetStorage() != nullptr) {
         std::vector maxBroadcastAxes = GetBroadcastAxes(max.GetShape(), self.GetShape());
-        ASSERT(maxBroadcastAxes.size() <= 1);
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, maxBroadcastAxes.size() <= 1)
+            << "maxBroadcastAxes size should be <= 1";
         result = Minimum(result, max);
     }
     result.GetStorage()->UpdateDynValidShape(self.GetStorage()->GetDynValidShape());
@@ -922,18 +954,20 @@ void LogicAndOperationTileFunc(Function &function, const TileShape &tileShape,
     TiledLogicalAndOperation(function, tileShape, iOperand[0], iOperand[1], oOperand[0]);
 }
 
-static void VarParamVaildCheck(const Tensor &input, std::vector<int> &dim)
-{
+static void VarParamVaildCheck(const Tensor &input, std::vector<int> &dim) {
     DataType dtype = input.GetDataType();
     Shape shape = input.GetShape();
     uint64_t shapeSize = shape.size();
 
-    ASSERT(shapeSize <= SHAPE_DIM4 && shapeSize >= SHAPE_DIM2) << "The shape.size() only support 2~4. Cur dimension"
-        " is " << shapeSize;
-    ASSERT(dim.size() <= shapeSize) << "The dim.size() should <= input.size()";
-    ASSERT((dtype == DT_FP32) || (dtype == DT_FP16) || (dtype == DT_BF16)) << "The datatype is only support float";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shapeSize <= SHAPE_DIM4 && shapeSize >= SHAPE_DIM2)
+        << "The shape.size() only support 2~4. Cur dimension"
+           " is "
+        << shapeSize;
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dim.size() <= shapeSize) << "The dim.size() should <= input.size()";
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, (dtype == DT_FP32) || (dtype == DT_FP16) || (dtype == DT_BF16))
+        << "The datatype is only support float";
     for (uint64_t i = 0; i < shapeSize; i++) {
-        ASSERT(shape[i] > 0) << "The input shape should > 0";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape[i] > 0) << "The input shape should > 0";
     }
 
     if (dim.empty()) {
@@ -943,10 +977,11 @@ static void VarParamVaildCheck(const Tensor &input, std::vector<int> &dim)
     }
     std::set<int> dupDimSet(dim.begin(), dim.end());
 
-    ASSERT(dupDimSet.size() == dim.size()) << "There is duplicates elements in dim";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dupDimSet.size() == dim.size()) << "There is duplicates elements in dim";
     for (size_t i = 0; i < dim.size(); i++) {
-        ASSERT(dim[i] < static_cast<int>(shapeSize) && dim[i] >= -(static_cast<int>(shapeSize))) <<
-            "The value in dim is out of range";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+            dim[i] < static_cast<int>(shapeSize) && dim[i] >= -(static_cast<int>(shapeSize)))
+            << "The value in dim is out of range";
         if (dim[i] < 0) {
             dim[i] = dim[i] + static_cast<int>(shapeSize);
         }
@@ -954,9 +989,8 @@ static void VarParamVaildCheck(const Tensor &input, std::vector<int> &dim)
     std::sort(dim.begin(), dim.end());
 }
 
-static Tensor VarResSqueeze(const Tensor &res, const std::vector<int> &dim, const std::vector<int64_t> &oriVecTile,
-    DataType dtype)
-{
+static Tensor VarResSqueeze(
+    const Tensor &res, const std::vector<int> &dim, const std::vector<int64_t> &oriVecTile, DataType dtype) {
     std::vector<int64_t> vecTile(oriVecTile.begin(), oriVecTile.end());
     for (auto it = dim.rbegin(); it != dim.rend(); ++it) {
         vecTile.erase(vecTile.begin() + *it);
@@ -973,8 +1007,7 @@ static Tensor VarResSqueeze(const Tensor &res, const std::vector<int> &dim, cons
     return Squeeze(res, dim);
 }
 
-Tensor Var(const Tensor &input, const std::vector<int> &dim, float correction, bool keepDim)
-{
+Tensor Var(const Tensor &input, const std::vector<int> &dim, float correction, bool keepDim) {
     std::vector<int> innerDim(dim.begin(), dim.end());
     VarParamVaildCheck(input, innerDim);
 
@@ -1041,11 +1074,13 @@ Tensor Exp2(const Tensor &self) {
 
     auto shapeSize = self.GetShape().size();
     auto dataType = self.GetDataType();
-    ASSERT(SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4) << "The shape.size() only support 2~4";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4)
+        << "The shape.size() only support 2~4";
     std::vector<DataType> EXP2_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_BF16, DataType::DT_INT32, DataType::DT_INT16};
-    ASSERT(std::find(EXP2_SUPPORT_DATATYPES.begin(), EXP2_SUPPORT_DATATYPES.end(), dataType) !=
-           EXP2_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(EXP2_SUPPORT_DATATYPES.begin(), EXP2_SUPPORT_DATATYPES.end(), dataType) !=
+            EXP2_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
 
     RETURN_CALL(Exp2, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
@@ -1058,7 +1093,8 @@ void TiledExp2(
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4) << "Length of tile shape only support 2~4";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 2~4";
         std::vector<int64_t> tmpShape;
         std::vector<int64_t> tmpShape2;
         tmpShape2.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
@@ -1087,7 +1123,8 @@ void TiledExp2(
 
 void TiledExp2(
     Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
-    ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
@@ -1115,11 +1152,13 @@ Tensor Round(const Tensor &self, const int &decimals) {
 
     auto shapeSize = self.GetShape().size();
     auto dataType = self.GetDataType();
-    ASSERT(SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4) << "The shape.size() only support 2~4";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4)
+        << "The shape.size() only support 2~4";
     std::vector<DataType> ROUND_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_BF16, DataType::DT_INT32, DataType::DT_INT16};
-    ASSERT(std::find(ROUND_SUPPORT_DATATYPES.begin(), ROUND_SUPPORT_DATATYPES.end(), dataType) !=
-           ROUND_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(ROUND_SUPPORT_DATATYPES.begin(), ROUND_SUPPORT_DATATYPES.end(), dataType) !=
+            ROUND_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
 
     RETURN_CALL(Round, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), decimals);
@@ -1132,14 +1171,15 @@ void TiledRound(Function &function, const TileShape &tileShape, size_t cur, Inpu
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4) << "Length of tile shape only support 2~4";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 2~4";
         std::vector<int64_t> tmpShape;
         if (result->Datatype() == DT_FP32) {
             tmpShape = {BLOCK_SIZE / sizeof(float)};
         } else {
             tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
             auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
-            tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize -1) / alignSize * alignSize;
+            tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
         }
         auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_FP32, tmpShape);
         auto &newOp = function.AddOperation(Opcode::OP_ROUND, {tile}, {resultTile, tmpTensor});
@@ -1162,7 +1202,8 @@ void TiledRound(Function &function, const TileShape &tileShape, size_t cur, Inpu
 
 void TiledRound(Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand,
     const LogicalTensorPtr &result, const int &decimals = 0) {
-    ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
@@ -1210,7 +1251,8 @@ void TiledExpm1(
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4) << "Length of tile shape only support 2~4";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 2~4";
         std::vector<int64_t> tmpShape;
         if (input.tensor.GetDataType() == DT_FP32) {
             tmpShape = {BLOCK_SIZE / sizeof(float)};
@@ -1233,7 +1275,8 @@ void TiledExpm1(
 
 void TiledExpm1(
     Function &function, const TileShape &tileShape, const LogicalTensorPtr &operand, const LogicalTensorPtr &result) {
-    ASSERT(operand->shape.size() == operand->offset.size()) << "The shape size of operand and offset must be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};

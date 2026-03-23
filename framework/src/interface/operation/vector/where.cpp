@@ -15,6 +15,7 @@
 
 #include "binary.h"
 #include "interface/utils/operator_tracer.h"
+#include "interface/utils/vector_error.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tensor_transformation.h"
 
@@ -166,7 +167,7 @@ void TiledWhereOperation(Function &function, const TileShape &tileShape, const L
     std::vector<int64_t> conditionExpandShape(result->shape);
     if (condition->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
-        ASSERT(tileShape.GetVecTile().tile.back() % bitsNumOfByte == 0)
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, tileShape.GetVecTile().tile.back() % bitsNumOfByte == 0)
             << "The tileShape of last axis need to 8 align!";
         conditionValidShape.back() = conditionValidShape.back() / bitsNumOfByte;
         conditionExpandShape.back() = conditionExpandShape.back() / bitsNumOfByte;
@@ -299,20 +300,20 @@ LogicalTensorPtr BinaryOperationUnsqueeze(const LogicalTensorPtr &operand, const
 
 LogicalTensorPtr TensorWhereOperation(
     Function &function, const Tensor &condition, const Tensor &input, const Tensor &other) {
-    ASSERT(condition.GetShape().size() == condition.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
-    ASSERT(input.GetShape().size() == input.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input.GetShape().size() == input.GetStorage()->offset.size())
         << "The shape size of input and offset must be equal";
-    ASSERT(other.GetShape().size() == other.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, other.GetShape().size() == other.GetStorage()->offset.size())
         << "The shape size of other and offset must be equal";
 
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         int broadcastFlag = 1;
-        ASSERT(
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT,
             input.GetStorage()->shape.back() % bitsNumOfByte == 0 || input.GetStorage()->shape.back() == broadcastFlag)
             << "The input shape of last axis need to 8 align or equal to 1";
-        ASSERT(
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT,
             other.GetStorage()->shape.back() % bitsNumOfByte == 0 || other.GetStorage()->shape.back() == broadcastFlag)
             << "The other shape of last axis need to 8 align or equal to 1";
     }
@@ -330,7 +331,7 @@ LogicalTensorPtr TensorWhereOperation(
         conditionT0 = BinaryOperationUnsqueeze(conditionT0, resultShape);
         ShrinkTensorLastDimension(conditionT0);
     } else {
-        ALOG_ERROR_F("condition Datatype must be uint8 or bool.");
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false) << "condition Datatype must be uint8 or bool.";
     }
 
     inputT1 = BinaryOperationUnsqueeze(inputT1, resultShape);
@@ -345,14 +346,14 @@ LogicalTensorPtr TensorWhereOperation(
 
 LogicalTensorPtr TensorWhereOperation(
     Function &function, const Tensor &condition, const Tensor &input, const Element &other) {
-    ASSERT(condition.GetShape().size() == condition.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
-    ASSERT(input.GetShape().size() == input.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input.GetShape().size() == input.GetStorage()->offset.size())
         << "The shape size of input and offset must be equal";
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         int broadcastFlag = 1;
-        ASSERT(
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT,
             input.GetStorage()->shape.back() % bitsNumOfByte == 0 || input.GetStorage()->shape.back() == broadcastFlag)
             << "The input shape of last axis need to 8 align or equal to 1";
     }
@@ -369,7 +370,7 @@ LogicalTensorPtr TensorWhereOperation(
         conditionT0 = BinaryOperationUnsqueeze(conditionT0, resultShape);
         ShrinkTensorLastDimension(conditionT0);
     } else {
-        ALOG_ERROR_F("condition Datatype must be uint8 or bool.");
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false) << "condition Datatype must be uint8 or bool.";
     }
     inputT1 = BinaryOperationUnsqueeze(inputT1, resultShape);
     std::vector<SymbolicScalar> resultValidShape = GetResultValidShape(conditionT0, inputT1, other, resultShape);
@@ -382,14 +383,14 @@ LogicalTensorPtr TensorWhereOperation(
 
 LogicalTensorPtr TensorWhereOperation(
     Function &function, const Tensor &condition, const Element &input, const Tensor &other) {
-    ASSERT(condition.GetShape().size() == condition.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
-    ASSERT(other.GetShape().size() == other.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, other.GetShape().size() == other.GetStorage()->offset.size())
         << "The shape size of other and offset must be equal";
     if (condition.GetStorage()->Datatype() == DT_UINT8) {
         int bitsNumOfByte = 8;
         int broadcastFlag = 1;
-        ASSERT(
+        ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT,
             other.GetStorage()->shape.back() % bitsNumOfByte == 0 || other.GetStorage()->shape.back() == broadcastFlag)
             << "The other shape of last axis need to 8 align or equal to 1";
     }
@@ -406,7 +407,7 @@ LogicalTensorPtr TensorWhereOperation(
         conditionT0 = BinaryOperationUnsqueeze(conditionT0, resultShape);
         ShrinkTensorLastDimension(conditionT0);
     } else {
-        ALOG_ERROR_F("condition Datatype must be uint8 or bool.");
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false) << "condition Datatype must be uint8 or bool.";
     }
     otherT1 = BinaryOperationUnsqueeze(otherT1, resultShape);
     std::vector<SymbolicScalar> resultValidShape = GetResultValidShape(conditionT0, input, otherT1, resultShape);
@@ -420,7 +421,7 @@ LogicalTensorPtr TensorWhereOperation(
 
 LogicalTensorPtr TensorWhereOperation(
     Function &function, const Tensor &condition, const Element &input, const Element &other) {
-    ASSERT(condition.GetShape().size() == condition.GetStorage()->offset.size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, condition.GetShape().size() == condition.GetStorage()->offset.size())
         << "The shape size of condition and offset must be equal";
     auto conditionT0 = condition.GetStorage();
     std::vector<int64_t> resultShape = {};
@@ -432,7 +433,7 @@ LogicalTensorPtr TensorWhereOperation(
         resultShape = GetBroadCastShapeReturnInt64_t(conditionT0, conditionT0);
         ShrinkTensorLastDimension(conditionT0);
     } else {
-        ALOG_ERROR_F("condition Datatype must be uint8 or bool.");
+        ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, false) << "condition Datatype must be uint8 or bool.";
     }
     std::vector<SymbolicScalar> resultValidShape = conditionT0->GetDynValidShape();
     if (conditionT0->Datatype() == DT_UINT8) {

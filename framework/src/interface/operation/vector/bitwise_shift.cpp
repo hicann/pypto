@@ -18,6 +18,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "interface/utils/common.h"
 #include "interface/configs/config_manager.h"
+#include "interface/utils/vector_error.h"
 
 namespace npu::tile_fwk {
 
@@ -35,7 +36,7 @@ std::string GetBitwiseShiftOpName() {
         case BitwiseShiftOpType::BITWISELEFTSHIFT: return "BITWISELEFTSHIFT";
         case BitwiseShiftOpType::SBITWISERIGHTSHIFT: return "SBITWISERIGHTSHIFT";
         case BitwiseShiftOpType::SBITWISELEFTSHIFT: return "SBITWISELEFTSHIFT";
-        default: ASSERT(false && "unknown binary op type"); return "";
+        default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type"; return "";
     }
 }
 
@@ -47,7 +48,7 @@ Opcode GetBitwiseShiftOpNameCode() {
         switch (T) {
             CASE(BITWISERIGHTSHIFT);
             CASE(BITWISELEFTSHIFT);
-            default: ASSERT(false && "unknown binary op type");
+            default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
         }
 #undef CASE
     }
@@ -59,18 +60,19 @@ Opcode GetBitwiseShiftOpNameCode() {
         CASE(BITWISELEFTSHIFT);
         CASE(SBITWISERIGHTSHIFT);
         CASE(SBITWISELEFTSHIFT);
-        default: ASSERT(false && "unknown binary op type");
+        default: ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "unknown binary op type";
     }
 #undef CASE
 }
 
 void CheckBitwiseShiftDtype(const DataType &selfType, const DataType &otherType) {
     std::vector<DataType> BITWISRSHIFT_SUPPORT_DATATYPES = {DataType::DT_INT16};
-    bool selfSupport = (std::find(BITWISRSHIFT_SUPPORT_DATATYPES.begin(), BITWISRSHIFT_SUPPORT_DATATYPES.end(), selfType) != 
-           BITWISRSHIFT_SUPPORT_DATATYPES.end());
-    bool otherSupport = (std::find(BITWISRSHIFT_SUPPORT_DATATYPES.begin(), BITWISRSHIFT_SUPPORT_DATATYPES.end(), otherType) != 
-           BITWISRSHIFT_SUPPORT_DATATYPES.end());
-    ASSERT(selfSupport && otherSupport) << "Inputs datatype not supported";
+    bool selfSupport = (std::find(BITWISRSHIFT_SUPPORT_DATATYPES.begin(), BITWISRSHIFT_SUPPORT_DATATYPES.end(),
+                            selfType) != BITWISRSHIFT_SUPPORT_DATATYPES.end());
+    bool otherSupport = (std::find(BITWISRSHIFT_SUPPORT_DATATYPES.begin(), BITWISRSHIFT_SUPPORT_DATATYPES.end(),
+                             otherType) != BITWISRSHIFT_SUPPORT_DATATYPES.end());
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, selfSupport && otherSupport)
+        << "Inputs datatype not supported";
 }
 
 template <BitwiseShiftOpType T>

@@ -24,6 +24,7 @@
 #include "tensor_transformation.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tilefwk/platform.h"
+#include "interface/utils/vector_error.h"
 
 namespace npu::tile_fwk {
 
@@ -58,10 +59,9 @@ void TiledBitSort(Function &function, const TileShape &tileShape, size_t cur, In
         if (resultTile->shape.size() == 1) {
             tmpShape = {resultTile->shape[resultTile->shape.size() - 1]};
         } else {
-           tmpShape = {1, resultTile->shape[resultTile->shape.size() - 1]}; 
+            tmpShape = {1, resultTile->shape[resultTile->shape.size() - 1]};
         }
-        auto tempTensor =
-                std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
+        auto tempTensor = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
         auto &op = function.AddOperation(Opcode::OP_BITSORT, {inputTile}, {resultTile, tempTensor});
         op.SetAttribute(TOPK_AXIS, axis);
         op.SetAttribute(TOPK_ORDER, static_cast<int>(isLargest));
@@ -125,10 +125,9 @@ void TiledMrgSort(Function &function, const TileShape &tileShape, size_t cur, In
         if (inputTile->shape.size() == 1) {
             tmpShape = {inputTile->shape[inputTile->shape.size() - 1]};
         } else {
-           tmpShape = {1, inputTile->shape[inputTile->shape.size() - 1]};
+            tmpShape = {1, inputTile->shape[inputTile->shape.size() - 1]};
         }
-        auto tempTensor =
-                std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
+        auto tempTensor = std::make_shared<LogicalTensor>(function, inputTile->Datatype(), tmpShape);
         auto &op = function.AddOperation(Opcode::OP_MRGSORT, {inputTile}, {resultTile, tempTensor});
         op.SetAttribute(TOPK_AXIS, axis);
         op.SetAttribute(TOPK_KVALUE, k);
@@ -248,7 +247,8 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
     const LogicalTensorPtr &valueResult, const LogicalTensorPtr &indexResult, TileInfo &resultTileInfo, int axis, int k,
     int isLargest) {
     auto &vecTile = tileShape.GetVecTile();
-    ASSERT(k <= vecTile[axis]) << "The k should less than or equal to" << vecTile[axis];
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, k <= vecTile[axis])
+        << "The k should less than or equal to" << vecTile[axis];
     if (static_cast<int>(cur) == axis) {
         auto source = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> vecTileAlign = vecTile.tile;
@@ -261,7 +261,7 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
             if (sourceShapeSize < maxNumValue) {
                 vecTileAlign[axis] = source->shape[axis];
             } else if (tileShapeSize < maxNumValue) {
-                vecTileAlign[axis] = std::max((int64_t)kBlockSize, 
+                vecTileAlign[axis] = std::max((int64_t)kBlockSize,
                     maxNumValue / (sourceShapeSize / source->shape[axis]) / kBlockSize * kBlockSize);
             }
         }
@@ -279,16 +279,14 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
             auto inputTile = source->View(function, tileSourceShape, tileSourceOffset);
             auto tileBitsortRemain = (source->shape[axis] - i + kBlockSize - 1) / kBlockSize * kBlockSize;
             tileBitsortShape[axis] = std::min(axisBlockSizeAlign * kFactorSize, tileBitsortRemain * kFactorSize);
-            auto bitsortTile =
-                std::make_shared<LogicalTensor>(function, source->Datatype(), tileBitsortShape);
+            auto bitsortTile = std::make_shared<LogicalTensor>(function, source->Datatype(), tileBitsortShape);
             std::vector<int64_t> tmpShape;
             if (bitsortTile->shape.size() == 1) {
                 tmpShape = {bitsortTile->shape[bitsortTile->shape.size() - 1]};
             } else {
                 tmpShape = {1, bitsortTile->shape[bitsortTile->shape.size() - 1]};
             }
-            auto bitsortTempTensor =
-                std::make_shared<LogicalTensor>(function, source->Datatype(), tmpShape);
+            auto bitsortTempTensor = std::make_shared<LogicalTensor>(function, source->Datatype(), tmpShape);
             auto &bitsortOp = function.AddOperation(Opcode::OP_BITSORT, {inputTile}, {bitsortTile, bitsortTempTensor});
             bitsortOp.SetAttribute(TOPK_AXIS, axis);
             bitsortOp.SetAttribute(TOPK_ORDER, static_cast<int>(isLargest));
@@ -296,11 +294,10 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
 
             int kValue = std::min(k, static_cast<int>(tileSourceShape[axis]));
             tileMrgsortShape[axis] = (kValue + kBlockFpNum - 1) / kBlockFpNum * kBlockFpNum * NUM_VALUE_2;
-            auto mrgsortTile =
-                std::make_shared<LogicalTensor>(function, source->Datatype(), tileMrgsortShape);
-            auto mrgsortTempTensor =
-                std::make_shared<LogicalTensor>(function, source->Datatype(), tmpShape);
-            auto &mrgsortOp = function.AddOperation(Opcode::OP_MRGSORT, {bitsortTile}, {mrgsortTile, mrgsortTempTensor});
+            auto mrgsortTile = std::make_shared<LogicalTensor>(function, source->Datatype(), tileMrgsortShape);
+            auto mrgsortTempTensor = std::make_shared<LogicalTensor>(function, source->Datatype(), tmpShape);
+            auto &mrgsortOp =
+                function.AddOperation(Opcode::OP_MRGSORT, {bitsortTile}, {mrgsortTile, mrgsortTempTensor});
             mrgsortOp.SetAttribute(TOPK_AXIS, axis);
             mrgsortOp.SetAttribute(TOPK_KVALUE, kValue);
             mrgsortOp.SetAttribute(TOPK_MERGE_SIZE, NUM_VALUE_32);
@@ -314,13 +311,11 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
             tempShape[i] = 1;
         }
         tileMrgsortShape[axis] = tileMrgsortShape[axis] * axisTileNum;
-        auto mrgsortBuffer = std::make_shared<LogicalTensor>(
-            function, valueResult->Datatype(), tileMrgsortShape);
+        auto mrgsortBuffer = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tileMrgsortShape);
         std::vector<LogicalTensorPtr> tiledMrgsortList;
         for (int i = 0; i < axisTileNum; i += NUM_VALUE_4) {
             if ((axisTileNum - i) == NUM_VALUE_3) {
-                auto tempTensor = std::make_shared<LogicalTensor>(
-                    function, valueResult->Datatype(), tempShape);
+                auto tempTensor = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tempShape);
                 mrgsortResultOffset[axis] = i / NUM_VALUE_4 * sortList[0]->shape[axis];
                 auto mrgsortRepeatResult = mrgsortBuffer->View(function, sortList[0]->shape, mrgsortResultOffset);
                 auto &mrgSortMultiQue = function.AddOperation(Opcode::OP_TILEDMRGSORT,
@@ -330,8 +325,7 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
                 mrgSortMultiQue.SetAttribute(TOPK_KVALUE, k);
                 tiledMrgsortList.push_back(mrgsortRepeatResult);
             } else if ((axisTileNum - i) == NUM_VALUE_2) {
-                auto tempTensor = std::make_shared<LogicalTensor>(
-                    function, valueResult->Datatype(), tempShape);
+                auto tempTensor = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tempShape);
                 mrgsortResultOffset[axis] = i / NUM_VALUE_4 * sortList[0]->shape[axis];
                 auto mrgsortRepeatResult = mrgsortBuffer->View(function, sortList[0]->shape, mrgsortResultOffset);
                 auto &mrgSortMultiQue = function.AddOperation(Opcode::OP_TILEDMRGSORT,
@@ -343,8 +337,7 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
             } else if ((axisTileNum - i) == 1) {
                 tiledMrgsortList.push_back(sortList[i]);
             } else {
-                auto tempTensor = std::make_shared<LogicalTensor>(
-                    function, valueResult->Datatype(), tempShape);
+                auto tempTensor = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tempShape);
                 mrgsortResultOffset[axis] = i / NUM_VALUE_4 * sortList[0]->shape[axis];
                 auto mrgsortRepeatResult = mrgsortBuffer->View(function, sortList[0]->shape, mrgsortResultOffset);
                 auto &mrgSortMultiQue = function.AddOperation(Opcode::OP_TILEDMRGSORT,
@@ -366,8 +359,7 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
             int tileResultNum = tiledMrgsortList.size();
             for (int j = tileResultIdx; j < tileResultNum; j += NUM_VALUE_4) {
                 if ((tileResultNum - j) == NUM_VALUE_3) {
-                    auto tempTensor = std::make_shared<LogicalTensor>(
-                        function, valueResult->Datatype(), tempShape);
+                    auto tempTensor = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tempShape);
                     mrgsortResultOffset[axis] =
                         (tileResultNum + (j - tileResultIdx) / NUM_VALUE_4) * sortList[0]->shape[axis];
                     auto mrgsortRepeatResult = mrgsortBuffer->View(function, sortList[0]->shape, mrgsortResultOffset);
@@ -379,8 +371,7 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
                     mrgSortMultiQue.SetAttribute(TOPK_KVALUE, k);
                     tiledMrgsortList.push_back(mrgsortRepeatResult);
                 } else if ((tileResultNum - j) == NUM_VALUE_2) {
-                    auto tempTensor = std::make_shared<LogicalTensor>(
-                        function, valueResult->Datatype(), tempShape);
+                    auto tempTensor = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tempShape);
                     mrgsortResultOffset[axis] =
                         (tileResultNum + (j - tileResultIdx) / NUM_VALUE_4) * sortList[0]->shape[axis];
                     auto mrgsortRepeatResult = mrgsortBuffer->View(function, sortList[0]->shape, mrgsortResultOffset);
@@ -394,8 +385,7 @@ void TiledTopK(Function &function, const TileShape &tileShape, size_t cur, Input
                 } else if ((tileResultNum - j) == 1) {
                     tiledMrgsortList.push_back(tiledMrgsortList[j]);
                 } else {
-                    auto tempTensor = std::make_shared<LogicalTensor>(
-                        function, valueResult->Datatype(), tempShape);
+                    auto tempTensor = std::make_shared<LogicalTensor>(function, valueResult->Datatype(), tempShape);
                     mrgsortResultOffset[axis] =
                         (tileResultNum + (j - tileResultIdx) / NUM_VALUE_4) * sortList[0]->shape[axis];
                     auto mrgsortRepeatResult = mrgsortBuffer->View(function, sortList[0]->shape, mrgsortResultOffset);
@@ -502,7 +492,7 @@ void TensorTopK(Function &function, const LogicalTensorPtr &self, LogicalTensorP
 std::tuple<Tensor, Tensor> TopK(const Tensor &self, int k, int axis, bool isLargest) {
     DECLARE_TRACER();
     const auto len = static_cast<int>(self.GetShape().size());
-    ASSERT(axis == (len - 1) || axis == -1) << "TopK only support last axis";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis == (len - 1) || axis == -1) << "TopK only support last axis";
     axis = axis >= 0 ? axis : (axis + len);
 
     auto topkOutShape = self.GetShape();
@@ -514,16 +504,17 @@ std::tuple<Tensor, Tensor> TopK(const Tensor &self, int k, int axis, bool isLarg
     return std::tie(valueResult, indexResult);
 }
 
-bool checkIsExceedUB(const std::vector<int64_t> &tileShape, const std::vector<int64_t> &shape, int axis, int blockSize = 32) {
+bool checkIsExceedUB(
+    const std::vector<int64_t> &tileShape, const std::vector<int64_t> &shape, int axis, int blockSize = 32) {
     int64_t UBSize = 196608;
-        
+
     // check shape is out of UB size
     int64_t tileRowShapeSize = 1; // tileShape[0] * tileShape[1] * ... * rawShape[-1]
     for (const auto &num : tileShape) {
         tileRowShapeSize *= num;
     }
-    ASSERT(tileShape[axis] > 0) << "tileShape in axis must greater than 0.";
-    ASSERT(blockSize > 0) << "blockSize must greater than 0.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tileShape[axis] > 0) << "tileShape in axis must greater than 0.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, blockSize > 0) << "blockSize must greater than 0.";
     tileRowShapeSize = tileRowShapeSize / tileShape[axis] * ((shape[axis] + blockSize - 1) / blockSize * blockSize);
     int64_t maxShapeSize = tileRowShapeSize * 2 * 4 * 4; // every element is 8B
     bool isInGM = maxShapeSize >= UBSize ? true : false;
@@ -531,15 +522,17 @@ bool checkIsExceedUB(const std::vector<int64_t> &tileShape, const std::vector<in
 }
 
 void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input &input,
-    const LogicalTensorPtr &valueResult, const LogicalTensorPtr &indexResult, TileInfo &resultTileInfo, int axis, int descending) {
+    const LogicalTensorPtr &valueResult, const LogicalTensorPtr &indexResult, TileInfo &resultTileInfo, int axis,
+    int descending) {
     auto &vecTile = tileShape.GetVecTile();
     if (static_cast<int>(cur) == axis) {
         input.tileInfo.offset[axis] = 0;
-        auto source = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset); // input.tensor是viewTensor, source是tileTensor
+        auto source = input.tensor.GetStorage()->View(
+            function, input.tileInfo.shape, input.tileInfo.offset); // input.tensor是viewTensor, source是tileTensor
         auto dynValidShape = source->GetDynValidShape();
 
         constexpr int32_t factorSize = 2;
-        
+
         bool isInGM = checkIsExceedUB(vecTile.tile, source->shape, axis, kBlockSize);
 
         // 行数据可以全部加载到UB上, 直接进行操作, 不进行tile切块
@@ -548,7 +541,8 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             std::vector<int64_t> bitSortOutputShape = source->shape;
             bitSortOutputShape[axis] = (bitSortOutputShape[axis] + kBlockSize - 1) / kBlockSize * kBlockSize;
             bitSortOutputShape[axis] = bitSortOutputShape[axis] * factorSize;
-            auto bitSortOutputTensor = std::make_shared<LogicalTensor>(function, source->Datatype(), bitSortOutputShape);
+            auto bitSortOutputTensor =
+                std::make_shared<LogicalTensor>(function, source->Datatype(), bitSortOutputShape);
             std::vector<int64_t> tmpShape;
             if (bitSortOutputShape.size() == 1) {
                 tmpShape = {bitSortOutputShape[axis]};
@@ -572,8 +566,10 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             // 32个元素组成的block之间进行归并
             std::vector<int64_t> mrgSortOutputShape = source->shape;
             mrgSortOutputShape[axis] = (mrgSortOutputShape[axis] + 7) / 8 * 8 * 2;
-            auto mrgSortOutputTensor = std::make_shared<LogicalTensor>(function, source->Datatype(), mrgSortOutputShape);
-            auto &mrgSortOp = function.AddOperation(Opcode::OP_MRGSORT, {bitSortOutputTensor}, {mrgSortOutputTensor, tempTensor});
+            auto mrgSortOutputTensor =
+                std::make_shared<LogicalTensor>(function, source->Datatype(), mrgSortOutputShape);
+            auto &mrgSortOp =
+                function.AddOperation(Opcode::OP_MRGSORT, {bitSortOutputTensor}, {mrgSortOutputTensor, tempTensor});
             mrgSortOp.SetAttribute(TOPK_AXIS, axis);
             mrgSortOp.SetAttribute(TOPK_KVALUE, source->shape[axis]);
             mrgSortOp.SetAttribute(TOPK_MERGE_SIZE, NUM_VALUE_32);
@@ -617,10 +613,11 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
         // 元素个数k和8对齐，extract中二维的vreduce才能正常转换，因为UB中32B对齐，k*4B和32B对齐，则k与8对齐
         sortOutputShape[axis] = (sortOutputShape[axis] + 7) / 8 * 8 * 2;
         sortOutputValidShape[axis] = sortOutputValidShape[axis] * 2;
-        auto sortOutputTensor = std::make_shared<LogicalTensor>(function, source->Datatype(), sortOutputShape, sortOutputValidShape);
+        auto sortOutputTensor =
+            std::make_shared<LogicalTensor>(function, source->Datatype(), sortOutputShape, sortOutputValidShape);
         std::vector<int64_t> tileOutputShape = sortOutputShape;
         std::vector<int64_t> tileOutputOffset(sortOutputShape.size(), 0);
-        
+
         for (int64_t i = 0; i < input.tensor.GetShape()[axis]; i += vecTileAlign[axis]) {
             tileSourceShape[axis] = std::min(vecTileAlign[axis], source->shape[axis] - i);
             tileSourceOffset[axis] = i;
@@ -647,7 +644,7 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             } else {
                 tempTensor->UpdateDynValidShape({1, bitSortDynValidShape[axis]});
             }
-            
+
             tileOutputShape[axis] = (tileSourceShape[axis] + 7) / 8 * 8 * 2; // UB 32B对齐，兼顾了DynMrgSort中的k向8对齐
             tileOutputOffset[axis] = i * 2;
             auto tmp = std::make_shared<LogicalTensor>(function, source->Datatype(), tileOutputShape);
@@ -667,12 +664,9 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
             auto &assembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {tmp}, {sortOutputTensor});
             assembleOp.iOperand[0]->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
             assembleOp.oOperand[0]->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-            assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-                MemoryType::MEM_UB,
-                tileOutputOffset,
+            assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, tileOutputOffset,
                 std::vector<SymbolicScalar>(tileOutputOffset.begin(), tileOutputOffset.end()),
-                tmp->GetDynValidShape()
-            ));
+                tmp->GetDynValidShape()));
         }
 
         vecTileAlign[axis] = vecTileAlign[axis] * 2;
@@ -682,11 +676,12 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
         std::queue<LogicalTensorPtr> q;
         q.push(sortOutputTensor);
         bool flag = true; // 判断当前是偶数还是奇数阶段
-        for (int64_t round = 1; round <= roundNum; round ++ ) {
+        for (int64_t round = 1; round <= roundNum; round++) {
             auto roundInputTensor = q.front();
             q.pop();
             unsigned firstShape = vecTileAlign[axis];
-            auto roundOutputTensor = std::make_shared<LogicalTensor>(function, source->Datatype(), sortOutputShape, sortOutputValidShape);
+            auto roundOutputTensor =
+                std::make_shared<LogicalTensor>(function, source->Datatype(), sortOutputShape, sortOutputValidShape);
             for (int64_t i = 0; i < sortOutputShape[axis];) {
                 tileOutputOffset[axis] = i;
                 if (i + vecTileAlign[axis] >= sortOutputShape[axis]) { // 尾块
@@ -697,7 +692,7 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
                     tileOutputShape[axis] = std::min(2 * vecTileAlign[axis], sortOutputShape[axis] - i);
                 }
                 i += tileOutputShape[axis];
-                
+
                 auto src = roundInputTensor->View(function, tileOutputShape, tileOutputOffset);
                 auto outputInUB = std::make_shared<LogicalTensor>(function, src->Datatype(), tileOutputShape);
                 auto &twoTileMrgSortOp = function.AddOperation(Opcode::OP_TWOTILEMRGSORT, {src}, {outputInUB});
@@ -708,12 +703,9 @@ void TiledSort(Function &function, const TileShape &tileShape, size_t cur, Input
                 auto &assembleOp = function.AddOperation(Opcode::OP_ASSEMBLE, {outputInUB}, {roundOutputTensor});
                 assembleOp.iOperand[0]->SetMemoryTypeOriginal(MemoryType::MEM_UB, true);
                 assembleOp.oOperand[0]->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-                assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
-                    MemoryType::MEM_UB,
-                    tileOutputOffset,
+                assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(MemoryType::MEM_UB, tileOutputOffset,
                     std::vector<SymbolicScalar>(tileOutputOffset.begin(), tileOutputOffset.end()),
-                    outputInUB->GetDynValidShape()
-                ));
+                    outputInUB->GetDynValidShape()));
             }
             q.push(roundOutputTensor);
             flag = !flag;
@@ -762,10 +754,11 @@ void TiledSort(Function &function, const TileShape &tileShape, const LogicalTens
     TiledSort(function, tileShape, 0, input, valueResult, indexResult, resultTileInfo, axis, descending);
 }
 
-void TensorSort(Function &function, const LogicalTensorPtr &self, LogicalTensorPtr &valueResult, 
+void TensorSort(Function &function, const LogicalTensorPtr &self, LogicalTensorPtr &valueResult,
     LogicalTensorPtr &indexResult, int axis, bool descending) {
     auto validShape = self->GetDynValidShape();
-    auto &op = GraphUtils::AddDynOperation(function, Opcode::OP_SORT_UB, {self}, {valueResult, indexResult}, {validShape, validShape});
+    auto &op = GraphUtils::AddDynOperation(
+        function, Opcode::OP_SORT_UB, {self}, {valueResult, indexResult}, {validShape, validShape});
     op.SetAttribute(SORT_AXIS, static_cast<int>(axis));
     op.SetAttribute(SORT_ORDER, static_cast<int>(descending));
     return;
@@ -774,20 +767,24 @@ void TensorSort(Function &function, const LogicalTensorPtr &self, LogicalTensorP
 std::tuple<Tensor, Tensor> sort(const Tensor &self, int axis = -1, bool descending = false) {
     DECLARE_TRACER();
     auto len = static_cast<int>(self.GetShape().size());
-    ASSERT(len >= 1 && len <= 4) << "Only support 1 dim to 4 dim.\n";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, len >= 1 && len <= 4) << "Only support 1 dim to 4 dim.\n";
 
     axis = axis >= 0 ? axis : axis + len;
-    ASSERT(axis >= 0 && axis < len) << "Invalid axis value: " << axis << ". Expected range: [-" << len << "," << len - 1 << "]\n";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis >= 0 && axis < len)
+        << "Invalid axis value: " << axis << ". Expected range: [-" << len << "," << len - 1 << "]\n";
 
-    ASSERT(len != 4 || axis != 0) << "Sort not support the 0th axis of 4D input.\n";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, len != 4 || axis != 0) << "Sort not support the 0th axis of 4D input.\n";
 
     auto validShape = self.GetStorage()->GetDynValidShape();
     auto vecTileShape = TileShape::Current().GetVecTile();
-    ASSERT(vecTileShape[axis] % 32 == 0) << "The size of the tile shape along axis " << axis << " must be a multiple of 32. Got " << vecTileShape[axis] << ".\n";
+    ASSERT(VectorErrorCode::ERR_CONFIG_ALIGNMENT, vecTileShape[axis] % 32 == 0)
+        << "The size of the tile shape along axis " << axis << " must be a multiple of 32. Got " << vecTileShape[axis]
+        << ".\n";
 
     if (checkIsExceedUB(vecTileShape.tile, self.GetShape(), axis, 32)) {
         int64_t tileNum = (self.GetShape()[axis] + vecTileShape[axis] - 1) / vecTileShape[axis];
-        ASSERT(tileNum < 128) << "For Large Shape in GM, the number of tile on sort axis must less than 128.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, tileNum < 128)
+            << "For Large Shape in GM, the number of tile on sort axis must less than 128.";
     }
 
     auto transposeSelf = Transpose(self, {axis, len - 1});
@@ -813,9 +810,9 @@ std::tuple<Tensor, Tensor> sort(const Tensor &self, int axis = -1, bool descendi
     auto outShape = castSelf.GetShape();
     auto valueResult = Tensor(DataType::DT_FP32, outShape);
     auto indexResult = Tensor(DataType::DT_INT32, outShape);
-    CALL(Sort, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), valueResult.GetStorage(), 
+    CALL(Sort, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), valueResult.GetStorage(),
         indexResult.GetStorage(), len - 1, descending);
-    
+
     auto castValueResult = Cast(valueResult, self.GetDataType(), CastMode::CAST_NONE);
     castValueResult.GetStorage()->UpdateDynValidShape(valueResult.GetStorage()->GetDynValidShape());
 
@@ -841,7 +838,6 @@ std::tuple<Tensor, Tensor> sort(const Tensor &self, int axis = -1, bool descendi
 Tensor ArgSort(const Tensor &self, int axis, bool descending) {
     return std::get<1>(sort(self, axis, descending));
 }
-
 
 void BitSortOperationTileFunc(Function &function, const TileShape &tileShape,
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
@@ -890,9 +886,9 @@ void TopkOperationTileFunc(Function &function, const TileShape &tileShape,
 void SortOperationTileFunc(Function &function, const TileShape &tileShape,
     const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
     [[maybe_unused]] const Operation &op) {
-        int axis = op.GetIntAttribute(SORT_AXIS);
-        int descending = op.GetIntAttribute(SORT_ORDER);
-        TiledSort(function, tileShape, iOperand[0], oOperand[0], oOperand[1], axis, descending);
+    int axis = op.GetIntAttribute(SORT_AXIS);
+    int descending = op.GetIntAttribute(SORT_ORDER);
+    TiledSort(function, tileShape, iOperand[0], oOperand[0], oOperand[1], axis, descending);
 }
 
 REGISTER_OPERATION_TILED_FUNC(OP_BITSORT, Opcode::OP_BITSORT, BitSortOperationTileFunc);
