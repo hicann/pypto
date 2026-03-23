@@ -261,19 +261,21 @@ public:
     static void DeviceInitDistributedContext(DeviceMemoryTy& devMem, const std::vector<std::string> &groupNames,
         DeviceKernelArgs &kArgs) {
         using groupsKey = std::vector<std::string>;
-        static std::map<groupsKey, int64_t*> hostCommContextsMap;
         static std::map<groupsKey, int64_t*> deviceCommContextsMap;
-        auto &commContextsMap = devMem.IsDevice() ? deviceCommContextsMap : hostCommContextsMap;
-        auto it = commContextsMap.find(groupNames);
-        if (it != commContextsMap.end()) {
-            kArgs.commContexts = it->second;
-            return;
-        }
+        if (devMem.IsDevice()) {
+            auto it = deviceCommContextsMap.find(groupNames);
+            if (it != deviceCommContextsMap.end()) {
+                kArgs.commContexts = it->second;
+                return;
+            }
+        }    
         std::vector<uint64_t> commContexts = devMem.IsDevice() ? DistributedContext::GetCommContext(groupNames) :
             DistributedContext::GetCommContextToHost(groupNames);
         commContexts.insert(commContexts.begin(), commContexts.size());
         kArgs.commContexts = reinterpret_cast<int64_t*>(devMem.CopyToDev(commContexts, nullptr));
-        commContextsMap[groupNames] = kArgs.commContexts;
+        if (devMem.IsDevice()) {
+            deviceCommContextsMap[groupNames] = kArgs.commContexts;
+        }
     }
 
     template<typename DeviceMemoryTy>
