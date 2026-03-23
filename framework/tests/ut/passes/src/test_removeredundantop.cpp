@@ -1165,5 +1165,48 @@ TEST_F(TestRemoveRedundantOpPass, TestGenerateViewDynOffsetCase) {
     EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[0].Dump(), SymbolicScalar("0").Dump());
     EXPECT_EQ(viewOpAttribute->GetFromDynOffset()[1].Dump(), SymbolicScalar("0").Dump());
 }
+
+/*
+TestOutcastMutiConsumerCase
+inCast{8,16}->view->Tensor1{4,16}->assemble->outCast1{4,16}
+                                 ->exp->Tensor2{4,16}->exp->outCast2{4,16}
+inCast{8,16}->view->outCast1{4,16}->exp->Tensor2{4,16}->exp->outCast2{4,16}
+*/
+TEST_F(TestRemoveRedundantOpPass, TestOutcastMutiConsumerCase) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestRemoveRedundantOp", "TestRemoveRedundantOp", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape1 = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1,
+        TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1,
+        TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    outCast2->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ddrTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    ddrTensor1->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+
+    auto &assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ddrTensor1}, {outCast1});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {ddrTensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ddrTensor1}, {ubTensor2});
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {ubTensor2}, {outCast2});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast1);
+    currFunctionPtr->outCasts_.push_back(outCast2);
+
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    uint32_t opNum = currFunctionPtr->Operations().size();
+    EXPECT_EQ(opNum, kNumThree);
+}
 }
 }
