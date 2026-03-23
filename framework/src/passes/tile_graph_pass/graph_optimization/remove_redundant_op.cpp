@@ -61,6 +61,10 @@ bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation &op) const {
         APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.opmagic);
         return false;
     }
+    if (op.HasAttr("op_attr_remain_redundant_op_flag")) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d] has attribute op_attr_remain_redundant_op_flag, skip removing.", op.opmagic);
+        return false;
+    }
     return true;
 }
 

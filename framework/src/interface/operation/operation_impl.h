@@ -50,6 +50,7 @@ const std::string A_MUL_B_TRANS_B = OP_ATTR_PREFIX + "trans_b";
 const std::string A_MUL_B_SCALE_B_COPY_IN_MODE = OP_ATTR_PREFIX + "scale_b_copy_in_mode";
 const std::string A_MUL_B_GM_ACC = OP_ATTR_PREFIX + "gm_acc";
 const std::string A_MUL_B_MX_ATTR = OP_ATTR_PREFIX + "is_mx";
+const std::string REMAIN_REDUNDANT_OP_FLAG = OP_ATTR_PREFIX + "remain_redundant_op_flag";
 const std::string COPY_IN_L1_PADDING_MODE = OP_ATTR_PREFIX + "copy_in_l1_padding_mode";
 const std::string L1_TO_L0_TRANSPOSE = OP_ATTR_PREFIX + "l1_to_l0_transpose";
 const std::string A_MUL_B_BIAS_ATTR = OP_ATTR_PREFIX + "has_bias";
