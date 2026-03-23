@@ -41,33 +41,42 @@ constexpr int INVALID_IN_OUT_INDEX = -1;
 // 每个调用子图的实参列表
 class SubfuncInvokeInfoTy {
 public:
-    struct TensorParamPackTy {
-        // 实参Loc和形参Loc需要检查一致
+    struct BaseParamPackTy {
         int paramLoc;
         int ddrId;
-        // the real offset of accessing tensor for this Subgraph
         Offset offset;
         Shape shape;
         Shape rawShape;
         DataType dType;
-        bool isOutputToGM;
         LogicalTensorPtr tensor;
         int opMagic;
         int operandIdx;
 
-        TensorParamPackTy(const int newParamLoc, const int newDdrId, const std::vector<int64_t> &newOffset,
+    protected:
+        BaseParamPackTy() = default;
+        BaseParamPackTy(const int newParamLoc, const int newDdrId, const std::vector<int64_t> &newOffset,
             const std::vector<int64_t> &newShape, const std::vector<int64_t> &newRawShape, const DataType newDtype,
-            const bool newIsOutputToGM, const LogicalTensorPtr &newTensor, const int newOpMagic, int newOperandIdx)
+            const LogicalTensorPtr &newTensor, const int newOpMagic, int newOperandIdx)
             : paramLoc(newParamLoc),
               ddrId(newDdrId),
               offset(newOffset),
               shape(newShape),
               rawShape(newRawShape),
               dType(newDtype),
-              isOutputToGM(newIsOutputToGM),
               tensor(newTensor),
               opMagic(newOpMagic),
               operandIdx(newOperandIdx) {}
+    };
+
+    struct TensorParamPackTy : BaseParamPackTy {
+        bool isOutputToGM;
+
+        TensorParamPackTy(const int newParamLoc, const int newDdrId, const std::vector<int64_t> &newOffset,
+            const std::vector<int64_t> &newShape, const std::vector<int64_t> &newRawShape, const DataType newDdType,
+            const bool newIsOutputToGM, const LogicalTensorPtr &newTensor, const int newOpMagic, int newOperandIdx)
+            : BaseParamPackTy(newParamLoc, newDdrId, newOffset, newShape, newRawShape, newDdType, newTensor,
+              newOpMagic, newOperandIdx),
+              isOutputToGM(newIsOutputToGM) {}
 
         TensorParamPackTy() = default;
         void Print(std::ostream &osm = std::cout) const;
@@ -76,31 +85,16 @@ public:
         bool operator!=(const TensorParamPackTy &other) const;
     };
 
-    struct IncastParamPackTy {
-        int paramLoc;
-        int ddrId;
-        Shape shape;
-        Shape rawShape;
-        Offset offset;
-        DataType dType;
-        LogicalTensorPtr tensor;
-        int opMagic;
-        int operandIdx;
+    struct IncastParamPackTy : BaseParamPackTy {
+        bool isOutputToGM{false};
 
         IncastParamPackTy() = default;
 
         IncastParamPackTy(const int newParamLoc, const int newDdrId, const std::vector<int64_t> &newOffset,
-            const std::vector<int64_t> &newShape, const std::vector<int64_t> &newRawShape, const DataType newDtype,
+            const std::vector<int64_t> &newShape, const std::vector<int64_t> &newRawShape, const DataType newDdType,
             const LogicalTensorPtr &newTensor, const int newOpMagic, int newOperandIdx)
-            : paramLoc(newParamLoc),
-              ddrId(newDdrId),
-              shape(newShape),
-              rawShape(newRawShape),
-              offset(newOffset),
-              dType(newDtype),
-              tensor(newTensor),
-              opMagic(newOpMagic),
-              operandIdx(newOperandIdx) {}
+            : BaseParamPackTy(newParamLoc, newDdrId, newOffset, newShape, newRawShape, newDdType, newTensor,
+              newOpMagic, newOperandIdx) {}
 
         void Print(std::ostream &osm = std::cout) const;
         void DumpIncastInfo(std::vector<int64_t> &invokeParam) const;
@@ -108,32 +102,16 @@ public:
         bool operator!=(const IncastParamPackTy &other) const;
     };
 
-    struct OutcastParamPackTy {
-        int paramLoc;
-        int ddrId;
+    struct OutcastParamPackTy : BaseParamPackTy {
         int refCount;
-        Offset offset;
-        Shape shape;
-        Shape rawShape;
-        DataType dType;
-        LogicalTensorPtr tensor;
-        int opMagic;
-        int operandIdx;
 
         OutcastParamPackTy(const int newParamLoc, const int newDdrId, const int newRefCount,
             const std::vector<int64_t> &newShape, const std::vector<int64_t> &rawshape,
-            const std::vector<int64_t> &newOffset, const DataType newDtype, const LogicalTensorPtr &newTensor,
+            const std::vector<int64_t> &newOffset, const DataType newDdType, const LogicalTensorPtr &newTensor,
             const int newOpMagic, int newOperandIdx)
-            : paramLoc(newParamLoc),
-              ddrId(newDdrId),
-              refCount(newRefCount),
-              offset(newOffset),
-              shape(newShape),
-              rawShape(rawshape),
-              dType(newDtype),
-              tensor(newTensor),
-              opMagic(newOpMagic),
-              operandIdx(newOperandIdx) {}
+            : BaseParamPackTy(newParamLoc, newDdrId, newOffset, newShape, rawshape, newDdType, newTensor,
+              newOpMagic, newOperandIdx),
+              refCount(newRefCount) {}
 
         OutcastParamPackTy() = default;
 
