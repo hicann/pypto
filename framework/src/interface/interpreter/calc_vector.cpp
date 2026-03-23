@@ -326,6 +326,20 @@ void ExecuteOpPad(ExecuteOperationContext *ctx) {
 }
 REGISTER_CALC_OP(OP_PAD, Opcode::OP_PAD, ExecuteOpPad);
 
+void ExecuteOpFillPad(ExecuteOperationContext *ctx) {
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
+           ctx->ooperandInplaceDataViewList->size() == 1);
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH,
+           ctx->ioperandDataViewList->size() == 1);
+    
+    auto oop = ctx->ooperandInplaceDataViewList->at(0);
+    auto iop_input = ctx->ioperandDataViewList->at(0);
+    auto element = Element(DT_FP32, 0.0f);
+    ctx->op->GetAttr(OpAttributeKey::scalar, element);
+    calc::FillPad(oop, iop_input, element);
+}
+REGISTER_CALC_OP(OP_FILLPAD, Opcode::OP_FILLPAD, ExecuteOpFillPad);
+
 void ExecuteOpRound(ExecuteOperationContext *ctx) {
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH,
            ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);

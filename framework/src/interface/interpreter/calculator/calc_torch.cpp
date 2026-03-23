@@ -265,6 +265,45 @@ static void Pad(const TensorData &out, const TensorData &input, const Element &p
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
+static void FillPad(const TensorData &out, const TensorData &input, const Element &padValue) {
+    auto tinput = From(input);
+    auto tout = From(out);
+
+    std::vector<int64_t> in_shape = tinput.second.sizes().vec();
+    std::vector<int64_t> out_shape = tout.second.sizes().vec();
+    size_t ndim = out_shape.size();
+
+    std::vector<int64_t> valid_shape = in_shape;
+    if (ndim >= 2) {
+        valid_shape[ndim - 1] = std::min(in_shape[ndim - 1], input.rawShape[ndim - 1]);
+        valid_shape[ndim - 2] = std::min(in_shape[ndim - 2], input.rawShape[ndim - 2]);
+    } else if (ndim == 1) {
+        valid_shape[0] = std::min(in_shape[0], input.rawShape[0]);
+    }
+
+    double pad_val_double = padValue.Cast<double>();
+    tout.second.fill_(pad_val_double);
+
+    if (ndim == 1) {
+        int64_t valid_w = valid_shape[0];
+        if (valid_w > 0) {
+            auto in_view = tinput.second.slice(0, 0, valid_w);
+            auto out_view = tout.second.slice(0, 0, valid_w);
+            out_view.copy_(in_view);
+        }
+    } else if (ndim == 2) {
+        int64_t valid_h = valid_shape[0];
+        int64_t valid_w = valid_shape[1];
+        if (valid_h > 0 && valid_w > 0) {
+            auto in_view = tinput.second.slice(1, 0, valid_w).slice(0, 0, valid_h);
+            auto out_view = tout.second.slice(1, 0, valid_w).slice(0, 0, valid_h);
+            out_view.copy_(in_view);
+        }
+    }
+
+    ToOperand(tout.second, tout.first, out.dtype);
+}
+
 static void BitwiseNot(const TensorData &out, const TensorData &self) {
     auto tout = From(out);
     auto tself = From(self);
@@ -2015,6 +2054,7 @@ static struct CalcOps calcOps = {
     .Relu = Relu,
     .Log1p = Log1p,
     .Pad = Pad,
+    .FillPad = FillPad,
     .BitwiseNot = BitwiseNot,
     .Abs = Abs,
     .Brcb = Brcb,

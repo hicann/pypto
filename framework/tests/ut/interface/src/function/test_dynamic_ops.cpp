@@ -97,6 +97,50 @@ TEST_F(DynamicOpsTest, FmodFp32) {
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
 
+TEST_F(DynamicOpsTest, FillPad1DFp32) {
+    std::string logOutput = CaptureLogFileAndEcho([]() {
+    config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+    config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+
+    int s = 32;
+    Tensor t0(DT_FP32, {s}, "t0");
+    Tensor out(DT_FP32, {s}, "out");
+
+    std::vector<float> inputData(s);
+    std::vector<float> goldenData(s);
+    
+    for (int i = 0; i < s; ++i) {
+        if (i < 16) { 
+            inputData[i] = 1.0f + i * 0.1f;
+            goldenData[i] = 1.0f + i * 0.1f; 
+        } else { 
+            inputData[i] = 999.0f;
+            goldenData[i] = 0.0f;  
+        }
+    }
+
+    ProgramData::GetInstance().AppendInputs({
+        RawTensorData::CreateTensor<float>(t0, inputData),
+    });
+    ProgramData::GetInstance().AppendOutputs({
+        RawTensorData::CreateConstantTensor<float>(out, 0.0),
+    });
+    ProgramData::GetInstance().AppendGoldens({
+        RawTensorData::CreateTensor<float>(out, goldenData),
+    });
+
+    FUNCTION("main", {t0}, {out}) {
+        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            auto t0_view = View(t0, {s}, SymbolicScalar::FromConcrete({16}), {0});
+            auto filled = FillPad(t0_view, "constant", 0.0f);
+            Assemble(filled, {0}, out);
+        }
+    }
+    });
+    EXPECT_NO_VERIFY_FAILED(logOutput);
+}
+
 TEST_F(DynamicOpsTest, FmodSFp32) {
     std::string logOutput = CaptureLogFileAndEcho([]() {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
