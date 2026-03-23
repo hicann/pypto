@@ -145,16 +145,16 @@ struct DevRelocVector {
 
     T &operator[](size_t idx) {
         if (idx >= size_) {
-            DEV_ERROR("Index out of bounds: idx=%zu, size=%zu", idx, size_);
+            DEV_ERROR(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, "#data.valid: Index out of bounds: idx=%zu, size=%zu", idx, size_);
         }
-        DEV_ASSERT(idx < size_);
+        DEV_ASSERT(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, idx < size_);
         return data_[idx];
     }
     const T &operator[](size_t idx) const {
         if (idx >= size_) {
-            DEV_ERROR("Index out of bounds: idx=%zu, size=%zu", idx, size_);
+            DEV_ERROR(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, "#data.valid: Index out of bounds: idx=%zu, size=%zu", idx, size_);
         }
-        DEV_ASSERT(idx < size_);
+        DEV_ASSERT(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, idx < size_);
         return data_[idx];
     }
 
@@ -323,7 +323,7 @@ struct AddressDescriptor {
     }
 
     static AddressDescriptor MakeFromRtOutcast(ItemPoolIter iter) {
-        DEV_ASSERT_MSG((iter & (1ULL << 63)) == 0,
+        DEV_ASSERT_MSG(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, (iter & (1ULL << 63)) == 0,
             "RtOutcast iterator %" PRId64 " exceeds maximum allowed value", iter);
         AddressDescriptor desc;
         desc.rtOutcastIter = iter;
@@ -340,7 +340,7 @@ struct AddressDescriptor {
 
     bool IsAddress() const { return !isRtOutcast; }
     uint64_t GetAddress() const {
-        DEV_ASSERT_MSG(IsAddress(),
+        DEV_ASSERT_MSG(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, IsAddress(),
             "Attempt to get address from a non-address AddressDescriptor.");
         return addr;
     }
@@ -349,7 +349,7 @@ struct AddressDescriptor {
 
     bool IsRtOutcast() const { return isRtOutcast; }
     ItemPoolIter GetRtOutcastIter() const {
-        DEV_ASSERT_MSG(IsRtOutcast(),
+        DEV_ASSERT_MSG(DevDataErr::DEV_RELOC_VECTOR_INDEX_OOB, IsRtOutcast(),
             "Attempt to get runtime outcast iterator from a non-iterator AddressDescriptor.");
         return rtOutcastIter;
     }

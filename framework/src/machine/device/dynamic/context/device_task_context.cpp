@@ -67,12 +67,12 @@ void DeviceTaskContext::AppendFinishTask(DynDeviceTask *dynTask) {
 }
 
 void DeviceTaskContext::ShowStats() {
-    DEV_ERROR("   Stitched function count: %10lu.", stitchedFuncNum);
-    DEV_ERROR("       Root function count: %10lu.", rootFuncNum);
-    DEV_ERROR("       Leaf function count: %10lu.", leafFuncNum);
-    DEV_ERROR("   Inital ready task count: %10lu.", readyTaskNum);
-    DEV_ERROR(" Static function data size: %10lu bytes.", dynFuncDataSize);
-    DEV_ERROR("   Leaf function data size: %10lu bytes.", leafFuncDataSize);
+    DEV_DEBUG("   Stitched function count: %10lu.", stitchedFuncNum);
+    DEV_DEBUG("       Root function count: %10lu.", rootFuncNum);
+    DEV_DEBUG("       Leaf function count: %10lu.", leafFuncNum);
+    DEV_DEBUG("   Inital ready task count: %10lu.", readyTaskNum);
+    DEV_DEBUG(" Static function data size: %10lu bytes.", dynFuncDataSize);
+    DEV_DEBUG("   Leaf function data size: %10lu bytes.", leafFuncDataSize);
 }
 
 void DeviceTaskContext::InitReadyCoreFunctionQueue(ReadyCoreFunctionQueue *q, uint32_t capacity) {
@@ -87,11 +87,11 @@ int DeviceTaskContext::InitReadyQueues(DynDeviceTask *dyntask, DevAscendProgram 
     ReadyCoreFunctionQueue* queue[READY_QUEUE_SIZE]) {
     uint32_t size = sizeof(ReadyCoreFunctionQueue) + dyntask->devTask.coreFunctionCnt * sizeof(taskid_t);
     if (dyntask->devTask.coreFunctionCnt > devProg->stitchFunctionsize) {
-        DEV_ERROR("coreFunctionCnt (%lu) exceeds stitchFunctionsize (%u), cannot build ready queue.",
+        DEV_ERROR(CtrlErr::DEVICE_TASK_BUILD_FAILED, "#ctrl.task.pre.queue.init: coreFunctionCnt (%lu) exceeds stitchFunctionsize (%u), cannot build ready queue.",
         dyntask->devTask.coreFunctionCnt, devProg->stitchFunctionsize);
         return DEVICE_MACHINE_ERROR;
     }
-    DEV_ASSERT(dyntask->devTask.coreFunctionCnt <= devProg->stitchFunctionsize);
+    DEV_ASSERT(CtrlErr::DEVICE_TASK_BUILD_FAILED, dyntask->devTask.coreFunctionCnt <= devProg->stitchFunctionsize);
 
     for (size_t i = 0; i < READY_QUEUE_SIZE; ++i) {
         WsAllocation qalloc = ControlFlowAllocateSlab(devProg_, size, workspace_->SlabAlloc(size, WsAicpuSlabMemType::READY_QUE));
@@ -235,10 +235,10 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask *dyntask, uint32_t taskId,
     funcHeader->funcNum = stitchedSize;
     funcHeader->cceBinary = reinterpret_cast<DynFuncBin *>(const_cast<DevCceBinary *>(dyntask->cceBinary));
     if (reinterpret_cast<uint64_t>(funcHeader->cceBinary) % CCE_BINARY_MOD != 0) {
-        DEV_ERROR("cceBinary address  is not aligned.");
+        DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, "#ctrl.task.pre.task.build: cceBinary address  is not aligned.");
         return DEVICE_MACHINE_ERROR;
     }
-    DEV_ASSERT(reinterpret_cast<uint64_t>(funcHeader->cceBinary) % CCE_BINARY_MOD == 0);
+    DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, reinterpret_cast<uint64_t>(funcHeader->cceBinary) % CCE_BINARY_MOD == 0);
 
     rootFuncNum += stitchedSize;
     for (size_t funcIdx = 0; funcIdx < stitchedSize; ++funcIdx) {
@@ -257,25 +257,25 @@ int DeviceTaskContext::BuildDynFuncData(DynDeviceTask *dyntask, uint32_t taskId,
         dyndata->rawTensorAddrSize = dupFunc.GetSource()->GetIncastSize() + dupFunc.GetSource()->GetOutcastSize();
         dyndata->rawTensorDescSize = dupFunc.GetSource()->GetRawTensorDescSize();
         if (reinterpret_cast<uint64_t>(dyndata->opAttrs) % OP_ATTRS_PRE_NUM != 0) {
-            DEV_ERROR("opAttrs address is not aligned.");
+            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, "#ctrl.task.pre.dynfunc.process: opAttrs address is not aligned.");
             return DEVICE_MACHINE_ERROR;
         }
         if (reinterpret_cast<uint64_t>(dyndata->opAtrrOffsets) % OP_ATTRS_OFFSET_PRE_NUM != 0) {
-            DEV_ERROR("opAtrrOffsets address is not aligned.");
+            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, "#ctrl.task.pre.dynfunc.process: opAtrrOffsets address is not aligned.");
             return DEVICE_MACHINE_ERROR;
         }
         if (reinterpret_cast<uint64_t>(dyndata->exprTbl) % EXPR_TABLE_PRE_NUM != 0) {
-            DEV_ERROR("exprTbl address is not aligned.");
+            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, "#ctrl.task.pre.dynfunc.process: exprTbl address is not aligned.");
             return DEVICE_MACHINE_ERROR;
         }
         if (reinterpret_cast<uint64_t>(dyndata->rawTensorAddr) % RAW_TENSOR_ADDR_MASK != 0) {
-            DEV_ERROR("rawTensorAddr address is not aligned.");
+            DEV_ERROR(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, "#ctrl.task.pre.dynfunc.process: rawTensorAddr address is not aligned.");
             return DEVICE_MACHINE_ERROR;
         }
-        DEV_ASSERT(reinterpret_cast<uint64_t>(dyndata->opAttrs) % OP_ATTRS_PRE_NUM == 0);
-        DEV_ASSERT(reinterpret_cast<uint64_t>(dyndata->opAtrrOffsets) % OP_ATTRS_OFFSET_PRE_NUM == 0);
-        DEV_ASSERT(reinterpret_cast<uint64_t>(dyndata->exprTbl) % EXPR_TABLE_PRE_NUM == 0);
-        DEV_ASSERT(reinterpret_cast<uint64_t>(dyndata->rawTensorAddr) % RAW_TENSOR_ADDR_MASK == 0);
+        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, reinterpret_cast<uint64_t>(dyndata->opAttrs) % OP_ATTRS_PRE_NUM == 0);
+        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, reinterpret_cast<uint64_t>(dyndata->opAtrrOffsets) % OP_ATTRS_OFFSET_PRE_NUM == 0);
+        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, reinterpret_cast<uint64_t>(dyndata->exprTbl) % EXPR_TABLE_PRE_NUM == 0);
+        DEV_ASSERT(ProgEncodeErr::DYNFUNC_DATA_ALIGNMENT_ERROR, reinterpret_cast<uint64_t>(dyndata->rawTensorAddr) % RAW_TENSOR_ADDR_MASK == 0);
 
         leafFuncDataSize += dupFunc.GetSource()->GetOpAttrSize() * sizeof(SymInt); // opAttrs
         leafFuncDataSize += dupFunc.GetSource()->GetOperationSize() * sizeof(int32_t); // opAttrOffsts;
@@ -336,24 +336,24 @@ void DeviceTaskContext::ResolveEarlyDepends(DynDeviceTask *dyntask) {
 }
 
 void DeviceTaskContext::DumpReadyQueue(DynDeviceTask *dynTask, const char *prefix) {
-    DEV_ERROR("%s: coreFunctionCnt: %d", prefix, (int)dynTask->devTask.coreFunctionCnt);
+    DEV_DEBUG("%s: coreFunctionCnt: %d", prefix, (int)dynTask->devTask.coreFunctionCnt);
     int aivIndex = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIV);
     int aicIndex = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AIC);
     int aicpuIndex = DynDeviceTask::GetReadyQueueIndexByCoreType(CoreType::AICPU);
 
-    DEV_ERROR("%s: ready queue aiv: %d-%d", prefix, (int)dynTask->readyQueue[aivIndex]->head, (int)dynTask->readyQueue[aivIndex]->tail);
+    DEV_DEBUG("%s: ready queue aiv: %d-%d", prefix, (int)dynTask->readyQueue[aivIndex]->head, (int)dynTask->readyQueue[aivIndex]->tail);
     for (uint32_t i = dynTask->readyQueue[aivIndex]->head; i < dynTask->readyQueue[aivIndex]->tail; i++) {
-        DEV_ERROR("%s: ready queue aiv[%d]: %x", prefix, (int)i, dynTask->readyQueue[aivIndex]->elem[i]);
+        DEV_DEBUG("%s: ready queue aiv[%d]: %x", prefix, (int)i, dynTask->readyQueue[aivIndex]->elem[i]);
     }
 
-    DEV_ERROR("%s: ready queue aic: %d-%d", prefix, (int)dynTask->readyQueue[aicIndex]->head, (int)dynTask->readyQueue[aicIndex]->tail);
+    DEV_DEBUG("%s: ready queue aic: %d-%d", prefix, (int)dynTask->readyQueue[aicIndex]->head, (int)dynTask->readyQueue[aicIndex]->tail);
     for (uint32_t i = dynTask->readyQueue[aicIndex]->head; i < dynTask->readyQueue[aicIndex]->tail; i++) {
-        DEV_ERROR("%s: ready queue aic[%d]: %x", prefix, (int)i, dynTask->readyQueue[aicIndex]->elem[i]);
+        DEV_DEBUG("%s: ready queue aic[%d]: %x", prefix, (int)i, dynTask->readyQueue[aicIndex]->elem[i]);
     }
 
-    DEV_ERROR("%s: ready queue aicpu: %d-%d", prefix, (int)dynTask->readyQueue[aicpuIndex]->head, (int)dynTask->readyQueue[aicpuIndex]->tail);
+    DEV_DEBUG("%s: ready queue aicpu: %d-%d", prefix, (int)dynTask->readyQueue[aicpuIndex]->head, (int)dynTask->readyQueue[aicpuIndex]->tail);
     for (uint32_t i = dynTask->readyQueue[aicpuIndex]->head; i < dynTask->readyQueue[aicpuIndex]->tail; i++) {
-        DEV_ERROR("%s: ready queue aicpu[%d]: %x", prefix, (int)i, dynTask->readyQueue[aicpuIndex]->elem[i]);
+        DEV_DEBUG("%s: ready queue aicpu[%d]: %x", prefix, (int)i, dynTask->readyQueue[aicpuIndex]->elem[i]);
     }
 }
 void DeviceTaskContext::DumpDepend(DynDeviceTask *dyntask, DevAscendProgram *devProg, DevStartArgs *startArgs, const char *prefix) {
@@ -364,25 +364,25 @@ void DeviceTaskContext::DumpDepend(DynDeviceTask *dyntask, DevAscendProgram *dev
         ReadyCoreFunctionQueue *q = dyntask->readyQueue[i];
         total += q->tail - q->head;
     }
-    DEV_ERROR("%s: ready total:%d", prefix, total);
+    DEV_DEBUG("%s: ready total:%d", prefix, total);
     for (size_t i = 0; i < READY_QUEUE_SIZE; i++) {
         ReadyCoreFunctionQueue *q = dyntask->readyQueue[i];
         for (uint32_t k = q->head; k < q->tail; k++) {
             uint32_t taskId = q->elem[k];
             uint32_t dupIndex = FuncID(taskId);
             uint32_t opIndex = TaskID(taskId);
-            DEV_ERROR("%s: ready %d-%d:L(%d,%d,%d)\n",
+            DEV_DEBUG("%s: ready %d-%d:L(%d,%d,%d)\n",
                 prefix,
                 (int)i, (int)k,
                 (int)dyntask->GetDynFuncDataList()->seqNo, (int)dupIndex, (int)opIndex);
         }
     }
-    DEV_ERROR("%s: workspace:%llx", prefix, (unsigned long long)startArgs->contextWorkspaceAddr);
+    DEV_DEBUG("%s: workspace:%llx", prefix, (unsigned long long)startArgs->contextWorkspaceAddr);
     for (size_t i = 0; i < startArgs->inputTensorSize; i++) {
-        DEV_ERROR("%s: input-%d:%llx", prefix, (int)i, (unsigned long long)startArgs->GetInputTensor(i).address);
+        DEV_DEBUG("%s: input-%d:%llx", prefix, (int)i, (unsigned long long)startArgs->GetInputTensor(i).address);
     }
     for (size_t i = 0; i < startArgs->outputTensorSize; i++) {
-        DEV_ERROR("%s: output-%d:%llx", prefix, (int)i, (unsigned long long)startArgs->GetOutputTensor(i).address);
+        DEV_DEBUG("%s: output-%d:%llx", prefix, (int)i, (unsigned long long)startArgs->GetOutputTensor(i).address);
     }
     std::unordered_map<uint64_t, AddressDescriptor> cacheInputOutputDict;
     DevControlFlowCache::RelocBuildInputOutputDesc(cacheInputOutputDict, startArgs);
@@ -399,7 +399,7 @@ void DeviceTaskContext::DumpDepend(DynDeviceTask *dyntask, DevAscendProgram *dev
 
         predcount_t *pred = &duppedData->GetOperationCurrPredCount(0);
         for (size_t opIndex = 0; opIndex < duppedData->GetOperationSize(); opIndex++) {
-            DEV_ERROR("%s: L(%d,%d,%d) pred:%d\n",
+            DEV_DEBUG("%s: L(%d,%d,%d) pred:%d\n",
                 prefix,
                 (int)deviceIndex, (int)dupIndex, (int)opIndex,
                 (int)pred[opIndex]);
@@ -409,13 +409,13 @@ void DeviceTaskContext::DumpDepend(DynDeviceTask *dyntask, DevAscendProgram *dev
             stitchList.ForEach([&](int succTaskId){
                 uint32_t succDupIndex = FuncID(succTaskId);
                 uint32_t succOpIndex = TaskID(succTaskId);
-                DEV_ERROR("%s: R(%d,%d).succ-%d: L(%d,%d,%d)\n",
+                DEV_DEBUG("%s: R(%d,%d).succ-%d: L(%d,%d,%d)\n",
                     prefix, (int)deviceIndex, (int)dupIndex, (int)stitchIndex,
                     (int)deviceIndex, (int)succDupIndex, (int)succOpIndex);
             });
         }
         for (size_t exprIndex = 0; exprIndex < duppedData->GetExpressionSize(); exprIndex++) {
-            DEV_ERROR("%s: R(%d,%d).expr-%d: %lld\n",
+            DEV_DEBUG("%s: R(%d,%d).expr-%d: %lld\n",
                 prefix, (int)deviceIndex, (int)dupIndex, (int)exprIndex,
                 (long long)duppedData->GetExpression(exprIndex));
         }
@@ -424,7 +424,7 @@ void DeviceTaskContext::DumpDepend(DynDeviceTask *dyntask, DevAscendProgram *dev
             AddressDescriptor addrDesc = addr;
             DevControlFlowCache::RelocDescToCache(addrDesc, relocWorkspace, cacheInputOutputDict);
 
-            DEV_ERROR("%s: R(%d,%d).incast-%d: 0x%llx - 0x%llx\n",
+            DEV_DEBUG("%s: R(%d,%d).incast-%d: 0x%llx - 0x%llx\n",
                 prefix, (int)deviceIndex, (int)dupIndex, (int)incastIndex,
                 (unsigned long long)addrDesc.GetAddressValue(),
                 (unsigned long long)addr.GetAddressValue());
@@ -433,39 +433,39 @@ void DeviceTaskContext::DumpDepend(DynDeviceTask *dyntask, DevAscendProgram *dev
             AddressDescriptor addr = duppedData->GetOutcastAddress(outcastIndex);
             AddressDescriptor addrDesc = addr;
             DevControlFlowCache::RelocDescToCache(addrDesc, relocWorkspace, cacheInputOutputDict);
-            DEV_ERROR("%s: R(%d,%d).outcast-%d: 0x%llx - 0x%llx\n",
+            DEV_DEBUG("%s: R(%d,%d).outcast-%d: 0x%llx - 0x%llx\n",
                 prefix, (int)deviceIndex, (int)dupIndex, (int)outcastIndex,
                 (unsigned long long)addrDesc.GetAddressValue(),
                 (unsigned long long)addr.GetAddressValue());
         }
-        DEV_ERROR("%s: R(%d,%d).workspace: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).workspace: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)duppedData->GetRuntimeWorkspace());
-        DEV_ERROR("%s: R(%d,%d).outcastWorkspace: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).outcastWorkspace: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)duppedData->GetRuntimeOutcastWorkspace());
 
-        DEV_ERROR("%s: R(%d,%d).opAttrList: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).opAttrList: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)dynFuncData.opAttrs);
-        DEV_ERROR("%s: R(%d,%d).opAttrList:Dupped: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).opAttrList:Dupped: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)duppedData->GetSource()->GetSymoffset(0));
 
-        DEV_ERROR("%s: R(%d,%d).opAttrOffsetList: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).opAttrOffsetList: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)dynFuncData.opAtrrOffsets);
-        DEV_ERROR("%s: R(%d,%d).opAttrOffsetList:Dupped: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).opAttrOffsetList:Dupped: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)duppedData->GetSource()->GetOpAttrOffsetAddr());
 
-        DEV_ERROR("%s: R(%d,%d).exprTbl: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).exprTbl: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)dynFuncData.exprTbl);
-        DEV_ERROR("%s: R(%d,%d).exprTbl:Dupped: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).exprTbl:Dupped: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)duppedData->GetExpressionAddr());
 
-        DEV_ERROR("%s: R(%d,%d).rawTensorDesc: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).rawTensorDesc: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)dynFuncData.rawTensorDesc);
-        DEV_ERROR("%s: R(%d,%d).rawTensorDesc:Dupped: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).rawTensorDesc:Dupped: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)duppedData->GetSource()->GetRawTensorDesc(0));
 
-        DEV_ERROR("%s: R(%d,%d).rawTensorDesc: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).rawTensorDesc: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)dynFuncData.rawTensorAddr);
-        DEV_ERROR("%s: R(%d,%d).rawTensorDesc:Dupped: 0x%llx\n",
+        DEV_DEBUG("%s: R(%d,%d).rawTensorDesc:Dupped: 0x%llx\n",
             prefix, (int)deviceIndex, (int)dupIndex, (unsigned long long)&duppedData->GetIncastAddress(0));
     }
 }
@@ -495,7 +495,7 @@ int DeviceTaskContext::BuildDeviceTaskDataAndReadyQueue(DynDeviceTask *dyntask, 
         return DEVICE_MACHINE_ERROR;
     }
     PerfEnd(PERF_EVT_CORE_FUNCDATA);
-    DEV_INFO("Finish build a new device task");
+    DEV_DEBUG("Finish build a new device task");
 
     DEV_IF_NONDEVICE {
         dyntask->DumpTopo(devProg->devArgs.enableVFFusion);

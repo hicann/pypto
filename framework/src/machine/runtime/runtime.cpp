@@ -71,7 +71,7 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t> &aic, std::vector<
     auto halFunc = (int (*)(int type, void *paramValue, size_t paramValueSize, void *outValue,
         size_t *outSizeRet))dlsym(nullptr, "halMemCtl");
     if (halFunc == nullptr) {
-        MACHINE_LOGE("Hal function not found.");
+        MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Hal function not found.");
         return -1;
     }
     struct AddrMapInPara inMapPara;
@@ -81,7 +81,8 @@ int RuntimeAgentMemory::GetAicoreRegInfo(std::vector<int64_t> &aic, std::vector<
     auto ret = halFunc(0, reinterpret_cast<void *>(&inMapPara), sizeof(struct AddrMapInPara),
         reinterpret_cast<void *>(&outMapPara), nullptr);
     if (ret != 0) {
-        MACHINE_LOGE("Map reg addr fail, maybe others are using current device. (ret=%d).", ret);
+        MACHINE_LOGE(HostLauncherErr::MAP_REG_ADDR_FAILED,
+                       "Map reg addr fail, maybe others are using current device. (ret=%d).", ret);
         return ret;
     }
     for (uint32_t i = 0; i < DAV_2201::MAX_CORE; i++) {
@@ -165,13 +166,13 @@ void *RuntimeAgentMemory::MapAiCoreReg() {
     size_t regAddrSize = sizeof(void *) * regAddr.size();
     AllocDevAddr(&devAddr, regAddrSize);
     if (devAddr == nullptr) {
-        MACHINE_LOGE("rtMalloc failed. size: %zu", regAddrSize);
+        MACHINE_LOGE(RtErr::RT_MALLOC_FAILED, "rtMalloc failed. size: %zu", regAddrSize);
         return nullptr;
     }
 
     int rc = rtMemcpy(devAddr, regAddrSize, regAddr.data(), regAddrSize, RT_MEMCPY_HOST_TO_DEVICE);
     if (rc != 0) {
-        MACHINE_LOGE("rtMemcpy failed. size: %zu", regAddrSize);
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED, "rtMemcpy failed. size: %zu", regAddrSize);
         FreeDevAddr((uint8_t*)devAddr);
         return nullptr;
     }

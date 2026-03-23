@@ -18,6 +18,7 @@
 #include <thread>
 #include "machine/host/backend.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/utils/machine_error.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
 
@@ -118,7 +119,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     DevAscendProgram *devProg = DeviceLauncher::GetDevProg(function);
     DevControlFlowCache* hostCtrlFlowCache = CreateHostCtrlFlowCache(devProg, function, memUtils);
     if (hostCtrlFlowCache == nullptr) {
-        MACHINE_LOGE("Failed to allocate control flow cache");
+        MACHINE_LOGE(CtrlErr::CTRL_SIM_FAILED, "Failed to allocate control flow cache");
         return -1;
     }
     hostCtrlFlowCache->isRecording = true;

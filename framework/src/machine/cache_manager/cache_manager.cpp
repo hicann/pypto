@@ -20,6 +20,7 @@
 #include "interface/program/program.h"
 #include "interface/utils/op_info_manager.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "machine/utils/machine_error.h"
 
 namespace npu::tile_fwk {
 namespace {
@@ -48,14 +49,14 @@ bool CacheManager::Initialize() {
     // create cache dir
     const char *envPath = std::getenv("HOME");
     if (envPath == nullptr) {
-        MACHINE_LOGE("Env[HOME] is not existed or empty.");
+        MACHINE_LOGE(DevCommonErr::GET_ENV_FAILED, "Env[HOME] is not existed or empty.");
         return false;
     }
     std::string homeEnvPath(envPath);
     cacheDirPath_ = homeEnvPath + "/ast_data/" + Platform::Instance().GetSoc().GetShortSocVersion();
     MACHINE_LOGD("Begin to initialize cache manager, cache dir path is [%s].", cacheDirPath_.c_str());
     if (RealPath(cacheDirPath_).empty() && !CreateMultiLevelDir(cacheDirPath_)) {
-        MACHINE_LOGE("Failed to create cache dir[%s].", cacheDirPath_.c_str());
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Failed to create cache dir[%s].", cacheDirPath_.c_str());
         return false;
     }
     MACHINE_LOGI("Cache manager has been initialized at cache dir path[%s].", cacheDirPath_.c_str());

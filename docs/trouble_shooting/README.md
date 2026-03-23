@@ -50,19 +50,19 @@
 
 ## 4 用法举例（以 MACHINE 为例）
 
-报错或打 ERROR 日志时带上错误码，日志中显示为 **Fxxxxx**（如 F70004）。枚举值即错误码，可直接转成数值使用。例如原日志：
+报错或打 ERROR 日志时带上错误码，日志中显示为 **Fxxxxx**。枚举值即错误码，可直接转成数值使用。例如原日志：
 
 ```cpp
 MACHINE_LOGE("xxx failed.");
 ```
 
-应改为带错误码的写法（枚举直接转数值打印）：
+应改为带错误码的写法（使用 `MACHINE_LOGE`，枚举值经掩码打印为 **Fxxxxx**）：
 
 ```cpp
-#include "machine/utils/machine_error.h"
+#include "tilefwk/pypto_fwk_log.h"
 
 MACHINE_LOGE(SchedErr::HANDSHAKE_TIMEOUT, "hand shake timeout.");
 ```
 
 效果
-[ERROR] PYPTO(411657):2026-03-13 14:25:42.400 [host_machine.cpp:135][MACHINE]:ErrCode: F70006! hand shake timeout.
+[ERROR] PYPTO(411657):2026-03-13 14:25:42.400 [host_machine.cpp:135][MACHINE]:ErrCode: F72002! hand shake timeout.

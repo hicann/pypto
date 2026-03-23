@@ -17,10 +17,16 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
+#include "interface/cache/function_cache.h"
+#include "machine/host/backend.h"
 
 using namespace npu::tile_fwk;
 
 class TestSuite_Backend : public testing::Test {};
+
+extern "C" int32_t Initialize();
+extern "C" bool MatchCache(const std::string &cacheKey);
+extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache);
 
 TEST_F(TestSuite_Backend, AihacBackend_Err1) {
     config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
@@ -37,4 +43,14 @@ TEST_F(TestSuite_Backend, SimulationBackend_Err1) {
         config::Reset();
     } catch (std::runtime_error&) {
     }
+}
+
+TEST_F(TestSuite_Backend, Execute_NullTask_ReturnsZero) {
+    FunctionCache cache;
+    EXPECT_EQ(Execute(nullptr, cache), 0);
+}
+
+TEST_F(TestSuite_Backend, InitializeAndMatchCache_Smoke) {
+    EXPECT_EQ(Initialize(), 0);
+    EXPECT_FALSE(MatchCache("ut_non_exist_cache_key"));
 }

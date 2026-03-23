@@ -57,7 +57,7 @@ public:
     }
 
     WsAllocation Allocate() {
-        DEV_ASSERT_MSG(freeListHeader_ != nullptr,
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, freeListHeader_ != nullptr,
             "Available slot: %zu/%zu", availableSlots_, slotNum_);
 
         BlockHeader *node = freeListHeader_;
@@ -97,9 +97,9 @@ public:
     }
 
     void Deallocate(uintdevptr_t ptr) {
-        DEV_ASSERT_MSG(workspaceAddr_ <= ptr && ptr < workspaceAddr_ + slotNum_ * slotStandardMemReq_,
+        DEV_ASSERT_MSG(WsErr::WS_TENSOR_ADDRESS_OUT_OF_RANGE, workspaceAddr_ <= ptr && ptr < workspaceAddr_ + slotNum_ * slotStandardMemReq_,
             "Pointer to deallocate is out of range");
-        DEV_ASSERT_MSG(notInUseHeaders_ != nullptr,
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, notInUseHeaders_ != nullptr,
             "Blocks are all free, there shouldn't be any deallocation request.");
 
         BlockHeader *node = notInUseHeaders_;

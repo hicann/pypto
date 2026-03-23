@@ -60,7 +60,7 @@ public:
 
     template <typename... Args>
     void AddRow(Args &&... args) {
-        DEV_ASSERT_MSG(sizeof...(Args) == columnTitles_.size(),
+        DEV_ASSERT_MSG(DevDataErr::SHEET_COLUMN_MISMATCH, sizeof...(Args) == columnTitles_.size(),
             "sizeof...(Args)=%zu != columnTitles_.size()=%zu", sizeof...(Args), columnTitles_.size());
         rows_.emplace_back();
         rows_.back().reserve(sizeof...(Args));
@@ -77,7 +77,7 @@ public:
     }
 
     void AddRowSeparator(size_t fromColumn = 0, char c = '-') {
-        DEV_ASSERT_MSG(fromColumn < columnTitles_.size(),
+        DEV_ASSERT_MSG(DevDataErr::SHEET_COLUMN_INDEX_OUT_OF_RANGE, fromColumn < columnTitles_.size(),
             "fromColumn=%zu >= columnTitles_.size()=%zu", fromColumn, columnTitles_.size());
         if (!rows_.empty()) {
             rowSeparators_.push_back(RowSeparator { rows_.size(), fromColumn, c });

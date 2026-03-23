@@ -252,7 +252,7 @@ public:
     inline void CheckCoreIdxInitStatus(uint32_t coreIdx) {
         DEV_IF_VERBOSE_DEBUG {
             if (pendingIds_[coreIdx] != AICORE_TASK_INIT || runningIds_[coreIdx] != AICORE_TASK_INIT) {
-                DEV_ERROR("core[%u]: pendingId=%x, runningId=%x, is illegal!", coreIdx, pendingIds_[coreIdx], runningIds_[coreIdx]);
+                DEV_ERROR(CtrlErr::TASK_STATS_ABNORMAL, "#sche.task.run.wrap.stats: core[%u]: pendingId=%x, runningId=%x, is illegal!", coreIdx, pendingIds_[coreIdx], runningIds_[coreIdx]);
             }
         }
     }
@@ -503,7 +503,7 @@ public:
         }
 
         if (wrapInfo == nullptr) {
-            DEV_ERROR("cant find wrapInfo in wrapQueueForThread!");
+            DEV_ERROR(DevCommonErr::NULLPTR, "#sche.task.run.wrap.dep.resolve: cant find wrapInfo in wrapQueueForThread!");
             return;
         }
         wrapInfo->taskCnt--;

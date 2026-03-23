@@ -194,7 +194,7 @@ public:
         auto ret = ExecuteTask(taskCtrl);
         wrapManager_.Deinit();
         if (unlikely(ret != DEVICE_MACHINE_OK)) {
-            DEV_ERROR("Aicpu[%d] proc finish: finishedFunctionCnt=%lu, coreFunctionCnt=%lu, taskId=%lu, but timeout!.", aicpuIdx_,
+            DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT, "#sche.dtask.leave: Aicpu[%d] proc finish: finishedFunctionCnt=%lu, coreFunctionCnt=%lu, taskId=%lu, but timeout!.", aicpuIdx_,
                 taskCtrl->finishedFunctionCnt.load(), curDevTask_->coreFunctionCnt, taskCtrl->taskId);
             DumpAiCoreStatus();
         }
@@ -286,11 +286,11 @@ public:
     inline void DumpLastWord(int coreIdx) {
         uint64_t status = aicoreHal_.GetAicoreStatus(coreIdx);
         if (pendingIds_[coreIdx] != AICORE_TASK_INIT) {
-            DEV_ERROR("status=%lu, pending taskId=%s, funcdata=%s", status, std::to_string(pendingIds_[coreIdx]).c_str(),
+            DEV_INFO("status=%lu, pending taskId=%s, funcdata=%s", status, std::to_string(pendingIds_[coreIdx]).c_str(),
             ((DynDeviceTask *)curDevTask_)->DumpTaskData(pendingIds_[coreIdx]).c_str());
         }
         if (runningIds_[coreIdx] != AICORE_TASK_INIT) {
-            DEV_ERROR("status=%lu, running taskId=%s, funcdata=%s", status, std::to_string(runningIds_[coreIdx]).c_str(),
+            DEV_INFO("status=%lu, running taskId=%s, funcdata=%s", status, std::to_string(runningIds_[coreIdx]).c_str(),
                 ((DynDeviceTask *)curDevTask_)->DumpTaskData(runningIds_[coreIdx]).c_str());
         }
     }
@@ -308,7 +308,7 @@ public:
 
     inline void PostRun(int ret, DeviceTaskCtrl *taskCtrl) {
         if (ret) {
-            DEV_ERROR("taskId=%lu execute error=%d, skip rest tasks", taskCtrl->taskId, ret);
+            DEV_ERROR(SchedErr::CORE_TASK_EXEC_FAILED, "#sche.dtask.leave.post: taskId=%lu execute error=%d, skip rest tasks", taskCtrl->taskId, ret);
             if constexpr (IsDeviceMode()) {
                 ForEachManageAicore([&](int coreIdx) { DumpLastWord(coreIdx); });
             }
@@ -341,7 +341,7 @@ public:
             ret = HandShake();
             PerfMtTrace(PERF_TRACE_CORE_HAND_SHAKE, threadIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
-                DEV_ERROR("hand shake timeout.");
+                DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.error: hand shake timeout.");
                 AbnormalStop();
                 while ((taskCtrl = taskQueue_->Dequeue())) {
                     taskCtrl->PutTask(ret);
@@ -588,7 +588,7 @@ private:
     inline void DumpDfxWhenCoreNotStop(AicoreStatus *coreStatus) {
         for (int i = aicStart_; i < aicEnd_; i++) {
             if (coreStatus[i] != AicoreStatus::CORE_FINISH_STOP) {
-                DEV_ERROR("left aic core %d not stop, status=%d, pendingNum=%u, runningNum=%u, regfinishid=%lu, "
+                DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT, "#sche.task.end.sync.timeout: left aic core %d not stop, status=%d, pendingNum=%u, runningNum=%u, regfinishid=%lu, "
                 "core last status=%lu", i, ToUnderlying(coreStatus[i]), pendingIds_[i], runningIds_[i],
                 aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i));
             }
@@ -596,7 +596,7 @@ private:
 
         for (int i = aivStart_; i < aivEnd_; i++) {
             if (coreStatus[i] != AicoreStatus::CORE_FINISH_STOP) {
-                DEV_ERROR("left aiv core %d not stop, status=%d, pendingNum=%u, runningNum=%u, regfinishid=%lu, "
+                DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT, "#sche.task.end.sync.timeout: left aiv core %d not stop, status=%d, pendingNum=%u, runningNum=%u, regfinishid=%lu, "
                 "core last status=%lu", i, ToUnderlying(coreStatus[i]), pendingIds_[i], runningIds_[i],
                 aicoreHal_.GetFinishedTask(i), aicoreHal_.GetAicoreStatus(i));
             }
@@ -664,7 +664,7 @@ private:
             DEV_IF_DEVICE {
                 if (GetCycles() - start_cycles > TIMEOUT_CYCLES) {
                     DumpDfxWhenCoreNotStop(coreStatus);
-                    DEV_ERROR("SyncAicoreDevTaskFinish timeout notstopNum=%d.", mngCoreNum - finishStopNum);
+                    DEV_ERROR(SchedErr::TASK_WAIT_TIMEOUT, "#sche.task.end.sync.timeout: SyncAicoreDevTaskFinish timeout notstopNum=%d.", mngCoreNum - finishStopNum);
                     return DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH;
                 }
             }
@@ -936,10 +936,10 @@ private:
          __atomic_fetch_add(&readyQue->tail, idCnt, std::memory_order_release);
         DEV_IF_NONDEVICE {
             if (readyQue->tail > readyQue->capacity){
-                DEV_ERROR("readyQue tail=%u > readyQue capacity=%u", readyQue->tail, readyQue->capacity);
+                DEV_ERROR(SchedErr::READY_QUEUE_OVERFLOW, "#sche.resolve.enqueue: readyQue tail=%u > readyQue capacity=%u", readyQue->tail, readyQue->capacity);
                 return DEVICE_MACHINE_ERROR;
             }
-            DEV_ASSERT(readyQue->tail <= readyQue->capacity);
+            DEV_ASSERT(SchedErr::READY_QUEUE_OVERFLOW, readyQue->tail <= readyQue->capacity);
         }
         ReadyQueueUnLock(readyQue);
         return DEVICE_MACHINE_OK;
@@ -1541,17 +1541,17 @@ private:
     inline void DumpAicoreStatusWhenTimeout(bool *handFlag) {
         for (int i = aicStart_; i < aicEnd_; i++) {
             if (handFlag[i]) {
-                DEV_ERROR("Aic core[%d] hand shake success, phyid=%d.", i, aicoreHal_.GetPhyIdByBlockId(i));
+                DEV_INFO("Aic core[%d] hand shake success, phyid=%d.", i, aicoreHal_.GetPhyIdByBlockId(i));
             } else {
-                DEV_ERROR("Aic core[%d] hand shake timeout, status=%lu.",  i, aicoreHal_.GetAicoreStatus(i));
+                DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.timeout: Aic core[%d] hand shake timeout, status=%lu.",  i, aicoreHal_.GetAicoreStatus(i));
             }
         }
 
         for (int i = aivStart_; i < aivEnd_; i++) {
             if (handFlag[i]) {
-                DEV_ERROR("Aiv core[%d] hand shake success, phyid=%d.", i,  aicoreHal_.GetPhyIdByBlockId(i));
+                DEV_INFO("Aiv core[%d] hand shake success, phyid=%d.", i,  aicoreHal_.GetPhyIdByBlockId(i));
             } else {
-                DEV_ERROR("Aiv core[%d] hand shake timeout, status=%lu.", i, aicoreHal_.GetAicoreStatus(i));
+                DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.timeout: Aiv core[%d] hand shake timeout, status=%lu.", i, aicoreHal_.GetAicoreStatus(i));
             }
         }
     }
@@ -1620,7 +1620,7 @@ private:
 
             if (GetCycles() - start_cycles > HAND_SHAKE_TIMEOUT) {
                 DumpAicoreStatusWhenTimeout(handFlag);
-                DEV_ERROR("HandShakeByGmWithPreSendTask timeout notHandshakeNum=%d.", mngAicoreNum - handShakeNum);
+                DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.timeout: HandShakeByGmWithPreSendTask timeout notHandshakeNum=%d.", mngAicoreNum - handShakeNum);
                 return DEVICE_MACHINE_ERROR;
             }
         }
@@ -1633,7 +1633,7 @@ private:
         DEV_INFO("aicpu[%d] handshake start.", aicpuIdx_);
         int rc = HandShakeByGmWithPreSendTask();
         if (rc != DEVICE_MACHINE_OK) {
-            DEV_ERROR("Aicpu[%d] handshake failed.", aicpuIdx_);
+            DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.presend: Aicpu[%d] handshake failed.", aicpuIdx_);
             return rc;
         }
 
@@ -1699,14 +1699,14 @@ private:
         for (int i = aicStart_; i < aicEnd_; ++i) {
             ret = func(i);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
-                DEV_ERROR("proc aicore aic[%d] failed.", i);
+                DEV_ERROR(SchedErr::CORE_TASK_PROCESS_FAILED, "#sche.check.aic.process: proc aicore aic[%d] failed.", i);
                 return ret;
             }
         }
         for (int i = aivStart_; i < aivEnd_; ++i) {
             ret = func(i);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
-                DEV_ERROR("proc aicore aiv[%d] failed.", i);
+                DEV_ERROR(SchedErr::CORE_TASK_PROCESS_FAILED, "#sche.check.aiv.process: proc aicore aiv[%d] failed.", i);
                 return ret;
             }
         }

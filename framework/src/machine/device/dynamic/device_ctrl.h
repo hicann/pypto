@@ -41,7 +41,7 @@ class DeviceCtrlMachine {
 public:
     void InitTaskCtrl(int idx, int type, uint64_t taskId, DeviceTask *devTask, DeviceExecuteContext *ctx) {
         if (ctx == nullptr) {
-            DEV_ERROR("Init Task control failed, which ctx is null.");
+            DEV_ERROR(CtrlErr::ROOT_ALLOC_CTX_NULL, "#ctrl.push.init_dtask: Init Task control failed, which ctx is null.");
             return;
         }
         auto taskCtrl = &GetTaskCtrlInPool(idx);
@@ -141,11 +141,11 @@ public:
         } else if (ctrlFlowCache != nullptr) {
             DEV_INFO("Init independent anchor program cache %p.", ctrlFlowCache);
             if (ctrlFlowCache->isRecording) {
-                DEV_ASSERT_MSG(!devProg->controlFlowCache.isRecording, "dev program ctr cache should not record");
+                DEV_ASSERT_MSG(CtrlErr::CTRL_FLOW_EXEC_FAILED, !devProg->controlFlowCache.isRecording, "#ctrl.flow.exec: dev program ctr cache should not record");
                 ctrlFlowCache->contextWorkspaceAddr = devStartArgs->contextWorkspaceAddr;
             } else {
-                DEV_ASSERT_MSG(!devProg->controlFlowCache.isActivated && ctrlFlowCache->isActivated,
-                        "should not active dev program cache and independent ctrl cache at same time");
+                DEV_ASSERT_MSG(CtrlErr::CTRL_FLOW_EXEC_FAILED, !devProg->controlFlowCache.isActivated && ctrlFlowCache->isActivated,
+                        "#ctrl.flow.exec: should not active dev program cache and independent ctrl cache at same time");
             }
             devCtrlFlowCache = ctrlFlowCache;
             if (devCtrlFlowCache->isActivated && !devCtrlFlowCache->isRelocMetaDev) {
@@ -328,7 +328,7 @@ public:
             return -1;
         }
         if (kargs->inputs == nullptr || kargs->cfgdata == nullptr) {
-            DEV_ERROR("Args has null in inputs[%p] work[%p] or cfg[%p].\n", kargs->inputs,
+            DEV_ERROR(DevCommonErr::NULLPTR, "#ctrl.init: Args has null in inputs[%p] work[%p] or cfg[%p].\n", kargs->inputs,
                     kargs->workspace, kargs->cfgdata);
             return -1;
         }

@@ -28,6 +28,7 @@
 #include "machine/utils/machine_ws_intf.h"
 #include "interface/operation/opcode.h"
 #include "interface/utils/common.h"
+#include "interface/utils/distributed_error.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -104,7 +105,7 @@ public:
                 return ret;
             }
             if (GetCycles() - start_cycles > TIMEOUT_CYCLES) {
-                DEV_ERROR("SyncAicpuTaskFinish timeout.");
+                DEV_ERROR(DistributedErrorCode::AICPU_TASK_TIMEOUT, "#sche.task.end.sync.timeout: SyncAicpuTaskFinish timeout.");
                 return DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH;
             }
         }

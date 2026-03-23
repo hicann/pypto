@@ -51,7 +51,7 @@ int32_t ShmemWaitUntil::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager *aic
 {
     return runingTaskQueue_.PollCompleted([&](SignalTileOp* task) {
         if (aicoreManager == nullptr) {
-            DEV_ERROR("AicoreManager is nullptr");
+            DEV_ERROR(DistributedErrorCode::NULLPTR, "sche.task.pre.task.poll#: AicoreManager is nullptr");
             return dynamic::DEVICE_MACHINE_ERROR;
         }
         return aicoreManager->ProcessCompletedAicpuTask(task->taskId_);
@@ -61,7 +61,7 @@ int32_t ShmemWaitUntil::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager *aic
 uint64_t ShmemWaitUntil::GetRawAddr(const uint64_t addr, const uint64_t dstRankId)
 {
     uint64_t groupIndex = npu::tile_fwk::Distributed::GetVirtualAddrGroupIndex(addr);
-    DEV_ASSERT(groupIndex < commGroupNum_);
+    DEV_ASSERT(DistributedErrorCode::INVALID_GROUP_INDEX, groupIndex < commGroupNum_);
     uint64_t offset = npu::tile_fwk::Distributed::GetVirtualAddrOffset(addr);
     uint64_t memType = npu::tile_fwk::Distributed::GetVirtualAddrMemType(addr);
     auto hcclOpParam = reinterpret_cast<TileOp::CommContext*>(hcclContextAddr_[groupIndex]);

@@ -67,7 +67,7 @@ public:
     int RunThread(int threadIdx, DevStartArgs *devStartArgs, DeviceArgs *args, int schedIdx) {
         int ret = 0;
         if (args->nrAic == 0 || args->nrValidAic == 0 || args->nrAicpu < args->scheCpuNum) {
-            DEV_ERROR("Device machine run invalid args: aicNum=%u, blockdim=%u, launchAicpuNum=%u, launchScheAicpuNum=%u",
+            DEV_ERROR(DevCommonErr::PARAM_INVALID, "#sche.thread.init: Device machine run invalid args: aicNum=%u, blockdim=%u, launchAicpuNum=%u, launchScheAicpuNum=%u",
                 args->nrAic, args->nrValidAic, args->nrAicpu, args->scheCpuNum);
             return DEVICE_MACHINE_ERROR;
         }
@@ -86,13 +86,13 @@ public:
 
     void ResetRegAll() {
       sleep(1);
-      DEV_ERROR("ResetRegAll");
+      DEV_INFO("ResetRegAll");
       for (uint32_t i = 0; i < schAicpuNum_; ++i) {
         aicoreManager_[i]->ResetRegAll();
       }
       sleep(1);
       aicoreManager_[0]->CheckAndResetReg();
-      DEV_ERROR("Exception reset reg finish.");
+      DEV_INFO("Exception reset reg finish.");
     }
 
     inline void DumpAicorePerfTrace(std::string file = "") {
@@ -111,7 +111,7 @@ public:
         while (startPos < totalLength) {
             uint32_t endPos = std::min(startPos + batchSize, totalLength);
             std::string batch = str.substr(startPos, endPos - startPos);
-            DEV_ERROR("tile_fwk aicore prof:%s", batch.c_str());
+            DEV_INFO("tile_fwk aicore prof:%s", batch.c_str());
             startPos = endPos;
         }
 
@@ -178,7 +178,7 @@ struct DynMachineManager {
         uint64_t start = GetCycles();
         while (__builtin_popcount(cpumask_.load(std::memory_order_acquire)) != static_cast<int>(devArgs->nrAicpu)) {
             if (GetCycles() - start > TIMEOUT_CYCLES) {
-                DEV_ERROR("Thread alloc timeout: threadIdx=%d, physicalCpu=%d.", curThreadIdx, cpu);
+                DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Thread alloc timeout: threadIdx=%d, physicalCpu=%d.", curThreadIdx, cpu);
                 return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
             }
             sched_yield();
@@ -191,7 +191,12 @@ struct DynMachineManager {
 
     int AllocThreadIdxForDav2201(DeviceArgs *devArgs, int cpu, int &curThreadIdx, std::atomic<int> &threadIdx) {
         cpumask_.fetch_or(1 << cpu, std::memory_order_release);
+        uint64_t start = GetCycles();
         while (__builtin_popcount(cpumask_.load(std::memory_order_acquire)) != static_cast<int>(devArgs->nrAicpu)) {
+            if (GetCycles() - start > TIMEOUT_CYCLES) {
+                DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Thread alloc timeout: threadIdx=%d, physicalCpu=%d.", curThreadIdx, cpu);
+                return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
+            }
             sched_yield();
         }
 
@@ -298,12 +303,12 @@ struct DynMachineManager {
         DeInit();
 #if ENABLE_PERF_TRACE
         PerfMtTrace(PERF_TRACE_EXIT, LastFinishThreadIdx_);
-        DEV_ERROR("Begin dump machine perf trace:");
+        DEV_INFO("Begin dump machine perf trace:");
         PerfEvtMgr::Instance().DumpPerfTrace(devProg->devArgs.scheCpuNum, "/tmp/tile_fwk_aicpu_perftrace.json");
         DEV_IF_DEVICE {
             machine_.DumpAicorePerfTrace("tmp/tile_fwk_aicore_perftrace.json");
         }
-        DEV_ERROR("Finish dump machine perf trace.");
+        DEV_INFO("Finish dump machine perf trace.");
 #endif
     }
 
@@ -311,12 +316,12 @@ struct DynMachineManager {
         int ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
         DeviceArgs *devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
         if (devArgs->scheCpuNum > devArgs->nrAicpu - 1) {
-            DEV_ERROR("Aicpu num[%u] less than scheNum[%u].", devArgs->nrAicpu, devArgs->scheCpuNum);
+            DEV_ERROR(DevCommonErr::PARAM_CHECK_FAILED, "#dev.unistream.init.no_cpu: Aicpu num[%u] less than scheNum[%u].", devArgs->nrAicpu, devArgs->scheCpuNum);
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
         int threadIdx = -1;
         if (AllocThreadIdx(devArgs, threadIdx, threadIdx_) != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-            DEV_ERROR("Current cpu[%d] alloc thread failed.", sched_getcpu());
+            DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.", sched_getcpu());
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
 
@@ -414,25 +419,25 @@ struct DynMachineManager {
     void SigAct(int signum, siginfo_t* info, void* act) {
         (void)info;
         (void)act;
-        DEV_ERROR("Exception Signum[%d] Act.", signum);
+        DEV_ERROR(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "#sche.except.signal: Exception Signum[%d] Act.", signum);
         PrintBacktrace("signal " + std::to_string(signum));
         if (reset_.load()) {
-            DEV_ERROR("Exception Already reset.");
+            DEV_ERROR(ThreadErr::RESET_REG_ALL_TRIGGERED, "#sche.except.reset: Exception Already reset.");
             sleep(SIGNAL_DELAY_SECONDS);
             return;
         }
         reset_.store(true);
         if (!init_.load()) {
-            DEV_ERROR("Exception call ori sigact.");
+            DEV_ERROR(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "#sche.except.signal: Exception call ori sigact.");
             __sighandler_t handle = GetSigHandle(signum);
             if (handle == SIG_DFL) {
-                DEV_ERROR("Ori sigact SIG_DFL.");
+                DEV_ERROR(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "#sche.except.signal: Ori sigact SIG_DFL.");
                 signal(signum, SIG_DFL);
                 raise(signum);
             } else if (handle == SIG_IGN) {
-                DEV_ERROR("Ori sigact SIG_IGN.");
+                DEV_ERROR(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "#sche.except.signal: Ori sigact SIG_IGN.");
             } else if (handle != nullptr) {
-                DEV_ERROR("Call Ori sigact.");
+                DEV_ERROR(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "#sche.except.signal: Call Ori sigact.");
                 handle(signum);
             }
             return;
@@ -456,7 +461,7 @@ struct DynMachineManager {
     int EntryUnifiedStream(DeviceKernelArgs *kargs, const KernelCtrlEntry &entry) {
         auto ret = RunCtrlInit(kargs, entry);
         if (ret != DEVICE_MACHINE_OK) {
-            DEV_ERROR("Server init failed");
+            DEV_ERROR(CtrlErr::CTRL_INIT_FAILED, "#dev.unistream.init.ctrl_init: Server init failed");
             return ret;
         }
         DevAscendProgram *devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
@@ -503,7 +508,7 @@ struct DynMachineManager {
         auto devArgs = devProg->devArgs;
         int threadIdx = -1;
         if (AllocThreadIdx(&devArgs, threadIdx, runtimeDataCurrent->devScheState.threadIdx) != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-            DEV_ERROR("Current cpu[%d] alloc thread failed.", sched_getcpu());
+            DEV_ERROR(ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.", sched_getcpu());
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
         PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx);
@@ -541,7 +546,7 @@ struct DynMachineManager {
                 return EntrySplittedStreamSche(kargs, entry);
                 break;
             default:
-                DEV_ERROR("Invalid run mode: %d\n", (int)kargs->parameter.runMode);
+                DEV_ERROR(DevCommonErr::PARAM_INVALID, "#dev.entry.invalid_mode: Invalid run mode: %d\n", (int)kargs->parameter.runMode);
                 break;
         }
         return DEVICE_MACHINE_INVALID_RUN_MODE;

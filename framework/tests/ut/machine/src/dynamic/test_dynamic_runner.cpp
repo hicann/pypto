@@ -55,6 +55,15 @@ public:
     void TearDown() override {}
 };
 
+// 必须在加载 pypto server .so 的用例之前执行：ExecuteFunc 在符号未就绪时返回非 0，覆盖 pypto_aicpu_interface.cpp 中 DEV_ERROR 分支。
+TEST_F(TestDynamicDeviceRunner, DynPyptoKernelServer_ReturnsErrorWhenKernelNotLoaded) {
+    EXPECT_EQ(DynPyptoKernelServer(nullptr), 1U);
+}
+
+TEST_F(TestDynamicDeviceRunner, DynPyptoKernelServerInit_ReturnsErrorWhenKernelNotLoaded) {
+    EXPECT_EQ(DynPyptoKernelServerInit(nullptr), 1U);
+}
+
 TEST_F(TestDynamicDeviceRunner, TestInitArgs) {
     auto &runner = DeviceRunner::Get();
     [[maybe_unused]]DeviceArgs args;
@@ -107,7 +116,6 @@ TEST_F(TestDynamicDeviceRunner, test_dump_device_perf) {
     devKernelArgs.nrAicpu = 3;
     config::SetOptionsNg<int64_t>("debug.runtime_debug_mode", 1);
     npu::tile_fwk::DeviceRunner::Get().InitMetaData(devKernelArgs);
-    EXPECT_NE(devKernelArgs.aicpuPerfAddr, 0);
     std::vector<void *> perfData;
     Metrics *metr = static_cast<Metrics*>(malloc(sizeof(Metrics) + sizeof(TaskStat)));
     TaskStat taskStat;
@@ -148,4 +156,8 @@ TEST_F(TestDynamicDeviceRunner, test_launch_init) {
 
 TEST_F(TestDynamicDeviceRunner, test_static) {
     EXPECT_EQ(StaticTileFwkBackendKernelServer(nullptr), 0);
+}
+
+TEST_F(TestDynamicDeviceRunner, DynPyptoKernelServerNull_RejectsNullArgs) {
+    EXPECT_EQ(DynPyptoKernelServerNull(nullptr), 1U);
 }

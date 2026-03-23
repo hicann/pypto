@@ -38,6 +38,7 @@
 #include "interface/configs/config_manager.h"
 #include "tilefwk/platform.h"
 #include "machine/runtime/distributed/distributed_context.h"
+#include "machine/utils/machine_error.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 #ifndef BUILD_WITH_CANN
@@ -149,7 +150,7 @@ public:
 
         uint64_t generalSize = devProg->memBudget.metadata.general;
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;
-        MACHINE_LOGD("generalSize=%lu, stitchPoolSize=%lu, generalOffset=%#lx, stitchPoolOffset=%#lx.", generalSize, stitchPoolSize,
+        MACHINE_LOGD("eneralSize=%lu, stitchPoolSize=%lu, generalOffset=%#lx, stitchPoolOffset=%#lx.", generalSize, stitchPoolSize,
             devProg->deviceRuntimeOffset.generalOffset, devProg->deviceRuntimeOffset.stitchPoolOffset);
         return;
     }
@@ -199,7 +200,8 @@ public:
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
         if (config.dynWorkspaceSize != 0) {
-            MACHINE_LOGE("[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
+            MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED,
+                           "[Deprecated] User provided dynamic workspace: %" PRId64, config.dynWorkspaceSize);
             devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = std::max(
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
@@ -210,8 +212,8 @@ public:
         }
 #endif
         devProg->workspaceSize = devProg->memBudget.Total();
-        MACHINE_LOGI("workspaceSize=%lu, tensor=%lu, metadata=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, leafDumpWorkspace=%lu",
-            devProg->workspaceSize, devProg->memBudget.tensor.Total(), devProg->memBudget.metadata.Total(),
+        MACHINE_LOGI("Metadata=%lu, workspaceSize=%lu, tensor=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, leafDumpWorkspace=%lu.",
+            devProg->memBudget.metadata.Total(), devProg->workspaceSize, devProg->memBudget.tensor.Total(),
             devProg->memBudget.aicoreSpilled, devProg->memBudget.debug.dumpTensor, devProg->memBudget.debug.leafDump);
         MACHINE_LOGI("Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
             devProg->memBudget.tensor.rootInner,
@@ -353,7 +355,7 @@ public:
             kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data() + sizeof(AiCpuArgs));
             kArgs.outputs = kArgs.inputs + 1;
         }
-        MACHINE_LOGD("Inputs=%p, outputs=%p, workspace=%p, cfgdata=%p, tensorSize=%zu", kArgs.inputs, kArgs.outputs, kArgs.workspace,
+        MACHINE_LOGD("Inputs=%p, outputs=%p, workspace=%p, cfgdata=%p, tensorSize=%zu.", kArgs.inputs, kArgs.outputs, kArgs.workspace,
             kArgs.cfgdata, tensorSize);
     }
 
