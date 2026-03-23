@@ -655,3 +655,29 @@ TEST_F(TestAxisCombineMarker, qaCase) {
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("b1")), false);
     EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t1")), false);
 }
+
+// op not in whitelist case
+TEST_F(TestAxisCombineMarker, transpose_op) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 16}, MemoryType::MEM_DEVICE_DDR, "gm1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 16}, MemoryType::MEM_UB, "t1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm1"}, {"t1"}, "copy_in1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1, 2}, MemoryType::MEM_DEVICE_DDR, "gm2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1, 2}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm2"}, {"t2"}, "copy_in2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 1}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_TRANSPOSE_VNCHWCONV, {"t2"}, {"t3"}, "transpose", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 2, 16}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_SUB, {"t1", "t3"}, {"t4"}, "sub", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t4"}, {"out"}, "copyout", true), true);
+
+    auto *rootFuncPtr = graph.GetFunction();
+    AxisCombineMarker marker;
+    marker.Run(*rootFuncPtr);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t1")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t3")), false);
+    EXPECT_EQ(marker.IsTensorEnableAxisCombine(graph.GetTensor("t4")), false);
+}
