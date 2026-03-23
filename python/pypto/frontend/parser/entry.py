@@ -398,14 +398,15 @@ class JitCallableWrapper:
             if param_name == "return":
                 continue
             ann = annotations.get(param_name)
-            if ann is not None and isinstance(ann, pypto.Tensor):
+            if ann is not None and hasattr(ann, 'to_tensor'):
                 if seen_non_tensor:
                     raise ValueError(
                         "Non-tensor parameters must come after all tensor parameters. "
                         f"Found tensor parameter '{param_name}' after non-tensor "
                         "parameter(s)."
                     )
-                input_tensor_list.append(ann)
+                tensor = ann.to_tensor(param_name)
+                input_tensor_list.append(tensor)
             else:
                 seen_non_tensor = True
                 non_tensor_param_names.append(param_name)

@@ -901,9 +901,9 @@ class Parser(ast.NodeVisitor):
             # Non-tensor parameter (no annotation)
             return (name, default_value)
         anno = self._visit_expr(node.annotation)
-        if isinstance(anno, pypto.Tensor):
-            anno.name = name
-            return anno
+        if hasattr(anno, 'to_tensor'):
+            tensor = anno.to_tensor(name)
+            return tensor
         else:
             # Non-tensor parameter (annotation is not pypto.Tensor)
             return (name, default_value)

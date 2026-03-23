@@ -57,6 +57,11 @@ def kernel_function(...):
 4. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后
 5. 非张量参数支持 keyword 传参、位置参数、使用默认值
 
+**pypto.Tensor[...]说明**：
+- kernel函数里申明推荐使用 `pypto.Tensor[[shape], dtype]` 方括号语法，符合 Python 类型注解规范
+- 也兼容旧的小括号语法 `pypto.Tensor([shape], dtype)`
+- 方括号内不支持 `key=value` 形式的关键字参数（Python 语法限制），只能按位置传递或使用字典
+- `pypto.Tensor[]`（空参数）不支持
 
 ## 调用示例
 
@@ -71,7 +76,7 @@ def add_kernel(
 ):
     pypto.set_vec_tile_shapes(2, 8)
     out[:] = pypto.add(a, b)
-    
+
 
 # 直接传入 torch 张量调用
 x = torch.randn(3, dtype=torch.float32, device='npu:0')

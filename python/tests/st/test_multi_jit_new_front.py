@@ -17,17 +17,17 @@ import torch_npu
 
 
 @pypto.frontend.jit()
-def cust_dyn_func_add(a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-                      b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-                      c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)):
+def cust_dyn_func_add(a: pypto.Tensor[[], pypto.DT_INT32],
+                      b: pypto.Tensor[[], pypto.DT_INT32],
+                      c: pypto.Tensor[[], pypto.DT_INT32]):
     pypto.set_vec_tile_shapes(32, 32)
     c.move(a + b)
 
 
 @pypto.frontend.jit()
-def cust_dyn_func_sub(a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-                      b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-                      c: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)):
+def cust_dyn_func_sub(a: pypto.Tensor[[...], pypto.DT_INT32],
+                      b: pypto.Tensor[[...], pypto.DT_INT32],
+                      c: pypto.Tensor[[...], pypto.DT_INT32]):
     pypto.set_vec_tile_shapes(32, 32)
     c.move(a - b)
 
