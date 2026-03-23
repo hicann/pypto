@@ -71,10 +71,6 @@ private:
     Status CreateMoveOpForConvert(Function &function, Operation &op) const;
     void ProcessUB2L1(Function &function, Operation &op) const;
     static int64_t PadUB(int64_t dim, int64_t padValue);
-    void InsertCopyUBOp(Function &function, Operation *needInsertCopyAssOp, LogicalTensorPtr &input);
-    void InsertCopyDDROp(Function &function, Operation *needInsertCopyAssOp, LogicalTensorPtr &input);
-    void FindNeedToCopyAssemble(std::unordered_set<Operation*> &needInsertCopyAssOps, std::unordered_set<int> &visitedAssOps, Operation &op);
-    void InsertAssembleCopy(Function &function);
 };
 }
 #endif // PASS_GENERATE_MOVE_OP_H_
