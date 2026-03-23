@@ -206,7 +206,7 @@ def get_env_device_id():
         logger.info("otherwise, set the environment variable TILE_FWK_DEVICE_ID.")
         logger.info("Please set it before running this example:")
         logger.info("  export TILE_FWK_DEVICE_ID=0")
-        return None
+        raise ValueError(f"Please set TILE_FWK_DEVICE_ID.")
 
     try:
         device_id = int(os.environ['TILE_FWK_DEVICE_ID'])
