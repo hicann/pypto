@@ -37,9 +37,9 @@ def create_add_kernel(run_mode: str):
 
     @pypto.frontend.jit(runtime_options={"run_mode": mode})
     def add_kernel(
-        x: pypto.Tensor(shape, pypto.DT_FP32),
-        y: pypto.Tensor(shape, pypto.DT_FP32),
-        out: pypto.Tensor(shape, pypto.DT_FP32),
+        x: pypto.Tensor([...], pypto.DT_FP32),
+        y: pypto.Tensor([...], pypto.DT_FP32),
+        out: pypto.Tensor([...], pypto.DT_FP32),
     ):
         pypto.set_vec_tile_shapes(1, 4, 1, 64)
         out[:] = x + y
@@ -60,9 +60,10 @@ if __name__ == "__main__":
 
     x = torch.rand(shape, dtype=torch.float32, device=device)
     y = torch.rand(shape, dtype=torch.float32, device=device)
+    output = torch.empty(shape, dtype=torch.float32, device=device)
 
     # 执行计算并查看结果
-    output = create_add_kernel(args.run_mode)(x, y)
+    create_add_kernel(args.run_mode)(x, y, output)
     print(f"Output shape: {output.shape}")
 ```
 
