@@ -480,6 +480,32 @@ class JitCallableWrapper:
             )
         return pto_tensors
 
+    @staticmethod
+    def _setup_verify_data(
+        pto_tensors
+    ) -> None:
+        """Set verify input/output/golden data for pass-level verification.
+
+        This mirrors the behavior of pypto.runtime._JIT.compile:
+        - Copy current input/output from NPU to Host
+        - Use golden data pre-injected via set_verify_golden_data
+        - Call SetVerifyData to register all three to the underlying ProgramData
+        """
+        if not pypto.get_verify_options().get("enable_pass_verify"):
+            return
+        
+        # Compile and load calculator
+        mgr = BuildOnlineManager()
+        mgr.build_and_load_calculator()
+
+        # Copy NPU Tensor to CPU, then convert to pypto.Tensor for constructing DeviceTensorData
+
+        host_pto_tensors, _ = _gen_pto_tensor(pto_tensors)
+        host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
+        for i, dev_tensor in enumerate(_pto_to_tensor_data(pto_tensors)):
+            pypto_impl.CopyToHost(dev_tensor, host_pto_t_datas[i])
+        pypto_impl.SetVerifyData(
+            host_pto_t_datas, [], _pto_verify_datas.get_data())
 
     def compile(
         self,
@@ -508,12 +534,13 @@ class JitCallableWrapper:
         self._parser.parse()
         self._parser.input_pto_tensor = args
 
-        # Initialize backend for compilation
-        self._setup_verify_data(args)
 
         # Set options AFTER OperatorBegin() to match @pypto.jit behavior
 
         self._set_config_option()
+
+        # Initialize backend for compilation
+        self._setup_verify_data(args)
 
         # Bind dynamic dimensions from concrete inputs
         self._parser.bind_dynamic_dims_to_input_tensors()
@@ -910,36 +937,6 @@ class JitCallableWrapper:
             pypto.set_verify_options(**self._verify_options)
         if self._debug_options:
             pypto.set_debug_options(**self._debug_options)
-
-
-    def _setup_verify_data(
-        self,
-        pto_tensors
-    ) -> None:
-        """Set verify input/output/golden data for pass-level verification.
-
-        This mirrors the behavior of pypto.runtime._JIT.compile:
-        - Copy current input/output from NPU to Host
-        - Use golden data pre-injected via set_verify_golden_data
-        - Call SetVerifyData to register all three to the underlying ProgramData
-        """
-        if not (
-            isinstance(self._verify_options, dict)
-            and self._verify_options.get("enable_pass_verify")
-        ):
-            return
-        # Compile and load calculator
-        mgr = BuildOnlineManager()
-        mgr.build_and_load_calculator()
-
-        # Copy NPU Tensor to CPU, then convert to pypto.Tensor for constructing DeviceTensorData
-
-        host_pto_tensors, _ = _gen_pto_tensor(pto_tensors)
-        host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
-        for i, dev_tensor in enumerate(_pto_to_tensor_data(pto_tensors)):
-            pypto_impl.CopyToHost(dev_tensor, host_pto_t_datas[i])
-        pypto_impl.SetVerifyData(
-            host_pto_t_datas, [], _pto_verify_datas.get_data())
 
     def _run(
         self,
