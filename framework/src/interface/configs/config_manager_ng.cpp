@@ -466,6 +466,15 @@ ConfigManagerNg::ScopedRestore::~ScopedRestore() {
     ConfigManagerNg::GetInstance().EndScope();
 }
 
+ConfigManagerNg::JitScopeGuard::JitScopeGuard(const std::string &name, std::map<std::string, Any> &&values,
+    const char *file, int lino) {
+    ConfigManagerNg::GetInstance().BeginScope(name, std::move(values), file, lino);
+}
+
+ConfigManagerNg::JitScopeGuard::~JitScopeGuard() {
+    ConfigManagerNg::GetInstance().EndScope();
+}
+
 void ConfigManagerNg::SetScope(std::map<std::string, Any> &&values, const char *file, int lino) {
     return impl_->SetScope(std::move(values), file, lino);
 }

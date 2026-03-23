@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -800,8 +801,11 @@ static void DoLaunch(py::object &module, aclrtStream aicoreStream, int devId,
 
     HOST_PERF_TRACE(TracePhase::LaunchInit);
 
+    std::optional<ConfigManagerNg::JitScopeGuard> jitScopeGuard;
+
     auto kbinary = kmodule->GetKernelBinary(tensors);
     if (kbinary == nullptr) {
+        jitScopeGuard.emplace("jit_scope", std::map<std::string, Any>{});
         Program::GetInstance().Reset();
         AclModeGuard guard(ACL_MODEL_RI_CAPTURE_MODE_RELAXED);
 #if ENABALE_VERBOSE_LOG
