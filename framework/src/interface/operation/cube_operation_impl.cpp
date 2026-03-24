@@ -1092,7 +1092,7 @@ Tensor ConstructTensorGraph(DataType dataType, MatmulGraphNodes &tensorGraphNode
 static void SetVecTileBasedOnUbSize(DataType outType, const CubeTile &cubeTile) {
     uint64_t ubSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
     // Add的两个输入矩阵总大小不能超过UB大小限制
-    if (cubeTile.m[0] * cubeTile.n[0] * BytesOf(outType) * 2 <= ubSize) {
+    if (cubeTile.m[0] * cubeTile.n[0] * BytesOf(outType) * 2 <= ubSize || outType == DT_INT32) {
         TileShape::Current().SetVecTile({cubeTile.m[0], cubeTile.n[0]});
     } else {
         TileShape::Current().SetVecTile({128, 128});
