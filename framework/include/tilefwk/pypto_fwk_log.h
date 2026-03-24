@@ -44,6 +44,7 @@ enum class LogModule {
     PLATFORM,
     MATMUL,
     VECTOR,
+    CONV,
     BOTTOM
 };
 
@@ -130,7 +131,7 @@ private:
 
 #define PYPTO_HOST_LOGE(module, errCode, fmt, ...) \
     PYPTO_HOST_LOG(DLOG_ERROR, module, "ErrCode: F%05X! " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__)
-     
+
 #define PYPTO_SIM_LOGE(module, errCode, fmt, ...) \
     PYPTO_SIM_LOG(DLOG_ERROR, module, "ErrCode: F%05X! " fmt, static_cast<uint32_t>(errCode) & 0xFFFFF, ##__VA_ARGS__)
 
@@ -210,6 +211,12 @@ private:
 #define MATMUL_LOGW(...) PYPTO_HOST_LOG(DLOG_WARN,  MATMUL, __VA_ARGS__)
 #define MATMUL_LOGE(...) PYPTO_HOST_LOG(DLOG_ERROR, MATMUL, __VA_ARGS__)
 #define MATMUL_LOGE_E(errCode, fmt, ...) PYPTO_HOST_LOGE(MATMUL, errCode, fmt, ##__VA_ARGS__)
+
+#define CONV_LOGD(...) PYPTO_HOST_LOG(DLOG_DEBUG, CONV, __VA_ARGS__)
+#define CONV_LOGI(...) PYPTO_HOST_LOG(DLOG_INFO,  CONV, __VA_ARGS__)
+#define CONV_LOGW(...) PYPTO_HOST_LOG(DLOG_WARN,  CONV, __VA_ARGS__)
+#define CONV_LOGE(...) PYPTO_HOST_LOG(DLOG_ERROR, CONV, __VA_ARGS__)
+#define CONV_LOGE_E(errCode, fmt, ...) PYPTO_HOST_LOGE(CONV, errCode, fmt, ##__VA_ARGS__)
 
 #define VECTOR_LOGD(...) PYPTO_HOST_LOG(DLOG_DEBUG, VECTOR, __VA_ARGS__)
 #define VECTOR_LOGI(...) PYPTO_HOST_LOG(DLOG_INFO,  VECTOR, __VA_ARGS__)
