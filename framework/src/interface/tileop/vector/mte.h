@@ -73,7 +73,6 @@ __aicore__ inline void TStore(T dst, U src, C coordinate) {
         auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
         auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
         auto gmOffset = dstLayout.template GetGmOffset<C, MAX_DIMS>(coordinate);
-        using SrcDtype = std::conditional_t<std::is_same_v<typename U::Type, bool>, uint8_t, typename U::Type>;
 
         if constexpr (TileOp::IsConstContinous<U>() == true) {
             // 对于静态整块场景，将UB合成二维，GM保持五维
