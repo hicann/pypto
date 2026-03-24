@@ -43,6 +43,7 @@ private:
     Status RunOnFunction(Function &function) override;
     void PadMatmul(Operation &op, LogicalTensorPtr &in);
     void PadVector(Operation &op, LogicalTensorPtr &in, std::unordered_set<std::shared_ptr<RawTensor>> &visitedRaw, bool noPadding);
+    void PadVector256(Operation &op, LogicalTensorPtr &in, bool needRowPad);
     bool IsExpandLastDim(const Operation &op);
     void TraverseCopyInConsumers(Function &function, Operation &consumer, std::unordered_set<LogicalTensorPtr> &visitedTensors);
     void TraverseBroadcast(Function &function, Operation &consumer, LogicalTensorPtr output, std::unordered_set<LogicalTensorPtr> &visitedTensors);
@@ -57,6 +58,7 @@ private:
     bool IsMatmul(const LogicalTensorPtr &tensor) const;
     bool IsVector(const LogicalTensorPtr &tensor);
     void DoPadding(Function &function);
+    void DoPadding256(Function &function);
     bool IsInputDataType(
         const Operation &op, const LogicalTensorPtr &in, const std::unordered_set<DataType> &targetTypes) const;
     bool processTranspose_;
