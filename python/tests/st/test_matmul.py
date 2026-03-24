@@ -101,7 +101,7 @@ def matmul_kernel_with_mn_split(
     m_view = shape_info.view_shape[0]
     n_view = shape_info.view_shape[1]
     pypto.set_cube_tile_shapes(shape_info.m_tile_shape, shape_info.k_tile_shape, shape_info.n_tile_shape,
-                                enable_multi_data_load=shape_info.mdl_flag, enable_split_k=shape_info.gm_acc)
+                                enable_split_k=shape_info.gm_acc)
     m_loop = (m + m_view - 1) // m_view
     n_loop = (n + n_view - 1) // n_view
     for m_idx in pypto.loop(0, m_loop, 1, name="LOOP_L0_mIdx", idx_name="m_idx"):
@@ -129,7 +129,7 @@ def bmm_kernel_with_no_mn_split(
     shape_info: ShapeConfig,
 ):
     pypto.set_cube_tile_shapes(shape_info.m_tile_shape, shape_info.k_tile_shape, shape_info.n_tile_shape, 
-                               enable_multi_data_load=shape_info.mdl_flag, enable_split_k=shape_info.gm_acc)
+                               enable_split_k=shape_info.gm_acc)
     result = pypto.matmul(a_tensor, b_tensor, a_trans=shape_info.a_trans, b_trans=shape_info.b_trans,
                           out_dtype=shape_info.out_dtype)
     out_tensor.move(result)

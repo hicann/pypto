@@ -231,12 +231,10 @@ pypto.set_vec_tile_shapes(64, 512)
 
 进一步调优Matmul的TileShape，需要充分考虑对算数强度和带宽的影响，具体介绍见[Matmul高性能编程](./matmul_performance_guide.md)章节。
 
-当前环节主要关注**减少重复载入**和**K轴分核**两个调优手段，分别对应`set_cube_tile_shapes`接口的`enable_multi_data_load`与`enable_split_k`配置参数。用户可以结合上述原理介绍，推导并选择合适的开关配置策略，也可以直接结合泳道图数据进行测试验证，择优配置。两个参数是相互解耦的，具体写法可参考如下配置：
+当前环节主要关注**减少重复载入**和**K轴分核**两个调优手段，可对应`set_cube_tile_shapes`接口的`enable_split_k`配置参数。用户可以结合上述原理介绍，推导并选择合适的开关配置策略，也可以直接结合泳道图数据进行测试验证，择优配置。两个参数是相互解耦的，具体写法可参考如下配置：
 
 ```python
-pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
-    enable_multi_data_load=True,
-    enable_split_k=True)
+pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256], enable_split_k=True)
 ```
 
 #### Vector TileShape 调优
