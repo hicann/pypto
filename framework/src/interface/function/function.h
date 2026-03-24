@@ -233,6 +233,7 @@ struct DynloopFunctionAttribute {
     LoopRange originalRange;
 
     bool submitBeforeLoop;
+    bool parallel;
     int unrollTimes{1};
     std::vector<DynloopFunctionPath> pathList;
 
@@ -241,8 +242,8 @@ struct DynloopFunctionAttribute {
     size_t currIndex{0};
 
     DynloopFunctionAttribute(
-        const std::string &symbolName, const LoopRange &range, const LoopRange &originRange, bool submit = false)
-        : iterSymbolName(symbolName), loopRange(range), originalRange(originRange), submitBeforeLoop(submit) {}
+        const std::string &symbolName, const LoopRange &range, const LoopRange &originRange, bool submit = false, bool parallelMode = false)
+ 	         : iterSymbolName(symbolName), loopRange(range), originalRange(originRange), submitBeforeLoop(submit), parallel(parallelMode) {}
 
     const std::string &IterSymbolName() { return iterSymbolName; }
     const SymbolicScalar &Begin() { return loopRange.Begin(); }

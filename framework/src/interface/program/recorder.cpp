@@ -201,14 +201,22 @@ bool RecordFunc::Iterator::operator!=(const IteratorEnd &rhs) {
 }
 
 RecordLoopFunc::RecordLoopFunc(const std::string &name, FunctionType funcType, const std::string &iterName,
-    const LoopRange &range, const std::set<int> &unrollList, bool submitBeforeLoop)
+    const LoopRange &range, const std::set<int> &unrollList, bool submitBeforeLoop, bool parallel)
     : name_(FUNCTION_PREFIX + name),
       iterName_(iterName),
       loopRange_(std::make_shared<LoopRange>(range)),
       submitBeforeLoop_(submitBeforeLoop),
+      parallel_(parallel),
       funcType_(funcType) {
     CHECK(FError::INVALID_TYPE, funcType == FunctionType::STATIC || funcType == FunctionType::DYNAMIC_LOOP)
         << "funcType: " << GetFunctionTypeNameDict().Find(funcType);
+    if (parallel_) {
+        for (auto &rlf : Program::GetInstance().GetLoopStack()) {
+            if (rlf.get().Getparallel()) {
+                ASSERT(!rlf.get().Getparallel()) << "The parallel attribute value does not allow nesting";
+            }
+        }
+    }
     Program::GetInstance().GetLoopStack().emplace_back(*this);
 
     GenDefaultUnrollTimes(unrollList);
@@ -235,6 +243,7 @@ void RecordLoopFunc::BeginLoopFunction() {
     auto loopFuncName = name_ + "_Unroll" + std::to_string(CurUnrollTimes());
     Program::GetInstance().BeginFunction(loopFuncName, FunctionType::DYNAMIC_LOOP);
     currentLoopFunc_ = Program::GetInstance().GetCurrentFunction();
+
     CHECK(FError::IS_EXIST, currentLoopFunc_->InsertLoopIdxNameList(iterName_))
         << "Forbid duplicate name of loop idx. It names " << iterName_;
     auto currentStep = CurUnrollTimes() == 1 ? loopRange_->Step() : loopRange_->Step() * CurUnrollTimes();
@@ -248,9 +257,11 @@ void RecordLoopFunc::BeginLoopFunction() {
         std::shared_ptr<LoopRange> newRange = std::make_shared<LoopRange>(prevRange->End(), newRangeEnd, currentStep);
         rangeOfEaceUnroll_.push_back(newRange);
     }
+    
     auto range = rangeOfEaceUnroll_.back();
     range->End().AsIntermediateVariable();
-    auto attr = std::make_shared<DynloopFunctionAttribute>(iterName_, *range, *loopRange_, submitBeforeLoop_);
+
+    auto attr = std::make_shared<DynloopFunctionAttribute>(iterName_, *range, *loopRange_, submitBeforeLoop_, parallel_);
     currentLoopFunc_->SetDynloopAttribute(attr);
     currentLoopFunc_->SetSourceLocation(location_);
 }

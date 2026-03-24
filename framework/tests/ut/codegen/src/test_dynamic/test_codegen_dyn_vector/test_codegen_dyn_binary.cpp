@@ -29,6 +29,7 @@
 #include "codegen/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
+#include "utils/host_log/log_manager.h"
 
 namespace npu::tile_fwk {
 class TestCodegenDynBinary : public ::testing::Test {
@@ -161,6 +162,7 @@ TEST_F(TestCodegenDynBinary, TestGatherEle) {
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
 }
+
 TEST_F(TestCodegenDynBinary, TestGatherEleTileTensor) {
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
     config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);

@@ -43,6 +43,12 @@
 using namespace npu::tile_fwk::dynamic;
 namespace npu::tile_fwk {
 
+enum ParallelMode {
+    DEFAULT = 0,
+    PARALLEL,
+    CHILD,
+};
+
 void ForceLinkLibraryCompiler() {}
 
 constexpr int ALIGN_SIZE_8 = 8;
@@ -352,6 +358,19 @@ static std::string BuildControlFlowCallee(Function *func, int ident) {
     return oss.str();
 }
 
+static ParallelMode GetFunctionParallelMode(Function *func) {
+    if (func->GetDynloopAttribute()->parallel) {
+        return ParallelMode::PARALLEL;
+    }
+
+    if (func->HasParent() && func->Parent().HasParent() && func->Parent().Parent().GetDynloopAttribute() &&
+        func->Parent().Parent().GetDynloopAttribute()->parallel) {
+            return func->Parent().Parent().GetDynloopAttribute()->parallel ?
+                ParallelMode::CHILD : ParallelMode::DEFAULT;
+    }
+    return ParallelMode::DEFAULT;
+}
+
 static void GenerateExpression(SymbolicExpressionTable *exprTable, int devRootKey, const std::string &expName,
     std::vector<std::string> &exprSrcFiles, std::ostringstream &controlFlowOss, std::ostringstream &exprHeaderOss, int indent,
     std::unordered_map<std::string, bool> &tensorNameToDependCore) {
@@ -465,6 +484,7 @@ static void BuildControlFlow(FunctionCache &cache, Linker &linker, const std::st
         controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "// hash=" << func->GetFunctionHash() << "\n";
         auto attr = func->GetDynloopAttribute();
         ASSERT(attr != nullptr)<<"attr is nullptr!";
+        (void)GetFunctionParallelMode(func);
         if (attr->submitBeforeLoop) {
             controlFlowOss << std::setw(indent * TABSIZE) << ' ' << "RUNTIME_RootStitch(RUNTIME_FUNCKEY_LOOP_BARRIER); // force submit before LOOP \n";
         }
