@@ -46,11 +46,11 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderS) {
     constexpr const int S = 16;
     constexpr const int D = 32;
     std::vector<int64_t> shape = {S, D};
-    Element other(DT_INT32, static_cast<int32_t>(2));
+    Element other(DT_INT16, static_cast<int16_t>(2));
     TileShape::Current().SetVecTile({S, D});
 
-    Tensor inputSrc(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, shape, "output");
+    Tensor inputSrc(DT_INT16, shape, "input");
+    Tensor output(DT_INT16, shape, "output");
     ConfigManager::Instance();
     std::string funcName = "RemainderS";
     FUNCTION(funcName, {inputSrc, output}) {
@@ -64,7 +64,7 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderS) {
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TRemainderS<float>(ubTensor_8, ubTensor_6, 2);)!!!";
+    std::string expect = R"!!!(TRemainderS<int16_t>(ubTensor_14, ubTensor_12, 2);)!!!";
     CheckStringExist(expect, res);
 }
 

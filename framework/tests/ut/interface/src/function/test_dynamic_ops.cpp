@@ -202,24 +202,24 @@ TEST_F(DynamicOpsTest, ExpandExpDifFp32) {
     }
 }
 
-TEST_F(DynamicOpsTest, RemainderFp32) {
+TEST_F(DynamicOpsTest, RemainderInt16) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
     int m = 32;
     int n = 32;
-    Tensor t0(DT_FP32, {m, n}, "t0");
-    Tensor t1(DT_FP32, {m, n}, "t1");
-    Tensor out(DT_FP32, {m, n}, "out");
+    Tensor t0(DT_INT16, {m, n}, "t0");
+    Tensor t1(DT_INT16, {m, n}, "t1");
+    Tensor out(DT_INT16, {m, n}, "out");
 
     ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateConstantTensor<float>(t0, 3.0),
-        RawTensorData::CreateConstantTensor<float>(t1, 2.0),
+        RawTensorData::CreateConstantTensor<int16_t>(t0, 3.0),
+        RawTensorData::CreateConstantTensor<int16_t>(t1, 2.0),
     });
     ProgramData::GetInstance().AppendOutputs({
-        RawTensorData::CreateConstantTensor<float>(out, 0.0),
+        RawTensorData::CreateConstantTensor<int16_t>(out, 0.0),
     });
     ProgramData::GetInstance().AppendGoldens({
-        RawTensorData::CreateConstantTensor<float>(out, 1.0),
+        RawTensorData::CreateConstantTensor<int16_t>(out, 1.0),
     });
 
     FUNCTION("main", {t0, t1}, {out}) {
@@ -260,23 +260,23 @@ TEST_F(DynamicOpsTest, RemainderSFp32) {
     }
 }
 
-TEST_F(DynamicOpsTest, RemainderRSFp32) {
+TEST_F(DynamicOpsTest, RemainderRSInt16) {
     config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
     config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
     int m = 32;
     int n = 32;
-    Tensor t0(DT_FP32, {m, n}, "t0");
-    Element src(DT_FP32, 4.0);
-    Tensor out(DT_FP32, {m, n}, "out");
+    Tensor t0(DT_INT16, {m, n}, "t0");
+    Element src(DT_INT16, 4.0);
+    Tensor out(DT_INT16, {m, n}, "out");
 
     ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateConstantTensor<float>(t0, 3.0),
+        RawTensorData::CreateConstantTensor<int16_t>(t0, 3.0),
     });
     ProgramData::GetInstance().AppendOutputs({
-        RawTensorData::CreateConstantTensor<float>(out, 0.0),
+        RawTensorData::CreateConstantTensor<int16_t>(out, 0.0),
     });
     ProgramData::GetInstance().AppendGoldens({
-        RawTensorData::CreateConstantTensor<float>(out, 1.0),
+        RawTensorData::CreateConstantTensor<int16_t>(out, 1.0),
     });
 
     FUNCTION("main", {t0}, {out}) {

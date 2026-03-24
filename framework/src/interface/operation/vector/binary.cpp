@@ -310,6 +310,15 @@ Tensor Fmod(const Tensor &self, const Tensor &other) {
 
 Tensor Remainder(const Tensor &self, const Tensor &other) {
     DECLARE_TRACER();
+    auto selfDtype = self.GetDataType();
+    if (selfDtype == DT_INT16) {
+        Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
+        Tensor castOther = Cast(other, DT_FP32, CastMode::CAST_NONE);
+        Tensor result = CALL(BinaryOperation<BinaryOpType::REM>,
+            *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), castOther.GetStorage());
+        Tensor castedResult = Cast(result, selfDtype, CastMode::CAST_TRUNC, SaturationMode::OFF);
+        return castedResult;
+    }
     RETURN_CALL(BinaryOperation<BinaryOpType::REM>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -451,12 +460,13 @@ Tensor Remainder(const Tensor &self, const Element &other) {
     DECLARE_TRACER();
     auto selfDtype = self.GetDataType();
     Tensor castSelf = self;
-    Element other_ = other;
-    if ((selfDtype == DT_INT16 || selfDtype == DT_INT32) && other.GetDataType() == DT_FP32) {
-        castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            self.GetStorage(), DT_FP32, CastMode::CAST_NONE);
-    } else {
-        other_ = Element(selfDtype, other.Cast<float>());
+    Element other_ = Element(selfDtype, other.Cast<float>());
+    if (selfDtype == DT_INT16) {
+        castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
+        Tensor result = CALL(BinaryOperationScalar<BinaryOpType::REM>,
+            *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage(), other_);
+        Tensor castedResult = Cast(result, selfDtype, CastMode::CAST_TRUNC, SaturationMode::OFF);
+        return castedResult;
     }
     RETURN_CALL(BinaryOperationScalar<BinaryOpType::REM>, *Program::GetInstance().GetCurrentFunction(),
         castSelf.GetStorage(), other_);
@@ -466,12 +476,13 @@ Tensor Remainder(const Element &self, const Tensor &other) {
     DECLARE_TRACER();
     auto otherDtype = other.GetDataType();
     Tensor castOther = other;
-    Element self_ = self;
-    if ((otherDtype == DT_INT16 || otherDtype == DT_INT32) && self.GetDataType() == DT_FP32) {
-        castOther = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
-            other.GetStorage(), DT_FP32, CastMode::CAST_NONE);
-    } else {
-        self_ = Element(otherDtype, self.Cast<float>());
+    Element self_ = Element(otherDtype, self.Cast<float>());
+    if (otherDtype == DT_INT16) {
+        castOther = Cast(other, DT_FP32, CastMode::CAST_NONE);
+        Tensor result = CALL(BinaryOperationAllScalar<BinaryOpType::REMR>,
+            *Program::GetInstance().GetCurrentFunction(), castOther.GetStorage(), self_, true);
+        Tensor castedResult = Cast(result, otherDtype, CastMode::CAST_TRUNC, SaturationMode::OFF);
+        return castedResult;
     }
     RETURN_CALL(BinaryOperationAllScalar<BinaryOpType::REMR>, *Program::GetInstance().GetCurrentFunction(),
         castOther.GetStorage(), self_, true);

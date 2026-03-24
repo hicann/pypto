@@ -111,7 +111,7 @@ def test_remainderrs_onboard():
     tile_shape = (16, 16)
     pypto.runtime._device_init()
 
-    input1 = pypto.tensor(shape, pypto.DT_INT16, "PTO_TENSOR_input1")
+    input1 = pypto.tensor(shape, pypto.DT_FP32, "PTO_TENSOR_input1")
     output = pypto.tensor(shape, pypto.DT_FP32, "PTO_TENSOR_output")
 
     b_loop_num = math.ceil(shape[0] / view_shape[0])
@@ -131,8 +131,7 @@ def test_remainderrs_onboard():
                 del view_tensor_a, view_tensor_b
 
 
-    a_tensor = torch.randint(
-        low=1, high=100, size=[shape[0], shape[1]], dtype=torch.int16)
+    a_tensor = torch.randn(shape, dtype=torch.float32)
     out_tensor = torch.zeros(shape[0], shape[1], dtype=torch.float32)
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
     pto_out_tensor = pypto.from_torch(out_tensor, "out_tensor")

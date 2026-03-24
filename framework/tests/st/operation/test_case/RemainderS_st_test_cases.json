@@ -378,7 +378,7 @@
         },
         {
             "case_index": 8,
-            "case_name": "RemainderS_2D_unalign_int32_int32",
+            "case_name": "RemainderS_2D_unalign_int32",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -426,7 +426,7 @@
         },
         {
             "case_index": 9,
-            "case_name": "RemainderS_2D_unalign_int16_int32",
+            "case_name": "RemainderS_2D_unalign_int16",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -474,103 +474,7 @@
         },
         {
             "case_index": 10,
-            "case_name": "RemainderS_2D_unalign_int32_fp32",
-            "operation": "RemainderS",
-            "input_tensors": [
-                {
-                    "name": "input0",
-                    "shape": [
-                        24,
-                        40
-                    ],
-                    "dtype": "int32",
-                    "format": "ND",
-                    "need_trans": false,
-                    "data_range": {
-                        "min": 1,
-                        "max": 100
-                    }
-                }
-            ],
-            "output_tensors": [
-                {
-                    "name": "output0",
-                    "shape": [
-                        24,
-                        40
-                    ],
-                    "dtype": "fp32",
-                    "format": "ND",
-                    "need_trans": false
-                }
-            ],
-            "view_shape": [
-                14,
-                16
-            ],
-            "tile_shape": [
-                6,
-                8
-            ],
-            "params": {
-                "scalar": -3.5,
-                "scalar_type": "fp32",
-                "on_board": true,
-                "func_id": -1
-            },
-            "index": 10
-        },
-        {
-            "case_index": 11,
-            "case_name": "RemainderS_2D_unalign_int16_fp32",
-            "operation": "RemainderS",
-            "input_tensors": [
-                {
-                    "name": "input0",
-                    "shape": [
-                        28,
-                        44
-                    ],
-                    "dtype": "int16",
-                    "format": "ND",
-                    "need_trans": false,
-                    "data_range": {
-                        "min": 1,
-                        "max": 100
-                    }
-                }
-            ],
-            "output_tensors": [
-                {
-                    "name": "output0",
-                    "shape": [
-                        28,
-                        44
-                    ],
-                    "dtype": "fp32",
-                    "format": "ND",
-                    "need_trans": false
-                }
-            ],
-            "view_shape": [
-                14,
-                20
-            ],
-            "tile_shape": [
-                7,
-                16
-            ],
-            "params": {
-                "scalar": 3.7,
-                "scalar_type": "fp32",
-                "on_board": true,
-                "func_id": -1
-            },
-            "index": 11
-        },
-        {
-            "case_index": 12,
-            "case_name": "RemainderS_3D_align_fp32_fp32",
+            "case_name": "RemainderS_3D_align_fp32",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -618,11 +522,11 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 12
+            "index": 10
         },
         {
-            "case_index": 13,
-            "case_name": "RemainderS_3D_unalign_fp16_fp32",
+            "case_index": 11,
+            "case_name": "RemainderS_3D_unalign_fp16",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -670,11 +574,11 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 13
+            "index": 11
         },
         {
-            "case_index": 14,
-            "case_name": "RemainderS_3D_align_int32_int32",
+            "case_index": 12,
+            "case_name": "RemainderS_3D_align_int32",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -722,11 +626,11 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 14
+            "index": 12
         },
         {
-            "case_index": 15,
-            "case_name": "RemainderS_4D_align_int32_fp32",
+            "case_index": 13,
+            "case_name": "RemainderS_4D_align_bf16",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -737,7 +641,7 @@
                         8,
                         8
                     ],
-                    "dtype": "int32",
+                    "dtype": "bf16",
                     "format": "ND",
                     "need_trans": false,
                     "data_range": {
@@ -755,7 +659,7 @@
                         8,
                         8
                     ],
-                    "dtype": "fp32",
+                    "dtype": "bf16",
                     "format": "ND",
                     "need_trans": false
                 }
@@ -778,11 +682,11 @@
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 15
+            "index": 13
         },
         {
-            "case_index": 16,
-            "case_name": "RemainderS_4D_unalign_int16_fp32",
+            "case_index": 14,
+            "case_name": "RemainderS_4D_unalign_int16",
             "operation": "RemainderS",
             "input_tensors": [
                 {
@@ -811,7 +715,7 @@
                         12,
                         12
                     ],
-                    "dtype": "fp32",
+                    "dtype": "int16",
                     "format": "ND",
                     "need_trans": false
                 }
@@ -829,12 +733,12 @@
                 16
             ],
             "params": {
-                "scalar": 3.75,
-                "scalar_type": "fp32",
+                "scalar": 3.0,
+                "scalar_type": "int32",
                 "on_board": true,
                 "func_id": -1
             },
-            "index": 16
+            "index": 14
         }
     ]
 }

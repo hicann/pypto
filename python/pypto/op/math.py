@@ -399,15 +399,11 @@ def remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]
     if isinstance(input, pypto_impl.Tensor):
         if isinstance(other, pypto_impl.Tensor):
             return pypto_impl.Remainder(input, other)
-        if isinstance(other, float):
-            return pypto_impl.Remainder(input, pypto_impl.Element(DataType.DT_FP32, other))
-        if isinstance(other, int):
-            return pypto_impl.Remainder(input, pypto_impl.Element(DataType.DT_INT32, other))
+        if isinstance(other, float) or isinstance(other, int):
+            return pypto_impl.Remainder(input, pypto_impl.Element(input.dtype, other))
     if isinstance(other, pypto_impl.Tensor):
-        if isinstance(input, int):
-            return pypto_impl.Remainder(pypto_impl.Element(DataType.DT_INT32, input), other)
-        if isinstance(input, float):
-            return pypto_impl.Remainder(pypto_impl.Element(DataType.DT_FP32, input), other)
+        if isinstance(input, float) or isinstance(input, int):
+            return pypto_impl.Remainder(pypto_impl.Element(other.dtype, input), other)
     raise TypeError(f"Unsupported operand types for remainder: {type(input)} and {type(other)}")
 
 
