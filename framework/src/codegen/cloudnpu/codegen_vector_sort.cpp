@@ -564,8 +564,8 @@ std::string CodeGenOpCloudNPU::PrintSortUBDynamicUnaligned(bool containDstType) 
     } else {
         paramList.emplace_back(srcDtypeStr);
     }
-    FillParamWithFullShape(paramList, ds);
-    FillParamWithFullShape(paramList, ss);
+    FillParamWithFullInput(paramList, ds);
+    FillParamWithFullInput(paramList, ss);
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     templateParam += GenOpAttr();
     paramList.clear();

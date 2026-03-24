@@ -101,9 +101,9 @@ std::string CodeGenOpCloudNPU::PrintRowMaxlineStatic(const PrintUnaryParam &para
 
     std::vector<std::string> paramList;
     paramList.emplace_back(param.dstDtypeStr);
-    FillParamWithFullShape(paramList, os);
-    FillParamWithShapeExceptFirst(paramList, srcShape);
-    FillParamWithShapeExceptFirst(paramList, dstShape);
+    FillParamWithFullInput(paramList, os);
+    FillParamWithInputExceptFirst(paramList, srcShape);
+    FillParamWithInputExceptFirst(paramList, dstShape);
     paramList.emplace_back(std::to_string(reduceAxis));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
 

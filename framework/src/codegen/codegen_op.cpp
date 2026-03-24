@@ -142,40 +142,39 @@ void CodeGenOp::UpdateShapeFromAttr(const std::vector<OpImmediate> &toValidShape
 }
 
 void CodeGenOp::UpdateOffsetForInput(const Operation &oper, const LogicalTensor &logicalTensor, int operandIdx) {
-    const std::set<Opcode> cubeMDLOpCode = {Opcode::OP_L1_TO_L0A, Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT,
+    static const std::set<Opcode> cubeMDLOpCode = {Opcode::OP_L1_TO_L0A, Opcode::OP_L1_TO_L0B, Opcode::OP_L1_TO_L0_AT,
         Opcode::OP_L1_TO_L0_BT, Opcode::OP_L1_TO_BT, Opcode::OP_L1_TO_FIX_QUANT_PRE, Opcode::OP_L0C_TO_L1,
-        Opcode::OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0B_SCALE};
+        Opcode::OP_L1_TO_L0A_SCALE, Opcode::OP_L1_TO_L0B_SCALE, Opcode::OP_L0C_COPY_UB};
+    bool cubeMDLCondition = cubeMDLOpCode.count(opCode);
+    bool useAttrShapeOffsetForInputGM =
+        OpcodeManager::Inst().IsCopyIn(opCode) && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR;
     std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
-    bool cubeMDLCondition = cubeMDLOpCode.count(opCode) && (attr != nullptr);
-    bool useAttrShapeOffsetForInputGM = OpcodeManager::Inst().IsCopyIn(opCode);
-    if (cubeMDLCondition || (useAttrShapeOffsetForInputGM && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
+    if (attr != nullptr && (cubeMDLCondition || useAttrShapeOffsetForInputGM)) {
         // only used for 1. L1 Copy; 2. spilling to gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         CODEGEN_LOGI("start update offset for GM input");
-        ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy in op: \n" << oper.Dump();
         UpdateOffsetValueFromAttr(attr->GetCopyInAttr().first, operandIdx);
         return;
     }
 
     offset[operandIdx] = logicalTensor.offset; // Local Tensor offset just use offset from LogicalTensor
-    CODEGEN_LOGI("UpdateOffsetForInput offset is %s", IntVecToStr(offset[operandIdx]).c_str());
+    CODEGEN_LOGI("UpdateOffsetForInput logicalTensor offset is %s", IntVecToStr(offset[operandIdx]).c_str());
 }
 
 void CodeGenOp::UpdateOffsetForOutput(const Operation &oper, const LogicalTensor &logicalTensor, int operandIdx) {
-    bool useAttrShapeOffsetForOutputGM = OpcodeManager::Inst().IsCopyOut(opCode);
-    const std::set<Opcode> cubeMDLOutOpCode = {Opcode::OP_L0C_TO_L1};
+    static const std::set<Opcode> cubeMDLOutOpCode = {Opcode::OP_L0C_TO_L1, Opcode::OP_L0C_COPY_UB};
+    bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode);
+    bool useAttrShapeOffsetForOutputGM =
+        OpcodeManager::Inst().IsCopyOut(opCode) && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR;
     std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(oper.GetOpAttribute());
-    bool cubeMDLCondition = cubeMDLOutOpCode.count(opCode) && (attr != nullptr);
-    if (cubeMDLCondition ||
-        (useAttrShapeOffsetForOutputGM && logicalTensor.GetMemoryTypeOriginal() == MEM_DEVICE_DDR)) {
+    if (attr != nullptr && (cubeMDLCondition || useAttrShapeOffsetForOutputGM)) {
         // only used for 1. L1 Copy; 2. spilling to gm scene(e.g., ooo spilling); 3. matmul Multi-Data Load scene.
         CODEGEN_LOGI("start update offset for GM output");
-        ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << ": missing OpAttr in copy in op: \n" << oper.Dump();
         UpdateOffsetValueFromAttr(attr->GetCopyOutAttr().second, operandIdx);
         return;
     }
 
     offset[operandIdx] = logicalTensor.offset; // Local Tensor offset just use offset from LogicalTensor
-    CODEGEN_LOGI("UpdateOffsetForInput offset is %s", IntVecToStr(offset[operandIdx]).c_str());
+    CODEGEN_LOGI("UpdateOffsetForOutput logicalTensor offset is %s", IntVecToStr(offset[operandIdx]).c_str());
 }
 
 void CodeGenOp::UpdateScalarValue(const Operation &ops) {

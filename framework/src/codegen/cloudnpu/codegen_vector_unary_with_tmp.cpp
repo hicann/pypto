@@ -355,10 +355,10 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffPara
 
     std::vector<std::string> paramList;
     paramList.emplace_back(param.dstDtypeStr);
-    FillParamWithFullShape(paramList, os);
-    FillParamWithShapeExceptFirst(paramList, srcShape);
-    FillParamWithShapeExceptFirst(paramList, dstShape);
-    FillParamWithShapeExceptFirst(paramList, tmpShape);
+    FillParamWithFullInput(paramList, os);
+    FillParamWithInputExceptFirst(paramList, srcShape);
+    FillParamWithInputExceptFirst(paramList, dstShape);
+    FillParamWithInputExceptFirst(paramList, tmpShape);
     paramList.emplace_back(std::to_string(reduceAxis));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
 

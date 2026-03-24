@@ -691,6 +691,22 @@ std::string CodeGenOpCloudNPU::PrintCoord(size_t dim, const std::string &coord) 
     return ret;
 }
 
+std::pair<std::string, std::string> CodeGenOpCloudNPU::PrintDstSrcCoordFromAttr() const {
+    std::vector<std::string> dstOffset;
+    for (const auto &tmpOffset : offsetFromAttr[ToUnderlying(MISOIdx::DST_IDX)]) {
+        dstOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
+    }
+    std::vector<std::string> srcOffset;
+    for (const auto &tmpOffset : offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)]) {
+        srcOffset.emplace_back(SymbolicExpressionTable::BuildExpression(tmpOffset));
+    }
+    std::string coordCpDst = WrapParamByParentheses(dstOffset);
+    std::string coordDst = PrintCoord(rawShape[ToUnderlying(MISOIdx::DST_IDX)].size(), coordCpDst);
+    std::string coordCpSrc = WrapParamByParentheses(srcOffset);
+    std::string coordSrc = PrintCoord(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), coordCpSrc);
+    return {coordDst, coordSrc};
+}
+
 TileTensor CodeGenOpCloudNPU::QueryTileTensorByIdx(int paramIdx) const {
     std::vector<TileTensor> res;
     bool isInLoop = forBlkMgr_ != nullptr && forBlkMgr_->IsInLoop();
