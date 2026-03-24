@@ -28,7 +28,7 @@
 #define STR(n)          STR_(n)
 #endif
 
-#define AOT_CODE_POOL_CODE_SIZE     (4096 * 0x200)
+#define AOT_CODE_POOL_CODE_SIZE     (4096 * 0x800)
 extern uint8_t aotCodePoolCode[];
 
 namespace npu::tile_fwk::dynamic {
