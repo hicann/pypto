@@ -336,7 +336,8 @@ std::string PipeSync::PipeDepInfo::DumpPipeDepInfo() {
     ss << "    wait idx: " << waitIdx << "\n";
     ss << "    setPipes:" << "\n";
     for (auto pair : setPipes) {
-        ss << "        pipetype: " << GetPipeTypeDict().Find(pair.first.pipe) << "  opidx: " << pair.second << "\n";
+        ss << "        pipetype: " << GetPipeTypeDict().Find(pair.first.pipe)
+ 	        << "  aivCore: " << static_cast<int>(pair.first.aivCore) << "  opidx: " << pair.second << "\n";
     }
     return ss.str();
 }
@@ -1281,8 +1282,10 @@ bool PipeSync::HasDataDependency(const Operation &opSet, const Operation &opWait
 }
 
 void PipeSync::UpdateDep(DepOp &currOp, DepOp &prevOp) {
-    PipeCoreReal currPipe(currOp.selfPipeCore.pipeStart, currOp.selfPipeCore.core);
-    PipeCoreReal prevPipe(prevOp.selfPipeCore.pipeEnd, prevOp.selfPipeCore.core);
+    AIVCore currAIVCore = oriOpList_[currOp.idx]->GetAIVCore();
+    AIVCore prevAIVCore = oriOpList_[prevOp.idx]->GetAIVCore();
+    PipeCoreRealEx currPipe(currOp.selfPipeCore.pipeStart, currOp.selfPipeCore.core, currAIVCore);
+    PipeCoreRealEx prevPipe(prevOp.selfPipeCore.pipeEnd, prevOp.selfPipeCore.core, prevAIVCore);
     auto &currPipeDep = latestPipeDep_[currPipe];
     currPipeDep.waitIdx = currOp.idx;
 
@@ -1296,9 +1299,9 @@ void PipeSync::UpdateDep(DepOp &currOp, DepOp &prevOp) {
         auto prevWaitPipeIdx = prevPipeDepIter->second.waitIdx;
         if (prevPipeDepIter != latestPipeDep_.end() && prevWaitPipeIdx <= prevOp.idx) {
             // merge dependency
-            std::map<PipeCoreReal, size_t, PipeCoreRealCompare> prevSetPipes = prevPipeDepIter->second.setPipes;
+            std::map<PipeCoreRealEx, size_t, PipeCoreRealExCompare> prevSetPipes = prevPipeDepIter->second.setPipes;
             for (auto ele : prevSetPipes) {
-                PipeCoreReal prevSetPipeType = ele.first;
+                PipeCoreRealEx prevSetPipeType = ele.first;
                 size_t prevSetPipeIdx = ele.second;
                 auto res = currPipeDep.setPipes.emplace(prevSetPipeType, prevSetPipeIdx);
                 //isExist == isPrevSetPipeTypeExist
@@ -1686,7 +1689,7 @@ Status InsertSync::InsertSyncMainLoop(Function *subGraphFunc) {
                 GetPipeTypeDict().Find(op->syncQueue_.trigPipeId_).c_str(), GetCoreTypeDict().Find(op->syncQueue_.trigCoreType_).c_str(), op->syncQueue_.eventId_);
             continue;
         }
-        APASS_LOG_DEBUG_F(Elements::Operation, "Output operation %d: %s", op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        APASS_LOG_DEBUG_F(Elements::Operation, "Output operation %d: %s, AIV core type: %d", op->GetOpMagic(), op->GetOpcodeStr().c_str(), static_cast<int>(op->GetAIVCore()));
     }
     return SUCCESS;
 }

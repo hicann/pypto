@@ -120,6 +120,33 @@ private:
         bool operator!=(const PipeCoreReal &t) const { return !(*this == t); }
     };
 
+    // 包含AIVCore类型的PipeCoreReal
+    struct PipeCoreRealEx {
+        PipeCoreRealEx(PipeType p, CoreType c, AIVCore a = AIVCore::UNSPECIFIED) : pipe(p), core(c), aivCore(a) {}
+        PipeCoreRealEx(PipeCoreReal p, AIVCore a = AIVCore::UNSPECIFIED) : pipe(p.pipe), core(p.core), aivCore(a) {}
+        PipeType pipe;
+        CoreType core;
+        AIVCore aivCore{AIVCore::UNSPECIFIED};
+
+        bool operator==(const PipeCoreRealEx &t) const {
+            return (this->pipe == t.pipe && this->core == t.core && this->aivCore == t.aivCore);
+        }
+
+        bool operator!=(const PipeCoreRealEx &t) const { return !(*this == t); }
+    };
+
+    struct PipeCoreRealExCompare {
+        bool operator()(const PipeCoreRealEx &lhs, const PipeCoreRealEx &rhs) const {
+            if (lhs.core != rhs.core) {
+                return static_cast<uint64_t>(lhs.core) < static_cast<uint64_t>(rhs.core);
+            }
+            if (lhs.pipe != rhs.pipe) {
+                return static_cast<uint64_t>(lhs.pipe) < static_cast<uint64_t>(rhs.pipe);
+            }
+            return static_cast<int>(lhs.aivCore) < static_cast<int>(rhs.aivCore);
+        }
+    };
+ 	 
     struct PipeCoreRealCompare {
         bool operator()(const PipeCoreReal &lhs, const PipeCoreReal &rhs) const {
             return ((static_cast<uint64_t>(lhs.core) << LEFT_OFFSET2) | (static_cast<uint64_t>(lhs.pipe) << LEFT_OFFSET3))
@@ -202,7 +229,7 @@ private:
 
     struct PipeDepInfo {
         size_t waitIdx;
-        std::map<PipeCoreReal, size_t, PipeCoreRealCompare> setPipes;
+        std::map<PipeCoreRealEx, size_t, PipeCoreRealExCompare> setPipes;
         std::string DumpPipeDepInfo();
     };
 
@@ -283,7 +310,7 @@ private:
     std::unordered_map<PipePair, std::deque<int>, PipePairHash> freeEventId_;
     std::unordered_map<CorePair, std::deque<int>, CorePairHash> crossCoreFreeEventId_;
     std::unordered_map<std::pair<size_t, size_t>, int, IndexVecHash> setWaitPairMap_;
-    std::map<PipeCoreReal, PipeDepInfo, PipeCoreRealCompare> latestPipeDep_;
+    std::map<PipeCoreRealEx, PipeDepInfo, PipeCoreRealExCompare> latestPipeDep_;
     static std::map<PipeCoreReal, PipeSeq, PipeCoreRealCompare> pipe2Seq;
     static std::map<PipeSeq, PipeCoreReal> seq2pipe;
     static std::vector<PipePair> dataDepPair;

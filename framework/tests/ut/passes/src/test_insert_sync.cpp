@@ -409,11 +409,12 @@ TEST_F(InsertSyncTest, TestUpdateDep) {
             if (ps.HasDataDependency(*opLogPtr[k], *opLogPtr[i], k, i)) {
                 // start tests
                 ps.UpdateDep(currOp, prevOp);
-                PipeSync::PipeCoreReal pcCurr(PipeType::PIPE_MTE3, CoreType::AIV);
-                PipeSync::PipeCoreReal pcSet1(PipeType::PIPE_V, CoreType::AIV);
-                PipeSync::PipeCoreReal pcSet2(PipeType::PIPE_MTE2, CoreType::AIV);
+                PipeSync::PipeCoreRealEx pcCurr(PipeType::PIPE_MTE3, CoreType::AIV, AIVCore::AIV0);
+                PipeSync::PipeCoreRealEx pcSet1(PipeType::PIPE_V, CoreType::AIV, AIVCore::AIV0);
+                PipeSync::PipeCoreRealEx pcSet2(PipeType::PIPE_MTE2, CoreType::AIV, AIVCore::AIV0);
                 auto setPipeIdx1 = ps.latestPipeDep_[pcCurr].setPipes[pcSet1];
                 auto setPipeIdx2 = ps.latestPipeDep_[pcCurr].setPipes[pcSet2];
+                ps.latestPipeDep_[pcCurr].DumpPipeDepInfo();
                 if (i == IS_NUM4 && k == IS_NUM3) {
                     EXPECT_EQ(setPipeIdx1, IS_NUM3);
                     EXPECT_EQ(setPipeIdx2, IS_NUM1);
