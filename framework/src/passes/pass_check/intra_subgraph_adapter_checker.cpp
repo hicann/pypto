@@ -15,18 +15,20 @@
 
 #include "intra_subgraph_adapter_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "tilefwk/platform.h"
 #define MODULE_NAME "IntraSubgraphAdapterChecker"
 
 namespace npu {
 namespace tile_fwk {
 
 Status IntraSubgraphAdapterChecker::PostCheckSubgraphTensor(const std::vector<std::vector<Operation *>> &subgraphs) {
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        return SUCCESS;
+    }
     for (const auto &subgraph : subgraphs) {
         if (subgraph.empty()) {
             continue;
         }
-        int32_t aicCount = 0;
-        int32_t aivCount = 0;
         int32_t aicMemoryCount = 0;
         int32_t aivMemoryCount = 0;
         std::unordered_set<std::shared_ptr<LogicalTensor>> tensorList;
@@ -48,16 +50,6 @@ Status IntraSubgraphAdapterChecker::PostCheckSubgraphTensor(const std::vector<st
                     aivMemoryCount++;
                 }
             }
-            if (op->HasAttr(OpAttributeKey::isCube) && op->GetBoolAttribute(OpAttributeKey::isCube)) {
-                aicCount++;
-                continue;
-            }
-            aivCount++;
-        }
-        if (aicCount > 0 && aivCount > 0) {
-            APASS_LOG_ERROR_F(Elements::Tensor, "Subgraph %d has both AIV(%d) and AIC(%d) operation.", subgraphId,
-                aivCount, aicCount);
-            return FAILED;
         }
         if (aicMemoryCount > 0 && aivMemoryCount > 0) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Subgraph %d has both ub(%d) and l0/l1(%d) memory type tensor.",
