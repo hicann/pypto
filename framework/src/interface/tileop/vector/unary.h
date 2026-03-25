@@ -214,11 +214,14 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
     constexpr int validW = GetValidWidth<SrcTileTensor>();
 
     if constexpr (IsIntegralType<SrcType>()) {
-        using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / 2, pto::BLayout::RowMajor, validH, validW / 2>;
+        using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, (tileDstW + 1) / 2, pto::BLayout::RowMajor, validH, (validW + 1) / 2>;
         TileDefineDst dstTile;
         pto::TASSIGN(dstTile, dst.GetAddr());
         int16_t mask = 0x0101;
+        TANDS(dstTile, dstTile, 0);
+        SyncV();
         TORS(dstTile, dstTile, mask);
+        SyncV();
         return;
     }
 
@@ -259,7 +262,7 @@ TILEOP void TIsFinite4Integral(DstTileTensor dst, SrcTileTensor src) {
     int validW = src.GetLayout().template GetShapeDim<DIM_5TH, MAX_DIMS>();
 
     using TileDefineDst = pto::Tile<pto::TileType::Vec, int16_t, tileDstH, tileDstW / 2, pto::BLayout::RowMajor, -1, -1>;
-    TileDefineDst dstTile(validH, validW / 2);
+    TileDefineDst dstTile(validH, (validW + 1) / 2);
     pto::TASSIGN(dstTile, dst.GetAddr());
     const auto dstLayout = dst.GetLayout();
     auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
@@ -272,7 +275,10 @@ TILEOP void TIsFinite4Integral(DstTileTensor dst, SrcTileTensor src) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 pto::TASSIGN(dstTile, dst.GetAddr() + GenTileOffset(dst, tileOffsets) * sizeof(DstType));
+                TANDS(dstTile, dstTile, 0);
+                SyncV();
                 TORS(dstTile, dstTile, mask);
+                SyncV();
             }
         }
     }
