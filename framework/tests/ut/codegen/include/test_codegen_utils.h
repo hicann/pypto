@@ -68,14 +68,14 @@ void CheckStringExist(const std::string &expect, const std::string &result);
 Function *GenMockFuncDyn(const std::string &funcName, const std::vector<int64_t> &shape = {64, 64});
 Function *GenMockFuncStatic(const std::string &funcName, const std::vector<int64_t> &shape = {64, 64});
 
-struct MockFuncDynConfig {
+struct MockFuncDynUnaryConf {
     std::vector<int64_t> shape = {64, 64};
     std::vector<int64_t> tileShape = {};
     DataType dtype = DT_FP32;
 };
 
 template <typename OpFunc>
-Function *GenMockFuncDynUnary(const std::string &funcName, const MockFuncDynConfig &config, OpFunc opFunc) {
+Function *GenMockFuncDynUnary(const std::string &funcName, const MockFuncDynUnaryConf &config, OpFunc opFunc) {
     auto tileShape = config.tileShape.empty() ? config.shape : config.tileShape;
     TileShape::Current().SetVecTile(tileShape);
     Tensor input(config.dtype, config.shape, "input");
@@ -93,6 +93,36 @@ Function *GenMockFuncDynUnary(const std::string &funcName, const MockFuncDynConf
     function->SetUnderDynamicFunction(true);
     return function;
 }
+
+struct MockFuncDynBinaryConf {
+    std::vector<int64_t> shapeA = {64, 64};
+    std::vector<int64_t> shapeB = {64, 64};
+    std::vector<int64_t> outputShape = {64, 64};
+    std::vector<int64_t> tileShape = {};
+    DataType dtype = DT_FP32;
+};
+
+template <typename OpFunc>
+Function *GenMockFuncDynBinary(const std::string &funcName, const MockFuncDynBinaryConf &config, OpFunc opFunc) {
+    auto tileShape = config.tileShape.empty() ? config.outputShape : config.tileShape;
+    TileShape::Current().SetVecTile(tileShape);
+    Tensor inputA(config.dtype, config.shapeA, "inputA");
+    Tensor inputB(config.dtype, config.shapeB, "inputB");
+    Tensor output(config.dtype, config.outputShape, "output");
+
+    FUNCTION(funcName, {inputA, inputB}, {output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            opFunc(inputA, inputB, output);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    function->SetUnderDynamicFunction(true);
+    return function;
+}
+
 
 std::shared_ptr<LogicalTensor> CreateConvTensor(Function &function, const DataType &dtype,
     const std::vector<int64_t> &shape, const MemoryType &memType, const bool &isCopyIn = true);

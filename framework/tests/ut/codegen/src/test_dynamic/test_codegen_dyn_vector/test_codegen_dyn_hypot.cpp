@@ -47,26 +47,9 @@ public:
 };
 
 TEST_F(TestCodegenDynHypot, HypotNormal) {
-    std::vector<int64_t> shape = {32, 256};
-    TileShape::Current().SetVecTile(shape);
-    
-    Tensor inputA(DT_FP32, shape, "inputA");
-    Tensor inputB(DT_FP32, shape, "inputB");
-    Tensor output(DT_FP32, shape, "output");
-
-    std::string funcName = "HYPOT_NORMAL";
-
-    FUNCTION(funcName, {inputA, inputB}, {output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = Hypot(inputA, inputB);
-        }
-    }
-
-    auto rawName = FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX;
-    auto function = Program::GetInstance().GetFunctionByRawName(rawName);
-    
-    ASSERT_NE(function, nullptr) << "Failed to find function: " << rawName;
+    MockFuncDynBinaryConf config;
+    auto function = GenMockFuncDynBinary(
+        "HYPOT_NORMAL", config, [](Tensor &inputA, Tensor &inputB, Tensor &output) { output = Hypot(inputA, inputB); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);

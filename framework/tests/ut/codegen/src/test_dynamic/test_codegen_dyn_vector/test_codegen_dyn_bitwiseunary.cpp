@@ -47,37 +47,19 @@ public:
     void TearDown() override {}
 };
 
-void TestBitwiseUnaryDynBody(const std::vector<int64_t> &shape, 
-                          const std::vector<int64_t> &tile_shape, 
-                          const std::string &name,
-                          const std::string &expect) {
-    // 设置Tile形状
-    TileShape::Current().SetVecTile(tile_shape);
-    
-    Tensor input_a(DT_INT16, shape, "A");
-    Tensor output(DT_INT16, shape, "B");
-
-    FUNCTION(name, {input_a}, {output}) {
-        LOOP(name, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = BitwiseNot(input_a);
-
-        }
-    }
-
-    auto function = Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + name + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+TEST_F(TestCodegenDynBitwiseUnary, BitwiseNotLayout) {
+    MockFuncDynUnaryConf config;
+    config.dtype = DT_INT16;
+    auto function =
+        GenMockFuncDynUnary("BitwiseNot", config, [](Tensor &input, Tensor &output) { output = BitwiseNot(input); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
 
     std::string res = GetResultFromCpp(*function);
+    std::string expect = R"(TBitwiseNot(ubTensor_0, ubTensor_0);)";
     CheckStringExist(expect, res);
-}
-
-TEST_F(TestCodegenDynBitwiseUnary, BitwiseNotLayout) {
-    const std::string expect = R"(TBitwiseNot(ubTensor_0, ubTensor_0);)";
-    TestBitwiseUnaryDynBody({32, 32}, {16, 16}, "BitwiseNot", expect);
 }
 
 } // namespace npu::tile_fwk

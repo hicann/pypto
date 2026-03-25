@@ -47,26 +47,12 @@ public:
 };
 
 TEST_F(TestCodegenDynPrelu, PreluNormal) {
-    std::vector<int64_t> shape = {32, 256};
-    TileShape::Current().SetVecTile(shape);
-    
-    Tensor input(DT_FP32, shape, "input");
-    Tensor weight(DT_FP32, {shape[1]}, "weight");
-    Tensor output(DT_FP32, shape, "output");
-
-    std::string funcName = "PRELU_NORMAL";
-
-    FUNCTION(funcName, {input, weight}, {output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = PReLU(input, weight);
-        }
-    }
-
-    auto rawName = FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX;
-    auto function = Program::GetInstance().GetFunctionByRawName(rawName);
-    
-    ASSERT_NE(function, nullptr) << "Failed to find function: " << rawName;
+    MockFuncDynBinaryConf config;
+    config.shapeA = {32, 256};
+    config.shapeB = {256};
+    config.outputShape = {32, 256};
+    auto function = GenMockFuncDynBinary(
+        "PRELU_NORMAL", config, [](Tensor &input, Tensor &weight, Tensor &output) { output = PReLU(input, weight); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -74,26 +60,13 @@ TEST_F(TestCodegenDynPrelu, PreluNormal) {
 }
 
 TEST_F(TestCodegenDynPrelu, PreluFP16) {
-    std::vector<int64_t> shape = {16, 128};
-    TileShape::Current().SetVecTile(shape);
-    
-    Tensor input(DT_FP16, shape, "input");
-    Tensor weight(DT_FP16, {shape[1]}, "weight");
-    Tensor output(DT_FP16, shape, "output");
-
-    std::string funcName = "PRELU_FP16";
-
-    FUNCTION(funcName, {input, weight}, {output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = PReLU(input, weight);
-        }
-    }
-
-    auto rawName = FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX;
-    auto function = Program::GetInstance().GetFunctionByRawName(rawName);
-    
-    ASSERT_NE(function, nullptr) << "Failed to find function: " << rawName;
+    MockFuncDynBinaryConf config;
+    config.shapeA = {16, 128};
+    config.shapeB = {128};
+    config.outputShape = {16, 128};
+    config.dtype = DT_FP16;
+    auto function = GenMockFuncDynBinary(
+        "PRELU_FP16", config, [](Tensor &input, Tensor &weight, Tensor &output) { output = PReLU(input, weight); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -101,26 +74,13 @@ TEST_F(TestCodegenDynPrelu, PreluFP16) {
 }
 
 TEST_F(TestCodegenDynPrelu, PreluBF16) {
-    std::vector<int64_t> shape = {8, 64};
-    TileShape::Current().SetVecTile(shape);
-    
-    Tensor input(DT_BF16, shape, "input");
-    Tensor weight(DT_BF16, {shape[1]}, "weight");
-    Tensor output(DT_BF16, shape, "output");
-
-    std::string funcName = "PRELU_BF16";
-
-    FUNCTION(funcName, {input, weight}, {output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = PReLU(input, weight);
-        }
-    }
-
-    auto rawName = FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX;
-    auto function = Program::GetInstance().GetFunctionByRawName(rawName);
-    
-    ASSERT_NE(function, nullptr) << "Failed to find function: " << rawName;
+    MockFuncDynBinaryConf config;
+    config.shapeA = {8, 64};
+    config.shapeB = {64};
+    config.outputShape = {8, 64};
+    config.dtype = DT_BF16;
+    auto function = GenMockFuncDynBinary(
+        "PRELU_BF16", config, [](Tensor &input, Tensor &weight, Tensor &output) { output = PReLU(input, weight); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -128,26 +88,12 @@ TEST_F(TestCodegenDynPrelu, PreluBF16) {
 }
 
 TEST_F(TestCodegenDynPrelu, Prelu4D) {
-    std::vector<int64_t> shape = {2, 64, 8, 8};
-    TileShape::Current().SetVecTile(shape);
-    
-    Tensor input(DT_FP32, shape, "input");
-    Tensor weight(DT_FP32, {shape[1]}, "weight");
-    Tensor output(DT_FP32, shape, "output");
-
-    std::string funcName = "PRELU_4D";
-
-    FUNCTION(funcName, {input, weight}, {output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = PReLU(input, weight);
-        }
-    }
-
-    auto rawName = FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX;
-    auto function = Program::GetInstance().GetFunctionByRawName(rawName);
-    
-    ASSERT_NE(function, nullptr) << "Failed to find function: " << rawName;
+    MockFuncDynBinaryConf config;
+    config.shapeA = {2, 64, 8, 8};
+    config.shapeB = {64};
+    config.outputShape = {2, 64, 8, 8};
+    auto function = GenMockFuncDynBinary(
+        "PRELU_4D", config, [](Tensor &input, Tensor &weight, Tensor &output) { output = PReLU(input, weight); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);

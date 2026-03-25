@@ -50,26 +50,9 @@ public:
 };
 
 TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil) {
-    std::vector<int64_t> shape = {64, 64};
-    TileShape::Current().SetVecTile(shape);
-    Tensor input(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, shape, "output");
-
-    std::string funcName = "TestDynOpCeil";
-    FUNCTION(funcName, {input, output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = Ceil(input);
-        }
-    }
-
+    MockFuncDynUnaryConf config;
     auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
-    std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+        GenMockFuncDynUnary("TestDynOpCeil", config, [](Tensor &input, Tensor &output) { output = Ceil(input); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -82,26 +65,9 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpCeil) {
 }
 
 TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor) {
-    std::vector<int64_t> shape = {64, 64};
-    TileShape::Current().SetVecTile(shape);
-    Tensor input(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, shape, "output");
-
-    std::string funcName = "TestDynOpFloor";
-    FUNCTION(funcName, {input, output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = Floor(input);
-        }
-    }
-
+    MockFuncDynUnaryConf config;
     auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
-    std::vector<SymbolicScalar> dynValidShape = {64, 64};
-    auto localTensorRes = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorTmp = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
-    auto localTensorSrc = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+        GenMockFuncDynUnary("TestDynOpFloor", config, [](Tensor &input, Tensor &output) { output = Floor(input); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
@@ -114,22 +80,9 @@ TEST_F(TestCodegenDynCalcInteger, TestDynOpFloor) {
 }
 
 TEST_F(TestCodegenDynCalcInteger, TestDynOpTrunc) {
-    std::vector<int64_t> shape = {64, 64};
-    TileShape::Current().SetVecTile(shape);
-    Tensor input(DT_FP32, shape, "input");
-    Tensor output(DT_FP32, shape, "output");
-
-    std::string funcName = "TestDynOpTrunc";
-    FUNCTION(funcName, {input, output}) {
-        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
-            (void)i;
-            output = Trunc(input);
-        }
-    }
-
+    MockFuncDynUnaryConf config;
     auto function =
-        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
-    function->SetUnderDynamicFunction(true);
+        GenMockFuncDynUnary("TestDynOpTrunc", config, [](Tensor &input, Tensor &output) { output = Trunc(input); });
 
     npu::tile_fwk::CodeGenCtx ctx;
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
