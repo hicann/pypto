@@ -52,8 +52,8 @@ TEST_F(TestDevEncode, test_dev_encode_program) {
     Tensor out(DT_FP32, {LOOP_COUNT_INNER * s, s}, "out");
 
     //clc
-    FUNCTION("main", {t0, t1, t2}, {out}) {
-        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT_INNER)) {
+    FUNCTION("main_LoopUnroll2", {t0, t1, t2}, {out}) {
+        LOOP("main_LoopUnroll2_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT_INNER)) {
             auto temp = Add(t0, t0);
             SymbolicScalar s_min = std::ternary(i < 2, i, i + 1);
 
@@ -127,7 +127,7 @@ static DevAscendProgram *BuildAndGetDevProgForExpectedMaxCachedNum()
     Tensor t2(DT_FP32, {s, s}, "t2");
     Tensor out(DT_FP32, {LOOP_COUNT_INNER * s, s}, "out");
     FUNCTION("stitch_max_cached_num", {t0, t1, t2}, {out}) {
-        LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT_INNER)) {
+        LOOP("stitch_max_cached_num_L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(LOOP_COUNT_INNER)) {
             auto temp = Add(t0, t0);
             SymbolicScalar s_min = std::ternary(i < 2, i, i + 1);
             IF(s_min == i) {
@@ -198,6 +198,7 @@ TEST_F(TestDevEncode, test_max_stitch_function_num) {
     DevAscendProgram *devProg4 = BuildAndGetDevProgForExpectedMaxCachedNum();
     ASSERT_NE(devProg4, nullptr);
     EXPECT_EQ(devProg4->stitchMaxFunctionNum, 512u);
+
 }
 
 TEST_F(TestDevEncode, test_dev_func_dupped) {
@@ -207,4 +208,5 @@ TEST_F(TestDevEncode, test_dev_func_dupped) {
     DevAscendFunctionDupped funcDuppped;
     funcDuppped.DumpRawShape(&rawTensor, 0, lines, oss);
 }
+
 

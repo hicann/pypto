@@ -84,15 +84,15 @@ bool PlatformManager::Initialize(const std::string &socVersion) {
     if (isInit_) {
         return true;
     }
-    MACHINE_LOGI("Begin to initialize PlatformManager with soc version[%s].", socVersion.c_str());
+    MACHINE_LOGI("Begin to initialize PlatformManager with socVersion[%s].", socVersion.c_str());
     if (socVersion.empty()) {
-        MACHINE_LOGW("Soc version is empty.");
+        MACHINE_LOGW("SocVersion is empty.");
         return false;
     }
     // get platform file path
     const char *envPath = std::getenv(HOME_PATH_ENV_NAME.c_str());
     if (envPath == nullptr) {
-        MACHINE_LOGW("Env[%s] is not existed or empty.", HOME_PATH_ENV_NAME.c_str());
+        MACHINE_LOGW("Failed to get Env[%s].", HOME_PATH_ENV_NAME.c_str());
         return false;
     }
 
@@ -103,7 +103,7 @@ bool PlatformManager::Initialize(const std::string &socVersion) {
 
     std::string platformFile = platformConfDir + socVersion + ".ini";
     if (RealPath(platformFile).empty()) {
-        MACHINE_LOGW("Platform file[%s] is not existed.", platformFile.c_str());
+        MACHINE_LOGW("Failed to get Platform file[%s].", platformFile.c_str());
         return false;
     }
 
@@ -186,7 +186,7 @@ void PlatformManager::ParseStrItem(const std::map<std::string, std::map<std::str
             continue;
         }
         pmStrItemArray_[static_cast<size_t>(item.first)] = iterSecondLayer->second;
-        MACHINE_LOGI("[%s] [%s] is [%s]", std::get<0>(item.second).c_str(), std::get<1>(item.second).c_str(),
+        MACHINE_LOGI("[%s] [%s] is [%s].", std::get<0>(item.second).c_str(), std::get<1>(item.second).c_str(),
                      pmStrItemArray_[static_cast<size_t>(item.first)].c_str());
     }
 }
@@ -203,7 +203,7 @@ void PlatformManager::ParseIntItem(const std::map<std::string, std::map<std::str
             continue;
         }
         pmIntItemArray_[static_cast<size_t>(item.first)] = std::get<FUNC_POS>(item.second)(iterSecondLayer->second);
-        MACHINE_LOGI("[%s] [%s] is [%ld]", std::get<0>(item.second).c_str(), std::get<1>(item.second).c_str(),
+        MACHINE_LOGI("[%s] [%s] is [%ld].", std::get<0>(item.second).c_str(), std::get<1>(item.second).c_str(),
                      static_cast<long>(pmIntItemArray_[static_cast<size_t>(item.first)]));
     }
 }

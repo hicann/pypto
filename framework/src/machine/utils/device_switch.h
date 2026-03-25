@@ -54,8 +54,6 @@ namespace npu::tile_fwk {
 
 #define DEBUG_INFINITE_LIFETIME 0
 
-#define ENABLE_AICORE_PRINT 0
-
 // for tensor dump
 #define ENABLE_TENSOR_DUMP 1
 

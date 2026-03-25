@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <fstream>
 #include <cstdlib>
+#include <string>
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 
@@ -28,7 +29,30 @@ using namespace npu::tile_fwk;
 
 namespace {
 const std::string PM_TEST_TMP_DIR = "/tmp/test_platform_manager_log";
+
+std::string PlatformConfigDir()
+{
+    return PM_TEST_TMP_DIR + "/data/platform_config";
 }
+
+std::string PlatformIniPath(const std::string &socVersion)
+{
+    return PlatformConfigDir() + "/" + socVersion + ".ini";
+}
+
+void WriteMinimalPlatformIni(const std::string &path)
+{
+    std::ofstream ofs(path, std::ios::out | std::ios::trunc);
+    ASSERT_TRUE(ofs.is_open());
+    ofs << "[version]\n";
+    ofs << "SoC_version=UtMinimalSoc\n";
+    ofs << "Short_SoC_version=UtMin\n";
+    ofs << "AIC_version=AIC-UT\n";
+    ofs << "\n[SoCInfo]\n";
+    ofs << "ai_core_cnt=7\n";
+    ofs.close();
+}
+} // namespace
 
 class TestPlatformManagerLog : public testing::Test {
 public:
@@ -74,3 +98,25 @@ TEST_F(TestPlatformManagerLog, Initialize_NoAscendHomePath) {
     EXPECT_FALSE(result);
 }
 
+TEST_F(TestPlatformManagerLog, Initialize_MissingPlatformFile_LogsAndReturnsFalse) {
+    ASSERT_TRUE(CreateMultiLevelDir(PlatformConfigDir()));
+    setenv("ASCEND_HOME_PATH", PM_TEST_TMP_DIR.c_str(), 1);
+
+    PlatformManager pm;
+    EXPECT_FALSE(pm.Initialize("NonexistentSocName_xyz"));
+}
+
+TEST_F(TestPlatformManagerLog, Initialize_UnreadablePlatformFile_LogsAndReturnsFalse) {
+    ASSERT_TRUE(CreateMultiLevelDir(PlatformConfigDir()));
+    const std::string iniPath = PlatformIniPath("UtUnreadableSoc");
+    WriteMinimalPlatformIni(iniPath);
+    if (::chmod(iniPath.c_str(), 0) != 0) {
+        GTEST_SKIP() << "chmod(0) not supported in this environment";
+    }
+
+    setenv("ASCEND_HOME_PATH", PM_TEST_TMP_DIR.c_str(), 1);
+    PlatformManager pm;
+    EXPECT_FALSE(pm.Initialize("UtUnreadableSoc"));
+
+    (void)::chmod(iniPath.c_str(), S_IRUSR | S_IWUSR);
+}

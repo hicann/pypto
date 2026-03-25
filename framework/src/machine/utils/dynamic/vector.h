@@ -64,7 +64,7 @@ public:
     ~Vector() {
         clear();
         if (dataAllocation_) {
-            DEV_ASSERT(allocator_);
+            DEV_ASSERT(DevDataErr::VECTOR_UNINITIALIZED, allocator_);
             allocator_->Deallocate(dataAllocation_);
         }
     }
@@ -93,7 +93,7 @@ public:
 
     void InitAllocator(WsAllocator_T &allocator) {
         // InitAllocator or passing allocator via constructor is allowed to happen only once
-        DEV_ASSERT_MSG(!allocator_, "Vector has been initialized already");
+        DEV_ASSERT_MSG(DevDataErr::VECTOR_UNINITIALIZED, !allocator_, "Vector has been initialized already");
         allocator_ = &allocator;
     }
 
@@ -101,11 +101,11 @@ public:
     const value_type *data() const { return dataAllocation_.As<value_type>(); }
 
     value_type &operator[](size_type idx) {
-        DEV_ASSERT_MSG(idx < size_, "idx=%u >= size_=%u", idx, size_);
+        DEV_ASSERT_MSG(DevDataErr::VECTOR_INDEX_OUT_OF_RANGE, idx < size_, "idx=%u >= size_=%u", idx, size_);
         return data()[idx];
     }
     const value_type &operator[](size_type idx) const {
-        DEV_ASSERT_MSG(idx < size_, "idx=%u >= size_=%u", idx, size_);
+        DEV_ASSERT_MSG(DevDataErr::VECTOR_INDEX_OUT_OF_RANGE, idx < size_, "idx=%u >= size_=%u", idx, size_);
         return data()[idx];
     }
 
@@ -115,11 +115,11 @@ public:
     value_type *end() { return data() + size_; }
     const value_type *end() const { return data() + size_; }
 
-    value_type &front() { DEV_ASSERT(!empty()); return *begin(); }
-    const value_type &front() const { DEV_ASSERT(!empty()); return *begin(); }
+    value_type &front() { DEV_ASSERT(DevDataErr::VECTOR_EMPTY_ACCESS, !empty()); return *begin(); }
+    const value_type &front() const { DEV_ASSERT(DevDataErr::VECTOR_EMPTY_ACCESS, !empty()); return *begin(); }
 
-    value_type &back() { DEV_ASSERT(!empty()); return *(end() - 1); }
-    const value_type &back() const { DEV_ASSERT(!empty()); return *(end() - 1); }
+    value_type &back() { DEV_ASSERT(DevDataErr::VECTOR_EMPTY_ACCESS, !empty()); return *(end() - 1); }
+    const value_type &back() const { DEV_ASSERT(DevDataErr::VECTOR_EMPTY_ACCESS, !empty()); return *(end() - 1); }
 
     size_type capacity() const { return capacity_; }
     size_type size() const { return size_; }
@@ -142,7 +142,7 @@ public:
     }
 
     void pop_back() {
-        DEV_ASSERT(!empty());
+        DEV_ASSERT(DevDataErr::VECTOR_EMPTY_ACCESS, !empty());
         if constexpr (!std::is_trivially_destructible_v<value_type>) {
             data()[size_ - 1].~value_type();
         }
@@ -181,7 +181,7 @@ private:
     void ExpandCapacity(size_type capacityReq) {
         static constexpr size_type MIN_CAPACITY = 8;
 
-        DEV_ASSERT_MSG(capacityReq > capacity_,
+        DEV_ASSERT_MSG(DevDataErr::VECTOR_INDEX_OUT_OF_RANGE, capacityReq > capacity_,
             "Unexpected ExpandCapacity call: capacityReq %u <= capacity_ %u", capacityReq, capacity_);
 
         size_type newCapacity = std::max(MIN_CAPACITY, capacityReq);
@@ -190,7 +190,7 @@ private:
     }
 
     void InternalReserve(size_type capacity) {
-        DEV_ASSERT(allocator_);
+        DEV_ASSERT(DevDataErr::VECTOR_UNINITIALIZED, allocator_);
         WsAllocation alloc = allocator_->template Allocate<value_type>(capacity, category);
         if (dataAllocation_) {
             value_type *newData = alloc.As<value_type>();
@@ -239,7 +239,7 @@ private:
             return;
         }
 
-        DEV_ASSERT_MSG(n <= size_, "n=%u > size_=%u", n, size_);
+        DEV_ASSERT_MSG(DevDataErr::VECTOR_INDEX_OUT_OF_RANGE, n <= size_, "n=%u > size_=%u", n, size_);
         if constexpr (!std::is_trivially_destructible_v<value_type>) {
             for (size_type i = size_ - n; i < size_; i++) {
                 data()[i].~value_type();

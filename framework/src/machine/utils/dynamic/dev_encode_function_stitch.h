@@ -28,7 +28,7 @@ struct DevAscendFunctionDuppedStitch {
     }
 
     void PushBack(uint32_t taskId) {
-        DEV_ASSERT_MSG(size_ < DUPPED_STITCH_SIZE, "Exceed maximum stitch size %u.", DUPPED_STITCH_SIZE);
+        DEV_ASSERT_MSG(ProgEncodeErr::STITCH_LIST_TOO_LARGE, size_ < DUPPED_STITCH_SIZE, "Exceed maximum stitch size %u.", DUPPED_STITCH_SIZE);
         taskList_[size_++] = taskId;
     }
 
@@ -37,7 +37,7 @@ struct DevAscendFunctionDuppedStitch {
     DevAscendFunctionDuppedStitch *&Next() { return next_; }
 
     uint32_t At(uint32_t idx) const {
-        DEV_ASSERT_MSG(idx < size_, "Index %u exceeds stitch size %u.", idx, size_);
+        DEV_ASSERT_MSG(ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, idx < size_, "Index %u exceeds stitch size %u.", idx, size_);
         return taskList_[idx];
     }
 
@@ -181,8 +181,8 @@ static void CellMatchHandle(const uint64_t offset[DEV_SHAPE_DIM_MAX], const uint
             rangeBegin[i] = offset[i] / cellMatchShapeDim;
             rangeEnd[i] = (offset[i] + shape[i] - 1) / cellMatchShapeDim;
         } else {
-            DEV_ERROR("CellMatchGetIndexRange: cellMatchShapeDim is zero for dimension=%d", i);
-            DEV_ASSERT(0);
+            DEV_ERROR(ProgEncodeErr::CELL_MATCH_DIM_ZERO, "#ctrl.encode.cell_match: CellMatchGetIndexRange: cellMatchShapeDim is zero for dimension=%d", i);
+            DEV_ASSERT(ProgEncodeErr::CELL_MATCH_DIM_ZERO, 0);
         }
     }
     switch (cellMatchTableDesc.cellShape.dimSize) {
@@ -224,7 +224,7 @@ static void CellMatchHandle(const uint64_t offset[DEV_SHAPE_DIM_MAX], const uint
         }
         break;
     default:
-        DEV_ERROR("[Stitch] Too many dimensions: dimSize=%d\n", (int)cellMatchTableDesc.GetDimensionSize());
+        DEV_ERROR(ProgEncodeErr::CELL_MATCH_PARAM_INVALID, "#ctrl.encode.stitch.dim: [Stitch] Too many dimensions: dimSize=%d\n", (int)cellMatchTableDesc.GetDimensionSize());
         break;
     }
 }

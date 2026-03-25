@@ -16,140 +16,159 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
+#include "interface/utils/common.h"
 
 namespace npu::tile_fwk {
 enum class MachineError : uint32_t {
-    SCHEDULE       = 0x70000U, // 调度链路
-    CONTROL_FLOW   = 0x71000U, // 控制流执行
-    WORKSPACE      = 0x72000U, // Workspace / Slab
-    DUMP_DFX       = 0x73000U, // Dump / DFX / Profiling
-    PROGRAM_ENCODE = 0x74000U, // 编解码与一致性
-    TENSOR_META    = 0x75000U, // 张量元信息
-    SERVER_KERNEL  = 0x76000U, // AICPU server / kernel
-    THREAD_MACHINE = 0x77000U, // 线程/机器级
-    DATA_STRUCTURE = 0x78000U, // 内部数据结构
-    UNKNOWN        = 0x79000U, // 未知/预留
+    HOST_BACKEND   = 0x70000U, // Host 后端（总段标识）
+    HOST_LAUNCHER  = 0x71000U, // Host 启动器（总段标识）
+    SCHEDULE       = 0x72000U, // 调度链路
+    CONTROL_FLOW   = 0x73000U, // 控制流执行
+    WORKSPACE      = 0x74000U, // Workspace / Slab
+    DUMP_DFX       = 0x75000U, // Dump / DFX / Profiling
+    PROGRAM_ENCODE = 0x76000U, // 编解码与一致性
+    TENSOR_META    = 0x77000U, // 张量元信息
+    SERVER_KERNEL  = 0x78000U, // AICPU server / kernel
+    THREAD_MACHINE = 0x79000U, // 线程/机器级
+    DEV_DATA       = 0x7A000U, // 设备侧数据结构子码段（DevDataErr：0x01–0x0A）
+    DEV_COMMON     = 0x7A000U, // 设备侧通用子码段（DevCommonErr：0x0B–0x14，与 DEV_DATA 同段基址）
+    RUNTIME_ERROR  = 0x7B000U, // aclRt 调用错误
+    UNKNOWN        = 0x7F000U, // 未知/预留
+};
+
+enum class DevDataErr : uint32_t {
+    DEV_RELOC_VECTOR_INDEX_OOB      = ToUnderlying(MachineError::DEV_DATA) + 0x01U, // 设备 reloc 向量索引越界
+    SMALL_ARRAY_RESIZE_OOB          = ToUnderlying(MachineError::DEV_DATA) + 0x02U, // 小数组 resize 越界
+    VECTOR_UNINITIALIZED            = ToUnderlying(MachineError::DEV_DATA) + 0x03U, // vector 未初始化
+    VECTOR_INDEX_OUT_OF_RANGE       = ToUnderlying(MachineError::DEV_DATA) + 0x04U, // vector 索引越界
+    VECTOR_EMPTY_ACCESS             = ToUnderlying(MachineError::DEV_DATA) + 0x05U, // 空 vector 访问 front/back
+    ITEM_POOL_UNINITIALIZED         = ToUnderlying(MachineError::DEV_DATA) + 0x06U, // item pool 未初始化
+    ITEM_POOL_FREE_LIST_INVALID     = ToUnderlying(MachineError::DEV_DATA) + 0x07U, // freelist 非法
+    ITEM_POOL_INDEX_OUT_OF_RANGE    = ToUnderlying(MachineError::DEV_DATA) + 0x08U, // item pool 索引越界
+    SHEET_COLUMN_MISMATCH           = ToUnderlying(MachineError::DEV_DATA) + 0x09U, // 列数量不匹配
+    SHEET_COLUMN_INDEX_OUT_OF_RANGE = ToUnderlying(MachineError::DEV_DATA) + 0x0AU, // 列索引越界
+};
+
+enum class DevCommonErr : uint32_t {
+    MEMCPY_FAILED      = ToUnderlying(MachineError::DEV_COMMON) + 0x01U, // memcpy_s 失败
+    ALLOC_FAILED       = ToUnderlying(MachineError::DEV_COMMON) + 0x02U, // 分配失败
+    MALLOC_FAILED      = ToUnderlying(MachineError::DEV_COMMON) + 0x03U,
+    NULLPTR            = ToUnderlying(MachineError::DEV_COMMON) + 0x04U, // 空指针访问
+    PARAM_INVALID      = ToUnderlying(MachineError::DEV_COMMON) + 0x05U, // 参数非法
+    PARAM_CHECK_FAILED = ToUnderlying(MachineError::DEV_COMMON) + 0x06U, // 参数校验失败
+    FILE_ERROR         = ToUnderlying(MachineError::DEV_COMMON) + 0x07U, // 文件错误
+    CMD_ERROR          = ToUnderlying(MachineError::DEV_COMMON) + 0x08U, // 命令错误
+    GET_ENV_FAILED     = ToUnderlying(MachineError::DEV_COMMON) + 0x09U, // 获取环境变量路径失败
+    GET_HANDLE_FAILED  = ToUnderlying(MachineError::DEV_COMMON) + 0x0AU, // 获取句柄失败
+    FREE_FAILED        = ToUnderlying(MachineError::DEV_COMMON) + 0x0BU, // 释放失败
+};
+
+enum class HostBackEndErr : uint32_t {
+    COMPILE_AICORE_FAILED    = ToUnderlying(MachineError::HOST_BACKEND) + 0x01U, // 生成/执行 AICore 编译命令失败
+    COMPILE_CCEC_FAILED      = ToUnderlying(MachineError::HOST_BACKEND) + 0x02U, // ccec 编译失败
+    LINK_FAILED              = ToUnderlying(MachineError::HOST_BACKEND) + 0x03U, // 链接 core machine 命令失败
+    GEN_AICORE_FILE_FAILED   = ToUnderlying(MachineError::HOST_BACKEND) + 0x04U, // 生成 AICore 源码失败
+    GEN_DYNAMIC_OP_FAILED    = ToUnderlying(MachineError::HOST_BACKEND) + 0x05U, // 生成动态算子失败
+    PRECOMPILE_FAILED        = ToUnderlying(MachineError::HOST_BACKEND) + 0x06U, // 算子预编译失败
+    FUNCTION_CACHE_HASH_MISS = ToUnderlying(MachineError::HOST_BACKEND) + 0x07U, // 函数缓存 hash 未命中/不一致
+    DUPLICATE_LEAF_FUNC_HASH = ToUnderlying(MachineError::HOST_BACKEND) + 0x08U, // leaf 函数 hash 重复
+};
+
+enum class HostLauncherErr : uint32_t {
+    LAUNCH_AICPU_FAILED                 = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x01U, // 启动 AICPU 任务失败
+    LAUNCH_PREPARE_FAILED               = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x02U, // launch 准备阶段失败
+    LAUNCH_CUSTOM_AICPU_FAILED          = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x03U, // 启动 custom AICPU 失败
+    LAUNCH_AICORE_FAILED                = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x04U, // 启动 AICore 失败
+    LAUNCH_BUILTIN_OP_NULL_FAILED       = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x05U, // 内置算子句柄/函数为空
+    REGISTER_KERNEL_FAILED              = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x06U, // 注册 kernel bin 失败
+    PREPARE_ARGS_FAILED                 = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x07U, // kernel 参数准备失败
+    MAP_REG_ADDR_FAILED                 = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x08U, // 寄存器地址映射失败
+    MEM_POOL_CHECK_ALL_SENTINELS_FAILED = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x09U, // 哨兵校验失败
+    TRIPLE_STREAM_ERROR                 = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x0AU, // 三级流水报错
+    SYNC_FAILED                         = ToUnderlying(MachineError::HOST_LAUNCHER) + 0x0BU, // 同步失败
 };
 
 enum class SchedErr : uint32_t {
-    PREFETCH_CHECK_FAILED     = 0x70001U,
-    AIC_TASK_WAIT_TIMEOUT     = 0x70002U,
-    AIV_TASK_WAIT_TIMEOUT     = 0x70003U,
-    TAIL_TASK_WAIT_TIMEOUT    = 0x70004U,
-    ALL_AICORE_SYNC_TIMEOUT   = 0x70005U,
-    HANDSHAKE_TIMEOUT         = 0x70006U,
-    READY_QUEUE_OVERFLOW      = 0x70007U,
-    SIGNAL_QUEUE_OVERFLOW     = 0x70008U,
-    QUEUE_DEQUEUE_WHEN_EMPTY  = 0x70009U,
-    CORE_TASK_PROCESS_FAILED  = 0x70010U,
-    AICPU_TASK_SYNC_TIMEOUT   = 0x70011U,
-    EXCEPTION_RESET_TRIGGERED = 0x70012U,
-    EXCEPTION_SIGNAL_RECEIVED = 0x70013U,
-    THREAD_INIT_ARGS_INVALID  = 0x70014U,
-    UNKNOWN                   = 0x70099U
+    TASK_WAIT_TIMEOUT        = ToUnderlying(MachineError::SCHEDULE) + 0x01U, // AIC 任务等待超时
+    HANDSHAKE_TIMEOUT        = ToUnderlying(MachineError::SCHEDULE) + 0x02U, // 线程握手超时
+    READY_QUEUE_OVERFLOW     = ToUnderlying(MachineError::SCHEDULE) + 0x03U, // 就绪队列溢出
+    CORE_TASK_EXEC_FAILED    = ToUnderlying(MachineError::SCHEDULE) + 0x04U, // core 任务执行返回错误
+    CORE_TASK_PROCESS_FAILED = ToUnderlying(MachineError::SCHEDULE) + 0x05U, // core 任务处理失败
 };
 
 enum class CtrlErr : uint32_t {
-    CTRL_FLOW_EXEC_FAILED     = 0x71001U,
-    ROOT_ALLOC_CTX_NULL       = 0x71002U,
-    ROOT_STITCH_CTX_NULL      = 0x71003U,
-    SYNC_FLAG_WAIT_TIMEOUT    = 0x71004U,
-    DEVICE_TASK_BUILD_FAILED  = 0x71005U,
-    READY_QUEUE_INIT_FAILED   = 0x71006U,
-    DEP_DUMP_FAILED           = 0x71007U,
-    READY_QUEUE_DUMP_FAILED   = 0x71008U,
-    TASK_STATS_ABNORMAL       = 0x71009U,
-    UNKNOWN                   = 0x71099U
+    CTRL_FLOW_EXEC_FAILED    = ToUnderlying(MachineError::CONTROL_FLOW) + 0x01U, // 控制流执行失败
+    ROOT_ALLOC_CTX_NULL      = ToUnderlying(MachineError::CONTROL_FLOW) + 0x02U, // root alloc 上下文为空
+    ROOT_STITCH_CTX_NULL     = ToUnderlying(MachineError::CONTROL_FLOW) + 0x03U, // root stitch 上下文为空
+    DEVICE_TASK_BUILD_FAILED = ToUnderlying(MachineError::CONTROL_FLOW) + 0x04U, // device task 构建失败
+    TASK_STATS_ABNORMAL      = ToUnderlying(MachineError::CONTROL_FLOW) + 0x05U, // 任务统计异常
+    CTRL_INIT_FAILED         = ToUnderlying(MachineError::CONTROL_FLOW) + 0x06U, // 控制流初始化失败
+    CTRL_SIM_FAILED          = ToUnderlying(MachineError::CONTROL_FLOW) + 0x07U, // 模拟控制流失败
 };
 
 enum class WsErr : uint32_t {
-    SLAB_ADD_CACHE_FAILED       = 0x72001U,
-    SLAB_STAGE_LIST_INCONSISTENT = 0x72002U,
-    SLAB_TYPE_INVALID           = 0x72003U,
-    WORKSPACE_INIT_RESOURCE_ERROR = 0x72004U,
-    WORKSPACE_INIT_PARAM_INVALID  = 0x72005U,
-    WS_TENSOR_ADDRESS_OUT_OF_RANGE = 0x72006U,
-    SLAB_CAPACITY_CALC_INVALID  = 0x72007U,
-    UNKNOWN                     = 0x72099U
-};
-
-enum class DumpDfxErr : uint32_t {
-    DUMP_MEMCPY_FAILED            = 0x73001U,
-    DUMP_TENSOR_INFO_FAILED       = 0x73002U,
-    DUMP_TENSOR_DATA_FAILED       = 0x73003U,
-    METRIC_ALLOC_OR_WAIT_TIMEOUT  = 0x73004U,
-    PERF_TRACE_FORMAT_ERROR       = 0x73005U,
-    PERF_TRACE_DUMP_ERROR         = 0x73006U,
-    DFX_AICPU_TIMEOUT            = 0x73007U,
-    UNKNOWN                       = 0x73099U
+    SLAB_ADD_CACHE_FAILED             = ToUnderlying(MachineError::WORKSPACE) + 0x01U, // slab 添加 cache 失败
+    SLAB_STAGE_LIST_INCONSISTENT      = ToUnderlying(MachineError::WORKSPACE) + 0x02U, // slab stage 列表不一致
+    SLAB_TYPE_INVALID                 = ToUnderlying(MachineError::WORKSPACE) + 0x03U, // slab 类型非法
+    WORKSPACE_INIT_RESOURCE_ERROR     = ToUnderlying(MachineError::WORKSPACE) + 0x04U, // workspace 初始化资源错误
+    WORKSPACE_INIT_PARAM_INVALID      = ToUnderlying(MachineError::WORKSPACE) + 0x05U, // workspace 初始化参数非法
+    WS_TENSOR_ADDRESS_OUT_OF_RANGE    = ToUnderlying(MachineError::WORKSPACE) + 0x06U, // tensor 地址越界
+    WORKSPACE_ITER_INVALID            = ToUnderlying(MachineError::WORKSPACE) + 0x07U, // workspace 迭代器非法
+    WORKSPACE_REFCOUNT_INVALID        = ToUnderlying(MachineError::WORKSPACE) + 0x08U, // 引用计数非法
+    WORKSPACE_ALLOCATOR_REGIST_FAILED = ToUnderlying(MachineError::WORKSPACE) + 0x09U, // allocator 注册失败
+    WORKSPACE_CATEGORY_INVALID        = ToUnderlying(MachineError::WORKSPACE) + 0x0AU, // category 非法
+    WORKSPACE_CAPACITY_INSUFFICIENT   = ToUnderlying(MachineError::WORKSPACE) + 0x0BU, // 容量不足
+    WORKSPACE_BASE_ADDR_OUT_OF_RANGE  = ToUnderlying(MachineError::WORKSPACE) + 0x0CU, // 基址越界
 };
 
 enum class ProgEncodeErr : uint32_t {
-    DYNFUNC_DATA_ALIGNMENT_ERROR = 0x74001U,
-    FUNC_OP_SIZE_MISMATCH        = 0x74002U,
-    STITCH_PRED_SUCC_MISMATCH     = 0x74003U,
-    STITCH_LIST_TOO_LARGE         = 0x74004U,
-    STITCH_HANDLE_INDEX_OUT_OF_RANGE = 0x74005U,
-    CELL_MATCH_PARAM_INVALID     = 0x74006U,
-    PROGRAM_RANGE_VERIFY_FAILED   = 0x74007U,
-    CACHE_RELOC_KIND_INVALID      = 0x74008U,
-    UNKNOWN                       = 0x74099U
+    DYNFUNC_DATA_ALIGNMENT_ERROR     = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x01U, // 动态函数数据对齐错误
+    FUNC_OP_SIZE_MISMATCH            = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x02U, // func op 大小不一致
+    STITCH_PRED_SUCC_MISMATCH        = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x03U, // stitch 前驱后继不一致
+    STITCH_LIST_TOO_LARGE            = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x04U, // stitch 列表过大
+    STITCH_HANDLE_INDEX_OUT_OF_RANGE = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x05U, // stitch handle 索引越界
+    CELL_MATCH_PARAM_INVALID         = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x06U, // cell match 参数非法
+    PROGRAM_RANGE_VERIFY_FAILED      = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x07U, // program 范围校验失败
+    CACHE_RELOC_KIND_INVALID         = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x08U, // cache reloc 类型非法
+    ADDR_OFFSET_RAW_MAGIC_MISMATCH   = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x09U, // 地址偏移与 raw magic 不匹配
+    CALL_OP_COUNT_EXCEEDS_UINT16_MAX = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x0AU, // call op 数量超过 uint16 上限
+    CELL_MATCH_DIM_ZERO              = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x0BU, // cell match 维度为 0
+    ASSEMBLE_STITCH_MEMORY_EXCESS    = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x0CU, // assemble stitch 内存超限
+    LEAF_CALLEE_ATTR_NULL            = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x0DU, // leaf 被调属性为空
 };
 
 enum class TensorMetaErr : uint32_t {
-    TENSOR_DIM_COUNT_EXCEEDED   = 0x75001U,
-    TENSOR_ENCODE_PTR_MISMATCH  = 0x75002U,
-    RAW_TENSOR_INDEX_OUT_OF_RANGE = 0x75003U,
-    SHAPE_VALUE_MISMATCH        = 0x75004U,
-    TENSOR_DUMP_INFO_INCONSISTENT = 0x75005U,
-    UNKNOWN                      = 0x75099U
+    TENSOR_DIM_COUNT_EXCEEDED     = ToUnderlying(MachineError::TENSOR_META) + 0x01U, // 维度个数超限
+    TENSOR_ENCODE_PTR_MISMATCH    = ToUnderlying(MachineError::TENSOR_META) + 0x02U, // 编码指针不一致
+    RAW_TENSOR_INDEX_OUT_OF_RANGE = ToUnderlying(MachineError::TENSOR_META) + 0x03U, // raw tensor 索引越界
+    SHAPE_VALUE_MISMATCH          = ToUnderlying(MachineError::TENSOR_META) + 0x04U, // shape 数值不一致
+    INCAST_ADDRESS_NULL           = ToUnderlying(MachineError::TENSOR_META) + 0x05U, // incast 地址为空
+    OUTCAST_ADDRESS_NULL          = ToUnderlying(MachineError::TENSOR_META) + 0x06U, // outcast 地址为空
+    RUNTIME_WORKSPACE_NULL        = ToUnderlying(MachineError::TENSOR_META) + 0x07U, // runtime workspace 为空
 };
 
 enum class ServerKernelErr : uint32_t {
-    DYN_SERVER_ARGS_NULL      = 0x76001U,
-    DYN_SERVER_SAVE_SO_FAILED  = 0x76002U,
-    KERNEL_EXEC_FUNC_FAILED    = 0x76003U,
-    KERNEL_SO_OR_FUNC_LOAD_FAILED = 0x76004U,
-    DYN_SERVER_RUN_FAILED      = 0x76005U,
-    DYN_SERVER_INIT_FAILED     = 0x76006U,
-    UNKNOWN                    = 0x76099U
+    KERNEL_EXEC_FAILED = ToUnderlying(MachineError::SERVER_KERNEL) + 0x01U, // kernel 执行函数失败
 };
 
 enum class ThreadErr : uint32_t {
-    DEVICE_ARGS_INVALID     = 0x77001U,
-    SIGNAL_HANDLER_ABNORMAL = 0x77002U,
-    RESET_REG_ALL_TRIGGERED = 0x77003U,
-    UNKNOWN                 = 0x77099U
+    SIGNAL_HANDLER_ABNORMAL = ToUnderlying(MachineError::THREAD_MACHINE) + 0x01U, // 信号处理异常
+    RESET_REG_ALL_TRIGGERED = ToUnderlying(MachineError::THREAD_MACHINE) + 0x02U, // 触发全量寄存器复位
+    THREAD_CPU_ALLOC_FAILED = ToUnderlying(MachineError::THREAD_MACHINE) + 0x03U, // CPU 分配线程失败
 };
 
-enum class DataStructErr : uint32_t {
-    DEV_RELOC_VECTOR_INDEX_OOB = 0x78001U,
-    SMALL_ARRAY_RESIZE_OOB     = 0x78002U,
-    UNKNOWN                    = 0x78099U
+enum class RtErr : uint32_t {
+    RT_INIT_FAILED     = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x01U, // ACL/RT 初始化失败
+    RT_MEMCPY_FAILED   = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x02U, // rtMemcpy 失败
+    RT_MEMSET_FAILED   = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x03U, // rtMemset 失败
+    RT_MALLOC_FAILED   = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x04U, // rtMalloc 失败
+    RT_LAUNCH_FAILED   = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x05U, // rt 启动失败
+    RT_EVENT_FAILED    = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x06U, // rt event/stream 相关失败
+    RT_CAPTURE_FAILED  = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x07U, // capture 信息/状态失败
+    RT_REGISTER_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x08U, // kernel 注册/注销失败
+    RT_LOAD_FAILED     = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x09U, // 加载失败
+    RT_GET_FUNC_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x0AU, // 获取函数句柄失败
+    RT_DEVICE_FAILED   = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x0BU, // 设备 id/设备相关失败
 };
-
-enum class MachineFunctionErr : uint32_t {
-    RESERVED = 0x87000U
-};
-enum class MachinePassErr : uint32_t {
-    RESERVED = 0x87500U
-};
-
-enum class MachineCodegenErr : uint32_t {
-    RESERVED = 0x88000U
-};
-
-enum class MachineSimulationErr : uint32_t {
-    RESERVED = 0x88500U
-};
-
-enum class MachineDistributedErr : uint32_t {
-    RESERVED = 0x89000U
-};
-
-enum class MachineOperationErr : uint32_t {
-    RESERVED = 0x89500U 
-};
-
 }  // namespace npu::tile_fwk
-

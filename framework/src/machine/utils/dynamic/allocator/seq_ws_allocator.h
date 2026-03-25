@@ -47,7 +47,7 @@ public:
     }
 
     WsAllocation Malloc(uint64_t memReq, WsMemCategory category = WsMemCategory::UNCLASSIFIED) {
-        DEV_ASSERT_MSG(CanAllocate(memReq), "Memory not enough(alloc %lu), WsProperty:%s, WsAddr:%lu, WsSize:%lu,"
+        DEV_ASSERT_MSG(WsErr::WORKSPACE_INIT_RESOURCE_ERROR, CanAllocate(memReq), "Memory not enough(alloc %lu), WsProperty:%s, WsAddr:%lu, WsSize:%lu,"
             "AllocatedCnt:%lu, ResetTimes:%u", memReq, GetWsAllocatorPropertyName(property_), workspaceAddr_, workspaceSize_, allocated_, resetTimes_);
 
         WsAllocation allocation;

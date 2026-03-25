@@ -112,7 +112,7 @@ public:
             npu::tile_fwk::ErrorMessage()                                                                                   \
             << "Errcode: F"                                                                                                 \
             << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                                             \
-            << (static_cast<unsigned>(errcode) & 0xFFFFF) << "!\n"
+            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "!\n"
 
 #define CHECK_WITH_CODE(errcode, cond)                                                                                      \
     (cond) ?                                                                                                                \
@@ -121,7 +121,7 @@ public:
             npu::tile_fwk::ErrorMessage()                                                                                   \
             << "Errcode: F"                                                                                                 \
             << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                                             \
-            << (static_cast<unsigned>(errcode) & 0xFFFFF) << "!\n"
+            << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "!\n"
 
 #define TILEFWK_ERROR()                                                                                            \
     npu::tile_fwk::Error(__func__, __FILE__, __LINE__, npu::tile_fwk::GetBacktrace(0, /* 64 is maxFrames */ 64)) = \
@@ -131,13 +131,13 @@ public:
     (cond) ? 0 :                                                                                                            \
              AssertInfo() = npu::tile_fwk::ErrorMessage()                                                                   \
              << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                            \
-             << (static_cast<unsigned>(errcode) & 0xFFFFF) << "!\n"
+             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "!\n"
 
 #define CHECK_WITH_CODE(errcode, cond)                                                                                      \
     (cond) ? 0 :                                                                                                            \
              AssertInfo() = npu::tile_fwk::ErrorMessage()                                                                   \
              << "Errcode: F" << std::uppercase << std::hex << std::setw(5) << std::setfill('0')                            \
-             << (static_cast<unsigned>(errcode) & 0xFFFFF) << "!\n"
+             << (static_cast<unsigned>(errcode) & 0xFFFFF) << std::dec << "!\n"
 #endif
 
 #define ASSERT_OVERLOAD_SELECT(_1, _2, NAME, ...) NAME

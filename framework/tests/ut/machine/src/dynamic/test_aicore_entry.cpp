@@ -49,9 +49,12 @@ public:
         int sharedBufferSize = (aicCount_ + aivCount_) * sizeof(KernelSharedBuffer);
         sharedBuffer_.resize(aicCount_ + aivCount_);
         memset_s(sharedBuffer_.data(), sharedBufferSize, 0, sharedBufferSize);
+        printBuffer_.resize((aicCount_ + aivCount_) * PRINT_BUFFER_SIZE);
+        memset_s(printBuffer_.data(), printBuffer_.size(), 0, printBuffer_.size());
     }
 
     KernelSharedBuffer *GetSharedBuffer() { return sharedBuffer_.data(); }
+    uint8_t *GetPrintBuffer(int idx) { return printBuffer_.data() + idx * PRINT_BUFFER_SIZE; }
     int GetAicpuCount() const { return aicpuCount_; }
     int GetAicCount() const { return aicCount_; }
     int GetAivCount() const { return aivCount_; }
@@ -60,6 +63,7 @@ private:
     int aicCount_;
     int aivCount_;
     std::vector<KernelSharedBuffer> sharedBuffer_;
+    std::vector<uint8_t> printBuffer_;
 };
 
 struct MultipleCore : ThreadAicoreEmulation {
@@ -69,6 +73,11 @@ struct MultipleCore : ThreadAicoreEmulation {
         devArgs.sharedBuffer = (uint64_t)(uintptr_t)memory->GetSharedBuffer();
         devDfxArgs = std::make_unique<DevDfxArgs>();
         devArgs.devDfxArgAddr = (uint64_t)(uintptr_t)devDfxArgs.get();
+        KernelSharedBuffer *buffer = memory->GetSharedBuffer();
+        for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
+            buffer[i].args.shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
+            buffer[i].args.shakeBufferCpuToCore[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
+        }
     }
 
     void WaitAndStartKernelEntry() {
@@ -117,6 +126,8 @@ struct MultipleCore : ThreadAicoreEmulation {
         KernelSharedBuffer *buffer = memory->GetSharedBuffer();
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
             buffer[i].args.shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = (uintptr_t)dataList;
+            buffer[i].args.shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
+            buffer[i].args.shakeBufferCpuToCore[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
         }
 
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {

@@ -24,6 +24,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "machine/utils/machine_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "machine/utils/machine_error.h"
 using Json = nlohmann::json;
 
 namespace {
@@ -61,7 +62,7 @@ void GenCustomOpInfo(const std::string &funcName, const std::string &controlAicp
     GenAicpuOpInfoJson(customOp, {costomInit, costomRun});
     std::string fileName = controlAicpuPath + "/" + constrolSoName + ".json";
     if (!DumpFile(customOp.dump(DUMP_LEVEL_FOUR), fileName)) {
-        MACHINE_LOGE("Contrust custom op json failed");
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Contrust custom op json failed");
         return;
     }
     OpInfoManager::GetInstance().GetCustomOpJsonPath() = fileName;
@@ -100,10 +101,10 @@ bool TieFwkAicpuPreCompile(std::string &preCompileO, std::string &controlAicpuPa
                                 " -I" + includePath + "/include/" +
                                 " -I" + GetCurrentSharedLibPath() + "/include/" +
                                 " -o " + objFile;
-        MACHINE_LOGD("PreCompileCmd is %s, file is %s\n", compileCmd.c_str(), file.c_str());
+        MACHINE_LOGD("PreCompileCmd is %s, file is %s.\n", compileCmd.c_str(), file.c_str());
         int result = std::system(compileCmd.c_str());
         if (result != 0) {
-            MACHINE_LOGE("Precompile %s fail\n", file.c_str());
+            MACHINE_LOGE(DevCommonErr::CMD_ERROR, "Precompile %s fail\n", file.c_str());
             return false;
         }
         preCompileStream << objFile << " ";
@@ -121,7 +122,7 @@ bool SharedAicpuCompile(const std::string &funcName, const std::string &aicpuDir
                                 " -Wl,--no-whole-archive";
     auto ret = std::system(cmdGccCompile.c_str());
     if (ret != 0) {
-        MACHINE_LOGE("RUNDeviceMachine compile fail\n");
+        MACHINE_LOGE(DevCommonErr::CMD_ERROR, "RUNDeviceMachine compile fail\n");
         return false;
     }
     MACHINE_LOGI("CmdGcc: %s\n", cmdGccCompile.c_str());
@@ -135,13 +136,13 @@ bool TileFwkAiCpuCompile(const std::string &funcName, const std::string &aicpuDi
     OpInfoManager::GetInstance().GetOpFuncName() = funcName;
     std::string controlAicpuPath = aicpuDirPath + "/" + funcName + "/aicpu/";
     if (!GenTilingFunc(funcName, controlAicpuPath)) {
-        MACHINE_LOGE("Gen op[%s]  not success\n", funcName.c_str());
+        MACHINE_LOGE(HostBackEndErr::GEN_DYNAMIC_OP_FAILED, "Gen op[%s]  not success\n", funcName.c_str());
         return false;
     }
     // preCompile
     std::string preCompileO= "";
     if (!TieFwkAicpuPreCompile(preCompileO, controlAicpuPath)) {
-        MACHINE_LOGE("Op %s preCompile fail\n", funcName.c_str());
+        MACHINE_LOGE(HostBackEndErr::PRECOMPILE_FAILED, "Op %s preCompile fail\n", funcName.c_str());
         return false;
     }
     return SharedAicpuCompile(funcName, aicpuDirPath, preCompileO);

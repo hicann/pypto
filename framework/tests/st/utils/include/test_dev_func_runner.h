@@ -23,6 +23,8 @@
 #include "interface/function/function.h"
 #include "machine/device/dynamic/costmodel_utils.h"
 #include "machine/runtime/device_launcher.h"
+#include "tilefwk/pypto_fwk_log.h"
+#include "machine/utils/machine_error.h"
 #include "cost_model/simulation/backend.h"
 
 using namespace npu::tile_fwk::dynamic;
@@ -64,7 +66,8 @@ struct MemoryHelper {
 
             uint8_t * rawPtr = (uint8_t*)malloc(totalSize);
             if (rawPtr == nullptr) {
-                MACHINE_LOGE("[AllocDev] malloc totalSize %zu failed", totalSize);
+                MACHINE_LOGE(DevCommonErr::MALLOC_FAILED,
+                               "[AllocDev] malloc totalSize %zu failed", totalSize);
                 return nullptr;
             }
             std::shared_ptr<uint8_t> ptr(rawPtr, free);
@@ -232,7 +235,8 @@ private:
         uint8_t *dumpTensorWsPtr = reinterpret_cast<uint8_t *>(kArgs.workspace) + devProg->memBudget.Total() - devProg->memBudget.debug.dumpTensor;
         uint64_t dumpTensorWsUsed = 0;
         rtMemcpy(&dumpTensorWsUsed, sizeof(uint64_t), dumpTensorWsPtr, sizeof(uint64_t), RT_MEMCPY_DEVICE_TO_HOST);
-        MACHINE_LOGE("[DumpTensor] dumpTensorWsPtr=%p, memory used=%lu\n", dumpTensorWsPtr, dumpTensorWsUsed);
+        MACHINE_LOGE(RtErr::RT_MEMCPY_FAILED,
+                       "[DumpTensor] dumpTensorWsPtr=%p, memory used=%lu\n", dumpTensorWsPtr, dumpTensorWsUsed);
 
         std::string path = config::LogTopFolder() + "/dump_tensor.txt";
         std::ofstream fout(path, std::ios::out | std::ios::binary);
@@ -243,15 +247,15 @@ private:
             int idx = 0;
             for (auto &ptr : ptrs) {
                 uint64_t devPtr = ptr ? reinterpret_cast<uint64_t>(ptr->GetDevPtr()) : 0;
-                MACHINE_LOGE("[DumpTensor] devPtr %d = %lu\n", idx++, devPtr);
+                MACHINE_LOGW("[DumpTensor] devPtr %d = %lu\n", idx++, devPtr);
                 fout.write(reinterpret_cast<const char *>(&devPtr), sizeof(devPtr));
             }
         };
 
         // write input/output devAddr list
-        MACHINE_LOGE("[DumpTensor] #inputs=%zu\n", inputs.size());
+        MACHINE_LOGW("[DumpTensor] #inputs=%zu\n", inputs.size());
         printIODevAddrs(inputs);
-        MACHINE_LOGE("[DumpTensor] #outputs=%zu\n", outputs.size());
+        MACHINE_LOGW("[DumpTensor] #outputs=%zu\n", outputs.size());
         printIODevAddrs(outputs);
 
         DumpDevDataBinary(fout, nullptr, dumpTensorWsUsed, dumpTensorWsPtr);
@@ -272,7 +276,7 @@ private:
         std::cout << "!!! Kernel Launch " << "\n";
         int rc = aclInit(nullptr);
         if (rc != 0 && rc != ACL_ERROR_REPEAT_INITIALIZE) {
-            MACHINE_LOGE("Acl init failed!!!");
+            MACHINE_LOGE(RtErr::RT_INIT_FAILED, "Acl init failed!!!");
             return;
         }
         CheckDeviceId();

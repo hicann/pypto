@@ -25,12 +25,6 @@ namespace npu::tile_fwk {
 
 using AtomicType = Distributed::AtomicType;
 
-void CheckInRange(int64_t value) {
-    if (value < std::numeric_limits<uint32_t>::min() || value > std::numeric_limits<uint32_t>::max()) {
-        throw std::out_of_range("Invalid value: " + std::to_string(value));
-    }
-}
-
 std::string CodeGenOpCloudNPU::GetTemplateDType() const {
     static const std::unordered_map<Opcode, int32_t> dTypeOperandIndexMap = {
         {                   Opcode::OP_FFN_BATCHING, 0},
@@ -53,7 +47,7 @@ std::string CodeGenOpCloudNPU::GetTemplateDType() const {
         {              Opcode::OP_DISPATCH_SET_FLAG, 4},
     };
     auto it = dTypeOperandIndexMap.find(opCode);
-    ASSERT(GenCodeErr::OP_CODE_UNSUPPORTED, it != dTypeOperandIndexMap.end()) << "Opcode is out of range";
+    ASSERT(GenCodeErr::OP_CODE_UNSUPPORTED, it != dTypeOperandIndexMap.end()) << "opcode \"" << opCodeStr << "\" is not distributed opcode";
     int32_t operandIndex = it->second;
     return DataType2CCEStr(operandDtype[operandIndex]);
 }
@@ -110,12 +104,6 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutAndGet() const {
         srcStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
         dstStride = nonShmemTensorRawShape[nonShmemTensorRawShape.size() - 1];
     }
-    CheckInRange(tileRowShape);
-    CheckInRange(tileColShape);
-    CheckInRange(bufferRowShape);
-    CheckInRange(bufferColShape);
-    CheckInRange(srcStride);
-    CheckInRange(dstStride);
 
     oss << "<" << DataType2CCEStr(operandDtype[nonShmemDataIndex]) << ", "
         << DataType2CCEStr(operandDtype[shmemDataIndex]) << ", " << tileRowShape << ", " << tileColShape << ", "
@@ -137,10 +125,6 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForPutUb2Gm() const
 
     const std::vector<int64_t>& shmemTensorRawShape = rawShape[shmemDataIndex];
     int64_t dstStride = shmemTensorRawShape[shmemTensorRawShape.size() - 1];
-
-    CheckInRange(tileRowShape);
-    CheckInRange(tileColShape);
-    CheckInRange(dstStride);
 
     oss << "<" << GetTemplateDType() << ", " << tileRowShape << ", " << tileColShape << ", " << dstStride << ", "
         << Distributed::AtomicTypeToString(distOpAttr.atomicType) << ">";
@@ -179,7 +163,7 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSet() const {
     int64_t rawShapeRow;
     int64_t rawShapeCol;
     size_t shmemTensorDim = originShape[shmemTensorIndex].size();
-    ASSERT(shmemTensorDim >= 2) << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
+    ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 2) << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
     if (distOpAttr.setType == 0) {
         rawShapeRow = originShape[shmemTensorIndex][shmemTensorDim - 2];
         rawShapeCol = originShape[shmemTensorIndex][shmemTensorDim - 1];
@@ -256,7 +240,7 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemPut() const {
     int32_t nonShmemDataIndex = 3;
     int32_t shmemDataIndex = 4;
     size_t shmemTensorDim = dynamicValidShape[shmemDataIndex].size();
-    ASSERT(shmemTensorDim >= 2) << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
+    ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 2) << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
     std::string viewOffsetStr = dynamicValidShape[shmemDataIndex][shmemTensorDim - 2].Dump();
     size_t firstComma = viewOffsetStr.find(",");
     size_t lastComma = viewOffsetStr.rfind(",");

@@ -103,7 +103,7 @@ public:
                 DEV_DEBUG("[SlabWsAllocator]Slab cache exists: objsize=%u, cacheType=%u.\n", objSize, type);
                 return true;
             }
-            DEV_ERROR("[SlabWsAllocator]Add cache failed: type=%u, objsize=%u", type, objSize);
+            DEV_ERROR(WsErr::SLAB_ADD_CACHE_FAILED, "workspace.slab.add_cache: [SlabWsAllocator]Add cache failed: type=%u, objsize=%u", type, objSize);
             return false;
         }
         uint32_t realObjSize = (((objSize) + (sizeof(uint64_t)) - 1) & ~((sizeof(uint64_t)) - 1));
@@ -217,16 +217,16 @@ public:
             } else {
                 void* temp = caches_[i].stageAllocHead;
                 if (temp == nullptr) {
-                    DEV_ERROR("stageAllocHead is null for cacheIndex=%u\n", i);
+                    DEV_ERROR(WsErr::SLAB_STAGE_LIST_INCONSISTENT, "workspace.slab.stage: stageAllocHead is null for cacheIndex=%u\n", i);
                 }
-                DEV_ASSERT(temp != nullptr);
+                DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
                 while (*static_cast<void**>(temp) != caches_[i].stageAllocTail) {
                     temp = *static_cast<void**>(temp);
                 }
                 if (temp == nullptr) {
-                    DEV_ERROR("stageAllocHead is null after loop for cacheIndex=%u, stageAllocTail=%p\n", i, caches_[i].stageAllocTail);
+                    DEV_ERROR(WsErr::SLAB_STAGE_LIST_INCONSISTENT, "workspace.slab.stage: stageAllocHead is null after loop for cacheIndex=%u, stageAllocTail=%p\n", i, caches_[i].stageAllocTail);
                 }
-                DEV_ASSERT(temp != nullptr);
+                DEV_ASSERT(WsErr::SLAB_STAGE_LIST_INCONSISTENT, temp != nullptr);
                 *static_cast<void**>(temp) = nullptr;
                 info.tails[i] = temp;
                 DEV_VERBOSE_DEBUG("Keep tail not pop %p \n", caches_[i].stageAllocTail);

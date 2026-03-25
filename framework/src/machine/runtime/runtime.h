@@ -39,6 +39,7 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "machine/utils/machine_error.h"
 #include "memory_pool.h"
 
 constexpr int ADDR_MAP_TYPE_REG_AIC_CTRL = 2;
@@ -92,7 +93,7 @@ inline void CheckDeviceId() {
     int32_t devId = 0;
     int32_t getDeviceResult = rtGetDevice(&devId);
     if (getDeviceResult != RT_ERROR_NONE) {
-        MACHINE_LOGE("fail get device id, check if set device id");
+        MACHINE_LOGE(RtErr::RT_DEVICE_FAILED, "fail get device id, check if set device id");
         return;
     }
 }
@@ -108,7 +109,7 @@ inline int32_t GetLogDeviceId() {
     int32_t userDeviceId = GetUserDeviceId();
     ASSERT(rtGetLogicDevIdByUserDevId(userDeviceId, &logicDeviceId) == RT_ERROR_NONE) << "Trans usrDeviceId: " <<
            userDeviceId << " to logDevId not success";
-    MACHINE_LOGD("Current userDeviceId=%d, logicDeviceId=%d", userDeviceId, logicDeviceId);
+    MACHINE_LOGD("Current userDeviceId=%d, logicDeviceId=%d.", userDeviceId, logicDeviceId);
     return logicDeviceId;
 }
 
@@ -117,7 +118,8 @@ public:
     void AllocDevAddr(uint8_t **devAddr, uint64_t size) {
         bool success = memPool_.AllocDevAddrInPool(devAddr, size);
         if (!success) {
-            MACHINE_LOGE("RuntimeAgent::AllocDevAddrInPool failed for size %lu", size);
+            MACHINE_LOGE(DevCommonErr::ALLOC_FAILED,
+                           "RuntimeAgent::AllocDevAddrInPool failed for size %lu", size);
             devAddr = nullptr;
         } else {
             MACHINE_LOGI("RuntimeAgentMemory: Alloc success %p", *devAddr);
@@ -255,7 +257,7 @@ public:
 #endif
         }
 
-        MACHINE_LOGD("RuntimeAgent: runtime quit");
+        MACHINE_LOGD("RuntimeAgent: Runtime quit!");
     }
 
 private:

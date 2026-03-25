@@ -37,6 +37,7 @@
 #include "interface/compiler_monitor/monitor_stage_scope.h"
 #include <dlfcn.h>
 #include "tilefwk/pypto_fwk_log.h"
+#include "machine/utils/machine_error.h"
 
 using namespace npu::tile_fwk::dynamic;
 namespace npu::tile_fwk {
@@ -61,7 +62,8 @@ extern "C" int32_t Execute(MachineTask *task, FunctionCache &cache) {
         return 0;
     }
     if (task == nullptr || task->GetFunction() == nullptr) {
-        MACHINE_LOGE("Machine task or function of machine task is null.");
+        MACHINE_LOGE(DevCommonErr::NULLPTR,
+                         "Machine task or function of machine task is null.");
         return 0;
     }
     Function *function = task->GetFunction();
@@ -99,7 +101,7 @@ static std::vector<Function *> GetCalleeList(FunctionCache &cache, Function *fun
         if (cacheFunction != nullptr) {
             calleeList.push_back(cacheFunction);
         } else {
-            MACHINE_LOGE("Cannot find cache %lu", hash.GetHash());
+            MACHINE_LOGE(HostBackEndErr::FUNCTION_CACHE_HASH_MISS, "Cannot find cache %lu", hash.GetHash());
         }
     }
     return calleeList;
@@ -744,8 +746,9 @@ static void OverCallOpMaxNum(Function *devRoot, DevAscendFunction *funcBin){
     uint32_t CallOpSize = funcBin->GetOperationSize();
     uint32_t CallOpmaxSize = config::GetRuntimeOption<uint32_t>(STITCH_FUNCTION_SIZE);
     auto funcMagicName = devRoot->GetRawName() + "_" + std::to_string(devRoot->GetFuncMagic());
-    MACHINE_LOGE("the loop function operation: %s size is %u hitting the maxinum single-loop-operation limit:%u.\n",
-    funcMagicName.c_str(), CallOpSize, CallOpmaxSize);
+    MACHINE_LOGE(DevCommonErr::PARAM_CHECK_FAILED,
+                   "the loop function operation: %s size is %u hitting the maxinum single-loop-operation limit:%u.\n",
+                   funcMagicName.c_str(), CallOpSize, CallOpmaxSize);
     ASSERT(CallOpSize <= CallOpmaxSize) << " loopFunction: " << funcMagicName << " CallOpSize: " << CallOpSize
     << " CallOpmaxSize: " << CallOpmaxSize;
 }
@@ -759,7 +762,7 @@ static void CompileControlFlow(const std::string &aicpuDirPath,
     MACHINE_LOGD("Dumpath is %s, functionName %s, path is %s",
                  aicpuDirPath.c_str(), funcName.c_str(), controlFlowCompilepath.c_str());
     if (!CreateMultiLevelDir(controlFlowCompilepath)) {
-        MACHINE_LOGE("Creat AicpuCompile dir not success\n");
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR, "Creat AicpuCompile dir not success\n");
         return;
     }
     std::string controlFlowFileName = controlFlowCompilepath + "/controlFlow_dev" + funcName + ".h";
@@ -882,7 +885,8 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
                     leafDict[hash] = leaf;
                     MACHINE_LOGI("Dyndev.codegen: %s", leaf->GetRawName().c_str());
                 } else {
-                    MACHINE_LOGE(" Duplicate func hash %lu name %s", hash, leaf->GetRawName().c_str());
+                    MACHINE_LOGE(HostBackEndErr::DUPLICATE_LEAF_FUNC_HASH, " Duplicate func hash %lu name %s", hash,
+                                   leaf->GetRawName().c_str());
                 }
             }
         };
@@ -905,7 +909,7 @@ static void CompileDyndevFunction(Function *function, FunctionCache &cache, [[ma
         int ret = CompileAICoreKernel(leafDict, encodeDevAscendFunctionParam,
                                     ccePath, function->GetFunctionHash().Data(), kernelPath);
         if (ret != 0) {
-            MACHINE_LOGE("Compile dynamic aicore.o failed.");
+            MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile dynamic aicore.o failed.");
             return;
         }
     }

@@ -36,6 +36,7 @@
 #include "load_aicpu_op.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "machine/utils/machine_error.h"
 #include "machine/platform/platform_manager.h"
 #include "machine/runtime/device_error_tracking.h"
 #include "nlohmann/json.hpp"
@@ -127,7 +128,7 @@ void *DeviceRunner::DevAlloc(int size) {
     int rc = rtMemset(devPtr, size, 0, size);
     if (rc != 0) {
         machine::GetRA()->FreeTensor(devPtr);
-        MACHINE_LOGE("rtMemset failed size=%d rc=%d\n", size, rc);
+        MACHINE_LOGE(RtErr::RT_MEMSET_FAILED, "rtMemset failed size=%d rc=%d\n", size, rc);
         return nullptr;
     }
     return devPtr;
@@ -222,7 +223,7 @@ int DeviceRunner::InitDeviceArgsCore(DeviceArgs &args, const std::vector<int64_t
     args.devDfxArgAddr = reinterpret_cast<uint64_t>(DevAlloc(sizeof(DevDfxArgs)));
 
     if (args.devDfxArgAddr == 0) {
-        MACHINE_LOGE("Alloc devDfx info failed");
+        MACHINE_LOGE(DevCommonErr::ALLOC_FAILED, "Alloc devDfx info failed");
         return -1;
     }
 
@@ -416,7 +417,8 @@ void DeviceRunner::InitAiCpuSoBin(DeviceArgs &devArgs) {
     std::vector<char> buffer;
     std::string fileName = GetCurrentSharedLibPath() + "/libtilefwk_backend_server.so";
     if (!ReadBytesFromFile(fileName, buffer)) {
-        MACHINE_LOGE("Read bin form tilefwk_backend_server.so failed, please check the so[%s]", fileName.c_str());
+        MACHINE_LOGE(DevCommonErr::FILE_ERROR,
+                       "Read bin form tilefwk_backend_server.so failed, please check the so[%s]", fileName.c_str());
         return;
     }
     size_t aicpuDataLength = buffer.size();
@@ -452,7 +454,7 @@ int DeviceRunner::InitAicpuServer() {
     int ret = rtAicpuKernelLaunchExWithArgs(rtKernelType_t::KERNEL_TYPE_AICPU_KFC,
         "AST_DYN_AICPU", 1, &rtArgs, nullptr, aicpuStream, 0);
     if (ret != RT_ERROR_NONE) {
-        MACHINE_LOGE("Aicpu server init failed %d", ret);
+        MACHINE_LOGE(RtErr::RT_LAUNCH_FAILED, "Aicpu server init failed %d", ret);
         return ret;
     }
     // for triple stream schedule, must wait aicpu server init done
@@ -506,19 +508,19 @@ int DeviceRunner::RunPreSync(rtStream_t aicpuStream, rtStream_t aicoreStream) {
     aclrtEvent event;
     int rc = aclrtCreateEventExWithFlag(&event, ACL_EVENT_SYNC);
     if (rc < 0) {
-        MACHINE_LOGE("aclrtCreateEvent failed %d\n", rc);
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "aclrtCreateEvent failed %d\n", rc);
         return rc;
     }
 
     rc = aclrtRecordEvent(event, aicoreStream);
     if (rc < 0) {
-        MACHINE_LOGE("aclrtRecordEvent failed %d\n", rc);
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "aclrtRecordEvent failed %d\n", rc);
         return rc;
     }
 
     rc = aclrtStreamWaitEvent(aicpuStream, event);
     if (rc < 0) {
-        MACHINE_LOGE("aclrtStreamWaitEvent failed %d\n", rc);
+        MACHINE_LOGE(RtErr::RT_EVENT_FAILED, "aclrtStreamWaitEvent failed %d\n", rc);
         return rc;
     }
     return 0;
@@ -534,7 +536,7 @@ int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreS
     uint64_t startTime = MsprofSysCycleTime();
     auto rc = launchDynamicAiCpu(aicpuStream, kernelArgs);
     if (rc < 0) {
-        MACHINE_LOGE("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, aicpuNum_, MSPROF_GE_TASK_TYPE_AI_CPU);
@@ -544,7 +546,7 @@ int DeviceRunner::DynamicKernelLaunch(rtStream_t aicpuStream, rtStream_t aicoreS
     startTime = MsprofSysCycleTime();
     rc = launchDynamicAiCore(aicoreStream, kernelArgs);
     if (rc < 0) {
-        MACHINE_LOGE("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
@@ -561,21 +563,21 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     uint64_t startTime = MsprofSysCycleTime();
     int rc = LoadAicpuOp::GetInstance().LaunchCustomOp(ctrlStream, kernelArgs, initKernel);
     if (rc < 0) {
-        MACHINE_LOGE("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
 
     rc = RunPreSync(ctrlStream, aicoreStream);
     if (rc < 0) {
-        MACHINE_LOGE("prepare failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_PREPARE_FAILED, "prepare failed %d\n", rc);
         return rc;
     }
 
     startTime = MsprofSysCycleTime();
     rc = LoadAicpuOp::GetInstance().LaunchCustomOp(ctrlStream, kernelArgs, mainKernel);
     if (rc < 0) {
-        MACHINE_LOGE("launch custom aicpu failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_CUSTOM_AICPU_FAILED, "launch custom aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
@@ -583,7 +585,7 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     startTime = MsprofSysCycleTime();
     rc = launchDynamicAiCpu(aicpuStream, kernelArgs);
     if (rc < 0) {
-        MACHINE_LOGE("launch aicpu failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, aicpuNum_, MSPROF_GE_TASK_TYPE_AI_CPU);
@@ -591,7 +593,7 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     startTime = MsprofSysCycleTime();
     rc = launchDynamicAiCore(aicoreStream, kernelArgs);
     if (rc < 0) {
-        MACHINE_LOGE("launch aicore failed %d\n", rc);
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICORE_FAILED, "launch aicore failed %d\n", rc);
         return rc;
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
@@ -606,7 +608,7 @@ int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, r
     if (!g_IsNullLaunched) {
         auto ret = LoadAicpuOp::GetInstance().LaunchBuiltInOp(aicpuStream, kernelArgs, 1, "PyptoNull");
         if (ret != 0) {
-            MACHINE_LOGE("launch built null failed");
+            MACHINE_LOGE(HostLauncherErr::LAUNCH_BUILTIN_OP_NULL_FAILED, "launch built null failed");
             return ret;
         }
         g_IsNullLaunched = true;
@@ -614,7 +616,7 @@ int DeviceRunner::DynamicLaunch(rtStream_t aicpuStream, rtStream_t ctrlStream, r
     #endif
     int rc = RunPrepare();
     if (rc < 0) {
-        MACHINE_LOGE("Prepare failed.");
+        MACHINE_LOGE(HostLauncherErr::LAUNCH_PREPARE_FAILED, "Prepare failed.");
         return rc;
     }
     HOST_PERF_TRACE(TracePhase::RunDevKernelInitRunPrepare);
@@ -691,7 +693,7 @@ int DeviceRunner::RegisterKernelBin(void **hdl, std::vector<uint8_t> *funcBinBuf
     rtDevBinary_t binary{.magic = RT_DEV_BINARY_MAGIC_ELF, .version = 0, .data = bin, .length = binSize};
     int rc = rtRegisterAllKernel(&binary, hdl);
     if (rc != 0) {
-        MACHINE_LOGE("RegisterKernelBin failed\n");
+        MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "RegisterKernelBin failed\n");
     }
     binHdl_ = *hdl;
     MACHINE_LOGD("finish RegisterKernelBin.");
@@ -706,18 +708,18 @@ int DeviceRunner::Init(void) {
     CreateMultiLevelDir(builtInOpPath);
     LoadAicpuOp::GetInstance().GenBuiltInOpInfo(builtInOpPath);
     if (LoadAicpuOp::GetInstance().GetBuiltInOpBinHandle() != 0) {
-        MACHINE_LOGE("Get builtInOp Funchandle failed\n");
+        MACHINE_LOGE(DevCommonErr::GET_HANDLE_FAILED, "Get builtInOp Funchandle failed\n");
         return -1;
     }
 
     InitializeErrorCallback();
 
     if (InitDeviceArgs(args_) != 0) {
-        MACHINE_LOGE("prepareArgs failed\n");
+        MACHINE_LOGE(HostLauncherErr::PREPARE_ARGS_FAILED, "prepareArgs failed\n");
         return -1;
     }
     if (RegisterKernelBin(&binHdl_) != 0) {
-        MACHINE_LOGE("RegisterKernelBin failed\n");
+        MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "RegisterKernelBin failed\n");
         return -1;
     }
     InitAicpuServer();

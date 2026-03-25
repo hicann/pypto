@@ -62,7 +62,7 @@ static inline range Range(uint64_t begin, uint64_t end) {
 #define DEV_TRACE_ERROR(arg, args...) \
     do { \
         using namespace npu::tile_fwk::schema; \
-        DEV_ERROR(DEV_TRACE_PREFIX " %s", DumpAttr(arg, ##args).c_str()); \
+        DEV_ERROR(ERROR_CODE_UNDEFINED, DEV_TRACE_PREFIX " %s", DumpAttr(arg, ##args).c_str()); \
     } while(0)
 #define DEV_TRACE_DEBUG_SPLIT(arg, args...) \
     do { \

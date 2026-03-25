@@ -29,6 +29,7 @@
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/configs/config_manager.h"
 #include "machine/runtime/device_launcher.h"
+#include "machine/utils/machine_error.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -41,7 +42,7 @@ struct EmulationMemoryUtils {
     uint8_t *AllocDev(size_t size, uint8_t **cachedDevAddrHolder) {
         (void)cachedDevAddrHolder;
         if (size == 0 || size > 0x500000000) {
-            MACHINE_LOGE("AllocDev failed: size=%zu", size);
+            MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "AllocDev failed: size=%zu", size);
             return nullptr;
         }
         uint8_t *rawPtr = (uint8_t *)malloc(size);

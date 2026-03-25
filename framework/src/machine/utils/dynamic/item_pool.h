@@ -57,13 +57,13 @@ public:
                 }
             }
 
-            DEV_ASSERT(allocator_);
+            DEV_ASSERT(DevDataErr::ITEM_POOL_UNINITIALIZED, allocator_);
             allocator_->Deallocate(allocation_);
         }
     }
 
     void Init(WsAllocator_T &allocator, size_t count, WsMemCategory category = WsMemCategory::UNCLASSIFIED_ITEMPOOL) {
-        DEV_ASSERT_MSG(!allocator_, "ItemPool has been initialized already");
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_UNINITIALIZED, !allocator_, "ItemPool has been initialized already");
         allocator_ = &allocator;
         count_ = count;
         allocation_ = allocator_->template Allocate<ItemBlock>(count_, category);
@@ -78,7 +78,7 @@ public:
 
     template <typename ...Args>
     T *Create(Args &&...args) {
-        DEV_ASSERT_MSG(freeListHeadIndex_ != ITEM_POOL_INVALID_INDEX,
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID, freeListHeadIndex_ != ITEM_POOL_INVALID_INDEX,
             "Available items: %zu/%zu", freeCount_, count_);
         ItemBlock *item = &ItemAt(freeListHeadIndex_);
         freeListHeadIndex_ = item->freeListNextIndex;
@@ -99,7 +99,7 @@ public:
     void Destroy(T *item) {
         item->~T();
         ItemBlock *block = (ItemBlock *)item;
-        DEV_ASSERT_MSG(block->freeListNextIndex == ITEM_POOL_NON_FREE_INDEX,
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_FREE_LIST_INVALID, block->freeListNextIndex == ITEM_POOL_NON_FREE_INDEX,
                        "Double free detected in ItemPool");
         AppendFreeList(block);
         freeCount_++;
@@ -124,7 +124,7 @@ private:
     }
 
     inline ItemBlock &ItemAt(ItemPoolIter index) {
-        DEV_ASSERT_MSG(index >= 0 && static_cast<size_t>(index) < count_,
+        DEV_ASSERT_MSG(DevDataErr::ITEM_POOL_INDEX_OUT_OF_RANGE, index >= 0 && static_cast<size_t>(index) < count_,
             "Index %" PRId64 " out of range [0, %zu)", index, count_);
         return allocation_.As<ItemBlock>()[index];
     }

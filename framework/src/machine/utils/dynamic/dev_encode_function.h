@@ -520,6 +520,62 @@ private:
             const std::vector<int> &noSuccOpList,
             const std::unordered_map<Operation *, std::vector<int>> &copyOutResolveSuccIndexListDict,
             bool fillContent);
+    void InitOperationNoPredNoSuccIndices(
+            uintdevptr_t &initOffset,
+            const OrderedSet<Operation *> &callList,
+            const std::unordered_map<Operation *, uint64_t> &callOpPredDict,
+            const std::unordered_map<Operation *, OrderedSet<Operation *>> &callOpSuccDict,
+            const std::vector<int> &noPredOpList,
+            const std::vector<int> &noSuccOpList,
+            bool fillContent);
+    void InitOperationBufferLayouts(
+            uintdevptr_t &initOffset,
+            const OrderedSet<Operation *> &callList,
+            const std::unordered_map<Operation *, OrderedSet<Operation *>> &callOpSuccDict,
+            const std::unordered_map<Operation *, std::vector<int>> &copyOutResolveSuccIndexListDict);
+    void FillOperationEncodedContent(
+            const SymbolicExpressionTable *expressionTable,
+            const OrderedSet<Operation *> &callList,
+            const OrderedSet<std::shared_ptr<LogicalTensor>> &tlist,
+            const OrderedSet<std::shared_ptr<RawTensor>> &rawList,
+            const std::unordered_map<Operation *, uint64_t> &callOpPredDict,
+            const std::unordered_map<Operation *, OrderedSet<Operation *>> &callOpSuccDict,
+            const std::unordered_map<uint64_t, int> &calleeHashIndexDict,
+            const std::vector<int32_t> &outcastStitchIndexList,
+            const std::unordered_map<Operation *, std::vector<int>> &copyOutResolveSuccIndexListDict,
+            bool fillContent);
+    void PopulateOperationEncodedContent(
+            const SymbolicExpressionTable *expressionTable,
+            const OrderedSet<Operation *> &callList,
+            const OrderedSet<std::shared_ptr<LogicalTensor>> &tlist,
+            const OrderedSet<std::shared_ptr<RawTensor>> &rawList,
+            const std::unordered_map<Operation *, OrderedSet<Operation *>> &callOpSuccDict,
+            const std::unordered_map<uint64_t, int> &calleeHashIndexDict,
+            const std::vector<int32_t> &outcastStitchIndexList,
+            const std::unordered_map<Operation *, std::vector<int>> &copyOutResolveSuccIndexListDict,
+            DevAscendFunctionDuppedData *dupData);
+    void PopulateOneEncodedOpOperandsAndAttrs(
+            size_t index,
+            int &operanSize,
+            int &staticAttributeSize,
+            const SymbolicExpressionTable *expressionTable,
+            const OrderedSet<Operation *> &callList,
+            const OrderedSet<std::shared_ptr<LogicalTensor>> &tlist,
+            const OrderedSet<std::shared_ptr<RawTensor>> &rawList,
+            const std::unordered_map<uint64_t, int> &calleeHashIndexDict,
+            const std::vector<int32_t> &outcastStitchIndexList);
+    void PopulateOneEncodedOpGraphEdges(
+            size_t index,
+            int &sucSize,
+            int &copyOutResolveSuccIdxSize,
+            const OrderedSet<Operation *> &callList,
+            const std::unordered_map<Operation *, OrderedSet<Operation *>> &callOpSuccDict,
+            const std::unordered_map<Operation *, std::vector<int>> &copyOutResolveSuccIndexListDict,
+            DevAscendFunctionDuppedData *dupData);
+    void VerifyOperationEncodedContent(
+            const OrderedSet<Operation *> &callList,
+            const std::unordered_map<Operation *, uint64_t> &callOpPredDict,
+            DevAscendFunctionDuppedData *dupData);
     void InitWrapInfo(uintdevptr_t &initOffset, const OrderedSet<Operation *> &callList, bool fillContent);
     void InitIncastOutcast(uintdevptr_t &initOffset, const std::vector<std::shared_ptr<LogicalTensor>> &incastTensorList,
         const std::vector<std::shared_ptr<LogicalTensor>> &outcastTensorList,
