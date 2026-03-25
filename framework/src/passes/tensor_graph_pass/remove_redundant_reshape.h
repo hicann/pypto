@@ -25,6 +25,7 @@ public:
     RemoveRedundantReshape() : Pass("RemoveRedundantReshape") {}
     ~RemoveRedundantReshape() override = default;
 private:
+    Status DefaultEnabledPreCheck(Function &function) override;
     Status PreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
     Status RunOnFunction(Function &function) override;

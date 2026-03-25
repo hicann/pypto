@@ -340,9 +340,9 @@ Status AutoCast::RemoveRedundantCastChain(Function &function) {
     return SUCCESS;
 }
 
-Status AutoCast::PreCheck(Function &function) {
+Status AutoCast::DefaultEnabledPreCheck(Function &function) {
     AutoCastChecker checker;
-    return checker.DoPreCheck(function);
+    return checker.DoDefaultEnabledPreCheck(function);
 }
 
 Status AutoCast::PostCheck(Function &function) {

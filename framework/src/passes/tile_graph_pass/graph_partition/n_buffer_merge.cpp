@@ -534,8 +534,8 @@ Status NBufferMerge::CheckVecNBufferSettingForManualMerge() {
     for (const auto& pair : vecNBufferSetting_) {
         if (pair.first < VEC_NBUFFER_SETTING_DEFAULT_MERGE_NUM_KEY || pair.first > static_cast<int64_t>(hashOrder_.size()) - 1) {
             APASS_LOG_WARN_F(Elements::Config,
-                "The VEC_NBUFFER_SETTING key %ld is invalid; For the current graph, valid keys should be between -2 and max hashOrder %ld.",
-                pair.first, static_cast<int64_t>(hashOrder_.size()) - 1);
+                "The VEC_NBUFFER_SETTING key %ld is invalid; For the current graph, valid keys should be between %ld and max hashOrder %ld.",
+                pair.first, VEC_NBUFFER_SETTING_DEFAULT_MERGE_NUM_KEY, static_cast<int64_t>(hashOrder_.size()) - 1);
         }
         if (pair.second <= 0 || pair.second > static_cast<int64_t>(INT_MAX)) {
             APASS_LOG_ERROR_F(Elements::Config, "The value %ld of the key %ld in VEC_NBUFFER_SETTING is incorrect; Please set values of VEC_NBUFFER_SETTING more than 0 and not exceeding the INT_MAX %d.", pair.second, pair.first, INT_MAX);

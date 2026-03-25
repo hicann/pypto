@@ -75,9 +75,9 @@ void ExpandFunction::ProcessForNotExpandOp(Function &function, Operation &op) co
     }
 }
 
-Status ExpandFunction::PreCheck(Function &function) {
+Status ExpandFunction::DefaultEnabledPreCheck(Function &function) {
     ExpandFunctionChecker checker;
-    return checker.DoPreCheck(function);
+    return checker.DoDefaultEnabledPreCheck(function);
 }
 
 Status ExpandFunction::PostCheck(Function &function) {

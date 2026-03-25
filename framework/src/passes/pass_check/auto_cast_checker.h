@@ -26,7 +26,7 @@ namespace npu {
 namespace tile_fwk {
 class AutoCastChecker : Checker {
 public:
-    Status DoPreCheck(Function &function) override;
+    Status DoDefaultEnabledPreCheck(Function &function) override;
     Status DoPostCheck(Function &function) override;
 private:
     Status PreCheckReshape(const LogicalTensorPtr &in);

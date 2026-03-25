@@ -477,3 +477,12 @@ TEST_F(PassCheckTest, TestPublicCheck_IncastEmpty) {
     Checker checker;
     EXPECT_EQ(checker.PublicCheck(*currFunctionPtr), SUCCESS);
 }
+
+TEST_F(PassCheckTest, TestDefaultCheckItems) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "TestDefaultCheckItems", "TestDefaultCheckItems", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    Checker checker;
+    EXPECT_EQ(checker.DoDefaultEnabledPreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(checker.DoDefaultEnabledPostCheck(*currFunctionPtr), SUCCESS);
+}

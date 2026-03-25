@@ -26,7 +26,7 @@ class ExpandFunction : public Pass {
 public:
     ExpandFunction() : Pass("ExpandFunction") {}
     ~ExpandFunction() override = default;
-    Status PreCheck(Function &function) override;
+    Status DefaultEnabledPreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
 private:
     Status RunOnFunction(Function &function) override;

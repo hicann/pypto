@@ -30,15 +30,23 @@ Status CheckDynSkip(const LogicalTensorPtr &outputTensor, bool &needSkip) {
             return SUCCESS;
         }
         auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp->GetOpAttribute());
-        if (assembleOpAttr) {
-            if (assembleOpAttr->GetToDynOffset().size() != 0) {
-                needSkip = true;
-                return SUCCESS;
-            }
-        } else {
+        if (!assembleOpAttr) {
             APASS_LOG_ERROR_F(Elements::Tensor, "%s[%d] has no valid assembleOpAttribute; Please check.",
                 producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
             return FAILED;
+        }
+        if (assembleOpAttr->GetToDynOffset().size() != 0) {
+            bool isAllImmediate = true;
+            for (const auto &offset : assembleOpAttr->GetToDynOffset()) {
+                if (!offset.IsImmediate()) {
+                    isAllImmediate = false;
+                    break;
+                }
+            }
+            if (!isAllImmediate) {
+                needSkip = true;
+            }
+            return SUCCESS;
         }
         auto input = producerOp->iOperand.front();
         if (input->GetDynValidShape().size() != 0) {

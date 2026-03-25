@@ -35,7 +35,7 @@ public:
     std::vector<Operation *> GetCastChain(Operation *tailOp);
     Status ShortenChain(Function &function, const std::vector<Operation *> &castChain, Operation *tailOp);
     Status RemoveRedundantCastChain(Function &function);
-    Status PreCheck(Function &function) override;
+    Status DefaultEnabledPreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
     void InsertCastOp(Function &function, LogicalTensorPtr src, LogicalTensorPtr tgt, const TileShape &tileShape);
     Status GetInOutConnectedTensor(Function &function);

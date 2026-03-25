@@ -20,8 +20,8 @@
 
 namespace npu {
 namespace tile_fwk {
-Status AutoCastChecker::DoPreCheck(Function &function) {
-    APASS_LOG_INFO_F(Elements::Operation, "PreCheck for AutoCast");
+Status AutoCastChecker::DoDefaultEnabledPreCheck(Function &function) {
+    APASS_LOG_INFO_F(Elements::Function, "DoDefaultEnabledPreCheck for AutoCast");
     std::vector<Operation *> opList = function.Operations().DuplicatedOpList();
     for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
         Operation *op = opList[opIdx];
@@ -51,7 +51,7 @@ Status AutoCastChecker::DoPreCheck(Function &function) {
 }
 
 Status AutoCastChecker::DoPostCheck(Function &function) {
-    APASS_LOG_INFO_F(Elements::Operation, "PostCheck for AutoCast");
+    APASS_LOG_INFO_F(Elements::Function, "PostCheck for AutoCast");
     std::vector<Operation *> opList = function.Operations().DuplicatedOpList();
     for (size_t opIdx = 0; opIdx < opList.size(); opIdx++) {
         Operation *op = opList[opIdx];

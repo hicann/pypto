@@ -172,6 +172,7 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeUTest3) {
     currFunctionPtr->outCasts_.push_back(outCast3);
 
     RemoveRedundantReshape removeredundantpass;
+    EXPECT_EQ(removeredundantpass.DefaultEnabledPreCheck(*currFunctionPtr), SUCCESS);
     EXPECT_NE(removeredundantpass.PreCheck(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.RunOnFunction(*currFunctionPtr), SUCCESS);
     EXPECT_EQ(removeredundantpass.PostCheck(*currFunctionPtr), SUCCESS);

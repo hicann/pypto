@@ -43,6 +43,20 @@ public:
      * \return Status, indicating whether the function passes the postcheck.
      */
     virtual Status DoPostCheck(Function &function);
+    /**
+     * \brief Do the DefaultEnabledPreCheck for current pass, the check items must be executed.
+     *        If not overriden, check nothing and return SUCCESS.
+     * \param function : This parameter indicates the function to be checked.
+     * \return Status, indicating whether the function passes the precheck.
+     */
+    virtual Status DoDefaultEnabledPreCheck(Function &function);
+    /**
+     * \brief Do the DefaultEnabledPostCheck for current pass, the check items must be executed.
+     *        If not overriden, check nothing and return SUCCESS.
+     * \param function : This parameter indicates the function to be checked.
+     * \return Status, indicating whether the function passes the postcheck.
+     */
+    virtual Status DoDefaultEnabledPostCheck(Function &function);
 protected:
     /**
      * \brief Check whether consumers and producers of the tensor are valid (not null).

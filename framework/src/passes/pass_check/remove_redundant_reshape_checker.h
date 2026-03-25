@@ -26,6 +26,7 @@ namespace npu {
 namespace tile_fwk {
 class RemoveRedundantReshapeChecker : Checker {
 public:
+    Status DoDefaultEnabledPreCheck(Function &function) override;
     Status DoPreCheck(Function &function) override;
     Status DoPostCheck(Function &function) override;
 private:

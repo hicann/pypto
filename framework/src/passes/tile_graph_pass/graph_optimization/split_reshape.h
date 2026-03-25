@@ -190,7 +190,7 @@ private:
     Status RawToAlign(const ReshapeTilePara &shapePara, std::vector<int64_t> &newOffset, std::vector<int64_t> &newShape);
     Status AlignToRaw(const ReshapeTilePara &shapePara, std::vector<int64_t> &newOffset, std::vector<int64_t> &newShape);
 
-    Status PreCheck(Function &function) override;
+    Status DefaultEnabledPreCheck(Function &function) override;
     Status PostCheck(Function &function) override;
     SplitReshapeChecker checker_;
     

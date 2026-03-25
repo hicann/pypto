@@ -157,7 +157,7 @@ TEST_F(AutoCastTest, InvalidOutputNum) {
     ASSERT_NE(function, nullptr);
 
     AutoCast autoCast;
-    EXPECT_EQ(autoCast.PreCheck(*function), FAILED);
+    EXPECT_EQ(autoCast.DefaultEnabledPreCheck(*function), FAILED);
     autoCast.RunOnFunction(*function);
 }
 
@@ -208,7 +208,7 @@ TEST_F(AutoCastTest, PreCheckNormal) {
     Function *function = G.GetFunction();
 
     AutoCast autoCast;
-    EXPECT_EQ(autoCast.PreCheck(*function), SUCCESS);
+    EXPECT_EQ(autoCast.DefaultEnabledPreCheck(*function), SUCCESS);
     autoCast.RunOnFunction(*function);
 }
 
@@ -225,7 +225,7 @@ TEST_F(AutoCastTest, CastInvalidInputNum) {
     Function *function = G.GetFunction();
 
     AutoCast autoCast;
-    EXPECT_EQ(autoCast.PreCheck(*function), FAILED);
+    EXPECT_EQ(autoCast.DefaultEnabledPreCheck(*function), FAILED);
     autoCast.RunOnFunction(*function);
 }
 

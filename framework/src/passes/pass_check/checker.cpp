@@ -30,6 +30,16 @@ Status Checker::DoPostCheck(Function &function) {
     return SUCCESS;
 }
 
+Status Checker::DoDefaultEnabledPreCheck(Function &function) {
+    (void)function;
+    return SUCCESS;
+}
+
+Status Checker::DoDefaultEnabledPostCheck(Function &function) {
+    (void)function;
+    return SUCCESS;
+}
+
 Status Checker::CheckConsumerProducer(const LogicalTensorPtr &tensor) {
     for (const auto &producer : tensor->GetProducers()) {
         if (producer == nullptr) {

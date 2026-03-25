@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,27 +9,21 @@
  */
 
 /*!
- * \file expand_function_checker.h
+ * \file index_outcast_checker.h
  * \brief
  */
 
-#ifndef EXPAND_FUNCTION_CHECKER_H
-#define EXPAND_FUNCTION_CHECKER_H
+#pragma once
 
+#include <queue>
 #include "checker.h"
-#include "index_outcast_checker.h"
-#include "interface/operation/opcode.h"
 #include "interface/function/function.h"
-#include "interface/operation/operation.h"
-#include "interface/tensor/logical_tensor.h"
 
 namespace npu {
 namespace tile_fwk {
-class ExpandFunctionChecker : Checker {
+class IndexOutcastChecker : Checker{
 public:
-    Status DoDefaultEnabledPreCheck(Function &function) override;
-    Status DoPostCheck(Function &function) override;
+    Status CheckIndexOutcastDisorderedCoverage(Function &function);
 };
 } // namespace tile_fwk
 } // namespace npu
-#endif  // EXPAND_FUNCTION_CHECKER_H
