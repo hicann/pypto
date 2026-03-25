@@ -72,6 +72,52 @@ TEST_F(CalcCommonTest, UnalignedReshape) {
 
 }
 
+// 测试 Reshape 中当输出 rawTensor 大小大于输入 rawTensor 大小时触发 padding 分支
+TEST_F(CalcCommonTest, UnalignedReshapeTriggerPaddingBranch) {
+    // 创建 Function 和 Operation, 构造一个虚拟的 ExecuteOperationContext
+    auto func = std::make_shared<Function>(Program::GetInstance(),
+        "TestUnalignedReshapeTriggerPadding", "TestUnalignedReshapeTriggerPadding", nullptr);
+
+    // 输入逻辑 shape 小，输出逻辑 shape 大
+    std::vector<int64_t> inputShape = {2, 2};   // 4 elements
+    std::vector<int64_t> outputShape = {3, 3};  // 9 elements
+
+    auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape);
+    auto &reshapeOp = func->AddOperation(Opcode::OP_RESHAPE, {inputTensor}, {outputTensor});
+
+    // 关键点：输入 RawTensor 按 inputShape 创建，输出 RawTensor 按 outputShape 创建
+    Tensor inputTensorData(DT_FP32, inputShape);
+    auto inputData = RawTensorData::CreateConstantTensor(inputTensorData, 1.0f);
+    auto inputDataView = std::make_shared<LogicalTensorData>(
+        inputData, inputShape, std::vector<int64_t>{0, 0});
+
+    Tensor outputTensorData(DT_FP32, outputShape);
+    auto outputData = RawTensorData::CreateConstantTensor(outputTensorData, 1.0f);
+    auto outputDataView = std::make_shared<LogicalTensorData>(outputData);
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {inputDataView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputDataView};
+
+    ExecuteOperationContext ctx = {
+        &frame,
+        &opInter,
+        &reshapeOp,
+        &ioperandDataViewList,
+        nullptr,
+        &ooperandInplaceDataViewList
+    };
+
+    // 确认 rawTensor 层面输出更大，从而走到 padding 分支
+    ASSERT_GT(outputData->GetSize(), inputData->GetSize())
+        << "Output raw tensor size should be greater than input raw tensor size to trigger padding branch";
+
+    opInter.ExecuteOperation(&ctx);
+}
+
 // 测试 OP_VEC_DUP 在 scalar 为极大 double 时对 FP32 类型输出进行 32 位饱和截断
 TEST_F(CalcCommonTest, VecDupClampFp32FromLargeDouble) {
     auto func = std::make_shared<Function>(Program::GetInstance(), "TestVecDupClampFp32",

@@ -327,14 +327,31 @@ void ExecuteOpReshape(ExecuteOperationContext *ctx) {
            ctx->ioperandDataViewList->size() == 1);
     auto &oop = ctx->ooperandInplaceDataViewList->at(0);
     auto &iop = ctx->ioperandDataViewList->at(0);
-    auto actualIop = std::make_shared<LogicalTensorData>(iop->GetData());
-    if (oop->GetSize() != iop->GetSize()) {
-        VERIFY_EVENT("%s", ctx->op->Dump().c_str());
-        VERIFY_EVENT("iop validShape: %s ---> oop validShape: %s", IntVecToStr(iop->GetShape()).c_str(), IntVecToStr(oop->GetShape()).c_str());
-        VERIFY_EVENT("Reshape: input tensor is not enough to reshape to output tensor");
-        calc::Reshape(oop, actualIop);
+    auto iopDataView = iop->View(iop->GetValidShape(), iop->GetOffset());
+    auto oopDataView = oop->View(oop->GetValidShape(), oop->GetOffset());
+    if (oop->GetData()->GetSize() > iop->GetData()->GetSize()) {
+        auto oopRawShapeStr = IntVecToStr(oop->GetData()->GetShape());
+        auto iopRawShapeStr = IntVecToStr(iop->GetData()->GetShape());
+        VERIFY_LOGW(
+            "Reshape: rawTensor shape/size mismatch in padding path: "
+            "oop(raw) shape=%s size=%ld, iop(raw) shape=%s size=%ld",
+            oopRawShapeStr.c_str(), oop->GetData()->GetSize(), iopRawShapeStr.c_str(), iop->GetData()->GetSize());
+        auto paddingRaw = std::make_shared<RawTensorData>(oop->GetData()->GetDataType(), oop->GetData()->GetShape());
+        auto paddingIopView = std::make_shared<LogicalTensorData>(paddingRaw, iop->GetValidShape(), iop->GetValidShape(), iop->GetOffset());
+        calc::Copy(paddingIopView, iopDataView);
+        iopDataView = paddingIopView;
+    }
+    auto actualIop = std::make_shared<LogicalTensorData>(iopDataView->GetData());
+    auto actualOop = std::make_shared<LogicalTensorData>(oopDataView->GetData());
+    if (oopDataView->GetSize() > iopDataView->GetSize()) {
+        VERIFY_LOGW("%s", ctx->op->Dump().c_str());
+        VERIFY_LOGW("iop validShape: %s ---> oop validShape: %s", IntVecToStr(iop->GetShape()).c_str(), IntVecToStr(oop->GetShape()).c_str());
+        VERIFY_LOGW("Reshape: input tensor is not enough to reshape to output tensor");
+        calc::Reshape(oopDataView, actualIop);
+    } else if (oopDataView->GetSize() < iopDataView->GetSize()) {
+        calc::Reshape(actualOop, iopDataView);
     } else {
-        calc::Reshape(oop, iop);
+        calc::Reshape(oopDataView, iopDataView);
     }
 }
 REGISTER_CALC_OP(OP_RESHAPE, Opcode::OP_RESHAPE, ExecuteOpReshape);

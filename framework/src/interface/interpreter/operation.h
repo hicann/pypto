@@ -89,6 +89,7 @@ private:
         std::vector<LogicalTensorDataPtr> result;
         for (auto &dataView : dataViewList) {
             auto &validShape = dataView->GetValidShape();
+            ASSERT(ExecuteOperationScene::EMPTY_VALIDSHAPE, validShape.size() != 0);
             if (validShape == dataView->GetShape()) {
                 result.emplace_back(dataView);
             } else {

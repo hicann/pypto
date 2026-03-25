@@ -113,6 +113,10 @@ std::vector<int64_t> OperationInterpreter::EvaluateOpImmediate(
 void OperationInterpreter::ExecuteOperation(ExecuteOperationContext *ctx) {
     auto iOperands = OperationInterpreter::GetValidDataView(*ctx->ioperandDataViewList);
     auto oOperands = OperationInterpreter::GetValidDataView(*ctx->ooperandInplaceDataViewList);
+    if (ctx->op->GetOpcode() == Opcode::OP_RESHAPE) {
+        iOperands = *ctx->ioperandDataViewList;
+        oOperands = *ctx->ooperandInplaceDataViewList;
+    }
     ExecuteOperationContext ctxValid = {ctx->frame, this, ctx->op, &iOperands, {}, &oOperands};
     try {
         OperationInterpreter::CallOperationInterpreterFunc(&ctxValid);
