@@ -439,6 +439,7 @@ public:
     static void UnregisterKernelBin(void *hdl);
     static void SetCaptureMode(bool captureMode);
     static bool IsCaptureMode();
+    static void SaveStream(aclrtStream aicoreStream);
     static void GetCaptureInfo(aclrtStream aicoreStream, aclmdlRI &rtModel);
     static void AddAicpuStream(aclmdlRI &rtModel, bool tripleStream);
     static int LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream, [[maybe_unused]]bool debugEnable, [[maybe_unused]]Function *function);

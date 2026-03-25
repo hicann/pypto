@@ -178,6 +178,10 @@ public:
 
     rtStream_t &GetCtrlStream() { return raStreamInstanceCtrl; }
 
+    rtStream_t &GetCurrentStream() { return currentStream; }
+
+    void SetCurrentStream(aclrtStream &stream) { currentStream = stream; }
+
     void CreateStream() {
         rtStreamCreate(&raStreamInstance, RT_STREAM_PRIORITY_DEFAULT);
         rtStreamCreate(&raStreamInstanceSche, RT_STREAM_PRIORITY_DEFAULT);
@@ -192,6 +196,7 @@ private:
     rtStream_t raStreamInstance{0};
     rtStream_t raStreamInstanceCtrl{0};
     aclrtStream raStreamInstanceSche{0};
+    aclrtStream currentStream{0};
 };
 
 class RuntimeAgent : public RuntimeAgentMemory, public RuntimeAgentStream {

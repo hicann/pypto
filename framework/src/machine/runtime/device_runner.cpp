@@ -342,6 +342,9 @@ void DeviceRunner::Dump() {
 
 /**************************** DynamicFunction *****************************/
 void DeviceRunner::DumpAiCoreExecutionTimeData() {
+    // 多轮控核，nrValidAic和scheCpuNum需实时刷新，否则泳道图会出错
+    args_.nrValidAic = dynamic::GetCfgBlockdim();
+    args_.scheCpuNum = dynamic::CalcSchAicpuNumByBlockDim(args_.nrValidAic, aicpuNum_, args_.archInfo);
     npu::tile_fwk::dynamic::DumpAicoreTaskExectInfo(args_, perfData_);
 }
 

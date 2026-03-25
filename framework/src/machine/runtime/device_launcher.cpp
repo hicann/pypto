@@ -42,7 +42,7 @@ int GetCfgBlockdim() {
     blk = blk > 0 ? blk : kMinDefaultDim;
 
     // 通过GetMaxBlockdim接口获取设置的最大核数，如果设置的最大核数大于硬件物理最大核数时，控核不生效
-    // 如果未进行控核，GetMaxBlockdim接口将通过aclrtGetResInCurrentThread函数返回硬件物理最大核数
+    // 如果未进行控核，GetMaxBlockdim接口将通过aclrtGetStreamResLimit函数返回硬件物理最大核数
     auto maxBlk = GetMaxBlockdim();
     blk = maxBlk < static_cast<int>(blk) ? maxBlk : blk;
     MACHINE_LOGD("Get blockdim[%zu].", blk);
@@ -56,9 +56,10 @@ int GetMaxBlockdim() {
 #ifdef BUILD_WITH_CANN
     uint32_t cubeBlockDim = 0;
     uint32_t vectorBlockDim = 0;
-    // 若未进行控核，aclrtGetResInCurrentThread返回的是满核
-    aclrtGetResInCurrentThread(ACL_RT_DEV_RES_CUBE_CORE, &cubeBlockDim);
-    aclrtGetResInCurrentThread(ACL_RT_DEV_RES_VECTOR_CORE, &vectorBlockDim);
+    // 若未进行控核，aclrtGetStreamResLimit返回的是满核
+    auto aicoreStream = machine::GetRA()->GetCurrentStream();
+    aclrtGetStreamResLimit(aicoreStream, ACL_RT_DEV_RES_CUBE_CORE, &cubeBlockDim);
+    aclrtGetStreamResLimit(aicoreStream, ACL_RT_DEV_RES_VECTOR_CORE, &vectorBlockDim);
     // 若不满足AIC和AIV的比例，手动处理成为符合AIC和AIV的比例最大值
     if (vectorBlockDim != cubeBlockDim * AICAIVRATIO) {
         auto rtsMaxBlockDim = std::min(cubeBlockDim, vectorBlockDim / AICAIVRATIO);
@@ -613,6 +614,15 @@ void DeviceLauncher::AddAicpuStream(aclmdlRI &rtModel, bool tripleStream) {
 #endif
 }
 
+void DeviceLauncher::SaveStream(aclrtStream aicoreStream) {
+#ifdef BUILD_WITH_CANN
+    // 存储 current stream，后续控核接口需使用current stream
+    machine::GetRA()->SetCurrentStream(aicoreStream);
+#else
+    (void)aicoreStream;
+#endif
+}
+
 void DeviceLauncher::GetCaptureInfo(aclrtStream aicoreStream, aclmdlRI &rtModel) {
 #ifdef BUILD_WITH_CANN
     SetCaptureMode(false);
@@ -715,7 +725,7 @@ int DeviceLauncher::LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream
         if (scheCpuNum == 1) {
             nrAicpu = 1;   // sche num is 1, no need lauch more aicpu in tripleStream
             DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu = 1;
-            MACHINE_LOGE("sche num is 1, no need lauch more aicpu in tripleStream, nrAicpu changed to %u",
+            MACHINE_LOGI("sche num is 1, no need lauch more aicpu in tripleStream, nrAicpu changed to %u",
                 DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
         }
         ret = rtAicpuKernelLaunchExWithArgs(

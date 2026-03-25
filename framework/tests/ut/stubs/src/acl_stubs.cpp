@@ -101,8 +101,9 @@ aclError aclrtSetExceptionInfoCallback(aclrtExceptionInfoCallback callback)
     return 0;
 }
 
-aclError aclrtGetResInCurrentThread(aclrtDevResLimitType type, uint32_t *value)
+aclError aclrtGetStreamResLimit(aclrtStream stream, aclrtDevResLimitType type, uint32_t *value)
 {
+    (void)stream;
     (void)type;
     (void)value;
     return 0;

@@ -797,6 +797,7 @@ static void DoLaunch(py::object &module, aclrtStream aicoreStream, int devId,
 
     auto kmodule = py::getattr(module, "kmodule").cast<KernelModulePtr>();
     aclmdlRI rtModel;
+    DeviceLauncher::SaveStream(aicoreStream);
     DeviceLauncher::GetCaptureInfo(aicoreStream, rtModel);
 
     HOST_PERF_TRACE(TracePhase::LaunchInit);
