@@ -504,9 +504,10 @@ int DeviceRunner::launchDynamicAiCpu(rtStream_t aicpuStream, DeviceKernelArgs *k
     hostInputInfo.addrOffset = reinterpret_cast<int8_t*>(&args->kArgs.inputs) - reinterpret_cast<int8_t*>(args);
     hostInputInfo.dataOffset = sizeof(dynamic::AiCpuArgs);
     rtArgs.hostInputInfoPtr = &hostInputInfo;
+    rtArgs.timeout = dynamic::AICPU_EXECUTE_TIMEOUT;
     MACHINE_LOGI("Copy flow addrOffset %u argsSize %u", hostInputInfo.addrOffset, hostInputInfo.dataOffset);
-    return rtAicpuKernelLaunchExWithArgs(
-        rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", aicpuNum_, &rtArgs, nullptr, aicpuStream, 0);
+    return rtAicpuKernelLaunchExWithArgs(rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", aicpuNum_,
+        &rtArgs, nullptr, aicpuStream, RT_KERNEL_USE_SPECIAL_TIMEOUT);
 }
 
 void DeviceRunner::InitAiCpuSoBin(DeviceArgs &devArgs) {
@@ -583,21 +584,19 @@ int DeviceRunner::RunPrepare() {
     return ret;
 }
 
-int DeviceRunner::RunPreSync(rtStream_t aicpuStream, rtStream_t aicoreStream) {
-    aclrtEvent event;
-    int rc = aclrtCreateEventExWithFlag(&event, ACL_EVENT_SYNC);
-    if (rc < 0) {
-        MACHINE_LOGE("aclrtCreateEvent failed %d\n", rc);
-        return rc;
-    }
+int DeviceRunner::RunPreSync(rtStream_t scheStream, rtStream_t ctrlStream, rtStream_t aicoreStream) {
 
-    rc = aclrtRecordEvent(event, aicoreStream);
+    int rc = aclrtRecordEvent(event_, aicoreStream);
     if (rc < 0) {
         MACHINE_LOGE("aclrtRecordEvent failed %d\n", rc);
         return rc;
     }
-
-    rc = aclrtStreamWaitEvent(aicpuStream, event);
+    rc = aclrtStreamWaitEvent(scheStream, event_);
+    if (rc < 0) {
+        MACHINE_LOGE("aclrtStreamWaitEvent failed %d\n", rc);
+        return rc;
+    }
+    rc = aclrtStreamWaitEvent(ctrlStream, event_);
     if (rc < 0) {
         MACHINE_LOGE("aclrtStreamWaitEvent failed %d\n", rc);
         return rc;
@@ -647,7 +646,7 @@ int DeviceRunner::DynamicSeparateLaunch(rtStream_t aicpuStream, rtStream_t ctrlS
     }
     ReportHostProfInfo(startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
 
-    rc = RunPreSync(ctrlStream, aicoreStream);
+    rc = RunPreSync(aicpuStream, ctrlStream, aicoreStream);
     if (rc < 0) {
         MACHINE_LOGE("prepare failed %d\n", rc);
         return rc;
@@ -790,7 +789,10 @@ int DeviceRunner::Init(void) {
         MACHINE_LOGE("Get builtInOp Funchandle failed\n");
         return -1;
     }
-
+    if (aclrtCreateEventExWithFlag(&event_, ACL_EVENT_SYNC) < 0) {
+        MACHINE_LOGE("aclrtCreateEvent failed.");
+        return -1;
+    }
     InitializeErrorCallback();
 
     if (InitDeviceArgs(args_) != 0) {

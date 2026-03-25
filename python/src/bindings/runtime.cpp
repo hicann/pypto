@@ -611,7 +611,10 @@ public:
         ALOG_ERROR_F("triple stream %d sequence %ld workspace %p cfgcache %p", tripleStream, sequence.load(), workspace,
             ctrlFlowCache);
 #endif
-        int ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, tripleStream, debugEnable, kernel->GetFunction());
+        int ret = DeviceLauncher::LaunchSyncTask(aicoreStream);
+        ASSERT(ret == RT_ERROR_NONE) << "launch pre sync failed: " << ret;
+
+        ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, tripleStream, debugEnable, kernel->GetFunction());
         ASSERT(ret == RT_ERROR_NONE) << "launch aicpu failed: " << ret;
 
         kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
@@ -639,7 +642,7 @@ private:
         hostInfo.addrOffset = offsetof(dynamic::AiCpuArgs, kArgs.inputs);
         hostInfo.dataOffset = sizeof(dynamic::AiCpuArgs);
         rtAicpuArgs.hostInputInfoPtr = &hostInfo;
-
+        rtAicpuArgs.timeout = AICPU_EXECUTE_TIMEOUT;
         memset_s(&rtAicoreArgs, sizeof(rtArgsEx_t), 0, sizeof(rtArgsEx_t));
         kernelArgs.resize(7, nullptr); // see aicore.ascpp
         rtAicoreArgs.args = kernelArgs.data();

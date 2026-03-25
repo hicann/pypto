@@ -190,8 +190,10 @@ struct DynMachineManager {
     }
 
     int AllocThreadIdxForDav2201(DeviceArgs *devArgs, int cpu, int &curThreadIdx, std::atomic<int> &threadIdx) {
+        uint64_t start = GetCycles();
         cpumask_.fetch_or(1 << cpu, std::memory_order_release);
         while (__builtin_popcount(cpumask_.load(std::memory_order_acquire)) != static_cast<int>(devArgs->nrAicpu)) {
+            CHECK_TIMEOUT_AND_RESET(start, "Wait cpu start over 5 min, expect cpu num[%u].", devArgs->nrAicpu);
             sched_yield();
         }
 
@@ -223,12 +225,17 @@ struct DynMachineManager {
         }
 
         int cpu = sched_getcpu();
+#ifndef __DEVICE__
+        cpu = simCpuId_++;
+#endif
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
             return AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx);
         } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
             return AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx);
         }
-
+#ifndef __DEVICE__
+        --simCpuId_;
+#endif
         curThreadIdx = ++threadIdx;
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
     }
@@ -295,7 +302,6 @@ struct DynMachineManager {
     void RunPost(DevAscendProgram *devProg) {
         ReleaseRuntimeDataRingBuffer(devProg);
         DEV_INFO("All schedule exited, destroy the machine.");
-        DeInit();
 #if ENABLE_PERF_TRACE
         PerfMtTrace(PERF_TRACE_EXIT, LastFinishThreadIdx_);
         DEV_ERROR("Begin dump machine perf trace:");
@@ -386,6 +392,7 @@ struct DynMachineManager {
         threadIdx_ = 0;
         finished_ = 0;
         cpumask_ = 0;
+        exitNum_ = 0;
         ctrlcpuIdx_ = 0;
         die0ThreadIdx_ = 0;
         die1ThreadIdx_ = 0;
@@ -465,6 +472,7 @@ struct DynMachineManager {
         int rc = RunUnifiedStream(kargs, entry);
         if (rc == npu::tile_fwk::dynamic::DEVICE_MACHINE_FINISHED) {
             RunPost(devProg);
+            DeInit();
             return DEVICE_MACHINE_OK;
         }
         return rc;
@@ -514,9 +522,12 @@ struct DynMachineManager {
                     DEV_WARN("Some registers force closed!");
                 }
                 RunPost(devProg);
-                DEV_INFO("All schedule exited, destroy the machine.");
-                return DEVICE_MACHINE_OK;
+                ret = DEVICE_MACHINE_OK;
             }
+        }
+        if (++exitNum_ == devArgs.nrAicpu) {
+            DeInit();
+            DEV_INFO("All sche cpu exited.");
         }
         return ret;
     }
@@ -542,7 +553,11 @@ struct DynMachineManager {
     int LastFinishThreadIdx_{0};
     std::atomic<int> threadIdx_{0};
     std::atomic<int> finished_{0};
+#ifndef __DEVICE__
+    std::atomic<int> simCpuId_{0};
+#endif
     std::atomic<uint64_t> cpumask_{0};
+    std::atomic<uint32_t> exitNum_{0};
     std::atomic<int> ctrlcpuIdx_{0};
     std::atomic<int> die0ThreadIdx_{0};
     std::atomic<int> die1ThreadIdx_{0};
@@ -565,16 +580,20 @@ struct DynMachineManager {
         std::atomic<uint64_t> currentRound{0};
 
         void ScheWait(DevAscendProgram *devProg) {
+            uint64_t start = GetCycles();
             while (unlikely(!devProg->runtimeDataRingBufferInited)) {
                 /* In the first launch, sche must wait for ctrl's ring buffer's initialization.
                  * Otherwise, the ringBufferHead->Empty() is not legal. */
                 RuntimeYield(0);
+                CHECK_TIMEOUT_AND_RESET(start, "Wait ring buffer init over 5 min.");
             }
 
             RuntimeDataRingBufferHead *ringBufferHead = devProg->GetRuntimeDataList();
+            start = GetCycles();
             while (unlikely(ringBufferHead->Empty())) {
                 /* Sche must wait until the current devStarArgs has been initialized. */
                 RuntimeYield(0);
+                CHECK_TIMEOUT_AND_RESET(start, "Wait ring buffer data over 5 min.");
             }
         }
 
