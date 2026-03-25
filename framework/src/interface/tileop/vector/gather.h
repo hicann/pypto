@@ -48,17 +48,16 @@ TILEOP void TgatherElement(T0 dst, T1 src0, T2 src1, T3 tmp) {
     constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
     constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
-    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T3, 4, 5>();
 
     constexpr bool scalarFlag = (sizeof(typename T2::Type) == 8) ? true : false;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
     constexpr auto srcTileShape1 = TileOp::GetOutterAxisMergeResult<shapeSize, typename T1::TileShape>();
     using srcTileDefine = pto::Tile<pto::TileType::Vec, typename T1::Type, srcTileShape1, srcTileW, pto::BLayout::RowMajor>;
-    using tmpTileDefine = pto::Tile<pto::TileType::Vec, typename T3::Type, 1, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
+    using idxTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, 1, idxTileW, pto::BLayout::RowMajor, -1, -1>;
     using dstTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, dstTileW, pto::BLayout::RowMajor, -1, -1>;
     srcTileDefine srcTile;
-    tmpTileDefine idxTile(1, n4IdxShape);
-    tmpTileDefine tmpTile(1, n4IdxShape);
+    idxTileDefine idxTile(1, n4IdxShape);
+    idxTileDefine tmpTile(1, n4IdxShape);
     dstTileDefine dstTile(1, n4IdxShape);
     if constexpr (scalarFlag) {
         set_flag(PIPE_V, PIPE_S, EVENT_ID7);
