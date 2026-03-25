@@ -58,7 +58,7 @@ struct MemoryHelper {
             size_t alignSize = 512;
             size_t totalSize = size + alignSize;
 
-            if (totalSize < size || totalSize > 0x7FFFFFFF) {
+            if (totalSize < size || totalSize > 0x500000000) {
                 return nullptr;
             }
 

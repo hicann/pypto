@@ -37,7 +37,7 @@ std::unordered_map<std::string, std::pair<uint64_t, uint64_t>> g_context; //key:
 
 namespace npu::tile_fwk::dynamic {
 uint8_t* AllocHostAddr(size_t size) {
-    if (size == 0 || size > 0x7FFFFFFF) {
+    if (size == 0 || size > 0x500000000) {
         DISTRIBUTED_LOGE("AllocHostAddr failed size %zu", size);
         return nullptr;
     }
