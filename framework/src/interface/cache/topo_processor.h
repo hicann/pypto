@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <map>
 #include "tilefwk/core_func_data.h"
+#include "tilefwk/pypto_fwk_log.h"
 #include "function_cache.h"
 #include "interface/utils/common.h"
 
@@ -82,11 +83,11 @@ private:
             CoreFunctionTopo *topoData = reinterpret_cast<CoreFunctionTopo*>(
                 base + ((uint64_t*)base)[i + 1]); // [i+1] access srcTopoData_->coreFunctionTopoOffsets
             if (topoData->depNum < batchDependNum) {
-                ALOG_DEBUG_F("[TopoProcessor]ignore proc topo %lu, dep num %lu", i, topoData->depNum);
+                MACHINE_LOGD("[TopoProcessor]ignore proc topo %lu, dep num %lu", i, topoData->depNum);
                 continue;
             }
             uint64_t tmpTopoId = ProcTopoBatchDepend(topoData);
-            ALOG_DEBUG_F("[TopoProcessor]proc topo %lu, dep num %lu, new tmp topoid:%lu",
+            MACHINE_LOGD("[TopoProcessor]proc topo %lu, dep num %lu, new tmp topoid:%lu",
                 i, topoData->depNum, tmpTopoId);
         }
     }
@@ -110,15 +111,15 @@ private:
             };
             bool isPure = checkPureBatchDepend();
             if (isPure) {
-                ALOG_DEBUG_F("[TopoProcessor]gen valid pure batch depend new topo %lu, size %lu, virtualTpopid:%lu",
+                MACHINE_LOGD("[TopoProcessor]gen valid pure batch depend new topo %lu, size %lu, virtualTpopid:%lu",
                     it->first, it->second.size(), virtualTopoId);
                 ConnectVirtualTopo(it->second, virtualTopoId, true);
             } else if (it->second.size() >= mergeNum) {
-                ALOG_DEBUG_F("[TopoProcessor]gen valid mix batch depend new topo %lu, size %lu, virtualTpopid:%lu",
+                MACHINE_LOGD("[TopoProcessor]gen valid mix batch depend new topo %lu, size %lu, virtualTpopid:%lu",
                     it->first, it->second.size(), virtualTopoId);
                 ConnectVirtualTopo(it->second, virtualTopoId, false);
             } else {
-                ALOG_DEBUG_F("[TopoProcessor]erase unvalid new topo %lu, size %lu",
+                MACHINE_LOGD("[TopoProcessor]erase unvalid new topo %lu, size %lu",
                     it->first, it->second.size());
             }
         }
@@ -136,9 +137,9 @@ private:
         virtualTopo->psgId = 0xFFFFFFFF; // invalid psgid
         virtualTopo->readyCount = (-1) * static_cast<int64_t>(oldTopoVec.size());
         newTopoIdToNewTopo_[virtualTopoId] = virtualTopo;
-        ALOG_DEBUG_F("[TopoProcessor]new virtual topo %lu , readycount:%ld", virtualTopoId, virtualTopo->readyCount);
+        MACHINE_LOGD("[TopoProcessor]new virtual topo %lu , readycount:%ld", virtualTopoId, virtualTopo->readyCount);
         for (uint64_t i = 0; i < oldTopo->depNum; i++) {
-            ALOG_DEBUG_F(" [TopoProcessor]batch depend topo id %lu ", oldTopo->depIds[i]);
+            MACHINE_LOGD(" [TopoProcessor]batch depend topo id %lu ", oldTopo->depIds[i]);
         }
 
         // connect old topo with virtual subgraph topo
@@ -147,7 +148,7 @@ private:
             oldTopo->depNum = 1;
             oldTopo->depIds[0] = virtualTopoId;
         }
-        ALOG_DEBUG_F("[TopoProcessor]have %lu old topo connect virtual topo %lu:", oldTopoVec.size(), virtualTopoId);
+        MACHINE_LOGD("[TopoProcessor]have %lu old topo connect virtual topo %lu:", oldTopoVec.size(), virtualTopoId);
 
         virtualTopoSize_ += (size + sizeof(uint64_t)); // add offset size
         virtualTopoNum_++;
@@ -189,7 +190,7 @@ private:
             uint32_t tempLength = sizeof(CoreFunctionTopo) + sizeof(uint64_t) * (tempPtr->depNum + tempPtr->extParamNum);
             curCoreFuncOffset += tempLength;
             topoPtr += tempLength;
-            ALOG_DEBUG_F("[TopoProcessor]gen final toppo, add topo, id = %lu, coretype = %lu", id, tempPtr->coreType);
+            MACHINE_LOGD("[TopoProcessor]gen final toppo, add topo, id = %lu, coretype = %lu", id, tempPtr->coreType);
         };
 
         for (uint32_t i = 0; i < srcTopoNum_; i++) {
@@ -198,13 +199,13 @@ private:
                 base + ((uint64_t*)base)[i + 1]);
             appendTopo(oldTopo, i);
         }
-        ALOG_DEBUG_F("[TopoProcessor] finish add old topo, num = %lu", srcTopoNum_);
+        MACHINE_LOGD("[TopoProcessor] finish add old topo, num = %lu", srcTopoNum_);
 
         // add virtual topo
         for(auto& elm : newTopoIdToNewTopo_) {
             appendTopo(elm.second, elm.first);
         }
-        ALOG_DEBUG_F("[TopoProcessor] finish add virtual topo, num = %lu", newTopoIdToNewTopo_.size());
+        MACHINE_LOGD("[TopoProcessor] finish add virtual topo, num = %lu", newTopoIdToNewTopo_.size());
 
         return std::tuple<std::shared_ptr<CoreFunctionTopoCache>, uint64_t>(newTopoCache, virtualTopoNum_);
     }
@@ -220,7 +221,7 @@ private:
         IdListKey key = {hash, count};
         uint32_t byteLen = count * sizeof(uint64_t);
         for (uint32_t i = 0; i < count; i++) {
-            ALOG_DEBUG_F(" ##[TopoProcessor] batch depend id list %lu", idList[i]);
+            MACHINE_LOGD(" ##[TopoProcessor] batch depend id list %lu", idList[i]);
         }
 
         auto& candidates = forwardMap_[key];
