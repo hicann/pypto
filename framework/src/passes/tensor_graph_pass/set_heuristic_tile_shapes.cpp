@@ -24,7 +24,10 @@
 #include "interface/program/program.h"
 #include "interface/operation/operation_impl.h"
 #include "interface/configs/config_manager.h"
+#include "passes/pass_log/pass_log.h"
 #include "set_heuristic_tile_shapes.h"
+
+#define MODULE_NAME "SetHeuristicTileShapes"
  
 using namespace npu::tile_fwk;
 using json = nlohmann::json;
@@ -342,7 +345,7 @@ size_t DimsCalculation(Operation *op, size_t tensorsNum, bool isInput) {
 std::vector<int64_t> MaxInputShapeCalculation(Operation *op, size_t inputsNum, size_t inputDims, int64_t maxTypeSize) {
     // Find the maximum values of the shape dimensions among the inputs, to find the maximum boundary of the tile values
     if (maxTypeSize == 0) {
-        ALOG_ERROR_F("maxTypeSize = 0, division by zero");
+        APASS_LOG_ERROR_F(Elements::Operation, "maxTypeSize = 0, division by zero");
     }
     std::vector<int64_t> maxInputShape(inputDims, LLONG_MIN);
     for (size_t input = 0; input < inputsNum; input++) {
@@ -360,7 +363,7 @@ void VcnhwconvProcessing(Operation *opInit, Operation *opNew, std::vector<int64_
     bool forwardTranspose = (opNew->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV && isForward);
     if (backwardTranspose || forwardTranspose) {
         if (tileSize == 0) {
-            ALOG_ERROR_F("tileSize = 0, division by zero");
+            APASS_LOG_ERROR_F(Elements::Operation, "tileSize = 0, division by zero");
         }
         int64_t smallDim = (maxInputShape[perm[0]] < maxInputShape[perm[1]]) ? perm[0] : perm[1];
         int64_t bigDim = (maxInputShape[perm[0]] > maxInputShape[perm[1]]) ? perm[0] : perm[1];
@@ -462,7 +465,7 @@ void ReshapeTileSetting(Operation *opInit, Operation *opBase, Operation *opNew, 
 
 int64_t TileSizeCalculation(Operation *op, std::vector<int64_t> vectorTilesOld, int64_t maxTypeSize) {
     if (maxTypeSize == 0) {
-        ALOG_ERROR_F("maxTypeSize = 0, division by zero");
+        APASS_LOG_ERROR_F(Elements::Operation, "maxTypeSize = 0, division by zero");
     }
     int64_t tileSize = std::accumulate(vectorTilesOld.begin(), vectorTilesOld.end(), 1, std::multiplies<int64_t>());
     tileSize = (op->GetOpcode() == Opcode::OP_TRANSPOSE_VNCHWCONV) ? tileSize * (BLOCK_SIZE / maxTypeSize) : tileSize;
@@ -481,7 +484,7 @@ void TileShapeSetting(Operation *opBase, Operation *opNew, std::vector<int64_t> 
     auto iterRowDim = reduceOps.find(opBase->GetOpcode());
     auto iterUniqueDim = uniqueOps.find(opBase->GetOpcode());
     if (inputTypeSize == 0) {
-        ALOG_ERROR_F("inputTypeSize = 0, division by zero");
+        APASS_LOG_ERROR_F(Elements::Operation, "inputTypeSize = 0, division by zero");
     }
 
     // Last Dim processing
@@ -561,7 +564,7 @@ bool Propagation(Operation *cubeOp, Operation *opInit, Operation *opBase, Operat
     int64_t maxTypeSize = std::max(inputTypeSize, outputTypeSize);
     std::vector<int64_t> vectorTilesOld = opInit->GetTileShape().GetVecTile().tile;
     if (inputTypeSize == 0 || maxTypeSize == 0) {
-        ALOG_ERROR_F("typeSize = 0, division by zero");
+        APASS_LOG_ERROR_F(Elements::Operation, "typeSize = 0, division by zero");
     }
     if (isReduce) {
         if (reduceOps.find(opNew->GetOpcode()) != reduceOps.end()) {
@@ -811,7 +814,7 @@ std::vector<Operation *> FillNoConsumersOperations(Function &function) {
             int64_t inputTypeSize = BytesOf(op.GetIOperands()[0]->tensor->GetDataType());
             int64_t defaultTileSize = DEFAULT_TILE_SIZE;
             if (inputTypeSize == 0) {
-                ALOG_ERROR_F("inputTypeSize = 0, division by zero");
+                APASS_LOG_ERROR_F(Elements::Operation, "inputTypeSize = 0, division by zero");
             }
             if (op.GetTileShape().GetVecTile()[0] == -1) {
                 int64_t curTile = std::min(defaultTileSize, static_cast<int64_t>(std::pow(NUM2, static_cast<int64_t>(std::log2(std::max(op.GetIOperands()[0]->shape[inputDims - 1], BLOCK_SIZE / inputTypeSize))))));
@@ -875,7 +878,7 @@ void SetReduceTiles(std::vector<Operation *> reduceOrderedOperations) {
         int64_t outputTypeSize = BytesOf(op->GetOOperands()[0]->tensor->GetDataType());
         int64_t maxTypeSize = std::max(inputTypeSize, outputTypeSize);
         if (inputTypeSize == 0 || maxTypeSize == 0) {
-            ALOG_ERROR_F("typeSize = 0, division by zero");
+            APASS_LOG_ERROR_F(Elements::Operation, "typeSize = 0, division by zero");
         }
         ASSERT(inputDims == outputDims) << "Input dims should be equal output dims";
         ASSERT(outputsNum == 1) << "ReduceOp must have 1 output";
