@@ -30,6 +30,8 @@
 #include "axis_combine_marker.h"
 
 namespace npu::tile_fwk {
+
+extern const std::unordered_set<Opcode> NEED_BRC_OPS;
 class AxisCombine : public Pass {
 public:
     AxisCombine() : Pass("AxisCombine") {}

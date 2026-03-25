@@ -18,7 +18,7 @@
 #include "interface/utils/operator_tracer.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/vector_error.h"
-
+#include "passes/tile_graph_pass/graph_constraint/axis_combine.h" 
 namespace npu::tile_fwk {
 
 std::vector<int64_t> BinaryOperationResultShape(LogicalTensorPtr operand1, LogicalTensorPtr operand2) {
@@ -148,13 +148,31 @@ void TiledBinaryOperation(Function &function, const TileShape &tileShape, size_t
     }
 }
 
+
+template <BinaryOpType T>
+bool IsOpInBrcWhitelist() {
+    Opcode opCode = GetBinaryOpNameCode<T>();
+    if (NEED_BRC_OPS.count(opCode) > 0) {
+        return true;
+    }
+    return false;
+}
+
+template <BinaryOpType T>
+bool ShouldUseBrcOperation(Function &function, LogicalTensorPtr operand1, LogicalTensorPtr operand2) {
+    bool isCombineAxisEnabled =
+        function.paramConfigs_.forceCombineAxis || (function.paramConfigs_.combineAxis && IsOpInBrcWhitelist<T>());
+    if (!isCombineAxisEnabled) {
+        return false;
+    }
+    return CallBrcBinOp(operand1, operand2);
+}
+
 template <BinaryOpType T>
 void TiledBinaryOperation(Function &function, const TileShape &tileShape, LogicalTensorPtr operand1,
     LogicalTensorPtr operand2, const LogicalTensorPtr &result) {
     CheckBinOpOperandsValid(operand1, operand2);
-    bool withBrc = CallBrcBinOp(operand1, operand2) &&
-                   (function.paramConfigs_.forceCombineAxis ||
-                       function.paramConfigs_.combineAxis);
+    bool withBrc = ShouldUseBrcOperation<T>(function, operand1, operand2);
     // nolast brc will be inline
     if (!withBrc) {
         BroadcastOperandTensor(operand1, operand2, result, function, tileShape);
