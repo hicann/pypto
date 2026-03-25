@@ -614,7 +614,7 @@ void SetConvShapeInfo(const TileShape &tileShape, const ConvGraphNodes &tensorGr
 LogicalTensorPtr ConstructBiasTile(Function &function, const ConvGraphNodes &tensorGraphNodes, ConvIterInfo &iterInfo,
                                    ConvTileInfo &convTileInfo)
 {
-    std::vector<int64_t> dstBiasL1Shape = std::vector<int64_t>{1, ConvAlignB(iterInfo.nL0Size, MKN_N_VALUE)};
+    std::vector<int64_t> dstBiasL1Shape = std::vector<int64_t>{1, iterInfo.nL0Size};
     std::vector<int64_t> dstBiasL1Offset = std::vector<int64_t>{0,
         iterInfo.groupOffset * convTileInfo.coutPerGroup + iterInfo.nL1Offset + iterInfo.nL0Offset};
     LogicalTensorPtr dstBiasl1TensorPtr =
@@ -628,9 +628,8 @@ LogicalTensorPtr ConstructBiasTile(Function &function, const ConvGraphNodes &ten
             SymbolicScalar::FromConcrete(dstBiasL1Offset), dstBiasl1TensorPtr->GetDynValidShape());
     viewOpBiasL1.SetOpAttribute(viewAttributeBiasL1);
     viewOpBiasL1.SetAttribute(Matrix::A_MUL_B_COPY_IN_MODE, static_cast<int64_t>(Matrix::CopyInMode::ND2ND));
-    viewOpBiasL1.SetAttribute("isConv", true);
 
-    std::vector<int64_t> dstBiasBtShape = std::vector<int64_t>{1, ConvAlignB(iterInfo.nL0Size, MKN_N_VALUE)};
+    std::vector<int64_t> dstBiasBtShape = std::vector<int64_t>{1, iterInfo.nL0Size};
     std::vector<int64_t> dstBiasBtOffset = std::vector<int64_t>{0, iterInfo.nL0Offset};
     LogicalTensorPtr dstBiasBtTensorPtr =
         std::make_shared<LogicalTensor>(function, DataType::DT_FP32, dstBiasBtShape,
@@ -641,7 +640,6 @@ LogicalTensorPtr ConstructBiasTile(Function &function, const ConvGraphNodes &ten
     auto viewAttributeBiasBt = std::make_shared<ViewOpAttribute>(dstBiasBtOffset, MemoryType::MEM_BT,
             SymbolicScalar::FromConcrete(dstBiasBtOffset), dstBiasBtTensorPtr->GetDynValidShape());
     viewOpBiasBt.SetOpAttribute(viewAttributeBiasBt);
-    viewOpBiasBt.SetAttribute("isConv", true);
 
     return dstBiasBtTensorPtr;
 }
