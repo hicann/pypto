@@ -74,7 +74,8 @@ Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]]Function &function, O
     auto inputTensor = op.GetIOperands();
     auto inTensor0 = inputTensor[0];
     auto inTensor1 = inputTensor[1];
-    if (inTensor0->GetShape() == inTensor1->GetShape()) {
+    if (inTensor0->GetShape() == inTensor1->GetShape() ||
+        (inTensor0->GetShape().back() == inTensor1->GetShape().back())) {
         return SUCCESS;
     }
     for (size_t idx = 0; idx < inputTensor.size(); ++idx) {

@@ -149,6 +149,34 @@ TEST_F(TestAxisCombine, Test3) {
     }
 }
 
+// Skip insert when Both inputs have last dim shape of 1.
+TEST_F(TestAxisCombine, Test4) {
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {-1, 1}, "t1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 1}, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1"}, {"t2"}, "c1", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {-1, 1}, "t3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t3"}, {"t4"}, "c2", true), true);
+
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {2, 1}, "t5"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_EXPANDEXPDIF, {"t2", "t4"}, {"t5"}, "expanddif", true), true);
+
+    auto *rootFuncPtr = graph.GetFunction();
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+    AxisCombine pass;
+    EXPECT_EQ(pass.RunOnFunction(*rootFuncPtr), SUCCESS);
+    // ================== Verify Pass Effect ==================
+    int cnt = 0;
+    for (const auto &op : rootFuncPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_EXPAND || op.GetOpcode() == Opcode::OP_BRCB) {
+            ++cnt;
+        }
+    }
+    EXPECT_EQ(cnt, 0);
+}
+
 TEST_F(TestAxisCombine, TestDD) {
     config::SetOperationOption(KEY_COMBINE_AXIS, true);
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
