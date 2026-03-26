@@ -162,7 +162,7 @@ _dtype_dict = {
 }
 
 
-def _dtype_from(dtype: str) -> DataType:
+def _dtype_from(dtype: 'torch.dtype') -> DataType:
     pto_dtype = _dtype_dict.get(dtype.__str__())
     if pto_dtype is None:
         raise ValueError(f"Input torch.dtype is not supported. Got {dtype}")
