@@ -65,7 +65,7 @@ std::string CodeGenOpCloudNPU::PrintCastTileTensor() const {
     }
 
     int64_t satModeEnum = 0;
-    GetAttr(OP_ATTR_PREFIX + "mode", satModeEnum);
+    GetAttr(OP_ATTR_PREFIX + "satmode", satModeEnum);
 
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
