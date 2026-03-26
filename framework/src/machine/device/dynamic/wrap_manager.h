@@ -98,7 +98,13 @@ public:
     }
 
     inline void InitDieId(int schedIdx) {
-        dieId_ = GetDieId(schedIdx);
+        if (schedIdx < curDie0MaxCpuId_) {
+            dieId_ = DieId::DIE_0;
+        } else if (schedIdx >= curDie1StartCpuId_) {
+            dieId_ = DieId::DIE_1;
+        } else {
+            dieId_ = DieId::DIE_MIX;
+        }
     }
 
     inline void GetDieSchedIdRange(int &schedStart, int &schedEnd, int scheCpuNum) {
@@ -111,16 +117,8 @@ public:
         }
     }
 
-    inline DieId GetDieId(int scheCpuIdx) {
-        if (scheCpuIdx < curDie0MaxCpuId_) {
-            return DieId::DIE_0;
-        }
-
-        if (scheCpuIdx >= curDie1StartCpuId_) {
-            return DieId::DIE_1;
-        }
-
-        return DieId::DIE_MIX;
+    inline DieId GetDieId() {
+        return dieId_;
     }
 
     inline void Init(DeviceTask* curDevTask, uint32_t* coreRunReadyCnt, uint32_t* runReadyCoreIdxZero,
@@ -529,8 +527,6 @@ public:
         if (!GetIsMixarch() || dieId_ == DieId::DIE_MIX || dieId_ == DieId::DIE_UNKNOW) {
             return defaultReadyQue;
         }
-
-#ifdef SUPPORT_DIE_TO_DIE_SCHE
         size_t dieIndex = static_cast<size_t>(dieId_);
         ReadyCoreFunctionQueue* dieReadyQueue = nullptr;
         switch(type) {
@@ -544,10 +540,6 @@ public:
                 break;
         }
         return (dieReadyQueue != nullptr) ? dieReadyQueue : defaultReadyQue;
-#else
-        (void)type;
-        return defaultReadyQue;
-#endif
     }
 };
 }

@@ -31,7 +31,9 @@ enum RuntimeCallStage {
     T_RUNTIME_CALL_LOG = 2,
     T_RUNTIME_CALL_SHMEM_ALLOC = 3,
     T_RUNTIME_CALL_SLOT_MARK_NEED_ALLOC = 4,
-    T_RUNTIME_CALL_MAX = 5,
+    T_RUNTIME_CALL_GET_DIE_ID = 5,
+    T_RUNTIME_CALL_SET_DIE_ID = 6,
+    T_RUNTIME_CALL_MAX = 7,
 };
 
 using Call1EntryType = uint64_t (*)(uint64_t);
@@ -105,6 +107,24 @@ int64_t RuntimeNe(int64_t input1, int64_t input2) {
 #define RUNTIME_And(lhs, rhs) ((lhs) && (rhs))
 #define RUNTIME_Select(cond, set, unset) ((cond) ? (set) : (unset))
 
+#define RUNTIME_CalcLoopDieId(var, idx, loopRange, step, dieNum) \
+    int8_t DIESET_##var = 0; \
+    if (*loopDieId == -1) { \
+        *loopDieId = ((idx) / (step)) % dieNum; \
+        if (((idx) + (step) == (loopRange)) && (*loopDieId == 0)) { \
+            *loopDieId = -1; \
+        } else { \
+            DIESET_##var = 1; \
+        } \
+    } \
+
+#define RUNTIME_ClearLoopDieId(var) \
+    do { \
+        if (DIESET_##var) { \
+            *loopDieId = -1; \
+        } \
+    } while(0)
+
 #define RUNTIME_SetExpr(exprList, index, value) \
     do { \
         if (exprList) { \
@@ -125,4 +145,8 @@ int64_t RuntimeNe(int64_t input1, int64_t input2) {
         runtimeCallList[RuntimeCallStage::T_RUNTIME_CALL_SLOT_MARK_NEED_ALLOC](ctx, slotIndex); \
     } while (0)
 
+#define RUNTIME_RootGetDieId(funcKey) \
+    int8_t *loopDieId = (int8_t *)runtimeCallList[RuntimeCallStage::T_RUNTIME_CALL_GET_DIE_ID](ctx, funcKey); \
+
+#define RUNTIME_RootSetDieId(funcKey) runtimeCallList[RuntimeCallStage::T_RUNTIME_CALL_SET_DIE_ID](ctx, funcKey)
 }  // namespace npu::tile_fwk

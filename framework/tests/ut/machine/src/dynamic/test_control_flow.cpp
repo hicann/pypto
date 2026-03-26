@@ -83,6 +83,7 @@ TEST_F(ControlFlowTest, RunDeviceContext) {
     for (size_t k = 1; k < 0x40; k++) {
         EXPECT_EQ("s1", inspector.nameList[k]);
     }
+    PyptoKernelCtrlServerRegisterTaskInspector(nullptr, nullptr);
 }
 
 TEST_F(ControlFlowTest, TestDD) {
@@ -220,6 +221,7 @@ TEST_F(ControlFlowTest, TensorRecycleDestruct) {
     EXPECT_TRUE(data.isAddr0Valid);
     EXPECT_TRUE(data.isAddr1Valid);
     EXPECT_NE(data.addr0Value, data.addr1Value);
+    PyptoKernelCtrlServerRegisterTaskInspector(nullptr, nullptr);
 }
 
 static DeviceTensorData toTensorData(const std::shared_ptr<LogicalTensor> &t) {

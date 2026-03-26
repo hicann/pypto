@@ -34,6 +34,7 @@ struct DevAscendFunctionDuppedData {
     uintdevptr_t runtimeWorkspace_;
     RuntimeReuseInfo runtimeWsReuseInfo_;
     uintdevptr_t runtimeOutcastWorkspace_;
+    intdevptr_t loopDieId_{-1};
     uint8_t data_[0];
     /*
      *  Duplicated:
