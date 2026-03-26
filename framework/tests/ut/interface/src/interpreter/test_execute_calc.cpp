@@ -639,6 +639,53 @@ TEST_F(CalcCommonTest, ExecuteOpLogicalAndBasic) {
     EXPECT_EQ(outputView->Get<bool>(3), false);
 }
 
+// 测试 ExecuteOpBinary 中 lhs 的 producer 为 OP_BRCB 时触发 BRCB 分支
+TEST_F(CalcCommonTest, ExecuteOpBinaryWithLhsFromBrcb) {
+    auto func = std::make_shared<Function>(Program::GetInstance(), "TestBinaryWithLhsFromBrcb",
+        "TestBinaryWithLhsFromBrcb", nullptr);
+
+    std::vector<int64_t> shape = {4, 1};
+    auto brcbInputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto lhsTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto rhsTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+
+    // 给 lhsTensor 挂上 OP_BRCB producer，用于触发 ExecuteOpBinary 中的 BRCB 检测分支
+    func->AddOperation(Opcode::OP_BRCB, {brcbInputTensor}, {lhsTensor});
+    auto &addOp = func->AddOperation(Opcode::OP_ADD, {lhsTensor, rhsTensor}, {outputTensor});
+
+    Tensor lhsTensorData(DT_FP32, shape);
+    Tensor rhsTensorData(DT_FP32, shape);
+    Tensor outputTensorData(DT_FP32, shape);
+
+    std::vector<float> lhsVals = {1.f, 2.f, 3.f, 4.f};
+    std::vector<float> rhsVals = {10.f, 20.f, 30.f, 40.f};
+    auto lhsData = RawTensorData::CreateTensor<float>(lhsTensorData, lhsVals);
+    auto rhsData = RawTensorData::CreateTensor<float>(rhsTensorData, rhsVals);
+    auto outputData = RawTensorData::CreateConstantTensor<float>(outputTensorData, 0.f);
+
+    auto lhsView = std::make_shared<LogicalTensorData>(lhsData);
+    auto rhsView = std::make_shared<LogicalTensorData>(rhsData);
+    auto outputView = std::make_shared<LogicalTensorData>(outputData);
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {lhsView, rhsView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputView};
+
+    ExecuteOperationContext ctx = {&frame, &opInter, &addOp, &ioperandDataViewList, nullptr, &ooperandInplaceDataViewList};
+    opInter.ExecuteOperation(&ctx);
+    opInter.ExecuteOperation(&ctx);
+
+    ASSERT_EQ(outputView->GetSize(), 4);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(0), 11.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(1), 22.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(2), 33.f);
+    EXPECT_FLOAT_EQ(outputView->Get<float>(3), 44.f);
+}
+
 // 测试 ExecuteOpLog1p，验证 calc::Log1p 行为
 TEST_F(CalcCommonTest, ExecuteOpLog1pBasic) {
     auto func = std::make_shared<Function>(Program::GetInstance(), "TestLog1p",

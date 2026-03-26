@@ -1693,6 +1693,7 @@ std::shared_ptr<LogicalTensor> Function::CreateIncastTensor(const std::shared_pt
     }
     auto incastSymbol = std::make_shared<LogicalTensor>(*this, inArgument->tensor->datatype, inArgument->shape,
         inArgument->tensor->GetDynRawShape(), inArgument->Format(), newSymbol, NodeType::INCAST);
+    incastSymbol->tensor->UpdateDynRawShape(inArgument->tensor->GetDynRawShape());
     tensorMap_.Insert(incastSymbol);
     inCasts_.push_back(incastSymbol);
     incastToInArgumentDict[incastSymbol] = inArgument;
@@ -3727,7 +3728,7 @@ void Function::DoMergeFunctionDupIncast() {
         auto oriIncast = inCasts_[slotSetIndex[0]];
         auto newIncast = std::make_shared<LogicalTensor>(*this, oriIncast->tensor->datatype, oriIncast->shape,
             oriIncast->tensor->GetDynRawShape(), oriIncast->Format(), oriIncast->tensor->GetSymbol(), NodeType::INCAST);
-
+        newIncast->tensor->UpdateDynRawShape(oriIncast->tensor->GetDynRawShape());
         for (auto incastIdx : slotSetIndex) {
             FUNCTION_ASSERT(FError::NOT_EXIST, inCasts_[incastIdx]->GetConsumers().size() > 0)
                 << "Incast at index " << incastIdx << " should have at least one consumer";
@@ -3753,7 +3754,7 @@ void Function::DoMergeFunctionDupOutcast() {
         auto oriOutcast = outCasts_[slotSetIndex[0]];
         auto newOutcast = std::make_shared<LogicalTensor>(*this, oriOutcast->tensor->datatype, oriOutcast->shape,
             oriOutcast->tensor->GetDynRawShape(), oriOutcast->Format(), oriOutcast->tensor->GetSymbol(), NodeType::OUTCAST);
-
+        newOutcast->tensor->UpdateDynRawShape(oriOutcast->tensor->GetDynRawShape());
         for (auto incastIdx : slotSetIndex) {
             FUNCTION_ASSERT(FError::NOT_EXIST, outCasts_[incastIdx]->GetProducers().size() > 0)
                 << "Outcast at index " << incastIdx << " should have at least one producer";

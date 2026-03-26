@@ -90,6 +90,7 @@ Tensor::Tensor(DataType dataType, const Shape &shape, std::string name, TileOpFo
     storage_ = std::make_shared<LogicalTensor>(
         *Program::GetInstance().GetCurrentFunction(), dataType, shape, dynShape, format, name, NodeType::LOCAL);
     storage_->tensor->AddRefCount(1);
+    storage_->tensor->UpdateDynRawShape(dynShape);
     Program::GetInstance().GetTensorSlotManager()->TensorConstruct(*this);
 
     Program::GetInstance().InsertAliveTensor(this);

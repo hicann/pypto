@@ -56,10 +56,6 @@ LogicalTensor::LogicalTensor(Function &function, DataType t, Shape tshape, std::
       nodetype(tnodetype),
       function_(&function)
 {
-    auto getTensorDataDict = GetTensorDataDict(tValidShape);
-    if (!tValidShape.empty() && getTensorDataDict.size() == 0) {
-        tensor->UpdateDynRawShape(tValidShape);
-    }
 }
 
 LogicalTensor::LogicalTensor(Function &function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
