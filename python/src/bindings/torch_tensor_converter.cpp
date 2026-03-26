@@ -50,6 +50,11 @@ void ParseTensorData(py::object &torchTensor, py::object &tensorDef, py::object 
             dtype = tensorDef.attr("dtype").cast<DataType>();
         }
     }
+    //  Use dtype from type annotation when provided; otherwise fallback to torch tensor dtype.
+    if (!tensorDef.is_none() && !tensorDef.attr("status_dtype").is_none()) {
+        dtype = tensorDef.attr("_base").cast<Tensor &>().GetDataType();
+    }
+
 }
 
 }  // namespace

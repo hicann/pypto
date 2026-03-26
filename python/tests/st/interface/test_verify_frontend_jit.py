@@ -77,7 +77,7 @@ def test_verify_dyn():
                     )
 def cmp_where_kenrel(
         a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16), 
-        out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16)):
+        out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)):
 
     for _ in pypto.loop(1):
         pypto.set_vec_tile_shapes(16, 16)
@@ -106,7 +106,7 @@ def test_verify_where():
 @pypto.frontend.jit(runtime_options={"run_mode": pypto.RunMode.NPU})
 def cmp_where_kenrel2(
         a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16), 
-        out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP16)):
+        out: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32)):
 
     for _ in pypto.loop(1):
         pypto.set_vec_tile_shapes(16, 16)
