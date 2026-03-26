@@ -715,5 +715,61 @@ TEST_F(ReplaceTensorTest, InsertAssembleCopySingleAssemble) {
     EXPECT_EQ(copyInNumBer, 0) << "Should not insert COPY_IN operation";
     EXPECT_EQ(copyOutNumBer, 0) << "Should not insert COPY_OUT operation";
 }
+
+TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble) {
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "UpdateCopyInAttrAfterBackAssemble", "UpdateCopyInAttrAfterBackAssemble", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    
+    // Prepare the graph
+    std::vector<int64_t> inshape = {4, 4};
+    std::vector<int64_t> outshape1 = {8, 4};
+    std::vector<int64_t> outshape2 = {2, 4};
+
+    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    incast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto copyInout1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    copyInout1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto copyOutout1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    copyOutout1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto copyInout2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    copyInout2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto outcast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape1);
+    outcast1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto outcast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape2);
+    outcast2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    /* Init Graph
+        incast -- CopyIn -- copyInout1 -- CopyOut -- copyOutOut1 -- Assemble -- outcast1
+                                                                 -- CopyIn   -- copyInout2 -- CopyOut -- outcast2
+    */
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {copyInout1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInout1}, {copyOutout1});
+    auto &assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {copyOutout1}, {outcast1});
+    auto &copyInOp = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {copyOutout1}, {copyInout2});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {copyInout2}, {outcast2});
+
+    Offset assembleToOffset = {4, 0};
+    auto assembleOpAttribute = std::make_shared<AssembleOpAttribute>(assembleToOffset, SymbolicScalar::FromConcrete(assembleToOffset));
+    assembleOp.SetOpAttribute(assembleOpAttribute);
+    Offset copyIn2FromOffset = {2, 0};
+    auto copyInOpAttribute = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified(copyIn2FromOffset),
+        MEM_UB, OpImmediate::Specified(copyInout2->GetShape()),
+        OpImmediate::Specified(copyInout2->tensor->GetDynRawShape()),
+        OpImmediate::Specified(copyInout2->GetDynValidShape())
+        );
+    copyInOp.SetOpAttribute(copyInOpAttribute);
+    
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast1);
+    currFunctionPtr->outCasts_.push_back(outcast2);
+
+    ReplaceTensor replaceTensorPass;
+    replaceTensorPass.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(copyOutout1->GetOffset()[0] == assembleToOffset[0], true);
+    EXPECT_EQ(copyOutout1->GetOffset()[1] == assembleToOffset[1], true);
+    std::vector<std::string> copyInAttrNewOffset = {"6", "0"} ;
+    EXPECT_EQ(copyInOpAttribute->GetFromOffset()[0].Dump(), copyInAttrNewOffset[0]);
+    EXPECT_EQ(copyInOpAttribute->GetFromOffset()[1].Dump(), copyInAttrNewOffset[1]);
+}
 }
 }

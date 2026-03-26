@@ -160,6 +160,8 @@ private:
 
     Status ForUpdateView(Operation *op);
     Status BackUpdateAssemble(Operation *op);
+    std::vector<OpImmediate> SumOffsetForCopyIn(const std::vector<OpImmediate> offset1, const std::vector<OpImmediate> offset2);
+    Status UpdateCopyInAttr(Operation *copyInOp);
 
     Status MarkTensorAsPartialMem(Function &function);
 
