@@ -1,5 +1,5 @@
 ---
-name: pypto-binary-search-without-verify
+name: pypto-precision-binary-search
 description: PyPTO 算子二分精度对比技能。通过在kernel函数中添加检查点tensor作为输入参数进行原地修改，对比中间结果的精度，定位导致精度差异的具体op。适用于算子运行通过但精度不满足要求、需要定位具体op导致精度问题、需要对比多个中间结果的场景。
 license: 完整条款见 LICENSE.txt
 ---
