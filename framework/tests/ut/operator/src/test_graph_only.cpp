@@ -601,17 +601,20 @@ TEST_F(GraphTest, TestTranspose_MLA_3D_2_reshape) {
     std::vector<int64_t> shape{bs, n, d};
     std::vector<int64_t> transposeShape{n, bs, d};
     std::vector<int64_t> resShape{n, bs * d};
+    std::vector<int64_t> flattenShape{n * bs * d};
 
     PROGRAM("Transpose") {
         Tensor input(DataType::DT_FP32, shape, "input");
         Tensor output1(DataType::DT_FP32, transposeShape, "res1");
         Tensor output2(DataType::DT_FP32, resShape, "res2");
+        Tensor output3(DataType::DT_FP32, flattenShape, "res3");
         config::SetBuildStatic(true);
         FUNCTION("MLA_3D_2", {input, output1, output2}) {
             TileShape::Current().SetVecTile(NUM_2, NUM_2, NUM_128);
             output1 = Transpose(input, {0, 1}); // [8, 32, 128] --> [32, 8, 128]
             TileShape::Current().SetVecTile(NUM_8, NUM_8, NUM_128);
             output2 = Reshape(output1, resShape); // [32, 8, 128] --> [32, 1024]
+            output3 = Reshape(output1, {-1}); // [32, 8, 128] --> [32 * 8 * 128]
         }
     }
 }

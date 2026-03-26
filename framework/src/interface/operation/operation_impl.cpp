@@ -1209,9 +1209,19 @@ void TensorInnerReshape(Function &function, const LogicalTensorPtr &operand, con
 
 
 static std::vector<int64_t> CheckAndInferShape(const std::vector<int64_t> &oriShape, const std::vector<int64_t> &dstshape) {
+    for (size_t i = 0; i < oriShape.size(); i++) {
+        CHECK_OP(oriShape[i] != -1)
+            << "Reshape does not support dynamic axis in input shape. Input shape contains -1 at index " << i;
+    }
+
     int negIdx = -1;
     std::vector<int64_t> newShape = dstshape;
     auto capacity = CalculateCapacity(oriShape);
+
+    // Special case: dstshape == [-1], flatten to 1D
+    if (dstshape.size() == 1 && dstshape[0] == -1) {
+        return std::vector<int64_t>{capacity};
+    }
 
     for (size_t i = 0; i < newShape.size(); i++) {
         int x = newShape[i];

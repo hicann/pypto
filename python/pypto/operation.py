@@ -141,6 +141,7 @@ def reshape(
 
     shape : List[int]
         The new shape of the tensor. The total number of elements must match the input tensor.
+        If shape is [-1], all dimensions will be flattened to 1D.
 
     valid_shape : List[int], optional
         An optional parameter specifying the valid shape for partial reshapeing or padding.
@@ -180,6 +181,11 @@ def reshape(
     input x: [[1, 2],
               [3, 4]]
     output y: [1, 2, 3, 4]
+
+    # flatten to 1D
+    x = pypto.tensor([4, 3, 2, 2], pypto.DT_FP32)
+    y = pypto.reshape(x, [-1])
+    # output y shape: [48]
     """
     if inplace:
         out = pypto_impl.Reshape(input, to_syms(shape), inplace)

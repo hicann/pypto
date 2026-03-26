@@ -73,10 +73,10 @@ def test_reshape():
 @pypto.frontend.jit()
 def reshape_infer_shape_kernel(
     x: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    out_tensor: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    out_tensor: pypto.Tensor([pypto.STATIC], pypto.DT_FP32),
 ):
     pypto.set_vec_tile_shapes(4, 8)
-    y = pypto.reshape(x, [x.shape[0], 2, -1])
+    y = pypto.reshape(x, [-1])
     out_tensor.move(y)
 
 
@@ -85,7 +85,7 @@ def test_reshape_infer_shape():
     torch.npu.set_device(device_id)
     x = torch.rand((4, 8), dtype=torch.float32)
     x_tensor = x.npu()
-    y_tensor = torch.zeros((4, 2, 4), dtype=torch.float32, device=f'npu:{device_id}')
+    y_tensor = torch.zeros((32), dtype=torch.float32, device=f'npu:{device_id}')
     reshape_infer_shape_kernel(x_tensor, y_tensor)
     torch_npu.npu.synchronize()
     y = y_tensor.cpu()

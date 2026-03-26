@@ -38,3 +38,4 @@ def test_unsqueeze_validshape():
         assert res.valid_shape[1].concrete() == 16
         assert res.valid_shape[2].concrete() == 16
 
+        assert pypto.reshape(res, [-1]).shape == [1024]
