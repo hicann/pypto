@@ -643,7 +643,7 @@ TEST_F(CostModelTest, TestParseInputFile) {
 
 }
 
-TEST_F(CostModelTest, TestJsonFileErrorFormat) {
+TEST_F(CostModelTest, TestJsonFErrororFormat) {
     using namespace CostModel;
     const std::string path = "./config/test_config.conf";
     CostModelAgent agent;

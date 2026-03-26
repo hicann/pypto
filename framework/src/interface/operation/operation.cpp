@@ -23,6 +23,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/inner/tile_shape.h"
+#include "interface/utils/function_error.h"
 #include "interface/program/program.h"
 #include "interface/operation/cycles.h"
 #include "interface/function/function.h"
@@ -134,7 +135,7 @@ Operation::Operation(
       coreType_(CoreType::MIX),
       function_(&cur) {
     if (opcode != Opcode::OP_CALL) {
-        ASSERT(cur.GetFunctionType() != FunctionType::EAGER);
+        FUNCTION_ASSERT(FError::INVALID_TYPE, cur.GetFunctionType() != FunctionType::EAGER);
     }
 
     auto opCoreType = OpcodeManager::Inst().GetCoreType(opcode);
@@ -155,13 +156,13 @@ Operation::Operation(
         if (cur.IsCompiledFunction()) {
             for (auto &t : GetOOperands()) {
                 if (cur.GetTensorMap().GetTensorByMagic(t->magic) == nullptr) {
-                    ASSERT(updateTensorMap || cur.IsCompiledFunction());
+                    FUNCTION_ASSERT(FError::NOT_EXIST, updateTensorMap || cur.IsCompiledFunction());
                 }
             }
         }
     } else {
         if (cur.GetTensorMap().GetTensorByMagic(GetOOperands()[0]->magic) == nullptr) {
-            ASSERT(updateTensorMap || cur.IsCompiledFunction());
+            FUNCTION_ASSERT(FError::NOT_EXIST, updateTensorMap || cur.IsCompiledFunction());
         } else {
             updateTensorMap = false;
         }
@@ -172,13 +173,14 @@ Operation::Operation(
         if (coreType_ == CoreType::AIC) {
             auto &cubeTile = tileShape_.GetCubeTile();
             auto &convTile = tileShape_.GetConvTile();
-            ASSERT(cubeTile.valid() || convTile.valid())
+            FUNCTION_ASSERT(FError::INVALID_VAL, cubeTile.valid() || convTile.valid())
                 << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
         }
         OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(opcode);
         if (coreType_ == CoreType::AIV && calcType != OpCalcType::DISTRIBUTED) {
             auto &vecTile = tileShape_.GetVecTile();
-            ASSERT(vecTile.valid()) << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
+            FUNCTION_ASSERT(FError::INVALID_VAL, vecTile.valid())
+                << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
         }
         SetSemanticLabel(config::GetSemanticLabel());
         location_ = SourceLocation::GetLocation();
@@ -217,7 +219,7 @@ Operation::Operation(
 }
 
 std::string Operation::GetStringAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     std::string attrVal;
     GetAttr(key, attrVal);
     return attrVal;
@@ -241,7 +243,7 @@ void Operation::SetAttribute(const std::string &key, bool value) {
 }
 
 int64_t Operation::GetIntAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     int64_t attrVal = 0;
     GetAttr(key, attrVal);
     return attrVal;
@@ -252,9 +254,9 @@ void Operation::SetAttribute(const std::string &key, int64_t value) {
 }
 
 CastMode Operation::GetCastModeAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     int attrVal = GetIntAttribute(key);
-    ASSERT(attrVal >= CAST_NONE && attrVal <= CAST_ODD);
+    FUNCTION_ASSERT(FError::INVALID_VAL, attrVal >= CAST_NONE && attrVal <= CAST_ODD);
     return static_cast<CastMode>(attrVal);
 }
 
@@ -263,44 +265,44 @@ void Operation::SetAttribute(const std::string &key, CastMode value) {
 }
 
 SymbolicScalar Operation::GetSymbolicScalarAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     SymbolicScalar attrVal = 0;
     GetAttr(key, attrVal);
-    ASSERT(attrVal.IsValid());
+    FUNCTION_ASSERT(FError::INVALID_VAL, attrVal.IsValid());
     return attrVal;
 }
 
 void Operation::SetAttribute(const std::string &key, const SymbolicScalar &value) {
-    ASSERT(value.IsValid());
+    FUNCTION_ASSERT(FError::INVALID_VAL, value.IsValid());
     SetAttr(key, value);
 }
 
 std::vector<SymbolicScalar> Operation::GetVectorSymbolicScalarAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     std::vector<SymbolicScalar> attrVal;
     GetAttr(key, attrVal);
     for (auto &attr : attrVal) {
-        ASSERT(attr.IsValid());
+        FUNCTION_ASSERT(FError::INVALID_VAL, attr.IsValid());
     }
     return attrVal;
 }
 
 void Operation::SetAttribute(const std::string &key, const std::vector<SymbolicScalar> &value) {
     for (auto &attr : value) {
-        ASSERT(attr.IsValid());
+        FUNCTION_ASSERT(FError::INVALID_VAL, attr.IsValid());
     }
     SetAttr(key, value);
 }
 
 [[nodiscard]] Element Operation::GetElementAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     Element attrVal;
     GetAttr(key, attrVal);
     return attrVal;
 }
 
 std::vector<Element> Operation::GetVectorElementAttribute(const std::string &key) const {
-    ASSERT(HasAttr(key)) << "Operation doesn't have attribute " << key;
+    FUNCTION_ASSERT(FError::NOT_EXIST, HasAttr(key)) << "Operation doesn't have attribute " << key;
     std::vector<Element> attrVal;
     GetAttr(key, attrVal);
     return attrVal;
@@ -358,7 +360,7 @@ Json Operation::DumpJson(bool dumpTensor) const {
             }
         }
         if (callee == nullptr) {
-            FUNCTION_LOGE("Cannot find function by calleeHash %s", calleeHash.c_str());
+            FUNCTION_LOGE_E(FError::NOT_EXIST, "Cannot find function by calleeHash %s", calleeHash.c_str());
         } else {
             if (callee->rootFunc_ == nullptr) {
                 opDump["calleehash"] = calleeHash.Data();
@@ -436,7 +438,7 @@ Json Operation::DumpJson(bool dumpTensor) const {
 
 std::shared_ptr<Operation> Operation::LoadJson(
     Function &cur, const std::unordered_map<int, std::shared_ptr<LogicalTensor>> &tensorDict, const Json &opDump) {
-    ASSERT(opDump[T_FIELD_KIND].get<int>() == static_cast<int>(Kind::T_KIND_OPERATION));
+    FUNCTION_ASSERT(FError::INVALID_TYPE, opDump[T_FIELD_KIND].get<int>() == static_cast<int>(Kind::T_KIND_OPERATION));
 
     std::vector<std::shared_ptr<LogicalTensor>> ioperands;
     std::vector<std::shared_ptr<LogicalTensor>> ooperands;
@@ -444,7 +446,7 @@ std::shared_ptr<Operation> Operation::LoadJson(
         std::shared_ptr<LogicalTensor> tensor;
         if (i.is_number()) {
             int magic = i.get<int>();
-            ASSERT(tensorDict.count(magic));
+            FUNCTION_ASSERT(FError::NOT_EXIST, tensorDict.count(magic));
             tensor = tensorDict.find(magic)->second;
         } else {
             tensor = tensorDict.find(i["magic"].get<int>())->second;
@@ -455,7 +457,7 @@ std::shared_ptr<Operation> Operation::LoadJson(
         std::shared_ptr<LogicalTensor> tensor;
         if (o.is_number()) {
             int magic = o.get<int>();
-            ASSERT(tensorDict.count(magic));
+            FUNCTION_ASSERT(FError::NOT_EXIST, tensorDict.count(magic));
             tensor = tensorDict.find(magic)->second;
         } else {
             tensor = tensorDict.find(o["magic"].get<int>())->second;
@@ -592,7 +594,7 @@ void Operation::ReplaceInputOperand(
         return;
     }
     for (size_t i = 0; i < iOperand.size(); ++i) {
-        ASSERT(iOperand[i] != nullptr);
+        FUNCTION_ASSERT(FError::INVALID_PTR, iOperand[i] != nullptr);
         if (iOperand[i] == originInput) {
             iOperand[i] = newInput;
             continue;
@@ -606,7 +608,7 @@ void Operation::ReplaceOutputOperand(
         return;
     }
     for (size_t i = 0; i < oOperand.size(); ++i) {
-        ASSERT(oOperand[i] != nullptr);
+        FUNCTION_ASSERT(FError::INVALID_PTR, oOperand[i] != nullptr);
         if (oOperand[i] == originOutput) {
             oOperand[i] = newOutput;
             continue;
@@ -615,7 +617,7 @@ void Operation::ReplaceOutputOperand(
 }
 
 void Operation::ReplaceIOperand(size_t index, std::shared_ptr<LogicalTensor> newTensor) {
-    ASSERT(index < GetIOperands().size());
+    FUNCTION_ASSERT(FError::OUT_OF_RANGE, index < GetIOperands().size());
     GetIOperands()[index]->RemoveConsumer(*this);
     GetIOperands()[index] = std::move(newTensor);
     GetIOperands()[index]->AddConsumer(*this);
@@ -624,7 +626,7 @@ void Operation::ReplaceIOperand(size_t index, std::shared_ptr<LogicalTensor> new
 }
 
 void Operation::ReplaceOOperand(size_t index, std::shared_ptr<LogicalTensor> newTensor) {
-    ASSERT(index < GetOOperands().size());
+    FUNCTION_ASSERT(FError::OUT_OF_RANGE, index < GetOOperands().size());
     GetOOperands()[index]->RemoveProducer(*this);
     GetOOperands()[index] = std::move(newTensor);
     GetOOperands()[index]->AddProducer(*this);
@@ -648,7 +650,7 @@ LogicalTensorPtr Operation::GetOutputOperand(const size_t index) const {
 
 int Operation::GetIOperandIndex(const LogicalTensorPtr &ioperand) const {
     for (size_t i = 0; i < iOperand.size(); ++i) {
-        ASSERT(iOperand[i] != nullptr);
+        FUNCTION_ASSERT(FError::INVALID_PTR, iOperand[i] != nullptr);
         if (iOperand[i] == ioperand) {
             return (int)i;
         }
@@ -657,7 +659,7 @@ int Operation::GetIOperandIndex(const LogicalTensorPtr &ioperand) const {
 }
 int Operation::GetOOperandIndex(const LogicalTensorPtr &ooperand) const {
     for (size_t i = 0; i < oOperand.size(); ++i) {
-        ASSERT(oOperand[i] != nullptr);
+        FUNCTION_ASSERT(FError::INVALID_PTR, oOperand[i] != nullptr);
         if (oOperand[i] == ooperand) {
             return (int)i;
         }
@@ -893,13 +895,13 @@ void Operation::ReplaceOutput(
 
 void Operation::SetSubFuncInvokeInfo(const SubfuncInvokeInfoTy &invokeInfo) {
     auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(opAttribute_);
-    ASSERT(callAttr != nullptr);
+    FUNCTION_ASSERT(FError::INVALID_PTR, callAttr != nullptr);
     callAttr->invokeInfo_ = std::make_shared<SubfuncInvokeInfoTy>(invokeInfo);
 }
 
 int Operation::GetProgramId() {
     auto callAttr = std::dynamic_pointer_cast<CallOpAttribute>(opAttribute_);
-    ASSERT(callAttr != nullptr);
+    FUNCTION_ASSERT(FError::INVALID_PTR, callAttr != nullptr);
     return callAttr->invokeInfo_->GetProgramId();
 }
 
@@ -917,123 +919,123 @@ std::vector<std::reference_wrapper<SymbolicScalar>> Operation::GetDynamicAttribu
     switch (GetOpcode()) {
         case Opcode::OP_VIEW:
             {
-                auto viewAttr = std::static_pointer_cast<ViewOpAttribute>(GetOpAttribute());
-                if (viewAttr != nullptr) {
-                    std::vector<SymbolicScalar> &viewFromDynOffset = viewAttr->GetFromDynOffset();
-                    for (auto &offset : viewFromDynOffset) {
-                        dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset));
-                    }
-                    std::vector<SymbolicScalar> &viewToDynValidShape = viewAttr->GetToDynValidShape();
-                    for (auto &shape : viewToDynValidShape) {
-                        dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
-                    }
+            auto viewAttr = std::static_pointer_cast<ViewOpAttribute>(GetOpAttribute());
+            if (viewAttr != nullptr) {
+                std::vector<SymbolicScalar> &viewFromDynOffset = viewAttr->GetFromDynOffset();
+                for (auto &offset : viewFromDynOffset) {
+                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset));
                 }
-                for (auto &shape: oOperand[0]->GetDynValidShape()) {
+                std::vector<SymbolicScalar> &viewToDynValidShape = viewAttr->GetToDynValidShape();
+                for (auto &shape : viewToDynValidShape) {
                     dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
                 }
-            } break;
+            }
+                for (auto &shape: oOperand[0]->GetDynValidShape()) {
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
+            }
+        } break;
         case Opcode::OP_ASSEMBLE:
             {
-                auto assembleAttr = std::static_pointer_cast<AssembleOpAttribute>(GetOpAttribute());
-                if (assembleAttr != nullptr) {
-                    std::vector<SymbolicScalar> &assembleToDynOffset = assembleAttr->GetToDynOffset();
-                    for (auto &offset : assembleToDynOffset) {
-                        dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset));
-                    }
-                    std::vector<SymbolicScalar> &assembleFromDynValidShape = assembleAttr->GetFromDynValidShape();
-                    for (auto &shape : assembleFromDynValidShape) {
-                        dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
-                    }
+            auto assembleAttr = std::static_pointer_cast<AssembleOpAttribute>(GetOpAttribute());
+            if (assembleAttr != nullptr) {
+                std::vector<SymbolicScalar> &assembleToDynOffset = assembleAttr->GetToDynOffset();
+                for (auto &offset : assembleToDynOffset) {
+                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset));
                 }
-                for (auto &shape: iOperand[0]->GetDynValidShape()) {
+                std::vector<SymbolicScalar> &assembleFromDynValidShape = assembleAttr->GetFromDynValidShape();
+                for (auto &shape : assembleFromDynValidShape) {
                     dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
                 }
-            } break;
+            }
+                for (auto &shape: iOperand[0]->GetDynValidShape()) {
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape));
+            }
+        } break;
         case Opcode::OP_COPY_IN: [[fallthrough]];
         case Opcode::OP_UB_COPY_IN:
             {
-                auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
-                if (copyAttr != nullptr) {
-                    for (auto &offset : copyAttr->GetFromOffset()) {
-                        if (offset.IsSpecified()) {
+            auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
+            if (copyAttr != nullptr) {
+                for (auto &offset : copyAttr->GetFromOffset()) {
+                    if (offset.IsSpecified()) {
                             dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
-                        }
-                    }
-                    for (auto &shape : copyAttr->GetToDynValidShape()) {
-                        if (shape.IsSpecified()) {
-                            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                        }
                     }
                 }
-            } break;
+                for (auto &shape : copyAttr->GetToDynValidShape()) {
+                    if (shape.IsSpecified()) {
+                            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                    }
+                }
+            }
+        } break;
         case Opcode::OP_COPY_OUT: [[fallthrough]];
         case Opcode::OP_UB_COPY_OUT:
             {
-                auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
-                if (copyAttr) {
-                    for (auto &offset : copyAttr->GetToOffset()) {
-                        if (offset.IsSpecified()) {
+            auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
+            if (copyAttr) {
+                for (auto &offset : copyAttr->GetToOffset()) {
+                    if (offset.IsSpecified()) {
                             dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(offset.GetSpecifiedValue()));
-                        }
-                    }
-                    for (auto &shape : copyAttr->GetFromDynValidShape()) {
-                        if (shape.IsSpecified()) {
-                            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                        }
                     }
                 }
-            } break;
+                for (auto &shape : copyAttr->GetFromDynValidShape()) {
+                    if (shape.IsSpecified()) {
+                            dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+                    }
+                }
+            }
+        } break;
         case Opcode::OP_VEC_DUP:
             {
-                auto scalar = GetAttr<SymbolicScalar>(OpAttributeKey::dynScalar);
-                if (scalar) {
-                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(*scalar));
-                }
-            } break;
+            auto scalar = GetAttr<SymbolicScalar>(OpAttributeKey::dynScalar);
+            if (scalar) {
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(*scalar));
+            }
+        } break;
         case Opcode::OP_PRINT:
             {
-                auto cond = GetAttr<SymbolicScalar>(OP_ATTR_PREFIX + "cond");
-                if (cond) {
-                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(*cond));
+            auto cond = GetAttr<SymbolicScalar>(OP_ATTR_PREFIX + "cond");
+            if (cond) {
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(*cond));
+            }
+            auto scalars = GetAttr<std::vector<SymbolicScalar>>(OP_ATTR_PREFIX + "scalars");
+            if (scalars) {
+                for (auto &scalar : *scalars) {
+                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(scalar));
                 }
-                auto scalars = GetAttr<std::vector<SymbolicScalar>>(OP_ATTR_PREFIX + "scalars");
-                if (scalars) {
-                    for (auto &scalar : *scalars) {
-                        dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(scalar));
-                    }
-                }
-            } break;
+            }
+        } break;
         case Opcode::OP_BIND_TENSOR:
             {
-                auto &attrDict = GetAllAttr();
-                auto it = attrDict.find(OpAttributeKey::bindTensor);
-                if (it != attrDict.end()) {
-                    auto &value = *npu::tile_fwk::AnyCast<SymbolicScalar>(&it->second);
-                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
-                }
-            } break;
+            auto &attrDict = GetAllAttr();
+            auto it = attrDict.find(OpAttributeKey::bindTensor);
+            if (it != attrDict.end()) {
+                auto &value = *npu::tile_fwk::AnyCast<SymbolicScalar>(&it->second);
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(value));
+            }
+        } break;
         case Opcode::OP_CALL:
             {
-                auto callAttr = std::static_pointer_cast<CallOpAttribute>(GetOpAttribute());
-                if (callAttr != nullptr) {
-                    for (auto &arg : callAttr->GetLinearArgList()) {
-                        dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(arg));
-                    }
+            auto callAttr = std::static_pointer_cast<CallOpAttribute>(GetOpAttribute());
+            if (callAttr != nullptr) {
+                for (auto &arg : callAttr->GetLinearArgList()) {
+                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(arg));
                 }
-            } break;
+            }
+        } break;
         case Opcode::OP_SHMEM_GET_GM2UB:
             {
-                auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
-                if (copyAttr == nullptr) {
-                    break;
+            auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(GetOpAttribute());
+            if (copyAttr == nullptr) {
+                break;
+            }
+            for (auto &shape : copyAttr->GetToDynValidShape()) {
+                if (!shape.IsSpecified()) {
+                    continue;
                 }
-                for (auto &shape : copyAttr->GetToDynValidShape()) {
-                    if (!shape.IsSpecified()) {
-                        continue;
-                    }
-                    dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
-                }
-            } break;
+                dynamicAttributeList.push_back(std::reference_wrapper<SymbolicScalar>(shape.GetSpecifiedValue()));
+            }
+        } break;
         default:
             break;
     }

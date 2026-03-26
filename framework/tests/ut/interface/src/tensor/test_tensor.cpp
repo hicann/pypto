@@ -82,9 +82,7 @@ TEST_F(TestTensor, AssignWithData2) {
     auto ptr1 = std::make_unique<uint8_t>(0);
     auto ptr2 = std::make_unique<uint8_t>(0);
 
-    auto reset = [&b]() {
-        b.SetData(nullptr);
-    };
+    auto reset = [&b]() { b.SetData(nullptr); };
 
     {
         Tensor a(DT_FP32, tshape, "A");
@@ -157,4 +155,33 @@ TEST_F(TestTensor, RawTensorNegative) {
     t.SetRefCount(-2);
     t.AddRefCount(1);
     EXPECT_EQ(t.GetRefCount(), -1);
+}
+
+TEST_F(TestTensor, GetShapeNoDimensions) {
+    std::vector<int64_t> shape = {};
+    Tensor a(DT_FP32, shape, "A");
+
+    EXPECT_THROW(a.GetShape(0), std::exception);
+}
+
+TEST_F(TestTensor, GetShapeAxisOutOfRange) {
+    std::vector<int64_t> shape = {16, 32, 16};
+    Tensor a(DT_FP32, shape, "A");
+
+    EXPECT_THROW(a.GetShape(10), std::exception);
+    EXPECT_THROW(a.GetShape(-10), std::exception);
+}
+
+TEST_F(TestTensor, InvalidShapeValue) {
+    std::vector<int64_t> shape = {-2, 16};
+    EXPECT_THROW(Tensor(DT_FP32, shape, "A"), std::exception);
+}
+
+TEST_F(TestTensor, SelfAssignment) {
+    std::vector<int64_t> shape = {16, 16};
+    Tensor a(DT_FP32, shape, "A");
+    auto ptr = std::make_unique<uint8_t>(0);
+
+    a.SetData(ptr.get());
+    EXPECT_NO_THROW(a = a);
 }

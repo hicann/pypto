@@ -258,7 +258,7 @@ bool DumpFile(const char *data, const size_t size, const std::string &fPath) {
     // dump bin file
     std::ofstream outFile(fPath, std::ios::binary);
     if (!outFile) {
-        FUNCTION_LOGE("Failed open file %s.", fPath.c_str());
+        FUNCTION_LOGE_E(FError::BAD_FD, "Failed open file %s.", fPath.c_str());
         return false;
     }
     outFile.write(data, size);
@@ -391,7 +391,7 @@ std::string GetCurRunningPath() {
     char buffer[size] = {};
     std::string cwd = getcwd(buffer, size);
     if (cwd.empty()) {
-        FUNCTION_LOGE("failed to call getcwd()");
+        FUNCTION_LOGW("failed to call getcwd()");
         return "";
     }
     return cwd;

@@ -26,6 +26,7 @@
 #include "tilefwk/config.h"
 #include "tilefwk/function.h"
 #include "interface/utils/common.h"
+#include "interface/utils/function_error.h"
 
 
 namespace npu::tile_fwk {

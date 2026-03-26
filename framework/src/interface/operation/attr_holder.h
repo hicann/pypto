@@ -24,6 +24,7 @@
 #include "interface/utils/common.h"
 #include "interface/utils/log.h"
 #include "interface/utils/string_utils.h"
+#include "interface/utils/function_error.h"
 #include "interface/inner/element.h"
 
 namespace npu::tile_fwk {
@@ -267,7 +268,7 @@ public:
                 return;
             }
         } catch (...) {
-            FUNCTION_LOGE("json parse error");
+            FUNCTION_LOGE_E(FError::INVALID_FILE, "json parse error");
         }
     }
 };

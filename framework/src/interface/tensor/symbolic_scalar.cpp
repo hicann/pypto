@@ -40,11 +40,11 @@ std::string CompileSourceCode(const std::string &sourceFilePath, const std::stri
         " -I" + includePath + "/tilefwk " +
         " -S " + sourceFilePath + " -o " + assembleFilePath;
     FUNCTION_LOGI("[RunCmd] %s", cmdGcc.c_str());
-    ASSERT(system(cmdGcc.c_str()) == 0);
+    FUNCTION_ASSERT(system(cmdGcc.c_str()) == 0);
 
     std::string cmdAs = LD_PRELOAD + gcc + " -fno-stack-protector -O2 -c " + assembleFilePath + " -o " + objectFilePath;
     FUNCTION_LOGI("[RunCmd] %s", cmdAs.c_str());
-    ASSERT(system(cmdAs.c_str()) == 0);
+    FUNCTION_ASSERT(system(cmdAs.c_str()) == 0);
     return objectFilePath;
 }
 
@@ -53,13 +53,13 @@ std::vector<std::string> ParallelCompile(const std::vector<std::string> &sourceF
     std::vector<std::thread> threads;
     const size_t maxThreads = 8;
     size_t numThreads = std::min(maxThreads, sourceFiles.size());
-    ASSERT(numThreads > 0);
+    FUNCTION_ASSERT(numThreads > 0);
     auto worker = [&sourceFiles, &objs, &gcc, &extraCflag](size_t startIdx, size_t endIdx) {
         for (size_t i = startIdx; i < endIdx; ++i) {
             objs[i] = CompileSourceCode(sourceFiles[i], gcc, extraCflag);
         }
     };
-    
+
     size_t filesPerThread = sourceFiles.size() / numThreads;
     size_t remainingFiles = sourceFiles.size() % numThreads;
     size_t currentIdx = 0;
@@ -98,15 +98,15 @@ std::vector<uint8_t> CompileAndLoadSection(const std::string &code, const std::s
     }
     cmdAs << " -o " << objectFilePath << " -O2 -T " << aicpuPath << "/merge.link";
     FUNCTION_LOGI("[RunCmd] %s", cmdAs.str().c_str());
-    ASSERT(system(cmdAs.str().c_str()) == 0);
+    FUNCTION_ASSERT(system(cmdAs.str().c_str()) == 0);
     std::string binaryFilePath = sourceFilePath + ".bin";
     std::string cmdObjcopy = LD_PRELOAD + objcopy + " --dump-section " + sectionName + "=" + binaryFilePath + " " + objectFilePath;
     FUNCTION_LOGI("[RunCmd] %s", cmdObjcopy.c_str());
-    ASSERT(system(cmdObjcopy.c_str()) == 0);
+    FUNCTION_ASSERT(system(cmdObjcopy.c_str()) == 0);
 
     FILE *fbin = fopen(binaryFilePath.c_str(), "rb");
     if (fbin == nullptr) {
-        FUNCTION_LOGE("open binary file name failed");
+        FUNCTION_LOGE_E(FError::BAD_FD, "open binary file name failed");
         return {};
     }
 
@@ -127,7 +127,8 @@ void SymbolicExpressionTable::SetElementKeyOnce(const std::string &key) {
     if (elementKey_.size() == 0) {
         elementKey_ = key;
     } else {
-        ASSERT(elementKey_ == key) << "elementKey_: " << elementKey_ << ", key: " << key;
+        FUNCTION_ASSERT(FError::INVALID_VAL, elementKey_ == key)
+            << "elementKey_: " << elementKey_ << ", key: " << key;
     }
 }
 
@@ -135,7 +136,7 @@ void SymbolicExpressionTable::SetTitleOnce(const std::string &title) {
     if (title_.size() == 0) {
         title_ = title;
     } else {
-        ASSERT(title_ == title) << "title_: " << title_ << ", title: " << title;
+        FUNCTION_ASSERT(FError::INVALID_VAL, title_ == title) << "title_: " << title_ << ", title: " << title;
     }
 }
 
@@ -175,15 +176,16 @@ std::string SymbolicExpressionTable::BuildExpressionByRaw(const RawSymbolicScala
             RawSymbolicExpPtr expr = std::dynamic_pointer_cast<RawSymbolicExpression>(raw);
             result = BuildExpressionCode(expr, exprDict);
         } break;
-        default: ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior"; break;
+        default: FUNCTION_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior"; break;
     }
     return result;
 }
 
 void SymbolicExpressionTable::BuildExtremaExpressionCode(const RawSymbolicExpPtr &expr, const std::unordered_map<RawSymbolicScalarPtr, std::string> &exprDict,
-        std::ostringstream &oss) {
+    std::ostringstream &oss) {
     const auto& operands = expr->OperandList();
-    ASSERT(operands.size() >= MIN_EXTREMA_OPERANDS) << "Extrema expression must have at least 2 operands";
+    FUNCTION_ASSERT(FError::INVALID_VAL, operands.size() >= MIN_EXTREMA_OPERANDS)
+        << "Extrema expression must have at least 2 operands";
     std::string funcName = (expr->Opcode() == SymbolicOpcode::T_MOP_MAX) ? "RUNTIME_Max" : "RUNTIME_Min";
     const size_t operandSize = operands.size();
 
@@ -314,7 +316,8 @@ bool SymbolicExpressionTable::CheckExprDependCore(const RawSymbolicScalarPtr &ra
                     const std::string &argName = std::dynamic_pointer_cast<RawSymbolicSymbol>(argExpr)->Name();
                     FUNCTION_LOGI("[RunCmd] Value depend tensor name:%s", argName.c_str());
                     auto it = tensorNameToDependCore.find(argName);
-                    ASSERT(it != tensorNameToDependCore.end())<<"Tensor "<<argName<<" not found in tensorNameToDependCore";
+                    FUNCTION_ASSERT(FError::NOT_EXIST, it != tensorNameToDependCore.end())
+                        << "Tensor " << argName << " not found in tensorNameToDependCore";
                     valDependMap[calleeExpr] = it->second;
                     return it->second;
                 }
@@ -351,22 +354,22 @@ void RawSymbolicScalar::FlattenOperands(const std::vector<RawSymbolicScalarPtr> 
 }
 
 ScalarImmediateType RawSymbolicScalar::GetImmediateValue() const {
-    ASSERT(IsImmediate()) << "Mismatch immediate type: " << SymbolicScalarKind2Name(Kind());
+    FUNCTION_ASSERT(FError::INVALID_TYPE, IsImmediate()) << "Mismatch immediate type: " << SymbolicScalarKind2Name(Kind());
     auto immediate = static_cast<const RawSymbolicImmediate *>(this);
     return immediate->Immediate();
 }
 const std::string &RawSymbolicScalar::GetSymbolName() const {
-    ASSERT(IsSymbol()) << "Mismatch symbol type: " << SymbolicScalarKind2Name(Kind());
+    FUNCTION_ASSERT(FError::INVALID_TYPE, IsSymbol()) << "Mismatch symbol type: " << SymbolicScalarKind2Name(Kind());
     auto symbol = static_cast<const RawSymbolicSymbol *>(this);
     return symbol->Name();
 }
 SymbolicOpcode RawSymbolicScalar::GetExpressionOpcode() const {
-    ASSERT(IsExpression()) << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
+    FUNCTION_ASSERT(FError::INVALID_TYPE, IsExpression()) << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
     auto expression = static_cast<const RawSymbolicExpression *>(this);
     return expression->Opcode();
 }
 const std::vector<RawSymbolicScalarPtr> &RawSymbolicScalar::GetExpressionOperandList() const {
-    ASSERT(IsExpression()) << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
+    FUNCTION_ASSERT(FError::INVALID_TYPE, IsExpression()) << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
     auto expression = static_cast<const RawSymbolicExpression *>(this);
     return expression->OperandList();
 }
@@ -418,7 +421,7 @@ static void DumpSymbolicScalar(const RawSymbolicScalarPtr &raw, Json &jarray) {
                 DumpSymbolicScalar(op, jarray);
             }
         } break;
-        default: ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior"; break;
+        default: FUNCTION_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior"; break;
     }
 }
 
@@ -620,7 +623,7 @@ SymbolicScalar SymbolicScalar::Min(const SymbolicScalar &sval) const {
         return SymbolicScalar(std::min(Concrete(), sval.Concrete()));
     }
     auto raw = RawSymbolicExpression::CreateMopMin({raw_, sval.raw_});
-    return SymbolicScalar(raw); 
+    return SymbolicScalar(raw);
 }
 
 SymbolicScalar SymbolicScalar::Max(const SymbolicScalar &sval) const {
@@ -628,7 +631,7 @@ SymbolicScalar SymbolicScalar::Max(const SymbolicScalar &sval) const {
         return SymbolicScalar(std::max(Concrete(), sval.Concrete()));
     }
     auto raw = RawSymbolicExpression::CreateMopMax({raw_, sval.raw_});
-    return SymbolicScalar(raw); 
+    return SymbolicScalar(raw);
 }
 
 SymbolicScalar SymbolicScalar::Ternary(const SymbolicScalar &sval1, const SymbolicScalar &sval2) const{
@@ -686,7 +689,7 @@ static void LookupExpressionByOpcode(std::vector<RawSymbolicScalarPtr> &exprList
                 LookupExpressionByOpcode(exprList, opcode, op);
             }
         } break;
-        default: ASSERT(false)  << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior"; break;
+        default: FUNCTION_ASSERT(false)  << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior"; break;
     }
 }
 
@@ -697,9 +700,8 @@ std::vector<RawSymbolicScalarPtr> LookupExpressionByOpcode(const RawSymbolicScal
 }
 
 void RawSymbolicExpression::DumpRuntimeExtrema(std::ostream& out) const {
-    ASSERT(operandList_.size() >= MIN_EXTREMA_OPERANDS)
-        << "DumpRuntimeExtrema expects at least 2 operands, but got "
-        << operandList_.size();
+    FUNCTION_ASSERT(FError::INVALID_VAL, operandList_.size() >= MIN_EXTREMA_OPERANDS)
+        << "DumpRuntimeExtrema expects at least 2 operands, but got " << operandList_.size();
     const char* funcName =
         (opcode_ == SymbolicOpcode::T_MOP_MAX) ? "RUNTIME_Max" : "RUNTIME_Min";
 

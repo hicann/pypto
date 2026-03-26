@@ -33,12 +33,12 @@
 #include "config_manager_ng.h"
 #include "tilefwk/tile_shape.h"
 #include "tilefwk/pypto_fwk_log.h"
-
+#include "interface/utils/function_error.h"
 
 namespace npu::tile_fwk {
 
 namespace {
-    std::mutex mtx;
+std::mutex mtx;
 }
 
 struct TypeInfo {
@@ -46,7 +46,7 @@ struct TypeInfo {
 
     void LoadConf(const std::string &path) {
         std::ifstream infile(path);
-        ASSERT(infile.is_open()) << "Open file " << path << " failed";
+        FUNCTION_ASSERT(FError::BAD_FD, infile.is_open()) << "Open file " << path << " failed";
         nlohmann::json jData;
         infile >> jData;
 
@@ -76,10 +76,11 @@ struct TypeInfo {
             } else if (type == "object") {
                 parse_object_type(jData, prefix);
             } else {
-                FUNCTION_LOGE("invalid type: %s at %s", type.c_str(), prefix.c_str());
+                FUNCTION_LOGE_E(FError::INVALID_TYPE, "invalid type: %s at %s", type.c_str(), prefix.c_str());
             }
         } else {
-            FUNCTION_LOGE("Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json", prefix.c_str());
+            FUNCTION_LOGE_E(FError::NOT_EXIST,
+                "Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json", prefix.c_str());
         }
     }
 
@@ -264,7 +265,7 @@ void ConfigScope::UpdateValueWithAny(const std::string &key, Any value) {
         os << ", its value doesn't within the value range.";
         DumpRange(os, value.Type(), key, ConfigManagerNg::GetInstance().Range());
         os << "\n";
-        throw std::runtime_error(os.str().c_str());
+        FUNCTION_ASSERT(FError::INVALID_VAL, false) << os.str();
     }
     std::stringstream oss;
     DumpValue(oss, key, value, "");
@@ -292,7 +293,7 @@ struct ConfigManagerImpl {
 
     void PushScope(ConfigScopePtr scope) {
         // Ensure the provided scope is not null
-        ASSERT(scope != nullptr) << "Cannot push a null scope";
+        FUNCTION_ASSERT(scope != nullptr) << "Cannot push a null scope";
         scopes.push(scope);
     }
 
@@ -309,7 +310,7 @@ struct ConfigManagerImpl {
         auto ins = typeInfo.rangeInfos;
         for (auto &[lf, rf] : value) {
             if (!IntervalJudge(lf, ins.at(properties + "_key").first, ins.at(properties + "_key").second) ||
-            !IntervalJudge(rf, ins.at(properties + "_val").first, ins.at(properties + "_val").second)) {
+                !IntervalJudge(rf, ins.at(properties + "_val").first, ins.at(properties + "_val").second)) {
                 return false;
             }
         }
@@ -327,7 +328,7 @@ struct ConfigManagerImpl {
 
     void EndScope(const char *file, int lino) {
         /* at least default and global two levels */
-        ASSERT(scopes.size() >= 0x2) << "No scope to pop";
+        FUNCTION_ASSERT(scopes.size() >= 0x2) << "No scope to pop";
         auto &scope = scopes.top();
         scope->end_file_ = file;
         scope->end_lino_ = lino;
@@ -358,7 +359,7 @@ struct ConfigManagerImpl {
                 root->AddValue(it.first, it.second);
                 FUNCTION_LOGD("Set option successfully. Key: %s", it.first.c_str());
             } catch (const std::exception &e) {
-                FUNCTION_LOGE("Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
+                FUNCTION_LOGE_E(FError::INVALID_VAL, "Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
             }
         }
     }
@@ -503,7 +504,8 @@ bool ConfigManagerNg::IsWithinRange(const std::string &properties, Any &value) c
             return impl_->IsWithinRange(properties, AnyCast<int64_t>(value));
         }
     } catch (const std::out_of_range &e) {
-        FUNCTION_LOGE("key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
+        FUNCTION_LOGE_E(FError::INVALID_VAL,
+            "key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
         return false;
     }
     return true;

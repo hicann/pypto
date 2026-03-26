@@ -125,7 +125,7 @@ bool RangeTest(
             T rlv = it;
             try {
                 SetFunc(group + "." + key, std::move(rlv));
-            } catch (const std::runtime_error &e) {
+            } catch (const std::exception &e) {
                 std::stringstream ss;
                 ss << e.what();
                 std::string errStr(ss.str());
