@@ -21,8 +21,8 @@ gcd(input: Tensor, other: Union[Tensor, int]) -> Tensor:
 
 | 参数名 | 输入/输出 | 说明                                                                                                                                                                                                                                                   |
 | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| input  | 输入      | 源操作数。`<br>` 支持的类型为：Tensor。 `<br>` Tensor支持的数据类型为：DT_INT8, DT_INT16，DT_INT32, DT_UINT8。 `<br>` 不支持空Tensor；Shape仅支持2-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。           |
-| other  | 输入      | 源操作数。`<br>` 支持的类型为int以及Tensor类型。 `<br>` Tensor支持的数据类型为：DT_INT8, DT_INT16，DT_INT32, DT_UINT8。 `<br>` 不支持空Tensor；Shape仅支持2-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_INT8, DT_INT16，DT_INT32, DT_UINT8。 <br> 不支持空Tensor；Shape仅支持2-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。           |
+| other  | 输入      | 源操作数。 <br> 支持的类型为int以及Tensor类型。 <br> Tensor支持的数据类型为：DT_INT8, DT_INT16，DT_INT32, DT_UINT8。 <br> 不支持空Tensor；Shape仅支持2-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 

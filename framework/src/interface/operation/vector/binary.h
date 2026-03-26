@@ -202,9 +202,9 @@ LogicalTensorPtr TensorBinaryOperation(Function &function, const Tensor &operand
     if ((!oprandT1->GetDynValidShape().empty()) && (!oprandT2->GetDynValidShape().empty())) {
         for (size_t i = 0; i < resultShape.size(); ++i) {
             if (resultShape[i] == oprandT1->shape[i]) {
-                resultValidShape.push_back(operand1.GetStorage()->GetDynValidShape()[i]);
+                resultValidShape.push_back(oprandT1->GetDynValidShape()[i]);
             } else {
-                resultValidShape.push_back(operand2.GetStorage()->GetDynValidShape()[i]);
+                resultValidShape.push_back(oprandT2->GetDynValidShape()[i]);
             }
         }
     }
