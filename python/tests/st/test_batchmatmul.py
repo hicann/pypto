@@ -125,10 +125,10 @@ def batchmatmul_4d_kernel(
 
 
 @pytest.mark.soc("950", "910")
-@pytest.mark.skip(reason="unused test case")
 def test_bmm3d_with_mn_split():
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch_npu.npu.config.allow_internal_format = True
+    torch.npu.set_device(int(device_id))
     b = 3
     m = 128
     k = 256
@@ -149,10 +149,10 @@ def test_bmm3d_with_mn_split():
 
 
 @pytest.mark.soc("950", "910")
-@pytest.mark.skip(reason="unused test case")
 def test_bmm4d_with_mn_split():
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch_npu.npu.config.allow_internal_format = True
+    torch.npu.set_device(int(device_id))
     b1 = 3
     b2 = 2
     m = 128
