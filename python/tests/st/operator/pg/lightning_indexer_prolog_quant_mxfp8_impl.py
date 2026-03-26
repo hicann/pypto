@@ -25,7 +25,7 @@ Main Functions:
     - rope_3d: 3D RoPE computation
 
 Example:
-    See deepseekv32_lightning_indexer_prolog_quant_mxfp8.py for usage examples.
+    See pg_lightning_indexer_prolog_quant_mxfp8.py for usage examples.
 """
 import math
 from typing import List
@@ -229,11 +229,42 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tens
     return res
 
 
-def lightning_indexer_prolog_quant_compute(x_in, q_norm_in, q_norm_scale_in, w_qb_in, w_qb_scale_in, wk_in,
-                                           w_proj_in, gamma_k_in, cos_idx_rope_in, sin_idx_rope_in,
-                                           hadamard_q_in, hadamard_k_in, k_quant_in, k_scale_in, 
-                                           k_cache_index_in, k_scale_cache_index_in, q_quant_out,
-                                           q_scale_out, k_quant_out, k_scale_out, weights_out):
+@pypto.frontend.jit(
+    pass_options={
+        # 3 cast_cos/sin, 4 q_rope, 7 q_nope, 1 q_quant
+        "vec_nbuffer_setting": {3: 2, 4: 4, 7: 16, 1: 8, -2: 1},
+        "cube_l1_reuse_setting": {-1: 8},
+        "pg_upper_bound": 8192
+    },
+    runtime_options={
+        "stitch_function_inner_memory": 128 * 128,
+        "stitch_function_outcast_memory": 128 * 128,
+        "device_sched_mode": 1
+    }
+)
+def lightning_indexer_prolog_quant(
+    x_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+    q_norm_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP8E4M3),
+    q_norm_scale_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP8E8M0),
+    w_qb_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP8E4M3),
+    w_qb_scale_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP8E8M0),
+    wk_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
+    w_proj_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
+    gamma_k_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
+    cos_idx_rope_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+    sin_idx_rope_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+    hadamard_q_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
+    hadamard_k_in: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
+    k_quant_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP8E4M3),
+    k_scale_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    k_cache_index_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT64),
+    k_scale_cache_index_in: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT64),
+    q_quant_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP8E4M3),
+    q_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    k_quant_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP8E4M3),
+    k_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    weights_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
+):
     """Compute Lightning Indexer Prolog with quantization.
 
     Main computation function for Lightning Indexer Prolog quantization.
@@ -365,66 +396,7 @@ def lightning_indexer_prolog_quant_compute(x_in, q_norm_in, q_norm_scale_in, w_q
         pypto.set_semantic_label("Weight-Linear")
         pypto.set_cube_tile_shapes([32, 32], [1024, 1024], [32, 32])
         pypto.set_vec_tile_shapes(128, head_num)
-        weights = pypto.matmul(x, w_proj_in, x_dtype)
-        weights = pypto.mul(weights, 1.0 / (math.sqrt(head_num) * math.sqrt(head_dim)))
+        weights = pypto.cast(pypto.matmul(x, w_proj_in, x_dtype), pypto.DT_FP32)
+        weights = pypto.cast(pypto.cast(weights * (head_num ** -0.5), pypto.DT_BF16), pypto.DT_FP32)
+        weights = pypto.cast(weights * (head_dim ** -0.5), pypto.DT_BF16) 
         pypto.assemble(weights, [t_idx, 0], weights_out)
-
-
-@pypto.jit(
-    pass_options={
-        # 3 cast_cos/sin, 4 q_rope, 7 q_nope, 1 q_quant
-        "vec_nbuffer_setting": {3: 2, 4: 4, 7: 16, 1: 8, -2: 1},
-        "cube_l1_reuse_setting": {-1: 8},
-        "pg_upper_bound": 8192
-    },
-    runtime_options={
-        "stitch_function_inner_memory": 128 * 128,
-        "stitch_function_outcast_memory": 128 * 128,
-        "device_sched_mode": 1
-    }
-)
-def lightning_indexer_prolog_quant(x_in, q_norm_in, q_norm_scale_in, w_qb_in, w_qb_scale_in, wk_in,
-                                   w_proj_in, gamma_k_in, cos_idx_rope_in, sin_idx_rope_in,
-                                   hadamard_q_in, hadamard_k_in, k_quant_in, k_scale_in, 
-                                   k_cache_index_in, k_scale_cache_index_in, q_quant_out,
-                                   q_scale_out, k_quant_out, k_scale_out, weights_out):
-    """JIT-compiled wrapper for Lightning Indexer Prolog quantization computation.
-
-    This is the main entry point for the Lightning Indexer Prolog quantization operator.
-    It sets up optimization passes and runtime options before calling the core
-    computation function.
-
-    Args:
-        x_in: Input hidden states tensor, shape (t, h), dtype BF16
-        q_norm_in: Quantized query norm tensor, shape (t, q_lora_rank), dtype MXFP8.E4M3
-        q_norm_scale_in: Query norm dequantization scale, shape (t, 1), dtype FP32
-        w_qb_in: Query projection weight matrix, MXFP8.E4M3 format with ND layout
-        w_qb_scale_in: Query weight dequantization scale, shape (head_num * head_dim, 1), dtype FP32
-        wk_in: Key projection weight matrix, BF16 format with ND layout
-        w_proj_in: Weight projection matrix, BF16 format with ND layout
-        gamma_k_in: RmsNorm scale parameter for key, shape (1, head_dim), dtype BF16
-        cos_idx_rope_in: Cosine values for RoPE, shape (t, rope_head_dim), dtype BF16
-        sin_idx_rope_in: Sine values for RoPE, shape (t, rope_head_dim), dtype BF16
-        hadamard_q_in: Hadamard transformation matrix for query, shape (head_dim, head_dim), dtype BF16
-        hadamard_k_in: Hadamard transformation matrix for key, shape (head_dim, head_dim), dtype BF16
-        k_quant_in: Input key cache, shape (block_num, block_size, n_kv, head_dim), dtype FP8.E4M3
-        k_scale_in: Key cache scale, shape (block_num, block_size, n_kv, 1), dtype FP16
-        k_cache_index_in: Cache index for scatter update, shape (t, 1), dtype INT64
-        k_scale_cache_index_in: Cache index for scatter update, shape (t, 1), dtype INT64
-        q_quant_out: Output quantized query tensor, shape (t, head_num, head_dim), dtype FP8.E4M3
-        q_scale_out: Output query quantization scale, shape (t, head_num, 1), dtype FP16
-        k_quant_out: Output key cache (updated in-place), shape (block_num, block_size, n_kv, head_dim), dtype FP8.E4M3
-        k_scale_out: Output key cache scale (updated in-place), shape (block_num, block_size, n_kv, 1), dtype FP16
-        weights_out: Output weights tensor, shape (t, head_num), dtype BF16
-
-    Note:
-        This function is decorated with @pypto.jit for JIT compilation.
-        It configures pass options for memory optimization and calls the core
-        computation function.
-    """
-
-    lightning_indexer_prolog_quant_compute(x_in, q_norm_in, q_norm_scale_in, w_qb_in, w_qb_scale_in, wk_in,
-                                           w_proj_in, gamma_k_in, cos_idx_rope_in, sin_idx_rope_in,
-                                           hadamard_q_in, hadamard_k_in, k_quant_in, k_scale_in, 
-                                           k_cache_index_in, k_scale_cache_index_in, q_quant_out,
-                                           q_scale_out, k_quant_out, k_scale_out, weights_out)

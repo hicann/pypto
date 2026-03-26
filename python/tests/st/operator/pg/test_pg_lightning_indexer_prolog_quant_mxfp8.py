@@ -401,7 +401,7 @@ def lightning_indexer_prolog_quant_mxfp8_meta(x, q_norm, q_norm_scale, w_qb, w_q
     return q_fp8e4m3, q_scale, k_fp8e4m3, k_scale, weights
 
 
-def lightning_indexer_prolog_quant_mxfp8_npu(x, q_norm, q_norm_scale, w_qb, w_qb_scale, wk, w_proj,
+def lightning_indexer_prolog_quant_mxfp8_pypto(x, q_norm, q_norm_scale, w_qb, w_qb_scale, wk, w_proj,
                                             gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k,
                                             k_cache, k_scale_cache, k_cache_index, k_scale_cache_index):
     t = x.shape[0]
@@ -441,34 +441,9 @@ def lightning_indexer_prolog_quant_mxfp8_npu(x, q_norm, q_norm_scale, w_qb, w_qb
     if isinstance(x, FakeTensor):
         return q_fp8e4m3, q_scale, k_fp8e4m3, k_scale, weights
 
-    input_tensors = {
-        x: [0],
-        q_norm: [0],
-        q_norm_scale: [0],
-        w_qb: [],
-        w_qb_scale: [],
-        wk: [],
-        w_proj: [],
-        gamma_k: [],
-        cos_idx_rope: [0],
-        sin_idx_rope: [0],
-        hadamard_q: [],
-        hadamard_k: [],
-        k_cache: [0],
-        k_scale_cache: [0],
-        k_cache_index: [0],
-        k_scale_cache_index: [0],
-    }
-    output_tensors = {
-        q_fp8e4m3: [0],
-        q_scale: [0],
-        k_fp8e4m3: [0],
-        k_scale: [0],
-        weights: [0],
-    }
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in input_tensors.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in output_tensors.items()]
-    lightning_indexer_prolog_quant(*pto_inputs, *pto_outputs)
+    lightning_indexer_prolog_quant(x, q_norm, q_norm_scale, w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope,
+        sin_idx_rope, hadamard_q, hadamard_k, k_cache, k_scale_cache, k_cache_index, k_scale_cache_index,
+        q_fp8e4m3, q_scale, k_fp8e4m3, k_scale, weights)
 
     k_fp8e4m3 = k_fp8e4m3.view(block_num, -1)[:, k_storage_offset: 
         k_storage_offset + block_size * n_kv * head_dim].view(block_num, block_size, n_kv, head_dim)
@@ -482,12 +457,16 @@ def lightning_indexer_prolog_quant_mxfp8_npu(x, q_norm, q_norm_scale, w_qb, w_qb
 
 
 try:
-    lightning_indexer_prolog_quant_mxfp8_npu = allow_in_graph(lightning_indexer_prolog_quant_mxfp8_npu)
+    lightning_indexer_prolog_quant_mxfp8_pypto = allow_in_graph(lightning_indexer_prolog_quant_mxfp8_pypto)
     torch.library.impl(pyptolib, "lightning_indexer_prolog_quant_mxfp8", "NPU")(
-        lightning_indexer_prolog_quant_mxfp8_npu
+        lightning_indexer_prolog_quant_mxfp8_pypto
     )
 except Exception as e:
-    logging.warning(f"Skip: {e}")
+    if "could not parse dispatch key: NPU" in str(e):
+        logging.warning(
+            "Skip: torchair not installed, skip NPU registration for operator 'lightning_indexer_prolog_quant_mxfp8'")
+    else:
+        logging.warning(f"Skip: Unexpected error : {e}")
 
 
 def do_test_lightning_indexer_prolog_quant(case_name, is_acl=False):
@@ -545,7 +524,7 @@ def do_test_lightning_indexer_prolog_quant(case_name, is_acl=False):
             w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k, k_cache,
             k_scale_cache, k_cache_index, k_scale_cache_index)
     else:
-        q_fp8e4m3, q_scale, k_fp8e4m3, k_scale, weights = lightning_indexer_prolog_quant_mxfp8_npu(x, q_norm,
+        q_fp8e4m3, q_scale, k_fp8e4m3, k_scale, weights = lightning_indexer_prolog_quant_mxfp8_pypto(x, q_norm,
             q_norm_scale, w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k,
             k_cache, k_scale_cache, k_cache_index, k_scale_cache_index)
 

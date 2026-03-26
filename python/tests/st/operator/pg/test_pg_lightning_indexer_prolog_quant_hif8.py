@@ -360,7 +360,7 @@ def lightning_indexer_prolog_quant_hif8_meta(x, q_norm, q_norm_scale, w_qb, w_qb
     return q_hif8, q_scale, k_hif8, k_scale, weights
 
 
-def lightning_indexer_prolog_quant_hif8_npu(x, q_norm, q_norm_scale, w_qb, w_qb_scale, wk, w_proj,
+def lightning_indexer_prolog_quant_hif8_pypto(x, q_norm, q_norm_scale, w_qb, w_qb_scale, wk, w_proj,
                                            gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k,
                                            k_cache, k_scale_cache, k_cache_index, k_scale_cache_index):
     t = x.shape[0]
@@ -400,37 +400,9 @@ def lightning_indexer_prolog_quant_hif8_npu(x, q_norm, q_norm_scale, w_qb, w_qb_
     if isinstance(x, FakeTensor):
         return q_hif8, q_scale, k_hif8, k_scale, weights
 
-    input_tensors = {
-        x: ([0], None),
-        q_norm: ([0], pypto.DataType.DT_HF8),
-        q_norm_scale: ([0], None),
-        w_qb: ([], pypto.DataType.DT_HF8),
-        w_qb_scale: ([], None),
-        wk: ([], None),
-        w_proj: ([], None),
-        gamma_k: ([], None),
-        cos_idx_rope: ([0], None),
-        sin_idx_rope: ([0], None),
-        hadamard_q: ([], None),
-        hadamard_k: ([], None),
-        k_cache: ([0], pypto.DataType.DT_HF8),
-        k_scale_cache: ([0], None),
-        k_cache_index: ([0], None),
-        k_scale_cache_index: ([0], None),
-    }
-    output_tensors = {
-        q_hif8: ([0], pypto.DataType.DT_HF8),
-        q_scale: ([0], None),
-        k_hif8: ([0], pypto.DataType.DT_HF8),
-        k_scale: ([0], None),
-        weights: ([0], None),
-    }
-
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis, dtype=dtype) \
-        for tensor, (axis, dtype) in input_tensors.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis, dtype=dtype) \
-        for tensor, (axis, dtype) in output_tensors.items()]
-    lightning_indexer_prolog_quant(*pto_inputs, *pto_outputs)
+    lightning_indexer_prolog_quant(x, q_norm, q_norm_scale, w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope,
+        sin_idx_rope, hadamard_q, hadamard_k, k_cache, k_scale_cache, k_cache_index, k_scale_cache_index, 
+        q_hif8, q_scale, k_hif8, k_scale, weights)
 
     k_hif8 = k_hif8.view(block_num, -1)[:, k_storage_offset: 
         k_storage_offset + block_size * n_kv * head_dim].view(block_num, block_size, n_kv, head_dim)
@@ -444,12 +416,16 @@ def lightning_indexer_prolog_quant_hif8_npu(x, q_norm, q_norm_scale, w_qb, w_qb_
 
 
 try:
-    lightning_indexer_prolog_quant_hif8_npu = allow_in_graph(lightning_indexer_prolog_quant_hif8_npu)
+    lightning_indexer_prolog_quant_hif8_pypto = allow_in_graph(lightning_indexer_prolog_quant_hif8_pypto)
     torch.library.impl(pyptolib, "lightning_indexer_prolog_quant_hif8", "NPU")(
-        lightning_indexer_prolog_quant_hif8_npu
+        lightning_indexer_prolog_quant_hif8_pypto
     )
 except Exception as e:
-    logging.warning(f"Skip: {e}")
+    if "could not parse dispatch key: NPU" in str(e):
+        logging.warning(
+            "Skip: torchair not installed, skip NPU registration for operator 'lightning_indexer_prolog_quant_hif8'")
+    else:
+        logging.warning(f"Skip: Unexpected error : {e}")
 
 
 def do_test_lightning_indexer_prolog_quant(case_name, is_acl=False):
@@ -504,11 +480,11 @@ def do_test_lightning_indexer_prolog_quant(case_name, is_acl=False):
         model = Model()
         compile_forward = torch.compile(model, fullgraph=True, backend="npugraph_ex", dynamic=False)
         q_hif8, q_scale, k_hif8, k_scale, weights = compile_forward(x, q_norm, q_norm_scale,
-            w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k, k_cache,
-            k_scale_cache, k_cache_index, k_scale_cache_index)
+            w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k,
+            k_cache, k_scale_cache, k_cache_index, k_scale_cache_index)
     else:
-        q_hif8, q_scale, k_hif8, k_scale, weights = lightning_indexer_prolog_quant_hif8_npu(x, q_norm,
-            q_norm_scale, w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k,
+        q_hif8, q_scale, k_hif8, k_scale, weights = lightning_indexer_prolog_quant_hif8_pypto(x, q_norm, q_norm_scale,
+            w_qb, w_qb_scale, wk, w_proj, gamma_k, cos_idx_rope, sin_idx_rope, hadamard_q, hadamard_k,
             k_cache, k_scale_cache, k_cache_index, k_scale_cache_index)
 
     logging.info("==================finish pypto==================")
