@@ -10,24 +10,20 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
-import os
-from contextlib import contextmanager
 from enum import IntEnum
-from typing import List, overload
+from typing import List
 
 import pypto
 import torch
 
 from . import pypto_impl
-from .converter import _gen_pto_tensor, from_torch
-from ._utils import BuildOnlineManager
+from .converter import from_torch
 
 __all__ = [
     "_device_init",
     "_device_fini",
     "_device_run_once_data_from_host",
     "_device_synchronize",
-    "jit",
     "verify",
     "set_verify_data",
 ]
@@ -90,163 +86,6 @@ def _device_run_once_data_from_host(*args):
             raise TypeError(f"Expected a pypto.Tensor at inputs[{i}], but got {type(t).__name__}.")
     pypto_impl.DeviceRunOnceDataFromHost(
         _pto_to_tensor_data(args), [])
-
-
-class _JIT:
-    def __init__(self, dyn_func, codegen_options=None, host_options=None,
-                 pass_options=None, runtime_options=None, verify_options=None,
-                 debug_options=None, infer_controlflow_shape=None):
-        self.dyn_func = dyn_func
-        self._codegen_options = codegen_options
-        self._host_options = host_options
-        self._pass_options = pass_options
-        self._runtime_options = runtime_options or {}
-        self._verify_options = verify_options or {}
-        self._debug_options = debug_options
-        self._infer_controlflow_shape = infer_controlflow_shape
-        self._run_mode = self.init_run_mode()
-        self.kwargs = None
-
-        # if infer cache shape supported, also use full cache mode
-        if self._infer_controlflow_shape:
-            # set to max cfgcache size 100000000
-            self._runtime_options['stitch_cfgcache_size'] = 100000000
-
-        self.kmodule = pypto_impl.KernelModule(self)
-
-    def __call__(self, *args, **kwargs):
-        if len(args) < 1:
-            raise ValueError("at least one tensor is required")
-        self.kwargs = kwargs
-        if self._run_mode == RunMode.NPU:
-            pypto_impl.LaunchKernel(self, _current_stream(), *args)
-        else:
-            self.run_cpu(*args)
-
-    @staticmethod
-    def verify_end():
-        _pto_verify_datas.reset()
-
-    @staticmethod
-    def alloc(size):
-        return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
-
-    def verify_begin(self, tensors):
-        if isinstance(self._verify_options, dict) and self._verify_options.get("enable_pass_verify"):
-            # Compile and load calculator
-            mgr = BuildOnlineManager()
-            mgr.build_and_load_calculator()
-
-            host_pto_tensors, _ = _gen_pto_tensor(tensors)
-            host_pto_t_datas = _pto_to_tensor_data(host_pto_tensors)
-            for i, dev_tensor in enumerate(_pto_to_tensor_data(tensors)):
-                pypto_impl.CopyToHost(dev_tensor, host_pto_t_datas[i])
-            pypto_impl.SetVerifyData(
-                host_pto_t_datas, [], _pto_verify_datas.get_data())
-
-    def compile(self, args):
-        tensors = [item for item in args if isinstance(item, pypto.Tensor)]
-        self.verify_begin(tensors)
-
-        with pypto.options("jit_scope"):
-            self._set_config_option()
-            # flowverify begin
-            self.verify_begin(tensors)
-
-            with pypto.function(self.dyn_func.__name__, *tensors) as rlf:
-                for _ in rlf:
-                    self.dyn_func(*args, **self.kwargs)
-                del rlf
-
-        # flowverify end
-        self.verify_end()
-
-    def init_run_mode(self):
-        is_cann_enable = bool(os.environ.get("ASCEND_HOME_PATH"))
-        if "run_mode" in self._runtime_options:
-            run_mode = RunMode(self._runtime_options["run_mode"])
-        else:
-            run_mode = RunMode.NPU if is_cann_enable else RunMode.SIM
-        if run_mode == RunMode.NPU and not is_cann_enable:
-            raise RuntimeError(
-                "Please source cann environment while run mode is NPU.")
-        self._runtime_options["run_mode"] = int(run_mode)
-        return RunMode(run_mode)
-
-    def run_cpu(self, *args):
-        # call cost_model interface
-        from .cost_model import _cost_model_run_once_data_from_host
-        tensors = [item for item in args if isinstance(item, pypto.Tensor)]
-        with pypto.options("jit_scope"):
-            self._set_config_option()
-            pypto_impl.DeviceInit()
-            self.compile(args)
-            _cost_model_run_once_data_from_host(tensors, [])
-
-    def _set_config_option(self):
-        if isinstance(self._codegen_options, dict):
-            pypto.set_codegen_options(**self._codegen_options)
-
-        if isinstance(self._host_options, dict):
-            pypto.set_host_options(**self._host_options)
-
-        if isinstance(self._pass_options, dict):
-            pypto.set_pass_options(**self._pass_options)
-
-        if isinstance(self._runtime_options, dict):
-            options_dict = {k: v for k, v in self._runtime_options.items() if v is not None}
-            pypto.set_options(runtime_options=options_dict)
-
-        if isinstance(self._verify_options, dict):
-            pypto.set_verify_options(**self._verify_options)
-
-        if isinstance(self._debug_options, dict):
-            pypto.set_debug_options(**self._debug_options)
-
-
-@overload
-def jit(dyn_func=None):
-    ...
-
-
-@overload
-def jit(
-        *,
-        codegen_options=None,
-        host_options=None,
-        pass_options=None,
-        runtime_options=None,
-        verify_options=None,
-        debug_options=None,
-        infer_controlflow_shape=None
-):
-    ...
-
-
-def jit(dyn_func=None,
-        *,
-        codegen_options=None,
-        host_options=None,
-        pass_options=None,
-        runtime_options=None,
-        verify_options=None,
-        debug_options=None,
-        infer_controlflow_shape=None):
-
-    def decorator(func):
-        return _JIT(func,
-                    codegen_options=codegen_options,
-                    host_options=host_options,
-                    pass_options=pass_options,
-                    runtime_options=runtime_options,
-                    verify_options=verify_options,
-                    debug_options=debug_options,
-                    infer_controlflow_shape=infer_controlflow_shape)
-
-    if dyn_func is not None:
-        return _JIT(dyn_func)
-    else:
-        return decorator
 
 
 def _device_synchronize():

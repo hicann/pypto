@@ -40,6 +40,25 @@ HEAD_DIM = 64
 HIDDEN_SIZE = 512
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -107,13 +126,12 @@ def scaled_dot_product_attention_core(q: pypto.Tensor, k: pypto.Tensor, v: pypto
     return res
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def scaled_dot_product_attention_kernel(
     q: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16),
     k: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_BF16),
     v: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM), pypto.DT_BF16),
-    output: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16),
-):
+    output: pypto.Tensor((BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM), pypto.DT_BF16)):
     scale = 1.0 / (HEAD_DIM ** 0.5)
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
     pypto.set_vec_tile_shapes(1, 8, 16, HEAD_DIM)
@@ -123,13 +141,13 @@ def scaled_dot_product_attention_kernel(
     output.move(pypto.matmul(attn_weights, v, out_dtype=pypto.DT_BF16))
 
 
-def test_scaled_dot_product_attention(device_id=None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_scaled_dot_product_attention(device_id=None, dynamic: bool = False) -> None:
     """Test attention function with dynamic shapes."""
     print("=" * 60)
     print("Test: Dynamic Scaled Dot-Product Attention")
     print("=" * 60)
     
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     
     q_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_Q, HEAD_DIM, dtype=torch.bfloat16, device=device)
     k_torch = torch.randn(BATCH_SIZE, NUM_HEADS, SEQ_LEN_KV, HEAD_DIM, dtype=torch.bfloat16, device=device)
@@ -143,7 +161,7 @@ def test_scaled_dot_product_attention(device_id=None, run_mode: str = "npu", dyn
     print(f"Input shape: {q_torch.shape}")
     print(f"Output shape: {out.shape}")
     
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         max_diff = (out - golden).abs().max().item()
         torch.allclose(out, golden, rtol=3e-3, atol=3e-3)
         print(f"Batch={BATCH_SIZE}, SeqQ={SEQ_LEN_Q}, SeqKV={SEQ_LEN_KV}, Max diff: {max_diff:.6f}")
@@ -173,15 +191,14 @@ def attention_with_projection_core(q_view: pypto.Tensor, k_view: pypto.Tensor,
     return res
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def attention_with_projection_kernel(
     hidden_states: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16),
     q_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
     k_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
     v_weight: pypto.Tensor((1, HIDDEN_SIZE, NUM_HEADS * HEAD_DIM), pypto.DT_BF16),
     out_weight: pypto.Tensor((1, NUM_HEADS * HEAD_DIM, HIDDEN_SIZE), pypto.DT_BF16),
-    output_tensor: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16),
-):
+    output_tensor: pypto.Tensor((BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE), pypto.DT_BF16)):
     tile_b = 1
     b_loop = BATCH_SIZE // tile_b
 
@@ -226,8 +243,7 @@ def attention_with_projection_golden(
     q_weight: torch.Tensor,
     k_weight: torch.Tensor,
     v_weight: torch.Tensor,
-    out_weight: torch.Tensor,
-) -> torch.Tensor:
+    out_weight: torch.Tensor) -> torch.Tensor:
     num_heads = NUM_HEADS
     head_dim = HEAD_DIM
     
@@ -250,13 +266,13 @@ def attention_with_projection_golden(
     return output
 
 
-def test_attention_with_projection(device_id=None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_attention_with_projection(device_id=None, dynamic: bool = False) -> None:
     """Test complete attention with input/output projections."""
     print("=" * 60)
     print("Test: Attention with Projections")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     # Create tensors
     hidden_states = torch.randn(BATCH_SIZE, SEQ_LEN, HIDDEN_SIZE, dtype=torch.bfloat16, device=device)
@@ -275,7 +291,7 @@ def test_attention_with_projection(device_id=None, run_mode: str = "npu", dynami
     
     print(f"Hidden states shape: {hidden_states.shape}")
     print(f"Output shape: {out.shape}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         max_diff = (out - golden).abs().max().item()
         print(f"Max difference: {max_diff:.6f}")
         torch.allclose(out, golden, rtol=3e-3, atol=3e-3)
@@ -318,8 +334,8 @@ Examples:
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
     args = parser.parse_args()
 
@@ -386,7 +402,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

@@ -33,6 +33,25 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -97,13 +116,12 @@ def layernorm_core(x: pypto.Tensor, gamma: pypto.Tensor, beta: pypto.Tensor, eps
     return scaled + beta
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def layer_norm_kernel(
     x: pypto.Tensor(), 
     gamma: pypto.Tensor(), 
     beta: pypto.Tensor(),
-    out: pypto.Tensor(),
-):
+    out: pypto.Tensor()):
     """Layer Normalization."""
     pypto.set_vec_tile_shapes(64, 128)
 
@@ -111,12 +129,11 @@ def layer_norm_kernel(
 
 
 # Function 2: Linear Projection
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def linear_projection_kernel(
     x: pypto.Tensor(),
     weight: pypto.Tensor(), 
-    out: pypto.Tensor(),
-    ):
+    out: pypto.Tensor()):
 
     bias = None
 
@@ -129,11 +146,10 @@ def linear_projection_kernel(
 
 
 # Function 3: GELU Activation
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def gelu_activation_kernel(
     x: pypto.Tensor(),
-    out: pypto.Tensor(),
-):
+    out: pypto.Tensor()):
     # Configure tiling
     tile_shapes = [32 for _ in range(len(x.shape))]
     pypto.set_vec_tile_shapes(*tile_shapes)
@@ -146,24 +162,22 @@ def gelu_activation_kernel(
 
 
 # Function 4: Residual Connection
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def residual_add_kernel(
         x: pypto.tensor(), 
         residual: pypto.tensor(),
-        out: pypto.tensor(),
-    ):
+        out: pypto.tensor()):
     pypto.set_vec_tile_shapes(64, 128)
     out[:] = pypto.add(x, residual)
 
     
 # Function 5: Attention (simplified)
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def attention_kernel(
         q: pypto.tensor(), 
         k: pypto.tensor(), 
         v: pypto.tensor(), 
-        out: pypto.tensor(),
-    ):
+        out: pypto.tensor()):
     pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
 
     # Q @ K^T
@@ -180,14 +194,14 @@ def attention_kernel(
     out[:] = pypto.matmul(attn_weights, v, out_dtype=out.dtype)
 
 
-def test_sequential_functions(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_sequential_functions(device_id: int = None, dynamic: bool = False) -> None:
     """Test multiple functions in sequence."""
     print("=" * 60)
     print("Test: Sequential Functions")
     print("=" * 60)
 
     # Get current device ID (set in main)
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     atol_val = 1e-1
 
@@ -214,7 +228,7 @@ def test_sequential_functions(device_id: int = None, run_mode: str = "npu", dyna
     max_diff_act = (activated - expected_activated).abs().max().item()
 
     print(f"Input shape: {x.shape}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         print(f"Normalized max diff: {max_diff_norm:.6f}")
         print(f"Activated max diff: {max_diff_act:.6f}")
         assert max_diff_norm < atol_val, "Layer norm mismatch!"
@@ -223,14 +237,14 @@ def test_sequential_functions(device_id: int = None, run_mode: str = "npu", dyna
     print()
 
 
-def test_residual_connection(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_residual_connection(device_id: int = None, dynamic: bool = False) -> None:
     """Test residual connection pattern."""
     print("=" * 60)
     print("Test: Residual Connection")
     print("=" * 60)
 
     # Get current device ID (set in main)
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     batch_size, hidden_size = 32, 128
 
@@ -249,21 +263,21 @@ def test_residual_connection(device_id: int = None, run_mode: str = "npu", dynam
     print(f"Input shape: {x.shape}")
     print(f"Residual shape: {residual.shape}")
     print(f"Output shape: {out.shape}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         print(f"Max difference: {max_diff:.6f}")
         assert max_diff < 1e-2, "Residual connection mismatch!"
     print("✓ Residual connection passed")
     print()
 
 
-def test_transformer_block(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_transformer_block(device_id: int = None, dynamic: bool = False) -> None:
     """Test a complete transformer block using multiple functions."""
     print("=" * 60)
     print("Test: Transformer Block (Multi-Function)")
     print("=" * 60)
 
     # Get current device ID (set in main)
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     batch_size, hidden_size, intermediate_size = 32, 128, 256
 
@@ -290,21 +304,21 @@ def test_transformer_block(device_id: int = None, run_mode: str = "npu", dynamic
     # 1. Layer normalization
     normed = torch.empty(x.shape, dtype=torch.bfloat16, device=device)
     layer_norm_kernel(x, gamma, beta, normed)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
 
     # 2. FFN: Gate and Up projections
     linear_projection_kernel(normed, gate_weight, gate)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
     linear_projection_kernel(normed, up_weight, up)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
 
     # 3. GELU activation on gate
     activated = torch.empty(gate.shape, dtype=torch.bfloat16, device=device)
     gelu_activation_kernel(gate, activated)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
 
     # 4. Multiply with up (SwiGLU-like)
@@ -324,14 +338,14 @@ def test_transformer_block(device_id: int = None, run_mode: str = "npu", dynamic
     print()
 
 
-def test_function_reuse(device_id: int = None, run_mode: str = "npu", dynamic: bool = True) -> None:
+def test_function_reuse(device_id: int = None, dynamic: bool = True) -> None:
     """Test reusing the same function multiple times."""
     print("=" * 60)
     print("Test: Function Reuse")
     print("=" * 60)
 
     # Get current device ID (set in main)
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     batch_size, hidden_size = 32, 128
 
@@ -350,13 +364,13 @@ def test_function_reuse(device_id: int = None, run_mode: str = "npu", dynamic: b
 
     # Reuse the same function with different inputs
     layer_norm_kernel(x1, gamma, beta, out1)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
     layer_norm_kernel(x2, gamma, beta, out2)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
     layer_norm_kernel(x3, gamma, beta, out3)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         torch.npu.synchronize()
 
 
@@ -370,7 +384,7 @@ def test_function_reuse(device_id: int = None, run_mode: str = "npu", dynamic: b
     max_diff3 = (out3 - expected3).abs().max().item()
 
     print(f"Function reused 3 times with different inputs")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         print(f"Max diff 1: {max_diff1:.6f}")
         print(f"Max diff 2: {max_diff2:.6f}")
         print(f"Max diff 3: {max_diff3:.6f}")
@@ -414,8 +428,8 @@ Examples:
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -494,7 +508,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

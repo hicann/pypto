@@ -22,6 +22,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -56,18 +75,17 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, add1_flag: bool = False
     return out
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_kernel(
     input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
     input1: pypto.Tensor(SHAPE, pypto.DT_FP32),
     out: pypto.Tensor(SHAPE, pypto.DT_FP32),
-    add1_flag: bool = True,
-):
+    add1_flag: bool = True):
     out[:] = add_core(input0, input1, add1_flag)
 
 
-def test_add_scalar_loop_multi_jit(device_id=None, run_mode: str = "npu") -> None:
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+def test_add_scalar_loop_multi_jit(device_id=None) -> None:
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = SHAPE
     #prepare data
@@ -84,7 +102,7 @@ def test_add_scalar_loop_multi_jit(device_id=None, run_mode: str = "npu") -> Non
     max_diff = np.abs(output_data.cpu().numpy() - golden.cpu().numpy()).max()
     print(f"Output shape: {output_data.shape}")
     print(f"Max difference: {max_diff:.6f}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
 
     golden2 = torch.add(input_data0, input_data1) + val
@@ -93,7 +111,7 @@ def test_add_scalar_loop_multi_jit(device_id=None, run_mode: str = "npu") -> Non
     max_diff = np.abs(output_data2.cpu().numpy() - golden2.cpu().numpy()).max()
     print(f"Output shape: {output_data2.shape}")
     print(f"Max difference: {max_diff:.6f}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data2.cpu()), np.array(golden2.cpu()), rtol=3e-3, atol=3e-3)
 
     print("✓ add_scalar_loop_multi_jit test passed")
@@ -133,8 +151,8 @@ Examples:
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
     
     args = parser.parse_args()
@@ -197,7 +215,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
         
         if len(examples_to_run) > 1:
             print("=" * 60)

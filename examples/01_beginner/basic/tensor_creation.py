@@ -29,6 +29,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -53,7 +72,7 @@ def get_device_id():
 # ARANGE Examples
 # ============================================================================
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def arange_end_kernel(out: pypto.Tensor((4,), pypto.DT_INT32),
     end,
     ):
@@ -61,32 +80,30 @@ def arange_end_kernel(out: pypto.Tensor((4,), pypto.DT_INT32),
     out.move(pypto.arange(end))
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def arange_start_end_kernel(out: pypto.Tensor((3,), pypto.DT_FP32),
     start,
-    end,
-    ):
+    end):
     pypto.set_vec_tile_shapes(8)
     out.move(pypto.arange(start, end))
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def arange_start_end_step_kernel(out: pypto.Tensor((6,), pypto.DT_FP32),
     start,
     end,
-    step,
-    ):
+    step):
     pypto.set_vec_tile_shapes(8)
     out.move(pypto.arange(start, end, step))
 
 
-def test_arange_basic(device_id = None, run_mode: str = "npu"):
+def test_arange_basic(device_id=None):
     """Test basic usage of arange function"""
     print("=" * 60)
     print("Test: Basic Usage of arange Function")
     print("=" * 60)
 
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     # Test 1: arange(end)
     expected_a = torch.tensor([0, 1, 2, 3], dtype=torch.int32, device=device)
@@ -94,7 +111,8 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     arange_end_kernel(out_torch, end=4)
     print(f"Output a: {out_torch}")
     print(f"Expected a: {expected_a}")
-    assert_allclose(out_torch.cpu().numpy(), expected_a.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(out_torch.cpu().numpy(), expected_a.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 2: arange(start, end)
     expected_b = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float32, device=device)
@@ -102,7 +120,8 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     arange_start_end_kernel(out_torch, start=1.0, end=4.0)
     print(f"Output b: {out_torch}")
     print(f"Expected b: {expected_b}")
-    assert_allclose(out_torch.cpu().numpy(), expected_b.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(out_torch.cpu().numpy(), expected_b.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 3: arange(start, end, step)
     expected_c = torch.tensor([1.0, 1.5, 2.0, 2.5, 3.0, 3.5], dtype=torch.float32, device=device)
@@ -110,7 +129,8 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
     arange_start_end_step_kernel(out_torch, start=1.0, end=4.0, step=0.5)
     print(f"Output c: {out_torch}")
     print(f"Expected c: {expected_c}")
-    assert_allclose(out_torch.cpu().numpy(), expected_c.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(out_torch.cpu().numpy(), expected_c.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     print("✓ Basic usage of arange function completed successfully")
 
@@ -119,7 +139,7 @@ def test_arange_basic(device_id = None, run_mode: str = "npu"):
 # DATATYPE Examples
 # ============================================================================
 
-def test_tensor_creation_with_datatypes(device_id = None, run_mode: str = "npu"):
+def test_tensor_creation_with_datatypes(device_id=None):
     """Test tensor creation with various data types"""
     print("=" * 60)
     print("Test: Tensor Creation with Various Data Types")
@@ -161,29 +181,27 @@ def test_tensor_creation_with_datatypes(device_id = None, run_mode: str = "npu")
 # FULL Examples
 # ============================================================================
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def full_float_kernel(out: pypto.Tensor((2, 2), pypto.DT_FP32),
-    fill_value,
-    ):
+    fill_value):
     pypto.set_vec_tile_shapes(2, 8)
     out.move(pypto.full((2, 2), fill_value, pypto.DT_FP32))
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def full_symbolic_scalar_kernel(out: pypto.Tensor((2, 2), pypto.DT_INT32),
-    fill_value,
-    ):
+    fill_value):
     pypto.set_vec_tile_shapes(2, 8)
     out.move(pypto.full((2, 2), fill_value, pypto.DT_INT32))
 
 
-def test_full_basic(device_id = None, run_mode: str = "npu"):
+def test_full_basic(device_id=None):
     """Test basic usage of full function"""
     print("=" * 60)
     print("Test: Basic Usage of full Function")
     print("=" * 60)
 
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     # Test 1: Create a 2x2 tensor filled with 1.0 (float32)
     expected_a = torch.tensor([[1.0, 1.0], [1.0, 1.0]], dtype=torch.float32, device=device)
@@ -191,7 +209,8 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
     full_float_kernel(out_torch, fill_value=1.0)
     print(f"Output a: {out_torch}")
     print(f"Expected a: {expected_a}")
-    assert_allclose(out_torch.cpu().numpy(), expected_a.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(out_torch.cpu().numpy(), expected_a.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     # Test 2: Create a 2x2 tensor filled with a symbolic scalar (int32)
     expected_b = torch.tensor([[1, 1], [1, 1]], dtype=torch.int32, device=device)
@@ -199,7 +218,8 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
     full_symbolic_scalar_kernel(out_torch, fill_value=pypto.symbolic_scalar(1))
     print(f"Output b: {out_torch}")
     print(f"Expected b: {expected_b}")
-    assert_allclose(out_torch.cpu().numpy(), expected_b.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(out_torch.cpu().numpy(), expected_b.cpu().numpy(), rtol=1e-3, atol=1e-3)
 
     print("✓ Basic usage of full function completed successfully")
 
@@ -208,7 +228,7 @@ def test_full_basic(device_id = None, run_mode: str = "npu"):
 # TENSOR Examples
 # ============================================================================
 
-def test_basic_tensor_creation(device_id = None, run_mode: str = "npu"):
+def test_basic_tensor_creation(device_id=None):
     """Test basic tensor creation"""
     print("=" * 60)
     print("Test: Basic Tensor Creation")
@@ -231,7 +251,7 @@ def test_basic_tensor_creation(device_id = None, run_mode: str = "npu"):
     print("✓ Basic tensor creation completed successfully")
 
 
-def test_tensor_creation_with_format(device_id = None, run_mode: str = "npu"):
+def test_tensor_creation_with_format(device_id=None):
     """Test tensor creation with specific format"""
     print("=" * 60)
     print("Test: Tensor Creation with Specific Format")
@@ -288,8 +308,8 @@ Examples:
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
     
     args = parser.parse_args()
@@ -363,7 +383,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
                 print(f"Running Example {ex_id}: {ex_info['name']}")
-                ex_info['function'](device_id, args.run_mode)
+                ex_info['function'](device_id)
         
         if len(examples_to_run) > 1:
             print("=" * 60)

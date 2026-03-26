@@ -731,11 +731,11 @@ def _build_command(
         if args.run_mode == "sim":
             cmd.extend(["--run_mode", "sim"])
     else:
-        # Execute pytest-style tests
+        # Execute pytest-style tests with --forked for process isolation
         if args.example_id:
-            cmd = ["pytest", f"{full_path}::{args.example_id}", "-v", "--capture=no"]
+            cmd = ["pytest", f"{full_path}::{args.example_id}", "-v", "--capture=no", "--forked"]
         else:
-            cmd = ["pytest", str(full_path), "-v", "--capture=no"]
+            cmd = ["pytest", str(full_path), "-v", "--capture=no", "--forked"]
 
     return cmd, env
 
@@ -762,9 +762,8 @@ def _execute_process(
         - (proc, None, None, ExecutionResult) on error or cancellation
         - (None, None, None, ExecutionResult) if process couldn't be created
     """
-    if ctx.print_cmd_on_serial:
-        cmd_str = " ".join(str(part) for part in cmd)
-        ctx.safe_print(f"→  Executing: {cmd_str}")
+    cmd_str = " ".join(str(part) for part in cmd)
+    ctx.safe_print(f"→  Executing: {cmd_str}")
 
     # Final shutdown check before creating process
     if ctx.process_manager.is_shutdown_requested():

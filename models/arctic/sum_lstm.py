@@ -209,23 +209,23 @@ def sum_lstm(run_mode: str = "npu"):
         mode = pypto.RunMode.SIM
     else:
         raise ValueError(f"Invalid run_mode: {run_mode}. Must be 'npu' or 'sim'")
-    
-    @pypto.jit(
+
+    @pypto.frontend.jit(
         runtime_options={"device_sched_mode": 1,
                          "stitch_cfgcache_size": 2700000},
     )
     def sum_lstm_kernel(
-        states_4d: pypto.Tensor((BATCH_SIZE, D_GATE_4), pypto.DT_FP16),
-        z4_4d: pypto.Tensor((BATCH_SIZE, D_GATE_4), pypto.DT_FP16),
-        prev_cell: pypto.Tensor((BATCH_SIZE, D_GATE), pypto.DT_FP16),
-        w_cell: pypto.Tensor((D_GATE,), pypto.DT_FP16),
-        b_cell: pypto.Tensor((D_GATE,), pypto.DT_FP16),
-        w_state: pypto.Tensor((D_GATE,), pypto.DT_FP16),
-        b_state: pypto.Tensor((D_GATE,), pypto.DT_FP16),
+        states_4d: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
+        z4_4d: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
+        prev_cell: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
+        w_cell: pypto.Tensor([...], pypto.DT_FP16),
+        b_cell: pypto.Tensor([...], pypto.DT_FP16),
+        w_state: pypto.Tensor([...], pypto.DT_FP16),
+        b_state: pypto.Tensor([...], pypto.DT_FP16),
+        h_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
+        c_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP16),
         config: LstmConfig,
-        h_out: pypto.Tensor((BATCH_SIZE, D_GATE), pypto.DT_FP16),
-        c_out: pypto.Tensor((BATCH_SIZE, D_GATE), pypto.DT_FP16)
-    ) -> None:
+    ):
 
         tile_cfg = LstmTileConfig()
 

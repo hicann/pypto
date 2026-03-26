@@ -34,6 +34,25 @@ from numpy.testing import assert_allclose
 # ----------------------------------------------------------------------------
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -58,22 +77,20 @@ def get_device_id():
 # Kernel Definitions
 # ----------------------------------------------------------------------------
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def symbolic_immediate_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-):
+    out: pypto.Tensor([], pypto.DT_FP32)):
     pypto.set_vec_tile_shapes(2, 8)
     s = pypto.symbolic_scalar(128)
     s = s + 1
     out.move(pypto.add(x, x))
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def symbolicscalar_in_loop_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-):
+    out: pypto.Tensor([], pypto.DT_FP32)):
     pypto.set_vec_tile_shapes(2, 8)
     y = pypto.zeros(x.shape)
     for _ in pypto.loop(2, name="sym_loop", idx_name="i"):
@@ -91,9 +108,9 @@ def symbolicscalar_in_loop_kernel(
 # ----------------------------------------------------------------------------
 
 
-def test_symbolicscalar_immediate(device_id: int = None, run_mode: str = "npu") -> None:
+def test_symbolicscalar_immediate(device_id: int = None) -> None:
     """Immediate (concrete) SymbolicScalar usage"""
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     x = torch.tensor(
         [1, 2, 3],
         dtype=torch.float32,
@@ -106,14 +123,15 @@ def test_symbolicscalar_immediate(device_id: int = None, run_mode: str = "npu") 
 
     print(f"Input shape: {x.shape}")
     print(f"Output shape: {y.shape}")
-    assert_allclose(y.cpu().numpy(), golden.numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(y.cpu().numpy(), golden.numpy(), rtol=1e-3, atol=1e-3)
     print("✓ SymbolicScalar immediate test passed")
     print()
 
 
-def test_symbolicscalar_in_loop(device_id: int = None, run_mode: str = "npu")->None:
+def test_symbolicscalar_in_loop(device_id: int = None):
     """SymbolicScalar as loop index inside kernel"""
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     x = torch.tensor(
         [1, 2, 3],
         dtype=torch.float32,
@@ -126,12 +144,13 @@ def test_symbolicscalar_in_loop(device_id: int = None, run_mode: str = "npu")->N
 
     print(f"Input shape: {x.shape}")
     print(f"Output shape: {y.shape}")
-    assert_allclose(y.cpu().numpy(), golden.numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        assert_allclose(y.cpu().numpy(), golden.numpy(), rtol=1e-3, atol=1e-3)
     print("✓ SymbolicScalar in loop test passed")
     print()
 
 
-def test_init_symbolic_scalar_value_arg(device_id: int = None, run_mode: str = "npu")->None:
+def test_init_symbolic_scalar_value_arg(device_id: int = None):
     """SymbolicScalar Initialization"""
     expected_value = 123
 
@@ -154,7 +173,7 @@ def test_init_symbolic_scalar_value_arg(device_id: int = None, run_mode: str = "
     print()
 
 
-def test_symbolic_scalar_prop(device_id: int = None, run_mode: str = "npu")->None:
+def test_symbolic_scalar_prop(device_id: int = None):
     """Inspect core SymbolicScalar properties"""
     scalar = pypto.symbolic_scalar(10)
     assert scalar.is_symbol() == False
@@ -188,7 +207,7 @@ def test_symbolic_scalar_prop(device_id: int = None, run_mode: str = "npu")->Non
     print()
 
 
-def test_symbolic_scalar_complex_expr(device_id: int = None, run_mode: str = "npu")->None:
+def test_symbolic_scalar_complex_expr(device_id: int = None):
     """SymbolicScalar expression involving multiple comparison operators"""
     b = pypto.symbolic_scalar('b')
     a = (b >= 2) * (b < 8)
@@ -222,8 +241,8 @@ Examples:
     )
     parser.add_argument(
         "--run_mode", "--run-mode",
-        nargs="?", type=str, default="npu", choices=["npu"],
-        help='Run mode, currently only support npu.'
+        nargs="?", type=str, default="npu", choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -314,7 +333,7 @@ Examples:
                 continue
 
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

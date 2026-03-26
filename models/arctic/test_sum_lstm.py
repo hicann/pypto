@@ -128,28 +128,11 @@ def prepare_test_data(device) -> Dict[str, Any]:
     inputs_torch = [states_4d, z4_4d, prev_cell, w_c, b_c, w_s, b_s]
     outputs_torch = [h_out, c_out]
 
-    inputs = {
-            states_4d: [0],
-            z4_4d: [0],
-            prev_cell: [0],
-            w_c: [],
-            b_c: [],
-            w_s: [],
-            b_s: []
-        }
-    outputs = {
-        h_out: [0],
-        c_out: [0]
-    }
-    import pypto
-    pto_inputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in inputs.items()]
-    pto_outputs = [pypto.from_torch(tensor, dynamic_axis=axis) for tensor, axis in outputs.items()]
-
     return {
         "torch_inputs": inputs_torch,
         "torch_outputs": outputs_torch,
-        "pto_inputs": pto_inputs,
-        "pto_outputs": pto_outputs,
+        "pto_inputs": inputs_torch,
+        "pto_outputs": outputs_torch,
         "config": config,
     }
 
@@ -169,7 +152,7 @@ def run_precision_test(kernel_func, data: Dict[str, Any]):
 
     # 1. Run NPU Kernel
     # Reset outputs to 0 to ensure we are reading fresh results
-    kernel_func(*pto_inputs, cfg, *pto_outputs)
+    kernel_func(*pto_inputs, *pto_outputs, cfg)
 
     # 2. Run Golden
     golden_h, golden_c = sum_lstm_golden(
@@ -227,7 +210,7 @@ def run_performance_test(kernel_func, data: Dict[str, Any]):
 
     # Wrap calls
     def run_npu():
-        kernel_func(*pto_inputs, cfg, *pto_outputs)
+        kernel_func(*pto_inputs, *pto_outputs, cfg)
 
     def run_golden():
         sum_lstm_golden(

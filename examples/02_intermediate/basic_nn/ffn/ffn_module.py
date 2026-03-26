@@ -51,6 +51,25 @@ class FFNConfig:
     run_mode: pypto.RunMode = pypto.RunMode.NPU
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -198,15 +217,14 @@ def dynamic_gelu_activation_core(output: pypto.tensor, hidden_states: pypto.tens
     return
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def ffn_activation_kernel(
     hidden_states: pypto.tensor(),
     gate_proj_weight: pypto.tensor(),
     up_proj_weight: pypto.tensor(),
     down_proj_weight: pypto.tensor(),
     output: pypto.tensor(),
-    config: FFNConfig,
-):
+    config: FFNConfig):
     # Configure tiling for matrix operations
     pypto.set_cube_tile_shapes(
         [config.cube_tile_shape[0], config.cube_tile_shape[0]],
@@ -239,7 +257,7 @@ def ffn_activation_kernel(
         pypto.assemble(result, [0, 0], output)    
 
 
-def test_ffn_static_gelu(device_id=None, run_mode: str = "npu"):
+def test_ffn_static_gelu(device_id=None):
     """Test static FFN with GELU activation."""
     print("=" * 60)
     print("Testing Static FFN with GELU Activation")
@@ -249,7 +267,7 @@ def test_ffn_static_gelu(device_id=None, run_mode: str = "npu"):
     hidden_size = 128
     intermediate_size = 1024
     dtype = torch.bfloat16
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     config = FFNConfig(
         batch_size=batch_size,
@@ -260,7 +278,7 @@ def test_ffn_static_gelu(device_id=None, run_mode: str = "npu"):
         use_dynamic_shape=False,
         vec_tile_shape=(16, 32),
         cube_tile_shape=(16, 32, 32),
-        run_mode=pypto.RunMode.NPU if run_mode == "npu" else pypto.RunMode.SIM
+        run_mode=pypto.RunMode.NPU if global_run_mode == pypto.RunMode.NPU else pypto.RunMode.SIM
     )
 
     hidden_states_torch = torch.randn(batch_size, hidden_size, 
@@ -283,7 +301,7 @@ def test_ffn_static_gelu(device_id=None, run_mode: str = "npu"):
 
     ffn_activation_kernel(hidden_states_torch, gate_proj_weight_torch, up_proj_weight_torch,
                             down_proj_weight_torch, output, config)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(output.cpu().to(torch.float32), output_torch_ref.cpu().to(torch.float32), rtol=3e-3, atol=3e-3)
     print(f"Output shape: {output_torch_ref.shape}")
     print(f"Output range: [{output_torch_ref.min().item():.4f}, {output_torch_ref.max().item():.4f}]")
@@ -291,7 +309,7 @@ def test_ffn_static_gelu(device_id=None, run_mode: str = "npu"):
     print()
 
 
-def test_ffn_static_swiglu(device_id=None, run_mode: str = "npu"):
+def test_ffn_static_swiglu(device_id=None):
     """Test static FFN with SwiGLU activation."""
     print("=" * 60)
     print("Testing Static FFN with SwiGLU Activation")
@@ -301,7 +319,7 @@ def test_ffn_static_swiglu(device_id=None, run_mode: str = "npu"):
     hidden_size = 128
     intermediate_size = 1024
     dtype = torch.bfloat16
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     config = FFNConfig(
         batch_size=batch_size,
         hidden_size=hidden_size,
@@ -311,7 +329,7 @@ def test_ffn_static_swiglu(device_id=None, run_mode: str = "npu"):
         use_dynamic_shape=False,
         vec_tile_shape=(16, 32),
         cube_tile_shape=(16, 32, 32),
-        run_mode=pypto.RunMode.NPU if run_mode == "npu" else pypto.RunMode.SIM
+        run_mode=pypto.RunMode.NPU if global_run_mode == pypto.RunMode.NPU else pypto.RunMode.SIM
     )
     # Create PyTorch tensors
     hidden_states_torch = torch.randn(batch_size, hidden_size, 
@@ -339,13 +357,13 @@ def test_ffn_static_swiglu(device_id=None, run_mode: str = "npu"):
     print(f"Output shape: {output_torch_ref.shape}")
     print(f"Output range: [{output_torch_ref.min().item():.4f}, {output_torch_ref.max().item():.4f}]")
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(output.cpu().to(torch.float32), output_torch_ref.cpu().to(torch.float32), rtol=3e-3, atol=3e-3)
     print("✓ Static FFN with SwiGLU test completed")
     print()
 
 
-def test_ffn_dynamic_gelu(device_id: int = None, run_mode: str = "npu", dynamic: bool = True):
+def test_ffn_dynamic_gelu(device_id: int = None, dynamic: bool = True):
     """Test dynamic FFN with GELU activation."""
     print("=" * 60)
     print("Testing Dynamic FFN with GELU Activation")
@@ -356,7 +374,7 @@ def test_ffn_dynamic_gelu(device_id: int = None, run_mode: str = "npu", dynamic:
     intermediate_size = 1024
     basic_batch = 16
     dtype = torch.bfloat16
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     config = FFNConfig(
         batch_size=batch_size,
@@ -368,7 +386,7 @@ def test_ffn_dynamic_gelu(device_id: int = None, run_mode: str = "npu", dynamic:
         vec_tile_shape=(32, 64),
         cube_tile_shape=(32, 64, 64),
         basic_batch=basic_batch,
-        run_mode=pypto.RunMode.NPU if run_mode == "npu" else pypto.RunMode.SIM
+        run_mode=pypto.RunMode.NPU if global_run_mode == pypto.RunMode.NPU else pypto.RunMode.SIM
     )
 
     # Create PyTorch tensors
@@ -395,14 +413,14 @@ def test_ffn_dynamic_gelu(device_id: int = None, run_mode: str = "npu", dynamic:
     output = torch.empty(batch_size, hidden_size, dtype=dtype, device=device)
     ffn_activation_kernel(hidden_states_torch, gate_proj_weight_torch, up_proj_weight_torch, 
                           down_proj_weight_torch, output, config)
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(output.cpu().to(torch.float32), output_torch_ref.cpu().to(torch.float32), rtol=3e-3, atol=3e-3)
     
     print("✓ Dynamic FFN with GELU test completed")
     print()
 
 
-def test_ffn_static_relu(device_id: int = None, run_mode: str = "npu", dynamic: bool = True):
+def test_ffn_static_relu(device_id: int = None, dynamic: bool = True):
     """Test static FFN with ReLU activation."""
     print("=" * 60)
     print("Testing Static FFN with ReLU Activation")
@@ -412,7 +430,7 @@ def test_ffn_static_relu(device_id: int = None, run_mode: str = "npu", dynamic: 
     hidden_size = 128
     intermediate_size = 1024
     dtype = torch.float16
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     config = FFNConfig(
         batch_size=batch_size,
@@ -423,7 +441,7 @@ def test_ffn_static_relu(device_id: int = None, run_mode: str = "npu", dynamic: 
         use_dynamic_shape=False,
         vec_tile_shape=(32, 64),
         cube_tile_shape=(32, 64, 64),
-        run_mode=pypto.RunMode.NPU if run_mode == "npu" else pypto.RunMode.SIM
+        run_mode=pypto.RunMode.NPU if global_run_mode == pypto.RunMode.NPU else pypto.RunMode.SIM
     )
 
     # Create PyTorch tensors
@@ -449,7 +467,7 @@ def test_ffn_static_relu(device_id: int = None, run_mode: str = "npu", dynamic: 
     print(f"Output shape: {output_torch_ref.shape}")
     print(f"Output range: [{output_torch_ref.min().item():.4f}, {output_torch_ref.max().item():.4f}]")
     print(f"Max difference: {max_diff:.6f}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(output.cpu().to(torch.float32), output_torch_ref.cpu().to(torch.float32), rtol=3e-3, atol=3e-3)
     print("✓ Static FFN with ReLU test completed")
     print()
@@ -490,8 +508,8 @@ Examples:
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -567,7 +585,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

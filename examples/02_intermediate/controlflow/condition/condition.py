@@ -27,6 +27,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -48,7 +67,7 @@ def get_device_id():
 
 
 def _get_mode(run_mode: str):
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         return pypto.RunMode.NPU
     elif run_mode == "sim":
         return pypto.RunMode.SIM
@@ -58,12 +77,11 @@ def _get_mode(run_mode: str):
 # ============================================================================
 # 1. Nested Loops with Conditions
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def nested_loops_with_conditions_kernel(
     a: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
     b: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
-    y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32),
-):
+    y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP32)):
     pypto.set_vec_tile_shapes(2, 8)
     for i in pypto.loop(2):
         for j in pypto.loop(2):
@@ -75,13 +93,13 @@ def nested_loops_with_conditions_kernel(
                 y[i:i + 1, j:j + 1] = a_view - b_view
 
 
-def test_nested_loops_with_conditions(device_id=None, run_mode: str = "npu", dynamic: bool = True) -> None:
+def test_nested_loops_with_conditions(device_id=None, dynamic: bool = True) -> None:
     """Test nested loops with conditional statements."""
     print("=" * 60)
     print("Test: Nested Loops with Conditional Statements")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (2, 2)
     dtype = torch.float
@@ -94,7 +112,7 @@ def test_nested_loops_with_conditions(device_id=None, run_mode: str = "npu", dyn
     golden[1] = a[1] - b[1]
     golden = golden.cpu()
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(y.cpu()), np.array(golden.cpu()), rtol=1e-3, atol=1e-3)
         print(f"Output: {y.cpu()}")
         print(f"Expected: {golden.cpu()}")
@@ -126,35 +144,33 @@ def add_core(input0: pypto.Tensor, input1: pypto.Tensor, output: pypto.Tensor, v
             output[b_offset:b_offset_end, ...] = t3_sub
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_dyn_axis_static_cond_kernel_static(
     input0: pypto.Tensor(),
     input1: pypto.Tensor(),
     output: pypto.Tensor(),
     val: int,
-    flag: bool,
-):
+    flag: bool):
     add_core(input0, input1, output, val, flag)
     
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_dyn_axis_static_cond_kernel_dynamic(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     val: int,
-    flag: bool,
-):
+    flag: bool):
     add_core(input0, input1, output, val, flag)
 
 
-def test_add_scalar_loop_dyn_axis_static_cond(device_id=None, run_mode: str = "npu") -> None:
+def test_add_scalar_loop_dyn_axis_static_cond(device_id=None) -> None:
     """Test dynamic axis with static (compile-time) condition."""
     print("=" * 60)
     print("Test: Dynamic Axis with Static Condition")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
     val = 1
@@ -170,7 +186,7 @@ def test_add_scalar_loop_dyn_axis_static_cond(device_id=None, run_mode: str = "n
     max_diff = np.abs(output_data.cpu().numpy() - golden.cpu().numpy()).max()
     print(f"Output shape (flag=False): {output_data.shape}")
     print(f"Max difference (flag=False): {max_diff:.6f}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
 
     # Test with flag=True: output = input0 + input1 + val
@@ -180,7 +196,7 @@ def test_add_scalar_loop_dyn_axis_static_cond(device_id=None, run_mode: str = "n
     max_diff = np.abs(output_data2.cpu().numpy() - golden2.cpu().numpy()).max()
     print(f"Output shape (flag=True): {output_data2.shape}")
     print(f"Max difference (flag=True): {max_diff:.6f}")
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data2.cpu()), np.array(golden2.cpu()), rtol=3e-3, atol=3e-3)
     print("✓ add_scalar_loop_dyn_axis_static_cond test passed")
     print()
@@ -189,13 +205,12 @@ def test_add_scalar_loop_dyn_axis_static_cond(device_id=None, run_mode: str = "n
 # ============================================================================
 # 3. Dynamic Axis with Dynamic Condition
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_dyn_axis_dyn_cond_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int,
-):
+    val: int):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     b = input0.shape[0]
     tile_b = 1
@@ -214,13 +229,13 @@ def add_scalar_loop_dyn_axis_dyn_cond_kernel(
 
 
 
-def test_add_scalar_loop_dynamic_axis_dynamic_cond(device_id=None, run_mode: str = "npu") -> None:
+def test_add_scalar_loop_dynamic_axis_dynamic_cond(device_id=None) -> None:
     """Test dynamic axis with dynamic (runtime) condition."""
     print("=" * 60)
     print("Test: Dynamic Axis with Dynamic Condition")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
     val = 1
@@ -238,7 +253,7 @@ def test_add_scalar_loop_dynamic_axis_dynamic_cond(device_id=None, run_mode: str
     print(f"Output shape: {output_data.shape}")
     print(f"Max difference: {max_diff:.6f}")
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
     print("✓ add_scalar_loop_dyn_axis_dyn_cond test passed")
     print()
@@ -247,13 +262,12 @@ def test_add_scalar_loop_dynamic_axis_dynamic_cond(device_id=None, run_mode: str
 # ============================================================================
 # 4. Dynamic Axis with Loop Boundary Conditions
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_dyn_axis_dyn_loop_cond_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int,
-):
+    val: int):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
     b = input0.shape[0]
     tile_b = 1
@@ -273,13 +287,13 @@ def add_scalar_loop_dyn_axis_dyn_loop_cond_kernel(
             output[b_offset:b_offset_end, ...] = t3_sub
 
 
-def test_add_scalar_loop_dynamic_axis_dynamic_loop_cond(device_id=None, run_mode: str = "npu") -> None:
+def test_add_scalar_loop_dynamic_axis_dynamic_loop_cond(device_id=None) -> None:
     """Test dynamic axis with loop boundary conditions (is_loop_begin / is_loop_end)."""
     print("=" * 60)
     print("Test: Dynamic Axis with Loop Boundary Conditions")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
     val = 1
@@ -298,7 +312,7 @@ def test_add_scalar_loop_dynamic_axis_dynamic_loop_cond(device_id=None, run_mode
     print(f"Output shape: {output_data.shape}")
     print(f"Max difference: {max_diff:.6f}")
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
     print("✓ add_scalar_loop_dyn_axis_dyn_loop_cond test passed")
     print()
@@ -326,8 +340,8 @@ Examples:
     )
     parser.add_argument('--list', action='store_true', help='List available examples')
     parser.add_argument(
-        '--run_mode', type=str, nargs='?', default="npu", choices=["npu"],
-        help='Run mode, currently only support npu.'
+        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -391,7 +405,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

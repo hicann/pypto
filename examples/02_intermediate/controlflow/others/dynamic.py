@@ -44,6 +44,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -78,12 +97,11 @@ def get_device_id():
 
 # Module-level dynamic dimension definition
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def dynamic_mul_kernel(
     x: pypto.Tensor([pypto.DYNAMIC, 128], pypto.DT_FP16),
     output: pypto.Tensor([pypto.DYNAMIC, 128], pypto.DT_FP16),
-    tile_b: int,
-):
+    tile_b: int):
     batch_size_dyn = x.shape[0]
     # Compute loop count: ceil(batch_size / tile_b)
     b_loop = (batch_size_dyn + tile_b - 1) // tile_b
@@ -105,13 +123,13 @@ def dynamic_mul_kernel(
 
 
 
-def test_dynamic_mul(device_id: int = None, run_mode: str = "npu"):
+def test_dynamic_mul(device_id: int = None):
     """Test dynamic mul with different batch sizes - same kernel, no recompilation."""
     print("=" * 60)
     print("Test: Dynamic Mul (basic view/assemble tiling)")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     test_batch_sizes = [8, 16]
     for bs in test_batch_sizes:
@@ -120,11 +138,11 @@ def test_dynamic_mul(device_id: int = None, run_mode: str = "npu"):
         dynamic_mul_kernel(x, result, bs)
         
 
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             torch.npu.synchronize()
 
         golden = x * 2.0
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             assert_allclose(
                 np.array(result.cpu()), np.array(golden.cpu()),
                 rtol=1e-3, atol=1e-3
@@ -151,11 +169,10 @@ def softmax_core(input_tensor: pypto.Tensor) -> pypto.Tensor:
     return pypto.softmax(input_tensor, dim=-1)
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def softmax_kernel(
     input_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-):
+    output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)):
     tile_b = 1
     bs_dyn, seqlen, head, dim = input_tensor.shape
     b_loop = bs_dyn // tile_b
@@ -172,13 +189,13 @@ def softmax_kernel(
 
 
 
-def test_dynamic_partial(device_id: int = None, run_mode: str = "npu"):
+def test_dynamic_partial(device_id: int = None):
     """Test softmax with partial dynamic dimensions (only batch is dynamic)."""
     print("=" * 60)
     print("Test: Partial Dynamic Dimensions (softmax)")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     # Fixed non-batch dimensions
     seqlen, head, dim = 32, 1, 256
@@ -191,11 +208,11 @@ def test_dynamic_partial(device_id: int = None, run_mode: str = "npu"):
 
         softmax_kernel(x, y)
 
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             torch.npu.synchronize()
 
         golden = torch.softmax(x, dim=-1)
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             assert_allclose(
                 np.array(y.cpu()), np.array(golden.cpu()),
                 rtol=1e-3, atol=1e-3
@@ -253,15 +270,14 @@ def scaled_dot_product_attention_core(
     return res
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def attention_kernel(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     v: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     config: AttentionConfig,
-    tile: int,
-):
+    tile: int):
     """Scaled dot-product attention with dynamic batch size."""
     bs_dyn = q.shape[0]
     head = config.num_heads
@@ -273,8 +289,7 @@ def attention_kernel(
     pypto.set_cube_tile_shapes(
         [cube_tiling, cube_tiling],
         [cube_tiling, cube_tiling],
-        [cube_tiling, cube_tiling],
-    )
+        [cube_tiling, cube_tiling])
 
     
     bs_loop = (bs_dyn + tile - 1) // tile
@@ -306,13 +321,13 @@ def attention_kernel(
 
 
 
-def test_dynamic_attention(device_id: int = None, run_mode: str = "npu"):
+def test_dynamic_attention(device_id: int = None):
     """Test attention with dynamic batch sizes."""
     print("=" * 60)
     print("Test: Dynamic Scaled Dot-Product Attention")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     num_heads, head_dim = 8, 64
     config = AttentionConfig(
@@ -337,13 +352,13 @@ def test_dynamic_attention(device_id: int = None, run_mode: str = "npu"):
                           dtype=dtype, device=device)
         attention_kernel(q, k, v, out, config, batch_size)
 
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             torch.npu.synchronize()
 
         scale = 1.0 / (head_dim ** 0.5)
         golden = scaled_dot_product_attention_golden(q, k, v, scale).cpu()
 
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             out_cpu = out.cpu()
             max_diff = (out_cpu - golden).abs().max().item()
             print(f"  Batch={batch_size}, SeqQ={seq_len_q}, SeqKV={seq_len_kv}, "
@@ -364,14 +379,13 @@ def test_dynamic_attention(device_id: int = None, run_mode: str = "npu"):
 # operations where both dimensions may vary.
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def dynamic_add_kernel(
     x: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
     y: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
     output: pypto.Tensor([pypto.DYNAMIC, pypto.DYNAMIC], pypto.DT_FP16),
     tile_b: int,
-    tile_h: int,
-):
+    tile_h: int):
     batch_dyn = x.shape[0]
     hidden_dyn = x.shape[1]
     b_loop = (batch_dyn + tile_b - 1) // tile_b
@@ -406,13 +420,13 @@ def dynamic_add_kernel(
     
 
 
-def test_dynamic_multi_dim(device_id: int = None, run_mode: str = "npu"):
+def test_dynamic_multi_dim(device_id: int = None):
     """Test kernel with multiple dynamic dimensions."""
     print("=" * 60)
     print("Test: Multiple Dynamic Dimensions (add)")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     test_cases = [
         (8, 64),
@@ -425,11 +439,11 @@ def test_dynamic_multi_dim(device_id: int = None, run_mode: str = "npu"):
         result = torch.zeros(bs, hs, dtype=torch.float16, device=device)
         dynamic_add_kernel(x, y, result, bs, hs)
 
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             torch.npu.synchronize()
 
         golden = x + y
-        if run_mode == "npu":
+        if global_run_mode == pypto.RunMode.NPU:
             assert_allclose(
                 np.array(result.cpu()), np.array(golden.cpu()),
                 rtol=1e-3, atol=1e-3
@@ -479,8 +493,8 @@ Examples:
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -553,7 +567,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

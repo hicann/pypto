@@ -27,6 +27,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -48,7 +67,7 @@ def get_device_id():
 
 
 def _get_mode(run_mode: str):
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         return pypto.RunMode.NPU
     elif run_mode == "sim":
         return pypto.RunMode.SIM
@@ -58,15 +77,14 @@ def _get_mode(run_mode: str):
 # ============================================================================
 # 1. Basic Loop Usage
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def loop_basic_kernel(
         t0: pypto.Tensor(),
         t1: pypto.Tensor(),
         out0: pypto.Tensor(),
         out1: pypto.Tensor(),
         s: int,
-        n: int,
-    ):
+        n: int):
     pypto.set_vec_tile_shapes(64, 64)
     for bs_idx in pypto.loop(0, n, 1):  # start, stop, step
         t0s = t0[bs_idx * s: (bs_idx + 1) * s, :]
@@ -80,13 +98,13 @@ def loop_basic_kernel(
 
 
 
-def test_loop_basic(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_loop_basic(device_id: int = None, dynamic: bool = False) -> None:
     """Test basic loop usage."""
     print("=" * 60)
     print("Test: Basic Loop Usage")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     s, n = 64, 8
     shape = (n * s, s)
@@ -97,7 +115,7 @@ def test_loop_basic(device_id: int = None, run_mode: str = "npu", dynamic: bool 
     loop_basic_kernel(input_t1, input_t2, output1, output2, s, n)
 
     expected = input_t1 + input_t2
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         max_diff1 = (output1 - expected).abs().max().item()
         max_diff2 = (output2 - expected).abs().max().item()
         equal_output_1_2 = (output1 - output2).abs().max().item() < 1e-6
@@ -112,13 +130,12 @@ def test_loop_basic(device_id: int = None, run_mode: str = "npu", dynamic: bool 
 # 2. Loop Compile Phase Print
 # ============================================================================
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def loop_compile_phase_print_kernel(
     in_t0: pypto.Tensor(),
     in_t1: pypto.Tensor(),
     out_t0: pypto.Tensor(),
-    out_t1: pypto.Tensor(),
-):
+    out_t1: pypto.Tensor()):
     pypto.set_vec_tile_shapes(64, 64)
     note = '''
     Below are demonstrations of print usage within loops.
@@ -154,13 +171,13 @@ def loop_compile_phase_print_kernel(
 
 
 
-def test_loop_compile_phase_print(device_id: int = None, run_mode: str = "npu", dynamic: bool = False) -> None:
+def test_loop_compile_phase_print(device_id: int = None, dynamic: bool = False) -> None:
     """Test loop compile phase print"""
     print("=" * 60)
     print("Test: Loop Compile Phase Print Feature")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     m, n = 6, 8
     shape = (m, n)
@@ -171,7 +188,7 @@ def test_loop_compile_phase_print(device_id: int = None, run_mode: str = "npu", 
     loop_compile_phase_print_kernel(input_t1, input_t2, output_t1, output_t2)
     expected_t1 = input_t1 + input_t1
     expected_t2 = input_t2 + input_t2
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         max_diff_t1 = (output_t1 - expected_t1).abs().max().item()
         max_diff_t2 = (output_t2 - expected_t2).abs().max().item()
         print(f"Max difference from PyTorch: {max_diff_t1:.6f}")
@@ -185,13 +202,12 @@ def test_loop_compile_phase_print(device_id: int = None, run_mode: str = "npu", 
 # ============================================================================
 # 3. Loop with Scalar Addition (add_scalar_loop)
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int,
-):
+    val: int):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     b = input0.shape[0]
@@ -209,13 +225,13 @@ def add_kernel(
 
 
 
-def test_add_scalar_loop(device_id=None, run_mode: str = "npu", dynamic: bool = True) -> None:
+def test_add_scalar_loop(device_id=None, dynamic: bool = True) -> None:
     """Test loop-based scalar addition."""
     print("=" * 60)
     print("Test: Loop with Scalar Addition (add_scalar_loop)")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
     val = 1
@@ -231,7 +247,7 @@ def test_add_scalar_loop(device_id=None, run_mode: str = "npu", dynamic: bool = 
     print(f"Output shape: {z.shape}")
     print(f"Max difference: {max_diff:.6f}")
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(z.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
     print("✓ add_scalar_loop test passed")
     print()
@@ -240,13 +256,12 @@ def test_add_scalar_loop(device_id=None, run_mode: str = "npu", dynamic: bool = 
 # ============================================================================
 # 4. Loop with Dynamic Axis (add_scalar_loop_dyn_axis)
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_dynamic_axis_kernel(
     input0: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     input1: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
     output: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    val: int,
-):
+    val: int):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     b, w, n, c = input0.shape
@@ -267,13 +282,13 @@ def add_scalar_loop_dynamic_axis_kernel(
         pypto.assemble(t3_sub, [b_offset, 0, 0, 0], output)
 
 
-def test_add_scalar_loop_dyn_axis(device_id: int = None, run_mode: str = "npu") -> None:
+def test_add_scalar_loop_dyn_axis(device_id: int = None) -> None:
     """Test loop with dynamic axis."""
     print("=" * 60)
     print("Test: Loop with Dynamic Axis (add_scalar_loop_dyn_axis)")
     print("=" * 60)
 
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
     val = 1
@@ -289,7 +304,7 @@ def test_add_scalar_loop_dyn_axis(device_id: int = None, run_mode: str = "npu") 
     print(f"Output shape: {output_data.shape}")
     print(f"Max difference: {max_diff:.6f}")
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         assert_allclose(np.array(output_data.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
     print("✓ add_scalar_loop_dyn_axis test passed")
     print()
@@ -317,8 +332,8 @@ Examples:
     )
     parser.add_argument('--list', action='store_true', help='List available examples')
     parser.add_argument(
-        '--run_mode', type=str, nargs='?', default="npu", choices=["npu"],
-        help='Run mode, currently only support npu.'
+        '--run_mode', type=str, nargs='?', default="npu", choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
 
     args = parser.parse_args()
@@ -382,7 +397,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)

@@ -28,6 +28,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -51,12 +70,11 @@ def get_device_id():
 SHAPE = (32, 32, 1, 256)
 
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def add_scalar_loop_view_assemble_kernel(
     input0: pypto.Tensor(SHAPE, pypto.DT_FP32),
     input1: pypto.Tensor(SHAPE, pypto.DT_FP32),
-    output: pypto.Tensor(SHAPE, pypto.DT_FP32),
-):
+    output: pypto.Tensor(SHAPE, pypto.DT_FP32)):
     pypto.set_vec_tile_shapes(1, 4, 1, 64)
 
     # Calculate the loop parameters
@@ -72,8 +90,8 @@ def add_scalar_loop_view_assemble_kernel(
         pypto.assemble(t3_sub, [b_offset, 0, 0, 0], output)
 
 
-def test_add_scalar_loop_view_assemble(device_id=None, run_mode: str = "npu", dynamic: bool = True) -> None:
-    device = f'npu:{device_id}' if (run_mode == "npu" and device_id is not None) else 'cpu'
+def test_add_scalar_loop_view_assemble(device_id=None, dynamic: bool = True) -> None:
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
 
     shape = (32, 32, 1, 256)
     #prepare data
@@ -87,7 +105,7 @@ def test_add_scalar_loop_view_assemble(device_id=None, run_mode: str = "npu", dy
     print(f"Input0 shape: {x.shape}")
     print(f"Input1 shape: {y.shape}")
 
-    if run_mode == "npu":
+    if global_run_mode == pypto.RunMode.NPU:
         print(f"Max difference: {max_diff:.6f}")
         assert_allclose(np.array(out.cpu()), np.array(golden.cpu()), rtol=3e-3, atol=3e-3)
     print("✓ add_scalar_loop_view_assemble test passed")
@@ -127,8 +145,8 @@ Examples:
         type=str,
         nargs='?',
         default="npu",
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
     
     args = parser.parse_args()
@@ -191,7 +209,7 @@ Examples:
     try:
         for ex_id, ex_info in examples_to_run:
             print(f"Running Example {ex_id}: {ex_info['name']}")
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
         
         if len(examples_to_run) > 1:
             print("=" * 60)

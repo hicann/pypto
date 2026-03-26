@@ -37,6 +37,25 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+def _peek_run_mode_from_argv(default: str = "npu") -> str:
+    """Read run_mode early so module-level decorators can use it."""
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--run_mode" and idx + 1 < len(sys.argv):
+            value = sys.argv[idx + 1]
+            if value in ("npu", "sim"):
+                return value
+        if arg.startswith("--run_mode="):
+            value = arg.split("=", 1)[1]
+            if value in ("npu", "sim"):
+                return value
+    return default
+
+
+global_run_mode = pypto.RunMode.NPU
+if _peek_run_mode_from_argv("npu") == "sim":
+    global_run_mode = pypto.RunMode.SIM
+
+
 def get_device_id():
     """
     Get and validate TILE_FWK_DEVICE_ID from environment variable.
@@ -61,7 +80,7 @@ def get_device_id():
 # 1. Tensor Creation
 # ============================================================================
 
-def test_tensor_creation(device_id=None, run_mode="npu"):
+def test_tensor_creation(device_id=None):
     """Demonstrate tensor creation and property access."""
     print("=" * 60)
     print("Example 1: Tensor Creation")
@@ -77,50 +96,50 @@ def test_tensor_creation(device_id=None, run_mode="npu"):
 # 2. Element-wise Operations
 # ============================================================================
 
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def elementwise_kernel(
     a: pypto.Tensor([], pypto.DT_FP16),
     b: pypto.Tensor([], pypto.DT_FP16),
-    out: pypto.Tensor([], pypto.DT_FP16),
-):
+    out: pypto.Tensor([], pypto.DT_FP16)):
     pypto.set_vec_tile_shapes(8, 8)
     out.move(pypto.mul(pypto.add(a, b), 2.0))
 
 
-def test_elementwise_ops(device_id=None, run_mode="npu"):
+def test_elementwise_ops(device_id=None):
     """Element-wise add + scalar mul: out = (a + b) * 2."""
     print("=" * 60)
     print("Example 2: Element-wise Operations")
     print("=" * 60)
 
     shape = (8, 8)
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
+
     a = torch.randn(shape, dtype=torch.float16, device=device)
     b = torch.randn(shape, dtype=torch.float16, device=device)
-    out = torch.empty(shape, dtype=torch.float16, device=device)
+    out = torch.zeros(shape, dtype=torch.float16, device=device)
     elementwise_kernel(a, b, out)
 
-    expected = (a + b) * 2.0
-    max_diff = (out - expected).abs().max().item()
-    print(f"  Max difference: {max_diff:.6f}")
-    assert max_diff < 1e-2, "Result mismatch!"
+    if global_run_mode == pypto.RunMode.NPU:
+        expected = (a + b) * 2.0
+        max_diff = (out - expected).abs().max().item()
+        print(f"  Max difference: {max_diff:.6f}")
+        assert max_diff < 1e-2, "Result mismatch!"
     print("✓ Element-wise operations completed successfully\n")
 
 
 # ============================================================================
 # 3. Matrix Multiplication
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def matmul_kernel(
     a: pypto.Tensor([], pypto.DT_BF16),
     b: pypto.Tensor([], pypto.DT_BF16),
-    out: pypto.Tensor([], pypto.DT_BF16),
-):
+    out: pypto.Tensor([], pypto.DT_BF16)):
     pypto.set_cube_tile_shapes([32, 32], [64, 64], [64, 64])
     out.move(pypto.matmul(a, b, a.dtype))
 
 
-def test_matmul(device_id=None, run_mode="npu"):
+def test_matmul(device_id=None):
     """Basic matrix multiplication: C = A @ B."""
     print("=" * 60)
     print("Example 3: Matrix Multiplication")
@@ -128,44 +147,45 @@ def test_matmul(device_id=None, run_mode="npu"):
 
     m, k, n = 64, 128, 64
 
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     a = torch.randn(m, k, dtype=torch.bfloat16, device=device)
     b = torch.randn(k, n, dtype=torch.bfloat16, device=device)
     out = torch.empty((m, n), dtype=torch.bfloat16, device=device)
     matmul_kernel(a, b, out)
 
-    expected = torch.matmul(a, b)
-    max_diff = (out - expected).abs().max().item()
-    print(f"  Max difference: {max_diff:.6f}")
-    assert max_diff < 1e-1, "Result mismatch!"
+    if global_run_mode == pypto.RunMode.NPU:
+        expected = torch.matmul(a, b)
+        max_diff = (out - expected).abs().max().item()
+        print(f"  Max difference: {max_diff:.6f}")
+        assert max_diff < 1e-1, "Result mismatch!"
     print("✓ Matrix multiplication completed successfully\n")
 
 
 # ============================================================================
 # 4. Reduction Operations
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def sum_kernel(
     a: pypto.Tensor([], pypto.DT_FP32),
-    out: pypto.Tensor([], pypto.DT_FP32),
-):
+    out: pypto.Tensor([], pypto.DT_FP32)):
     pypto.set_vec_tile_shapes(8, 8)
     out.move(pypto.sum(a, dim=-1, keepdim=False))
 
 
-def test_reduce_ops(device_id=None, run_mode="npu"):
+def test_reduce_ops(device_id=None):
     """Reduction: sum along last dimension."""
     print("=" * 60)
     print("Example 4: Reduction Operations (sum)")
     print("=" * 60)
 
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     a = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=torch.float32, device=device)
-    out = torch.empty((2,), dtype=torch.float32, device=device)
+    out = torch.empty((2), dtype=torch.float32, device=device)
     sum_kernel(a, out)
 
-    expected = torch.tensor([6, 15], dtype=torch.float32, device=device)
-    assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        expected = torch.tensor([6, 15], dtype=torch.float32, device=device)
+        assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
     print(f"  Input:    {a.tolist()}")
     print(f"  Output:   {out.tolist()}")
     print("✓ Reduction operations completed successfully\n")
@@ -174,31 +194,31 @@ def test_reduce_ops(device_id=None, run_mode="npu"):
 # ============================================================================
 # 5. Tiling Configuration
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def tiled_add_kernel(
     a: pypto.Tensor(),
     b: pypto.Tensor(),
-    out: pypto.Tensor(),
-):
+    out: pypto.Tensor()):
     pypto.set_vec_tile_shapes(2, 8)
     out.move(pypto.add(a, b))
 
 
-def test_tiling_config(device_id=None, run_mode="npu"):
+def test_tiling_config(device_id=None):
     """Show how to set vec and cube tile shapes."""
     print("=" * 60)
     print("Example 5: Tiling Configuration")
     print("=" * 60)
 
 
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     a = torch.ones((2, 8), dtype=torch.float32, device=device)
     b = torch.ones((2, 8), dtype=torch.float32, device=device)
     out = torch.empty((2, 8), dtype=torch.float32, device=device)
     tiled_add_kernel(a, b, out)
 
-    expected = a + b
-    assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    if global_run_mode == pypto.RunMode.NPU:
+        expected = a + b
+        assert_allclose(out.cpu().numpy(), expected.cpu().numpy(), rtol=1e-3, atol=1e-3)
     print(f"  vec_tile_shapes set to (2, 8)")
     print("✓ Tiling configuration completed successfully\n")
 
@@ -206,15 +226,14 @@ def test_tiling_config(device_id=None, run_mode="npu"):
 # ============================================================================
 # 6. Transform Operations (view + assemble)
 # ============================================================================
-@pypto.frontend.jit
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
 def view_assemble_kernel(
     x: pypto.Tensor(),
     output: pypto.Tensor(),
     tile_h: int,
     tile_w: int,
     height: int,
-    width: int,
-):
+    width: int):
     pypto.set_vec_tile_shapes(tile_h, tile_w)
     h_tiles = height // tile_h
     w_tiles = width // tile_w
@@ -227,7 +246,7 @@ def view_assemble_kernel(
             pypto.assemble(result, [h_off, w_off], output)
 
 
-def test_transform_ops(device_id=None, run_mode="npu"):
+def test_transform_ops(device_id=None):
     """Loop-based tiling with view and assemble: out = input * 2."""
     print("=" * 60)
     print("Example 6: Transform Operations (view + assemble)")
@@ -236,15 +255,16 @@ def test_transform_ops(device_id=None, run_mode="npu"):
     height, width = 64, 64
     tile_h, tile_w = 32, 32
 
-    device = f'npu:{device_id}'
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
     x = torch.randn((height, width), dtype=torch.float16, device=device)
     out = torch.empty((height, width), dtype=torch.float16, device=device)
     view_assemble_kernel(x, out, tile_h, tile_w, height, width)
 
-    expected = x * 2.0
-    max_diff = (out - expected).abs().max().item()
-    print(f"  Max difference: {max_diff:.6f}")
-    assert max_diff < 1e-2, "Result mismatch!"
+    if global_run_mode == pypto.RunMode.NPU:
+        expected = x * 2.0
+        max_diff = (out - expected).abs().max().item()
+        print(f"  Max difference: {max_diff:.6f}")
+        assert max_diff < 1e-2, "Result mismatch!"
     print("✓ Transform operations completed successfully\n")
 
 
@@ -255,8 +275,7 @@ def test_transform_ops(device_id=None, run_mode="npu"):
 def main():
     parser = argparse.ArgumentParser(
         description="PyPTO Basic Operations Quick-Start",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         'example_id', type=str, nargs='?',
         help='Run a specific case. If omitted, all cases run.'
@@ -267,8 +286,8 @@ def main():
         type=str,
         nargs='?',
         default='npu',
-        choices=["npu"],
-        help='Run mode, currently only support npu.'
+        choices=["npu", "sim"],
+        help='Run mode, supports npu and sim.'
     )
     args = parser.parse_args()
 
@@ -330,7 +349,7 @@ def main():
 
     try:
         for _, ex_info in examples_to_run:
-            ex_info['function'](device_id, args.run_mode)
+            ex_info['function'](device_id)
 
         if len(examples_to_run) > 1:
             print("=" * 60)
