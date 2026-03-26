@@ -43,7 +43,7 @@ license: 完整条款见 LICENSE.txt
 进入 `pypto_path`，修改以下配置：
 
 - **头文件**: 修改 `aicore_entry.h`
-  - 注释 `#if ENABLE_AICORE_PRINT`（它的下一行是`CoreFuncParam`）行及相邻的后6行
+  - 注释 `#if ENABLE_AICORE_PRINT`（它的下一行是`CoreFuncParam`）行及相邻的后6行（共7行），包含CallSubFuncTask函数
 
 ### 2.2 编译安装
 
@@ -122,7 +122,7 @@ cd -
 ### 6.1 查找 trace 日志、分析缺失 leaf index 并定位问题 CCE 文件
 
 ```bash
-python3 .agents/skills/pypto-aicore-error-locator/scripts/analyze_trace.py device_log_path run_path/kernel/kernel_aicore
+python3 .agents/skills/pypto-aicore-error-locator/scripts/analyze_trace.py device_log_path run_path/kernel_aicore
 ```
 
 **⚠️ 重要提示**: 若未定位到问题 CCE 文件，请说明原因，**停止执行后续步骤**
