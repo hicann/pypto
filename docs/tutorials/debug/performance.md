@@ -190,7 +190,7 @@ pypto.set_vec_tile_shapes(64, 512)
 
 [Stitch](../appendix/glossary.md)配置决定了多少个root function被同时下发调度，即该参数控制一次stitch能处理的最大loop数量，会同时影响调度开销、控制流生成耗时以及 workspace 内存占用。因此Stitch设置较大后任务可以充分并行，通常性能更优。当泳道图中出现大量空隙时，可能是Stitch配置的值太小导致的。
 
-当前Stitch配置主要由[stitch_function_max_num](../../api/config/pypto-set_pass_options.md)参数决定，在jit装饰器中完成配置，可参考如下配置：
+当前Stitch配置主要由[stitch_function_max_num](../../api/config/pypto-jit.md#runtime_options_detail)参数决定，在jit装饰器中完成配置，可参考如下配置：
 
 ```python
     @pypto.frontend.jit(

@@ -5,6 +5,7 @@ import os
 import sys
 import shutil
 import logging
+from dataclasses import dataclass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (
@@ -26,66 +27,77 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
-def binary_search_iteration(cce_file, test_cmd, run_dir, left, right):
-    logger.info("二分查找迭代: left=%d, right=%d", left, right)
-    logger.info("CCE 文件: %s", cce_file)
+@dataclass
+class BinarySearchParams:
+    cce_file: str
+    test_cmd: str
+    run_dir: str
+    left: int
+    right: int
+    error_in_t: bool
+
+
+def binary_search_iteration(params):
+    logger.info("二分查找迭代: left=%d, right=%d", params.left, params.right)
+    logger.info("CCE 文件: %s", params.cce_file)
+    logger.info("error_in_t: %s", params.error_in_t)
     logger.info("")
-    
-    backup_file = cce_file + ".bak"
-    shutil.copy(cce_file, backup_file)
-    cce_lines = read_file(cce_file)
+
+    backup_file = params.cce_file + ".bak"
+    shutil.copy(params.cce_file, backup_file)
+    cce_lines = read_file(params.cce_file)
     original_lines = cce_lines.copy()
-    
-    commentable_lines = get_commentable_lines(cce_lines)
-    
+
+    commentable_lines = get_commentable_lines(cce_lines, params.error_in_t)
+
     if not commentable_lines:
         logger.info("错误：没有可注释的行")
-        write_file(cce_file, original_lines)
+        write_file(params.cce_file, original_lines)
         os.remove(backup_file)
         return None, None, None
-    
-    mid = (left + right) // 2
-    logger.info("mid = (left + right) // 2 = (%d + %d) // 2 = %d", left, right, mid)
+
+    mid = (params.left + params.right) // 2
+    logger.info("mid = (left + right) // 2 = (%d + %d) // 2 = %d", params.left, params.right, mid)
     logger.info("取消注释范围 [0, %d] 的行", mid)
     logger.info(commentable_lines[0:mid + 1])
-    
+
     current_lines = cce_lines.copy()
     current_lines = comment_lines(current_lines, commentable_lines)
-    
+
     lines_to_uncomment = commentable_lines[0:mid + 1]
     current_lines = uncomment_lines(current_lines, lines_to_uncomment)
-    
-    write_file(cce_file, current_lines)
+
+    write_file(params.cce_file, current_lines)
     logger.info("运行测试...")
-    returncode, output = run_test(test_cmd, run_dir)
+    returncode, output = run_test(params.test_cmd, params.run_dir)
     error_exists = has_error(returncode, output)
-    
-    write_file(cce_file, original_lines)
+
+    write_file(params.cce_file, original_lines)
     os.remove(backup_file)
-    
+
     if error_exists:
         print_error_info(output, logger)
-        logger.info("结果: 运行失败（有 error），问题在 [%d, %d] 中", left, mid)
-        new_left = left
+        logger.info("结果: 运行失败（有 error），问题在 [%d, %d] 中", params.left, mid)
+        new_left = params.left
         new_right = mid
     else:
-        logger.info("结果: 运行成功（无 error），问题在 [%d, %d] 中", mid + 1, right)
+        logger.info("结果: 运行成功（无 error），问题在 [%d, %d] 中", mid + 1, params.right)
         new_left = mid + 1
-        new_right = right
-    
+        new_right = params.right
+
     logger.info("下一轮: left=%d, right=%d", new_left, new_right)
     logger.info("")
-    
+
     if new_left == new_right:
         problem_line = commentable_lines[new_left]
         logger.info("找到问题代码行: %d", problem_line)
         return new_left, new_right, problem_line
-    
+
     return new_left, new_right, None
 
 
 def print_usage():
-    logger.info("用法: python3 binary_search_iteration.py <cce_file> <test_cmd> <run_dir> <left> <right>")
+    logger.info("用法: python3 binary_search_iteration.py <cce_file> <test_cmd> <run_dir> <left> <right> <error_in_t>")
     logger.info("")
     logger.info("参数说明:")
     logger.info("  cce_file: CCE 文件路径")
@@ -93,6 +105,7 @@ def print_usage():
     logger.info("  run_dir: 运行测试命令的目录路径")
     logger.info("  left: 二分查找左边界")
     logger.info("  right: 二分查找右边界")
+    logger.info("  error_in_t: 错误是否在T操作中 (True/False)")
     logger.info("")
     logger.info("输出格式:")
     logger.info("  NEXT_LEFT <next_left>")
@@ -101,30 +114,42 @@ def print_usage():
 
 
 def main():
-    if len(sys.argv) < 6:
+    if len(sys.argv) < 7:
         print_usage()
         sys.exit(1)
-    
+
     cce_file = sys.argv[1]
     test_cmd = sys.argv[2]
     run_dir = sys.argv[3]
     left = int(sys.argv[4])
     right = int(sys.argv[5])
-    
+    error_in_t = sys.argv[6].lower() == 'true'
+
     cce_file = os.path.abspath(cce_file)
     run_dir = os.path.abspath(run_dir)
-    
+
+    valid = False
+    error_msg = None
+
     valid, error_msg = validate_path(cce_file, "CCE 文件")
     if not valid:
         logger.info(error_msg)
         sys.exit(1)
-    
+
     valid, error_msg = validate_path(run_dir, "运行目录")
     if not valid:
         logger.info(error_msg)
         sys.exit(1)
-    
-    new_left, new_right, problem_line = binary_search_iteration(cce_file, test_cmd, run_dir, left, right)
+
+    params = BinarySearchParams(
+        cce_file=cce_file,
+        test_cmd=test_cmd,
+        run_dir=run_dir,
+        left=left,
+        right=right,
+        error_in_t=error_in_t
+    )
+    new_left, new_right, problem_line = binary_search_iteration(params)
     
     if new_left is not None:
         logger.info(f"NEXT_LEFT {new_left}")

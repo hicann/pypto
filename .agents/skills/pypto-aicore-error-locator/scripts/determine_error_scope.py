@@ -39,7 +39,7 @@ def check_all_commented_error(cce_file, test_cmd, run_dir):
     
     cce_lines = comment_special_lines(cce_lines)
     
-    commentable_lines = get_commentable_lines(cce_lines)
+    commentable_lines = get_commentable_lines(cce_lines, True)
     logger.info(f"可注释的行数: {len(commentable_lines)}")
     
     if not commentable_lines:
@@ -62,10 +62,10 @@ def check_all_commented_error(cce_file, test_cmd, run_dir):
     
     if error_exists:
         print_error_info(output, logger)
-        logger.info("结果: 注释所有行后仍有 error，无法定位问题")
+        logger.info("结果: 注释所有操作行后仍有 error，问题不在操作行，请二分查找所有行")
         return False
     else:
-        logger.info("结果: 注释所有行后运行成功（无 error），可以继续二分查找")
+        logger.info("结果: 注释所有操作行后运行成功（无 error），请二分查找操作行")
         return True
 
 
@@ -103,11 +103,14 @@ def main():
     result = check_all_commented_error(cce_file, test_cmd, run_dir)
     
     if result is True:
-        logger.info("NO_ERROR_AFTER_COMMENT")
+        logger.info(f"ERROR_IN_T=True")
+        logger.info("请查找所有操作行")
     elif result is False:
-        logger.info("HAS_ERROR_AFTER_COMMENT")
+        logger.info("ERROR_IN_T=False")
+        logger.info("请查找所有代码行")
     else:
-        logger.info("NO_COMMENTABLE_LINES")
+        logger.info("ERROR_IN_T=False")
+        logger.info("请查找所有代码行")
 
 
 if __name__ == "__main__":

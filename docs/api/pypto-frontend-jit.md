@@ -42,7 +42,7 @@ def kernel_function(...):
 | codegen_options | 输入 | 类型为 `dict[str, any]`，用于设置 codegen 配置项，配置项参数见[参数说明](./config/pypto-set_codegen_options.md)  |
 | host_options | 输入 | 类型为 `dict[str, any]`，用于设置 host 配置项，配置项参数见[参数说明](./config/pypto-set_host_options.md) |
 | pass_options | 输入 | 类型为 `dict[str, any]`，用于设置 Pass 配置项，配置项参数见[参数说明](./config/pypto-set_pass_options.md)  |
-| runtime_options | 输入 | 类型为 `dict[str, any]`，用于设置 runtime 配置项，配置项参数见[参数说明](./config/pypto-runtime_options.md) |
+| runtime_options | 输入 | 类型为 `dict[str, any]`，用于设置 runtime 配置项，配置项参数见[runtime_options 参数说明](./config/pypto-jit.md#runtime_options_detail) |
 
 ## 返回值说明
 

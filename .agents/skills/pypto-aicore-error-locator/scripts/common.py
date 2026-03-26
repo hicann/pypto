@@ -35,8 +35,9 @@ def print_error_info(output, logger, max_lines=10):
             logger.info(f"  {line}")
 
 
-def get_commentable_lines(lines):
+def get_commentable_lines(lines, error_in_t=False):
     commentable_lines = []
+    fast_commentable_lines = []
     skip_keywords = ['set_flag', 'wait_flag', 'pipe_barrier']
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -48,12 +49,19 @@ def get_commentable_lines(lines):
             '#' in stripped or
             any(keyword in stripped for keyword in skip_keywords)
         )
+
         if should_skip:
             continue
         else:
             commentable_lines.append(i)
+            is_t_operation = stripped.startswith('T') and '<' in stripped and '>' in stripped
+            if is_t_operation:
+                fast_commentable_lines.append(i)
 
-    return commentable_lines
+    if error_in_t:
+        return fast_commentable_lines
+    else:
+        return commentable_lines
 
 
 def comment_lines(lines, line_indices):
@@ -92,6 +100,9 @@ def has_error(returncode, output):
     ]
     
     for keyword in true_error_keywords:
+        if keyword in output_lower and "aicore error" not in output_lower:
+            raise RuntimeError(f"检测到非 aicore error: {output_lower}")
+        
         if keyword in output_lower:
             return True
     
