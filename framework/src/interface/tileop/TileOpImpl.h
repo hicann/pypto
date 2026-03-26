@@ -50,6 +50,7 @@
 #include "vector/indexadd.h"
 #include "vector/scatter.h"
 #include "vector/expand.h"
+#include "vector/expand_exp_dif.h"
 #include "vector/cumsum.h"
 #include "vector/extract.h"
 #include "vector/pair_binary.h"

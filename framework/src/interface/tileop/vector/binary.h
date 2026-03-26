@@ -217,26 +217,6 @@ TILEOP void TBitwiseOr(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::BITWISEOR, operand, LastUse>(dst, src0, src1);
 }
 
-#define OP_TILE_OP_EXPANDEXPDIF TExpandExpDif
-template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
-TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1) {
-    if constexpr (operand == TileOp::BroadcastOperand::NONE) {
-        const auto src0Layout = src0.GetLayout();
-        auto src0Shape3 = src0Layout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
-        auto src0Shape4 = src0Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-        const auto src1Layout = src1.GetLayout();
-        auto src1Shape3 = src1Layout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
-        auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
-        // (1024, 1) & (1024, 1) -> (1024, 1) use TROWEXPANDEXPDIF
-        if ((src0Shape3 == src1Shape3) && (src0Shape4 == src1Shape4) && (src1Shape4 == 1)) {
-            BinaryCompute<BinaryOp::EXPANDEXPDIF, TileOp::BroadcastOperand::RIGHT_OPERAND, LastUse3Dim<0, 0, 0>>(
-                dst, src0, src1);
-            return;
-        }
-    }
-    BinaryCompute<BinaryOp::EXPANDEXPDIF, operand, LastUse3Dim<0, 0, 0>>(dst, src0, src1);
-}
-
 TILEOP int gcd(int a, int b) {
     if (a < 0) {
         a = 0 - a;
