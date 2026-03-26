@@ -462,7 +462,11 @@ try:
         lightning_indexer_prolog_quant_mxfp8_pypto
     )
 except Exception as e:
-    logging.warning(f"Skip: {e}")
+    if "could not parse dispatch key: NPU" in str(e):
+        logging.warning(
+            "Skip: torchair not installed, skip NPU registration for operator 'lightning_indexer_prolog_quant_mxfp8'")
+    else:
+        logging.warning(f"Skip: Unexpected error : {e}")
 
 
 def do_test_lightning_indexer_prolog_quant(case_name, is_acl=False):
