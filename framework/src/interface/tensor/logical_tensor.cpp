@@ -530,7 +530,7 @@ std::vector<SymbolicScalar> npu::tile_fwk::GetViewValidShape(const std::vector<S
         return {};
     }
     FUNCTION_ASSERT(FError::INVALID_VAL, validShape.size() == viewShape.size())
-        << "Their size actually are " << validShape.size() << "and " << viewShape.size();
+        << "Their size actually are " << validShape.size() << " and " << viewShape.size();
 
     std::vector<SymbolicScalar> result;
     for (size_t i = 0; i < validShape.size(); i++) {

@@ -17,7 +17,6 @@
 #include <sys/mman.h>
 #include <thread>
 #include <sstream>
-#include "interface/utils/function_error.h"
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 
