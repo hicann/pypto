@@ -108,4 +108,21 @@ aclError aclrtGetStreamResLimit(aclrtStream stream, aclrtDevResLimitType type, u
     (void)value;
     return 0;
 }
+
+aclError aclrtGetStreamAttribute(aclrtStream stream, aclrtStreamAttr stmAttrType, aclrtStreamAttrValue *value)
+{
+    (void)stream;
+    (void)stmAttrType;
+    if (value != nullptr) {
+        value->cacheOpInfoSwitch = 1;
+    }
+    return 0;
+}
+
+aclError aclrtCacheLastTaskOpInfo(const void * const infoPtr, size_t infoSize)
+{
+    (void)infoPtr;
+    (void)infoSize;
+    return 0;
+}
 }

@@ -357,7 +357,7 @@ public:
         if (devMem.IsDevice()) {
             kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data());
             kArgs.outputs = (int64_t *)allSize;
-        } else {;
+        } else {
             kArgs.inputs = reinterpret_cast<int64_t*>(tensorInfo_.data() + sizeof(AiCpuArgs));
             kArgs.outputs = kArgs.inputs + 1;
         }

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <array>
 #include <string>
 #include <stdexcept>
 #include <unordered_map>
@@ -240,6 +241,31 @@ const std::unordered_map<std::string, DataType> STR_DATA_TYPE_MAP = {
     {"fp8e8m0",  DT_FP8E8M0},
     {"fp4_e2m1x2",  DT_FP4_E2M1X2},
     {"fp4_e1m2x2",  DT_FP4_E1M2X2}
+};
+
+const std::array<uint32_t, static_cast<size_t>(DataType::DT_BOTTOM)> DATA_TYPE_CANN_ARRAY = {
+    29, //  DT_INT4 = 0,
+     2, //  DT_INT8 = 1,
+     6, //  DT_INT16 = 2,
+     3, //  DT_INT32 = 3,
+     9, //  DT_INT64 = 4,
+    28, //  DT_FP8 = 5,
+     1, //  DT_FP16 = 6,
+     0, //  DT_FP32 = 7,
+    27, //  DT_BF16 = 8,
+    28, //  DT_HF4 = 9,
+    34, //  DT_HF8 = 10,
+     4, //  DT_UINT8 = 11,
+     7, //  DT_UINT16 = 12,
+     8, //  DT_UINT32 = 13,
+    10, //  DT_UINT64 = 14,
+    12, //  DT_BOOL = 15,
+    11, //  DT_DOUBLE = 16,
+    35, //  DT_FP8E5M2 = 17,
+    36, //  DT_FP8E4M3 = 18,
+    37, //  DT_FP8E8M0 = 19,
+    40, //  DT_FP4_E2M1X2 = 20,
+    41  //  DT_FP4_E1M2X2 = 21,
 };
 
 inline std::string MemoryTypeToString(MemoryType mt) {

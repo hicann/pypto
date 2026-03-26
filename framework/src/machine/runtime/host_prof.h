@@ -9,13 +9,25 @@
  */
 
 #pragma once
-#include <cstdint>
-#include <string>
+
 #include "interface/function/function.h"
 #ifdef BUILD_WITH_CANN
-#include "toolchain/prof_api.h"
+#include "profiling/aprof_pub.h"
+#include "acl/acl_base_rt.h"
+#include "interface/interpreter/raw_tensor_data.h"
 
 namespace npu::tile_fwk{
+struct CacheTaskInfo {
+    uint32_t taskType;
+    uint32_t numBlocks;
+    uint64_t nodeId;
+    uint64_t opType;
+    uint64_t attrId{0};
+    uint64_t reserve2{0};
+    uint32_t opFlag;
+    uint32_t tensorNum;
+    MsrofTensorData tensorData[0];
+};
 class HostProf
 {
 public:
@@ -24,6 +36,7 @@ public:
   bool HostProfReportApi(const uint64_t &startTime, const uint64_t &endTime) const;
   void HostProfReportNodeInfo(const uint64_t &endTime, const uint32_t blockDim, const uint16_t taskType) const;
   void HostProfReportContextInfo(const uint64_t &endTime) const;
+  void HostProfReportCacheTaskInfo(const aclrtStream stream, const uint32_t numBlocks, const uint32_t taskType) const;
   void SetProfFunction(Function *function);
   static uint64_t GetProfSwitch();
   static uint32_t GetProfType();
@@ -34,6 +47,9 @@ private:
   void PackTensorInfo(MsprofTensorInfo *profTensorData, const uint32_t groupId, const uint32_t modId) const;
   void HostProfReportBasicInfo(const uint64_t &endTime, const uint32_t blockDim, const uint16_t taskType) const;
   void HostProfReportTensorInfo(const uint64_t &endTime) const;
+  static bool IsCacheOpInfoEnable(const aclrtStream stream);
+  static void BuildCacheTensorInfo(CacheTaskInfo *taskInfo);
+  static void BuildTensor(const uint32_t tensorType, const RawTensorDataPtr &tensorInfo, MsrofTensorData &tensorData);
   std::string opName_;
   Function *profFunction_{nullptr};
   uint32_t inputsSize_;
@@ -61,6 +77,5 @@ public:
     return hostProf;
   }
 };
-
 }
 #endif

@@ -601,8 +601,35 @@ public:
         return kernel->GetWorkspaceSize(tensors);
     }
 
+    void SetTensorData(const std::vector<DeviceTensorData> &tensors) {
+        Function *func = Program::GetInstance().GetLastFunction();
+        if (func == nullptr) {
+            return;
+        }
+        size_t inputSize = func->inCasts_.size();
+        size_t outputSize = func->outCasts_.size();
+        if (tensors.size() != (inputSize + outputSize)) {
+            return;
+        }
+        if (ProgramData::GetInstance().GetInputDataList().empty()) {
+            for (size_t i = 0; i < inputSize; i++) {
+                RawTensorDataPtr rawDataPtr =
+                    std::make_shared<RawTensorData>(tensors.at(i).GetDataType(), tensors.at(i).GetShape());
+                ProgramData::GetInstance().AppendInput(rawDataPtr);
+            }
+        }
+        if (ProgramData::GetInstance().GetOutputDataList().empty()) {
+            for (size_t i = inputSize; i < tensors.size(); i++) {
+                RawTensorDataPtr rawDataPtr =
+                    std::make_shared<RawTensorData>(tensors.at(i).GetDataType(), tensors.at(i).GetShape());
+                ProgramData::GetInstance().AppendOutput(rawDataPtr);
+            }
+        }
+    }
+
     void Launch(KernelBinary *kernel, aclrtStream aicoreStream, std::vector<DeviceTensorData> &tensors,
         uint8_t *ctrlFlowCache, int64_t *workspace) {
+        SetTensorData(tensors);
         auto [args, argsSize] = kernel->BuildKernelArgs(tensors);
         rtAicpuArgs.args = args;
         rtAicpuArgs.argsSize = argsSize;

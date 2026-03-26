@@ -124,6 +124,8 @@ class DevFuncRunner : public DeviceLauncher {
 public:
     static void Run(Function *function, const std::vector<RawTensorDataPtr> &inputs,
         const std::vector<RawTensorDataPtr> &outputs, const DeviceLauncherConfig &config = DeviceLauncherConfig()) {
+        ProgramData::GetInstance().AppendInputs(inputs);
+        ProgramData::GetInstance().AppendOutputs(outputs);
         auto runner = DevFuncRunner(function, config);
         DeviceRunner::Get().GetHostProfInstance().SetProfFunction(function);
         runner.RunDynamic(inputs, outputs);
