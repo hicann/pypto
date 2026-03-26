@@ -2395,8 +2395,10 @@ static TensorWorkspaceResult CalcTensorWorkspace(Function *func, DevAscendProgra
     res.totalAssembleOutcastSlot = std::count_if(slots.begin(), slots.end(), [](const SlotInfo &slot) {
         return slot.kindSet.Count(RuntimeSlotKind::ASSEMBLE_OUTCAST);
     });
+    uint64_t boundaryOutcastRatio =
+        std::max(std::min((uint32_t)EstimatedStitchingCount(), ExpectedMaxCachedNum()), (uint32_t)SLOTS_NEED_ALLOC_SIZE);
     res.devTaskBoundaryOutcastNum = res.totalExclusiveOutcastSlot * SLOTS_NEED_ALLOC_SIZE +
-        res.totalAssembleOutcastSlot * std::min((uint32_t)EstimatedStitchingCount(), ExpectedMaxCachedNum());
+        res.totalAssembleOutcastSlot * boundaryOutcastRatio;
 
     res.perCoreSpilledMem = AlignUp(maxPerCoreSpilledMem, TENSOR_ADDR_ALIGNMENT);
 
