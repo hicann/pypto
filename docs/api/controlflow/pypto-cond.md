@@ -33,12 +33,24 @@ pypto\_impl.RecordIfBranch: 返回一个条件分支对象，用于 Python 的 i
 -   必须与 Python 的 if、elif、else 语句配合使用
 -   条件表达式会被记录到计算图中
 -   支持嵌套的条件语句
+-   当函数未使用 @pypto.frontend.jit 或 @pypto.frontend.function 装饰器修饰时，条件表达式需要用 pypto.cond 包装
 
 ## 调用示例
 
 ```python
-for s2_idx in pypto.loop(0, 10, 1, power_of_2(max_unroll_times), name="LOOP_L0_bIdx_mla_prolog", idx_name="b_idx"):
-    if pypto.cond(pypto.is_loop_end(s2_idx, bn_per_batch)):
-        ...
+# 未使用装饰器，需要用 pypto.cond 包装条件表达式
+def kernel():
+    ...
+    for s2_idx in pypto.loop(0, 10, 1, power_of_2(max_unroll_times), name="LOOP_L0_bIdx_mla_prolog", idx_name="b_idx"):
+        if pypto.cond(pypto.is_loop_end(s2_idx, bn_per_batch)):
+            ...
+
+# 使用装饰器，无需 pypto.cond 包装
+@pypto.frontend.jit
+def kernel():
+    ...
+    for s2_idx in pypto.loop(0, 10, 1, power_of_2(max_unroll_times), name="LOOP_L0_bIdx_mla_prolog", idx_name="b_idx"):
+        if pypto.is_loop_end(s2_idx, bn_per_batch):
+            ...
 ```
 

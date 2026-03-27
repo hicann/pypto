@@ -32,12 +32,23 @@ def is_loop_end(scalar: SymInt) -> SymbolicScalar
 
 -   scalar 必须是循环迭代器返回的符号标量
 -   如果不是循环索引，将抛出 ValueError 异常
+-   当函数未使用 @pypto.frontend.jit 或 @pypto.frontend.function 装饰器修饰时，条件表达式需要用 pypto.cond 包装
 
 ## 调用示例
 
 ```python
-for idx in pypto.loop(0, 10, 1):
-    if pypto.cond(pypto.is_loop_end(idx)):
-        ...
-```
+# 未使用装饰器，需要用 pypto.cond 包装条件表达式
+def kernel():
+    ...
+    for idx in pypto.loop(0, 10, 1):
+        if pypto.cond(pypto.is_loop_end(idx)):
+            ...
 
+# 使用装饰器，无需 pypto.cond 包装
+@pypto.frontend.jit
+def kernel():
+    ...
+    for idx in pypto.loop(0, 10, 1):
+        if pypto.is_loop_end(idx):
+            ...
+```
