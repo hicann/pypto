@@ -23,8 +23,7 @@ Status MixCallOperationBuilder::CreateCallOps(Function& rootFunc, const std::vec
                                               const std::vector<InternalComponentInfo>& components,
                                               const std::vector<uint64_t>& newProgramIDs,
                                               SubgraphToFunction& subgraphToFunction,
-                                              std::vector<Function*>& newFunctions,
-                                              const std::vector<InternalDependencyInfo>& internalDeps)
+                                              std::vector<Function*>& newFunctions)
 {
     APASS_LOG_INFO_F(Elements::Operation, "Creating call operations for %zu original call ops and %zu components",
                 originalCallOps.size(), components.size());
@@ -57,10 +56,6 @@ Status MixCallOperationBuilder::CreateCallOps(Function& rootFunc, const std::vec
                          info.createdCallOp->GetOpMagic(), info.componentIndex, wrapId);
         }
     }
-    // 现在统一处理内部依赖（按wrapId分组）
-    ProcessAllInternalDependencies(rootFunc, callOpInfos, internalDeps);
-    APASS_LOG_INFO_F(Elements::Operation, "Successfully created %zu call operations with internal dependencies",
-                callOpInfos.size());
     return SUCCESS;
 }
 
@@ -535,88 +530,6 @@ void MixCallOperationBuilder::SetCallOpAttribute(Function& leafFunc,
     APASS_LOG_DEBUG_F(Elements::Operation, "Created callOp %d: %zu arg blocks (from original callOp %d), %zu input offsets, %zu output offsets",
                  callOp.GetOpMagic(), argList.size(), originalCallOp->GetOpMagic(),
                  info.iOffsets.size(), info.oOffsets.size());
-}
-
-// 添加内部依赖的depend operands
-void MixCallOperationBuilder::ProcessAllInternalDependencies(
-    Function& rootFunc,
-    const std::vector<CallOpCreationInfo>& callOpInfos,
-    const std::vector<InternalDependencyInfo>& internalDeps) const
-{
-    if (internalDeps.empty()) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "No internal dependencies to process");
-        return;
-    }
-    // 按wrapId分组call op信息
-    std::unordered_map<uint64_t, std::vector<const CallOpCreationInfo*>> wrapIdToInfos;
-    for (const auto& info : callOpInfos) {
-        wrapIdToInfos[info.wrapId].push_back(&info);
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "Processing internal dependencies for %zu wrap groups", wrapIdToInfos.size());
-    // 为每个wrap组处理内部依赖
-    for (const auto& [wrapId, infos] : wrapIdToInfos) {
-        ProcessInternalDependenciesForWrap(rootFunc, infos, internalDeps, wrapId);
-    }
-}
-
-// 为单个wrap组处理内部依赖
-void MixCallOperationBuilder::ProcessInternalDependenciesForWrap(
-    Function& rootFunc,
-    const std::vector<const CallOpCreationInfo*>& infos,
-    const std::vector<InternalDependencyInfo>& internalDeps,
-    uint64_t wrapId) const
-{
-    // 构建scope索引到call op的映射
-    std::unordered_map<int, Operation*> componentToCallOp;
-    for (const auto& info : infos) {
-        if (info->createdCallOp) {
-            componentToCallOp[info->componentIndex] = info->createdCallOp;
-            APASS_LOG_DEBUG_F(Elements::Operation, "Wrap %lu: map component %lu -> call op %d",
-                         wrapId, info->componentIndex, info->createdCallOp->GetOpMagic());
-        }
-    }
-    // 如果没有内部依赖，直接返回
-    if (internalDeps.empty()) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Wrap %lu: No internal dependencies to add", wrapId);
-        return;
-    }
-    APASS_LOG_INFO_F(Elements::Operation, "Wrap %lu: Processing %zu internal dependencies", wrapId, internalDeps.size());
-
-    // 处理每个内部依赖
-    for (const auto& dep : internalDeps) {
-        int srcComp = dep.srcComp;
-        int dstComp = dep.dstComp;
-        auto srcIt = componentToCallOp.find(srcComp);
-        auto dstIt = componentToCallOp.find(dstComp);
-        if (srcIt == componentToCallOp.end() || dstIt == componentToCallOp.end()) {
-            // 这个wrap中可能不包含这个依赖的所有scope
-            continue;
-        }
-        Operation* producerCallOp = srcIt->second;
-        Operation* consumerCallOp = dstIt->second;
-        // 生成tensor key
-        const char* scopeType = (dep.compType == ComponentType::C_SCOPE) ? "C" : "V";
-        std::string tensorKey = "depend_" + std::to_string(wrapId) + "_" +
-                                scopeType + std::to_string(srcComp) + "_to_" +
-                                scopeType + std::to_string(dstComp);
-        // 创建新的dummy tensor
-        LogicalTensorPtr dependTensor = std::make_shared<LogicalTensor>(
-            rootFunc,                   // 属于root function
-            DataType::DT_INT8,             // 最小数据类型
-            Shape({1}),                 // 最小形状 (标量)
-            TileOpFormat::TILEOP_ND,    // 默认格式
-            tensorKey,                  // tensor名称
-            NodeType::LOCAL             // 节点类型
-        );
-        dependTensor->AddProducer(producerCallOp);
-        dependTensor->AddConsumer(consumerCallOp);
-        consumerCallOp->AddDependOperand(dependTensor);
-        APASS_LOG_INFO_F(Elements::Operation, "Wrap %lu: component %d -> component %d "
-                    "(call op %d -> %d, tensor magic=%d, has %zu producers, %zu consumers)",
-                    wrapId, srcComp, dstComp,
-                    producerCallOp->GetOpMagic(), consumerCallOp->GetOpMagic(),
-                    dependTensor->magic, dependTensor->GetProducers().size(), dependTensor->GetConsumers().size());
-    }
 }
 }
 }
