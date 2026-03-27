@@ -105,7 +105,7 @@ public:
     static int EmulationLaunchDeviceTensorData(Function *function, const std::vector<DeviceTensorData> &inputList,
         const std::vector<DeviceTensorData> &outputList, const DeviceLauncherConfig &config = DeviceLauncherConfig());
     static int EmulationRunOnce(Function *function, DevControlFlowCache* ctrlCache, const DeviceLauncherConfig &config = DeviceLauncherConfig());
-
+    static int EmulationBuildControlFlowCache(DeviceKernelArgs &kArgs);
     static DevControlFlowCache* CreateHostCtrlFlowCache(DevAscendProgram *devProg, Function *function, EmulationMemoryUtils& memUtils);
     static int BuildControlFlowCacheWithEmulationTensorData(
             Function *function, const std::vector<DeviceTensorData> &inputList,

@@ -272,10 +272,10 @@ inline int CheckTimeOut(const std::string &operation, TimeCheck &timeCheck) {
     return CheckTimeOut(timeCheck.startTime, timeCheck.count, timeCheck.curTime, operation);
 }
 
-#define START_TIMEOUT_CHECK() \
+#define TIMEOUT_CHECK_START() \
     uint64_t start = GetCycles()
 
-#define CHECK_TIMEOUT_AND_RESET(timeout, ...) \
+#define TIMEOUT_CHECK_AND_RESET(timeout, ...) \
     do { \
         if (GetCycles() - start > (timeout)) { \
             DEV_ERROR(__VA_ARGS__); \

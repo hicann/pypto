@@ -62,6 +62,16 @@ static int EmulationLaunchOnce(DeviceKernelArgs &kArgs) {
     return 0;
 }
 
+int EmulationLauncher::EmulationBuildControlFlowCache(DeviceKernelArgs &kArgs) {
+    auto *devProg = (DevAscendProgram *)(kArgs.cfgdata);
+    size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
+    auto deviceTaskCtrlPoolAddr = devProg->GetRuntimeDataList()->GetRuntimeData() + DEV_ARGS_SIZE;
+    (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
+    devProg->devArgs.aicpuPerfAddr = 0UL;
+    kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
+    return DynTileFwkBackendKernelServer(&kArgs);;
+}
+
 int EmulationLauncher::EmulationLaunchOnceWithHostTensorData(
         Function *function, const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
         DevControlFlowCache* ctrlCache, EmulationMemoryUtils& memUtils, const DeviceLauncherConfig &config) {
@@ -128,7 +138,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     DeviceLauncher::DeviceInitDistributedContext(memUtils, dynAttr->commGroupNames, kArgs);
     DeviceLauncher::DeviceInitTilingData(memUtils, kArgs, dynAttr->devProgBinary, hostCtrlFlowCache, config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(memUtils, kArgs, inputList, outputList, dynAttr->disableL2List);
-    int rc = EmulationLaunchOnce(kArgs);
+    int rc = EmulationBuildControlFlowCache(kArgs);
 
     hostCtrlFlowCache->isRecording = false;
     hostCtrlFlowCache->CalcUsedCacheSize();
