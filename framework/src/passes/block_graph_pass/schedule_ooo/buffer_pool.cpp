@@ -359,7 +359,6 @@ Status BufferPool::CompactBufferSlices(std::unordered_map<int, LocalBufferPtr> &
 
 
 void BufferPool::PrintStatus() {
-    ALOG_DEBUG_F("Buffer Status : ");
     std::vector<int> memIdList;
     for (auto &[memId, slice] : bufferSlices) {
         (void)slice;

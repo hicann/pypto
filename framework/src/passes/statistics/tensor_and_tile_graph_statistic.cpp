@@ -33,6 +33,9 @@
 #include "interface/tensor/raw_tensor.h"
 #include "interface/utils/file_utils.h"
 #include "interface/tensor/hypercube_overlap_checker.h"
+#include "passes/pass_log/pass_log.h"
+
+#define MODULE_NAME "TensorAndTileGraphStatistic"
 
 namespace npu {
 namespace tile_fwk {
@@ -55,7 +58,7 @@ void CalcOperatorInfo(Function &function, json &report) {
 
     // 非静态场景下 无法计算size 直接返回
     if(function.GetFunctionType() != FunctionType::STATIC) {
-        ALOG_INFO_F("PeakMemory can't be calculated; because functiontype is not static, name %s, hash %lu.",
+        APASS_LOG_INFO_F(Elements::Function, "PeakMemory can't be calculated; because functiontype is not static, name %s, hash %lu.",
                      function.GetMagicName().c_str(), function.GetFunctionHash().GetHash());
         return;
     }
@@ -193,7 +196,7 @@ void CalShapeInt(Operation *copyin, std::vector<OpImmediate> &shape, std::vector
     for (auto s : shape) {
         SymbolicScalar &value = s.GetSpecifiedValue();
         if (value.Raw()->Kind() != SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE) {
-            ALOG_WARN_F("%d COPYIN Shape is dynamic, CalShapeInt not support!", copyin->GetOpMagic());
+            APASS_LOG_WARN_F(Elements::Operation, "%d COPYIN Shape is dynamic, CalShapeInt not support!", copyin->GetOpMagic());
             continueFlag = true;
             return;
         }
@@ -206,7 +209,7 @@ void CalOffsetInt(Operation *copyin, std::vector<OpImmediate> &offset, std::vect
     for (auto o : offset) {
         SymbolicScalar &value = o.GetSpecifiedValue();
         if (value.Raw()->Kind() != SymbolicScalarKind::T_SCALAR_SYMBOLIC_IMMEDIATE) {
-            ALOG_WARN_F("%d COPYIN Offset is dynamic, CalOffsetInt not support!", copyin->GetOpMagic());
+            APASS_LOG_WARN_F(Elements::Operation, "%d COPYIN Offset is dynamic, CalOffsetInt not support!", copyin->GetOpMagic());
             continueFlag = true;
             return;
         }
@@ -231,7 +234,7 @@ Status CalRedundantCopy(Function &function, json &report) {
         for (auto &consumer : tensor->GetConsumers()) {
             if (consumer->GetOpcodeStr().find("COPY_IN") != std::string::npos) {
                 if (consumer->GetOpAttribute() == nullptr) {
-                    ALOG_ERROR_F("%d COPYIN op attr is nullptr, CalRedundantCopy failed!", consumer->GetOpMagic());
+                    APASS_LOG_ERROR_F(Elements::Operation, "%d COPYIN op attr is nullptr, CalRedundantCopy failed!", consumer->GetOpMagic());
                     return FAILED;
                 }
                 std::shared_ptr<CopyOpAttribute> attr = std::static_pointer_cast<CopyOpAttribute>(consumer->GetOpAttribute());
@@ -270,11 +273,11 @@ Status CalRedundantCopy(Function &function, json &report) {
 
 void WriteHealthReport(const json& report, const std::string &reportPath, const std::string& filename) {
     if (!CreateMultiLevelDir(reportPath)) {
-        ALOG_ERROR_F("Failed to create directory for health report");
+        APASS_LOG_ERROR_F(Elements::Operation, "Failed to create directory for health report");
     }
     std::ofstream out(reportPath + "/" + filename);
     if (!out.is_open()) {
-        ALOG_ERROR_F("Failed to open health report file for writing");
+        APASS_LOG_ERROR_F(Elements::Operation, "Failed to open health report file for writing");
         return;
     }
     out << report.dump(DUMP_WIDTH);
@@ -286,7 +289,7 @@ Status CheckTileShapeAIV(Operation *op, std::vector<int> &res) {
     for (auto input : op->GetIOperands()) {
         auto tensorShape = input->GetShape();
         if (tileSize.size() != tensorShape.size()) {
-            ALOG_WARN_F("%d Tensorshape size %d is not equal to %d %s tileshape size %d, CheckTileShapeAIV failed!",
+            APASS_LOG_WARN_F(Elements::Tensor, "%d Tensorshape size %zu is not equal to %d %s tileshape size %zu, CheckTileShapeAIV failed!",
                 input->GetMagic(), tensorShape.size(), op->GetOpMagic(), op->GetOpcodeStr().c_str(), tileSize.size());
             return FAILED;
         }
@@ -314,13 +317,13 @@ Status CheckTileShapeAIC(Operation *op, std::vector<int> &res)  {
     auto kL0 = tileSize.k[0];
     auto nL0 = tileSize.n[0];
     if (op->GetIOperands().size() != CUDE_IOPERAND_NUM2 && op->GetIOperands().size() != CUDE_IOPERAND_NUM3) {
-        ALOG_WARN_F("Cube operation %d %s ioperands size is %d, should be 2 or 3, CheckTileShapeAIC failed!", op->GetOpMagic(), op->GetOpcodeStr().c_str(), op->GetIOperands().size());
+        APASS_LOG_WARN_F(Elements::Operation, "Cube operation %d %s ioperands size is %zu, should be 2 or 3, CheckTileShapeAIC failed!", op->GetOpMagic(), op->GetOpcodeStr().c_str(), op->GetIOperands().size());
         return FAILED;
     }
     auto TensorA = op->GetIOperands()[0];
     auto TensorB = op->GetIOperands()[1];
     if (TensorA->GetShape().size() != NUM2 || TensorB->GetShape().size() != NUM2) {
-        ALOG_WARN_F("Cube operation %d %s input tensor shape size is not 2, CheckTileShapeAIC failed!", op->GetOpMagic(), op->GetOpcodeStr().c_str());
+        APASS_LOG_WARN_F(Elements::Operation, "Cube operation %d %s input tensor shape size is not 2, CheckTileShapeAIC failed!", op->GetOpMagic(), op->GetOpcodeStr().c_str());
         return FAILED;
     }
     bool L1A = false;
@@ -354,12 +357,12 @@ void FindShapeNotdevisibleOp(Function &function, json &report) {
         auto opcfg = OpcodeManager::Inst().GetTileOpCfg(op->GetOpcode());
         if (opcfg.coreType_ == CoreType::AIV) {
             if (CheckTileShapeAIV(op, res) != SUCCESS) {
-                ALOG_WARN_F("FindShapeNotdevisibleOp faild at function CheckTileShapeAIV!");
+                APASS_LOG_WARN_F(Elements::Operation, "FindShapeNotdevisibleOp faild at function CheckTileShapeAIV!");
                 return;
             }
         } else if (opcfg.coreType_ == CoreType::AIC) {
             if (CheckTileShapeAIC(op, res) != SUCCESS) {
-                ALOG_WARN_F("FindShapeNotdevisibleOp faild at function CheckTileShapeAIC!");
+                APASS_LOG_WARN_F(Elements::Operation, "FindShapeNotdevisibleOp faild at function CheckTileShapeAIC!");
                 return;
             }
         }
@@ -419,7 +422,7 @@ void HealthCheckTileGraph(Function &function, const std::string &reportPath, con
 
     // 5. 冗余搬运统计
     if (CalRedundantCopy(function, tileGraphReport) != SUCCESS) {
-        ALOG_ERROR_F("HealthCheckTileGraph failed at function CalRedundantCopy!");
+        APASS_LOG_ERROR_F(Elements::Function, "HealthCheckTileGraph failed at function CalRedundantCopy!");
     }
 
     // 6. 写出健康报告

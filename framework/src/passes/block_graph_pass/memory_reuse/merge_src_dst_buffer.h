@@ -19,6 +19,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_interface/pass.h"
 #include "interface/utils/log.h"
+
 namespace npu::tile_fwk {
 class SrcDstBufferMergeImpl {
 public:
@@ -60,13 +61,10 @@ public:
 
 private:
     Status RunOnFunction(Function &function) override {
-        ALOG_INFO_F("===> Start SrcDstBufferMerge.");
         SrcDstBufferMergeImpl merge;
         if (merge.Run(function) != SUCCESS) {
-			ALOG_INFO_F("===> Stop SrcDstBufferMerge.");
 			return SUCCESS;
 		}
-        ALOG_INFO_F("===> Finish SrcDstBufferMerge.");
         return SUCCESS;
     }
 };

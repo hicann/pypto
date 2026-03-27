@@ -58,11 +58,13 @@ bool EqualInOut(const Operation &op) {
 
 bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation &op) const {
     if (!EqualInOut(op)) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.opmagic);
+        APASS_LOG_DEBUG_F(Elements::Operation,
+            "op[%d]'s input and output has unequal shape and dynshape, skip removing.", op.opmagic);
         return false;
     }
     if (op.HasAttr("op_attr_remain_redundant_op_flag")) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d] has attribute op_attr_remain_redundant_op_flag, skip removing.", op.opmagic);
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "op[%d] has attribute op_attr_remain_redundant_op_flag, skip removing.", op.opmagic);
         return false;
     }
     return true;
@@ -70,13 +72,15 @@ bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation &op) const {
 
 bool RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation &op) const {
     if (!EqualInOutShape(op)) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s input and output has unequal shape, skip removing.", op.opmagic);
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "op[%d]'s input and output has unequal shape, skip removing.", op.opmagic);
         return false;
     }
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
         auto assembleOut = op.GetOOperands().front();
         if (assembleOut->GetProducers().size() > 1) {
-            APASS_LOG_DEBUG_F(Elements::Operation, "assembleOut[%d] has more than one producer, skip removing.", assembleOut->GetMagic());
+            APASS_LOG_DEBUG_F(Elements::Operation, "assembleOut[%d] has more than one producer, skip removing.",
+                assembleOut->GetMagic());
             return false;
         }
     }
@@ -84,7 +88,7 @@ bool RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation &op) const {
 }
 
 Status RemoveRedundantOp::RemoveDummyOp(Function &function) {
-    for (auto &op: function.Operations()) {
+    for (auto &op : function.Operations()) {
         bool canRemove = false;
         if (matchOpcodeWithDynshape.find(op.GetOpcode()) != matchOpcodeWithDynshape.end()) {
             canRemove = ProcessRedundantOpWithDynShape(op);
@@ -152,17 +156,17 @@ Status RemoveRedundantOp::RemoveDummyOps(Function &function) {
 Status RemoveRedundantOp::ProcessViewAssemble(Function &function) {
     for (auto &op : function.Operations()) {
         auto opcode = op.GetOpcode();
-        if(opcode != Opcode::OP_VIEW) {
-            //跳过非view的op
+        if (opcode != Opcode::OP_VIEW) {
+            // 跳过非view的op
             continue;
         }
         auto &startTensor = op.iOperand.front();
         auto inputMemtype = startTensor->GetMemoryTypeOriginal();
         auto consumers = op.oOperand.front()->GetConsumers();
-        //获取view级联的assemble消费者
+        // 获取view级联的assemble消费者
         for (const auto &consumer : consumers) {
             if (consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
-                //跳过不是assemble的消费者
+                // 跳过不是assemble的消费者
                 continue;
             }
             auto &endTensor = consumer->oOperand.front();
@@ -171,30 +175,34 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function &function) {
             }
             auto outputMemtype = endTensor->GetMemoryTypeOriginal();
             if (inputMemtype != outputMemtype) {
-                //跳过view输入和 assemble输出 mem类型不同的场景
+                // 跳过view输入和 assemble输出 mem类型不同的场景
                 continue;
             }
-            if (startTensor->shape == endTensor->shape && startTensor->offset == endTensor->offset ) {
-                //case1：view输入和assemble输出tensor shape和offset完全匹配
-                //      startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape = inshape)
-                //                           ---> view2  ---> tempTensor2  --->  assemble2 
-                APASS_LOG_DEBUG_F(Elements::Operation, 
-                    "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.", op.opmagic, consumer->GetOpMagic());
+            if (startTensor->shape == endTensor->shape && startTensor->offset == endTensor->offset) {
+                // case1：view输入和assemble输出tensor shape和offset完全匹配
+                //       startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape =
+                //       inshape)
+                //                            ---> view2  ---> tempTensor2  --->  assemble2
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                    "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.", op.opmagic,
+                    consumer->GetOpMagic());
                 ProcessPerfectMatch(function, startTensor, endTensor);
             } else {
-                //对于输入输出存在动轴的场景无法做级联的冗余删除
+                // 对于输入输出存在动轴的场景无法做级联的冗余删除
                 if ((function.IsFromInCast(startTensor) && CommonUtils::ContainsNegativeOne(startTensor->GetShape())) ||
                     (function.IsFromOutCast(endTensor) && CommonUtils::ContainsNegativeOne(endTensor->GetShape()))) {
-                        continue;
-                    }
-                //case2：assemble的输出tensor是view输入tensor的一部分
-                //       startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape < inshape)
-                //                            ---> view2  ---> tempTensor2  --->  assemble2 
-                APASS_LOG_DEBUG_F(Elements::Operation, 
-                    "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.", op.opmagic, consumer->GetOpMagic());
-                GenerateNewView(function, op, startTensor, endTensor);  
-            }   
-        }    
+                    continue;
+                }
+                // case2：assemble的输出tensor是view输入tensor的一部分
+                //        startTensor(inshape) ---> view1  ---> tempTensor1  --->  assemble1  ---> endTensor(outshape <
+                //        inshape)
+                //                             ---> view2  ---> tempTensor2  --->  assemble2
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                    "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.", op.opmagic,
+                    consumer->GetOpMagic());
+                GenerateNewView(function, op, startTensor, endTensor);
+            }
+        }
     }
     DeadOperationEliminator::EliminateDeadOperation(function);
     return SUCCESS;
@@ -226,13 +234,14 @@ void RemoveRedundantOp::RemoveViewAssembleForOutcast(Function &function, Logical
     }
 }
 
-//处理view输入和assemble输出完美匹配场景
-void RemoveRedundantOp::ProcessPerfectMatch(Function &function, LogicalTensorPtr &startTensor,LogicalTensorPtr &endTensor) {
+// 处理view输入和assemble输出完美匹配场景
+void RemoveRedundantOp::ProcessPerfectMatch(
+    Function &function, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) {
     if (!IsValidViewAssemble(startTensor, endTensor)) {
         APASS_LOG_DEBUG_F(Elements::Tensor, "Not valid view-assemble case.");    
         return; 
     }
-    //图重连逻辑
+    // 图重连逻辑
     if (endTensor->GetConsumers().size() == 0) {
         RemoveViewAssembleForOutcast(function, startTensor, endTensor);
     } else {
@@ -246,10 +255,10 @@ void RemoveRedundantOp::ProcessPerfectMatch(Function &function, LogicalTensorPtr
     }
 }
 
-//判断view输入是否非同源
+// 判断view输入是否非同源
 bool RemoveRedundantOp::IsNotSameViewInput(LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const {
     for (auto &assembleOp : endTensor->GetProducers()) {
-        if (assembleOp->GetIOperands().empty()) { 
+        if (assembleOp->GetIOperands().empty()) {
             continue;
         }
         auto &tempTensor = assembleOp->GetIOperands().front();
@@ -257,23 +266,23 @@ bool RemoveRedundantOp::IsNotSameViewInput(LogicalTensorPtr &startTensor, Logica
         if (producers.empty()) {
             return true;
         } else {
-            auto &producerOps = tempTensor->GetProducers(); 
+            auto &producerOps = tempTensor->GetProducers();
             for (auto &producerOp : producerOps) {
                 if (producerOp->GetIOperands().empty()) {
                     continue;
                 }
                 auto &inTensor = producerOp->GetIOperands().front();
-                if (inTensor != startTensor) { 
+                if (inTensor != startTensor) {
                     return true;
                 }
                 if (producerOp->GetOpcode() != Opcode::OP_VIEW) {continue;}
-            }    
-        } 
+            }
+        }
     }
     return false;
 }
 
-//判断assemble数据是否是重排场景
+// 判断assemble数据是否是重排场景
 bool RemoveRedundantOp::IsDataReplace(LogicalTensorPtr &endTensor) const {
     for (auto &assembleOp : endTensor->GetProducers()) {
         if (assembleOp->GetIOperands().empty()) {
@@ -284,7 +293,7 @@ bool RemoveRedundantOp::IsDataReplace(LogicalTensorPtr &endTensor) const {
         if (producers.empty()) {
             return true;
         } else {
-            auto &viewOps = tempTensor->GetProducers(); 
+            auto &viewOps = tempTensor->GetProducers();
             for (auto &viewOp : viewOps) {
                 if (viewOp->GetIOperands().empty()) {
                     continue;
@@ -296,7 +305,7 @@ bool RemoveRedundantOp::IsDataReplace(LogicalTensorPtr &endTensor) const {
                 auto viewOffset = viewOpAttribute->GetFrom();
                 auto assembleOpAttribute = dynamic_cast<AssembleOpAttribute *>(assembleOp->GetOpAttribute().get());
                 auto assembleOffset = assembleOpAttribute->GetToOffset();
-                if (viewOffset != assembleOffset) { //跳过assemble数据重排场景
+                if (viewOffset != assembleOffset) { // 跳过assemble数据重排场景
                     return true;
                 }
             }
@@ -306,15 +315,16 @@ bool RemoveRedundantOp::IsDataReplace(LogicalTensorPtr &endTensor) const {
 }
 
 bool RemoveRedundantOp::IsValidViewAssemble(LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) const {
-    //step1：排除view输入非同源场景
-    bool isNotSameViewInput = IsNotSameViewInput(startTensor,endTensor); //true表示view的输入非同源
+    // step1：排除view输入非同源场景
+    bool isNotSameViewInput = IsNotSameViewInput(startTensor, endTensor); // true表示view的输入非同源
     if (isNotSameViewInput) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, 
-            "OP_ASSEMBLE'S output endTensor[%d] has different input except startTesnor[%d].", startTensor->magic, endTensor->magic);    
-        return false; 
+        APASS_LOG_DEBUG_F(Elements::Tensor,
+            "OP_ASSEMBLE'S output endTensor[%d] has different input except startTesnor[%d].", startTensor->magic,
+            endTensor->magic);
+        return false;
     }
-    //step2:排除assemble数据重排场景
-    bool isDataRepalce = IsDataReplace(endTensor);  //true表示assemble后数据重排布
+    // step2:排除assemble数据重排场景
+    bool isDataRepalce = IsDataReplace(endTensor); // true表示assemble后数据重排布
     if (isDataRepalce) {
         APASS_LOG_DEBUG_F(Elements::Tensor, 
             "OP_ASSEMBLE'S output endTensor[%d] is repalced comparing with startTesnor[%d].", startTensor->magic, endTensor->magic);
@@ -323,7 +333,8 @@ bool RemoveRedundantOp::IsValidViewAssemble(LogicalTensorPtr &startTensor, Logic
     return true;
 }
 
-void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor, std::vector<long> &newoffset, std::vector<SymbolicScalar> &newDynoffset) {
+void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor,
+    std::vector<long> &newoffset, std::vector<SymbolicScalar> &newDynoffset) {
     for (size_t m = 0; m < op.iOperand[0]->offset.size(); m++) {
         for (auto &comsumerView : startTensor->GetConsumers()) {
             auto opcode = comsumerView->GetOpcode();
@@ -331,23 +342,24 @@ void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &sta
                 continue;
             }
             auto &tempTensor = comsumerView->GetOOperands().front();
-            //检查view输出的消费者，寻找assemble操作
+            // 检查view输出的消费者，寻找assemble操作
             bool leadsToCurrentEndTesnor = false;
             for (auto &consumerAssemble : tempTensor->GetConsumers()) {
                 if (consumerAssemble->GetOpcode() != Opcode::OP_ASSEMBLE) {
                     continue;
                 }
-                //检查assemble的输出是否是当前的endTensor
-                if (!consumerAssemble->GetOOperands().empty() && consumerAssemble->GetOOperands().front() == endTensor) {
+                // 检查assemble的输出是否是当前的endTensor
+                if (!consumerAssemble->GetOOperands().empty() &&
+                    consumerAssemble->GetOOperands().front() == endTensor) {
                     leadsToCurrentEndTesnor = true;
                     break;
                 }
             }
-            //如果当前view不经过assemble连接到当前endTensor,跳过不处理
+            // 如果当前view不经过assemble连接到当前endTensor,跳过不处理
             if (!leadsToCurrentEndTesnor) {
                 continue;
             }
-            //只处理satrtTensor->view->tempTensor->assemble->endTensor
+            // 只处理satrtTensor->view->tempTensor->assemble->endTensor
             auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(comsumerView->GetOpAttribute().get());
             if (viewOpAttribute != nullptr) {
                 auto viewOffset = viewOpAttribute->GetFromOffset();
@@ -359,23 +371,25 @@ void RemoveRedundantOp::CalculateViewOffset(Operation &op, LogicalTensorPtr &sta
     }
 }
 
-void RemoveRedundantOp::GenerateNewView(Function &function, Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) {
-    //查找最小的offset
+void RemoveRedundantOp::GenerateNewView(
+    Function &function, Operation &op, LogicalTensorPtr &startTensor, LogicalTensorPtr &endTensor) {
+    // 查找最小的offset
     if (!IsValidViewAssemble(startTensor, endTensor)) {
-        APASS_LOG_DEBUG_F(Elements::Tensor, "Not valid view-assemble case.");    
-        return; 
+        APASS_LOG_DEBUG_F(Elements::Tensor, "Not valid view-assemble case.");
+        return;
     }
-    std::vector<long> newoffset(op.iOperand[0]->offset.size(),INT_MAX);
-    std::vector<SymbolicScalar> newDynoffset(op.iOperand[0]->offset.size(),INT_MAX);
+    std::vector<long> newoffset(op.iOperand[0]->offset.size(), INT_MAX);
+    std::vector<SymbolicScalar> newDynoffset(op.iOperand[0]->offset.size(), INT_MAX);
     CalculateViewOffset(op, startTensor, endTensor, newoffset, newDynoffset);
-    //新建一个logical tensor并更新图链接关系:清除endTensor的消费者，清除endTensor，将assemble的消费者连接到newView
+    // 新建一个logical tensor并更新图链接关系:清除endTensor的消费者，清除endTensor，将assemble的消费者连接到newView
     LogicalTensorPtr newViewTensor;
     if (endTensor->GetConsumers().empty()) {
         newViewTensor = endTensor;
         RemoveViewAssembleForOutcast(function, startTensor, endTensor);
     } else {
         std::vector<long> curOffset(endTensor->shape.size(), 0);
-        newViewTensor = std::make_shared<LogicalTensor>(function, endTensor->GetRawTensor(), curOffset, endTensor->shape);
+        newViewTensor =
+            std::make_shared<LogicalTensor>(function, endTensor->GetRawTensor(), curOffset, endTensor->shape);
         newViewTensor->SetMemoryTypeBoth(endTensor->GetMemoryTypeOriginal());
         for (auto &assembleConsumer : endTensor->GetConsumers()) {
             assembleConsumer->iOperand = {newViewTensor};
@@ -384,11 +398,11 @@ void RemoveRedundantOp::GenerateNewView(Function &function, Operation &op, Logic
         endTensor->GetConsumers().clear();
         function.GetTensorMap().Erase(endTensor);
     }
-    //新建一个view op
+    // 新建一个view op
     auto &newViewOp = function.AddOperation(Opcode::OP_VIEW, {startTensor}, {newViewTensor});
-    //获取view上的dynoffset属性
-    std::shared_ptr<ViewOpAttribute> viewAttribute = std::make_shared<ViewOpAttribute>(
-            newoffset, newDynoffset, newViewTensor->GetDynValidShape());
+    // 获取view上的dynoffset属性
+    std::shared_ptr<ViewOpAttribute> viewAttribute =
+        std::make_shared<ViewOpAttribute>(newoffset, newDynoffset, newViewTensor->GetDynValidShape());
     viewAttribute->SetToType(endTensor->GetMemoryTypeToBe());
     newViewOp.SetOpAttribute(viewAttribute);
     operationUpdated = true;
@@ -399,13 +413,14 @@ Status RemoveRedundantOp::ProcessReshape(Function &function) {
     for (auto &op : function.Operations()) {
         auto opcode = op.GetOpcode();
         if (opcode != Opcode::OP_RESHAPE) {
-            //跳过非reshape的op
+            // 跳过非reshape的op
             continue;
         }
         auto in = op.GetIOperands().front();
         auto out = op.GetOOperands().front();
         canRemove = false;
-        if (in->shape == out->shape && !CommonUtils::ContainsNegativeOne(in->GetShape()) && !CommonUtils::ContainsNegativeOne(out->GetShape())) {
+        if (in->shape == out->shape && !CommonUtils::ContainsNegativeOne(in->GetShape()) &&
+            !CommonUtils::ContainsNegativeOne(out->GetShape())) {
             APASS_LOG_DEBUG_F(Elements::Operation, "op[%d]'s in->shape == out->shape.", op.GetOpMagic());
             canRemove = true;
         } else if (!op.ConsumerOps().empty()) {
