@@ -22,11 +22,15 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
 #include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_log/pass_log.h"
 #include <vector>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+
+#undef MODULE_NAME
+#define MODULE_NAME "AddAlloc"
 
 namespace npu::tile_fwk {
 struct TensorAllocMsg {
@@ -43,11 +47,11 @@ public:
 
 private:
     Status RunOnFunction(Function &function) override {
-        ALOG_INFO_F("===> Start AddAlloc.");
+        APASS_LOG_INFO_F(Elements::Function, "===> Start AddAlloc.");
         for (auto &program : function.rootFunc_->programs_) {
-            if (AddAndCheckAlloc(*program.second) != SUCCESS) { ALOG_ERROR_F("AddAndCheckAlloc failed."); return FAILED; }
+            if (AddAndCheckAlloc(*program.second) != SUCCESS) { APASS_LOG_ERROR_F(Elements::Function, "AddAndCheckAlloc failed."); return FAILED; }
         }
-        ALOG_INFO_F("===> End AddAlloc.");
+        APASS_LOG_INFO_F(Elements::Function, "===> End AddAlloc.");
         return SUCCESS;
     }
     // 按color去判断是否需要插入alloc

@@ -126,7 +126,8 @@ Status SplitK::EliminateReduceAcc(Function &function) {
             }
             // delete the Reduce_Acc
             op.SetAsDeleted();
-            APASS_LOG_DEBUG_F(Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
+            APASS_LOG_DEBUG_F(
+                Elements::Operation, "%s[%d] will be deleted.", op.GetOpcodeStr().c_str(), op.GetOpMagic());
         }
     }
     function.EraseOperations(true);

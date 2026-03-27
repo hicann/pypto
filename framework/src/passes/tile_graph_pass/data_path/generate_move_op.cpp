@@ -32,14 +32,16 @@ constexpr int64_t OUTER_PAD_VALUE = 16;
 const Offset ZERO_OFFSET = {0, 0};
 
 int64_t GenerateMoveOp::PadUB(int64_t dim, int64_t padValue) {
-    ASSERT (padValue >0);
+    ASSERT(padValue > 0);
     return (dim + padValue - 1) / padValue * padValue;
 }
 
 Status GenerateMoveOp::RunOnFunction(Function &function) {
     APASS_LOG_INFO_F(Elements::Operation, "===> Start GenerateMoveOp");
     Status status = CreateMoveOp(function);
-    if(status != SUCCESS) {return status;}
+    if (status != SUCCESS) {
+        return status;
+    }
     APASS_LOG_INFO_F(Elements::Operation, "===> End GenerateMoveOp");
     return SUCCESS;
 }
@@ -59,8 +61,7 @@ bool GenerateMoveOp::HasSpecificConsumer(const Operation &op) const {
     auto consumersCopy = viewResult->GetConsumers();
 
     for (auto childOp : consumersCopy) {
-        if (childOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST ||
-            childOp->GetOpcode() == Opcode::OP_RESHAPE) {
+        if (childOp->GetOpcode() == Opcode::OP_INDEX_OUTCAST || childOp->GetOpcode() == Opcode::OP_RESHAPE) {
             return true;
         }
     }
@@ -72,16 +73,16 @@ Status GenerateMoveOp::A23CreateMoveOpForView(Function &function, Operation &op)
     bool isGmInput = op.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
     bool isGmOutput = op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
     if (isGmInput) {
-        //case1: VIEW转copyIn
+        // case1: VIEW转copyIn
         return ProcessGmInput(isGmOutput, op, viewOpAttribute);
     } else if (op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0A) {
-        //case2: VIEW转L0A/L0AT
+        // case2: VIEW转L0A/L0AT
         return ProcessL0A(op, viewOpAttribute);
     } else if (op.oOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0B) {
-        //case3: VIEW转L0B/L0BT
-       return ProcessL0B(op, viewOpAttribute);
+        // case3: VIEW转L0B/L0BT
+        return ProcessL0B(op, viewOpAttribute);
     } else {
-        //case4: VIEW转其他搬运op
+        // case4: VIEW转其他搬运op
         return ProcessDefault(function, op, viewOpAttribute);
     }
     return SUCCESS;
@@ -100,13 +101,13 @@ Status GenerateMoveOp::ProcessGmInput(bool &isGmOutput, Operation &op, ViewOpAtt
 
 Status GenerateMoveOp::ProcessL0A(Operation &op, ViewOpAttribute *viewOpAttribute) const {
     auto isTrans = (op.HasAttr("op_attr_l1_to_l0_transpose")) ? op.GetBoolAttribute("op_attr_l1_to_l0_transpose") : 0;
-    if(isTrans) {
+    if (isTrans) {
         op.SetOpCode(Opcode::OP_L1_TO_L0_AT);
     } else {
         op.SetOpCode(Opcode::OP_L1_TO_L0A);
     }
     op.SetCoreType(CoreType::AIC);
-    SetCopyAttr(op,viewOpAttribute);
+    SetCopyAttr(op, viewOpAttribute);
     return SUCCESS;
 }
 
@@ -118,7 +119,7 @@ Status GenerateMoveOp::ProcessL0B(Operation &op, ViewOpAttribute *viewOpAttribut
         op.SetOpCode(Opcode::OP_L1_TO_L0B);
     }
     op.SetCoreType(CoreType::AIC);
-    SetCopyAttr(op,viewOpAttribute);
+    SetCopyAttr(op, viewOpAttribute);
     return SUCCESS;
 }
 
@@ -154,17 +155,20 @@ Status GenerateMoveOp::ProcessDefault(Function &function, Operation &op, ViewOpA
     if (from == to) {
         return SUCCESS;
     }
-    Status status = SetOpcodeByMemPath(op,from,to);
-    if(status != SUCCESS) {return status;}
-    if(op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
+    Status status = SetOpcodeByMemPath(op, from, to);
+    if (status != SUCCESS) {
+        return status;
+    }
+    if (op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
         ProcessUB2L1(function, op);
     }
-    if(op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
-        SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
+    if (op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
+        SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(),
+            OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()), OpImmediate::Specified(ZERO_OFFSET));
     } else if (op.GetOpcode() == Opcode::OP_L0C_COPY_UB) {
         op.SetAttribute(OpAttributeKey::isCube, true);
     } else {
-        SetCopyAttr(op,viewOpAttribute);
+        SetCopyAttr(op, viewOpAttribute);
     }
     return SUCCESS;
 }
@@ -194,13 +198,11 @@ Status GenerateMoveOp::A5CreateMoveOpForView(Function &function, Operation &op) 
     return SUCCESS;
 }
 
-void GenerateMoveOp::SetCopyAttr(Operation &op,ViewOpAttribute *viewOpAttribute) const {
-    auto copyAttr = std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
+void GenerateMoveOp::SetCopyAttr(Operation &op, ViewOpAttribute *viewOpAttribute) const {
+    auto copyAttr = std::make_shared<CopyOpAttribute>(OpImmediate::Specified(viewOpAttribute->GetFromTensorOffset()),
         viewOpAttribute->GetTo(), OpImmediate::Specified(op.oOperand.front()->shape),
         OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
-        OpImmediate::Specified(viewOpAttribute->GetToDynValidShape())
-    );
+        OpImmediate::Specified(viewOpAttribute->GetToDynValidShape()));
     op.GetOOperands()[0]->UpdateDynValidShape(viewOpAttribute->GetToDynValidShape());
     op.SetOpAttribute(copyAttr);
 }
@@ -212,25 +214,19 @@ void GenerateMoveOp::SetL0C2L1CopyAttr(Operation &op, const Shape &realShape,
         SymbolicScalar scal = SymbolicScalar(dim);
         validShape.push_back(scal);
     }
-    auto copyAttr = std::make_shared<CopyOpAttribute>(
-        fromOffset,
-        op.oOperand.front()->GetMemoryTypeOriginal(),
-        OpImmediate::Specified(realShape),
-        OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
-        OpImmediate::Specified(validShape)
-    );
+    auto copyAttr = std::make_shared<CopyOpAttribute>(fromOffset, op.oOperand.front()->GetMemoryTypeOriginal(),
+        OpImmediate::Specified(realShape), OpImmediate::Specified(op.iOperand.front()->tensor->GetDynRawShape()),
+        OpImmediate::Specified(validShape));
     copyAttr->SetToOffset(toOffset);
     op.SetOpAttribute(copyAttr);
 }
 
-Status GenerateMoveOp::SetOpcodeByMemPath(Operation &op,MemoryType from,MemoryType to) const {
-    std::pair<MemoryType,MemoryType> memPathPair = {from,to};
+Status GenerateMoveOp::SetOpcodeByMemPath(Operation &op, MemoryType from, MemoryType to) const {
+    std::pair<MemoryType, MemoryType> memPathPair = {from, to};
     auto it = platformPathMap.find(memPathPair);
     if (it == platformPathMap.end()) {
         APASS_LOG_ERROR_F(Elements::Operation, "No memory path found from %s to %s for operation %s[%d].",
-            BriefMemoryTypeToString(from).c_str(),
-            BriefMemoryTypeToString(to).c_str(),
-            op.GetOpcodeStr().c_str(),
+            BriefMemoryTypeToString(from).c_str(), BriefMemoryTypeToString(to).c_str(), op.GetOpcodeStr().c_str(),
             op.GetOpMagic());
         return FAILED;
     }
@@ -256,7 +252,8 @@ void GenerateMoveOp::CreateMoveOpForAssemble(Operation &op) const {
     }
     op.SetOpCode(Opcode::OP_COPY_OUT);
     if (assembleOpAttribute->GetFrom() != ASSEMBLE_in->GetMemoryTypeOriginal()) {
-        APASS_LOG_WARN_F(Elements::Operation, "Assemble op from Attr is different from iOperand, opmagic: %d, do force setting.", op.opmagic);
+        APASS_LOG_WARN_F(Elements::Operation,
+            "Assemble op from Attr is different from iOperand, opmagic: %d, do force setting.", op.opmagic);
     }
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(ASSEMBLE_in->GetMemoryTypeOriginal(),
         OpImmediate::Specified(assembleOpAttribute->GetToTensorOffset()),
@@ -268,45 +265,51 @@ void GenerateMoveOp::CreateMoveOpForAssemble(Operation &op) const {
 Status GenerateMoveOp::CreateMoveOpForConvert(Function &function, Operation &op) const {
     auto convertOpAttribute = dynamic_cast<ConvertOpAttribute *>(op.GetOpAttribute().get());
     auto [from, to] = convertOpAttribute->GetConvertPath();
-    Status status = SetOpcodeByMemPath(op, from, to);	 
+    Status status = SetOpcodeByMemPath(op, from, to);
     if (op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
         ProcessUB2L1(function, op);
     }
     if (op.GetOpcode() == Opcode::OP_L0C_TO_L1) {
         SetL0C2L1CopyAttr(op, op.GetOOperands()[0]->GetShape(), OpImmediate::Specified(ZERO_OFFSET), OpImmediate::Specified(ZERO_OFFSET));
     }
-    if(status != SUCCESS) {return status;}
+    if (status != SUCCESS) {
+        return status;
+    }
     auto childOp = *op.oOperand.front()->GetConsumers().begin();
     op.UpdateSubgraphID(childOp->GetSubgraphID());
     return SUCCESS;
 }
 
 void GenerateMoveOp::ProcessUB2L1(Function &function, Operation &op) const {
-    //插入UB2L1节点（NZ2NZ)，并设置UBcopyL1的NZ属性
+    // 插入UB2L1节点（NZ2NZ)，并设置UBcopyL1的NZ属性
     op.SetAttribute(OP_ATTR_PREFIX + "is_nz", 1);
     op.SetAttribute(OpAttributeKey::isCube, false);
     auto inputTensor = op.iOperand.front();
-    if(inputTensor->Format() == TileOpFormat::TILEOP_ND) {
-        //新建一块logcialtensor
+    if (inputTensor->Format() == TileOpFormat::TILEOP_ND) {
+        // 新建一块logcialtensor
         std::shared_ptr<LogicalTensor> ubNdTensor = inputTensor;
-        std::shared_ptr<RawTensor> newRawTensor = std::make_shared<RawTensor>(ubNdTensor->Datatype(), ubNdTensor->GetShape(), TileOpFormat::TILEOP_NZ);
-        std::vector<int64_t> newoffset(inputTensor->GetShape().size(),0);
-        std::shared_ptr<LogicalTensor> ubNzTensor = std::make_shared<LogicalTensor>(function, newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape());
-        //ND转NZ时shape对齐
+        std::shared_ptr<RawTensor> newRawTensor =
+            std::make_shared<RawTensor>(ubNdTensor->Datatype(), ubNdTensor->GetShape(), TileOpFormat::TILEOP_NZ);
+        std::vector<int64_t> newoffset(inputTensor->GetShape().size(), 0);
+        std::shared_ptr<LogicalTensor> ubNzTensor = std::make_shared<LogicalTensor>(
+            function, newRawTensor, newoffset, inputTensor->shape, inputTensor->GetDynValidShape());
+        // ND转NZ时shape对齐
         auto innerIndex = ubNzTensor->shape.size() - 2; // matmul高轴
-        auto outerIndex = ubNzTensor->shape.size() - 1;  // matmul低轴
-        ubNzTensor->shape[innerIndex] = GenerateMoveOp::PadUB(ubNzTensor->shape[innerIndex], INNER_PAD_VALUE/BytesOf(ubNdTensor->Datatype()));
+        auto outerIndex = ubNzTensor->shape.size() - 1; // matmul低轴
+        ubNzTensor->shape[innerIndex] =
+            GenerateMoveOp::PadUB(ubNzTensor->shape[innerIndex], INNER_PAD_VALUE / BytesOf(ubNdTensor->Datatype()));
         ubNzTensor->shape[outerIndex] = GenerateMoveOp::PadUB(ubNzTensor->shape[outerIndex], OUTER_PAD_VALUE);
         std::vector<int64_t> rawshape_new = ubNdTensor->tensor->rawshape;
-        rawshape_new[innerIndex] = GenerateMoveOp::PadUB(ubNzTensor->tensor->rawshape[innerIndex], INNER_PAD_VALUE/BytesOf(ubNdTensor->Datatype()));
+        rawshape_new[innerIndex] = GenerateMoveOp::PadUB(
+            ubNzTensor->tensor->rawshape[innerIndex], INNER_PAD_VALUE / BytesOf(ubNdTensor->Datatype()));
         rawshape_new[outerIndex] = GenerateMoveOp::PadUB(ubNzTensor->tensor->rawshape[outerIndex], OUTER_PAD_VALUE);
         ubNzTensor->tensor->UpdateRawShape(rawshape_new);
         ubNzTensor->SetMemoryTypeBoth(MemoryType::MEM_UB);
-        //插入UB2UB节点（ND2NZ)
+        // 插入UB2UB节点（ND2NZ)
         auto &ub2ub = function.AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {inputTensor}, {ubNzTensor});
         ub2ub.UpdateSubgraphID(op.GetSubgraphID());
 
-        //图重连
+        // 图重连
         op.iOperand = {ubNzTensor};
         inputTensor->RemoveConsumer(op);
         ubNzTensor->AddConsumer(op);
@@ -333,11 +336,13 @@ Status GenerateMoveOp::CreateMoveOp(Function &function) const {
             }
             case Opcode::OP_CONVERT: {
                 Status createMoveOpForConvert = CreateMoveOpForConvert(function, op);
-                if(createMoveOpForConvert != SUCCESS) {return createMoveOpForConvert;}
+                if (createMoveOpForConvert != SUCCESS) {
+                    return createMoveOpForConvert;
+                }
                 break;
             }
             case Opcode::OP_DUPLICATE: {
-                op.SetOpCode(Opcode::OP_COPY_OUT); //将duplicate转化为copyout
+                op.SetOpCode(Opcode::OP_COPY_OUT); // 将duplicate转化为copyout
                 std::vector<OpImmediate> newOffset;
                 for (size_t i = 0; i < op.iOperand.front()->shape.size(); i++) {
                     newOffset.push_back(OpImmediate::Specified(SymbolicScalar(0)));

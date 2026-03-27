@@ -63,7 +63,7 @@ Status OoOSchedulerCheck::HealthCheckOoOSchedule() {
     // Pipe Usage Rate
     Json pipeUsageRate;
     if (clock == 0) {
-        ALOG_ERROR_F("Clock is 0, HealthCheckOoOSchedule failed!");
+        APASS_LOG_ERROR_F(Elements::Function, "Clock is 0, HealthCheckOoOSchedule failed!");
         return FAILED;
     }
     pipeUsageRate["PIPE_S_Usage_Rate"] = FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_S)) / clock * percent);
@@ -149,7 +149,7 @@ void OoOSchedulerCheck::HealthCheckBlockGraph(Function *function) {
 
 Status OoOSchedulerCheck::DoHealthCheck(Function *function, const std::string &fileName) {
     if (HealthCheckOoOSchedule() != SUCCESS) {
-        ALOG_ERROR_F("DoHealthCheck failed at HealthCheckOoOSchedule!");
+        APASS_LOG_ERROR_F(Elements::Function, "DoHealthCheck failed at HealthCheckOoOSchedule!");
         return FAILED;
     }
     HealthCheckBlockGraph(function);
