@@ -34,6 +34,7 @@ loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymInt, int]]
 -   展开因子列表会被排序并去重，且总是包含 1
 -   展开因子按从大到小排序
 -   每个展开因子会生成一个子循环
+-   多层循环使用了loop_unroll并且配置unroll_list，会大大增加编译出的图数量，影响编译性能
 
 ## 调用示例
 

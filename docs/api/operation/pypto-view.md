@@ -26,12 +26,13 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
 | input       | 输入      | 源操作数。<br> 支持的数据类型为：PyPto支持的数据类型<br> 不支持空Tensor；Shape Size不大于2147483647（即INT32_MAX）。 |
 | shape       | 输入      | 获取出视图的大小。<br> Shape Size不大于2147483647（即INT32_MAX） |
 | offsets     | 输入      | 获取视图时每个维度相对于input的偏移。<br> 需要保证offsets小于input的Shape |
-| valid_shape | 输入      | 取出示意图块的有效数据大小。<br> 需要保证valid_shape小于input的Shape |
+| valid_shape | 输入      | 取出示意图块的有效数据大小。<br> 需要保证valid_shape小于input的Shape；在类似page_attention场景下，当输入的kv_cache等张量包含无效数据时，无法正确推导输出的validshape，需要手动传入； |
 | dtype       | 输入      | 返回值的数据类型，允许将输入数据解读为不同数据类型 |
 
 ## 返回值说明
 
 返回输出Tensor，Tensor的数据类型和input相同，Shape为参数shape指定大小，若指定了valid\_shape，则真实大小为valid\_shape。若指定dtype，则会将输入按照dtype进行读取。
+
 
 ## 调用示例
 
@@ -90,13 +91,13 @@ view(input: Tensor, shape: List[int] = None, offsets: List[Union[int, SymbolicSc
     结果如下：
 
     ```python
-    输入数据x: 
+    输入数据x:
     [[0.9405094  0.20237109],
      [0.99819463 0.13246714]]
-    
-    输出数据y: 
+
+    输出数据y:
     [[  57  -59  112   63   94   58   79   62],
      [ -81 -119  127   63  119  -91    7   62]]
-    
+
     ```
 
