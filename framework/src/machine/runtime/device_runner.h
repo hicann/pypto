@@ -85,7 +85,7 @@ public:
     bool GetEnableDumpDevPref() const;
     void StartMachinePerfTraceDumpThread();
     void StopMachinePerfTraceDumpThread();
-
+    int RunPreSync(rtStream_t scheStream, rtStream_t ctrlStream, rtStream_t aicoreStream);
 private:
     DeviceRunner() = default;
     ~DeviceRunner();
@@ -101,7 +101,6 @@ private:
     int launchDynamicAiCore(rtStream_t aicoreStream, DeviceKernelArgs *kernelArgs);
     int launchDynamicAiCpu(rtStream_t aicpuStream, DeviceKernelArgs *kArgs);
     int RunPrepare();
-    int RunPreSync(rtStream_t aicpuStream, rtStream_t aicoreStream);
     int RunPost(rtStream_t aicpuStream, rtStream_t aicoreStream);
     int launchDynamicAiCpuInit(rtStream_t aicpuStream, DeviceKernelArgs *kArgs);
     int InitAicpuServer();
@@ -122,6 +121,7 @@ private:
     rtBinHandle binHdl_;
     FileLock lock_;
     HostProf hostProf_;
+    aclrtEvent event_;
     std::unordered_map<ArchInfo, std::function<int(std::vector<int64_t>&, std::vector<int64_t>&)>> addressMappingTable_;
     bool isCapture_{false};
     bool initFlag_{false};

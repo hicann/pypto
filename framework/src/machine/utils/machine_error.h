@@ -95,6 +95,7 @@ enum class SchedErr : uint32_t {
     READY_QUEUE_OVERFLOW     = ToUnderlying(MachineError::SCHEDULE) + 0x03U, // 就绪队列溢出
     CORE_TASK_EXEC_FAILED    = ToUnderlying(MachineError::SCHEDULE) + 0x04U, // core 任务执行返回错误
     CORE_TASK_PROCESS_FAILED = ToUnderlying(MachineError::SCHEDULE) + 0x05U, // core 任务处理失败
+    RINGBUFFER_WAIT_TIMEOUT    = ToUnderlying(MachineError::SCHEDULE) + 0x06U, // ring buf 等待超时
 };
 
 enum class CtrlErr : uint32_t {
@@ -105,6 +106,7 @@ enum class CtrlErr : uint32_t {
     TASK_STATS_ABNORMAL      = ToUnderlying(MachineError::CONTROL_FLOW) + 0x05U, // 任务统计异常
     CTRL_INIT_FAILED         = ToUnderlying(MachineError::CONTROL_FLOW) + 0x06U, // 控制流初始化失败
     CTRL_SIM_FAILED          = ToUnderlying(MachineError::CONTROL_FLOW) + 0x07U, // 模拟控制流失败
+    CTRL_ALLOC_TIMEOUT       = ToUnderlying(MachineError::CONTROL_FLOW) + 0x08U, // 控制流分配资源超时
 };
 
 enum class WsErr : uint32_t {

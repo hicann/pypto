@@ -71,6 +71,7 @@ public:
 
     int AllocNewTaskCtrl() {
         uint32_t &taskCtrlIndex = devStartArgs_->devCtrlState.taskCtrlIndex;
+        START_TIMEOUT_CHECK();
         while (true) {
             if (taskCtrlIndex == MAX_DEVICE_TASK_NUM)
                 taskCtrlIndex = 0;
@@ -78,6 +79,7 @@ public:
                 return taskCtrlIndex++;
             }
             taskCtrlIndex++;
+            CHECK_TIMEOUT_AND_RESET(TIMEOUT_ONE_MINUTE, CtrlErr::CTRL_ALLOC_TIMEOUT, "Alloc new task ctrl over 1 min.");
         }
     }
 

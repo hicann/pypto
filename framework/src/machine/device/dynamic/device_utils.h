@@ -66,6 +66,7 @@ constexpr uint64_t US_PER_SEC = 1000000;
 constexpr uint64_t NSEC_PER_USEC = 1000;
 constexpr uint64_t NSEC_PER_SEC = 1000000000;
 constexpr uint64_t HAND_SHAKE_TIMEOUT = 48000000000; // aicpu stream wait hccl finish
+constexpr uint64_t TIMEOUT_ONE_MINUTE = 3000000000;
 constexpr int32_t MAX_MNG_AICORE_AVG_NUM = 8;
 constexpr uint32_t CORE_IDX_AIV = 0;
 constexpr uint32_t CORE_IDX_AIC = 1;
@@ -270,5 +271,17 @@ struct TimeCheck {
 inline int CheckTimeOut(const std::string &operation, TimeCheck &timeCheck) {
     return CheckTimeOut(timeCheck.startTime, timeCheck.count, timeCheck.curTime, operation);
 }
+
+#define START_TIMEOUT_CHECK() \
+    uint64_t start = GetCycles()
+
+#define CHECK_TIMEOUT_AND_RESET(timeout, ...) \
+    do { \
+        if (GetCycles() - start > (timeout)) { \
+            DEV_ERROR(__VA_ARGS__); \
+            start = GetCycles(); \
+        } \
+    } while (0)
+
 }
 #endif

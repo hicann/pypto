@@ -391,6 +391,7 @@ struct DynMachineManager {
         threadIdx_ = 0;
         finished_ = 0;
         cpumask_ = 0;
+        exitNum_ = 0;
         ctrlcpuIdx_ = 0;
         die0ThreadIdx_ = 0;
         die1ThreadIdx_ = 0;
@@ -470,6 +471,7 @@ struct DynMachineManager {
         int rc = RunUnifiedStream(kargs, entry);
         if (rc == npu::tile_fwk::dynamic::DEVICE_MACHINE_FINISHED) {
             RunPost(devProg);
+            DeInit();
             return DEVICE_MACHINE_OK;
         }
         return rc;
@@ -526,10 +528,13 @@ struct DynMachineManager {
                 RunPost(devProg);
                 PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
                 PerfEvtMgr::Instance().AddScheduleTurn();
-                DEV_INFO("All schedule exited, destroy the machine.");
-                return DEVICE_MACHINE_OK;
+                ret = DEVICE_MACHINE_OK;
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
+        }
+        if (++exitNum_ == devArgs.nrAicpu) {
+            DeInit();
+            DEV_INFO("All sche cpu exited.");
         }
         return ret;
     }
@@ -556,6 +561,7 @@ struct DynMachineManager {
     std::atomic<int> threadIdx_{0};
     std::atomic<int> finished_{0};
     std::atomic<uint64_t> cpumask_{0};
+    std::atomic<uint32_t> exitNum_{0};
     std::atomic<int> ctrlcpuIdx_{0};
     std::atomic<int> die0ThreadIdx_{0};
     std::atomic<int> die1ThreadIdx_{0};
@@ -578,16 +584,18 @@ struct DynMachineManager {
         std::atomic<uint64_t> currentRound{0};
 
         void ScheWait(DevAscendProgram *devProg) {
+            START_TIMEOUT_CHECK();
             while (unlikely(!devProg->runtimeDataRingBufferInited)) {
                 /* In the first launch, sche must wait for ctrl's ring buffer's initialization.
                  * Otherwise, the ringBufferHead->Empty() is not legal. */
                 RuntimeYield(0);
+                CHECK_TIMEOUT_AND_RESET(TIMEOUT_ONE_MINUTE, SchedErr::RINGBUFFER_WAIT_TIMEOUT, "Sche wait ring buf init over 1 min.");
             }
-
             RuntimeDataRingBufferHead *ringBufferHead = devProg->GetRuntimeDataList();
             while (unlikely(ringBufferHead->Empty())) {
                 /* Sche must wait until the current devStarArgs has been initialized. */
                 RuntimeYield(0);
+                CHECK_TIMEOUT_AND_RESET(TIMEOUT_ONE_MINUTE, SchedErr::RINGBUFFER_WAIT_TIMEOUT, "Sche wait ring buf data over 1 min.");
             }
         }
 

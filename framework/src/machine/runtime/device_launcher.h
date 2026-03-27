@@ -447,6 +447,7 @@ public:
     static void GetCaptureInfo(aclrtStream aicoreStream, aclmdlRI &rtModel);
     static void AddAicpuStream(aclmdlRI &rtModel, bool tripleStream);
     static int LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream, [[maybe_unused]]bool debugEnable, [[maybe_unused]]Function *function);
+    static int LaunchSyncTask(aclrtStream aicoreStream, bool isCaptureMode);
     static int LaunchAicoreKernel(
         aclrtStream aicoreStream, void *kernel, rtArgsEx_t &rtArgs, rtTaskCfgInfo_t &rtTaskCfg, bool debugEnable);
     static int DeviceRunOnce(Function *function, DevControlFlowCache* hostCtrlCache = nullptr,

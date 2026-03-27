@@ -46,6 +46,7 @@ inline uint32_t CalcSchAicpuNumByBlockDim(uint32_t blockDim, uint32_t aiCpuNum, 
 }
 
 const int DEVICE_MAX_AICPU_NUM = 7;
+const uint16_t AICPU_EXECUTE_TIMEOUT = 1080; // 18min
 
 struct SchduleContext {
     uint64_t waitTaskCnt_[AICORE_TYPE_NUM]{0,0};
