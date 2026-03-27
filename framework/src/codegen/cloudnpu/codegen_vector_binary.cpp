@@ -20,7 +20,7 @@
 #include "codegen/utils/codegen_utils.h"
 
 namespace npu::tile_fwk {
-std::string GetBrcOprandIdxStr(int64_t brcbOperandIdx) {
+std::string GetBrcbOprandIdxStr(int64_t brcbOperandIdx) {
     CODEGEN_LOGI("input brcbOperandIdx is %ld", static_cast<long>(brcbOperandIdx));
     std::string ret = "TileOp::";
     switch (brcbOperandIdx) {
@@ -28,6 +28,18 @@ std::string GetBrcOprandIdxStr(int64_t brcbOperandIdx) {
         case ToUnderlying(BroadcastOperand::LEFT_OPERAND): ret.append("BroadcastOperand::LEFT_OPERAND"); break;
         case ToUnderlying(BroadcastOperand::RIGHT_OPERAND): ret.append("BroadcastOperand::RIGHT_OPERAND"); break;
         default: ret.append("BroadcastOperand::NONE");
+    }
+    return ret;
+}
+
+std::string GetPenuBrcOprandIdxStr(int64_t PenuBrcbOperandIdx) {
+    CODEGEN_LOGI("input PenuBrcbOperandIdx is %ld", static_cast<long>(PenuBrcbOperandIdx));
+    std::string ret = "TileOp::";
+    switch (PenuBrcbOperandIdx) {
+        case ToUnderlying(PenuBroadcastOperand::NONE): ret.append("PenuBroadcastOperand::NONE"); break;
+        case ToUnderlying(PenuBroadcastOperand::LEFT_OPERAND): ret.append("PenuBroadcastOperand::LEFT_OPERAND"); break;
+        case ToUnderlying(PenuBroadcastOperand::RIGHT_OPERAND): ret.append("PenuBroadcastOperand::RIGHT_OPERAND"); break;
+        default: ret.append("PenuBroadcastOperand::NONE");
     }
     return ret;
 }
@@ -71,7 +83,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryStatic(const PrintBinaryParam &param) 
     }
     int64_t brcOperandIdx = 0;
     if (GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
-        paramList.emplace_back(GetBrcOprandIdxStr(brcOperandIdx));
+        paramList.emplace_back(GetBrcbOprandIdxStr(brcOperandIdx));
     }
     std::string templateParam = JoinString(paramList, CONN_COMMA);
 
@@ -122,7 +134,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryDynamicUnaligned(const PrintBinaryPara
     }
     int64_t brcOperandIdx = 0;
     if (GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
-        paramList.emplace_back(GetBrcOprandIdxStr(brcOperandIdx));
+        paramList.emplace_back(GetBrcbOprandIdxStr(brcOperandIdx));
     }
     std::string templateParam = JoinString(paramList, CONN_COMMA);
 
@@ -152,12 +164,20 @@ std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const {
 
     std::vector<std::string> templateParamList;
     int64_t brcOperandIdx = 0;
+    int64_t penuBrcOperandIdx = 0;
     std::string lastUse = GetLastUse();
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }
-    if (GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
-        templateParamList.emplace_back(GetBrcOprandIdxStr(brcOperandIdx));
+    bool hasBrcb = GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx);
+    bool hasPenu = GetAttr(OpAttributeKey::brcpIdx, penuBrcOperandIdx);
+    // Must provide NONE for the last axis if only the 2nd last axis is specified
+    // To match TileOp template
+    if (hasBrcb || hasPenu) {
+        templateParamList.emplace_back(GetBrcbOprandIdxStr(brcOperandIdx));
+    }
+    if (hasPenu) {
+        templateParamList.emplace_back(GetPenuBrcOprandIdxStr(penuBrcOperandIdx));
     }
 
     std::ostringstream oss;

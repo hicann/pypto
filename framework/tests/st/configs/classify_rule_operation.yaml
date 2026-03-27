@@ -89,6 +89,7 @@ stest:
       - TestRange/RangeOperationTest.TestRange/1
       - TestAdd/AddOperationTest.TestAdd/10
       - TestAdd/AddOperationTest.TestAdd/11
+      - TestAdd/AddOperationTest.TestAdd/18
       - TestFmod/FmodOperationTest.TestFmod/0
       - TestFmod/FmodOperationTest.TestFmod/1
       - TestLReLU/LReLUOperationTest.TestLReLU/0

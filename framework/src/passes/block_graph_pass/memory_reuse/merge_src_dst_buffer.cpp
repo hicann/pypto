@@ -105,6 +105,10 @@ bool SrcDstBufferMergeImpl::CheckIgnoreScene(const Operation &oriOps) {
         return true;
     }
 
+    if (oriOps.HasAttr(OpAttributeKey::excludeBufferReuse)) {
+        return true;
+    }
+
     for (auto &output : oriOps.GetOOperands()) {
         if (output == nullptr) {
             return true;

@@ -710,4 +710,5 @@ inline bool IsOpCodeSupportMultiProducers(Opcode opCode) {
 extern std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS;
 extern std::unordered_set<Opcode> SUPPORT_VF_FUSE_OPS;
 extern std::unordered_set<Opcode> SKIP_OPCODE_FOR_CODEGEN;
+extern std::unordered_set<Opcode> SUPPORT_BRCINLINE;
 } // namespace npu::tile_fwk

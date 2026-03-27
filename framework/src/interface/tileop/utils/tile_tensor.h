@@ -86,6 +86,15 @@ private:
     LA layout_;
 };
 
+template <typename T>
+struct TensorTileInfo {
+    static constexpr auto tile0 = TileOp::GetTensorTileShapeDim<T, DIM_1ST, MAX_DIMS>();
+    static constexpr auto tile1 = TileOp::GetTensorTileShapeDim<T, DIM_2ND, MAX_DIMS>();
+    static constexpr auto tile2 = TileOp::GetTensorTileShapeDim<T, DIM_3RD, MAX_DIMS>();
+    static constexpr auto tileH = TileOp::GetTensorTileShapeDim<T, DIM_4TH, MAX_DIMS>();
+    static constexpr auto tileW = TileOp::GetTensorTileShapeDim<T, DIM_5TH, MAX_DIMS>();
+};
+
 template <typename T, typename LA, Hardware FMT = Hardware::UB>
 TILEOP TileTensor<T, LA, FMT> MakeTensor(__ubuf__ T *addr, LA layout) {
     return TileTensor<T, LA, FMT>(addr, layout);

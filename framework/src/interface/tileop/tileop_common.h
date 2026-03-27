@@ -108,11 +108,14 @@ enum CastMode {
     CAST_ODD = 6,   // round to odd (Von Neumann rounding)
 };
 
-enum BroadcastOperand : int64_t {
+enum class TileOperand : int64_t {
     NONE          = 0,
     LEFT_OPERAND  = 1,
     RIGHT_OPERAND = 2,
 };
+
+using BroadcastOperand = TileOperand;
+using PenuBroadcastOperand = TileOperand;
 
 constexpr uint64_t MASK_LEN = 64;
 constexpr uint64_t BLOCK_NELEM_B16 = 16;

@@ -22,18 +22,9 @@
 namespace npu {
 namespace tile_fwk {
 constexpr size_t INPUT_SIZE = 2;
-const std::unordered_set<Opcode> NEED_BRC_OPS{
-    Opcode::OP_ADD,
-    Opcode::OP_SUB,
-    Opcode::OP_MUL,
-    Opcode::OP_DIV,
-    Opcode::OP_MAXIMUM,
-    Opcode::OP_MINIMUM,
-    Opcode::OP_EXPANDEXPDIF,
-};
 
 bool InsertCondition(const Opcode &code) {
-    if (NEED_BRC_OPS.count(code) > 0) {
+    if (SUPPORT_BRCINLINE.count(code) > 0) {
         return true;
     }
     return false;

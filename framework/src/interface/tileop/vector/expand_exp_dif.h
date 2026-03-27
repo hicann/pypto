@@ -19,9 +19,11 @@
 #include "unary.h"
 
 #define OP_TILE_OP_EXPANDEXPDIF TExpandExpDif
-template <TileOp::BroadcastOperand operand = TileOp::BroadcastOperand::NONE, typename T0, typename T1, typename T2>
+template <TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
+          TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE,
+          typename T0, typename T1, typename T2>
 TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1) {
-    if constexpr (operand == TileOp::BroadcastOperand::NONE) {
+    if constexpr (WBrcSide == TileOp::BroadcastOperand::NONE) {
         const auto src0Layout = src0.GetLayout();
         auto src0Shape3 = src0Layout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
         auto src0Shape4 = src0Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
@@ -30,7 +32,7 @@ TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1) {
         auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
         // (m, n) & (m, n) -> (m, n) use SUB + EXP
         if ((src0Shape3 == src1Shape3) && (src0Shape4 == src1Shape4)) {
-            BinaryCompute<BinaryOp::SUB, operand, LastUse3Dim<0, 0, 0>>(dst, src0, src1);
+            BinaryCompute<BinaryOp::SUB, WBrcSide, HBrcSide, LastUse3Dim<0, 0, 0>>(dst, src0, src1);
 #ifdef __DAV_V220
             pipe_barrier(PIPE_V);
 #endif
@@ -38,7 +40,7 @@ TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1) {
             return;
         }
     }
-    BinaryCompute<BinaryOp::EXPANDEXPDIF, operand, LastUse3Dim<0, 0, 0>>(dst, src0, src1);
+    BinaryCompute<BinaryOp::EXPANDEXPDIF, WBrcSide, HBrcSide, LastUse3Dim<0, 0, 0>>(dst, src0, src1);
 }
 
 #endif // TILEOP_TILE_OPERATOR_EXPAND_EXP_DIF__H
