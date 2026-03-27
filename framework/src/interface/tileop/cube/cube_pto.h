@@ -626,13 +626,14 @@ TILEOP void TMatmul(T &c, U &a, V &b) {
 
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
     tileL0ATensor l0a(validM, validK);
-    if constexpr (transMode != TransMode::CAST_NONE) {
-        l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));
-    }
     tileL0BTensor l0b(validK, validN);
     tileL0CTensor l0c(validM, validN);
     if (std::is_same<typename tileL0ATensor::DType, float>::value) {
+        l0a.ResetMadMode();
         l0a.SetKAligned(true);
+    }
+    if constexpr (transMode != TransMode::CAST_NONE) {
+        l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));
     }
 
     pto::TASSIGN(l0a, (uint64_t)a.GetAddr());
@@ -679,12 +680,15 @@ TILEOP void TMatmul(T0 &c, T1 &a, T2 &b, T3 &bias) {
 
     validM = (validM + BLOCK_CUBE_M_N - 1) / BLOCK_CUBE_M_N * BLOCK_CUBE_M_N;
     tileL0ATensor l0a(validM, validK);
-    if constexpr (transMode != TransMode::CAST_NONE) {
-        l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));
-    }
     tileL0BTensor l0b(validK, validN);
     tileL0CTensor l0c(validM, validN);
     tileBiasTensor biasT(1, validN);
+    if (std::is_same<typename tileL0ATensor::DType, float>::value) {
+        l0a.ResetMadMode();
+    }
+    if constexpr (transMode != TransMode::CAST_NONE) {
+        l0a.SetMadTF32Mode(static_cast<pto::RoundMode>(transMode));
+    }
 
     pto::TASSIGN(l0a, (uint64_t)a.GetAddr());
     pto::TASSIGN(l0b, (uint64_t)b.GetAddr());
