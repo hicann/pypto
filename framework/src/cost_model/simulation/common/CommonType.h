@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <regex>
 #include <unordered_set>
@@ -64,47 +65,23 @@ enum class NodeType { LOCAL, INCAST, OUTCAST };
 
 using namespace npu::tile_fwk;
 
-inline std::string BufferName(OperandType type)
-{
-    switch (type) {
-        case BUF_UB:
-            return "UB";
-        case BUF_L1:
-            return "L1";
-        case BUF_L0A:
-            return "L0A";
-        case BUF_L0B:
-            return "L0B";
-        case BUF_L0C:
-            return "L0C";
-        case BUF_FIX:
-            return "FIX";
-        case BUF_DDR:
-            return "DDR";
-        case BUF_REG:
-            return "REG";
-        default:
-            return "BUF_UNKNOWN";
-    }
-}
-
 inline CostModel::OperandType BufferNameToType(std::string &name)
 {
-    if (name == "MEM_UB") {
-        return OperandType::BUF_UB;
-    } else if (name == "MEM_L1") {
-        return OperandType::BUF_L1;
-    } else if (name == "MEM_L0A") {
-        return OperandType::BUF_L0A;
-    } else if (name == "MEM_L0B") {
-        return OperandType::BUF_L0B;
-    } else if (name == "MEM_L0C") {
-        return OperandType::BUF_L0C;
-    } else if (name == "MEM_DEVICE_DDR") {
-        return OperandType::BUF_DDR;
-    } else {
-        return OperandType::BUF_UNKNOWN;
-    }
+    static const std::unordered_map<std::string, CostModel::OperandType> bufferMap = {
+        {"MEM_UB", OperandType::BUF_UB},
+        {"MEM_L1", OperandType::BUF_L1},
+        {"MEM_L0A", OperandType::BUF_L0A},
+        {"MEM_L0B", OperandType::BUF_L0B},
+        {"MEM_L0C", OperandType::BUF_L0C},
+        {"MEM_FIX", OperandType::BUF_FIX},
+        {"MEM_BT", OperandType::BUF_BT},
+        {"MEM_DEVICE_DDR", OperandType::BUF_DDR},
+        {"MEM_L0AMX", OperandType::BUF_L0AMX},
+        {"MEM_L0BMX", OperandType::BUF_L0BMX},
+    };
+    
+    auto it = bufferMap.find(name);
+    return (it != bufferMap.end()) ? it->second : OperandType::BUF_UNKNOWN;
 }
 
 inline NodeType ToNodeType(std::string &type)
@@ -120,44 +97,36 @@ inline NodeType ToNodeType(std::string &type)
 
 inline DataType ToDataType(std::string &name)
 {
-    if (name == "DT_INT4") {
-        return DataType::DT_INT4;
-    } else if (name == "DT_INT8") {
-        return DataType::DT_INT8;
-    } else if (name == "DT_INT16") {
-        return DataType::DT_INT16;
-    } else if (name == "DT_INT32") {
-        return DataType::DT_INT32;
-    } else if (name == "DT_INT64") {
-        return DataType::DT_INT64;
-    } else if (name == "DT_FP8") {
-        return DataType::DT_FP8;
-    } else if (name == "DT_FP16") {
-        return DataType::DT_FP16;
-    } else if (name == "DT_FP32") {
-        return DataType::DT_FP32;
-    } else if (name == "DT_BF16") {
-        return DataType::DT_BF16;
-    } else if (name == "DT_HF4") {
-        return DataType::DT_HF4;
-    } else if (name == "DT_HF8") {
-        return DataType::DT_HF8;
-    } else if (name == "DT_UINT8") {
-        return DataType::DT_UINT8;
-    } else if (name == "DT_UINT16") {
-        return DataType::DT_UINT16;
-    } else if (name == "DT_UINT32") {
-        return DataType::DT_UINT32;
-    } else if (name == "DT_UINT64") {
-        return DataType::DT_UINT64;
-    } else if (name == "DT_BOOL") {
-        return DataType::DT_BOOL;
-    } else if (name == "DT_DOUBLE") {
-        return DataType::DT_DOUBLE;
-    } else {
+    static std::unordered_map<std::string, DataType> type_map = {
+        {"DT_INT4", DataType::DT_INT4},
+        {"DT_INT8", DataType::DT_INT8},
+        {"DT_INT16", DataType::DT_INT16},
+        {"DT_INT32", DataType::DT_INT32},
+        {"DT_INT64", DataType::DT_INT64},
+        {"DT_FP8", DataType::DT_FP8},
+        {"DT_FP16", DataType::DT_FP16},
+        {"DT_FP32", DataType::DT_FP32},
+        {"DT_BF16", DataType::DT_BF16},
+        {"DT_HF4", DataType::DT_HF4},
+        {"DT_HF8", DataType::DT_HF8},
+        {"DT_UINT8", DataType::DT_UINT8},
+        {"DT_UINT16", DataType::DT_UINT16},
+        {"DT_UINT32", DataType::DT_UINT32},
+        {"DT_UINT64", DataType::DT_UINT64},
+        {"DT_BOOL", DataType::DT_BOOL},
+        {"DT_DOUBLE", DataType::DT_DOUBLE},
+        {"DT_FP8E5M2", DataType::DT_FP8E5M2},
+        {"DT_FP8E4M3", DataType::DT_FP8E4M3},
+        {"DT_FP8E8M0", DataType::DT_FP8E8M0},
+        {"DT_FP4_E2M1X2", DataType::DT_FP4_E2M1X2},
+        {"DT_FP4_E1M2X2", DataType::DT_FP4_E1M2X2}
+    };
+    auto it = type_map.find(name);
+    if (it == type_map.end()) {
         std::cout << "Unrecognized DataType" << name << std::endl;
+        return DataType::DT_FP16;
     }
-    return DataType::DT_FP16;
+    return it -> second;
 }
 
 // CostModel
