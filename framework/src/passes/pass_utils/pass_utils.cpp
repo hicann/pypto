@@ -19,6 +19,9 @@
 #include "interface/tensor/logical_tensor.h"
 #include "interface/function/function.h"
 #include "tilefwk/platform.h"
+#include "passes/pass_log/pass_log.h"
+
+#define MODULE_NAME "PassUtils"
 
 namespace npu::tile_fwk {
 void FunctionUtils::RelinkOperationInput(Operation *op, const size_t inputIndex, const Operation *targetOp,
@@ -116,13 +119,13 @@ const int SPACE_NUM_16 = 16;
 } // namespace
 void SubfuncInvokeInfoTy::ConstructActualInvokeParam(int esgId) {
     if (!isFinalized_) {
-        ALOG_ERROR("Error: does not finalized before constructing InvokeParam");
+        APASS_LOG_ERROR_F(Elements::Function, "Error: does not finalized before constructing InvokeParam");
         return;
     }
 
     int paramLoc = 0;
     for (auto &tensorArg : tensorArgs_) {
-        ALOG_DEBUG_F("######## Construct TA for %d ########", esgId);
+        APASS_LOG_DEBUG_F(Elements::Function, "Construct TA for %d", esgId);
         tensorParamList_.emplace_back(paramLoc, tensorArg.realDDRId, tensorArg.offset, tensorArg.shape,
             tensorArg.rawShape, tensorArg.dType, tensorArg.isOutputToGM, tensorArg.tensor, tensorArg.opMagic,
             tensorArg.operandIdx);

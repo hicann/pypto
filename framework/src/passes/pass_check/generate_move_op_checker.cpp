@@ -14,11 +14,15 @@
  */
 
 #include "generate_move_op_checker.h"
+#include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_error.h"
+
+#define MODULE_NAME "GenerateMoveOp"
 
 namespace npu {
 namespace tile_fwk {
 Status GenerateMoveOpChecker::DoPreCheck(Function &function) {
-    ALOG_INFO_F("Start Precheck for GenerateMoveOp.");
+    APASS_LOG_INFO_F(Elements::Operation, "Start Precheck for GenerateMoveOp.");
     auto operations = function.Operations();
     // Check iOperand and oOperand of OP_CONVERT
     for (auto &operation : operations) {
@@ -38,7 +42,7 @@ Status GenerateMoveOpChecker::DoPreCheck(Function &function) {
                 continue;
         }
         if (!isValid) {
-            ALOG_ERROR_F("Operation validation failed.");
+            APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed.");
             return FAILED;
         }
     }
@@ -46,27 +50,27 @@ Status GenerateMoveOpChecker::DoPreCheck(Function &function) {
 }
 
 Status GenerateMoveOpChecker::DoPostCheck(Function &function) {
-    ALOG_INFO_F("Start Postcheck for GenerateMoveOp.");
+    APASS_LOG_INFO_F(Elements::Operation, "Start Postcheck for GenerateMoveOp.");
     auto operations = function.Operations();
     for (auto &operation : operations) {
         auto op = operation.GetOpcode();
         if(op == Opcode::OP_DUPLICATE || op == Opcode::OP_CONVERT) {
-            ALOG_ERROR_F("Operation validation failed: Operation %s[%d] is invalid here.",operation.GetOpcode(),operation.GetOpMagic());
+            APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed: Operation %s[%d] is invalid here.", operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
             return FAILED;
         }
         if(op == Opcode::OP_ASSEMBLE || op == Opcode::OP_VIEW) {
             if(operation.GetIOperands().size() != 1) {
-                ALOG_ERROR_F("Operation validation failed: Operation %s[%d] has more than one input.",operation.GetOpcode(),operation.GetOpMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed: Operation %s[%d] has more than one input.", operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
                 return FAILED;
             }
             if(operation.GetOOperands().size() != 1) {
-                ALOG_ERROR_F("Operation validation failed: Operation %s[%d] has more than one output.",operation.GetOpcode(),operation.GetOpMagic());
+                APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed: Operation %s[%d] has more than one output.", operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
                 return FAILED;
             }
             auto inputMemType = operation.GetIOperands().front()->GetMemoryTypeOriginal();
             auto outputMemType = operation.GetOOperands().front()->GetMemoryTypeOriginal();
             if(inputMemType != outputMemType) {
-                ALOG_ERROR_F("Operation validation failed: Operation %s[%d] has dismatched memory type. Input memory type:%s. Output memory type:%s",operation.GetOpcode(),operation.GetOpMagic(),
+                APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed: Operation %s[%d] has dismatched memory type. Input memory type:%s. Output memory type:%s", operation.GetOpcodeStr().c_str(), operation.GetOpMagic(),
                     BriefMemoryTypeToString(inputMemType).c_str(),
                     BriefMemoryTypeToString(outputMemType).c_str()
                 );
@@ -80,27 +84,27 @@ Status GenerateMoveOpChecker::DoPostCheck(Function &function) {
 bool GenerateMoveOpChecker::ValidViewOp(const Operation &op) const {
     //校验view单输入单输出，指针非空
     if(op.GetOpAttribute().get() == nullptr) {
-        ALOG_ERROR_F("View op [%d] check failed : Op attribute is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "View op [%d] check failed : Op attribute is null.",op.GetOpMagic());
         return false;
     }
     if(op.GetIOperands().size() != 1) {
-        ALOG_ERROR_F("View op [%d] check failed : Found more than one input.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "View op [%d] check failed : Found more than one input.",op.GetOpMagic());
         return false;
     }
     if(op.GetOOperands().size() != 1) {
-        ALOG_ERROR_F("View op [%d] check failed : Found more than one output.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "View op [%d] check failed : Found more than one output.",op.GetOpMagic());
         return false;
     }
     if(op.GetIOperands().front() == nullptr) {
-        ALOG_ERROR_F("View op [%d] check failed : Input is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "View op [%d] check failed : Input is null.",op.GetOpMagic());
         return false;
     }
     if(op.GetOOperands().front() == nullptr) {
-        ALOG_ERROR_F("View op [%d] check failed : Output is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER,Elements::Operation, "View op [%d] check failed : Output is null.",op.GetOpMagic());
         return false;
     }
     if(*(op.oOperand[0]->GetConsumers().begin()) == nullptr) {
-        ALOG_ERROR_F("View op [%d] check failed : Output has null consumer.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "View op [%d] check failed : Output has null consumer.",op.GetOpMagic());
         return false;
     }
     bool checkViewOut = CheckViewOutTensorMemType(op);
@@ -115,7 +119,7 @@ bool GenerateMoveOpChecker::CheckViewOutTensorMemType(const Operation &op) const
     auto consumerOps = op.oOperand[0]->GetConsumers(); 
     for (auto childOp : consumerOps) {
         if (childOp == nullptr) {
-            ALOG_ERROR_F("View op [%d] output has null consumers.",op.GetOpMagic());
+            APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "View op [%d] output has null consumers.",op.GetOpMagic());
             return false;
         }
         auto opcode = childOp->GetOpcode();
@@ -128,13 +132,13 @@ bool GenerateMoveOpChecker::CheckViewOutTensorMemType(const Operation &op) const
             continue;
         }
         if (opcode != Opcode::OP_CONVERT) {
-            ALOG_ERROR_F("View op [%d] consumer %s[%d] does not support DDR input.", op.GetOpMagic(),childOp->GetOpcodeStr().c_str(),childOp->GetOpMagic());
+            APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "View op [%d] consumer %s[%d] does not support DDR input.", op.GetOpMagic(),childOp->GetOpcodeStr().c_str(),childOp->GetOpMagic());
             return false;
         }
         auto convertOpAttribute = dynamic_cast<ConvertOpAttribute *>(op.GetOpAttribute().get());
         auto convertPath = convertOpAttribute->GetConvertPath();
         if (convertPath.first != MemoryType::MEM_DEVICE_DDR){
-            ALOG_ERROR_F("View op [%d] consumer %s[%d] has invalid convert path.", op.GetOpMagic(),childOp->GetOpcodeStr().c_str(),childOp->GetOpMagic());
+            APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "View op [%d] consumer %s[%d] has invalid convert path.", op.GetOpMagic(),childOp->GetOpcodeStr().c_str(),childOp->GetOpMagic());
             return false;
         }
     }    
@@ -144,23 +148,23 @@ bool GenerateMoveOpChecker::CheckViewOutTensorMemType(const Operation &op) const
 bool GenerateMoveOpChecker::ValidAssembleOp(const Operation &op) const {
     //校验assemble单输入单输出，指针非空
     if(op.GetOpAttribute().get() == nullptr) {
-        ALOG_ERROR_F("Assemble op [%d] check failed : Op attribute is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op [%d] check failed : Op attribute is null.",op.GetOpMagic());
         return false;
     }
     if(op.GetIOperands().size() != 1) {
-        ALOG_ERROR_F("Assemble op [%d] check failed : Found more than one input.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "Assemble op [%d] check failed : Found more than one input.",op.GetOpMagic());
         return false;
     }
     if(op.GetOOperands().size() != 1) {
-        ALOG_ERROR_F("Assemble op [%d] check failed : Found more than one output.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "Assemble op [%d] check failed : Found more than one output.",op.GetOpMagic());
         return false;
     }
     if(op.GetIOperands().front() == nullptr) {
-        ALOG_ERROR_F("Assemble op [%d] check failed : Input is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op [%d] check failed : Input is null.",op.GetOpMagic());
         return false;
     }
     if(op.GetOOperands().front() == nullptr) {
-        ALOG_ERROR_F("Assemble op [%d] check failed : Output is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op [%d] check failed : Output is null.",op.GetOpMagic());
         return false;
     }
     return true;
@@ -169,36 +173,36 @@ bool GenerateMoveOpChecker::ValidAssembleOp(const Operation &op) const {
 bool GenerateMoveOpChecker::ValidConvertOp(const Operation &op) const {
     //校验convert单输入单输出，指针非空，输入输出内存类型不同，且存在DDR类型
    if(op.GetOpAttribute().get() == nullptr) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Op attribute is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Convert op [%d] check failed : Op attribute is null.",op.GetOpMagic());
         return false;
     }
     if(op.GetIOperands().size() != 1) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Found more than one input.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "Convert op [%d] check failed : Found more than one input.",op.GetOpMagic());
         return false;
     }
     if(op.GetOOperands().size() != 1) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Found more than one output.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "Convert op [%d] check failed : Found more than one output.",op.GetOpMagic());
         return false;
     }
     if(op.GetIOperands().front() == nullptr) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Input is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Convert op [%d] check failed : Input is null.",op.GetOpMagic());
         return false;
     }
     if(op.GetOOperands().front() == nullptr) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Output is null.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Convert op [%d] check failed : Output is null.",op.GetOpMagic());
         return false;
     }
     auto inputMemType = op.GetIOperands().front()->GetMemoryTypeOriginal();
     auto outputMemType = op.GetOOperands().front()->GetMemoryTypeOriginal();
     if(inputMemType == outputMemType) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Op has dismatched memory type. Input memory type:%s. Output memory type:%s",op.GetOpMagic(),
+        APASS_LOG_ERROR_C(TensorErr::TENSOR_INVALID_MEMORY_TYPE, Elements::Operation, "Convert op [%d] check failed : Op has dismatched memory type. Input memory type:%s. Output memory type:%s",op.GetOpMagic(),
             BriefMemoryTypeToString(inputMemType).c_str(),
             BriefMemoryTypeToString(outputMemType).c_str()
         );
         return false;
     }
     if(op.GetIOperands().front()->GetShape() != op.GetOOperands().front()->GetShape()) {
-        ALOG_ERROR_F("Convert op [%d] check failed : Input and output tensor has different data shape.",op.GetOpMagic());
+        APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Operation, "Convert op [%d] check failed : Input and output tensor has different data shape.",op.GetOpMagic());
         return false;
     }
     return true;
