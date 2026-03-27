@@ -192,29 +192,32 @@ void ValidateL0Constraint(int64_t tile1, int64_t tile2, int64_t tile3, size_t dt
         << dim3Name << " × dtypesize ≤ " << cacheName << "Size(" << cacheSize << ").";
 }
 
-void CheckL0TileTiling(DataType outType, const ConvAttrParam &attrParam, const Tensor &weightTensor)
+void CheckL0TileTiling(DataType outType, const ConvAttrParam &attrParam, const Tensor &weightTensor, const Tensor &inputTensor)
 {
     auto &convTile = TileShape::Current().GetConvTile();
-    int64_t tileH = convTile.tileL0Info.tileH;
-    int64_t tileW = convTile.tileL0Info.tileW;
-    int64_t tileN = convTile.tileL0Info.tileN;
-    int64_t tileK = convTile.tileL0Info.tileK;
-    int64_t tileHout = convTile.tileL1Info.tileHout;
-    int64_t tileWout = convTile.tileL1Info.tileWout;
-    int64_t tileCout = convTile.tileL1Info.tileN;
-    int64_t k0 = ALIGN_SIZE_32 / BytesOf(outType);
+    int64_t tileH = convTile.tileL0Info.tileH, tileW = convTile.tileL0Info.tileW;
+    int64_t tileN = convTile.tileL0Info.tileN, tileK = convTile.tileL0Info.tileK; 
+    int64_t tileHout = convTile.tileL1Info.tileHout, tileWout = convTile.tileL1Info.tileWout;
+    int64_t tileCout = convTile.tileL1Info.tileN, k0 = ALIGN_SIZE_32 / BytesOf(outType);
     int64_t tileCinFmap = convTile.tileL1Info.tileCinFmap;
     int64_t tileCinWeight = convTile.tileL1Info.tileCinWeight;
     uint32_t indexH = attrParam.isConv3D ? NCDHW_H_IDX : NCHW_H_IDX;
     uint32_t indexW = attrParam.isConv3D ? NCDHW_W_IDX : (attrParam.isConv1D ? NCHW_H_IDX : NCHW_W_IDX);
     int64_t kh = attrParam.isConv1D ? 1 : weightTensor.GetShape()[indexH];
     int64_t kw = weightTensor.GetShape()[indexW];
-    int64_t kAL1 = ConvAlignB(tileCinFmap, k0) * kh * kw;
+    int64_t cin = inputTensor.GetShape()[NCHW_C_IDX];
+    int64_t cout = weightTensor.GetShape()[NCHW_N_IDX];
+    int64_t kAL1 = ConvAlignB(tileCinFmap, k0) * kh * kw, oriK = ConvAlignB(cin, k0) * kh * kw;
     int64_t kBL1 = ConvAlignB(tileCinWeight, k0) * kh * kw;
+    int64_t batch = inputTensor.GetShape()[NCHW_N_IDX], groups = attrParam.groups;
+    int numTileL0 = batch * groups * CeilDiv(cout/groups, tileN) * CeilDiv(tileHout, tileH) * CeilDiv(tileWout, tileW);
     if (attrParam.isConv3D) {
         int64_t kd = weightTensor.GetShape()[NCDHW_D_IDX];
-        kAL1 *= kd;
-        kBL1 *= kd;
+        int64_t dout = ConvComputeDo(inputTensor, weightTensor, attrParam);
+        numTileL0 *= dout; kAL1 *= kd; kBL1 *= kd; oriK *= kd;
+    }
+    if (numTileL0 > MAX_LOOP || CeilDiv(oriK, tileK) > MAX_LOOP) {
+        CONV_LOGW("Suggestion: Consider increasing tile size to reduce compilation time.");
     }
     int64_t minKL1 = std::min(kAL1, kBL1);
     CheckAlignment(tileK , k0, "tileK");
@@ -274,7 +277,7 @@ void CheckTileTiling(DataType outType, const Tensor &inputTensor, const Tensor &
     CheckAlignment(tileCinFmap, k0, "tileCinFmap");
     CheckAlignment(tileCinWeight, k0, "tileCinWeight");
     if (convTile.setL0Tile){
-        CheckL0TileTiling(outType, attrParam, weightTensor);
+        CheckL0TileTiling(outType, attrParam, weightTensor, inputTensor);
     }
 }
 
@@ -316,7 +319,6 @@ void CheckL1SizeTiling(DataType outType, const Tensor &inputTensor, const Tensor
     }
     uint64_t tileCinFmap = convTile.tileL1Info.tileCinFmap;
     uint64_t tileCinWeight = convTile.tileL1Info.tileCinWeight;
-    uint64_t kAL1 = ConvAlignB(tileCinFmap * kh * kw, k0);
     uint64_t kBL1 = ConvAlignB(tileCinWeight * kh * kw, k0);
     uint64_t weightL1Size = ConvAlignB(kBL1 * tileN * BytesOf(outType), ALIGN_SIZE_32);
 
@@ -328,7 +330,7 @@ void CheckL1SizeTiling(DataType outType, const Tensor &inputTensor, const Tensor
     uint64_t kwDilated = (kw - 1) * dilationW + 1;
     uint64_t wiAL1 = std::min((tileWout - 1) * strideW + kwDilated, win);;
 
-    inputL1Size = ConvAlignB(hiAL1 * wiAL1 * kAL1 * BytesOf(outType), ALIGN_SIZE_32);
+    inputL1Size = ConvAlignB(hiAL1 * wiAL1 * tileCinFmap * BytesOf(outType), ALIGN_SIZE_32);
     uint64_t minL1LoadSize = biasL1Size + inputL1Size + weightL1Size;
     ASSERT(ConvOperationError::OVER_BUFFER_LIMIT, minL1LoadSize <= l1Size)
         << "MinL1LoadSize > L1size, current MinL1LoadSize: " << minL1LoadSize << ", L1size: " << l1Size << ".";
@@ -416,7 +418,7 @@ void CheckAttrShape(DataType outType, const Tensor &inputTensor, const Tensor &w
         int paddingRight = paddings[i * 2 + 1];
         ASSERT(ConvOperationError::INPUT_INVALID, paddingLeft < weightVal && paddingRight < weightVal)
             << "The value of the " << dimNames[i]
-            << " dimension of weight must be >= padding.Current weight value:" << weightVal
+            << " dimension of weight must be > padding.Current weight value:" << weightVal
             << ",padding value:" << paddingLeft
             << " and " << paddingRight
             << ".";
