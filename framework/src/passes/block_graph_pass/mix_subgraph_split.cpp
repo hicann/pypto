@@ -428,13 +428,9 @@ Status MixSubgraphSplit::ProcessLeafFunction(Function& rootFunc,
             subgraphToFunction = analyzerOutput->subgraphToFunction;
         }
     }
-    std::vector<InternalDependencyInfo> internalDeps;
-    if (analyzerOutput) {
-        internalDeps = analyzerOutput->internalDeps;
-    }
     // 为每个原始CallOp创建一组新的callOp, 每个原始callOp使用不同的wrapId（包含dummyTensor依赖）
     APASS_LOG_DEBUG_F(Elements::Operation, "Creating call operations for %zu components", components.size());
-    if (callOpBuilder_.CreateCallOps(rootFunc, originalCallOps, originalMixFunc, components, newProgramIDs, subgraphToFunction, newFunctions, internalDeps) != SUCCESS) {
+    if (callOpBuilder_.CreateCallOps(rootFunc, originalCallOps, originalMixFunc, components, newProgramIDs, subgraphToFunction, newFunctions) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Failed to create call ops for function %s",
                 originalMixFunc->GetRawName().c_str());
         return FAILED;
