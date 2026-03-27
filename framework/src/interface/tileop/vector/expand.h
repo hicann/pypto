@@ -101,11 +101,12 @@ TILEOP void TExpand(T0 dst, T1 src) {
         for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1;
-                auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1;
+                auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1;    
+                constexpr size_t minTileH = dstTileH > srcTileH ? srcTileH : dstTileH;
                 using dstTileDefine =
-                    pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                    pto::Tile<pto::TileType::Vec, DstDtype, minTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                 using srcTileDefine =
-                    pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                    pto::Tile<pto::TileType::Vec, SrcDtype, minTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
                 dstTileDefine dstTile(dstShape3, dstShape4);
                 srcTileDefine srcTile(srcShape3, srcShape4);
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
@@ -118,11 +119,12 @@ TILEOP void TExpand(T0 dst, T1 src) {
     } else if constexpr (axis == 0) {
         for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
             auto dstOffset = n0Index * dstStride0;
-            auto srcOffset = n0Index * srcStride0;
+            auto srcOffset = n0Index * srcStride0;    
+            constexpr size_t minTileH = dstTileH > srcTileH ? srcTileH : dstTileH;
             using dstTileDefine =
-                pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                pto::Tile<pto::TileType::Vec, DstDtype, minTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
             using srcTileDefine =
-                pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+                pto::Tile<pto::TileType::Vec, SrcDtype, minTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;    
             dstTileDefine dstTile(dstShape3, dstShape4);
             srcTileDefine srcTile(srcShape3, srcShape4);
 
