@@ -19,6 +19,7 @@ import inspect
 import os
 from typing import Any, Callable, Optional, Union
 from enum import IntEnum
+import itertools
 
 import pypto
 import torch
@@ -187,6 +188,7 @@ class JitCallableWrapper:
 
     # Global KernelModule cache
     _kernel_module_cache: dict[tuple, Any] = {}
+    _global_func_idx_generator = itertools.count(0)
 
     _dtype_dict = {
         "torch.int8": pypto.DataType.DT_INT8,
@@ -294,6 +296,9 @@ class JitCallableWrapper:
 
         self._set_run_mode()
         self.kwargs = None
+        self._cached_signature = self._get_signature()
+        self._cached_non_tensor_defaults: dict[str, Any] = self._extract_non_tensor_defaults()
+        self._cache_hashes: tuple = self._compute_cache_hashes()
 
         # Copy metadata from the original function
         if hasattr(original_func, "__name__"):
@@ -329,14 +334,13 @@ class JitCallableWrapper:
             args, kwargs
         )
         self._get_or_create_kmodule(non_tensor_values)
-        device = self._resolve_device(in_tensors)
+        self._resolve_device(in_tensors)
         if self._debug_options is not None:
             debug_mode = self._debug_options.get("runtime_debug_mode", None)
             if debug_mode == DebugMode.CHECKATTR:
                 self._check_input_defs_match_tensors(in_tensors, input_tensor_defs)
-        torch_tensors = in_tensors
-        tensor_defs = input_tensor_defs
-        self._execute_kernel(torch_tensors, tensor_defs)
+        self._execute_kernel(in_tensors, input_tensor_defs)
+
         return None
 
 
@@ -369,53 +373,7 @@ class JitCallableWrapper:
         return torch.empty(size, dtype=torch.int8, device='npu').data_ptr()
 
 
-    @staticmethod
-    def get_signature_high_performance(
-        func: Callable,
-    ) -> tuple[list[pypto.Tensor], list[str]]:
-        """Extract function signature: tensor param annotations and non-tensor param names.
 
-        Does not read or validate return annotation; use out parameter and out.move() instead.
-
-        Parameters
-        ----------
-        func : Callable
-            The function to analyze.
-
-        Returns
-        -------
-        input_tensor_list : list[pypto.Tensor]
-            List of input parameter annotations (tensor definitions, including out).
-        non_tensor_param_names : list[str]
-            Ordered list of non-tensor parameter names (must come after tensor params).
-        """
-        code = func.__code__
-        annotations = func.__annotations__ or {}
-        argcount = code.co_argcount
-        param_names = code.co_varnames[:argcount]
-
-        input_tensor_list: list[pypto.Tensor] = []
-        non_tensor_param_names: list[str] = []
-        seen_non_tensor = False
-
-        for param_name in param_names:
-            if param_name == "return":
-                continue
-            ann = annotations.get(param_name)
-            if ann is not None and hasattr(ann, 'to_tensor'):
-                if seen_non_tensor:
-                    raise ValueError(
-                        "Non-tensor parameters must come after all tensor parameters. "
-                        f"Found tensor parameter '{param_name}' after non-tensor "
-                        "parameter(s)."
-                    )
-                tensor = ann.to_tensor(param_name)
-                input_tensor_list.append(tensor)
-            else:
-                seen_non_tensor = True
-                non_tensor_param_names.append(param_name)
-
-        return input_tensor_list, non_tensor_param_names
 
 
     @staticmethod
@@ -514,6 +472,20 @@ class JitCallableWrapper:
         pypto_impl.SetVerifyData(
             host_pto_t_datas, [], _pto_verify_datas.get_data())
 
+
+    @staticmethod
+    def _make_hashable(obj) -> Any:
+        """Convert dict/list/tuple to a hashable representation."""
+        if obj is None:
+            return None
+        t = type(obj)
+        if t is dict:
+            return frozenset((k, JitCallableWrapper._make_hashable(v)) for k, v in obj.items())
+        if t is list or t is tuple:
+            return tuple(JitCallableWrapper._make_hashable(item) for item in obj)
+        return str(obj)
+
+
     def compile(
         self,
         tensors,
@@ -572,9 +544,7 @@ class JitCallableWrapper:
         non_tensor_values : dict[str, Any]
         input_tensor_defs : list
         """
-        input_tensor_defs, non_tensor_param_names = (
-            self.get_signature_high_performance(self._original_func)
-        )
+        input_tensor_defs, non_tensor_param_names = self._cached_signature
         n_tensors = len(input_tensor_defs)
         if len(args) < n_tensors:
             raise RuntimeError(
@@ -607,25 +577,16 @@ class JitCallableWrapper:
         non_tensor_from_args: list,
         kwargs: dict,
     ) -> dict[str, Any]:
-        """Merge positional non-tensor args with kwargs, using func defaults when needed."""
+        """Merge positional non-tensor args with kwargs, using pre-extracted defaults when needed."""
+        non_tensor_defaults = self._cached_non_tensor_defaults
         result: dict[str, Any] = {}
-        try:
-            sig = inspect.signature(self._original_func)
-        except (ValueError, TypeError):
-            sig = None
         for i, param_name in enumerate(non_tensor_param_names):
             if param_name in kwargs:
                 val = kwargs[param_name]
             elif i < len(non_tensor_from_args):
                 val = non_tensor_from_args[i]
-            elif sig is not None and param_name in sig.parameters:
-                param = sig.parameters[param_name]
-                if param.default is not inspect.Parameter.empty:
-                    val = param.default
-                else:
-                    raise RuntimeError(
-                        f"Missing required non-tensor argument '{param_name}'."
-                    )
+            elif param_name in non_tensor_defaults:
+                val = non_tensor_defaults[param_name]
             else:
                 raise RuntimeError(
                     f"Missing required non-tensor argument '{param_name}'."
@@ -787,6 +748,113 @@ class JitCallableWrapper:
                     raise ValueError(f"The format of {ordinal(idx)} input tensor {get_format(in_tensor)} \
                         does not match the format of input tensor definition {input_tensor_def.format}.")
 
+
+    def _extract_non_tensor_defaults(self) -> dict[str, Any]:
+        """Extract default values for non-tensor parameters from the original function signature."""
+        _, non_tensor_param_names = self._cached_signature
+        non_tensor_defaults: dict[str, Any] = {}
+        sig = inspect.signature(self._original_func)
+        for param_name in non_tensor_param_names:
+            if param_name in sig.parameters:
+                param = sig.parameters[param_name]
+                if param.default is not inspect.Parameter.empty:
+                    non_tensor_defaults[param_name] = param.default
+        return non_tensor_defaults
+
+
+    def _compute_cache_hashes(self) -> Any:
+        """Compute (source_code, options_hash, captured_locals_hash) for cache key generation."""
+
+        def is_defined_globally(func):
+            if not inspect.isfunction(func):
+                return False
+            qualname = func.__qualname__
+            return '<locals>' not in qualname and '.' not in qualname
+        
+        if is_defined_globally(self._original_func):
+            name = self._original_func.__name__
+            _loop_idx_generator = next(self._global_func_idx_generator)
+            return (name, _loop_idx_generator)
+
+        code_obj = self._original_func.__code__
+        source_code = (
+            code_obj.co_code,
+            code_obj.co_consts,
+            code_obj.co_names,
+            code_obj.co_varnames,
+        )
+
+        options_hash = (
+            self._make_hashable(self._codegen_options),
+            self._make_hashable(self._host_options),
+            self._make_hashable(self._pass_options),
+            self._make_hashable(self._runtime_options),
+            self._make_hashable(self._verify_options),
+            self._make_hashable(self._debug_options),
+        )
+
+        if self._captured_locals is not None:
+            filtered_locals = {
+                k: v for k, v in self._captured_locals.items()
+                if not isinstance(v, torch.Tensor)
+            }
+            captured_locals_hash = self._make_hashable(filtered_locals)
+        else:
+            captured_locals_hash = None
+
+        return (source_code, options_hash, captured_locals_hash)
+
+
+    def _get_signature(
+        self,
+    ) -> tuple[list[pypto.Tensor], list[str]]:
+        """Extract function signature: tensor param annotations, non-tensor param names,
+        and non-tensor param defaults.
+
+        Does not read or validate return annotation; use out parameter and out.move() instead.
+
+        Parameters
+        ----------
+        func : Callable
+            The function to analyze.
+
+        Returns
+        -------
+        input_tensor_list : list[pypto.Tensor]
+            List of input parameter annotations (tensor definitions, including out).
+        non_tensor_param_names : list[str]
+            Ordered list of non-tensor parameter names (must come after tensor params).
+        """
+        func = self._original_func
+        code = func.__code__
+        annotations = func.__annotations__ or {}
+        argcount = code.co_argcount
+        param_names = code.co_varnames[:argcount]
+
+        input_tensor_list: list[pypto.Tensor] = []
+        non_tensor_param_names: list[str] = []
+        seen_non_tensor = False
+
+        for param_name in param_names:
+            if param_name == "return":
+                continue
+            ann = annotations.get(param_name)
+            if ann is not None and hasattr(ann, 'to_tensor'):
+                if seen_non_tensor:
+                    raise ValueError(
+                        "Non-tensor parameters must come after all tensor parameters. "
+                        f"Found tensor parameter '{param_name}' after non-tensor "
+                        "parameter(s)."
+                    )
+                tensor = ann.to_tensor(param_name)
+                input_tensor_list.append(tensor)
+            else:
+                seen_non_tensor = True
+                non_tensor_param_names.append(param_name)
+
+        return input_tensor_list, non_tensor_param_names
+
+
     def _get_compilation_cache_key(
         self,
         non_tensor_values: Optional[dict[str, Any]] = None,
@@ -813,56 +881,20 @@ class JitCallableWrapper:
         Optional[tuple]
             A hashable cache key, or None if caching is not applicable.
         """
-        try:
-            # Use the source code as the primary key
-            # For factory functions, each call creates a new code object,
-            # so we need to use source code string instead
-            code_obj = self._original_func.__code__
-            # Using __code__ attributes directly for performance instead of source code string
-            source_code = (
-                code_obj.co_code,
-                code_obj.co_consts,
-                code_obj.co_names,
-                code_obj.co_varnames,
-            )
-
-            # Create a hashable representation of options
-            def make_hashable(obj):
-                """Convert dict/list to hashable tuple representation."""
-                if obj is None:
-                    return None
-                t = type(obj)
-                if t is dict:
-                    return frozenset((k, make_hashable(v)) for k, v in obj.items())
-                if t is list or t is tuple:
-                    return tuple(make_hashable(item) for item in obj)
-                return str(obj)
-
-            options_hash = (
-                make_hashable(self._codegen_options),
-                make_hashable(self._host_options),
-                make_hashable(self._pass_options),
-                make_hashable(self._runtime_options),
-                make_hashable(self._verify_options),
-                make_hashable(self._debug_options),
-            )
-
-            if self._captured_locals is not None:
-                filtered_locals = {
-                    k: v for k, v in self._captured_locals.items()
-                    if not isinstance(v, torch.Tensor)
-                }
-                captured_locals_hash = make_hashable(filtered_locals)
-            else:
-                captured_locals_hash = None
-
-            non_tensor_hash = make_hashable(non_tensor_values) if non_tensor_values else None
-
-            return (source_code, options_hash, captured_locals_hash, non_tensor_hash)
-        except (OSError, TypeError):
-            # If we can't generate a cache key (e.g., source not available),
-            # disable caching for this function
+        if self._cache_hashes is None:
             return None
+
+        non_tensor_hash = (
+            self._make_hashable(non_tensor_values) if non_tensor_values else None
+        )
+        if len(self._cache_hashes) == 2:
+            # Globally-defined function: cache key is (func_name, non_tensor_hash)
+            fun_name, global_func_id = self._cache_hashes
+            combined_key = f"{fun_name}::{global_func_id}"
+            return (combined_key, non_tensor_hash)
+
+        source_code, options_hash, captured_locals_hash = self._cache_hashes
+        return (source_code, options_hash, captured_locals_hash, non_tensor_hash)
 
     def _set_run_mode(self) -> None:
         """Configure the runtime execution mode (NPU or SIM).

@@ -106,6 +106,10 @@ def gen_quan_per_channel_weight_nz(x):
     return y_int8_nz, scale_dequant
 
 
+ND = pypto.TileOpFormat.TILEOP_ND
+NZ = pypto.TileOpFormat.TILEOP_NZ
+
+
 @pypto.frontend.jit(
     runtime_options={"device_sched_mode": 1,
                     "stitch_function_max_num": 128,
@@ -113,16 +117,16 @@ def gen_quan_per_channel_weight_nz(x):
     pass_options={"cube_l1_reuse_setting": {-1: 2}}
 )
 def moe_fusion_kernel(
-    hidden_states: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
-    mm_weight: pypto.Tensor([], pypto.DT_FP32),
-    e_score_bias_input: pypto.Tensor([], pypto.DT_BF16),
-    w13: pypto.Tensor([], pypto.DT_INT8),
-    w13_scale: pypto.Tensor([], pypto.DT_BF16),
-    w2: pypto.Tensor([], pypto.DT_INT8),
-    w2_scale: pypto.Tensor([], pypto.DT_BF16),
-    weight_k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),
-    ids_k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
-    ffn_res: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
+    hidden_states: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16, format=ND),
+    mm_weight: pypto.Tensor([], pypto.DT_FP32, format=ND),
+    e_score_bias_input: pypto.Tensor([], pypto.DT_BF16, format=ND),
+    w13: pypto.Tensor([], pypto.DT_INT8, format=NZ),
+    w13_scale: pypto.Tensor([], pypto.DT_BF16, format=ND),
+    w2: pypto.Tensor([], pypto.DT_INT8, format=NZ),
+    w2_scale: pypto.Tensor([], pypto.DT_BF16, format=ND),
+    weight_k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32, format=ND),
+    ids_k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32, format=ND),
+    ffn_res: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16, format=ND),
     topk_group,
     num_expert_group,
 ):

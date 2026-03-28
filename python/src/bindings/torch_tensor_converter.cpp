@@ -105,7 +105,7 @@ int TorchTensorConverter::Convert(py::sequence &tensors, py::sequence &tensor_de
 
     py::object toDlpack = GetTorchToDlpack();
     py::object device = py::none();
-    
+
     py::module torch_npu;
     for (size_t i = 0; i < n; i++) {
         py::object torchTensor = tensors[py::int_(i)];
@@ -119,8 +119,12 @@ int TorchTensorConverter::Convert(py::sequence &tensors, py::sequence &tensor_de
         TileOpFormat format = TileOpFormat::TILEOP_ND;
         py::object tensorDevice = torchTensor.attr("device");
 
-        if (tensorDef.attr("explict_format").cast<bool>()) {
-            format = tensorDef.attr("format").cast<TileOpFormat>();
+        auto base = py::getattr(tensorDef, "_base", py::none());
+        ASSERT(py::isinstance<Tensor>(base)) << "the '_base' attribute must be a Tensor type";
+        auto &t = base.cast<Tensor &>();
+
+        if (tensorDef.attr("explicit_format").cast<bool>()) {
+            format = t.Format();
         } else {
             std::string device_type = py::cast<std::string>(tensorDevice.attr("type"));
             if (device_type == "npu") {
@@ -133,7 +137,12 @@ int TorchTensorConverter::Convert(py::sequence &tensors, py::sequence &tensor_de
                 }
             }
         }
+        // Use dtype from type annotation when provided; otherwise fallback to torch tensor dtype.
+        if (!tensorDef.attr("status_dtype").is_none()) {
+            dtype = t.GetDataType();
+        }
         
+
         tensors_data.emplace_back(dtype, dataPtr, shape, format);
 
         if (device.is_none()) {
