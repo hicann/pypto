@@ -254,10 +254,10 @@ private:
     PipeSeq GetPipeSeq(PipeCoreReal pipe);
     PipeCoreReal GetPipeFromSeq(PipeSeq seq);
     Status PipeDispatch(const std::vector<Operation *> opLogPtr, std::vector<IndexOp> &syncedOpLog);
-    Status AdjustReshapeCfg(TileOpCfg &opcfg, Operation &op);
-    Status AdjustCopyInCfg(TileOpCfg &opcfg, Operation &op);
-    Status AdjustCopyOutCfg(TileOpCfg &opcfg, Operation &op);
-    Status AdjustOpCfg(TileOpCfg &opcfg, Operation &op);
+    Status AdjustReshapeCfg(TileOpCfg &opcfg, const Operation &op);
+    Status AdjustCopyInCfg(TileOpCfg &opcfg, const Operation &op);
+    Status AdjustCopyOutCfg(TileOpCfg &opcfg, const Operation &op);
+    Status AdjustOpCfg(TileOpCfg &opcfg, const Operation &op);
     void InitIssueQueue();
     void EnqueueOp(DepOp &op, const std::vector<Operation *> opLogPtr, std::vector<IndexOp> &syncedOpLog);
     void RemoveOpDep(DepOp &setOp, DepOp &waitOp) const;

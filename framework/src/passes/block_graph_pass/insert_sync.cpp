@@ -402,7 +402,7 @@ PipeSync::PipeCoreReal PipeSync::GetPipeFromSeq(PipeSeq seq) {
     return seq2pipe.at(seq);
 }
 
-Status PipeSync::AdjustReshapeCfg(TileOpCfg &opcfg, Operation &op) {
+Status PipeSync::AdjustReshapeCfg(TileOpCfg &opcfg, const Operation &op) {
     if (op.GetIOperands().size() < 1 || op.GetOOperands().size() < 1) {
         APASS_LOG_ERROR_F(Elements::Operation, "%d RESHAPE op operands size is 0, AdjustOpCfg failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
@@ -415,7 +415,7 @@ Status PipeSync::AdjustReshapeCfg(TileOpCfg &opcfg, Operation &op) {
     return SUCCESS;
 }
 
-Status PipeSync::AdjustCopyInCfg(TileOpCfg &opcfg, Operation &op) {
+Status PipeSync::AdjustCopyInCfg(TileOpCfg &opcfg, const Operation &op) {
     if (op.GetOpAttribute() == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, "%d COPYIN op attr is nullptr, AdjustOpCfg failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
@@ -436,7 +436,7 @@ Status PipeSync::AdjustCopyInCfg(TileOpCfg &opcfg, Operation &op) {
     return SUCCESS;
 }
 
-Status PipeSync::AdjustCopyOutCfg(TileOpCfg &opcfg, Operation &op) {
+Status PipeSync::AdjustCopyOutCfg(TileOpCfg &opcfg, const Operation &op) {
     if (op.GetOpAttribute() == nullptr) {
         APASS_LOG_ERROR_F(Elements::Operation, "%d COPYOUT op attr is nullptr, AdjustOpCfg failed.%s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
         return FAILED;
@@ -463,7 +463,7 @@ Status PipeSync::AdjustCopyOutCfg(TileOpCfg &opcfg, Operation &op) {
     return SUCCESS;
 }
 
-Status PipeSync::AdjustOpCfg(TileOpCfg &opcfg, Operation &op) {
+Status PipeSync::AdjustOpCfg(TileOpCfg &opcfg, const Operation &op) {
     if (op.GetOpcode() == Opcode::OP_RESHAPE) {
         if (AdjustReshapeCfg(opcfg, op) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "AdjustReshapeCfg failed.");
@@ -1259,6 +1259,8 @@ bool PipeSync::HasDataDependency(const Operation &opSet, const Operation &opWait
     bool checkWaw = true;
     auto setCfg = OpcodeManager::Inst().GetTileOpCfg(opSet.GetOpcode());
     auto waitCfg = OpcodeManager::Inst().GetTileOpCfg(opWait.GetOpcode());
+    AdjustOpCfg(setCfg, opSet);
+    AdjustOpCfg(waitCfg, opWait);
     if (waitCfg.pipeIdStart_ == setCfg.pipeIdStart_ && (opSetStr.find("CUBE_A_MUL") == std::string::npos || opWaitStr.find("CUBE_A_MUL") == std::string::npos)) {
         checkWaw = false;
     }
