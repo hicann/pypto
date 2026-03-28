@@ -21,6 +21,7 @@
 #include "interface/operation/attribute.h"
 #include "interface/function/function.h"
 #include "interface/interpreter/function.h"
+#include <float.h>
 
 namespace npu::tile_fwk {
 
@@ -36,19 +37,48 @@ public:
         const std::shared_ptr<TensorSlotManager> &slotManager);
     void VerifyPass(Function *func, int passIndex, const std::string &passIdentifier);
 
+     struct CompareResultDetail {
+        size_t totalCnt;
+        size_t zeroCnt;
+        size_t toleranceCnt;
+        size_t warnNum;
+        size_t failNum;
+        double mre;
+        double mreTop8;
+        double mreTop1Permil;
+        double mae;
+        double maeTop8;
+        double maeTop1Permil;
+        double aMax = FLT_MIN;
+        double aMin = FLT_MAX;
+        double aAvg;
+        double aAavg;
+        size_t aZero = 0;
+        size_t aInfnan = 0;
+        double bMax = FLT_MIN;
+        double bMin = FLT_MAX;
+        double bAvg;
+        double bAavg;
+        size_t bZero = 0;
+        size_t bInfnan = 0;
+        size_t infnanCnt = 0;
+    };
+
     struct CompareElement {
         bool isError;
         size_t index;
-        float goldenValue;
-        float outputValue;
-        float absDiff;
-        float relDiff;
+        double goldenValue;
+        double outputValue;
+        double absDiff;
+        double relDiff;
+        double tolerance;
 
         CompareElement() = default;
         CompareElement(const CompareElement &) = default;
         CompareElement &operator=(const CompareElement &) = default;
-        CompareElement(bool isError_, size_t index_, float goldenValue_, float outputValue_, float absDiff_, float relDiff_)
-            : isError(isError_), index(index_), goldenValue(goldenValue_), outputValue(outputValue_), absDiff(absDiff_), relDiff(relDiff_) {}
+        CompareElement(bool isError_, size_t index_, double goldenValue_, double outputValue_, double absDiff_, double relDiff_, double tolerance_)
+            : isError(isError_), index(index_), goldenValue(goldenValue_), outputValue(outputValue_),
+            absDiff(absDiff_), relDiff(relDiff_), tolerance(tolerance_){}
 
         std::string Dump() const {
             std::ostringstream oss;
@@ -62,18 +92,17 @@ public:
     };
     struct CompareResult : std::vector<CompareElement> {
         CompareResult() {}
-        CompareResult(int size, float rtol, float atol, size_t errorCountThreshold = 0, size_t failNum = 0) : size_(size),
-                        rtol_(rtol), atol_(atol), errorCountThreshold_(errorCountThreshold), failNum_(failNum) {}
+        CompareResult(int size, float rtol, float atol, size_t errorCountThreshold = 0, size_t failNum = 0, Shape shape = {}) : size_(size),
+                        rtol_(rtol), atol_(atol), errorCountThreshold_(errorCountThreshold), failNum_(failNum), shape_(shape) {}
 
         template<typename...TyArgs>
         void AppendError(TyArgs && ...args) {
             errorCount_++;
             this->emplace_back(args...);
         }
-        template<typename...TyArgs>
-        void AppendZero(TyArgs && ...args) {
+
+        void AppendZero() {
             zeroCount_++;
-            this->emplace_back(args...);
         }
 
         void AppendFail() {
@@ -93,11 +122,99 @@ public:
             return errorCount_ <= errorCountThreshold_ && failNum_ == 0;
         }
 
-        std::vector<std::string> Dump(int indent = 2, size_t maxPrint = 5) const {
-            float maxAbsDiff = 0;
-            float maxRelDiff = 0;
-            float totalAbsDiff = 0;
-            float totalRelDiff = 0;
+        void sortByAbsAdesc() {
+            std::sort(this->begin(), this->end(),
+                [](const CompareElement &lhs, const CompareElement &rhs) {
+                    return lhs.absDiff > rhs.absDiff;
+                });
+        }
+
+        void sortByRelAdesc() {
+            std::sort(this->begin(), this->end(),
+                [](const CompareElement &lhs, const CompareElement &rhs) {
+                    return lhs.relDiff > rhs.relDiff;
+                });
+        }
+
+        double GetMeanTopN(size_t num, bool is_abs) const {
+            double sum = 0;
+            size_t count = std::min(this->size(), num);
+            if (count == 0) return 0;
+            if (is_abs) {
+                sum = std::accumulate(this->begin(), this->begin() + count, 0.0,
+                    [](double acc, const CompareElement& item) {
+                        return acc + item.absDiff;
+                    });
+            } else {
+                sum = std::accumulate(this->begin(), this->begin() + count, 0.0,
+                    [](double acc, const CompareElement& item) {
+                        return acc + item.relDiff;
+                    });
+            }
+            return sum / count;
+        }
+
+        Shape GetOffsetRaw(int64_t offset) const {
+            if (shape_.empty()) {
+                return {};
+            }
+            int64_t total = 1;
+            for (int64_t dim : shape_) {
+                total *= dim;
+            }
+            if (offset >= total) {
+                throw std::out_of_range("Offset " + std::to_string(offset) + 
+                                        " exceeds total size " + std::to_string(total));
+            }
+            
+            std::vector<int64_t> indices(shape_.size());
+            int64_t remaining = offset;
+
+            for (int i = static_cast<int>(shape_.size()) - 1; i >= 0; --i) {
+                indices[i] = remaining % shape_[i];
+                remaining /= shape_[i];
+            }
+            return indices;
+        }
+
+        void DumpDataDetail(std::ostringstream &oss, size_t topk = 64) {
+            oss << "GROUP,INDEX,OFFSET,OFFSET_RAW,A>data,B>data,AB>ae,AB>re,AB>tol\n";
+            size_t count = std::min(topk, this->size());
+            for (size_t k = 0; k < count; k++) {
+                auto [isError, index, goldenValue, outputValue, absDiff, relDiff, tolerance] = (*this)[k];
+                (void)isError;
+                oss << "firstk," 
+                    << k << ","
+                    << index << ","
+                    << FunctionInterpreter::ShapeToString(GetOffsetRaw(index)) << ","
+                    << goldenValue << ","
+                    << outputValue << ","
+                    << absDiff << ","
+                    << relDiff << ","
+                    << tolerance << "\n";
+            }
+            sortByRelAdesc();
+            for (size_t k = 0; k < count; k++) {
+                auto [isError, index, goldenValue, outputValue, absDiff, relDiff, tolerance] = (*this)[k];
+                (void)isError;
+                oss << "topk_re," 
+                    << k << ","
+                    << index << ","
+                    << FunctionInterpreter::ShapeToString(GetOffsetRaw(index)) << ","
+                    << goldenValue << ","
+                    << outputValue << ","
+                    << absDiff << ","
+                    << relDiff << ","
+                    << tolerance << "\n";
+            }
+        }
+
+        CompareResultDetail Dump(int indent = 2, size_t maxPrint = 5) {
+            double maxAbsDiff = 0;
+            double maxRelDiff = 0;
+            double totalAbsDiff = 0;
+            double totalRelDiff = 0;
+            CompareResultDetail compareResultDetail;
             CompareElement maxAbsElement;
             CompareElement maxRelElement;
             std::ostringstream oss;
@@ -106,10 +223,9 @@ public:
             std::string infoZero = "\n  " + space + "Zero";
             size_t count_ = 0;
             for (auto &element : *this) {
-                auto [isError, index, goldenValue, outputValue, absDiff, relDiff] = element;
+                auto [isError, index, goldenValue, outputValue, absDiff, relDiff, tolerance] = element;
                 (void)index;
-                (void)goldenValue;
-                (void)outputValue;
+                (void)tolerance;
                 if (absDiff > maxAbsDiff) {
                     maxAbsDiff = absDiff;
                     maxAbsElement = element;
@@ -120,6 +236,10 @@ public:
                 }
                 maxAbsDiff = std::max(maxAbsDiff, absDiff);
                 maxRelDiff = std::max(maxRelDiff, relDiff);
+                compareResultDetail.aMax = std::max(compareResultDetail.aMax, goldenValue);
+                compareResultDetail.bMax = std::max(compareResultDetail.bMax, outputValue);
+                compareResultDetail.aMin = std::min(compareResultDetail.aMin, goldenValue);
+                compareResultDetail.bMin = std::min(compareResultDetail.bMin, outputValue);
                 totalAbsDiff += absDiff;
                 totalRelDiff += relDiff;
 
@@ -149,19 +269,56 @@ public:
                     << space << "maxRel-> " << maxRelElement.Dump() << "\n";
             }
             if (!Check()) { VERIFY_EVENT("%s", oss.str().c_str()); }
-            return {std::to_string(maxAbsDiff), std::to_string(maxRelDiff), std::to_string(totalAbsDiff / size_),
-                    std::to_string(totalRelDiff / size_), std::to_string(errorCount_), std::to_string(errorCount_ * 1.0 / size_),
-                    std::to_string(zeroCount_), std::to_string(zeroCount_ * 1.0 / size_)};
+            compareResultDetail.totalCnt = size_;
+            compareResultDetail.zeroCnt = zeroCount_;
+            compareResultDetail.toleranceCnt = errorCountThreshold_;
+            compareResultDetail.warnNum = errorCount_;
+            compareResultDetail.failNum = failNum_;
+            compareResultDetail.mre = totalAbsDiff / size_;
+            compareResultDetail.mae = totalRelDiff / size_;
+            compareResultDetail.mreTop8 = GetMeanTopN(8, false);
+            compareResultDetail.mreTop1Permil = GetMeanTopN(1000, false);
+            sortByAbsAdesc();
+            compareResultDetail.maeTop1Permil = GetMeanTopN(1000, true);
+            compareResultDetail.maeTop8 = GetMeanTopN(8, true);
+            compareResultDetail.aMax = goldenMax_;
+            compareResultDetail.aMin = goldenMin_;
+            compareResultDetail.aAvg = goldenSum_ / size_;
+            compareResultDetail.aAavg = goldenAbsSum_ / size_;
+            compareResultDetail.aZero = goldenZero_;
+            compareResultDetail.bMax = outputMax_;
+            compareResultDetail.bMin = outputMin_;
+            compareResultDetail.bAvg = outputSum_ / size_;
+            compareResultDetail.bAavg = outputAbsSum_ / size_;
+            compareResultDetail.bZero = outputZero_;
+            compareResultDetail.bInfnan = outputInfnan_;
+            compareResultDetail.aInfnan = goldenInfnan_;
+            compareResultDetail.infnanCnt = infnanCnt_;
+            return compareResultDetail;
         }
 
         float GetRtol() const { return rtol_; }
         float GetAtol() const { return atol_; }
+        double goldenMax_ = -DBL_MAX;
+        double outputMax_ = -DBL_MAX;
+        double goldenMin_ = DBL_MAX;
+        double outputMin_ = DBL_MAX;
+        double goldenSum_ = 0;
+        double outputSum_ = 0;
+        double goldenAbsSum_ = 0;
+        double outputAbsSum_ = 0;
+        size_t goldenZero_ = 0;
+        size_t outputZero_ = 0;
+        size_t goldenInfnan_ = 0;
+        size_t outputInfnan_ = 0;
+        size_t infnanCnt_ = 0;
     private:
         size_t size_{0};
         float rtol_{0};
         float atol_{0};
         size_t errorCountThreshold_{0};
         size_t failNum_{0};
+        Shape shape_;
         size_t errorCount_ = 0;
         size_t zeroCount_ = 0;
     };
@@ -172,21 +329,43 @@ public:
         for (size_t index = 0; index < count; index++) {
             auto goldenValue = static_cast<T>(goldenValueList[index]);       
             auto outputValue = static_cast<T>(outputValueList[index]);
-            
+            compareResult.goldenMax_ = std::max(compareResult.goldenMax_, static_cast<double>(goldenValue));
+            compareResult.outputMax_ = std::max(compareResult.outputMax_, static_cast<double>(outputValue));
+            compareResult.goldenMin_ = std::min(compareResult.goldenMin_, static_cast<double>(goldenValue));
+            compareResult.outputMin_ = std::min(compareResult.outputMin_, static_cast<double>(outputValue));
+            compareResult.goldenSum_ += goldenValue;
+            compareResult.outputSum_ += outputValue;
             auto output_abs = abs(outputValue);
             auto golden_abs = abs(goldenValue);
             auto output_golden_sub_abs = abs(outputValue - goldenValue);
+            compareResult.goldenAbsSum_ += golden_abs;
+            compareResult.outputAbsSum_ += output_abs;
+            if (output_abs <= 0) {
+                compareResult.outputZero_++;
+            }
+            if (golden_abs <= 0) {
+                compareResult.goldenZero_++;
+            }
+            if (!std::isfinite(outputValue)) {
+                compareResult.outputInfnan_++;
+            }
+            if (!std::isfinite(goldenValue)) {
+                compareResult.goldenInfnan_++;
+            }
+            if (!std::isfinite(output_golden_sub_abs)) {
+                compareResult.infnanCnt_++;
+            }
             auto output_golden_abs_add = output_abs + golden_abs;
             if (output_golden_abs_add <= 0) {
-                compareResult.AppendZero(false, offset + index, goldenValue, outputValue, 0, 0);
+                compareResult.AppendZero();
                 continue;
             }
 
-            auto relDiff = output_golden_sub_abs / output_golden_abs_add * 2;
+            auto relDiff = output_golden_sub_abs * 2 / output_golden_abs_add;
             auto tol_attn = output_golden_abs_add * compareResult.GetRtol() / 2 + compareResult.GetAtol();
             auto tol_fail = tol_attn * 128;
             if (output_golden_sub_abs > tol_attn) {
-                compareResult.AppendError(true, offset + index, goldenValue, outputValue, output_golden_sub_abs, relDiff);
+                compareResult.AppendError(true, offset + index, goldenValue, outputValue, output_golden_sub_abs, relDiff, tol_attn);
             }
             if (output_golden_sub_abs > tol_fail) {
                 compareResult.AppendFail();
@@ -218,7 +397,7 @@ public:
         int failNum = 0) {
         auto &validShape = goldenDataView->GetValidShape();
         auto size = std::accumulate(validShape.begin(), validShape.end(), 1, std::multiplies<>());
-        CompareResult compareResult(size, rtol, atol, errorCountThreshold, failNum);
+        CompareResult compareResult(size, rtol, atol, errorCountThreshold, failNum, validShape);
         CompareDataRecursive<DataType, T>(compareResult, 0, 0, 0, goldenDataView, outputDataView);
         compareResult.UpdateErrorCountThreshold();
         return compareResult;
@@ -227,11 +406,17 @@ public:
     static CompareResult VerifyResult(
             const std::shared_ptr<LogicalTensorData> &goldenDataView,
             const std::shared_ptr<LogicalTensorData> &outputDataView, float rtol, float atol);
-    bool VerifyResult(const std::string &key, const std::string tensorNameList,
+    bool VerifyResult(const std::vector<std::shared_ptr<LogicalTensor>> &tensorDatalist,
+        const std::vector<std::shared_ptr<LogicalTensor>> &goldenDatalist,
+        const std::string &key, const std::string tensorNameList,
         const std::vector<std::shared_ptr<LogicalTensorData>> &goldenDataViewList,
         const std::vector<std::shared_ptr<LogicalTensorData>> &tensorDataViewList, float rtol, float atol);
     
     std::string ParseErrorMsg(std::string errorMsg);
+
+    void WriteUserGolden(const std::vector<std::shared_ptr<LogicalTensorData>> &goldenDataViewList);
+
+    void WriteException();
 
 private:
     void UpdateInterpreterCache();

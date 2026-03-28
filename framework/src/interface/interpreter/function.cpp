@@ -183,18 +183,23 @@ void FunctionInterpreter::DumpTensorBinary(
 
 void FunctionInterpreter::DumpTensorBinary(
         const std::shared_ptr<LogicalTensorData> &dataView,
-        std::string dumpTensorFileName) {
+        std::string dumpTensorFileName, bool isRaw) {
     std::string dumpTensorFilePath = execDumpDir + "/" + dumpTensorFileName;
-    int totalSize = dataView->GetSize();
-    if (totalSize <= 0) {
+    auto rawShape = dataView->GetData()->GetShape();
+    if (std::any_of(rawShape.begin(), rawShape.end(), [](const int64_t& val) {return val <= 0;})) {
         VERIFY_LOGW("The tensor size is not greater than 0.");
         return;
     }
     auto validShape = dataView->GetValidShape();
+    auto offset = dataView->GetOffset();
+    if (isRaw) {
+        validShape = rawShape;
+        std::fill(offset.begin(), offset.end(), 0);
+    }
     if (std::any_of(validShape.begin(), validShape.end(), [](const int64_t& val) {return val <= 0;})) {
         return;
     }
-    auto offset = dataView->GetOffset();
+    
     auto stride = dataView->GetData()->GetStride();
     if (offset.size() != validShape.size() || stride.size() != validShape.size()) {
         return;
@@ -281,19 +286,20 @@ void FunctionInterpreter::DumpTensorList(const std::string &name, const std::vec
 
 void FunctionInterpreter::FillOperationBasicInfo(Operation *op, FunctionFrame *frame, std::vector<std::string> &opInfo) {
     opInfo[toIndex(OpInfoCsvHeader::rootFuncID)] = std::to_string(frame->rootFuncIndex);
-    opInfo[toIndex(OpInfoCsvHeader::rootFuncHash)] = std::to_string(frame->rootFuncHash);
+    opInfo[toIndex(OpInfoCsvHeader::rootFuncHash)] = "'" + std::to_string(frame->rootFuncHash);
+    opInfo[toIndex(OpInfoCsvHeader::rootFuncType)] = frame->rootFuncType;
+    opInfo[toIndex(OpInfoCsvHeader::rootFuncGraphType)] = frame->rootFuncGraphType;
     opInfo[toIndex(OpInfoCsvHeader::funcID)] = std::to_string(frame->funcIndex);
-    opInfo[toIndex(OpInfoCsvHeader::funcHash)] = std::to_string(frame->funcHash);
+    opInfo[toIndex(OpInfoCsvHeader::funcHash)] = "'" + std::to_string(frame->funcHash);
+    opInfo[toIndex(OpInfoCsvHeader::funcType)] = frame->funcType;
+    opInfo[toIndex(OpInfoCsvHeader::funcGraphType)] = frame->funcGraphType;
     opInfo[toIndex(OpInfoCsvHeader::passName)] = execDumpPassName;
-    opInfo[toIndex(OpInfoCsvHeader::verifyType)] = execDumpFunPath;
+    opInfo[toIndex(OpInfoCsvHeader::pathFuncMagicName)] = execDumpFunPath;
+    opInfo[toIndex(OpInfoCsvHeader::pathFuncMagic)] = std::to_string(pathFuncMagic);
+    opInfo[toIndex(OpInfoCsvHeader::pathFuncHash)] = "'" + std::to_string(pathFuncHash);
     opInfo[toIndex(OpInfoCsvHeader::loopInfo)] = GetLoopSymbolString();
     opInfo[toIndex(OpInfoCsvHeader::opCode)] = op->GetOpcodeStr();
     opInfo[toIndex(OpInfoCsvHeader::opMagic)] = std::to_string(op->GetOpMagic());
-    if (execDumpPassName == "tensor_graph") {
-        opInfo[toIndex(OpInfoCsvHeader::referPassName)] = "golden";
-    } else {
-        opInfo[toIndex(OpInfoCsvHeader::referPassName)] = "tensor_graph";
-    }
     if (frame->callop != nullptr) {
         opInfo[toIndex(OpInfoCsvHeader::callopMagic)] = std::to_string(frame->callop->GetOpMagic());
     }
@@ -311,11 +317,16 @@ void FunctionInterpreter::FillOperationOffsetInfo(Operation *op, FunctionFrame *
             auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
             auto offset = copyAttr->IsCopyOut() ? copyAttr->GetToOffset() : copyAttr->GetFromOffset();
             auto offsetView = operationInterpreter->EvaluateOpImmediate(frame, offset);
-            opInfo[toIndex(OpInfoCsvHeader::offset)] = ShapeToString(offsetView);
+            opInfo[toIndex(OpInfoCsvHeader::attrOffset)] = ShapeToString(offsetView);
         } else {
             Offset offsetView = EvaluateOffset(opAttr->GetFromOffset(), opAttr->GetFromDynOffset(), linearArgList);
-            opInfo[toIndex(OpInfoCsvHeader::offset)] = ShapeToString(offsetView);
+            opInfo[toIndex(OpInfoCsvHeader::attrOffset)] = ShapeToString(offsetView);
         }
+    }
+    if (op->HasAttribute(OP_ATTR_PREFIX + "atomic_add")) {
+        opInfo[toIndex(OpInfoCsvHeader::attrAtomic)] = "True";
+    } else {
+        opInfo[toIndex(OpInfoCsvHeader::attrAtomic)] = "False";
     }
 }
 
@@ -329,14 +340,10 @@ void FunctionInterpreter::FillOperationInputInfo(Operation *op, FunctionFrame *f
         }
         auto dataView = ioperandDataViewList->at(k);
         if (k > 0) {
-            opInfo[toIndex(OpInfoCsvHeader::inputShape)] += ", ";
-            opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ", ";
-            opInfo[toIndex(OpInfoCsvHeader::inputDtype)] += ", ";
             opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += ", ";
+            opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ", ";
         }
-        opInfo[toIndex(OpInfoCsvHeader::inputShape)] += ShapeToString(dataView->GetShape());
         opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ShapeToString(dataView->GetValidShape());
-        opInfo[toIndex(OpInfoCsvHeader::inputDtype)] += DataType2String(dataView->GetDataType());
         auto it = frame->tensorDataBinDict.find(op->GetIOperands()[k]);
         if (it != frame->tensorDataBinDict.end()) {
             opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += it->second;
@@ -359,7 +366,8 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
         if (k < ooperandDataViewList->size()) {
             auto dataView = ooperandDataViewList->at(k);
             std::string dumpTensorFileName = GetDumpTensorFileName(op->GetOOperands()[k], op, frame);
-            DumpTensorBinary(dataView, dumpTensorFileName);
+            bool isRaw = (op->GetOpcode() == Opcode::OP_COPY_OUT || op->GetOpcode() == Opcode::OP_ASSEMBLE);
+            DumpTensorBinary(dataView, dumpTensorFileName, isRaw);
             fprintf(execDumpFile, "<div class=\"detail indent_%d\">%s</a></div>\n", indent, dumpTensorFileName.c_str());
             struct timeval tv;
             gettimeofday(&tv, nullptr);
@@ -369,9 +377,10 @@ void FunctionInterpreter::FillOperationOutputInfo(Operation *op, FunctionFrame *
             opInfo[toIndex(OpInfoCsvHeader::tensorMagic)] = std::to_string(op->GetOOperands()[k]->GetMagic());
             opInfo[toIndex(OpInfoCsvHeader::rawTensorMagic)] = std::to_string(op->GetOOperands()[k]->GetRawTensor()->GetRawMagic());
             opInfo[toIndex(OpInfoCsvHeader::outputShape)] = ShapeToString(dataView->GetShape());
+            opInfo[toIndex(OpInfoCsvHeader::outputRawShape)] = ShapeToString(dataView->GetData()->GetShape());
             opInfo[toIndex(OpInfoCsvHeader::outputValidShape)] = ShapeToString(dataView->GetValidShape());
             opInfo[toIndex(OpInfoCsvHeader::outputDynValidShape)] = ShapeToString(EvaluateValidShape((op->GetOOperands()[k]->GetDynValidShape()), linearArgList));
-            opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = DataType2String(dataView->GetDataType());
+            opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = BriefDataType2String(dataView->GetDataType());
             opInfo[toIndex(OpInfoCsvHeader::tensorOffset)] = ShapeToString(dataView->GetOffset());
             opInfo[toIndex(OpInfoCsvHeader::outputTensor)] = dumpTensorFileName;
             opInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts);

@@ -100,8 +100,12 @@ struct FunctionFrame {
     std::vector<std::set<LogicalTensorPtr>> inplaceTensorSetList;
     int funcIndex;
     size_t funcHash;
+    std::string funcType;
+    std::string funcGraphType;
     int rootFuncIndex{-1};
     size_t rootFuncHash;
+    std::string rootFuncType;
+    std::string rootFuncGraphType;
     int passIndex{-1};
 
     Operation *currentOperation;
@@ -457,62 +461,86 @@ const std::unordered_set<Opcode> MIX_PATH_OPS = {
 enum class VerifyType { INVALID, TENSOR_GRAPH, PASS, EXECUTE_GRAPH };
 enum class OpInfoCsvHeader {
     num = 0,
+    passName,
+    pathFuncMagicName,
+    pathFuncMagic,
+    pathFuncHash,
+    loopInfo,
+    rootFuncType,
+    rootFuncGraphType,
     rootFuncID,
     rootFuncHash,
+    funcType,
+    funcGraphType,
     funcID,
     funcHash,
-    passName,
-    referPassName,
-    verifyType,
-    callopMagic,
-    loopInfo,
-    opMagic,
-    opCode,
     rawTensorMagic,
+    outputRawShape,
+    outputDtype,
+    outputFormat,
+    outputSymbol,
     tensorMagic,
-    callopRawMagic,
-    offset,
-    inputShape,
-    inputValidShape,
-    inputDtype,
-    inputTensors,
-    outputShape,
     tensorOffset,
+    outputShape,
     outputValidShape,
     outputDynValidShape,
-    outputDtype,
-    outputTensor,
-    outputSymbol,
-    outputFormat,
+    callopMagic,
+    callopRawMagic,
+    opMagic,
+    opCode,
+    attrOffset,
+    attrAtomic,
     ioflag,
     timeStamp,
+    outputTensor,
+    inputTensors,
+    inputValidShape,
     COL_COUNT
 };
 
 enum class ProgrameInfoCsvHeader {
-    funcID,
+    num = 0,
+    goldenPassName,
     passName,
-    referPassName,
-    verifyType,
+    pathFuncMagicName,
+    pathFuncMagic,
+    pathFuncHash,
     loopInfo,
     ioflag,
+    goldenRawMagic,
+    outputRawMagic,
+    outputRawShape,
+    outputDtype,
+    outputFormat,
+    outputSymbol,
     outputShape,
     outputValidShape,
-    outputDtype,
-    outputTensor,
+    aTimeStamp,
     goldenTensor,
+    bTimeStamp,
+    outputTensor,
     verifyResult,
-    rtol,
-    atol,
-    maxAbsDiff,
-    maxRelDiff,
-    averageAbsDiff,
-    averageRelDiff,
-    errorCount,
-    errorRatio,
-    zeroCount,
-    zeroRatio,
-    timeStamp,
+    rtolAndAtol,
+    failCnt,
+    totalCnt,
+    mre,
+    mreTop8,
+    mreTop1Permil,
+    mae,
+    maeTop8,
+    maeTop1Permil,
+    aMax,
+    aMin,
+    aAvg,
+    aAavg,
+    aZero,
+    aInfnan,
+    bMax,
+    bMin,
+    bAvg,
+    bAavg,
+    bZero,
+    bInfnan,
     COL_COUNT
 };
 
@@ -539,19 +567,22 @@ struct FunctionInterpreter {
         dumpPath = dumpPath + "/" + "verify_" + timestamp.str() + "/";
         CreateMultiLevelDir(dumpPath);
 
-        std::string dumpOpFilePath = dumpPath + "verify_result_metadata.csv";
-        std::string dumpProgrameFilePath = dumpPath + "verify_result_brief.csv";
-        std::string dumpErrorPath = dumpPath + "verify_exception.log";
+        std::string dumpOpFilePath = dumpPath + "verify_graph_data_metainfo.csv";
+        std::string dumpProgrameFilePath = dumpPath + "verify_graph_result_brief.csv";
+        std::string dumpErrorPath = dumpPath + "verify_graph_result_brief.log";
         execOpResultFile = fopen(dumpOpFilePath.c_str(), "w");
         execProgrameResultFile = fopen(dumpProgrameFilePath.c_str(), "w");
         execDumpErrorFile = fopen(dumpErrorPath.c_str(), "w");
-        std::vector<std::string> OpcsvHeader = {"No.", "rootFuncID", "rootFuncHash", "funcID", "funcHash", "passName", "referPassName",
-            "verifyType", "callopMagic", "loopInfo", "opMagic", "opCode", "rawTensorMagic", "tensorMagic", "callopRawMagic", "offset",
-            "inputShape", "inputValidShape", "inputDtype", "inputTensors", "outputShape", "tensorOffset", "outputValidShape",
-            "outputDynValidShape", "outputDtype", "outputTensor", "outputSymbol", "outputFormat", "ioflag", "timeStamp"};
-        std::vector<std::string> ProgrameInfoCsvHeader = {"funcID", "passName", "referPassName", "verifyType", "loopInfo", "ioflag", "outputShape",
-            "outputValidShape", "outputDtype", "outputTensor", "goldenTensor", "verifyResult", "rtol", "atol", "maxAbsDiff", "maxRelDiff",
-            "averageAbsDiff", "averageRelDiff", "errorCount", "errorRatio", "zeroCount", "zeroRatio", "timeStamp"};
+        std::vector<std::string> OpcsvHeader = {"NO.", "PHASE_NAME", "PATH_FUNC:func_magicname", "PATH_FUNC:funcmagic", "PATH_FUNC:hash",
+            "LOOP_INFO", "ROOT_FUNC:functype", "ROOT_FUNC:graphtype", "ROOT_FUNC:funcmagic", "ROOT_FUNC:hash", "FUNC:functype",
+            "FUNC:graphtype", "FUNC:funcmagic", "FUNC:hash", ":rawmagic", ":rawshape", ":datatype", ":format", ":symbol", ":magic",
+            ":offset", ":shape", ":validshape", "EVAL:dynvalidshape", "ROOT_CALL:opmagic", "ROOT_CALL:rawmagic", ":opmagic", ":opcode",
+            "OP_ATTR_SYM_OFFSET", "OP_ATTR_ATOMIC", "OP_IO_FLAG", "TIMESTAMP", "FILENAME", "INPUT_FILENAMES", ":inputValidShape"};
+        std::vector<std::string> ProgrameInfoCsvHeader = {"NO.", "A>PHASE_NAME", "B>PHASE_NAME", "PATH_FUNC:func_magicname",
+            "PATH_FUNC:funcmagic", "PATH_FUNC:hash", "LOOP_INFO", "IO_FLAG", "A>:rawmagic", "B>:rawmagic", ":rawshape", ":datatype", ":format",
+            ":symbol", ":shape", ":validshape", "A>TIMESTAMP", "A>FILENAME" ,"B>TIMESTAMP", "B>FILENAME", "AB>RESULT", "AB>rtol/atol",
+            "AB>fail_cnt/warn_cnt/tol_cnt", "AB>total_cnt/zero_cnt/infnan_cnt", "AB>mre", "AB>mre_top8", "AB>mre_top1permil", "AB>mae", "AB>mae_top8",
+            "AB>mae_top1permil", "A>max", "A>min", "A>avg", "A>aavg", "A>zero", "A>infnan", "B>max", "B>min", "B>avg", "B>aavg", "B>zero", "B>infnan"};
         WriteCsvRow(OpcsvHeader, opInfoRowNum, execOpResultFile);
         WriteCsvRow(ProgrameInfoCsvHeader, ProgrameRowNum, execProgrameResultFile);
     }
@@ -583,6 +614,8 @@ struct FunctionInterpreter {
     std::string execDumpFuncKey;
     std::string execDumpPassName;
     std::string execDumpFunPath;
+    int pathFuncMagic;
+    size_t pathFuncHash;
     std::vector<ElementDump> execDumpElementList;
     std::vector<std::shared_ptr<FunctionFrame>> execDumpStack;
     int frameCount{0};
@@ -881,10 +914,14 @@ struct FunctionInterpreter {
         captureFrameList->push_back(frame);
         frame->funcIndex = func->GetFuncMagic();
         frame->funcHash = func->GetFunctionHash().GetHash();
+        frame->funcType = func->GetFunctionTypeStr();
+        frame->funcGraphType = GetGraphTypeNameDict().Find(func->GetGraphType());
         frame->passIndex = passIndex;
         if (func->HasParent()) {
             frame->rootFuncIndex = func->Parent().GetFuncMagic();
             frame->rootFuncHash = func->Parent().GetFunctionHash().GetHash();
+            frame->rootFuncType = func->Parent().GetFunctionTypeStr();
+            frame->rootFuncGraphType = GetGraphTypeNameDict().Find(func->Parent().GetGraphType());
         }
 
         UpdateIODataPair(inoutDataPair);
@@ -1078,6 +1115,8 @@ struct FunctionInterpreter {
                 ExecuteFunctionDynamic(func, controlFlowExecution);
             } else {
                 execDumpFunPath = func->GetMagicName();
+                pathFuncMagic = func->GetFuncMagic();
+                pathFuncHash = func->GetFunctionHash().GetHash();
                 auto &incastSlot = func->GetSlotScope()->ioslot.incastSlot;
                 auto &outcastSlot = func->GetSlotScope()->ioslot.outcastSlot;
                 auto &partialSlot = func->GetSlotScope()->ioslot.partialUpdateOutcastList;
@@ -1173,7 +1212,7 @@ public:
             const std::shared_ptr<LogicalTensorData> &dataView);
     void DumpTensorBinary(
             const std::shared_ptr<LogicalTensorData> &dataView,
-            std::string dumpTensorFileName);
+            std::string dumpTensorFileName, bool isRaw = false);
     void DumpBinary(std::vector<int64_t> &shape, std::vector<int64_t> &stride, std::vector<int64_t> &offset, 
             FILE *fdata, uint8_t *data, size_t dtypeSize);
     void DumpTensorList(
@@ -1262,12 +1301,12 @@ public:
         dumpOperationUsage = 0;
     }
 
-    std::string ShapeToString(const std::vector<int64_t> &shape) {
+    static std::string ShapeToString(const std::vector<int64_t> &shape) {
         std::ostringstream oss;
         oss << "[";
         for (size_t i = 0; i < shape.size(); ++i) {
             if (i > 0) {
-                oss << ", ";
+                oss << ",";
             }
             oss << std::to_string(shape[i]);
         }

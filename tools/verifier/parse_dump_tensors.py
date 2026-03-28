@@ -110,22 +110,22 @@ class VerifyRes:
     
     def read_verify_result(self, verify_path):
         self.verify_path = verify_path
-        verify_res_file = os.path.join(self.verify_path, "verify_result.csv")
+        verify_res_file = os.path.join(self.verify_path, "verify_graph_data_metainfo.csv")
         if not os.path.exists(verify_res_file):
             logging.error(f"verify path {verify_path} not exist.")
             return
         
         df = pd.read_csv(verify_res_file, encoding="utf-8")
-        df_clean = df.dropna(subset=["rawTensorMagic"]).copy()
-        df_clean["rawTensorMagic"] = df_clean["rawTensorMagic"].astype(int)
+        df_clean = df.dropna(subset=[":rawmagic"]).copy()
+        df_clean[":rawmagic"] = df_clean[":rawmagic"].astype(int)
 
-        codegen_filter = df_clean["passName"].str.contains("CodegenPreproc", na=False)
+        codegen_filter = df_clean["PHASE_NAME"].str.contains("Pass_36_CodegenPreproc", na=False)
         df_codegen = df_clean[codegen_filter]
-        df_codegen = df_codegen.dropna(subset=["callopMagic"]).copy()
-        df_codegen["callopMagic"] = df_codegen["callopMagic"].astype(int)
+        df_codegen = df_codegen.dropna(subset=["ROOT_CALL:opmagic"]).copy()
+        df_codegen["ROOT_CALL:opmagic"] = df_codegen["ROOT_CALL:opmagic"].astype(int)
         self.verify_codegen_op_info_list = df_codegen
 
-        tensor_graph_filter = df_clean["passName"].str.contains("tensor_graph", na=False)
+        tensor_graph_filter = df_clean["PHASE_NAME"].str.contains("tensor_graph", na=False)
         self.verify_tensorgraph_op_info_list = df_clean[tensor_graph_filter]
 
 
@@ -138,33 +138,33 @@ class VerifyRes:
         verify_dup_tensor = ""
         valid_shape = []
         loop_info = ""
-        op_info_list.sort(key=lambda x: x.get("No."))      # 按序号排序,序号也是执行顺序
+        op_info_list.sort(key=lambda x: x.get("NO."))      # 按序号排序,序号也是执行顺序
         
         for op_info in op_info_list:
-            if callop_magic != op_info.get("callopMagic"):
+            if callop_magic != op_info.get("ROOT_CALL:opmagic"):
                 continue 
-            if raw_magic != op_info.get("callopRawMagic"):
+            if raw_magic != op_info.get("ROOT_CALL:rawmagic"):
                 continue
             
-            if "input" in ioflag and op_info.get("opCode") in ["COPY_IN", "VIEW"]:
-                verify_op_offset = json.loads(op_info.get("offset"))
+            if "input" in ioflag and op_info.get(":opcode") in ["COPY_IN", "VIEW"]:
+                verify_op_offset = json.loads(op_info.get("OP_ATTR_SYM_OFFSET"))
                 verify_op_offset_str = '_'.join(str(item) for item in verify_op_offset)
                 if verify_op_offset_str == tensor_info_offset_str:
-                    verify_dup_tensor = op_info.get("outputTensor")
-                    valid_shape = json.loads(op_info.get("outputValidShape"))
-                    loop_info = op_info.get("loopInfo")
+                    verify_dup_tensor = op_info.get("FILENAME")
+                    valid_shape = json.loads(op_info.get(":validshape"))
+                    loop_info = op_info.get("LOOP_INFO")
                     break
-            elif "output" in ioflag and op_info.get("opCode") in ["COPY_OUT"]:
-                verify_op_offset = json.loads(op_info.get("offset"))
+            elif "output" in ioflag and op_info.get(":opcode") in ["COPY_OUT"]:
+                verify_op_offset = json.loads(op_info.get("OP_ATTR_SYM_OFFSET"))
                 verify_op_offset_str = '_'.join(str(item) for item in verify_op_offset)
                 if verify_op_offset_str == tensor_info_offset_str:
-                    verify_dup_tensor = op_info.get("inputTensors")   # COPY_OUT的op只会有一个输入
-                    valid_shape = json.loads(op_info.get("inputValidShape"))
-                    loop_info = op_info.get("loopInfo")
+                    verify_dup_tensor = op_info.get("INPUT_FILENAMES")   # COPY_OUT的op只会有一个输入
+                    valid_shape = json.loads(op_info.get(":inputValidShape"))
+                    loop_info = op_info.get("LOOP_INFO")
                     break
 
         if verify_dup_tensor:
-            verify_dup_tensor = os.path.join(self.verify_path, op_info.get("passName"), verify_dup_tensor)
+            verify_dup_tensor = os.path.join(self.verify_path, op_info.get("PHASE_NAME"), verify_dup_tensor)
         tensor_info["verify_dup_tensor"] = verify_dup_tensor
         tensor_info["valid_shape"], tensor_info["loop_info"] = valid_shape, loop_info
 
@@ -178,7 +178,7 @@ class VerifyRes:
             cur_loop_info = tensor_infos_new[0].get("loop_info")
             if not cur_loop_info:
                 break
-            op_info_list_with_loop = op_info_list[op_info_list["loopInfo"] == cur_loop_info]
+            op_info_list_with_loop = op_info_list[op_info_list["LOOP_INFO"] == cur_loop_info]
             all_match = True
             for i, tensor_info in enumerate(tensor_infos_new):
                 if i == 0:
@@ -189,9 +189,9 @@ class VerifyRes:
                     all_match = False
                     break
             if all_match:
-                update_op_info = op_info_list_callop[op_info_list_callop["loopInfo"] != cur_loop_info]
+                update_op_info = op_info_list_callop[op_info_list_callop["LOOP_INFO"] != cur_loop_info]
                 break
-            op_info_list = op_info_list[op_info_list["loopInfo"] != cur_loop_info]
+            op_info_list = op_info_list[op_info_list["LOOP_INFO"] != cur_loop_info]
         if not all_match:
             for _, tensor_info in enumerate(tensor_infos):
                 tensor_info["verify_tensor_file"] = "" 
@@ -211,7 +211,7 @@ class VerifyRes:
 
         callop_magic = callop_tensor_infos[0][0].get("callopMagic")   # callop
         op_info_list_callop = self.verify_codegen_op_info_list.copy(deep=True)
-        op_info_list_callop = op_info_list_callop[op_info_list_callop["callopMagic"] == callop_magic]
+        op_info_list_callop = op_info_list_callop[op_info_list_callop["ROOT_CALL:opmagic"] == callop_magic]
         for tensor_infos in callop_tensor_infos:
             op_info_list_callop = self.process_single_task(tensor_infos, op_info_list_callop)
             res_tensor_infos.extend(tensor_infos)
@@ -229,17 +229,17 @@ class VerifyRes:
         
         # 按rawTensorMagic过滤
         filtered_df = self.verify_tensorgraph_op_info_list[
-            self.verify_tensorgraph_op_info_list["rawTensorMagic"] == raw_magic
+            self.verify_tensorgraph_op_info_list[":rawmagic"] == raw_magic
         ]
         if filtered_df.empty:
             return verify_dup_tensor, valid_shape
 
-        sorted_df = filtered_df.sort_values(by="No.", ascending=True)
+        sorted_df = filtered_df.sort_values(by="NO.", ascending=True)
         last_op_info = sorted_df.iloc[-1]
-        verify_dup_tensor = last_op_info.get("outputTensor")
-        valid_shape = json.loads(last_op_info.get("outputValidShape"))
+        verify_dup_tensor = last_op_info.get("FILENAME")
+        valid_shape = json.loads(last_op_info.get(":validshape"))
         if verify_dup_tensor:
-            verify_dup_tensor = os.path.join(self.verify_path, last_op_info.get("passName"), verify_dup_tensor)
+            verify_dup_tensor = os.path.join(self.verify_path, last_op_info.get("PHASE_NAME"), verify_dup_tensor)
         
         return verify_dup_tensor, valid_shape
 
@@ -413,7 +413,6 @@ class CompactDumpTensorInfoParser:
         num_tasks = len(self.task_tensor_info)
         num_cpus = os.cpu_count() or 1
         num_processes = min(16, num_cpus, num_tasks)
-        
         with multiprocessing.Pool(processes=num_processes) as pool:
             tasks = []
             callop_tasks = {}
@@ -435,7 +434,7 @@ class CompactDumpTensorInfoParser:
             except Exception as e:
                 logging.error(f"Tensor comparison failed with error: {e}")
                 for tensor_infos in tasks:
-                    merged_result.extend(tensor_infos)
+                    merged_result.extend(x for sublist in tensor_infos for x in sublist)
                 return merged_result
 
         for result in results:

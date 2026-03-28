@@ -25,47 +25,6 @@ from tensor_diff import TensorComparator, IsCloseConfig
 from run_float_diff import DataDiffAnalyzer
 
 
-@dataclass
-class ComparisonRecord:
-    """Comparison record data class."""
-    result_is_close: str
-    result_reason: str
-    file_a: str
-    file_b: str
-    opcode_a: str
-    opcode_b: str
-    dtype: str
-    shape_a: str
-    shape_b: str
-    offset_a: str
-    offset_b: str
-    verify_type: str
-    raw_tensor_magic_a: str
-    raw_tensor_magic_b: str
-    raw_tensor_symbol_a: str
-    raw_tensor_symbol_b: str
-    raw_tensor_format_a: str
-    raw_tensor_format_b: str
-    raw_tensor_ioflag_a: str
-    raw_tensor_ioflag_b: str
-    tensor_magic_a: str
-    tensor_magic_b: str
-    loop_info: str
-    pass_name: str
-    refer_pass_name: str
-    timestamp: str
-    max_abs_diff: str
-    max_rel_diff: str
-    average_abs_diff: str
-    average_rel_diff: str
-    error_count: str
-    error_ratio: str
-    zero_count: str
-    zero_ratio: str
-    rtol: str
-    atol: str
-
-
 class PassComparator:
     """Pass comparator class, which encapsulates all comparison logic."""
     
@@ -76,7 +35,7 @@ class PassComparator:
                  verify_path_pass2: str = "",
                  atol: float = 1e-3,
                  rtol: float = 1e-3,
-                 topk: int = 50,
+                 topk: int = 1000,
                  is_sort: bool = False,
                  mode: int = 0,
                  line: List[int] = None):
@@ -98,21 +57,21 @@ class PassComparator:
         self.is_sort = is_sort
         self.mode = mode
         self.line = line
-        self.key = "rawTensorMagic"
+        self.key = ":rawmagic"
         self.output_pass = output_pass
         self.golden_pass = golden_pass
-        self.result_file = f'verify_pass@{output_pass}@{golden_pass}@{int(time.time() * 1_000_000)}.csv'
-
-        self.comparison_records: List[ComparisonRecord] = []
-        
+        self.result_file = ""
+        self.row_num = 1
+        self.comparison_records: List[Dict[str, Any]] = []
+        self.csv_data: pd.DataFrame = pd.DataFrame()
         self.dtype_dict = {
-            "DT_BF16": ml_dtypes.bfloat16,
-            "DT_FP32": np.float32,
-            "DT_FP16": np.float16,
-            "DT_INT32": np.int32,
-            "DT_INT8": np.int8,
-            "DT_INT64": np.int64,
-            "DT_INT16": np.int16
+            "BF16": ml_dtypes.bfloat16,
+            "FP32": np.float32,
+            "FP16": np.float16,
+            "INT32": np.int32,
+            "INT8": np.int8,
+            "INT64": np.int64,
+            "INT16": np.int16
         }
         
         self.torch_dtype_dict = {
@@ -179,23 +138,26 @@ class PassComparator:
         Returns:
             bool: True indicates that a is included in b.
         """
-        a_offset = json.loads(a["tensorOffset"])
-        b_offset = json.loads(b["tensorOffset"])
-        a_shape = json.loads(a["outputValidShape"])
-        b_shape = json.loads(b["outputValidShape"])
-        if key == "tensorMagic" and a_shape == b_shape:
+        a_offset = json.loads(a[":offset"])
+        b_offset = json.loads(b[":offset"])
+        a_shape = json.loads(a[":validshape"])
+        b_shape = json.loads(b[":validshape"])
+        if a[":opcode"] in {"ASSEMBLE", "COPY_OUT"}:
+            return a["OP_ATTR_SYM_OFFSET"] == b["OP_ATTR_SYM_OFFSET"] and a[":opcode"] == b[":opcode"]
+        if key == ":magic" and a_shape == b_shape:
             return True
-        elif a["rawTensorMagic"] == b["rawTensorMagic"]:
+        else:
             for a_off, b_off, a_sh, b_sh in zip(a_offset, b_offset, a_shape, b_shape):
                 if (a_off < b_off) or ((a_off + a_sh) > (b_off + b_sh)):
                     return False
-            return True
-        return False
+        if key == "ROOT_CALL:rawmagic":
+            return a[":opcode"] == b[":opcode"]
+        return True
 
     @staticmethod
     def data_sort(a: Dict[str, Any], b: Dict[str, Any]) -> Tuple[Dict, Dict]:
-        a_shape = json.loads(a["outputValidShape"])
-        b_shape = json.loads(b["outputValidShape"])
+        a_shape = json.loads(a[":validshape"])
+        b_shape = json.loads(b[":validshape"])
         for ai_shape, bi_shape in zip(a_shape, b_shape):
             if ai_shape > bi_shape:
                 return b, a
@@ -203,28 +165,30 @@ class PassComparator:
     
     @staticmethod
     def _build_file_path(data: Dict[str, Any], base_path: str) -> str:
-        return os.path.join(base_path, data["passName"], data["outputTensor"])
+        return os.path.join(base_path, data["PHASE_NAME"], data["FILENAME"])
     
     @staticmethod
     def _log_comparison_info(key: str, a: Dict, b: Optional[Dict] = None):
         logging.info("------" * 10)
-        logging.info(f'functionName : {a["verifyType"]}')
-        logging.info(f'key : {a[key]}, path : {a["loopInfo"]}')
-        logging.info(f'line : {a["No."]}, a_shape: {a["outputValidShape"]}, '
-                    f'offset: {a["tensorOffset"]}, dtype: {a["outputDtype"]}')
+        logging.info(f'functionName : {a["PATH_FUNC:func_magicname"]}')
+        logging.info(f'key : {a[key]}, loopinfo : {a["LOOP_INFO"]}')
+        logging.info(f'line : {a["NO."]}, a_shape: {a[":validshape"]}, '
+                    f'offset: {a[":offset"]}, dtype: {a[":datatype"]}')
         if b is not None:
-            logging.info(f'line : {b["No."]}, b_shape: {b["outputValidShape"]}, '
-                    f'offset: {b["tensorOffset"]}, dtype: {b["outputDtype"]}')
+            logging.info(f'line : {b["NO."]}, b_shape: {b[":validshape"]}, '
+                    f'offset: {b[":offset"]}, dtype: {b[":datatype"]}')
 
     def compare_data(self, a: Dict[str, Any], b: Dict[str, Any]) -> bool:
         """Compare two data items"""
         data_a, data_b = self.get_data_slice(a, b)
-        
-        a_shape = json.loads(a["outputValidShape"])
-        dtype = a["outputDtype"]
+        a_shape = json.loads(a[":validshape"])
+        if a[":opcode"] in {"ASSEMBLE", "COPY_OUT"}:
+            input_dict = self.csv_data[self.csv_data["FILENAME"] == a["INPUT_FILENAMES"]].to_dict(orient='records')
+            a_shape = json.loads(input_dict[0][":validshape"])
+        dtype = a[":datatype"]
         np_dtype_a = self.dtype_dict.get(dtype)
         t_dtype_a = self.torch_dtype_dict.get(np_dtype_a)
-        if dtype == "DT_BF16":
+        if dtype == "BF16":
             tensor_a = torch.frombuffer(
                 memoryview(data_a.tobytes()), 
                 dtype=t_dtype_a
@@ -242,7 +206,8 @@ class PassComparator:
             rtol=self.rtol, 
             atol=self.atol, 
             calc_dtype=torch.float64, 
-            is_detail=True
+            is_detail=True,
+            shape=a_shape
         )
         result_is_close, result_reason_str, result_info = comparator.check_isclose(
            tensor_a, tensor_b, config
@@ -256,9 +221,9 @@ class PassComparator:
         
         if not result_is_close:
             csv_path = os.path.join(self.verify_path_pass1, 
-                                    f"Pass_{self.pass_dict[self.output_pass]:02d}_{self.output_pass}", 
-                                    a["verifyType"], a["loopInfo"], f'{a["opMagic"]}_{a["rawTensorMagic"]}.csv')
-            comparator.print_isclose_info(result_is_close, result_reason_str, result_info, csv_path)
+                                    self.result_file[:-4] + ".DETAIL", 
+                                    a["FILENAME"][:-5] + ".csv")
+            comparator.print_isclose_info(result_is_close, result_reason_str, result_info, csv_path, self.topk)
             logging.error("Data comparison failed.")
             return False
         
@@ -277,21 +242,21 @@ class PassComparator:
             logging.error(f"Some files do not exist; these will be skipped directly.  file name : {f_a} ,{f_b}")
             return False
 
-        opcode_a = a["opCode"]
-        opcode_b = b["opCode"]
-        if self.key == "rawTensorMagic" and opcode_a != opcode_b and not self.opcode_match(opcode_a, opcode_b):
+        opcode_a = a[":opcode"]
+        opcode_b = b[":opcode"]
+        if self.key == ":rawmagic" and opcode_a != opcode_b and not self.opcode_match(opcode_a, opcode_b):
             logging.error(f"opcode not match : {opcode_a} ,{opcode_b}")
             return False
         
-        dtype = a["outputDtype"]
+        dtype = a[":datatype"]
         np_dtype = self.dtype_dict.get(dtype)
         if np_dtype is None:
             error_msg = f"Unsupported data types : {dtype}"
             logging.error(error_msg)
             return False
 
-        if a["outputDtype"] != b["outputDtype"]:
-            error_msg = f"data dtype is different : {a['outputDtype']}, {b['outputDtype']}"
+        if a[":datatype"] != b[":datatype"]:
+            error_msg = f"data dtype is different : {a[':datatype']}, {b[':datatype']}"
             logging.error(error_msg)
             return False
         return True
@@ -299,17 +264,19 @@ class PassComparator:
     def get_data_slice(self, a: Dict[str, Any], b: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
         f_a = self._build_file_path(a, self.verify_path_pass1)
         f_b = self._build_file_path(b, self.verify_path_pass2)
-        a_offset = json.loads(a["tensorOffset"])
-        b_offset = json.loads(b["tensorOffset"])
-        a_shape = json.loads(a["outputValidShape"])
-        b_shape = json.loads(b["outputValidShape"])
-        np_dtype = self.dtype_dict.get(a["outputDtype"])
+        if a[":opcode"] in {"ASSEMBLE", "COPY_OUT"}:
+            return self.get_data_slice_assemble(a, b)
+        a_offset = json.loads(a[":offset"])
+        b_offset = json.loads(b[":offset"])
+        a_shape = json.loads(a[":validshape"])
+        b_shape = json.loads(b[":validshape"])
+        np_dtype = self.dtype_dict.get(a[":datatype"])
         data_a = np.fromfile(f_a, np_dtype)
         data_b = np.fromfile(f_b, np_dtype)
 
         data_a = data_a.reshape(a_shape)
         data_b = data_b.reshape(b_shape)
-        if self.key == "tensorMagic" and a_shape == b_shape:
+        if self.key == ":magic" and a_shape == b_shape:
             return data_a, data_b
 
         slices = []
@@ -319,9 +286,41 @@ class PassComparator:
             slices.append(slice(start, stop))
         b_slice = data_b[tuple(slices)]
         return data_a, b_slice
+
+    def get_data_slice_assemble(self, a: Dict[str, Any], b: Dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
+        f_a = self._build_file_path(a, self.verify_path_pass1)
+        f_b = self._build_file_path(b, self.verify_path_pass2)
+        input_dict = self.csv_data[self.csv_data["FILENAME"] == a["INPUT_FILENAMES"]].to_dict(orient='records')
+        if not input_dict:
+            logging.error(f"No matching record found for FILENAME: {a['INPUT_FILENAMES']}")
+        a_offset = json.loads(a["OP_ATTR_SYM_OFFSET"])
+        b_offset = json.loads(b["OP_ATTR_SYM_OFFSET"])
+        shape = json.loads(a[":rawshape"])
+        a_shape = json.loads(input_dict[0][":validshape"])
+        b_shape = json.loads(input_dict[0][":validshape"])
+        np_dtype = self.dtype_dict.get(a[":datatype"])
+        data_a = np.fromfile(f_a, np_dtype)
+        data_b = np.fromfile(f_b, np_dtype)
+
+        data_a = data_a.reshape(shape)
+        data_b = data_b.reshape(shape)
+
+        slices_a = []
+        for dim in range(data_a.ndim):
+            start = a_offset[dim]
+            stop = start + a_shape[dim]
+            slices_a.append(slice(start, stop))
+        a_slice = data_a[tuple(slices_a)]
+        slices_b = []
+        for dim in range(data_b.ndim):
+            start = b_offset[dim]
+            stop = start + b_shape[dim]
+            slices_b.append(slice(start, stop))
+        b_slice = data_b[tuple(slices_b)]
+        return a_slice, b_slice
     
     def loop_compare(self, pass_a: str, pass_b: str, df_loop, 
-                    raw_tensor_list: List[int] = None) -> bool:
+                raw_tensor_list: List[int] = None) -> bool:
         """
         Compares all data within a loop.
             Parameters:
@@ -332,25 +331,31 @@ class PassComparator:
         Returns:
             bool: whether all comparisons are passed.
         """
-        df_a = df_loop[df_loop["passName"].str.contains(pass_a)]
-        df_b = df_loop[df_loop["passName"].str.contains(pass_b)]
-        a_dict = df_loop[df_loop["passName"].str.contains(pass_a)].to_dict(orient='records')
-        self.golden_pass = df_b["passName"].values[0]
-
+        df_a = df_loop[df_loop["PHASE_NAME"].str.contains(pass_a)]
+        df_b = df_loop[df_loop["PHASE_NAME"].str.contains(pass_b)]
+        
+        # 判断是否需要使用 codegen 的特殊逻辑
+        is_codegen = False
+        if self.pass_dict[pass_a] >= 28 and self.pass_dict[pass_b] >= 4 and self.pass_dict[pass_b] < 28:
+            # codegen 特殊处理：只处理 COPY_IN 和 COPY_OUT 的 opcode
+            a_copy = df_a[df_a[":opcode"].isin(['COPY_IN', 'COPY_OUT'])]
+            a_dict = a_copy[a_copy["ROOT_CALL:rawmagic"].notna()].to_dict(orient='records')
+            self.key = "ROOT_CALL:rawmagic"
+            is_codegen = True
+        else:
+            # 正常处理
+            a_dict = df_a.to_dict(orient='records')
+        
+        # 遍历所有记录进行比较
         for ai in a_dict:
             raw_magic = ai[self.key]
-            a_records = df_a[df_a[self.key] == raw_magic].to_dict(orient='records')
-            b_records = df_b[df_b[self.key] == raw_magic].to_dict(orient='records')
-            flag = True
+            if is_codegen:
+                b_records = df_b[df_b[":rawmagic"] == raw_magic].to_dict(orient='records')
+            else:
+                b_records = df_b[df_b[self.key] == raw_magic].to_dict(orient='records')
+            
             if len(b_records) == 0:
                 error_msg = f"{self.key} : {raw_magic}, not exit in golden pass"
-                flag = False
-            #切leaffunction后多次循环会复用第一个的tensormagic，无法匹配
-            elif len(a_records) != len(b_records) and self.pass_dict[pass_a] >= 28 \
-                and self.pass_dict[pass_b] >= 4:
-                error_msg = f'tensormagic : {raw_magic},After pass4,the sizes on both pass are not the same'
-                flag = False
-            if not flag:
                 self._log_comparison_info(self.key, ai)
                 logging.error(error_msg)
                 self.add_comparison_record(
@@ -359,6 +364,7 @@ class PassComparator:
                     a=ai
                 )
                 continue
+            
             is_match = False
             for bi in b_records:
                 self._log_comparison_info(self.key, ai, bi)
@@ -367,6 +373,7 @@ class PassComparator:
                 self.compare_data(ai, bi)
                 is_match = True
                 break
+            
             if not is_match:
                 self.add_comparison_record(
                     result_is_close="Skip",
@@ -379,10 +386,10 @@ class PassComparator:
     def line_compare(self, df: Dict[str, Any], line: List[str] = None) -> None:
         if len(line) < 2:
             logging.error(f'line size < 2 : {len(line)}')
-        a = df[df["No."] == line[0]].to_dict(orient='records')
-        b = df[df["No."] == line[1]].to_dict(orient='records')
+        a = df[df["NO."] == line[0]].to_dict(orient='records')
+        b = df[df["NO."] == line[1]].to_dict(orient='records')
         
-        self.key = "tensorMagic"
+        self.key = ":magic"
         if self.is_contain(a[0], b[0], self.key):
             is_right = self.compare_data(a[0], b[0])
             return
@@ -400,31 +407,37 @@ class PassComparator:
             paths: List of paths to be compared
             raw_tensor_list: List of raw tensors to be compared
         """
-        csv_path = os.path.join(self.verify_path_pass1, "verify_result_metadata.csv")
+        csv_path = os.path.join(self.verify_path_pass1, "verify_graph_data_metainfo.csv")
         df = pd.read_csv(csv_path, encoding="utf-8", 
                         na_values=["", " ", "NaN", "NA"])
-        
+        self.csv_data = df
         # mode = 1: Compare two rows of data.
         if self.mode == 1:
             self.line_compare(df, self.line)
             return
+
+        if self.pass_dict[pass_a] < self.pass_dict[pass_b]:
+            pass_a, pass_b = pass_b, pass_a
+            self.output_pass, self.golden_pass = self.golden_pass, self.output_pass
+            self.verify_path_pass1, self.verify_path_pass2 = self.verify_path_pass2, self.verify_path_pass1
+        self.result_file = f'verify_graph_result_cmp~Pass_{self.pass_dict[self.golden_pass]:02d}_{self.golden_pass}~' \
+                f'Pass_{self.pass_dict[self.output_pass]:02d}_{self.output_pass}~{int(time.time() * 1_000_000)}.csv'
         
         if self.pass_dict[pass_a] >= 4 and self.pass_dict[pass_b] >= 4:
-            self.key = "tensorMagic"
+            self.key = ":magic"
         logging.info(f"key  : {self.key}")
 
-        df_pass = df[df["passName"].str.contains(f'{pass_a}|{pass_b}', 
+        df_pass = df[df["PHASE_NAME"].str.contains(f'{pass_a}|{pass_b}', 
                                                  na=False, regex=True)]
-        
         if paths == []:
-            paths = df_pass["verifyType"].dropna().unique()
+            paths = df_pass["PATH_FUNC:func_magicname"].dropna().unique()
         
         for path in paths:
-            df_path = df_pass[df_pass["verifyType"] == path]
-            loop_info_list = df_path["loopInfo"].dropna().unique()
+            df_path = df_pass[df_pass["PATH_FUNC:func_magicname"] == path]
+            loop_info_list = df_path["LOOP_INFO"].dropna().unique()
             
             for loop_info in loop_info_list:
-                df_loop = df_path[df_path["loopInfo"] == loop_info]
+                df_loop = df_path[df_path["LOOP_INFO"] == loop_info]
                 try:
                     self.loop_compare(pass_a, pass_b, df_loop, raw_tensor_list)
                 except Exception as e:
@@ -444,44 +457,72 @@ class PassComparator:
                                diff_conf: Optional[Tuple] = None):
         """Add the comparison record to the internal list"""
         
-        record = ComparisonRecord(
-            result_is_close=result_is_close,
-            result_reason=result_reason,
-            file_a=a["outputTensor"],
-            file_b=b["outputTensor"] if b else None,
-            dtype=a["outputDtype"],
-            shape_a=a["outputValidShape"],
-            shape_b=b["outputValidShape"] if b else None,
-            offset_a=a["tensorOffset"],
-            offset_b=b["tensorOffset"] if b else None,
-            verify_type=a["verifyType"],
-            raw_tensor_magic_a=str(a["rawTensorMagic"]),
-            raw_tensor_magic_b=str(b["rawTensorMagic"]) if b else None,
-            tensor_magic_a=str(a["tensorMagic"]),
-            tensor_magic_b=str(b["tensorMagic"]) if b else None,
-            opcode_a=str(a["opCode"]),
-            opcode_b=str(b["opCode"]) if b else None,
-            loop_info=a["loopInfo"],
-            pass_name=a["passName"],
-            refer_pass_name=self.golden_pass,
-            timestamp=int(time.time() * 1_000_000),
-            raw_tensor_symbol_a=str(a["outputSymbol"]),
-            raw_tensor_symbol_b=str(b["outputSymbol"]) if b else None,
-            raw_tensor_format_a=str(a["outputFormat"]),
-            raw_tensor_format_b=str(b["outputFormat"]) if b else None,
-            raw_tensor_ioflag_a=str(a["ioflag"]),
-            raw_tensor_ioflag_b=str(b["ioflag"]) if b else None,
-            rtol=str(self.rtol),
-            atol=str(self.atol),
-            max_abs_diff=diff_conf[0] if diff_conf else None,
-            max_rel_diff=diff_conf[1] if diff_conf else None,
-            average_abs_diff=diff_conf[2] if diff_conf else None,
-            average_rel_diff=diff_conf[3] if diff_conf else None,
-            error_count=diff_conf[4] if diff_conf else None,
-            error_ratio=diff_conf[5] if diff_conf else None,
-            zero_count=diff_conf[6] if diff_conf else None,
-            zero_ratio=diff_conf[7] if diff_conf else None
-        )
+        record = {}
+        record["NO."] = self.row_num
+        record["PATH_FUNC:func_magicname "] = a["PATH_FUNC:func_magicname"]
+        record["PATH_FUNC:funcmagic"] = a["PATH_FUNC:funcmagic"]
+        record["PATH_FUNC:hash"] = a["PATH_FUNC:hash"]
+        record["LOOP_INFO"] = a["LOOP_INFO"]
+        record[":symbol"] = a[":symbol"]
+        record[":validshape"] = a[":validshape"]
+        record[":datatype"] = a[":datatype"]
+        record["OP_ATTR_SYM_OFFSET"] = a["OP_ATTR_SYM_OFFSET"]
+        record["OP_IO_FLAG"] = a["OP_IO_FLAG"]
+        record["A>PHASE_NAME"] = self.golden_pass
+        record["B>PHASE_NAME"] = a["PHASE_NAME"]
+        record["A>TIMESTAMP"] = b["TIMESTAMP"] if b else None
+        record["B>TIMESTAMP"] = a["TIMESTAMP"]
+        record["A>FILENAME"] = b["FILENAME"] if b else None
+        record["B>FILENAME"] = a["FILENAME"]
+        record["A>FUNC:hash"] = b["FUNC:hash"] if b else None
+        record["B>FUNC:hash"] = a["FUNC:hash"]
+        record["A>ROOT_CALL:opmagic"] = b["ROOT_CALL:opmagic"] if b else None
+        record["B>ROOT_CALL:opmagic"] = a["ROOT_CALL:opmagic"]
+        record["A>ROOT_CALL:rawmagic"] = b["ROOT_CALL:rawmagic"] if b else None
+        record["B>ROOT_CALL:rawmagic"] = a["ROOT_CALL:rawmagic"]
+        record["A>:opmagic"] = b[":opmagic"] if b else None
+        record["B>:opmagic"] = a[":opmagic"]
+        record["A>:opcode"] = b[":opcode"] if b else None
+        record["B>:opcode"] = a[":opcode"]
+        record["A>:rawmagic"] = b[":rawmagic"] if b else None
+        record["A>:rawshape"] = b[":rawshape"] if b else None
+        record["A>:format"] = b[":format"] if b else None
+        record["B>:rawmagic"] = a[":rawmagic"]
+        record["B>:rawshape"] = a[":rawshape"]
+        record["B>:format"] = a[":format"]
+        record["A>:shape"] = b[":shape"] if b else None
+        record["B>:shape"] = a[":shape"]
+        record["A>EVAL:dynvalidshape"] = b["EVAL:dynvalidshape"] if b else None
+        record["B>EVAL:dynvalidshape"] = a["EVAL:dynvalidshape"]
+        record["AB>RESULT"] = result_is_close
+        record["result_reason"] = result_reason
+        record["AB>rtol/atol"] = str(self.rtol) + "/" + str(self.atol)
+        if diff_conf is not None:
+            brief_conf = diff_conf[0]
+            ab_conf = diff_conf[1]
+            a_conf = diff_conf[2]
+            b_conf = diff_conf[3]
+            record["AB>fail_cnt/warn_cnt/tol_cnt"] = f"{brief_conf[4]}/{brief_conf[3]}/{brief_conf[2]}"
+            record["AB>total_cnt/zero_cnt/infnan_cnt"] = f"{brief_conf[0]}/{brief_conf[1]}/{brief_conf[5]}"
+            record["AB>mae"] = str(ab_conf[0])
+            record["AB>mae_top8"] = str(ab_conf[1])
+            record["AB>mae_top1permil"] = str(ab_conf[2])
+            record["AB>mre"] = str(ab_conf[3])
+            record["AB>mre_top8"] = str(ab_conf[4])
+            record["AB>mre_top1permil"] = str(ab_conf[5])
+            record["A>max"] = str(b_conf[0])
+            record["A>min"] = str(b_conf[1])
+            record["A>avg"] = str(b_conf[2])
+            record["A>aavg"] = str(b_conf[3])
+            record["A>zero"] = str(b_conf[4])
+            record["A>infnan"] = str(b_conf[5])
+            record["B>max"] = str(a_conf[0])
+            record["B>min"] = str(a_conf[1])
+            record["B>avg"] = str(a_conf[2])
+            record["B>aavg"] = str(a_conf[3])
+            record["B>zero"] = str(a_conf[4])
+            record["B>infnan"] = str(a_conf[5])
+        self.row_num += 1
         self.comparison_records.append(record)
     
     def save_comparison_results(self, csv_path: str = None):
@@ -495,54 +536,8 @@ class PassComparator:
         if csv_path is None:
             csv_path = os.path.join(self.verify_path_pass1, self.result_file)
         
-        # Converts records to a list of dictionaries.
-        records_dict = [asdict(record) for record in self.comparison_records]
-        
-        df = pd.DataFrame(records_dict)
-        
-        column_order = [
-            'pass_name',
-            'refer_pass_name',
-            'verify_type',
-            'loop_info',
-            'dtype',
-            'raw_tensor_magic_a',
-            'raw_tensor_symbol_a',
-            'raw_tensor_format_a',
-            'raw_tensor_ioflag_a',
-            'tensor_magic_a',
-            'opcode_a',
-            'shape_a',
-            'offset_a',
-            'file_a',
-            'raw_tensor_magic_b',
-            'raw_tensor_symbol_b',
-            'raw_tensor_format_b',
-            'raw_tensor_ioflag_b',
-            'tensor_magic_b',
-            'opcode_b',
-            'shape_b',
-            'offset_b',
-            'file_b',
-            'result_is_close',
-            'result_reason',
-            'rtol',
-            'atol',
-            'max_abs_diff',
-            'max_rel_diff',
-            'average_abs_diff',
-            'average_rel_diff',
-            'error_count',
-            'error_ratio',
-            'zero_count',
-            'zero_ratio',
-            'timestamp'
-        ]
-        
-        existing_columns = [col for col in column_order if col in df.columns]
-        df = df[existing_columns]
-        
-        df.to_csv(csv_path, index=False, encoding='utf-8-sig')
+        df = pd.DataFrame(self.comparison_records)
+        df.to_csv(csv_path, index=False, encoding='utf-8')
         logging.info(f"Comparison results saved to {csv_path}")
 
     def opcode_match(self, opcode_a: str, opcode_b: str) -> bool:
@@ -577,7 +572,7 @@ def main():
                        help="Absolute tolerance")
     parser.add_argument("--rtol", type=float, default=1e-3,
                        help="Relative tolerance")
-    parser.add_argument("--topk", type=int, default=50,
+    parser.add_argument("--topk", type=int, default=1000,
                        help="Print the number of differing lines")
     parser.add_argument("--mode", type=int, default=0,
                        help="mode 0 indicates the pass comparison, and mode 1 indicates that\
@@ -634,7 +629,7 @@ if __name__ == "__main__":
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler("app.log", encoding="utf-8")
+            logging.FileHandler("app.log", mode='w', encoding="utf-8")
         ]
     )
     
