@@ -2342,12 +2342,12 @@ static void ProcessDevFunctionOutcasts(Function *func, DevAscendFunction *devFun
         devFunc->rootInnerTensorWsMemoryRequirement, unroll, WorkspaceRecyclePeriod());
     uint64_t funcDevTaskInnerExclusiveOutcastMem = CalcUnrolledRootBudget(
         devFunc->exclusiveOutcastWsMemoryRequirement, unroll, EstimatedStitchingCount());
-    MACHINE_LOGD("RootInnerTensorWsMemoryRequirement is %lu, funcDevTaskInnerExclusiveOutcastMem is %lu.",
+    MACHINE_LOGD("[worskspaceSize] RootInnerTensorWsMemoryRequirement is %lu, funcDevTaskInnerExclusiveOutcastMem is %lu.",
                   devFunc->rootInnerTensorWsMemoryRequirement, devFunc->exclusiveOutcastWsMemoryRequirement);
     
     maxRootInnerMem = std::max(maxRootInnerMem, funcRootInnerMem);
     maxDevTaskInnerExclusiveOutcastMem = std::max(maxDevTaskInnerExclusiveOutcastMem, funcDevTaskInnerExclusiveOutcastMem);
-    MACHINE_LOGD("MaxRootInnerMem is %lu, maxDevTaskInnerExclusiveOutcastMem is %lu.",
+    MACHINE_LOGD("[workspaceSize] MaxRootInnerMem is %lu, maxDevTaskInnerExclusiveOutcastMem is %lu.",
                   maxRootInnerMem, maxDevTaskInnerExclusiveOutcastMem);
     maxPerCoreSpilledMem = std::max(maxPerCoreSpilledMem, static_cast<uint64_t>(devFunc->stackWorkSpaceSize));
 }
@@ -2410,12 +2410,12 @@ static uint64_t CalcGeneralMetadataSlotWorkspace(DevAscendProgram *devProg) {
     uint64_t itemPoolMemSize = DeviceWorkspaceAllocator::CalcMetadataItemPoolMemSize(devProg);
     uint64_t vectorMemSize = DeviceWorkspaceAllocator::CalcMetadataVectorMemSize(devProg);
     uint64_t slotAllocatorMemSize = DeviceWorkspaceAllocator::CalcMetadataSlotAllocatorMemSize(devProg);
-    MACHINE_LOGD("ItemPoolMemSize is: %lu, vectorMemSize is: %lu, slotAllocatorMemSize is %lu.,",
+    MACHINE_LOGD("[workspaceSize] ItemPoolMemSize is: %lu, vectorMemSize is: %lu, slotAllocatorMemSize is %lu.,",
                   itemPoolMemSize, vectorMemSize, slotAllocatorMemSize);
     static constexpr uint64_t AICPU_SLOT_STATIC_MEMSIZE = 2 * MEBI;
     generalMetadataSlotSize = itemPoolMemSize + vectorMemSize + 
                               slotAllocatorMemSize + AICPU_SLOT_STATIC_MEMSIZE;
-    MACHINE_LOGD("Workspace of generalMetadataSlotSize is %lu., ", generalMetadataSlotSize);
+    MACHINE_LOGD("[workspaceSize] Workspace of generalMetadataSlotSize is %lu., ", generalMetadataSlotSize);
     return generalMetadataSlotSize;
 }
 static uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram *devProg) {
@@ -2445,10 +2445,10 @@ static uint64_t CalcGeneralMetadataSlabWorkspace(DevAscendProgram *devProg) {
         // alloc redundant slabpage for DuppedFunction and Readyque to prevent memory border situations
         if(i == ToUnderlying(WsAicpuSlabMemType::DUPPED_FUNC_DATA) ||
          i == ToUnderlying(WsAicpuSlabMemType::READY_QUE)) requiredSlabNum++;
-        MACHINE_LOGD("RequiredSlabNum[%d] is %u.", i, requiredSlabNum);
+        MACHINE_LOGD("[workspaceSize] RequiredSlabNum[%d] is %u.", i, requiredSlabNum);
         generalMetadataSlabSize += static_cast<uint64_t>(requiredSlabNum) * slabSize;
     }
-    MACHINE_LOGD("GeneralMetadataSlabSize is %lu.", static_cast<unsigned long>(generalMetadataSlabSize));
+    MACHINE_LOGD("[workspaceSize] General->MetadataSlabSize is %lu.", static_cast<unsigned long>(generalMetadataSlabSize));
     generalMetadataSlabSize = (generalMetadataSlabSize < GENERAL_METADATA_SIZE_MIN) ? GENERAL_METADATA_SIZE_MIN : generalMetadataSlabSize;
     return generalMetadataSlabSize;
 }

@@ -216,10 +216,10 @@ public:
         }
 #endif
         devProg->workspaceSize = devProg->memBudget.Total();
-        MACHINE_LOGI("Metadata=%lu, workspaceSize=%lu, tensor=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, leafDumpWorkspace=%lu.",
+        MACHINE_LOGI("[workspaceSize] Metadata=%lu, workspaceSize=%lu, tensor=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, leafDumpWorkspace=%lu.",
             devProg->memBudget.metadata.Total(), devProg->workspaceSize, devProg->memBudget.tensor.Total(),
             devProg->memBudget.aicoreSpilled, devProg->memBudget.debug.dumpTensor, devProg->memBudget.debug.leafDump);
-        MACHINE_LOGI("Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
+        MACHINE_LOGI("[workspaceSize] Tensor:rootInner=%lu, devTaskInnerOutCasts=%lu, slotted=%lux%lu(slots).",
             devProg->memBudget.tensor.rootInner,
             devProg->memBudget.tensor.devTaskInnerExclusiveOutcasts, devProg->memBudget.tensor.MaxOutcastMem(),
             devProg->memBudget.tensor.devTaskBoundaryOutcastNum);

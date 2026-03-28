@@ -243,7 +243,7 @@ private:
 
             int slotIndex = devRootSrc->At(devRootSrc->GetIncast(i).fromSlotList, 0);
             DEV_ASSERT_MSG(WsErr::WORKSPACE_ITER_INVALID, slotList[slotIndex].rtOutcastIter != ITEM_POOL_INVALID_INDEX,
-                "Root incast read from empty address.");
+                "Root[%s] incast %zu  slotIndex %d read from empty address.",devRootSrc->GetRawName(), i, slotIndex);
             auto &incastDesc = devRootDup.GetIncastAddress(i);
             incastDesc = AddressDescriptor::MakeFromRtOutcast(slotList[slotIndex].rtOutcastIter);
             RuntimeOutcastTensorRef(incastDesc.GetRtOutcastIter());
@@ -594,7 +594,7 @@ public:
 
     uint32_t CalcSlabMemObjmaxSize () {
         uint32_t slabMemObjmaxSize = CalcAicpuMetaSlabAlloctorSlabMemObjmaxSize();
-        DEV_DEBUG ("slabMemObjmaxSize=%u", slabMemObjmaxSize);
+        DEV_DEBUG ("[workspaceSize] slabMemObjmaxSize=%u", slabMemObjmaxSize);
         return slabMemObjmaxSize;
     }
     void CalculateSlabCapacityPerType (uint32_t slabSize, uint32_t* slabCapacity, uint32_t slabTypeNum) {

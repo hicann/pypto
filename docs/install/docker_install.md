@@ -234,8 +234,32 @@ ENV http_proxy=$PROXY
 ```
 
 若希望构建其他 Python / OS 组合的镜像，可参考：
-[`https://quay.io/repository/ascend/python`](https://quay.io/repository/ascend/python)
+[`https://quay.io/repository/ascend/python`](https://quay.io/repository/ascend/python)<br>
+<span style="font-size:12px;">注：Pypto考虑到会在国内外都会有部署使用，因此我们提供的参考dockerfile中基于的是国内外更常用的quay.io。若在国内存在访问quay.io访问慢的情况，可通过配置docker代理，如下：<br>
+ 配置信任证书
+```
+mkdir -p /etc/systemd/system/docker.service.d/
+tee -a /etc/docker/daemon.json > /dev/null << 'EOF'
+{
+  "insecure-registries":["quay.io", "cdn01.quay.io"]
+}
+EOF
+```
 
+
+<span style="font-size:12px;"> 配置docker代理</span>
+```
+tee -a /etc/systemd/system/docker.service.d/http-proxy.conf > /dev/null << 'EOF'
+[Service]
+Environment="HTTP_PROXY=<代理地址>"
+Environment="HTTPS_PROXY=<代理地址>"
+EOF
+
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl restart docker.service</span>
+
+```
 ---
 
 ## 使用指导
@@ -317,7 +341,7 @@ docker exec -it pypto_x86a3 /bin/bash
 
 ### 4. 在容器内拉取并安装 PyPTO
 
-进入容器后，执行以下步骤：
+进入容器后，推荐使用源码进行安装，执行以下步骤：
 
 1. **克隆代码仓库**
 
@@ -329,14 +353,17 @@ docker exec -it pypto_x86a3 /bin/bash
 
    ```bash
    cd pypto
-   python3 -m pip install -e . --verbose
+   python3 -m pip install . --verbose
    ```
-
-   可根据实际需求对安装参数、依赖源等进行适当调整与适配。
+   当前Pypto已发布至PyPI，也可以直接使用pip进行安装：
+    ```
+      # 从PyPI源下载并安装
+      python3 -m pip install pypto
+   ```   
 
 3. **验证**
 
-   完成以上步骤后，即可在容器内运行 PyPTO 相关用例。
+   完成以上步骤后，参考文档[样例运行](../invocation/examples_invocation.md)执行相关用例，验证Pypto是否成功安装。
 
 4. **安装MPI依赖（可选，通信需要）**
 

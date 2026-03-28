@@ -105,5 +105,5 @@ python3 -m pip install pypto
 
 ## 通过Docker镜像安装
 
-为了方便快速搭建环境，同样提供已完成PyPTO运行环境搭建的Docker镜像，详细使用请参考[Docker README](../../docker/README.md)。
+为了方便快速搭建环境，同样提供已完成PyPTO运行环境搭建的Docker镜像，详细使用请参考[docker_and_install](./docker_install.md)。
 
