@@ -35,7 +35,7 @@ index_put_(input: Tensor, indices: tuple, values: Tensor, accumulate: bool = Fal
 
 1. indices中的一维Tensor维度相同，不支持broadcast。indices中第i个Tensor中的值须小于input中第i-1维的Shape大小。当indices的选取会对同一个位置进行重复更新时，结果是未确定的。
 
-2. values不支持broadcast，其第0维的shape须和indices中一维Tensor的shape相同。
+2. values不支持broadcast，其第0维的shape须和indices中一维Tensor的shape相同。若values的维度大于等于2，那么其除第0维外的后i个维度（i>0）和input后i个维度的shape完全相同。
 
 3. input的维度、indices中Tensor的个数和values的维度之间需满足：(input.shape.size) + 1 = (indices.size) + (values.shape.size)。
 
