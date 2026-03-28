@@ -189,7 +189,7 @@ INLINE void TLoadND2ND(T &dst, U &src, const int64_t &offset0, const int64_t &of
     using globalData = pto::GlobalTensor<typename U::Type, shapeDim2, strideDim2, pto::Layout::ND>;
     // 目前场景,ND2ND只搬运bias和fixpipe，大小均为1 * N，offset0默认均为0
     int64_t gmOffset = offset1 + offset0 * srcShape1;
-    globalData src0Global((__gm__ typename U::Type *)(src.GetAddr() + gmOffset), shapeDim2(staticL1H, staticL1W),
+    globalData src0Global((__gm__ typename U::Type *)(src.GetAddr() + gmOffset), shapeDim2(dstShape0, dstShape1),
         strideDim2(srcStride0, srcStride1));
     using tileData =
         pto::Tile<pto::TileType::Mat, typename T::Type, staticL1H, staticL1W, pto::BLayout::RowMajor, -1, -1>;
