@@ -163,6 +163,9 @@ public:
          * However, it should be moved into the execute context. */
         devProg->ctrlFlowCacheAnchor = devCtrlFlowCache;
         if (devCtrlFlowCache->deviceTaskCount == 0) {
+            if (!firstInit) {
+                devProg->ResetRerun(); // Clean the dirty data of cell match table from the last launch
+            }
             DEV_INFO("ControlFlowCache: cache have no devtask , ignore it");
             return;
         }
