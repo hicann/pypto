@@ -1130,7 +1130,7 @@ Status SplitReshape::GetReshapeDynShape(const std::shared_ptr<ReshapeOp> &op, st
             return FAILED;
         }
         for (size_t i = 0; i < validShape.size(); ++i) {
-            dynValidShape[i] = std::max(dynValidShape[i], validShape[i] - upperleftIdx[i]);
+            dynValidShape[i] = std::max(dynValidShape[i], validShape[i] - op->output->GetOffset()[i]);
         }
     }
     return SUCCESS;
