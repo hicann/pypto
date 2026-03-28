@@ -75,7 +75,7 @@ bool PadLocalBuffer::IsInputDataType(
     }
 
     if (op.GetOpcode() == Opcode::OP_COPY_OUT || op.GetOpcode() == Opcode::OP_L0C_TO_L1 ||
-        op.GetOpcode() == Opcode::OP_L0C_COPY_UB) {
+        op.GetOpcode() == Opcode::OP_L0C_COPY_UB || op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
         Operation *inProducerPtr = *in->GetProducers().begin();
         if (inProducerPtr != nullptr && inProducerPtr->GetIOperands().size() != 0 &&
             inProducerPtr->GetIOperands()[0] != nullptr && inProducerPtr->GetIOperands()[0]->tensor != nullptr) {
@@ -231,7 +231,7 @@ void PadLocalBuffer::PadVector256(Operation &op, LogicalTensorPtr &in, bool need
             APASS_LOG_ERROR_F(Elements::Tensor, "Tensor %d shape or rawshape less than 2D\n", in->GetMagic());
             return;
         }
-        
+
         auto dim32Count = lastDimBytes / 32;
 
         // 修改shape和rawshape，256B/96B非整除场景需要向上取整
@@ -248,6 +248,10 @@ void PadLocalBuffer::PadVector256(Operation &op, LogicalTensorPtr &in, bool need
    3. 对于broadcast op，如果shape小于一个Block的大小对齐到Block，否则做到两个输入之间的较大者的Block对齐。 */
 void PadLocalBuffer::PadVector(Operation &op, LogicalTensorPtr &in, std::unordered_set<std::shared_ptr<RawTensor>> &visitedRaw,
     bool noPadding) {
+    if (op.GetOpcode() == Opcode::OP_UB_COPY_L1) {
+        PadMatmul(op, in);
+        return;
+    }
     if (in->shape.empty()) {
         APASS_LOG_ERROR_F(Elements::Operation, "Vector Op %d %s input %d shape size is less than 2; Please check the input size. %s", op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
         return;

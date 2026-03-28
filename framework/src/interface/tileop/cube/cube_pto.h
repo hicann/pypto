@@ -304,12 +304,14 @@ TILEOP void TMoveND2NZ(T &dst, U &src) {
     constexpr int64_t shapeSize = Std::tuple_size<typename T::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2, "Shape Size should be 2 Dim");
     static_assert(T::FORMAT == Hardware::UB && U::FORMAT == Hardware::UB);
-    constexpr int64_t staticVecH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename U::TileShape>::type::value;
-    constexpr int64_t staticVecW = Std::tuple_element<shapeSize - 1, typename U::TileShape>::type::value;
-    using tileNDTensor = pto::Tile<pto::TileType::Vec, typename U::Type, staticVecH, staticVecW, pto::BLayout::RowMajor,
-                                   staticVecH, staticVecW>;
-    using tileNZTensor = pto::Tile<pto::TileType::Vec, typename T::Type, staticVecH, staticVecW, pto::BLayout::ColMajor,
-                                   staticVecH, staticVecW, pto::SLayout::RowMajor>;
+    constexpr int64_t staticNDH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename U::TileShape>::type::value;
+    constexpr int64_t staticNDW = Std::tuple_element<shapeSize - 1, typename U::TileShape>::type::value;
+    constexpr int64_t staticNZH = Std::tuple_element<shapeSize - SHAPE_DIM2, typename T::TileShape>::type::value;
+    constexpr int64_t staticNZW = Std::tuple_element<shapeSize - 1, typename T::TileShape>::type::value;
+    using tileNDTensor = pto::Tile<pto::TileType::Vec, typename U::Type, staticNDH, staticNDW, pto::BLayout::RowMajor,
+                                   staticNDH, staticNDW>;
+    using tileNZTensor = pto::Tile<pto::TileType::Vec, typename T::Type, staticNZH, staticNZW, pto::BLayout::ColMajor,
+                                   staticNZH, staticNZW, pto::SLayout::RowMajor>;
     tileNDTensor srcTile;
     tileNZTensor dstTile;
     pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());

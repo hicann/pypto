@@ -1486,3 +1486,34 @@ TEST_F(TestPadLocalBuffer, padTwoCmpsInputTo256){
     EXPECT_EQ(graphBuilder.GetTensor("t2")->GetShape()[1], 8);
     EXPECT_EQ(graphBuilder.GetTensor("t3")->GetShape()[1], 8);
 }
+
+TEST_F(TestPadLocalBuffer, UB2L1) {
+    ComputationalGraphBuilder graph;
+    // a from vec to cube
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {15, 32}, MemoryType::MEM_DEVICE_DDR, "t1a"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {15, 32}, MemoryType::MEM_UB, "t2a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1a"}, {"t2a"}, "COPYA1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {15, 32}, MemoryType::MEM_UB, "t3a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_UB_COPY_ND2NZ, {"t2a"}, {"t3a"}, "ND2NZ", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {15, 32}, MemoryType::MEM_L1, "t4a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_UB_COPY_L1, {"t3a"}, {"t4a"}, "COPYA2", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {15, 32}, MemoryType::MEM_L0A, "t5a"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_L0A, {"t4a"}, {"t5a"}, "L1TOL0A", true), true);
+    // b
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 32}, MemoryType::MEM_DEVICE_DDR, "t1b"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 32}, MemoryType::MEM_L1, "t2b"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"t1b"}, {"t2b"}, "COPYB", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_INT8, {32, 32}, MemoryType::MEM_L0B, "t3b"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_L1_TO_L0_BT, {"t2b"}, {"t3b"}, "L1TOL0B", true), true);
+    // amulb
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP16, {15, 32}, MemoryType::MEM_L0C, "out"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_A_MUL_B, {"t5a", "t3b"}, {"out"}, "AMULB", true), true);
+
+    auto *currFunctionPtr = graph.GetFunction();
+    PadLocalBuffer padLocalBufferTest;
+    padLocalBufferTest.RunOnFunction(*currFunctionPtr);
+    std::vector<int64_t> expectShape{32, 32};
+    auto t2 = graph.GetTensor("t3a");
+    EXPECT_EQ(t2->GetShape(), expectShape);
+    EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
+}
