@@ -221,13 +221,13 @@ inline bool IsDebugMode() {
 
 #define BACKTRACE_STACK_COUNT 64
 
-static inline void PrintBacktrace(const std::string &prefix = "", int count = BACKTRACE_STACK_COUNT) {
+static inline void PrintBacktrace[[maybe_unused]](const npu::tile_fwk::ThreadErr errcode, const std::string &prefix = "", int count = BACKTRACE_STACK_COUNT) {
     std::vector<void *> backtraceStack(count);
     int backtraceStackCount = backtrace(backtraceStack.data(), static_cast<int>(backtraceStack.size()));
-    DEV_INFO("backtrace %s count:%d", prefix.c_str(), backtraceStackCount);
+    DEV_ERROR(errcode, "backtrace %s count:%d", prefix.c_str(), backtraceStackCount);
     char **backtraceSymbolList = backtrace_symbols(backtraceStack.data(), backtraceStackCount);
     for (int i = 0; i < backtraceStackCount; i++) {
-        DEV_INFO("backtrace %s frame[%d]: %s", prefix.c_str(), i, backtraceSymbolList[i]);
+        DEV_ERROR(errcode, "backtrace %s frame[%d]: %s", prefix.c_str(), i, backtraceSymbolList[i]);
     }
     free(backtraceSymbolList);
 }

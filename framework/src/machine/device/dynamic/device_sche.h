@@ -426,9 +426,9 @@ struct DynMachineManager {
         (void)info;
         (void)act;
         DEV_ERROR(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "#sche.except.signal: Exception Signum[%d] Act.", signum);
-        PrintBacktrace("signal " + std::to_string(signum));
+        PrintBacktrace(ThreadErr::SIGNAL_HANDLER_ABNORMAL, "signal " + std::to_string(signum));
         if (reset_.load()) {
-            DEV_ERROR(ThreadErr::RESET_REG_ALL_TRIGGERED, "#sche.except.reset: Exception Already reset.");
+            DEV_WARN("#sche.except.reset: Exception Already reset.");
             sleep(SIGNAL_DELAY_SECONDS);
             return;
         }

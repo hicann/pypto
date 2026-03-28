@@ -156,7 +156,6 @@ enum class ServerKernelErr : uint32_t {
 
 enum class ThreadErr : uint32_t {
     SIGNAL_HANDLER_ABNORMAL = ToUnderlying(MachineError::THREAD_MACHINE) + 0x01U, // 信号处理异常
-    RESET_REG_ALL_TRIGGERED = ToUnderlying(MachineError::THREAD_MACHINE) + 0x02U, // 触发全量寄存器复位
     THREAD_CPU_ALLOC_FAILED = ToUnderlying(MachineError::THREAD_MACHINE) + 0x03U, // CPU 分配线程失败
 };
 
