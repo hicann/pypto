@@ -19,6 +19,7 @@ Tensor是PyPTO中的基本数据结构，用于表示将在计算图中使用并
     -   dtype：表示Tensor中存储的数据类型，支持DataType类型，例如，DT\_FP16表示16位半精度浮点数。
     -   name：名称，支持字符串类型，可选。但建议为Tensor提供有意义的名称，以便于调试和理解计算图结构。
     -   format：数据排布格式，支持TileOpFormat类型，可选，默认为：TILEOP\_ND。
+                format显式标记时, 性能更优, 要求传入的torch tensor与pypto.Tensor声明的format一致;
 
 -   创建带格式的Tensor
 

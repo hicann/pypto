@@ -18,9 +18,9 @@ import pypto
 
 
 @pypto.frontend.jit()
-def loop_scope(a: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-               b: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32),
-               result: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT32)):
+def loop_scope(a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+               b: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32],
+               result: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32]):
     pypto.set_vec_tile_shapes(64, 64)
 
     for _ in pypto.loop(1, name="s0", idx_name="k"):

@@ -52,9 +52,16 @@ def kernel_function(...):
 
 1. 张量参数，必须使用类型注解指定为 `pypto.Tensor` 类型
 2. 动态维度必须使用 `pypto.DYNAMIC` 或 `pypto.DYN` 在参数注解中标记
-3. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后
-4. 非张量参数支持 keyword 传参、位置参数、使用默认值
+3. tensor format用format标记，format支持非显式标记(参考示例1中的a), 默认为pypto.TileOpFormat.TILEOP_ND;
+   format显式标记时, 性能更优, 要求传入的torch tensor与pypto.Tensor声明的format一致，能获得更优的性能;
+4. 张量参数在前，非张量参数（如 `scalar`、`tiling`）在后
+5. 非张量参数支持 keyword 传参、位置参数、使用默认值
 
+**pypto.Tensor[...]说明**：
+- kernel函数里申明推荐使用 `pypto.Tensor[[shape], dtype]` 方括号语法，符合 Python 类型注解规范
+- 也兼容旧的小括号语法 `pypto.Tensor([shape], dtype)`
+- 方括号内不支持 `key=value` 形式的关键字参数（Python 语法限制），只能按位置传递或使用字典
+- `pypto.Tensor[]`（空参数）不支持
 
 ## 调用示例
 
@@ -64,12 +71,12 @@ def kernel_function(...):
 @pypto.frontend.jit
 def add_kernel(
     a: pypto.Tensor([3], pypto.DT_FP32),
-    b: pypto.Tensor([3], pypto.DT_FP32),
+    b: pypto.Tensor([3], pypto.DT_FP32, format=pypto.TileOpFormat.TILEOP_NZ),
     out: pypto.Tensor([3], pypto.DT_FP32)
 ):
     pypto.set_vec_tile_shapes(2, 8)
     out[:] = pypto.add(a, b)
-    
+
 
 # 直接传入 torch 张量调用
 x = torch.randn(3, dtype=torch.float32, device='npu:0')

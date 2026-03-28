@@ -20,15 +20,43 @@ from .symbolic_scalar import SymbolicScalar, SymInt
 from ._element import Element
 
 
+class TensorAnnotation:
+    """Type annotation for Tensor parameters.
+
+    This class is used to represent tensor type annotations in function signatures,
+    supporting the Python-standard syntax: pypto.Tensor[shape, dtype]
+    """
+
+    def __init__(self, shape=None, dtype=None, name="", format=TileOpFormat.TILEOP_ND,
+                 data_ptr=None, device=None, ori_shape=None):
+        self.shape = shape if shape is not None else []
+        self.dtype = dtype if dtype is not None else pypto.DT_FP32
+        self.name = name
+        self.format = format
+        self.data_ptr = data_ptr
+        self.device = device
+        self.ori_shape = ori_shape
+
+    def to_tensor(self, name: str = ""):
+        final_name = name if name else self.name
+        return Tensor(self.shape, self.dtype, final_name, self.format,
+                      self.data_ptr, self.device, self.ori_shape)
+
+
 class Tensor:
 
     def __init__(self, shape=None, dtype: Union[DataType, None] = None,
-                 name: str = "", format: TileOpFormat = TileOpFormat.TILEOP_ND,
+                 name: str = "", format=None,
                  data_ptr: Optional[int] = None, device=None, ori_shape=None):
         self.ori_shape = None
         self.status_shape = None
         self.status_dtype = dtype
         ndtype = dtype if dtype is not None else pypto.DT_FP32
+        # format显式配置标记
+        self.explicit_format = format is not None
+        #format没有显式传递用默认值
+        if not self.explicit_format:
+            format = TileOpFormat.TILEOP_ND
         if shape is None:
             nshape = []
             self._base = pypto_impl.Tensor(ndtype, nshape, name, format)
@@ -47,6 +75,63 @@ class Tensor:
             self._base = pypto_impl.Tensor(ndtype, sym_shape, name, format)
         self.data_ptr = data_ptr
         self.device = device
+
+    @classmethod
+    def __class_getitem__(cls, params):
+        """Enable Tensor[shape, dtype] syntax for type annotations.
+
+        Examples:
+            >>> a: pypto.Tensor[[pypto.STATIC, pypto.STATIC], pypto.DT_INT32]
+            >>> b: pypto.Tensor[[pypto.STATIC, ...], pypto.DT_INT32]
+            >>> c: pypto.Tensor[[], pypto.DT_INT32]
+            >>> d: pypto.Tensor[[batch_size, hidden_size], pypto.DT_FP32, pypto.TileOpFormat.TILEOP_ND]
+
+            Note: Tensor[] (empty parameters) is NOT supported.
+
+        Parameters
+        ----------
+        params : tuple
+            A tuple of (shape, dtype).
+
+        Returns
+        -------
+        TensorAnnotation
+            A tensor annotation object for type hints.
+        """
+        if not isinstance(params, tuple):
+            params = (params,)
+
+        shape = None
+        dtype = None
+        name = ""
+        format = None
+        data_ptr = None
+        device = None
+        ori_shape = None
+
+        for param in params:
+            if isinstance(param, dict):
+                name = param.get('name', name)
+                format = param.get('format', format)
+                data_ptr = param.get('data_ptr', data_ptr)
+                device = param.get('device', device)
+                ori_shape = param.get('ori_shape', ori_shape)
+                if 'dtype' in param:
+                    dtype = param['dtype']
+                if 'shape' in param:
+                    shape = param['shape']
+            elif isinstance(param, (list, tuple)):
+                shape = param
+            elif isinstance(param, DataType):
+                dtype = param
+            elif isinstance(param, TileOpFormat):
+                format = param
+            elif isinstance(param, str):
+                name = param
+            else:
+                pass
+
+        return TensorAnnotation(shape, dtype, name, format, data_ptr, device, ori_shape)
 
     @source_location
     def __setitem__(self, key, value):
@@ -505,6 +590,12 @@ class Tensor:
         obj._base = base
         return obj
 
+    def to_tensor(self, name: str = ""):
+        """Return self for unified interface with TensorAnnotation."""
+        if name:
+            self.name = name
+        return self
+
     def set_cache_policy(self, policy: CachePolicy, value: bool) -> None:
         self._base.SetCachePolicy(policy, value)
 
@@ -531,7 +622,7 @@ class Tensor:
     @source_location
     def mul(self, other: 'Tensor | int | float') -> 'Tensor':
         return pypto.mul(self, other)
-    
+
     @source_location
     def hypot(self, other: 'Tensor') -> 'Tensor':
         return pypto.hypot(self, other)
@@ -651,7 +742,7 @@ class Tensor:
     @source_location
     def topk(self, k: int, dim: Optional[int] = None, largest: bool = True) -> Tuple['Tensor', 'Tensor']:
         return pypto.topk(self, k, dim, largest)
-    
+
     @source_location
     def sort32(self, index: Optional[int] = None) -> 'Tensor':
         return pypto.sort32(self, index)
@@ -663,7 +754,7 @@ class Tensor:
     @source_location
     def exp(self) -> 'Tensor':
         return pypto.exp(self)
-    
+
     @source_location
     def sign(self) -> 'Tensor':
         return pypto.sign(self)
@@ -691,7 +782,7 @@ class Tensor:
     @source_location
     def log10(self) -> 'Tensor':
         return pypto.log10(self)
-        
+
     @source_location
     def log2(self) -> 'Tensor':
         return pypto.log2(self)
@@ -802,7 +893,7 @@ class Tensor:
     @source_location
     def pad(self, pad: Sequence[int], mode: str = "constant", value: float = 0.0) -> 'Tensor':
         return pypto.pad(self, pad, mode, value)
-        
+
     @source_location
     def fillpad(self, mode: str = "constant", value: float = 0.0) -> 'Tensor':
         return pypto.fillpad(self, mode, value)
