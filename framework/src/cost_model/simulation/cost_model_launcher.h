@@ -222,9 +222,6 @@ private:
         SIMULATION_LOGI("Run DynCostModel");
         RunDynCostModel();
         SIMULATION_LOGI("Run PvModel");
-#ifdef BUILD_WITH_CANN
-        RunPvModel(kArgs, inputs, outputs);
-#endif
     }
 
     bool IsDumpTensorEnable() const {
