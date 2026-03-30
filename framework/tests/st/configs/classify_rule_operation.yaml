@@ -100,6 +100,8 @@ stest:
       - TestGcd/GcdOperationTest.TestGcd/4
       - TestGcds/GcdsOperationTest.TestGcds/1
       - TestGcds/GcdsOperationTest.TestGcds/2
+      - TestCumProd/CumProdOperationTest.TestCumProd/0
+      - TestCumProd/CumProdOperationTest.TestCumProd/1
       - TestCumSum/CumSumOperationTest.TestCumSum/2
       - TestCumSum/CumSumOperationTest.TestCumSum/3
       - TestGatherElement/GatherElementOperationTest.TestGatherElement/0

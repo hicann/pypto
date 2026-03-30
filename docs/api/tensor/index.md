@@ -12,6 +12,7 @@ pypto-Tensor-assemble
 pypto-Tensor-clone
 pypto-Tensor-concat
 pypto-Tensor-cos
+pypto-Tensor-cumprod
 pypto-Tensor-cumsum
 pypto-Tensor-dim
 pypto-Tensor-div

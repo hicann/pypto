@@ -368,6 +368,7 @@ void bind_operation(py::module &m) {
         "Cat", [](const std::vector<Tensor> &tensors, int axis) { return npu::tile_fwk::Cat(tensors, axis); },
         "Tensor concat.");
     m.def("cumsum", [](const Tensor &input, int axis) { return npu::tile_fwk::CumSum(input, axis); }, "Tensor cumsum.");
+    m.def("cumprod", [](const Tensor &input, int axis) { return npu::tile_fwk::CumProd(input, axis); }, "Tensor cumprod.");
     m.def(
         "TriU",
         [](const Tensor &input, const SymbolicScalar &diagonal) { return npu::tile_fwk::TriU(input, diagonal); },

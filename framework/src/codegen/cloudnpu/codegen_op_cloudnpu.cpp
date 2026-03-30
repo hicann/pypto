@@ -207,8 +207,9 @@ CodeGenOpCloudNPU::CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx &ctx)
           // indexput
           {Opcode::OP_INDEX_PUT, [this]() { return GenIndexPutOp(); }},
 
-          // cumsum
-          {Opcode::OP_CUM_SUM, [this]() { return GenCumSumOp(); }},
+          // cumOperation
+          {Opcode::OP_CUM_SUM, [this]() { return GenCumOperationOp(); }},
+          {Opcode::OP_CUM_PROD, [this]() { return GenCumOperationOp(); }},
 
           // triUL
           {Opcode::OP_TRIUL, [this]() { return GenTriULOp(); }},

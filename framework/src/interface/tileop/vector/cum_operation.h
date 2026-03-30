@@ -9,18 +9,18 @@
  */
 
 /*!
- * \file cumsum.h
+ * \file cum_operation.h
  * \brief
  */
 
-#ifndef TILEOP_TILE_OPERATOR_CUMSUM__H
-#define TILEOP_TILE_OPERATOR_CUMSUM__H
+#ifndef TILEOP_TILE_OPERATOR_CUM_OPERATION__H
+#define TILEOP_TILE_OPERATOR_CUM_OPERATION__H
 #include "utils/layout.h"
 #include "utils/tile_tensor.h"
 #include <array>
 
-template <typename T0, typename T1, unsigned tileW, unsigned dstTypeSize>
-TILEOP void CumSumTool(T0 dst, T1 src, uint64_t tileH, uint64_t tmpStride) {
+template <typename T0, typename T1, unsigned tileW, unsigned dstTypeSize, int is_sum>
+TILEOP void CumOperationTool(T0 dst, T1 src, uint64_t tileH, uint64_t tmpStride) {
     using tmpTileDefine = pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, 1, tileW>;
     tmpTileDefine tmpDstTile, tmpSrcTile;
     pto::TASSIGN(tmpDstTile, (uint64_t)(dst.GetAddr() + tmpStride));
@@ -36,12 +36,16 @@ TILEOP void CumSumTool(T0 dst, T1 src, uint64_t tileH, uint64_t tmpStride) {
         pto::TASSIGN(dst0Tile, (uint64_t)(dst.GetAddr() + tmpStride + (i - 1) * tileW * dstTypeSize));
         pto::TASSIGN(dst1Tile, (uint64_t)(dst.GetAddr() + tmpStride + i * tileW * dstTypeSize));
         pto::TASSIGN(src1Tile, (uint64_t)(src.GetAddr() + tmpStride + i * tileW * dstTypeSize));
-        pto::TADD(dst1Tile, dst0Tile, src1Tile);
+        if (is_sum) {
+            pto::TADD(dst1Tile, dst0Tile, src1Tile);
+        } else {
+            pto::TMUL(dst1Tile, dst0Tile, src1Tile);
+        }
     }
 }
 
-template <unsigned axis, typename T0, typename T1>
-TILEOP void TCumSum(T0 dst, T1 src) {
+template <int axis, int is_sum, typename T0, typename T1>
+TILEOP void TCumOperation(T0 dst, T1 src) {
     constexpr size_t expectSize = 5;
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto dstTypeSize = sizeof(typename T0::Type);
@@ -61,7 +65,7 @@ TILEOP void TCumSum(T0 dst, T1 src) {
         constexpr auto tileH = Std::tuple_element<DIM_1ST, typename T0::TileShape>::type::value;
         constexpr auto tileW = TileOp::GetNonFirstAxisMergeResult<shapeSize, typename T0::TileShape>();
         uint64_t tmpStride = 0;
-        CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
+        CumOperationTool<T0, T1, tileW, dstTypeSize, is_sum>(dst, src, tileH, tmpStride);
         return;
     } else if constexpr (axis == 1) {
         int loops = n0DstShape;
@@ -72,7 +76,7 @@ TILEOP void TCumSum(T0 dst, T1 src) {
 
         for (LoopVar loop = 0; loop < loops; loop++) {
             uint64_t tmpStride = loop * n0DstStride * dstTypeSize;
-            CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
+            CumOperationTool<T0, T1, tileW, dstTypeSize, is_sum>(dst, src, tileH, tmpStride);
         }
         return;
     } else if constexpr (axis == 2) {
@@ -84,7 +88,7 @@ TILEOP void TCumSum(T0 dst, T1 src) {
         for (LoopVar j = 0; j < n0DstShape; j++) {
             for (LoopVar k = 0; k < n1DstShape; k++) {
                 uint64_t tmpStride = (j * n0DstStride + k * n1DstStride) * dstTypeSize;
-                CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
+                CumOperationTool<T0, T1, tileW, dstTypeSize, is_sum>(dst, src, tileH, tmpStride);
             }
         }
         return;
@@ -97,7 +101,7 @@ TILEOP void TCumSum(T0 dst, T1 src) {
             for (LoopVar j = 0; j < n1DstShape; j++) {
                 for (LoopVar k = 0; k < n2DstShape; k++) {
                     uint64_t tmpStride = (m * n0DstStride + j * n1DstStride + k * n2DstStride) * dstTypeSize;
-                    CumSumTool<T0, T1, tileW, dstTypeSize>(dst, src, tileH, tmpStride);
+                    CumOperationTool<T0, T1, tileW, dstTypeSize, is_sum>(dst, src, tileH, tmpStride);
                 }
             }
         }
@@ -115,7 +119,11 @@ TILEOP void TCumSum(T0 dst, T1 src) {
                         int tmpStride = n * n0DstStride + j * n1DstStride + k * n2DstStride + m * n3DstStride;
                         dstAddr[tmpStride] = srcAddr[tmpStride];
                         for (LoopVar i = 1; i < n4DstShape; i++) {
-                            dstAddr[tmpStride + i] = srcAddr[tmpStride + i] + dstAddr[tmpStride + i - 1];
+                            if (is_sum) {
+                                dstAddr[tmpStride + i] = srcAddr[tmpStride + i] + dstAddr[tmpStride + i - 1];
+                            } else {
+                                dstAddr[tmpStride + i] = srcAddr[tmpStride + i] * dstAddr[tmpStride + i - 1];
+                            }
                         }
                     }
                 }

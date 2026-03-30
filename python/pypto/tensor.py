@@ -860,6 +860,10 @@ class Tensor:
     @source_location
     def cumsum(self: 'Tensor', dim: int) -> 'Tensor':
         return pypto.cumsum(self, dim)
+    
+    @source_location
+    def cumprod(self: 'Tensor', dim: int) -> 'Tensor':
+        return pypto.cumprod(self, dim)
 
     @source_location
     def gcd(self: 'Tensor', other: 'Tensor | int') -> 'Tensor':

@@ -2058,6 +2058,30 @@ def gen_cumsum_op_golden(case_name: str, output: Path, case_index: int = None) -
     return gen_op_golden("CumSum", cumsum_golden_func, output, case_index)
 
 
+def cumprod_golden_func(inputs: list, config: dict):
+    params = config.get("params")
+    axis = params["axis"]
+    if inputs[0].dtype == bfloat16:
+        input_tensor = torch.as_tensor(inputs[0].astype(np.float32)).to(torch.bfloat16)
+    else:
+        input_tensor = torch.from_numpy(inputs[0])
+    res = torch.cumprod(input_tensor, axis)
+    if inputs[0].dtype == bfloat16:
+        res = res.to(torch.float32).numpy().astype(bfloat16)
+        return [res]
+
+    return [res.numpy()]
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestCumProd/CumProdOperationTest.TestCumProd",
+    ]
+)
+def gen_cumprod_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("CumProd", cumprod_golden_func, output, case_index)
+
+
 def triu_golden_func(inputs: list, config: dict):
     params = config.get("params")
     diagonal = params["diagonal"]

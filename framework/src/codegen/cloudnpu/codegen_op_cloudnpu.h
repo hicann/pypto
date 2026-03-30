@@ -121,7 +121,7 @@ public:
     std::string GenIndexOutCastOp() const;
     std::string PrintIndexOutCastTileTensor() const;
 
-    std::string GenCumSumOp() const;
+    std::string GenCumOperationOp() const;
     std::string GenTriULOp() const;
     std::string PrintGatherDynamicUnaligned() const;
     std::string PrintGatherLayout() const;
@@ -451,7 +451,7 @@ private:
     std::string PrintTriULTileTensor(const std::string &diagonal, bool isUpper) const;
 
     std::string PrintCumSumDynamicUnaligned(const PrintCumSumParam &param) const;
-    std::string PrintCumSumTileTensor(int axis) const;
+    std::string PrintCumOperationTileTensor(int axis, bool is_sum) const;
 
     WhereParam PrepareWhereParam() const;
     void GetWhereVarAndType(std::vector<std::string> &varExpr, std::vector<std::string> &dataTypeExpr) const;

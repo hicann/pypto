@@ -155,6 +155,7 @@ struct CalcOps {
     void (*TriU)(const TensorData &, const TensorData &, int);
     void (*TriL)(const TensorData &, const TensorData &, int);
     void (*CumSum)(const TensorData &, const TensorData &, int);
+    void (*CumProd)(const TensorData &, const TensorData &, int);
     void (*IndexPut)(const TensorData &, const TensorData &, const std::vector<TensorData> &, const TensorData &, bool);
 
     void (*Reshape)(const TensorData &, const TensorData &);

@@ -51,7 +51,7 @@
 #include "vector/scatter.h"
 #include "vector/expand.h"
 #include "vector/expand_exp_dif.h"
-#include "vector/cumsum.h"
+#include "vector/cum_operation.h"
 #include "vector/extract.h"
 #include "vector/pair_binary.h"
 #include "vector/where.h"

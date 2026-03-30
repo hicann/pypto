@@ -25,6 +25,7 @@ pypto-clone
 pypto-concat
 pypto-copysign
 pypto-cos
+pypto-cumprod
 pypto-cumsum
 pypto-div
 pypto-eq

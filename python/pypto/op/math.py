@@ -1307,6 +1307,34 @@ def cumsum(
 
 
 @op_wrapper
+def cumprod(
+    input: Tensor,
+    dim: int
+) -> Tensor:
+    """
+    This function returns the cumulative prod over a given axis.
+    Parameters
+    ---------
+    input: Tensor
+        tensor to be calculated.
+    dim : int
+        specified dimension.
+    out: Tensor
+        The tensor after calculating the cumulative prod.
+    Examples
+    ---------
+    x = pypto.tensor([2, 3], pypto.data_type.DT_FP32) 
+    dim = 0
+    out = pypto.cumprod(x, dim)
+    Input  x : [[0 1 2],
+                [3 4 5]]
+    Output out:[[0 1 2],
+                [0 4 10]]
+    """
+    return pypto_impl.cumprod(input, dim)
+
+
+@op_wrapper
 def bitwise_right_shift(
     input: Union[Tensor, int], other: Union[Tensor, int]) -> Tensor:
     """Computes the element-wise bitwise right shift of `input` and `other`.

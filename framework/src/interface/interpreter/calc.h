@@ -366,6 +366,9 @@ inline void TriL(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int diagonal
 inline void CumSum(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
     GetCalcOps()->CumSum(Trans(out), Trans(in), axis);
 }
+inline void CumProd(LogicalTensorDataPtr out, LogicalTensorDataPtr in, int axis) {
+    GetCalcOps()->CumProd(Trans(out), Trans(in), axis);
+}
 inline void IndexPut(LogicalTensorDataPtr out, LogicalTensorDataPtr self, std::vector<LogicalTensorDataPtr> indices,
     LogicalTensorDataPtr values, bool accumulate = false) {
     GetCalcOps()->IndexPut(Trans(out), Trans(self), TransVec(indices), Trans(values), accumulate);
