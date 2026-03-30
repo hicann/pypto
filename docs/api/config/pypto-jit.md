@@ -57,7 +57,7 @@ def jit(dyn_func=None,
 无参数装饰
 
 ```python
-@pypto.jit
+@pypto.frontend.jit
 def func(tensor1, tensor2, tensor3):
 ...
 ```
@@ -65,7 +65,7 @@ def func(tensor1, tensor2, tensor3):
 带配置装饰
 
 ```python
-@pypto.jit(
+@pypto.frontend.jit(
     codegen_options={"support_dynamic_aligned": True}
 )
 def func(tensor1, tensor2, tensor3):

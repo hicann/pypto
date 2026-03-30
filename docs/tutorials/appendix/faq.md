@@ -9,7 +9,7 @@
 示例代码：
 
 ```python
-@pypto.jit
+@pypto.frontend.jit
 def add_kernel(x, y):
     pypto.set_vec_tile_shapes(4, 4)
     y = x + 1 # 此处会创建新的Tensor y
@@ -41,7 +41,7 @@ tensor([[2.0703e-19, 7.1833e+22, 1.8502e+28, 6.8608e+22],
 示例代码：
 
 ```python
-@pypto.jit
+@pypto.frontend.jit
 def add_kernel(x, y):
     pypto.set_vec_tile_shapes(4, 4)
     y[:] = x + 1 # 将x+1的结果写入函数参数y的原有内存空间
@@ -281,7 +281,7 @@ CompileCCE failed. errCode = 256, cce file: output/output_20251111_175724_806073
 ### 问题现象描述
 
 ```python
-@pypto.jit
+@pypto.frontend.jit
 def add_kernel_0(a, b, c):
     for i in pypto.loop(20):
         print("i = ", i)
@@ -289,7 +289,7 @@ def add_kernel_0(a, b, c):
 >>>
 i = 0
 
-@pypto.jit
+@pypto.frontend.jit
 def add_kernel_1(a, b, c):
     for i in pypto.loop(20):
         print("i = ", i)
@@ -368,22 +368,22 @@ def loop_roll(start, end, step=1, name=None, idx_name=None,
 8. 为了写代码方便，可能有时看到前端算子并没有直接表达loop，是如何产生loop和loop body的呢. 实际是在构图阶段前端会隐式的在function开始的位置插入一个loop， 循环次数为1. 循环直到下一个循环开始前结束，举例如下
 
     ```python
-    @pypto.jit
+    @pypto.frontend.jit
     def foo(a, b, c):
         c[:] = a + b
     # 等价于
-    @pypto.jit
+    @pypto.frontend.jit
     def foo(a, b, c):
         for i in pypto.loop(1):
             c[:] = a + b
 
-    @pypto.jit
+    @pypto.frontend.jit
     def foo(a, b, c):
         t = a + 1
         for i in pypto.loop(1):
             c[:] = t + b
     # 等价于
-    @pypto.jit
+    @pypto.frontend.jit
     def foo(a, b, c):
         for i in pypto.loop(1):
             t = a + 1

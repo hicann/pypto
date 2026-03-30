@@ -416,7 +416,7 @@ def recurrent_state_attn_all(
 ## 运行时配置
 
 ```python
-@pypto.jit(
+@pypto.frontend.jit(
     runtime_options={
         "stitch_function_inner_memory": 128 * 32,
         "stitch_function_num_initial": 128,

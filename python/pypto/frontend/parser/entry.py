@@ -514,7 +514,7 @@ class JitCallableWrapper:
         self._parser.input_pto_tensor = args
 
 
-        # Set options AFTER OperatorBegin() to match @pypto.jit behavior
+        # Set options AFTER OperatorBegin() to match @pypto.frontend.jit behavior
 
         self._set_config_option()
 
@@ -1220,7 +1220,7 @@ def jit(
             raise TypeError("jit decorator can only be used on functions")
 
         # Create wrapper without compiling - defer to first call
-        # This matches the behavior of @pypto.jit and avoids backend initialization
+        # This matches the behavior of @pypto.frontend.jit and avoids backend initialization
         # during module load time
         captured_locals = None
         frame = inspect.currentframe()

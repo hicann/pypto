@@ -252,7 +252,7 @@ python3 scripts/analyze_perf.py output/output_20260214_152549_401503_511667
 
 4. **优化调度策略**
     ```python
-    @pypto.jit(runtime_options={"device_sched_mode": 1})
+    @pypto.frontend.jit(runtime_options={"device_sched_mode": 1})
     ```
 
 5. **使用 L1Reuse 优化**
@@ -273,7 +273,7 @@ python3 scripts/analyze_perf.py output/output_20260214_152549_401503_511667
 
 1. **使用 L2 亲和调度**
     ```python
-    @pypto.jit(runtime_options={"device_sched_mode": 1})
+    @pypto.frontend.jit(runtime_options={"device_sched_mode": 1})
     ```
 
 2. **调整 Tilesize 增大算术强度**

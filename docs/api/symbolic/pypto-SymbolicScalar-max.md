@@ -11,6 +11,25 @@
 
 计算两个符号标量的最大值。
 
+## 使用场景
+
+当需要对 SymbolicScalar（如从 `tensor.shape` 获取的动态维度值）进行比较时，应使用此方法。
+
+**与 pypto.maximum 的区别**：
+- `pypto.maximum`：用于 Tensor 的逐元素最大值计算
+- `SymbolicScalar.max`：用于符号标量的最大值计算
+
+**不支持 Python 三元表达式**：
+```python
+# ❌ 错误：不支持三元表达式
+cur_seq = kv_act_seqs[b_idx]
+tmp = cur_seq - s2_idx * s2_tile
+actual = tmp if tmp > threshold else threshold
+
+# ✅ 正确：使用 .max() 方法
+actual = (cur_seq - s2_idx * s2_tile).max(threshold)
+```
+
 ## 函数原型
 
 ```python

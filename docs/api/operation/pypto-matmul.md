@@ -15,6 +15,14 @@
 -   input 、mat2为源操作数，input 为左矩阵；mat2为右矩阵
 -   out 为目的操作数，存放矩阵乘结果的矩阵
 
+## 注意事项
+
+- **左右矩阵数据类型必须一致**：matmul 的左右矩阵数据类型必须相同（如 BF16+BF16、FP16+FP16），不支持混合输入（如 BF16+FP32）
+- **推荐使用低精度输入**：BF16/FP16 输入直接 matmul 输出 FP32，比先 cast 到 FP32 再 matmul 性能更好，且精度相当
+- **避免不必要的 cast**：将 BF16 升级到 FP32 再进行 matmul 计算不会有精度提升，反而会产生额外的数据搬移开销
+- **利用随路 transpose**：matmul 支持 `a_trans` 和 `b_trans` 参数，可以在矩阵乘时随路完成转置，避免额外调用 transpose 操作
+- **必须先设置 TileShape**：调用 matmul 接口前需要通过 `set_cube_tile_shapes` 设置 M、N、K 轴上的切分大小
+
 ## 函数原型
 
 ```python

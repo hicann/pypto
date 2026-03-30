@@ -11,6 +11,10 @@
 
 从输入Tensor中取出部分视图，用于后续计算。
 
+## 注意事项
+
+- **需要 valid_shape 时必须用 pypto.view**：当需要指定 `valid_shape`（动态有效数据大小）时，不能使用 `[]` 切片语法，必须使用显式的 `pypto.view` 接口
+
 ## 函数原型
 
 ```python

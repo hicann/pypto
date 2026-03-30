@@ -11,6 +11,10 @@
 
 创建一个大小为 `size`、填充值全为 `0` 的Tensor。其数据类型由 `dtype` 指定，默认数据类型为 `DT_FP32`。
 
+## 注意事项
+
+- **必须先设置 TileShape**：调用此接口前，必须先通过 [set_vec_tile_shapes](pypto-set_vec_tile_shapes.md) 设置 TileShape
+
 ## 函数原型
 
 ```python

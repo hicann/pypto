@@ -4,7 +4,7 @@
 
 ## 概览
 
-PTO 前端负责解析使用 `@pypto.jit` 或 `@pypto.frontend.function` 装饰的 Python 函数，并将其转换为 PTO 中间表示（IR）。前端为编写高性能张量计算内核提供了一个高级、Python 原生的接口，同时允许用户对底层执行细节保持完全控制。
+PTO 前端负责解析使用 `@pypto.frontend.jit` 或 `@pypto.frontend.function` 装饰的 Python 函数，并将其转换为 PTO 中间表示（IR）。前端为编写高性能张量计算内核提供了一个高级、Python 原生的接口，同时允许用户对底层执行细节保持完全控制。
 
 本文档为参与 PTO 前端解析器开发、维护或扩展的开发者提供一份全面指南。
 

@@ -11,6 +11,11 @@
 
 计算输入与另一输入的逐元素最大值。支持二维、三维或四维的Tensor。
 
+## 注意事项
+
+- **不支持 SymbolicScalar 参数**：如果需要对 SymbolicScalar 进行比较，请使用 [SymbolicScalar.max()](../symbolic/pypto-SymbolicScalar-max.md) 方法
+- 两个参数中至少一个为 Tensor 类型
+
 ## 函数原型
 
 ```python

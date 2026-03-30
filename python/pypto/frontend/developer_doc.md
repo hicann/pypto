@@ -2,7 +2,7 @@
 
 ## Overview
 
-The PTO Frontend is responsible for parsing Python functions decorated with `@pypto.jit` or `@pypto.frontend.function` and converting them into PTO intermediate representation (IR). The frontend provides a high-level, Python-native interface for writing optimized tensor computation kernels while maintaining full control over low-level execution details.
+The PTO Frontend is responsible for parsing Python functions decorated with `@pypto.frontend.jit` or `@pypto.frontend.function` and converting them into PTO intermediate representation (IR). The frontend provides a high-level, Python-native interface for writing optimized tensor computation kernels while maintaining full control over low-level execution details.
 
 This document provides a comprehensive guide for developers working on or extending the PTO frontend parser.
 

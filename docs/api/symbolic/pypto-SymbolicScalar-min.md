@@ -11,6 +11,25 @@
 
 计算两个符号标量的最小值。
 
+## 使用场景
+
+当需要对 SymbolicScalar（如从 `tensor.shape` 获取的动态维度值）进行比较时，应使用此方法。
+
+**与 pypto.minimum 的区别**：
+- `pypto.minimum`：用于 Tensor 的逐元素最小值计算
+- `SymbolicScalar.min`：用于符号标量的最小值计算
+
+**不支持 Python 三元表达式**：
+```python
+# ❌ 错误：不支持三元表达式
+cur_seq = kv_act_seqs[b_idx]
+tmp = cur_seq - s2_idx * s2_tile
+actual = tmp if tmp < s2_tile else s2_tile
+
+# ✅ 正确：使用 .min() 方法
+actual = (cur_seq - s2_idx * s2_tile).min(s2_tile)
+```
+
 ## 函数原型
 
 ```python

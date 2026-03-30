@@ -279,7 +279,7 @@ class ShapeConfig:
     description: str = ""
 
 
-@pypto.jit
+@pypto.frontend.jit
 def scaled_matmul_kernel(
     a: pypto.Tensor,
     b: pypto.Tensor,
