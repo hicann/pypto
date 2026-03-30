@@ -120,7 +120,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamic) {
     FUNCTION(funcName, {input, output}) {
         LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
             (void)i;
-            output = Pad(input, {0, 6, 0, 8}, "constant", 0.0f);
+            output = Pad(input, {0, 6, 0, 8}, "constant", 2.0);
         }
     }
     auto function =
@@ -131,7 +131,73 @@ TEST_F(TestCodegenDynUna, TestPadDynamic) {
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     const std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TPad<pto::PadValue::Zero>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2.0)>(ubTensor_2, ubTensor_0);)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynUna, TestPadDynamicFP16) {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    int S0 = 6;
+    int S1 = 12;
+    int D0 = 12;
+    int D1 = 20;
+
+    std::vector<int64_t> srcShape = {S0, S1};
+    std::vector<int64_t> dstShape = {D0, D1};
+
+    TileShape::Current().SetVecTile({32, 32});
+    Tensor input(DataType::DT_FP16, srcShape, "input");
+    Tensor output(DataType::DT_FP16, dstShape, "output");
+
+    std::string funcName = "TestPadDynamicFP16";
+    FUNCTION(funcName, {input, output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = Pad(input, {0, 6, 0, 8}, "constant", std::numeric_limits<float>::infinity());
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TPad<pto::PadValue::Max>(ubTensor_2, ubTensor_0);)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16) {
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    int S0 = 12;
+    int S1 = 20;
+    int D0 = 12;
+    int D1 = 20;
+
+    std::vector<int64_t> srcShape = {S0, S1};
+    std::vector<int64_t> dstShape = {D0, D1};
+
+    TileShape::Current().SetVecTile({32, 32});
+    Tensor input(DataType::DT_BF16, srcShape, "input");
+    Tensor output(DataType::DT_BF16, dstShape, "output");
+
+    std::string funcName = "TestFillPadDynamicBF16";
+    FUNCTION(funcName, {input, output}) {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1)) {
+            (void)i;
+            output = FillPad(input, "constant", 0.0f);
+        }
+    }
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0.0)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -164,7 +230,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamic) {
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     const std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TFillPad<pto::PadValue::Zero>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0.0)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 

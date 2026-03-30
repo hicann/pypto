@@ -87,6 +87,10 @@ TEST_P(FillPadOperationTest, TestFillPad) {
         padValue = -std::numeric_limits<float>::infinity();
     } else if (padValueType == "max") {
         padValue = std::numeric_limits<float>::infinity();
+    } else if (padValueType == "zero") {
+        padValue = 0.0f;
+    } else if (padValueType == "custom") {
+        padValue = GetValueByName<float>(test_data, "pad_value");
     }
     auto args = FillPadOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), padValue);
     auto testCase = CreateTestCaseDesc<FillPadOpMetaData>(GetParam(), &args);

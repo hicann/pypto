@@ -54,6 +54,7 @@ std::string FormatFloat(const std::variant<int64_t, uint64_t, double> &v, DataTy
     return std::visit(apply, v);
 }
 
+
 std::string GetTypeForB16B32(const DataType &dtype) {
     if (BytesOf(dtype) == K_BYTES_OF16_BIT) {
         return "uint16_t";

@@ -1642,18 +1642,22 @@ std::string CodeGenOpCloudNPU::PrintPadTileTensor() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     auto c = extOperandVal.Cast<float>();
-    std::string padValue = "pto::PadValue::Zero";
-    if (c < 0) {
-        padValue = "pto::PadValue::Min";
-    } else if (c > 0) {
-        padValue = "pto::PadValue::Max";
-    }
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor};
-
     std::ostringstream oss;
-    oss << tileOpName << "<" << padValue << ">";
-    oss << WrapParamByParentheses(tileOpParamList);
-    oss << STMT_END;
+    if (std::isinf(c)) {
+        std::string padValue = c < 0 ? "pto::PadValue::Min" : "pto::PadValue::Max";
+        oss << tileOpName << "<" << padValue << ">";
+        oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
+        return oss.str();
+    }
+    std::string padValueStr = FormatFloat(extOperandVal.Cast<float>());
+    if (padValueStr.find('.') == std::string::npos) {
+        padValueStr += ".0";
+    }    
+    DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
+    std::string padValueArg = "(" + DataType2CCEStr(dstDtype) + ")" + padValueStr;
+    oss << tileOpName << "<pto::PadValueCustom(" << padValueArg << ")>";
+    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 

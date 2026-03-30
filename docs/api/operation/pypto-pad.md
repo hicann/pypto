@@ -26,7 +26,7 @@ pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float = 0.
 | input  | 输入      | 需要进行填充的源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32、DT_FP16、DT_BF16。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。                                                    |
 | pad    | 输入      | 填充大小序列。<br> 支持的类型为：tuple 或 list (包含int)。<br> 序列长度 $m$ 必须为偶数，且满足 $\frac{m}{2} \leq$ `input` 的维度数。<br> 格式为：`(pad_left, pad_right, pad_top, pad_bottom, ...)`。                           |
 | mode   | 输入      | 填充模式。<br> 支持的类型为：str。<br> 可选值为 `'constant'`、`'reflect'`、`'replicate'` 或 `'circular'`。<br> 默认值：`'constant'`。<br> **注意**：当前仅支持 `'constant'` 模式。                                             |
-| value  | 输入      | 当填充模式为常量填充 (`'constant'`) 时的填充值。<br> 支持的类型为：float。<br> 当前仅支持3个固定值`-inf`,`inf`,`0.0`。 默认值：`0.0`。                                                                                                                                 |
+| value  | 输入      | 当填充模式为常量填充 (`'constant'`) 时的填充值。<br> 支持的类型为：float。<br> 支持任意浮点数值，包括 `-inf`、`inf`、`0.0` 以及其他任意浮点数（如 `1.0`、`-1.0`、`0.5` 等）。 默认值：`0.0`。                                                                                                                                 |
 
 ## 返回值说明
 
@@ -37,7 +37,7 @@ pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float = 0.
 1. `pad` 参数的长度必须为2或者4。
 2. 当前**仅支持多维情况下在右侧（Right）和底部（Bottom）进行填充，或者1维情况下在右侧（Right）填充**。即 `pad` 序列中向左和向上的填充量必须为 0（例如格式必须为 `(0, pad_right, 0, pad_bottom)` 或者`(0, pad_right)`）。
 3. mode当前**仅支持 `'constant'`（常量填充）模式**，其他模式暂不支持。
-4. value当前**仅支持`-inf`,`inf`,`0.0`**。
+4. value 支持任意浮点数值，填充值的数据类型会自动转换为与输入 Tensor 一致。
 5. 如果 `input` 不是 Tensor 类型，或 `pad` 不是整数序列，将抛出 `TypeError`。
 
 ## 调用示例
