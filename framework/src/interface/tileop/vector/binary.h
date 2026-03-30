@@ -64,11 +64,6 @@ TILEOP void BinaryComputeImpl(T0 dst, T1 src0, T2 src1) {
         pto::TOR(dst, src0, src1);
         return;
     }
-    
-    if constexpr (op == BinaryOp::REM) {
-        pto::TREM(dst, src0, src1);
-        return;
-    }  
 
     if constexpr (op == BinaryOp::EXPANDEXPDIF) {
         pto::TCOLEXPANDEXPDIF(dst, src0, src1);
@@ -210,15 +205,6 @@ template <typename LastUse = LastUse3Dim<0, 0, 0>,
           typename T0, typename T1, typename T2>
 TILEOP void TMin(T0 dst, T1 src0, T2 src1) {
     BinaryCompute<BinaryOp::MIN, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
-}
-
-#define OP_TILE_OP_REM TRem
-template <typename LastUse = LastUse3Dim<0, 0, 0>,
-          TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
-          TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE,
-          typename T0, typename T1, typename T2>
-TILEOP void TRemainder(T0 dst, T1 src0, T2 src1) {
-    BinaryCompute<BinaryOp::REM, WBrcSide, HBrcSide, LastUse>(dst, src0, src1);
 }
 
 #define OP_TILE_OP_BITWISEAND TBitwiseAnd
@@ -430,6 +416,10 @@ TILEOP void BinaryTmpComputeImpl(T0 dst, T1 src0, T2 src1, T3 tmp) {
         CalcPow(dst, src0, src1, tmp);
         return;
     }
+    if constexpr (op == BinaryOp::REM) {
+        pto::TREM(dst, src0, src1, tmp);
+        return;
+    } 
 }
 
 template <BinaryOp op, TileOp::BroadcastOperand WBrcSide, TileOp::PenuBroadcastOperand HBrcSide, typename T0, typename T1, typename T2, typename T3>
@@ -484,6 +474,14 @@ template <TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
 TILEOP void TPow(T0 dst, T1 src0, T2 src1, T3 tmp) {
     static_assert(std::is_same_v<typename T1::Type, float> || std::is_same_v<typename T1::Type, int32_t>);
     BinaryTmpCompute<BinaryOp::POW, WBrcSide, HBrcSide>(dst, src0, src1, tmp);
+}
+
+#define OP_TILE_OP_REM TRem
+template <TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
+    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1, typename T2,
+    typename T3>
+TILEOP void TRemainder(T0 dst, T1 src0, T2 src1, T3 tmp) {
+    BinaryTmpCompute<BinaryOp::REM, WBrcSide, HBrcSide>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_FLOORDIV TFloorDiv

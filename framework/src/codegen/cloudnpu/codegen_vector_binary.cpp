@@ -257,7 +257,7 @@ std::string CodeGenOpCloudNPU::GenVectorScalarOpWithTmp() const {
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenRemainderRSOp() const {
+std::string CodeGenOpCloudNPU::GenRemainderSOp() const {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
@@ -568,23 +568,6 @@ std::string CodeGenOpCloudNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnar
 
     std::string tiloOpCallParam = JoinString(paramList, CONN_COMMA);
     oss << tileOpName << "_<" << templateParam << ">" << "(" << tiloOpCallParam << ");\n";
-    return oss.str();
-}
-
-std::string CodeGenOpCloudNPU::GenRemainderSOp() const {
-    const std::string &scalarDtypeStr = DataType2CCEStr(extOperandVal.GetDataType());
-    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
-
-    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, scalarTmpBuffer};
-    std::vector<std::string> templateParamList;
-    std::ostringstream oss;
-    templateParamList.emplace_back(scalarDtypeStr);
-    oss << tileOpName;
-    oss << WrapParamByAngleBrackets(templateParamList);
-    oss << WrapParamByParentheses(tileOpParamList);
-    oss << STMT_END;
     return oss.str();
 }
 

@@ -126,7 +126,7 @@ void TiledBinaryOperation(Function &function, const TileShape &tileShape, size_t
             op = &function.AddOperation(
                 GetBinaryOpNameCode<T, false, true>(), {inputTile1, inputTile2}, {resultTile, tempTensor});
         } else {
-            if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW") {
+            if (opName == "BITWISEXOR" || opName == "COPYSIGN" || opName == "POW" || opName == "REM") {
                 std::vector<int64_t> tmpShape(resultTileInfo.shape);
                 auto alignSize = BLOCK_SIZE / BytesOf(result->Datatype());
                 tmpShape[resultTileInfo.shape.size() - 1] = 
@@ -452,7 +452,7 @@ void TiledBinaryOperationScalar(Function &function, const TileShape &tileShape, 
     if (cur == input1.tensor->GetShape().size()) {
         auto inputTile1 = input1.tensor->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
         auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
-        if (opNameCode == Opcode::OP_BITWISEXORS || opNameCode == Opcode::OP_REMRS) {
+        if (opNameCode == Opcode::OP_BITWISEXORS) {
             std::vector<int64_t> tmpShape(resultTileInfo.shape);
             auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
             tmpShape[resultTileInfo.shape.size() - 1] = AlignUp(tmpShape[resultTileInfo.shape.size() - 1], alignSize);
@@ -499,6 +499,50 @@ void TiledBinaryOperationScalar(Function &function, const TileShape &tileShape, 
     TileInfo resultTileInfo(result->shape.size(), result->offset.size());
     auto input1 = LogicalInput{operand1, tileInfo1};
     TiledBinaryOperationScalar<T>(function, tileShape, 0, input1, value, result, resultTileInfo, reverseOperand);
+}
+
+template <BinaryOpType T>
+void TiledRemainderSOperation(Function &function, const TileShape &tileShape, size_t cur, LogicalInput &input1,
+    Element &value, const LogicalTensorPtr &result, TileInfo &resultTileInfo, bool reverseOperand) {
+    auto opNameCode = GetBinaryOpNameCode<T, true>();
+    if (cur == input1.tensor->GetShape().size()) {
+        auto inputTile1 = input1.tensor->View(function, input1.tileInfo.shape, input1.tileInfo.offset);
+        auto resultTile = result->View(function, resultTileInfo.shape, resultTileInfo.offset);
+        int64_t shapeSize = resultTileInfo.shape.size();
+        auto alignSize = BLOCK_SIZE / BytesOf(input1.tensor->Datatype());
+        std::vector<int64_t> tmpShape;
+        if (shapeSize > 1) {
+            tmpShape.push_back(resultTileInfo.shape[shapeSize - 2]);
+        }
+        tmpShape.push_back(AlignUp(resultTileInfo.shape[shapeSize - 1], alignSize));
+        if (opNameCode == Opcode::OP_REMRS) {
+            tmpShape[0] = 2 * tmpShape[0];
+        }
+        auto tmpTensor = std::make_shared<LogicalTensor>(function, input1.tensor->Datatype(), tmpShape);
+        auto &tmpOp = function.AddOperation(opNameCode, {inputTile1}, {resultTile, tmpTensor});
+        tmpOp.SetAttribute(OpAttributeKey::scalar, value);
+        tmpOp.SetAttribute(OP_ATTR_PREFIX + "reverseOperand", reverseOperand);
+        return;
+    }
+    auto &vecTile = tileShape.GetVecTile();
+    for (int i = 0; i < result->shape[cur]; i += vecTile[cur]) {
+        resultTileInfo.offset[cur] = i;
+        resultTileInfo.shape[cur] = std::min(result->shape[cur] - resultTileInfo.offset[cur], vecTile[cur]);
+        input1.tileInfo.offset[cur] = i % input1.tensor->GetShape()[cur];
+        input1.tileInfo.shape[cur] =
+            std::min(input1.tensor->GetShape()[cur] - input1.tileInfo.offset[cur], vecTile[cur]);
+        TiledRemainderSOperation<T>(
+            function, tileShape, cur + 1, input1, value, result, resultTileInfo, reverseOperand);
+    }
+}
+
+template <BinaryOpType T>
+void TiledRemainderSOperation(Function &function, const TileShape &tileShape, LogicalTensorPtr operand1,
+    Element value, const LogicalTensorPtr &result, bool reverseOperand = false) {
+    TileInfo tileInfo1(result->shape.size(), result->offset.size());
+    TileInfo resultTileInfo(result->shape.size(), result->offset.size());
+    auto input1 = LogicalInput{operand1, tileInfo1};
+    TiledRemainderSOperation<T>(function, tileShape, 0, input1, value, result, resultTileInfo, reverseOperand);
 }
 
 Tensor Add(const Tensor &self, const Element &other) {
@@ -858,6 +902,14 @@ void BinaryOperationScalarResTileFunc(Function &function, const TileShape &tileS
         oOperand[0], op.GetBoolAttribute(OP_ATTR_PREFIX + "reverseOperand"));
 }
 
+template <BinaryOpType T>
+void RemainderSTileFunc(Function &function, const TileShape &tileShape,
+    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand,
+    [[maybe_unused]] const Operation &op) {
+    TiledRemainderSOperation<T>(function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar),
+        oOperand[0], op.GetBoolAttribute(OP_ATTR_PREFIX + "reverseOperand"));
+}
+
 // OP_S_ADDS OP_S_SUBS OP_S_MULS OP_S_DIVS OP_S_MAXS
 template <BinaryOpType T>
 void BinaryOperationAllScalarResTileFunc(Function &function, const TileShape &tileShape,
@@ -905,8 +957,8 @@ REGISTER_OPERATION_TILED_FUNC(OP_BITWISEANDS, Opcode::OP_BITWISEANDS, BinaryOper
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEORS, Opcode::OP_BITWISEORS, BinaryOperationScalarTileFunc<BinaryOpType::BITWISEOR>);
 REGISTER_OPERATION_TILED_FUNC(OP_BITWISEXORS, Opcode::OP_BITWISEXORS, BinaryOperationScalarTileFunc<BinaryOpType::BITWISEXOR>);
 REGISTER_OPERATION_TILED_FUNC(OP_GCDS, Opcode::OP_GCDS, BinaryOperationScalarTileFunc<BinaryOpType::GCD>);
-REGISTER_OPERATION_TILED_FUNC(OP_REMS, Opcode::OP_REMS, BinaryOperationScalarTileFunc<BinaryOpType::REM>);
-REGISTER_OPERATION_TILED_FUNC(OP_REMRS, Opcode::OP_REMRS, BinaryOperationScalarResTileFunc<BinaryOpType::REMR>);
+REGISTER_OPERATION_TILED_FUNC(OP_REMS, Opcode::OP_REMS, RemainderSTileFunc<BinaryOpType::REM>);
+REGISTER_OPERATION_TILED_FUNC(OP_REMRS, Opcode::OP_REMRS, RemainderSTileFunc<BinaryOpType::REMR>);
 REGISTER_OPERATION_TILED_FUNC(OP_FLOORDIVS, Opcode::OP_FLOORDIVS, BinaryOperationScalarResTileFunc<BinaryOpType::FLOORDIV>);
 
 REGISTER_OPERATION_TILED_FUNC(OP_S_ADDS, Opcode::OP_S_ADDS, BinaryOperationAllScalarResTileFunc<BinaryOpType::S_ADD>);

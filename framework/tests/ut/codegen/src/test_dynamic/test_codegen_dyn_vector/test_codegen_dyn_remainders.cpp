@@ -64,7 +64,7 @@ TEST_F(TestCodegenDynRemainderS, TestRemainderS) {
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TRemainderS<int16_t>(ubTensor_14, ubTensor_12, 2);)!!!";
+    std::string expect = R"!!!(TRemainderS<int16_t>(ubTensor_15, ubTensor_13, 2, ubTensor_16);)!!!";
     CheckStringExist(expect, res);
 }
 
