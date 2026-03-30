@@ -22,18 +22,23 @@ import pypto
 
 NUM_HEADS = 8
 HEAD_DIM = 64
-BLOCK_SIZE_KV = 16
+BLOCK_SIZE_KV = 64
+BLOCK_SIZE_Q = 64
 
 
 @pypto.frontend.jit(
     pass_options={
         "pg_upper_bound": 5000000,
+        "cube_l1_reuse_setting": {0: 8},
+        "cube_nbuffer_setting": {0: 4},
+        "vec_nbuffer_setting": {0: 4},
     },
     runtime_options={
-        "stitch_function_max_num": 128,
+        "stitch_function_max_num": 256,
+        "device_sched_mode": 1,
     },
     debug_options={
-        "runtime_debug_mode": 1,
+        "runtime_debug_mode": 0,
     }
 )
 def flash_attention_score_kernel_with_mask(
@@ -53,27 +58,34 @@ def flash_attention_score_kernel_with_mask(
     
     scale = 1.0 / math.sqrt(HEAD_DIM)
     
-    pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
-    pypto.set_vec_tile_shapes(16, 128)
+    pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128])
+    pypto.set_vec_tile_shapes(64, 512)
     
     num_blocks_kv = (seq_len_kv + BLOCK_SIZE_KV - 1) // BLOCK_SIZE_KV
+    num_blocks_q = (seq_len_q + BLOCK_SIZE_Q - 1) // BLOCK_SIZE_Q
     
     for b_idx in pypto.loop(0, batch_size, 1, name="LOOP_B", idx_name="b_idx"):
         for n_idx in pypto.loop(0, NUM_HEADS, 1, name="LOOP_N", idx_name="n_idx"):
-            for q_idx in pypto.loop(0, seq_len_q, 1, name="LOOP_Q", idx_name="q_idx"):
-                oi_update = pypto.tensor([1, HEAD_DIM], pypto.DT_FP32, "oi_update")
-                li_update = pypto.tensor([1, 1], pypto.DT_FP32, "li_update")
-                mi_update = pypto.tensor([1, 1], pypto.DT_FP32, "mi_update")
+            for q_block_idx in pypto.loop(0, num_blocks_q, 1, name="LOOP_Q_BLOCK", idx_name="q_block_idx"):
+                q_start = q_block_idx * BLOCK_SIZE_Q
+                cur_q_size = pypto.min(BLOCK_SIZE_Q, seq_len_q - q_start)
                 
-                q_vec = pypto.view(query, [1, 1, 1, HEAD_DIM], 
-                                   [b_idx, n_idx, q_idx, 0],
-                                   valid_shape=[1, 1, 1, HEAD_DIM])
-                q_vec_2d = pypto.reshape(q_vec, [1, HEAD_DIM])
+                oi_update = pypto.tensor([BLOCK_SIZE_Q, HEAD_DIM], pypto.DT_FP32, "oi_update")
+                li_update = pypto.tensor([BLOCK_SIZE_Q, 1], pypto.DT_FP32, "li_update")
+                mi_update = pypto.tensor([BLOCK_SIZE_Q, 1], pypto.DT_FP32, "mi_update")
+                
+                q_block = pypto.view(query, [1, 1, BLOCK_SIZE_Q, HEAD_DIM], 
+                                    [b_idx, n_idx, q_start, 0],
+                                    valid_shape=[1, 1, cur_q_size, HEAD_DIM])
+                q_block_2d = pypto.reshape(q_block, [BLOCK_SIZE_Q, HEAD_DIM])
+                q_block_2d_valid = pypto.view(q_block_2d, [BLOCK_SIZE_Q, HEAD_DIM],
+                                              [0, 0],
+                                              valid_shape=[cur_q_size, HEAD_DIM])
                 
                 for kv_block_idx, _ in pypto.loop_unroll(0, num_blocks_kv, 1,
                                                          name="LOOP_KV_BLOCK", 
                                                          idx_name="kv_block_idx",
-                                                         unroll_list={1}):
+                                                         unroll_list=[4, 2, 1]):
                     kv_start = kv_block_idx * BLOCK_SIZE_KV
                     cur_block_size = pypto.min(BLOCK_SIZE_KV, seq_len_kv - kv_start)
                     
@@ -85,13 +97,13 @@ def flash_attention_score_kernel_with_mask(
                                                   [0, 0],
                                                   valid_shape=[cur_block_size, HEAD_DIM])
                     
-                    scores = pypto.matmul(q_vec_2d, k_block_2d_valid, pypto.DT_FP32, 
+                    scores = pypto.matmul(q_block_2d_valid, k_block_2d_valid, pypto.DT_FP32, 
                                          a_trans=False, b_trans=True)
                     scores_scaled = pypto.mul(scores, scale)
                     
-                    mask_block = pypto.view(atten_mask, [1, BLOCK_SIZE_KV],
-                                           [q_idx, kv_start],
-                                           valid_shape=[1, cur_block_size])
+                    mask_block = pypto.view(atten_mask, [BLOCK_SIZE_Q, BLOCK_SIZE_KV],
+                                           [q_start, kv_start],
+                                           valid_shape=[cur_q_size, cur_block_size])
                     valid_mask = pypto.add(mask_block, -1.0)
                     valid_mask = pypto.mul(valid_mask, -1.0)
                     
@@ -117,8 +129,8 @@ def flash_attention_score_kernel_with_mask(
                         if pypto.is_loop_end(kv_block_idx):
                             o_final = pypto.div(o_ij, l_ij)
                             o_final_bf16 = pypto.cast(o_final, pypto.DT_BF16)
-                            o_final_4d = pypto.reshape(o_final_bf16, [1, 1, 1, HEAD_DIM])
-                            output[b_idx: b_idx + 1, n_idx: n_idx + 1, q_idx: q_idx + 1, :] = o_final_4d
+                            o_final_4d = pypto.reshape(o_final_bf16, [1, 1, BLOCK_SIZE_Q, HEAD_DIM])
+                            output[b_idx: b_idx + 1, n_idx: n_idx + 1, q_start: q_start + BLOCK_SIZE_Q, :] = o_final_4d
                         else:
                             oi_update[:] = o_ij
                         li_update[:] = l_ij
@@ -141,8 +153,8 @@ def flash_attention_score_kernel_with_mask(
                         if pypto.is_loop_end(kv_block_idx):
                             o_final = pypto.div(oi_new, li_new)
                             o_final_bf16 = pypto.cast(o_final, pypto.DT_BF16)
-                            o_final_4d = pypto.reshape(o_final_bf16, [1, 1, 1, HEAD_DIM])
-                            output[b_idx: b_idx + 1, n_idx: n_idx + 1, q_idx: q_idx + 1, :] = o_final_4d
+                            o_final_4d = pypto.reshape(o_final_bf16, [1, 1, BLOCK_SIZE_Q, HEAD_DIM])
+                            output[b_idx: b_idx + 1, n_idx: n_idx + 1, q_start: q_start + BLOCK_SIZE_Q, :] = o_final_4d
                         else:
                             oi_update[:] = oi_new
                         li_update[:] = li_new
