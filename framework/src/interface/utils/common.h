@@ -51,6 +51,7 @@ using Status = uint32_t;
 constexpr uint32_t DIST_COMM_GROUP_NUM = 2;
 
 constexpr const int NUM2 = 2;
+constexpr const int NUM3 = 3;
 constexpr const int NUM4 = 4;
 constexpr const int NUM1 = 1;
 constexpr const int NUM150 = 150;

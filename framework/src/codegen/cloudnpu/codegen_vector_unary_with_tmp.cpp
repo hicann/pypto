@@ -510,11 +510,12 @@ std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const {
         return PrintExpm1();
     }
 
-    if (opCode == Opcode::OP_ROWSUMLINE) {
+    if (opCode == Opcode::OP_ROWSUMLINE || opCode == Opcode::OP_ROWARGMAXLINE || opCode == Opcode::OP_ROWARGMINLINE) {
         return PrintRowSumline({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
     if (opCode == Opcode::OP_ROWSUM_SINGLE || opCode == Opcode::OP_ROWMAX_SINGLE ||
-        opCode == Opcode::OP_ROWMIN_SINGLE || opCode == Opcode::OP_ROWPROD_SINGLE) {
+        opCode == Opcode::OP_ROWMIN_SINGLE || opCode == Opcode::OP_ROWPROD_SINGLE ||
+        opCode == Opcode::OP_ROWARGMAX_SINGLE || opCode == Opcode::OP_ROWARGMIN_SINGLE ) {
         return PrintReduceLastAxis({s0Var, tmpVar, dVar, srcDtypeStr, tmpDtypeStr, dstDtypeStr});
     }
 

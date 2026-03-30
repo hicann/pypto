@@ -186,6 +186,8 @@ Tensor RowMaxExpand(const Tensor &operand);
 
 Tensor Sum(const Tensor &self, int axis = -1, bool keepDim=false);
 Tensor Amax(const Tensor &self, int axis = -1, bool keepDim=false);
+Tensor ArgMax(const Tensor &self, int axis = -1, bool keepDim=false);
+Tensor ArgMin(const Tensor &self, int axis = -1, bool keepDim=false);
 Tensor Amin(const Tensor &self, int axis = -1, bool keepDim=false);
 Tensor Prod(const Tensor &self, int axis = -1, bool keepDim=false);
 

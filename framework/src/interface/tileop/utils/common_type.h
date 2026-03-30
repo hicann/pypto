@@ -49,7 +49,7 @@ enum class BroadcastOperand : uint8_t { NONE = 0, LEFT, RIGHT };
 
 enum class PairBinaryOp : uint8_t { ADD = 0, MAX, MIN, MUL };
 
-enum class ReduceOp : uint8_t { SUM = 0, MAX, MIN, PROD};
+enum class ReduceOp : uint8_t { SUM = 0, MAX, MIN, PROD, ARGMAX, ARGMIN};
 
 enum class BinaryScalarOp : uint8_t { ADD = 0, SUB, MUL, DIV, MAX, MIN, MOD, REM, BITWISEAND, BITWISEOR, BITWISEXOR, LRELU, FLOORDIV };
 

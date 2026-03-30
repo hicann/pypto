@@ -35,7 +35,6 @@ namespace tile_fwk {
 constexpr int SUBGRAPHID0 = 0;
 constexpr int SUBGRAPHID1 = 1;
 constexpr int SUBGRAPHID2 = 2;
-constexpr int NUM3 = 3;
 constexpr int NUM5 = 5;
 constexpr int NUM10 = 10;
 constexpr int NUM128 = 128;

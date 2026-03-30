@@ -161,11 +161,14 @@ void TileReduceNew(Function &function, const TileShape &tileShape, const std::st
         }
         case npu::tile_fwk::ReduceType::SINGLE: {
             std::vector<int64_t> tmpShape = {1, static_cast<int>(BLOCK_SIZE / BytesOf(in->Datatype()))};
-            if (op == "SUM" || (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
+            if (op == "SUM" || op == "ARGMAX" || op == "ARGMIN" ||
+                (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
                 if (static_cast<size_t>(axis) == (in->shape.size() - 1)) {
                     tmpShape[0] = sourceReg->shape[axis - 1];
                     if (op == "PROD") {
                         tmpShape = sourceReg->shape;
+                    } else if (op == "ARGMAX" || op == "ARGMIN") {
+                        tmpShape[1] = sourceReg->shape[axis];
                     } else if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {
                         tmpShape[0] = 1;
                     } else if (static_cast<size_t>(sourceReg->shape[axis]) <=
@@ -183,8 +186,9 @@ void TileReduceNew(Function &function, const TileShape &tileShape, const std::st
                     auto &newOp = function.AddOperation("TILE_ROW" + op + "_SINGLE", {sourceReg}, {result, tempTensor});
                     newOp.SetAttribute(OP_ATTR_PREFIX + "AXIS", axis);
                 } else {
-                    tmpShape[0] = (sourceReg->shape[axis] + 1) / NUM2;
-                    tmpShape[1] = (sourceReg->shape[in->shape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM;
+                    tmpShape[0] = (op == "ARGMAX" || op == "ARGMIN") ? 1 : (sourceReg->shape[axis] + 1) / NUM2;
+                    tmpShape[1] = (op == "ARGMAX" || op == "ARGMIN") ? REPEAT_BYTE / BytesOf(in->Datatype()) * NUM3 :
+                        (sourceReg->shape[in->shape.size() - 1] + BLOCK_NUM - 1) / BLOCK_NUM * BLOCK_NUM;
                     auto tempTensor = std::make_shared<LogicalTensor>(function, in->Datatype(), tmpShape);
                     tempTensor->dynValidShape_ = SymbolicScalar::FromConcrete(tmpShape);
                     auto &newOp = function.AddOperation("TILE_ROW" + op + "LINE", {sourceReg}, {result, tempTensor});
@@ -226,7 +230,8 @@ void ReduceSingle(size_t cur, const std::string &op, Input &input, const Logical
 void TiledReduceSingle(Function &function, const TileShape &tileShape, const std::string &op,
     const LogicalTensorPtr &operand, const LogicalTensorPtr &result, int axis) {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "MIN" || op == "SUM" || op == "PROD" ||
-                                                   op == "MAX_COMBINE_AXIS" || op == "SUM_COMBINE_AXIS")
+                                               op == "ARGMAX" || op == "ARGMIN" ||
+                                               op == "MAX_COMBINE_AXIS" || op == "SUM_COMBINE_AXIS")
         << "Not support op:" << op;
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset should be equal";
@@ -249,7 +254,8 @@ void TiledReduceSingle(Function &function, const TileShape &tileShape, const std
 [[maybe_unused]] void TensorReduceSingle(
     Function &function, const std::string &op, const Tensor &operand, Tensor &result, int axis) {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, op == "MAX" || op == "MIN" || op == "SUM" || op == "PROD" ||
-                                                   op == "MAX_COMBINE_AXIS" || op == "SUM_COMBINE_AXIS")
+                                            op == "ARGMAX" || op == "ARGMIN" ||
+                                            op == "MAX_COMBINE_AXIS" || op == "SUM_COMBINE_AXIS")
         << "Not support op:" << op;
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand.GetShape().size() == operand.GetStorage()->offset.size())
         << "The shape size of operand and offset should be equal";
@@ -262,6 +268,10 @@ void TiledReduceSingle(Function &function, const TileShape &tileShape, const std
         opCode = Opcode::OP_ROWSUM_SINGLE;
     } else if (op == "PROD") {
         opCode = Opcode::OP_ROWPROD_SINGLE;
+    } else if (op == "ARGMAX") {
+        opCode = Opcode::OP_ROWARGMAX_SINGLE;
+    } else if (op == "ARGMIN") {
+        opCode = Opcode::OP_ROWARGMIN_SINGLE;
     } else if (op == "MAX_COMBINE_AXIS") {
         opCode = Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE;
     } else { // SUM_COMBINE_AXIS
@@ -334,6 +344,34 @@ Tensor Amax(const Tensor &self, int axis, bool keepDim) {
     } else {
         CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "MAX", self, result, axis);
     }
+
+    return ProcessResultShape(result, self, axis, keepDim);
+}
+
+Tensor ArgMax(const Tensor &self, int axis, bool keepDim) {
+    DECLARE_TRACER();
+    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    ValidateReductionAxis(self, axis);
+
+    auto resultShape = self.GetShape();
+    resultShape[axis] = 1;
+
+    Tensor result(DataType::DT_INT32, resultShape);
+    CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMAX", self, result, axis);
+
+    return ProcessResultShape(result, self, axis, keepDim);
+}
+
+Tensor ArgMin(const Tensor &self, int axis, bool keepDim) {
+    DECLARE_TRACER();
+    axis = axis < 0 ? self.GetShape().size() + axis : axis;
+    ValidateReductionAxis(self, axis);
+
+    auto resultShape = self.GetShape();
+    resultShape[axis] = 1;
+
+    Tensor result(DataType::DT_INT32, resultShape);
+    CALL(ReduceSingle, *Program::GetInstance().GetCurrentFunction(), "ARGMIN", self, result, axis);
 
     return ProcessResultShape(result, self, axis, keepDim);
 }
@@ -529,10 +567,26 @@ void RowExpSumSingleOperationTileFunc(Function &function, const TileShape &tileS
     TiledReduceExpand(function, tileShape, "SUM", iOperand[0], oOperand[0]);
 }
 
+void RowArgMaxSingleOperationTileFunc(Function &function, const TileShape &tileShape,
+    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand, const Operation &op) {
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    auto axis = op.GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
+    TiledReduceSingle(function, tileShape, "ARGMAX", iOperand[0], oOperand[0], axis);
+}
+
+void RowArgMinSingleOperationTileFunc(Function &function, const TileShape &tileShape,
+    const std::vector<LogicalTensorPtr> &iOperand, const std::vector<LogicalTensorPtr> &oOperand, const Operation &op) {
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    auto axis = op.GetIntAttribute(OP_ATTR_PREFIX + "AXIS");
+    TiledReduceSingle(function, tileShape, "ARGMIN", iOperand[0], oOperand[0], axis);
+}
+
 REGISTER_OPERATION_TILED_FUNC(OP_ROWMAX_SINGLE, Opcode::OP_ROWMAX_SINGLE, RowMaxSingleOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ROWMIN_SINGLE, Opcode::OP_ROWMIN_SINGLE, RowMinSingleOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ROWSUM_SINGLE, Opcode::OP_ROWSUM_SINGLE, RowSumSingleOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ROWPROD_SINGLE, Opcode::OP_ROWPROD_SINGLE, RowProdSingleOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ROWARGMAX_SINGLE, Opcode::OP_ROWARGMAX_SINGLE, RowArgMaxSingleOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_ROWARGMIN_SINGLE, Opcode::OP_ROWARGMIN_SINGLE, RowArgMinSingleOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(
     OP_ROWMAX_COMBINE_AXIS_SINGLE, Opcode::OP_ROWMAX_COMBINE_AXIS_SINGLE, RowMaxCombineOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(

@@ -1531,7 +1531,7 @@ def gen_bitwise_xors_op_golden(case_name: str, output: Path, case_index: int = N
     return gen_op_golden("BitwiseXors", golden_func, output, case_index)
 
 
-@TestCaseLoader.reg_params_handler(ops=["Sum", "Amax", "Amin", "Prod"])
+@TestCaseLoader.reg_params_handler(ops=["Sum", "Amax", "Amin", "Prod", "ArgMax", "ArgMin"])
 def params_dims_func(params: dict):
     params["dims"] = parse_list_str(params.get("dims"))
     params["keepDim"] = params.get("keepDim", True)
@@ -1577,6 +1577,46 @@ def gen_reduce_max_op_golden(
 
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("Amax", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestArgMax/ArgMaxOperationTest.TestArgMax",
+    ]
+)
+def gen_argmax_op_golden(
+    case_name: str, output: Path, case_index: int = None
+) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, config: dict):
+        params = config.get("params")
+        x = inputs[0]
+        dims = params["dims"]
+        keepdim = params.get("keepDim", True)
+        return [x.argmax(axis=dims[0], keepdims=keepdim).astype(np.int32)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("ArgMax", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestArgMin/ArgMinOperationTest.TestArgMin",
+    ]
+)
+def gen_argmin_op_golden(
+    case_name: str, output: Path, case_index: int = None
+) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, config: dict):
+        params = config.get("params")
+        x = inputs[0]
+        dims = params["dims"]
+        keepdim = params.get("keepDim", True)
+        return [x.argmin(axis=dims[0], keepdims=keepdim).astype(np.int32)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("ArgMin", golden_func, output, case_index)
 
 
 @GoldenRegister.reg_golden_func(

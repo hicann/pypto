@@ -32,6 +32,10 @@ TILEOP void ReduceComputeImpl(T0 dst, T1 src, T2 tmp) {
         PTO_WITH_LAST_USE(pto::TROWMIN(dst, src, tmp), n1, n2, n3);
     } else if constexpr (op == ReduceOp::PROD) {
         PTO_WITH_LAST_USE(pto::TROWPROD(dst, src, tmp), n1, n2, n3);
+    } else if constexpr (op == ReduceOp::ARGMAX) {
+        pto::TROWARGMAX(dst, src, tmp);
+    } else if constexpr (op == ReduceOp::ARGMIN) {
+        pto::TROWARGMIN(dst, src, tmp);
     }
 }
 
@@ -103,6 +107,18 @@ TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp) {
 template <typename LastUse = LastUse3Dim<0, 0, 0>, typename T0, typename T1, typename T2>
 TILEOP void TRowSumSingle(T0 dst, T1 src, T2 tmp) {
     ReduceLastAxisCompute<ReduceOp::SUM, LastUse>(dst, src, tmp);
+}
+
+#define OP_TILE_OP_ROWARGMAXSINGLE TRowArgMaxSingle
+template <typename LastUse = LastUse3Dim<0, 0, 0>, typename T0, typename T1, typename T2>
+TILEOP void TRowArgMaxSingle(T0 dst, T1 src, T2 tmp) {
+    ReduceLastAxisCompute<ReduceOp::ARGMAX, LastUse>(dst, src, tmp);
+}
+
+#define OP_TILE_OP_ROWARGMINSINGLE TRowArgMinSingle
+template <typename LastUse = LastUse3Dim<0, 0, 0>, typename T0, typename T1, typename T2>
+TILEOP void TRowArgMinSingle(T0 dst, T1 src, T2 tmp) {
+    ReduceLastAxisCompute<ReduceOp::ARGMIN, LastUse>(dst, src, tmp);
 }
 
 #define OP_TILE_OP_ROWMAXSINGLE TRowMaxSingle
@@ -206,8 +222,8 @@ TILEOP void TRowProdLine(T0 dst, T1 src) {
     TRowMaxMinProdLineDynamic<ReduceOp::PROD, axis>(dst, src);
 }
 
-template <int axis, typename DstTileDefine, typename SrcTileDefine, typename TmpTileDefine, typename T0, typename T1, typename T2>	 
- TILEOP void TRowSumLineDynamic(T0 dst, T1 src, T2 tmp) {
+template <int axis, ReduceOp op, typename DstTileDefine, typename SrcTileDefine, typename TmpTileDefine, typename T0, typename T1, typename T2>	 
+ TILEOP void ColReduceWithTmpImp(T0 dst, T1 src, T2 tmp) {
     constexpr size_t expectSize = 5;
     constexpr auto typeSize = sizeof(typename T1::Type);
     const auto dstLayout = dst.GetLayout();
@@ -253,16 +269,21 @@ template <int axis, typename DstTileDefine, typename SrcTileDefine, typename Tmp
                     pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
                     pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
                     pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
-                    pto::TCOLSUM(dstTile, srcTile, tmpTile, true);
+                    if constexpr (op == ReduceOp::SUM) {
+                        pto::TCOLSUM(dstTile, srcTile, tmpTile, true);
+                    } else if constexpr (op == ReduceOp::ARGMAX) {
+                        pto::TCOLARGMAX(dstTile, srcTile, tmpTile);
+                    } else if constexpr (op == ReduceOp::ARGMIN) {
+                        pto::TCOLARGMIN(dstTile, srcTile, tmpTile);
+                    }
                 }
             }
         }
     }
 }
 
-#define OP_TILE_OP_ROWSUMLINE TRowSumLine
-template <int axis, typename T0, typename T1, typename T2>
-TILEOP void TRowSumLine(T0 dst, T1 src, T2 tmp) {
+template <int axis, ReduceOp op, typename T0, typename T1, typename T2>
+TILEOP void ColReduceWithTmp(T0 dst, T1 src, T2 tmp) {
     constexpr auto srcShapeSize = Std::tuple_size<typename T1::Shape>::value;
     constexpr auto dstShapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr auto tmpShapeSize = Std::tuple_size<typename T2::Shape>::value;
@@ -275,6 +296,24 @@ TILEOP void TRowSumLine(T0 dst, T1 src, T2 tmp) {
     constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, tmpShapeSize - 2>();
     constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, tmpShapeSize - 1>();
     using TmpTileDefine = pto::Tile<pto::TileType::Vec, typename T2::Type, tmpTileH, tmpTileW, pto::BLayout::RowMajor, tmpTileH, tmpTileW>;
-    TRowSumLineDynamic<axis, DstTileDefine, SrcTileDefine, TmpTileDefine>(dst, src, tmp);
+    ColReduceWithTmpImp<axis, op, DstTileDefine, SrcTileDefine, TmpTileDefine>(dst, src, tmp);
+}
+
+#define OP_TILE_OP_ROWSUMLINE TRowSumLine
+template <int axis, typename T0, typename T1, typename T2>
+TILEOP void TRowSumLine(T0 dst, T1 src, T2 tmp) {
+    ColReduceWithTmp<axis, ReduceOp::SUM, T0, T1, T2>(dst, src, tmp);
+}
+
+#define OP_TILE_OP_ROWARGMAXLINE TRowArgMaxLine
+template <int axis, typename T0, typename T1, typename T2>
+TILEOP void TRowArgMaxLine(T0 dst, T1 src, T2 tmp) {
+    ColReduceWithTmp<axis, ReduceOp::ARGMAX, T0, T1, T2>(dst, src, tmp);
+}
+
+#define OP_TILE_OP_ROWARGMINLINE TRowArgMinLine
+template <int axis, typename T0, typename T1, typename T2>
+TILEOP void TRowArgMinLine(T0 dst, T1 src, T2 tmp) {
+    ColReduceWithTmp<axis, ReduceOp::ARGMIN, T0, T1, T2>(dst, src, tmp);
 }
 #endif
