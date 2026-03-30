@@ -10,6 +10,7 @@
 
 #include "gtest/gtest.h"
 #include "machine/host/expr_generator.h"
+#include "machine/host/backend.h"
 #include <fstream>
 #include <sstream>
 #include <cstdio>
@@ -103,8 +104,8 @@ TEST_F(TestExprBatchGenerator, LinkScriptGeneration) {
 TEST_F(TestExprBatchGenerator, CheckExprDependCoreTest) {
     // Create a test tensor name
     std::string testTensorName = "test_tensor";
-    std::unordered_map<std::string, bool> tensorNameToDependCore;
-    tensorNameToDependCore[testTensorName] = true;
+    ValDependTensorMeta valDependTensorMeta;
+    valDependTensorMeta.tensorNameToDependCore[testTensorName] = true;
 
     // Create a GetInputData call expression to test CheckExprDependCore
     RawSymbolicScalarPtr callee = RawSymbolicSymbol::Create("RUNTIME_GetInputData");
@@ -112,13 +113,14 @@ TEST_F(TestExprBatchGenerator, CheckExprDependCoreTest) {
     RawSymbolicScalarPtr arg2 = RawSymbolicImmediate::Create(0);
     std::vector<RawSymbolicScalarPtr> operands = {callee, arg1, arg2};
     RawSymbolicScalarPtr getInputDataExpr = std::make_shared<RawSymbolicExpression>(SymbolicOpcode::T_MOP_CALL, operands);
-    std::unordered_map<RawSymbolicScalarPtr, bool> valDependMap;
-    bool dependsCore = SymbolicExpressionTable::CheckExprDependCore(getInputDataExpr, tensorNameToDependCore, valDependMap);
+    bool dependsCore = SymbolicExpressionTable::CheckExprDependCore(getInputDataExpr, valDependTensorMeta.tensorNameToDependCore,
+        valDependTensorMeta.valDependMap);
     ASSERT_TRUE(dependsCore);
 
-    tensorNameToDependCore[testTensorName] = false;
-    valDependMap.clear();
-    dependsCore = SymbolicExpressionTable::CheckExprDependCore(getInputDataExpr, tensorNameToDependCore, valDependMap);
+    valDependTensorMeta.tensorNameToDependCore[testTensorName] = false;
+    valDependTensorMeta.valDependMap.clear();
+    dependsCore = SymbolicExpressionTable::CheckExprDependCore(getInputDataExpr, valDependTensorMeta.tensorNameToDependCore,
+        valDependTensorMeta.valDependMap);
     ASSERT_FALSE(dependsCore);
 }
 
@@ -138,11 +140,9 @@ TEST_F(TestExprBatchGenerator, BatchFileGeneration) {
         expressions.Insert(expr);
     }
 
-    std::unordered_map<std::string, bool> tensorNameToDependCore;
-
     // Generate batch files
     generator.GenerateBatchFile(&exprTable, controlFlowOss, exprHeaderOss, "test_exp.h", expressions,
-        exprSrcFiles, 1, 1, tensorNameToDependCore);
+        exprSrcFiles, 1, 1);
 
     // Check if batch files were created
     ASSERT_EQ(exprSrcFiles.size(), 2);

@@ -118,4 +118,8 @@ private:
 // Force link library compiler as nothing depends on it.
 void ForceLinkLibraryCompiler();
 
+struct ValDependTensorMeta {
+    std::unordered_map<std::string, bool> tensorNameToDependCore;
+    std::unordered_map<RawSymbolicScalarPtr, bool> valDependMap;
+};
 }

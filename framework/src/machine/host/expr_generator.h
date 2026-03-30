@@ -71,11 +71,7 @@ public:
 
     template<typename ExpressionSet>
     void GenerateBatchFile(SymbolicExpressionTable *exprTable, std::ostringstream &controlFlowOss, std::ostringstream &exprHeaderOss,
-        const std::string &expName, const ExpressionSet& expressions, std::vector<std::string> &exprSrcFiles,
-        int indent, int devRootKey, std::unordered_map<std::string, bool> &tensorNameToDependCore) {
-        std::ostringstream subCallOss;
-        bool needSync = false;
-        std::unordered_map<RawSymbolicScalarPtr, bool> valDependMap;
+        const std::string &expName, const ExpressionSet& expressions, std::vector<std::string> &exprSrcFiles, int indent, int devRootKey) {
         for (auto& batch : batches_) {
             std::string filePath = outputDir_ + "/" + batch.fileName;
             std::ofstream out(filePath);
@@ -97,24 +93,17 @@ public:
             for (size_t idx = batch.startExprIndex; idx < batch.endExprIndex; idx++) {
                 const auto& expr = expressions[idx];
                 auto exprStr = exprTable->BuildExpression(expr);
-                if (!needSync && exprTable->CheckExprDependCore(expr, tensorNameToDependCore, valDependMap)) {
-                    needSync = true;
-                }
                 out << "    RUNTIME_SetExpr(exprList, " << idx << ", " << exprStr << ");\n";
             }
             out << "}\n\n"
                 << "} // namespace npu::tile_fwk\n";
             out.close();
-            subCallOss << std::setw(indent * TABSIZE) << ' ' 
+            controlFlowOss << std::setw(indent * TABSIZE) << ' ' 
                 << batch.functionName << "(ctx, symbolTable, runtimeCallList, startArgs, exprList" << devRootKey <<");\n";
             exprSrcFiles.emplace_back(filePath);
             exprHeaderOss << "void " << batch.functionName
                 << "(void *ctx, int64_t *symbolTable, RuntimeCallEntryType runtimeCallList[], DevStartArgsBase *startArgs, uint64_t *exprList);\n";
         }
-        if (needSync) {
-            controlFlowOss << std::setw(indent * TABSIZE) << ' '  << "WaitAicoreStart(startArgs);\n";
-        }
-        controlFlowOss << subCallOss.str();
         return;
     }
 

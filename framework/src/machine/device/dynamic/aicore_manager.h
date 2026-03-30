@@ -342,7 +342,7 @@ public:
         DeviceTaskCtrl *taskCtrl = nullptr;
         taskQueue_ = &(devStartArgs->deviceRuntimeDataDesc.taskQueueList[schedIdx_]);
         if constexpr (IsDeviceMode()) {
-            ret = HandShake();
+            ret = HandShake(devStartArgs);
             PerfMtTrace(PERF_TRACE_CORE_HAND_SHAKE, threadIdx);
             if (unlikely(ret != DEVICE_MACHINE_OK)) {
                 DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.error: hand shake timeout.");
@@ -352,7 +352,6 @@ public:
                 }
                 return ret;
             }
-            devStartArgs->syncFlag = 1;
             aicoreProf_.ProfStart();
         }
         DEV_DEBUG("Schedule run start succ");
@@ -1578,7 +1577,7 @@ private:
         }
     }
 
-    inline int HandShakeByGmWithPreSendTask() {
+    inline int HandShakeByGmWithPreSendTask(DevStartArgs *devStartArgs) {
         int handShakeNum = 0;
         int mngAicoreNum = aicEnd_ - aicStart_ + aivEnd_ - aivStart_;
         bool handFlag[MAX_AICORE_NUM] = {false};
@@ -1587,6 +1586,7 @@ private:
         bool needSendAiv = false;
         bool aicAllSuccess = false;
         bool aivAllSuccess = false;
+        bool needSetSync = true;
         int aicSucessCnt = 0;
         int aivSucessCnt = 0;
         int aicTreshold = 4;
@@ -1611,6 +1611,11 @@ private:
                 }
             }
             aicAllSuccess = curIterAllAicSuccess;
+
+            if (unlikely(needSetSync && (handShakeNum > 0))) {
+                devStartArgs->syncFlag = 1;
+                needSetSync = false;
+            }
 
             if (needSendAic && aicSucessCnt >= aicTreshold) {
                 __sync_synchronize(); // sync  REG_SPR_FAST_PATH_ENABLE
@@ -1640,7 +1645,7 @@ private:
                 aivSucessCnt = 0;
             }
 
-            if (GetCycles() - start_cycles > HAND_SHAKE_TIMEOUT) {
+            if (unlikely(GetCycles() - start_cycles > HAND_SHAKE_TIMEOUT)) {
                 DumpAicoreStatusWhenTimeout(handFlag);
                 DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.timeout: HandShakeByGmWithPreSendTask timeout notHandshakeNum=%d.", mngAicoreNum - handShakeNum);
                 return DEVICE_MACHINE_ERROR;
@@ -1651,9 +1656,9 @@ private:
         return DEVICE_MACHINE_OK;
     }
 
-    inline int HandShake() {
+    inline int HandShake(DevStartArgs *devStartArgs) {
         DEV_INFO("aicpu[%d] handshake start.", aicpuIdx_);
-        int rc = HandShakeByGmWithPreSendTask();
+        int rc = HandShakeByGmWithPreSendTask(devStartArgs);
         if (rc != DEVICE_MACHINE_OK) {
             DEV_ERROR(SchedErr::HANDSHAKE_TIMEOUT, "#sche.handshake.presend: Aicpu[%d] handshake failed.", aicpuIdx_);
             return rc;
