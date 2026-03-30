@@ -26,7 +26,7 @@
 
 | 检查项 | 诊断命令 | 通过标准 | 修复建议 |
 |--------|----------|----------|----------|
-| Commit message 格式 | `git log -1 --format="%s"` | 必须匹配 `^(feat|fix|docs|style|refactor|test|perf|ci|build|chore)\(.+\): .+` | 重写 commit message |
+| Commit message 格式 | `git log -1 --format="%s"` | 必须匹配 `^(feat|fix|docs|style|refactor|test|perf)\(.+\): .+` | 重写 commit message |
 | 分支同步状态 | `git log HEAD..origin/<target_branch> --oneline | wc -l` | 应该为 0 | `git pull --rebase origin <target_branch>` |
 | 文件大小限制 | `git diff --stat HEAD~1` | 单文件不超过 100MB | 拆分大文件 |
 | 提交者身份 | `git log -1 --format="%ae"` | 邮箱格式合法 | 配置 git user.email |

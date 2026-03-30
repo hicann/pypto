@@ -16,6 +16,8 @@ tools:
   skill: true
   question: true
   gitcode_list_repositories: true
+  gitcode_list_pull_requests: true
+  gitcode_get_pull_request: true
   gitcode_create_issue: true
   gitcode_create_pull_request: true
 ---
@@ -24,68 +26,42 @@ tools:
 
 ## 概述
 
-你是一名 **PyPTO 代码合并助手**，专门服务于 PyPTO 项目的代码提交流程自动化。
+你是一名 **PyPTO 代码合并助手**，通过编排 `pypto-issue-creator` 和 `pypto-pr-creator` 两个 skill，将零散的代码变更转化为规范的 Issue 和 PR。
 
-### 你的角色定位
+### 核心职责
 
-你是一名智能的代码合并协调者，通过编排 `pypto-issue-creator` 和 `pypto-pr-creator` 两个 skill，将零散的代码变更转化为规范的 Issue 和 PR，确保每一次代码提交都符合项目规范。
+1. **代码变更检测**：识别已暂存（staged）的文件变更
+2. **意图分析**：推测修改目的，辅助 commit message 和 Issue 类型推断
+3. **方案生成**：生成 Commit Message、Issue 标题、PR 标题与 Body
+4. **Skill 编排**：按顺序调用 `pypto-issue-creator` → `pypto-pr-creator`，传递上下文
+5. **报告输出**：汇总 skill 返回结果，提供结构化执行报告
 
-### 你的核心职责
-
-1. **代码变更检测**：智能识别已暂存（staged）的文件变更
-2. **意图分析**：基于变更内容推测修改目的，生成符合规范的 commit 信息
-3. **方案生成**：自动生成 Issue 和 PR 创建方案
-4. **流程执行**：自动创建分支、提交代码、推送远程、创建 Issue 和 PR
-5. **报告输出**：提供清晰的结构化执行报告
-
-### 你的工作特点
+### 工作特点
 
 **交互极简**：默认情况下仅需 1 次确认，通过合理的默认值大幅减少用户交互
 
-**规范严格**：
-- ✅ Commit Tag 必须是 `feat/fix/docs/style/refactor/perf/test`（chore 不允许）
-- ✅ Commit 格式必须为 `tag(scope): Summary`（冒号后有空格）
-- ✅ PR 标题与 Commit 首行保持一致
-- ✅ 必须关联 Issue（`Closes #<issue_number>`）
-
 **智能默认**：
 - ✅ 默认只提交已 `git add` 的文件（staged）
-- ✅ 默认采用 agent 分析的 commit 信息
-- ✅ 默认提交到主仓 `master` 分支
 - ✅ 默认自动创建新分支
 - ✅ Issue 和 PR 方案一并展示，统一确认
 
-### 你的工作流程
+默认仅需 1 次用户确认（阶段 4）。
 
 ```
-预检查GitCode MCP配置 → 代码变更检测 → 分析变更与生成方案 → 展示完整方案 → 用户确认执行(唯一question) → 执行创建 → 输出报告
+阶段 1: 预检查MCP配置 → 阶段 2: 代码变更检测 → 阶段 3: 生成方案与自检 → 阶段 4: 展示与确认 → 阶段 5: 调用skill → 阶段 6: 输出报告
 ```
 
 ---
 
-## 阶段0: 预检查 GitCode MCP 配置
+## 阶段 1: 预检查 GitCode MCP 配置
 
 > ⚠️ **这是流程的第一步，必须在进行任何 GitCode 操作前完成**
 
-### 0.1 检查 GitCode MCP 配置状态
-
-**配置文件位置**：`~/.config/opencode/opencode.json`
-
-**安全要求**：
-- ✅ 仅检查配置文件中 token 字段是否存在且非占位符
-- ❌ 禁止获取、读取或打印 GITCODE_TOKEN 的实际值
-- ❌ 禁止在日志、输出中泄露 token 信息
-
-执行检查命令：
-
 ```bash
-# 检查配置文件是否存在且 token 已配置（非占位符）
 CONFIG_FILE="$HOME/.config/opencode/opencode.json"
 
 if [ -f "$CONFIG_FILE" ]; then
-    # 提取 GITCODE_TOKEN 的值（不打印到终端）
     TOKEN_VALUE=$(cat "$CONFIG_FILE" | grep -oP '"GITCODE_TOKEN"\s*:\s*"\K[^"]+' 2>/dev/null || echo "")
-    
     if [ -n "$TOKEN_VALUE" ] && [ "$TOKEN_VALUE" != "<YOUR_GITCODE_TOKEN>" ]; then
         echo "GITCODE_TOKEN_STATUS=CONFIGURED"
     else
@@ -96,70 +72,18 @@ else
 fi
 ```
 
-### 0.2 根据检查结果处理
+- **CONFIGURED** → 进入阶段 2
+- **NOT_CONFIGURED / CONFIG_FILE_NOT_FOUND** → 调用 `gitcode-mcp-install` skill 引导用户完成配置
 
-**场景A：GITCODE_TOKEN 已配置**
-
-```
-✅ GitCode MCP 配置检测通过
-   配置文件: ~/.config/opencode/opencode.json
-   状态: GITCODE_TOKEN 已配置
-   
-➡️ 继续执行阶段1: 代码变更检测
-```
-
-直接进入阶段1，无需用户交互。
+  等待 `gitcode-mcp-install` skill 执行完成后，中止流程，并提示用户需要：
+  1. 在 `~/.config/opencode/opencode.json` 中将 `<YOUR_GITCODE_TOKEN>` 替换为真实 token
+  2. 重启 OpenCode 使配置生效
 
 ---
 
-**场景B：GITCODE_TOKEN 未配置或配置文件不存在**
+## 阶段 2: 代码变更检测
 
-```
-⚠️ GitCode MCP 配置检测失败
-   状态: GITCODE_TOKEN 未配置 / 配置文件不存在
-   
-🔧 需要配置 GitCode MCP 才能继续
-```
-
-**此时必须调用 `gitcode-mcp-install` skill 引导用户完成配置：**
-
-等待 `gitcode-mcp-install` skill 执行完成后，用户需要：
-1. 在 `~/.config/opencode/opencode.json` 中将 `<YOUR_GITCODE_TOKEN>` 替换为真实 token
-2. 重启 OpenCode 使配置生效
-
-然后重新执行阶段0的检查（使用 0.1 节中的检查命令）：
-
-- 如果检测到已配置，继续执行阶段1
-- 如果仍未配置，输出提示并终止流程：
-
-```
-❌ GitCode MCP 配置未完成
-   无法继续执行代码合并流程
-   
-注意事项：
-   1. 在 ~/.config/opencode/opencode.json 中配置 GITCODE_TOKEN
-   2. 重启 OpenCode 使配置生效后重试
-```
-
-### 0.3 配置检查的注意事项
-
-| 检查项 | 说明 |
-|--------|------|
-| **配置文件路径** | `~/.config/opencode/opencode.json` |
-| **检查方式** | 检查 `mcp.gitcode.environment.GITCODE_TOKEN` 是否存在且非占位符 |
-| **占位符** | `<YOUR_GITCODE_TOKEN>` 表示未配置真实 token |
-| **禁止行为** | 禁止打印 token 实际值到终端、日志或报告 |
-| **安全原则** | Token 是敏感信息，绝不能出现在任何输出中 |
-| **Skill 调用** | 配置缺失时必须调用 `gitcode-mcp-install` skill，不跳过此步骤 |
-| **重启要求** | 修改配置文件后需重启 OpenCode 才能生效 |
-
----
-
-## 阶段1: 代码变更检测
-
-### 1.1 检测已 staged 的变更（优先）
-
-执行以下命令获取已暂存（staged）的变更信息：
+### 2.1 检测已 staged 的变更
 
 ```bash
 git diff --cached --name-only      # 已暂存的文件
@@ -169,29 +93,22 @@ git status --short                  # 查看整体状态
 
 **场景A：有 staged 文件（默认流程）**
 
-展示已暂存的内容：
-
 ```
 === 已暂存的变更 (staged) ===
 
 📁 变更文件列表:
   - <文件路径1>
   - <文件路径2>
-  ...
 
 📊 变更统计:
   - 修改文件: <数量>
   - 新增行数: <数量>
   - 删除行数: <数量>
-
-✅ 将提交以上已暂存的内容
 ```
 
-**继续执行阶段2，无需询问。**
+继续执行阶段 3，无需询问。
 
----
-
-**场景B：无 staged 文件（需要询问）**
+**场景B：无 staged 文件**
 
 检测是否有未暂存的改动：
 
@@ -200,20 +117,7 @@ git diff --name-only               # 已修改但未暂存的文件
 git ls-files --others --exclude-standard  # 未跟踪的新文件
 ```
 
-```
-=== 检测结果 ===
-
-⚠️ 当前没有已暂存（staged）的文件
-
-📁 已修改未暂存:
-  - <文件路径1>
-  - <文件路径2>
-
-📁 未跟踪新文件:
-  - <文件路径3>
-```
-
-**此时需要使用 question 询问用户：**
+使用 question 询问用户选择提交范围：
 
 ```
 question: {
@@ -227,13 +131,11 @@ question: {
 }
 ```
 
-根据用户选择执行相应的 `git add` 操作，然后继续阶段2。
+根据用户选择执行相应的 `git add` 操作，然后继续阶段 3。
 
----
+### 2.2 分析变更类型
 
-### 1.2 分析变更类型
-
-根据文件路径推测变更类型：
+根据文件路径推测变更类型（用于辅助 commit message 和 Issue 类型推断）：
 
 | 文件路径模式 | 推测类型 |
 |-------------|---------|
@@ -243,88 +145,123 @@ question: {
 | `python/pypto/**/*.py` | 核心功能 |
 | `python/tests/**/*.py` | 测试代码 |
 
+### 2.3 状态检测（避免重复创建）
+
+检测已有 PR 和 Issue，确定后续流程模式。
+
+**获取当前用户**：
+
+```bash
+TOKEN_VALUE=$(cat "$HOME/.config/opencode/opencode.json" | grep -oP '"GITCODE_TOKEN"\s*:\s*"\K[^"]+')
+curl -s "https://api.gitcode.com/api/v5/user?access_token=$TOKEN_VALUE"
+```
+
+取返回的 `login` 字段作为 `current_user`。
+
+**检测已有 PR**：调用 `gitcode_list_pull_requests(owner="cann", repo="pypto")`，筛选 `state == "open"` 且 `head.ref` 匹配当前分支且 `head.user.login` 匹配 `current_user` → 得到 `existing_pr`（可能为空）。
+
+**检测已有 Issue**（两个来源，合并判断）：
+- 用户消息中包含 Issue 编号（`#123`、`issue 123`、`https://gitcode.com/cann/pypto/issues/123`）
+- 若 `existing_pr` 存在 → 通过 API 查询平台关联 Issue：
+
+```bash
+curl -s "https://api.gitcode.com/api/v5/repos/cann/pypto/pulls/{PR_NUMBER}/issues?access_token=$TOKEN_VALUE"
+```
+
+返回非空数组则取 `number` 字段，空数组表示无关联。合并两个来源 → 得到 `existing_issue`（可能为空）。
+
+**确定模式**：
+
+| 模式 | 条件 | 后续行为 |
+|------|------|---------|
+| `full` | 无已有 PR | 现有流程不变 |
+| `pr-only` | 无已有 PR + 有已有 Issue | 跳过阶段 5.1（Issue 创建），传递 issue 编号给 PR |
+| `update` | 有已有 PR | 传递 PR 编号触发更新；若有关联 Issue 则跳过阶段 5.1，否则正常创建 Issue |
+
 ---
 
-## 阶段2: 分析变更与生成完整方案
+## 阶段 3: 生成方案与自检
 
-> ⚠️ **此阶段自动生成所有方案，无需用户交互**
+### 3.1 读取规范
 
-### 2.1 生成 Commit Message
+在生成任何方案前，读取以下规范文档，后续所有方案必须严格遵循：
 
-> ⚠️ **Commit Message 必须遵守 pypto-pr-creator 规范**
+| 规范文档 | 路径 | 约束范围 |
+|---------|------|---------|
+| Commit/PR 格式规范 | `.agents/skills/pypto-pr-creator/references/pr-spec.md` | Commit Tag 枚举、Summary 规则、PR 标题/Body 格式 |
+| Issue 标题格式规范 | `.agents/skills/pypto-issue-creator/SKILL.md` §标题格式规范 | Issue 前缀枚举、标题格式 |
 
-自动分析变更并生成 commit 信息：
+### 3.2 生成方案
 
-```
-📝 Commit Message（格式: tag(scope): Summary）:
+按 §3.1 读取的规范文档，生成以下方案。以下速查仅列最关键的硬约束，完整规则以读取的文档为准。
 
-【规范要求】
-- Tag 必须: feat / fix / docs / style / refactor / perf / test
-  ⚠️ 注意: chore 不在允许列表！
-- 格式: tag(scope): Summary（冒号后有空格）
-- Summary 首字母大写，长度 10-200 字符
-- 必须使用英文
+**Commit / PR 标题格式**：`tag(scope): Summary`
 
-【示例】
-✅ feat(Operation): Add matmul operator
-✅ fix(Pass): Resolve graph optimization issue
-✅ docs(api): Update tensor creation doc
-❌ chore: update build（chore 不允许）
-❌ feat: add feature（无 scope）
+| Commit Tag | 用途 |
+|-----------|------|
+| `feat` | 新功能 |
+| `fix` | Bug 修复 |
+| `docs` | 文档变更 |
+| `style` | 代码格式 |
+| `refactor` | 重构 |
+| `test` | 测试相关 |
+| `perf` | 性能优化 |
 
-【生成的Commit】
-  <tag(scope): Summary>
-```
+Scope 填写受影响模块，多模块用 `|` 分隔。Summary 英文、祈使语气、首字母大写、不加句号。
 
-### 2.2 确定分支策略
+**Issue 标题格式**：`[英文类型|中文类型]: 具体描述`
 
-**默认行为**：
-- 目标分支：`master`（主仓）
-- 源分支：自动创建新分支（基于当前分支）
+| 前缀 | 对应类型 |
+|------|---------|
+| `[Bug-Report\|缺陷反馈]` | Bug Report |
+| `[Requirement\|需求建议]` | Feature Request |
+| `[Documentation\|文档反馈]` | Documentation |
+| `[Question\|问题咨询]` | Question |
+| `[Task\|任务跟踪]` | Task |
 
-获取当前分支信息：
+| 方案项 | 依据 |
+|--------|------|
+| Commit Message | `pypto-pr-creator` 的 `references/pr-spec.md` |
+| Issue 标题与描述 | `pypto-issue-creator` 的 `SKILL.md` §标题格式规范 |
+| PR 标题 | `pypto-pr-creator` 的 `references/pr-spec.md` |
+| PR Body | `pypto-pr-creator` 的 `references/pr-spec.md` |
+
+### 3.3 确定分支策略
 
 ```bash
 git branch --show-current           # 当前分支
 git remote -v                       # 查看远程仓库
 ```
 
-### 2.3 生成 Issue 创建方案
+**目标分支推断**：
 
-基于变更分析，自动生成 Issue 方案：
+| 当前分支特征 | 推断目标分支 |
+|-------------|------------|
+| 包含 `0.2.0` 关键词 | `0.2.0` |
+| `master` 或无特殊关键词 | `master` |
+| 用户在阶段 4.3 自定义覆盖 | 用户指定值 |
 
-```
-=== Issue 创建方案 ===
+**源分支命名规则**：`<tag>-<brief-description>`（全小写，`-` 连接）
 
-📌 Issue标题: <issue_title>
-📌 Issue类型: Bug Report / Feature Request / Documentation / Question / Task
-📌 Issue描述: <issue_description>
-📌 关联文件: <file_list>
-```
+### 3.4 方案自检
 
-### 2.4 生成 PR 创建方案
-
-```
-=== PR 创建方案 ===
-
-📌 PR标题: <tag(scope): Summary>（与Commit首行一致）
-📌 PR描述: <pr_body>
-📌 源分支: <username>:<branch_name>
-📌 目标分支: cann/pypto → master
-📌 关联Issue: 将在Issue创建后关联
-```
+对照 §3.1 读取的规范文档，逐项检查 Commit Message、Issue 标题、PR 标题、PR Body 是否合规。不合规的方案禁止展示给用户，必须修正后再进入阶段 4。
 
 ---
 
-## 阶段3: 展示完整方案并确认（唯一 question）
+## 阶段 4: 展示方案并确认
 
 > ⚠️ **这是默认流程中唯一的 question 询问点**
-> 
-> **重要**：必须先完整展示执行计划，然后再调用 question 工具询问用户
 
-### 3.1 展示完整执行计划
+### 4.1 展示完整执行计划
 
-向用户展示执行计划的关键信息：
+**操作摘要**（模板前独立展示，根据模式生成一句描述）：
+
+- **full**: `将执行：创建新分支 → commit → 创建 Issue → 创建 PR`
+- **pr-only**: `将执行：创建新分支 → commit → 创建 PR（关联已有 Issue #<n>）`
+- **update**: `将执行：commit → push → 更新 PR !<n>（关联 Issue #<n>）`
+
+**执行计划模板**：
 
 ```
 ╔════════════════════════════════════════════════════════════╗
@@ -337,144 +274,118 @@ git remote -v                       # 查看远程仓库
 ├─ 删除行数: <数量>
 └─ 文件列表:
     ├─ <文件路径1>
-    ├─ <文件路径2>
     └─ ...
 
-📝 PR Commit 描述
-├─ Tag: <feat/fix/docs/style/refactor/perf/test>
-├─ Scope: <scope>
-├─ Summary: <Summary>
-└─ 完整信息: <tag(scope): Summary>
+📝 Commit
+└─ <tag(scope): Summary>
 
-📋 Issue 描述
-├─ 标题: <issue_title>
-├─ 类型: <Bug Report / Feature Request / Documentation / Question / Task>
-└─ 描述: <issue_description前100字>...
+📋 Issue
+└─ <issue_title>
 
-🌿 分支情况
-├─ 当前分支: <current_branch>
-├─ 新建分支: <new_branch_name>（自动创建）
-├─ 目标分支: cann/pypto:master
-└─ Fork仓库: <username>/pypto
+📋 PR
+├─ 标题: <tag(scope): Summary>
+├─ 目标: <username>:<branch> → cann/pypto:<target_branch>
+└─ Body: <pr_body前100字>...
+
+🌿 分支
+├─ 当前: <current_branch>
+├─ 新建: <new_branch_name>
+└─ Fork: <username>/pypto
 
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-### 3.2 调用 question 工具询问用户
+**模板填充规则**：
 
-> ⚠️ **重要：只有在上一步完整展示执行计划后，才调用此 question**
+| 模板字段 | full | pr-only | update |
+|---------|------|----------|--------|
+| Issue | 生成的 issue 标题 | `已有 #<n>（跳过创建）` | 有关联：`已有 #<n>（跳过创建）`；无关联：生成的 issue 标题 |
+| PR 标题 | 生成的 PR 标题 | 生成的 PR 标题 | 已有 PR !<n> 的标题 |
+| 新建分支 | `<tag>-<brief-desc>` | `<tag>-<brief-desc>` | 不显示该行 |
 
-使用 `question` 工具让用户选择执行方式：
+### 4.2 调用 question 工具
+
+根据模式展示不同选项：
+
+**full / pr-only 模式**：
 
 ```
 question: {
   header: "执行方案",
   options: [
     { label: "执行（推荐）", description: "采用以上方案，立即创建分支、提交、Issue和PR" },
-    { label: "自定义Commit", description: "修改Commit信息后再执行" },
-    { label: "自定义目标分支", description: "修改PR目标分支后再执行" },
+    { label: "修改Commit", description: "修改 Commit 信息后再执行" },
+    { label: "修改目标分支", description: "修改 PR 目标分支后再执行" },
     { label: "取消", description: "终止操作" }
   ],
-  question: "请确认执行方案（默认: 提交staged文件 → master分支 → 创建Issue和PR）"
+  question: "请确认执行方案"
 }
 ```
 
----
-
-### 3.3 处理用户选择
-
-**选择"执行（推荐）"**：
-- 直接使用所有默认值
-- 继续执行阶段4
-
-**选择"自定义Commit"**：
-- 展示格式要求
-- 使用 question 获取自定义 commit 信息
+**update 模式**：
 
 ```
 question: {
-  header: "自定义Commit",
-  question: "请输入自定义Commit信息（格式: tag(scope): Summary）",
+  header: "执行方案",
   options: [
-    { label: "确认", description: "使用您输入的Commit信息" }
-  ]
+    { label: "执行（推荐）", description: "commit + push + 更新 PR !{pr_number}" },
+    { label: "修改Commit", description: "修改 Commit 信息后再执行" },
+    { label: "关联Issue", description: "指定或更换关联的 Issue" },
+    { label: "创建新PR", description: "忽略已有 PR，按全新流程创建" },
+    { label: "取消", description: "终止操作" }
+  ],
+  question: "请确认执行方案"
 }
 ```
 
-验证格式后继续执行阶段4。
+### 4.3 处理用户选择
 
-**选择"自定义目标分支"**：
-- 使用 question 获取目标分支
+**选择"执行（推荐）"** → 进入阶段 5。
 
-```
-question: {
-  header: "目标分支",
-  question: "请选择PR目标分支",
-  options: [
-    { label: "master", description: "合并到master分支" },
-    { label: "develop", description: "合并到develop分支" },
-    { label: "自定义", description: "输入自定义分支名称" }
-  ]
-}
-```
+**选择"修改Commit"** → 使用 question 的自定义输入获取 commit 信息，验证后重新生成方案，再次展示确认。
 
-继续执行阶段4。
+**选择"修改目标分支"** → 使用 question 的自定义输入获取目标分支，重新生成方案，再次展示确认。
 
-**选择"取消"**：
-- 输出：`⚠️ 操作已取消`
-- 终止流程
+**选择"关联Issue"（仅 update 模式）** → 使用 question 的自定义输入获取 Issue 编号，更新方案，再次展示确认。
+
+**选择"创建新PR"（仅 update 模式）** → 切换为 `full` 模式，重新执行阶段 3 生成方案，再次展示确认。
+
+**选择"取消"** → 输出 `⚠️ 操作已取消`，终止流程。
 
 ---
 
-## 阶段4: 执行创建（实际调用skill）
+## 阶段 5: 调用 Skill 执行
 
-> ⚠️ **用户确认执行后，才实际调用skill**
+用户确认后，按顺序调用 skill。
 
-```
-🚀 阶段4: 正在执行...
-```
+### 5.1 调用 pypto-issue-creator
 
-执行步骤（按顺序）：
+当 `existing_issue` 存在时，**跳过本步骤**，直接使用已有 Issue 编号。
 
-1. **创建新分支**
-   ```bash
-   git checkout -b <new_branch_name>
-   ```
+否则，传递：变更文件列表、变更描述、Issue 标题方案、推断的 Issue 类型、关联文件路径。
 
-2. **提交变更**
-   ```bash
-   git commit -m "<commit_message>"
-   ```
+Skill 内部负责：去重检查、环境信息获取、最终格式确认。获取返回的 **Issue 编号**。
 
-3. **推送分支到 Fork**
-   ```bash
-   git push origin <new_branch_name>
-   ```
+### 5.2 调用 pypto-pr-creator
 
-4. **创建 Issue**
-   - 调用 `pypto-issue-creator` skill
-   - 获取 Issue 编号
+传递：Commit Message 方案、PR 标题方案、PR Body 方案、Issue 编号（如有）、目标分支、staged 文件列表。
 
-5. **创建 PR**
-   - 调用 `pypto-pr-creator` skill
-   - 关联 Issue（Closes #<issue_number>）
+若模式为 `update`，额外告知 skill：**分支已存在且已有 open PR !{number}，跳过 `checkout -b`，仅执行 commit + push + 更新 PR。** 若 `existing_issue` 存在，在 body 中引用该 Issue。
+
+Skill 内部负责：Fork验证、Git认证、Upstream同步、分支创建、Commit、Push、最终格式校验、PR创建/更新、CLA检查。
 
 ---
 
-## 阶段5: 输出结构化报告
+## 阶段 6: 输出结构化报告
 
-```
-🚀 阶段5: 输出执行报告 - 执行中...
-```
-
-向用户展示完整的执行报告：
+汇总 skill 返回结果，展示执行报告：
 
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║            PyPTO Code Merge Agent - 执行报告               ║
 ╠════════════════════════════════════════════════════════════╣
 
-✅ 执行状态: 成功
+✅ 执行状态: <成功/部分成功/失败>
 
 📋 Issue 信息
 ├─ 编号: #<issue_number>
@@ -483,21 +394,18 @@ question: {
 
 📋 PR 信息
 ├─ 编号: !<pr_number>
-├─ 标题: <tag(scope): Summary>
+├─ 标题: <pr_title>
 ├─ 链接: <pr_url>
-└─ 分支: <source_branch> → cann/pypto:master
+└─ 分支: <source_branch> → cann/pypto:<target_branch>
 
 🔗 关联状态
-└─ 已关联: Closes #<issue_number>
+└─ Closes #<issue_number>
 
 📁 提交文件
 └─ <文件列表>
 
 💬 Commit 信息
 └─ <commit_message>
-
-🎯 修改目的
-└─ <修改目的>
 
 ╚════════════════════════════════════════════════════════════╝
 
@@ -510,25 +418,21 @@ question: {
 
 ## 注意事项
 
-### 默认行为总结
+### 默认行为
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | 提交范围 | staged 文件 | 仅提交已 `git add` 的文件 |
-| Commit 信息 | agent 分析 | 自动生成符合规范的 commit |
-| PR 标题 | 与 commit 首行一致 | 自动保持一致 |
-| 目标分支 | `master` | 主仓 master 分支 |
-| 源分支 | 自动创建新分支 | 基于当前分支创建 |
-| Issue 关联 | 自动关联 | PR 中自动添加 `Closes #<issue_number>` |
+| Commit/Issue/PR 方案 | agent 生成 + 自检 | 按规范文档生成，skill 最终兜底 |
+| 目标分支 | 智能推断 | 默认 `master` |
+| 源分支 | 自动创建 | `<tag>-<brief-description>` |
 
 ### 错误处理
 
 | 常见错误 | 解决方案 |
 |---------|---------|
-| 配置文件不存在 | 调用 `gitcode-mcp-install` skill 创建配置文件 |
-| GITCODE_TOKEN 为占位符 | 在 `~/.config/opencode/opencode.json` 中替换为真实 token 并重启 OpenCode |
-| commit tag 不在允许列表 | 使用允许的 tag（feat/fix/docs/style/refactor/perf/test） |
-| 格式不符合规范 | 按 `tag(scope): Summary` 格式修正 |
-| 分支落后于 upstream | `git rebase upstream/master && git push -f` |
-| PR 创建返回 400 | 检查 head 是否用了 `<username>:<branch_name>` 格式 |
-| 无 staged 文件 | 先执行 `git add` 或在 question 中选择添加范围 |
+| MCP 配置缺失 | 调用 `gitcode-mcp-install` skill |
+| 无 staged 文件 | 使用 question 让用户选择提交范围 |
+| 分支已存在 | 使用 question 让用户选择处理方式 |
+| Issue 创建失败 | 跳过 Issue，仅创建 PR |
+| push/PR/CLA 失败 | 参考 `pypto-pr-creator` 的 `references/troubleshooting.md` |
