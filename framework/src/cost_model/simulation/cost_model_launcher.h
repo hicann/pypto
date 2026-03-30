@@ -325,7 +325,6 @@ private:
             return;
         }
         config::SetSimConfig(KEY_SIM_MODE, CostModel::SimMode::NORMAL);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
         CostModelAgent costModelAgent;
 
         std::string path = config::LogTopFolder() + "/dyn_topo.txt";
@@ -340,7 +339,6 @@ private:
         if (config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) != CFG_RUN_MODE_SIM || std::getenv("ASCEND_HOME_PATH") == nullptr) {
             return;
         }
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
         try {
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
