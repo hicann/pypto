@@ -32,6 +32,8 @@ const uint32_t PV_REG_PARA_BASE = 4;
 const uint32_t PV_REG_BLOCK_DIM = 9;
 const uint32_t PV_REG_TASK_CFG = 163;
 const uint32_t PV_STEP_PIPE_ID = 2;
+const uint32_t PV_REG_SYS_VA_BASE = 67;
+const uint32_t PV_REG_STACK_PHY_BASE = 68;
 const uint64_t HBM_SATRT_ADDR = 0xffff8000;
 
 void PvModelBinHelper::DumpBin(std::vector<uint8_t>& bytes, uint64_t size, std::string path)
@@ -622,17 +624,22 @@ void DynPvModelImpl<SystemConfig, CaseConfig>::SetUp(
     } else {
         this->subcoreId_ = static_cast<uint64_t>(0);
     }
-    pv_set_toml_((dir + "/spec.toml").c_str());
     pv_init_(0, 0, 1, (dir + std::string("/../pvlog/")).c_str(), coreId_);
     pv_launch_sub_core_(binAddr, (dir + "/" + binName).c_str(), subcoreId_, coreId_);
 
     uint64_t hbm_para_start_addr = HBM_SATRT_ADDR;
     uint8_t value_1_ = 1;
     uint8_t* value_1_ptr = &value_1_;
+    uint8_t value_2_ = 0;
+    uint8_t *value_2_ptr = &value_2_;
+    uint64_t value_3_ = 34603008;
+    uint8_t *value_3_ptr = (uint8_t*)(&value_3_);
     pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PC, (uint8_t*)&binAddr, subcoreId_, coreId_);
     pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t*)&hbm_para_start_addr, subcoreId_, coreId_);
     pv_reg_write_(static_cast<uint32_t>(1), PV_REG_BLOCK_DIM, value_1_ptr, subcoreId_, coreId_);
     pv_reg_write_(static_cast<uint32_t>(1), PV_REG_TASK_CFG, value_1_ptr, subcoreId_, coreId_);
+    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_SYS_VA_BASE, value_2_ptr, subcoreId_, coreId_);
+    pv_reg_write_(static_cast<uint32_t>(1), PV_REG_STACK_PHY_BASE, value_3_ptr, subcoreId_, coreId_);
     LoadPvConfig(funcdata, opAttrOffset, dupData, hbm_para_start_addr);
 }
 
