@@ -1398,9 +1398,7 @@ class Parser(ast.NodeVisitor):
 
         # Use Python function-level scoping semantics, do not create a new frame
         # Variable lifetime is controlled by liveness analysis
-        set_source_location(filename=self.source_name(), lineno=node.lineno)
         for loop_var in iterator:
-            clear_source_location()
             self._assign_loop_variable(node.target, loop_var, is_tuple_unpack, loop_var_name, target_names)
             self._visit_body(node.body)
 
@@ -1464,6 +1462,7 @@ class Parser(ast.NodeVisitor):
             for t, e in zip(target.elts, expr):
                 self._assign_target(t, e)
         elif isinstance(target, ast.Subscript):
+            set_source_location(filename=self.source_name(), lineno=target.lineno)
             # Subscript assignment: b[:] = expr or b[0] = expr
             # This handles in-place tensor updates using Python's subscript syntax.
             # Evaluate the value (e.g., b) to get the tensor being assigned to
@@ -1473,6 +1472,7 @@ class Parser(ast.NodeVisitor):
             # Perform the assignment using __setitem__, which translates to
             # the appropriate PTO IR operation for tensor element/slice updates
             tensor[slice_obj] = expr
+            clear_source_location()
         else:
             raise ParserError(
                 target,
@@ -1567,12 +1567,14 @@ class Parser(ast.NodeVisitor):
                 )
             target_value = var_values[node.target.id]
         elif isinstance(node.target, ast.Subscript):
+            set_source_location(filename=self.source_name(), lineno=node.target.lineno)
             # For Subscript targets (e.g., a[i] += y), evaluate the tensor and slice/index
             tensor = self._eval_expr(node.target.value)
             slice_obj = self._eval_expr(node.target.slice)
 
             # Get the current value from the subscript
             target_value = tensor[slice_obj]
+            clear_source_location()
         else:
             raise ParserError(
                 node.target,
