@@ -44,6 +44,7 @@ extern "C" __attribute__((visibility("default"))) int PyptoKernelCtrlServer(void
 
 extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelServerInit(void *targ) {
     (void)targ;
+    g_machine_mgr.SignalReg(SigAct);
     return 0;
 }
 
@@ -54,6 +55,6 @@ extern "C" __attribute__((visibility("default"))) int StaticTileFwkBackendKernel
 
 extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelServer(void *targ) {
     DeviceKernelArgs *kargs = (DeviceKernelArgs *)targ;
-    DynMachineManager::KernelCtrlEntry entry = { SigAct, PyptoKernelCtrlServerInit, PyptoKernelCtrlServer };
+    DynMachineManager::KernelCtrlEntry entry = { PyptoKernelCtrlServerInit, PyptoKernelCtrlServer };
     return g_machine_mgr.Entry(kargs, entry);
 }

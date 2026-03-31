@@ -44,6 +44,8 @@ struct AicoreLogManager {
     AicoreLogger logger[MAX_AICORE_NUM];
 };
 
+typedef void (*sig_act_f)(int signum, siginfo_t* info, void* act);
+
 class DeviceSchedMachine {
 public:
     DeviceSchedMachine() {
@@ -139,7 +141,6 @@ constexpr int SCHE_THREAD_START_IDX = 1;
 
 struct DynMachineManager {
     struct KernelCtrlEntry {
-        void (*sigAct)(int signum, siginfo_t* info, void* act);
         int (*kernelCtrlServerInit)(void *targ);
         int (*kernelCtrlServer)(void *targ);
     };
@@ -241,17 +242,13 @@ struct DynMachineManager {
         return ret;
     }
 
-    void SignalReg(const KernelCtrlEntry &entry) {
-        if (sigReg_) {
-            return;
-        }
-        sigReg_ = true;
+    void SignalReg(const sig_act_f sigAct) {
         DEV_INFO("Exception SignalReg.");
         struct sigaction myAct;
         (void)memset_s(&myAct, sizeof(myAct), 0, sizeof(myAct));
         sigemptyset(&myAct.sa_mask);
         myAct.sa_flags = SA_SIGINFO;
-        myAct.sa_sigaction = entry.sigAct;
+        myAct.sa_sigaction = sigAct;
         sigaction(SIGFPE, &myAct, &oriFPEAct_);
         sigaction(SIGBUS, &myAct, &oriBUSAct_);
         sigaction(SIGSEGV, &myAct, &oriSEGVAct_);
@@ -338,7 +335,6 @@ struct DynMachineManager {
                 ret = RunCtrl(kargs, entry, threadIdx);
             } else {
                 threadIdx += devArgs->scheCpuNum;
-                SignalReg(entry);
             }
         }
 
@@ -483,25 +479,18 @@ struct DynMachineManager {
     }
 
     int EntrySplittedStreamCtrl(DeviceKernelArgs *kargs, const KernelCtrlEntry &entry) {
-        int ret = 0;
-        constexpr int ctrlThreadIdx = 0;
-        uint64_t ctrlStep = splittedInfo_.ctrlStep++;
-        // ctrl start 2 threads: one for ctrl, one for registering signal
-        if (ctrlStep % 2 == 0) {
-            DEV_INFO("CtrlThreadEnter idx=%d round=%d", ctrlThreadIdx, (int)kargs->parameter.globalRound);
-            ret = RunCtrlInitNoLock(kargs, entry);
-            if (ret != 0) {
-                return ret;
-            }
-            kargs->taskWastTime = GetCycles();
-            ret = RunCtrl(kargs, entry, ctrlThreadIdx);
-            PerfMtTrace(PERF_TRACE_BEGIN, ctrlThreadIdx, kargs->taskWastTime);
-            PerfMtTrace(PERF_TRACE_EXIT, ctrlThreadIdx);
-            DEV_INFO("CtrlThreadLeave idx=%d ret=%d", ctrlThreadIdx, ret);
-            PerfEvtMgr::Instance().AddCtrlTurn();
-        } else {
-            SignalReg(entry);
+        // ctrl start only one thread
+        DEV_INFO("Ctrl enter round=%d", (int)kargs->parameter.globalRound);
+        int ret = RunCtrlInitNoLock(kargs, entry);
+        if (ret != 0) {
+            return ret;
         }
+        kargs->taskWastTime = GetCycles();
+        ret = RunCtrl(kargs, entry, 0);
+        PerfMtTrace(PERF_TRACE_BEGIN, 0, kargs->taskWastTime);
+        PerfMtTrace(PERF_TRACE_EXIT, 0);
+        DEV_INFO("Ctrl leave ret=%d", ret);
+        PerfEvtMgr::Instance().AddCtrlTurn();
         return ret;
     }
 
@@ -574,7 +563,6 @@ struct DynMachineManager {
     std::atomic<int> die0ThreadIdx_{0};
     std::atomic<int> die1ThreadIdx_{0};
     DeviceSchedMachine machine_;
-    bool sigReg_{false};
     struct sigaction oriFPEAct_;
     struct sigaction oriBUSAct_;
     struct sigaction oriSEGVAct_;
@@ -588,7 +576,6 @@ struct DynMachineManager {
     std::atomic<bool> schRunFailed_{false};
 
     struct SplittedInfo {
-        std::atomic<uint64_t> ctrlStep{0};
         std::atomic<uint64_t> currentRound{0};
 
         void ScheWait(DevAscendProgram *devProg) {

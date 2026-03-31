@@ -38,6 +38,7 @@ using namespace npu::tile_fwk;
 extern "C" uint32_t DynPyptoKernelServerNull(void *targ);
 extern "C" uint32_t DynTileFwkBackendKernelServer(void *targ);
 extern "C" uint32_t StaticTileFwkBackendKernelServer(void *targ);
+extern "C" int DynTileFwkBackendKernelServerInit(void *targ);
 class TestDynamicDeviceRunner : public testing::Test {
 public:
     static void SetUpTestCase() {
@@ -152,6 +153,11 @@ TEST_F(TestDynamicDeviceRunner, test_launch_init) {
     pyptoKernelArgs.cfgdata = static_cast<int64_t *>(static_cast<void *>(&devKernelArgs));
     auto ret = DynTileFwkBackendKernelServer(&pyptoKernelArgs);
     EXPECT_EQ(ret, -1);
+}
+
+TEST_F(TestDynamicDeviceRunner, test_launch_init_server) {
+    auto ret = DynTileFwkBackendKernelServerInit(nullptr);
+    EXPECT_EQ(ret, 0);
 }
 
 TEST_F(TestDynamicDeviceRunner, test_static) {
