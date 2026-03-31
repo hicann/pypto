@@ -118,6 +118,7 @@ def pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float 
         m-elements tuple, where m/2 <= input dimensions and m is even.
         Format is (pad_left, pad_right, pad_top, pad_bottom, ...).
         Note: Currently only supports pad_left=0 and pad_top=0 (Right/Bottom padding only).
+        All padding values must be non-negative. Negative padding values are NOT supported.
     mode : str, optional
         'constant', 'reflect', 'replicate' or 'circular'. Default: 'constant'
         Note: Currently only 'constant' is supported.
@@ -138,6 +139,7 @@ def pad(input: Tensor, pad: Sequence[int], mode: str = "constant", value: float 
         If pad is not a sequence of integers.
     ValueError
         If pad length is not even.
+        If any padding value is negative.
 
     Examples
     --------

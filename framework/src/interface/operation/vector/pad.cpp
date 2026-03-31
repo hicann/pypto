@@ -149,6 +149,9 @@ LogicalTensorPtr TensorPadOperation(
             << "Pad: 1D tensor only support 2 padding values.";
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding[0] == 0) << "Pad: 1D tensor only support right pad.";
         padRight = padding[1];
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
+            << "Pad: padding values must be non-negative, got pad_right=" << padRight
+            << ". Negative padding (for cropping) is not supported.";
         outputShape[0] += padRight;
     } else {
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padding.size() == 4) << "Pad: only support last 2 axis pad.";
@@ -156,6 +159,12 @@ LogicalTensorPtr TensorPadOperation(
             << "Pad: only support bottom and right pad.";
         padRight = padding[1];
         padBottom = padding[3];
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padRight >= 0)
+            << "Pad: padding values must be non-negative, got pad_right=" << padRight
+            << ". Negative padding (for cropping) is not supported.";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, padBottom >= 0)
+            << "Pad: padding values must be non-negative, got pad_bottom=" << padBottom
+            << ". Negative padding (for cropping) is not supported.";
         outputShape[ndim - 1] += padRight;
         outputShape[ndim - 2] += padBottom;
     }
