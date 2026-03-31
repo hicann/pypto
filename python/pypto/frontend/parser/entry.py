@@ -527,7 +527,7 @@ class JitCallableWrapper:
         # Execute the deferred parsing (happens on first __call__)
         self._pto_function = self._parser.execute()
 
-        # Reset golden data after compilation, similar to pypto.jit
+        # Reset golden data after compilation
         _pto_verify_datas.reset()
 
     def _parse_call_args(

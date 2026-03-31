@@ -13,7 +13,6 @@ pypto-get_pass_configs
 pypto-get_pass_default_config
 pypto-get_vec_tile_shapes
 pypto-get_verify_options
-pypto-jit
 pypto-reset_options
 pypto-set_codegen_options
 pypto-set_cube_tile_shapes
