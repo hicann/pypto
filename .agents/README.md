@@ -220,7 +220,7 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 **工作流程**：`需求理解 → 环境准备 → Golden → 设计 → 算子实现 → 精度调试 → 性能分析 → 性能调优`
 
-**关键串联**：调用 `pypto-intent-understanding`、`pypto-api-explorer`、`pypto-golden-generator`、`pypto-op-design`、`pypto-op-develop`、`pypto-precision-debugger`、`pypto-op-perf-analyzer`、`pypto-op-perf-autotuner`
+**关键串联**：调用 `pypto-intent-understanding`、`pypto-api-explorer`、`pypto-golden-generator`、`pypto-op-design`、`pypto-op-develop`、`pypto-precision-debugger`、`pypto-operator-auto-tuner`
 
 #### `pypto-intent-understanding` — 需求意图理解
 
@@ -288,17 +288,13 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 ### 性能分析
 
-#### `pypto-op-perf-analyzer` — 性能指标分析
+#### `pypto-operator-auto-tuner` — 性能分析及调优
 
-**适用场景**：分析已生成的性能数据，评估算子性能表现
+**适用场景**：分析已生成的性能数据，评估算子性能表现，基于实测性能数据迭代调优，并验证精度与性能收益
 
 **核心指标**：核心利用率、气泡率、AicoreTime、等待时间
 
 **评级标准**：⭐⭐⭐⭐⭐（利用率>90%，气泡<2%）到 ⭐（利用率<50%，气泡>20%）
-
-#### `pypto-op-perf-autotuner` — 性能调优
-
-**适用场景**：基于实测性能数据迭代调优，并验证精度与性能收益
 
 **调优手段**：Stitch 调优、loop_unroll、Tilesize 调整、L2 亲和调度、CubeNBuffer 合并
 

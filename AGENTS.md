@@ -29,8 +29,7 @@
 - `pypto-aicore-error-locator`：定位 aicore error 的问题文件和代码行
 
 #### 性能分析
-- `pypto-op-perf-analyzer`：分析性能数据、定位瓶颈并给出优化依据
-- `pypto-op-perf-autotuner`：基于实测性能数据迭代调优，并验证精度与性能收益
+- `pypto-operator-auto-tuner`：分析性能数据、定位瓶颈并给出优化依据，基于实测性能数据迭代调优，并验证精度与性能收益
 
 #### 环境与工具
 - `pypto-environment-setup`：PyPTO 环境安装与环境问题修复

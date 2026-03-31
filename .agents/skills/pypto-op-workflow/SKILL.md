@@ -212,7 +212,7 @@ tag: [PyPTO, 算子开发]
 
 | 项目 | 说明 |
 |------|------|
-| **Skill** | `pypto-op-perf-analyzer`（分析）→ `pypto-op-perf-autotuner`（调优） |
+| **Skill** | `pypto-operator-auto-tuner` |
 | **输入** | 精度通过的 `{op}_impl.py` + `test_{op}.py` |
 | **核心动作** | 启用性能采集（`debug_options`）→ 运行采集数据 → 分析核心指标（利用率 / 气泡率）→ 制定优化策略 → 应用优化 → 精度复验 → 性能对比 → 迭代 |
 | **输出** | 调优后的 `{op}_impl.py`，性能分析报告 |
