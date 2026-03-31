@@ -891,6 +891,51 @@ def get_total_time(tasks):
     return tasks[-1].exec_end - tasks[0].exec_start
 
 
+def print_aicore_summary():
+    global total_cores
+
+    total_aicore_time = 0.0
+    lane_count = 0
+    global_min_start = None
+    global_max_end = None
+
+    for _, core_entry in total_cores.items():
+        core_type = core_entry.get_brief_core_type()
+        if core_type not in ("AIC", "AIV"):
+            continue
+        lane_count += 1
+        for task in core_entry.tasks:
+            if task.is_fake:
+                continue
+            exec_start = task.exec_start
+            exec_end = task.exec_end
+            if exec_end < exec_start:
+                continue
+            total_aicore_time += (exec_end - exec_start)
+            if global_min_start is None or exec_start < global_min_start:
+                global_min_start = exec_start
+            if global_max_end is None or exec_end > global_max_end:
+                global_max_end = exec_end
+
+    title = "-------- AICORE Prof Summary --------"
+    if lane_count <= 0 or global_min_start is None or global_max_end is None:
+        print(f"\n{title}")
+        print("AICore End-to-End Time: 0.00")
+        print("AICore Utilization:     0.00%")
+        print("-" * len(title))
+        return
+
+    lane_duration = max(global_max_end - global_min_start, 0.0)
+    utilization = 0.0
+    if lane_duration > 0:
+        utilization = total_aicore_time / (lane_count * lane_duration)
+
+    print(f"\n{title}")
+    print(f"AICore End-to-End Time: {lane_duration:.2f}")
+    print(f"AICore Utilization:     {utilization * 100:.2f}%")
+    print("-" * len(title))
+
+
 def calculate_pipe_usage(path):
     global total_cores
     global total_tasks
@@ -982,6 +1027,7 @@ if __name__ == "__main__":
     dir_name = os.path.dirname(args.swim_json_file)
     # 根据日志信息和topo 信息构建total_cores 和 total_tasks
     build_swim_info(input_swim_data, input_topo_data, args.label_type)
+    print_aicore_summary()
 
     # 输出核分析日志
     ana_path = os.path.join(dir_name, "bubble_analysis.log")
