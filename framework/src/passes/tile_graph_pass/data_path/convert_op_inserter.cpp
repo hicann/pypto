@@ -332,13 +332,29 @@ bool ConvertInserter::FitL0C2L1(const LogicalTensorPtr &tensor){
         (shape[0] % L0C2L1_DIM1_SHAPE_RESTICT == 0) && (dim2Size % L0C2L1_DIM2_BYTE_RESTICT ==0);
 }
 
+// 规避条件检测，检查op是否满足输入无表达式validShape。
+// 规避问题： L0C2L1的输入存在validShape时，即便输出同样存在validShape也会导致精度问题，此场景暂时走DDR规避。
+bool ConvertInserter::FitL0C2L1(const Operation& op)
+{
+    for (const auto &input : op.GetIOperands()) {
+        const auto &dynValidShape = input->GetDynValidShape();
+        for (const auto &dim : dynValidShape) {
+            if (!dim.IsImmediate()) {
+                return false;
+            }
+        }
+    }
+    auto in = op.iOperand.front();
+    return FitL0C2L1(in);
+}
+
 //构造转换路径
 Status ConvertInserter::ProcessConvertPath(const Operation &op, const std::shared_ptr<LogicalTensor> &oOperand,
     MemoryType requiredMemoryType, std::vector<MemoryType> &paths) {
     auto currTensorMemOri = oOperand->GetMemoryTypeOriginal();
     if(currTensorMemOri == MemoryType::MEM_L0C && requiredMemoryType == MemoryType::MEM_L1) {
         //特殊处理L0C2L1：针对不支持的数据类型场景路径中插入DDR
-        bool needDDRTrans = IsNotValidDataType(oOperand) || !FitL0C2L1(oOperand);
+        bool needDDRTrans = IsNotValidDataType(oOperand) || !FitL0C2L1(op);
         if(needDDRTrans) {
             paths = {currTensorMemOri, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1};
         } else {

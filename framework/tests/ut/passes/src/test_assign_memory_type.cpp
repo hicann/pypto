@@ -1108,6 +1108,90 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1NoSupportNotMultipleCase) {
     }
 }
 
+void ConstructL0C2L1GraphWithNonImmediateValidShape(std::shared_ptr<Function>& currFunctionPtr)
+{
+    std::vector<int64_t> shapeA1 = {NUM_64, NUM_32};
+    std::vector<int64_t> shapeB1 = {NUM_32, NUM_16};
+    std::vector<int64_t> shapeC1 = {NUM_64, NUM_16};
+    std::vector<int64_t> shapeA2 = {NUM_128, NUM_64};
+    std::vector<int64_t> shapeC2 = {NUM_128, NUM_16};
+
+    auto inputA1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeA1);
+    auto inputB1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeB1);
+    auto inputA2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeA2);
+    auto inputB2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeC1);
+    auto outputC2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeC2);
+
+    auto matmul1Output = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeC1);
+    auto viewL1Output = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeC1);
+    auto viewL0AOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP16, shapeC1);
+
+    auto& matmul1Op = currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {inputA1, inputB1}, {matmul1Output});
+    matmul1Op.opmagic = 1001;
+
+    auto& viewL1Op = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {matmul1Output}, {viewL1Output});
+    auto viewL1Attr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
+    viewL1Attr->SetToType(MemoryType::MEM_L1);
+    viewL1Op.SetOpAttribute(viewL1Attr);
+    viewL1Op.opmagic = 1002;
+
+    auto& viewL0AOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {viewL1Output}, {viewL0AOutput});
+    auto viewL0AAttr = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
+    viewL0AAttr->SetToType(MemoryType::MEM_L0A);
+    viewL0AOp.SetOpAttribute(viewL0AAttr);
+    viewL0AOp.opmagic = 1003;
+
+    auto& matmul2Op = currFunctionPtr->AddRawOperation(Opcode::OP_A_MUL_B, {inputA2, viewL0AOutput}, {outputC2});
+    matmul2Op.opmagic = 1004;
+
+    currFunctionPtr->inCasts_.push_back(inputA1);
+    currFunctionPtr->inCasts_.push_back(inputB1);
+    currFunctionPtr->inCasts_.push_back(inputA2);
+    currFunctionPtr->inCasts_.push_back(inputB2);
+    currFunctionPtr->outCasts_.push_back(outputC2);
+
+    std::vector<SymbolicScalar> dynValidShape;
+    dynValidShape.push_back(SymbolicScalar("dim0"));
+    dynValidShape.push_back(SymbolicScalar("dim1"));
+    matmul1Output->UpdateDynValidShape(dynValidShape);
+}
+
+// 当tensor存在非立即数dynValidShape时，直接走L0C2L1通道进行后续矩阵乘会有精度问题，当前走DDR规避
+TEST_F(AssignMemoryTypeTest, TestL0C2L1WithNonImmediateValidShape)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestL0C2L1WithNonImmediateValidShape",
+        "TestL0C2L1WithNonImmediateValidShape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("TestL0C2L1WithNonImmediateValidShape", currFunctionPtr);
+
+    ConstructL0C2L1GraphWithNonImmediateValidShape(currFunctionPtr);
+
+    AssignMemoryType assignMemoryType;
+    assignMemoryType.PreCheck(*currFunctionPtr);
+    assignMemoryType.RunOnFunction(*currFunctionPtr);
+    assignMemoryType.PostCheck(*currFunctionPtr);
+
+    int l0c2l1Count = 0;
+    int ddr2l1Count = 0;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_CONVERT || op.GetOpcode() == Opcode::OP_VIEW) {
+            if (op.GetIOperands().size() > 0 && op.GetOOperands().size() > 0) {
+                auto inputMem = op.GetIOperands().front()->GetMemoryTypeOriginal();
+                auto outputMem = op.GetOOperands().front()->GetMemoryTypeOriginal();
+                if (inputMem == MemoryType::MEM_L0C && outputMem == MemoryType::MEM_L1) {
+                    l0c2l1Count++;
+                }
+                if (inputMem == MemoryType::MEM_DEVICE_DDR && outputMem == MemoryType::MEM_L1) {
+                    ddr2l1Count++;
+                }
+            }
+        }
+    }
+    EXPECT_EQ(l0c2l1Count, 0) << "Should not use L0C2L1 path when validShape is non-immediate";
+    EXPECT_GT(ddr2l1Count, 0) << "Should use DDR2L1 path when validShape is non-immediate";
+}
+
 TEST_F(AssignMemoryTypeTest, TestCascadingAssembleViewNoDDR2L0C) {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
     std::vector<int64_t> shapeA1 = {NUM_16, NUM_32};

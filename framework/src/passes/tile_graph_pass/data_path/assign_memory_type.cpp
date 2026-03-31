@@ -188,7 +188,7 @@ void AssignMemoryType::ProcessViewwithSpecificMem(Operation &operation) {
     // 适配L0C2L1通路，当满足条件时view的输入的tobe设为L0C，否则设置为DDR
     if (in->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
         (out->GetMemoryTypeOriginal() == MemoryType::MEM_L1 || attrToType == MemoryType::MEM_L1)) {
-        if (inserter.FitL0C2L1(in)) {
+        if (inserter.FitL0C2L1(operation)) {
             inserter.UpdateTensorTobeMap(in, operation, MemoryType::MEM_L0C);
         } else {
             inserter.UpdateTensorTobeMap(in, operation, MemoryType::MEM_DEVICE_DDR);
@@ -220,7 +220,7 @@ void AssignMemoryType::ProcessAssemblewithSpecificMem(Operation &operation) {
     if (input->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
         return;
     }
-    if (!inserter.FitL0C2L1(input)) {
+    if (!inserter.FitL0C2L1(operation)) {
         return;
     }
     for (const auto &consumerOp : output->GetConsumers()) {
@@ -513,7 +513,7 @@ void AssignMemoryType::AssignMoveOpForView(Operation &operation) {
             continue;
         }
         if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
-            outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1 && inserter.FitL0C2L1(tensor)) {
+            outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1 && inserter.FitL0C2L1(operation)) {
             inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0C);
             viewOpAttribute->SetToType(outputTensor->GetMemoryTypeOriginal());
             continue;
