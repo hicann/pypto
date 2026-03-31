@@ -10,32 +10,149 @@ license: 完整条款见 LICENSE.txt
 
 本技能用于分析如何根据用户描述生成对应的Pass侧单元测试用例（UT），结合pypto-pass-module-analyzer/SKILL.md技能分析Pass业务，帮助设计相关单元测试用例（UT）。
 
-## 触发机制
- 	 
- 	当用户输入包含以下关键字或者相关内容时，自动触发此技能：
- 	 
- 	 （1）设计Pass模块XXX的UT用例**：设计指定 Pass 模块的功能的UT用例
- 	 （2）设计Pass模块XXX的XXX功能**：设计指定 Pass 模块的指定功能的UT用例
- 	 （3）设计XXX功能的相关Pass模块的UT用例**：设计与XXX功能相关Pass的UT用例
- 
- 	触发示例：
+## 目录结构
 
- 	 （1）"设计Pass模块AutoCast的UT用例"
- 	 （2）"设计Pass模块AutoCast的对于不支持BF16 OP插入Cast的功能"
- 	 （3）"设计删除冗余Op功能的相关Pass的UT用例"
+```
+pypto-pass-ut-generate/
+├── SKILL.md                  # 主技能文档
+├── scipts/                   # 脚本工具目录
+│   ├── common_utils.py       # 公共工具函数
+│   ├── pr_utils.py           # PR 处理工具（完整功能）
+│   ├── get_ut_status.py    # 简化版 UT 状态获取
+│   └── ut_coverage.py        # 覆盖率分析工具
+└── references/
+    ├── check_list.md         # 检查清单
+    ├── usage.md              # 使用指南
+    ├── trouble_shooting.md   # 故障排查
+    └── common_errors.md      # 常见错误记录
+```
+
+## 触发机制
+
+当用户输入包含以下关键字或相关内容时，自动触发此技能：
+
+| 触发词 | 说明 |
+|--------|------|
+| "设计Pass模块XXX的UT用例" | 设计指定 Pass 模块的功能的UT用例 |
+| "设计Pass模块XXX的XXX功能" | 设计指定 Pass 模块的指定功能的UT用例 |
+| "设计XXX功能的相关Pass模块的UT用例" | 设计与XXX功能相关Pass的UT用例 |
+| "为PR XXXX补充UT" | 为指定 PR 补充 UT 测试用例（在线） |
+| "分析覆盖率报告" | 分析 UT 覆盖率报告，补充未覆盖代码（离线） |
+| "分析本地diff文件" | 分析用户指定的本地 diff 文件（离线） |
+| "分析本地覆盖率文件" | 分析用户指定的本地覆盖率 .tar.gz 文件（离线） |
+| "分析本地文件" | 同时分析本地 diff 和覆盖率文件（离线） |
+
+**触发示例**：
+- "设计Pass模块AutoCast的UT用例"
+- "设计Pass模块AutoCast的对于不支持BF16 OP插入Cast的功能"
+- "设计删除冗余Op功能的相关Pass的UT用例"
+- "为PR 1894补充UT"
+- "分析覆盖率报告，补充未覆盖代码"
+- "分析本地 /path/to/ut_cov.tar.gz 文件"
+- "分析本地 diff 文件 /path/to/pr.diff"
 
 ## 使用场景
- 	 
- 	当需要设计 PyPTO pass 中模块的功能或业务单元测试时使用此技能。
+
+本技能支持以下 5 种使用场景：
+
+### 场景一：为指定 Pass 生成完整 UT（从零开始）
+
+**适用情况**：需要为某个 Pass 设计完整的 UT 测试套件
+
+**执行步骤**：
+1. 分析 Pass 业务逻辑（参考 pypto-pass-module-analyzer/SKILL.md）
+2. 在 `pypto/framework/tests/ut/passes/src/test_xxx.cpp` 创建测试文件
+3. 按照 UT 生成流程一或流程二编写测试用例
+4. 执行 `python3 build_ci.py -c -u=TestPassName.* -j=24 -f=cpp` 验证
+5. 运行 `python3 build_ci.py -c -u=TestPassName.* --gcov -j=24 -f=cpp` 检查覆盖率
+
+### 场景二：为 PR 补充 UT
+
+**适用情况**：PR 已有部分 UT，需要补充未覆盖的代码
+
+**执行步骤**：
+1. 使用 `scipts/get_ut_status.py` 快速获取 UT 状态
+2. 使用 `scipts/pr_utils.py` 处理 PR，获取 diff 和覆盖率报告
+3. 分析未覆盖的代码行
+4. 针对未覆盖行设计 UT 用例
+5. 验证编译和覆盖率
+
+**示例**：
+```bash
+# 快速获取 UT 状态
+python3 scipts/get_ut_status.py 2017
+
+# 完整处理 PR
+python3 scipts/pr_utils.py 2017
+```
+
+### 场景三：离线分析本地 diff 文件
+
+**适用情况**：用户指定本地 diff 文件，需要离线分析
+
+**执行步骤**：
+1. 使用 `scipts/ut_coverage.py` 解析用户指定的本地 diff 文件
+2. 提取变更的 Pass 文件和代码行
+3. 分析变更代码的业务逻辑
+4. 生成 UT 设计建议
+5. 手动实现测试用例
+
+**示例**：
+```bash
+# 解析本地 diff 文件
+python3 scipts/ut_coverage.py --diff /path/to/pr.diff
+
+# 简短写法（文件在当前目录）
+python3 scipts/ut_coverage.py --diff pr.diff
+```
+
+### 场景四：离线分析本地覆盖率报告
+
+**适用情况**：用户指定本地覆盖率报告（.tar.gz 格式），需要分析未覆盖代码
+
+**执行步骤**：
+1. 解析用户指定的本地覆盖率报告文件（支持 .tar.gz 格式）
+2. 提取未覆盖的代码行
+3. 针对未覆盖行分析业务逻辑
+4. 设计测试用例覆盖这些行
+
+**示例**：
+```bash
+# 解析本地覆盖率报告
+python3 scipts/ut_coverage.py --report /path/to/ut_cov.tar.gz
+
+# 简短写法（文件在当前目录）
+python3 scipts/ut_coverage.py --report ut_cov.tar.gz
+```
+
+### 场景五：离线综合分析
+
+**适用情况**：用户同时指定本地 diff 文件和覆盖率报告，需要关联分析
+
+**执行步骤**：
+1. 解析用户指定的本地 diff 文件，获取变更的 Pass 文件
+2. 解析用户指定的本地覆盖率报告，获取未覆盖行
+3. 关联 diff 和覆盖率，识别需要补充 UT 的代码
+4. 生成 UT 设计建议
+
+**示例**：
+```bash
+# 综合分析（同时指定 diff 和覆盖率文件）
+python3 scipts/ut_coverage.py --diff /path/to/pr.diff --report /path/to/ut_cov.tar.gz
+
+# 输出 JSON 格式建议
+python3 scipts/ut_coverage.py --diff pr.diff --report ut_cov.tar.gz --json
+```
 
 ## UT生成流程一
 
 ### 步骤 1：分析业务
 
     根据用户描述的业务情况，分析相关业务：
-        （1）当描述为具体Pass的具体业务时，使用 `pypto-pass-module-analyzer` skill，分析业务场景，根据当前业务设计相应的UT用例，例如：设计Splitk这个Pass消除RedunceAcc功能的UT；
-        （2）当描述为模糊Pass业务时，使用 `pypto-pass-module-analyzer` skill，进行相关Pass业务总结，挑选出符合业务的Pass，分析业务场景，设计对应的UT用例，例如：请针对Pass中对于视图类Op，view、assemble处理的Pass设计对应的UT，验证功能实现；
-        （3）当描述为设计Pass的UT时，使用 `pypto-pass-module-analyzer` skill，进行相关Pass业务总结，分析业务场景，设计该Pass业务的UT用例，例如：针对Splitk这个Pass设计相关UT用例。
+        （1）当描述为具体Pass的具体业务时，根据@.opencode/skills/pypto-pass/pypto-pass-module-analyzer/SKILL.md，分析业务场景，根据当前业务设计相应的UT用例，例如：设计Splitk这个Pass消除RedunceAcc功能的UT；
+        （2）当描述为模糊Pass业务时，根据@.opencode/skills/pypto-pass/pypto-pass-module-analyzer/SKILL.md，进行相关Pass业务总结，挑选出符合业务的Pass，分析业务场景，设计对应的UT用例，例如：请针对Pass中对于视图类Op，view、assemble处理的Pass设计对应的UT，验证功能实现；
+        （3）当描述为设计Pass的UT时，根据@.opencode/skills/pypto-pass/pypto-pass-module-analyzer/SKILL.md，进行相关Pass业务总结，分析业务场景，设计该Pass业务的UT用例，例如：针对Splitk这个Pass设计相关UT用例;
+         (4) 当描述为设计PRxxxx的UT或者提供diff文件、ut覆盖率报告时，解析变更变更代码或者未覆盖到的代码行，进行相关Pass业务总结，分析业务场景，设计该Pass业务的UT用例，例如：针对PR01设计相关UT用例或者针对01.diff文件生成UT用例或者针对ut-report.tar.gz生成UT用例;
 
 ### 步骤 2：环境配置
 
@@ -46,7 +163,7 @@ license: 完整条款见 LICENSE.txt
         （2）声明该类继承于gtest框架
         （3）该类中，编写相关函数：
                 1.所有测试用例全局初始化函数--static void SetUpTestCase() {}，若未明确指定内容，则为空实现；
-                2.所有测试用例全局清理函数--static void TearDownTestCase() {}， 若未明确指定内容，则为空实现；
+                2.所有测试用例全局清理函数--static void TearDownTestCase() {}，  若未明确指定内容，则为空实现；
                 3.每个测试用例执行前的初始化测试环境函数--void SetUp() override {}，若未指定内容，则默认生成以下代码体；
 ```cpp
                     void SetUp() override {
@@ -149,7 +266,7 @@ license: 完整条款见 LICENSE.txt
 
 ### 步骤 8：利用现有的环境，执行生成的UT，并对错误进行修改(若当前环境正常，需在当前环境中验证)
 
-    当生成UT用例后，执行Python3 build_ci.py -c -u=xxx.* -j=24来验证用例是否正确，xxx为该测试用例类的名字，对于错误进行改正。
+    当生成UT用例后，执行执行Python3 build_ci.py -c -u=xxx.* -j=24来验证用例是否正确，xxx为该测试用例类的名字，对于错误进行改正。
     当执行超时时，优先执行Python3 build_ci.py -u=xxx.* -j=24。
     若此时还存在执行超时问题，则执行Python3 build_ci.py -u=xxx.xx -j=24，xx为测试用例
     例如: python3 build_ci.py -c -u=TestRemoveRedundantOpPass.* -j=24 -f=cpp
@@ -207,6 +324,53 @@ license: 完整条款见 LICENSE.txt
     生成的用例请真实执行，并对生成的用例进行验证修改；
     对于UT覆盖率，请打印出来当前所设计UT的覆盖率。
 
+## 工具使用
+
+### pr_utils.py - PR 处理工具（在线）
+
+功能：
+- 通过 PR 编号获取代码变更内容
+- 解析 PR 评论中的 UT-REPORT，获取覆盖率和未覆盖行
+- 将 diff 应用到本地仓库
+- 检查编译状态
+- 生成 UT 设计建议
+
+使用示例：
+```bash
+# 在线处理 PR
+python3 scipts/pr_utils.py 1894
+```
+
+### ut_coverage.py - 覆盖率分析工具
+
+功能：
+- 解析本地 diff 文件
+- 解析本地覆盖率报告（支持 .tar.gz 格式）
+- 关联 Diff 和覆盖率
+- 生成 UT 设计建议
+- 提取未覆盖行
+
+使用示例：
+```bash
+# 解析本地 diff 文件
+python3 scipts/ut_coverage.py --diff /path/to/pr.diff
+
+# 解析本地覆盖率报告（.tar.gz 格式）
+python3 scipts/ut_coverage.py --report /path/to/ut_cov.tar.gz
+
+# 综合分析（同时指定 diff 和覆盖率文件）
+python3 scipts/ut_coverage.py --diff /path/to/pr.diff --report /path/to/ut_cov.tar.gz
+
+# 输出 JSON 格式建议
+python3 scipts/ut_coverage.py --diff pr.diff --report ut_cov.tar.gz --json
+```
+
+详见 [references/usage.md](references/usage.md)
+
+## 故障排查
+
+详见 [references/trouble_shooting.md](references/trouble_shooting.md)
+
 ## 参考资料
 
 | 类别 | 文件路径 |
@@ -229,9 +393,11 @@ license: 完整条款见 LICENSE.txt
 | 阶段 | 配置值 |
 |------|--------|
 | TENSOR GRAPH 执行 | `CS_TENSOR_GRAPH` |
-| TILE GRAPH 执行 | `CS_TILE_GRAPH` |
+| `TILE GRAPH 执行 | `CS_TILE_GRAPH` |
 | BLOCK GRAPH 执行 | `CS_EXECUTE_GRAPH` |
 
 根据 Pass 所在文件夹目录选择对应的编译策略。
 
+## 检查清单
 
+详见 [references/check_list.md](references/check_list.md)
