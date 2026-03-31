@@ -139,7 +139,7 @@ TEST_F(TestCodegenDynUna, TestPadDynamic)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     const std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2.0)>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TPad<pto::PadValueCustom((float)2)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -211,7 +211,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamicBF16)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     const std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0.0)>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((bfloat16_t)0)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 
@@ -247,7 +247,7 @@ TEST_F(TestCodegenDynUna, TestFillPadDynamic)
     npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
     codeGen.GenCode(*function, {});
     const std::string res = GetResultFromCpp(*function);
-    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0.0)>(ubTensor_2, ubTensor_0);)!!!";
+    std::string expect = R"!!!(TFillPad<pto::PadValueCustom((float)0)>(ubTensor_2, ubTensor_0);)!!!";
     CheckStringExist(expect, res);
 }
 

@@ -1716,9 +1716,6 @@ std::string CodeGenOpCloudNPU::PrintPadTileTensor() const
         return oss.str();
     }
     std::string padValueStr = FormatFloat(extOperandVal.Cast<float>());
-    if (padValueStr.find('.') == std::string::npos) {
-        padValueStr += ".0";
-    }
     DataType dstDtype = operandDtype[ToUnderlying(MISOIdx::DST_IDX)];
     std::string padValueArg = "(" + DataType2CCEStr(dstDtype) + ")" + padValueStr;
     oss << tileOpName << "<pto::PadValueCustom(" << padValueArg << ")>";
