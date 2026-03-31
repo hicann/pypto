@@ -198,7 +198,6 @@ def dynamic_gelu_activation_core(output: pypto.tensor, hidden_states: pypto.tens
             [batch_offset, 0],
             valid_shape=[(batch_size - batch_offset).min(basic_batch), hidden_size]
         )
-        # Configure tiling for matrix operations
         pypto.set_matrix_size([basic_batch, hidden_size, intermediate_size])
         # Gate projection
         gate = pypto.matmul(hidden_chunk, gate_proj_weight, config.dtype)
