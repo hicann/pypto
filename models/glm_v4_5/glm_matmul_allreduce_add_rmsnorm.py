@@ -60,7 +60,7 @@ def matmul_allreduce_add_rmsnorm_kernel(
 
     for bs_idx in pypto.loop(bs_loop, name="LOOP_MM_ALLREDUCE_ADD_RMSNORM", idx_name="bs_idx"):
         # 1. create shmem tesnor
-        shmem_shape = [1, view_row_shape, hidden_size]
+        shmem_shape = [view_row_shape, hidden_size]
         shmem_tensor = pypto.distributed.create_shmem_tensor(
             group_name, world_size, pypto.DT_FP32, shmem_shape)
         shmem_barrier_signal = pypto.distributed.create_shmem_signal(group_name, world_size)
@@ -73,7 +73,7 @@ def matmul_allreduce_add_rmsnorm_kernel(
             # 2. clear data
             pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
             data_clear_out = pypto.distributed.shmem_clear_data(
-                shmem_tensor, shmem_shape, [0, 0, 0], pred=[in_tensor_tile])
+                shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
             signal_clear_out = pypto.distributed.shmem_clear_signal(
                 shmem_tensor, pred=[in_tensor_tile])
             barrier_out = pypto.distributed.shmem_barrier_all(
@@ -86,15 +86,15 @@ def matmul_allreduce_add_rmsnorm_kernel(
             # 4. allreduce
             pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
             for dyn_idx in range(world_size):
-                put_out = pypto.distributed.shmem_put(matmul_result, [0, 0, 0], shmem_tensor, dyn_idx,
+                put_out = pypto.distributed.shmem_put(matmul_result, [0, 0], shmem_tensor, dyn_idx,
                     put_op=pypto.AtomicType.ADD, pred=[barrier_out])
                 pypto.distributed.shmem_signal(shmem_tensor, dyn_idx, 1, shmem_shape,
-                    [0, 0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out])
+                    [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out])
             wait_until_out = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
-                shmem_shape, [0, 0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
+                shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
             pypto.set_vec_tile_shapes(1, hidden_size)
             all_reduce_out = pypto.experimental.shmem_load(
-                shmem_tensor, my_pe, shmem_shape, [0, 0, 0], pred=[wait_until_out], valid_shape=shmem_shape
+                shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out], valid_shape=shmem_shape
             )
 
             # 5. Add RmsNorm

@@ -37,7 +37,7 @@ void TestReduceScatter(OpTestParam& testParam, std::string& goldenDir)
     std::vector<T> inData =
         ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
 
-    Shape shmemDataShape{1, rowOut, col};
+    Shape shmemDataShape{rowOut, col};
     FUNCTION("ShmemReduceScatter", {in}, {out})
     {
         DataType shmemDataType = in.GetDataType();

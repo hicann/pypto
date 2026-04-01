@@ -169,7 +169,7 @@ def shmem_put(
     Send local GM data to dst_pe 1
     tile = pypto.distributed.shmem_put(
         local_tensor,
-        [0, 0, 0],
+        [0, 0],
         shmem_tensor,
         1,
         put_op=pypto.AtomicType.SET,
@@ -177,7 +177,7 @@ def shmem_put(
     )
     """
     dummy = __normalize_pred(pred)
-    dst = pypto_impl.ShmemView(dst, [1] + src.shape, offsets)
+    dst = pypto_impl.ShmemView(dst, src.shape, offsets)
     return pypto_impl.ShmemPut(src, dst, dst_pe, put_op, dummy)
 
 
@@ -221,8 +221,8 @@ def shmem_get(
     local_tensor = pypto.distributed.shmem_get(
         shmem_data,
         1,
-        [1, 128, 256],
-        [0, 0, 0],
+        [128, 256],
+        [0, 0],
         valid_shape=valid_shape,
         pred=pred_token,
     )
@@ -283,8 +283,8 @@ def shmem_signal(
         1,
         1,
         2,
-        [1, 128, 256],
-        [0, 0, 0],
+        [128, 256],
+        [0, 0],
         target_pe=1,
         sig_op=pypto.AtomicType.SET,
         pred=pred_token,
@@ -345,8 +345,8 @@ def shmem_wait_until(
         1,
         OpType.EQ,
         4,
-        [1, 128, 256],
-        [0, 0, 0],
+        [128, 256],
+        [0, 0],
         clear_signal=False,
         pred=pred_token,
     )

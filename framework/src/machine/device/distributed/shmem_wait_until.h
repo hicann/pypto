@@ -214,20 +214,17 @@ public:
         int32_t totalTileNum = tileRows * tileCols;
 
         DEV_DEBUG(
-            "ShmemWaitUntilImpl::EnqueueOp logical rawShape=[%u, %u, %u],"
-            "logical tile=[%u, %u], logical offset=[%u, %u, %u], ownerRank=%u,"
-            "actual rawShape=[%u, %u, %d], actual offset=[%u, %u, %d], buffer maxTileNum=%u, bufferStride=%u",
-            paramInfo_.expandDimRawShape, paramInfo_.rawShapeRow, paramInfo_.rawShapeCol, paramInfo_.tileShapeRow,
-            paramInfo_.tileShapeCol, info.offset[EXPAND_DIM_INDEX], info.offset[SHMEM_DIM_ROW],
-            info.offset[SHMEM_DIM_COL], info.offset[OWNER_RANK_ID_INDEX], paramInfo_.rankNum,
-            paramInfo_.expandDimRawShape, totalTileNum, info.offset[OWNER_RANK_ID_INDEX], info.offset[EXPAND_DIM_INDEX],
-            tileIndex, paramInfo_.maxTileNum, paramInfo_.bufferStride);
+            "ShmemWaitUntilImpl::EnqueueOp logical rawShape=[%u, %u],"
+            "logical tile=[%u, %u], logical offset=[%u, %u], ownerRank=%u,"
+            "actual rawShape=[%u, %d], actual offset=[%u, %d], buffer maxTileNum=%u, bufferStride=%u",
+            paramInfo_.rawShapeRow, paramInfo_.rawShapeCol, paramInfo_.tileShapeRow, paramInfo_.tileShapeCol,
+            info.offset[SHMEM_DIM_ROW], info.offset[SHMEM_DIM_COL], info.offset[OWNER_RANK_ID_INDEX],
+            paramInfo_.rankNum, totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex, paramInfo_.maxTileNum,
+            paramInfo_.bufferStride);
 
-        auto offset = CalcLinearOffset(
-                          paramInfo_.expandDimRawShape, totalTileNum, info.offset[OWNER_RANK_ID_INDEX],
-                          info.offset[EXPAND_DIM_INDEX], tileIndex) *
-                      paramInfo_.bufferStride;
-        int32_t* addr = reinterpret_cast<int32_t*>(info.rawAddr) + offset;
+        int32_t* addr =
+            reinterpret_cast<int32_t*>(info.rawAddr) +
+            CalcLinearOffset(totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) * paramInfo_.bufferStride;
         return hashMap_.InsertTask(taskId, addr, expectedSum, resetSignal);
     }
 

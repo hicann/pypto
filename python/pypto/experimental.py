@@ -212,7 +212,7 @@ def shmem_store(
         dummy = Tensor([1, 1], DataType.DT_INT32).base()
     else:
         dummy = pred[0] if len(pred) == 1 else pypto_impl.Nop(pred)
-    dst_tile = pypto_impl.ShmemView(dst, [1] + src.shape, offsets)
+    dst_tile = pypto_impl.ShmemView(dst, src.shape, offsets)
     return pypto_impl.ShmemStore(src, dst_tile, dst_pe, put_op, dummy)
 
 
@@ -266,8 +266,8 @@ def shmem_load(
     tile = pypto.experimental.shmem_load(
         shmem_data,
         1,
-        [1, 128, 256],
-        [0, 0, 0],
+        [128, 256],
+        [0, 0],
         pred=wait_until_out,
         valid_shape=None,
     )

@@ -39,7 +39,7 @@ void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
     std::vector<T> inPtr =
         ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
 
-    Shape shmemDataShape{testParam.rankSize, row, col};
+    Shape shmemDataShape{testParam.rankSize * row, col};
     FUNCTION("ALLGATHER", {in}, {out})
     {
         TileShape::Current().SetVecTile({tileRow, tileCol});

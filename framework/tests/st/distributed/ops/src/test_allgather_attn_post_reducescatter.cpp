@@ -65,7 +65,7 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam& testParam, std::string
         LOOP("ALLGATHER", FunctionType::DYNAMIC_LOOP, unusedDynRankId, LoopRange(1))
         {
             (void)unusedDynRankId;
-            Shape shmemDataAgShape{testParam.rankSize, b * n * s / testParam.rankSize, kvLoraRank};
+            Shape shmemDataAgShape{testParam.rankSize * b * n * s / testParam.rankSize, kvLoraRank};
             ShmemTensor shmemTensor = CreateShmemTensor(testParam.group, testParam.rankSize, dtype, shmemDataAgShape);
             TileShape::Current().SetVecTile({64, kvLoraRank});
             AllGather(agIn, agIn, shmemTensor, agOut);
@@ -99,7 +99,7 @@ void TestAllGatherAttentionPostReducescatter(OpTestParam& testParam, std::string
                                          DT_FP32 :
                                          attnOut.GetDataType();
             ShmemTensor shmemTensor =
-                CreateShmemTensor(testParam.group, testParam.rankSize, shmemDataType, {1, outRow, h});
+                CreateShmemTensor(testParam.group, testParam.rankSize, shmemDataType, {outRow, h});
             TileShape::Current().SetVecTile({16, h});
             Distributed::ReduceScatter(attnOut, attnOut, shmemTensor, DistReduceType::DIST_REDUCE_ADD, out);
         }

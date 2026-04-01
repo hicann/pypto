@@ -165,13 +165,13 @@ std::string CodeGenOpCloudNPU::GenTemplateParamsForSet() const
     Distributed::ShmemSetAttr distOpAttr = AnyCast<Distributed::ShmemSetAttr>(opAttrs.at(OpAttributeKey::distOpAttr));
     int64_t bufferEleNum = distOpAttr.setBufferShape[0];
     size_t shmemTensorDim = rawShape[shmemTensorIndex].size();
-    ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 3)
-        << "shmem tensor dim = " << shmemTensorDim << ", should >= 3.";
+    ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 2)
+        << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
     Shape actualRawShape = distOpAttr.isSetData ?
                                rawShape[shmemTensorIndex] :
-                               Shape{rawShape[shmemTensorIndex][0], 0, Distributed::SHMEM_SIGNAL_STRIDE};
-    oss << "<" << GetTemplateDType() << ", " << actualRawShape[0] << ", " << actualRawShape[1] << ", "
-        << actualRawShape[2] << ", " << bufferEleNum << ">";
+                               Shape{rawShape[shmemTensorIndex][0], Distributed::SHMEM_SIGNAL_STRIDE};
+    oss << "<" << GetTemplateDType() << ", " << actualRawShape[0] << ", " << actualRawShape[1] << ", " << bufferEleNum
+        << ">";
     return oss.str();
 }
 
@@ -238,6 +238,29 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapes(int32_t operandIndex) cons
     return GenOffsets(operandIndex) + ", " + GenRawShapes(operandIndex);
 }
 
+static RawSymbolicScalarPtr FormatValidShapeExpr(const RawSymbolicScalarPtr& rawScalar)
+{
+    if (rawScalar->IsSymbol()) {
+        if (std::islower(static_cast<unsigned char>(rawScalar->Dump().front()))) {
+            SymbolicScalar updateIndexScalar("RUNTIME_GetSymbol(INDEX_" + rawScalar->Dump() + ")");
+            auto formatedScalar = updateIndexScalar.Raw();
+            return formatedScalar;
+        }
+        return rawScalar;
+    } else if (rawScalar->IsExpression()) {
+        auto rawExpresssion = std::dynamic_pointer_cast<RawSymbolicExpression>(rawScalar);
+        std::vector<RawSymbolicScalarPtr> newOperands;
+        newOperands.reserve(rawExpresssion->OperandList().size());
+        for (const auto& operand : rawExpresssion->OperandList()) {
+            newOperands.push_back(FormatValidShapeExpr(operand));
+        }
+        auto formatedExpression =
+            std::make_shared<RawSymbolicExpression>(rawExpresssion->GetExpressionOpcode(), newOperands);
+        return formatedExpression;
+    }
+    return rawScalar;
+}
+
 std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemPut() const
 {
     std::ostringstream oss;
@@ -246,7 +269,8 @@ std::string CodeGenOpCloudNPU::GenOffsetsAndRawShapesForShmemPut() const
     size_t shmemTensorDim = dynamicValidShape[shmemDataIndex].size();
     ASSERT(GenCodeErr::TENSOR_DIM_UNSUPPORTED, shmemTensorDim >= 2)
         << "shmem tensor dim = " << shmemTensorDim << ", should >= 2.";
-    std::string viewOffsetStr = dynamicValidShape[shmemDataIndex][shmemTensorDim - 2].Dump();
+    std::string viewOffsetStr =
+        FormatValidShapeExpr(dynamicValidShape[shmemDataIndex][shmemTensorDim - 2].Raw())->Dump();
     size_t firstComma = viewOffsetStr.find(",");
     size_t lastComma = viewOffsetStr.rfind(",");
     std::string viewOffset = viewOffsetStr.substr(firstComma + 1, lastComma - firstComma - 1);

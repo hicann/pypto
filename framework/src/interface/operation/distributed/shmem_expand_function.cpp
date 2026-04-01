@@ -398,11 +398,8 @@ void TiledShmemGetGM2UB(
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
         tileOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified({0, 0}), MEM_UB,
-            OpImmediate::Specified({shmemDataTile->shape[1], shmemDataTile->shape[2]}),
-            OpImmediate::Specified({outUb->shape[0], outUb->shape[1]}),
-            OpImmediate::Specified(
-                std::vector<SymbolicScalar>{shmemDataTile->dynValidShape_[1], shmemDataTile->dynValidShape_[2]})));
+            OpImmediate::Specified(Shape(outUb->shape.size(), 0)), MEM_UB, OpImmediate::Specified(shmemDataTile->shape),
+            OpImmediate::Specified(outUb->shape), OpImmediate::Specified(shmemDataTile->dynValidShape_)));
     });
 }
 

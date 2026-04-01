@@ -45,12 +45,10 @@ void TestAllReduce(OpTestParam& testParam, std::string& goldenDir)
     ProgramData::GetInstance().AppendOutputs({
         RawTensorData::CreateTensorZero(out),
     });
-    int32_t rowPerRank = row;
-    Shape shmemDataShape{1, rowPerRank, col};
+    Shape shmemDataShape{row, col};
     if (useTwoShot) {
         CHECK(testParam.rankSize > 0) << "testParam.rankSize must be > 0, but got: " << testParam.rankSize;
-        rowPerRank /= testParam.rankSize;
-        shmemDataShape = {testParam.rankSize, rowPerRank, col};
+        shmemDataShape = {row / testParam.rankSize, col};
     }
     FUNCTION("ALLREDUCE", {in}, {out})
     {

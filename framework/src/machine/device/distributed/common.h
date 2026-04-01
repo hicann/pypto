@@ -28,9 +28,8 @@ namespace npu::tile_fwk::Distributed {
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE = 1024;
 constexpr uint64_t AICPU_TASK_ARRAY_SIZE_MOD = AICPU_TASK_ARRAY_SIZE - 1;
 constexpr uint64_t OWNER_RANK_ID_INDEX = 0;
-constexpr uint64_t EXPAND_DIM_INDEX = 1;
-constexpr uint64_t SHMEM_DIM_ROW = 2;
-constexpr uint64_t SHMEM_DIM_COL = 3;
+constexpr uint64_t SHMEM_DIM_ROW = 1;
+constexpr uint64_t SHMEM_DIM_COL = 2;
 constexpr uint64_t ATTR_STRIDE_OFFSET = 1;
 constexpr uint64_t ATTR_TILEROW_OFFSET = 3;
 constexpr uint64_t ATTR_TILECOL_OFFSET = 4;
@@ -54,7 +53,6 @@ struct AicpuParamInfo {
     int32_t shapeIndex{0};
     uint32_t rawShapeRow{0};
     uint32_t rawShapeCol{0};
-    uint32_t expandDimRawShape{0};
     uint32_t shapeRow{0};
     uint32_t shapeCol{0};
     uint32_t bufferStride{0};
@@ -117,10 +115,9 @@ inline std::vector<uint32_t> GetCoaVector(
     return vec;
 }
 
-inline unsigned CalcLinearOffset(
-    unsigned GmShape1, unsigned GmShape2, unsigned Offset0, unsigned Offset1, unsigned Offset2)
+inline unsigned CalcLinearOffset(unsigned GmShape1, unsigned Offset0, unsigned Offset1)
 {
-    return Offset2 + Offset1 * GmShape2 + Offset0 * (GmShape1 * GmShape2);
+    return Offset1 + Offset0 * GmShape1;
 }
 
 inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode)
@@ -134,18 +131,14 @@ inline AicpuParamInfo DecodeAicpuCode(const npu::tile_fwk::dynamic::DevRelocVect
 
     index = index + aicpuCode[index] + 1;
     paramInfo.rawShapeIndex = index + 1;
-    paramInfo.expandDimRawShape = aicpuCode[paramInfo.rawShapeIndex + 1]; // ShmemSignal RawShape[ranksize, ranksize,
-                                                                          // ranksize, row, col], 2表示rankShape的值
-    paramInfo.rawShapeRow = aicpuCode[paramInfo.rawShapeIndex + 2];       // ShmemSignal RawShape[ranksize, ranksize,
-                                                                          // ranksize, row, col], 3表示row的值
-    paramInfo.rawShapeCol = aicpuCode[paramInfo.rawShapeIndex + 3];       // ShmemSignal RawShape[ranksize, ranksize,
-                                                                          // ranksize, row, col], 4表示col的值
+    paramInfo.rawShapeRow =
+        aicpuCode[paramInfo.rawShapeIndex + 1];         // ShmemSignal RawShape[ranksize, row, col], 3表示row的值
+    paramInfo.rawShapeCol =
+        aicpuCode[paramInfo.rawShapeIndex + 2];         // ShmemSignal RawShape[ranksize, row, col], 4表示col的值
     paramInfo.shapeIndex =
         paramInfo.rawShapeIndex + aicpuCode[index] / 2; // 存储了signal_dim * 2个参数, tieShape往后偏移dim位
-    paramInfo.shapeRow =
-        aicpuCode[paramInfo.shapeIndex + 2]; // ShmemSignal Shape[ranksize, ranksize, ranksize, row, col], 3表示row的值
-    paramInfo.shapeCol =
-        aicpuCode[paramInfo.shapeIndex + 3]; // ShmemSignal Shape[ranksize, ranksize, ranksize, row, col], 4表示col的值
+    paramInfo.shapeRow = aicpuCode[paramInfo.shapeIndex + 1]; // ShmemSignal Shape[ranksize, row, col], 3表示row的值
+    paramInfo.shapeCol = aicpuCode[paramInfo.shapeIndex + 2]; // ShmemSignal Shape[ranksize, row, col], 4表示col的值
     index = index + aicpuCode[index] + 1;
     if (index + 1 < static_cast<int32_t>(aicpuCode.size())) {
         paramInfo.attrIndex = index + 1;

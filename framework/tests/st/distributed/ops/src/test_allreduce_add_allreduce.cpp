@@ -76,7 +76,7 @@ void FuncAllReduceAddAllReduce(const Tensor& in, Tensor& out, const OpTestParam&
         Tensor allReduceOut(in.GetDataType(), in.GetShape(), "allReduceOut");
         Tensor addOut(in.GetDataType(), in.GetShape(), "addOut");
         DataType shmemDataType = in.GetDataType();
-        Shape shmemDataShape{1, row, col};
+        Shape shmemDataShape{row, col};
         if ((shmemDataType == DT_BF16) || (shmemDataType == DT_FP16)) {
             shmemDataType = DT_FP32;
         }
