@@ -567,7 +567,7 @@ public:
 
     std::vector<std::reference_wrapper<SymbolicScalar>> GetDynamicAttributeList();
     SourceLocationPtr GetLocation() const { return location_; }
-
+    void SetLocation(SourceLocationPtr location) { location_ = location; }
     const std::vector<std::string>& GetCommentList() const { return commentList_; }
     std::vector<std::string>& GetCommentList() { return commentList_; }
 

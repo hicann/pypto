@@ -1530,7 +1530,7 @@ void Function::UpdateTensorDataUsage(Operation& op)
 }
 
 Operation& Function::AddRawOperation(
-    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, bool updateTensorMap)
+    const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands, bool updateTensorMap, const SourceLocationPtr &sourceLocation)
 {
     if (IsFunctionTypeAndGraphType(FunctionType::STATIC, {GraphType::EXECUTE_GRAPH, GraphType::BLOCK_GRAPH})) {
         updateTensorMap = false;
@@ -1542,6 +1542,9 @@ Operation& Function::AddRawOperation(
         operations_.emplace_back(std::make_shared<Operation>(*this, opCode, iOperands, oOperands, updateTensorMap));
     opPosition_.emplace(op.get(), operations_.size() - 1);
     operations_.back()->SetScopeId(config::GetPassOption<int>(SG_SET_SCOPE));
+    if (sourceLocation != nullptr) {
+        operations_.back()->SetLocation(sourceLocation);
+    }
     return *operations_.back();
 }
 

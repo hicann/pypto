@@ -855,5 +855,46 @@ TEST_F(TestDuplicateOpPass, GatherIn_OOperandNull) {
         }
     }
 }
+
+/*
+TestSourceLocation
+inCast{16,16}->gatherIn->ubTensor{16,16}->sqrt->outCast1{16,16}
+                                        ->sqrt->outCast2{16,16}
+inCast{16,16}->gatherIn->ubTensor{16,16}->sqrt->outCast1{16,16}
+            ->gatherIn->ubTensor'{16,16}->sqrt->outCast2{16,16}
+*/
+TEST_F(TestDuplicateOpPass, TestSourceLocation)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestDuplicateView", "TestDuplicateView", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    int64_t i = 0;
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumExpFour, kNumExpFour};
+    auto sourceLocation = std::make_shared<SourceLocation>("gatherIn", kNumOne);
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto& gatherIn = currFunctionPtr->AddRawOperation(Opcode::OP_GATHER_IN_L1, {inCast}, {ubTensor}, true, sourceLocation);
+    gatherIn.SetAttribute(OpAttributeKey::startOffset, i);
+    currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast1});
+    currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast2});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast1);
+    currFunctionPtr->outCasts_.push_back(outCast2);
+
+    DuplicateOp duplicateOpPass;
+    EXPECT_EQ(duplicateOpPass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(duplicateOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(duplicateOpPass.PostCheck(*currFunctionPtr), SUCCESS);
+
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_GATHER_IN_L1) {
+            EXPECT_EQ(op.GetLocation()->lineno_, kNumOne);
+        }
+    }
+}
 }
 }

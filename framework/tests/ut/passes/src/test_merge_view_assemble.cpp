@@ -926,5 +926,47 @@ TEST_F(MergeViewAssembleTest, TestPreCheck)
     Status status = mergeViewAssemble.PreCheck(*currFunctionPtr);
     EXPECT_EQ(status, FAILED);
 }
+
+/*
+TestSourceLocation
+inCast{16,16}->view->ubTensor1{8,4}->assemble->ubTensor2{8,4}->assemble->outCast{8,4}
+inCast{16,16}->view->ubTensor1{8,4}->assemble->outCast{8,4}
+*/
+TEST_F(MergeViewAssembleTest, TestSourceLocation)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestSourceLocation", "TestSourceLocation", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape1 = {16, 16};
+    std::vector<int64_t> shape2 = {8, 4};
+    auto sourceLocation1 = std::make_shared<SourceLocation>("view", NUM1);
+    auto sourceLocation2 = std::make_shared<SourceLocation>("view", NUM2);
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+
+    auto& viewOp = currFunctionPtr->AddRawOperation(Opcode::OP_VIEW, {inCast}, {ubTensor1}, true, sourceLocation1);
+    auto viewAttribute = std::make_shared<ViewOpAttribute>(std::vector<int64_t>{0, 0});
+    viewAttribute->SetToType(MemoryType::MEM_UB);
+    viewOp.SetOpAttribute(viewAttribute);
+    currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor1}, {ubTensor2}, true, sourceLocation2);
+    currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {ubTensor2}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->inCasts_.push_back(outCast);
+    MergeViewAssemble mergeViewAssemble;
+    Status status = mergeViewAssemble.RunOnFunction(*currFunctionPtr);
+    EXPECT_EQ(status, SUCCESS);
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            EXPECT_EQ(op.GetLocation()->lineno_, NUM2);
+        }
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            EXPECT_EQ(op.GetLocation()->lineno_, NUM1);
+        }
+    }
+}
 } // namespace tile_fwk
 } // namespace npu
