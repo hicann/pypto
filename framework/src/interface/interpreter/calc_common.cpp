@@ -333,7 +333,7 @@ void ExecuteOpReshape(ExecuteOperationContext* ctx)
             "Reshape: rawTensor shape/size mismatch in padding path: "
             "oop(raw) shape=%s size=%ld, iop(raw) shape=%s size=%ld",
             oopRawShapeStr.c_str(), oop->GetData()->GetSize(), iopRawShapeStr.c_str(), iop->GetData()->GetSize());
-        auto paddingRaw = std::make_shared<RawTensorData>(oop->GetData()->GetDataType(), oop->GetData()->GetShape());
+        auto paddingRaw = std::make_shared<RawTensorData>(oop->GetData()->GetDataType(), iop->GetShape());
         auto paddingIopView = std::make_shared<LogicalTensorData>(
             paddingRaw, iop->GetValidShape(), iop->GetValidShape(), iop->GetOffset());
         calc::Copy(paddingIopView, iopDataView);
