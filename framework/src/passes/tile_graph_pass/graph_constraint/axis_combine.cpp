@@ -23,15 +23,9 @@ namespace npu {
 namespace tile_fwk {
 constexpr size_t INPUT_SIZE = 2;
 
-bool InsertCondition(const Opcode& code)
-{
-    if (SUPPORT_BRCINLINE.count(code) > 0) {
-        return true;
-    }
-    return false;
-}
+bool InsertCondition(const Opcode& code) { return SUPPORT_BRCINLINE.count(code) > 0; }
 
-Status AlignedIfNeed(int64_t& currentDim, int64_t& padValue)
+Status AlignedIfNeed(int64_t& currentDim, int64_t padValue)
 {
     if (padValue == 0) {
         APASS_LOG_ERROR_F(Elements::Config, "invalid pad base %ld.", static_cast<long>(padValue));
@@ -65,58 +59,80 @@ inline int GetExpandDim(const std::vector<int64_t>& lhsShape, const std::vector<
     return -1;
 }
 
+static void SetValidShapeForExpand(Operation& expand, const LogicalTensorPtr& refTensor)
+{
+    const auto& validShape = refTensor->GetDynValidShape();
+    if (!validShape.empty()) {
+        expand.SetAttribute(OP_ATTR_PREFIX + "validShape", validShape);
+    } else {
+        expand.SetAttribute(OP_ATTR_PREFIX + "validShape", SymbolicScalar::FromConcrete(refTensor->GetShape()));
+    }
+}
+
+static LogicalTensorPtr CreateAlignedTensor(
+    Function& function, const LogicalTensorPtr& srcTensor, const std::vector<int64_t>& alignedShape)
+{
+    auto alignedTensor =
+        std::make_shared<LogicalTensor>(function, srcTensor->Datatype(), alignedShape, srcTensor->Format());
+    alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    return alignedTensor;
+}
+
+static void UpdateOperand(
+    Operation& op, size_t idx, const LogicalTensorPtr& oldTensor, const LogicalTensorPtr& newTensor,
+    std::vector<LogicalTensorPtr>& inputTensor)
+{
+    oldTensor->RemoveConsumer(op);
+    op.ReplaceIOperand(idx, newTensor);
+    inputTensor[idx] = newTensor;
+}
+
 Status AxisCombine::AlignBroadCastOpInputs([[maybe_unused]] Function& function, Operation& op)
 {
     auto inputTensor = op.GetIOperands();
-    auto inTensor0 = inputTensor[0];
-    auto inTensor1 = inputTensor[1];
-    if (inTensor0->GetShape() == inTensor1->GetShape() ||
-        (inTensor0->GetShape().back() == inTensor1->GetShape().back())) {
+    auto& inTensor0 = inputTensor[0];
+    auto& inTensor1 = inputTensor[1];
+    const auto& shape0 = inTensor0->GetShape();
+    const auto& shape1 = inTensor1->GetShape();
+    if (shape0 == shape1 || shape0.back() == shape1.back()) {
         return SUCCESS;
     }
-    for (size_t idx = 0; idx < inputTensor.size(); ++idx) {
+    for (size_t idx = 0; idx < INPUT_SIZE; ++idx) {
         auto srcTensor = inputTensor[idx];
+        auto otherTensor = inputTensor[idx ^ 1];
         auto alignedShape = srcTensor->GetShape();
-        bool needMarkBrcInput{true};
-        if (alignedShape.back() == 1) {
-            if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
-                int64_t padValue = 0;
-                if (GetPaddingValue(srcTensor, padValue) != SUCCESS) {
-                    return FAILED;
-                }
-                if (!axisCombineMarker.IsTensorEnableAxisCombine(srcTensor)) {
-                    padValue = inputTensor[idx ^ 1]->GetShape().back();
-                }
-                if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
-                    return FAILED;
-                }
-                auto alignedTensor =
-                    std::make_shared<LogicalTensor>(function, srcTensor->Datatype(), alignedShape, srcTensor->Format());
-                alignedTensor->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
-                auto& brcb = function.AddRawOperation(Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
-                if (!axisCombineMarker.IsTensorEnableAxisCombine(srcTensor)) {
-                    brcb.SetOpCode(Opcode::OP_EXPAND);
-                    brcb.SetAttribute(
-                        OP_ATTR_PREFIX + "EXPANDDIM",
-                        GetExpandDim(srcTensor->GetShape(), inputTensor[idx ^ 1]->GetShape()));
-                    needMarkBrcInput = false;
-                    if (!(inputTensor[idx ^ 1]->GetDynValidShape().empty())) {
-                        brcb.SetAttribute(OP_ATTR_PREFIX + "validShape", inputTensor[idx ^ 1]->GetDynValidShape());
-                    } else {
-                        brcb.SetAttribute(
-                            OP_ATTR_PREFIX + "validShape",
-                            SymbolicScalar::FromConcrete(inputTensor[idx ^ 1]->GetShape()));
-                    }
-                }
-                brcb.UpdateSubgraphID(op.GetSubgraphID());
-                srcTensor->RemoveConsumer(op);
-                op.ReplaceIOperand(idx, alignedTensor);
-                inputTensor[idx] = alignedTensor;
-            }
-            if (needMarkBrcInput) {
-                op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(idx + 1));
-            }
+        if (alignedShape.back() != 1) {
+            continue;
         }
+        int64_t padValue = 0;
+        if (GetPaddingValue(srcTensor, padValue) != SUCCESS) {
+            return FAILED;
+        }
+        const bool enableAxisCombine = axisCombineMarker.IsTensorEnableAxisCombine(srcTensor);
+        const bool isDAV3510 = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510;
+        if (!enableAxisCombine) {
+            padValue = otherTensor->GetShape().back();
+            if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
+                return FAILED;
+            }
+            auto alignedTensor = CreateAlignedTensor(function, srcTensor, alignedShape);
+            auto& expand = function.AddRawOperation(Opcode::OP_EXPAND, {srcTensor}, {alignedTensor});
+            expand.SetAttribute(
+                OP_ATTR_PREFIX + "EXPANDDIM", GetExpandDim(srcTensor->GetShape(), otherTensor->GetShape()));
+            SetValidShapeForExpand(expand, otherTensor);
+            expand.UpdateSubgraphID(op.GetSubgraphID());
+            UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
+            continue;
+        } else if (!isDAV3510) {
+            if (AlignedIfNeed(alignedShape.back(), padValue) != SUCCESS) {
+                return FAILED;
+            }
+            auto alignedTensor = CreateAlignedTensor(function, srcTensor, alignedShape);
+            auto& brcb = function.AddRawOperation(Opcode::OP_BRCB, {srcTensor}, {alignedTensor});
+            brcb.UpdateSubgraphID(op.GetSubgraphID());
+            UpdateOperand(op, idx, srcTensor, alignedTensor, inputTensor);
+        }
+        op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(idx + 1));
     }
     return SUCCESS;
 }
