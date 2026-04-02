@@ -334,10 +334,6 @@ std::string CodeGenCloudNPU::PrepareCmd(const CompileInfo& compileInfo, const st
 
     std::string compileCmd = oss.str();
 
-    int ret = CheckInjectStr(compileCmd.c_str(), compileCmd.length());
-    ASSERT(CmpCodeErr::CMD_CHECK_FAILED, ret == 0)
-        << "CheckInjectStr failed. errCode = " << ret << ", compileCmd is " << compileCmd;
-
     CODEGEN_LOGI_FULL("compile kernel...\n%s", compileCmd.c_str());
     return compileCmd;
 }
@@ -607,7 +603,11 @@ std::string CodeGenCloudNPU::GetCoreArch(const CompileInfo& compileInfo) const
 
 int CodeGenCloudNPU::DoCompileCmd(const std::string& compileCmd) const
 {
-    int ret = std::system(compileCmd.c_str());
+    int ret = CheckInjectStr(compileCmd.c_str(), compileCmd.length());
+    ASSERT(CmpCodeErr::CMD_CHECK_FAILED, ret == 0)
+        << "CheckInjectStr failed. errCode = " << ret << ", compileCmd is " << compileCmd;
+
+    ret = std::system(compileCmd.c_str());
     if (ret != 0) {
         CODEGEN_LOGE_E(
             CmpCodeErr::COMPILE_CODE_FAILED, "kernel compilation failed, ret = %d\ncompile cmd is:\n %s", ret,
