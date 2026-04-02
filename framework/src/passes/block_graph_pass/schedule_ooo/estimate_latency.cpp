@@ -17,10 +17,9 @@
 
 namespace npu::tile_fwk {
 
-void LatencyEstimator::LaunchReadyIssue()
-{
-    for (auto& op : taskList) {
-        if (USE_LESS_OPS2.find(op->GetOpcode()) != USE_LESS_OPS2.end() && inGraph[op].empty()) {
+void LatencyEstimator::LaunchReadyIssue() {
+    for (auto &op : taskList) {
+        if (USE_LESS_OPS2.find(op->GetOpcode()) != USE_LESS_OPS2.end() && depManager_.GetPredecessors(op).empty()) {
             auto type = RescheduleUtils::GetOpPipeType(op);
             opQueues[type].Insert(op);
         }
@@ -76,12 +75,12 @@ Status LatencyEstimator::RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt
         return FAILED;
     }
 
-    for (auto succ : outGraph[op]) {
+    for (auto succ : depManager_.GetSuccessors(op)) {
         if (opRetiredInfo[succ]) {
             continue;
         }
         bool ready = true;
-        for (auto pred : inGraph[succ]) {
+        for (auto pred : depManager_.GetPredecessors(succ)) {
             if (!opRetiredInfo[pred]) {
                 ready = false;
                 break;
