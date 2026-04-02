@@ -133,8 +133,7 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
     for (const auto& op : operationList) {
         CODEGEN_LOGI(
             "======================== Op CodeGenNPU Start ========================\nGen OP IS: %s", op.Dump().c_str());
-        Opcode opcode = op.GetOpcode();
-        if (SKIP_OPCODE_FOR_CODEGEN.find(opcode) != SKIP_OPCODE_FOR_CODEGEN.end()) {
+        if (SKIP_OPCODE_FOR_CODEGEN.find(op.GetOpcode()) != SKIP_OPCODE_FOR_CODEGEN.end()) {
             CODEGEN_LOGI("ignore this op\n------------------------ Op CodeGenNPU Finish -----------------------");
             continue;
         }

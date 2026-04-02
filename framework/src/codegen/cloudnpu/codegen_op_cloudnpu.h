@@ -174,7 +174,7 @@ public:
 
 private:
     TileTensor QueryTileTensorByIdx(int paramIdx) const;
-    std::string InsertOpComment(const std::string& tileOpSourceCode) const;
+    std::string InsertOpComment(std::string& tileOpSourceCode) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
     std::string GenTemplateParamsForPutUb2Gm() const;

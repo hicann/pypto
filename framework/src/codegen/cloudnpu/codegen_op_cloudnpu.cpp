@@ -774,9 +774,19 @@ TileTensor CodeGenOpCloudNPU::QueryTileTensorByIdx(int paramIdx) const
     return emptyTileTensor;
 }
 
-std::string CodeGenOpCloudNPU::InsertOpComment(const std::string& tileOpSourceCode) const
+std::string CodeGenOpCloudNPU::InsertOpComment(std::string& tileOpSourceCode) const
 {
     std::ostringstream os;
+
+    if (config::GetDebugOption<int64_t>(CFG_COMPILE_DBEUG_MODE) == CFG_DEBUG_ALL) {
+        tileOpSourceCode.erase(tileOpSourceCode.find_last_not_of(" \n\r\t") + 1);
+        // Add comment after op. e.g. [opmagic:10016]
+        os << " // [opMagic:" << originalOp.GetOpMagic() << "]\n";
+        tileOpSourceCode.append(os.str());
+        os.str("");
+    }
+
+    // Add comment before op
     for (auto& c : originalOp.GetCommentList()) {
         os << "/*" << c << "*/\n";
     }
