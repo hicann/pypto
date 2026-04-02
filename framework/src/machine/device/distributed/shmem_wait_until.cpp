@@ -42,7 +42,6 @@ inline bool SignalTileOp::PollCompleted() const
         return false;
     }
     if (resetSignal_) {
-        DEV_ERROR(DistributedErrorCode::NULLPTR, "expectedSum_=%d", expectedSum_);
         addr_[0] = 0;
     }
     return true;
