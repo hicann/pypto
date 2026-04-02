@@ -22,6 +22,8 @@
 #include "interface/function/function.h"
 #include "interface/interpreter/function.h"
 #include <float.h>
+#include <cmath>
+#include <utility>
 
 namespace npu::tile_fwk {
 
@@ -324,56 +326,85 @@ public:
         size_t zeroCount_ = 0;
     };
 
+private:
+    static void CompareScalarPair(
+        CompareResult& compareResult, int64_t linearIndex, double goldenValue, double outputValue)
+    {
+        compareResult.goldenMax_ = std::max(compareResult.goldenMax_, goldenValue);
+        compareResult.outputMax_ = std::max(compareResult.outputMax_, outputValue);
+        compareResult.goldenMin_ = std::min(compareResult.goldenMin_, goldenValue);
+        compareResult.outputMin_ = std::min(compareResult.outputMin_, outputValue);
+        compareResult.goldenSum_ += goldenValue;
+        compareResult.outputSum_ += outputValue;
+        const double output_abs = std::abs(outputValue);
+        const double golden_abs = std::abs(goldenValue);
+        const double output_golden_sub_abs = std::abs(outputValue - goldenValue);
+        compareResult.goldenAbsSum_ += golden_abs;
+        compareResult.outputAbsSum_ += output_abs;
+        if (output_abs <= 0) {
+            compareResult.outputZero_++;
+        }
+        if (golden_abs <= 0) {
+            compareResult.goldenZero_++;
+        }
+        if (!std::isfinite(outputValue)) {
+            compareResult.outputInfnan_++;
+        }
+        if (!std::isfinite(goldenValue)) {
+            compareResult.goldenInfnan_++;
+        }
+        if (!std::isfinite(output_golden_sub_abs)) {
+            compareResult.infnanCnt_++;
+        }
+        const double output_golden_abs_add = output_abs + golden_abs;
+        if (output_golden_abs_add <= 0) {
+            compareResult.AppendZero();
+            return;
+        }
+
+        const double relDiff = output_golden_sub_abs * 2 / output_golden_abs_add;
+        const double tol_attn = output_golden_abs_add * compareResult.GetRtol() / 2 + compareResult.GetAtol();
+        const double tol_fail = tol_attn * 128;
+        if (output_golden_sub_abs > tol_attn) {
+            compareResult.AppendError(
+                true, static_cast<size_t>(linearIndex), goldenValue, outputValue, output_golden_sub_abs, relDiff,
+                tol_attn);
+        }
+        if (output_golden_sub_abs > tol_fail) {
+            compareResult.AppendFail();
+        }
+    }
+
+    template <typename Leaf>
+    static void CompareDataRecursiveWithLeaf(
+        CompareResult& compareResult, size_t axis, int64_t goldenOffset, int64_t outputOffset,
+        const std::shared_ptr<LogicalTensorData>& goldenDataView,
+        const std::shared_ptr<LogicalTensorData>& outputDataView, Leaf&& leaf)
+    {
+        auto& validShape = goldenDataView->GetValidShape();
+        if (axis == validShape.size() - 1) {
+            leaf(compareResult, validShape[axis], outputOffset, goldenOffset, goldenDataView, outputDataView);
+        } else {
+            for (int i = 0; i < validShape[axis]; i++) {
+                int nGoldenOffset = goldenOffset + goldenDataView->GetData()->GetStride()[axis] * i;
+                int nOutputOffset = outputOffset + outputDataView->GetData()->GetStride()[axis] * i;
+                CompareDataRecursiveWithLeaf(
+                    compareResult, axis + 1, nGoldenOffset, nOutputOffset, goldenDataView, outputDataView,
+                    std::forward<Leaf>(leaf));
+            }
+        }
+    }
+
+public:
     template <typename DataType, typename T>
     static void CompareData(
         CompareResult& compareResult, size_t count, int64_t offset, const DataType* goldenValueList,
         const DataType* outputValueList)
     {
         for (size_t index = 0; index < count; index++) {
-            auto goldenValue = static_cast<T>(goldenValueList[index]);
-            auto outputValue = static_cast<T>(outputValueList[index]);
-            compareResult.goldenMax_ = std::max(compareResult.goldenMax_, static_cast<double>(goldenValue));
-            compareResult.outputMax_ = std::max(compareResult.outputMax_, static_cast<double>(outputValue));
-            compareResult.goldenMin_ = std::min(compareResult.goldenMin_, static_cast<double>(goldenValue));
-            compareResult.outputMin_ = std::min(compareResult.outputMin_, static_cast<double>(outputValue));
-            compareResult.goldenSum_ += goldenValue;
-            compareResult.outputSum_ += outputValue;
-            auto output_abs = abs(outputValue);
-            auto golden_abs = abs(goldenValue);
-            auto output_golden_sub_abs = abs(outputValue - goldenValue);
-            compareResult.goldenAbsSum_ += golden_abs;
-            compareResult.outputAbsSum_ += output_abs;
-            if (output_abs <= 0) {
-                compareResult.outputZero_++;
-            }
-            if (golden_abs <= 0) {
-                compareResult.goldenZero_++;
-            }
-            if (!std::isfinite(outputValue)) {
-                compareResult.outputInfnan_++;
-            }
-            if (!std::isfinite(goldenValue)) {
-                compareResult.goldenInfnan_++;
-            }
-            if (!std::isfinite(output_golden_sub_abs)) {
-                compareResult.infnanCnt_++;
-            }
-            auto output_golden_abs_add = output_abs + golden_abs;
-            if (output_golden_abs_add <= 0) {
-                compareResult.AppendZero();
-                continue;
-            }
-
-            auto relDiff = output_golden_sub_abs * 2 / output_golden_abs_add;
-            auto tol_attn = output_golden_abs_add * compareResult.GetRtol() / 2 + compareResult.GetAtol();
-            auto tol_fail = tol_attn * 128;
-            if (output_golden_sub_abs > tol_attn) {
-                compareResult.AppendError(
-                    true, offset + index, goldenValue, outputValue, output_golden_sub_abs, relDiff, tol_attn);
-            }
-            if (output_golden_sub_abs > tol_fail) {
-                compareResult.AppendFail();
-            }
+            const double goldenValue = static_cast<double>(static_cast<T>(goldenValueList[index]));
+            const double outputValue = static_cast<double>(static_cast<T>(outputValueList[index]));
+            CompareScalarPair(compareResult, offset + static_cast<int64_t>(index), goldenValue, outputValue);
         }
     }
 
@@ -383,19 +414,12 @@ public:
         const std::shared_ptr<LogicalTensorData>& goldenDataView,
         const std::shared_ptr<LogicalTensorData>& outputDataView)
     {
-        auto& validShape = goldenDataView->GetValidShape();
-        if (axis == validShape.size() - 1) {
-            CompareData<DataType, T>(
-                compareResult, validShape[axis], outputOffset, &goldenDataView->Get<DataType>(goldenOffset),
-                &outputDataView->Get<DataType>(outputOffset));
-        } else {
-            for (int i = 0; i < validShape[axis]; i++) {
-                int nGoldenOffset = goldenOffset + goldenDataView->GetData()->GetStride()[axis] * i;
-                int nOutputOffset = outputOffset + outputDataView->GetData()->GetStride()[axis] * i;
-                CompareDataRecursive<DataType, T>(
-                    compareResult, axis + 1, nGoldenOffset, nOutputOffset, goldenDataView, outputDataView);
-            }
-        }
+        CompareDataRecursiveWithLeaf(
+            compareResult, axis, goldenOffset, outputOffset, goldenDataView, outputDataView,
+            [](CompareResult& cr, size_t lastAxisLen, int64_t outOff, int64_t gOff,
+               const std::shared_ptr<LogicalTensorData>& gv, const std::shared_ptr<LogicalTensorData>& ov) {
+                CompareData<DataType, T>(cr, lastAxisLen, outOff, &gv->Get<DataType>(gOff), &ov->Get<DataType>(outOff));
+            });
     }
 
     template <typename DataType, typename T>
@@ -428,6 +452,11 @@ public:
     void WriteException();
 
 private:
+    static CompareResult CompareFp8TensorData(
+        const std::shared_ptr<LogicalTensorData>& goldenDataView,
+        const std::shared_ptr<LogicalTensorData>& outputDataView, DataType fp8Format, float rtol, float atol,
+        int errorCountThreshold = 0, int failNum = 0);
+
     void UpdateInterpreterCache();
     void Initialize(
         Function* entry, const std::vector<std::shared_ptr<LogicalTensorData>>& inputDataViewList,

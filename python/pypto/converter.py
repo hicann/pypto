@@ -171,7 +171,9 @@ def _dtype_from(dtype: 'torch.dtype') -> DataType:
 
 def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
     """
-    convert the input into a torch.dtype
+    Convert the input into a torch.dtype.
+    Dynamically checks for all FP8 support to ensure maximum compatibility
+    across different PyTorch versions (including older versions without FP8).
 
     Parameters
     ----------
@@ -181,7 +183,13 @@ def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
     Returns
     -------
     torch.dtype
-        The torch.dtype string.
+        The corresponding torch.dtype.
+
+    Raises
+    ------
+    ValueError
+        If the dtype is not supported or if a specific FP8 type is requested
+        but not available in the current PyTorch version.
     """
     import torch
 
@@ -201,9 +209,39 @@ def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
         DataType.DT_BOOL: torch.bool,
     }
 
+    fp8_mappings = [
+        (DataType.DT_FP8E4M3, 'float8_e4m3fn'),
+        (DataType.DT_FP8E5M2, 'float8_e5m2'),
+        (DataType.DT_FP8E8M0, 'float8_e8m0fnu'),
+    ]
+
+    for pto_dtype, attr_name in fp8_mappings:
+        torch_attr = getattr(torch, attr_name, None)
+        if torch_attr is not None:
+            _torch_dtype_dict[pto_dtype] = torch_attr
+
     torch_dtype = _torch_dtype_dict.get(dtype)
     if torch_dtype is None:
-        raise ValueError(f"Input pypto.DataType is not supported. Got {dtype}")
+        if dtype == DataType.DT_FP8E8M0:
+            raise ValueError(
+                f"DataType.DT_FP8E8M0 requires 'torch.float8_e8m0fnu', which is NOT available "
+                f"in your current PyTorch version ({torch.__version__}).\n"
+                "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
+            )
+        elif dtype == DataType.DT_FP8E4M3:
+            raise ValueError(
+                f"DataType.DT_FP8E4M3 requires 'torch.float8_e4m3fn', which is NOT available "
+                f"in your current PyTorch version ({torch.__version__}).\n"
+                "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
+            )
+        elif dtype == DataType.DT_FP8E5M2:
+            raise ValueError(
+                f"DataType.DT_FP8E5M2 requires 'torch.float8_e5m2', which is NOT available "
+                f"in your current PyTorch version ({torch.__version__}).\n"
+                "Action: Please upgrade your torch-npu / PyTorch to a version supporting this specific FP8 format."
+            )
+        else:
+            raise ValueError(f"Input pypto.DataType is not supported or mapped to None. Got {dtype}")
     return torch_dtype
 
 

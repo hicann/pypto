@@ -13,6 +13,10 @@
  * \brief
  */
 
+#include <cmath>
+#include <limits>
+#include <numeric>
+
 #include "flow_verifier.h"
 #include "tilefwk/tilefwk.h"
 #include "tilefwk/pypto_fwk_log.h"
@@ -22,6 +26,101 @@
 #include "interface/interpreter/verify_error.h"
 
 namespace npu::tile_fwk {
+
+namespace {
+
+// Scalar decode aligned with calculator/fp8_convert.cpp (E4M3, E5M2, E8M0).
+float DecodeFp8E4M3(uint8_t x)
+{
+    const int xi = static_cast<int>(x);
+    const float sign = (xi & 0x80) != 0 ? -1.0f : 1.0f;
+    const int expBits = (xi >> 3) & 0xF;
+    const int mantBits = xi & 0x7;
+    if (expBits == 0) {
+        return sign * (static_cast<float>(mantBits) / 8.0f) * (1.0f / 64.0f);
+    }
+    if (expBits >= 1 && expBits <= 14) {
+        const float expVal = static_cast<float>(expBits) - 7.0f;
+        const float mantVal = 1.0f + static_cast<float>(mantBits) / 8.0f;
+        return sign * std::pow(2.0f, expVal) * mantVal;
+    }
+    return sign * 240.0f;
+}
+
+float DecodeFp8E5M2(uint8_t x)
+{
+    const int xi = static_cast<int>(x);
+    const float sign = (xi & 0x80) != 0 ? -1.0f : 1.0f;
+    const int expBits = (xi >> 2) & 0x1F;
+    const int mantBits = xi & 0x3;
+    if (expBits == 0) {
+        return sign * (static_cast<float>(mantBits) / 4.0f) * (1.0f / 16384.0f);
+    }
+    if (expBits >= 1 && expBits <= 30) {
+        const float expVal = static_cast<float>(expBits) - 15.0f;
+        const float mantVal = 1.0f + static_cast<float>(mantBits) / 4.0f;
+        return sign * std::pow(2.0f, expVal) * mantVal;
+    }
+    if (mantBits == 0) {
+        return sign * std::numeric_limits<float>::infinity();
+    }
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+float DecodeFp8E8M0(uint8_t x)
+{
+    const int xi = static_cast<int>(x);
+    const float sign = (xi & 0x80) != 0 ? -1.0f : 1.0f;
+    const int expBits = xi & 0x7F;
+    const float expVal = static_cast<float>(expBits) - 63.0f;
+    return sign * std::pow(2.0f, expVal);
+}
+
+double Fp8StorageToDouble(uint8_t bits, DataType fmt)
+{
+    float v = 0.0f;
+    switch (fmt) {
+        case DT_FP8:
+        case DT_FP8E4M3:
+            v = DecodeFp8E4M3(bits);
+            break;
+        case DT_FP8E5M2:
+            v = DecodeFp8E5M2(bits);
+            break;
+        case DT_FP8E8M0:
+            v = DecodeFp8E8M0(bits);
+            break;
+        default:
+            ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, false);
+            break;
+    }
+    return static_cast<double>(v);
+}
+
+} // namespace
+
+FlowVerifier::CompareResult FlowVerifier::CompareFp8TensorData(
+    const std::shared_ptr<LogicalTensorData>& goldenDataView, const std::shared_ptr<LogicalTensorData>& outputDataView,
+    DataType fp8Format, float rtol, float atol, int errorCountThreshold, int failNum)
+{
+    auto& validShape = goldenDataView->GetValidShape();
+    const auto size = std::accumulate(validShape.begin(), validShape.end(), 1, std::multiplies<>());
+    CompareResult compareResult(size, rtol, atol, errorCountThreshold, failNum, validShape);
+    CompareDataRecursiveWithLeaf(
+        compareResult, 0, 0, 0, goldenDataView, outputDataView,
+        [&](CompareResult& cr, size_t lastCount, int64_t outOff, int64_t gOff,
+            const std::shared_ptr<LogicalTensorData>& gv, const std::shared_ptr<LogicalTensorData>& ov) {
+            const uint8_t* gp = &gv->Get<uint8_t>(gOff);
+            const uint8_t* op = &ov->Get<uint8_t>(outOff);
+            for (size_t i = 0; i < lastCount; i++) {
+                CompareScalarPair(
+                    cr, outOff + static_cast<int64_t>(i), Fp8StorageToDouble(gp[i], fp8Format),
+                    Fp8StorageToDouble(op[i], fp8Format));
+            }
+        });
+    compareResult.UpdateErrorCountThreshold();
+    return compareResult;
+}
 
 FlowVerifier::CompareResult FlowVerifier::VerifyResult(
     const std::shared_ptr<LogicalTensorData>& goldenDataView, const std::shared_ptr<LogicalTensorData>& outputDataView,
@@ -60,6 +159,11 @@ FlowVerifier::CompareResult FlowVerifier::VerifyResult(
             return CompareData<double, double>(goldenDataView, outputDataView, rtol, atol);
         case DT_BOOL:
             return CompareData<uint8_t, double>(goldenDataView, outputDataView, rtol, atol);
+        case DT_FP8:
+        case DT_FP8E4M3:
+        case DT_FP8E5M2:
+        case DT_FP8E8M0:
+            return CompareFp8TensorData(goldenDataView, outputDataView, goldenDataView->GetDataType(), rtol, atol);
         default:
             ASSERT(ExecuteOperationScene::INVALID_TENSOR_DTYPE, false);
             break;
