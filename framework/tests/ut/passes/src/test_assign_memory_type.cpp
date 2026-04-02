@@ -1458,6 +1458,62 @@ TEST_F(AssignMemoryTypeTest, TestMultiDataLoad2)
     MultiDataLoadCheck(func);
 }
 
+TEST_F(AssignMemoryTypeTest, TestMatmulL0COutputToL1ToL0A) {
+    /*
+     * Before:
+     *   A_MUL_B1(l0a_in, l0b_in) -> l0c_out1(MEM_L0C) -> L1_TO_L0A -> l0a_mid(MEM_L0A) -> A_MUL_B2 -> l0c_out2
+     *
+     * After:
+     *   A_MUL_B1 -> l0c_out1(MEM_L0C) -> OP_CONVERT(L0C->L1) -> tensorL1(MEM_L1) -> L1_TO_L0A -> l0a_mid(MEM_L0A) ->
+     * A_MUL_B2 -> l0c_out2
+     */
+    ComputationalGraphBuilder G;
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_16}, MemoryType::MEM_L0A, "l0a_in");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_16}, MemoryType::MEM_L0B, "l0b_in");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_16}, MemoryType::MEM_L0C, "l0c_out1");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_16}, MemoryType::MEM_L0A, "l0a_mid");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_16}, MemoryType::MEM_L0B, "l0b_in2");
+    G.AddTensor(DataType::DT_FP16, {NUM_16, NUM_16}, MemoryType::MEM_L0C, "l0c_out2");
+
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_in", "l0b_in"}, {"l0c_out1"}, "matmul1");
+    G.AddOp(Opcode::OP_L1_TO_L0A, {"l0c_out1"}, {"l0a_mid"}, "l1_to_l0a");
+    G.AddOp(Opcode::OP_A_MUL_B, {"l0a_mid", "l0b_in2"}, {"l0c_out2"}, "matmul2");
+
+    constexpr int producerScopeId = 42;
+    G.GetOp("matmul1")->SetScopeId(producerScopeId);
+
+    G.SetInCast({"l0a_in", "l0b_in", "l0b_in2"});
+    G.SetOutCast({"l0c_out2"});
+
+    Function *func = G.GetFunction();
+    size_t beforeOpCount = func->Operations().size();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+    auto opList = func->Operations();
+    int convertNum = 0;
+    bool foundL1ToL0A = false;
+    for (const auto &op : opList) {
+        if (op.GetOpcode() == Opcode::OP_CONVERT) {
+            convertNum++;
+            auto input = op.GetIOperands().front();
+            auto output = op.GetOOperands().front();
+            EXPECT_EQ(input->GetMemoryTypeOriginal(), MemoryType::MEM_L0C) << "convert input should be MEM_L0C";
+            EXPECT_EQ(output->GetMemoryTypeOriginal(), MemoryType::MEM_L1) << "convert output should be MEM_L1";
+            EXPECT_EQ(op.GetScopeId(), producerScopeId) << "convert should inherit scopeId from its producer (matmul1)";
+        }
+        if (op.GetOpcode() == Opcode::OP_L1_TO_L0A) {
+            foundL1ToL0A = true;
+            auto l1ToL0AInput = op.GetIOperands().front();
+            EXPECT_EQ(l1ToL0AInput->GetMemoryTypeOriginal(), MemoryType::MEM_L1)
+                << "L1_TO_L0A input should be reconnected to MEM_L1 tensor (convert output)";
+        }
+    }
+    EXPECT_EQ(convertNum, 1) << "should insert exactly 1 OP_CONVERT";
+    EXPECT_TRUE(foundL1ToL0A) << "L1_TO_L0A should still exist after insertion";
+    EXPECT_EQ(opList.size(), beforeOpCount + 1) << "should have exactly 1 more op after insertion";
+}
+
 TEST_F(AssignMemoryTypeTest, TestAmulBInputInvalidProducer) {
     ComputationalGraphBuilder G;
     Shape s{NUM_128, NUM_128};

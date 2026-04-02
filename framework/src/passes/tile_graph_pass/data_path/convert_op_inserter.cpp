@@ -598,6 +598,8 @@ void ConvertInserter::InsertConvertOps(Function& function)
         auto& convertOp = function.AddRawOperation(Opcode::OP_CONVERT, {c.input}, {c.output});
         convertOp.SetOpAttribute(std::make_shared<ConvertOpAttribute>(c.from, c.to));
         CreateMoveOpForConvert(convertOp);
+        auto producerScopeId = (*(c.input->GetProducers().begin()))->GetScopeId();
+        convertOp.SetScopeId(producerScopeId); // convert 是拷贝出操作，和producer一个子图
     }
 }
 
