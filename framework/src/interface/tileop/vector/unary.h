@@ -237,36 +237,36 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
         TORS(dstTile, dstTile, mask);
         SyncV();
         return;
+    } else {
+        using TileDefineDst =
+            pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, validH, validW>;
+        using HalfTileDefineSrc = pto::Tile<
+            pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor, validH,
+            validW>;
+        using B16TileDefineSrc = pto::Tile<
+            pto::TileType::Vec, int16_t, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor,
+            validH, validW>;
+
+        HalfTileDefineSrc bufferTile;
+        TileDefineDst dstTile;
+        B16TileDefineSrc srcTile;
+        pto::TASSIGN(bufferTile, buffer.GetAddr());
+        pto::TASSIGN(dstTile, dst.GetAddr());
+        pto::TASSIGN(srcTile, src.GetAddr());
+
+        if constexpr (std::is_same_v<SrcType, float>) {
+            using FP32TileDefineSrc =
+                pto::Tile<pto::TileType::Vec, float, tileSrcH, tileSrcW, pto::BLayout::RowMajor, validH, validW>;
+            FP32TileDefineSrc srcFP32;
+            HalfTileDefineSrc srcFP16;
+            pto::TASSIGN(srcFP32, src.GetAddr());
+            pto::TASSIGN(srcFP16, src.GetAddr());
+            pto::TCVT(srcFP16, srcFP32, pto::RoundMode::CAST_NONE);
+            SyncV();
+        }
+
+        IsFiniteComputeImpl<SrcType, HalfTileDefineSrc, true>(dstTile, srcTile, bufferTile);
     }
-
-    using TileDefineDst =
-        pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, validH, validW>;
-    using HalfTileDefineSrc = pto::Tile<
-        pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor, validH,
-        validW>;
-    using B16TileDefineSrc = pto::Tile<
-        pto::TileType::Vec, int16_t, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor,
-        validH, validW>;
-
-    HalfTileDefineSrc bufferTile;
-    TileDefineDst dstTile;
-    B16TileDefineSrc srcTile;
-    pto::TASSIGN(bufferTile, buffer.GetAddr());
-    pto::TASSIGN(dstTile, dst.GetAddr());
-    pto::TASSIGN(srcTile, src.GetAddr());
-
-    if constexpr (std::is_same_v<SrcType, float>) {
-        using FP32TileDefineSrc =
-            pto::Tile<pto::TileType::Vec, float, tileSrcH, tileSrcW, pto::BLayout::RowMajor, validH, validW>;
-        FP32TileDefineSrc srcFP32;
-        HalfTileDefineSrc srcFP16;
-        pto::TASSIGN(srcFP32, src.GetAddr());
-        pto::TASSIGN(srcFP16, src.GetAddr());
-        pto::TCVT(srcFP16, srcFP32, pto::RoundMode::CAST_NONE);
-        SyncV();
-    }
-
-    IsFiniteComputeImpl<SrcType, HalfTileDefineSrc, true>(dstTile, srcTile, bufferTile);
 }
 
 template <typename DstTileTensor, typename SrcTileTensor>
@@ -372,10 +372,10 @@ TILEOP void TIsFinite(DstTileTensor dst, SrcTileTensor src, BufferTileTensor buf
     using SrcType = typename SrcTileTensor::Type;
     if constexpr (IsIntegralType<SrcType>()) {
         TIsFinite4Integral(dst, src);
-        return;
+    } else {
+        TIsFinite4Floats(dst, src, buffer);
     }
 
-    TIsFinite4Floats(dst, src, buffer);
 }
 
 #define OP_TILE_OP_BRCB Tbrcb
