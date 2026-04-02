@@ -620,6 +620,24 @@ void DevAscendFunction::PopulateOperationEncodedContent(
     }
 }
 
+static int64_t MaybeRawTensorIndex(int64_t val, const OrderedSet<std::shared_ptr<RawTensor>>& rawList)
+{
+    const int64_t kRawTensorIndexBit = 1L << 62;
+    if ((val == -1) || !(val & kRawTensorIndexBit)) {
+        // concrete may -1, ignore this bad case
+        return val;
+    }
+
+    auto magic = val & (~kRawTensorIndexBit);
+    for (auto rawTensor : rawList) {
+        if (rawTensor->GetRawMagic() == magic) {
+            return rawList.GetIndex(rawTensor);
+        }
+    }
+
+    return val;
+}
+
 void DevAscendFunction::PopulateOneEncodedOpOperandsAndAttrs(
     size_t index, int& operanSize, int& staticAttributeSize, const SymbolicExpressionTable* expressionTable,
     const OrderedSet<Operation*>& callList, const OrderedSet<std::shared_ptr<LogicalTensor>>& tlist,
@@ -661,8 +679,7 @@ void DevAscendFunction::PopulateOneEncodedOpOperandsAndAttrs(
     for (size_t k = CALLOP_ARG_ATTR_BASE_INDEX; k < (size_t)opStaticAttrSize; k++) {
         int fillValue = 0;
         if (callArgs[k].IsImmediate()) {
-            auto it = rawTensorIndex.find(k);
-            fillValue = (it != rawTensorIndex.end()) ? it->second : callArgs[k].Concrete();
+            fillValue = MaybeRawTensorIndex(callArgs[k].Concrete(), rawList);
         } else {
             fillValue = expressionTable->LookupPrimaryExpressionIndex(callArgs[k]);
         }
