@@ -26,18 +26,18 @@ remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]) ->
 
 | 参数名 | 输入/输出 | 说明                                                                 |
 |--------|-----------|----------------------------------------------------------------------|
-| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-5维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-5维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other  | 输入      | 源操作数。 <br> 支持的类型为：Tensor、int、float。 <br> Tensor支持的数据类型为：DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16。 <br> 不支持空Tensor；Shape仅支持1-4维，并支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 
-返回输出Tensor，Shape为input和other广播后大小，Tensor的数据类型和input、other相同。
+返回输出Tensor，Shape为input和other广播后大小，数据类型和输入Tensor的数据类型相同。
 
 ## 约束说明
 
-1. input 和 other 类型相同；
+1. input 和 other 均为Tensor时数据类型相同；
 2. other 不支持0等特殊值；
-3. int32在数据范围超过\[-2^24, 2^24\]时不保证精度。
+3. 若输入Tensor的数据类型为DT_INT32，数据范围超过\[-2^24, 2^24\]时不保证精度。
 
 ## 调用示例
 

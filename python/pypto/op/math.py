@@ -367,7 +367,7 @@ def remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]
     Parameters
     ----------
     input : Tensor or Number
-        The first input tensor.
+        The first input tensor or a scalar.
     other : Tensor or Number
         The second input tensor or a scalar to remainder operation.
 

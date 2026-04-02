@@ -46,7 +46,7 @@ gather(input: Tensor, dim: int, index: Tensor) -> Tensor
 
 3. input.shape 的 dim 轴不可切，要求 viewshape\[dim\] \>= max\( input.shape\[dim\], index.shape\[dim\] \)，其余维度的 Shape 大小不做限制；
 
-4. TileShape的维度与 result 相同，用于切分 result 和 index，TileShape\[dim\] = viewshape\[dim\]，所有输入和输出的 TileShape 大小总和不能超过UB内存的大小。
+4. TileShape的维度与 index 相同，用于切分 input 和 index，input 的 dim 轴不可切，且所有输入和输出的 TileShape 大小总和不能超过UB内存的大小。
 
 ## 调用示例
 
