@@ -12,7 +12,7 @@
 计算自然对数的底数e的(input - other)次幂，其中other的尾轴或次尾轴的值为1，返回与输入input数据类型及形状相同的Tensor。
 
 $$
-e^(input - other)
+e^{(input - other)}
 $$
 
 ## 函数原型

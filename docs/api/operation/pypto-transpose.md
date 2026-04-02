@@ -34,9 +34,9 @@ transpose(input: Tensor, dim0: int, dim1: int) -> Tensor
 
 1. TileShape和输入input维度一致，用于切分input。
 
-2.输入维度dim0，dim1 必须大于0，小于input维度。
+2. 输入维度dim0，dim1 的取值范围为：-D ≤ dim ≤ D-1，其中D为input的维度数。
 
-3.当前Transpose实现存在约束，只能支持以下场景转置：
+3. 当前Transpose实现存在约束，只能支持以下场景转置：
 
 -   2维：任意轴
 -   3维：任意轴
