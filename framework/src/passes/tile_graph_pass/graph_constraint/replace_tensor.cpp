@@ -900,9 +900,25 @@ inline int64_t Pad(int64_t dim, int64_t padValue)
 }
 
 /**
+ * @brief 计算tensor的数据量
+ */
+int computeTensorSize(const LogicalTensorPtr& tensor) {
+    if (tensor == nullptr || tensor->shape.empty()) {
+        return 0;
+    }
+
+    int bytes = BytesOf(tensor->Datatype());
+    int tensorSize = bytes;
+    for (int dim : tensor->shape) {
+        tensorSize *= dim;
+    }
+    return tensorSize;
+}
+
+/**
  * @brief 为 UB 内存类型的输入插入拷贝序列 (UB → DDR → UB)
  */
-void ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input)
+Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input)
 {
     auto copyShape = input->GetShape();
     auto copyRawShape = input->tensor->GetDynRawShape();
@@ -929,12 +945,13 @@ void ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCopy
     copyInOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     needInsertCopyAssOp->ReplaceInput(copyInOutputPtr, input);
+    return SUCCESS;
 }
 
 /**
  * @brief 为 DDR 内存类型的输入插入拷贝序列 (DDR → UB → DDR)
  */
-void ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input)
+Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input)
 {
     auto copyShape = input->GetShape();
     auto copyRawShape = input->tensor->GetDynRawShape();
@@ -946,8 +963,10 @@ void ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertCop
     const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
     auto memType = copyInOutput.GetMemoryTypeOriginal();
     if ((memType == MemoryType::MEM_UB) && (copyInOutput.GetDataSize() > UB_SIZE_THRESHOLD)) {
-        APASS_LOG_ERROR_F(Elements::Tensor, "Tensor %d exceeds the UB size limit.", copyInOutput.magic);
-        return;
+        APASS_LOG_ERROR_F(Elements::Tensor, 
+                          "Tensor [%d] can not copy to UB, tensor size [%d] exceeds the UB size [%d] limit.", input->magic, 
+                          computeTensorSize(input), UB_SIZE_THRESHOLD);
+        return FAILED;
     }
     auto copyInOutputPtr = std::make_shared<LogicalTensor>(std::move(copyInOutput));
     if (memType == MemoryType::MEM_UB && !IsLastDim32BAligned(copyInOutputPtr)) {
@@ -979,19 +998,20 @@ void ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertCop
     copyOutOp.UpdateSubgraphID(needInsertCopyAssOp->GetSubgraphID());
 
     needInsertCopyAssOp->ReplaceInput(copyOutOutputPtr, input);
+    return SUCCESS;
 }
 
 /**
  * @brief 递归查找需要插入拷贝的 ASSEMBLE 操作
  */
-void ReplaceTensor::FindNeedToCopyAssemble(
+Status ReplaceTensor::FindNeedToCopyAssemble(
     std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op)
 {
     visitedAssOps.insert(op.GetOpMagic());
     auto assembleIn = op.GetIOperands()[0];
     auto producers = assembleIn->GetProducers();
     if ((!producers.empty()) && (*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) {
-        return;
+        return FAILED;
     }
     auto consumers = assembleIn->GetConsumers();
     bool sameAssembleOut = true;
@@ -1009,6 +1029,7 @@ void ReplaceTensor::FindNeedToCopyAssemble(
             }
         }
     }
+    return SUCCESS;
 }
 
 /**
@@ -1021,7 +1042,7 @@ void ReplaceTensor::FindNeedToCopyAssemble(
 
  * Tensor1 ---> Reshape ---> Assemble ---> Tensor2(可能造成CopyOut+Reshape+Assemble的一些场景性能损失)
  */
-void ReplaceTensor::InsertNeedCopy(Function& function)
+Status ReplaceTensor::InsertNeedCopy(Function& function)
 {
     std::unordered_set<int> visitedAssOps;
     std::unordered_set<Operation*> needInsertCopyAssOps;
@@ -1045,7 +1066,7 @@ void ReplaceTensor::InsertNeedCopy(Function& function)
                 }
             }
             for (auto consumerOp : consumerOps) {
-                if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE) {
+                if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE && consumerOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
                     needInsertCopyAssOps.insert(consumerOp);
                 }
             }
@@ -1060,15 +1081,20 @@ void ReplaceTensor::InsertNeedCopy(Function& function)
         if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
             InsertCopyUBOp(function, needInsertCopyAssOp, input);
         } else if (input->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-            InsertCopyDDROp(function, needInsertCopyAssOp, input);
+            if (InsertCopyDDROp(function, needInsertCopyAssOp, input) == FAILED) {
+                return FAILED;
+            }
         }
     }
+    return SUCCESS;
 }
 
 Status ReplaceTensor::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "===> Start ReplaceTensor.");
-    InsertNeedCopy(function);
+    if (InsertNeedCopy(function) == FAILED) {
+        return FAILED;
+    }
     auto tensorToOrderIndex = BuildTensorOrderIndexMap(function);
     UnionFind uf(tensorToOrderIndex);
     UniteTensor(function, uf);

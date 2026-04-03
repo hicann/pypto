@@ -667,8 +667,8 @@ TEST_F(ReplaceTensorTest, InsertAssembleCopyDDR)
     currFunctionPtr->outCasts_.push_back(output2);
 
     // 调用InsertAssembleCopy
-    ReplaceTensor commonOperationEliminate;
-    commonOperationEliminate.InsertNeedCopy(*currFunctionPtr);
+    ReplaceTensor testcase1;
+    testcase1.InsertNeedCopy(*currFunctionPtr);
 
     // 验证插入的拷贝序列
     int copyInNum = 0;
@@ -688,6 +688,59 @@ TEST_F(ReplaceTensorTest, InsertAssembleCopyDDR)
     EXPECT_EQ(assembleNum, 2) << "Should have 2 ASSEMBLE operations";
     EXPECT_EQ(copyInNum, 1) << "Should insert 1 COPY_IN operation";
     EXPECT_EQ(copyOutNum, 1) << "Should insert 1 COPY_OUT operation";
+}
+
+// ========== 测试用例：InsertAssembleCopy - DDR内存类型场景 ==========
+TEST_F(ReplaceTensorTest, InsertAssembleCopyDDRExceedUB)
+{
+    auto testFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "InsertAssembleCopyDDRExceedUB", "InsertAssembleCopyDDRExceedUB", nullptr);
+    EXPECT_TRUE(testFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("InsertAssembleCopyDDRExceedUB", testFunctionPtr);
+
+    // 创建共享输入tensor (DDR内存类型)
+    std::vector<int64_t> shape = {930, 64};
+    auto testInput = std::make_shared<LogicalTensor>(*testFunctionPtr, DT_FP32, shape);
+    testInput->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    // 创建多个输出tensor
+    auto output1 = std::make_shared<LogicalTensor>(*testFunctionPtr, DT_FP32, shape);
+    output1->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto output2 = std::make_shared<LogicalTensor>(*testFunctionPtr, DT_FP32, shape);
+    output2->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+
+    // 创建多个ASSEMBLE操作，共享同一个输入
+    auto& assemble1 = testFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {testInput}, {output1});
+    assemble1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& assemble2 = testFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {testInput}, {output2});
+    assemble2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    testFunctionPtr->inCasts_.push_back(testInput);
+    testFunctionPtr->outCasts_.push_back(output1);
+    testFunctionPtr->outCasts_.push_back(output2);
+
+    // 调用InsertAssembleCopy
+    ReplaceTensor testcast;
+    testcast.InsertNeedCopy(*testFunctionPtr);
+
+    // 验证插入的拷贝序列
+    int copyInNums = 0;
+    int copyOutNums = 0;
+    int assembleNums = 0;
+    for (const auto& op : testFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_COPY_IN) {
+            copyInNums++;
+        } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            assembleNums++;
+        } else if (op.GetOpcode() == Opcode::OP_COPY_OUT) {
+            copyOutNums++;
+        }
+    }
+
+    // 应该为1个ASSEMBLE操作插入拷贝序列（DDR→UB→DDR）
+    EXPECT_EQ(assembleNums, 2) << "Should have 2 ASSEMBLE operations";
+    EXPECT_EQ(copyInNums, 0) << "Should insert 1 COPY_IN operation";
+    EXPECT_EQ(copyOutNums, 0) << "Should insert 1 COPY_OUT operation";
 }
 
 // ========== 测试用例：InsertAssembleCopy - 单个ASSEMBLE不插入拷贝 ==========
@@ -843,6 +896,8 @@ TEST_F(ReplaceTensorTest, InsertNeedCopyViewReshapeCopyOut)
     EXPECT_EQ(copyInNumBer, kNumOne) << "Should not insert COPY_IN operation";
     EXPECT_EQ(copyOutNumBer, kNumZero) << "Should not insert COPY_OUT operation";
 }
+
+
 
 TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
 {
