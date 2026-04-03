@@ -41,6 +41,18 @@
 
 1. **检查张量格式**：确认张量格式为 ND 格式，确保数据格式符合规范。
 
+### INVALID_SHMEM_TENSOR
+
+1. **检查输入Shmem Tensor**：请根据报错信息确定原因，可能原因是ShmemTensor中没有合法的data或者signal Tensor。
+
+### INVALID_SHMEM_VIEW_PARAM
+
+1. **检查ShmemView接口参数**：请根据报错信息确定原因，可能原因是ShmemView传入shape或者offset信息不合法。
+
+### INVALID_OP_TYPE
+
+1. **检查ShmemWaitUntil**：请直接根据报错信息确定原因，可能原因是ShmemWaitUntil接口传入了不支持的比较类型。
+
 #### 0xA0006 INVALID_SHMEM_TENSOR
 
 1. **检查输入Shmem Tensor**：请根据报错信息确定原因，可能原因是ShmemTensor中没有合法的data或者signal Tensor。
@@ -117,4 +129,3 @@
 
 1. **检查运行时管理对象**：确保 AicoreManager等运行时依赖对象已正确初始化并传入。
 2. **查日志上下文**：参考 `docs\trouble_shooting\machine.md` 文件，打开DEBUG日志。
-

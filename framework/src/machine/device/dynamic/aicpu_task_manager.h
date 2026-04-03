@@ -171,7 +171,7 @@ private:
 
     ReadyCoreFunctionQueue *readyQueue_{nullptr};
 
-    npu::tile_fwk::Distributed::ShmemWaitUntil shmemWaitUntil_;
+    npu::tile_fwk::Distributed::ShmemWaitUntilImpl shmemWaitUntil_;
     DynDeviceTask *curDevTask_;
     DynFuncData *funcDataList_;
     Metrics* aicpuTaskStat_;

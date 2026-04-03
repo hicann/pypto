@@ -8,7 +8,7 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
- /*!
+/*!
  * \file moe_distributed_combine.cpp
  * \brief
  */
@@ -56,7 +56,7 @@ void MoeDistributedCombineValidateExpandX(
         << DataType2String(expandX.GetDataType());
 
     CHECK(expandX.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"expandX\" only supports ND, "
-        << "but got NZ";
+                                                                      << "but got NZ";
 }
 
 void MoeDistributedCombineValidateAssistInfoForCombine(const Tensor& assistInfoForCombine, const Tensor& expandX)
@@ -93,10 +93,10 @@ void MoeDistributedCombineValidateRecvCounts(const Tensor& recvCounts)
     CHECK(recvCountsSize == 1) << "The size of \"recvCounts\" must be 1, but recvCountsSize=" << recvCountsSize;
 
     CHECK(recvCounts.GetDataType() == DT_INT32) << "The data type of \"recvCounts\" only supports DT_INT32, but got "
-        << DataType2String(recvCounts.GetDataType());
+                                                << DataType2String(recvCounts.GetDataType());
 
     CHECK(recvCounts.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"recvCounts\" only "
-        << "supports ND, but got NZ";
+                                                                         << "supports ND, but got NZ";
 }
 
 void MoeDistributedCombineValidateExpertScales(const Tensor& expertScales)
@@ -115,13 +115,13 @@ void MoeDistributedCombineValidateExpertScales(const Tensor& expertScales)
     int32_t expertScalesCol = expertScales.GetShape(1);
     int32_t supportedExpertScalesCol = 8;
     CHECK(expertScalesCol == supportedExpertScalesCol) << "The second axis of \"expertScales\" only supports "
-        << supportedExpertScalesCol << ", but got " << expertScalesCol;
+                                                       << supportedExpertScalesCol << ", but got " << expertScalesCol;
 
     CHECK(expertScales.GetDataType() == DT_FP32) << "The data type of \"expertScales\" only supports DT_FP32, but got "
-        << DataType2String(expertScales.GetDataType());
+                                                 << DataType2String(expertScales.GetDataType());
 
     CHECK(expertScales.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"expertScales\" only "
-        << "supports ND, but got NZ";
+                                                                           << "supports ND, but got NZ";
 }
 
 void MoeDistributedCombineValidateOut(const Tensor& out, const Tensor& expertScales, const Tensor& expandX)
@@ -133,19 +133,19 @@ void MoeDistributedCombineValidateOut(const Tensor& out, const Tensor& expertSca
     int32_t outRow = out.GetShape(0);
     int32_t expertScalesRow = expertScales.GetShape(0);
     CHECK(outRow == expertScalesRow) << "The first axis of \"out\" must be consistent with that of \"expertScales\", "
-        << "but expertScalesRow=" << expertScalesRow << ", outRow=" << outRow;
+                                     << "but expertScalesRow=" << expertScalesRow << ", outRow=" << outRow;
 
     int32_t outCol = out.GetShape(1);
     int32_t expandXCol = expandX.GetShape(1);
     CHECK(outCol == expandXCol) << "The second axis of \"out\" must be consistent with that of \"expandX\", but "
-        << "expandXCol=" << expandXCol << ", outCol=" << outCol;
+                                << "expandXCol=" << expandXCol << ", outCol=" << outCol;
 
     CHECK(out.GetDataType() == expandX.GetDataType()) << "The data type of \"out\" must be consistent with that of "
         << "\"expandX\",  but the data type of \"expandX\" is "<< DataType2String(expandX.GetDataType()) << " and the "
         << "data type of \"out\" is " << DataType2String(out.GetDataType());
 
     CHECK(out.Format() == npu::tile_fwk::TileOpFormat::TILEOP_ND) << "The format of \"out\" only supports ND, but got "
-        << "NZ";
+                                                                  << "NZ";
 }
 
 void MoeDistributedCombineValidateGroup(const char* group)
@@ -169,7 +169,7 @@ void MoeDistributedCombineValidateMoeExpertNum(int32_t moeExpertNum)
 {
     int32_t supportedMoeExpertNum = 160;
     CHECK(moeExpertNum == supportedMoeExpertNum) << "moeExpertNum only supports " << supportedMoeExpertNum << ", but "
-        << "got " << moeExpertNum;
+                                                 << "got " << moeExpertNum;
 }
 
 void TiledMoeDistributedCombineSend(
@@ -285,7 +285,7 @@ void CreateShmemTensor(
     Program::GetInstance().GetTensorSlotManager()->TensorWrite(shmemTensor, SlotProperty::SHMEM_TENSOR);
     auto &op = function.AddOperation(Opcode::OP_BIND_TENSOR, {}, {shmemTensorInner});
     op.SetAttribute(OpAttributeKey::bindTensor, BindTensor(hcclGroupIndex, memType,
-        BytesOf(dataType) * std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int64_t>())));
+            BytesOf(dataType) * std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int64_t>())));
 }
 
 Tensor MoeDistributedCombineSend(
@@ -301,7 +301,7 @@ Tensor MoeDistributedCombineSend(
     auto& op = function.AddOperation(
         Opcode::OP_MOE_DISTRIBUTED_COMBINE_SEND,
         {in.GetStorage(), assistInfoForCombine.GetStorage(), recvCounts.GetStorage(), shmemData.GetStorage(),
-            shmemSignal.GetStorage()},
+         shmemSignal.GetStorage()},
         {out});
     MoeCombineAttr distOpAttr;
     distOpAttr.topK = topK;
@@ -392,52 +392,50 @@ void MoeDistributedCombine(const Tensor& expandX, const Tensor& assistInfoForCom
     }
 }
 
-void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts,
-    const Tensor& expertScales, const char* group, uint32_t epWorldSize, uint32_t moeExpertNum,
-    uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& out)
+void MoeDistributedCombineV2(
+    const Tensor& expandX, const Tensor& assistInfoForCombine, const Tensor& recvCounts, const Tensor& expertScales,
+    const char* group, uint32_t epWorldSize, uint32_t moeExpertNum, uint32_t sharedExpertNum,
+    uint32_t sharedExpertRankNum, Tensor& out)
 {
-    MoeDistributedCombineValidate(expandX, assistInfoForCombine, recvCounts, expertScales, group, epWorldSize,
-        moeExpertNum, sharedExpertNum, sharedExpertRankNum, out);
+    MoeDistributedCombineValidate(
+        expandX, assistInfoForCombine, recvCounts, expertScales, group, epWorldSize, moeExpertNum, sharedExpertNum,
+        sharedExpertRankNum, out);
 
     int32_t batchSize = expertScales.GetShape(0);
     int32_t topK = expertScales.GetShape(1);
     int32_t hiddenSize = expandX.GetShape(1);
 
-    Tensor shmemData;
-    Tensor shmemSignal;
-    LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
-        (void)index;
-        CreateShmemData(group, epWorldSize, expandX.GetDataType(), {1, batchSize * topK, hiddenSize}, shmemData);
-        CreateShmemSignal(group, shmemData, shmemSignal);
-    }
+    auto shmemTensor = CreateShmemTensor(group, epWorldSize, expandX.GetDataType(), {batchSize * topK, hiddenSize});
 
     SymbolicScalar recvCountsScalar = GetTensorData(recvCounts, {0});
     std::set<int> unrollList = {64, 32, 16, 8, 4, 2, 1};
-    LOOP("MoeDistributedCombineSend", FunctionType::DYNAMIC_LOOP, rowIndex, LoopRange(recvCountsScalar), unrollList) {
+    LOOP("MoeDistributedCombineSend", FunctionType::DYNAMIC_LOOP, rowIndex, LoopRange(recvCountsScalar), unrollList)
+    {
         SymbolicScalar rankId = GetTensorData(assistInfoForCombine, {rowIndex, 0});
         SymbolicScalar tokenId = GetTensorData(assistInfoForCombine, {rowIndex, 1});
         SymbolicScalar kOffset = GetTensorData(assistInfoForCombine, {rowIndex, 2});
 
         Tensor expandXTile = View(expandX, {1, hiddenSize}, {rowIndex, 0});
-        Tensor shmemDataTile = View(shmemData, {1, 1, 1, hiddenSize}, {rankId, 0, topK * tokenId + kOffset, 0});
+        auto shmemDataTile = ShmemView(shmemTensor, {1, hiddenSize}, {topK * tokenId + kOffset, 0});
         TileShape::Current().SetVecTile({1, hiddenSize});
         Tensor predToken(DT_INT32, {1, 1}, "sendPredToken");
-        Tensor shmemPutOut = ShmemPut(predToken, expandXTile, shmemDataTile);
+        Tensor shmemPutOut = ShmemPut(expandXTile, shmemDataTile, rankId, AtomicType::SET, predToken);
 
-        Tensor shmemSignalTile = View(shmemSignal, {1, 1, 1, 1, hiddenSize}, {rankId, 0, 0, tokenId, 0});
-        ShmemSignal(shmemPutOut, shmemSignalTile, AtomicType::ADD);
+        auto shmemSignalTile = ShmemView(shmemTensor, {1, hiddenSize}, {tokenId, 0});
+        ShmemSignal(shmemSignalTile, rankId, rankId, 1, AtomicType::ADD, shmemPutOut);
     }
 
     SymbolicScalar thisRank = GetHcclRankId(group);
-    LOOP("MoeDistributedCombineReceive", FunctionType::DYNAMIC_LOOP, tokenId, LoopRange(batchSize)) {
-        Tensor shmemSignalTile = View(shmemSignal, {1, 1, 1, 1, hiddenSize}, {thisRank, 0, 0, tokenId, 0});
+    LOOP("MoeDistributedCombineReceive", FunctionType::DYNAMIC_LOOP, tokenId, LoopRange(batchSize))
+    {
+        auto shmemSignalTile = ShmemView(shmemTensor, {1, hiddenSize}, {tokenId, 0});
         TileShape::Current().SetVecTile({1, hiddenSize});
         Tensor predToken(DT_INT32, {1, 1}, "receivePredToken");
-        Tensor waitUntilOut = WaitUntil(predToken, shmemSignalTile, topK);
+        Tensor waitUntilOut = ShmemWaitUntil(shmemSignalTile, thisRank, OpType::EQ, topK, true, predToken);
 
         TileShape::Current().SetVecTile({topK, hiddenSize});
-        Tensor shmemDataTile = View(shmemData, {1, 1, topK, hiddenSize}, {thisRank, 0, topK * tokenId, 0});
-        Tensor shmemGetOutFp16 = ShmemGet(waitUntilOut, shmemDataTile);
+        auto shmemDataTile = ShmemView(shmemTensor, {topK, hiddenSize}, {topK * tokenId, 0});
+        Tensor shmemGetOutFp16 = ShmemGet(shmemDataTile, thisRank, waitUntilOut);
 
         TileShape::Current().SetVecTile({topK / 2, hiddenSize});
         Tensor shmemGetOutFp32 = npu::tile_fwk::Cast(shmemGetOutFp16, DT_FP32);
@@ -456,4 +454,4 @@ void MoeDistributedCombineV2(const Tensor& expandX, const Tensor& assistInfoForC
     }
 }
 
-}   // namespace npu::tile_fwk::Distributed
+} // namespace npu::tile_fwk::Distributed

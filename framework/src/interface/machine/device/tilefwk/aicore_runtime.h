@@ -419,4 +419,6 @@ INLINE uint32_t GetTensorDataInt32(CoreFuncParam *ctx, uint64_t address) {
 #define RT_OPERATION_OP_ADD(dst, src0, src1, combineAxis, reverse)                  TAdd((dst), (src0), (src1));
 #define RT_OPERATION_OP_UB_COPY_OUT(dst, src, off0, off1)                           TStore((dst), (src), Coord2Dim((off0), (off1)));
 
+#define RUNTIME_GetHcclRankId(groupIndex) \
+    ((TileOp::CommContext *)(RuntimeGetStartArgs()->commContexts[groupIndex]))->rankId
 #endif // AST_RUNTIME_H

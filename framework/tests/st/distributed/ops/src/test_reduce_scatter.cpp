@@ -23,7 +23,7 @@
 namespace npu::tile_fwk {
 namespace Distributed {
 
-template<typename T>
+template <typename T>
 void TestReduceScatter(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 5;
@@ -34,22 +34,22 @@ void TestReduceScatter(OpTestParam& testParam, std::string& goldenDir)
     Tensor in(dType, {row, col}, "in");
     Tensor out(dType, {rowOut, col}, "out");
 
-    std::vector<T> inData = ReadToVector<T>(
-        goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
+    std::vector<T> inData =
+        ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", {row, col});
 
-    Shape shmemDataShape {1, rowOut, col};
-    FUNCTION("ShmemReduceScatter", {in}, {out}) {
+    Shape shmemDataShape{rowOut, col};
+    FUNCTION("ShmemReduceScatter", {in}, {out})
+    {
         DataType shmemDataType = in.GetDataType();
         shmemDataType = (shmemDataType == DT_BF16) || (shmemDataType == DT_FP16) ? DT_FP32 : shmemDataType;
-        Tensor shmemData;
-        Tensor shmemSignal;
-        LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, unused, LoopRange(1)) {
-            (void)unused;
-            CreateShmemData(testParam.group, testParam.rankSize, shmemDataType, shmemDataShape, shmemData);
-            CreateShmemSignal(testParam.group, shmemData, shmemSignal);
+        ShmemTensor shmemTensor;
+        LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1))
+        {
+            (void)index;
+            CreateShmemTensor(testParam.group, testParam.rankSize, shmemDataType, shmemDataShape, shmemTensor);
         }
         TileShape::Current().SetVecTile({tileRow, tileCol});
-        ReduceScatter(in, in, testParam.group, shmemData, shmemSignal, DistReduceType::DIST_REDUCE_ADD, out);
+        ReduceScatter(in, in, shmemTensor, DistReduceType::DIST_REDUCE_ADD, out);
     }
 
     ProgramData::GetInstance().AppendInputs({
@@ -60,7 +60,8 @@ void TestReduceScatter(OpTestParam& testParam, std::string& goldenDir)
     });
     RunTest();
     auto outPut = ProgramData::GetInstance().GetOutputData(0);
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_rank_", rowOut * col, outPut->GetDevPtr(), testParam));
+    EXPECT_TRUE(
+        CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_rank_", rowOut * col, outPut->GetDevPtr(), testParam));
 }
 
 template void TestReduceScatter<int32_t>(OpTestParam& testParam, std::string& goldenDir);

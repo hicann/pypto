@@ -25,23 +25,26 @@ constexpr uint16_t UB_BUFFER_BYTE_SIZE = 16 * 1024;
 constexpr uint16_t DTYPE_CAST_BYTE_SIZE = 256;
 constexpr uint16_t UB_ALIGN_SIZE = 32;
 
-LogicalTensorPtr View2DTile(const LogicalTensorPtr dummy, int32_t tileIndex, int32_t tileRowNum, int32_t tileColNum,
-    Function& function)
+LogicalTensorPtr View2DTile(
+    const LogicalTensorPtr dummy, int32_t tileIndex, int32_t tileRowNum, int32_t tileColNum, Function& function)
 {
     Shape dummyShape = dummy->shape;
-    ASSERT(DistributedErrorCode::DIVISION_BY_ZERO, (tileRowNum != 0) && (tileColNum != 0)) << "TileRowNum and tileColNum cannot be zero";
+    ASSERT(DistributedErrorCode::DIVISION_BY_ZERO, (tileRowNum != 0) && (tileColNum != 0))
+        << "TileRowNum and tileColNum cannot be zero";
     int32_t rowIndex = tileIndex / tileColNum;
     int32_t colIndex = tileIndex % tileColNum;
 
     int32_t baseRow = dummyShape[0] / tileRowNum;
     int32_t remRow = dummyShape[0] % tileRowNum;
     int32_t tileRowShape = rowIndex < remRow ? baseRow + 1 : baseRow;
-    int32_t tileRowOffset = rowIndex < remRow ? (rowIndex * tileRowShape) : remRow * (baseRow + 1) + (rowIndex - remRow) * baseRow;
+    int32_t tileRowOffset =
+        rowIndex < remRow ? (rowIndex * tileRowShape) : remRow * (baseRow + 1) + (rowIndex - remRow) * baseRow;
 
     int32_t baseCol = dummyShape[1] / tileColNum;
     int32_t remCol = dummyShape[1] % tileColNum;
     int32_t tileColShape = colIndex < remCol ? baseCol + 1 : baseCol;
-    int32_t tileColOffset = colIndex < remCol ? (colIndex * tileColShape) : remCol * (baseCol + 1) + (colIndex - remCol) * baseCol;
+    int32_t tileColOffset =
+        colIndex < remCol ? (colIndex * tileColShape) : remCol * (baseCol + 1) + (colIndex - remCol) * baseCol;
     return dummy->View(function, {tileRowShape, tileColShape}, {tileRowOffset, tileColOffset});
 }
 
@@ -67,8 +70,8 @@ LogicalTensorPtr View1DTile(const LogicalTensorPtr dummy, int32_t tileIndex, int
     return dummy->View(function, {1, 1}, {tileRowStart, tileColStart});
 }
 
-DummyTileFunc GetDummyTileFunc(const LogicalTensorPtr dummy, const LogicalTensorPtr shmemTensor, const VecTile& vecTile,
-    Function& function)
+DummyTileFunc GetDummyTileFunc(
+    const LogicalTensorPtr dummy, const LogicalTensorPtr shmemTensor, const VecTile& vecTile, Function& function)
 {
     int32_t totalRowShape = shmemTensor->shape[shmemTensor->shape.size() - 2];
     int32_t totalColShape = shmemTensor->shape[shmemTensor->shape.size() - 1];
@@ -97,7 +100,8 @@ DummyTileFunc GetDummyTileFunc(const LogicalTensorPtr dummy, const LogicalTensor
     };
 }
 
-void DfsTiling(const Shape& shmemTensorTileShape, Input& input, size_t curDim, uint32_t& tileIndex,
+void DfsTiling(
+    const Shape& shmemTensorTileShape, Input& input, size_t curDim, uint32_t& tileIndex,
     std::function<void(uint32_t, Input&)> addTileOp)
 {
     std::vector<int64_t>& tileShape = input.tileInfo.shape;
@@ -115,8 +119,8 @@ void DfsTiling(const Shape& shmemTensorTileShape, Input& input, size_t curDim, u
     }
 }
 
-void DfsTiling(const VecTile& vecTile, const LogicalTensorPtr shmemTensor,
-    std::function<void(uint32_t, Input&)> addTileOp)
+void DfsTiling(
+    const VecTile& vecTile, const LogicalTensorPtr shmemTensor, std::function<void(uint32_t, Input&)> addTileOp)
 {
     size_t dim = shmemTensor->shape.size();
     Shape shmemTensorTileShape = shmemTensor->shape;
@@ -130,10 +134,7 @@ void DfsTiling(const VecTile& vecTile, const LogicalTensorPtr shmemTensor,
     DfsTiling(shmemTensorTileShape, input, shmemTensorStartDim, tileIndex, addTileOp);
 }
 
-bool shouldConvertDtype(DataType ubType, DataType castType)
-{
-    return ubType != castType;
-}
+bool shouldConvertDtype(DataType ubType, DataType castType) { return ubType != castType; }
 
 Shape GetCopyBufferShape(DataType nonShmemDtype, DataType shmemDtype, Shape tileShape)
 {
@@ -156,7 +157,8 @@ Shape GetCopyBufferShape(DataType nonShmemDtype, DataType shmemDtype, Shape tile
 }
 
 LogicalTensorPtr CreateAdaptiveUbTensor(
-    Function &function, const Shape &shape, DataType ubType, DataType castType, bool gm2Ub = false) {
+    Function& function, const Shape& shape, DataType ubType, DataType castType, bool gm2Ub = false)
+{
     Shape ubShape = {0};
     int64_t ubLen = shape[0] * AlignUp(shape[1] * BytesOf(ubType), UB_ALIGN_SIZE) / BytesOf(ubType);
     if (!shouldConvertDtype(ubType, castType) && !gm2Ub) {
@@ -172,8 +174,8 @@ LogicalTensorPtr CreateAdaptiveUbTensor(
     return std::make_shared<LogicalTensor>(function, ubType, ubShape);
 }
 
-std::pair<Shape, Offset> GetNonShmemDataTileShapeAndOffset(const Shape& shmemDataTileShape,
-    const Offset& shmemDataTileOffset, size_t nonShmemDataDim)
+std::pair<Shape, Offset> GetNonShmemDataTileShapeAndOffset(
+    const Shape& shmemDataTileShape, const Offset& shmemDataTileOffset, size_t nonShmemDataDim)
 {
     Shape nonShmemTileShape(nonShmemDataDim);
     Offset nonShmemOffset(nonShmemDataDim);
@@ -184,12 +186,14 @@ std::pair<Shape, Offset> GetNonShmemDataTileShapeAndOffset(const Shape& shmemDat
 }
 } // namespace
 
-void TiledShmemPut(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemPut(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 3UL) << "TiledShmemPut iOperand size is not equal to 3";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemPut oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 3UL)
+        << "TiledShmemPut iOperand size is not equal to 3";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemPut oOperand size is not equal to 1";
     auto predToken = iOperand[0];
     auto in = iOperand[1];
     auto shmemData = iOperand[2];
@@ -200,68 +204,74 @@ void TiledShmemPut(Function& function, const TileShape& tileShape,
     DfsTiling(tileShape.GetVecTile(), shmemData, [&](uint32_t tileIndex, Input& input) {
         Shape shmemDataTileShape = input.tileInfo.shape;
         Offset shmemDataTileOffset = input.tileInfo.offset;
-        auto [nonShmemDataTileShape, nonShmemDataTileOffset] = GetNonShmemDataTileShapeAndOffset(shmemDataTileShape,
-            shmemDataTileOffset, in->shape.size());
+        auto [nonShmemDataTileShape, nonShmemDataTileOffset] =
+            GetNonShmemDataTileShapeAndOffset(shmemDataTileShape, shmemDataTileOffset, in->shape.size());
         auto inTile = in->View(function, nonShmemDataTileShape, nonShmemDataTileOffset);
         auto shmemDataTile = shmemData->View(function, shmemDataTileShape, shmemDataTileOffset);
         auto predTokenTile = predTokenTileFunc(tileIndex);
         auto outTile = outTileFunc(tileIndex);
         auto copyBufferShape = GetCopyBufferShape(inTile->Datatype(), shmemDataTile->Datatype(), nonShmemDataTileShape);
-        auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, inTile->Datatype(),
-            shmemDataTile->Datatype());
+        auto ubTensor =
+            CreateAdaptiveUbTensor(function, copyBufferShape, inTile->Datatype(), shmemDataTile->Datatype());
 
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_PUT, {predTokenTile, inTile, shmemDataTile},
-            {outTile, ubTensor});
+        auto& tileOp =
+            function.AddOperation(Opcode::OP_SHMEM_PUT, {predTokenTile, inTile, shmemDataTile}, {outTile, ubTensor});
         ShmemPutAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.copyBufferShape = copyBufferShape;
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
     });
 }
 
-void TiledShmemPutUB2GM(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemPutUB2GM(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 3UL) << "TiledShmemPut iOperand size is not equal to 3";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemPut oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 3UL)
+        << "TiledShmemPut iOperand size is not equal to 3";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemPut oOperand size is not equal to 1";
     auto in = iOperand[0];
     auto shmemData = iOperand[1];
     auto barrierDummy = iOperand[2]; // operand 2
     auto dummy = oOperand[0];
-    
+
     DummyTileFunc barrierDummyTileFunc = GetDummyTileFunc(barrierDummy, shmemData, tileShape.GetVecTile(), function);
     DummyTileFunc dummyTileFunc = GetDummyTileFunc(dummy, shmemData, tileShape.GetVecTile(), function);
     DfsTiling(tileShape.GetVecTile(), shmemData, [&](uint32_t tileIndex, Input& input) {
         Shape shmemDataTileShape = input.tileInfo.shape;
         Offset shmemDataTileOffset = input.tileInfo.offset;
-        auto [nonShmemDataTileShape, nonShmemDataTileOffset] = GetNonShmemDataTileShapeAndOffset(shmemDataTileShape,
-            shmemDataTileOffset, in->shape.size());
+        auto [nonShmemDataTileShape, nonShmemDataTileOffset] =
+            GetNonShmemDataTileShapeAndOffset(shmemDataTileShape, shmemDataTileOffset, in->shape.size());
         auto inTile = in->View(function, nonShmemDataTileShape, nonShmemDataTileOffset);
         auto shmemDataTile = shmemData->View(function, shmemDataTileShape, shmemDataTileOffset);
         auto barrierDummyTile = barrierDummyTileFunc(tileIndex);
         auto dummyTile = dummyTileFunc(tileIndex);
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_PUT_UB2GM, {inTile, shmemDataTile, barrierDummyTile},
-            {dummyTile});
+        auto& tileOp =
+            function.AddOperation(Opcode::OP_SHMEM_PUT_UB2GM, {inTile, shmemDataTile, barrierDummyTile}, {dummyTile});
         ShmemPutAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
     });
 }
 
-void TiledShmemSignal(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemSignal(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL) << "TiledShmemSignal iOperand size is not equal to 2";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemSignal oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL)
+        << "TiledShmemSignal iOperand size is not equal to 2";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemSignal oOperand size is not equal to 1";
     auto predToken = iOperand[0];
     auto shmemSignal = iOperand[1];
     auto out = oOperand[0];
 
     DummyTileFunc predTokenTileFunc = GetDummyTileFunc(predToken, shmemSignal, tileShape.GetVecTile(), function);
     DummyTileFunc outTileFunc = GetDummyTileFunc(out, shmemSignal, tileShape.GetVecTile(), function);
-    DfsTiling(tileShape.GetVecTile(), shmemSignal, [&](uint32_t tileIndex, Input& input){
+    DfsTiling(tileShape.GetVecTile(), shmemSignal, [&](uint32_t tileIndex, Input& input) {
         auto predTokenTile = predTokenTileFunc(tileIndex);
         std::vector<int64_t>& shmemSignalTileShape = input.tileInfo.shape;
         std::vector<int64_t>& shmemSignalTileOffset = input.tileInfo.offset;
@@ -269,24 +279,27 @@ void TiledShmemSignal(Function& function, const TileShape& tileShape,
         auto outTile = outTileFunc(tileIndex);
         auto ubTensor = std::make_shared<LogicalTensor>(function, shmemSignal->Datatype(), Shape{SHMEM_SIGNAL_STRIDE});
 
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_SIGNAL, {predTokenTile, shmemSignalTile},
-            {outTile, ubTensor});
+        auto& tileOp =
+            function.AddOperation(Opcode::OP_SHMEM_SIGNAL, {predTokenTile, shmemSignalTile}, {outTile, ubTensor});
 
         ShmemSignalAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.tileRowShape = tileShape.GetVecTile()[0];
         distOpAttr.tileColShape = tileShape.GetVecTile()[1];
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
         tileOp.SetAttr(OpAttributeKey::dontTouch, true);
     });
 }
 
-void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemWaitUntil(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL) << "TiledShmemWaitUntil iOperand size is not equal to 2";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemWaitUntil oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL)
+        << "TiledShmemWaitUntil iOperand size is not equal to 2";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemWaitUntil oOperand size is not equal to 1";
     auto predToken = iOperand[0];
     auto shmemSignal = iOperand[1];
     auto out = oOperand[0];
@@ -305,22 +318,23 @@ void TiledShmemWaitUntil(Function& function, const TileShape& tileShape,
 
         auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_WAIT_UNTIL, {predTokenTile, shmemSignalTile}, {outTile});
         tileNumOfWaitUntil++;
-        ASSERT(DistributedErrorCode::TILE_NUM_EXCEED_LIMIT, tileNumOfWaitUntil <= MAX_TILE_NUM) <<
-            "WaitUntil tile count exceeds the maximum allowed value: " << std::to_string(MAX_TILE_NUM);
         ShmemWaitUntilAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.tileRowShape = tileRowShape;
         distOpAttr.tileColShape = tileColShape;
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
     });
 }
 
-void TiledShmemGet(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemGet(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL) << "TiledShmemGet iOperand size is not equal to 2";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemGet oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL)
+        << "TiledShmemGet iOperand size is not equal to 2";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemGet oOperand size is not equal to 1";
     auto predToken = iOperand[0];
     auto shmemData = iOperand[1];
     auto out = oOperand[0];
@@ -331,8 +345,8 @@ void TiledShmemGet(Function& function, const TileShape& tileShape,
         std::vector<int64_t>& shmemDataTileShape = input.tileInfo.shape;
         std::vector<int64_t>& shmemDataTileOffset = input.tileInfo.offset;
         auto shmemDataTile = shmemData->View(function, shmemDataTileShape, shmemDataTileOffset);
-        auto [nonShmemDataTileShape, nonShmemDataTileOffset] = GetNonShmemDataTileShapeAndOffset(shmemDataTileShape,
-            shmemDataTileOffset, out->shape.size());
+        auto [nonShmemDataTileShape, nonShmemDataTileOffset] =
+            GetNonShmemDataTileShapeAndOffset(shmemDataTileShape, shmemDataTileOffset, out->shape.size());
         auto outTile = out->View(function, nonShmemDataTileShape, nonShmemDataTileOffset);
         auto copyBufferShape = GetCopyBufferShape(out->Datatype(), shmemDataTile->Datatype(), nonShmemDataTileShape);
         auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, out->Datatype(), shmemDataTile->Datatype());
@@ -343,15 +357,18 @@ void TiledShmemGet(Function& function, const TileShape& tileShape,
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.copyBufferShape = copyBufferShape;
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+        tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
     });
 }
 
-void TiledShmemGetGM2UB(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemGetGM2UB(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL) << "TiledShmemGetGM2UB iOperand size is not equal to 2";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemGetGM2UB oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL)
+        << "TiledShmemGetGM2UB iOperand size is not equal to 2";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemGetGM2UB oOperand size is not equal to 1";
     auto dummy = iOperand[0];
     auto shmemData = iOperand[1];
     auto outUb = oOperand[0];
@@ -363,61 +380,68 @@ void TiledShmemGetGM2UB(Function& function, const TileShape& tileShape,
         Shape shmemDataTileShape = input.tileInfo.shape;
         Offset shmemDataTileOffset = input.tileInfo.offset;
         auto shmemDataTile = shmemData->View(function, shmemDataTileShape, shmemDataTileOffset);
-        auto [nonShmemDataTileShape, nonShmemDataTileOffset] = GetNonShmemDataTileShapeAndOffset(shmemDataTileShape,
-            shmemDataTileOffset, outUb->shape.size());
+        auto [nonShmemDataTileShape, nonShmemDataTileOffset] =
+            GetNonShmemDataTileShapeAndOffset(shmemDataTileShape, shmemDataTileOffset, outUb->shape.size());
         auto outUbTile = outUb->View(function, nonShmemDataTileShape, nonShmemDataTileOffset);
-        auto copyBufferShape = {outUbTile->shape[0],
+        auto copyBufferShape = {
+            outUbTile->shape[0],
             static_cast<int64_t>(
                 AlignUp(outUbTile->shape[1] * BytesOf(outUb->Datatype()), UB_ALIGN_SIZE) / BytesOf(outUb->Datatype()))};
-        auto ubTensor = CreateAdaptiveUbTensor(function, copyBufferShape, outUb->Datatype(), shmemDataTile->Datatype(), true);
-        auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_GET_GM2UB, {dummyTile, shmemDataTile}, {outUbTile, ubTensor});
+        auto ubTensor =
+            CreateAdaptiveUbTensor(function, copyBufferShape, outUb->Datatype(), shmemDataTile->Datatype(), true);
+        auto& tileOp =
+            function.AddOperation(Opcode::OP_SHMEM_GET_GM2UB, {dummyTile, shmemDataTile}, {outUbTile, ubTensor});
 
         ShmemGetAttr distOpAttr;
         op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
         distOpAttr.copyBufferShape = copyBufferShape;
         tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
-        tileOp.SetOpAttribute(
-            std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_UB,
-            OpImmediate::Specified({shmemDataTile->shape[2], shmemDataTile->shape[3]}), OpImmediate::Specified({outUb->shape[0], outUb->shape[1]}),
-            OpImmediate::Specified(std::vector<SymbolicScalar>{shmemDataTile->dynValidShape_[2], shmemDataTile->dynValidShape_[3]})));
+        tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
+        tileOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified(Shape(outUb->shape.size(), 0)), MEM_UB, OpImmediate::Specified(shmemDataTile->shape),
+            OpImmediate::Specified(outUb->shape), OpImmediate::Specified(shmemDataTile->dynValidShape_)));
     });
 }
 
-void TiledShmemSet(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemSet(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
     (void)op;
     (void)tileShape;
 
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL) << "TiledShmemSet iOperand size is not equal to 2";
-    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL) << "TiledShmemSet oOperand size is not equal to 1";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, iOperand.size() == 2UL)
+        << "TiledShmemSet iOperand size is not equal to 2";
+    ASSERT(DistributedErrorCode::INVALID_OPERAND_NUM, oOperand.size() == 1UL)
+        << "TiledShmemSet oOperand size is not equal to 1";
     auto predToken = iOperand[0];
     auto shmemTensor = iOperand[1];
     auto out = oOperand[0];
 
-    ASSERT(DistributedErrorCode::INVALID_ALIGNMENT, UB_BUFFER_BYTE_SIZE % REPEAT_BYTE == 0) << "UB_BUFFER_BYTE_SIZE must be a multiple of 256, but got "
-        << UB_BUFFER_BYTE_SIZE;
-    Shape bufferShape{static_cast<int64_t>(UB_BUFFER_BYTE_SIZE / BytesOf(shmemTensor->Datatype()))};
-    auto buffer = std::make_shared<LogicalTensor>(function, shmemTensor->Datatype(), bufferShape);
-    auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_SET, {predToken, shmemTensor}, {out, buffer});
+    ASSERT(DistributedErrorCode::INVALID_ALIGNMENT, UB_BUFFER_BYTE_SIZE % REPEAT_BYTE == 0)
+        << "UB_BUFFER_BYTE_SIZE must be a multiple of 256, but got " << UB_BUFFER_BYTE_SIZE;
     ShmemSetAttr distOpAttr;
     op.GetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+    uint32_t bufferSize = distOpAttr.isSetData ? UB_BUFFER_BYTE_SIZE : SHMEM_SIZE_ALIGN;
+    Shape bufferShape{static_cast<int64_t>(bufferSize / BytesOf(shmemTensor->Datatype()))};
+    auto buffer = std::make_shared<LogicalTensor>(function, shmemTensor->Datatype(), bufferShape);
+    auto& tileOp = function.AddOperation(Opcode::OP_SHMEM_SET, {predToken, shmemTensor}, {out, buffer});
     distOpAttr.setBufferShape = bufferShape;
     tileOp.SetAttr(OpAttributeKey::distOpAttr, distOpAttr);
+    tileOp.SetAttr(OpAttributeKey::ownerRank, distOpAttr.ownerRank);
 }
 
-void TiledShmemBindTensor(Function& function, const TileShape& tileShape,
-    const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
+void TiledShmemBindTensor(
+    Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
 {
     (void)iOperand;
     (void)tileShape;
-    auto &oper = function.AddOperation(Opcode::OP_BIND_TENSOR, {}, oOperand);
+    auto& oper = function.AddOperation(Opcode::OP_BIND_TENSOR, {}, oOperand);
     SymbolicScalar bindTensor;
     if (op.HasAttr(OpAttributeKey::bindTensor)) {
         bindTensor = op.GetSymbolicScalarAttribute(OpAttributeKey::bindTensor);
         oper.SetAttribute(OpAttributeKey::bindTensor, bindTensor);
     }
 }
-}   // namespace npu::tile_fwk::Distributed
+} // namespace npu::tile_fwk::Distributed

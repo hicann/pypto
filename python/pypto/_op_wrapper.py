@@ -15,11 +15,11 @@ from . import pypto_impl
 from ._element import Element
 from ._utils import clear_source_location, set_source_location
 from .symbolic_scalar import SymbolicScalar
-from .tensor import Tensor
+from .tensor import Tensor, ShmemTensor
 
 
 def _to_base(arg):
-    if isinstance(arg, (Tensor, Element, SymbolicScalar)):
+    if isinstance(arg, (Tensor, Element, SymbolicScalar, ShmemTensor)):
         return arg.base()
     elif isinstance(arg, (list, tuple)):
         return [_to_base(a) for a in arg]
@@ -32,6 +32,8 @@ def _to_base(arg):
 def _from_base(out):
     if isinstance(out, pypto_impl.Tensor):
         return Tensor.from_base(out)
+    elif isinstance(out, pypto_impl.ShmemTensor):
+        return ShmemTensor.from_base(out)
     elif isinstance(out, pypto_impl.SymbolicScalar):
         return SymbolicScalar.from_base(out)
     elif isinstance(out, (list, tuple)):

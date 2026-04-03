@@ -23,7 +23,7 @@
 namespace npu::tile_fwk {
 namespace Distributed {
 
-template<typename T>
+template <typename T>
 void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
 {
     constexpr size_t paramsSize = 5;
@@ -31,45 +31,40 @@ void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
 
     DataType dType = GetDataTypeNum(typeNum);
 
-    int32_t outSize = row * col * testParam.rankSize;
-
     Shape shape{row, col};
     Shape outShape{testParam.rankSize * row, col};
     Tensor in(dType, shape, "in");
     Tensor out(dType, outShape, "out");
 
-    std::vector<T> inPtr = ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
-    
-    Shape shmemDataShape{testParam.rankSize, row, col};
-    FUNCTION("ALLGATHER", {in}, {out}) {
+    std::vector<T> inPtr =
+        ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
+
+    Shape shmemDataShape{testParam.rankSize * row, col};
+    FUNCTION("ALLGATHER", {in}, {out})
+    {
         TileShape::Current().SetVecTile({tileRow, tileCol});
-        Tensor shmemData;
-        Tensor shmemSignal;
-        LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1)) {
+        ShmemTensor shmemTensor;
+        LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1))
+        {
             (void)index;
-            CreateShmemData(testParam.group, testParam.rankSize, dType, shmemDataShape, shmemData);
-            CreateShmemSignal(testParam.group, shmemData, shmemSignal);
+            CreateShmemTensor(testParam.group, testParam.rankSize, dType, shmemDataShape, shmemTensor);
         }
-        AllGather(in, in, testParam.group, shmemData, shmemSignal, out);
+        AllGather(in, in, shmemTensor, out);
     }
 
-    ProgramData::GetInstance().AppendInputs({
-        RawTensorData::CreateTensor<T>(in, inPtr)
-    });
-    ProgramData::GetInstance().AppendOutputs({
-        RawTensorData::CreateTensorZero(out)
-    });
+    ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<T>(in, inPtr)});
+    ProgramData::GetInstance().AppendOutputs({RawTensorData::CreateTensorZero(out)});
 
     RunTest();
     auto outPtr = ProgramData::GetInstance().GetOutputData(0)->GetDevPtr();
+    int32_t outSize = row * col * testParam.rankSize;
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(dType, goldenDir + "/output_rank_", outSize, outPtr, testParam));
-
 }
 
-template void TestAllGather<int32_t>(OpTestParam &testParam, std::string& goldenDir);
-template void TestAllGather<float>(OpTestParam &testParam, std::string& goldenDir);
-template void TestAllGather<float16>(OpTestParam &testParam, std::string& goldenDir);
-template void TestAllGather<bfloat16>(OpTestParam &testParam, std::string& goldenDir);
+template void TestAllGather<int32_t>(OpTestParam& testParam, std::string& goldenDir);
+template void TestAllGather<float>(OpTestParam& testParam, std::string& goldenDir);
+template void TestAllGather<float16>(OpTestParam& testParam, std::string& goldenDir);
+template void TestAllGather<bfloat16>(OpTestParam& testParam, std::string& goldenDir);
 
 } // namespace Distributed
 } // namespace npu::tile_fwk

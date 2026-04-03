@@ -956,3 +956,17 @@ class Tensor:
         assert self.dim == len(key), f"rank not match, expect {self.dim}, but got {len(key)}"
         key = self._negative_index_to_positive(key, self.shape)
         return key
+
+
+class ShmemTensor:
+    def __init__(self):
+        self._base = pypto_impl.ShmemTensor()
+
+    @classmethod
+    def from_base(cls, base: pypto_impl.ShmemTensor) -> 'ShmemTensor':
+        obj = cls.__new__(cls)
+        obj._base = base
+        return obj
+
+    def base(self) -> pypto_impl.ShmemTensor:
+        return self._base

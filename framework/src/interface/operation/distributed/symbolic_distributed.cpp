@@ -21,20 +21,22 @@
 #include "tilefwk/comm_group_recorder.h"
 
 namespace npu::tile_fwk {
-SymbolicScalar GetHcclRankId(const std::string &groupName) {
-    int32_t hcclGroupIndex = static_cast<int32_t>(
-        Distributed::CommGroupRecorder::GetInstance().Input(std::string(groupName)));
+SymbolicScalar GetHcclRankId(const std::string& groupName)
+{
+    int32_t hcclGroupIndex =
+        static_cast<int32_t>(Distributed::CommGroupRecorder::GetInstance().Input(std::string(groupName)));
     std::string name = SymbolHandler::GetNameByHandlerId(SymbolHandlerId::GetHcclRankId);
     name = AddRuntimePrefix(name);
     SymbolicScalar getHcclRankId(name);
     return getHcclRankId(hcclGroupIndex);
 }
 
-SymbolicScalar BindTensor(uint64_t groupIndex, uint64_t memType, uint64_t size) {
+SymbolicScalar BindTensor(uint64_t groupIndex, uint64_t memType, uint64_t size, uint64_t maxTileNum)
+{
     std::string name = SymbolHandler::GetNameByHandlerId(SymbolHandlerId::BindTensor);
     name = AddRuntimePrefix(name);
     SymbolicScalar bindTensor(name);
     static uint64_t index = 0;
-    return bindTensor(groupIndex, memType, size, index++);
+    return bindTensor(groupIndex, memType, size, maxTileNum, index++);
 }
-}
+} // namespace npu::tile_fwk

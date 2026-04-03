@@ -27,6 +27,9 @@ enum class DistributedErrorCode : uint32_t {
     INVALID_TENSOR_DTYPE = 0xA0004,
     INVALID_TENSOR_FORMAT = 0xA0005,
     INVALID_OPERAND_NUM = 0xA0006,
+    INVALID_SHMEM_TENSOR = 0xA0007,
+    INVALID_SHMEM_VIEW_PARAM = 0xA0008,
+    INVALID_OP_TYPE = 0xA0009,
 
     // FA1xxx: 配置错误
     INVALID_TILE_DIM = 0xA1000,
@@ -46,4 +49,4 @@ enum class DistributedErrorCode : uint32_t {
     INVALID_GROUP_INDEX = 0xA3004,
     NULLPTR = 0xA3005,
 };
-}  // namespace npu::tile_fwk
+} // namespace npu::tile_fwk
