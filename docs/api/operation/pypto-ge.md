@@ -28,7 +28,7 @@ ge(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor
 
 ## 返回值说明
 
-返回Shape与输入Tensor一致、数据类型为DT\_BOOL的Tensor。若input对应位置的元素值大于或者other对应位置的元素值，则该位置的返回值为True，其余位置的返回值为False。
+返回Shape与输入Tensor一致、数据类型为DT\_BOOL的Tensor。若input对应位置的元素值大于或者等于other对应位置的元素值，则该位置的返回值为True，其余位置的返回值为False。
 
 ## 约束说明
 

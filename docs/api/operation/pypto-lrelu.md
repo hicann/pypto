@@ -26,7 +26,7 @@ $$
 ## 函数原型
 
 ```python
-lrelu(input: Tensor, negative_slope: float = 0.01) -> Tensor
+lrelu(input: Tensor, negative_slope: Union[float, Element] = 0.01) -> Tensor
 ```
 
 ## 参数说明
