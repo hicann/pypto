@@ -58,17 +58,33 @@ bool EqualInOut(const Operation& op)
     return (equalShape && equalDynValidShape);
 }
 
+bool IsDdrToL1OperationWithFlag(const Operation& op)
+{
+    if (!op.HasAttr("op_attr_remain_redundant_op_flag")) {
+        return false;
+    }
+    auto in = op.GetIOperands().front();
+    auto out = op.GetOOperands().front();
+    if (in->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
+        return false;
+    }
+    if (out->GetMemoryTypeOriginal() != MemoryType::MEM_L1) {
+        return false;
+    }
+    return true;
+}
+
 bool RemoveRedundantOp::ProcessRedundantOpWithDynShape(Operation& op) const
 {
+    if (IsDdrToL1OperationWithFlag(op)) {
+        APASS_LOG_DEBUG_F(
+            Elements::Operation, "op[%d] has attribute op_attr_remain_redundant_op_flag for DDR to L1 path, skip removing.", op.GetOpMagic());
+        return false;
+    }
     if (!EqualInOut(op)) {
         APASS_LOG_DEBUG_F(
             Elements::Operation, "op[%d]'s input and output has unequal shape and dynshape, skip removing.",
-            op.opmagic);
-        return false;
-    }
-    if (op.HasAttr("op_attr_remain_redundant_op_flag")) {
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "op[%d] has attribute op_attr_remain_redundant_op_flag, skip removing.", op.opmagic);
+            op.GetOpMagic());
         return false;
     }
     return true;

@@ -1397,5 +1397,90 @@ TEST_F(TestRemoveRedundantOpPass, RegCopyNoConsumer)
     Status ret = pass.PreCheck(*func);
     EXPECT_EQ(ret, FAILED);
 }
+
+/*
+TestViewHasFlagWithoutGmToUb
+inCast{8,16}->copyIn->ubTensor1{8,16}->view->ubTensor2{8,16}->copyout->outCast{8,16}
+inCast{8,16}->copyIn->ubTensor1{8,16}->view->ubTensor2{8,16}->copyout->outCast{8,16}
+*/
+TEST_F(TestRemoveRedundantOpPass, TestViewHasFlagWithoutGmToUb)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestViewHasFlagWithoutGmToUb", "TestViewHasFlagWithoutGmToUb", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumEight, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor1->SetMemoryTypeOriginal(MemoryType::MEM_L1, false);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor2->SetMemoryTypeOriginal(MemoryType::MEM_L1, false);
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {inCast}, {ubTensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {ubTensor2}, {outCast});
+    auto& view = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor1}, {ubTensor2});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    view.SetAttr("op_attr_remain_redundant_op_flag", true);
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    uint32_t opNum = currFunctionPtr->Operations().size();
+    EXPECT_EQ(opNum, kNumTwo);
+    uint32_t viewNum = kNumZero;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+    }
+    EXPECT_EQ(viewNum, kNumZero);
+}
+
+/*
+TestViewHasFlagWithGmToUb
+inCast{16,16}->view->ubTensor{16,16}->copyout->outCast{16,16}
+inCast{16,16}->view->ubTensor{16,16}->copyout->outCast{16,16}
+*/
+TEST_F(TestRemoveRedundantOpPass, TestViewHasFlagWithGmToUb)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestViewHasFlagWithGmToUb", "TestViewHasFlagWithGmToUb", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    // Prepare the graph
+    std::vector<int64_t> shape = {kNumExpFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    auto ubTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    ubTensor->SetMemoryTypeOriginal(MemoryType::MEM_L1, false);
+    auto& view = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {ubTensor});
+    view.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+    view.SetAttr("op_attr_remain_redundant_op_flag", true);
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {ubTensor}, {outCast});
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp RemoveRedundantOpPass;
+    EXPECT_EQ(RemoveRedundantOpPass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    uint32_t opNum = currFunctionPtr->Operations().size();
+    EXPECT_EQ(opNum, kNumTwo);
+    uint32_t viewNum = kNumZero;
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+        }
+    }
+    EXPECT_EQ(viewNum, kNumOne);
+}
 }
 }
