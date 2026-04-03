@@ -31,7 +31,7 @@ std::string CodeGenOpCloudNPU::PrintSortDynamicUnaligned(const SortParam& param)
     const std::string& tmpDtypeStr = param.tmpDtypeStr;
 
     auto dynSrcShape = dynamicValidShape[ID2];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
 
     std::vector<std::string> paramList;
     paramList.emplace_back(srcDtypeStr);
@@ -119,10 +119,10 @@ std::string CodeGenOpCloudNPU::PrintTiledSortDynamicUnaligned(const TiledSortPar
     auto dynSrc1Shape = dynamicValidShape[ID3];
     auto dynSrc2Shape = dynamicValidShape[ID4];
     auto dynSrc3Shape = dynamicValidShape[ID5];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrc0Shape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrc1Shape, SHAPE_DIM4 - dynamicValidShape[ID3].size(), 1);
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrc2Shape, SHAPE_DIM4 - dynamicValidShape[ID4].size(), 1);
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrc3Shape, SHAPE_DIM4 - dynamicValidShape[ID5].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrc0Shape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrc1Shape, SHAPE_DIM4 - dynamicValidShape[ID3].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrc2Shape, SHAPE_DIM4 - dynamicValidShape[ID4].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrc3Shape, SHAPE_DIM4 - dynamicValidShape[ID5].size(), 1);
 
     std::vector<std::string> paramList;
     paramList.emplace_back(srcDtypeStr);
@@ -307,9 +307,9 @@ std::string CodeGenOpCloudNPU::PrintExtractDynamicUnaligned() const
     std::string srcParam = "(__ubuf__ " + src0DtypeStr + "*)" + s0Var;
     paramList.insert(paramList.end(), {dstParam, srcParam});
     auto dynSrcShape = dynamicValidShape[1];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[1].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[1].size(), 1);
     auto dynDstShape = dynamicValidShape[0];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynDstShape, SHAPE_DIM4 - dynamicValidShape[0].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynDstShape, SHAPE_DIM4 - dynamicValidShape[0].size(), 1);
     for (int i = 0; i < SHAPE_DIM3; ++i) {
         auto tShape = dynSrcShape[i].Min(dynDstShape[i]);
         paramList.emplace_back(SymbolicExpressionTable::BuildExpression(tShape));
@@ -584,7 +584,7 @@ std::string CodeGenOpCloudNPU::PrintSortUBDynamicUnaligned(bool containDstType) 
     std::vector<int64_t> ss = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
 
     auto dynSrcShape = dynamicValidShape[ID1];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[ID1].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[ID1].size(), 1);
 
     std::vector<std::string> paramList;
     if (containDstType) {

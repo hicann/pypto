@@ -160,8 +160,8 @@ void NormalizeGatherShape(std::vector<T>& rawShape, const int paramDim, const in
         paramShape = NormalizeShape(paramShape, SHAPE_DIM4);
         indicesShape = NormalizeShape(indicesShape, SHAPE_DIM2);
     } else if constexpr (std::is_same_v<T, SymbolicScalar>) {
-        FillIntVecWithDummyInHead<SymbolicScalar>(paramShape, SHAPE_DIM4 - paramDim, 1);
-        FillIntVecWithDummyInHead<SymbolicScalar>(indicesShape, SHAPE_DIM2 - indicesDim, 1);
+        FillVecWithDummyInHead<SymbolicScalar>(paramShape, SHAPE_DIM4 - paramDim, 1);
+        FillVecWithDummyInHead<SymbolicScalar>(indicesShape, SHAPE_DIM2 - indicesDim, 1);
     }
     rawShape = paramShape;
     int normalizedAxis = NormalizeAxis(axis, paramDim);
@@ -227,15 +227,15 @@ std::string CodeGenOpCloudNPU::PrintGatherDynamicUnaligned() const
 
     auto paramGMStride = GenParamIdxExprByIndex(paramIndex, paramDim, PREFIX_STR_RAW_SHAPE);
     auto paramStartOffsets = GenParamIdxExprByIndex(paramIndex, paramDim, PREFIX_STR_OFFSET);
-    FillIntVecWithDummyInHead<std::string>(paramGMStride, SHAPE_DIM4 - paramDim, std::string("1"));
-    FillIntVecWithDummyInHead<std::string>(paramStartOffsets, SHAPE_DIM4 - paramDim, std::string("0"));
+    FillVecWithDummyInHead<std::string>(paramGMStride, SHAPE_DIM4 - paramDim, std::string("1"));
+    FillVecWithDummyInHead<std::string>(paramStartOffsets, SHAPE_DIM4 - paramDim, std::string("0"));
     paramList.insert(paramList.end(), paramGMStride.begin() + 1, paramGMStride.end());
     paramList.insert(paramList.end(), paramStartOffsets.begin(), paramStartOffsets.end());
 
     auto indicesGMStride = GenParamIdxExprByIndex(indicesIndex, indicesDim, PREFIX_STR_RAW_SHAPE);
     auto indicesStartOffsets = GenParamIdxExprByIndex(indicesIndex, indicesDim, PREFIX_STR_OFFSET);
-    FillIntVecWithDummyInHead<std::string>(indicesGMStride, SHAPE_DIM2 - indicesDim, std::string("1"));
-    FillIntVecWithDummyInHead<std::string>(indicesStartOffsets, SHAPE_DIM2 - indicesDim, std::string("0"));
+    FillVecWithDummyInHead<std::string>(indicesGMStride, SHAPE_DIM2 - indicesDim, std::string("1"));
+    FillVecWithDummyInHead<std::string>(indicesStartOffsets, SHAPE_DIM2 - indicesDim, std::string("0"));
     paramList.insert(paramList.end(), indicesGMStride.begin() + 1, indicesGMStride.end());
     paramList.insert(paramList.end(), indicesStartOffsets.begin(), indicesStartOffsets.end());
 

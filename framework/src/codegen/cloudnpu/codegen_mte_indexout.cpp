@@ -21,6 +21,20 @@
 #include "securec.h"
 
 namespace npu::tile_fwk {
+int CodeGenOpCloudNPU::GetCacheModeFlag(const std::string& cacheMode) const
+{
+    const int PA_BNSD = 0;
+    const int PA_NZ = 1;
+    const int PA_BSND = 2;
+    int cacheModeFlag = PA_BNSD;
+    if (cacheMode == "PA_NZ") {
+        cacheModeFlag = PA_NZ;
+    } else if (cacheMode == "PA_BSND") {
+        cacheModeFlag = PA_BSND;
+    }
+    return cacheModeFlag;
+}
+
 std::string CodeGenOpCloudNPU::PrintIndexOutCastTileTensor() const
 {
     auto cacheMode = AnyCast<std::string>(opAttrs.at(OpAttributeKey::cacheMode));
@@ -206,7 +220,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastDynamicUnaligned(const PrintInde
     auto paramPack = PrepareDynamicShapeInfoForMTE(ID0);
 
     auto src0ValidShape = dynamicValidShape[ID1];
-    FillIntVecWithDummyInHead<SymbolicScalar>(src0ValidShape, SHAPE_DIM4 - dynamicValidShape[ID1].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(src0ValidShape, SHAPE_DIM4 - dynamicValidShape[ID1].size(), 1);
     auto src1ValidShape = dynamicValidShape[ID2];
 
     std::ostringstream os;

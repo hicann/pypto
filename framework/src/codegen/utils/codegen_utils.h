@@ -32,7 +32,7 @@ namespace npu::tile_fwk {
 constexpr int COMMENT_PREFIX_LENGTH = 2;
 
 template <typename T>
-inline void FillIntVecWithDummyInHead(std::vector<T>& input, unsigned padNum, T dummy)
+inline void FillVecWithDummyInHead(std::vector<T>& input, unsigned padNum, T dummy)
 {
     for (unsigned i = 0; i < padNum; ++i) {
         input.insert(input.begin(), dummy);

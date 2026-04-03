@@ -132,8 +132,8 @@ std::string CodeGenOpCloudNPU::PrintBinaryDynamicUnaligned(const PrintBinaryPara
     std::vector<SymbolicScalar> dynSrcShape0 = dynamicValidShape[ID1];
     std::vector<SymbolicScalar> dynSrcShape1 = dynamicValidShape[ID2];
 
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape0, SHAPE_DIM4 - dynamicValidShape[ID1].size(), 1);
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape1, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape0, SHAPE_DIM4 - dynamicValidShape[ID1].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape1, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
 
     std::ostringstream os;
     std::vector<std::string> paramList;
@@ -364,7 +364,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryBrcDynamicUnaligned(const PrintBinaryB
     std::vector<int64_t> ds = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
 
     auto dynSrcShape = dynamicValidShape[ID2];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
 
     std::ostringstream os;
     std::vector<std::string> paramList;
@@ -502,7 +502,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryScalarDynamicUnaligned(const PrintBina
     std::vector<int64_t> ds = NormalizeShape(dstShape, SHAPE_DIM3);
 
     auto dynSrcShape = dynamicValidShape[1];
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM3 - dynamicValidShape[1].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM3 - dynamicValidShape[1].size(), 1);
 
     std::ostringstream os;
     std::vector<std::string> paramList;
@@ -574,7 +574,7 @@ std::string CodeGenOpCloudNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnar
     const std::string& s0Var = param.s0Var;
 
     auto newDynSrcValidShape = dynamicValidShape[1];
-    FillIntVecWithDummyInHead<SymbolicScalar>(newDynSrcValidShape, SHAPE_DIM4 - dynamicValidShape[1].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(newDynSrcValidShape, SHAPE_DIM4 - dynamicValidShape[1].size(), 1);
     std::vector<int64_t> s0 = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
     char scalarTmp[BUFFER_SIZE_256] = "CG_ERROR";

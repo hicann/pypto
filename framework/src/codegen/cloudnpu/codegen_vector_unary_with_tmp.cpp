@@ -67,7 +67,7 @@ std::string CodeGenOpCloudNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuf
     std::vector<int64_t> s0 = NormalizeShape(rawShape[ID2], SHAPE_DIM5);
     std::vector<int64_t> ds = NormalizeShape(rawShape[ID0], SHAPE_DIM5);
     auto newDynSrcValidShape = dynamicValidShape[ID2];
-    FillIntVecWithDummyInHead<SymbolicScalar>(newDynSrcValidShape, SHAPE_DIM5 - dynamicValidShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(newDynSrcValidShape, SHAPE_DIM5 - dynamicValidShape[ID2].size(), 1);
 
     std::ostringstream os;
     std::vector<std::string> paramList;
@@ -183,7 +183,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnar
     const std::string& tmpVar = param.tmpVar;
 
     auto newDynSrcValidShape = dynamicValidShape[ID2];
-    FillIntVecWithDummyInHead<SymbolicScalar>(newDynSrcValidShape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(newDynSrcValidShape, SHAPE_DIM4 - dynamicValidShape[ID2].size(), 1);
     std::vector<int64_t> srcRawShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
     std::vector<int64_t> dstRawShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
     std::vector<int64_t> tmpRawShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
@@ -417,7 +417,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryT
     std::vector<int64_t> dstShape = NormalizeShape(rawShape[ID0], SHAPE_DIM4);
     std::vector<int64_t> tmpShape = NormalizeShape(rawShape[ID1], SHAPE_DIM4);
     std::vector<int64_t> srcShape = NormalizeShape(rawShape[ID2], SHAPE_DIM4);
-    FillIntVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - rawShape[ID2].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(dynSrcShape, SHAPE_DIM4 - rawShape[ID2].size(), 1);
 
     std::ostringstream os;
     std::vector<std::string> paramList;

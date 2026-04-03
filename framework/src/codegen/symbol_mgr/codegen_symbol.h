@@ -262,21 +262,24 @@ public:
     std::string GenUsingList();
     std::string GenTileTensorDefList();
 
-    std::string GenTensorName(BufferType bufType) {
+    std::string GenTensorName(BufferType bufType)
+    {
         return BUFFER_TYPE_TO_PREFIX_LC.at(bufType) + "Tensor_" +
                std::to_string(idGenMgr_.NewId<SymbolIdType::CG_VAR_NAME>());
     }
 
-    void OutForLoop() {
+    void OutForLoop()
+    {
         tileTensorByMagicInLoop_.clear();
         tensorNameInLoopToFullDim_.clear();
     }
 
 private:
-    std::string GenTensorUsingName(const TileTensorUsing &tileTensorUsing) {
+    std::string GenTensorUsingName(const TileTensorUsing& tileTensorUsing)
+    {
         return tileTensorUsing.GenName() + std::to_string(idGenMgr_.NewId<SymbolIdType::CG_USING_NAME>());
     }
-    
+
     std::shared_ptr<LogicalTensor> GetTensorByMagic(int magicNum) const;
     AllocKey CreateAllocKey(const std::shared_ptr<LogicalTensor>& tensor) const;
     AllocKey CreateAllocKey(int tensorMagicNum) const;

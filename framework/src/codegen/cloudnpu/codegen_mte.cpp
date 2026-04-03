@@ -35,7 +35,7 @@ DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
     } else {
         pack.gmShapeExpr = GenGetParamMacroPacked(dynShapeIdx, dim, PREFIX_STR_RAW_SHAPE);
     }
-    FillIntVecWithDummyInHead<std::string>(pack.gmShapeExpr, shapeDim - dim, "1");
+    FillVecWithDummyInHead<std::string>(pack.gmShapeExpr, shapeDim - dim, "1");
     CODEGEN_LOGI("dynamic gmShape param: %s", IntVecToStr(pack.gmShapeExpr).c_str());
 
     if (offsetFromAttr[dynShapeIdx][ID0].IsValid()) {
@@ -43,7 +43,7 @@ DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
     } else {
         pack.gmOffsetExpr = GenGetParamMacroPacked(dynShapeIdx, dim, PREFIX_STR_OFFSET);
     }
-    FillIntVecWithDummyInHead<std::string>(pack.gmOffsetExpr, shapeDim - dim, "0");
+    FillVecWithDummyInHead<std::string>(pack.gmOffsetExpr, shapeDim - dim, "0");
     CODEGEN_LOGI("dynamic gmOffset param: %s", IntVecToStr(pack.gmOffsetExpr).c_str());
 
     for (const auto& gs : pack.gmShapeExpr) {
@@ -406,20 +406,6 @@ std::string CodeGenOpCloudNPU::GenUBToUBND2NZTileTensor() const
     std::ostringstream oss;
     oss << tileOpName << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
-}
-
-int CodeGenOpCloudNPU::GetCacheModeFlag(const std::string& cacheMode) const
-{
-    const int PA_BNSD = 0;
-    const int PA_NZ = 1;
-    const int PA_BSND = 2;
-    int cacheModeFlag = PA_BNSD;
-    if (cacheMode == "PA_NZ") {
-        cacheModeFlag = PA_NZ;
-    } else if (cacheMode == "PA_BSND") {
-        cacheModeFlag = PA_BSND;
-    }
-    return cacheModeFlag;
 }
 
 // In static shape scene, GM Offset is already calculated and added to GM Addr in host side, so TileOp do not need
@@ -973,7 +959,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamic(const PrintMemCopyWithU
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
     std::vector<int64_t> newOriginShape = originShape[localIdx];
-    FillIntVecWithDummyInHead<int64_t>(newOriginShape, MAX_DIM - originShape[localIdx].size(), 1);
+    FillVecWithDummyInHead<int64_t>(newOriginShape, MAX_DIM - originShape[localIdx].size(), 1);
     const std::vector<int64_t>& localRawShape = NormalizeShape(rawShape[localIdx], SHAPE_DIM5);
 
     auto paramPack = PrepareDynamicShapeInfoForMTE(gmIdx, MAX_DIM, param.isSpillingToGM);
@@ -1012,7 +998,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const P
     const std::vector<std::string>& dataTypeExpr = param.dataTypeExpr;
 
     std::vector<SymbolicScalar> newDynamicShape = dynamicValidShape[localIdx];
-    FillIntVecWithDummyInHead<SymbolicScalar>(newDynamicShape, MAX_DIM - dynamicValidShape[localIdx].size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(newDynamicShape, MAX_DIM - dynamicValidShape[localIdx].size(), 1);
     const std::vector<int64_t>& localRawShape = NormalizeShape(rawShape[localIdx], SHAPE_DIM5);
 
     auto paramPack = PrepareDynamicShapeInfoForMTE(gmIdx, MAX_DIM, param.isSpillingToGM);

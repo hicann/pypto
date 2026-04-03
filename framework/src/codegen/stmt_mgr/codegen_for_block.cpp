@@ -52,7 +52,7 @@ void ForNode::PrintUpdate(std::ostringstream& os) const
 void ForBlockManager::UpdateAxesList(const std::vector<SymbolicScalar>& axesList)
 {
     axesList_ = axesList;
-    FillIntVecWithDummyInHead<SymbolicScalar>(axesList_, MAX_LOOP_DEPTH - axesList.size(), 1);
+    FillVecWithDummyInHead<SymbolicScalar>(axesList_, MAX_LOOP_DEPTH - axesList.size(), 1);
     CODEGEN_LOGI("axesList_ after fill is : %s, ", IntVecToStr(axesList_).c_str());
     for (size_t i = 0; i < axesList_.size(); ++i) {
         std::string loopVar = "idx" + std::to_string(i);
