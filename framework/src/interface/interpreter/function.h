@@ -499,6 +499,7 @@ enum class OpInfoCsvHeader {
     outputTensor,
     inputTensors,
     inputValidShape,
+    inputRawMagic,
     COL_COUNT
 };
 
@@ -609,7 +610,8 @@ struct FunctionInterpreter {
             "TIMESTAMP",
             "FILENAME",
             "INPUT_FILENAMES",
-            ":inputValidShape"};
+            ":inputValidShape",
+            ":inputRawMagic"};
         std::vector<std::string> ProgrameInfoCsvHeader = {
             "NO.",
             "A>PHASE_NAME",
@@ -1431,6 +1433,16 @@ public:
             oss << std::to_string(shape[i]);
         }
         oss << "]";
+        return oss.str();
+    }
+
+    template <typename Type>
+    static std::string ToStrWithPrecision(const Type &value)
+    {
+        std::ostringstream oss;
+        constexpr auto max_precision{std::numeric_limits<float>::digits10 + 1};
+        oss << std::setprecision(max_precision);
+        oss << value;
         return oss.str();
     }
 

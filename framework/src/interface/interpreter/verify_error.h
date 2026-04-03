@@ -93,6 +93,7 @@ enum class VerifyResultScene : uint32_t {
     VERIFY_RESULT_MISMATCH = 0xB4001U,   // 精度比对失败
     VERIFY_RESULT_SHAPE_DIFF = 0xB4002U, // 比对双方 shape 不一致
     VERIFY_RESULT_DTYPE_DIFF = 0xB4003U, // 比对双方 dtype 不一致
+    VERIFY_RESULT_INDEX_OUTOFBOUNDS = 0xB4004U // 数据越界 超过了validShape
 };
 
 // Element 封装/标量计算相关场景：Element 内部 dtype/运算非法

@@ -371,8 +371,11 @@ void FunctionInterpreter::FillOperationInputInfo(
         if (k > 0) {
             opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += ", ";
             opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ", ";
+            opInfo[toIndex(OpInfoCsvHeader::inputRawMagic)] += ", ";
         }
         opInfo[toIndex(OpInfoCsvHeader::inputValidShape)] += ShapeToString(dataView->GetValidShape());
+        opInfo[toIndex(OpInfoCsvHeader::inputRawMagic)] +=
+                                std::to_string(op->GetIOperands()[k]->GetRawTensor()->GetRawMagic());
         auto it = frame->tensorDataBinDict.find(op->GetIOperands()[k]);
         if (it != frame->tensorDataBinDict.end()) {
             opInfo[toIndex(OpInfoCsvHeader::inputTensors)] += it->second;
