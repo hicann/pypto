@@ -220,7 +220,7 @@ python3 custom/{op}/test_{op}.py
 
 1. **PyPTO tensor 创建后是未初始化随机值**：使用前先初始化，或者保证先写后读；不要把 `pypto.tensor(...)` 当成已初始化张量使用。
 2. **禁止无中生有 op**：实现时只能使用 PyPTO 已支持的 API，遇到缺失能力应回退到 API 探索或设计阶段重新确认。
-3. **优先使用 `@pypto.frontend.jit` 写法**：选择最新的非 wrapper 包装写法，参考 `docs/api/pypto-frontend-jit.md`，与现有示例和文档保持一致。
+3. **优先使用 `@pypto.frontend.jit` 写法**：选择最新的非 wrapper 包装写法，参考 `docs/api/config/pypto-frontend-jit.md`，与现有示例和文档保持一致。
 4. **golden / impl / test 必须职责分离**：不要把 golden 逻辑、实现逻辑和测试逻辑混写到同一个文件中。
 5. **动态数据范围使用 valid_shape**：当最后一块数据量可能小于固定块大小时，`pypto.view` / `pypto.reshape` 中必须指定 `valid_shape`。
 6. **动态循环边界使用 unroll_list**：当循环次数为动态值时，需要使用 `unroll_list`；多层循环嵌套时，最内层使用 `unroll_list`。

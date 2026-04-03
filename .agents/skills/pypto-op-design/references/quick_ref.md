@@ -73,7 +73,7 @@ for i in pypto.loop(batch_size, name="LOOP_BATCH"):
 
 | 规则 | 说明 | 证据 |
 |------|------|------|
-| run_mode | 0=NPU，1=模拟器 | `docs/api/pypto-frontend-jit.md` |
+| run_mode | 0=NPU，1=模拟器 | `docs/api/config/pypto-frontend-jit.md` |
 | NPU 需 CANN | run_mode=0 时需 source CANN 环境 | `docs/install/prepare_environment.md` |
 
 ### 示例

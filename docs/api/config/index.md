@@ -3,6 +3,7 @@
 ```{toctree}
 :maxdepth: 2
 
+pypto-frontend-jit
 pypto-get_codegen_options
 pypto-get_cube_tile_shapes
 pypto-get_debug_options
