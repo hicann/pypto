@@ -92,15 +92,13 @@ def symbolicscalar_in_loop_kernel(
     x: pypto.Tensor([], pypto.DT_FP32),
     out: pypto.Tensor([], pypto.DT_FP32)):
     pypto.set_vec_tile_shapes(2, 8)
-    y = pypto.zeros(x.shape)
     for _ in pypto.loop(2, name="sym_loop", idx_name="i"):
         # Assert is not supported yet.
         # Assert whether not i.is_concrete()
         # Assert whether i.is_symbol() or i.is_expression()
         # Execute expression: let expr be the result of i + 1
         # Assert whether not expr.is_concrete()
-        y = x + y
-    out.move(y)
+        out[:] = pypto.add(x, out)
 
 
 # ----------------------------------------------------------------------------
@@ -138,7 +136,7 @@ def test_symbolicscalar_in_loop(device_id: int = None):
         device=device
     )
 
-    y = torch.empty_like(x)
+    y = torch.zeros(x.shape, dtype=x.dtype, device=device)
     symbolicscalar_in_loop_kernel(x, y)
     golden = (x + x).cpu()
 
