@@ -26,21 +26,25 @@ std::string CodeGenOpCloudNPU::GenCastOp() const
     if (isSupportLayout) {
         return PrintCastTileTensor();
     }
-    std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
+
+    bool hasTmpBuffer = (operandCnt == NUM3);
+    int srcIdx = hasTmpBuffer ? ID2 : ID1;
+
+    std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[srcIdx]);
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
 
-    std::vector srcShape = rawShape[ID1];
+    std::vector srcShape = rawShape[srcIdx];
     CODEGEN_LOGI("genCastOp %s, srcShape is %s", tileOpName.c_str(), IntVecToStr(srcShape).c_str());
 
     std::vector dstShape = rawShape[ID0];
     CODEGEN_LOGI("genCastOp %s, dstShape is %s", tileOpName.c_str(), IntVecToStr(dstShape).c_str());
 
-    std::string srcDtypeStr = DataType2CCEStr(operandDtype[ID1]);
+    std::string srcDtypeStr = DataType2CCEStr(operandDtype[srcIdx]);
     std::string dstDtypeStr = DataType2CCEStr(operandDtype[ID0]);
 
     AppendLocalBufVarOffsetInOrder(dVar, s0Var);
     std::vector<int64_t> os = NormalizeShape(originShape[0], SHAPE_DIM4);
-    std::vector<int64_t> ss = NormalizeShape(rawShape[1], SHAPE_DIM4);
+    std::vector<int64_t> ss = NormalizeShape(rawShape[srcIdx], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
 
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";

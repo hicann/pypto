@@ -596,9 +596,31 @@ void TiledCastOperation(
     if (cur == static_cast<int>(input.tensor.GetShape().size())) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
-        auto& op = function.AddOperation(GetCastOpName<T>(), {tile}, {resultTile});
-        op.SetAttribute(OP_ATTR_PREFIX + "mode", mode);
-        op.SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(satmode));
+        
+        DataType srcDtype = tile->Datatype();
+        DataType dstDtype = resultTile->Datatype();
+        
+        bool needTmpBuffer = false;
+        if ((srcDtype == DT_FP32 && dstDtype == DT_INT16) ||
+            (srcDtype == DT_FP16 && dstDtype == DT_INT16) ||
+            (srcDtype == DT_FP16 && dstDtype == DT_INT8)) {
+            needTmpBuffer = true;
+        }
+        
+        Operation* op = nullptr;
+        if (needTmpBuffer) {
+            size_t shapeSize = input.tileInfo.shape.size();
+            int64_t shape3 = (shapeSize >= 2) ? input.tileInfo.shape[shapeSize - 2] : 1;
+            int64_t shape4 = (shapeSize >= 1) ? input.tileInfo.shape[shapeSize - 1] : 1;
+            shape4 = AlignUp(shape4, static_cast<int64_t>(BytesOf(DT_INT32)));
+            std::vector<int64_t> tmpShape = {shape3, shape4};
+            auto tmpTensor = std::make_shared<LogicalTensor>(function, DT_INT32, tmpShape);
+            op = &function.AddOperation(GetCastOpName<T>(), {tile}, {resultTile, tmpTensor});
+        } else {
+            op = &function.AddOperation(GetCastOpName<T>(), {tile}, {resultTile});
+        }
+        op->SetAttribute(OP_ATTR_PREFIX + "mode", mode);
+        op->SetAttribute(OP_ATTR_PREFIX + "satmode", static_cast<int64_t>(satmode));
         return;
     }
     auto& vecTile = tileShape.GetVecTile();

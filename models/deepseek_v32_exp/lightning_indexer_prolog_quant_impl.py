@@ -236,7 +236,7 @@ def prolog_quant(x: pypto.Tensor):
     out_fp32 = input_fp32 * scale_quant
     out_int32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
     out_half = pypto.cast(out_int32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
-    out_int8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC)
+    out_int8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC, satmode=pypto.SaturationMode.ON)
     temp1 = pypto.full(scale_quant.shape, s8_one_value, pypto.DT_FP32)
     scale_dequant = temp1 / scale_quant
     return (out_int8, scale_dequant)

@@ -166,7 +166,7 @@ def quantize(
         out_fp32 = x / scale_quant
         out_int_32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
         out_half = pypto.cast(out_int_32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
-        out_int_8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC)
+        out_int_8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC, satmode=pypto.SaturationMode.ON)
         scale_dequant = ones / scale_quant
 
         return out_int_8, scale_dequant
@@ -180,7 +180,7 @@ def quantize(
 
         out_int_32 = pypto.cast(out_fp32, pypto.DT_INT32, pypto.CastMode.CAST_RINT)
         out_half = pypto.cast(out_int_32, pypto.DT_FP16, pypto.CastMode.CAST_ROUND)
-        out_int_8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC)
+        out_int_8 = pypto.cast(out_half, pypto.DT_INT8, pypto.CastMode.CAST_TRUNC, satmode=pypto.SaturationMode.ON)
 
         return out_int_8, scale_dequant
 

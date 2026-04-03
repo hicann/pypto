@@ -20,9 +20,59 @@
 #include "utils/tile_tensor.h"
 
 #define OP_TILE_OP_CAST TCast
-template <
-    typename LastUse = LastUse2Dim<0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF,
-    typename T0, typename T1>
+template <typename LastUse = LastUse2Dim<0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF, typename T0, typename T1, typename T2>
+TILEOP void TCast(T0 dst, T1 src, T2 tmp) {
+    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
+    constexpr size_t expectSize = 5;
+    const auto dstLayout = dst.GetLayout();
+    const auto srcLayout = src.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<0, expectSize>();
+    auto shape1 = dstLayout.template GetShapeDim<1, expectSize>();
+    auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
+    auto shape3 = dstLayout.template GetShapeDim<3, expectSize>();
+    auto shape4 = dstLayout.template GetShapeDim<4, expectSize>();
+    auto dstStride0 = dstLayout.template GetStrideDim<0, expectSize>();
+    auto dstStride1 = dstLayout.template GetStrideDim<1, expectSize>();
+    auto dstStride2 = dstLayout.template GetStrideDim<2, expectSize>();
+    auto srcStride0 = srcLayout.template GetStrideDim<0, expectSize>();
+    auto srcStride1 = srcLayout.template GetStrideDim<1, expectSize>();
+    auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
+    constexpr auto tmpTileH = TileOp::GetTensorTileShapeDim<T2, 3, 5>();
+    constexpr auto tmpTileW = TileOp::GetTensorTileShapeDim<T2, 4, 5>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+    constexpr auto srcTypeSize = sizeof(typename T1::Type);
+    constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
+    constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
+    using SrcDtype = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
+    using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                using TileDefineDst =
+                    pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                using TileDefineSrc =
+                    pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;            
+                using TmpTile = 
+                    pto::Tile<pto::TileType::Vec, int32_t, tmpTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;                 
+                TileDefineDst dstTile(shape3, shape4);
+                TileDefineSrc srcTile(shape3, shape4);
+                TmpTile tmpTile(shape3, shape4);
+                auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
+                auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
+                pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+                pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
+                PTO_WITH_LAST_USE(pto::TCVT(dstTile, srcTile, tmpTile, static_cast<pto::RoundMode>(Mode), satmode), n1, n2);
+            }
+        }
+    }
+}
+
+template <typename LastUse = LastUse2Dim<0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF, typename T0, typename T1>
 TILEOP void TCast(T0 dst, T1 src)
 {
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
@@ -68,4 +118,5 @@ TILEOP void TCast(T0 dst, T1 src)
         }
     }
 }
+
 #endif
