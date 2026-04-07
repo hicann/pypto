@@ -182,42 +182,6 @@ TEST_F(DynamicFunctionTest, TestDynOffset)
     EXPECT_EQ(tt->GetShape(), t.GetStorage()->GetShape());
 }
 
-struct MopCall {
-    static long long func() { return 0; }
-    static long long func1(long long arg0) { return arg0; }
-    static long long func2(long long arg0, long long arg1) { return arg0 + arg1; }
-    static long long func3(long long arg0, long long arg1, long long arg2) { return arg0 + arg1 + arg2; }
-};
-
-#define PTR_TO_ULONG(p) reinterpret_cast<int64_t>(reinterpret_cast<void*>(p))
-
-TEST_F(DynamicFunctionTest, MopCall)
-{
-    SymbolicScalar arg0("arg0", 1);
-    SymbolicScalar arg1("arg1", 2);
-    SymbolicScalar arg2("arg2", 3);
-
-    SymbolicScalar func("func", PTR_TO_ULONG(MopCall::func));
-    auto ret = func();
-    EXPECT_TRUE(ret.ConcreteValid());
-    EXPECT_EQ(ret.Concrete(), 0);
-
-    SymbolicScalar func1("func1", PTR_TO_ULONG(MopCall::func1));
-    auto ret1 = func1(arg0);
-    EXPECT_TRUE(ret1.ConcreteValid());
-    EXPECT_EQ(ret1.Concrete(), 1);
-
-    SymbolicScalar func2("func2", PTR_TO_ULONG(MopCall::func2));
-    auto ret2 = func2(arg0, arg1);
-    EXPECT_TRUE(ret2.ConcreteValid());
-    EXPECT_EQ(ret2.Concrete(), 3);
-
-    SymbolicScalar func3("func3", PTR_TO_ULONG(MopCall::func3));
-    auto ret3 = func3(arg0, arg1, arg2);
-    EXPECT_TRUE(ret3.ConcreteValid());
-    EXPECT_EQ(ret3.Concrete(), 6);
-}
-
 TEST_F(DynamicFunctionTest, TestLoopRange)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
@@ -822,7 +786,7 @@ TEST_F(DynamicFunctionTest, HiddenLoop)
 
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_Main_2"); // outest function
     EXPECT_NE(mainFunc, nullptr);
-    EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1);                         // one hidden loop
+    EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1); // one hidden loop
 
     auto outerLoopFunc = mainFunc->GetCalleeFunctionList()[0];
     EXPECT_EQ(outerLoopFunc->GetMagicName(), "TENSOR_TENSOR_Main_loop_Unroll1_3");
@@ -840,7 +804,7 @@ TEST_F(DynamicFunctionTest, HiddenLoop)
     auto innerLoopFunc2 =
         Program::GetInstance().GetFunctionByMagicName("TENSOR_L01_Unroll1_PATH0_7"); // one of the innermost loops
     EXPECT_NE(innerLoopFunc2, nullptr);
-    EXPECT_EQ(innerLoopFunc2->GetCalleeFunctionList().size(), 1);                    // Excessive hidden loop
+    EXPECT_EQ(innerLoopFunc2->GetCalleeFunctionList().size(), 1); // Excessive hidden loop
 }
 
 void HiddenLoopWithIf(Tensor& t0, Tensor& t1, Tensor& out)
@@ -1043,7 +1007,7 @@ TEST_F(DynamicFunctionTest, HiddenLoopNestedWithIfComplex)
 
     auto mainFunc = Program::GetInstance().GetFunctionByMagicName("TENSOR_Main_2"); // outest function
     EXPECT_NE(mainFunc, nullptr);
-    EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1);                         // one hidden loop
+    EXPECT_EQ(mainFunc->GetCalleeFunctionList().size(), 1); // one hidden loop
 
     auto outerLoopFunc = mainFunc->GetCalleeFunctionList()[0];
     EXPECT_EQ(outerLoopFunc->GetMagicName(), "TENSOR_TENSOR_Main_loop_Unroll1_3");

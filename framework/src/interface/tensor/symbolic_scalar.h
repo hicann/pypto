@@ -347,37 +347,6 @@ public:
         return OPCODE_NAME_LIST[static_cast<size_t>(opcode)];
     }
 
-    static inline ScalarImmediateType CalcMopCall(const std::vector<ScalarImmediateType>& immediateList)
-    {
-        ScalarImmediateType result = 0;
-        switch (immediateList.size()) {
-            // 1 func with not arguments
-            case 1:
-                result = reinterpret_cast<ScalarImmediateType (*)()>(immediateList[0])();
-                break;
-            // 2 func with unary operand
-            case 2:
-                result =
-                    reinterpret_cast<ScalarImmediateType (*)(ScalarImmediateType)>(immediateList[0])(immediateList[1]);
-                break;
-            // 3 func with binary operands
-            case 3:
-                result = reinterpret_cast<ScalarImmediateType (*)(ScalarImmediateType, ScalarImmediateType)>(
-                    immediateList[0])(immediateList[1], immediateList[2]); // 2 is arg index
-                break;
-            // 4 func with ternary operands
-            case 4:
-                result = reinterpret_cast<ScalarImmediateType (*)(
-                    ScalarImmediateType, ScalarImmediateType, ScalarImmediateType)>(immediateList[0])(
-                    immediateList[1], immediateList[2], immediateList[3]); // 2 and 3 is arg index
-                break;
-            default:
-                FUNCTION_ASSERT(false) << "immediateList.size(): " << immediateList.size();
-                break;
-        }
-        return result;
-    }
-
     static void Handle2NonzeroOperand(
         RawSymbolicScalarPtr& raw, SymbolicOpcode opcode, std::vector<RawSymbolicScalarPtr>& nonzeroOperandList)
     {
@@ -474,7 +443,7 @@ public:
     static bool AllImmediate(const std::vector<RawSymbolicScalarPtr>& ops)
     {
         FUNCTION_ASSERT(!ops.empty());
-        return std::all_of(ops.begin(), ops.end(), [](const RawSymbolicScalarPtr& o) { return o->IsImmediate(); });
+        return std::all_of(ops.begin(), ops.end(), [](const RawSymbolicScalarPtr& op) { return op->IsImmediate(); });
     }
 
     static std::vector<ScalarImmediateType> ToImmediateList(const std::vector<RawSymbolicScalarPtr>& ops)
@@ -500,8 +469,6 @@ public:
                 });
         } else if (opcode == SymbolicOpcode::T_MOP_MAX || opcode == SymbolicOpcode::T_MOP_MIN) {
             return RawSymbolicExpression::GetSymbolicCalcMultiple(opcode)(immediateList);
-        } else if (opcode == SymbolicOpcode::T_MOP_CALL) {
-            return CalcMopCall(immediateList);
         }
         FUNCTION_ASSERT(false) << "undefined behavior.";
         return 0;
@@ -962,6 +929,7 @@ struct SymbolicExpressionTable {
         std::unordered_map<RawSymbolicScalarPtr, bool>& valDependMap);
 
 private:
+    static std::string BuildSymbolName(const std::string& name);
     static void BuildExtremaExpressionCode(
         const RawSymbolicExpPtr& expr, const std::unordered_map<RawSymbolicScalarPtr, std::string>& exprDict,
         std::ostringstream& oss);
