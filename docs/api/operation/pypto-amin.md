@@ -49,8 +49,6 @@ amin(input: Tensor, dim: int, keepdim: bool = False) -> Tensor:
 
 2. 尾轴要 32bytes 对齐；
 
-3. TileShape 次尾轴要小于等于255，即 TileShape\[-2\]<=255.
-
 ## 调用示例
 
 ### TileShape设置示例
