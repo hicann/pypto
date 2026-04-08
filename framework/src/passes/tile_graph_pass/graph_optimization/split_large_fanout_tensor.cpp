@@ -220,6 +220,73 @@ void SplitLargeFanoutTensor::CreateOpFor1toM(
     }
 }
 
+void SplitLargeFanoutTensor::ExtractDualOverlapTiles(Function &function, LogicalTensorPtr largeTensor,
+    const LogicalTensors &dualOverlaps, LogicalTensors &dualOverlapTiles, LogicalTensors &filteredDualOverlaps)
+{
+    for (const auto &dualOverlap : dualOverlaps) {
+        Offset dualOverlapOffset;
+        for (const auto &producerOp : dualOverlap->GetProducers()) {
+            if (producerOp->GetIOperands().front() == largeTensor) {
+                auto opAttr = dynamic_cast<ViewOpAttribute *>(producerOp->GetOpAttribute().get());
+                if (opAttr != nullptr) {
+                    dualOverlapOffset = opAttr->GetFromOffset();
+                    break;
+                }
+            }
+        }
+        if (dualOverlapOffset.size() == 0) {
+            continue;
+        }
+        auto dualOverlapTile =
+            std::make_shared<LogicalTensor>(function, largeTensor->tensor, dualOverlapOffset, dualOverlap->shape);
+        dualOverlapTiles.emplace_back(dualOverlapTile);
+        filteredDualOverlaps.push_back(dualOverlap);
+    }
+}
+
+bool SplitLargeFanoutTensor::HasIntersectionWithAnyDualOverlap(
+    LogicalTensorPtr overlapTile, const LogicalTensors &dualOverlapTiles)
+{
+    for (auto dualOverlapTile : dualOverlapTiles) {
+        auto status = CalcOverlap(overlapTile, dualOverlapTile, true);
+        if (status == OverlapStatus::BE_COVERED || status == OverlapStatus::PERFECTLY_MATCH ||
+            status == OverlapStatus::PARTIAL_OVERLAP || status == OverlapStatus::COVERED) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void SplitLargeFanoutTensor::FilterOverlaps(Function &function, LogicalTensorPtr largeTensor,
+    LogicalTensors &overlaps, const LogicalTensors &dualOverlaps)
+{
+    LogicalTensors filteredOverlaps;
+    LogicalTensors filteredDualOverlaps;
+    LogicalTensors dualOverlapTiles;
+    ExtractDualOverlapTiles(function, largeTensor, dualOverlaps, dualOverlapTiles, filteredDualOverlaps);
+    for (const auto &overlap : overlaps) {
+        Offset overlapOffset;
+        for (const auto &consumerOp : overlap->GetConsumers()) {
+            if (consumerOp->GetOOperands().front() == largeTensor) {
+                auto opAttr = dynamic_cast<AssembleOpAttribute *>(consumerOp->GetOpAttribute().get());
+                if (opAttr != nullptr) {
+                    overlapOffset = opAttr->GetToOffset();
+                    break;
+                }
+            }
+        }
+        if (overlapOffset.size() == 0) {
+            return;
+        }
+        auto overlapTile =
+            std::make_shared<LogicalTensor>(function, largeTensor->tensor, overlapOffset, overlap->shape);
+        if (HasIntersectionWithAnyDualOverlap(overlapTile, dualOverlapTiles)) {
+            filteredOverlaps.push_back(overlap);
+        }
+    }
+    overlaps = filteredOverlaps;
+}
+
 // 对于多对一、多对多场景创建新的AssembleOp和Tensor
 void SplitLargeFanoutTensor::CreateOpForMtoM(
     Function& function, LogicalTensorPtr largeTensor, Shape lcmTileShape, Offset lcmTileOffset, LogicalTensors overlaps,
@@ -541,34 +608,120 @@ void SplitLargeFanoutTensor::SplitLargeTensor(Function& function)
 void SplitLargeFanoutTensor::GetOffsets(
     std::set<Shape, ShapeDimComparator>& tileOffsets, const Shape& lcmShape, const LogicalTensorPtr& largeTensor)
 {
-    Shape current(lcmShape.size());
-    const auto& offsets = toShapes_[largeTensor];
-    // 规避：当前以每个维度上最大的toShape做offset切分来覆盖非尾块的offset，避免级联view-assemble导致的validShape表达式过长
-    if (!offsets.empty()) {
-        Shape boundingOffset = *offsets.begin();
-        for (const auto& offset : offsets) {
-            for (size_t i = 0; i < boundingOffset.size(); ++i) {
-                if (offset[i] > boundingOffset[i]) {
-                    boundingOffset[i] = offset[i];
+    auto ndim = lcmShape.size();
+    std::vector<std::set<int64_t>> boundaryPerDim(ndim); // 收集每一维上的 tile 边界线
+    // 分别从 toInfoMap_ (Assemble 端) 和fromInfoMap_ (View 端)提取边界
+    auto toIt = toInfoMap_.find(largeTensor->tensor->rawmagic);
+    if (toIt != toInfoMap_.end()) {
+        for (const auto& [tensor, offset] : toIt->second) {
+            for (size_t d = 0; d < ndim; ++d) {
+                boundaryPerDim[d].insert(offset[d]);
+                if (offset[d] + tensor->shape[d] < largeTensor->shape[d]) {
+                    boundaryPerDim[d].insert(offset[d] + tensor->shape[d]);
                 }
             }
         }
-
-        std::vector<Shape> tempOffsets;
-        GenerateOffset(largeTensor->shape, boundingOffset, current, tempOffsets, 0);
-        for (const auto& tempOffset : tempOffsets) {
-            tileOffsets.insert(tempOffset);
+    }
+    auto fromIt = fromInfoMap_.find(largeTensor->tensor->rawmagic);
+    if (fromIt != fromInfoMap_.end()) {
+        for (const auto& [tensor, offset] : fromIt->second) {
+            for (size_t d = 0; d < ndim; ++d) {
+                boundaryPerDim[d].insert(offset[d]);
+                if (offset[d] + tensor->shape[d] < largeTensor->shape[d]) {
+                    boundaryPerDim[d].insert(offset[d] + tensor->shape[d]);
+                }
+            }
         }
-    } else {
+    }
+    // 迭代生成所有组合
+    std::vector<Shape> results;
+    results.push_back(Shape(ndim, 0));
+    for (size_t d = 0; d < ndim; ++d) {
+        std::vector<Shape> expanded;
+        for (const auto& partial : results) {
+            for (auto boundVal : boundaryPerDim[d]) {
+                Shape newOffset = partial;
+                newOffset[d] = boundVal;
+                expanded.push_back(std::move(newOffset));
+            }
+        }
+        results = std::move(expanded);
+    }
+    for (auto& offset : results) {
+        tileOffsets.insert(std::move(offset));
+    }
+    if (!tileOffsets.empty()) {
         APASS_LOG_WARN_F(
             Elements::Tensor, "Skip offset processing for large tensor [%d] due to empty offsets.",
             largeTensor->GetMagic());
     }
-    // 处理lcmShape对应的offset
-    std::vector<Shape> tempOffsets;
-    GenerateOffset(largeTensor->shape, lcmShape, current, tempOffsets, 0);
-    for (const auto& offset : tempOffsets) {
-        tileOffsets.insert(offset);
+}
+
+Shape SplitLargeFanoutTensor::AdjustLcmTileShapeForTailBlock(
+    const Shape& lcmShape, const Shape& tileOffset, const LogicalTensorPtr& largeTensor)
+{
+    auto lcmTileShape = lcmShape;
+    for (size_t i = 0; i < lcmShape.size(); i++) {
+        if (tileOffset[i] + lcmTileShape[i] > largeTensor->shape[i]) {
+            lcmTileShape[i] = largeTensor->shape[i] - tileOffset[i];
+        }
+    }
+    return lcmTileShape;
+}
+
+bool SplitLargeFanoutTensor::CheckOverlapCoverage(
+    const LogicalTensors& overlaps, const Shape& lcmTileShape)
+{
+    auto [lcmTileArea, lcmOverflow] = CommonUtils::SafeMultiplyShape(lcmTileShape);
+    if (lcmOverflow) {
+        return false;
+    }
+    int64_t overlapTotalArea = 0;
+    for (const auto& overlap : overlaps) {
+        auto [area, overflow] = CommonUtils::SafeMultiplyShape(overlap->shape);
+        if (overflow || overlapTotalArea > INT64_MAX - area) {
+            return false;
+        }
+        overlapTotalArea += area;
+    }
+    return overlapTotalArea == lcmTileArea;
+}
+
+void SplitLargeFanoutTensor::ProcessTileSplit(
+    Function& function, LogicalTensorPtr largeTensor, const Shape& lcmTileShape,
+    const Shape& tileOffset, LogicalTensors& overlaps, LogicalTensors& dualOverlaps)
+{
+    CollectOverlaps(
+        lcmTileShape, tileOffset, toInfoMap_[largeTensor->tensor->rawmagic],
+        fromInfoMap_[largeTensor->tensor->rawmagic], overlaps, dualOverlaps);
+    if (overlaps.size() == 0 || dualOverlaps.size() == 0) {
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor,
+            "Split large tensor miss, this lcmTile does NOT have both overlaps([%zu]) "
+            "and dualOverlaps([%zu]) simultaneously.",
+            overlaps.size(), dualOverlaps.size());
+        return;
+    }
+    if (!CheckOverlapCoverage(overlaps, lcmTileShape)) {
+        APASS_LOG_DEBUG_F(
+            Elements::Tensor,
+            "Split large tensor miss, this lcmTile(shape %s, offset %s) of largeTensor %d is not filled up by all "
+            "collected overlaps.",
+            CommonUtils::ContainerToStr(lcmTileShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(),
+            largeTensor->GetMagic());
+        return;
+    }
+    APASS_LOG_DEBUG_F(
+        Elements::Tensor,
+        "Split large tensor hit, this lcmTile(shape %s, offset %s) has [%zu] overlaps and [%zu] dualOverlaps.",
+        CommonUtils::ContainerToStr(lcmTileShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(),
+        overlaps.size(), dualOverlaps.size());
+    // 对于是否有[多个tensor聚合到一个Tensor]的情况进行不同处理
+    if (overlaps.size() == 1) {
+        CreateOpFor1toM(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
+    } else {
+        FilterOverlaps(function, largeTensor, overlaps, dualOverlaps);
+        CreateOpForMtoM(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
     }
 }
 
@@ -578,55 +731,10 @@ void SplitLargeFanoutTensor::TryToSplitLargeTensor(
     std::set<Shape, ShapeDimComparator> tileOffsets;
     GetOffsets(tileOffsets, lcmShape, largeTensor);
     for (const auto& tileOffset : tileOffsets) {
-        // 更新实际的lcmTileShape, 仅在尾块时会有变小的情况
-        auto lcmTileShape = lcmShape;
-        for (size_t i = 0; i < lcmShape.size(); i++) {
-            if (tileOffset[i] + lcmTileShape[i] > largeTensor->shape[i]) {
-                lcmTileShape[i] = largeTensor->shape[i] - tileOffset[i];
-            }
-        }
+        auto lcmTileShape = AdjustLcmTileShapeForTailBlock(lcmShape, tileOffset, largeTensor);
         LogicalTensors overlaps;
         LogicalTensors dualOverlaps;
-        CollectOverlaps(
-            lcmTileShape, tileOffset, toInfoMap_[largeTensor->tensor->rawmagic],
-            fromInfoMap_[largeTensor->tensor->rawmagic], overlaps, dualOverlaps);
-        if (overlaps.size() == 0 || dualOverlaps.size() == 0) {
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor,
-                "Split large tensor miss, this lcmTile does NOT have both overlaps([%zu]) "
-                "and dualOverlaps([%zu]) simultaneously.",
-                overlaps.size(), dualOverlaps.size());
-            continue;
-        }
-
-        auto multiply = [](const std::vector<int64_t>& vec) -> int64_t {
-            return std::accumulate(
-                vec.begin(), vec.end(), static_cast<int64_t>(1), [](int64_t a, int64_t b) { return a * b; });
-        };
-        int64_t overlapTotalArea = 0;
-        for (const auto& overlap : overlaps) {
-            overlapTotalArea += multiply(overlap->shape);
-        }
-        if (overlapTotalArea != multiply(lcmShape)) {
-            APASS_LOG_DEBUG_F(
-                Elements::Tensor,
-                "Split large tensor miss, this lcmTile(shape %s, offset %s) of largeTensor %d is not filled up by all "
-                "collected overlaps.",
-                CommonUtils::ContainerToStr(lcmShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(),
-                largeTensor->GetMagic());
-            continue;
-        }
-        APASS_LOG_DEBUG_F(
-            Elements::Tensor,
-            "Split large tensor hit, this lcmTile(shape %s, offset %s) has [%zu] overlaps and [%zu] dualOverlaps.",
-            CommonUtils::ContainerToStr(lcmShape).c_str(), CommonUtils::ContainerToStr(tileOffset).c_str(),
-            overlaps.size(), dualOverlaps.size());
-        // 对于是否有[多个tensor聚合到一个Tensor]的情况进行不同处理
-        if (overlaps.size() == 1) {
-            CreateOpFor1toM(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
-        } else {
-            CreateOpForMtoM(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
-        }
+        ProcessTileSplit(function, largeTensor, lcmTileShape, tileOffset, overlaps, dualOverlaps);
     }
 }
 

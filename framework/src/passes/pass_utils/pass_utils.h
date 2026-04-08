@@ -539,5 +539,24 @@ public:
     }
 
     static std::unordered_map<MemoryType, int64_t> GetLocalMemorySize();
+
+    // 安全计算 shape 的乘积，检测溢出
+    // 返回 pair<结果, 是否溢出>，如果溢出则返回 <0, true>
+    static std::pair<int64_t, bool> SafeMultiplyShape(const Shape& shape)
+    {
+        if (shape.empty()) {
+            return {0, false};
+        }
+        int64_t result = 1;
+        for (int64_t dim : shape) {
+            if (result != 0 && dim != 0) {
+                if (result > INT64_MAX / dim) {
+                    return {0, true};
+                }
+            }
+            result *= dim;
+        }
+        return {result, false};
+    }
 };
 } // namespace npu::tile_fwk
