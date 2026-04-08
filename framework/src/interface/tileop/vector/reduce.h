@@ -243,7 +243,8 @@ template <
 TILEOP void ColReduceWithTmpImp(T0 dst, T1 src, T2 tmp)
 {
     constexpr size_t expectSize = 5;
-    constexpr auto typeSize = sizeof(typename T1::Type);
+    constexpr auto srcTypeSize = sizeof(typename T1::Type);
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
     const auto tmpLayout = tmp.GetLayout();
@@ -280,8 +281,8 @@ TILEOP void ColReduceWithTmpImp(T0 dst, T1 src, T2 tmp)
                                      n3Index * dstStride[3];
                     auto srcOffset = n0Index * srcStride[0] + n1Index * srcStride[1] + n2Index * srcStride[2] +
                                      n3Index * srcStride[3];
-                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
-                    pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
+                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
+                    pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                     pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
                     if constexpr (op == ReduceOp::SUM) {
                         pto::TCOLSUM(dstTile, srcTile, tmpTile, true);
