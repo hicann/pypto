@@ -22,6 +22,8 @@
 #include "interface/configs/config_manager.h"
 #include "ut_json/ut_json_tool.h"
 #include "passes/tile_graph_pass/graph_optimization/remove_redundant_op.h"
+#include "computational_graph_builder.h"
+#include "interface/operation/attribute.h"
 #include <fstream>
 #include <vector>
 #include <string>
@@ -197,3 +199,79 @@ TEST_F(RemoveRedundantOpTest, TestInternalAssembleView)
     EXPECT_EQ(view_count, ori_view_count) << "No VIEW op should be removed in RemoveRedundantOp";
     EXPECT_EQ(assemble_count, ori_assemble_count) << "No ASSEMBLE op should be removed in RemoveRedundantOp";
 }
+
+std::shared_ptr<Function> SetUpParallelAssembleWithReshapeGraph()
+{
+    auto func = std::make_shared<Function>(Program::GetInstance(),
+        "ProcessRedundantOpParallelAssembleWithReshape",
+        "ProcessRedundantOpParallelAssembleWithReshape", nullptr);
+
+    std::vector<int64_t> inputShape = {32, 128};
+    std::vector<int64_t> outputShape1 = {64, 128};
+    std::vector<int64_t> outputShape2 = {32, 128};
+
+    auto oriInput = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    oriInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto sharedInput = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    sharedInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto anotherInput = std::make_shared<LogicalTensor>(*func, DT_FP32, inputShape);
+    anotherInput->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto outputA = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape1);
+    outputA->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    auto outputB = std::make_shared<LogicalTensor>(*func, DT_FP32, outputShape2);
+    outputB->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+
+    func->AddRawOperation(Opcode::OP_ADDS, {oriInput}, {sharedInput}, true);
+    func->AddRawOperation(Opcode::OP_ADDS, {oriInput}, {anotherInput}, true);
+
+    auto& assemble1 = func->AddRawOperation(Opcode::OP_ASSEMBLE, {anotherInput}, {outputA}, true);
+    assemble1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+    auto& assemble2 = func->AddRawOperation(Opcode::OP_ASSEMBLE, {sharedInput}, {outputA}, true);
+    assemble2.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{32, 0}));
+    auto& assemble3 = func->AddRawOperation(Opcode::OP_ASSEMBLE, {sharedInput}, {outputB}, true);
+    assemble3.SetOpAttribute(std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0}));
+
+    std::vector<int64_t> reshapeShape = {4096};
+    auto reshapeOut = std::make_shared<LogicalTensor>(*func, DT_FP32, reshapeShape);
+    reshapeOut->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    func->AddRawOperation(Opcode::OP_RESHAPE, {outputB}, {reshapeOut}, true);
+
+    func->inCasts_.push_back(oriInput);
+    func->outCasts_.push_back(outputA);
+    func->outCasts_.push_back(reshapeOut);
+    return func;
+}
+
+TEST_F(RemoveRedundantOpTest, ProcessParallelAssembleWithReshape)
+{
+    auto currFunctionPtr = SetUpParallelAssembleWithReshapeGraph();
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    Function* func = currFunctionPtr.get();
+    EXPECT_NE(func, nullptr);
+
+    auto oriOpList = func->Operations(true);
+    int oriAssembleCount = 0;
+    for (auto& op : oriOpList) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            oriAssembleCount++;
+        }
+    }
+    EXPECT_EQ(oriAssembleCount, 3) << "Should have 3 ASSEMBLE ops before pass";
+
+    RemoveRedundantOp removeRedundantOp;
+    removeRedundantOp.PreCheck(*func);
+    removeRedundantOp.RunOnFunction(*func);
+    removeRedundantOp.PostCheck(*func);
+
+    auto updatedOps = func->Operations(true);
+    int newAssembleCount = 0;
+    for (auto& op : updatedOps) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            newAssembleCount++;
+        }
+    }
+    EXPECT_EQ(newAssembleCount, oriAssembleCount)
+        << "ASSEMBLE ops should NOT be deleted when hasParallelAssemble=true and hasReshapeConsumer=true";
+}
+

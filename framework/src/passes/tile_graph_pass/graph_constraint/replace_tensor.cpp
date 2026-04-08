@@ -444,6 +444,7 @@ Status ReplaceTensor::ForwardAssemble(Operation* op, LogicalTensorPtr& rootTenso
         }
         return SUCCESS;
     } else {
+        forRoots.push(assembleOut);
         backRoots.push(assembleOut);
         return SUCCESS;
     }

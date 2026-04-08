@@ -98,13 +98,28 @@ bool RemoveRedundantOp::ProcessRedundantOpWithoutDynShape(Operation& op) const
         return false;
     }
     if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-        auto assembleOut = op.GetOOperands().front();
-        if (assembleOut->GetProducers().size() > 1) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "assembleOut[%d] has more than one producer, skip removing.",
-                assembleOut->GetMagic());
+        auto assembleOutput = op.GetOOperands().front();
+        if (assembleOutput->GetProducers().size() > 1) {
+            APASS_LOG_DEBUG_F(Elements::Operation, "assembleOutput[%d] has more than one producer, skip removing.",
+                assembleOutput->GetMagic());
             return false;
         }
+        auto assembleInput = op.GetIOperands().front();
+        bool hasParallelAssemble = false;
+        for (const auto& consumer : assembleInput->GetConsumers()) {
+            if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE && consumer->GetOpMagic() != op.GetOpMagic()) {
+                hasParallelAssemble = true;
+                break;
+            }
+        }
+        bool hasReshapeConsumer = false;
+        for (const auto& consumer : assembleOutput->GetConsumers()) {
+            if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
+                hasReshapeConsumer = true;
+                break;
+            }
+        }
+        if (hasParallelAssemble && hasReshapeConsumer) return false;
     }
     return true;
 }

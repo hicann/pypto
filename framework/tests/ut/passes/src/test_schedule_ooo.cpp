@@ -1042,6 +1042,58 @@ TEST_F(ScheduleOoOTest, TestScheduleSpillAssemble)
     EXPECT_EQ(res, SUCCESS);
 }
 
+TEST_F(ScheduleOoOTest, TestScheduleSpillWithInplaceView)
+{
+    ComputationalGraphBuilder subGraph;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t12"};
+    std::vector<MemoryType> tensorMemTypes{
+        MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR,
+        MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB,
+        MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB,         MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC, Opcode::OP_UB_ALLOC,
+                                Opcode::OP_UB_ALLOC, Opcode::OP_COPY_IN,  Opcode::OP_COPY_IN,  Opcode::OP_COPY_IN,
+                                Opcode::OP_COPY_IN,  Opcode::OP_ADD,      Opcode::OP_ADD,      Opcode::OP_ADD, 
+                                Opcode::OP_VIEW};
+    std::vector<std::vector<std::string>> ioperands{{},     {},     {},     {},           {},           {"t1"},
+                                                    {"t2"}, {"t3"}, {"t4"}, {"t5", "t6"}, {"t7", "t8"}, {"t9", "t10"}, {"t11"}};
+    std::vector<std::vector<std::string>> ooperands{{"t5"}, {"t6"}, {"t7"}, {"t8"},  {"t9"}, {"t5"},
+                                                    {"t6"}, {"t7"}, {"t8"}, {"t10"}, {"t9"}, {"t11"}, {"t12"}};
+    std::vector<std::string> opNames{"Alloc1",  "Alloc2",  "Alloc3",  "Alloc4", "Alloc5", "Copyin1",
+                                     "Copyin2", "Copyin3", "Copyin4", "Add1",   "Add2",   "Add3", "View1"};
+    EXPECT_EQ(subGraph.AddTensors(DataType::DT_FP32, {128, 128}, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(subGraph.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    Function* function = subGraph.GetFunction();
+    EXPECT_NE(function, nullptr);
+
+    EXPECT_NE(subGraph.GetTensor("t11"), nullptr);
+    std::shared_ptr<LogicalTensor> tensor1 = subGraph.GetTensor("t10");
+    tensor1->memoryrange.memId = subGraph.GetTensor("t5")->memoryrange.memId;
+    std::shared_ptr<LogicalTensor> tensor2 = subGraph.GetTensor("t11");
+    tensor2->memoryrange.memId = subGraph.GetTensor("t5")->memoryrange.memId;
+    std::shared_ptr<LogicalTensor> tensor3 = subGraph.GetTensor("t12");
+    tensor3->memoryrange.memId = subGraph.GetTensor("t5")->memoryrange.memId;
+
+    std::vector<int64_t> offset1 = {0, 0};
+    auto viewAttr1 = std::make_shared<ViewOpAttribute>(offset1, MemoryType::MEM_UB);
+    auto view1 = subGraph.GetOp("View1");
+    view1->SetOpAttribute(viewAttr1);
+    auto inputTensor = view1->GetIOperands()[0];
+    auto outputTensor = view1->GetOOperands()[0];
+    EXPECT_EQ(outputTensor->memoryrange.memId, inputTensor->memoryrange.memId);
+    OptimizeSort sort(function->Operations().DuplicatedOpList(), *function);
+    Status res = sort.SortOps();
+    EXPECT_EQ(res, SUCCESS);
+    OoOScheduler ooOScheduler(*function);
+    res = ooOScheduler.Init(sort.operations);
+    EXPECT_EQ(res, SUCCESS);
+    std::rotate(ooOScheduler.orderedOps.begin(), ooOScheduler.orderedOps.begin() + 6, ooOScheduler.orderedOps.begin() + 11);
+    res = ooOScheduler.ScheduleMainLoop();
+    EXPECT_EQ(res, SUCCESS);
+    // The tensor's memId remains the same before and after the view operation following a spill.
+    EXPECT_EQ(outputTensor->memoryrange.memId, inputTensor->memoryrange.memId);
+}
+
+
 TEST_F(ScheduleOoOTest, TestScheduleSpillFragFailed)
 {
     ComputationalGraphBuilder subGraph;

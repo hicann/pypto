@@ -246,6 +246,7 @@ private:
     Status UpdateReloadIssueDepend(Operation* reloadCopyin, Operation* spillOp, int spillMemId);
     Status UpdateRemainOpBufId(int oldMemId, int newMemId);
     void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
+    void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
     void UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr spillTensor, std::vector<int64_t> offset,
         Operation* spillOp, int64_t workspaceBaseOffset);
@@ -261,7 +262,7 @@ private:
     Status UpdateAssembleBuffer(SpillInfo &spillInfo, LocalBufferPtr allocBuffer, LogicalTensorPtr assembleTensor);
     LogicalTensorPtr CreateAssemblePartTensor(LogicalTensorPtr iOperand, LogicalTensorPtr assembleTensor,
         SpillInfo &spillInfo, std::shared_ptr<AssembleOpAttribute> assembleAttr);
-    int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset);
+    int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType);
     void GetWorkspaceBaseOffset(LogicalTensorPtr ddrTensor, int64_t& base);
     Status UpdateCopyOutMode(Operation& copyOutOp);
     Status UpdateCopyInMode(Operation& copyInOp);

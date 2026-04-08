@@ -158,16 +158,45 @@ void OoOScheduler::UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr s
     op.UpdateLatency(opLatency);
 }
 
-void OoOScheduler::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId) {
+void OoOScheduler::ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId)
+{
+    std::vector<Operation*> viewConsumers;
+    for (auto* consumer : startTensor->GetConsumers()) {
+        if (IsViewOp(*consumer)) {
+            viewConsumers.push_back(consumer);
+        }
+    }
+
+    while (!viewConsumers.empty()) {
+        Operation* viewOp = viewConsumers.back();
+        viewConsumers.pop_back();
+        auto viewOutTensor = viewOp->GetOutputOperand(0);
+        if (viewOutTensor == nullptr) {
+            continue;
+        }
+        if (viewOutTensor->memoryrange.memId == oldMemId) {
+            viewOutTensor->memoryrange.memId = newMemId;
+        }
+        for (auto* consumer : viewOutTensor->GetConsumers()) {
+            if (IsViewOp(*consumer)) {
+                viewConsumers.push_back(consumer);
+            }
+        }
+    }
+}
+
+void OoOScheduler::ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId)
+{
     auto& reqMemIds = opReqMemIdsMap[op];
     for (auto memId : reqMemIds) {
         if (memId == oldMemId) {
             std::replace(reqMemIds.begin(), reqMemIds.end(), oldMemId, newMemId);
         }
     }
-    for (auto &outTensor : op->GetOOperands()) {
+    for (auto& outTensor : op->GetOOperands()) {
         if (outTensor->memoryrange.memId == oldMemId) {
             outTensor->memoryrange.memId = newMemId;
+            ReplaceViewOpChainMemId(outTensor, oldMemId, newMemId);
         }
     }
 }
@@ -812,7 +841,7 @@ Status OoOScheduler::FindAssembleWithSpillTensor(SpillInfo &spillInfo, std::vect
     return SUCCESS;
 }
 
-int64_t OoOScheduler::CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset)
+int64_t OoOScheduler::CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType)
 {
     if (shape.size() != offset.size()) {
         return -1;
@@ -821,16 +850,16 @@ int64_t OoOScheduler::CalcWorkspaceOffset(std::vector<int64_t> shape, std::vecto
         return 0;
     }
 
-    int64_t result = 0;
+    int64_t linearOffset = 0;
     int64_t stride = 1;
     // 从最低维到最高维计算
     for (size_t i = shape.size(); i > 0; --i) {
-        result += offset[i - 1] * stride;
+        linearOffset += offset[i - 1] * stride;
         if (i > 0) {
             stride *= shape[i - 1];
         }
     }
-    return result;
+    return linearOffset * BytesOf(dataType);
 }
 
 void OoOScheduler::GetWorkspaceBaseOffset(LogicalTensorPtr ddrTensor, int64_t& base)
@@ -908,7 +937,7 @@ Status OoOScheduler::SpillParticalBuffer(SpillInfo &spillInfo, Operation* allocO
     }
     // copyin
     std::vector<int64_t> offset = assembleAttr->GetToOffset();
-    int64_t gmRelatOffset = CalcWorkspaceOffset(assembleTensor->GetShape(), assembleAttr->GetToOffset());
+    int64_t gmRelatOffset = CalcWorkspaceOffset(assembleTensor->GetShape(), assembleAttr->GetToOffset(), assembleTensor->Datatype());
     if (gmRelatOffset == -1) {
         APASS_LOG_ERROR_F(Elements::Operation, "CalcWorkspaceOffset failed.");
         return FAILED;

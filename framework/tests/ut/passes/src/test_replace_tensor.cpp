@@ -36,6 +36,7 @@ static const uint32_t kNumThree = 3u;
 static const uint32_t kNumFour = 4u;
 static const uint32_t kNumSix = 6u;
 static const uint32_t kNumEight = 8u;
+static const uint32_t kNumTwelve = 12u;
 static const uint32_t kNumSixteen = 16u;
 
 class ReplaceTensorTest : public testing::Test {
@@ -897,7 +898,54 @@ TEST_F(ReplaceTensorTest, InsertNeedCopyViewReshapeCopyOut)
     EXPECT_EQ(copyOutNumBer, kNumZero) << "Should not insert COPY_OUT operation";
 }
 
+TEST_F(ReplaceTensorTest, TestEqualAssembleWithReshape)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestMultiAssembleToSameOutput", "TestMultiAssembleToSameOutput", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
 
+    // Prepare the graph
+    std::vector<int64_t> shape1 = {kNumTwo, kNumEight};
+    std::vector<int64_t> shape2 = {kNumOne, kNumSixteen};
+    std::vector<int64_t> shape3 = {kNumOne, kNumTwelve};
+    std::vector<int64_t> offset0 = {kNumZero, kNumZero};
+
+    // init LogicalTensor
+    auto input1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto ubTensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto ubTensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto ubTensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
+    auto ubTensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape2);
+    auto ubTensor5 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
+    auto output = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape3);
+
+    /*  Init Graph
+        input1 -> copyIn -> ubTensor1 -> add -> ubTensor2 -> assemble -> ubTensor3 -> reshape
+        ubTensor4 -> view -> ubTensor5 -> copyOut -> output
+    */
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {input1}, {ubTensor1});
+    currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor1}, {ubTensor2});
+    auto& assOp1 = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {ubTensor2}, {ubTensor3});
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {ubTensor3}, {ubTensor4});
+    auto& viewOp1 = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {ubTensor4}, {ubTensor5});
+    currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {ubTensor5}, {output});
+
+    // Init Attribute
+    viewOp1.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset0));
+    assOp1.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset0));
+
+    currFunctionPtr->inCasts_.push_back(input1);
+    currFunctionPtr->outCasts_.push_back(output);
+
+    // Run the Pass
+    ReplaceTensor pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    EXPECT_EQ(ubTensor2->GetRawMagic(), ubTensor3->GetRawMagic());
+    EXPECT_EQ(ubTensor3->GetRawMagic(), ubTensor4->GetRawMagic());
+    EXPECT_EQ(ubTensor4->GetRawMagic(), ubTensor5->GetRawMagic());
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+}
 
 TEST_F(ReplaceTensorTest, UpdateCopyInAttrAfterBackAssemble)
 {
