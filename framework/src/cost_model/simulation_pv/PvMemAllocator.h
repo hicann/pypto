@@ -20,12 +20,13 @@
 namespace CostModel {
 class PvMemAllocator {
 private:
-    uint64_t hbmParaBase_;
-    uint64_t workspaceBase_;
     uint64_t argBase_;
     uint64_t codeBase_;
 
 public:
+    uint64_t hbmParaBase_;
+    uint64_t workspaceBase_;
+    uint64_t stackWorkSapceBase_;
     PvMemAllocator();
     uint64_t AllocWorkspace(uint64_t size);
     uint64_t AllocArg(uint64_t size);

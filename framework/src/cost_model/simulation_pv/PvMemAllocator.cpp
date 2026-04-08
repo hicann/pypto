@@ -21,7 +21,8 @@ PvMemAllocator::PvMemAllocator()
     hbmParaBase_ = 0xffff8000;
     codeBase_ = 0xffffc000;
     argBase_ = 0x30000000;
-    workspaceBase_ = 0x80000000;
+    workspaceBase_ = 0x40000000;
+    stackWorkSapceBase_ = 0x80000000;
 }
 
 uint64_t PvMemAllocator::AllocWorkspace(uint64_t size)

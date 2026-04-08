@@ -43,7 +43,6 @@ const uint32_t PV_REG_TASK_CFG = 163;
 const uint32_t PV_STEP_PIPE_ID = 2;
 const uint32_t PV_SYS_VA_BASE = 67;
 const uint32_t PV_SYS_PHY_BASE = 68;
-const uint64_t HBM_SATRT_ADDR = 0xffff8000;
 inline int64_t CalcShapeSizeFunc(const std::vector<int64_t> &shape)
 {
     int64_t size = 1;
@@ -287,7 +286,6 @@ private:
         uint64_t size;
     };
     std::vector<RawTensorData> rawTensor_;
-    DataMap workspace_;
     std::vector<std::vector<uint8_t>> storage_;
 
     struct PvModelCceBin {
@@ -353,10 +351,9 @@ public:
         uint8_t *value_0_ptr = new uint8_t(0);
         uint8_t *value_1_ptr = new uint8_t(1);
         uint8_t *value_34603008_ptr = reinterpret_cast<uint8_t*>(new uint64_t(34603008));
-        uint64_t hbm_para_start_addr = HBM_SATRT_ADDR;
         pv_init_(0, 0, 1, (dir_ + std::string("/pvlog/")).c_str(), coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t *)&hbm_para_start_addr, 0, coreId_);
-        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t *)&hbm_para_start_addr, 1, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t *)&allocator_->hbmParaBase_, 0, coreId_);
+        pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PARA_BASE, (uint8_t *)&allocator_->hbmParaBase_, 1, coreId_);
         pv_reg_write_(static_cast<uint32_t>(1), PV_REG_BLOCK_DIM, value_1_ptr, 0, coreId_);
         pv_reg_write_(static_cast<uint32_t>(1), PV_REG_BLOCK_DIM, value_1_ptr, 1, coreId_);
         pv_reg_write_(static_cast<uint32_t>(1), PV_REG_TASK_CFG, value_1_ptr, 0, coreId_);
@@ -466,17 +463,6 @@ public:
         }
     }
 
-    uint8_t* AllocWorkspaceDev(size_t size)
-    {
-        std::vector<uint8_t> s(size, 0);
-        uint8_t* hostPtr = s.data();
-        storage_.emplace_back(std::move(s));
-        uint64_t devPtr = allocator_->AllocWorkspace(size);
-        DataMap m = {0, devPtr, size};
-        workspace_ = m;
-        return hostPtr;
-    }
-
     void Run(npu::tile_fwk::DynFuncData *funcdata, int coreId, int funcId, int taskId,
         std::map<uint64_t, uint64_t> tensorAddr2SizeMap);
 
@@ -489,7 +475,6 @@ private:
     void BuildFuncData(npu::tile_fwk::DynFuncData *funcdata, npu::tile_fwk::DynFuncData *dupData, uint64_t *refAddr,
         uint64_t *refSize, std::vector<uint8_t> *ref_data);
     void BuildFuncDataWorkSpace(npu::tile_fwk::DynFuncData *funcdata, npu::tile_fwk::DynFuncData *dupData);
-    uint64_t LookupWorkspace(uint64_t addr);
     uint64_t LookupData(uint64_t addr);
 
     PvInitFunc pv_init_;
