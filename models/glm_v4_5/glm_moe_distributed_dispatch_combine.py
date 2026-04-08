@@ -780,7 +780,7 @@ def moe_distributed_combine_kernel(
 
         # 接收 token
         my_pe = pypto.distributed.my_symbolic_pe(group_name)
-        for token_id in range(batch_size):
+        for token_id in pypto.loop(batch_size, name='MOE_DISTRIBUTED_RECEIVE', idx_name='token_id'):
             pypto.set_vec_tile_shapes(1, hidden_size)
             wait_until_out = pypto.distributed.shmem_wait_until(
                 shmem_data,
