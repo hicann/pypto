@@ -311,6 +311,70 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpandinline)
     EXPECT_EQ(sub->GetIntAttribute(OpAttributeKey::brcbIdx), 1);
 }
 
+// expand input have multi consumer
+TEST_F(CodegenPreprocTest, TestCombineAxisExpand2) 
+{
+    ComputationalGraphBuilder graph;
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "in1"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "t2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"in1"}, {"t2"}, "copyin1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "t3"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_EXP, {"t2"}, {"t3"}, "exp", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_UB, "t4"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_EXPAND, {"t3"}, {"t4"}, "expand", true), true);
+    auto expand = graph.GetOp("expand");
+    expand->SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", 0);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "in2"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "t22"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"in2"}, {"t22"}, "copyin12", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_UB, "t32"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_MUL, {"t3", "t22"}, {"t32"}, "mul1", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 1}, MemoryType::MEM_DEVICE_DDR, "out1"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t32"}, {"out1"}, "copyout", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_DEVICE_DDR, "in3"), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_UB, "t23"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"in3"}, {"t23"}, "copyin13", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_UB, "t33"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_MUL, {"t23", "t4"}, {"t33"}, "mul2", true), true);
+    EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 128}, MemoryType::MEM_DEVICE_DDR, "out2"), true);
+    EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_OUT, {"t33"}, {"out2"}, "copyout2", true), true);
+
+    auto funcPtr = graph.GetFunction();
+    funcPtr->paramConfigs_.combineAxis = true;
+    AxisCombine axisCombineTest;
+    EXPECT_EQ(axisCombineTest.RunOnFunction(*funcPtr), SUCCESS);
+    PadLocalBuffer padLocalBufferTest;
+    EXPECT_EQ(padLocalBufferTest.RunOnFunction(*funcPtr), SUCCESS);
+
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestCombineAxis", "TestCombineAxis", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestCombineAxisLeaf", "TestCombineAxisLeaf", graph.GetFunction());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), graph.GetFunction());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+    rootFuncPtr->paramConfigs_.combineAxis = true;
+
+    CodegenPreproc codegenPreprocPass;
+    EXPECT_EQ(codegenPreprocPass.RunOnFunction(*rootFuncPtr), SUCCESS);
+    // Verify PadLocalBuffer
+    EXPECT_EQ(graph.GetTensor("t3")->GetRawTensor()->GetRawShape(), (Shape{8, 1}));
+    // Verify CodegenPreproc
+    auto afterExpand = graph.GetOp("expand");
+    int axis = afterExpand->GetIntAttribute(OP_ATTR_PREFIX + "EXPANDDIM");
+    EXPECT_EQ(axis, 1);
+    std::vector<bool> inputAttr;
+    EXPECT_TRUE(expand->HasAttr(OpAttributeKey::inputCombineAxis));
+    expand->GetAttr(OpAttributeKey::inputCombineAxis, inputAttr);
+    EXPECT_EQ(inputAttr, (std::vector<bool>{true}));
+    std::vector<bool> outAttr;
+    EXPECT_TRUE(expand->HasAttr(OpAttributeKey::outputCombineAxis));
+    expand->GetAttr(OpAttributeKey::outputCombineAxis, outAttr);
+    EXPECT_EQ(outAttr, (std::vector<bool>{true}));
+}
+
 TEST_F(CodegenPreprocTest, TestCombineAxis3510)
 {
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
