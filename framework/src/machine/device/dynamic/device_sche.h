@@ -166,11 +166,6 @@ struct DynMachineManager {
 
     int AllocThreadIdxForDav3510(DeviceArgs* devArgs, int cpu, int& curThreadIdx, std::atomic<int>& threadIdx)
     {
-        if (!IsDeviceMode()) {
-            curThreadIdx = ++threadIdx;
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
-        }
-
         int die0MaxCpuid = static_cast<int>(devArgs->maxAicpuNum >> 1);
         int die0MaxCpuNum = static_cast<int>(devArgs->scheCpuNum >> 1);
         int die1MaxCpuNum = static_cast<int>(devArgs->scheCpuNum) - die0MaxCpuNum;
@@ -245,7 +240,7 @@ struct DynMachineManager {
 #ifdef __DEVICE__
         int cpu = sched_getcpu();
 #else
-        int cpu = simCpuId_++;
+        int cpu = ++simCpuId_;
 #endif
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
             ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx);

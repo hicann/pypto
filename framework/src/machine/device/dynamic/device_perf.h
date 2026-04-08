@@ -260,7 +260,7 @@ struct PerfEvtMgr {
         };
 
         uint64_t freq = GetFreq() / (NSEC_PER_SEC / NSEC_PER_USEC);
-        uint32_t usedAicpuNum = scheCpuNum + MAX_OTHER_AICPU_NUM;
+        uint32_t usedAicpuNum = scheCpuNum + MAX_CONTROL_FLOW_AICPU_NUM;
         for (uint32_t tid = 0; tid < usedAicpuNum; tid++) {
             std::string coreType = "\"AICPU\"";
             if (tid == 0) {

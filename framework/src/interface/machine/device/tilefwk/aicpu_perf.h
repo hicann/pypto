@@ -19,9 +19,10 @@
 #include <cstdint>
 
 namespace npu::tile_fwk::dynamic {
+constexpr int MAX_LAUNCH_SCHEDULE_AICPU_NUM = 6;
 constexpr uint32_t MAX_SCHEDULE_AICPU_NUM = 5; // 真正负责调度aicore的最大aicpu个数
-constexpr uint32_t MAX_OTHER_AICPU_NUM = 2;    // 除调度cpu以外的其它aicpu数量
-constexpr uint32_t MAX_USED_AICPU_NUM = MAX_SCHEDULE_AICPU_NUM + MAX_OTHER_AICPU_NUM;
+constexpr uint32_t MAX_CONTROL_FLOW_AICPU_NUM = 1;    // contral flow aicpu数量
+constexpr uint32_t MAX_USED_AICPU_NUM = MAX_SCHEDULE_AICPU_NUM + MAX_CONTROL_FLOW_AICPU_NUM;
 constexpr uint32_t FREQ_DAV_2201 = 50;
 constexpr uint32_t FREQ_DAV_3510 = 1000;
 

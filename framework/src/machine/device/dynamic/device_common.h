@@ -31,7 +31,7 @@ const uint32_t READY_ID_FIX_CACHE_NUM = 512;
 const uint32_t MAX_DAV_2210_SCHEDULE_AICPU_NUM = 3;
 inline uint32_t CalcSchAicpuNumByBlockDim(uint32_t blockDim, uint32_t aiCpuNum, ArchInfo archInfo)
 {
-    uint32_t maxScheCore = aiCpuNum - dynamic::MAX_OTHER_AICPU_NUM;
+    uint32_t maxScheCore = aiCpuNum - dynamic::MAX_CONTROL_FLOW_AICPU_NUM;
     if (archInfo == ArchInfo::DAV_2201) {
         maxScheCore = maxScheCore >= MAX_DAV_2210_SCHEDULE_AICPU_NUM ? MAX_DAV_2210_SCHEDULE_AICPU_NUM : maxScheCore;
     }

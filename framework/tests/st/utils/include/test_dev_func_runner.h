@@ -375,27 +375,26 @@ private:
         size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
         auto deviceTaskCtrlPoolAddr = devProg->GetRuntimeDataList()->GetRuntimeData() + DEV_ARGS_SIZE;
         (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
-        auto threadNum = static_cast<int>(devProg->devArgs.nrAicpu);
-        threadNum = (devProg->devArgs.enableCtrl == 1) ? threadNum : threadNum + 1;
-        for (int i = 0; i < threadNum; i++) {
-            aicpus[i] = std::thread([&]() {
-                int tidx = idx++;
-                cpu_set_t cpuSet;
-                CPU_ZERO(&cpuSet);
-                CPU_SET(tidx, &cpuSet);
-                char name[64];
-                sprintf(name, "aicput%d", tidx);
-                std::cout << "start thread: " << name << std::endl;
-                pthread_setname_np(pthread_self(), name);
-                pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuSet);
-                auto rc = 0;
-                if ((devProg->devArgs.enableCtrl == 0) && (uint32_t)tidx == devProg->devArgs.scheCpuNum) {
-                    rc = PyptoKernelCtrlServer(kArgs);
-                } else {
-                    rc = DynTileFwkBackendKernelServer(kArgs);
-                }
-                EXPECT_EQ(rc, 0);
-            });
+        auto threadNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
+        auto threadFun = [&](uint32_t runMode) {
+            int tidx = idx++;
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(tidx, &cpuset);
+            char name[64];
+            (void)sprintf_s(name, sizeof(name), "aicput%d", tidx);
+            std::cout << "start thread: " << name << std::endl;
+            pthread_setname_np(pthread_self(), name);
+            pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+            DeviceKernelArgs *localArgs = kArgs;
+            localArgs->parameter.runMode = runMode;
+            auto rc = 0;
+            rc = DynTileFwkBackendKernelServer(localArgs);
+            EXPECT_EQ(rc, 0);
+        };
+        aicpus[0] = std::thread(threadFun, RUN_SPLITTED_STREAM_CTRL);
+        for (int i = 1; i < threadNum; i++) {
+            aicpus[i] = std::thread(threadFun, RUN_SPLITTED_STREAM_SCHE);
         }
 
         for (int i = 0; i < threadNum; i++) {

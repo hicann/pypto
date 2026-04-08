@@ -163,21 +163,26 @@ public:
         return;
     }
 
-    static uint32_t GetAiCpuNumForDav3510(uint32_t aiCpuNum, uint32_t scheCpuNum, DeviceLauncherConfig& config)
+    static uint32_t GetAiCpuNum(uint32_t aiCpuNum, uint32_t scheCpuNum, ArchInfo archInfo, DeviceLauncherConfig& config)
     {
         if (scheCpuNum == 1) {
-            return config.isTripleStream ? scheCpuNum : scheCpuNum + dynamic::MAX_OTHER_AICPU_NUM;
+            return config.isTripleStream ? scheCpuNum : scheCpuNum + dynamic::MAX_CONTROL_FLOW_AICPU_NUM;
         }
 
-        uint32_t oneDieMinCpuNum = aiCpuNum >> 1;
-        uint32_t oneDieMaxCpuNum = oneDieMinCpuNum + (aiCpuNum - (oneDieMinCpuNum << 1));
-        uint32_t oneDieMinScheCpuNum = scheCpuNum >> 1;
-        uint32_t lunchMinCpuNum = oneDieMaxCpuNum + oneDieMinScheCpuNum;
-        if (!config.isTripleStream) {
-            lunchMinCpuNum += dynamic::MAX_OTHER_AICPU_NUM;
+        if ( archInfo== ArchInfo::DAV_3510) {
+            uint32_t oneDieMinCpuNum = aiCpuNum >> 1;
+            uint32_t oneDieMaxCpuNum = oneDieMinCpuNum + (aiCpuNum - (oneDieMinCpuNum << 1));
+            uint32_t oneDieMinScheCpuNum = scheCpuNum >> 1;
+            uint32_t launchCpuNum = oneDieMaxCpuNum + oneDieMinScheCpuNum;
+            if (!config.isTripleStream) {
+                launchCpuNum += dynamic::MAX_CONTROL_FLOW_AICPU_NUM;
+            }
+            return launchCpuNum < aiCpuNum ? launchCpuNum : aiCpuNum;
+        } else {
+            // sche = 2, need launch 3 aicpu ensure cluster; sche = 3, need launch 5 aicpu
+            uint32_t launchCpuNum =  2 * scheCpuNum - 1;    // 2 : ensure cluster success
+            return launchCpuNum < aiCpuNum ? launchCpuNum : aiCpuNum;
         }
-
-        return lunchMinCpuNum < aiCpuNum ? lunchMinCpuNum : aiCpuNum;
     }
 
     // Prepare device program scheduling and memory budget related args (keeps <= 50 lines)
@@ -191,16 +196,11 @@ public:
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
 
-        int aiCpuNum = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum());
+        uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);
-        devProg->devArgs.maxAicpuNum = aiCpuNum;
-        config.aicpuNum = devProg->devArgs.scheCpuNum + dynamic::MAX_OTHER_AICPU_NUM;
-        if (devProg->devArgs.archInfo == ArchInfo::DAV_3510) {
-            devProg->devArgs.nrAicpu =
-                GetAiCpuNumForDav3510(static_cast<uint32_t>(aiCpuNum), devProg->devArgs.scheCpuNum, config);
-        } else {
-            devProg->devArgs.nrAicpu = config.aicpuNum;
-        }
+        devProg->devArgs.maxAicpuNum = static_cast<int>(aiCpuNum);
+        config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo, config);
+        devProg->devArgs.nrAicpu = config.aicpuNum;
 
 #ifdef BUILD_WITH_CANN
         if (IsPtoDataDumpEnabled()) { // dump tensor
