@@ -49,6 +49,7 @@ private:
     void UpdateOpACEnableBackward(uint16_t opIdx);
     void ForwardVisit();
     void BackwardVisit();
+    void DisableNoneWhiteListTensor(Operation* op);
     std::unordered_map<LogicalTensorPtr, AxisReorderStatus> tensorStatus_;
 };
 } // namespace npu::tile_fwk
