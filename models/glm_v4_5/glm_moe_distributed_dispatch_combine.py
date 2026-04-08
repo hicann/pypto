@@ -404,7 +404,7 @@ def dispatch_calc_occurrences(
 def moe_distributed_dispatch_kernel(
     moe_case: MoeCase,
     group_name: str,
-) -> Callable[[pypto.Tensor, pypto.Tensor], tuple[pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor]]:
+) -> Callable[[pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor], None]:
     batch_size = moe_case.batch_size
     hidden_size = moe_case.hidden_size
     moe_expert_num = moe_case.moe_expert_num
@@ -713,7 +713,7 @@ def test_moe_distributed_dispatch() -> None:
 def moe_distributed_combine_kernel(
     moe_case: MoeCase,
     group_name: str,
-) -> Callable[[pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor], pypto.Tensor]:
+) -> Callable[[pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor], None]:
     batch_size = moe_case.batch_size
     hidden_size = moe_case.hidden_size
     moe_expert_num = moe_case.moe_expert_num
@@ -754,7 +754,7 @@ def moe_distributed_combine_kernel(
         # 发送 token
         recv_counts_scalar = recv_counts[0]
         for row_index in pypto.loop(recv_counts_scalar, name='MOE_DISTRIBUTED_SEND', idx_name='row_index'):
-            logical_rank_id = assist_info_for_combine[row_index, 0]
+            rank_id = assist_info_for_combine[row_index, 0]
             token_id = assist_info_for_combine[row_index, 1]
             k_offset = assist_info_for_combine[row_index, 2]
 
@@ -764,7 +764,7 @@ def moe_distributed_combine_kernel(
                 expand_x_tile,
                 [topk * token_id + k_offset, 0],
                 shmem_data,
-                logical_rank_id,
+                rank_id,
             )
 
             pypto.distributed.shmem_signal(
@@ -773,7 +773,7 @@ def moe_distributed_combine_kernel(
                 1,
                 [1, hidden_size],
                 [token_id, 0],
-                target_pe=logical_rank_id,
+                target_pe=rank_id,
                 sig_op=pypto.AtomicType.ADD,
                 pred=[shmem_put_out],
             )
