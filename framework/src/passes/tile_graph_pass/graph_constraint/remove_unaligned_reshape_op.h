@@ -57,7 +57,9 @@ private:
     void ProcessCopyOutOfDDRReshape(Function& function, Operation& op, Operation* copyOutOp);
     void ProcessCopyInOfDDRReshape(Function& function, Operation& op, std::vector<Operation*>& copyInOps);
     std::unordered_set<int> processedReshapeOps;
-    std::vector<Operation*> FindAllProducerCopyOuts(LogicalTensorPtr tensor, bool& hasOtherBranch);
+    Operation* CopyBranchBetweenCopyOut2Reshape(Function& function, std::vector<LogicalTensorPtr>& needToCopyTensors, const int& index);
+    Operation* FindAllProducerCopyOuts(
+        LogicalTensorPtr tensor, Operation& op, std::vector<LogicalTensorPtr>& needToCopyTensors, int& index);
     void FindAllConsumerCopyIns(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps, bool& hasViewOrAssemble);
     bool CheckUnaligned(Operation& op);
     LogicalTensorPtr InsertIOTensor(
