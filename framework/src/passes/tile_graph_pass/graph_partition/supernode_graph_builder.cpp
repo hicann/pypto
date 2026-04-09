@@ -475,7 +475,8 @@ inline bool SuperNodeGraphBuilder::L1CopyInCombine(
         }
         return true;
     }
-    if (opList[i]->GetOOperands().size() > 0 &&
+    if (opList[i]->GetOOperands().size() > 0 && opList[i]->GetIOperands().size() > 0 &&
+        opList[i]->GetIOperands()[0]->GetMemoryTypeOriginal() != MemoryType::MEM_UB &&
         (opList[i]->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1 ||
          opList[i]->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_BT ||
          opList[i]->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_FIX_QUANT_PRE)) {
