@@ -92,6 +92,13 @@ export ASCEND_PROCESS_LOG_PATH=./my_log
 
 （3）执行用例
 
+（4）获取 program.json 路径
+
+```bash
+python3 .agents/skills/pypto-aicore-error-locator/scripts/get_latest_program_json.py run_path/output
+```
+结果说明：此脚本会给出program.json绝对路径program_json_path，给第6步映射到前端源代码使用
+
 4. **分析追踪日志并定位 CCE 文件**
 
 （1）查找 trace 日志、分析缺失 leaf index 并定位问题 CCE 文件
@@ -129,6 +136,12 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/get_commentable_range.
 python3 .agents/skills/pypto-aicore-error-locator/scripts/binary_search_iteration.py <cce_file> test_cmd run_path <left> <right> ERROR_IN_T
 ```
 结果说明：此脚本运行输出结果为新的left和right值，基于新的left和right值继续执行该脚本，直到出现 找到问题代码行 为止
+
+6. **映射到前端源代码**  
+```bash
+python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_source_line.py <cce_file> <program_json_path> <problem_line>
+```
+结果说明：此脚本运行输出结果为前端源代码文件路径和行号
 
 **关联 Skill**：[pypto-aicore-error-locator](../../.agents/skills/pypto-aicore-error-locator/SKILL.md)
 
@@ -226,6 +239,8 @@ python3 tools/schema/schema_memory_check.py -d /path/to/my_log/debug/device-8/ -
 （1）如果报错 emory reuse must happen for full match. 则两个需要内存复用的 rawtensor 范围不一致；
 （2）如果报错 memory reuse must happen for same dimension. 则两个内存复用的 rawtensor 的 shape 不一致；
 上述两种情况非内存重叠，脚本内存检查依赖不会发生上述情况 ，因此脚本会断言，直接提示日志信息错误。
+
+**关联 Skill**：[pypto-memory-overlap-detector](../../.agents/skills/pypto-memory-overlap-detector/SKILL.md)
 
 6. **复杂特性排除**：
 使用 `pypto-precision-debugger` skill，关闭unroll_list、合轴特性、配置submit_before_loop=True使loop串行执行、确定valid_shape配置正确性、+0.0等，缩小定位范围。

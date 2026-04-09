@@ -10,7 +10,7 @@ license: 完整条款见 LICENSE.txt
 
 ## 工作流程概述
 
-1. 收集必要信息（必须执行）
+1. 初始化默认信息
 2. 排除 machine 框架调度问题
 3. 启用追踪日志
 4. 重新编译和安装
@@ -22,18 +22,14 @@ license: 完整条款见 LICENSE.txt
 
 ---
 
-## 步骤 1：收集必要信息（必须执行）
+## 步骤 1：初始化默认信息
 
-**⚠️ 重要：第一步必须使用 `question` 工具向用户收集信息，严禁猜测或使用默认值。**
+使用以下默认值直接初始化：
 
-使用 `question` 工具收集以下信息：
-
-- **pypto_path**: pypto 项目的根目录路径（绝对路径）
-- **device_log_path**: device log 的落盘路径（若不存在则需创建，绝对路径）
-- **test_cmd**: 触发 aicore error 的完整测试命令
-- **run_path**: 运行测试命令的目录路径（绝对路径）
-
-将收集的路径全部转换成绝对路径，收集到所有信息后才能继续后续步骤。
+- **pypto_path**: 当前工作目录（即 pypto 项目根目录）
+- **device_log_path**: `{pypto_path}/device_log`
+- **run_path**: `{pypto_path}`
+- **test_cmd**: 从用户输入中提取（用户触发此技能时提供的测试命令或问题描述中包含的运行命令）
 
 ---
 **⚠️ 重要提示**: 将 bash 运行命令超时时间设置为 1800000ms
@@ -245,6 +241,6 @@ python3 .agents/skills/pypto-aicore-error-locator/scripts/locate_source_line.py 
 
 1. **fixed 模式**: 确保 `fixed` 模式启用以保持输出路径不变
 2. **路径规范**: 所有路径必须使用绝对路径
-3. **信息收集**: 第一步必须通过 `question` 工具收集信息，严禁猜测
+3. **默认路径**: 步骤 1 使用默认值初始化，无需收集用户输入
 4. **停止条件**: 遇到不适用的情况或定位失败时，立即停止执行并说明原因
 5. **并行编译问题**: 遇到 `ld.lld: error: undefined` 错误时，需要修改 `parallel_compile` 为 `1` 并从头重新执行
