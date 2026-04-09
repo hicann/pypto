@@ -96,6 +96,10 @@ enum class SchedErr : uint32_t {
     CORE_TASK_EXEC_FAILED = ToUnderlying(MachineError::SCHEDULE) + 0x04U,    // core 任务执行返回错误
     CORE_TASK_PROCESS_FAILED = ToUnderlying(MachineError::SCHEDULE) + 0x05U, // core 任务处理失败
     RINGBUFFER_WAIT_TIMEOUT = ToUnderlying(MachineError::SCHEDULE) + 0x06U,  // ring buf 等待超时
+    ABNOMAL_LAST_WORD = ToUnderlying(MachineError::SCHEDULE) + 0x07U,  // 异常状态临终遗言
+    SCH_DEVTASK_CTX_FULL =  ToUnderlying(MachineError::SCHEDULE) + 0x08U,  // devicetask 上下文队列满
+    FSM_STATUS_ERROR =  ToUnderlying(MachineError::SCHEDULE) + 0x09U,  // 状态机状态异常
+    SCH_PARALLEL_DEVTASK_TIMEOUT = ToUnderlying(MachineError::SCHEDULE) + 0x0aU,  // parallel devtask 调度超时
 };
 
 enum class CtrlErr : uint32_t {

@@ -67,7 +67,8 @@ protected:
 
     std::unique_ptr<AiCoreManager> CreateAiCoreManager(AicpuTaskManager* aicpuTaskPtr)
     {
-        auto aicoreMng = std::make_unique<AiCoreManager>(*aicpuTaskPtr);
+        npu::tile_fwk::dynamic::SchThreadStatus status;
+        auto aicoreMng = std::make_unique<AiCoreManager>(status, *aicpuTaskPtr);
         aicoreMng->aicNum_ = 1;
         aicoreMng->aivNum_ = 0;
         aicoreMng->aicStart_ = 0;
@@ -95,8 +96,9 @@ protected:
 
         PmuTestEnv(size_t regBufSize)
         {
+            npu::tile_fwk::dynamic::SchThreadStatus status;
             aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
-            aicoreMng = std::make_unique<AiCoreManager>(*aicpuTaskPtr);
+            aicoreMng = std::make_unique<AiCoreManager>(status, *aicpuTaskPtr);
             aicoreMng->aicNum_ = 1;
             aicoreMng->aivNum_ = 0;
             aicoreMng->aicStart_ = 0;
@@ -139,8 +141,9 @@ protected:
 
         BasicProfTestEnv()
         {
+            npu::tile_fwk::dynamic::SchThreadStatus status;
             aicpuTaskPtr = std::make_unique<AicpuTaskManager>();
-            aicoreMng = std::make_unique<AiCoreManager>(*aicpuTaskPtr);
+            aicoreMng = std::make_unique<AiCoreManager>(status, *aicpuTaskPtr);
             aicoreMng->aicNum_ = 0;
             aicoreMng->aivNum_ = 1;
             aicoreMng->aivEnd_ = 1;

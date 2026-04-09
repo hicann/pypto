@@ -17,11 +17,13 @@
 #include <cstdint>
 #include "aicore_constants.h"
 #include "machine/utils/machine_ws_intf.h"
-#include "machine/device/dynamic/aicore_hal.h"
 #include "machine/device/tilefwk/core_func_data.h"
+#include "aicore_constants.h"
+
 namespace npu::tile_fwk::dynamic {
 
-using SendTaskToAiCoreFunc = std::function<void(CoreType type, int coreIdx, uint64_t newTask)>;
+struct SchDeviceTaskContext;
+using SendTaskToAiCoreFunc = std::function<void(struct SchDeviceTaskContext* devCtx, CoreType type, int coreIdx, uint64_t newTask)>;
 using AddReadyCoreIdxFunc = std::function<void(int coreIdx, int type)>;
 
 enum class MixResourceType { MIX_UNKNOWN = 0, MIX_1C1V = 1, MIX_1C2V = 2 };
@@ -83,6 +85,7 @@ public:
     ~WrapManager() {};
     WrapManager() {};
 
+    SchDeviceTaskContext* schDevTaskCtx{nullptr};
     DeviceTask* curDevTask_;
     uint32_t* coreRunReadyCnt_;
     uint32_t* runReadyCoreIdx_[AICORE_TYPE_NUM];
@@ -110,6 +113,8 @@ public:
     // for die-to-die shchedule
     ReadyCoreFunctionQueue* readyDieAicFunctionQue_[DIE_NUM] = {nullptr};
     ReadyCoreFunctionQueue* readyDieAivFunctionQue_[DIE_NUM] = {nullptr};
+    ReadyCoreFunctionQueue* selectReadyDieAicFunctionQue_{nullptr};
+    ReadyCoreFunctionQueue* selectReadyDieAivFunctionQue_{nullptr};
 
     inline void InitDeviceInfo(DeviceArgs* deviceArgs, int schedIdx)
     {
@@ -162,7 +167,8 @@ public:
     }
 
     inline void Init(
-        DeviceTask* curDevTask, uint32_t* coreRunReadyCnt, uint32_t* runReadyCoreIdxZero, uint32_t* runReadyCoreIdxOne,
+        SchDeviceTaskContext* devTaskctx, DeviceTask* curDevTask, uint32_t* coreRunReadyCnt,
+        uint32_t* runReadyCoreIdxZero, uint32_t* runReadyCoreIdxOne,
         uint32_t* corePendReadyCnt, uint32_t* pendingIds, uint32_t* runningIds, int aicValidNum,
         uint8_t* coreIdxPosition, bool* wrapCoreAvail, SendTaskToAiCoreFunc func,
         AddReadyCoreIdxFunc addReadyCoreIdxFunc)
@@ -170,6 +176,7 @@ public:
         if (archInfo != ArchInfo::DAV_3510) {
             return;
         }
+        schDevTaskCtx = devTaskctx;
         isOpenMixSche = curDevTask->mixTaskData.wrapIdNum > 0;
         curDevTask_ = curDevTask;
         coreRunReadyCnt_ = coreRunReadyCnt;
@@ -193,6 +200,13 @@ public:
                 nullptr :
                 static_cast<uint64_t*>(malloc(curDevTask_->mixTaskData.wrapIdNum * sizeof(uint64_t)));
         SetDieReadyQueue(curDevTask->dieReadyFunctionQue);
+
+        selectReadyDieAicFunctionQue_ =
+            GetDieReadyQueue(
+                CoreType::AIC, reinterpret_cast<ReadyCoreFunctionQueue*>(curDevTask->readyAicCoreFunctionQue));
+        selectReadyDieAivFunctionQue_ =
+            GetDieReadyQueue(
+                CoreType::AIV, reinterpret_cast<ReadyCoreFunctionQueue*>(curDevTask->readyAivCoreFunctionQue));
     }
 
     inline void Deinit()
@@ -379,7 +393,7 @@ public:
                 }
                 CoreType coreType = taskIdx == WRAP_IDX_AIC ? CoreType::AIC : CoreType::AIV;
                 DEV_VERBOSE_DEBUG("try to send wrapId[%u]'s taskIdx[%u] taskId[%u]", wrapInfo->wrapId, taskIdx, taskId);
-                SendTaskToAiCore(coreType, wrapInfo->aicoreIdxList[taskIdx], taskId);
+                SendTaskToAiCore(schDevTaskCtx, coreType, wrapInfo->aicoreIdxList[taskIdx], taskId);
                 wrapInfo->tasklist[taskIdx] = AICORE_TASK_DISTRIBUTED;
             }
         }
@@ -509,7 +523,7 @@ public:
 
         CoreType coreType = taskIdx == WRAP_IDX_AIC ? CoreType::AIC : CoreType::AIV;
         DEV_VERBOSE_DEBUG("directly send taskId %u to core, core type idx: %d", taskId, taskIdx);
-        SendTaskToAiCore(coreType, wrapInfo->aicoreIdxList[taskIdx], taskId);
+        SendTaskToAiCore(schDevTaskCtx, coreType, wrapInfo->aicoreIdxList[taskIdx], taskId);
     }
 
     inline void UpdateFinishIdForMixCore(uint32_t finishId)
@@ -579,5 +593,8 @@ public:
         }
         return (dieReadyQueue != nullptr) ? dieReadyQueue : defaultReadyQue;
     }
+
+    ReadyCoreFunctionQueue* GetDieReadyAicQue() { return selectReadyDieAicFunctionQue_; }
+    ReadyCoreFunctionQueue* GetDieReadyAivQue() { return selectReadyDieAivFunctionQue_; }
 };
 } // namespace npu::tile_fwk::dynamic

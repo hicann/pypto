@@ -52,6 +52,7 @@ struct DevAscendProgram {
             uint64_t maxStaticOutcastMem;
             uint64_t maxDynamicAssembleOutcastMem;
             uint64_t devTaskBoundaryOutcastNum;
+            uint32_t parallelism{1};
 
             uint64_t MaxOutcastMem() const { return std::max(maxStaticOutcastMem, maxDynamicAssembleOutcastMem); }
 
@@ -63,7 +64,7 @@ struct DevAscendProgram {
                     MaxOutcastMem() * devTaskBoundaryOutcastNum; // root func outcasts & non-dassemble-dst & DeviceTask
                                                                  // boundary outcasts
                 static constexpr uint64_t ALIGNMENT_32K = 32 * 1024;
-                return AlignUp(total, ALIGNMENT_32K);
+                return AlignUp(total, ALIGNMENT_32K) * parallelism;
             }
         } tensor;
         uint64_t aicoreSpilled;
@@ -318,7 +319,9 @@ struct DevAscendProgram {
 
         RelocOffset(shift, offset, controlFlowCache.inputTensorDataList);
         RelocOffset(shift, offset, controlFlowCache.outputTensorDataList);
-        RelocOffset(shift, offset, controlFlowCache.runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList);
+        for (uint32_t i = 0; i < SCH_DEVTASK_MAX_PARALLELISM; i++) {
+            RelocOffset(shift, offset, controlFlowCache.runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList);
+        }
         RelocOffset(shift, offset, controlFlowCache.runtimeBackup.slotContext.slotList);
         RelocOffset(shift, offset, controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool);
         RelocOffset(shift, offset, controlFlowCache.deviceTaskCacheList);
@@ -415,7 +418,7 @@ struct DevAscendProgram {
             disableL2List,
             controlFlowCache.inputTensorDataList,
             controlFlowCache.outputTensorDataList,
-            controlFlowCache.runtimeBackup.workspace.tensorAllocators.slottedOutcastsBlockList, // 20
+            controlFlowCache.runtimeBackup.workspace.tensorAllocators[0].slottedOutcastsBlockList, // 20
             controlFlowCache.runtimeBackup.slotContext.slotList,
             controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool,
             controlFlowCache.deviceTaskCacheList,
@@ -472,6 +475,9 @@ struct DevAscendProgram {
     }
 
     const DeviceRuntimeOffset& GetDeviceRuntimeOffset() const { return deviceRuntimeOffset; }
+
+    void SetParallelism(uint32_t parallelism) { memBudget.tensor.parallelism = parallelism; }
+    uint32_t GetParallelism() { return memBudget.tensor.parallelism; }
 
 private:
     friend struct EncodeDevAscendProgramInfo;

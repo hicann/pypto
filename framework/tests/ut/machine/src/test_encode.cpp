@@ -77,7 +77,7 @@ TEST_F(TestDevEncode, test_dev_encode_program)
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;
     devProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr);
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
     devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     devProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
@@ -238,7 +238,7 @@ TEST_F(TestDevEncode, test_init_wrap_info)
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;
     devProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr);
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
     devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     devProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(

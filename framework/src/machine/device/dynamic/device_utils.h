@@ -30,7 +30,7 @@
 #include "interface/machine/device/tilefwk/aicpu_perf.h"
 
 #ifndef CONFIG_MAX_DEVICE_TASK_NUM
-#define CONFIG_MAX_DEVICE_TASK_NUM 64
+#define CONFIG_MAX_DEVICE_TASK_NUM 1024
 #endif
 
 #define MAX_DEVICE_TASK_NUM CONFIG_MAX_DEVICE_TASK_NUM
@@ -50,6 +50,7 @@ inline constexpr bool IsDeviceMode()
 }
 
 constexpr int32_t DEVICE_MACHINE_INVALID_RUN_MODE = -40;
+constexpr int32_t DEVICE_MACHINE_TIMEOUT_SCH_PARALLEL_DEVTASK = -7;
 constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_AICPU_FINISH = -6;
 constexpr int32_t DEVICE_MACHINE_TIMEOUT_SYNC_CORE_FINISH = -5;
 constexpr int32_t DEVICE_MACHINE_TIMEOUT_AIV = -4;

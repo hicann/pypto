@@ -48,6 +48,10 @@ struct WsAllocation {
     using uintdevptr_t = uint64_t;
 
     uintdevptr_t ptr{0};
+    uint32_t parallelWsId{0};
+
+    WsAllocation() {}
+    WsAllocation(uintdevptr_t addr, uint32_t wsid) : ptr(addr), parallelWsId(wsid) {}
 
     operator bool() const { return ptr != 0; }
 

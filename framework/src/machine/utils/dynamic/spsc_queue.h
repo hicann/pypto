@@ -62,25 +62,66 @@ public:
         return true;
     }
 
-    inline bool FreeUntil(std::function<bool(const T&)> checker)
+    inline void PopFront()
     {
-        bool checkerSucc = false;
-        while (true) {
-            auto head = head_.load(std::memory_order_relaxed);
-            auto tail = tail_.load(std::memory_order_acquire);
-            if (head == tail) {
-                break;
-            }
-
-            const T& elem = pools_[head % N];
-            if (!checker(elem)) {
-                break;
-            }
-
+        if (tail_ - head_ > 0) {
             head_.fetch_add(1, std::memory_order_release);
-            checkerSucc = true;
         }
-        return checkerSucc;
+    }
+
+    inline bool TempDequeue(T &val)
+    {
+        auto head = head_.load(std::memory_order_relaxed);
+        auto tail = tail_.load(std::memory_order_acquire);
+        if (tail - head == 0) {
+            return false;
+        }
+        val = pools_[head % N];
+        return true;
+    }
+
+    inline bool FreeUntil(std::function<bool(const T&, bool&)> checker)
+    {
+        bool anyCanfree = false;
+        while (true) {
+            size_t head = head_.load(std::memory_order_acquire);
+            size_t tail = tail_.load(std::memory_order_acquire);
+            if (head == tail) break;
+
+            size_t i = 0;
+            bool popped = false;
+            while (head + i < tail) {
+                size_t idx = (head + i) % N;
+                const T& elem = pools_[idx];
+
+                bool continueFlag = false;
+                bool canfree = checker(elem, continueFlag);
+                if (canfree) {
+                    anyCanfree = true;
+                    if (i == 0) {
+                        head_.fetch_add(1, std::memory_order_release);
+                        popped = true;
+                        break;
+                    } else {
+                        pools_[idx] = nullptr;
+                        ++i;
+                        continue;
+                    }
+                } else {
+                    if (continueFlag) {
+                        ++i;
+                        continue;
+                    } else {
+                        return anyCanfree;
+                    }
+                }
+            }
+
+            if (!popped) {
+                break;
+            }
+        }
+        return anyCanfree;
     }
 
     inline bool IsEmpty() { return (head_ == tail_); }

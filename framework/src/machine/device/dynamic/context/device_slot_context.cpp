@@ -113,7 +113,7 @@ void DeviceSlotContext::FillInputOutputSlot(
             ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, slotIndex >= 0 && slotIndex < static_cast<int>(slotSize),
             "Invalid slot index %d", slotIndex);
         slotList[slotIndex].rtOutcastIter =
-            workspace_->MakeRuntimeOutcastTensor(param.address, RuntimeTensorMemProperty::EXTERNAL);
+            workspace_->MakeRuntimeOutcastTensor(WsAllocation(param.address, 0), RuntimeTensorMemProperty::EXTERNAL);
         // input/output flatten
         slotList[slotIndex].isOutputSlot = true;
         DEV_INFO("Param %d Input Slot %d = %lx.", index, slotIndex, param.address);
@@ -127,7 +127,7 @@ void DeviceSlotContext::FillInputOutputSlot(
             ProgEncodeErr::STITCH_HANDLE_INDEX_OUT_OF_RANGE, slotIndex >= 0 && slotIndex < static_cast<int>(slotSize),
             "Invalid slot index %d", slotIndex);
         slotList[slotIndex].rtOutcastIter =
-            workspace_->MakeRuntimeOutcastTensor(param.address, RuntimeTensorMemProperty::EXTERNAL);
+            workspace_->MakeRuntimeOutcastTensor(WsAllocation(param.address, 0), RuntimeTensorMemProperty::EXTERNAL);
         slotList[slotIndex].isOutputSlot = true;
         DEV_INFO("Param %d Output Slot %d = %lx.", index, slotIndex, param.address);
         DEV_TRACE_DEBUG(CtrlEvent(none(), OutputTensorElement(index, param.address, param.shape.GetSize())));

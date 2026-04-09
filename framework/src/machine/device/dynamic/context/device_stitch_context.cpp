@@ -84,7 +84,7 @@ uint64_t DeviceStitchContext::Stitch(
     if (stitchedList_.capacity() == 0) {
         /* This stitchedList_ vector can only allocate sufficient space once,
             during a single device task construction process.*/
-        stitchedList_.reserve(devProg_->stitchMaxFunctionNum);
+        stitchedList_.reserve(MAX_STITCH_FUNC_NUM);
     }
     Append(nextDup);
     stitchedCallOpSize_ += (nextDup.GetSource()->GetOperationSize() - nextDup.GetSource()->hubOpCount_);
@@ -154,7 +154,7 @@ int DeviceStitchContext::DecideIncastOutcast(uint64_t taskId)
             auto& desc = dup.GetIncastAddress(i);
             DEV_ASSERT(CtrlErr::DEVICE_TASK_BUILD_FAILED, desc.IsRtOutcast());
             ItemPoolIter iter = desc.GetRtOutcastIter();
-            uintdevptr_t addr = workspace_->GetRuntimeOutcastTensor(iter).addr;
+            uintdevptr_t addr = workspace_->GetRuntimeOutcastTensor(iter).allocation.ptr;
             workspace_->RuntimeOutcastTensorDeref(iter);
             desc = AddressDescriptor::MakeFromAddress(addr);
         }
@@ -165,7 +165,7 @@ int DeviceStitchContext::DecideIncastOutcast(uint64_t taskId)
             auto& desc = dup.GetOutcastAddress(i);
             DEV_ASSERT(CtrlErr::DEVICE_TASK_BUILD_FAILED, desc.IsRtOutcast());
             ItemPoolIter iter = desc.GetRtOutcastIter();
-            uintdevptr_t addr = workspace_->GetRuntimeOutcastTensor(iter).addr;
+            uintdevptr_t addr = workspace_->GetRuntimeOutcastTensor(iter).Addr();
             workspace_->RuntimeOutcastTensorDeref(iter);
             desc = AddressDescriptor::MakeFromAddress(addr);
         }

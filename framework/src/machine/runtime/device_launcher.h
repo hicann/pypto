@@ -151,9 +151,13 @@ public:
         size_t runtimeDataCount = devProg->GetDeviceRuntimeOffset().count;
         size_t runtimeDataRingBufferSize =
             RuntimeDataRingBufferHead::GetRingBufferSize(runtimeDataSize, runtimeDataCount);
-        uint64_t runtimeDataRingBufferAddr = (uint64_t)devMem.AllocDev(
-            runtimeDataRingBufferSize, CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
-        devProg->devArgs.runtimeDataRingBufferAddr = runtimeDataRingBufferAddr;
+        if (cachedOperator && *CachedOperator::GetMetaDataDevAddrHolder(cachedOperator) != nullptr) {
+            devProg->devArgs.runtimeDataRingBufferAddr =
+                reinterpret_cast<uint64_t>(*CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
+        } else {
+            devProg->devArgs.runtimeDataRingBufferAddr =
+                (uint64_t)devMem.AllocZero(runtimeDataRingBufferSize, nullptr);
+        }
 
         uint64_t generalSize = devProg->memBudget.metadata.general;
         uint64_t stitchPoolSize = devProg->memBudget.metadata.stitchPool;

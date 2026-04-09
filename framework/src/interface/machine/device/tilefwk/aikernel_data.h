@@ -130,20 +130,55 @@ struct CoreFuncParam {
     LogContext* ctx;
 };
 
-#define TASKID_TASK_BITS 20
+/*
+    |--------16bit-------------|----16bit----|----1bit----|-----1bit------|------1bit-----|-----3bit--------|---10bit---|---16bit--|
+    |-parallel ctx modifyflag--|--devtaskid--|----rspflag-|--pingpongflag-|---dcci flag---|--prallel index--|--func id--|--opindex-|
+*/
+#define TASKID_TASK_BITS 16
 #define TASKID_TASK_MASK ((1 << TASKID_TASK_BITS) - 1)
 
-#define TASKID_FUNC_BITS 11
+#define TASKID_FUNC_BITS 10
 #define TASKID_FUNC_MASK ((1 << TASKID_FUNC_BITS) - 1)
 
-#define TASKID_SHIFT32 32
+#define TASKID_PARALLEL_INDEX_BITS 3
+#define TASKID_PARALLEL_INDEX_MASK ((1 << TASKID_PARALLEL_INDEX_BITS) - 1)
 
-INLINE uint32_t FuncID(uint32_t taskId) { return taskId >> TASKID_TASK_BITS; }
+#define TASKID_DEVTASK_DCCI_BITS 1
+#define TASKID_DEVTASK_DCCI_MASK ((1 << TASKID_DEVTASK_DCCI_BITS) - 1)
+
+#define TASKID_SHIFT32 32
+#define TASKID_FROM_CTRL_TOPO_MASK ((1 << (TASKID_TASK_BITS + TASKID_FUNC_BITS)) - 1)
+
+const uint32_t SCH_DEVTASK_MAX_PARALLELISM = (1 << TASKID_PARALLEL_INDEX_BITS);
+
+INLINE uint32_t FuncID(uint32_t taskId) { return (taskId >> TASKID_TASK_BITS) & TASKID_FUNC_MASK; }
 
 INLINE uint32_t TaskID(uint32_t taskId) { return taskId & TASKID_TASK_MASK; }
 
 INLINE uint32_t MakeTaskID(uint32_t rootId, uint32_t leafId) { return (rootId << TASKID_TASK_BITS) | leafId; }
 
-} // namespace npu::tile_fwk
+INLINE uint32_t ParallelIndex(uint32_t taskId) {
+    return (taskId >> (TASKID_TASK_BITS + TASKID_FUNC_BITS)) & TASKID_PARALLEL_INDEX_MASK;
+}
+
+INLINE uint32_t DevTaskDcciFlag(uint32_t taskId) {
+    return (taskId >> (TASKID_TASK_BITS + TASKID_FUNC_BITS + TASKID_PARALLEL_INDEX_BITS)) & TASKID_DEVTASK_DCCI_MASK;
+}
+
+#define REG_VAL_DEVTASK_ID_BITS 16
+#define REG_VAL_DEVTASK_ID_MASK ((1 << REG_VAL_DEVTASK_ID_BITS) - 1)
+
+#define REG_VAL_PARALLEL_DEVTASK_CTX_MODIFYFLAG_BITS 16
+#define REG_VAL_PARALLEL_DEVTASK_CTX_MODIFYFLAG_MASK ((1 << REG_VAL_PARALLEL_DEVTASK_CTX_MODIFYFLAG_BITS) - 1)
+
+INLINE uint32_t DevTaskId(uint64_t highRegValue) {
+    return highRegValue & REG_VAL_DEVTASK_ID_MASK;
+}
+
+INLINE uint32_t ParallelDevTaskModifyFlag(uint64_t highRegValue) {
+    return (highRegValue >> REG_VAL_DEVTASK_ID_BITS) & REG_VAL_PARALLEL_DEVTASK_CTX_MODIFYFLAG_MASK;
+}
+
+}
 
 #endif

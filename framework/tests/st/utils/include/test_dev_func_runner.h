@@ -173,7 +173,7 @@ private:
 
             functionDevProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
             functionDevProg->controlFlowCache.RuntimeAddrRelocWorkspace(
-                contextWorkspaceAddr, 0, nullptr, nullptr, nullptr);
+                contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, functionDevProg->GetParallelism());
             functionDevProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(functionDevProg), 0);
             functionDevProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
             functionDevProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(

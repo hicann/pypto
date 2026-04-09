@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <string>
 #include <sstream>
+#include "allocator/ws_allocator_basics.h"
 
 using uintdevptr_t = uint64_t;
 using intdevptr_t = int64_t;
@@ -42,21 +43,23 @@ inline constexpr const char* GetRuntimeTensorMemPropertyName(RuntimeTensorMemPro
 }
 
 struct RuntimeOutcastTensor {
-    uintdevptr_t addr;
+    WsAllocation allocation;
     RuntimeTensorMemProperty property;
     bool isCache{false}; // mark used for control flow cache
     uint32_t refCnt;
 
-    RuntimeOutcastTensor(uintdevptr_t taddr, RuntimeTensorMemProperty tproperty, uint32_t trefCnt)
-        : addr(taddr), property(tproperty), refCnt(trefCnt)
+    RuntimeOutcastTensor(WsAllocation inAllocation, RuntimeTensorMemProperty tproperty, uint32_t trefCnt)
+        : allocation(inAllocation), property(tproperty), refCnt(trefCnt)
     {}
 
     std::string Dump() const
     {
         std::stringstream ss;
-        ss << "&0x" << std::hex << addr << ", " << GetRuntimeTensorMemPropertyName(property);
+        ss << "&0x" << std::hex << allocation.ptr << ", " << GetRuntimeTensorMemPropertyName(property);
         return std::move(ss).str();
     }
+
+    uintdevptr_t& Addr() { return allocation.ptr; }
 };
 
 } // namespace npu::tile_fwk::dynamic

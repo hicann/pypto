@@ -20,6 +20,7 @@
 #include "tilefwk/core_func_data.h"
 #include "interface/machine/device/tilefwk/aicpu_perf.h"
 #include "machine/utils/dynamic/spsc_queue.h"
+#include "dev_encode_program_ctrlflow_cache.h"
 
 #ifndef __DEVICE__
 #include "interface/configs/config_manager.h"
@@ -126,42 +127,92 @@ static_assert(
     sizeof(DynDeviceTask) < sizeof(DynDeviceTaskBase) + DYN_DEVICE_TASK_EXT_SIZE, "Invalid dyn device task extension");
 
 struct DeviceTaskCtrl {
-    int taskType{0};
     uint64_t taskId{0};
     DeviceTask* devTask{nullptr};
-    uint64_t initAicFuncNum{0};
-    uint64_t initAivFuncNum{0};
-    uint64_t finishedAicFunctionCnt{0};   // 所有aicpu处理完成的aic function个数，多线程增加修改
-    uint64_t finishedAivFunctionCnt{0};   // 所有aicpu处理完成的aiv function个数，多线程增加修改
-    uint64_t finishedAicpuFunctionCnt{0}; // 所有aicpu处理完成的aicpu function个数，多线程增加修改
-    uint64_t finishedHubFunctionCnt{0};   // 所有aicpu处理完成的hub function个数，多线程增加修改
-    // 这些原子变量跨进程了，不能sche与ctrl间两边同时写
+
+    // 这些原子变量跨线程了，不能sche与ctrl间两边同时写
     std::atomic<uint64_t> finishedFunctionCnt{0};
     std::atomic<bool> runFlag{false};
     std::atomic<int> runcnt{0};
-    void* ctx{nullptr};
-    int retCode{0};
-    std::atomic<bool> isAicpuIdle[AICORE_TYPE_NUM][MAX_SCHEDULE_AICPU_NUM];
-    bool isFirstDevTask{false};
 
-    inline bool IsNotFree() { return runFlag.load(std::memory_order_acquire); }
+    std::atomic<bool> existNextSameIterTask{false}; // mark have next task
+    std::atomic<uint64_t> nextSameIterTaskCtrl{0}; // make sure fetched as soon as possible,ctrl cpu maybe set next task ctrl after this taskctrl fetched by schedule cpu
+    std::atomic<bool> notFree{false};
+    std::atomic<int> freeCnt{0}; // make sure all sch release this ctrl
 
-    void PutTask(int ret)
+    uint32_t ParallelForId() { return (reinterpret_cast<DynDeviceTask *>(devTask))->ParallelForId(); }
+    uint32_t ParallelIterId() { return (reinterpret_cast<DynDeviceTask *>(devTask))->ParallelIterId(); }
+    bool SupportParallel() { return (reinterpret_cast<DynDeviceTask *>(devTask))->ParallelForId() != 0; }
+    uint32_t ParallelWsId() { return (reinterpret_cast<DynDeviceTask *>(devTask))->ParallelWsId(); }
+    bool ExistNextSameIterTask() { return existNextSameIterTask.load(std::memory_order_acquire); }
+    DeviceTaskCtrl* NextSameIterTaskCtrl() {
+        return reinterpret_cast<DeviceTaskCtrl*>(nextSameIterTaskCtrl.load(std::memory_order_acquire));
+    }
+
+    inline bool IsNotFree() { return notFree.load(std::memory_order_acquire); }
+    void SetFree()
     {
-        if (ret != 0)
-            retCode = ret;
+        auto *dynTask = reinterpret_cast<DynDeviceTask*>(devTask);
+        dynTask->taskStageAllocMem.canFree.store(true);
+        notFree.store(false, std::memory_order_release); // parallel device task will reuse this ctrl,so this ctrl cannot free
+    }
 
-        // sync point, ensure all aiore_manager threads task finished
-        int cnt = runcnt.fetch_sub(1, std::memory_order_acq_rel);
-        if (cnt == 1) {
-            runFlag.store(false, std::memory_order_release); // set finish
-            auto* dynTask = reinterpret_cast<DynDeviceTask*>(devTask);
-            dynTask->taskStageAllocMem.canFree.store(true);
+    void Free()
+    {
+        if (freeCnt.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            SetFree();
+        }
+
+        DEV_DEBUG("freecnt : %d", freeCnt.load());
+    }
+
+    bool Finish(bool syncWait)
+    {
+        if (runcnt.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            // parallel device task will reuse this ctrl,so this ctrl cannot free, non-parallel task can free
+            if (syncWait) {
+                SetFree();
+            }
+            return true;
         } else {
-            // wait finish
-            while (runFlag.load(std::memory_order_acquire)) {
+            if (syncWait) {
+                // sync point, ensure all aiore_manager threads task finished
+                while (runcnt.load(std::memory_order_acquire) != 0) {}
+                return true;
+            } else if (runcnt.load(std::memory_order_acquire) == 0) {
+                return true;
             }
         }
+        return false;
+    }
+
+    // wait other sch aicpu finish this devtask
+    bool TryWaitAllSchFinish()
+    {
+        if (runcnt.load(std::memory_order_acquire) == 0) {
+            return true;
+        }
+        return false;
+    }
+
+    void BindTask(DeviceTask* newDevTask)
+    {
+        devTask = newDevTask;
+        taskId = (reinterpret_cast<DynDeviceTask *>(devTask))->GetIndex();
+
+        finishedFunctionCnt.store(0, std::memory_order_relaxed);
+        runFlag.store(true, std::memory_order_release);
+        notFree.store(true, std::memory_order_release);
+        nextSameIterTaskCtrl = 0;
+
+        // parallel devtask  have next same iter task default
+        existNextSameIterTask = (reinterpret_cast<DynDeviceTask *>(devTask)->ParallelForId() != 0) ? true : false;
+    }
+
+    void SetSchNumCnt(int num)
+    {
+        runcnt.store(num, std::memory_order_relaxed);
+        freeCnt.store(num, std::memory_order_relaxed);
     }
 };
 

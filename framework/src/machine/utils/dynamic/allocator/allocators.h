@@ -21,6 +21,7 @@
 #include "seq_ws_allocator.h"
 #include "ws_allocator_counter.h"
 #include "ws_metadata_allocator.h"
+#include "tilefwk/aikernel_data.h"
 
 namespace npu::tile_fwk::dynamic {
 struct MetadataAllocator {
@@ -37,4 +38,4 @@ struct TensorAllocator {
 struct RuntimeReuseInfo {
     uint32_t poolResetTimes;
 };
-} // namespace npu::tile_fwk::dynamic
+}

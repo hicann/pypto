@@ -56,7 +56,7 @@ struct DevStartArgs : DevStartArgsBase {
 
     DevInputSymbol* inputSymbolList;
     uint64_t inputSymbolSize;
-    const void* controlFlowEntry;
+    const void* controlFlowEntry{nullptr};
 
     DeviceRuntimeDataDesc deviceRuntimeDataDesc;
     DevCtrlState devCtrlState;

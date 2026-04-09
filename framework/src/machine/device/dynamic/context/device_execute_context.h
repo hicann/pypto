@@ -26,6 +26,37 @@ namespace npu::tile_fwk::dynamic {
 
 using DeviceTaskInspectorEntry = void (*)(void* inspector_, DeviceExecuteContext* execCtx, DynDeviceTask* task);
 
+struct ParallelForContext {
+    ParallelInfo info;
+    bool isInParallelForScope{false};
+
+    void Begin() {
+        if (info.forId == 0) { // first loop is parallel for, forid cannot equal 0
+            ++info.forId;
+        }
+        ++info.iterId;
+        isInParallelForScope = true;
+        if (++info.wsId == info.parallelism) {
+            info.wsId = 0;
+        }
+    }
+
+    void End() {
+        isInParallelForScope = false;
+    }
+
+    void SwitchDefaultWorkspace() {
+        info.wsId = 0;
+    }
+
+    void ChangeForId() {
+        ++info.forId;
+        info.iterId = 0; // begin a new prallel for
+    }
+
+    void InitParallel(uint32_t parallelism) { info.parallelism = parallelism; }
+};
+
 struct DeviceExecuteContext {
     using PushTaskEntry = std::function<void(DynDeviceTask*, DeviceExecuteContext*)>;
     PushTaskEntry pushTask;
@@ -33,6 +64,7 @@ struct DeviceExecuteContext {
     DevStartArgs* args{nullptr};
     uint64_t taskId{0};
     bool isFirstTaskSend{true};
+    ParallelForContext  parallelCtx;
 
     DevAscendProgram* devProg{nullptr};
     DeviceExecuteProgram execProg;
@@ -91,7 +123,7 @@ struct DeviceExecuteContext {
 
     static void DumpDeviceTask(uint64_t taskId, DynDeviceTask* deviceTask);
 
-    int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false);
+    int SubmitToAicoreAndRecycleMemory(bool withoutTail, bool isLastTask = false, bool isParallelIterLast = false);
 
     void ProcessControlFlowCacheRecord(DynDeviceTask* dynTask);
 
@@ -102,6 +134,10 @@ struct DeviceExecuteContext {
     void* CallRootFunctionAlloc(uint64_t rootKey);
 
     void* CallRootFunctionStitch(uint64_t rootKey);
+
+    bool NeedSubmmitDevTask(uint64_t rootkey);
+
+    void ParallelForBegin();
 
     void MarkSlotNeedAlloc(int slotIndex);
     void SetLoopDieId(int8_t rootKey);

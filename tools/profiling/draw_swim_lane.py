@@ -61,8 +61,8 @@ class TaskInfo:
 
     def formal_name(self):
         seq_no = self.task_id >> 32
-        func_id = (self.task_id >> 20) & ((1 << 11) - 1)
-        oper_idx = self.task_id & ((1 << 20) - 1)
+        func_id = (self.task_id >> 16) & ((1 << 10) - 1)
+        oper_idx = self.task_id & ((1 << 16) - 1)
         return f"{seq_no}-{func_id}-{oper_idx}"
 
     def get_task_full_name(self):

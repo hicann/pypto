@@ -19,11 +19,12 @@
 #include <cstddef>
 #include <cstdint>
 #include "aicpu_perf.h"
+#include "aikernel_data.h"
 
 const uint64_t AICORE_TASK_INIT = 0xFFFFFFFF;
-const uint64_t AICORE_TASK_DISTRIBUTED = 0x7FFFFFFE;
-const uint64_t AICORE_TASK_STOP = 0x7FFFFFF0;
-const uint64_t AICORE_FUNC_STOP = 0x7FFFFFE0;
+const uint64_t AICORE_TASK_DISTRIBUTED = 0xF0000003;
+const uint64_t AICORE_TASK_STOP = 0xF0000001;
+const uint64_t AICORE_FUNC_STOP = 0xF0000002;
 const uint64_t AICORE_FIN_MASK = 0x80000000;
 const uint64_t AICORE_TASK_MAX = 0x70000000;
 
@@ -241,6 +242,16 @@ inline const char* AicorePerfTraceName[] = {
     "WAIT_ALL_DEV_TASK_CALLOP_EXEC_FINISH",
     "WAIT_EXIT_NOTIFY"};
 
+
+// use ring buffer to control parallel multi devtask
+struct ParallelDevTask {
+    uint32_t front{0};
+    uint32_t rear{0};
+    uint32_t version;
+    uint32_t reserver;
+    int64_t elements[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]; // device task ptr
+};
+
 struct TaskEntry {
     int32_t subGraphId;
     int32_t taskId;
@@ -257,6 +268,7 @@ struct KernelArgs {
     int64_t shakeBuffer[8];
     int64_t shakeBufferCpuToCore[8];
     int64_t waveBufferCpuToCore[8];
+    struct ParallelDevTask parallelDevTask;
     TaskEntry taskEntry;
     TaskStat taskStat[2]; // 寄存器高低32位，两个task 和 pending & running task存储： 2 * 2 个
 };
@@ -264,6 +276,7 @@ struct KernelArgs {
 union KernelSharedBuffer {
     struct KernelArgs args;
     uint8_t sharedBuffer[SHARED_BUFFER_SIZE];
+    KernelSharedBuffer() {};
 };
 
 static_assert(sizeof(KernelArgs) < SHARED_BUFFER_SIZE);

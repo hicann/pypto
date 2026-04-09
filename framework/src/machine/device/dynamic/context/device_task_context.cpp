@@ -57,7 +57,7 @@ DynDeviceTask* DeviceTaskContext::BuildDeviceTaskData(
     PerfBegin(PERF_EVT_SLAB_MEM_SUBMIT);
     // cache allocated memory , when task finish will recycle
     dynTask->taskStageAllocMem = workspace_->SlabGetStageAllocMem(withoutTail, WsAicpuSlabMemType::DUPPED_FUNC_DATA);
-    workspace_->SlabStageAllocMemSubmmit(&dynTask->taskStageAllocMem);
+    workspace_->SlabStageAllocMemSubmmit(dynTask);
     PerfEnd(PERF_EVT_SLAB_MEM_SUBMIT);
     return dynTask;
 }

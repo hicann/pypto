@@ -28,7 +28,7 @@ PROPERTY_NUM = 6
 
 
 def parse_task_id(task_id: int) -> Tuple[int, int]: # root id + leaf call id
-    taskid_task_bits = 20
+    taskid_task_bits = 16
     return (task_id >> taskid_task_bits, task_id & ((1 << taskid_task_bits) - 1))
 
 

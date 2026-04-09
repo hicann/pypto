@@ -53,6 +53,8 @@ using Call5EntryType = uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint
 #define RUNTIME_FUNCKEY_FINISH (static_cast<uint64_t>(-1))
 #define RUNTIME_FUNCKEY_CACHESTOP (static_cast<uint64_t>(-2))
 #define RUNTIME_FUNCKEY_LOOP_BARRIER (static_cast<uint64_t>(-3))
+#define RUNTIME_FUNCKEY_PARALLEL_FOR_BEGIN (static_cast<uint64_t>(-4))
+#define RUNTIME_FUNCKEY_PARALLEL_FOR_END (static_cast<uint64_t>(-5))
 #define RUNTIME_FUNCRET_CACHESTOP_CONTINUE (reinterpret_cast<void*>(static_cast<uintptr_t>(0)))
 #define RUNTIME_FUNCRET_CACHESTOP_RETURN (reinterpret_cast<void*>(static_cast<uintptr_t>(1)))
 
