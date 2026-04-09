@@ -54,22 +54,33 @@ void SetVerifyData(
     const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs,
     const std::vector<DeviceTensorData>& goldens)
 {
+    auto ToLogicalShape = [](DataType dtype, const std::vector<int64_t>& shape) -> std::vector<int64_t> {
+        auto logical = shape;
+        if ((dtype == DT_FP4_E2M1X2 || dtype == DT_FP4_E1M2X2) && !logical.empty()) {
+            logical.back() *= 2;
+        }
+        return logical;
+    };
+
     ProgramData::GetInstance().Reset();
     for (size_t i = 0; i < inputs.size(); i++) {
+        auto logicalShape = ToLogicalShape(inputs[i].GetDataType(), inputs[i].GetShape());
         auto rawData =
-            RawTensorData::CreateTensor(inputs[i].GetDataType(), inputs[i].GetShape(), (uint8_t*)inputs[i].GetAddr());
+            RawTensorData::CreateTensor(inputs[i].GetDataType(), logicalShape, (uint8_t*)inputs[i].GetAddr());
         ProgramData::GetInstance().AppendInput(rawData);
     }
     for (size_t i = 0; i < outputs.size(); i++) {
-        auto rawData = std::make_shared<RawTensorData>(outputs[i].GetDataType(), outputs[i].GetShape());
+        auto logicalShape = ToLogicalShape(outputs[i].GetDataType(), outputs[i].GetShape());
+        auto rawData = std::make_shared<RawTensorData>(outputs[i].GetDataType(), logicalShape);
         ProgramData::GetInstance().AppendOutput(rawData);
     }
     for (size_t i = 0; i < goldens.size(); i++) {
         if (goldens[i].GetAddr() == 0) {
             ProgramData::GetInstance().AppendGolden(nullptr);
         } else {
-            auto rawData = RawTensorData::CreateTensor(
-                goldens[i].GetDataType(), goldens[i].GetShape(), (uint8_t*)goldens[i].GetAddr());
+            auto logicalShape = ToLogicalShape(goldens[i].GetDataType(), goldens[i].GetShape());
+            auto rawData =
+                RawTensorData::CreateTensor(goldens[i].GetDataType(), logicalShape, (uint8_t*)goldens[i].GetAddr());
             ProgramData::GetInstance().AppendGolden(rawData);
         }
     }

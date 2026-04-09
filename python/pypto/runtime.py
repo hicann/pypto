@@ -128,9 +128,11 @@ def verify(func, inputs, outputs, goldens, *args,
         verify_options = {"enable_pass_verify": True}
     pypto.set_verify_options(**verify_options)
 
-    pypto_impl.SetVerifyData(_pto_to_tensor_data(inputs),
-                             _pto_to_tensor_data(outputs),
-                             _pto_to_tensor_data(goldens))
+    pypto_impl.SetVerifyData(
+        _pto_to_tensor_data(inputs),
+        _pto_to_tensor_data(outputs),
+        _pto_to_tensor_data(goldens),
+    )
 
     inputs = [from_torch(t, f"IN_{idx}") for idx, t in enumerate(inputs)]
     outputs = [from_torch(t, f"OUT_{idx}") for idx, t in enumerate(outputs)]
@@ -186,5 +188,4 @@ def set_verify_golden_data(in_out_tensors=None, goldens=None):
             pto_in_out.append(t if isinstance(t, pypto.Tensor)
                               else pypto.from_torch(t))
 
-        pypto_impl.SetVerifyData(_pto_to_tensor_data(pto_in_out),
-                                 [], pto_goldens)
+        pypto_impl.SetVerifyData(_pto_to_tensor_data(pto_in_out), [], pto_goldens)

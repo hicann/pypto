@@ -107,7 +107,8 @@ FlowVerifier::CompareResult FlowVerifier::CompareFp8TensorData(
     const auto size = std::accumulate(validShape.begin(), validShape.end(), 1, std::multiplies<>());
     CompareResult compareResult(size, rtol, atol, errorCountThreshold, failNum, validShape);
     CompareDataRecursiveWithLeaf(
-        compareResult, 0, 0, 0, goldenDataView, outputDataView, 0,
+        compareResult, 0, goldenDataView->GetStorageOffset(), outputDataView->GetStorageOffset(), goldenDataView,
+        outputDataView, 0,
         [&](CompareResult& cr, size_t lastCount, int64_t outOff, int64_t gOff, int64_t index,
             const std::shared_ptr<LogicalTensorData>& gv, const std::shared_ptr<LogicalTensorData>& ov) {
             const uint8_t* gp = &gv->Get<uint8_t>(gOff);
@@ -221,8 +222,8 @@ bool FlowVerifier::VerifyResult(
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aTimeStamp)] = std::to_string(ts);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bTimeStamp)] = std::to_string(ts);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::rtolAndAtol)] = functionInterpreter_->ToStrWithPrecision(rtol)
-                                                            + "/" + functionInterpreter_->ToStrWithPrecision(atol);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::rtolAndAtol)] =
+            functionInterpreter_->ToStrWithPrecision(rtol) + "/" + functionInterpreter_->ToStrWithPrecision(atol);
         if (functionInterpreter_->execDumpPassName == "tensor_graph") {
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::goldenPassName)] = "user_golden";
             ProgrameInfo[toIndex(ProgrameInfoCsvHeader::ioflag)] = "a" + std::to_string(k);
@@ -265,11 +266,11 @@ bool FlowVerifier::VerifyResult(
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mre)] = functionInterpreter_->ToStrWithPrecision(res.mre);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mreTop8)] = functionInterpreter_->ToStrWithPrecision(res.mreTop8);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mreTop1Permil)] =
-                                                    functionInterpreter_->ToStrWithPrecision(res.mreTop1Permil);
+            functionInterpreter_->ToStrWithPrecision(res.mreTop1Permil);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::mae)] = functionInterpreter_->ToStrWithPrecision(res.mae);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::maeTop8)] = functionInterpreter_->ToStrWithPrecision(res.maeTop8);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::maeTop1Permil)] =
-                                                    functionInterpreter_->ToStrWithPrecision(res.maeTop1Permil);
+            functionInterpreter_->ToStrWithPrecision(res.maeTop1Permil);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aMax)] = functionInterpreter_->ToStrWithPrecision(res.aMax);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aMin)] = functionInterpreter_->ToStrWithPrecision(res.aMin);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aAvg)] = functionInterpreter_->ToStrWithPrecision(res.aAvg);
@@ -333,7 +334,7 @@ void FlowVerifier::WriteException()
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagicName)] = functionInterpreter_->execDumpFunPath;
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagic)] = std::to_string(functionInterpreter_->pathFuncMagic);
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] =
-                                                "'" + std::to_string(functionInterpreter_->pathFuncHash);
+        "'" + std::to_string(functionInterpreter_->pathFuncHash);
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "EXCEPTION";
     if (functionInterpreter_->execDumpPassName == "tensor_graph") {
@@ -509,11 +510,11 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
         std::shared_ptr<FunctionCaptureExecution> captureExecution = nullptr;
         try {
             captureExecution = functionInterpreter_->RunForPass(functionInterpreter_->execDumpPassName, func, capture);
-            
+
             auto goldenDataViewList = capture->golden->outcastDataViewList;
             auto executeDataViewList = captureExecution->golden->outcastDataViewList;
             std::string tensorName = "tensor~" + func->GetMagicName() + "~" + passIdentifier + "~" +
-                                    functionInterpreter_->GetLoopSymbolString(false);
+                                     functionInterpreter_->GetLoopSymbolString(false);
 
             auto res = VerifyResult(
                 func->GetOutcast(), capture->func->GetOutcast(), key, tensorName, goldenDataViewList,

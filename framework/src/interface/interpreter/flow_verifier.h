@@ -392,16 +392,15 @@ private:
     {
         auto& validShape = goldenDataView->GetValidShape();
         if (axis == validShape.size() - 1) {
-            leaf(compareResult, validShape[axis], outputOffset, goldenOffset, index,
-                goldenDataView, outputDataView);
+            leaf(compareResult, validShape[axis], outputOffset, goldenOffset, index, goldenDataView, outputDataView);
         } else {
             for (int i = 0; i < validShape[axis]; i++) {
                 int nGoldenOffset = goldenOffset + goldenDataView->GetData()->GetStride()[axis] * i;
                 int nOutputOffset = outputOffset + outputDataView->GetData()->GetStride()[axis] * i;
                 int64_t nindex = index + GetValidStride(validShape, axis) * i;
                 CompareDataRecursiveWithLeaf(
-                    compareResult, axis + 1, nGoldenOffset, nOutputOffset, goldenDataView, outputDataView,
-                    nindex, std::forward<Leaf>(leaf));
+                    compareResult, axis + 1, nGoldenOffset, nOutputOffset, goldenDataView, outputDataView, nindex,
+                    std::forward<Leaf>(leaf));
             }
         }
     }
@@ -442,7 +441,9 @@ public:
         auto& validShape = goldenDataView->GetValidShape();
         auto size = std::accumulate(validShape.begin(), validShape.end(), 1, std::multiplies<>());
         CompareResult compareResult(size, rtol, atol, errorCountThreshold, failNum, validShape);
-        CompareDataRecursive<DataType, T>(compareResult, 0, 0, 0, goldenDataView, outputDataView, 0);
+        CompareDataRecursive<DataType, T>(
+            compareResult, 0, goldenDataView->GetStorageOffset(), outputDataView->GetStorageOffset(), goldenDataView,
+            outputDataView, 0);
         compareResult.UpdateErrorCountThreshold();
         return compareResult;
     }

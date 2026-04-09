@@ -285,7 +285,7 @@ struct FunctionFrame {
         } else {
             ASSERT(ControlFlowScene::FUNC_INPLACE_ALLOC_CONFLICT, inplaceTensor == nullptr);
             rawData = std::make_shared<RawTensorData>(dtype, rawShape);
-            rawData->resize(rawData->GetElementSize() * rawData->GetSize());
+            rawData->resize(rawData->GetDataSize());
         }
         DoAddRawTensorDataView(tensor->GetRawTensor(), rawData);
         std::shared_ptr<LogicalTensorData> view =
@@ -1437,7 +1437,7 @@ public:
     }
 
     template <typename Type>
-    static std::string ToStrWithPrecision(const Type &value)
+    static std::string ToStrWithPrecision(const Type& value)
     {
         std::ostringstream oss;
         constexpr auto max_precision{std::numeric_limits<float>::digits10 + 1};

@@ -49,6 +49,15 @@ LogicalTensorDataPtr MakeFp8E8m0Scalar(uint8_t byte)
 constexpr float kVerifyRtol = 1e-3f;
 constexpr float kVerifyAtol = 1e-2f;
 
+LogicalTensorDataPtr MakeInt8ViewOnPaddedRaw(
+    const std::vector<int8_t>& rawVals, const std::vector<int64_t>& rawShape, const std::vector<int64_t>& viewShape,
+    const std::vector<int64_t>& offset)
+{
+    Tensor t(DT_INT8, rawShape);
+    auto raw = RawTensorData::CreateTensor<int8_t>(t, rawVals);
+    return std::make_shared<LogicalTensorData>(raw, viewShape, viewShape, offset);
+}
+
 } // namespace
 
 // Golden 0x0E and output 0x0F are adjacent E4M3 codes (~0.0273 vs ~0.0293). Raw uint8 differs, but decode
@@ -113,6 +122,31 @@ TEST(FlowVerifierFp8Test, E8M0AdjacentCodesDecodePassBytesDiffer)
 
     auto result = FlowVerifier::VerifyResult(golden, output, kVerifyRtol, kVerifyAtol);
     EXPECT_TRUE(result.Check()) << "E8M0 0x32 vs 0x33: decode+tol should pass while storage bytes differ";
+}
+
+// Regression guard for packed/physical stride usage in verifier recursion:
+// view shape is [2,2] on top of raw [2,4] with offset [0,1].
+// Correct row stepping must follow raw stride(0)=4 instead of logical stride(0)=2.
+TEST(FlowVerifierStrideTest, PaddedRawViewUsesPhysicalStride)
+{
+    const std::vector<int64_t> rawShape = {2, 4};
+    const std::vector<int64_t> viewShape = {2, 2};
+    const std::vector<int64_t> offset = {0, 1};
+
+    // raw index mapping for view:
+    // row0 -> [1,2], row1 -> [5,6]
+    const std::vector<int8_t> goldenRaw = {
+        99, 10, 11, 98,                                    // row0
+        97, 12, 13, 96                                     // row1
+    };
+    const std::vector<int8_t> outputRaw = {-1, 10, 11, -2, // padding bytes intentionally differ
+                                           -3, 12, 13, -4};
+
+    auto golden = MakeInt8ViewOnPaddedRaw(goldenRaw, rawShape, viewShape, offset);
+    auto output = MakeInt8ViewOnPaddedRaw(outputRaw, rawShape, viewShape, offset);
+
+    auto result = FlowVerifier::VerifyResult(golden, output, 0.0f, 0.0f);
+    EXPECT_TRUE(result.Check()) << "Verifier should compare valid view elements only with physical raw stride stepping";
 }
 
 } // namespace npu::tile_fwk

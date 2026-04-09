@@ -10,7 +10,7 @@
 
 /*!
  * \file test_interp_type_convert.cpp
- * \brief Unit tests for interpreter internal type conversion, especially FP8 (E4M3, E5M2, E8M0).
+ * \brief Unit tests for interpreter internal type conversion: FP8 (E4M3, E5M2, E8M0), FP4 packed (E2M1X2, E1M2X2).
  */
 
 #include <gtest/gtest.h>
@@ -304,4 +304,60 @@ TEST_F(InterpTypeConvertTest, Fp8E5M2SpecialValues)
         }
     }
 }
+
+// FP4 E2M1 packed (DT_FP4_E2M1X2): 1 byte = 2 nibbles (high 4 bits first, low 4 bits second).
+// Tensor shape uses logical FP4 elements.
+TEST_F(InterpTypeConvertTest, Fp4E2M1PackedDecodeToFp32)
+{
+    // 0x10: high=1 -> E2M1 subnormal mant=1 -> 0.5; low=0 -> 0
+    // 0x23: high=2 -> exp=1,m=0 -> 1.0; low=3 -> exp=1,m=1 -> 1.5
+    const std::vector<uint8_t> packed = {0x10, 0x23};
+    auto src = makeTensorData(DT_FP4_E2M1X2, {4}, packed);
+    auto out = makeTensorData(DT_FP32, {4}, 0.0f);
+    calc::Cast(out, src);
+    const std::vector<float> goldenVals = {0.5f, 0.0f, 1.0f, 1.5f};
+    auto golden = makeTensorData(DT_FP32, {4}, goldenVals);
+    ASSERT_ALLCLOSE_ATOL(out, golden, 1e-6f);
+}
+
+// FP4 E1M2 packed (DT_FP4_E1M2X2): verify nibble decode order and value mapping.
+TEST_F(InterpTypeConvertTest, Fp4E1M2PackedDecodeToFp32)
+{
+    // 0x14: high=1 -> E1M2 e=0,m=1 -> 0.125
+    //       low=4  -> E1M2 e=1,m=0 -> 1.0
+    // 0xFC: high=15-> sign=1,e=1,m=3 -> -1.75
+    //       low=12 -> sign=1,e=1,m=0 -> -1.0
+    const std::vector<uint8_t> packed = {0x14, 0xFC};
+    auto src = makeTensorData(DT_FP4_E1M2X2, {4}, packed);
+    auto out = makeTensorData(DT_FP32, {4}, 0.0f);
+    calc::Cast(out, src);
+    const std::vector<float> goldenVals = {0.125f, 1.0f, -1.75f, -1.0f};
+    auto golden = makeTensorData(DT_FP32, {4}, goldenVals);
+    ASSERT_ALLCLOSE_ATOL(out, golden, 1e-6f);
+}
+
+// End-to-end FP4 arithmetic validation:
+// FP4(E2M1X2) + FP4(E2M1X2) -> FP4(E2M1X2), then cast back to FP32 and compare with golden.
+// This validates decode (From), torch op, and encode back (ToOperand).
+TEST_F(InterpTypeConvertTest, Fp4E2M1AddRoundTripViaFp32)
+{
+    // a (packed {0x12,0x9A}) -> [0.5, 1.0, -0.5, -1.0]
+    // b (packed {0x21,0x92}) -> [1.0, 0.5, -0.5,  1.0]
+    // sum                    -> [1.5, 1.5, -1.0,  0.0] (all exactly representable in E2M1)
+    const std::vector<uint8_t> aPacked = {0x12, 0x9A};
+    const std::vector<uint8_t> bPacked = {0x21, 0x92};
+
+    auto a = makeTensorData(DT_FP4_E2M1X2, {4}, aPacked);
+    auto b = makeTensorData(DT_FP4_E2M1X2, {4}, bPacked);
+    auto out = makeTensorData(DT_FP4_E2M1X2, {4}, std::vector<uint8_t>(2, 0));
+    calc::Add(out, a, b);
+
+    auto outF32 = makeTensorData(DT_FP32, {4}, 0.0f);
+    calc::Cast(outF32, out);
+
+    const std::vector<float> goldenVals = {1.5f, 1.5f, -1.0f, 0.0f};
+    auto golden = makeTensorData(DT_FP32, {4}, goldenVals);
+    ASSERT_ALLCLOSE_ATOL(outF32, golden, 1e-6f);
+}
+
 } // namespace npu::tile_fwk

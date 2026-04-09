@@ -119,6 +119,52 @@ TEST_F(CalcCommonTest, UnalignedReshapeTriggerPaddingBranch)
     ASSERT_FLOAT_EQ(outputDataView->Get<float>(2), 2.0f);
 }
 
+// 测试 ExecuteOpAssemble，验证 toOffset 生效且仅覆盖目标子区域
+TEST_F(CalcCommonTest, ExecuteOpAssembleWithOffsetBasic)
+{
+    auto func =
+        std::make_shared<Function>(Program::GetInstance(), "TestAssembleWithOffset", "TestAssembleWithOffset", nullptr);
+
+    std::vector<int64_t> inShape = {2, 2};
+    std::vector<int64_t> outShape = {3, 4};
+    std::vector<int64_t> toOffset = {1, 1};
+
+    auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, inShape);
+    auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, outShape);
+    auto& assembleOp = func->AddOperation(Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
+    assembleOp.SetAssembleOpAttribute(toOffset);
+
+    Tensor inputTensorData(DT_FP32, inShape);
+    Tensor outputTensorData(DT_FP32, outShape);
+
+    std::vector<float> inputVals = {1.f, 2.f, 3.f, 4.f};
+    auto inputData = RawTensorData::CreateTensor<float>(inputTensorData, inputVals);
+    auto outputData = RawTensorData::CreateConstantTensor<float>(outputTensorData, 0.f);
+
+    auto inputView = std::make_shared<LogicalTensorData>(inputData);
+    auto outputView = std::make_shared<LogicalTensorData>(outputData);
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {inputView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList = {outputView};
+    ExecuteOperationContext ctx = {
+        &frame, &opInter, &assembleOp, &ioperandDataViewList, nullptr, &ooperandInplaceDataViewList};
+
+    opInter.ExecuteOperation(&ctx);
+
+    // 期望输出 3x4（行优先）：
+    // [0, 0, 0, 0]
+    // [0, 1, 2, 0]
+    // [0, 3, 4, 0]
+    std::vector<float> expected = {0.f, 0.f, 0.f, 0.f, 0.f, 1.f, 2.f, 0.f, 0.f, 3.f, 4.f, 0.f};
+    ASSERT_EQ(outputView->GetSize(), static_cast<int64_t>(expected.size()));
+    for (size_t i = 0; i < expected.size(); ++i) {
+        EXPECT_FLOAT_EQ(outputView->Get<float>(i), expected[i]);
+    }
+}
+
 // 测试 OP_VEC_DUP 在 scalar 为极大 double 时对 FP32 类型输出进行 32 位饱和截断
 TEST_F(CalcCommonTest, VecDupClampFp32FromLargeDouble)
 {

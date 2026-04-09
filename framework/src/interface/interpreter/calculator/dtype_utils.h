@@ -8,22 +8,14 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-/*!
- * \file fp8_convert.h
- * \brief FP8 format conversion utilities (E4M3, E5M2, E8M0) between FP8 and Float32.
- */
-
 #pragma once
 
-#include <torch/torch.h>
 #include "tilefwk/data_type.h"
 
 namespace npu::tile_fwk {
 
-// Convert FP8 (stored as uint8) to Float32. actualType specifies the FP8 format.
-torch::Tensor Fp8ToFloat32(const torch::Tensor& self, DataType actualType);
+inline bool IsFp8Dtype(DataType t) { return t == DT_FP8 || t == DT_FP8E4M3 || t == DT_FP8E5M2 || t == DT_FP8E8M0; }
 
-// Convert Float32 to FP8 (returns uint8 tensor). actualType specifies the FP8 format.
-torch::Tensor Float32ToFp8(const torch::Tensor& self, DataType actualType);
+inline bool IsFp4PackedDtype(DataType t) { return t == DT_FP4_E2M1X2 || t == DT_FP4_E1M2X2; }
 
 } // namespace npu::tile_fwk
