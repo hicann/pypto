@@ -1006,6 +1006,29 @@ struct DevControlFlowCache {
             }
         }
     }
+    void RelocDuppedDataAndDynFuncData(RelocRange& relocProgram, RelocRange& relocCtrlCache,
+        DevAscendFunctionDuppedData* duppedData, DynFuncData* dynData, DynFuncDataCache* dynDataCache,
+        DynFuncDataBackup* dynDataBackup)
+    {
+        // Reloc Dupped
+        relocProgram.Reloc(duppedData->source_);
+
+        // Reloc DynFuncData
+        relocProgram.Reloc(dynData->opAttrs);
+        relocProgram.Reloc(dynData->opAtrrOffsets);
+        relocProgram.Reloc(dynData->rawTensorDesc);
+
+        relocCtrlCache.Reloc(dynData->exprTbl);
+        relocCtrlCache.Reloc(dynData->rawTensorAddr);
+
+        relocProgram.Reloc(dynDataCache->devFunc);
+        relocProgram.Reloc(dynDataCache->calleeList);
+
+        relocCtrlCache.Reloc(dynDataCache->predCount);
+        relocCtrlCache.RelocNullable(dynDataBackup->predCountBackup);
+        relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
+    }
+
     /* Host-to-cache: devStartArgs should be nullptr. Cache-to-Device: devStartArgs should be filled */
     void TaskAddrRelocProgramAndCtrlCache(
         uint64_t srcProgram, uint64_t srcCtrlCache, uint64_t dstProgram, uint64_t dstCtrlCache)
@@ -1036,6 +1059,7 @@ struct DevControlFlowCache {
 
             DynFuncHeader*& dynFuncDataListRef = dynTaskBase->dynFuncDataList;
             DynFuncHeader* dynFuncDataList = RelocControlFlowCachePointer(dynFuncDataListRef, relocCtrlCache);
+            relocProgram.Reloc(dynFuncDataList->cceBinary);
             DynFuncDataCache* dynFuncDataCacheList = dynTaskBase->dynFuncDataCacheList;
             DynFuncDataBackup* dynFuncDataBackupList = dynTaskBase->dynFuncDataBackupList;
             MixTaskDataReloc(relocCtrlCache, relocProgram, dynTaskBase, dynFuncDataList);
@@ -1057,24 +1081,7 @@ struct DevControlFlowCache {
                         nodePtr = &node->Next();
                     }
                 }
-
-                // Reloc Dupped
-                relocProgram.Reloc(duppedData->source_);
-
-                // Reloc DynFuncData
-                relocProgram.Reloc(dynData->opAttrs);
-                relocProgram.Reloc(dynData->opAtrrOffsets);
-                relocProgram.Reloc(dynData->rawTensorDesc);
-
-                relocCtrlCache.Reloc(dynData->exprTbl);
-                relocCtrlCache.Reloc(dynData->rawTensorAddr);
-
-                relocProgram.Reloc(dynDataCache->devFunc);
-                relocProgram.Reloc(dynDataCache->calleeList);
-
-                relocCtrlCache.Reloc(dynDataCache->predCount);
-                relocCtrlCache.RelocNullable(dynDataBackup->predCountBackup);
-                relocCtrlCache.RelocNullable(dynDataBackup->rawTensorAddrBackup);
+                RelocDuppedDataAndDynFuncData(relocProgram, relocCtrlCache, duppedData, dynData, dynDataCache, dynDataBackup);
             }
         }
     }

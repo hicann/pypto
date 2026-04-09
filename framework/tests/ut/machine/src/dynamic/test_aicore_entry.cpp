@@ -120,14 +120,20 @@ struct MultipleCore : ThreadAicoreEmulation {
         }
 
         dynFuncDataList.resize(sizeof(DynFuncHeader) + sizeof(DynFuncData) * rootCount);
+        dynFuncBinList.resize(rootCount);
         DynFuncHeader* dataList = reinterpret_cast<DynFuncHeader*>(dynFuncDataList.data());
         dataList->funcNum = rootCount;
         dataList->seqNo = 0;
+        dataList->cceBinary = dynFuncBinList.data();
         for (size_t k = 0; k < dataList->funcNum; k++) {
             dataList->At(k).opAttrs = devFuncAttrList.data();
             dataList->At(k).opAtrrOffsets = devFuncAttrOffsetList.data();
             dataList->At(k).startArgs = &startArgs;
             dataList->At(k).exprTbl = reinterpret_cast<uint64_t*>(devFuncExprTbl.data());
+        }
+
+        for (size_t k = 0; k < attrCount; k++) {
+            devFuncAttrList[k] = 0;
         }
 
         KernelSharedBuffer* buffer = memory->GetSharedBuffer();
@@ -163,6 +169,7 @@ public:
     DeviceArgs devArgs;
     std::unique_ptr<DevDfxArgs> devDfxArgs;
     std::vector<uint8_t> dynFuncDataList;
+    std::vector<DynFuncBin> dynFuncBinList;
     std::vector<uint64_t> devFuncAttrList;
     std::vector<int32_t> devFuncAttrOffsetList;
     std::vector<uint64_t> devFuncExprTbl;

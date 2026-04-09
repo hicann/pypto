@@ -78,6 +78,7 @@ struct ExecuteContext {
     int32_t blockIdx;
     uint32_t seqNo{0};
     __gm__ DynFuncData* funcDataList{nullptr};
+    __gm__ DynFuncBin* cceBinary{nullptr};
     uint64_t lastTaskFinishCycle{0};
 #if ENABLE_AICORE_PRINT
     AicoreLogger logger;
@@ -322,9 +323,25 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
 #else
     CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
 #endif
+
+#ifdef __ENABLE_MAIN_BLOCK
+#define __MAIN_BLOCK 1
+#else
+#define __MAIN_BLOCK 0
+#endif
+
+#ifdef __DAV_V310
+   // for mix coretasks, use cube's stackworkspace
+    int index = __MAIN_BLOCK ? (opAttrs[0] + 1) / 2 :opAttrs[0];
+    int64_t blockIndex = (ctx->cceBinary[index].mixResourceType != 0) ? get_block_idx() : ctx->blockIdx;
+    int64_t gmStackAddr = funcData->stackWorkSpaceAddr + blockIndex * funcData->stackWorkSpaceSize;
+#else
+    int64_t gmStackAddr = funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize;
+#endif
+
     CallSubFuncTask(
         opAttrs[0] + funcData->exprTbl[0], &param,
-        funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize,
+        gmStackAddr,
         (__gm__ int64_t*)funcData->startArgs->commContexts);
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();
@@ -349,6 +366,7 @@ INLINE void InitCtx(ExecuteContext* ctx, __gm__ Metrics* metric, uint64_t coreFu
     ctx->seqNo = header->seqNo;
     PerfTraceRecord(ctx->seqNo, metric, PERF_TRACE_CORE_DEV_TASK_RCV_MODEL, ctx->args);
     ctx->funcDataList = (__gm__ npu::tile_fwk::DynFuncData*)(header + 1);
+    ctx->cceBinary = (__gm__ npu::tile_fwk::DynFuncBin*)(header->cceBinary);
     ctx->lastTaskFinishCycle = 0;
 #if ENABLE_AICORE_PRINT
     auto buffer = reinterpret_cast<__gm__ uint8_t*>(ctx->args->shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX]);

@@ -46,6 +46,9 @@ static int CompileCoreMachine(
     const std::string coreType = isCube ? "-D__AIC__" : "-D__AIV__";
     const auto& opType = OpInfoManager::GetInstance().GetOpType();
     std::string hasSubFunc = headFile.empty() ? "" : "-D__HAS_SUB_FUNC__";
+    const std::string davArch = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_2201) ? "-D__DAV_V220" : "-D__DAV_V310";
+    const std::string enableMainBlock = ((config::GetPassGlobalConfig(KEY_ENABLE_VF, false) ||
+        config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1)) ? "-D__ENABLE_MAIN_BLOCK" : "";
     std::string ccecCmd;
     ccecCmd.resize(CMD_SIZE_2K);
     std::string includePath = GetCurrentSharedLibPath() + "/../include/tile_fwk";
@@ -69,11 +72,11 @@ static int CompileCoreMachine(
         "-I%s/ "
         "-I%s/include/tileop/arch32 "
         "-I%s/include/ "
-        "-o %s "
-        "%s",
+        "-o %s %s %s %s",
         BISHENG_PROGRAM_CMD, cc_opt.c_str(), std::to_string(tilingKey).c_str(), opType.c_str(), headFile.c_str(),
         hasSubFunc.c_str(), coreType.c_str(), includePath.c_str(), includePath.c_str(),
-        GetCurrentSharedLibPath().c_str(), GetCurrentSharedLibPath().c_str(), objFile.c_str(), aicoreSrcFile.c_str());
+        GetCurrentSharedLibPath().c_str(), GetCurrentSharedLibPath().c_str(), objFile.c_str(),
+        aicoreSrcFile.c_str(), davArch.c_str(), enableMainBlock.c_str());
     if (ret < 0) {
         MACHINE_LOGE(HostBackEndErr::COMPILE_AICORE_FAILED, "Compile aicore construct cmd failed.");
         return ret;
