@@ -332,6 +332,9 @@ def lightning_indexer(case_name: str) -> bool:
     elif case_name == "LightningIndexerSTest.lightning_indexer_quant_8_b_2_s1_64k_s2":
         b, s1 = 8, 2
         act_seq = [32767, 32656, 384, 2000, 64 * 1024, 971, 32 * 1024 + 101, 129090]
+    elif case_name == "LightningIndexerSTest.lightning_indexer_quant_4_b_2_s1_64k_s2_perf":
+        b, s1 = 4, 2  # batch size和query序列长度
+        act_seq = [64 * 1024] * b # 每个样本的实际序列长度
     else:
         logging.error("Fail to gen golden for Case(%s)", case_name)
         return False
@@ -393,6 +396,12 @@ def test_lightning_indexer_topk_quant_8_b_2_s1_64k_s2():
     lightning_indexer("LightningIndexerSTest.lightning_indexer_quant_8_b_2_s1_64k_s2")
 
 
+@pytest.mark.skip(reason="large shape")
+def test_lightning_indexer_topk_quant_4_b_2_s1_64k_s2_perf():
+    lightning_indexer("LightningIndexerSTest.lightning_indexer_quant_4_b_2_s1_64k_s2_perf")
+
+
 if __name__ == "__main__":
     test_lightning_indexer_topk_quant_4_b_2_s1_64k_s2()
     test_lightning_indexer_topk_quant_8_b_2_s1_64k_s2()
+    test_lightning_indexer_topk_quant_4_b_2_s1_64k_s2_perf()
