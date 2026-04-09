@@ -104,7 +104,7 @@ class NestedFunctionMarker:
                         )
 
             # Check the dtype of input tensors and input tensor definitions
-            if input_tensor_def.status_dtype is not None and arg_value.dtype != input_tensor_def.dtype:
+            if input_tensor_def.explicit_dtype is not None and arg_value.dtype != input_tensor_def.dtype:
                 raise ValueError(
                     f"In nested function '{self._func_name}': "
                     f"The dtype of {ordinal(idx)} parameter '{param_name}' ({arg_value.dtype}) "

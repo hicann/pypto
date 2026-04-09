@@ -54,7 +54,7 @@ void ParseTensorData(
         }
     }
     //  Use dtype from type annotation when provided; otherwise fallback to torch tensor dtype.
-    if (!tensorDef.is_none() && !tensorDef.attr("status_dtype").is_none()) {
+    if (!tensorDef.is_none() && !tensorDef.attr("explicit_dtype").is_none()) {
         dtype = tensorDef.attr("_base").cast<Tensor&>().GetDataType();
     }
 }
@@ -133,7 +133,7 @@ int TorchTensorConverter::Convert(
         ASSERT(py::isinstance<Tensor>(base)) << "the '_base' attribute must be a Tensor type";
         auto& t = base.cast<Tensor&>();
 
-        if (tensorDef.attr("explicit_format").cast<bool>()) {
+        if (!tensorDef.attr("explicit_format").is_none()) {
             format = t.Format();
         } else {
             std::string device_type = py::cast<std::string>(tensorDevice.attr("type"));
@@ -148,7 +148,7 @@ int TorchTensorConverter::Convert(
             }
         }
         // Use dtype from type annotation when provided; otherwise fallback to torch tensor dtype.
-        if (!tensorDef.attr("status_dtype").is_none()) {
+        if (!tensorDef.attr("explicit_dtype").is_none()) {
             dtype = t.GetDataType();
         }
 
