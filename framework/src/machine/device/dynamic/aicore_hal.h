@@ -19,6 +19,7 @@
 #include "machine/device/dynamic/aicore_constants.h"
 #include "machine/device/dynamic/aicore_prof.h"
 #include "machine/device/dynamic/costmodel_utils.h"
+#include "machine/device/dynamic/eslmodel_aicore_hal.h"
 
 namespace npu::tile_fwk::dynamic {
 constexpr uint32_t NUM_ONE = 1;
@@ -69,6 +70,12 @@ public:
             regSprDataMainBase_ = DAV_3510::REG_SPR_DATA_MAIN_BASE;
             regSprCond_ = DAV_3510::REG_SPR_COND;
             isNeedWriteRegForFastPath_ = false;
+        }
+        enableEslModel_ = deviceArgs->enableEslModel;
+        DEV_IF_NONDEVICE {
+            if (enableEslModel_) {
+                eslModel_.Init();
+            }
         }
     }
 
@@ -145,11 +152,14 @@ public:
         if constexpr (IsDeviceMode()) {
             *readyRegQueues_[GetPhyIdByBlockId(coreIdx)] = value;
         } else {
-            DEV_VERBOSE_DEBUG("set coreidx %d value %lx.", coreIdx, value);
-            auto taskId = value - 1;
-            if (value == 0 || taskId == AICORE_TASK_STOP || (taskId & 0xFFFFFFFF) == AICORE_FUNC_STOP)
-                return;
-            CostModelSendTask(coreIdx, taskId, {});
+            if (enableEslModel_) {
+                eslModel_.WriteEslReg(coreIdx, &value);
+            }else {
+                DEV_VERBOSE_DEBUG("set coreidx %d value %lx.", coreIdx, value);
+                auto taskId = value - 1;
+                if (value == 0 || taskId == AICORE_TASK_STOP || (taskId & 0xFFFFFFFF) == AICORE_FUNC_STOP) return;
+                CostModelSendTask(coreIdx, taskId, {});
+            }
         }
     }
 
@@ -260,7 +270,11 @@ public:
         if constexpr (IsDeviceMode()) {
             return *(finishRegQueues_[GetPhyIdByBlockId(coreIdx)]);
         } else {
-            return CostModelGetTask(coreIdx);
+            if (enableEslModel_) {
+                return eslModel_.ReadEslReg(coreIdx);
+            }else {
+                return CostModelGetTask(coreIdx);
+            }
         }
     }
 
@@ -438,7 +452,15 @@ public:
 #endif
             arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = funcdata;
         } else {
-            if (costModel_) {
+            if (enableEslModel_) {
+                if (args_[coreIdx] == nullptr) {
+                    args_[coreIdx] = reinterpret_cast<KernelArgs*>((static_cast<uint64_t>(sharedBuffer_)) + SHARED_BUFFER_SIZE * coreIdx);
+                }
+                volatile KernelArgs *arg = args_[coreIdx];
+                eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&arg->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX]), sizeof(funcdata), &funcdata);
+                uint64_t valToSend = 0;
+                eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&arg->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX]), sizeof(uint64_t), &valToSend);
+            } else if (costModel_) {
                 costModel_->InitData(coreIdx, funcdata);
             }
         }
@@ -467,16 +489,25 @@ public:
     }
 
     // We must makesure close 0x18 before aicore exit.
-    void ResetShakeBuf(int coreIdx)
-    {
-        if (isNeedWriteRegForFastPath_) {
-            WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_CLOSE);
-            __sync_synchronize();
+    void ResetShakeBuf(int coreIdx) {
+        if constexpr (IsDeviceMode()) {
+            if (isNeedWriteRegForFastPath_) {
+                WriteReg32(coreIdx, REG_SPR_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_CLOSE);
+                __sync_synchronize();
+            }
+            args_[coreIdx]->shakeBuffer[0] = 0;
+            args_[coreIdx]->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
+            args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
+            return;
+        }else {
+            if (enableEslModel_) {
+                uint64_t valToSend = 0;
+                eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&args_[coreIdx]->shakeBuffer[0]), sizeof(uint64_t), &valToSend);
+                valToSend = AICORE_SAY_GOODBYE;
+                eslModel_.WriteEslMem(reinterpret_cast<uint64_t>(&args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX]), sizeof(uint64_t), &valToSend);
+            }
+            
         }
-        args_[coreIdx]->shakeBuffer[0] = 0;
-        args_[coreIdx]->shakeBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_COREFUNC_DATA_INDEX] = 0;
-        args_[coreIdx]->waveBufferCpuToCore[CPU_TO_CORE_SHAK_BUF_GOODBYE_INDEX] = AICORE_SAY_GOODBYE;
-        return;
     }
 
     volatile TaskStat* GetTaskStat(int coreIdx, int pos)
@@ -513,5 +544,8 @@ private:
     bool isNeedWriteRegForFastPath_{true};
     AiCoreProf* aicoreProf_{nullptr};
     CostModel::AiCoreModel* costModel_{nullptr};
+
+    bool enableEslModel_;
+    EslAicoreHal eslModel_;
 };
 } // namespace npu::tile_fwk::dynamic

@@ -820,7 +820,9 @@ int DeviceRunner::Init(void)
         MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "RegisterKernelBin failed\n");
         return -1;
     }
-    InitAicpuServer();
+    if (config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) != 2) {
+        InitAicpuServer();
+    }
     StartMachinePerfTraceDumpThread();
     return 0;
 }

@@ -576,27 +576,31 @@ private:
         CORE_FINISH_STOP,
     };
 
-    void SendStopToCore(int coreIdx, bool isLastDevTask, AicoreStatus* coreStatus, int& finishStopNum)
-    {
-        DEV_IF_DEVICE
-        {
-            if (isLastDevTask) {
-                NormalStopSingleCore(coreIdx);
-                coreStatus[coreIdx] = AicoreStatus::CORE_FINISH_STOP;
-                finishStopNum++;
-                DEV_VERBOSE_DEBUG("Last devtask ,core %d send AICORE_TASK_STOP.", coreIdx);
-            } else {
-                uint64_t stopFlag =
-                    (static_cast<uint64_t>(curTaskId_) << REG_HIGH_DTASKID_SHIFT) | (AICORE_FUNC_STOP + 1);
-                aicoreHal_.SetReadyQueue(coreIdx, stopFlag);
-                coreStatus[coreIdx] = AicoreStatus::CORE_SEND_STOP;
-                DEV_VERBOSE_DEBUG("core %d send AICORE_FUNC_STOP %lx.", coreIdx, stopFlag);
-            }
-        }
-        else
-        {
+    void SendStopToDevCore(int coreIdx, bool isLastDevTask, AicoreStatus *coreStatus, int &finishStopNum) {
+        if (isLastDevTask) {
+            NormalStopSingleCore(coreIdx);
             coreStatus[coreIdx] = AicoreStatus::CORE_FINISH_STOP;
             finishStopNum++;
+            DEV_VERBOSE_DEBUG("Last devtask ,core %d send AICORE_TASK_STOP.", coreIdx);
+        } else {
+            uint64_t stopFlag =
+                (static_cast<uint64_t>(curTaskId_) << REG_HIGH_DTASKID_SHIFT) | (AICORE_FUNC_STOP + 1);
+            aicoreHal_.SetReadyQueue(coreIdx, stopFlag);
+            coreStatus[coreIdx] = AicoreStatus::CORE_SEND_STOP;
+            DEV_VERBOSE_DEBUG("core %d send AICORE_FUNC_STOP %lx.", coreIdx, stopFlag);
+        }
+    }
+
+    void SendStopToCore(int coreIdx, bool isLastDevTask, AicoreStatus *coreStatus, int &finishStopNum) {
+        DEV_IF_DEVICE {
+            SendStopToDevCore(coreIdx, isLastDevTask, coreStatus, finishStopNum);
+        } else {
+            if (enableEslModel_) {
+                SendStopToDevCore(coreIdx, isLastDevTask, coreStatus, finishStopNum);
+            } else {
+                coreStatus[coreIdx] = AicoreStatus::CORE_FINISH_STOP;
+                finishStopNum++;
+            }
         }
     }
 
@@ -618,27 +622,31 @@ private:
         }
     }
 
-    inline void AicoreDevTaskFinishProc(int coreIdx, bool isLastDevTask, AicoreStatus* coreStatus, int& finishStopNum)
-    {
+    inline void CheckAndHandleCoreStopAck(int coreIdx, AicoreStatus* coreStatus, int& finishStopNum) {
+        if ((coreStatus[coreIdx] == AicoreStatus::CORE_SEND_STOP) &&
+        (aicoreHal_.GetFinishedTask(coreIdx) == ((static_cast<uint64_t>(curTaskId_) << REG_HIGH_DTASKID_SHIFT) 
+                                                 | (AICORE_FUNC_STOP | AICORE_FIN_MASK)))) {
+            SendPreFetchNextDevTaskDataToCore(coreIdx);
+            coreStatus[coreIdx] = AicoreStatus::CORE_FINISH_STOP;
+            finishStopNum++;
+            DEV_VERBOSE_DEBUG("core %d rsp AICORE_FUNC_STOP ack.", coreIdx);
+        }
+    }
+
+    inline void AicoreDevTaskFinishProc(int coreIdx,  bool isLastDevTask,
+                AicoreStatus *coreStatus, int &finishStopNum) {
         if ((coreStatus[coreIdx] == AicoreStatus::CORE_TASK_WAIT_FINISH) && CheckStopTaskCanBeSent(coreIdx)) {
             SendStopToCore(coreIdx, isLastDevTask, coreStatus, finishStopNum);
         }
-
         if (!isLastDevTask) {
-            DEV_IF_DEVICE
-            {
-                if ((coreStatus[coreIdx] == AicoreStatus::CORE_SEND_STOP) &&
-                    (aicoreHal_.GetFinishedTask(coreIdx) ==
-                     ((static_cast<uint64_t>(curTaskId_) << REG_HIGH_DTASKID_SHIFT) |
-                      (AICORE_FUNC_STOP | AICORE_FIN_MASK)))) {
-                    SendPreFetchNextDevTaskDataToCore(coreIdx);
-                    coreStatus[coreIdx] = AicoreStatus::CORE_FINISH_STOP;
-                    finishStopNum++;
-                    DEV_VERBOSE_DEBUG("core %d rsp AICORE_FUNC_STOP ack.", coreIdx);
+            DEV_IF_DEVICE {
+                CheckAndHandleCoreStopAck(coreIdx, coreStatus, finishStopNum);
+            } else {
+                if (enableEslModel_) {
+                    CheckAndHandleCoreStopAck(coreIdx, coreStatus, finishStopNum);
                 }
             }
         }
-
         return;
     }
 
@@ -1664,6 +1672,7 @@ private:
         aicpuIdx_ = threadIdx;
         schedIdx_ = schedIdx;
         aicValidNum_ = deviceArgs->nrValidAic;
+        enableEslModel_ = deviceArgs->enableEslModel;
         aicoreHal_.Init(deviceArgs, &aicoreProf_);
         validGetPgMask_ = deviceArgs->validGetPgMask;
         runningIds_.fill(AICORE_STATUS_INIT);
@@ -2074,5 +2083,7 @@ private:
 
     AicoreLogger* logger_{nullptr};
     friend class AiCoreProf;
+
+    bool enableEslModel_;
 };
 } // namespace npu::tile_fwk::dynamic

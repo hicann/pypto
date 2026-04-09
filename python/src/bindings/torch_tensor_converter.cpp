@@ -160,6 +160,9 @@ int TorchTensorConverter::Convert(
             throw std::runtime_error("All input tensors must be on the same device");
         }
     }
+    if (config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) {
+        return 0;
+    }
     if (py::getattr(device, "type").cast<std::string>() != "npu") {
         throw std::runtime_error("Not npu device");
     }
