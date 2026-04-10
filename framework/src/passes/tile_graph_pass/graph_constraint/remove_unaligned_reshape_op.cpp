@@ -137,19 +137,20 @@ std::vector<int64_t> FindChangedDims(const std::vector<int64_t>& inputShapes, co
 void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOps(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "===> Start ReplaceDynUnalignedReshapeOps.");
-    for (auto& op : function.Operations()) {
-        if (op.GetOpcode() != Opcode::OP_RESHAPE || processedReshapeOps.count(op.GetOpMagic())) {
+    auto opList = function.Operations().DuplicatedOpList();
+    for (auto& op : opList) {
+        if (op->GetOpcode() != Opcode::OP_RESHAPE || processedReshapeOps.count(op->GetOpMagic())) {
             continue;
         }
-        auto input = op.GetIOperands().front();
-        auto output = op.GetOOperands().front();
+        auto input = op->GetIOperands().front();
+        auto output = op->GetOOperands().front();
         if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
             output->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-            ReplaceDynUnalignedReshapeOpsForUB(function, op);
+            ReplaceDynUnalignedReshapeOpsForUB(function, *op);
         } else if (
             input->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
             output->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-            ReplaceDynUnalignedReshapeOpsForDDR(function, op);
+            ReplaceDynUnalignedReshapeOpsForDDR(function, *op);
         }
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End ReplaceDynUnalignedReshapeOps.");

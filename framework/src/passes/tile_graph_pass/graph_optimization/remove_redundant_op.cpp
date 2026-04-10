@@ -197,15 +197,16 @@ Status RemoveRedundantOp::RemoveDummyOps(Function& function)
 
 Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
 {
-    for (auto& op : function.Operations()) {
-        auto opcode = op.GetOpcode();
+    auto opList = function.Operations().DuplicatedOpList();
+    for (auto& op : opList) {
+        auto opcode = op->GetOpcode();
         if (opcode != Opcode::OP_VIEW) {
             // 跳过非view的op
             continue;
         }
-        auto& startTensor = op.iOperand.front();
+        auto& startTensor = op->iOperand.front();
         auto inputMemtype = startTensor->GetMemoryTypeOriginal();
-        auto consumers = op.oOperand.front()->GetConsumers();
+        auto consumers = op->oOperand.front()->GetConsumers();
         // 获取view级联的assemble消费者
         for (const auto& consumer : consumers) {
             if (consumer->GetOpcode() != Opcode::OP_ASSEMBLE) {
@@ -228,7 +229,7 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
                 //                            ---> view2  ---> tempTensor2  --->  assemble2
                 APASS_LOG_DEBUG_F(
                     Elements::Operation,
-                    "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.", op.opmagic,
+                    "CASE1: Process OP_VIEW[%d]'s input and OP_ASSEMBLE[%d]'s output perfectMatch.", op->opmagic,
                     consumer->GetOpMagic());
                 ProcessPerfectMatch(function, startTensor, endTensor);
             } else {
@@ -243,8 +244,8 @@ Status RemoveRedundantOp::ProcessViewAssemble(Function& function)
                 //                             ---> view2  ---> tempTensor2  --->  assemble2
                 APASS_LOG_DEBUG_F(
                     Elements::Operation, "CASE2: Process OP_VIEW[%d]'s input is a part of OP_ASSEMBLE[%d]'s output.",
-                    op.opmagic, consumer->GetOpMagic());
-                GenerateNewView(function, op, startTensor, endTensor);
+                    op->opmagic, consumer->GetOpMagic());
+                GenerateNewView(function, *op, startTensor, endTensor);
             }
         }
     }
