@@ -16,19 +16,19 @@
 
 #### 算子开发与编排
 - `pypto-op-workflow`：无状态的全流程 Skill 入口，用于手动串联算子开发阶段
-- `pypto-intent-understanding`：将自然语言算子需求转化为结构化规格
-- `pypto-api-explorer`：探索 API 映射、约束条件与实现可行性
-- `pypto-golden-generator`：生成用于精度对比的 golden 参考实现
+- `pypto-intent-understand`：将自然语言算子需求转化为结构化规格
+- `pypto-api-explore`：探索 API 映射、约束条件与实现可行性
+- `pypto-golden-generate`：生成用于精度对比的 golden 参考实现
 - `pypto-op-design`：生成算子设计方案，明确数据切分、tiling 与 loop 结构
 - `pypto-op-develop`：Stage 5 实现阶段 Skill，生成实现、测试入口与 README
 
 #### 精度验证与调试
-- `pypto-precision-debugger`：定位并修复精度问题
+- `pypto-precision-debug`：定位并修复精度问题
 - `pypto-precision-compare`：精度对比与定位，支持文件保存和二分对比两种方法
 - `pypto-aicore-error-locator`：定位 aicore error 的问题文件和代码行
 
 #### 性能分析
-- `pypto-operator-auto-tuner`：分析性能数据、定位瓶颈并给出优化依据，基于实测性能数据迭代调优，并验证精度与性能收益
+- `pypto-op-perf-tune`：分析性能数据、定位瓶颈并给出优化依据，基于实测性能数据迭代调优，并验证精度与性能收益
 
 #### 环境与工具
 - `pypto-environment-setup`：PyPTO 环境安装与环境问题修复

@@ -66,6 +66,6 @@
 | 错误类型 | 关联 Skill |
 |----------|------------|
 | 环境问题 | `pypto-environment-setup` |
-| 精度问题 | `pypto-precision-debugger` / `pypto-precision-compare` |
+| 精度问题 | `pypto-precision-debug` / `pypto-precision-compare` |
 | AICore Error | `pypto-aicore-error-locator` |
 | Pass 问题 | `pypto-pass-error-fixer` |

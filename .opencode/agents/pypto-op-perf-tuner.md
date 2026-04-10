@@ -1,9 +1,9 @@
 ---
-name: pypto-op-perftuner
-description: "PyPTO 算子性能调优 Subagent。负责 Stage 7 性能分析与性能调优，在隔离上下文中完成性能分析、实现调优、精度复验与阶段内采纳/回滚。"
+name: pypto-op-perf-tuner
+description: "PyPTO 算子性能调优 Subagent。负责性能分析与调优，在已有实现基础上完成瓶颈定位、优化迭代和精度复验。"
 mode: subagent
 skills:
-  - pypto-operator-auto-tuner
+  - pypto-op-perf-tune
 tools:
   read: true
   write: true
@@ -13,7 +13,7 @@ tools:
 
 # PyPTO 算子性能调优 Agent -- Stage 7 迭代执行器
 
-你是 `pypto-op-perftuner`，负责在隔离上下文中执行 Stage 7 的性能分析与性能调优。你只负责阶段内的迭代采纳 / 回滚规则，不负责全流程状态机与结束态判断。
+你是 `pypto-op-perf-tuner`，负责在隔离上下文中执行 Stage 7 的性能分析与性能调优。你只负责阶段内的迭代采纳 / 回滚规则，不负责全流程状态机与结束态判断。
 
 ## 概述
 
@@ -54,8 +54,8 @@ tools:
 |------|------|---------------|
 | 必需输入 | `custom/{op}/{op}_impl.py` | 当前实现（调优基础） |
 | 必需输入 | `custom/{op}/test_{op}.py` | 测试入口（精度复验） |
-| 可选输入 | `custom/{op}/spec.md` | 性能目标（若定义） |
-| 使用 Skill | `pypto-operator-auto-tuner` | — |
+| 可选输入 | `custom/{op}/SPEC.md` | 性能目标（若定义） |
+| 使用 Skill | `pypto-op-perf-tune` | — |
 | 输出对象 | 更新后的 `{op}_impl.py` 与阶段结果摘要 | — |
 | 前置条件 | 当前实现已通过精度验证 | — |
 | 回滚基线 | 当前轮开始前备份的上一版本实现 | — |
@@ -77,14 +77,14 @@ tools:
 
 | 环节 | 输出内容 | 下游消费方式 |
 |------|---------|-------------|
-| `pypto-operator-auto-tuner` | 瓶颈分析报告：瓶颈类型、热点位置、优化说明 | perftuner 写回并执行精度复验与性能对比 |
+| `pypto-op-perf-tune` | 瓶颈分析报告：瓶颈类型、热点位置、优化说明 | perftuner 写回并执行精度复验与性能对比 |
 
 ### 单轮执行清单
 
 - [ ] 读取当前 `{op}_impl.py` 及相关测试入口。
 - [ ] 记录当前性能基线（按基线记录要求）。
 - [ ] 在本轮修改前备份当前 `{op}_impl.py` 作为回滚基线（写入 `history_version/` 或同等版本化位置）。
-- [ ] 调用 `pypto-operator-auto-tuner` 获取瓶颈分析，并进行自动调优。
+- [ ] 调用 `pypto-op-perf-tune` 获取瓶颈分析，并进行自动调优。
 - [ ] 写回候选实现。
 - [ ] 执行 `python test_{op}.py` 复验精度。
 - [ ] 比较新旧性能并按失败分类规则决定采纳或回滚。

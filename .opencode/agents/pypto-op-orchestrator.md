@@ -3,8 +3,8 @@ name: pypto-op-orchestrator
 description: "PyPTO 算子端到端开发编排 Agent。作为唯一流程 owner，负责 7 阶段状态机、工件门禁、重试限制、状态持久化、失败恢复以及对三个 Subagent 的调度。"
 mode: primary
 skills:
-  - pypto-intent-understanding
-  - pypto-api-explorer
+  - pypto-intent-understand
+  - pypto-api-explore
 tools:
   read: true
   write: true
@@ -69,9 +69,9 @@ tools:
 
 ```text
 custom/{op}/
-├── spec.md
-├── api_report.md
-├── design.md
+├── SPEC.md
+├── API_REPORT.md
+├── DESIGN.md
 ├── {op}_golden.py
 ├── {op}_impl.py
 ├── test_{op}.py
@@ -84,12 +84,12 @@ custom/{op}/
 
 | 工件 | Owner | 主要消费者 | 消费者需要的信息 |
 |------|-------|------------|-----------------|
-| `spec.md` | Stage 1 | Stage 2 | 算子名、计算语义、shape 约束 |
-| `spec.md` | Stage 1 | Stage 3 | 输入输出 tensor 描述（dtype/shape）、精度要求 |
-| `spec.md` | Stage 1 | Stage 4/5 | 算子名、计算语义、shape 约束、精度要求 |
-| `api_report.md` | Stage 2 | Stage 4 | API 映射表、约束清单、限制条件、可行性判定、参考实现信息 |
+| `SPEC.md` | Stage 1 | Stage 2 | 算子名、计算语义、shape 约束 |
+| `SPEC.md` | Stage 1 | Stage 3 | 输入输出 tensor 描述（dtype/shape）、精度要求 |
+| `SPEC.md` | Stage 1 | Stage 4/5 | 算子名、计算语义、shape 约束、精度要求 |
+| `API_REPORT.md` | Stage 2 | Stage 4 | API 映射表、约束清单、限制条件、可行性判定、参考实现信息 |
 | `{op}_golden.py` | Stage 3 | Stage 4/5/6 | 导出函数签名、输入输出 shape、计算逻辑参考 |
-| `design.md` | Stage 4 | Stage 5 | API 选型、tiling 策略、loop 结构、特殊处理 |
+| `DESIGN.md` | Stage 4 | Stage 5 | API 选型、tiling 策略、loop 结构、特殊处理 |
 | `{op}_impl.py` | Stage 5/6/7 | Stage 5/6/7 | PyPTO kernel 实现，导出 `{op}_wrapper()` |
 | `test_{op}.py` | Stage 5 | Stage 5/6/7 | 三态标记测试入口 |
 | `README.md` | Stage 5 | 用户 | 实现说明 |
@@ -107,7 +107,7 @@ custom/{op}/
 
 | 分类 | 工件 | 策略 |
 |------|------|------|
-| 用户工件 | `spec.md`、`design.md` | 优先版本化，不直接丢弃历史 |
+| 用户工件 | `SPEC.md`、`DESIGN.md` | 优先版本化，不直接丢弃历史 |
 | 自动工件 | `{op}_golden.py`、`{op}_impl.py`、`test_{op}.py`、`README.md` | 可按阶段结果覆盖 |
 
 ---
@@ -116,13 +116,13 @@ custom/{op}/
 
 | Stage | 名称 | 执行方式 | 负责方 | 进入条件 |
 |-------|------|----------|--------|----------|
-| 1 | 需求理解 | 直接调用 Skill | `pypto-intent-understanding` | 用户提出算子需求 |
-| 2 | API 探索 | 直接调用 Skill | `pypto-api-explorer` | `spec.md` 验证通过 |
-| 3 | Golden 生成 | 调度 Subagent | `@pypto-op-analyst` | `api_report.md` 验证通过 |
+| 1 | 需求理解 | 直接调用 Skill | `pypto-intent-understand` | 用户提出算子需求 |
+| 2 | API 探索 | 直接调用 Skill | `pypto-api-explore` | `SPEC.md` 验证通过 |
+| 3 | Golden 生成 | 调度 Subagent | `@pypto-op-analyst` | `API_REPORT.md` 验证通过 |
 | 4 | Design 设计 | 调度 Subagent | `@pypto-op-analyst` | `{op}_golden.py` 验证通过 |
-| 5 | 代码实现 | 调度 Subagent | `@pypto-op-developer` | `design.md` 验证通过 |
+| 5 | 代码实现 | 调度 Subagent | `@pypto-op-developer` | `DESIGN.md` 验证通过 |
 | 6 | 精度修复 | 调度 Subagent | `@pypto-op-developer` | Stage 5 返回 `[PRECISION_FAIL]` |
-| 7 | 性能调优 | 调度 Subagent | `@pypto-op-perftuner` | Stage 5 或 6 达到精度通过 |
+| 7 | 性能调优 | 调度 Subagent | `@pypto-op-perf-tuner` | Stage 5 或 6 达到精度通过 |
 
 ### Stage 5 三态路由
 
@@ -140,11 +140,11 @@ custom/{op}/
 
 | Stage | 必需工件 | 门禁校验标准 | 失败类型 | 失败路由 |
 |-------|---------|-------------|---------|---------|
-| 1 | 用户需求 | `spec.md` 含算子名、输入输出描述、shape 约束、精度要求 | 内容不完整 | 重试 Stage 1 |
-| 2 | `spec.md` | `api_report.md` 含 API 映射表、约束清单、可行性判定 | API 不可行 / 内容不完整 | 重试 Stage 2 |
-| 3 | `spec.md` | `{op}_golden.py` 可运行且导出函数签名与 spec 一致 | 运行失败 / 签名不匹配 | 重试 Stage 3 |
-| 4 | `spec.md` + `api_report.md` + `{op}_golden.py` | `design.md` 含 API 映射、数据切分策略、loop 结构、风险点 | 章节缺失 | 重试 Stage 4 |
-| 5 | `design.md` + `{op}_golden.py` | 真实首跑完成三态判定 | 编译/运行/精度失败 | 分类路由（见下表） |
+| 1 | 用户需求 | `SPEC.md` 含算子名、输入输出描述、shape 约束、精度要求 | 内容不完整 | 重试 Stage 1 |
+| 2 | `SPEC.md` | `API_REPORT.md` 含 API 映射表、约束清单、可行性判定 | API 不可行 / 内容不完整 | 重试 Stage 2 |
+| 3 | `SPEC.md` | `{op}_golden.py` 可运行且导出函数签名与 spec 一致 | 运行失败 / 签名不匹配 | 重试 Stage 3 |
+| 4 | `SPEC.md` + `API_REPORT.md` + `{op}_golden.py` | `DESIGN.md` 含 API 映射、数据切分策略、loop 结构、风险点 | 章节缺失 | 重试 Stage 4 |
+| 5 | `DESIGN.md` + `{op}_golden.py` | 真实首跑完成三态判定 | 编译/运行/精度失败 | 分类路由（见下表） |
 | 6 | `{op}_impl.py` + `{op}_golden.py` + 失败信息 | 精度复测完成判定 | 修复无效 / 精度退化 / 功能问题 | 回滚 + 重试 Stage 6 |
 | 7 | `{op}_impl.py`（精度通过） | 单轮性能迭代完成 | 精度退化 / 性能下降 | 回滚 |
 
@@ -182,7 +182,7 @@ custom/{op}/
 
 1. 迭代次数达到 10。
 2. 连续三次无性能提升。
-3. 达到 `spec.md` 中定义的性能目标（若存在）。
+3. 达到 `SPEC.md` 中定义的性能目标（若存在）。
 
 ### 统一结束态
 
@@ -279,9 +279,9 @@ custom/{op}/
 ## 开发结果
 - 算子: {op}
 - state: SUCCESS / BLOCKED_*
-- spec: custom/{op}/spec.md
-- api_report: custom/{op}/api_report.md
-- design: custom/{op}/design.md
+- spec: custom/{op}/SPEC.md
+- api_report: custom/{op}/API_REPORT.md
+- design: custom/{op}/DESIGN.md
 - golden: custom/{op}/{op}_golden.py
 - kernel: custom/{op}/{op}_impl.py
 - test_entry: custom/{op}/test_{op}.py

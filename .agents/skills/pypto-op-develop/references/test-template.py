@@ -7,7 +7,7 @@
   - 本文件是 test_{op}.py 的固定模板，由 pypto-op-develop 在 Stage 3 生成。
   - 所有 {op} 占位符需替换为实际算子名称。
   - test_{op}.py 只做 import + 调用 + 精度对比，不包含 golden 或 kernel 实现代码。
-  - golden 实现来自 {op}_golden.py（Stage 2A 由 pypto-golden-generator 生成）。
+  - golden 实现来自 {op}_golden.py（Stage 2A 由 pypto-golden-generate 生成）。
   - kernel 实现来自 {op}_impl.py（Stage 3 由 pypto-op-develop 生成）。
   - 精度对比必须使用 numpy.testing.assert_allclose，禁止手写 assert max_diff < tolerance。
   - 模式参照 examples/ 与 models/ 的统一规范。

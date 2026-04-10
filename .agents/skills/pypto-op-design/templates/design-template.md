@@ -3,7 +3,7 @@
 > **算子名称**: {operator_name}
 > **算子分类**: {category}
 > **生成时间**: {timestamp}
-> **基于**: spec.md
+> **基于**: SPEC.md
 
 ---
 
@@ -30,7 +30,7 @@ Algorithm: {algorithm_name}
 ### 1.4 数据流图
 
 ```
-{ASCII数据流图，从 spec.md §3 复制}
+{ASCII数据流图，从 SPEC.md §3 复制}
 ```
 
 ---
@@ -214,7 +214,7 @@ def {operator_name}_golden({golden_params}) -> {golden_return_type}:
 
 ### 6.2 测试用例设计
 
-#### 基于 spec.md 所有典型配置
+#### 基于 SPEC.md 所有典型配置
 
 | 配置名称 | 类型 | 优先级 | 参数 | 输入 Shape | 输出 Shape | 说明 |
 |----------|------|--------|------|------------|------------|------|
@@ -238,7 +238,7 @@ def {operator_name}_golden({golden_params}) -> {golden_return_type}:
 
 ### 7.1 性能目标
 
-基于 spec.md 典型配置（性能类）的预期性能：
+基于 SPEC.md 典型配置（性能类）的预期性能：
 
 | 配置名称 | 类型 | 优先级 | 参数 | 输入 Shape | 输出 Shape | 预期 kernel 耗时 |
 |----------|------|--------|------|------------|------------|------------------|
@@ -295,8 +295,8 @@ def {operator_name}_golden({golden_params}) -> {golden_return_type}:
 
 ```
 custom/{operator_name}/
-├── spec.md                          # 需求规范（已有）
-├── design.md                        # 设计文档（本文件）
+├── SPEC.md                          # 需求规范（已有）
+├── DESIGN.md                        # 设计文档（本文件）
 ├── {operator_name}_golden.py        # Golden 参考实现
 ├── {operator_name}_impl.py          # 算子实现代码
 ├── test_{operator_name}.py          # 测试代码
@@ -307,9 +307,9 @@ custom/{operator_name}/
 
 | 文件 | 类型 | 说明 | 生成方式 |
 |------|------|------|----------|
-| spec.md | 需求 | 算子需求规范 | pypto-intent-understanding |
-| design.md | 设计 | 算子设计文档 | pypto-op-design（本 skill） |
-| {operator_name}_golden.py | 代码 | Golden 参考实现 | pypto-golden-generator |
+| SPEC.md | 需求 | 算子需求规范 | pypto-intent-understand |
+| DESIGN.md | 设计 | 算子设计文档 | pypto-op-design（本 skill） |
+| {operator_name}_golden.py | 代码 | Golden 参考实现 | pypto-golden-generate |
 | {operator_name}_impl.py | 代码 | 算子核心实现 | 后续实现 |
 | test_{operator_name}.py | 代码 | 测试用例 | 后续实现 |
 
@@ -326,5 +326,5 @@ custom/{operator_name}/
 ### 9.4 生成顺序
 
 ```
-spec.md → design.md → {op}_golden.py → {op}_impl.py → test_{op}.py
+SPEC.md → DESIGN.md → {op}_golden.py → {op}_impl.py → test_{op}.py
 ```

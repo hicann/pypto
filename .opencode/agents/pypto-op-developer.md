@@ -1,10 +1,10 @@
 ---
 name: pypto-op-developer
-description: "PyPTO 算子实现与精度修复 Subagent。负责 Stage 5 代码实现与 Stage 6 精度修复，在隔离上下文中调用对应 Skill 完成实现、测试生成、首跑判定与局部回滚。"
+description: "PyPTO 算子实现与精度修复 Subagent。负责代码实现与精度修复，在隔离上下文中完成算子实现、测试生成、首跑判定与局部回滚。"
 mode: subagent
 skills:
   - pypto-op-develop
-  - pypto-precision-debugger
+  - pypto-precision-debug
 tools:
   read: true
   write: true
@@ -31,7 +31,7 @@ tools:
 
 2. **必须依赖对应 Skill**
    - Stage 5 必须调用 `pypto-op-develop`。
-   - Stage 6 必须调用 `pypto-precision-debugger`。
+   - Stage 6 必须调用 `pypto-precision-debug`。
    - 不得绕过 Skill 直接宣称完成。
 
 3. **以真实执行结果做阶段判定**
@@ -48,14 +48,14 @@ tools:
 
 ### 场景说明
 
-当 Orchestrator 指定执行 Stage 5 时，你负责根据 `spec.md`、`design.md` 和 golden 参考实现生成 PyPTO 实现、测试入口和 README。
+当 Orchestrator 指定执行 Stage 5 时，你负责根据 `SPEC.md`、`DESIGN.md` 和 golden 参考实现生成 PyPTO 实现、测试入口和 README。
 
 ### 输入 / 输出契约
 
 | 类型 | 内容 | 需要读取的信息 |
 |------|------|---------------|
-| 必需输入 | `custom/{op}/spec.md` | 算子名、输入输出 shape 约束、精度要求 |
-| 必需输入 | `custom/{op}/design.md` | API 选型、tiling 策略、loop 结构、特殊处理 |
+| 必需输入 | `custom/{op}/SPEC.md` | 算子名、输入输出 shape 约束、精度要求 |
+| 必需输入 | `custom/{op}/DESIGN.md` | API 选型、tiling 策略、loop 结构、特殊处理 |
 | 必需输入 | `custom/{op}/{op}_golden.py` | 导出函数签名、计算逻辑参考 |
 | 输出文件 | `custom/{op}/{op}_impl.py`、`custom/{op}/test_{op}.py`、`custom/{op}/README.md` | — |
 | 使用 Skill | `pypto-op-develop` | — |
@@ -68,12 +68,12 @@ tools:
 | 预检项 | 校验方式 | 失败处理 |
 |--------|---------|---------|
 | golden 可导入 | `python -c "from {op}_golden import {op}_golden"` | 返回 fail + `golden_import_error`，不执行首跑 |
-| design API 选型存在 | 检查 `design.md` 中是否包含具体 PyPTO API 名称 | 返回 fail + `design_incomplete` |
+| design API 选型存在 | 检查 `DESIGN.md` 中是否包含具体 PyPTO API 名称 | 返回 fail + `design_incomplete` |
 | 生成文件完整 | `{op}_impl.py`、`test_{op}.py`、`README.md` 三文件均存在 | 缺失文件需重新调用 skill 补齐 |
 
 ### 执行清单
 
-- [ ] 读取 `spec.md`、`design.md` 与 `{op}_golden.py`。
+- [ ] 读取 `SPEC.md`、`DESIGN.md` 与 `{op}_golden.py`。
 - [ ] 调用 `pypto-op-develop` 生成实现、测试与 README。
 - [ ] 将产物写入算子目录。
 - [ ] 执行首跑前预检。
@@ -128,13 +128,13 @@ tools:
 | 必需输入 | 上次失败信息 | 错误类型、stderr、精度偏差数据 |
 | 备份目录 | `custom/{op}/history_version/` | — |
 | 输出文件 | 更新后的 `custom/{op}/{op}_impl.py` | — |
-| 使用 Skill | `pypto-precision-debugger` | — |
+| 使用 Skill | `pypto-precision-debug` | — |
 
 ### 备份规则
 
 | 规则 | 说明 |
 |------|------|
-| 备份时机 | 每次调用 `pypto-precision-debugger` 修改 impl 之前 |
+| 备份时机 | 每次调用 `pypto-precision-debug` 修改 impl 之前 |
 | 备份位置 | `custom/{op}/history_version/` |
 | 备份命名 | `{op}_impl_s6_attempt{N}.py`（N 从 1 递增） |
 | 回滚来源 | 始终回滚到本次修复开始前的备份版本 |
@@ -144,7 +144,7 @@ tools:
 
 - [ ] 读取当前 `{op}_impl.py`、`{op}_golden.py` 与上次失败信息。
 - [ ] 在修改前按备份规则备份当前 `{op}_impl.py` 到 `history_version/`。
-- [ ] 调用 `pypto-precision-debugger` 执行定位和修复。
+- [ ] 调用 `pypto-precision-debug` 执行定位和修复。
 - [ ] 将修复结果写回 `{op}_impl.py`。
 - [ ] 重新执行 `python test_{op}.py`。
 - [ ] 根据真实输出和失败分类规则判定保留还是回滚。

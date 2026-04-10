@@ -131,7 +131,7 @@ claude --agent pypto-op-orchestrator
 |:---|:---|
 | 完整算子开发流程 | 方式二（Orchestrator Agent） |
 | 单步任务（如只需生成 Golden） | 方式一（直接调用对应 Skill） |
-| 调试修复类任务 | 方式一（直接调用 `pypto-precision-debugger` 等） |
+| 调试修复类任务 | 方式一（直接调用 `pypto-precision-debug` 等） |
 
 ---
 
@@ -160,15 +160,15 @@ AGENTS.md 是 OpenCode 的项目级自定义指令文件。当你在本仓库中
 | `pypto-op-orchestrator` | Primary | 算子端到端开发编排，管理 7 阶段状态机 |
 | `pypto-op-analyst` | Subagent | Golden 生成与 Design 设计分析（上下文隔离） |
 | `pypto-op-developer` | Subagent | 代码实现与精度修复（上下文隔离） |
-| `pypto-op-perftuner` | Subagent | 性能分析与调优（上下文隔离） |
+| `pypto-op-perf-tuner` | Subagent | 性能分析与调优（上下文隔离） |
 | `pypto-code-merge-agent` | Subagent | 代码变更到 PR 提交的自动化流程 |
 
 **Orchestrator 状态机**：
 
 ```
-Stage 1: 需求理解 (pypto-intent-understanding)
+Stage 1: 需求理解 (pypto-intent-understand)
     ↓
-Stage 2: API 探索 (pypto-api-explorer)
+Stage 2: API 探索 (pypto-api-explore)
     ↓
 Stage 3: Golden 生成 → Analyst Subagent
     ↓
@@ -220,23 +220,23 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 **工作流程**：`需求理解 → 环境准备 → Golden → 设计 → 算子实现 → 精度调试 → 性能分析 → 性能调优`
 
-**关键串联**：调用 `pypto-intent-understanding`、`pypto-api-explorer`、`pypto-golden-generator`、`pypto-op-design`、`pypto-op-develop`、`pypto-precision-debugger`、`pypto-operator-auto-tuner`
+**关键串联**：调用 `pypto-intent-understand`、`pypto-api-explore`、`pypto-golden-generate`、`pypto-op-design`、`pypto-op-develop`、`pypto-precision-debug`、`pypto-op-perf-tune`
 
-#### `pypto-intent-understanding` — 需求意图理解
+#### `pypto-intent-understand` — 需求意图理解
 
-**适用场景**：将用户的自然语言算子描述转化为结构化需求文档（spec.md）
+**适用场景**：将用户的自然语言算子描述转化为结构化需求文档（SPEC.md）
 
 **你需要提供**：算子名称、数学公式、输入输出规格
 
-**你会得到**：结构化的 spec.md，包含 ASCII 数据流图、规格确认清单、典型配置
+**你会得到**：结构化的 SPEC.md，包含 ASCII 数据流图、规格确认清单、典型配置
 
-#### `pypto-api-explorer` — API 探索
+#### `pypto-api-explore` — API 探索
 
 **适用场景**：查找 PyPTO 是否支持某个操作、验证 API 约束、分析算子可行性
 
-**你会得到**：api_report.md，包含公式分解、PyPTO API 映射表、约束分析、Tiling 需求
+**你会得到**：API_REPORT.md，包含公式分解、PyPTO API 映射表、约束分析、Tiling 需求
 
-#### `pypto-golden-generator` — Golden 参考实现生成
+#### `pypto-golden-generate` — Golden 参考实现生成
 
 **适用场景**：生成用于精度对比的 PyTorch golden 参考实现
 
@@ -246,7 +246,7 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 **适用场景**：设计 PyPTO 算子实现方案（Tiling 策略、Loop 结构）
 
-**你会得到**：design.md，包含 API 映射设计、数据规格设计、Tiling 策略、Loop 结构、验证方案
+**你会得到**：DESIGN.md，包含 API 映射设计、数据规格设计、Tiling 策略、Loop 结构、验证方案
 
 #### `pypto-op-develop` — 代码实现
 
@@ -258,7 +258,7 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 ### 精度验证与调试
 
-#### `pypto-precision-debugger` — 精度问题排查
+#### `pypto-precision-debug` — 精度问题排查
 
 **适用场景**：算子精度验证失败，需要系统化定位问题根因
 
@@ -282,7 +282,7 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 ### 性能分析
 
-#### `pypto-operator-auto-tuner` — 性能分析及调优
+#### `pypto-op-perf-tune` — 性能分析及调优
 
 **适用场景**：分析已生成的性能数据，评估算子性能表现，基于实测性能数据迭代调优，并验证精度与性能收益
 
@@ -398,8 +398,8 @@ Stage 7: 性能调优 → PerfTuner Subagent
 <summary><b>什么时候用 Orchestrator，什么时候直接用 Skill？</b></summary>
 
 - **完整算子开发**：使用 `pypto-op-orchestrator` agent（或触发 `pypto-op-workflow` skill）
-- **单步任务**：直接调用对应 Skill，如只需生成 Golden 就调用 `pypto-golden-generator`
-- **调试修复**：直接调用调试类 Skill，如 `pypto-precision-debugger`、`pypto-aicore-error-locator`
+- **单步任务**：直接调用对应 Skill，如只需生成 Golden 就调用 `pypto-golden-generate`
+- **调试修复**：直接调用调试类 Skill，如 `pypto-precision-debug`、`pypto-aicore-error-locator`
 
 </details>
 

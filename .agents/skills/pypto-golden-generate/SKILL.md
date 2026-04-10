@@ -1,11 +1,11 @@
 ---
-name: pypto-golden-generator
+name: pypto-golden-generate
 description: "当需要生成 golden 参考实现时使用此 skill。基于算子规格信息，生成纯 PyTorch golden 参考实现 `{op}_golden.py`，导出 `{op}_golden()` 函数，作为精度验证基准。Triggers: 生成 golden、生成参考实现、写 golden 函数、golden script、golden reference、reference implementation、generate golden、torch 参考、验证基准、baseline implementation、写验证代码、'帮我写 golden'、golden.py、参考代码。"
 ---
 
 # PyPTO Golden 参考实现生成
 
-基于算子规格信息，自动生成 PyTorch golden 参考实现及完整验证代码。生成的 golden 脚本用于开发阶段快速验证算子实现的正确性，可以作为独立模块被 `test_{op}.py` 等其他脚本导入调用。基于固定模板 [references/golden-template.py](references/golden-template.py) 生成（在§9 生成文件结构阶段读取该模板）。纯 torch 实现，禁止引入 pypto。
+基于算子规格信息，自动生成 PyTorch golden 参考实现及完整验证代码。生成的 golden 脚本用于开发阶段快速验证算子实现的正确性，可以作为独立模块被 `test_{op}.py` 等其他脚本导入调用。基于固定模板 [templates/golden-template.py](templates/golden-template.py) 生成（在§9 生成文件结构阶段读取该模板）。纯 torch 实现，禁止引入 pypto。
 
 1. 从用户输入提取算子名称、公式、输入输出规格等必要信息
 2. 如果信息不足，向用户逐步提问补充
@@ -149,11 +149,11 @@ def safe_div_golden(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 **两层来源**：
 
 ```
-├── 典型 case（来自 spec.md §11 典型配置表格）
+├── 典型 case（来自算子规格中的典型配置）
 │   ├── 性能类型：按优先级验证，P0 必须通过
 │   └── 功能类型：按优先级验证，P0 必须通过
 │
-└── 泛化 case（来自 spec.md §7 动态轴取值范围）
+└── 泛化 case（来自算子规格中的动态轴取值范围）
     └── 每个动态轴采样：最小值、中间值、最大值
         如 b: 1-128 → [1, 64, 128]
            s: 64-2048 → [64, 1024, 2048]
@@ -222,79 +222,12 @@ def safe_div_golden(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
 
 ## 9. 生成文件结构
 
-```python
-#!/usr/bin/env python3
-# coding: utf-8
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
-# ... 版权声明 ...
-# -----------------------------------------------------------------------------------------------------------
-"""
-{算子名} Golden 参考实现
+生成的文件遵循固定模板 [`templates/golden-template.py`](templates/golden-template.py)，在生成时读取模板并将占位符替换为实际算子内容。模板包含以下结构：
 
-公式: {从 spec.md 提取的公式}
-置信度: ⭐⭐⭐⭐⭐ (使用 PyTorch 内置 API)
-"""
-
-# 动态生成的 import 语句
-import torch
-from typing import Optional, List
-
-
-def {算子名}_golden({输入参数}) -> {返回类型}:
-    """
-    {算子名} 参考实现 (PyTorch)
-
-    Args:
-        {参数说明}
-
-    Returns:
-        {返回值说明}
-
-    公式:
-        {数学公式}
-    """
-    {LLM 生成的 PyTorch 实现}
-    return {输出}
-
-
-# ==================== 自动生成的验证代码 ====================
-
-def _validate():
-    """自动生成的验证函数 - 运行时动态生成报告"""
-
-    print("=" * 60)
-    print("{算子名}_golden 验证报告")
-    print("=" * 60)
-
-    # 1. 典型 case 验证（来自 spec.md §11）
-    # 按优先级顺序：性能_P0 → 性能_P1 → 功能_P0 → 功能_P1
-    print("\n[典型 case 验证]")
-
-    # 2. 泛化 case 验证（来自 spec.md §7 动态轴范围）
-    print("\n[泛化 case 验证]")
-
-    # 3. 值域检查（从公式推导）
-    print("\n[值域检查]")
-
-    # 4. 数值稳定性检查
-    print("\n[数值稳定性检查]")
-
-    # 5. API 对比（如适用）
-    print("\n[API 对比]")
-
-    print("\n" + "=" * 60)
-    print("验证完成")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    _validate()
-```
-
-**关键特点**：
-- import 语句根据实际使用的 API 动态生成
-- 验证报告运行时打印到终端，不保存到文件
-- 验证函数统一命名为 `_validate()`
+- 文件级 docstring（算子名、公式、置信度）
+- `{op}_golden()` 函数：纯 PyTorch 参考实现（含示例注释）
+- `_validate()` 函数：自动验证（典型 case、泛化 case、值域检查、数值稳定性、API 对比）
+- `if __name__ == "__main__": _validate()` 入口
 
 ---
 

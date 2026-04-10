@@ -1,11 +1,11 @@
 ---
-name: pypto-intent-understanding
+name: pypto-intent-understand
 description: "PyPTO 算子需求意图理解。将用户的自然语言算子描述转化为结构化需求文档。当用户描述要开发、实现、创建某个算子时触发，例如：'开发一个 sinh 算子'、'实现 GELU'、'参考 PyTorch 的 F.scaled_dot_product_attention'、'根据论文实现算子'、'创建自定义算子'"
 ---
 
 # PyPTO 算子需求意图理解
 
-将用户的自然语言描述转化为**结构化、完备**的 PyPTO 算子开发需求文档（spec.md）。
+将用户的自然语言描述转化为**结构化、完备**的 PyPTO 算子开发需求文档（SPEC.md）。
 
 ## 核心原则
 
@@ -424,9 +424,9 @@ Algorithm: Flash Attention (Forward)
 
 ## 输出文件生成
 
-用户确认后，生成 spec.md 文件：
+用户确认后，生成 SPEC.md 文件：
 
-### spec.md 模板
+### SPEC.md 模板
 
 模板文件位于: [templates/spec-template.md](templates/spec-template.md)
 
@@ -452,11 +452,11 @@ Algorithm: Flash Attention (Forward)
 
 ## 文件冲突处理
 
-如果目标路径下 `spec.md` 已存在，**必须**通过 `AskUserQuestion` 询问用户：
+如果目标路径下 `SPEC.md` 已存在，**必须**通过 `AskUserQuestion` 询问用户：
 
 ```
 ⚠ 文件已存在:
-  - spec.md 路径
+  - SPEC.md 路径
 
 请选择:
   1. 覆盖 — 用新生成的内容替换已有文件
@@ -516,7 +516,7 @@ Algorithm: Flash Attention (Forward)
 展示格式建议：
 
 ```md
-⚙️ 将使用以下默认值（如不修改，将直接写入 spec.md）：
+⚙️ 将使用以下默认值（如不修改，将直接写入 SPEC.md）：
 - dtype: float32
 - atol/rtol: 0.001 / 0.001
 - 动态轴范围: [1, INT32_MAX]

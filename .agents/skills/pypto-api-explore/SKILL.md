@@ -1,9 +1,9 @@
 ---
-name: pypto-api-explorer
+name: pypto-api-explore
 description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查和 Tiling 需求分析。当需要查找 PyPTO 是否支持某个操作、验证 API 约束、分析算子可行性时使用。Triggers: API 探索、查找 API、PyPTO 有没有 xxx、支持什么 dtype、约束是什么、tiling 怎么配、API 映射、可行性分析、这个算子能做吗。"
 ---
 
-# pypto-api-explorer
+# pypto-api-explore
 
 使用 `Explore` subagent 探索 PyPTO API，为算子开发提供 API 映射、约束检查和 Tiling 需求分析。
 
@@ -19,8 +19,8 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 
 ## 输出
 
-- **输出件**：api_report.md
-- **格式**：markdown，使用 [templates/api_report.md](templates/api_report.md) 模板
+- **输出件**：API_REPORT.md
+- **格式**：markdown，使用 [templates/API_REPORT.md](templates/API_REPORT.md) 模板
 - **输出路径**：当前目录或用户指定位置
 
 ---
@@ -95,7 +95,7 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 
 ### Stage 6: 生成报告
 
-基于 [templates/api_report.md](templates/api_report.md) 模板生成 api_report.md。
+基于 [templates/API_REPORT.md](templates/API_REPORT.md) 模板生成 API_REPORT.md。
 
 ---
 
@@ -163,7 +163,7 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 
 ## Checklist
 
-验证 api_report.md 的门禁条件：
+验证 API_REPORT.md 的门禁条件：
 1. 文件存在
 2. 以下 5 个章节存在且内容不为空：
    - `## 1. 概述`
