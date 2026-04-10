@@ -406,7 +406,15 @@ Tensor Remainder(const Tensor& self, const Tensor& other)
 Tensor Maximum(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
-
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
+        << "The datatype of the two input must be equal";
+    std::vector<DataType> MAXIMUM_SUPPORT_DATATYPES = {
+        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(MAXIMUM_SUPPORT_DATATYPES.begin(), MAXIMUM_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
+            MAXIMUM_SUPPORT_DATATYPES.end())
+        << "The datatype is not supported";
     RETURN_CALL(
         BinaryOperation<BinaryOpType::MAXIMUM>, *Program::GetInstance().GetCurrentFunction(), operand1, operand2);
 }
@@ -414,7 +422,15 @@ Tensor Maximum(const Tensor& operand1, const Tensor& operand2)
 Tensor Minimum(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
-
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
+        << "The datatype of the two input must be equal";
+    std::vector<DataType> MINIMUM_SUPPORT_DATATYPES = {
+        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+        std::find(MINIMUM_SUPPORT_DATATYPES.begin(), MINIMUM_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
+            MINIMUM_SUPPORT_DATATYPES.end())
+        << "The datatype is not supported";
     RETURN_CALL(
         BinaryOperation<BinaryOpType::MINIMUM>, *Program::GetInstance().GetCurrentFunction(), operand1, operand2);
 }

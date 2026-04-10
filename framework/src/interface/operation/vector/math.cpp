@@ -1072,6 +1072,8 @@ Tensor Clip(const Tensor& self, const Tensor& min, const Tensor& max)
         result = Maximum(result, min);
     }
     if (max.GetStorage() != nullptr) {
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, max.GetDataType() == self.GetDataType())
+            << "The datatype of inputs should be same";
         std::vector maxBroadcastAxes = GetBroadcastAxes(max.GetShape(), self.GetShape());
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, maxBroadcastAxes.size() <= 1)
             << "maxBroadcastAxes size should be <= 1";
