@@ -174,11 +174,17 @@ std::string CodeGenOpCloudNPU::GenDupOp() const
         ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(Element)))
             << "SCALAR attribute must be float value: " << AnyCast<Element>(scalar).IsFloat();
         dupV = FormatFloat(AnyCast<Element>(scalar).Cast<float>(), operandDtype[ToUnderlying(MISOIdx::DST_IDX)]);
-    } else if (dstDtypeStr == "int32_t") {
+    } else if (dstDtypeStr == "bool" || dstDtypeStr == "int8_t" ||
+               dstDtypeStr == "int16_t" || dstDtypeStr == "int32_t") {
         auto scalar = opAttrs.at(OpAttributeKey::scalar);
         ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(Element)))
             << "SCALAR attribute has to be int value: " << AnyCast<Element>(scalar).IsSigned();
-        dupV = std::to_string(AnyCast<Element>(scalar).Cast<int>());
+        dupV = std::to_string(AnyCast<Element>(scalar).Cast<int64_t>());
+    } else if (dstDtypeStr == "uint8_t" || dstDtypeStr == "uint16_t" || dstDtypeStr == "uint32_t") {
+        auto scalar = opAttrs.at(OpAttributeKey::scalar);
+        ASSERT(OperErr::ATTRIBUTE_INVALID, (scalar.HasValue()) && (scalar.Type() == typeid(Element)))
+            << "SCALAR attribute has to be uint value: " << AnyCast<Element>(scalar).IsUnsigned();
+        dupV = std::to_string(AnyCast<Element>(scalar).Cast<uint64_t>());
     } else {
         ASSERT(OperErr::ATTRIBUTE_INVALID, false) << "unsupported type, dstDtypeStr: " << dstDtypeStr;
     }

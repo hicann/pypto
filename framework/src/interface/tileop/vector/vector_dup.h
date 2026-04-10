@@ -25,6 +25,7 @@ TILEOP void TVecDup(T0 dst, Scalar src)
     constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
+    using T1 = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     auto shape0 = dstLayout.template GetShapeDim<0, expectSize>();
     auto shape1 = dstLayout.template GetShapeDim<1, expectSize>();
     auto shape2 = dstLayout.template GetShapeDim<2, expectSize>();
@@ -40,7 +41,7 @@ TILEOP void TVecDup(T0 dst, Scalar src)
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 using TileDefineDst = pto::Tile<
-                    pto::TileType::Vec, typename T0::Type, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+                    pto::TileType::Vec, T1, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
                 TileDefineDst dstTile(shape3, shape4);
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
