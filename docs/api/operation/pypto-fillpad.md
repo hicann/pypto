@@ -30,13 +30,13 @@ fillpad(input: Tensor, mode: str = "constant", value: float = 0.0) -> Tensor
 
 ## 返回值说明
 
-返回输出 Tensor，Tensor 的数据类型和 `input` 相同，Shape 为根据 `pad` 参数在对应维度上扩展后的大小。
+返回输出 Tensor，Tensor 的数据类型和`input` 相同，Shape 也和`input` 相同。
 
 ## 约束说明
 
 1. mode当前**仅支持 `'constant'`（常量填充）模式**，其他模式暂不支持。
 2. value 支持任意浮点数值，填充值的数据类型会自动转换为与输入 Tensor 一致。
-3. 如果 `input` 不是 Tensor 类型，或 `pad` 不是整数序列，将抛出 `TypeError`。
+3. 如果 `input` 不是 Tensor 类型，将抛出 `TypeError`。
 
 ## 调用示例
 

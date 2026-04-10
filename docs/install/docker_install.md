@@ -130,11 +130,11 @@ RUN set -e; \
     case "${TARGETPLATFORM}" in \
         "linux/amd64") \
             ARCH="x86_64"; \
-            URL_SUFFIX="ubuntu_x86/cann-pto-isa_linux-x86_64.run"; \
+            URL_SUFFIX="cann-pto-isa_linux-x86_64.run"; \
             ;; \
         "linux/arm64") \
             ARCH="aarch64"; \
-            URL_SUFFIX="ubuntu_aarch64/cann-pto-isa_linux-aarch64.run"; \
+            URL_SUFFIX="cann-pto-isa_linux-aarch64.run"; \
             ;; \
         *) \
             echo "ERROR: Unsupported or undefined TARGETPLATFORM: ${TARGETPLATFORM}"; \
@@ -143,7 +143,7 @@ RUN set -e; \
             ;; \
     esac; \
     echo "Target platform: ${TARGETPLATFORM}, architecture: ${ARCH}"; \
-    PACKAGE_URL="http://container-obsfs-filesystem.obs.cn-north-4.myhuaweicloud.com/package/cann/pto-isa/version_compile/master/release_version/${URL_SUFFIX}"; \
+    PACKAGE_URL="https://ascend-ci.obs.cn-north-4.myhuaweicloud.com/pto-isa/daily/${URL_SUFFIX}"; \
     PACKAGE_NAME="cann-pto-isa_8.5.0_linux-${ARCH}.run"; \
     echo "Downloading package from: ${PACKAGE_URL}"; \
     wget --quiet --no-check-certificate -O "${PACKAGE_NAME}" "${PACKAGE_URL}"; \
