@@ -108,11 +108,13 @@ private:
     };                                                                                                       \
     static OpCoreStr##TiledRegister OpCoreStr##_tiled_register
 
+enum class AIVCore;
+
 class OpSyncQueue {
 public:
     OpSyncQueue() {}
-    OpSyncQueue(PipeType pipeId, PipeType trigPipeId, CoreType coreType, CoreType tirgCoreType, int evid)
-        : pipeId_(pipeId), trigPipeId_(trigPipeId), coreType_(coreType), trigCoreType_(tirgCoreType), eventId_(evid)
+    OpSyncQueue(PipeType pipeId, PipeType trigPipeId, CoreType coreType, CoreType tirgCoreType, int evid, AIVCore aivCore)
+        : pipeId_(pipeId), trigPipeId_(trigPipeId), coreType_(coreType), trigCoreType_(tirgCoreType), eventId_(evid), aivCore_(aivCore)
     {}
 
     OpSyncQueue(int bufid, const std::vector<int>& offset, CoreType coreType, CoreType tirgCoreType)
@@ -124,6 +126,7 @@ public:
     CoreType coreType_{CoreType::AIV};
     CoreType trigCoreType_{CoreType::AIV};
     int eventId_{0};
+    AIVCore aivCore_;
     int gMBufId{0};
     std::vector<int> offset_;
 

@@ -501,21 +501,40 @@ TEST_F(InsertSyncTest, TestHandleEventID)
     EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM1);
     EXPECT_EQ(ps.depOps_[IS_NUM1].waitPipe[0], 0);
 
-    // HandleEventID
+    // HandleEventID - Test AdjustOpDep path
+    // Set up conditions to trigger AdjustOpDep:
+    // 1. currIssueNum >= maxIssueNum (both set to 8)
+    // 2. deadlock = true
+    // 3. issueQ has enough elements for nextOp
     bool eventIdDeadlock = true;
     bool res = false;
     PipeSync::IssueNum issuenum;
+    // issueState_[4] is AIV_MTE2 queue, contains copyin1(0) and copyin2(2)
     PipeSync::IssueQueue& issueQ = ps.issueState_[IS_NUM4];
     PipeSync::DepOp& handleOp = ps.depOps_[0];
     PipeSync::DepOp& eleOp = ps.depOps_[IS_NUM1];
-    PipeSync::PipeCoreReal currPipeCore(handleOp.selfPipeCore.pipeEnd, handleOp.selfPipeCore.core);
-    PipeSync::PipeCoreReal elePipeCore(eleOp.selfPipeCore.pipeStart, eleOp.selfPipeCore.core);
-    PipeSync::PipePair pp{currPipeCore, elePipeCore};
-    issuenum.maxIssueNum.emplace(pp, IS_NUM8);
-    issuenum.currIssueNum.emplace(pp, IS_NUM8);
+    AIVCore currAIVCore = ps.oriOpList_[handleOp.idx]->GetAIVCore();
+    AIVCore eleAIVCore = ps.oriOpList_[eleOp.idx]->GetAIVCore();
+    PipeSync::PipeCoreRealEx currPipeCoreEx(handleOp.selfPipeCore.pipeEnd, handleOp.selfPipeCore.core, currAIVCore);
+    PipeSync::PipeCoreRealEx elePipeCoreEx(eleOp.selfPipeCore.pipeStart, eleOp.selfPipeCore.core, eleAIVCore);
+    PipeSync::PipePairEx pp{currPipeCoreEx, elePipeCoreEx};
+
+    // Pre-set issuenum to trigger AdjustOpDep: currIssueNum >= maxIssueNum
+    issuenum.maxIssueNum[pp] = IS_NUM8;
+    issuenum.currIssueNum[pp] = IS_NUM8;
+
+    // Verify initial state before HandleEventID
+    EXPECT_EQ(ps.depOps_[IS_NUM1].waitPipe[0], 0); // cast waits for copyin1
+    EXPECT_EQ(ps.depOps_[0].setPipe[0], IS_NUM1);  // copyin1 sets for cast
+
     ps.HandleEventID(handleOp, issueQ, issuenum, eventIdDeadlock, res);
-    EXPECT_EQ(ps.depOps_[IS_NUM1].waitPipe[0], IS_NUM2);
-    EXPECT_EQ(ps.depOps_[IS_NUM2].setPipe[0], IS_NUM1);
+
+    // After HandleEventID with AdjustOpDep:
+    // RemoveOpDep: copyin1's setPipe removes cast, cast's waitPipe removes copyin1
+    // AddOpDep: copyin2's setPipe adds cast, cast's waitPipe adds copyin2
+    EXPECT_EQ(ps.depOps_[IS_NUM1].waitPipe[0], IS_NUM2); // cast now waits for copyin2
+    EXPECT_EQ(ps.depOps_[IS_NUM2].setPipe[0], IS_NUM1);  // copyin2 sets for cast
+    EXPECT_EQ(ps.depOps_[0].setPipe.size(), 0);          // copyin1 has no setPipe
 
     // InitCVEventIdQ
     PipeSync::CoreTypeDetail setCore = {CoreType::AIC, AIVCore::UNSPECIFIED};
