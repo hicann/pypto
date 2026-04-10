@@ -699,9 +699,6 @@ def mla_prolog_quant_compute(
     },
     runtime_options={
         "stitch_function_max_num": 128
-    },
-    debug_options={
-        "runtime_debug_mode": 3
     }
 )
 def mla_prolog_quant_p(

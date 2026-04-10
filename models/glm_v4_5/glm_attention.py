@@ -95,7 +95,7 @@ class AttentionConfig:
     kv_num_blocks: int = 0
 
 
-def get_qwen_common_config(device="cpu", a5_flag=0):
+def get_qwen_common_config(device="cpu", case_950=0):
     b = 8
     s1 = 1
     s2 = 16384
@@ -110,7 +110,7 @@ def get_qwen_common_config(device="cpu", a5_flag=0):
     cube_tile = 128
     m_tile = 128
     s2_tile = 512
-    if a5_flag == 1:
+    if case_950 == 1:
         b = 16
         s1 = 1
         s2 = 8192
@@ -275,14 +275,14 @@ def ifa_func_kernel(
     k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     v: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     block_table: pypto.Tensor([], pypto.DT_INT32),
-    kv_act_seqs: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
+    kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     atten_out: pypto.Tensor([], pypto.DT_BF16)
 ):
 
     # 1. 添加支持动态的config
     pypto.experimental.set_operation_options(combine_axis=True)
 
-    atten_cfg, tile_cfg = get_qwen_common_config(device="cpu", a5_flag=0)
+    atten_cfg, tile_cfg = get_qwen_common_config(device="cpu", case_950=0)
     softmax_scale = atten_cfg.softmax_scale
 
     # 2. 从入参拿到输入和输出tensor
@@ -433,15 +433,15 @@ def ifa_func_kernel(
     },
     host_options={"compile_monitor_enable": True}
 )
-def ifa_func_kernel_a5(
+def ifa_func_kernel_for_950(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     k: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     v: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     block_table: pypto.Tensor([], pypto.DT_INT32),
-    kv_act_seqs: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
+    kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     atten_out: pypto.Tensor([], pypto.DT_BF16)
 ):
-    atten_cfg, tile_cfg = get_qwen_common_config(device="cpu", a5_flag=1)
+    atten_cfg, tile_cfg = get_qwen_common_config(device="cpu", case_950=1)
     softmax_scale = atten_cfg.softmax_scale
 
      # 2. 从入参拿到输入和输出tensor
@@ -589,7 +589,7 @@ def ifa_func_kernel_a5(
                             pypto.set_pass_options(sg_set_scope=-1)
 
 
-def ifa(atten_cfg, a5_flag=0):
+def ifa(atten_cfg, case_950=0):
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     torch_dtype = torch.bfloat16
     torch.npu.set_device(int(device_id))
@@ -659,8 +659,8 @@ def ifa(atten_cfg, a5_flag=0):
         out_torch
     ]
     # 5. 执行kernel并获取结果
-    if a5_flag == 1:
-        attention_a5(*inputs)
+    if case_950 == 1:
+        attention_for_950(*inputs)
     else:
         attention(*inputs)
 
@@ -672,11 +672,11 @@ def ifa(atten_cfg, a5_flag=0):
 
 @pytest.mark.soc("950")
 @pytest.mark.skip(reason="large test case")
-def test_ifa_a5():
+def test_ifa_for_950():
     # 1. 设置参数
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     device = f'npu:{device_id}'
-    atten_cfg, _ = get_qwen_common_config(device=device, a5_flag=1)
+    atten_cfg, _ = get_qwen_common_config(device=device, case_950=1)
 
     # 检查 B 的大小和 actual_seq 长度是否相等
     assert atten_cfg.b == len(
@@ -689,7 +689,7 @@ def test_ifa_a5():
         actual_seq_cpu = atten_cfg.actual_seq
 
     assert all(x <= atten_cfg.s2 for x in actual_seq_cpu), "所有值都必须小于s2"
-    ifa(atten_cfg, a5_flag=1)
+    ifa(atten_cfg, case_950=1)
 
 
 @pytest.mark.soc("950", "910")
@@ -697,7 +697,7 @@ def test_ifa():
     # 1. 设置参数
     device_id = os.environ.get('TILE_FWK_DEVICE_ID', 0)
     device = f'npu:{device_id}'
-    atten_cfg, _ = get_qwen_common_config(device=device, a5_flag=0)
+    atten_cfg, _ = get_qwen_common_config(device=device, case_950=0)
 
     # 检查 B 的大小和 actual_seq 长度是否相等
     assert atten_cfg.b == len(
@@ -710,7 +710,7 @@ def test_ifa():
         actual_seq_cpu = atten_cfg.actual_seq
 
     assert all(x <= atten_cfg.s2 for x in actual_seq_cpu), "所有值都必须小于s2"
-    ifa(atten_cfg, a5_flag=0)
+    ifa(atten_cfg, case_950=0)
 
 
 @allow_in_graph
@@ -757,7 +757,7 @@ def attention(
 
 
 @allow_in_graph
-def attention_a5(
+def attention_for_950(
     query: torch.Tensor,
     key_cache: torch.Tensor,
     value_cache: torch.Tensor,
@@ -797,8 +797,8 @@ def attention_a5(
 
     inputs = [query, key_cache, value_cache, block_tables, actual_seqs, attn_res]
     for _ in range(1):
-        ifa_func_kernel_a5(*inputs)
+        ifa_func_kernel_for_950(*inputs)
 
 if __name__ == "__main__":
     test_ifa()
-    # A5上板 test_ifa_a5()
+    # 950上板 test_ifa_for_950()

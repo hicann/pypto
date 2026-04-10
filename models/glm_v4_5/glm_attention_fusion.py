@@ -213,7 +213,7 @@ def attention(
 )
 def ifa_func_kernel(
     block_table: pypto.Tensor(),
-    kv_act_seqs: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
+    kv_act_seqs: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
     index: pypto.Tensor(),
     x: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     residual_input: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),

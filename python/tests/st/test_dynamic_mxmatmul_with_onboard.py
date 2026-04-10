@@ -185,5 +185,5 @@ def create_scale_mm_with_bias(tile_config: ShapeConfig):
 @pytest.mark.soc("950")
 def test_scaled_mm_with_bias():
     tile_config = ShapeConfig([385, 192, 96], [64, 64], [64, 256], [256, 256], [192, 32], pypto.DataType.DT_FP8E4M3,
-                              pypto.DataType.DT_FP16, False, True, True, False, False, True)
+                              pypto.DataType.DT_FP16, False, True, True, False, False, False, True)
     create_scale_mm_with_bias(tile_config)

@@ -57,8 +57,7 @@ def check_args(
 
 @pypto.frontend.jit(
     runtime_options={
-    "stitch_cfgcache_size": 2500000},
-    debug_options={"runtime_debug_mode": 3}
+    "stitch_cfgcache_size": 2500000}
 )
 def select_experts_mm_kernel(
     hidden_states: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32),

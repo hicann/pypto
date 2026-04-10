@@ -34,8 +34,7 @@ def test_add_with_kwargs_run():
         res.move(a + b + c + d + scalar)
 
     @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU},
-        debug_options={"runtime_debug_mode": 3}
+        runtime_options={"run_mode": pypto.RunMode.NPU}
         )
     def add_kernel(
         a: pypto.Tensor(dtype=pypto.DT_INT32),
@@ -77,8 +76,7 @@ def test_add_with_kwargs_check_stable():
         res.move(a + b + c + d + scalar)
 
     @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU},
-        debug_options={"runtime_debug_mode": 3}
+        runtime_options={"run_mode": pypto.RunMode.NPU}
         )
     def add_kernel(
         a: pypto.Tensor(dtype=pypto.DT_INT32),
@@ -121,8 +119,7 @@ def test_add_with_kwargs_check_dtype():
         res.move(a + b + c + d + scalar)
 
     @pypto.frontend.jit(
-        runtime_options={"run_mode": pypto.RunMode.NPU},
-        debug_options={"runtime_debug_mode": 3}
+        runtime_options={"run_mode": pypto.RunMode.NPU}
         )
     def add_kernel(
         a: pypto.Tensor(dtype=pypto.DT_INT32),

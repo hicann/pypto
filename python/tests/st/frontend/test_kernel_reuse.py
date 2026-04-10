@@ -21,8 +21,7 @@ DEVICE_ID = int(os.environ.get("TILE_FWK_DEVICE_ID", 0))
 
 
 @pypto.frontend.jit(
-    runtime_options={"run_mode": pypto.RunMode.NPU},
-    debug_options={"runtime_debug_mode": 3},
+    runtime_options={"run_mode": pypto.RunMode.NPU}
 )
 def kernel_with_dynamic(
     a: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),

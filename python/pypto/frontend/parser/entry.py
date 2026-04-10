@@ -50,13 +50,6 @@ class RunMode(IntEnum):
     SIM = 1
 
 
-class DebugMode(IntEnum):
-    OFF = 0
-    SWIM = 1
-    TENSOR_NODEPEND = 2
-    CHECKATTR = 3
-
-
 def parse(program: Source, extra_vars: Optional[dict[str, Any]] = None) -> Any:
     """Parse a PTO script program.
 
@@ -336,10 +329,6 @@ class JitCallableWrapper:
             args, kwargs
         )
         self._get_or_create_kmodule(non_tensor_values)
-        if self._debug_options is not None:
-            debug_mode = self._debug_options.get("runtime_debug_mode", None)
-            if debug_mode == DebugMode.CHECKATTR:
-                self._check_input_defs_match_tensors(in_tensors, input_tensor_defs)
         self._execute_kernel(in_tensors, input_tensor_defs)
 
         return None
@@ -477,6 +466,7 @@ class JitCallableWrapper:
             using name/dynamic_axis/dtype from each tensor_def. When None, tensors are PTO tensors.
         """
         if tensor_defs is not None:
+            self._check_input_defs_match_tensors(tensors, tensor_defs)
             args = self._convert_tensors_with_metadata(tensors, tensor_defs)
             snapshot_src = list(tensors)
         else:
@@ -764,9 +754,10 @@ class JitCallableWrapper:
                         does not match the dtype of input tensor definition {input_tensor_def.dtype}.")
 
             if in_tensor.device.type == "npu":
-                if self._format_dict[get_format(in_tensor)] != input_tensor_def.format:
-                    raise ValueError(f"The format of {ordinal(idx)} input tensor {get_format(in_tensor)} \
-                        does not match the format of input tensor definition {input_tensor_def.format}.")
+                if input_tensor_def.explicit_format is not None:
+                    if self._format_dict[get_format(in_tensor)] != input_tensor_def.format:
+                        raise ValueError(f"The format of {ordinal(idx)} input tensor {get_format(in_tensor)} \
+                            does not match the format of input tensor definition {input_tensor_def.format}.")
 
 
     def _extract_non_tensor_defaults(self) -> dict[str, Any]:

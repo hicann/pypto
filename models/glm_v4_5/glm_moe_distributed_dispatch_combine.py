@@ -431,7 +431,7 @@ def moe_distributed_dispatch_kernel(
     cum_sum_row_size = align_up(moe_expert_num, 256)
     count_size = 8
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 3})
+    @pypto.frontend.jit()
     def kernel(
         x: pypto.Tensor([batch_size, hidden_size], data_type, format=pypto.TileOpFormat.TILEOP_ND),
         expert_ids: pypto.Tensor([batch_size, topk], pypto.DT_INT32, format=pypto.TileOpFormat.TILEOP_ND),
@@ -735,7 +735,7 @@ def moe_distributed_combine_kernel(
         f'The length of group_name only supports [1, 128), but got {len(group_name)}',
     )
 
-    @pypto.frontend.jit(debug_options={"runtime_debug_mode": 3})
+    @pypto.frontend.jit()
     def kernel(
         expand_x: pypto.Tensor([row, hidden_size], data_type, format=pypto.TileOpFormat.TILEOP_ND),
         assist_info_for_combine: pypto.Tensor([row, 3], pypto.DT_INT32, format=pypto.TileOpFormat.TILEOP_ND),
