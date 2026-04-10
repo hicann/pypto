@@ -207,6 +207,7 @@ def _torch_dtype_from(dtype: DataType) -> "torch.dtype":
         DataType.DT_INT64: torch.int64,
         DataType.DT_UINT64: torch.uint64,
         DataType.DT_BOOL: torch.bool,
+        DataType.DT_HF8: torch.uint8,
     }
 
     fp8_mappings = [

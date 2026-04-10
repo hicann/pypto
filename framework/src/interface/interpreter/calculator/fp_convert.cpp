@@ -104,6 +104,71 @@ static torch::Tensor Fp8E8M0ToFloat32(const torch::Tensor& self)
     return sign * torch::pow(2.0f, exp_val);
 }
 
+static torch::Tensor Hf8ToFloat32(const torch::Tensor& self)
+{
+    auto x = self.to(torch::kInt32);
+    auto sign =
+        1.0f -
+        (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) * 2.0f;
+    auto lower7 = torch::bitwise_and(x, at::Scalar(0x7F));
+    auto out = torch::zeros_like(self, torch::TensorOptions().dtype(torch::kFloat32));
+
+    // Subnormal: D=0000, M=bits[2:0], value=S_v*2^(M_v-23)
+    auto isSub = (torch::bitwise_right_shift(lower7, at::Scalar(3)) == 0);
+    auto subMant = torch::bitwise_and(lower7, at::Scalar(0x7)).to(torch::kFloat32);
+    auto subVal = sign * torch::pow(2.0f, subMant - 23.0f);
+    out = torch::where(isSub, subVal, out);
+
+    // Normal-1: D=0001, E_v=0, M=bits[2:0]
+    auto isN1 = (torch::bitwise_right_shift(lower7, at::Scalar(3)) == 1);
+    auto n1Mant = torch::bitwise_and(lower7, at::Scalar(0x7)).to(torch::kFloat32) / 8.0f;
+    auto n1Val = sign * (1.0f + n1Mant);
+    out = torch::where(isN1, n1Val, out);
+
+    // Remaining normal branches are prefix-coded by top bits of lower7.
+    auto top3 = torch::bitwise_right_shift(lower7, at::Scalar(4));
+    auto top2 = torch::bitwise_right_shift(lower7, at::Scalar(5));
+
+    // N2: D=001, E=1bit -> E_v in {+1,-1}, M=bits[2:0]
+    auto isN2 = (top3 == 1);
+    auto n2ExpBits = torch::bitwise_and(torch::bitwise_right_shift(lower7, at::Scalar(3)), at::Scalar(0x1));
+    auto n2Exp = 1.0f - 2.0f * n2ExpBits.to(torch::kFloat32); // 0->+1, 1->-1
+    auto n2Mant = torch::bitwise_and(lower7, at::Scalar(0x7)).to(torch::kFloat32) / 8.0f;
+    auto n2Val = sign * torch::pow(2.0f, n2Exp) * (1.0f + n2Mant);
+    out = torch::where(isN2, n2Val, out);
+
+    // N3: D=01, E=2bits (sign+magnitude with |E_v| in [2,3]), M=bits[2:0]
+    auto isN3 = (top2 == 1);
+    auto n3ExpBits = torch::bitwise_and(torch::bitwise_right_shift(lower7, at::Scalar(3)), at::Scalar(0x3));
+    auto n3Sign = torch::bitwise_right_shift(n3ExpBits, at::Scalar(1));
+    auto n3Mag = torch::bitwise_and(n3ExpBits, at::Scalar(0x1));
+    auto n3Exp = (2.0f + n3Mag.to(torch::kFloat32)) * (1.0f - 2.0f * n3Sign.to(torch::kFloat32));
+    auto n3Mant = torch::bitwise_and(lower7, at::Scalar(0x7)).to(torch::kFloat32) / 8.0f;
+    auto n3Val = sign * torch::pow(2.0f, n3Exp) * (1.0f + n3Mant);
+    out = torch::where(isN3, n3Val, out);
+
+    // N4: D=10, E=3bits (|E_v| in [4,7]), M=bits[1:0]
+    auto isN4 = (top2 == 2);
+    auto n4ExpBits = torch::bitwise_and(torch::bitwise_right_shift(lower7, at::Scalar(2)), at::Scalar(0x7));
+    auto n4Sign = torch::bitwise_right_shift(n4ExpBits, at::Scalar(2));
+    auto n4Mag = torch::bitwise_and(n4ExpBits, at::Scalar(0x3));
+    auto n4Exp = (4.0f + n4Mag.to(torch::kFloat32)) * (1.0f - 2.0f * n4Sign.to(torch::kFloat32));
+    auto n4Mant = torch::bitwise_and(lower7, at::Scalar(0x3)).to(torch::kFloat32) / 4.0f;
+    auto n4Val = sign * torch::pow(2.0f, n4Exp) * (1.0f + n4Mant);
+    out = torch::where(isN4, n4Val, out);
+
+    // N5: D=11, E=4bits (|E_v| in [8,15]), M=bits[0]
+    auto isN5 = (top2 == 3);
+    auto n5ExpBits = torch::bitwise_and(torch::bitwise_right_shift(lower7, at::Scalar(1)), at::Scalar(0xF));
+    auto n5Sign = torch::bitwise_right_shift(n5ExpBits, at::Scalar(3));
+    auto n5Mag = torch::bitwise_and(n5ExpBits, at::Scalar(0x7));
+    auto n5Exp = (8.0f + n5Mag.to(torch::kFloat32)) * (1.0f - 2.0f * n5Sign.to(torch::kFloat32));
+    auto n5Mant = torch::bitwise_and(lower7, at::Scalar(0x1)).to(torch::kFloat32) / 2.0f;
+    auto n5Val = sign * torch::pow(2.0f, n5Exp) * (1.0f + n5Mant);
+    out = torch::where(isN5, n5Val, out);
+    return out;
+}
+
 torch::Tensor Fp8ToFloat32(const torch::Tensor& self, DataType actualType)
 {
     if (actualType == DT_UINT8) {
@@ -113,6 +178,8 @@ torch::Tensor Fp8ToFloat32(const torch::Tensor& self, DataType actualType)
         case DT_FP8:
         case DT_FP8E4M3:
             return Fp8E4M3ToFloat32(self);
+        case DT_HF8:
+            return Hf8ToFloat32(self);
         case DT_FP8E5M2:
             return Fp8E5M2ToFloat32(self);
         case DT_FP8E8M0:
@@ -197,6 +264,67 @@ static inline uint8_t EncodeFloatToFp8E4M3(float v)
     return static_cast<uint8_t>((sign << 7) | (exp_bits << 3) | mant_bits);
 }
 
+static inline uint8_t EncodeHf8Exponent(int exponent, int expBitCount)
+{
+    if (expBitCount <= 0) {
+        return 0;
+    }
+    const int maxAbs = (1 << expBitCount) - 1;
+    int absExp = std::abs(exponent);
+    absExp = std::clamp(absExp, 1 << (expBitCount - 1), maxAbs);
+    const int signBit = exponent < 0 ? (1 << (expBitCount - 1)) : 0;
+    const int magnitudeMask = (1 << (expBitCount - 1)) - 1;
+    const int encodedMagnitude = absExp - (1 << (expBitCount - 1));
+    return static_cast<uint8_t>(signBit | (encodedMagnitude & magnitudeMask));
+}
+
+static inline uint8_t EncodeFloatToHf8(float v)
+{
+    if (std::fpclassify(v) == FP_ZERO || std::isnan(v)) {
+        return 0;
+    }
+    const int sign = std::signbit(v) ? 1 : 0;
+    const float absv = std::fabs(v);
+    if (std::isinf(v)) {
+        // Saturate to the largest representable normal branch.
+        return static_cast<uint8_t>((sign << 7) | 0b11'0111'1);
+    }
+    int expRaw;
+    float frac = std::frexp(absv, &expRaw); // absv = frac * 2^expRaw, frac in [0.5,1)
+    float normalized = frac * 2.0f;
+    int exponent = expRaw - 1;
+    float mant = normalized - 1.0f;
+
+    auto clampInt = [](int x, int lo, int hi) { return std::max(lo, std::min(hi, x)); };
+    if (exponent <= -16) {
+        // Subnormal branch: value=S_v*2^(M_v-23), M_v in [0,7]
+        int mv = clampInt(static_cast<int>(std::round(std::log2(absv) + 23.0f)), 0, 7);
+        return static_cast<uint8_t>((sign << 7) | mv);
+    }
+    if (exponent == 0) {
+        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 7);
+        return static_cast<uint8_t>((sign << 7) | (0b0001 << 3) | mv);
+    }
+    if (std::abs(exponent) == 1) {
+        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 7);
+        uint8_t e = EncodeHf8Exponent(exponent, 1);
+        return static_cast<uint8_t>((sign << 7) | (0b001 << 4) | ((e & 0x1) << 3) | mv);
+    }
+    if (std::abs(exponent) <= 3) {
+        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 7);
+        uint8_t e = EncodeHf8Exponent(exponent, 2);
+        return static_cast<uint8_t>((sign << 7) | (0b01 << 5) | ((e & 0x3) << 3) | mv);
+    }
+    if (std::abs(exponent) <= 7) {
+        int mv = clampInt(static_cast<int>(std::round(mant * 4.0f)), 0, 3);
+        uint8_t e = EncodeHf8Exponent(exponent, 3);
+        return static_cast<uint8_t>((sign << 7) | (0b10 << 5) | ((e & 0x7) << 2) | mv);
+    }
+    int mv = clampInt(static_cast<int>(std::round(mant * 2.0f)), 0, 1);
+    uint8_t e = EncodeHf8Exponent(exponent, 4);
+    return static_cast<uint8_t>((sign << 7) | (0b11 << 5) | ((e & 0xF) << 1) | mv);
+}
+
 static torch::Tensor Float32ToFp8E4M3(const torch::Tensor& self)
 {
     auto x = self.to(torch::kFloat32).contiguous();
@@ -206,6 +334,19 @@ static torch::Tensor Float32ToFp8E4M3(const torch::Tensor& self)
     auto out_ptr = result.data_ptr<uint8_t>();
     for (int64_t i = 0; i < flat.numel(); ++i) {
         out_ptr[i] = EncodeFloatToFp8E4M3(ptr[i]);
+    }
+    return result.reshape(x.sizes());
+}
+
+static torch::Tensor Float32ToHf8(const torch::Tensor& self)
+{
+    auto x = self.to(torch::kFloat32).contiguous();
+    auto flat = x.flatten();
+    auto result = torch::empty_like(flat, torch::TensorOptions().dtype(torch::kUInt8));
+    auto ptr = flat.data_ptr<float>();
+    auto outPtr = result.data_ptr<uint8_t>();
+    for (int64_t i = 0; i < flat.numel(); ++i) {
+        outPtr[i] = EncodeFloatToHf8(ptr[i]);
     }
     return result.reshape(x.sizes());
 }
@@ -293,6 +434,8 @@ torch::Tensor Float32ToFp8(const torch::Tensor& self, DataType actualType)
         case DT_FP8:
         case DT_FP8E4M3:
             return Float32ToFp8E4M3(self);
+        case DT_HF8:
+            return Float32ToHf8(self);
         case DT_FP8E5M2:
             return Float32ToFp8E5M2(self);
         case DT_FP8E8M0:

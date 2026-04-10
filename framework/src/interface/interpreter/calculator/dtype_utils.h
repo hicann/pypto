@@ -14,7 +14,10 @@
 
 namespace npu::tile_fwk {
 
-inline bool IsFp8Dtype(DataType t) { return t == DT_FP8 || t == DT_FP8E4M3 || t == DT_FP8E5M2 || t == DT_FP8E8M0; }
+inline bool IsFp8Dtype(DataType t)
+{
+    return t == DT_FP8 || t == DT_HF8 || t == DT_FP8E4M3 || t == DT_FP8E5M2 || t == DT_FP8E8M0;
+}
 
 inline bool IsFp4PackedDtype(DataType t) { return t == DT_FP4_E2M1X2 || t == DT_FP4_E1M2X2; }
 

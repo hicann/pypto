@@ -360,4 +360,88 @@ TEST_F(InterpTypeConvertTest, Fp4E2M1AddRoundTripViaFp32)
     ASSERT_ALLCLOSE_ATOL(outF32, golden, 1e-6f);
 }
 
+TEST_F(InterpTypeConvertTest, Hf8DecodeSubnormalAndNormal)
+{
+    struct {
+        uint8_t bits;
+        float expected;
+    } cases[] = {
+        // Subnormal (D=0000): value = S_v * 2^(M_v - 23)
+        {0x00, std::exp2(-23.0f)},  // +, M_v=0
+        {0x07, std::exp2(-16.0f)},  // +, M_v=7
+        {0x87, -std::exp2(-16.0f)}, // -, M_v=7
+        // Normal-1 (D=0001): value = S_v * 2^0 * (1 + M_v)
+        {0x08, 1.0f},    // M_v=0/8
+        {0x0F, 1.875f},  // M_v=7/8
+        {0x8F, -1.875f}, // sign=-
+    };
+
+    for (const auto& c : cases) {
+        auto src = makeTensorData(DT_HF8, {4}, static_cast<uint8_t>(c.bits));
+        auto out = makeTensorData(DT_FP32, {4}, 0.0f);
+        calc::Cast(out, src);
+        auto golden = makeTensorData(DT_FP32, {4}, c.expected);
+        ASSERT_ALLCLOSE_ATOL(out, golden, 1e-6f);
+    }
+}
+
+TEST_F(InterpTypeConvertTest, Hf8DecodeNormalExponentBranches)
+{
+    struct {
+        uint8_t bits;
+        float expected;
+    } cases[] = {
+        // D=001, E_v in {+1,-1}, M_v in [0/8,7/8]
+        {0x10, 2.0f},    // E_v=+1, M_v=0
+        {0x1F, 0.9375f}, // E_v=-1, M_v=7/8
+        {0x18, 0.5f},    // E_v=-1, M_v=0
+        // D=01, E_v in ±[2,3], M_v in [0/8,7/8]
+        {0x20, 4.0f},  // E_v=+2, M_v=0
+        {0x2F, 15.0f}, // E_v=+3, M_v=7/8
+        {0x30, 0.25f}, // E_v=-2, M_v=0
+        // D=10, E_v in ±[4,7], M_v in [0/4,3/4]
+        {0x40, 16.0f}, // E_v=+4, M_v=0
+        {0x43, 28.0f}, // E_v=+4, M_v=3/4
+        // D=11, E_v in ±[8,15], M_v in [0/2,1/2]
+        {0x60, 256.0f}, // E_v=+8, M_v=0
+        {0x61, 384.0f}, // E_v=+8, M_v=1/2
+    };
+
+    for (const auto& c : cases) {
+        auto src = makeTensorData(DT_HF8, {4}, static_cast<uint8_t>(c.bits));
+        auto out = makeTensorData(DT_FP32, {4}, 0.0f);
+        calc::Cast(out, src);
+        auto golden = makeTensorData(DT_FP32, {4}, c.expected);
+        ASSERT_ALLCLOSE_ATOL(out, golden, 1e-5f);
+    }
+}
+
+TEST_F(InterpTypeConvertTest, Hf8RoundTripViaCast)
+{
+    // These values are selected from exact HF8 grid points across branches.
+    const std::vector<float> vals = {
+        std::exp2(-23.0f), // subnormal
+        std::exp2(-16.0f), // subnormal max
+        1.0f,              // D=0001, M=0
+        1.875f,            // D=0001, M=7/8
+        2.0f,              // D=001, E=+1, M=0
+        0.5f,              // D=001, E=-1, M=0
+        4.0f,              // D=01,  E=+2, M=0
+        0.25f,             // D=01,  E=-2, M=0
+        28.0f,             // D=10,  E=+4, M=3/4
+        384.0f,            // D=11,  E=+8, M=1/2
+        -1.875f,           // negative normal
+        -0.5f,             // negative normal
+    };
+
+    auto src = makeTensorData(DT_FP32, {static_cast<int64_t>(vals.size())}, vals);
+    auto hf8 = makeTensorData(DT_HF8, {static_cast<int64_t>(vals.size())}, std::vector<uint8_t>(vals.size(), 0));
+    auto out = makeTensorData(DT_FP32, {static_cast<int64_t>(vals.size())}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {static_cast<int64_t>(vals.size())}, vals);
+
+    calc::Cast(hf8, src); // Float32 -> HF8 encode
+    calc::Cast(out, hf8); // HF8 -> Float32 decode
+    ASSERT_ALLCLOSE_ATOL(out, golden, 1e-5f);
+}
+
 } // namespace npu::tile_fwk
