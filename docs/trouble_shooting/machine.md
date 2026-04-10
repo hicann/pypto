@@ -481,3 +481,38 @@ struct {
 4. **查日志上下文**：结合同线程前后日志（如 “Schedule run init succ” 之后、AbnormalStop 相关）确认是首次握手失败还是运行中异常。
 
 **关联 Skill**：[pypto-environment-setup](../../.agents/skills/pypto-environment-setup/SKILL.md)（环境与 NPU 设备诊断、`npu-smi`、驱动与编译运行）
+
+---
+### Host侧捕获异常打印汇编堆栈信息
+
+**问题特征**：执行用例在host打屏输出堆栈信息
+例如：
+```
+floating point exception !!!
+libtile_fwk_interface.so(npu::tile_fwk::Pad(long, long)+0xe) [0X77188ae025ae]
+```
+
+**定位步骤**：
+
+1. **编译带有Debug信息的pypto包并安装**：
+```
+python3 build_ci.py -f=python3 --build_type=Debug
+pip install build_out/pypto*whl --force-reinstall --no-dep
+```
+
+2. **重新执行问题用例**
+
+3. **查找二进制文件位置**：
+如果不清楚包安装在哪里可以使用find全局搜索
+```
+find / -name "libtile_fwk_interface.so"
+```
+
+4. **反汇编得到具体代码行**：
+例如：
+```
+objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::Pad(long, long)>"
+```
+可得到触发问题的函数具体行号。
+
+5.**关联skill**：[pypto-host-stacktrace-analyzer](../../.agents/skills/pypto-host-stacktrace-analyzer/SKILL.md)
