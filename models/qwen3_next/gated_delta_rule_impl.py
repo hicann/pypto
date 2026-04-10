@@ -96,51 +96,6 @@ def pre_attn(
     return gate_cum, decay_mask, a, key_beta
 
 
-def pre_attn_unaligned(
-    gate_view: pypto.Tensor,
-    key_view_2d: pypto.Tensor,
-    beta_view: pypto.Tensor,
-    tril: pypto.Tensor,
-    mask: pypto.Tensor,
-) -> tuple[pypto.Tensor, pypto.Tensor, pypto.Tensor, pypto.Tensor]:
-    """
-    Calculate gate_cumsum, decay_mask, beta_k and kkt.
-
-    Parameters
-    ---------
-    gate: [L, 1]
-    key: [L, D]
-    beta: [L, 1]
-    tril: [L, L]
-    mask: [L, L]
-
-    Return
-    ---------
-    gate_cum: [L, 1]
-    decay_mask: [L, L]
-    A: [L, L]
-    key_beta: [L, D]
-    """
-
-    l = gate_view.shape[0]
-    actual_l = gate_view.valid_shape[0]
-    pypto.set_vec_tile_shapes(128, 128)
-    pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
-    # cal_cumsum
-    gate_cum = pypto.matmul(tril, gate_view, pypto.DT_FP32)  # [L,1]
-    # cal_decay_mask
-    gate_t = gate_cum.reshape([1, l], valid_shape=[1, actual_l])
-    g_sub = gate_cum - gate_t
-    decay_mask = (g_sub * tril).exp() * tril  # [L,L]
-    # beta_k
-    key_beta = key_view_2d * beta_view  # [L,D]
-    # kkt
-    kkt = pypto.matmul(key_beta, key_view_2d, pypto.DT_FP32, b_trans=True)  # [L,L]
-    a = kkt * decay_mask * mask  # [L,L]
-
-    return gate_cum, decay_mask, a, key_beta
-
-
 def inverse_pto(**kwargs) -> pypto.Tensor:
     """
     Calculate inverse of big matrix.
@@ -171,10 +126,9 @@ def inverse_pto(**kwargs) -> pypto.Tensor:
     attn_8_8_list = []
     for i in range(8):
         attn_8_8_list.append(attn.view([min_length, min_length], [min_length * i, min_length * i]) + 0.0)
-    attn_tmp_dim0 = pypto.concat(attn_8_8_list, dim=0)
     attn_tmp_dim1 = pypto.concat(attn_8_8_list, dim=1)
 
-    attn_tmp_dim1_inv = inverse_pto_min_length(attn_tmp_dim0, attn_tmp_dim1, eye, min_length, min_length * 8)
+    attn_tmp_dim1_inv = inverse_pto_min_length(attn_tmp_dim1, eye, min_length, min_length * 8)
 
     attn_8_8_inv_list = []
     for i in range(8):
@@ -197,7 +151,6 @@ def inverse_pto(**kwargs) -> pypto.Tensor:
 
 
 def inverse_pto_min_length(
-    attn_dim0: pypto.Tensor,
     attn_dim1: pypto.Tensor,
     eye: pypto.Tensor,
     row_num: int,
@@ -224,13 +177,11 @@ def inverse_pto_min_length(
     attn_inv_list[1] = attn_dim1[:2, :]
     pypto.set_vec_tile_shapes(128, 128)
 
-    attn_dim0_trans = attn_dim0.transpose(0, 1).reshape([col_num, row_num])
-
     for i in range(2, row_num, 1):
         # Add 0.0 to enable attn_inv_cur to enter the UB in advance
         attn_inv_cur = attn_inv_list.get(i - 1) + 0.0
         row = attn_dim1.view([1, col_num], [i, 0])
-        row_expand = attn_dim0_trans.view([size * i, 1], [0, i])
+        row_expand = row.reshape([size, row_num]).view([size, i], [0, 0]).transpose(1, 0).reshape([size * i, 1])
         attn_inv_cur_reshape = attn_inv_cur.reshape([size * i, row_num])
         prod_mul = (row_expand * attn_inv_cur_reshape).reshape([i, col_num])
 
@@ -283,92 +234,6 @@ def inverse_matmul(**kwargs) -> pypto.Tensor:
     attn_inv[m_len:m_len * 2, m_len:m_len * 2] = attn_2_2_inv
 
     return attn_inv
-
-
-def inverse_pto_unaligned(
-    attn: pypto.Tensor,
-    eye: pypto.Tensor,
-    size: int) -> pypto.Tensor:
-    """
-    Calculate inverse of unaligned big matrix.
-
-    Parameters
-    ---------
-    attn: [L, L]
-    eye: [L // 8, L // 8]
-    size: matrix size
-
-    Return
-    ---------
-    attn_inv: [L, L]
-    """
-    half_size = size // 2
-    min_length = 16
-    attn_1_1 = attn.view([half_size, half_size], [0, 0])
-    attn_2_2 = attn.view([half_size, half_size], [half_size, half_size])
-
-    if half_size == min_length:
-        attn_1_1_inv = inverse_pto_min_length_unaligned(attn_1_1, eye, min_length)
-        attn_2_2_inv = inverse_pto_min_length_unaligned(attn_2_2, eye, min_length)
-    else:
-        attn_1_1_inv = inverse_pto_unaligned(attn_1_1, eye, half_size)
-        attn_2_2_inv = inverse_pto_unaligned(attn_2_2, eye, half_size)
-
-    pypto.set_vec_tile_shapes(64, 64)
-    pypto.set_cube_tile_shapes([64, 64], [64, 64], [64, 64])
-
-    attn_2_1 = attn.view([half_size, half_size], [half_size, 0])
-
-    attn_2_1_inv = (attn_2_2_inv @ attn_2_1) @ attn_1_1_inv
-
-    attn_inv = pypto.tensor(attn.shape, dtype=attn.dtype)
-    attn_inv[0:half_size, 0:half_size] = attn_1_1_inv
-    attn_inv[0:half_size, half_size:size] = pypto.full(size=[half_size, half_size], fill_value=0.0, dtype=attn.dtype)
-    attn_inv[half_size:size, 0:half_size] = attn_2_1_inv
-    attn_inv[half_size:size, half_size:size] = attn_2_2_inv
-
-    return attn_inv
-
-
-def inverse_pto_min_length_unaligned(
-    attn: pypto.Tensor,
-    eye: pypto.Tensor,
-    min_length: int) -> None:
-    """
-    Calculate inverse of matrix with tail concat optimization.
-
-    Parameters
-    ---------
-    attn: [L // 8, L // 8]
-    eye: [L // 8, L // 8]
-    min_length: L // 8
-
-    Return
-    ---------
-    res: [L // 8, L // 8]
-    """
-    attn_inv_list = {}
-    attn_inv_list[1] = attn[:2, :]
-    attn_initial = pypto.tensor(attn.shape, dtype=attn.dtype)
-    pypto.assemble(attn, [0, 0], attn_initial)
-
-    pypto.set_vec_tile_shapes(128, 128)
-    attn_transpose = attn.transpose(dim0=0, dim1=1)
-
-    pypto.set_pass_options(sg_set_scope=1)
-    for i in range(2, min_length, 1):
-        attn_inv_cur = attn_inv_list.get(i - 1)
-        row = attn_initial.view([1, min_length], [i, 0])
-        row_expand = attn_transpose.view([i, 1], [0, i])
-        prod = (row_expand * attn_inv_cur).sum(0, keepdim=True)
-        attn_update = row + prod
-
-        attn_inv_list[i] = pypto.concat([attn_inv_cur, attn_update], dim=0)
-
-    res = attn_inv_list.get(min_length - 1) + eye
-    pypto.set_pass_options(sg_set_scope=-1)
-
-    return res
 
 
 def cal_value_and_key_cumdecay(
@@ -467,6 +332,9 @@ def recurrent_state_attn_all(**kwargs) -> tuple[pypto.Tensor, pypto.Tensor]:
 def chunk_gated_delta_rule(b, nqk, nv, d, l):
 
     t = pypto.DYNAMIC
+    b1 = b + 1
+    b1 = pypto.DYNAMIC
+    b = pypto.DYNAMIC
     query_shape = [t, nqk, d]
     key_shape = [t, nqk, d]
     value_shape = [t, nv, d]
@@ -476,7 +344,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
     mask_shape = [l, l]
     tril_mask_shape = [l, l]
     eye_shape = [16, l]
-    act_seq_len_shape = [b + 1]
+    act_seq_len_shape = [b1]
     core_attn_out_shape = [t, nv, d]
     last_state_data_shape = [b, nv, d, d]
 
@@ -530,6 +398,8 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
         l, l = mask.shape
         group = nv // nqk
         last_state = pypto.tensor([d, d], pypto.DT_FP32)
+        pypto.experimental.set_operation_options(combine_axis=True)
+
         for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
             s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
             b_ofs = act_seq_len[b_idx]
@@ -568,15 +438,15 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
 
                     # inverse
                     a_block_inverse = inverse_pto(attn=a_block, eye=eye, size=128, zeros_16=zeros_16,
-                                zeros_32=zeros_32, zeros_64=zeros_64)
+                        zeros_32=zeros_32, zeros_64=zeros_64)
 
                     # cal_value_and_keycumdecay
                     value_out, key_cum_out = cal_value_and_key_cumdecay(a_block_inverse, value_view_2d,
                         beta_view, key_beta, gate_cum)
 
                     chunk_attn_out, cur_state = recurrent_state_attn_all(query=query_scale, key=key_norm,
-                    value=value_out, k_cumdecay=key_cum_out, gate=gate_cum, state=last_state,
-                    decay_mask=decay_mask, tril=tril_mask)
+                        value=value_out, k_cumdecay=key_cum_out, gate=gate_cum, state=last_state,
+                        decay_mask=decay_mask, tril=tril_mask)
 
                     # assemble
                     pypto.set_vec_tile_shapes(16, 16, 128, 128)
@@ -590,18 +460,21 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
 def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
 
     t_unaligned = pypto.DYNAMIC
-    query_shape = (t_unaligned, nqk, d)
-    key_shape = (t_unaligned, nqk, d)
-    value_shape = (t_unaligned, nv, d)
-    beta_shape = (t_unaligned, nv)
-    gate_shape = (t_unaligned, nv)
-    states_shape = (b, nv, d, d)
-    mask_shape = (l, l)
-    tril_mask_shape = (l, l)
-    eye_shape = (16, 16)
-    act_seq_len_shape = (b + 1,)
-    core_attn_out_shape = (t_unaligned, nv, d)
-    last_state_data_shape = (b, nv, d, d)
+    b1 = b + 1
+    b1 = pypto.DYNAMIC
+    b = pypto.DYNAMIC
+    query_shape = [t_unaligned, nqk, d]
+    key_shape = [t_unaligned, nqk, d]
+    value_shape = [t_unaligned, nv, d]
+    beta_shape = [t_unaligned, nv]
+    gate_shape = [t_unaligned, nv]
+    states_shape = [b, nv, d, d]
+    mask_shape = [l, l]
+    tril_mask_shape = [l, l]
+    eye_shape = [16, l]
+    act_seq_len_shape = [b1]
+    core_attn_out_shape = [t_unaligned, nv, d]
+    last_state_data_shape = [b, nv, d, d]
 
     @pypto.frontend.jit(
         runtime_options={
@@ -653,7 +526,8 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
         b = states.shape[0]
         l, l = mask.shape
         group = nv // nqk
-        last_state = pypto.tensor([d, d], pypto.DT_FP32)
+        pypto.experimental.set_operation_options(combine_axis=True)
+
         for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
             s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
             b_ofs = act_seq_len[b_idx]
@@ -661,10 +535,15 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
                 nqk_idx = nv_idx // group
                 pypto.set_vec_tile_shapes(16, 16, 128, 128)
                 last_state = states[b_idx, nv_idx]
-                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx"):
+                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx", unroll_list=[16, 1]): # 2
                     bs_ofs = b_ofs + s_idx
                     actual_l = (s - s_idx).min(l)
-                    ## view
+
+                    zeros_16 = pypto.full(size=[16, 16], fill_value=0.0, dtype=pypto.DT_FP32)
+                    zeros_32 = pypto.full(size=[32, 32], fill_value=0.0, dtype=pypto.DT_FP32)
+                    zeros_64 = pypto.full(size=[64, 64], fill_value=0.0, dtype=pypto.DT_FP32)
+                    
+                    # view
                     query_view = pypto.view(query, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
                     key_view = pypto.view(key, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
                     value_view = pypto.view(value, [l, 1, d], [bs_ofs, nv_idx, 0], valid_shape=[actual_l, 1, d])
@@ -676,37 +555,59 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
                     key_view_2d = pypto.reshape(key_view, [l, d], valid_shape=[actual_l, d])
                     value_view_2d = pypto.reshape(value_view, [l, d], valid_shape=[actual_l, d])
 
-                    # compute
-                    # qk_l2norm
-                    query_norm, key_norm = l2norm(query_view_2d, key_view_2d)
-                    scale = 1 / d ** 0.5
-                    query_scale = query_norm * scale
+                    if pypto.is_loop_end(s_idx):
+                        pad_q = pypto.fillpad(query_view_2d, "constant", 0.0)
+                        pad_k = pypto.fillpad(key_view_2d, "constant", 0.0)
+                        pad_v = pypto.fillpad(value_view_2d, "constant", 0.0)
+                        pad_b = pypto.fillpad(beta_view, "constant", 0.0)
+                        pad_g = pypto.fillpad(gate_view, "constant", 0.0)
 
-                    # kv_beta & g_cumsum & decay_mask & pre_attn
-                    mask_view = pypto.view(mask, [l, l], [0, 0], valid_shape=[actual_l, actual_l])
-                    tril_mask_view = pypto.view(tril_mask, [l, l], [0, 0], valid_shape=[actual_l, actual_l])
-                    gate_cum, decay_mask, a_block, key_beta = pre_attn_unaligned(gate_view, key_norm, beta_view,
-                                                                tril_mask_view, mask_view)
+                        # compute
+                        # qk_l2norm
+                        query_norm, key_norm = l2norm(pad_q, pad_k)
+                        scale = 1 / d ** 0.5
+                        query_scale = query_norm * scale
 
-                    # inverse
-                    a_block_view = pypto.view(a_block, [l, l], [0, 0], valid_shape=[actual_l, actual_l])
-                    a_block_inverse_aligned = inverse_pto_unaligned(a_block_view, eye, 128)
-                    pypto.set_vec_tile_shapes(128, 128)
-                    a_block_inverse = pypto.view(a_block_inverse_aligned, [l, l], [0, 0],
-                                        valid_shape=[actual_l, actual_l])
+                        # kv_beta & g_cumsum & decay_mask & pre_attn
+                        gate_cum, decay_mask, a_block, key_beta = pre_attn(pad_g, key_norm, pad_b, tril_mask, mask)
 
-                    # cal_value_and_keycumdecay
-                    value_out, key_cum_out = cal_value_and_key_cumdecay(a_block_inverse, value_view_2d, beta_view,
-                                            key_beta, gate_cum)
-                    chunk_attn_out, cur_state = recurrent_state_attn_all(query=query_scale, key=key_norm,
-                                value=value_out, k_cumdecay=key_cum_out, gate=gate_cum, state=last_state,
-                                decay_mask=decay_mask, tril=tril_mask_view)
-                    # assemble
-                    last_state[:] = cur_state
-                    pypto.set_vec_tile_shapes(128, 16, 128)
-                    chunk_attn_out_16_reshaped = chunk_attn_out.reshape([l, 1, d], valid_shape=[actual_l, 1, d])
-                    pypto.assemble(chunk_attn_out_16_reshaped, [bs_ofs, nv_idx, 0], core_attn_out)
-                    pypto.set_vec_tile_shapes(16, 16, 128, 128)
-                    last_state_data[b_idx, nv_idx] = last_state
+                        # inverse
+                        a_block_inverse = inverse_pto(attn=a_block, eye=eye, size=128, zeros_16=zeros_16,
+                                zeros_32=zeros_32, zeros_64=zeros_64)
+    
+                        # cal_value_and_keycumdecay
+                        value_out, key_cum_out = cal_value_and_key_cumdecay(
+                            a_block_inverse, pad_v, pad_b, key_beta, gate_cum)
+                        chunk_attn_out, cur_state = recurrent_state_attn_all(query=query_scale, key=key_norm,
+                            value=value_out, k_cumdecay=key_cum_out, gate=gate_cum, state=last_state,
+                            decay_mask=decay_mask, tril=tril_mask)
+                        # assemble
+                        last_state[:] = cur_state
+                        last_state_data[b_idx, nv_idx] = last_state
+                        pypto.set_vec_tile_shapes(128, 16, 128)
+                        chunk_attn_out_reshaped = chunk_attn_out.reshape([l, 1, d], valid_shape=[actual_l, 1, d])
+                        pypto.assemble(chunk_attn_out_reshaped, [bs_ofs, nv_idx, 0], core_attn_out)
+
+                    else:
+                        query_norm, key_norm = l2norm(query_view_2d, key_view_2d)
+                        scale = 1 / d ** 0.5
+                        query_scale = query_norm * scale
+
+                        gate_cum, decay_mask, a_block, key_beta = pre_attn(
+                            gate_view, key_norm, beta_view, tril_mask, mask)
+                        # inverse
+                        a_block_inverse = inverse_pto(attn=a_block, eye=eye, size=128, zeros_16=zeros_16,
+                            zeros_32=zeros_32, zeros_64=zeros_64)
+
+                        # cal_value_and_keycumdecay
+                        value_out, key_cum_out = cal_value_and_key_cumdecay(
+                            a_block_inverse, value_view_2d, beta_view, key_beta, gate_cum)
+                        chunk_attn_out, cur_state = recurrent_state_attn_all(query=query_scale, key=key_norm,
+                            value=value_out, k_cumdecay=key_cum_out, gate=gate_cum, state=last_state,
+                            decay_mask=decay_mask, tril=tril_mask)
+                        # assemble
+                        last_state[:] = cur_state
+                        last_state_data[b_idx, nv_idx] = last_state
+                        core_attn_out[bs_ofs:bs_ofs + l, nv_idx] = chunk_attn_out
 
     return kernel

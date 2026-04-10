@@ -170,7 +170,7 @@ def pypto_chunk_gated_delta_rule_dyn(dims, inputs: dict, outputs: dict):
 
     if (act_seq_len % l != 0).any():
         input_data = [inputs["query"], inputs["key"], inputs["value"], inputs["beta"], inputs["gate"], inputs["states"],
-                inputs["mask"], inputs["tril_mask"], inputs["eye_data_unaligned"], inputs["act_seq_len"]]
+                inputs["mask"], inputs["tril_mask"], inputs["eye_data"], inputs["act_seq_len"]]
         output_data = [outputs["core_attn_out"], outputs["final_state"]]
         chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l)(*input_data, *output_data)
     else:
@@ -445,7 +445,6 @@ def test_b1_nqk2_nv4_s1m():
 
 
 # Test case: B:1, Nqk:2, Nv:4, S:1026
-@pytest.mark.skip(reason="non-divisible test case")
 def test_b1_nqk2_nv4_s1026():
     do_test_chunk_gated_delta_rule("ChunkGatedDeltaRuleSTest.b1_nqk2_nv4_s1026")
 
