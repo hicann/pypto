@@ -572,7 +572,8 @@ void AssignMemoryType::AssignMemUnknown(Function& function)
             inputOperandVisited.insert(i);
             if (i->GetMemoryTypeOriginal() == MemoryType::MEM_UNKNOWN) {
                 MemoryType fromType = MemoryType::MEM_DEVICE_DDR;
-                std::map<MemoryType, std::set<Operation*>> localTobeMap = inserter.GetRequiredTobe(i);
+                std::map<MemoryType, std::set<Operation*, OpMagicComparator>> localTobeMap =
+                    inserter.GetRequiredTobe(i);
                 if (localTobeMap.size() == 1 && localTobeMap.begin()->first != MemoryType::MEM_UNKNOWN) {
                     fromType = localTobeMap.begin()->first;
                 }
@@ -595,7 +596,8 @@ void AssignMemoryType::AssignMemUnknown(Function& function)
                 或者图上op的输出数量超过了opcode.cpp中的定义，目前仅有OP_REDUCE_ACC，已有特殊处理
                 */
                 MemoryType fromType = MemoryType::MEM_DEVICE_DDR;
-                std::map<MemoryType, std::set<Operation*>> localTobeMap = inserter.GetRequiredTobe(o);
+                std::map<MemoryType, std::set<Operation*, OpMagicComparator>> localTobeMap =
+                    inserter.GetRequiredTobe(o);
                 if (localTobeMap.size() == 1 && localTobeMap.begin()->first != MemoryType::MEM_UNKNOWN) {
                     fromType = localTobeMap.begin()->first;
                 }
@@ -611,6 +613,7 @@ void AssignMemoryType::AssignMemUnknown(Function& function)
         }
     }
 }
+
 void AssignMemoryType::ProcesSmallTileToLargeTile(Function& function)
 {
     // CASE1:处理cube级联场景小搬大

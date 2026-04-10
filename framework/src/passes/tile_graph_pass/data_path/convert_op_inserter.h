@@ -17,6 +17,7 @@
 #define PASS_CONVERT_OP_INSERTER_H_
 
 #include <unordered_map>
+#include <set>
 
 #include "interface/function/function.h"
 #include "interface/operation/opcode.h"
@@ -28,6 +29,12 @@
 
 namespace npu {
 namespace tile_fwk {
+
+struct OpMagicComparator {
+    bool operator()(const Operation* a, const Operation* b) const {
+        return a->GetOpMagic() < b->GetOpMagic();
+    }
+};
 
 struct ConvertOpInfo {
     MemoryType from;
@@ -46,10 +53,10 @@ public:
 
     /*
         key: Tensor 指针
-        value: consumer op的指针到该op所需内存类型的映射map
+        value: Opmagic到consumer op的指针和该op所需内存类型对的映射map
     */
-    std::unordered_map<LogicalTensorPtr, std::map<Operation*, MemoryType>> tensorTobeMap;
-    std::unordered_map<int, std::map<MemoryType, std::set<Operation*>>> conflictMap;
+    std::map<LogicalTensorPtr, std::map<int, std::pair<Operation *, MemoryType>>> tensorTobeMap;
+    std::unordered_map<int, std::map<MemoryType, std::set<Operation*, OpMagicComparator>>> conflictMap;
 
     // 设置指定tensor的指定consumer op所需的mem tobe 类型
     void UpdateTensorTobeMap(const LogicalTensorPtr& tensor, Operation& operation, MemoryType t);
@@ -64,13 +71,14 @@ public:
     std::map<Operation*, MemoryType> GetTobeDefault(LogicalTensorPtr& tensor) const;
 
     // 提取指定tensor的tobe map，新格式，key为Mem类型，val为需要改mem类型的op指针set
-    std::map<MemoryType, std::set<Operation*>> GetRequiredTobe(LogicalTensorPtr& tensor) const;
+    std::map<MemoryType, std::set<Operation*, OpMagicComparator>> GetRequiredTobe(LogicalTensorPtr& tensor) const;
 
     // 过滤得到所有有conflict的tensor信息
     void FilterConflictTensor();
 
     // tobe Map转换类型，以memory type为key
-    std::map<MemoryType, std::set<Operation*>> ReformMap(std::map<Operation*, MemoryType>& oriMap) const;
+    std::map<MemoryType, std::set<Operation*, OpMagicComparator>> ReformMap(
+        const std::map<int, std::pair<Operation*, MemoryType>>& oriMap) const;
 
     // 提取指定tensor的指定consumer op所需的mem类型
     MemoryType GetMemoryTypeFromTensorTobeMap(LogicalTensorPtr& tensor, Operation& operation) const;
@@ -114,12 +122,12 @@ public:
     bool isAllProducerAssemble(const std::shared_ptr<LogicalTensor>& oOperand) const;
 
     // 检查tensor所有的消费者是否都有效
-    bool isAllConsumersValid(const std::set<Operation*>& consumers) const;
+    bool isAllConsumersValid(const std::set<Operation*, OpMagicComparator>& consumers) const;
 
     // 为每个存在内存冲突的消费者插入convert op
     void InsertConvertOpForEachConsumer(
         Function& function, const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand,
-        std::set<Operation*>& consumers, std::vector<MemoryType>& paths);
+        std::set<Operation*, OpMagicComparator>& consumers, std::vector<MemoryType>& paths);
 
     // 记录需要插入的convert op
     std::shared_ptr<LogicalTensor> RecordInsertConvertOp(
@@ -129,7 +137,7 @@ public:
     // graph重连
     void GraphReconnect(
         const std::shared_ptr<LogicalTensor>& oOperand, std::shared_ptr<LogicalTensor> output,
-        const std::set<Operation*>& consumers, Function& function) const;
+        const std::set<Operation*, OpMagicComparator>& consumers, Function& function) const;
 
     // cube级联场景
     bool IsNotValidDataType(const std::shared_ptr<LogicalTensor>& firstCVOutput) const;
@@ -142,7 +150,7 @@ public:
 
     // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
     void ProcessSpecialProducersOrConsumers(
-        const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, std::set<Operation*>& consumers,
+        const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, std::set<Operation*, OpMagicComparator>& consumers,
         MemoryType& requiredMemoryType);
 
     // 构造转换路径
