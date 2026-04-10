@@ -54,3 +54,16 @@ def test_empty_begin_end_function():
         pypto.set_vec_tile_shapes(8, 8)
 
     assert True
+
+
+def test_hidden_loop():
+    dtype = pypto.DT_INT32
+    shape = [64, 64]
+    a = pypto.tensor(shape, dtype, "a")
+    c1 = pypto.tensor(shape, dtype, "c1")
+
+    with pypto.function("SUBS", a, c1):
+        pypto.set_vec_tile_shapes(32, 32)
+        a1 = a[:16, :16]
+        for _ in pypto.loop(1):
+            c1[:16, :16] = a1 - 3

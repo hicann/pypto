@@ -180,7 +180,7 @@ Operation::Operation(
         }
     }
 
-    if (function_->IsGraphType({GraphType::TENSOR_GRAPH, GraphType::TILE_GRAPH})) {
+    if (function_->IsGraphType(GraphType::TENSOR_GRAPH)) {
         tileShape_ = TileShape::Current();
         if (coreType_ == CoreType::AIC) {
             auto& cubeTile = tileShape_.GetCubeTile();
@@ -194,6 +194,9 @@ Operation::Operation(
             FUNCTION_ASSERT(FError::INVALID_VAL, vecTile.valid())
                 << "op [" << OpcodeManager::Inst().GetOpcodeStr(opcode) << "]tile shape not set";
         }
+    }
+
+    if (function_->IsGraphType({GraphType::TENSOR_GRAPH, GraphType::TILE_GRAPH})) {
         SetSemanticLabel(config::GetSemanticLabel());
         location_ = SourceLocation::GetLocation();
     }

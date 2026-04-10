@@ -121,3 +121,17 @@ def test_tensor_nz_format():
 
     c = pypto.from_torch(torch.randn((64, 64)), "c", tensor_format=pypto.TileOpFormat.TILEOP_ND)
     assert c.format == pypto.TileOpFormat.TILEOP_ND
+
+
+def test_tensor_starred():
+    dtype = pypto.DT_INT32
+    shape = [64, 64]
+    a = pypto.tensor(shape, dtype, "a")
+    c1 = pypto.tensor(shape, dtype, "c1")
+    c2 = pypto.tensor(shape, dtype, "c2")
+
+    with pytest.raises(TypeError):
+        with pypto.function("SUBS", a, c1, c2):
+            pypto.set_vec_tile_shapes(32, 32)
+            c = a - 3
+            c1, *c2 = c

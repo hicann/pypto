@@ -212,6 +212,9 @@ class Tensor:
 
         raise ValueError("tuple key must be int, SymbolicScalar or slice")
 
+    def __iter__(self):
+        raise TypeError("Tensor is not iterable.")
+
     @source_location
     def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None):
         """

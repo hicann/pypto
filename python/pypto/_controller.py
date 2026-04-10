@@ -416,7 +416,8 @@ def function(name: str, *args) -> Iterator:
         set_source_location(level=2)
         func = pypto_impl.RecordFunc(name, [t.base() for t in in_out_tensors])
         clear_source_location()
-        yield func
+        for _ in loop(1, name="__main__"):
+            yield func
     except Exception as e:
         logging.error("Record function %s failed: %s", name, e)
         raise
@@ -676,7 +677,6 @@ def loop_unroll(*args, **kwargs) -> Iterator[Tuple[SymbolicScalar, int]]:
         unroll_list.append(1)
 
     ori_name = kwargs.get("name", None)
-    ori_idx_name = kwargs.get("idx_name", None)
 
     nstart = start
     for p in unroll_list:

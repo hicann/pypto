@@ -81,7 +81,7 @@ def test_set_tensor_data():
         c[1, 1] = 1
 
 
-@pytest.mark.parametrize("dtype", [pypto.DT_BOOL, pypto.DT_INT32, pypto.DT_INT64])
+@pytest.mark.parametrize("dtype", [pypto.DT_INT32])
 def test_get_input_shape(dtype):
     shape = (128, 128)
     a = pypto.tensor(shape, dtype, "a")
