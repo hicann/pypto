@@ -1,6 +1,7 @@
 # PyPTO
 
 ## 🔥最新动态
+- 2026/04/10：0.2.0版本发布，变更前端表达方法，提升易用性、增强功能及性能，完善各模块能力，优化开发体验与运行效率
 - 2026/03/30：v0.1.2版本发布，支持集群训练场景、优化框架编译性能与基础性能、修复已知整网集成问题
 - 2026/03/09：v0.1.1版本发布，支持新前端、进一步增加API丰富程度、修复一些已知问题
 - 2026/01/06：v0.1.0版本发布，PyPTO项目初始版本
@@ -32,20 +33,20 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 ### 大模型实现样例
 
-- [DeepSeekV3.2 SFA](https://gitcode.com/cann/pypto/blob/master/models/deepseek_v32_exp/deepseekv32_sparse_flash_attention_quant.py) -稀疏Flash Attention量化实现
-- [DeepSeekV3.2 MLA-PROLOG](https://gitcode.com/cann/pypto/blob/master/models/deepseek_v32_exp/deepseekv32_mla_indexer_prolog_quant.py) -MLA Indexer Prolog量化实现
-- [GLM V4.5 Attention](https://gitcode.com/cann/pypto/blob/master/models/glm_v4_5/glm_attention.py) -GLM注意力机制实现
-- [GLM V4.5 ExpertsSelector](https://gitcode.com/cann/pypto/blob/master/models/glm_v4_5/glm_select_experts.py) -GLM专家选择器实现
+- [DeepSeekV3.2 SFA](https://gitcode.com/cann/pypto/blob/0.2.0/models/deepseek_v32_exp/deepseekv32_sparse_flash_attention_quant.py) -稀疏Flash Attention量化实现
+- [DeepSeekV3.2 MLA-PROLOG](https://gitcode.com/cann/pypto/blob/0.2.0/models/deepseek_v32_exp/deepseekv32_mla_indexer_prolog_quant.py) -MLA Indexer Prolog量化实现
+- [GLM V4.5 Attention](https://gitcode.com/cann/pypto/blob/0.2.0/models/glm_v4_5/glm_attention.py) -GLM注意力机制实现
+- [GLM V4.5 ExpertsSelector](https://gitcode.com/cann/pypto/blob/0.2.0/models/glm_v4_5/glm_select_experts.py) -GLM专家选择器实现
 
 ### 学习路径
 
-在 [examples](https://gitcode.com/cann/pypto/blob/master/examples)目录下，我们规划了多个层级的样例:
+在 [examples](https://gitcode.com/cann/pypto/blob/0.2.0/examples)目录下，我们规划了多个层级的样例:
 
-- [beginner/](https://gitcode.com/cann/pypto/blob/master/examples/01_beginner)：基础操作示例，帮助初学者快速上手PyPTO编程
-- [intermediate/](https://gitcode.com/cann/pypto/blob/master/examples/02_intermediate)：中级示例，包括自定义操作、神经网络模块等
-- [advanced/](https://gitcode.com/cann/pypto/blob/master/examples/03_advanced)：高级示例，包括复杂模式和多函数组合
+- [beginner/](https://gitcode.com/cann/pypto/blob/0.2.0/examples/01_beginner)：基础操作示例，帮助初学者快速上手PyPTO编程
+- [intermediate/](https://gitcode.com/cann/pypto/blob/0.2.0/examples/02_intermediate)：中级示例，包括自定义操作、神经网络模块等
+- [advanced/](https://gitcode.com/cann/pypto/blob/0.2.0/examples/03_advanced)：高级示例，包括复杂模式和多函数组合
 
-在 [models/](https://gitcode.com/cann/pypto/blob/master/models)目录下，我们提供了部分大模型实现样例，供快速移植和部署
+在 [models/](https://gitcode.com/cann/pypto/blob/0.2.0/models)目录下，我们提供了部分大模型实现样例，供快速移植和部署
 
 这些示例可以帮助开发者学习如何编写PyPTO算子，从简单的Tensor操作到复杂的模型网络实现。
 
@@ -53,15 +54,15 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 若您希望快速体验PyPTO的使用和开发过程，请访问如下文档获取简易教程。
 
-- [环境部署](https://gitcode.com/cann/pypto/blob/master/docs/install/prepare_environment.md)：介绍项目基础环境的搭建，包括软件包和第三方依赖的获取和安装。
-- [编译安装](https://gitcode.com/cann/pypto/blob/master/docs/install/build_and_install.md)：环境部署后，介绍如何快速获取或编译PyPTO软件包并安装。
-- [样例运行](https://gitcode.com/cann/pypto/blob/master/docs/invocation/examples_invocation.md)：安装PyPTO软件包后，介绍如何快速实现样例运行。
+- [环境部署](https://gitcode.com/cann/pypto/blob/0.2.0/docs/install/prepare_environment.md)：介绍项目基础环境的搭建，包括软件包和第三方依赖的获取和安装。
+- [编译安装](https://gitcode.com/cann/pypto/blob/0.2.0/docs/install/build_and_install.md)：环境部署后，介绍如何快速获取或编译PyPTO软件包并安装。
+- [样例运行](https://gitcode.com/cann/pypto/blob/0.2.0/docs/invocation/examples_invocation.md)：安装PyPTO软件包后，介绍如何快速实现样例运行。
 
 ## 📖文档资源
 
 若您希望深入体验项目功能并修改源码，请访问如下文档获取详细教程。
 - [文档中心](https://pypto.gitcode.com) ：当前发布版本的详细文档，包括编程指南、API参考，贡献指南等
-- [示例代码](https://gitcode.com/cann/pypto/blob/master/examples/)：丰富的示例代码，从基础到高级应用
+- [示例代码](https://gitcode.com/cann/pypto/blob/0.2.0/examples/)：丰富的示例代码，从基础到高级应用
 
 ## 🔍目录结构
 
@@ -105,9 +106,9 @@ PyPTO提供了丰富的示例代码，涵盖从基础操作到复杂模型实现
 
 ## 📝相关信息
 
-- [贡献指南](https://gitcode.com/cann/pypto/blob/master/CONTRIBUTION.md)
-- [安全声明](https://gitcode.com/cann/pypto/blob/master/SECURITY.md)
-- [许可证](https://gitcode.com/cann/pypto/blob/master/LICENSE)
+- [贡献指南](https://gitcode.com/cann/pypto/blob/0.2.0/CONTRIBUTION.md)
+- [安全声明](https://gitcode.com/cann/pypto/blob/0.2.0/SECURITY.md)
+- [许可证](https://gitcode.com/cann/pypto/blob/0.2.0/LICENSE)
 
 ## 联系我们
 
