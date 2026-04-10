@@ -138,6 +138,8 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     npu::tile_fwk::dynamic::AiCpuHandShakeSta handShakeSta;
     prof.ProfGet(aicoreId, subgraphId, taskId, taskStat);
     prof.profLevel_ = npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG_PMU;
+    uint32_t ctrl0val = 0;
+    prof.addrs_.ctrl0Addr = &ctrl0val;
     prof.ProfStop();
     delete aiCpuStat;
     delete taskStat;

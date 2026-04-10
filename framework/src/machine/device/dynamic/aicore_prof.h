@@ -340,6 +340,9 @@ private:
     uint64_t ProfGetCurCpuTimestamp();
 
 private:
+    uint32_t ctrl0Val_;
+    uint32_t ctrl1Val_;
+    PmuCtrlAddrs addrs_;
     int32_t coreNum_ = 0;
     AiCoreProfLevel profLevel_ = PROF_LEVEL_OFF;
     uint64_t taskCnt_ = 0;

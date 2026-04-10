@@ -501,9 +501,10 @@ void AiCoreProf::ProgramPmuStartForCore(void* mapBase, int coreIdx, const PmuCtr
     *addrs.startCntCyc1Addr = 0x0;
     *addrs.stopCntCyc0Addr = 0xFFFFFFFF;
     *addrs.stopCntCyc1Addr = 0xFFFFFFFF;
-
+    ctrl0Val_ = *addrs.ctrl0Addr;
     *addrs.ctrl0Addr = cfg.ctrl0Val;
     if (cfg.ctrl1Offset != 0 && addrs.ctrl1Addr != nullptr) {
+        ctrl1Val_ = *addrs.ctrl1Addr;
         *addrs.ctrl1Addr = cfg.ctrl1Val;
     }
 }
@@ -515,13 +516,17 @@ void AiCoreProf::ProfStartPmu()
         uint32_t pageSize = static_cast<uint32_t>(sysconf(_SC_PAGESIZE));
         void* mapBase =
             reinterpret_cast<void*>(reinterpret_cast<uint64_t>(addr) & ~(static_cast<uint64_t>(pageSize) - 1));
-        PmuCtrlAddrs addrs = InitPmuRegAddrsForCore(addr, mapBase, coreIdx);
-        ProgramPmuStartForCore(mapBase, coreIdx, addrs);
+        addrs_ = InitPmuRegAddrsForCore(addr, mapBase, coreIdx);
+        ProgramPmuStartForCore(mapBase, coreIdx, addrs_);
     });
 }
 
 void AiCoreProf::ProfStopPmu()
 {
+    *addrs_.ctrl0Addr = ctrl0Val_;
+    if (archInfo_ == ArchInfo::DAV_3510) {
+        *addrs_.ctrl1Addr = ctrl1Val_;
+    }
     if (!ProfCheckLevel(PROF_TASK_TIME_L2)) {
         return;
     }
