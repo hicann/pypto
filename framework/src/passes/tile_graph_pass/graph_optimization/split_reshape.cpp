@@ -1451,5 +1451,4 @@ Status SplitReshape::SetMemoryType(Function& function)
 
 Status SplitReshape::DefaultEnabledPreCheck(Function& function) { return checker_.DoDefaultEnabledPreCheck(function); }
 
-Status SplitReshape::PostCheck(Function& function) { return checker_.DoPostCheck(function); }
 } // namespace npu::tile_fwk

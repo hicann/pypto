@@ -29,16 +29,5 @@ Status SplitReshapeChecker::DoDefaultEnabledPreCheck(Function& function)
     APASS_LOG_INFO_F(Elements::Function, "End Precheck for SplitReshape.");
     return SUCCESS;
 }
-
-Status SplitReshapeChecker::DoPostCheck(Function& function)
-{
-    APASS_LOG_INFO_F(Elements::Function, "===> Start PostCheck for SplitReshape.");
-    if (CheckAssembleOverlap(function) == FAILED) {
-        APASS_LOG_ERROR_F(Elements::Function, "PostCheck of SplitReshape failed since overlaps of assemble inputs.");
-        return FAILED;
-    }
-    APASS_LOG_INFO_F(Elements::Function, "End PostCheck for SplitReshape.");
-    return SUCCESS;
-}
 } // namespace tile_fwk
 } // namespace npu

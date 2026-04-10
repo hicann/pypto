@@ -25,7 +25,6 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_utils/pass_utils.h"
-#include "passes/pass_check/split_large_fanout_tensor_checker.h"
 
 namespace npu::tile_fwk {
 struct ShapeDimComparator {
@@ -116,9 +115,6 @@ private:
     std::map<LogicalTensorPtr, std::set<Shape>> fromShapes_;
     bool enableMoreSplit_ = false;
 
-    Status PreCheck(Function& function) override;
-    Status PostCheck(Function& function) override;
-    SplitLargeFanoutTensorChecker checker_;
     std::string idx;
 };
 

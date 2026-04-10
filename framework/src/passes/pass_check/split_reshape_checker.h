@@ -23,7 +23,6 @@ namespace tile_fwk {
 class SplitReshapeChecker : AssembleChecker {
 public:
     Status DoDefaultEnabledPreCheck(Function& function) override;
-    Status DoPostCheck(Function& function) override;
 };
 } // namespace tile_fwk
 } // namespace npu

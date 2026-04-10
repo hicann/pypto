@@ -210,7 +210,6 @@ private:
         const ReshapeTilePara& shapePara, std::vector<int64_t>& newOffset, std::vector<int64_t>& newShape);
 
     Status DefaultEnabledPreCheck(Function& function) override;
-    Status PostCheck(Function& function) override;
     SplitReshapeChecker checker_;
 
     std::unordered_map<int, std::set<LogicalTensorPtr, TensorPtrComparator>> assembleOutToInput_;
