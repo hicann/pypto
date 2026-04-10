@@ -59,7 +59,8 @@ private:
     std::unordered_set<int> processedReshapeOps;
     Operation* CopyBranchBetweenCopyOut2Reshape(Function& function, std::vector<LogicalTensorPtr>& needToCopyTensors, const int& index);
     Operation* FindAllProducerCopyOuts(
-        LogicalTensorPtr tensor, Operation& op, std::vector<LogicalTensorPtr>& needToCopyTensors, int& index);
+        LogicalTensorPtr tensor, Operation& op, std::vector<LogicalTensorPtr>& needToCopyTensors, int& index,
+        const int reshapeMagic);
     void FindAllConsumerCopyIns(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps, bool& hasViewOrAssemble);
     bool CheckUnaligned(Operation& op);
     LogicalTensorPtr InsertIOTensor(
