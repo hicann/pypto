@@ -135,7 +135,8 @@ TILEOP void ShmemSet(
     uint32_t shmemTensorRawShape1, uint32_t shmemTensorRawShape2, uint32_t shmemTensorShape0,
     uint32_t shmemTensorShape1, uint32_t shmemTensorShape2, uint32_t ownerRank, __gm__ int64_t* hcclContext)
 {
-    uint32_t maxTileNume = static_cast<uint32_t>(GetVirtualMaxTileNum((uint64_t)shmemTensorBaseAddr));
+    uint32_t maxTileNume =
+        static_cast<uint32_t>(TileOp::Distributed::DecodeShmemAddrMaxTileNum((uint64_t)shmemTensorBaseAddr));
 
     __gm__ T* shmemTensorAddr = MapVirtualAddr<T>(hcclContext, shmemTensorBaseAddr, ownerRank);
 
@@ -483,7 +484,7 @@ TILEOP void ShmemSignal(
     uint32_t sRank = notifyAll ? 0 : ownerRank;
     uint32_t eRank = notifyAll ? worldSize : sRank + 1;
     for (uint32_t rankId = sRank; rankId < eRank; rankId++) {
-        __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t>(hcclContext, shmemSignalBaseAddr, rankId) +
+        __gm__ int32_t* shmemSignalAddr = MapVirtualAddr<int32_t, 1>(hcclContext, shmemSignalBaseAddr, rankId) +
                                           CalcLinearOffset(totalTileNum, shmemSignalOffset0, tileIndex) * stride;
         ShmemGlobalTensor<int32_t, 1, signalColShape> signalGlobal(shmemSignalAddr, signalShape, signalStride);
         AtomicStore<atomicType>(signalGlobal, signalTile);

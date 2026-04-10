@@ -16,8 +16,8 @@
 #ifndef DISTRIBUTED_COMMON_H
 #define DISTRIBUTED_COMMON_H
 
-#include "comm_context.h"
 #include "../tileop_common.h"
+#include "comm_context.h"
 
 #define PIPE_SYNC_EVENT(from, to, eventId)  \
     do {                                    \
@@ -153,47 +153,14 @@ struct DispatchInfo {
     int expertIndex;
 };
 
-TILEOP uint64_t GetVirtualAddrBist(uint64_t val, uint64_t start, uint64_t end)
-{
-    return (((val) >> (start)) & ((1UL << ((end) - (start) + 1UL)) - 1UL));
-}
-
-TILEOP uint64_t GetVirtualAddrOffset(uint64_t val)
-{
-    constexpr uint64_t offsetStart = 0UL;
-    constexpr uint64_t offsetEnd = 41UL;
-    return GetVirtualAddrBist(val, offsetStart, offsetEnd);
-}
-
-TILEOP uint64_t GetVirtualMaxTileNum(uint64_t val)
-{
-    constexpr uint64_t offsetStart = 42UL;
-    constexpr uint64_t offsetEnd = 53UL;
-    return GetVirtualAddrBist(val, offsetStart, offsetEnd);
-}
-
-TILEOP uint64_t GetVirtualAddrGroupIndex(uint64_t val)
-{
-    constexpr uint64_t groupIndexStart = 54UL;
-    constexpr uint64_t groupIndexEnd = 55UL;
-    return GetVirtualAddrBist(val, groupIndexStart, groupIndexEnd);
-}
-
-TILEOP uint64_t GetVirtualAddrMemType(uint64_t val)
-{
-    constexpr uint64_t memTypeStart = 56UL;
-    constexpr uint64_t memTypeEnd = 57UL;
-    return GetVirtualAddrBist(val, memTypeStart, memTypeEnd);
-}
-
-template <typename T>
+template <typename T, uint32_t memType = 0>
 TILEOP __gm__ T* MapVirtualAddr(__gm__ int64_t* hcclContext, __gm__ T* vAddr, uint32_t dstRankId)
 {
-    auto groupIndex = GetVirtualAddrGroupIndex((uint64_t)vAddr);
-    auto offset = GetVirtualAddrOffset((uint64_t)vAddr);
-    auto memType = GetVirtualAddrMemType((uint64_t)vAddr);
+    uint64_t addrVal = (uint64_t)vAddr;
+    uint64_t groupIndex = TileOp::Distributed::DecodeShmemAddrGroupIndex(addrVal);
+    uint64_t offset = TileOp::Distributed::DecodeShmemAddrOffset(addrVal);
     __gm__ TileOp::CommContext* commCtxParam = (__gm__ TileOp::CommContext*)hcclContext[groupIndex];
-    if (memType == 0) {
+    if constexpr (memType == 0) {
         return (__gm__ T*)(commCtxParam->winAddr[dstRankId] + offset);
     } else {
         return (__gm__ T*)(commCtxParam->winAddr[commCtxParam->statusIndex + dstRankId] + offset);

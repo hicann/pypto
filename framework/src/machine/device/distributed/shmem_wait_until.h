@@ -216,11 +216,11 @@ public:
         DEV_DEBUG(
             "ShmemWaitUntilImpl::EnqueueOp logical rawShape=[%u, %u],"
             "logical tile=[%u, %u], logical offset=[%u, %u], ownerRank=%u,"
-            "actual rawShape=[%u, %d], actual offset=[%u, %d], buffer maxTileNum=%u, bufferStride=%u",
+            "actual rawShape=[%lu, %d], actual offset=[%u, %d], buffer maxTileNum=%lu, bufferStride=%u",
             paramInfo_.rawShapeRow, paramInfo_.rawShapeCol, paramInfo_.tileShapeRow, paramInfo_.tileShapeCol,
             info.offset[SHMEM_DIM_ROW], info.offset[SHMEM_DIM_COL], info.offset[OWNER_RANK_ID_INDEX],
-            paramInfo_.rankNum, totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex, paramInfo_.maxTileNum,
-            paramInfo_.bufferStride);
+            GetRankNum(hcclContextAddr_, info.vaddr), totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex,
+            TileOp::Distributed::DecodeShmemAddrMaxTileNum(info.vaddr), paramInfo_.bufferStride);
 
         int32_t* addr =
             reinterpret_cast<int32_t*>(info.rawAddr) +
@@ -242,7 +242,6 @@ private:
     uint64_t commGroupNum_{0};
     AicpuParamInfo paramInfo_;
 
-    uint64_t GetRawAddr(const uint64_t addr);
     TensorInfo GetTensorInfo(uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode);
 };
 

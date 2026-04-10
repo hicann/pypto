@@ -58,21 +58,6 @@ int32_t ShmemWaitUntilImpl::PollCompleted(npu::tile_fwk::dynamic::AiCoreManager*
     });
 }
 
-uint64_t ShmemWaitUntilImpl::GetRawAddr(const uint64_t addr)
-{
-    uint64_t groupIndex = npu::tile_fwk::Distributed::GetVirtualAddrGroupIndex(addr);
-    DEV_ASSERT(DistributedErrorCode::INVALID_GROUP_INDEX, groupIndex < commGroupNum_);
-    uint64_t offset = npu::tile_fwk::Distributed::GetVirtualAddrOffset(addr);
-    uint64_t memType = npu::tile_fwk::Distributed::GetVirtualAddrMemType(addr);
-    paramInfo_.maxTileNum = npu::tile_fwk::Distributed::GetVirtualMaxTileNum(addr);
-    auto hcclOpParam = reinterpret_cast<TileOp::CommContext*>(hcclContextAddr_[groupIndex]);
-    paramInfo_.rankNum = hcclOpParam->rankNum;
-    auto rankId = hcclOpParam->rankId;
-    auto winAddrOffset = (memType == 0) ? rankId : hcclOpParam->statusIndex + rankId;
-    uint64_t rawAddr = hcclOpParam->winAddr[winAddrOffset] + offset;
-    return rawAddr;
-}
-
 TensorInfo ShmemWaitUntilImpl::GetTensorInfo(
     uint64_t taskId, const npu::tile_fwk::dynamic::DevRelocVector<int32_t>& aicpuCode)
 {
@@ -94,7 +79,8 @@ TensorInfo ShmemWaitUntilImpl::GetTensorInfo(
     info.expectedSum = aicpuCode[paramInfo_.attrIndex];
     info.resetSignal = aicpuCode[paramInfo_.attrIndex + AICPU_ATTR_DIM_INDEX];
     auto desc = &funcData.rawTensorDesc[info.rawIndex];
-    info.rawAddr = ShmemWaitUntilImpl::GetRawAddr(funcData.rawTensorAddr[desc->offsetOrIndex]);
+    info.vaddr = funcData.rawTensorAddr[desc->offsetOrIndex];
+    info.rawAddr = MapVirtualSignalAddr(hcclContextAddr_, info.vaddr);
     return info;
 }
 } // namespace npu::tile_fwk::Distributed
