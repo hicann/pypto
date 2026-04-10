@@ -301,6 +301,9 @@ void PvModelImpl<SystemConfig, CaseConfig>::BinGen(npu::tile_fwk::Function* func
 
         if (level_ > 0) {
             char cmd[2048];
+            CHECK(npu::tile_fwk::FileExist(task_.objPath[subFuncPair.first])) << "ErrCode: F" <<
+                static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
+                << ", obj file does not exist. objPath: " << task_.objPath[subFuncPair.first];
             (void)snprintf_s(
                 cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s",
                 task_.objPath[subFuncPair.first].c_str(), task_.binPath[subFuncPair.first].c_str());

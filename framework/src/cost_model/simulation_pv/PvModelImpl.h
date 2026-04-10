@@ -32,6 +32,9 @@
 #include "interface/configs/config_manager.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error.h"
+#include "tilefwk/file.h"
+#include "cost_model/simulation/utils/simulation_error.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
 
@@ -420,6 +423,9 @@ public:
                 binPath = srcPath.substr(0, srcPath.length() - Len3) + "bin";
                 constexpr int cmdLen = 2048;
                 char cmd[cmdLen];
+                CHECK(npu::tile_fwk::FileExist(objPath)) << "ErrCode: F" <<
+                    static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
+                    << ", obj file does not exist. objPath: " << objPath;
                 (void)snprintf_s(
                     cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s", objPath.c_str(),
                     binPath.c_str());

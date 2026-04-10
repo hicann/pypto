@@ -22,8 +22,11 @@
 #include "cost_model/simulation/tools/visualizer.h"
 #include "cost_model/simulation/arch/PipeFactory.h"
 #include "cost_model/simulation/pv/PvModelFactory.h"
+#include "cost_model/simulation/utils/simulation_error.h"
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "tilefwk/error.h"
+#include "tilefwk/file.h"
 
 namespace CostModel {
 
@@ -578,6 +581,12 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
 
     SIMULATION_LOGW("Pipe SwimLane Graph Generated (PNG & HTML): %s", pipeDetailPath.c_str());
     std::string drawScriptPath = GetCurrentSharedLibPath() + "/scripts/draw_pipe_swim_lane.py";
+    CHECK(npu::tile_fwk::FileExist(drawScriptPath)) << "ErrCode: F" <<
+        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) << ", draw_pipe_swim_lane.py does not exist. drawScriptPath: "
+        << drawScriptPath;
+    CHECK(npu::tile_fwk::FileExist(pipeDetailPath)) << "ErrCode: F" <<
+        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) << ", pipe.swim.json does not exist. pipeDetailPath: "
+        << pipeDetailPath;
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
     int ret = system(cmd.c_str());
     if (ret != 0) {
@@ -608,6 +617,12 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     }
     SIMULATION_LOGW("SwimLane Graph Generated (PNG): %s", outSwimPath.c_str());
     std::string drawScriptPath = GetCurrentSharedLibPath() + "/scripts/print_swim_lane.py";
+    CHECK(npu::tile_fwk::FileExist(drawScriptPath)) << "ErrCode: F" <<
+        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) << ", draw_pipe_swim_lane.py does not exist. drawScriptPath: "
+        << drawScriptPath;
+    CHECK(npu::tile_fwk::FileExist(outSwimPath)) << "ErrCode: F" <<
+        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) << ", swim.json does not exist. outSwimPath: "
+        << outSwimPath;
     std::string cmd = "python3 " + drawScriptPath + " " + outSwimPath + " -t";
     int result1 = system(cmd.c_str());
     if (result1 != 0) {
@@ -623,10 +638,22 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     SIMULATION_LOGI("program_json_path: %s", program_json_path.c_str());
     std::string label_type = "--label_type=1 --time_convert_denominator=1800"; // default 1.8GHz
     SIMULATION_LOGI("label_type: %s", label_type.c_str());
+    CHECK(npu::tile_fwk::FileExist(mergeScriptPath)) << "ErrCode: F" <<
+        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
+        << ", draw_pipe_swim_lane.py does not exist. drawScriptPath: " << mergeScriptPath;
     if (devicePtr->config.submitTopo) {
+        CHECK(npu::tile_fwk::FileExist(topo_txt_path)) << "ErrCode: F" <<
+            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
+            << ", dyn_topo.txt does not exist. topo_txt_path: " << topo_txt_path;
+        CHECK(npu::tile_fwk::FileExist(program_json_path)) << "ErrCode: F" <<
+            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
+            << ", program.json does not exist. program_json_path: " << program_json_path;
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topo_txt_path + " " + program_json_path + " " +
               label_type;
     } else {
+        CHECK(npu::tile_fwk::FileExist(topoOutFile)) << "ErrCode: F" <<
+            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
+            << ", topo.json does not exist. topoOutFile: " << topoOutFile;
         SIMULATION_LOGW("devicePtr->config.submitTopo: %d", devicePtr->config.submitTopo);
         cmd = "python3 " + mergeScriptPath + " " + outSwimPath + " " + topoOutFile;
     }
