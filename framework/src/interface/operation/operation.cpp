@@ -87,6 +87,7 @@ const std::string OpAttributeKey::scaleValue = "op_attr_scale_value";
 const std::string OpAttributeKey::rowPad = "op_attr_row_pad";
 const std::string OpAttributeKey::ownerRank = "owner_rank";
 const std::string OpAttributeKey::maxTileNum = "max_tile_num";
+const std::string OpAttributeKey::precisionType = "precision_type";
 
 const std::string ConvOpAttributeKey::cin = "CIN";
 const std::string ConvOpAttributeKey::cout = "COUT";

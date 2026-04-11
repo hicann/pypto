@@ -175,6 +175,17 @@ std::string CodeGenOpCloudNPU::PrintBinaryDynamicUnaligned(const PrintBinaryPara
     return os.str();
 }
 
+void CodeGenOpCloudNPU::AddDivPrecisionTypeParm(std::vector<std::string>& templateParamList) const
+{
+    int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
+    (void)GetAttr(OpAttributeKey::precisionType, precisionType);
+    if (precisionType == static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION)) {
+        templateParamList.emplace_back("pto::DivAlgorithm::HIGH_PRECISION");
+    } else {
+        templateParamList.emplace_back("pto::DivAlgorithm::DEFAULT");
+    }
+}
+
 std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
@@ -186,6 +197,11 @@ std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const
     int64_t brcOperandIdx = 0;
     int64_t penuBrcOperandIdx = 0;
     std::string lastUse = GetLastUse();
+
+    if (opCode == Opcode::OP_DIV) {
+        AddDivPrecisionTypeParm(templateParamList);
+    }
+
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }
@@ -547,6 +563,11 @@ std::string CodeGenOpCloudNPU::PrintVectorScalarTileTensor(const PrintUnaryParam
     std::vector<std::string> templateParamList;
     std::ostringstream oss;
     std::string lastUse = GetLastUse();
+
+    if (opCode == Opcode::OP_DIVS) {
+        AddDivPrecisionTypeParm(templateParamList);
+    }
+
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }

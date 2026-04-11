@@ -19,7 +19,7 @@ $$
 ## 函数原型
 
 ```python
-div(input: Tensor,other: Union[Tensor, float]) -> Tensor
+div(input: Tensor, other: Union[Tensor, float], precision_type: DivAlgorithm = DivAlgorithm.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
@@ -29,6 +29,7 @@ div(input: Tensor,other: Union[Tensor, float]) -> Tensor
 |--------|-----------|----------------------------------------------------------------------|
 | input  | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；当数据类型为DT_FP32或DT_FP16时，支持多维度广播到相同形状，其他类型支持单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other  | 输入      | 源操作数。 <br> 支持的类型为float以及Tensor类型。 <br> Tensor支持的数据类型为：DT_FP16，DT_BF16，DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；当数据类型为DT_FP32或DT_FP16时，支持多维度广播到相同形状，其他类型支持单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| precision_type | 输入 | 精度模式枚举类型，用以控制除法计算的精度模式，具体定义为：[DivAlgorithm](../datatype/DivAlgorithm.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
@@ -39,6 +40,9 @@ div(input: Tensor,other: Union[Tensor, float]) -> Tensor
 1.  input 和 other 类型应该相同。
 2.  other 为数字的时候，不支持隐式转化。
 3.  other 不支持nan、inf等特殊值
+4.  **精度模式说明**：
+    - **HIGH_PRECISION（高精度模式）**：默认模式，在底层实现中会使用更高精度的计算方式。
+    - **INTRINSIC（指令模式）**：直接使用芯片指令进行计算。
 
 ## 调用示例
 
@@ -58,10 +62,12 @@ pypto.set_vec_tile_shapes(4, 16)
 
 ### 接口调用示例
 
+#### 基本用法（默认使用高精度模式）
+
 ```python
 a = pypto.tensor([1, 3], pypto.DT_FP32)
 b = pypto.tensor([1, 3], pypto.DT_FP32)
-out = pypto.div(a, b)
+out = pypto.div(a, b)  # 默认使用 HIGH_PRECISION 模式
 ```
 
 结果示例如下：
@@ -70,4 +76,29 @@ out = pypto.div(a, b)
 输入数据a:    [[2.0 4.0 6.0]]
 输入数据b:    [[2.0 2.0 2.0]]
 输出数据out:  [[1.0 2.0 3.0]]
+```
+
+#### 显式指定高精度模式
+
+```python
+a = pypto.tensor([1, 3], pypto.DT_FP16)
+b = pypto.tensor([1, 3], pypto.DT_FP16)
+out = pypto.div(a, b, pypto.DivAlgorithm.HIGH_PRECISION)
+```
+
+#### 使用指令模式
+
+```python
+a = pypto.tensor([1, 3], pypto.DT_FP32)
+b = pypto.tensor([1, 3], pypto.DT_FP32)
+out = pypto.div(a, b, pypto.DivAlgorithm.INTRINSIC)
+```
+
+#### 使用运算符（自动使用高精度模式）
+
+```python
+a = pypto.tensor([1, 3], pypto.DT_FP16)
+b = pypto.tensor([1, 3], pypto.DT_FP16)
+out = a / b  # 自动使用 HIGH_PRECISION 模式
+out = a.div(b)  # 自动使用 HIGH_PRECISION 模式
 ```

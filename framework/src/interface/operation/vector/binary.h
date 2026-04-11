@@ -229,7 +229,7 @@ void BroadcastOperandTensor(
 
 // OP_ADD OP_SUB OP_MUL OP_DIV OP_MAX OP_BITWISEAND OP_BITWISEOR OP_BITWISEXOR
 template <BinaryOpType T>
-LogicalTensorPtr TensorBinaryOperation(Function& function, const Tensor& operand1, const Tensor& operand2)
+std::pair<LogicalTensorPtr, Operation*> TensorBinaryOperationWithOp(Function& function, const Tensor& operand1, const Tensor& operand2)
 {
     auto oprandT1 = operand1.GetStorage();
     auto oprandT2 = operand2.GetStorage();
@@ -255,13 +255,20 @@ LogicalTensorPtr TensorBinaryOperation(Function& function, const Tensor& operand
     }
     auto result = std::make_shared<LogicalTensor>(
         function, oprandT1->Datatype(), resultShape, resultValidShape, oprandT1->Format());
-    function.AddOperation(GetBinaryOpNameCode<T>(), {oprandT1, oprandT2}, {result});
-    return result;
+    auto& op = function.AddOperation(GetBinaryOpNameCode<T>(), {oprandT1, oprandT2}, {result});
+    return {result, &op};
+}
+
+template <BinaryOpType T>
+LogicalTensorPtr TensorBinaryOperation(Function& function, const Tensor& operand1, const Tensor& operand2)
+{
+    return TensorBinaryOperationWithOp<T>(function, operand1, operand2).first;
 }
 
 // OP_ADDS OP_SUBS OP_MULS OP_DIVS OP_MAXS OP_MINS OP_BITWISEANDS OP_BITWISEORS OP_BITWISEXORS
 template <BinaryOpType T>
-LogicalTensorPtr TensorBinaryOperationScalar(Function& function, LogicalTensorPtr operand1, const Element& value)
+std::pair<LogicalTensorPtr, Operation*> TensorBinaryOperationScalarWithOp(
+    Function& function, LogicalTensorPtr operand1, const Element& value)
 {
     auto opName = GetBinaryOpName<T>();
     CheckTensorShape(operand1, opName);
@@ -269,7 +276,13 @@ LogicalTensorPtr TensorBinaryOperationScalar(Function& function, LogicalTensorPt
         std::make_shared<LogicalTensor>(function, operand1->Datatype(), operand1->shape, operand1->GetDynValidShape());
     auto& op = function.AddOperation(GetBinaryOpNameCode<T, true>(), {operand1}, {result});
     op.SetAttribute(OpAttributeKey::scalar, value);
-    return result;
+    return {result, &op};
+}
+
+template <BinaryOpType T>
+LogicalTensorPtr TensorBinaryOperationScalar(Function& function, LogicalTensorPtr operand1, const Element& value)
+{
+    return TensorBinaryOperationScalarWithOp<T>(function, operand1, value).first;
 }
 
 // OP_S_ADDS OP_S_SUBS OP_S_MULS OP_S_DIVS OP_S_MAXS

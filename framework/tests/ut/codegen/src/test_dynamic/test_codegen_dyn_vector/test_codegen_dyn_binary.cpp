@@ -378,4 +378,75 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor)
     res = cop.QueryTileTensorTypeByIdx(0);
     EXPECT_EQ(res, expect);
 }
+
+TEST_F(TestCodegenDynBinary, TestDivHighPrecisionFP16)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+
+    std::vector<int64_t> shape = {64, 64};
+    TileShape::Current().SetVecTile({64, 64});
+    Tensor input_a(DataType::DT_FP16, shape, "A");
+    Tensor input_b(DataType::DT_FP16, shape, "B");
+    Tensor output(DataType::DT_FP16, shape, "C");
+
+    std::string funcName = "TestDivHighPrecisionFP16";
+    FUNCTION(funcName, {input_a, input_b, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Div(input_a, input_b, DivAlgorithm::HIGH_PRECISION);
+        }
+    }
+
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TDiv<pto::DivAlgorithm::HIGH_PRECISION, LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynBinary, TestDivIntrinsicPrecision)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+
+    std::vector<int64_t> shape = {64, 64};
+    TileShape::Current().SetVecTile({64, 64});
+    Tensor input_a(DataType::DT_FP16, shape, "A");
+    Tensor input_b(DataType::DT_FP16, shape, "B");
+    Tensor output(DataType::DT_FP16, shape, "C");
+
+    std::string funcName = "TestDivDefaultPrecision";
+    FUNCTION(funcName, {input_a, input_b, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Div(input_a, input_b, DivAlgorithm::DEFAULT);
+        }
+    }
+
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TDiv<pto::DivAlgorithm::DEFAULT, LastUse3Dim<0, 1, 1>>(ubTensor_0, ubTensor_0, ubTensor_2);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
 } // namespace npu::tile_fwk

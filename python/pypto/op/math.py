@@ -15,7 +15,7 @@ from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
-from ..enum import DataType
+from ..enum import DataType, DivAlgorithm
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
 
@@ -185,7 +185,8 @@ def mul(input: Tensor, other: Union[Tensor, float]) -> Tensor:
 
 
 @op_wrapper
-def div(input: Tensor, other: Union[Tensor, float]) -> Tensor:
+def div(
+    input: Tensor, other: Union[Tensor, float], precision_type: DivAlgorithm = DivAlgorithm.HIGH_PRECISION) -> Tensor:
     """Computes the element-wise division of `input` and `other`.
 
     This function calculates the formula: `out = input / other`.
@@ -197,6 +198,10 @@ def div(input: Tensor, other: Union[Tensor, float]) -> Tensor:
         The first input tensor.
     other : Tensor or Number
         The second input tensor or a scalar to divide.
+    precision_type : DivAlgorithm, optional
+        The precision algorithm for division. Default is DivAlgorithm.HIGH_PRECISION.
+        HIGH_PRECISION uses higher precision calculation to reduce precision loss.
+        Use DivAlgorithm.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -222,11 +227,16 @@ def div(input: Tensor, other: Union[Tensor, float]) -> Tensor:
     Input a:    [[2.0 4.0 6.0]]
     Input b:    [[2.0 2.0 2.0]]
     Output out: [[1.0 2.0 3.0]]
+
+    # Using high precision mode for FP16
+    a = pypto.tensor([1, 3], pypto.DT_FP16)
+    b = pypto.tensor([1, 3], pypto.DT_FP16)
+    out = pypto.div(a, b, pypto.DivAlgorithm.HIGH_PRECISION)
     """
     if isinstance(other, pypto_impl.Tensor):
-        return pypto_impl.Div(input, other)
+        return pypto_impl.Div(input, other, precision_type)
     else:
-        return pypto_impl.Div(input, pypto_impl.Element(input.dtype, other))
+        return pypto_impl.Div(input, pypto_impl.Element(input.dtype, other), precision_type)
 
 
 @op_wrapper

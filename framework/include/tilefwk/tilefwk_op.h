@@ -45,6 +45,12 @@ enum class SaturationMode : uint8_t {
     OFF = 1,
 };
 
+enum class DivAlgorithm : uint8_t
+{
+    DEFAULT,
+    HIGH_PRECISION
+};
+
 namespace experimental {
 struct PrintHelper {
     SymbolicScalar cond;
@@ -212,7 +218,7 @@ Tensor Compact(const Tensor& operand);
 
 Tensor Add(const Tensor& self, const Tensor& other);
 Tensor Sub(const Tensor& self, const Tensor& other);
-Tensor Div(const Tensor& self, const Tensor& other);
+Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType = DivAlgorithm::DEFAULT);
 Tensor Mul(const Tensor& self, const Tensor& other);
 Tensor Hypot(const Tensor& self, const Tensor& other);
 Tensor Fmod(const Tensor& self, const Tensor& other);
@@ -224,7 +230,7 @@ Tensor BitwiseXor(const Tensor& self, const Tensor& other);
 Tensor ExpandExpDif(const Tensor& input, const Tensor& other);
 Tensor Add(const Tensor& self, const Element& other);
 Tensor Sub(const Tensor& self, const Element& other);
-Tensor Div(const Tensor& self, const Element& other);
+Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType = DivAlgorithm::DEFAULT);
 Tensor Mul(const Tensor& self, const Element& other);
 Tensor Fmod(const Tensor& self, const Element& other);
 Tensor BitwiseAnd(const Tensor& self, const Element& other);
