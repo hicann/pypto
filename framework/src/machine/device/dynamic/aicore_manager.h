@@ -1163,7 +1163,9 @@ private:
 
 #if ENABLE_TENSOR_DUMP
         // dump input tensor
-        aicoreDump_.DoDump(devTaskCtx->GetDeviceTask(), "input", newTask, GetPhyIdByBlockId(coreIdx));
+        if (unlikely(isEnableDump)) {
+            aicoreDump_.DoDump(devTaskCtx->GetDeviceTask(), "input", newTask, GetPhyIdByBlockId(coreIdx));
+        }
 #endif
         uint64_t encodeTaskId = EncodeTaskId(devTaskCtx, coreIdx, newTask);
         aicoreHal_.SetReadyQueue(coreIdx, (encodeTaskId + 1));
@@ -1875,8 +1877,12 @@ private:
         context_->Init(deviceArgs, schedIdx);
 
 #if ENABLE_TENSOR_DUMP
-        aicoreDump_.Init(startArgs, schedIdx);
+        isEnableDump = startArgs->devProg->devArgs.hostPid != 0;
+        if (unlikely(isEnableDump)) {
+            aicoreDump_.Init(startArgs, schedIdx);
+        }
 #endif
+        (void)startArgs;
 
         if (deviceArgs->machineConfig != static_cast<uint8_t>(MachineScheduleConfig::DEFAULT_SCH)) {
             if (aicpuNum_ > 1) {
@@ -2198,7 +2204,9 @@ private:
 
 #if ENABLE_TENSOR_DUMP
         // dump output tensor
-        aicoreDump_.DoDump(deviceTaskCtx->GetDeviceTask(), "output", taskId, GetPhyIdByBlockId(coreIdx), stat->execStart, stat->execEnd);
+        if (unlikely(isEnableDump)) {
+            aicoreDump_.DoDump(deviceTaskCtx->GetDeviceTask(), "output", taskId, GetPhyIdByBlockId(coreIdx), stat->execStart, stat->execEnd);
+        }
 #endif
 
         DEV_IF_VERBOSE_DEBUG { recvFinTask_[coreIdx].push_back(TaskInfo(coreIdx, taskId, deviceTaskCtx->TaskId())); }
@@ -2350,6 +2358,7 @@ private:
 
     AiCoreProf aicoreProf_;
     AicoreDump aicoreDump_;
+    bool isEnableDump{false};
     int64_t dotStatus_{0};
     bool isSendStop{false};
     std::array<uint8_t, MAX_AICORE_NUM> pingPongFlag_;

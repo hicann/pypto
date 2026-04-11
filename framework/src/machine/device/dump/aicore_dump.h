@@ -138,12 +138,10 @@ public:
     void DoDump(
         DeviceTask* devTask, std::string iOinfo, int32_t taskId, int32_t coreId, int64_t execStart = 0,
         int64_t execEnd = 0)
-    {
-        if (IsEnableDump()) {
-            DumpInit(taskId, coreId, execStart, execEnd);
-            DoDump(devTask, iOinfo);
-        }
-    }
+    {      
+        DumpInit(taskId, coreId, execStart, execEnd);
+        DoDump(devTask, iOinfo);
+}
 
     void DumpInit(int32_t taskId, int32_t coreId, int64_t execStart = 0, int64_t execEnd = 0)
     {
@@ -160,7 +158,7 @@ public:
         DEV_DEBUG("HostPid=%u.", hostPid_);
         enableDump_ = (hostPid_ != 0);
     }
-    bool IsEnableDump() const { return enableDump_; }
+    inline bool IsEnableDump() const { return enableDump_; }
 
     inline bool DumpData(
         const IDE_SESSION& ideSession, std::string& fileName, unsigned char* dataBuf, uint64_t dataSize,
