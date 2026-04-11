@@ -92,8 +92,7 @@ void CodeGenOp::UpdateShape(
         IntVecToStr(logicalTensor.GetDynValidShape()).c_str());
 
     rawShape[operandIdx] = logicalTensor.tensor->rawshape;
-    // need adapt unaligned scene after
-    originShape[operandIdx] = isMainBlock ? logicalTensor.shape : logicalTensor.oriShape;
+    originShape[operandIdx] = logicalTensor.oriShape;
     if (isDynamicFunction) {
         dynamicValidShape[operandIdx] =
             isMainBlock ? SymbolicScalar::FromConcrete(logicalTensor.shape) : logicalTensor.GetDynValidShape();
