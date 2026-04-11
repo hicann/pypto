@@ -173,7 +173,7 @@ Status OoOSchedule::MixSchedule(
         return a.startTime < b.startTime;
     });
     std::vector<Operation*> operations;
-    std::unordered_map<Operation*, std::pair<OpCoreType, int>> opCoreMap;
+    std::unordered_map<Operation*, CoreLocationType> opCoreMap;
     for (auto& taskNode : taskNodeList) {
         SortTaskList(taskNode.opList_, opList);
         UpdateOpCoreMap(taskNode, opCoreMap);
@@ -201,10 +201,10 @@ Status OoOSchedule::MixSchedule(
 }
 
 Status OoOSchedule::UpdateOpCoreMap(
-    const TaskNode& taskNode, std::unordered_map<Operation*, std::pair<OpCoreType, int>>& opCoreMap)
+    const TaskNode& taskNode, std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
 {
     for (auto op : taskNode.opList_) {
-        if (targetCoreTypeMap.find(taskNode.targetCoreType) == targetCoreTypeMap.end()) {
+        if (taskNode.targetCoreType == TargetCoreType::UNKNOWN) {
             APASS_LOG_ERROR_F(Elements::Operation, "CoreType is not AIC, AIV0 or AIV1");
             return FAILED;
         }

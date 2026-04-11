@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file estimate_latency.h
+ * \file latency_estimator.h
  * \brief
  */
 
@@ -17,10 +17,11 @@
 #define PASS_ESTIMATE_LATENCY_H
 
 #include "schedule_base.h"
+#include "schedule_main_loop_base.h"
 #include <vector>
 
 namespace npu::tile_fwk {
-class LatencyEstimator : public ScheduleBase {
+class LatencyEstimator : public ScheduleBase, public ScheduleMainLoopBase {
 public:
     LatencyEstimator() {}
     LatencyEstimator(std::vector<Operation*>& newTaskList, std::vector<Operation*>& newOperations)
@@ -34,8 +35,6 @@ public:
     std::map<MemoryType, OpQueue> allocIssueQueue; // alloc执行 顺序
     std::map<PipeType, OpQueue> opQueues;
     std::map<Operation*, bool> opRetiredInfo;
-    int clock{0};
-    uint64_t numTotalIssues{0};
     std::vector<Operation*> taskList;
     std::vector<Operation*> operations;
     std::set<int> spillblockMemIds;
@@ -43,13 +42,17 @@ public:
     void LaunchReadyIssue();
     Status FreeBuffer(Operation* op);
     Status RetireOpAndAwakeSucc(Operation* op, uint64_t& commitCnt);
-    Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle);
+    // ScheduleMainLoopBase 钩子实现
+    Status PreMainLoop() override;
+    Status PostMainLoop() override;
+    Status RetireIssueStage(uint64_t& commitCnt, int& nextCycle) override;
     Status ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, OpQueue& pipe);
-    Status BufferAllocStage(uint64_t& commitCnt);
-    Status LaunchIssueStage(int& nextCycle);
-    Status SpillOnBlock();
+    Status BufferAllocStage(uint64_t& commitCnt) override;
+    Status LaunchIssueStage(int& nextCycle) override;
+    Status SpillOnBlock() override;
     void initLatencyEstimatorOpQueues();
     void InitMemWithoutAlloc();
+    // 保留原入口名称,内部直接转发到 ScheduleMainLoopBase::RunMainLoop。
     Status LatencyEstimatorMainLoop();
 
 private:

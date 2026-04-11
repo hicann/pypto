@@ -301,7 +301,6 @@ Status DependencyManager::InitDependencies(const std::vector<Operation *> &ops, 
             }
         }
     }
-
     return SUCCESS;
 }
 

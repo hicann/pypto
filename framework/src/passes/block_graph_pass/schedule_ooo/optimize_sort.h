@@ -38,7 +38,6 @@ public:
     std::stack<std::pair<Operation*, MemoryType>> needFreeOpStack_;
     std::map<Operation*, bool> visitedOp_;
     std::map<Operation*, std::unordered_map<int, int>> recordBufRefCount_;
-    std::unordered_map<Operation*, std::vector<int>> opMemIdsCache_;
 
     // 回溯点位置,当前执行op的全部信息,用于后期回退
     Operation* backTraceOp_{nullptr};
@@ -95,7 +94,6 @@ public:
     void OpMemoryUpdate(
         Operation* op, size_t startIndex, std::shared_ptr<std::vector<Operation*>> curOpList,
         const std::map<MemoryType, int64_t>& curMemoryMap);
-    const std::vector<int>& GetOpMemIds(Operation* op);
     Status ConsumeOpBuffers(Operation* op);
     Status AllocExecute(
         Operation* op, std::shared_ptr<std::vector<Operation*>>& curOpList, std::map<MemoryType, int64_t>& curMemoryMap,

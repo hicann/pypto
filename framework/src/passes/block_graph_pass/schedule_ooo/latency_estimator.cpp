@@ -13,11 +13,12 @@
  * \brief
  */
 
-#include "passes/block_graph_pass/schedule_ooo/estimate_latency.h"
+#include "passes/block_graph_pass/schedule_ooo/latency_estimator.h"
 
 namespace npu::tile_fwk {
 
-void LatencyEstimator::LaunchReadyIssue() {
+void LatencyEstimator::LaunchReadyIssue()
+{
     for (auto &op : taskList) {
         if (USE_LESS_OPS2.find(op->GetOpcode()) != USE_LESS_OPS2.end() && depManager_.GetPredecessors(op).empty()) {
             auto type = RescheduleUtils::GetOpPipeType(op);
@@ -270,45 +271,23 @@ void LatencyEstimator::InitMemWithoutAlloc()
 
 Status LatencyEstimator::LatencyEstimatorMainLoop()
 {
+    if (RunMainLoop() != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "RunMainLoop failed.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status LatencyEstimator::PreMainLoop()
+{
     initLatencyEstimatorOpQueues();
     LaunchReadyIssue();
     numTotalIssues = taskList.size();
-    uint64_t commitCount = 0; // 当前已提交的issue数量
-    bool isAllRetired = false;
-    while (!isAllRetired) {
-        int nextCycleTime = -1;
-        // Retire Stage :
-        // 检查现有pipe中的op是否执行完。如果op执行完，则将op标记为retired状态，将可以被释放的buffer释放掉，并唤醒后续已经就绪的op。
-        // 完毕后更新整个pipe的状态。
-        if (RetireIssueStage(commitCount, nextCycleTime) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "RetireIssueStage failed.");
-            return FAILED;
-        }
-        // Buffer Allocation Stage :
-        // 分配buffer。对于所有类型的buffer，按顺序执行alloc指令，并激活后续已经就绪的op。不断执行alloc直到buffer被占满为止。
-        if (BufferAllocStage(commitCount) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "BufferAllocStage failed.");
-            return FAILED;
-        }
-        // Launch Stage ：检查idle的pipe中是否有已经就绪的指令。如果有，则执行该指令，并更新pipe的状态为busy。
-        if (LaunchIssueStage(nextCycleTime) != SUCCESS) {
-            APASS_LOG_ERROR_F(Elements::Operation, "LaunchIssueStage failed.");
-            return FAILED;
-        }
-        if (numTotalIssues == commitCount && nextCycleTime == -1) {
-            isAllRetired = true;
-            break;
-        }
-        // 如果nextCycleTime为-1，说明每个pipe都处于idle的状态，判断出现阻塞。需要spill调整内存
-        if (nextCycleTime == -1) {
-            if (SpillOnBlock() != SUCCESS) {
-                APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed.");
-                return FAILED;
-            }
-        } else {
-            clock = nextCycleTime;
-        }
-    }
+    return SUCCESS;
+}
+
+Status LatencyEstimator::PostMainLoop()
+{
     APASS_LOG_DEBUG_F(Elements::Operation, "\n Estimate Latency: %d", clock);
     return SUCCESS;
 }

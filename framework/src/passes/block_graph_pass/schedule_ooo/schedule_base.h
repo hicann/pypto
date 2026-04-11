@@ -61,6 +61,7 @@ public:
     std::unordered_map<MemoryType, int64_t> localMemoryCurrentSize;
     std::unordered_map<int, LocalBufferPtr> localBufferMap_; //memid:local
     std::unordered_map<Operation*, LogicalTensors> inOutOperandsCache_;
+    std::unordered_map<Operation*, std::vector<int>> opReqMemIdsMap;
 
     //  初始依赖的list序列
     std::vector<Operation*> operations;
@@ -69,25 +70,51 @@ protected:
     DependencyManager depManager_;
 
 public:
-    const LogicalTensors& GetInOutOperandCached(Operation* op) {
-        auto it = inOutOperandsCache_.find(op);
-        if (it != inOutOperandsCache_.end())
+    std::vector<int>& GetOpMemIds(Operation* op)
+    {
+        auto it = opReqMemIdsMap.find(op);
+        if (it != opReqMemIdsMap.end()) {
             return it->second;
+        }
+        std::vector<int> memIds;
+        for (auto tensor : GetInOutOperandCached(op)) {
+            memIds.push_back(tensor->memoryrange.memId);
+        }
+        auto inserted = opReqMemIdsMap.emplace(op, std::move(memIds));
+        return inserted.first->second;
+    }
 
-        LogicalTensors inOutOperand;
-        inOutOperand.reserve(op->GetOOperands().size() + op->GetIOperands().size());
-        for (auto o : op->GetOOperands()) {
-            if (o->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-                inOutOperand.push_back(o);
+    void SetOpMemIds(Operation* op, const std::vector<int>& memIds)
+    {
+        opReqMemIdsMap[op] = memIds;
+    }
+
+    void ClearOpMemIds(Operation* op)
+    {
+        opReqMemIdsMap[op].clear();
+    }
+
+    void AddOpMemId(Operation* op, int memId)
+    {
+        opReqMemIdsMap[op].push_back(memId);
+    }
+
+    void ClearAllOpMemIds()
+    {
+        opReqMemIdsMap.clear();
+    }
+
+    bool ReplaceOpMemId(Operation* op, int oldMemId, int newMemId)
+    {
+        auto& memIds = opReqMemIdsMap[op];
+        bool replaced = false;
+        for (auto& memId : memIds) {
+            if (memId == oldMemId) {
+                memId = newMemId;
+                replaced = true;
             }
         }
-        for (auto i : op->GetIOperands()) {
-            if (i->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
-                inOutOperand.push_back(i);
-            }
-        }
-        auto cacheIt = inOutOperandsCache_.emplace(op, std::move(inOutOperand)).first;
-        return cacheIt->second;
+        return replaced;
     }
 
     Status InitLocalBuffer(LogicalTensorPtr oOperand, int memId) {
@@ -150,21 +177,45 @@ public:
         return bytes;
     }
 
-    void UpdateBufRefCount(LogicalTensorPtr tensor)
+    const LogicalTensors& GetInOutOperandCached(Operation* op) {
+        auto it = inOutOperandsCache_.find(op);
+        if (it != inOutOperandsCache_.end())
+            return it->second;
+        LogicalTensors inOutOperand;
+        inOutOperand.reserve(op->GetOOperands().size() + op->GetIOperands().size());
+        for (auto o : op->GetOOperands()) {
+            if (o->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+                inOutOperand.push_back(o);
+            }
+        }
+        for (auto i : op->GetIOperands()) {
+            if (i->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
+                inOutOperand.push_back(i);
+            }
+        }
+        auto cacheIt = inOutOperandsCache_.emplace(op, std::move(inOutOperand)).first;
+        return cacheIt->second;
+    }
+
+    void UpdateBufRefCount(Operation* op, LogicalTensorPtr tensor)
     {
         int memId = tensor->memoryrange.memId;
         if (tensor->GetMemoryTypeOriginal() < MemoryType::MEM_DEVICE_DDR) {
             bufRefCount_[memId]++;
+            opReqMemIdsMap[op].push_back(memId);
         }
     }
 
-    Status InitBufRefCount()
+    Status InitBufRefCount(std::vector<Operation*> &list)
     {
         bufRefCount_.clear();
         depManager_.ClearDependencies();
-        for (const auto &op : operations) {
+        localBufferMap_.clear();
+        inOutOperandsCache_.clear();
+        opReqMemIdsMap.clear();
+        for (const auto &op : list) {
             for (auto &tensor : op->GetIOperands()) {
-                UpdateBufRefCount(tensor);
+                UpdateBufRefCount(op, tensor);
                 int memId = tensor->memoryrange.memId;
                 if (InitLocalBuffer(tensor, memId) == FAILED) {
                     APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
@@ -172,7 +223,7 @@ public:
                 }
             }
             for (auto& tensor : op->GetOOperands()) {
-                UpdateBufRefCount(tensor);
+                UpdateBufRefCount(op, tensor);
                 int memId = tensor->memoryrange.memId;
                 if (InitLocalBuffer(tensor, memId) == FAILED) {
                     APASS_LOG_ERROR_F(Elements::Operation, "InitLocalBuffer failed at InitBufRefCount!");
@@ -343,7 +394,7 @@ public:
                 return FAILED;
             }
         }
-        InitBufRefCount();
+        InitBufRefCount(operations);
         // 构建依赖关系
         if (depManager_.InitDependencies(operations, true) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "InitDependencies failed!");
