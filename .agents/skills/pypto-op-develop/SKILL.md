@@ -245,6 +245,25 @@ python3 custom/{op}/test_{op}.py
 6. **使用 PyTorch 作为 Golden**：使用 NumPy 实现 golden 函数时，bfloat16 数据类型转换不够准确；golden 必须独立在 `{op}_golden.py`，使用纯 torch 实现
 7. **SymbolicScalar 用作 list 索引报错**：`TypeError: list indices must be integers or slices, not SymbolicScalar`。原因：`pypto.loop` 返回的是编译时符号值，不是 Python runtime 对象。解决方法：使用 tensor slice 或 `pypto.view`/`pypto.assemble` 构建数据流。
 
+### 多动态轴算子的关键陷阱（8-13）
+
+8. **4D 多 DYN 轴直接 matmul 报错**：当 tensor 有 2 个及以上 DYN 维度时，matmul 编译期无法确定 shape（显示为 -1）。**必须**采用 "2D reshape + 嵌套 loop + concrete tile" 模式，参考 `models/glm_v4_5/glm_attention.py`
+9. **pypto.view 的 shape 参数传入 SymbolicScalar**：`shape` 参数只接受 Python int，SymbolicScalar 只能用在 `offsets` 和 `valid_shape` 中。Python 切片 `tensor[sym:sym+1]` 同样不可用
+10. **inplace=True 用在函数输出参数上**：`pypto.reshape(..., inplace=True)` 的输出不能是 kernel 的输出参数，否则产生静默 NaN 错误。在 wrapper 层提前 reshape，kernel 内直接引用
+11. **漏设 set_vec_tile_shapes**：每次 matmul / mul / cast / sum 前都必须设置 tile shapes，维度数必须匹配操作数。在多 loop 嵌套中极易遗漏
+12. **梯度算子跨维度累加**：当多个输出在不同维度累加时（如 dQ 沿 S2 累加、dK/dV 沿 S1 累加），使用**两趟分离计算**，避免跨 loop 的读写依赖
+13. **pto-isa 版本与 CANN 不匹配**：如遇头文件找不到（如 `TROWARGMAX`），按 `pypto-environment-setup` skill 切换到源码版 pto-isa
+
+### 错误处理
+
+| 场景 | 处理方式 |
+|------|----------|
+| 模板占位符替换不完整 | 检查生成文件中是否残留 `{op}` 字面量，定位并修正 |
+| import 失败（找不到 impl/golden） | 确认文件已生成且在同一目录 |
+| 编译或执行超过 10 分钟且卡住 | 中断并杀掉相关进程，重新检查代码 |
+
+---
+
 ## 三种状态标记约定
 
 生成的 `test_{op}.py` 必须使用以下模式输出精度判定标记：

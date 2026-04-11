@@ -147,7 +147,122 @@
 - `cast`：显式暴露 `CastMode` 和 `SaturationMode`，不是简单的 `to(dtype)`。
 - 浮点转整数时，`satmode=ON/OFF` 会直接改变溢出后的结果值。
 
-## 5. 写代码前先检查这 8 件事
+## 5. 多动态轴算子的实现模式（关键断点知识）
+
+> **核心结论**：当算子有 2 个及以上动态轴（如 Batch + SeqLen）时，不能直接在高维 tensor 上调 matmul/view，必须采用 **"2D reshape + 嵌套 loop + concrete tile"** 模式。
+
+### 5.1 为什么 4D 多动态轴直接 matmul 会失败
+
+```python
+# ❌ 错误：B 和 S 都是 DYN，matmul 编译期需要 concrete shape
+q: pypto.Tensor([pypto.DYN, N, pypto.DYN, D], pypto.DT_BF16)
+scores = pypto.matmul(q, k, out_dtype=pypto.DT_FP32, b_trans=True)
+# 报错: operand1 dim[0] = -1, must be > 0
+```
+
+PyPTO 的 matmul 在编译期需要所有维度的 concrete shape 来生成 tiling 代码。DYN 维度在编译期表现为 -1，硬件 matmul checker 直接拒绝。
+
+### 5.2 pypto.view 的 shape 参数不接受 SymbolicScalar
+
+```python
+s = q.shape[2]  # SymbolicScalar
+# ❌ 错误：shape 参数必须全部是 Python int
+q_s = pypto.view(q, [1, N, s, D], [b_off, 0, 0, 0], valid_shape=...)
+# 报错: View(): incompatible function arguments
+
+# ❌ 错误：Python 切片内部也会对 SymbolicScalar 调 int() 转换
+q_s = q[b_off:b_off + 1]
+# 报错: Cannot convert symbols to int
+```
+
+`pypto.view` 三个参数的类型要求：
+- `shape`: **必须全部是 Python int**，不接受 SymbolicScalar
+- `offsets`: 接受 SymbolicScalar
+- `valid_shape`: 接受 SymbolicScalar，用于尾块有效数据标记
+
+Python `[]` 切片语法内部会对 index 做 `int()` 转换，因此也不能用 SymbolicScalar 做切片索引。
+
+### 5.3 正确模式："2D reshape + 嵌套 loop + concrete tile"
+
+参考 `models/glm_v4_5/glm_attention.py`：
+
+```
+4D [B, N, S, D]
+      ↓ 在 Python wrapper 层做 reshape
+2D [B*N*S, D]
+      ↓ 进入 kernel
+      ↓ pypto.loop(b) → pypto.loop(N) → pypto.loop(s_tiles)
+      ↓ pypto.view([S_TILE, D], [symbolic_offset, 0], valid_shape=[actual_s, D])
+2D tile [S_TILE, D]  ← shape 全是 concrete int，编译通过
+      ↓ matmul / elementwise / sum（都是 2D 操作）
+      ↓ pypto.assemble(result, [symbolic_offset, 0], output_2d)
+```
+
+关键点：
+- **shape 全 concrete**：`[S_TILE, D]` 都是固定整数常量
+- **动态性只进入 offset 和 loop bound**：offset 和 loop 的边界可以是 SymbolicScalar
+- **valid_shape 处理尾块**：`actual_s = (s - s_idx * S_TILE).min(S_TILE)`
+- **2D matmul**：`[S_TILE, D] × [D, S_TILE]` 编译期 shape 完全确定
+
+### 5.4 循环内累加的标准模式
+
+```python
+acc = pypto.tensor([TILE, D], pypto.DT_FP32, "acc")
+for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
+    tile = compute_something(...)
+    if pypto.is_loop_begin(idx):
+        acc[:] = tile          # 首次迭代：初始化
+    else:
+        acc[:] = acc + tile    # 后续迭代：累加
+    if pypto.is_loop_end(idx):
+        result = pypto.cast(acc, pypto.DT_BF16)
+        pypto.assemble(result, [offset, 0], output)  # 最后一次：写回
+```
+
+- `pypto.tensor()` 创建的是未初始化随机值，**必须在 is_loop_begin 中初始化**
+- `unroll_list` 对内层循环使用，让编译器为不同迭代次数生成优化代码
+
+### 5.5 梯度算子的两趟设计模式
+
+当算子有多个输出需要在不同维度上累加时（如 FlashAttention backward 的 dQ/dK/dV），使用两趟分离计算：
+
+```python
+# 趟1: 计算 dQ（外层循环 S1 tiles，内层循环 S2 tiles 累加 dQ）
+for s1_idx in pypto.loop(s_loop):
+    dQ_acc = pypto.tensor(...)
+    for s2_idx in pypto.loop(s_loop):
+        dQ_acc += dS_ij @ K_j     # dQ 沿 S2 维度累加
+    assemble(dQ_acc, ..., dq)
+
+# 趟2: 计算 dK, dV（外层循环 S2 tiles，内层循环 S1 tiles 累加 dK/dV）
+for s2_idx in pypto.loop(s_loop):
+    dK_acc = pypto.tensor(...)
+    dV_acc = pypto.tensor(...)
+    for s1_idx in pypto.loop(s_loop):
+        dK_acc += dS_ij^T @ Q_i   # dK 沿 S1 维度累加
+        dV_acc += P_ij^T @ dY_i   # dV 沿 S1 维度累加
+    assemble(dK_acc, ..., dk)
+    assemble(dV_acc, ..., dv)
+```
+
+代价是中间结果（P、dS）重复计算一次，但避免了跨 loop 的读写依赖，不需要 `submit_before_loop=True`。
+
+### 5.6 inplace=True 的限制
+
+```python
+# ❌ 错误：dq 是函数输出参数，不能用 inplace=True
+dq_2d = pypto.reshape(dq, [bns, HEAD_DIM], inplace=True)
+# 结果：静默错误，输出 NaN
+```
+
+约束：`inplace=True` 的输出不能是整个 Function 的输出参数。当输入 tensor 已经是目标形状时，直接赋值引用即可：
+
+```python
+# ✅ 正确：在 wrapper 层提前 reshape，kernel 直接使用
+q_2d = q   # 已经是 2D，不需要 reshape
+```
+
+## 6. 写代码前先检查这 8 件事
 
 1. 需要建图执行的代码直接写成 `@pypto.frontend.jit` kernel；不要保留为普通 Python/Torch 逻辑。
 2. 用 `[:]`、`move()` 或 `assemble()` 把结果明确写回出参；不要用 `out = ...` 代替写回。
@@ -157,3 +272,7 @@
 6. 检查 TileShape 维度数、最后一维对齐和相关算子的 Tile 约束，再执行编译。
 7. 无法自动推导动态 `view` 的 `valid_shape` 时，显式传入 `valid_shape`。
 8. 避免同一 Tensor 在同一图里既被读取又被 `assemble` 回写。
+9. 多动态轴算子必须采用 "2D reshape + 嵌套 loop + concrete tile" 模式（见第 5 节），不要尝试在 4D DYN tensor 上直接 matmul。
+10. `pypto.view` 的 `shape` 参数只接受 Python int；用 SymbolicScalar 做 offset 和 valid_shape，不要混入 shape。
+11. 不要用 `inplace=True` reshape 在函数输出参数上；在 wrapper 层提前 reshape。
+12. 每次 matmul / mul / cast / sum 前都必须设置 `set_vec_tile_shapes`（或 `set_cube_tile_shapes`），维度数匹配操作数。漏设会报 `tile shape not set` 或得到错误结果。

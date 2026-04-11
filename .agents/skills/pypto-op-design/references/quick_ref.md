@@ -67,6 +67,39 @@ for i in pypto.loop(batch_size, name="LOOP_BATCH"):
     x_i = pypto.view(x, [seq_len, hidden], [i * seq_len, 0])
 ```
 
+### 2.4 多动态轴模式（Batch + SeqLen 同时动态）
+
+当有 2 个及以上动态轴时，不能在高维 tensor 上直接 matmul（会报 `dim = -1`），必须：
+
+1. **wrapper 层 reshape 到 2D**：`[B, N, S, D]` → `[B*N*S, D]`
+2. **嵌套 loop 拆解各维度**：`loop(B) → loop(N) → loop(S // S_TILE)`
+3. **view 使用 concrete tile shapes**：`pypto.view(t, [S_TILE, D], [offset, 0], valid_shape=[actual_s, D])`
+4. **2D matmul**：`[S_TILE, D] × [D, S_TILE]`，编译期 shape 完全确定
+5. **assemble 写回**：`pypto.assemble(result, [offset, 0], output_2d)`
+
+**参考实现**：`models/glm_v4_5/glm_attention.py`
+
+**关键约束**：
+- `pypto.view` 的 `shape` 参数**只接受 Python int**，SymbolicScalar 只能用在 `offsets` 和 `valid_shape` 中
+- Python 切片 `tensor[sym:sym+1]` 同样不能用 SymbolicScalar 索引
+- `inplace=True` reshape 不能用在 kernel 输出参数上（产生静默 NaN）
+
+**循环内累加标准模式**：
+
+```python
+acc = pypto.tensor([TILE, D], pypto.DT_FP32, "acc")
+for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
+    tile = compute(...)
+    if pypto.is_loop_begin(idx):
+        acc[:] = tile          # 首次：初始化
+    else:
+        acc[:] = acc + tile    # 后续：累加
+    if pypto.is_loop_end(idx):
+        pypto.assemble(pypto.cast(acc, pypto.DT_BF16), [offset, 0], output)
+```
+
+**梯度算子两趟模式**：当多个输出在不同维度累加时（如 dQ 沿 S2、dK/dV 沿 S1），用两趟分别计算，避免跨 loop 依赖。
+
 ---
 
 ## 3. Runtime 硬约束
