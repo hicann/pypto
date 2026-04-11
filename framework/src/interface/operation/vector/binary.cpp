@@ -190,7 +190,7 @@ std::pair<std::vector<int64_t>, std::vector<int64_t>> GetBrcExpandShape(
     auto operand2Shape = result->shape;
     size_t shapeSize = result->shape.size();
 
-    bool isInWhiteList = SUPPORT_BRCINLINE.count(GetBinaryOpNameCode<T>());
+    bool isInWhiteList = SUPPORT_BRC_INLINE.count(GetBinaryOpNameCode<T>());
     bool isSupportDtype = (operand1->Datatype() == DT_FP32 || operand1->Datatype() == DT_FP16);
     bool isCombineAxisEnabled =
         function.paramConfigs_.forceCombineAxis || (function.paramConfigs_.combineAxis && isInWhiteList);

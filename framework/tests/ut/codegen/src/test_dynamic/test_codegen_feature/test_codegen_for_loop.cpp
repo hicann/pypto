@@ -123,7 +123,7 @@ TEST_F(TestCodegenForLoop, TestForLoop)
 
     // 定义第一个待检查的目标代码片段
     const std::string expect1 = R"(
-        auto tileOffsets = TileOffset(idx0, idx1, idx2);
+        auto tileOffsets = TileOffset(0, idx1, idx2);
         ubTensor_10_low2DimInLoop.SetAddr(ubTensor_10.GetLinearAddr(tileOffsets));
         ubTensor_2_low2DimInLoop.SetAddr(ubTensor_2.GetLinearAddr(tileOffsets));
         ubTensor_0_low2DimInLoop.SetAddr(ubTensor_0.GetLinearAddr(tileOffsets));
@@ -136,7 +136,7 @@ TEST_F(TestCodegenForLoop, TestForLoop)
     CheckStringExist(expect1, res);
 
     const std::string expect2 = R"(
-        auto tileOffsets = TileOffset(idx0, idx1, idx2);
+        auto tileOffsets = TileOffset(0, idx1, idx2);
         ubTensor_10_low2DimInLoop.SetAddr(ubTensor_10.GetLinearAddr(tileOffsets));
         ubTensor_4_low2DimInLoop.SetAddr(ubTensor_4.GetLinearAddr(tileOffsets));
         TMul<LastUse3Dim<0, 1, 1>>(ubTensor_4_low2DimInLoop, ubTensor_4_low2DimInLoop, ubTensor_10_low2DimInLoop);
@@ -146,7 +146,7 @@ TEST_F(TestCodegenForLoop, TestForLoop)
     CheckStringExist(expect2, res);
 
     const std::string expect3 = R"(
-        auto tileOffsets = TileOffset(idx0, idx1, idx2);
+        auto tileOffsets = TileOffset(0, idx1, idx2);
         ubTensor_31_low2DimInLoop.SetAddr(ubTensor_31.GetLinearAddr(tileOffsets));
         ubTensor_35_low2DimInLoop.SetAddr(ubTensor_35.GetLinearAddr(tileOffsets));
         TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_35_low2DimInLoop, ubTensor_31_low2DimInLoop, ubTensor_36);

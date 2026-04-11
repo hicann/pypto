@@ -273,8 +273,8 @@ public:
 
     std::string AddTileTensorUsing(const TileTensorUsing& tileTensorUsing);
     std::string AddTileTensor(int opMagic, const TileTensor& tileTensor);
-    const TileTensor* QueryTileTensorByMagic(int magic, int opMagic) const;
-    const TileTensor* QueryTileTensorInLoopByMagic(int magic, int opMagic) const;
+    const TileTensor* QueryTileTensorByMagic(int tensorMagic, int opMagic) const;
+    const TileTensor* QueryTileTensorInLoopByMagic(int tensorMagic, int opMagic) const;
     void InsertTensorNameInLoopToFullDim(const std::string& tensorName, const std::string& fullDimTensorName);
     std::string QueryTileTensorFullDimByTensorInLoop(const std::string& tensorName);
     // To be compatible with GM Tensor in Static Function Type like same ddr magic number with different parmaIdx &

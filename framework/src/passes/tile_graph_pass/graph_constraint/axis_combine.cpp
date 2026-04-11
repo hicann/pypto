@@ -23,7 +23,7 @@ namespace npu {
 namespace tile_fwk {
 constexpr size_t INPUT_SIZE = 2;
 
-bool InsertCondition(const Opcode& code) { return SUPPORT_BRCINLINE.count(code) > 0; }
+bool InsertCondition(const Opcode& code) { return SUPPORT_BRC_INLINE.count(code) > 0; }
 
 Status AlignedIfNeed(int64_t& currentDim, int64_t padValue)
 {

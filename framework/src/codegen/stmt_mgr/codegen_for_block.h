@@ -54,21 +54,18 @@ public:
         sm_->OutForLoop();
         axesList_.clear();
         forNodes_.clear();
-        tensorNeedSetAddr_.clear();
+        tensorOffset_.clear();
+        allOffsetsInLoop_.clear();
         opList_.clear();
 
         isInLoop_ = false;
+        offsetCnt_ = 0;
     }
 
     bool IsInLoop() { return isInLoop_; }
 
-    void AddTensorInLoopBody(const std::string& tensorFullDim, const TileTensor& tileTensor, int opMagic)
-    {
-        CODEGEN_LOGI("AddTensorInLoopBody : %s", tileTensor.tensorName.c_str());
-        std::string tensorNameInLoop = sm_->AddTileTensor(opMagic, tileTensor);
-        sm_->InsertTensorNameInLoopToFullDim(tensorNameInLoop, tensorFullDim);
-        tensorNeedSetAddr_.insert(tensorNameInLoop);
-    }
+    void AddTensorInLoopBody(
+        const std::string& tensorFullDim, const TileTensor& tileTensor, int opMagic, Opcode opCode);
 
     void AddOpInLoopBody(std::string& op)
     {
@@ -84,14 +81,23 @@ private:
     void PrintForEnd(std::ostringstream& os) const;
     void PrintOffsetDef(std::ostringstream& os) const;
     void PrintSetAddrs(std::ostringstream& os) const;
-    void PrintSetAddrSingle(std::ostringstream& os, const std::string& tensor) const;
+    void PrintSetAddrSingle(std::ostringstream& os, const std::string& tensor, const std::string& offset) const;
     void PrintTileOps(std::ostringstream& os) const;
+    void UpdateTensorOffsetInLoop(Opcode opCode, int tensorMagic, int opMagic, const std::string& tensorNameInLoop);
 
     std::shared_ptr<SymbolManager> sm_;
     std::vector<SymbolicScalar> axesList_;
     std::vector<ForNode> forNodes_;
-    std::unordered_set<std::string> tensorNeedSetAddr_;
     std::vector<std::string> opList_;
+    // tensorNameInLoop -> offset var, e.g. ubTensor_2 -> tileOffset_1
+    std::unordered_map<std::string, std::string> tensorOffset_;
+    // OffsetInLoop -> offset var, e.g. (0, idx1, 0) -> tileOffset_1
+    using OffsetInLoop = std::vector<std::string>;
+    std::map<OffsetInLoop, std::string> allOffsetsInLoop_;
+    // default offset, e.g. (idx0, idx1, idx2)
+    OffsetInLoop defaultOffset_;
+
     bool isInLoop_{false};
+    int offsetCnt_{0};
 };
 } // namespace npu::tile_fwk

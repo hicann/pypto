@@ -172,20 +172,20 @@ std::string SymbolManager::AddTileTensor(int opMagic, const TileTensor& tileTens
     return tensorName;
 }
 
-const TileTensor* SymbolManager::QueryTileTensorByMagic(int magic, int opMagic) const
+const TileTensor* SymbolManager::QueryTileTensorByMagic(int tensorMagic, int opMagic) const
 {
-    CODEGEN_LOGI("QueryTileTensorByMagic tensor magic is %d, op magic is %d", magic, opMagic);
-    auto iter = tileTensorByMagic_.find({magic, opMagic});
+    CODEGEN_LOGI("QueryTileTensorByMagic tensor magic is %d, op magic is %d", tensorMagic, opMagic);
+    auto iter = tileTensorByMagic_.find({tensorMagic, opMagic});
     if (iter != tileTensorByMagic_.end()) {
         return &iter->second.get();
     }
     return nullptr;
 }
 
-const TileTensor* SymbolManager::QueryTileTensorInLoopByMagic(int magic, int opMagic) const
+const TileTensor* SymbolManager::QueryTileTensorInLoopByMagic(int tensorMagic, int opMagic) const
 {
-    CODEGEN_LOGI("QueryTileTensorInLoopByMagic tensor magic is %d, op magic is %d", magic, opMagic);
-    auto iter = tileTensorByMagicInLoop_.find({magic, opMagic});
+    CODEGEN_LOGI("QueryTileTensorInLoopByMagic tensor magic is %d, op magic is %d", tensorMagic, opMagic);
+    auto iter = tileTensorByMagicInLoop_.find({tensorMagic, opMagic});
     if (iter != tileTensorByMagicInLoop_.end()) {
         return &iter->second.get();
     }
