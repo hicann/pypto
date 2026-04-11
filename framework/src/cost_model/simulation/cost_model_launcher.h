@@ -422,9 +422,9 @@ private:
             std::string name = "aicput" + std::to_string(tidx);
             pthread_setname_np(pthread_self(), name.c_str());
             pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-            DeviceKernelArgs *localArgs = kArgs;
-            localArgs->parameter.runMode = runMode;
-            (void)DynTileFwkBackendKernelServer(localArgs);
+            DeviceKernelArgs localArgs = *kArgs;
+            localArgs.parameter.runMode = runMode;
+            (void)DynTileFwkBackendKernelServer(&localArgs);
         };
 
         aicpus[0] = std::thread(threadFun, RUN_SPLITTED_STREAM_CTRL);

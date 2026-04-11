@@ -386,10 +386,10 @@ private:
             std::cout << "start thread: " << name << std::endl;
             pthread_setname_np(pthread_self(), name);
             pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-            DeviceKernelArgs *localArgs = kArgs;
-            localArgs->parameter.runMode = runMode;
+            DeviceKernelArgs localArgs = *kArgs;
+            localArgs.parameter.runMode = runMode;
             auto rc = 0;
-            rc = DynTileFwkBackendKernelServer(localArgs);
+            rc = DynTileFwkBackendKernelServer(&localArgs);
             EXPECT_EQ(rc, 0);
         };
         aicpus[0] = std::thread(threadFun, RUN_SPLITTED_STREAM_CTRL);
