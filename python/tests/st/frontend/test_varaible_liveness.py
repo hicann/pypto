@@ -43,7 +43,7 @@ def kernel_loop(
 
     for _ in range(2):
         b = a + 1
-        a = a + 1
+        a[:] = a + 1
     result[:] = b * 1.0
 
 

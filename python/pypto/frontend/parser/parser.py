@@ -813,6 +813,7 @@ class Parser(ast.NodeVisitor):
         """
         for arg in tensor_args:
             if isinstance(arg, pypto.Tensor):
+                arg.is_input = True
                 self.context.add(arg.name, arg)
 
     def _add_metadata_to_context(self, func_name: str) -> None:
@@ -1439,6 +1440,21 @@ class Parser(ast.NodeVisitor):
             The value to assign.
         """
         if isinstance(target, ast.Name):
+            # 检查是否试图重新赋值输入 tensor
+            values_stack = self.context.name2value.get(target.id, [])
+            if values_stack:
+                existing_value = values_stack[-1]
+                if (isinstance(existing_value, pypto.Tensor) and
+                    getattr(existing_value, 'is_input', False)):
+                    raise ParserError(
+                        target,
+                        ValueError(
+                            f"Input tensor '{target.id}' cannot be reassigned. "
+                            f"Use subscript assignment ('{target.id}[:] = ...') "
+                            f"or '{target.id}.move(...)' instead."
+                        ),
+                    )
+
             # Simple assignment: a = expr
             # Set the tensor name if expr is a tensor
             if isinstance(expr, pypto.Tensor):

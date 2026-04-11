@@ -248,7 +248,7 @@ def ffn_activation_kernel(
         activated = gelu_activation_core(gate)
     elif config.activation == "swiglu":
         # SwiGLU activation
-        up_proj_weight = pypto.matmul(hidden_states, up_proj_weight, config.dtype)
+        up_proj_weight[:] = pypto.matmul(hidden_states, up_proj_weight, config.dtype)
         activated = swiglu_activation_core(gate, up_proj_weight)
     elif config.activation == "relu":
         # ReLU activation
