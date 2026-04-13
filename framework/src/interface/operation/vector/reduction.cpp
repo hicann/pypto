@@ -167,9 +167,7 @@ void TileReduceNew(
                 (static_cast<size_t>(axis) == (in->shape.size() - 1))) {
                 if (static_cast<size_t>(axis) == (in->shape.size() - 1)) {
                     tmpShape[0] = sourceReg->shape[axis - 1];
-                    if (op == "PROD") {
-                        tmpShape = sourceReg->shape;
-                    } else if (op == "ARGMAX" || op == "ARGMIN") {
+                    if (op == "ARGMAX" || op == "ARGMIN") {
                         tmpShape[1] = sourceReg->shape[axis];
                     } else if (static_cast<size_t>(sourceReg->shape[axis]) <= REPEAT_BYTE / BytesOf(in->Datatype())) {
                         tmpShape[0] = 1;
