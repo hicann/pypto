@@ -102,7 +102,7 @@ Status checkTensor(const LogicalTensorPtr& tensor)
         std::shared_ptr<AssembleOpAttribute> attr =
             std::dynamic_pointer_cast<AssembleOpAttribute>(producer->GetOpAttribute());
         if (attr == nullptr) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Assemble op %d do not have attribute. %s", producer->GetOpMagic(),
+            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Assemble op %d do not have attribute. %s", producer->GetOpMagic(),
                 GetFormatBacktrace(producer).c_str());
             return FAILED;
         }
@@ -121,6 +121,7 @@ Status checkTensor(const LogicalTensorPtr& tensor)
 
     return SUCCESS;
 }
+
 Status InferDisContinuousInputChecker::DoPostCheck(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "PostCheck for DisContinuousInput.");

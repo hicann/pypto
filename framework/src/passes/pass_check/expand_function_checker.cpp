@@ -24,7 +24,7 @@ namespace npu {
 namespace tile_fwk {
 Status ExpandFunctionChecker::DoDefaultEnabledPreCheck(Function& function)
 {
-    APASS_LOG_INFO_F(Elements::Function, "DoDefaultEnabledPreCheck for ExpandFunction.");
+    APASS_LOG_INFO_F(Elements::Function, "DoDefaultEnabledPreCheck for ExpandFunction!");
     if (!function.OperationLoopCheck()) {
         APASS_LOG_ERROR_C(GraphErr::GRAPH_LOOP_DETECTION, Elements::Function, "Operation Loop detected before expand function; Please validate the operation input specifications.");
         return FAILED;
@@ -41,7 +41,7 @@ Status ExpandFunctionChecker::DoDefaultEnabledPreCheck(Function& function)
 
 Status ExpandFunctionChecker::DoPostCheck(Function& function)
 {
-    APASS_LOG_INFO_F(Elements::Function, "PostCheck for ExpandFunction.");
+    APASS_LOG_INFO_F(Elements::Function, "PostCheck for ExpandFunction!");
     if (function.expandFunctionAccelerate != false) {
         APASS_LOG_ERROR_F(
             Elements::Function, "ExpandFunctionAccelerate should equal to false after ExpandFunction process.");

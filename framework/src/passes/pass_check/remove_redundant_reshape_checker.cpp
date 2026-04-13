@@ -89,7 +89,9 @@ Status RemoveRedundantReshapeChecker::PreCheckReshape(const LogicalTensorPtr& in
     for (auto& childOp : in->GetConsumers()) {
         if (childOp->GetOpcode() == Opcode::OP_RESHAPE) {
             if (childOp->ConsumerOps().empty()) {
-                APASS_LOG_ERROR_C(OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "At least one reshape op without consumer.");
+                APASS_LOG_ERROR_C(
+                    OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation,
+                    "At least one reshape op without consumer.");
                 return FAILED;
             }
         }

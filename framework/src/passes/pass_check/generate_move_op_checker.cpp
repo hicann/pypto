@@ -23,7 +23,7 @@ namespace npu {
 namespace tile_fwk {
 Status GenerateMoveOpChecker::DoPreCheck(Function& function)
 {
-    APASS_LOG_INFO_F(Elements::Operation, "Start Precheck for GenerateMoveOp.");
+    APASS_LOG_INFO_F(Elements::Operation, "Start Precheck for GenerateMoveOp!");
     auto operations = function.Operations();
     // Check iOperand and oOperand of OP_CONVERT
     for (auto& operation : operations) {
@@ -43,7 +43,7 @@ Status GenerateMoveOpChecker::DoPreCheck(Function& function)
                 continue;
         }
         if (!isValid) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed.");
+            APASS_LOG_ERROR_F(Elements::Operation, "Operation validation failed!");
             return FAILED;
         }
     }
@@ -52,7 +52,7 @@ Status GenerateMoveOpChecker::DoPreCheck(Function& function)
 
 Status GenerateMoveOpChecker::DoPostCheck(Function& function)
 {
-    APASS_LOG_INFO_F(Elements::Operation, "Start Postcheck for GenerateMoveOp.");
+    APASS_LOG_INFO_F(Elements::Operation, "Start Postcheck for GenerateMoveOp!");
     auto operations = function.Operations();
     for (auto& operation : operations) {
         auto op = operation.GetOpcode();

@@ -42,8 +42,8 @@ Status RemoveRedundantOpChecker::PreCheckAssemble(Function& function, const Oper
         }
     }
     if (assembleRemoveNum > 1 && otherOpNum > 0) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "More than one assemble ddr op without consumer; Please check the num of assemble ddr "
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_PRODUCER_CONSUMER, Elements::Operation, "More than one assemble ddr op without consumer; Please check the num of assemble ddr "
                                  "op without consumer.");
         return FAILED;
     }

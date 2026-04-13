@@ -33,8 +33,10 @@ Status CheckDynSkip(const LogicalTensorPtr& outputTensor, bool& needSkip)
         }
         auto assembleOpAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(producerOp->GetOpAttribute());
         if (!assembleOpAttr) {
-            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Tensor, "%s[%d] has no valid assembleOpAttribute; Please check.",
-                producerOp->GetOpcodeStr().c_str(), producerOp->GetOpMagic());
+            APASS_LOG_ERROR_C(
+                OperationErr::OP_NULL_POINTER, Elements::Tensor,
+                "%s[%d] has no valid assembleOpAttribute; Please check.", producerOp->GetOpcodeStr().c_str(),
+                producerOp->GetOpMagic());
             return FAILED;
         }
         if (assembleOpAttr->GetToDynOffset().size() != 0) {
@@ -93,8 +95,10 @@ Status AssembleChecker::CheckAssembleOverlap(Function& function)
                     continue;
                 }
                 std::vector<std::pair<int64_t, int64_t>> curInputArea;
-                if(assembleOffset.size() != inputShape.size()) {
-                    APASS_LOG_ERROR_C(TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Tensor, "Dimension of assemble op[%d]'s toOffset(%s) "
+                if (assembleOffset.size() != inputShape.size()) {
+                    APASS_LOG_ERROR_C(
+                        TensorErr::TENSOR_SHAPE_MISMATCH, Elements::Tensor,
+                        "Dimension of assemble op[%d]'s toOffset(%s) "
                         "varies from its input[%d]'s shape(%s); Please check the function graph.",
                         assembleOp->GetOpMagic(), CommonUtils::ContainerToStr(assembleOffset).c_str(),
                         inputTensor->GetMagic(), CommonUtils::ContainerToStr(inputShape).c_str());
@@ -106,8 +110,12 @@ Status AssembleChecker::CheckAssembleOverlap(Function& function)
 
                 // 判断是否有重叠
                 if (OverlapCurInput(curInputArea)) {
-                    APASS_LOG_ERROR_C(TensorErr::TENSOR_MEMORY_CORRUPTION, Elements::Tensor, "Overlap input2: shape:%s offset:%s; Please check the function graph; Please check Tensor[%d] and its input.",
-                        CommonUtils::ContainerToStr(inputShape).c_str(), CommonUtils::ContainerToStr(assembleOffset).c_str(), outputTensor->GetMagic());
+                    APASS_LOG_ERROR_C(
+                        TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Tensor,
+                        "Overlap input2: shape:%s offset:%s; Please check the function graph; Please check Tensor[%d] "
+                        "and its input.",
+                        CommonUtils::ContainerToStr(inputShape).c_str(),
+                        CommonUtils::ContainerToStr(assembleOffset).c_str(), outputTensor->GetMagic());
                     return FAILED;
                 }
 
@@ -133,8 +141,11 @@ bool AssembleChecker::OverlapCurInput(const std::vector<std::pair<int64_t, int64
                 recordedOffset.emplace_back(recordedDim.first);
                 recordedShape.emplace_back(recordedDim.second + 1 - recordedDim.first);
             }
-            APASS_LOG_ERROR_C(TensorErr::TENSOR_MEMORY_CORRUPTION, Elements::Tensor, "Tensor produced by assemble has overlap inputs. Overlap input1: shape:%s offset:%s.",
-                CommonUtils::ContainerToStr(recordedShape).c_str(), CommonUtils::ContainerToStr(recordedOffset).c_str());
+            APASS_LOG_ERROR_C(
+                TensorErr::TENSOR_MEMORY_ALLOCATION, Elements::Tensor,
+                "Tensor produced by assemble has overlap inputs. Overlap input1: shape:%s offset:%s.",
+                CommonUtils::ContainerToStr(recordedShape).c_str(),
+                CommonUtils::ContainerToStr(recordedOffset).c_str());
             return true;
         }
     }

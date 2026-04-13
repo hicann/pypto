@@ -24,23 +24,33 @@ namespace tile_fwk {
 Status SubGraphToFuncChecker::NOPCheck(const Operation& op) const
 {
     if (!op.IsNOP()) {
-        APASS_LOG_ERROR_C(OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation, "op[%d] is not an NOP. %s", op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation, "op[%d] is not an NOP. %s", op.GetOpMagic(),
+            GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetIOperands().size() > 0) {
-        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "NOP[%d] has IOperands size %zu. %s", op.GetOpMagic(), op.GetIOperands().size(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "NOP[%d] has IOperands size %zu. %s",
+            op.GetOpMagic(), op.GetIOperands().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetInCtrlOperations().size() > 0) {
-        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "NOP[%d] has InCtrlOperations size %zu. %s", op.GetOpMagic(), op.GetInCtrlOperations().size(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "NOP[%d] has InCtrlOperations size %zu. %s",
+            op.GetOpMagic(), op.GetInCtrlOperations().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetOOperands().size() > 0) {
-        APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "NOP[%d] has OOperands size %zu. %s", op.GetOpMagic(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "NOP[%d] has OOperands size %zu. %s",
+            op.GetOpMagic(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     if (op.GetOutCtrlOperations().size() > 0) {
-        APASS_LOG_ERROR_C(OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation, "NOP[%d] has OutCtrlOperations size %zu. %s", op.GetOpMagic(), op.GetOutCtrlOperations().size(), GetFormatBacktrace(op).c_str());
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_SPECIAL_CONSTRAINT, Elements::Operation, "NOP[%d] has OutCtrlOperations size %zu. %s",
+            op.GetOpMagic(), op.GetOutCtrlOperations().size(), GetFormatBacktrace(op).c_str());
         return FAILED;
     }
     return SUCCESS;
@@ -51,7 +61,9 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function& function) const
     auto operations = function.Operations();
     int totalSubGraphNum = function.GetTotalSubGraphCount();
     if (operations.size() > 0 && totalSubGraphNum <= 0) {
-        APASS_LOG_ERROR_F(Elements::Function, "input totalSubGraphNum %d is invalid", totalSubGraphNum);
+        APASS_LOG_ERROR_C(
+            FunctionErr::FUNCTION_GRAPH_STRUCTURE, Elements::Function, "input totalSubGraphNum %d is invalid",
+            totalSubGraphNum);
         return FAILED;
     }
     std::vector<bool> hitSubgraph = std::vector<bool>(totalSubGraphNum, false);
@@ -59,15 +71,17 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function& function) const
         auto& op = operations[i];
         int subGraphId = op.GetSubgraphID();
         if (subGraphId < 0 && NOPCheck(op) != SUCCESS) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "operation %zu has negative subGraphID %d and failed NOP check. %s", i, subGraphId,
+            APASS_LOG_ERROR_C(
+                GraphErr::GRAPH_SUBGRAPH_ID_INVALID, Elements::Graph,
+                "operation %zu has negative subGraphID %d and failed NOP check. %s", i, subGraphId,
                 GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         if (subGraphId >= totalSubGraphNum) {
-            APASS_LOG_ERROR_F(
-                Elements::Operation, "operation %zu has subGraphID %d that exceeds totalSubGraphNum %d. %s", i,
-                subGraphId, totalSubGraphNum, GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_C(
+                GraphErr::GRAPH_SUBGRAPH_ID_INVALID, Elements::Graph,
+                "operation %zu has subGraphID %d that exceeds totalSubGraphNum %d. %s", i, subGraphId, totalSubGraphNum,
+                GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         hitSubgraph[subGraphId] = true;
@@ -76,8 +90,8 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function& function) const
             for (auto parentOp : inOperand->GetProducers()) {
                 int parentSubGraphId = parentOp->GetSubgraphID();
                 if (parentSubGraphId > subGraphId) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation,
+                    APASS_LOG_ERROR_C(
+                        GraphErr::GRAPH_TOPOLOGY_STRUCTURE, Elements::Graph,
                         "operation %zu has subGraphId %d and parent subGraphId %d, parent subGraphId should be less "
                         "than or equal to subGraphId. %s",
                         i, subGraphId, parentSubGraphId, GetFormatBacktrace(op).c_str());
@@ -89,7 +103,7 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function& function) const
 
     for (int i = 0; i < totalSubGraphNum; i++) {
         if (hitSubgraph[i] == false) {
-            APASS_LOG_ERROR_F(Elements::Graph, "Subgraph %d is empty", i);
+            APASS_LOG_ERROR_C(GraphErr::GRAPH_SUBGRAPH_EMPTY, Elements::Graph, "Subgraph %d is empty", i);
             return FAILED;
         }
     }
@@ -100,12 +114,13 @@ Status SubGraphToFuncChecker::CheckSubGraphTopo(Function& function) const
 Status SubGraphToFuncChecker::EdgeIndexCheck(const bool found, const int newIndex, const size_t graphSize) const
 {
     if (!found) {
-        APASS_LOG_ERROR_F(Elements::Operation, "op magic not found");
+        APASS_LOG_ERROR_C(FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "op magic not found");
         return FAILED;
     }
     if (static_cast<size_t>(newIndex) >= graphSize) {
-        APASS_LOG_ERROR_F(
-            Elements::Operation, "parent index %d is larger than operations_ size %zu", newIndex, graphSize);
+        APASS_LOG_ERROR_C(
+            GraphErr::GRAPH_TOPOLOGY_STRUCTURE,
+            Elements::Graph, "parent index %d is larger than operations_ size %zu", newIndex, graphSize);
         return FAILED;
     }
     return SUCCESS;
@@ -121,8 +136,8 @@ Status SubGraphToFuncChecker::BuildInGraph(Function& function)
             for (auto& parentOp : inOperand->GetProducers()) {
                 auto [parentSeqNo, found] = operationViewer.FindOpPosition(*parentOp);
                 if (EdgeIndexCheck(found, parentSeqNo, inGraph_.size()) != SUCCESS) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "error inserting op magic %d in function %d %s to inGraph. %s",
+                    APASS_LOG_ERROR_C(
+                        FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "error inserting op magic %d in function %d %s to inGraph. %s",
                         parentOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
                         GetFormatBacktrace(parentOp).c_str());
                     return FAILED;
@@ -137,8 +152,8 @@ Status SubGraphToFuncChecker::BuildInGraph(Function& function)
         for (const auto& inControlOp : operationViewer[i].GetInCtrlOperations()) {
             auto [parentSeqNo, found] = operationViewer.FindOpPosition(*inControlOp);
             if (EdgeIndexCheck(found, parentSeqNo, inGraph_.size()) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Error inserting op magic %d in function %d %s to inGraph. %s",
+                APASS_LOG_ERROR_C(
+                    FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "Error inserting op magic %d in function %d %s to inGraph. %s",
                     inControlOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
                     GetFormatBacktrace(inControlOp).c_str());
                 return FAILED;
@@ -161,8 +176,8 @@ Status SubGraphToFuncChecker::BuildOutGraph(Function& function)
             for (auto& childOp : outOperand->GetConsumers()) {
                 auto [childSeqNo, found] = operationViewer.FindOpPosition(*childOp);
                 if (EdgeIndexCheck(found, childSeqNo, inGraph_.size()) != SUCCESS) {
-                    APASS_LOG_ERROR_F(
-                        Elements::Operation, "Error inserting op magic %d in function %d %s to outGraph_. %s",
+                    APASS_LOG_ERROR_C(
+                        FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "Error inserting op magic %d in function %d %s to outGraph_. %s",
                         childOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
                         GetFormatBacktrace(childOp).c_str());
                     return FAILED;
@@ -177,8 +192,8 @@ Status SubGraphToFuncChecker::BuildOutGraph(Function& function)
         for (const auto& outControlOp : operationViewer[i].GetOutCtrlOperations()) {
             auto [childSeqNo, found] = operationViewer.FindOpPosition(*outControlOp);
             if (EdgeIndexCheck(found, childSeqNo, inGraph_.size()) != SUCCESS) {
-                APASS_LOG_ERROR_F(
-                    Elements::Operation, "Error inserting op magic %d in function %d %s to outGraph_. %s",
+                APASS_LOG_ERROR_C(
+                    FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "Error inserting op magic %d in function %d %s to outGraph_. %s",
                     outControlOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
                     GetFormatBacktrace(outControlOp).c_str());
                 return FAILED;
@@ -208,16 +223,17 @@ Status SubGraphToFuncChecker::InAndOutGraphConsistencyCheck(
         for (size_t j = 0; j < inEdgeGraph[i].size(); j++) {
             size_t parentSeqNo = static_cast<size_t>(inEdgeGraph[i][j]);
             if (nodeColIdx[parentSeqNo] >= outEdgeGraph[parentSeqNo].size()) {
-                APASS_LOG_ERROR_F(
-                    Elements::Graph, "node %zu, %zu th parentSeqNo %zu exceeds outgraph[%zu] size %zu", i, j,
-                    parentSeqNo, parentSeqNo, outEdgeGraph[parentSeqNo].size());
+                APASS_LOG_ERROR_C(
+                    GraphErr::GRAPH_EDGE_CONSISTENCY, Elements::Graph,
+                    "node %zu, %zu th parentSeqNo %zu exceeds outgraph[%zu] size %zu", i, j, parentSeqNo, parentSeqNo,
+                    outEdgeGraph[parentSeqNo].size());
                 return FAILED;
             }
             // inEdgeGraph和outEdgeGraph都是按顺序排列的
             if (static_cast<size_t>(outEdgeGraph[parentSeqNo][nodeColIdx[parentSeqNo]++]) != i) {
-                APASS_LOG_ERROR_F(
-                    Elements::Graph, "node %zu, %zu th parentSeqNo %zu is not found in outgraph[%zu]", i, j,
-                    parentSeqNo, parentSeqNo);
+                APASS_LOG_ERROR_C(
+                    GraphErr::GRAPH_EDGE_CONSISTENCY, Elements::Graph,
+                    "node %zu, %zu th parentSeqNo %zu is not found in outgraph[%zu]", i, j, parentSeqNo, parentSeqNo);
                 return FAILED;
             }
         }
@@ -226,8 +242,8 @@ Status SubGraphToFuncChecker::InAndOutGraphConsistencyCheck(
     // check outEdgeGraph has been fully traversed
     for (size_t i = 0; i < outEdgeGraph.size(); i++) {
         if (outEdgeGraph[i].size() != nodeColIdx[i]) {
-            APASS_LOG_ERROR_F(
-                Elements::Graph, "outEdgeGraph[%zu] has size %zu, but only %zu of them have been traversed", i,
+            APASS_LOG_ERROR_C(
+                GraphErr::GRAPH_EDGE_CONSISTENCY, Elements::Graph, "outEdgeGraph[%zu] has size %zu, but only %zu of them have been traversed", i,
                 outEdgeGraph[i].size(), nodeColIdx[i]);
             return FAILED;
         }
@@ -288,8 +304,8 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
             // (这个规则可以在producer都是view操作时跳过)
             if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && !iOperand->isSubGraphBoundary &&
                 !hasOnlyViewProducers) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Input operand %zu of operation %zu (opdump: %s) is from DDR but not marked as subgraph boundary! "
                     "%s",
                     k, i, op.Dump().c_str(), GetFormatBacktrace(op).c_str());
@@ -297,8 +313,8 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
             }
             // Rule 2: Operands with consumer in a different subgraph must be marked as subgraph boundary
             if (subGraphId != iOperand->subGraphID && !iOperand->isSubGraphBoundary) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Input operand %zu of operation %zu (opdump: %s) has a consumer in a different subgraph but not "
                     "marked as subgraph boundary! %s",
                     k, i, op.Dump().c_str(), GetFormatBacktrace(op).c_str());
@@ -306,8 +322,8 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
             }
             // Rule 3: Input operands of special ops (e.g., OP_UB_COPY_IN) must be marked as subgraph boundary
             if (IsCopyIn(op.GetOpcode()) && !iOperand->isSubGraphBoundary) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Input operand %zu of IsCopyIn operation %zu (opdump: %s) is not marked as subgraph boundary! %s",
                     k, i, op.Dump().c_str(), GetFormatBacktrace(op).c_str());
                 return FAILED;
@@ -321,8 +337,8 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
             // Rule 1: Operands from DDR memory must be marked as subgraph boundary
             if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && !oOperand->isSubGraphBoundary &&
                 !hasOnlyViewProducers) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Output operand %zu of operation %zu (opdump: %s) is from DDR but not marked as subgraph boundary! "
                     "%s",
                     k, i, op.Dump().c_str(), GetFormatBacktrace(op).c_str());
@@ -330,8 +346,8 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
             }
             // Rule 2: Operands with producer in a different subgraph must be marked as subgraph boundary
             if (subGraphId != oOperand->subGraphID && !oOperand->isSubGraphBoundary) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Output operand %zu of operation %zu (opdump: %s) has a producer in a different subgraph but not "
                     "marked as subgraph boundary! %s",
                     k, i, op.Dump().c_str(), GetFormatBacktrace(op).c_str());
@@ -340,8 +356,8 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
             // Rule 3: Output operands of special ops (e.g., OP_UB_COPY_OUT, OP_TRANSPOSE_DATA_MOVE, OP_INDEX_OUTCAST)
             // must be marked as subgraph boundary
             if (IsCopyOut(op.GetOpcode()) && !oOperand->isSubGraphBoundary) {
-                APASS_LOG_ERROR_F(
-                    Elements::Tensor,
+                APASS_LOG_ERROR_C(
+                    TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Output operand %zu of IsCopyOut operation %zu (opdump: %s) is not marked as subgraph boundary! %s",
                     k, i, op.Dump().c_str(), GetFormatBacktrace(op).c_str());
                 return FAILED;
