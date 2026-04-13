@@ -250,7 +250,7 @@ struct PerfEvtMgr {
     {
         auto devTaskPerfFormatFunc = [this](std::ostringstream& osStr, uint32_t tid, uint32_t type) -> void {
             for (uint32_t i = 0; i < perfTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)]; i++) {
-                if (type == PERF_TRACE_DEV_TASK_SEND_FIRST_CALLOP_TASK) {
+                if (type == PERF_TRACE_DEV_TASK_SEND_FIRST_LEAF_TASK) {
                     osStr << "{\"name\":\"" << PerfTraceName[type] << "\",";
                 } else {
                     osStr << "{\"name\":\"" << PerfTraceName[type] << "(" << i << ")\",";

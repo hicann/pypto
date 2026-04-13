@@ -117,7 +117,7 @@ inline void DevTaskPerfFormat(
     for (uint32_t i = 0; i < aicpuPer->perfAicpuTraceDevTaskCnt[tid][DEVTASK_PERF_ARRY_INDEX(type)]; i++) {
         std::string name = PerfTraceName[type];
         name = name + "_" + std::to_string(turnIdx);
-        if (type != PERF_TRACE_DEV_TASK_SEND_FIRST_CALLOP_TASK) {
+        if (type != PERF_TRACE_DEV_TASK_SEND_FIRST_LEAF_TASK) {
             name = name + "(" + std::to_string(i) + ")";
         }
         per_dev_task["name"] = name;

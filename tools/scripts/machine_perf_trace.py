@@ -439,8 +439,8 @@ def collect_aicore_exec_rows(aicpu_dev_pref: List[Dict[str, Any]], round_id: Opt
             continue
         tasks = core.get("tasks", [])
         begin = get_task_cycle(tasks, "BEGIN", None, round_id)
-        wait_first_map = get_task_cycle_map(tasks, "DEV_TASK_WAIT_RCV_FIRST_CALLOP_TASK", round_id)
-        all_exec_map = get_task_cycle_map(tasks, "DEV_TASK_ALL_CALLOP_TASK_EXEC", round_id)
+        wait_first_map = get_task_cycle_map(tasks, "DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK", round_id)
+        all_exec_map = get_task_cycle_map(tasks, "DEV_TASK_ALL_LEAF_TASK_EXEC", round_id)
         wait_first = wait_first_map.get(0)
         all_exec = all_exec_map.get(0)
         wait_exit_notify = get_task_cycle(tasks, "WAIT_EXIT_NOTIFY", None, round_id)

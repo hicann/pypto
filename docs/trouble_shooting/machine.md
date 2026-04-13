@@ -516,3 +516,62 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 可得到触发问题的函数具体行号。
 
 5.**关联skill**：[pypto-host-stacktrace-analyzer](../../.agents/skills/pypto-host-stacktrace-analyzer/SKILL.md)
+
+---
+### 泳道图相关问题指导
+
+#### output 目录产物说明
+
+在 `output/output_时间戳` 目录下，泳道图相关文件通常包括：
+- `merged_swimlane.json`：IDE 展示用的综合泳道图文件。
+- `machine_runtime_operator_trace*.json`：AI CPU/AI Core 泳道图展示文件，可用于观察联合时序。
+- `machine_trace_perf_data*.json`：Machine 组件原始 Profiling 数据文件。
+- `tilefwk_L1_prof_data_*.json`：Machine 组件原始 Profiling 数据文件。
+其中，`machine_trace_perf_data*.json` 与 `tilefwk_L1_prof_data_*.json` 可用于判断底层数据采集是否成功（例如文件是否为空）；`merged_swimlane.json` 与 `machine_runtime_operator_trace*.json` 主要用于 IDE 可视化展示。建议优先联系 IDE 对应负责人咨询解决。
+
+#### IDE 参数含义解释
+
+在生成和查看泳道图时，IDE 工具中会显示多个性能参数和事件标签。以下是常见参数的含义说明：
+
+**1. AICore 泳道图**
+
+| 参数/事件名称 | 含义解释 |
+| --- | --- |
+| **Task Time** | AI Core 端到端执行时间 |
+| **AICore Time** | 所有 AICore 任务时间之和 |
+| **AICore 利用率** | `AICore Time` / (`泳道数` × `泳道时长`) |
+
+**2. AICPU 泳道图**
+
+| 模块 | 参数/事件名称 | 含义解释 | 线程信息 |
+| --- | --- | --- | --- |
+| **AICPU** | **DEV_TASK_BUILD** | Ctrl AICPU 构建 devTask 的耗时（即 stitch 耗时统计） | Ctrl |
+| **AICPU** | **DEV_TASK_RCV** | Sched AICPU 接收到 Ctrl AICPU 构建的 devTask 的耗时 | Sched |
+| **AICore** | **RCV_MODEL** | AICore 接收到 AICPU 发送的 devTask 的耗时 | Sched |
+| **AICore** | **ALL_LEAF_TASK_EXEC** | 当前 AICore 的 devTask 中所有 leafTask 执行完成的耗时 | Sched |
+
+
+#### 常见异常排查
+
+##### 1. 未生成泳道图文件
+
+**现象**：算子运行正常，但 `output` 目录下未生成 `tilefwk_L1_prof_data_*.json` 文件。
+**原因与排查**：通常是因为未启动性能数据采集功能。请检查代码中是否已正确将 `runtime_debug_mode` 设置为 `1`。
+
+##### 2. 泳道图文件为空（无任何数据）
+**现象**：成功生成了 `tilefwk_L1_prof_data_*.json` 文件，但文件内容为空。
+**原因与排查**：通常是 Profiling 功能未能成功使能。需要开启 DEBUG 日志打印进行进一步排查：
+   - 按照上文说明打开 DEBUG 日志并指定日志落盘路径。
+   - **Device 侧排查**：检查日志文件 `log/debug/device*/device*.log`。若包含 `aicore profiling is opened, level is %d.`，表示成功使能；若包含 `aicore profiling is closed..`，则表示未能成功使能，aicore没有开启泳道图性能数据采集。
+
+##### 3. 泳道图中某些核首任务启动时间过长
+**现象**：从泳道图看，部分核并没有前序任务依赖，但第一个任务的启动时间却很长。
+**原因与排查**：这种情况通常是因为 AICPU 启动较慢，导致 AICore 接收任务的时间被整体延后。在泳道图中表现为首任务启动前存在等待 AICPU 启动的时间。
+
+##### 4. ACL Graph 模式下采集不到泳道图数据
+**现象**：当算子运行在 ACL Graph 模式时，启动泳道图性能采集后，`output` 目录下没有生成泳道图文件。
+**原因与排查**：当前 PyPTO 尚未支持 ACL Graph 场景的泳道图性能数据采集。在 ACL Graph 模式中，执行流程分为 Capture 和 Replay 两个阶段，当前 Capture 阶段未开启 Profiling，而是在 Replay 阶段开启性能采集；但 Task 的下发实际发生在 Capture 阶段，由于此时 Profiling 开关是关闭的，所以不会上报 OP 相关信息。目前请暂时规避该场景，后续版本将支持 ACL Graph 模式下的泳道图性能数据采集。
+
+##### 5. Profiling 泳道图数据与 msprof 采集的结果差距较大
+**现象**：`msprof` 采集到的 AICore 耗时远大于泳道图中的 AICore 端到端耗时，二者数据无法对齐。
+**原因与排查**：`msprof` 所采集到的 AICore 耗时不能真实代表 AICore 内部端到端的执行耗时，因为它实际上还包含了 **AICore 启动等待 AICPU 下发 devTask 的时间**，以及 **AICore 执行完任务后的退出时间**。为了获取更准确的时间，当前已实现对 AICore 端到端执行时间的打屏输出，可以在执行算子前设置环境变量 `export DUMP_DEVICE_PERF=true`，即可在终端中直接获取当前准确的性能统计数据。

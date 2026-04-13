@@ -14,7 +14,13 @@
 
 ### 采集泳道图数据
 
-1.  通过给@pypto.frontend.jit装饰器的入参debug_options配置图执行阶段调试开关启动性能数据采集功能。
+当前支持两种并列采集方式：**图执行阶段泳道图采集** 与 **AI CPU/AI Core 联合采集**。两种方式可分别单独开启，互不干扰；也可同时开启。若同时开启，可在泳道图中同时观察同一时间轴上的 AI CPU 与 AI Core Profiling 数据。
+
+#### 方式一：图执行阶段泳道图采集（`runtime_debug_mode`）
+
+**适用场景**：用于常规性能调优，重点关注子图执行顺序、任务耗时分布、AI Core 端到端耗时与 AI Core 利用率。
+
+1.  通过给 `@pypto.frontend.jit` 装饰器的入参 `debug_options` 配置图执行阶段调试开关，启动性能数据采集：
 
     ```python
     @pypto.frontend.jit(
@@ -22,24 +28,56 @@
     )
     ```
 
-2.  执行用例
+2.  执行用例：
 
     ```bash
     python3 examples/02_intermediate/operators/softmax/softmax.py
     ```
 
-3.  生成泳道图json文件
+3.  采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
 
-    在当前工作目录的output/output\_时间戳目录下生成merged\_swimlane.json，该文件为泳道图数据文件。
+#### 方式二：AI CPU/AI Core 联合采集（`DUMP_DEVICE_PERF`）
+
+**适用场景**：用于分析 AI CPU 调度与 AI Core 执行的协同关系，定位首任务启动慢、调度等待等问题。
+
+1.  通过环境变量使能：
+
+    ```bash
+    export DUMP_DEVICE_PERF=true
+    ```
+
+2.  执行用例：
+
+    ```bash
+    python3 examples/02_intermediate/operators/softmax/softmax.py
+    ```
+
+3.  采集结果输出到当前工作目录 `output/output_时间戳` 下（详见“采集结果文件说明”）。
+
+4.  终端可直接查看 AI CPU/AI Core 数据汇总表：
+
+    ![](../figures/machine_perf_summary.png "AI CPU/AI Core数据汇总表")
+
+### 采集结果文件说明
+
+关于采集结果文件的详细说明，请参阅 Machine 的 Troubleshooting（故障诊断） 手册：
+[output 目录产物说明](../../trouble_shooting/machine.md#output-目录产物说明)。
 
 ### 查看泳道图数据
 
-1.  通过PyPTO Toolkit插件查看泳道图。
+1.  通过终端查看 AI Core 执行端到端耗时以及 AI Core 利用率：
 
-    右键单击json文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”，如下图所示。
+    **图 1**  查看 AI Core Perf 信息
+    ![](..\figures\aicore_perf_summary.png "AI Core Perf信息")
 
-    **图 1**  查看泳道图
+2.  通过 PyPTO Toolkit 插件查看泳道图。
+
+    右键单击对应 JSON 文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
+
+    **图 2**  查看泳道图
     ![](../figures/view_swimlane_graph.png "查看泳道图")
+
+    ![AI CPU/AI Core泳道图](../figures/machine_runtime_operator_trace_0.png)
 
     图中展示了任务的执行顺序和耗时信息，帮助开发者分析性能瓶颈。
 

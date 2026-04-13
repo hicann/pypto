@@ -260,7 +260,7 @@ INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __
     PerfTraceRecord(INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_EXIT_NOTIFY, args);
     if (ctx->lastTaskFinishCycle > 0) {
         PerfTraceRecord(
-            INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_ALL_DEV_TASK_CALLOP_EXEC_FINISH, args,
+            INVALID_DEV_TASK_ID, metric, PERF_TRACE_CORE_WAIT_ALL_DEV_TASK_LEAF_TASK_EXEC_FINISH, args,
             ctx->lastTaskFinishCycle);
     }
     if (unlikely(
@@ -274,7 +274,7 @@ INLINE void DfxProcWhenCoreExit(ExecuteContext* ctx, __gm__ KernelArgs* args, __
 INLINE void DfxProcWhenDevTaskStop(ExecuteContext *ctx, __gm__ KernelArgs *args, __gm__ Metrics* metric)
 {
     if (ctx->lastTaskFinishCycle > 0) {
-        PerfTraceRecord(ctx->SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_CALLOP_TASK_EXEC, args, ctx->lastTaskFinishCycle);
+        PerfTraceRecord(ctx->SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_LEAF_TASK_EXEC, args, ctx->lastTaskFinishCycle);
     }
 }
 
@@ -600,7 +600,7 @@ INLINE void KernelEntry(
             ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
   
             if (isFirstTask) {
-                PerfTraceRecord(ctx.seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_CALLOP_TASK, args);
+                PerfTraceRecord(ctx.seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK, args);
                 isFirstTask = false;
             }
 
