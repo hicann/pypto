@@ -10,7 +10,7 @@
 [build-system]
 requires = [
     "setuptools>=77.0.3",
-    "pybind11>=2.13.6",
+    "pybind11>=3.0.1",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -48,7 +48,7 @@ Repository = "https://gitcode.com/cann/pypto"
 [project.optional-dependencies]
 dev = [
     "setuptools>=77.0.3",
-    "pybind11>=2.13.6",
+    "pybind11>=3.0.1",
     "pip",
     "build",
     "packaging",
