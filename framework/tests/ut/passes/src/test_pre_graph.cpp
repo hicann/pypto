@@ -1543,6 +1543,61 @@ TEST_F(PreGraphTest, MutiConsumerDeleteSingleAssemble)
     // check after pass
     EXPECT_EQ(function->Operations().size(), operationSize - 1);
 }
+
+/*
+maybeCycle
+incast -> COPYIN -> COPYOUT -> ASSEMBLE ->         midOut -> COPYIN -> COPYOUT -> outcast
+                            -> COPYIN -> COPYOUT -/
+不删除ASSEMBLE
+*/
+TEST_F(PreGraphTest, maybeCycle)
+{
+    ComputationalGraphBuilder G;
+    DataType dataType = DataType::DT_FP16;
+    // add tensor
+    G.AddTensor(dataType, {4, 4}, "inCast");
+    auto inCast = G.GetTensor("inCast");
+    inCast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dataType, {4, 4}, "copyInOut1");
+    auto copyInOut1 = G.GetTensor("copyInOut1");
+    copyInOut1->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    G.AddTensor(dataType, {4, 4}, "copyOutOut");
+    auto copyOutOut = G.GetTensor("copyOutOut");
+    copyOutOut->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dataType, {4, 8}, "assembleOut");
+    auto assembleOut = G.GetTensor("assembleOut");
+    assembleOut->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    G.AddTensor(dataType, {4, 4}, "copyInOut2");
+    auto copyInOut2 = G.GetTensor("copyInOut2");
+    copyInOut2->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+     G.AddTensor(dataType, {4, 8}, "copyInOut3");
+    auto copyInOut3 = G.GetTensor("copyInOut3");
+    copyInOut3->SetMemoryTypeBoth(MemoryType::MEM_UB, true);
+    G.AddTensor(dataType, {4, 8}, "outCast");
+    auto outCast = G.GetTensor("outCast");
+    outCast->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    
+    // add op
+    G.AddOp(Opcode::OP_COPY_IN, {"inCast"}, {"copyInOut1"}, "COPYIN1");
+    G.AddOp(Opcode::OP_COPY_OUT, {"copyInOut1"}, {"copyOutOut"}, "COPYOUT1");
+    G.AddOp(Opcode::OP_ASSEMBLE, {"copyOutOut"}, {"assembleOut"}, "ASSEMBLE");
+    G.AddOp(Opcode::OP_COPY_IN, {"copyOutOut"}, {"copyInOut2"}, "COPYIN2");
+    G.AddOp(Opcode::OP_COPY_OUT, {"copyInOut2"}, {"assembleOut"}, "COPYOUT2");
+    G.AddOp(Opcode::OP_COPY_IN, {"assembleOut"}, {"copyInOut3"}, "COPYIN3");
+    G.AddOp(Opcode::OP_COPY_OUT, {"copyInOut3"}, {"outCast"}, "COPYOUT3");
+
+    // set incast and outcast
+    G.SetInCast({"inCast"});
+    G.SetOutCast({"outCast"});
+    // run pass
+    Function* function = G.GetFunction();
+    EXPECT_NE(function, nullptr);
+    PreGraphProcess preGraph;
+    auto opSize = function->Operations().size();
+    preGraph.Run(*function, "", "", 0);
+    // check after pass
+    EXPECT_EQ(function->Operations().size(), opSize);
+}
 } // namespace tile_fwk
 } // namespace npu
 #undef private
