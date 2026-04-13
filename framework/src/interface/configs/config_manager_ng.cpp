@@ -277,9 +277,8 @@ void ConfigScope::AddValue(const std::string& key, Any value)
 
 void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
 {
-    if (ConfigManagerNg::GetInstance().Range().count(key) == 0) {
-        FUNCTION_LOGE_E(FError::NOT_EXIST, "Key[%s] not found in rangeInfos", key.c_str());
-    } else if (!ConfigManagerNg::GetInstance().IsWithinRange(key, value)) {
+    if (ConfigManagerNg::GetInstance().Range().count(key) != 0 &&
+        !ConfigManagerNg::GetInstance().IsWithinRange(key, value)) {
         std::stringstream os("Option:");
         std::map<std::string, Any> node;
         node[key] = value;
@@ -375,7 +374,11 @@ struct ConfigManagerImpl {
             scope = scopes.top();
         }
         for (auto& it : values) {
-            scope->UpdateValueWithAny(it.first, it.second);
+            if (scope->HasConfig(it.first)) {
+                scope->UpdateValueWithAny(it.first, it.second);
+            } else {
+                FUNCTION_LOGW("key[%s] does not exist.", it.first.c_str());
+            }
         }
     }
 
