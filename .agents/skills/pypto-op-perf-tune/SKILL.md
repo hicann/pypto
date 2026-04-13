@@ -415,21 +415,21 @@ Read perf-analyzer/SKILL.md
 ```bash
 # ========== 第1步：开箱性能调优 ==========
 # 1.1 加载子技能
-Read .agents/skills/pypto-operator-auto-tuner/tune-frontend/SKILL.md
+Read .agents/skills/pypto-op-perf-tune/tune-frontend/SKILL.md
 # 1.2 执行迭代调优（参考 4.3 迭代流程）
 # 1.3 阶段退出后 → 生成阶段交接摘要（参考 4.5）→ 上下文压缩
 
 # ========== 第2步：深度性能调优 ==========
 # 2.0 确认上一阶段交接摘要，以此为基础启动
 # 2.1 加载子技能
-Read .agents/skills/pypto-operator-auto-tuner/tune-swimlane/SKILL.md
+Read .agents/skills/pypto-op-perf-tune/tune-swimlane/SKILL.md
 # 2.2 执行迭代调优
 # 2.3 阶段退出后 → 生成阶段交接摘要（参考 4.5）→ 上下文压缩
 
 # ========== 第3步：核内性能调优 ==========
 # 3.0 确认上一阶段交接摘要，以此为基础启动
 # 3.1 加载子技能
-Read .agents/skills/pypto-operator-auto-tuner/tune-incore/SKILL.md
+Read .agents/skills/pypto-op-perf-tune/tune-incore/SKILL.md
 # 3.2 执行迭代调优
 # 3.3 阶段退出后 → 生成阶段交接摘要（参考 4.5）→ 进入报告生成
 ```

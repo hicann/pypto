@@ -116,7 +116,7 @@ pypto.set_cube_tile_shapes([128, 128], [64, 256], [256, 256],
 
 ```bash
 # Step 1: 用 analyze_swimlane.py 分析泳道图数据
-python3 .agents/skills/pypto-operator-auto-tuner/scripts/analyze_swimlane.py \
+python3 .agents/skills/pypto-op-perf-tune/tune-swimlane/scripts/analyze_swimlane.py \
     output/output_<最新目录>
 
 # Step 2: 从输出确定：
@@ -242,8 +242,8 @@ pypto.set_pass_options(sg_set_scope=-1)
 **用法**：
 
 ```bash
-python3 .agents/skills/pypto-operator-auto-tuner/scripts/analyze_aiv_dep_chains.py <output_dir>
-python3 .agents/skills/pypto-operator-auto-tuner/scripts/analyze_aiv_dep_chains.py <output_dir> --json result.json
+python3 .agents/skills/pypto-op-perf-tune/tune-swimlane/scripts/analyze_aiv_dep_chains.py <output_dir>
+python3 .agents/skills/pypto-op-perf-tune/tune-swimlane/scripts/analyze_aiv_dep_chains.py <output_dir> --json result.json
 ```
 
 **输入文件**（`output_dir` 中）：
@@ -312,10 +312,10 @@ sg_set_scope 优化建议
 
 ```bash
 # 查看指定 leafHash 的代码位置
-python3 .agents/skills/pypto-operator-auto-tuner/scripts/leafhash_to_code.py <output_dir> --leafhash <hash>
+python3 .agents/skills/pypto-op-perf-tune/tune-swimlane/scripts/leafhash_to_code.py <output_dir> --leafhash <hash>
 
 # 查看所有 leafHash
-python3 .agents/skills/pypto-operator-auto-tuner/scripts/leafhash_to_code.py <output_dir>
+python3 .agents/skills/pypto-op-perf-tune/tune-swimlane/scripts/leafhash_to_code.py <output_dir>
 ```
 
 **验证检查清单**（对建议中的每个链段逐项检查）：
