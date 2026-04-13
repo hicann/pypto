@@ -94,7 +94,8 @@ def matmul_allreduce_add_rmsnorm_kernel(
                 shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
             pypto.set_vec_tile_shapes(1, hidden_size)
             all_reduce_out = pypto.experimental.shmem_load(
-                shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out], valid_shape=shmem_shape
+                shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out],
+                valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size]
             )
 
             # 5. Add RmsNorm

@@ -26,8 +26,9 @@ namespace Distributed {
 template <typename T>
 void TestAllReduce(OpTestParam& testParam, std::string& goldenDir)
 {
-    constexpr size_t paramsSize = 6;
-    auto [row, col, typeNum, tileRow, tileCol, useTwoShot] = GetParams<paramsSize>(goldenDir + "/params.bin");
+    constexpr size_t paramsSize = 8;
+    auto [row, col, validRow, validCol, typeNum, tileRow, tileCol, useTwoShot]
+        = GetParams<paramsSize>(goldenDir + "/params.bin");
     DataType dType = GetDataTypeNum(typeNum);
 
     int32_t outSize = row * col;
@@ -52,6 +53,7 @@ void TestAllReduce(OpTestParam& testParam, std::string& goldenDir)
     }
     FUNCTION("ALLREDUCE", {in}, {out})
     {
+        in.GetStorage()->UpdateDynValidShape(std::vector<SymbolicScalar>{validRow, validCol});
         TileShape::Current().SetVecTile({tileRow, tileCol});
         Tensor shmemData;
         Tensor shmemSignal;

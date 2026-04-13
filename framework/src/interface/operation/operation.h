@@ -80,6 +80,7 @@ public:
     static const std::string bindTensor;
     static const std::string startOffset;
     static const std::string distOpAttr;
+    static const std::string isDistCopyOut;
     static const std::string subBlockIdx;
     static const std::string accumulate;
     static const std::string indicesSize;

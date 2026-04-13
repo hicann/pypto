@@ -781,11 +781,11 @@ void MoeDistributedDispatchV2(
         TileShape::Current().SetVecTile({1, signalCol});
         auto shmemDataSignalLocalTile = ShmemView(shmemDataSignal, {1, signalCol}, {0, 0});
         Tensor waitUntilOut1 =
-            ShmemWaitUntil(shmemDataSignalLocalTile, 0, OpType::EQ, batchSize * topK * epWorldSize, true, cumSumResult);
+            ShmemWaitUntil(shmemDataSignalLocalTile, 0, OpType::EQ, batchSize * topK * epWorldSize, true, x);
         TileShape::Current().SetVecTile({1, signalCol});
         auto shmemCountSignalLocalTile = ShmemView(shmemCountSignal, {1, signalCol}, {0, 0});
         Tensor waitUntilOut =
-            ShmemWaitUntil(shmemCountSignalLocalTile, 0, OpType::EQ, moeExpertNum, true, cumSumResult);
+            ShmemWaitUntil(shmemCountSignalLocalTile, 0, OpType::EQ, moeExpertNum, true, x);
         Tensor waitOut = Nop({waitUntilOut1, waitUntilOut});
 
         TileShape::Current().SetVecTile({cumSumRowShape, countSize});
@@ -809,25 +809,22 @@ void MoeDistributedDispatchV2(
         }
     }
 
-    LOOP("MoeDistributedDispatchReceive", FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+    LOOP("MoeDistributedDispatchReceive", FunctionType::DYNAMIC_LOOP, index, LoopRange(expertNumPerRank * epWorldSize))
     {
-        (void)i;
-        for (uint32_t index = 0; index < expertNumPerRank * epWorldSize; ++index) {
-            SymbolicScalar curCount = GetTensorData(localExpertRecvCount, {index + 1, 0});
-            SymbolicScalar offset = GetTensorData(cumSumResult, {index, 0});
-            auto curShmemDataTile = ShmemView(
-                shmemData, {batchSize, hiddenSize}, std::vector<SymbolicScalar>{curCount, hiddenSize},
-                {index * batchSize, 0});
-            TileShape::Current().SetVecTile({batchSize, hiddenSize});
-            Tensor localDataRecvCount = ShmemLoad(curShmemDataTile, thisRank, cumSumResult);
-            Assemble(localDataRecvCount, std::vector<SymbolicScalar>{offset, 0}, expandX);
-            auto curShmemInfoTile = ShmemView(
-                shmemInfo, {batchSize, assistInfoForCombine.GetShape(1)},
-                std::vector<SymbolicScalar>{curCount, assistInfoForCombine.GetShape(1)}, {index * batchSize, 0});
-            TileShape::Current().SetVecTile({batchSize, assistInfoForCombine.GetShape(1)});
-            Tensor localInfoRecvCount = ShmemLoad(curShmemInfoTile, thisRank, cumSumResult);
-            Assemble(localInfoRecvCount, std::vector<SymbolicScalar>{offset, 0}, assistInfoForCombine);
-        }
+        SymbolicScalar curCount = GetTensorData(localExpertRecvCount, {index + 1, 0});
+        SymbolicScalar offset = GetTensorData(cumSumResult, {index, 0});
+        auto curShmemDataTile = ShmemView(
+            shmemData, {batchSize, hiddenSize}, std::vector<SymbolicScalar>{curCount, hiddenSize},
+            {index * batchSize, 0});
+        TileShape::Current().SetVecTile({batchSize, hiddenSize});
+        Tensor localDataRecvCount = ShmemGet(curShmemDataTile, thisRank, cumSumResult);
+        Assemble(localDataRecvCount, std::vector<SymbolicScalar>{offset, 0}, expandX);
+        auto curShmemInfoTile = ShmemView(
+            shmemInfo, {batchSize, assistInfoForCombine.GetShape(1)},
+            std::vector<SymbolicScalar>{curCount, assistInfoForCombine.GetShape(1)}, {index * batchSize, 0});
+        TileShape::Current().SetVecTile({batchSize, assistInfoForCombine.GetShape(1)});
+        Tensor localInfoRecvCount = ShmemGet(curShmemInfoTile, thisRank, cumSumResult);
+        Assemble(localInfoRecvCount, std::vector<SymbolicScalar>{offset, 0}, assistInfoForCombine);
     }
 }
 } // namespace Distributed

@@ -26,8 +26,8 @@ namespace Distributed {
 template <typename T>
 void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
 {
-    constexpr size_t paramsSize = 5;
-    auto [row, col, typeNum, tileRow, tileCol] = GetParams<paramsSize>(goldenDir + "/params.bin");
+    constexpr size_t paramsSize = 7;
+    auto [row, col, validRow, validCol, typeNum, tileRow, tileCol] = GetParams<paramsSize>(goldenDir + "/params.bin");
 
     DataType dType = GetDataTypeNum(typeNum);
 
@@ -42,6 +42,7 @@ void TestAllGather(OpTestParam& testParam, std::string& goldenDir)
     Shape shmemDataShape{testParam.rankSize * row, col};
     FUNCTION("ALLGATHER", {in}, {out})
     {
+        in.GetStorage()->UpdateDynValidShape(std::vector<SymbolicScalar>{validRow, validCol});
         TileShape::Current().SetVecTile({tileRow, tileCol});
         ShmemTensor shmemTensor;
         LOOP("CreateShmemTensor", FunctionType::DYNAMIC_LOOP, index, LoopRange(1))

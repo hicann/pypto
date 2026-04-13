@@ -230,7 +230,7 @@ def shmem_get(
     dummy = __normalize_pred(pred)
     if shape is not None and offsets is not None:
         if valid_shape is not None:
-            src = pypto_impl.ShmemView(src, shape, offsets, valid_shape)
+            src = pypto_impl.ShmemView(src, shape, valid_shape, offsets)
         else:
             src = pypto_impl.ShmemView(src, shape, offsets)
     return pypto_impl.ShmemGet(src, src_pe, dummy)

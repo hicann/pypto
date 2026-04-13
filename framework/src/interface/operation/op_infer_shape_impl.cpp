@@ -889,9 +889,57 @@ void CopyInInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& ou
 }
 REGISTER_INFER_SHAPE_FUNC(OP_COPY_IN, Opcode::OP_COPY_IN, CopyInInferFunc);
 
+void ShmemPutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (op->iOperand[2]->GetDynOffset().size() != 0) {
+        copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[2]->GetDynOffset()));
+    } else {
+        copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[2]->GetOffset()));
+    }
+    std::vector<SymbolicScalar> fromValidShapeSym(copyOpAttribute->GetFromDynValidShape().size());
+    OpImmediate::NormalizeValue(fromValidShapeSym, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(fromValidShapeSym);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_PUT, Opcode::OP_SHMEM_PUT, ShmemPutInferFunc);
+
+void ShmemGetInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    std::vector<SymbolicScalar> fromValidShapeSym(copyOpAttribute->GetFromDynValidShape().size());
+    OpImmediate::NormalizeValue(fromValidShapeSym, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(fromValidShapeSym);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_GET, Opcode::OP_SHMEM_GET, ShmemGetInferFunc);
+
+void ShmemPutUB2GMInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (op->iOperand[1]->GetDynOffset().size() != 0) {
+        copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[1]->GetDynOffset()));
+    } else {
+        copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[1]->GetOffset()));
+    }
+    std::vector<SymbolicScalar> fromValidShapeSym(copyOpAttribute->GetFromDynValidShape().size());
+    OpImmediate::NormalizeValue(fromValidShapeSym, 0, copyOpAttribute->GetFromDynValidShape(), 0, false);
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(fromValidShapeSym);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_SHMEM_PUT_UB2GM, Opcode::OP_SHMEM_PUT_UB2GM, ShmemPutUB2GMInferFunc);
+
 void ShmemGetGm2UBInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto copyOpAttribute = std::dynamic_pointer_cast<CopyOpAttribute>(op->GetOpAttribute());
+    if (op->iOperand[1]->GetDynOffset().size() != 0) {
+        copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[1]->GetDynOffset()));
+    } else {
+        copyOpAttribute->SetFromOffset(OpImmediate::Specified(op->iOperand[1]->GetOffset()));
+    }
     std::vector<SymbolicScalar> toValidShapeSym(copyOpAttribute->GetToDynValidShape().size());
     OpImmediate::NormalizeValue(toValidShapeSym, 0, copyOpAttribute->GetToDynValidShape(), 0, false);
     for (auto output : op->GetOOperands()) {

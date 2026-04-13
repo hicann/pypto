@@ -163,7 +163,8 @@ public:
     std::string GenRawShapes(int32_t operandIndex) const;
     std::string GenExtraParamsStr() const;
     std::string GenOffsetsAndRawShapes(int32_t operandIndex) const;
-
+    std::string GenDynOffset(int32_t operandIndex) const;
+    std::string GenDynValidShape(int32_t operandIndex) const;
     std::string GenAicpuCallOp() const;
 
     std::string GenWhereOp() const;
@@ -187,7 +188,8 @@ private:
 
     std::string GenOffsetsAndRawShapesForShmemPut() const;
     std::string GenOffsetsAndRawShapesForShmemGet() const;
-    std::string GenOffsetsAndRawShapesForShmemPutAndGetUB() const;
+    std::string GenOffsetsAndRawShapesForShmemPutUB() const;
+    std::string GenOffsetsAndRawShapesForShmemGetUB() const;
     std::string GenOffsetsAndRawShapesForShmemSignal() const;
     std::string GenOffsetsAndRawShapesForMoeDistributedCombineSend() const;
     std::string GenOffsetsAndRawShapesForMoeDistributedCombineReceive() const;

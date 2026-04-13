@@ -87,7 +87,9 @@ void FuncAllReduceAddAllReduce(const Tensor& in, Tensor& out, const OpTestParam&
             CreateShmemTensor(testParam.group, testParam.rankSize, shmemDataType, shmemDataShape, shmemTensor);
         }
         LoopAllReduce1(in, shmemTensor, allReduceOut, row, col);
+        allReduceOut.GetStorage()->UpdateDynValidShape(in.GetValidShape());
         LoopAdd(allReduceOut, addOut);
+        addOut.GetStorage()->UpdateDynValidShape(in.GetValidShape());
         LoopAllReduce2(addOut, shmemTensor, out, row, col);
     };
 }
@@ -95,14 +97,14 @@ void FuncAllReduceAddAllReduce(const Tensor& in, Tensor& out, const OpTestParam&
 template <typename T>
 void TestAllReduceAddAllReduce(OpTestParam& testParam, std::string& goldenDir)
 {
-    constexpr size_t paramsSize = 3;
-    auto [row, col, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
+    constexpr size_t paramsSize = 5;
+    auto [row, col, validRow, validCol, typeNum] = GetParams<paramsSize>(goldenDir + "/params.bin");
 
     Shape shape{row, col};
     DataType dType = GetDataTypeNum(typeNum);
     Tensor in(dType, shape, "in");
     Tensor out(dType, shape, "out");
-
+    in.GetStorage()->UpdateDynValidShape(std::vector<SymbolicScalar>{validRow, validCol});
     std::vector<T> inPtr =
         ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
     config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 10);
