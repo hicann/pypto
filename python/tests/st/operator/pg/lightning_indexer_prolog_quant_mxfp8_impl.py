@@ -237,8 +237,6 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tens
         "pg_upper_bound": 8192
     },
     runtime_options={
-        "stitch_function_inner_memory": 128 * 128,
-        "stitch_function_outcast_memory": 128 * 128,
         "device_sched_mode": 1
     }
 )

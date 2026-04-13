@@ -22,32 +22,24 @@ def runtime_options_list():
     # 910
     if pypto.platform.npuarch == 'DAV_1001':
         return {
-            "stitch_function_inner_memory": 8192,
-            "stitch_function_outcast_memory": 4096,
-            "stitch_function_num_initial": 128,
+            "stitch_function_max_num": 128,
             "device_sched_mode": 3
         }
     # 910B/910C
     elif pypto.platform.npuarch == 'DAV_2201':
         return {
-            "stitch_function_inner_memory": 4096,
-            "stitch_function_outcast_memory": 4096,
-            "stitch_function_num_initial": 128,
+            "stitch_function_max_num": 128,
             "device_sched_mode": 3
         }
     # 950
     elif pypto.platform.npuarch == 'DAV_3510':
         return {
-            "stitch_function_inner_memory": 4096,
-            "stitch_function_outcast_memory": 4096,
-            "stitch_function_num_initial": 128,
+            "stitch_function_max_num": 128,
             "device_sched_mode": 1
         }
     else:
         return {
-            "stitch_function_inner_memory": 4096,
-            "stitch_function_outcast_memory": 4096,
-            "stitch_function_num_initial": 128,
+            "stitch_function_max_num": 128,
             "device_sched_mode": 1
         }
 

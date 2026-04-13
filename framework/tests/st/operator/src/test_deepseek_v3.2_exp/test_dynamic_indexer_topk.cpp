@@ -141,8 +141,6 @@ TEST_F(DynamicIndexerTopk, indexer_topk_quant_4_b_1_s1_64k_s2)
         DEVICE_SCHED_MODE, static_cast<uint8_t>(MachineScheduleConfig::L2CACHE_AFFINITY_SCH) |
                                static_cast<uint8_t>(MachineScheduleConfig::MULTI_CORE_FAIR_SCH));
 
-    config::SetRuntimeOption(STITCH_FUNCTION_INNER_MEMORY, 128);
-    config::SetRuntimeOption(STITCH_FUNCTION_OUTCAST_MEMORY, 128);
     IndexerTile config;
 
     config.weightTile = {64, 128};

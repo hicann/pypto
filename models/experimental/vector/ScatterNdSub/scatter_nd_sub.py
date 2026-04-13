@@ -37,8 +37,7 @@ def get_device_id():
 
 
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_num_initial": 128, "stitch_function_outcast_memory": 1024,
-                    "stitch_function_inner_memory": 1024}
+    runtime_options={"stitch_function_max_num": 128}
 )
 def scatter_nd_sub_kernel(
     target: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),

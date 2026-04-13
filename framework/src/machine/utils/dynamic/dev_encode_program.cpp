@@ -109,8 +109,7 @@ void DevAscendProgram::DumpBasicInfo(const int indent, std::ostringstream& oss) 
     oss << INDENTINNER << "#tensorMemBudget:" << memBudget.tensor.Total() << "\n";
     oss << INDENTINNER << "#metadataMemBudget:" << memBudget.metadata.Total() << "\n";
     oss << INDENTINNER << "#deviceSchMode:" << devArgs.machineConfig << "\n";
-    oss << INDENTINNER << "#stitchFunctionNumInitial:" << stitchFunctionNumInitial << "\n";
-    oss << INDENTINNER << "#stitchFunctionNumStep:" << stitchFunctionNumStep << "\n";
+    oss << INDENTINNER << "#stitchMaxFunctionNum:" << stitchMaxFunctionNum << "\n";
     oss << INDENTINNER << "#stitchFunctionsize:" << stitchFunctionsize << "\n";
     oss << INDENTINNER << "#slot{" << slotSize << "}\n";
     oss << INDENTINNER << "#assembleSlot{" << assembleSlotSize << "}\n";

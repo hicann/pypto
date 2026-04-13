@@ -45,11 +45,7 @@ constexpr const char* COPYOUT_RESOLVE_COALESCING = "copyout_resolve_coalescing";
 
 // runtime
 constexpr const char* DEVICE_SCHED_MODE = "device_sched_mode";
-constexpr const char* STITCH_FUNCTION_INNER_MEMORY = "stitch_function_inner_memory";
-constexpr const char* STITCH_FUNCTION_OUTCAST_MEMORY = "stitch_function_outcast_memory";
-constexpr const char* STITCH_FUNCTION_NUM_INITIAL = "stitch_function_num_initial";
 constexpr const char* STITCH_FUNCTION_MAX_NUM = "stitch_function_max_num";
-constexpr const char* STITCH_FUNCTION_NUM_STEP = "stitch_function_num_step";
 constexpr const char* STITCH_FUNCTION_SIZE = "stitch_function_size";
 constexpr const char* STITCH_CFGCACHE_SIZE = "stitch_cfgcache_size";
 constexpr const char* CFG_RUN_MODE = "run_mode";
@@ -57,7 +53,6 @@ constexpr const char* CFG_VALID_SHAPE_OPTIMIZE = "valid_shape_optimize";
 constexpr int64_t CFG_RUN_MODE_NPU = 0;
 constexpr int64_t CFG_RUN_MODE_SIM = 1;
 constexpr const char* READY_ON_HOST_TENSORS = "ready_on_host_tensors";
-constexpr const char* CFG_TRIPLE_STREAM_SCHED = "triple_stream_sched";
 
 // host
 constexpr const char* COMPILE_STAGE = "compile_stage";

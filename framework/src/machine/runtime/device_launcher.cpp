@@ -252,7 +252,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     DataDumpInit();
     rc = DeviceRunner::Get().DynamicLaunch(
-        aicpuStream, nullptr, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum, config.isTripleStream);
+        aicpuStream, nullptr, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum);
     if (rc < 0) {
         return rc;
     }
@@ -631,21 +631,18 @@ void DeviceLauncher::FreeControlFlowCache(uint8_t* ctrlCache)
 #endif
 }
 
-void DeviceLauncher::AddAicpuStream(aclmdlRI& rtModel, bool tripleStream)
+void DeviceLauncher::AddAicpuStream(aclmdlRI& rtModel)
 {
 #ifdef BUILD_WITH_CANN
     auto ctrlStream = (aclrtStream)machine::GetRA()->GetCtrlStream();
     auto schedtream = (aclrtStream)machine::GetRA()->GetScheStream();
 
     if (IsCaptureMode()) {
-        if (tripleStream) {
-            rtStreamAddToModel(ctrlStream, rtModel);
-        }
+        rtStreamAddToModel(ctrlStream, rtModel);
         rtStreamAddToModel(schedtream, rtModel);
     }
 #else
     (void)rtModel;
-    (void)tripleStream;
     return;
 #endif
 }
@@ -754,7 +751,7 @@ int DeviceLauncher::LaunchSyncTask(aclrtStream aicoreStream, bool isCaptureMode)
 }
 
 int DeviceLauncher::LaunchAicpuKernel(
-    rtAicpuArgsEx_t& rtArgs, bool tripleStream, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function)
+    rtAicpuArgsEx_t& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function)
 {
 #ifdef BUILD_WITH_CANN
     auto ctrlStream = (aclrtStream)machine::GetRA()->GetCtrlStream();
@@ -764,36 +761,25 @@ int DeviceLauncher::LaunchAicpuKernel(
     int ret = 0;
     auto args = (AiCpuArgs*)rtArgs.args;
     const int nrAicpu = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
-    if (tripleStream) {
-        auto startTime = MsprofSysCycleTime();
-        args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
-        ret = rtAicpuKernelLaunchExWithArgs(
-            rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
-            RT_KERNEL_USE_SPECIAL_TIMEOUT);
-        devRunner.ReportHostProfInfo(ctrlStream, startTime, 1, MSPROF_GE_TASK_TYPE_AI_CPU, false);
-        if (ret != RT_ERROR_NONE) {
-            return ret;
-        }
-        args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
-        startTime = MsprofSysCycleTime();
-        const int scheCpuNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.scheCpuNum);
-        ret = rtAicpuKernelLaunchExWithArgs(
-            rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
-            RT_KERNEL_USE_SPECIAL_TIMEOUT);
-        devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPROF_GE_TASK_TYPE_AI_CPU, false);
-        return ret;
-    } else {
-        args->kArgs.parameter.runMode = RUN_UNIFIED_STREAM;
-        auto startTime = MsprofSysCycleTime();
-        ret = rtAicpuKernelLaunchExWithArgs(
-            rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
-            RT_KERNEL_USE_SPECIAL_TIMEOUT);
-        devRunner.ReportHostProfInfo(schedStream, startTime, nrAicpu, MSPROF_GE_TASK_TYPE_AI_CPU, false);
+    auto startTime = MsprofSysCycleTime();
+    args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
+    ret = rtAicpuKernelLaunchExWithArgs(
+        rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 1, &rtArgs, nullptr, ctrlStream,
+        RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    devRunner.ReportHostProfInfo(ctrlStream, startTime, 1, MSPROF_GE_TASK_TYPE_AI_CPU, false);
+    if (ret != RT_ERROR_NONE) {
         return ret;
     }
+    args->kArgs.parameter.runMode = RUN_SPLITTED_STREAM_SCHE;
+    startTime = MsprofSysCycleTime();
+    const int scheCpuNum = static_cast<int>(DeviceLauncher::GetDevProg(function)->devArgs.scheCpuNum);
+    ret = rtAicpuKernelLaunchExWithArgs(
+        rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", nrAicpu, &rtArgs, nullptr, schedStream,
+        RT_KERNEL_USE_SPECIAL_TIMEOUT);
+    devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPROF_GE_TASK_TYPE_AI_CPU, false);
+    return ret;
 #else
     (void)rtArgs;
-    (void)tripleStream;
     (void)debugEnable;
     return 0;
 #endif

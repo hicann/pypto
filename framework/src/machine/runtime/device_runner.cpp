@@ -577,54 +577,6 @@ int DeviceRunner::DynamicKernelLaunch(
     return rc;
 }
 
-int DeviceRunner::DynamicSeparateLaunch(
-    rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, DeviceKernelArgs* kernelArgs, int blockdim)
-{
-    LoadAicpuOp::GetInstance().CustomAiCpuSoLoad();
-    std::string initKernel = OpInfoManager::GetInstance().GetOpFuncName() + "Init";
-    std::string mainKernel = OpInfoManager::GetInstance().GetOpFuncName() + "Run";
-    uint64_t startTime = MsprofSysCycleTime();
-    int rc = LoadAicpuOp::GetInstance().LaunchCustomOp(ctrlStream, kernelArgs, initKernel);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(ctrlStream, startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
-
-    rc = RunPreSync(aicpuStream, ctrlStream, aicoreStream);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_PREPARE_FAILED, "prepare failed %d\n", rc);
-        return rc;
-    }
-
-    startTime = MsprofSysCycleTime();
-    rc = LoadAicpuOp::GetInstance().LaunchCustomOp(ctrlStream, kernelArgs, mainKernel);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_CUSTOM_AICPU_FAILED, "launch custom aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(ctrlStream, startTime, blockdim, MSPROF_GE_TASK_TYPE_AI_CPU, true);
-
-    startTime = MsprofSysCycleTime();
-    rc = launchDynamicAiCpu(aicpuStream, kernelArgs);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICPU_FAILED, "launch aicpu failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(aicpuStream, startTime, aicpuNum_, MSPROF_GE_TASK_TYPE_AI_CPU);
-
-    startTime = MsprofSysCycleTime();
-    rc = launchDynamicAiCore(aicoreStream, kernelArgs);
-    if (rc < 0) {
-        MACHINE_LOGE(HostLauncherErr::LAUNCH_AICORE_FAILED, "launch aicore failed %d\n", rc);
-        return rc;
-    }
-    ReportHostProfInfo(aicoreStream, startTime, blockdim, MSPROF_GE_TASK_TYPE_MIX_AIC, true);
-
-    rc = RunPost(ctrlStream, aicoreStream);
-    return rc;
-}
-
 int DeviceRunner::DynamicTripleStreamLaunch(
     rtStream_t schedStream, rtStream_t ctrlStream, rtStream_t aicoreStream, DeviceKernelArgs* kernelArgs, int blockdim)
 {
@@ -680,7 +632,7 @@ int DeviceRunner::DynamicTripleStreamLaunch(
 
 int DeviceRunner::DynamicLaunch(
     rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, [[maybe_unused]] int64_t taskId,
-    DeviceKernelArgs* kernelArgs, int blockdim, int launchAicpuNum, bool isTripleStream)
+    DeviceKernelArgs* kernelArgs, int blockdim, int launchAicpuNum)
 {
 #ifdef BUILD_WITH_NEW_CANN
     if (!g_IsNullLaunched) {
@@ -710,13 +662,8 @@ int DeviceRunner::DynamicLaunch(
     ExchangeCaputerMode(isCapture_);
     if (ctrlStream == nullptr) {
         return DynamicKernelLaunch(aicpuStream, aicoreStream, kernelArgs, blockDim_);
-    } else {
-        if (isTripleStream) {
-            return DynamicTripleStreamLaunch(aicpuStream, ctrlStream, aicoreStream, kernelArgs, blockDim_);
-        } else {
-            return DynamicSeparateLaunch(aicpuStream, ctrlStream, aicoreStream, kernelArgs, blockDim_);
-        }
     }
+    return DynamicTripleStreamLaunch(aicpuStream, ctrlStream, aicoreStream, kernelArgs, blockDim_);
 }
 
 void DeviceRunner::ReportHostProfInfo(
@@ -742,10 +689,9 @@ void DeviceRunner::ReportHostProfInfo(
 
 int DeviceRunner::DynamicRun(
     rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId,
-    DeviceKernelArgs* kernelArgs, int blockdim, int launchAicpuNum, bool isTripleStream)
+    DeviceKernelArgs* kernelArgs, int blockdim, int launchAicpuNum)
 {
-    int rc = DynamicLaunch(
-        aicpuStream, ctrlStream, aicoreStream, taskId, kernelArgs, blockdim, launchAicpuNum, isTripleStream);
+    int rc = DynamicLaunch(aicpuStream, ctrlStream, aicoreStream, taskId, kernelArgs, blockdim, launchAicpuNum);
     if (rc < 0) {
         return rc;
     }

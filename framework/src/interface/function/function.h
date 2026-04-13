@@ -458,8 +458,6 @@ struct ParamConfigs {
     int sgParallelNum{1};
     int sgMgCopyInUpperBound{2 * 1024 * 1024};
     uint8_t machineConfig_{0}; // machine config
-    uint16_t stitchFunctionNumInitial_{0};
-    uint16_t stitchFunctionNumStep_{0};
     std::map<int64_t, int64_t> cubeL1ReuseSetting;
     std::map<int64_t, int64_t> cubeNBufferSetting;
     std::string OoOPreScheduleMethod{"PriorDFS"};
@@ -559,7 +557,7 @@ public:
         const bool updateTensorMap = true);
     Operation& AddRawOperation(
         const Opcode opCode, const LogicalTensors& iOperands, const LogicalTensors& oOperands,
-        bool updateTensorMap = true, const SourceLocationPtr &sourceLocation = nullptr);
+        bool updateTensorMap = true, const SourceLocationPtr& sourceLocation = nullptr);
 
     std::map<std::shared_ptr<RawTensor>, std::shared_ptr<RawTensor>> outIncastLinkMap; // 记录outcast 共享地址的 incast
     void SetSameMemId(const LogicalTensorPtr& operand, LogicalTensorPtr& dst);

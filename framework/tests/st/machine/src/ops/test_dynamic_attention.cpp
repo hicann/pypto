@@ -437,10 +437,6 @@ TEST_F(DynamicAttention, high_throughput_quant_smooth_nz)
     paTileConfig.c2TileShape = {nTile, nTile, 256, 256, 128, 128};
     paTileConfig.v2TileShape = {16, 256};
 
-    // Set Stitching window optimization
-    config::SetRuntimeOption<int>(STITCH_FUNCTION_INNER_MEMORY, 11);
-    config::SetRuntimeOption<int>(STITCH_FUNCTION_OUTCAST_MEMORY, 32);
-
     TestDynamicAttention<npu::tile_fwk::float16, int8_t, splitK, nz>(
         params, paTileConfig, GetGoldenDir(), 10000, isQuant, isSmooth);
 }

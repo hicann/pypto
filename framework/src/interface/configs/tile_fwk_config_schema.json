@@ -164,33 +164,6 @@
                         }
                     ]
                 },
-                "stitch_function_inner_memory": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "控制root function中间计算结果的内存池大小的参数，该数值越大root function运行时并行度越高",
-                        "en": "Control the memory pool size for intermediate results of rootfunction; a larger value enables higher runtime parallelism of rootfunction"
-                    },
-                    "minimum": 1,
-                    "maximum": 2147483647
-                },
-                "stitch_function_outcast_memory": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "控制stitch构建的devicetask中间计算结果（devitask内部rootfunction的outcast）的内存池大小的参数，该数值越大devicetask下发的rootfunction越多",
-                        "en": "Control the memory pool size for intermediate results inside stitch-constructed device task; a larger value allows more rootfunction to be dispatched per device task"
-                    },
-                    "minimum": 1,
-                    "maximum": 2147483647
-                },
-                "stitch_function_num_initial": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "设置运行时ctrlflow aicpu里stitch构建首个device task的rootfunction数量，进而控制device machine启动头开销大小",
-                        "en": "Set the number of rootfunction generated for the first device task in ctrlflow AICPU, thereby controlling the startup overhead of device machine"
-                    },
-                    "minimum": 1,
-                    "maximum": 1024
-                },
                 "stitch_function_max_num": {
                     "type": "integer",
                     "label": {
@@ -198,15 +171,6 @@
                         "en": "Set the number of rootfunction generated for device task in ctrlflow AICPU"
                     },
                     "minimum": 1,
-                    "maximum": 1024
-                },
-                "stitch_function_num_step": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "设置运行时ctrlflow aicpu里stitch构建非首次device task的rootfunction数量",
-                        "en": "Set the number of rootfunction generated for subsequent (non-initial) device task in ctrlflow AICPU"
-                    },
-                    "minimum": 0,
                     "maximum": 1024
                 },
                 "stitch_cfgcache_size": {

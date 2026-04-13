@@ -184,8 +184,7 @@ def avg_pool_2d(config: AvgPool2DConfig):
         raise ValueError(f"Invalid run_mode: {config.run_mode}. Must be 'npu' or 'sim'")
 
     @pypto.frontend.jit(pass_options={"vec_nbuffer_setting": {-1: 2, 0: 8}},
-                        runtime_options={"run_mode": mode, "stitch_function_num_initial": 128,
-                        "stitch_function_outcast_memory": 1024, "stitch_function_inner_memory": 1024},
+                        runtime_options={"run_mode": mode, "stitch_function_max_num": 128},
                         debug_options=dict(runtime_debug_mode=1, compile_debug_mode=1))
     def avg_pool_2d_kernel(
         input_tensor: pypto.Tensor((batch_size, channels, in_h, in_w), pypto.DT_FP32),

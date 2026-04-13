@@ -372,9 +372,6 @@ void LightningIndexerImpl(
     config::SetPassOption("vec_nbuffer_setting", configs.vecNBufferSetting);
     // cube graph fuse optimization
     config::SetPassOption("cube_l1_reuse_setting", configs.cubeL1ReuseSetting);
-    // stitch optimization
-    config::SetRuntimeOption("stitch_function_inner_memory", configs.maxRecyclePeriod);
-    config::SetRuntimeOption("stitch_function_outcast_memory", configs.maxLoopNum);
     // schedule policy selection
     config::SetRuntimeOption("device_sched_mode", static_cast<uint8_t>(MachineScheduleConfig::L2CACHE_AFFINITY_SCH));
 

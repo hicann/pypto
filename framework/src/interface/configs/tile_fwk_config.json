@@ -13,16 +13,11 @@
         "vec_nbuffer_setting": []
     },
     "runtime": {
-        "device_sched_mode": 0,
-        "stitch_function_inner_memory": 10,
-        "stitch_function_outcast_memory": 50,
-        "stitch_function_num_initial": 128,
-        "stitch_function_max_num": 0,
-        "stitch_function_num_step": 0,
         "stitch_cfgcache_size": 0,
-        "stitch_function_size": 60000,
-        "triple_stream_sched": true,
+        "stitch_function_size": 20000,
+        "device_sched_mode": 0,
         "run_mode": 0,
+        "stitch_function_max_num": 128,
         "valid_shape_optimize": 0,
         "ready_on_host_tensors": []
     },

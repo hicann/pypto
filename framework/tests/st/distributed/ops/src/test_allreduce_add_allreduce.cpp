@@ -105,7 +105,7 @@ void TestAllReduceAddAllReduce(OpTestParam& testParam, std::string& goldenDir)
 
     std::vector<T> inPtr =
         ReadToVector<T>(goldenDir + "/input_rank_" + std::to_string(testParam.rankId) + ".bin", shape);
-
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 10);
     ProgramData::GetInstance().AppendInputs({RawTensorData::CreateTensor<T>(in, inPtr)});
     ProgramData::GetInstance().AppendOutputs({RawTensorData::CreateTensorZero(out)});
 

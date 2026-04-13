@@ -424,7 +424,8 @@ public:
     {
         if (dynAttr->maxDynamicAssembleOutcastMem.IsValid()) {
             Evaluator eval{dynAttr->inputSymbolDict, tensors, {}};
-            devProg->memBudget.tensor.maxDynamicAssembleOutcastMem = eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
+            devProg->memBudget.tensor.maxDynamicAssembleOutcastMem =
+                eval.Evaluate(dynAttr->maxDynamicAssembleOutcastMem);
             workspaceSize = devProg->memBudget.Total();
             return workspaceSize;
         }
@@ -556,7 +557,6 @@ public:
         }
     }
 
-    bool IsTripleStream() { return tripleStream; }
     bool IsCompileStageAllComplete() { return compileStageAllComplete; }
 
     KernelBinary* GetKernelBinary(std::vector<DeviceTensorData>& tensors)
@@ -677,15 +677,13 @@ public:
         bool debugEnable = !isCaptureMode && isDebugMode;
 
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE(
-            "triple stream %d sequence %ld workspace %p cfgcache %p", tripleStream, sequence.load(), workspace,
-            ctrlFlowCache);
+        COMPILER_LOGE("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
 #endif
         int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode);
         ASSERT(ret == RT_ERROR_NONE) << "launch pre sync failed: " << ret;
 
         DeviceLauncher::SetDevPerfAddr(debugEnable, isCaptureMode);
-        ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, tripleStream, debugEnable, kernel->GetFunction());
+        ret = DeviceLauncher::LaunchAicpuKernel(rtAicpuArgs, debugEnable, kernel->GetFunction());
         ASSERT(ret == RT_ERROR_NONE) << "launch aicpu failed: " << ret;
 
         kernelArgs[5] = args->kArgs.cfgdata; // 5 is cfgdata
@@ -706,7 +704,8 @@ public:
         ASSERT(ret == RT_ERROR_NONE) << "emulation run failed: " << ret;
     }
 
-    void EslModelLaunch(KernelBinary *kernel, std::vector<DeviceTensorData> &tensors) {
+    void EslModelLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
+    {
         DeviceLauncherConfig config;
         ProgramData::GetInstance().Reset();
         InitializeInputOutputData(tensors, {});
@@ -741,9 +740,6 @@ private:
     void InitConfigOptions(py::object& module)
     {
         auto options = module.attr("_runtime_options").cast<py::dict>();
-        if (options.contains("triple_stream_sched")) {
-            tripleStream = options["triple_stream_sched"].cast<bool>();
-        }
         if (options.contains("stitch_cfgcache_size")) {
             stitchCfgCacheSize = options["stitch_cfgcache_size"].cast<int64_t>();
         }
@@ -779,9 +775,7 @@ private:
             }
         }
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE(
-            "triple_stream_sched: %d, stitch_cfgcache_size: %ld, infer_cache_shape: %d", tripleStream,
-            stitchCfgCacheSize, inferCacheShape);
+        COMPILER_LOGE("stitch_cfgcache_size: %ld, infer_cache_shape: %d", stitchCfgCacheSize, inferCacheShape);
 #endif
     }
 
@@ -831,7 +825,6 @@ private:
 
 private:
     bool inferCacheShape{false};
-    bool tripleStream{true};
     bool isDebugMode{false};
     int64_t stitchCfgCacheSize{0};
     bool compileStageAllComplete{true};
@@ -925,18 +918,18 @@ private:
         }
         kmodule->EmulationLaunch(kbinary, tensors);
 
-    int64_t* wsAddr = nullptr;
-    int64_t wsSize = kmodule->GetWorkspaceSize(kbinary, tensors);
-    if (wsSize) {
-        auto pyalloc = py::getattr(module, "alloc");
-        wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
-    }
+        int64_t* wsAddr = nullptr;
+        int64_t wsSize = kmodule->GetWorkspaceSize(kbinary, tensors);
+        if (wsSize) {
+            auto pyalloc = py::getattr(module, "alloc");
+            wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
+        }
 #if ENABALE_VERBOSE_LOG
-    COMPILER_LOGE("alloc workspace %ld", wsSize);
+        COMPILER_LOGE("alloc workspace %ld", wsSize);
 #endif
-    HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
+        HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
 
-        DeviceLauncher::AddAicpuStream(rtModel, kmodule->IsTripleStream());
+        DeviceLauncher::AddAicpuStream(rtModel);
         HOST_PERF_TRACE(TracePhase::LaunchAttachStream);
 
         uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, tensors);

@@ -418,12 +418,17 @@ def recurrent_state_attn_all(
 ```python
 @pypto.frontend.jit(
     runtime_options={
-        "stitch_function_inner_memory": 128 * 32,
-        "stitch_function_num_initial": 128,
-        "stitch_function_outcast_memory": 128 * 32,
+        "stitch_function_max_num": 128,
+        "ready_on_host_tensors": ["tensor_a", "tensor_b"]
     },
     debug_options={"runtime_debug_mode": 1},
 )
+def test_kernel(
+    tensor_a: pypto.Tensor(),
+    tensor_b: pypto.Tensor(),
+    tensor_c: pypto.Tensor(),
+):
+    ******
 ```
 
 ## 性能特点

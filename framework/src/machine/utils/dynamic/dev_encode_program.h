@@ -86,8 +86,6 @@ struct DevAscendProgram {
     DeviceRuntimeOffset deviceRuntimeOffset;
     const void* controlFlowBinaryAddr{nullptr};
     std::atomic<bool> runtimeDataRingBufferInited{false};
-    uint16_t stitchFunctionNumInitial{0};
-    uint16_t stitchFunctionNumStep{0};
     uint32_t stitchFunctionsize{0};
     uint32_t stitchMaxFunctionNum{0};
     uint32_t ctrlFlowCacheSize{0};
@@ -320,7 +318,8 @@ struct DevAscendProgram {
         RelocOffset(shift, offset, controlFlowCache.inputTensorDataList);
         RelocOffset(shift, offset, controlFlowCache.outputTensorDataList);
         for (uint32_t i = 0; i < SCH_DEVTASK_MAX_PARALLELISM; i++) {
-            RelocOffset(shift, offset, controlFlowCache.runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList);
+            RelocOffset(
+                shift, offset, controlFlowCache.runtimeBackup.workspace.tensorAllocators[i].slottedOutcastsBlockList);
         }
         RelocOffset(shift, offset, controlFlowCache.runtimeBackup.slotContext.slotList);
         RelocOffset(shift, offset, controlFlowCache.runtimeBackup.workspace.runtimeOutcastTensorPool);

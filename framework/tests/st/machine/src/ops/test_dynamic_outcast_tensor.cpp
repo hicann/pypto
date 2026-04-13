@@ -45,8 +45,7 @@ namespace {
 
 TEST_F(DynamicOutcastTensorTest, TensorAllocateIntermediate)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_NUM_INITIAL, 100);
-    config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_NUM_STEP, 0);
+    config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_MAX_NUM, 100);
 
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling);

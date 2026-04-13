@@ -380,8 +380,6 @@ Status LoopUnroll::CreateLoopUnrollFunc(Function* function)
     paramConfigs.sgParallelNum = currentScope->GetPassConfig<int>(SG_PARALLEL_NUM);
     paramConfigs.sgMgCopyInUpperBound = currentScope->GetPassConfig<int>(MG_COPYIN_UPPER_BOUND);
     paramConfigs.machineConfig_ = currentScope->GetRuntimeConfig<uint8_t>(DEVICE_SCHED_MODE);
-    paramConfigs.stitchFunctionNumInitial_ = currentScope->GetRuntimeConfig<uint16_t>(STITCH_FUNCTION_NUM_INITIAL);
-    paramConfigs.stitchFunctionNumStep_ = currentScope->GetRuntimeConfig<uint16_t>(STITCH_FUNCTION_NUM_STEP);
     paramConfigs.cubeL1ReuseSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_L1_REUSE_SETTING);
     paramConfigs.cubeNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(CUBE_NBUFFER_SETTING);
     paramConfigs.vecNBufferSetting = currentScope->GetPassConfig<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING);

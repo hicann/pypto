@@ -307,12 +307,11 @@ private:
         DeviceInitTilingData(memoryHelper, kArgs, dynAttr->devProgBinary, nullptr, config_, nullptr);
         auto aicpuStream = machine::GetRA()->GetScheStream();
         auto aicoreStream = machine::GetRA()->GetStream();
-        auto ctrlStream = (config_.cpuSeparate || config_.isTripleStream) ? machine::GetRA()->GetCtrlStream() : nullptr;
+        auto ctrlStream = machine::GetRA()->GetCtrlStream();
         for (int i = 0; i < config_.repeatNum; i++) {
             InitKernelInOuts(memoryHelper, kArgs, inputs, outputs, false, dynAttr->disableL2List);
             rc = DeviceRunner::Get().DynamicRun(
-                aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config_.blockdim, config_.aicpuNum,
-                config_.isTripleStream);
+                aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config_.blockdim, config_.aicpuNum);
             EXPECT_EQ(rc, 0);
             DeviceRunner::Get().SynchronizeDeviceToHostProfData();
         }

@@ -350,9 +350,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
 
     @pypto.frontend.jit(
         runtime_options={
-            "stitch_function_inner_memory": 128 * 16,
-            "stitch_function_num_initial": 128,
-            "stitch_function_outcast_memory": 128 * 16,
+            "stitch_function_max_num": 128,
         },
     )
     def kernel(
@@ -478,9 +476,7 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
 
     @pypto.frontend.jit(
         runtime_options={
-            "stitch_function_inner_memory": 128 * 16,
-            "stitch_function_num_initial": 128,
-            "stitch_function_outcast_memory": 128 * 16,
+            "stitch_function_max_num": 128,
         },
     )
     def kernel(
@@ -542,7 +538,7 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
                     zeros_16 = pypto.full(size=[16, 16], fill_value=0.0, dtype=pypto.DT_FP32)
                     zeros_32 = pypto.full(size=[32, 32], fill_value=0.0, dtype=pypto.DT_FP32)
                     zeros_64 = pypto.full(size=[64, 64], fill_value=0.0, dtype=pypto.DT_FP32)
-                    
+
                     # view
                     query_view = pypto.view(query, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
                     key_view = pypto.view(key, [l, 1, d], [bs_ofs, nqk_idx, 0], valid_shape=[actual_l, 1, d])
@@ -574,7 +570,7 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
                         # inverse
                         a_block_inverse = inverse_pto(attn=a_block, eye=eye, size=128, zeros_16=zeros_16,
                                 zeros_32=zeros_32, zeros_64=zeros_64)
-    
+
                         # cal_value_and_keycumdecay
                         value_out, key_cum_out = cal_value_and_key_cumdecay(
                             a_block_inverse, pad_v, pad_b, key_beta, gate_cum)

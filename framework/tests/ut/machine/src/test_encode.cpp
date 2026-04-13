@@ -72,12 +72,13 @@ TEST_F(TestDevEncode, test_dev_encode_program)
     ASSERT_NE(funcDynDev, nullptr);
     DevAscendProgram* devProg = reinterpret_cast<DevAscendProgram*>(funcDynDev->devProgBinary.data());
     ASSERT_NE(devProg, nullptr);
-    EXPECT_EQ(devProg->stitchFunctionNumInitial, 64);
+    EXPECT_EQ(devProg->stitchMaxFunctionNum, 64);
     devProg->RelocProgram(0, reinterpret_cast<uint64_t>(devProg), true);
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;
     devProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(
+        contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
     devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     devProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(
@@ -155,50 +156,10 @@ TEST_F(TestDevEncode, test_max_stitch_function_num)
     Program::GetInstance().Reset();
     config::Reset();
     config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-    config::SetRuntimeOption(STITCH_FUNCTION_INNER_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_OUTCAST_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_INITIAL, 256);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_STEP, 0);
+    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 256);
     DevAscendProgram* devProg1 = BuildAndGetDevProgForExpectedMaxCachedNum();
     ASSERT_NE(devProg1, nullptr);
     EXPECT_EQ(devProg1->stitchMaxFunctionNum, 256u);
-
-    // case2:
-    Program::GetInstance().Reset();
-    config::Reset();
-    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-    config::SetRuntimeOption(STITCH_FUNCTION_INNER_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_OUTCAST_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_INITIAL, 64);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_STEP, 0);
-    DevAscendProgram* devProg2 = BuildAndGetDevProgForExpectedMaxCachedNum();
-    ASSERT_NE(devProg2, nullptr);
-    EXPECT_EQ(devProg2->stitchMaxFunctionNum, 128u);
-
-    // case3:
-    Program::GetInstance().Reset();
-    config::Reset();
-    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-    config::SetRuntimeOption(STITCH_FUNCTION_INNER_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_OUTCAST_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_INITIAL, 64);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_STEP, 20);
-    DevAscendProgram* devProg3 = BuildAndGetDevProgForExpectedMaxCachedNum();
-    ASSERT_NE(devProg3, nullptr);
-    EXPECT_EQ(devProg3->stitchMaxFunctionNum, 1024u);
-
-    // case4:
-    Program::GetInstance().Reset();
-    config::Reset();
-    config::SetPlatformConfig(KEY_ENABLE_AIHAC_BACKEND, true);
-    config::SetRuntimeOption(STITCH_FUNCTION_INNER_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_OUTCAST_MEMORY, 1024);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_INITIAL, 64);
-    config::SetRuntimeOption(STITCH_FUNCTION_NUM_STEP, 0);
-    config::SetRuntimeOption(STITCH_FUNCTION_MAX_NUM, 512);
-    DevAscendProgram* devProg4 = BuildAndGetDevProgForExpectedMaxCachedNum();
-    ASSERT_NE(devProg4, nullptr);
-    EXPECT_EQ(devProg4->stitchMaxFunctionNum, 512u);
 }
 
 TEST_F(TestDevEncode, test_dev_func_dupped)
@@ -238,7 +199,8 @@ TEST_F(TestDevEncode, test_init_wrap_info)
     devProg->controlFlowCache.isRecording = false;
     uint64_t contextWorkspaceAddr = devProg->controlFlowCache.contextWorkspaceAddr;
     devProg->controlFlowCache.IncastOutcastAddrReloc(contextWorkspaceAddr, 0, nullptr);
-    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
+    devProg->controlFlowCache.RuntimeAddrRelocWorkspace(
+        contextWorkspaceAddr, 0, nullptr, nullptr, nullptr, devProg->GetParallelism());
     devProg->controlFlowCache.RuntimeAddrRelocProgram(reinterpret_cast<uint64_t>(devProg), 0);
     devProg->controlFlowCache.TaskAddrRelocWorkspace(contextWorkspaceAddr, 0, nullptr);
     devProg->controlFlowCache.TaskAddrRelocProgramAndCtrlCache(

@@ -24,9 +24,7 @@ class RMSPropConfig:
 @pypto.frontend.jit(
     runtime_options={
         "run_mode": pypto.RunMode.NPU,
-        "stitch_function_num_initial": 128,
-        "stitch_function_outcast_memory": 1024,
-        "stitch_function_inner_memory": 1024,
+        "stitch_function_max_num": 128,
     },
     debug_options=dict(compile_debug_mode=1, runtime_debug_mode=1),
 )
