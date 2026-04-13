@@ -47,6 +47,7 @@
 - `pypto-issue-creator`：基于上下文创建 GitCode Issue
 - `pypto-fracture-point-detector`：识别 PyPTO 框架或文档断裂点
 - `pypto-skill-reviewer`：评审 skill 目录的质量与规范符合性
+- `pypto-skill-validation-prompt`：为任意 skill 生成校验提示词，用于验证 skill 实际执行效果
 
 ---
 

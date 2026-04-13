@@ -330,6 +330,12 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 **你会得到**：48 条规则评分报告，包含 9 维度评分、问题列表、修复建议
 
+#### `pypto-skill-validation-prompt` — Skill 校验提示词生成
+
+**适用场景**：为任意 Skill 生成校验提示词，验证实际执行效果是否符合规范
+
+**你会得到**：≤80 行的校验提示词文档，可交给 AI 代理执行，产出数据驱动的优化报告
+
 #### `pypto-issue-creator` — 创建 GitCode Issue
 
 **适用场景**：基于会话上下文智能创建 GitCode Issue

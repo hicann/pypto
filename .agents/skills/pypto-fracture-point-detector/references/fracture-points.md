@@ -22,7 +22,7 @@
 - **根因归属**：文档
 - **信号描述**：搜索某个 API/概念但找不到任何文档
 - **典型表现**：Grep/Glob 搜索返回空结果，Read 找不到对应文件
-- **示例**：搜索 `pypto.reshape` 的文档，但整个文档目录中没有任何相关内容
+- **示例**：搜索 `pypto.nonexistent_op` 的文档，但整个文档目录中没有任何相关内容
 
 ### D3 - 文档误导
 
@@ -49,7 +49,7 @@
 - **根因归属**：框架
 - **信号描述**：调用某个 API 但返回"未定义"或"不存在"
 - **典型表现**：`AttributeError: module 'pypto' has no attribute 'xxx'`
-- **示例**：尝试调用 `pypto.reshape` 但该 API 不存在
+- **示例**：尝试调用 `pypto.nonexistent_op` 但该 API 不存在
 
 ### A2 - API 行为异常
 

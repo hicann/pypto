@@ -13,16 +13,25 @@ import argparse
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 
 STATUS_PRIORITY = {"FAIL": 4, "WARN": 3, "PASS": 2, "SKIP": 1}
-GRADE_THRESHOLDS = [(90, "A"), (75, "B"), (60, "C"), (40, "D"), (0, "F")]
+GRADE_THRESHOLDS = [(95, "A"), (85, "B"), (70, "C"), (55, "D"), (0, "F")]
 S0_VETO_CAP = 59.9
 
 
 def load_json(path):
-    with open(path, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    """Load JSON file with error handling."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        logging.error(f"File not found: {path}")
+        raise
+    except json.JSONDecodeError as e:
+        logging.error(f"Invalid JSON in {path}: {e}")
+        raise
 
 
 def normalize_status(value):
@@ -103,7 +112,7 @@ def score(rules_data, findings, skill_path):
         by_rule[rule_id] = merge_findings(by_rule[rule_id], merged)
 
     counts = {"PASS": 0, "FAIL": 0, "WARN": 0, "SKIP": 0}
-    deductions_by_dim = {f"D{i}": 0 for i in range(1, 10)}
+    deductions_by_dim = {f"D{i}": 0 for i in range(1, 11)}
     s0_veto = False
 
     for item in by_rule.values():
@@ -119,10 +128,30 @@ def score(rules_data, findings, skill_path):
 
     scripts_dir = os.path.join(skill_path, "scripts")
     d9_no_scripts = not os.path.isdir(scripts_dir)
+    
+    references_dir = os.path.join(skill_path, "references")
+    skill_md_path = os.path.join(skill_path, "SKILL.md")
+    has_knowledge_content = False
+    
+    if os.path.isdir(references_dir) and os.listdir(references_dir):
+        has_knowledge_content = True
+    elif os.path.isfile(skill_md_path):
+        try:
+            with open(skill_md_path, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
+                if any(marker in content for marker in ["pypto.", "docs/", "API", "tensor", "tile", "codegen", "pass"]):
+                    has_knowledge_content = True
+        except OSError:
+            pass
+    
+    d10_no_knowledge = not has_knowledge_content
 
     dimensions = {}
     for dim, weight in dimension_weights.items():
         if dim == "D9" and d9_no_scripts:
+            raw = 100
+            deductions = 0
+        elif dim == "D10" and d10_no_knowledge:
             raw = 100
             deductions = 0
         else:
@@ -149,6 +178,7 @@ def score(rules_data, findings, skill_path):
         "grade": grade,
         "s0_veto": s0_veto,
         "d9_no_scripts": d9_no_scripts,
+        "d10_no_knowledge": d10_no_knowledge,
         "counts": {
             "pass_count": counts["PASS"],
             "fail_count": counts["FAIL"],
@@ -192,7 +222,11 @@ def main():
     result = score(rules_data, findings, args.skill_path)
 
     if args.out:
-        Path(args.out).write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        try:
+            Path(args.out).write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        except (OSError, IOError) as e:
+            logging.error(f"Failed to write output file {args.out}: {e}")
+            sys.exit(1)
     else:
         logging.info(json.dumps(result, indent=2, ensure_ascii=False))
 

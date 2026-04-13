@@ -495,7 +495,9 @@ def check_r39(skill_dir, **_):
     """R39: Python scripts must have valid syntax"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
-        return None
+        return finding("R39", "S2", "D9", "SKIP",
+                       "不存在 scripts/ 目录，跳过 Python 语法检查",
+                       "scripts/", 0, "(directory not found)")
     results = []
     for f in os.listdir(scripts_dir):
         if not f.endswith(".py"):
@@ -516,12 +518,13 @@ def check_r40(skill_dir, **_):
     """R40: Scripts must include a shebang line"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
-        return None
+        return finding("R40", "S2", "D9", "SKIP",
+                       "不存在 scripts/ 目录，跳过 shebang 检查",
+                       "scripts/", 0, "(directory not found)")
     results = []
     for f in os.listdir(scripts_dir):
         if not any(f.endswith(ext) for ext in (".py", ".sh", ".bash")):
             continue
-        # 豁免 __init__.py（Python 包初始化文件不需要 shebang）
         if f == "__init__.py":
             continue
         fpath = os.path.join(scripts_dir, f)
@@ -541,10 +544,11 @@ def check_r41(skill_dir, **_):
     """R41: Script paths must be portable (no hardcoded user paths)"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
-        return None
+        return finding("R41", "S2", "D9", "SKIP",
+                       "不存在 scripts/ 目录，跳过路径可移植性检查",
+                       "scripts/", 0, "(directory not found)")
     path_pattern = re.compile(r"(/home/|/Users/|/root/)\S+")
     exclude_pattern = re.compile(r"(https?://|/usr/bin/env|/dev/null)")
-    # Lines containing regex definitions or string patterns for detection are not real hardcoded paths
     detection_pattern = re.compile(r"""(re\.compile|compile\(|["'].*(/home/|/Users/|/root/).*["'])""")
     results = []
     for f in os.listdir(scripts_dir):
@@ -624,7 +628,7 @@ def check_r45(lines, fm_end_line, **_):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def finding(rule_id, *args):
+def finding(rule_id, *args, suggested_fix=None):
     """Create a standardized finding dict."""
     if len(args) == 7:
         legacy_severity, legacy_dimension, status, message, file, line, snippet = args
@@ -651,7 +655,8 @@ def finding(rule_id, *args):
             "file": file,
             "line": line,
             "snippet": str(snippet)[:200]
-        }
+        },
+        "suggested_fix": suggested_fix or ""
     }
 
 
@@ -755,7 +760,7 @@ def validate(skill_dir):
     failed_rules = {f["rule_id"] for f in findings}
     for rule_id in static_rule_ids:
         if rule_id not in failed_rules:
-            findings.append(finding(rule_id, "PASS", "", "", 0, ""))
+            findings.append(finding(rule_id, "PASS", "", "", 0, "", suggested_fix=""))
 
     return findings
 
