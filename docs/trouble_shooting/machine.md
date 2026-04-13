@@ -471,7 +471,7 @@ struct {
 - 动态 shape 场景下 `maxStaticMemReq` 为 0（无法从符号 shape 推算静态大小），此类 Tensor 不会出现在超大 Tensor 的警告中
 - `aicoreSpilled` 为 AICore 栈溢出到 workspace 的内存，若该项异常偏大，需检查算子的 `stackWorkSpaceSize`
 - `debug.DumpTensor` 和 `leafDumpWorkspace` 为调试模式下的额外内存开销，正常模式下为 0
-
+**关联 Skill**：[pypto-environment-setup](../../.agents/skills/pypto-machine-workspace/SKILL.md)
 ---
 ### F70006 HANDSHAKE_TIMEOUT
 
