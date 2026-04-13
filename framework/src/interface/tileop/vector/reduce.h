@@ -80,6 +80,7 @@ TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp)
     constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
     constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
     constexpr auto srcTypeSize = sizeof(typename T1::Type);
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
     for (LoopVar n0Index = 0; n0Index < dstShape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
@@ -96,7 +97,7 @@ TILEOP void ReduceLastAxisCompute(T0 dst, T1 src, T2 tmp)
                 SrcTileDefine srcTile(srcShape3, srcShape4);
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
-                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * srcTypeSize));
+                pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * srcTypeSize));
                 pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
                 if (srcShape3 == 0 || srcShape4 == 0) {
