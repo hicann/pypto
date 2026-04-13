@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file test_indexadd_operation.cpp
+ * \file test_indexadd__operation.cpp
  * \brief
  */
 
@@ -21,7 +21,9 @@ struct IndexAddOpFuncArgs : public OpFuncArgs {
     IndexAddOpFuncArgs(
         const std::vector<int64_t>& viewShape, const std::vector<int64_t> tileShape, int axis, Element& alpha)
         : viewShape_(viewShape), tileShape_(tileShape), axis_(axis), alpha_(alpha)
-    {}
+    {
+        this->inplaceInfo[0] = 0; // 表示第0个输出初始化为第0个输入的数据
+    }
 
     std::vector<int64_t> viewShape_;
     std::vector<int64_t> tileShape_;
@@ -49,40 +51,29 @@ static void IndexAddOperationExeFunc2Dims(
         SymbolicScalar src_firstDim = inputs[1].GetShape()[0];
         SymbolicScalar src_secondDim = inputs[1].GetShape()[1];
         SymbolicScalar idxDim = inputs[2].GetShape()[0];
-
         auto args = static_cast<const IndexAddOpFuncArgs*>(opArgs);
         int axis = args->axis_;
         axis = axis >= 0 ? axis : axis + inputs[0].GetShape().size();
         std::vector<int64_t> viewShape = args->viewShape_;
 
         ASSERT(idxDim == inputs[1].GetShape()[axis]);
-        ASSERT(viewShape[axis] >= std::max(inputs[0].GetShape()[axis], idxDim)); // 确保viewshape按最大的切
-
         const int64_t firstViewShape = viewShape[0];
         const int64_t secondViewShape = viewShape[1];
         const int64_t bloop = CeilDiv(src_firstDim, firstViewShape);
         const int64_t sloop = CeilDiv(src_secondDim, secondViewShape);
-
-        // selfshape和srcshape的axis轴都不切
+        // self为GM输入，不进行view切分，其他两个输入支持axis轴view切分
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
             {
                 std::vector<SymbolicScalar> offset = {bIdx * firstViewShape, sIdx * secondViewShape};
-                std::vector<SymbolicScalar> selfValidShape = {
-                    std::min(self_firstDim - bIdx * firstViewShape, firstViewShape),
-                    std::min(self_secondDim - sIdx * secondViewShape, secondViewShape)};
                 std::vector<SymbolicScalar> srcValidShape = {
                     std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                     std::min(src_secondDim - sIdx * secondViewShape, secondViewShape)};
-                auto selfTensor = View(inputs[0], viewShape, selfValidShape, offset);
                 auto srcTensor = View(inputs[1], viewShape, srcValidShape, offset);
-                auto idxTensor = View(
-                    inputs[2], {viewShape[axis]}, {srcValidShape[axis]}, {offset[axis]}); // idxshape只有在axis轴才切
-
+                auto idxTensor = View(inputs[2], {viewShape[axis]}, {srcValidShape[axis]}, {offset[axis]});
                 TileShape::Current().SetVecTile(args->tileShape_);
-                auto dst = IndexAdd(selfTensor, srcTensor, idxTensor, args->axis_, args->alpha_);
-                Assemble(dst, offset, outputs[0]); // offset[axis]=0
+                IndexAdd_(outputs[0], srcTensor, idxTensor, args->axis_, args->alpha_);
             }
         }
     }
@@ -106,16 +97,13 @@ static void IndexAddOperationExeFunc3Dims(
         std::vector<int64_t> viewShape = args->viewShape_;
 
         ASSERT(idxDim == inputs[1].GetShape()[axis]);
-        ASSERT(viewShape[axis] >= std::max(inputs[0].GetShape()[axis], idxDim)); // 确保viewshape按最大的切
-
+        // self为GM输入，不进行view切分，其他两个输入支持axis轴view切分
         const int64_t firstViewShape = viewShape[0];
         const int64_t secondViewShape = viewShape[1];
         const int64_t thirdViewShape = viewShape[2];
-
         const int64_t bloop = CeilDiv(src_firstDim, firstViewShape);
         const int64_t sloop = CeilDiv(src_secondDim, secondViewShape);
         const int64_t nloop = CeilDiv(src_thirdDim, thirdViewShape);
-
         // selfshape的axis轴不切，因此测试用例需要保证viewshape[axis] = selfshape[axis]
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
@@ -125,23 +113,14 @@ static void IndexAddOperationExeFunc3Dims(
                 {
                     std::vector<SymbolicScalar> offset = {
                         bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape};
-                    std::vector<SymbolicScalar> selfValidShape = {
-                        std::min(self_firstDim - bIdx * firstViewShape, firstViewShape),
-                        std::min(self_secondDim - sIdx * secondViewShape, secondViewShape),
-                        std::min(self_thirdDim - nIdx * thirdViewShape, thirdViewShape)};
                     std::vector<SymbolicScalar> srcValidShape = {
                         std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                         std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
                         std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape)};
-                    auto selfTensor = View(inputs[0], viewShape, selfValidShape, offset);
                     auto srcTensor = View(inputs[1], viewShape, srcValidShape, offset);
-                    auto idxTensor = View(
-                        inputs[2], {viewShape[axis]}, {srcValidShape[axis]},
-                        {offset[axis]}); // idxshape只有在axis轴才切
-
+                    auto idxTensor = View(inputs[2], {viewShape[axis]}, {srcValidShape[axis]}, {offset[axis]});
                     TileShape::Current().SetVecTile(args->tileShape_);
-                    auto dst = IndexAdd(selfTensor, srcTensor, idxTensor, args->axis_, args->alpha_);
-                    Assemble(dst, offset, outputs[0]); // offset[axis]=0
+                    IndexAdd_(outputs[0], srcTensor, idxTensor, args->axis_, args->alpha_);
                 }
             }
         }
@@ -168,19 +147,15 @@ static void IndexAddOperationExeFunc4Dims(
         std::vector<int64_t> viewShape = args->viewShape_;
 
         ASSERT(idxDim == inputs[1].GetShape()[axis]);
-        ASSERT(viewShape[axis] >= std::max(inputs[0].GetShape()[axis], idxDim)); // 确保viewshape按最大的切
-
         const int64_t firstViewShape = viewShape[0];
         const int64_t secondViewShape = viewShape[1];
         const int64_t thirdViewShape = viewShape[2];
         const int64_t forthViewShape = viewShape[3];
-
         const int64_t bloop = CeilDiv(src_firstDim, firstViewShape);
         const int64_t sloop = CeilDiv(src_secondDim, secondViewShape);
         const int64_t nloop = CeilDiv(src_thirdDim, thirdViewShape);
         const int64_t qloop = CeilDiv(src_forthDim, forthViewShape);
-
-        // selfshape的axis轴不切，因此测试用例需要保证viewshape[axis] = selfshape[axis]
+        // self为GM输入，不进行view切分，其他两个输入支持axis轴view切分
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
@@ -192,25 +167,15 @@ static void IndexAddOperationExeFunc4Dims(
                         std::vector<SymbolicScalar> offset = {
                             bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
                             qIdx * forthViewShape};
-                        std::vector<SymbolicScalar> selfValidShape = {
-                            std::min(self_firstDim - bIdx * firstViewShape, firstViewShape),
-                            std::min(self_secondDim - sIdx * secondViewShape, secondViewShape),
-                            std::min(self_thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                            std::min(self_forthDim - qIdx * forthViewShape, forthViewShape)};
                         std::vector<SymbolicScalar> srcValidShape = {
                             std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                             std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
                             std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape),
                             std::min(src_forthDim - qIdx * forthViewShape, forthViewShape)};
-                        auto selfTensor = View(inputs[0], viewShape, selfValidShape, offset);
                         auto srcTensor = View(inputs[1], viewShape, srcValidShape, offset);
-                        auto idxTensor = View(
-                            inputs[2], {viewShape[axis]}, {srcValidShape[axis]},
-                            {offset[axis]}); // idxshape只有在axis轴才切
-
+                        auto idxTensor = View(inputs[2], {viewShape[axis]}, {srcValidShape[axis]}, {offset[axis]});
                         TileShape::Current().SetVecTile(args->tileShape_);
-                        auto dst = IndexAdd(selfTensor, srcTensor, idxTensor, args->axis_, args->alpha_);
-                        Assemble(dst, offset, outputs[0]); // offset[axis]=0
+                        IndexAdd_(outputs[0], srcTensor, idxTensor, args->axis_, args->alpha_);
                     }
                 }
             }
@@ -238,8 +203,8 @@ static void IndexAddOperationExeFunc5Dims(
         int axis = args->axis_;
         axis = axis >= 0 ? axis : axis + inputs[0].GetShape().size();
         std::vector<int64_t> viewShape = args->viewShape_;
+
         ASSERT(idxDim == inputs[1].GetShape()[axis]);
-        ASSERT(viewShape[axis] >= std::max(inputs[0].GetShape()[axis], idxDim)); // 确保viewshape按最大的切
         const int64_t firstViewShape = viewShape[0];
         const int64_t secondViewShape = viewShape[1];
         const int64_t thirdViewShape = viewShape[2];
@@ -249,7 +214,7 @@ static void IndexAddOperationExeFunc5Dims(
             CeilDiv(src_firstDim, firstViewShape), CeilDiv(src_secondDim, secondViewShape),
             CeilDiv(src_thirdDim, thirdViewShape), CeilDiv(src_forthDim, forthViewShape),
             CeilDiv(src_fifthDim, fifthViewShape)};
-        // selfshape的axis轴不切，因此测试用例需要保证viewshape[axis] = selfshape[axis]
+        // self为GM输入，不进行view切分，其他两个输入支持axis轴view切分
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(loop[0]))
         {
             LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(loop[1]))
@@ -263,26 +228,16 @@ static void IndexAddOperationExeFunc5Dims(
                             std::vector<SymbolicScalar> offset = {
                                 bIdx * firstViewShape, sIdx * secondViewShape, nIdx * thirdViewShape,
                                 qIdx * forthViewShape, rIdx * fifthViewShape};
-                            std::vector<SymbolicScalar> selfValidShape = {
-                                std::min(self_firstDim - bIdx * firstViewShape, firstViewShape),
-                                std::min(self_secondDim - sIdx * secondViewShape, secondViewShape),
-                                std::min(self_thirdDim - nIdx * thirdViewShape, thirdViewShape),
-                                std::min(self_forthDim - qIdx * forthViewShape, forthViewShape),
-                                std::min(self_fifthDim - rIdx * fifthViewShape, fifthViewShape)};
                             std::vector<SymbolicScalar> srcValidShape = {
                                 std::min(src_firstDim - bIdx * firstViewShape, firstViewShape),
                                 std::min(src_secondDim - sIdx * secondViewShape, secondViewShape),
                                 std::min(src_thirdDim - nIdx * thirdViewShape, thirdViewShape),
                                 std::min(src_forthDim - qIdx * forthViewShape, forthViewShape),
                                 std::min(src_fifthDim - rIdx * fifthViewShape, fifthViewShape)};
-                            auto selfTensor = View(inputs[0], viewShape, selfValidShape, offset);
                             auto srcTensor = View(inputs[1], viewShape, srcValidShape, offset);
-                            auto idxTensor = View(
-                                inputs[2], {viewShape[axis]}, {srcValidShape[axis]},
-                                {offset[axis]}); // idxshape只有在axis轴才切
+                            auto idxTensor = View(inputs[2], {viewShape[axis]}, {srcValidShape[axis]}, {offset[axis]});
                             TileShape::Current().SetVecTile(args->tileShape_);
-                            auto dst = IndexAdd(selfTensor, srcTensor, idxTensor, args->axis_, args->alpha_);
-                            Assemble(dst, offset, outputs[0]); // offset[axis]=0
+                            IndexAdd_(outputs[0], srcTensor, idxTensor, args->axis_, args->alpha_);
                         }
                     }
                 }
@@ -291,16 +246,16 @@ static void IndexAddOperationExeFunc5Dims(
     }
 }
 
-class IndexAddOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<IndexAddOpMetaData> {};
+class IndexAdd_OperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac_param<IndexAddOpMetaData> {};
 
 INSTANTIATE_TEST_SUITE_P(
-    TestIndexAdd, IndexAddOperationTest,
+    TestIndexAdd_, IndexAdd_OperationTest,
     ::testing::ValuesIn(GetOpMetaData<IndexAddOpMetaData>(
         {IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims, IndexAddOperationExeFunc4Dims,
          IndexAddOperationExeFunc5Dims},
-        "IndexAdd")));
+        "IndexAdd_")));
 
-TEST_P(IndexAddOperationTest, TestIndexAdd)
+TEST_P(IndexAdd_OperationTest, TestIndexAdd_)
 {
     auto test_data = GetParam().test_data_;
     auto axis = static_cast<CastMode>(GetValueByName<int>(test_data, "axis"));

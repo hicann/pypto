@@ -291,12 +291,19 @@ void bind_operation(py::module& m)
         py::arg("self"), py::arg("indices"), py::arg("src"), py::arg("axis"), py::arg("reduce") = ScatterMode::NONE,
         "Tensor scatter noninplace.");
     m.def(
-        "IndexAdd",
+        "IndexAddUB",
         [](const Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha) {
-            return npu::tile_fwk::IndexAdd(self, src, indices, axis, alpha);
+            return npu::tile_fwk::IndexAddUB(self, src, indices, axis, alpha);
         },
         py::arg("self"), py::arg("src"), py::arg("indices"), py::arg("axis"),
         py::arg("alpha") = npu::tile_fwk::Element(DT_FP32, 1.0), "Tensor add with index.");
+    m.def(
+        "IndexAdd_",
+        [](Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha) {
+            npu::tile_fwk::IndexAdd_(self, src, indices, axis, alpha);
+        },
+        py::arg("self"), py::arg("src"), py::arg("indices"), py::arg("axis"),
+        py::arg("alpha") = npu::tile_fwk::Element(DT_FP32, 1.0), "Tensor add with index inplacely.");
     m.def(
         "GatherElements",
         [](const Tensor& params, const Tensor& indices, int axis) {

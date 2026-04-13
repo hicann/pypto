@@ -1721,7 +1721,7 @@ TEST_F(DynamicOpsTest, GatherMask)
     }
 }
 
-TEST_F(DynamicOpsTest, IndexAdd)
+TEST_F(DynamicOpsTest, IndexAddUB)
 {
     std::string logOutput = CaptureLogFileAndEcho([]() {
         config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
@@ -1764,7 +1764,7 @@ TEST_F(DynamicOpsTest, IndexAdd)
                 auto t0 = View(self, {b, s}, {0, 0});
                 auto t1 = View(source, {b, s}, {0, 0});
                 auto t2 = View(index, {b}, {0});
-                out = IndexAdd(t0, t1, t2, axis, alpha);
+                out = IndexAddUB(t0, t1, t2, axis, alpha);
             }
         }
     });

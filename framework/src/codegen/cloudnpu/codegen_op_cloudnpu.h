@@ -116,6 +116,7 @@ public:
     std::string GenScatterElementSOp() const;
     std::string GenScatterOp() const;
 
+    std::string GenIndexAddUBOp() const;
     std::string GenIndexAddOp() const;
 
     std::string GenIndexPutOp() const;
@@ -454,8 +455,8 @@ private:
     std::string PrintScatterOpDynamicUnaligned(const PrintScatterParam& param) const;
     std::string PrintScatterTileTensor(const PrintScatterParam& param) const;
 
-    std::string PrintIndexAddDynamicUnaligned(const PrintIndexAddParam& param) const;
-    std::string PrintIndexAddTileTensor(const PrintIndexAddParam& param) const;
+    std::string PrintIndexAddUBDynamicUnaligned(const PrintIndexAddParam& param) const;
+    std::string PrintIndexAddUBTileTensor(const PrintIndexAddParam& param) const;
 
     std::string PrintIndexPut(const PrintIndexPutParam& param) const;
     std::string PrintIndexPutLayout(size_t indicesSize, bool accumulate) const;

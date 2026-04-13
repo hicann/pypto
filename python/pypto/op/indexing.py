@@ -18,8 +18,9 @@ from .._element import Element
 from ..tensor import Tensor
 
 
+# will be delated
 @op_wrapper
-def index_add_(
+def index_add__ub(
     input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
     ) -> Tensor:
     """
@@ -86,7 +87,27 @@ def index_add_(
                 [1 1 1]]               # shape (2, 3)
     """
 
-    input.Move(pypto_impl.IndexAdd(input, source, index, dim, pypto_impl.Element(input.dtype, alpha)))
+    input.Move(pypto_impl.IndexAddUB(input, source, index, dim, pypto_impl.Element(input.dtype, alpha)))
+    return input
+
+
+# will be delated
+@op_wrapper
+def index_add_ub(
+    input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
+    ) -> Tensor:
+    """
+    The out-of-place version of index_add_()
+    """
+
+    return pypto_impl.IndexAddUB(input, source, index, dim, pypto_impl.Element(input.dtype, alpha))
+
+
+@op_wrapper
+def index_add_(
+    input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[int, float] = 1
+    ) -> Tensor:
+    pypto_impl.IndexAdd_(input, source, index, dim, pypto_impl.Element(input.dtype, alpha))
     return input
 
 
@@ -97,8 +118,9 @@ def index_add(
     """
     The out-of-place version of index_add_()
     """
-
-    return pypto_impl.IndexAdd(input, source, index, dim, pypto_impl.Element(input.dtype, alpha))
+    input0 = input
+    pypto_impl.IndexAdd_(input0, source, index, dim, pypto_impl.Element(input.dtype, alpha))
+    return input0
 
 
 @op_wrapper

@@ -28,7 +28,8 @@ constexpr uint32_t VERIFY_SHAPE_SIZE_LAST_INPUT = 0x0008;
 
 // customize the check items of opcode
 // for example : {OP_XX, VERIFY_TAIL_ALIGN | VERIFY_FIX_AXIS}
-const std::unordered_map<Opcode, uint32_t> verify_cfg = {{Opcode::OP_INDEX_PUT, VERIFY_SHAPE_SIZE_LAST_INPUT}};
+const std::unordered_map<Opcode, uint32_t> verify_cfg = {
+    {Opcode::OP_INDEX_PUT, VERIFY_SHAPE_SIZE_LAST_INPUT}, {Opcode::OP_INDEX_ADD, VERIFY_SHAPE_SIZE_LAST_INPUT}};
 
 const std::unordered_map<Opcode, std::string> axis_name_map = {
     {Opcode::OP_EXPAND, "EXPANDDIM"}, {Opcode::OP_GATHER, "axis"}};

@@ -34,7 +34,7 @@ TEST_F(OperationOpsTest, CheckIndexAddParamsInvalid_FP16_Overflow)
     Tensor indices(DT_INT32, indicesShape);
     Element alpha(DT_FP16, 65505.0f);
 
-    EXPECT_THROW(IndexAdd(self, src, indices, axis, alpha), std::exception);
+    EXPECT_THROW(IndexAdd_(self, src, indices, axis, alpha), std::exception);
 }
 
 TEST_F(OperationOpsTest, Range_UnsupportedStartDataType)
