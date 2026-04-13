@@ -415,5 +415,71 @@ TEST_F(CodegenPreprocTest, TestCombineAxis3510)
     Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
 }
 
+TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermute)
+{
+    auto rootFuncPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestSaveGmParamPermute", "TestSaveGmParamPermute", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestSaveGmParamPermuteLeaf", "TestSaveGmParamPermuteLeaf", rootFuncPtr.get());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+
+    std::vector<int64_t> shape = {CP_NUM16, CP_NUM16, CP_NUM16};
+    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    auto& copyin = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    copyin.SetIOpAttrOffset(0, 0);
+    auto& permute_op = currFunctionPtr->AddRawOperation(Opcode::OP_PERMUTE, {tensor3}, {tensor2});
+    permute_op.SetIOpAttrOffset(0, 0);
+    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
+    copyout.SetOOpAttrOffset(0, 1);
+
+    CodegenPreproc codegenPreprocPass;
+    codegenPreprocPass.SaveGmTensorParamIdxToOp(*rootFuncPtr);
+
+    EXPECT_TRUE(copyin.HasAttr("GmTensorParamIdxInCallFunc"));
+    EXPECT_TRUE(permute_op.HasAttr("GmTensorParamIdxInCallFunc"));
+    EXPECT_TRUE(copyout.HasAttr("GmTensorParamIdxInCallFunc"));
+}
+
+TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
+{
+    auto rootFuncPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestSaveGmParamPermuteElem", "TestSaveGmParamPermuteElem", nullptr);
+    rootFuncPtr->rootFunc_ = rootFuncPtr.get();
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestSaveGmParamPermuteElemLeaf", "TestSaveGmParamPermuteElemLeaf", rootFuncPtr.get());
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
+    rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetUnderDynamicFunction(true);
+
+    std::vector<int64_t> shape = {CP_NUM16, CP_NUM16, CP_NUM16};
+    auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    auto& copyin = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_IN, {tensor1}, {tensor3});
+    copyin.SetIOpAttrOffset(0, 0);
+    auto& permute_elem_op = currFunctionPtr->AddRawOperation(Opcode::OP_PERMUTE_ELEMENT, {tensor3}, {tensor2});
+    permute_elem_op.SetIOpAttrOffset(0, 0);
+    auto& copyout = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {tensor2}, {tensor4});
+    copyout.SetOOpAttrOffset(0, 1);
+
+    CodegenPreproc codegenPreprocPass;
+    codegenPreprocPass.SaveGmTensorParamIdxToOp(*rootFuncPtr);
+
+    EXPECT_TRUE(copyin.HasAttr("GmTensorParamIdxInCallFunc"));
+    EXPECT_TRUE(permute_elem_op.HasAttr("GmTensorParamIdxInCallFunc"));
+    EXPECT_TRUE(copyout.HasAttr("GmTensorParamIdxInCallFunc"));
+}
+
 } // namespace tile_fwk
 } // namespace npu

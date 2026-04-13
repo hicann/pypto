@@ -65,6 +65,7 @@
 #include "vector/index_outcast.h"
 #include "vector/bitwise_shift.h"
 #include "vector/copysign.h"
+#include "vector/permute.h"
 #include "cube/cube_pto.h"
 #include "conv/conv_pto.h"
 #endif

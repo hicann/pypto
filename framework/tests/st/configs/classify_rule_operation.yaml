@@ -207,6 +207,14 @@ stest:
       - TestTranspose/TransposeOperationTest.TestTranspose/13
       - TestTranspose/TransposeOperationTest.TestTranspose/15
       - TestTranspose/TransposeOperationTest.TestTranspose/18
+      - TestPermute/PermuteOperationTest.TestPermute/0
+      - TestPermute/PermuteOperationTest.TestPermute/1
+      - TestPermute/PermuteOperationTest.TestPermute/2
+      - TestPermute/PermuteOperationTest.TestPermute/3
+      - TestPermute/PermuteOperationTest.TestPermute/7
+      - TestPermute/PermuteOperationTest.TestPermute/8
+      - TestPermute/PermuteOperationTest.TestPermute/9
+      - TestPermute/PermuteOperationTest.TestPermute/10  
       - TestWhere/WhereOperationTest.TestWhere/0
       - TestWhere/WhereOperationTest.TestWhere/8
       - TestWhere/WhereOperationTest.TestWhere/15

@@ -148,6 +148,7 @@ Tensor Full(
 Tensor Transpose(const Tensor& self, std::vector<int> perm);
 Tensor Cast(
     const Tensor& self, DataType dstDataType, CastMode mode = CAST_NONE, SaturationMode satmode = SaturationMode::OFF);
+Tensor Permute(const Tensor &self, std::vector<int> perm);
 
 Tensor Exp(const Tensor& self);
 Tensor Exp2(const Tensor& self);

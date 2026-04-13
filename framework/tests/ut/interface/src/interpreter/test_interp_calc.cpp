@@ -1280,6 +1280,30 @@ TEST_F(TorchAdaptorTest, Reduce)
     }
 }
 
+TEST_F(TorchAdaptorTest, Permute3D)
+{
+    {
+        std::vector<float> sdata = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12,
+                                    13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+        std::vector<float> gdata = {1,  2,  3,  4,  13, 14, 15, 16, 5,  6,  7,  8,
+                                    17, 18, 19, 20, 9,  10, 11, 12, 21, 22, 23, 24};
+        auto self = makeTensorData(DT_FP32, {2, 3, 4}, sdata);
+        auto out = makeTensorData(DT_FP32, {2, 3, 4}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {2, 3, 4}, gdata);
+        calc::Permute(out, self, {1, 0, 2});
+        ASSERT_ALLCLOSE(out, golden);
+    }
+    {
+        std::vector<float> sdata = {1, 2, 3, 4, 5, 6};
+        std::vector<float> gdata = {1, 4, 2, 5, 3, 6};
+        auto self = makeTensorData(DT_FP32, {2, 3}, sdata);
+        auto out = makeTensorData(DT_FP32, {3, 2}, 0.0f);
+        auto golden = makeTensorData(DT_FP32, {3, 2}, gdata);
+        calc::Permute(out, self, {1, 0});
+        ASSERT_ALLCLOSE(out, golden);
+    }
+}
+
 TEST_F(TorchAdaptorTest, Misc)
 {
     {

@@ -620,5 +620,81 @@ TEST_F(InferShapeTest, TestIndexOutCast)
     const auto& fromDynValidShape = indexOutCastOpAttribute->GetFromDynValidShape();
     EXPECT_NE(fromDynValidShape.size(), 0U);
 }
+
+TEST_F(InferShapeTest, TestPermute)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestPermuteInferShape", "TestPermuteInferShape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inshape = {2, 3, 4};
+    std::vector<int64_t> outshape = {3, 2, 4};
+    auto shapeImme = OpImmediate::Specified(inshape);
+    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+
+    auto& copyin_op = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {inTensor});
+    auto copyin_Attr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<OpImmediate>());
+    std::vector<OpImmediate> toValidShape = {
+        OpImmediate(SymbolicScalar("Input_0_Dim_0")), OpImmediate(SymbolicScalar("Input_0_Dim_1")),
+        OpImmediate(SymbolicScalar("Input_0_Dim_2"))};
+    copyin_Attr->SetToDynValidShape(toValidShape);
+    copyin_op.SetOpAttribute(copyin_Attr);
+
+    auto& permute_op = currFunctionPtr->AddOperation(Opcode::OP_PERMUTE, {inTensor}, {outTensor});
+    permute_op.SetAttribute(OpAttributeKey::perm, std::vector<int>{1, 0, 2});
+
+    auto& copyout_op = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {outTensor}, {outcast});
+    (void)copyout_op;
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+
+    InferDynShape inferShapeTest;
+    inferShapeTest.RunOnFunction(*currFunctionPtr);
+    std::cout << currFunctionPtr->Dump() << std::endl;
+    EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
+}
+
+TEST_F(InferShapeTest, TestPermuteElement)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestPermuteElemInferShape", "TestPermuteElemInferShape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> inshape = {2, 3, 4};
+    std::vector<int64_t> outshape = {2, 4, 3};
+    auto shapeImme = OpImmediate::Specified(inshape);
+    auto incast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto outcast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+    auto inTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, inshape);
+    auto outTensor = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, outshape);
+
+    auto& copyin_op = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast}, {inTensor});
+    auto copyin_Attr = std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0, 0}), MEM_UB, shapeImme, shapeImme, std::vector<OpImmediate>());
+    std::vector<OpImmediate> toValidShape = {
+        OpImmediate(SymbolicScalar("Input_0_Dim_0")), OpImmediate(SymbolicScalar("Input_0_Dim_1")),
+        OpImmediate(SymbolicScalar("Input_0_Dim_2"))};
+    copyin_Attr->SetToDynValidShape(toValidShape);
+    copyin_op.SetOpAttribute(copyin_Attr);
+
+    auto& permute_op = currFunctionPtr->AddOperation(Opcode::OP_PERMUTE_ELEMENT, {inTensor}, {outTensor});
+    permute_op.SetAttribute(OpAttributeKey::perm, std::vector<int>{0, 2, 1});
+
+    auto& copyout_op = currFunctionPtr->AddOperation(Opcode::OP_COPY_OUT, {outTensor}, {outcast});
+    (void)copyout_op;
+
+    currFunctionPtr->inCasts_.push_back(incast);
+    currFunctionPtr->outCasts_.push_back(outcast);
+
+    InferDynShape inferShapeTest;
+    inferShapeTest.RunOnFunction(*currFunctionPtr);
+    std::cout << currFunctionPtr->Dump() << std::endl;
+    EXPECT_EQ(inferShapeTest.PostCheck(*currFunctionPtr), SUCCESS);
+}
 } // namespace tile_fwk
 } // namespace npu

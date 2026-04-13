@@ -75,6 +75,7 @@ pypto-neg
 pypto-ones
 pypto-one_hot
 pypto-pad
+pypto-permute
 pypto-pow
 pypto-prelu
 pypto-prod

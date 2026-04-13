@@ -844,6 +844,10 @@ class Tensor:
         return pypto.relu(self)
 
     @source_location
+    def permute(self, perm: List[int]) -> 'Tensor':
+        return pypto.permute(self, perm)
+
+    @source_location
     def transpose(self, dim0: int, dim1: int) -> 'Tensor':
         return pypto.transpose(self, dim0, dim1)
 

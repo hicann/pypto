@@ -191,6 +191,34 @@ std::string CodeGenOpCloudNPU::GenDupOp() const
     return PrintDupOp({dVar, dstDtypeStr, dupV});
 }
 
+std::string CodeGenOpCloudNPU::PrintPermuteLayout() const
+{
+    size_t srcDim = rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size();
+    auto srcOffsetSymbol = GenGetParamMacroPacked(ToUnderlying(MISOIdx::SRC0_IDX), srcDim, PREFIX_STR_OFFSET);
+    std::string coordCpSrc = WrapParamByParentheses(srcOffsetSymbol);
+    std::string coord4Src = PrintCoord(srcDim, coordCpSrc);
+
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+
+    auto permAttr = opAttrs.at(OpAttributeKey::perm);
+    const auto& permVec = AnyCast<std::vector<int64_t>>(permAttr);
+    std::vector<int> axes(MAX_DIM + 1, -1);
+    for (size_t i = 0; i < permVec.size() && i < 5; ++i) {
+        axes[i] = static_cast<int>(permVec[i]);
+    }
+    axes[MAX_DIM] = permVec.size();
+    std::vector<std::string> tileOpParamList = {outputTensor, srcTensor, coord4Src};
+    std::ostringstream oss;
+    oss << tileOpName << WrapParamByAngleBrackets(axes) << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    return oss.str();
+}
+
+std::string CodeGenOpCloudNPU::GenPermuteOp() const
+{
+    return PrintPermuteLayout();
+}
+
 std::string CodeGenOpCloudNPU::GenTransposeDataMove() const
 {
     bool isCopyLocalToGM = opCode == Opcode::OP_TRANSPOSE_MOVEOUT;

@@ -1008,6 +1008,41 @@ REGISTER_INFER_SHAPE_FUNC(OP_TRANSPOSE_VNCHWCONV, Opcode::OP_TRANSPOSE_VNCHWCONV
 REGISTER_INFER_SHAPE_FUNC(OP_TRANSPOSE_MOVEIN, Opcode::OP_TRANSPOSE_MOVEIN, TransposeInferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_TRANSPOSE_MOVEOUT, Opcode::OP_TRANSPOSE_MOVEOUT, TransposeInferFunc);
 
+void PermuteInferFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outValidShapes)
+{
+    std::vector<SymbolicScalar> validShape;
+    const auto &oOperands = op->GetOOperands();
+
+    std::vector<SymbolicScalar> inputValidShape;
+    if (!op->GetIOperands().empty()) {
+        inputValidShape = op->GetIOperands()[0]->GetDynValidShape();
+    }
+    if (inputValidShape.empty()) {
+        return;
+    }
+    std::vector<int> perm = op->GetVectorIntAttribute<int>(OpAttributeKey::perm);
+    std::vector<SymbolicScalar> resultValidShape;
+    resultValidShape.reserve(perm.size());
+    for (int axis : perm) {
+        resultValidShape.push_back(inputValidShape[axis]);
+    }
+    if (op->GetAttr(OP_ATTR_PREFIX + "validShape", validShape) && !validShape.empty()) {
+        outValidShapes.push_back(validShape);
+    } else if (!resultValidShape.empty()) {
+        outValidShapes.push_back(resultValidShape);
+    }
+    for (size_t idx = 1; idx < oOperands.size(); ++idx) {
+        auto outputValidShape = oOperands[idx]->GetDynValidShape();
+        if (outputValidShape.empty()) {
+            outputValidShape = resultValidShape;
+        }
+        outValidShapes.push_back(outputValidShape);
+    }
+}
+
+REGISTER_INFER_SHAPE_FUNC(OP_PERMUTE, Opcode::OP_PERMUTE, PermuteInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_PERMUTE_ELEMENT, Opcode::OP_PERMUTE_ELEMENT, PermuteInferFunc);
+
 void ViewInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
     auto viewOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(op->GetOpAttribute());

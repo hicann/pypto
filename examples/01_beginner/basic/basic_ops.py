@@ -246,6 +246,40 @@ def view_assemble_kernel(
             pypto.assemble(result, [h_off, w_off], output)
 
 
+@pypto.frontend.jit(runtime_options={"run_mode": global_run_mode})
+def permute_kernel(
+    x: pypto.Tensor([], pypto.DT_FP32),
+    out: pypto.Tensor([], pypto.DT_FP32),
+    dims: list):
+    vec_tile_shapes = [8 for _ in range(len(x.shape))]
+    pypto.set_vec_tile_shapes(*vec_tile_shapes)
+    out[:] = pypto.permute(x, dims)
+
+
+def test_permute(device_id=None):
+    """Permute: rearrange dimensions of a 5-D tensor."""
+    print("=" * 60)
+    print("Example 7: Permute")
+    print("=" * 60)
+
+    device = f'npu:{device_id}' if global_run_mode == pypto.RunMode.NPU and device_id is not None else 'cpu'
+
+    dtype = torch.float32
+    x = torch.randn(2, 3, 4, 5, 6, dtype=dtype, device=device)
+
+    permute_dims = (3, 1, 4, 0, 2)
+    out_shape = tuple(x.shape[d] for d in permute_dims)
+    out = torch.empty(out_shape, dtype=torch.float32, device=device)
+    permute_kernel(x, out, permute_dims)
+
+    if global_run_mode == pypto.RunMode.NPU:
+        golden = x.permute(*permute_dims)
+        max_diff = np.abs(out.cpu().numpy() - golden.cpu().numpy()).max()
+        print(f"  Max difference: {max_diff:.6f}")
+        assert_allclose(out.cpu().numpy(), golden.cpu().numpy(), rtol=1e-3, atol=1e-3)
+    print("✓ Permute completed successfully\n")
+
+
 def test_transform_ops(device_id=None):
     """Loop-based tiling with view and assemble: out = input * 2."""
     print("=" * 60)
@@ -315,6 +349,10 @@ def main():
         "transform_ops::test_transform_ops": {
             'name': 'Transform Operations',
             'function': test_transform_ops,
+        },
+        "permute::test_permute": {
+            'name': 'Permute',
+            'function': test_permute,
         },
     }
 

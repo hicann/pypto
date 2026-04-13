@@ -1364,6 +1364,54 @@ TEST_F(OperationImplTest, test_FillPad_2D)
     FUNCTION("TestFillPad2D") { result = FillPad(input, "constant", 0.0f); }
 }
 
+TEST_F(OperationImplTest, Test_Permute_3D_FP32)
+{
+    TileShape::Current().SetVecTile(4, 8, 16);
+    Tensor input(DT_FP32, {4, 8, 16}, "input");
+    Tensor result;
+    FUNCTION("TestPermute3D") { result = Permute(input, {1, 0, 2}); }
+}
+
+TEST_F(OperationImplTest, Test_Permute_3D_FP16)
+{
+    TileShape::Current().SetVecTile(4, 8, 16);
+    Tensor input(DT_FP16, {4, 8, 16}, "input");
+    Tensor result;
+    FUNCTION("TestPermute3D_FP16") { result = Permute(input, {0, 2, 1}); }
+}
+
+TEST_F(OperationImplTest, Test_Permute_4D_FP32)
+{
+    TileShape::Current().SetVecTile(4, 4, 8, 8);
+    Tensor input(DT_FP32, {4, 4, 8, 8}, "input");
+    Tensor result;
+    FUNCTION("TestPermute4D") { result = Permute(input, {0, 2, 3, 1}); }
+}
+
+TEST_F(OperationImplTest, Test_Permute_5D_FP32)
+{
+    TileShape::Current().SetVecTile(2, 2, 4, 4, 4);
+    Tensor input(DT_FP32, {2, 2, 4, 4, 4}, "input");
+    Tensor result;
+    FUNCTION("TestPermute5D") { result = Permute(input, {4, 3, 2, 1, 0}); }
+}
+
+TEST_F(OperationImplTest, Test_Permute_Identity)
+{
+    TileShape::Current().SetVecTile(4, 8);
+    Tensor input(DT_FP32, {4, 8}, "input");
+    Tensor result;
+    FUNCTION("TestPermuteIdentity") { result = Permute(input, {0, 1}); }
+}
+
+TEST_F(OperationImplTest, Test_Permute_1D)
+{
+    TileShape::Current().SetVecTile(32);
+    Tensor input(DT_FP32, {32}, "input");
+    Tensor result;
+    FUNCTION("TestPermute1D") { result = Permute(input, {0}); }
+}
+
 TEST_F(OperationImplTest, Test_Matmul_SFA)
 {
     TileShape::Current().SetCubeTile({128, 128}, {128, 128}, {128, 128});

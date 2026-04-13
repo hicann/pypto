@@ -115,6 +115,11 @@ void bind_operation(py::module& m)
         "Exp2", [](const Tensor& self) { return npu::tile_fwk::Exp2(self); }, "Tensor exp2.");
 
     m.def(
+        "Permute",
+        [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Permute(self, perm); },
+        "Tensor transpose.");
+
+    m.def(
         "Transpose",
         [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Transpose(self, perm); },
         "Tensor transpose.");

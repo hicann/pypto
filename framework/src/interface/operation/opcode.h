@@ -83,6 +83,8 @@ enum class Opcode {
     OP_TRANSPOSE_MOVEOUT,
     OP_TRANSPOSE_VNCHWCONV,
     OP_ABS,
+    OP_PERMUTE,
+    OP_PERMUTE_ELEMENT,
     OP_LN,
     OP_ISFINITE,
     OP_HUB,

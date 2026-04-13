@@ -35,6 +35,7 @@ pypto-Tensor-maximum
 pypto-Tensor-move
 pypto-Tensor-mul
 pypto-Tensor-name
+pypto-Tensor-permute
 pypto-Tensor-reshape
 pypto-Tensor-round
 pypto-Tensor-set_cache_policy

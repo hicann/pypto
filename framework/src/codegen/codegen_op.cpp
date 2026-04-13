@@ -490,10 +490,8 @@ void CodeGenOp::GetGmParamIdx(const Operation& oper)
         return;
     }
 
-    if (OpcodeManager::Inst().IsCopyIn(oper.GetOpcode())) {
-        const std::shared_ptr<OpAttribute>& attr = oper.GetOpAttribute();
-        ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << "Copy In attr is null, Op is " << oper.Dump();
-        std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
+    if (OpcodeManager::Inst().IsCopyIn(oper.GetOpcode()) || (oper.GetOpcode() == Opcode::OP_PERMUTE) ||
+        (oper.GetOpcode() == Opcode::OP_PERMUTE_ELEMENT)) {
         paramLocation[1] = oper.GetIOpAttrOffset(0);
         CODEGEN_LOGI("Gm Param Index of Copy In Op %s is %d", tileOpName.c_str(), paramLocation[1]);
         GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
