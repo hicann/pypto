@@ -412,6 +412,7 @@ def pre_compute_2d(
     is_smooth = smooth_scales_cq is not None
 
     bs = token_x.shape[0]
+    k = token_x.shape[1]
     q_lora_rank = w_dq.shape[1]
 
     dtype = token_x.dtype
@@ -440,7 +441,14 @@ def pre_compute_2d(
                                    [tile_config.pre_quant_cube_tile[2], tile_config.pre_quant_cube_tile[3]],
                                    [tile_config.pre_quant_cube_tile[4], tile_config.pre_quant_cube_tile[5]])
         pypto.set_semantic_label("Matmul_qa")
-        q_a_proj = pypto.matmul(token_x, w_dq, dtype)
+        x_view1 = pypto.view(token_x, [bs, k // 2], [0, 0])
+        x_view2 = pypto.view(token_x, [bs, k // 2], [0, k // 2])
+        w_dq1 = pypto.view(w_dq, [k // 2, q_lora_rank], [0, 0])
+        w_dq2 = pypto.view(w_dq, [k // 2, q_lora_rank], [k // 2, 0])
+        q_a_proj1 = pypto.matmul(x_view1, w_dq1, pypto.DT_FP32)
+        q_a_proj2 = pypto.matmul(x_view2, w_dq2, pypto.DT_FP32)
+        q_a_proj_tmp = q_a_proj1 + q_a_proj2
+        q_a_proj = pypto.cast(q_a_proj_tmp, pypto.DT_BF16)
 
     pypto.set_vec_tile_shapes(mv, q_lora_rank)
     pypto.set_semantic_label("RmsNorm_qa")
@@ -464,7 +472,7 @@ def pre_compute_2d(
     else:
         pypto.set_cube_tile_shapes([tile_config.pre_quant_cube_tile[0], tile_config.pre_quant_cube_tile[1]],
                                    [tile_config.pre_quant_cube_tile[2], tile_config.pre_quant_cube_tile[3]],
-                                   [tile_config.pre_quant_cube_tile[4], tile_config.pre_quant_cube_tile[5]])
+                                   [256, 256])
         pypto.set_semantic_label("Matmul_qb")
         q_b_proj = pypto.matmul(norm_res, w_uq_qr, dtype)
 
@@ -595,9 +603,11 @@ def mla_prolog_quant_compute(
     quant_inputs = MlaQuantInputs()
 
     k_cache_index_2d = pypto.reshape(cache_index, [t, 1], inplace=True)
-    if dequant_scale is not None:
+    is_quant = False
+    if dequant_scale.shape[0] != 0:
         dequant_scale_wuqr_reshape = pypto.reshape(dequant_scale, [1, n1 * q_head_dim], inplace=True)
         quant_inputs.dequant_scale_w_uq_qr = dequant_scale_wuqr_reshape
+        is_quant = True
 
     unroll_list = tile_config.unroll_list
     for bs_offset, unroll_length in pypto.loop_unroll(0, t, 1, name="MLA_BS_LOOP", idx_name="bs_offset",
@@ -616,26 +626,19 @@ def mla_prolog_quant_compute(
         q_norm = q_kv[2]
         pypto.set_vec_tile_shapes(tile_bs, q_lora_rank)
         pypto.assemble(q_norm, [bs_offset, 0], q_norm_out)
-        q_norm_scale = q_kv[3]
-        pypto.set_vec_tile_shapes(tile_bs, 1)
-        pypto.assemble(q_norm_scale, [bs_offset, 0], q_norm_scale_out)
+        if is_quant:
+            q_norm_scale = q_kv[3]
+            pypto.set_vec_tile_shapes(tile_bs, 1)
+            pypto.assemble(q_norm_scale, [bs_offset, 0], q_norm_scale_out)
 
         ########### q ##############
         q_tmp = pypto.reshape(q, [tile_bs, n1, q_head_dim])
         pypto.set_semantic_label("Prepare_qNope")
         q_nope = pypto.view(q_tmp, [tile_bs, n1, qk_nope_head_dim], [0, 0, 0])
-        tile_shape = [min(16, tile_bs), 32, qk_nope_head_dim]
-        pypto.set_vec_tile_shapes(*tile_shape)
-        q_nope_trans = pypto.transpose(q_nope, 0, 1)
-
         m = tile_config.m_tile
         pypto.set_semantic_label("Matmul_qNope_wUk")
         pypto.set_cube_tile_shapes([m, m], [128, 128], [128, 128])
-        q_nope_new = pypto.matmul(q_nope_trans, w_uk, dtype)
-
-        tile_shape = [1, min(32, tile_bs), kv_lora_rank]
-        pypto.set_vec_tile_shapes(*tile_shape)
-        q_nope_new_trans = pypto.transpose(q_nope_new, 0, 1)
+        q_nope_new_trans = pypto.experimental.transposed_batchmatmul(q_nope, w_uk, dtype)
 
         pypto.set_semantic_label("Assemble_queryOut")
         pypto.set_vec_tile_shapes(tile_config.q_vec_tile0, tile_config.q_vec_tile1, 128)
@@ -669,33 +672,59 @@ def mla_prolog_quant_compute(
         pypto.set_semantic_label("Quant_knope")
         pypto.set_vec_tile_shapes(32, kv_lora_rank)
         k_nope_split = pypto.reshape(k_nope, [tile_bs, 4, kv_lora_rank // 4])
-        pypto.set_vec_tile_shapes(32, 4, kv_lora_rank // 4)
-        k_nope_quant_res = k_nope_quant(k_nope_split)
-        k_nope_quant_tensor = k_nope_quant_res[0]
-        k_nope_scale = k_nope_quant_res[1]
-
-        pypto.set_vec_tile_shapes(32, 4, kv_lora_rank // 4)
-        k_nope_2d = pypto.reshape(k_nope_quant_tensor, [tile_bs, kv_lora_rank])
-        k_scale_2d = pypto.reshape(k_nope_scale, [tile_bs, 4])
 
         k_rope_4d = pypto.reshape(k_rope_2d, [tile_bs, 1, 1, qk_rope_head_dim], inplace=True)
-        k_nope_4d = pypto.reshape(k_nope_2d, [tile_bs, 1, 1, kv_lora_rank], inplace=True)
-        k_scale_4d = pypto.reshape(k_scale_2d, [tile_bs, 1, 1, 4], inplace=True)
         index = pypto.view(k_cache_index_2d, [tile_bs, 1], [bs_offset, 0])
         pypto.set_semantic_label("ScatterUpdate_krCache")
         pypto.set_vec_tile_shapes(32, 1, 1, qk_rope_head_dim)
         kr_cache_out[:] = pypto.scatter_update(kr_cache, -2, index, k_rope_4d)
-        pypto.set_semantic_label("ScatterUpdate_kvCache")
-        pypto.set_vec_tile_shapes(32, 1, 1, kv_lora_rank)
-        kv_cache_out[:] = pypto.scatter_update(kv_cache, -2, index, k_nope_4d)
-        pypto.set_semantic_label("ScatterUpdate_kScaleCache")
-        pypto.set_vec_tile_shapes(32, 1, 1, 4)
-        k_scale_cache_out[:] = pypto.scatter_update(k_scale_cache, -2, index, k_scale_4d)
+        if is_quant:
+            pypto.set_vec_tile_shapes(32, 4, kv_lora_rank // 4)
+            k_nope_quant_res = k_nope_quant(k_nope_split)
+            k_nope_quant_tensor = k_nope_quant_res[0]
+            k_nope_scale = k_nope_quant_res[1]
+            pypto.set_vec_tile_shapes(32, 4, kv_lora_rank // 4)
+            k_nope_2d = pypto.reshape(k_nope_quant_tensor, [tile_bs, kv_lora_rank])
+            k_scale_2d = pypto.reshape(k_nope_scale, [tile_bs, 4])
+            k_nope_4d = pypto.reshape(k_nope_2d, [tile_bs, 1, 1, kv_lora_rank], inplace=True)
+            k_scale_4d = pypto.reshape(k_scale_2d, [tile_bs, 1, 1, 4], inplace=True)
+            pypto.set_semantic_label("ScatterUpdate_kvCache")
+            pypto.set_vec_tile_shapes(32, 1, 1, kv_lora_rank)
+            kv_cache_out[:] = pypto.scatter_update(kv_cache, -2, index, k_nope_4d)
+            pypto.set_semantic_label("ScatterUpdate_kScaleCache")
+            pypto.set_vec_tile_shapes(32, 1, 1, 4)
+            k_scale_cache_out[:] = pypto.scatter_update(k_scale_cache, -2, index, k_scale_4d)
+        else:
+            pypto.set_vec_tile_shapes(32, 4, kv_lora_rank // 4)
+            k_nope_4d = pypto.reshape(k_nope_split, [tile_bs, 1, 1, kv_lora_rank], inplace=True)
+            pypto.set_semantic_label("ScatterUpdate_kvCache")
+            pypto.set_vec_tile_shapes(32, 1, 1, kv_lora_rank)
+            kv_cache_out[:] = pypto.scatter_update(kv_cache, -2, index, k_nope_4d)
+
+
+
+def options_list():
+    if pypto.platform.npuarch == 'DAV_3510':
+        return {
+            "pass_options": {
+                "cube_l1_reuse_setting": {-1: 4, 0: 1, 1: 1, 2: 1},
+                "cube_nbuffer_setting": {0: 1, 1: 1, 2: 1, 3: 3, 4: 4},
+            },
+            "runtime_options": {"device_sched_mode": 2},
+            }
+    else:
+        return {
+            "pass_options": {
+                "cube_l1_reuse_setting": {-1: 3, 0: 1, 1: 1},
+                "cube_nbuffer_setting": {-1: 6, 0: 1, 1: 4},
+            },
+            "runtime_options": {"device_sched_mode": 2},
+        }
 
 
 @pypto.frontend.jit(
     pass_options={
-        "cube_l1_reuse_setting": {-1: 4},
+        "cube_l1_reuse_setting": {-1: 4},   
     },
     runtime_options={
         "stitch_function_max_num": 128
@@ -773,33 +802,31 @@ def mla_prolog_quant_p(
 
 
 @pypto.frontend.jit(
-    pass_options={
-        "cube_l1_reuse_setting": {-1: 3, 0: 1, 1: 1},
-        "cube_nbuffer_setting": {-1: 6, 0: 1, 1: 4},
-    },
+    pass_options=options_list()["pass_options"],
+    runtime_options=options_list()["runtime_options"],
 )
 def mla_prolog_quant_d(
-    token_x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-    w_dq: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_NZ),
-    w_uq_qr: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_INT8, format=pypto.TileOpFormat.TILEOP_NZ),
-    dequant_scale: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    w_uk: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
-    w_dkv_kr: pypto.Tensor([pypto.STATIC, pypto.STATIC], pypto.DT_BF16, format=pypto.TileOpFormat.TILEOP_NZ),
-    gamma_cq: pypto.Tensor([pypto.STATIC], pypto.DT_BF16),
-    gamma_ckv: pypto.Tensor([pypto.STATIC], pypto.DT_BF16),
-    cos: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-    sin: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_BF16),
-    cache_index: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT64),
-    kv_cache: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
-    kr_cache: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
-    k_scale_cache: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
-    q_norm_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_INT8),
-    q_norm_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC], pypto.DT_FP32),
-    query_nope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
-    query_rope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
-    kv_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_INT8),
-    kr_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_BF16),
-    k_scale_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC], pypto.DT_FP32),
+    token_x: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    w_dq: pypto.Tensor([pypto.STATIC, pypto.STATIC], format=pypto.TileOpFormat.TILEOP_NZ),
+    w_uq_qr: pypto.Tensor([pypto.STATIC, pypto.STATIC], format=pypto.TileOpFormat.TILEOP_NZ),
+    dequant_scale: pypto.Tensor(),
+    w_uk: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    w_dkv_kr: pypto.Tensor([pypto.STATIC, pypto.STATIC], format=pypto.TileOpFormat.TILEOP_NZ),
+    gamma_cq: pypto.Tensor([pypto.STATIC]),
+    gamma_ckv: pypto.Tensor([pypto.STATIC]),
+    cos: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    sin: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    cache_index: pypto.Tensor([pypto.DYNAMIC]),
+    kv_cache: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    kr_cache: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    k_scale_cache: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    q_norm_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    q_norm_scale_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC]),
+    query_nope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
+    query_rope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
+    kv_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    kr_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
+    k_scale_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     epsilon_cq, epsilon_ckv, cache_mode, tile_config, rope_cfg
 ):
     """

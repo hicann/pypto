@@ -22,8 +22,6 @@ import pypto
 from mla_prolog_quant_impl import mla_prolog_quant_p, mla_prolog_quant_d, MlaTileConfig
 from utils.compare import compare
 
-torch.manual_seed(5)
-
 
 def prep_env():
     device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
@@ -605,7 +603,7 @@ def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, is_
         dequant_scale_w_uq_qr_data =  \
                 input_tensors["w_qb_scale"].reshape(dequant_scale_w_uq_qr_shape).npu()
     else:
-        dequant_scale_w_uq_qr_data = None
+        dequant_scale_w_uq_qr_data = torch.Tensor().npu()
 
     input_data = [token_x_data, w_dq_data, w_uq_qr_data, dequant_scale_w_uq_qr_data,
                 w_uk_data, w_dkv_kr_data, rmsnorm_gamma_cq_data, rmsnorm_gamma_ckv_data,
@@ -642,7 +640,7 @@ def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, is_
     if is_quant_b:
         compare(output_kv_cache_data.cpu(), golden3.cpu(), "kv", 1.0, 0.0, 0)
     else:
-        compare(output_kv_cache_data.cpu(), golden6.cpu(), "kv", 0.0001, 0.0078125, 0)
+        compare(output_kv_cache_data.cpu(), golden3.cpu(), "kv", 0.0001, 0.0078125, 0)
     print("kr =======")
     compare(output_kr_cache_data.cpu(), golden4.cpu(), "kr", 0.0001, 0.0078125, 0)
     if is_quant_b:
@@ -655,6 +653,7 @@ def test_b128_s4k4_pa_nd_bf16_quantb_p():
     '''
     mla_prolog prefill测试函数
     '''
+    torch.manual_seed(5)
     prep_env()
     params = {
         'b': 128,
@@ -702,6 +701,7 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
     '''
     mla_prolog decode测试函数
     '''
+    torch.manual_seed(5)
     prep_env()
     params = {
         'b': 4,
@@ -730,6 +730,54 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
     tile_config.m_tile = m_tile_value
 
     tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 256, 256, 128, 128]
+    tile_config.mv_tile = mv_tile_value
+    tile_config.q_vec_tile0 = 1
+    tile_config.q_vec_tile1 = 32
+    tile_config.k_vec_tile0 = 2
+    tile_config.k_vec_tile1 = 512
+    tile_config.unroll_list = [8, 4, 2, 1]
+
+    actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
+    input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \
+                    (is_quant_a, is_quant_b), False, 128, "PA_BSND")
+    mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, \
+                        is_quant_a, is_quant_b, is_nz, tile_config, cache_mode, is_p=False)
+
+
+@pytest.mark.soc("950")
+def test_b4_s64k2_pa_nd_bf16_d():
+    '''
+    mla_prolog decode非量化测试函数
+    '''
+    torch.manual_seed(5)
+    prep_env()
+    params = {
+        'b': 4,
+        't': 8,
+        's': 2,
+        's1': 2,
+        's2': 64 * 1024,
+        'n1': 128,
+        'h': 7168,
+        'q_lora_rank': 1536,
+        'qk_nope_head_dim': 128,
+        'qk_rope_head_dim': 64,
+        'kv_lora_rank': 512,
+        'block_size': 128
+    }
+    dtype = pypto.DT_BF16
+    w_dtype = pypto.DT_INT8
+    is_quant_a, is_quant_b, is_nz = False, False, False
+    cache_mode = "PA_BSND"
+    tile_config = MlaTileConfig()
+    tile_config.tile_bs = 8
+
+    c0 = 16
+    m_tile_value = (min(32, tile_config.tile_bs) + c0 - 1) // c0 * c0
+    mv_tile_value = min(8, tile_config.tile_bs)
+    tile_config.m_tile = m_tile_value
+
+    tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 64, 256, 128, 128]
     tile_config.mv_tile = mv_tile_value
     tile_config.q_vec_tile0 = 1
     tile_config.q_vec_tile1 = 32
