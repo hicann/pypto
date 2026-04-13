@@ -31,7 +31,6 @@
 #include "interface/operation/opcode.h"
 #include "interface/schema/schema.h"
 #include "machine/utils/dynamic/dev_workspace.h"
-#include "machine/utils/dynamic/device_task.h"
 #include "machine/utils/dynamic/small_array.h"
 #include "machine/utils/dynamic/spsc_queue.h"
 #include "machine/utils/machine_ws_intf.h"
@@ -42,7 +41,7 @@
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/device/dynamic/wrap_manager.h"
 #include "machine/device/dump/aicore_dump.h"
-#include "device_sche_context.h"
+#include "machine/device/debug/schema_trace_utils.h"
 
 namespace npu::tile_fwk::dynamic {
 
@@ -961,127 +960,6 @@ private:
         return ret;
     }
 
-#define RAW_TENSOR_ADDR_MASK ((1UL << 63) - 1)
-    inline DynFuncData* GetDynFuncData(DeviceTask* deviceTask, uint64_t taskId)
-    {
-        auto dyntask = reinterpret_cast<DynDeviceTask*>(deviceTask);
-        DynFuncHeader* head = (DynFuncHeader*)dyntask->GetDynFuncDataList();
-        auto funcDataList = (DynFuncData*)(head + 1);
-        auto funcData = &funcDataList[FuncID(taskId)];
-        return funcData;
-    }
-
-    inline uint64_t GetTensorAddr(DynFuncData* dynFuncData, uint64_t rawTensorIndex)
-    {
-        auto desc = &dynFuncData->rawTensorDesc[rawTensorIndex];
-        if (desc->location == npu::tile_fwk::RAW_TENSOR_LOCATION_LOCAL) {
-            return dynFuncData->workspaceAddr + desc->offsetOrIndex;
-        } else {
-            return dynFuncData->rawTensorAddr[desc->offsetOrIndex] & RAW_TENSOR_ADDR_MASK;
-        }
-    }
-
-    inline uint64_t GetCoa(DynFuncData* dynFuncData, const SymInt* attrs, int idx)
-    {
-        return attrs[idx].IsExpression() ? dynFuncData->exprTbl[attrs[idx].Value()] : attrs[idx].Value();
-    }
-
-    inline schema::shape SchemaGetShape(
-        DynFuncData* dynFuncData, const SymInt* attrs, const DevAscendOperationOperandInfo& info)
-    {
-        auto attrOffset = info.staticOffsetAttrBeginIndex;
-        std::vector<schema::Int64Type> shapeList;
-        for (int d = 0; d < info.GetDim(); d++) {
-            auto shapeIdx = attrOffset + d + info.GetDim() * 3;
-            auto actualShape = GetCoa(dynFuncData, attrs, shapeIdx);
-            shapeList.push_back(actualShape);
-        }
-        return schema::shape(schema::shapeList(shapeList));
-    }
-
-    inline schema::offset SchemaGetOffset(
-        DynFuncData* dynFuncData, const SymInt* attrs, const DevAscendOperationOperandInfo& info)
-    {
-        auto attrOffset = info.staticOffsetAttrBeginIndex;
-        std::vector<schema::Int64Type> offsetList;
-        for (int d = 0; d < info.GetDim(); d++) {
-            auto offsetIdx = attrOffset + d;
-            auto actualOffset = GetCoa(dynFuncData, attrs, offsetIdx);
-            offsetList.push_back(actualOffset);
-        }
-        return schema::offset(schema::offsetList(offsetList));
-    }
-
-    inline std::map<uint64_t, uint64_t> CalTensorAddrAndSize(SchDeviceTaskContext* devTaskCtx, uint64_t taskId)
-    {
-        std::map<uint64_t, uint64_t> tensorAddr2SizeMap;
-        uint32_t opIdx = TaskID(taskId);
-        auto duppedData = GetDuppedData(devTaskCtx->GetDeviceTask(), taskId);
-        auto dynFuncData = GetDynFuncData(devTaskCtx->GetDeviceTask(), taskId);
-        auto iOperandSize = duppedData->GetSource()->GetOperationIOperandSize(opIdx);
-        for (size_t i = 0; i < iOperandSize; i++) {
-            auto iOperand = duppedData->GetSource()->GetOperationIOperand(opIdx, i);
-            auto base = GetTensorAddr(dynFuncData, iOperand->rawIndex);
-            auto size = duppedData->GetRawTensorDataSize(iOperand->rawIndex);
-            tensorAddr2SizeMap[base] = size;
-        }
-
-        auto oOperandSize = duppedData->GetSource()->GetOperationOOperandSize(opIdx);
-        for (size_t i = 0; i < oOperandSize; i++) {
-            auto oOperand = duppedData->GetSource()->GetOperationOOperand(opIdx, i);
-            auto base = GetTensorAddr(dynFuncData, oOperand->rawIndex);
-            auto size = duppedData->GetRawTensorDataSize(oOperand->rawIndex);
-            tensorAddr2SizeMap[base] = size;
-        }
-        return tensorAddr2SizeMap;
-    }
-
-    inline void DumpSchemaOperationInfo(SchDeviceTaskContext* devTaskCtx, int coreIdx, uint64_t taskId)
-    {
-        DeviceTaskCtrl* curTaskCtrl = devTaskCtx->GetDeviceTaskCtrl();
-        uint64_t deviceTaskId = curTaskCtrl->taskId;
-        uint32_t funcId = FuncID(taskId);
-        int rootIndex = GetRootIndex(devTaskCtx, taskId);
-        int leafIndex = GetLeafIndex(devTaskCtx, taskId);
-        uint32_t opIdx = TaskID(taskId);
-        auto duppedData = GetDuppedData(devTaskCtx->GetDeviceTask(), taskId);
-        auto dynFuncData = GetDynFuncData(devTaskCtx->GetDeviceTask(), taskId);
-        auto attrBase = &duppedData->GetSource()->GetOperationAttr(opIdx, 0);
-
-        DEV_TRACE_DEBUG(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex), LActStart(coreIdx)));
-        DEV_TRACE_DEBUG_SPLIT(LEvent(
-            LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex), duppedData->GetSource()->SchemaGetCoa(opIdx)));
-
-        auto iOperandSize = duppedData->GetSource()->GetOperationIOperandSize(opIdx);
-        DEV_TRACE_DEBUG(LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex), LActIncastCount(iOperandSize)));
-        for (size_t i = 0; i < iOperandSize; i++) {
-            auto iOperand = duppedData->GetSource()->GetOperationIOperand(opIdx, i);
-            auto base = GetTensorAddr(dynFuncData, iOperand->rawIndex);
-            auto size = duppedData->GetRawTensorDataSize(iOperand->rawIndex);
-            auto opInfo = duppedData->GetSource()->GetOperationIOperandInfo(opIdx, i);
-            DEV_TRACE_DEBUG(LEvent(
-                LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
-                LActIncast(
-                    SchemaGetShape(dynFuncData, attrBase, opInfo), SchemaGetOffset(dynFuncData, attrBase, opInfo),
-                    Range(base, base + size))));
-        }
-
-        auto oOperandSize = duppedData->GetSource()->GetOperationOOperandSize(opIdx);
-        DEV_TRACE_DEBUG(
-            LEvent(LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex), LActOutcastCount(oOperandSize)));
-        for (size_t i = 0; i < oOperandSize; i++) {
-            auto oOperand = duppedData->GetSource()->GetOperationOOperand(opIdx, i);
-            auto base = GetTensorAddr(dynFuncData, oOperand->rawIndex);
-            auto size = duppedData->GetRawTensorDataSize(oOperand->rawIndex);
-            auto opInfo = duppedData->GetSource()->GetOperationOOperandInfo(opIdx, i);
-            DEV_TRACE_DEBUG(LEvent(
-                LUid(deviceTaskId, funcId, rootIndex, opIdx, leafIndex),
-                LActOutcast(
-                    SchemaGetShape(dynFuncData, attrBase, opInfo), SchemaGetOffset(dynFuncData, attrBase, opInfo),
-                    Range(base, base + size))));
-        }
-    }
-
     uint64_t UpdateParallelCtxAndCalcModifyFlag(int coreIdx, uint32_t coreParallelVersion)
     {
         uint64_t modifyFlag = 0;
@@ -1159,7 +1037,9 @@ private:
 
     inline void SendTaskToAiCore(SchDeviceTaskContext* devTaskCtx, CoreType type, int coreIdx, uint64_t newTask)
     {
-        DEV_IF_VERBOSE_DEBUG { DumpSchemaOperationInfo(devTaskCtx, coreIdx, newTask); }
+#if ENABLE_DUMP_OPERATION
+        SchemaDumpUtil::DumpSchemaOperationInfo(devTaskCtx, coreIdx, newTask);
+#endif
 
 #if ENABLE_TENSOR_DUMP
         // dump input tensor

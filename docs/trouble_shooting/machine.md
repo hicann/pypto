@@ -196,15 +196,15 @@ workspace_tensor = torch.empty(workspace_size * 10, dtype=torch.uint8, device=de
 如果问题不复现，则是workspace使用问题，存在内存踩踏等
 
 5. **leaf function粒度的内存重叠检测**
-（1）打开VERBOSE日志
+（1）打开 Operation 信息 Dump 开关
 `framework/src/machine/utils/device_switch.h`
 ```cpp
-#define ENABLE_COMPILE_VERBOSE_LOG 1
+#define ENABLE_DUMP_OPERATION 1
 ```
 
 （2）打开DEBUG日志，指定日志落盘路径
 ```bash
-export ASCEND_GLOBAL_LOG_LEVEL=0
+export ASCEND_GLOBAL_LOG_LEVEL=1
 export ASCEND_PROCESS_LOG_PATH=./my_log
 ```
 
