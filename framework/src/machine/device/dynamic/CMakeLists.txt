@@ -31,7 +31,6 @@ message(STATUS "CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
 file(GLOB CTRL_FILES RELATIVE ${CMAKE_CURRENT_LIST_DIR}
     device_ctrl.cpp
-    ../device_log.cpp
     context/*.cpp
 )
 
