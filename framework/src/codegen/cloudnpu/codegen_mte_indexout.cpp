@@ -40,7 +40,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastTileTensor() const
     auto cacheMode = AnyCast<std::string>(opAttrs.at(OpAttributeKey::cacheMode));
     auto blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::panzBlockSize));
     int cacheModeFlag = GetCacheModeFlag(cacheMode);
-    std::string dstTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID0));
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
 

@@ -256,8 +256,8 @@ std::string CodeGenOpCloudNPU::PrintTransposeDataMove(const PrintTransposeDataMo
 std::string CodeGenOpCloudNPU::PrintTransposeDataMoveLayout(const PrintTransposeDataMoveParam& param) const
 {
     std::string gmVarName = GenGmParamVar(param.gmIdx);
-    std::string dstTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::DST_IDX), param.gmIdx, gmVarName);
-    std::string srcTensor = PrintTensorForCopyBetweenGM(ToUnderlying(MISOIdx::SRC0_IDX), param.gmIdx, gmVarName);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::vector<int64_t> transposeAxis = AnyCast<std::vector<int64_t>>(opAttrs.at(OP_ATTR_PREFIX + "shape"));
     int correctionAxis = SHAPE_DIM5 - originShape[param.localIdx].size();
     std::vector<std::string> uselessVector0;
@@ -749,8 +749,7 @@ std::string CodeGenOpCloudNPU::PrintIndexPut(const PrintIndexPutParam& param) co
 
 std::string CodeGenOpCloudNPU::PrintIndexPutLayout(size_t indicesSize, bool accumulate) const
 {
-    std::string gmVarName = GenGmParamVar(ID0);
-    std::string dstTensor = sm->QueryTileTensorNameByBufVar(gmVarName);
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(ID0);
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
     std::string coord = PrintCoord(rawShape[ID0].size(), coordCp);

@@ -372,9 +372,6 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor)
     EXPECT_EQ(res, expect);
 
     expect = "UBTileTensorFP16Dim2_0";
-    res = symbolManager->QueryTileTensorTypeByBufVar("UB_S0_E0_T");
-    EXPECT_EQ(res, expect);
-
     res = cop.QueryTileTensorTypeByIdx(0);
     EXPECT_EQ(res, expect);
 }

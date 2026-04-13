@@ -36,8 +36,7 @@ std::string CodeGenOpCloudNPU::GetConvCopyInMode() const
 
 std::string CodeGenOpCloudNPU::GenMemL1CopyInConv() const
 {
-    std::string gmVarName = GenGmParamVar(ToUnderlying(MISOIdx::SRC0_IDX));
-    std::string srcTensor = sm->QueryTileTensorNameByBufVar(gmVarName);
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string copyInModeStr = GetConvCopyInMode();
 
@@ -113,8 +112,7 @@ std::string CodeGenOpCloudNPU::GetConvCopyOutMode() const
 
 std::string CodeGenOpCloudNPU::GenMemL1CopyOutConv() const
 {
-    std::string gmVarName = GenGmParamVar(ToUnderlying(MISOIdx::DST_IDX));
-    std::string dstTensor = sm->QueryTileTensorNameByBufVar(gmVarName);
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string copyOutModeStr = GetConvCopyOutMode();
 

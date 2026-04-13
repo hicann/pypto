@@ -23,9 +23,9 @@
 namespace npu::tile_fwk {
 std::string CodeGenOpCloudNPU::PrintGatherInL1TileTensor() const
 {
-    std::string srcVar = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID1));
-    std::string offsetsVar = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID2));
-    std::string blockTableVar = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ID3));
+    std::string srcVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::string offsetsVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+    std::string blockTableVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC2_IDX));
     std::string dstVar = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     int64_t blockSize = AnyCast<int64_t>(opAttrs.at("op_attr_blocksize"));
 
@@ -317,9 +317,9 @@ std::string CodeGenOpCloudNPU::PrintGatherInUBLayout() const
     std::string coord4Indices = PrintCoord(indicesDim, coordCpindicesOffset);
     std::string coord4BlockTable = PrintCoord(blockTableDim, coordCpblockTableOffset);
     std::string outputTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
-    std::string paramTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ToUnderlying(MISOIdx::SRC0_IDX)));
-    std::string indicesTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ToUnderlying(MISOIdx::SRC1_IDX)));
-    std::string pageTableTensor = sm->QueryTileTensorNameByBufVar(GenGmParamVar(ToUnderlying(MISOIdx::SRC2_IDX)));
+    std::string paramTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
+    std::string indicesTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+    std::string pageTableTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC2_IDX));
     std::vector<std::string> paramList;
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.find(OpAttributeKey::blockSize) != opAttrs.end())
         << "GenGatherOp: There is nop blockSize attribute here";

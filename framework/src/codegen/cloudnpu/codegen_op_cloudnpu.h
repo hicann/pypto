@@ -324,8 +324,7 @@ private:
     std::string PrintCompact(const PrintUnaryTmpBuffParam& param) const;
     std::string PrintCompactStatic(const PrintUnaryTmpBuffParam& param) const;
 
-    std::vector<std::string> GeTileOpParamForNormalCopyTileTensor(
-        unsigned gmIdx, const std::string& gmVarName, bool isSpillingToGM) const;
+    std::vector<std::string> GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx, bool isSpillingToGM) const;
     std::string PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CParam& param) const;
@@ -488,7 +487,6 @@ private:
 
     std::string PrintCoord(size_t dim, const std::string& coord) const;
     std::pair<std::string, std::string> PrintDstSrcCoordFromAttr() const;
-    std::string PrintTensorForCopyBetweenGM(unsigned operandIdx, unsigned gmIdx, const std::string& gmVarName) const;
     template <typename T>
     void FillParamWithFullInput(std::vector<std::string>& paramList, const std::vector<T>& input) const
     {
