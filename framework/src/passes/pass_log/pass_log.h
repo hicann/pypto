@@ -20,6 +20,7 @@
 #include <chrono>
 #include "interface/operation/operation.h"
 #include "interface/function/function.h"
+#include "passes/pass_interface/pass.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
@@ -82,6 +83,27 @@ private:
     bool started_{false};
     bool ended_{false};
     std::chrono::steady_clock::time_point start_;
+};
+
+/**
+ * @brief RAII utility for managing pass-specific log file redirection
+ *
+ * Redirects log output to a pass-specific file during construction and
+ * restores the original log output on destruction. Automatically cleans
+ * up empty log directories.
+ */
+class PassLogUtil {
+public:
+    PassLogUtil(Pass& pass, Function& function, size_t passIndex);
+    ~PassLogUtil();
+
+    PassLogUtil(const PassLogUtil&) = delete;
+    PassLogUtil& operator=(const PassLogUtil&) = delete;
+
+private:
+    std::string originLogOutPath_;
+    std::string logFilePath_;
+    std::string logFolder_;
 };
 } // namespace npu::tile_fwk
 

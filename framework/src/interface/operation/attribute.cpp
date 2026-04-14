@@ -16,7 +16,7 @@
 #include <sstream>
 #include <iomanip>
 #include "attribute.h"
-#include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/subfunc_utils.h"
 
 using namespace npu::tile_fwk;
 

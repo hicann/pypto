@@ -46,6 +46,7 @@ using Status = uint32_t;
 
 #define SUCCESS 0
 #define FAILED 1
+#define WARNING 2
 #define CACHELINE_SIZE_FOR_B64 64
 
 constexpr uint32_t DIST_COMM_GROUP_NUM = 2;

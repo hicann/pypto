@@ -20,7 +20,6 @@
 #include "interface/configs/config_manager.h"
 #include "passes/pass_interface/pass.h"
 #include "passes/pass_interface/pass_type.h"
-#include "passes/pass_utils/pass_log_util.h"
 #include "pass_registry.h"
 #include "tilefwk/error.h"
 #include "tilefwk/platform.h"

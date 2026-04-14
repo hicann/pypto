@@ -14,6 +14,7 @@
  */
 
 #include "l1_copy_reuse.h"
+#include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
 inline std::vector<uint64_t> GetGMInputFeature(const Operation& op)

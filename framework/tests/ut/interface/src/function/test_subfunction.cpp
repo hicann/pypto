@@ -16,7 +16,8 @@
 #include "gtest/gtest.h"
 
 #include <iostream>
-#include "passes/pass_utils/pass_utils.h"
+#include <sstream>
+#include "passes/pass_utils/subfunc_utils.h"
 
 using namespace npu::tile_fwk;
 
@@ -137,6 +138,70 @@ TEST_F(SubFunctionTest, SubfuncInvokeInfoTy_Print1)
 
     subfuncInvokeInfo.SetGraphType(CoreType::AIC);
     EXPECT_EQ(subfuncInvokeInfo.GetGraphType(), CoreType::AIC);
+}
+
+TEST_F(SubFunctionTest, SubfuncInvokeInfoTy_ToJson)
+{
+    SubfuncInvokeInfoTy subfuncInvokeInfo;
+    subfuncInvokeInfo.RecordTensorArg(
+        1, 456, {0, 1}, {16, 32}, {16, 32}, DataType::DT_FP32, true, nullptr, 20);
+    subfuncInvokeInfo.RecordConnection(
+        2, 3, 4, 123, {2, 3}, {64, 65}, {64, 65}, DataType::DT_FP16, nullptr, 30);
+
+    std::vector<SubfuncInvokeInfoTy::SuccessorIncastRecTy> inCasts;
+    inCasts.emplace_back(100, 7, nullptr, 88);
+    inCasts.emplace_back(101, 8, nullptr, 99);
+    subfuncInvokeInfo.RecordOutcast(
+        4, 0, 2, 789, inCasts, {6, 7}, {128, 129}, {128, 129}, DataType::DT_INT32, nullptr, 40);
+
+    Json result = subfuncInvokeInfo.ToJson();
+
+    ASSERT_TRUE(result.contains("incasts"));
+    ASSERT_TRUE(result.contains("outcasts"));
+    ASSERT_TRUE(result.contains("tensors"));
+
+    ASSERT_EQ(result["incasts"].size(), 1);
+    EXPECT_EQ(result["incasts"][0]["operandIdx"].get<int>(), 4);
+    EXPECT_EQ(result["incasts"][0]["ddrId"].get<int>(), 123);
+    EXPECT_EQ(result["incasts"][0]["shape"].get<std::vector<int64_t>>(), std::vector<int64_t>({64, 65}));
+    EXPECT_EQ(result["incasts"][0]["offset"].get<std::vector<int64_t>>(), std::vector<int64_t>({2, 3}));
+    EXPECT_EQ(result["incasts"][0]["dtype"].get<int>(), static_cast<int>(DataType::DT_FP16));
+
+    ASSERT_EQ(result["outcasts"].size(), 1);
+    EXPECT_EQ(result["outcasts"][0]["operandIdx"].get<int>(), 0);
+    EXPECT_EQ(result["outcasts"][0]["ddrId"].get<int>(), 789);
+    EXPECT_EQ(result["outcasts"][0]["shape"].get<std::vector<int64_t>>(), std::vector<int64_t>({128, 129}));
+    EXPECT_EQ(result["outcasts"][0]["offset"].get<std::vector<int64_t>>(), std::vector<int64_t>({6, 7}));
+    EXPECT_EQ(result["outcasts"][0]["dtype"].get<int>(), static_cast<int>(DataType::DT_INT32));
+    EXPECT_EQ(result["outcasts"][0]["succEsgIds"].get<std::vector<int>>(), std::vector<int>({100, 101}));
+
+    ASSERT_EQ(result["tensors"].size(), 1);
+    EXPECT_EQ(result["tensors"][0]["operandIdx"].get<int>(), 1);
+    EXPECT_EQ(result["tensors"][0]["ddrId"].get<int>(), 456);
+    EXPECT_EQ(result["tensors"][0]["shape"].get<std::vector<int64_t>>(), std::vector<int64_t>({16, 32}));
+    EXPECT_EQ(result["tensors"][0]["offset"].get<std::vector<int64_t>>(), std::vector<int64_t>({0, 1}));
+    EXPECT_EQ(result["tensors"][0]["dtype"].get<int>(), static_cast<int>(DataType::DT_FP32));
+    EXPECT_EQ(result["tensors"][0]["isOutput"].get<bool>(), true);
+}
+
+TEST_F(SubFunctionTest, SubfuncParam_PrettyPrint)
+{
+    SubfuncParam subfuncParam;
+    subfuncParam.AppendTensorParam(1, 11, {16, 32}, {0, 1}, "tensor_sym", 0, "tensor_symbol", DataType::DT_FP32);
+    subfuncParam.AppendIncastParam(2, 22, {64, 65}, {2, 3}, "incast_sym", 1, "incast_symbol", DataType::DT_FP16);
+    subfuncParam.AppendOutcastParam(
+        3, 33, 2, {128, 129}, {4, 5}, "outcast_sym", 2, "outcast_symbol", DataType::DT_INT32);
+
+    std::ostringstream osm;
+    subfuncParam.PrettyPrint(123, osm);
+    std::string output = osm.str();
+
+    EXPECT_NE(output.find("PARAM_LIST[123]"), std::string::npos);
+    EXPECT_NE(output.find("tensor_sym"), std::string::npos);
+    EXPECT_NE(output.find("INCAST"), std::string::npos);
+    EXPECT_NE(output.find("incast_sym"), std::string::npos);
+    EXPECT_NE(output.find("OUTCAST"), std::string::npos);
+    EXPECT_NE(output.find("outcast_sym"), std::string::npos);
 }
 
 TEST_F(SubFunctionTest, SubfuncTopologyInfoTy_TopoSort)

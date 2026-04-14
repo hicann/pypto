@@ -30,7 +30,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "interface/tensor/raw_tensor.h"
 #include "interface/utils/serialization.h"
-#include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/subfunc_utils.h"
 #include "interface/configs/config_manager_ng.h"
 
 namespace npu::tile_fwk {

@@ -29,7 +29,7 @@
 #include "interface/tensor/tensormap.h"
 #include "interface/tensor/tensor_slot.h"
 #include "interface/cache/hash.h"
-#include "passes/pass_utils/pass_utils.h"
+#include "passes/pass_utils/subfunc_utils.h"
 
 namespace npu::tile_fwk {
 constexpr int FUNCTION_MAX_INCASTS = 10000;
