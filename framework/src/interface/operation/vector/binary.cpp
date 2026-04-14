@@ -95,16 +95,17 @@ void BinaryOperationOperandCheck(
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == outOpSize) << "oOperand size should be 1";
 }
 
-// Identify which operand need brc at a specific axis counting from the last (e.g., axisNum = 1 expand last axis)
-int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, size_t axisNum)
+// Identify which operand need brc at a specific axis counting from the first
+int BrcAxisBinaryOp(LogicalTensorPtr operand1, LogicalTensorPtr operand2, int64_t axisNum)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1->shape.size() == operand2->shape.size()) << "Dims not match";
-    size_t shapeSize = operand1->shape.size();
+    int64_t shapeSize = operand1->shape.size();
     int operandNum = -1;
-    if (shapeSize < axisNum || axisNum == 0) {
+
+    int64_t idx = (axisNum < 0) ? (shapeSize + axisNum) : axisNum;
+    if (idx >= shapeSize || idx < 0) {
         return operandNum;
     }
-    const size_t idx = shapeSize - axisNum;
     if ((operand1->shape[idx] != 1) && (operand2->shape[idx] == 1)) {
         operandNum = 2;
     } else if ((operand1->shape[idx] == 1) && (operand2->shape[idx] != 1)) {
@@ -158,11 +159,17 @@ void TiledBinaryOperation(
             }
         }
 
-        int Get2ndLastBrcOp = BrcAxisBinaryOp(input1.tensor, input2.tensor, NUM2);
-        if (Get2ndLastBrcOp != -1) {
-            op->SetAttribute(OpAttributeKey::brcpIdx, static_cast<int64_t>(Get2ndLastBrcOp));
-            if (BrcAxisBinaryOp(input1.tensor, input2.tensor, 1) != -1) {
+        if (op != nullptr) {
+            std::vector<int64_t> brcOperand(shapeSize, 0);
+            for (size_t i = 0; i < shapeSize; i++) {
+                brcOperand[i] = BrcAxisBinaryOp(input1.tensor, input2.tensor, i);
+            }
+            if (brcOperand[shapeSize - 1] != -1) {
                 op->SetAttribute(OpAttributeKey::excludeBufferReuse, true);
+            }
+            op->SetAttribute(OP_ATTR_PREFIX + "brcOperand", brcOperand);
+            if (shapeSize >= NUM2 && brcOperand[shapeSize - NUM2] != -1) {
+                op->SetAttribute(OpAttributeKey::brcpIdx, brcOperand[shapeSize - NUM2]);
             }
         }
         if constexpr (T == BinaryOpType::DIV) {
@@ -237,7 +244,7 @@ void TiledBinaryOperation(
     auto input1 = LogicalInput{operand1, tileInfo1};
     auto input2 = LogicalInput{operand2, tileInfo2};
     // 如果打开了forceCombineAxis要走进OP_XX_BRC，如果打开combineAxis要避免后续走OP_XX_BRC逻辑
-    bool withBrc = (BrcAxisBinaryOp(operand1, operand2, 1) != -1) && function.paramConfigs_.forceCombineAxis &&
+    bool withBrc = (BrcAxisBinaryOp(operand1, operand2, -1) != -1) && function.paramConfigs_.forceCombineAxis &&
                    !function.paramConfigs_.combineAxis;
     TiledBinaryOperation<T>(function, tileShape, 0, input1, input2, result, resultTileInfo, withBrc, precisionType);
 }

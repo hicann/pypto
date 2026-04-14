@@ -128,7 +128,7 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
     }
 
     if constexpr (brcmode == BrcMode::BRC_HW) {
-        BinaryMixBrcCompute<op, PrecisionType, WBrcSide, Src0TileInfo, Src1TileInfo, LastUse>(dst, src0, src1, info);
+        BinaryMixBrcCompute<op, PrecisionType, WBrcSide, HBrcSide, Src0TileInfo, Src1TileInfo, LastUse>(dst, src0, src1, info);
         return;
     }
 
