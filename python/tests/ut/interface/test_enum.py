@@ -36,40 +36,40 @@ def test_dtype():
     assert pypto.bytes_of(pypto.DT_BOOL) == 1
     assert pypto.bytes_of(pypto.DT_DOUBLE) == 8
 
-    assert str(pypto.DT_INT4) == "DataType.DT_INT4"
+    assert repr(pypto.DT_INT4) == "DataType.DT_INT4"
 
 
 def test_tile_op_format():
-    assert str(pypto.TileOpFormat.TILEOP_ND) == "TileOpFormat.TILEOP_ND"
-    assert str(pypto.TileOpFormat.TILEOP_NZ) == "TileOpFormat.TILEOP_NZ"
+    assert repr(pypto.TileOpFormat.TILEOP_ND) == "TileOpFormat.TILEOP_ND"
+    assert repr(pypto.TileOpFormat.TILEOP_NZ) == "TileOpFormat.TILEOP_NZ"
 
 
 def test_cache_policy():
-    assert str(pypto.CachePolicy.NONE_CACHEABLE) == "CachePolicy.NONE_CACHEABLE"
+    assert repr(pypto.CachePolicy.NONE_CACHEABLE) == "CachePolicy.NONE_CACHEABLE"
 
 
 def test_reduce_mode():
-    assert str(pypto.ReduceMode.ATOMIC_ADD) == "ReduceMode.ATOMIC_ADD"
+    assert repr(pypto.ReduceMode.ATOMIC_ADD) == "ReduceMode.ATOMIC_ADD"
 
 
 def test_cast_mode():
-    assert str(pypto.CastMode.CAST_RINT) == "CastMode.CAST_RINT"
-    assert str(pypto.CastMode.CAST_ROUND) == "CastMode.CAST_ROUND"
-    assert str(pypto.CastMode.CAST_FLOOR) == "CastMode.CAST_FLOOR"
-    assert str(pypto.CastMode.CAST_CEIL) == "CastMode.CAST_CEIL"
-    assert str(pypto.CastMode.CAST_TRUNC) == "CastMode.CAST_TRUNC"
-    assert str(pypto.CastMode.CAST_ODD) == "CastMode.CAST_ODD"
+    assert repr(pypto.CastMode.CAST_RINT) == "CastMode.CAST_RINT"
+    assert repr(pypto.CastMode.CAST_ROUND) == "CastMode.CAST_ROUND"
+    assert repr(pypto.CastMode.CAST_FLOOR) == "CastMode.CAST_FLOOR"
+    assert repr(pypto.CastMode.CAST_CEIL) == "CastMode.CAST_CEIL"
+    assert repr(pypto.CastMode.CAST_TRUNC) == "CastMode.CAST_TRUNC"
+    assert repr(pypto.CastMode.CAST_ODD) == "CastMode.CAST_ODD"
 
 
 def test_op_type():
-    assert str(pypto.OpType.EQ) == "OpType.EQ"
-    assert str(pypto.OpType.NE) == "OpType.NE"
-    assert str(pypto.OpType.LT) == "OpType.LT"
-    assert str(pypto.OpType.LE) == "OpType.LE"
-    assert str(pypto.OpType.GT) == "OpType.GT"
-    assert str(pypto.OpType.GE) == "OpType.GE"
+    assert repr(pypto.OpType.EQ) == "OpType.EQ"
+    assert repr(pypto.OpType.NE) == "OpType.NE"
+    assert repr(pypto.OpType.LT) == "OpType.LT"
+    assert repr(pypto.OpType.LE) == "OpType.LE"
+    assert repr(pypto.OpType.GT) == "OpType.GT"
+    assert repr(pypto.OpType.GE) == "OpType.GE"
 
 
 def test_out_type():
-    assert str(pypto.OutType.BOOL) == "OutType.BOOL"
-    assert str(pypto.OutType.BIT) == "OutType.BIT"
+    assert repr(pypto.OutType.BOOL) == "OutType.BOOL"
+    assert repr(pypto.OutType.BIT) == "OutType.BIT"

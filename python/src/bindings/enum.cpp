@@ -14,80 +14,58 @@
  */
 
 #include "pybind_common.h"
+#include "pybind11/native_enum.h"
 
 using namespace npu::tile_fwk;
 
 namespace pypto {
 void bind_enum(py::module& m)
 {
-    py::enum_<DataType>(m, "DataType")
+    // clang-format off
+    py::native_enum<DataType>(m, "DataType", "enum.IntEnum")
 #define DTYPE_DESC(name, byte, bit, is_float, type, cann_value) \
         .value(#name, DataType::name)
         DATA_TYPE_ALL
 #undef DTYPE_DESC
         .value("DT_BOTTOM", DataType::DT_BOTTOM)
-        .export_values();
+        .export_values()
+        .finalize();
+    // clang-format on
 
-    py::enum_<NodeType>(m, "NodeType")
+    py::native_enum<NodeType>(m, "NodeType", "enum.IntEnum")
         .value("LOCAL", NodeType::LOCAL)
         .value("INCAST", NodeType::INCAST)
         .value("OUTCAST", NodeType::OUTCAST)
-        .export_values();
+        .finalize();
 
-    py::enum_<TileOpFormat>(m, "TileOpFormat")
+    py::native_enum<TileOpFormat>(m, "TileOpFormat", "enum.IntEnum")
         .value("TILEOP_ND", TileOpFormat::TILEOP_ND)
         .value("TILEOP_NZ", TileOpFormat::TILEOP_NZ)
-        .value("TILEOP_FORMAT_NUM", TileOpFormat::TILEOP_FORMAT_NUM)
-        .export_values();
+        .finalize();
 
-    py::enum_<CachePolicy>(m, "CachePolicy")
+    py::native_enum<CachePolicy>(m, "CachePolicy", "enum.IntEnum")
         .value("NONE_CACHEABLE", CachePolicy::NONE_CACHEABLE)
-        .value("MAX_NUM", CachePolicy::MAX_NUM)
-        .export_values();
+        .finalize();
 
-    py::enum_<ReduceMode>(m, "ReduceMode").value("ATOMIC_ADD", ReduceMode::ATOMIC_ADD).export_values();
+    py::native_enum<ReduceMode>(m, "ReduceMode", "enum.IntEnum").value("ATOMIC_ADD", ReduceMode::ATOMIC_ADD).finalize();
 
-    py::enum_<ScatterMode>(m, "ScatterMode")
+    py::native_enum<ScatterMode>(m, "ScatterMode", "enum.IntEnum")
         .value("NONE", ScatterMode::NONE)
         .value("ADD", ScatterMode::ADD)
         .value("MULTIPLY", ScatterMode::MULTIPLY)
-        .export_values();
+        .finalize();
 
-    py::enum_<MemoryType>(m, "MemoryType")
-        .value("MEM_UB", MemoryType::MEM_UB)
-        .value("MEM_L1", MemoryType::MEM_L1)
-        .value("MEM_L0A", MemoryType::MEM_L0A)
-        .value("MEM_L0B", MemoryType::MEM_L0B)
-        .value("MEM_L0C", MemoryType::MEM_L0C)
-        .value("MEM_L2", MemoryType::MEM_L2)
-        .value("MEM_L3", MemoryType::MEM_L3)
-        .value("MEM_DEVICE_DDR", MemoryType::MEM_DEVICE_DDR)
-        .value("MEM_HOST1", MemoryType::MEM_HOST1)
-        .value("MEM_FAR1", MemoryType::MEM_FAR1)
-        .value("MEM_FAR2", MemoryType::MEM_FAR2)
-        .value("MEM_UNKNOWN", MemoryType::MEM_UNKNOWN)
-        .export_values();
-
-    py::enum_<FunctionType>(m, "FunctionType")
-        .value("EAGER", FunctionType::EAGER)
+    py::native_enum<FunctionType>(m, "FunctionType", "enum.IntEnum")
         .value("STATIC", FunctionType::STATIC)
         .value("DYNAMIC", FunctionType::DYNAMIC)
         .value("DYNAMIC_LOOP", FunctionType::DYNAMIC_LOOP)
-        .value("DYNAMIC_LOOP_PATH", FunctionType::DYNAMIC_LOOP_PATH)
-        .value("INVALID", FunctionType::INVALID)
-        .value("MAX", FunctionType::MAX)
-        .export_values();
+        .finalize();
 
-    py::enum_<GraphType>(m, "GraphType")
+    py::native_enum<GraphType>(m, "GraphType", "enum.IntEnum")
         .value("TENSOR_GRAPH", GraphType::TENSOR_GRAPH)
-        .value("TILE_GRAPH", GraphType::TILE_GRAPH)
-        .value("EXECUTE_GRAPH", GraphType::EXECUTE_GRAPH)
-        .value("BLOCK_GRAPH", GraphType::BLOCK_GRAPH)
-        .value("LEAF_VF_GRAPH", GraphType::LEAF_VF_GRAPH)
-        .value("INVALID", GraphType::INVALID)
-        .export_values();
+        .finalize();
 
-    py::enum_<CastMode>(m, "CastMode")
+    py::native_enum<CastMode>(m, "CastMode", "enum.IntEnum")
         .value("CAST_NONE", CastMode::CAST_NONE)
         .value("CAST_RINT", CastMode::CAST_RINT)
         .value("CAST_ROUND", CastMode::CAST_ROUND)
@@ -95,61 +73,64 @@ void bind_enum(py::module& m)
         .value("CAST_CEIL", CastMode::CAST_CEIL)
         .value("CAST_TRUNC", CastMode::CAST_TRUNC)
         .value("CAST_ODD", CastMode::CAST_ODD)
-        .export_values();
+        .finalize();
 
-    py::enum_<SaturationMode>(m, "SaturationMode")
+    py::native_enum<SaturationMode>(m, "SaturationMode", "enum.IntEnum")
         .value("OFF", SaturationMode::OFF)
         .value("ON", SaturationMode::ON)
-        .export_values();
+        .finalize();
 
-    py::enum_<DivAlgorithm>(m, "DivAlgorithm")
+    py::native_enum<DivAlgorithm>(m, "DivAlgorithm", "enum.IntEnum")
         .value("INTRINSIC", DivAlgorithm::DEFAULT)
         .value("HIGH_PRECISION", DivAlgorithm::HIGH_PRECISION)
-        .export_values();
+        .finalize();
 
-    py::enum_<TileType>(m, "TileType")
+    py::native_enum<TileType>(m, "TileType", "enum.IntEnum")
         .value("VEC", TileType::VEC)
         .value("CUBE", TileType::CUBE)
         .value("DIST", TileType::DIST)
         .value("MAX", TileType::MAX)
-        .export_values();
+        .finalize();
 
-    py::enum_<OpType>(m, "OpType")
+    py::native_enum<OpType>(m, "OpType", "enum.IntEnum")
         .value("EQ", OpType::EQ)
         .value("NE", OpType::NE)
         .value("LT", OpType::LT)
         .value("LE", OpType::LE)
         .value("GT", OpType::GT)
         .value("GE", OpType::GE)
-        .export_values();
+        .finalize();
 
-    py::enum_<OutType>(m, "OutType").value("BOOL", OutType::BOOL).value("BIT", OutType::BIT).export_values();
+    py::native_enum<OutType>(m, "OutType", "enum.IntEnum")
+        .value("BOOL", OutType::BOOL)
+        .value("BIT", OutType::BIT)
+        .finalize();
 
-    py::enum_<Matrix::ReLuType>(m, "ReLuType")
+    py::native_enum<Matrix::ReLuType>(m, "ReLuType", "enum.IntEnum")
         .value("NO_RELU", Matrix::ReLuType::NoReLu)
         .value("RELU", Matrix::ReLuType::ReLu)
-        .export_values();
+        .finalize();
 
-    py::enum_<Conv::ReLuType>(m, "ConvReLuType")
+    py::native_enum<Conv::ReLuType>(m, "ConvReLuType", "enum.IntEnum")
         .value("NO_RELU", Conv::ReLuType::NoReLu)
         .value("RELU", Conv::ReLuType::ReLu)
-        .export_values();
+        .finalize();
 
-    py::enum_<Matrix::TransMode>(m, "TransMode")
+    py::native_enum<Matrix::TransMode>(m, "TransMode", "enum.IntEnum")
         .value("CAST_NONE", Matrix::TransMode::CAST_NONE)
         .value("CAST_RINT", Matrix::TransMode::CAST_RINT)
         .value("CAST_ROUND", Matrix::TransMode::CAST_ROUND)
-        .export_values();
+        .finalize();
 
-    py::enum_<LogBaseType>(m, "LogBaseType")
+    py::native_enum<LogBaseType>(m, "LogBaseType", "enum.IntEnum")
         .value("LOG_E", LogBaseType::LOG_E)
         .value("LOG_2", LogBaseType::LOG_2)
         .value("LOG_10", LogBaseType::LOG_10)
-        .export_values();
+        .finalize();
 
-    py::enum_<Distributed::AtomicType>(m, "AtomicType")
+    py::native_enum<Distributed::AtomicType>(m, "AtomicType", "enum.IntEnum")
         .value("SET", Distributed::AtomicType::SET)
         .value("ADD", Distributed::AtomicType::ADD)
-        .export_values();
+        .finalize();
 }
 } // namespace pypto
