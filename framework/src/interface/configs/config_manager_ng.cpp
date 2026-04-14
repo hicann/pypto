@@ -20,6 +20,7 @@
 #include <list>
 #include <stack>
 #include <mutex>
+#include <typeindex>
 #include <climits>
 #include <utility>
 
@@ -39,7 +40,28 @@ namespace npu::tile_fwk {
 
 namespace {
 std::mutex mtx;
+
+std::string GetReadableTypeName(const std::type_info& type)
+{
+    static const std::unordered_map<std::type_index, std::string> kTypeNames = {
+        {typeid(void), "unknown"},
+        {typeid(bool), "bool"},
+        {typeid(int64_t), "int64"},
+        {typeid(double), "double"},
+        {typeid(std::string), "string"},
+        {typeid(std::vector<int64_t>), "list[int64]"},
+        {typeid(std::vector<double>), "list[double]"},
+        {typeid(std::vector<std::string>), "list[string]"},
+        {typeid(std::map<int64_t, int64_t>), "dict[int64, int64]"},
+        {typeid(CubeTile), "CubeTile"},
+        {typeid(ConvTile), "ConvTile"},
+        {typeid(DistTile), "DistTile"},
+    };
+
+    auto it = kTypeNames.find(std::type_index(type));
+    return it != kTypeNames.end() ? it->second : type.name();
 }
+} // namespace
 
 struct TypeInfo {
     TypeInfo() = default;
@@ -142,6 +164,10 @@ const Any& ConfigScope::GetAnyConfig(const std::string& key) const
 
 bool ConfigScope::HasConfig(const std::string& key) const
 {
+    if (key == "matrix_size" || key == "vec_tile_shapes" || key == "conv_tile_shapes" || key == "cube_tile_shapes") {
+        return true;
+    }
+
     return values_.find(key) != values_.end() || (parent_ && parent_->HasConfig(key));
 }
 
@@ -235,14 +261,24 @@ void DumpRange(
 {
     os << "Range: ";
     if (type == typeid(std::map<int64_t, int64_t>)) {
-        os << "{[" << rangeInfos.at(key + "_key").first << ", " 
-           << rangeInfos.at(key + "_key").second << "], ["
-           << rangeInfos.at(key + "_val").first << ", " 
-           << rangeInfos.at(key + "_val").second << "]}";
+        os << "{[" << rangeInfos.at(key + "_key").first << ", " << rangeInfos.at(key + "_key").second << "], ["
+           << rangeInfos.at(key + "_val").first << ", " << rangeInfos.at(key + "_val").second << "]}";
     } else {
-        os << "[" << rangeInfos.at(key).first << ", " 
-           << rangeInfos.at(key).second << "]";
+        os << "[" << rangeInfos.at(key).first << ", " << rangeInfos.at(key).second << "]";
     }
+}
+
+void ValidateConfigValueType(const std::string& key, const Any& value)
+{
+    const auto& expectedType = ConfigManagerNg::GetInstance().Type(key);
+    if (expectedType == typeid(void) || value.Type() == expectedType) {
+        return;
+    }
+
+    std::stringstream os;
+    os << "Option '" << key << "' has invalid type. Expected " << GetReadableTypeName(expectedType) << ", but got "
+       << GetReadableTypeName(value.Type());
+    FUNCTION_ASSERT(FError::INVALID_TYPE, false) << os.str();
 }
 
 std::string ConfigScope::ToString() const
@@ -277,6 +313,7 @@ void ConfigScope::AddValue(const std::string& key, Any value)
 
 void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
 {
+    ValidateConfigValueType(key, value);
     if (ConfigManagerNg::GetInstance().Range().count(key) != 0 &&
         !ConfigManagerNg::GetInstance().IsWithinRange(key, value)) {
         std::stringstream os("Option:");
@@ -374,11 +411,9 @@ struct ConfigManagerImpl {
             scope = scopes.top();
         }
         for (auto& it : values) {
-            if (scope->HasConfig(it.first)) {
-                scope->UpdateValueWithAny(it.first, it.second);
-            } else {
-                FUNCTION_LOGW("key[%s] does not exist.", it.first.c_str());
-            }
+            FUNCTION_ASSERT(FError::INVALID_VAL, scope->HasConfig(it.first))
+                << "key: " << it.first.c_str() << " does not exist.";
+            scope->UpdateValueWithAny(it.first, it.second);
         }
     }
 

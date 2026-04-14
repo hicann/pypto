@@ -268,3 +268,16 @@ TEST_F(TestConfigManager, IsWithinRangeInvalidKey)
     scope->UpdateValueWithAny("invalid.key.not.in.scope", int64_t(100));
     EXPECT_EQ(cm.IsWithinRange("invalid.key.not.in.schema", value), false);
 }
+
+TEST_F(TestConfigManager, InvalidValue)
+{
+    auto& cm = ConfigManagerNg::GetInstance();
+    try {
+        cm.SetScope({{"pass.pg_lower_bound", "1"}});
+        FAIL() << "Expected exception was not thrown.";
+    } catch (const std::exception& e) {
+        std::string msg = e.what();
+        EXPECT_NE(msg.find("Option 'pass.pg_lower_bound' has invalid type."), std::string::npos);
+        EXPECT_NE(msg.find("Expected int64"), std::string::npos);
+    }
+}
