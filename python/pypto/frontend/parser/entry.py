@@ -1026,7 +1026,8 @@ class JitCallableWrapper:
         RuntimeError
             If runtime execution fails with an error message from the backend.
         """
-        assert self._handler is not None
+        if self._handler is None:
+            raise RuntimeError("handler is not initialized")
         workspace_size = pypto_impl.GetWorkSpaceSize(
             self._handler, in_tensor_data, out_tensor_data
         )

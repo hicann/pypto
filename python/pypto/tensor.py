@@ -67,8 +67,8 @@ class Tensor:
             self.status_shape = shape
         else:
             nshape = to_syms(shape)
-            assert isinstance(nshape, list), "shape must be a list of int or SymbolicScalar"
-
+            if not isinstance(nshape, list):
+                raise TypeError("shape must be a list of int or SymbolicScalar")
         self._base = pypto_impl.Tensor(ndtype, nshape, name, nformat)
         self.data_ptr = data_ptr
         self.device = device
@@ -190,7 +190,8 @@ class Tensor:
             return
 
         if isinstance(key, slice) and isinstance(key.stop, Tensor):
-            assert isinstance(key.start, int)
+            if not isinstance(key.start, int):
+                raise TypeError(f"scatter key.start must be int, got {type(key.start).__name__}")
             return pypto.scatter(self, key.start, key.stop, value)
 
         key = self._normalize_key(key)
@@ -206,7 +207,7 @@ class Tensor:
         if all(isinstance(k, (slice, int, SymbolicScalar)) for k in key):
             new_shape = self._add_one_dim(key, value.shape)
             value_reshaped = pypto.reshape(value, new_shape)
-            new_key, _ = self._get_slice_index(key)  # int→slice
+            new_key, _ = self._get_slice_index(key)
             offsets = self._get_assemble_offset(tuple(new_key), self.shape)
             return pypto.assemble(value_reshaped, offsets, self)
 
@@ -291,7 +292,8 @@ class Tensor:
             return self
 
         if isinstance(key, slice) and isinstance(key.stop, Tensor):
-            assert isinstance(key.start, int)
+            if not isinstance(key.start, int):
+                raise TypeError(f"gather key.start must be int, got {type(key.start).__name__}")
             return pypto.gather(self, key.start, key.stop)
 
         key = self._normalize_key(key)
@@ -519,10 +521,11 @@ class Tensor:
     @staticmethod
     def _add_one_dim(key, value_shape):
         slices_count = sum(1 for k in key if isinstance(k, slice))
-        assert slices_count == len(value_shape), (
-            f"The number of slice in key ({slices_count}) "
-            f"must match the length of input Tensor ({len(value_shape)}). "
-        )
+        if slices_count != len(value_shape):
+            raise ValueError(
+                f"The number of slice in key ({slices_count}) "
+                f"must match the length of input Tensor ({len(value_shape)}). "
+            )
         new_shape = []
         idx = 0
         for k in key:
@@ -970,7 +973,8 @@ class Tensor:
             missing_dims = self.dim - len(key)
             key += (slice(None),) * missing_dims
 
-        assert self.dim == len(key), f"rank not match, expect {self.dim}, but got {len(key)}"
+        if self.dim != len(key):
+            raise IndexError(f"rank not match, expect {self.dim}, but got {len(key)}")
         key = self._negative_index_to_positive(key, self.shape)
         return key
 
