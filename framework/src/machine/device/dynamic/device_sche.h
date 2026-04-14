@@ -226,9 +226,11 @@ struct DynMachineManager {
         }
         if (clus_id == -1) {
             curThreadIdx = ++threadIdx;
+            return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
         }
         if (cpu < cpuoff || cpu >= (cpuoff + CPUS_PER_CLUSTER)) {
             curThreadIdx = -1;
+            return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
         }
         curThreadIdx = ++threadIdx;
         return npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
