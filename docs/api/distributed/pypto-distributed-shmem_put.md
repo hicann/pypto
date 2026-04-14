@@ -31,7 +31,7 @@ shmem_put(
 |---------|-----------|----------------------------------------------------------------------|
 | src   | 输入      | 源操作数。 <br> 支持的数据类型为：DT_INT32，DT_FP16，DT_FP32，DT_BF16。 <br> 不支持空 Tensor；Shape 仅支持 2 维；Shape Size 不大于 2147483647（即 INT32_MAX）。 <br> 支持的数据格式为 ND。 |
 | offsets   | 输入      | dst 的偏移量。 <br> 支持 int 或 SymbolicScalar 类型的列表。 <br> offsets 的维度应与 dst 的维度一致，且每个维度的偏移量值应小于 dst 对应维度的大小。 |
-| dst   | 输入      | 目的操作数，一个 shared memory tensor，其形状为 [1] + src.shape。 |
+| dst   | 输入      | 目的操作数，一个 shared memory tensor，其形状为与src一致。 |
 | dst_pe   | 输入      | shared memory tensor 所属的 pe。<br> 支持的数据类型为 int 或 SymbolicScalar 类型。 <br> 0 <= dst_pe < n_pes。 |
 | put_op   | 输入      | 数据传输时应用的原子操作类型。 <br> 支持的数据类型为: AtomicType.SET，AtomicType.ADD。 <br> 默认为 AtomicType.SET 类型。 |
 | pred   | 输入      | 用于控制操作执行的依赖关系张量列表。 <br> 对数据类型无要求。 <br> 不支持空 Tensor；Shape 仅支持 2 维。 |
@@ -58,32 +58,32 @@ shmem_put(
 
 ### 接口调用示例
 
-- 示例 1：先创建一个 shared memory tensor，其形状为 [1] + 输入数据的形状。将输入数据赋值到 pe = 1 的 shared memory tensor 的指定区域，并与该视图原本的数据进行累加操作。
+- 示例 1：先创建一个 shared memory tensor。将输入数据赋值到 pe = 1 的 shared memory tensor 的指定区域，并与该视图原本的数据进行累加操作。
 
     ```python
     input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
-    shmem_shape = [1] + input_tensor.shape
+    shmem_shape = input_tensor.shape
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP32, shape=shmem_shape)
     pypto.set_vec_tile_shapes(16, 64)
     put_out = pypto.distributed.shmem_put(
         src=input_tensor ,
-        offsets=[0, 0, 0],
+        offsets=[0, 0],
         dst=shmem_tensor,
         dst_pe=1,
         put_op=pypto.AtomicType.ADD,
     )
     ```
 
-- 示例 2：先创建一个 shared memory tensor，其形状为 [1] + 输入数据的形状。将输入数据赋值到 pe = 3 的 shared memory tensor 的指定区域，并覆盖该视图原本的数据。
+- 示例 2：先创建一个 shared memory tensor。将输入数据赋值到 pe = 3 的 shared memory tensor 的指定区域，并覆盖该视图原本的数据。
 
     ```python
     input_tensor = pypto.tensor([16, 64], pypto.DT_BF16, "input_tensor")
-    shmem_shape = [1] + input_tensor.shape
+    shmem_shape = input_tensor.shape
     shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP32, shape=shmem_shape)
     pypto.set_vec_tile_shapes(16, 64)
     put_out = pypto.distributed.shmem_put(
         src=input_tensor,
-        offsets=[0, 0, 0],
+        offsets=[0, 0],
         dst=shmem_tensor,
         dst_pe=3,
         put_op=pypto.AtomicType.SET,

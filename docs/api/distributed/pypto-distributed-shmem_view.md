@@ -42,9 +42,9 @@ shmem_view(
 
 ## 调用示例
 
-- 示例 1：从  shared memory tensor 的提取一个部分视图，该部分视图的 shape 为 [1, 64, 64]，offset 为 [0, 0, 1]，实际获取的数据有效大小为 [1, 64, 32]。
+- 示例 1：从  shared memory tensor 的提取一个部分视图，该部分视图的 shape 为 [64, 64]，offset 为 [0, 1]，实际获取的数据有效大小为 [64, 32]。
 
     ```python
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[1, 64, 128])
-    y = pypto.distributed.shmem_view(src=x, shape=[1, 64, 64], offsets=[0, 0, 1], valid_shape=[1, 64, 32])
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
+    y = pypto.distributed.shmem_view(src=x, shape=[64, 64], offsets=[0, 1], valid_shape=[64, 32])
     ```

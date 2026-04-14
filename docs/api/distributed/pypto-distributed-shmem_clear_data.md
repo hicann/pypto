@@ -42,14 +42,14 @@ shmem_clear_data(
 
 ## 调用示例
 
-- 示例 1：创建了一个 shape = [1, 128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的部分视图的数据。该部分视图的 shape 为 [1, 128, 128], offsets 为 [0, 0, 0]。
+- 示例 1：创建了一个 shape = [128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的部分视图的数据。该部分视图的 shape 为 [128, 128], offsets 为 [0, 0]。
 
     ```python
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[1, 128, 256])
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])
     data_clear_dummy = pypto.distributed.shmem_clear_data(
         src=shmem_tensor,
-        shape=[1, 128, 128],
-        offsets=[0, 0, 0],
+        shape=[128, 128],
+        offsets=[0, 0],
         pred=predToken,
     )
     ```
@@ -57,7 +57,7 @@ shmem_clear_data(
 - 示例 2：创建了一个 shape = [1, 128, 256] 的 shared memory tensor，清除当前 pe 对应的 shared memory tensor 的全部视图的数据。
 
     ```python
-    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[1, 128, 256])
+    shmem_tensor = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[128, 256])
     data_clear_dummy = pypto.distributed.shmem_clear_data(
         src=shmem_tensor,
         pred=predToken,

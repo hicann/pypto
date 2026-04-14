@@ -38,5 +38,5 @@ create_shmem_tensor(group_name: str, n_pes: int, dtype: DataType, shape: list[in
 ## 调用示例
 
 ```python
-data = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[1, 64, 128])
+data = pypto.distributed.create_shmem_tensor(group_name="tp", n_pes=8, dtype=pypto.DT_FP16, shape=[64, 128])
 ```
