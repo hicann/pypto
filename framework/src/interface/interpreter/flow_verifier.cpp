@@ -292,7 +292,7 @@ bool FlowVerifier::VerifyResult(
 
         auto tensorGraphResult = VerifyResult(goldenDataViewList[k], tensorDataViewList[k], rtol, atol);
         if (!tensorGraphResult.Check()) {
-            VERIFY_LOGE_FULL_E(
+            VERIFY_LOGE_FULL(
                 VerifyResultScene::VERIFY_RESULT_MISMATCH, "%s Verify for %zu data view list index %zu result FAILED",
                 key.c_str(), goldenDataViewList.size(), k);
             fprintf(
@@ -575,7 +575,7 @@ void FlowVerifier::VerifyPass(Function* func, int passIndex, const std::string& 
                 checkResult = false;
             }
         } catch (std::exception& e) {
-            VERIFY_LOGE_FULL_E(
+            VERIFY_LOGE_FULL(
                 VerifyResultScene::VERIFY_RESULT_MISMATCH,
                 "VerifyPass failed for function %s, pass %s (passIndex: %d, captureIndex: %zu): %s",
                 func->GetMagicName().c_str(), passIdentifier.c_str(), passIndex, captureIndex, e.what());

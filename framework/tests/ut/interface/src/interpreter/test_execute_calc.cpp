@@ -15,6 +15,8 @@
 
 #include <gtest/gtest.h>
 #include <limits>
+#include <filesystem>
+#include <cstdlib>
 
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/tensor/float.h"
@@ -262,6 +264,41 @@ TEST_F(CalcCommonTest, ExecuteOpGatherInL1Basic)
         float value = outputView->Get<float>(i);
         ASSERT_FLOAT_EQ(value, expected[i]);
     }
+}
+
+// 测试 ExecutePrint 在 csv 文件无法创建时走 DUMP_OPEN_FILE_FAILED 分支
+TEST_F(CalcCommonTest, ExecutePrintCsvOpenFailed)
+{
+    const std::string outputRoot = "/tmp/pypto_ut_print_csv_open_failed";
+    setenv("TILE_FWK_OUTPUT_DIR", outputRoot.c_str(), 1);
+    config::Reset();
+
+    auto func =
+        std::make_shared<Function>(Program::GetInstance(), "TestPrintCsvOpenFailed", "TestPrintCsvOpenFailed", nullptr);
+    std::vector<int64_t> shape = {2, 2};
+    auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, shape);
+    auto& printOp = func->AddOperation(Opcode::OP_PRINT, {inputTensor}, {});
+    printOp.SetAttribute(OP_ATTR_PREFIX + "cond", SymbolicScalar(1));
+    printOp.SetAttribute(OP_ATTR_PREFIX + "fname", std::string("ut_print_csv_open_failed"));
+
+    Tensor inputTensorData(DT_FP32, shape);
+    std::vector<float> inputVals = {1.f, 2.f, 3.f, 4.f};
+    auto inputData = RawTensorData::CreateTensor<float>(inputTensorData, inputVals);
+    auto inputView = std::make_shared<LogicalTensorData>(inputData);
+
+    auto tensorDir = config::LogTopFolder() + "/tensor";
+    std::filesystem::remove_all(tensorDir);
+    ASSERT_FALSE(std::filesystem::exists(tensorDir));
+
+    auto inoutDataPair = std::make_shared<FunctionIODataPair>();
+    FunctionFrame frame(func.get(), nullptr, nullptr, inoutDataPair, 0);
+    OperationInterpreter opInter;
+    std::vector<LogicalTensorDataPtr> ioperandDataViewList = {inputView};
+    std::vector<LogicalTensorDataPtr> ooperandInplaceDataViewList;
+    ExecuteOperationContext ctx = {
+        &frame, &opInter, &printOp, &ioperandDataViewList, nullptr, &ooperandInplaceDataViewList};
+
+    opInter.ExecuteOperation(&ctx);
 }
 
 // 测试 ExecuteOpUnary 以 OP_EXP 为例，验证一元运算路径正确调用 calc::Exp
@@ -1098,7 +1135,7 @@ TEST_F(CalcCommonTest, ExecuteOpPermute3D)
     auto inputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, inShape);
     auto outputTensor = std::make_shared<LogicalTensor>(*func, DT_FP32, outShape);
 
-    auto &permuteOp = func->AddOperation(Opcode::OP_PERMUTE, {inputTensor}, {outputTensor});
+    auto& permuteOp = func->AddOperation(Opcode::OP_PERMUTE, {inputTensor}, {outputTensor});
     permuteOp.SetAttribute(OpAttributeKey::perm, std::vector<int>{1, 0, 2});
 
     Tensor inputTensorData(DT_FP32, inShape);

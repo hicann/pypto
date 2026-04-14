@@ -30,7 +30,7 @@ struct CalcOps* GetCalcOps()
 #ifndef ENABLE_TESTS
         auto handle = dlopen(nullptr, RTLD_LAZY | RTLD_NOLOAD);
         if (handle == nullptr) {
-            VERIFY_LOGE_FULL_E(VerifyEnableScene::VERIFY_LOAD_CALC_OPS_FAILED, "Can't get program handle");
+            VERIFY_LOGE_FULL(VerifyEnableScene::VERIFY_LOAD_CALC_OPS_FAILED, "Can't get program handle");
             return;
         }
 #else
