@@ -60,11 +60,15 @@ public:
     int AllocNewTaskCtrl()
     {
         uint32_t& taskCtrlIndex = devStartArgs_->devCtrlState.taskCtrlIndex;
+        auto& taskCtrlInitCount = devStartArgs_->devCtrlState.taskCtrlInitCount;
         TIMEOUT_CHECK_START();
         while (true) {
             if (taskCtrlIndex == MAX_DEVICE_TASK_NUM)
                 taskCtrlIndex = 0;
-            if (!GetTaskCtrlInPool(taskCtrlIndex).IsNotFree()) {
+            if (taskCtrlIndex >= taskCtrlInitCount) {
+                taskCtrlInitCount++;
+                return taskCtrlIndex++;
+            } else if (!GetTaskCtrlInPool(taskCtrlIndex).IsNotFree()) {
                 return taskCtrlIndex++;
             }
             taskCtrlIndex++;
@@ -239,12 +243,12 @@ public:
         DEV_INFO("AllocatePrepare begin runtimedata: %lu, %lu %lu", ringBufferHead->GetIndexFinished(),
             ringBufferHead->GetIndexPending(), ringBufferHead->GetRuntimeDataCount());
         DevStartArgs *devStartArgs = reinterpret_cast<DevStartArgs*>(ringBufferHead->AllocatePrepare());
-        DEV_INFO("AllocatePrepare end");
 
         devStartArgs->syncFlag = 0;
         devStartArgs->InitProgram(devProg, reinterpret_cast<uint64_t>(devStartArgs));
         devStartArgs->devCtrlState.schAicpuNum = devProg->devArgs.scheCpuNum;
         devStartArgs->devCtrlState.taskCtrlIndex = 0;
+        devStartArgs->devCtrlState.taskCtrlInitCount = 0;
         devStartArgs->devScheState.threadIdx = CTRL_THREAD_INDEX;
         devStartArgs->devScheState.finished = 0;
 

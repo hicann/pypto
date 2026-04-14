@@ -132,7 +132,6 @@ struct DeviceTaskCtrl {
 
     // 这些原子变量跨线程了，不能sche与ctrl间两边同时写
     std::atomic<uint64_t> finishedFunctionCnt{0};
-    std::atomic<bool> runFlag{false};
     std::atomic<int> runcnt{0};
 
     std::atomic<bool> existNextSameIterTask{false}; // mark have next task
@@ -201,7 +200,6 @@ struct DeviceTaskCtrl {
         taskId = (reinterpret_cast<DynDeviceTask *>(devTask))->GetIndex();
 
         finishedFunctionCnt.store(0, std::memory_order_relaxed);
-        runFlag.store(true, std::memory_order_release);
         notFree.store(true, std::memory_order_release);
         nextSameIterTaskCtrl = 0;
 
