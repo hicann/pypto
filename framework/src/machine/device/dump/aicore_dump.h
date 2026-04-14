@@ -48,8 +48,8 @@ struct DumpTensorInfo {
     int32_t dataType; // INT8...
     int32_t rawMagic;
     int32_t dims;
-    int64_t exeStart;
-    int64_t exeEnd;
+    int64_t execStart;
+    int64_t execEnd;
     uint64_t rootHash;
     uint64_t funcHash;
     uint64_t timeStamp;
@@ -242,8 +242,8 @@ public:
             dumpTensorInfo.coreId = coreId_;
             dumpTensorInfo.dataType = static_cast<uint32_t>(rawTensor->dataType);
             dumpTensorInfo.dims = dimSize;
-            dumpTensorInfo.exeStart = execStart_;
-            dumpTensorInfo.exeEnd = execEnd_;
+            dumpTensorInfo.execStart = execStart_;
+            dumpTensorInfo.execEnd = execEnd_;
             dumpTensorInfo.rootHash = func->rootHash;
             dumpTensorInfo.funcHash = dyntask->cceBinary[func->GetOperationAttrCalleeIndex(opIdx)].funcHash;
             GetTensorOffsetAndShape<false>(

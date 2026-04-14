@@ -257,12 +257,12 @@ class CompactDumpTensorInfoParser:
             ("funcId", "uint32_t"),
             ("taskId", "uint32_t"),
             ("callopMagic", "uint32_t"),
-            ("coreId", "int32_t"),
+            ("blockIdx", "int32_t"),
             ("dataType", "int32_t"),
             ("rawMagic", "int32_t"),
             ("dims", "int32_t"),
-            ("exeStart", "int64_t"),
-            ("exeEnd", "int64_t"),
+            ("execStart", "int64_t"),
+            ("execEnd", "int64_t"),
             ("rootHash", "uint64_t"),
             ("funcHash", "uint64_t"),
             ("timeStamp", "uint64_t"),
@@ -280,8 +280,8 @@ class CompactDumpTensorInfoParser:
         total = 0
         # 基础字段
         total += FIELD_SIZES["uint32_t"] * 4  # headSize ~ taskId
-        total += FIELD_SIZES["int32_t"] * 4   # coreId ~ dims
-        total += FIELD_SIZES["int64_t"] * 2   # exeStart ~ exeEnd
+        total += FIELD_SIZES["int32_t"] * 4   # blockIdx ~ dims
+        total += FIELD_SIZES["int64_t"] * 2   # execStart ~ execEnd
         total += FIELD_SIZES["uint64_t"] * 3   # rootHash ~ timeStamp
         # 数组字段
         array_size = FIELD_SIZES["uint64_t"] * DEV_SHAPE_DIM_MAX
@@ -367,7 +367,6 @@ class CompactDumpTensorInfoParser:
             result["rawShape"] = result["rawShape"][:dims]
 
         # 衍生字段（可选）
-        result["exeDuration"] = result.get("exeEnd") - result.get("exeStart")
         result["dataTypeStr"] = _get_data_type(result.get("dataType", 17))[0]
 
         return result
@@ -387,7 +386,7 @@ class CompactDumpTensorInfoParser:
         data.tofile(bin_file)
 
         tensor_info["ioflag"] = bin_file.split("_")[-1][:-5]
-        tensor_info["seqNo"] = bin_file.split("_")[-8]
+        tensor_info["seqNo"] = int(os.path.basename(bin_file).split("_")[1])
 
         tensor_info["bin_file"] = bin_file
 
@@ -401,6 +400,38 @@ class CompactDumpTensorInfoParser:
             self.task_tensor_info[key] = []
         self.task_tensor_info[key].append(tensor_info)
         return tensor_info
+
+    def get_exec_time(self, prof_data_file):
+        """解析prof_data文件，获取每个任务的执行时间"""
+        with open(prof_data_file, "rb") as f:
+            data = json.load(f)
+
+        # 构建任务执行时间索引，键为 (blockId, taskId, seqNo)
+        exec_time_index = {}
+        for block_data in data:
+            block_idx = block_data.get("blockIdx")
+            for task in block_data.get("tasks", []):
+                key = (block_idx, task.get("taskId"), task.get("seqNo"))
+                exec_time_index[key] = {
+                    "execStart": task.get("execStart", 0),
+                    "execEnd": task.get("execEnd", 0)
+                }
+
+        # 批量更新任务执行时间
+        for _, tensor_infos in self.task_tensor_info.items():
+            if not tensor_infos:
+                continue
+                
+            block_idx = tensor_infos[0].get("blockIdx")
+            task_id = tensor_infos[0].get("taskId")
+            seq_no = tensor_infos[0].get("seqNo")
+            key = (block_idx, task_id, seq_no)
+            if key not in exec_time_index:
+                continue
+            exec_time = exec_time_index[key]
+            for tensor_info in tensor_infos:
+                tensor_info["execStart"] = exec_time["execStart"]
+                tensor_info["execEnd"] = exec_time["execEnd"]
 
     def tensor_compare(self):
         logging.info(f"Start compare tensors.")
@@ -452,6 +483,8 @@ class CompactDumpTensorInfoParser:
         merge_tensor_info["dataType"] = tensor_infos[0]["dataType"]
         merge_tensor_info["rootHash"] = 0
         merge_tensor_info["funcHash"] = 0
+        merge_tensor_info["execStart"] = 0
+        merge_tensor_info["execEnd"] = 0
 
         # 生成保存路径
         file_path = os.path.join(self.dump_tensor_path,
@@ -535,14 +568,23 @@ def main():
                 continue
             bin_file = os.path.join(dir_path, file_name)
             parser.parse_file(bin_file)
+    
+    parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(args.dump_tensor_path)))
+    prof_data_file = os.path.join(parent_dir, "tilefwk_L1_prof_data.json")
+    if os.path.exists(prof_data_file):
+        parser.get_exec_time(prof_data_file)
 
     tensor_infos = parser.tensor_compare()
     tensor_infos.sort(key=lambda x: x.get("timeStamp"))  # 输出前做一次排序
     merge_tensor_infos = parser.merge_raw_tensor()
     tensor_infos.extend(merge_tensor_infos)
-    df = pd.DataFrame(tensor_infos)
-    df["rootHash"] = "'" + df["rootHash"].astype(str)
-    df["funcHash"] = "'" + df["funcHash"].astype(str)
+    df = pd.DataFrame(tensor_infos, dtype=object)
+    # 转成字符串，防止用excel打开后显示为科学计算法，导致数据截断
+    df["rootHash"] = df["rootHash"].apply(lambda x: f'\t{x:.0f}')
+    df["funcHash"] = df["funcHash"].apply(lambda x: f'\t{x:.0f}')
+    df["execStart"] = df["execStart"].apply(lambda x: f'\t{x:.0f}')
+    df["execEnd"] = df["execEnd"].apply(lambda x: f'\t{x:.0f}')
+
     logging.info(df)
 
     df.to_csv(os.path.join(args.dump_tensor_path, "tensor_info.csv"), index=False, encoding="utf-8")
