@@ -1,58 +1,69 @@
 # pypto.reciprocal
 
-## 产品支持情况
-
-| 产品             | 是否支持 |
-|:-----------------|:--------:|
-| Ascend 950PR/Ascend 950DT |    √     |
-| Atlas A3 训练系列产品/Atlas A3 推理系列产品 |    √     |
-| Atlas A2 训练系列产品/Atlas A2 推理系列产品 |    √     |
-
 ## 功能说明
 
-计算输入Tensor中每个元素的倒数，逐元素运算。
+计算输入张量的元素级倒数，即 `out = 1 / input`。
 
-## 函数原型
+## 接口原型
 
 ```python
-reciprocal(input: Tensor) -> Tensor
+pypto.reciprocal(input, precision_type=pypto.RecipAlgorithm.INTRINSIC) -> Tensor
 ```
 
 ## 参数说明
 
+| 参数 | 类型 | 说明 |
+|:-----|:-----|:-----|
+| input | Tensor | 输入张量，必须是非零值（input != 0）。 |
+| precision_type | RecipAlgorithm, 可选 | 倒数操作的精度模式。默认值为 `RecipAlgorithm.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
 
-| 参数名  | 输入/输出 | 说明                                                                 |
-|---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP32，DT_BF16，DT_FP16。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+## 返回值
 
-## 返回值说明
+| 类型 | 说明 |
+|:-----|:-----|
+| Tensor | 包含输入张量元素级倒数的新张量。 |
 
-返回Tensor类型。其Shape、数据类型与输入Tensor一致，其元素为输入Tensor对应元素的倒数。
+## 代码示例
 
-## 调用示例
-
-### TileShape设置示例
-
-说明：调用该operation接口前，应通过set_vec_tile_shapes设置TileShape。
-
-TileShape维度应和输出一致。
-
-示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+### 示例 1：基本使用
 
 ```python
-pypto.set_vec_tile_shapes(4, 16)
-```
+import pypto
 
-### 接口调用示例
-
-```python
-x = pypto.tensor([1, 4], pypto.DT_FP32)
+x = pypto.tensor([4], pypto.DT_FP32)
 y = pypto.reciprocal(x)
+
+# Input x:  [-0.4595, -2.1219, -1.4314,  0.7298]
+# Output y: [-2.1763, -0.4713, -0.6986,  1.3702]
 ```
 
-结果示例如下：
+### 示例 2：使用高精度模式
 
 ```python
-输入数据x: [1.0, 2.0, 3.0, 4.0, 5.0]
-输出数据y: [1.0, 0.5, 0.33, 0.25, 0.2]
+import pypto
+
+# 使用高精度模式进行 FP16 计算
+x = pypto.tensor([4], pypto.DT_FP16)
+y = pypto.reciprocal(x, pypto.RecipAlgorithm.HIGH_PRECISION)
+
+# Input x:  [4]
+# Output y: [0.25]
 ```
+
+### 示例 3：使用指令模式
+
+```python
+import pypto
+
+# 使用指令模式
+x = pypto.tensor([4], pypto.DT_FP32)
+y = pypto.reciprocal(x, pypto.RecipAlgorithm.INTRINSIC)
+
+# Input x:  [4]
+# Output y: [0.25]
+```
+
+## 相关接口
+
+- [pypto.rsqrt](pypto-rsqrt.md)：计算输入张量的元素级平方根的倒数。
+- [pypto.div](pypto-div.md)：计算两个张量的元素级除法。

@@ -85,6 +85,31 @@ void bind_enum(py::module& m)
         .value("HIGH_PRECISION", DivAlgorithm::HIGH_PRECISION)
         .finalize();
 
+    py::native_enum<SqrtAlgorithm>(m, "SqrtAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", SqrtAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", SqrtAlgorithm::HIGH_PRECISION)
+        .finalize();
+
+    py::native_enum<RsqrtAlgorithm>(m, "RsqrtAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", RsqrtAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", RsqrtAlgorithm::HIGH_PRECISION)
+        .finalize();
+
+    py::native_enum<ExpAlgorithm>(m, "ExpAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", ExpAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", ExpAlgorithm::HIGH_PRECISION)
+        .finalize();
+
+    py::native_enum<LogAlgorithm>(m, "LogAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", LogAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", LogAlgorithm::HIGH_PRECISION)
+        .finalize();
+
+    py::native_enum<RecipAlgorithm>(m, "RecipAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", RecipAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", RecipAlgorithm::HIGH_PRECISION)
+        .finalize();
+
     py::native_enum<TileType>(m, "TileType", "enum.IntEnum")
         .value("VEC", TileType::VEC)
         .value("CUBE", TileType::CUBE)

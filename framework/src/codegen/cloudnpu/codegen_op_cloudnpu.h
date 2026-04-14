@@ -362,6 +362,7 @@ private:
 
     std::string PrintUnary(const PrintUnaryParam& param) const;
     std::string PrintUnaryTileTensor() const;
+    void AddUnaryPrecisionTypeParm(std::vector<std::string>& templateParamList) const;
     std::string PrintUnaryDynamicUnaligned(const PrintUnaryParam& param) const;
     std::string PrintUnaryStatic(const PrintUnaryParam& param) const;
 

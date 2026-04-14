@@ -31,17 +31,21 @@ void UnaryOperationOperandCheck(
 template <UnaryOpType T>
 void TiledUnaryOperation(
     Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& result,
-    uint32_t workspaceSize = 0)
+    uint32_t workspaceSize = 0, int64_t precisionType = 0)
 {
     if (cur == input.tensor.GetShape().size()) {
         auto tile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        Operation* op = nullptr;
         if (workspaceSize == 0) {
-            function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile});
+            op = &function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile});
         } else {
             LogicalTensorPtr workspace =
                 std::make_shared<LogicalTensor>(function, DT_UINT8, std::vector<int64_t>{workspaceSize});
-            function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile, workspace});
+            op = &function.AddOperation(GetUnaryOpNameCode<T>(), {tile}, {resultTile, workspace});
+        }
+        if (T == UnaryOpType::EXP || T == UnaryOpType::SQRT || T == UnaryOpType::LN || T == UnaryOpType::RECIPROCAL) {
+            op->SetAttribute(OpAttributeKey::precisionType, precisionType);
         }
         return;
     }
@@ -49,35 +53,40 @@ void TiledUnaryOperation(
     for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
         input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
         input.tileInfo.offset[cur] = i;
-        TiledUnaryOperation<T>(function, tileShape, cur + 1, input, result, workspaceSize);
+        TiledUnaryOperation<T>(function, tileShape, cur + 1, input, result, workspaceSize, precisionType);
     }
 }
 
 template <UnaryOpType T>
 void TiledUnaryOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result,
-    int32_t workspaceSize = 0)
+    int32_t workspaceSize = 0, int64_t precisionType = 0)
 {
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
         << "The shape size of operand and offset must be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
-    TiledUnaryOperation<T>(function, tileShape, 0, input, result, workspaceSize);
+    TiledUnaryOperation<T>(function, tileShape, 0, input, result, workspaceSize, precisionType);
 }
 
-Tensor Exp(const Tensor& self)
+Tensor Exp(const Tensor& self, ExpAlgorithm precisionType)
 {
     DECLARE_TRACER();
 
-    RETURN_CALL(UnaryOperation<UnaryOpType::EXP>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    auto [result, op] =
+        TensorUnaryOperationWithOp<UnaryOpType::EXP>(*Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+    return Tensor(result);
 }
 
-Tensor Ln(const Tensor& operand)
+Tensor Ln(const Tensor& operand, LogAlgorithm precisionType)
 {
     DECLARE_TRACER();
 
-    RETURN_CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+    auto [result, op] = TensorUnaryOperationWithOp<UnaryOpType::LN>(*Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+    op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+    return Tensor(result);
 }
 
 Tensor IsFinite(const Tensor& self)
@@ -95,7 +104,7 @@ Tensor IsFinite(const Tensor& self)
         DT_BOOL);
 }
 
-Tensor Rsqrt(const Tensor& self)
+Tensor Rsqrt(const Tensor& self, RsqrtAlgorithm precisionType)
 {
     DECLARE_TRACER();
 
@@ -105,25 +114,31 @@ Tensor Rsqrt(const Tensor& self)
             CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
             DataType::DT_FP32, CastMode::CAST_NONE);
     }
-    auto sqrtSelf = CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), castSelf);
+    auto [sqrtResult, sqrtOp] =
+        TensorUnaryOperationWithOp<UnaryOpType::SQRT>(*Program::GetInstance().GetCurrentFunction(), castSelf);
+    sqrtOp->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
     auto ones = CALL(
         FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, 1.0), SymbolicScalar(),
         DataType::DT_FP32, self.GetShape(), self.GetStorage()->GetDynValidShape());
-    auto result =
-        CALL(BinaryOperation<BinaryOpType::DIV>, *Program::GetInstance().GetCurrentFunction(), ones, sqrtSelf);
+    auto [divResult, divOp] =
+        TensorBinaryOperationWithOp<BinaryOpType::DIV>(*Program::GetInstance().GetCurrentFunction(), ones, sqrtResult);
+    divOp->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
     if (self.GetDataType() != DataType::DT_FP32) {
         RETURN_CALL(
-            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, self.GetDataType(),
-            CastMode::CAST_NONE);
+            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), divResult,
+            self.GetDataType(), CastMode::CAST_NONE);
     }
-    return result;
+    return divResult;
 }
 
-Tensor Sqrt(const Tensor& self)
+Tensor Sqrt(const Tensor& self, SqrtAlgorithm precisionType)
 {
     DECLARE_TRACER();
 
-    RETURN_CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    auto [result, op] =
+        TensorUnaryOperationWithOp<UnaryOpType::SQRT>(*Program::GetInstance().GetCurrentFunction(), self.GetStorage());
+    op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+    return Tensor(result);
 }
 
 Tensor Relu(const Tensor& self)
@@ -202,12 +217,13 @@ Tensor BitwiseNot(const Tensor& self)
         UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
-Tensor Reciprocal(const Tensor& operand)
+Tensor Reciprocal(const Tensor& operand, RecipAlgorithm precisionType)
 {
     DECLARE_TRACER();
 
-    RETURN_CALL(
-        UnaryOperation<UnaryOpType::RECIPROCAL>, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+    auto [result, op] = TensorUnaryOperationWithOp<UnaryOpType::RECIPROCAL>(*Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+    op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
+    return Tensor(result);
 }
 
 Tensor Abs(const Tensor& self)
@@ -237,7 +253,11 @@ void ExpOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    return TiledUnaryOperation<UnaryOpType::EXP>(function, tileShape, iOperand[0], oOperand[0]);
+    int64_t precisionType = static_cast<int64_t>(ExpAlgorithm::DEFAULT);
+    if (op.HasAttr(OpAttributeKey::precisionType)) {
+        precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
+    }
+    return TiledUnaryOperation<UnaryOpType::EXP>(function, tileShape, iOperand[0], oOperand[0], 0, precisionType);
 }
 
 void RsqrtOperationTileFunc(
@@ -285,7 +305,11 @@ void SqrtOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    return TiledUnaryOperation<UnaryOpType::SQRT>(function, tileShape, iOperand[0], oOperand[0]);
+    int64_t precisionType = static_cast<int64_t>(SqrtAlgorithm::DEFAULT);
+    if (op.HasAttr(OpAttributeKey::precisionType)) {
+        precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
+    }
+    return TiledUnaryOperation<UnaryOpType::SQRT>(function, tileShape, iOperand[0], oOperand[0], 0, precisionType);
 }
 
 void BitwiseNotOperationTileFunc(
@@ -298,10 +322,15 @@ void BitwiseNotOperationTileFunc(
 
 void ReciprocalOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
-    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+    const std::vector<LogicalTensorPtr>& oOperand, const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    return TiledUnaryOperation<UnaryOpType::RECIPROCAL>(function, tileShape, iOperand[0], oOperand[0]);
+    int64_t precisionType = static_cast<int64_t>(RecipAlgorithm::DEFAULT);
+    if (op.HasAttr(OpAttributeKey::precisionType)) {
+        precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
+    }
+    return TiledUnaryOperation<UnaryOpType::RECIPROCAL>(
+        function, tileShape, iOperand[0], oOperand[0], 0, precisionType);
 }
 
 void AbsOperationTileFunc(
@@ -317,7 +346,11 @@ void LnOperationTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     UnaryOperationOperandCheck(iOperand, oOperand);
-    return TiledUnaryOperation<UnaryOpType::LN>(function, tileShape, iOperand[0], oOperand[0]);
+    int64_t precisionType = static_cast<int64_t>(LogAlgorithm::DEFAULT);
+    if (op.HasAttr(OpAttributeKey::precisionType)) {
+        precisionType = op.GetIntAttribute(OpAttributeKey::precisionType);
+    }
+    return TiledUnaryOperation<UnaryOpType::LN>(function, tileShape, iOperand[0], oOperand[0], 0, precisionType);
 }
 
 void IsFiniteOperationTileFunc(

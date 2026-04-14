@@ -755,8 +755,8 @@ class Tensor:
         return pypto.mrgsort(self, mergesize)
 
     @source_location
-    def exp(self) -> 'Tensor':
-        return pypto.exp(self)
+    def exp(self, precision_type: ExpAlgorithm = ExpAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.exp(self, precision_type)
 
     @source_location
     def sign(self) -> 'Tensor':
@@ -775,20 +775,20 @@ class Tensor:
         return pypto.expm1(self)
 
     @source_location
-    def log(self) -> 'Tensor':
-        return pypto.log(self)
+    def log(self, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.log(self, precision_type)
 
     @source_location
     def log1p(self) -> 'Tensor':
         return pypto.log1p(self)
 
     @source_location
-    def log10(self) -> 'Tensor':
-        return pypto.log10(self)
+    def log10(self, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.log10(self, precision_type)
 
     @source_location
-    def log2(self) -> 'Tensor':
-        return pypto.log2(self)
+    def log2(self, precision_type: LogAlgorithm = LogAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.log2(self, precision_type)
 
     @source_location
     def logical_not(self) -> 'Tensor':
@@ -819,12 +819,12 @@ class Tensor:
         return pypto.round(self, decimals)
 
     @source_location
-    def rsqrt(self) -> 'Tensor':
-        return pypto.rsqrt(self)
+    def rsqrt(self, precision_type: RsqrtAlgorithm = RsqrtAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.rsqrt(self, precision_type)
 
     @source_location
-    def sqrt(self) -> 'Tensor':
-        return pypto.sqrt(self)
+    def sqrt(self, precision_type: SqrtAlgorithm = SqrtAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.sqrt(self, precision_type)
 
     @source_location
     def ceil(self) -> 'Tensor':
@@ -839,8 +839,8 @@ class Tensor:
         return pypto.trunc(self)
 
     @source_location
-    def reciprocal(self) -> 'Tensor':
-        return pypto.reciprocal(self)
+    def reciprocal(self, precision_type: RecipAlgorithm = RecipAlgorithm.INTRINSIC) -> 'Tensor':
+        return pypto.reciprocal(self, precision_type)
 
     @source_location
     def relu(self) -> 'Tensor':

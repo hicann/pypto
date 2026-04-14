@@ -38,7 +38,7 @@ TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1)
 #ifdef __DAV_V220
             pipe_barrier(PIPE_V);
 #endif
-            UnaryCompute<UnaryOp::EXP, LastUse2Dim<0, 0>>(dst, dst);
+            UnaryCompute<UnaryOp::EXP, 0, LastUse2Dim<0, 0>>(dst, dst);
             return;
         }
     }

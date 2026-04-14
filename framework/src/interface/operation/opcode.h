@@ -907,6 +907,7 @@ const std::unordered_set<Opcode> UNSUPPORT_BF16_ARCH35_OPS{
     Opcode::OP_RSQRT,
     Opcode::OP_SQRT,
     Opcode::OP_RELU,
+    Opcode::OP_RECIPROCAL,
     Opcode::OP_ABS,
     Opcode::OP_LOGICALNOT,
     Opcode::OP_LOGICALAND,

@@ -10,8 +10,14 @@
 ## 函数原型
 
 ```python
-sqrt(self) -> 'Tensor'
+sqrt(self, precision_type: SqrtAlgorithm = SqrtAlgorithm.INTRINSIC) -> 'Tensor'
 ```
+
+## 参数说明
+
+| 参数名  | 输入/输出 | 说明                                                                 |
+|---------|-----------|----------------------------------------------------------------------|
+| precision_type  | 输入      | 精度类型。 <br> 支持的类型为：SqrtAlgorithm。 <br> 默认值为 SqrtAlgorithm.INTRINSIC。 <br> INTRINSIC 直接使用芯片指令进行计算，速度更快；HIGH_PRECISION 使用更高精度的计算以减少精度损失。 |
 
 ## 详细说明
 

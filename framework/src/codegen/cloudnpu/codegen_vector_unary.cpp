@@ -558,6 +558,30 @@ std::string CodeGenOpCloudNPU::PrintBitwiseNot() const
     return oss.str();
 }
 
+void CodeGenOpCloudNPU::AddUnaryPrecisionTypeParm(std::vector<std::string>& templateParamList) const
+{
+    if (opCode == Opcode::OP_EXP || opCode == Opcode::OP_SQRT || opCode == Opcode::OP_LN ||
+        opCode == Opcode::OP_RECIPROCAL) {
+        int64_t precisionType = 0;
+        (void)GetAttr(OpAttributeKey::precisionType, precisionType);
+        std::string enumName = "";
+        if (opCode == Opcode::OP_EXP) {
+            enumName = "ExpAlgorithm";
+        } else if (opCode == Opcode::OP_SQRT) {
+            enumName = "SqrtAlgorithm";
+        } else if (opCode == Opcode::OP_LN) {
+            enumName = "LogAlgorithm";
+        } else if (opCode == Opcode::OP_RECIPROCAL) {
+            enumName = "RecipAlgorithm";
+        }
+        std::string enumValue = "DEFAULT";
+        if (precisionType == 1) {
+            enumValue = "HIGH_PRECISION";
+        }
+        templateParamList.emplace_back("pto::" + enumName + "::" + enumValue);
+    }
+}
+
 std::string CodeGenOpCloudNPU::PrintUnaryTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
@@ -565,10 +589,16 @@ std::string CodeGenOpCloudNPU::PrintUnaryTileTensor() const
 
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
+    AddUnaryPrecisionTypeParm(templateParamList);
     std::string lastUse = GetLastUse();
     oss << tileOpName;
+
     if (!lastUse.empty()) {
-        oss << WrapParamByAngleBrackets({lastUse});
+        templateParamList.emplace_back(lastUse);
+    }
+
+    if (!templateParamList.empty()) {
+        oss << WrapParamByAngleBrackets(templateParamList);
     }
     oss << WrapParamByParentheses({dstTensor, srcTensor});
     oss << ";\n";

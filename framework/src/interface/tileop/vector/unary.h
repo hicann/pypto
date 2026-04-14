@@ -36,13 +36,13 @@ TILEOP constexpr bool IsIntegralType()
            std::is_same_v<DType, int64_t> || std::is_same_v<DType, uint64_t>;
 }
 
-template <UnaryOp op, typename LastUse, typename T0, typename T1>
+template <UnaryOp op, auto PrecisionType = 0, typename LastUse, typename T0, typename T1>
 TILEOP void UnaryComputeImpl(T0 dst, T1 src)
 {
     constexpr auto n1 = Std::tuple_element<DIM_1ST, LastUse>::type::value;
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     if constexpr (op == UnaryOp::EXP) {
-        PTO_WITH_LAST_USE(pto::TEXP(dst, src), n1, n2);
+        PTO_WITH_LAST_USE(pto::TEXP<PrecisionType>(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::RSQRT) {
@@ -50,7 +50,7 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src)
         return;
     }
     if constexpr (op == UnaryOp::SQRT) {
-        PTO_WITH_LAST_USE(pto::TSQRT(dst, src), n1, n2);
+        PTO_WITH_LAST_USE(pto::TSQRT<PrecisionType>(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::BRCB) {
@@ -62,7 +62,7 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src)
         return;
     }
     if constexpr (op == UnaryOp::RECIPROCAL) {
-        PTO_WITH_LAST_USE(pto::TRECIP(dst, src), n1, n2);
+        PTO_WITH_LAST_USE(pto::TRECIP<PrecisionType>(dst, src), n1, n2);
         return;
     }
     if constexpr (op == UnaryOp::BITWISENOT) {
@@ -74,7 +74,7 @@ TILEOP void UnaryComputeImpl(T0 dst, T1 src)
         return;
     }
     if constexpr (op == UnaryOp::LN) {
-        pto::TLOG(dst, src);
+        pto::TLOG<PrecisionType>(dst, src);
         return;
     }
 }
@@ -119,7 +119,7 @@ TILEOP void IsFiniteComputeImpl(TileDefineDst dst, B16TileDefineSrc src, HalfTil
     }
 }
 
-template <UnaryOp op, typename LastUse, typename T0, typename T1>
+template <UnaryOp op, auto PrecisionType = 0, typename LastUse, typename T0, typename T1>
 TILEOP void UnaryCompute(T0 dst, T1 src)
 {
     if constexpr (TileOp::IsConstContinous<T0, T1>() == true) {
@@ -127,7 +127,7 @@ TILEOP void UnaryCompute(T0 dst, T1 src)
         auto srcTile = PtoTile<T1, pto::BLayout::RowMajor, true>().Data();
         pto::TASSIGN(dstTile, (uint64_t)dst.GetAddr());
         pto::TASSIGN(srcTile, (uint64_t)src.GetAddr());
-        UnaryComputeImpl<op, LastUse>(dstTile, srcTile);
+        UnaryComputeImpl<op, PrecisionType, LastUse>(dstTile, srcTile);
         return;
     }
     const auto dstLayout = dst.GetLayout();
@@ -143,7 +143,7 @@ TILEOP void UnaryCompute(T0 dst, T1 src)
                 auto tileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 dstTile.Assign(dst, tileOffsets);
                 srcTile.Assign(src, tileOffsets);
-                UnaryComputeImpl<op, LastUse>(dstTile.Data(), srcTile.Data());
+                UnaryComputeImpl<op, PrecisionType, LastUse>(dstTile.Data(), srcTile.Data());
             }
         }
     }
@@ -184,30 +184,31 @@ TILEOP void BrcbCompute(T0 dst, T1 src)
                 auto srcTileOffsets = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstTileOffsets * sizeof(typename T0::Type)));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcTileOffsets * sizeof(typename T1::Type)));
-                UnaryComputeImpl<UnaryOp::BRCB, LastUse>(dstTile, srcTile);
+                UnaryComputeImpl<UnaryOp::BRCB, 0, LastUse>(dstTile, srcTile);
             }
         }
     }
 }
 
-template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+#define OP_TILE_OP_EXP TExp
+template <auto PrecisionType = pto::ExpAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TExp(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::EXP, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::EXP, PrecisionType, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_RSQRT TRsqrt
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TRsqrt(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::RSQRT, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::RSQRT, 0, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_SQRT TSqrt
-template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+template <auto PrecisionType = pto::SqrtAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TSqrt(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::SQRT, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::SQRT, PrecisionType, LastUse>(dst, src);
 }
 
 template <typename DstTileTensor, typename SrcTileTensor, typename BufferTileTensor>
@@ -241,8 +242,8 @@ TILEOP void TIsFiniteCombineAxis(DstTileTensor dst, SrcTileTensor src, BufferTil
         using TileDefineDst =
             pto::Tile<pto::TileType::Vec, DstType, tileDstH, tileDstW, pto::BLayout::RowMajor, validH, validW>;
         using HalfTileDefineSrc = pto::Tile<
-            pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor, validH,
-            validW>;
+            pto::TileType::Vec, half, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(half), pto::BLayout::RowMajor,
+            validH, validW>;
         using B16TileDefineSrc = pto::Tile<
             pto::TileType::Vec, int16_t, tileSrcH, tileSrcW * sizeof(SrcType) / sizeof(int16_t), pto::BLayout::RowMajor,
             validH, validW>;
@@ -375,7 +376,6 @@ TILEOP void TIsFinite(DstTileTensor dst, SrcTileTensor src, BufferTileTensor buf
     } else {
         TIsFinite4Floats(dst, src, buffer);
     }
-
 }
 
 #define OP_TILE_OP_BRCB Tbrcb
@@ -389,21 +389,21 @@ TILEOP void Tbrcb(T0 dst, T1 src)
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TAbs(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::ABS, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::ABS, 0, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_BITWISENOT TBitwiseNot
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TBitwiseNot(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::BITWISENOT, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::BITWISENOT, 0, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_LOG TLog
-template <typename T0, typename T1>
+template <auto PrecisionType = pto::LogAlgorithm::DEFAULT, typename T0, typename T1>
 TILEOP void TLog(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::LN, LastUse2Dim<0, 0>>(dst, src);
+    UnaryCompute<UnaryOp::LN, PrecisionType, LastUse2Dim<0, 0>>(dst, src);
 }
 
 template <typename Ttemp, typename T0, typename T1>
@@ -698,16 +698,16 @@ TILEOP void TExpm1(T0 dst, T1 tmp, T2 src)
 }
 
 #define OP_TILE_OP_RECIPROCAL TReciprocal
-template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
+template <auto PrecisionType = pto::RecipAlgorithm::DEFAULT, typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TReciprocal(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::RECIPROCAL, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::RECIPROCAL, PrecisionType, LastUse>(dst, src);
 }
 
 #define OP_TILE_OP_RELU TRelu
 template <typename LastUse = LastUse2Dim<0, 0>, typename T0, typename T1>
 TILEOP void TRelu(T0 dst, T1 src)
 {
-    UnaryCompute<UnaryOp::RELU, LastUse>(dst, src);
+    UnaryCompute<UnaryOp::RELU, 0, LastUse>(dst, src);
 }
 #endif
