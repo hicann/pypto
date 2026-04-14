@@ -217,6 +217,33 @@ y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0], [])
 # 正确示例
 y = pypto.view(x, [16, 16, 8, 8], [0, 0, 0, 0], [])
 ```
+#### 使用动态Shape的Tensor进行计算表达
+```python
+# 错误示例
+@pypto.frontend.jit
+def kernel_with_dynamic(
+    a: pypto.Tensor([pypto.DYNAMIC, ...]),
+    out: pypto.Tensor([pypto.DYNAMIC, ...]),
+):
+    pypto.set_vec_tile_shapes(16, 16)
+    # 用动态Shape的Tensor进行计算表达
+    out[:] = pypto.exp(a)
+
+# 正确示例
+@pypto.frontend.jit
+def kernel_with_dynamic(
+    a: pypto.Tensor([pypto.DYNAMIC, ...]),
+    out: pypto.Tensor([pypto.DYNAMIC, ...]),
+):
+    pypto.set_vec_tile_shapes(16, 16)
+    view = 32
+    # 在loop中view出静态shape后，再做计算
+    count = (a.shape[0] - 1 + view) // view
+    for idx in pypto.loop(count):
+        temp = a[idx: idx + view, :]
+        out[idx: idx + view, :] = pypto.exp(temp)
+```
+
 
 ---
 

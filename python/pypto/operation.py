@@ -190,6 +190,12 @@ def reshape(
     if inplace:
         out = pypto_impl.Reshape(input, to_syms(shape), inplace)
     else:
+        if not all(isinstance(s, int) for s in shape):
+            raise TypeError(
+                f"reshape() requires integer shape when 'inplace=False', "
+                f"but got [{', '.join(type(s).__name__ for s in shape)}]. "
+                f"Use 'inplace=True' for dynamic shapes."
+            )
         if valid_shape is None:
             out = pypto_impl.Reshape(input, shape)
         else:

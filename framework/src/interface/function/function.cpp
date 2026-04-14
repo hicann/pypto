@@ -1491,6 +1491,7 @@ Operation& Function::AddOperation(
     const Opcode opCode, LogicalTensors iOperands, const LogicalTensors& oOperands, const bool updateTensorMap)
 {
     for (auto& iOperand : iOperands) {
+        CheckTensorDynamicShape(iOperand, opCode);
         FUNCTION_ASSERT(FError::INVALID_VAL, iOperand->shape.size() != 0) << "tensor shape size invalid";
         iOperand = ConnectWithOverlap(iOperand);
     }
