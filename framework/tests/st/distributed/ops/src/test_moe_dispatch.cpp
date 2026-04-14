@@ -40,16 +40,15 @@ void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
     Tensor expertTokenNums(DataType::DT_INT32, {expertNumPerRank}, "expertTokenNums");
     Tensor expandX(dType, expandXShape, "expandX");
     Tensor combineInfo(DataType::DT_INT32, combineInfoShape, "combineInfo");
-    Tensor recvCounts(DataType::DT_INT32, {1}, "recvCounts");
     std::string xPath = goldenDir + "/x_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<T> tokenTensorPtr = ReadToVector<T>(xPath, tokenTensorShape);
     std::string expertIdsPath = goldenDir + "/expert_ids_rank_" + std::to_string(testParam.rankId) + ".bin";
     std::vector<int32_t> tokenExpertTablePtr = ReadToVector<int32_t>(expertIdsPath, tokenExpertTableShape);
-    FUNCTION("MoeDispatch", {tokenTensor, tokenExpertTable}, {expandX, expertTokenNums, combineInfo, recvCounts})
+    MoeConfig moeConfig{routedNum, expertNumPerRank, static_cast<int32_t>(testParam.rankSize)};
+    FUNCTION("MoeDispatch", {tokenTensor, tokenExpertTable}, {expandX, expertTokenNums, combineInfo})
     {
-        Distributed::MoeDistributedDispatchV2(
-            tokenTensor, tokenExpertTable, testParam.group, static_cast<uint32_t>(testParam.rankSize), routedNum, 0, 0,
-            expandX, combineInfo, expertTokenNums, recvCounts);
+        Distributed::MoeDistributedDispatch(tokenTensor, tokenExpertTable, expandX, expertTokenNums, combineInfo,
+            testParam.group, moeConfig);
     }
     ProgramData::GetInstance().AppendInputs({
         RawTensorData::CreateTensor<T>(tokenTensor, tokenTensorPtr),
@@ -59,7 +58,6 @@ void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
         RawTensorData::CreateTensorZero(expandX),
         RawTensorData::CreateTensorZero(expertTokenNums),
         RawTensorData::CreateTensorZero(combineInfo),
-        RawTensorData::CreateTensorZero(recvCounts),
     });
     DeviceLauncherConfig config;
     config.runModel = false;
@@ -77,9 +75,6 @@ void TestShmemMoeDispatch(OpTestParam& testParam, std::string& goldenDir)
     EXPECT_TRUE(CompareWithGolden<uint8_t*>(
         DataType::DT_INT32, goldenDir + "/combine_info_rank_", combineInfoEleNum, combineInfoOutPut->GetDevPtr(),
         testParam));
-    auto recvCountsOutPut = ProgramData::GetInstance().GetOutputData(3);
-    EXPECT_TRUE(CompareWithGolden<uint8_t*>(
-        DataType::DT_INT32, goldenDir + "/recv_counts_rank_", 1, recvCountsOutPut->GetDevPtr(), testParam));
 }
 
 template void TestShmemMoeDispatch<int32_t>(OpTestParam& testParam, std::string& goldenDir);
