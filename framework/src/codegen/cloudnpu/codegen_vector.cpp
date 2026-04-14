@@ -975,8 +975,8 @@ std::string CodeGenOpCloudNPU::GenIndexAddUBOp() const
 
 std::string CodeGenOpCloudNPU::GenIndexAddOp() const
 {
-    ASSERT(opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
-    ASSERT(isSupportLayout) << "IndexAdd operation only support TileTensor mode";
+    ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OP_ATTR_PREFIX + "axis")) << "cannot get axis attr";
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "IndexAdd operation only support TileTensor mode";
     int axis = AnyCast<int64_t>(opAttrs.at(OP_ATTR_PREFIX + "axis"));
     axis += SHAPE_DIM5 - rawShape[ID0].size();
     std::string dstTensor = QueryTileTensorNameByIdx(ID0);
