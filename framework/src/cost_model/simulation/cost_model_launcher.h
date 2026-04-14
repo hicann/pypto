@@ -222,7 +222,7 @@ private:
         InitKernelInOuts(kArgs, inputs, outputs, true);
         RunCostModel(&kArgs);
         SIMULATION_LOGI("Run TestModel");
-        RunTestMode(&kArgs, DEVICE_MAX_AICPU_NUM);
+        RunTestMode(&kArgs);
         SIMULATION_LOGI("Run DynCostModel");
         RunDynCostModel();
         SIMULATION_LOGI("Run PvModel");
@@ -359,10 +359,9 @@ private:
         }
 
         model_ = std::make_shared<AiCorePvModelImpl>(pv_);
-        const int maxCpuNum = 6;
         pv_->Codegen(function_);
         BuildPvKernelArgs(kArgs, inputs, outputs);
-        RunTestMode(&kArgs, maxCpuNum);
+        RunTestMode(&kArgs);
         pv_->CopyTensorFromDev();
     }
 
@@ -403,10 +402,8 @@ private:
         kArgs.aicoreModel = model_.get();
     }
 
-    void RunTestMode(DeviceKernelArgs* kArgs, int maxCpuNum)
+    void RunTestMode(DeviceKernelArgs* kArgs)
     {
-        (void)kArgs;
-        std::vector<std::thread> aicpus(maxCpuNum);
         std::atomic<int> idx{0};
         auto* devProg = (DevAscendProgram*)(kArgs->cfgdata);
         size_t shmSize = DEVICE_TASK_CTRL_POOL_SIZE + DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
@@ -414,6 +411,7 @@ private:
             devProg->devArgs.runtimeDataRingBufferAddr + sizeof(RuntimeDataRingBufferHead) + DEV_ARGS_SIZE;
         (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
         int launchAiCpuNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
+        std::vector<std::thread> aicpus(launchAiCpuNum);
         auto threadFun = [&](uint32_t runMode) {
             int tidx = idx++;
             cpu_set_t cpuset;
