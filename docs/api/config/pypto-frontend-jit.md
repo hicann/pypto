@@ -43,6 +43,8 @@ def kernel_function(...):
 | host_options | 输入 | 类型为 `dict[str, any]`，用于设置 host 配置项，配置项参数见[参数说明](./pypto-set_host_options.md) |
 | pass_options | 输入 | 类型为 `dict[str, any]`，用于设置 Pass 配置项，配置项参数见[参数说明](./pypto-set_pass_options.md)  |
 | runtime_options | 输入 | 类型为 `dict[str, any]`，用于设置 runtime 配置项，配置项参数见[runtime_options 参数说明](#runtime_options_detail) |
+| verify_options | 输入 | 类型为 `dict[str, any]`，用于设置 Verify 配置项，配置项参数见[参数说明](./pypto-set_verify_options.md) |
+| debug_options | 输入 | 类型为 `dict[str, any]`，用于设置 debug 配置项，配置项参数见[参数说明](./pypto-set_debug_options.md) |
 
 ### runtime_options 参数说明 <a id="runtime_options_detail"></a>
 
