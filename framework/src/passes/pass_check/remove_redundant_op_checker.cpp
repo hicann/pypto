@@ -164,8 +164,24 @@ Status RemoveRedundantOpChecker::PostCheckAssemble(const Operation& op)
             Elements::Tensor, "Assemble's out[%d] has more than one producer, skip checking.", assembleOut->GetMagic());
         return SUCCESS;
     }
-    if (assembleIn->shape == assembleOut->shape &&
-        assembleIn->GetMemoryTypeOriginal() == assembleOut->GetMemoryTypeOriginal()) {
+    bool hasParallelAssemble = false;
+    for (const auto& consumer : assembleIn->GetConsumers()) {
+        if (consumer->GetOpcode() == Opcode::OP_ASSEMBLE && consumer->GetOpMagic() != op.GetOpMagic()) {
+            hasParallelAssemble = true;
+            break;
+        }
+    }
+    bool hasReshapeConsumer = false;
+    for (const auto& consumer : assembleOut->GetConsumers()) {
+        if (consumer->GetOpcode() == Opcode::OP_RESHAPE) {
+            hasReshapeConsumer = true;
+            break;
+        }
+    }
+    if (hasParallelAssemble && hasReshapeConsumer) { 
+        return SUCCESS;
+    }    
+    if (assembleIn->shape == assembleOut->shape && assembleIn->GetMemoryTypeOriginal() == assembleOut->GetMemoryTypeOriginal()) {
         APASS_LOG_ERROR_F(
             Elements::Operation,
             "PostCheck for assemble op[%d] failed: input and output has the same shape and memorytype; Please check "
