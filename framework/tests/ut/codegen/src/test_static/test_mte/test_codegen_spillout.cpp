@@ -23,8 +23,8 @@
 #include "tilefwk/data_type.h"
 #include "codegen/codegen_op.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
-#include "codegen/cloudnpu/codegen_op_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 
 namespace npu::tile_fwk {
@@ -67,7 +67,7 @@ TEST_F(TestCodegenSpillOut, UBSpillOut)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
 
     std::string res = cop.GenOpCode();
@@ -100,7 +100,7 @@ TEST_F(TestCodegenSpillOut, UBSpillOutTileTensor)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
 
     std::string res = symbolManager->GenTileTensorDefList();
@@ -134,7 +134,7 @@ TEST_F(TestCodegenSpillOut, L1SpillOut)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
 
     cop.GenOpCode();

@@ -19,7 +19,7 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "codegen/codegen.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_common.h"
 #include "interface/operation/distributed/distributed_common.h"
 #include <vector>

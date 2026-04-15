@@ -39,7 +39,6 @@ struct DevCtrlState {
     /* state used by control */
     uint32_t schAicpuNum{MAX_SCHEDULE_AICPU_NUM};
     uint32_t taskCtrlIndex{0};
-    uint32_t taskCtrlInitCount{0};
 };
 
 #define CTRL_THREAD_INDEX 0

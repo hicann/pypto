@@ -349,7 +349,7 @@ def rope_3d_v2(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.T
     else:
         pypto.set_vec_tile_shapes(1, 64, 64)
     cast_x = pypto.cast(x, pypto.DT_FP32)
-    
+
     pypto.set_vec_tile_shapes(1, 64, 128, 128)
     x_view = pypto.reshape(cast_x, [x.shape[0], x.shape[1], x.shape[2] // 2, 2])
     x_trans = pypto.transpose(x_view, 2, 3)
@@ -726,7 +726,7 @@ def options_list():
 
 @pypto.frontend.jit(
     pass_options={
-        "cube_l1_reuse_setting": {-1: 4},   
+        "cube_l1_reuse_setting": {-1: 4},
     },
     runtime_options={
         "stitch_function_max_num": 128

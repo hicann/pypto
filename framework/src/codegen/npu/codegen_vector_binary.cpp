@@ -14,7 +14,7 @@
  */
 
 #include "interface/tensor/logical_tensor.h"
-#include "codegen_op_cloudnpu.h"
+#include "codegen_op_npu.h"
 #include "securec.h"
 #include "codegen/utils/codegen_utils.h"
 
@@ -59,7 +59,7 @@ std::string GetPenuBrcOprandIdxStr(int64_t PenuBrcbOperandIdx)
     return ret;
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryStatic(const PrintBinaryParam& param) const
+std::string CodeGenOpNPU::PrintBinaryStatic(const PrintBinaryParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& src0DtypeStr = param.src0DtypeStr;
@@ -116,7 +116,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryStatic(const PrintBinaryParam& param) 
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& param) const
+std::string CodeGenOpNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& src0DtypeStr = param.src0DtypeStr;
@@ -175,7 +175,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryDynamicUnaligned(const PrintBinaryPara
     return os.str();
 }
 
-void CodeGenOpCloudNPU::AddDivPrecisionTypeParm(std::vector<std::string>& templateParamList) const
+void CodeGenOpNPU::AddDivPrecisionTypeParm(std::vector<std::string>& templateParamList) const
 {
     int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
     (void)GetAttr(OpAttributeKey::precisionType, precisionType);
@@ -186,7 +186,7 @@ void CodeGenOpCloudNPU::AddDivPrecisionTypeParm(std::vector<std::string>& templa
     }
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const
+std::string CodeGenOpNPU::PrintBinaryTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -225,7 +225,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinary(const PrintBinaryParam& param) const
+std::string CodeGenOpNPU::PrintBinary(const PrintBinaryParam& param) const
 {
     if (isSupportLayout) {
         return PrintBinaryTileTensor();
@@ -236,7 +236,7 @@ std::string CodeGenOpCloudNPU::PrintBinary(const PrintBinaryParam& param) const
     return PrintBinaryStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::GenBinaryOp() const
+std::string CodeGenOpNPU::GenBinaryOp() const
 {
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
@@ -265,7 +265,7 @@ std::string CodeGenOpCloudNPU::GenBinaryOp() const
     return PrintBinary({s0Var, s1Var, dVar, src0DtypeStr, src1DtypeStr, dstDtypeStr});
 }
 
-std::string CodeGenOpCloudNPU::GenBinaryOpWithTmp() const
+std::string CodeGenOpNPU::GenBinaryOpWithTmp() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
@@ -278,7 +278,7 @@ std::string CodeGenOpCloudNPU::GenBinaryOpWithTmp() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenVectorScalarOpWithTmp() const
+std::string CodeGenOpNPU::GenVectorScalarOpWithTmp() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
@@ -297,7 +297,7 @@ std::string CodeGenOpCloudNPU::GenVectorScalarOpWithTmp() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenRemainderSOp() const
+std::string CodeGenOpNPU::GenRemainderSOp() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
@@ -312,7 +312,7 @@ std::string CodeGenOpCloudNPU::GenRemainderSOp() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryBrcStatic(const PrintBinaryBrcParam& param) const
+std::string CodeGenOpNPU::PrintBinaryBrcStatic(const PrintBinaryBrcParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& src0DtypeStr = param.src0DtypeStr;
@@ -363,7 +363,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryBrcStatic(const PrintBinaryBrcParam& p
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryBrcDynamicUnaligned(const PrintBinaryBrcParam& param) const
+std::string CodeGenOpNPU::PrintBinaryBrcDynamicUnaligned(const PrintBinaryBrcParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& src0DtypeStr = param.src0DtypeStr;
@@ -418,7 +418,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryBrcDynamicUnaligned(const PrintBinaryB
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryBrc(const PrintBinaryBrcParam& param) const
+std::string CodeGenOpNPU::PrintBinaryBrc(const PrintBinaryBrcParam& param) const
 {
     if (isDynamicFunction) {
         return PrintBinaryBrcDynamicUnaligned(param);
@@ -426,7 +426,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryBrc(const PrintBinaryBrcParam& param) 
     return PrintBinaryBrcStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::GenBinaryWithBrc() const
+std::string CodeGenOpNPU::GenBinaryWithBrc() const
 {
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);
@@ -454,14 +454,14 @@ std::string CodeGenOpCloudNPU::GenBinaryWithBrc() const
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::GenVectorScalarOp() const { return GenVectorScalarOpByMode(VecScalMode::VEC_MODE); }
+std::string CodeGenOpNPU::GenVectorScalarOp() const { return GenVectorScalarOpByMode(VecScalMode::VEC_MODE); }
 
-std::string CodeGenOpCloudNPU::GenVectorScalarOpScalarMode() const
+std::string CodeGenOpNPU::GenVectorScalarOpScalarMode() const
 {
     return GenVectorScalarOpByMode(VecScalMode::SCALAR_MODE);
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryScalarStatic(const PrintBinaryScalarParam& param) const
+std::string CodeGenOpNPU::PrintBinaryScalarStatic(const PrintBinaryScalarParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& src0DtypeStr = param.src0DtypeStr;
@@ -504,7 +504,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryScalarStatic(const PrintBinaryScalarPa
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryScalarDynamicUnaligned(const PrintBinaryScalarParam& param) const
+std::string CodeGenOpNPU::PrintBinaryScalarDynamicUnaligned(const PrintBinaryScalarParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& src0DtypeStr = param.src0DtypeStr;
@@ -552,7 +552,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryScalarDynamicUnaligned(const PrintBina
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintVectorScalarTileTensor(const PrintUnaryParam& param) const
+std::string CodeGenOpNPU::PrintVectorScalarTileTensor(const PrintUnaryParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
@@ -579,7 +579,7 @@ std::string CodeGenOpCloudNPU::PrintVectorScalarTileTensor(const PrintUnaryParam
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintBinaryScalar(const PrintBinaryScalarParam& param) const
+std::string CodeGenOpNPU::PrintBinaryScalar(const PrintBinaryScalarParam& param) const
 {
     if (isDynamicFunction) {
         return PrintBinaryScalarDynamicUnaligned(param);
@@ -587,7 +587,7 @@ std::string CodeGenOpCloudNPU::PrintBinaryScalar(const PrintBinaryScalarParam& p
     return PrintBinaryScalarStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnaryParam& param) const
+std::string CodeGenOpNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnaryParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& srcDtypeStr = param.srcDtypeStr;
@@ -630,7 +630,7 @@ std::string CodeGenOpCloudNPU::PrintVectorScalarOpDynamicUnalign(const PrintUnar
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenVectorScalarOpByMode(VecScalMode mode) const
+std::string CodeGenOpNPU::GenVectorScalarOpByMode(VecScalMode mode) const
 {
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID1]);
     std::string dVar = sm->QueryVarNameByTensorMagic(operandWithMagic[ID0]);

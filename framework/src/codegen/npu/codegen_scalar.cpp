@@ -14,13 +14,13 @@
  */
 
 #include "interface/tensor/logical_tensor.h"
-#include "codegen_op_cloudnpu.h"
+#include "codegen_op_npu.h"
 #include "securec.h"
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 
 namespace npu::tile_fwk {
-std::string CodeGenOpCloudNPU::GenBarrier() const
+std::string CodeGenOpNPU::GenBarrier() const
 {
     char buffer[256] = "CG_ERROR";
     auto pipeId1 = GetPipeId(syncQueue.pipeId_);
@@ -31,7 +31,7 @@ std::string CodeGenOpCloudNPU::GenBarrier() const
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::GenSyncSetOp() const
+std::string CodeGenOpNPU::GenSyncSetOp() const
 {
     char buffer[256] = "CG_ERROR";
     auto pipeId1 = GetPipeId(syncQueue.pipeId_);
@@ -45,7 +45,7 @@ std::string CodeGenOpCloudNPU::GenSyncSetOp() const
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::GenSyncWaitOp() const
+std::string CodeGenOpNPU::GenSyncWaitOp() const
 {
     char buffer[256] = "CG_ERROR";
     auto pipeId1 = GetPipeId(syncQueue.pipeId_);
@@ -59,7 +59,7 @@ std::string CodeGenOpCloudNPU::GenSyncWaitOp() const
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::GenCVSyncSetOp() const
+std::string CodeGenOpNPU::GenCVSyncSetOp() const
 {
     auto pipeId = GetPipeId(syncQueue.pipeId_);
     std::ostringstream oss;
@@ -67,7 +67,7 @@ std::string CodeGenOpCloudNPU::GenCVSyncSetOp() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenCVSyncWaitOp() const
+std::string CodeGenOpNPU::GenCVSyncWaitOp() const
 {
     auto pipeId = GetPipeId(syncQueue.trigPipeId_);
     std::ostringstream oss;
@@ -79,7 +79,7 @@ static const std::unordered_map<int, std::string> aicpuCallNumDict = {
     {AICPU_CALL_NUM_COPYOUT_RESOLVE, "AICPU_CALL_NUM_COPYOUT_RESOLVE"},
 };
 
-std::string CodeGenOpCloudNPU::GenAicpuCallOp() const
+std::string CodeGenOpNPU::GenAicpuCallOp() const
 {
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::aicpuCall))
         << "OpAttributeKey::aicpuCall not found";

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025 Huawei Technologies Co., Ltd.
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,14 +9,13 @@
  */
 
 /*!
- * \file codegen.h
+ * \file codegen_npu.h
  * \brief
  */
 
-#ifndef CODEGEN_CLOUDNPU_H
-#define CODEGEN_CLOUDNPU_H
+#ifndef CODEGEN_NPU_H
+#define CODEGEN_NPU_H
 
-#include <string>
 #include <unordered_set>
 #include <utility>
 #include <mutex>
@@ -32,6 +31,9 @@
 #include "interface/configs/config_manager.h"
 
 namespace npu::tile_fwk {
+const std::string ENV_ASCEND_HOME_PATH = "ASCEND_HOME_PATH";
+const std::string ENV_PTO_TILE_LIB_CODE_PATH = "PTO_TILE_LIB_CODE_PATH";
+constexpr const int64_t CODE_RESERVED_SIZE = 1024 * 1024;
 
 struct CompileTaskInfo {
     std::string outputPath;
@@ -52,6 +54,8 @@ public:
     {
         Init(topFunc, subFuncPair.first);
     };
+    virtual ~CompileInfo() = default;
+
     std::string GetCCEAbsPath() const { return cceAbsPath_; }
     void SetCCEAbsPath(const std::string& cceAbsPath) { cceAbsPath_ = cceAbsPath; }
 
@@ -64,7 +68,7 @@ public:
     bool IsCube() const { return isCube_; }
     bool isUnderDyn() const { return isUnderDyn_; }
 
-private:
+protected:
     void Init(Function& topFunc, uint64_t subProgramId)
     {
         std::string coreType = isCube_ ? "aic" : "aiv";
@@ -116,13 +120,13 @@ private:
     bool isMainBlock_{false};
 };
 
-class CodeGenCloudNPU : public CodeGenCCE {
+class CodeGenNPU : public CodeGenCCE {
 public:
-    explicit CodeGenCloudNPU(const CodeGenCtx& cgCtx) : CodeGenCCE(cgCtx)
+    explicit CodeGenNPU(const CodeGenCtx& cgCtx) : CodeGenCCE(cgCtx)
     {
         platform_ = Platform::Instance().GetSoc().GetNPUArch();
     };
-    ~CodeGenCloudNPU() override = default;
+    ~CodeGenNPU() override = default;
 
     void GenCode(Function& topFunc, const std::map<uint64_t, std::list<InvokeParaOffset>>& invokeParaOffset) override;
     std::string PrepareCmd(const CompileInfo& compileInfo, const std::string& compileOptions) const;
@@ -131,17 +135,17 @@ public:
     std::optional<std::string> GenExtraAlloc(
         const std::shared_ptr<SymbolManager>& sm, const std::shared_ptr<LogicalTensor>& tensor) const;
     std::string GenAllocForLocalBuffer(const Operation& op, const std::shared_ptr<SymbolManager>& sm) const;
-    std::string GetCoreArch(const CompileInfo& compileInfo) const;
+    virtual std::string GetCoreArch(const CompileInfo& compileInfo) const;
     static void AppendVFOptions(NPUArch platform, std::ostringstream& oss);
 
-private:
+protected:
     void GenFuncBodyBefore(
         const std::pair<uint64_t, Function*>& subFuncPair, Function& topFunc, CompileInfo& compileInfo,
         std::ostringstream& oss) const;
     void GenInclude(const Function& topFunc, std::ostringstream& oss) const;
     void GenCommentBeforeFuncHeader(Function& subFunc, std::ostringstream& oss) const;
     std::string GenFuncHeader(uint64_t programId, Function& topFunc, CompileInfo& compileInfo) const;
-    void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const;
+    virtual void GenFuncBody(Function& subFunc, Function& topFunc, std::ostringstream& oss) const = 0;
     void GenFuncEnd(std::ostringstream& oss) const;
     static std::string GenKernelName(Function& topFunc, uint64_t programId);
 
@@ -151,9 +155,9 @@ private:
     void DumpCode(const std::string& name, std::ostringstream& code) const;
     int DoCompileCmd(const std::string& compileCmd) const;
 
-    void BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const;
+    virtual void BuildArchOptions(std::ostringstream& oss, const CompileInfo& compileInfo) const;
     void BuildIncludes(std::ostringstream& oss) const;
-    void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const;
+    virtual void BuildExtraOptions(std::ostringstream& oss, const std::string& compileOptions) const;
 
     std::string GenAlloc(
         const std::shared_ptr<SymbolManager>& manager, BufferType bufferType, DataType dataType,
@@ -177,7 +181,6 @@ private:
 
     mutable std::mutex compileTasksMutex_;
     mutable std::vector<CompileTaskInfo> compileTasks_;
-
     NPUArch platform_;
 };
 
@@ -192,4 +195,4 @@ private:
 
 } // namespace npu::tile_fwk
 
-#endif // CODEGEN_CLOUDNPU_H
+#endif // CODEGEN_NPU_H

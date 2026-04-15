@@ -13,13 +13,13 @@
  * \brief
  */
 
-#include "codegen_op_cloudnpu.h"
+#include "codegen_op_npu.h"
 #include "codegen/utils/codegen_utils.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "securec.h"
 
 namespace npu::tile_fwk {
-std::string CodeGenOpCloudNPU::PrintMatmulTileTensor(
+std::string CodeGenOpNPU::PrintMatmulTileTensor(
     bool isAcc, std::unordered_map<OperandType, std::string>& tensorWithMemType) const
 {
     std::ostringstream oss;
@@ -48,7 +48,7 @@ std::string CodeGenOpCloudNPU::PrintMatmulTileTensor(
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintMatmulTileTensor(bool isAcc) const
+std::string CodeGenOpNPU::PrintMatmulTileTensor(bool isAcc) const
 {
     std::unordered_map<OperandType, std::string> tensorWithMemType;
     for (int i = 0; i < operandCnt; i++) {
@@ -75,7 +75,7 @@ std::string CodeGenOpCloudNPU::PrintMatmulTileTensor(bool isAcc) const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenCubeOp(bool zeroC) const
+std::string CodeGenOpNPU::GenCubeOp(bool zeroC) const
 {
     if (isSupportLayout) {
         return PrintMatmulTileTensor(!zeroC);
@@ -131,11 +131,11 @@ std::string CodeGenOpCloudNPU::GenCubeOp(bool zeroC) const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenCubeOpMatmul() const { return GenCubeOp(true); }
+std::string CodeGenOpNPU::GenCubeOpMatmul() const { return GenCubeOp(true); }
 
-std::string CodeGenOpCloudNPU::GenCubeOpMatmulAcc() const { return GenCubeOp(false); }
+std::string CodeGenOpNPU::GenCubeOpMatmulAcc() const { return GenCubeOp(false); }
 
-std::string CodeGenOpCloudNPU::GenParamsStr(const std::unordered_set<int32_t>& skipOperands) const
+std::string CodeGenOpNPU::GenParamsStr(const std::unordered_set<int32_t>& skipOperands) const
 {
     std::vector<std::string> params;
     for (int i = 0; i < MAX_OPERANDS; i++) {

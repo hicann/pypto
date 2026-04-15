@@ -30,7 +30,9 @@
 #include "dynamic/aicpu_call.h"
 
 #ifdef SUPPORT_TILE_TENSOR
+#ifndef __LITE_NPU
 #include "distributed/tileop_shmem.h"
+#endif
 #include "utils/layout.h"
 #include "vector/unary.h"
 #include "vector/trans.h"

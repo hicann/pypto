@@ -15,13 +15,13 @@
 #include <iterator>
 #include <string>
 
-#include "codegen_op_cloudnpu.h"
+#include "codegen_op_npu.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/utils/codegen_utils.h"
 #include "securec.h"
 
 namespace npu::tile_fwk {
-int CodeGenOpCloudNPU::GetCacheModeFlag(const std::string& cacheMode) const
+int CodeGenOpNPU::GetCacheModeFlag(const std::string& cacheMode) const
 {
     const int PA_BNSD = 0;
     const int PA_NZ = 1;
@@ -35,7 +35,7 @@ int CodeGenOpCloudNPU::GetCacheModeFlag(const std::string& cacheMode) const
     return cacheModeFlag;
 }
 
-std::string CodeGenOpCloudNPU::PrintIndexOutCastTileTensor() const
+std::string CodeGenOpNPU::PrintIndexOutCastTileTensor() const
 {
     auto cacheMode = AnyCast<std::string>(opAttrs.at(OpAttributeKey::cacheMode));
     auto blockSize = AnyCast<int64_t>(opAttrs.at(OpAttributeKey::panzBlockSize));
@@ -59,7 +59,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenIndexOutCastOp() const
+std::string CodeGenOpNPU::GenIndexOutCastOp() const
 {
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::cacheMode)) << "cannot get cacheMode attr";
     ASSERT(OperErr::ATTRIBUTE_INVALID, opAttrs.count(OpAttributeKey::panzBlockSize)) << "cannot get panzBlockSize attr";
@@ -98,7 +98,7 @@ std::string CodeGenOpCloudNPU::GenIndexOutCastOp() const
         {s0Var, s1Var, addrExpr, gms, s0os, s0rs, src1OriginShape, s1rs, dataTypeExpr, cacheMode, blockSizeStr});
 }
 
-std::string CodeGenOpCloudNPU::PrintIndexOutCast(const PrintIndexOutCastParam& param) const
+std::string CodeGenOpNPU::PrintIndexOutCast(const PrintIndexOutCastParam& param) const
 {
     if (isSupportLayout) {
         return PrintIndexOutCastTileTensor();
@@ -115,7 +115,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCast(const PrintIndexOutCastParam& p
 // unsigned src1Shape1, unsigned GmShape0, unsigned GmShape1, unsigned GmShape2, unsigned GmShape3>
 // TILEOP void TIndexoutcast(__gm__ T* dst, __ubuf__ T* src0, __ubuf__ int32_t* index, unsigned Offset0, unsigned
 // Offset1) {
-std::string CodeGenOpCloudNPU::PrintIndexOutCastStatic(const PrintIndexOutCastParam& param) const
+std::string CodeGenOpNPU::PrintIndexOutCastStatic(const PrintIndexOutCastParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& s1Var = param.s1Var;
@@ -158,7 +158,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastStatic(const PrintIndexOutCastPa
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintIndexOutCastDynamic(const PrintIndexOutCastParam& param) const
+std::string CodeGenOpNPU::PrintIndexOutCastDynamic(const PrintIndexOutCastParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& s1Var = param.s1Var;
@@ -206,7 +206,7 @@ std::string CodeGenOpCloudNPU::PrintIndexOutCastDynamic(const PrintIndexOutCastP
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintIndexOutCastDynamicUnaligned(const PrintIndexOutCastParam& param) const
+std::string CodeGenOpNPU::PrintIndexOutCastDynamicUnaligned(const PrintIndexOutCastParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& s1Var = param.s1Var;

@@ -96,6 +96,7 @@ enum class DPlatform {
     ASCEND_910B3,
     ASCEND_910B4,
     ASCEND_950PR_9579,
+    KIRIN_9030,
     UNKNOWN_DEVICE,
 };
 
@@ -104,8 +105,7 @@ inline DPlatform StringToDpaltform(std::string platform)
     std::unordered_map<std::string, DPlatform> mappings = {
         {"ASCEND_910B1", DPlatform::ASCEND_910B1},           {"ASCEND_910B2", DPlatform::ASCEND_910B2},
         {"ASCEND_910B3", DPlatform::ASCEND_910B3},           {"ASCEND_910B4", DPlatform::ASCEND_910B4},
-        {"ASCEND_950PR_9579", DPlatform::ASCEND_950PR_9579},
-    };
+        {"ASCEND_950PR_9579", DPlatform::ASCEND_950PR_9579}, {"KIRIN_9030", DPlatform::KIRIN_9030}};
 
     if (mappings.count(platform)) {
         return mappings[platform];

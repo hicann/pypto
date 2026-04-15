@@ -14,12 +14,12 @@
  */
 
 #include "interface/tensor/logical_tensor.h"
-#include "codegen_op_cloudnpu.h"
+#include "codegen_op_npu.h"
 #include "securec.h"
 #include "codegen/utils/codegen_utils.h"
 
 namespace npu::tile_fwk {
-std::string CodeGenOpCloudNPU::PrintVnchwconvStatic(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintVnchwconvStatic(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& tmpVar = param.tmpVar;
@@ -56,7 +56,7 @@ std::string CodeGenOpCloudNPU::PrintVnchwconvStatic(const PrintUnaryTmpBuffParam
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& tmpVar = param.tmpVar;
@@ -95,7 +95,7 @@ std::string CodeGenOpCloudNPU::PrintVnchwconvDynUnaligned(const PrintUnaryTmpBuf
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintUnaryWithTmpTileTensor() const
+std::string CodeGenOpNPU::PrintUnaryWithTmpTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
@@ -105,7 +105,7 @@ std::string CodeGenOpCloudNPU::PrintUnaryWithTmpTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintVnchwconv(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintVnchwconv(const PrintUnaryTmpBuffParam& param) const
 {
     if (isSupportLayout) {
         return PrintUnaryWithTmpTileTensor();
@@ -116,7 +116,7 @@ std::string CodeGenOpCloudNPU::PrintVnchwconv(const PrintUnaryTmpBuffParam& para
     return PrintVnchwconvStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& tmpVar = param.tmpVar;
@@ -156,7 +156,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxis(const PrintUnaryTmpBuffParam&
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::PrintReduceLastAxisTileTensor() const
+std::string CodeGenOpNPU::PrintReduceLastAxisTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -173,7 +173,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxisTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& srcDtypeStr = param.srcDtypeStr;
@@ -217,7 +217,7 @@ std::string CodeGenOpCloudNPU::PrintReduceLastAxisDynamicUnalign(const PrintUnar
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintReduceCombine(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintReduceCombine(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& srcDtypeStr = param.srcDtypeStr;
@@ -261,7 +261,7 @@ std::string CodeGenOpCloudNPU::PrintReduceCombine(const PrintUnaryTmpBuffParam& 
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintCompactStatic(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintCompactStatic(const PrintUnaryTmpBuffParam& param) const
 {
     const std::string& s0Var = param.s0Var;
     const std::string& tmpVar = param.tmpVar;
@@ -294,12 +294,9 @@ std::string CodeGenOpCloudNPU::PrintCompactStatic(const PrintUnaryTmpBuffParam& 
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintCompact(const PrintUnaryTmpBuffParam& param) const
-{
-    return PrintCompactStatic(param);
-}
+std::string CodeGenOpNPU::PrintCompact(const PrintUnaryTmpBuffParam& param) const { return PrintCompactStatic(param); }
 
-std::string CodeGenOpCloudNPU::PrintExp2Layout() const
+std::string CodeGenOpNPU::PrintExp2Layout() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MILOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MILOIdx::TMP_IDX));
@@ -312,13 +309,13 @@ std::string CodeGenOpCloudNPU::PrintExp2Layout() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintExp2() const
+std::string CodeGenOpNPU::PrintExp2() const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Exp2 only support tile tensor";
     return PrintExp2Layout();
 }
 
-std::string CodeGenOpCloudNPU::PrintRoundLayout() const
+std::string CodeGenOpNPU::PrintRoundLayout() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
@@ -332,13 +329,13 @@ std::string CodeGenOpCloudNPU::PrintRoundLayout() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintRound() const
+std::string CodeGenOpNPU::PrintRound() const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Round only support tile tensor";
     return PrintRoundLayout();
 }
 
-std::string CodeGenOpCloudNPU::PrintExpm1Layout() const
+std::string CodeGenOpNPU::PrintExpm1Layout() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::DST_IDX));
     std::string tmpTensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::TMP_IDX));
@@ -351,13 +348,13 @@ std::string CodeGenOpCloudNPU::PrintExpm1Layout() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintExpm1() const
+std::string CodeGenOpNPU::PrintExpm1() const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Expm1 only support tile tensor";
     return PrintExpm1Layout();
 }
 
-std::string CodeGenOpCloudNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffParam& param) const
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
@@ -395,7 +392,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineStatic(const PrintUnaryTmpBuffPara
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryTmpBuffParam& param) const
 {
     int reduceAxis{-1};
     auto axis = opAttrs.at(OP_ATTR_PREFIX + "AXIS");
@@ -452,7 +449,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineDynamicUnaligned(const PrintUnaryT
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintRowSumlineTileTensor() const
+std::string CodeGenOpNPU::PrintRowSumlineTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ID0);
     std::string tmpTensor = QueryTileTensorNameByIdx(ID1);
@@ -473,7 +470,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumlineTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintRowSumline(const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintRowSumline(const PrintUnaryTmpBuffParam& param) const
 {
     if (isSupportLayout) {
         return PrintRowSumlineTileTensor();
@@ -484,7 +481,7 @@ std::string CodeGenOpCloudNPU::PrintRowSumline(const PrintUnaryTmpBuffParam& par
     return PrintRowSumlineStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintIsFinite([[maybe_unused]] const PrintUnaryTmpBuffParam& param) const
+std::string CodeGenOpNPU::PrintIsFinite([[maybe_unused]] const PrintUnaryTmpBuffParam& param) const
 {
     ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout)
         << "`IsFinite` only supports `codegen_support_tile_tensor`==true! Please modify `tile_fwk_config.json`!";
@@ -496,7 +493,7 @@ std::string CodeGenOpCloudNPU::PrintIsFinite([[maybe_unused]] const PrintUnaryTm
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenUnaryOpWithTmpBuff() const
+std::string CodeGenOpNPU::GenUnaryOpWithTmpBuff() const
 {
     // In this scenario, frontend set tmp buffer in output to optimize ooo schedule result.
     std::string s0Var = sm->QueryVarNameByTensorMagic(operandWithMagic[ID2]);

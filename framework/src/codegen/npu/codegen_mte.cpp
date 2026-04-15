@@ -15,7 +15,7 @@
 #include <iterator>
 #include <string>
 
-#include "codegen_op_cloudnpu.h"
+#include "codegen_op_npu.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/utils/codegen_utils.h"
 #include "securec.h"
@@ -23,8 +23,7 @@
 namespace npu::tile_fwk {
 const std::string TSTORE_CONF = "TStoreConfig";
 
-DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
-    int dynShapeIdx, int shapeDim, bool isGmSpill) const
+DynamicParamPackMTE CodeGenOpNPU::PrepareDynamicShapeInfoForMTE(int dynShapeIdx, int shapeDim, bool isGmSpill) const
 {
     DynamicParamPackMTE pack;
     int dim = static_cast<int>(rawShape[dynShapeIdx].size());
@@ -58,20 +57,20 @@ DynamicParamPackMTE CodeGenOpCloudNPU::PrepareDynamicShapeInfoForMTE(
     return pack;
 }
 
-std::string CodeGenOpCloudNPU::GenMemL1CopyIn() const { return GenMemCopyCube(false, 0); }
+std::string CodeGenOpNPU::GenMemL1CopyIn() const { return GenMemCopyCube(false, 0); }
 
-std::string CodeGenOpCloudNPU::GenMemL1CopyOut() const { return GenMemCopyCube(true, 0); }
+std::string CodeGenOpNPU::GenMemL1CopyOut() const { return GenMemCopyCube(true, 0); }
 
-std::string CodeGenOpCloudNPU::GenMemL0CCopyOut() const { return GenMemCopyCube(true, 0); }
+std::string CodeGenOpNPU::GenMemL0CCopyOut() const { return GenMemCopyCube(true, 0); }
 
-std::string CodeGenOpCloudNPU::GenMemCopyCube(bool isLocalToGM, unsigned uf) const
+std::string CodeGenOpNPU::GenMemCopyCube(bool isLocalToGM, unsigned uf) const
 {
     unsigned gmIdx = isLocalToGM ? 0 : 1;
     bool isSpillToGm = operand[gmIdx] == SYMBOL_STACK_BASE;
     return GenMemCopyVar(isLocalToGM, isSpillToGm, uf);
 }
 
-std::string CodeGenOpCloudNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) const
+std::string CodeGenOpNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) const
 {
     unsigned gmIdx = isLocalToGM ? 0 : 1;
     unsigned l1Idx = isLocalToGM ? 1 : 0;
@@ -129,7 +128,7 @@ std::string CodeGenOpCloudNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) 
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::GenL0CToUBTileTensor() const
+std::string CodeGenOpNPU::GenL0CToUBTileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -148,7 +147,7 @@ std::string CodeGenOpCloudNPU::GenL0CToUBTileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const
+std::string CodeGenOpNPU::PrintMemL1ToL0TileTensor() const
 {
     bool isTrans = false;
     if ((opCode == Opcode::OP_L1_TO_L0_BT) || (opCode == Opcode::OP_L1_TO_L0_AT)) {
@@ -185,7 +184,7 @@ std::string CodeGenOpCloudNPU::PrintMemL1ToL0TileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenMemL1ToL0() const
+std::string CodeGenOpNPU::GenMemL1ToL0() const
 {
     if (isSupportLayout) {
         return PrintMemL1ToL0TileTensor();
@@ -234,7 +233,7 @@ std::string CodeGenOpCloudNPU::GenMemL1ToL0() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintTmove() const
+std::string CodeGenOpNPU::PrintTmove() const
 {
     std::ostringstream oss;
     std::vector<int64_t> tmpoffset(rawShape[ToUnderlying(MISOIdx::SRC0_IDX)].size(), 0);
@@ -250,7 +249,7 @@ std::string CodeGenOpCloudNPU::PrintTmove() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenMemL1ToBt() const
+std::string CodeGenOpNPU::GenMemL1ToBt() const
 {
     if (isSupportLayout) {
         return PrintTmove();
@@ -287,22 +286,22 @@ std::string CodeGenOpCloudNPU::GenMemL1ToBt() const
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::GenMemUBTransfer(bool isCopyUBToGM) const
+std::string CodeGenOpNPU::GenMemUBTransfer(bool isCopyUBToGM) const
 {
     unsigned gmIdx = isCopyUBToGM ? 0 : 1;
     bool isSpillToGm = operand[gmIdx] == SYMBOL_STACK_BASE;
     return GenMemCopyVar(isCopyUBToGM, isSpillToGm);
 }
 
-std::string CodeGenOpCloudNPU::GenUBCopyIn() const { return GenMemUBTransfer(false); }
+std::string CodeGenOpNPU::GenUBCopyIn() const { return GenMemUBTransfer(false); }
 
-std::string CodeGenOpCloudNPU::GenUBCopyOut() const { return GenMemUBTransfer(true); }
+std::string CodeGenOpNPU::GenUBCopyOut() const { return GenMemUBTransfer(true); }
 
-std::string CodeGenOpCloudNPU::GenReshapeCopyIn() const { return GenMemCopyVar(false); }
+std::string CodeGenOpNPU::GenReshapeCopyIn() const { return GenMemCopyVar(false); }
 
-std::string CodeGenOpCloudNPU::GenReshapeCopyOut() const { return GenMemCopyVar(true); }
+std::string CodeGenOpNPU::GenReshapeCopyOut() const { return GenMemCopyVar(true); }
 
-std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const
+std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -331,7 +330,7 @@ std::string CodeGenOpCloudNPU::PrintL0CToL1TileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenMemL0CToL1() const
+std::string CodeGenOpNPU::GenMemL0CToL1() const
 {
     if (isSupportLayout) {
         return PrintL0CToL1TileTensor();
@@ -375,7 +374,7 @@ std::string CodeGenOpCloudNPU::GenMemL0CToL1() const
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::GenUBToL1TileTensor() const
+std::string CodeGenOpNPU::GenUBToL1TileTensor() const
 {
     if (!isSupportLayout) {
         return "";
@@ -393,7 +392,7 @@ std::string CodeGenOpCloudNPU::GenUBToL1TileTensor() const
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenUBToUBND2NZTileTensor() const
+std::string CodeGenOpNPU::GenUBToUBND2NZTileTensor() const
 {
     if (!isSupportLayout) {
         return "";
@@ -410,7 +409,7 @@ std::string CodeGenOpCloudNPU::GenUBToUBND2NZTileTensor() const
 
 // In static shape scene, GM Offset is already calculated and added to GM Addr in host side, so TileOp do not need
 // GM offset
-std::string CodeGenOpCloudNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillToGm, unsigned uf) const
+std::string CodeGenOpNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillToGm, unsigned uf) const
 {
     unsigned gmIdx = isCopyLocalToGM ? 0 : 1;
     unsigned localIdx = isCopyLocalToGM ? 1 : 0;
@@ -448,7 +447,7 @@ std::string CodeGenOpCloudNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillT
     return {};
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0CParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyWithL0CParam& param) const
 {
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(param.gmIdx);
     std::string coordCp = WrapParamByParentheses(gmOffsetExpr);
@@ -493,8 +492,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CTileTensor(const PrintMemCopyW
     return oss.str();
 }
 
-std::vector<std::string> CodeGenOpCloudNPU::GenTileOpParamForNormalCopyTileTensor(
-    unsigned gmIdx, bool isSpillingToGM) const
+std::vector<std::string> CodeGenOpNPU::GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx, bool isSpillingToGM) const
 {
     std::vector<std::string> gmOffsetExpr = GetGmOffsetForTileTensor(gmIdx, isSpillingToGM);
     // e.g. ((RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 0)),(RUNTIME_COA_GET_PARAM_OFFSET(2, 136, 1)))
@@ -508,7 +506,7 @@ std::vector<std::string> CodeGenOpCloudNPU::GenTileOpParamForNormalCopyTileTenso
     return tileOpParamList;
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const
 {
     if (isSupportLayout) {
         return PrintMemCopyWithL0CTileTensor(param);
@@ -519,7 +517,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0C(const PrintMemCopyWithL0CPara
     return PrintMemCopyWithL0CStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CParam& param) const
 {
     unsigned uf = param.uf;
     unsigned gmIdx = param.gmIdx;
@@ -548,7 +546,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CStatic(const PrintMemCopyWithL
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::PrintL0CCopyOutDynamicUnalign(
+std::string CodeGenOpNPU::PrintL0CCopyOutDynamicUnalign(
     const PrintMemCopyWithL0CParam& param, std::vector<std::string>& gmShapeExpr,
     std::vector<std::string>& gmOffsetExpr) const
 {
@@ -606,7 +604,7 @@ std::string CodeGenOpCloudNPU::PrintL0CCopyOutDynamicUnalign(
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CParam& param) const
 {
     unsigned uf = param.uf;
     unsigned gmIdx = param.gmIdx;
@@ -644,7 +642,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL0CDynamic(const PrintMemCopyWith
     return PrintL0CCopyOutDynamicUnalign(param, gmShapeExpr, gmOffsetExpr);
 }
 
-std::pair<std::string, std::string> CodeGenOpCloudNPU::GetOuterInnerValueStr(
+std::pair<std::string, std::string> CodeGenOpNPU::GetOuterInnerValueStr(
     unsigned gmIdx, const std::vector<int64_t>& gmShape, bool isSpillingToGM) const
 {
     int64_t outerValue = 0;
@@ -666,7 +664,7 @@ std::pair<std::string, std::string> CodeGenOpCloudNPU::GetOuterInnerValueStr(
     return {getValueStr(outerValue, 0, gmShape[0]), getValueStr(innerValue, 1, gmShape[1])};
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
 {
     if (param.isCopyLocalToGM) {
         return PrintMemCopyOutWithL1TileTensor(param);
@@ -675,7 +673,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1TileTensor(const PrintMemCopyWi
     return PrintMemCopyInWithL1TileTensor(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
+std::string CodeGenOpNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
 {
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx, param.isSpillingToGM);
 
@@ -711,7 +709,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyInWithL1TileTensor(const PrintMemCopy
 }
 
 // used in L1 spilling scene
-std::string CodeGenOpCloudNPU::PrintMemCopyOutWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
+std::string CodeGenOpNPU::PrintMemCopyOutWithL1TileTensor(const PrintMemCopyWithL1Param& param) const
 {
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx, param.isSpillingToGM);
 
@@ -731,7 +729,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyOutWithL1TileTensor(const PrintMemCop
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL1(const PrintMemCopyWithL1Param& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL1(const PrintMemCopyWithL1Param& param) const
 {
     if (isSupportLayout) {
         return PrintMemCopyWithL1TileTensor(param);
@@ -748,7 +746,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1(const PrintMemCopyWithL1Param&
     return PrintMemCopyWithL1Static(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param& param) const
 {
     unsigned uf = param.uf;
     unsigned gmIdx = param.gmIdx;
@@ -806,7 +804,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL1Param& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL1Param& param) const
 {
     std::ostringstream oss;
 
@@ -880,7 +878,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithL1Dynamic(const PrintMemCopyWithL
 
 // When ub tensor spilling to GM occurred, the spilling unit is entire raw shape of ub tensor.
 // So ub offset is always zero under this scene, do not need to calculate anymore.
-std::string CodeGenOpCloudNPU::PrintMemCopyWithUB(PrintMemCopyWithUBParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithUB(PrintMemCopyWithUBParam& param) const
 {
     unsigned localIdx = param.localIdx;
     std::vector<std::string>& addrExpr = param.addrExpr;
@@ -898,7 +896,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUB(PrintMemCopyWithUBParam& param
     return PrintMemCopyWithUBStatic(param);
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithUBStatic(const PrintMemCopyWithUBParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithUBStatic(const PrintMemCopyWithUBParam& param) const
 {
     char buffer[BUFFER_SIZE_1024] = "CG_ERROR";
 
@@ -932,7 +930,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBStatic(const PrintMemCopyWithUB
     return buffer;
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamic(const PrintMemCopyWithUBParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithUBDynamic(const PrintMemCopyWithUBParam& param) const
 {
     unsigned gmIdx = param.gmIdx;
     unsigned localIdx = param.localIdx;
@@ -971,7 +969,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamic(const PrintMemCopyWithU
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const PrintMemCopyWithUBParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const PrintMemCopyWithUBParam& param) const
 {
     unsigned gmIdx = param.gmIdx;
     unsigned localIdx = param.localIdx;
@@ -1021,7 +1019,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const P
     return os.str();
 }
 
-std::vector<std::string> CodeGenOpCloudNPU::GetGmOffsetForTileTensor(unsigned gmIdx, bool isSpillingToGM) const
+std::vector<std::string> CodeGenOpNPU::GetGmOffsetForTileTensor(unsigned gmIdx, bool isSpillingToGM) const
 {
     int dim = static_cast<int>(rawShape[gmIdx].size());
     std::vector<std::string> gmOffsetExpr;
@@ -1036,7 +1034,7 @@ std::vector<std::string> CodeGenOpCloudNPU::GetGmOffsetForTileTensor(unsigned gm
     return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
 }
 
-std::string CodeGenOpCloudNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBParam& param) const
+std::string CodeGenOpNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBParam& param) const
 {
     std::vector<std::string> tileOpParamList = GenTileOpParamForNormalCopyTileTensor(param.gmIdx, param.isSpillingToGM);
     std::ostringstream oss;
@@ -1046,7 +1044,7 @@ std::string CodeGenOpCloudNPU::PrintMemCopyWithUBTileTensor(const PrintMemCopyWi
     return oss.str();
 }
 
-std::string CodeGenOpCloudNPU::GenMemL1ToFB() const
+std::string CodeGenOpNPU::GenMemL1ToFB() const
 {
     if (isSupportLayout) {
         return PrintTmove();
@@ -1078,7 +1076,7 @@ std::string CodeGenOpCloudNPU::GenMemL1ToFB() const
     return os.str();
 }
 
-std::string CodeGenOpCloudNPU::GenGMAddrExprWithOffset(const std::string& addrExpr) const
+std::string CodeGenOpNPU::GenGMAddrExprWithOffset(const std::string& addrExpr) const
 {
     // gm offset of spilling workspace is calculated by pass, the value is saved in dim 0.
     int64_t gmOffset = 0;

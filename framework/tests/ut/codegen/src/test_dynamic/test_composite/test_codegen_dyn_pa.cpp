@@ -22,7 +22,7 @@
 #include "operator/models/llama/llama_def.h"
 #include "operator/models/deepseek/page_attention.h"
 #include "interface/configs/config_manager.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 
 namespace npu::tile_fwk {
 

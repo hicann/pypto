@@ -26,8 +26,8 @@
 #include "codegen/codegen.h"
 #include "codegen/codegen_op.h"
 #include "codegen/codegen_cce.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
-#include "codegen/cloudnpu/codegen_op_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "cost_model/simulation/arch/SimplifiedMemoryAllocator.h"
 #include "cost_model/simulation/arch/PipeSimulatorFast.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
@@ -73,9 +73,9 @@ static bool GenerateCode(const std::string& buffer, std::string fileName)
 {
     size_t lastSlash = fileName.find_last_of("/\\");
     std::string dirPart = (lastSlash == std::string::npos) ? "" : fileName.substr(0, lastSlash);
-    CHECK(npu::tile_fwk::IsPathExist(dirPart)) << "ErrCode: F" <<
-        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) << ", Error: invalid dir path: "
-        << dirPart;
+    CHECK(npu::tile_fwk::IsPathExist(dirPart))
+        << "ErrCode: F" << static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH)
+        << ", Error: invalid dir path: " << dirPart;
     std::ofstream os(fileName);
     if (!os.is_open()) {
         SIMULATION_LOGE(
@@ -109,9 +109,9 @@ static bool GenerateCode(const std::string& buffer, std::string fileName)
 std::vector<std::string> RunExeAndCaptureOutput(const std::string& exePath)
 {
     std::vector<std::string> outputLines;
-    CHECK(npu::tile_fwk::FileExist(exePath)) << "ErrCode: F" <<
-        static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) << ", EXE File does not exist. exePath: "
-        << exePath;
+    CHECK(npu::tile_fwk::FileExist(exePath))
+        << "ErrCode: F" << static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH)
+        << ", EXE File does not exist. exePath: " << exePath;
     FILE* pipe = popen(exePath.c_str(), "r");
     if (!pipe) {
         SIMULATION_LOGE("run error");
@@ -144,16 +144,17 @@ static std::vector<std::string> CompileAndRunCode(const std::string& source, con
     std::string path_3 = includePath + "/mock";
     std::string path_4 = includePath + "/tileop";
     std::string path_5 = includePath + "/tilefwk";
-    if (!npu::tile_fwk::IsPathExist(path_1) || !npu::tile_fwk::IsPathExist(path_2) || !npu::tile_fwk::IsPathExist(path_3) ||
-    !npu::tile_fwk::IsPathExist(path_4) || !npu::tile_fwk::IsPathExist(path_5)) {
+    if (!npu::tile_fwk::IsPathExist(path_1) || !npu::tile_fwk::IsPathExist(path_2) ||
+        !npu::tile_fwk::IsPathExist(path_3) || !npu::tile_fwk::IsPathExist(path_4) ||
+        !npu::tile_fwk::IsPathExist(path_5)) {
         SIMULATION_LOGE(
             "ErrCode: F%u, Error: invalid include path.",
             static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH));
     }
 
     std::string cmd = config.cPlusPlus + " -w -std=c++17 " + source + " -o " + executable + " " + "-I" + includePath +
-                      " " + "-I" + path_1 + " -I" + path_2 +
-                      " -I" + path_3 + " -I" + path_4 + " -I" + path_5 + " >/dev/null 2>&1";
+                      " " + "-I" + path_1 + " -I" + path_2 + " -I" + path_3 + " -I" + path_4 + " -I" + path_5 +
+                      " >/dev/null 2>&1";
     int result = std::system(cmd.c_str());
     if (result != 0) {
         return {};

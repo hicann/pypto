@@ -719,7 +719,8 @@ Status PipeSync::PopFromQueue(IssueQueue& issueQ, std::vector<size_t>& poped, bo
             AIVCore currAIVCore = oriOpList_[op.idx]->GetAIVCore();
             AIVCore eleAIVCore = oriOpList_[ele]->GetAIVCore();
             PipeCoreRealEx currPipeCoreEx(op.selfPipeCore.pipeEnd, op.selfPipeCore.core, currAIVCore);
-            PipeCoreRealEx elePipeCoreEx(depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, eleAIVCore);
+            PipeCoreRealEx elePipeCoreEx(
+                depOps_[ele].selfPipeCore.pipeStart, depOps_[ele].selfPipeCore.core, eleAIVCore);
             auto pp = PipePairEx{currPipeCoreEx, elePipeCoreEx};
             issuenum.currIssueNum[pp] = issuenum.currIssueNum[pp] + 1;
         }
@@ -754,8 +755,8 @@ Status PipeSync::InjectWaitFlag(Function& function, size_t idx, std::vector<Inde
             Elements::Operation, "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d, AIVCore type: %d",
             syncOp.GetOpMagic(), syncOp.GetOpcodeStr().c_str(),
             GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
-            GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(),
-            syncOp.syncQueue_.eventId_, static_cast<int>(syncOp.syncQueue_.coreType_));
+            GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_,
+            static_cast<int>(syncOp.syncQueue_.coreType_));
         std::pair<CoreTypeDetail, CoreTypeDetail> setWaitCoreType;
         GetFreeEventIdQueue({setPipeRealEx, currPipeRealEx}, ele, idx, setWaitCoreType).push_back(eventId);
         if (setPipeRealEx.core != currPipeRealEx.core) {
@@ -793,8 +794,8 @@ Status PipeSync::InjectSetFlag(Function& function, size_t idx, std::vector<Index
                 Elements::Operation, "Insert %d %s, setpipe: %s, waitpipe: %s, eventid: %d, AIVCore type: %d",
                 syncOp.GetOpMagic(), syncOp.GetOpcodeStr().c_str(),
                 GetPipeTypeDict().Find(syncOp.syncQueue_.pipeId_).c_str(),
-                GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(),
-                syncOp.syncQueue_.eventId_, static_cast<int>(syncOp.syncQueue_.coreType_));
+                GetPipeTypeDict().Find(syncOp.syncQueue_.trigPipeId_).c_str(), syncOp.syncQueue_.eventId_,
+                static_cast<int>(syncOp.syncQueue_.coreType_));
             setWaitPairMap_[{idx, ele}] = eventId;
             // 记录wait op 和 setflag的对应关系
             setOpMap.emplace(&syncOp, oriOpList_[ele]);
@@ -1061,7 +1062,8 @@ bool PipeSync::FindDataDep(DataDepInfo& depInfo, std::vector<IndexOp>& syncedOpL
     for (auto syncDstLogIdx : depOpSrc.setPipe) { // setpipe中的op为该op之后的，依赖于该op的op id
         DepOp& depOpDst = depOps_[syncDstLogIdx];
         AIVCore aivCore = oriOpList_[depOpDst.idx]->GetAIVCore();
-        if (depOpDst.selfPipeCore.core == depInfo.waitc && depOpDst.selfPipeCore.pipeStart == depInfo.waitp && aivCore == depInfo.aivc) {
+        if (depOpDst.selfPipeCore.core == depInfo.waitc && depOpDst.selfPipeCore.pipeStart == depInfo.waitp &&
+            aivCore == depInfo.aivc) {
             depInfo.opDepList.push_back(std::make_pair(syncSrcLogIdx, syncDstLogIdx));
         }
     }
@@ -1769,7 +1771,8 @@ void InsertSync::InsertPipeAll(Function* subGraphFunc)
         std::vector<std::shared_ptr<LogicalTensor>> input;
         std::vector<std::shared_ptr<LogicalTensor>> output;
         Operation& syncOp = subGraphFunc->AddRawOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {input}, {output});
-        syncOp.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1, AIVCore::UNSPECIFIED};
+        syncOp.syncQueue_ = {PipeType::PIPE_ALL,  PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+                             AIVCore::UNSPECIFIED};
         newOpList.push_back(&syncOp);
     }
     subGraphFunc->ScheduleBy(newOpList, true);
@@ -1846,8 +1849,8 @@ Status InsertSync::InsertSyncMainLoop(Function* subGraphFunc)
                 op->GetOpMagic(), op->GetOpcodeStr().c_str(), GetPipeTypeDict().Find(op->syncQueue_.pipeId_).c_str(),
                 GetCoreTypeDict().Find(op->syncQueue_.coreType_).c_str(),
                 GetPipeTypeDict().Find(op->syncQueue_.trigPipeId_).c_str(),
-                GetCoreTypeDict().Find(op->syncQueue_.trigCoreType_).c_str(),
-                op->syncQueue_.eventId_, static_cast<int>(op->syncQueue_.aivCore_));
+                GetCoreTypeDict().Find(op->syncQueue_.trigCoreType_).c_str(), op->syncQueue_.eventId_,
+                static_cast<int>(op->syncQueue_.aivCore_));
             continue;
         }
         APASS_LOG_DEBUG_F(

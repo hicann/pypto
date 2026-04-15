@@ -23,8 +23,8 @@
 #include "interface/inner/tilefwk.h"
 #include "interface/configs/config_manager.h"
 #include "codegen/codegen.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
-#include "codegen/cloudnpu/codegen_op_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 
 namespace npu::tile_fwk {
@@ -136,7 +136,8 @@ TEST_F(TestCodegenScalar, TestPipeAll)
         CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, dynValidShape});
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
     Operation& syncOp = function->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {ddrTensor}, {ubTensor});
-    syncOp.syncQueue_ = {PipeType::PIPE_ALL, PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1, AIVCore::UNSPECIFIED};
+    syncOp.syncQueue_ = {PipeType::PIPE_ALL,  PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+                         AIVCore::UNSPECIFIED};
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -184,7 +185,7 @@ void TestCVSyncBody(Opcode syncOpcode)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
+    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op);
     CodeGenOpCloudNPU cop(opCtx);
 
     std::string res = cop.GenOpCode();

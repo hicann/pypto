@@ -26,8 +26,8 @@
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "passes/pass_mgr/pass_manager.h"
 #include "codegen/codegen.h"
-#include "codegen/cloudnpu/codegen_op_cloudnpu.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
 #include "interface/utils/id_gen.h"
@@ -109,7 +109,7 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutDynUnaligned)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
+    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
     std::string res = cop.GenOpCode();
     std::string expect =

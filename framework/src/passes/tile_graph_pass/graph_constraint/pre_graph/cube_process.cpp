@@ -208,9 +208,9 @@ Status CubeProcess::UpdateL0cDtype(Operation& op)
         }
         return SUCCESS;
     } else {
-        APASS_LOG_ERROR_F(Elements::Operation, "%s[%d] has unsupport input dtypes (L0A: %s, L0B: %s), update L0C dtype Failed. %s",
-            op.GetOpcodeStr().c_str(), op.GetOpMagic(), 
-            DataType2String(inputDtypes.first, true),
+        APASS_LOG_ERROR_F(
+            Elements::Operation, "%s[%d] has unsupport input dtypes (L0A: %s, L0B: %s), update L0C dtype Failed. %s",
+            op.GetOpcodeStr().c_str(), op.GetOpMagic(), DataType2String(inputDtypes.first, true),
             DataType2String(inputDtypes.second, true), GetFormatBacktrace(op).c_str());
         return FAILED;
     }

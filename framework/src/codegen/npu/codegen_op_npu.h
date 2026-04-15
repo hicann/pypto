@@ -9,19 +9,17 @@
  */
 
 /*!
- * \file codegen_op.h
+ * \file codegen_op_npu.h
  * \brief
  */
 
-#ifndef CODEGEN_OP_CLOUDNPU_H
-#define CODEGEN_OP_CLOUDNPU_H
+#ifndef CODEGEN_OP_NPU_H
+#define CODEGEN_OP_NPU_H
 
 #include <utility>
 #include <map>
 #include <functional>
-#include <unordered_set>
 
-#include "op_print_param_def.h"
 #include "codegen/codegen_common.h"
 #include "tilefwk/data_type.h"
 #include "interface/operation/operation.h"
@@ -30,15 +28,17 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/program/program.h"
+#include "codegen/npu/op_print_param_def.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/stmt_mgr/codegen_for_block.h"
 #include "codegen/codegen_op.h"
 
 namespace npu::tile_fwk {
-struct CodeGenOpCloudNPUCtx : public CodeGenOpCtx {
+
+struct CodeGenOpNPUCtx : public CodeGenOpCtx {
     std::shared_ptr<ForBlockManager> forBlockManager{nullptr};
 
-    CodeGenOpCloudNPUCtx(
+    CodeGenOpNPUCtx(
         std::shared_ptr<SymbolManager> sm, Function& tf, Function& sf, const Operation& op,
         const std::map<int, int>& lto = {}, bool isMainBlk = false, bool isDynAligned = false,
         std::shared_ptr<ForBlockManager> fbm = nullptr)
@@ -46,11 +46,10 @@ struct CodeGenOpCloudNPUCtx : public CodeGenOpCtx {
     {}
 };
 
-class CodeGenOpCloudNPU : public CodeGenOp {
+class CodeGenOpNPU : public CodeGenOp {
 public:
-    explicit CodeGenOpCloudNPU(const CodeGenOpCloudNPUCtx& ctx);
-
-    ~CodeGenOpCloudNPU() override = default;
+    explicit CodeGenOpNPU(const CodeGenOpNPUCtx& ctx);
+    ~CodeGenOpNPU() override = default;
 
     std::string GenBarrier() const;
     std::string GenSyncSetOp() const;
@@ -175,8 +174,8 @@ public:
     std::string QueryTileTensorNameByIdx(int paramIdx) const;
     std::string QueryTileTensorTypeByIdx(int paramIdx) const;
 
-private:
-    TileTensor QueryTileTensorByIdx(int paramIdx) const;
+protected:
+    virtual TileTensor QueryTileTensorByIdx(int paramIdx) const;
     std::string InsertOpComment(std::string& tileOpSourceCode) const;
 
     std::string GenTemplateParamsForPutAndGet() const;
@@ -258,8 +257,8 @@ private:
 
     std::string GetLastUse() const;
 
-    TileTensor BuildTileTensor(int paramIdx, const std::string& usingType, const ShapeInLoop& shapeInLoop = {});
-    void UpdateTileTensorShapeAndStride(
+    virtual TileTensor BuildTileTensor(int paramIdx, const std::string& usingType, const ShapeInLoop& shapeInLoop = {});
+    virtual void UpdateTileTensorShapeAndStride(
         int paramIdx, TileTensor& tileTensor, bool isSpillToGm, const ShapeInLoop& shapeInLoop = {});
     std::vector<std::string> BuildStride(const std::vector<int64_t>& input);
 
@@ -281,7 +280,7 @@ private:
     // get start offset in total block
     SymbolicScalar GetOperandStartOffset(int operandIdx) const;
 
-    std::string GenGmParamVar(unsigned gmParamIdx) const;
+    virtual std::string GenGmParamVar(unsigned gmParamIdx) const;
 
     std::vector<std::string> GenGetParamMacroPacked(unsigned gmParamIdx, int dim, const std::string& prefix) const;
 
@@ -522,9 +521,9 @@ private:
 
     const std::unordered_map<Opcode, std::function<std::string()>> normalVecOps_;
 
-    std::unordered_map<Opcode, std::function<std::string()>> perfOps_;
+    const std::unordered_map<Opcode, std::function<std::string()>> perfOps_;
 
-    std::unordered_map<Opcode, std::function<std::string()>> aicpuOps_;
+    const std::unordered_map<Opcode, std::function<std::string()>> aicpuOps_;
 
     std::unordered_map<Opcode, std::function<std::string()>> opsGenMap_;
 
@@ -556,4 +555,4 @@ private:
 };
 } // namespace npu::tile_fwk
 
-#endif // CODEGEN_OP_CLOUDNPU_H
+#endif // CODEGEN_OP_NPU_H

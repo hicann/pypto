@@ -22,8 +22,8 @@
 #include "tilefwk/data_type.h"
 #include "codegen/codegen.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
-#include "codegen/cloudnpu/codegen_op_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_op_cloudnpu.h"
 #include "test_codegen_utils.h"
 #include "test_codegen_common.h"
 
@@ -69,7 +69,7 @@ TEST_F(TestCodegenDynRange, TestDynOpRange)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, symbolManager);
-    CodeGenOpCloudNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
+    CodeGenOpNPUCtx opCtx(symbolManager, *function, *function->rootFunc_->programs_[0], op, {});
     CodeGenOpCloudNPU cop(opCtx);
     std::string res = cop.GenOpCode();
     std::string expect =
@@ -101,7 +101,7 @@ TEST_F(TestCodegenDynRange, RangeTileTensor)
     CodeGenCtx ctx;
     CodeGenCloudNPU cga(ctx);
     cga.GenAllocForLocalBuffer(op, rangeSymbolManager);
-    CodeGenOpCloudNPUCtx opCtx(rangeSymbolManager, *function, *function->rootFunc_->programs_[0], op, {}, true);
+    CodeGenOpNPUCtx opCtx(rangeSymbolManager, *function, *function->rootFunc_->programs_[0], op, {}, true);
     CodeGenOpCloudNPU cop(opCtx);
 
     cop.GenOpCode();

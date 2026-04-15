@@ -154,7 +154,7 @@ public:
             devProg->devArgs.runtimeDataRingBufferAddr =
                 reinterpret_cast<uint64_t>(*CachedOperator::GetMetaDataDevAddrHolder(cachedOperator));
         } else {
-            devProg->devArgs.runtimeDataRingBufferAddr = (uint64_t)devMem.AllocDev(runtimeDataRingBufferSize, nullptr);
+            devProg->devArgs.runtimeDataRingBufferAddr = (uint64_t)devMem.AllocZero(runtimeDataRingBufferSize, nullptr);
         }
 
         uint64_t generalSize = devProg->memBudget.metadata.general;

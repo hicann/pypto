@@ -17,7 +17,8 @@
 #define TILEOP_TILE_OPERATOR_BINARY_SCALAR__H
 #include "binary.h"
 
-template <BinaryScalarOp op, pto::DivAlgorithm PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
+template <
+    BinaryScalarOp op, pto::DivAlgorithm PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
     typename T1, typename Scalar>
 TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1)
 {
@@ -29,7 +30,12 @@ TILEOP void BinaryScalarComputeImpl(T0 dst, T1 src0, Scalar src1)
     }
 
     if constexpr (op == BinaryScalarOp::SUB) {
-        PTO_WITH_LAST_USE(pto::TADDS(dst, src0, -src1), n1, n2);
+        if constexpr (std::is_same<Scalar, half>::value) {
+            PTO_WITH_LAST_USE(
+                pto::TADDS(dst, src0, static_cast<half>(static_cast<float>(-1) * static_cast<float>(src1))), n1, n2);
+        } else {
+            PTO_WITH_LAST_USE(pto::TADDS(dst, src0, -src1), n1, n2);
+        }
         return;
     }
 
@@ -396,7 +402,7 @@ TILEOP void TFloorDivS(T0 dst, T1 src0, Scalar src1, T2 tmp)
                     pto::TXORS(tmp1MaskTile, tmp0MaskTile, src1Mask, dstTile); // packed mask of sign_differ
                     pto::TDIVS(dstTile, src0Tile, src1);                       // quot
                     pto::TMULS(tmp0DataTile, dstTile, -src1);
-                    pto::TADD(src0Tile, tmp0DataTile, src0Tile); // rem
+                    pto::TADD(src0Tile, tmp0DataTile, src0Tile);               // rem
 
                     pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::NE);
                     pto::TAND(tmp0MaskTile, tmp1MaskTile, tmp0MaskTile);

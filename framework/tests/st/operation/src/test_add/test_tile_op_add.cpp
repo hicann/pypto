@@ -14,7 +14,7 @@
  */
 
 #include "test_suite_stest_ops.h"
-#include "codegen/cloudnpu/codegen_cloudnpu.h"
+#include "codegen/npu/cloudnpu/codegen_cloudnpu.h"
 #include "interface/utils/file_utils.h"
 
 namespace npu::tile_fwk {
