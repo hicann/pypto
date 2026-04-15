@@ -289,11 +289,8 @@ static Tensor ShmemPutImpl(
     }
     MemoryType fromType = isUb2Gm ? MemoryType::MEM_UB : MemoryType::MEM_DEVICE_DDR;
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        fromType,
-        OpImmediate::Specified({0, 0}),
-        OpImmediate::Specified({src.GetShape()}),
-        OpImmediate::Specified({src.GetShape()}),
-        OpImmediate::Specified(src.GetValidShape())));
+        fromType, OpImmediate::Specified({0, 0}), OpImmediate::Specified({src.GetShape()}),
+        OpImmediate::Specified({src.GetShape()}), OpImmediate::Specified(src.GetValidShape())));
     op.SetAttr(OpAttributeKey::isDistCopyOut, true);
     function.UpdateTensorDataUsage(op);
     ShmemPutAttr distOpAttr;
@@ -332,11 +329,8 @@ Tensor ShmemGet(const ShmemTensor& src, const SymbolicScalar& srcRank, const Ten
         src.data.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(src.data.GetShape()));
     }
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_DEVICE_DDR,
-        OpImmediate::Specified({0, 0}),
-        OpImmediate::Specified(src.data.GetShape()),
-        OpImmediate::Specified(src.data.GetShape()),
-        OpImmediate::Specified(src.data.GetValidShape())));
+        MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified({0, 0}), OpImmediate::Specified(src.data.GetShape()),
+        OpImmediate::Specified(src.data.GetShape()), OpImmediate::Specified(src.data.GetValidShape())));
     function.UpdateTensorDataUsage(op);
     ShmemGetAttr distOpAttr;
     distOpAttr.ownerRank = srcRank;
@@ -361,10 +355,9 @@ Tensor ShmemLoad(const ShmemTensor& src, const SymbolicScalar& srcRank, const Te
     if (src.data.GetValidShape().size() == 0) {
         src.data.GetStorage()->UpdateDynValidShape(SymbolicScalar::FromConcrete(src.data.GetShape()));
     }
-    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_UB,
-        OpImmediate::Specified(src.data.GetShape()),
-        OpImmediate::Specified(out->shape),
-        OpImmediate::Specified(src.data.GetValidShape())));
+    op.SetOpAttribute(std::make_shared<CopyOpAttribute>(
+        OpImmediate::Specified({0, 0}), MEM_UB, OpImmediate::Specified(src.data.GetShape()),
+        OpImmediate::Specified(out->shape), OpImmediate::Specified(src.data.GetValidShape())));
     function.UpdateTensorDataUsage(op);
     ShmemGetAttr distOpAttr;
     distOpAttr.ownerRank = srcRank;
@@ -376,7 +369,7 @@ Tensor ShmemLoad(const ShmemTensor& src, const SymbolicScalar& srcRank, const Te
 static void UpdataSignalMaxTile(const ShmemTensor& src)
 {
     const auto& vecTile = TileShape::Current().GetVecTile();
-    auto totalTileNum = GetTotalTileNum(vecTile, src.signal.GetShape());
+    auto totalTileNum = GetTotalTileNum(vecTile, ((Operation*)src.signalOp)->GetOOperands()[0]->tensor->rawshape);
     int64_t cur = ((Operation*)src.signalOp)->GetIntAttribute(OpAttributeKey::maxTileNum);
     if (totalTileNum > cur) {
         auto hcclGroupIndex = static_cast<uint64_t>(CommGroupRecorder::GetInstance().Input(src.group));
@@ -506,7 +499,8 @@ void AllGather(const Tensor& predToken, const Tensor& in, ShmemTensor& shmemTens
         auto shmemDataTile = ShmemView(shmemTensor, {row, col}, std::vector<SymbolicScalar>{thisRank * row, 0});
         auto shmemPutOut = ShmemPut(in, shmemDataTile, dynRankId, AtomicType::SET, predToken);
         auto shmemSignalOut = ShmemSignal(shmemDataTile, dynRankId, dynRankId, 1, AtomicType::SET, shmemPutOut);
-        auto shmemDataLocal = ShmemView(shmemTensor, {row, col}, std::vector<SymbolicScalar>{validRow, validCol},
+        auto shmemDataLocal = ShmemView(
+            shmemTensor, {row, col}, std::vector<SymbolicScalar>{validRow, validCol},
             std::vector<SymbolicScalar>{dynRankId * row, 0});
         auto waitUntilOut = ShmemWaitUntil(shmemDataLocal, thisRank, OpType::EQ, 1, true, shmemSignalOut);
         auto shmemGetOut = ShmemGet(shmemDataLocal, thisRank, waitUntilOut);

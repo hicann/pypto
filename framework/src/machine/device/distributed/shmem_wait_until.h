@@ -213,18 +213,20 @@ public:
         int32_t tileIndex = tileRow * tileCols + tileCol;
         int32_t totalTileNum = tileRows * tileCols;
 
-        DEV_DEBUG(
-            "ShmemWaitUntilImpl::EnqueueOp logical rawShape=[%u, %u],"
-            "logical tile=[%u, %u], logical offset=[%u, %u], ownerRank=%u,"
-            "actual rawShape=[%lu, %d], actual offset=[%u, %d], buffer maxTileNum=%lu, bufferStride=%u",
-            paramInfo_.rawShapeRow, paramInfo_.rawShapeCol, paramInfo_.tileShapeRow, paramInfo_.tileShapeCol,
-            info.offset[SHMEM_DIM_ROW], info.offset[SHMEM_DIM_COL], info.offset[OWNER_RANK_ID_INDEX],
-            GetRankNum(hcclContextAddr_, info.vaddr), totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex,
-            TileOp::Distributed::DecodeShmemAddrMaxTileNum(info.vaddr), paramInfo_.bufferStride);
-
         int32_t* addr =
             reinterpret_cast<int32_t*>(info.rawAddr) +
             CalcLinearOffset(totalTileNum, info.offset[OWNER_RANK_ID_INDEX], tileIndex) * paramInfo_.bufferStride;
+
+        DEV_DEBUG(
+            "PrepareTask baseAddr=0x%lx, actualAddr=0x%lx, logical rawShape=[%u, %u], logical tile=[%u, %u],"
+            "logical offset=[%u, %u], ownerRank=%u, actual rawShape=[%lu, %d], actual offset=[%u, %d],"
+            "buffer maxTileNum=%lu, bufferStride=%u",
+            info.rawAddr, reinterpret_cast<uint64_t>(addr), paramInfo_.rawShapeRow, paramInfo_.rawShapeCol,
+            paramInfo_.tileShapeRow, paramInfo_.tileShapeCol, info.offset[SHMEM_DIM_ROW], info.offset[SHMEM_DIM_COL],
+            info.offset[OWNER_RANK_ID_INDEX], GetRankNum(hcclContextAddr_, info.vaddr), totalTileNum,
+            info.offset[OWNER_RANK_ID_INDEX], tileIndex, TileOp::Distributed::DecodeShmemAddrMaxTileNum(info.vaddr),
+            paramInfo_.bufferStride);
+
         return hashMap_.InsertTask(taskId, addr, expectedSum, resetSignal);
     }
 
