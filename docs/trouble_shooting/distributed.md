@@ -13,7 +13,7 @@
 
 根据日志中不同ErrorCode关联到下述排查建议：
 
-### 参数错误（0xA0000 - 0xA0009）
+### 参数错误（0xA0000 - 0xA000A）
 
 #### 0xA0000 INVALID_GROUP_NAME
 
@@ -56,6 +56,10 @@
 #### 0xA0009 INVALID_OPERAND_NUM
 
 1. **检查输入输出参数个数**：确保传入的输入和输出参数数量与 API 定义一致。
+
+#### 0xA000A INVALID_MOE_EXPERT_NUM
+
+1. **检查 MoE 专家数量**：确认传入的 moeExpertNum 参数值为 160，符合 MoE 分布式组合算子的要求。
 
 ### 配置错误（0xA1000-0xA1002）
 
