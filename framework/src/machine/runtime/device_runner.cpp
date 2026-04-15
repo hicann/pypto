@@ -498,7 +498,7 @@ void DeviceRunner::ResetMetrics(const uint32_t& coreId)
 
 void DeviceRunner::SetDebugEnable()
 {
-    for (uint32_t i = 0; i < args_.nrAic + args_.nrAiv; i++) {
+    for (uint32_t i = 0; i < args_.nrAic + args_.nrAiv + AICPU_NUM_OF_RUN_AICPU_TASKS; i++) {
         ResetMetrics(i);
         rtMemcpy(
             (reinterpret_cast<uint8_t*>(args_.sharedBuffer + sizeof(uint64_t) * SHAK_BUF_DFX_DATA_INDEX)) +
