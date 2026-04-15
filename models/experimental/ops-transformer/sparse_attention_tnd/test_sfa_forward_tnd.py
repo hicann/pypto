@@ -31,7 +31,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sfa_forward_tnd_impl import sfa_forward_tnd, SaTileShapeConfig
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'deepseek_v32_exp'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'deepseek_v32_exp'))
 from utils.compare import compare
 
 
@@ -207,7 +207,7 @@ def do_test_sfa_tnd(input_params, input_tensors, core_attn_golden,
                     sm_max_golden, sm_sum_golden):
     """Run SFA TND v2 kernel on NPU and compare with golden."""
 
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 4))
+    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
     torch.npu.set_device(device_id)
     logging.info(f"device_id:{device_id}")
     p = input_params
@@ -299,6 +299,25 @@ def get_case_config(case_name: str):
             [4096],
             2048
         ),
+        "sfa_tnd_v2_bf16_b1_s1k_seq_32k": (
+            1, 2, 1,
+            [1024],
+            [32768],
+            2048
+        ),
+        "sfa_tnd_v2_bf16_b1_s256_seq_32k": (
+            1, 64, 1,
+            [256],
+            [32768],
+            2048
+        ),
+        "sfa_tnd_v2_bf16_b1_s128_seq_32k": (
+            1, 32, 1,
+            [128],
+            [32768],
+            2048
+        )
+        
     }
     return test_case_config.get(case_name)
 
@@ -357,8 +376,23 @@ def test_sfa_tnd_v2_bf16_b4_s4_seq128k():
     do_test_sfa_tnd_entry("sfa_tnd_v2_bf16_b4_s4_seq128K")
 
 
+@pytest.mark.skip(reason="large test case")
 def test_sfa_tnd_v2_bf16_b1_seq_4k():
     do_test_sfa_tnd_entry("sfa_tnd_v2_bf16_b1_seq_4k")
+    
+
+@pytest.mark.skip(reason="large test case")   
+def test_sfa_tnd_v2_bf16_b1_s1k_seq_32k():
+    do_test_sfa_tnd_entry("sfa_tnd_v2_bf16_b1_s1k_seq_32k")
+    
+
+@pytest.mark.skip(reason="large test case")    
+def test_sfa_tnd_v2_bf16_b1_s256_seq_32k():
+    do_test_sfa_tnd_entry("sfa_tnd_v2_bf16_b1_s256_seq_32k")
+
+
+def test_sfa_tnd_v2_bf16_b1_s128_seq_32k():
+    do_test_sfa_tnd_entry("sfa_tnd_v2_bf16_b1_s128_seq_32k")
 
 
 if __name__ == "__main__":
@@ -366,5 +400,5 @@ if __name__ == "__main__":
         format='%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s: %(message)s',
         level=logging.INFO
     )
-    test_sfa_tnd_v2_bf16_b1_seq_4k()
+    test_sfa_tnd_v2_bf16_b1_s1k_seq_32k()
 
