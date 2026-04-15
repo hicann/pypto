@@ -612,14 +612,11 @@ def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, is_
     output_data = [output_q_norm_data, output_q_norm_scale_data, output_q_nope_data,
                 output_q_rope_data, output_kv_cache_data, output_kr_cache_data, k_scale_cache_data_out]
 
+    from mla_prolog_quant_impl import RopeTileShapeConfig
+    rope_tile_shape = RopeTileShapeConfig(two_dim=[32, 64], three_dim=[32, 32, 128], four_dim=[16, 128, 128, 128])
     if is_p:
-        from mla_prolog_quant_impl import RopeTileShapeConfig
-        rope_tile_shape = RopeTileShapeConfig(two_dim=[32, 64], three_dim=[32, 32, 128], four_dim=[16, 128, 128, 128])
         mla_prolog_quant_p(*input_data, *output_data, 1e-5, 1e-5, cache_mode, tile_config, rope_tile_shape)
     else:
-        from mla_prolog_quant_impl import RopeTileShapeConfig
-        rope_tile_shape = RopeTileShapeConfig(two_dim=[128, 128],
-            three_dim=[128, 128, 128], four_dim=[16, 128, 128, 128])
         mla_prolog_quant_d(*input_data, *output_data, 1e-5, 1e-5, cache_mode, tile_config, rope_tile_shape)
     torch_npu.npu.synchronize()
 
@@ -784,6 +781,53 @@ def test_b4_s64k2_pa_nd_bf16_d():
     tile_config.k_vec_tile0 = 2
     tile_config.k_vec_tile1 = 512
     tile_config.unroll_list = [8, 4, 2, 1]
+
+    actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
+    input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \
+                    (is_quant_a, is_quant_b), False, 128, "PA_BSND")
+    mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, w_dtype, \
+                        is_quant_a, is_quant_b, is_nz, tile_config, cache_mode, is_p=False)
+
+
+@pytest.mark.soc("950")
+def test_b64_s64k2_pa_nd_bf16_d():
+    '''
+    mla_prolog decode非量化测试函数
+    '''
+    torch.manual_seed(5)
+    prep_env()
+    params = {
+        'b': 64,
+        't': 128,
+        's': 2,
+        's1': 2,
+        's2': 64 * 1024,
+        'n1': 128,
+        'h': 7168,
+        'q_lora_rank': 1536,
+        'qk_nope_head_dim': 128,
+        'qk_rope_head_dim': 64,
+        'kv_lora_rank': 512,
+        'block_size': 128
+    }
+    dtype = pypto.DT_BF16
+    w_dtype = pypto.DT_INT8
+    is_quant_a, is_quant_b, is_nz = False, False, False
+    cache_mode = "PA_BSND"
+    tile_config = MlaTileConfig()
+    tile_config.tile_bs = 128
+    c0 = 16
+    m_tile_value = (min(128, tile_config.tile_bs) + c0 - 1) // c0 * c0
+    mv_tile_value = min(8, tile_config.tile_bs)
+    tile_config.m_tile = m_tile_value
+
+    tile_config.pre_quant_cube_tile = [m_tile_value, m_tile_value, 64, 256, 128, 128]
+    tile_config.mv_tile = mv_tile_value
+    tile_config.q_vec_tile0 = 32
+    tile_config.q_vec_tile1 = 128
+    tile_config.k_vec_tile0 = 32
+    tile_config.k_vec_tile1 = 512
+    tile_config.unroll_list = [128, 64, 32, 16, 8, 4, 2, 1]
 
     actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
     input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \

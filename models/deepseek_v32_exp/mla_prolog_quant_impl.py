@@ -338,20 +338,23 @@ def rope_3d_v2(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.T
         then applies rotation: x_rotated = x * cos + rotate_half(x) * sin
     """
 
-    pypto.set_vec_tile_shapes(1, 64)
+    pypto.set_vec_tile_shapes(4, 64)
     cast_cos = pypto.cast(cos, pypto.DT_FP32)
     cast_sin = pypto.cast(sin, pypto.DT_FP32)
+    cast_cos_re = pypto.reshape(cast_cos, [x.shape[0], 1, x.shape[2]])
+    cast_sin_re = pypto.reshape(cast_sin, [x.shape[0], 1, x.shape[2]])
 
-    pypto.set_vec_tile_shapes(1, 64, 64)
+    if pypto.platform.npuarch == 'DAV_3510':
+        pypto.set_vec_tile_shapes(1, 128, 64)
+    else:
+        pypto.set_vec_tile_shapes(1, 64, 64)
     cast_x = pypto.cast(x, pypto.DT_FP32)
-    cast_cos = pypto.reshape(cast_cos, [x.shape[0], 1, x.shape[2]])
-    cast_sin = pypto.reshape(cast_sin, [x.shape[0], 1, x.shape[2]])
-
+    
     pypto.set_vec_tile_shapes(1, 64, 128, 128)
     x_view = pypto.reshape(cast_x, [x.shape[0], x.shape[1], x.shape[2] // 2, 2])
     x_trans = pypto.transpose(x_view, 2, 3)
     x_re_second = pypto.reshape(x_trans, x.shape)
-    x_embed = x_re_second * cast_cos + rotate_half(x_re_second) * cast_sin
+    x_embed = x_re_second * cast_cos_re + rotate_half(x_re_second) * cast_sin_re
 
     return pypto.cast(x_embed, x.dtype)
 
@@ -644,8 +647,7 @@ def mla_prolog_quant_compute(
         pypto.set_vec_tile_shapes(tile_config.q_vec_tile0, tile_config.q_vec_tile1, 128)
         pypto.assemble(q_nope_new_trans, output_offset, query_nope_out)
 
-        if tile_bs >= 128:
-            pypto.set_vec_tile_shapes(tile_config.q_vec_tile0, tile_config.q_vec_tile1, 64)
+        pypto.set_vec_tile_shapes(tile_config.q_vec_tile0, tile_config.q_vec_tile1, 64)
         q_pe_view = pypto.view(q_tmp, [tile_bs, n1, qk_rope_head_dim], [0, 0, qk_nope_head_dim])
         cos_2d_view = pypto.view(cos, [tile_bs, qk_rope_head_dim], [bs_offset, 0])
         sin_2d_view = pypto.view(sin, [tile_bs, qk_rope_head_dim], [bs_offset, 0])
@@ -708,17 +710,17 @@ def options_list():
         return {
             "pass_options": {
                 "cube_l1_reuse_setting": {-1: 4, 0: 1, 1: 1, 2: 1},
-                "cube_nbuffer_setting": {0: 1, 1: 1, 2: 1, 3: 3, 4: 4},
+                "cube_nbuffer_setting": {-1: 4, 0: 1, 1: 1, 2: 1, 3: 3},
             },
             "runtime_options": {"device_sched_mode": 2},
             }
     else:
         return {
             "pass_options": {
-                "cube_l1_reuse_setting": {-1: 3, 0: 1, 1: 1},
-                "cube_nbuffer_setting": {-1: 6, 0: 1, 1: 4},
+                "cube_l1_reuse_setting": {-1: 4, 0: 1, 1: 1},
+                "cube_nbuffer_setting": {-1: 4, 0: 1, 1: 1},
             },
-            "runtime_options": {"device_sched_mode": 2},
+            "runtime_options": {"device_sched_mode": 1},
         }
 
 
