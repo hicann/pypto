@@ -111,15 +111,16 @@ def test_set_vec_different_tile_shapes_runtime():
 ## Cube计算的Tiling配置
 
 set\_cube\_tile\_shapes用于设置矩阵计算中各矩阵在m、k、n维度上的TileShape。
+具体优化切分配置可参考[Matmul高性能编程](https://gitcode.com/cann/pypto/blob/master/docs/tutorials/debug/matmul_performance_guide.md)。
 
 ```python
 # 设置Cube计算的TileShape
-pypto.set_cube_tile_shapes([16, 16], [256, 512], [128, 128])
+pypto.set_cube_tile_shapes([16, 16], [256, 512], [128, 128], enable_split_k=False)
 # 获取并打印设置的TileShape
-print(pypto.get_cube_tile_shapes())  # 输出: [[16, 16], [256, 512, 512], [128, 128]]
+print(pypto.get_cube_tile_shapes())  # 输出: [[16, 16], [256, 512, 512], [128, 128], False]
 ```
 
-pypto.set\_cube\_tile\_shapes\(\[16, 16\], \[256, 512\], \[128, 128\]\)：将矩阵相乘形状变化记为\(m, k\) x \(k, n\) = \(m, n\)，这里三个列表分别设置的是矩阵m、k、n维度的切分大小，每个列表的两个元素，第一个元素是设置L0的切分大小，第二个元素设置的是L1的切分大小，其中，当最后一个参数设置为False时，L0和L1的切分大小需保持一致；当最后一个参数设置为True时，L0的切分可以小于L1，但需能被L1切分大小整除。
+pypto.set\_cube\_tile\_shapes\(\[16, 16\], \[256, 512\], \[128, 128\], enable\_split\_k=False\)：将矩阵相乘形状变化记为\(m, k\) x \(k, n\) = \(m, n\)，这里三个列表分别设置的是矩阵m、k、n维度的切分大小，每个列表的两个元素，第一个元素是设置L0的切分大小，第二个元素设置的是L1的切分大小。其中enable\_split\_k参数为是否开启多核切K功能，默认为False。对于M、N较小而K轴较大的场景，仅在M、N轴做分核可能无法用满核导致整体性能较差，此时可以设置`enable_split_k`为True以使能K轴分核。
 
 实际用例如下：
 
