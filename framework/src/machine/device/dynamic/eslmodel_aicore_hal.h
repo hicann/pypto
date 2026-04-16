@@ -18,8 +18,8 @@ const int SUBBLOCKDIM_NUM = 2;
 const int BLOCKDIM = 32;
 using CaReadReg64Func = uint32_t (*)(uint32_t coreId, uint32_t subcoreId, uint64_t addr, uint64_t *data);
 using CaWriteReg64Func = uint32_t (*)(uint32_t coreId, uint32_t subcoreId, uint64_t addr, uint64_t *data);
-using BusDirectReadFunc = uint32_t (*)(void *ptr, uint64_t size, uint64_t address, uint32_t devIdx);
-using BusDirectWriteFunc = uint32_t (*)(uint64_t address, uint64_t size, void *ptr, uint32_t devIdx);
+using BusDirectReadFunc = uint32_t (*)(void *ptr, uint64_t size, uint64_t address);
+using BusDirectWriteFunc = uint32_t (*)(uint64_t address, uint64_t size, void *ptr);
 
 namespace npu::tile_fwk::dynamic {
 
@@ -55,7 +55,7 @@ public:
     }
 
     inline void WriteEslMem(uint64_t address, uint64_t size, void *value) {
-        busDirectWrite_(address, size, value, 0);
+        busDirectWrite_(address, size, value);
     }
 
     inline void SendDynFuncData(DynDeviceTask *dyntask, uint64_t stitchedSize, uint64_t dynFuncDataSize) {

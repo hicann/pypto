@@ -684,14 +684,22 @@ class JitCallableWrapper:
                 self, _current_stream(), torch_tensors, tensor_defs
             )
         else:
-            pto_tensors = self._convert_tensors_with_metadata(
-                torch_tensors, tensor_defs
-            )
-            with pypto.options("jit_scope"):
-                self._set_config_option()
-                pypto_impl.DeviceInit()
-                self.compile(pto_tensors)
-                self._run_with_cpu(pto_tensors, [])
+            # Run kernel on esl
+            cann_is_configed: bool = bool(os.environ.get("ASCEND_HOME_PATH"))
+            if (pypto.get_global_config("simulation.accuracy_level") == 2 and cann_is_configed):
+                import torch_npu
+                pypto_impl.LaunchKernelTorch(
+                    self, _current_stream(), torch_tensors, tensor_defs
+                )
+            else:
+                pto_tensors = self._convert_tensors_with_metadata(
+                    torch_tensors, tensor_defs
+                )
+                with pypto.options("jit_scope"):
+                    self._set_config_option()
+                    pypto_impl.DeviceInit()
+                    self.compile(pto_tensors)
+                    self._run_with_cpu(pto_tensors, [])
 
     def _check_input_defs_match_tensors(self, in_tensors: list, input_tensor_defs: list[pypto.Tensor]) -> None:
         """Check if the input tensor definitions match the input tensors.

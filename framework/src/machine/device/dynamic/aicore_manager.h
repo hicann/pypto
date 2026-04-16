@@ -98,6 +98,14 @@ public:
                 aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
                 FillKernelArgsParallexDevTask(parallelCtx, coreIdx);
             });
+        } else {
+            if (enableEslModel_) {
+                ForEachManageAicore([&](int coreIdx) {
+                    auto logbuf = logger_ ? logger_[coreIdx].GetBuffer() : nullptr;
+                    aicoreHal_.InitKernelArgs(coreIdx,  reinterpret_cast<int64_t>(logbuf));
+                    FillKernelArgsParallexDevTask(parallelCtx, coreIdx);
+                });
+            }
         }
     }
 

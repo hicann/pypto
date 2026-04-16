@@ -71,7 +71,7 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, aclrtStrea
     threadNum = (devProg->devArgs.enableCtrl == 1) ? threadNum : threadNum + 1;
     std::vector<std::thread> aicpus(threadNum);
     std::atomic<int> idx{0};
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::this_thread::sleep_for(std::chrono::seconds(30));
     for (int i = 0; i < threadNum; i++) {
         aicpus[i] = std::thread([&]() {
             int tidx = idx++;
