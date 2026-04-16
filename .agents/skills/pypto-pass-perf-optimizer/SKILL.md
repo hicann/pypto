@@ -819,3 +819,57 @@ find $ASCEND_PROCESS_LOG_PATH/debug/plog -name "pypto-log-*-20260312*.log" -type
 find $ASCEND_PROCESS_LOG_PATH/debug/plog -name "pypto-log-*.log" -type f | \
     sed 's/pypto-log-\([0-9]*\)-.*/\1/' | sort | uniq -c
 ```
+
+## 历史优化案例学习
+
+以下是已完成的 Pass 编译性能优化案例，可作为优化参考。
+
+### 案例1：提前终止遍历 + 避免拷贝 (DynAttrToStatic)
+
+**Commit**: 6002c12d
+
+**优化方法**:
+- 引用语义消除冗余拷贝：`auto&` 替代 `auto`
+- 短路求值优化：条件不满足时立即 `break` 终止遍历
+
+### 案例2：预计算索引 (ReplaceTensor)
+
+**Commit**: 1303180c
+
+**优化方法**:
+- 空间换时间：预构建 `tensorToOrderIndex` 索引映射，将 O(n²) 降为 O(1) 查找
+
+### 案例3：缓存 + 数据结构简化 (SplitReshape)
+
+**Commit**: 0f653952
+
+**优化方法**:
+- 记忆化搜索：添加 Cache 避免重复计算
+- 扁平化数据结构：两层嵌套哈希扁平化为 `map<pair<K1,K2>, V>`
+
+### 案例4：避免临时对象 (SplitLargeFanoutTensor)
+
+**Commit**: 22f7d2aa
+
+**优化方法**:
+- 零拷贝设计：提取核心计算逻辑，直接传递 offset/shape 参数，消除临时对象构造开销
+
+### 案例5：Copy-on-Write 思想 (OoOscheduler)
+
+**Commit**: 18046c2b
+
+**优化方法**:
+- 写时复制策略：`shared_ptr` 实现数据共享，仅在修改时触发深拷贝，降低内存与时间开销
+
+---
+
+**通用优化模式总结**:
+| 模式 | 适用场景 | 示例案例 |
+|-----|---------|---------|
+| 提前终止 | 条件检查类遍历 | 案例1 |
+| 避免拷贝 | 遍历容器时 | 案例1 |
+| 预计算索引 | 重复遍历同一数据 | 案例2 |
+| 添加缓存 | 重复计算相同结果 | 案例3 |
+| 数据结构简化 | 多层嵌套容器 | 案例3 |
+| 避免临时对象 | 频繁创建销毁对象 | 案例4 |
+| Copy-on-Write | 大数据频繁复制 | 案例5 |
