@@ -96,12 +96,13 @@ static torch::Tensor Fp8E5M2ToFloat32(const torch::Tensor& self)
 static torch::Tensor Fp8E8M0ToFloat32(const torch::Tensor& self)
 {
     auto x = self.to(torch::kInt32);
-    auto sign =
-        1.0f -
-        (torch::bitwise_and(torch::bitwise_right_shift(x, at::Scalar(7)), at::Scalar(1))).to(torch::kFloat32) * 2.0f;
-    auto exp_bits = torch::bitwise_and(x, at::Scalar(0x7F));
-    auto exp_val = exp_bits.to(torch::kFloat32) - 63.0f;
-    return sign * torch::pow(2.0f, exp_val);
+    // E8M0 scale uses unsigned exponent semantics in practice for MX scaling.
+    // Keep zero as exact zero, and decode others as power-of-two values.
+    auto is_zero = (x == 0);
+    auto exp_bits = torch::bitwise_and(x, at::Scalar(0xFF));
+    auto exp_val = exp_bits.to(torch::kFloat32) - 127.0f;
+    auto decoded = torch::pow(2.0f, exp_val);
+    return torch::where(is_zero, torch::zeros_like(decoded), decoded);
 }
 
 static torch::Tensor Hf8ToFloat32(const torch::Tensor& self)
@@ -406,22 +407,22 @@ static torch::Tensor Float32ToFp8E8M0(const torch::Tensor& self)
     auto x = self.to(torch::kFloat32).contiguous();
     auto flat = x.flatten();
     auto result = torch::empty_like(flat, torch::TensorOptions().dtype(torch::kUInt8));
-    const float kMinVal = std::exp2(-63.0f);
-    const float kMaxVal = std::exp2(63.0f);
+    const float kMinVal = std::exp2(-126.0f);
+    const float kMaxVal = std::exp2(127.0f);
     auto ptr = flat.data_ptr<float>();
     auto out_ptr = result.data_ptr<uint8_t>();
     for (int64_t i = 0; i < flat.numel(); ++i) {
         float v = ptr[i];
         uint8_t enc = 0;
-        if (std::isnan(v) || std::isinf(v) || std::fpclassify(v) == FP_ZERO) {
-            enc = (std::signbit(v) && !std::isnan(v)) ? 0x80 : 0;
+        if (std::isnan(v) || std::fpclassify(v) == FP_ZERO || v < 0.0f) {
+            enc = 0;
+        } else if (std::isinf(v)) {
+            enc = 254;
         } else {
-            float absv = std::fabs(v);
-            int sign = std::signbit(v) ? 1 : 0;
-            absv = std::clamp(absv, kMinVal, kMaxVal);
-            int exp = static_cast<int>(std::round(std::log2(absv) + 63.0f));
-            exp = std::clamp(exp, 0, 127);
-            enc = (sign << 7) | exp;
+            float clamped = std::clamp(v, kMinVal, kMaxVal);
+            int exp = static_cast<int>(std::round(std::log2(clamped) + 127.0f));
+            exp = std::clamp(exp, 1, 254);
+            enc = static_cast<uint8_t>(exp);
         }
         out_ptr[i] = enc;
     }

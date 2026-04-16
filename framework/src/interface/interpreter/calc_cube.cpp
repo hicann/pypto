@@ -17,10 +17,54 @@
 #include "interface/interpreter/operation.h"
 #include "interface/operation/operation_impl.h"
 #include "interface/interpreter/verify_error.h"
+#include "interface/utils/common.h"
 
 using namespace npu::tile_fwk::calc;
 
 namespace npu::tile_fwk {
+
+namespace {
+constexpr int64_t DN2NZ_MODE = static_cast<int64_t>(Matrix::CopyInMode::DN2NZ);
+constexpr size_t SCALE_A_INDEX = 2;
+constexpr size_t SCALE_B_INDEX = 3;
+constexpr size_t BIAS_DEFAULT_INDEX = 2;
+constexpr size_t BIAS_WITH_SCALE_INDEX = 4;
+
+bool IsAccOp(Opcode opcode) { return opcode == Opcode::OP_A_MULACC_B || opcode == Opcode::OP_A_MULACC_BT; }
+
+bool IsMxScaleTensor(const LogicalTensorDataPtr& tensor)
+{
+    if (tensor == nullptr || tensor->GetDataType() != DataType::DT_FP8E8M0) {
+        return false;
+    }
+    const auto& shape = tensor->GetShape();
+    return shape.size() == 3 && shape[2] == 2;
+}
+
+bool HasMxScaleByInputs(const ExecuteOperationContext* ctx, bool isAccOp)
+{
+    return !isAccOp && ctx->ioperandDataViewList->size() >= BIAS_WITH_SCALE_INDEX &&
+           IsMxScaleTensor(ctx->ioperandDataViewList->at(SCALE_A_INDEX)) &&
+           IsMxScaleTensor(ctx->ioperandDataViewList->at(SCALE_B_INDEX));
+}
+
+bool GetBoolAttrOrDefault(const Operation* op, const std::string& attr, bool defaultValue = false)
+{
+    return op->HasAttr(attr) ? op->GetBoolAttribute(attr) : defaultValue;
+}
+
+int GetIntAttrOrDefault(const Operation* op, const std::string& attr, int defaultValue = 0)
+{
+    return op->HasAttr(attr) ? op->GetIntAttribute(attr) : defaultValue;
+}
+
+uint64_t GetScaleAttrOrDefault(const Operation* op)
+{
+    return op->HasAttr(Matrix::A_MUL_B_SCALE_ATTR) ?
+               op->GetElementAttribute(Matrix::A_MUL_B_SCALE_ATTR).GetUnsignedData() :
+               0;
+}
+} // namespace
 
 void ExecuteOpAMulB(ExecuteOperationContext* ctx)
 {
@@ -30,19 +74,38 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
     auto ret = ctx->ooperandInplaceDataViewList->at(0);
     auto lhs = ctx->ioperandDataViewList->at(0);
     auto rhs = ctx->ioperandDataViewList->at(1);
-    auto bias = (ctx->op->GetBoolAttribute(Matrix::A_MUL_B_BIAS_ATTR)) ? ctx->ioperandDataViewList->at(2) : nullptr;
+    Opcode opcode = ctx->op->GetOpcode();
+    bool isAccOp = IsAccOp(opcode);
+    bool hasMXScaleAttr = GetBoolAttrOrDefault(ctx->op, Matrix::A_MUL_B_MX_ATTR);
+    bool hasMXScaleByInputs = HasMxScaleByInputs(ctx, isAccOp);
+    bool hasMXScale = hasMXScaleAttr || hasMXScaleByInputs;
+    bool transAScale = hasMXScale && ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_A_COPY_IN_MODE) &&
+                       ctx->op->GetIntAttribute(Matrix::A_MUL_B_SCALE_A_COPY_IN_MODE) == DN2NZ_MODE;
+    bool transBScale = hasMXScale && ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_B_COPY_IN_MODE) &&
+                       ctx->op->GetIntAttribute(Matrix::A_MUL_B_SCALE_B_COPY_IN_MODE) == DN2NZ_MODE;
+    bool hasBias = GetBoolAttrOrDefault(ctx->op, Matrix::A_MUL_B_BIAS_ATTR) ||
+                   (!isAccOp && hasMXScaleByInputs && ctx->ioperandDataViewList->size() > BIAS_WITH_SCALE_INDEX);
+    size_t biasIndex = BIAS_DEFAULT_INDEX;
+    if (!isAccOp && hasMXScale) {
+        // scaled_mm interface: [A, B, scale_a, scale_b, (optional) bias]
+        biasIndex = BIAS_WITH_SCALE_INDEX;
+    }
+    auto bias =
+        (hasBias && ctx->ioperandDataViewList->size() > biasIndex) ? ctx->ioperandDataViewList->at(biasIndex) : nullptr;
+    auto aScale = (hasMXScale && ctx->ioperandDataViewList->size() > SCALE_A_INDEX) ?
+                      ctx->ioperandDataViewList->at(SCALE_A_INDEX) :
+                      nullptr;
+    auto bScale = (hasMXScale && ctx->ioperandDataViewList->size() > SCALE_B_INDEX) ?
+                      ctx->ioperandDataViewList->at(SCALE_B_INDEX) :
+                      nullptr;
     auto& cubeTile = ctx->op->GetTileShape().GetCubeTile();
     int k1 = cubeTile.k[1];
     int k2 = cubeTile.k[2];
     int kStep = std::gcd(k1, k2);
-    bool transA =
-        (ctx->op->HasAttr(Matrix::A_MUL_B_TRANS_A)) ? ctx->op->GetBoolAttribute(Matrix::A_MUL_B_TRANS_A) : false;
-    bool transB =
-        (ctx->op->HasAttr(Matrix::A_MUL_B_TRANS_B)) ? ctx->op->GetBoolAttribute(Matrix::A_MUL_B_TRANS_B) : false;
-    uint64_t scale = (ctx->op->HasAttr(Matrix::A_MUL_B_SCALE_ATTR)) ?
-                         ctx->op->GetElementAttribute(Matrix::A_MUL_B_SCALE_ATTR).GetUnsignedData() :
-                         0;
-    int relu = (ctx->op->HasAttr(Matrix::A_MUL_B_RELU_ATTR)) ? ctx->op->GetIntAttribute(Matrix::A_MUL_B_RELU_ATTR) : 0;
+    bool transA = GetBoolAttrOrDefault(ctx->op, Matrix::A_MUL_B_TRANS_A);
+    bool transB = GetBoolAttrOrDefault(ctx->op, Matrix::A_MUL_B_TRANS_B);
+    uint64_t scale = GetScaleAttrOrDefault(ctx->op);
+    int relu = GetIntAttrOrDefault(ctx->op, Matrix::A_MUL_B_RELU_ATTR);
     LogicalTensorDataPtr scalePtr = nullptr;
     if (lhs->GetDataType() == DataType::DT_INT8 && ret->GetDataType() == DataType::DT_FP16 && scale == 0) {
         for (size_t idx = 0; idx < ctx->ioperandDataViewList->size(); idx++) {
@@ -51,7 +114,8 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
             }
         }
     }
-    MatMulParam param = {transA, transB, kStep, scale, relu, nullptr, nullptr};
+    MatMulParam param = {transA, transB,  transAScale, transBScale, kStep,  scale,
+                         relu,   nullptr, nullptr,     nullptr,     nullptr};
     TensorData tempScale;
     if (scalePtr != nullptr) {
         tempScale = Trans(scalePtr);
@@ -62,11 +126,25 @@ void ExecuteOpAMulB(ExecuteOperationContext* ctx)
         tempBias = Trans(bias);
         param.biasPtr = &tempBias;
     }
-    switch (ctx->op->GetOpcode()) {
-        case Opcode::OP_A_MUL_B: {
+    TensorData tempAScale;
+    if (aScale != nullptr) {
+        tempAScale = Trans(aScale);
+        param.aScalePtr = &tempAScale;
+    }
+    TensorData tempBScale;
+    if (bScale != nullptr) {
+        tempBScale = Trans(bScale);
+        param.bScalePtr = &tempBScale;
+    }
+    switch (opcode) {
+        case Opcode::OP_A_MUL_B:
+        case Opcode::OP_A_MUL_BT:
+        case Opcode::OP_AT_MUL_B:
+        case Opcode::OP_AT_MUL_BT: {
             calc::MatMul(ret, lhs, rhs, param);
         } break;
-        case Opcode::OP_A_MULACC_B: {
+        case Opcode::OP_A_MULACC_B:
+        case Opcode::OP_A_MULACC_BT: {
             auto acc = ctx->ioperandDataViewList->at(2);
             ASSERT(
                 ExecuteOperationScene::AMULACC_ACC_DTYPE_UNSUPPORTED,

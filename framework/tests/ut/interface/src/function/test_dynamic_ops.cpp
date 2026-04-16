@@ -20,16 +20,28 @@
 #include <unistd.h>
 
 #include "../interpreter/interpreter_log_test_utils.h"
+#include "configs/config_manager_ng.h"
 #include "test_cost_macro.h"
 #include "interface/configs/config_manager.h"
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/interpreter/calc.h"
 #include "tilefwk/tilefwk_op.h"
 #include "tilefwk/tilefwk.h"
+#include "tilefwk/platform.h"
 #include "interface/inner/tilefwk.h"
 
 using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::calc;
+
+namespace {
+inline SymbolicScalar CeilDivSym(SymbolicScalar a, int64_t b)
+{
+    if (b == 0) {
+        return a;
+    }
+    return (a + b - 1) / b;
+}
+} // namespace
 
 class DynamicOpsTest : public testing::Test {
 public:
@@ -1202,7 +1214,12 @@ TEST_F(DynamicOpsTest, MatMulPertensor)
         float scaleValue = 2.0;
         uint32_t scaleValueTmp = 0;
         memcpy_s(&scaleValueTmp, sizeof(scaleValueTmp), &scaleValue, sizeof(scaleValue));
-        calc::MatMul(golden, logicTensor0, logicTensor1, {false, true, 0, scaleValueTmp, 1, nullptr, nullptr});
+        MatMulParam param{};
+        param.aTrans = false;
+        param.bTrans = true;
+        param.scale = scaleValueTmp;
+        param.relu = 1;
+        calc::MatMul(golden, logicTensor0, logicTensor1, param);
 
         ProgramData::GetInstance().PrepareData(
             {logicTensor0->GetData(), logicTensor1->GetData()}, {out0->GetData()}, {golden->GetData()});
@@ -1244,7 +1261,11 @@ TEST_F(DynamicOpsTest, MatMulPerchannel)
         auto scaleTensorRaw = RawTensorData::CreateConstantTensor<uint64_t>(scaleTensor, scaleValueTmp);
         auto logicScale = LogicalTensorData::Create(*scaleTensorRaw);
         auto logicScaleData = Trans(logicScale);
-        calc::MatMul(golden, logicTensor0, logicTensor1, {false, true, 0, 0, 0, &logicScaleData, nullptr});
+        MatMulParam param{};
+        param.aTrans = false;
+        param.bTrans = true;
+        param.scalePtr = &logicScaleData;
+        calc::MatMul(golden, logicTensor0, logicTensor1, param);
 
         ProgramData::GetInstance().PrepareData(
             {logicTensor0->GetData(), logicTensor1->GetData(), logicScale->GetData()}, {out0->GetData()},
@@ -1279,7 +1300,11 @@ TEST_F(DynamicOpsTest, MatMulBias)
         auto golden = Random(DT_FP16, out.GetShape());
         auto logicBias = Random(DT_FP16, biasTensor.GetShape());
         auto logicBiasData = Trans(logicBias);
-        calc::MatMul(golden, d0, d1, {false, false, 0, 0, 0, nullptr, &logicBiasData});
+        MatMulParam param{};
+        param.aTrans = false;
+        param.bTrans = false;
+        param.biasPtr = &logicBiasData;
+        calc::MatMul(golden, d0, d1, param);
 
         ProgramData::GetInstance().PrepareData(
             {d0->GetData(), d1->GetData(), logicBias->GetData()}, {out0->GetData()}, {golden->GetData()});
@@ -1294,6 +1319,78 @@ TEST_F(DynamicOpsTest, MatMulBias)
                 out = Matrix::Matmul(DT_FP16, t0, t1, pm, false, false, false);
             }
         }
+    });
+    EXPECT_NO_VERIFY_FAILED(logOutput);
+}
+
+// Similar to python/tests/st/test_dynamic_mxmatmul_with_onboard.py::test_scaled_mm_with_bias
+// (FP8E4M3 MX + bias). Keep a single dynamic loop and avoid M/N sub-views because
+// current ExpandFunction path for MX-scale with nested dynamic split is unstable in UT.
+TEST_F(DynamicOpsTest, ScaledMmMxMNSplitWithBiasFp8e4m3)
+{
+    std::string logOutput = CaptureLogFileAndEcho([]() {
+        const NPUArch savedArch = Platform::Instance().GetSoc().GetNPUArch();
+        Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
+        // Some environments use an older bisheng that does not support
+        // --enable-pto-tile-fusion. Disable VF for this UT to avoid
+        // unrelated toolchain-option failures.
+        config::SetPassGlobalConfig(KEY_ENABLE_VF, false);
+        config::SetVerifyOption(KEY_ENABLE_PASS_VERIFY, true);
+        config::SetVerifyOption(KEY_PASS_VERIFY_SAVE_TENSOR, true);
+        std::vector<std::string> passFilter = {""};
+        config::SetVerifyOption(KEY_PASS_VERIFY_FILTER, passFilter);
+
+        constexpr int64_t mm = 385;
+        constexpr int64_t kk = 192;
+        constexpr int64_t nn = 96;
+        constexpr int64_t k64 = kk / 64;
+
+        TileShape::Current().SetCubeTile({64, 64}, {64, 256, 0}, {256, 256});
+
+        Tensor matA(DT_FP8E4M3, {mm, kk}, "matA");
+        Tensor scaleA(DT_FP8E8M0, {mm, k64, 2}, "scaleA");
+        Tensor matB(DT_FP8E4M3, {nn, kk}, "matB");
+        Tensor scaleB(DT_FP8E8M0, {k64, nn, 2}, "scaleB");
+        Tensor bias(DT_FP32, {1, nn}, "bias");
+        Tensor out(DT_FP16, {mm, nn}, "out");
+
+        auto dA = Random(DT_FP8E4M3, matA.GetShape());
+        auto dSA = Random(DT_FP8E8M0, scaleA.GetShape());
+        auto dB = Random(DT_FP8E4M3, matB.GetShape());
+        auto dSB = Random(DT_FP8E8M0, scaleB.GetShape());
+        auto dBias = Random(DT_FP32, bias.GetShape());
+        auto out0 = Random(DT_FP16, out.GetShape());
+        auto golden = Random(DT_FP16, out.GetShape());
+
+        TensorData biasTd = Trans(dBias);
+        TensorData aScaleTd = Trans(dSA);
+        TensorData bScaleTd = Trans(dSB);
+        MatMulParam mxParam{};
+        mxParam.aTrans = false;
+        mxParam.bTrans = true;
+        mxParam.aScaleTrans = false;
+        mxParam.bScaleTrans = false;
+        mxParam.kStep = 0;
+        mxParam.biasPtr = &biasTd;
+        mxParam.aScalePtr = &aScaleTd;
+        mxParam.bScalePtr = &bScaleTd;
+        calc::MatMul(golden, dA, dB, mxParam);
+
+        ProgramData::GetInstance().PrepareData(
+            {dA->GetData(), dSA->GetData(), dB->GetData(), dSB->GetData(), dBias->GetData()}, {out0->GetData()},
+            {golden->GetData()});
+
+        FUNCTION("ScaledMmMxMNSplit", {matA, scaleA, matB, scaleB, bias}, {out})
+        {
+            LOOP("L0", FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+            {
+                (void)i;
+                Matrix::MatmulExtendParam ext;
+                ext.biasTensor = bias;
+                out = Matrix::MatmulMX(DT_FP16, matA, scaleA, matB, scaleB, ext, false, false, true, false, false);
+            }
+        }
+        Platform::Instance().GetSoc().SetNPUArch(savedArch);
     });
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
@@ -1321,7 +1418,11 @@ TEST_F(DynamicOpsTest, MatMulL0CToL1Fixpipe)
         auto scaleTensorRaw = RawTensorData::CreateConstantTensor<uint64_t>(scaleTensor, scaleValueTmp);
         auto logicScale = LogicalTensorData::Create(*scaleTensorRaw);
         auto logicScaleData = Trans(logicScale);
-        calc::MatMul(golden, logicTensor0, logicTensor1, {false, false, 0, 0, 0, &logicScaleData, nullptr});
+        MatMulParam param{};
+        param.aTrans = false;
+        param.bTrans = false;
+        param.scalePtr = &logicScaleData;
+        calc::MatMul(golden, logicTensor0, logicTensor1, param);
         calc::MatMul(golden, golden, l0c2L1Data);
 
         ProgramData::GetInstance().PrepareData(

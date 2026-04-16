@@ -983,7 +983,7 @@ static void Range(const TensorData& out, const Element& start, const Element& en
     for (int64_t dim : out.shape) {
         expected_numel *= dim;
     }
-    ASSERT(calc_error::CalculatorErrorScene::RANGE_NUMEL_MISMATCH, tmp.numel() == expected_numel)
+    ASSERT(CalculatorErrorScene::RANGE_NUMEL_MISMATCH, tmp.numel() == expected_numel)
         << "Range numel mismatch: generated " << tmp.numel() << ", expected " << expected_numel;
     auto tout = From(out);
     tout.second.copy_(tmp);
@@ -1016,14 +1016,14 @@ static void CompareImpl(
             tmp_result = torch::ge(tself, other_op);
             break;
         default:
-            ASSERT(calc_error::CalculatorErrorScene::COMPARE_UNSUPPORTED_TYPE, false) << "Unsupported compare type";
+            ASSERT(CalculatorErrorScene::COMPARE_UNSUPPORTED_TYPE, false) << "Unsupported compare type";
             break;
     }
 
     if (mode == CmpModeType::BIT) {
         if (tmp_result.dim() > 0) {
             int64_t last_dim = tmp_result.size(-1);
-            ASSERT(calc_error::CalculatorErrorScene::BITMODE_LAST_DIM_INVALID, last_dim % NUM_VALUE_8 == 0)
+            ASSERT(CalculatorErrorScene::BITMODE_LAST_DIM_INVALID, last_dim % NUM_VALUE_8 == 0)
                 << "Last dimension must be divisible by 8 in BIT mode";
 
             auto shape = tmp_result.sizes().vec();
@@ -1104,7 +1104,7 @@ static inline int64_t alignup(int64_t x, int64_t align) { return (x + (align - 1
 static void FormatND2NZ(const TensorData& out, const TensorData& self)
 {
     auto& shape = self.shape;
-    ASSERT(calc_error::CalculatorErrorScene::FORMAT_ND2NZ_RANK_LT_2, shape.size() >= 0x2)
+    ASSERT(CalculatorErrorScene::FORMAT_ND2NZ_RANK_LT_2, shape.size() >= 0x2)
         << "Input tensor must have at least 2 dimensions";
 
     int64_t ndim = shape.size();
@@ -1141,7 +1141,7 @@ static void FormatND2NZ(const TensorData& out, const TensorData& self)
 static void FormatNZ2ND(const TensorData& out, const TensorData& self)
 {
     auto& shape = self.shape;
-    ASSERT(calc_error::CalculatorErrorScene::FORMAT_NZ2ND_RANK_LT_2, shape.size() >= 0x2)
+    ASSERT(CalculatorErrorScene::FORMAT_NZ2ND_RANK_LT_2, shape.size() >= 0x2)
         << "Input tensor must have at least 2 dimensions";
 
     auto tself_pair = From(self);
@@ -1218,11 +1218,9 @@ static void QuantExecute(torch::Tensor& tout, const TensorData* scalePtr, uint64
 static void QuantPreCompute(
     const TensorData& out, const TensorData& self, const TensorData* scalePtr, uint64_t scale, int relu)
 {
+    ASSERT(CalculatorErrorScene::QUANTPRECOMPUTE_NULL_DATAPTR, out.dataPtr != nullptr && self.dataPtr != nullptr);
     ASSERT(
-        calc_error::CalculatorErrorScene::QUANTPRECOMPUTE_NULL_DATAPTR,
-        out.dataPtr != nullptr && self.dataPtr != nullptr);
-    ASSERT(
-        calc_error::CalculatorErrorScene::QUANTPRECOMPUTE_DTYPE_MISMATCH,
+        CalculatorErrorScene::QUANTPRECOMPUTE_DTYPE_MISMATCH,
         out.dtype == DataType::DT_FP16 && self.dtype == DataType::DT_INT32);
     auto tself = From(self);
     auto tout = From(out);
@@ -1238,6 +1236,60 @@ static void QuantPreCompute(
         tout.second = tout.second.to(dtype);
     }
     ToOperand(tout.second, tout.first, out.dtype);
+}
+
+static torch::Tensor BuildMXScaleForA(const torch::Tensor& scaleA, bool scaleATrans, int64_t mSize, int64_t kSize)
+{
+    auto localScaleA = scaleA;
+    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.dim() == 3)
+        << "MX scale_a must be 3D, got dim: " << localScaleA.dim();
+    torch::Tensor merged;
+    if (!scaleATrans) {
+        // test reference: scale_a.view(m, k / 32)
+        ASSERT(
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.size(0) == mSize && localScaleA.size(2) == 2)
+            << "MX scale_a shape mismatch, expected [M, K/64, 2], got [" << localScaleA.size(0) << ", "
+            << localScaleA.size(1) << ", " << localScaleA.size(2) << "]";
+        merged = localScaleA.reshape({mSize, -1});
+    } else {
+        // test reference: torch.transpose(scale_a, -2, -1).reshape(k / 32, m).T
+        ASSERT(
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleA.size(1) == mSize && localScaleA.size(2) == 2)
+            << "MX trans scale_a shape mismatch, expected [K/64, M, 2], got [" << localScaleA.size(0) << ", "
+            << localScaleA.size(1) << ", " << localScaleA.size(2) << "]";
+        merged = localScaleA.transpose(-2, -1).reshape({-1, mSize}).transpose(0, 1);
+    }
+    auto expanded = merged.repeat_interleave(32, 1);
+    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, expanded.size(1) == kSize)
+        << "MX scale_a expanded K mismatch, got " << expanded.size(1) << ", expect " << kSize;
+    return expanded;
+}
+
+static torch::Tensor BuildMXScaleForB(const torch::Tensor& scaleB, bool scaleBTrans, int64_t kSize, int64_t nSize)
+{
+    auto localScaleB = scaleB;
+    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.dim() == 3)
+        << "MX scale_b must be 3D, got dim: " << localScaleB.dim();
+    torch::Tensor merged;
+    if (!scaleBTrans) {
+        // test reference: torch.transpose(scale_b, -2, -1).reshape(k / 32, n)
+        ASSERT(
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.size(1) == nSize && localScaleB.size(2) == 2)
+            << "MX scale_b shape mismatch, expected [K/64, N, 2], got [" << localScaleB.size(0) << ", "
+            << localScaleB.size(1) << ", " << localScaleB.size(2) << "]";
+        merged = localScaleB.transpose(-2, -1).reshape({-1, nSize});
+    } else {
+        // test reference: scale_b.view(n, k / 32).T
+        ASSERT(
+            CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, localScaleB.size(0) == nSize && localScaleB.size(2) == 2)
+            << "MX trans scale_b shape mismatch, expected [N, K/64, 2], got [" << localScaleB.size(0) << ", "
+            << localScaleB.size(1) << ", " << localScaleB.size(2) << "]";
+        merged = localScaleB.reshape({nSize, -1}).transpose(0, 1);
+    }
+    auto expanded = merged.repeat_interleave(32, 0);
+    ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, expanded.size(0) == kSize)
+        << "MX scale_b expanded K mismatch, got " << expanded.size(0) << ", expect " << kSize;
+    return expanded;
 }
 
 static void MatMul(
@@ -1273,6 +1325,19 @@ static void MatMul(
     }
     if (tother.second.scalar_type() != calcType) {
         tother.second = tother.second.to(calcType);
+    }
+    if (param.aScalePtr != nullptr && param.bScalePtr != nullptr) {
+        auto taScale = From(*param.aScalePtr).second.to(calcType);
+        auto tbScale = From(*param.bScalePtr).second.to(calcType);
+        ASSERT(CalculatorErrorScene::MATMUL_INPUT_SHAPE_MISMATCH, tself.second.dim() == 2 && tother.second.dim() == 2)
+            << "MX MatMul currently only supports 2D matrices.";
+        int64_t mSize = tself.second.size(0);
+        int64_t kSize = tself.second.size(1);
+        int64_t nSize = tother.second.size(1);
+        auto aScaleExpanded = BuildMXScaleForA(taScale, param.aScaleTrans, mSize, kSize);
+        auto bScaleExpanded = BuildMXScaleForB(tbScale, param.bScaleTrans, kSize, nSize);
+        tself.second = tself.second.mul(aScaleExpanded);
+        tother.second = tother.second.mul(bScaleExpanded);
     }
     if (!param.kStep || param.kStep == tself.second.size(-1)) {
         if (param.biasPtr != nullptr) {
@@ -1501,9 +1566,7 @@ void GatherMask(const TensorData& out, const TensorData& self, int patternMode)
                 selected_indices = torch::arange(3, last_dim, 4);
                 break;
             default:
-                ASSERT(
-                    calc_error::CalculatorErrorScene::GATHERMASK_PATTERNMODE_INVALID,
-                    patternMode >= 1 && patternMode <= 7)
+                ASSERT(CalculatorErrorScene::GATHERMASK_PATTERNMODE_INVALID, patternMode >= 1 && patternMode <= 7)
                     << "Invalid patternMode";
         }
         ret.second = src.second.index_select(-1, selected_indices);
@@ -1869,7 +1932,7 @@ static void MrgSort(const TensorData& out, const TensorData& self, int64_t axis,
     auto sliceIndices = torch::arange(actShape, torch::dtype(torch::kLong));
     auto tselfHalf = tself.second.index_select(axis, sliceIndices);
 
-    ASSERT(calc_error::CalculatorErrorScene::MRGSORT_AXIS_OUT_OF_RANGE, axis >= 0 && axis < tselfHalf.dim())
+    ASSERT(CalculatorErrorScene::MRGSORT_AXIS_OUT_OF_RANGE, axis >= 0 && axis < tselfHalf.dim())
         << "axis" << axis << " is out of bounds for tensor of dimension " << tselfHalf.dim();
 
     std::vector<int64_t> viewOffset(tself.second.dim(), 0);
@@ -2191,7 +2254,7 @@ bool ScatterDateCopy(
     int64_t j = loopIdx[1];
     int64_t dataIdx = indices.index({i, j}).item<int64_t>();
 
-    ASSERT(calc_error::CalculatorErrorScene::SCATTER_BLOCKSIZE_ZERO, blockSize != 0);
+    ASSERT(CalculatorErrorScene::SCATTER_BLOCKSIZE_ZERO, blockSize != 0);
     if (ret.dim() == 2) { // 2 dim
         int64_t srcIdx = i * s + j;
         if ((dataIdx < 0 || dataIdx >= ret.size(0)) || (srcIdx < 0 || srcIdx >= src.size(0))) {
@@ -2225,16 +2288,15 @@ static void ScatterUpdate(
     auto src = From(self);
     auto indices = From(index);
 
+    ASSERT(CalculatorErrorScene::SCATTER_INDICES_DIM_INVALID,
+           indices.second.dim() == 2); // indices should be 2 dim
     ASSERT(
-        calc_error::CalculatorErrorScene::SCATTER_INDICES_DIM_INVALID,
-        indices.second.dim() == 2); // indices should be 2 dim
-    ASSERT(
-        calc_error::CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
+        CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
         (src.second.dim() == 2) || (src.second.dim() == 4)); // only 2, 4 dim support
     ASSERT(
-        calc_error::CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
+        CalculatorErrorScene::SCATTER_SRC_RET_DIM_UNSUPPORTED,
         (ret.second.dim() == 2) || (ret.second.dim() == 4)); // only 2, 4 dim support
-    ASSERT(calc_error::CalculatorErrorScene::SCATTER_SRC_RET_DIM_MISMATCH, src.second.dim() == ret.second.dim());
+    ASSERT(CalculatorErrorScene::SCATTER_SRC_RET_DIM_MISMATCH, src.second.dim() == ret.second.dim());
 
     int64_t b = indices.second.size(0);
     int64_t s = indices.second.size(1);
