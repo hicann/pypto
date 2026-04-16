@@ -44,6 +44,8 @@ public:
         attr_.isDevice = true;
         attr_.deviceId = deviceId;
     }
+    
+    const std::string& GetHostLogDir() const { return hostLogDir_; }
 
 private:
     LogManager();

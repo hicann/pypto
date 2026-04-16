@@ -35,6 +35,7 @@ public:
     virtual Status DefaultEnabledPostCheck(Function& function);
     const std::string& LogFolder(const std::string& topFolder, size_t i) const;
     const std::string& GetName() const { return name_; }
+    const std::string& GetPassFolder() const { return passFolder_; }
     void SetPassConfigs(const PassConfigs& config) { passDfxconfigs_ = config; }
     std::vector<NPUArch>& GetSupportedArches() { return supportedArches_; }
     void SetSupportedArches(const std::vector<NPUArch>& supportedArches)

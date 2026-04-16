@@ -60,7 +60,8 @@
       "Area": [
         "framework/src/operator/",
         "framework/src/passes/",
-        "framework/src/platform/"
+        "framework/src/platform/",
+        "framework/src/utils"
       ],
       "Include": [
         "framework/include/"

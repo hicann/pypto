@@ -135,6 +135,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
                 tools/profiling/function_json_convert.py
                 tools/profiling/parse_pipe_time_trace.py
                 tools/scripts/machine_perf_trace.py
+                tools/scripts/extract_pass_log.py
             DESTINATION ${PyPTO_WhlName}/lib/scripts
     )
 
