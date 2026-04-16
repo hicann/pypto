@@ -53,7 +53,7 @@ def extract_operation_type(cce_op_val):
     for val in cce_op_val:
         if val.startswith('T') and '<' in val and '>' in val:
             cce_op_type.append(val.split("<")[0])
-        elif val.startswith('T') and '(' in val and '(' in val:
+        elif val.startswith('T') and '(' in val and ')' in val:
             cce_op_type.append(val.split("(")[0])
         elif (val.startswith('w') or val.startswith('s')) and '(' in val:
             cce_op_type.append(val.split("(")[0])

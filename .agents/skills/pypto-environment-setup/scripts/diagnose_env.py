@@ -664,6 +664,10 @@ def _collect_issues(
         issues.append({'component': 'pto-isa', 'severity': 'warning',
                        'message': f'PTO_TILE_LIB_CODE_PATH={pto_path} 下缺少 include/pto',
                        'fix_hint': '见 troubleshooting.md § "pto-isa 版本不匹配"'})
+    elif pto_isa.get('header_count', 0) == 0:
+        issues.append({'component': 'pto-isa', 'severity': 'warning',
+                       'message': f'PTO_TILE_LIB_CODE_PATH={pto_path} 的 include/pto 下无头文件，指令集不完整',
+                       'fix_hint': '重新获取 pto-isa 源码：git clone https://gitcode.com/cann/pto-isa.git'})
 
     if not pypto_repo.get('valid'):
         issues.append({'component': 'pypto_repo', 'severity': 'warning', 'message': 'PyPTO 仓库未找到',
@@ -966,6 +970,18 @@ def main() -> int:
         pto_isa['include_pto_exists'] = os.path.isdir(os.path.join(pto_isa_path, 'include', 'pto'))
         comm_inst = os.path.join(pto_isa_path, 'include', 'pto', 'comm', 'pto_comm_inst.hpp')
         pto_isa['include_comm_exists'] = os.path.isfile(comm_inst)
+        pto_include_dir = os.path.join(pto_isa_path, 'include', 'pto')
+        if os.path.isdir(pto_include_dir):
+            pto_header_files = []
+            for root, _dirs, files in os.walk(pto_include_dir):
+                for fn in files:
+                    if fn.endswith(('.h', '.hpp')):
+                        pto_header_files.append(os.path.relpath(os.path.join(root, fn), pto_isa_path))
+            pto_isa['header_count'] = len(pto_header_files)
+            pto_isa['header_files_sample'] = pto_header_files[:10]
+        else:
+            pto_isa['header_count'] = 0
+            pto_isa['header_files_sample'] = []
 
     # CANN 路径推导（优先环境变量，fallback 目录扫描）
     cann_hint, ascend_root = _resolve_cann_path()

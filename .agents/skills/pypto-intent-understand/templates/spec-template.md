@@ -5,6 +5,7 @@
 - **算子分类**: {category}  <!-- element-wise / reduction / matmul / attention / custom -->
 - **数学公式**: ${formula}$
 - **功能描述**: {description}
+- **算法参数**: {algorithm_params}  <!-- 如 epsilon, momentum, beta 等超参数，无则填写 "无" -->
 
 ### 2. 关键特性
 <!-- 复杂算子必须填写，简单算子可省略 -->
@@ -30,15 +31,15 @@ Algorithm: {algorithm_name}
 
 **输入规格**:
 
-| 变量 | Shape | Dtype | 动态轴 | 说明 |
-|------|-------|-------|--------|------|
-| {name} | {shape} | {dtype} | {dynamic_axes} | {description} |
+| 变量 | Shape | Dtype | 动态轴 | 置信度 | 说明 |
+|------|-------|-------|--------|--------|------|
+| {name} | {shape} | {dtype} | {dynamic_axes} | {confidence} | {description} |
 
 **输出规格**:
 
-| 变量 | Shape | Dtype | 动态轴 | 说明 |
-|------|-------|-------|--------|------|
-| {name} | {shape} | {dtype} | {dynamic_axes} | {description} |
+| 变量 | Shape | Dtype | 动态轴 | 置信度 | 说明 |
+|------|-------|-------|--------|--------|------|
+| {name} | {shape} | {dtype} | {dynamic_axes} | {confidence} | {description} |
 
 ### 6. 数据类型支持
 
@@ -81,3 +82,4 @@ Algorithm: {algorithm_name}
 ---
 *生成时间: {timestamp}*
 *确认状态: 已确认*
+*置信度说明: ✓ 高（自身知识库/框架知识） / ⚠ 中（外部材料提取，需确认）*
