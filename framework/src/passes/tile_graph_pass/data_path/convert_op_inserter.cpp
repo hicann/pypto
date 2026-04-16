@@ -576,7 +576,7 @@ void ConvertInserter::CheckUnknown(Function& function) const
     });
 }
 
-void ConvertInserter::CreateMoveOpForConvert(Operation& op)
+bool ConvertInserter::CreateMoveOpForConvert(Operation& op)
 {
     auto convertOpAttribute = dynamic_cast<ConvertOpAttribute*>(op.GetOpAttribute().get());
     auto [from, to] = convertOpAttribute->GetConvertPath();
@@ -588,7 +588,8 @@ void ConvertInserter::CreateMoveOpForConvert(Operation& op)
             op.iOperand.front()->GetDynValidShape()));
         auto childOp = *op.oOperand.front()->GetConsumers().begin();
         op.UpdateSubgraphID(childOp->GetSubgraphID());
-        return;
+        op.SetScopeId(childOp->GetScopeId());
+        return true;
     }
 
     if (to == MemoryType::MEM_DEVICE_DDR) {
@@ -596,9 +597,12 @@ void ConvertInserter::CreateMoveOpForConvert(Operation& op)
         op.SetOpAttribute(std::make_shared<AssembleOpAttribute>(
             from, op.oOperand.front()->GetOffset(), op.oOperand.front()->GetDynOffset(),
             op.iOperand.front()->GetDynValidShape()));
-        auto parentOp = *op.oOperand.front()->GetProducers().begin();
+        auto parentOp = *op.iOperand.front()->GetProducers().begin();
         op.UpdateSubgraphID(parentOp->GetSubgraphID());
+        op.SetScopeId(parentOp->GetScopeId());
+        return true;
     }
+    return false;
 }
 
 // 根据已记录的converts插入OP_CONVERT
@@ -609,9 +613,10 @@ void ConvertInserter::InsertConvertOps(Function& function)
         GraphUtils::CopyDynStatus(c.output, c.input);
         auto& convertOp = function.AddRawOperation(Opcode::OP_CONVERT, {c.input}, {c.output});
         convertOp.SetOpAttribute(std::make_shared<ConvertOpAttribute>(c.from, c.to));
-        CreateMoveOpForConvert(convertOp);
-        auto producerScopeId = (*(c.input->GetProducers().begin()))->GetScopeId();
-        convertOp.SetScopeId(producerScopeId); // convert 是拷贝出操作，和producer一个子图
+        if (!CreateMoveOpForConvert(convertOp)) {
+            auto producerScopeId = (*(c.input->GetProducers().begin()))->GetScopeId();
+            convertOp.SetScopeId(producerScopeId); // convert 是拷贝出操作，和producer一个子图
+        }
     }
 }
 

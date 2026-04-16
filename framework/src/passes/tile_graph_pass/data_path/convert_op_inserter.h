@@ -95,7 +95,7 @@ public:
     void InsertConvertOps(Function& function);
 
     // 将插入的OP_CONVERT转化为View和Assemble，后续GenerateMoveOp时会转化为copy类Op
-    void CreateMoveOpForConvert(Operation& op);
+    bool CreateMoveOpForConvert(Operation& op);
 
     // 判断是否跨Memory层级
     bool CrossCore(const MemoryType from, const MemoryType to) const;

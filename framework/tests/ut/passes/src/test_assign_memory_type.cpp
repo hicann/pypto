@@ -1529,6 +1529,67 @@ TEST_F(AssignMemoryTypeTest, TestAmulBInputInvalidProducer) {
     EXPECT_EQ(assignMemoryType.PreCheck(*func), FAILED);
 }
 
+TEST_F(AssignMemoryTypeTest, TestConvertScopeId)
+{
+    ComputationalGraphBuilder G;
+    Shape s1{NUM_16, NUM_128};
+    Shape s{NUM_16, NUM_16};
+    Offset o1{0, 112};
+    Offset o2{0, 0};
+    G.AddTensor(DataType::DT_FP32, s1, MemoryType::MEM_UNKNOWN, "input");
+    G.AddTensor(DataType::DT_FP32, s1, MemoryType::MEM_UNKNOWN, "t1");
+    G.AddOp(Opcode::OP_VIEW, {"input"}, {"t1"}, "view1");
+    G.GetOp("view1")->SetOpAttribute(std::make_shared<ViewOpAttribute>(o2, MemoryType::MEM_UNKNOWN));
+
+    G.AddTensor(DataType::DT_FP32, s1, MemoryType::MEM_UNKNOWN, "t11");
+    G.AddOp(Opcode::OP_ADDS, {"t1"}, {"t11"}, "adds1");
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t12");
+    G.AddOp(Opcode::OP_VIEW, {"t11"}, {"t12"}, "view12");
+    G.GetOp("view12")->SetOpAttribute(std::make_shared<ViewOpAttribute>(o1, MemoryType::MEM_UNKNOWN));
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t2");
+    G.AddOp(Opcode::OP_ADDS, {"t12"}, {"t2"}, "adds");
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t3");
+    G.AddOp(Opcode::OP_VIEW, {"t2"}, {"t3"}, "view2");
+    G.GetOp("view2")->SetOpAttribute(std::make_shared<ViewOpAttribute>(o2, MemoryType::MEM_L1));
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t4");
+    G.AddOp(Opcode::OP_VIEW, {"t3"}, {"t4"}, "view3");
+    G.GetOp("view3")->SetOpAttribute(std::make_shared<ViewOpAttribute>(o2, MemoryType::MEM_L0A));
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "input_b");
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t5");
+    G.AddOp(Opcode::OP_VIEW, {"input_b"}, {"t5"}, "view4");
+    G.GetOp("view4")->SetOpAttribute(std::make_shared<ViewOpAttribute>(o2, MemoryType::MEM_L1));
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "t6");
+    G.AddOp(Opcode::OP_VIEW, {"t5"}, {"t6"}, "view5");
+    G.GetOp("view5")->SetOpAttribute(std::make_shared<ViewOpAttribute>(o2, MemoryType::MEM_L0B));
+
+    G.AddTensor(DataType::DT_FP32, s, MemoryType::MEM_UNKNOWN, "output");
+    G.AddOp(Opcode::OP_A_MUL_B, {"t4", "t6"}, {"output"}, "a_mul_b");
+
+    constexpr int scopeId1 = 1;
+    G.GetOp("adds")->SetScopeId(scopeId1);
+    G.GetOp("adds1")->SetScopeId(scopeId1);
+
+    G.SetInCast({"input", "input_b"});
+    G.SetOutCast({"output"});
+
+    Function* func = G.GetFunction();
+    AssignMemoryType assignMemoryType;
+    EXPECT_EQ(assignMemoryType.RunOnFunction(*func), SUCCESS);
+    EXPECT_EQ(assignMemoryType.PostCheck(*func), SUCCESS);
+
+    for (auto& op : func->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            EXPECT_EQ(op.GetScopeId(), scopeId1);
+        }
+    }
+}
+
 TEST_F(AssignMemoryTypeTest, TestTobeMapOrdering)
 {
     config::SetHostConfig(KEY_STRATEGY, "AssignMemoryTypeTestStrategy");
