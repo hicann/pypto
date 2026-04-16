@@ -15,6 +15,11 @@ import pytest
 import torch
 
 
+def _to_device_tensor_data(tensor: torch.Tensor, shape=None, dtype=pypto.DT_FP32):
+    target_shape = list(tensor.shape) if shape is None else shape
+    return pypto.pypto_impl.DeviceTensorData(dtype, tensor.data_ptr(), target_shape)
+
+
 @pytest.mark.skip(reason="Verify not supported")
 def test_verify_dynamic_ops_assemble():
     s = 32
@@ -44,3 +49,32 @@ def test_verify_dynamic_ops_assemble():
             pypto.assemble(t2a, [0, 0], out)
             pypto.assemble(t2b, [s, 0], out)
             pypto.pass_verify_save(out, "tensor_out_idx$idx", idx=idx)
+
+
+def test_set_verify_data_dtype_mismatch_intercept():
+    input_tensor = torch.zeros((2, 3), dtype=torch.float32)
+    output_tensor = torch.zeros((2, 3), dtype=torch.float32)
+    input_golden = torch.zeros((2, 3), dtype=torch.float32)
+    output_golden = torch.zeros((2, 3), dtype=torch.float32)
+
+    input_data = _to_device_tensor_data(input_tensor, dtype=pypto.DT_FP32)
+    output_data = _to_device_tensor_data(output_tensor, dtype=pypto.DT_FP32)
+    input_golden_data = _to_device_tensor_data(input_golden, dtype=pypto.DT_FP32)
+    output_golden_data = _to_device_tensor_data(output_golden, dtype=pypto.DT_FP16)
+
+    with pytest.raises(Exception, match="Errcode:\\s*FB4003"):
+        pypto.pypto_impl.SetVerifyData([input_data], [output_data], [input_golden_data, output_golden_data])
+
+
+def test_set_verify_data_shape_mismatch_intercept():
+    input_tensor = torch.zeros((2, 3), dtype=torch.float32)
+    output_tensor = torch.zeros((2, 3), dtype=torch.float32)
+    input_golden = torch.zeros((2, 3), dtype=torch.float32)
+    output_golden = torch.zeros((2, 3), dtype=torch.float32)
+
+    input_data = _to_device_tensor_data(input_tensor)
+    input_golden_data = _to_device_tensor_data(input_golden)
+    output_golden_exact = _to_device_tensor_data(output_golden, [2, 3])
+    output_bad_shape = _to_device_tensor_data(output_tensor, [2, 4])
+    with pytest.raises(Exception, match="Errcode:\\s*FB4002"):
+        pypto.pypto_impl.SetVerifyData([input_data], [output_bad_shape], [input_golden_data, output_golden_exact])

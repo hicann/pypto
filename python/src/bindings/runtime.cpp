@@ -24,6 +24,7 @@
 #include <vector>
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/interpreter/raw_tensor_data.h"
+#include "interface/interpreter/verify_error.h"
 #include "interface/utils/op_info_manager.h"
 #include "machine/runtime/device_launcher_binding.h"
 #include "machine/runtime/emulation_launcher.h"
@@ -39,6 +40,32 @@ using namespace npu::tile_fwk;
 using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
+
+static void ValidateVerifyOutputAndGolden(
+    const std::vector<DeviceTensorData>& inOutTensors, const std::vector<DeviceTensorData>& goldens)
+{
+    if (inOutTensors.size() != goldens.size()) {
+        return;
+    }
+
+    for (size_t i = 0; i < inOutTensors.size(); i++) {
+        bool outputIsNone = inOutTensors[i].GetAddr() == nullptr;
+        bool goldenIsNone = goldens[i].GetAddr() == nullptr;
+        if (outputIsNone || goldenIsNone) {
+            continue;
+        }
+
+        ASSERT(VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, inOutTensors[i].GetDataType() == goldens[i].GetDataType())
+            << "dtype mismatch at index " << i;
+
+        auto& outputShape = inOutTensors[i].GetShape();
+        auto& goldenShape = goldens[i].GetShape();
+        ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF, outputShape.size() == goldenShape.size());
+        for (size_t dim = 0; dim < outputShape.size(); dim++) {
+            ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF, outputShape[dim] == goldenShape[dim]);
+        }
+    }
+}
 
 void CopyToHost(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
 {
@@ -61,6 +88,12 @@ void SetVerifyData(
         }
         return logical;
     };
+
+    std::vector<DeviceTensorData> inOutTensors;
+    inOutTensors.reserve(inputs.size() + outputs.size());
+    inOutTensors.insert(inOutTensors.end(), inputs.begin(), inputs.end());
+    inOutTensors.insert(inOutTensors.end(), outputs.begin(), outputs.end());
+    ValidateVerifyOutputAndGolden(inOutTensors, goldens);
 
     ProgramData::GetInstance().Reset();
     for (size_t i = 0; i < inputs.size(); i++) {
