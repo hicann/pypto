@@ -67,9 +67,8 @@ public:
             if (it != dispatcher.end()) {
                 it->second(cfgValue);
             } else {
-                SIMULATION_LOGE(
-                    "ErrCode: F%u, Invalid config name: %s",
-                    static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_CONFIG_NAME), cfgName.c_str());
+                SIMULATION_LOGE_E(CostModel::ExternalErrorScene::INVALID_CONFIG_NAME,
+                    "Invalid config name: %s", cfgName.c_str());
             }
         }
     }

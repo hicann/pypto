@@ -68,6 +68,8 @@
 #### CANN_LOAD_FAILED
 1. **确认是否加载了CANN环境**: `source xxx/set_env.sh`
 
+#### CMD_FAILED
+1. 检查打印出来的终端命令是否正确
 
 ## 通用排查建议
 

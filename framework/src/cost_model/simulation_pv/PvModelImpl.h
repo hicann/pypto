@@ -432,7 +432,7 @@ public:
 
                 int ret = std::system(cmd);
                 if (ret != 0) {
-                    SIMULATION_LOGE("cmd error: %s", cmd);
+                    SIMULATION_LOGE_E(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd);
                 }
 
                 cceBin.emplace_back(

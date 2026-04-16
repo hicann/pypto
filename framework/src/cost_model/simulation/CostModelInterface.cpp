@@ -168,9 +168,8 @@ void CostModelInterface::RunPerformance()
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
     if (sim->IsDeadlock()) {
-        SIMULATION_LOGE(
-            "ErrCode: F%u, Simulation is deadlock at cycle %lu !!!!!!!!!",
-            static_cast<unsigned>(CostModel::ForwardSimErrorScene::DEAD_LOCK), sim->globalCycles);
+        SIMULATION_LOGE_E(CostModel::ForwardSimErrorScene::DEAD_LOCK,
+            "Simulation is deadlock at cycle %lu !!!!!!!!!", sim->globalCycles);
     }
     SIMULATION_LOGW("CostModel Simulation Runtime: %ld(s)", duration.count());
 }

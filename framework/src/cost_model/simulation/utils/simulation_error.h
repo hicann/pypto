@@ -62,5 +62,9 @@ enum class ForwardSimErrorScene : uint32_t {
 
 enum class PostSimErrorScene : uint32_t { UNKNOWN = 93099U };
 
-enum class PrecisionSimErrorScene : uint32_t { NO_SO_EXISTS = 94001U, CANN_LOAD_FAILED = 94002U, UNKNOWN = 94099U };
+enum class PrecisionSimErrorScene : uint32_t { 
+    NO_SO_EXISTS = 94001U, 
+    CANN_LOAD_FAILED = 94002U, 
+    CMD_ERROR = 94003U,
+    UNKNOWN = 94099U };
 } // namespace CostModel

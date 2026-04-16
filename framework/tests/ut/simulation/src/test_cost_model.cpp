@@ -494,6 +494,7 @@ TEST_F(CostModelTest, TestCoreMachineDeadlock2)
     } catch (const std::exception& e) {
         EXPECT_TRUE(true); // 如果捕获到异常，测试通过
     }
+    coreMachine->sim->ReportDeadlock(1);
     delete coreMachine;
 }
 

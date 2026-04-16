@@ -140,9 +140,8 @@ void PvModelCaseConfig::Dump(std::string path)
     std::fstream file(path, std::ios::out);
 
     if (!file.is_open()) {
-        SIMULATION_LOGE(
-            "ErrCode: F%u, [PVMODEL]open config file error: %s",
-            static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), path.c_str());
+        SIMULATION_LOGE_E(CostModel::ExternalErrorScene::FILE_OPEN_FAILED,
+            "[PVMODEL]open config file error: %s", path.c_str());
         return;
     }
 

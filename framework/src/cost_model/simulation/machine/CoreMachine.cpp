@@ -71,7 +71,7 @@ void CoreMachine::SetCalendar()
             counterSetQueue.Enqueue(calendarSecondSet);
         }
 
-        SIMULATION_LOGE(
+        SIMULATION_LOGI(
             "[Cycle: %lu][CoreMachine][SetCalendar] task id %lu SetCalendar pass!!!",
             static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId));
     }
@@ -165,27 +165,8 @@ void CoreMachine::StepQueue()
     cacheRespQueue.Step();
     counterSetQueue.Step();
     while (!counterSetQueue.Empty()) {
-        int number = counterSetQueue.CalendarPopFront();
+        counterSetQueue.CalendarPopFront();
         sim->calendarCounter[sim->taskSetMap[executingTaskId]]++;
-        if ((number == calendarSecondSet) &&
-            (sim->calendarCounter[sim->taskSetMap[executingTaskId]] != sim->taskSetExpectMap[executingTaskId])) {
-            SIMULATION_LOGE(
-                "[Cycle: %lu][CoreMachine][StepQueue] task id %lu after set counter %d calendar value is %d expect "
-                "value is %d",
-                static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId),
-                sim->taskSetMap[executingTaskId], sim->calendarCounter[sim->taskSetMap[executingTaskId]],
-                sim->taskSetExpectMap[executingTaskId]);
-
-        } else if (
-            (number == calendarFirstSet) &&
-            (sim->calendarCounter[sim->taskSetMap[executingTaskId]] != sim->taskFirstSetMap[executingTaskId])) {
-            SIMULATION_LOGE(
-                "[Cycle: %lu][CoreMachine][StepQueue] task id %lu after first set counter %d calendar value is %d "
-                "expect value is %d",
-                static_cast<unsigned long>(GetSim()->GetCycles()), static_cast<unsigned long>(executingTaskId),
-                sim->taskSetMap[executingTaskId], sim->calendarCounter[sim->taskSetMap[executingTaskId]],
-                sim->taskFirstSetMap[executingTaskId]);
-        }
 
         SIMULATION_LOGI(
             "[Cycle: %lu][CoreMachine][StepQueue] task id %lu set counter %d value before %d value after %d",
