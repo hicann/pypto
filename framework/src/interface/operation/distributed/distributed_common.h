@@ -198,61 +198,6 @@ inline int GetTotalTileNum(const std::array<int, MAX_DIST_DIM_SIZE>& tile)
            static_cast<int>(tile[static_cast<size_t>(TileIndex::TAIL_SHAPE)] != 0);
 }
 
-inline bool checkValidInput(
-    const Tensor& input, uint64_t dim, DataType dType, int32_t row, int32_t col, std::string& assertResult)
-{
-    if (input.Format() != TileOpFormat::TILEOP_ND) {
-        assertResult = "Distributed constraint violated: " + input.GetName() + " format must be TILEOP_ND.";
-        return false;
-    }
-    if (input.GetName() == "") {
-        assertResult = "Distributed constraint violated: input name can't be null.";
-        return false;
-    }
-    if (input.Dim() != dim) {
-        assertResult =
-            "Distributed constraint violated: " + input.GetName() + " dim must be " + std::to_string(dim) + ".";
-        return false;
-    }
-    if (input.GetDataType() != dType) {
-        assertResult = "Distributed constraint violated: " + input.GetName() + " dataType is not valid.";
-        return false;
-    }
-    if (input.GetShape(0) != row) {
-        assertResult =
-            "Distributed constraint violated: " + input.GetName() + " row must be " + std::to_string(row) + ".";
-        return false;
-    }
-    if (input.Dim() != 1 && input.GetShape(1) != col) {
-        assertResult =
-            "Distributed constraint violated: " + input.GetName() + " col must be " + std::to_string(col) + ".";
-        return false;
-    }
-    return true;
-}
-
-inline bool checkValidConfig(const MoeConfig& moeConfig, std::string& assertResult)
-{
-    int32_t rankNum = moeConfig.rankNum;
-    int32_t routedExpertNum = moeConfig.routedExpertNum;
-    int32_t expertNumPerRank = moeConfig.expertNumPerRank;
-    if (rankNum != 4 && rankNum != 8) { // rankNum仅支持4和8
-        assertResult = "Distributed constraint violated: moeConfig rankSize must be 4 or 8.";
-        return false;
-    }
-    if (routedExpertNum != ROUTED_EXPET_NUM) {
-        assertResult = "Distributed constraint violated: moeConfig routedExpertNum must be " +
-                       std::to_string(ROUTED_EXPET_NUM) + ".";
-        return false;
-    }
-    if (expertNumPerRank != routedExpertNum / rankNum) {
-        assertResult = "Distributed constraint violated: moeConfig expertNumPerRank must be " +
-                       std::to_string(routedExpertNum / rankNum) + ".";
-        return false;
-    }
-    return true;
-}
-
 inline int64_t GetTotalTileNum(const VecTile& tileShape, const Shape& dataShape)
 {
     ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, tileShape.size() == 2)

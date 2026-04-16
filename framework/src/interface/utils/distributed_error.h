@@ -31,6 +31,8 @@ enum class DistributedErrorCode : uint32_t {
     INVALID_SHMEM_VIEW_PARAM = 0xA0008,
     INVALID_OP_TYPE = 0xA0009,
     INVALID_MOE_EXPERT_NUM = 0xA000A,
+    INVALID_MOE_TOP_K = 0xA000B,
+    INVALID_EXPERT_NUM_PER_RANK = 0xA000C,
 
     // FA1xxx: 配置错误
     INVALID_TILE_DIM = 0xA1000,

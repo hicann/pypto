@@ -28,6 +28,51 @@
 
 namespace npu::tile_fwk {
 namespace Distributed {
+void MoeDistributedDispatchValidateGroup(const char* group)
+{
+    ASSERT(DistributedErrorCode::NULLPTR, group != nullptr) << "\"group\" cannot be nullptr";
+    int32_t groupLen = std::strlen(group);
+    int32_t maxGroupLen = 128;
+    ASSERT(DistributedErrorCode::INVALID_GROUP_NAME, (groupLen >= 1) && (groupLen < maxGroupLen))
+        << "The length of \"group\" only supports [1, " << maxGroupLen << "), but got " << groupLen;
+}
+
+void MoeDistributedDispatchValidTensor(
+    const Tensor& input, uint64_t dim, DataType dType, int32_t row, int32_t col)
+{
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_FORMAT, input.Format() == TileOpFormat::TILEOP_ND)
+        << "Distributed constraint violated: " + input.GetName() + " format must be TILEOP_ND.";
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_DIM, input.Dim() == dim)
+        << "Distributed constraint violated: " + input.GetName() + " dim must be " + std::to_string(dim)
+        << "but got " << std::to_string(input.Dim()) ;
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_DTYPE, input.GetDataType() == dType)
+        << "Distributed constraint violated: " + input.GetName() + " dataType must be " << DataType2String(dType)
+        << "but got " << DataType2String(input.GetDataType());
+    ASSERT(DistributedErrorCode::INVALID_TENSOR_SHAPE, input.GetShape(0) == row)
+        << "Distributed constraint violated: " + input.GetName() + " row must be " + std::to_string(row)
+        << "but got " << std::to_string(input.GetShape(0));
+    if (input.Dim() == 2) {
+        ASSERT(DistributedErrorCode::INVALID_TENSOR_SHAPE, input.GetShape(1) == col)
+        << "Distributed constraint violated: " + input.GetName() + " col must be " + std::to_string(col)
+        << "but got " << std::to_string(input.GetShape(1));
+    }
+}
+
+void MoeDistributedDispatchValidConfig(const MoeConfig& moeConfig)
+{
+    int32_t supportedEpWorldSize1 = 4;
+    int32_t supportedEpWorldSize2 = 8;
+    ASSERT(
+        DistributedErrorCode::INVALID_WORLD_SIZE,
+        (moeConfig.rankNum == supportedEpWorldSize1) || (moeConfig.rankNum == supportedEpWorldSize2))
+        << "epWorldSize only "
+        << "supports " << std::to_string(supportedEpWorldSize1) << " or " << std::to_string(supportedEpWorldSize2)
+        << ", but got " << std::to_string(moeConfig.rankNum);
+    ASSERT(DistributedErrorCode::INVALID_MOE_EXPERT_NUM, moeConfig.routedExpertNum == ROUTED_EXPET_NUM)
+        "Distributed constraint violated: moeConfig routedExpertNum must be " + std::to_string(ROUTED_EXPET_NUM)
+        << "but got " << std::to_string(moeConfig.routedExpertNum);
+}
+
 void TiledDispatchFFNSched(
     Function& function, const TileShape& tileShape, const std::vector<std::shared_ptr<LogicalTensor>>& iOperand,
     const std::vector<std::shared_ptr<LogicalTensor>>& oOperand, const Operation& op)
@@ -505,25 +550,16 @@ void MoeDispatchValidateV1(
     const Tensor& tokenTensor, const Tensor& tokenExpertTable, Tensor& expandX, Tensor& validCnt, Tensor& combineInfo,
     const char* group, const MoeConfig& moeConfig)
 {
-    std::string assertResult;
-    CHECK(checkValidConfig(moeConfig, assertResult)) << assertResult;
-    CHECK(group != nullptr) << "MoeDispatch constraint violated: group name can't be nullptr.";
-    CHECK(group[0] != '\0') << "MoeDispatch constraint violated: group name is not valid.";
-    CHECK(strnlen(group, 128) < 128) << "MoeDispatch constraint violated: group name max size must be 128.";
-    CHECK(checkValidInput(tokenTensor, 2, DataType::DT_BF16, 8, 5120, assertResult))
-        << assertResult; // 当前仅支持shape:8,5120
+    MoeDistributedDispatchValidConfig(moeConfig);
+    MoeDistributedDispatchValidateGroup(group);
+    MoeDistributedDispatchValidTensor(tokenTensor, 2, DataType::DT_BF16, 8, 5120);
+    MoeDistributedDispatchValidTensor(tokenExpertTable, 2, DataType::DT_INT32, 8, 8);
     int32_t expandXRow = std::min(
         static_cast<int32_t>(tokenTensor.GetShape(0)) * static_cast<int32_t>(tokenExpertTable.GetShape(1)) *
-            moeConfig.rankNum,
-        static_cast<int32_t>(tokenTensor.GetShape(0)) * moeConfig.routedExpertNum);
-    CHECK(checkValidInput(tokenExpertTable, 2, DataType::DT_INT32, 8, 8, assertResult))
-        << assertResult; // 当前仅支持shape:8,8
-    CHECK(checkValidInput(validCnt, 1, DataType::DT_INT32, moeConfig.expertNumPerRank, 1, assertResult))
-        << assertResult;
-    CHECK(checkValidInput(expandX, 2, DataType::DT_BF16, expandXRow, 5120, assertResult))
-        << assertResult; // 当前仅支持hiddenSize:5120
-    CHECK(checkValidInput(combineInfo, 2, DataType::DT_INT32, expandXRow, 3, assertResult))
-        << assertResult; // comBineInfo固定hiddenSize:3
+            moeConfig.rankNum, static_cast<int32_t>(tokenTensor.GetShape(0)) * moeConfig.routedExpertNum);
+    MoeDistributedDispatchValidTensor(validCnt, 1, DataType::DT_INT32, moeConfig.expertNumPerRank, 1);
+    MoeDistributedDispatchValidTensor(expandX, 2, DataType::DT_BF16, expandXRow, 5120);
+    MoeDistributedDispatchValidTensor(combineInfo, 2, DataType::DT_INT32, expandXRow, 3);
 }
 
 void CreateShmemData(
@@ -613,37 +649,34 @@ void MoeDispatchValidateV2(
     uint32_t sharedExpertNum, uint32_t sharedExpertRankNum, Tensor& expandX, Tensor& expertTokenNums,
     Tensor& assistInfoForCombine, Tensor& recvCounts)
 {
-    std::string assertResult;
-    CHECK(group != nullptr) << "MoeDispatch constraint violated: group name can't be nullptr.";
-    CHECK(group[0] != '\0') << "MoeDispatch constraint violated: group name must be valid, but got '\0'";
-    CHECK(strnlen(group, 128) < 128) << "MoeDispatch constraint violated: group name max size must be 128, but got "
-                                     << strnlen(group, 128);
-    CHECK(epWorldSize > 0) << "MoeDispatch constraint violated: epWorldSize must be > 0, but got " << epWorldSize;
-    CHECK(moeExpertNum == 160) << "MoeDispatch constraint violated: moeExpertNum must 160, but got " << moeExpertNum;
-    CHECK(sharedExpertNum == 0) << "MoeDispatch constraint violated: sharedExpertNum must 0, but got "
-                                << sharedExpertNum;
-    CHECK(sharedExpertRankNum == 0) << "MoeDispatch constraint violated: sharedExpertRankNum must 0, but got "
-                                    << sharedExpertRankNum;
+    (void) sharedExpertRankNum;
+    MoeDistributedDispatchValidateGroup(group);
+    ASSERT(DistributedErrorCode::INVALID_WORLD_SIZE, epWorldSize > 0)
+        << "MoeDispatch constraint violated: epWorldSize must be > 0, but got " << std::to_string(epWorldSize);
+    ASSERT(DistributedErrorCode::INVALID_MOE_EXPERT_NUM, moeExpertNum == 160)
+        << "MoeDispatch constraint violated: moeExpertNum must 160, but got " << std::to_string(moeExpertNum);
     int32_t routedExpertNum = moeExpertNum - sharedExpertNum;
     int32_t expertNumPerRank = routedExpertNum / epWorldSize;
-    CHECK(checkValidInput(x, 2, DataType::DT_BF16, 8, 5120, assertResult)) << assertResult;
-    CHECK(checkValidInput(expertIds, 2, DataType::DT_INT32, 8, 8, assertResult)) << assertResult;
-    CHECK(checkValidInput(expertTokenNums, 1, DataType::DT_INT32, expertNumPerRank, 1, assertResult)) << assertResult;
-    CHECK(checkValidInput(recvCounts, 1, DataType::DT_INT32, 1, 0, assertResult)) << assertResult;
+    MoeDistributedDispatchValidTensor(x, 2, DataType::DT_BF16, 8, 5120);
+    MoeDistributedDispatchValidTensor(expertIds, 2, DataType::DT_INT32, 8, 8);
+    MoeDistributedDispatchValidTensor(expertTokenNums, 1, DataType::DT_INT32, expertNumPerRank, 1);
+    MoeDistributedDispatchValidTensor(recvCounts, 1, DataType::DT_INT32, 1, 0);
     int batchSize = x.GetShape(0);
     int topK = expertIds.GetShape(1);
     int32_t expandXRow = std::min(
         static_cast<int32_t>(batchSize) * static_cast<int32_t>(topK) * static_cast<int32_t>(epWorldSize),
         static_cast<int32_t>(batchSize) * routedExpertNum);
-    CHECK(checkValidInput(expandX, 2, DataType::DT_BF16, expandXRow, 5120, assertResult)) << assertResult;
-    CHECK(checkValidInput(assistInfoForCombine, 2, DataType::DT_INT32, expandXRow, 3, assertResult)) << assertResult;
+    MoeDistributedDispatchValidTensor(expandX, 2, DataType::DT_BF16, expandXRow, 5120);
+    MoeDistributedDispatchValidTensor(assistInfoForCombine, 2, DataType::DT_INT32, expandXRow, 3);
     uint64_t shmemSize =
         moeExpertNum * x.GetShape(0) * x.GetShape(1) * BytesOf(x.GetDataType()) +
         moeExpertNum * x.GetShape(0) * assistInfoForCombine.GetShape(1) * BytesOf(assistInfoForCombine.GetDataType()) +
         AlignUp(routedExpertNum, 256) * 8 * BytesOf(DataType::DT_INT32) +
         moeExpertNum * 128 * BytesOf(DataType::DT_INT32) + 128 * BytesOf(DataType::DT_INT32);
     const uint64_t winSize = 1024 * 1024 * 200;
-    CHECK(shmemSize < winSize) << "Exceeds winSize limit. Masxmum allowed: " << winSize << ", got: " << shmemSize;
+    ASSERT(DistributedErrorCode::WIN_SIZE_EXCEED_LIMIT, shmemSize < winSize)
+        << "Exceeds winSize limit. Masxmum allowed " << std::to_string(winSize)
+        << ", got " << std::to_string(shmemSize);
 }
 
 Tensor Nop(const std::vector<Tensor>& inTensors)
@@ -684,14 +717,17 @@ void MoeDistributedDispatchV2(
         x, expertIds, group, epWorldSize, moeExpertNum, sharedExpertNum, sharedExpertRankNum, expandX, expertTokenNums,
         assistInfoForCombine, recvCounts);
     int32_t routedExpertNum = moeExpertNum - sharedExpertNum;
-    CHECK(epWorldSize > 0) << "MoeDispatch constraint violated: epWorldSize must be > 0, but got " << epWorldSize;
+    ASSERT(DistributedErrorCode::INVALID_WORLD_SIZE, epWorldSize > 0)
+        << "MoeDispatch constraint violated: epWorldSize must be > 0, but got " << std::to_string(epWorldSize);
     int32_t expertNumPerRank = routedExpertNum / epWorldSize;
     int32_t batchSize = x.GetShape(0);
     int32_t hiddenSize = x.GetShape(1);
     int32_t topK = expertIds.GetShape(1);
-    CHECK(topK > 0) << "MoeDispatch constraint violated: topK must be > 0, but got " << topK;
-    CHECK(expertNumPerRank > 0) << "MoeDispatch constraint violated: expertNumPerRank must be > 0, but got "
-                                << expertNumPerRank;
+    ASSERT(DistributedErrorCode::INVALID_MOE_TOP_K, topK > 0)
+        << "MoeDispatch constraint violated: topK must be > 0, but got " << std::to_string(topK);
+    ASSERT(DistributedErrorCode::INVALID_EXPERT_NUM_PER_RANK, expertNumPerRank > 0)
+        << "MoeDispatch constraint violated: expertNumPerRank must be > 0, but got "
+        << std::to_string(expertNumPerRank);
     int32_t infoSize = AlignUp(assistInfoForCombine.GetShape(1), 8);
     int32_t countSize = 8;
     int32_t signalCol = 128;

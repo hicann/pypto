@@ -13,7 +13,7 @@
 
 根据日志中不同ErrorCode关联到下述排查建议：
 
-### 参数错误（0xA0000 - 0xA000A）
+### 参数错误（0xA0000 - 0xA000C）
 
 #### 0xA0000 INVALID_GROUP_NAME
 
@@ -60,6 +60,14 @@
 #### 0xA000A INVALID_MOE_EXPERT_NUM
 
 1. **检查 MoE 专家数量**：确认传入的 moeExpertNum 参数值为 160，符合 MoE 分布式组合算子的要求。
+
+#### 0xA000B INVALID_MOE_TOP_K
+
+1. **检查 MoE topK数**：确认传入的 topK 参数值为 8，符合 MoE 分布式组合算子的要求。
+
+#### 0xA000C INVALID_EXPERT_NUM_PER_RANK
+
+1. **检查 MoE 每卡专家数**：确认传入的 expertNumPerRank 参数值符合 moeExpertNum / epWorldSize，符合 MoE 分布式组合算子的要求。
 
 ### 配置错误（0xA1000-0xA1002）
 
