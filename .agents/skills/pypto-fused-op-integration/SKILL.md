@@ -128,7 +128,7 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
 
 定位目标算子，分析输入输出规格。
 
-**推荐 Skill：** `pypto-intent-understanding`
+**推荐 Skill：** `pypto-intent-understand`
 
 ---
 
@@ -239,17 +239,18 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
    
    参考 `models/glm_v4_5/utils/golden/attn_golden.py` 中的 `attention_pre_golden()` 函数，编写 Golden 参考实现。
    
-   或使用 `pypto-golden-generator` skill 自动生成，参考 `.agents/skills/pypto-golden-generate/templates/golden-template.py` 模板。
+   或使用 `pypto-golden-generate` skill 自动生成，参考 `.agents/skills/pypto-golden-generate/templates/golden-template.py` 模板。
    
    关键要点：
    - Golden 实现必须是纯 PyTorch 实现，禁止引入 pypto
    - Golden 实现应完整覆盖原始小算子组合的计算逻辑
    - 导出 `{op}_golden()` 函数供测试脚本调用
+   - 每个融合算子必须有独立 `{op}_golden.py` 文件，禁止将 golden 逻辑内联在测试或实现文件中
 
 **输出物：**
 - Golden 实现文件（`*_golden.py`）
 
-**推荐 Skill：** `pypto-golden-generator`
+**推荐 Skill：** `pypto-golden-generate`
 
 **参考示例：**
 - `models/glm_v4_5/utils/golden/attn_golden.py:322` (attention_pre_golden 函数)
@@ -369,7 +370,6 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
 注意事项：
 - 严格匹配目标文件和目标函数
 - 使用开关变量保证可回滚
-   ```
 
 **输出物：**
 - 修改后的模型代码
@@ -383,7 +383,7 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
 
 运行整网推理，验证融合算子精度正确性。
 
-**推荐 Skill：** `pypto-precision-compare`、`pypto-precision-debugger`
+**推荐 Skill：** `pypto-precision-compare`、`pypto-precision-debug`
 
 ---
 
@@ -407,7 +407,7 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
 - 分析瓶颈（KV 组装、MatMul、循环开销）
 - 优化 Tile 配置、L1 reuse、合图策略
 
-**推荐 Skill：** `pypto-operator-auto-tuner`、`tune-frontend`、`tune-incore`、`tune-swimlane`
+**推荐 Skill：** `pypto-op-perf-tune`、`tune-frontend`、`tune-incore`、`tune-swimlane`
 
 ---
 
@@ -415,7 +415,7 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
 
 排查集成过程中的问题。
 
-**推荐 Skill：** `pypto-aicore-error-locator`、`pypto-host-stacktrace-analyzer`、`pypto-precision-debugger`
+**推荐 Skill：** `pypto-aicore-error-locator`、`pypto-host-stacktrace-analyzer`、`pypto-precision-debug`
 
 ---
 
@@ -441,12 +441,12 @@ description: 将 PyPTO 融合算子集成到整网中，替代多个小算子组
 - **PyPTO 官方文档**：`docs/`
 
 ### 相关 Skill
-- `pypto-golden-generator`：生成 Golden 参考实现
+- `pypto-golden-generate`：生成 Golden 参考实现
 - `pypto-op-design`：算子设计方案
 - `pypto-op-develop`：算子实现
 - `pypto-precision-compare`：精度对比
-- `pypto-precision-debugger`：精度调试
-- `pypto-operator-auto-tuner`：性能调优
+- `pypto-precision-debug`：精度调试
+- `pypto-op-perf-tune`：性能调优
 - `pypto-aicore-error-locator`：定位 aicore error
 - `pypto-host-stacktrace-analyzer`：分析堆栈信息
 - `pypto-issue-creator`：创建 Issue

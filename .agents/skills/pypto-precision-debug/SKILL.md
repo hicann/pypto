@@ -41,6 +41,9 @@ license: 完整条款见 LICENSE.txt
 | 4 | 嵌套循环精度异常 | `submit_before_loop=True` | `pypto.loop(range(m), submit_before_loop=True)` | 确保子循环正确提交，避免并行执行时的内存覆盖 |
 | 5 | 特定 shape 精度异常 | 调整 shape | 避免尾轴为 1，避免非整除 | 特定 shape 可能触发 Pass 推导边界情况，导致 valid_shape 错误 |
 | 6 | 编译器优化异常 | `+0.0` 技巧 | `result = compute(...) + 0.0` | 阻止编译器过度优化，保留计算操作完整性 |
+| 7 | 未初始化 Tensor | 使用前初始化 | `output = pypto.Tensor(shape, dtype); output[:] = 0` | pypto.Tensor 创建后是未初始化随机值，必须先写后读 |
+| 8 | view 未传 valid_shape | 添加 valid_shape | `pypto.view(tensor, shape, valid_shape=actual_size)` | 动态数据范围最后一块可能小于固定块大小 |
+
 ---
 
 ## ⭐ 重要提示：使用新前端写法
@@ -350,6 +353,8 @@ result = compute(...) + 0.0
 
 ### 步骤 3：二分定位（如需要）
 
+**转入标准**：当步骤 2 所有 5 种规避方法均尝试且无效时，进入此步骤。
+
 如果上述方法无法定位问题，使用 `pypto-precision-compare` skill 查找定位具体问题 op。
 
 **阶段总结**：
@@ -409,7 +414,7 @@ result = compute(...) + 0.0
 ...
 
 ### 结论
-经过多种规避方法尝试，问题仍未解决。**可能是底层框架层面的问题**。
+经过多种规避方法尝试，问题仍未解决。**判定前提**：步骤 0-2 全部尝试完毕 + 代码审查无逻辑错误 + 步骤 3 已执行。**可能是底层框架层面的问题**。
 ```
 
 ---

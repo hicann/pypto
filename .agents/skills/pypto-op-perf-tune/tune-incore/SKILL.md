@@ -195,6 +195,48 @@ A:
 
 A: 不会。冗余计算是指增加一些不影响最终结果的计算（如复制数据），目的是优化调度和合图，不会改变计算逻辑。
 
+## L2 Cache 策略优化
+
+L2 Cache 命中率直接影响核内数据搬运效率，尤其对 Cube 类算子（matmul）影响显著。
+
+**优化策略**：
+
+1. **数据预取**：对连续访问的大块数据，确保访问模式为顺序访问以利用硬件预取
+2. **TileShape 对齐**：将 TileShape 的内积轴（K 轴）设置为 L2 Cache 行大小的整数倍（通常 256B 或 512B）
+3. **双缓冲**：对前后依赖的计算步骤使用 ping-pong buffer 隐藏搬运延迟
+
+**代码示例**：
+
+```python
+# 设置 cube tile shapes 使 K 轴对齐 256B
+# FP16: 256B = 128 elements, BF16: 256B = 128 elements
+pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
+```
+
+## TileOperation 检查流程
+
+对核内每个 TileOperation，按以下流程检查效率：
+
+1. **检查操作数连续性**：输入 tensor 是否在内存中连续，不连续需先调用 `pypto.reshape` 或 `pypto.transpose` 调整
+2. **检查数据搬运方向**：Gather → 从 HBM 到 L1 应使用 `set_cube_tile_shapes` 配置的块大小；Scatter → 从 L1 到 HBM 应使用 `pypto.assemble`
+3. **检查计算与搬运重叠**：使用 `submit_before_loop=True` 确保子循环正确提交
+
+## 尾轴优化案例
+
+**场景**：尾轴为 1 或非整除时，最后一块数据量小于固定块大小
+
+**问题**：最后一块可能触发额外的零填充计算，浪费算力
+
+**优化方案**：
+
+```python
+# 使用 valid_shape 标记有效数据范围
+for i in pypto.loop(range(total_tiles)):
+    tile = pypto.view(input, shape=[BLOCK_SIZE], offsets=[i * BLOCK_SIZE], valid_shape=[actual_last_size if i == last_tile else BLOCK_SIZE])
+    result = compute(tile)
+    pypto.assemble(result, offsets=[i * BLOCK_SIZE], output=output)
+```
+
 ## 参考资料
 
 - [性能调优文档](../../../../docs/tutorials/debug/performance.md)

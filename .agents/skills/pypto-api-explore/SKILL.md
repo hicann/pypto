@@ -20,7 +20,7 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 ## 输出
 
 - **输出件**：API_REPORT.md
-- **格式**：markdown，使用 [templates/API_REPORT.md](templates/API_REPORT.md) 模板
+- **格式**：markdown，使用 [templates/api_report.md](templates/api_report.md) 模板
 - **输出路径**：当前目录或用户指定位置
 
 ---
@@ -95,7 +95,7 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 
 ### Stage 6: 生成报告
 
-基于 [templates/API_REPORT.md](templates/API_REPORT.md) 模板生成 API_REPORT.md。
+基于 [templates/api_report.md](templates/api_report.md) 模板生成 API_REPORT.md。
 
 ---
 
@@ -135,7 +135,8 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 
 **常见 Substitute（无直接 API）**：
 - `mean` → `sum/count`
-- `gelu` → 组合 mul/add/tanh/pow
+- `gelu` → 组合 `mul + sigmoid + mul`（x * sigmoid(1.702 * x)），与 activation.py 一致
+- `sigmoid` → 仅支持 FP32；需在其他 dtype 场景下先 `cast` 到 FP32 再调用
 
 ### 算子类型判断
 
@@ -153,11 +154,13 @@ description: "探索 PyPTO API，为算子开发提供 API 映射、约束检查
 
 | 约束类型 | 规则 | 来源 |
 |----------|------|------|
-| dtype 入口 | FP16/BF16/FP32/INT8-64/BOOL | from_torch 文档 |
+| dtype 入口 | FP16/BF16/FP32/FP64/INT8/INT16/INT32/INT64/UINT8/UINT16/UINT32/UINT64/BOOL | from_torch 文档 |
 | shape 入口 | 非空 Tensor | from_torch 文档 |
 | contiguous | 必须连续 | from_torch 文档 |
 | TileShape | 每维 > 0，最多 4 维 | set_vec_tile_shapes 文档 |
+| Cube TileShape | 32 字节对齐；buffer 空间需满足 K 轴 × 2 ≤ L1 容量 | set_cube_tile_shapes 文档 |
 | shape size | ≤ INT32_MAX | 各 API 文档 |
+| sigmoid dtype | 仅支持 DT_FP32 | pypto.sigmoid API 文档 |
 
 ---
 

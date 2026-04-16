@@ -32,6 +32,7 @@
   - `AttributeError: module 'pypto' has no attribute` → A1
   - API 执行但结果明显错误 → A2
   - 操作失败但无错误输出 → E1
+  - 操作返回空输出或无输出（期望有输出的场景）→ E1
   - 错误信息过于笼统（如 "internal error"、"failed"） → E2
 
 ### 3. 重复操作

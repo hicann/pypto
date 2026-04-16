@@ -47,7 +47,7 @@ fi
 - `origin` 指向用户 fork，禁止指向 `cann/pypto`
 - 禁止打印 `GITCODE_TOKEN`，包括屏幕、日志、调试信息
 - 创建分支、commit、push、创建/更新 PR 前必须获得用户明确确认
-- Commit message 使用英文，格式 `tag(scope): Summary`，整个 message 不超过 10 行
+- Commit message 使用英文，格式 `tag(scope): Summary`，整个 message 不超过 10 行，不以句号结尾，首字母大写，长度 10-200 字符
 
 ## 参考文件
 
