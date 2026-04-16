@@ -723,6 +723,7 @@ void TiledSort(
             unsigned firstShape = vecTileAlign[axis];
             auto roundOutputTensor =
                 std::make_shared<LogicalTensor>(function, source->Datatype(), sortOutputShape, sortOutputValidShape);
+            std::vector<SymbolicScalar> curValidShape = sortOutputValidShape;
             for (int64_t i = 0; i < sortOutputShape[axis];) {
                 tileOutputOffset[axis] = i;
                 if (i + vecTileAlign[axis] >= sortOutputShape[axis]) { // 尾块
@@ -734,7 +735,15 @@ void TiledSort(
                 }
                 i += tileOutputShape[axis];
 
-                auto src = roundInputTensor->View(function, tileOutputShape, tileOutputOffset);
+                auto src = std::make_shared<LogicalTensor>(function, source->Datatype(), tileOutputShape);
+                auto& viewOp = function.AddOperation(Opcode::OP_VIEW, {roundInputTensor}, {src});
+                curValidShape[axis] = std::max(0, std::min(sortOutputValidShape[axis] - tileOutputOffset[axis], tileOutputShape[axis]));
+                viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
+                    tileOutputOffset, MemoryType::MEM_UB,
+                    std::vector<SymbolicScalar>(tileOutputOffset.begin(), tileOutputOffset.end()),
+                    curValidShape
+                ));
+
                 auto outputInUB = std::make_shared<LogicalTensor>(function, src->Datatype(), tileOutputShape);
                 auto& twoTileMrgSortOp = function.AddOperation(Opcode::OP_TWOTILEMRGSORT, {src}, {outputInUB});
                 twoTileMrgSortOp.SetAttribute(SORT_FIRSTSHAPE, static_cast<int>(firstShape));
