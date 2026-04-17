@@ -32,7 +32,7 @@ uint32_t CommGroupRecorder::Input(const std::string& hcclGroupName)
 
     // 新组：记录映射关系
     uint32_t newIndex = index2Name_.size();
-    ASSERT(newIndex < HCCL_GROUP_NUM);
+    ASSERT(DistributedErrorCode::INVALID_GROUP_INDEX, newIndex < HCCL_GROUP_NUM) << "Invalid comm group";
 
     index2Name_.push_back(hcclGroupName);
     name2Index_[hcclGroupName] = newIndex;

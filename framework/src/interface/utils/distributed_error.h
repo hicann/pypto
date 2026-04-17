@@ -51,5 +51,10 @@ enum class DistributedErrorCode : uint32_t {
     AICPU_TASKID_NOT_IN_MAP = 0xA3003,
     INVALID_GROUP_INDEX = 0xA3004,
     NULLPTR = 0xA3005,
+
+    // FA4xxx: distributedContext 相关的错误
+    HCCL_ALLOC_RESOURCE_FAILED = 0xA4000,
+    INVALID_HCCL_TOPO = 0xA4001,
+    CONTEXT_CONFIGURE_FAILED = 0xA4002,
 };
 } // namespace npu::tile_fwk

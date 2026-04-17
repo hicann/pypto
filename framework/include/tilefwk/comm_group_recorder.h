@@ -20,6 +20,7 @@
 #include <sstream>
 #include "tilefwk/error.h"
 #include "tilefwk/core_func_data.h"
+#include "interface/utils/distributed_error.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {
