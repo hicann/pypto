@@ -62,7 +62,8 @@ public:
         size -= naddr - addr + CACHE_LINE_SIZE;
         nrSlot_ = size / sizeof(struct Slot);
         slots_ = reinterpret_cast<Slot*>(naddr + CACHE_LINE_SIZE);
-        ASSERT(nrSlot_ > 0 && "size too small") << "nrSlot_= " << nrSlot_ << ", expected >0";
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, nrSlot_ > 0 && "size too small")
+            << "nrSlot_= " << nrSlot_ << ", expected >0";
         DEV_DEBUG("nrSlot addr: nextSlot=%p, nrSlot=%ld\n", nextSlot_, nrSlot_);
 
         reset();
@@ -104,7 +105,7 @@ public:
 
     void sync(int slotId)
     {
-        ASSERT(slotId < nrSlot_) << "slotId=" << slotId << " >= nrSlot_=" << nrSlot_;
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slotId < nrSlot_) << "slotId=" << slotId << " >= nrSlot_=" << nrSlot_;
         while (!trySync(slotId)) {
             cpuRelax();
         }
@@ -167,13 +168,14 @@ public:
         size -= naddr - addr + CACHE_LINE_SIZE;
         nrSlot_ = size / sizeof(struct Slot);
         slots_ = reinterpret_cast<Slot*>(naddr + CACHE_LINE_SIZE);
-        ASSERT(nrSlot_ > 0 && "size too small") << ", nrSlot_=" << nrSlot_ << ", expected >0";
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, nrSlot_ > 0 && "size too small")
+            << ", nrSlot_=" << nrSlot_ << ", expected >0";
         DEV_DEBUG("nrSlot addr: nextSlot=%p, nrSlot=%ld\n", nextSlot_, nrSlot_);
     }
 
     void Finish(int64_t slot)
     {
-        ASSERT(slot < nrSlot_) << "slot=" << slot << " >= nrSlot_=" << nrSlot_;
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, slot < nrSlot_) << "slot=" << slot << " >= nrSlot_=" << nrSlot_;
 
         DEV_DEBUG("fin: taskId=%lx, slot=%ld\n", slots_[slot].taskId, slot);
         std::lock_guard<SpinLock> lock(lock_);

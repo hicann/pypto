@@ -262,7 +262,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     }
     if (streamSynchronize) {
         rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
-        ASSERT(machine::GetRA()->CheckAllSentinels());
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, machine::GetRA()->CheckAllSentinels());
     }
     MACHINE_LOGI("finish Kernel Launch.");
 
@@ -851,7 +851,7 @@ int DeviceLauncher::LaunchAicoreKernel(
             return rc;
         }
         devRunner.DumpAiCoreExecutionTimeData();
-        ASSERT(machine::GetRA()->CheckAllSentinels());
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, machine::GetRA()->CheckAllSentinels());
     }
     if (IsPtoDataDumpEnabled()) {
         auto scheStream = (aclrtStream)machine::GetRA()->GetScheStream();

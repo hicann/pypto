@@ -58,7 +58,7 @@ enum class DevCommonErr : uint32_t {
     PARAM_INVALID = ToUnderlying(MachineError::DEV_COMMON) + 0x05U,      // 参数非法
     PARAM_CHECK_FAILED = ToUnderlying(MachineError::DEV_COMMON) + 0x06U, // 参数校验失败
     FILE_ERROR = ToUnderlying(MachineError::DEV_COMMON) + 0x07U,         // 文件错误
-    CMD_ERROR = ToUnderlying(MachineError::DEV_COMMON) + 0x08U,          // 命令错误
+    SYSTEM_CALL_FAILED = ToUnderlying(MachineError::DEV_COMMON) + 0x08U,          // 命令错误
     GET_ENV_FAILED = ToUnderlying(MachineError::DEV_COMMON) + 0x09U,     // 获取环境变量路径失败
     GET_HANDLE_FAILED = ToUnderlying(MachineError::DEV_COMMON) + 0x0AU,  // 获取句柄失败
     FREE_FAILED = ToUnderlying(MachineError::DEV_COMMON) + 0x0BU,        // 释放失败
@@ -73,6 +73,7 @@ enum class HostBackEndErr : uint32_t {
     PRECOMPILE_FAILED = ToUnderlying(MachineError::HOST_BACKEND) + 0x06U,        // 算子预编译失败
     FUNCTION_CACHE_HASH_MISS = ToUnderlying(MachineError::HOST_BACKEND) + 0x07U, // 函数缓存 hash 未命中/不一致
     DUPLICATE_LEAF_FUNC_HASH = ToUnderlying(MachineError::HOST_BACKEND) + 0x08U, // leaf 函数 hash 重复
+    RUN_PASS_FAILED = ToUnderlying(MachineError::HOST_BACKEND) + 0x09U,          // run pass fail
 };
 
 enum class HostLauncherErr : uint32_t {
@@ -135,9 +136,9 @@ enum class ProgEncodeErr : uint32_t {
     STITCH_LIST_TOO_LARGE = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x04U,        // stitch 列表过大
     STITCH_HANDLE_INDEX_OUT_OF_RANGE = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x05U, // stitch handle 索引越界
     CELL_MATCH_PARAM_INVALID = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x06U,         // cell match 参数非法
-    PROGRAM_RANGE_VERIFY_FAILED = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x07U,      // program 范围校验失败
+    RANGE_VERIFY_FAILED = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x07U,              // program 范围校验失败
     CACHE_RELOC_KIND_INVALID = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x08U,         // cache reloc 类型非法
-    ADDR_OFFSET_RAW_MAGIC_MISMATCH = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x09U, // 地址偏移与 raw magic 不匹配
+    ADDR_OFFSET_RAW_MAGIC_MISMATCH = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x09U,   // 地址偏移与 raw magic 不匹配
     CALL_OP_COUNT_EXCEEDS_UINT16_MAX =
         ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x0AU,                   // call op 数量超过 uint16 上限
     CELL_MATCH_DIM_ZERO = ToUnderlying(MachineError::PROGRAM_ENCODE) + 0x0BU, // cell match 维度为 0

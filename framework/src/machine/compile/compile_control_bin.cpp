@@ -107,7 +107,7 @@ bool TieFwkAicpuPreCompile(std::string& preCompileO, std::string& controlAicpuPa
         MACHINE_LOGD("PreCompileCmd is %s, file is %s.\n", compileCmd.c_str(), file.c_str());
         int result = std::system(compileCmd.c_str());
         if (result != 0) {
-            MACHINE_LOGE(DevCommonErr::CMD_ERROR, "Precompile %s fail\n", file.c_str());
+            MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "Precompile %s fail\n", file.c_str());
             return false;
         }
         preCompileStream << objFile << " ";
@@ -125,7 +125,7 @@ bool SharedAicpuCompile(const std::string& funcName, const std::string& aicpuDir
                                 " -Wl,--no-whole-archive";
     auto ret = std::system(cmdGccCompile.c_str());
     if (ret != 0) {
-        MACHINE_LOGE(DevCommonErr::CMD_ERROR, "RUNDeviceMachine compile fail\n");
+        MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "RUNDeviceMachine compile fail\n");
         return false;
     }
     MACHINE_LOGI("CmdGcc: %s\n", cmdGccCompile.c_str());

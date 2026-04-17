@@ -23,6 +23,7 @@
 #include "tilefwk/error.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/tensor/symbolic_scalar.h"
+#include "machine/utils/machine_error.h"
 
 namespace npu::tile_fwk {
 namespace {
@@ -64,7 +65,7 @@ public:
         std::string headerPath = outputDir_ + "/control_flow_expr_table.h";
         std::ofstream header(headerPath);
         if (!header.is_open()) {
-            ASSERT(false) << "File batch_expr.h open failed!";
+            ASSERT(DevCommonErr::FILE_ERROR, false) << "File batch_expr.h open failed!";
             return;
         }
         out << "\n} // namespace npu::tile_fwk\n";
@@ -82,7 +83,7 @@ public:
             std::string filePath = outputDir_ + "/" + batch.fileName;
             std::ofstream out(filePath);
             if (!out.is_open()) {
-                ASSERT(false) << "File set_expr open failed!";
+                ASSERT(DevCommonErr::FILE_ERROR, false) << "File set_expr open failed!";
                 return;
             }
             // Write file header
@@ -138,7 +139,7 @@ private:
         std::string scriptFile = outputDir_ + "/merge.link";
         std::ofstream file(scriptFile);
         if (!file.is_open()) {
-            ASSERT(false) << "File merge.link open failed!";
+            ASSERT(DevCommonErr::FILE_ERROR, false) << "File merge.link open failed!";
             return;
         }
         file << "SECTIONS\n{\n"

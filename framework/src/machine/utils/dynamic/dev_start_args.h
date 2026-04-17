@@ -195,7 +195,7 @@ public:
     void Deallocate(uint8_t* ptr)
     {
         uint8_t* nextFree = GetRuntimeData(indexFinished_ + 1);
-        ASSERT(nextFree == ptr);
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, nextFree == ptr);
         /* deallocate from the ring buffer */
         indexFinished_ += 1;
     }

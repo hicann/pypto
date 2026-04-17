@@ -94,14 +94,13 @@ std::string GenSubFuncCall(
     const std::string& ccePath, uint64_t tilingKey, std::stringstream& src_obj)
 {
     std::stringstream code;
-    int leafIndex = 1;
     std::map<int, std::string> idxNameMap;
     // Declare extern leaf func.
     for (const auto& iter : leafDict) {
         const auto leaf = iter.second;
-        leafIndex = param.calleeHashIndexDict[leaf->ComputeHash().GetHash()];
+        int leafIndex = param.calleeHashIndexDict[leaf->ComputeHash().GetHash()];
         auto leafFuncAttr = leaf->GetLeafFuncAttribute();
-        ASSERT(leafFuncAttr != nullptr) << "LeafFuncAttr is null for leaf: " << leaf;
+        ASSERT(ProgEncodeErr::LEAF_CALLEE_ATTR_NULL, leafFuncAttr != nullptr) << "LeafFuncAttr is null for " << leaf;
         if (coreType != leafFuncAttr->coreType) {
             continue;
         }
@@ -201,10 +200,11 @@ int CompileAICoreKernel(
         auto headFile = GenSubFuncCall(leafDict, CoreType::AIC, param, ccePath, tilingKey, src_aic_obj);
         std::string mid_aic_obj = ccePath + "mid_kernel_" + funcHash + "_aic_" + std::to_string(tilingKey) + ".o";
         auto ret = CompileCoreMachine(mid_aic_obj, true, tilingKey, headFile, aicoreSrcFile);
-        ASSERT(ret == 0) << "CompileCoreMachine failed with return code  " << ret;
+        ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
+            << "CompileCoreMachine failed with return code  " << ret;
         src_aic_obj << mid_aic_obj;
         ret = LinkObject(src_aic_obj.str(), aic_obj, ccePath, true, "aic");
-        ASSERT(ret == 0) << "LinkObject failed with return code  " << ret;
+        ASSERT(HostBackEndErr::LINK_FAILED, ret == 0) << "LinkObject failed with return code  " << ret;
         return;
     };
     tasks.push_back(task);
@@ -214,10 +214,11 @@ int CompileAICoreKernel(
         auto headFile = GenSubFuncCall(leafDict, CoreType::AIV, param, ccePath, tilingKey, src_aiv_obj);
         std::string mid_aiv_obj = ccePath + "mid_kernel_" + funcHash + "_aiv_" + std::to_string(tilingKey) + ".o";
         auto ret = CompileCoreMachine(mid_aiv_obj, false, tilingKey, headFile, aicoreSrcFile);
-        ASSERT(ret == 0) << "CompileCoreMachine failed with return code  " << ret;
+        ASSERT(HostBackEndErr::COMPILE_AICORE_FAILED, ret == 0)
+            << "CompileCoreMachine failed with return code  " << ret;
         src_aiv_obj << mid_aiv_obj;
         ret = LinkObject(src_aiv_obj.str(), aiv_obj, ccePath, true, "aiv");
-        ASSERT(ret == 0) << "LinkObject failed with return code  " << ret;
+        ASSERT(HostBackEndErr::LINK_FAILED, ret == 0) << "LinkObject failed with return code  " << ret;
         return;
     };
     tasks.push_back(task1);
