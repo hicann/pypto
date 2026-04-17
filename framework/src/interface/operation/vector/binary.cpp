@@ -318,7 +318,7 @@ void PReLUOperationOperandCheck(
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->Datatype() == weight->Datatype())
         << "The input and weight should have the same data type";
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->shape.size() >= 2 && input->shape.size() <= 4)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input->shape.size() >= 2 && input->shape.size() <= 4)
         << "The input shape dimension should be in range [2, 4]";
 
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == 1) << "The weight should be 1-dimensional";
@@ -473,7 +473,7 @@ Tensor Gcd(const Tensor& self, const Tensor& other)
     auto dataType = self.GetDataType();
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dataType == other.GetDataType())
         << "Inputs must have the same dataType.";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
         << "This operation's input only support 1-5 dims";
     std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {
         DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
@@ -487,7 +487,7 @@ Tensor Gcd(const Tensor& self, const Element& other)
     DECLARE_TRACER();
     auto shapeSize = self.GetShape().size();
     auto dataType = self.GetDataType();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
         << "This operation's input only support 1-5 dims";
     std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {
         DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};

@@ -16,6 +16,8 @@
 #include <cassert>
 #include <algorithm>
 #include "cycles.h"
+#include "interface/utils/vector_error.h"
+#include "tilefwk/error.h"
 
 namespace npu::tile_fwk {
 constexpr const int BYTES_PER_REPEAT = 256;
@@ -138,7 +140,7 @@ int64_t GetCycles(const std::string& op, const std::vector<std::vector<int64_t>>
         return iterSyncOp->second;
     }
 
-    assert(!shape.empty() && !shape[0].empty() && "shape is invalid");
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, !shape.empty() && !shape[0].empty()) << "shape is invalid";
 
     // assume that the cycle of UB_ALLOC, L1_ALLOC, etc. is 1
     if (op.find("_ALLOC") != std::string::npos) {

@@ -360,17 +360,11 @@ void InnerTiledIndexAdd(
 void TiledIndexAdd(Function& function, const TileShape& tileShape, const IndexAddPara& indexaddPara)
 {
     // Check Operands Valid
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_INVALID,
-        indexaddPara.selfInput->GetShape().size() == indexaddPara.selfInput->GetOffset().size())
-        << "The size of indexaddPara selfInput shape and selfInput offset should be equal";
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_INVALID,
-        indexaddPara.srcInput->GetShape().size() == indexaddPara.srcInput->GetOffset().size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indexaddPara.selfInput->GetShape().size() == indexaddPara.selfInput->GetOffset().size())
+        << "The size of indexaddPara selfinput shape and selfinput offset should be equal";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indexaddPara.srcInput->GetShape().size() == indexaddPara.srcInput->GetOffset().size())
         << "The size of indexaddPara srcInput shape and srcInput offset should be equal";
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_INVALID,
-        indexaddPara.indicesInput->GetShape().size() == indexaddPara.indicesInput->GetOffset().size())
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indexaddPara.indicesInput->GetShape().size() == indexaddPara.indicesInput->GetOffset().size())
         << "The size of indexaddPara indicesInput shape and indicesInput offset should be equal";
 
     IndexAddTileInfoPara indexaddTileInfo{
@@ -495,9 +489,9 @@ void TiledGatherOperation(
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices->shape.size() == indices->offset.size())
         << "The size of indices shape and offset should be equal";
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, result->shape.size() <= NUM_VALUE_5)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, result->shape.size() <= NUM_VALUE_5)
         << "Not support shape size of result greater than 5";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices->shape.size() <= NUM_VALUE_2)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, indices->shape.size() <= NUM_VALUE_2)
         << "Not support shape size of indices greater than 2";
     if (axis < 0) {
         axis += params->shape.size();

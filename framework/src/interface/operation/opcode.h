@@ -22,6 +22,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include "interface/utils/common.h"
+#include "interface/utils/vector_error.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/error.h"
 #include "verifier.h"
@@ -383,24 +384,24 @@ public:
     Opcode GetOpcode(const std::string& str) const
     {
         auto it = strToEnum_.find(str);
-        ASSERT(it != strToEnum_.end());
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, it != strToEnum_.end()) << "str not found in strToEnum_";
         return it->second;
     }
     const std::string& GetOpcodeStr(Opcode opcode) const
     {
-        ASSERT(HasOpcode(opcode));
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, HasOpcode(opcode)) << "opcode not found";
         return opcodeInfos_[static_cast<int>(opcode)].str;
     }
 
     OpCoreType GetCoreType(Opcode opcode) const
     {
-        ASSERT(HasOpcode(opcode)) << "Can't find op " << static_cast<int>(opcode) << std::endl;
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, HasOpcode(opcode)) << "Can't find op";
         return opcodeInfos_[static_cast<int>(opcode)].coreType;
     }
 
     const TileOpCfg& GetTileOpCfg(Opcode opcode) const
     {
-        ASSERT(HasOpcode(opcode)) << "Can't find op " << static_cast<int>(opcode) << std::endl;
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, HasOpcode(opcode)) << "Can't find op";
         return opcodeInfos_[static_cast<int>(opcode)].tileOpCfg;
     }
 

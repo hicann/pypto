@@ -803,7 +803,7 @@ void CheckCumOperation(const Tensor& input, const int& axis, const bool& is_sum)
     auto shapeSize = input.GetShape().size();
     auto dataType = input.GetDataType();
 
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM4)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM4)
         << "The shape.size() only support 1~4";
     if (is_sum) {
         std::vector<DataType> CUMSUM_SUPPORT_DATATYPES = {
@@ -1389,14 +1389,13 @@ Tensor Expm1(const Tensor& self)
 
     auto shapeSize = self.GetShape().size();
     auto dataType = self.GetDataType();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4)
+    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, SHAPE_DIM2 <= shapeSize && shapeSize <= SHAPE_DIM4)
         << "The shape.size() only support 2~4";
     std::vector<DataType> EXPM1_SUPPORT_DATATYPES = {
         DataType::DT_FP32, DataType::DT_FP16, DataType::DT_BF16, DataType::DT_INT32, DataType::DT_INT16};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(EXPM1_SUPPORT_DATATYPES.begin(), EXPM1_SUPPORT_DATATYPES.end(), dataType) !=
-            EXPM1_SUPPORT_DATATYPES.end())
+    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
+           std::find(EXPM1_SUPPORT_DATATYPES.begin(), EXPM1_SUPPORT_DATATYPES.end(), dataType) !=
+               EXPM1_SUPPORT_DATATYPES.end())
         << "The datatype is not supported";
 
     RETURN_CALL(Expm1, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());

@@ -19,6 +19,7 @@
 #include "tilefwk/data_type.h"
 #include "interface/operation/operation.h"
 #include "interface/operation/vector/unary.h"
+#include "interface/utils/vector_error.h"
 #include "distributed/distributed_expand.h"
 #include "interface/function/function.h"
 #include "tilefwk/symbolic_scalar.h"
@@ -83,7 +84,8 @@ void TiledAssemble(
     Function& function, const TileShape& tileShape, const std::shared_ptr<LogicalTensor>& operand,
     const std::shared_ptr<LogicalTensor>& result, std::shared_ptr<AssembleOpAttribute> attr)
 {
-    assert(operand->shape.size() == operand->offset.size());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "operand's shape size and offset size should be equal";
 
     TileInfo tileInfo(result->shape.size(), result->offset.size());
     auto input = Input{operand, tileInfo};
@@ -236,7 +238,8 @@ Tensor Compact(const Tensor& operand)
 {
     DECLARE_TRACER();
 
-    assert(operand.GetShape().size() == operand.GetStorage()->offset.size());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand.GetShape().size() == operand.GetStorage()->offset.size())
+        << "operand's shape size and offset size should be equal";
     Tensor result(operand.GetStorage()->tensor->datatype, {operand.GetShape()[0], 1});
     Tensor workspace(operand.GetStorage()->tensor->datatype, {operand.GetShape()[0], NUM_VALUE_8});
     Program::GetInstance().AddOperation(Opcode::OP_COMPACT, {operand.GetStorage()}, {result.GetStorage()});
@@ -402,13 +405,14 @@ void TiledInnerRegisterCopy(
 void TiledInnerCompact(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
 {
-    assert(operand->shape.size() == operand->offset.size());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "operand's shape size and offset size should be equal";
     auto workspace = std::make_shared<LogicalTensor>(
         function, operand->tensor->datatype, std::vector<int64_t>{operand->shape[0], NUM_VALUE_8});
 
     // 目前只支持2维操作
     if (operand->shape.size() != 2) {
-        assert(false && "unsupported dimension");
+        ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, false) << "unsupported dimension";
     }
     auto& vecTile = tileShape.GetVecTile();
     int tileShape1 = std::min(operand->shape[1], vecTile[1]);
@@ -947,7 +951,8 @@ void TiledViewTypeOperation(
 void TiledViewTypeOperation(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr& operand, const LogicalTensorPtr& result)
 {
-    assert(operand->shape.size() == operand->offset.size());
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand->shape.size() == operand->offset.size())
+        << "operand's shape size and offset size should be equal";
 
     TileInfo operandTileInfo(operand->shape.size(), operand->offset.size());
     auto input = Input{operand, operandTileInfo};

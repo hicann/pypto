@@ -35,9 +35,11 @@ void OpcodeManager::RegisterInfo(
     std::vector<MemoryType> outputsMemType, const TileOpCfg tileOpCfg, OpCalcType calcType,
     const std::vector<std::string>& attrs, VerifyOperationEntry verifyOperationEntry)
 {
-    ASSERT(opcode < Opcode::OP_UNKNOWN) << "opcode: " << static_cast<int64_t>(opcode);
-    ASSERT(strToEnum_.count(str) == 0) << str << " doesn't exist.";
-    ASSERT(registered_.count(opcode) == 0) << "opcode: " << static_cast<int64_t>(opcode) << " not registered.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, opcode < Opcode::OP_UNKNOWN)
+        << "opcode: " << static_cast<int64_t>(opcode) << " is unknown";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, strToEnum_.count(str) == 0) << str << " doesn't exist.";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, registered_.count(opcode) == 0)
+        << "opcode: " << static_cast<int64_t>(opcode) << " not registered.";
     registered_.emplace(opcode);
     strToEnum_.emplace(str, opcode);
     opcodeInfos_[static_cast<int>(opcode)] =
@@ -1183,7 +1185,8 @@ OpcodeManager::OpcodeManager()
     RegisterCube();
     RegisterDistribute();
     RegisterCommon();
-    ASSERT(strToEnum_.size() == static_cast<size_t>(Opcode::OP_UNKNOWN));
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, strToEnum_.size() == static_cast<size_t>(Opcode::OP_UNKNOWN))
+        << "strToEnum_.size() should equal to Opcode::OP_UNKNOWN";
 }
 
 // NEXTNEXT: delete after tile op register has supported tile tensor
