@@ -326,7 +326,7 @@ Status NodeGraphInfo::Build(
             int32_t opIdx = node2Op_[nodeIdx][opNodeIdx];
             op2Node_[opIdx] = nodeIdx;
             nodeCycles_[nodeIdx] += operationGraphInfo->opList_[opIdx]->GetLatency();
-            int32_t scopeId = operationGraphInfo->opList_[opIdx]->GetScopeId();
+            int32_t scopeId = operationGraphInfo->opList_[opIdx]->GetScopeIdLower();
             if (scopeId != -1) {
                 nodeScope_[nodeIdx] = scopeId;
             }
@@ -345,7 +345,7 @@ bool NodeGraphInfo::GetNodeMergeable(const std::shared_ptr<OperationGraphInfo> o
            (nodeInGraph_[nodeIdx].size() > 1 && nodeOutGraph_[nodeIdx].empty()) ||
            (nodeInGraph_[nodeIdx].empty() && nodeOutGraph_[nodeIdx].size() > 1)));
     for (auto opIdx : node2Op_[nodeIdx]) {
-        if (operationGraphInfo->opList_[opIdx]->GetScopeId() != -1) {
+        if (operationGraphInfo->opList_[opIdx]->GetScopeIdLower() != -1) {
             isMergeable = false;
         }
     }
@@ -670,12 +670,12 @@ Status SuperNodeGraphBuilder::BuildSuperNodeGraph()
     std::vector<std::pair<int32_t, int32_t>> mergePair;
     UpdateScopeId(opList);
     for (size_t i = 0; i < opList.size(); i++) {
-        auto targetScope = opList[i]->GetScopeId();
+        auto targetScope = opList[i]->GetScopeIdLower();
         if (targetScope == -1) {
             continue;
         }
         for (auto outputNode : operationInfo_->outGraph_[i]) {
-            if (opList[outputNode]->GetScopeId() == targetScope) {
+            if (opList[outputNode]->GetScopeIdLower() == targetScope) {
                 mergePair.emplace_back(outputNode, i);
             }
         }

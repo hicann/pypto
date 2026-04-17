@@ -40,8 +40,12 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetHostConfig(KEY_STRATEGY, "ReduceCopyTestStrategy");
+        Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_3510);
     }
-    void TearDown() override {}
+    void TearDown() override
+    {
+        Platform::Instance().GetSoc().SetNPUArch(NPUArch::DAV_UNKNOWN);
+    }
 };
 
 void BuildMatmulAddBranch(
@@ -60,12 +64,15 @@ void BuildMatmulAddBranch(
     std::vector<std::string> opNames{"view" + br, "view2" + br, "toA" + br, "toB" + br, "matmul" + br, "convert" + br};
     EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorNames), true);
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    for (auto aicOp : opNames) {
+        G.GetOp(aicOp)->SetAttr(OpAttributeKey::isCube, true);
+    }
     incasts.push_back("tRA" + br);
     incasts.push_back("tRB" + br);
-    const int Num100 = 100;
+    const int Num50 = 50;
     for (auto opName : opNames) {
         G.GetOp(opName)->UpdateSubgraphID(brId);
-        G.GetOp(opName)->UpdateLatency(Num100);
+        G.GetOp(opName)->UpdateLatency(Num50);
     }
     const int Num2 = 2;
     for (int k = 0; k < Num2; k++) {
@@ -88,7 +95,7 @@ void BuildMatmulAddBranch(
         outcasts.push_back("out" + brv1);
         for (auto opName : opNamesV1) {
             G.GetOp(opName)->UpdateSubgraphID(brId + 1 + k);
-            G.GetOp(opName)->UpdateLatency(Num100);
+            G.GetOp(opName)->UpdateLatency(Num50);
         }
     }
 }
@@ -112,20 +119,17 @@ TEST_F(ReduceCopyTest, TestCase0)
     ComputationalGraphBuilder G;
     BuildMatmulAddsGraph(G);
     Function* function = G.GetFunction();
-    ReduceCopyRunner runner;
-    const double lowerBound = 0.1;
-    const double upperBound = 10.0;
-    runner.mergeThresholds = {{lowerBound, upperBound}};
-    EXPECT_EQ(runner.ReduceCopy(*function), SUCCESS);
-    const int Num6 = 6;
-    EXPECT_EQ(function->GetTotalSubGraphCount(), Num6);
+    ReduceCopyMerge merger;
+    merger.RunOnFunction(*function);
+    const int Num2 = 2;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num2);
 }
 
 void BuildConnectMatmul(
     ComputationalGraphBuilder& G, int brId, std::vector<std::string>& incasts, std::vector<std::string>& outcasts)
 {
     std::vector<int64_t> tileShape{16, 16};
-    const int Num100 = 100;
+    const int Num50 = 50;
     std::string br = std::to_string(brId);
     std::vector<std::string> tensorNames{"tRA" + br, "tRB" + br, "tL1A" + br, "tL1B" + br,
                                          "tA" + br,  "tB" + br,  "tC" + br,   "tGM" + br};
@@ -142,7 +146,8 @@ void BuildConnectMatmul(
     incasts.push_back("tRB" + br);
     for (auto opName : opNames) {
         G.GetOp(opName)->UpdateSubgraphID(brId);
-        G.GetOp(opName)->UpdateLatency(Num100);
+        G.GetOp(opName)->UpdateLatency(Num50);
+        G.GetOp(opName)->SetAttr(OpAttributeKey::isCube, true);
     }
     std::string br2 = std::to_string(brId + 1);
     std::vector<std::string> tensorNames2{"tRB" + br2, "tL1A" + br2, "tL1B" + br2, "tA" + br2,
@@ -161,7 +166,7 @@ void BuildConnectMatmul(
     outcasts.push_back("tGM" + br2);
     for (auto opName : opNames2) {
         G.GetOp(opName)->UpdateSubgraphID(brId + 1);
-        G.GetOp(opName)->UpdateLatency(Num100);
+        G.GetOp(opName)->UpdateLatency(Num50);
     }
 }
 
@@ -179,11 +184,11 @@ void BuildConnectVector(
     EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
     incasts.push_back("tin" + br);
     outcasts.push_back("tout" + br);
-    const int Num100 = 100;
+    const int Num50 = 50;
     G.GetOp("adds1" + br)->UpdateSubgraphID(brId);
-    G.GetOp("adds1" + br)->UpdateLatency(Num100);
+    G.GetOp("adds1" + br)->UpdateLatency(Num50);
     G.GetOp("adds2" + br)->UpdateSubgraphID(brId + 1);
-    G.GetOp("adds2" + br)->UpdateLatency(Num100);
+    G.GetOp("adds2" + br)->UpdateLatency(Num50);
 }
 
 void BuildConnect(ComputationalGraphBuilder& G)
@@ -205,13 +210,10 @@ TEST_F(ReduceCopyTest, TestCase1)
     ComputationalGraphBuilder G;
     BuildConnect(G);
     Function* function = G.GetFunction();
-    ReduceCopyRunner runner;
-    const double lowerBound = 0.1;
-    const double upperBound = 10.0;
-    runner.mergeThresholds = {{lowerBound, upperBound}};
-    EXPECT_EQ(runner.ReduceCopy(*function), SUCCESS);
-    const int Num4 = 4;
-    EXPECT_EQ(function->GetTotalSubGraphCount(), Num4);
+    ReduceCopyMerge merger;
+    merger.RunOnFunction(*function);
+    const int Num3 = 3;
+    EXPECT_EQ(function->GetTotalSubGraphCount(), Num3);
 }
 
 } // namespace tile_fwk
