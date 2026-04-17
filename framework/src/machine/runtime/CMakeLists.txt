@@ -50,6 +50,7 @@ target_link_libraries(tile_fwk_runtime
             $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:profapi>>
             $<BUILD_INTERFACE:$<$<AND:$<NOT:$<BOOL:${ENABLE_UTEST}>>,$<BOOL:${BUILD_WITH_CANN}>>:hcomm>>
             $<BUILD_INTERFACE:$<$<AND:$<BOOL:${ENABLE_UTEST}>,$<BOOL:${BUILD_WITH_CANN}>>:hccl_stubs>>
+            $<BUILD_INTERFACE:$<$<AND:$<BOOL:${ENABLE_UTEST}>,$<BOOL:${BUILD_WITH_CANN}>>:dump_stubs>>
         PRIVATE
             intf_pub_cxx17
             tile_fwk_intf_pub

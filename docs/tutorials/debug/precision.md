@@ -411,3 +411,62 @@ output/output_*/dump_tensor_*/device_0/
 | bin_file | 数据文件路径 |
 | verify_tensor_file | 验证数据文件路径（如果启用验证） |
 | cmp_res | 对比结果（True/False/"NO_CMP"） |
+
+## 算子级别的输入输出tensor dump
+
+### 1. 功能概述
+
+支持整网中算子级别的输入输出上板dump的能力。
+
+### 2. 启用方式
+
+在脚本运行目录下创建 acl.json 文件，内容如下：
+
+```json
+{
+    "dump":{
+        "dump_path":"/your/path",
+        "dump_mode":"all",
+        "dump_debug":"off",
+        "dump_op_switch":"on"
+    }
+}
+```
+
+在要执行的用例 test.py 中添加如下配置：
+
+```python
+import torch
+import torch_npu
+
+torch.npu.init_dump()
+torch.npu.set_dump("acl.json")
+```
+
+### 3. Dump 数据输出路径
+
+数据输出路径就是 acl.json 里面配置的 dump_path，在该路径下会生成如下文件：
+
+```
+/your/path
+└── 20260415084134/0
+    └── TENSOR_batchmatmul_3d_kernel.TENSOR_batchmatmul_3d_kernel.29.46.1776242496294291
+```
+
+调用 CANN 已有的工具解析该文件，命令如下：
+
+```bash
+python3 /${CANN_PACKAGE_PATH}/Ascend/cann-9.0.0/tools/operator_cmp/compare/msaccucmp.py convert -d /your/path/20260415084134/0 -out /your/path/20260415084134/0/out
+```
+
+解析后生成如下 npy 文件：
+
+```
+/your/path
+└── 20260415084134/0
+    ├── out/
+    │   ├── TENSOR_batchmatmul_3d_kernel.TENSOR_batchmatmul_3d_kernel.29.46.1776242496294291.input.0.npy
+    │   ├── TENSOR_batchmatmul_3d_kernel.TENSOR_batchmatmul_3d_kernel.29.46.1776242496294291.input.1.npy
+    │   └── TENSOR_batchmatmul_3d_kernel.TENSOR_batchmatmul_3d_kernel.29.46.1776242496294291.input.2.npy
+    └── TENSOR_batchmatmul_3d_kernel.TENSOR_batchmatmul_3d_kernel.29.46.1776242496294291
+```

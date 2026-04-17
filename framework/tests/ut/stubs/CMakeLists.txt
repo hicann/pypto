@@ -90,7 +90,30 @@ if (BUILD_WITH_CANN)
                 $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/msprof/toolchain>>
                 $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc>>
                 $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc/hccl>>
+ 
+    )
 
+    # stub dump
+    add_library(dump_stubs SHARED)
+    target_sources(dump_stubs
+            PRIVATE
+                src/dump_stubs.cpp
+    )
+    target_link_libraries(dump_stubs
+            PRIVATE
+                intf_pub_cxx17
+                tile_fwk_intf_pub
+                c_sec
+    )
+    target_include_directories(dump_stubs
+            PRIVATE
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include>>
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment>>
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/runtime>>
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/runtime/runtime>>
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/msprof>>
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/include/experiment/msprof/toolchain>>
+                $<BUILD_INTERFACE:$<$<BOOL:${BUILD_WITH_CANN}>:${ASCEND_CANN_PACKAGE_PATH}/pkg_inc>>
     )
 
     # 追加 Stubs 相关配置, 需保证:
@@ -104,6 +127,7 @@ if (BUILD_WITH_CANN)
             src/prof_stub.cpp
             src/runtime_stubs.cpp
             src/hccl_stubs.cpp
+            src/dump_stubs.cpp
     )
 
     add_library(${_Target} STATIC)

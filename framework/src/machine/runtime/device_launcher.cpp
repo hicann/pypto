@@ -477,6 +477,54 @@ void DataDumpUnInit()
     }
 }
 
+int DataFormat2CannFormat(TileOpFormat format)
+{
+#ifdef BUILD_WITH_CANN
+    switch (format) {
+        case TileOpFormat::TILEOP_ND:
+            return ge::Format::FORMAT_ND;
+            break;
+        case TileOpFormat::TILEOP_NZ:
+            return ge::Format::FORMAT_FRACTAL_NZ;
+            break;
+        default:
+            throw std::invalid_argument("Unknown Format");
+    }
+#else
+    (void)format;
+    return 0;
+#endif
+}
+
+void DumpIOTensorsWithCann(
+    aclrtStream stream, std::vector<DeviceTensorData>& tensors,
+    const std::string& funcName)
+{
+#ifdef BUILD_WITH_CANN
+    if (Adx::AdumpGetDumpSwitch(Adx::DumpType::OPERATOR) != 0) {
+        std::vector<Adx::TensorInfoV2> dumpTensors;
+        for (auto& tensor : tensors) {
+            Adx::TensorInfoV2 info;
+            info.type = Adx::TensorType::INPUT;
+            info.addrType = Adx::AddressType::TRADITIONAL;
+            info.tensorSize = static_cast<size_t>(tensor.GetDataSize());
+            info.format = DataFormat2CannFormat(tensor.Format());
+            info.dataType = DataType2CannType(tensor.GetDataType());
+            info.tensorAddr = static_cast<int64_t *>(tensor.GetAddr());
+            info.placement = Adx::TensorPlacement::kOnDeviceHbm;
+            info.shape = tensor.GetShape();
+            info.originShape = tensor.GetShape();
+            dumpTensors.push_back(info);
+        }
+        Adx::AdumpDumpTensorV2(funcName, funcName, dumpTensors, stream);
+    }
+#else
+    (void)stream;
+    (void)tensors;
+    (void)funcName;
+#endif
+}
+
 uint32_t GetProcessId()
 {
 #ifdef BUILD_WITH_CANN
