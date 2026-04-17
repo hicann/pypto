@@ -130,24 +130,6 @@ Status OoOScheduler::PrintSpillFailedInfo(Operation* allocOp, bool isGenSpill)
     return SUCCESS;
 }
 
-void OoOScheduler::UpdateBufferUsage(MemoryType bufferType, int memId, bool isFree)
-{
-    if (isFree) {
-        int freeBufferSize = localBufferMap_[memId]->size;
-        oooCheck.bufferTotalUsage[bufferType] +=
-            oooCheck.bufferLastUsage[bufferType] * (clock - oooCheck.lastClock[bufferType]);
-        oooCheck.bufferLastUsage[bufferType] -= freeBufferSize;
-        oooCheck.lastClock[bufferType] = clock;
-    } else {
-        oooCheck.bufferTotalUsage[bufferType] +=
-            oooCheck.bufferLastUsage[bufferType] * (clock - oooCheck.lastClock[bufferType]);
-        oooCheck.bufferLastUsage[bufferType] += localBufferMap_[memId]->size;
-        oooCheck.lastClock[bufferType] = clock;
-        oooCheck.bufferMaxUsage[bufferType] =
-            std::max(oooCheck.bufferMaxUsage[bufferType], oooCheck.bufferLastUsage[bufferType]);
-    }
-}
-
 void OoOScheduler::PrintOpList(std::vector<Operation*> opList)
 {
     APASS_LOG_INFO_F(Elements::Operation, "==================== OP_LIST =====================");
@@ -334,7 +316,7 @@ Status OoOScheduler::LaunchIssueStage(int& nextCycle)
             pipe.busy = true;
             pipe.curIssue = op;
             pipe.curOpRetireCycle = clock + op->GetLatency();
-            oooCheck.pipeUsageCount[pipeType] += op->GetLatency();
+            NotifyPipeIssued(pipeType, op->GetLatency());
             HandleViewOp(op);
             newOperations_.emplace_back(op);
             if (nextCycle == -1 || nextCycle > pipe.curOpRetireCycle) {
@@ -368,10 +350,7 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
                 APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", reqMemIds[0]);
                 return FAILED;
             }
-            // Healthcheck record - update buffer usage statistics
-            if (oooCheck.doHealthCheck) {
-                UpdateBufferUsage(memType, reqMemIds[0], false);
-            }
+            NotifyBufferAllocated(memType, reqMemIds[0]);
             tensorOccupyMap[memType][reqMemIds[0]] = op;
             localBufferMap_[reqMemIds[0]]->startCycle = clock;
             if (op->GetOutputOperand(0) == nullptr) {
@@ -431,10 +410,7 @@ Status OoOScheduler::FreeBuffer(Operation* op)
                 APASS_LOG_ERROR_F(Elements::Tensor, "Free tensor [%d] failed.", memId);
                 return FAILED;
             }
-            // Healthcheck record - update buffer usage statistics
-            if (oooCheck.doHealthCheck) {
-                UpdateBufferUsage(memType, memId, true);
-            }
+            NotifyBufferFreed(memType, memId);
             localBufferMap_[memId]->retireCycle = clock;
             if (tensorOccupyMap[memType].erase(localBufferMap_[memId]->id) == 0) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", memId);
@@ -927,6 +903,7 @@ Status OoOScheduler::Schedule(
     PrintOpList(newOperations_);
     function_.SetStackWorkespaceSize(workspaceOffset);
     function_.pipeEndTime = pipeEndTime;
+    NotifyScheduleEnd(true);
     return SUCCESS;
 }
 

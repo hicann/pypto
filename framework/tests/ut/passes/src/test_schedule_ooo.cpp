@@ -1307,8 +1307,9 @@ TEST_F(ScheduleOoOTest, TestBufferUsage)
     Status res = sort.SortOps();
     EXPECT_EQ(res, SUCCESS);
     OoOScheduler ooOScheduler(*function);
+    OoOScheduleStatistic testCheck;
+    ooOScheduler.AddObserver(&testCheck);
     res = ooOScheduler.Init(sort.operations);
-    ooOScheduler.oooCheck.doHealthCheck = true;
     EXPECT_EQ(res, SUCCESS);
     res = ooOScheduler.ScheduleMainLoop();
     EXPECT_EQ(res, SUCCESS);
@@ -1324,14 +1325,14 @@ TEST_F(ScheduleOoOTest, TestBufferUsage)
         {MemoryType::MEM_L0A, 0},
         {MemoryType::MEM_L0B, 0},
         {MemoryType::MEM_L0C, 0}};
-    EXPECT_NE(ooOScheduler.oooCheck.bufferTotalUsage, invalidBufferTotalUsage);
-    EXPECT_NE(ooOScheduler.oooCheck.bufferMaxUsage, invalidBufferMaxUsage);
+    EXPECT_NE(testCheck.bufferTotalUsage, invalidBufferTotalUsage);
+    EXPECT_NE(testCheck.bufferMaxUsage, invalidBufferMaxUsage);
 
     // 增加健康检查校验
-    ooOScheduler.oooCheck.clock = 3; // 模拟数据
-    res = ooOScheduler.oooCheck.HealthCheckOoOSchedule();
+    testCheck.clock = 3; // 模拟数据
+    res = testCheck.HealthCheckOoOSchedule();
     EXPECT_EQ(res, SUCCESS);
-    EXPECT_NE(ooOScheduler.oooCheck.report, nullptr);
+    EXPECT_NE(testCheck.report, nullptr);
 }
 
 TEST_F(ScheduleOoOTest, TestScheduleGenSpillInfiniteLoop)
@@ -1983,6 +1984,8 @@ TEST_F(ScheduleOoOTest, TestL1SpillBuffer)
     EXPECT_EQ(res, SUCCESS);
     auto opList = optimizeSort.operations;
     OoOScheduler oooSchedule(*function);
+    OoOScheduleStatistic testCheck;
+    oooSchedule.AddObserver(&testCheck);
     res = oooSchedule.Init(opList);
     EXPECT_EQ(res, SUCCESS);
     EXPECT_EQ(oooSchedule.orderedOps[4]->GetOpcodeStr(), "L0A_ALLOC");

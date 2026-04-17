@@ -26,7 +26,6 @@
 #include "interface/utils/common.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_interface/pass.h"
-#include "passes/statistics/ooo_schedule_statistic.h"
 #include "passes/block_graph_pass/schedule_ooo/buffer_pool.h"
 #include "passes/block_graph_pass/schedule_ooo/dep_manager.h"
 #include "passes/pass_utils/reschedule_utils.h"

@@ -21,33 +21,6 @@ namespace npu::tile_fwk {
 constexpr int32_t TWO_ISSUE = 2;
 constexpr int32_t DEFAULT_LATENCY = 511;
 
-OoOSchedulerCheck::SpillInfo OoOScheduler::RecordSpillInfo(
-    MemoryType bufferType, int memId, LocalBufferPtr allocBuffer, LogicalTensorPtr spillOutTensor, bool needCopyOut)
-{
-    OoOSchedulerCheck::SpillInfo spillInfo;
-    spillInfo.spillType = bufferType;
-    spillInfo.bufferCurrUsage = oooCheck.bufferLastUsage[bufferType];
-    spillInfo.spillTensorSize = localBufferMap_[memId]->size;
-    spillInfo.spillTensorMagic = spillOutTensor->GetMagic();
-    spillInfo.triggerTensorSize = allocBuffer->size;
-    int allocOccupied = 0;
-    for (const auto &pair : tensorOccupyMap[bufferType]) {
-        if (opIsAllocMap[pair.second]) {
-            allocOccupied += localBufferMap_[pair.first]->size;
-        }
-    }
-    spillInfo.allocOccupiedSize = allocOccupied;
-    if (needCopyOut) {
-        auto dtype = spillOutTensor->tensor->datatype;
-        spillInfo.spillCopyoutSize =
-            std::accumulate(spillOutTensor->shape.begin(), spillOutTensor->shape.end(), 1, std::multiplies<int64_t>()) *
-            BytesOf(dtype);
-    } else {
-        spillInfo.spillCopyoutSize = 0;
-    }
-    return spillInfo;
-}
-
 int OoOScheduler::GetBufNextUseOrder(Operation* op, int curMemId) {
     int execOrder = opExecOrderMap[op];
     auto it = std::find_if(orderedOps.begin(), orderedOps.end(), [this, execOrder, curMemId](Operation* a) {
@@ -797,21 +770,13 @@ Status OoOScheduler::SpillBuffer(SpillInfo &spillInfo, Operation* allocOp, size_
         APASS_LOG_ERROR_F(Elements::Operation, "SpillOutBuffer failed. %s", GetFormatBacktrace(*spillInfo.spillOp_).c_str());
         return FAILED;
     }
-    // Healthcheck record - spill info
-    if (oooCheck.doHealthCheck) {
-        oooCheck.spillInfoVec.emplace_back(
-            RecordSpillInfo(allocBuffer->memType, spillInfo.spillMemId_, allocBuffer, spillInfo.ddrTensor_,
-                spillInfo.spillOp_->GetOpcodeStr().find("COPY_IN") == std::string::npos));
-    }
+    NotifySpill(spillInfo, allocBuffer);
     if (SpillInBuffer(spillInfo, allocOp, allocBuffer->memType, isGenSpill) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "SpillInBuffer failed. %s", GetFormatBacktrace(*spillInfo.spillOp_).c_str());
         return FAILED;
     }
     if (!isGenSpill) {
-        // Healthcheck record - update buffer usage statistics
-        if (oooCheck.doHealthCheck) {
-            UpdateBufferUsage(allocBuffer->memType, spillInfo.spillMemId_, true);
-        }
+        NotifyBufferFreed(allocBuffer->memType, spillInfo.spillMemId_);
         localBufferMap_[spillInfo.spillMemId_]->retireCycle = clock;
         if (tensorOccupyMap[allocBuffer->memType].erase(spillInfo.spillMemId_) == 0) {
             APASS_LOG_ERROR_F(Elements::Tensor, "Erase tensor[%d] failed.", spillInfo.spillMemId_);

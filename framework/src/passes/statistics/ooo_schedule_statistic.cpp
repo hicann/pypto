@@ -16,6 +16,7 @@
 #include "ooo_schedule_statistic.h"
 #include <fstream>
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "OooScheduleStatistic"
 namespace npu {
@@ -24,7 +25,48 @@ namespace tile_fwk {
 constexpr int32_t percent = 100;
 constexpr float decimal = 10000.f; // 保留四位小数
 
-void OoOSchedulerCheck::HealthCheckSpillInfo()
+// === ScheduleObserver callback implementations ===
+
+void OoOScheduleStatistic::OnPipeIssued(const PipeIssuedEvent& e)
+{
+    pipeUsageCount[e.pipeType] += e.latency;
+}
+
+void OoOScheduleStatistic::OnBufferAllocated(const BufferAllocEvent& e)
+{
+    bufferTotalUsage[e.memType] += bufferLastUsage[e.memType] * (e.clock - lastClock[e.memType]);
+    bufferLastUsage[e.memType] += e.size;
+    lastClock[e.memType] = e.clock;
+    bufferMaxUsage[e.memType] = std::max(bufferMaxUsage[e.memType], bufferLastUsage[e.memType]);
+}
+
+void OoOScheduleStatistic::OnBufferFreed(const BufferFreeEvent& e)
+{
+    bufferTotalUsage[e.memType] += bufferLastUsage[e.memType] * (e.clock - lastClock[e.memType]);
+    bufferLastUsage[e.memType] -= e.size;
+    lastClock[e.memType] = e.clock;
+}
+
+void OoOScheduleStatistic::OnSpill(const SpillEvent& e)
+{
+    SpillInfo info;
+    info.spillType = e.memType;
+    info.bufferCurrUsage = bufferLastUsage[e.memType];
+    info.spillTensorSize = e.spillTensorSize;
+    info.triggerTensorSize = e.triggerTensorSize;
+    info.allocOccupiedSize = e.allocOccupiedSize;
+    info.spillCopyoutSize = e.spillCopyoutSize;
+    info.spillTensorMagic = e.spillTensorMagic;
+    spillInfoVec.emplace_back(info);
+}
+
+void OoOScheduleStatistic::OnScheduleEnd(const ScheduleEndEvent& e)
+{
+    clock = e.totalCycles;
+    workspaceOffset = e.workspaceOffset;
+}
+
+void OoOScheduleStatistic::HealthCheckSpillInfo()
 {
     int spillIdx = 0;
     Json spill = Json::array();
@@ -45,83 +87,65 @@ void OoOSchedulerCheck::HealthCheckSpillInfo()
     report["spillDetails"] = spill;
 }
 
-double OoOSchedulerCheck::FormatUsageRate(double value) { return std::round(value * decimal) / decimal; }
+double OoOScheduleStatistic::FormatUsageRate(double value) { return std::round(value * decimal) / decimal; }
 
-Status OoOSchedulerCheck::HealthCheckOoOSchedule()
+Status OoOScheduleStatistic::HealthCheckOoOSchedule()
 {
-    int64_t maxL0ASize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0A);
-    int64_t maxL0BSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0B);
-    int64_t maxL0CSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0C);
-    int64_t maxUBSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
-    int64_t maxL1Size = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1);
-    if (maxL0ASize == 0 || maxL0BSize == 0 || maxL0CSize == 0 || maxUBSize == 0 || maxL1Size == 0) {
-        APASS_LOG_ERROR_F(Elements::Function, "Max buffer size is 0, HealthCheckOoOSchedule failed!");
-        return FAILED;
+    auto memorySize = CommonUtils::GetLocalMemorySize();
+    for (auto memType : {MemoryType::MEM_UB, MemoryType::MEM_L1,
+             MemoryType::MEM_L0A, MemoryType::MEM_L0B, MemoryType::MEM_L0C}) {
+        if (memorySize[memType] == 0) {
+            APASS_LOG_ERROR_F(Elements::Function, "Max buffer size is 0, HealthCheckOoOSchedule failed!");
+            return FAILED;
+        }
     }
-    // Workspace Info
-    report["workspaceOffset"] = workspaceOffset;
-    // Execution Info
-    report["totalCycles"] = clock;
-    // Pipe Usage Rate
-    Json pipeUsageRate;
     if (clock == 0) {
         APASS_LOG_ERROR_F(Elements::Function, "Clock is 0, HealthCheckOoOSchedule failed!");
         return FAILED;
     }
-    pipeUsageRate["PIPE_S_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_S)) / clock * percent);
-    pipeUsageRate["PIPE_V_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_V)) / clock * percent);
-    pipeUsageRate["PIPE_M_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_M)) / clock * percent);
-    pipeUsageRate["PIPE_MTE1_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_MTE1)) / clock * percent);
-    pipeUsageRate["PIPE_MTE2_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_MTE2)) / clock * percent);
-    pipeUsageRate["PIPE_MTE3_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_MTE3)) / clock * percent);
-    pipeUsageRate["PIPE_FIX_Usage_Rate"] =
-        FormatUsageRate(static_cast<double>(pipeUsageCount.at(PipeType::PIPE_FIX)) / clock * percent);
-    report["pipeUsageRate"] = pipeUsageRate;
-
-    uint64_t maxUsage = 0;
-    for (const auto& entry : pipeUsageCount) {
-        if (entry.second > maxUsage) {
-            maxUsage = entry.second;
-        }
-    }
-    report["theoreticalMinimumCycles"] = maxUsage;
-    // Memory Usage
-    Json memoryUsage;
-    memoryUsage["MEM_UB_Peak_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferMaxUsage.at(MemoryType::MEM_UB)) / maxUBSize * percent);
-    memoryUsage["MEM_UB_Average_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferTotalUsage.at(MemoryType::MEM_UB)) / clock / maxUBSize * percent);
-    memoryUsage["MEM_L1_Peak_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferMaxUsage.at(MemoryType::MEM_L1)) / maxL1Size * percent);
-    memoryUsage["MEM_L1_Average_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferTotalUsage.at(MemoryType::MEM_L1)) / clock / maxL1Size * percent);
-    memoryUsage["MEM_L0A_Peak_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferMaxUsage.at(MemoryType::MEM_L0A)) / maxL0ASize * percent);
-    memoryUsage["MEM_L0A_Average_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferTotalUsage.at(MemoryType::MEM_L0A)) / clock / maxL0ASize * percent);
-    memoryUsage["MEM_L0B_Peak_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferMaxUsage.at(MemoryType::MEM_L0B)) / maxL0BSize * percent);
-    memoryUsage["MEM_L0B_Average_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferTotalUsage.at(MemoryType::MEM_L0B)) / clock / maxL0BSize * percent);
-    memoryUsage["MEM_L0C_Peak_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferMaxUsage.at(MemoryType::MEM_L0C)) / maxL0CSize * percent);
-    memoryUsage["MEM_L0C_Average_Usage"] =
-        FormatUsageRate(static_cast<double>(bufferTotalUsage.at(MemoryType::MEM_L0C)) / clock / maxL0CSize * percent);
-    report["memoryUsage"] = memoryUsage;
-    // Spill Info
+    report["workspaceOffset"] = workspaceOffset;
+    report["totalCycles"] = clock;
+    ReportPipeUsage();
+    ReportMemoryUsage(memorySize);
     report["spillCount"] = spillInfoVec.size();
-    // Detailed spill information
     HealthCheckSpillInfo();
     return SUCCESS;
 }
 
-void OoOSchedulerCheck::HealthCheckBlockGraph(Function* function)
+void OoOScheduleStatistic::ReportPipeUsage()
+{
+    static const std::vector<std::pair<PipeType, std::string>> pipeNames = {
+        {PipeType::PIPE_S, "PIPE_S"}, {PipeType::PIPE_V, "PIPE_V"}, {PipeType::PIPE_M, "PIPE_M"},
+        {PipeType::PIPE_MTE1, "PIPE_MTE1"}, {PipeType::PIPE_MTE2, "PIPE_MTE2"},
+        {PipeType::PIPE_MTE3, "PIPE_MTE3"}, {PipeType::PIPE_FIX, "PIPE_FIX"}};
+    Json pipeUsageRate;
+    uint64_t maxUsage = 0;
+    for (const auto& [pipeType, name] : pipeNames) {
+        auto count = pipeUsageCount.at(pipeType);
+        pipeUsageRate[name + "_Usage_Rate"] = FormatUsageRate(static_cast<double>(count) / clock * percent);
+        maxUsage = std::max(maxUsage, count);
+    }
+    report["pipeUsageRate"] = pipeUsageRate;
+    report["theoreticalMinimumCycles"] = maxUsage;
+}
+
+void OoOScheduleStatistic::ReportMemoryUsage(const std::unordered_map<MemoryType, int64_t>& memorySize)
+{
+    static const std::vector<std::pair<MemoryType, std::string>> memNames = {
+        {MemoryType::MEM_UB, "MEM_UB"}, {MemoryType::MEM_L1, "MEM_L1"}, {MemoryType::MEM_L0A, "MEM_L0A"},
+        {MemoryType::MEM_L0B, "MEM_L0B"}, {MemoryType::MEM_L0C, "MEM_L0C"}};
+    Json memoryUsage;
+    for (const auto& [memType, name] : memNames) {
+        auto maxSize = memorySize.at(memType);
+        memoryUsage[name + "_Peak_Usage"] =
+            FormatUsageRate(static_cast<double>(bufferMaxUsage.at(memType)) / maxSize * percent);
+        memoryUsage[name + "_Average_Usage"] =
+            FormatUsageRate(static_cast<double>(bufferTotalUsage.at(memType)) / clock / maxSize * percent);
+    }
+    report["memoryUsage"] = memoryUsage;
+}
+
+void OoOScheduleStatistic::HealthCheckBlockGraph(Function* function)
 {
     report["totalOpCount"] = function->Operations().size();
     auto& tensors = function->GetTensorMap().inverseMap_;
@@ -167,7 +191,7 @@ void OoOSchedulerCheck::HealthCheckBlockGraph(Function* function)
     report["maxOutputsOps"] = maxOutputsOps;
 }
 
-Status OoOSchedulerCheck::DoHealthCheck(Function* function, const std::string& fileName)
+Status OoOScheduleStatistic::DoHealthCheck(Function* function, const std::string& fileName)
 {
     if (HealthCheckOoOSchedule() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "DoHealthCheck failed at HealthCheckOoOSchedule!");

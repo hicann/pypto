@@ -61,13 +61,12 @@ void OoOSchedule::SortTaskList(std::vector<Operation*>& opList, std::vector<Oper
     taskList = newTaskList;
 }
 
-void OoOSchedule::OoOHealthCheck(OoOScheduler& oooSchedule, Function& function, std::pair<uint64_t, Function*>& program)
+void OoOSchedule::CollectStatistic(OoOScheduleStatistic& oooHealthCheck,
+    Function& function, std::pair<uint64_t, Function*>& program)
 {
-    if (oooSchedule.oooCheck.doHealthCheck) {
-        oooSchedule.oooCheck.workspaceOffset = oooSchedule.workspaceOffset;
-        oooSchedule.oooCheck.clock = oooSchedule.clock;
-        oooSchedule.oooCheck.jsonFileName = GetDumpFilePrefix(function, false, program.second, program.first);
-        schedulerMap.insert({program.first, oooSchedule});
+    if (passDfxconfigs_.healthCheck) {
+        oooHealthCheck.SetOutputPrefix(GetDumpFilePrefix(function, false, program.second, program.first));
+        statisticMap_.insert({program.first, oooHealthCheck});
     }
 }
 
@@ -78,7 +77,10 @@ Status OoOSchedule::NonMixSchedule(
     // 直接对oplist进行GenSpill和mainLoop
     APASS_LOG_INFO_F(Elements::Operation, "=============== START NonMixSchedule ===============");
     OoOScheduler oooSchedule(*program.second);
-    oooSchedule.oooCheck.doHealthCheck = passDfxconfigs_.healthCheck;
+    OoOScheduleStatistic oooHealthCheck;
+    if (passDfxconfigs_.healthCheck) {
+        oooSchedule.AddObserver(&oooHealthCheck);
+    }
     if (oooSchedule.Schedule(opList) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Non-mixGraph schedule failed.");
         return FAILED;
@@ -89,7 +91,7 @@ Status OoOSchedule::NonMixSchedule(
     RescheduleUtils::UpdateTensorConsProd(program.second);
     maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
     function.SetStackWorkespaceSize(maxWorkeSpaceSize);
-    OoOHealthCheck(oooSchedule, function, program);
+    CollectStatistic(oooHealthCheck, function, program);
     return SUCCESS;
 }
 
@@ -144,15 +146,51 @@ Status OoOSchedule::MixSchedule(
     int64_t& maxWorkeSpaceSize)
 {
     APASS_LOG_INFO_F(Elements::Operation, "=============== START MixSchedule ===============");
-    std::unordered_map<TargetCoreType, std::string> targetToString{
+    TaskSpliter spliter;
+    // 对 taskNode.opList_ 进行排序，并返回预估 latency，随后完成 core schedule 与子图合并。
+    if (EstimateTaskLatencyAndSchedule(spliter, opList) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "EstimateTaskLatencyAndSchedule failed.");
+        return FAILED;
+    }
+    std::unordered_map<Operation*, CoreLocationType> opCoreMap;
+    // 传入 taskNode 序列，对全部 opList 重新拼装并构建 opCoreMap。
+    if (BuildMixedScheduleOps(spliter, opList, opCoreMap) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "BuildMixedScheduleOps failed.");
+        return FAILED;
+    }
+    if (ModifyBoundaryOrder(opList) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "ModifyBoundaryOrder failed.");
+        return FAILED;
+    }
+    OoOScheduler oooSchedule(*program.second);
+    OoOScheduleStatistic oooHealthCheck;
+    if (passDfxconfigs_.healthCheck) {
+        oooSchedule.AddObserver(&oooHealthCheck);
+    }
+    if (oooSchedule.Schedule(opList, opCoreMap, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "Schedule failed.");
+        return FAILED;
+    }
+    CollectStatistic(oooHealthCheck, function, program);
+    APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
+    program.second->ScheduleBy(oooSchedule.GetNewOperations());
+    program.second->RecordOOOSeq();
+    RescheduleUtils::UpdateTensorConsProd(program.second);
+    maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
+    function.SetStackWorkespaceSize(maxWorkeSpaceSize);
+    return SUCCESS;
+}
+
+Status OoOSchedule::EstimateTaskLatencyAndSchedule(TaskSpliter& spliter, std::vector<Operation*>& opList)
+{
+    static const std::unordered_map<TargetCoreType, std::string> targetToString{
         {TargetCoreType::AIC, "AIC"},
         {TargetCoreType::AIV0, "AIV0"},
         {TargetCoreType::AIV1, "AIV1"},
         {TargetCoreType::UNKNOWN, "UNKNOWN"}};
-    TaskSpliter spliter;
+
     spliter.SplitGraph(opList);
     for (auto& taskNode : spliter.GetTaskGraph().tasks) {
-        // 对taskNode.opList_进行排序，并返回预估的latency
         if (SortAndLatencyEstimate(opList, taskNode.opList_, taskNode.latency) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "SortAndLatencyEstimate failed, taskNode[%d].", taskNode.idx);
             return FAILED;
@@ -161,42 +199,31 @@ Status OoOSchedule::MixSchedule(
     CoreScheduler coreScheduler;
     coreScheduler.Schedule(spliter.GetTaskGraph(), 10); // BruteForce threshold is 10
     for (auto& taskNode : spliter.GetTaskGraph().tasks) {
-        APASS_LOG_INFO_F(
-            Elements::Operation, "eval task %d on %s: %d - %d.", taskNode.idx,
-            targetToString[taskNode.targetCoreType].c_str(), taskNode.startTime, taskNode.endTime);
+        APASS_LOG_INFO_F(Elements::Operation, "eval task %d on %s: %d - %d.", taskNode.idx,
+            targetToString.at(taskNode.targetCoreType).c_str(), taskNode.startTime, taskNode.endTime);
     }
     spliter.MergeTask();
     spliter.MarkInternalSubgraphID();
-    // 传入一个taskNode序列 taskNodeList,对全部opList进行schedule
+    return SUCCESS;
+}
+
+Status OoOSchedule::BuildMixedScheduleOps(TaskSpliter& spliter, std::vector<Operation*>& opList,
+    std::unordered_map<Operation*, CoreLocationType>& opCoreMap)
+{
     auto taskNodeList = spliter.GetTaskGraph().tasks;
     std::sort(taskNodeList.begin(), taskNodeList.end(), [](const TaskNode& a, const TaskNode& b) {
         return a.startTime < b.startTime;
     });
     std::vector<Operation*> operations;
-    std::unordered_map<Operation*, CoreLocationType> opCoreMap;
     for (auto& taskNode : taskNodeList) {
         SortTaskList(taskNode.opList_, opList);
-        UpdateOpCoreMap(taskNode, opCoreMap);
+        if (UpdateOpCoreMap(taskNode, opCoreMap) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Operation, "UpdateOpCoreMap failed, taskNode[%d].", taskNode.idx);
+            return FAILED;
+        }
         operations.insert(operations.end(), taskNode.opList_.begin(), taskNode.opList_.end());
     }
-    opList = operations;
-    if (ModifyBoundaryOrder(opList) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "ModifyBoundaryOrder failed.");
-        return FAILED;
-    }
-    OoOScheduler oooSchedule(*program.second);
-    oooSchedule.oooCheck.doHealthCheck = passDfxconfigs_.healthCheck;
-    if (oooSchedule.Schedule(opList, opCoreMap, CORE_INIT_CONFIGS_HARDWARE_TWO_AIV) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "Schedule failed.");
-        return FAILED;
-    }
-    OoOHealthCheck(oooSchedule, function, program);
-    APASS_LOG_INFO_F(Elements::Operation, "Subgraph[%zu] OOOSchedule end.", program.first);
-    program.second->ScheduleBy(oooSchedule.GetNewOperations());
-    program.second->RecordOOOSeq();
-    RescheduleUtils::UpdateTensorConsProd(program.second);
-    maxWorkeSpaceSize = std::max(maxWorkeSpaceSize, (*program.second).GetStackWorkespaceSize());
-    function.SetStackWorkespaceSize(maxWorkeSpaceSize);
+    opList = std::move(operations);
     return SUCCESS;
 }
 
@@ -327,12 +354,11 @@ Status OoOSchedule::RunOnFunction(Function& function)
 
 void OoOSchedule::DoHealthCheckAfter(Function& function, const std::string& folderPath)
 {
-    for (auto& scheduler : schedulerMap) {
-        auto fileName = folderPath + '/' + scheduler.second.oooCheck.jsonFileName + "_Block_Graph_Health_Report.json";
-        auto it = function.rootFunc_->programs_.find(scheduler.first);
+    for (auto& [programId, check] : statisticMap_) {
+        auto fileName = folderPath + '/' + check.jsonFileName + "_Block_Graph_Health_Report.json";
+        auto it = function.rootFunc_->programs_.find(programId);
         if (it != function.rootFunc_->programs_.end()) {
-            auto subFunc = it->second;
-            scheduler.second.oooCheck.DoHealthCheck(subFunc, fileName);
+            check.DoHealthCheck(it->second, fileName);
         }
     }
 }
