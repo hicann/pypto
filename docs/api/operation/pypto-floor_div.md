@@ -37,8 +37,7 @@ def floor_div(input: Tensor, other: Union[Tensor, int]) -> Tensor
 ## 约束说明
 
 1. input 和 other 数据类型应该相同。
-2. other 中不能包含$0$值。
-3. 只支持单轴广播。
+2. 只支持单轴广播。
 
 ## 调用示例
 
