@@ -160,13 +160,13 @@ void PassManager::RegDefaultStrategy()
                         {"TuneSyncForVF", PassName::TUNE_SYNC_FOR_VF},
                         {"MixSubgraphSplit", PassName::MIX_SUBGRAPH_SPLIT},
                         {"GlobalMemoryReuse", PassName::GLOBAL_MEMORY_REUSE},
-                        {"LoopaxesProc", PassName::LOOPAXES_PROC},
                         {"CodegenPreproc", PassName::CODEGEN_PREPROC},
                     });
     RegisterStrategy("FunctionUnroll", {{"LoopUnroll", PassName::LOOP_UNROLL}});
     RegisterStrategy(
         "ExecuteGraph", {
                             {"DynAttrToStatic", PassName::DYN_ATTR_TO_STATIC},
+                            {"LoopaxesProc", PassName::LOOPAXES_PROC},
                         });
 }
 

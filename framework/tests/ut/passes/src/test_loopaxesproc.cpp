@@ -81,9 +81,14 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
         std::make_shared<Function>(Program::GetInstance(), "TestLoopaxesProcPass", "TestLoopaxesProcPass", nullptr);
     rootFuncPtr->rootFunc_ = rootFuncPtr.get();
     auto currFunctionPtr = std::make_shared<Function>(
-        Program::GetInstance(), "TestLoopaxesProcPassLeaf", "TestLoopaxesProcPassLeaf", nullptr);
+        Program::GetInstance(), "TestLoopaxesProcPassLeaf", "TestLoopaxesProcPassLeaf", rootFuncPtr.get());
+    // Register the leaf function in Program's functionmap_ so GetFunctionByMagicName can find it
+    Program::GetInstance().InsertFuncToFunctionMap(currFunctionPtr->GetMagicName(), currFunctionPtr);
     rootFuncPtr->rootFunc_->programs_.emplace(currFunctionPtr->GetFuncMagic(), currFunctionPtr.get());
     rootFuncPtr->SetFunctionType(FunctionType::DYNAMIC_LOOP_PATH);
+    rootFuncPtr->SetGraphType(GraphType::EXECUTE_GRAPH);
+    currFunctionPtr->SetGraphType(GraphType::TILE_GRAPH);
+    currFunctionPtr->SetFunctionType(FunctionType::STATIC);
     rootFuncPtr->SetUnderDynamicFunction(true);
 
     auto inCast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape1);
@@ -119,6 +124,18 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     currFunctionPtr->inCasts_.push_back(inCast1);
     currFunctionPtr->inCasts_.push_back(inCast2);
     currFunctionPtr->outCasts_.push_back(outCast);
+
+    // Create a call operation in rootFunc to connect to currFunctionPtr
+    auto rootInCast1 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape1);
+    auto rootInCast2 = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape2);
+    auto rootOutCast = std::make_shared<LogicalTensor>(*rootFuncPtr, DT_FP32, shape3);
+    auto& callOp = rootFuncPtr->AddRawOperation(Opcode::OP_CALL, {rootInCast1, rootInCast2}, {rootOutCast}, false);
+    std::vector<std::vector<SymbolicScalar>> argList;
+    std::map<int, SymbolicScalar> outIndexToExpr;
+    callOp.SetOpAttribute(currFunctionPtr->CreateCallOpAttribute(argList, outIndexToExpr));
+    callOp.SetIOpAttrOffset(0, 0);
+    callOp.SetIOpAttrOffset(1, 0);
+    callOp.SetOOpAttrOffset(0, 0);
 
     LoopaxesProc loopaxesprocpass;
     EXPECT_EQ(loopaxesprocpass.RunOnFunction(*rootFuncPtr), SUCCESS);

@@ -244,6 +244,8 @@ public:
     ~DynAttrToStatic() override = default;
 
 private:
+    friend class LoopaxesProc;
+    
     std::unordered_map<Function*, std::vector<Operation*>> leaf2Caller;
 
     Status RunOnFunction(Function& function) override;
