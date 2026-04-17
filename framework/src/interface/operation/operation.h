@@ -285,6 +285,25 @@ public:
     static std::shared_ptr<Operation> LoadJson(
         Function& cur, const std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict, const Json& opDump);
 
+private:
+    void DumpOperandsJson(Json& opDump, bool dumpTensor) const;
+    void DumpCalleeHashJson(Json& opDump) const;
+    void DumpLocationJson(Json& opDump) const;
+    void DumpParamLocationJson(Json& opDump) const;
+    void DumpCallOpInfoJson(Json& opDump) const;
+    void DumpTileInfoJson(Json& opDump) const;
+    void DumpAttributesJson(Json& opDump) const;
+
+    static void LoadOperandsFromJson(
+        const Json& opDump, const std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict,
+        std::vector<std::shared_ptr<LogicalTensor>>& ioperands, std::vector<std::shared_ptr<LogicalTensor>>& ooperands);
+    void LoadLocationFromJson(const Json& opDump);
+    void LoadBasicInfoFromJson(const Json& opDump);
+    void LoadTileInfoFromJson(const Json& opDump);
+    void LoadOpAttributeFromJson(const Json& opDump, Opcode opcode);
+    void LoadExtraInfoFromJson(const Json& opDump);
+
+public:
     [[nodiscard]] std::string DumpSSA(const std::string& prefix = "") const;
 
     [[nodiscard]] std::string Dump() const;
@@ -501,6 +520,12 @@ public:
         return mixSubgraphFields_ ? mixSubgraphFields_->internalSubgraphID : NOT_IN_SUBGRAPH;
     }
     void UpdateSubgraphID(int subgraphID) { subgraphID_ = subgraphID; }
+    int GetL1ReuseHashOrder() const { return l1ReuseHashOrder_; }
+    void UpdateL1ReuseHashOrder(int hashOrder) { l1ReuseHashOrder_ = hashOrder; }
+    int GetCubeMergeHashOrder() const { return cubeMergeHashOrder_; }
+    void UpdateCubeMergeHashOrder(int hashOrder) { cubeMergeHashOrder_ = hashOrder; }
+    int GetVecMergeHashOrder() const { return vecMergeHashOrder_; }
+    void UpdateVecMergeHashOrder(int hashOrder) { vecMergeHashOrder_ = hashOrder; }
     void UpdateInternalSubgraphID(int internalSubgraphID)
     {
         ensureMixSubgraphFields();
@@ -578,6 +603,9 @@ public:
 private:
     Opcode opcode_{Opcode::OP_UNKNOWN};
     int subgraphID_{NOT_IN_SUBGRAPH};
+    int l1ReuseHashOrder_{-1};
+    int cubeMergeHashOrder_{-1};
+    int vecMergeHashOrder_{-1};
     bool isTileOp_{false};
     TileShape tileShape_;
     std::shared_ptr<OpAttribute> opAttribute_;

@@ -41,6 +41,7 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPassOption(VEC_NBUFFER_SETTING, std::map<int64_t, int64_t>{{-1, 2}});
+        NBufferMerge::ResetGlobalHashOrderCounter();
     }
 
     void TearDown() override {}
@@ -265,6 +266,78 @@ Status NBufferMergeTest::TestNBufferMergeWithDifferentVecBufferSetting(std::map<
     function->SetTotalSubGraphCount(subGraphNum);
     NBufferMerge NBM;
     return NBM.RunOnFunction(*function);
+}
+
+Function* BuildFunctionWithSubgraphs(
+    ComputationalGraphBuilder& G, const std::vector<int64_t>& tileShape, int subGraphNum)
+{
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"incast0", "incast1", "outcast"}), true);
+    EXPECT_EQ(G.AddOps({Opcode::OP_COPY_IN}, {{"incast0"}}, {{"incast1"}}, {"copy_in"}, true), true);
+    G.GetOp("copy_in")->UpdateSubgraphID(0);
+    for (int i = 1; i <= subGraphNum; i++) {
+        std::string strID = std::to_string(i);
+        EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape,
+            {"tensor1_" + strID, "tensor2_" + strID, "tensor3_" + strID}), true);
+        std::vector<std::vector<std::string>> iOperands{
+            {"incast1"}, {"tensor1_" + strID}, {"tensor2_" + strID}, {"tensor3_" + strID}};
+        std::vector<std::vector<std::string>> oOperands{
+            {"tensor1_" + strID}, {"tensor2_" + strID}, {"tensor3_" + strID}, {"outcast"}};
+        std::vector<std::string> opNames{"ABS_" + strID, "EXP_" + strID, "ADDS_" + strID, "ASSEMBLE_" + strID};
+        std::vector<Opcode> opLists{Opcode::OP_ABS, Opcode::OP_EXP, Opcode::OP_ADDS, Opcode::OP_ASSEMBLE};
+        EXPECT_EQ(G.AddOps(opLists, iOperands, oOperands, opNames, true), true);
+        G.GetOp("ABS_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("EXP_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("ADDS_" + strID)->UpdateSubgraphID(i);
+        G.GetOp("ASSEMBLE_" + strID)->UpdateSubgraphID(i);
+    }
+    EXPECT_EQ(G.SetInCast({"incast0"}), true);
+    EXPECT_EQ(G.SetOutCast({"outcast"}), true);
+    return G.GetFunction();
+}
+
+TEST_F(NBufferMergeTest, TestHashOrderGlobalAccumulation)
+{
+    NBufferMerge::ResetGlobalHashOrderCounter();
+    std::vector<int64_t> tileShape{16, 16};
+    const int mgVecParallelLb = 3;
+    const int subGraphNum1 = 4;
+    const int subGraphNum2 = 3;
+
+    // 第一个 Function
+    ComputationalGraphBuilder G1;
+    Function* function1 = BuildFunctionWithSubgraphs(G1, tileShape, subGraphNum1);
+    function1->paramConfigs_.vecNBufferSetting = {{-1, 2}};
+    function1->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function1->SetTotalSubGraphCount(subGraphNum1 + 1);
+    NBufferMerge NBM1;
+    EXPECT_EQ(NBM1.RunOnFunction(*function1), SUCCESS);
+
+    // 获取第一个 Function 的最大 hashOrder
+    int maxHashOrder1 = -1;
+    for (auto& op : function1->Operations()) {
+        if (!op.IsDeleted()) {
+            maxHashOrder1 = std::max(maxHashOrder1, op.GetVecMergeHashOrder());
+        }
+    }
+    EXPECT_GE(maxHashOrder1, 0) << "First function should have vecMergeHashOrder set";
+
+    // 第二个 Function
+    ComputationalGraphBuilder G2;
+    Function* function2 = BuildFunctionWithSubgraphs(G2, tileShape, subGraphNum2);
+    function2->paramConfigs_.vecNBufferSetting = {{-1, 2}};
+    function2->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function2->SetTotalSubGraphCount(subGraphNum2 + 1);
+    NBufferMerge NBM2;
+    EXPECT_EQ(NBM2.RunOnFunction(*function2), SUCCESS);
+
+    // 获取第二个 Function 的最小 hashOrder 并验证累加
+    int minHashOrder2 = INT_MAX;
+    for (auto& op : function2->Operations()) {
+        if (!op.IsDeleted() && op.GetVecMergeHashOrder() >= 0) {
+            minHashOrder2 = std::min(minHashOrder2, op.GetVecMergeHashOrder());
+        }
+    }
+    EXPECT_GT(minHashOrder2, maxHashOrder1) << "Second function's hashOrder should be greater than first";
 }
 } // namespace tile_fwk
 } // namespace npu

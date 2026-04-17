@@ -32,6 +32,8 @@
 #include "passes/tensor_graph_pass/loop_unroll.h"
 //  tile graph pass
 #include "passes/tile_graph_pass/graph_partition/graph_partition.h"
+#include "passes/tile_graph_pass/graph_partition/l1_copy_reuse.h"
+#include "passes/tile_graph_pass/graph_partition/n_buffer_merge.h"
 #include "passes/tile_graph_pass/graph_optimization/graph_optimization.h"
 #include "passes/tile_graph_pass/graph_constraint/graph_constraint.h"
 #include "passes/tile_graph_pass/data_path/data_path.h"
@@ -58,6 +60,12 @@ PassManager& PassManager::Instance()
 {
     static PassManager instance;
     return instance;
+}
+
+void PassManager::ResetStaticVariables()
+{
+    L1CopyInReuseRunner::ResetGlobalHashOrderCounters();
+    NBufferMerge::ResetGlobalHashOrderCounter();
 }
 
 void RegPass()

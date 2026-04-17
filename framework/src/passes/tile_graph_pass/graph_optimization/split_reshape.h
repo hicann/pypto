@@ -17,6 +17,7 @@
 #define PASS_SPLIT_RESHAPE_H_
 
 #include "interface/function/function.h"
+#include "interface/interpreter/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/configs/config_manager.h"
 #include "passes/pass_utils/pass_common_defs.h"
@@ -29,14 +30,6 @@ using InputMaigc = int;
 using OutputMaigc = int;
 using OverlaprawMagic = int;
 
-struct PairHash {
-    size_t operator()(const std::pair<int, int>& p) const noexcept
-    {
-        // 把两个32-bit打包到64-bit,再进行hash
-        uint64_t key = (uint64_t(uint32_t(p.first)) << 32) | uint64_t(uint32_t(p.second));
-        return std::hash<uint64_t>{}(key);
-    }
-};
 
 struct UpdatePara {
     int64_t ShapeVal;

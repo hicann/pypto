@@ -32,6 +32,9 @@ public:
 
     PassManager(const PassManager&) = delete;
     void operator=(const PassManager&) = delete;
+
+    static void ResetStaticVariables();
+
     Status RunPass(Program& program, Function& function, const std::string& strategy) const;
     std::string GetResumePath(const std::string& strategy);
 

@@ -233,7 +233,7 @@ void Attention(
         SymbolicScalar nLoop = nQ / nTile;
 
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{-1, 2}});
-        config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 0}});
+        config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 1}});
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
         config::SetPassOption(SG_PG_UPPER_BOUND, NUM_100000);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_2);
