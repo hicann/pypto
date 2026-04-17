@@ -24,6 +24,7 @@
 #include <cerrno>
 #include <sched.h>
 #include "utils/test_cost_macro.h"
+#include "adapter/api/runtime_api.h"
 
 #if defined(BUILD_WITH_CANN) && defined(ENABLE_STEST)
 #include "runtime/dev.h"
@@ -32,8 +33,8 @@ bool CheckDeviceConsistency()
 {
     /* 获取实际生效的 DeviceId */
     int32_t rtDevId = -1; // -1 表示无效 DeviceId
-    int32_t getDeviceResult = rtGetDevice(&rtDevId);
-    if (getDeviceResult != RT_ERROR_NONE) {
+    int32_t getDeviceResult = npu::tile_fwk::RuntimeGetDevice(&rtDevId);
+    if (getDeviceResult != npu::tile_fwk::RT_SUCCESS) {
         std::cout << "Error: Can't get deviceId" << std::endl;
         return false;
     }

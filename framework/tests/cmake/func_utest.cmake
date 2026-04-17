@@ -153,10 +153,10 @@ function(PTO_Fwk_UTest_AddExe_RunExe)
 
     set(_PrivateLinkLibraries
             ${PTO_Fwk_UTestNamePrefix}_utils
-            $<$<BOOL:${BUILD_WITH_CANN}>:${PTO_Fwk_UTestNamePrefix}_stubs>
             # 基本依赖
             # Interface 内 HostMachine 存在 dlopen 逻辑, 此处增加对应库连接, 触发相关 so 被添加到可执行程序依赖中
             tile_fwk_utils
+            tile_fwk_adapter
             tile_fwk_cann_host_runtime
             tile_fwk_platform
             tile_fwk_interface

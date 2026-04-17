@@ -75,11 +75,11 @@ void CompileTestCCE(const std::string& cceFileName)
 
 TEST_F(TestTileOpAdd, TestAddDim2)
 {
-    aclInit(nullptr);
-    rtSetDevice(GetDeviceIdByEnvVar());
+    AclInit(nullptr);
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
 
-    rtStream_t stream;
-    rtStreamCreate(&stream, 0);
+    RtStream stream;
+    RuntimeStreamCreate(&stream, 0);
 
     std::vector<int> shape = {64, 64};
     int capacity = shape[0] * shape[1];
@@ -92,7 +92,7 @@ TEST_F(TestTileOpAdd, TestAddDim2)
     void* src0 = readToDev(GetGoldenDir() + "/add_x.bin", capacity);
     void* src1 = readToDev(GetGoldenDir() + "/add_y.bin", capacity);
 
-    typedef void (*KernelFnPtrTy)(const std::vector<uint64_t>&, rtStream_t&);
+    typedef void (*KernelFnPtrTy)(const std::vector<uint64_t>&, RtStream&);
     KernelFnPtrTy KernelFn = nullptr;
     void* soHandle = nullptr;
     const std::string kernelSoPath = "./kernel_meta/" + cceFileName + ".o";

@@ -117,6 +117,7 @@
         "framework/tests/runtime/"
       ],
       "Area": [
+        "framework/src/adapter",
         "framework/src/interface/",
         "framework/src/passes/",
         "framework/src/machine/",
@@ -196,6 +197,22 @@
     "Source-Header": {
       "Self": [
         "framework/src/utils"
+      ],
+      "Area": [
+      ],
+      "Include": [
+        "framework/include/"
+      ],
+      "WhiteList": [
+      ],
+      "BlackList": [
+      ]
+    }
+  },
+  "libtile_fwk_adapter.so": {
+    "Source-Header": {
+      "Self": [
+        "framework/src/adapter"
       ],
       "Area": [
       ],

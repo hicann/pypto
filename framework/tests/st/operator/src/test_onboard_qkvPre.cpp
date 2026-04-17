@@ -57,8 +57,8 @@ void TestQkvPre(std::vector<int>& params, string dataPath)
     int capacity_q = std::accumulate(q_shape.begin(), q_shape.end(), 1, std::multiplies<>());
     int capacity_kv = std::accumulate(kv_shape.begin(), kv_shape.end(), 1, std::multiplies<>());
 
-    aclInit(nullptr);
-    rtSetDevice(GetDeviceIdByEnvVar());
+    AclInit(nullptr);
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
     uint64_t outputSize0 = capacity_q * sizeof(T);
     uint64_t outputSize1 = capacity_kv * sizeof(T);
     uint8_t* q_out_ptr = allocDevAddr(outputSize0);
@@ -406,8 +406,8 @@ void TestQkvPreFp32(std::vector<int>& params, string dataPath)
     int capacity_q = std::accumulate(q_shape.begin(), q_shape.end(), 1, std::multiplies<>());
     int capacity_kv = std::accumulate(kv_shape.begin(), kv_shape.end(), 1, std::multiplies<>());
 
-    aclInit(nullptr);
-    rtSetDevice(GetDeviceIdByEnvVar());
+    AclInit(nullptr);
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
     uint64_t outputSize0 = capacity_q * sizeof(float);
     uint64_t outputSize1 = capacity_kv * sizeof(float);
     uint8_t* q_out_ptr = allocDevAddr(outputSize0);

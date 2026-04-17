@@ -8,27 +8,28 @@
  * See LICENSE in the root of the software repository for the full text of the License.
  */
 
-#include <thread>
 #include "machine/runtime/eslmodel_launcher.h"
+#include <thread>
+#include "adapter/api/acl_api.h"
 #include "machine/runtime/device_launcher.h"
 #include "interface/utils/op_info_manager.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void *targ);
 namespace npu::tile_fwk::dynamic {
 
-int EslModelLauncher::EslModelLaunchAicore(aclrtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs) {
+int EslModelLauncher::EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs) {
 #ifdef BUILD_WITH_CANN
-    rtArgsEx_t rtArgs;
+    RtArgsEx rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
     std::vector<void *> kArgs = {nullptr, nullptr, nullptr, nullptr, nullptr, kernelArgs->cfgdata};
     rtArgs.args = kArgs.data();
     rtArgs.argsSize = kArgs.size() * sizeof(int64_t);
     uint64_t tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
-    rtTaskCfgInfo_t cfg = {};
-    cfg.schemMode = RT_SCHEM_MODE_BATCH;
+    RtTaskCfgInfo cfg = {};
+    cfg.schemMode = static_cast<uint8_t>(RtSchemModeType::BATCH);
     auto *devProg = (dynamic::DevAscendProgram *)(kernelArgs->cfgdata);
     auto blockDim = devProg->devArgs.nrValidAic;
-    return rtKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &cfg);
+    return RuntimeKernelLaunchWithHandleV2(kernel, tilingKey, blockDim, &rtArgs, nullptr, aicoreStream, &cfg);
 #else
     (void) aicoreStream;
     (void) kernel;
@@ -56,7 +57,7 @@ void EslModelLauncher::CopyInputOutputData() {
     }
 }
 
-int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, aclrtStream aicoreStream, void *kernel) {
+int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStream aicoreStream, void *kernel) {
 #ifdef BUILD_WITH_CANN
     auto *devProg = (dynamic::DevAscendProgram *)(kArgs->cfgdata);
     devProg->devArgs.nrAic = 32;
@@ -102,9 +103,9 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, aclrtStrea
 void EslModelLauncher::ExchangeCaputerMode(const bool &isCapture) {
 #ifdef BUILD_WITH_CANN
     if (isCapture) {
-        aclmdlRICaptureMode mode = ACL_MODEL_RI_CAPTURE_MODE_GLOBAL;
-        aclmdlRICaptureThreadExchangeMode(&mode);
-        MACHINE_LOGI("captureMode is: %d", mode);
+        AclMdlRICaptureMode mode = AclMdlRICaptureMode::GLOBAL;
+        AclMdlRICaptureThreadExchangeMode(&mode);
+        MACHINE_LOGI("captureMode is: %d", static_cast<int32_t>(mode));
     }
 #else
     (void) isCapture;
@@ -113,7 +114,7 @@ void EslModelLauncher::ExchangeCaputerMode(const bool &isCapture) {
 
 int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-    rtStream_t aicpuStream, rtStream_t aicoreStream, void *kernel, const DeviceLauncherConfig &config) {
+    RtStream aicpuStream, RtStream aicoreStream, void *kernel, const DeviceLauncherConfig &config) {
 #ifdef BUILD_WITH_CANN
     MACHINE_LOGI("Kernel Launch");
     bool isCapture = false;
@@ -124,8 +125,8 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
         DeviceLauncher::ChangeCaptureModeRelax();
     }
 
-    auto rc = aclInit(nullptr);
-    if (rc != 0 && rc != ACL_ERROR_REPEAT_INITIALIZE) {
+    auto rc = AclInit(nullptr);
+    if (rc != 0 && rc != ACLRT_ERROR_REPEAT_INITIALIZE) {
         return rc;
     }
 
@@ -142,7 +143,7 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     if (rc < 0) {
         return rc;
     }
-    rc = rtStreamSynchronize(aicoreStream);
+    rc = RuntimeStreamSynchronize(aicoreStream);
     return rc;
 #else
     (void) function;

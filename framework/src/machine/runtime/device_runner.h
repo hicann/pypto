@@ -30,8 +30,6 @@
 #include "machine/utils/machine_ws_intf.h"
 
 #ifdef BUILD_WITH_CANN
-#include <runtime/rt.h>
-#include <acl/acl_rt.h>
 #include "machine/runtime/pmu_common.h"
 
 constexpr int CORE_DEFAULT_NUM = 70;
@@ -64,11 +62,11 @@ public:
 
     uint64_t GetTasksTime() const;
     int DynamicLaunch(
-        rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId,
+        RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream, int64_t taskId,
         DeviceKernelArgs* kernelArgs, int blockdim, int launchAicpuNum);
-    int DynamicLaunchSynchronize(rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream);
+    int DynamicLaunchSynchronize(RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream);
     int DynamicRun(
-        rtStream_t aicpuStream, rtStream_t ctrlStream, rtStream_t aicoreStream, int64_t taskId,
+        RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream, int64_t taskId,
         DeviceKernelArgs* kernelArgs, int blockdim = 25, int launchAicpuNum = 5);
     void InitDynamicArgs(DeviceArgs& args);
     int RegisterKernelBin(void** hdl, std::vector<uint8_t>* funcBinBuf = nullptr);
@@ -86,11 +84,11 @@ public:
     void InitAiCpuSoBin(DeviceArgs& devArgs);
     bool GetValidGetPgMask() const;
     void ReportHostProfInfo(
-        rtStream_t stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore = false);
+        RtStream stream, uint64_t startTime, uint32_t blockDim, uint16_t taskType, bool isCore = false);
     bool GetEnableDumpDevPref() const;
     void StartMachinePerfTraceDumpThread();
     void StopMachinePerfTraceDumpThread();
-    int RunPreSync(rtStream_t scheStream, rtStream_t ctrlStream, rtStream_t aicoreStream);
+    int RunPreSync(RtStream scheStream, RtStream ctrlStream, RtStream aicoreStream);
 
 private:
     DeviceRunner() = default;
@@ -104,16 +102,16 @@ private:
     void Dump();
     void AllocDfxMetricMemory();
     /**************DynamicFunction**************/
-    int launchDynamicAiCore(rtStream_t aicoreStream, DeviceKernelArgs* kernelArgs);
-    int launchDynamicAiCpu(rtStream_t aicpuStream, DeviceKernelArgs* kArgs);
+    int launchDynamicAiCore(RtStream aicoreStream, DeviceKernelArgs* kernelArgs);
+    int launchDynamicAiCpu(RtStream aicpuStream, DeviceKernelArgs* kArgs);
     int RunPrepare();
-    int RunPost(rtStream_t aicpuStream, rtStream_t aicoreStream);
-    int launchDynamicAiCpuInit(rtStream_t aicpuStream, DeviceKernelArgs* kArgs);
+    int RunPost(RtStream aicpuStream, RtStream aicoreStream);
+    int launchDynamicAiCpuInit(RtStream aicpuStream, DeviceKernelArgs* kArgs);
     int InitAicpuServer();
     int DynamicKernelLaunch(
-        rtStream_t aicpuStream, rtStream_t aicoreStream, DeviceKernelArgs* kernelArgs, int blockdim);
+        RtStream aicpuStream, RtStream aicoreStream, DeviceKernelArgs* kernelArgs, int blockdim);
     int DynamicTripleStreamLaunch(
-        rtStream_t schedStream, rtStream_t ctrlStream, rtStream_t aicoreStream, DeviceKernelArgs* kernelArgs,
+        RtStream schedStream, RtStream ctrlStream, RtStream aicoreStream, DeviceKernelArgs* kernelArgs,
         int blockdim);
     int ConstrutDeviceArgs(DeviceArgs& args, const std::vector<int64_t>& regs, const std::vector<int64_t>& regsPmu);
     void MachinePerfTraceDumpThread();
@@ -128,10 +126,10 @@ private:
     DeviceArgs* devArgs_;
     std::vector<void*> perfData_;
     std::once_flag once_;
-    rtBinHandle binHdl_;
+    RtBinHandle binHdl_;
     FileLock lock_;
     HostProf hostProf_;
-    aclrtEvent event_;
+    AclRtEvent event_;
     std::unordered_map<ArchInfo, std::function<int(std::vector<int64_t>&, std::vector<int64_t>&)>> addressMappingTable_;
     bool isCapture_{false};
     bool initFlag_{false};

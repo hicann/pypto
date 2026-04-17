@@ -207,6 +207,7 @@ function(PTO_Fwk_STest_AddExe_RunExe)
     list(REMOVE_DUPLICATES PTO_Fwk_STestCaseLibraries)
     set(PTO_Fwk_Libraries
             tile_fwk_utils
+            tile_fwk_adapter
             tile_fwk_cann_host_runtime
             tile_fwk_platform
             tile_fwk_interface

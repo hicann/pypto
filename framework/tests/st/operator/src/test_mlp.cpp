@@ -26,8 +26,8 @@ constexpr float F_NEGA_1 = -1.0;
 TEST_F(MlpTest, test_16_7168_tileop)
 {
     // 初始化
-    aclInit(nullptr);
-    rtSetDevice(GetDeviceIdByEnvVar());
+    AclInit(nullptr);
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
 
     // 创建输入输出shape
     int b = 64;

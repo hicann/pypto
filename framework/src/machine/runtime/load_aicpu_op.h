@@ -18,33 +18,28 @@
 #include <string>
 #include <vector>
 #include <memory>
-
-#ifdef BUILD_WITH_NEW_CANN
-#include "rts/rts_kernel.h"
-#endif
-#ifdef BUILD_WITH_CANN
-#include "runtime/mem.h"
-#include "machine/utils/machine_ws_intf.h"
-#endif
 #include <unordered_map>
+
+#include "adapter/api/runtime_define.h"
+#include "machine/utils/machine_ws_intf.h"
 
 namespace npu::tile_fwk {
 class LoadAicpuOp {
 private:
-    rtFuncHandle funcHandle_;
+    RtFuncHandle funcHandle_;
     void* customBinHandle_ = nullptr;
     std::string builtInOpJsonPath_;
-    std::unordered_map<std::string, rtFuncHandle> builtInFuncMap_;
+    std::unordered_map<std::string, RtFuncHandle> builtInFuncMap_;
 
 public:
     LoadAicpuOp() = default;
     ~LoadAicpuOp(){};
     int AicpuKernelLaunch(
-        [[maybe_unused]] void* funcHandle, [[maybe_unused]] const rtStream_t& stream,
+        [[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
         [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim);
-    int LaunchBuiltInOp(rtStream_t stream, DeviceKernelArgs* kArgs, const int& aicpuNum, const std::string& funcName);
+    int LaunchBuiltInOp(RtStream stream, DeviceKernelArgs* kArgs, const int& aicpuNum, const std::string& funcName);
     int GetBuiltInOpBinHandle();
-    int LaunchCustomOp(rtStream_t stream, DeviceKernelArgs* kArgs, std::string& OpType);
+    int LaunchCustomOp(RtStream stream, DeviceKernelArgs* kArgs, std::string& OpType);
     void CustomAiCpuSoLoad();
     void GenBuiltInOpInfo(const std::string& jsonPath);
     static LoadAicpuOp& GetInstance()

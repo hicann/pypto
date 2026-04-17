@@ -36,7 +36,7 @@ public:
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
         TileShape::Current().SetVecTile(32, 32);
         TileShape::Current().SetCubeTile({32, 32}, {32, 32}, {32, 32});
-        rtSetDevice(GetDeviceIdByEnvVar());
+        RuntimeSetDevice(GetDeviceIdByEnvVar());
     }
 };
 

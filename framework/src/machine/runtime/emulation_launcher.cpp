@@ -254,7 +254,7 @@ static std::vector<DeviceTensorData> toHostTensorData(const std::vector<DeviceTe
         void* ptr = malloc(size);
         if (isInput) {
 #ifdef BUILD_WITH_CANN
-            rtMemcpy(ptr, size, devData.GetAddr(), size, RT_MEMCPY_DEVICE_TO_HOST);
+            RuntimeMemcpy(ptr, size, devData.GetAddr(), size, RtMemcpyKind::DEVICE_TO_HOST);
 #endif
         }
         hostDataList.emplace_back(devData.GetDataType(), ptr, devData.GetShape());

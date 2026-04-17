@@ -17,6 +17,7 @@
 #include "interface/inner/tilefwk.h"
 #include "distributed_test_framework.h"
 #include "test_distributed.h"
+#include "adapter/api/hcomm_api.h"
 
 namespace npu::tile_fwk::Distributed {
 class DistributedTest : public testing::TestWithParam<OpMetaData> {
@@ -66,11 +67,11 @@ protected:
     void DistributedTestDestroy()
     {
         // 销毁集合通信域
-        CHECK(HcclCommDestroy(hcomTestParam.hcclComm) == 0) << "HcclCommDestroy failed";
+        CHECK(HcommCommDestroy(hcomTestParam.hcclComm) == 0) << "HcommCommDestroy failed";
         // 重置设备
-        CHECK(aclrtResetDevice(physicalDeviceId) == 0) << "aclResetDevice failed";
+        CHECK(AclRtResetDevice(physicalDeviceId) == 0) << "aclResetDevice failed";
         // 设备去初始化
-        CHECK(aclFinalize() == 0) << "aclFinalize failed";
+        CHECK(AclFinalize() == 0) << "AclFinalize failed";
     }
 
     Distributed::OpTestParam testParam;

@@ -13,17 +13,17 @@
  * \brief
  */
 
+#include "load_aicpu_op.h"
+
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <limits.h>
 #ifdef BUILD_WITH_CANN
-#include "load_aicpu_op.h"
-#include "runtime/mem.h"
+#include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/file_utils.h"
 #include "interface/utils/op_info_manager.h"
-#include "runtime.h"
+#include "machine/runtime/runtime.h"
 #include "machine/utils/machine_utils.h"
-#include "tilefwk/pypto_fwk_log.h"
 #include "machine/utils/machine_error.h"
 using Json = nlohmann::json;
 
@@ -76,11 +76,11 @@ void LoadAicpuOp::GenBuiltInOpInfo(const std::string& jsonPath)
 void LoadAicpuOp::CustomAiCpuSoLoad()
 {
 #ifdef BUILD_WITH_NEW_CANN
-    rtLoadBinaryConfig_t optionCfg;
-    auto loadBinOptions = std::make_unique<rtLoadBinaryOption_t>();
+    RtLoadBinaryConfig optionCfg;
+    auto loadBinOptions = std::make_unique<RtLoadBinaryOption>();
 
     optionCfg.options = loadBinOptions.get();
-    optionCfg.options->optionId = RT_LOAD_BINARY_OPT_CPU_KERNEL_MODE;
+    optionCfg.options->optionId = RtLoadBinaryOptionType::CPU_KERNEL_MODE;
     optionCfg.options->value.cpuKernelMode = 1;
     optionCfg.numOpt = 1;
     std::string customOpJsonPath = OpInfoManager::GetInstance().GetCustomOpJsonPath();
@@ -92,7 +92,8 @@ void LoadAicpuOp::CustomAiCpuSoLoad()
     if (customBinHandle_ != nullptr) {
         return;
     }
-    auto ret = rtsBinaryLoadFromFile(customOpJsonPath.c_str(), &optionCfg, reinterpret_cast<void**>(&customBinHandle_));
+    auto ret = RuntimeBinaryLoadFromFile(customOpJsonPath.c_str(), &optionCfg,
+                                         reinterpret_cast<void**>(&customBinHandle_));
     if (ret != 0) {
         MACHINE_LOGE(RtErr::RT_LOAD_FAILED, "Load aicpu json failed ret is %d", ret);
     }
@@ -100,36 +101,35 @@ void LoadAicpuOp::CustomAiCpuSoLoad()
 #endif
 }
 
-int LoadAicpuOp::AicpuKernelLaunch(
-    [[maybe_unused]] void* funcHandle, [[maybe_unused]] const rtStream_t& stream,
+int LoadAicpuOp::AicpuKernelLaunch([[maybe_unused]] void* funcHandle, [[maybe_unused]] const RtStream& stream,
     [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const uint32_t& blockDim)
 {
 #ifdef BUILD_WITH_NEW_CANN
-    rtFuncHandle aicpuFuncHandle = static_cast<rtFuncHandle>(funcHandle);
-    rtAicpuArgsEx_t rtArgs;
+    RtFuncHandle aicpuFuncHandle = static_cast<RtFuncHandle>(funcHandle);
+    RtAicpuArgsEx rtArgs;
     memset_s(&rtArgs, sizeof(rtArgs), 0, sizeof(rtArgs));
     rtArgs.args = kArgs;
     rtArgs.argsSize = sizeof(DeviceKernelArgs);
 
-    rtCpuKernelArgs_t argInfo;
+    RtCpuKernelArgs argInfo;
     memset_s(&argInfo, sizeof(argInfo), 0, sizeof(argInfo));
     argInfo.baseArgs = rtArgs;
-    rtKernelLaunchCfg_t kernelLaunchCfg = {nullptr, 0U};
-    auto launchKernelAttr = std::make_unique<rtLaunchKernelAttr_t>();
+    RtKernelLaunchCfg kernelLaunchCfg = {nullptr, 0U};
+    auto launchKernelAttr = std::make_unique<RtLaunchKernelAttr>();
     kernelLaunchCfg.attrs = launchKernelAttr.get();
-    return rtsLaunchCpuKernel(aicpuFuncHandle, blockDim, stream, &kernelLaunchCfg, &argInfo);
+    return RuntimeLaunchCpuKernel(aicpuFuncHandle, blockDim, stream, &kernelLaunchCfg, &argInfo);
 #else
     return 0;
 #endif
 }
 
-int LoadAicpuOp::LaunchCustomOp(
-    [[maybe_unused]] rtStream_t stream, [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] std::string& OpType)
+int LoadAicpuOp::LaunchCustomOp([[maybe_unused]] RtStream stream, [[maybe_unused]] DeviceKernelArgs* kArgs,
+    [[maybe_unused]] std::string& OpType)
 {
 #ifdef BUILD_WITH_NEW_CANN
     ASSERT(DevCommonErr::PARAM_INVALID, customBinHandle_ != nullptr) << "customBinHandle cannot be null";
-    rtFuncHandle custFuncHandle;
-    auto ret = rtsFuncGetByName(customBinHandle_, OpType.c_str(), &custFuncHandle);
+    RtFuncHandle custFuncHandle;
+    auto ret = RuntimeFuncGetByName(customBinHandle_, OpType.c_str(), &custFuncHandle);
     if (ret != 0) {
         MACHINE_LOGE(RtErr::RT_GET_FUNC_FAILED, "Get OpType[%s] funcHandle failed ret[%d]", OpType.c_str(), ret);
         return ret;
@@ -147,23 +147,23 @@ int LoadAicpuOp::GetBuiltInOpBinHandle()
         MACHINE_LOGE(DevCommonErr::FILE_ERROR, "JsonPath is empty");
         return -1;
     }
-    rtLoadBinaryConfig_t optionCfg;
-    auto loadBinOptions = std::make_unique<rtLoadBinaryOption_t>();
+    RtLoadBinaryConfig optionCfg;
+    auto loadBinOptions = std::make_unique<RtLoadBinaryOption>();
 
     optionCfg.options = loadBinOptions.get();
-    optionCfg.options->optionId = RT_LOAD_BINARY_OPT_CPU_KERNEL_MODE;
+    optionCfg.options->optionId = RtLoadBinaryOptionType::CPU_KERNEL_MODE;
     optionCfg.options->value.cpuKernelMode = 0;
     optionCfg.numOpt = 1;
     void* binHandle;
-    auto ret = rtsBinaryLoadFromFile(builtInOpJsonPath_.c_str(), &optionCfg, reinterpret_cast<void**>(&binHandle));
+    auto ret = RuntimeBinaryLoadFromFile(builtInOpJsonPath_.c_str(), &optionCfg, reinterpret_cast<void**>(&binHandle));
     if (ret != 0) {
         MACHINE_LOGE(RtErr::RT_LOAD_FAILED, "Get built in bin handle failed");
         return -1;
     }
 
     for (int i = 0; i < BuiltInOpNum; i++) {
-        rtFuncHandle funcHandle;
-        ret = rtsFuncGetByName(binHandle, BuiltInFunName[i].c_str(), &funcHandle);
+        RtFuncHandle funcHandle;
+        ret = RuntimeFuncGetByName(binHandle, BuiltInFunName[i].c_str(), &funcHandle);
         if (ret != 0) {
             MACHINE_LOGE(
                 RtErr::RT_GET_FUNC_FAILED, "Get BuiltIn FuncName[%s] funcHandle failed ret[%d]",
@@ -176,12 +176,11 @@ int LoadAicpuOp::GetBuiltInOpBinHandle()
     return 0;
 }
 
-int LoadAicpuOp::LaunchBuiltInOp(
-    [[maybe_unused]] rtStream_t stream, [[maybe_unused]] DeviceKernelArgs* kArgs, [[maybe_unused]] const int& aicpuNum,
-    [[maybe_unused]] const std::string& funcName)
+int LoadAicpuOp::LaunchBuiltInOp([[maybe_unused]] RtStream stream, [[maybe_unused]] DeviceKernelArgs* kArgs,
+    [[maybe_unused]] const int& aicpuNum, [[maybe_unused]] const std::string& funcName)
 {
 #ifdef BUILD_WITH_NEW_CANN
-    rtFuncHandle funcHandle;
+    RtFuncHandle funcHandle;
     auto it = builtInFuncMap_.find(funcName);
     if (it != builtInFuncMap_.end()) {
         funcHandle = it->second;

@@ -557,18 +557,18 @@ void* readToDev(const std::string& path, int size)
     uint8_t* devPtr = nullptr;
     machine::GetRA()->AllocDevAddr(&devPtr, bytes);
     if (devPtr == nullptr) {
-        std::cout << "rtMalloc failed" << std::endl;
+        std::cout << "RuntimeMalloc failed" << std::endl;
         devPtr = reinterpret_cast<uint8_t*>(CostModel::SoftMemory::Instance().AllocateData(bytes, data));
         if (devPtr == nullptr) {
-            std::cout << "SoftMemory rtMalloc failed" << std::endl;
+            std::cout << "SoftMemory RuntimeMalloc failed" << std::endl;
             return nullptr;
         } else {
             CostModel::PvData::Instance().Put(devPtr, data);
             return devPtr;
         }
     }
-    if (rtMemcpy(devPtr, bytes, data.data(), bytes, RT_MEMCPY_HOST_TO_DEVICE) != 0) {
-        std::cout << "rtMalloc failed" << std::endl;
+    if (RuntimeMemcpy(devPtr, bytes, data.data(), bytes, RtMemcpyKind::HOST_TO_DEVICE) != 0) {
+        std::cout << "RuntimeMalloc failed" << std::endl;
         return nullptr;
     }
     CostModel::PvData::Instance().Put(devPtr, data);
@@ -580,11 +580,11 @@ void* readToDev(const std::string& path, int size)
     uint8_t* devPtr = nullptr;
     machine::GetRA()->AllocDevAddr(&devPtr, size);
     if (devPtr == nullptr) {
-        std::cout << "allocDevAddr rtMalloc failed" << std::endl;
+        std::cout << "allocDevAddr RuntimeMalloc failed" << std::endl;
         std::vector<uint8_t> data(size);
         devPtr = reinterpret_cast<uint8_t*>(CostModel::SoftMemory::Instance().AllocateData(size, data));
         if (devPtr == nullptr) {
-            std::cout << "SoftMemory rtMalloc failed" << std::endl;
+            std::cout << "SoftMemory RuntimeMalloc failed" << std::endl;
             return nullptr;
         } else {
             CostModel::PvData::Instance().Put(devPtr, data);

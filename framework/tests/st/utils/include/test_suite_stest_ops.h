@@ -46,7 +46,7 @@ public:
         config::GetPassConfig(KEY_PRINT_GRAPH, true);
 #endif
         // Reset Program
-        rtSetDevice(GetDeviceIdByEnvVar());
+        RuntimeSetDevice(GetDeviceIdByEnvVar());
         Program::GetInstance().Reset();
         ProgramData::GetInstance().Reset();
     }

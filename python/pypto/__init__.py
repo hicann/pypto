@@ -47,6 +47,7 @@ def _load_shared_libs():
     # name, load
     desc_lst: List[List[Any]] = [
         ["libtile_fwk_utils.so", True, ],
+        ["libtile_fwk_adapter.so", True, ],
         ["libtile_fwk_cann_host_runtime.so", True, ],
         ["libtile_fwk_platform.so", True, ],
         ["libtile_fwk_interface.so", True, ],

@@ -112,7 +112,9 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     int64_t* regAddrs_ = oriRegAddrs_ + 1024;
     regAddrs_[0] = (int64_t)&regAddrs_[0];
     ToSubMachineConfig toSubMachineConfig;
-    AdprofReportAdditionalInfo(0, 0, 0);
+    if (AdprofReportAdditionalInfo != nullptr) {
+        AdprofReportAdditionalInfo(0, 0, 0);
+    }
     toSubMachineConfig.profConfig.Add(ProfConfig::OFF);
     std::unique_ptr<DeviceArgs> devArgs = std::make_unique<DeviceArgs>();
     devArgs->toSubMachineConfig = toSubMachineConfig;

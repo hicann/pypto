@@ -26,11 +26,17 @@ namespace {
 constexpr int32_t kInvalidModuleLogLevel = -1;
 constexpr const char* kEnvModuleLogLevel = "ASCEND_MODULE_LOG_LEVEL";
 const std::map<std::string, LogModule> kLogModuleMap = {
-    {"FUNCTION", LogModule::FUNCTION},       {"PASS", LogModule::PASS},
-    {"CODEGEN", LogModule::CODEGEN},         {"MACHINE", LogModule::MACHINE},
-    {"DISTRIBUTED", LogModule::DISTRIBUTED}, {"SIMULATION", LogModule::SIMULATION},
-    {"VERIFY", LogModule::VERIFY},           {"COMPILER_MONITOR", LogModule::COMPILER_MONITOR},
-    {"PLATFORM", LogModule::PLATFORM}};
+    {"FUNCTION", LogModule::FUNCTION},
+    {"PASS", LogModule::PASS},
+    {"CODEGEN", LogModule::CODEGEN},
+    {"MACHINE", LogModule::MACHINE},
+    {"DISTRIBUTED", LogModule::DISTRIBUTED},
+    {"SIMULATION", LogModule::SIMULATION},
+    {"VERIFY", LogModule::VERIFY},
+    {"COMPILER_MONITOR", LogModule::COMPILER_MONITOR},
+    {"ADAPTER", LogModule::ADAPTER},
+    {"PLATFORM", LogModule::PLATFORM}
+};
 
 inline bool IsLogLevelValid(const int32_t logLevel) { return logLevel >= DLOG_DEBUG && logLevel <= DLOG_ERROR; }
 

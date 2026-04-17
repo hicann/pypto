@@ -22,14 +22,14 @@ class MoEGatePart2OnBoardTest : public npu::tile_fwk::stest::TestSuite_STest_Ops
 
 TEST_F(MoEGatePart2OnBoardTest, test_operation_b_2)
 {
-    aclInit(nullptr);
+    AclInit(nullptr);
     constexpr int32_t nRoutedExperts = 256;
     constexpr int32_t nGroup = 8;
     constexpr int32_t topkGroup = 4;
     constexpr int32_t S = 1;
     constexpr int32_t B = 2;
 
-    rtSetDevice(GetDeviceIdByEnvVar());
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
     uint64_t inputSize = B * nRoutedExperts * sizeof(float);
     uint64_t outputSize = B * topkGroup * sizeof(float);
     uint8_t* out_group_idx_ptr = allocDevAddr(outputSize);
@@ -91,14 +91,14 @@ TEST_F(MoEGatePart2OnBoardTest, test_operation_b_2)
 
 TEST_F(MoEGatePart2OnBoardTest, test_operation_b_1024)
 {
-    aclInit(nullptr);
+    AclInit(nullptr);
     constexpr int32_t nRoutedExperts = 256;
     constexpr int32_t nGroup = 8;
     constexpr int32_t topkGroup = 4;
     constexpr int32_t S = 1;
     constexpr int32_t B = 1024;
 
-    rtSetDevice(GetDeviceIdByEnvVar());
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
     uint64_t inputSize = B * nRoutedExperts * sizeof(float);
     uint64_t outputSize = B * topkGroup * sizeof(float);
     uint8_t* out_group_idx_ptr = allocDevAddr(outputSize);

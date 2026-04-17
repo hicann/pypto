@@ -27,15 +27,15 @@ public:
     void SetUp() override
     {
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
-        aclInit(nullptr);
-        rtSetDevice(GetDeviceIdByEnvVar());
+        AclInit(nullptr);
+        RuntimeSetDevice(GetDeviceIdByEnvVar());
         Program::GetInstance().Reset();
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_ALL_COMPLETE);
         config::SetHostConfig(KEY_STRATEGY, "PVC2_OOO");
         config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, LLMA_L1REUSE_THRESHOLD}});
         config::SetPassOption(SG_PG_LOWER_BOUND, LLMA_CYCLE_THRESHOLD);
-        rtSetDevice(GetDeviceIdByEnvVar());
+        RuntimeSetDevice(GetDeviceIdByEnvVar());
     }
 };
 

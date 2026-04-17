@@ -9,16 +9,15 @@
  */
 
 #include "machine/runtime/host_prof.h"
-
 #include "interface/tensor/logical_tensor.h"
 #ifdef BUILD_WITH_CANN
 #include <array>
 #include <sys/syscall.h>
 #include "tilefwk/pypto_fwk_log.h"
-#include "toolchain/prof_api.h"
-#include "toolchain/log_types.h"
-#include "runtime/base.h"
-#include "acl/acl_rt.h"
+#include "adapter/api/msprof_api.h"
+#include "adapter/api/acl_api.h"
+
+#define CCECPU 25
 
 namespace npu::tile_fwk {
 namespace {
@@ -41,33 +40,33 @@ int32_t HostProf::HostProfInit(uint32_t type, void* data, uint32_t len)
         MACHINE_LOGW("Para is invalid");
         return -1;
     }
-    if (type != RT_PROF_CTRL_SWITCH) {
+    if (type != static_cast<uint32_t>(RtProfCtrlType::SWITCH)) {
         MACHINE_LOGW("Prof type [%u] is invalid", type);
         return -1;
     }
-    if (len < sizeof(MsprofCommandHandle)) {
+    if (len < sizeof(MspfCommandHandle)) {
         MACHINE_LOGW("Prof CommandHandle len [%u] is invalid", len);
         return -1;
     }
-    MsprofCommandHandle* hostProfHandleConfig = reinterpret_cast<MsprofCommandHandle*>(data);
+    MspfCommandHandle* hostProfHandleConfig = reinterpret_cast<MspfCommandHandle*>(data);
     profSwitch_ = hostProfHandleConfig->profSwitch;
     profType_ = hostProfHandleConfig->type;
     MACHINE_LOGD("Host prof profSwitch is %lu profType is %u", profSwitch_, profType_);
     return 0;
 }
 
-void HostProf::RegHostProf() { MsprofRegisterCallback(CCECPU, HostProfInit); }
+void HostProf::RegHostProf() { MspfRegisterCallback(CCECPU, HostProfInit); }
 
 bool HostProf::HostProfReportApi(const uint64_t& startTime, const uint64_t& endTime) const
 {
-    struct MsprofApi apiInfo;
-    apiInfo.level = MSPROF_REPORT_NODE_LEVEL;
-    apiInfo.type = MSPROF_REPORT_NODE_LAUNCH_TYPE;
+    struct MspfApi apiInfo;
+    apiInfo.level = MSPF_REPORT_NODE_LEVEL;
+    apiInfo.type = MSPF_REPORT_NODE_LAUNCH_TYPE;
     apiInfo.beginTime = startTime;
     apiInfo.endTime = endTime;
-    apiInfo.itemId = MsprofGetHashId(opName_.c_str(), opName_.length());
+    apiInfo.itemId = MspfGetHashId(opName_.c_str(), opName_.length());
     apiInfo.threadId = syscall(SYS_gettid);
-    auto ret = MsprofReportApi(true, &apiInfo);
+    auto ret = MspfReportApi(true, &apiInfo);
     if (ret != 0) {
         MACHINE_LOGW("Report Api not success");
         return false;
@@ -83,18 +82,18 @@ void HostProf::HostProfReportNodeInfo(const uint64_t& endTime, const uint32_t bl
 
 void HostProf::HostProfReportBasicInfo(const uint64_t& endTime, const uint32_t blockDim, const uint16_t taskType) const
 {
-    struct MsprofCompactInfo nodeBasicInfo;
-    nodeBasicInfo.level = MSPROF_REPORT_NODE_LEVEL;
-    nodeBasicInfo.type = MSPROF_REPORT_NODE_BASIC_INFO_TYPE;
+    struct MspfCompactInfo nodeBasicInfo;
+    nodeBasicInfo.level = MSPF_REPORT_NODE_LEVEL;
+    nodeBasicInfo.type = MSPF_REPORT_NODE_BASIC_INFO_TYPE;
     nodeBasicInfo.timeStamp = endTime;
     nodeBasicInfo.threadId = syscall(SYS_gettid);
-    nodeBasicInfo.data.nodeBasicInfo.opName = MsprofGetHashId(opName_.c_str(), opName_.length());
-    nodeBasicInfo.data.nodeBasicInfo.opType = MsprofGetHashId(kOpType.c_str(), kOpType.length());
+    nodeBasicInfo.data.nodeBasicInfo.opName = MspfGetHashId(opName_.c_str(), opName_.length());
+    nodeBasicInfo.data.nodeBasicInfo.opType = MspfGetHashId(kOpType.c_str(), kOpType.length());
     nodeBasicInfo.data.nodeBasicInfo.taskType = taskType;
     nodeBasicInfo.data.nodeBasicInfo.blockDim = blockDim;
     nodeBasicInfo.data.nodeBasicInfo.opFlag = true;
-    auto ret = MsprofReportCompactInfo(
-        static_cast<uint32_t>(true), &nodeBasicInfo, static_cast<uint32_t>(sizeof(MsprofCompactInfo)));
+    auto ret = MspfReportCompactInfo(
+        static_cast<uint32_t>(true), &nodeBasicInfo, static_cast<uint32_t>(sizeof(MspfCompactInfo)));
     if (ret != 0) {
         MACHINE_LOGW("Compact node[%s] basic info failed", opName_.c_str());
     }
@@ -102,17 +101,17 @@ void HostProf::HostProfReportBasicInfo(const uint64_t& endTime, const uint32_t b
 
 void HostProf::HostProfReportContextInfo(const uint64_t& endTime) const
 {
-    struct MsprofAdditionalInfo contextInfo;
-    contextInfo.level = MSPROF_REPORT_NODE_LEVEL;
-    contextInfo.type = MSPROF_REPORT_NODE_CONTEXT_ID_INFO_TYPE;
+    struct MspfAdditionalInfo contextInfo;
+    contextInfo.level = MSPF_REPORT_NODE_LEVEL;
+    contextInfo.type = MSPF_REPORT_NODE_CONTEXT_ID_INFO_TYPE;
     contextInfo.threadId = syscall(SYS_gettid);
     contextInfo.timeStamp = endTime;
-    struct MsprofContextIdInfo ctxId;
-    ctxId.opName = MsprofGetHashId(opName_.c_str(), opName_.length());
+    struct MspfContextIdInfo ctxId;
+    ctxId.opName = MspfGetHashId(opName_.c_str(), opName_.length());
     ctxId.ctxIdNum = 1;
     ctxId.ctxIds[0] = 0;
-    memcpy_s(contextInfo.data, MSPROF_ADDTIONAL_INFO_DATA_LENGTH, &ctxId, sizeof(MsprofContextIdInfo));
-    auto ret = MsprofReportAdditionalInfo(false, reinterpret_cast<void*>(&contextInfo), sizeof(MsprofAdditionalInfo));
+    memcpy_s(contextInfo.data, MSPF_ADDTIONAL_INFO_DATA_LENGTH, &ctxId, sizeof(MspfContextIdInfo));
+    auto ret = MspfReportAdditionalInfo(false, reinterpret_cast<void*>(&contextInfo), sizeof(MspfAdditionalInfo));
     if (ret != 0) {
         MACHINE_LOGW("Op[%s] Msprof report context info not success", opName_.c_str());
     }
@@ -128,10 +127,10 @@ void HostProf::HostProfReportTensorInfo(const uint64_t& endTime) const
     MACHINE_LOGD(
         "Op [%s] with inputs[%zu], outputs[%zu]", opName_.c_str(), profFunction_->inCasts_.size(),
         profFunction_->outCasts_.size());
-    uint32_t groupNums = iONums / MSPROF_GE_TENSOR_DATA_NUM;
-    uint32_t modulus = iONums % MSPROF_GE_TENSOR_DATA_NUM;
+    uint32_t groupNums = iONums / MSPF_GE_TENSOR_DATA_NUM;
+    uint32_t modulus = iONums % MSPF_GE_TENSOR_DATA_NUM;
     for (uint32_t i = 0; i < groupNums; i++) {
-        ReportTensoInfo(i, MSPROF_GE_TENSOR_DATA_NUM, endTime);
+        ReportTensoInfo(i, MSPF_GE_TENSOR_DATA_NUM, endTime);
     }
 
     if (modulus > 0) {
@@ -141,37 +140,37 @@ void HostProf::HostProfReportTensorInfo(const uint64_t& endTime) const
 
 void HostProf::ReportTensoInfo(const uint32_t& groupId, const uint32_t mods, const uint64_t& endTime) const
 {
-    struct MsprofAdditionalInfo tensorInfo;
-    tensorInfo.level = MSPROF_REPORT_NODE_LEVEL;
-    tensorInfo.type = MSPROF_REPORT_NODE_TENSOR_INFO_TYPE;
+    struct MspfAdditionalInfo tensorInfo;
+    tensorInfo.level = MSPF_REPORT_NODE_LEVEL;
+    tensorInfo.type = MSPF_REPORT_NODE_TENSOR_INFO_TYPE;
     tensorInfo.threadId = syscall(SYS_gettid);
     tensorInfo.timeStamp = endTime;
-    auto profTensorData = reinterpret_cast<MsprofTensorInfo*>(tensorInfo.data);
-    profTensorData->opName = MsprofGetHashId(opName_.c_str(), opName_.length());
+    auto profTensorData = reinterpret_cast<MspfTensorInfo*>(tensorInfo.data);
+    profTensorData->opName = MspfGetHashId(opName_.c_str(), opName_.length());
     profTensorData->tensorNum = mods;
     for (uint32_t j = 0; j < mods; j++) {
         PackTensorInfo(profTensorData, groupId, j);
     }
-    auto ret = MsprofReportAdditionalInfo(false, reinterpret_cast<void*>(&tensorInfo), sizeof(MsprofAdditionalInfo));
+    auto ret = MspfReportAdditionalInfo(false, reinterpret_cast<void*>(&tensorInfo), sizeof(MspfAdditionalInfo));
     if (ret != 0) {
         MACHINE_LOGW("Op[%s] Msprof report tensor info not success", opName_.c_str());
     }
 }
 
-void HostProf::PackTensorInfo(MsprofTensorInfo* profTensorData, const uint32_t groupId, const uint32_t modId) const
+void HostProf::PackTensorInfo(MspfTensorInfo* profTensorData, const uint32_t groupId, const uint32_t modId) const
 {
-    uint32_t iOIdx = groupId * MSPROF_GE_TENSOR_DATA_NUM + modId;
+    uint32_t iOIdx = groupId * MSPF_GE_TENSOR_DATA_NUM + modId;
     std::shared_ptr<LogicalTensor> iOTensor;
     std::stringstream iOtensorInfo;
     if (inputsSize_ > iOIdx) {
-        profTensorData->tensorData[modId].tensorType = MSPROF_GE_TENSOR_TYPE_INPUT;
+        profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_INPUT;
         profTensorData->tensorData[modId].format = static_cast<uint32_t>(profFunction_->inCasts_[iOIdx]->Format());
         profTensorData->tensorData[modId].dataType = static_cast<uint32_t>(profFunction_->inCasts_[iOIdx]->nodetype);
         iOTensor = profFunction_->inCasts_[iOIdx];
         iOtensorInfo << "Input " << iOIdx << " shape: ";
     } else {
         auto outputIdx = iOIdx - inputsSize_;
-        profTensorData->tensorData[modId].tensorType = MSPROF_GE_TENSOR_TYPE_OUTPUT;
+        profTensorData->tensorData[modId].tensorType = MSPF_GE_TENSOR_TYPE_OUTPUT;
         profTensorData->tensorData[modId].format = static_cast<uint32_t>(profFunction_->outCasts_[outputIdx]->Format());
         profTensorData->tensorData[modId].dataType =
             static_cast<uint32_t>(profFunction_->outCasts_[outputIdx]->nodetype);
@@ -179,25 +178,25 @@ void HostProf::PackTensorInfo(MsprofTensorInfo* profTensorData, const uint32_t g
         iOtensorInfo << "output " << outputIdx << " shape: ";
     }
     size_t shapeLen = iOTensor->shape.size();
-    if (iOTensor->shape.size() > MSPROF_GE_TENSOR_DATA_SHAPE_LEN) {
+    if (iOTensor->shape.size() > MSPF_GE_TENSOR_DATA_SHAPE_LEN) {
         MACHINE_LOGW(
             "Op [%s] tensor[%u] size[%zu] len over [%d]", opName_.c_str(), iOIdx, shapeLen,
-            MSPROF_GE_TENSOR_DATA_SHAPE_LEN);
-        shapeLen = MSPROF_GE_TENSOR_DATA_SHAPE_LEN;
+            MSPF_GE_TENSOR_DATA_SHAPE_LEN);
+        shapeLen = MSPF_GE_TENSOR_DATA_SHAPE_LEN;
     }
 
     for (size_t j = 0; j < shapeLen; j++) {
         profTensorData->tensorData[modId].shape[j] = iOTensor->shape[j];
         iOtensorInfo << iOTensor->shape[j] << " ";
     }
-    for (size_t j = shapeLen; j < MSPROF_GE_TENSOR_DATA_SHAPE_LEN; j++) {
+    for (size_t j = shapeLen; j < MSPF_GE_TENSOR_DATA_SHAPE_LEN; j++) {
         profTensorData->tensorData[modId].shape[j] = 0;
     }
     iOtensorInfo << "\n";
     MACHINE_LOGD("tensorInfo %s", iOtensorInfo.str().c_str());
 }
 
-void HostProf::BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& tensorInfo, MsrofTensorData& tensorData)
+void HostProf::BuildTensor(const uint32_t tensorType, const RawTensorDataPtr& tensorInfo, MspfTensorData& tensorData)
 {
     tensorData.tensorType = tensorType;
     if (tensorInfo == nullptr) {
@@ -220,23 +219,23 @@ void HostProf::BuildCacheTensorInfo(CacheTaskInfo* taskInfo)
     }
     const std::vector<RawTensorDataPtr>& input_tensors = ProgramData::GetInstance().GetInputDataList();
     for (size_t i = 0; i < input_tensors.size(); ++i) {
-        BuildTensor(MSPROF_GE_TENSOR_TYPE_INPUT, input_tensors.at(i), taskInfo->tensorData[i]);
+        BuildTensor(MSPF_GE_TENSOR_TYPE_INPUT, input_tensors.at(i), taskInfo->tensorData[i]);
     }
     const std::vector<RawTensorDataPtr>& output_tensors = ProgramData::GetInstance().GetOutputDataList();
     for (size_t i = 0; i < output_tensors.size(); ++i) {
-        BuildTensor(MSPROF_GE_TENSOR_TYPE_OUTPUT, output_tensors.at(i), taskInfo->tensorData[i + input_tensors.size()]);
+        BuildTensor(MSPF_GE_TENSOR_TYPE_OUTPUT, output_tensors.at(i), taskInfo->tensorData[i + input_tensors.size()]);
     }
 }
 
-bool HostProf::IsCacheOpInfoEnable(const aclrtStream stream)
+bool HostProf::IsCacheOpInfoEnable(const AclRtStream stream)
 {
     if (stream == nullptr) {
         return false;
     }
-    aclrtStreamAttrValue value = {};
+    AclRtStreamAttrValue value = {};
     value.cacheOpInfoSwitch = 0;
-    aclError ret = aclrtGetStreamAttribute(stream, ACL_STREAM_ATTR_CACHE_OP_INFO, &value);
-    if (ret != ACL_SUCCESS) {
+    AclError ret = AclRtGetStreamAttribute(stream, AclRtStreamAttr::CACHE_OP_INFO, &value);
+    if (ret != ACLRT_SUCCESS) {
         MACHINE_LOGW("Get stream attribute failed, ret is [%d]", ret);
         return false;
     }
@@ -244,7 +243,7 @@ bool HostProf::IsCacheOpInfoEnable(const aclrtStream stream)
 }
 
 void HostProf::HostProfReportCacheTaskInfo(
-    const aclrtStream stream, const uint32_t numBlocks, const uint32_t taskType) const
+    const AclRtStream stream, const uint32_t numBlocks, const uint32_t taskType) const
 {
     if (!IsCacheOpInfoEnable(stream)) {
         MACHINE_LOGD("Op cache for AclGraph is disabled.");
@@ -252,11 +251,11 @@ void HostProf::HostProfReportCacheTaskInfo(
     }
     MACHINE_LOGD("Begin to report op cache [%s].", opName_.c_str());
     uint32_t tensorSize = 0;
-    if (taskType != MSPROF_GE_TASK_TYPE_AI_CPU) {
+    if (taskType != MSPF_GE_TASK_TYPE_AI_CPU) {
         tensorSize = ProgramData::GetInstance().GetInputDataList().size() +
                      ProgramData::GetInstance().GetOutputDataList().size();
     }
-    size_t bufferSize = sizeof(CacheTaskInfo) + sizeof(MsrofTensorData) * tensorSize;
+    size_t bufferSize = sizeof(CacheTaskInfo) + sizeof(MspfTensorData) * tensorSize;
     void* buffer = malloc(bufferSize);
     if (buffer == nullptr) {
         MACHINE_LOGW("Fail to malloc memory, size is [%zu]", bufferSize);
@@ -266,17 +265,17 @@ void HostProf::HostProfReportCacheTaskInfo(
     CacheTaskInfo* taskInfo = reinterpret_cast<CacheTaskInfo*>(buffer);
     taskInfo->taskType = taskType;
     taskInfo->numBlocks = numBlocks;
-    taskInfo->nodeId = MsprofGetHashId(opName_.c_str(), opName_.length());
-    taskInfo->opType = MsprofGetHashId(kOpType.c_str(), kOpType.length());
+    taskInfo->nodeId = MspfGetHashId(opName_.c_str(), opName_.length());
+    taskInfo->opType = MspfGetHashId(kOpType.c_str(), kOpType.length());
     taskInfo->attrId = 0;
     taskInfo->opFlag = 0;
     taskInfo->tensorNum = tensorSize;
 
-    if (taskType != MSPROF_GE_TASK_TYPE_AI_CPU) {
+    if (taskType != MSPF_GE_TASK_TYPE_AI_CPU) {
         BuildCacheTensorInfo(taskInfo);
     }
 
-    if (aclrtCacheLastTaskOpInfo(buffer, bufferSize) != ACL_SUCCESS) {
+    if (AclRtCacheLastTaskOpInfo(buffer, bufferSize) != ACLRT_SUCCESS) {
         MACHINE_LOGW("Report op info cache failed for op[%s, %s].", opName_.c_str(), kOpType.c_str());
     } else {
         MACHINE_LOGI(

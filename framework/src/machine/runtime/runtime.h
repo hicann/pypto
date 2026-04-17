@@ -15,32 +15,13 @@
 
 #pragma once
 
-#include <cstring>
-#include <iostream>
 #include <vector>
-#include <iomanip>
-#include <dlfcn.h>
-#include <map>
-#include <cassert>
-#include <cstdarg>
-#include <cstdio>
-#include <cstring>
-#include <string>
-#include <vector>
-#include <ctime>
-#include <cassert>
-#include <sys/time.h>
-#include <fcntl.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-#include <execinfo.h>
-#include "interface/utils/common.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/data_type.h"
-#include "tilefwk/platform.h"
+
 #include "tilefwk/pypto_fwk_log.h"
+#include "adapter/api/acl_api.h"
+#include "adapter/api/runtime_api.h"
 #include "machine/utils/machine_error.h"
-#include "memory_pool.h"
+#include "machine/runtime/memory_pool.h"
 
 constexpr int ADDR_MAP_TYPE_REG_AIC_CTRL = 2;
 constexpr int ADDR_MAP_TYPE_REG_AIC_PMU_CTRL = 3;
@@ -86,8 +67,8 @@ namespace npu::tile_fwk {
 inline void CheckDeviceId()
 {
     int32_t devId = 0;
-    int32_t getDeviceResult = rtGetDevice(&devId);
-    if (getDeviceResult != RT_ERROR_NONE) {
+    int32_t getDeviceResult = RuntimeGetDevice(&devId);
+    if (getDeviceResult != RT_SUCCESS) {
         MACHINE_LOGE(RtErr::RT_DEVICE_FAILED, "fail get device id, check if set device id");
         return;
     }
@@ -96,7 +77,7 @@ inline void CheckDeviceId()
 inline int32_t GetUserDeviceId()
 {
     int32_t userDeviceId = 0;
-    rtGetDevice(&userDeviceId);
+    RuntimeGetDevice(&userDeviceId);
     return userDeviceId;
 }
 
@@ -104,7 +85,7 @@ inline int32_t GetLogDeviceId()
 {
     int32_t logicDeviceId = 0;
     int32_t userDeviceId = GetUserDeviceId();
-    ASSERT(RtErr::RT_DEVICE_FAILED, rtGetLogicDevIdByUserDevId(userDeviceId, &logicDeviceId) == RT_ERROR_NONE)
+    ASSERT(RtErr::RT_DEVICE_FAILED, RuntimeGetLogicDevIdByUserDevId(userDeviceId, &logicDeviceId) == RT_SUCCESS)
         << "Trans usrDeviceId: " << userDeviceId << " to logDevId not success";
     MACHINE_LOGD("Current userDeviceId=%d, logicDeviceId=%d.", userDeviceId, logicDeviceId);
     return logicDeviceId;
@@ -138,7 +119,7 @@ public:
 
     static void CopyToDev(uint8_t* devDstAddr, uint8_t* hostSrcAddr, uint64_t size)
     {
-        rtMemcpy(devDstAddr, size, hostSrcAddr, size, RT_MEMCPY_HOST_TO_DEVICE);
+        RuntimeMemcpy(devDstAddr, size, hostSrcAddr, size, RtMemcpyKind::HOST_TO_DEVICE);
         MACHINE_LOGD(
             "RuntimeAgent::CopyToDev src=%#lx, dst=%#lx, size=%lu", reinterpret_cast<uint64_t>(hostSrcAddr),
             reinterpret_cast<uint64_t>(devDstAddr), size);
@@ -146,7 +127,7 @@ public:
 
     static void CopyFromDev(uint8_t* hostDstAddr, uint8_t* devSrcAddr, uint64_t size)
     {
-        rtMemcpy(hostDstAddr, size, devSrcAddr, size, RT_MEMCPY_DEVICE_TO_HOST);
+        RuntimeMemcpy(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST);
     }
 
     int GetAicoreRegInfo(std::vector<int64_t>& aic, std::vector<int64_t>& aiv, const int& addrType);
@@ -167,34 +148,34 @@ private:
 
 class RuntimeAgentStream {
 public:
-    rtStream_t& GetStream() { return raStreamInstance; }
+    RtStream& GetStream() { return raStreamInstance; }
 
-    aclrtStream& GetScheStream() { return raStreamInstanceSche; }
+    AclRtStream& GetScheStream() { return raStreamInstanceSche; }
 
-    rtStream_t& GetCtrlStream() { return raStreamInstanceCtrl; }
+    RtStream& GetCtrlStream() { return raStreamInstanceCtrl; }
 
-    rtStream_t& GetCurrentStream() { return currentStream; }
+    RtStream& GetCurrentStream() { return currentStream; }
 
-    void SetCurrentStream(aclrtStream& stream) { currentStream = stream; }
+    void SetCurrentStream(AclRtStream& stream) { currentStream = stream; }
 
     void CreateStream()
     {
-        rtStreamCreate(&raStreamInstance, RT_STREAM_PRIORITY_DEFAULT);
-        rtStreamCreate(&raStreamInstanceSche, RT_STREAM_PRIORITY_DEFAULT);
-        rtStreamCreate(&raStreamInstanceCtrl, RT_STREAM_PRIORITY_DEFAULT);
+        RuntimeStreamCreate(&raStreamInstance, RT_STREAM_PRIORITY_DEFAULT);
+        RuntimeStreamCreate(&raStreamInstanceSche, RT_STREAM_PRIORITY_DEFAULT);
+        RuntimeStreamCreate(&raStreamInstanceCtrl, RT_STREAM_PRIORITY_DEFAULT);
     }
     void DestroyStream()
     {
-        rtStreamDestroy(raStreamInstance);
-        rtStreamDestroy(raStreamInstanceSche);
-        rtStreamDestroy(raStreamInstanceCtrl);
+        RuntimeStreamDestroy(raStreamInstance);
+        RuntimeStreamDestroy(raStreamInstanceSche);
+        RuntimeStreamDestroy(raStreamInstanceCtrl);
     }
 
 private:
-    rtStream_t raStreamInstance{0};
-    rtStream_t raStreamInstanceCtrl{0};
-    aclrtStream raStreamInstanceSche{0};
-    aclrtStream currentStream{0};
+    RtStream raStreamInstance{0};
+    RtStream raStreamInstanceCtrl{0};
+    AclRtStream raStreamInstanceSche{0};
+    AclRtStream currentStream{0};
 };
 
 class RuntimeAgent : public RuntimeAgentMemory, public RuntimeAgentStream {
@@ -213,9 +194,9 @@ protected:
     RuntimeAgent()
     {
 #ifdef RUN_WITH_ASCEND_CAMODEL
-        // don't call aclInit, it will cause camodel running fail
+        // don't call AclInit, it will cause camodel running fail
 #else
-        aclInited = aclInit(nullptr) == 0;
+        AclInited = AclInit(nullptr) == 0;
 #endif
         Init();
     }
@@ -228,18 +209,18 @@ public:
     {
         uint64_t offset = 0;
         int32_t userDeviceId = GetUserDeviceId();
-        rtGetL2CacheOffset(userDeviceId, &offset);
-        MACHINE_LOGD("rtGetL2CacheOffset=%lu", offset);
+        RuntimeGetL2CacheOffset(userDeviceId, &offset);
+        MACHINE_LOGD("RuntimeGetL2CacheOffset=%lu", offset);
         return offset;
     }
 
     void CopyFromTensor(uint8_t* hostDstAddr, uint8_t* devSrcAddr, uint64_t size)
     {
 #ifdef RUN_WITH_ASCEND_CAMODEL
-        rtMemcpy(hostDstAddr, size, devSrcAddr, size, RT_MEMCPY_DEVICE_TO_HOST);
+        RuntimeMemcpy(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST);
 #else
-        rtMemcpyAsync(hostDstAddr, size, devSrcAddr, size, RT_MEMCPY_DEVICE_TO_HOST, GetStream());
-        rtStreamSynchronize(GetStream());
+        RuntimeMemcpyAsync(hostDstAddr, size, devSrcAddr, size, RtMemcpyKind::DEVICE_TO_HOST, GetStream());
+        RuntimeStreamSynchronize(GetStream());
 #endif
     }
 
@@ -251,11 +232,11 @@ public:
 
     void Finalize()
     {
-        if (aclInited) {
+        if (AclInited) {
             DestroyMemory();
             DestroyStream();
 #ifndef RUN_WITH_ASCEND_CAMODEL
-            aclFinalize();
+            AclFinalize();
 #endif
         }
 
@@ -272,7 +253,7 @@ private:
     }
 
 private:
-    bool aclInited{false};
+    bool AclInited{false};
 };
 namespace machine {
 inline npu::tile_fwk::RuntimeAgent* GetRA() { return npu::tile_fwk::RuntimeAgent::GetAgent(); }

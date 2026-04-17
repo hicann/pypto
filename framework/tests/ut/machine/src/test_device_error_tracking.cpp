@@ -24,8 +24,7 @@
 #include <functional>
 
 #ifdef BUILD_WITH_CANN
-#include "acl/acl_rt.h"
-#include "runtime/base.h"
+#include "securec.h"
 std::string CaptureStdout(std::function<void()> func)
 {
     int pipefd[2];
@@ -73,25 +72,25 @@ using namespace npu::tile_fwk;
 
 TEST(DeviceErrorTrackingTest, GetExceptionTypeNameCoversAllCases)
 {
-    EXPECT_STREQ(getExceptionTypeName(RT_EXCEPTION_INVALID), "exception invalid error");
-    EXPECT_STREQ(getExceptionTypeName(RT_EXCEPTION_FFTS_PLUS), "exception ffts_plus error");
-    EXPECT_STREQ(getExceptionTypeName(RT_EXCEPTION_AICORE), "exception aicore error");
-    EXPECT_STREQ(getExceptionTypeName(RT_EXCEPTION_UB), "exception ub error");
-    EXPECT_STREQ(getExceptionTypeName(RT_EXCEPTION_CCU), "exception ccu error");
-    EXPECT_STREQ(getExceptionTypeName(RT_EXCEPTION_FUSION), "exception fusion error");
-    EXPECT_STREQ(getExceptionTypeName(static_cast<rtExceptionExpandType_t>(100)), "unknown error type");
+    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::INVALID), "exception invalid error");
+    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::FFTS_PLUS), "exception ffts_plus error");
+    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::AICORE), "exception aicore error");
+    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::UB), "exception ub error");
+    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::CCU), "exception ccu error");
+    EXPECT_STREQ(getExceptionTypeName(RtExceptionExpandType::FUSION), "exception fusion error");
+    EXPECT_STREQ(getExceptionTypeName(static_cast<RtExceptionExpandType>(100)), "unknown error type");
 }
 
 TEST(DeviceErrorTrackingTest, AicpuErrorCallBackOutputsCorrectInfo)
 {
-    aclrtExceptionInfo exceptionInfo{};
-    memset(&exceptionInfo, 0, sizeof(aclrtExceptionInfo));
+    AclRtExceptionInfo exceptionInfo{};
+    memset_s(&exceptionInfo, sizeof(AclRtExceptionInfo), 0, sizeof(AclRtExceptionInfo));
     exceptionInfo.taskid = 123;
     exceptionInfo.streamid = 456;
     exceptionInfo.tid = 789;
     exceptionInfo.deviceid = 0;
     exceptionInfo.retcode = 1;
-    exceptionInfo.expandInfo.type = RT_EXCEPTION_AICORE;
+    exceptionInfo.expandInfo.type = RtExceptionExpandType::AICORE;
 
     char kernelName[] = "test_kernel";
     exceptionInfo.expandInfo.u.aicoreInfo.exceptionArgs.exceptionKernelInfo.kernelName = kernelName;

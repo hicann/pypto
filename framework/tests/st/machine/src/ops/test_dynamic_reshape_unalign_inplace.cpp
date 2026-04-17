@@ -27,7 +27,7 @@ public:
     void SetUp() override
     {
         npu::tile_fwk::stest::TestSuite_STest_Ops_Aihac::SetUp();
-        rtSetDevice(GetDeviceIdByEnvVar());
+        RuntimeSetDevice(GetDeviceIdByEnvVar());
     }
 };
 

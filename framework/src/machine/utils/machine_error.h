@@ -167,9 +167,9 @@ enum class ThreadErr : uint32_t {
 
 enum class RtErr : uint32_t {
     RT_INIT_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x01U,     // ACL/RT 初始化失败
-    RT_MEMCPY_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x02U,   // rtMemcpy 失败
-    RT_MEMSET_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x03U,   // rtMemset 失败
-    RT_MALLOC_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x04U,   // rtMalloc 失败
+    RT_MEMCPY_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x02U,   // RuntimeMemcpy 失败
+    RT_MEMSET_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x03U,   // RuntimeMemset 失败
+    RT_MALLOC_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x04U,   // RuntimeMalloc 失败
     RT_LAUNCH_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x05U,   // rt 启动失败
     RT_EVENT_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x06U,    // rt event/stream 相关失败
     RT_CAPTURE_FAILED = ToUnderlying(MachineError::RUNTIME_ERROR) + 0x07U,  // capture 信息/状态失败

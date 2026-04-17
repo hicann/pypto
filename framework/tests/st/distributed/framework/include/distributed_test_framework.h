@@ -16,21 +16,19 @@
 #pragma once
 
 #include "distributed_op_test_suite.h"
-#include "hccl/hccl.h"
-#include "hccl/hccl_types.h"
+#include "adapter/api/hcomm_define.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {
 
 struct HcomTestParam {
-    HcclComm hcclComm;
+    HcommHandle hcclComm;
     int32_t rootRank;
-    HcclRootInfo rootInfo;
+    HcommRootInfo rootInfo;
 };
 
 void TestFrameworkInit(OpTestParam& testParam, HcomTestParam& hcomTestParam, int& physicalDeviceId);
 void TestFrameworkDestroy(int32_t timeout);
 std::string getTimeStamp();
-
 } // namespace Distributed
 } // namespace npu::tile_fwk

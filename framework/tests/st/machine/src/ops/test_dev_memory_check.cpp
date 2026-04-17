@@ -125,7 +125,7 @@ TEST_F(TestGenAtten, test_mem_check_fail)
     auto& firstVec = firstPair.second;
     EXPECT_FALSE(firstVec.empty());
     uint64_t faultVal = 0x232;
-    rtMemcpy(firstVec[0], sizeof(uint64_t), &faultVal, sizeof(uint64_t), RT_MEMCPY_HOST_TO_DEVICE);
+    RuntimeMemcpy(firstVec[0], sizeof(uint64_t), &faultVal, sizeof(uint64_t), RtMemcpyKind::HOST_TO_DEVICE);
     auto ret = machine::GetRA()->CheckAllSentinels();
     EXPECT_FALSE(ret);
 }

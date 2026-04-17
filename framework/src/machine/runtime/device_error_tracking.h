@@ -16,9 +16,11 @@
 #ifndef DEVICE_ERROR_TRACKING_H
 #define DEVICE_ERROR_TRACKING_H
 
+#include "adapter/api/acl_define.h"
+
 namespace npu::tile_fwk {
-const char* getExceptionTypeName(rtExceptionExpandType_t type);
-void AicpuErrorCallBack(aclrtExceptionInfo* exceptionInfo);
+const char* getExceptionTypeName(RtExceptionExpandType type);
+void AicpuErrorCallBack(AclRtExceptionInfo* exceptionInfo);
 void InitializeErrorCallback();
 } // namespace npu::tile_fwk
 #endif

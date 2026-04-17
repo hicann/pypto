@@ -95,8 +95,8 @@ int finishPython(PyObject* args)
 
 void TransposePre(uint8_t** out_ptr, uint64_t* outsize)
 {
-    aclInit(nullptr);
-    rtSetDevice(GetDeviceIdByEnvVar());
+    AclInit(nullptr);
+    RuntimeSetDevice(GetDeviceIdByEnvVar());
     *outsize = capacity * sizeof(float);
     *out_ptr = allocDevAddr(*outsize);
 }

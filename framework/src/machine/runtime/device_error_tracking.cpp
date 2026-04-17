@@ -15,31 +15,30 @@
 
 #include <iostream>
 #ifdef BUILD_WITH_CANN
-#include "acl/acl_rt.h"
-#include "runtime/base.h"
+#include "adapter/api/acl_api.h"
 
 namespace npu::tile_fwk {
-const char* getExceptionTypeName(rtExceptionExpandType_t type)
+const char* getExceptionTypeName(RtExceptionExpandType type)
 {
     switch (type) {
-        case RT_EXCEPTION_INVALID:
+        case RtExceptionExpandType::INVALID:
             return "exception invalid error";
-        case RT_EXCEPTION_FFTS_PLUS:
+        case RtExceptionExpandType::FFTS_PLUS:
             return "exception ffts_plus error";
-        case RT_EXCEPTION_AICORE:
+        case RtExceptionExpandType::AICORE:
             return "exception aicore error";
-        case RT_EXCEPTION_UB:
+        case RtExceptionExpandType::UB:
             return "exception ub error";
-        case RT_EXCEPTION_CCU:
+        case RtExceptionExpandType::CCU:
             return "exception ccu error";
-        case RT_EXCEPTION_FUSION:
+        case RtExceptionExpandType::FUSION:
             return "exception fusion error";
         default:
             return "unknown error type";
     }
 }
 
-void AicpuErrorCallBack(aclrtExceptionInfo* exceptionInfo)
+void AicpuErrorCallBack(AclRtExceptionInfo* exceptionInfo)
 {
     printf(
         "ErrorTracking callback in, task_id = %u, stream_id = %u.\n", exceptionInfo->taskid, exceptionInfo->streamid);
@@ -53,8 +52,8 @@ void AicpuErrorCallBack(aclrtExceptionInfo* exceptionInfo)
 
 void InitializeErrorCallback()
 {
-    aclError ret = aclrtSetExceptionInfoCallback(&AicpuErrorCallBack);
-    if (ret != ACL_SUCCESS) {
+    AclError ret = AclRtSetExceptionInfoCallback(&AicpuErrorCallBack);
+    if (ret != ACLRT_SUCCESS) {
         printf("Failed to set exception callback: %d\n", ret);
     }
 }

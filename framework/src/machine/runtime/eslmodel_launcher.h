@@ -16,18 +16,14 @@
 #pragma once
 
 #include <sys/mman.h>
+#include "adapter/api/acl_define.h"
+#include "adapter/api/runtime_api.h"
 #include "machine/runtime/device_launcher_binding.h"
 #include "machine/runtime/runtime.h"
 #include "machine/platform/platform_manager.h"
 #include "interface/interpreter/raw_tensor_data.h"
 
 namespace npu::tile_fwk::dynamic {
-
-#ifndef BUILD_WITH_CANN
-using rtStream_t = uint64_t;
-using aclrtStream = void*;
-#endif
-
 #ifdef BUILD_WITH_CANN
 struct MmapRecord {
     void* addr;
@@ -74,7 +70,7 @@ struct EslModelMemoryUtils {
             if (isUseHugePage_) {
                 machine::GetRA()->AllocDevAddr(&devPtr, size);
             } else {
-                rtMalloc((void**)&devPtr, size, RT_MEMORY_HBM, 0);
+                RuntimeMalloc((void**)&devPtr, size, RT_MEMORY_HBM, 0);
             }
             if (cachedDevAddrHolder != nullptr && *cachedDevAddrHolder == nullptr) {
                 *cachedDevAddrHolder = devPtr;
@@ -88,19 +84,19 @@ struct EslModelMemoryUtils {
 
     uint8_t *AllocZero(uint64_t size, uint8_t **cachedDevAddrHolder) {
         uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
-        (void)rtMemset(devPtr, size, 0, size);
+        (void)RuntimeMemset(devPtr, size, 0, size);
         return devPtr;
     }
 
     uint8_t *CopyToDev(uint8_t *data, uint64_t size, uint8_t **cachedDevAddrHolder) {
         uint8_t *devPtr = AllocDev(size, cachedDevAddrHolder);
-        rtMemcpy(devPtr, size, data, size, RT_MEMCPY_HOST_TO_DEVICE);
+        RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
         MemCopytoMapAddr(devPtr, data, size);
         return devPtr;
     }
 
     void CopyToDev(uint8_t *devPtr, uint8_t *data, uint64_t size) {
-        rtMemcpy(devPtr, size, data, size, RT_MEMCPY_HOST_TO_DEVICE);
+        RuntimeMemcpy(devPtr, size, data, size, RtMemcpyKind::HOST_TO_DEVICE);
     }
 
     template <typename T>
@@ -109,7 +105,7 @@ struct EslModelMemoryUtils {
     }
 
     void CopyFromDev(uint8_t *data, uint8_t *devPtr, uint64_t size) {
-        rtMemcpy(data, size, devPtr, size, RT_MEMCPY_DEVICE_TO_HOST);
+        RuntimeMemcpy(data, size, devPtr, size, RtMemcpyKind::DEVICE_TO_HOST);
     }
 
     uint8_t *CopyToDev(RawTensorData &data) {
@@ -120,7 +116,7 @@ struct EslModelMemoryUtils {
                 return nullptr;
             }
             MapEslAddrToHostAddr(reinterpret_cast<uintptr_t>(devPtr), data.size());
-            rtMemcpy(devPtr, data.size(), (uint8_t *)data.data(), data.size(), RT_MEMCPY_HOST_TO_DEVICE);
+            RuntimeMemcpy(devPtr, data.size(), (uint8_t *)data.data(), data.size(), RtMemcpyKind::HOST_TO_DEVICE);
             data.SetDevPtr(devPtr);
         }
         return data.GetDevPtr();
@@ -132,7 +128,7 @@ struct EslModelMemoryUtils {
 
     void Free(uint8_t* mem) {
         if (mem && (!isUseHugePage_)) {
-            rtFree(mem);
+            RuntimeFree(mem);
         }
     }
 
@@ -189,10 +185,10 @@ public:
     static int EslModelRunOnce(void *kernel, const DeviceLauncherConfig &config = DeviceLauncherConfig());
     static int EslModelLaunchDeviceTensorData(Function *function,
         const std::vector<DeviceTensorData> &inputList, const std::vector<DeviceTensorData> &outputList,
-        rtStream_t aicpuStream, rtStream_t aicoreStream, void *kernel, const DeviceLauncherConfig &config);
+        RtStream aicpuStream, RtStream aicoreStream, void *kernel, const DeviceLauncherConfig &config);
     static void ExchangeCaputerMode(const bool &isCapture);
-    static int DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, aclrtStream aicoreStream, void *kernel);
-    static int EslModelLaunchAicore(aclrtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs);
+    static int DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStream aicoreStream, void *kernel);
+    static int EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs);
     static void CopyInputOutputData();
 };
 }

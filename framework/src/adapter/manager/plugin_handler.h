@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+* Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
  * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
  * CANN Open Software License Agreement Version 2.0 (the "License").
  * Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -9,31 +9,24 @@
  */
 
 /*!
- * \file dump_stubs.cpp
+ * \file plugin_handler.h
  * \brief
  */
 
-#include <dump/adump_api.h>
+#pragma once
 
-namespace Adx {
+#include <string>
 
-uint64_t AdumpGetDumpSwitch(DumpType type)
-{
-    (void)type;
-    return 0;
+namespace npu::tile_fwk {
+class PluginHandler {
+public:
+    PluginHandler();
+    ~PluginHandler();
+    bool OpenHandler(const std::string &libName);
+    void CloseHandler();
+
+    void* GetFunction(const std::string &funcName) const;
+private:
+    void *handler_;
+};
 }
-
-int32_t AdumpDumpTensorV2(
-    const std::string& opType,
-    const std::string& opName,
-    const std::vector<TensorInfoV2>& tensorInfos,
-    aclrtStream stream)
-{
-    (void)opType;
-    (void)opName;
-    (void)tensorInfos;
-    (void)stream;
-    return 0;
-}
-
-} // namespace Adx
