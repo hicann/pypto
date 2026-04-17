@@ -1,6 +1,6 @@
 ---
 name: pypto-skill-validation-prompt
-description: "为任意 skill 生成校验提示词（validation prompt）。当需要验证某个 skill 的实际执行效果——即它在真实场景下产出的制品是否符合自身声明的规范——时使用。本技能的输出是一份结构化的中文校验提示词文档，可交给 AI 代理独立执行，产出一份数据驱动的优化报告。适用场景：新 skill 上线前的质量把关、现有 skill 的定期审计、skill 修改后的回归验证。触发词：校验skill、验证skill、生成校验提示词、skill验证、审计skill、skill质量评估。"
+description: 为任意 skill 生成校验提示词（validation prompt）。当需要验证某个 skill 的实际执行效果——即它在真实场景下产出的制品是否符合自身声明的规范——时使用。本技能的输出是一份结构化的中文校验提示词文档，可交给 AI 代理独立执行，产出一份数据驱动的优化报告。适用场景：新 skill 上线前的质量把关、现有 skill 的定期审计、skill 修改后的回归验证。触发词：校验skill、验证skill、生成校验提示词、skill验证、审计skill、skill质量评估。
 ---
 
 # Skill Validation Prompt Generator

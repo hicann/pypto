@@ -1,7 +1,6 @@
 ---
 name: pypto-pass-ut-generate
 description: 根据 Pass 业务描述，生成单元测试用例（UT）。当用户输入业务情况时，能根据业务，生成对应 Pass 的 UT 用例。
-license: 完整条款见 LICENSE.txt
 ---
 
 # Pass 业务单元测试生成

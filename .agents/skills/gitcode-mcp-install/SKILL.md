@@ -1,8 +1,6 @@
 ---
 name: gitcode-mcp-install
-description: >-
-  安装和配置 GitCode MCP Server，使 AI 客户端能与 GitCode 平台交互（仓库/分支/Issue/PR 管理）。
-  触发词：安装 gitcode mcp、配置 gitcode mcp、gitcode mcp server。
+description: 安装和配置 GitCode MCP Server，使 AI 客户端能与 GitCode 平台交互（仓库/分支/Issue/PR 管理）。触发词：安装 gitcode mcp、配置 gitcode mcp、gitcode mcp server。
 ---
 
 

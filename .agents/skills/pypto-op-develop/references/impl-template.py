@@ -4,7 +4,7 @@
 """PyPTO {op} kernel implementation.
 
 模板说明：
-  - 本文件是 {op}_impl.py 的固定模板，由 pypto-op-develop 在 Stage 3 生成。
+  - 本文件是 {op}_impl.py 的固定模板，由 pypto-op-develop 生成。
   - 所有 {op} 占位符需替换为实际算子名称。
   - 导出函数 {op}_wrapper() 供 test_{op}.py 调用。
   - kernel 使用 @pypto.frontend.jit 装饰，内部使用 pypto API。
@@ -21,7 +21,7 @@ import torch
 def {op}_core(x: pypto.Tensor) -> pypto.Tensor:
     """核心计算逻辑，供 kernel 调用。
 
-    根据 DESIGN.md 中的 API 映射实现。
+    根据设计方案中的 API 映射实现。
     使用 pypto 基础 API（如 pypto.exp, pypto.sum, pypto.amax 等）。
 
     Args:
@@ -50,13 +50,13 @@ def {op}_kernel(
 ):
     """PyPTO jit kernel。
 
-    根据 DESIGN.md 实现。
+    根据设计方案实现。
     - Tensor 描述符使用 pypto.Tensor()（shape 自动推断）或
       pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)（显式指定）。
     - 必须配置 tiling：pypto.set_vec_tile_shapes(...) 或 pypto.set_cube_tile_shapes(...)。
     - 输出写回使用 output_tensor[:] = result 或 pypto.assemble(result, offset, output_tensor)。
     """
-    # TODO: 根据 DESIGN.md 配置 tiling
+    # TODO: 根据设计方案配置 tiling
     # 示例: pypto.set_vec_tile_shapes(64, 128)
 
     # TODO: 替换为实际 kernel 逻辑

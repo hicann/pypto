@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# Copyright (c) Huawei Technologies Co., Ltd. 2024-2026. All rights reserved.
+
+from __future__ import annotations
+
+import ast
+from typing import Optional
+
+
+def _get_jit_functions(tree: ast.Module) -> list[ast.FunctionDef]:
+    """找到所有被 @pypto.frontend.jit 装饰的函数"""
+    result = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for dec in node.decorator_list:
+            dec_str = ast.dump(dec)
+            if "pypto" in dec_str and "jit" in dec_str:
+                result.append(node)
+                break
+    return result
+
+
+def _get_wrapper_functions(tree: ast.Module) -> list[ast.FunctionDef]:
+    wrappers: list[ast.FunctionDef] = []
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.FunctionDef) and node.name.endswith("_wrapper"):
+            wrappers.append(node)
+    return wrappers
+
+
+def _resolve_primary_kernel_names(tree: ast.Module) -> set[str]:
+    """解析主 kernel 名称（优先取 wrapper 内直接调用的 jit 函数）。"""
+    jit_funcs = _get_jit_functions(tree)
+    if not jit_funcs:
+        return set()
+    jit_names = {f.name for f in jit_funcs}
+
+    resolved: set[str] = set()
+    for wrapper in _get_wrapper_functions(tree):
+        for node in ast.walk(wrapper):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Name) and node.func.id in jit_names:
+                resolved.add(node.func.id)
+    if resolved:
+        return resolved
+
+    # 无法解析 wrapper 调用关系时，降级为“全部 jit”。
+    return jit_names
+
+
+def _get_primary_jit_functions(tree: ast.Module) -> list[ast.FunctionDef]:
+    primary_names = _resolve_primary_kernel_names(tree)
+    if not primary_names:
+        return []
+    return [f for f in _get_jit_functions(tree) if f.name in primary_names]
+
+
+def _has_loop_structure(tree: ast.AST) -> bool:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+            return True
+        if isinstance(node, ast.Call):
+            call_str = ast.dump(node.func).lower()
+            if "loop" in call_str:
+                return True
+            if any(keyword.arg in ("unroll_list", "submit_before_loop")
+                   for keyword in node.keywords if keyword.arg):
+                return True
+    return False
+
+
+def _is_pypto_tensor_annotation(annotation: ast.AST) -> bool:
+    """检查注解是否为 pypto.Tensor 类型"""
+    func: ast.AST
+    if isinstance(annotation, ast.Call):
+        func = annotation.func
+    else:
+        func = annotation
+
+    if isinstance(func, ast.Attribute):
+        return isinstance(func.value, ast.Name) and func.value.id == "pypto" and func.attr == "Tensor"
+    if isinstance(func, ast.Name):
+        return func.id == "Tensor"
+    return False
+
+
+def _is_non_tensor_annotation(annotation: ast.AST) -> bool:
+    """检查注解是否为显式声明的非 Tensor 参数类型。"""
+    return annotation is not None and not _is_pypto_tensor_annotation(annotation)
+
+
+def _has_test_level_markers(tree: ast.Module, source: str) -> tuple[bool, bool]:
+    """识别仓内常见的两级测试命名方式。
+
+    支持：
+    - 函数名中的 level0 / level1
+    - 功能_P0 / 性能_P0（含 func_p0 / perf_p0）这类 case 命名或元数据
+    """
+    func_names = [
+        node.name.lower() for node in ast.iter_child_nodes(tree)
+        if isinstance(node, ast.FunctionDef)
+    ]
+    has_level0 = any("level0" in name for name in func_names)
+    has_level1 = any("level1" in name for name in func_names)
+    if has_level0 and has_level1:
+        return True, True
+
+    lower = source.lower()
+    p0_level0_patterns = (
+        "功能_p0",
+        "func_p0",
+        "test_p0",
+    )
+    p0_level1_patterns = (
+        "性能_p0",
+        "perf_p0",
+    )
+    has_level0 = has_level0 or any(pattern in lower for pattern in p0_level0_patterns)
+    has_level1 = has_level1 or any(pattern in lower for pattern in p0_level1_patterns)
+    return has_level0, has_level1
+
+
+FP32_ONLY_OPS = {"sigmoid", "softmax", "sin", "cos"}
+
+
+def _is_fp32_only_call(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    if not isinstance(node.func, ast.Attribute):
+        return False
+    owner = node.func.value
+    if not isinstance(owner, ast.Name):
+        return False
+    if owner.id != "pypto":
+        return False
+    return node.func.attr in FP32_ONLY_OPS
+
+
+def _extract_symbolic_dynamic_aliases(tree: ast.Module) -> set[str]:
+    """提取模块级别指向 pypto.DYNAMIC/pypto.DYN 的符号名。"""
+    aliases: set[str] = set()
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+            continue
+        target = node.targets[0].id
+        value = node.value
+        if isinstance(value, ast.Attribute):
+            if isinstance(value.value, ast.Name) and value.value.id == "pypto" and value.attr in ("DYNAMIC", "DYN"):
+                aliases.add(target)
+        elif isinstance(value, ast.Name) and value.id in ("DYNAMIC", "DYN"):
+            aliases.add(target)
+    return aliases
+
+
+def _shape_has_dynamic(shape_node: ast.AST, dynamic_aliases: set[str]) -> bool:
+    """递归判断 shape 注解中是否包含动态维度声明。"""
+    if isinstance(shape_node, ast.Attribute):
+        owner = shape_node.value
+        if isinstance(owner, ast.Name) and owner.id == "pypto" and shape_node.attr in ("DYNAMIC", "DYN"):
+            return True
+    if isinstance(shape_node, ast.Name):
+        return shape_node.id in dynamic_aliases or shape_node.id in ("DYNAMIC", "DYN")
+    if isinstance(shape_node, (ast.List, ast.Tuple)):
+        return any(_shape_has_dynamic(elem, dynamic_aliases) for elem in shape_node.elts)
+    for child in ast.iter_child_nodes(shape_node):
+        if _shape_has_dynamic(child, dynamic_aliases):
+            return True
+    return False
+
+
+def _get_func_param_count(tree: ast.Module, func_name: str) -> Optional[int]:
+    """获取指定函数的必需参数个数"""
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == func_name:
+            total = len(node.args.args)
+            defaults = len(node.args.defaults)
+            required = total - defaults
+            if required > 0 and node.args.args[0].arg in ("self", "cls"):
+                required -= 1
+            return required
+    return None
+
+
+def _extract_shapes_from_test_ast(tree: ast.Module) -> set[tuple[int, ...]]:
+    """从测试 AST 中提取 shape 覆盖。
+
+    支持模式：
+    1) _run_and_check(name, n, m, ...)
+    2) torch.randn(n, m, ...) / torch.zeros((n, m), ...) 等
+    """
+    shapes: set[tuple[int, ...]] = set()
+
+    def _const_int(node: ast.AST) -> Optional[int]:
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return int(node.value)
+        return None
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+
+        if isinstance(node.func, ast.Name) and node.func.id == "_run_and_check":
+            if len(node.args) >= 3:
+                n_val = _const_int(node.args[1])
+                m_val = _const_int(node.args[2])
+                if n_val is not None and m_val is not None:
+                    shapes.add((n_val, m_val))
+
+        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            if node.func.value.id != "torch":
+                continue
+            if node.func.attr not in ("randn", "zeros", "ones", "empty", "full"):
+                continue
+
+            if node.func.attr == "randn" and len(node.args) >= 2:
+                n_val = _const_int(node.args[0])
+                m_val = _const_int(node.args[1])
+                if n_val is not None and m_val is not None:
+                    shapes.add((n_val, m_val))
+
+            if node.args and isinstance(node.args[0], (ast.Tuple, ast.List)) and len(node.args[0].elts) >= 2:
+                n_val = _const_int(node.args[0].elts[0])
+                m_val = _const_int(node.args[0].elts[1])
+                if n_val is not None and m_val is not None:
+                    shapes.add((n_val, m_val))
+
+    return shapes
+
+
+def _extract_jit_assigned_names(tree: ast.Module) -> set[str]:
+    names: set[str] = set()
+    for func in _get_jit_functions(tree):
+        for node in ast.walk(func):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        names.add(target.id)
+            elif isinstance(node, ast.AnnAssign):
+                if isinstance(node.target, ast.Name):
+                    names.add(node.target.id)
+    return names

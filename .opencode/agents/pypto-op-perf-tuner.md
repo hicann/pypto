@@ -4,11 +4,6 @@ description: "PyPTO 算子性能调优 Subagent。负责性能分析与调优，
 mode: subagent
 skills:
   - pypto-op-perf-tune
-tools:
-  read: true
-  write: true
-  edit: true
-  bash: true
 ---
 
 # PyPTO 算子性能调优 Agent -- Stage 7 迭代执行器

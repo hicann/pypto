@@ -1,7 +1,6 @@
 ---
 name: pypto-aicore-error-locator
 description: 定位测试案例中出现 aicore error 时的问题 CCE 文件和问题代码行。当用户说"aicore error"、"定位 aicore error 的原因"、"帮我定位 aicore error 报错"时使用此技能。
-license: 完整条款见 LICENSE.txt
 ---
 
 # AICore Error 定位器

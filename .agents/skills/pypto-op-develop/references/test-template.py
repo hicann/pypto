@@ -4,11 +4,11 @@
 """PyPTO {op} operator test.
 
 模板说明：
-  - 本文件是 test_{op}.py 的固定模板，由 pypto-op-develop 在 Stage 3 生成。
+  - 本文件是 test_{op}.py 的固定模板，由 pypto-op-develop 生成。
   - 所有 {op} 占位符需替换为实际算子名称。
   - test_{op}.py 只做 import + 调用 + 精度对比，不包含 golden 或 kernel 实现代码。
-  - golden 实现来自 {op}_golden.py（Stage 2A 由 pypto-golden-generate 生成）。
-  - kernel 实现来自 {op}_impl.py（Stage 3 由 pypto-op-develop 生成）。
+  - golden 实现来自 {op}_golden.py（由 pypto-golden-generate 生成）。
+  - kernel 实现来自 {op}_impl.py（由 pypto-op-develop 生成）。
   - 精度对比必须使用 numpy.testing.assert_allclose，禁止手写 assert max_diff < tolerance。
   - 模式参照 examples/ 与 models/ 的统一规范。
 """
@@ -31,13 +31,13 @@ from {op}_impl import {op}_wrapper
 def get_device_id():
     """从环境变量获取 TILE_FWK_DEVICE_ID。"""
     if "TILE_FWK_DEVICE_ID" not in os.environ:
-        print("Please set: export TILE_FWK_DEVICE_ID=0")
-        return None
+        print("Please set: export TILE_FWK_DEVICE_ID={device_id}")
+        return 0
     try:
         return int(os.environ["TILE_FWK_DEVICE_ID"])
     except ValueError:
         print(f"ERROR: TILE_FWK_DEVICE_ID must be int, got: {os.environ['TILE_FWK_DEVICE_ID']}")
-        return None
+        return 0
 
 # ─────────────────────────────────────────────
 # 2. 测试函数

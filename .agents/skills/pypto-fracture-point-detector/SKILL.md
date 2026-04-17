@@ -1,9 +1,6 @@
 ---
 name: pypto-fracture-point-detector
-description: |
-  分析当前 session 上下文，识别 PyPTO 框架或文档不完善导致的断裂点，产出可转化为 Issue 的结构化报告。
-  当用户在 pypto 相关 skill 运行结束后提到"断裂点"、"识别断裂点"、"检测断裂点"、"fracture point"时触发此 skill。
-  也适用于用户对 session 中遇到的问题进行复盘、想要生成问题报告、或希望改进 pypto 框架/文档质量的场景。
+description: 分析当前 session 上下文，识别 PyPTO 框架或文档不完善导致的断裂点，产出可转化为 Issue 的结构化报告。当用户在 pypto 相关 skill 运行结束后提到"断裂点"、"识别断裂点"、"检测断裂点"、"fracture point"时触发此 skill。也适用于用户对 session 中遇到的问题进行复盘、想要生成问题报告、或希望改进 pypto 框架/文档质量的场景。
 ---
 
 # PyPTO 断裂点识别

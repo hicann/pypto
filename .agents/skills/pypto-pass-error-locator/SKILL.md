@@ -1,7 +1,6 @@
 ---
 name: pypto-pass-error-locator
 description: PyPTO Pass 模块错误诊断技能。包含错误定位、原因分析和提供问题修复建议，提供从问题定位到修复建议的完整工作流程。当遇到 PyPTO Pass 模块抛出错误时使用此技能。
-license: 完整条款见 LICENSE.txt
 ---
 
 # PyPTO Pass 错误诊断与修复技能

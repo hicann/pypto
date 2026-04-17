@@ -1,3 +1,13 @@
+---
+schema_version: 1
+op_name: {operator_name}
+supported_dtypes: {supported_dtypes}
+dynamic_axes: {axes_list}
+shape_constraints: {shape_constraints}
+tiling_required: {tiling_required}
+feasibility: {feasibility}
+---
+
 # API 探索报告
 
 > **生成时间**: {timestamp}

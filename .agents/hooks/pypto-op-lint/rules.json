@@ -1,0 +1,541 @@
+{
+  "version": "1.0.0",
+  "tolerance_schema": {
+    "type": "dict",
+    "description": "tolerance 必须是 dict，且满足以下任一模式",
+    "oneOf": [
+      {
+        "mode": "standard",
+        "required": ["atol", "rtol"],
+        "description": "标准容差模式（atol + rtol）"
+      },
+      {
+        "mode": "custom_metrics",
+        "required": ["mare_matrix", "mere_matrix", "rmse_matrix"],
+        "description": "自定义三分位指标模式"
+      }
+    ]
+  },
+  "dimensions": {
+    "D1": {
+      "name": "框架约束合规"
+    },
+    "D2": {
+      "name": "工件完整性与流程合规"
+    },
+    "D3": {
+      "name": "三文件分离"
+    },
+    "D4": {
+      "name": "测试规范"
+    },
+    "D5": {
+      "name": "跨文件一致性"
+    }
+  },
+  "rules": [
+    {
+      "id": "OL01",
+      "severity": "S0",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "kernel 函数必须有 @pypto.frontend.jit 装饰器",
+      "check_function": "check_ol01"
+    },
+    {
+      "id": "OL02",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "输出写回必须用 [:]/move()/assemble()，禁止 out = expr",
+      "check_function": "check_ol02"
+    },
+    {
+      "id": "OL03",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "kernel 函数不能有 return 语句",
+      "check_function": "check_ol03"
+    },
+    {
+      "id": "OL04",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "必须调用 set_vec_tile_shapes 或 set_cube_tile_shapes",
+      "check_function": "check_ol04"
+    },
+    {
+      "id": "OL05",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "kernel 张量参数必须有 pypto.Tensor 类型注解",
+      "check_function": "check_ol05"
+    },
+    {
+      "id": "OL06",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "kernel 内禁用 Python 原生 min()/max()",
+      "check_function": "check_ol06"
+    },
+    {
+      "id": "OL07",
+      "severity": "S0",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "必须 import pypto",
+      "check_function": "check_ol07"
+    },
+    {
+      "id": "OL08",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "wrapper 函数必须导出且以 _wrapper 结尾",
+      "check_function": "check_ol08"
+    },
+    {
+      "id": "OL23",
+      "severity": "S2",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "所有算子的 impl 应显式说明是否需要 loop；若未检测到 loop 相关结构则给出提醒",
+      "check_function": "check_ol23"
+    },
+    {
+      "id": "OL09",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        1,
+        2
+      ],
+      "target": "gate",
+      "rule": "SPEC.md 必须通过结构化章节校验（数学公式、输入输出规格、精度要求）和 front matter schema 校验（p0_shapes/supported_dtypes/tolerance 格式）",
+      "check_function": "check_ol09"
+    },
+    {
+      "id": "OL10",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        3
+      ],
+      "target": "gate",
+      "rule": "进入 Stage 3 需 API_REPORT.md 通过结构化章节校验（API 映射、约束、Tiling）",
+      "check_function": "check_ol10"
+    },
+    {
+      "id": "OL11",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        4
+      ],
+      "target": "gate",
+      "rule": "进入 Stage 4 需 {op}_golden.py 可导入",
+      "check_function": "check_ol11"
+    },
+    {
+      "id": "OL12",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        4,
+        5
+      ],
+      "target": "gate",
+      "rule": "DESIGN.md 结构化章节校验（计算图、Tiling、验证方案），Stage 4 完成时即校验，Stage 5 复查兜底",
+      "check_function": "check_ol12"
+    },
+    {
+      "id": "OL13",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        5
+      ],
+      "target": "gate",
+      "rule": "生成文件三件套完整: {op}_impl.py, test_{op}.py, README.md",
+      "check_function": "check_ol13"
+    },
+    {
+      "id": "OL14",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        7
+      ],
+      "target": "gate",
+      "rule": "进入 Stage 7 需精度通过",
+      "check_function": "check_ol14"
+    },
+    {
+      "id": "OL15",
+      "severity": "S1",
+      "dimension": "D3",
+      "stages": [
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "target": "golden",
+      "rule": "golden 文件禁止 import pypto",
+      "check_function": "check_ol15"
+    },
+    {
+      "id": "OL16",
+      "severity": "S1",
+      "dimension": "D3",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "impl 文件不应导入 golden 模块",
+      "check_function": "check_ol16"
+    },
+    {
+      "id": "OL17",
+      "severity": "S1",
+      "dimension": "D3",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test 文件不应包含 kernel 实现代码",
+      "check_function": "check_ol17"
+    },
+    {
+      "id": "OL18",
+      "severity": "S1",
+      "dimension": "D3",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test 文件必须从 impl 和 golden 分别导入",
+      "check_function": "check_ol18"
+    },
+    {
+      "id": "OL19",
+      "severity": "S1",
+      "dimension": "D4",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test 必须使用 assert_allclose，禁止手写 assert max_diff",
+      "check_function": "check_ol19"
+    },
+    {
+      "id": "OL20",
+      "severity": "S1",
+      "dimension": "D4",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test 必须处理 TILE_FWK_DEVICE_ID 环境变量并调用 set_device",
+      "check_function": "check_ol20"
+    },
+    {
+      "id": "OL21",
+      "severity": "S2",
+      "dimension": "D4",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test 必须有 Level 0 和 Level 1 两级测试函数",
+      "check_function": "check_ol21"
+    },
+    {
+      "id": "OL22",
+      "severity": "S2",
+      "dimension": "D4",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "test 应设置 torch.manual_seed 保证可复现",
+      "check_function": "check_ol22"
+    },
+    {
+      "id": "OL24",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": ".orchestrator_state.json 结构合法",
+      "check_function": "check_ol24"
+    },
+    {
+      "id": "OL25",
+      "severity": "S2",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "Tensor 注解完整性检查：无参数或缺 dtype 时告警",
+      "check_function": "check_ol25"
+    },
+    {
+      "id": "OL26",
+      "severity": "S1",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "JIT 函数中张量参数必须在非张量参数之前",
+      "check_function": "check_ol26"
+    },
+    {
+      "id": "OL28",
+      "severity": "S2",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "sigmoid/softmax/sin/cos 仅支持 DT_FP32，非 FP32 dtype 时警告",
+      "check_function": "check_ol28"
+    },
+    {
+      "id": "OL29",
+      "severity": "S2",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "Tensor 注解的 shape 中应声明 pypto.DYNAMIC/pypto.DYN 维度",
+      "check_function": "check_ol29"
+    },
+    {
+      "id": "OL30",
+      "severity": "S1",
+      "dimension": "D5",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "spec.md 声明支持的 dtype 必须在测试文件中覆盖",
+      "check_function": "check_ol30"
+    },
+    {
+      "id": "OL31",
+      "severity": "S1",
+      "dimension": "D5",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "design.md 动态轴声明须与 impl Tensor 注解中的 DYNAMIC 一致",
+      "check_function": "check_ol31"
+    },
+    {
+      "id": "OL32",
+      "severity": "S2",
+      "dimension": "D5",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "spec.md 精度容差(atol/rtol)须与 test 文件一致",
+      "check_function": "check_ol32"
+    },
+    {
+      "id": "OL33",
+      "severity": "S2",
+      "dimension": "D5",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "golden 与 wrapper 的必需参数数量应一致（避免调用接口不兼容）",
+      "check_function": "check_ol33"
+    },
+    {
+      "id": "OL34",
+      "severity": "S1",
+      "dimension": "D5",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "spec.md P0 测试配置 shape 应在 test 文件中覆盖",
+      "check_function": "check_ol34"
+    },
+    {
+      "id": "OL37",
+      "severity": "S3",
+      "dimension": "D1",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "impl",
+      "rule": "design 与 impl 的关键中间变量命名应具备可追溯性（重合较少时给出信息提示）",
+      "check_function": "check_ol37"
+    },
+    {
+      "id": "OL39",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "strict 模式下文档必须包含 front matter",
+      "check_function": "check_ol39"
+    },
+    {
+      "id": "OL40",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "strict 模式下 front matter 必填字段必须完整",
+      "check_function": "check_ol40"
+    },
+    {
+      "id": "OL41",
+      "severity": "S1",
+      "dimension": "D2",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "代码工件禁止包含 lint/门禁输出文本污染",
+      "check_function": "check_ol41"
+    },
+    {
+      "id": "OL42",
+      "severity": "S1",
+      "dimension": "D4",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "test",
+      "rule": "NPU 环境可用时，test 禁止硬编码 sim 模式（default='sim' 或 run_mode='sim'）",
+      "check_function": "check_ol42"
+    },
+    {
+      "id": "OL43",
+      "severity": "S1",
+      "dimension": "D5",
+      "stages": [
+        5,
+        6,
+        7
+      ],
+      "target": "gate",
+      "rule": "DESIGN.md 声明动态轴时，impl 的 jit 函数中必须包含 pypto.loop 调用",
+      "check_function": "check_ol43"
+    }
+  ]
+}

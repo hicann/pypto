@@ -1,6 +1,6 @@
 ---
 name: pypto-pr-creator
-description: "将本地修改创建或更新到 cann/pypto 仓库的 PR。覆盖 fork 验证、Git 认证、upstream 同步、commit 规范检查、PR 创建/更新和 CLA 检查。当用户提到创建 PR、提交代码、代码合并、推送到 cann/pypto，或已完成开发需要提交变更时使用。触发词：创建PR、修改更新、提交PR、更新PR、修改PR、PR规范、commit message、pypto贡献、提交代码。"
+description: 将本地修改创建或更新到 cann/pypto 仓库的 PR。覆盖 fork 验证、Git 认证、upstream 同步、commit 规范检查、PR 创建/更新和 CLA 检查。当用户提到创建 PR、提交代码、代码合并、推送到 cann/pypto，或已完成开发需要提交变更时使用。触发词：创建PR、修改更新、提交PR、更新PR、修改PR、PR规范、commit message、pypto贡献、提交代码。
 ---
 
 # PyPTO PR Creator

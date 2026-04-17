@@ -1,8 +1,6 @@
 ---
 name: pypto-memory-overlap-detector
-description: |
-  PyPTO MACHINE 内存重叠检测与修复技能。通过系统化流程检测和修复 workspace 内存重叠、内存管理策略问题导致的精度异常。当怀疑精度问题由内存重叠、workspace 不足、内存管理异常引起时使用此技能。Triggers: 内存重叠、内存重叠检测、workspace问题、内存管理异常、内存复用错误。
-license: 完整条款见 LICENSE.txt
+description: PyPTO MACHINE 内存重叠检测与修复技能。通过系统化流程检测和修复 workspace 内存重叠、内存管理策略问题导致的精度异常。当怀疑精度问题由内存重叠、workspace 不足、内存管理异常引起时使用此技能。Triggers: 内存重叠、内存重叠检测、workspace问题、内存管理异常、内存复用错误。
 ---
 
 # PyPTO MACHINE 内存重叠检测与修复技能

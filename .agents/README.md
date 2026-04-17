@@ -90,6 +90,9 @@ cp -r .agents/skills/* .claude/skills/
 
 # 4. 复制 Agents 到 Claude Code 目录
 cp -r .opencode/agents/* .claude/agents/
+
+# 5. 复制 Hook 配置（权限、lint hooks 等）
+cp .agents/settings.json .claude/settings.json
 ```
 
 #### 方式一：直接调用 Skill
@@ -421,9 +424,26 @@ Stage 7: 性能调优 → PerfTuner Subagent
 | 项目指令 | `AGENTS.md` | `CLAUDE.md` |
 | Skills | `.agents/skills/` | `.claude/skills/` |
 | Agents | `.opencode/agents/` | `.claude/agents/` |
+| Hook/Plugin | `.opencode/plugins/` | `.claude/settings.json` |
 
 **格式兼容性**：
 - **SKILL.md**：YAML frontmatter + Markdown，两种工具完全兼容
 - **Agents**：YAML frontmatter + Markdown，`mode: primary` 为 OpenCode 特有字段，Claude Code 会忽略
+
+</details>
+
+<details>
+<summary><b>OpenCode 和 Claude Code 的 Hook/Lint 机制有什么区别？</b></summary>
+
+两种工具共享同一份 Python lint 脚本（`.agents/hooks/pypto-op-lint/pypto_op_lint.py`），但触发方式不同：
+
+- **OpenCode**：通过 `.opencode/plugins/` 下的 TypeScript 插件自动加载，无需手动配置
+  - `pypto-op-lint.ts` — 编辑/测试时自动 lint，阻断 S1 级违规
+  - `pypto-state-transition.ts` — 提供 `state_transition` 工具，封装阶段状态迁移与门禁检查
+- **Claude Code**：通过 `.claude/settings.json` 中的 hooks 配置触发（从 `.agents/settings.json` 拷贝）
+  - `PostToolUse[Write|Edit|MultiEdit]` → post-edit lint
+  - `PostToolUse[Bash]` → 测试输出三态判定
+  - `PreToolUse[Write|Edit|MultiEdit]` → Stage 6 自动备份
+  - `Stop` → 交付门禁
 
 </details>

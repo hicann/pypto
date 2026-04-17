@@ -6,20 +6,6 @@ skills:
   - gitcode-mcp-install
   - pypto-issue-creator
   - pypto-pr-creator
-tools:
-  bash: true
-  read: true
-  write: true
-  edit: true
-  glob: true
-  grep: true
-  skill: true
-  question: true
-  gitcode_list_repositories: true
-  gitcode_list_pull_requests: true
-  gitcode_get_pull_request: true
-  gitcode_create_issue: true
-  gitcode_create_pull_request: true
 ---
 
 # PyPTO Code Merge Agent
