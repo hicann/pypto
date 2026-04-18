@@ -37,35 +37,34 @@ void CheckTensorShape(const LogicalTensorPtr& tensor, const std::string& op)
     ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED,
            shape.size() >= shape_len_limit[0] && shape.size() <= shape_len_limit[1])
         << "The dims of tensor out of range.";
-    CheckTensorDynamicShape(tensor, op);
-    size_t shapeSize = 1;
+    int64_t shapeSize = 1;
     for (const auto& value : shape) {
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, value <= INT32_MAX)
             << "The dim value of tensor must less than or equal to INT32_MAX(2,147,483,647)";
-        shapeSize *= static_cast<size_t>(value);
+        shapeSize *= value;
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shapeSize <= INT32_MAX)
             << "The shape size of tensor must less than or equal to INT32_MAX(2,147,483,647)";
     }
 }
 
-void CheckTensorDynamicShape(const LogicalTensorPtr& iOperand, const std::string& opName)
+void CheckTensorDynamicShape(const LogicalTensors iOperands, const Opcode opCode)
 {
-    for (size_t dimIdx = 0; dimIdx < iOperand->shape.size(); ++dimIdx) {
-        auto i = iOperand->shape[dimIdx];
-        CHECK_OP(i != -1) << (!opName.empty() ? "Operation: " + opName : "")
-                          << " Input operand (name: " << iOperand->tensor->GetSymbol() << ") "
-                          << " at dimension[" << dimIdx << "] has invalid shape value: -1";
-    }
-}
-
-void CheckTensorDynamicShape(const LogicalTensorPtr& iOperand, const Opcode opCode)
-{
-    if (opCode == Opcode::OP_VIEW || opCode == Opcode::OP_ASSEMBLE || opCode == Opcode::OP_RESHAPE ||
-        opCode == Opcode::OP_INDEX_OUTCAST) {
+    const std::string opName = OpcodeManager::Inst().GetOpcodeStr(opCode);
+    const auto& inputMemType = OpcodeManager::Inst().GetInputsMemType(opCode);
+    if (inputMemType.size() != iOperands.size()) {
         return;
     }
-    const std::string opName = OpcodeManager::Inst().GetOpcodeStr(opCode);
-    CheckTensorDynamicShape(iOperand, opName);
+    for (size_t i = 0; i < iOperands.size(); i++) {
+        if (inputMemType[i] == MemoryType::MEM_DEVICE_DDR) {
+            continue;
+        }
+        for (size_t dimIdx = 0; dimIdx < iOperands[i]->shape.size(); ++dimIdx) {
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperands[i]->shape[dimIdx] > 0)
+                << (!opName.empty() ? "Operation: " + opName : "")
+                << " Input operand (name: " << iOperands[i]->tensor->GetSymbol() << ") "
+                << " at dimension[" << dimIdx << "] has invalid shape value: " << iOperands[i]->shape[dimIdx];
+        }
+    }
 }
 
 std::vector<int> GetBroadCastShape(LogicalTensorPtr& operand1, LogicalTensorPtr& operand2)

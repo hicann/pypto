@@ -94,7 +94,7 @@ def test_matmul_dynamic_shape_error():
     b_npu = torch.rand([k, n], dtype=torch.float16, device=device)
     out_npu = torch.zeros([m, n], dtype=torch.float16, device=device)
 
-    with pytest.raises(Exception, match="has invalid shape value: -1"):
+    with pytest.raises(Exception, match="operand1 dim\\[0\\] = -1, must be > 0"):
         matmul_kernel(a_npu, b_npu, out_npu)
 
 
@@ -116,7 +116,7 @@ def test_dynamic_reshape_error():
     q = torch.ones(1, 128, 64, dtype=torch.float32, device=device)
     out = torch.zeros(128, 64, dtype=torch.float32, device=device)
 
-    with pytest.raises(Exception, match="reshape\(\) requires integer shape when 'inplace=False'"):
+    with pytest.raises(Exception, match="reshape\\(\\) requires integer shape when 'inplace=False'"):
         kernel_dynamic_reshape(q, out)
 
 

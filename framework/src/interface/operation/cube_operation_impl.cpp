@@ -277,8 +277,6 @@ Status CheckOperandShape(const Tensor& operand1, const Tensor& operand2)
     ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, Op1DimValid) << "operand1 dimension(" << operand1Dim << ") must be >= 2";
     ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, Op2DimValid) << "operand2 dimension(" << operand2Dim << ") must be >= 2";
 
-    CheckTensorDynamicShape(operand1.GetStorage(), Opcode::OP_A_MUL_B);
-    CheckTensorDynamicShape(operand2.GetStorage(), Opcode::OP_A_MUL_B);
     // 检查每个维度的值
     for (size_t i = 0; i < operand1Dim; ++i) {
         ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, shape1[i] > 0)
