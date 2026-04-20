@@ -475,196 +475,51 @@ void PvModelImpl<SystemConfig, CaseConfig>::TearDown(std::string esgDir)
 }
 
 void DynPvModelImpl::Run(
-    DynFuncData* funcdata, int coreId, int funcId, int taskId, std::map<uint64_t, uint64_t> tensorAddr2SizeMap)
+    DynFuncData* funcDataList, int coreId, int funcId, int taskId)
 {
     SIMULATION_LOGI("[AICORE] core  %d, func %d, task %d", coreId, funcId, taskId);
     CostModel::OutputSilencer silencer;
     silencer.silence();
-    auto data = &funcdata[funcId];
-    auto opAttrs = &data->opAttrs[data->opAtrrOffsets[taskId]];
-    auto psgId = opAttrs[0];
-    auto cce = &cceBin[psgId];
-    std::string dir(dir_ + "/leaf_" + std::to_string(funcId) + "_" + std::to_string(taskId));
-    std::string coreType[] = {"AIV", "AIC", "MIX", "AICPU", "HUB", "GMATOMIC", "INVALID"};
-    dir += "_" + coreType[static_cast<int>(cce->coreType)];
-    (void)CreateDir(dir);
+    auto funcData = &funcDataList[funcId];
+    auto opAttrs = &funcData->opAttrs[funcData->opAtrrOffsets[taskId]];
+    auto funcIdx = opAttrs[0] + funcData->exprTbl[0];
+    auto cce = &cceBin[funcIdx];
 
     if (cce->coreType != CoreType::AIV && cce->coreType != CoreType::AIC && cce->coreType != CoreType::MIX) {
         return;
     }
 
-    for (const auto& tensor : tensorAddr2SizeMap) {
-        uint64_t devPtr = LookupData(tensor.first);
-        if (devPtr == 0) {
-            devPtr = allocator_->AllocArg(tensor.second);
-            DataMap m = {tensor.first, devPtr, tensor.second};
-            data_.emplace_back(m);
-        }
-    }
-
-    DynFuncData dupData;
-    memset_s(&dupData, sizeof(dupData), 0, sizeof(dupData));
-    SetUp(cce, data, static_cast<uint64_t>(data->opAtrrOffsets[taskId]), dir, &dupData);
-    RunModel();
+    RunModel(cce, funcData, opAttrs);
     silencer.restore();
 }
 
-uint64_t DynPvModelImpl::LookupData(uint64_t addr)
+void DynPvModelImpl::RunModel(PvModelCceBin* cce, DynFuncData* funcdata, uint64_t* opAttrs)
 {
-    for (auto& d : data_) {
-        if (addr == d.hostPtr) {
-            return d.devPtr;
-        }
-    }
-    return 0;
-}
-
-void DynPvModelImpl::BuildFuncData(
-    DynFuncData* funcdata, DynFuncData* dupData, uint64_t* refAddr, uint64_t* refSize, std::vector<uint8_t>* ref_data)
-{
-    uint64_t opAttrSize = funcdata->opAttrSize * sizeof(uint64_t);
-    uint64_t exprSize = funcdata->exprNum * sizeof(uint64_t);
-    uint64_t rawDescSize = funcdata->rawTensorDescSize * sizeof(DevRawTensorDesc);
-    uint64_t rawTensorSize = funcdata->rawTensorAddrSize * sizeof(uint64_t);
-    *refSize = opAttrSize + exprSize + rawTensorSize + rawDescSize;
-
-    std::vector<uint8_t> ref(*refSize, 0);
-    uint64_t offset = 0;
-    auto p = reinterpret_cast<uint8_t*>(funcdata->opAttrs);
-    std::copy(p, p + opAttrSize, ref.begin() + offset);
-    offset += opAttrSize;
-
-    p = reinterpret_cast<uint8_t*>(funcdata->exprTbl);
-    std::copy(p, p + exprSize, ref.begin() + offset);
-    offset += exprSize;
-
-    p = reinterpret_cast<uint8_t*>(funcdata->rawTensorDesc);
-    std::copy(p, p + rawDescSize, ref.begin() + offset);
-    offset += rawDescSize;
-
-    constexpr uint32_t RAW_TENSOR_OFFSET_SIZE = 63;
-    std::vector<uint64_t> tensorAddr(funcdata->rawTensorAddrSize);
-    for (size_t i = 0; i < funcdata->rawTensorAddrSize; i++) {
-        auto addr = reinterpret_cast<uint64_t>(funcdata->rawTensorAddr[i]) & ((1UL << RAW_TENSOR_OFFSET_SIZE) - 1);
-        tensorAddr[i] = LookupData(addr);
-    }
-    auto err = memcpy_s(ref.data() + offset, rawTensorSize, tensorAddr.data(), rawTensorSize);
-    ASSERT(err == 0) << "[SIMULATION]: tensorAddr copy failed. error=" << err;
-    *ref_data = ref;
-
-    auto addr = allocator_->AllocArg(*refSize);
-    *refAddr = addr;
-    dupData->opAttrs = reinterpret_cast<uint64_t*>(addr);
-    addr += opAttrSize;
-    dupData->exprTbl = reinterpret_cast<uint64_t*>(addr);
-    addr += exprSize;
-    dupData->rawTensorDesc = reinterpret_cast<DevRawTensorDesc*>(addr);
-    addr += rawDescSize;
-    dupData->rawTensorAddr = reinterpret_cast<uint64_t*>(addr);
-    dupData->opAttrSize = funcdata->opAttrSize;
-    dupData->rawTensorAddrSize = funcdata->rawTensorAddrSize;
-    dupData->rawTensorDescSize = funcdata->rawTensorDescSize;
-    dupData->exprNum = funcdata->exprNum;
-    BuildFuncDataWorkSpace(funcdata, dupData);
-}
-
-void DynPvModelImpl::BuildFuncDataWorkSpace(DynFuncData* funcdata, DynFuncData* dupData)
-{
-    if (funcdata->workspaceAddr) {
-        dupData->workspaceAddr = allocator_->workspaceBase_;
-    } else {
-        dupData->workspaceAddr = 0;
-    }
-
-    if (funcdata->stackWorkSpaceSize) {
-        dupData->workspaceAddr = allocator_->stackWorkSapceBase_;
-    } else {
-        dupData->workspaceAddr = 0;
-    }
-}
-
-void DynPvModelImpl::SetUp(
-    PvModelCceBin* cce, DynFuncData* funcdata, uint64_t opAttrOffset, std::string dir, DynFuncData* dupData)
-{
-    // program
+    // cce
     auto binName = FileName(cce->binPath);
-    (void)CopyFile(cce->binPath, dir + "/" + binName);
-    auto srcName = FileName(cce->srcPath);
-    (void)CopyFile(cce->srcPath, dir + "/" + srcName);
     auto binSize = PvModelBinHelper::GetBinSize(cce->binPath);
     auto binAddr = allocator_->AllocCode(binSize);
-
-    // AIC/AIV flag
-    if (binName.find("aiv") != std::string::npos) {
-        this->subcoreId_ = static_cast<uint64_t>(1);
-    } else {
-        this->subcoreId_ = static_cast<uint64_t>(0);
-    }
-    pv_launch_sub_core_(binAddr, (dir + "/" + binName).c_str(), subcoreId_, coreId_);
+    this->subcoreId_ = binName.find("aiv") != std::string::npos ? static_cast<uint64_t>(1) : static_cast<uint64_t>(0);
+    pv_launch_sub_core_(binAddr, cce->binPath.c_str(), subcoreId_, coreId_);
     pv_reg_write_(static_cast<uint32_t>(1), PV_REG_PC, (uint8_t*)&binAddr, subcoreId_, coreId_);
-    LoadPvConfig(funcdata, opAttrOffset, dupData);
-}
 
-void DynPvModelImpl::LoadPvConfig(DynFuncData* funcdata, uint64_t opAttrOffset, DynFuncData* dupData)
-{
+    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata), sizeof(DynFuncData), reinterpret_cast<uint8_t*>(funcdata), subcoreId_, coreId_);
+    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->opAttrs), funcdata->opAttrSize * sizeof(uint64_t), reinterpret_cast<uint8_t*>(funcdata->opAttrs), subcoreId_, coreId_);
+    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->exprTbl), funcdata->exprNum * sizeof(uint64_t), reinterpret_cast<uint8_t*>(funcdata->exprTbl), subcoreId_, coreId_);
+    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->rawTensorDesc), funcdata->rawTensorDescSize * sizeof(DevRawTensorDesc), reinterpret_cast<uint8_t*>(funcdata->rawTensorDesc), subcoreId_, coreId_);
+    pv_mem_write_(0, reinterpret_cast<uint64_t>(funcdata->rawTensorAddr), funcdata->rawTensorAddrSize * sizeof(uint64_t), reinterpret_cast<uint8_t*>(funcdata->rawTensorAddr), subcoreId_, coreId_);
     std::vector<uint64_t> para_args;
+    para_args.push_back(reinterpret_cast<uint64_t>(funcdata));
 
-    // funcdata
-    uint64_t refAddr;
-    uint64_t refSize;
-    std::vector<uint8_t> ref_data;
-    BuildFuncData(funcdata, dupData, &refAddr, &refSize, &ref_data);
-    std::vector<uint8_t> dup(
-        reinterpret_cast<uint8_t*>(dupData), reinterpret_cast<uint8_t*>(dupData) + sizeof(DynFuncData));
-    auto addr = allocator_->AllocArg(dup.size());
-    pv_mem_write_(0, addr, dup.size(), dup.data(), subcoreId_, coreId_);
-    para_args.push_back(addr);
+    pv_mem_write_(0, reinterpret_cast<uint64_t>(opAttrs), sizeof(uint64_t), reinterpret_cast<uint8_t*>(opAttrs), subcoreId_, coreId_);
+    para_args.push_back(reinterpret_cast<uint64_t>(opAttrs));
+    
+    pv_mem_write_(uint32_t(0), HBM_PARA_BASE, para_args.size() * sizeof(uint64_t), (uint8_t*)(&para_args[0]), subcoreId_, coreId_);
 
-    // attr offset
-    std::vector<uint8_t> offset(sizeof(uint64_t), 0);
-    memcpy_s(offset.data(), sizeof(uint64_t), &opAttrOffset, sizeof(uint64_t));
-    addr = allocator_->AllocArg(offset.size());
-    pv_mem_write_(0, addr, offset.size(), offset.data(), subcoreId_, coreId_);
-    para_args.push_back(addr);
-
-    // ref
-    pv_mem_write_(0, refAddr, refSize, ref_data.data(), subcoreId_, coreId_);
-    para_args.push_back(refAddr);
-
-    // input tensor
-    for (size_t i = 0; i < data_.size(); i++) {
-        std::vector<uint8_t> tensorData(
-            reinterpret_cast<uint8_t*>(data_[i].hostPtr), reinterpret_cast<uint8_t*>(data_[i].hostPtr) + data_[i].size);
-        pv_mem_write_(0, data_[i].devPtr, data_[i].size, tensorData.data(), subcoreId_, coreId_);
-        para_args.push_back(data_[i].devPtr);
-    }
-
-    pv_mem_write_(
-        uint32_t(0), allocator_->hbmParaBase_, para_args.size() * sizeof(uint64_t), (uint8_t*)(&para_args[0]),
-        subcoreId_, coreId_);
-}
-
-void DynPvModelImpl::RunModel()
-{
     step_status_t step_status;
     do {
         step_status = static_cast<step_status_t>(pv_step_(PV_STEP_PIPE_ID, subcoreId_, coreId_, 0));
     } while (step_status != step_status_t::END && step_status != step_status_t::TIME_OUT);
-
-    for (size_t i = 0; i < data_.size(); i++) {
-        CopyToHost(data_[i].hostPtr, data_[i].devPtr, data_[i].size);
-    }
-}
-
-void DynPvModelImpl::CopyToHost(uint64_t hostAddr, uint64_t devAddr, uint64_t size)
-{
-    const uint64_t MAX_READ_SIZE = 2048;
-    for (uint64_t i = 0; i < size; i += MAX_READ_SIZE) {
-        const uint32_t read_size = std::min(MAX_READ_SIZE, (size - i));
-        std::vector<uint8_t> model_data(read_size);
-        pv_mem_read_(0, devAddr + i, read_size, model_data.data(), subcoreId_, coreId_);
-        memcpy_s(reinterpret_cast<void*>(hostAddr + i), read_size, model_data.data(), read_size);
-    }
 }
 
 template class PvModelImpl<PvModelSystemA2A3Config, PvModelCaseConfig>;

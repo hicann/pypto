@@ -29,7 +29,7 @@ class AiCoreModel {
 public:
     virtual ~AiCoreModel() = default;
     virtual void InitData(int coreIdx, int64_t funcdata) = 0;
-    virtual void SendTask(int coreIdx, uint64_t taskId, std::map<uint64_t, uint64_t> tensorAddr2SizeMap) = 0;
+    virtual void SendTask(int coreIdx, uint64_t taskId) = 0;
 };
 
 } // namespace CostModel
