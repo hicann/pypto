@@ -864,13 +864,13 @@ Status SuperNodeGraphBuilder::ProcessScopeMerge()
 
 uint64_t SuperNodeGraphBuilder::CombineHash(const uint64_t h1, const uint64_t h2) const
 {
-    const uint64_t mask52 = 0xFFFFFFFFFFFFF;
-    const uint64_t maskXor = 0x12345678;
-    const uint64_t prime = 881;
-    uint64_t h1Trunc = h1 & mask52;
-    uint64_t h2Trunc = h2 & mask52;
-    uint64_t h3 = (h1Trunc * prime) + (h2Trunc ^ maskXor);
-    return h3;
+    const uint64_t kMul = 0x9ddfea08eb382d69ULL;
+    uint64_t a = (h1 ^ h2) * kMul;
+    a ^= (a >> 47);
+    uint64_t b = (h2 ^ a) * kMul;
+    b ^= (b >> 47);
+    b *= kMul;
+    return b;
 }
 
 std::vector<std::pair<int32_t, int32_t>> SuperNodeGraphBuilder::GetReduceNodeMergePair() const
