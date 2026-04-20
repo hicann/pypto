@@ -339,9 +339,12 @@ void PadLocalBuffer::PadVector(
 
 bool PadLocalBuffer::IsExpandLastDim(const Operation& op)
 {
-    int axis = op.GetIntAttribute(OP_ATTR_PREFIX + "EXPANDDIM");
-    if (axis == static_cast<int>(op.GetOOperands()[0]->shape.size() - 1)) {
-        return true;
+    auto axes = op.GetVectorIntAttribute(OpAttributeKey::expandDims);
+    int lastDim = static_cast<int>(op.GetOOperands()[0]->shape.size() - 1);
+    for (auto axis : axes) {
+        if (axis == lastDim) {
+            return true;
+        }
     }
     return false;
 }

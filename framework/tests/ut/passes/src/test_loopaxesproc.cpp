@@ -115,7 +115,7 @@ TEST_F(TestLoopaxesProcPass, LoopaxesProcUTest1)
     outCast->UpdateDynValidShape(symShape3);
 
     auto& expand = currFunctionPtr->AddOperation(Opcode::OP_EXPAND, {inCast2}, {ubTensor2});
-    expand.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", kNum3);
+    expand.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{kNum3});
     currFunctionPtr->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {inCast1}, {ubTensor2});
     auto& add = currFunctionPtr->AddOperation(Opcode::OP_ADD, {ubTensor2, ubTensor3}, {ubTensor4});
     auto& mul = currFunctionPtr->AddOperation(Opcode::OP_MUL, {ubTensor2, ubTensor4}, {ubTensor5});

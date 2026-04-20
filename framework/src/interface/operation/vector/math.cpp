@@ -701,7 +701,7 @@ void InnerTiledCumOperation(
             LogicalTensorPtr lastTile =
                 std::make_shared<LogicalTensor>(function, srcTile->Datatype(), srcTile->GetShape());
             auto& eop = function.AddOperation("TILE_EXPAND", {lastAxisTile}, {lastTile});
-            eop.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", axis);
+            eop.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{axis});
             if (is_sum) {
                 function.AddOperation(Opcode::OP_ADD, {srcTile, lastTile}, {dstTile});
             } else {

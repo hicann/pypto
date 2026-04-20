@@ -35,26 +35,35 @@ struct ExpandOpMetaData {
     nlohmann::json test_data_;
 };
 
-int ExpandAxis(const std::vector<SymbolicScalar>& inputsShape, const std::vector<SymbolicScalar>& outputsShape)
-{
-    int expandAxis = -1;
-    for (size_t i = 0; i < inputsShape.size(); i++) {
-        if (inputsShape[i] != outputsShape[i]) {
-            expandAxis = i;
-        }
-    }
-    return expandAxis;
-}
-
-void UpdateInputViewShape(
-    std::vector<int64_t>& inputViewShape, int expandAxis, const std::vector<SymbolicScalar>& inputsShape,
+void UpdateInputExpandViewShape(
+    std::vector<int64_t>& inputViewShape, const std::vector<SymbolicScalar>& inputsShape,
     const std::vector<SymbolicScalar>& outputsShape)
 {
-    if (expandAxis != -1) {
-        for (size_t i = 0; i < inputsShape.size(); i++) {
-            if (inputsShape[i] != outputsShape[i]) {
-                inputViewShape[i] = inputsShape[i].Concrete();
-            }
+    for (size_t i = 0; i < inputsShape.size(); i++) {
+        if (inputsShape[i] == 1 && outputsShape[i] != 1) {
+            inputViewShape[i] = 1;
+        }
+    }
+}
+
+void UpdateInputExpandVaildShape(
+    std::vector<SymbolicScalar>& inputValidShape, const std::vector<SymbolicScalar>& inputsShape,
+    const std::vector<SymbolicScalar>& outputsShape)
+{
+    for (size_t i = 0; i < inputsShape.size(); i++) {
+        if (inputsShape[i] == 1 && outputsShape[i] != 1) {
+            inputValidShape[i] = 1;
+        }
+    }
+}
+
+void UpdateInputExpandOffset(
+    std::vector<SymbolicScalar>& inputOffset, const std::vector<SymbolicScalar>& inputsShape,
+    const std::vector<SymbolicScalar>& outputsShape)
+{
+    for (size_t i = 0; i < inputsShape.size(); i++) {
+        if (inputsShape[i] == 1 && outputsShape[i] != 1) {
+            inputOffset[i] = 0;
         }
     }
 }
@@ -69,10 +78,9 @@ static void ExpandOperationExeFunc2Dims(
         auto args = static_cast<const ExpandOpFuncArgs*>(opArgs);
         std::vector<int64_t> viewShape = {args->viewShape_[0], args->viewShape_[1]};
         std::vector<int64_t> inputViewShape = viewShape;
+        UpdateInputExpandViewShape(inputViewShape, inputsShape, outputsShape);
         std::vector<SymbolicScalar> inputValidShape(2, 0);
         std::vector<SymbolicScalar> inputOffset(2, 0);
-        const int expandAxis = ExpandAxis(inputsShape, outputsShape);
-        UpdateInputViewShape(inputViewShape, expandAxis, inputsShape, outputsShape);
         const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
         const int sloop = CeilDiv(outputsShape[1], viewShape[1]);
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
@@ -83,10 +91,8 @@ static void ExpandOperationExeFunc2Dims(
                     std::min(inputsShape[0] - bIdx * inputViewShape[0], inputViewShape[0]),
                     std::min(inputsShape[1] - sIdx * inputViewShape[1], inputViewShape[1])};
                 inputOffset = {bIdx * inputViewShape[0], sIdx * inputViewShape[1]};
-                if (expandAxis >= 0 && expandAxis <= 1) {
-                    inputValidShape[expandAxis] = inputViewShape[expandAxis];
-                    inputOffset[expandAxis] = 0;
-                }
+                UpdateInputExpandVaildShape(inputValidShape, inputsShape, outputsShape);
+                UpdateInputExpandOffset(inputOffset, inputsShape, outputsShape);
                 Tensor tileTensor0 = View(inputs[0], inputViewShape, inputValidShape, inputOffset);
                 TileShape::Current().SetVecTile(args->tileShape_);
                 auto res = Expand(
@@ -111,10 +117,9 @@ static void ExpandOperationExeFunc3Dims(
         auto args = static_cast<const ExpandOpFuncArgs*>(opArgs);
         std::vector<int64_t> viewShape = {args->viewShape_[0], args->viewShape_[1], args->viewShape_[2]};
         std::vector<int64_t> inputViewShape = viewShape;
+        UpdateInputExpandViewShape(inputViewShape, inputsShape, outputsShape);
         std::vector<SymbolicScalar> inputValidShape(3, 0);
         std::vector<SymbolicScalar> inputOffset(3, 0);
-        const int expandAxis = ExpandAxis(inputsShape, outputsShape);
-        UpdateInputViewShape(inputViewShape, expandAxis, inputsShape, outputsShape);
         const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
         const int sloop = CeilDiv(outputsShape[1], viewShape[1]);
         const int nloop = CeilDiv(outputsShape[2], viewShape[2]);
@@ -129,10 +134,8 @@ static void ExpandOperationExeFunc3Dims(
                         std::min(inputsShape[1] - sIdx * inputViewShape[1], inputViewShape[1]),
                         std::min(inputsShape[2] - nIdx * inputViewShape[2], inputViewShape[2])};
                     inputOffset = {bIdx * inputViewShape[0], sIdx * inputViewShape[1], nIdx * inputViewShape[2]};
-                    if (expandAxis >= 0 && expandAxis <= 2) {
-                        inputValidShape[expandAxis] = inputViewShape[expandAxis];
-                        inputOffset[expandAxis] = 0;
-                    }
+                    UpdateInputExpandVaildShape(inputValidShape, inputsShape, outputsShape);
+                    UpdateInputExpandOffset(inputOffset, inputsShape, outputsShape);
                     Tensor tileTensor0 = View(inputs[0], inputViewShape, inputValidShape, inputOffset);
                     TileShape::Current().SetVecTile(args->tileShape_);
                     auto res = Expand(
@@ -160,10 +163,9 @@ static void ExpandOperationExeFunc4Dims(
         std::vector<int64_t> viewShape = {
             args->viewShape_[0], args->viewShape_[1], args->viewShape_[2], args->viewShape_[3]};
         std::vector<int64_t> inputViewShape = viewShape;
+        UpdateInputExpandViewShape(inputViewShape, inputsShape, outputsShape);
         std::vector<SymbolicScalar> inputValidShape(4, 0);
         std::vector<SymbolicScalar> inputOffset(4, 0);
-        const int expandAxis = ExpandAxis(inputsShape, outputsShape);
-        UpdateInputViewShape(inputViewShape, expandAxis, inputsShape, outputsShape);
         const int bloop = CeilDiv(outputsShape[0], viewShape[0]);
         const int sloop = CeilDiv(outputsShape[1], viewShape[1]);
         const int nloop = CeilDiv(outputsShape[2], viewShape[2]);
@@ -184,10 +186,8 @@ static void ExpandOperationExeFunc4Dims(
                         inputOffset = {
                             bIdx * inputViewShape[0], sIdx * inputViewShape[1], nIdx * inputViewShape[2],
                             mIdx * inputViewShape[3]};
-                        if (expandAxis >= 0 && expandAxis <= 3) {
-                            inputValidShape[expandAxis] = inputViewShape[expandAxis];
-                            inputOffset[expandAxis] = 0;
-                        }
+                        UpdateInputExpandVaildShape(inputValidShape, inputsShape, outputsShape);
+                        UpdateInputExpandOffset(inputOffset, inputsShape, outputsShape);
                         Tensor tileTensor0 = View(inputs[0], inputViewShape, inputValidShape, inputOffset);
                         TileShape::Current().SetVecTile(args->tileShape_);
                         auto res = Expand(

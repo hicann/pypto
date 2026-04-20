@@ -92,7 +92,7 @@ TEST_F(TestCodegenDynUna, TestDynExpand)
     auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
 
     auto& op = function->AddOperation(Opcode::OP_EXPAND, {localTensor}, {localOutTensor});
-    op.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", 0);
+    op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{0});
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

@@ -67,6 +67,7 @@ public:
     static const std::string tag;
     static const std::string distTilingInfo;
     static const std::string sameInOut;
+    static const std::string expandDims;
     static const std::string inputCombineAxis;
     static const std::string outputCombineAxis;
     static const std::string inputCombineAxisDone;

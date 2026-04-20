@@ -26,11 +26,11 @@ struct ExpandInfo {
     const std::shared_ptr<LogicalTensor>& result;
     std::vector<int64_t>& viewShape;
     std::vector<int64_t>& offset;
-    const int expandDim;
+    const std::vector<int> expandDims;
     ExpandInfo(
         const std::shared_ptr<LogicalTensor>& srcTensor0, const std::shared_ptr<LogicalTensor>& result0,
-        std::vector<int64_t>& viewShape0, std::vector<int64_t>& offset0, const int expandDim0)
-        : srcTensor(srcTensor0), result(result0), viewShape(viewShape0), offset(offset0), expandDim(expandDim0)
+        std::vector<int64_t>& viewShape0, std::vector<int64_t>& offset0, const std::vector<int> expandDims0)
+        : srcTensor(srcTensor0), result(result0), viewShape(viewShape0), offset(offset0), expandDims(expandDims0)
     {}
 };
 
@@ -58,20 +58,6 @@ void CheckExpandTensorValid(const LogicalTensorPtr& operand, const LogicalTensor
         }
     }
 
-    int numExpandAxis = 0;
-    for (size_t i = 0; i < result_shape.size(); ++i) {
-        if (operand_shape[i] != result_shape[i]) {
-            numExpandAxis++;
-        }
-    }
-    if (numExpandAxis > 1) {
-        std::ostringstream oss;
-        oss << "Only allow to expand one axis! "
-            << "Actual expanded axes count: " << numExpandAxis << ". "
-            << "Operand shape: (" << operand_shape << ") "
-            << "Result shape: (" << result_shape << ")";
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << oss.str();
-    }
 }
 
 void ExpandTile(Function& function, const struct ExpandInfo& expandInfo)
@@ -91,7 +77,7 @@ void ExpandTile(Function& function, const struct ExpandInfo& expandInfo)
     }
     auto srcTile = expandInfo.srcTensor->View(function, srcShape, srcOffset);
     auto& newOp = function.AddOperation("TILE_EXPAND", {srcTile}, {resultTile});
-    newOp.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", expandInfo.expandDim);
+    newOp.SetAttribute(OpAttributeKey::expandDims, expandInfo.expandDims);
     newOp.SetAttribute(OP_ATTR_PREFIX + "validShape", resultTile->GetDynValidShape());
 }
 
@@ -122,10 +108,10 @@ void Expand(
     std::vector<int64_t> offset(result->shape.size(), 0);
     std::vector<int64_t> viewShape(result->shape.size(), 1);
     std::vector<SymbolicScalar> outValidShape;
-    int expandDim = -1;
+    std::vector<int> expandDims;
     for (size_t i = 0; i < result->shape.size(); ++i) {
         if (operand->shape[i] != result->shape[i]) {
-            expandDim = i;
+            expandDims.push_back(i);
             for (auto it : other) {
                 if (it != nullptr && it->shape[i] == result->shape[i]) {
                     if (it->GetDynValidShape().empty()) {
@@ -146,7 +132,7 @@ void Expand(
     }
 
     result->UpdateDynValidShape(outValidShape);
-    struct ExpandInfo expandInfo(operand, result, viewShape, offset, expandDim);
+    struct ExpandInfo expandInfo(operand, result, viewShape, offset, expandDims);
     ExpandTile(function, tileShape, 0, expandInfo, outValidShape);
 }
 
@@ -159,14 +145,14 @@ void ExpandWithResultValidShape(
         << "The GetGraphType of function is incorrect";
     std::vector<int64_t> offset(result->shape.size(), 0);
     std::vector<int64_t> viewShape(result->shape.size(), 1);
-    int expandDim = -1;
+    std::vector<int> expandDims;
     for (size_t i = 0; i < result->shape.size(); ++i) {
         if (operand->shape[i] != result->shape[i]) {
-            expandDim = i;
+            expandDims.push_back(i);
         }
     }
     result->UpdateDynValidShape(resultValidShape);
-    struct ExpandInfo expandInfo(operand, result, viewShape, offset, expandDim);
+    struct ExpandInfo expandInfo(operand, result, viewShape, offset, expandDims);
     ExpandTile(function, tileShape, 0, expandInfo, resultValidShape);
 }
 
@@ -180,14 +166,14 @@ void TiledExpand(
 
     std::vector<int64_t> offset(result->shape.size(), 0);
     std::vector<int64_t> viewShape(result->shape.size(), 1);
-    int expandDim = -1;
+    std::vector<int> expandDims;
     for (size_t i = 0; i < result->shape.size(); ++i) {
         if (operand->shape[i] != result->shape[i]) {
-            expandDim = i;
+            expandDims.push_back(i);
         }
     }
     result->UpdateDynValidShape(validShape);
-    struct ExpandInfo expandInfo(operand, result, viewShape, offset, expandDim);
+    struct ExpandInfo expandInfo(operand, result, viewShape, offset, expandDims);
     ExpandTile(function, tileShape, 0, expandInfo, validShape);
 }
 
@@ -219,13 +205,6 @@ Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vec
 
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == dstShape.size())
         << "The shape size of self and dst should be equal";
-    int numExpandAxis = 0;
-    for (size_t i = 0; i < dstShape.size(); ++i) {
-        if (self.GetShape()[i] != dstShape[i]) {
-            numExpandAxis++;
-        }
-    }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, numExpandAxis <= 1) << "Only allow to expand one axis";
     if (validShape.empty()) {
         for (size_t i = 0; i < dstShape.size(); ++i) {
             if (self.GetShape()[i] != dstShape[i]) {

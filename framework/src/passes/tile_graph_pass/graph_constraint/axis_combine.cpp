@@ -80,7 +80,7 @@ static void UpdateOperand(
 static void SetAttrForExpand(Operation& op, LogicalTensors& inputTensor, int idx, Shape& shape)
 {
     int expandDim = inputTensor[idx]->GetShape().size() - 1;
-    op.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", expandDim);
+    op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{expandDim});
     auto dynValidShape = SymbolicScalar::FromConcrete(shape);
     if (!(inputTensor[idx]->GetDynValidShape().empty())) {
         dynValidShape = inputTensor[idx]->GetDynValidShape();

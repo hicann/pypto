@@ -52,6 +52,7 @@ const std::string OpAttributeKey::dontTouch = "DONT_TOUCH";
 const std::string OpAttributeKey::tag = "TAG";
 const std::string OpAttributeKey::distTilingInfo = "DIST_TILING_INFO";
 const std::string OpAttributeKey::sameInOut = "SAME_IN_OUT";
+const std::string OpAttributeKey::expandDims = "op_attr_expand_dims";
 const std::string OpAttributeKey::inputCombineAxis = "op_attr_input_combine_axis";
 const std::string OpAttributeKey::outputCombineAxis = "op_attr_output_combine_axis";
 const std::string OpAttributeKey::inplaceIdx = "INPLACE_IDX";

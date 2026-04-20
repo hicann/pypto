@@ -273,7 +273,7 @@ inline void ConstructGraph6(std::shared_ptr<Function>& currFunctionPtr)
     (void)abs_op;
     auto& expand_op = currFunctionPtr->AddRawOperation(Opcode::OP_EXPAND, {ubTensor3}, {ubTensor4});
     (void)expand_op;
-    expand_op.SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", 1);
+    expand_op.SetAttribute(OpAttributeKey::expandDims, std::vector<int>{1});
     auto& copy_out_op = currFunctionPtr->AddRawOperation(Opcode::OP_COPY_OUT, {ubTensor4}, {outCast});
     (void)copy_out_op;
     currFunctionPtr->inCasts_.push_back(incast1);
@@ -1175,7 +1175,7 @@ TEST_F(TestPadLocalBuffer, axiscombineDisable3)
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm"}, {"t1"}, "copyin", true), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {24, 1}, MemoryType::MEM_UB, "t2"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_EXPAND, {"t1"}, {"t2"}, "expand", true), true);
-    graph.GetOp("expand")->SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", 0);
+    graph.GetOp("expand")->SetAttribute(OpAttributeKey::expandDims, std::vector<int>{0});
 
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {24, 1}, MemoryType::MEM_UB, "t3"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {24, 1}, MemoryType::MEM_UB, "t4"), true);
@@ -1239,7 +1239,7 @@ TEST_F(TestPadLocalBuffer, axiscombineEnable)
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {1, 16}, MemoryType::MEM_UB, "t1"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {24, 16}, MemoryType::MEM_UB, "t2"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_EXPAND, {"t1"}, {"t2"}, "expand", true), true);
-    graph.GetOp("expand")->SetAttribute(OP_ATTR_PREFIX + "EXPANDDIM", 0);
+    graph.GetOp("expand")->SetAttribute(OpAttributeKey::expandDims, std::vector<int>{0});
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {24, 1}, MemoryType::MEM_DEVICE_DDR, "gm"), true);
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {24, 1}, MemoryType::MEM_UB, "t3"), true);
     EXPECT_EQ(graph.AddOp(Opcode::OP_COPY_IN, {"gm"}, {"t3"}, "copyin", true), true);

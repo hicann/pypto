@@ -306,8 +306,10 @@ std::string CodeGenOpNPU::PrintVcopyStatic(const PrintUnaryParam& param) const
 
 std::string CodeGenOpNPU::PrintVcopy(const PrintUnaryParam& param) const { return PrintVcopyStatic(param); }
 
-std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& param, int expandAxis) const
+std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& param, std::vector<int> expandAxes) const
 {
+    ASSERT(OperErr::ATTRIBUTE_INVALID, expandAxes.size() == 1)
+            << "Dynamic Expand only supports single axis expand, got " << expandAxes.size();
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& dVar = param.dVar;
@@ -331,7 +333,9 @@ std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& par
     for (int i = ID1; i < SHAPE_DIM4; i++) {
         paramList.emplace_back(std::to_string(ss[i]));
     }
-    paramList.emplace_back(std::to_string(expandAxis));
+    for (auto axis : expandAxes) {
+        paramList.emplace_back(std::to_string(axis));
+    }
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     paramList.clear();
     std::string dst = "(__ubuf__ " + dstDtypeStr + "*)" + dVar;
@@ -352,7 +356,7 @@ std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& par
     return os.str();
 }
 
-std::string CodeGenOpNPU::PrintExpandLayout(int expandAxis) const
+std::string CodeGenOpNPU::PrintExpandLayout(std::vector<int> expandAxes) const
 {
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
@@ -363,7 +367,9 @@ std::string CodeGenOpNPU::PrintExpandLayout(int expandAxis) const
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }
-    templateParamList.emplace_back(std::to_string(expandAxis));
+    for (auto axis : expandAxes) {
+        templateParamList.emplace_back(std::to_string(axis));
+    }
     oss << WrapParamByAngleBrackets(templateParamList);
     oss << WrapParamByParentheses({dstTensor, srcTensor});
     oss << ";\n";
@@ -374,40 +380,45 @@ std::string CodeGenOpNPU::PrintExpand(
     const std::string& s0Var, const std::string& dVar, const std::string& srcDtypeStr,
     const std::string& dstDtypeStr) const
 {
-    char buffer[256] = "CG_ERROR";
-    int ret = 0;
-    int expandAxis{-1};
     std::vector<int64_t> dos = NormalizeShape(originShape[0], SHAPE_DIM4);
     std::vector<int64_t> os = NormalizeShape(originShape[1], SHAPE_DIM4);
     std::vector<int64_t> ss = NormalizeShape(rawShape[1], SHAPE_DIM4);
     std::vector<int64_t> ds = NormalizeShape(rawShape[0], SHAPE_DIM4);
-    auto axis = opAttrs.at(OP_ATTR_PREFIX + "EXPANDDIM");
-    if (axis.HasValue()) {
-        expandAxis = AnyCast<int64_t>(axis);
-    }
+    auto axesAttr = opAttrs.at(OpAttributeKey::expandDims);
+    ASSERT(OperErr::ATTRIBUTE_INVALID, axesAttr.HasValue()) << "expandDims attribute not found";
+    auto expandAxes = AnyCast<std::vector<int64_t>>(axesAttr);
+    ASSERT(OperErr::ATTRIBUTE_INVALID, !expandAxes.empty()) << "expandDims is empty";
 
-    bool isValidAxis = ((expandAxis >= 0) && (expandAxis <= (static_cast<int>(rawShape[1].size() - 1))));
-    ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported expand axis: " << expandAxis;
-    // modify expandAxis for SHAPE_DIM4
-    expandAxis += SHAPE_DIM4 - rawShape[1].size();
+    int originDimSize = static_cast<int>(rawShape[1].size());
+    std::vector<int> normalized4DAxes;
+    std::vector<int> normalized5DAxes;
+    for (auto axis : expandAxes) {
+        bool isValidAxis = ((axis >= 0) && (axis <= (originDimSize - 1)));
+        ASSERT(OperErr::ATTRIBUTE_INVALID, isValidAxis) << "unsupported expand axis: " << axis;
+        normalized4DAxes.push_back(static_cast<int>(axis) + SHAPE_DIM4 - originDimSize);
+        normalized5DAxes.push_back(static_cast<int>(axis) + SHAPE_DIM5 - originDimSize);
+    }
 
     if (isSupportLayout) {
-        return PrintExpandLayout(expandAxis);
+        return PrintExpandLayout(normalized5DAxes);
     }
     if (isDynamicFunction) {
-        return PrintExpandDynamicUnaligned({s0Var, dVar, srcDtypeStr, dstDtypeStr}, expandAxis);
+        return PrintExpandDynamicUnaligned({s0Var, dVar, srcDtypeStr, dstDtypeStr}, normalized4DAxes);
     }
 
-    ret = sprintf_s(
-        buffer, sizeof(buffer),
-        "%s_<%s, %d, %d, %d, %d, %d, %d, %d, %d, /*DS*/ %d, %d, %d, /*SS*/ %d, %d, %d, %d>"
-        "((__ubuf__ %s*)%s, (__ubuf__ %s*)%s);\n",
-        tileOpName.c_str(), dstDtypeStr.c_str(), dos[ID0], dos[ID1], dos[ID2], dos[ID3], os[ID0], os[ID1], os[ID2],
-        os[ID3], ds[ID1], ds[ID2], ds[ID3], ss[ID1], ss[ID2], ss[ID3], expandAxis, dstDtypeStr.c_str(), dVar.c_str(),
-        srcDtypeStr.c_str(), s0Var.c_str());
-    ASSERT(GenCodeErr::PRINT_FAILED, ret >= 0)
-        << "GenUnaryOp" << OpcodeManager::Inst().GetOpcodeStr(opCode) << " sprintf_s failed " << ret;
-    return buffer;
+    std::ostringstream oss;
+    oss << tileOpName << "_<" << dstDtypeStr
+        << ", " << dos[ID0] << ", " << dos[ID1] << ", " << dos[ID2] << ", " << dos[ID3]
+        << ", " << os[ID0] << ", " << os[ID1] << ", " << os[ID2] << ", " << os[ID3]
+        << ", /*DS*/" << ds[ID1] << ", " << ds[ID2] << ", " << ds[ID3]
+        << ", /*SS*/" << ss[ID1] << ", " << ss[ID2] << ", " << ss[ID3];
+    for (auto axis : normalized4DAxes) {
+        oss << ", " << axis;
+    }
+    oss << ">((__ubuf__ " << dstDtypeStr << "*)" << dVar
+        << ", (__ubuf__ " << srcDtypeStr << "*)" << s0Var << ");\n";
+
+    return oss.str();
 }
 
 std::string CodeGenOpNPU::PrintOneHotLayout() const
