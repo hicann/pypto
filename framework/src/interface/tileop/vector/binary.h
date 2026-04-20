@@ -106,7 +106,10 @@ template <
     TileOp::PenuBroadcastOperand HBrcSide, typename LastUse, typename T0, typename T1, typename T2>
 TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
 {
-    auto info = ExtractLayoutInfo(dst, src0, src1);
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
     using Src0TileInfo = TensorTileInfo<T1>;
     using Src1TileInfo = TensorTileInfo<T2>;
     constexpr BrcMode brcmode = GetBrcMode<WBrcSide, HBrcSide>();
@@ -128,7 +131,7 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
     }
 
     if constexpr (brcmode == BrcMode::BRC_HW) {
-        BinaryMixBrcCompute<op, PrecisionType, WBrcSide, HBrcSide, Src0TileInfo, Src1TileInfo, LastUse>(dst, src0, src1, info);
+        BinaryMixBrcCompute<op, PrecisionType, WBrcSide, HBrcSide, Src0TileInfo, Src1TileInfo, LastUse>(dst, src0, src1);
         return;
     }
 
@@ -141,9 +144,9 @@ TILEOP void BinaryCompute(T0 dst, T1 src0, T2 src1)
     auto dstTile = PtoTile<T0>(dst);
     auto src0Tile = Src0PtoTile(src0);
     auto src1Tile = Src1PtoTile(src1);
-    for (LoopVar n0Index = 0; n0Index < info.shape0; ++n0Index) {
-        for (LoopVar n1Index = 0; n1Index < info.shape1; ++n1Index) {
-            for (LoopVar n2Index = 0; n2Index < info.shape2; ++n2Index) {
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
                 auto dsttileOffsets = TileOffset(n0Index, n1Index, n2Index);
                 auto src0tileOffsets = TileOffset(
                     Src0TileInfo::tile0 == 1 ? 0 : n0Index, Src0TileInfo::tile1 == 1 ? 0 : n1Index,

@@ -160,11 +160,15 @@ void TiledBinaryOperation(
         }
 
         if (op != nullptr) {
-            std::vector<int64_t> brcOperand(shapeSize, 0);
+            std::vector<int64_t> brcOperand(shapeSize, -1);
+            size_t brcAxesCount = 0;
             for (size_t i = 0; i < shapeSize; i++) {
                 brcOperand[i] = BrcAxisBinaryOp(input1.tensor, input2.tensor, i);
+                if (brcOperand[i] != -1) {
+                    brcAxesCount++;
+                }
             }
-            if (brcOperand[shapeSize - 1] != -1) {
+            if (brcOperand[shapeSize - 1] != -1 && brcAxesCount >= 2) {
                 op->SetAttribute(OpAttributeKey::excludeBufferReuse, true);
             }
             op->SetAttribute(OP_ATTR_PREFIX + "brcOperand", brcOperand);
@@ -201,7 +205,6 @@ std::pair<std::vector<int64_t>, std::vector<int64_t>> GetBrcExpandShape(
     size_t shapeSize = result->shape.size();
 
     bool isInWhiteList = SUPPORT_BRC_INLINE.count(GetBinaryOpNameCode<T>());
-    bool isSupportDtype = (operand1->Datatype() == DT_FP32 || operand1->Datatype() == DT_FP16);
     bool isCombineAxisEnabled =
         function.paramConfigs_.forceCombineAxis || (function.paramConfigs_.combineAxis && isInWhiteList);
     if (isInWhiteList) {
@@ -212,17 +215,15 @@ std::pair<std::vector<int64_t>, std::vector<int64_t>> GetBrcExpandShape(
                 operand2Shape[i] = operand2->shape[i];
             }
         }
-        if (isSupportDtype) {
-            // The 2nd last axis: skip expand, brcinline
-            if (shapeSize > 1) {
-                operand1Shape[shapeSize - 2] = operand1->shape[shapeSize - 2];
-                operand2Shape[shapeSize - 2] = operand2->shape[shapeSize - 2];
-            }
-            // The last axis: brcinline when combineAxis is enabled
-            if (shapeSize > 0 && isCombineAxisEnabled) {
-                operand1Shape[shapeSize - 1] = operand1->shape[shapeSize - 1];
-                operand2Shape[shapeSize - 1] = operand2->shape[shapeSize - 1];
-            }
+        // The 2nd last axis: skip expand, brcinline
+        if (shapeSize > 1) {
+            operand1Shape[shapeSize - 2] = operand1->shape[shapeSize - 2];
+            operand2Shape[shapeSize - 2] = operand2->shape[shapeSize - 2];
+        }
+        // The last axis: brcinline when combineAxis is enabled
+        if (shapeSize > 0 && isCombineAxisEnabled) {
+            operand1Shape[shapeSize - 1] = operand1->shape[shapeSize - 1];
+            operand2Shape[shapeSize - 1] = operand2->shape[shapeSize - 1];
         }
     }
     return {operand1Shape, operand2Shape};
