@@ -71,5 +71,5 @@ y = my_kernel(x)
 For detailed developer documentation, see developer_doc.md in the frontend directory.
 """
 
-from . import error
+from ... import error
 from .entry import jit, function

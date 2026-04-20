@@ -37,7 +37,7 @@ import enum
 import typing
 from typing import NoReturn, Callable
 
-from .error import RenderedParserError
+from pypto.error import RenderedParserError
 
 PRIOR_CONTEXT_LINES = 2
 SUBSEQUENT_CONTEXT_LINES = 4

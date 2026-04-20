@@ -15,7 +15,7 @@ import pytest
 import torch
 import torch_npu
 import pypto
-from pypto.frontend.parser.error import ParserError
+from pypto.error import ParserError
 
 
 @pypto.frontend.jit()

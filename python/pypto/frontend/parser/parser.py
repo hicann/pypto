@@ -19,10 +19,10 @@ from typing import Any, List, Optional, Union, Callable
 
 import pypto
 from pypto._utils import set_source_location, clear_source_location
+from pypto.error import ParserError, RenderedParserError
 from pypto.symbolic_scalar import SymbolicScalar, SymInt
 from .context import Context
 from .diagnostics import DiagnosticLevel, Diagnostics, Source
-from .error import ParserError, RenderedParserError
 from .evaluator import ExprEvaluator
 from .liveness import LivenessAnalyzer
 

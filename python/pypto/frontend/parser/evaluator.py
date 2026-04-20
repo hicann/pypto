@@ -37,8 +37,8 @@ from typing import Any
 
 import pypto
 
+from pypto.error import ParserError
 from .diagnostics import Diagnostics
-from .error import ParserError
 
 
 class ExprEvaluator:
