@@ -16,6 +16,7 @@
 #include "replace_tensor.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_error.h"
+#include "passes/pass_utils/alignment_utils.h"
 
 #define MODULE_NAME "ReplaceTensor"
 
@@ -862,62 +863,6 @@ std::unordered_map<LogicalTensorPtr, int> ReplaceTensor::BuildTensorOrderIndexMa
 }
 
 /**
- * @brief 判断 UB 上的tensor尾轴是否32B对齐
- */
-inline bool IsLastDim32BAligned(const LogicalTensorPtr& tensor)
-{
-    // 空shape视为非32B对齐
-    if (tensor->shape.empty()) {
-        return false;
-    }
-
-    size_t lastIdx = tensor->shape.size() - 1;
-    size_t lastDim = tensor->shape[lastIdx];
-    size_t bytes = BytesOf(tensor->Datatype());
-    size_t totalByte = lastDim * bytes;
-
-    // 判断是否32字节对齐
-    return (totalByte % 32) == 0;
-}
-
-inline size_t GetPaddingValue(LogicalTensorPtr& in)
-{
-    auto bytes = BytesOf(in->Datatype());
-    auto paddingIter = BLOCK_PADDING_DIM.find(bytes);
-    if (paddingIter == BLOCK_PADDING_DIM.end()) {
-        return 1;
-    }
-    return paddingIter->second;
-}
-
-/**
- * @brief 为 UB 上尾轴非32B对齐的tensor做32B对齐操作
- */
-inline int64_t Pad(int64_t dim, int64_t padValue)
-{
-    if (padValue == 0) {
-        return dim;
-    }
-    return (dim + padValue - 1) / padValue * padValue;
-}
-
-/**
- * @brief 计算tensor的数据量
- */
-int computeTensorSize(const LogicalTensorPtr& tensor) {
-    if (tensor == nullptr || tensor->shape.empty()) {
-        return 0;
-    }
-
-    int bytes = BytesOf(tensor->Datatype());
-    int tensorSize = bytes;
-    for (int dim : tensor->shape) {
-        tensorSize *= dim;
-    }
-    return tensorSize;
-}
-
-/**
  * @brief 为 UB 内存类型的输入插入拷贝序列 (UB → DDR → UB)
  */
 Status ReplaceTensor::InsertCopyUBOp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input)
@@ -966,24 +911,13 @@ Status ReplaceTensor::InsertCopyDDROp(Function& function, Operation* needInsertC
     auto memType = copyInOutput.GetMemoryTypeOriginal();
     if ((memType == MemoryType::MEM_UB) && (copyInOutput.GetDataSize() > UB_SIZE_THRESHOLD)) {
         APASS_LOG_ERROR_F(Elements::Tensor, 
-                          "Tensor [%d] can not copy to UB, tensor size [%d] exceeds the UB size [%d] limit.", input->magic, 
-                          computeTensorSize(input), UB_SIZE_THRESHOLD);
+                          "Tensor [%d] can not copy to UB, tensor size [%ld] exceeds the UB size [%d] limit.", input->magic, 
+                          input->GetDataSize(), UB_SIZE_THRESHOLD);
         return FAILED;
     }
     auto copyInOutputPtr = std::make_shared<LogicalTensor>(std::move(copyInOutput));
-    if (memType == MemoryType::MEM_UB && !IsLastDim32BAligned(copyInOutputPtr)) {
-        size_t lastIdx = copyInOutputPtr->shape.size() - 1;
-        size_t paddingValue = GetPaddingValue(copyInOutputPtr); // 根据数据类型，判断需要pad到几个元素
-
-        // 保存rawshape
-        copyInOutputPtr->oriShape = copyInOutputPtr->shape;
-        copyInOutputPtr->tensor->oriRawshape = copyInOutputPtr->tensor->rawshape;
-
-        // pad 32B
-        copyInOutputPtr->shape[lastIdx] = Pad(copyInOutputPtr->shape[lastIdx], paddingValue);
-        copyInOutputPtr->tensor->rawshape[lastIdx] =
-            Pad(copyInOutputPtr->tensor->oriRawshape[lastIdx], copyInOutputPtr->shape[lastIdx]);
-    }
+    //为copy到Ub的Tensor进行32B对齐
+    AlignmentUtils::ProcessLastDim32BAlignedOnUB(copyInOutputPtr);
     auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {input}, {copyInOutputPtr});
     copyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
         OpImmediate::Specified(input->GetOffset()), MemoryType::MEM_UB, OpImmediate::Specified(copyShape),
