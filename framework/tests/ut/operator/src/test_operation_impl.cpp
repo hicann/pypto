@@ -684,6 +684,111 @@ TEST_F(OperationImplTest, test_Range_INT32)
     FUNCTION("TestRange") { result = Range(start, end, step); }
 }
 
+TEST_F(OperationImplTest, Test_Uniform_UINT32) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {128};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 12345678901234;
+        uint64_t counter0 = 0;
+        uint64_t counter1 = 0;
+        Tensor output(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_UINT32") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP32);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Uniform_FP16) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {128};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 12345678901234;
+        uint64_t counter0 = 0;
+        uint64_t counter1 = 0;
+        Tensor output(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_FP16") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP16);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Uniform_BF16) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {128};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 12345678901234;
+        uint64_t counter0 = 0;
+        uint64_t counter1 = 0;
+        Tensor output(DT_BF16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_BF16") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_BF16);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Uniform_Rounds7) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {128};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 12345678901234;
+        uint64_t counter0 = 0;
+        uint64_t counter1 = 0;
+        Tensor output(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_Rounds7") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)), DT_FP32);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Uniform_FP16_Rounds7) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {128};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 12345678901234;
+        uint64_t counter0 = 0;
+        uint64_t counter1 = 0;
+        Tensor output(DT_FP16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_FP16_Rounds7") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)), DT_FP16);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Uniform_BF16_Rounds7) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {128};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 12345678901234;
+        uint64_t counter0 = 0;
+        uint64_t counter1 = 0;
+        Tensor output(DT_BF16, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_BF16_Rounds7") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(7)), DT_BF16);
+        }
+    }
+}
+
+TEST_F(OperationImplTest, Test_Uniform_LargeShape) {
+    PROGRAM("Uniform") {
+        std::vector<int64_t> shape = {256};
+        TileShape::Current().SetVecTile({128});
+        uint64_t key = 9876543210;
+        uint64_t counter0 = 100;
+        uint64_t counter1 = 200;
+        Tensor output(DT_FP32, shape, "res");
+        config::SetBuildStatic(true);
+        FUNCTION("Uniform_LargeShape") {
+            output = Uniform(Element(DT_UINT64, key), SymbolicScalar(static_cast<int64_t>(counter0)), Element(DT_UINT64, counter1), shape, Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP32);
+        }
+    }
+}
+
 TEST_F(OperationImplTest, Test_Exp2_FP16)
 {
     PROGRAM("Exp2")

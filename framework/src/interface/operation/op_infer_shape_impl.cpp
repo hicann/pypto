@@ -476,6 +476,18 @@ void RangeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& out
 }
 REGISTER_INFER_SHAPE_FUNC(OP_RANGE, Opcode::OP_RANGE, RangeInferFunc);
 
+void UniformInferFunc(Operation *op, std::vector<std::vector<SymbolicScalar>> &outValidShapes) {
+    std::vector<SymbolicScalar> outValidShape;
+    auto shapeAttr = op->GetVectorIntAttribute(OP_ATTR_PREFIX + "SHAPE");
+    for (auto dim : shapeAttr) {
+        outValidShape.push_back(SymbolicScalar(static_cast<int64_t>(dim)));
+    }
+    for (auto output : op->GetOOperands()) {
+        outValidShapes.push_back(outValidShape);
+    }
+}
+REGISTER_INFER_SHAPE_FUNC(OP_UNIFORM, Opcode::OP_UNIFORM, UniformInferFunc);
+
 // reduce infer shape func
 void ReduceInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {

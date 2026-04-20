@@ -2640,6 +2640,143 @@ def as_float(value):
     return value
 
 
+def uniform_golden_func(inputs: list, config: dict):
+    params = config.get("params", {})
+    rounds = params.get("rounds", 10)
+    if isinstance(rounds, str):
+        rounds = int(rounds)
+    shape = config["output_tensors"][0]["shape"]
+    output_dtype = config["output_tensors"][0].get("dtype", "fp32").lower()
+    
+    key = params.get("key", 0)
+    if isinstance(key, str):
+        key = int(key)
+    
+    counter_0 = params.get("counter_0", 0)
+    if isinstance(counter_0, str):
+        counter_0 = int(counter_0)
+    counter_1 = params.get("counter_1", 0)
+    if isinstance(counter_1, str):
+        counter_1 = int(counter_1)
+    counter = [counter_0, counter_1]
+    
+    def uint32(x):
+        return x & 0xFFFFFFFF
+
+    def multiply_high_low(a, b):
+        product = a * b
+        hi = uint32(product >> 32)
+        lo = uint32(product)
+        return lo, hi
+    
+    def philox_single_round(counter, key0, key1):
+        lo0, hi0 = multiply_high_low(0xD2511F53, counter[0])
+        lo1, hi1 = multiply_high_low(0xCD9E8D57, counter[2])
+        
+        return [
+            uint32(hi1 ^ counter[1] ^ key0),
+            uint32(lo1),
+            uint32(hi0 ^ counter[3] ^ key1),
+            uint32(lo0)
+        ]
+    
+    def raise_key(key0, key1):
+        return (
+            uint32(key0 + 0x9E3779B9),
+            uint32(key1 + 0xBB67AE85)
+        )
+    
+    total_elements = 1
+    for dim in shape:
+        total_elements *= dim
+    
+    result = np.zeros(total_elements, dtype=np.uint32)
+
+    init_key0 = uint32(key)
+    init_key1 = uint32(key >> 32)
+    
+    original_counter = [
+        uint32(counter[0]),
+        uint32(counter[0] >> 32),
+        uint32(counter[1]),
+        uint32(counter[1] >> 32)
+    ]
+    
+    for i in range(0, total_elements, 4):
+        key0, key1 = init_key0, init_key1
+        current_counter = original_counter.copy()
+
+        for _ in range(rounds):
+            current_counter = philox_single_round(current_counter, key0, key1)
+            key0, key1 = raise_key(key0, key1)
+        
+        for j in range(min(4, total_elements - i)):
+            result[i + j] = current_counter[j]
+        
+        original_counter[0] = uint32(original_counter[0] + 1)
+        if original_counter[0] == 0:
+            original_counter[1] = uint32(original_counter[1] + 1)
+            if original_counter[1] == 0:
+                original_counter[2] = uint32(original_counter[2] + 1)
+                if original_counter[2] == 0:
+                    original_counter[3] = uint32(original_counter[3] + 1)
+    
+    if output_dtype == "fp32":
+        result_float = np.zeros(total_elements, dtype=np.float32)
+        for i in range(total_elements):
+            x = result[i]
+            man = x & 0x7fffff
+            exp = 127
+            val = (exp << 23) | man
+            result_float[i] = np.frombuffer(np.array([val], dtype=np.uint32).tobytes(), dtype=np.float32)[0] - 1.0
+        return [result_float.reshape(shape)]
+    elif output_dtype == "fp16":
+        result_half = np.zeros(total_elements, dtype=np.float16)
+        for i in range(total_elements):
+            x = result[i]
+            x_uint16 = np.uint16(x & 0xFFFF)
+            man = x_uint16 & 0x3ff
+            exp = np.uint16(15)
+            val = (exp << 10) | man
+            result_half[i] = (
+                np.frombuffer(np.array([val], dtype=np.uint16).tobytes(), dtype=np.float16)[0]
+                - np.float16(1.0)
+            )
+        return [result_half.reshape(shape)]
+    elif output_dtype == "bf16":
+        result_bfloat16 = np.zeros(total_elements, dtype=bfloat16)
+        for i in range(total_elements):
+            x = result[i]
+            x_uint16 = np.uint16(x & 0xFFFF)
+            man = x_uint16 & 0x7f
+            exp = np.uint16(127)
+            val = (exp << 7) | man
+            result_bfloat16[i] = (
+                np.frombuffer(np.array([val], dtype=np.uint16).tobytes(), dtype=bfloat16)[0]
+                - bfloat16(1.0)
+            )
+        return [result_bfloat16.reshape(shape)]
+    else:
+        result_float = np.zeros(total_elements, dtype=np.float32)
+        for i in range(total_elements):
+            x = result[i]
+            man = x & 0x7fffff
+            exp = 127
+            val = (exp << 23) | man
+            result_float[i] = np.frombuffer(np.array([val], dtype=np.uint32).tobytes(), dtype=np.float32)[0] - 1.0
+        return [result_float.reshape(shape)]
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestUniform/UniformOperationTest.TestUniform",
+    ]
+)
+def gen_uniform_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Uniform", uniform_golden_func, output, case_index)
+
+
 def safe_tensor_conversion(arr):
     if isinstance(arr, np.ndarray) and arr.dtype == np.dtype('bfloat16'):
         return torch.tensor(arr.astype(np.float32), dtype=torch.bfloat16)

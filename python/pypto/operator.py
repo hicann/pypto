@@ -11,7 +11,7 @@
 import pypto
 from pypto import Tensor
 
-__all__ = ["sin", "cos", "sigmoid", "softmax", "rms_norm"]
+__all__ = ["sin", "cos", "sigmoid", "softmax", "rms_norm", "stateless_random_uniform_v2", "stateless_random_normal_v2"]
 
 
 def sin(input: Tensor) -> Tensor:
@@ -504,3 +504,148 @@ def rms_norm(input: Tensor, gamma: Tensor = None, epsilon: float = 1e-6) -> Tens
     if in_dtype != pypto.DT_FP32:
         y = pypto.cast(y, in_dtype)
     return y
+
+
+def stateless_random_uniform_v2(shape, key, counter, alg, dtype) -> Tensor:
+    """Return a tensor containing uniformly distributed random values.
+
+    Parameters
+    ----------
+    shape: List[int]
+        The shape of the output tensor.
+    key: List[int]
+        The key for random number generation.
+    counter: List[int]
+        The counter for random number generation.
+    alg: List[int]
+        The algorithm to use for random number generation, support 1(Philox) and 3(auto_select, select Philox).
+    dtype: DataType
+        The data type of the output tensor.
+        The supported data types are DT_FP32, DT_FP16, and DT_BF16.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the specified shape and data type, containing
+        uniformly distributed random values in the range [0, 1).
+
+
+    Examples
+    --------
+    shape = [4, 4]
+    key = [1234]
+    counter = [0, 1]
+    alg = [1]
+
+    y = pypto.stateless_random_uniform_v2(shape, key, counter, alg, dtype)
+
+    Output y:[[0.1689806  0.9725481  0.90036285 0.16582811]
+              [0.1454581  0.48029935 0.02495587 0.99239147]
+              [0.02835405 0.10649502 0.45283175 0.87260246]
+              [0.6877538  0.24809706 0.95886254 0.24039495]]
+    """
+    if len(shape) < 1 or len(shape) > 4:
+        raise ValueError(f"output shape dim should be in [1, 4], but got {len(shape)}.")
+
+    if len(key) != 1:
+        raise ValueError(f"input key number should be 1, but got {len(key)}.")
+
+    if len(counter) != 2:
+        raise ValueError(f"input counter number should be 2, but got {len(counter)}.")
+
+    if len(alg) != 1:
+        raise ValueError(f"input alg number should be 1, but got {len(alg)}.")
+
+    alg = alg[0]
+    if alg != 1 and alg != 3:
+        raise ValueError(f"alg only support Philox.")
+
+    tile_shapes = pypto.get_vec_tile_shapes()
+    tile_shape_one_dim = 1
+    for dim_num in tile_shapes:
+        tile_shape_one_dim *= dim_num
+    pypto.set_vec_tile_shapes(tile_shape_one_dim)
+
+    shape_one_dim = 1
+    for dim_num in shape:
+        shape_one_dim *= dim_num
+
+    counter0, counter1 = counter
+    uniform_res = pypto.uniform(key[0], counter0, counter1, [shape_one_dim], rounds=10, dtype=dtype)
+    pypto.set_vec_tile_shapes(*tile_shapes)
+    return pypto.reshape(uniform_res, shape)
+
+
+def stateless_random_normal_v2(shape, key, counter, alg, dtype) -> Tensor:
+    """Return a tensor containing normally distributed random values.
+
+    Parameters
+    ----------
+    shape: List[int]
+        The shape of the output tensor.
+    key: List
+        The key for random number generation.
+    counter: List[int]
+        The counter for random number generation.
+    alg: List[int]
+        The algorithm to use for random number generation, support 1(Philox) and 3(auto_select, select Philox).
+    dtype: DataType
+        The data type of the output tensor.
+        The supported data types are DT_FP32, DT_FP16, and DT_BF16.
+
+    Returns
+    -------
+    Tensor
+        A tensor with the specified shape and data type, containing
+        uniformly distributed random values in the range [0, 1).
+
+
+    Examples
+    --------
+    shape = [4, 4]
+    key = [1234]
+    counter = [0, 1]
+    alg = [1]
+
+    y = pypto.stateless_random_normal_v2(shape, key, counter, alg, dtype)
+
+    Output y:[[-0.32364845  1.8577391   0.39556974  0.2311697 ]
+              [ 0.24243996 -1.9485782  -0.12983137  2.7137496 ]
+              [ 1.6558666   2.0938187  -0.90338254  0.8765667 ]
+              [ 0.86518306  0.01034508  0.2893259   0.01748212]]
+    """
+    def box_muller(input: Tensor) -> Tensor:
+        input = pypto.reshape(input, [-1])
+        tensor_len = input.shape[0]
+        u1_index = pypto.arange(0, tensor_len, 2)
+        u2_index = pypto.add(u1_index, 1)
+        u1 = pypto.gather(input, 0, u1_index)
+        u2 = pypto.gather(input, 0, u2_index)
+
+        eps = 1.0e-7
+        m_pi = 3.14159265358979323846
+        u1 = pypto.maximum(u1, eps)
+        v1 = pypto.mul(u2, 2.0 * m_pi)
+        v2 = pypto.sqrt(pypto.mul(pypto.log(u1), -2.0))
+        f0 = pypto.sin(v1)
+        f1 = pypto.cos(v1)
+        f2 = pypto.mul(f0, v2)
+        f3 = pypto.mul(f1, v2)
+        f4 = pypto.zeros([tensor_len], dtype=pypto.DT_FP32)
+
+        pypto.set_vec_tile_shapes(tensor_len)
+        pypto.scatter_(f4, 0, u1_index, f2, reduce='add')
+        if tensor_len % 2 != 0:
+            u2_index = pypto.arange(1, tensor_len, 2)
+        pypto.scatter_(f4, 0, u2_index, f3, reduce='add')
+        return f4
+
+    tile_shapes = pypto.get_vec_tile_shapes()
+    uniform_res = pypto.stateless_random_uniform_v2(shape, key, counter, alg, dtype=pypto.DT_FP32)
+    box_muller_res = box_muller(uniform_res)
+
+    normal_res = pypto.reshape(box_muller_res, shape)
+    if dtype != pypto.DT_FP32:
+        normal_res = pypto.cast(normal_res, dtype)
+    pypto.set_vec_tile_shapes(*tile_shapes)
+    return normal_res

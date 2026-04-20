@@ -92,6 +92,62 @@ TEST_F(TorchAdaptorTest, Range)
     ASSERT_ALLCLOSE(out, golden);
 }
 
+TEST_F(TorchAdaptorTest, Uniform) {
+    uint64_t key = 12345678901234;
+    uint64_t counter0 = 0;
+    uint64_t counter1 = 0;
+    auto out = makeTensorData(DT_FP32, {16}, 0.0f);
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP32);
+}
+
+TEST_F(TorchAdaptorTest, Uniform_FP16) {
+    uint64_t key = 12345678901234;
+    uint64_t counter0 = 0;
+    uint64_t counter1 = 0;
+    auto out = makeTensorData(DT_FP16, {16}, float16(0.0));
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP16);
+}
+
+TEST_F(TorchAdaptorTest, Uniform_BF16) {
+    uint64_t key = 12345678901234;
+    uint64_t counter0 = 0;
+    uint64_t counter1 = 0;
+    auto out = makeTensorData(DT_BF16, {16}, static_cast<bfloat16>(0.0f));
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(10)), DT_BF16);
+}
+
+TEST_F(TorchAdaptorTest, Uniform_Rounds7) {
+    uint64_t key = 12345678901234;
+    uint64_t counter0 = 0;
+    uint64_t counter1 = 0;
+    auto out = makeTensorData(DT_FP32, {16}, 0.0f);
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(7)), DT_FP32);
+}
+
+TEST_F(TorchAdaptorTest, Uniform_FP16_Rounds7) {
+    uint64_t key = 12345678901234;
+    uint64_t counter0 = 0;
+    uint64_t counter1 = 0;
+    auto out = makeTensorData(DT_FP16, {16}, float16(0.0));
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(7)), DT_FP16);
+}
+
+TEST_F(TorchAdaptorTest, Uniform_BF16_Rounds7) {
+    uint64_t key = 12345678901234;
+    uint64_t counter0 = 0;
+    uint64_t counter1 = 0;
+    auto out = makeTensorData(DT_BF16, {16}, static_cast<bfloat16>(0.0f));
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(7)), DT_BF16);
+}
+
+TEST_F(TorchAdaptorTest, Uniform_LargeShape) {
+    uint64_t key = 9876543210;
+    uint64_t counter0 = 100;
+    uint64_t counter1 = 200;
+    auto out = makeTensorData(DT_FP32, {64}, 0.0f);
+    calc::Uniform(out, Element(DT_UINT64, key), Element(DT_UINT64, counter0), Element(DT_UINT64, counter1), Element(DT_UINT16, static_cast<uint16_t>(10)), DT_FP32);
+}
+
 TEST_F(TorchAdaptorTest, Exp2)
 {
     auto self = makeTensorData(DT_FP32, {16, 16}, 2.0f);

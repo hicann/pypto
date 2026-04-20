@@ -266,6 +266,14 @@ void bind_operation(py::module& m)
         },
         py::arg("start"), py::arg("end"), py::arg("step"), "Tensor range.");
     m.def(
+        "Uniform",
+        [](const Element &key, const SymbolicScalar& counter0, const Element &counter1,
+           const std::vector<int64_t> &shape, const Element &rounds, DataType dtype) {
+            return npu::tile_fwk::Uniform(key, counter0, counter1, shape, rounds, dtype);
+        },
+        py::arg("key"), py::arg("counter0"), py::arg("counter1"), py::arg("shape"), py::arg("rounds") = Element(DT_UINT16, static_cast<uint16_t>(10)), py::arg("dtype") = DT_FP32,
+        "Uniform random number generator.");
+    m.def(
         "Amax",
         [](const Tensor& operand, int axis, bool keepDim) { return npu::tile_fwk::Amax(operand, axis, keepDim); },
         py::arg("operand"), py::arg("axis") = -1, py::arg("keepDim") = false, "Tensor row max single.");
