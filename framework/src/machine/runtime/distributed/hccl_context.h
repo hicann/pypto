@@ -17,6 +17,7 @@
 #define __LOGICALTENSOR_HCCL_CONTEXT__
 
 #include <type_traits>
+#include <cstdint>
 
 namespace npu::tile_fwk {
 constexpr uint32_t LOCAL_NOTIFY_MAX_NUM = 64;
