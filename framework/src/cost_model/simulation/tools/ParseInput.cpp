@@ -20,7 +20,7 @@
 #include "nlohmann/json.hpp"
 #include "cost_model/simulation/tools/visualizer.h"
 #include "cost_model/simulation/base/ModelTop.h"
-#include "cost_model/simulation/utils/simulation_error.h"
+#include "interface/utils/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 using namespace std;

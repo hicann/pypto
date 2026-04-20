@@ -21,7 +21,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "interface/utils/common.h"
 #include "interface/utils/operator_tracer.h"
-#include "interface/utils/conv_error.h"
+#include "interface/utils/error_code.h"
 #include "operation_impl.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/tile_shape.h"

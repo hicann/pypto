@@ -38,7 +38,7 @@
 #include "interface/compiler_monitor/monitor_stage_scope.h"
 #include <dlfcn.h>
 #include "tilefwk/pypto_fwk_log.h"
-#include "machine/utils/machine_error.h"
+#include "interface/utils/error_code.h"
 
 using namespace npu::tile_fwk::dynamic;
 namespace npu::tile_fwk {

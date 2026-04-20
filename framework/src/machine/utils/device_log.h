@@ -30,7 +30,7 @@
 #include "securec.h"
 #include "tilefwk/aikernel_define.h"
 #include "machine/utils/device_switch.h"
-#include "machine/utils/machine_error.h"
+#include "interface/utils/error_code.h"
 
 #ifndef ERROR_CODE_UNDEFINED
 #define ERROR_CODE_UNDEFINED 0xFFFFFU

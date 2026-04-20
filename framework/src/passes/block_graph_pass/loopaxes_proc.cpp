@@ -22,7 +22,7 @@
 #include "passes/pass_interface/pass.h"
 #include "loopaxes_proc.h"
 #include "passes/block_graph_pass/dyn_attr_to_static.h"
-#include "passes/pass_utils/pass_error.h"
+#include "interface/utils/error_code.h"
 
 #undef MODULE_NAME
 #define MODULE_NAME "LoopaxesProc"

@@ -17,7 +17,7 @@
 #include <fstream>
 #include "PvModelConfig.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "cost_model/simulation/utils/simulation_error.h"
+#include "interface/utils/error_code.h"
 
 namespace CostModel {
 void PvModelSystemA2A3Config::Dump(std::string path)

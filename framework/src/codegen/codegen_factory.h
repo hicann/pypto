@@ -26,7 +26,7 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "npu/cloudnpu/codegen_cloudnpu.h"
-#include "utils/codegen_error.h"
+#include "interface/utils/error_code.h"
 #include "npu/litenpu/codegen_litenpu.h"
 
 namespace npu::tile_fwk {

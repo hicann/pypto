@@ -14,7 +14,7 @@
  */
 
 #include "operation_common.h"
-#include "interface/utils/vector_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 

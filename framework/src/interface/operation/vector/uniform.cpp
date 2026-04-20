@@ -17,7 +17,7 @@
 #include "passes/pass_utils/graph_utils.h"
 #include "interface/function/function.h"
 #include "interface/program/program.h"
-#include "interface/utils/vector_error.h"
+#include "interface/utils/error_code.h"
 #include "interface/operation/operation_common.h"
 
 namespace npu::tile_fwk {

@@ -23,7 +23,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "machine/runtime/runtime.h"
 #include "machine/utils/machine_utils.h"
-#include "machine/utils/machine_error.h"
+#include "interface/utils/error_code.h"
 using Json = nlohmann::json;
 
 namespace {

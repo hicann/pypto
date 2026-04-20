@@ -17,7 +17,7 @@
 #include "unary.h"
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
-#include "interface/utils/vector_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 

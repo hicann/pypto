@@ -15,7 +15,7 @@
 
 #include "interface/inner/element.h"
 #include "tilefwk/error.h"
-#include "interface/interpreter/verify_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 

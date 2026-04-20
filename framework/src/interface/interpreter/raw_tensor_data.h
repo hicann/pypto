@@ -28,7 +28,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/tensor/tensor_offset.h"
 #include "interface/interpreter/calculator/dtype_utils.h"
-#include "interface/interpreter/verify_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 

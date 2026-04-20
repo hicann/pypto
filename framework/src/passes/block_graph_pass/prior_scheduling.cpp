@@ -18,7 +18,7 @@
 #include <queue>
 #include <climits>
 #include "interface/function/function.h"
-#include "passes/pass_utils/pass_error.h"
+#include "interface/utils/error_code.h"
 
 using namespace npu::tile_fwk;
 

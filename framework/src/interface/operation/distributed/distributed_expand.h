@@ -22,7 +22,7 @@
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"
-#include "interface/utils/distributed_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {

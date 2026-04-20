@@ -22,7 +22,7 @@
 #include "interface/program/program.h"
 #include "passes/pass_utils/parallel_tool.h"
 #include "passes/pass_log/pass_log.h"
-#include "passes/pass_utils/pass_error.h"
+#include "interface/utils/error_code.h"
 
 #ifndef MODULE_NAME
 #define MODULE_NAME "OoOSchedule"

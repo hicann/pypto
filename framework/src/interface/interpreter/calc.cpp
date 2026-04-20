@@ -14,7 +14,7 @@
 #include "tilefwk/error.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/file_utils.h"
-#include "interface/interpreter/verify_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk::calc {
 

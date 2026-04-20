@@ -21,7 +21,7 @@
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "tensor_transformation.h"
-#include "interface/utils/vector_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 

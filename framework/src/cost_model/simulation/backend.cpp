@@ -20,7 +20,7 @@
 #include "interface/cache/function_cache.h"
 #include "interface/machine/host/machine_task.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "simulation/utils/simulation_error.h"
+#include "interface/utils/error_code.h"
 
 namespace {
 const std::string PROGRAM_ENTRY_FUNCTION_NAME = "PROGRAM_ENTRY";

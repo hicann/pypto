@@ -18,7 +18,7 @@
 #include <thread>
 #include "machine/host/backend.h"
 #include "machine/runtime/device_launcher.h"
-#include "machine/utils/machine_error.h"
+#include "interface/utils/error_code.h"
 
 extern "C" int DynTileFwkBackendKernelServer(void* targ);
 

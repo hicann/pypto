@@ -25,7 +25,7 @@
 
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/error.h"
-#include "passes/pass_utils/pass_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 class PassRegistry {

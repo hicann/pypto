@@ -25,7 +25,7 @@
 #include <regex>
 #include "tilefwk/error.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "cost_model/simulation/utils/simulation_error.h"
+#include "interface/utils/error_code.h"
 
 namespace CostModel {
 

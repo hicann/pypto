@@ -28,7 +28,7 @@
 #include "interface/utils/common.h"
 #include "interface/tensor/logical_tensor.h"
 #include "codegen/utils/codegen_utils.h"
-#include "codegen/utils/codegen_error.h"
+#include "interface/utils/error_code.h"
 #include "symbol_id_gen.h"
 
 namespace npu::tile_fwk {

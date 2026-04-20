@@ -22,7 +22,7 @@
 #include "machine/utils/dynamic/dev_workspace.h"
 #include "machine/utils/dynamic/device_task.h"
 #include "machine/device/dynamic/device_utils.h"
-#include "interface/utils/distributed_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk::Distributed {
 struct SignalTileOp {

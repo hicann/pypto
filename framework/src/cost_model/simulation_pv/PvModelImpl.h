@@ -34,7 +34,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"
 #include "tilefwk/file.h"
-#include "cost_model/simulation/utils/simulation_error.h"
+#include "interface/utils/error_code.h"
 
 constexpr int INVALID_ARG_INDEX = 0xFFFFFFFF;
 using namespace npu::tile_fwk;

@@ -21,7 +21,7 @@
 #include "interface/interpreter/operation.h"
 #include "interface/tensor/symbolic_scalar_evaluate.h"
 #include "calc.h"
-#include "interface/interpreter/verify_error.h"
+#include "interface/utils/error_code.h"
 #include <algorithm>
 
 namespace npu::tile_fwk {

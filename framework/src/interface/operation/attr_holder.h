@@ -23,7 +23,7 @@
 #include "interface/inner/any.h"
 #include "interface/utils/common.h"
 #include "interface/utils/string_utils.h"
-#include "interface/utils/function_error.h"
+#include "interface/utils/error_code.h"
 #include "interface/inner/element.h"
 
 namespace npu::tile_fwk {

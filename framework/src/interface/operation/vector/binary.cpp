@@ -17,7 +17,7 @@
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
 #include "interface/configs/config_manager.h"
-#include "interface/utils/vector_error.h"
+#include "interface/utils/error_code.h"
 #include "passes/tile_graph_pass/graph_constraint/axis_combine.h"
 namespace npu::tile_fwk {
 

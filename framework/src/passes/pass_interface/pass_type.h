@@ -16,7 +16,7 @@
 #pragma once
 #include <cstdint>
 #include "tilefwk/error.h"
-#include "passes/pass_utils/pass_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 enum class PassType : int32_t {

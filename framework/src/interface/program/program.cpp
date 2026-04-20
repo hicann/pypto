@@ -30,7 +30,7 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager_ng.h"
 #include "interface/compiler_monitor/monitor_manager.h"
-#include "interface/utils/function_error.h"
+#include "interface/utils/error.h"
 #include "passes/pass_mgr/pass_manager.h"
 
 namespace npu::tile_fwk {

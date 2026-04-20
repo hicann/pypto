@@ -29,7 +29,7 @@
 #include "tilefwk/error.h"
 #include "interface/inner/hash_buffer.h"
 #include "symbol_handler.h"
-#include "interface/utils/function_error.h"
+#include "interface/utils/error.h"
 #include "interface/utils/string_utils.h"
 #include "interface/utils/common.h"
 

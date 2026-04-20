@@ -15,7 +15,7 @@
 
 #include "remove_redundant_op_checker.h"
 #include "passes/pass_log/pass_log.h"
-#include "passes/pass_utils/pass_error.h"
+#include "interface/utils/error_code.h"
 
 #define MODULE_NAME "RemoveRedundantOp"
 

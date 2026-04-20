@@ -24,7 +24,7 @@
 #include <cstdio>
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/configs/config_manager.h"
-#include "machine/utils/machine_error.h"
+#include "interface/utils/error_code.h"
 
 namespace npu::tile_fwk {
 inline constexpr int RTMALLOC_SUCCESS = 0;

@@ -22,7 +22,7 @@
 #include "tilefwk/data_type.h"
 #include "tilefwk/element.h"
 #include "raw_tensor_data.h"
-#include "interface/interpreter/verify_error.h"
+#include "interface/utils/error_code.h"
 #include "calculator/calc_api.h"
 
 namespace npu::tile_fwk::calc {

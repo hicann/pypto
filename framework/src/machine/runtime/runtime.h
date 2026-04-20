@@ -20,7 +20,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "adapter/api/acl_api.h"
 #include "adapter/api/runtime_api.h"
-#include "machine/utils/machine_error.h"
+#include "interface/utils/error_code.h"
 #include "machine/runtime/memory_pool.h"
 
 constexpr int ADDR_MAP_TYPE_REG_AIC_CTRL = 2;
