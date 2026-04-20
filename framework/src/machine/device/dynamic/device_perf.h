@@ -156,10 +156,10 @@ struct PerfEvtMgr {
 
     void SetIsOpenProf(bool isOpenProf, uint64_t aicpuPerf = 0)
     {
-        if (ctrlTurn_ >= MAX_TURN_NUM) {
+        if (ctrlTurn_ >= MAX_ROUND_NUM) {
             aicpuPerf_ = 0;
             isOpenProf_ = false;
-            DEV_WARN("Aicpu perf info more than maxTurnNum=%u, some info would be lost", MAX_TURN_NUM);
+            DEV_WARN("Aicpu perf info more than maxTurnNum=%u, some info would be lost", MAX_ROUND_NUM);
             return;
         }
         ResetPerfTrace();
@@ -237,6 +237,9 @@ struct PerfEvtMgr {
                     aicpuMetrics->perfAicpuTraceDevTask[tid][DEVTASK_PERF_ARRY_INDEX(type)][devCnt] =
                         cycle == 0 ? static_cast<uint64_t>(GetCycles()) : cycle;
                 }
+            } else {
+                DEV_WARN("Dev task num larger than: %u, the excess part will not be recorded",
+                         PERF_TRACE_COUNT_DEVTASK_MAX_NUM);
             }
             return;
         }

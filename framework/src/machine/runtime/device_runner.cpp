@@ -170,7 +170,7 @@ void DeviceRunner::InitDynamicArgs(DeviceArgs& args)
     }
 
     if (GetEnvVar("DUMP_DEVICE_PERF") == "true") {
-        auto aicpuDevPtr = MachinePerfTraceDevMalloc(MAX_TURN_NUM * sizeof(MetricPerf));
+        auto aicpuDevPtr = MachinePerfTraceDevMalloc(MAX_ROUND_NUM * sizeof(MetricPerf));
         if (aicpuDevPtr == 0) {
             MACHINE_LOGW("Aicpu per addr malloc failed");
             return;
@@ -491,6 +491,9 @@ bool DeviceRunner::GetEnableDumpDevPref() const { return enableDumpMachinePerfTr
 
 void DeviceRunner::ResetMetrics(const uint32_t& coreId)
 {
+    if (perfData_.empty()) {
+        return;
+    }
     if (enableDumpMachinePerfTrace_) {
         if (!g_is_machine_trace_addr_inited) {
             RuntimeMemset(perfData_[coreId], sizeof(Metrics), 0, sizeof(Metrics));
