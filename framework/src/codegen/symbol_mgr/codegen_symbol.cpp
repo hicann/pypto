@@ -145,6 +145,11 @@ TileTensorKey SymbolManager::BuildTileTensorKey(const TileTensor& tileTensor) co
 std::string SymbolManager::AddTileTensor(int opMagic, const TileTensor& tileTensor)
 {
     TileTensorKey tileTensorKey = BuildTileTensorKey(tileTensor);
+
+    CODEGEN_LOGI(
+        "AddTileTensor --> tensorMagic=%d, opMagic=%d, key={%s}", tileTensor.magic, opMagic,
+        tileTensorKey.ToString().c_str());
+
     auto tileTensorByKeyIter = tileTensorByKey_.find(tileTensorKey);
     bool isNewTileTensor = false;
     if (tileTensorByKeyIter == tileTensorByKey_.end()) {

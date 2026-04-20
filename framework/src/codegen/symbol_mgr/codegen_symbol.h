@@ -18,6 +18,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <sstream>
 #include <tuple>
 #include <cstdint>
 #include <string>
@@ -151,6 +152,15 @@ struct TileTensorKey {
     {
         return dim == other.dim && bufVar == other.bufVar && shape == other.shape && dtype == other.dtype &&
                localBufOffset == other.localBufOffset && rawShape == other.rawShape;
+    }
+
+    std::string ToString() const
+    {
+        std::ostringstream oss;
+        oss << "dim=" << dim << ", dtype=" << ToUnderlying(dtype) << ", bufVar=" << bufVar
+            << ", shape=" << IntVecToStr(shape) << ", rawShape=" << IntVecToStr(rawShape)
+            << ", localBufOffset=" << IntVecToStr(localBufOffset);
+        return oss.str();
     }
 };
 

@@ -523,8 +523,8 @@ void CodeGenOpNPU::UpdateTileTensorShapeAndStride(
 
     tileTensor.rawShape = newRawShape;
 
-    // ---- static ----
-    if (functionType == FunctionType::STATIC) {
+    // ---- static or "main block" ----
+    if (tileTensor.isConstant) {
         for (auto s : newOriginShape) {
             tileTensor.shape.emplace_back(std::to_string(s));
         }
