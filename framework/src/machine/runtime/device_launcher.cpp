@@ -42,24 +42,19 @@ constexpr uint32_t AICAIVRATIO = 2;
 } // namespace
 int GetCfgBlockdim()
 {
-#ifdef BUILD_WITH_CANN
     auto blk = Platform::Instance().GetSoc().GetAICoreNum();
     blk = blk > 0 ? blk : kMinDefaultDim;
 
     // 通过GetMaxBlockdim接口获取设置的最大核数，如果设置的最大核数大于硬件物理最大核数时，控核不生效
     // 如果未进行控核，GetMaxBlockdim接口将通过AclRtGetStreamResLimit函数返回硬件物理最大核数
     auto maxBlk = GetMaxBlockdim();
-    blk = maxBlk < static_cast<int>(blk) ? maxBlk : blk;
+    blk = (maxBlk > 0 && maxBlk < static_cast<int>(blk)) ? maxBlk : blk;
     MACHINE_LOGD("Get blockdim[%zu].", blk);
     return blk;
-#else
-    return kMinDefaultDim;
-#endif
 }
 
 int GetMaxBlockdim()
 {
-#ifdef BUILD_WITH_CANN
     uint32_t cubeBlockDim = 0;
     uint32_t vectorBlockDim = 0;
     // 若未进行控核，AclRtGetStreamResLimit返回的是满核
@@ -78,9 +73,6 @@ int GetMaxBlockdim()
     } else {
         return cubeBlockDim;
     }
-#else
-    return kMinDefaultDim;
-#endif
 }
 
 void (*forceLinkLibraryCompiler)() = &npu::tile_fwk::ForceLinkLibraryCompiler;
@@ -94,7 +86,6 @@ DeviceLauncherContext& DeviceLauncherContext::Get()
 std::vector<uint8_t> DeviceLauncher::tensorInfo_(kDefaultTensorinfoSize);
 bool DeviceLauncher::captureMode_ = false;
 
-#ifdef BUILD_WITH_CANN
 static const std::unordered_map<AclMdlRICaptureStatus, std::function<void(bool&)>> captureStatusHandlers = {
     {npu::tile_fwk::AclMdlRICaptureStatus::ACTIVE, [](bool& isCapture) { isCapture = true; }},
     {npu::tile_fwk::AclMdlRICaptureStatus::NONE,
@@ -279,12 +270,10 @@ int DeviceLauncher::DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStrea
     int rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
     return rc;
 }
-#endif
 
 int DeviceLauncher::DeviceRunOnce(
     Function* function, DevControlFlowCache* hostCtrlCache, const DeviceLauncherConfig& config)
 {
-#ifdef BUILD_WITH_CANN
     auto& inputDataList = ProgramData::GetInstance().GetInputDataList();
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
     auto aicpuStream = machine::GetRA()->GetScheStream();
@@ -311,12 +300,6 @@ int DeviceLauncher::DeviceRunOnce(
     }
     devMemory.Free(devCtrlCache);
     return rc;
-#else
-    (void)hostCtrlCache;
-    (void)function;
-    (void)config;
-    return 0;
-#endif
 }
 
 struct DeviceRunCacheInfo {
@@ -368,22 +351,14 @@ CachedOperator* DeviceLauncher::DeviceRunCacheOperatorGet(Function* func)
 
 DeviceStream DeviceGetAicpuStream()
 {
-#ifdef BUILD_WITH_CANN
     RtStream aicpuStreamValue = machine::GetRA()->GetScheStream();
     return reinterpret_cast<DeviceStream>(aicpuStreamValue);
-#else
-    return 0;
-#endif
 }
 
 DeviceStream DeviceGetAicoreStream()
 {
-#ifdef BUILD_WITH_CANN
     RtStream aicoreStreamValue = machine::GetRA()->GetStream();
     return reinterpret_cast<DeviceStream>(aicoreStreamValue);
-#else
-    return 0;
-#endif
 }
 
 int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
@@ -391,37 +366,18 @@ int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
     const std::vector<DeviceTensorData>& outputList, DeviceStream aicpuStream, DeviceStream aicoreStream,
     bool streamSynchronize, uint8_t* devCtrlCache, const DeviceLauncherConfig& config)
 {
-#ifdef BUILD_WITH_CANN
     RtStream aicpuStreamValue = reinterpret_cast<RtStream>(aicpuStream);
     RtStream aicoreStreamValue = reinterpret_cast<RtStream>(aicoreStream);
     return DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         op->GetFunction(), inputList, outputList, aicpuStreamValue, aicoreStreamValue, streamSynchronize, op,
         reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
-#else
-    (void)devCtrlCache;
-    (void)op;
-    (void)inputList;
-    (void)outputList;
-    (void)aicpuStream;
-    (void)aicoreStream;
-    (void)streamSynchronize;
-    (void)devCtrlCache;
-    (void)config;
-    return 0;
-#endif
 }
 
 int DeviceSynchronize(DeviceStream aicpuStream, DeviceStream aicoreStream)
 {
-#ifdef BUILD_WITH_CANN
     RtStream aicpuStreamValue = reinterpret_cast<RtStream>(aicpuStream);
     RtStream aicoreStreamValue = reinterpret_cast<RtStream>(aicoreStream);
     return DeviceLauncher::DeviceSynchronize(aicpuStreamValue, aicoreStreamValue);
-#else
-    (void)aicpuStream;
-    (void)aicoreStream;
-    return 0;
-#endif
 }
 
 int DeviceRunOnce(Function* function, uint8_t* hostCtrlCache, const DeviceLauncherConfig& config)
@@ -480,7 +436,6 @@ void DataDumpUnInit()
     }
 }
 
-#ifdef BUILD_WITH_CANN
 int32_t DataFormat2CannFormat(const TileOpFormat format)
 {
     constexpr int32_t GE_FORAMT_ND = 2;
@@ -494,13 +449,9 @@ int32_t DataFormat2CannFormat(const TileOpFormat format)
             throw std::invalid_argument("Unknown Format");
     }
 }
-#endif
 
-void DumpIOTensorsWithCann(
-    AclRtStream stream, std::vector<DeviceTensorData>& tensors,
-    const std::string& funcName)
+void DumpIOTensorsWithCann(AclRtStream stream, std::vector<DeviceTensorData>& tensors, const std::string& funcName)
 {
-#ifdef BUILD_WITH_CANN
     if (AdxDumpGetDumpSwitch(AdxDumpType::OPERATOR) != 0) {
         std::vector<AdxTensorInfoV2> dumpTensors;
         for (auto& tensor : tensors) {
@@ -509,7 +460,7 @@ void DumpIOTensorsWithCann(
             info.addrType = AdxAddressType::TRADITIONAL;
             info.tensorSize = static_cast<size_t>(tensor.GetDataSize());
             info.format = DataFormat2CannFormat(tensor.Format());
-            info.dataType = DataType2CannType(tensor.GetDataType());
+            info.dataType = static_cast<int32_t>(DataType2CannType(tensor.GetDataType()));
             info.tensorAddr = static_cast<int64_t *>(tensor.GetAddr());
             info.placement = static_cast<int32_t>(AdxTensorPlacement::kOnDeviceHbm);
             info.shape = tensor.GetShape();
@@ -518,16 +469,10 @@ void DumpIOTensorsWithCann(
         }
         AdxDumpDumpTensorV2(funcName, funcName, dumpTensors, stream);
     }
-#else
-    (void)stream;
-    (void)tensors;
-    (void)funcName;
-#endif
 }
 
 uint32_t GetProcessId()
 {
-#ifdef BUILD_WITH_CANN
     if (drvGetProcessSign != nullptr) {
         process_sign processSign;
         auto ret = drvGetProcessSign(&processSign);
@@ -543,106 +488,68 @@ uint32_t GetProcessId()
     uint32_t pid = static_cast<uint32_t>(getpid());
     MACHINE_LOGD("Using getpid(): pid=%u", pid);
     return pid;
-#else
-    return 0;
-#endif
 }
 
 void CopyDevToHost(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
 {
-#ifdef BUILD_WITH_CANN
     DeviceMemoryUtils().CopyFromDev(
         (uint8_t*)hostTensor.GetAddr(), (uint8_t*)devTensor.GetAddr(), devTensor.GetDataSize());
-#else
-    (void)devTensor;
-    (void)hostTensor;
-#endif
 }
 
 void CopyHostToDev(const DeviceTensorData& devTensor, DeviceTensorData& hostTensor)
 {
-#ifdef BUILD_WITH_CANN
     DeviceMemoryUtils().CopyToDev(
         (uint8_t*)devTensor.GetAddr(), (uint8_t*)hostTensor.GetAddr(), devTensor.GetDataSize());
-#else
-    (void)devTensor;
-    (void)hostTensor;
-#endif
 }
 
 uint8_t* CopyHostToDev(uint8_t* data, uint64_t size)
 {
-#ifdef BUILD_WITH_CANN
     return DeviceMemoryUtils(false).CopyToDev((uint8_t*)data, size, nullptr);
-#else
-    (void)data;
-    (void)size;
-    return nullptr;
-#endif
 }
 
 DeviceGuard::DeviceGuard(int32_t devId) : nDevId(devId)
 {
-#ifdef BUILD_WITH_CANN
     (void)RuntimeGetDevice(&oDevId);
     if (nDevId != oDevId) {
         RuntimeSetDevice(nDevId);
     }
-#endif
 }
 
 DeviceGuard::~DeviceGuard()
 {
-#ifdef BUILD_WITH_CANN
     if (nDevId != oDevId) {
         RuntimeSetDevice(oDevId);
     }
-#endif
 }
 
 AclModeGuard::AclModeGuard(AclMdlRICaptureMode tmode) : mode(tmode)
 {
-#ifdef BUILD_WITH_CANN
     AclMdlRICaptureThreadExchangeMode(&mode);
-#endif
 }
 AclModeGuard::~AclModeGuard()
 {
-#ifdef BUILD_WITH_CANN
     AclMdlRICaptureMode mod = AclMdlRICaptureMode::GLOBAL;
     AclMdlRICaptureThreadExchangeMode(&mod);
-#endif
 }
 
 void DeviceLauncher::FillDeviceKernelArgs(
     std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames)
 {
-#ifdef BUILD_WITH_CANN
     DeviceLauncherConfig config;
     CachedOperator cache;
     DeviceLauncherConfigFillDeviceInfo(config);
     DeviceMemoryUtils deviceMemoryUtils;
     DeviceInitTilingData(deviceMemoryUtils, kargs, devProgData, nullptr, config, &cache);
     DeviceInitDistributedContext(deviceMemoryUtils, groupNames, kargs);
-#else
-    (void)devProgData;
-    (void)kargs;
-    (void)groupNames;
-#endif
 }
 
 int64_t DeviceLauncher::GetL2Offset()
 {
-#ifdef BUILD_WITH_CANN
     return machine::GetRA()->GetL2Offset();
-#else
-    return 0;
-#endif
 }
 
 uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
 {
-#ifdef BUILD_WITH_CANN
     uint8_t* devCache = nullptr;
     auto cacheSize = ctrlCache->usedCacheSize;
     auto bufNum = DEFAULT_RUNTIME_DATA_RING_BUFFER_COUNT;
@@ -662,26 +569,17 @@ uint8_t* DeviceLauncher::CopyControlFlowCache(DevControlFlowCache* ctrlCache)
         }
     }
     return devCache;
-#else
-    (void)ctrlCache;
-    return nullptr;
-#endif
 }
 
 void DeviceLauncher::FreeControlFlowCache(uint8_t* ctrlCache)
 {
-#ifdef BUILD_WITH_CANN
     if (ctrlCache != nullptr) {
         RuntimeFree(ctrlCache);
     }
-#else
-    (void)ctrlCache;
-#endif
 }
 
 void DeviceLauncher::AddAicpuStream(AclMdlRI& rtModel)
 {
-#ifdef BUILD_WITH_CANN
     auto ctrlStream = (AclRtStream)machine::GetRA()->GetCtrlStream();
     auto schedtream = (AclRtStream)machine::GetRA()->GetScheStream();
 
@@ -689,25 +587,16 @@ void DeviceLauncher::AddAicpuStream(AclMdlRI& rtModel)
         RuntimeStreamAddToModel(ctrlStream, rtModel);
         RuntimeStreamAddToModel(schedtream, rtModel);
     }
-#else
-    (void)rtModel;
-    return;
-#endif
 }
 
 void DeviceLauncher::SaveStream(AclRtStream aicoreStream)
 {
-#ifdef BUILD_WITH_CANN
     // 存储 current stream，后续控核接口需使用current stream
     machine::GetRA()->SetCurrentStream(aicoreStream);
-#else
-    (void)aicoreStream;
-#endif
 }
 
 void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
 {
-#ifdef BUILD_WITH_CANN
     SetCaptureMode(false);
     AclMdlRICaptureStatus status = AclMdlRICaptureStatus::NONE;
     auto ret = AclMdlRICaptureGetInfo(aicoreStream, &status, &rtModel);
@@ -721,11 +610,6 @@ void DeviceLauncher::GetCaptureInfo(AclRtStream aicoreStream, AclMdlRI& rtModel)
         SetCaptureMode(true);
         MACHINE_LOGI("The current mode is capture mode");
     }
-#else
-    (void)aicoreStream;
-    (void)rtModel;
-    SetCaptureMode(false);
-#endif
 }
 
 void DeviceLauncher::SetCaptureMode(bool captureMode) { captureMode_ = captureMode; }
@@ -734,7 +618,6 @@ bool DeviceLauncher::IsCaptureMode() { return captureMode_; }
 
 void* DeviceLauncher::RegisterKernelBin(const std::vector<uint8_t>& kernelBinary)
 {
-#ifdef BUILD_WITH_CANN
     void* hdl = nullptr;
     RtDevBinary binary = {
         .magic = RT_DEV_BINARY_MAGIC_ELF,
@@ -748,28 +631,19 @@ void* DeviceLauncher::RegisterKernelBin(const std::vector<uint8_t>& kernelBinary
         MACHINE_LOGE(HostLauncherErr::REGISTER_KERNEL_FAILED, "register kernel failed, ret: %d", ret);
     }
     return hdl;
-#else
-    (void)kernelBinary;
-    return nullptr;
-#endif
 }
 
 void DeviceLauncher::UnregisterKernelBin(void* hdl)
 {
-#ifdef BUILD_WITH_CANN
     int ret = RuntimeDevBinaryUnRegister(hdl);
     if (ret != RT_SUCCESS) {
         MACHINE_LOGE(RtErr::RT_REGISTER_FAILED, "unregister kernel failed, ret: %d", ret);
     }
-#else
-    (void)hdl;
-#endif
 }
 
 void DeviceLauncher::SetDevPerfAddr(
     [[maybe_unused]] const bool& debugEnable, [[maybe_unused]] const bool& isCaptureMode)
 {
-#ifdef BUILD_WITH_CANN
     auto& devRunner = DeviceRunner::Get();
     if (debugEnable || devRunner.GetEnableDumpDevPref() || devRunner.GetHostProfInstance().GetProfType() == 1) {
         if (isCaptureMode) {
@@ -780,7 +654,6 @@ void DeviceLauncher::SetDevPerfAddr(
             ChangeCaptureModeGlobal();
         }
     }
-#endif
 }
 
 int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode)
@@ -788,20 +661,14 @@ int DeviceLauncher::LaunchSyncTask(AclRtStream aicoreStream, bool isCaptureMode)
     if (isCaptureMode) {
         return 0;
     }
-#ifdef BUILD_WITH_CANN
     auto schedStream = machine::GetRA()->GetScheStream();
     auto ctrlStream = machine::GetRA()->GetCtrlStream();
     return DeviceRunner::Get().RunPreSync(schedStream, ctrlStream, (RtStream)aicoreStream);
-#else
-    (void)aicoreStream;
-    return 0;
-#endif
 }
 
 int DeviceLauncher::LaunchAicpuKernel(
     RtAicpuArgsEx& rtArgs, [[maybe_unused]] bool debugEnable, [[maybe_unused]] Function* function)
 {
-#ifdef BUILD_WITH_CANN
     auto ctrlStream = (AclRtStream)machine::GetRA()->GetCtrlStream();
     auto schedStream = (AclRtStream)machine::GetRA()->GetScheStream();
     auto& devRunner = DeviceRunner::Get();
@@ -826,17 +693,11 @@ int DeviceLauncher::LaunchAicpuKernel(
         schedStream, RT_KERNEL_USE_SPECIAL_TIMEOUT);
     devRunner.ReportHostProfInfo(schedStream, startTime, scheCpuNum, MSPF_GE_TASK_TYPE_AI_CPU, false);
     return ret;
-#else
-    (void)rtArgs;
-    (void)debugEnable;
-    return 0;
-#endif
 }
 
 int DeviceLauncher::LaunchAicoreKernel(
     AclRtStream aicoreStream, void* kernel, RtArgsEx& rtArgs, RtTaskCfgInfo& rtTaskCfg, bool debugEnable)
 {
-#ifdef BUILD_WITH_CANN
     auto& devRunner = DeviceRunner::Get();
     auto tilingKey = OpInfoManager::GetInstance().GetOpTilingKey();
     auto blockDim = dynamic::GetCfgBlockdim();
@@ -868,13 +729,5 @@ int DeviceLauncher::LaunchAicoreKernel(
         }
     }
     return ret;
-#else
-    (void)aicoreStream;
-    (void)kernel;
-    (void)rtArgs;
-    (void)rtTaskCfg;
-    (void)debugEnable;
-    return 0;
-#endif
 }
 } // namespace npu::tile_fwk::dynamic

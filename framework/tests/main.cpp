@@ -24,11 +24,9 @@
 #include <cerrno>
 #include <sched.h>
 #include "utils/test_cost_macro.h"
+
+#if defined(ENABLE_STEST)
 #include "adapter/api/runtime_api.h"
-
-#if defined(BUILD_WITH_CANN) && defined(ENABLE_STEST)
-#include "runtime/dev.h"
-
 bool CheckDeviceConsistency()
 {
     /* 获取实际生效的 DeviceId */

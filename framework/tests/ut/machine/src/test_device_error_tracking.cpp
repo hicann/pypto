@@ -22,9 +22,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <functional>
-
-#ifdef BUILD_WITH_CANN
 #include "securec.h"
+#include "machine/runtime/device_error_tracking.h"
+
+using namespace npu::tile_fwk;
+
 std::string CaptureStdout(std::function<void()> func)
 {
     int pipefd[2];
@@ -63,12 +65,6 @@ std::string CaptureStdout(std::function<void()> func)
 
     return std::string(buffer, len);
 }
-#endif
-
-#include "machine/runtime/device_error_tracking.h"
-
-#ifdef BUILD_WITH_CANN
-using namespace npu::tile_fwk;
 
 TEST(DeviceErrorTrackingTest, GetExceptionTypeNameCoversAllCases)
 {
@@ -108,4 +104,3 @@ TEST(DeviceErrorTrackingTest, InitializeErrorCallbackExecutesNormally)
     std::string output = CaptureStdout([&]() { InitializeErrorCallback(); });
     SUCCEED() << "InitializeErrorCallback executed normally";
 }
-#endif

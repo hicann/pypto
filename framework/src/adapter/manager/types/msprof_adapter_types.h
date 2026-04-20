@@ -20,7 +20,7 @@
 
 namespace npu::tile_fwk {
 enum class MsprofFunc {
-    SysCycleTime,
+    SysCycleTime = 0,
     GetHashId,
     ReportApi,
     ReportCompactInfo,

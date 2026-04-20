@@ -10,11 +10,9 @@
 
 #pragma once
 
-#include "interface/function/function.h"
-
-#ifdef BUILD_WITH_CANN
 #include "adapter/api/msprof_define.h"
 #include "adapter/api/acl_define.h"
+#include "interface/function/function.h"
 #include "interface/interpreter/raw_tensor_data.h"
 
 namespace npu::tile_fwk {
@@ -58,26 +56,3 @@ private:
     static uint32_t profType_;   // prof open/close
 };
 } // namespace npu::tile_fwk
-#else
-namespace npu::tile_fwk {
-class HostProf {
-public:
-    HostProf() = default;
-    ~HostProf(){};
-    void SetProfFunction(Function* function) { (void)function; }
-    void RegHostProf(){};
-    void HostProfReportNodeInfo(uint64_t& endTime, uint32_t blockDim, uint16_t taskType)
-    {
-        (void)endTime;
-        (void)blockDim;
-        (void)taskType;
-    }
-    void HostProfReportContextInfo(uint64_t& endTime) { (void)endTime; }
-    static HostProf& Get()
-    {
-        static HostProf hostProf;
-        return hostProf;
-    }
-};
-} // namespace npu::tile_fwk
-#endif

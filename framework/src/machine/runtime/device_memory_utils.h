@@ -15,11 +15,8 @@
 
 #pragma once
 
-#ifdef BUILD_WITH_CANN
-
 #include "machine/runtime/runtime.h"
 #include "machine/runtime/device_runner.h"
-#include "machine/platform/platform_manager.h"
 #include "interface/interpreter/raw_tensor_data.h"
 
 namespace npu::tile_fwk::dynamic {
@@ -106,4 +103,3 @@ struct DeviceMemoryUtils {
     bool isUseHugePage_{true};
 };
 } // namespace npu::tile_fwk::dynamic
-#endif

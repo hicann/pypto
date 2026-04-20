@@ -19,7 +19,6 @@
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
-
 namespace {
 void SetPmuEventTypeDAV2201(int32_t profPmuType, std::vector<int64_t>& pmuEvtType)
 {

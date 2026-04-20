@@ -22,15 +22,11 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
-#include "interface/configs/config_manager.h"
-
-#ifdef BUILD_WITH_CANN
 #include "tilefwk/pypto_fwk_log.h"
+#include "interface/configs/config_manager.h"
 #include "machine/utils/machine_error.h"
-#endif
 
 namespace npu::tile_fwk {
-#ifdef BUILD_WITH_CANN
 inline constexpr int RTMALLOC_SUCCESS = 0;
 inline constexpr uint32_t ONG_GB_HUGE_PAGE_FLAGS = RT_MEMORY_HBM | RT_MEMORY_POLICY_HUGE1G_PAGE_ONLY;
 inline constexpr size_t ONT_GB_SIZE = 1024 * 1024 * 1024;
@@ -423,5 +419,4 @@ private:
     std::vector<uint64_t> sentinelVec_;
     std::unordered_map<uint8_t*, std::vector<uint8_t*>> sentinelValMap_;
 };
-#endif
 } // namespace npu::tile_fwk

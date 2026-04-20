@@ -95,7 +95,6 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
             tile_fwk_codegen
             tile_fwk_compiler
             tile_fwk_runtime
-            tile_fwk_runtime_stub
             tile_fwk_simulation
             tile_fwk_simulation_ca
             tile_fwk_simulation_pv

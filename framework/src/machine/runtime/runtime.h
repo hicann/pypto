@@ -61,9 +61,6 @@ struct res_map_info {
 };
 
 namespace npu::tile_fwk {
-
-#ifdef BUILD_WITH_CANN
-
 inline void CheckDeviceId()
 {
     int32_t devId = 0;
@@ -258,7 +255,4 @@ private:
 namespace machine {
 inline npu::tile_fwk::RuntimeAgent* GetRA() { return npu::tile_fwk::RuntimeAgent::GetAgent(); }
 } // namespace machine
-#else
-
-#endif
 } // namespace npu::tile_fwk

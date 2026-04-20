@@ -48,6 +48,5 @@ public:
         return loadCustomAicpuOp;
     }
 };
-
 } // namespace npu::tile_fwk
 #endif

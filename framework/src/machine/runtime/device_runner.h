@@ -28,8 +28,6 @@
 #include "tilefwk/platform.h"
 #include "machine/runtime/host_prof.h"
 #include "machine/utils/machine_ws_intf.h"
-
-#ifdef BUILD_WITH_CANN
 #include "machine/runtime/pmu_common.h"
 
 constexpr int CORE_DEFAULT_NUM = 70;
@@ -139,18 +137,4 @@ private:
     std::atomic<bool> dumpThreadStopFlag_{false};
 };
 } // namespace npu::tile_fwk
-#else
-namespace npu::tile_fwk {
-class DeviceRunner {
-public:
-    static DeviceRunner& Get();
-    void InitMetaData(DeviceArgs& devArgs);
-    bool GetValidGetPgMask() const;
-    HostProf& GetHostProfInstance() { return hostProf_; }
-
-private:
-    HostProf hostProf_;
-};
-} // namespace npu::tile_fwk
-#endif
 #endif // SRC_MACHINE_DEVICE_RUNNER_H

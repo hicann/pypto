@@ -21,7 +21,6 @@
 #include "machine/utils/machine_ws_intf.h"
 
 namespace npu::tile_fwk {
-
 // pmu event type
 constexpr int32_t ARITHMETIC_UTILIZATION = 1;
 constexpr int32_t PIPE_UTILIZATION = 2;
@@ -38,7 +37,5 @@ class PmuCommon {
 public:
     static void InitPmuEventType(const ArchInfo& archInfo, std::vector<int64_t>& pmuEvtType);
 };
-
 } // namespace npu::tile_fwk
-
 #endif // SRC_MACHINE_RUNTIME_PMU_COMMON_H

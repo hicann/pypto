@@ -18,27 +18,21 @@
 
 #include <cstdint>
 #include <cinttypes>
-
-#ifdef BUILD_WITH_CANN
+#include "tilefwk/data_type.h"
+#include "tilefwk/tilefwk.h"
+#include "tilefwk/platform.h"
+#include "tilefwk/pypto_fwk_log.h"
+#include "interface/inner/tilefwk.h"
+#include "interface/interpreter/raw_tensor_data.h"
 #include "machine/runtime/device_runner.h"
-#endif
-
 #include "machine/runtime/device_launcher_binding.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "machine/utils/dynamic/dev_tensor_creator.h"
 #include "machine/device/dynamic/device_common.h"
 #include "machine/runtime/device_memory_utils.h"
-#include "tilefwk/tilefwk.h"
-#include "tilefwk/platform.h"
-#include "interface/inner/tilefwk.h"
-#include "tilefwk/data_type.h"
-#include "interface/interpreter/raw_tensor_data.h"
-#include "interface/configs/config_manager.h"
-#include "tilefwk/platform.h"
 #include "machine/runtime/distributed/distributed_context.h"
 #include "machine/utils/machine_error.h"
-#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk::dynamic {
 struct AiCpuArgs {
@@ -113,13 +107,10 @@ public:
     static void DeviceLauncherConfigFillDeviceInfo(const DeviceLauncherConfig& config)
     {
         DeviceLauncherConfig& devConfig = const_cast<DeviceLauncherConfig&>(config);
-#ifdef BUILD_WITH_CANN
         int maxBlockDim = GetCfgBlockdim();
         int maxAicpuNum = static_cast<int>(Platform::Instance().GetSoc().GetAICPUNum());
-#else
-        int maxBlockDim = 25; // 25:maxblockDim
-        int maxAicpuNum = 5;  // 5:maxaicpuNUm
-#endif
+        maxAicpuNum = maxAicpuNum > 0 ? maxAicpuNum : 5;
+
         if (devConfig.blockdim == 0 || devConfig.blockdim > maxBlockDim) {
             devConfig.blockdim = maxBlockDim;
         }
@@ -191,14 +182,13 @@ public:
         config.aicpuNum = GetAiCpuNum(aiCpuNum, devProg->devArgs.scheCpuNum, devProg->devArgs.archInfo);
         devProg->devArgs.nrAicpu = config.aicpuNum;
 
-#ifdef BUILD_WITH_CANN
         if (IsPtoDataDumpEnabled()) { // dump tensor
             devProg->devArgs.hostPid = GetProcessId();
         }
         if (isDevice) {
             devProg->devArgs.validGetPgMask = DeviceRunner::Get().GetValidGetPgMask();
         }
-#endif
+
         MACHINE_LOGD("Set aicore blockdim=%d, aicpu blockdim=%d.", config.blockdim, config.aicpuNum);
 
         devProg->devArgs.enableCtrl = 1; // need set 0 if use custom cpu launch ctrl cpu
@@ -210,11 +200,11 @@ public:
                 static_cast<int64_t>(devProg->memBudget.tensor.maxDynamicAssembleOutcastMem),
                 AlignUp(config.dynWorkspaceSize, TENSOR_ADDR_ALIGNMENT));
         }
-#ifdef BUILD_WITH_CANN
+
         if (isDevice) {
             DeviceRunner::Get().InitMetaData(devProg->devArgs);
         }
-#endif
+
         devProg->workspaceSize = devProg->memBudget.Total();
         MACHINE_LOGI(
             "[workspaceSize] Metadata=%lu, workspaceSize=%lu, tensor=%lu, aicoreSpillen=%lu, debug.DumpTensor=%lu, "
@@ -425,7 +415,6 @@ public:
         }
     }
 
-#ifdef BUILD_WITH_CANN
     static void ChangeCaptureModeRelax();
     static void ChangeCaptureModeGlobal();
     static int GetStreamCaptureInfo(RtStream aicoreStream, AclMdlRI& rtModel, bool& isCapture);
@@ -438,21 +427,7 @@ public:
         const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
     static int DeviceSynchronize(RtStream aicpuStream, RtStream aicoreStream);
-#else
-    static void ChangeCaptureModeRelax() {}
-    static void ChangeCaptureModeGlobal() {}
-    static int GetStreamCaptureInfo(RtStream, AclMdlRI&, bool&) { return 0; }
-    static int SetCaptureStream(RtStream, RtStream, bool&) { return 0; }
-    static int RunWithProfile(RtStream, RtStream, bool) { return 0; }
-    static int DeviceLaunchOnceWithDeviceTensorData(
-        Function*, const std::vector<DeviceTensorData>&, const std::vector<DeviceTensorData>&, RtStream, RtStream,
-        bool, CachedOperator*, uintptr_t, const DeviceLauncherConfig& config = DeviceLauncherConfig())
-    {
-        (void)config;
-        return 0;
-    }
-    static int DeviceSynchronize(RtStream, RtStream) { return 0; }
-#endif
+
     static void FillDeviceKernelArgs(
         std::vector<uint8_t>& devProgData, DeviceKernelArgs& kargs, const std::vector<std::string>& groupNames);
     static int64_t GetL2Offset();

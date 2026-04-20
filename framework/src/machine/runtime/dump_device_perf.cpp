@@ -13,7 +13,6 @@
  * \brief
  */
 #include "dump_device_perf.h"
-#ifdef BUILD_WITH_CANN
 
 #include <cstdlib>
 #include "tilefwk/pypto_fwk_log.h"
@@ -295,4 +294,3 @@ void DumpAicpuPerfInfo(DeviceArgs& args, const std::vector<void*>& perfData, uin
                                        std::to_string(g_last_round_num) + ".json");
 }
 } // namespace npu::tile_fwk::dynamic
-#endif

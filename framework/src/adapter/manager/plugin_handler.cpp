@@ -15,6 +15,7 @@
 
 #include "adapter/manager/plugin_handler.h"
 #include <dlfcn.h>
+#include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk {
 PluginHandler::PluginHandler() : handler_(nullptr) {}
@@ -27,6 +28,9 @@ PluginHandler::~PluginHandler()
 bool PluginHandler::OpenHandler(const std::string &libName)
 {
     handler_ = dlopen(libName.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    if (handler_ == nullptr) {
+        ADAPTER_LOGW("Failed to load library[%s], error: %s", libName.c_str(), dlerror());
+    }
     return handler_ != nullptr;
 }
 
@@ -41,6 +45,10 @@ void PluginHandler::CloseHandler()
 
 void* PluginHandler::GetFunction(const std::string& funcName) const
 {
-    return dlsym(handler_, funcName.c_str());
+    void *func = dlsym(handler_, funcName.c_str());
+    if (func == nullptr) {
+        ADAPTER_LOGI("Failed to load symbol[%s] from library, error: %s", funcName.c_str(), dlerror());
+    }
+    return func;
 }
 }

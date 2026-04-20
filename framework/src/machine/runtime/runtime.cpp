@@ -13,7 +13,6 @@
  * \brief
  */
 
-#ifdef BUILD_WITH_CANN
 #include "machine/runtime/runtime.h"
 #include "tilefwk/platform.h"
 #include "adapter/api/hal_api.h"
@@ -174,7 +173,5 @@ void* RuntimeAgentMemory::MapAiCoreReg()
     MACHINE_LOGI("All AiCore Reg mapped: %p. size: %zu", devAddr, regAddrSize);
     return devAddr;
 }
-
 } // namespace npu::tile_fwk
 
-#endif // BUILD_WITH_CANN
