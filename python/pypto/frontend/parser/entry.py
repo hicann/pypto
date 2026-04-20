@@ -727,10 +727,11 @@ class JitCallableWrapper:
             # Skip checking if the input tensor definition is None or（shape len is 0 && shape object is not list）
             if len(input_tensor_def.shape) != 0 or input_tensor_def.status_shape is not None:
 
+                filtered_shape = len([dim for dim in input_tensor_def.shape if dim is not Ellipsis])
                 # def shape len must <= tensor shape len
                 is_diff_shape = len(in_tensor.shape) != len(input_tensor_def.shape) \
                     if input_tensor_def.status_shape is None \
-                    else len(in_tensor.shape) < len(input_tensor_def.shape)
+                    else len(in_tensor.shape) < filtered_shape
 
                 # Check the shape of input tensors and input tensor definitions
                 if is_diff_shape:

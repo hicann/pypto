@@ -46,7 +46,7 @@ def matmul_kernel(
 
 @pypto.frontend.jit
 def one_hot_kernel(
-    a: pypto.Tensor([pypto.DYNAMIC], pypto.DT_INT32),
+    a: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_INT32),
     out: pypto.Tensor([], pypto.DT_INT32),
 ):
     pypto.set_vec_tile_shapes(4, 5, 32)
