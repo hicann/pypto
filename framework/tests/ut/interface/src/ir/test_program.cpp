@@ -101,31 +101,6 @@ TEST_F(IRProgramTest, TestGetFunctionNotFound)
 }
 
 // ============================================================================
-// Program GetGlobalVar Tests
-// ============================================================================
-
-TEST_F(IRProgramTest, TestGetGlobalVarByName)
-{
-    auto func = MakeSimpleFunction("my_func");
-    std::vector<FunctionPtr> funcs = {func};
-    auto program = std::make_shared<Program>(funcs, "test", Span::Unknown());
-
-    auto gv = program->GetGlobalVar("my_func");
-    ASSERT_NE(gv, nullptr);
-    ASSERT_EQ(gv->name_, "my_func");
-}
-
-TEST_F(IRProgramTest, TestGetGlobalVarNotFound)
-{
-    auto func = MakeSimpleFunction("existing");
-    std::vector<FunctionPtr> funcs = {func};
-    auto program = std::make_shared<Program>(funcs, "test", Span::Unknown());
-
-    auto gv = program->GetGlobalVar("nonexistent");
-    ASSERT_EQ(gv, nullptr);
-}
-
-// ============================================================================
 // Program Validation Tests
 // ============================================================================
 

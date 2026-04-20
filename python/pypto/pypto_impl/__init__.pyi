@@ -9,7 +9,49 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
 import enum
-from typing import Iterator, overload, Union, List, Dict, Tuple, Optional
+from typing import Iterator, overload, Union, List, Dict, Tuple, Optional, NoReturn
+
+
+class InternalError(Exception):
+    """Exception raised when an internal system error occurs"""
+
+
+class LogLevel(enum.IntEnum):
+    DEBUG = ...
+    INFO = ...
+    WARN = ...
+    ERROR = ...
+    FATAL = ...
+    EVENT = ...
+
+
+def set_log_level(level: LogLevel) -> None:
+    """Set the log level threshold."""
+    ...
+
+
+def get_log_level() -> LogLevel:
+    """Get the current log level threshold."""
+    ...
+
+
+def log(level: LogLevel, message: str) -> None:
+    """Log a message at the specified level."""
+    ...
+
+
+def check(condition: bool, message: str) -> None:
+    """Check a condition and throw ValueError if it fails."""
+    ...
+
+
+def internal_check(condition: bool, message: str) -> None:
+    """Check a condition and throw InternalError if it fails."""
+    ...
+
+
+def raise_error(error_type: str, message: str) -> NoReturn:
+    """Raise an error from C++ for testing error handling."""
 
 
 class DataType(enum.Enum):

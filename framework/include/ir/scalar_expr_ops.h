@@ -41,8 +41,8 @@ inline DataType GetScalarDtype(const ExprPtr& expr, const Span& span = Span::Unk
     // Note: Must use dynamic_pointer_cast here because this header is included before
     // the TypePtr overload of As<> is defined in kind_traits.h
     auto scalarType = std::dynamic_pointer_cast<const ScalarType>(expr->GetType());
-    CHECK(scalarType) << "Expression must be ScalarExpr or Var with ScalarType, got " << expr->TypeName()
-                      << " with type " << expr->GetType()->TypeName() << " at " << span.ToString();
+    CHECK(scalarType) << "Expression must be Var with ScalarType, got " << expr->TypeName() << " with type "
+                      << expr->GetType()->TypeName() << " at " << span.ToString();
     return scalarType->dtype_;
 }
 

@@ -9,6 +9,11 @@
  */
 
 #pragma once
+
+#include <string>
+
+#include "core/error.h"
+
 namespace pypto {
 namespace ir {
 
@@ -25,6 +30,35 @@ enum PipeType : int {
     FIX,  ///< Fix Pipe (L0C -> UB)
     ALL   ///< All Pipes
 };
+
+/**
+ * @brief Convert PipeType to its string name
+ * @param pipe The pipeline type
+ * @return String representation (e.g., "MTE1", "MTE2", "V")
+ */
+inline std::string PipeTypeToString(PipeType pipe)
+{
+    switch (pipe) {
+        case PipeType::MTE1:
+            return "MTE1";
+        case PipeType::MTE2:
+            return "MTE2";
+        case PipeType::MTE3:
+            return "MTE3";
+        case PipeType::M:
+            return "M";
+        case PipeType::V:
+            return "V";
+        case PipeType::S:
+            return "S";
+        case PipeType::FIX:
+            return "FIX";
+        case PipeType::ALL:
+            return "ALL";
+        default:
+            throw TypeError("Unknown PipeType: " + std::to_string(static_cast<int>(pipe)));
+    }
+}
 
 /**
  * \brief Core type enumeration (numeric values must match runtime add_task expectation)

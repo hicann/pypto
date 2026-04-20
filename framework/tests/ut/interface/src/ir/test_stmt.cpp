@@ -30,44 +30,6 @@ namespace ir {
 class IRStmtTest : public testing::Test {};
 
 // ============================================================================
-// OpStmts Tests
-// ============================================================================
-
-TEST_F(IRStmtTest, TestOpStmtsWithAssignStmts)
-{
-    auto var1 = std::make_shared<Var>("x", std::make_shared<ScalarType>(DataType::FP32), Span::Unknown());
-    auto val1 = std::make_shared<ConstInt>(1, DataType::INT32, Span::Unknown());
-    auto assign1 = std::make_shared<AssignStmt>(var1, val1, Span::Unknown());
-
-    auto var2 = std::make_shared<Var>("y", std::make_shared<ScalarType>(DataType::FP32), Span::Unknown());
-    auto val2 = std::make_shared<ConstInt>(2, DataType::INT32, Span::Unknown());
-    auto assign2 = std::make_shared<AssignStmt>(var2, val2, Span::Unknown());
-
-    std::vector<StmtPtr> stmts = {assign1, assign2};
-    auto opStmts = std::make_shared<OpStmts>(stmts, Span::Unknown());
-
-    ASSERT_EQ(opStmts->stmts_.size(), 2);
-}
-
-TEST_F(IRStmtTest, TestOpStmtsWithEvalStmt)
-{
-    auto val = std::make_shared<ConstInt>(42, DataType::INT32, Span::Unknown());
-    auto evalStmt = std::make_shared<EvalStmt>(val, Span::Unknown());
-
-    std::vector<StmtPtr> stmts = {evalStmt};
-    auto opStmts = std::make_shared<OpStmts>(stmts, Span::Unknown());
-
-    ASSERT_EQ(opStmts->stmts_.size(), 1);
-}
-
-TEST_F(IRStmtTest, TestOpStmtsEmpty)
-{
-    std::vector<StmtPtr> stmts;
-    auto opStmts = std::make_shared<OpStmts>(stmts, Span::Unknown());
-    ASSERT_EQ(opStmts->stmts_.size(), 0);
-}
-
-// ============================================================================
 // AssignStmt Tests
 // ============================================================================
 

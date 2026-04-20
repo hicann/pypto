@@ -284,7 +284,13 @@ public:
      * \brief Set the global log level threshold
      * \param l New log level
      */
-    static void ResetLevel(LogLevel l) { GetManager().level = l; }
+    static void SetLevel(LogLevel l) { GetManager().level = l; }
+
+    /**
+     * \brief Get the current global log level threshold
+     * \return Current log level
+     */
+    static LogLevel GetLevel() { return GetManager().level; }
 
     /**
      * \brief Enable or disable standard output logging
@@ -615,4 +621,14 @@ public:
  */
 #define INTERNAL_UNREACHABLE pypto::FatalLogger<pypto::ir::InternalError>("unreachable", __FILE__, __LINE__)
 
+/**
+ * @brief Check an internal invariant with IR source location and throw InternalError if it fails
+ *
+ * Usage: INTERNAL_CHECK_SPAN(condition, node->span_) << "error message";
+ */
+#define INTERNAL_CHECK_SPAN(expr, span) \
+    if (!!(expr))                       \
+        ;                               \
+    else                                \
+        pypto::FatalLogger<pypto::ir::InternalError>(#expr, span.filename_.c_str(), span.beginLine_)
 } // namespace pypto

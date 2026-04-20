@@ -14,6 +14,7 @@ file(GLOB _Interface_Srcs
         # Core infrastructure
         core/*.cpp
         ir/*.cpp
+        ir/transforms/*.cpp
         # 前端框架
         schema/*.cpp
         configs/*.cpp

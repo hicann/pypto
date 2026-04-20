@@ -89,12 +89,9 @@ TEST(ProgramTest, GetGlobalVarByName)
     auto func = std::make_shared<Function>("my_func", std::vector<VarPtr>{}, std::vector<TypePtr>{}, body, span);
     auto prog = std::make_shared<Program>(std::vector<FunctionPtr>{func}, "prog", span);
 
-    auto gvar = prog->GetGlobalVar("my_func");
-    ASSERT_NE(gvar, nullptr);
-    ASSERT_EQ(gvar->name_, "my_func");
-
-    auto notFound = prog->GetGlobalVar("nonexistent");
-    ASSERT_EQ(notFound, nullptr);
+    auto found = prog->GetFunction("my_func");
+    ASSERT_NE(found, nullptr);
+    ASSERT_EQ(found->name_, "my_func");
 }
 
 TEST(ProgramTest, ProgramKindAndTypeName)
@@ -136,31 +133,6 @@ TEST(SpanTest, ToString)
     ASSERT_NE(str.find("file.py"), std::string::npos);
     ASSERT_NE(str.find("10"), std::string::npos);
     ASSERT_NE(str.find("5"), std::string::npos);
-}
-
-TEST(SpanTest, IsValidTrue)
-{
-    Span span("file.py", 1, 1);
-    ASSERT_TRUE(span.IsValid());
-}
-
-TEST(SpanTest, IsValidWithEndPos)
-{
-    Span span("file.py", 1, 1, 5, 10);
-    ASSERT_TRUE(span.IsValid());
-}
-
-TEST(SpanTest, IsValidFalseNegativeLine)
-{
-    Span span("file.py", -1, -1, -1, -1);
-    ASSERT_FALSE(span.IsValid());
-}
-
-TEST(SpanTest, UnknownSpan)
-{
-    auto span = Span::Unknown();
-    ASSERT_FALSE(span.IsValid());
-    ASSERT_TRUE(span.filename_.empty());
 }
 
 // ============================================================================
@@ -217,41 +189,6 @@ TEST(ExprTest, TupleGetItemSecondElement)
     auto ResultType = As<ScalarType>(getItem->GetType());
     ASSERT_NE(ResultType, nullptr);
     ASSERT_EQ(ResultType->dtype_, DataType::FP32);
-}
-
-// ============================================================================
-// Stmt Tests (stmt.cpp)
-// ============================================================================
-
-TEST(StmtTest, OpStmtsWithAssignAndEval)
-{
-    auto span = TestSpan();
-    auto x = std::make_shared<Var>("x", Int32Type(), span);
-    auto one = std::make_shared<ConstInt>(1, DataType::INT32, span);
-    auto assign = std::make_shared<AssignStmt>(x, one, span);
-    auto eval = std::make_shared<EvalStmt>(one, span);
-
-    auto opStmts = std::make_shared<OpStmts>(std::vector<StmtPtr>{assign, eval}, span);
-    ASSERT_NE(opStmts, nullptr);
-    ASSERT_EQ(opStmts->stmts_.size(), 2u);
-    ASSERT_EQ(opStmts->GetKind(), ObjectKind::OpStmts);
-    ASSERT_EQ(opStmts->TypeName(), "OpStmts");
-}
-
-TEST(StmtTest, OpStmtsRejectsInvalidStmt)
-{
-    auto span = TestSpan();
-    auto ret = std::make_shared<ReturnStmt>(span);
-    // ReturnStmt is not AssignStmt or EvalStmt, should throw
-    ASSERT_THROW(std::make_shared<OpStmts>(std::vector<StmtPtr>{ret}, span), InternalError);
-}
-
-TEST(StmtTest, OpStmtsEmpty)
-{
-    auto span = TestSpan();
-    auto opStmts = std::make_shared<OpStmts>(std::vector<StmtPtr>{}, span);
-    ASSERT_NE(opStmts, nullptr);
-    ASSERT_TRUE(opStmts->stmts_.empty());
 }
 
 // ============================================================================
@@ -318,46 +255,22 @@ TEST(MemRefTest, Construction)
 {
     auto span = TestSpan();
     auto addr = std::make_shared<ConstInt>(0, DataType::INT64, span);
-    auto memref = std::make_shared<MemRef>(MemorySpace::UB, addr, 1024, 0, span);
+    auto memref = std::make_shared<MemRef>(MemorySpace::Vec, addr, 1024, span);
 
     ASSERT_NE(memref, nullptr);
-    ASSERT_EQ(memref->memorySpace_, MemorySpace::UB);
+    ASSERT_EQ(memref->memorySpace_, MemorySpace::Vec);
     ASSERT_EQ(memref->size_, 1024u);
-    ASSERT_EQ(memref->id_, 0u);
     ASSERT_EQ(memref->GetKind(), ObjectKind::MemRef);
 }
 
 TEST(MemRefTest, MemorySpaceToString)
 {
     ASSERT_EQ(MemorySpaceToString(MemorySpace::DDR), "DDR");
-    ASSERT_EQ(MemorySpaceToString(MemorySpace::UB), "UB");
-    ASSERT_EQ(MemorySpaceToString(MemorySpace::L1), "L1");
-    ASSERT_EQ(MemorySpaceToString(MemorySpace::L0A), "L0A");
-    ASSERT_EQ(MemorySpaceToString(MemorySpace::L0B), "L0B");
-    ASSERT_EQ(MemorySpaceToString(MemorySpace::L0C), "L0C");
+    ASSERT_EQ(MemorySpaceToString(MemorySpace::Vec), "Vec");
+    ASSERT_EQ(MemorySpaceToString(MemorySpace::Mat), "Mat");
+    ASSERT_EQ(MemorySpaceToString(MemorySpace::Left), "Left");
+    ASSERT_EQ(MemorySpaceToString(MemorySpace::Right), "Right");
+    ASSERT_EQ(MemorySpaceToString(MemorySpace::Acc), "Acc");
 }
-
-TEST(MemRefTest, NameContainsMemorySpace)
-{
-    auto span = TestSpan();
-    auto addr = std::make_shared<ConstInt>(0, DataType::INT64, span);
-    auto memref = std::make_shared<MemRef>(MemorySpace::L1, addr, 512, 1, span);
-    // Name should contain lowercase memory space
-    ASSERT_NE(memref->name_.find("l1"), std::string::npos);
-}
-
-TEST(MemRefTest, DifferentMemorySpaces)
-{
-    auto span = TestSpan();
-    auto addr = std::make_shared<ConstInt>(0, DataType::INT64, span);
-
-    auto ub = std::make_shared<MemRef>(MemorySpace::UB, addr, 1024, 0, span);
-    auto l0a = std::make_shared<MemRef>(MemorySpace::L0A, addr, 1024, 1, span);
-    auto l0b = std::make_shared<MemRef>(MemorySpace::L0B, addr, 1024, 2, span);
-
-    ASSERT_NE(ub->name_, l0a->name_);
-    ASSERT_NE(l0a->name_, l0b->name_);
-}
-
 } // namespace ir
 } // namespace pypto

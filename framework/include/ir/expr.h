@@ -24,7 +24,6 @@
 #include "core/dtype.h"
 #include "core/logging.h"
 #include "ir/core.h"
-#include "ir/memref.h"
 #include "ir/pipe.h"
 #include "ir/reflection/field_traits.h"
 #include "ir/type.h"
@@ -56,7 +55,7 @@ public:
     /**
      * \brief Get the type name of this expression
      *
-     * \return Human-readable type name (e.g., "ScalarExpr", "Var", "Call")
+     * \return Human-readable type name (e.g., "Var", "Call")
      */
     [[nodiscard]] std::string TypeName() const override { return "Expr"; }
 
@@ -314,56 +313,6 @@ public:
 
 using IterArgPtr = std::shared_ptr<const IterArg>;
 
-/**
- * \brief Memory reference variable for shaped types (tensor and tile)
- *
- * Represents a memory allocation with metadata (space, address, size, id).
- * Inherits from Var, making it a first-class IR expression that can be
- * declared and referenced like other variables.
- *
- * Memory references have auto-generated names based on their ID (e.g., "mem_123")
- * and MemRefType as their type.
- */
-class MemRef : public Var {
-public:
-    MemorySpace memorySpace_; ///< Memory space (DDR, UB, L1, etc.)
-    ExprPtr addr_;            ///< Starting address expression
-    uint64_t size_;           ///< Size in bytes (64-bit unsigned)
-    uint64_t id_;             ///< Unique identifier (used for name generation)
-
-    /**
-     * \brief Constructor with all parameters including explicit ID
-     *
-     * Generates a variable name from the ID (e.g., "mem_123") and creates
-     * a MemRefType for the type. Calls Var constructor with these values.
-     *
-     * \param memorySpace Memory space (DDR, UB, L1, etc.)
-     * \param addr Starting address expression
-     * \param size Size in bytes
-     * \param id Unique identifier (used to generate variable name)
-     * \param span Source location (defaults to Span::Unknown())
-     */
-    MemRef(MemorySpace memorySpace, ExprPtr addr, uint64_t size, uint64_t id, Span span = Span::Unknown());
-
-    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::MemRef; }
-    [[nodiscard]] std::string TypeName() const override { return "MemRef"; }
-
-    /**
-     * \brief Get field descriptors for reflection-based visitation
-     *
-     * \return Tuple of field descriptors
-     */
-    static constexpr auto GetFieldDescriptors()
-    {
-        return std::tuple_cat(
-            Var::GetFieldDescriptors(),
-            std::make_tuple(
-                reflection::UsualField(&MemRef::memorySpace_, "memory_space"),
-                reflection::UsualField(&MemRef::addr_, "addr"), reflection::UsualField(&MemRef::size_, "size"),
-                reflection::UsualField(&MemRef::id_, "id")));
-    }
-};
-
 // MemRefPtr is already declared in memref.h, just reuse it here
 
 /**
@@ -375,7 +324,7 @@ public:
  */
 class Call : public Expr {
 public:
-    OpPtr op_;                                             // Operation/function
+    std::string name_;                                     // Name of the operation/function
     std::vector<ExprPtr> args_;                            // Positional arguments
     std::vector<std::pair<std::string, std::any>> kwargs_; // Keyword arguments (metadata, ordered)
 
@@ -386,8 +335,8 @@ public:
      * \param args List of argument expressions
      * \param span Source location
      */
-    Call(OpPtr op, std::vector<ExprPtr> args, Span span)
-        : Expr(std::move(span)), op_(std::move(op)), args_(std::move(args)), kwargs_()
+    Call(std::string name, std::vector<ExprPtr> args, Span span)
+        : Expr(std::move(span)), name_(std::move(name)), args_(std::move(args)), kwargs_()
     {}
 
     /**
@@ -398,71 +347,9 @@ public:
      * \param type Result type of the call
      * \param span Source location
      */
-    Call(OpPtr op, std::vector<ExprPtr> args, TypePtr type, Span span)
-        : Expr(std::move(span), std::move(type)), op_(std::move(op)), args_(std::move(args)), kwargs_()
+    Call(std::string name, std::vector<ExprPtr> args, TypePtr type, Span span)
+        : Expr(std::move(span), std::move(type)), name_(std::move(name)), args_(std::move(args)), kwargs_()
     {}
-
-    /**
-     * \brief Create a function call expression with kwargs
-     *
-     * \param op Operation/function to call
-     * \param args List of argument expressions
-     * \param kwargs Keyword arguments (metadata)
-     * \param span Source location
-     */
-    Call(OpPtr op, std::vector<ExprPtr> args, std::vector<std::pair<std::string, std::any>> kwargs, Span span)
-        : Expr(std::move(span)), op_(std::move(op)), args_(std::move(args)), kwargs_(std::move(kwargs))
-    {}
-
-    /**
-     * \brief Create a function call expression with kwargs and explicit type
-     *
-     * \param op Operation/function to call
-     * \param args List of argument expressions
-     * \param kwargs Keyword arguments (metadata)
-     * \param type Result type of the call
-     * \param span Source location
-     */
-    Call(
-        OpPtr op, std::vector<ExprPtr> args, std::vector<std::pair<std::string, std::any>> kwargs, TypePtr type,
-        Span span)
-        : Expr(std::move(span), std::move(type)), op_(std::move(op)), args_(std::move(args)), kwargs_(std::move(kwargs))
-    {}
-
-    /**
-     * \brief Get a kwarg value with type checking
-     *
-     * \tparam T Type of the kwarg value
-     * \param key Kwarg key
-     * \param defaultValue Default value if key doesn't exist
-     * \return The kwarg value or default
-     */
-    template <typename T>
-    T GetKwarg(const std::string& key, const T& defaultValue = T{}) const
-    {
-        for (const auto& [k, v] : kwargs_) {
-            if (k == key) {
-                return AnyCast<T>(v, "kwarg key: " + key);
-            }
-        }
-        return defaultValue;
-    }
-
-    /**
-     * \brief Check if a kwarg exists
-     *
-     * \param key Kwarg key
-     * \return true if the kwarg exists
-     */
-    [[nodiscard]] bool HasKwarg(const std::string& key) const
-    {
-        for (const auto& kv : kwargs_) {
-            if (kv.first == key) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::Call; }
     [[nodiscard]] std::string TypeName() const override { return "Call"; }
@@ -477,8 +364,7 @@ public:
         return std::tuple_cat(
             Expr::GetFieldDescriptors(),
             std::make_tuple(
-                reflection::UsualField(&Call::op_, "op"), reflection::UsualField(&Call::args_, "args"),
-                reflection::UsualField(&Call::kwargs_, "kwargs")));
+                reflection::UsualField(&Call::name_, "name"), reflection::UsualField(&Call::args_, "args")));
     }
 };
 

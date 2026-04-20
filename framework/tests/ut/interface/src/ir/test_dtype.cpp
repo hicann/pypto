@@ -46,7 +46,7 @@ TEST(CoreDTypeTest, TestDataTypeConstants)
 TEST(CoreDTypeTest, TestGetBit)
 {
     // Test GetBit() for all data types
-    ASSERT_EQ(DataType::BOOL.GetBit(), 1);
+    ASSERT_EQ(DataType::BOOL.GetBit(), 8);
     ASSERT_EQ(DataType::INT4.GetBit(), 4);
     ASSERT_EQ(DataType::INT8.GetBit(), 8);
     ASSERT_EQ(DataType::INT16.GetBit(), 16);

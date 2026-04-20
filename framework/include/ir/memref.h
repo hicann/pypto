@@ -18,45 +18,56 @@
 #include <vector>
 
 #include "core/dtype.h"
+#include "ir/expr.h"
 #include "ir/reflection/field_traits.h"
 
 namespace pypto {
 namespace ir {
-
-// Forward declarations
-class Expr;
-using ExprPtr = std::shared_ptr<const Expr>;
-
-class MemRef;
-using MemRefPtr = std::shared_ptr<const MemRef>;
-
 /**
- * \brief Memory space enumeration
+ * @brief Memory reference variable for shaped types (tensor and tile)
  *
- * Defines the available memory spaces in the hardware hierarchy:
- * - DDR: Double Data Rate memory (off-chip)
- * - UB: Unified Buffer (on-chip shared memory)
- * - L1: L1 cache
- * - L0A: L0A buffer (matrix A operand)
- * - L0B: L0B buffer (matrix B operand)
- * - L0C: L0C buffer (matrix C/result)
+ * Represents a memory reference combining an allocation identity (base Ptr),
+ * a byte offset within that allocation, and a size.
+ *
+ * - base_: VarPtr to the Ptr variable from tile.alloc/tensor.alloc (allocation identity)
+ * - byte_offset_: byte offset from base (0 for root alloc, computed for views)
+ * - size_: size in bytes of this memory region
+ *
+ * Aliasing is determined by comparing base_ pointers (SameAllocation) and
+ * checking for overlapping byte ranges (MayAlias).
  */
-enum class MemorySpace {
-    DDR, ///< DDR memory (off-chip)
-    UB,  ///< Unified Buffer (on-chip)
-    L1,  ///< L1 cache
-    L0A, ///< L0A buffer
-    L0B, ///< L0B buffer
-    L0C  ///< L0C buffer
+class MemRef : public Expr {
+public:
+    MemorySpace memorySpace_; ///< Memory space of this MemRef, e.g. Global, Local, Constant
+    ExprPtr offset_;          ///< Byte offset from base (0 for full alloc, view offset for views)
+    uint64_t size_;           ///< Size in bytes of this MemRef
+
+    /**
+     * @brief Construct with explicit variable name. Used by deserialization and
+     * address allocation where the name must be preserved exactly.
+     */
+    MemRef(MemorySpace memory_space, ExprPtr offset, uint64_t size, Span span = Span::Unknown());
+
+    [[nodiscard]] ObjectKind GetKind() const override { return ObjectKind::MemRef; }
+    [[nodiscard]] std::string TypeName() const override { return "MemRef"; }
+
+    /// Are two MemRefs from the same allocation? (compare base_ Ptr identity)
+    static bool SameAllocation(const MemRefPtr& a, const MemRefPtr& b);
+
+    /// Do two MemRefs potentially alias? (same base + overlapping byte ranges)
+    static bool MayAlias(const MemRefPtr& a, const MemRefPtr& b);
+
+    static constexpr auto GetFieldDescriptors()
+    {
+        return std::tuple_cat(
+            Expr::GetFieldDescriptors(),
+            std::make_tuple(
+                reflection::UsualField(&MemRef::memorySpace_, "memory_space"),
+                reflection::UsualField(&MemRef::offset_, "offset"), reflection::UsualField(&MemRef::size_, "size")));
+    }
 };
 
-/**
- * \brief Convert MemorySpace enum to string
- *
- * \param space Memory space enum value
- * \return String representation
- */
-std::string MemorySpaceToString(MemorySpace space);
+using MemRefPtr = std::shared_ptr<const MemRef>;
 
 } // namespace ir
 } // namespace pypto

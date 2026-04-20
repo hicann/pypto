@@ -47,28 +47,6 @@ TEST(IRCoreTest, TestSpanToString)
     ASSERT_TRUE(str.find("test.py") != std::string::npos || str.find("10") != std::string::npos);
 }
 
-TEST(IRCoreTest, TestSpanIsValid)
-{
-    // Test Span is_valid() method
-    Span validSpan("test.py", 10, 5, 10, 15);
-    ASSERT_TRUE(validSpan.IsValid());
-
-    // Unknown span should be invalid
-    Span unknownSpan = Span::Unknown();
-    ASSERT_FALSE(unknownSpan.IsValid());
-}
-
-TEST(IRCoreTest, TestSpanUnknown)
-{
-    // Test Span::Unknown() creates an invalid span
-    Span span = Span::Unknown();
-    ASSERT_FALSE(span.IsValid());
-
-    // Unknown span should have meaningful string representation
-    std::string str = span.ToString();
-    ASSERT_TRUE(!str.empty());
-}
-
 TEST(IRCoreTest, TestSpanMultiline)
 {
     // Test Span spanning multiple lines
@@ -89,7 +67,6 @@ TEST(IRCoreTest, TestSpanSingleCharacter)
     ASSERT_EQ(span.endLine_, 5);
     ASSERT_EQ(span.beginColumn_, 10);
     ASSERT_EQ(span.endColumn_, 11);
-    ASSERT_TRUE(span.IsValid());
 }
 
 TEST(IRCoreTest, TestIRNodeBasic)
@@ -110,14 +87,6 @@ TEST(IRCoreTest, TestIRNodeTypeName)
 
     std::string typeName = node->TypeName();
     ASSERT_EQ(typeName, "ConstInt");
-}
-
-TEST(IRCoreTest, TestIRNodeWithUnknownSpan)
-{
-    // Test IRNode with unknown span via ConstInt
-    auto node = std::make_shared<ConstInt>(0, DataType::INT32, Span::Unknown());
-
-    ASSERT_FALSE(node->span_.IsValid());
 }
 
 TEST(IRCoreTest, TestMultipleIRNodes)

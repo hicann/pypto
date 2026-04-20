@@ -83,6 +83,7 @@ from .symbolic_scalar import SymbolicScalar
 from .tensor import Tensor
 from .functions import Function, get_last_function, get_current_function
 from ._element import Element
+from .logging import *  # noqa
 
 # Import frontend after all other imports to avoid circular imports
 from . import frontend

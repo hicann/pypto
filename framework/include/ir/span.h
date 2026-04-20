@@ -65,14 +65,14 @@ public:
      *
      * \return true if all line/column numbers are positive
      */
-    [[nodiscard]] bool IsValid() const;
+    static bool IsUnknown(const Span& span);
 
     /**
      * \brief Create an unknown/invalid span
      *
      * \return Span with empty filename and invalid coordinates
      */
-    static Span Unknown();
+    static Span& Unknown();
 };
 
 } // namespace ir
