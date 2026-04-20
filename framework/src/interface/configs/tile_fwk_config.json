@@ -102,6 +102,7 @@
             "pass_thread_num": 1,
             "vf_opt_mark_for": false,
             "enable_vf": true,
+            "enable_vf_unroll": false,
             "default_pass_configs": {
                 "print_graph": false,
                 "print_program": false,

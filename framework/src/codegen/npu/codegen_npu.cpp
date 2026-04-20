@@ -554,11 +554,22 @@ void CodeGenNPU::BuildIncludes(std::ostringstream& oss) const
 
 void CodeGenNPU::AppendVFOptions(NPUArch platform, std::ostringstream& oss)
 {
-    if (platform == NPUArch::DAV_3510 && config::GetPassGlobalConfig(KEY_ENABLE_VF, false)) {
-        oss << "--enable-pto-tile-fusion "
-            << "-mllvm --tile-fusion-skip-shape-inference=true "
-            << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
-            << "-mllvm --tile-fusion-skip-legality-check=false ";
+    if (platform != NPUArch::DAV_3510) {
+        
+        return;
+    }
+
+    if (!config::GetPassGlobalConfig(KEY_ENABLE_VF, true)) {
+        oss << "--cce-simd-vf-fusion=false ";
+        return;
+    }
+
+    oss << "--enable-pto-tile-fusion "
+        << "-mllvm --tile-fusion-skip-shape-inference=true "
+        << "-mllvm --tile-fusion-skip-reduceop-fusion=false "
+        << "-mllvm --tile-fusion-skip-legality-check=false ";
+    if (config::GetPassGlobalConfig(KEY_ENABLE_VF_UNROLL, false)) {
+        oss << "-mllvm -enable-unroll-after-fused=true ";
     }
 }
 
