@@ -25,6 +25,7 @@
 
 #include "passes/pass_interface/pass.h"
 #include "tilefwk/error.h"
+#include "passes/pass_utils/pass_error.h"
 
 namespace npu::tile_fwk {
 class PassRegistry {
@@ -56,7 +57,7 @@ public:
         []() {                                                                                                    \
             static_assert(std::is_base_of_v<::npu::tile_fwk::Pass, DerivedPass>);                                 \
             std::string passName = DerivedPass().GetName();                                                       \
-            ASSERT(passName == #DerivedPass) << "[PassRegistry][Manager][ERROR]: Pass class " << #DerivedPass     \
+            ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, passName == #DerivedPass) << "[PassRegistry][Manager][ERROR]: Pass class " << #DerivedPass     \
                                              << " has incompatible name: " << passName;                           \
         })
 } // namespace npu::tile_fwk

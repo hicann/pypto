@@ -15,6 +15,7 @@
 
 #include "replace_tensor.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_error.h"
 
 #define MODULE_NAME "ReplaceTensor"
 
@@ -685,7 +686,7 @@ LogicalTensorPtr ReplaceTensor::FindReplaceSource(
         return visited.at(&op);
     }
     auto inplaceIdx = op.GetIntAttribute(OpAttributeKey::inplaceIdx);
-    ASSERT(inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()));
+    ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()));
     auto inplaceIOperand = op.GetInputOperand(inplaceIdx);
     LogicalTensorPtr res = nullptr;
     for (auto producer : inplaceIOperand->GetProducers()) {
@@ -696,7 +697,7 @@ LogicalTensorPtr ReplaceTensor::FindReplaceSource(
         if (res == nullptr) {
             res = tmp;
         } else {
-            ASSERT(res == tmp); // inplace路径应总是交汇于同一起点
+            ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, res == tmp); // inplace路径应总是交汇于同一起点
         }
     }
     if (res == nullptr) {
@@ -730,14 +731,14 @@ Status ReplaceTensor::RefactorViewConnectForReplace(Function& function)
             continue;
         }
         auto inplaceIdx = op->GetIntAttribute(OpAttributeKey::inplaceIdx);
-        ASSERT(inplaceIdx == 0);
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, inplaceIdx == 0);
         auto iOperand = op->GetInputOperand(inplaceIdx);
         auto oOperand = op->GetOutputOperand(0);
         if (iOperand == srcTensor) { // 开头的VIEW不需要插入NOP来控制顺序
             continue;
         }
-        ASSERT(iOperand->GetRawTensor() == srcTensor->GetRawTensor());
-        ASSERT(oOperand->GetRawTensor() == srcTensor->GetRawTensor());
+        ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, iOperand->GetRawTensor() == srcTensor->GetRawTensor());
+        ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, oOperand->GetRawTensor() == srcTensor->GetRawTensor());
         op->ReplaceIOperand(0, srcTensor);
         // 含inplace语义，都为同一个RawTensor
         auto nopOutput = std::make_shared<LogicalTensor>(

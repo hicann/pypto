@@ -18,6 +18,7 @@
 #include <queue>
 #include <climits>
 #include "interface/function/function.h"
+#include "passes/pass_utils/pass_error.h"
 
 using namespace npu::tile_fwk;
 
@@ -316,7 +317,7 @@ void ChangeReadyTasksPriorities(
 
     // Change readyAic & readyAiv & readyAicpu priorities
     std::map<int, int> LastLevelMap = GetLastLevelMap(function);
-    ASSERT(priorities[priorities.size() - 1].size() == LastLevelMap.size());
+    ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, priorities[priorities.size() - 1].size() == LastLevelMap.size());
 
     size_t lastLevelSize = LastLevelMap.size();
     std::vector<std::pair<int, int>> LastLevelVector;

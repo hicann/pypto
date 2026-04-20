@@ -24,6 +24,7 @@
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_error.h"
 
 #undef MODULE_NAME
 #define MODULE_NAME "SubgraphToFunction"
@@ -671,13 +672,13 @@ static std::unordered_map<int, GetTensorDataOutcastDesc> GetTensorDataBuildOutca
     }
     for (auto& [index, desc] : getTensorDataOutcastDescDict) {
         (void)index;
-        ASSERT(desc.opListDict[Opcode::OP_ADDS].size() == 1) << "Expect the size is 1 for opListDict, but we get "
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, desc.opListDict[Opcode::OP_ADDS].size() == 1) << "Expect the size is 1 for opListDict, but we get "
                                                              << desc.opListDict[Opcode::OP_ADDS].size() << "OP_ADDS";
         auto mark = desc.opListDict[Opcode::OP_ADDS][0];
 
         std::shared_ptr<LogicalTensor> addsOpOut = mark->GetOOperands()[0];
         auto copyout = *addsOpOut->GetConsumers().begin();
-        ASSERT(copyout->GetOpcode() == Opcode::OP_COPY_OUT)
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, copyout->GetOpcode() == Opcode::OP_COPY_OUT)
             << "Expect Opcode OP_COPY_OUT, but we get " << copyout->GetOpcodeStr() << " at operation["
             << copyout->GetOpMagic() << "].";
         ;
@@ -757,7 +758,7 @@ static std::vector<GetTensorDataUsageDesc> GetTensorDataBuildUsageDesc(Function&
         }
         // subgraphTensor should be the same subgraph to the copyin.
         std::shared_ptr<LogicalTensor> subgraphTensor = GetTensorDataSubgraphTensor(refOp);
-        ASSERT(subgraphTensor != nullptr)
+        ASSERT(TensorErr::TENSOR_NULL_POINTER, subgraphTensor != nullptr)
             << "Expect operation[" << refOp.GetOpMagic()
             << "] has valid IOperand/OOperand, but we get nullptr. Please check the operation.";
         MemoryType subgraphMemoryType = subgraphTensor->GetMemoryTypeToBe();

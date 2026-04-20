@@ -68,7 +68,8 @@ enum class GraphErr : uint32_t {
 enum class ConfigErr : uint32_t {
     CONFIG_MEMORY_TYPE_REACHABLE = 0x44000U,
     CONFIG_SUBGRAPH_BOUNDARY = 0x44001U,
-    CONFIG_TENSOR_MEMORY_TYPE = 0x44002U
+    CONFIG_TENSOR_MEMORY_TYPE = 0x44002U,
+    CONFIG_FILE_FAILED = 0x44003U
 };
 
 // 前端传入Manager错误

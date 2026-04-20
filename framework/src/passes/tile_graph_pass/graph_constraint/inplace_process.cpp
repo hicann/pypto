@@ -15,6 +15,7 @@
 
 #include "inplace_process.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_error.h"
 
 #define MODULE_NAME "InplaceProcess"
 
@@ -586,7 +587,7 @@ LogicalTensorPtr FindInplaceSource(
         return visited.at(&op);
     }
     auto inplaceIdx = op.GetIntAttribute(OpAttributeKey::inplaceIdx);
-    ASSERT(inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()))
+    ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, inplaceIdx >= 0 && inplaceIdx < static_cast<int>(op.GetIOperands().size()))
         << "Invalid inplaceIdx " << inplaceIdx << " for operation " << op.GetOpMagic();
     auto inplaceIOperand = op.GetInputOperand(inplaceIdx);
     LogicalTensorPtr res = nullptr;
@@ -598,7 +599,7 @@ LogicalTensorPtr FindInplaceSource(
         if (res == nullptr) {
             res = tmp;
         } else {
-            ASSERT(res == tmp) << "Inconsistent inplace source for operation "
+            ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, res == tmp) << "Inconsistent inplace source for operation "
                                << op.GetOpMagic(); // inplace路径应总是交汇于同一起点
         }
     }

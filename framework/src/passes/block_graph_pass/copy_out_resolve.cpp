@@ -16,6 +16,7 @@
 #include "copy_out_resolve.h"
 
 #include "interface/program/program.h"
+#include "passes/pass_utils/pass_error.h"
 
 namespace npu::tile_fwk {
 
@@ -55,7 +56,7 @@ void CopyOutResolve::CheckOutcastProducer(Function* leafFunc) const
                     if (!OpcodeManager::Inst().IsCopyOut(producerOpCode)) {
                         // not a copyout outcast, which should be ignored
                     } else {
-                        ASSERT(false) << "Outcast not filled by any operation!";
+                        ASSERT(FunctionErr::FUNCTION_GRAPH_STRUCTURE, false) << "Outcast not filled by any operation!";
                     }
                 }
             }

@@ -23,6 +23,7 @@
 #include "passes/pass_check/generate_move_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_error.h"
 
 #define MODULE_NAME "GenerateMoveOp"
 
@@ -33,7 +34,7 @@ const Offset ZERO_OFFSET = {0, 0};
 
 int64_t GenerateMoveOp::PadUB(int64_t dim, int64_t padValue)
 {
-    ASSERT(padValue > 0);
+    ASSERT(TensorErr::TENSOR_INVALID_MEMORY_TYPE, padValue > 0);
     return (dim + padValue - 1) / padValue * padValue;
 }
 

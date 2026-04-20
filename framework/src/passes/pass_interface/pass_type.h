@@ -16,6 +16,8 @@
 #pragma once
 #include <cstdint>
 #include "tilefwk/error.h"
+#include "passes/pass_utils/pass_error.h"
+
 namespace npu::tile_fwk {
 enum class PassType : int32_t {
     TYPE_INVALID = -1,
@@ -167,7 +169,7 @@ inline constexpr const char* PassNameStr(PassName name)
         case PassName::NOT_DEFINED:
             return "NotDefined";
         default:
-            ASSERT(false) << "[PassDependency][Manager][ERROR]: PassName not defined.";
+            ASSERT(FunctionErr::FUNCTION_SPECIAL_STRUCTURE, false) << "[PassDependency][Manager][ERROR]: PassName not defined.";
             return "Invalid";
     }
 }

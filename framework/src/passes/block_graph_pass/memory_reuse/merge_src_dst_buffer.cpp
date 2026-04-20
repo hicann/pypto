@@ -15,6 +15,7 @@
 
 #include "merge_src_dst_buffer.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/pass_error.h"
 
 #define MODULE_NAME "SrcDstBufferMerge"
 
@@ -346,7 +347,7 @@ bool SrcDstBufferMergeImpl::IsL1ToL0Transfer(const Operation& op)
             return false;
         }
     }
-    ASSERT(op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1)
+    ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1)
         << "The L1-to-L0 copy op can have only one input and one output tensor";
     return true;
 }
@@ -363,7 +364,7 @@ bool SrcDstBufferMergeImpl::IsL0CToL1Transfer(const Operation& op)
             return false;
         }
     }
-    ASSERT(op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1)
+    ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, op.GetIOperands().size() == 1 && op.GetOOperands().size() == 1)
         << "The L0C-to-L1 copy op can have only one input and one output tensor";
     return true;
 }

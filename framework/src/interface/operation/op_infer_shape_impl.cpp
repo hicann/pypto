@@ -20,6 +20,7 @@
 #include "interface/utils/common.h"
 #include "interface/utils/vector_error.h"
 #include "interface/utils/matmul_error.h"
+#include "passes/pass_utils/pass_error.h"
 
 namespace npu::tile_fwk {
 const std::string COPY_OUT_FORCE_INFER_SHAPE = "copy_out_force_infer_shape";

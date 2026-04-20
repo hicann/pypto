@@ -27,6 +27,7 @@
 #include "interface/configs/config_manager.h"
 #include "passes/pass_log/pass_log.h"
 #include "set_heuristic_tile_shapes.h"
+#include "passes/pass_utils/pass_error.h"
 
 #define MODULE_NAME "SetHeuristicTileShapes"
 
@@ -975,8 +976,8 @@ void SetReduceTiles(std::vector<Operation*> reduceOrderedOperations)
         if (inputTypeSize == 0 || maxTypeSize == 0) {
             APASS_LOG_ERROR_F(Elements::Operation, "typeSize = 0, division by zero");
         }
-        ASSERT(inputDims == outputDims) << "Input dims should be equal output dims";
-        ASSERT(outputsNum == 1) << "ReduceOp must have 1 output";
+        ASSERT(TensorErr::TENSOR_SHAPE_MISMATCH, inputDims == outputDims) << "Input dims should be equal output dims";
+        ASSERT(OperationErr::OP_INVALID_OPERAND_COUNT, outputsNum == 1) << "ReduceOp must have 1 output";
 
         std::vector<int64_t> maxInputShape = MaxInputShapeCalculation(op, inputsNum, inputDims, maxTypeSize);
         int64_t reducedDim = -1;
@@ -985,13 +986,13 @@ void SetReduceTiles(std::vector<Operation*> reduceOrderedOperations)
                 (reducedDim == -1)) {
                 reducedDim = dim;
             } else {
-                ASSERT(
+                ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT,
                     !((maxInputShape[dim] != op->GetOOperands()[0]->shape[dim]) &&
                       (op->GetOOperands()[0]->shape[dim] == 1) && (reducedDim != -1)))
                     << "Several reduced dims \n";
             }
         }
-        ASSERT(reducedDim >= 0) << "Not found reduced dims";
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, reducedDim >= 0) << "Not found reduced dims";
         int64_t tileSize = MAX_TILE_SIZE / maxTypeSize;
         vectorTilesReduce.resize(inputDims);
 
@@ -1234,7 +1235,7 @@ void SetHeuristicTileShapes::SetHeuristicTileShapesFunc(Function& function) cons
 
     // Check that all tiles was defined by algorithm
     for (auto& op : function.Operations()) {
-        ASSERT(op.GetTileShape().GetVecTile()[0] != -1) << "Not all tiles was set";
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, op.GetTileShape().GetVecTile()[0] != -1) << "Not all tiles was set";
     }
 #endif
 
