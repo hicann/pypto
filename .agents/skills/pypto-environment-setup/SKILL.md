@@ -1,6 +1,6 @@
 ---
 name: pypto-environment-setup
-description: PyPTO 环境安装与环境问题修复，包括 CANN、torch_npu、编译工具链、第三方依赖和 PyPTO 编译运行等。Triggers: PyPTO environment setup, CANN install, torch_npu, NPU environment, Ascend toolkit, compile PyPTO, build PyPTO, NPU driver, prepare_env, diagnose environment, fix import error, torch_npu import fail, DT_FP8E8M0, pto-isa, ASCEND_HOME_PATH, npu-smi, softmax verify, pip dependency conflict
+description: PyPTO 环境安装与环境问题修复，包括 CANN、torch_npu、编译工具链、第三方依赖和 PyPTO 编译运行等。触发词：PyPTO environment setup, CANN install, torch_npu, NPU environment, Ascend toolkit, compile PyPTO, build PyPTO, NPU driver, prepare_env, diagnose environment, fix import error, torch_npu import fail, DT_FP8E8M0, pto-isa, ASCEND_HOME_PATH, npu-smi, softmax verify, pip dependency conflict
 ---
 
 # PyPTO Environment Setup

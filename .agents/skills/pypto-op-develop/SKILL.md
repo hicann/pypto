@@ -1,6 +1,6 @@
 ---
 name: pypto-op-develop
-description: 当需要编写 PyPTO 算子实现时使用此 skill。基于需求规格、设计方案和参考实现，生成完整可运行的 PyPTO 算子实现与配套测试、文档。Triggers: 实现算子、写 kernel、编写实现、写 impl、算子编码、开始编码、code the op、写 test、生成测试、写实现代码、op develop、kernel 实现。
+description: 当需要编写 PyPTO 算子实现时使用此 skill。基于需求规格、设计方案和参考实现，生成完整可运行的 PyPTO 算子实现与配套测试、文档。触发词：实现算子、写 kernel、编写实现、写 impl、算子编码、开始编码、code the op、写 test、生成测试、写实现代码、op develop、kernel 实现。
 ---
 
 # PyPTO 算子实现
@@ -53,8 +53,8 @@ description: 当需要编写 PyPTO 算子实现时使用此 skill。基于需求
 
 | 文件 | 用途 | 加载时机 |
 |------|------|----------|
-| [references/test-template.py](references/test-template.py) | test 文件固定模板 | 生成 test_{op}.py 时读取 |
-| [references/impl-template.py](references/impl-template.py) | impl 文件固定模板 | 生成 {op}_impl.py 时读取 |
+| [templates/test-template.py](templates/test-template.py) | test 文件固定模板 | 生成 test_{op}.py 时读取 |
+| [templates/impl-template.py](templates/impl-template.py) | impl 文件固定模板 | 生成 {op}_impl.py 时读取 |
 | [references/execution-constraints.md](references/execution-constraints.md) | PyPTO 开发执行约束清单 | 进入实现阶段前必读；编码与自检时反复对照 |
 | [references/error-code-troubleshooting.md](references/error-code-troubleshooting.md) | 错误码排查流程与常见错误码速查 | 验证失败时按流程排查 |
 | [scripts/environment_prepare.sh](scripts/environment_prepare.sh) | 环境初始化脚本 | 环境准备阶段按需执行 |
@@ -107,8 +107,8 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 **准备工作**（并行读取）：
 在进入编码前，**并行读取**以下参考文件（同一条消息中发起所有 Read 调用）：
 - `references/execution-constraints.md` — 框架级约束清单
-- `references/impl-template.py` — impl 文件模板
-- `references/test-template.py` — test 文件模板
+- `templates/impl-template.py` — impl 文件模板
+- `templates/test-template.py` — test 文件模板
 
 **生成顺序**：
 1. 根据输入信息，先梳理 API 映射、tiling 策略、loop 结构，确认可行后再进入实现
@@ -121,7 +121,7 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 
 #### 生成 {op}_impl.py
 
-PyPTO kernel 函数实现，基于固定模板 `references/impl-template.py` 生成。
+PyPTO kernel 函数实现，基于固定模板 `templates/impl-template.py` 生成。
 
 实现前必须逐项核对 `references/execution-constraints.md`，尤其是：输出写回、动态轴标注、Element 使用、TileShape、valid_shape、loop/cond、同图内读写回环。
 
@@ -136,7 +136,7 @@ PyPTO kernel 函数实现，基于固定模板 `references/impl-template.py` 生
 
 #### 生成 test_{op}.py
 
-torch golden 函数精度对比测试，基于固定模板 `references/test-template.py` 生成。
+torch golden 函数精度对比测试，基于固定模板 `templates/test-template.py` 生成。
 
 **结构**：
 
