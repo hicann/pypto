@@ -618,6 +618,7 @@ template void SetOptionsNg<std::map<long, long>>(const std::string& key, const s
 template void SetOptionsNg<std::vector<int>>(const std::string& key, const std::vector<int>& value);
 template void SetOptionsNg<std::vector<std::string>>(const std::string& key, const std::vector<std::string>& value);
 template void SetOptionsNg<std::vector<double>>(const std::string& key, const std::vector<double>& value);
+template void SetOptionsNg<std::vector<int64_t>>(const std::string& key, const std::vector<int64_t>& value);
 
 std::shared_ptr<ConfigScope> Duplicate() { return ConfigManagerNg::CurrentScope(); }
 

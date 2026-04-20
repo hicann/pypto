@@ -91,6 +91,7 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation) co
             }
             consumer->ReplaceInput(dst, oOperand);
             auto& newOp = function.AddRawOperation(Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst}, true, operation.GetLocation());
+            newOp.SetScopeInfo(operation.GetScopeInfo());
             newOp.SetAttribute(OpAttributeKey::startOffset, operation.GetIntAttribute(OpAttributeKey::startOffset));
         }
     }
@@ -135,6 +136,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation) const
             }
             consumer->ReplaceInput(dst, oOperand);
             auto& newOp = function.AddRawOperation(Opcode::OP_VIEW, {iOperand}, {dst}, true, operation.GetLocation());
+            newOp.SetScopeInfo(operation.GetScopeInfo());
             auto oriViewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
             if (oriViewAttr != nullptr) {
                 auto newOffset = oriViewAttr->GetFromOffset();

@@ -134,20 +134,20 @@ bool ReduceCopyMerge::IsEnforceMergeBoundary(LogicalTensorPtr &tensor)
 {
     std::unordered_set<int> boundaryScopeIds;
     for (auto &op : tensor->GetProducers()) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Boundary tensor %d has produce %d with scopeIdUpper %d.",
-                          tensor->GetMagic(), op->GetOpMagic(), op->GetScopeIdUpper());
-        if (op->GetScopeIdUpper() == -1) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Boundary tensor %d has produce %d with scopeInfoCvFuseId %d.",
+                          tensor->GetMagic(), op->GetOpMagic(), op->GetCvFuseId());
+        if (op->GetCvFuseId() == -1) {
             return false;
         }
-        boundaryScopeIds.insert(op->GetScopeIdUpper());
+        boundaryScopeIds.insert(op->GetCvFuseId());
     }
     for (auto &op : tensor->GetConsumers()) {
-        APASS_LOG_DEBUG_F(Elements::Operation, "Boundary tensor %d has consumer %d with scopeIdUpper %d.",
-                          tensor->GetMagic(), op->GetOpMagic(), op->GetScopeIdUpper());
-        if (op->GetScopeIdUpper() == -1) {
+        APASS_LOG_DEBUG_F(Elements::Operation, "Boundary tensor %d has consumer %d with scopeInfoCvFuseId %d.",
+                          tensor->GetMagic(), op->GetOpMagic(), op->GetCvFuseId());
+        if (op->GetCvFuseId() == -1) {
             return false;
         }
-        boundaryScopeIds.insert(op->GetScopeIdUpper());
+        boundaryScopeIds.insert(op->GetCvFuseId());
     }
     if (boundaryScopeIds.size() == 1) {
         return true;

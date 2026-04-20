@@ -28,6 +28,7 @@
 #include "passes/statistics/tensor_and_tile_graph_statistic.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
+#include "passes/pass_utils/pass_error.h"
 
 #define MODULE_NAME "ExpandFunction"
 
@@ -72,6 +73,7 @@ void ExpandFunction::ProcessForNotExpandOp(Function& function, Operation& op) co
 {
     auto& newOp = function.AddOperation(op.GetOpcode(), op.GetIOperands(), op.GetOOperands());
     newOp.SetOpAttribute(op.GetOpAttribute());
+    newOp.SetScopeInfo(op.GetScopeInfo());
     newOp.CopyAttrFrom(op, OP_EMUOP_PREFIX);
     if (op.HasAttribute(OpAttributeKey::inplaceIdx)) {
         newOp.SetAttribute(OpAttributeKey::inplaceIdx, op.GetIntAttribute(OpAttributeKey::inplaceIdx));
@@ -90,11 +92,62 @@ Status ExpandFunction::PostCheck(Function& function)
     return checker.DoPostCheck(function);
 }
 
+Status ExpandFunction::VerifyScopeInfo(Function& function, std::ostringstream& oss) const
+{
+    std::unordered_map<int, Operation::ScopeInfo> scopeInfoMap;
+    std::unordered_map<int, std::unordered_set<CoreType>> scopeCoreTypes;
+    for (auto& op : function.Operations(false)) {
+        const auto& info = op.GetScopeInfo();
+        if (info.scopeId == -1 && (info.allowParallelMerge || info.allowCrossScopeMerge)) {
+            oss << "Op " << op.GetOpcodeStr() << "[" << op.GetOpMagic()
+                << "]: allowParallelMerge and allowCrossScopeMerge must be false when scopeId is -1.";
+            return FAILED;
+        }
+        if (info.scopeId != -1) {
+            auto it = scopeInfoMap.find(info.scopeId);
+            if (it != scopeInfoMap.end()) {
+                const auto& existing = it->second;
+                if (existing.allowParallelMerge != info.allowParallelMerge ||
+                    existing.allowCrossScopeMerge != info.allowCrossScopeMerge) {
+                    oss << "Op " << op.GetOpcodeStr() << "[" << op.GetOpMagic() << "]: scopeId=" << info.scopeId
+                        << " has conflicting allowParallelMerge or allowCrossScopeMerge settings.";
+                    return FAILED;
+                }
+            } else {
+                scopeInfoMap[info.scopeId] = info;
+            }
+            scopeCoreTypes[info.scopeId].insert(op.GetCoreType());
+        }
+    }
+    for (auto& [scopeId, coreTypes] : scopeCoreTypes) {
+        if (coreTypes.count(CoreType::AIC) > 0 && coreTypes.count(CoreType::AIV) > 0) {
+            if (!GraphUtils::IsCVMixPlatform()) {
+                oss << "Cannot mix cube and vector op on a CV seperate platform in function: " << function.GetRawName()
+                    << ", please check your setting: sg_set_scope=" << scopeId;
+                return FAILED;
+            }
+            const auto& info = scopeInfoMap[scopeId];
+            if (info.allowParallelMerge || info.allowCrossScopeMerge) {
+                oss << "Op scopeId=" << scopeId
+                    << " on CV mix platform: allowParallelMerge and allowCrossScopeMerge must be false "
+                    << "when cube and vector ops are mixed in the same scope.";
+                return FAILED;
+            }
+        }
+    }
+    return SUCCESS;
+}
+
 Status ExpandFunction::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Function, "Start ExpandFunction function [%s].", function.GetRawName().c_str());
     std::ostringstream oss;
-    scopeMap_.clear();
+    if (VerifyScopeInfo(function, oss) != SUCCESS) {
+        APASS_LOG_ERROR_C(
+            OperationErr::OP_SCOPE_ERROR, Elements::Function, "Function[%s] ScopeInfo verification failed: %s",
+            function.GetRawName().c_str(), oss.str().c_str());
+        return FAILED;
+    }
     bool verifyResult = true;
     for (auto& op : function.Operations(false)) {
         auto verifyOperationEntry = OpcodeManager::Inst().GetVerifyOperationEntry(op.GetOpcode());
@@ -174,24 +227,16 @@ Status ExpandFunction::Expandfunction(Function& function) const
     return SUCCESS;
 }
 
-Status ExpandFunction::ExpandOperation(Function& function, Operation& op) const
-{
-    int scopeIdx = op.GetScopeId();
-    if (scopeIdx >= 0) { // scopeIdx < 0 means no need to merge
-        scopeMap_[scopeIdx].insert(op.GetCoreType());
-        if (!GraphUtils::IsCVMixPlatform() && scopeMap_[scopeIdx].find(CoreType::AIC) != scopeMap_[scopeIdx].end() &&
-            scopeMap_[scopeIdx].find(CoreType::AIV) != scopeMap_[scopeIdx].end()) {
-            APASS_LOG_ERROR_F(
-                Elements::Function,
-                "Cannot mix cube and vector op on a CV seperate platform in function: %s, please check your setting: "
-                "sg_set_scope=%d",
-                function.GetRawName().c_str(), scopeIdx);
-            return FAILED;
-        }
-    }
-    config::SetPassOption(SG_SET_SCOPE, scopeIdx);
+Status ExpandFunction::ExpandOperation(Function &function, Operation &op) const{
+    const auto &info = op.GetScopeInfo();
+    std::vector<int64_t> scopeVec = {
+        static_cast<int64_t>(info.scopeId),
+        static_cast<int64_t>(info.allowParallelMerge),
+        static_cast<int64_t>(info.allowCrossScopeMerge)
+    };
+    config::SetPassOption(SG_SET_SCOPE, scopeVec);
     ExpandOperationInto(function, op.GetTileShape(), op.GetOpcode(), op.GetIOperands(), op.GetOOperands(), op);
-    config::SetPassOption(SG_SET_SCOPE, -1);
+    config::SetPassOption(SG_SET_SCOPE, std::vector<int64_t>{-1, 0, 0});
     return SUCCESS;
 }
 

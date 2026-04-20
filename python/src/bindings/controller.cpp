@@ -216,45 +216,54 @@ void bind_controller_utils(py::module& m)
     m.def("ClearLocation", &SourceLocation::ClearLocation);
 }
 
+npu::tile_fwk::Any ConvertPyList(const std::string& key, const py::list& lst)
+{
+    if (lst.size() == 0) {
+        return std::vector<int64_t>();
+    }
+    if (py::isinstance<py::int_>(lst[0])) {
+        std::vector<int64_t> intVec;
+        for (auto elem : lst) {
+            intVec.push_back(py::cast<int64_t>(elem));
+        }
+        return intVec;
+    } else if (py::isinstance<py::str>(lst[0])) {
+        return py::cast<std::vector<std::string>>(lst);
+    } else if (py::isinstance<py::float_>(lst[0])) {
+        return py::cast<std::vector<double>>(lst);
+    }
+    throw py::type_error("Unsupported list element type for key: " + key);
+}
+
+npu::tile_fwk::Any ConvertPyValue(const std::string& key, const py::object& value)
+{
+    if (py::isinstance<py::bool_>(value)) {
+        return value.cast<bool>();
+    } else if (py::isinstance<py::int_>(value)) {
+        return value.cast<int64_t>();
+    } else if (py::isinstance<py::float_>(value)) {
+        return value.cast<double>();
+    } else if (py::isinstance<py::str>(value)) {
+        return value.cast<std::string>();
+    } else if (py::isinstance<CubeTile>(value)) {
+        return value.cast<CubeTile>();
+    } else if (py::isinstance<ConvTile>(value)) {
+        return value.cast<ConvTile>();
+    } else if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value)) {
+        return ConvertPyList(key, py::cast<py::list>(value));
+    } else if (py::isinstance<py::dict>(value)) {
+        return value.cast<std::map<int64_t, int64_t>>();
+    }
+    throw py::type_error("Unsupported value type for key: " + key);
+}
+
 std::map<std::string, npu::tile_fwk::Any> ConvertPyDictToCppMap(const py::dict& values)
 {
     std::map<std::string, npu::tile_fwk::Any> cpp_values;
     for (auto item : values) {
         std::string key = py::str(item.first);
         py::object value = py::reinterpret_borrow<py::object>(item.second);
-
-        if (py::isinstance<py::bool_>(value)) {
-            cpp_values[key] = value.cast<bool>();
-        } else if (py::isinstance<py::int_>(value)) {
-            cpp_values[key] = value.cast<int64_t>();
-        } else if (py::isinstance<py::float_>(value)) {
-            cpp_values[key] = value.cast<double>();
-        } else if (py::isinstance<py::str>(value)) {
-            cpp_values[key] = value.cast<std::string>();
-        } else if (py::isinstance<CubeTile>(value)) {
-            cpp_values[key] = value.cast<CubeTile>();
-        } else if (py::isinstance<ConvTile>(value)) {
-            cpp_values[key] = value.cast<ConvTile>();
-        } else if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value)) {
-            py::list lst = py::cast<py::list>(value);
-            if (lst.size() > 0) {
-                if (py::isinstance<py::int_>(lst[0])) {
-                    cpp_values[key] = value.cast<std::vector<int64_t>>();
-                } else if (py::isinstance<py::str>(lst[0])) {
-                    cpp_values[key] = value.cast<std::vector<std::string>>();
-                } else if (py::isinstance<py::float_>(lst[0])) {
-                    cpp_values[key] = value.cast<std::vector<double>>();
-                } else {
-                    throw py::type_error("Unsupported list element type for key: " + key);
-                }
-            } else {
-                cpp_values[key] = std::vector<int64_t>();
-            }
-        } else if (py::isinstance<py::dict>(value)) {
-            cpp_values[key] = value.cast<std::map<int64_t, int64_t>>();
-        } else {
-            throw py::type_error("Unsupported value type for key: " + key);
-        }
+        cpp_values[key] = ConvertPyValue(key, value);
     }
 
     return cpp_values;

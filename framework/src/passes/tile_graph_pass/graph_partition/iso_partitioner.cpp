@@ -175,7 +175,8 @@ Status IsomorphismGraphGroup::BuildGraphGroup(
             return FAILED;
         }
         sgPtr->AddNode(nodeIdx);
-        sgPtr->scopeId_ = superNodeInfo->nodeScope_[nodeIdx];
+        sgPtr->scopeId_ = superNodeInfo->nodeScope_[nodeIdx].scopeId;
+        sgPtr->SetAllowCrossScopeMerge(superNodeInfo->nodeScope_[nodeIdx].allowCrossScopeMerge);
         isoGraphs_.push_back(sgPtr);
     }
     mergeable_ = superNodeInfo_->nodeMergeable_[expandCandidate[0]];
@@ -187,7 +188,7 @@ Status IsomorphismGraphGroup::InLinkCountDelete(
 {
     for (int32_t consumer : superNodeInfo_->nodeOutGraph_[nodeIdx]) {
         if (consumer < 0 || consumer >= static_cast<int32_t>(idxInLinkNum.size())) {
-            APASS_LOG_ERROR_F(Elements::Operation, "Consumer index illegal in InLinkCountDelete.");
+            APASS_LOG_ERROR_F(Elements::Operation, "Consumer index(%d) illegal in InLinkCountDelete.", consumer);
             return FAILED;
         }
         idxInLinkNum[consumer] -= 1;
@@ -296,7 +297,7 @@ bool IsomorphismGraphGroup::IsLegalIsoGraphExtender(
     }
     for (size_t i = 0; i < expandCandidate.size(); i++) {
         int origScopeId = isoGraphs_[i]->scopeId_;
-        int mergeScopeId = superNodeInfo_->nodeScope_[expandCandidate[i]];
+        int mergeScopeId = superNodeInfo_->nodeScope_[expandCandidate[i]].scopeId;
         if (origScopeId != mergeScopeId) {
             APASS_LOG_INFO_F(
                 Elements::Operation, "Cannot merge supernodes with different scopeId %d and %d.", origScopeId,
@@ -474,32 +475,65 @@ std::vector<int32_t> IsoPartitioner::GetCandidateMergeColors(
     return mergeColors;
 }
 
+bool IsoPartitioner::CanMergeScopes(int32_t currColor, int32_t mergeColor) const
+{
+    auto canMergeFrom = [this](const std::shared_ptr<IsomorphismGraphGroup>& fromGroup,
+                               const std::shared_ptr<IsomorphismGraphGroup>& toGroup) -> bool {
+        for (auto& g : fromGroup->isoGraphs_) {
+            if (g->scopeId_ == -1) continue;
+            if (!g->GetAllowCrossScopeMerge()) {
+                APASS_LOG_INFO_F(Elements::Operation,
+                    "Cannot merge: subgraph scopeId=%d with allowCrossScopeMerge=false.", g->scopeId_);
+                return false;
+            }
+            for (auto& tg : toGroup->isoGraphs_) {
+                if (tg->scopeId_ != -1) {
+                    APASS_LOG_INFO_F(Elements::Operation,
+                        "Cannot merge: allowCrossScopeMerge=true requires target scope=-1, got %d.", tg->scopeId_);
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+
+    return canMergeFrom(isoSubGroups_[currColor], isoSubGroups_[mergeColor]) &&
+           canMergeFrom(isoSubGroups_[mergeColor], isoSubGroups_[currColor]);
+}
+
+int32_t IsoPartitioner::CalculateMergedLatency(int32_t currColor, int32_t mergeColor) const
+{
+    int32_t currColorSize = static_cast<int32_t>(isoSubGroups_[currColor]->Size());
+    int32_t mergeColorSize = static_cast<int32_t>(isoSubGroups_[mergeColor]->Size());
+    if (currColorSize <= mergeColorSize) {
+        return isoSubGroups_[currColor]->GetLatency() +
+               isoSubGroups_[mergeColor]->GetLatency() * (mergeColorSize / currColorSize);
+    }
+    return isoSubGroups_[currColor]->GetLatency() * (currColorSize / mergeColorSize) +
+           isoSubGroups_[mergeColor]->GetLatency();
+}
+
+bool IsoPartitioner::CheckIsoMergeConditions(int32_t currColorSize, int32_t mergeColorSize) const
+{
+    bool isSuitableForMerge = (currColorSize == mergeColorSize);
+    isSuitableForMerge = isSuitableForMerge || (std::min(currColorSize, mergeColorSize) >= parallelNum_);
+    return isSuitableForMerge;
+}
+
 bool IsoPartitioner::SuitableForMergeCheck(int32_t currColor, int32_t mergeColor, bool nonIsoGraphsMerge) const
 {
-    for (auto graphPtr : isoSubGroups_[currColor]->isoGraphs_) {
-        if (graphPtr->scopeId_ != -1) {
-            return false;
-        }
-    }
-    for (auto graphPtr : isoSubGroups_[mergeColor]->isoGraphs_) {
-        if (graphPtr->scopeId_ != -1) {
-            return false;
-        }
+    if (!CanMergeScopes(currColor, mergeColor)) {
+        return false;
     }
     std::set<OpCoreType> opcoreTypes{
         isoSubGroups_[currColor]->GetSubGraph(0)->coreType_, isoSubGroups_[mergeColor]->GetSubGraph(0)->coreType_};
     bool coreTypeMergable = operationInfo_->CoreTypeMergeable(opcoreTypes);
-    int32_t latencyMerged = 0;
     int32_t currColorSize = static_cast<int32_t>(isoSubGroups_[currColor]->Size());
     int32_t mergeColorSize = static_cast<int32_t>(isoSubGroups_[mergeColor]->Size());
     if (currColorSize == 0 || mergeColorSize == 0) {
         return false;
     }
-    latencyMerged = (currColorSize <= mergeColorSize) ?
-                        isoSubGroups_[currColor]->GetLatency() +
-                            isoSubGroups_[mergeColor]->GetLatency() * (mergeColorSize / currColorSize) :
-                        isoSubGroups_[currColor]->GetLatency() * (currColorSize / mergeColorSize) +
-                            isoSubGroups_[mergeColor]->GetLatency();
+    int32_t latencyMerged = CalculateMergedLatency(currColor, mergeColor);
     bool cycleMergable = latencyMerged <= cycleUB_;
     if (nonIsoGraphsMerge) {
         bool shouldMerge = coreTypeMergable && cycleMergable;
@@ -509,10 +543,8 @@ bool IsoPartitioner::SuitableForMergeCheck(int32_t currColor, int32_t mergeColor
             isoSubGroups_[mergeColor]->GetSubGraph(0)->DumpStr().c_str(), shouldMerge);
         return shouldMerge;
     }
-    bool isSuitableForMerge = (currColorSize == mergeColorSize);
-    isSuitableForMerge = isSuitableForMerge || (std::min(currColorSize, mergeColorSize) >= parallelNum_);
-    isSuitableForMerge =
-        isSuitableForMerge ||
+    bool isSuitableForMerge = CheckIsoMergeConditions(currColorSize, mergeColorSize);
+    isSuitableForMerge = isSuitableForMerge ||
         (std::min(isoSubGroups_[currColor]->GetLatency(), isoSubGroups_[mergeColor]->GetLatency()) <= cycleLB_);
     isSuitableForMerge = coreTypeMergable && isSuitableForMerge && cycleMergable;
     APASS_LOG_DEBUG_F(

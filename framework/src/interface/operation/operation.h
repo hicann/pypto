@@ -171,6 +171,26 @@ public:
         int internalSubgraphID{NOT_IN_SUBGRAPH};
         AIVCore aivCore{AIVCore::UNSPECIFIED};
     };
+
+    // sg_set_scope 相关字段的结构体
+    struct ScopeInfo {
+        int scopeId{-1};
+        bool allowParallelMerge{false};
+        bool allowCrossScopeMerge{false};
+        int cvFuseId{-1}; // 仅由graph_partition标记
+
+        ScopeInfo() = default;
+        explicit ScopeInfo(int id) : scopeId(id) {}
+        static ScopeInfo FromConfig(const std::vector<int64_t>& config)
+        {
+            ScopeInfo info;
+            info.scopeId = static_cast<int>(config[0]);
+            info.allowParallelMerge = static_cast<bool>(config[1]);
+            info.allowCrossScopeMerge = static_cast<bool>(config[2]);
+            return info;
+        }
+        void SetCvFuseId(int id) { cvFuseId = id; }
+    };
     friend class Function;
     LogicalTensors iOperand;      // Input operands (now actual objects, not shared_ptr)
     LogicalTensors oOperand;      // Output operands (now actual objects, not shared_ptr)
@@ -363,26 +383,14 @@ public:
 
     void ClearOutCtrlOperations() { outputCtrlOps.clear(); }
 
-    int scopeId_{-1};
-    void SetScopeId(int scopeId) { scopeId_ = scopeId; };
-    int GetScopeId() const { return scopeId_; };
-    int GetScopeIdLower() const
-    {
-        const int reduceCopyScopeBase = 10000;
-        return scopeId_ < reduceCopyScopeBase ? scopeId_ : -1;
-    };
-    int GetScopeIdUpper() const
-    {
-        const int cvSeperateScopeBase = 5000;
-        const int reduceCopyScopeBase = 10000;
-        const int groupWidth = 10;
-        if (scopeId_ < cvSeperateScopeBase) {
-            return -1;
-        } else if (scopeId_ < reduceCopyScopeBase) {
-            return scopeId_ / groupWidth;
-        }
-        return scopeId_;
-    };
+    ScopeInfo scopeInfo_;
+    void SetScopeId(int scopeId) {scopeInfo_.scopeId = scopeId; };
+    void SetScopeInfo(const ScopeInfo &info) { scopeInfo_ = info; };
+    const ScopeInfo &GetScopeInfo() const { return scopeInfo_; };
+    int GetScopeId() const { return scopeInfo_.scopeId; };
+    bool GetAllowParallelMerge() const { return scopeInfo_.allowParallelMerge; };
+    bool GetAllowCrossScopeMerge() const { return scopeInfo_.allowCrossScopeMerge; };
+    int GetCvFuseId() const { return scopeInfo_.cvFuseId; };
 
     void AddInCtrlOperation(Operation& operation);
 

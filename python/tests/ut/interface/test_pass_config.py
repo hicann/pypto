@@ -41,7 +41,7 @@ def test_pass_config():
 
 def test_pass_option():
     test_params = {
-        "sg_set_scope": 5,
+        "sg_set_scope": (5, False, False),
         "vec_nbuffer_setting": {1: 2},
         "cube_l1_reuse_setting": {-1: 6, 2: 3},
         "cube_nbuffer_setting": {-1: 2}

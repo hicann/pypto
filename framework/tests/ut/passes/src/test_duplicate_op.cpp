@@ -878,6 +878,7 @@ TEST_F(TestDuplicateOpPass, TestSourceLocation)
     auto outCast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
     auto& gatherIn = currFunctionPtr->AddRawOperation(Opcode::OP_GATHER_IN_L1, {inCast}, {ubTensor}, true, sourceLocation);
     gatherIn.SetAttribute(OpAttributeKey::startOffset, i);
+    gatherIn.SetScopeId(1);
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast1});
     currFunctionPtr->AddOperation(Opcode::OP_SQRT, {ubTensor}, {outCast2});
 
@@ -893,6 +894,7 @@ TEST_F(TestDuplicateOpPass, TestSourceLocation)
     for (auto& op : currFunctionPtr->Operations()) {
         if (op.GetOpcode() == Opcode::OP_GATHER_IN_L1) {
             EXPECT_EQ(op.GetLocation()->lineno_, kNumOne);
+            EXPECT_EQ(op.GetScopeId(), 1);
         }
     }
 }

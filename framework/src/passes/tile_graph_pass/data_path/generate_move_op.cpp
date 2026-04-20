@@ -326,6 +326,7 @@ void GenerateMoveOp::ProcessUB2L1(Function& function, Operation& op) const
         // 插入UB2UB节点（ND2NZ)
         auto& ub2ub = function.AddRawOperation(Opcode::OP_UB_COPY_ND2NZ, {inputTensor}, {ubNzTensor});
         ub2ub.SetLocation(op.GetLocation());
+        ub2ub.SetScopeInfo(op.GetScopeInfo());
         ub2ub.UpdateSubgraphID(op.GetSubgraphID());
 
         // 图重连

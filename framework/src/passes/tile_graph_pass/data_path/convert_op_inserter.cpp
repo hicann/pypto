@@ -588,7 +588,7 @@ bool ConvertInserter::CreateMoveOpForConvert(Operation& op)
             op.iOperand.front()->GetDynValidShape()));
         auto childOp = *op.oOperand.front()->GetConsumers().begin();
         op.UpdateSubgraphID(childOp->GetSubgraphID());
-        op.SetScopeId(childOp->GetScopeId());
+        op.SetScopeInfo(childOp->GetScopeInfo());
         return true;
     }
 
@@ -599,7 +599,7 @@ bool ConvertInserter::CreateMoveOpForConvert(Operation& op)
             op.iOperand.front()->GetDynValidShape()));
         auto parentOp = *op.iOperand.front()->GetProducers().begin();
         op.UpdateSubgraphID(parentOp->GetSubgraphID());
-        op.SetScopeId(parentOp->GetScopeId());
+        op.SetScopeInfo(parentOp->GetScopeInfo());
         return true;
     }
     return false;
@@ -614,8 +614,8 @@ void ConvertInserter::InsertConvertOps(Function& function)
         auto& convertOp = function.AddRawOperation(Opcode::OP_CONVERT, {c.input}, {c.output});
         convertOp.SetOpAttribute(std::make_shared<ConvertOpAttribute>(c.from, c.to));
         if (!CreateMoveOpForConvert(convertOp)) {
-            auto producerScopeId = (*(c.input->GetProducers().begin()))->GetScopeId();
-            convertOp.SetScopeId(producerScopeId); // convert 是拷贝出操作，和producer一个子图
+            auto producerScopeInfo = (*(c.input->GetProducers().begin()))->GetScopeInfo();
+            convertOp.SetScopeInfo(producerScopeInfo); // convert 是拷贝出操作，和producer一个子图
         }
     }
 }

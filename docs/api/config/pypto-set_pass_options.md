@@ -18,7 +18,7 @@ set_pass_options(*,
                      vec_nbuffer_setting: Optional[Dict[int, int]] = None,
                      cube_l1_reuse_setting: Optional[Dict[int, int]] = None,
                      cube_nbuffer_setting: Optional[Dict[int, int]] = None,
-                     sg_set_scope: Optional[int] = None,
+                     sg_set_scope: Optional[Union[int, Tuple[int, bool, bool]]] = None,
                      )
 ```
 
@@ -29,7 +29,7 @@ set_pass_options(*,
 | vec_nbuffer_setting     | 输入      | 含义：合图参数，用于配置相同结构AIV子图的合并数量。 <br> 说明：该参数适用于结构相同的AIV子图合并。 <br> 类型：dict[int, int] <br> 取值：<br> {-1: 1}：跳过AIV子图合并 <br> {} （空字典）：自动合并，根据AIV核心数自动计算合并粒度<br> {-1: N, 0: N2, ...}：手动合并，默认粒度为N <br> 默认值：{} 空字典 <br> 影响Pass范围： NBufferMerge |
 | cube_l1_reuse_setting | 输入 | 含义：合图参数，用于配置重复搬运同一GM数据的子图合并数量。<br> 说明：该参数适用于含有CUBE计算的子图合并。 <br> 类型： dict[int, int] <br> 取值：<br>{-1: 1}：跳过L1Reuse合并 <br> {} （空字典）：自动合并，根据AIC核心数自动计算合并粒度<br> {-1: N, 0: N1, ...}：手动合并，默认合并粒度为N。 <br> 默认值：{} 空字典 <br> 影响Pass范围：L1ReuseMerge |
 | cube_nbuffer_setting    | 输入      | 含义：合图参数，用于配置相同结构AIC子图的合并数量。 <br> 说明：该参数适用于结构相同的AIC子图合并。 <br> 类型：dict[int, int] <br> 取值：<br>{-1: 1}：跳过AIC子图合并 <br> {} （空字典）：自动合并，根据AIC核心数自动计算合并粒度<br> {-1: N, 0: N1, ...}：手动合并，默认合并粒度为N <br>默认值：{-1: 1} <br> 影响Pass范围： L1ReuseMerge |
-| sg_set_scope            | 输入      | 含义：手动控制合图参数。 <br> 说明：将operation赋予特定的scopeId，若相邻的operation具有相同的非-1的scopeId，则会被强制合并在一个子图之中，并且这个子图不会与其他子图合并。该参数仅对存在上下游连接通路的operation生效，例如operation A的输出作为operation B的输入即构成此类连接通路。 <br> 类型：int <br> 取值范围：-1~2147483647 <br> 默认值：-1 <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的scopeId。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
+| sg_set_scope            | 输入      | 含义：控制合图（子图划分）行为，将 operation 赋予结构化的 ScopeInfo。 <br> 类型：`Tuple[int, bool, bool]` 或 `int` <br> **tuple 格式**：`(scope_id, allow_parallel_merge, allow_cross_scope_merge)`，各字段含义如下： <br> - `scope_id`（int）：scope 标识，取值范围 -1~2147483647。相同 scope_id 的相邻 Operation 归入同一子图；-1 表示不参与 scope 合并，由合图算法决定子图划分。 <br> - `allow_parallel_merge`（bool）：控制同一 scope_id 下 Operation 的合并方式。取值 True/False。<br>&emsp;&emsp;False（默认）：仅允许存在上下游连接通路的 Operation 合并，即 Operation A 的输出作为 Operation B 的输入时才可合并到同一子图。<br>&emsp;&emsp;True：允许位于并行分支（无数据依赖）的同一 scope_id Operation 也合并到同一子图。 <br> - `allow_cross_scope_merge`（bool）：控制带有 scope 的子图是否可与无 scope（scope_id=-1）的子图合并，扩大scope子图。取值 True/False。<br>&emsp;&emsp;False（默认）：带有 scope 的子图保持独立，不与其他子图合并。<br>&emsp;&emsp;True：允许带有 scope 的子图与 scope_id=-1 的子图合并。不同 scope_id 的子图之间不可合并。 <br> **int 格式**：传入单个 int 时等价于 `(scope_id, False, False)`，即仅设置 scope_id，不允许并行分支合并和跨 scope 合并。 <br> 默认值：(-1, False, False) <br> 影响Pass范围：GraphPartition <br> 配置建议：1）视图类Operation与其对应的计算类Operation应配置相同的 scope_id。2）Reshape Operation较为特殊，部分场景会单独成子图，手动控制合图行为可能失效。|
 
 ## 返回值说明
 
@@ -40,6 +40,9 @@ set_pass_options(*,
 - 设置时机：不要求在图编译开始前调用，可以在任何时候进行设置。
 - 类型安全：必须确保传入的value的类型与参数定义的类型完全一致，否则可能导致未定义行为或运行时错误。
 - 作用范围：参数设置是局部的，只会影响当前jit或者loop内的编译过程，若未设置，则继承上层作用域。
+- sg_set_scope 一致性约束：同一 scope_id 的所有 Operation 必须设置相同的 `allow_parallel_merge` 和 `allow_cross_scope_merge`，否则编译报错。
+- scope_id 为 -1 时，`allow_parallel_merge` 和 `allow_cross_scope_merge` 必须为 False。
+- 不同 scope_id 的子图之间不可合并，`allow_cross_scope_merge` 仅控制带 scope 的子图与无 scope（scope_id=-1）的子图合并。
 
 ## 调用示例
 
@@ -48,6 +51,24 @@ set_pass_options(*,
                        vec_nbuffer_setting={},
                        cube_l1_reuse_setting={},
                        cube_nbuffer_setting={})
+```
+
+### sg_set_scope 配置示例
+
+```python
+import pypto
+
+# int 格式：等效于 (48, False, False)
+pypto.set_pass_options(sg_set_scope=48)
+
+# tuple 格式：scope_id=1，允许并行分支合并，不允许跨 scope 合并
+pypto.set_pass_options(sg_set_scope=(1, True, False))
+
+# tuple 格式：scope_id=2，允许与无 scope 的子图合并
+pypto.set_pass_options(sg_set_scope=(2, False, True))
+
+# 恢复默认（不参与 scope 合并）
+pypto.set_pass_options(sg_set_scope=-1)
 ```
 
 ### dict类型配置说明

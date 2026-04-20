@@ -26,7 +26,7 @@ def assert_option_type_error(setter, pattern):
     [
         (
             lambda: pypto.set_pass_options(sg_set_scope="aa"),
-            "Option 'pass.sg_set_scope' has invalid type. Expected int64, but got string.",
+            "Option 'pass.sg_set_scope' has invalid type. Expected int64 or tuple, but got str.",
         ),
         (
             lambda: pypto.set_pass_options(cube_nbuffer_setting=[1, 2]),

@@ -33,6 +33,7 @@ struct ViewOp {
     std::vector<int64_t> fromOffset;
     LogicalTensorPtr input;
     LogicalTensorPtr output;
+    const Operation* originOp = nullptr;
 };
 
 struct CopyInOutOp {

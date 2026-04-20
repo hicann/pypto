@@ -22,10 +22,10 @@ def test_print_options():
 
 
 def test_pass_option():
-    # int
+    # tuple
     pypto.set_pass_options(sg_set_scope=48)
     pass_option = pypto.get_pass_options()
-    assert pass_option["sg_set_scope"] == 48
+    assert pass_option["sg_set_scope"] == (48, False, False)
     # map
     pypto.set_pass_options(cube_nbuffer_setting={3: 4})
     pass_option = pypto.get_pass_options()
@@ -86,5 +86,30 @@ def test_option_map():
     assert pass_option["cube_nbuffer_setting"] == {-1: 1}
 
 
+def test_sg_set_scope_new_format():
+    pypto.set_pass_options(sg_set_scope=(1, True, True))
+    pass_option = pypto.get_pass_options()
+    assert pass_option["sg_set_scope"] == (1, True, True)
+
+    pypto.set_pass_options(sg_set_scope=48)
+    pass_option = pypto.get_pass_options()
+    assert pass_option["sg_set_scope"] == (48, False, False)
+
+    pypto.reset_options()
+    pass_option = pypto.get_pass_options()
+    assert pass_option["sg_set_scope"] == (-1, False, False)
+    try:
+        pypto.set_pass_options(sg_set_scope=(1, True))  # 元素不足
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Expected 3" in str(e)
+
+    try:
+        pypto.set_pass_options(sg_set_scope=(1, "True", True))  # 类型错误
+        assert False, "Should raise ValueError"
+    except ValueError as e:
+        assert "Expected bool" in str(e)
+
 if __name__ == "__main__":
     test_option_map()
+    test_sg_set_scope_new_format()

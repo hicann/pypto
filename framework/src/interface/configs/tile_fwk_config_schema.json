@@ -108,13 +108,14 @@
                     "maximum": 1000000
                 },
                 "sg_set_scope": {
-                    "type": "integer",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
                     "label": {
                         "zh": "手动控制合图参数。将operation赋予特定的scopeId，若相邻的operation具有相同的非-1的scopeId，则会被强制合并在一个子图之中，并且这个子图不会与其他子图合并。",
                         "en": "Parameter for manual control of graph merging. Assign a specific scopeId to an operation; if adjacent operations have the same non-1 scopeId, they will be forcibly merged into one subgraph, and this subgraph will not be merged with any other subgraphs."
-                    },
-                    "minimum": -1,
-                    "maximum": 2147483647
+                    }
                 }
             }
         },

@@ -107,6 +107,14 @@
 行为：
 - 存在不允许的OP或OP组合
 
+#### 8. OP_SCOPE_ERROR
+描述：OP的Scope配置存在问题\
+行为：
+- scope_id为-1时，allow_parallel_merge和allow_cross_scope_merge必须配置为false
+- 相同scope_id的所有操作必须配置一致的allow_parallel_merge和allow_cross_scope_merge
+- A2/A3架构中不允许相同scope_id中同时存在AIC和AIV操作
+- A5架构中允许相同scope_id中同时存在AIC和AIV操作，但allowParallelMerge和allowCrossScopeMerge必须配置为false
+
 ### Function相关错误
 
 #### 1. FUNCTION_GRAPH_STRUCTURE
