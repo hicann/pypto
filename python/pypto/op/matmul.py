@@ -17,6 +17,7 @@ from .._op_wrapper import op_wrapper
 from ..enum import DataType
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
+from ..error import PyptoError
 
 
 @op_wrapper
@@ -264,9 +265,9 @@ def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> N
     if value is None:
         return
     if not isinstance(value, expect_type):
-        raise TypeError(
+        raise PyptoError(0xF00001, TypeError(
             f"Argument '{arg_name}' must be of type {expect_type.__name__}, but got {type(value).__name__}."
-        )
+        ))
 
 
 def __get_valid_shape(tensor):
@@ -277,10 +278,10 @@ def __validate_shape(input_tensor1: Tensor, input_tensor2: Tensor, a_trans: bool
     input_dim = input_tensor1.Dim()
     mat2_dim = input_tensor2.Dim()
     if input_dim != mat2_dim or input_dim not in {2, 3, 4}:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Tensor dimension mismatch. Expect input_dim == mat2_dim and both in [2, 3, 4], "
             f"got input_dim: {input_dim}, mat2_dim: {mat2_dim}."
-        )
+        ))
 
     input_valid_shape = __get_valid_shape(input_tensor1)
     mat2_valid_shape = __get_valid_shape(input_tensor2)
@@ -289,11 +290,11 @@ def __validate_shape(input_tensor1: Tensor, input_tensor2: Tensor, a_trans: bool
     kb_dim, n_dim = (mat2_valid_shape[-2], mat2_valid_shape[-1]) if not b_trans else \
         (mat2_valid_shape[-1], mat2_valid_shape[-2])
     if ka_dim.is_concrete() and kb_dim.is_concrete() and ka_dim != kb_dim:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "K-dimension valid shape mismatch. "
             f"Got input valid shape: {input_valid_shape}, mat2 valid shape: {mat2_valid_shape}, "
             f"a_trans: {a_trans}, b_trans: {b_trans}."
-        )
+        ))
 
 
 def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -> None:
@@ -312,7 +313,7 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
     input2_format = input_tensor2.Format()
     fp8_dtype = (pypto_impl.DataType.DT_FP8E5M2, pypto_impl.DataType.DT_FP8E4M3)
     if is_out_nz:
-        raise ValueError("Output tensor do not support NZ currently.")
+        raise PyptoError(0xF00002, ValueError("Output tensor do not support NZ currently."))
     input1_fp32_valid = input1_dtype == pypto_impl.DataType.DT_FP32 \
         and input1_format == pypto_impl.TileOpFormat.TILEOP_NZ
     input2_fp32_valid = input2_dtype == pypto_impl.DataType.DT_FP32 \
@@ -322,15 +323,17 @@ def __validate_inputs(input_tensor1, input_tensor2, out_dtype, optional_param) -
     input2_fp8_valid = input2_dtype == pypto_impl.DataType.DT_FP8E5M2 \
         and input2_format == pypto_impl.TileOpFormat.TILEOP_NZ
     if (input1_fp32_valid or input2_fp32_valid):
-        raise ValueError("Input tensor with DT_FP32 must use ND format, NZ format is not support currently.")
+        raise PyptoError(0xF00002, ValueError(
+            "Input tensor with DT_FP32 must use ND format, NZ format is not support currently."))
     if (input1_fp8_valid or input2_fp8_valid):
-        raise ValueError("Input tensor with DT_FP8E5M2 must use ND format, NZ format is not support currently.")
+        raise PyptoError(0xF00002, ValueError(
+            "Input tensor with DT_FP8E5M2 must use ND format, NZ format is not support currently."))
     if not ((input1_dtype in fp8_dtype and input2_dtype in fp8_dtype) or (input1_dtype == input2_dtype)):
-        raise ValueError("Non-FP8 inputs require identical dtypes.")
+        raise PyptoError(0xF00002, ValueError("Non-FP8 inputs require identical dtypes."))
     if input_tensor1.Dim() != 2 and extend_params is not None:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "extend_params is not supported for batched matrix multiplication."
-        )
+        ))
 
 
 def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_scale2) -> None:
@@ -342,15 +345,15 @@ def __validate_scaled_inputs(input_tensor1, input_tensor2, input_scale1, input_s
     shape_dim_3 = 3
 
     if input_dim != other_dim or input_dim != shape_dim_2:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Tensor dimension mismatch. Expect input_dim == other_dim and both equal to 2, "
             f"got input_dim: {input_dim}, other_dim: {other_dim}."
-        )
+        ))
     if scale_a_dim != scale_b_dim or scale_a_dim != shape_dim_3:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Tensor dimension mismatch. Expect scale_a_dim == scale_b_dim and both equal to 3, "
             f"got scale_a_dim: {scale_a_dim}, scale_b_dim: {scale_b_dim}."
-        )
+        ))
 
 
 def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_scale2, optional_param) -> None:
@@ -380,49 +383,49 @@ def __validate_scaled_shape(input_tensor1, input_tensor2, input_scale1, input_sc
 
 def __validate_scale_k0_dimensions(k_a_scale0_dim, k_b_scale0_dim):
     if (k_a_scale0_dim.is_concrete() and k_b_scale0_dim.is_concrete() and k_a_scale0_dim != k_b_scale0_dim):
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Scale Matrix Kscale0 dimension mismatch. Expect scale_ka_size == scale_kb_size, "
             f"got scale_ka_size: {k_a_scale0_dim}, scale_kb_size: {k_b_scale0_dim}."
-        )
+        ))
 
 
 def __validate_scale_k1_dimensions(k_a_scale1_dim, k_b_scale1_dim, shape_dim_2):
     is_value_concrete = (k_a_scale1_dim.is_concrete() and k_b_scale1_dim.is_concrete())
     if is_value_concrete and k_a_scale1_dim != k_b_scale1_dim and k_a_scale1_dim != shape_dim_2:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Scale Matrix Kscale1 dimension mismatch. Expect scale_a_shape[2] == scale_b_shape[2] "
             f"and both equal to 2, got scale_a_shape[2]: {k_a_scale1_dim}, "
             f"scale_b_shape[2]: {k_b_scale1_dim}."
-        )
+        ))
 
 
 def __validate_scale_m_dimensions(m_dim, m_scale_dim):
     if (m_dim.is_concrete() and m_scale_dim.is_concrete() and m_dim != m_scale_dim):
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Matrix M dimension mismatch. Expect m_scale_size == m_size, "
             f"got m_scale_size: {m_scale_dim}, m_size: {m_dim}."
-        )
+        ))
 
 
 def __validate_scale_n_dimensions(n_dim, n_scale_dim):
     if (n_dim.is_concrete() and n_scale_dim.is_concrete() and n_dim != n_scale_dim):
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Matrix N dimension mismatch. Expect n_scale_size == n_size, "
             f"got n_scale_size: {n_scale_dim}, n_size: {n_dim}."
-        )
+        ))
 
 
 def __validate_scale_k_alignment(ka_dim, k_a_scale0_dim, align_64):
     if ka_dim.is_concrete() and ka_dim % align_64 != 0:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Matrix K dimension mismatch. Expect k_size be aligned to 64 element, "
             f"k_size: {ka_dim}."
-        )
+        ))
     if (k_a_scale0_dim.is_concrete() and ka_dim.is_concrete() and k_a_scale0_dim != ka_dim // align_64):
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Matrix K dimension is not a multiple of 64 of the Scale Matrix K0 dimension. "
             f"k_size: {ka_dim}, k_scale_size0: {k_a_scale0_dim}"
-        )
+        ))
 
 
 def __validate_trans_mode(mat_a, mat_b, extend_params):
@@ -431,9 +434,9 @@ def __validate_trans_mode(mat_a, mat_b, extend_params):
             pypto_impl.TransMode.CAST_NONE and
             mat_a.GetDataType() != pypto_impl.DataType.DT_FP32 and
             mat_b.GetDataType() != pypto_impl.DataType.DT_FP32):
-            raise RuntimeError(
-                "The param of trans_mode is only supported when input data type is DT_FP32."
-            )
+            raise PyptoError(0xF00003, RuntimeError(
+                "The param of trans_mode is only supported when input data type is DT_FP32"
+            ))
 
 
 def __convert_matmul_extend_params(extend_params) -> dict:
