@@ -121,6 +121,30 @@ class ComprehensiveAnalyzer:
                 report.append(f"- {name}: {path}")
             report.append("")
 
+        # 源码映射失败提示
+        if self.cpp_frames:
+            all_unknown = all(
+                frame.get('source_location', '').strip() in ('??:0', '?:0', '')
+                for frame in self.cpp_frames
+                if 'source_location' in frame
+            )
+            if all_unknown:
+                report.append("## ⚠️ 源码映射提示")
+                report.append("")
+                report.append("所有 C++ 帧的源码位置均为 `??:0`，这通常表示当前安装的 PyPTO 为 **Release 构建**，不包含调试符号。")
+                report.append("")
+                report.append("**解决方案**：")
+                report.append("1. 按步骤 2 编译安装 Debug 版本 PyPTO（包含调试符号），然后重新运行分析")
+                report.append("2. 或使用 `addr2line` 手动定位（需要二进制文件路径）：")
+                report.append("   ```bash")
+                report.append("   addr2line -e <binary_path> -f -C <address>")
+                report.append("   ```")
+                report.append("3. 或使用 `objdump` 反汇编查看上下文：")
+                report.append("   ```bash")
+                report.append("   objdump -d -C <binary_path> | grep -A 20 '<symbol>'")
+                report.append("   ```")
+                report.append("")
+
         return '\n'.join(report)
 
     def _extract_error_info(self, text: str):
@@ -136,6 +160,8 @@ class ComprehensiveAnalyzer:
 
         # 提取错误位置
         location_match = re.search(r'file\s+(\S+),\s+line\s+(\d+),\s+func\s+(\S+)', text)
+        if not location_match:
+            location_match = re.search(r'File\s+"([^"]+)",\s+line\s+(\d+)(?:,\s+in\s+(\S+))?', text)
         if location_match:
             self.error_info['location'] = {
                 'file': location_match.group(1),
@@ -219,9 +245,8 @@ class ComprehensiveAnalyzer:
                             frame.get('symbol'),
                             binary_path,
                             e,
-                            exc_info=True,
                         )
-                        raise
+                        continue
 
                     # 尝试定位源码行号
                     if 'address' in frame:

@@ -184,7 +184,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/plot_accuracy.py /path/to
 - 绘制双折线图：相对容差(rtol) 和绝对容差(atol)
 - 生成精度数据汇总表格，- 输出 PNG 格式的可视化图表（保存在 operator 目录）
 
-### 步骤 6：定位并修复### 步骤 5：定位并修复
+### 步骤 6：定位并修复
 
 根据对比结果定位到具体的 op，然后修复问题。
 

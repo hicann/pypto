@@ -256,6 +256,7 @@ def setup_logging(work_dir, golden_dir):
     file_handler.setFormatter(log_formatter)
 
     logger.handlers = [console_handler, file_handler]
+    logger.propagate = False
     return operator_name
 
 
@@ -271,17 +272,17 @@ def main():
 
     args = parser.parse_args()
 
+    latest_dir = args.output_dir if args.output_dir else find_latest_output_dir(args.work_dir)
+
+    if not latest_dir:
+        logging.error("✗ 未找到 output 目录")
+        sys.exit(1)
+
     operator_name = setup_logging(args.work_dir, args.golden_dir)
 
     logger.info("=" * 80)
     logger.info("PyPTO 精度检查点文件对比工具")
     logger.info("=" * 80)
-
-    latest_dir = args.output_dir if args.output_dir else find_latest_output_dir(args.work_dir)
-
-    if not latest_dir:
-        logger.error("✗ 未找到 output 目录")
-        sys.exit(1)
 
     golden_base_dir = args.golden_dir if args.golden_dir else args.work_dir
     tensor_dir = os.path.join(args.work_dir, "output", latest_dir, "tensor")

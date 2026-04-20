@@ -70,11 +70,19 @@ def test_{op}_level0(device_id=None, run_mode="npu"):
     print(f"  Max diff    : {max_diff:.6e}")
 
     if run_mode == "npu":
-        assert_allclose(
-            result.cpu().numpy(),
-            golden.cpu().numpy(),
-            rtol=1e-3, atol=1e-3,
-        )
+        try:
+            assert_allclose(
+                result.cpu().numpy(),
+                golden.cpu().numpy(),
+                rtol=1e-3, atol=1e-3,
+            )
+            print("[PRECISION_PASS]")
+        except AssertionError as e:
+            print(f"[PRECISION_FAIL] {e}", file=sys.stderr)
+            raise
+        except Exception as e:
+            print(f"Runtime error: {e}", file=sys.stderr)
+            raise
 
     print("  ✓ Passed\n")
 
@@ -99,11 +107,19 @@ def test_{op}_level1(device_id=None, run_mode="npu"):
     print(f"  Shape: {shape}, Max diff: {max_diff:.6e}")
 
     if run_mode == "npu":
-        assert_allclose(
-            result.cpu().numpy(),
-            golden.cpu().numpy(),
-            rtol=1e-3, atol=1e-3,
-        )
+        try:
+            assert_allclose(
+                result.cpu().numpy(),
+                golden.cpu().numpy(),
+                rtol=1e-3, atol=1e-3,
+            )
+            print("[PRECISION_PASS]")
+        except AssertionError as e:
+            print(f"[PRECISION_FAIL] {e}", file=sys.stderr)
+            raise
+        except Exception as e:
+            print(f"Runtime error: {e}", file=sys.stderr)
+            raise
 
     print("  ✓ Passed\n")
 
