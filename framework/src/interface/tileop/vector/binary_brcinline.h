@@ -95,28 +95,28 @@ TILEOP BinaryLayoutInfo ExtractLayoutInfo(const T0& dst, const T1& src0, const T
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value; \
     constexpr auto n3 = Std::tuple_element<DIM_3RD, LastUse>::type::value;
 
-#define BINARY_EXPAND_DISPATCH(PREFIX)                                          \
-    if constexpr (op == BinaryOp::ADD) {                                        \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##ADD(dst, src0, src1), n1, n2, n3);    \
-        return;                                                                 \
-    } else if constexpr (op == BinaryOp::SUB) {                                 \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##SUB(dst, src0, src1), n1, n2, n3);    \
-        return;                                                                 \
-    } else if constexpr (op == BinaryOp::MUL) {                                 \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##MUL(dst, src0, src1), n1, n2, n3);    \
-        return;                                                                 \
-    } else if constexpr (op == BinaryOp::DIV) {                                 \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##DIV(dst, src0, src1), n1, n2, n3);    \
-        return;                                                                 \
-    } else if constexpr (op == BinaryOp::MAX) {                                 \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##MAX(dst, src0, src1), n1, n2, n3);    \
-        return;                                                                 \
-    } else if constexpr (op == BinaryOp::MIN) {                                 \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##MIN(dst, src0, src1), n1, n2, n3);    \
-        return;                                                                 \
-    } else if constexpr (op == BinaryOp::EXPANDEXPDIF) {                        \
-        PTO_WITH_LAST_USE(pto::T##PREFIX##EXPDIF(dst, src0, src1), n1, n2, n3); \
-        return;                                                                 \
+#define BINARY_EXPAND_DISPATCH(PREFIX, PrecisionType)                                       \
+    if constexpr (op == BinaryOp::ADD) {                                                    \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##ADD(dst, src0, src1), n1, n2, n3);                \
+        return;                                                                             \
+    } else if constexpr (op == BinaryOp::SUB) {                                             \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##SUB(dst, src0, src1), n1, n2, n3);                \
+        return;                                                                             \
+    } else if constexpr (op == BinaryOp::MUL) {                                             \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##MUL(dst, src0, src1), n1, n2, n3);                \
+        return;                                                                             \
+    } else if constexpr (op == BinaryOp::DIV) {                                             \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##DIV<PrecisionType>(dst, src0, src1), n1, n2, n3); \
+        return;                                                                             \
+    } else if constexpr (op == BinaryOp::MAX) {                                             \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##MAX(dst, src0, src1), n1, n2, n3);                \
+        return;                                                                             \
+    } else if constexpr (op == BinaryOp::MIN) {                                             \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##MIN(dst, src0, src1), n1, n2, n3);                \
+        return;                                                                             \
+    } else if constexpr (op == BinaryOp::EXPANDEXPDIF) {                                    \
+        PTO_WITH_LAST_USE(pto::T##PREFIX##EXPDIF(dst, src0, src1), n1, n2, n3);             \
+        return;                                                                             \
     }
 
 template <
@@ -124,9 +124,8 @@ template <
     typename T1, typename T2>
 TILEOP void BinaryRowExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 {
-    (void)PrecisionType;
     EXTRACT_LAST_USE_3DIM(LastUse)
-    BINARY_EXPAND_DISPATCH(ROWEXPAND)
+    BINARY_EXPAND_DISPATCH(ROWEXPAND, PrecisionType)
 }
 
 template <
@@ -134,11 +133,10 @@ template <
     typename T1, typename T2>
 TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 {
-    (void)PrecisionType;
     EXTRACT_LAST_USE_3DIM(LastUse)
-    BINARY_EXPAND_DISPATCH(COLEXPAND)
+    BINARY_EXPAND_DISPATCH(COLEXPAND, PrecisionType)
     if constexpr (op == BinaryOp::MOD) {
-        pto::TROWEXPANDDIV(dst, src0, src1);
+        pto::TROWEXPANDDIV<PrecisionType>(dst, src0, src1);
 #ifdef __DAV_V220
         pipe_barrier(PIPE_V);
 #endif
