@@ -20,7 +20,9 @@
 #include <cstdint>
 
 #define __ubuf__
+#ifndef __aicore__
 #define __aicore__
+#endif
 #define __cbuf__
 #define __fbuf__
 #define __ca__
