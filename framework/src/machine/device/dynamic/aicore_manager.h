@@ -1293,7 +1293,8 @@ private:
     }
 
     inline int32_t ReleaseCoreByRegVal(
-        CoreType type, int coreIdx, ResolveTaskContext* ctx, uint32_t& finishCnt, uint32_t& resloveParallelIdx)
+        CoreType type, int coreIdx, [[maybe_unused]]ResolveTaskContext* ctx,
+        [[maybe_unused]]uint32_t& finishCnt, uint32_t& resloveParallelIdx)
     {
         int32_t ret = DEVICE_MACHINE_OK;
         uint64_t finTaskRegVal = aicoreHal_.GetFinishedTask(coreIdx);
