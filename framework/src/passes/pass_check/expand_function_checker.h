@@ -17,7 +17,7 @@
 #define EXPAND_FUNCTION_CHECKER_H
 
 #include "checker.h"
-#include "index_outcast_checker.h"
+#include "inplace_conflict_checker.h"
 #include "interface/operation/opcode.h"
 #include "interface/function/function.h"
 #include "interface/operation/operation.h"

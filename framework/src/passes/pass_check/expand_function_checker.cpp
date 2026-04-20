@@ -29,12 +29,15 @@ Status ExpandFunctionChecker::DoDefaultEnabledPreCheck(Function& function)
         APASS_LOG_ERROR_C(GraphErr::GRAPH_LOOP_DETECTION, Elements::Function, "Operation Loop detected before expand function; Please validate the operation input specifications.");
         return FAILED;
     }
-    IndexOutcastChecker indexOutcastChecker;
-    if (indexOutcastChecker.CheckIndexOutcastDisorderedCoverage(function) != SUCCESS) {
+    InplaceConflictChecker inplaceConflictChecker;
+    if (inplaceConflictChecker.CheckIndexOutcastDisorderedCoverage(function) != SUCCESS) {
         APASS_LOG_WARN_F(
             Elements::Function,
-            "Function[%d] has multiple OP_INDEX_OUTCAST consume the same tensor, the precision may be abnormal.",
+            "Function[%d] has tensor serves both the dst of OP_INDEX_OUTCAST and the input of other Operations, the precision may be abnormal.",
             function.GetFuncMagic());
+    }
+    if (inplaceConflictChecker.CheckInplaceOperationConflict(function) != SUCCESS) {
+        APASS_LOG_WARN_F(Elements::Function, "Function[%d] CheckInplaceOperationConflict failed, the precision may be abnormal.", function.GetFuncMagic());
     }
     return SUCCESS;
 }

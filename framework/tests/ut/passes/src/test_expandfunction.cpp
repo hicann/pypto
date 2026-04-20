@@ -27,6 +27,7 @@
 #include "interface/operation/operation.h"
 #include "passes/tensor_graph_pass/expand_function.h"
 #include "computational_graph_builder.h"
+#include "passes/pass_check/inplace_conflict_checker.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -627,6 +628,120 @@ TEST_F(TestExpandFunctionPass, PreCheckForDisorderIndexOutcast)
 
     ExpandFunction expandfunctionpass;
     EXPECT_EQ(expandfunctionpass.PreRun(*function), SUCCESS);
+}
+
+/*
+    Tensor is used by both OP_VIEW and another operation (conflict scenario)
+    tensor -> view -> ...
+    tensor -> add -> ...
+    This should fail CheckInplaceOperationConflict because tensor serves both view and other operations
+*/
+TEST_F(TestExpandFunctionPass, PreCheckForViewConflict)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{32, 32};
+    EXPECT_EQ(
+        G.AddTensors(DataType::DT_FP32, tileShape, {"tensor", "view_output", "add_output1", "add_output2", "other_input"}),
+        true);
+    
+    std::vector<Opcode> opLists{Opcode::OP_VIEW, Opcode::OP_ADD};
+    std::vector<std::vector<std::string>> iOperands{{"tensor"}, {"tensor", "other_input"}};
+    std::vector<std::vector<std::string>> oOperands{{"view_output"}, {"add_output1"}};
+    std::vector<std::string> opNames{"OP_VIEW_1", "OP_ADD_1"};
+    EXPECT_EQ(G.AddOps(opLists, iOperands, oOperands, opNames, true), true);
+
+    EXPECT_EQ(G.SetInCast({"tensor", "other_input"}), true);
+    EXPECT_EQ(G.SetOutCast({"view_output", "add_output1"}), true);
+
+    Function* function = G.GetFunction();
+    function->GetTensorMap().Insert(G.GetTensor("tensor"));
+
+    InplaceConflictChecker inplaceConflictChecker;
+    EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), FAILED);
+}
+
+/*
+    Tensor is used by both OP_RESHAPE and another operation (conflict scenario)
+    tensor -> reshape -> ...
+    tensor -> mul -> ...
+    This should fail CheckInplaceOperationConflict because tensor serves both reshape and other operations
+*/
+TEST_F(TestExpandFunctionPass, PreCheckForReshapeConflict)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{32, 32};
+    EXPECT_EQ(
+        G.AddTensors(DataType::DT_FP32, tileShape, {"tensor", "reshape_output", "mul_output", "other_input"}),
+        true);
+    
+    std::vector<Opcode> opLists{Opcode::OP_RESHAPE, Opcode::OP_MUL};
+    std::vector<std::vector<std::string>> iOperands{{"tensor"}, {"tensor", "other_input"}};
+    std::vector<std::vector<std::string>> oOperands{{"reshape_output"}, {"mul_output"}};
+    std::vector<std::string> opNames{"OP_RESHAPE_1", "OP_MUL_1"};
+    EXPECT_EQ(G.AddOps(opLists, iOperands, oOperands, opNames, true), true);
+
+    EXPECT_EQ(G.SetInCast({"tensor", "other_input"}), true);
+    EXPECT_EQ(G.SetOutCast({"reshape_output", "mul_output"}), true);
+
+    Function* function = G.GetFunction();
+    function->GetTensorMap().Insert(G.GetTensor("tensor"));
+
+    InplaceConflictChecker inplaceConflictChecker;
+    EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), FAILED);
+}
+
+/*
+    Tensor is used only by OP_VIEW (no conflict scenario)
+    tensor -> view -> adds
+    This should succeed because tensor only serves view operation (tensor has only one consumer)
+*/
+TEST_F(TestExpandFunctionPass, PreCheckForViewNoConflict)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{32, 32};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"tensor", "view_output", "final_output"}), true);
+    
+    std::vector<Opcode> opLists{Opcode::OP_VIEW, Opcode::OP_ADDS};
+    std::vector<std::vector<std::string>> iOperands{{"tensor"}, {"view_output"}};
+    std::vector<std::vector<std::string>> oOperands{{"view_output"}, {"final_output"}};
+    std::vector<std::string> opNames{"OP_VIEW_1", "OP_ADDS_1"};
+    EXPECT_EQ(G.AddOps(opLists, iOperands, oOperands, opNames, true), true);
+
+    EXPECT_EQ(G.SetInCast({"tensor"}), true);
+    EXPECT_EQ(G.SetOutCast({"final_output"}), true);
+
+    Function* function = G.GetFunction();
+    function->GetTensorMap().Insert(G.GetTensor("tensor"));
+
+    InplaceConflictChecker inplaceConflictChecker;
+    EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), SUCCESS);
+}
+
+/*
+    Tensor is used only by OP_RESHAPE (no conflict scenario)
+    tensor -> reshape -> exp
+    This should succeed because tensor only serves reshape operation (tensor has only one consumer)
+*/
+TEST_F(TestExpandFunctionPass, PreCheckForReshapeNoConflict)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{32, 32};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, {"tensor", "reshape_output", "final_output"}), true);
+    
+    std::vector<Opcode> opLists{Opcode::OP_RESHAPE, Opcode::OP_EXP};
+    std::vector<std::vector<std::string>> iOperands{{"tensor"}, {"reshape_output"}};
+    std::vector<std::vector<std::string>> oOperands{{"reshape_output"}, {"final_output"}};
+    std::vector<std::string> opNames{"OP_RESHAPE_1", "OP_EXP_1"};
+    EXPECT_EQ(G.AddOps(opLists, iOperands, oOperands, opNames, true), true);
+
+    EXPECT_EQ(G.SetInCast({"tensor"}), true);
+    EXPECT_EQ(G.SetOutCast({"final_output"}), true);
+
+    Function* function = G.GetFunction();
+    function->GetTensorMap().Insert(G.GetTensor("tensor"));
+
+    InplaceConflictChecker inplaceConflictChecker;
+    EXPECT_EQ(inplaceConflictChecker.CheckInplaceOperationConflict(*function), SUCCESS);
 }
 } // namespace tile_fwk
 } // namespace npu

@@ -9,7 +9,7 @@
  */
 
 /*!
- * \file index_outcast_checker.h
+ * \file inplace_conflict_checker.h
  * \brief
  */
 
@@ -21,9 +21,10 @@
 
 namespace npu {
 namespace tile_fwk {
-class IndexOutcastChecker : Checker {
+class InplaceConflictChecker : Checker {
 public:
     Status CheckIndexOutcastDisorderedCoverage(Function& function);
+    Status CheckInplaceOperationConflict(Function& function);
 };
 } // namespace tile_fwk
 } // namespace npu
