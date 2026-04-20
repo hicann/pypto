@@ -448,4 +448,20 @@ TEST_F(InterpTypeConvertTest, Hf8RoundTripViaCast)
     ASSERT_ALLCLOSE_ATOL(out, golden, 1e-5f);
 }
 
+TEST_F(InterpTypeConvertTest, Fp32CastToHf8QuantizationCases)
+{
+    // Representative quantization checks around D=10/D=11 branches and negative carry boundary.
+    const std::vector<float> vals = {-7640.0f, -258.0f, -247.0f, 220.0f, 200.0f, 180.0f, 160.0f};
+    const std::vector<float> expected = {-8192.0f, -256.0f, -256.0f, 224.0f, 192.0f, 192.0f, 160.0f};
+
+    auto src = makeTensorData(DT_FP32, {static_cast<int64_t>(vals.size())}, vals);
+    auto hf8 = makeTensorData(DT_HF8, {static_cast<int64_t>(vals.size())}, std::vector<uint8_t>(vals.size(), 0));
+    auto out = makeTensorData(DT_FP32, {static_cast<int64_t>(vals.size())}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {static_cast<int64_t>(vals.size())}, expected);
+
+    calc::Cast(hf8, src); // FP32 -> HF8
+    calc::Cast(out, hf8); // HF8 -> FP32 decode for validation
+    ASSERT_ALLCLOSE_ATOL(out, golden, 1e-5f);
+}
+
 } // namespace npu::tile_fwk

@@ -307,21 +307,41 @@ static inline uint8_t EncodeFloatToHf8(float v)
         return static_cast<uint8_t>((sign << 7) | (0b0001 << 3) | mv);
     }
     if (std::abs(exponent) == 1) {
-        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 7);
+        int mvRaw = static_cast<int>(std::round(mant * 8.0f));
+        if (mvRaw >= 8) {
+            const float carried = std::ldexp(1.0f, exponent + 1);
+            return EncodeFloatToHf8(sign ? -carried : carried);
+        }
+        int mv = clampInt(mvRaw, 0, 7);
         uint8_t e = EncodeHf8Exponent(exponent, 1);
         return static_cast<uint8_t>((sign << 7) | (0b001 << 4) | ((e & 0x1) << 3) | mv);
     }
     if (std::abs(exponent) <= 3) {
-        int mv = clampInt(static_cast<int>(std::round(mant * 8.0f)), 0, 7);
+        int mvRaw = static_cast<int>(std::round(mant * 8.0f));
+        if (mvRaw >= 8) {
+            const float carried = std::ldexp(1.0f, exponent + 1);
+            return EncodeFloatToHf8(sign ? -carried : carried);
+        }
+        int mv = clampInt(mvRaw, 0, 7);
         uint8_t e = EncodeHf8Exponent(exponent, 2);
         return static_cast<uint8_t>((sign << 7) | (0b01 << 5) | ((e & 0x3) << 3) | mv);
     }
     if (std::abs(exponent) <= 7) {
-        int mv = clampInt(static_cast<int>(std::round(mant * 4.0f)), 0, 3);
+        int mvRaw = static_cast<int>(std::round(mant * 4.0f));
+        if (mvRaw >= 4) {
+            const float carried = std::ldexp(1.0f, exponent + 1);
+            return EncodeFloatToHf8(sign ? -carried : carried);
+        }
+        int mv = clampInt(mvRaw, 0, 3);
         uint8_t e = EncodeHf8Exponent(exponent, 3);
         return static_cast<uint8_t>((sign << 7) | (0b10 << 5) | ((e & 0x7) << 2) | mv);
     }
-    int mv = clampInt(static_cast<int>(std::round(mant * 2.0f)), 0, 1);
+    int mvRaw = static_cast<int>(std::round(mant * 2.0f));
+    if (mvRaw >= 2) {
+        const float carried = std::ldexp(1.0f, exponent + 1);
+        return EncodeFloatToHf8(sign ? -carried : carried);
+    }
+    int mv = clampInt(mvRaw, 0, 1);
     uint8_t e = EncodeHf8Exponent(exponent, 4);
     return static_cast<uint8_t>((sign << 7) | (0b11 << 5) | ((e & 0xF) << 1) | mv);
 }

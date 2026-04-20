@@ -43,9 +43,27 @@ using namespace npu::tile_fwk::dynamic;
 
 namespace pypto {
 
+static bool IsUint8GoldenAndHf8InOut(const DeviceTensorData& inOutTensor, const DeviceTensorData& goldenTensor)
+{
+    return inOutTensor.GetDataType() == DT_HF8 && goldenTensor.GetDataType() == DT_UINT8;
+}
+
 static void ValidateVerifyOutputAndGolden(
     const std::vector<DeviceTensorData>& inOutTensors, const std::vector<DeviceTensorData>& goldens)
 {
+    auto ShapeToString = [](const std::vector<int64_t>& shape) {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < shape.size(); ++i) {
+            if (i != 0) {
+                oss << ", ";
+            }
+            oss << shape[i];
+        }
+        oss << "]";
+        return oss.str();
+    };
+
     if (inOutTensors.size() != goldens.size()) {
         return;
     }
@@ -57,14 +75,21 @@ static void ValidateVerifyOutputAndGolden(
             continue;
         }
 
-        ASSERT(VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, inOutTensors[i].GetDataType() == goldens[i].GetDataType())
-            << "dtype mismatch at index " << i;
+        ASSERT(
+            VerifyResultScene::VERIFY_RESULT_DTYPE_DIFF, inOutTensors[i].GetDataType() == goldens[i].GetDataType() ||
+                                                             IsUint8GoldenAndHf8InOut(inOutTensors[i], goldens[i]))
+            << "dtype mismatch at index " << i << ", output dtype: " << DataType2String(inOutTensors[i].GetDataType())
+            << ", golden dtype: " << DataType2String(goldens[i].GetDataType());
 
         auto& outputShape = inOutTensors[i].GetShape();
         auto& goldenShape = goldens[i].GetShape();
-        ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF, outputShape.size() == goldenShape.size());
+        ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF, outputShape.size() == goldenShape.size())
+            << "shape rank mismatch at golden index " << i << ", output rank: " << outputShape.size()
+            << ", golden rank: " << goldenShape.size();
         for (size_t dim = 0; dim < outputShape.size(); dim++) {
-            ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF, outputShape[dim] == goldenShape[dim]);
+            ASSERT(VerifyResultScene::VERIFY_RESULT_SHAPE_DIFF, outputShape[dim] == goldenShape[dim])
+                << "shape mismatch at golden index " << i << ", dim " << dim
+                << ", output shape: " << ShapeToString(outputShape) << ", golden shape: " << ShapeToString(goldenShape);
         }
     }
 }
@@ -113,9 +138,12 @@ void SetVerifyData(
         if (goldens[i].GetAddr() == 0) {
             ProgramData::GetInstance().AppendGolden(nullptr);
         } else {
-            auto logicalShape = ToLogicalShape(goldens[i].GetDataType(), goldens[i].GetShape());
-            auto rawData =
-                RawTensorData::CreateTensor(goldens[i].GetDataType(), logicalShape, (uint8_t*)goldens[i].GetAddr());
+            auto goldenType = goldens[i].GetDataType();
+            if (i < inOutTensors.size() && IsUint8GoldenAndHf8InOut(inOutTensors[i], goldens[i])) {
+                goldenType = DT_HF8;
+            }
+            auto logicalShape = ToLogicalShape(goldenType, goldens[i].GetShape());
+            auto rawData = RawTensorData::CreateTensor(goldenType, logicalShape, (uint8_t*)goldens[i].GetAddr());
             ProgramData::GetInstance().AppendGolden(rawData);
         }
     }
