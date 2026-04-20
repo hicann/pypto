@@ -48,12 +48,10 @@ class PyptoError(Exception):
         err_code: Error code (int). Defaults to _ERROR_CODE_UNKNOWN.
     """
 
-    def __init__(self, msg: Union[str, Exception], err_code: Optional[int] = None):
-        if err_code is None:
-            err_code = _ERROR_CODE_UNKNOWN
+    def __init__(self, err_code: int, msg: Union[str, Exception]):
         if isinstance(msg, Exception):
             msg = f"ErrCode: {err_code:X}, {type(msg).__name__}: {msg}"
-        else:
+        elif "ErrCode" not in msg:
             msg = f"ErrCode: {err_code:X}, {msg}"
         super().__init__(msg)
         self.node: Optional[ast.AST] = None
@@ -72,8 +70,8 @@ class ParserError(PyptoError):
     """
 
     def __init__(self, node: ast.AST, msg: Union[str, Exception]):
-        err_code = _get_err_code(msg) if isinstance(msg, Exception) else None
-        super().__init__(msg, err_code=err_code)
+        err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
+        super().__init__(err_code, msg)
         self.node = node
 
 
