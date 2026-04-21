@@ -65,13 +65,15 @@ Status AssignMemoryType::RunOnFunction(Function& function)
         AssignSpecialOpMemtype(op, infoBufferSize);
     }
     if (infoBufferSize) {
-        const size_t UB_SIZE_THRESHOLD =
-            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD);
+        const size_t UB_SIZE_THRESHOLD_ASSEMBLE =
+            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
+        const size_t UB_SIZE_THRESHOLD_VIEW =
+            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_VIEW);
         const size_t L1_SIZE_THRESHOLD =
             static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
         APASS_LOG_INFO_F(
-            Elements::Operation, "UB buffer size threshold %zu, L1 buffer size threshold %zu.", UB_SIZE_THRESHOLD,
-            L1_SIZE_THRESHOLD);
+            Elements::Operation, "UB buffer size threshold %zu for assemble, UB buffer size threshold %zu for view, L1 buffer size threshold %zu.", 
+            UB_SIZE_THRESHOLD_ASSEMBLE, UB_SIZE_THRESHOLD_VIEW, L1_SIZE_THRESHOLD);
     }
     // 处理cube级联场景tile等大约束
     ProcesSmallTileToLargeTile(function);
@@ -259,7 +261,7 @@ void AssignMemoryType::AssignMemtypeForSplitReshape(
     Operation& op, const LogicalTensorPtr& input, const LogicalTensorPtr& output)
 {
     const int UB_SIZE_THRESHOLD =
-        static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD);
+        static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
     // 如果reshape前序是Assemble后接View，是SplitReshape处理的Reshape
     auto& producers = input->GetProducers();
     auto& consumers = output->GetConsumers();
@@ -372,23 +374,35 @@ void AssignMemoryType::AssignSpecialOpMemtype(Operation& op, bool& infoBufferSiz
         UpdateOverSizedLocalBuffer(op);
         infoBufferSize = true;
     }
+
+    if (op.GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW) {
+        UpdateOverSizedLocalBuffer(op);
+        infoBufferSize = true;
+    }
 }
 
 void AssignMemoryType::UpdateOverSizedLocalBuffer(Operation& operation)
-{
+{   
+    double ubThreshold = (operation.GetOpcode() == Opcode::OP_VIEW) ? UB_THRESHOLD_VIEW : UB_THRESHOLD_ASSEMBLE;
     const int UB_SIZE_THRESHOLD =
-        static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD);
+        static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * ubThreshold);
     const int L1_SIZE_THRESHOLD =
         static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
 
-    auto assembleOut = operation.GetOOperands().front();
-    auto memType = assembleOut->GetMemoryTypeOriginal();
-    if (((memType == MemoryType::MEM_UB) && (assembleOut->GetDataSize() > UB_SIZE_THRESHOLD)) ||
-        ((memType == MemoryType::MEM_L1) && (assembleOut->GetDataSize() > L1_SIZE_THRESHOLD))) {
-        assembleOut->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+    auto output = operation.GetOOperands().front();
+    auto memType = output->GetMemoryTypeOriginal();
+    if (((memType == MemoryType::MEM_UB) && (output->GetDataSize() > UB_SIZE_THRESHOLD)) ||
+        ((memType == MemoryType::MEM_L1) && (output->GetDataSize() > L1_SIZE_THRESHOLD))) {
+        output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+        if (operation.GetOpcode() == Opcode::OP_VIEW) {
+            auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());
+            if (viewAttr) {
+                viewAttr->SetToType(MemoryType::MEM_DEVICE_DDR);
+            }
+        }
         APASS_LOG_INFO_F(
             Elements::Operation, "%s[%d] output %d is oversized, set as MEM_DEVICE_DDR.",
-            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), assembleOut->magic);
+            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), output->magic);
     }
 }
 
