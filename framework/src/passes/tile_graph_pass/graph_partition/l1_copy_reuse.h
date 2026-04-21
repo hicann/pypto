@@ -41,11 +41,6 @@ public:
     explicit L1CopyInReuseRunner(const std::vector<std::vector<int>>& inGraph1) : inGraph_(inGraph1) {}
     ~L1CopyInReuseRunner() {}
     Status Run(Function& func, int color, std::vector<std::vector<int>>& colorNode);
-    static void ResetGlobalHashOrderCounters()
-    {
-        globalL1ReuseHashOrder_ = 0;
-        globalCubeMergeHashOrder_ = 0;
-    }
     static bool CanReuse(const Operation& op);
     static int GetModeBySetting(const std::map<int64_t, int64_t>& setting);
     static std::vector<int> GetCopyIn(
@@ -85,7 +80,7 @@ private:
     Status SetNumFromConfig(
         const std::map<int64_t, int64_t>& configMap, std::map<int, int>& resultMap,
         const std::string& configName);
-    void HashUpdate(int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
+    void HashUpdate(Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
                     std::vector<std::vector<int>>& colorNode);
     const std::vector<std::vector<int>>& inGraph_;
     std::unordered_map<int, int> replacedCopyMap_;
@@ -98,8 +93,6 @@ private:
     int L1ReuseMode_;
     int cubeNBufferMode_;
     std::set<int> mulaccGraph_;
-    static int globalL1ReuseHashOrder_;
-    static int globalCubeMergeHashOrder_;
 };
 
 class L1CopyInReuseMerge : public Pass {

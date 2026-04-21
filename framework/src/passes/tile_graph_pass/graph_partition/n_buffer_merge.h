@@ -35,10 +35,6 @@ class NBufferMerge : public Pass {
 public:
     NBufferMerge() : Pass("NBufferMerge") {}
     ~NBufferMerge() override = default;
-    static void ResetGlobalHashOrderCounter()
-    {
-        globalVecMergeHashOrder_ = 0;
-    }
 
 private:
     Status RunOnFunction(Function& function) override;
@@ -87,7 +83,6 @@ private:
     int mgVecParallelLb_;
     std::map<int64_t, int64_t> vecNBufferSetting_;
     std::unordered_map<uint64_t, int> hashOrder_;
-    static int globalVecMergeHashOrder_;    // 全局 hashOrder 计数器
     enum ModeType { noMerge = 0, autoMerge = 1, manualMerge = 2, autoMulityInOutMerge = 3, manualMulityInOutMerge = 4 };
 };
 } // namespace npu::tile_fwk

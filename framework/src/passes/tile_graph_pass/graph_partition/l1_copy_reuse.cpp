@@ -17,9 +17,6 @@
 #include "passes/pass_utils/pass_utils.h"
 
 namespace npu::tile_fwk {
-int L1CopyInReuseRunner::globalL1ReuseHashOrder_ = 0;
-int L1CopyInReuseRunner::globalCubeMergeHashOrder_ = 0;
-
 inline std::vector<uint64_t> GetGMInputFeature(const Operation& op)
 { // 提取GM tensor的特征
     auto ioperand = op.GetIOperands()[0];
@@ -263,11 +260,12 @@ void L1CopyInReuseRunner::GetColorHash(const OperationsViewer& opOriList, std::v
         hashColor[opOriList[i].GetSubgraphID()] =
             (hashColor[opOriList[i].GetSubgraphID()] * p + (hashTileOp[i] ^ a)) % mod;
     }
+    int order = 0;
     for (int i : mulaccGraph_) {
         hashMap_[hashColor[i]].push_back(i);
         if (hashMap_[hashColor[i]].size() == 1) {
-            hashOrder_[hashColor[i]] = globalL1ReuseHashOrder_;
-            globalL1ReuseHashOrder_++;
+            hashOrder_[hashColor[i]] = order;
+            order++;
         }
     }
     for (auto& entry : hashMap_) {
@@ -281,7 +279,7 @@ void L1CopyInReuseRunner::GetColorHash(const OperationsViewer& opOriList, std::v
     }
 }
 
-void L1CopyInReuseRunner::HashUpdate(int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
+void L1CopyInReuseRunner::HashUpdate(Function& func, int color, const std::vector<uint64_t>& hashColor, OperationsViewer& opOriList,
     std::vector<std::vector<int>>& colorNode)
 {
     for (auto entry = hashMap_.begin(); entry != hashMap_.end();) {
@@ -293,24 +291,26 @@ void L1CopyInReuseRunner::HashUpdate(int color, const std::vector<uint64_t>& has
     }
 
     hashOrder_.clear();
+    int order = 0;
     for (int i = 0; i < color; i++) {
-        if (!mulaccGraph_.count(i)) continue;
         if (hashMap_.find(hashColor[i]) != hashMap_.end() && hashOrder_.find(hashColor[i]) == hashOrder_.end()) {
-            hashOrder_[hashColor[i]] = globalCubeMergeHashOrder_;
+            hashOrder_[hashColor[i]] = order;
             for (auto subgraphId : hashMap_[hashColor[i]]) {
                 for (auto opIdx : colorNode[subgraphId]) {
-                    opOriList[opIdx].UpdateCubeMergeHashOrder(globalCubeMergeHashOrder_);
+                    opOriList[opIdx].UpdateCubeMergeHashOrder(order);
                 }
             }
-            globalCubeMergeHashOrder_++;
+            order++;
         }
     }
 
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
     for (auto& entry : hashOrder_) {
         auto& subgraphIds = hashMap_[entry.first];
-        APASS_LOG_INFO_F(Elements::Operation, "Hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
+        APASS_LOG_INFO_F(Elements::Function, "Cube nbuffer hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
             entry.second, entry.first, subgraphIds.size(), IntVecToStr(subgraphIds).c_str());
     }
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
 }
 
 Status L1CopyInReuseRunner::SetNumFromConfig(
@@ -576,13 +576,13 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
     hashOrder_.clear();
     GetColorHash(opOriList, hashColor, colorNode);
     // print hashorder
-    APASS_LOG_INFO_F(Elements::Operation, "Computation graph [%s] overview.", func.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
     for (auto& entry : hashMap_) {
         APASS_LOG_INFO_F(
-            Elements::Operation, "Hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
+            Elements::Function, "L1 reuse hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
             hashOrder_[entry.first], entry.first, entry.second.size(), IntVecToStr(entry.second).c_str());
     }
-    APASS_LOG_INFO_F(Elements::Operation, "Computation graph [%s] overview end.", func.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
     auto colorCopyIn = GetCopyIn(opOriList, color, colorNode); // 记录各子图的大小
     mgCopyInUpperBound_ = func.paramConfigs_.sgMgCopyInUpperBound;
     numLRMap_ = func.paramConfigs_.cubeL1ReuseSetting;
@@ -599,7 +599,7 @@ Status L1CopyInReuseRunner::Run(Function& func, int color, std::vector<std::vect
             APASS_LOG_ERROR_F(Elements::Function, "Run: MergeDupL1CopyIn failed.");
             return FAILED;
         }
-        HashUpdate(color, hashColor, opOriList, colorNode);
+        HashUpdate(func, color, hashColor, opOriList, colorNode);
     }
     std::map<int, int> hashMergeNumMap;
     // NBuffer参数设置

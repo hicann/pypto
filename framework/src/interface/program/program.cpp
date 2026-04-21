@@ -75,7 +75,6 @@ void Program::Reset()
     CreateInitFunction();
     tensorSlotManager_ = nullptr;
     currentFunctionPtr_ = functionmap_[currentFunctionMagicName_].get();
-    PassManager::ResetStaticVariables();
 }
 
 Function* Program::GetFunctionByRawName(const std::string& rawName) const

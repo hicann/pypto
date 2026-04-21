@@ -43,9 +43,6 @@ public:
 
         config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 4}, {0, 2}});
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 1}});
-
-        // 重置全局 hashOrder 计数器，确保每个测试从 0 开始
-        L1CopyInReuseRunner::ResetGlobalHashOrderCounters();
     }
 
     void TearDown() override {}
@@ -391,69 +388,6 @@ TEST_F(L1CopyInReuseTest, TestTensorReuseFailed)
     function->SetTotalSubGraphCount(subGraphNum);
     L1CopyInReuseMerge LCRM;
     EXPECT_EQ(LCRM.RunOnFunction(*function), FAILED);
-}
-
-// 验证多个 Function 间，hashOrder 全局累加正确，且两个阶段独立计数
-TEST_F(L1CopyInReuseTest, TestHashOrderGlobalAccumulation)
-{
-    L1CopyInReuseRunner::ResetGlobalHashOrderCounters();
-
-    // 第一个 Function
-    ComputationalGraphBuilder G1;
-    std::vector<int64_t> tileShape{16, 16};
-    const int subGraphNum1 = 4;
-    InitGraphBuilder(G1, tileShape, subGraphNum1);
-
-    Function* function1 = G1.GetFunction();
-    function1->paramConfigs_.cubeNBufferSetting = {{-1, 2}};
-    function1->paramConfigs_.cubeL1ReuseSetting = {{-1, 2}};
-    function1->SetTotalSubGraphCount(subGraphNum1);
-
-    L1CopyInReuseMerge LCRM;
-    EXPECT_EQ(LCRM.RunOnFunction(*function1), SUCCESS);
-
-    // 记录第一个 Function 的最大 hashOrder
-    int maxL1Reuse1 = -1;
-    int maxCubeMerge1 = -1;
-    for (auto& op : function1->Operations()) {
-        if (!op.IsDeleted()) {
-            maxL1Reuse1 = std::max(maxL1Reuse1, op.GetL1ReuseHashOrder());
-            maxCubeMerge1 = std::max(maxCubeMerge1, op.GetCubeMergeHashOrder());
-        }
-    }
-    // 确保第一个 Function 有 hashOrder 被设置
-    EXPECT_GE(maxL1Reuse1, 0) << "First function should have l1ReuseHashOrder set";
-    EXPECT_GE(maxCubeMerge1, 0) << "First function should have cubeMergeHashOrder set";
-
-    // 第二个 Function
-    ComputationalGraphBuilder G2;
-    const int subGraphNum2 = 3;
-    InitGraphBuilder(G2, tileShape, subGraphNum2);
-
-    Function* function2 = G2.GetFunction();
-    function2->paramConfigs_.cubeNBufferSetting = {{-1, 2}};
-    function2->paramConfigs_.cubeL1ReuseSetting = {{-1, 2}};
-    function2->SetTotalSubGraphCount(subGraphNum2);
-
-    EXPECT_EQ(LCRM.RunOnFunction(*function2), SUCCESS);
-
-    // 验证第二个 Function 的 hashOrder 从第一个 Function 的最大值继续累加
-    int minL1Reuse2 = INT_MAX;
-    int minCubeMerge2 = INT_MAX;
-    for (auto& op : function2->Operations()) {
-        if (!op.IsDeleted()) {
-            if (op.GetL1ReuseHashOrder() >= 0) {
-                minL1Reuse2 = std::min(minL1Reuse2, op.GetL1ReuseHashOrder());
-            }
-            if (op.GetCubeMergeHashOrder() >= 0) {
-                minCubeMerge2 = std::min(minCubeMerge2, op.GetCubeMergeHashOrder());
-            }
-        }
-    }
-
-    // 第二个 Function 的最小 hashOrder 应该大于第一个 Function 的最大 hashOrder
-    EXPECT_GT(minL1Reuse2, maxL1Reuse1) << "Second function's l1ReuseHashOrder should be greater than first";
-    EXPECT_GT(minCubeMerge2, maxCubeMerge1) << "Second function's cubeMergeHashOrder should be greater than first";
 }
 } // namespace tile_fwk
 } // namespace npu

@@ -41,7 +41,6 @@ public:
         config::Reset();
         config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
         config::SetPassOption(VEC_NBUFFER_SETTING, std::map<int64_t, int64_t>{{-1, 2}});
-        NBufferMerge::ResetGlobalHashOrderCounter();
     }
 
     void TearDown() override {}
@@ -293,51 +292,6 @@ Function* BuildFunctionWithSubgraphs(
     EXPECT_EQ(G.SetInCast({"incast0"}), true);
     EXPECT_EQ(G.SetOutCast({"outcast"}), true);
     return G.GetFunction();
-}
-
-TEST_F(NBufferMergeTest, TestHashOrderGlobalAccumulation)
-{
-    NBufferMerge::ResetGlobalHashOrderCounter();
-    std::vector<int64_t> tileShape{16, 16};
-    const int mgVecParallelLb = 3;
-    const int subGraphNum1 = 4;
-    const int subGraphNum2 = 3;
-
-    // 第一个 Function
-    ComputationalGraphBuilder G1;
-    Function* function1 = BuildFunctionWithSubgraphs(G1, tileShape, subGraphNum1);
-    function1->paramConfigs_.vecNBufferSetting = {{-1, 2}};
-    function1->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
-    function1->SetTotalSubGraphCount(subGraphNum1 + 1);
-    NBufferMerge NBM1;
-    EXPECT_EQ(NBM1.RunOnFunction(*function1), SUCCESS);
-
-    // 获取第一个 Function 的最大 hashOrder
-    int maxHashOrder1 = -1;
-    for (auto& op : function1->Operations()) {
-        if (!op.IsDeleted()) {
-            maxHashOrder1 = std::max(maxHashOrder1, op.GetVecMergeHashOrder());
-        }
-    }
-    EXPECT_GE(maxHashOrder1, 0) << "First function should have vecMergeHashOrder set";
-
-    // 第二个 Function
-    ComputationalGraphBuilder G2;
-    Function* function2 = BuildFunctionWithSubgraphs(G2, tileShape, subGraphNum2);
-    function2->paramConfigs_.vecNBufferSetting = {{-1, 2}};
-    function2->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
-    function2->SetTotalSubGraphCount(subGraphNum2 + 1);
-    NBufferMerge NBM2;
-    EXPECT_EQ(NBM2.RunOnFunction(*function2), SUCCESS);
-
-    // 获取第二个 Function 的最小 hashOrder 并验证累加
-    int minHashOrder2 = INT_MAX;
-    for (auto& op : function2->Operations()) {
-        if (!op.IsDeleted() && op.GetVecMergeHashOrder() >= 0) {
-            minHashOrder2 = std::min(minHashOrder2, op.GetVecMergeHashOrder());
-        }
-    }
-    EXPECT_GT(minHashOrder2, maxHashOrder1) << "Second function's hashOrder should be greater than first";
 }
 } // namespace tile_fwk
 } // namespace npu

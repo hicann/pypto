@@ -62,12 +62,6 @@ PassManager& PassManager::Instance()
     return instance;
 }
 
-void PassManager::ResetStaticVariables()
-{
-    L1CopyInReuseRunner::ResetGlobalHashOrderCounters();
-    NBufferMerge::ResetGlobalHashOrderCounter();
-}
-
 void RegPass()
 {
     REG_PASS(GlobalMemoryReuse);

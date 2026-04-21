@@ -24,8 +24,6 @@
 
 namespace npu::tile_fwk {
 
-int NBufferMerge::globalVecMergeHashOrder_ = 0;
-
 void NBufferMerge::GetOpHash(std::vector<uint64_t>& hashList, const std::string op, size_t idx)
 {
     uint64_t p = 37;
@@ -300,12 +298,13 @@ void NBufferMerge::GetColorHash(
     for (auto subgraphId : mulaccGraph) {
         hashColor[subgraphId] = 0;
     }
+    int order = 0;
     for (int i = 0; i < colorNum_; i++) {
         if (mulaccGraph.count(i)) continue;
         hashMap[hashColor[i]].push_back(i);
         if (hashMap[hashColor[i]].size() == 1) {
-            hashOrder_[hashColor[i]] = globalVecMergeHashOrder_;
-            globalVecMergeHashOrder_++;
+            hashOrder_[hashColor[i]] = order;
+            order++;
         }
     }
     for (auto& entry : hashMap) {
@@ -516,13 +515,13 @@ Status NBufferMerge::NBufferMergeProcess(Function& func)
     hashOrder_.clear();
     GetColorHash(opOriList, hashColor, hashMap);
     // print hashorder
-    APASS_LOG_INFO_F(Elements::Operation, "Computation graph [%s] overview.", func.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview.", func.GetMagicName().c_str());
     for (auto& entry : hashMap) {
         APASS_LOG_INFO_F(
-            Elements::Operation, "Hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
+            Elements::Function, "Vec nbuffer hash order: %d, Subgraph hash: %lu, Subgraph count: %zu, Subgraph IDs: %s.",
             hashOrder_[entry.first], entry.first, entry.second.size(), IntVecToStr(entry.second).c_str());
     }
-    APASS_LOG_INFO_F(Elements::Operation, "Computation graph [%s] overview end.", func.GetRawName().c_str());
+    APASS_LOG_INFO_F(Elements::Function, "Computation graph [%s] overview end.", func.GetMagicName().c_str());
     std::map<uint64_t, size_t> hashMergeNum;
     if (vecNBuffermode_ == autoMerge || vecNBuffermode_ == autoMulityInOutMerge) {
         APASS_LOG_INFO_F(
