@@ -22,13 +22,29 @@ public:
         MonitorManager::Instance().StartStage(stageName_);
     }
 
-    ~MonitorStageScope() { MonitorManager::Instance().EndStage(stageName_); }
+    MonitorStageScope(const std::string& stageName, int rootFuncIndex, const std::string& rootFuncName)
+        : stageName_(stageName), rootFuncIndex_(rootFuncIndex), rootFuncName_(rootFuncName), isRootFunc_(true)
+    {
+        MonitorManager::Instance().StartStage(stageName_, rootFuncIndex_, rootFuncName_);
+    }
+
+    ~MonitorStageScope()
+    {
+        if (isRootFunc_) {
+            MonitorManager::Instance().EndStage(stageName_, rootFuncIndex_, rootFuncName_);
+        } else {
+            MonitorManager::Instance().EndStage(stageName_);
+        }
+    }
 
     MonitorStageScope(const MonitorStageScope&) = delete;
     MonitorStageScope& operator=(const MonitorStageScope&) = delete;
 
 private:
     std::string stageName_;
+    int rootFuncIndex_{0};
+    std::string rootFuncName_;
+    bool isRootFunc_{false};
 };
 
 } // namespace npu::tile_fwk

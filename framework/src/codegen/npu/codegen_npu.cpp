@@ -23,6 +23,8 @@
 #include "interface/utils/file_utils.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/function/function.h"
+#include "interface/compiler_monitor/monitor_stage_scope.h"
+#include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/op_info_manager.h"
 #include "interface/operation/distributed/distributed_common.h"
@@ -229,7 +231,7 @@ void CodeGenNPU::GenCode(
         "Start Generate AI_CORE code for topFunc: %s, hash: %s", topFunc.GetMagicName().c_str(),
         topFunc.GetFunctionHash().c_str());
 
-    compileTasks_.clear();
+    Prepare(topFunc);
 
     std::deque<std::function<void(void)>> tasks;
     for (auto& subFuncPair : topFunc.rootFunc_->programs_) {
@@ -600,13 +602,23 @@ int CodeGenNPU::DoCompileCmd(const std::string& compileCmd) const
     ASSERT(CmpCodeErr::CMD_CHECK_FAILED, ret == 0)
         << "CheckInjectStr failed. errCode = " << ret << ", compileCmd is " << compileCmd;
 
-    ret = std::system(compileCmd.c_str());
+    int rootFuncIdx = MonitorManager::Instance().PrepareNextRootFunc();
+    {
+        MonitorStageScope compileCmdScope(STAGE_FUNC_TO_BIN, rootFuncIdx, rootFuncName_);
+        ret = std::system(compileCmd.c_str());
+    }
     if (ret != 0) {
         CODEGEN_LOGE_E(
             CmpCodeErr::COMPILE_CODE_FAILED, "kernel compilation failed, ret = %d\ncompile cmd is:\n %s", ret,
             compileCmd.c_str());
     }
     return ret;
+}
+
+void CodeGenNPU::Prepare(const Function& topFunc)
+{
+    compileTasks_.clear();
+    rootFuncName_ = topFunc.GetMagicName();
 }
 
 void EncodeWaitUntilInfo(const Operation& op, std::vector<int32_t>& code)

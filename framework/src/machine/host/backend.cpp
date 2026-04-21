@@ -1006,6 +1006,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::map<uint64_t, Function*> leafDict;
     std::mutex leafDictMutex;
 
+    MonitorManager::Instance().SetRootFuncCount(static_cast<int>(attr->funcGroup.devRootList.size()));
+
     std::deque<std::function<void(void)>> tasks;
     for (auto& devRoot : attr->funcGroup.devRootList) {
         std::function task = [&devRoot, &attr, &leafDict, &leafDictMutex]() {
@@ -1112,6 +1114,7 @@ MachineTask* GenCode(MachineTask* task, FunctionCache& cache)
      * the filepath of the object file is updated to the binPath_ member.
      */
     if (function->GetGraphType() == GraphType::TILE_GRAPH) {
+        MonitorManager::Instance().SetRootFuncCount(1);
         MonitorStageScope codeGenScope("CodeGen");
         COMPILER_LOGI("Start (TILE_GRAPH) CodeGen stage...");
         std::map<uint64_t, std::list<InvokeParaOffset>> invokeParaOffset;
