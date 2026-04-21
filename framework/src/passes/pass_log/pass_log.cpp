@@ -126,7 +126,7 @@ void ExtractPassLogByFunction(const Function& function)
     const std::string functionName = function.GetMagicName();
     const std::string outputDir = config::LogTopFolder();
     const std::string command = "python3 " + EscapeShellArg(scriptPath) + " " + EscapeShellArg(logPattern) + " -f " +
-                                EscapeShellArg(functionName) + " -o " + EscapeShellArg(outputDir);
+                                EscapeShellArg(functionName) + " -o " + EscapeShellArg(outputDir) + " --silentmode";
     int ret = std::system(command.c_str());
     if (ret != 0) {
         APASS_LOG_WARN_F(

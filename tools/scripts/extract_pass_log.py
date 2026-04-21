@@ -11,7 +11,6 @@
 import re
 import os
 import glob
-import sys
 import argparse
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -167,12 +166,15 @@ def main():
                        help='输出目录（默认：pass_logs）')
     parser.add_argument('-f', '--function-name', default=None,
                        help='仅提取指定function_name的日志（默认：提取全部）')
+    parser.add_argument('--silentmode', '--silent-mode', action='store_true',
+                       help='静默模式：不输出任何提示信息')
     
     args = parser.parse_args()
     
     log_patterns = args.log_files
     output_directory = args.output
     target_function_name = args.function_name
+    silent_mode = args.silentmode
     
     log_files = []
     for pattern in log_patterns:
@@ -181,7 +183,9 @@ def main():
             log_files.extend(matched_files)
     
     if not log_files:
-        sys.exit("Error, no log has been found.")
+        if not silent_mode:
+            sys.exit("Error, no log has been found.")
+        return
     
     log_files.sort()
     extract_pass_logs(log_files, output_directory, target_function_name)
