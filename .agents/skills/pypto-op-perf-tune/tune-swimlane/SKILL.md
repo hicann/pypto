@@ -644,181 +644,42 @@ python3 scripts/leafhash_to_code.py <output_dir>
 - [device_sched_mode 参数设置说明](../../../../docs/api/config/pypto-frontend-jit.md)
 
 
-## 性能优化建议库
-
-### 建议 1：气泡率过高
-
-**症状**：气泡率 > 10%
-
-**可能原因：**
-- 任务粒度过小
-- 调度策略不当
-- stitch 参数过小
-
-**优化建议**：
-1. **Stitch 调优（优先级高）**
-   ```python
-   @pypto.frontend.jit(
-       runtime_options={"stitch_function_max_num": 128}
-   )
-   ```
-
-2. **Loop Unroll（优先级高）**
-   ```python
-   for s2_idx in pypto.loop(s2_loop, unroll_list=[8, 4, 2, 1], name="LOOP_s2", idx_name="s2_idx"):
-       # 计算逻辑
-   ```
-
-3. **L1Reuse 优化**
-
-4. **调整任务粒度**
-- 增大 loop 的 tile size
-- 减少 loop 层级
-
-5. **合图调优**
-
-
-### 建议 2：核心利用率低
-
-**症状**：核心利用率 < 50%
-
-**可能原因：**
-- 等待时间过长
-- 任务调度不均衡
-- 内存访问冲突
-- **核未满**：任务数不足以分配到所有核
-
-**优化建议**：
-
-1. **⛔ 优先检查核使用率**（详见第 3 节）
-   - 统计每个 leafHash 占用的 core 数量
-   - 核未满 → 先通过减小 TileShape 增加任务数用满核
-
-2. **L2 亲和调度**
-   ```python
-   @pypto.jit(runtime_options={"device_sched_mode": 1})
-   ```
-
-3. **调整 TileSize**
-   ```python
-   pypto.set_cube_tile_shapes([128, 128], [128, 512], [128, 128])
-   ```
-
-4. **核满后再启用 CubeNBuffer 合并同构子图**
-   ```python
-   pypto.set_pass_options(cube_nbuffer_setting={-1: 4})
-   ```
-
-### 建议 3：核心负载不均衡
-
-**症状**：AicoreTime 差异 > 20%
-
-**可能原因：**
-- 任务分配不均
-- 任务执行时间差异大
-- 部分子图核未满，其他子图核已满
-
-**⛔ 必须按照第 3.3 节负载均衡优化流程系统化处理**：
-1. 按 total(us) 排序识别瓶颈子图
-2. 针对瓶颈子图调整 TileShape
-3. 每次只调一个子图，重新采集数据验证
-4. 瓶颈与次大差距 < 20% 或连续 3 轮无改善后停止
-
-3. **优化任务粒度**
-   - 调整 tile size 使任务更均匀
-
-4. **调整任务执行顺序**
-   - 使用 sg_set_scope 合并子图
-   ```python
-   pypto.set_pass_options(sg_set_scope=1)
-   # ... 操作 ...
-   pypto.set_pass_options(sg_set_scope=-1)
-   ```
-
-
 ## 调优检查清单
 
-**⛔ 必须按以下清单逐项执行。每项标记为 ✅已尝试 或 ❌已失败（附原因），禁止跳过。**
+**⛔ 必须按以下清单逐项执行。每项标记为 ✅已尝试 或 ❌已失败（附原因），禁止跳过。完整优化点信息参考 [shared/optimization_catalog.md](../shared/optimization_catalog.md)。**
 
 **优化优先级**：
-1. ⭐⭐⭐ **P0 - 核使用率分析** - **最重要**
-2. ⭐⭐⭐ **P1 - 负载均衡** - **最重要**
-3. ⭐⭐⭐ **P2 - 手动合图（sg_set_scope）** - **最重要**
-4. ⭐⭐ **P3 - 自动合图** - **很重要**
-5. ⭐ **P4 - 调度策略**
+1. ⭐⭐⭐ **P0 - 核使用率分析** → 详见 [S-1]
+2. ⭐⭐⭐ **P1 - 负载均衡** → 详见 [S-3]
+3. ⭐⭐⭐ **P2 - 手动合图（sg_set_scope）** → 详见 [S-4]
+4. ⭐⭐ **P3 - 自动合图** → 详见 [S-5][S-6][S-7][S-8]
+5. ⭐ **P4 - 调度策略** → 详见 [S-9][S-10]
 
-**🔥 P0 - 核使用率分析（合图前置条件）**：
-- [ ] 是否运行 analyze_core_usage.py 统计每个 leafHash 核使用率
-- [ ] 每个 NOT FULL 子图是否已尝试 TileShape 调整（减小 L0/L1 增加任务数）
+**🔥 P0 - 核使用率分析 [S-1]**（合图前置条件）：
+- [ ] [S-1] 是否运行 analyze_core_usage.py 统计每个 leafHash 核使用率
+- [ ] [S-2] 每个 NOT FULL 子图是否已尝试 TileShape 调整（减小 L0/L1 增加任务数）
 - [ ] 是否尝试完所有轴的 TileShape 调整后才判定"核无法再增"
 
-**🔥 P1 - 负载均衡（核填充后强制）**：
-- [ ] 是否按 total(us) 降序排列所有子图，识别瓶颈子图
+**🔥 P1 - 负载均衡 [S-3]**（核填充后强制）：
+- [ ] [S-3] 是否按 total(us) 降序排列所有子图，识别瓶颈子图
 - [ ] 瓶颈差距是否已量化（>20% 必须优化）
-- [ ] 是否针对瓶颈子图尝试了 TileShape 调整（每次只调一个子图）
+- [ ] [S-11] 是否针对瓶颈子图尝试了 TileShape 深度调优（每次只调一个子图）
 
-**🔥 P2 - 手动合图（sg_set_scope，最重要但最易跳过）**：
-- [ ] 是否运行 analyze_aiv_dep_chains.py 分析 AIV 依赖链
+**🔥 P2 - 手动合图 [S-4]**（最重要但最易跳过）：
+- [ ] [S-4] 是否运行 analyze_aiv_dep_chains.py 分析 AIV 依赖链
 - [ ] 是否检查了可合并的连续 Vector 操作（有直接数据依赖、同循环层级、无 Cube 夹杂）
 - [ ] 是否对每个可合并链段尝试了 sg_set_scope
 - [ ] 如果跳过此项，是否说明了具体原因（而非"觉得不适用"）
 
-**P3 - 自动合图**：
-- [ ] 是否对短耗时（<10us）AIV 任务尝试了 vec_nbuffer_setting + pg_upper_bound
-- [ ] 是否对核满的 AIC 子图尝试了 cube_l1_reuse_setting
-- [ ] 是否对核满的 AIC 子图尝试了 cube_nbuffer_setting
+**P3 - 自动合图 [S-5~S-8]**：
+- [ ] [S-5] 是否对短耗时（<10us）AIV 任务尝试了 vec_nbuffer_setting + pg_upper_bound
+- [ ] [S-6] 是否对核满的 AIC 子图尝试了 cube_l1_reuse_setting
+- [ ] [S-7] 是否对核满的 AIC 子图尝试了 cube_nbuffer_setting
+- [ ] [S-8] 如已配置 S-6/S-7，是否检查了协同使用是否过大
 
-**P4 - 调度策略**：
-- [ ] 是否尝试了 device_sched_mode 调整（1/2/3）
-- [ ] 是否尝试了 stitch_function_max_num 调整
-
-**清单使用规则**：
-1. 不适用的项必须说明具体原因
-2. 禁止凭感觉判断"不适用"而不验证——至少运行对应的分析脚本确认
-3. 所有适用的项尝试完后，"连续N轮无提升"退出条件才生效
-
-
-## 调优流程
-
-```
-┌────────────────────────────────────────────────────┐
-│                深度性能调优流程                      │
-├────────────────────────────────────────────────────┤
-│                                                    │
-│  1. 采集泳道图数据                                 │
-│     └─ debug_options={"runtime_debug_mode": 1}     │
-│                                                    │
-│  2. 分析泳道图                                     │
-│     ├─ 查看任务执行顺序                            │
-│     ├─ 识别气泡（等待调度时间）                    │
-│     └─ 分析核心利用率                              │
-│                                                    │
-│  3. ⛔ 核使用率分析（合图前置条件）                 │
-│     ├─ 统计每个 leafHash 占用的 core 数量          │
-│     ├─ 核未满 → 调整 TileShape 用满核 → 回到 1     │
-│     └─ 核已满/TileShape已充分调整 → 进入 3a        │
-│                                                    │
-│  3a. ⛔ 负载均衡优化（核填充后强制执行）            │
-│     ├─ 按 total(us) 排序识别瓶颈子图               │
-│     ├─ 瓶颈差距 > 20% → 调整 TileShape → 回到 1   │
-│     └─ 瓶颈差距 < 20% 或 3轮无改善 → 进入 4       │
-│                                                    │
-│  4. 合图调优                                       │
-│     ├─ AIC 核满 → L1Reuse / CubeNBuffer            │
-│     └─ AIV 核满 → VecNBuffer / sg_set_scope        │
-│                                                    │
-│  5. 调度策略调优                                   │
-│     └─ device_sched_mode 调整                      │
-│                                                    │
-│  6. 验证                                           │
-│     ├─ 重新编译运行                                │
-│     ├─ 检查精度                                    │
-│     └─ 对比性能数据                                │
-│                                                    │
-│  7. 迭代直到达到目标性能                           │
-│                                                    │
-└────────────────────────────────────────────────────┘
-```
+**P4 - 调度策略 [S-9~S-10]**：
+- [ ] [S-9] 是否尝试了 stitch_function_max_num 调整
+- [ ] [S-10] 是否尝试了 device_sched_mode 调整（1/2/3）
 
 
 ## 常见问题
