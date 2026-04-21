@@ -17,11 +17,12 @@
 #include <elf.h>
 #include <cstdio>
 #include <fstream>
+#include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
-#include "securec.h"
+#include "interface/utils/error_code.h"
 #include "topo_processor.h"
-#include "tilefwk/pypto_fwk_log.h"
+#include "securec.h"
 
 namespace npu::tile_fwk {
 std::optional<CacheValue> FunctionCache::Get(HashKey key)
@@ -58,7 +59,7 @@ void FunctionCache::UpdateTopoCache(const Function& func, CacheValue& value)
         offsetPtr[i] = curCoreFuncOffset;
         CoreFunctionTopo* tempPtr = reinterpret_cast<CoreFunctionTopo*>(topoPtr);
         tempPtr->coreType = static_cast<uint64_t>(func.GetSubFuncInvokeInfo(i).GetGraphType());
-        ASSERT(
+        ASSERT(FError::INVALID_TYPE,
             (tempPtr->coreType == static_cast<uint64_t>(CoreType::AIV)) ||
             (tempPtr->coreType == static_cast<uint64_t>(CoreType::AIC)) ||
             (tempPtr->coreType == static_cast<uint64_t>(CoreType::HUB)) ||
@@ -86,7 +87,7 @@ void FunctionCache::UpdateTopoCache(const Function& func, CacheValue& value)
         topoPtr += tempLength;
     }
     value.header.coreFunctionNum = topoNum;
-    ASSERT(topoNum != 0) << "Invalid topoNum: " << topoNum;
+    ASSERT(FError::INVALID_VAL, topoNum != 0) << "Invalid topoNum: " << topoNum;
 
     TopoProcessor processor(value.topoCache, topoNum);
     std::tuple<std::shared_ptr<CoreFunctionTopoCache>, uint64_t> newTopo = processor.MergeBatchDepend(10, 1);
@@ -131,7 +132,7 @@ void FunctionCache::UpdateBinCache(const Function& func, CacheValue& value)
     uint64_t totalSize = 0;
     for (auto& ele : func.programs_) {
         auto leafFuncAttr = ele.second->GetLeafFuncAttribute();
-        ASSERT(leafFuncAttr != nullptr) << "Leaf function attr not found";
+        ASSERT(FError::INVALID_VAL, leafFuncAttr != nullptr) << "Leaf function attr not found";
         auto binPath = leafFuncAttr->binPath;
         if (!RealPath(binPath).empty()) {
             auto binData = LoadBinData(binPath);
@@ -198,7 +199,7 @@ void FunctionCache::UpdateReadyFunction(const Function& func, CacheValue& value)
         index++;
     }
     value.header.readyCoreFunctionNum = readyNum;
-    ASSERT(value.header.readyCoreFunctionNum != 0)
+    ASSERT(FError::INVALID_VAL, value.header.readyCoreFunctionNum != 0)
         << "readyCoreFunctionNum is 0, value.header.readyCoreFunctionNum=" << value.header.readyCoreFunctionNum;
 }
 

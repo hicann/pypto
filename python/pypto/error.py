@@ -42,7 +42,7 @@ def _get_err_code(msg: Exception) -> int:
 
 class PyptoError(Exception):
     """Base exception class for all PyPTO errors.
-    
+
     Args:
         msg: Exception object or error message string.
         err_code: Error code (int). Defaults to _ERROR_CODE_UNKNOWN.
@@ -77,3 +77,15 @@ class ParserError(PyptoError):
 
 class RenderedParserError(ParserError):
     """Error class for diagnostics with rendered message."""
+
+
+class PyptoRtError(PyptoError):
+    """Runtime error class for all runtime errors.
+
+    Args:
+        msg: Exception object or error message string.
+    """
+
+    def __init__(self, msg: Union[str, Exception]):
+        err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
+        super().__init__(err_code, msg)
