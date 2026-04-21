@@ -20,7 +20,6 @@ __all__ = [
     "get_pass_configs"
 ]
 from enum import Enum
-from pypto.error import PyptoError, _get_err_code
 from . import pypto_impl
 
 
@@ -78,11 +77,9 @@ def get_pass_default_config(key: PassConfigKey, default_value: bool) -> bool:
         If the key is not a valid PassConfigKey enum value.
     """
     if not isinstance(default_value, bool):
-        raise PyptoError(TypeError(f"Expected boolean type, but received {type(default_value).__name__}"),
-        _get_err_code(TypeError("")))
+        raise TypeError(f"Expected boolean type, but received {type(default_value).__name__}")
     if not isinstance(key, PassConfigKey):
-        raise PyptoError(ValueError(f"key must be a member of PassConfigKey, got {key}. "),
-        _get_err_code(ValueError("")))
+        raise ValueError(f"key must be a member of PassConfigKey, got {key}. ")
     return pypto_impl.GetPassDefaultConfig(key.value, default_value)
 
 
@@ -104,11 +101,9 @@ def set_pass_default_config(key: PassConfigKey, value: bool):
         If the key is not a valid PassConfigKey enum value.
     """
     if not isinstance(value, bool):
-        raise PyptoError(TypeError(f"Expected boolean type, but received {type(value).__name__}"),
-        _get_err_code(TypeError("")))
+        raise TypeError(f"Expected boolean type, but received {type(value).__name__}")
     if not isinstance(key, PassConfigKey):
-        raise PyptoError(ValueError(f"key must be a member of PassConfigKey, got {key}. "),
-        _get_err_code(ValueError("")))
+        raise ValueError(f"key must be a member of PassConfigKey, got {key}. ")
     pypto_impl.SetPassDefaultConfig(key.value, value)
 
 
@@ -141,11 +136,9 @@ def get_pass_config(strategy: str, identifier: str, key: PassConfigKey, default_
         If the key is not a valid PassConfigKey enum value.
     """
     if not isinstance(default_value, bool):
-        raise PyptoError(TypeError(f"Expected boolean type, but received {type(default_value).__name__}"),
-        _get_err_code(TypeError("")))
+        raise TypeError(f"Expected boolean type, but received {type(default_value).__name__}")
     if not isinstance(key, PassConfigKey):
-        raise PyptoError(ValueError(f"key must be a member of PassConfigKey, got {key}. "),
-        _get_err_code(ValueError("")))
+        raise ValueError(f"key must be a member of PassConfigKey, got {key}. ")
     return pypto_impl.GetPassConfig(strategy, identifier, key.value, default_value)
 
 
@@ -173,11 +166,9 @@ def set_pass_config(strategy: str, identifier: str, key: PassConfigKey, value: b
         If the key is not a valid PassConfigKey enum value.
     """
     if not isinstance(value, bool):
-        raise PyptoError(TypeError(f"Expected boolean type, but received {type(value).__name__}"),
-        _get_err_code(TypeError("")))
+        raise TypeError(f"Expected boolean type, but received {type(value).__name__}")
     if not isinstance(key, PassConfigKey):
-        raise PyptoError(ValueError(f"key must be a member of PassConfigKey, got {key}. "),
-        _get_err_code(ValueError("")))
+        raise ValueError(f"key must be a member of PassConfigKey, got {key}. ")
     pypto_impl.SetPassConfig(strategy, identifier, key.value, value)
 
 
