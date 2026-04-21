@@ -110,13 +110,12 @@ struct ToSubMachineConfig {
 
 enum DeviceKernelRunMode : uint32_t {
     RUN_INVALID = 0,
-    RUN_UNIFIED_STREAM = 1,
-    RUN_SPLITTED_STREAM_CTRL = 2,
-    RUN_SPLITTED_STREAM_SCHE = 3,
+    RUN_SPLITTED_STREAM_CTRL = 1,
+    RUN_SPLITTED_STREAM_SCHE = 2,
 };
 
 struct DeviceKernelArgsParameter {
-    uint32_t runMode{RUN_UNIFIED_STREAM};
+    uint32_t runMode{RUN_INVALID};
     uint32_t p1;
     uint64_t globalRound{0};
 };

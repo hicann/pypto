@@ -159,6 +159,7 @@ TEST_F(TestDynamicDeviceRunner, test_launch_init)
     DeviceKernelArgs pyptoKernelArgs;
     DeviceArgs devKernelArgs;
     devKernelArgs.aicpuPerfAddr = 1;
+    pyptoKernelArgs.parameter.runMode = RUN_SPLITTED_STREAM_CTRL;
     pyptoKernelArgs.cfgdata = static_cast<int64_t*>(static_cast<void*>(&devKernelArgs));
     auto ret = DynTileFwkBackendKernelServer(&pyptoKernelArgs);
     EXPECT_EQ(ret, -1);

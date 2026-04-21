@@ -27,6 +27,7 @@
 namespace npu::tile_fwk::dynamic {
 using DeviceStream = unsigned long long;
 DeviceStream DeviceGetAicpuStream();
+DeviceStream DeviceGetCtrlStream();
 DeviceStream DeviceGetAicoreStream();
 
 class DeviceTensorData {
@@ -321,8 +322,8 @@ private:
 
 int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
     ExportedOperator* op, const std::vector<DeviceTensorData>& inputList,
-    const std::vector<DeviceTensorData>& outputList, DeviceStream aicpuStream, DeviceStream aicoreStream,
-    bool streamSynchronize, uint8_t* devCtrlCache = nullptr,
+    const std::vector<DeviceTensorData>& outputList, DeviceStream aicpuStream, DeviceStream ctrlStream,
+    DeviceStream aicoreStream, bool streamSynchronize, uint8_t* devCtrlCache = nullptr,
     const DeviceLauncherConfig& config = DeviceLauncherConfig());
 
 int DeviceSynchronize(DeviceStream aicpuStream, DeviceStream aicoreStream);

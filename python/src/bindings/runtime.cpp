@@ -268,10 +268,11 @@ std::string OperatorDeviceRunOnceDataFromDevice(
 
     auto aicoreStream = incomingStream;
     auto aicpuStream = DeviceGetAicpuStream();
+    auto ctrlStream = DeviceGetCtrlStream();
     auto workspaceDataAddr = static_cast<uintptr_t>(workspaceData);
     auto ctrlCache = static_cast<uintptr_t>(devCtrlCache);
     int rc = ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
-        op, inputs, outputs, aicpuStream, aicoreStream, false, reinterpret_cast<uint8_t*>(ctrlCache),
+        op, inputs, outputs, aicpuStream, ctrlStream, aicoreStream, false, reinterpret_cast<uint8_t*>(ctrlCache),
         DeviceLauncherConfig::CreateConfigWithWorkspaceAddr(workspaceDataAddr));
     if (rc < 0) {
         return "device run failed";

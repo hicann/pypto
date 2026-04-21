@@ -177,8 +177,8 @@ int DeviceLauncher::RunWithProfile(RtStream aicoreStream, RtStream aicpuStream, 
 
 int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
     Function* function, const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList,
-    RtStream aicpuStream, RtStream aicoreStream, bool streamSynchronize, CachedOperator* cachedOperator,
-    DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
+    RtStream aicpuStream, RtStream ctrlStream, RtStream aicoreStream, bool streamSynchronize,
+    CachedOperator* cachedOperator, DevControlFlowCache* inputDevCtrlCache, const DeviceLauncherConfig& config)
 {
     bool isCapture = false;
     MACHINE_LOGI("Kernel Launch");
@@ -246,7 +246,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
 
     DataDumpInit();
     rc = DeviceRunner::Get().DynamicLaunch(
-        aicpuStream, nullptr, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum);
+        aicpuStream, ctrlStream, aicoreStream, 0, &kArgs, config.blockdim, config.aicpuNum);
     if (rc < 0) {
         return rc;
     }
@@ -255,7 +255,7 @@ int DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
         return rc;
     }
     if (streamSynchronize) {
-        rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, nullptr, aicoreStream);
+        rc = DeviceRunner::Get().DynamicLaunchSynchronize(aicpuStream, ctrlStream, aicoreStream);
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, machine::GetRA()->CheckAllSentinels());
     }
     MACHINE_LOGI("finish Kernel Launch.");
@@ -278,6 +278,7 @@ int DeviceLauncher::DeviceRunOnce(
     auto& outputDataList = ProgramData::GetInstance().GetOutputDataList();
     auto aicpuStream = machine::GetRA()->GetScheStream();
     auto aicoreStream = machine::GetRA()->GetStream();
+    auto ctrlStream = machine::GetRA()->GetCtrlStream();
     std::vector<DeviceTensorData> inputDeviceDataList;
     std::vector<DeviceTensorData> outputDeviceDataList;
     DeviceMemoryUtils devMemoryUtilis(true);
@@ -292,7 +293,7 @@ int DeviceLauncher::DeviceRunOnce(
     }
 
     int rc = DeviceLaunchOnceWithDeviceTensorData(
-        function, inputDeviceDataList, outputDeviceDataList, aicpuStream, aicoreStream, true, nullptr,
+        function, inputDeviceDataList, outputDeviceDataList, aicpuStream, ctrlStream, aicoreStream, true, nullptr,
         reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
     CopyFromDev(DeviceMemoryUtils(), outputDataList);
     if (HasInplaceArgs(function) || outputDataList.size() == 0) {
@@ -355,6 +356,12 @@ DeviceStream DeviceGetAicpuStream()
     return reinterpret_cast<DeviceStream>(aicpuStreamValue);
 }
 
+DeviceStream DeviceGetCtrlStream()
+{
+    RtStream ctrlStreamValue = machine::GetRA()->GetCtrlStream();
+    return reinterpret_cast<DeviceStream>(ctrlStreamValue);
+}
+
 DeviceStream DeviceGetAicoreStream()
 {
     RtStream aicoreStreamValue = machine::GetRA()->GetStream();
@@ -363,14 +370,15 @@ DeviceStream DeviceGetAicoreStream()
 
 int ExportedOperatorDeviceLaunchOnceWithDeviceTensorData(
     ExportedOperator* op, const std::vector<DeviceTensorData>& inputList,
-    const std::vector<DeviceTensorData>& outputList, DeviceStream aicpuStream, DeviceStream aicoreStream,
-    bool streamSynchronize, uint8_t* devCtrlCache, const DeviceLauncherConfig& config)
+    const std::vector<DeviceTensorData>& outputList, DeviceStream aicpuStream, DeviceStream ctrlStream,
+    DeviceStream aicoreStream, bool streamSynchronize, uint8_t* devCtrlCache, const DeviceLauncherConfig& config)
 {
     RtStream aicpuStreamValue = reinterpret_cast<RtStream>(aicpuStream);
+    RtStream ctrlStreamValue = reinterpret_cast<RtStream>(ctrlStream);
     RtStream aicoreStreamValue = reinterpret_cast<RtStream>(aicoreStream);
     return DeviceLauncher::DeviceLaunchOnceWithDeviceTensorData(
-        op->GetFunction(), inputList, outputList, aicpuStreamValue, aicoreStreamValue, streamSynchronize, op,
-        reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
+        op->GetFunction(), inputList, outputList, aicpuStreamValue, ctrlStreamValue, aicoreStreamValue,
+        streamSynchronize, op, reinterpret_cast<DevControlFlowCache*>(devCtrlCache), config);
 }
 
 int DeviceSynchronize(DeviceStream aicpuStream, DeviceStream aicoreStream)

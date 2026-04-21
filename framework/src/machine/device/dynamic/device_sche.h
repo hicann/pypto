@@ -344,70 +344,6 @@ struct DynMachineManager {
         DEV_INFO("All schedule exited, destroy the machine.");
     }
 
-	// unified stream
-    void RunUnifiedPost(DevAscendProgram *devProg)
-    {
-        ReleaseRuntimeDataRingBuffer(devProg);
-        DEV_INFO("All schedule exited, destroy the machine.");
-        UnifiedDeInit();
-#if ENABLE_PERF_TRACE
-        PerfMtTrace(PERF_TRACE_EXIT, LastFinishThreadIdx_);
-        DEV_INFO("Begin dump machine perf trace:");
-        PerfEvtMgr::Instance().DumpPerfTrace(devProg->devArgs.scheCpuNum, "/tmp/tile_fwk_aicpu_perftrace.json");
-        DEV_IF_DEVICE { schMachine_.DumpAicorePerfTrace("tmp/tile_fwk_aicore_perftrace.json"); }
-        DEV_INFO("Finish dump machine perf trace.");
-#endif
-    }
-
-    int RunUnifiedStream(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
-    {
-        int ret = npu::tile_fwk::dynamic::DEVICE_MACHINE_OK;
-        DeviceArgs* devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
-        if (devArgs->scheCpuNum > devArgs->nrAicpu - 1) {
-            DEV_ERROR(
-                DevCommonErr::PARAM_CHECK_FAILED, "#dev.unistream.init.no_cpu: Aicpu num[%u] less than scheNum[%u].",
-                devArgs->nrAicpu, devArgs->scheCpuNum);
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
-        }
-        int threadIdx = -1;
-        DEV_INFO("Begin alloc thread.");
-        if (AllocThreadIdx(devArgs, threadIdx, threadIdx_) != npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
-            DEV_ERROR(
-                ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
-                sched_getcpu());
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
-        }
-
-        uint64_t allocThreadCycle = GetCycles();
-
-        if ((threadIdx != -1) && threadIdx <= static_cast<int>(devArgs->scheCpuNum)) {
-            ret = RunSche(kargs, entry, threadIdx);
-        } else {
-            threadIdx = ctrlcpuIdx_.fetch_add(1);
-            DEV_INFO("TaskType=%d.", static_cast<int>(devArgs->taskType));
-            if (devArgs->enableCtrl == 1 && threadIdx == CTRL_CPU_THREAD_IDX) {
-                ret = RunCtrl(kargs, entry, threadIdx);
-            } else {
-                threadIdx += devArgs->scheCpuNum;
-            }
-        }
-
-        PerfMtTrace(PERF_TRACE_BEGIN, threadIdx, kargs->taskWastTime);
-        PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx, allocThreadCycle);
-
-        DEV_INFO("ThreadLeave idx=%d ret=%d", threadIdx, ret);
-
-        PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
-        if (++finished_ == static_cast<std::atomic<int>>(devArgs->nrAicpu)) {
-            LastFinishThreadIdx_ = threadIdx;
-            if (unlikely(!schMachine_.CheckAndResetReg())) {
-                DEV_WARN("Some registers force closed!");
-            }
-            return npu::tile_fwk::dynamic::DEVICE_MACHINE_FINISHED;
-        }
-        return ret;
-    }
-
     int RunCtrlInitNoLock(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
 #ifdef __DEVICE__
@@ -418,45 +354,6 @@ struct DynMachineManager {
 #endif
         int ret = entry.kernelCtrlServerInit(kargs);
         return ret;
-    }
-
-    // UnifiedStream
-    int RunUnifiedCtrlInit(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
-    {
-        int ret = DEVICE_MACHINE_OK;
-        mutex_.lock();
-        if (!initCtrl_.load()) {
-            initCtrl_.store(true);
-            ret = RunCtrlInitNoLock(kargs, entry);
-        }
-        mutex_.unlock();
-        return ret;
-    }
-
-    // UnifiedStream
-    void UnifiedInit(DeviceArgs* args)
-    {
-        if (initCtrl_.load()) {
-            return;
-        }
-        initCtrl_.store(true);
-        ctrlcpuIdx_.store(0);
-        schMachine_.init(args->scheCpuNum);
-        schRunFailed_ = false;
-    }
-
-    // UnifiedStream
-    void UnifiedDeInit() {
-        threadIdx_ = 0;
-        finished_ = 0;
-        cpumask_ = 0;
-#ifndef __DEVICE__
-        simCpuId_ = 0;
-#endif
-        ctrlcpuIdx_ = 0;
-        die0ThreadIdx_ = 0;
-        die1ThreadIdx_ = 0;
-        initCtrl_.store(false);
     }
 
     __sighandler_t GetSigHandle(int signum)
@@ -521,25 +418,6 @@ struct DynMachineManager {
         RuntimeDataRingBufferHead* runtimeDataList = devProg->GetRuntimeDataList();
         runtimeDataList->Deallocate(runtimeDataList->GetRuntimeDataCurrent());
         DEV_INFO("Runtimedata: %lu, %lu", runtimeDataList->GetIndexFinished(), runtimeDataList->GetIndexPending());
-    }
-
-	// UnifiedStream
-    int EntryUnifiedStream(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
-    {
-        auto ret = RunUnifiedCtrlInit(kargs, entry);
-        if (ret != DEVICE_MACHINE_OK) {
-            DEV_ERROR(CtrlErr::CTRL_INIT_FAILED, "#dev.unistream.init.ctrl_init: Server init failed");
-            return ret;
-        }
-        DevAscendProgram* devProg = PtrToPtr<int64_t, DevAscendProgram>(kargs->cfgdata);
-        kargs->taskWastTime = GetCycles();
-        UnifiedInit(&devProg->devArgs);
-        int rc = RunUnifiedStream(kargs, entry);
-        if (rc == npu::tile_fwk::dynamic::DEVICE_MACHINE_FINISHED) {
-            RunUnifiedPost(devProg);
-            return DEVICE_MACHINE_OK;
-        }
-        return rc;
     }
 
     int EntrySplittedStreamCtrl(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
@@ -608,9 +486,6 @@ struct DynMachineManager {
     int Entry(DeviceKernelArgs* kargs, const KernelCtrlEntry& entry)
     {
         switch (kargs->parameter.runMode) {
-            case RUN_UNIFIED_STREAM:
-                return EntryUnifiedStream(kargs, entry); // UnifiedStream
-                break;
             case RUN_SPLITTED_STREAM_CTRL:
                 return EntrySplittedStreamCtrl(kargs, entry);
                 break;
@@ -627,8 +502,6 @@ struct DynMachineManager {
     }
 
     int LastFinishThreadIdx_{0};
-    std::atomic<int> threadIdx_{0}; // UnifiedStream
-    std::atomic<int> finished_{0}; // UnifiedStream
     std::atomic<uint64_t> cpumask_{0};
     std::atomic<uint32_t> schExitNum_{0};
 #ifndef __DEVICE__
@@ -645,10 +518,8 @@ struct DynMachineManager {
     struct sigaction oriILLAct_;
     struct sigaction oriBordAct_;
     std::atomic<bool> reset_{false};
-    std::atomic<bool> init_{false}; // UnifiedStream
     std::atomic<bool> initCtrl_{false};
 	std::atomic<bool> initSch_{false};
-    std::mutex mutex_; // UnifiedStream
     std::atomic<bool> schRunFailed_{false};
 
     struct SplittedInfo {

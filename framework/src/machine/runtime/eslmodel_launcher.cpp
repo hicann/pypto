@@ -60,24 +60,29 @@ int EslModelLauncher::DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStrea
     size_t shmSize = dynamic::DEVICE_TASK_CTRL_POOL_SIZE + dynamic::DEVICE_TASK_QUEUE_SIZE * devProg->devArgs.scheCpuNum;
     auto deviceTaskCtrlPoolAddr = devProg->devArgs.runtimeDataRingBufferAddr + sizeof(RuntimeDataRingBufferHead) + DEV_ARGS_SIZE;
     (void)memset_s(reinterpret_cast<void*>(deviceTaskCtrlPoolAddr), shmSize, 0, shmSize);
-    int threadNum = static_cast<int>(devProg->devArgs.nrAicpu);
-    threadNum = (devProg->devArgs.enableCtrl == 1) ? threadNum : threadNum + 1;
-    std::vector<std::thread> aicpus(threadNum);
+    int launchAiCpuNum = static_cast<int>(devProg->devArgs.nrAicpu + dynamic::MAX_CONTROL_FLOW_AICPU_NUM);
+    std::vector<std::thread> aicpus(launchAiCpuNum);
     std::atomic<int> idx{0};
     std::this_thread::sleep_for(std::chrono::seconds(30));
-    for (int i = 0; i < threadNum; i++) {
-        aicpus[i] = std::thread([&]() {
-            int tidx = idx++;
-            cpu_set_t cpuset;
-            CPU_ZERO(&cpuset);
-            CPU_SET(tidx, &cpuset);
-            std::string name = "aicput" + std::to_string(tidx);
-            pthread_setname_np(pthread_self(), name.c_str());
-            pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-            (void)DynTileFwkBackendKernelServer(kArgs);
-        });
+    auto threadFun = [&](uint32_t runMode) {
+        int tidx = idx++;
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(tidx, &cpuset);
+        std::string name = "aicput" + std::to_string(tidx);
+        pthread_setname_np(pthread_self(), name.c_str());
+        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+        DeviceKernelArgs localArgs = *kArgs;
+        localArgs.parameter.runMode = runMode;
+        (void)DynTileFwkBackendKernelServer(&localArgs);
+    };
+
+    aicpus[0] = std::thread(threadFun, RUN_SPLITTED_STREAM_CTRL);
+    for (int i = 1; i < launchAiCpuNum; i++) {
+        aicpus[i] = std::thread(threadFun, RUN_SPLITTED_STREAM_SCHE);
     }
-    for (int i = 0; i < threadNum; i++) {
+    
+    for (int i = 0; i < launchAiCpuNum; i++) {
         if (aicpus[i].joinable()) {
             aicpus[i].join();
         }
