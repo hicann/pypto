@@ -51,6 +51,21 @@ enum class CalculatorErrorScene : uint32_t {
 
     // MatMul 形状约束
     MATMUL_INPUT_SHAPE_MISMATCH = 0xBF00DU, // MatMul/MX MatMul 输入shape不符合预期
+
+    // Gather / GatherINUB 相关
+    GATHER_AXIS_OUT_OF_RANGE = 0xBF00EU,             // Gather 中 axis 超出 params 维度范围
+    GATHER_INUB_DEVICE_INVALID = 0xBF00FU,           // GatherINUB 要求 params/indices/pageTable/out 全部在 CPU 上
+    GATHER_INUB_AXIS_INVALID = 0xBF010U,             // GatherINUB 仅支持 axis == 0
+    GATHER_INUB_BLOCKSIZE_INVALID = 0xBF011U,        // GatherINUB 中 blockSize 非法（<= 0）
+    GATHER_INUB_SHAPE_INVALID = 0xBF012U,            // GatherINUB 输入/输出 shape 不满足约束
+    GATHER_INUB_DTYPE_INVALID = 0xBF013U,            // GatherINUB dtype 约束不满足
+    GATHER_INUB_LOGICAL_INDEX_INVALID = 0xBF014U,    // GatherINUB 逻辑索引越界或非法
+    GATHER_INUB_PAGETABLE_NUMEL_MISMATCH = 0xBF015U, // GatherINUB pageTable 展开后元素个数异常
+    GATHER_INUB_LOGICAL_BLOCK_INVALID = 0xBF016U,    // GatherINUB logical_block 越界或非法
+    GATHER_INUB_PHYSICAL_INDEX_INVALID = 0xBF017U,   // GatherINUB physical 索引非法
+
+    // FP4 打包转换相关
+    FP4_PACKED_LAST_DIM_INVALID = 0xBF018U, // FP4 packed 转换要求最后一维必须是偶数
 };
 
 } // namespace npu::tile_fwk

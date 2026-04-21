@@ -17,6 +17,8 @@
 #include <cmath>
 #include <limits>
 #include "fp_convert.h"
+#include "calc_error.h"
+#include "tilefwk/error.h"
 
 namespace npu::tile_fwk {
 
@@ -569,7 +571,8 @@ torch::Tensor Float32ToFp4Packed(const torch::Tensor& self, DataType actualType)
         return torch::empty(sizes, torch::TensorOptions().dtype(torch::kUInt8));
     }
     int64_t lastFloat = sizes.back();
-    TORCH_CHECK(lastFloat % 2 == 0, "FP4 packed conversion requires an even last dimension");
+    ASSERT(CalculatorErrorScene::FP4_PACKED_LAST_DIM_INVALID, lastFloat % 2 == 0)
+        << "FP4 packed conversion requires an even last dimension";
     int64_t lastPacked = lastFloat / 2;
     std::vector<int64_t> outSizes = sizes;
     outSizes.back() = lastPacked;
