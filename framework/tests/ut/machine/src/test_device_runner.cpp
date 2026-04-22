@@ -136,14 +136,11 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     int32_t subgraphId = 0;
     int32_t taskId = 0;
     TaskStat* taskStat = new TaskStat{1, 0, 0, 0, 1, 1};
-    npu::tile_fwk::dynamic::AiCpuTaskStat* aiCpuStat = new npu::tile_fwk::dynamic::AiCpuTaskStat{0, 0, 0, 0, 1};
-    npu::tile_fwk::dynamic::AiCpuHandShakeSta handShakeSta;
     prof.ProfGet(aicoreId, subgraphId, taskId, taskStat);
     prof.profLevel_ = npu::tile_fwk::dynamic::PROF_LEVEL_FUNC_LOG_PMU;
     uint32_t ctrl0val = 0;
     prof.addrs_.ctrl0Addr = &ctrl0val;
     prof.ProfStop();
-    delete aiCpuStat;
     delete taskStat;
     free(oriRegAddrs_);
 }

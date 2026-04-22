@@ -1093,15 +1093,6 @@ private:
             encodeTaskId, newTask, coreIdx, static_cast<int>(type));
     }
 
-    inline void SetAiCpuStat(int coreIdx, uint64_t taskId)
-    {
-        struct AiCpuTaskStat aiCpuTaskStat;
-        aiCpuTaskStat.taskId = taskId;
-        aiCpuTaskStat.coreId = aicoreHal_.GetPhyIdByBlockId(coreIdx);
-        aicoreProf_.AsmCntvc(aiCpuTaskStat.taskGetStart);
-        aicoreProf_.SetAiCpuTaskStat(taskId, aiCpuTaskStat);
-    };
-
     inline void AddReadyCoreIdx(int coreIdx, int type)
     {
         context_->coreIdxPosition_[coreIdx] = context_->coreRunReadyCnt_[type];

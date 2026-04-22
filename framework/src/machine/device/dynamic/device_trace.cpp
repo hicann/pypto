@@ -53,9 +53,7 @@ void* DeviceTrace::LoadLibrary(const std::string& libraryName) {
     void* handle = dlopen(libraryName.c_str(), RTLD_NOW);
     if (handle == nullptr) {
         const char* error = dlerror();
-        DEV_TRACE_LOG_ERROR(
-            DevCommonErr::LOAD_LIBRARY_FAILED, "Failed to load library %s: %s", libraryName.c_str(),
-            error ? error : "unknown error");
+        DEV_WARN("Failed to load library %s: %s", libraryName.c_str(), error ? error : "unknown error");
     }
     return handle;
 }
