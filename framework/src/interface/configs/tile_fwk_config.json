@@ -11,7 +11,10 @@
         "sg_set_scope": [-1, 0, 0],
         "cube_l1_reuse_setting": [],
         "cube_nbuffer_setting": [[-1, 1]],
-        "vec_nbuffer_setting": []
+        "vec_nbuffer_setting": [],
+        "cube_l1_reuse_setting_by_label": {},
+        "cube_nbuffer_setting_by_label": {},
+        "vec_nbuffer_setting_by_label": {}
     },
     "runtime": {
         "stitch_cfgcache_size": 0,

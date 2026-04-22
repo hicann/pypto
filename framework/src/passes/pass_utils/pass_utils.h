@@ -15,10 +15,29 @@
 
 #pragma once
 
+#include <map>
+#include <set>
+#include <string>
 #include "interface/operation/operation.h"
 #include "interface/tensor/logical_tensor.h"
+#include "interface/function/function.h"
 
 namespace npu::tile_fwk {
+
+inline std::map<std::string, std::set<int>> BuildLabelToColorsMap(const OperationsViewer& opOriList)
+{
+    std::map<std::string, std::set<int>> labelToColors;
+    for (size_t i = 0; i < opOriList.size(); i++) {
+        if (opOriList[i].GetSubgraphID() < 0) {
+            continue;
+        }
+        const std::string& label = opOriList[i].GetSemanticLabelStr();
+        if (!label.empty()) {
+            labelToColors[label].insert(opOriList[i].GetSubgraphID());
+        }
+    }
+    return labelToColors;
+}
 
 class FunctionUtils {
 public:

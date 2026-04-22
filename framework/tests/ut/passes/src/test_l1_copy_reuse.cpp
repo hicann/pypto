@@ -389,5 +389,35 @@ TEST_F(L1CopyInReuseTest, TestTensorReuseFailed)
     L1CopyInReuseMerge LCRM;
     EXPECT_EQ(LCRM.RunOnFunction(*function), FAILED);
 }
+
+TEST_F(L1CopyInReuseTest, TestSemanticLabelSetting)
+{
+    ComputationalGraphBuilder G;
+    std::vector<int64_t> tileShape{16, 16};
+    const int subGraphNum = 20;
+    InitGraphBuilder(G, tileShape, subGraphNum);
+
+    // Set semantic label for first few subgraphs
+    auto cubeLabel = std::make_shared<SemanticLabel>("CubeLabel", __FILE__, __LINE__);
+    for (int i = 1; i <= 3; i++) {
+        std::string strID = std::to_string(i);
+        G.GetOp("EXP_" + strID)->SetSemanticLabel(cubeLabel);
+    }
+
+    Function* function = G.GetFunction();
+
+    // L1Reuse: default merge=2, "CubeLabel" subgraphs override to 1 (subgraph granularity)
+    function->paramConfigs_.cubeL1ReuseSetting = {{-1, 2}};
+    function->paramConfigs_.cubeL1ReuseSettingByLabel = {{"CubeLabel", 1}};
+
+    // CubeNBuffer: default merge=4, "CubeLabel" group override to 2
+    function->paramConfigs_.cubeNBufferSetting = {{-1, 4}};
+    function->paramConfigs_.cubeNBufferSettingByLabel = {{"CubeLabel", 2}};
+
+    function->SetTotalSubGraphCount(subGraphNum);
+    L1CopyInReuseMerge LCRM;
+    EXPECT_EQ(LCRM.RunOnFunction(*function), SUCCESS);
+}
+
 } // namespace tile_fwk
 } // namespace npu

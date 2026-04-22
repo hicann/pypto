@@ -275,8 +275,9 @@ Function* BuildFunctionWithSubgraphs(
     G.GetOp("copy_in")->UpdateSubgraphID(0);
     for (int i = 1; i <= subGraphNum; i++) {
         std::string strID = std::to_string(i);
-        EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape,
-            {"tensor1_" + strID, "tensor2_" + strID, "tensor3_" + strID}), true);
+        EXPECT_EQ(
+            G.AddTensors(DataType::DT_FP32, tileShape, {"tensor1_" + strID, "tensor2_" + strID, "tensor3_" + strID}),
+            true);
         std::vector<std::vector<std::string>> iOperands{
             {"incast1"}, {"tensor1_" + strID}, {"tensor2_" + strID}, {"tensor3_" + strID}};
         std::vector<std::vector<std::string>> oOperands{
@@ -293,5 +294,31 @@ Function* BuildFunctionWithSubgraphs(
     EXPECT_EQ(G.SetOutCast({"outcast"}), true);
     return G.GetFunction();
 }
+
+TEST_F(NBufferMergeTest, TestSemanticLabelSetting)
+{
+    std::vector<int64_t> tileShape{16, 16};
+    const int mgVecParallelLb = 3;
+    const int subGraphNum = 4;
+    ComputationalGraphBuilder G;
+    Function* function = BuildFunctionWithSubgraphs(G, tileShape, subGraphNum);
+
+    // Set semantic label for subgraph 1 and 2
+    auto vecLabel = std::make_shared<SemanticLabel>("VecLabel", __FILE__, __LINE__);
+    for (int i = 1; i <= 2; i++) {
+        std::string strID = std::to_string(i);
+        G.GetOp("ABS_" + strID)->SetSemanticLabel(vecLabel);
+        G.GetOp("EXP_" + strID)->SetSemanticLabel(vecLabel);
+    }
+
+    // Default merge=4, but "VecLabel" override to 1 (no merge for labeled subgraphs)
+    function->paramConfigs_.vecNBufferSetting = {{-1, 4}};
+    function->paramConfigs_.vecNBufferSettingByLabel = {{"VecLabel", 1}};
+    function->paramConfigs_.mgVecParallelLb = mgVecParallelLb;
+    function->SetTotalSubGraphCount(subGraphNum + 1);
+    NBufferMerge NBM;
+    EXPECT_EQ(NBM.RunOnFunction(*function), SUCCESS);
+}
+
 } // namespace tile_fwk
 } // namespace npu

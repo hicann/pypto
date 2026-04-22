@@ -136,6 +136,8 @@ struct TypeInfo {
             typeInfos.insert({prefix, typeid(std::map<int64_t, int64_t>)});
             parse_range_info(jData, prefix + "_key", "key_minimum", "key_maximum");
             parse_range_info(jData, prefix + "_val", "value_minimum", "value_maximum");
+        } else if (typeHints == "stringmap") {
+            typeInfos.insert({prefix, typeid(std::map<std::string, int64_t>)});
         }
     }
 
@@ -477,6 +479,14 @@ private:
                 auto arr = pair.get<std::vector<int64_t>>();
                 if (arr.size() >= 2) {
                     mapJson[arr[0]] = arr[1];
+                }
+            }
+            root->AddValue(prefix, mapJson);
+        } else if (typeInfo.Type(prefix) == typeid(std::map<std::string, int64_t>)) {
+            std::map<std::string, int64_t> mapJson;
+            if (jData.is_object()) {
+                for (auto& it : jData.items()) {
+                    mapJson[it.key()] = it.value().get<int64_t>();
                 }
             }
             root->AddValue(prefix, mapJson);

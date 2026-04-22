@@ -114,6 +114,30 @@
                     "value_minimum": 0,
                     "value_maximum": 2147483647
                 },
+                "cube_l1_reuse_setting_by_label": {
+                    "type": "object",
+                    "typeHints": "stringmap",
+                    "label": {
+                        "zh": "合图参数，按语义标签配置L1数据复用子图的合并数量。",
+                        "en": "Graph merging parameter, used to configure the merging count of L1 data reuse subgraphs by semantic label."
+                    }
+                },
+                "cube_nbuffer_setting_by_label": {
+                    "type": "object",
+                    "typeHints": "stringmap",
+                    "label": {
+                        "zh": "合图参数，按语义标签配置相同结构AIC子图的合并数量。",
+                        "en": "Graph merging parameter, used to configure the merging count of AIC subgraphs with identical structures by semantic label."
+                    }
+                },
+                "vec_nbuffer_setting_by_label": {
+                    "type": "object",
+                    "typeHints": "stringmap",
+                    "label": {
+                        "zh": "合图参数，按语义标签配置相同结构AIV子图的合并数量。",
+                        "en": "Graph merging parameter, used to configure the merging count of AIV subgraphs with identical structures by semantic label."
+                    }
+                },
                 "mg_vec_parallel_lb": {
                     "type": "integer",
                     "label": {

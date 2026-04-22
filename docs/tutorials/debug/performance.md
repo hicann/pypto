@@ -329,6 +329,11 @@ Matmul运算场景下通过[set_pass_options](../../api/config/pypto-set_pass_op
     pass_options={"cube_l1_reuse_setting": {0: 8}}
 )
 
+# 全局自动配置的基础上，semantic_label为C1的op所在的子图配置为4
+@pypto.frontend.jit(
+    pass_options={"cube_l1_reuse_setting": {"C1": 4}}
+)
+
 # 全局配置为2的基础上，同构子图id为0的子图配置为8
 @pypto.frontend.jit(
     pass_options={"cube_l1_reuse_setting": {-1: 2, 0: 8}}

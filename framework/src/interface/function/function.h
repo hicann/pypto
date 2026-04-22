@@ -465,6 +465,9 @@ struct ParamConfigs {
     int mgVecParallelLb{48};
     bool pgSkipPartition{false};
     std::map<int64_t, int64_t> vecNBufferSetting;
+    std::map<std::string, int64_t> cubeL1ReuseSettingByLabel;
+    std::map<std::string, int64_t> cubeNBufferSettingByLabel;
+    std::map<std::string, int64_t> vecNBufferSettingByLabel;
     int copyOutResolveCoalescing{0};
     bool forceCombineAxis{false};
     bool combineAxis{false};
