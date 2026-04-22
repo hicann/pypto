@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import json
+import logging
 import os
 import re
 import shutil
@@ -70,6 +71,7 @@ class CheckContext:
     rules: list[dict[str, Any]]
     _ast_cache: dict[str, ast.Module] = field(default_factory=dict, repr=False)
     _parse_errors: dict[str, str] = field(default_factory=dict, repr=False)
+    _pypto_aliases_cache: dict[str, set[str]] = field(default_factory=dict, repr=False)
 
     def file_path(self, filename: str) -> str:
         return os.path.join(self.op_dir, filename)
@@ -100,6 +102,19 @@ class CheckContext:
 
     def parse_error(self, filename: str) -> str:
         return self._parse_errors.get(filename, "")
+
+    def pypto_aliases(self, filename: str) -> set[str]:
+        """获取指定文件中 pypto 包的 import 别名集合（带缓存）。"""
+        if filename in self._pypto_aliases_cache:
+            return self._pypto_aliases_cache[filename]
+        from .ast_helpers import _resolve_pypto_aliases  # noqa: PLC0415
+        tree = self.parse_file(filename)
+        if tree is None:
+            aliases = {"pypto"}
+        else:
+            aliases = _resolve_pypto_aliases(tree)
+        self._pypto_aliases_cache[filename] = aliases
+        return aliases
 
     def get_rule(self, rule_id: str) -> dict[str, Any]:
         for r in self.rules:
@@ -134,8 +149,12 @@ def register(rule_id: str):
 
 def _load_rules() -> list[dict[str, Any]]:
     rules_path = os.path.join(SCRIPT_DIR, "rules.json")
-    with open(rules_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(rules_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logging.getLogger(__name__).error("[pypto-op-lint FATAL] rules.json 加载失败: %s", e)
+        return []
     return data.get("rules", [])
 
 

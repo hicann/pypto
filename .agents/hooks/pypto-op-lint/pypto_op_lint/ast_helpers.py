@@ -7,15 +7,65 @@ import ast
 from typing import Optional
 
 
-def _get_jit_functions(tree: ast.Module) -> list[ast.FunctionDef]:
-    """找到所有被 @pypto.frontend.jit 装饰的函数"""
+def _resolve_pypto_aliases(tree: ast.Module) -> set[str]:
+    """解析模块中 pypto 包的所有 import 别名。
+
+    支持的模式:
+    - ``import pypto``            → {"pypto"}
+    - ``import pypto as pt``      → {"pt"}
+    - ``import pypto.frontend``   → {"pypto"}  (取顶层名)
+    - ``from pypto import frontend``  → 不影响包别名（frontend 不是 pypto 的别名）
+
+    返回所有指代 pypto 顶层包的名称集合，始终至少包含 "pypto" 自身。
+    """
+    aliases: set[str] = {"pypto"}
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "pypto" or alias.name.startswith("pypto."):
+                    # import pypto as pt → pt；import pypto → pypto
+                    resolved = alias.asname if alias.asname else alias.name.split(".")[0]
+                    aliases.add(resolved)
+    return aliases
+
+
+def _is_jit_decorator(dec: ast.AST, pypto_aliases: set[str]) -> bool:
+    """精确判断装饰器是否为 pypto.frontend.jit（含别名）。
+
+    匹配的合法模式（以 pypto_aliases={"pypto", "pt"} 为例）:
+    - @pypto.frontend.jit
+    - @pt.frontend.jit
+    - @pypto.frontend.jit(...)   (带参数调用)
+    - @pt.frontend.jit(...)
+    """
+    # 若装饰器是一个调用（如 @xxx.jit(...)），剥离到被调用对象
+    target = dec
+    if isinstance(target, ast.Call):
+        target = target.func
+
+    # 预期结构: Attribute(value=Attribute(value=Name(id=alias), attr='frontend'), attr='jit')
+    if not isinstance(target, ast.Attribute) or target.attr != "jit":
+        return False
+    mid = target.value
+    if not isinstance(mid, ast.Attribute) or mid.attr != "frontend":
+        return False
+    root = mid.value
+    if not isinstance(root, ast.Name):
+        return False
+    return root.id in pypto_aliases
+
+
+def _get_jit_functions(tree: ast.Module,
+                       pypto_aliases: set[str] | None = None) -> list[ast.FunctionDef]:
+    """找到所有被 @pypto.frontend.jit 装饰的函数（支持别名）"""
+    if pypto_aliases is None:
+        pypto_aliases = _resolve_pypto_aliases(tree)
     result = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
             continue
         for dec in node.decorator_list:
-            dec_str = ast.dump(dec)
-            if "pypto" in dec_str and "jit" in dec_str:
+            if _is_jit_decorator(dec, pypto_aliases):
                 result.append(node)
                 break
     return result
@@ -29,9 +79,10 @@ def _get_wrapper_functions(tree: ast.Module) -> list[ast.FunctionDef]:
     return wrappers
 
 
-def _resolve_primary_kernel_names(tree: ast.Module) -> set[str]:
+def _resolve_primary_kernel_names(tree: ast.Module,
+                                   pypto_aliases: set[str] | None = None) -> set[str]:
     """解析主 kernel 名称（优先取 wrapper 内直接调用的 jit 函数）。"""
-    jit_funcs = _get_jit_functions(tree)
+    jit_funcs = _get_jit_functions(tree, pypto_aliases)
     if not jit_funcs:
         return set()
     jit_names = {f.name for f in jit_funcs}
@@ -46,15 +97,16 @@ def _resolve_primary_kernel_names(tree: ast.Module) -> set[str]:
     if resolved:
         return resolved
 
-    # 无法解析 wrapper 调用关系时，降级为“全部 jit”。
+    # 无法解析 wrapper 调用关系时，降级为"全部 jit"。
     return jit_names
 
 
-def _get_primary_jit_functions(tree: ast.Module) -> list[ast.FunctionDef]:
-    primary_names = _resolve_primary_kernel_names(tree)
+def _get_primary_jit_functions(tree: ast.Module,
+                                pypto_aliases: set[str] | None = None) -> list[ast.FunctionDef]:
+    primary_names = _resolve_primary_kernel_names(tree, pypto_aliases)
     if not primary_names:
         return []
-    return [f for f in _get_jit_functions(tree) if f.name in primary_names]
+    return [f for f in _get_jit_functions(tree, pypto_aliases) if f.name in primary_names]
 
 
 def _has_loop_structure(tree: ast.AST) -> bool:
@@ -71,8 +123,11 @@ def _has_loop_structure(tree: ast.AST) -> bool:
     return False
 
 
-def _is_pypto_tensor_annotation(annotation: ast.AST) -> bool:
-    """检查注解是否为 pypto.Tensor 类型"""
+def _is_pypto_tensor_annotation(annotation: ast.AST,
+                                pypto_aliases: set[str] | None = None) -> bool:
+    """检查注解是否为 pypto.Tensor 类型（支持别名）"""
+    if pypto_aliases is None:
+        pypto_aliases = {"pypto"}
     func: ast.AST
     if isinstance(annotation, ast.Call):
         func = annotation.func
@@ -80,15 +135,16 @@ def _is_pypto_tensor_annotation(annotation: ast.AST) -> bool:
         func = annotation
 
     if isinstance(func, ast.Attribute):
-        return isinstance(func.value, ast.Name) and func.value.id == "pypto" and func.attr == "Tensor"
+        return isinstance(func.value, ast.Name) and func.value.id in pypto_aliases and func.attr == "Tensor"
     if isinstance(func, ast.Name):
         return func.id == "Tensor"
     return False
 
 
-def _is_non_tensor_annotation(annotation: ast.AST) -> bool:
+def _is_non_tensor_annotation(annotation: ast.AST,
+                              pypto_aliases: set[str] | None = None) -> bool:
     """检查注解是否为显式声明的非 Tensor 参数类型。"""
-    return annotation is not None and not _is_pypto_tensor_annotation(annotation)
+    return annotation is not None and not _is_pypto_tensor_annotation(annotation, pypto_aliases)
 
 
 def _has_test_level_markers(tree: ast.Module, source: str) -> tuple[bool, bool]:
@@ -125,7 +181,10 @@ def _has_test_level_markers(tree: ast.Module, source: str) -> tuple[bool, bool]:
 FP32_ONLY_OPS = {"sigmoid", "softmax", "sin", "cos"}
 
 
-def _is_fp32_only_call(node: ast.AST) -> bool:
+def _is_fp32_only_call(node: ast.AST,
+                       pypto_aliases: set[str] | None = None) -> bool:
+    if pypto_aliases is None:
+        pypto_aliases = {"pypto"}
     if not isinstance(node, ast.Call):
         return False
     if not isinstance(node.func, ast.Attribute):
@@ -133,13 +192,16 @@ def _is_fp32_only_call(node: ast.AST) -> bool:
     owner = node.func.value
     if not isinstance(owner, ast.Name):
         return False
-    if owner.id != "pypto":
+    if owner.id not in pypto_aliases:
         return False
     return node.func.attr in FP32_ONLY_OPS
 
 
-def _extract_symbolic_dynamic_aliases(tree: ast.Module) -> set[str]:
-    """提取模块级别指向 pypto.DYNAMIC/pypto.DYN 的符号名。"""
+def _extract_symbolic_dynamic_aliases(tree: ast.Module,
+                                      pypto_aliases: set[str] | None = None) -> set[str]:
+    """提取模块级别指向 pypto.DYNAMIC/pypto.DYN 的符号名（支持别名）。"""
+    if pypto_aliases is None:
+        pypto_aliases = _resolve_pypto_aliases(tree)
     aliases: set[str] = set()
     for node in ast.iter_child_nodes(tree):
         if not isinstance(node, ast.Assign):
@@ -149,25 +211,30 @@ def _extract_symbolic_dynamic_aliases(tree: ast.Module) -> set[str]:
         target = node.targets[0].id
         value = node.value
         if isinstance(value, ast.Attribute):
-            if isinstance(value.value, ast.Name) and value.value.id == "pypto" and value.attr in ("DYNAMIC", "DYN"):
+            if (isinstance(value.value, ast.Name)
+                and value.value.id in pypto_aliases
+                and value.attr in ("DYNAMIC", "DYN")):
                 aliases.add(target)
         elif isinstance(value, ast.Name) and value.id in ("DYNAMIC", "DYN"):
             aliases.add(target)
     return aliases
 
 
-def _shape_has_dynamic(shape_node: ast.AST, dynamic_aliases: set[str]) -> bool:
-    """递归判断 shape 注解中是否包含动态维度声明。"""
+def _shape_has_dynamic(shape_node: ast.AST, dynamic_aliases: set[str],
+                       pypto_aliases: set[str] | None = None) -> bool:
+    """递归判断 shape 注解中是否包含动态维度声明（支持别名）。"""
+    if pypto_aliases is None:
+        pypto_aliases = {"pypto"}
     if isinstance(shape_node, ast.Attribute):
         owner = shape_node.value
-        if isinstance(owner, ast.Name) and owner.id == "pypto" and shape_node.attr in ("DYNAMIC", "DYN"):
+        if isinstance(owner, ast.Name) and owner.id in pypto_aliases and shape_node.attr in ("DYNAMIC", "DYN"):
             return True
     if isinstance(shape_node, ast.Name):
         return shape_node.id in dynamic_aliases or shape_node.id in ("DYNAMIC", "DYN")
     if isinstance(shape_node, (ast.List, ast.Tuple)):
-        return any(_shape_has_dynamic(elem, dynamic_aliases) for elem in shape_node.elts)
+        return any(_shape_has_dynamic(elem, dynamic_aliases, pypto_aliases) for elem in shape_node.elts)
     for child in ast.iter_child_nodes(shape_node):
-        if _shape_has_dynamic(child, dynamic_aliases):
+        if _shape_has_dynamic(child, dynamic_aliases, pypto_aliases):
             return True
     return False
 
@@ -231,9 +298,10 @@ def _extract_shapes_from_test_ast(tree: ast.Module) -> set[tuple[int, ...]]:
     return shapes
 
 
-def _extract_jit_assigned_names(tree: ast.Module) -> set[str]:
+def _extract_jit_assigned_names(tree: ast.Module,
+                                pypto_aliases: set[str] | None = None) -> set[str]:
     names: set[str] = set()
-    for func in _get_jit_functions(tree):
+    for func in _get_jit_functions(tree, pypto_aliases):
         for node in ast.walk(func):
             if isinstance(node, ast.Assign):
                 for target in node.targets:

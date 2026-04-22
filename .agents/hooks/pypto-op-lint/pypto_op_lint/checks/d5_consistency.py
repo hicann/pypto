@@ -88,7 +88,8 @@ def check_ol31(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL31", "SKIP", f"{impl_file} 无法解析")
-    jit_funcs = _get_primary_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_primary_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL31", "SKIP", "无 jit 函数")
 
@@ -97,19 +98,19 @@ def check_ol31(ctx: CheckContext) -> Finding:
         return ctx.make_finding("OL31", "PASS",
             f"{DESIGN_FILE} front matter 未声明动态轴，无需检查")
 
-    dynamic_aliases = _extract_symbolic_dynamic_aliases(tree)
+    dynamic_aliases = _extract_symbolic_dynamic_aliases(tree, aliases)
     has_dynamic_in_impl = False
     has_unparameterized_tensor = False
     for func in jit_funcs:
         for arg in func.args.args:
             ann = arg.annotation
-            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann):
+            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann, aliases):
                 continue
             # pypto.Tensor() 无参数 => 所有维度隐式动态，兼容任何 dynamic_axes 声明
             if not ann.args:
                 has_unparameterized_tensor = True
                 break
-            if _shape_has_dynamic(ann.args[0], dynamic_aliases):
+            if _shape_has_dynamic(ann.args[0], dynamic_aliases, aliases):
                 has_dynamic_in_impl = True
                 break
         if has_dynamic_in_impl or has_unparameterized_tensor:
@@ -152,7 +153,8 @@ def check_ol43(ctx: CheckContext) -> Finding:
     if tree is None:
         return ctx.make_finding("OL43", "SKIP", f"{impl_file} 不存在或无法解析")
 
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL43", "SKIP", "未找到 JIT 函数")
 
@@ -423,7 +425,8 @@ def check_ol37(ctx: CheckContext) -> Finding:
         return ctx.make_finding("OL37", "SKIP", f"{impl_file} 不存在或无法解析")
 
     design_names = _extract_design_identifiers(design_content)
-    impl_names = _extract_jit_assigned_names(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    impl_names = _extract_jit_assigned_names(tree, aliases)
     impl_blacklist = {
         "i", "j", "k", "n", "m", "x", "y", "z", "tmp", "temp", "result", "out",
         "input", "output",

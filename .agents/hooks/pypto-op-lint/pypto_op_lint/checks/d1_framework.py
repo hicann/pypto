@@ -25,7 +25,8 @@ def check_ol01(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL01", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if jit_funcs:
         func = jit_funcs[0]
         return ctx.make_finding("OL01", "PASS",
@@ -47,7 +48,8 @@ def check_ol02(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL02", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL02", "SKIP", "无 jit 函数")
     for func in jit_funcs:
@@ -76,7 +78,8 @@ def check_ol03(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL03", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL03", "SKIP", "无 jit 函数")
     for func in jit_funcs:
@@ -95,7 +98,8 @@ def check_ol04(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL04", "SKIP", f"{impl_file} 不存在或无法解析")
-    for func in _get_jit_functions(tree):
+    aliases = ctx.pypto_aliases(impl_file)
+    for func in _get_jit_functions(tree, aliases):
         for node in ast.walk(func):
             if isinstance(node, ast.Call):
                 call_str = ast.dump(node.func)
@@ -115,7 +119,8 @@ def check_ol05(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL05", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL05", "SKIP", "无 jit 函数")
     for func in jit_funcs:
@@ -125,9 +130,9 @@ def check_ol05(ctx: CheckContext) -> Finding:
                     f"jit 函数参数 `{arg.arg}` 缺少类型注解",
                     file=impl_file, line=func.lineno)
             # 非张量参数（int/float 等标量）跳过 Tensor 注解检查
-            if _is_non_tensor_annotation(arg.annotation):
+            if _is_non_tensor_annotation(arg.annotation, aliases):
                 continue
-            if not _is_pypto_tensor_annotation(arg.annotation):
+            if not _is_pypto_tensor_annotation(arg.annotation, aliases):
                 return ctx.make_finding("OL05", "FAIL",
                     f"jit 函数张量参数 `{arg.arg}` 注解必须为 pypto.Tensor",
                     file=impl_file, line=func.lineno)
@@ -142,7 +147,8 @@ def check_ol06(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL06", "SKIP", f"{impl_file} 不存在或无法解析")
-    for func in _get_jit_functions(tree):
+    aliases = ctx.pypto_aliases(impl_file)
+    for func in _get_jit_functions(tree, aliases):
         for node in ast.walk(func):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                     and node.func.id in ("min", "max")):
@@ -203,7 +209,8 @@ def check_ol23(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL23", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_primary_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_primary_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL23", "SKIP", "无 jit 函数")
     if any(_has_loop_structure(func) for func in jit_funcs):
@@ -221,7 +228,8 @@ def check_ol25(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL25", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL25", "SKIP", "无 jit 函数")
     for func in jit_funcs:
@@ -229,9 +237,9 @@ def check_ol25(ctx: CheckContext) -> Finding:
             ann = arg.annotation
             if ann is None:
                 continue
-            if _is_non_tensor_annotation(ann):
+            if _is_non_tensor_annotation(ann, aliases):
                 continue
-            if not _is_pypto_tensor_annotation(ann):
+            if not _is_pypto_tensor_annotation(ann, aliases):
                 continue
             if not isinstance(ann, ast.Call):
                 continue
@@ -256,7 +264,8 @@ def check_ol26(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL26", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL26", "SKIP", "无 jit 函数")
     for func in jit_funcs:
@@ -265,9 +274,9 @@ def check_ol26(ctx: CheckContext) -> Finding:
             ann = arg.annotation
             if ann is None:
                 continue
-            if _is_non_tensor_annotation(ann):
+            if _is_non_tensor_annotation(ann, aliases):
                 seen_non_tensor = True
-            elif _is_pypto_tensor_annotation(ann):
+            elif _is_pypto_tensor_annotation(ann, aliases):
                 if seen_non_tensor:
                     return ctx.make_finding("OL26", "FAIL",
                         f"jit 函数 {func.name} 中张量参数 `{arg.arg}` 出现在非张量参数之后，"
@@ -284,19 +293,20 @@ def check_ol28(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL28", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL28", "SKIP", "无 jit 函数")
     for func in jit_funcs:
         used_fp32_only = set()
         for node in ast.walk(func):
-            if _is_fp32_only_call(node):
+            if _is_fp32_only_call(node, aliases):
                 used_fp32_only.add(node.func.attr)
         if not used_fp32_only:
             continue
         for arg in func.args.args:
             ann = arg.annotation
-            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann):
+            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann, aliases):
                 continue
             if len(ann.args) >= 2:
                 dtype_str = ast.dump(ann.args[1])
@@ -318,20 +328,21 @@ def check_ol29(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(impl_file)
     if tree is None:
         return ctx.make_finding("OL29", "SKIP", f"{impl_file} 不存在或无法解析")
-    jit_funcs = _get_primary_jit_functions(tree)
+    aliases = ctx.pypto_aliases(impl_file)
+    jit_funcs = _get_primary_jit_functions(tree, aliases)
     if not jit_funcs:
         return ctx.make_finding("OL29", "SKIP", "无 jit 函数")
     tensor_count = 0
     has_dynamic = False
-    dynamic_aliases = _extract_symbolic_dynamic_aliases(tree)
+    dynamic_aliases = _extract_symbolic_dynamic_aliases(tree, aliases)
     for func in jit_funcs:
         for arg in func.args.args:
             ann = arg.annotation
-            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann):
+            if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann, aliases):
                 continue
             tensor_count += 1
             if ann.args:
-                if _shape_has_dynamic(ann.args[0], dynamic_aliases):
+                if _shape_has_dynamic(ann.args[0], dynamic_aliases, aliases):
                     has_dynamic = True
     if tensor_count == 0:
         return ctx.make_finding("OL29", "SKIP", "无 Tensor 注解")

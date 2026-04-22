@@ -61,7 +61,8 @@ def check_ol17(ctx: CheckContext) -> Finding:
     tree = ctx.parse_file(test_file)
     if tree is None:
         return ctx.make_finding("OL17", "SKIP", f"{test_file} 不存在或无法解析")
-    jit_funcs = _get_jit_functions(tree)
+    aliases = ctx.pypto_aliases(test_file)
+    jit_funcs = _get_jit_functions(tree, aliases)
     if jit_funcs:
         func = jit_funcs[0]
         return ctx.make_finding("OL17", "FAIL",
