@@ -231,6 +231,7 @@ stest:
       - TestIndexPut_/IndexPut_OperationTest.TestIndexPut_/42
       - TestExpand/ExpandOperationTest.TestExpand/4
       - TestExpand/ExpandOperationTest.TestExpand/20
+      - TestExpand/ExpandOperationTest.TestExpand/42
       - TestMinimum/MinimumOperationTest.TestMinimum/12
       - TestMaximum/MaximumOperationTest.TestMaximum/12
       - TestMinimum/MinimumOperationTest.TestMinimum/19

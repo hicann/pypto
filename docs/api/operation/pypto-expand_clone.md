@@ -10,7 +10,7 @@
 
 ## 功能说明
 
-将输入Tensor在唯一等于1的轴上广播以匹配Shape，返回真实占内存的新Tensor。
+将输入Tensor在等于1的轴上广播以匹配Shape，返回真实占内存的新Tensor。
 
 ## 函数原型
 
@@ -38,7 +38,7 @@ expand_clone(
 
 ## 约束说明
 
-1.  只能一维广播，输入Tensor被广播的轴的Shape大小要为1。
+1.  支持多维广播，输入Tensor被广播的轴的Shape大小要为1。
 2.  input的viewshape与 input 维度相同，viewshape\[dim\]=1，input\[dim\]=1, 其中dim为被拓展轴，其余维度不做限制。举例如下：
     1.  \[a,1\] 拓展到\[a,5\]，其中dim=1，表示在dim 1 上进行拓展。
     2.  len\(viewshape\)=2 并且 viewshape\[dim\]=1
