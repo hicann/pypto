@@ -19,6 +19,9 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
 def get_device_id():
     if 'TILE_FWK_DEVICE_ID' not in os.environ:
         logging.info("Please set TILE_FWK_DEVICE_ID")
@@ -43,8 +46,8 @@ def test_fwd(m, k, n, device_id):
     x = torch.randn(m, k, dtype=torch.bfloat16, device=device) / math.sqrt(m)
     w_g = torch.randn(k, n, dtype=torch.bfloat16, device=device) / math.sqrt(k)
     w_fc = torch.randn(k, n, dtype=torch.bfloat16, device=device) / math.sqrt(k)
-    b_g = torch.randn(n, dtype=torch.bfloat16, device=device) / math.sqrt(n)
-    b_fc = torch.randn(n, dtype=torch.bfloat16, device=device) / math.sqrt(n)
+    b_g = torch.randn(1, n, dtype=torch.bfloat16, device=device) / math.sqrt(n)
+    b_fc = torch.randn(1, n, dtype=torch.bfloat16, device=device) / math.sqrt(n)
     y_golden = golden_fused_swiglu_fwd(x, w_g, w_fc, b_g, b_fc)
     y_out = torch.empty(m, n, dtype=torch.bfloat16, device=device)
 
@@ -52,6 +55,7 @@ def test_fwd(m, k, n, device_id):
     fused_swiglu_fwd_kernel(x, w_g, w_fc, b_g, b_fc, y_out)
 
     assert_allclose(y_out.cpu().float().numpy(), y_golden.cpu().float().numpy(), rtol=0.0078125, atol=0.0001)
+    logging.info(f"\n=== Forward Pass ===")
 
 
 def main():

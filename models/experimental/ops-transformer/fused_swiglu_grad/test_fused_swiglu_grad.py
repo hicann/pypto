@@ -19,6 +19,9 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
 def get_device_id():
     if 'TILE_FWK_DEVICE_ID' not in os.environ:
         logging.info("Please set TILE_FWK_DEVICE_ID")
@@ -40,7 +43,7 @@ def golden_fused_swiglu_bwd(dy, g, fc, w_g, w_fc, x):
 
 
 def test_bwd(m, k, n, device_id):
-    logging.info(f"\n=== Forward Test [{m}, {k}] @ [{k}, {n}] ===")
+    logging.info(f"\n=== Backward Test [{m}, {k}] @ [{k}, {n}] ===")
     device = f'npu:{device_id}'
     np.random.seed(0)
     torch.manual_seed(0)
@@ -71,6 +74,7 @@ def test_bwd(m, k, n, device_id):
     assert_allclose(dw_fc_out.cpu().float().numpy(), dw_fc_golden.cpu().float().numpy(), rtol=0.0078125, atol=0.0001)
     assert_allclose(db_g_out.cpu().float().numpy(), db_g_golden.cpu().float().numpy(), rtol=0.0078125, atol=0.0001)
     assert_allclose(db_fc_out.cpu().float().numpy(), db_fc_golden.cpu().float().numpy(), rtol=0.0078125, atol=0.0001)
+    logging.info(f"\n=== Backward Pass ===")
 
 
 def main():

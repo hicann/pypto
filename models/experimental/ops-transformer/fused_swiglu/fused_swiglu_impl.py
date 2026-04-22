@@ -56,21 +56,22 @@ def fused_swiglu_fwd_kernel(
     pypto.experimental.set_operation_options(combine_axis=True)
     m = x.shape[0]
     k = x.shape[1]
-    tile_m = 1024
+    tile_m = 512
     loop_count = (m + tile_m - 1) // tile_m
+    pypto.set_vec_tile_shapes(128, 128)
+    b_g_fp32 = pypto.cast(b_g, pypto.DT_FP32)
+    b_fc_fp32 = pypto.cast(b_fc, pypto.DT_FP32)
 
     for idx in pypto.loop(loop_count, name="LOOP_BWD_DW", idx_name="idx"):
         tile_offset = idx * tile_m
         valid_m = (m - tile_offset).min(tile_m)
         x_tile = pypto.view(x, [tile_m, k], [tile_offset, 0], valid_shape=[valid_m, k])
         pypto.set_cube_tile_shapes([128, 128], [128, 256], [128, 128])
-        g_tile = pypto.matmul(x_tile, w_g, pypto.DT_BF16)
-        fc_tile = pypto.matmul(x_tile, w_fc, pypto.DT_BF16)
+        g_tile = pypto.matmul(x_tile, w_g, pypto.DT_FP32, extend_params={'bias_tensor': b_g_fp32})
+        fc_tile = pypto.matmul(x_tile, w_fc, pypto.DT_FP32, extend_params={'bias_tensor': b_fc_fp32})
         pypto.set_vec_tile_shapes(128, 128)
-        g_bias = g_tile + b_g
-        fc_bias = fc_tile + b_fc
-        sigmoid_g = pypto.sigmoid(g_bias)
-        silu_g = g_bias * sigmoid_g
-        y_result = silu_g * fc_bias
+        sigmoid_g = pypto.sigmoid(g_tile)
+        silu_g = g_tile * sigmoid_g
+        y_result = silu_g * fc_tile
         y_bf16 = pypto.cast(y_result, pypto.DT_BF16)
         y[tile_offset:, 0:] = y_bf16
