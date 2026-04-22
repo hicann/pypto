@@ -285,7 +285,7 @@ def softmax(x, is_fp16=False):
     # Q常驻，0代表第一组mmad，4代表4次matmul合并
     "cube_l1_reuse_setting": {0: 4}},
     host_options={"compile_monitor_enable": True},
-    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
+    debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
 )
 def ifa_func_kernel(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -297,8 +297,10 @@ def ifa_func_kernel(
 ):
     # 1. 添加支持动态的config
     pypto.experimental.set_operation_options(combine_axis=True)
-
     atten_cfg, tile_cfg = get_common_config()
+    if tile_cfg.c1_tile_shape is None:
+        set_qwen_common_config()
+        atten_cfg, tile_cfg = get_common_config()
     softmax_scale = atten_cfg.softmax_scale
 
     # 2. 从入参拿到输入和输出tensor
@@ -430,7 +432,7 @@ def ifa_func_kernel(
                             pypto.set_vec_tile_shapes(v2_tile[0], v2_tile[1])
                             oi_update[:] = oi_update * update_mul + oi_tmp
                         if pypto.is_loop_end(s2_idx):
-                            oi_final = pypto.div(oi_update, sum_update)
+                            oi_final = pypto.div(oi_update, sum_update, precision_type=pypto.DivAlgorithm.INTRINSIC)
                             pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
                             oi_final_3d = pypto.cast(
                                 pypto.reshape(oi_final, [1, g_tile, dn]),
@@ -448,7 +450,7 @@ def ifa_func_kernel(
     "cube_nbuffer_setting": {1: 4}
     },
     host_options={"compile_monitor_enable": True},
-    debug_options={"runtime_debug_mode": 0, "compile_debug_mode": 0}
+    debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
 )
 def ifa_func_kernel_for_950(
     q: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
@@ -460,6 +462,9 @@ def ifa_func_kernel_for_950(
 ):
     pypto.experimental.set_operation_options(combine_axis=True)
     atten_cfg, tile_cfg = get_common_config()
+    if tile_cfg.c1_tile_shape is None:
+        set_qwen_common_config(case_950=1, b=16, s1=1, s2=8192)
+        atten_cfg, tile_cfg = get_common_config()
     softmax_scale = atten_cfg.softmax_scale
 
      # 2. 从入参拿到输入和输出tensor
@@ -530,7 +535,6 @@ def ifa_func_kernel_for_950(
                         # c1
                         # 9. 下面是flash attention的计算逻辑  m 128  k=128  n=128
                         pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
-                        # 后续开启other pypto.set_pass_options(sg_set_scope=10001)
                         # 后续开启 pypto.set_pass_options(sg_set_scope=5001)
                         sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False, b_trans=True)
                         # 后续开启 pypto.set_pass_options(sg_set_scope=-1)
@@ -538,7 +542,7 @@ def ifa_func_kernel_for_950(
                                 valid_shape=[g_tile, actual_s2_tile])
                         # v1
                         pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
-                        # 后续开启 pypto.set_pass_options(sg_set_scope=5002)
+                        # 后续开启 pypto.set_pass_options(sg_set_scope=5001)
                         sij_scale = pypto.mul(sij, softmax_scale)
                         amax_ij = pypto.amax(sij_scale, dim=-1, keepdim=True)
                         tsub = pypto.sub(sij_scale, amax_ij)
@@ -556,7 +560,7 @@ def ifa_func_kernel_for_950(
                                 [block_size, dn], [block_idx_vaild * block_size, 0])
                         vj_assemble = pypto.view(vj_assemble, [s2_tile, dn], [0, 0],
                                         valid_shape=[actual_s2_tile, dn])
-                        # 后续开启 pypto.set_pass_options(sg_set_scope=5003)
+                        # 后续开启 pypto.set_pass_options(sg_set_scope=5001)
                         pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
                         mm2_res = pypto.matmul(vec1_res_fp16, vj_assemble, pypto.DT_FP32)
                         # 后续开启 pypto.set_pass_options(sg_set_scope=-1)
@@ -568,7 +572,7 @@ def ifa_func_kernel_for_950(
                             oi_tmp = mm2_res
                             oi_update[:] = pypto.tensor(oi_tmp.shape, pypto.DT_FP32, "oi_update")
                             if pypto.is_loop_end(s2_idx):
-                                oi_update[:] = pypto.div(oi_tmp, sum_local)
+                                oi_update[:] = pypto.div(oi_tmp, sum_local, precision_type=pypto.DivAlgorithm.INTRINSIC)
                                 pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
                                 oi_update_3d = pypto.cast(pypto.reshape(oi_update, [1, g_tile, dn]),
                                                         dtype)
@@ -599,7 +603,8 @@ def ifa_func_kernel_for_950(
                             oi_tmp = pypto.add(oi_last, oi_flash)
                             if pypto.is_loop_end(s2_idx):
                                 pypto.set_vec_tile_shapes(16, v2_tile[0], v2_tile[1])
-                                oi_update_tmp = pypto.div(oi_tmp, sum_update)
+                                oi_update_tmp = pypto.div(oi_tmp, sum_update,
+                                                          precision_type=pypto.DivAlgorithm.INTRINSIC)
                                 oi_update_3d = pypto.cast(pypto.reshape(oi_update_tmp, [1, g_tile, dn]), dtype)
                                 # 11. 将结果搬运到输出tensor上
                                 pypto.assemble(oi_update_3d, oi_ofs, atten_out)
@@ -690,10 +695,9 @@ def ifa(atten_cfg, case_950=0):
 
 
 @pytest.mark.soc("950")
-@pytest.mark.skip(reason="mix bug")
 def test_ifa_for_950():
     # 1. 设置参数
-    for case_i in range(3):
+    for case_i in range(4):
         set_qwen_common_config(case_950=1, b=16, s1=1, s2=8192)
         if case_i == 1:
             set_qwen_common_config(case_950=1, b=64, s1=1, s2=8192)
@@ -720,7 +724,7 @@ def test_ifa_for_950():
 
 @pytest.mark.soc("950", "910")
 def test_ifa():
-    for case_i in range(1):
+    for case_i in range(2):
         # 1. 设置参数
         set_qwen_common_config(case_950=0, b=8, s1=1, s2=16384)
         if case_i == 1:
