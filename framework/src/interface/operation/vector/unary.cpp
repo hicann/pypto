@@ -73,6 +73,8 @@ void TiledUnaryOperation(
 Tensor Exp(const Tensor& self, ExpAlgorithm precisionType)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Exp");
 
     auto [result, op] =
         TensorUnaryOperationWithOp<UnaryOpType::EXP>(*Program::GetInstance().GetCurrentFunction(), self.GetStorage());
@@ -83,8 +85,11 @@ Tensor Exp(const Tensor& self, ExpAlgorithm precisionType)
 Tensor Ln(const Tensor& operand, LogAlgorithm precisionType)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "Ln");
 
-    auto [result, op] = TensorUnaryOperationWithOp<UnaryOpType::LN>(*Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+    auto [result, op] =
+        TensorUnaryOperationWithOp<UnaryOpType::LN>(*Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
     op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
     return Tensor(result);
 }
@@ -92,13 +97,9 @@ Tensor Ln(const Tensor& operand, LogAlgorithm precisionType)
 Tensor IsFinite(const Tensor& self)
 {
     DECLARE_TRACER();
-    std::vector<DataType> SUPPORT_TYPES = {DT_FP16,  DT_FP32,   DT_BF16,   DT_INT16, DT_INT4,   DT_INT8,
-                                           DT_INT32, DT_UINT16, DT_UINT32, DT_UINT8, DT_UINT64, DT_INT64};
-
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(SUPPORT_TYPES.begin(), SUPPORT_TYPES.end(), self.GetDataType()) != SUPPORT_TYPES.end())
-        << "`IsFinite` only supports FP16/BF16/FP32/INT8/UINT8/INT16/UINT16/INT32/UINT32/INT64/UINT64 in datatypes!";
+    std::unordered_set<DataType> supportedTypes = {DT_FP16,  DT_FP32,   DT_BF16,   DT_INT16, DT_INT4,   DT_INT8,
+                                                   DT_INT32, DT_UINT16, DT_UINT32, DT_UINT8, DT_UINT64, DT_INT64};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "IsFinite");
     RETURN_CALL(
         UnaryOperation<UnaryOpType::ISFINITE>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         DT_BOOL);
@@ -107,6 +108,8 @@ Tensor IsFinite(const Tensor& self)
 Tensor Rsqrt(const Tensor& self, RsqrtAlgorithm precisionType)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Rsqrt");
 
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
@@ -134,6 +137,8 @@ Tensor Rsqrt(const Tensor& self, RsqrtAlgorithm precisionType)
 Tensor Sqrt(const Tensor& self, SqrtAlgorithm precisionType)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Sqrt");
 
     auto [result, op] =
         TensorUnaryOperationWithOp<UnaryOpType::SQRT>(*Program::GetInstance().GetCurrentFunction(), self.GetStorage());
@@ -144,12 +149,16 @@ Tensor Sqrt(const Tensor& self, SqrtAlgorithm precisionType)
 Tensor Relu(const Tensor& self)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Relu");
     RETURN_CALL(UnaryOperation<UnaryOpType::RELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
 Tensor Ceil(const Tensor& self)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Ceil");
 
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
@@ -170,6 +179,8 @@ Tensor Ceil(const Tensor& self)
 Tensor Floor(const Tensor& self)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Floor");
 
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
@@ -190,6 +201,8 @@ Tensor Floor(const Tensor& self)
 Tensor Trunc(const Tensor& self)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Trunc");
 
     auto castSelf = self.GetStorage();
     if (self.GetDataType() != DataType::DT_FP32) {
@@ -213,6 +226,8 @@ Tensor BitwiseNot(const Tensor& self)
     if (self.GetDataType() == DT_BOOL) {
         return LogicalNot(self);
     }
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseNot");
     RETURN_CALL(
         UnaryOperation<UnaryOpType::BITWISENOT>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
@@ -220,8 +235,11 @@ Tensor BitwiseNot(const Tensor& self)
 Tensor Reciprocal(const Tensor& operand, RecipAlgorithm precisionType)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "Reciprocal");
 
-    auto [result, op] = TensorUnaryOperationWithOp<UnaryOpType::RECIPROCAL>(*Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
+    auto [result, op] = TensorUnaryOperationWithOp<UnaryOpType::RECIPROCAL>(
+        *Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
     op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
     return Tensor(result);
 }
@@ -229,14 +247,14 @@ Tensor Reciprocal(const Tensor& operand, RecipAlgorithm precisionType)
 Tensor Abs(const Tensor& self)
 {
     DECLARE_TRACER();
-
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "Abs");
     RETURN_CALL(UnaryOperation<UnaryOpType::ABS>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 
 Tensor Hub(const Tensor& self)
 {
     DECLARE_TRACER();
-
     RETURN_CALL(UnaryOperation<UnaryOpType::HUB>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
 

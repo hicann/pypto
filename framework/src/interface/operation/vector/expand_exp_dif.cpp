@@ -63,6 +63,10 @@ void TiledExpandExpDifOperation(
 Tensor ExpandExpDif(const Tensor& input, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(input.GetStorage(), other.GetStorage(), "EXPANDEXPDIF");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(input.GetStorage(), supportedTypes, "EXPANDEXPDIF");
+    CheckBinaryInputTensors(input.GetStorage(), other.GetStorage(), "EXPANDEXPDIF");
     config::SetOperationOption(KEY_COMBINE_AXIS, true);
     RETURN_CALL(
         BinaryOperation<BinaryOpType::EXPANDEXPDIF>, *Program::GetInstance().GetCurrentFunction(), input, other);

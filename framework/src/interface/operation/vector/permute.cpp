@@ -225,14 +225,15 @@ void PermuteElementOperationTileFunc(
 Tensor Permute(const Tensor& self, std::vector<int> perm)
 {
     DECLARE_TRACER();
+    CheckTensorShapeSize(self.GetStorage(), "PERMUTE");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_UINT16, DT_FP32, DT_INT32, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "PERMUTE");
+    CheckTensorDimRange(self.GetStorage(), 1, 5, "PERMUTE");
 
     const int shapeSize = static_cast<int>(self.GetShape().size());
 
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, perm.size() == static_cast<size_t>(shapeSize))
         << "Permute dim num should match input dim num. Expected: " << shapeSize << ", Got: " << perm.size();
-
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shapeSize >= 1 && shapeSize <= 5)
-        << "Permute only supports 2D to 5D tensors. Got: " << shapeSize << "D";
 
     if (shapeSize == 1) {
         return self;

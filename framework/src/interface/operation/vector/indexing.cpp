@@ -228,8 +228,14 @@ void CheckIndexAddParamsInvalid(
         axis < static_cast<int>(self.GetShape().size()) && axis >= -static_cast<int>(self.GetShape().size()))
         << "axis out of range of shape size";
     int axis_ = axis < 0 ? self.GetShape().size() + axis : axis;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == src.GetShape().size())
-        << "shape size of self and src should be equal";
+
+    CheckTensorDimRange(self.GetStorage(), 2, 5, "INDEXADD");
+    CheckTensorDimRange(indices.GetStorage(), 1, 1, "INDEXADD");
+    CheckTensorShapeSize(self.GetStorage(), "INDEXADD");
+    CheckTensorShapeSize(src.GetStorage(), "INDEXADD");
+    CheckTensorShapeSize(indices.GetStorage(), "INDEXADD");
+    std::vector<LogicalTensorPtr> tensors = {self.GetStorage(), src.GetStorage()};
+    CheckTensorsDimConsistency(tensors, "INDEXADD");
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src.GetShape()[axis_] == indices.GetShape()[0])
         << "src shape[axis] and indices[0] must equal";
     for (size_t i = 0; i < self.GetShape().size(); ++i) {
@@ -240,13 +246,14 @@ void CheckIndexAddParamsInvalid(
             << "src shape and self shape should be equal";
     }
 
-    const std::unordered_set<DataType> SRC_SUPPORT_DATATYPES = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT8};
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, SRC_SUPPORT_DATATYPES.count(self.GetDataType()) > 0)
-        << "The datatype is not supported";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetDataType() == src.GetDataType())
-        << "Datatype of src and self should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices.GetDataType() == DT_INT32 || indices.GetDataType() == DT_INT64)
-        << "Datatype of indices is incorrect";
+    // 检查数据类型和格式
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_INT8};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "INDEXADD");
+    CheckTensorsDataTypeConsistency(self.GetStorage(), src.GetStorage(), "INDEXADD");
+    CheckTensorsFormatConsistency(self.GetStorage(), src.GetStorage(), "INDEXADD");
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
+    CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "INDEXADD");
+
     // 检验 alpha 溢出
     if (CheckAlphaOverflow(alpha, self.GetDataType())) {
         ASSERT(VectorErrorCode::ERR_RUNTIME_LOGIC, false)
@@ -360,11 +367,17 @@ void InnerTiledIndexAdd(
 void TiledIndexAdd(Function& function, const TileShape& tileShape, const IndexAddPara& indexaddPara)
 {
     // Check Operands Valid
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indexaddPara.selfInput->GetShape().size() == indexaddPara.selfInput->GetOffset().size())
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_INVALID,
+        indexaddPara.selfInput->GetShape().size() == indexaddPara.selfInput->GetOffset().size())
         << "The size of indexaddPara selfinput shape and selfinput offset should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indexaddPara.srcInput->GetShape().size() == indexaddPara.srcInput->GetOffset().size())
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_INVALID,
+        indexaddPara.srcInput->GetShape().size() == indexaddPara.srcInput->GetOffset().size())
         << "The size of indexaddPara srcInput shape and srcInput offset should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indexaddPara.indicesInput->GetShape().size() == indexaddPara.indicesInput->GetOffset().size())
+    ASSERT(
+        VectorErrorCode::ERR_PARAM_INVALID,
+        indexaddPara.indicesInput->GetShape().size() == indexaddPara.indicesInput->GetOffset().size())
         << "The size of indexaddPara indicesInput shape and indicesInput offset should be equal";
 
     IndexAddTileInfoPara indexaddTileInfo{
@@ -538,10 +551,25 @@ void TensorGatherMask(
     }
 }
 
+void CheckGatherParamsInvalid(const Tensor& params, const Tensor& indices, int axis, const std::string& opName)
+{
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16,    DT_BF16,    DT_INT32,  DT_INT16,
+                                                   DT_INT8, DT_FP8E4M3, DT_FP8E5M2, DT_FP8E8M0};
+    CheckTensorDataType(params.GetStorage(), supportedTypes, opName);
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
+    CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, opName);
+    CheckTensorDimRange(params.GetStorage(), 2, 4, opName);
+    CheckTensorDimRange(indices.GetStorage(), 1, 2, opName);
+    CheckTensorShapeSize(params.GetStorage(), opName);
+    CheckTensorShapeSize(indices.GetStorage(), opName);
+    CheckAxisRange(params, axis);
+    CheckTensorsFormatConsistency(params.GetStorage(), indices.GetStorage(), opName);
+}
+
 Tensor Gather(const Tensor& params, const Tensor& indices, int axis)
 {
     DECLARE_TRACER();
-
+    CheckGatherParamsInvalid(params, indices, axis, "GATHER");
     RETURN_CALL(
         GatherOperation, *Program::GetInstance().GetCurrentFunction(), params.GetStorage(), indices.GetStorage(), axis);
 }
@@ -549,7 +577,7 @@ Tensor Gather(const Tensor& params, const Tensor& indices, int axis)
 Tensor TensorIndex(const Tensor& params, const Tensor& indices)
 {
     DECLARE_TRACER();
-
+    CheckGatherParamsInvalid(params, indices, 0, "TENSORINDEX");
     // TensorIndex默认按0轴进行gather
     RETURN_CALL(
         GatherOperation, *Program::GetInstance().GetCurrentFunction(), params.GetStorage(), indices.GetStorage(), 0);
@@ -639,12 +667,8 @@ LogicalTensorPtr TensorGatherElementOperation(
 Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
 {
     DECLARE_TRACER();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, params.GetShape().size() == indices.GetShape().size())
-        << "The shape size of params and indices should be equal";
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_INVALID,
-        axis < static_cast<int>(params.GetShape().size()) && axis >= -static_cast<int>(params.GetShape().size()))
-        << "The axis out of range of params shape size";
+    std::vector<LogicalTensorPtr> tensors = {params.GetStorage(), indices.GetStorage()};
+    CheckTensorsDimConsistency(tensors, "GATHERELEMENTS");
     CheckAxisRange(params, axis); // 支持负轴
     for (size_t i = 0; i < params.GetShape().size(); ++i) {
         if (static_cast<int>(i) == axis) {
@@ -653,14 +677,14 @@ Tensor GatherElements(const Tensor& params, const Tensor& indices, int axis)
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices.GetShape()[i] <= params.GetShape()[i])
             << "The shape of params and indices should be equal";
     }
-    std::vector<DataType> SUPPORT_DATATYPES = {
-        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(SUPPORT_DATATYPES.begin(), SUPPORT_DATATYPES.end(), params.GetDataType()) != SUPPORT_DATATYPES.end())
-        << "The datatype is not supported";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices.GetDataType() == DT_INT32 || indices.GetDataType() == DT_INT64)
-        << "The datatype of indices is incorrect";
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
+    CheckTensorDataType(params.GetStorage(), supportedTypes, "GATHERELEMENTS");
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
+    CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "GATHERELEMENTS");
+    CheckTensorDimRange(params.GetStorage(), 1, 4, "GATHERELEMENTS");
+    CheckTensorShapeSize(params.GetStorage(), "GATHERELEMENTS");
+    CheckTensorShapeSize(indices.GetStorage(), "GATHERELEMENTS");
+    CheckTensorsFormatConsistency(params.GetStorage(), indices.GetStorage(), "GATHERELEMENTS");
 
     RETURN_CALL(
         GatherElementOperation, *Program::GetInstance().GetCurrentFunction(), params.GetStorage(), indices.GetStorage(),
@@ -773,13 +797,12 @@ void TensorScatterElementS(Function& function, const ScatterElementSPara& scatte
 static void CheckScatterElementSParamsInvalid(
     const Tensor& self, const Tensor& indices, int axis, const ScatterMode reduce)
 {
-    DataType idx_dtype = indices.GetDataType();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, idx_dtype == DataType::DT_INT32 || idx_dtype == DataType::DT_INT64)
-        << "Scatter: 'indices' must be of integer type (int32 or int64)";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == indices.GetShape().size())
-        << "The shape size of self and indices should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis < static_cast<int>(self.GetShape().size()))
-        << "The axis should be less than size of self shape";
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
+    CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
+    std::vector<LogicalTensorPtr> tensors = {self.GetStorage(), indices.GetStorage()};
+    CheckTensorsDimConsistency(tensors, "SCATTER");
+    CheckTensorsFormatConsistency(self.GetStorage(), indices.GetStorage(), "SCATTER");
+    CheckAxisRange(self, axis);
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, reduce <= ScatterMode::UNKNOWN)
         << "The ScatterMode of reduce should be less than UNKNOWN";
     for (size_t i = 0; i < self.GetShape().size(); i++) {
@@ -789,12 +812,14 @@ static void CheckScatterElementSParamsInvalid(
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices.GetShape()[i] <= self.GetShape()[i])
             << "The shape of indices and self should be equal";
     }
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SCATTER");
+    CheckTensorShapeSize(self.GetStorage(), "SCATTER");
+    CheckTensorShapeSize(indices.GetStorage(), "SCATTER");
 }
 
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, int axis, ScatterMode reduce)
 {
     DECLARE_TRACER();
-
     DataType orgDtype = self.GetDataType();
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
     if ((orgDtype == DataType::DT_FP16 || orgDtype == DataType::DT_BF16) &&
@@ -807,7 +832,7 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Element& src, in
     }
     axis = axis < 0 ? operandCast.GetShape().size() + axis : axis;
     CheckScatterElementSParamsInvalid(operandCast, indices, axis, reduce);
-    Tensor result(operandCast.GetStorage()->tensor->datatype, operandCast.GetShape());
+    Tensor result(operandCast.GetStorage()->Datatype(), operandCast.GetShape());
     CALL(
         ScatterElementS, *Program::GetInstance().GetCurrentFunction(),
         {result.GetStorage(), operandCast.GetStorage(), indices.GetStorage(), src, axis, static_cast<int>(reduce)});
@@ -939,15 +964,15 @@ void TensorScatter(Function& function, const ScatterPara& scatterPara)
 static void CheckScatterParamsInvalid(
     const Tensor& self, const Tensor& indices, const Tensor& src, int axis, const ScatterMode reduce)
 {
-    DataType idx_dtype = indices.GetDataType();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, idx_dtype == DataType::DT_INT32 || idx_dtype == DataType::DT_INT64)
-        << "Scatter: 'indices' must be of integer type (int32 or int64)";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == indices.GetShape().size())
-        << "The shape size of self and indices should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src.GetShape().size() == indices.GetShape().size())
-        << "The shape size of src and indices should be equal";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis < static_cast<int>(self.GetShape().size()))
-        << "The axis should be less than size of self shape";
+    CheckTensorsDataTypeConsistency(self.GetStorage(), src.GetStorage(), "SCATTER");
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
+    CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, "SCATTER");
+    std::vector<LogicalTensorPtr> tensors = {self.GetStorage(), indices.GetStorage(), src.GetStorage()};
+    CheckTensorsDimConsistency(tensors, "SCATTER");
+    CheckTensorsFormatConsistency(self.GetStorage(), indices.GetStorage(), "SCATTER");
+    CheckTensorsFormatConsistency(self.GetStorage(), src.GetStorage(), "SCATTER");
+    CheckTensorsFormatConsistency(indices.GetStorage(), src.GetStorage(), "SCATTER");
+    CheckAxisRange(self, axis);
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, reduce <= ScatterMode::UNKNOWN)
         << "The ScatterMode of reduce should be less than UNKNOWN";
     for (size_t i = 0; i < self.GetShape().size(); i++) {
@@ -959,14 +984,15 @@ static void CheckScatterParamsInvalid(
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices.GetShape()[i] <= self.GetShape()[i])
             << "The shape size of src and indices should be equal";
     }
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SCATTER");
+    CheckTensorShapeSize(self.GetStorage(), "SCATTER");
+    CheckTensorShapeSize(indices.GetStorage(), "SCATTER");
+    CheckTensorShapeSize(src.GetStorage(), "SCATTER");
 }
 
 Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int axis, ScatterMode reduce)
 {
     DECLARE_TRACER();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetDataType() == src.GetDataType())
-        << "Datatype of self and src should be equal";
-
     DataType orgDtype = self.GetDataType();
     auto operandSelfCast = Tensor(DataType::DT_FP32, self.GetShape());
     auto operandSrcCast = Tensor(DataType::DT_FP32, src.GetShape());
@@ -984,7 +1010,7 @@ Tensor Scatter(const Tensor& self, const Tensor& indices, const Tensor& src, int
     }
     axis = axis < 0 ? operandSelfCast.GetShape().size() + axis : axis;
     CheckScatterParamsInvalid(operandSelfCast, indices, operandSrcCast, axis, reduce);
-    Tensor result(operandSelfCast.GetStorage()->tensor->datatype, operandSelfCast.GetShape());
+    Tensor result(operandSelfCast.GetStorage()->Datatype(), operandSelfCast.GetShape());
     CALL(
         Scatter, *Program::GetInstance().GetCurrentFunction(),
         {result.GetStorage(), operandSelfCast.GetStorage(), indices.GetStorage(), operandSrcCast.GetStorage(), axis,
@@ -1245,14 +1271,13 @@ static void CheckScatterUpdateInput(const Tensor& input)
         VectorErrorCode::ERR_PARAM_INVALID,
         input.GetShape().size() == NUM_VALUE_2 || input.GetShape().size() == NUM_VALUE_4)
         << "The shape size of input is invaild";
+    CheckTensorDimRange(input.GetStorage(), 2, 4, "SCATTERUPDATE");
 }
 
 static void CheckScatterUpdateIndex(const Tensor& index)
 {
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        index.GetDataType() == DT_INT64 || index.GetDataType() == DT_INT32 || index.GetDataType() == DT_INT16)
-        << "The datatype of input is not supported";
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT64, DT_INT32, DT_INT16};
+    CheckTensorDataType(index.GetStorage(), indexSupportedTypes, "SCATTERUPDATE");
     ASSERT(
         VectorErrorCode::ERR_PARAM_INVALID, index.GetShape().size() == NUM_VALUE_2 &&
                                                 index.GetShape(NUM_VALUE_0) != NUM_VALUE_0 &&
@@ -1262,8 +1287,8 @@ static void CheckScatterUpdateIndex(const Tensor& index)
 
 static void CheckScatterUpdateInvalid(const Tensor& dst, const Tensor& index, const Tensor& src)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src.GetShape().size() == dst.GetShape().size())
-        << "The shape size of src and dst should be equal";
+    std::vector<LogicalTensorPtr> tensors = {dst.GetStorage(), src.GetStorage()};
+    CheckTensorsDimConsistency(tensors, "SCATTERUPDATE");
     CheckScatterUpdateIndex(index);
     CheckScatterUpdateInput(src);
     CheckScatterUpdateInput(dst);
@@ -1273,14 +1298,13 @@ Tensor ScatterUpdate(
     const Tensor& dst, const Tensor& index, const Tensor& src, int axis, std::string cacheMode, int chunkSize)
 {
     DECLARE_TRACER();
-
     CheckScatterUpdateInvalid(dst, index, src);
     CheckAxisRange(dst, axis);
 
-    Tensor result(dst.GetStorage()->tensor->datatype, dst.GetStorage()->GetShape(), "", dst.Format());
+    Tensor result(dst.GetStorage()->Datatype(), dst.GetStorage()->GetShape(), "", dst.Format());
     if (std::find(dst.GetStorage()->GetShape().begin(), dst.GetStorage()->GetShape().end(), -1) !=
         dst.GetStorage()->GetShape().end()) {
-        Tensor resTmp(dst.GetStorage()->tensor->datatype, dst.GetStorage()->GetDynValidShape(), "", dst.Format());
+        Tensor resTmp(dst.GetStorage()->Datatype(), dst.GetStorage()->GetDynValidShape(), "", dst.Format());
         result = resTmp;
     }
 
@@ -1380,47 +1404,62 @@ void TensorIndexPut(
     Function& function, const LogicalTensorPtr& self, const LogicalTensors& indices, const LogicalTensorPtr& values,
     const LogicalTensorPtr& dst, bool accumulate)
 {
-    Shape selfShape(self->shape);
-    Shape valuesShape(values->shape);
-    size_t dimSelf = selfShape.size();
-    size_t indicesSize = indices.size();
-    int indicesShape = indices[0]->GetShape()[0];
-    size_t dimValues = valuesShape.size();
-    int valuesFirstDim = valuesShape[0];
-    for (size_t i = 0; i < indicesSize; i++) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices[i]->GetShape().size() == 1)
-            << "Tensors in indices should be 1D";
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices[i]->GetShape()[0] == indicesShape)
-            << "Tensors in indices should have the same shape";
-    }
-    constexpr size_t num1 = 1;
-    constexpr size_t num4 = 4;
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indicesSize >= num1 && indicesSize <= num4)
-        << "indicesSize is out of range [1, 4]";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dimSelf >= num1 && dimSelf <= num4)
-        << "input dimSelf is out of range [2, 4]";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dimValues >= num1 && dimValues <= num4)
-        << "input sizeIndices is out of range [1, 4]";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dimValues + indicesSize == dimSelf + num1)
-        << "unsupport the inputs shape combination: dimValues +  indicesSize != dimSelf + 1";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, valuesFirstDim == indicesShape)
-        << "valuesFirstDim should equal to indicesSize";
-    for (size_t i = 1; i < dimValues; i++) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, selfShape[dimSelf - i] == valuesShape[dimValues - i])
-            << "valuesShape should match selfShape";
-    }
     LogicalTensors iOperands = indices;
     iOperands.insert(iOperands.begin(), {self, values});
     auto& op = function.AddOperation(Opcode::OP_INDEX_PUT, iOperands, {dst});
     op.SetAttribute(OpAttributeKey::inplaceIdx, 0);
     op.SetAttribute(OpAttributeKey::accumulate, accumulate);
-    op.SetAttribute(OpAttributeKey::indicesSize, static_cast<int>(indicesSize));
+    op.SetAttribute(OpAttributeKey::indicesSize, static_cast<int>(indices.size()));
     function.UpdateTensorDataUsage(op);
+}
+
+static void CheckIndexPutParamsInvalid(const Tensor& self, const std::vector<Tensor>& indices, const Tensor& values)
+{
+    std::unordered_set<DataType> supportedTypes = {DT_INT8,  DT_UINT8,  DT_INT16, DT_UINT16, DT_INT32, DT_UINT32,
+                                                   DT_INT64, DT_UINT64, DT_BF16,  DT_FP16,   DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "INDEXPUT");
+    CheckTensorsDataTypeConsistency(self.GetStorage(), values.GetStorage(), "INDEXPUT");
+    std::unordered_set<DataType> indexSupportedTypes = {DT_INT8,  DT_UINT8,  DT_INT16, DT_UINT16,
+                                                        DT_INT32, DT_UINT32, DT_INT64, DT_UINT64};
+    int indicesShape = -1;
+    for (size_t i = 0; i < indices.size(); i++) {
+        CheckTensorDataType(indices[i].GetStorage(), indexSupportedTypes, "INDEXPUT");
+        CheckTensorDimRange(indices[i].GetStorage(), 1, 1, "INDEXPUT");
+        if (indicesShape == -1) {
+            indicesShape = indices[i].GetShape()[0];
+        } else {
+            ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices[i].GetShape()[0] == indicesShape)
+                << "Tensors in indices should have the same shape";
+        }
+        CheckTensorShapeSize(indices[i].GetStorage(), "INDEXPUT");
+    }
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, indices.size() >= 1 && indices.size() <= 4)
+        << "indicesSize is out of range [1, 4]";
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "INDEXPUT");
+    CheckTensorDimRange(values.GetStorage(), 1, 4, "INDEXPUT");
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() + 1 == indices.size() + values.GetShape().size())
+        << "unsupport the inputs shape combination: dimSelf + 1 != indicesSize + dimValues";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, values.GetShape()[0] == indicesShape)
+        << "valuesFirstDim should equal to indicesShape";
+    for (size_t i = 1; i < values.GetShape().size(); i++) {
+        ASSERT(
+            VectorErrorCode::ERR_PARAM_INVALID,
+            self.GetShape()[self.GetShape().size() - i] == values.GetShape()[values.GetShape().size() - i])
+            << "valuesShape should match selfShape";
+    }
+    CheckTensorShapeSize(self.GetStorage(), "INDEXPUT");
+    CheckTensorShapeSize(values.GetStorage(), "INDEXPUT");
+    CheckTensorsFormatConsistency(self.GetStorage(), values.GetStorage(), "INDEXPUT");
+    for (size_t i = 0; i < indices.size(); i++) {
+        CheckTensorsFormatConsistency(self.GetStorage(), indices[i].GetStorage(), "INDEXPUT");
+        CheckTensorsFormatConsistency(values.GetStorage(), indices[i].GetStorage(), "INDEXPUT");
+    }
 }
 
 void IndexPut_(Tensor& self, const std::vector<Tensor>& indices, const Tensor& values, bool accumulate)
 {
     DECLARE_TRACER();
+    CheckIndexPutParamsInvalid(self, indices, values);
 
     std::vector<LogicalTensorPtr> indicesLogical;
     for (size_t i = 0; i < indices.size(); i++) {
@@ -1637,25 +1676,29 @@ Tensor Range(const Element& start, const Element& end, const Element& step)
 Tensor GatherMask(const Tensor& self, const uint8_t patternMode)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16, DT_UINT16, DT_UINT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "GATHERMASK");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "GATHERMASK");
+    CheckTensorShapeSize(self.GetStorage(), "GATHERMASK");
     auto shape = self.GetShape();
     auto& vecTile = TileShape::Current().GetVecTile();
     if (patternMode == 1 || patternMode == 2) {
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape[shape.size() - 1] % 2 == 0)
-            << "The last axis of input shape should be divisible by 2 when ptternMode is 1 or 2";
+            << "The last axis of input shape should be divisible by 2 when patternMode is 1 or 2";
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, vecTile.tile[vecTile.tile.size() - 1] % 2 == 0)
-            << "The last axis of tileshape should be divisible by 2 when ptternMode is 1 or 2";
+            << "The last axis of tileshape should be divisible by 2 when patternMode is 1 or 2";
         shape[shape.size() - 1] = shape[shape.size() - 1] / 2;
     } else if (patternMode == 3 || patternMode == 4 || patternMode == 5 || patternMode == 6) {
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape[shape.size() - 1] % 4 == 0)
-            << "The last axis of input shape should be divisible by 4 when ptternMode is 3, 4, 5 or 6";
+            << "The last axis of input shape should be divisible by 4 when patternMode is 3, 4, 5 or 6";
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, vecTile.tile[vecTile.tile.size() - 1] % 4 == 0)
-            << "The last axis of tileshape should be divisible by 4 when ptternMode is 3, 4, 5 or 6";
+            << "The last axis of tileshape should be divisible by 4 when patternMode is 3, 4, 5 or 6";
         shape[shape.size() - 1] = shape[shape.size() - 1] / 4;
     } else {
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, patternMode == 7)
             << "Just support patternMode is 1, 2, 3, 4, 5, 6, 7";
     }
-    auto result = Tensor(self.GetStorage()->tensor->datatype, shape);
+    auto result = Tensor(self.GetDataType(), shape);
 
     if (!self.GetStorage()->GetDynValidShape().empty()) {
         std::vector<SymbolicScalar> outValidShape;

@@ -113,6 +113,10 @@ void TensorBitsortOperation(
 Tensor Sort32(const Tensor& self, int idxStart)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SORT32");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SORT32");
+    CheckTensorShapeSize(self.GetStorage(), "SORT32");
     const auto len = static_cast<int>(self.GetShape().size());
     auto outShape = self.GetShape();
     outShape[len - 1] *= NUM_VALUE_2;
@@ -186,6 +190,10 @@ void TensorMrgSortOperation(
 Tensor MrgSort(const Tensor& self, int mergeSize)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "MRGSORT");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "MRGSORT");
+    CheckTensorShapeSize(self.GetStorage(), "MRGSORT");
     const auto len = static_cast<int>(self.GetShape().size());
     const auto k = static_cast<int>(self.GetShape()[len - 1]);
     auto outShape = self.GetShape();
@@ -253,6 +261,11 @@ void TensorExtractOperation(
 
 Tensor TopKExtract(const Tensor& self, int k, bool isIndex)
 {
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPKEXTRACT");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "TOPKEXTRACT");
+    CheckTensorShapeSize(self.GetStorage(), "TOPKEXTRACT");
     DataType dType = isIndex ? DataType::DT_INT32 : self.GetStorage()->tensor->datatype;
     const auto len = static_cast<int>(self.GetShape().size());
     auto outShape = self.GetShape();
@@ -528,6 +541,10 @@ void TensorTopK(
 std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLargest)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "TOPK");
+    CheckTensorShapeSize(self.GetStorage(), "TOPK");
     const auto len = static_cast<int>(self.GetShape().size());
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis == (len - 1) || axis == -1) << "TopK only support last axis";
     axis = axis >= 0 ? axis : (axis + len);
@@ -728,21 +745,20 @@ void TiledSort(
                 tileOutputOffset[axis] = i;
                 if (i + vecTileAlign[axis] >= sortOutputShape[axis]) { // 尾块
                     tileOutputShape[axis] = sortOutputShape[axis] - i;
-                } else if (!flag && i == 0) {                          // 奇数阶段的头块
+                } else if (!flag && i == 0) { // 奇数阶段的头块
                     tileOutputShape[axis] = vecTileAlign[axis];
-                } else {                                               // 两块
+                } else { // 两块
                     tileOutputShape[axis] = std::min(2 * vecTileAlign[axis], sortOutputShape[axis] - i);
                 }
                 i += tileOutputShape[axis];
 
                 auto src = std::make_shared<LogicalTensor>(function, source->Datatype(), tileOutputShape);
                 auto& viewOp = function.AddOperation(Opcode::OP_VIEW, {roundInputTensor}, {src});
-                curValidShape[axis] = std::max(0, std::min(sortOutputValidShape[axis] - tileOutputOffset[axis], tileOutputShape[axis]));
+                curValidShape[axis] =
+                    std::max(0, std::min(sortOutputValidShape[axis] - tileOutputOffset[axis], tileOutputShape[axis]));
                 viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(
                     tileOutputOffset, MemoryType::MEM_UB,
-                    std::vector<SymbolicScalar>(tileOutputOffset.begin(), tileOutputOffset.end()),
-                    curValidShape
-                ));
+                    std::vector<SymbolicScalar>(tileOutputOffset.begin(), tileOutputOffset.end()), curValidShape));
 
                 auto outputInUB = std::make_shared<LogicalTensor>(function, src->Datatype(), tileOutputShape);
                 auto& twoTileMrgSortOp = function.AddOperation(Opcode::OP_TWOTILEMRGSORT, {src}, {outputInUB});
@@ -822,6 +838,10 @@ void TensorSort(
 std::tuple<Tensor, Tensor> sort(const Tensor& self, int axis = -1, bool descending = false)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SORT");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SORT");
+    CheckTensorShapeSize(self.GetStorage(), "SORT");
     auto len = static_cast<int>(self.GetShape().size());
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, len >= 1 && len <= 4) << "Only support 1 dim to 4 dim.\n";
 

@@ -102,8 +102,9 @@ TEST_F(TestCodegenForLoop, TestForLoop)
             auto res3 = Mul(res1, res2);
             auto res4 = Cast(res3, DT_FP16);
             auto res5 = Cast(res4, DT_INT8, CAST_NONE, SaturationMode::ON);
-            auto res6 = Cast(res5, DT_FP32);
-            output = Sum(res6, -1, true);
+            auto res6 = Cast(res5, DT_FP16);
+            auto res7 = Cast(res6, DT_FP32);
+            output = Sum(res7, -1, true);
         }
     }
 
@@ -147,9 +148,9 @@ TEST_F(TestCodegenForLoop, TestForLoop)
 
     const std::string expect3 = R"(
         auto tileOffsets = TileOffset(0, idx1, idx2);
-        ubTensor_31_low2DimInLoop.SetAddr(ubTensor_31.GetLinearAddr(tileOffsets));
         ubTensor_35_low2DimInLoop.SetAddr(ubTensor_35.GetLinearAddr(tileOffsets));
-        TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_35_low2DimInLoop, ubTensor_31_low2DimInLoop, ubTensor_36);
+        ubTensor_39_low2DimInLoop.SetAddr(ubTensor_39.GetLinearAddr(tileOffsets));
+        TRowSumSingle<LastUse3Dim<0, 0, 0>>(ubTensor_39_low2DimInLoop, ubTensor_35_low2DimInLoop, ubTensor_40);
 )";
     CheckStringExist(expect3, res);
 }

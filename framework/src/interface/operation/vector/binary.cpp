@@ -58,19 +58,6 @@ void CheckBinOpOperandsValid(const LogicalTensorPtr& operand1, const LogicalTens
     }
 }
 
-void CheckBinaryInputTensors(const LogicalTensorPtr& tensor1, const LogicalTensorPtr& tensor2, std::string& op)
-{
-    CheckTensorShape(tensor1, op);
-    CheckTensorShape(tensor2, op);
-    CheckBinOpOperandsValid(tensor1, tensor2);
-    if (tensor1->Datatype() != tensor2->Datatype()) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The dtype of input tensors are not same.";
-    }
-    if (tensor1->Format() != tensor2->Format()) {
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "The format of input tensors are not same.";
-    }
-}
-
 void BroadcastOperandTensor(
     LogicalTensorPtr& operand, LogicalTensorPtr& other, LogicalTensorPtr result, Function& function,
     const TileShape& tileShape, std::vector<int64_t> dstShape)
@@ -191,7 +178,8 @@ void TiledBinaryOperation(
         input2.tileInfo.offset[cur] = i % input2.tensor->GetShape()[cur];
         input2.tileInfo.shape[cur] =
             std::min(input2.tensor->GetShape()[cur] - input2.tileInfo.offset[cur], vecTile[cur]);
-        TiledBinaryOperation<T>(function, tileShape, cur + 1, input1, input2, result, resultTileInfo, withBrc, precisionType);
+        TiledBinaryOperation<T>(
+            function, tileShape, cur + 1, input1, input2, result, resultTileInfo, withBrc, precisionType);
     }
 }
 
@@ -307,43 +295,21 @@ void TiledPReLUOperation(
     TiledPReLUOperation(function, tileShape, 0, inputArg, weightArg, result);
 }
 
-void PReLUOperationOperandCheck(
-    const std::vector<LogicalTensorPtr>& iOperand, const std::vector<LogicalTensorPtr>& oOperand)
+void PReLUOperationOperandCheck(const LogicalTensorPtr& selfTensor, const LogicalTensorPtr& weightTensor)
 {
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, iOperand.size() == 2) << "The input operand size should be 2";
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, oOperand.size() == 1) << "The output operand size should be 1";
+    CheckTensorDimRange(selfTensor, 2, 4, "PReLU");
+    CheckTensorDimRange(weightTensor, 1, 1, "PReLU");
+    CheckTensorShapeSize(selfTensor, "PReLU");
+    CheckTensorShapeSize(weightTensor, "PReLU");
 
-    auto input = iOperand[0];
-    auto weight = iOperand[1];
-
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, input->Datatype() == weight->Datatype())
-        << "The input and weight should have the same data type";
-
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, input->shape.size() >= 2 && input->shape.size() <= 4)
-        << "The input shape dimension should be in range [2, 4]";
-
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape.size() == 1) << "The weight should be 1-dimensional";
-
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weight->shape[0] == input->shape[1])
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightTensor->shape[0] == selfTensor->shape[1])
         << "The weight size should equal to input's second dimension";
-
-    int64_t inputSize = 1;
-    for (size_t i = 0; i < input->shape.size(); ++i) {
-        inputSize *= input->shape[i];
-    }
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, inputSize <= INT32_MAX)
-        << "The input shape size should not exceed INT32_MAX";
-
-    int64_t weightSize = weight->shape[0];
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, weightSize <= INT32_MAX)
-        << "The weight shape size should not exceed INT32_MAX";
 }
 
 void PReLUOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
-    PReLUOperationOperandCheck(iOperand, oOperand);
     TiledPReLUOperation(function, tileShape, iOperand[0], iOperand[1], oOperand[0]);
 }
 
@@ -351,6 +317,8 @@ LogicalTensorPtr TensorPReLUOperation(Function& function, const Tensor& self, co
 {
     auto selfTensor = self.GetStorage();
     auto weightTensor = weight.GetStorage();
+
+    PReLUOperationOperandCheck(selfTensor, weightTensor);
 
     auto result = std::make_shared<LogicalTensor>(
         function, selfTensor->Datatype(), selfTensor->shape, selfTensor->GetDynValidShape());
@@ -361,6 +329,9 @@ LogicalTensorPtr TensorPReLUOperation(Function& function, const Tensor& self, co
 Tensor PReLU(const Tensor& self, const Tensor& weight)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), weight.GetStorage(), "PReLU");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "PReLU");
 
     RETURN_CALL(PReLUOperation, *Program::GetInstance().GetCurrentFunction(), self, weight);
 }
@@ -368,27 +339,36 @@ Tensor PReLU(const Tensor& self, const Tensor& weight)
 Tensor Add(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "ADD");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "ADD");
     RETURN_CALL(BinaryOperation<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor Sub(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "SUB");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SUB");
     RETURN_CALL(BinaryOperation<BinaryOpType::SUB>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor Mul(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MUL");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "MUL");
     RETURN_CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType)
 {
     DECLARE_TRACER();
-
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "DIV");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
     auto [result, op] =
         TensorBinaryOperationWithOp<BinaryOpType::DIV>(*Program::GetInstance().GetCurrentFunction(), self, other);
     op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
@@ -398,12 +378,18 @@ Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType)
 Tensor Fmod(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "MOD");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "MOD");
     RETURN_CALL(BinaryOperation<BinaryOpType::MOD>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor Remainder(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "REM");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "REM");
     auto selfDtype = self.GetDataType();
     if (selfDtype == DT_INT16) {
         Tensor castSelf = Cast(self, DT_FP32, CastMode::CAST_NONE);
@@ -420,15 +406,9 @@ Tensor Remainder(const Tensor& self, const Tensor& other)
 Tensor Maximum(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
-        << "The datatype of the two input must be equal";
-    std::vector<DataType> MAXIMUM_SUPPORT_DATATYPES = {
-        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(MAXIMUM_SUPPORT_DATATYPES.begin(), MAXIMUM_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
-            MAXIMUM_SUPPORT_DATATYPES.end())
-        << "The datatype is not supported";
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "MAXIMUM");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "MAXIMUM");
     RETURN_CALL(
         BinaryOperation<BinaryOpType::MAXIMUM>, *Program::GetInstance().GetCurrentFunction(), operand1, operand2);
 }
@@ -436,15 +416,9 @@ Tensor Maximum(const Tensor& operand1, const Tensor& operand2)
 Tensor Minimum(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
-        << "The datatype of the two input must be equal";
-    std::vector<DataType> MINIMUM_SUPPORT_DATATYPES = {
-        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(MINIMUM_SUPPORT_DATATYPES.begin(), MINIMUM_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
-            MINIMUM_SUPPORT_DATATYPES.end())
-        << "The datatype is not supported";
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "MINIMUM");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "MINIMUM");
     RETURN_CALL(
         BinaryOperation<BinaryOpType::MINIMUM>, *Program::GetInstance().GetCurrentFunction(), operand1, operand2);
 }
@@ -452,48 +426,46 @@ Tensor Minimum(const Tensor& operand1, const Tensor& operand2)
 Tensor BitwiseAnd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEAND");
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEAND");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEAND>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor BitwiseOr(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEOR");
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEOR");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor BitwiseXor(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "BITWISEXOR");
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEXOR");
     RETURN_CALL(BinaryOperation<BinaryOpType::BITWISEXOR>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor Gcd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    auto shapeSize = self.GetShape().size();
-    auto dataType = self.GetDataType();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, dataType == other.GetDataType())
-        << "Inputs must have the same dataType.";
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
-        << "This operation's input only support 1-5 dims";
-    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {
-        DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, GCD_SUPPORT_DATATYPES.count(dataType))
-        << "This datatype is not supported";
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "GCD");
+    CheckTensorDimRange(self.GetStorage(), 2, 4, "GCD");
+    std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
     RETURN_CALL(BinaryOperation<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
 Tensor Gcd(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    auto shapeSize = self.GetShape().size();
-    auto dataType = self.GetDataType();
-    ASSERT(VectorErrorCode::ERR_PARAM_SHAPE_DIM_UNSUPPORTED, SHAPE_DIM1 <= shapeSize && shapeSize <= SHAPE_DIM5)
-        << "This operation's input only support 1-5 dims";
-    std::unordered_set<DataType> GCD_SUPPORT_DATATYPES = {
-        DataType::DT_INT32, DataType::DT_INT16, DataType::DT_INT8, DataType::DT_UINT8};
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, GCD_SUPPORT_DATATYPES.count(dataType))
-        << "This datatype is not supported";
+    CheckTensorDimRange(self.GetStorage(), 2, 4, "GCD");
+    std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -502,14 +474,9 @@ Tensor Gcd(const Tensor& self, const Element& other)
 Tensor FloorDiv(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    std::vector<DataType> FLOORDIV_SUPPORT_TYPES = {DataType::DT_INT32};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        self.GetDataType() == other.GetDataType() &&
-            std::find(FLOORDIV_SUPPORT_TYPES.begin(), FLOORDIV_SUPPORT_TYPES.end(), self.GetDataType()) !=
-                FLOORDIV_SUPPORT_TYPES.end())
-        << "FloorDiv only supports same data type for self and other! And it should be in DT_INT32.";
-
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "FLOORDIV");
+    std::unordered_set<DataType> supportedTypes = {DT_INT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
     RETURN_CALL(BinaryOperation<BinaryOpType::FLOORDIV>, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
@@ -571,7 +538,8 @@ void TiledBinaryOperationScalar(
     TileInfo tileInfo1(result->shape.size(), result->offset.size());
     TileInfo resultTileInfo(result->shape.size(), result->offset.size());
     auto input1 = LogicalInput{operand1, tileInfo1};
-    TiledBinaryOperationScalar<T>(function, tileShape, 0, input1, value, result, resultTileInfo, reverseOperand, precisionType);
+    TiledBinaryOperationScalar<T>(
+        function, tileShape, 0, input1, value, result, resultTileInfo, reverseOperand, precisionType);
 }
 
 template <BinaryOpType T>
@@ -625,6 +593,8 @@ void TiledRemainderSOperation(
 Tensor Add(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "ADD");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::ADD>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -633,6 +603,8 @@ Tensor Add(const Tensor& self, const Element& other)
 Tensor Sub(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SUB");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::SUB>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -641,6 +613,8 @@ Tensor Sub(const Tensor& self, const Element& other)
 Tensor Mul(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "MUL");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -649,6 +623,8 @@ Tensor Mul(const Tensor& self, const Element& other)
 Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "DIV");
     auto [result, op] = TensorBinaryOperationScalarWithOp<BinaryOpType::DIV>(
         *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), other);
     op->SetAttribute(OpAttributeKey::precisionType, static_cast<int64_t>(precisionType));
@@ -658,6 +634,8 @@ Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType)
 Tensor Fmod(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "MOD");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::MOD>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -666,6 +644,8 @@ Tensor Fmod(const Tensor& self, const Element& other)
 Tensor Remainder(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "REM");
     auto selfDtype = self.GetDataType();
     Tensor castSelf = self;
     Element other_ = Element(selfDtype, other.Cast<float>());
@@ -685,6 +665,8 @@ Tensor Remainder(const Tensor& self, const Element& other)
 Tensor Remainder(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(other.GetStorage(), supportedTypes, "REM");
     auto otherDtype = other.GetDataType();
     Tensor castOther = other;
     Element self_ = Element(otherDtype, self.Cast<float>());
@@ -704,6 +686,8 @@ Tensor Remainder(const Element& self, const Tensor& other)
 Tensor BitwiseAnd(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEAND");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::BITWISEAND>, *Program::GetInstance().GetCurrentFunction(),
         self.GetStorage(), other);
@@ -712,6 +696,8 @@ Tensor BitwiseAnd(const Tensor& self, const Element& other)
 Tensor BitwiseOr(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEOR");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::BITWISEOR>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -720,6 +706,8 @@ Tensor BitwiseOr(const Tensor& self, const Element& other)
 Tensor BitwiseXor(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_INT16, DT_UINT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BITWISEXOR");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::BITWISEXOR>, *Program::GetInstance().GetCurrentFunction(),
         self.GetStorage(), other);
@@ -728,15 +716,8 @@ Tensor BitwiseXor(const Tensor& self, const Element& other)
 Tensor Maximum(const Tensor& operand1, const Element& operand2)
 {
     DECLARE_TRACER();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
-        << "The datatype of the two input must be equal";
-    std::vector<DataType> MAXS_SUPPORT_DATATYPES = {
-        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(MAXS_SUPPORT_DATATYPES.begin(), MAXS_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
-            MAXS_SUPPORT_DATATYPES.end())
-        << "The datatype is not supported";
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "MAX");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::MAX>, *Program::GetInstance().GetCurrentFunction(), operand1.GetStorage(),
         operand2);
@@ -745,15 +726,8 @@ Tensor Maximum(const Tensor& operand1, const Element& operand2)
 Tensor Minimum(const Tensor& operand1, const Element& operand2)
 {
     DECLARE_TRACER();
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, operand1.GetDataType() == operand2.GetDataType())
-        << "The datatype of the two input must be equal";
-    std::vector<DataType> MINS_SUPPORT_DATATYPES = {
-        DataType::DT_FP32, DataType::DT_FP16, DataType::DT_INT32, DataType::DT_INT16, DataType::DT_BF16};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        std::find(MINS_SUPPORT_DATATYPES.begin(), MINS_SUPPORT_DATATYPES.end(), operand1.GetDataType()) !=
-            MINS_SUPPORT_DATATYPES.end())
-        << "The datatype is not supported";
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "MIN");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::MIN>, *Program::GetInstance().GetCurrentFunction(), operand1.GetStorage(),
         operand2);
@@ -762,6 +736,8 @@ Tensor Minimum(const Tensor& operand1, const Element& operand2)
 Tensor LReLU(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "LRELU");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::LRELU>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -769,13 +745,10 @@ Tensor LReLU(const Tensor& self, const Element& other)
 
 Tensor CeilDiv(const Tensor& self, const Tensor& other)
 {
-    std::vector<DataType> CEILDIV_SUPPORT_TYPES = {DataType::DT_INT32};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        self.GetDataType() == other.GetDataType() &&
-            std::find(CEILDIV_SUPPORT_TYPES.begin(), CEILDIV_SUPPORT_TYPES.end(), self.GetDataType()) !=
-                CEILDIV_SUPPORT_TYPES.end())
-        << "CeilDiv only supports same data type for self and other! And it should be in DT_INT32.";
+    DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "CEILDIV");
+    std::unordered_set<DataType> supportedTypes = {DT_INT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "CEILDIV");
 
     Tensor selfFp32 = Cast(self, DataType::DT_FP32);
     Tensor otherFp32 = Cast(other, DataType::DT_FP32);
@@ -787,13 +760,9 @@ Tensor CeilDiv(const Tensor& self, const Tensor& other)
 
 Tensor CeilDiv(const Tensor& self, const Element& other)
 {
-    std::vector<DataType> CEILDIV_SUPPORT_TYPES = {DataType::DT_INT32};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        self.GetDataType() == other.GetDataType() &&
-            std::find(CEILDIV_SUPPORT_TYPES.begin(), CEILDIV_SUPPORT_TYPES.end(), self.GetDataType()) !=
-                CEILDIV_SUPPORT_TYPES.end())
-        << "CeilDiv only supports same data type for self and other! And it should be in DT_INT32.";
+    DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_INT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "CEILDIV");
 
     Tensor selfFp32 = Cast(self, DataType::DT_FP32);
     Element otherFp32(DT_FP32, other.Cast<float>());
@@ -806,14 +775,8 @@ Tensor CeilDiv(const Tensor& self, const Element& other)
 Tensor FloorDiv(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    std::vector<DataType> FLOORDIV_SUPPORT_TYPES = {DataType::DT_INT32};
-    ASSERT(
-        VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED,
-        self.GetDataType() == other.GetDataType() &&
-            std::find(FLOORDIV_SUPPORT_TYPES.begin(), FLOORDIV_SUPPORT_TYPES.end(), self.GetDataType()) !=
-                FLOORDIV_SUPPORT_TYPES.end())
-        << "FloorDiv only supports same data type for self and other! And it should be in DT_INT32.";
-
+    std::unordered_set<DataType> supportedTypes = {DT_INT32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "FLOORDIV");
     RETURN_CALL(
         BinaryOperationScalar<BinaryOpType::FLOORDIV>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(),
         other);
@@ -860,6 +823,8 @@ void TiledBinaryOperationAllScalar(
 Tensor ScalarAddS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_ADD");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_ADD>, *Program::GetInstance().GetCurrentFunction(),
@@ -869,6 +834,8 @@ Tensor ScalarAddS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarSubS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_SUB");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_SUB>, *Program::GetInstance().GetCurrentFunction(),
@@ -878,6 +845,8 @@ Tensor ScalarSubS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarMulS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_MUL");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_MUL>, *Program::GetInstance().GetCurrentFunction(),
@@ -887,6 +856,8 @@ Tensor ScalarMulS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarDivS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_DIV");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_DIV>, *Program::GetInstance().GetCurrentFunction(),
@@ -896,6 +867,8 @@ Tensor ScalarDivS(const Tensor& operand, const Element& value, bool reverseOpera
 Tensor ScalarMaxS(const Tensor& operand, const Element& value, bool reverseOperand)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand.GetStorage(), supportedTypes, "S_MAX");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_MAX>, *Program::GetInstance().GetCurrentFunction(),
@@ -960,6 +933,9 @@ void TiledBinaryOperationAllScalar(
 Tensor ScalarAdd(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_ADD");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_ADD");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_ADD>, *Program::GetInstance().GetCurrentFunction(),
@@ -968,6 +944,9 @@ Tensor ScalarAdd(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarSub(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_SUB");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_SUB");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_SUB>, *Program::GetInstance().GetCurrentFunction(),
@@ -977,6 +956,9 @@ Tensor ScalarSub(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarMul(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_MUL");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_MUL");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_MUL>, *Program::GetInstance().GetCurrentFunction(),
@@ -986,6 +968,9 @@ Tensor ScalarMul(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarDiv(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_DIV");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_DIV");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_DIV>, *Program::GetInstance().GetCurrentFunction(),
@@ -995,6 +980,9 @@ Tensor ScalarDiv(const Tensor& operand1, const Tensor& operand2)
 Tensor ScalarMax(const Tensor& operand1, const Tensor& operand2)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(operand1.GetStorage(), operand2.GetStorage(), "S_MAX");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(operand1.GetStorage(), supportedTypes, "S_MAX");
 
     RETURN_CALL(
         BinaryOperationAllScalar<BinaryOpType::S_MAX>, *Program::GetInstance().GetCurrentFunction(),
@@ -1004,6 +992,9 @@ Tensor ScalarMax(const Tensor& operand1, const Tensor& operand2)
 Tensor CopySign(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "COPYSIGN");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "COPYSIGN");
 
     DataType selfDType = self.GetDataType();
     DataType otherDType = other.GetDataType();
@@ -1052,7 +1043,8 @@ void BinaryOperationScalarTileFunc(
         }
     }
     TiledBinaryOperationScalar<T>(
-        function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar), oOperand[0], false, precisionType);
+        function, tileShape, iOperand[0], op.GetElementAttribute(OpAttributeKey::scalar), oOperand[0], false,
+        precisionType);
 }
 
 template <BinaryOpType T>
@@ -1099,6 +1091,7 @@ void BinaryOperationAllScalarTileFunc(
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
 {
     BinaryOperationOperandCheck(iOperand, oOperand);
+    CheckTensorsDataTypeConsistency(iOperand[0], iOperand[1], GetBinaryOpName<T>());
     TiledBinaryOperationAllScalar<T>(function, tileShape, iOperand[0], iOperand[1], oOperand[0]);
 }
 

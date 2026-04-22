@@ -471,24 +471,58 @@ LogicalTensorPtr TensorWhereOperation(
 Tensor Where(const Tensor& condition, const Tensor& input, const Tensor& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
+    CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
+    std::unordered_set<DataType> inputTypes = {DT_FP32, DT_FP16, DT_BF16};
+    CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 2, 4, "WHERE");
+    CheckTensorShapeSize(condition.GetStorage(), "WHERE");
+    CheckTensorShapeSize(input.GetStorage(), "WHERE");
+    CheckTensorShapeSize(other.GetStorage(), "WHERE");
+    CheckTensorsDimConsistency({condition.GetStorage(), input.GetStorage(), other.GetStorage()}, "WHERE");
+    CheckTensorsDataTypeConsistency(input.GetStorage(), other.GetStorage(), "WHERE");
+    CheckTensorsFormatConsistency(condition.GetStorage(), input.GetStorage(), "WHERE");
+    CheckTensorsFormatConsistency(condition.GetStorage(), other.GetStorage(), "WHERE");
     RETURN_CALL(WhereOperation, *Program::GetInstance().GetCurrentFunction(), condition, input, other);
 }
 
 Tensor Where(const Tensor& condition, const Tensor& input, const Element& otherValue)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
+    CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
+    std::unordered_set<DataType> inputTypes = {DT_FP32, DT_FP16, DT_BF16};
+    CheckTensorDataType(input.GetStorage(), inputTypes, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 2, 4, "WHERE");
+    CheckTensorShapeSize(condition.GetStorage(), "WHERE");
+    CheckTensorShapeSize(input.GetStorage(), "WHERE");
+    CheckTensorsDimConsistency({condition.GetStorage(), input.GetStorage()}, "WHERE");
+    CheckTensorsFormatConsistency(condition.GetStorage(), input.GetStorage(), "WHERE");
     RETURN_CALL(WhereOperation, *Program::GetInstance().GetCurrentFunction(), condition, input, otherValue);
 }
 
 Tensor Where(const Tensor& condition, const Element& inputValue, const Tensor& other)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
+    CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
+    std::unordered_set<DataType> inputTypes = {DT_FP32, DT_FP16, DT_BF16};
+    CheckTensorDataType(other.GetStorage(), inputTypes, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 2, 4, "WHERE");
+    CheckTensorShapeSize(condition.GetStorage(), "WHERE");
+    CheckTensorShapeSize(other.GetStorage(), "WHERE");
+    CheckTensorsDimConsistency({condition.GetStorage(), other.GetStorage()}, "WHERE");
+    CheckTensorsFormatConsistency(condition.GetStorage(), other.GetStorage(), "WHERE");
     RETURN_CALL(WhereOperation, *Program::GetInstance().GetCurrentFunction(), condition, inputValue, other);
 }
 
 Tensor Where(const Tensor& condition, const Element& inputValue, const Element& otherValue)
 {
     DECLARE_TRACER();
+    std::unordered_set<DataType> conditionTypes = {DT_BOOL, DT_UINT8};
+    CheckTensorDataType(condition.GetStorage(), conditionTypes, "WHERE");
+    CheckTensorDimRange(condition.GetStorage(), 2, 4, "WHERE");
+    CheckTensorShapeSize(condition.GetStorage(), "WHERE");
     RETURN_CALL(WhereOperation, *Program::GetInstance().GetCurrentFunction(), condition, inputValue, otherValue);
 }
 

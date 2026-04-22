@@ -711,7 +711,8 @@ Tensor DeepseekV2MoE::MoeInfer(
 
     TileShape::Current().SetVecTile(NUM_128);
     // reduce 0维, (b*s, nRoutedExperts)->(nRoutedExperts)
-    Tensor idxs = ArgSort(Reshape(topkIds, {bs * expertPerTok}), -1, false); // (b*s*num_experts_per_tok)
+    Tensor idxs =
+        ArgSort(Cast(Reshape(topkIds, {bs * expertPerTok}), DataType::DT_FP32), -1, false); // (b*s*num_experts_per_tok)
 
     TileShape::Current().SetVecTile({NUM_128, NUM_128});
 
@@ -810,7 +811,8 @@ Tensor DeepseekV2MoE::MoeInferSingleMlp(
 
     TileShape::Current().SetVecTile(NUM_128);
     // reduce 0维, (b*s, nRoutedExperts)->(nRoutedExperts)
-    Tensor idxs = ArgSort(Reshape(topkIds, {bs * expertPerTok}), -1, false); // (b*s*num_experts_per_tok)
+    Tensor idxs =
+        ArgSort(Cast(Reshape(topkIds, {bs * expertPerTok}), DataType::DT_FP32), -1, false); // (b*s*num_experts_per_tok)
 
     TileShape::Current().SetVecTile({NUM_128, NUM_128});
 
@@ -878,7 +880,8 @@ Tensor DeepseekV2MoE::MoeInferSingleMlpQuant(
 
     TileShape::Current().SetVecTile(NUM_128);
     // reduce 0维, (b*s, nRoutedExperts)->(nRoutedExperts)
-    Tensor idxs = ArgSort(Reshape(topkIds, {bs * expertPerTok}), -1, false); // (b*s*num_experts_per_tok)
+    Tensor idxs =
+        ArgSort(Cast(Reshape(topkIds, {bs * expertPerTok}), DataType::DT_FP32), -1, false); // (b*s*num_experts_per_tok)
 
     TileShape::Current().SetVecTile({NUM_32, NUM_512});
 
@@ -948,7 +951,7 @@ Tensor DeepseekV2MoE::MoeInfer(
 
     TileShape::Current().SetVecTile(NUM_128);
     // reduce 0维, (b*s, nRoutedExperts)->(nRoutedExperts)
-    idxs = ArgSort(Reshape(topkIds, {bs * expertPerTok}), -1, false); // (b*s*numExpertsPerTok)
+    idxs = ArgSort(Cast(Reshape(topkIds, {bs * expertPerTok}), DataType::DT_FP32), -1, false); // (b*s*numExpertsPerTok)
 
     TileShape::Current().SetVecTile({NUM_64, NUM_64});
 
@@ -1044,13 +1047,13 @@ Tensor DeepseekV2MoE::MoeInfer(Tensor x, Tensor topkIds, Tensor topkWeight, int 
 
     Tensor tokensPerExpert = Sum(cnts, 0, true);
     // reduce 0维, (b*s, nRoutedExperts)->(nRoutedExperts)
-    Tensor idxs = ArgSort(Reshape(topkIds, {bs * expertPerTok}), -1); // (b*s*numExpertsPerTok)
+    Tensor idxs = ArgSort(Cast(Reshape(topkIds, {bs * expertPerTok}), DataType::DT_FP32), -1); // (b*s*numExpertsPerTok)
 
     // Tensor((b*s, h))[Tensor(b*s*numExpertsPerTok)] = (b*s*numExpertsPerTok, h)
     Tensor sortedTokens = TensorIndex(
-        x, Div(idxs, Element(
-                         DataType::DT_FP32,
-                         static_cast<double>(expertPerTok)))); // int64除法
+        x, Cast(
+               Div(Cast(idxs, DataType::DT_FP32), Element(DataType::DT_FP32, static_cast<double>(expertPerTok))),
+               DataType::DT_INT32, CAST_TRUNC)); // int64除法
     auto& sortedTokensShape = sortedTokens.GetShape();
 
     // tokensPerExpertCpu = tokensPerExpert.cpu().numpy(); 手动设置规避动态图

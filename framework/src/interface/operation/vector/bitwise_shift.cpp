@@ -77,19 +77,6 @@ Opcode GetBitwiseShiftOpNameCode()
 #undef CASE
 }
 
-void CheckBitwiseShiftDtype(const DataType& selfType, const DataType& otherType)
-{
-    std::vector<DataType> BITWISRSHIFT_SUPPORT_DATATYPES = {DataType::DT_INT16};
-    bool selfSupport =
-        (std::find(BITWISRSHIFT_SUPPORT_DATATYPES.begin(), BITWISRSHIFT_SUPPORT_DATATYPES.end(), selfType) !=
-         BITWISRSHIFT_SUPPORT_DATATYPES.end());
-    bool otherSupport =
-        (std::find(BITWISRSHIFT_SUPPORT_DATATYPES.begin(), BITWISRSHIFT_SUPPORT_DATATYPES.end(), otherType) !=
-         BITWISRSHIFT_SUPPORT_DATATYPES.end());
-    ASSERT(VectorErrorCode::ERR_PARAM_DTYPE_UNSUPPORTED, selfSupport && otherSupport)
-        << "Inputs datatype not supported";
-}
-
 template <BitwiseShiftOpType T>
 void TiledBitwiseShiftOperation(
     Function& function, const TileShape& tileShape, size_t cur, LogicalInput& input1, LogicalInput& input2,
@@ -151,6 +138,7 @@ LogicalTensorPtr TensorBitwiseShiftOperation(Function& function, const Tensor& s
     }
     auto opName = GetBitwiseShiftOpName<T>();
     CheckBinaryInputTensors(operand1, operand2, opName);
+    CheckTensorsDataTypeConsistency(operand1, operand2, opName);
 
     std::vector<SymbolicScalar> resultValidShape;
     std::vector<int64_t> resultShape = BinaryOperationResultShape(operand1, operand2);
@@ -210,7 +198,8 @@ LogicalTensorPtr TensorBitwiseShiftOperationScalar(
     Function& function, const LogicalTensorPtr& self, const Element& other)
 {
     auto opName = GetBitwiseShiftOpName<T>();
-    CheckTensorShape(self, opName);
+    CheckTensorDimRange(self, MIN_TENSOR_DIM, MAX_TENSOR_DIM, opName);
+    CheckTensorShapeSize(self, opName);
     auto result = std::make_shared<LogicalTensor>(function, self->Datatype(), self->shape, self->GetDynValidShape());
     auto& op = function.AddOperation(GetBitwiseShiftOpNameCode<T, true>(), {self}, {result});
     op.SetAttribute(OpAttributeKey::scalar, other);
@@ -265,7 +254,8 @@ LogicalTensorPtr TensorBitwiseShiftOperationSelfScalar(
     Function& function, const Element& self, const LogicalTensorPtr& other)
 {
     auto opName = GetBitwiseShiftOpName<T>();
-    CheckTensorShape(other, opName);
+    CheckTensorDimRange(other, MIN_TENSOR_DIM, MAX_TENSOR_DIM, opName);
+    CheckTensorShapeSize(other, opName);
     auto result = std::make_shared<LogicalTensor>(function, other->Datatype(), other->shape, other->GetDynValidShape());
     auto& op = function.AddOperation(GetBitwiseShiftOpNameCode<T>(), {other}, {result});
     op.SetAttribute(OpAttributeKey::scalar, self);
@@ -275,7 +265,8 @@ LogicalTensorPtr TensorBitwiseShiftOperationSelfScalar(
 Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    CheckBitwiseShiftDtype(self.GetDataType(), other.GetDataType());
+    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     RETURN_CALL(
         BitwiseShiftOperation<BitwiseShiftOpType::BITWISERIGHTSHIFT>, *Program::GetInstance().GetCurrentFunction(),
         self, other);
@@ -284,7 +275,8 @@ Tensor BitwiseRightShift(const Tensor& self, const Tensor& other)
 Tensor BitwiseRightShift(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    CheckBitwiseShiftDtype(self.GetDataType(), other.GetDataType());
+    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
         newOther = Element(self.GetDataType(), other.Cast<int32_t>());
@@ -297,7 +289,8 @@ Tensor BitwiseRightShift(const Tensor& self, const Element& other)
 Tensor BitwiseRightShift(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    CheckBitwiseShiftDtype(self.GetDataType(), other.GetDataType());
+    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseRightShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
         newSelf = Element(other.GetDataType(), self.Cast<int32_t>());
@@ -309,7 +302,8 @@ Tensor BitwiseRightShift(const Element& self, const Tensor& other)
 Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    CheckBitwiseShiftDtype(self.GetDataType(), other.GetDataType());
+    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     RETURN_CALL(
         BitwiseShiftOperation<BitwiseShiftOpType::BITWISELEFTSHIFT>, *Program::GetInstance().GetCurrentFunction(), self,
         other);
@@ -318,7 +312,8 @@ Tensor BitwiseLeftShift(const Tensor& self, const Tensor& other)
 Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    CheckBitwiseShiftDtype(self.GetDataType(), other.GetDataType());
+    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newOther = other;
     if (self.GetDataType() != other.GetDataType()) {
         newOther = Element(self.GetDataType(), other.Cast<int32_t>());
@@ -331,7 +326,8 @@ Tensor BitwiseLeftShift(const Tensor& self, const Element& other)
 Tensor BitwiseLeftShift(const Element& self, const Tensor& other)
 {
     DECLARE_TRACER();
-    CheckBitwiseShiftDtype(self.GetDataType(), other.GetDataType());
+    std::unordered_set<DataType> supportedTypes = {DT_INT16};
+    CheckTensorDataType(other.GetStorage(), supportedTypes, "BitwiseLeftShift");
     Element newSelf = self;
     if (self.GetDataType() != other.GetDataType()) {
         newSelf = Element(other.GetDataType(), self.Cast<int32_t>());

@@ -117,6 +117,10 @@ LogicalTensorPtr TensorHypotOperation(Function& function, const Tensor& self, co
 Tensor Hypot(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
+    CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "HYPOT");
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "HYPOT");
+    CheckBinaryInputTensors(self.GetStorage(), other.GetStorage(), "HYPOT");
     RETURN_CALL(HypotOperation, *Program::GetInstance().GetCurrentFunction(), self, other);
 }
 
