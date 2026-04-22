@@ -585,6 +585,8 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                     MaskTileDefine tmp0MaskTile(1, dstShape4);
                     MaskTileDefine tmp1MaskTile(1, dstShape4);
 
+                    constexpr int32_t pos = 0x7FFF7F7F, neg = 0x80008080;
+
                     pto::TASSIGN(tmp0DataTile, (uint64_t)(tmp.GetAddr()));
                     pto::TASSIGN(tmp1DataTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
                     pto::TASSIGN(src0Tile, (uint64_t)(src0.GetAddr() + offset * dstTypeSize));
@@ -594,14 +596,29 @@ TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)
                     // Reuse the same tmp as packed mask storage
                     pto::TASSIGN(tmp0MaskTile, (uint64_t)(tmp.GetAddr()));
                     pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
-
+                    
+                    // Deal dividend is zero
+                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::LT);
+                    pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, pos);
+                    pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::GE);
+                    pto::TSELS(tmp1DataTile, tmp0MaskTile, tmp1DataTile, tmp1DataTile, neg);
+                    pto::TCMPS(tmp0MaskTile, src1Tile, 0, CmpMode::NE);
+                    pto::TSEL(src0Tile, tmp0MaskTile, src0Tile, tmp1DataTile, tmp1DataTile);
+                    pto::TSELS(src1Tile, tmp0MaskTile, src1Tile, tmp1DataTile, 1);
+                    
+                    /*
+                     * After zero-divisor handling:
+                     * sign_differ = (src0 < 0) != (src1 < 0)
+                     * quot = src0 / src1
+                     * rem = src0 - quot * src1
+                     * dst = (sign_differ && rem != 0) ? quot - 1 : quot
+                     */
                     pto::TCMPS(tmp0MaskTile, src0Tile, 0, CmpMode::LT);
                     pto::TCMPS(tmp1MaskTile, src1Tile, 0, CmpMode::LT);
                     pto::TXOR(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile, dstTile); // packed mask of sign_differ
                     pto::TDIV(dstTile, src0Tile, src1Tile);                       // quot
                     pto::TMUL(tmp1DataTile, src1Tile, dstTile);
-                    pto::TMULS(tmp1DataTile, tmp1DataTile, -1);
-                    pto::TADD(src0Tile, tmp1DataTile, src0Tile); // rem
+                    pto::TSUB(src0Tile, src0Tile, tmp1DataTile); // rem
 
                     pto::TCMPS(tmp1MaskTile, src0Tile, 0, CmpMode::NE);
                     pto::TAND(tmp0MaskTile, tmp0MaskTile, tmp1MaskTile);
