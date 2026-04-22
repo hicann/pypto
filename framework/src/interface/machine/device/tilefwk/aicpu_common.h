@@ -195,6 +195,7 @@ struct TaskStat {
 struct DevDfxArgs {
     int32_t logLevel{-1};
     int32_t isOpenPerfTrace{0};
+    uint32_t deviceId{0};
 };
 
 constexpr uint32_t PERF_TRACE_INST_MAX_NUM_EVERY_TYPE = 20;

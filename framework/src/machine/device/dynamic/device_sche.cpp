@@ -23,6 +23,7 @@
 #include <sched.h>
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/utils/device_log.h"
+#include "interface/utils/error_code.h"
 #include "device_utils.h"
 
 using namespace npu::tile_fwk;
@@ -43,6 +44,14 @@ extern "C" __attribute__((visibility("default"))) int PyptoKernelCtrlServer(void
 extern "C" __attribute__((visibility("default"))) int DynTileFwkBackendKernelServerInit(void* targ)
 {
     (void)targ;
+#ifdef __DEVICE__
+    InitLogSwitch();
+    if (DeviceTrace::GetInstance().Initialize(targ) != 0) {
+        DEV_ERROR(DevCommonErr::INIT_FAILED, "Pypto Trace init failed");
+        return -1;
+    }
+#endif
+    DEV_ATRACE("Start to Reg signal");
     g_machine_mgr.SignalReg(SigAct);
     return 0;
 }

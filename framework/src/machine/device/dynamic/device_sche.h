@@ -25,6 +25,7 @@
 #include "machine/utils/device_log.h"
 #include "tilefwk/aicore_print.h"
 #include "machine/device/dynamic/aicore_prof.h"
+#include "device_trace.h"
 
 constexpr uint32_t LAUNCH_AICPU_NUM = 5;
 
@@ -294,6 +295,7 @@ struct DynMachineManager {
 
         DeviceArgs* devArgs = PtrToPtr<int64_t, DeviceArgs>(kargs->cfgdata);
         DEV_INFO("ThreadScheEnter idx=%d", threadIdx);
+        DEV_ATRACE("ThreadScheEnter idx=%d", threadIdx);
 
         DEV_INFO(
             "TaskType=%d, threadIdx=%d, aicNum=%u, aivNum=%u, aicpuNum=%u, validAicNum=%u.",
@@ -314,6 +316,7 @@ struct DynMachineManager {
         int ret = schMachine_.RunThread(threadIdx, devStartArgs, devArgs, schedIdx);
 
         DEV_INFO("ThreadScheLeave idx=%d ret=%d", threadIdx, ret);
+        DEV_ATRACE("ThreadScheLeave idx=%d ret=%d", threadIdx, ret);
         return ret;
     }
 
@@ -425,9 +428,11 @@ struct DynMachineManager {
         // ctrl start only one thread
         DEV_INFO("Ctrl enter round=%d", (int)kargs->parameter.globalRound);
         initCtrl_.store(true);
+        DEV_ATRACE("Start Ctrl Aicpu init");
         int ret = RunCtrlInitNoLock(kargs, entry);
         if (ret != 0) {
             initCtrl_.store(false);
+            DeviceTrace::GetInstance().ReportTraceMsg();
             return ret;
         }
         kargs->taskWastTime = GetCycles();
@@ -451,13 +456,17 @@ struct DynMachineManager {
         auto devArgs = devProg->devArgs;
         int threadIdx = -1;
         RunSchInit(&devArgs);
+        DEV_ATRACE("Start to Alloc Schedule Thread");
         if (AllocThreadIdx(&devArgs, threadIdx, runtimeDataCurrent->devScheState.threadIdx) !=
             npu::tile_fwk::dynamic::DEVICE_MACHINE_OK) {
             DEV_ERROR(
                 ThreadErr::THREAD_CPU_ALLOC_FAILED, "#sche.thread.init: Current cpu[%d] alloc thread failed.",
                 sched_getcpu());
+            DEV_ATRACE("Schedule Current cpu[%d] alloc thread failed", sched_getcpu());
+            DeviceTrace::GetInstance().ReportTraceMsg();
             return npu::tile_fwk::dynamic::DEVICE_MACHINE_ERROR;
         }
+        DEV_ATRACE("Alloced Schedule ThreadIdx: %d", threadIdx);
         PerfMtTrace(PERF_TRACE_ALLOC_THREAD_ID, threadIdx);
         PerfMtTrace(PERF_TRACE_BEGIN, threadIdx, beginTime);
         int ret = DEVICE_MACHINE_OK;
@@ -465,6 +474,9 @@ struct DynMachineManager {
             DEV_INFO("SchedThreadEnter idx=%d round=%d", threadIdx, (int)kargs->parameter.globalRound);
             ret = RunSche(kargs, entry, threadIdx);
             DEV_INFO("SchedThreadLeave idx=%d ret=%d", threadIdx, ret);
+            if (ret != DEVICE_MACHINE_OK) {
+                DeviceTrace::GetInstance().ReportTraceMsg();
+            }
 
             if (splittedInfo_.ScheSync(runtimeDataCurrent, devArgs.scheCpuNum)) {
                 if (unlikely(!schMachine_.CheckAndResetReg())) {

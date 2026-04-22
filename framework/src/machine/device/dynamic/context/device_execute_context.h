@@ -21,6 +21,7 @@
 #include "machine/device/dynamic/context/device_stitch_context.h"
 #include "machine/device/dynamic/context/device_task_context.h"
 #include "machine/device/dynamic/costmodel_utils.h"
+#include "../device_trace.h"
 
 namespace npu::tile_fwk::dynamic {
 
