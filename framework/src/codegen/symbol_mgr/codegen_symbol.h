@@ -94,7 +94,7 @@ struct TileTensor {
                 // only calc linear offset in the outermost loop, tensor in loop use base addr from tensor out of loop
                 linearOffset = CalcLinearOffset(rawShape, localBufOffset);
             }
-            if (linearOffset != 0) {
+            if (linearOffset != 0 && bufType != BUF_L1) {
                 // append linear offset, e.g. UBTileTensorFP32Dim2_1 ubTensor_1((uint64_t)((float *)UB_S0_E4096 + 32))
                 oss << "((" << DataType2CCEStr(dtype) << " *)" << bufVar << " + " << linearOffset << ")";
             } else {

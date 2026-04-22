@@ -212,7 +212,6 @@ private:
         std::vector<int> &groupNextUseTime, std::unordered_map<int, size_t> &nextUseTimeCache, bool isGenSpill);
     Operation* GetSpillIssue(Operation* allocOp, int memId, bool isGenSpill);
     bool CheckMachineAndL1(Operation* spillOp, Operation* allocOp);
-    bool CheckParallelL0C2L1(Operation* spillOp);
     bool IsBelongSpillBlackList(Operation* spillOp, Operation* op);
     void FindFilterLtags(Operation* allocOp, std::set<Operation*> &filterLtags);
     Status SpillAllBuffer(Operation* allocOp, size_t &pcIdx, bool isGenSpill, LocalBufferPtr allocBuffer);
@@ -238,11 +237,20 @@ private:
     Status UpdateReloadIssueInfo(Operation* reloadAlloc, Operation* reloadCopyin,
         Operation* spillOp, int spillMemId, Operation* allocOp);
     bool HasEnoughBuffer(Operation* allocOp, MemoryType memType);
+    // spill assemble
     Status SpillAssembleBuffer(SpillInfo &spillInfo, Operation* allocOp, size_t &pcIdx,
         LocalBufferPtr allocBuffer, bool isGenSpill);
-    Status SpillParticalBuffer(SpillInfo &spillInfo, Operation* allocOp, Operation* assembleOp,
+    Status SpillParticalBuffer(SpillInfo &spillInfo, Operation* allocOp, Operation* producerOp,
         LogicalTensorPtr assembleTensor, bool &isFirst, bool isGenSpill);
     Status FindAssembleWithSpillTensor(SpillInfo &spillInfo, std::vector<Operation*> &assembleOps);
+    bool IsSupportedPartialWriteProducer(const Operation &op) const;
+    Status GetPartialWriteReplayAttr(Operation* producerOp, std::vector<int64_t> &toOffset,
+        std::vector<SymbolicScalar> &toDynOffset, std::vector<SymbolicScalar> &fromDynValidShape) const;
+    Operation* FindAllocForAssembleProducers(const std::vector<Operation*> &assembleOps) const;
+    bool HasNZHorizontalSlice(const std::vector<Operation*> &assembleOps) const;
+    Status RejectIfNZHorizontalSlice(SpillInfo &spillInfo, std::vector<Operation*> &assembleOps);
+    Status ReplayPartialWriteProducers(SpillInfo &spillInfo, Operation* allocOp,
+        LogicalTensorPtr assembleTensor, const std::vector<Operation*> &assembleOps, bool isGenSpill);
     Status SpillOnBlock() override;
     Status SpillOnCoreBlock(CoreLocationType targetCore, bool &didSpill);
     Operation* SkipViewChain(Operation* start, bool followProducers);
@@ -270,9 +278,8 @@ private:
     Operation* UpdateIssueAttr(Operation &newOp, std::vector<int> memIds, Operation* allocOp,
         int &bufNextUseOrder, bool isGenSpill);
     Status UpdateAssembleBuffer(SpillInfo &spillInfo, LocalBufferPtr allocBuffer, LogicalTensorPtr assembleTensor);
-    LogicalTensorPtr CreateAssemblePartTensor(LogicalTensorPtr iOperand, LogicalTensorPtr assembleTensor,
-        SpillInfo &spillInfo, std::shared_ptr<AssembleOpAttribute> assembleAttr);
-    int64_t CalcWorkspaceOffset(std::vector<int64_t> shape, std::vector<int64_t> offset, DataType dataType);
+    LogicalTensorPtr CreateAssemblePartTensor(
+        LogicalTensorPtr iOperand, LogicalTensorPtr assembleTensor, const std::vector<int64_t> &toOffset);
     void GetWorkspaceBaseOffset(LogicalTensorPtr ddrTensor, int64_t& base);
     Status UpdateCopyOutMode(Operation& copyOutOp);
     Status UpdateCopyInMode(Operation& copyInOp);

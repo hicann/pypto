@@ -113,7 +113,7 @@ INLINE void TLoadND2NZ(T& dst, U& src, const int64_t& offset0, const int64_t& of
         gmOffset = gmOffset >> 1;
     }
     globalData src0Global(
-        (__gm__ typename U::Type*)(src.GetAddr() + gmOffset), shapeDim2(staticL1H, staticL1W),
+        (__gm__ typename U::Type*)(src.GetAddr() + gmOffset), shapeDim2(dstShape0, dstShape1),
         strideDim2(srcStride0, srcStride1));
     tileData dstL1(dstShape0, dstShape1);
     pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
@@ -127,7 +127,8 @@ INLINE void TLoadND2NZ(T& dst, U& src, const int64_t& offset0, const int64_t& of
 // Copy data from DDR to L1 with NZ -> NZ format
 template <PaddingMode padMode, typename T, typename U>
 INLINE void TLoadNZ2NZ(
-    T& dst, U& src, const int64_t& offset0, const int64_t& offset1, const int64_t& curH, const int64_t& curW)
+    T& dst, U& src, const int64_t& dstOffset0, const int64_t& dstOffset1, const int64_t& srcOffset0,
+    const int64_t& srcOffset1, const int64_t& curH, const int64_t& curW)
 {
     constexpr bool isB4 = CheckIsB4<T>();
     constexpr int64_t c0Size = isB4 ? FP4_BLOCK_ALIGN_BYTE : BLOCK_ALIGN_BYTE / sizeof(typename U::Type);
@@ -144,7 +145,8 @@ INLINE void TLoadNZ2NZ(
     using tileData = pto::Tile<
         pto::TileType::Mat, typename T::Type, staticL1H, staticL1W, pto::BLayout::ColMajor, -1, -1,
         pto::SLayout::RowMajor>;
-    int64_t gmOffset = CalNZOffset(srcShape0, srcShape1, offset0, offset1, c0Size);
+    int64_t gmOffset = CalNZOffset(srcShape0, srcShape1, srcOffset0, srcOffset1, c0Size);
+    int64_t l1Offset = CalNZOffset(dstShape0, dstShape1, dstOffset0, dstOffset1, c0Size);
     if constexpr (isB4) {
         gmOffset = gmOffset >> 1;
     }
@@ -152,7 +154,7 @@ INLINE void TLoadNZ2NZ(
         (__gm__ typename U::Type*)(src.GetAddr() + gmOffset), shapeDim2(dstShape1 / c0Size, dstShape0 / BLOCK_CUBE_M_N),
         strideDim2(srcShape0 * srcShape1, srcShape0 * c0Size, BLOCK_CUBE_M_N * c0Size));
     tileData dstL1(dstShape0, dstShape1);
-    pto::TASSIGN(dstL1, (uint64_t)dst.GetAddr());
+    pto::TASSIGN(dstL1, (uint64_t)((typename T::Type*)dst.GetAddr() + l1Offset));
     pto::TLOAD(dstL1, src0Global);
     if constexpr (padMode != PaddingMode::NO_PADDING) {
         pto::TFILLPAD(dstL1, dstL1);
@@ -162,25 +164,27 @@ INLINE void TLoadNZ2NZ(
 
 // Copy data from DDR to L1
 template <CopyInMode copyMode, PaddingMode padMode, typename Coord, typename T, typename U>
-TILEOP void TLoad(T& dst, U& src, const Coord& coord, const int64_t& curH, const int64_t& curW)
+TILEOP void TLoad(
+    T& dst, U& src, const Coord& dstCoord, const Coord& srcCoord, const int64_t& curH, const int64_t& curW)
 {
     constexpr auto shapeSize = Std::tuple_size<typename T::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     if (!CheckShapeValid(dst, src)) {
         return;
     }
-    int64_t offset0 = coord.GetValue();
-    int64_t offset1 = static_cast<const Std::tuple<size_t>&>(coord).GetValue();
-
+    int64_t dstOffset0 = TileOp::GetTupleElement<Coord, DIM_1ST, shapeSize, 0>(dstCoord);
+    int64_t dstOffset1 = TileOp::GetTupleElement<Coord, DIM_2ND, shapeSize, 0>(dstCoord);
+    int64_t srcOffset0 = TileOp::GetTupleElement<Coord, DIM_1ST, shapeSize, 0>(srcCoord);
+    int64_t srcOffset1 = TileOp::GetTupleElement<Coord, DIM_2ND, shapeSize, 0>(srcCoord);
     static_assert(
         T::FORMAT == Hardware::L1 && U::FORMAT == Hardware::GM,
         "[TLoad Error]: Dst format shoulde be L1 and Src format shoulde be GM");
     if constexpr (copyMode == CopyInMode::ND2NZ) {
-        TLoadND2NZ<padMode>(dst, src, offset0, offset1);
+        TLoadND2NZ<padMode>(dst, src, srcOffset0, srcOffset1);
     } else if constexpr (copyMode == CopyInMode::NZ2NZ) {
-        TLoadNZ2NZ<padMode>(dst, src, offset0, offset1, curH, curW);
+        TLoadNZ2NZ<padMode>(dst, src, dstOffset0, dstOffset1, srcOffset0, srcOffset1, curH, curW);
     } else if constexpr (copyMode == CopyInMode::ND2ND) {
-        TLoadND2ND(dst, src, offset0, offset1);
+        TLoadND2ND(dst, src, srcOffset0, srcOffset1);
     }
     return;
 }
