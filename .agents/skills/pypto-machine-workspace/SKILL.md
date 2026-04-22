@@ -208,7 +208,7 @@ workspaceSize = TOTAL
 │   └── 否 ↓
 ├── debug.DumpTensor 或 leafDumpWorkspace 非零？
 │   ├── 是 → 调试模式开销，确认是否关闭了调试选项
-│   └── 否 → 需综合分析各项，可能存在多项均偏大的情况
+│   └── 否 → 综合分析：按各组件 workspace 占比降序排列，优先处理占比最高的组件（阈值：单项 > 30% 或多项合计 > 60%）
 ```
 
 **⚠️ 重要**：绝大多数 workspace 偏大问题集中在 **Tensor Workspace**，直接进入步骤 5 是最常见路径。
