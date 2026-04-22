@@ -3,6 +3,7 @@
         "pg_parallel_lower_bound": 20,
         "pg_upper_bound": 10000,
         "pg_lower_bound": 512,
+        "pg_partition_algorithm": "Iso",
         "mg_copyin_upper_bound": 104857600,
         "mg_vec_parallel_lb": 48,
         "pg_skip_partition": false,

@@ -2163,6 +2163,7 @@ Json Function::DumpJson(bool useTable)
     funcJson["_sg_pg_upperbound"] = paramConfigs_.sgPgUpperBound;
     funcJson["_sg_pg_lowerbound"] = paramConfigs_.sgPgLowerBound;
     funcJson["_sg_parallel_num"] = paramConfigs_.sgParallelNum;
+    funcJson["_sg_partition_algorithm"] = paramConfigs_.sgPartitionAlgorithm;
     funcJson["_sg_mg_copyin_upper_bound"] = paramConfigs_.sgMgCopyInUpperBound;
     funcJson["_mg_vec_parallel_lb"] = paramConfigs_.mgVecParallelLb;
     funcJson["_pg_skip_partition"] = paramConfigs_.pgSkipPartition;
@@ -2183,8 +2184,7 @@ Json Function::DumpJson(bool useTable)
             if (slotScope_ != nullptr && i < slotScope_->ioslot.incastSlot.size()) {
                 incast.second = slotScope_->ioslot.incastSlot[i];
             } else {
-                std::vector<int> emptyIncast;
-                incast.second = emptyIncast;
+                incast.second = std::vector<int>();
             }
             incasts.push_back(incast);
         }
@@ -2477,13 +2477,13 @@ std::shared_ptr<Function> Function::LoadJson(Program& belongTo, const Json& func
     std::unordered_map<int, std::shared_ptr<LogicalTensor>> tensorDict;
     LoadTensorJson(func, funcJson, rawTensorDict, tensorDict);
     func->opSeed_ = funcJson["_opseed"].get<int>();
-    int rawid = funcJson["_rawid"].get<int>();
-    IdGen<IdType::RAW_TENSOR>::Inst().SetId(rawid);
+    IdGen<IdType::RAW_TENSOR>::Inst().SetId(funcJson["_rawid"].get<int>());
     int funcid = funcJson["_funcid"].get<int>();
     IdGen<IdType::FUNCTION>::Inst().SetId(funcid);
     func->paramConfigs_.sgPgUpperBound = funcJson["_sg_pg_upperbound"].get<int>();
     func->paramConfigs_.sgPgLowerBound = funcJson["_sg_pg_lowerbound"].get<int>();
     func->paramConfigs_.sgParallelNum = funcJson["_sg_parallel_num"].get<int>();
+    func->paramConfigs_.sgPartitionAlgorithm = funcJson["_sg_partition_algorithm"].get<std::string>();
     func->paramConfigs_.sgMgCopyInUpperBound = funcJson["_sg_mg_copyin_upper_bound"].get<int>();
     func->paramConfigs_.mgVecParallelLb = funcJson["_mg_vec_parallel_lb"].get<int>();
     func->paramConfigs_.pgSkipPartition = funcJson["_pg_skip_partition"].get<bool>();
@@ -2516,7 +2516,6 @@ std::shared_ptr<Function> Function::LoadJson(Program& belongTo, const Json& func
     std::shared_ptr<TensorSlotScope> tensorSlotScope = std::make_shared<TensorSlotScope>(func.get());
     tensorSlotScope->ioslot = ioSlot;
     func->slotScope_ = tensorSlotScope;
-
     func->ComputeHashOrderless();
     func->functionHash_ = std::stoull(funcJson["hash"].get<std::string>());
 

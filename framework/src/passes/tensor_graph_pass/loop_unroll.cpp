@@ -377,6 +377,7 @@ Status LoopUnroll::CreateLoopUnrollFunc(Function* function)
     std::shared_ptr<ConfigScope> currentScope = ConfigManagerNg::GetInstance().CurrentScope();
     paramConfigs.sgPgUpperBound = currentScope->GetPassConfig<int>(SG_PG_UPPER_BOUND);
     paramConfigs.sgPgLowerBound = currentScope->GetPassConfig<int>(SG_PG_LOWER_BOUND);
+    paramConfigs.sgPartitionAlgorithm = currentScope->GetPassConfig<std::string>(SG_PARTITION_ALGORITHM);
     paramConfigs.sgParallelNum = currentScope->GetPassConfig<int>(SG_PARALLEL_NUM);
     paramConfigs.sgMgCopyInUpperBound = currentScope->GetPassConfig<int>(MG_COPYIN_UPPER_BOUND);
     paramConfigs.machineConfig_ = currentScope->GetRuntimeConfig<uint8_t>(DEVICE_SCHED_MODE);

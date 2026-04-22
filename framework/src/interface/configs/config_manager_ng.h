@@ -31,6 +31,7 @@ namespace npu::tile_fwk {
 constexpr const char* SG_PARALLEL_NUM = "pg_parallel_lower_bound";
 constexpr const char* SG_PG_UPPER_BOUND = "pg_upper_bound";
 constexpr const char* SG_PG_LOWER_BOUND = "pg_lower_bound";
+constexpr const char* SG_PARTITION_ALGORITHM = "pg_partition_algorithm";
 constexpr const char* SG_SET_SCOPE = "sg_set_scope";
 constexpr const char* CUBE_L1_REUSE_SETTING = "cube_l1_reuse_setting";
 constexpr const char* CUBE_NBUFFER_SETTING = "cube_nbuffer_setting";

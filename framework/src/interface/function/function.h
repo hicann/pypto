@@ -457,6 +457,7 @@ struct ParamConfigs {
     int sgPgLowerBound{1};
     int sgParallelNum{1};
     int sgMgCopyInUpperBound{2 * 1024 * 1024};
+    std::string sgPartitionAlgorithm{"Iso"};
     uint8_t machineConfig_{0}; // machine config
     std::map<int64_t, int64_t> cubeL1ReuseSetting;
     std::map<int64_t, int64_t> cubeNBufferSetting;

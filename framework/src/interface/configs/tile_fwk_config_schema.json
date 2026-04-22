@@ -36,6 +36,38 @@
                     "minimum": 0,
                     "maximum": 2147483647
                 },
+                "pg_partition_algorithm": {
+                    "type": "string",
+                    "enum": ["Iso", "OspSarkar", "OspBsp"],
+                    "default" : "Iso",
+                    "label": {
+                        "zh": "",
+                        "en": "Graph merging parameter, used to configure the partitioning algorithm."
+                    },
+                    "options": [
+                        {
+                            "value": "Iso",
+                            "label": {
+                                "zh": "基于同构检测融合瓦片内核",
+                                "en": "Fuses tile kernels based on isomorphism detection."
+                            }
+                        },
+                        {
+                            "value": "OspSarkar",
+                            "label": {
+                                "zh": "基于关键路径缩减的瓦片内核融合。",
+                                "en": "Fuses tile kernels based on critical path reduction."
+                            }
+                        },
+                        {
+                            "value": "OspBsp",
+                            "label": {
+                                "zh": "基于 BSP 模型融合瓦片内核，用于并行计算和同构检测。",
+                                "en": "Fuses tile kernels based on the BSP model for parallel computation and isomorphism detection."
+                            }
+                        }
+                    ]
+                },
                 "cube_l1_reuse_setting": {
                     "type": "object",
                     "typeHints": "intmap",

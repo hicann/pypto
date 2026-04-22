@@ -444,7 +444,7 @@ inline bool IsL0cToL1MoveOp(Operation* op)
            op->GetOOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_L1;
 }
 
-inline bool SuperNodeGraphBuilder::L1CopyInCombine(
+bool SuperNodeGraphBuilder::L1CopyInCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair)
 {
@@ -482,7 +482,7 @@ inline bool SuperNodeGraphBuilder::L1CopyInCombine(
     return false;
 }
 
-inline bool SuperNodeGraphBuilder::ConvertCombine(
+bool SuperNodeGraphBuilder::ConvertCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair)
 {
@@ -519,7 +519,7 @@ inline bool SuperNodeGraphBuilder::ConvertCombine(
     return true;
 }
 
-inline bool SuperNodeGraphBuilder::AssembleCombine(
+bool SuperNodeGraphBuilder::AssembleCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair)
 {
@@ -547,7 +547,7 @@ inline bool SuperNodeGraphBuilder::AssembleCombine(
     return false;
 }
 
-inline bool SuperNodeGraphBuilder::CopyOutCombine(
+bool SuperNodeGraphBuilder::CopyOutCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair, bool assembleScene)
 {
@@ -568,7 +568,7 @@ inline bool SuperNodeGraphBuilder::CopyOutCombine(
     return false;
 }
 
-inline bool SuperNodeGraphBuilder::CopyInCombine(
+bool SuperNodeGraphBuilder::CopyInCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair)
 {
@@ -588,7 +588,7 @@ inline bool SuperNodeGraphBuilder::CopyInCombine(
     return false;
 }
 
-inline bool SuperNodeGraphBuilder::MulAccCombine(
+bool SuperNodeGraphBuilder::MulAccCombine(
     const std::shared_ptr<OperationGraphInfo> operationInfo, std::vector<Operation*>& opList, int32_t i,
     std::vector<std::pair<int32_t, int32_t>>& mergePair)
 {
@@ -619,7 +619,30 @@ inline bool SuperNodeGraphBuilder::MulAccCombine(
     return false;
 }
 
-inline bool SuperNodeGraphBuilder::AssembleToCopyoutScene(Operation* op)
+bool SuperNodeGraphBuilder::ExpandCombine(
+    const std::shared_ptr<OperationGraphInfo> operationInfo,
+    std::vector<Operation*>& opList,
+    int32_t i,
+    std::vector<std::pair<int32_t, int32_t>>& mergePair)
+{
+    if (i < 0 || i >= static_cast<int32_t>(opList.size())) {
+        return false;
+    }
+    // Expand operation with only one child
+    if (opList[i]->GetOpcode() == Opcode::OP_EXPAND) {
+        if (operationInfo->outGraph_[i].size() == 1U) {
+            mergePair.emplace_back(i, *(operationInfo->outGraph_[i].begin()));
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "Combine %d and %d for Expand in building SuperNode.",
+                opList[i]->GetOpMagic(),
+                opList[*(operationInfo->outGraph_[i].begin())]->GetOpMagic());
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SuperNodeGraphBuilder::AssembleToCopyoutScene(Operation* op)
 {
     auto assembleIn = op->iOperand.front();
     auto parentOp = *assembleIn->GetProducers().begin();
