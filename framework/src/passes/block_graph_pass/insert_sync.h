@@ -96,11 +96,15 @@ enum class PipeSeq {
     AIC_MTE1,
     AIC_M,
     AIC_FIX,
-    AIV_MTE2,
-    AIV_V,
-    AIV_MTE3,
+    AIV0_MTE2,
+    AIV1_MTE2,
+    AIV0_V,
+    AIV1_V,
+    AIV0_MTE3,
+    AIV1_MTE3,
     AIC_MTE3,
-    AIV_S,
+    AIV0_S,
+    AIV1_S,
     AIC_S,
     PIPE_END
 };
@@ -173,14 +177,15 @@ private:
     };
 
     struct PipeCore {
-        PipeCore(PipeType ps, PipeType pe, CoreType c) : pipeStart(ps), pipeEnd(pe), core(c) {}
+        PipeCore(PipeType ps, PipeType pe, CoreType c, AIVCore a) : pipeStart(ps), pipeEnd(pe), core(c), aivCore(a) {}
         PipeType pipeStart;
         PipeType pipeEnd;
         CoreType core;
+        AIVCore aivCore;
 
         bool operator==(const PipeCore& t) const
         {
-            return (this->pipeStart == t.pipeStart && this->pipeEnd == t.pipeEnd && this->core == t.core);
+            return (this->pipeStart == t.pipeStart && this->pipeEnd == t.pipeEnd && this->core == t.core && this->aivCore == t.aivCore);
         }
 
         bool operator!=(const PipeCore& t) const { return !(*this == t); }
@@ -189,12 +194,14 @@ private:
     struct PipeCoreCompare {
         bool operator()(const PipeCore& lhs, const PipeCore& rhs) const
         {
-            return ((static_cast<uint64_t>(lhs.core) << LEFT_OFFSET4) |
-                    (static_cast<uint64_t>(lhs.pipeStart) << LEFT_OFFSET2) |
-                    (static_cast<uint64_t>(lhs.pipeEnd) << LEFT_OFFSET3)) <
-                   ((static_cast<uint64_t>(rhs.core) << LEFT_OFFSET4) |
-                    (static_cast<uint64_t>(rhs.pipeStart) << LEFT_OFFSET2) |
-                    (static_cast<uint64_t>(rhs.pipeEnd) << LEFT_OFFSET3));
+            return ((static_cast<uint64_t>(lhs.core) << LEFT_OFFSET1) |
+                    (static_cast<uint64_t>(lhs.pipeStart) << LEFT_OFFSET4) |
+                    (static_cast<uint64_t>(lhs.pipeEnd) << LEFT_OFFSET2) |
+                    (static_cast<uint64_t>(lhs.aivCore) << LEFT_OFFSET3)) <
+                   ((static_cast<uint64_t>(rhs.core) << LEFT_OFFSET1) |
+                    (static_cast<uint64_t>(rhs.pipeStart) << LEFT_OFFSET4) |
+                    (static_cast<uint64_t>(rhs.pipeEnd) << LEFT_OFFSET2) |
+                    (static_cast<uint64_t>(rhs.aivCore) << LEFT_OFFSET3));
         }
     };
 
@@ -264,8 +271,8 @@ private:
     };
 
     struct IssueQueue {
-        explicit IssueQueue(PipeCoreReal pipe) : selfPipeCore(pipe) {}
-        PipeCoreReal selfPipeCore;
+        explicit IssueQueue(PipeCoreRealEx pipe) : selfPipeCore(pipe) {}
+        PipeCoreRealEx selfPipeCore;
         size_t currOp{0};
         std::vector<size_t> ops;
         std::string DumpIssueQueue(std::vector<Operation*> opLogPtr = {});
@@ -296,8 +303,8 @@ private:
     };
 
     std::string PipeSeqName(PipeSeq seq) const;
-    PipeSeq GetPipeSeq(PipeCoreReal pipe);
-    PipeCoreReal GetPipeFromSeq(PipeSeq seq);
+    PipeSeq GetPipeSeq(PipeCoreRealEx pipe);
+    PipeCoreRealEx GetPipeFromSeq(PipeSeq seq);
     Status PipeDispatch(const std::vector<Operation*> opLogPtr, std::vector<IndexOp>& syncedOpLog);
     Status AdjustCopyInCfg(TileOpCfg& opcfg, const Operation& op);
     Status AdjustCopyOutCfg(TileOpCfg& opcfg, const Operation& op);
@@ -368,8 +375,8 @@ private:
     std::unordered_map<CorePair, std::deque<int>, CorePairHash> crossCoreFreeEventId_;
     std::unordered_map<std::pair<size_t, size_t>, int, IndexVecHash> setWaitPairMap_;
     std::map<PipeCoreRealEx, PipeDepInfo, PipeCoreRealExCompare> latestPipeDep_;
-    static std::map<PipeCoreReal, PipeSeq, PipeCoreRealCompare> pipe2Seq;
-    static std::map<PipeSeq, PipeCoreReal> seq2pipe;
+    static std::map<PipeCoreRealEx, PipeSeq, PipeCoreRealExCompare> pipe2Seq;
+    static std::map<PipeSeq, PipeCoreRealEx> seq2pipe;
     static std::vector<PipePair> dataDepPair;
 
     static constexpr int EVENT_NUM = 8;
