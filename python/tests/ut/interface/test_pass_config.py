@@ -35,7 +35,7 @@ def test_pass_config():
     # reset
     pypto.set_pass_config("PVC2_OOO", "ExpandFunction", pypto.PassConfigKey.KEY_DUMP_GRAPH, False)
 
-    with pytest.raises(TypeError, match=r"Expected boolean type, but received int"):
+    with pytest.raises(pypto.error.PassError, match=r"Expected boolean type, but received int"):
         pypto.get_pass_default_config(pypto.PassConfigKey.KEY_DUMP_GRAPH, -2)
 
 

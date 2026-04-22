@@ -89,3 +89,10 @@ class PyptoRtError(PyptoError):
     def __init__(self, msg: Union[str, Exception]):
         err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
         super().__init__(err_code, msg)
+
+
+class PassError(ParserError):
+    """Error class for Pass management and configuration errors."""
+    def __init__(self, msg: Union[str, Exception]):
+        err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
+        super().__init__(err_code, msg)
