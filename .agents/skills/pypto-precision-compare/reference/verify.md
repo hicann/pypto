@@ -87,13 +87,36 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /p
 - dtype=8: BF16 格式（2字节）
 - dtype=7: FP32 格式（4字节）
 
-### 3. 检查点插入位置问题
+### 3. FP8/BOOL 类型转换问题（重要）
+
+**问题**：FP8 和 BOOL 类型无法直接进行算术运算比对
+- FP8 类型（dtype=5/17/18）：PyTorch CPU对 `torch.float8_e4m3fn/e5m2` 的算术运算支持有限
+- BOOL 类型（dtype=15）：`torch.bool` 不支持数值运算（减法、加法等）
+
+**修正**：**两边必须同时转换为可计算类型后再保存对比**
+
+```python
+# kernel 侧：FP8 转 FP32
+temp_fp8 = pypto.compute_op(...)  # dtype=17/18 FP8 结果
+temp_compare = pypto.cast(temp_fp8, pypto.DT_FP32)   # 转为 FP32 用于对比
+pypto.pass_verify_save(temp_compare, "checkpoint_name_FP8")
+
+# golden 侧：FP8 转 FP32（计算时已为高精度，只需确保类型一致）
+temp = compute_op(...)
+torch.save(temp.to(torch.float32), f"{output_dir}/golden_checkpoint_name_FP8.pt")
+```
+
+**注意**：
+- **两边必须使用相同的转换类型**（FP8 → FP32，BOOL → INT8）
+- 转换类型后，容差标准按转换前的类型设置（读取时会按照csv保存的类型，但带*_FP8此类类型后缀的按FP8类型容差判断）
+
+### 4. 检查点插入位置问题
 
 **原则**：检查点位置要一一对应
 - 如果 kernel 在 A→B→C 三个步骤后都插入检查点，golden 也需要在对应步骤保存
 - 保持两边计算逻辑和保存时机完全一致
 
-### 4. 切块计算问题
+### 5. 切块计算问题
 
 **原则**：保持保存的数据维度一致
 
@@ -101,7 +124,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /p
 1. **golden 保存对应的切片数据**：golden 一次性计算完整数据，只保存与 kernel 对应的切片
 2. **golden 改写为和 kernel 实现完全一致**（推荐）：golden 模拟 kernel 的循环结构和分块策略
 
-### 5. 精度标准问题
+### 6. 精度标准问题
 
 **修正**：对比工具根据数据类型自动设置容差：
 
@@ -115,7 +138,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /p
 | FP32 | 7 | 1e-3 | 1e-4 |
 | BF16 | 8 | 5e-3 | 5e-2 |
 
-### 6. 量化场景容差设置
+### 7. 量化场景容差设置
 
 **修正**：使用 `--rtol` 和 `--atol` 参数指定自定义容差：
 ```bash
@@ -125,7 +148,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py \
     -v
 ```
 
-### 7. 对比逻辑问题
+### 8. 对比逻辑问题
 
 **修正**：对比工具使用 `torch.isclose` 统计不匹配个数：
 - 判断条件：不匹配个数 < 总数 * max(rtol, atol)
