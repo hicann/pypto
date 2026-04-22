@@ -19,6 +19,7 @@
 #include <sstream>
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
+#include "symbolic_scalar_simplify.h"
 
 constexpr uint64_t IMMEDIATE = 0;
 constexpr uint64_t SYMBOL = 1;
@@ -508,15 +509,15 @@ void SymbolicScalar::AsIntermediateVariable() { raw_->AsIntermediateVariable(); 
 
 bool SymbolicScalar::IsIntermediateVariable() const { return raw_->IsIntermediateVariable(); }
 
-#define SYMBOLIC_SCALAR_DEFINE_UOP(name, uop, rawname)  \
-    SymbolicScalar SymbolicScalar::name() const         \
-    {                                                   \
-        auto raw = rawname(raw_);                       \
-        if (ConcreteValid()) {                          \
-            return SymbolicScalar(raw, uop Concrete()); \
-        } else {                                        \
-            return SymbolicScalar(raw);                 \
-        }                                               \
+#define SYMBOLIC_SCALAR_DEFINE_UOP(name, uop, rawname) \
+    SymbolicScalar SymbolicScalar::name() const        \
+    {                                                  \
+        auto raw = rawname(raw_);                      \
+        if (ConcreteValid()) {                         \
+            return SymbolicScalar(uop Concrete());     \
+        } else {                                       \
+            return SymbolicScalar(raw);                \
+        }                                              \
     }
 SYMBOLIC_SCALAR_DEFINE_UOP(Pos, +, RawSymbolicExpression::CreateUopPos)
 SYMBOLIC_SCALAR_DEFINE_UOP(Neg, -, RawSymbolicExpression::CreateUopNeg)
@@ -528,7 +529,7 @@ SYMBOLIC_SCALAR_DEFINE_UOP(Not, !, RawSymbolicExpression::CreateUopNot)
     {                                                                     \
         auto raw = rawname(raw_, sval.raw_);                              \
         if (ConcreteValid() && sval.ConcreteValid()) {                    \
-            return SymbolicScalar(raw, Concrete() bop sval.Concrete());   \
+            return SymbolicScalar(Concrete() bop sval.Concrete());        \
         } else {                                                          \
             return SymbolicScalar(raw);                                   \
         }                                                                 \
@@ -607,6 +608,16 @@ std::string SymbolicScalar::Dump() const
     return buf.str();
 }
 
+SymbolicScalar SymbolicScalar::Simplify() const
+{
+    if (!raw_ || concreteValid_) {
+        return *this;
+    }
+    SymbolicScalarSimplify simplifier;
+    auto simplified = simplifier.Simplify(raw_);
+    return SymbolicScalar(simplified);
+}
+
 bool SymbolicScalar::IsImmediate() const { return raw_ && raw_->IsImmediate(); }
 bool SymbolicScalar::IsSymbol() const { return raw_ && raw_->IsSymbol(); }
 bool SymbolicScalar::IsExpression() const { return raw_ && raw_->IsExpression(); }
@@ -644,9 +655,6 @@ SymbolicScalar::SymbolicScalar(int64_t value)
 SymbolicScalar::SymbolicScalar(const std::string& name) : raw_(RawSymbolicSymbol::Create(name)) {}
 SymbolicScalar::SymbolicScalar(const std::string& name, int64_t value)
     : raw_(RawSymbolicSymbol::Create(name)), concreteValid_(true), concrete_(value)
-{}
-SymbolicScalar::SymbolicScalar(RawSymbolicScalarPtr raw, int64_t concrete)
-    : raw_(raw), concreteValid_(true), concrete_(concrete)
 {}
 SymbolicScalar::SymbolicScalar(RawSymbolicScalarPtr raw) : raw_(raw)
 {

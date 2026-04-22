@@ -522,7 +522,7 @@ SymbolicScalar npu::tile_fwk::GetViewValidShapeDim(
         SymbolicScalar getViewValidShape(getViewValidShapeName);
         result = getViewValidShape(validShapeDim, viewOffsetDim, viewShapeDim);
     }
-    return result;
+    return result.Simplify();
 }
 
 std::vector<SymbolicScalar> npu::tile_fwk::GetViewValidShape(

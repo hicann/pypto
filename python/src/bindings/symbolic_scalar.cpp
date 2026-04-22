@@ -61,5 +61,7 @@ void BindSymbolicScalar(py::module& m)
         .def("Max", &SymbolicScalar::Max, py::arg("other"));
 
     _SymbolicScalar.def("Pos", &SymbolicScalar::Pos).def("Neg", &SymbolicScalar::Neg).def("Not", &SymbolicScalar::Not);
+
+    _SymbolicScalar.def("Simplify", &SymbolicScalar::Simplify);
 }
 } // namespace pypto

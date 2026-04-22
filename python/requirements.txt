@@ -15,7 +15,6 @@ setproctitle
 psutil
 
 # pypto 依赖
-sympy
 PyYAML
 
 # 绘制泳道图

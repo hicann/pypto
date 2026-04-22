@@ -11,7 +11,6 @@
 import typing
 from typing import Union, List, Optional, Tuple, Sequence
 
-import sympy
 import pypto
 
 from .enum import *  # noqa
@@ -582,7 +581,7 @@ class Tensor:
             offsets.append(start)
             tshape = stop - start
             if isinstance(tshape, SymbolicScalar):
-                tshape = int(sympy.sympify(str(tshape)))
+                tshape = int(tshape.simplify())
             shapes.append(tshape)  # shape should be concrete
         return offsets, shapes
 

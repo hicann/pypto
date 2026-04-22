@@ -104,6 +104,8 @@ public:
 
     std::string Dump() const;
 
+    SymbolicScalar Simplify() const;
+
     SymbolicScalar operator()() const;
     SymbolicScalar operator()(const SymbolicScalar& arg0) const;
     SymbolicScalar operator()(const SymbolicScalar& arg0, const SymbolicScalar& arg1) const;
@@ -124,7 +126,6 @@ public:
 
 public:
     /* internal use */
-    SymbolicScalar(RawSymbolicScalarPtr raw, int64_t concrete);
     SymbolicScalar(RawSymbolicScalarPtr raw);
 
     RawSymbolicScalarPtr Raw() const { return raw_; }

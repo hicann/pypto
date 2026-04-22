@@ -262,6 +262,8 @@ class SymbolicScalar:
 
     def Not(self) -> SymbolicScalar: ...
 
+    def Simplify(self) -> SymbolicScalar: ...
+
 
 class Tensor:
 

@@ -11,23 +11,7 @@
 import re
 from typing import Union
 
-import sympy
-
 from . import pypto_impl
-
-_replacements = {
-    "RUNTIME_Min": "min",
-    "RUNTIME_Max": "max",
-    "RUNTIME_Eq": "Eq",
-    "RUNTIME_Ne": "Ne",
-    "/": "//",  # 'a' / 8 * 8 may be optomized by sympy, that's bad
-}
-
-_REPLACE_PATTERN = re.compile("|".join(_replacements.keys()))
-
-
-def _expr_preprocess(s: str) -> str:
-    return _REPLACE_PATTERN.sub(lambda m: _replacements[m.group(0)], s)
 
 
 class SymbolicScalar:
@@ -156,6 +140,9 @@ class SymbolicScalar:
             return self._base.Concrete()
         else:
             raise ValueError("Not concrete value")
+
+    def simplify(self) -> 'SymbolicScalar':
+        return self.from_base(self._base.Simplify())
 
     def as_variable(self) -> None:
         self._base.AsIntermediateVariable()

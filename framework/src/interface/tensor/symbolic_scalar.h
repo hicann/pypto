@@ -88,8 +88,8 @@ enum class SymbolicOpcode {
     T_BOP_GT,
     T_BOP_GE,
 
-    T_BOP_MIN,
-    T_BOP_MAX,
+    T_BOP_MIN, // deprecated
+    T_BOP_MAX, // deprecated
 
     T_MOP_CALL,
     T_MOP_MIN,
