@@ -635,6 +635,10 @@ def stateless_random_normal_v2(shape, key, counter, alg, dtype) -> Tensor:
 
         pypto.set_vec_tile_shapes(tensor_len)
         pypto.scatter_(f4, 0, u1_index, f2, reduce='add')
+
+        if tensor_len <= 1:
+            return f4
+
         if tensor_len % 2 != 0:
             u2_index = pypto.arange(1, tensor_len, 2)
         pypto.scatter_(f4, 0, u2_index, f3, reduce='add')
@@ -642,10 +646,9 @@ def stateless_random_normal_v2(shape, key, counter, alg, dtype) -> Tensor:
 
     tile_shapes = pypto.get_vec_tile_shapes()
     uniform_res = pypto.stateless_random_uniform_v2(shape, key, counter, alg, dtype=pypto.DT_FP32)
-    box_muller_res = box_muller(uniform_res)
+    normal_res = box_muller(uniform_res)
 
-    normal_res = pypto.reshape(box_muller_res, shape)
     if dtype != pypto.DT_FP32:
         normal_res = pypto.cast(normal_res, dtype)
     pypto.set_vec_tile_shapes(*tile_shapes)
-    return normal_res
+    return pypto.reshape(normal_res, shape)

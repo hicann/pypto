@@ -23,14 +23,14 @@ def stateless_random_normal_v2_numpy_golden(shape, key, counter, alg, dtype):
     """
     Numpy implementation of stateless_random_normal_v2 based on TensorFlow's Philox algorithm.
     Replicates TensorFlow's behavior using the Philox 4x32_10 algorithm with Box-Muller transform.
-    
+
     Args:
         shape: Output shape (list of integers)
         key: Random seed key (list with one uint64 value)
         counter: Counter value (list with two uint64 values)
         alg: Algorithm identifier (list with one int, 1=Philox)
         dtype: Data type (pypto.DT_FP32, pypto.DT_FP16, pypto.DT_BF16)
-    
+
     Returns:
         Random normal array with values from standard normal distribution (mean=0, std=1)
     """
