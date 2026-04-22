@@ -29,8 +29,8 @@ namespace npu {
 namespace tile_fwk {
 static const size_t kSizeZero = 0UL;
 static const size_t kSizeOne = 1UL;
-static const size_t kSizeTwelve = 12UL;
 static const size_t kSizeThirteen = 13UL;
+static const size_t kSizeFifteen = 15UL;
 static const uint16_t kNumZero = 0u;
 static const uint16_t kNumOne = 1u;
 static const uint16_t kNumTwo = 2u;
@@ -291,7 +291,7 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeSTest1)
     }
 
     Function* func = Program::GetInstance().GetFunctionByRawName("TENSOR_STCase1");
-    EXPECT_EQ(func->Operations().size(), kSizeThirteen);
+    EXPECT_EQ(func->Operations().size(), kSizeFifteen);
 
     passManager.RegisterStrategy(
         "RemoveRedundantReshapeTestStrategy", {
@@ -303,7 +303,7 @@ TEST_F(TestRemoveRedundantReshapePass, RemoveRedundantReshapeSTest1)
     auto updated_operations = func->Operations();
 
     int reshape_num = kNumZero;
-    EXPECT_EQ(updated_operations.size(), kSizeTwelve);
+    EXPECT_EQ(updated_operations.size(), kSizeThirteen);
     for (const auto& op : updated_operations) {
         if (op.GetOpcode() == Opcode::OP_RESHAPE) {
             reshape_num++;

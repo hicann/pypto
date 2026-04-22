@@ -1412,9 +1412,6 @@ Tensor Reshape(
 {
     DECLARE_TRACERX(lr);
     CHECK_OP(!inplace) << "The 'inplace' parameter must be false !!!";
-    if (operand.GetShape() == dstshape) {
-        return operand;
-    }
     std::vector<SymbolicScalar> validShapeDefault = validShape;
     auto newShape = CheckAndInferShape(operand.GetShape(), dstshape);
     if (validShape.empty()) {

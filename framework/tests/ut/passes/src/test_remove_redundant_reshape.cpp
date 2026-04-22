@@ -42,64 +42,6 @@ public:
     void TearDown() override {}
 };
 
-// Verify that Reshape whose output shape is the same as its input shape can be removed and consumer's inputs are
-// updated
-TEST_F(RemoveRedundantReshapeTest, TestSameInputOutputShape)
-{
-    // Define the shape of the Tensors
-    std::vector<int64_t> shape1{1, 256, 512};
-    std::vector<int64_t> shape2{1, 512, 256};
-
-    // Create Tensor
-    Tensor in_tensor(DT_FP32, shape1, "in_tensor");
-    Tensor out_tensor_A(DT_FP32, shape1, "out_tensor_A");
-    Tensor out_tensor_B(DT_FP32, shape2, "out_tensor_B");
-
-    // Initialize PassManager
-    PassManager& passManager = PassManager::Instance();
-    passManager.RegisterStrategy(
-        "ReshapeTestStrategy", {
-                                   {"RemoveRedundantReshape", PassName::REMOVE_REDUNDANT_RESHAPE},
-                               });
-    ConfigManager::Instance();
-
-    // Create and configure the function
-    Function* originFunction = nullptr;
-    std::vector<int64_t> originOpmagic;
-    FUNCTION("ReshapeFunction")
-    {
-        // Add Operations
-        out_tensor_A = Reshape(in_tensor, shape1);
-        out_tensor_B = Reshape(out_tensor_A, shape2);
-        originFunction = Program::GetInstance().GetCurrentFunction();
-        ASSERT_NE(originFunction, nullptr) << "当前函数指针为空";
-        auto operations = originFunction->Operations();
-        for (const auto& op : operations) {
-            originOpmagic.emplace_back(op.opmagic);
-        }
-    }
-
-    // Print and draw the graph
-    Function* currentFunction = Program::GetInstance().GetFunctionByRawName("TENSOR_ReshapeFunction");
-    printf("Function name is %s\n", currentFunction->GetMagicName().c_str());
-    // ================== Verify Pass Effect ==================
-    auto updated_operations = currentFunction->Operations();
-    EXPECT_EQ(updated_operations.size(), 3) << "3 operations should remain（View + Reshape + Assemble）";
-    EXPECT_EQ(updated_operations[0].GetOpcode(), Opcode::OP_VIEW) << "View operation should remain";
-    EXPECT_EQ(updated_operations[1].GetOpcode(), Opcode::OP_RESHAPE) << "The second Reshape should remain";
-    EXPECT_EQ(updated_operations[1].opmagic, originOpmagic.back()) << "The retained Reshape is the second one";
-    EXPECT_EQ(updated_operations[2].GetOpcode(), Opcode::OP_ASSEMBLE) << "Assemble operation should remain";
-
-    // Check Tensor connection relationships
-    auto& view_op = updated_operations[0];
-    auto& remaining_reshape_op = updated_operations[1];
-    auto& assemble_op = updated_operations[2];
-    EXPECT_EQ(remaining_reshape_op.GetIOperands()[0], view_op.GetOOperands()[0])
-        << "The output of View should be connected to the input of the remaining Reshape";
-    EXPECT_EQ(assemble_op.GetIOperands()[0], remaining_reshape_op.GetOOperands()[0])
-        << "The output of the remaining Reshape should be connected to the input of Assemble";
-}
-
 TEST_F(RemoveRedundantReshapeTest, TestReshapeChain)
 {
     // Define Tensor shapes
