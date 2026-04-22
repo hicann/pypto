@@ -249,7 +249,8 @@ struct ParallelDevTask {
     uint32_t rear{0};
     uint32_t version;
     uint32_t reserver;
-    int64_t elements[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]; // device task ptr
+    uint32_t idElements[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]; // device task id
+    int64_t ptrElements[npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]; // device task ptr
 };
 
 struct TaskEntry {

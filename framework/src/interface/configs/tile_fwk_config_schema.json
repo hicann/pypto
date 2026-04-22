@@ -274,6 +274,16 @@
                         "zh": "标记在Host端准备好的Tensor名称列表",
                         "en": "Specify the list of Tensor names that are ready on Host"
                     }
+                },
+                "device_sched_parallelism": {
+                    "type": "integer",
+                    "label": {
+                        "zh": "当 pypto.loop 设置了可并行标记(parallel=True)时,此配置项用于指定 pypto.loop 调度执行时的并行度",
+                        "en": "When a pypto.loop is marked as parallelizable (parallel=True), this configuration item is used to set the degree of parallelism when the pypto.loop is scheduled and executed"
+                    },
+                    "default": 1,
+                    "minimum": 1,
+                    "maximum": 8
                 }
             }
         },

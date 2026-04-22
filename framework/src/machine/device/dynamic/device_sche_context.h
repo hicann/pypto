@@ -29,29 +29,27 @@ const uint32_t READY_ID_FIX_CACHE_NUM = 256;
 enum class DevTaskExecStage { INIT = 0, SEND_CORE_TASK = 1, WAIT_TAIL_TASK_FINISH = 2, WAIT_ALL_SCH_FINISH =3,  FINISH = 4 };
 
 struct SchDeviceTaskContext {
-    uint32_t parallelIdx{0}; // parallel context index
-    uint32_t bindParallelCtxVersion{0};
     DeviceTaskCtrl *taskCtrl{nullptr};
-    bool isFirstTaskSend{false};
     ReadyCoreFunctionQueue* readyAicCoreFunctionQue{nullptr};
     ReadyCoreFunctionQueue* readyAivCoreFunctionQue{nullptr};
     ReadyCoreFunctionQueue* readyAicpuFunctionQue{nullptr};
-    uint32_t readyIds[AICORE_TYPE_NUM][READY_ID_FIX_CACHE_NUM];
-    uint32_t readyCount[AICORE_TYPE_NUM]{0,0};
-    uint32_t sendCnt[AICORE_TYPE_NUM]{0,0};
-    uint32_t aicpuTaskSendCnt{0};
-    uint64_t waitTaskCnt[AICORE_TYPE_NUM]{0,0};
-    uint64_t resolveHubCnt{0};
-    uint32_t curSent{0};
-    uint32_t lastSent{0};
-    uint32_t allSent{0};
-    bool isFree{true};
-    DevTaskExecStage curStage{DevTaskExecStage::INIT};
-    WrapManager wrapManager;
 
-    // for sync task finish
+    uint32_t bindParallelCtxVersion{0};
+    DevTaskExecStage curStage{DevTaskExecStage::INIT};
+    uint16_t lastSent{0};
+    uint16_t allSent{0};
+    uint16_t aicpuTaskSendCnt{0};
+    uint16_t resolveHubCnt{0};
+    uint8_t sendCnt[AICORE_TYPE_NUM]{0,0};
+    uint8_t parallelIdx{0};
+    uint8_t isFirstTaskSend{0};
+    uint8_t isFree{1};
+    uint8_t coreFinishedNum{0};
     std::array<uint8_t, MAX_AICORE_NUM> coreTaskFinished;
-    uint32_t coreFinishedNum{0};
+    uint16_t readyCount[AICORE_TYPE_NUM]{0,0};
+    uint32_t readyIds[AICORE_TYPE_NUM][READY_ID_FIX_CACHE_NUM];
+
+    WrapManager wrapManager;
 
     DeviceTaskCtrl* GetDeviceTaskCtrl() { return taskCtrl; }
     DeviceTask* GetDeviceTask() { return taskCtrl->devTask; }
@@ -65,20 +63,20 @@ struct SchDeviceTaskContext {
     bool IsRunFinish() { return curStage == DevTaskExecStage::FINISH; }
     void Free()
     {
-        isFree = true;
+        isFree = 1;
         taskCtrl->Free();
     }
-    bool IsFree() { return isFree; }
+    bool IsFree() { return static_cast<bool>(isFree); }
 
     void BindTaskCtrl(struct DeviceTaskCtrl* inputTaskCtrl)
     {
         Init();
         taskCtrl = inputTaskCtrl;
-        isFirstTaskSend = false;
+        isFirstTaskSend = 0;
         readyAicCoreFunctionQue = reinterpret_cast<ReadyCoreFunctionQueue*>(taskCtrl->devTask->readyAicCoreFunctionQue);
         readyAivCoreFunctionQue = reinterpret_cast<ReadyCoreFunctionQueue*>(taskCtrl->devTask->readyAivCoreFunctionQue);
         readyAicpuFunctionQue = reinterpret_cast<ReadyCoreFunctionQueue*>(taskCtrl->devTask->readyAicpuFunctionQue);
-        isFree = false;
+        isFree = 0;
     }
 
     void Init()
@@ -86,7 +84,6 @@ struct SchDeviceTaskContext {
         taskCtrl = nullptr;
         aicpuTaskSendCnt = 0;
         resolveHubCnt = 0;
-        curSent = 0;
         lastSent = 0;
         allSent = 0;
         curStage = DevTaskExecStage::INIT;
@@ -94,14 +91,14 @@ struct SchDeviceTaskContext {
         coreFinishedNum = 0;
     }
 
-    void CountCoreTaskSent()
+    void CountCoreTaskSent(uint32_t& cntAic, uint32_t& cntAiv)
     {
-        uint32_t sentAic = sendCnt[static_cast<int>(CoreType::AIC)];
-        uint32_t sentAiv = sendCnt[static_cast<int>(CoreType::AIV)];
+        uint8_t sentAic = sendCnt[static_cast<int>(CoreType::AIC)];
+        uint8_t sentAiv = sendCnt[static_cast<int>(CoreType::AIV)];
 
-        waitTaskCnt[static_cast<int>(CoreType::AIC)] += sentAic;
-        waitTaskCnt[static_cast<int>(CoreType::AIV)] += sentAiv;
-        curSent = sentAic + sentAiv + aicpuTaskSendCnt;
+        cntAic += sentAic;
+        cntAiv += sentAiv;
+        uint16_t curSent = sentAic + sentAiv + aicpuTaskSendCnt;
 
         aicpuTaskSendCnt = 0;
         sendCnt[static_cast<int>(CoreType::AIC)] = 0;
@@ -117,7 +114,6 @@ struct SchDeviceTaskContext {
         }
 
         allSent = taskCtrl->finishedFunctionCnt.load(std::memory_order_relaxed) + lastSent;
-        curSent = 0;
     }
 
     bool NeedSendCoreTask() { return (allSent < taskCtrl->devTask->coreFunctionCnt); }
@@ -209,10 +205,11 @@ struct ParallelSchDeviceTaskContext {
 };
 
 struct SchduleContext {
-    uint32_t corePendReadyCnt_[AICORE_TYPE_NUM]{0,0};
-    uint32_t coreRunReadyCnt_[AICORE_TYPE_NUM]{0,0};
-    uint32_t runReadyCoreIdx_[AICORE_TYPE_NUM][MAX_MANAGER_AIV_NUM];
-    uint32_t lastPendReadyCoreIdx_[AICORE_TYPE_NUM]{0,0};
+    uint32_t waitTaskCnt[AICORE_TYPE_NUM]{0,0};
+    uint8_t corePendReadyCnt_[AICORE_TYPE_NUM]{0,0};
+    uint8_t coreRunReadyCnt_[AICORE_TYPE_NUM]{0,0};
+    uint8_t runReadyCoreIdx_[AICORE_TYPE_NUM][MAX_MANAGER_AIV_NUM];
+    uint8_t lastPendReadyCoreIdx_[AICORE_TYPE_NUM]{0,0};
 
     uint8_t coreIdxPosition_[MAX_AICORE_NUM]{0}; // used to record core's position in runReadyCoreIdx_
     bool wrapCoreAvail_[MAX_AICORE_NUM]{true};   // used to check coreIdx is used by wrap_manager

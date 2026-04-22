@@ -311,8 +311,8 @@ INLINE volatile __gm__ ParallelDevTask* GetCoreFuncionData(ExecuteContext *ctx, 
                 uint32_t idx = i % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM;
                 int64_t elemPtr = 0;
                 do {
-                    dcci(&parallelDevTask->elements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
-                    elemPtr = parallelDevTask->elements[idx];
+                    dcci(&parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
+                    elemPtr = parallelDevTask->ptrElements[idx];
 
                     ++loop_count;
                     if ((loop_count % 1000 == 0) && (get_sys_cnt() - t0 > AICORE_DEVICE_TASK_WAIT_TIME_OUT)) {
@@ -458,29 +458,48 @@ INLINE uint32_t RefreshParallelDevTaskByModifyFlag(ExecuteContext *ctx, uint32_t
 {
     uint32_t curLeafDevTaskId = npu::tile_fwk::DevTaskId(highRegValue);
     uint32_t mask = npu::tile_fwk::ParallelDevTaskModifyFlag(highRegValue);
+    int32_t modifyCnt = __builtin_popcount(mask);
     while (mask) {
         int idx = __builtin_ffs(mask) - 1;
+
+        // dcci read new devtask id
+        uint32_t newDevTaskId;
+        if (modifyCnt == 1) { // un-parallel devtask scene
+            newDevTaskId = curLeafDevTaskId;
+        } else {
+            uint32_t oldDevTaskId = ctx->cachedDevTasks[idx].seqNo;
+            uint64_t t0 = get_sys_cnt();
+            do {
+                dcci(&ctx->parallelDevTask->idElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
+                newDevTaskId = ctx->parallelDevTask->idElements[idx];
+                if ((get_sys_cnt() - t0 > AICORE_GM_DCCI_TIMEOUT)) {
+                    return AICORE_TASK_STOP;
+                }
+            } while (newDevTaskId == oldDevTaskId);
+        }
+
+        // dcci read new devtask ptr
         int64_t newElemPtr;
         __gm__ DynFuncHeader *oldHeader = ctx->cachedDevTasks[idx].header;
         uint64_t t0 = get_sys_cnt();
         do {
-            dcci(&ctx->parallelDevTask->elements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
-            newElemPtr = ctx->parallelDevTask->elements[idx];
+            dcci(&ctx->parallelDevTask->ptrElements[idx], SINGLE_CACHE_LINE, CACHELINE_OUT);
+            newElemPtr = ctx->parallelDevTask->ptrElements[idx];
             if ((get_sys_cnt() - t0 > AICORE_GM_DCCI_TIMEOUT)) {
                 return AICORE_TASK_STOP;
             }
+
             if (newElemPtr != (int64_t)oldHeader) {
                 dcci((__gm__ void *)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
                 break;
             }
-            dcci((__gm__ void *)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
-        } while (newElemPtr == 0 || ((__gm__ DynFuncHeader *)newElemPtr)->seqNo == ctx->cachedDevTasks[idx].seqNo);
+
+            if (newElemPtr) {
+                dcci((__gm__ void *)newElemPtr, SINGLE_CACHE_LINE, CACHELINE_OUT);
+            } 
+        } while (newElemPtr == 0 || (((__gm__ DynFuncHeader *)newElemPtr)->seqNo != newDevTaskId));
         UpdateCacheDevTask(ctx, idx, newElemPtr);
         mask &= (mask - 1);
-    }
-
-    if (curLeafDevTaskId !=  ctx->SeqNo()) {
-        return AICORE_TASK_STOP;
     }
 
     return 0;

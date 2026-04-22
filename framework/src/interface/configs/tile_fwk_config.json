@@ -20,7 +20,8 @@
         "run_mode": 0,
         "stitch_function_max_num": 128,
         "valid_shape_optimize": 0,
-        "ready_on_host_tensors": []
+        "ready_on_host_tensors": [],
+        "device_sched_parallelism": 1
     },
     "host": {
         "compile_stage": 0,

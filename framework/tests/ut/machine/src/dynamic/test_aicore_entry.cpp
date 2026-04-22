@@ -139,7 +139,7 @@ struct MultipleCore : ThreadAicoreEmulation {
         for (int i = 0; i < memory->GetAicCount() + memory->GetAivCount(); i++) {
             buffer[i].args.parallelDevTask.front = 0;
             buffer[i].args.parallelDevTask.rear = 1;
-            buffer[i].args.parallelDevTask.elements[0] = (uintptr_t)dataList;
+            buffer[i].args.parallelDevTask.ptrElements[0] = (uintptr_t)dataList;
             
             buffer[i].args.shakeBuffer[SHAK_BUF_PRINT_BUFFER_INDEX] = (uintptr_t)memory->GetPrintBuffer(i);
         }

@@ -75,6 +75,10 @@ def test_wrapper_option_type_mismatch_error(setter, pattern):
             "Option 'runtime.ready_on_host_tensors' has invalid type. Expected list\\[string\\], but got string.",
         ),
         (
+            {"runtime_options": {"device_sched_parallelism": "aa"}},
+            "Option 'runtime.device_sched_parallelism' has invalid type. Expected int64, but got string.",
+        ),
+        (
             {"verify_options": {"pass_verify_pass_filter": False}},
             "Option 'verify.pass_verify_pass_filter' has invalid type. Expected list\\[string\\], but got bool.",
         ),

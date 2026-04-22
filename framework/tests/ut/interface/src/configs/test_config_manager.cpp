@@ -150,7 +150,7 @@ TEST_F(TestConfigManager, NormalRuntimeTest)
     std::unordered_map<std::string, std::vector<int64_t>> input = {
         {DEVICE_SCHED_MODE, {0, 1, 2, 3}},      {STITCH_FUNCTION_MAX_NUM, {1, 1024}},
         {STITCH_CFGCACHE_SIZE, {0, 100000000}}, {CFG_RUN_MODE, {0, 1}},
-        {CFG_VALID_SHAPE_OPTIMIZE, {0, 1}},
+        {CFG_VALID_SHAPE_OPTIMIZE, {0, 1}}, {DEVICE_SCHED_PARALLELISM, {1, 8}}
     };
     bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "runtime");
     EXPECT_EQ(ret, true);
@@ -160,7 +160,7 @@ TEST_F(TestConfigManager, AbnormalRuntimeTest)
 {
     std::unordered_map<std::string, std::vector<int64_t>> input = {
         {DEVICE_SCHED_MODE, {-1, 4}}, {STITCH_FUNCTION_MAX_NUM, {0, 1025}}, {STITCH_CFGCACHE_SIZE, {-1, 100000001}},
-        {CFG_RUN_MODE, {-1, 2}},      {CFG_VALID_SHAPE_OPTIMIZE, {-1, 2}},
+        {CFG_RUN_MODE, {-1, 2}},      {CFG_VALID_SHAPE_OPTIMIZE, {-1, 2}}, {DEVICE_SCHED_PARALLELISM, {0, 9}}
     };
     bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "runtime");
     EXPECT_EQ(ret, true);

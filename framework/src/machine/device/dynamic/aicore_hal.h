@@ -516,17 +516,23 @@ public:
         return &arg->parallelDevTask;
     }
 
-    void SetParallelDevTask(volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData)
+    void SetParallelDevTask(
+        volatile ParallelDevTask* kernelParallDevTask, int parallelIdx, int64_t funcData, uint32_t devTaskId)
     {
         DEV_IF_DEVICE
         {
-            kernelParallDevTask->elements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM] = funcData;
+            kernelParallDevTask->ptrElements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM] = funcData;
+            kernelParallDevTask->idElements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM] = devTaskId;
         } else {
             if (enableEslModel_) {
                 eslModel_.WriteEslMem(
                     reinterpret_cast<uint64_t>(
-                        &kernelParallDevTask->elements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]),
+                        &kernelParallDevTask->ptrElements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]),
                         sizeof(funcData), &funcData);
+                eslModel_.WriteEslMem(
+                    reinterpret_cast<uint64_t>(
+                        &kernelParallDevTask->idElements[parallelIdx % npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM]),
+                        sizeof(devTaskId), &devTaskId);
             }
         }
     }
@@ -575,7 +581,8 @@ public:
             args_[coreIdx]->parallelDevTask.front = 0;
             args_[coreIdx]->parallelDevTask.rear = 0;
             for (uint32_t i = 0; i < npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM; i++) {
-                args_[coreIdx]->parallelDevTask.elements[i] = 0;
+                args_[coreIdx]->parallelDevTask.ptrElements[i] = 0;
+                args_[coreIdx]->parallelDevTask.idElements[i] = 0;
             }
         } else {
             if (enableEslModel_) {
@@ -590,7 +597,9 @@ public:
                 int64_t i64Zereo = 0;
                 for (uint32_t i = 0; i < npu::tile_fwk::SCH_DEVTASK_MAX_PARALLELISM; i++) {
                     eslModel_.WriteEslMem(
-                    reinterpret_cast<uint64_t>(&args_[coreIdx]->parallelDevTask.elements[i]), sizeof(i64Zereo), &i64Zereo);
+                    reinterpret_cast<uint64_t>(&args_[coreIdx]->parallelDevTask.ptrElements[i]), sizeof(i64Zereo), &i64Zereo);
+                    eslModel_.WriteEslMem(
+                    reinterpret_cast<uint64_t>(&args_[coreIdx]->parallelDevTask.idElements[i]), sizeof(u32Zero), &u32Zero);
                 }
             }
         }

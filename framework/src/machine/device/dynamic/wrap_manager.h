@@ -87,9 +87,9 @@ public:
 
     SchDeviceTaskContext* schDevTaskCtx{nullptr};
     DeviceTask* curDevTask_;
-    uint32_t* coreRunReadyCnt_;
-    uint32_t* runReadyCoreIdx_[AICORE_TYPE_NUM];
-    uint32_t* corePendReadyCnt_;
+    uint8_t* coreRunReadyCnt_;
+    uint8_t* runReadyCoreIdx_[AICORE_TYPE_NUM];
+    uint8_t* corePendReadyCnt_;
     uint32_t* pendingIds_;
     uint32_t* runningIds_;
 
@@ -167,8 +167,8 @@ public:
     }
 
     inline void Init(
-        SchDeviceTaskContext* devTaskctx, DeviceTask* curDevTask, uint32_t* coreRunReadyCnt,
-        uint32_t* runReadyCoreIdxZero, uint32_t* runReadyCoreIdxOne, uint32_t* corePendReadyCnt, uint32_t* pendingIds,
+        SchDeviceTaskContext* devTaskctx, DeviceTask* curDevTask, uint8_t* coreRunReadyCnt,
+        uint8_t* runReadyCoreIdxZero, uint8_t* runReadyCoreIdxOne, uint8_t* corePendReadyCnt, uint32_t* pendingIds,
         uint32_t* runningIds, int aicValidNum, uint8_t* coreIdxPosition, bool* wrapCoreAvail, SendTaskToAiCoreFunc func,
         AddReadyCoreIdxFunc addReadyCoreIdxFunc)
     {

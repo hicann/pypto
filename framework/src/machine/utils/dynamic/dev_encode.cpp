@@ -2687,8 +2687,8 @@ void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* 
         encodeInfo.Init(&devfunc, false);
         offset = devfunc.GetSize();
     } else {
-        uint32_t parallism = 1; // need get prallism from  parallel option
-        base->SetParallelism(parallism);
+        base->SetParallelism(config::GetRuntimeOption<uint32_t>(DEVICE_SCHED_PARALLELISM));
+        MACHINE_LOGD("device sched parallelism is %u.", base->GetParallelism());
         encodeInfo.Init(base, true);
         offset = base->GetSize();
 
