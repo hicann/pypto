@@ -20,12 +20,21 @@
 #include "utils/tile_tensor.h"
 
 #define OP_TILE_OP_CAST TCast
+
+#define INIT_TILE(tile, TileType, validH, validW, shape3, shape4) \
+    if constexpr(validH == -1 && validW == -1) { \
+        tile = TileType(shape3, shape4); \
+    } else if constexpr(validH == -1) { \
+        tile = TileType(shape3); \
+    } else if constexpr(validW == -1) { \
+        tile = TileType(shape4); \
+    }
+
 template <
     typename LastUse = LastUse3Dim<0, 0, 0>, unsigned Mode, pto::SaturationMode satmode = pto::SaturationMode::OFF,
     typename T0, typename T1, typename T2>
 TILEOP void TCast(T0 dst, T1 src, T2 tmp)
 {
-    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
@@ -53,18 +62,27 @@ TILEOP void TCast(T0 dst, T1 src, T2 tmp)
     constexpr auto n3 = Std::tuple_element<DIM_3RD, LastUse>::type::value;
     using SrcDtype = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
     using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
+    constexpr auto dstValidH = GetValidHeight<T0, false>();
+    constexpr auto dstValidW = GetValidWidth<T0>();
+    constexpr auto srcValidH = GetValidHeight<T1, false>();
+    constexpr auto srcValidW = GetValidWidth<T1>();
+    constexpr auto tmpValidH = GetValidHeight<T2, false>();
+    constexpr auto tmpValidW = GetValidWidth<T2>();
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                using TileDefineDst =
-                    pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-                using TileDefineSrc =
-                    pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
-                using TmpTile =
-                    pto::Tile<pto::TileType::Vec, int32_t, tmpTileH, tmpTileW, pto::BLayout::RowMajor, -1, -1>;
-                TileDefineDst dstTile(shape3, shape4);
-                TileDefineSrc srcTile(shape3, shape4);
-                TmpTile tmpTile(shape3, shape4);
+                using TileDefineDst = pto::Tile<
+                    pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, dstValidH, dstValidW>;
+                using TileDefineSrc = pto::Tile<
+                    pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, srcValidH, srcValidW>;
+                using TmpTile = pto::Tile<
+                    pto::TileType::Vec, int32_t, tmpTileH, tmpTileW, pto::BLayout::RowMajor, tmpValidH, tmpValidW>;
+                TileDefineDst dstTile;
+                TileDefineSrc srcTile;
+                TmpTile tmpTile;
+                INIT_TILE(dstTile, TileDefineDst, dstValidH, dstValidW, shape3, shape4)
+                INIT_TILE(srcTile, TileDefineSrc, srcValidH, srcValidW, shape3, shape4)
+                INIT_TILE(tmpTile, TmpTile, tmpValidH, tmpValidW, shape3, shape4)
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(tmpTile, (uint64_t)(tmp.GetAddr()));
@@ -82,7 +100,6 @@ template <
     typename T0, typename T1>
 TILEOP void TCast(T0 dst, T1 src)
 {
-    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr size_t expectSize = 5;
     const auto dstLayout = dst.GetLayout();
     const auto srcLayout = src.GetLayout();
@@ -107,15 +124,21 @@ TILEOP void TCast(T0 dst, T1 src)
     constexpr auto n2 = Std::tuple_element<DIM_2ND, LastUse>::type::value;
     using SrcDtype = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
     using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
+    constexpr auto dstValidH = GetValidHeight<T0, false>();
+    constexpr auto dstValidW = GetValidWidth<T0>();
+    constexpr auto srcValidH = GetValidHeight<T1, false>();
+    constexpr auto srcValidW = GetValidWidth<T1>();
     for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
         for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
-                using TileDefineDst =
-                    pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
-                using TileDefineSrc =
-                    pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
-                TileDefineDst dstTile(shape3, shape4);
-                TileDefineSrc srcTile(shape3, shape4);
+                using TileDefineDst = pto::Tile<
+                    pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, dstValidH, dstValidW>;
+                using TileDefineSrc = pto::Tile<
+                    pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, srcValidH, srcValidW>;
+                TileDefineDst dstTile;
+                TileDefineSrc srcTile;
+                INIT_TILE(dstTile, TileDefineDst, dstValidH, dstValidW, shape3, shape4)
+                INIT_TILE(srcTile, TileDefineSrc, srcValidH, srcValidW, shape3, shape4)
                 auto dstOffset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2;
                 auto srcOffset = n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2;
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * dstTypeSize));
