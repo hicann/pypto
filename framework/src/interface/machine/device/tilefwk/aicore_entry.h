@@ -572,8 +572,8 @@ INLINE void KernelEntry(
         }
         lastTaskIdx = AICORE_TASK_INIT;
         if (bIsExit) {
-            DfxProcWhenCoreExit(&ctx, args, metric);
             WaitWaveSignal(args); // no data exit
+            DfxProcWhenCoreExit(&ctx, args, metric);
             return;
         }
         parallelDevTask = GetCoreFuncionData(&ctx, args, parallelDevTask);
@@ -619,7 +619,7 @@ INLINE void KernelEntry(
             ctx.curLeafTaskParallelIdx = npu::tile_fwk::ParallelIndex(curTaskIdx);
   
             if (isFirstTask) {
-                PerfTraceRecord(ctx.seqNo, metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK, args);
+                PerfTraceRecord(ctx.SeqNo(), metric, PERF_TRACE_CORE_DEV_TASK_WAIT_RCV_FIRST_LEAF_TASK, args);
                 isFirstTask = false;
             }
 

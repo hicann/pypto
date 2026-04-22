@@ -77,13 +77,15 @@
 1.  通过终端查看 AI Core 执行端到端耗时以及 AI Core 利用率：
 
     **图 1**  查看 AI Core Perf 信息
-    ![](..\figures\aicore_perf_summary.png "AI Core Perf信息")
+    
+    ![](../figures/aicore_perf_summary.png "AI Core Perf信息")
 
 2.  通过 PyPTO Toolkit 插件查看泳道图。
 
     右键单击对应 JSON 文件，在弹出的菜单中选择“使用PyPTO Toolkit打开”。
 
     **图 2**  查看泳道图
+
     ![](../figures/view_swimlane_graph.png "查看泳道图")
 
     ![AI CPU/AI Core泳道图](../figures/machine_runtime_operator_trace_0.png)
