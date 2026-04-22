@@ -68,6 +68,8 @@ const std::map<std::string, CorePipeType> SCHED_CORE_PIPE_TYPE{
     {"TRANSPOSE_MOVEOUT", CorePipeType::PIPE_MTE_OUT},
     {"TRANSPOSE_VNCHWCONV", CorePipeType::PIPE_VECTOR_ALU},
     {"ABS", CorePipeType::PIPE_VECTOR_ALU},
+    {"PERMUTE", CorePipeType::PIPE_S},
+    {"PERMUTE_ELEMENT", CorePipeType::PIPE_S},
     {"LN", CorePipeType::PIPE_VECTOR_ALU},
     {"ISFINITE", CorePipeType::PIPE_VECTOR_ALU},
     {"HUB", CorePipeType::PIPE_VECTOR_ALU},

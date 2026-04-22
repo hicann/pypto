@@ -303,8 +303,8 @@ private:
         std::vector<uint8_t>& devProgData = function_->GetDyndevAttribute()->devProgBinary;
         auto* devProg = reinterpret_cast<DevAscendProgram*>(const_cast<uint8_t*>(devProgData.data()));
 
-        devProg->devArgs.nrAicpu = 6;
-        devProg->devArgs.nrValidAic = 24;
+        devProg->devArgs.nrAicpu = 1;
+        devProg->devArgs.nrValidAic = 1;
         devProg->devArgs.scheCpuNum = 1;
         AssignMetaAddr(devMem, kArgs, devProg, nullptr);
         size_t tensorSize = (inputs.size() + outputs.size()) * sizeof(DevTensorData) + 2 * sizeof(uint64_t);
