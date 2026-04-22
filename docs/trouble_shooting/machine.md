@@ -520,6 +520,7 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 ---
 ### 泳道图相关问题指导
 
+<a id="output-目录产物说明"></a>
 #### output 目录产物说明
 
 在 `output/output_时间戳` 目录下，泳道图相关文件通常包括：
@@ -529,26 +530,36 @@ objdump -d -C -l /path/to/libtile_fwk_interface.so | grep -A 20 "npu::tile_fwk::
 - `tilefwk_L1_prof_data_*.json`：Machine 组件原始 Profiling 数据文件。
 其中，`machine_trace_perf_data*.json` 与 `tilefwk_L1_prof_data_*.json` 可用于判断底层数据采集是否成功（例如文件是否为空）；`merged_swimlane.json` 与 `machine_runtime_operator_trace*.json` 主要用于 IDE 可视化展示。建议优先联系 IDE 对应负责人咨询解决。
 
+<a id="IDE-参数含义解释"></a>
 #### IDE 参数含义解释
 
 在生成和查看泳道图时，IDE 工具中会显示多个性能参数和事件标签。以下是常见参数的含义说明：
 
-**1. AICore 泳道图**
+**1. CTRL AICPU**
 
-| 参数/事件名称 | 含义解释 |
-| --- | --- |
-| **Task Time** | AI Core 端到端执行时间 |
-| **AICore Time** | 所有 AICore 任务时间之和 |
-| **AICore 利用率** | `AICore Time` / (`泳道数` × `泳道时长`) |
+| 阶段 | 含义 | 打点位置 |
+| --- | --- | --- |
+| **DEV_TASK_BUILD** | Ctrl AICPU 构建 devTask 的耗时，即 stitch 耗时统计 | 在 stitch 之后 |
+| **Post-process** | Ctrl AICPU 在构建完所有 DevTask 到退出的时间 | AICPU 退出时 |
+| **Total run time** | Ctrl AICPU 从被拉起到退出时的总时间 | 整个流程启动到退出 |
 
-**2. AICPU 泳道图**
+**2. SCHED AICPU**
 
-| 模块 | 参数/事件名称 | 含义解释 | 线程信息 |
-| --- | --- | --- | --- |
-| **AICPU** | **DEV_TASK_BUILD** | Ctrl AICPU 构建 devTask 的耗时（即 stitch 耗时统计） | Ctrl |
-| **AICPU** | **DEV_TASK_RCV** | Sched AICPU 接收到 Ctrl AICPU 构建的 devTask 的耗时 | Sched |
-| **AICore** | **RCV_MODEL** | AICore 接收到 AICPU 发送的 devTask 的耗时 | Sched |
-| **AICore** | **ALL_LEAF_TASK_EXEC** | 当前 AICore 的 devTask 中所有 leafTask 执行完成的耗时 | Sched |
+| 阶段 | 含义 | 打点位置 |
+| --- | --- | --- |
+| **ALLOC_THREAD_ID** | 线程分配，绑核耗时统计 | AllocThreadIdx 之后 |
+| **INIT** | Sched AICPU 初始化耗时统计 | Sched arg 参数初始化后（Sched init() 之后） |
+| **CORE_HAND_SHAKE** | Sched AICPU 与 AICore 握手的耗时统计 | 握手之后 |
+| **DEV_TASK_RCV** | Sched AICPU 接收到 Ctrl AICPU 构建的 devTask 的耗时 | 从 taskQue 读取 DevTask 之后 |
+| **Post-process** | Sched AICPU 在执行完所有 DevTask 到退出的时间 | ExecuteTask 之后到 AICPU 退出时 |
+| **Total run time** | Sched AICPU 从被拉起到退出时的总时间 | 整个流程启动到退出 |
+
+**3. AICORE**
+
+| 阶段 | 含义 | 打点位置 |
+| --- | --- | --- |
+| **End-to-End time** | AICore 端到端实际执行时间 | 从最早开始执行 ExecCoreFunctionKernel 的 AICore 到最晚结束执行的 AICore 统计时间 |
+| **Total run time** | AICore 从被拉起到退出时的总时间 | 整个流程启动到退出 |
 
 
 #### 常见异常排查

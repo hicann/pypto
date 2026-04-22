@@ -40,6 +40,14 @@
 
 **适用场景**：用于分析 AI CPU 调度与 AI Core 执行的协同关系，定位首任务启动慢、调度等待等问题。
 
+**限制说明**：
+- 该工具最多支持 200 轮数据采集和打屏，超出部分将被截断。
+- 当前只支持采集 20 次 devTask 构建的数据。当 devTask 构建次数（与 `stitch_function_max_num` 配置相关，每次 stitch 对应一次 devTask 构建）超过 20 次时，超出部分的 perf 数据将被截断，并在日志中出现如下告警提示：
+
+    ```
+    Dev task num larger than: 20, the excess part will not be recorded
+    ```
+
 1.  通过环境变量使能：
 
     ```bash
@@ -56,12 +64,13 @@
 
 4.  终端可直接查看 AI CPU/AI Core 数据汇总表：
 
-    ![](../figures/machine_perf_summary.png "AI CPU/AI Core数据汇总表")
+    ![](../figures/dump_device_perf.png "AI CPU/AI Core数据汇总表")
 
-### 采集结果文件说明
+### 采集结果文件说明和参数含义解释
 
-关于采集结果文件的详细说明，请参阅 Machine 的 Troubleshooting（故障诊断） 手册：
-[output 目录产物说明](../../trouble_shooting/machine.md#output-目录产物说明)。
+关于采集结果文件的详细说明和 IDE 参数含义解释，请参阅 Machine 的 Troubleshooting（故障诊断）手册：
+- [output 目录产物说明及 IDE 参数含义解释](../../trouble_shooting/machine.md#output-目录产物说明)
+
 
 ### 查看泳道图数据
 
@@ -80,6 +89,63 @@
     ![AI CPU/AI Core泳道图](../figures/machine_runtime_operator_trace_0.png)
 
     图中展示了任务的执行顺序和耗时信息，帮助开发者分析性能瓶颈。
+
+### 采集 PMU 数据
+
+PMU（Performance Monitoring Unit）是现代处理器中关键的硬件模块，专门用于监控和分析处理器的运行性能。PMU 内部有多个可编程计数器，每个计数器可监控一种或多种事件。
+
+#### 采集流程
+
+**步骤 1：编译宏适配**
+
+由于当前仅支持串行采集，而 AI CPU 是异步执行的，需要先适配以下编译宏，然后重新编译 whl 包。
+
+修改 `device_switch.h`：
+
+```cpp
+#define PMU_COLLECT 1
+```
+
+修改 `aicore_entry.h`：
+
+```cpp
+#define PERF_PMU_TEST_SWITCH 1
+#define PROF_DFX_HOST_PREPARE_MEMORY_MODE 0
+```
+
+**步骤 2：选择采集模式**
+
+通过环境变量选择采集模式：
+
+```bash
+export PROF_PMU_EVENT_TYPE=<group_id>
+```
+
+其中 `group_id` 取值范围为 `[1, 2, 4, 5, 6, 7, 8]`，默认值为 `2`。PMU 支持的模式如下：
+
+![](../figures/PMU_event.png "PMU 支持的模式")
+
+**步骤 3：数据采集**
+
+适配编译宏后，通过 `msprof` 命令采集 PMU 数据：
+
+```bash
+msprof --task-time=l3 [--output=<数据存放路径>] python xxx.py
+```
+
+其中：
+- `l3`：开启 PMU 采集开关
+- `--output`：指定 PROF 产物的输出路径，默认落盘在项目根目录下
+
+**步骤 4：数据解析**
+
+PMU 数据采集完成后，会落盘在 `output/PROF*/device_*/data/` 目录下。根据所选的 `PMU_EVENT_TYPE`，执行解析脚本：
+
+```bash
+python tools/profiling/tilefwk_pmu_to_csv.py -p PROF_xxx/device_x/data -pe=$PROF_EVENT_TYPE --arch [dav_2201, dav_3510]
+```
+
+解析完成后，会在项目根目录下生成 `tilefwk_prof_pmu.csv` 文件。
 
 ## 开箱性能调优
 
