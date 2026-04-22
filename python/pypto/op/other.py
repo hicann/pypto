@@ -13,6 +13,7 @@ from typing import Union, Sequence, List
 
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
+from ..error import PyptoError
 from ..tensor import Tensor
 from .._element import Element
 
@@ -246,13 +247,13 @@ def one_hot(input: Tensor, num_classes: int) -> Tensor:
 
     """
     if not isinstance(input, pypto_impl.Tensor):
-        raise TypeError("input must be a `Tensor`")
+        raise PyptoError(0xF00001, TypeError("input must be a `Tensor`"))
     if not isinstance(num_classes, int):
-        raise TypeError("num_classes must be an `int`")
+        raise PyptoError(0xF00001, TypeError("num_classes must be an `int`"))
     if num_classes == -1:
-        raise RuntimeError("num_classes must be specified")
+        raise PyptoError(0xF00003, RuntimeError("num_classes must be specified"))
     if num_classes <= 0:
-        raise RuntimeError("num_classes must be a positive integer")
+        raise PyptoError(0xF00003, RuntimeError("num_classes must be a positive integer"))
     return pypto_impl.OneHot(input, num_classes)
 
 

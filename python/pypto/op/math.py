@@ -14,6 +14,7 @@ from typing import Optional, Union, List, Tuple, overload
 from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
+from ..error import PyptoError
 from ..tensor import Tensor
 from ..enum import DataType, DivAlgorithm, ExpAlgorithm, SqrtAlgorithm, RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm
 from ..symbolic_scalar import SymbolicScalar, SymInt
@@ -74,7 +75,9 @@ def add(
             return pypto_impl.Add(input, pypto_impl.Element(input.dtype, other))
         else:
             if not isinstance(other, (int, float)):
-                raise TypeError(f"alpha must be int or float, but got {type(other)}.")
+                raise PyptoError(0xF00001, TypeError(
+                    f"alpha must be int or float, but got {type(other)}."
+                    ))
             return pypto_impl.Add(input, pypto_impl.Element(input.dtype, other * alpha))
 
 
@@ -137,7 +140,9 @@ def sub(
             return pypto_impl.Sub(input, pypto_impl.Element(input.dtype, other))
         else:
             if not isinstance(other, (int, float)):
-                raise TypeError(f"alpha must be int or float, but got {type(other)}.")
+                raise PyptoError(0xF00001, TypeError(
+                    f"alpha must be int or float, but got {type(other)}."
+                    ))
             return pypto_impl.Sub(input, pypto_impl.Element(input.dtype, other * alpha))
 
 
@@ -414,7 +419,9 @@ def remainder(input: Union[Tensor, int, float], other: Union[Tensor, int, float]
     if isinstance(other, pypto_impl.Tensor):
         if isinstance(input, float) or isinstance(input, int):
             return pypto_impl.Remainder(pypto_impl.Element(other.dtype, input), other)
-    raise TypeError(f"Unsupported operand types for remainder: {type(input)} and {type(other)}")
+    raise PyptoError(0xF00001, TypeError(
+        f"Unsupported operand types for remainder: {type(input)} and {type(other)}"
+        ))
 
 
 @op_wrapper
@@ -455,7 +462,9 @@ def bitwise_and(self: Tensor, other: Union[Tensor, int]) -> Tensor:
         return pypto_impl.BitwiseAnd(self, other)
     else:
         if not isinstance(other, int):
-            raise TypeError(f"Scalar operand for bitwise_and must be an integer, but got {type(other)}.")
+            raise PyptoError(0xF00001, TypeError(
+                f"Scalar operand for bitwise_and must be an integer, but got {type(other)}."
+                ))
         return pypto_impl.BitwiseAnd(self, pypto_impl.Element(self.dtype, other))
 
 
@@ -497,7 +506,9 @@ def bitwise_or(input1: Tensor, input2: Union[Tensor, int]) -> Tensor:
         return pypto_impl.BitwiseOr(input1, input2)
     else:
         if not isinstance(input2, int):
-            raise TypeError(f"Scalar operand for bitwise_or must be an integer, but got {type(input2)}.")
+            raise PyptoError(0xF00001, TypeError(
+                f"Scalar operand for bitwise_or must be an integer, but got {type(input2)}."
+                ))
         return pypto_impl.BitwiseOr(input1, pypto_impl.Element(input1.dtype, input2))
 
 
@@ -539,7 +550,9 @@ def bitwise_xor(first: Tensor, second: Union[Tensor, int]) -> Tensor:
         return pypto_impl.BitwiseXor(first, second)
     else:
         if not isinstance(second, int):
-            raise TypeError(f"Scalar operand for bitwise_xor must be an integer, but got {type(second)}.")
+            raise PyptoError(0xF00001, TypeError(
+                f"Scalar operand for bitwise_xor must be an integer, but got {type(second)}."
+                ))
         return pypto_impl.BitwiseXor(first, pypto_impl.Element(first.dtype, second))
 
 
@@ -579,7 +592,9 @@ def pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor:
               [-3.0 4.0]]
     """
     if not isinstance(other, (pypto_impl.Tensor, int, float)):
-        raise TypeError(f"other must be Tensor, int or float but got {type(other)}.")
+        raise PyptoError(0xF00001, TypeError(
+            f"other must be Tensor, int or float but got {type(other)}."
+            ))
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Pow(input, other)
     if isinstance(other, int):
@@ -1826,7 +1841,9 @@ def var(
     elif isinstance(dim, (list, tuple)):
         inner_dim = list(dim)
     else:
-        raise TypeError(f"the type of dim is not supported. 'int' or 'Lise[int]' or 'Tuple[int]' is needed.")
+        raise PyptoError(0xF00001, TypeError(
+            f"the type of dim is not supported. 'int' or 'Lise[int]' or 'Tuple[int]' is needed."
+            ))
 
     return pypto_impl.Var(input, inner_dim, correction, keepdim)
 
@@ -1977,16 +1994,22 @@ def uniform(
     output = pypto.uniform(key, counter0, counter1, shape, rounds=10)
     """
     if len(shape) != 1:
-        raise ValueError(f"shape must be 1-dimensional, got {len(shape)} dimensions")
+        raise PyptoError(0xF00002, ValueError(
+            f"shape must be 1-dimensional, got {len(shape)} dimensions"
+            ))
     if rounds not in [7, 10]:
-        raise ValueError(f"rounds must be 7 or 10, got {rounds}")
+        raise PyptoError(0xF00002, ValueError(
+            f"rounds must be 7 or 10, got {rounds}"
+            ))
     
     if dtype is None:
         dtype = pypto_impl.DataType.DT_FP32
     
     valid_dtypes = [pypto_impl.DataType.DT_FP32, pypto_impl.DataType.DT_FP16, pypto_impl.DataType.DT_BF16]
     if dtype not in valid_dtypes:
-        raise ValueError(f"dtype must be one of DT_FP32, DT_FP16, DT_BF16, got {dtype}")
+        raise PyptoError(0xF00002, ValueError(
+            f"dtype must be one of DT_FP32, DT_FP16, DT_BF16, got {dtype}"
+            ))
     
     if isinstance(counter0, int):
         counter0 = SymbolicScalar(counter0).base()

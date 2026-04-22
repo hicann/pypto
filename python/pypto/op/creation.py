@@ -15,6 +15,7 @@ from .. import pypto_impl
 from .._element import Element
 from ..enum import DataType
 from .._op_wrapper import op_wrapper
+from ..error import PyptoError
 from .._utils import to_syms
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
@@ -188,9 +189,9 @@ def arange(*args: Union[int, float]) -> Tensor:
         )
 
     if len(args) != 3:
-        raise ValueError(
+        raise PyptoError(0xF00002, ValueError(
             f"The length of args should in [1, 2, 3], but got {len(args)}."
-        )
+            ))
 
     start, end, step = args
     return pypto_impl.Range(

@@ -14,6 +14,7 @@ from typing import Union
 from .. import pypto_impl
 from .._element import Element
 from .._op_wrapper import op_wrapper
+from ..error import PyptoError
 from ..tensor import Tensor
 
 
@@ -117,7 +118,7 @@ def maximum(
     if not isinstance(input, pypto_impl.Tensor) and not isinstance(
         other, pypto_impl.Tensor
     ):
-        raise TypeError("one of `input` and `other` should be `Tensor`")
+        raise PyptoError(0xF00001, TypeError("one of `input` and `other` should be `Tensor`"))
 
     if not isinstance(input, pypto_impl.Tensor) and isinstance(other, pypto_impl.Tensor):
         input, other = other, input
@@ -158,7 +159,7 @@ def minimum(
     if not isinstance(input, pypto_impl.Tensor) and not isinstance(
         other, pypto_impl.Tensor
     ):
-        raise TypeError("one of `input` and `other` should be `Tensor`")
+        raise PyptoError(0xF00001, TypeError("one of `input` and `other` should be `Tensor`"))
 
     if not isinstance(input, pypto_impl.Tensor) and isinstance(other, pypto_impl.Tensor):
         input, other = other, input
