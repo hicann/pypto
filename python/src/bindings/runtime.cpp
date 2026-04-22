@@ -26,7 +26,7 @@
 #include "adapter/api/acl_define.h"
 #include "adapter/api/runtime_define.h"
 #include "interface/interpreter/raw_tensor_data.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "interface/utils/op_info_manager.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"

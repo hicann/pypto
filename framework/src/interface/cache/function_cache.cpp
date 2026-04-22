@@ -20,7 +20,7 @@
 #include "tilefwk/pypto_fwk_log.h"
 #include "interface/utils/common.h"
 #include "interface/utils/file_utils.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "topo_processor.h"
 #include "securec.h"
 

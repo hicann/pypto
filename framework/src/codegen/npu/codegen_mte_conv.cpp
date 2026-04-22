@@ -18,7 +18,7 @@
 #include "codegen_op_npu.h"
 #include "codegen/symbol_mgr/codegen_symbol.h"
 #include "codegen/utils/codegen_utils.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "securec.h"
 
 namespace npu::tile_fwk {

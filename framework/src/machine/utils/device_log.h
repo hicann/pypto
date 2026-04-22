@@ -30,7 +30,7 @@
 #include "securec.h"
 #include "tilefwk/aikernel_define.h"
 #include "machine/utils/device_switch.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "machine/device/dynamic/device_trace.h"
 
 #ifndef ERROR_CODE_UNDEFINED

@@ -5,7 +5,7 @@
 
 ## 错误码定义与使用说明
 
-Vector相关错误码的统一定义，参见 `/framework/src/interface/utils/vector_error.h` 文件。
+Vector 相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 `VectorErrorCode`）。
 
 ## 排查建议
 

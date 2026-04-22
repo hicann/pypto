@@ -16,7 +16,7 @@
 #include "unary.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/operator_tracer.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 

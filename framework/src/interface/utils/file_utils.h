@@ -17,7 +17,7 @@
 
 #include <nlohmann/json.hpp>
 #include <string>
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/file.h"
 
 namespace npu::tile_fwk {

@@ -23,7 +23,7 @@
 #include <memory>
 #include <deque>
 #include "cost_model/simulation/common/CommonType.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace CostModel {

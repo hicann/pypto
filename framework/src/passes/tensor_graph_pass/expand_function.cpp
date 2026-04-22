@@ -28,7 +28,7 @@
 #include "passes/statistics/tensor_and_tile_graph_statistic.h"
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/graph_utils.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 #define MODULE_NAME "ExpandFunction"
 

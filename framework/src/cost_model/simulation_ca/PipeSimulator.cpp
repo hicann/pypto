@@ -31,7 +31,7 @@
 #include "cost_model/simulation/arch/SimplifiedMemoryAllocator.h"
 #include "cost_model/simulation/arch/PipeSimulatorFast.h"
 #include "cost_model/simulation/arch/A2A3/PostSimulatorA2A3.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"

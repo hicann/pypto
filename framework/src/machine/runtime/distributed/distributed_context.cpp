@@ -20,7 +20,7 @@
 #include "adapter/api/hcomm_api.h"
 #include "adapter/api/acl_api.h"
 #include "interface/utils/common.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "machine/runtime/runtime.h"
 #include "machine/device/dynamic/device_utils.h"
 

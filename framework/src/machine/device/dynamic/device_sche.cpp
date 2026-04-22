@@ -23,7 +23,7 @@
 #include <sched.h>
 #include "machine/device/dynamic/device_utils.h"
 #include "machine/utils/device_log.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "device_utils.h"
 
 using namespace npu::tile_fwk;

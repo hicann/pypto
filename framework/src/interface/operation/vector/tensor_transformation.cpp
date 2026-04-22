@@ -18,7 +18,7 @@
 #include <string>
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/platform.h"
 
 namespace npu::tile_fwk {

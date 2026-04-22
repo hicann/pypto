@@ -16,7 +16,7 @@
 #include <cmath>
 #include "tensor_transformation.h"
 #include "interface/utils/operator_tracer.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "passes/pass_utils/graph_utils.h"
 
 namespace npu::tile_fwk {

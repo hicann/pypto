@@ -16,7 +16,7 @@
 #include "interface/interpreter/function.h"
 #include "interface/interpreter/operation.h"
 #include "interface/operation/operation_impl.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "interface/utils/common.h"
 
 using namespace npu::tile_fwk::calc;

@@ -23,7 +23,7 @@
 #include "machine/runtime/device_launcher_binding.h"
 #include "machine/host/backend.h"
 #include "machine/host/perf_analysis.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 struct process_sign {
     pid_t tgid;

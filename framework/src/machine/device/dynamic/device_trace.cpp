@@ -17,7 +17,7 @@
 #include <string>
 #include <cstdarg>
 #include <cstdio>
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "machine/utils/device_log.h"
 #include "device_trace.h"
 #ifdef __DEVICE__

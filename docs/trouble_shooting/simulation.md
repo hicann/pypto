@@ -6,7 +6,7 @@
 
 ## 错误码定义与使用说明
 
-相关错误码的统一定义，参见 `framework/src/cost_model/simulation/utils/simulation_error.h` 文件。
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（仿真侧见 `CostModel` 命名空间下各枚举）。
 
 
 ## 排查建议

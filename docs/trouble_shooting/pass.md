@@ -6,7 +6,7 @@
 
 ## 错误码定义与使用说明
 
-相关错误码的统一定义，参见 framework/src/passes/pass_utils/pass_error.h 文件。
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（PASS 侧见 TensorErr、OperationErr、FunctionErr、GraphErr、ConfigErr 等）。
 
 ---
 

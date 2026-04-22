@@ -22,7 +22,7 @@
 #include "interface/tensor/logical_tensor.h"
 #include "interface/operation/opcode.h"
 #include "interface/utils/source_location.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 #define CALL(n, ...) Tensor##n(__VA_ARGS__)

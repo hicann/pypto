@@ -42,7 +42,7 @@
 ## 原则
 
 - **报错与日志**：各组件 ASSERT/CHECK/ERROR 报错处须使用本组件 error 头文件中的错误码，并在日志或异常中携带该码。
-- **统一管理**：各组件错误码统一定义在 `framework/src/interface/utils/error_code.h`，组件侧头文件仅用于兼容包含。
+- **统一管理**：各组件错误码统一定义在 `framework/include/tilefwk/error_code.h`，组件侧头文件仅用于兼容包含。
 - **文档补充**：若单靠 ErrorMsg 无法说明原因或难以定位，须为该错误码补充 trouble_shooting 文档（原因、排查步骤与解决方案）。
 - **关联 Skill**：各组件错误码文档中可为每个错误码注明 **关联 Skill**，指向 [.agents/skills](../../.agents/skills) 下对应技能（如 `pypto-environment-setup`），便于排查时加载该技能进行环境诊断、算子开发或性能调优等。
 - **大流程到子流程**：错误码分类应先梳理大流程（Category），再细化子流程（Scene）；头文件内按此顺序组织枚举。

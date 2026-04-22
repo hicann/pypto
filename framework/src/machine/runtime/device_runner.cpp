@@ -34,7 +34,7 @@
 #include "load_aicpu_op.h"
 #include "tilefwk/platform.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "machine/platform/platform_manager.h"
 #include "machine/runtime/device_error_tracking.h"
 #include "nlohmann/json.hpp"

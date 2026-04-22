@@ -5,7 +5,7 @@
 
 ## 错误码定义与使用说明
 
-Matmul相关错误码的统一定义，参见 `/framework/src/interface/utils/matmul_error.h` 文件。
+Matmul 相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 `MatmulErrorCode`）。
 
 ## 排查建议
 

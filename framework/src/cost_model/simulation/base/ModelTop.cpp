@@ -22,7 +22,7 @@
 #include "cost_model/simulation/tools/visualizer.h"
 #include "cost_model/simulation/arch/PipeFactory.h"
 #include "cost_model/simulation/pv/PvModelFactory.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "interface/utils/file_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error.h"

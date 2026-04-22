@@ -15,7 +15,7 @@
 
 #include "replace_tensor.h"
 #include "passes/pass_log/pass_log.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "passes/pass_utils/alignment_utils.h"
 
 #define MODULE_NAME "ReplaceTensor"

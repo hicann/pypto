@@ -7,7 +7,7 @@
 
 ## 错误码定义与使用说明
 
-相关错误码的统一定义，参见 `framework/src/interface/utils/conv_error.h` 文件。
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 ConvOperationError、ConvExpandFuncError、ConvCodenGenError、ConvTileOpError 等）。
 ---
 
 ## 错误码定义和场景说明

@@ -14,7 +14,7 @@
 #include <fstream>
 #include "gtest/gtest.h"
 
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "interface/configs/config_manager.h"
 #include "interface/function/function.h"
 #include "tilefwk/tilefwk.h"

@@ -32,7 +32,7 @@
 #include "interface/configs/config_manager.h"
 #include "distributed_expand.h"
 #include "tilefwk/comm_group_recorder.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 namespace Distributed {

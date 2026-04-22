@@ -22,7 +22,7 @@
 #include <variant>
 
 #include "codegen/codegen_common.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/data_type.h"
 #include "interface/tensor/symbolic_scalar.h"
 #include "interface/utils/common.h"

@@ -24,7 +24,7 @@
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_log/pass_log.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 #undef MODULE_NAME
 #define MODULE_NAME "SubgraphToFunction"

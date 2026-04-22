@@ -16,7 +16,7 @@
 #include "copy_out_resolve.h"
 
 #include "interface/program/program.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 

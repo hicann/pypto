@@ -20,7 +20,7 @@
 #include "interface/program/program.h"
 #include "interface/tensor/logical_tensor.h"
 #include "interface/utils/common.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/data_type.h"
 #include "tilefwk/symbolic_distributed.h"
 #include "tilefwk/tensor.h"

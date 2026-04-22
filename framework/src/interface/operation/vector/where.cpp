@@ -15,7 +15,7 @@
 
 #include "binary.h"
 #include "interface/utils/operator_tracer.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "tensor_transformation.h"
 

@@ -26,7 +26,7 @@
 #include "tilefwk/config.h"
 #include "tilefwk/function.h"
 #include "interface/utils/common.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk {
 using JsonExpcetion = nlohmann::json::exception;

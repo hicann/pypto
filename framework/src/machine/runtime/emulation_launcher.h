@@ -29,7 +29,7 @@
 #include "interface/interpreter/raw_tensor_data.h"
 #include "interface/configs/config_manager.h"
 #include "machine/runtime/device_launcher.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/pypto_fwk_log.h"
 
 namespace npu::tile_fwk::dynamic {

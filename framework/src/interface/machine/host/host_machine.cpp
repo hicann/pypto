@@ -22,7 +22,7 @@
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "interface/utils/op_info_manager.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "interface/compiler_monitor/monitor_manager.h"
 #include "interface/compiler_monitor/monitor_stage_scope.h"
 #include "machine/host/perf_analysis.h"

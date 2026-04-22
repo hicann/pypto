@@ -16,7 +16,7 @@
 #include "pass_registry.h"
 
 #include "passes/pass_log/pass_log.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 #define MODULE_NAME "PassRegistry"
 

@@ -16,7 +16,7 @@
 #include <cassert>
 #include <algorithm>
 #include "cycles.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "tilefwk/error.h"
 
 namespace npu::tile_fwk {

@@ -6,7 +6,7 @@
 
 ## 错误码定义与使用说明
 
-相关错误码的统一定义，参见 [machine_error.h](../../framework/src/machine/utils/machine_error.h) 文件。
+相关错误码的枚举与码值统一定义在 [`framework/include/tilefwk/error_code.h`](../../framework/include/tilefwk/error_code.h)（见 MachineError、HostBackEndErr、SchedErr、RtErr 等）。
 
 ## 排查建议
 

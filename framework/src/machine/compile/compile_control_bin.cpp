@@ -23,7 +23,7 @@
 #include "interface/utils/op_info_manager.h"
 #include "machine/utils/machine_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 using Json = nlohmann::json;
 
 namespace {

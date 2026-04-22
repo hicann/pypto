@@ -5,7 +5,7 @@
 
 ## 错误码定义
 
-相关错误码的统一定义，参见 `framework/src/interface/utils/distributed_error.h` 文件。
+相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`（见 `DistributedErrorCode`）。
 
 ---
 

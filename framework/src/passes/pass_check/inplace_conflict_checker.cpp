@@ -16,7 +16,7 @@
 #include <utility>
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/pass_utils.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 #include "inplace_conflict_checker.h"
 
 #define MODULE_NAME "InplaceConflictChecker"

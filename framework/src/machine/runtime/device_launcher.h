@@ -32,7 +32,7 @@
 #include "machine/device/dynamic/device_common.h"
 #include "machine/runtime/device_memory_utils.h"
 #include "machine/runtime/distributed/distributed_context.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk::dynamic {
 struct AiCpuArgs {

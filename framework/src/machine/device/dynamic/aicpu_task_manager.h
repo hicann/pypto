@@ -28,7 +28,7 @@
 #include "machine/utils/machine_ws_intf.h"
 #include "interface/operation/opcode.h"
 #include "interface/utils/common.h"
-#include "interface/utils/error_code.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk::dynamic {
 
