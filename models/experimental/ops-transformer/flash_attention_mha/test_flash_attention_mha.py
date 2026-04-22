@@ -40,8 +40,8 @@ NUM_HEADS = 8
 HEAD_DIM = 64
 HIDDEN_DIM = NUM_HEADS * HEAD_DIM
 
-Q_TILE = 256
-K_TILE = 512
+Q_TILE = 320
+K_TILE = 320
 
 
 @dataclass
@@ -199,8 +199,7 @@ def run_test(device, batch_size=None, num_heads=None, s1_size=None,
     logging.info("=" * 60)
     logging.info(f"Test Case: batch={batch_size}, heads={num_heads}, "
                  f"Q:s1_size={s1_size}, KV:s2_size={s2_size}, dim={dim}")
-    logging.info(f"  hidden_dim={hidden_dim}, scale={scale:.6f}, "
-                 f"q_tile={tile_config.q_tile}, k_tile={tile_config.k_tile}")
+    logging.info(f"  hidden_dim={hidden_dim}, scale={scale:.6f}")
     logging.info("=" * 60)
 
     q, k, v, cu_seqlens_q, cu_seqlens_k, q_seqlens, kv_seqlens = create_inputs(

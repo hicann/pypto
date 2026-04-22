@@ -170,7 +170,7 @@ def flash_attention_varlen_forward_kernel(
                     if pypto.is_loop_begin(k_tile_idx):
                         if pypto.is_loop_end(k_tile_idx):
                             pypto.set_vec_tile_shapes(v1_tile[0], v1_tile[1])
-                            pij_div = pypto.div(pij, lij)
+                            pij_div = pypto.div(pij, lij, precision_type=pypto.DivAlgorithm.INTRINSIC)
                             pij_bf16 = pypto.cast(pij_div, pypto.DT_BF16)
                             pypto.set_pass_options(sg_set_scope=-1)
 
@@ -211,7 +211,7 @@ def flash_attention_varlen_forward_kernel(
                         li_new = pypto.add(pypto.mul(t2, li), pypto.mul(t4, lij))
                         oi_tmp = pypto.add(pypto.mul(oi, t2), pypto.mul(oij, t4))
 
-                        out_fp32 = pypto.div(oi_tmp, li_new)
+                        out_fp32 = pypto.div(oi_tmp, li_new, precision_type=pypto.DivAlgorithm.INTRINSIC)
                         out_bf16 = pypto.cast(out_fp32, pypto.DT_BF16)
                         pypto.assemble(out_bf16, [q_start + q_tile_start, h_offset], output)
                         pypto.assemble(li_new, [q_start + q_tile_start, 0], l_output)
