@@ -49,7 +49,43 @@ def matmul_kernel(a, b, out):
 
 **效果**：从 500us 优化到 40us
 
-### 2. 增加冗余计算避免冗余依赖
+### 2. L2 Cache 策略
+
+通过 `set_cache_policy` 控制 Tensor 是否经过 L2 Cache，减少 Cache 争用，提升数据搬运效率。
+
+#### 2.1 API 说明
+
+```python
+tensor.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)
+```
+
+- **API 文档**：`docs/api/tensor/pypto-Tensor-set_cache_policy.md`
+- **当前 Python 可用策略**：仅 `CachePolicy.NONE_CACHEABLE`（C++ 层还有 `PREFETCH`，但 Python API 未暴露）
+- **效果**：标记后该 Tensor 的数据访问将绕过 L2 Cache，直接访问主存（HBM）
+
+#### 2.2 适用场景
+
+根据官方文档，以下两类数据适合设置 `NONE_CACHEABLE`：
+
+1. **只读一次的权重矩阵**：类似于 weight 这种常量，算子仅从内存读取一次、不复用，没有必要占用 L2 Cache 空间
+2. **过大的输出 Tensor**：输出 shape 过大时，下层算子最先使用的内存不是上层最后的输出结果，进 L2 后反而触发回写导致性能恶化
+
+#### 2.3 调优策略
+
+**逐个尝试法（适用于简单算子）**：对候选 Tensor 逐个设置 NONE_CACHEABLE，每次实测对比。
+
+**批量设置法（适用于融合算子）**：当算子包含多个大型权重矩阵时，应考虑**同时对所有权重设置 NONE_CACHEABLE**。单独对某个权重设置可能因 L2 Cache 争用反而恶化，但全部绕过 L2 后可释放 Cache 容量给 KV Cache、中间激活等频繁访问的数据。
+
+#### 2.4 ⛔ 注意事项
+
+1. **输入 Tensor（hidden_states、residual 等）通常不适合 NONE_CACHEABLE**：这些 Tensor 虽然只读一次，但数据量小，L2 Cache 的硬件预取已经足够高效，绕过反而增加延迟
+2. **输出 Tensor（output、residual_out）不适合 NONE_CACHEABLE**：输出需要写入主存，绕过 L2 会增加写回开销
+3. **单独对某个大权重设置可能无效甚至恶化**：在融合算子中，单独绕过某个权重可能打破 L2 Cache 的整体平衡，导致其他权重访问变慢
+4. **必须实测验证**：Cache 策略的效果高度依赖算子的数据访问模式和硬件状态，无法仅凭理论判断
+
+**🔥 案例**：[权重矩阵批量 NONE_CACHEABLE](cases/weight-none-l2-cacheable.md)（Pangu 7B Fused Layer，5 个权重同时设置，437→354 us，-19.1%，含 5 轮迭代失败分析）
+
+### 3. 增加冗余计算避免冗余依赖
 
 通过增加冗余计算来避免冗余依赖和搬运。
 
@@ -66,22 +102,13 @@ for tmp_idx in range(tile_batch):
 e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 ```
 
-### 3. 尾轴长度优化
+### 4. 尾轴长度优化
 
 尽量避免处理尾轴长度较小的 Tensor。
 
 **解决方案**：
 - 使用 concat、transpose 或 reshape 等 Operation 来增大尾轴
 - 设置较大的 TileShape
-
-### 4. L2 Cache 策略
-
-设置合理的 L2 Cache Mode，对于只访问一次的 Global Memory 数据设置其访问状态为不进入 L2 Cache。
-
-```python
-# 设置 L2 Cache 策略
-tensor.set_cache_policy(...)
-```
 
 ### 5. TileOperation 实现检查
 
@@ -98,19 +125,19 @@ tensor.set_cache_policy(...)
 
 **优化优先级**：
 1. ⭐⭐⭐ **P0 - 特殊 Shape 处理** → 详见 [I-1]
-2. ⭐⭐ **P1 - 依赖与搬运优化** → 详见 [I-2][I-3]
-3. ⭐ **P2 - Cache 与实现检查** → 详见 [I-4][I-5]
+2. ⭐⭐ **P1 - L2 Cache + 依赖与搬运优化** → 详见 [I-2][I-3][I-4]
+3. ⭐ **P2 - 实现检查** → 详见 [I-5]
 
 **🔥 P0 - 特殊 Shape [I-1]**：
 - [ ] [I-1] Matmul 的 Shape 是否特殊（如 M 很大 N 很小）
 - [ ] 是否可以用 Vector 预处理构造标准 Shape
 
-**P1 - 依赖与搬运 [I-2~I-3]**：
-- [ ] [I-2] 是否存在一对多的子图依赖（可通过冗余计算消除）
-- [ ] [I-3] 尾轴是否过小（< 32B 对齐）
+**🔥 P1 - L2 Cache + 依赖与搬运 [I-2~I-4]**：
+- [ ] [I-2] 只读一次的大型权重矩阵是否设置了 L2 Cache 策略（`NONE_CACHEABLE`）；融合算子中应对所有权重同时设置，避免 L2 争用失衡 → **🔥 案例**：[权重矩阵批量 NONE_CACHEABLE](cases/weight-none-l2-cacheable.md)（-19.1%）
+- [ ] [I-3] 是否存在一对多的子图依赖（可通过冗余计算消除）
+- [ ] [I-4] 尾轴是否过小（< 32B 对齐）
 
-**P2 - Cache 与实现 [I-4~I-5]**：
-- [ ] [I-4] 只读一次的数据是否设置了 L2 Cache 策略
+**P2 - 实现检查 [I-5]**：
 - [ ] [I-5] 单个 Operation 是否与 Ascend C 对比过性能
 
 
@@ -130,24 +157,6 @@ A:
 ### Q3: 增加冗余计算会影响精度吗？
 
 A: 不会。冗余计算是指增加一些不影响最终结果的计算（如复制数据），目的是优化调度和合图，不会改变计算逻辑。
-
-## L2 Cache 策略优化
-
-L2 Cache 命中率直接影响核内数据搬运效率，尤其对 Cube 类算子（matmul）影响显著。
-
-**优化策略**：
-
-1. **数据预取**：对连续访问的大块数据，确保访问模式为顺序访问以利用硬件预取
-2. **TileShape 对齐**：将 TileShape 的内积轴（K 轴）设置为 L2 Cache 行大小的整数倍（通常 256B 或 512B）
-3. **双缓冲**：对前后依赖的计算步骤使用 ping-pong buffer 隐藏搬运延迟
-
-**代码示例**：
-
-```python
-# 设置 cube tile shapes 使 K 轴对齐 256B
-# FP16: 256B = 128 elements, BF16: 256B = 128 elements
-pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
-```
 
 ## TileOperation 检查流程
 
@@ -175,6 +184,9 @@ for i in pypto.loop(range(total_tiles)):
 
 ## 参考资料
 
+- [set_cache_policy API 文档](../../../../docs/api/tensor/pypto-Tensor-set_cache_policy.md)
+- [CachePolicy 数据类型](../../../../docs/api/datatype/CachePolicy.md)
 - [性能调优文档](../../../../docs/tutorials/debug/performance.md)
 - [GLM MoE Fusion 案例](../../../../models/glm_v4_5/glm_moe_fusion.py)
 - [MLA Prolog Quant 案例](../../../../models/deepseek_v32_exp/mla_prolog_quant_impl.py)
+- [典型案例库](cases/README.md)

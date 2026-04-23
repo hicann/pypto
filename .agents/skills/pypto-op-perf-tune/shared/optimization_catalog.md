@@ -53,9 +53,9 @@
 | 编号 | 优化方向 | 优先级 | 适用条件 | 详细指南 |
 |------|---------|--------|---------|---------|
 | I-1 | 小 Shape 矩阵乘 | ⭐⭐⭐ | Matmul Shape 特殊 | tune-incore §1 |
-| I-2 | 冗余计算消依赖 | ⭐⭐ | 一对多子图依赖 | tune-incore §2 |
-| I-3 | 尾轴长度优化 | ⭐⭐ | 尾轴 < 32B 对齐 | tune-incore §3 |
-| I-4 | L2 Cache 策略 | ⭐ | 有只读一次的数据 | tune-incore §4 |
+| I-2 | L2 Cache 策略（权重矩阵 NONE_CACHEABLE） | ⭐⭐ | 含大型权重矩阵 / 融合算子 | tune-incore §2 |
+| I-3 | 冗余计算消依赖 | ⭐⭐ | 一对多子图依赖 | tune-incore §3 |
+| I-4 | 尾轴长度优化 | ⭐⭐ | 尾轴 < 32B 对齐 | tune-incore §4 |
 | I-5 | TileOperation 实现检查 | ⭐ | 上述优化无效时 | tune-incore §5 |
 
 ---
@@ -99,9 +99,9 @@
 | 优先级 | 优化点 | 所在阶段 | 操作速览 |
 |--------|--------|---------|---------|
 | ⭐⭐⭐ | I-1 小 Shape 矩阵乘 | 核内 | Vector 预处理 reshape |
-| ⭐⭐ | I-3 尾轴长度优化 | 核内 | concat/transpose 增大尾轴 |
-| ⭐⭐ | I-2 冗余计算消依赖 | 核内 | 复制数据使分支独立 |
-| ⭐ | I-4 L2 Cache | 核内 | `set_cache_policy` |
+| ⭐⭐ | I-2 L2 Cache（融合算子批量设置权重） | 核内 | 所有权重同时 `NONE_CACHEABLE` |
+| ⭐⭐ | I-3 冗余计算消依赖 | 核内 | 复制数据使分支独立 |
+| ⭐⭐ | I-4 尾轴长度优化 | 核内 | concat/transpose 增大尾轴 |
 | ⭐ | I-5 Operation 检查 | 核内 | 与 Ascend C 对比 |
 
 ---
@@ -398,33 +398,52 @@
 - **解决方案**: 使用 Vector 操作提前处理输入矩阵，通过 concat/reshape 构造标准 Shape
 - **典型案例**: 左右矩阵 (884736, 16) × (16, 16) → 从 500us 优化到 40us
 
-### [I-2] 冗余计算消依赖
+### [I-2] L2 Cache 策略
+
+- **阶段**: 核内调优
+- **优先级**: ⭐⭐ P1（融合算子中效果显著）
+- **适用条件**: 算子包含大型权重矩阵（matmul 权重），或有过大的输出 Tensor
+- **API**: `tensor.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)`
+- **API 文档**: `docs/api/tensor/pypto-Tensor-set_cache_policy.md`
+- **检查方法**: 分析算子中所有权重矩阵的访问模式，识别只读一次且不复用的大 Tensor
+- **操作指南**: tune-incore SKILL.md §2
+- **调优策略**:
+  - 简单算子：逐个对候选 Tensor 设置 NONE_CACHEABLE，每次实测对比
+  - 融合算子（含多个大权重矩阵）：**同时对所有权重设置 NONE_CACHEABLE**，避免 L2 争用失衡
+- **⛔ 不适用场景**:
+  - 输入 Tensor（数据量小，硬件预取已足够，绕过反增延迟）
+  - 输出 Tensor（增加写回延迟）
+  - 融合算子中单独对某个权重设置（打破 L2 平衡，可能恶化）
+- **典型收益**: 10-20%（融合算子中批量设置所有权重）
+- **典型案例**: Pangu 7B Fused Layer，5 个权重矩阵同时设置 NONE_CACHEABLE → 437.28us→354us（-19.1%）
+- **代码示例**:
+  ```python
+  # 融合算子中：对所有权重矩阵同时设置
+  qkv_weight.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)
+  o_weight.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)
+  gate_weight.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)
+  up_weight.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)
+  down_weight.set_cache_policy(pypto.CachePolicy.NONE_CACHEABLE, True)
+  ```
+
+### [I-3] 冗余计算消依赖
 
 - **阶段**: 核内调优
 - **优先级**: ⭐⭐ P1
 - **适用条件**: 一对多的子图依赖（一个 tensor 被多个下游消费）
 - **检查方法**: 分析 `dyn_topo.txt` 中是否存在一个节点有多个不同 psgId 的后继
-- **操作指南**: tune-incore SKILL.md §2
+- **操作指南**: tune-incore SKILL.md §3
 - **解决方案**: 增加冗余计算（复制数据），使每个分支独立，避免一对多的子图依赖
 - **典型案例**: GLM MoE Fusion 中将 e_score_bias_2d 复制 tile_batch 份
 
-### [I-3] 尾轴长度优化
+### [I-4] 尾轴长度优化
 
 - **阶段**: 核内调优
 - **优先级**: ⭐⭐ P1
 - **适用条件**: Operation 输入 Tensor 尾轴 < 32B 对齐
 - **检查方法**: 检查参与计算的关键 tensor 的最后一个维度大小
-- **操作指南**: tune-incore SKILL.md §3
-- **解决方案**: 使用 concat 增大尾轴、transpose 调整轴顺序、reshape 调整 Shape
-
-### [I-4] L2 Cache 策略
-
-- **阶段**: 核内调优
-- **优先级**: ⭐ P2
-- **适用条件**: 有只访问一次的 Global Memory 数据
-- **检查方法**: 分析数据访问模式，识别只读一次的数据
 - **操作指南**: tune-incore SKILL.md §4
-- **解决方案**: 对只访问一次的数据设置其访问状态为不进入 L2 Cache，`tensor.set_cache_policy(...)`
+- **解决方案**: 使用 concat 增大尾轴、transpose 调整轴顺序、reshape 调整 Shape
 
 ### [I-5] TileOperation 实现检查
 
