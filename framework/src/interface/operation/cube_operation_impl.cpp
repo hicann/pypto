@@ -32,6 +32,7 @@ namespace npu {
 namespace tile_fwk {
 namespace Matrix {
 const float EPSILON = 1e-6f;
+const uint64_t VECTOR_TILE_SHAPE = 128;
 
 template <typename T>
 auto CeilAlign(T num_1, T num_2) -> T
@@ -722,6 +723,12 @@ Status CheckMXMatmulOperands(
     const Tensor& aTensor, const Tensor& aScaleTensor, const Tensor& bTensor, const Tensor& bScaleTensor,
     const MatmulAttrParam& attrParam)
 {
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, aTensor.GetStorage() != nullptr) << "aMatrix cannot be nullptr";
+
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, bTensor.GetStorage() != nullptr) << "bMatrix cannot be nullptr";
+
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, aScaleTensor.GetStorage() != nullptr) << "aScale cannot be nullptr";
+    ASSERT(MatmulErrorCode::ERR_RUNTIME_NULLPTR, bScaleTensor.GetStorage() != nullptr) << "bScale cannot be nullptr";
     ASSERT(
         MatmulErrorCode::ERR_PARAM_MISMATCH,
         aScaleTensor.GetDataType() == DataType::DT_FP8E8M0 && bScaleTensor.GetDataType() == DataType::DT_FP8E8M0)
@@ -741,7 +748,6 @@ Status CheckMXMatmulOperands(
     CheckMXMatmulShape(aTensor, aScaleTensor, bTensor, bScaleTensor, attrParam);
     return SUCCESS;
 }
-
 void SetMatmulTileInfo(
     const TileShape& tileShape, const MatmulAttrParam& attrParam, const MatmulGraphNodes& tensorGraphNodes,
     MatmulTileInfo& tileInfo)
@@ -1211,7 +1217,7 @@ static void SetVecTileBasedOnUbSize(DataType outType, const CubeTile& cubeTile)
     if (cubeTile.m[0] * cubeTile.n[0] * BytesOf(outType) * 2 <= ubSize || outType == DT_INT32) {
         TileShape::Current().SetVecTile({cubeTile.m[0], cubeTile.n[0]});
     } else {
-        TileShape::Current().SetVecTile({128, 128});
+        TileShape::Current().SetVecTile({VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     }
 }
 
@@ -1340,6 +1346,71 @@ Tensor Matmul(
     return ConstructTensorGraph(outType, tensorGraphNodes, attrParam, param);
 }
 
+static Tensor ConstructMXGmAccumulationTensorGraph(
+    DataType outType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
+    const MatmulAttrParam& attrParam)
+{
+    auto& cubeTile = TileShape::Current().GetCubeTile();
+    auto aMatrixValidShape = aMatrix.GetStorage()->GetDynValidShape();
+    auto bMatrixValidShape = bMatrix.GetStorage()->GetDynValidShape();
+    SymbolicScalar mValidShape = attrParam.transA ? aMatrixValidShape[1] : aMatrixValidShape[0];
+    SymbolicScalar nValidShape = attrParam.transB ? bMatrixValidShape[0] : bMatrixValidShape[1];
+    SymbolicScalar kL1TileShape = std::min(cubeTile.k[1], cubeTile.k[2]);
+    int64_t mSize = attrParam.transA ? aMatrix.GetShape()[1] : aMatrix.GetShape()[0];
+    int64_t kSize = attrParam.transA ? aMatrix.GetShape()[0] : aMatrix.GetShape()[1];
+    int64_t nSize = attrParam.transB ? bMatrix.GetShape()[0] : bMatrix.GetShape()[1];
+    TileShape::Current().SetVecTile({VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
+    std::vector<Tensor> gmPartialSums;
+    ASSERT(MatmulErrorCode::ERR_PARAM_INVALID, kL1TileShape != 0) << "kL1TileShape can not be 0";
+    const int64_t kLoop = (kSize + kL1TileShape - 1) / kL1TileShape;
+    const int64_t kL1Size = std::min(kSize, kL1TileShape);
+    const int64_t kScaleL1Size = kL1Size / ALIGN_SIZE_64;
+    for (int64_t kIdx = 0; kIdx < kLoop; ++kIdx) {
+        int64_t kValidShape = std::min(kSize - kL1Size * kIdx, kL1Size);
+        int64_t kScaleValidShape = kValidShape / ALIGN_SIZE_64;
+        Tensor tensorA;
+        if (attrParam.transA) {
+            tensorA = View(aMatrix, {kValidShape, mSize}, {kValidShape, mValidShape}, {kL1Size * kIdx, 0});
+        } else {
+            tensorA = View(aMatrix, {mSize, kValidShape}, {mValidShape, kValidShape}, {0, kL1Size * kIdx});
+        }
+        Tensor scaleA;
+        if (attrParam.transAScale) {
+            scaleA = View(
+                aScale, {kScaleValidShape, mSize, SHAPE_DIM2}, {kScaleValidShape, mValidShape, SHAPE_DIM2},
+                {kScaleL1Size * kIdx, 0, 0});
+        } else {
+            scaleA = View(
+                aScale, {mSize, kScaleValidShape, SHAPE_DIM2}, {mValidShape, kScaleValidShape, SHAPE_DIM2},
+                {0, kScaleL1Size * kIdx, 0});
+        }
+        Tensor tensorB;
+        if (attrParam.transB) {
+            tensorB = View(bMatrix, {nSize, kValidShape}, {nValidShape, kValidShape}, {0, kL1Size * kIdx});
+        } else {
+            tensorB = View(bMatrix, {kValidShape, nSize}, {kValidShape, nValidShape}, {kL1Size * kIdx, 0});
+        }
+        Tensor scaleB;
+        if (attrParam.transBScale) {
+            scaleB = View(
+                bScale, {nSize, kScaleValidShape, SHAPE_DIM2}, {nValidShape, kScaleValidShape, SHAPE_DIM2},
+                {0, kScaleL1Size * kIdx, 0});
+        } else {
+            scaleB = View(
+                bScale, {kScaleValidShape, nSize, SHAPE_DIM2}, {kScaleValidShape, nValidShape, SHAPE_DIM2},
+                {kScaleL1Size * kIdx, 0, 0});
+        }
+        MatmulGraphNodes tensorGraphNodes(
+            tensorA.GetStorage(), scaleA.GetStorage(), tensorB.GetStorage(), scaleB.GetStorage());
+        Tensor gmPartialSum = ConstructTensorGraph(outType, tensorGraphNodes, attrParam);
+        gmPartialSums.emplace_back(gmPartialSum);
+    }
+    for (int64_t kIdx = 1; kIdx < kLoop; ++kIdx) {
+        gmPartialSums[0] = npu::tile_fwk::Add(gmPartialSums[0], gmPartialSums[kIdx]);
+    }
+    return gmPartialSums[0];
+}
+
 Tensor MatmulMX(
     DataType outType, const Tensor& aMatrix, const Tensor& aScale, const Tensor& bMatrix, const Tensor& bScale,
     bool isATrans, bool isAScaleTrans, bool isBTrans, bool isBScaleTrans, bool isCMatrixNZ)
@@ -1347,12 +1418,14 @@ Tensor MatmulMX(
     MATMUL_LOGD("MatmulMX[Basic]: Start.");
     MatmulAttrParam attrParam(isATrans, isAScaleTrans, isBTrans, isBScaleTrans, isCMatrixNZ);
     CheckMatmulOperands(outType, aMatrix, bMatrix, attrParam);
-    Status checkStatus = CheckMatmulOperands(outType, aMatrix, bMatrix, attrParam);
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkStatus == SUCCESS) << "Matmul operands check failed";
-    Status checkMXStatus = CheckMXMatmulOperands(aMatrix, aScale, bMatrix, bScale, attrParam);
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkMXStatus == SUCCESS) << "MXMatmul operands check failed";
+    CheckMXMatmulOperands(aMatrix, aScale, bMatrix, bScale, attrParam);
     MatmulGraphNodes tensorGraphNodes(
         aMatrix.GetStorage(), aScale.GetStorage(), bMatrix.GetStorage(), bScale.GetStorage());
+    auto& cubeTile = TileShape::Current().GetCubeTile();
+    if (cubeTile.enableSplitK) {
+        MATMUL_LOGD("Matmul[Basic]: Using GM accumulation mode.");
+        return ConstructMXGmAccumulationTensorGraph(outType, aMatrix, aScale, bMatrix, bScale, attrParam);
+    }
     return ConstructTensorGraph(outType, tensorGraphNodes, attrParam);
 }
 
@@ -1363,12 +1436,15 @@ Tensor MatmulMX(
 {
     MATMUL_LOGD("MatmulMX[Extend]: Start.");
     MatmulAttrParam attrParam(isATrans, isAScaleTrans, isBTrans, isBScaleTrans, isCMatrixNZ);
-    Status checkStatus = CheckMatmulOperands(outType, aMatrix, bMatrix, attrParam, param);
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkStatus == SUCCESS) << "Matmul operands check failed";
-    Status checkMXStatus = CheckMXMatmulOperands(aMatrix, aScale, bMatrix, bScale, attrParam);
-    ASSERT(MatmulErrorCode::ERR_RUNTIME_LOGIC, checkMXStatus == SUCCESS) << "MXMatmul operands check failed";
+    CheckMatmulOperands(outType, aMatrix, bMatrix, attrParam, param);
+    CheckMXMatmulOperands(aMatrix, aScale, bMatrix, bScale, attrParam);
     MatmulGraphNodes tensorGraphNodes(
         aMatrix.GetStorage(), aScale.GetStorage(), bMatrix.GetStorage(), bScale.GetStorage());
+    auto& cubeTile = TileShape::Current().GetCubeTile();
+    if (cubeTile.enableSplitK) {
+        MATMUL_LOGD("Matmul[Extend]: Using GM accumulation mode.");
+        return ConstructMXGmAccumulationTensorGraph(outType, aMatrix, aScale, bMatrix, bScale, attrParam);
+    }
     return ConstructTensorGraph(outType, tensorGraphNodes, attrParam, param);
 }
 
@@ -1403,7 +1479,7 @@ Tensor ConstructBatchMatmulTensorGraph3D(
                         Tensor(dataType, {batchSize, mView, nView}, "BatchMatmulOutputNz", TileOpFormat::TILEOP_NZ) :
                         Tensor(dataType, {batchSize, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
-    TileShape::Current().SetVecTile({1, 128, 128});
+    TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     for (int64_t bIdx = 0; bIdx < batchSize; bIdx++) {
         int64_t offsetBatchA = batchSizeA == 1 ? 0 : bIdx;
         int64_t offsetBatchB = batchSizeB == 1 ? 0 : bIdx;
@@ -1454,7 +1530,7 @@ Tensor ConstructBatchMatmulTensorGraph4D(
             Tensor(dataType, {batchSize1, batchSize2, mView, nView}, "BatchMatmulOutputNz", TileOpFormat::TILEOP_NZ) :
             Tensor(dataType, {batchSize1, batchSize2, mView, nView});
     auto oriVecTile = TileShape::Current().GetVecTile();
-    TileShape::Current().SetVecTile({1, 1, 128, 128});
+    TileShape::Current().SetVecTile({1, 1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     for (int64_t bIdx1 = 0; bIdx1 < batchSize1; bIdx1++) {
         int64_t offsetBatchA1 = batchSizeA1 == 1 ? 0 : bIdx1;
         int64_t offsetBatchB1 = batchSizeB1 == 1 ? 0 : bIdx1;
@@ -1531,7 +1607,7 @@ Tensor TransposedBatchMatmul(DataType dataType, const Tensor& aMatrix, const Ten
         << "kSize invalid, expect kaSize = kbSize, given kaSize: " << kaSize << ", kbSize: " << kbSize;
 
     // 128: custom tile shape size
-    TileShape::Current().SetVecTile({1, 128, 128});
+    TileShape::Current().SetVecTile({1, VECTOR_TILE_SHAPE, VECTOR_TILE_SHAPE});
     Tensor aMatrixFused = Reshape(aMatrix, {mSize, batchSizeA * kaSize});
     Tensor cMatrix(dataType, {mSize, batchSizeA * nSize});
     for (int64_t bIdx = 0; bIdx < batchSizeA; ++bIdx) {
