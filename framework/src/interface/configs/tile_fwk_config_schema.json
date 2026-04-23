@@ -230,15 +230,7 @@
                     "minimum": 1,
                     "maximum": 1024
                 },
-                "stitch_cfgcache_size": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "指定生成controlflow缓存的大小",
-                        "en": "Specify the size of the generated controlflow cache"
-                    },
-                    "minimum": 0,
-                    "maximum": 100000000
-                },
+
                 "run_mode": {
                     "type": "integer",
                     "label": {

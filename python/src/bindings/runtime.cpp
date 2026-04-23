@@ -213,11 +213,9 @@ std::string DeviceRunOnceDataFromHost(
 
     DevControlFlowCache* hostCache = nullptr;
     EmulationMemoryUtils memUtils;
-    if (config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE) != 0) {
-        DeviceLauncherConfig config;
-        DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
-        EmulationLauncher::BuildControlFlowCache(func, memUtils, inputs, outputs, &hostCache, config);
-    }
+    DeviceLauncherConfig config;
+    DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
+    EmulationLauncher::BuildControlFlowCache(func, memUtils, inputs, outputs, &hostCache, config);
 
     if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE) == 1 &&
         EmulationLauncher::EmulationRunOnce(func, hostCache) != 0) {
@@ -271,7 +269,7 @@ std::string OperatorDeviceRunOnceDataFromDevice(
     if (config::GetDebugOption<int>(CFG_RUNTIME_DBEUG_MODE) == 1) {
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
-        if (EmulationLauncher::EmulationLaunchDeviceTensorData(func, inputs, outputs, config) != 0) {
+        if (EmulationLauncher::EmulationLaunchDeviceTensorData(func, inputs, outputs, config, nullptr) != 0) {
             return "emulation run failed";
         }
     }
@@ -353,47 +351,42 @@ int64_t BuildCache(
     if (op == nullptr) {
         return -1;
     }
-    if (config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE) != 0) {
-        DeviceLauncherConfig config;
-        DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
-        uint8_t* ctrlCache = op->FindCtrlFlowCache(inputList, outputList);
-        EmulationMemoryUtils memUtils;
-        if (ctrlCache == nullptr) {
-            HOST_PERF_EVT_BEGIN(EventPhase::BuildCtrlFlowCache);
-            DevControlFlowCache* hostCache = nullptr;
-            if (EmulationLauncher::BuildControlFlowCache(
-                    op->GetFunction(), memUtils, inputList, outputList, &hostCache, config) != 0) {
-                return 0;
-            }
-
-#ifdef BUILD_WITH_CANN
-            if (isCapturing) {
-                ChangeCaptureModeRelax();
-            }
-
-            if (hostCache) {
-                ctrlCache = CopyHostToDev(
-                    reinterpret_cast<uint8_t*>(hostCache),
-                    reinterpret_cast<DevControlFlowCache*>(hostCache)->usedCacheSize);
-            }
-
-            if (isCapturing) {
-                ChangeCaptureModeGlobal();
-            }
-#else
-            ctrlCache = reinterpret_cast<uint8_t*>(hostCache);
-#endif
-
-            if (ctrlCache) {
-                op->InsertCtrlFlowCache(inputList, outputList, ctrlCache);
-            }
-            HOST_PERF_EVT_END(EventPhase::BuildCtrlFlowCache);
+    DeviceLauncherConfig config;
+    DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
+    uint8_t* ctrlCache = op->FindCtrlFlowCache(inputList, outputList);
+    EmulationMemoryUtils memUtils;
+    if (ctrlCache == nullptr) {
+        HOST_PERF_EVT_BEGIN(EventPhase::BuildCtrlFlowCache);
+        DevControlFlowCache* hostCache = nullptr;
+        if (EmulationLauncher::BuildControlFlowCache(
+                op->GetFunction(), memUtils, inputList, outputList, &hostCache, config) != 0) {
+            return 0;
         }
 
-        return ctrlCache == nullptr ? 0 : reinterpret_cast<int64_t>(ctrlCache);
-    }
+#ifdef BUILD_WITH_CANN
+        if (isCapturing) {
+            ChangeCaptureModeRelax();
+        }
 
-    return 0;
+        if (hostCache) {
+            ctrlCache = CopyHostToDev(
+                reinterpret_cast<uint8_t*>(hostCache),
+                reinterpret_cast<DevControlFlowCache*>(hostCache)->usedCacheSize);
+        }
+
+        if (isCapturing) {
+            ChangeCaptureModeGlobal();
+        }
+#else
+        ctrlCache = reinterpret_cast<uint8_t*>(hostCache);
+#endif
+
+        if (ctrlCache) {
+            op->InsertCtrlFlowCache(inputList, outputList, ctrlCache);
+        }
+        HOST_PERF_EVT_END(EventPhase::BuildCtrlFlowCache);
+    }
+    return ctrlCache == nullptr ? 0 : reinterpret_cast<int64_t>(ctrlCache);
 }
 
 #ifdef BUILD_WITH_CANN
@@ -472,13 +465,12 @@ public:
         return nullptr;
     }
 
-    uint8_t* BuildControlFlowCache(std::vector<DeviceTensorData>& inputs, int64_t cfgCacheSize, bool isOriginShape)
+    uint8_t* BuildControlFlowCache(std::vector<DeviceTensorData>& inputs, bool isOriginShape)
     {
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
         DevControlFlowCache* ctrlCache = nullptr;
-
-        devProg->ctrlFlowCacheSize = cfgCacheSize;
+        devProg->ctrlFlowCacheSize = DEFAULT_STITCH_CFGCACHE_SIZE;
         config.isCacheOriginShape = isOriginShape;
         EmulationMemoryUtils memUtils;
         int ret = EmulationLauncher::BuildControlFlowCache(dynFunc.get(), memUtils, inputs, {}, &ctrlCache, config);
@@ -656,21 +648,17 @@ public:
 
     uint8_t* FindCtrlFlowCache(KernelBinary* kernel, py::object& module, std::vector<DeviceTensorData>& tensors)
     {
-        if (!IsCacheEnabled()) {
-            return nullptr;
-        }
-
         auto devCache = kernel->FindCtrlFlowCache(tensors, true);
         if (devCache == nullptr) {
             std::vector<std::vector<int64_t>> shape;
             if (DeviceLauncher::IsCaptureMode()) {
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-                devCache = kernel->BuildControlFlowCache(tensors, stitchCfgCacheSize, true);
+                devCache = kernel->BuildControlFlowCache(tensors, true);
             } else if (InferCacheShape(module, tensors, shape)) {
                 devCache = kernel->FindCtrlFlowCache(shape, false);
             } else {
                 AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
-                devCache = kernel->BuildControlFlowCache(tensors, stitchCfgCacheSize, true);
+                devCache = kernel->BuildControlFlowCache(tensors, true);
             }
         }
 #if ENABALE_VERBOSE_LOG
@@ -777,15 +765,37 @@ public:
         ASSERT(ret == RT_SUCCESS) << "launch aicore failed: " << ret;
     }
 
-    void EmulationLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors)
+    DevControlFlowCache* GetHostCtrlFlowCache(KernelBinary* kernel, 
+        std::vector<DeviceTensorData>& tensors, uint8_t* devCache, std::vector<uint8_t>& hostCache)
+    {
+        DevControlFlowCache* ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);
+        if (ctrlCache == nullptr && devCache != nullptr) {
+            auto devProg =
+                reinterpret_cast<DevAscendProgram*>(kernel->GetFunction()->GetDyndevAttribute()->devProgBinary.data());
+            size_t ctrlCacheSize = devProg->ctrlFlowCacheSize;
+            std::vector<uint8_t> hostCacheVec;
+            hostCacheVec.resize(ctrlCacheSize);
+            AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
+            if (RuntimeMemcpy(hostCacheVec.data(), ctrlCacheSize, devCache, ctrlCacheSize, RtMemcpyKind::DEVICE_TO_HOST) != RT_SUCCESS) {
+                ASSERT(false) << "RuntimeMemcpy cache failed!";
+                return nullptr;
+            }
+            AddHostCtrlFlowCache(tensors, std::move(hostCacheVec));
+            ctrlCache = FindHostCtrlFlowCache(tensors, hostCache);
+        }
+        return ctrlCache;
+    }
+
+    void EmulationLaunch(KernelBinary* kernel, std::vector<DeviceTensorData>& tensors, uint8_t* devCache)
     {
         if (!isDebugMode) {
             return;
         }
-
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
-        int ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config);
+        std::vector<uint8_t> hostCache;
+        DevControlFlowCache* ctrlCache = GetHostCtrlFlowCache(kernel, tensors, devCache, hostCache);
+        int ret = EmulationLauncher::EmulationLaunchDeviceTensorData(kernel->GetFunction(), tensors, {}, config, ctrlCache);
         ASSERT(ret == RT_SUCCESS) << "emulation run failed: " << ret;
     }
 
@@ -825,9 +835,6 @@ private:
     void InitConfigOptions(py::object& module)
     {
         auto options = module.attr("_runtime_options").cast<py::dict>();
-        if (options.contains("stitch_cfgcache_size")) {
-            stitchCfgCacheSize = options["stitch_cfgcache_size"].cast<int64_t>();
-        }
         if (!module.attr("_debug_options").is_none()) {
             auto debugOptions = module.attr("_debug_options").cast<py::dict>();
             if (debugOptions.contains("runtime_debug_mode")) {
@@ -860,7 +867,7 @@ private:
             }
         }
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE("stitch_cfgcache_size: %ld, infer_cache_shape: %d", stitchCfgCacheSize, inferCacheShape);
+        COMPILER_LOGE("infer_cache_shape: %d", inferCacheShape);
 #endif
     }
 
@@ -880,7 +887,7 @@ private:
                 inputs.emplace_back(tensors[i].GetDataType(), nullptr, inputShapes[i]);
             }
             if (kernel->CheckArgs(inputs)) {
-                kernel->BuildControlFlowCache(inputs, stitchCfgCacheSize, false);
+                kernel->BuildControlFlowCache(inputs, false);
             } else {
                 COMPILER_LOGE("Invalid cache shape, skip it");
             }
@@ -906,12 +913,36 @@ private:
         return true;
     }
 
-    bool IsCacheEnabled() { return stitchCfgCacheSize != 0; }
+    DevControlFlowCache* FindHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>& hostCache)
+    {
+        int64_t hash = ControlFlowCache::Hash(tensors);
+        for (auto& cache : hostCtrlFlowCaches) {
+            if (cache.hash == hash) {
+                hostCache = cache.hostCache; // Copy new backup
+                return reinterpret_cast<DevControlFlowCache*>(hostCache.data());
+            }
+        }
+        return nullptr;
+    }
+
+    void AddHostCtrlFlowCache(std::vector<DeviceTensorData>& tensors, std::vector<uint8_t>&& hostCache)
+    {
+        hostCtrlFlowCaches.emplace_back(tensors, std::move(hostCache));
+    }
 
 private:
+    struct HostControlFlowCache {
+        int64_t hash;
+        std::vector<uint8_t> hostCache;
+
+        HostControlFlowCache(std::vector<DeviceTensorData>& datas, std::vector<uint8_t>&& hcache) : hostCache(std::move(hcache))
+        {
+            hash = ControlFlowCache::Hash(datas);
+        }
+    };
+
     bool inferCacheShape{false};
     bool isDebugMode{false};
-    int64_t stitchCfgCacheSize{0};
     bool compileStageAllComplete{true};
     bool compileMonitorEnable{true};
     int intervalSec{60};
@@ -925,6 +956,7 @@ private:
     RtTaskCfgInfo rtTaskCfg;
     std::vector<void*> kernelArgs;
     std::vector<KernelBinary*> kernels;
+    std::vector<HostControlFlowCache> hostCtrlFlowCaches;
 
     static std::atomic<int64_t> sequence;
 };
@@ -1001,7 +1033,6 @@ private:
             kmodule->EslModelLaunch(kbinary, tensors);
             return;
         }
-        kmodule->EmulationLaunch(kbinary, tensors);
 
         int64_t* wsAddr = nullptr;
         int64_t wsSize = kmodule->GetWorkspaceSize(kbinary, tensors);
@@ -1019,6 +1050,8 @@ private:
 
         uint8_t* ctrlFlowCache = kmodule->FindCtrlFlowCache(kbinary, module, tensors);
         HOST_PERF_TRACE(TracePhase::FindCtrlFlowCache);
+
+        kmodule->EmulationLaunch(kbinary, tensors, ctrlFlowCache);
 
         kmodule->Launch(kbinary, aicoreStream, tensors, ctrlFlowCache, wsAddr);
         HOST_PERF_TRACE(TracePhase::Launch);

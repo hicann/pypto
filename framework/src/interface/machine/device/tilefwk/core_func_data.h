@@ -23,6 +23,7 @@
 
 inline constexpr size_t MAX_STITCH_FUNC_NUM = 1024;      // stitch数量阈值
 inline constexpr size_t MAX_STITCH_FUNC_NUM_LOWER = 128; // stitch数量阈值下限
+inline constexpr size_t MAX_STITCH_LEAFFUNC_NUM = 20000;
 constexpr int MAX_DIMS = 8;
 constexpr uint32_t AICORE_TYPE_NUM = 2;
 

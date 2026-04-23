@@ -26,7 +26,6 @@
 #include "interface/program/program.h"
 #include "interface/configs/config_manager.h"
 #include "tilefwk/pypto_fwk_log.h"
-#include "machine/utils/machine_error.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -2254,8 +2253,7 @@ void DevAscendProgram::InitControlFlowCache(
     uintdevptr_t& initOffset, const std::shared_ptr<DyndevFunctionAttribute>& dyndevAttr, bool fillContent)
 {
     (void)fillContent;
-
-    ctrlFlowCacheSize = config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE);
+    ctrlFlowCacheSize = DEFAULT_STITCH_CFGCACHE_SIZE;
     controlFlowCache.Init(
         dyndevAttr.get(), ctrlFlowCacheSize, runtimeOutcastPoolSize, initOffset, ExpectedMaxCachedNum());
 }
@@ -2714,7 +2712,7 @@ void EncodeDevAscendProgram(Function* func, uint64_t& offset, DevAscendProgram* 
         base->memBudget.aicoreSpilled = tensorWsRes.perCoreSpilledMem * maxCoreNum;
         base->devArgs.machineConfig = func->paramConfigs_.machineConfig_;
         base->stitchMaxFunctionNum = ExpectedMaxCachedNum();
-        base->stitchFunctionsize = config::GetRuntimeOption<uint32_t>(STITCH_FUNCTION_SIZE);
+        base->stitchFunctionsize = MAX_STITCH_LEAFFUNC_NUM;
         base->memBudget.metadata.general = CalcGeneralMetadataSlotWorkspace(base);
         base->memBudget.metadata.general += CalcGeneralMetadataSlabWorkspace(base);
         base->memBudget.metadata.stitchPool = CalcStitchWorkspace(*base);

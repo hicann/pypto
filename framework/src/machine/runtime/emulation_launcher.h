@@ -105,7 +105,8 @@ public:
         const DeviceLauncherConfig& config = DeviceLauncherConfig());
     static int EmulationLaunchDeviceTensorData(
         Function* function, const std::vector<DeviceTensorData>& inputList,
-        const std::vector<DeviceTensorData>& outputList, const DeviceLauncherConfig& config = DeviceLauncherConfig());
+        const std::vector<DeviceTensorData>& outputList, const DeviceLauncherConfig& config = DeviceLauncherConfig(),
+        DevControlFlowCache* ctrlCache = nullptr);
     static int EmulationRunOnce(
         Function* function, DevControlFlowCache* ctrlCache,
         const DeviceLauncherConfig& config = DeviceLauncherConfig());

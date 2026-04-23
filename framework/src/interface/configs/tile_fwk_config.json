@@ -17,8 +17,6 @@
         "vec_nbuffer_setting_by_label": {}
     },
     "runtime": {
-        "stitch_cfgcache_size": 0,
-        "stitch_function_size": 20000,
         "device_sched_mode": 0,
         "run_mode": 0,
         "stitch_function_max_num": 128,

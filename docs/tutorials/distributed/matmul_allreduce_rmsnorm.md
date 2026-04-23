@@ -28,8 +28,7 @@ $$
 
 ```python
 @pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 128,
-                     "stitch_cfgcache_size": 100000000},
+    runtime_options={"stitch_function_max_num": 128},
 )
 def matmul_allreduce_add_rmsnorm_kernel(
     in_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),

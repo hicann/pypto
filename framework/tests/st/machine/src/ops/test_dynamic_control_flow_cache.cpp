@@ -45,8 +45,6 @@ namespace {
 
 TEST_F(DynamicControlFlowCacheTest, KernelReuse)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 2100000);
-
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling);
 
@@ -108,8 +106,6 @@ TEST_F(DynamicControlFlowCacheTest, KernelReuse)
 
 TEST_F(DynamicControlFlowCacheTest, CheckShape)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 2100000);
-
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling);
 
@@ -223,7 +219,6 @@ TEST_F(DynamicControlFlowCacheTest, CheckShape)
 
 TEST_F(DynamicControlFlowCacheTest, CheckLackMemory)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 12000);
     config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_MAX_NUM, 128);
 
     int tiling = 32;
@@ -286,8 +281,6 @@ TEST_F(DynamicControlFlowCacheTest, CheckLackMemory)
 
 TEST_F(DynamicControlFlowCacheTest, CheckGetTensorData)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 2100000);
-
     int tiling = 32;
     TileShape::Current().SetVecTile(tiling, tiling);
 
@@ -344,8 +337,6 @@ static DeviceTensorData toTensorData(const std::shared_ptr<LogicalTensor>& t)
 TEST_F(DynamicControlFlowCacheTest, PartialCache)
 {
     // cache at most 3 task
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 276000);
-
     // every task 4 root func
     config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_MAX_NUM, 0x4);
 
@@ -401,18 +392,19 @@ TEST_F(DynamicControlFlowCacheTest, PartialCache)
                Program::GetInstance().GetLastFunction(), memUtils, inputList, outputList, &ctrlFlowCache, config));
     DevAscendProgram* devProg = DeviceLauncher::GetDevProg(Program::GetInstance().GetLastFunction());
 
-    EXPECT_EQ(0x3, ctrlFlowCache->deviceTaskCount);
-    EXPECT_EQ(0x1, ctrlFlowCache->deviceTaskSkippedCount);
+    EXPECT_EQ(0x5, ctrlFlowCache->deviceTaskCount);
+    EXPECT_EQ(0x0, ctrlFlowCache->deviceTaskSkippedCount);
 
     devProg->RelocProgram(0, (intptr_t)devProg);
     ctrlFlowCache->RelocMetaCache(0, (intptr_t)ctrlFlowCache);
     ctrlFlowCache->TaskAddrRelocProgramAndCtrlCache(0, 0, (intptr_t)devProg, (intptr_t)ctrlFlowCache);
 
-    for (int i = 0; i < 0x3; i++) {
+    for (int i = 0; i < 0x4; i++) {
         auto dynTaskBase = ctrlFlowCache->deviceTaskCacheList[i].dynTaskBase;
         EXPECT_EQ(0x4, dynTaskBase->GetDynFuncDataList()->Size());
     }
-
+    auto dynTaskBase = ctrlFlowCache->deviceTaskCacheList[0x4].dynTaskBase;
+    EXPECT_EQ(0x1, dynTaskBase->GetDynFuncDataList()->Size());
     ctrlFlowCache->TaskAddrRelocProgramAndCtrlCache((intptr_t)devProg, (intptr_t)ctrlFlowCache, 0, 0);
     devProg->RelocProgram((intptr_t)devProg, 0);
     ctrlFlowCache->RelocMetaCache((intptr_t)ctrlFlowCache, 0);
@@ -442,8 +434,6 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheChangeWorkspaceAddress)
     config::SetPassOption<std::map<int64_t, int64_t>>(VEC_NBUFFER_SETTING, {{-1, 16}});
 
     // cache at most 3 task
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 120000);
-
     // every task 4 root func
     config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_MAX_NUM, 0x3);
 
@@ -561,7 +551,6 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheChangeWorkspaceAddress)
 
 TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependData)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 112000);
     config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_MAX_NUM, 0x4);
     int tiling = 32;
     int n = tiling * 4;
@@ -645,7 +634,6 @@ TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependData)
 
 TEST_F(DynamicControlFlowCacheTest, PartialCacheValueDependControl)
 {
-    config::SetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE, 120000);
     config::SetRuntimeOption<int64_t>(STITCH_FUNCTION_MAX_NUM, 4);
 
     int tiling = 32;

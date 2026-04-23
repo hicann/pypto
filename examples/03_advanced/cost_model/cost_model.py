@@ -85,8 +85,7 @@ def softmax_core(input_tensor: pypto.Tensor) -> pypto.Tensor:
 
 
 @pypto.frontend.jit(
-    runtime_options={"stitch_cfgcache_size": 2100000,
-                        "run_mode": pypto.RunMode.SIM}
+    runtime_options={"run_mode": pypto.RunMode.SIM}
 )
 def softmax(input_tensor: pypto.Tensor(),
             output_tensor: pypto.Tensor()

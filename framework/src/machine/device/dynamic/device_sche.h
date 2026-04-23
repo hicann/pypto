@@ -211,7 +211,6 @@ struct DynMachineManager {
             TIMEOUT_CHECK_AND_RESET(
                 TIMEOUT_ONE_MINUTE, ThreadErr::THREAD_CPU_ALLOC_FAILED,
                 "#sche.thread.init: Thread alloc timeout over 1 min: threadIdx=%d, physicalCpu=%d.", curThreadIdx, cpu);
-            sched_yield();
         }
 
         auto maskval = cpumask_.load(std::memory_order_relaxed);

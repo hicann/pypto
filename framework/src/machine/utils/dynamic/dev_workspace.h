@@ -439,6 +439,11 @@ public:
         return reinterpret_cast<ItemPool<RuntimeOutcastTensor>::ItemBlock*>(&runtimeOutcastTensorPool_.At(0));
     }
 
+    ItemPool<RuntimeOutcastTensor>* GetRuntimeOutcastTensorPool()
+    {
+        return &runtimeOutcastTensorPool_;
+    }
+
     RuntimeOutcastTensor& GetRuntimeOutcastTensor(ItemPoolIter iter)
     {
         DEV_ASSERT(WsErr::WORKSPACE_ITER_INVALID, iter != ITEM_POOL_INVALID_INDEX);

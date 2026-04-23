@@ -867,7 +867,7 @@ static bool IsNeedDumpAicpuKernel(const std::string& inputFile)
 static void OverCallOpMaxNum(Function* devRoot, DevAscendFunction* funcBin)
 {
     uint32_t CallOpSize = funcBin->GetOperationSize();
-    uint32_t CallOpmaxSize = config::GetRuntimeOption<uint32_t>(STITCH_FUNCTION_SIZE);
+    uint32_t CallOpmaxSize = MAX_STITCH_LEAFFUNC_NUM;
     auto funcMagicName = devRoot->GetRawName() + "_" + std::to_string(devRoot->GetFuncMagic());
     MACHINE_LOGE(
         DevCommonErr::PARAM_CHECK_FAILED,
@@ -1092,7 +1092,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
         funcBin->getTensorDataCount = 0;
         EncodeDevAscendFunction(function, encodeDevAscendFunctionParam, size, funcBin);
         funcBin->Reloc(-reinterpret_cast<int64_t>(funcBin), true);
-        uint32_t CallOpmaxSize = config::GetRuntimeOption<uint32_t>(STITCH_FUNCTION_SIZE);
+        uint32_t CallOpmaxSize = MAX_STITCH_LEAFFUNC_NUM;
         ASSERT(DevCommonErr::PARAM_CHECK_FAILED, CallOpmaxSize <= STITCH_FUNCTION_MAX_SIZE)
             << " CallOpmaxSize set: " << CallOpmaxSize << "exceeds the maximum allowed value of 65535.";
         if (funcBin->GetOperationSize() > CallOpmaxSize) {

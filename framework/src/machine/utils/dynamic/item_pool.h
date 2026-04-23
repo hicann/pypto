@@ -22,6 +22,12 @@ namespace npu::tile_fwk::dynamic {
 
 using ItemPoolIter = int64_t;
 
+struct ItemPoolMeta {
+    size_t count;
+    size_t freeCount;
+    ItemPoolIter freeListHeadIndex;
+};
+
 static constexpr ItemPoolIter ITEM_POOL_INVALID_INDEX = std::numeric_limits<int64_t>::max();
 static constexpr ItemPoolIter ITEM_POOL_NON_FREE_INDEX = std::numeric_limits<int64_t>::max() - 1;
 
@@ -114,6 +120,17 @@ public:
     void DestroyAt(ItemPoolIter index) { Destroy(&At(index)); }
 
     size_t FreeItemNum() const { return freeCount_; }
+
+    void RestoreMetaData(const ItemPoolMeta &meta) {
+        count_ = meta.count;
+        freeCount_ = meta.freeCount;
+        freeListHeadIndex_ = meta.freeListHeadIndex;
+        return;
+    }
+
+    ItemPoolMeta GetMetaData() const {
+        return {count_, freeCount_, freeListHeadIndex_};
+    }
 
 private:
     inline void AppendFreeList(ItemBlock* block)

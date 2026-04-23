@@ -174,6 +174,7 @@ int EmulationLauncher::BuildControlFlowCacheWithEmulationTensorData(
     hostCtrlFlowCache->RelocMetaCache(reinterpret_cast<uint64_t>(hostCtrlFlowCache), 0);
     hostCtrlFlowCache->isActivated = true;
     devProg->ctrlFlowCacheAnchor = nullptr;
+    devProg->ctrlFlowCacheSize = hostCtrlFlowCache->usedCacheSize;
     devProg->ResetFromLaunch();
     if (outCtrlFlowCache) {
         *outCtrlFlowCache = hostCtrlFlowCache;
@@ -269,14 +270,14 @@ static void freeHostTensorData(const std::vector<DeviceTensorData>& hostDataList
 
 int EmulationLauncher::EmulationLaunchDeviceTensorData(
     Function* function, const std::vector<DeviceTensorData>& inDevList, const std::vector<DeviceTensorData>& outDevList,
-    const DeviceLauncherConfig& config)
+    const DeviceLauncherConfig& config, DevControlFlowCache* ctrlCache)
 {
     EmulationMemoryUtils memUtils;
     DeviceLauncher::ChangeCaptureModeRelax();
     auto inList = toHostTensorData(inDevList, true);
     auto outList = toHostTensorData(outDevList, false);
     DeviceLauncher::ChangeCaptureModeGlobal();
-    int rc = EmulationLaunchOnceWithHostTensorData(function, inList, outList, nullptr, memUtils, config);
+    int rc = EmulationLaunchOnceWithHostTensorData(function, inList, outList, ctrlCache, memUtils, config);
     freeHostTensorData(inList);
     freeHostTensorData(outList);
     return rc;
