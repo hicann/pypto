@@ -68,4 +68,4 @@
 | 环境问题 | `pypto-environment-setup` |
 | 精度问题 | `pypto-precision-debug` / `pypto-precision-compare` |
 | AICore Error | `pypto-aicore-error-locator` |
-| Pass 问题 | `pypto-pass-error-fixer` |
+| Pass 问题 | `pypto-pass-error-locator` |

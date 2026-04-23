@@ -18,7 +18,7 @@
         "Skill(pypto-pr-fixer)",
         "Skill(pypto-issue-creator)",
         "Skill(pypto-fracture-point-detector)",
-        "Skill(pypto-pass-error-fixer)",
+        "Skill(pypto-pass-error-locator)",
         "Skill(pypto-pass-module-analyzer)",
         "Skill(pypto-pass-perf-optimizer)",
         "Skill(pypto-pass-ut-generate)",

@@ -35,7 +35,7 @@
 - `gitcode-mcp-install`：安装和配置 GitCode MCP Server
 
 #### Pass 分析与优化
-- `pypto-pass-error-fixer`：Pass 模块错误诊断与修复，提供从问题定位到修复验证的完整工作流程
+- `pypto-pass-error-locator`：Pass 模块错误诊断，提供从问题定位到给出修复建议的完整工作流程
 - `pypto-pass-module-analyzer`：Pass 模块代码分析，生成模块分析文档，帮助理解接口、功能与特殊场景
 - `pypto-pass-perf-optimizer`：Pass 编译性能优化，分析和优化 Pass 模块的编译性能
 - `pypto-pass-ut-generate`：根据 Pass 业务描述，生成单元测试用例（UT）

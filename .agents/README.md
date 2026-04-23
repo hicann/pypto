@@ -355,11 +355,11 @@ Stage 7: 性能调优 → PerfTuner Subagent
 
 ### Pass 分析与优化
 
-#### `pypto-pass-error-fixer` — Pass 模块错误诊断与修复
+#### `pypto-pass-error-locator` — Pass 模块错误诊断
 
-**适用场景**：Pass 模块抛出错误，需要从问题定位到修复验证的完整排查流程
+**适用场景**：Pass 模块抛出错误，需要从问题定位到给出修复建议的完整排查流程
 
-**工作流程**：错误定位 → 原因分析 → 问题修复 → 验证确认
+**工作流程**：错误定位 → 原因分析 → 修复建议
 
 #### `pypto-pass-module-analyzer` — Pass 模块代码分析
 

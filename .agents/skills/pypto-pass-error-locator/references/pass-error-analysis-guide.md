@@ -1,160 +1,591 @@
 # PyPTO Pass 异常分析流程指导
 
-本文档针对 PyPTO Pass 模块常见异常类型，提供不同异常类型的分析流程指导。
+本文件提供 PyPTO Pass 模块常见异常类型的分析流程，指导AI Agent 针对不同类型的异常，采用不同策略进行分析。
+
+---
+
+## 通用分析总流程
+
+### 步骤 1：定位日志
+
+1. 从 `$ASCEND_PROCESS_LOG_PATH/debug/plog` 目录获取最新 `pypto-*.log`。
+2. 先找 `[ERROR]`，再找 `[WARN]`。
+
+```bash
+ls "$ASCEND_PROCESS_LOG_PATH/debug/plog"
+```
+
+```bash
+grep -n "\[ERROR\]\|\[WARN\]" "$ASCEND_PROCESS_LOG_PATH"/debug/plog/pypto-*.log
+```
+
+### 步骤 2：提取关键信息
+
+从日志中提取以下信息：
+
+- `op_magic` 或 `tensor_magic`
+- Pass 名称
+- Before / After 阶段
+- `subgraph_id`
+- 报错文本
+- 文件路径和行号
+
+### 步骤 3：选择分析入口
+
+1. 如果日志里有 `op_magic` 或 `tensor_magic`，优先走计算图 JSON。
+2. 如果拿到 `.tifwkgr`，走 IR 分析。
+3. 如果两者都有，先用 JSON 定位，再用 IR 验证变化。
+
+### 步骤 4：定位计算图节点
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <graph_json_path> \
+  --op-magic <op_magic>
+```
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <graph_json_path> \
+  --tensor-magic <tensor_magic>
+```
+
+建议先在 `output/` 下找最近的计算图文件：
+
+```bash
+ls -lt output/*/Pass_*/*.json
+```
+
+如果需要确认具体文件名，可先找对应 pass 目录：
+
+```bash
+ls -lt output/*/Pass_* | head
+```
+
+### 步骤 5：定位源码
+
+1. 取 `OperationInfo.file` 和 `OperationInfo.line`。
+2. 打开源码上下文，建议看前后各 20 行。
+
+```bash
+sed -n '<line-20>,<line+20>p' <source_file>
+```
+
+如果已经通过脚本输出了 `file` 和 `line`，可直接回看用户代码位置。
+
+### 步骤 6：查官方文档
+
+1. 算子类问题，先查 `docs/api/operation/`。
+2. 参数类问题，先查 `docs/api/config/pypto-set_pass_options.md`。
+3. 计算图解析类问题，直接使用本文件的“通用分析总流程”和 `scripts/computation_graph_analyzer.py`。
+
+```bash
+grep -R "<opcode>" docs/api/operation/
+```
+
+```bash
+grep -n "<param_name>" docs/api/config/pypto-set_pass_options.md
+```
+
+### 步骤 7：对比 Before / After
+
+1. 对比同一节点的 `shape`、`validshape`、`mem_type`、`ioperands`、`ooperands`。
+2. 确认 Pass 是否产生了非预期变更。
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <before_json_path> \
+  --op-magic <op_magic>
+```
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <after_json_path> \
+  --op-magic <op_magic>
+```
+
+### 步骤 8：输出根因链
+
+按以下格式输出：
+
+`现象(日志) -> 触发位置(源码行) -> 状态异常(计算图 Before/After) -> 违反规则(文档约束)`
+
+---
+
+## 公共参考：`After` 计算图缺失时补打异常前计算图
+
+当出现以下任一情况时，应先参考本节补打异常前最近一份计算图，再进入对应异常类型的专项分析：
+
+- 日志显示 pass 在 `RunOnFunction` / 核心处理逻辑中抛异常或提前返回
+- pass 输出目录里只有 `Before` 图，没有对应 `After` 图
+- 需要分析的是“执行中断前最后一版图”，而默认 dump 机制拿不到
+
+适用范围：
+
+- 计算图成环
+- 拓扑排序失败
+- 属性检查失败
+- Pass 中途修改依赖、替换 tensor、重建 op 后立即触发异常
+- 其他所有“异常发生在 pass 内部，导致 after 阶段文件未生成”的场景
+
+### 步骤 1：确认默认 dump 在哪里中断
+
+1. 先根据日志判断异常发生在 pass 的哪个函数、哪个代码分支。
+2. 确认当前 `Before` 文件已生成但 `After` 文件缺失。
+3. 不要把“缺失 After 文件”直接当作 pass 未修改图；它更常见的含义是“图已被部分修改，但尚未来得及统一落盘”。
+
+仓内可核实依据：
+
+- `framework/src/passes/pass_interface/pass.cpp`
+- `Pass::DumpFunctionJson(...)`
+- `framework/src/interface/function/function.cpp`
+- `Function::DumpJsonFile(...)`
+
+可以据此判断：默认 `After` 计算图通常在 pass 正常执行到统一 dump 流程后才会落盘；一旦 pass 中途异常，往往需要人工在异常前最近位置追加临时 dump。
+
+### 步骤 2：选择最近的插桩点
+
+插桩位置必须满足“尽量靠近异常点，同时保证 dump 调用本身有机会执行”。优先级如下：
+
+1. 异常日志对应代码行之前最近一次图结构修改完成处
+2. 即将执行拓扑检查、成环检查、属性校验、依赖校验的调用前
+3. `return FAILED`、`CHECK`、`throw`、`PYPTO_ASSERT`、`GELOGE(...); return ...;` 之前
+4. 遍历中可疑分支内部，在关键修改后立即 dump
+
+禁止做法：
+
+- 只在 pass 入口处 dump 一份 `Before` 图，然后声称已经拿到“异常前图”
+- 为了避免插桩而跳过问题分支、注释掉异常逻辑或简化代码路径
+- 未重新编译执行就声称“已确认中断前图状态”
+
+### 步骤 3：插入临时 `DumpJsonFile` 代码
+
+优先对当前正在被 pass 修改的 `Function` 对象调用：
+
+```cpp
+function.DumpJsonFile("/tmp/pass_debug/<pass_name>_before_abort.json");
+```
+
+若当前上下文持有的是 `Function*` / `std::shared_ptr<Function>`，使用等价写法：
+
+```cpp
+currFunctionPtr->DumpJsonFile("./config/pass/json/<pass_name>_before_abort.json");
+```
+
+文件路径要求：
+
+- 使用明确、不覆盖原始 dump 的文件名
+- 建议包含 `pass 名称 + 阶段 + before_abort / pre_check / pre_return` 等语义
+- 路径父目录必须真实存在，否则 `Function::DumpJsonFile` 打开文件会失败
+
+命名示例：
+
+- `./config/pass/json/cycle_detect_before_abort.json`
+- `./config/pass/json/pass_x_pre_topology_check.json`
+- `./config/pass/json/pass_x_before_return_failed.json`
+
+插桩示例 1：在校验前补打
+
+```cpp
+// Dump the latest graph state before topology validation aborts execution.
+function.DumpJsonFile("./config/pass/json/pass_x_pre_topology_check.json");
+auto ret = OperationLoopCheck(function);
+if (ret != SUCCESS) {
+    GELOGE(INTERNAL_ERROR, "loop check failed");
+    return ret;
+}
+```
+
+插桩示例 2：在错误返回前补打
+
+```cpp
+if (!IsEdgeValid(producer, consumer)) {
+    function.DumpJsonFile("./config/pass/json/pass_x_before_return_failed.json");
+    GELOGE(INTERNAL_ERROR, "invalid producer-consumer edge");
+    return INTERNAL_ERROR;
+}
+```
+
+### 步骤 4：重新编译并复现
+
+1. 重新编译受影响模块或按用户原命令重新构建。
+2. 在同一会话中保留日志环境变量，重新执行复现命令。
+3. 确认临时 dump 文件实际生成。
+4. 若仍未生成，继续把插桩点向异常前收缩，直到拿到“中断前最后一版图”。
+
+本步骤必须输出以下事实：
+
+- 是否已重新编译
+- 是否已重新执行原复现命令
+- 临时 dump 文件路径
+- 临时 dump 文件是否实际生成
+
+### 步骤 5：基于补打图继续分析
+
+获得补打图后，继续按原异常类型流程分析：
+
+1. 若是成环 / 拓扑失败：
+   - 对补打图执行 `--detect-op-cycle` / `--detect-subgraph-cycle`
+   - 与当前 pass 的 `Before` 图、上游 pass 输出图对比
+2. 若是属性、shape、依赖异常：
+   - 将补打图视为“异常前最新状态图”
+   - 对比异常前后关键 op、tensor、subgraph 的变化
+3. 在最终结论中明确标注该图来源于“临时异常前 dump”，不要误写成框架自动导出的标准 `After` 图
+
+### 步骤 6：调试结束后清理临时插桩
+
+若本轮任务包含代码修复或准备提交变更：
+
+1. 在确认根因后移除临时 `DumpJsonFile` 调试代码
+2. 除非用户明确要求保留诊断代码，否则不要把临时 dump 插桩作为正式修复提交
+3. 最终报告中保留：插桩位置、dump 文件名、分析结论；不要保留无必要的临时调试改动
 
 ---
 
 ## 一、参数配置异常
 
 ### 日志特征
+
 - `vec_nbuffer_setting`
 - `cube_l1_reuse_setting`
 - `cube_nbuffer_setting`
 - `sg_set_scope`
-- 包含pass配置参数名关键字
+- 包含 pass 配置参数名关键字
 
 ### 分析流程
 
 #### 步骤 1：获取参数约束
-1. 从 `docs/api/config/pypto-set_pass_options.md` 获取指定配置参数的使用说明
+
+```bash
+grep -n "<param_name>" docs/api/config/pypto-set_pass_options.md
+```
 
 #### 步骤 2：检查用户参数配置
-1. 检查用户提供的代码，定位到参数配置代码行，获取用户参数配置
-2. 检查用户参数配置，对比参数使用说明，检查是否满足参数约束
 
-#### 步骤 3：检查pass业务逻辑
-1. 分析pass异常位置代码逻辑，检查约束实现是否正确，约束是否有例外场景
+1. 定位用户代码中的参数设置位置。
+2. 对照文档确认参数范围、类型和默认值。
+
+#### 步骤 3：检查 pass 逻辑
+
+1. 回看日志里的源码位置。
+2. 检查 pass 是否正确处理了该参数。
 
 #### 步骤 4：确定根因
-1. 如果用户配置参数不满足约束：给出异常的参数配置信息，代码位置，不满足的约束点
-2. 如果是pass逻辑问题：给出pass逻辑异常代码位置，不满足的约束点
+
+1. 如果是用户配置不满足约束，明确指出参数值和不满足的规则。
+2. 如果是 pass 逻辑问题，明确指出源码位置和错误分支。
 
 ---
 
 ## 二、算子约束违反
 
+### 日志特征
+
+- `opmagic`
+- `tensor_magic`
+
 ### 分析流程
 
 #### 步骤 1：提取关键信息
-1. 从日志中提取 opmagic 或 tensor magic
-2. 识别 magic 类型（op_magic 或 tensor_magic）
 
-#### 步骤 2：加载计算图
-1. 从 `output` 目录下，按时间戳找到最新的计算图输出目录，例如：`output/output_20260324_162232_912961_1605290_C0A8451A`
-2. 在该目录下查找异常pass模块的 `.json` 计算图文件，获取文件路径，例如：`output/output_20260402_211910_059229_787054_C0A8451A/Pass_01_AutoCast/After_001_AutoCast_TENSOR_default_loop_1_Unroll1_PATH0_hiddenfunc0_5.json`
-3. 使用 `ComputationGraphAnalyzer.load_graph(json_path)` 加载计算图
-4. 获取分析器实例
+从日志中提取 `op_magic` 或 `tensor_magic`。
+
+#### 步骤 2：获取计算图关键信息
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <graph_json_path> \
+  --op-magic <op_magic>
+```
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <graph_json_path> \
+  --tensor-magic <tensor_magic>
+```
 
 #### 步骤 3：获取算子信息
-1. **如果是 op_magic**：
-   - 调用 `find_operation_by_magic(opmagic)` 获取 OperationInfo
-2. **如果是 tensor_magic**：
-   - 调用 `find_producer_of_tensor(tensor_magic)` 获取生产者 op
-   - 调用 `find_consumers_of_tensor(tensor_magic)` 获取消费者 op 列表
-   - 对生产者和每个消费者分别执行后续分析步骤
+
+1. 如果是 `op_magic`，直接定位 Operation。
+2. 如果是 `tensor_magic`，先查生产者，再查消费者。
 
 #### 步骤 4：定位用户代码
-1. 从 OperationInfo 获取 `file` 和 `line` 属性
-2. 定位到用户代码的具体位置，确定该位置的算子类型
+
+1. 使用脚本输出的 `file` 和 `line`。
+2. 查看源码上下文。
+
+```bash
+sed -n '<line-20>,<line+20>p' <source_file>
+```
 
 #### 步骤 5：检查算子约束
-1. 从 `docs/api/operation/` 目录下获取对应算子的使用说明文档
-2. 检查用户代码中该算子的使用是否满足文档约束
-3. 检查pass异常位置对该算子的处理逻辑，是否可能导致pass处理后不满足算子约束
 
-#### 步骤 6：确定根因
-1. 如果用户代码中算子使用不满足约束：给出异常的参数配置信息，代码位置，不满足的约束点
-2. 如果是pass逻辑问题：给出pass逻辑异常代码位置，代码逻辑的解释说明，经过pass处理后不满足约束的原因
+```bash
+grep -R "<opcode>" docs/api/operation/
+```
+
+#### 步骤 6：对比 Pass 前后变化
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <before_json_path> \
+  --op-magic <op_magic>
+```
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <after_json_path> \
+  --op-magic <op_magic>
+```
+
+#### 步骤 7：确定根因
+
+1. 如果是用户代码不满足约束，说明违反了哪条文档规则。
+2. 如果是 pass 处理导致约束破坏，说明具体变更点。
 
 ---
 
-## 通用问题分析流程
+## 三、计算图成环
 
-在没有对应的异常类型指导时，使用该分析流程进行分析。本流程通过日志、计算图与源码的交叉验证，快速定位问题根因。
+### 日志特征
 
-### 步骤 1：提取日志关键信息
-1. **定位日志文件**：从 `$ASCEND_PROCESS_LOG_PATH/debug/plog` 目录下获取最新的 `pypto-*.log` 文件。
-2. **解析错误行**：搜索 `[ERROR]` 或 `[WARN]` 级别日志，提取以下关键信息：
-   - **Magic ID**：`op_magic`（算子唯一标识）或 `tensor_magic`（张量唯一标识）
-   - **Pass 上下文**：触发异常的 Pass 名称、执行阶段（Before/After）、子图 ID（subgraph_id）
-   - **错误描述**：具体的错误提示文本（如约束违反、索引越界、内存冲突等）
-3. **验证检查点**：
-   - [ ] Magic ID 准确提取
-   - [ ] Pass 名称与阶段明确
-   - [ ] 错误描述完整记录
+当日志中出现以下关键字时，应优先按“计算图成环”场景分析：
 
-### 步骤 2：根据关键信息定位计算图异常节点
-1. **选择计算图文件**：在 `output/` 目录下按时间戳找到最新输出，定位到异常 Pass 对应的 `Before_*.json` 和 `After_*.json` 文件。
-2. **加载计算图分析器**：使用 `ComputationGraphAnalyzer` 工具加载 JSON 文件。
-   ```python
-   analyzer = ComputationGraphAnalyzer()
-   graph = analyzer.load_graph(json_path)
-   ```
-3. **查询异常节点**：
-   - 若日志提供 `op_magic`：调用 `analyzer.find_operation_by_magic(op_magic)` 获取 OperationInfo
-   - 若日志提供 `tensor_magic`：调用 `analyzer.find_tensor_by_magic(tensor_magic)` 获取 TensorInfo，并进一步查询其生产者/消费者
-4. **验证检查点**：
-   - [ ] 节点成功定位
-   - [ ] 节点属性（opcode, shape, mem_type, offset 等）准确获取
-   - [ ] 节点所属 Function/Subgraph 确认
+- `cycle detected`
+- `graph cycle`
+- `topological sort failed`
+- `circular dependency`
+- `Loop Detected`
+- `OperationLoopCheck`
+- `Cycle Detection`
 
-### 步骤 2.1：定位异常算子对应代码行（仅当异常信息包含 op 信息时执行）
-1. **提取代码位置**：从 OperationInfo 中获取 `file` 和 `line` 属性，定位到用户代码的具体位置。
-2. **识别算子类型**：根据 OperationInfo 的 `opcode` 字段确定算子类型（如 `ADD`, `MUL`, `VIEW`, `INDEX_OUTCAST` 等）。
-3. **查找算子使用文档**：
-   - 从 `docs/api/operation/` 目录下查找对应算子的使用说明文档（如 `pypto-add.md`、`pypto-view.md`）
-   - 若文档不存在，可搜索 `python/pypto/op/` 目录下的算子实现源码
-4. **理解算子用法**：
-   - 阅读文档中的**参数说明**：输入输出类型、支持的 dtype、shape 约束
-   - 阅读文档中的**约束说明**：broadcast 规则、tile shape 要求、内存层级限制
-   - 阅读文档中的**调用示例**：正确使用方式与常见错误写法
-5. **对比用户代码**：将用户代码中的算子调用与文档约束逐项对比，识别可能的违规使用。
-6. **验证检查点**：
-   - [ ] 代码行准确定位（文件路径 + 行号）
-   - [ ] 算子类型明确识别
-   - [ ] 算子文档获取并阅读完成
-   - [ ] 用户代码与文档约束对比完成
+说明：
 
-### 步骤 3：对比 Pass 前后计算图节点变化
-1. **提取节点属性**：分别从 `Before` 和 `After` JSON 中提取同一节点的关键属性。
-2. **对比关键字段**：
-   - **结构属性**：shape, dtype, format, validshape
-   - **内存属性**：mem_type (asis/tobe), mem_id, offset, life_range
-   - **连接关系**：ioperands（输入操作数）, ooperands（输出操作数）
-3. **结合 Pass 源码分析**：
-   - 阅读对应 Pass 的 C++ 实现代码，理解该 Pass 的预期行为（如内存提升、算子融合、张量替换等）
-   - 对比预期行为与实际变化，识别**非预期变更**（如 shape 错误修改、mem_type 未提升、连接断裂等）
-4. **验证检查点**：
-   - [ ] 前后差异点明确列出
-   - [ ] Pass 预期行为与实际变更对比完成
-   - [ ] 异常变更点精准定位
+- 当前报错 pass 不一定是成环的根因 pass。
+- 某些 pass 只是首次执行拓扑检查、排序或子图依赖检查，因此会最先暴露问题，但环可能由更早的 pass 引入。
 
-### 步骤 4：分析异常节点生产者/消费者链路
-1. **向上追溯生产者链路（Producer Chain）**：
-   - 从异常节点出发，沿 `ioperands` 递归查找数据生产者
-   - 检查数据生成逻辑是否符合预期，是否存在非法输入传播
-2. **向下追踪消费者链路（Consumer Chain）**：
-   - 沿 `ooperands` 查找数据消费者
-   - 检查下游算子是否满足输入约束（如 dtype 匹配、shape 兼容、内存层级要求）
-3. **识别特殊 Op 链路**：重点关注链路中的特殊操作，如 `VIEW`, `RESHAPE`, `INDEX_OUTCAST`, `ASSEMBLE`, `TRANSPOSE` 等，这些节点常是数据流断裂或约束违反的高发区。
-4. **验证检查点**：
-   - [ ] 完整数据流链路绘制
-   - [ ] 异常传播路径识别
-   - [ ] 特殊 Op 约束检查完成
+### 输入材料
 
-### 步骤 5：综合推断错误原因
-1. **构建根因链**：按照以下格式串联证据：
-   `现象(日志报错) -> 触发位置(Pass源码行) -> 状态异常(计算图Before/After差异) -> 违反规则(算子约束/内存策略)`
-2. **交叉验证**：
-   - 将日志错误信息与代码逻辑分支进行匹配
-   - 验证计算图实际状态是否满足算子/Pass 的官方约束文档
-   - 排除环境干扰、配置错误等外部因素
-3. **输出结论与修复建议**：
-   - **错误类型**：明确分类（配置错误/代码逻辑缺陷/约束违反/环境问题）
-   - **根因定位**：精确到文件、行号、具体逻辑分支
-   - **修复方案**：提供可执行的修改建议（如调整参数、修复 Pass 逻辑、修改用户代码写法）
-4. **验证检查点**：
-   - [ ] 根因链完整闭环
-   - [ ] 证据链（日志+源码+计算图）相互支撑
-   - [ ] 修复建议具备可操作性
+分析该场景时，至少需要准备以下材料：
 
+- 当前报错日志
+- 当前报错 pass 对应的计算图 JSON
+- 上游相邻 pass 的计算图 JSON
+- 若可获得，当前 pass 的 Before / After 两份图
+- 日志中对应的源码文件与行号
+
+常见计算图目录位置：
+
+- `output/output_*/`
+- `build/output/bin/output/output_*/`
+
+pass 中间目录通常类似：
+
+- `Pass_{PASS_SEQ}_{PASS_NAME}`
+
+例如：
+
+```bash
+ls -lt build/output/bin/output/output_*/Pass_*/*.json
+```
+
+```bash
+ls -lt output/output_*/Pass_*/*.json
+```
+
+### 分析目标
+
+本场景的分析目标包括：
+
+1. 确认当前图中是否存在 op 之间的循环依赖
+2. 确认当前图中是否存在 subgraph 之间的循环依赖
+3. 判断当前报错 pass 是否为根因 pass
+4. 沿 pass 链向前回溯，定位首次引入环的 pass 模块
+5. 结合源码分析形成根因链，并给出修复建议
+
+### 分析流程
+
+#### 步骤 1：定位当前报错 pass 和对应图文件
+
+1. 从日志中提取以下信息：
+   - pass 名称
+   - Before / After 阶段
+   - 报错文件和行号
+   - 相关 `op_magic`、`tensor_magic`
+2. 在 pass 输出目录中定位当前报错 pass 的图文件
+3. 同时收集上一个 pass 的输出图，作为回溯起点
+4. 如果当前 pass 缺失 `After` 图，必须先参考“公共参考：`After` 计算图缺失时补打异常前计算图”一节，拿到异常前最近一份图后，再继续成环分析
+
+#### 步骤 2：对当前图执行 op 级成环检测
+
+op 级成环检测用于确认计算图中是否存在 operation 之间的循环依赖。
+
+分析口径参考：
+
+- `framework/src/interface/function/function.cpp`
+- `Function::OperationLoopCheck(const std::string&)`
+
+其核心逻辑是：
+
+- 遍历所有 operation
+- 根据 op 输出 tensor 到 consumer op 的关系建立依赖边
+- 对 consumer 链执行 DFS
+- 若遍历过程中再次进入 `IN_STACK` 状态的 op，则说明存在回边，图中成环
+
+建议执行：
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <graph_json_path> \
+  --detect-op-cycle
+```
+
+需要记录的结果：
+
+- 是否存在 op 级环
+- 成环路径上的 `opmagic` 列表
+- 每条依赖边对应的 `tensor magic`
+- 每个 op 的 `opcode`、`file`、`line`
+
+#### 步骤 3：对当前图执行 subgraph 级成环检测
+
+subgraph 级成环检测用于确认不同 `subgraphid` 之间是否通过 tensor 形成闭环。
+
+分析口径参考：
+
+- `framework/src/interface/function/function.cpp`
+- `Function::LoopCheck()`
+
+其核心逻辑是：
+
+- 按 `subgraphid` 聚合 operation
+- 根据跨 subgraph 的 tensor 生产消费关系建立依赖边
+- 对 subgraph 图执行 DFS
+- 若遍历过程中再次进入 `IN_STACK` 状态的 subgraph，则说明 subgraph 之间存在环
+
+建议执行：
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <graph_json_path> \
+  --detect-subgraph-cycle
+```
+
+需要记录的结果：
+
+- 是否存在 subgraph 级环
+- 成环的 `subgraph id` 路径
+- 触发该路径的跨 subgraph tensor
+- 对应 producer op 和 consumer op
+
+#### 步骤 4：判断当前图成环是否能被脚本证实
+
+根据脚本结果分情况处理：
+
+1. 如果脚本检测到显式环：
+   - 继续沿 pass 链向前回溯，定位首次引入环的 pass
+2. 如果脚本未检测到显式环，但日志提示 `cycle detected` 或 `topological sort failed`：
+   - 不得直接认定“图中无环”
+   - 需要进一步怀疑以下隐式依赖：
+     - `dependOperand`
+     - operation group 顺序约束
+     - 调度级或拓扑级附加依赖
+
+说明：
+
+- 当前图 JSON 中已稳定导出 `ioperands`、`ooperands`
+- 当前图 JSON 中未直接导出 `dependOperand`
+- 因此脚本第一阶段只能稳定分析“显式 tensor 数据流”上的成环问题
+- 若日志来自拓扑排序或调度阶段，则可能存在 JSON 未表达的隐式依赖，需要回到源码侧确认
+- 若当前 pass 的标准 `After` 图缺失，但临时补打图已经生成，则应以该临时补打图作为“异常前最后状态图”继续本步骤，不得因为缺少标准 `After` 图而中止分析
+
+#### 步骤 5：沿 pass 链向前回溯，定位首次引入环的 pass
+
+当前报错 pass 不一定是根因 pass，需要逐步回溯。
+
+回溯方法：
+
+1. 对当前报错 pass 的输入图执行成环检测
+2. 若当前 pass 存在临时补打图，优先对该图执行成环检测
+3. 对上一个 pass 的输出图执行成环检测
+4. 按 pass 顺序持续向前回溯
+5. 找到“前一阶段无环、当前阶段有环”的边界
+6. 将该 pass 标记为“首次引入环的根因候选 pass”
+
+建议执行：
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <curr_graph> \
+  --detect-op-cycle
+```
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --json-path <prev_graph> \
+  --detect-op-cycle
+```
+
+若脚本支持对比模式，也可执行：
+
+```bash
+python3 scripts/computation_graph_analyzer.py \
+  --before-json <prev_graph> \
+  --after-json <curr_graph> \
+  --compare-cycle
+```
+
+回溯结论必须区分：
+
+- 报错 pass：首次抛出异常的 pass
+- 根因候选 pass：首次引入环的 pass
+- 根因未定：图文件不完整或隐式依赖无法从 JSON 还原时的结论
+
+#### 步骤 6：结合源码确认根因修改点
+
+对“首次引入环”的 pass，需要重点检查其是否进行了以下操作：
+
+- 新增了错误的 producer-consumer 依赖
+- 复用了旧 tensor，导致边关系串错
+- 修改 op 输入输出时遗留旧依赖
+- 跨 subgraph 迁移 op 后未同步修正边界 tensor
+- 引入额外 depend 依赖但未同步维护一致性
+
+需要输出的证据包括：
+
+- 成环路径上的关键 op
+- 成环路径上的关键 tensor
+- pass 中建立或修改依赖的源码位置
+- Before / After 图差异
+
+### 输出要求
+
+最终输出必须明确区分以下概念：
+
+- **报错 pass**：第一个抛出成环异常的 pass
+- **当前图证据**：当前图中是否真的检测到显式环
+- **根因候选 pass**：首次引入环的 pass
+- **能力边界**：是否存在 JSON 未表达的隐式依赖
+
+建议按如下根因链格式输出：
+
+`现象(某 pass 报 cycle) -> 图证据(某 JSON 中的 op/subgraph 环路) -> 首次引入位置(某上游 pass) -> 触发源码(某文件某行的依赖修改逻辑)`
+
+### 注意事项
+
+- 当前报错 pass 不一定是根因 pass
+- 脚本未检测到显式环，不等于图中一定无环
+- 拓扑排序失败还可能来自 `dependOperand` 或调度顺序约束
+- 图文件不完整时，只能给出“根因候选”，不能伪造成确定结论
+
+---
+
+## 输出要求
+
+最终分析结果至少包含：
+
+- 日志证据
+- 计算图证据
+- 源码位置
+- 官方文档约束
+- 可执行修复建议
