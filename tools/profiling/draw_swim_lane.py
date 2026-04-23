@@ -58,6 +58,9 @@ class TaskInfo:
         self.tensors = {}
         self.rawtensors = {}
         self.wrap_id = -1
+        self.l1_reuse_hash_order = -1
+        self.cube_merge_hash_order = -1
+        self.vec_merge_hash_order = -1
 
     def formal_name(self):
         seq_no = self.task_id >> 32
@@ -107,6 +110,9 @@ class TaskInfo:
         res["args"]["taskId"] = self.origin_task_id
         res["args"]["seqNo"] = self.origin_seq_no
         res["args"]["wrapId"] = self.wrap_id
+        res["args"]["l1ReuseHashOrder"] = self.l1_reuse_hash_order
+        res["args"]["cubeNBufferHashOrder"] = self.cube_merge_hash_order
+        res["args"]["vecNBufferHashOrder"] = self.vec_merge_hash_order
         res["cat"] = "event"
         res["id"] = event_id
         res["name"] = self.get_task_name()
@@ -128,6 +134,9 @@ class TaskInfo:
         res["args"]["ooperand-hint"] = self.outoperand_label
         res["args"]["taskId"] = self.origin_task_id
         res["args"]["seqNo"] = self.origin_seq_no
+        res["args"]["l1ReuseHashOrder"] = self.l1_reuse_hash_order
+        res["args"]["cubeNBufferHashOrder"] = self.cube_merge_hash_order
+        res["args"]["vecNBufferHashOrder"] = self.vec_merge_hash_order
         if len(self.func_name) == 0:
             res["funcName"] = "Func"
         else:
@@ -415,6 +424,9 @@ def build_swim_info(swim_data, topo_data, label_type: int = 0):
             entry.func_name = func_name
             entry.psg_id_within_static = topo_task.get("psgId", entry.psg_id_in_dyn)
             entry.wrap_id = topo_task.get("wrapId", -1)
+            entry.l1_reuse_hash_order = topo_task.get("l1ReuseHashOrder", -1)
+            entry.cube_merge_hash_order = topo_task.get("cubeNBufferHashOrder", -1)
+            entry.vec_merge_hash_order = topo_task.get("vecNBufferHashOrder", -1)
             entry.inoperand_label = f"{topo_task.get('inoperands', [])}"
             entry.outoperand_label = f"{topo_task.get('outoperands', [])}"
             entry.successors = topo_task["successors"]
@@ -748,6 +760,9 @@ def load_dyn_topo(file_path, func_data):
             root_index = get_func_index(root_hash, func_data)
             leaf_index = get_func_index(func_hash, func_data)
             succs = fields[10:]
+            l1_reuse_hash_order, cube_merge_hash_order, vec_merge_hash_order = fcvt.get_hash_order(
+                leaf_index, func_data
+            )
             topo.append(
                 {
                     "taskId": seq_no << 32 | task_id,
@@ -762,6 +777,9 @@ def load_dyn_topo(file_path, func_data):
                     "psgId": psg_id_within_root,
                     "wrapId": wrap_id,
                     "funcHash": func_hash,
+                    "l1ReuseHashOrder": l1_reuse_hash_order,
+                    "cubeNBufferHashOrder": cube_merge_hash_order,
+                    "vecNBufferHashOrder": vec_merge_hash_order,
                     "semanticLabel": fcvt.get_sematic(
                         root_index, opmagic, func_data
                     ),

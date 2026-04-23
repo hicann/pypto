@@ -26,6 +26,35 @@ def get_sematic(func_index, opmagic, func_data):
     return ""
 
 
+def get_hash_order(func_index, func_data):
+    """Get hashOrder info from program.json by func_index.
+
+    Traverse all operations in the function to find valid hashOrder values.
+    Some ops (e.g., added by l1_reuse/nbuffer pass) have all hashOrder=-1,
+    so we search for any op with valid values in the same function.
+
+    Args:
+        func_index: Index of the function in func_data (should be leaf function for hashOrder)
+        func_data: List of functions from program.json
+
+    Returns:
+        tuple: (l1ReuseHashOrder, cubeMergeHashOrder, vecMergeHashOrder)
+    """
+    if func_index >= len(func_data):
+        return -1, -1, -1
+
+    func = func_data[func_index]
+
+    for op in func["operations"]:
+        l1_reuse_hash_order = op.get("l1ReuseHashOrder", -1)
+        cube_merge_hash_order = op.get("cubeMergeHashOrder", -1)
+        vec_merge_hash_order = op.get("vecMergeHashOrder", -1)
+        if l1_reuse_hash_order != -1 or cube_merge_hash_order != -1 or vec_merge_hash_order != -1:
+            return l1_reuse_hash_order, cube_merge_hash_order, vec_merge_hash_order
+
+    return -1, -1, -1
+
+
 class DataType(Enum):
     INT4 = 0
     INT8 = 1
