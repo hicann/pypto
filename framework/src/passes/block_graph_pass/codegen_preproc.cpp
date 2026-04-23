@@ -268,7 +268,8 @@ Status CodegenPreproc::ForceCombineAxisForAxisCombine(Function& func) const
             std::vector<bool> inputCombineAxis;
             LogicalTensors inputs = op.GetIOperands();
             for (size_t i = 0; i < inputs.size(); ++i) {
-                if (inputs[i]->tensor->rawshape.back() == 1 &&
+                if (inputs[i]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR &&
+                    inputs[i]->tensor->rawshape.back() == 1 &&
                     SkipInputCombineOps(op, static_cast<int>(inputs[i]->tensor->rawshape.size()))) {
                     inputCombineAxis.push_back(true);
                 } else {
@@ -279,7 +280,8 @@ Status CodegenPreproc::ForceCombineAxisForAxisCombine(Function& func) const
             std::vector<bool> outputCombineAxis;
             auto outputs = op.GetOOperands();
             for (size_t i = 0; i < outputs.size(); ++i) {
-                if (outputs[i]->tensor->rawshape.back() == 1 && ReduceNeedCombineAxis(op)) {
+                if (outputs[i]->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR &&
+                    outputs[i]->tensor->rawshape.back() == 1 && ReduceNeedCombineAxis(op)) {
                     outputCombineAxis.push_back(true);
                     // OP_EXPAND 只有单输出，此处只会执行一次
                     FixExpandDimForAxisCombine(op, static_cast<int>(outputs[i]->tensor->rawshape.size()));
