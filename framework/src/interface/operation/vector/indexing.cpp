@@ -569,7 +569,7 @@ void CheckGatherParamsInvalid(const Tensor& params, const Tensor& indices, int a
     CheckTensorDataType(params.GetStorage(), supportedTypes, opName);
     std::unordered_set<DataType> indexSupportedTypes = {DT_INT32, DT_INT64};
     CheckTensorDataType(indices.GetStorage(), indexSupportedTypes, opName);
-    CheckTensorDimRange(params.GetStorage(), 2, 4, opName);
+    CheckTensorDimRange(params.GetStorage(), 1, 4, opName);
     CheckTensorDimRange(indices.GetStorage(), 1, 2, opName);
     CheckTensorShapeSize(params.GetStorage(), opName);
     CheckTensorShapeSize(indices.GetStorage(), opName);

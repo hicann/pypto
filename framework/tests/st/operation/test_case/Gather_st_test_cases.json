@@ -55,6 +55,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 0
             },
             "index": 0
@@ -114,6 +115,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 0
             },
             "index": 1
@@ -177,6 +179,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 1
             },
             "index": 2
@@ -240,6 +243,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 1
             },
             "index": 3
@@ -303,6 +307,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 4
@@ -366,6 +371,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 5
@@ -429,6 +435,7 @@
             ],
             "params": {
                 "axis": 2,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 6
@@ -496,6 +503,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 3
             },
             "index": 7
@@ -563,6 +571,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 3
             },
             "index": 8
@@ -630,6 +639,7 @@
             ],
             "params": {
                 "axis": 2,
+                "on_board": true,
                 "func_id": 3
             },
             "index": 9
@@ -697,6 +707,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 10
@@ -764,6 +775,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 11
@@ -831,6 +843,7 @@
             ],
             "params": {
                 "axis": 2,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 12
@@ -898,6 +911,7 @@
             ],
             "params": {
                 "axis": 3,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 13
@@ -969,6 +983,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 14
@@ -1040,6 +1055,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 15
@@ -1111,6 +1127,7 @@
             ],
             "params": {
                 "axis": 2,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 16
@@ -1182,6 +1199,7 @@
             ],
             "params": {
                 "axis": 3,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 17
@@ -1249,6 +1267,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 18
@@ -1320,6 +1339,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 19
@@ -1383,6 +1403,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 20
@@ -1450,6 +1471,7 @@
             ],
             "params": {
                 "axis": 2,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 21
@@ -1517,6 +1539,7 @@
             ],
             "params": {
                 "axis": -1,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 22
@@ -1580,6 +1603,7 @@
             ],
             "params": {
                 "axis": -2,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 23
@@ -1647,6 +1671,7 @@
             ],
             "params": {
                 "axis": -2,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 24
@@ -1718,6 +1743,7 @@
             ],
             "params": {
                 "axis": -3,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 25
@@ -1789,6 +1815,7 @@
             ],
             "params": {
                 "axis": -1,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 26
@@ -1852,6 +1879,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 27
@@ -1915,6 +1943,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 28
@@ -1978,6 +2007,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 29
@@ -2041,6 +2071,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 30
@@ -2104,6 +2135,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 31
@@ -2171,6 +2203,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 2
             },
             "index": 32
@@ -2238,6 +2271,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 33
@@ -2305,6 +2339,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 4
             },
             "index": 34
@@ -2368,6 +2403,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 0
             },
             "index": 35
@@ -2435,6 +2471,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 1
             },
             "index": 36
@@ -2498,6 +2535,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 1
             },
             "index": 37
@@ -2561,6 +2599,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 5
             },
             "index": 38
@@ -2628,6 +2667,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 3
             },
             "index": 39
@@ -2695,6 +2735,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 3
             },
             "index": 40
@@ -2762,6 +2803,7 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 3
             },
             "index": 41
@@ -2821,6 +2863,7 @@
             ],
             "params": {
                 "axis": 0,
+                "on_board": true,
                 "func_id": 0
             },
             "index": 42
@@ -2880,9 +2923,66 @@
             ],
             "params": {
                 "axis": 1,
+                "on_board": true,
                 "func_id": 0
             },
             "index": 43
+        },
+        {
+            "case_index": 44,
+            "case_name": "Gather_test_44",
+            "operation": "Gather",
+            "input_tensors": [
+                {
+                    "name": "input0",
+                    "shape": [
+                        32
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": -1,
+                        "max": 1
+                    }
+                },
+                {
+                    "name": "input1",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "int64",
+                    "format": "ND",
+                    "need_trans": false,
+                    "data_range": {
+                        "min": 0,
+                        "max": 31
+                    }
+                }
+            ],
+            "output_tensors": [
+                {
+                    "name": "output0",
+                    "shape": [
+                        16
+                    ],
+                    "dtype": "fp32",
+                    "format": "ND",
+                    "need_trans": false
+                }
+            ],
+            "view_shape": [
+                8
+            ],
+            "tile_shape": [
+                8
+            ],
+            "params": {
+                "axis": 0,
+                "on_board": true,
+                "func_id": 0
+            },
+            "index": 44
         }
     ]
 }

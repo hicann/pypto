@@ -266,7 +266,7 @@ def index_select(input: Tensor, dim: int, index: Tensor) -> Tensor:
     Parameters
     ----------
     input : Tensor
-    2-4-D tensor of shape (S0, S1, …, Sn-1) that provides the source values to gather from.
+    1-4-D tensor of shape (S0, S1, …, Sn-1) that provides the source values to gather from.
 
     index : Tensor (integer type)
     1-2-D integer tensor of shape (I0, I1); every entry must satisfy 0 ≤ value < S_dim.

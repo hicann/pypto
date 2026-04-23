@@ -39,6 +39,60 @@ constexpr int AXIS0 = 0;
 constexpr int AXIS1 = 1;
 constexpr int AXIS2 = 2;
 constexpr int AXIS3 = 3;
+static void GatherOperationExeFunc1_1Dims(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+    {
+        SymbolicScalar src_firstDim = inputs[0].GetShape()[0];
+        SymbolicScalar idx_firstDim = inputs[1].GetShape()[0];
+        auto args = static_cast<const GatherOpFuncArgs*>(opArgs);
+        const int firstViewShape = args->viewShape_[0];
+        const int bloop = CeilDiv(idx_firstDim, firstViewShape);
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            auto tileTensor0 = View(inputs[0], {src_firstDim}, {src_firstDim}, {0});
+            auto tileTensor1 = View(
+                inputs[1], {firstViewShape}, {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape)},
+                {bIdx * firstViewShape});
+            TileShape::Current().SetVecTile(args->tileShape_);
+            auto res = Gather(tileTensor0, tileTensor1, args->axis_);
+            Assemble(res, {bIdx * firstViewShape}, outputs[0]);
+        }
+    }
+}
+
+static void GatherOperationExeFunc1_2Dims(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0], inputs[1]}, {outputs[0]})
+    {
+        SymbolicScalar src_firstDim = inputs[0].GetShape()[0];
+        SymbolicScalar idx_firstDim = inputs[1].GetShape()[0];
+        SymbolicScalar idx_secondDim = inputs[1].GetShape()[1];
+        auto args = static_cast<const GatherOpFuncArgs*>(opArgs);
+        const int firstViewShape = args->viewShape_[0];
+        const int secondViewShape = args->viewShape_[1];
+        const int bloop = CeilDiv(idx_firstDim, firstViewShape);
+        const int sloop = CeilDiv(idx_secondDim, secondViewShape);
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            LOOP("LOOP_L1_sIdx", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, sloop, 1))
+            {
+                auto tileTensor0 = View(inputs[0], {src_firstDim}, {src_firstDim}, {0});
+                auto tileTensor1 = View(
+                    inputs[1], {firstViewShape, secondViewShape},
+                    {std::min(idx_firstDim - bIdx * firstViewShape, firstViewShape),
+                     std::min(idx_secondDim - sIdx * secondViewShape, secondViewShape)},
+                    {bIdx * firstViewShape, sIdx * secondViewShape});
+                TileShape::Current().SetVecTile(args->tileShape_);
+                auto res = Gather(tileTensor0, tileTensor1, args->axis_);
+                Assemble(res, {bIdx * firstViewShape, sIdx * secondViewShape}, outputs[0]);
+            }
+        }
+    }
+}
+
 static void GatherOperationExeFunc2_1Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -750,13 +804,15 @@ class GatherOperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_Aih
 INSTANTIATE_TEST_SUITE_P(
     TestGather, GatherOperationTest,
     ::testing::ValuesIn(GetOpMetaData<GatherOpMetaData>(
-        {GatherOperationExeFunc2_1Dims, GatherOperationExeFunc2_2Dims, GatherOperationExeFunc3_1Dims,
-         GatherOperationExeFunc3_2Dims, GatherOperationExeFunc4_1Dims, GatherOperationExeFunc4_2Dims},
+        {GatherOperationExeFunc1_1Dims, GatherOperationExeFunc1_2Dims, GatherOperationExeFunc2_1Dims,
+         GatherOperationExeFunc2_2Dims, GatherOperationExeFunc3_1Dims, GatherOperationExeFunc3_2Dims,
+         GatherOperationExeFunc4_1Dims, GatherOperationExeFunc4_2Dims},
         "Gather")));
 
 TEST_P(GatherOperationTest, TestGather)
 {
     std::unordered_map<int, std::unordered_map<int, OpFunc>> func{
+        {1, {{1, GatherOperationExeFunc1_1Dims}, {2, GatherOperationExeFunc1_2Dims}}},
         {2, {{1, GatherOperationExeFunc2_1Dims}, {2, GatherOperationExeFunc2_2Dims}}},
         {3, {{1, GatherOperationExeFunc3_1Dims}, {2, GatherOperationExeFunc3_2Dims}}},
         {4, {{1, GatherOperationExeFunc4_1Dims}, {2, GatherOperationExeFunc4_2Dims}}},

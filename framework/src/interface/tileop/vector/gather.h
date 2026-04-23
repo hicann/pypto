@@ -129,8 +129,6 @@ template <
     typename T2, typename C1, typename C2>
 TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
 {
-    constexpr size_t N = Std::tuple_size<typename T0::Shape>::value;
-    constexpr auto shapeSize = Std::tuple_size<typename T0::Shape>::value;
     constexpr size_t srcExpectSize = 4;
     constexpr size_t idxExpectSize = 2;
     constexpr size_t dstExpectSize = 5;
@@ -171,8 +169,8 @@ TILEOP void Tgather(T0 dst, T1 src, T2 idx, C1 srcCoordinate, C2 idxCoordinate)
     srcAddr += srcOffset;
     idxAddr += idxOffset;
     __ubuf__ dstType* dstAddr = (__ubuf__ dstType*)((uint64_t)(dst.GetAddr()));
-    constexpr auto tileH = Std::tuple_element<shapeSize - 2, typename T0::TileShape>::type::value;
-    constexpr auto tileW = Std::tuple_element<shapeSize - 1, typename T0::TileShape>::type::value;
+    constexpr auto tileH = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
     using ShapeDim5 = pto::Shape<-1, -1, -1, -1, -1>;
     using StrideDim5 = pto::Stride<-1, -1, -1, -1, -1>;
     using GlobalData = pto::GlobalTensor<srcType, ShapeDim5, StrideDim5>;
