@@ -39,7 +39,7 @@ namespace npu::tile_fwk::dynamic {
 uint8_t* AllocHostAddr(size_t size)
 {
     if (size == 0 || size > 0x500000000) {
-        DISTRIBUTED_LOGE("AllocHostAddr failed size %zu", size);
+        DISTRIBUTED_LOGE_E(DistributedErrorCode::CONTEXT_CONFIGURE_FAILED, "AllocHostAddr failed size %zu", size);
         return nullptr;
     }
     auto hostPtr = (uint8_t*)malloc(size);
