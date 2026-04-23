@@ -91,19 +91,22 @@ TILEOP void TExpand(T0 dst, T1 src)
         return;
     }
 
-    using DstTileInfo = TensorTileInfo<T0>;
-    using SrcTileInfo = TensorTileInfo<T1>;
     using DstDtype = std::conditional_t<std::is_same_v<typename T0::Type, bool>, uint8_t, typename T0::Type>;
     using SrcDtype = std::conditional_t<std::is_same_v<typename T1::Type, bool>, uint8_t, typename T1::Type>;
     constexpr auto typeSize = sizeof(DstDtype);
     
-    constexpr auto minTileH = DstTileInfo::tileH < SrcTileInfo::tileH ? DstTileInfo::tileH : SrcTileInfo::tileH;
-    constexpr auto dstTileH = (expandTile == ExpandTile::NONE) ? minTileH : DstTileInfo::tileH;
-    constexpr auto srcTileH = (expandTile == ExpandTile::NONE) ? minTileH : SrcTileInfo::tileH;
+    constexpr auto dstTileHOrigin = TileOp::GetTensorTileShapeDim<T0, DIM_4TH, MAX_DIMS>();
+    constexpr auto srcTileHOrigin = TileOp::GetTensorTileShapeDim<T1, DIM_4TH, MAX_DIMS>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, DIM_5TH, MAX_DIMS>();
 
-    using dstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, DstTileInfo::tileW, pto::BLayout::RowMajor, -1, -1>;
-    using srcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, SrcTileInfo::tileW, pto::BLayout::RowMajor, -1, -1>;
-    using tmpTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, srcTileH, DstTileInfo::tileW, pto::BLayout::RowMajor, -1, -1>;
+    constexpr auto minTileH = dstTileHOrigin < srcTileHOrigin ? dstTileHOrigin : srcTileHOrigin;
+    constexpr auto dstTileH = (expandTile == ExpandTile::NONE) ? minTileH : dstTileHOrigin;
+    constexpr auto srcTileH = (expandTile == ExpandTile::NONE) ? minTileH : srcTileHOrigin;
+
+    using dstTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, dstTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
+    using srcTileDefine = pto::Tile<pto::TileType::Vec, SrcDtype, srcTileH, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+    using tmpTileDefine = pto::Tile<pto::TileType::Vec, DstDtype, srcTileH, dstTileW, pto::BLayout::RowMajor, -1, -1>;
 
     dstTileDefine dstTile(dstShape3, dstShape4);
     srcTileDefine srcTile(srcShape3, srcShape4);
@@ -113,8 +116,8 @@ TILEOP void TExpand(T0 dst, T1 src)
         for (LoopVar n1Index = 0; n1Index < dstShape1; ++n1Index) {
             for (LoopVar n2Index = 0; n2Index < dstShape2; ++n2Index) {
                 auto dstOffset = GenTileOffset(dst, TileOffset(n0Index, n1Index, n2Index));
-                auto srcOffset = GenTileOffset(src, TileOffset(SrcTileInfo::tile0 == 1 ? 0 : n0Index, SrcTileInfo::tile1 == 1 ? 0 : n1Index,
-                                                               SrcTileInfo::tile2 == 1 ? 0 : n2Index));
+                auto srcOffset = GenTileOffset(src, TileOffset(((Axes == DIM_1ST) || ...) ? 0 : n0Index, ((Axes == DIM_2ND) || ...) ? 0 : n1Index,
+                                                               ((Axes == DIM_3RD) || ...) ? 0 : n2Index));
                 pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
                 pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + srcOffset * typeSize));
                 pto::TASSIGN(tmpTile, (uint64_t)(dst.GetAddr() + dstOffset * typeSize));
