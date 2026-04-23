@@ -144,7 +144,6 @@ void QuantLightningIndexerPrologCompute(
     config::SetPassOption("vec_nbuffer_setting", std::map<int64_t, int64_t>{{-1, 1}});
     config::SetPassOption("cube_l1_reuse_setting", configs.l1ReuseParam);
     config::SetPassOption("mg_copyin_upper_bound", configs.mgCopyInUpperBound);
-    config::SetPassOption("pg_upper_bound", configs.pgUpperBound);
 
     ASSERT(
         inputs.x.GetShape().size() == Q_PARAM_DIM && inputs.qNorm.GetShape().size() == Q_PARAM_DIM &&

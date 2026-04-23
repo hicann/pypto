@@ -32,7 +32,6 @@ constexpr float AVOID_FP32_TO_FP16_OVERFLOW_SCALE = 1.0f / 2048;
 struct LightningIndexerConfigs {
     // graph optimization params
     int mgCopyInUpperBound = 2 * 1024 * 1024;
-    int pgUpperBound = 16 * 8192;
     std::map<int64_t, int64_t> cubeL1ReuseSetting = {{0, 8}, {1, 8}};
     int vecMergeMode = 2;
     std::map<int64_t, int64_t> vecNBufferSetting = {{-1, 32}}; // set with max unrolls

@@ -18,15 +18,6 @@
                     "minimum": 0,
                     "maximum": 2147483647
                 },
-                "pg_upper_bound": {
-                    "type": "integer",
-                    "label": {
-                        "zh": "合图参数，用于配置子图大小上界。当子图大小达到上界不允许与其他子图合并。",
-                        "en": "Graph merging parameter, used to configure the upper bound of subgraph size. When the subgraph size reaches the upper bound, merging with other subgraphs is not allowed."
-                    },
-                    "minimum": 0,
-                    "maximum": 2147483647
-                },
                 "pg_lower_bound": {
                     "type": "integer",
                     "label": {

@@ -248,7 +248,6 @@ class AttentionTileConfig:
 @pypto.frontend.jit(
     runtime_options={"stitch_function_max_num": 128},
     pass_options={
-        "pg_upper_bound": 1536,           # 子图大小上界
         "cube_l1_reuse_setting": {0: 4},  # Q 常驻 L1，4 次 matmul 合并
         "vec_nbuffer_setting": {-1: 4},   # Vector 双缓冲
         "cube_nbuffer_setting": {-1: 4}   # Cube 双缓冲

@@ -305,8 +305,6 @@ void DynamicNsa(
         /******** gen attn ********/
         Tensor attentionOut(dtype, {b, s, n1, vDim}, "attentionOut");
         GenAttn(gatingScore, cmpAttnOut16Tmp, slcAttn, winAtten, attentionOut); // [b,s,n1,vDim] fp16
-
-        config::SetPassOption(SG_PG_UPPER_BOUND, 500000);                       // 500000
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 4}});
         // Loop_barrier
         // subgraph-7: postOut [b,s,h]

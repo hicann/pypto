@@ -85,7 +85,6 @@ void Attention(
                  NUM_4}}); // 从NUM_3个mm开始设置CubeNBuffer数量为NUM_4；CubeNBuffer：设置同构的mm计算合并入一个图
         config::SetPassOption(
             MG_COPYIN_UPPER_BOUND, NUM_2 * NUM_1024 * NUM_1024); // CubeNBuffer、CubeL1reusemode合并时copyin的cycle上限
-        config::SetPassOption(SG_PG_UPPER_BOUND, NUM_100000); // 设置切图与合图后子图的Latency的上限
         config::SetPassOption(
             SG_PARALLEL_NUM, NUM_2); // 设置子图合并的并行度下限（子图数量大于等于pgParallelLowerBound才可合并）
 
@@ -235,7 +234,6 @@ void Attention(
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{-1, 2}});
         config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{{-1, 1}});
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
-        config::SetPassOption(SG_PG_UPPER_BOUND, NUM_100000);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_2);
         config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, true);
 
@@ -358,7 +356,6 @@ void Attention(
 
         /******** post ********/
         config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * NUM_1024 * NUM_1024);
-        config::SetPassOption(SG_PG_UPPER_BOUND, NUM_500000);
         config::SetPassOption(SG_PARALLEL_NUM, NUM_20);
         config::SetOperationOption(KEY_FORCE_COMBINE_AXIS, false);
         config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{{0, 4}});

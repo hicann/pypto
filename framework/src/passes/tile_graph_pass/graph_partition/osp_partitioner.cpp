@@ -130,7 +130,6 @@ Status OspPartitioner::RunSarkar(const GraphType &graph, CoarseGraphType &coarse
     params.geomDecay_ = 0.875;
     params.leniency_ = 0.005;
     params.commCostVec_ = std::vector<WorkType>({1, 2, 5, 10, 20, 50, 100, 200, 500, 1000});
-    params.maxWeight_ = archParameters_.partitionWorkUpperBound_;
     params.smallWeightThreshold_ = archParameters_.partitionWorkLowerBound_;
     params.maxNumIterationWithoutChanges_ = 3U;
     params.bufferMergeMode_ = osp::sarkar_params::BufferMergeMode::FULL;
@@ -489,15 +488,6 @@ Status OspPartitioner::BuildHashValues()
 
 Status OspPartitioner::SetParameter(const Function &function)
 {
-    const auto pgUpperBound = function.paramConfigs_.sgPgUpperBound;
-    if (pgUpperBound < 0) {
-        APASS_LOG_ERROR_F(Elements::Config,
-            "Illegal pgUpperBound: %d; Parameter pgUpperBound must be non-negative.",
-            pgUpperBound);
-        return FAILED;
-    }
-    archParameters_.partitionWorkUpperBound_ = pgUpperBound;
-
     const auto pgLowerBound = function.paramConfigs_.sgPgLowerBound;
     if (pgLowerBound < 0) {
         APASS_LOG_ERROR_F(Elements::Config,

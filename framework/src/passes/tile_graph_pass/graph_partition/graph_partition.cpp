@@ -28,7 +28,6 @@ Status RunIsoPartition(Function &function)
     APASS_LOG_INFO_F(Elements::Function, "===> Start GraphPartition. Mode: IsoPartitioner.");
     IsoPartitioner partitioner;
     if (partitioner.SetParameter(
-        function.paramConfigs_.sgPgUpperBound,
         function.paramConfigs_.sgParallelNum,
         function.paramConfigs_.sgPgLowerBound,
         true,

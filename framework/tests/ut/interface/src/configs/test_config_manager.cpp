@@ -91,18 +91,12 @@ TEST_F(TestConfigManager, Dump)
 
     cm.BeginScope("scope2", {{"pass.pg_lower_bound", 20L}});
     {
-        cm.BeginScope("scope2.1", {{"pass.pg_upper_bound", 120L}});
         auto scope2 = cm.CurrentScope();
-        auto upper = AnyCast<int64_t>(scope2->GetAnyConfig("pass.pg_upper_bound"));
-        EXPECT_EQ(upper, 120);
         auto lower = AnyCast<int64_t>(scope2->GetAnyConfig("pass.pg_lower_bound"));
         EXPECT_EQ(lower, 20);
-        cm.EndScope();
     }
 
     auto scope = cm.CurrentScope();
-    auto upper = AnyCast<int64_t>(scope->GetAnyConfig("pass.pg_upper_bound"));
-    EXPECT_EQ(upper, 10000);
     auto lower = AnyCast<int64_t>(scope->GetAnyConfig("pass.pg_lower_bound"));
     EXPECT_EQ(lower, 20);
     cm.EndScope();
@@ -169,7 +163,7 @@ TEST_F(TestConfigManager, AbnormalRuntimeTest)
 TEST_F(TestConfigManager, NormalPassTest)
 {
     std::unordered_map<std::string, std::vector<int64_t>> input = {
-        {SG_PARALLEL_NUM, {0, INT_MAX}},   {SG_PG_UPPER_BOUND, {0, INT_MAX}},
+        {SG_PARALLEL_NUM, {0, INT_MAX}},
         {SG_PG_LOWER_BOUND, {0, INT_MAX}}, {MG_COPYIN_UPPER_BOUND, {0, INT_MAX}},
         {MG_VEC_PARALLEL_LB, {1, 48}},     {COPYOUT_RESOLVE_COALESCING, {0, 1000000}}};
     bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "pass");
@@ -188,7 +182,7 @@ TEST_F(TestConfigManager, AbnormalPassTest)
     int64_t outVal = INT_MAX;
     ++outVal;
     std::unordered_map<std::string, std::vector<int64_t>> input = {
-        {SG_PARALLEL_NUM, {-1, outVal}},   {SG_PG_UPPER_BOUND, {-1, outVal}},
+        {SG_PARALLEL_NUM, {-1, outVal}},
         {SG_PG_LOWER_BOUND, {-1, outVal}}, {MG_COPYIN_UPPER_BOUND, {-1, outVal}},
         {MG_VEC_PARALLEL_LB, {0, 49}},     {COPYOUT_RESOLVE_COALESCING, {-1, 1000001}}};
     bool ret = RangeTest<int64_t>(input, &(config::SetOptionsNg), "pass");

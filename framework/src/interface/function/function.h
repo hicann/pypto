@@ -453,7 +453,6 @@ struct DynParamInfo {
 };
 struct ParamConfigs {
     bool dynamicAlignedOps;
-    int sgPgUpperBound{1};
     int sgPgLowerBound{1};
     int sgParallelNum{1};
     int sgMgCopyInUpperBound{2 * 1024 * 1024};

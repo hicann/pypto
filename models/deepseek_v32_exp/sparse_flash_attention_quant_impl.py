@@ -445,7 +445,6 @@ def sparse_flash_attention_quant_compute_flash(query_nope, query_rope, key_nope_
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "vec_nbuffer_setting": {-1: 4},
         "cube_l1_reuse_setting": {-1: 4},
     },
@@ -507,7 +506,6 @@ def sparse_flash_attention_quant_d_950(
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "vec_nbuffer_setting": {-1: 2, 0: 8},
         "cube_l1_reuse_setting": {-1: 2},
     },
@@ -569,7 +567,6 @@ def sparse_flash_attention_quant_d(
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "vec_nbuffer_setting": {-1: 4, 0: 16},
         "cube_l1_reuse_setting": {-1: 4},
     },

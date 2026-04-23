@@ -147,7 +147,6 @@ TEST_F(DynamicGatherSlcFlashAttnDSASTest, SFA_b4_s2_seq64K_int8_perf)
     config::SetPassOption(CUBE_NBUFFER_SETTING, std::map<int64_t, int64_t>{});
     config::SetPassOption(CUBE_L1_REUSE_SETTING, std::map<int64_t, int64_t>{});
     config::SetPassOption(MG_COPYIN_UPPER_BOUND, 1 * 1024 * 1024);
-    config::SetPassOption(SG_PG_UPPER_BOUND, 20000);
     config::SetPassOption(SG_PG_LOWER_BOUND, 512);
 
     config::SetPassOption(SG_PARALLEL_NUM, 20);

@@ -231,7 +231,6 @@ def rope_3d(x: pypto.Tensor, cos: pypto.Tensor, sin: pypto.Tensor) -> pypto.Tens
         # 1 cast_cos/sin, 2 q_dequant, 6 q_quant
         "vec_nbuffer_setting": {1: 2, 2: 2, 6: 8, -2: 1},
         "cube_l1_reuse_setting": {-1: 8},
-        "pg_upper_bound": 8192
     },
     runtime_options={
         "device_sched_mode": 1

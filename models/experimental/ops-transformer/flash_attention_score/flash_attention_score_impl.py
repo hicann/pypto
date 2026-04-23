@@ -40,7 +40,6 @@ BLOCK_SIZE_Q = 32
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "cube_l1_reuse_setting": {0: 8},
         "cube_nbuffer_setting": {0: 4},
         "vec_nbuffer_setting": {0: 4},
@@ -175,7 +174,6 @@ def flash_attention_score_kernel_with_mask_origin(
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "cube_l1_reuse_setting": {0: 8},
         "cube_nbuffer_setting": {0: 4},
         "vec_nbuffer_setting": {0: 4},
@@ -362,7 +360,6 @@ def flash_attention_score_kernel_with_mask(
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "cube_l1_reuse_setting": {0: 8},
         "cube_nbuffer_setting": {0: 4},
         "vec_nbuffer_setting": {0: 4},

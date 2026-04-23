@@ -84,12 +84,11 @@ TEST_F(GraphPartitionTest, TestBuildOpGraph)
     ComputationalGraphBuilder G;
     GetPairSumGraph(G);
     Function* function = G.GetFunction();
-    const int cycleUB = 10;
     const int parallelTH = 10;
     const int cycleLB = 10;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     EXPECT_EQ(partitioner.operationInfo_->opList_.size(), function->Operations().size());
     EXPECT_EQ(partitioner.operationInfo_->magic2Idx_.size(), function->Operations().size());
@@ -167,12 +166,11 @@ TEST_F(GraphPartitionTest, TestSuperNode)
     ComputationalGraphBuilder G;
     GetReshapeGraph(G);
     Function* function = G.GetFunction();
-    const int cycleUB = 0;
     const int parallelTH = 10;
     const int cycleLB = 10;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     std::unordered_set<int> frontReshapeNode;
     const int brNum = 4;
@@ -200,12 +198,11 @@ TEST_F(GraphPartitionTest, TestReduceNodeHash)
     ComputationalGraphBuilder G;
     GetPairSumGraph(G);
     Function* function = G.GetFunction();
-    const int cycleUB = 0;
     const int parallelTH = 10;
     const int cycleLB = 10;
     const int useNodeHash = true;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     std::unordered_set<uint64_t> copyInHash;
     const int brNum = 4;
@@ -253,12 +250,11 @@ TEST_F(GraphPartitionTest, TestBuildIsomorphismGraph)
     ComputationalGraphBuilder G;
     GetCrossGraph(G);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 10;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     const int subGraphNum = 8;
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
@@ -270,18 +266,15 @@ TEST_F(GraphPartitionTest, TestIsoParameterFailure)
     Function *function = G.GetFunction();
     EXPECT_EQ(function->Operations().size(), 0);
 
-    const int cycleUBFail = -1;
-    const int cycleUB = 100000;
     const int parallelTHFail = -2;
     const int parallelTH = 10;
-    const int cycleLBFail = -11;
+    const int cycleLBFail = -1;
     const int cycleLB = 100000;
     const int useNodeHash = false;
 
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUBFail, parallelTH, cycleLB, useNodeHash), FAILED);
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTHFail, cycleLB, useNodeHash), FAILED);
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLBFail, useNodeHash), FAILED);
+    EXPECT_EQ(partitioner.SetParameter(parallelTHFail, cycleLB, useNodeHash), FAILED);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLBFail, useNodeHash), FAILED);
 
     EXPECT_EQ(partitioner.PartitionGraph(*function), FAILED);
 }
@@ -294,20 +287,12 @@ TEST_F(GraphPartitionTest, TestOspParameter)
 
     OspPartitioner partitioner(OspMode::SARKAR);
 
-    const int cycleUBFail = -1;
-    const int cycleUB = 100000;
     const int cycleLBFail = -11;
     const int cycleLB = 10000;
 
-    function->paramConfigs_.sgPgUpperBound = cycleUBFail;
-    function->paramConfigs_.sgPgLowerBound = cycleLB;
-    EXPECT_EQ(partitioner.SetParameter(*function), FAILED);
-
-    function->paramConfigs_.sgPgUpperBound = cycleUB;
     function->paramConfigs_.sgPgLowerBound = cycleLBFail;
     EXPECT_EQ(partitioner.SetParameter(*function), FAILED);
 
-    function->paramConfigs_.sgPgUpperBound = cycleUB;
     function->paramConfigs_.sgPgLowerBound = cycleLB;
     EXPECT_EQ(partitioner.SetParameter(*function), SUCCESS);
 }
@@ -419,12 +404,11 @@ TEST_F(GraphPartitionTest, TestCVGraph)
     const int brNum = 4;
     GetCubeVectorGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 1;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     std::unordered_set<std::string> cubeOp{"MUL1", "MC1", "MC2", "MC3", "COPY_OUT_C"};
     for (int i = 0; i < brNum; i++) {
@@ -555,20 +539,19 @@ void GetMergeableGraph(ComputationalGraphBuilder &G, int brNum)
     EXPECT_EQ(G.SetOutCast(outCast), true);
 }
 
-TEST_F(GraphPartitionTest, TestCycleUpperBound)
+TEST_F(GraphPartitionTest, TestDynamicCycleEstimation)
 {
     ComputationalGraphBuilder G;
     const int brNum = 4;
     GetMergeableGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 0;
     const int parallelTH = 1;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
-    const int subGraphNum = 6 * brNum;
+    const int subGraphNum = brNum;
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
 }
 
@@ -578,12 +561,11 @@ TEST_F(GraphPartitionTest, TestParallelThreshold)
     const int brNum = 4;
     GetMergeableGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = brNum * 2;
     const int cycleLB = 0;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     const int subGraphNum = 3 * brNum;
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
@@ -595,12 +577,11 @@ TEST_F(GraphPartitionTest, TestSmallGraphBound)
     const int brNum = 4;
     GetMergeableGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = brNum * 2;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     const int subGraphNum = brNum;
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
@@ -612,12 +593,11 @@ TEST_F(GraphPartitionTest, TestLargeSuperNode)
     const int brNum = 5000;
     GetCubeVectorGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = brNum * 2;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
 }
 
@@ -649,12 +629,11 @@ TEST_F(GraphPartitionTest, TestLargeWideGraph)
     const int brNum = 5000;
     GetWideGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 20;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
 }
 
@@ -690,12 +669,11 @@ TEST_F(GraphPartitionTest, TestLargeDeepGraph)
     const int brNum = 5000;
     GetDeepGraph(G, brNum);
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 20;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
 }
 
@@ -714,12 +692,11 @@ TEST_F(GraphPartitionTest, TestIsomorphismGraph)
     EXPECT_EQ(G.SetOutCast({"h6"}), true);
 
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 20;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     const int subGraphNum = 4;
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);
@@ -746,12 +723,11 @@ void RunScopeTest(bool allowCrossScopeMerge, int expectedSubGraphNum)
     }
 
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 20;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     EXPECT_EQ(function->GetTotalSubGraphCount(), expectedSubGraphNum);
 }
@@ -978,12 +954,11 @@ TEST_F(GraphPartitionTest, TestNonIsomorphismGraph)
     EXPECT_EQ(G.SetOutCast({"hout"}), true);
 
     Function* function = G.GetFunction();
-    const int cycleUB = 100000;
     const int parallelTH = 20;
     const int cycleLB = 100000;
     const int useNodeHash = false;
     IsoPartitioner partitioner;
-    EXPECT_EQ(partitioner.SetParameter(cycleUB, parallelTH, cycleLB, useNodeHash), SUCCESS);
+    EXPECT_EQ(partitioner.SetParameter(parallelTH, cycleLB, useNodeHash), SUCCESS);
     EXPECT_EQ(partitioner.PartitionGraph(*function), SUCCESS);
     const int subGraphNum = 1;
     EXPECT_EQ(function->GetTotalSubGraphCount(), subGraphNum);

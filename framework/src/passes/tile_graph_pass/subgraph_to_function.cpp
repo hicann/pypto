@@ -780,7 +780,7 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
             if (callList.size() == 0) {
                 APASS_LOG_ERROR_F(
                     Elements::Function,
-                    "Call list is empty in funciton %s. Please check whether the input graph is complete.",
+                    "Call list is empty in function %s. Please check whether the input graph is complete.",
                     function.GetRawName().c_str());
                 return FAILED;
             }

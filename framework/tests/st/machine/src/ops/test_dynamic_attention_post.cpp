@@ -2057,7 +2057,6 @@ void PaPostDebugCastFirstMm5SplitK(
     {
         SymbolicScalar B = postIn.GetShape()[0] / N;      // S=1
         const int bTile = 32;
-        config::SetPassOption(SG_PG_UPPER_BOUND, 500000); // 300000(1024/167us)   700000(512/174us)   500000(512/171us)
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, B / bTile, 1))
         {
             auto postInUnit = View(postIn, {bTile * S * N, kvLoraRank}, {bIdx * bTile * S * N, 0});
@@ -2127,7 +2126,6 @@ void PaPostDebugCastFirstMm5NormalUnSplitK(
     {
         SymbolicScalar B = postIn.GetShape()[0] / N;      // S=1
         const int bTile = 32;
-        config::SetPassOption(SG_PG_UPPER_BOUND, 500000); // 300000(1024/167us)   700000(512/174us)   500000(512/171us)
         LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, B / bTile, 1))
         {
             auto postInUnit = View(postIn, {bTile * S * N, kvLoraRank}, {bIdx * bTile * S * N, 0});
@@ -2640,7 +2638,6 @@ void PageAttentionPostBf16(
         }
 
         SymbolicScalar B = attentionOut.GetShape()[0] / N; // S=1
-        config::SetPassOption(SG_PG_UPPER_BOUND, NUM_500000);
         LOOP(
             "LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, B / (bTile <= 0 ? 1 : bTile), 1),
             PowersOf2(maxUnrollTimes), true)

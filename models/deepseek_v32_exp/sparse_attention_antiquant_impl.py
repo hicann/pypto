@@ -250,7 +250,6 @@ def sparse_attention_antiquant_compute(query_nope, query_rope, nope_cache, topk_
         "compile_timeout_stage": 5,
         "compile_monitor_print_interval": 2},
     pass_options={
-        "pg_upper_bound": 5000000,
         "vec_nbuffer_setting": {-1: 2, 0: 4},
         "cube_l1_reuse_setting": {-1: 2},
     },
@@ -313,7 +312,6 @@ def sparse_attention_antiquant_d(
         "compile_timeout_stage": 5,
         "compile_monitor_print_interval": 2},
     pass_options={
-        "pg_upper_bound": 5000000,
         "vec_nbuffer_setting": {-1: 4, 0: 4},
         "cube_l1_reuse_setting": {-1: 4},
     },

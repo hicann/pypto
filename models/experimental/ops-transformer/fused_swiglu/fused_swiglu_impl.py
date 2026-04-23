@@ -31,7 +31,6 @@ global_run_mode = get_run_mode()
 
 @pypto.frontend.jit(
     pass_options={
-        "pg_upper_bound": 5000000,
         "vec_nbuffer_setting": {-1: 2, 0: 4},
         "cube_l1_reuse_setting": {-1: 2}
     },
