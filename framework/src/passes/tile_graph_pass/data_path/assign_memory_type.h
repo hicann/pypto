@@ -47,7 +47,8 @@ private:
     void AssignOpViewTypeMemtype(Operation& op);
     void AssignOpNopMemtype(Operation& op);
     void AssignMemtypeForSplitReshape(Operation& op, const LogicalTensorPtr& input, const LogicalTensorPtr& output);
-    void UpdateOverSizedLocalBuffer(Operation& operation);
+    void UpdateOverSizedLocalBufferForAssemble(Operation& operation);
+    void UpdateOverSizedLocalBufferForView(Operation& operation);
     void ProcesSmallTileToLargeTile(Function& function);
     void ProcessLargeTileToSamllTile(Function& function);
     bool IsDimMultiple(const Shape& shape1, const Shape& shape2);
@@ -57,7 +58,7 @@ private:
     AssignMemoryTypeChecker checker;
 };
 static constexpr double UB_THRESHOLD_ASSEMBLE = 0.35;
-static constexpr double UB_THRESHOLD_VIEW = 0.5;
+static constexpr double UB_THRESHOLD_NORMAL = 1.0;
 static constexpr double L1_THRESHOLD = 0.5;
 } // namespace npu::tile_fwk
 

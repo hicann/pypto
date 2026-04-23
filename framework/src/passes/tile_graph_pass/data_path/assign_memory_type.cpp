@@ -68,7 +68,7 @@ Status AssignMemoryType::RunOnFunction(Function& function)
         const size_t UB_SIZE_THRESHOLD_ASSEMBLE =
             static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
         const size_t UB_SIZE_THRESHOLD_VIEW =
-            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_VIEW);
+            static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
         const size_t L1_SIZE_THRESHOLD =
             static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
         APASS_LOG_INFO_F(
@@ -371,21 +371,20 @@ void AssignMemoryType::AssignSpecialOpMemtype(Operation& op, bool& infoBufferSiz
             output->GetMemoryTypeToBe() == npu::tile_fwk::MEM_DEVICE_DDR) {
             output->SetMemoryTypeBoth(output->GetMemoryTypeOriginal(), true);
         }
-        UpdateOverSizedLocalBuffer(op);
+        UpdateOverSizedLocalBufferForAssemble(op);
         infoBufferSize = true;
     }
 
     if (op.GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW) {
-        UpdateOverSizedLocalBuffer(op);
+        UpdateOverSizedLocalBufferForView(op);
         infoBufferSize = true;
     }
 }
 
-void AssignMemoryType::UpdateOverSizedLocalBuffer(Operation& operation)
+void AssignMemoryType::UpdateOverSizedLocalBufferForAssemble(Operation& operation)
 {   
-    double ubThreshold = (operation.GetOpcode() == Opcode::OP_VIEW) ? UB_THRESHOLD_VIEW : UB_THRESHOLD_ASSEMBLE;
     const int UB_SIZE_THRESHOLD =
-        static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * ubThreshold);
+        static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
     const int L1_SIZE_THRESHOLD =
         static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
 
@@ -393,6 +392,20 @@ void AssignMemoryType::UpdateOverSizedLocalBuffer(Operation& operation)
     auto memType = output->GetMemoryTypeOriginal();
     if (((memType == MemoryType::MEM_UB) && (output->GetDataSize() > UB_SIZE_THRESHOLD)) ||
         ((memType == MemoryType::MEM_L1) && (output->GetDataSize() > L1_SIZE_THRESHOLD))) {
+        output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
+        APASS_LOG_INFO_F(
+            Elements::Operation, "%s[%d] output %d is oversized, set as MEM_DEVICE_DDR.",
+            operation.GetOpcodeStr().c_str(), operation.GetOpMagic(), output->magic);
+    }
+}
+
+void AssignMemoryType::UpdateOverSizedLocalBufferForView(Operation& operation)
+{   
+    const int UB_SIZE_THRESHOLD = static_cast<int>(
+        Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
+    auto output = operation.GetOOperands().front();
+    auto memType = output->GetMemoryTypeOriginal();
+    if (((memType == MemoryType::MEM_UB) && (output->GetDataSize() > UB_SIZE_THRESHOLD))) {
         output->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
         if (operation.GetOpcode() == Opcode::OP_VIEW) {
             auto viewAttr = std::dynamic_pointer_cast<ViewOpAttribute>(operation.GetOpAttribute());

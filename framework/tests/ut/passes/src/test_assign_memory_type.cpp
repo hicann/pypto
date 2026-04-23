@@ -1676,15 +1676,13 @@ TEST_F(AssignMemoryTypeTest, TestTobeMapOrdering)
 TEST_F(AssignMemoryTypeTest, TestOverSizeUb)
 {
     config::SetHostConfig(KEY_STRATEGY, "TestOverSizeUb");
-    std::vector<int64_t> shape1 = {NUM_256, NUM_128};
-    std::vector<int64_t> shape2 = {NUM_128, NUM_128};
-    std::vector<int64_t> shape3 = {NUM_256, NUM_128};
+    std::vector<int64_t> shape = {NUM_256, NUM_256};
     PROGRAM("TestOverSizeUb") {
-        Tensor input1(DataType::DT_FP32, shape1, "input1");
-        Tensor input2(DataType::DT_FP32, shape2, "input2");
-        Tensor input3(DataType::DT_FP32, shape3, "input3");
-        Tensor input4(DataType::DT_FP32, shape3, "input4");
-        Tensor output(DataType::DT_FP32, shape3, "output");
+        Tensor input1(DataType::DT_FP32, shape, "input1");
+        Tensor input2(DataType::DT_FP32, shape, "input2");
+        Tensor input3(DataType::DT_FP32, shape, "input3");
+        Tensor input4(DataType::DT_FP32, shape, "input4");
+        Tensor output(DataType::DT_FP32, shape, "output");
         SetFullTestStrategy();
         config::SetBuildStatic(true);
         FUNCTION("TestOverSizeUb", {input1, input2, input3, input4, output}) {
