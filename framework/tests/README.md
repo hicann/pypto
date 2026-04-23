@@ -54,6 +54,5 @@
 |:--------------|:---------------------------------------|
 | interface     | tensor, function, machine, ops, passes |
 | simulation    | simulation                             |
-| simulation_ca | simulation_ca                          |
 | codegen       | codegen                                |
 | runtime       | runtime                                |

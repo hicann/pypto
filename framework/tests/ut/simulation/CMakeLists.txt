@@ -18,7 +18,7 @@ PTO_Fwk_UTest_AddCaseLib(
         PRIVATE_INCLUDE_DIRECTORIES ${PTO_FWK_SRC_ROOT}/framework/src/cost_model
         LINK_LIBRARIES tile_fwk_operator tile_fwk_simulation dl
 )
-add_dependencies(${_Target} tile_fwk_simulation_ca tile_fwk_simulation_pv)
+add_dependencies(${_Target} tile_fwk_simulation_pv)
 
 # 可执行程序运行依赖的配置, 脚本配置
 add_custom_command(

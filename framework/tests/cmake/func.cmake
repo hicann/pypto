@@ -276,7 +276,6 @@ function(PTO_Fwk_GTest_AddExe)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${InstallLibIncludeDir}/
             COMMAND ln -sf ${PTO_FWK_SRC_ROOT}/framework/src/interface/tileop ${InstallLibIncludeDir}
             COMMAND ln -sf ${PTO_FWK_SRC_ROOT}/framework/src/interface/machine/device/tilefwk ${InstallLibIncludeDir}
-            COMMAND ln -sf ${PTO_FWK_SRC_ROOT}/framework/src/cost_model/simulation_ca/mock ${InstallLibIncludeDir}
             COMMENT "Soft link of library include directory has been created at ${InstallLibIncludeDir}"
     )
 endfunction()

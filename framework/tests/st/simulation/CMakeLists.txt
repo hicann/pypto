@@ -16,7 +16,7 @@ file(GLOB_RECURSE _Sources src/*.cpp)
 PTO_Fwk_STest_AddLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
-        LD_LIBRARIES_EXT tile_fwk_compiler tile_fwk_simulation tile_fwk_simulation_ca
+        LD_LIBRARIES_EXT tile_fwk_compiler tile_fwk_simulation
 )
 # 可执行程序运行依赖的配置, 脚本配置
 add_custom_command(

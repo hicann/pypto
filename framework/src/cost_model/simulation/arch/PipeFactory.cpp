@@ -26,35 +26,10 @@
 #include "cost_model/simulation/arch/A5/PostSimulatorA5.h"
 
 namespace CostModel {
-UnifiedPipeMachinePtr CreatePipeSimulator(const std::string& simulator)
-{
-    std::string soPath = "libtile_fwk_simulation_ca.so";
-    void* handle = dlopen(soPath.c_str(), RTLD_LAZY);
-    if (!handle) {
-        throw std::runtime_error("can not load library: " + std::string(dlerror()));
-    }
-
-    // 获取工厂函数符号
-    using CreateFunc = UnifiedPipeMachinePtr (*)();
-    std::string funcName = "CreatePipeSimulator" + simulator;
-    auto createFunc = (CreateFunc)(dlsym(handle, funcName.c_str()));
-    if (!createFunc) {
-        dlclose(handle);
-        throw std::runtime_error("can not find the factory func: " + std::string(dlerror()));
-    }
-
-    // 创建对象并返回
-    return createFunc();
-}
-
 UnifiedPipeMachinePtr CreateSimulator(const std::string& archType, int accLevel)
 {
-    if (archType == "A2A3") {
-        if (accLevel == 1) {
-            return CreatePipeSimulatorFast<PostSimulatorA2A3>();
-        } else {
-            return CreatePipeSimulator("SimulatorA2A3");
-        }
+    if (archType == "A2A3" && accLevel == 1) {
+        return CreatePipeSimulatorFast<PostSimulatorA2A3>();
     } else if (archType == "A5" && accLevel == 1) {
         return CreatePipeSimulatorFast<PostSimulatorA5>();
     } else {

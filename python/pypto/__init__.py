@@ -55,7 +55,6 @@ def _load_shared_libs():
         ["libtile_fwk_compiler.so", True, ],
         ["libtile_fwk_runtime.so", True, ],
         ["libtile_fwk_simulation.so", True, ],
-        ["libtile_fwk_simulation_ca.so", True, ],
         ["libtile_fwk_simulation_pv.so", use_cann, ],
     ]
     for desc in desc_lst:

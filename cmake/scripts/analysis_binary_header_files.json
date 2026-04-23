@@ -172,27 +172,6 @@
       ]
     }
   },
-  "libtile_fwk_simulation_ca.so": {
-    "Source-Header": {
-      "Self": [
-        "framework/src/cost_model/simulation_ca/"
-      ],
-      "Area": [
-        "framework/src/interface/",
-        "framework/src/passes/",
-        "framework/src/codegen/",
-        "framework/src/cost_model/simulation/"
-      ],
-      "Include": [
-        "framework/include/"
-      ],
-      "WhiteList": [
-      ],
-      "BlackList": [
-        "framework/src/interface/tileop/"
-      ]
-    }
-  },
   "libtile_fwk_utils.so": {
     "Source-Header": {
       "Self": [

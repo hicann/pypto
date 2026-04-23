@@ -510,7 +510,6 @@ enum class ForwardSimErrorScene : uint32_t {
     INVALID_PIPE_TYPE = 92001U,
     INVALID_DATA_TYPE = 92002U,
     DEAD_LOCK = 92003U,
-    FUNC_NOT_SUPPORT = 92004U,
     UNKNOWN = 92099U
 };
 

@@ -15,7 +15,7 @@ file(GLOB_RECURSE _Sources src/*.cpp)
 PTO_Fwk_STest_AddLib(
         TARGET ${_Target}
         SOURCES ${_Sources}
-        LD_LIBRARIES_EXT tile_fwk_compiler tile_fwk_simulation tile_fwk_simulation_ca tile_fwk_simulation_pv
+        LD_LIBRARIES_EXT tile_fwk_compiler tile_fwk_simulation tile_fwk_simulation_pv
         GOLDEN_SCRIPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 add_custom_command(

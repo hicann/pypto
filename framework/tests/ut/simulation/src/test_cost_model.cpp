@@ -23,7 +23,6 @@
 #include "interface/inner/tilefwk.h"
 #include "cost_model/simulation/pv/PvModelFactory.h"
 #include "interface/configs/config_manager.h"
-#include "cost_model/simulation_ca/PipeSimulator.h"
 #include "cost_model/simulation/arch/PipeFactory.h"
 #include "cost_model/simulation/arch/CacheMachineImpl.h"
 #include "cost_model/simulation/machine/CoreMachine.h"
@@ -225,20 +224,6 @@ TEST_F(CostModelTest, TestFixedLatencyTasks)
     costModelAgent.TerminateCostModel();
 }
 
-TEST_F(CostModelTest, TestAttentionPostAccuracy2)
-{
-    int accuracylevel = 2;
-    config::SetSimConfig(KEY_ACCURACY_LEVEL, accuracylevel);
-    RunAttentionPostCostModel();
-}
-
-TEST_F(CostModelTest, TestAttentionPostAccuracy3)
-{
-    int accuracylevel = 2;
-    config::SetSimConfig(KEY_ACCURACY_LEVEL, accuracylevel);
-    RunMatrixCostModel();
-}
-
 TEST_F(CostModelTest, TestAttentionPostL2Cache)
 {
     int accuracylevel = 1;
@@ -285,12 +270,6 @@ TEST_F(CostModelTest, TestCoreMachineDeadlock)
     arg.emplace_back("Pipe.l0cSizeThreshold=256");
     config::SetSimConfig(KEY_ARGS, arg);
     RunAttentionPostCostModel();
-}
-
-TEST_F(CostModelTest, TestReplaceGMStr)
-{
-    std::string str = "abc";
-    CostModel::PipeSimulatorUtils::ReplaceGMStr(str);
 }
 
 void RunCat()
