@@ -19,8 +19,10 @@
 #include <nlohmann/json.hpp>
 #include "interface/program/program.h"
 #include "interface/utils/file_utils.h"
+#include "interface/utils/common.h"
 #include "interface/configs/config_manager.h"
 #include "interface/utils/op_info_manager.h"
+#include "machine/utils/checkinject.h"
 #include "machine/utils/machine_utils.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "tilefwk/error_code.h"
@@ -33,13 +35,24 @@ const std::string CustomKerneLib = "CUSTKFCKernel";
 
 std::string GetMachineCompilerPath()
 {
-    // ARM arch compiler
-    const char* homePath = std::getenv("ASCEND_HOME_PATH");
-    if (homePath == nullptr) {
+    constexpr const char* kAscendHomeEnv = "ASCEND_HOME_PATH";
+    const std::string homePath = npu::tile_fwk::GetEnvVar(kAscendHomeEnv);
+    if (homePath.empty()) {
+        MACHINE_LOGE(npu::tile_fwk::DevCommonErr::GET_ENV_FAILED,
+            "%s is unset, empty after trimming whitespace, or exceeds max env length; device control-flow compiler "
+            "path is disabled.",
+            kAscendHomeEnv);
         return "";
-    } else {
-        return std::string(homePath) + "/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++";
     }
+    const std::string compiler =
+        homePath + "/toolkit/toolchain/hcc/bin/aarch64-target-linux-gnu-g++";
+    if (!npu::tile_fwk::FileExist(compiler)) {
+        MACHINE_LOGE(npu::tile_fwk::DevCommonErr::FILE_ERROR,
+            "%s is set but aarch64 toolchain g++ was not found at \"%s\" (canonical path must exist).",
+            kAscendHomeEnv, compiler.c_str());
+        return "";
+    }
+    return compiler;
 }
 const std::string DeviceMahineCompiler = GetMachineCompilerPath();
 } // namespace
@@ -105,8 +118,13 @@ bool TieFwkAicpuPreCompile(std::string& preCompileO, std::string& controlAicpuPa
                                  controlAicpuPath + file + " -I" + includePath + " -I" + includePath + "/include/" +
                                  " -I" + GetCurrentSharedLibPath() + "/include/" + " -o " + objFile;
         MACHINE_LOGD("PreCompileCmd is %s, file is %s.\n", compileCmd.c_str(), file.c_str());
-        int result = std::system(compileCmd.c_str());
-        if (result != 0) {
+        int ret = Checkinject(compileCmd.c_str(), compileCmd.size());
+        if (ret != 0) {
+            MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "Precompile %s cmd illegal char.\n", file.c_str());
+            return false;
+        }
+        ret = std::system(compileCmd.c_str());
+        if (ret != 0) {
             MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "Precompile %s fail\n", file.c_str());
             return false;
         }
@@ -123,12 +141,16 @@ bool SharedAicpuCompile(const std::string& funcName, const std::string& aicpuDir
                                 aicpuDirPath + "/lib" + funcName + "_control.so " + preCompileO +
                                 " -Wl,--whole-archive " + GetCurrentSharedLibPath() + "/libpypto_ctrl_server.a" +
                                 " -Wl,--no-whole-archive";
-    auto ret = std::system(cmdGccCompile.c_str());
+    int ret = Checkinject(cmdGccCompile.c_str(), cmdGccCompile.size());
+    if (ret != 0) {
+        MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "RunDeviceMachine compile cmd illegal char.\n");
+        return false;
+    }
+    ret = std::system(cmdGccCompile.c_str());
     if (ret != 0) {
         MACHINE_LOGE(DevCommonErr::SYSTEM_CALL_FAILED, "RUNDeviceMachine compile fail\n");
         return false;
     }
-    MACHINE_LOGI("CmdGcc: %s\n", cmdGccCompile.c_str());
     std::string srcSoPath = aicpuDirPath + "/lib" + funcName + "_control.so";
     std::string constrolSoName = "lib" + funcName + "_control";
     GenCustomOpInfo(funcName, aicpuDirPath, constrolSoName);

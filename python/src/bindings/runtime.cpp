@@ -169,6 +169,19 @@ static std::string ValidateFunctionAndIO(
     return "";
 }
 
+static ExportedOperator* GetValidatedOperator(uintptr_t opAddr)
+{
+    if (opAddr == 0) {
+        return nullptr;
+    }
+
+    if (opAddr % alignof(ExportedOperator) != 0) {
+        MACHINE_LOGE(DevCommonErr::PARAM_INVALID, "Invalid operator address alignment");
+        return nullptr;
+    }
+    return reinterpret_cast<ExportedOperator*>(opAddr);
+}
+
 static void InitializeInputOutputData(
     const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
 {
@@ -245,8 +258,10 @@ std::string OperatorDeviceRunOnceDataFromDevice(
     if (opAddr == 0) {
         return "invalid operator";
     }
-
-    ExportedOperator* op = reinterpret_cast<ExportedOperator*>(opAddr);
+    ExportedOperator* op = GetValidatedOperator(opAddr);
+    if (op == nullptr) {
+        return "invalid operator";
+    }
     Function* func = op->GetFunction();
     auto errorMsg = ValidateFunctionAndIO(func, inputs, outputs);
     if (!errorMsg.empty()) {
@@ -286,7 +301,7 @@ std::string OperatorDeviceRunOnceDataFromDevice(
 uint64_t GetWorkSpaceSize(
     uintptr_t opAddr, const std::vector<DeviceTensorData>& inputs, const std::vector<DeviceTensorData>& outputs)
 {
-    ExportedOperator* op = reinterpret_cast<ExportedOperator*>(opAddr);
+    ExportedOperator* op = GetValidatedOperator(opAddr);
     if (op) {
         return op->GetWorkSpaceSize(inputs, outputs);
     }
@@ -322,7 +337,10 @@ uintptr_t OperatorBegin()
 
 std::string OperatorEnd(uintptr_t opAddr)
 {
-    ExportedOperator* op = reinterpret_cast<ExportedOperator*>(opAddr);
+    ExportedOperator* op = GetValidatedOperator(opAddr);
+    if (op == nullptr) {
+        return "invalid operator";
+    }
     ExportedOperatorEnd(op);
     return "";
 }
@@ -331,7 +349,10 @@ int64_t BuildCache(
     uintptr_t opAddr, const std::vector<DeviceTensorData>& inputList, const std::vector<DeviceTensorData>& outputList,
     [[maybe_unused]] bool isCapturing)
 {
-    ExportedOperator* op = reinterpret_cast<ExportedOperator*>(opAddr);
+    ExportedOperator* op = GetValidatedOperator(opAddr);
+    if (op == nullptr) {
+        return -1;
+    }
     if (config::GetRuntimeOption<int64_t>(STITCH_CFGCACHE_SIZE) != 0) {
         DeviceLauncherConfig config;
         DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);

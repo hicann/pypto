@@ -14,6 +14,7 @@ This is a subscript of build_ci.py
 import os
 from pathlib import Path
 import subprocess
+import shutil
 
 
 def ini(path, prof, pe):
@@ -72,23 +73,44 @@ def find_file_and_get_parent_dirs(target_file, search_dir='.'):
     return parent_dirs
 
 
+def remove_prof_dirs(base_path):
+    base = Path(base_path).resolve()
+    for prof_dir in base.glob("PROF*"):
+        if prof_dir.is_dir():
+            shutil.rmtree(prof_dir)
+
+
 def work_flow_plot(path, level, pe):
-    path_pro = find_file_and_get_parent_dirs("aicpu.data.*", path)
-    cmd_rm = f'rm -rf {str(path)}/PROF*'
+    base_path = Path(path).resolve()
+    path_pro = find_file_and_get_parent_dirs("aicpu.data.*", base_path)
     if len(path_pro) < 1:
-        subprocess.run(cmd_rm, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
-        assert False, f'{str(path)} No Profiling, Do not to plot'
-    save_path = Path(path, "Profiling/work_flow")
+        remove_prof_dirs(base_path)
+        assert False, f'{str(base_path)} No Profiling, Do not to plot'
+    save_path = base_path / "Profiling/work_flow"
     if not save_path.exists():
         os.makedirs(save_path)
     print(save_path)
-    cmd = f"python3 ./tools/profiling/tilefwk_prof_data_parser.py -p {path_pro[0]} --output={str(save_path)} -t"
-    print(cmd)
-    subprocess.run(cmd, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
+    cmd = [
+        "python3",
+        "./tools/profiling/tilefwk_prof_data_parser.py",
+        "-p",
+        str(path_pro[0]),
+        f"--output={str(save_path)}",
+        "-t",
+    ]
+    print(" ".join(cmd))
+    subprocess.run(cmd, shell=False, capture_output=False, check=True, text=True, encoding='utf-8')
     if level == 2:
-        cmd = f"python3 ./tools/profiling/tilefwk_pmu_to_csv.py -p {path_pro[0]} --output={str(save_path)} -pe={pe}"
-        print(cmd)
-        subprocess.run(cmd, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
+        cmd = [
+            "python3",
+            "./tools/profiling/tilefwk_pmu_to_csv.py",
+            "-p",
+            str(path_pro[0]),
+            f"--output={str(save_path)}",
+            f"-pe={pe}",
+        ]
+        print(" ".join(cmd))
+        subprocess.run(cmd, shell=False, capture_output=False, check=True, text=True, encoding='utf-8')
     #删除Prof落盘日志，避免有干扰
-    print(cmd_rm)
-    subprocess.run(cmd_rm, shell=True, capture_output=False, check=True, text=True, encoding='utf-8')
+    print(f"cleanup PROF* under {str(base_path)}")
+    remove_prof_dirs(base_path)
