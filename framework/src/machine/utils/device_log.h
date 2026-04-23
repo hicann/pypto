@@ -88,6 +88,7 @@ inline void InitLogSwitch() {
         npu::tile_fwk::dynamic::HardBranchManager::GetInstance().AddGroup(HardBranchGroupCreate(verboseInfo));
     }
     npu::tile_fwk::dynamic::HardBranchManager::GetInstance().SwitchToJump();
+    npu::tile_fwk::dynamic::HardBranchManager::GetInstance().Clear();
 }
 
 inline bool IsLogEnableDebug() { return g_isLogEnableDebug; }
