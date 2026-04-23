@@ -2344,7 +2344,7 @@
             ],
             "params": {
                 "axis": 2,
-                "alpha": -1.0,
+                "alpha": 1.0,
                 "on_board": true,
                 "func_id": -1
             },
@@ -2434,7 +2434,7 @@
             ],
             "params": {
                 "axis": 3,
-                "alpha": 1.2,
+                "alpha": 1.0,
                 "on_board": true,
                 "func_id": -1
             },

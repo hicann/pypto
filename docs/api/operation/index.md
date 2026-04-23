@@ -54,6 +54,8 @@ pypto-gt
 pypto-hypot
 pypto-index_add
 pypto-index_add_
+pypto-index_add_ub
+pypto-index_add__ub
 pypto-index_select
 pypto-indexput_
 pypto-isfinite

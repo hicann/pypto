@@ -54,8 +54,8 @@ Shape GetTempShape(Shape shape, size_t axis)
     return newShape;
 }
 
-// IndexAdd in UB , will be delated
-void IndexAddUBExpandFunc(Function& function, const IndexAddPara indexaddPara, IndexAddTileInfoPara& indexaddTileInfo)
+// IndexAdd in UB
+void IndexAddUBExpandFunc(Function& function, const IndexAddPara& indexaddPara, IndexAddTileInfoPara& indexaddTileInfo)
 {
     const LogicalTensorPtr& selfInput = indexaddPara.selfInput;
     const LogicalTensorPtr& srcInput = indexaddPara.srcInput;
@@ -127,7 +127,7 @@ void IndexAddUBExpandFunc(Function& function, const IndexAddPara indexaddPara, I
 }
 
 void InnerTiledIndexAddUB(
-    size_t cur, Function& function, const TileShape& tileShape, const IndexAddPara indexaddPara,
+    size_t cur, Function& function, const TileShape& tileShape, const IndexAddPara& indexaddPara,
     IndexAddTileInfoPara& indexaddTileInfo)
 {
     if (cur == indexaddPara.dstTensor->shape.size()) {
@@ -164,7 +164,7 @@ void InnerTiledIndexAddUB(
     }
 }
 
-void TiledIndexAddUB(Function& function, const TileShape& tileShape, const IndexAddPara indexaddPara)
+void TiledIndexAddUB(Function& function, const TileShape& tileShape, const IndexAddPara& indexaddPara)
 {
     // Check Operands Valid
     ASSERT(
@@ -188,7 +188,7 @@ void TiledIndexAddUB(Function& function, const TileShape& tileShape, const Index
     InnerTiledIndexAddUB(0, function, tileShape, indexaddPara, indexaddTileInfo);
 }
 
-void TensorIndexAddUB(Function& function, const IndexAddPara indexaddPara)
+void TensorIndexAddUB(Function& function, const IndexAddPara& indexaddPara)
 {
     auto& op = GraphUtils::AddDynOperation(
         function, Opcode::OP_INDEX_ADD_UB, {indexaddPara.selfInput, indexaddPara.srcInput, indexaddPara.indicesInput},
@@ -227,7 +227,6 @@ void CheckIndexAddParamsInvalid(
         VectorErrorCode::ERR_PARAM_INVALID,
         axis < static_cast<int>(self.GetShape().size()) && axis >= -static_cast<int>(self.GetShape().size()))
         << "axis out of range of shape size";
-    int axis_ = axis < 0 ? self.GetShape().size() + axis : axis;
 
     CheckTensorDimRange(self.GetStorage(), 2, 5, "INDEXADD");
     CheckTensorDimRange(indices.GetStorage(), 1, 1, "INDEXADD");
@@ -236,10 +235,10 @@ void CheckIndexAddParamsInvalid(
     CheckTensorShapeSize(indices.GetStorage(), "INDEXADD");
     std::vector<LogicalTensorPtr> tensors = {self.GetStorage(), src.GetStorage()};
     CheckTensorsDimConsistency(tensors, "INDEXADD");
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src.GetShape()[axis_] == indices.GetShape()[0])
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src.GetShape()[axis] == indices.GetShape()[0])
         << "src shape[axis] and indices[0] must equal";
     for (size_t i = 0; i < self.GetShape().size(); ++i) {
-        if (static_cast<int>(i) == axis_) {
+        if (static_cast<int>(i) == axis) {
             continue;
         }
         ASSERT(VectorErrorCode::ERR_PARAM_INVALID, src.GetShape()[i] == self.GetShape()[i])
@@ -264,8 +263,8 @@ void CheckIndexAddParamsInvalid(
 Tensor IndexAddUB(const Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha)
 {
     DECLARE_TRACER();
-    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
     CheckAxisRange(self, axis);
+    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
     DataType selfDataType = self.GetDataType();
     Element alpha_ = Element(selfDataType, alpha.Cast<float>());
     Tensor result(selfDataType, self.GetShape());
@@ -402,15 +401,27 @@ void TensorIndexAdd(Function& function, const IndexAddPara& indexaddPara)
 void IndexAdd_(Tensor& self, const Tensor& src, const Tensor& indices, int axis, const Element& alpha)
 {
     DECLARE_TRACER();
-    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
     CheckAxisRange(self, axis);
+    CheckIndexAddParamsInvalid(self, src, indices, axis, alpha);
     DataType selfDataType = self.GetDataType();
     Element castedAlpha = Element(selfDataType, alpha.Cast<float>());
     Tensor result(selfDataType, self.GetShape());
-    CALL(
-        IndexAdd, *Program::GetInstance().GetCurrentFunction(),
-        {self.GetStorage(), src.GetStorage(), indices.GetStorage(), result.GetStorage(), axis, castedAlpha});
-    self = result;
+    if (selfDataType == DT_INT8 && axis != static_cast<int>(self.GetShape().size() - 1)) { // int8->fp16
+        Tensor selfCasted = Cast(self, DT_FP16, CastMode::CAST_NONE);
+        Tensor srcCasted = Cast(src, DT_FP16, CastMode::CAST_NONE);
+        Tensor resultCasted(DT_FP16, self.GetShape());
+        CALL(
+            IndexAdd, *Program::GetInstance().GetCurrentFunction(),
+            {selfCasted.GetStorage(), srcCasted.GetStorage(), indices.GetStorage(), resultCasted.GetStorage(), axis,
+             castedAlpha});
+        selfCasted = resultCasted;
+        self = Cast(resultCasted, selfDataType, CastMode::CAST_TRUNC, SaturationMode::OFF);
+    } else {
+        CALL(
+            IndexAdd, *Program::GetInstance().GetCurrentFunction(),
+            {self.GetStorage(), src.GetStorage(), indices.GetStorage(), result.GetStorage(), axis, castedAlpha});
+        self = result;
+    }
 }
 
 void TiledGatherOperation(

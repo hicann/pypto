@@ -812,8 +812,8 @@ const std::unordered_set<Opcode> SUPPORT_DYNAMIC_UNALIGNED_OPS{
     Opcode::OP_FLOORDIV,
     Opcode::OP_FLOORDIVS};
 
-const std::unordered_set<Opcode> UNSUPPORT_FP16_OPS{
-    Opcode::OP_MOD, Opcode::OP_MODS, Opcode::OP_REMRS, Opcode::OP_REMS, Opcode::OP_REM};
+const std::unordered_set<Opcode> UNSUPPORT_FP16_OPS{Opcode::OP_MOD,  Opcode::OP_MODS, Opcode::OP_REMRS,
+                                                    Opcode::OP_REMS, Opcode::OP_REM,  Opcode::OP_INDEX_ADD};
 
 const std::unordered_set<Opcode> UNSUPPORT_BF16_OPS{
     Opcode::OP_INDEX_ADD,
