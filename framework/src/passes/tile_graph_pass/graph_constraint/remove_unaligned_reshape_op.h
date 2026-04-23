@@ -61,7 +61,8 @@ private:
     Operation* FindAllProducerCopyOuts(
         LogicalTensorPtr tensor, Operation& op, std::vector<LogicalTensorPtr>& needToCopyTensors, int& index,
         const int reshapeMagic);
-    void FindAllConsumerCopyIns(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps, bool& hasViewOrAssemble);
+    bool checkNonCopyInConsumerExists(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps);
+    void HandleNoCopyInConsumer(Function& function, Operation& op, LogicalTensorPtr output, std::vector<Operation*>& copyInOps, bool& checkOverUbSize);
     bool CheckUnaligned(Operation& op);
     LogicalTensorPtr InsertIOTensor(
         Function& function, Operation& op, std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>>& rawIO,
