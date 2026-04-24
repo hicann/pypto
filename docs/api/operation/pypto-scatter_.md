@@ -1,4 +1,4 @@
-# pypto.scatter\_
+﻿# pypto.scatter\_
 
 ## 产品支持情况
 
@@ -69,7 +69,7 @@ scatter_(input: Tensor, dim: int, index: Tensor, src: Union[float, Element, Tens
 
 TileShape维度应和输出一致。
 
-如输入intput shape为[a, b, c]，dim为1，index为[m, t, p](其中m<=a, p<=c)，src为[x, y, z](其中x>=m, y>=t, z>=p)，输出为[a, b, c], TileShape设置为[m1, t1, p1]。 则m1, p1分别用于切分m, p轴。t1必须大于等于b和t，dim对应轴不可切，必须保证b轴和t轴全载。
+如输入input shape为[a, b, c]，dim为1，index为[m, t, p](其中m<=a, p<=c)，src为[x, y, z](其中x>=m, y>=t, z>=p)，输出为[a, b, c], TileShape设置为[m1, t1, p1]。 则m1, p1分别用于切分m, p轴。t1必须大于等于b和t，dim对应轴不可切，必须保证b轴和t轴全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

@@ -1,4 +1,4 @@
-# pypto.topk
+﻿# pypto.topk
 
 ## 产品支持情况
 
@@ -50,7 +50,7 @@ topk(input: Tensor, k: int, dim: Optional[int]=None, largest: bool=True) -> Tupl
 
 TileShape维度应和输入input一致。
 
-示例1：输入intput shape为[m, n, p]，dim为2，largest为True，输出为[m, n, k], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。p1必须大于等于k，k轴不支持切分，必须保证全载。
+示例1：输入input shape为[m, n, p]，dim为2，largest为True，输出为[m, n, k], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。p1必须大于等于k，k轴不支持切分，必须保证全载。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

@@ -1,4 +1,4 @@
-# pypto.transpose
+﻿# pypto.transpose
 
 ## 产品支持情况
 
@@ -64,7 +64,7 @@ dim1: 3
 
 TileShape维度应和输入input一致。
 
-示例1：输入intput shape为[m, n, p]，dim0为1，dim1为2，输出为[m, p, n], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。
+示例1：输入input shape为[m, n, p]，dim0为1，dim1为2，输出为[m, p, n], TileShape设置为[m1, n1, p1], 则m1, n1, p1分别用于切分m, n, p轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16, 32)

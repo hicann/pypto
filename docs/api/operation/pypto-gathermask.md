@@ -1,4 +1,4 @@
-# pypto.gather
+# pypto.gathermask
 
 ## 产品支持情况
 

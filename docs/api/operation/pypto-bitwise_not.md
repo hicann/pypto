@@ -1,4 +1,4 @@
-# pypto.bitwise\_not
+﻿# pypto.bitwise\_not
 
 ## 产品支持情况
 
@@ -41,7 +41,7 @@ bitwise_not(input: Tensor) -> Tensor
 
 TileShape维度应和输出一致。
 
-如输入intput shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
+如输入input shape为[m, n]，输出为[m, n]，TileShape设置为[m1, n1]，则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)

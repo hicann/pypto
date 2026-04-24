@@ -1,4 +1,4 @@
-# pypto.triu
+﻿# pypto.triu
 
 ## 产品支持情况
 
@@ -41,7 +41,7 @@ triu(input: Tensor, diagonal: SymInt = 0) -> Tensor:
 
 TileShape维度应和输出一致。
 
-示例1：输入intput shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
+示例1：输入input shape为[m, n]，输出为[m, n], TileShape设置为[m1, n1], 则m1, n1分别用于切分m, n轴。
 
 ```python
 pypto.set_vec_tile_shapes(4, 16)
