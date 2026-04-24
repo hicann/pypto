@@ -223,11 +223,11 @@ public:
     {
         int32_t ret = DEVICE_MACHINE_OK;
         DEV_VERBOSE_DEBUG("Run device task entry stage : %d", ToUnderlying(deviceTaskCtx->CurStage()));
-        DEV_ATRACE("Schedule aicpu %d Start to Run devTask: %lu", aicpuIdx_, deviceTaskCtx->TaskId());
         while (true) {
             bool isStageFinish = false;
             switch (deviceTaskCtx->CurStage()) {
                 case DevTaskExecStage::INIT: {
+                    DEV_ATRACE("Schedule aicpu %d Start to Run devTask: %lu", aicpuIdx_, deviceTaskCtx->TaskId());
                     ret = PreProcessTask(deviceTaskCtx, isStageFinish);
                     if (isStageFinish) {
                         deviceTaskCtx->EntryStage(DevTaskExecStage::SEND_CORE_TASK);
