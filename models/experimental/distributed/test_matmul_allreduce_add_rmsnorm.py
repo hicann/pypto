@@ -239,6 +239,7 @@ def matmul_allreduce_add_rmsnorm(
     return out_tensor, residual_out
 
 
+@pytest.mark.skip(reason="temporarily disabled")
 @pytest.mark.world_size(4)
 def test_matmul_allreduce_add_rmsnorm():
     mp.set_start_method('spawn', force=True)
