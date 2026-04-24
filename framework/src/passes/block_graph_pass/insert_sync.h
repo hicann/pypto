@@ -289,10 +289,13 @@ private:
         CoreType setc;
         PipeType waitp;
         CoreType waitc;
-        AIVCore aivc;
-        std::vector<int> setOpIdList{};
-        std::vector<int> setOpEventIdList{};
+        AIVCore setaivc;
+        AIVCore waitaivc;
+        std::vector<int> setOpIdList{}; // 对应sync_src/cv_sync_src在syncedOpLog中的idx
+        std::vector<int> setOpEventIdList{}; // eventid
+        // sync_src/cv_sync_src对应的setop和waitop的idx pair {setop idx, waitop idx}
         std::vector<std::pair<int, int>> opDepList{};
+        std::string DumpDataDepInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<Operation*>& oriOpList);
     };
 
     struct IssueNum {
@@ -336,6 +339,18 @@ private:
         int maxOverlapDepIdx, const DataDepInfo& depInfo, const PipePairEx& pipePairEx, std::vector<IndexOp>& syncedOpLog);
     Status GetDepInfo(std::vector<IndexOp>& syncedOpLog, const PipePairEx& pipePairEx, DataDepInfo& depInfo);
     Status RelaxFakeDataDep(std::vector<IndexOp>& syncedOpLog);
+    Status RelaxCvEventId(std::vector<IndexOp>& syncedOpLog);
+    bool HasCvSyncDstAfter(const std::vector<IndexOp>& syncedOpLog, int srcIdx, const Operation& srcOp) const;
+    void FillCvDepInfoEntry(std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap,
+                            const std::vector<IndexOp>& syncedOpLog, int idx, int eventId);
+    void FindCvSyncSrcInfo(const std::vector<IndexOp>& syncedOpLog, std::vector<int>& eventIdVec, const CorePair& corePair,
+                           std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap);
+    bool FindMaxOverlapForCV(PipePair& targetPp, int& maxOverlapIdx,
+                             std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap);
+    std::string DumpMergeCVInfo(PipePair targetPp, int maxOverlapIdx,
+                                std::unordered_map<PipePair, DataDepInfo, PipePairHash> cvDepInfoMap);
+    std::string DumpDepInfoMap(const std::vector<IndexOp>& syncedOpLog,
+                               std::unordered_map<PipePair, DataDepInfo, PipePairHash>& cvDepInfoMap);
     bool CheckIssuedOp(const DepOp& op);
     bool ConstructDepInfo(DataDepInfo& depInfo, std::vector<IndexOp>& syncedOpLog, int i);
     bool FindDataDep(DataDepInfo& depInfo, std::vector<IndexOp>& syncedOpLog, int i);
@@ -357,7 +372,7 @@ private:
     void InitCVEventIdQ(bool isAIV1, CorePair corePair, CorePair corePairReverse);
     std::deque<int>& GetFreeEventIdQueue(
         const PipePairEx& pp, size_t setIdx, size_t waitIdx, std::pair<CoreTypeDetail, CoreTypeDetail>& setWaitCoreType);
-    int GetSyncSrcLogIdx(std::vector<IndexOp>& syncedOpLog, int i);
+    int GetSyncSrcLogIdx(const std::vector<IndexOp>& syncedOpLog, int i);
     int GetMaxEventId(const PipePairEx& pp);
     Status ProcessView(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
     Status ProcessAssemble(std::vector<Operation*>& opLogNew, std::pair<Operation*, Operation*> pair);
@@ -378,6 +393,7 @@ private:
     static std::map<PipeCoreRealEx, PipeSeq, PipeCoreRealExCompare> pipe2Seq;
     static std::map<PipeSeq, PipeCoreRealEx> seq2pipe;
     static std::vector<PipePair> dataDepPair;
+    static std::vector<CorePair> cvCorePair;
 
     static constexpr int EVENT_NUM = 8;
     static constexpr int CROSS_CORE_EVENT_NUM = 16;
