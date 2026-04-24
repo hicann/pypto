@@ -96,6 +96,8 @@ public:
 
     void ClearStashFuncQueue();
 
+    void ResetAllPasses();
+
 public: // api mode
     MachineTask* Compile(MachineTask* task = nullptr) const;
 

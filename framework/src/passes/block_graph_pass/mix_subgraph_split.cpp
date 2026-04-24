@@ -660,5 +660,14 @@ void MixSubgraphSplit::DeleteOriginalMixCallOps(Function& rootFunc, const std::v
     rootFunc.EraseOperations(false);
     APASS_LOG_INFO_F(Elements::Operation, "Deleted %zu original mix subgraph callOps", callOpsToDelete.size());
 }
+
+void MixSubgraphSplit::Reset()
+{
+    APASS_LOG_INFO_F(Elements::Function, 
+        "MixSubgraphSplit::Reset() called, clearing cache");
+    // 清理所有缓存记录
+    globalSplitRecords_.clear();
+    globalNextMixId_ = 0;
+}
 } // namespace tile_fwk
 } // namespace npu

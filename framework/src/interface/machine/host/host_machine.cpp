@@ -42,6 +42,7 @@ struct Backend {
     ExecuteFunc simuExecute;
     PlatformFunc platform;
     MatchCacheFunc matchCache;
+    void (*resetAllPasses)();
 
     static Backend& GetBackend()
     {
@@ -71,6 +72,8 @@ private:
         execute = (ExecuteFunc)GetSymbol(compilerHandle, "Execute");
         matchCache = (MatchCacheFunc)GetSymbol(compilerHandle, "MatchCache");
         simuExecute = (ExecuteFunc)GetSymbol(simuHandle, "ExecuteSimulation");
+
+        resetAllPasses = (void(*)())GetSymbol(progHandle, "ResetAllPasses");
 
         auto initFunc = (InitFunc)GetSymbol(compilerHandle, "Initialize");
         if (initFunc) {
@@ -191,6 +194,19 @@ void HostMachine::CompileFunction(Function* func) const
     }
     if (func->rootFunc_ != nullptr) {
         func->rootFunc_->DumpTopoFile(config::LogTopFolder() + "/topo.json");
+    }
+}
+
+void HostMachine::ResetAllPasses()
+{
+    MACHINE_LOGI("ResetAllPasses called");
+    
+    auto& backend = Backend::GetBackend();
+    if (backend.resetAllPasses) {
+        backend.resetAllPasses();
+        MACHINE_LOGI("ResetAllPasses executed successfully");
+    } else {
+        MACHINE_LOGW("ResetAllPasses symbol not found in backend");
     }
 }
 

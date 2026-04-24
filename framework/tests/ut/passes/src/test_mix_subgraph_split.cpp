@@ -46,7 +46,7 @@ public:
         config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
     }
 
-    void TearDown() override { MixSubgraphSplit::ResetGlobalState(); }
+    void TearDown() override {}
 
 protected:
     // 单个辅助函数：构建Mix子图的所有内容

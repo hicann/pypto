@@ -20,4 +20,9 @@ extern "C" std::string GetResumePath(const std::string& strategy)
 {
     return PassManager::Instance().GetResumePath(strategy);
 }
+
+extern "C" void ResetAllPasses()
+{
+    PassManager::Instance().ResetAllPasses();
+}
 } // namespace npu::tile_fwk

@@ -304,4 +304,44 @@ Status PassManager::RunPass(Program& program, Function& function, const std::str
     return SUCCESS;
 }
 
+void PassManager::ResetAllPasses()
+{
+    APASS_LOG_INFO_F(Elements::Function, "ResetAllPasses: resetting all passes from all strategies");
+    // 用于记录已经 reset 过的 Pass，避免重复 reset
+    std::unordered_set<PassName> resetPasses;
+    // 遍历所有策略
+    for (auto& strategyPair : strategies_) {
+        const auto& strategyName = strategyPair.first;
+        const auto& passEntries = strategyPair.second;
+        
+        APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: processing strategy: %s", strategyName.c_str());
+        
+        // 遍历策略中的所有 Pass
+        for (const auto& passEntry : passEntries) {
+            PassName passName = passEntry.passName;
+            
+            // 避免重复 reset 同一个 Pass
+            if (resetPasses.find(passName) != resetPasses.end()) {
+                continue;
+            }
+            
+            auto pass = PassRegistry::GetInstance().CreatePass(PassNameStr(passName));
+            if (pass == nullptr) {
+                APASS_LOG_WARN_F(Elements::Function, "ResetAllPasses: Pass [%s] does not exist.", 
+                                 PassNameStr(passName));
+                continue;
+            }
+            
+            APASS_LOG_DEBUG_F(Elements::Function, "ResetAllPasses: resetting pass: %s", 
+                              PassNameStr(passName));
+            
+            // 调用 Pass 的 Reset 方法
+            pass->Reset();
+            
+            // 记录已 reset 的 Pass
+            resetPasses.insert(passName);
+        }
+    }
+    APASS_LOG_INFO_F(Elements::Function, "ResetAllPasses: reset %zu unique passes", resetPasses.size());
+}
 } // namespace npu::tile_fwk

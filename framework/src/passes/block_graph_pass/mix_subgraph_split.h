@@ -109,11 +109,7 @@ public:
 
     Status RunOnFunction(Function& function) override;
 
-    static void ResetGlobalState()
-    {
-        globalSplitRecords_.clear();
-        globalNextMixId_.store(0);
-    }
+    void Reset() override;
 
 private:
     // 子模块
