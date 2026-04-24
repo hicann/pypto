@@ -228,7 +228,7 @@ void CheckIndexAddParamsInvalid(
         axis < static_cast<int>(self.GetShape().size()) && axis >= -static_cast<int>(self.GetShape().size()))
         << "axis out of range of shape size";
 
-    CheckTensorDimRange(self.GetStorage(), 2, 5, "INDEXADD");
+    CheckTensorDimRange(self.GetStorage(), 1, 5, "INDEXADD");
     CheckTensorDimRange(indices.GetStorage(), 1, 1, "INDEXADD");
     CheckTensorShapeSize(self.GetStorage(), "INDEXADD");
     CheckTensorShapeSize(src.GetStorage(), "INDEXADD");

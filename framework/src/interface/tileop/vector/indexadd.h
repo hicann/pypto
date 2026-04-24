@@ -320,8 +320,9 @@ TILEOP void IndexAddLastAxisCompute(
                                 float mulsResult = static_cast<float>(src1Addr[src1Offset]) * static_cast<float>(alpha);
                                 src1Addr[src1Offset] = static_cast<half>(mulsResult);
                             } else if constexpr (Std::is_same_v<Scalar, bfloat16_t>) { // bf16
-                                float mulsResult = TileOp::Bf16ToFp32(src1Addr[src1Offset]) * TileOp::Bf16ToFp32(alpha);
-                                src1Addr[src1Offset] = TileOp::Fp32ToBf16R(mulsResult);
+                                float mulsResult = src1Addr[src1Offset] * TileOp::Bf16ToFp32(alpha);
+                                bfloat16_t mulsResBf16 = TileOp::Fp32ToBf16R(mulsResult);
+                                src1Addr[src1Offset] = TileOp::Bf16ToFp32(mulsResBf16);
                             } else { // int8,int16,int32,float32
                                 Scalar mulsResult = static_cast<Scalar>(src1Addr[src1Offset]) * alpha;
                                 src1Addr[src1Offset] = static_cast<src1Type>(mulsResult);

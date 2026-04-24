@@ -40,7 +40,37 @@ struct IndexAddOpMetaData {
     nlohmann::json test_data_;
 };
 
-// Tensor IndexAdd(const Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha)
+// void IndexAdd_(Tensor &self, const Tensor &src, const Tensor &indices, int axis, const Element &alpha)
+static void IndexAddOperationExeFunc1Dim(
+    const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
+{
+    FUNCTION("main", {inputs[0], inputs[1], inputs[2]}, {outputs[0]})
+    {
+        SymbolicScalar self_firstDim = inputs[0].GetShape()[0];
+        SymbolicScalar src_firstDim = inputs[1].GetShape()[0];
+        SymbolicScalar idxDim = inputs[2].GetShape()[0];
+        auto args = static_cast<const IndexAddOpFuncArgs*>(opArgs);
+        int axis = args->axis_;
+        axis = axis >= 0 ? axis : axis + inputs[0].GetShape().size();
+        std::vector<int64_t> viewShape = args->viewShape_;
+
+        ASSERT(idxDim == inputs[1].GetShape()[axis]);
+        const int64_t firstViewShape = viewShape[0];
+        const int64_t bloop = CeilDiv(src_firstDim, firstViewShape);
+        // self为GM输入，不进行view切分，其他两个输入支持axis轴view切分
+        LOOP("LOOP_L0_bIdx", FunctionType::DYNAMIC_LOOP, bIdx, LoopRange(0, bloop, 1))
+        {
+            std::vector<SymbolicScalar> offset = {bIdx * firstViewShape};
+            std::vector<SymbolicScalar> srcValidShape = {
+                std::min(src_firstDim - bIdx * firstViewShape, firstViewShape)};
+            auto srcTensor = View(inputs[1], viewShape, srcValidShape, offset);
+            auto idxTensor = View(inputs[2], {viewShape[axis]}, {srcValidShape[axis]}, {offset[axis]});
+            TileShape::Current().SetVecTile(args->tileShape_);
+            IndexAdd_(outputs[0], srcTensor, idxTensor, args->axis_, args->alpha_);
+        }
+    }
+}
+
 static void IndexAddOperationExeFunc2Dims(
     const std::vector<Tensor>& inputs, std::vector<Tensor>& outputs, const OpFuncArgs* opArgs)
 {
@@ -250,10 +280,11 @@ class IndexAdd_OperationTest : public npu::tile_fwk::stest::TestSuite_STest_Ops_
 
 INSTANTIATE_TEST_SUITE_P(
     TestIndexAdd_, IndexAdd_OperationTest,
-    ::testing::ValuesIn(GetOpMetaData<IndexAddOpMetaData>(
-        {IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims, IndexAddOperationExeFunc4Dims,
-         IndexAddOperationExeFunc5Dims},
-        "IndexAdd_")));
+    ::testing::ValuesIn(
+        GetOpMetaData<IndexAddOpMetaData>(
+            {IndexAddOperationExeFunc1Dim, IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims,
+             IndexAddOperationExeFunc4Dims, IndexAddOperationExeFunc5Dims},
+            "IndexAdd_")));
 
 TEST_P(IndexAdd_OperationTest, TestIndexAdd_)
 {
@@ -280,9 +311,9 @@ TEST_P(IndexAdd_OperationTest, TestIndexAdd_)
     auto args = IndexAddOpFuncArgs(GetViewShape(test_data), GetTileShape(test_data), axis, alp);
     auto testCase = CreateTestCaseDesc<IndexAddOpMetaData>(GetParam(), &args);
     std::vector<OpFunc> opFuncs = {
-        IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims, IndexAddOperationExeFunc4Dims,
-        IndexAddOperationExeFunc5Dims};
-    testCase.opFunc = opFuncs[GetViewShape(test_data).size() - 2];
+        IndexAddOperationExeFunc1Dim, IndexAddOperationExeFunc2Dims, IndexAddOperationExeFunc3Dims,
+        IndexAddOperationExeFunc4Dims, IndexAddOperationExeFunc5Dims};
+    testCase.opFunc = opFuncs[GetViewShape(test_data).size() - 1];
     TestExecutor::runTest(testCase);
 }
 } // namespace
