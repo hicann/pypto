@@ -103,7 +103,7 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutDynUnaligned)
     op.SetAttribute(OpAttributeKey::indicesSize, 1);
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -113,7 +113,7 @@ TEST_F(TestCodegenDynIndexPut, DynIndexPutDynUnaligned)
     CodeGenOpCloudNPU cop(opCtx);
     std::string res = cop.GenOpCode();
     std::string expect =
-        R"!!!(TileOp::DynTIndexPut<float, float, 2, 1, 64, 64, 1>((__gm__ float*)GET_PARAM_ADDR(param, 0, -1), (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 64, 1, 1, GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1));
+        R"!!!(TileOp::DynTIndexPut<float, float, 2, 1, 64, 64, 1>((__gm__ float*)GET_PARAM_ADDR(param, 0, 1), (__ubuf__ float*)UB_S0_E0, (__ubuf__ float*)UB_S0_E0, 64, 1, 1, GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, 1, 2, 1));
 )!!!";
     EXPECT_EQ(res, expect);
 }

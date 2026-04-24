@@ -95,7 +95,7 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOp)
 
     for (const auto& op : opLogPtr) {
         if (OpcodeManager::Inst().IsCopyInOrOut(op->GetOpcode())) {
-            EXPECT_TRUE(op->HasAttr("GmTensorParamIdxInCallFunc"));
+            EXPECT_TRUE(op->HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
         }
     }
 }
@@ -313,7 +313,7 @@ TEST_F(CodegenPreprocTest, TestCombineAxisExpandinline)
 }
 
 // expand input have multi consumer
-TEST_F(CodegenPreprocTest, TestCombineAxisExpand2) 
+TEST_F(CodegenPreprocTest, TestCombineAxisExpand2)
 {
     ComputationalGraphBuilder graph;
     EXPECT_EQ(graph.AddTensor(DataType::DT_FP32, {128, 1}, MemoryType::MEM_DEVICE_DDR, "in1"), true);
@@ -445,9 +445,9 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermute)
     CodegenPreproc codegenPreprocPass;
     codegenPreprocPass.SaveGmTensorParamIdxToOp(*rootFuncPtr);
 
-    EXPECT_TRUE(copyin.HasAttr("GmTensorParamIdxInCallFunc"));
-    EXPECT_TRUE(permute_op.HasAttr("GmTensorParamIdxInCallFunc"));
-    EXPECT_TRUE(copyout.HasAttr("GmTensorParamIdxInCallFunc"));
+    EXPECT_TRUE(copyin.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
+    EXPECT_TRUE(permute_op.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
+    EXPECT_TRUE(copyout.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
 }
 
 TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
@@ -478,9 +478,9 @@ TEST_F(CodegenPreprocTest, TestSaveGmTensorParamIdxToOpPermuteElement)
     CodegenPreproc codegenPreprocPass;
     codegenPreprocPass.SaveGmTensorParamIdxToOp(*rootFuncPtr);
 
-    EXPECT_TRUE(copyin.HasAttr("GmTensorParamIdxInCallFunc"));
-    EXPECT_TRUE(permute_elem_op.HasAttr("GmTensorParamIdxInCallFunc"));
-    EXPECT_TRUE(copyout.HasAttr("GmTensorParamIdxInCallFunc"));
+    EXPECT_TRUE(copyin.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
+    EXPECT_TRUE(permute_elem_op.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
+    EXPECT_TRUE(copyout.HasAttr(OpAttributeKey::gmTensorParamIdxInCall));
 }
 
 } // namespace tile_fwk

@@ -999,7 +999,9 @@ std::string CodeGenOpNPU::PrintMemCopyWithUBDynamicSupportUnaligned(const PrintM
         paramList.emplace_back(std::to_string(localRawShape[i]));
     }
     if (localIdx == 0) { // means op is COPY_IN
-        if (isPartialMem[localIdx]) {
+        bool isPartialMem{false};
+        GetTensorAttr(localIdx, "isPartialMem", isPartialMem);
+        if (isPartialMem) {
             paramList.emplace_back("true");
         }
     }

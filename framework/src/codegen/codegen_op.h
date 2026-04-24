@@ -97,7 +97,6 @@ protected:
     Element extOperandVal;
     SymbolicScalar extSymbolicScalar;
     std::vector<Element> extScalarVec;
-    bool isPartialMem[MAX_OPERANDS] = {};
 
     std::vector<int64_t> offset[MAX_OPERANDS] = {};
     std::vector<int64_t> shape[MAX_OPERANDS] = {};
@@ -123,6 +122,7 @@ protected:
     std::vector<int> poolParams;
 
     std::map<std::string, Any> opAttrs;
+    std::map<std::string, Any> tensorAttrs[MAX_OPERANDS];
 
     std::shared_ptr<SymbolManager> sm{nullptr};
     const std::map<int, int>& paramLocToParamListOffset{};

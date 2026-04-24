@@ -61,7 +61,7 @@ TEST_F(TestCodegenDynSpillOut, UBSpillOut)
     auto& op = function->AddOperation(Opcode::OP_COPY_OUT, {ubTensor}, {ddrTensor});
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -87,7 +87,7 @@ TEST_F(TestCodegenDynSpillOut, L1SpillOut)
     auto& op = function->AddOperation(Opcode::OP_COPY_OUT, {l1Tensor}, {ddrTensor});
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -111,11 +111,11 @@ TEST_F(TestCodegenDynSpillOut, L1SpillTileTensor)
     auto& op = function->rootFunc_->programs_[0]->AddOperation(Opcode::OP_COPY_OUT, {l1Tensor}, {ddrTensor});
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     auto& op2 = function->rootFunc_->programs_[0]->AddOperation(Opcode::OP_COPY_IN, {ddrTensor}, {l1Tensor});
     op2.SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_L1, shapeImme, shapeImme));
-    op2.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op2.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     op2.SetAttribute(OP_ATTR_PREFIX + "copy_in_mode", 0);
 
     CodeGenCtx ctx;

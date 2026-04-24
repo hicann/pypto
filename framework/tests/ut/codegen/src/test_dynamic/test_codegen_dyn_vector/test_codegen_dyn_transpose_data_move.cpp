@@ -70,7 +70,7 @@ void TestTransposeDataMoveBody(int dim = 3)
     auto shapeImme = OpImmediate::Specified(shape);
     op.SetOpAttribute(std::make_shared<CopyOpAttribute>(MEM_UB, to_offset, shapeImme, shapeImme));
     op.SetOOpAttrOffset(0, 0);
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;

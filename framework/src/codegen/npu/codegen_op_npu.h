@@ -223,11 +223,11 @@ protected:
     int GetCacheModeFlag(const std::string& cacheMode) const;
 
     template <typename T>
-    bool GetAttr(const std::string& key, T& value) const
+    bool GetAttrFromMap(const std::map<std::string, Any>& attrMap, const std::string& key, T& value) const
     {
-        auto it = opAttrs.find(key);
-        if (it == opAttrs.end()) {
-            CODEGEN_LOGI("can not find key: %s in opAttrs", key.c_str());
+        auto it = attrMap.find(key);
+        if (it == attrMap.end()) {
+            CODEGEN_LOGI("can not find key: %s in attrMap", key.c_str());
             return false;
         }
         if (it->second.Type() == typeid(T)) {
@@ -238,6 +238,20 @@ protected:
             GenCodeErr::DATA_TYPE_MISMATCHED, "Type of attribute %s from PASS is mismatch: %s != %s", key.c_str(),
             it->second.Type().name(), typeid(T).name());
         return false;
+    }
+
+    template <typename T>
+    bool GetAttr(const std::string& key, T& value) const
+    {
+        return GetAttrFromMap(opAttrs, key, value);
+    }
+
+    template <typename T>
+    bool GetTensorAttr(int idx, const std::string& key, T& value) const
+    {
+        ASSERT(GenCodeErr::PARAM_IDX_INVALID, idx >= 0 && idx < MAX_OPERANDS)
+            << "idx " << idx << " is out of range [0, " << MAX_OPERANDS << ")";
+        return GetAttrFromMap(tensorAttrs[idx], key, value);
     }
 
     template <typename T = int64_t>
@@ -280,6 +294,8 @@ protected:
 
     // get start offset in total block
     SymbolicScalar GetOperandStartOffset(int operandIdx) const;
+
+    std::string GetGmTensorAddrByAttr(unsigned gmParamIdx) const;
 
     virtual std::string GenGmParamVar(unsigned gmParamIdx) const;
 

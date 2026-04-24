@@ -106,6 +106,7 @@ public:
     static const std::string maxTileNum;
     static const std::string precisionType;
     static const std::string perm;
+    static const std::string gmTensorParamIdxInCall;
 };
 
 class ConvOpAttributeKey {
@@ -153,6 +154,11 @@ class PoolOpAttributeKey {
 public:
     static const std::string poolh;
     static const std::string poolw;
+};
+
+class TensorAttributeKey {
+public:
+    static const std::string tensorAddr;
 };
 
 enum class FbBufferSpace { QUANT_PRE = 0, RELU_PRE, RELU_POST, QUANT_POST, ANTIQ_ELT, ANTIQ_MTE2 };
@@ -385,9 +391,9 @@ public:
     void ClearOutCtrlOperations() { outputCtrlOps.clear(); }
 
     ScopeInfo scopeInfo_;
-    void SetScopeId(int scopeId) {scopeInfo_.scopeId = scopeId; };
-    void SetScopeInfo(const ScopeInfo &info) { scopeInfo_ = info; };
-    const ScopeInfo &GetScopeInfo() const { return scopeInfo_; };
+    void SetScopeId(int scopeId) { scopeInfo_.scopeId = scopeId; };
+    void SetScopeInfo(const ScopeInfo& info) { scopeInfo_ = info; };
+    const ScopeInfo& GetScopeInfo() const { return scopeInfo_; };
     int GetScopeId() const { return scopeInfo_.scopeId; };
     bool GetAllowParallelMerge() const { return scopeInfo_.allowParallelMerge; };
     bool GetAllowCrossScopeMerge() const { return scopeInfo_.allowCrossScopeMerge; };

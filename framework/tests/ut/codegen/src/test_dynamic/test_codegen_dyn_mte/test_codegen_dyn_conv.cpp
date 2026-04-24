@@ -108,7 +108,7 @@ std::string TestConvL1CopyInBody(
     op.SetAttribute("IS_FMAP", isFmap);
     op.SetAttribute("IS_CONV3D", isConv3D);
     op.SetAttribute("COPY_IN_MODE", copyInMode);
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     SetConvL1CopyInOpAttr(op, isConv3D, gmShape, dstL1Shape);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
@@ -172,7 +172,7 @@ std::string TestConvL0COutBody(
     auto shapeImme = OpImmediate::Specified(l0cShape);
     op.SetAttribute("COPY_OUT_MODE", copyOutMode);
     op.SetAttribute("IS_CONV3D", isConv3D);
-    op.SetAttribute("GmTensorParamIdxInCallFunc", 0);
+    op.SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, 0);
     op.SetOpAttribute(
         std::make_shared<CopyOpAttribute>(MEM_L1, OpImmediate::Specified(offset), shapeImme, shapeImme, shapeImme));
 

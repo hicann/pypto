@@ -261,6 +261,9 @@ int64_t RuntimeGetViewValidShapeDim(int64_t validshape, int64_t viewOffset, int6
 #define RUNTIME_GetViewValidShapeDim(validShape, viewOffset, viewShape) \
     RuntimeGetViewValidShapeDim(validShape, viewOffset, viewShape)
 
+#define RUNTIME_GET_PARAM_ADDR GET_PARAM_ADDR
+#define RUNTIME_param param
+
 #define GET_PARAM_ADDR(param, n, base) GetTensorAddr(param, base)
 
 #define GET_PARAM_OFFSET_BY_IDX(param, n, base, dim, idx) GetCoa(param, ((base) + 1) + 0 * (dim) + idx)

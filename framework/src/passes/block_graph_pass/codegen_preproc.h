@@ -40,7 +40,9 @@ private:
     // force combine axis
     Status ForceCombineAxis(Function& func) const;
     Status ForceCombineAxisForAxisCombine(Function& func) const;
-    bool IsNeedSave(const Operation& op) const;
+    bool IsCopyNeedSave(const Operation& op) const;
+    void SetTensorParamAddr(
+        LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar, int opMagic) const;
     void CombineTailAxis(std::vector<int64_t>& shape, size_t shapeSize) const;
     void CombineLastAxis(std::vector<SymbolicScalar>& shape, size_t shapeSize) const;
     Status ProcessAxis(Operation& op, std::vector<bool> attr, bool isInput) const;

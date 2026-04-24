@@ -270,8 +270,6 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
                                                                               -tensor->tensor->GetRawMagic();
     operandWithMagic[operandIdx] = tensor->GetMagic();
     dynamicOffset[operandIdx] = tensor->GetDynOffset();
-    auto value = tensor->GetAttr<bool>("isPartialMem");
-    isPartialMem[operandIdx] = (value != nullptr) && (*value);
     UpdateShape(ops, *tensor, operandIdx, isInput, ioIdx);
     if (isInput) {
         UpdateOffsetForInput(ops, *tensor, operandIdx);
@@ -284,6 +282,7 @@ void CodeGenOp::UpdateCodegenOpInfoByTensor(
         << "can not support memory type: " << static_cast<size_t>(tensor->GetMemoryTypeOriginal()) << ", Tensor is "
         << tensor->Dump();
     operandType[operandIdx] = it->second;
+    tensorAttrs[operandIdx] = tensor->GetAllAttr();
     ++operandIdx;
 }
 
@@ -459,58 +458,23 @@ void CodeGenOp::GetGmParamIdx(const Operation& oper)
         return;
     }
 
-    if (OpcodeManager::Inst().IsSharedMemory(oper.GetOpcode())) {
-        for (size_t i = 0; i < oper.GetOOperands().size(); ++i) {
-            if (oper.GetOOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
-                paramLocation[i] = oper.GetOOpAttrOffset(i);
-            }
+    if (oper.HasAttribute(OpAttributeKey::gmTensorParamIdxInCall)) {
+        GmTensorParamIdxInCallFunc = oper.GetIntAttribute(OpAttributeKey::gmTensorParamIdxInCall);
+    }
+
+    for (size_t i = 0; i < oper.GetOOperands().size(); ++i) {
+        if (oper.GetOOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
+            paramLocation[i] = oper.GetOOpAttrOffset(i);
         }
-        size_t iOffset = oper.GetOOperands().size() == 0 ? 1 : oper.GetOOperands().size();
-        for (size_t i = 0; i < oper.GetIOperands().size(); ++i) {
-            if (oper.GetIOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
-                paramLocation[i + iOffset] = oper.GetIOpAttrOffset(i);
-            }
+    }
+    size_t iOffset = oper.GetOOperands().size() == 0 ? 1 : oper.GetOOperands().size();
+    for (size_t i = 0; i < oper.GetIOperands().size(); ++i) {
+        if (oper.GetIOperands()[i]->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
+            paramLocation[i + iOffset] = oper.GetIOpAttrOffset(i);
         }
-        return;
     }
 
-    if (oper.GetOpcode() == Opcode::OP_GATHER_IN_L1 || oper.GetOpcode() == Opcode::OP_GATHER_IN_UB) {
-        int ioAttrOffset = 0;
-        for (int i = 0; i < operandCnt; i++) {
-            if (operandType[i] == BUF_DDR) {
-                paramLocation[i] = oper.GetIOpAttrOffset(ioAttrOffset++);
-            }
-        }
-        GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
-        return;
-    }
-
-    if (oper.GetOpcode() == Opcode::OP_GATHER) {
-        paramLocation[ID1] = oper.GetIOpAttrOffset(0);
-        paramLocation[ID2] = oper.GetIOpAttrOffset(1);
-        GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
-        return;
-    }
-
-    if (OpcodeManager::Inst().IsCopyIn(oper.GetOpcode()) || (oper.GetOpcode() == Opcode::OP_PERMUTE) ||
-        (oper.GetOpcode() == Opcode::OP_PERMUTE_ELEMENT)) {
-        paramLocation[1] = oper.GetIOpAttrOffset(0);
-        CODEGEN_LOGI("Gm Param Index of Copy In Op %s is %d", tileOpName.c_str(), paramLocation[1]);
-        GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
-        CODEGEN_LOGI("GmTensorParamIdxInCallFunc: %d", GmTensorParamIdxInCallFunc);
-        return;
-    }
-
-    if (OpcodeManager::Inst().IsCopyOut(oper.GetOpcode())) {
-        const std::shared_ptr<OpAttribute>& attr = oper.GetOpAttribute();
-        ASSERT(OperErr::ATTRIBUTE_INVALID, attr != nullptr) << "Copy Out attr is null, Op is " << oper.Dump();
-        std::shared_ptr<CopyOpAttribute> copyAttr = std::static_pointer_cast<CopyOpAttribute>(attr);
-        paramLocation[0] = oper.GetOOpAttrOffset(0);
-        CODEGEN_LOGI("Gm Param Index of Copy Out Op %s is %d", tileOpName.c_str(), paramLocation[0]);
-        GmTensorParamIdxInCallFunc = oper.GetIntAttribute("GmTensorParamIdxInCallFunc");
-        CODEGEN_LOGI("GmTensorParamIdxInCallFunc: %d", GmTensorParamIdxInCallFunc);
-        return;
-    }
+    return;
 }
 
 } // namespace npu::tile_fwk

@@ -29,10 +29,23 @@
 namespace npu {
 namespace tile_fwk {
 const std::string REDUCE_AXIS = OP_ATTR_PREFIX + "AXIS";
+static const SymbolicScalar GET_PARAM_ADDR = AddRuntimePrefix("GET_PARAM_ADDR");
+
 // only save general gm input/output, not contain spill-out scene
-bool CodegenPreproc::IsNeedSave(const Operation& op) const
+bool CodegenPreproc::IsCopyNeedSave(const Operation& op) const
 {
     return OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) && (!op.IsNeedStackGM());
+}
+
+void CodegenPreproc::SetTensorParamAddr(
+    LogicalTensor& tensor, int64_t tensorParamIdx, const SymbolicScalar& attrOffsetScalar, int opMagic) const
+{
+    SymbolicScalar paramAddr =
+        GET_PARAM_ADDR(AddRuntimePrefix("param"), SymbolicScalar(tensorParamIdx), attrOffsetScalar);
+    std::map<int, SymbolicScalar> opParamAddrs;
+    tensor.GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
+    opParamAddrs[opMagic] = paramAddr;
+    tensor.SetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, opParamAddrs);
 }
 
 // only used in DYNAMIC_LOOP_PATH scene
@@ -42,20 +55,18 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
         return SUCCESS;
     }
 
+    // op magic -> <tensor magic, param offset in call op>
+    std::unordered_map<int, std::unordered_map<int, int>> gmParamOffsetInOp;
     std::map<int, std::vector<Operation*>> gmParamInCallFunc;
     for (auto& subProgram : func.rootFunc_->programs_) {
         gmParamInCallFunc.clear();
         for (auto& op : subProgram.second->Operations(false)) {
-            if (IsNeedSave(op)) {
-                int coaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
+            if (IsCopyNeedSave(op)) {
+                int coaIndex =
+                    OpcodeManager::Inst().IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
                 gmParamInCallFunc[coaIndex].emplace_back(&op);
             }
-            if (op.GetOpcode() == Opcode::OP_GATHER_IN_L1) {
-                gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
-                gmParamInCallFunc[op.GetIOpAttrOffset(1)].emplace_back(&op);
-                gmParamInCallFunc[op.GetIOpAttrOffset(2)].emplace_back(&op);
-            }
-            if (op.GetOpcode() == Opcode::OP_GATHER_IN_UB) {
+            if (op.GetOpcode() == Opcode::OP_GATHER_IN_L1 || op.GetOpcode() == Opcode::OP_GATHER_IN_UB) {
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
                 gmParamInCallFunc[op.GetIOpAttrOffset(1)].emplace_back(&op);
                 gmParamInCallFunc[op.GetIOpAttrOffset(2)].emplace_back(&op);
@@ -64,23 +75,45 @@ Status CodegenPreproc::SaveGmTensorParamIdxToOp(Function& func) const
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
                 gmParamInCallFunc[op.GetIOpAttrOffset(1)].emplace_back(&op);
             }
-            if (op.GetOpcode() == Opcode::OP_PERMUTE) {
-                gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
-            }
-            if (op.GetOpcode() == Opcode::OP_PERMUTE_ELEMENT) {
+            if (op.GetOpcode() == Opcode::OP_PERMUTE || op.GetOpcode() == Opcode::OP_PERMUTE_ELEMENT) {
                 gmParamInCallFunc[op.GetIOpAttrOffset(0)].emplace_back(&op);
             }
         }
+
         APASS_LOG_INFO_F(
             Elements::Operation, "%d:%sgmParamInCallFunc size: %zu", __LINE__, __FUNCTION__, gmParamInCallFunc.size());
-        int tensorParamIdx{0};
+
+        int64_t tensorParamIdx{0};
         for (auto param : gmParamInCallFunc) {
             for (auto op : param.second) {
-                op->SetAttribute("GmTensorParamIdxInCallFunc", tensorParamIdx);
-                ++tensorParamIdx;
+                op->SetAttribute(OpAttributeKey::gmTensorParamIdxInCall, tensorParamIdx++);
+            }
+        }
+
+        for (auto& op : subProgram.second->Operations(false)) {
+            int64_t gmTensorParamIdx{0};
+            if (op.HasAttribute(OpAttributeKey::gmTensorParamIdxInCall)) {
+                op.GetAttr(OpAttributeKey::gmTensorParamIdxInCall, gmTensorParamIdx);
+            }
+            int attrOffset{0};
+            for (size_t i = 0; i < op.GetIOperands().size(); ++i) {
+                auto& tensor = op.GetIOperands()[i];
+                if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
+                    SetTensorParamAddr(
+                        *tensor, gmTensorParamIdx, SymbolicScalar(op.GetIOpAttrOffset(attrOffset++)), op.GetOpMagic());
+                }
+            }
+            attrOffset = 0;
+            for (size_t i = 0; i < op.GetOOperands().size(); ++i) {
+                auto& tensor = op.GetOOperands()[i];
+                if (tensor->GetMemoryTypeToBe() == MEM_DEVICE_DDR) {
+                    SetTensorParamAddr(
+                        *tensor, gmTensorParamIdx, SymbolicScalar(op.GetOOpAttrOffset(attrOffset++)), op.GetOpMagic());
+                }
             }
         }
     }
+
     return SUCCESS;
 }
 
@@ -205,7 +238,7 @@ void CodegenPreproc::FixExpandDimForAxisCombine(Operation& op, int dimSize) cons
     if (op.GetOpcode() == Opcode::OP_EXPAND) {
         auto axes = op.GetVectorIntAttribute(OpAttributeKey::expandDims);
         bool updated = false;
-        for (auto &axis : axes) {
+        for (auto& axis : axes) {
             if (axis == dimSize - NUM2) {
                 axis = axis + 1;
                 updated = true;
@@ -246,8 +279,8 @@ inline bool SkipInputCombineOps(Operation& op, int dimSize)
     }
     if (op.GetOpcode() == Opcode::OP_EXPAND) {
         auto axes = op.GetVectorIntAttribute(OpAttributeKey::expandDims);
-        for (auto &axis : axes) {
-            if (axis == dimSize - NUM1) {  // 尾轴expand不支持换轴
+        for (auto& axis : axes) {
+            if (axis == dimSize - NUM1) { // 尾轴expand不支持换轴
                 return false;
             }
         }
