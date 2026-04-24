@@ -192,11 +192,13 @@ def backup_and_test(cce_file, test_cmd, run_dir, modify_func):
     cce_lines = comment_special_lines(cce_lines)
     modified_lines = modify_func(cce_lines)
 
-    write_file(cce_file, modified_lines)
-    returncode, output = run_test(test_cmd, run_dir)
-    error_exists = has_error(returncode, output)
-
-    write_file(cce_file, original_lines)
-    os.remove(backup_file)
+    try:
+        write_file(cce_file, modified_lines)
+        returncode, output = run_test(test_cmd, run_dir)
+        error_exists = has_error(returncode, output)
+    finally:
+        write_file(cce_file, original_lines)
+        if os.path.exists(backup_file):
+            os.remove(backup_file)
 
     return error_exists, output, original_lines

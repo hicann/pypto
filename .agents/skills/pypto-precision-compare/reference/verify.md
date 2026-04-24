@@ -150,8 +150,11 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py \
 
 ### 8. 对比逻辑问题
 
-**修正**：对比工具使用 `torch.isclose` 统计不匹配个数：
-- 判断条件：不匹配个数 < 总数 * max(rtol, atol)
+**修正**：对比工具使用双阈值方案：
+- 警告阈值：`tol_attn = abs_sum * rtol / 2 + atol`，超出此阈值的元素允许少量存在（不超过 `error_threshold` 个）
+- 失败阈值：`tol_fail = tol_attn * 128`，超出此阈值的元素不允许存在（必须为 0）
+- 判断条件：`warn_count <= error_threshold and fail_count == 0`
+- `error_threshold` 基于统计：`max(16, int(sqrt(non_zero_count)) // 2)`，且不超过 `non_zero_count * min(rtol, atol)`
 
 ## 完整工作流程
 

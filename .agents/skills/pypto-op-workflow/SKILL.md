@@ -107,6 +107,17 @@ description: PyPTO 算子开发工作流程。用于开发华为昇腾 AI 处理
 | **输出工件** | `SPEC.md`（含算子名、公式、输入输出规格、精度要求、典型配置） |
 | **完成标准** | `SPEC.md` 包含算子名称、数学公式、输入输出规格（shape + dtype）、精度要求 |
 
+**阶段产出文件对应关系**：
+
+| 阶段 | 产出文件 | 存放位置 | 下游消费方式 |
+|------|---------|---------|------------|
+| Stage 1 | `SPEC.md` | 算子工作目录根 | Stage 2/3/4 读取规格信息 |
+| Stage 2 | `API_REPORT.md` | 算子工作目录根 | Stage 4 读取 API 映射和约束 |
+| Stage 3 | `{op}_golden.py` | 算子工作目录根 | Stage 5 test 文件 import golden 函数 |
+| Stage 4 | `DESIGN.md` | 算子工作目录根 | Stage 5 读取 tiling/loop 设计 |
+| Stage 5 | `{op}_impl.py` + `test_{op}.py` + `README.md` | 算子工作目录根 | Stage 6/7 读取 impl 和 test |
+| Stage 7 | 性能分析报告 | `output/` 子目录 | 交付物 |
+
 **关键决策**：
 - 信息完整 → 展示确认后直接生成
 - 信息不足 → 向用户提问补充（最多 2 轮确认）
