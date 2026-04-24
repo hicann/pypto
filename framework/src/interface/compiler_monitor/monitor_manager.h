@@ -90,7 +90,9 @@ public:
 private:
     void MaybeStartTotalClock();
     void PrintCompilationFinished();
-    void EndStageInternal(const std::string& name, int rootFuncIndex, const std::string& rootFuncName);
+    void EndStageInternal(
+        const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+        const std::chrono::steady_clock::time_point& startTime);
 
     mutable std::mutex mutex_;
     MonitorImpl* impl_{nullptr};

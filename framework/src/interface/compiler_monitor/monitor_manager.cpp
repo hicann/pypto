@@ -423,6 +423,7 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
     std::lock_guard<std::mutex> lock(mutex_);
     int actualRootFuncIndex = rootFuncIndex;
     std::string actualRootFuncName = rootFuncName;
+    auto stageStartTime = stage_start_;
 
     auto it = active_stages_.rend();
     if (rootFuncIndex < 0) {
@@ -432,6 +433,7 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
         if (it != active_stages_.rend()) {
             actualRootFuncIndex = it->rootFuncIndex;
             actualRootFuncName = it->rootFuncName;
+            stageStartTime = it->startTime;
         } else {
             actualRootFuncIndex = current_root_func_index_;
             actualRootFuncName = current_root_func_;
@@ -440,28 +442,30 @@ void MonitorManager::EndStage(const std::string& name, int rootFuncIndex, const 
         it = std::find_if(active_stages_.rbegin(), active_stages_.rend(), [&](const ActiveStageInfo& info) {
             return info.stageName == name && info.rootFuncIndex == rootFuncIndex;
         });
+        if (it != active_stages_.rend()) {
+            stageStartTime = it->startTime;
+        }
     }
 
     if (it != active_stages_.rend()) {
         active_stages_.erase(std::prev(it.base()));
     }
-    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName);
+    EndStageInternal(name, actualRootFuncIndex, actualRootFuncName, stageStartTime);
 }
 
-void MonitorManager::EndStageInternal(const std::string& name, int rootFuncIndex, const std::string& rootFuncName)
+void MonitorManager::EndStageInternal(
+    const std::string& name, int rootFuncIndex, const std::string& rootFuncName,
+    const std::chrono::steady_clock::time_point& startTime)
 {
     if (!initialized_ || !impl_ || !enable_) {
         return;
     }
     if (timeout_sec_.load() != 0) {
-        stage_timeout_flag_["Prepare"] = false;
-        stage_timeout_flag_["Pass"] = false;
-        stage_timeout_flag_["CodeGen"] = false;
-        stage_timeout_flag_[STAGE_FUNC_TO_BIN] = false;
+        stage_timeout_flag_[name] = false;
     }
     impl_->StopMonitoring();
     auto now = std::chrono::steady_clock::now();
-    double elapsed = std::chrono::duration<double>(now - stage_start_).count();
+    double elapsed = std::chrono::duration<double>(now - startTime).count();
     if (name != STAGE_FUNC_TO_BIN) {
         stage_elapsed_totals_[name] += elapsed;
     }

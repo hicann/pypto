@@ -433,8 +433,8 @@ void GetReadyOnHostTensorsSet(std::unordered_set<int>& readyOnHostTensorsSet)
                 break;
             }
         }
-        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, i < inputSize) << "Tensor " << tensorStr
-            << " not found in input list, please check [ready_on_host_tensors] config.";
+        ASSERT(DevCommonErr::PARAM_CHECK_FAILED, i < inputSize)
+            << "Tensor " << tensorStr << " not found in input list, please check [ready_on_host_tensors] config.";
     }
 }
 static bool NeedCrossDie(Function* func, bool isLoop = false)
@@ -453,7 +453,8 @@ static void BuildControlFlow(
     std::ostringstream& expressionOss, std::ostringstream& exprHeaderOss, int indent, const std::string& expName,
     std::vector<std::string>& exprSrcFiles, ValDependTensorMeta& valDependTensorMeta)
 {
-    bool supportParallelLoop = (config::GetRuntimeOption<uint16_t>(DEVICE_SCHED_PARALLELISM) > 1); // enable by the parallism option
+    bool supportParallelLoop =
+        (config::GetRuntimeOption<uint16_t>(DEVICE_SCHED_PARALLELISM) > 1); // enable by the parallism option
     auto funcType = func->GetFunctionType();
     if (funcType == FunctionType::DYNAMIC) {
         controlFlowOss << "#define __TILE_FWK_AICPU__ 1\n"
@@ -902,16 +903,28 @@ static void CompileControlFlow(
         return;
     }
 #ifdef BUILD_WITH_CANN
-        if (std::getenv("ASCEND_HOME_PATH") != nullptr) {
-            ASSERT(HostBackEndErr::GEN_DYNAMIC_OP_FAILED, TileFwkAiCpuCompile(funcName, aicpuDirPath))
-                << ": PyPto Control Flow compile failed";
-        }
+    if (std::getenv("ASCEND_HOME_PATH") != nullptr) {
+        ASSERT(HostBackEndErr::GEN_DYNAMIC_OP_FAILED, TileFwkAiCpuCompile(funcName, aicpuDirPath))
+            << ": PyPto Control Flow compile failed";
+    }
 #endif
+}
+
+int GetRootFuncNum(std::shared_ptr<DyndevFunctionAttribute> attr)
+{
+    bool enableVF = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 &&
+                    config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
+    int rootFuncNum = static_cast<int>(attr->funcGroup.devRootList.size());
+    if (enableVF) {
+        rootFuncNum *= 2; // codegen with main block and tail block
+    }
+    return rootFuncNum;
 }
 
 static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[maybe_unused]] const std::string& ccePath)
 {
-    ASSERT(HostBackEndErr::RUN_PASS_FAILED,
+    ASSERT(
+        HostBackEndErr::RUN_PASS_FAILED,
         (PassManager::Instance().RunPass(Program::GetInstance(), *function, "ExecuteGraph") == SUCCESS));
 
     std::shared_ptr<DyndevFunctionAttribute> attr = function->GetDyndevAttribute();
@@ -1006,7 +1019,7 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::map<uint64_t, Function*> leafDict;
     std::mutex leafDictMutex;
 
-    MonitorManager::Instance().SetRootFuncCount(static_cast<int>(attr->funcGroup.devRootList.size()));
+    MonitorManager::Instance().SetRootFuncCount(GetRootFuncNum(attr));
 
     std::deque<std::function<void(void)>> tasks;
     for (auto& devRoot : attr->funcGroup.devRootList) {
@@ -1048,8 +1061,8 @@ static void CompileDyndevFunction(Function* function, FunctionCache& cache, [[ma
     std::string kernelPath;
 #ifdef BUILD_WITH_CANN
     bool enableCompile = config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_NPU ||
-        ((config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) &&
-        config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM);
+                         ((config::GetSimConfig(KEY_ACCURACY_LEVEL, 2) == 2) &&
+                          config::GetRuntimeOption<int64_t>(CFG_RUN_MODE) == CFG_RUN_MODE_SIM);
     if (enableCompile && config::GetHostOption<int64_t>(COMPILE_STAGE) != CS_CODEGEN_INSTRUCTION) {
         int ret = CompileAICoreKernel(
             leafDict, encodeDevAscendFunctionParam, ccePath, function->GetFunctionHash().Data(), kernelPath);

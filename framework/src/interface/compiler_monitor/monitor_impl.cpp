@@ -197,8 +197,8 @@ void MonitorImpl::MonitorLoop()
                     warm_msg =
                         "[Compiler Monitor] | [** WARNING **] " + PadLabel("Function(parallel): ") +
                         PadRight(std::to_string(stageInfo.rootFuncIndex) + "/" + std::to_string(total_root_n), pw) +
-                        " | Stage [" + stage + "] elapsed [" + FormatElapsed(curr_stage_elapsed) +
-                        "] exceeded the current stage total time threshold [" +
+                        " | Stage CodeGen[" + stage + "], Func:[" + stageInfo.rootFuncName + "] elapsed [" +
+                        FormatElapsed(curr_stage_elapsed) + "] exceeded the current stage total time threshold [" +
                         FormatElapsed(static_cast<double>(stage_timeout_sec)) +
                         "], you can terminate the process by pressing Ctrl+C !!!";
                     (void)fprintf(stdout, "%s\n", warm_msg.c_str());
