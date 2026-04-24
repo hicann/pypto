@@ -23,7 +23,7 @@ logical_not(input: Tensor) -> Tensor
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor 支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_BOOL，DT_INT8，DT_UINT8。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor 支持的数据类型为：DT_FP32，DT_FP16，DT_BF16，DT_BOOL，DT_INT8，DT_UINT8。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 
 ## 返回值说明
 

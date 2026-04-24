@@ -22,7 +22,7 @@ pypto.sqrt(input, precision_type=pypto.SqrtAlgorithm.INTRINSIC) -> Tensor
 
 | 参数 | 类型 | 说明 |
 |:-----|:-----|:-----|
-| input | Tensor | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为DT_FP16、DT_BF16、DT_FP32。 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input | Tensor | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为DT_FP16、DT_BF16、DT_FP32。 <br> 不支持空Tensor；支持的维度：1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | precision_type | SqrtAlgorithm, 可选 | 平方根操作的精度模式。默认值为 `SqrtAlgorithm.INTRINSIC`。<br>**INTRINSIC**：直接使用芯片指令进行计算，速度更快。<br>**HIGH_PRECISION**：使用更高精度的计算方式，减少精度损失。 |
 
 ## 返回值说明

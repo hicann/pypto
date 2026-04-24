@@ -454,7 +454,7 @@ Tensor Gcd(const Tensor& self, const Tensor& other)
 {
     DECLARE_TRACER();
     CheckTensorsDataTypeConsistency(self.GetStorage(), other.GetStorage(), "GCD");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "GCD");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "GCD");
     std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
     RETURN_CALL(BinaryOperation<BinaryOpType::GCD>, *Program::GetInstance().GetCurrentFunction(), self, other);
@@ -463,7 +463,7 @@ Tensor Gcd(const Tensor& self, const Tensor& other)
 Tensor Gcd(const Tensor& self, const Element& other)
 {
     DECLARE_TRACER();
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "GCD");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "GCD");
     std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_UINT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "GCD");
     RETURN_CALL(

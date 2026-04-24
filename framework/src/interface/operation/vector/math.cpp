@@ -85,7 +85,7 @@ Tensor LogicalNot(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_UINT8, DT_INT8, DT_BOOL, DT_BF16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOGICALNOT");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "LOGICALNOT");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "LOGICALNOT");
     CheckTensorShapeSize(self.GetStorage(), "LOGICALNOT");
     RETURN_CALL(LogicalNotOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
@@ -188,7 +188,7 @@ Tensor Sign(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32, DT_INT8};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SIGN");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "SIGN");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SIGN");
     CheckTensorShapeSize(self.GetStorage(), "SIGN");
     RETURN_CALL(SignOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
@@ -198,7 +198,7 @@ Tensor Signbit(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SIGNBIT");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "SIGNBIT");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SIGNBIT");
     CheckTensorShapeSize(self.GetStorage(), "SIGNBIT");
     RETURN_CALL(SignbitOperation, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
 }
@@ -208,7 +208,7 @@ Tensor Neg(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "NEG");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "NEG");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "NEG");
     CheckTensorShapeSize(self.GetStorage(), "NEG");
 
     if (IsFloat(self.GetStorage()->Datatype())) {
@@ -337,7 +337,7 @@ Tensor Log1p(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_BF16, DT_FP16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "LOG1P");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "LOG1P");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "LOG1P");
     CheckTensorShapeSize(self.GetStorage(), "LOG1P");
 
     auto operandCast = Tensor(DataType::DT_FP32, self.GetShape());
@@ -1097,7 +1097,7 @@ static void VarParamVaildCheck(const Tensor& input, std::vector<int>& dim)
 {
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16};
     CheckTensorDataType(input.GetStorage(), supportedTypes, "VAR");
-    CheckTensorDimRange(input.GetStorage(), 2, 4, "VAR");
+    CheckTensorDimRange(input.GetStorage(), 1, 4, "VAR");
     CheckTensorShapeSize(input.GetStorage(), "VAR");
 
     Shape shape = input.GetShape();
@@ -1216,7 +1216,7 @@ Tensor Exp2(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "EXP2");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "EXP2");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "EXP2");
     CheckTensorShapeSize(self.GetStorage(), "EXP2");
 
     RETURN_CALL(Exp2, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
@@ -1229,17 +1229,25 @@ void TiledExp2(Function& function, const TileShape& tileShape, size_t cur, Input
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
-            << "Length of tile shape only support 2~4";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 1~4";
         std::vector<int64_t> tmpShape;
         std::vector<int64_t> tmpShape2;
-        tmpShape2.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+        if (srcTileShape.size() == 1) {
+            tmpShape2.assign(srcTileShape.end() - SHAPE_DIM1, srcTileShape.end());
+        } else {
+            tmpShape2.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+        }
         auto alignSize2 = BLOCK_SIZE / BytesOf(DT_FP32);
         tmpShape2[tmpShape2.size() - 1] = (tmpShape2[tmpShape2.size() - 1] + alignSize2 - 1) / alignSize2 * alignSize2;
         if (input.tensor.GetDataType() == DT_FP32) {
             tmpShape = {BLOCK_SIZE / sizeof(float)};
         } else {
-            tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            if (srcTileShape.size() == 1) {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM1, srcTileShape.end());
+            } else {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            }
             auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
             tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
         }
@@ -1291,7 +1299,7 @@ Tensor Round(const Tensor& self, const int& decimals)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ROUND");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "ROUND");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "ROUND");
     CheckTensorShapeSize(self.GetStorage(), "ROUND");
 
     RETURN_CALL(Round, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), decimals);
@@ -1306,13 +1314,17 @@ void TiledRound(
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
-            << "Length of tile shape only support 2~4";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 1~4";
         std::vector<int64_t> tmpShape;
         if (result->Datatype() == DT_FP32) {
             tmpShape = {BLOCK_SIZE / sizeof(float)};
         } else {
-            tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            if (srcTileShape.size() == 1) {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM1, srcTileShape.end());
+            } else {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            }
             auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
             tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
         }
@@ -1373,7 +1385,7 @@ Tensor Expm1(const Tensor& self)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_FP16, DT_BF16, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "EXPM1");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "EXPM1");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "EXPM1");
     CheckTensorShapeSize(self.GetStorage(), "EXPM1");
 
     RETURN_CALL(Expm1, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
@@ -1387,13 +1399,17 @@ void TiledExpm1(
         auto resultTile = result->View(function, input.tileInfo.shape, input.tileInfo.offset);
         std::vector<int64_t> srcTileShape(input.tileInfo.shape);
         auto tileShapeLen = srcTileShape.size();
-        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM2 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
-            << "Length of tile shape only support 2~4";
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, SHAPE_DIM1 <= tileShapeLen && tileShapeLen <= SHAPE_DIM4)
+            << "Length of tile shape only support 1~4";
         std::vector<int64_t> tmpShape;
         if (input.tensor.GetDataType() == DT_FP32) {
             tmpShape = {BLOCK_SIZE / sizeof(float)};
         } else {
-            tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            if (srcTileShape.size() == 1) {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM1, srcTileShape.end());
+            } else {
+                tmpShape.assign(srcTileShape.end() - SHAPE_DIM2, srcTileShape.end());
+            }
             auto alignSize = BLOCK_SIZE / BytesOf(DT_FP32);
             tmpShape[tmpShape.size() - 1] = (tmpShape[tmpShape.size() - 1] + alignSize - 1) / alignSize * alignSize;
         }

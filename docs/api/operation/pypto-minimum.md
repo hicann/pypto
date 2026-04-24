@@ -30,8 +30,8 @@ minimum(
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT_32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
-| other   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT_32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和 Element支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32 <br> 不支持空Tensor；Shape仅支持2-4维；Shape Size不大于2147483647（即INT32_MAX）。 <br> 类型和数据类型必须与源操作数一保持一致。 |
+| input   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT_32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和Element支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| other   | 输入      | 源操作数一。 <br> 支持的类型为int, float, Element以及Tensor类型。 <br> 当为int或者float类型时会自动转换为Element的类型DT_INT_32/DT_FP32。当需要使用其他数据类型时，可以通过Element构建。 <br> Tensor和 Element支持的数据类型为：DT_FP16，DT_BF16，DT_INT16，DT_INT32，DT_FP32 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 <br> 类型和数据类型必须与源操作数一保持一致。 |
 
 源操作数一与源操作数二之间至少一者为Tensor。
 

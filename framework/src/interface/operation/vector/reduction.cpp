@@ -346,7 +346,7 @@ Tensor Amax(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMAX");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "AMAX");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "AMAX");
     CheckTensorShapeSize(self.GetStorage(), "AMAX");
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     ValidateReductionAxis(self, axis);
@@ -370,7 +370,7 @@ Tensor ArgMax(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMAX");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "ARGMAX");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMAX");
     CheckTensorShapeSize(self.GetStorage(), "ARGMAX");
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     ValidateReductionAxis(self, axis);
@@ -392,7 +392,7 @@ Tensor ArgMin(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ARGMIN");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "ARGMIN");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "ARGMIN");
     CheckTensorShapeSize(self.GetStorage(), "ARGMIN");
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     ValidateReductionAxis(self, axis);
@@ -414,7 +414,7 @@ Tensor Amin(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT16, DT_INT32, DT_FP32};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "AMIN");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "AMIN");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "AMIN");
     CheckTensorShapeSize(self.GetStorage(), "AMIN");
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     ValidateReductionAxis(self, axis);
@@ -438,7 +438,7 @@ Tensor Sum(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_BF16, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "SUM");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "SUM");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SUM");
     CheckTensorShapeSize(self.GetStorage(), "SUM");
     axis = axis < 0 ? self.GetShape().size() + axis : axis;
     ValidateReductionAxis(self, axis);
@@ -462,7 +462,7 @@ Tensor Prod(const Tensor& self, int axis, bool keepDim)
     DECLARE_TRACER();
     std::unordered_set<DataType> supportedTypes = {DT_FP32, DT_INT32, DT_INT16};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "PROD");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "PROD");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "PROD");
     CheckTensorShapeSize(self.GetStorage(), "PROD");
 
     axis = axis < 0 ? self.GetShape().size() + axis : axis;

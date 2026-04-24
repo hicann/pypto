@@ -102,11 +102,11 @@ TILEOP void TLogicalNot(T0 dst, T1 src, T2 tmp)
     auto srcStride2 = srcLayout.template GetStrideDim<2, expectSize>();
     auto srcStride3 = srcLayout.template GetStrideDim<3, expectSize>();
 
-    constexpr auto dstTileH = Std::tuple_element<shapeSize0 - 2, typename T0::TileShape>::type::value;
-    constexpr auto dstTileW = Std::tuple_element<shapeSize0 - 1, typename T0::TileShape>::type::value;
+    constexpr auto dstTileH = TileOp::GetTensorTileShapeDim<T0, 3, 5>();
+    constexpr auto dstTileW = TileOp::GetTensorTileShapeDim<T0, 4, 5>();
 
-    constexpr auto srcTileH = Std::tuple_element<shapeSize1 - 2, typename T1::TileShape>::type::value;
-    constexpr auto srcTileW = Std::tuple_element<shapeSize1 - 1, typename T1::TileShape>::type::value;
+    constexpr auto srcTileH = TileOp::GetTensorTileShapeDim<T1, 3, 5>();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<T1, 4, 5>();
 
     constexpr uint32_t ALIGN_SIZE = 32;
     constexpr int64_t COUNT_MAX = 2048;

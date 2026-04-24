@@ -207,7 +207,7 @@ Tensor Expand(const Tensor& self, const std::vector<int64_t>& dstShape, std::vec
     std::unordered_set<DataType> supportedTypes = {DT_BF16,  DT_FP32,  DT_FP16,   DT_INT8,   DT_INT16,
                                                    DT_INT32, DT_UINT8, DT_UINT16, DT_UINT32, DT_BOOL};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "EXPAND");
-    CheckTensorDimRange(self.GetStorage(), 2, 4, "EXPAND");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "EXPAND");
     CheckTensorShapeSize(self.GetStorage(), "EXPAND");
     CheckDstShapeSize(dstShape, "EXPAND");
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, self.GetShape().size() == dstShape.size())
