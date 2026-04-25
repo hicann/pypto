@@ -434,6 +434,46 @@ using select_srcTensor = std::conditional_t<
         pto::TileType::Mat, typename U::Type, elements * sizeof(typename U::Type), pto::Layout::NC1HWC0,
         pto::ConvTileShape<-1, -1, -1, -1, -1>>>;
 
+template <bool isConv3D, typename srcTensorType>
+INLINE void SetConvTileParams(
+    srcTensorType& l1,
+    const uint8_t* padValues,
+    const int64_t& filterH, const int64_t& filterW,
+    const int64_t& dilationH, const int64_t& dilationW,
+    const int64_t& strideH, const int64_t& strideW,
+    const int64_t& padValue,
+    const int64_t& mL0, const int64_t& kL0,
+    const int64_t& shape1, const int64_t& shape2,
+    const int64_t& shape3, const int64_t& shape4,
+    const int64_t& c0Size)
+{
+    l1.SetPadListArray(padValues);
+    l1.SetFilterH(filterH);
+    l1.SetFilterW(filterW);
+    l1.SetDilationH(dilationH);
+    l1.SetDilationW(dilationW);
+    l1.SetStrideH(strideH);
+    l1.SetStrideW(strideW);
+    l1.SetPadValue(padValue);
+
+    l1.SetRepeatTime(NUM1);
+    l1.SetRepeatMode(NUM1);
+    l1.SetDstStride(mL0 / BLOCK_CUBE_M_N);
+    l1.SetDstMposition(NUM0);
+
+    if constexpr (isConv3D) {
+        l1.SetFmapH(static_cast<uint16_t>(shape3));
+        l1.SetFmapW(static_cast<uint16_t>(shape4));
+        l1.SetChannelSize(shape2 * c0Size);
+        l1.SetRepeatStride(kL0 / c0Size);
+    } else {
+        l1.SetFmapH(static_cast<uint16_t>(shape2));
+        l1.SetFmapW(static_cast<uint16_t>(shape3));
+        l1.SetChannelSize(shape1 * shape4); // c1 * c0
+        l1.SetRepeatStride(kL0 / shape4);
+    }
+}
+
 template <bool isConv3D, typename T, typename U>
 TILEOP void TLoad3D(
     T& dst, U& src, const int64_t& mPos, const int64_t& kPos, const int64_t& padLeft, const int64_t& padRight,
@@ -468,35 +508,12 @@ TILEOP void TLoad3D(
     uint8_t values[4] = {
         static_cast<uint8_t>(padLeft), static_cast<uint8_t>(padRight), static_cast<uint8_t>(padTop),
         static_cast<uint8_t>(padBottom)};
-    l1.SetPadListArray(values);
-    l1.SetFilterH(filterH);
-    l1.SetFilterW(filterW);
-    l1.SetDilationH(dilationH);
-    l1.SetDilationW(dilationW);
-    l1.SetStrideH(strideH);
-    l1.SetStrideW(strideW);
-    l1.SetPadValue(padValue);
-
-    l1.SetRepeatTime(NUM1);
-    l1.SetRepeatMode(NUM1);
-    l1.SetDstStride(mL0 / BLOCK_CUBE_M_N);
-    l1.SetDstMposition(NUM0);
-
-    if constexpr (isConv3D) {
-        l1.SetFmapH(static_cast<uint16_t>(shape3));
-        l1.SetFmapW(static_cast<uint16_t>(shape4));
-        l1.SetChannelSize(shape2 * c0Size);
-        l1.SetRepeatStride(kL0 / c0Size);
-    } else {
-        l1.SetFmapH(static_cast<uint16_t>(shape2));
-        l1.SetFmapW(static_cast<uint16_t>(shape3));
-        l1.SetChannelSize(shape1 * shape4); // c1 * c0
-        l1.SetRepeatStride(kL0 / shape4);
-    }
+    SetConvTileParams<isConv3D>(
+        l1, values, filterH, filterW, dilationH, dilationW, strideH, strideW, padValue, mL0, kL0,
+        shape1, shape2, shape3, shape4, c0Size);
 
     pto::TASSIGN(l1, static_cast<uint64_t>(src.GetAddr()));
     pto::TASSIGN(l0, static_cast<uint64_t>(dst.GetAddr()));
-    pto::TSETFMATRIX(l1);
     pto::TIMG2COL<dstTensor, srcTensor, pto::SetFmatrixMode::FMATRIX_A_AUTO>(l0, l1, mPos, kPos);
 }
 
