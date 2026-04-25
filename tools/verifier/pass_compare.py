@@ -23,9 +23,8 @@ import torch
 import ml_dtypes
 import pandas as pd
 import numpy as np
-from tensor_diff import TensorComparator, IsCloseConfig
+from tensor_diff import TensorComparator, IsCloseConfig, compare_tensors_result_dict, MAX_PRECISION
 from run_float_diff import DataDiffAnalyzer
-MAX_PRECISION = sys.float_info.dig + 1
 
 
 @dataclass
@@ -164,13 +163,9 @@ class PassComparator:
         return False
 
     @staticmethod
-    def add_comparison_record(result_is_close: str,
-                            result_reason: str,
-                            a: Dict[str, Any],
-                            rtol: float,
-                            atol: float,
-                            b: Optional[Dict[str, Any]] = None,
-                            diff_conf: Optional[Tuple] = None):
+    def add_comparison_record(a: Dict[str, Any],
+                              b: Optional[Dict[str, Any]] = None,
+                              compare_result: Optional[Dict[str, Any]] = None):
         """Add the comparison record to the internal list"""
 
         record = {}
@@ -184,62 +179,44 @@ class PassComparator:
         record[":datatype"] = a[":datatype"]
         record["OP_ATTR_SYM_OFFSET"] = a["OP_ATTR_SYM_OFFSET"]
         record["OP_IO_FLAG"] = a["OP_IO_FLAG"]
-        record["A>PHASE_NAME"] = b["PHASE_NAME"] if b else None
         record["B>PHASE_NAME"] = a["PHASE_NAME"]
-        record["A>TIMESTAMP"] = b["TIMESTAMP"] if b else None
         record["B>TIMESTAMP"] = a["TIMESTAMP"]
-        record["A>FILENAME"] = b["FILENAME"] if b else None
         record["B>FILENAME"] = a["FILENAME"]
-        record["A>FUNC:hash"] = b["FUNC:hash"] if b else None
-        record["A>FUNC:funcmagic"] = b["FUNC:funcmagic"] if b else None
         record["B>FUNC:hash"] = a["FUNC:hash"]
         record["B>FUNC:funcmagic"] = a["FUNC:funcmagic"]
-        record["A>ROOT_CALL:opmagic"] = b["ROOT_CALL:opmagic"] if b else None
         record["B>ROOT_CALL:opmagic"] = a["ROOT_CALL:opmagic"]
-        record["A>ROOT_CALL:rawmagic"] = b["ROOT_CALL:rawmagic"] if b else None
         record["B>ROOT_CALL:rawmagic"] = a["ROOT_CALL:rawmagic"]
-        record["A>:opmagic"] = b[":opmagic"] if b else None
         record["B>:opmagic"] = a[":opmagic"]
-        record["A>:opcode"] = b[":opcode"] if b else None
         record["B>:opcode"] = a[":opcode"]
-        record["A>:rawmagic"] = b[":rawmagic"] if b else None
-        record["A>:rawshape"] = b[":rawshape"] if b else None
-        record["A>:format"] = b[":format"] if b else None
         record["B>:rawmagic"] = a[":rawmagic"]
         record["B>:rawshape"] = a[":rawshape"]
         record["B>:format"] = a[":format"]
-        record["A>:shape"] = b[":shape"] if b else None
         record["B>:shape"] = a[":shape"]
-        record["A>EVAL:dynvalidshape"] = b["EVAL:dynvalidshape"] if b else None
         record["B>EVAL:dynvalidshape"] = a["EVAL:dynvalidshape"]
-        record["AB>RESULT"] = result_is_close
-        record["result_reason"] = result_reason
-        record["AB>rtol/atol"] = f"{rtol:.{MAX_PRECISION}g}/{atol:.{MAX_PRECISION}g}"
-        if diff_conf is not None:
-            brief_conf = diff_conf[0]
-            ab_conf = diff_conf[1]
-            a_conf = diff_conf[2]
-            b_conf = diff_conf[3]
-            record["AB>fail_cnt/warn_cnt/tol_cnt"] = f"{brief_conf[4]}/{brief_conf[3]}/{brief_conf[2]}"
-            record["AB>total_cnt/zero_cnt/infnan_cnt"] = f"{brief_conf[0]}/{brief_conf[1]}/{brief_conf[5]}"
-            record["AB>mae"] = f"{ab_conf[0]:.{MAX_PRECISION}g}"
-            record["AB>mae_top8"] = f"{ab_conf[1]:.{MAX_PRECISION}g}"
-            record["AB>mae_top1permil"] = f"{ab_conf[2]:.{MAX_PRECISION}g}"
-            record["AB>mre"] = f"{ab_conf[3]:.{MAX_PRECISION}g}"
-            record["AB>mre_top8"] = f"{ab_conf[4]:.{MAX_PRECISION}g}"
-            record["AB>mre_top1permil"] = f"{ab_conf[5]:.{MAX_PRECISION}g}"
-            record["A>max"] = f"{b_conf[0]:.{MAX_PRECISION}g}"
-            record["A>min"] = f"{b_conf[1]:.{MAX_PRECISION}g}"
-            record["A>avg"] = f"{b_conf[2]:.{MAX_PRECISION}g}"
-            record["A>aavg"] = f"{b_conf[3]:.{MAX_PRECISION}g}"
-            record["A>zero"] = f"{b_conf[4]:.{MAX_PRECISION}g}"
-            record["A>infnan"] = f"{b_conf[5]:.{MAX_PRECISION}g}"
-            record["B>max"] = f"{a_conf[0]:.{MAX_PRECISION}g}"
-            record["B>min"] = f"{a_conf[1]:.{MAX_PRECISION}g}"
-            record["B>avg"] = f"{a_conf[2]:.{MAX_PRECISION}g}"
-            record["B>aavg"] = f"{a_conf[3]:.{MAX_PRECISION}g}"
-            record["B>zero"] = f"{a_conf[4]:.{MAX_PRECISION}g}"
-            record["B>infnan"] = f"{a_conf[5]:.{MAX_PRECISION}g}"
+        
+        if b:
+            record["A>PHASE_NAME"] = b["PHASE_NAME"]
+            record["A>TIMESTAMP"] = b["TIMESTAMP"]
+            record["A>FILENAME"] = b["FILENAME"]
+            record["A>FUNC:hash"] = b["FUNC:hash"]
+            record["A>FUNC:funcmagic"] = b["FUNC:funcmagic"]
+            record["A>ROOT_CALL:opmagic"] = b["ROOT_CALL:opmagic"]
+            record["A>ROOT_CALL:rawmagic"] = b["ROOT_CALL:rawmagic"]
+            record["A>:opmagic"] = b[":opmagic"]
+            record["A>:opcode"] = b[":opcode"]
+            record["A>:rawmagic"] = b[":rawmagic"]
+            record["A>:rawshape"] = b[":rawshape"]
+            record["A>:format"] = b[":format"]
+            record["A>:shape"] = b[":shape"]
+            record["A>EVAL:dynvalidshape"] = b["EVAL:dynvalidshape"]
+        
+        if compare_result is None:
+            record["AB>RESULT"] = "Skip"
+            record["result_reason"] = a.get("skip_reason", "")
+            record["AB>rtol/atol"] = ""
+        else:
+            record.update(compare_result)
+        
         return record
 
     @staticmethod
@@ -303,14 +280,8 @@ class PassComparator:
                     b_records = df_b[df_b[key] == raw_magic].to_dict(orient='records')
 
                 if len(b_records) == 0:
-                    result_reason = f"{key} : {raw_magic}, not exit in golden pass"
-                    record = PassComparator.add_comparison_record(
-                        result_is_close="Skip",
-                        result_reason=result_reason,
-                        a=ai,
-                        rtol=rtol,
-                        atol=atol
-                    )
+                    ai["skip_reason"] = f"{key} : {raw_magic}, not exit in golden pass"
+                    record = PassComparator.add_comparison_record(a=ai, compare_result=None)
                     comparison_records.append(record)
                     continue
 
@@ -324,27 +295,14 @@ class PassComparator:
                         ai, bi, verify_path_pass1, verify_path_pass2, atol, rtol, topk,
                         csv_data_dict, dtype_dict, key, result_file
                     )
-                    record = PassComparator.add_comparison_record(
-                        result_is_close=compare_result["result_is_close"],
-                        result_reason=compare_result["result_reason"],
-                        a=ai,
-                        rtol=rtol,
-                        atol=atol,
-                        b=bi,
-                        diff_conf=compare_result["diff_conf"]
-                    )
+                    record = PassComparator.add_comparison_record(a=ai, b=bi, compare_result=compare_result)
                     comparison_records.append(record)
                     is_match = True
                     break
 
                 if not is_match:
-                    record = PassComparator.add_comparison_record(
-                        result_is_close="Skip",
-                        result_reason="not match",
-                        a=ai,
-                        rtol=rtol,
-                        atol=atol
-                    )
+                    ai["skip_reason"] = "not match"
+                    record = PassComparator.add_comparison_record(a=ai, compare_result=None)
                     comparison_records.append(record)
 
         return comparison_records
@@ -397,27 +355,29 @@ class PassComparator:
         tensor_a = torch.from_numpy(data_a.astype(np.float64)).to(torch.float64)
         tensor_b = torch.from_numpy(data_b.astype(np.float64)).to(torch.float64)
 
-        comparator = TensorComparator()
         config = IsCloseConfig(
-            rtol=rtol,
-            atol=atol,
-            calc_dtype=torch.float64, 
-            is_detail=True,
-            shape=a_shape
+            rtol=rtol, atol=atol,
+            is_detail=True, shape=a_shape,
+            calc_dtype=torch.float64
         )
-        result_is_close, result_reason_str, result_info = comparator.check_isclose(
-           tensor_a, tensor_b, config
-        )
-        if not result_is_close:
+        result_dict = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
+        
+        if not result_dict["AB>RESULT"]:
+            comparator = TensorComparator()
+            config = IsCloseConfig(
+                rtol=rtol,
+                atol=atol,
+                calc_dtype=torch.float64,
+                is_detail=True,
+                shape=a_shape
+            )
+            _, result_reason_str, result_info = comparator.check_isclose(tensor_a, tensor_b, config)
             csv_path = os.path.join(verify_path_pass1,
                                     result_file[:-4] + ".DETAIL",
                                     a["FILENAME"][:-5] + ".csv")
-            comparator.print_isclose_info(result_is_close, result_reason_str, result_info, csv_path, topk)
-        return {
-            "result_is_close": result_is_close,
-            "result_reason": result_reason_str,
-            "diff_conf": result_info[6] if len(result_info) > 6 else None
-        }
+            comparator.print_isclose_info(False, result_reason_str, result_info, csv_path, topk)
+        
+        return result_dict
 
     @staticmethod
     def _get_data_slice_static(a: Dict[str, Any], b: Dict[str, Any],

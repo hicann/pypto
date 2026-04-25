@@ -13,6 +13,7 @@
 import os
 import json
 import copy
+import time
 import struct
 import argparse
 import logging
@@ -21,6 +22,8 @@ from itertools import groupby
 import ml_dtypes
 import numpy as np
 import pandas as pd
+import torch
+from tensor_diff import compare_tensors_result_dict, IsCloseConfig
 
 
 # ===================== 核心配置（需和C/C++端一致）=====================
@@ -49,26 +52,51 @@ logging.basicConfig(
 def _get_data_type(data_type: int):
     """数据类型数值转可读字符串"""
     _data_type_full_mapping = {
-        0: ("DT_INT4", ml_dtypes.int4),
-        1: ("DT_INT8", np.int8),
-        2: ("DT_INT16", np.int16),
-        3: ("DT_INT32", np.int32),
-        4: ("DT_INT64", np.int64),
-        5: ("DT_FP8", ml_dtypes.float8_e4m3fn),
-        6: ("DT_FP16", np.float16),
-        7: ("DT_FP32", np.float32),
-        8: ("DT_BF16", ml_dtypes.bfloat16),
-        9: ("DT_HF4", None),                    # 暂不支持解析
-        10: ("DT_HF8", None),                   # 暂不支持解析
-        11: ("DT_UINT8", np.uint8),
-        12: ("DT_UINT16", np.uint16),
-        13: ("DT_UINT32", np.uint32),
-        14: ("DT_UINT64", np.uint64),
-        15: ("DT_BOOL", np.bool_),
-        16: ("DT_DOUBLE", np.float64),
-        17: ("DT_BOTTOM", None)
+        0: ("INT4", ml_dtypes.int4),
+        1: ("INT8", np.int8),
+        2: ("INT16", np.int16),
+        3: ("INT32", np.int32),
+        4: ("INT64", np.int64),
+        5: ("FP8", ml_dtypes.float8_e4m3fn),
+        6: ("FP16", np.float16),
+        7: ("FP32", np.float32),
+        8: ("BF16", ml_dtypes.bfloat16),
+        9: ("HF4", None),                    # 暂不支持解析
+        10: ("HF8", None),                   # 暂不支持解析
+        11: ("UINT8", np.uint8),
+        12: ("UINT16", np.uint16),
+        13: ("UINT32", np.uint32),
+        14: ("UINT64", np.uint64),
+        15: ("BOOL", np.bool_),
+        16: ("DOUBLE", np.float64),
+        17: ("BOTTOM", None)
     }
     return _data_type_full_mapping.get(data_type, f"UNKNOWN({data_type})")
+
+
+def _get_compare_config(dtype):
+    """
+    根据数据类型返回合适的对比配置
+    
+    Args:
+        dtype: numpy dtype 对象，可能为 None
+    
+    Returns:
+        IsCloseConfig: 对比配置对象，或 None（表示不支持的类型）
+    """
+    if dtype is None:
+        return None
+    
+    # 整型数据：精确匹配
+    if np.issubdtype(dtype, np.integer):
+        return IsCloseConfig(rtol=0, atol=0, calc_dtype=torch.float64, is_detail=True)
+    
+    # FP32/FP64：标准容差
+    if dtype in [np.float32, np.float64]:
+        return IsCloseConfig(rtol=1e-3, atol=1e-3, calc_dtype=torch.float64, is_detail=True)
+    
+    # FP16/BF16/FP8 等低精度浮点：放宽容差
+    return IsCloseConfig(rtol=1e-2, atol=1e-2, calc_dtype=torch.float64, is_detail=True)
 
 
 class VerifyRes:
@@ -81,32 +109,48 @@ class VerifyRes:
     def _compare_codegen_tensors(tensor_infos, tensor_infos_new):
 
         for i, tensor_info in enumerate(tensor_infos_new):
-            dump_tshape = tensor_info.get("shape")
+            dump_tshape = tensor_info.get("B>validshape")
             verify_tensor_info = tensor_info["verify_dup_tensor"]
             verify_tshape = tensor_info["valid_shape"]
-            tensor_infos[i]["verify_tensor_file"] = tensor_info["verify_dup_tensor"]
+            tensor_infos[i]["A>PHASE_NAME"] = tensor_info["PHASE_NAME"] 
+            tensor_infos[i]["A>validshape"] = verify_tshape
+            tensor_infos[i]["A>datatype"] = tensor_info["A>datatype"]
+            tensor_infos[i]["A>FILENAME"] = tensor_info["verify_dup_tensor"]
 
             if os.path.exists(verify_tensor_info) and len(verify_tshape) == len(dump_tshape):
-                dtype = _get_data_type(tensor_info["dataType"])[1]
-
+                dtype_result = _get_data_type(tensor_info["datatype"])
+                dtype = dtype_result[1]
+                
+                # 不支持的类型，跳过对比
+                if dtype is None:
+                    tensor_infos[i]["AB>RESULT"] = "NO_CMP"
+                    tensor_infos[i]["result_reason"] = f"unsupported dtype: {dtype_result[0]}"
+                    continue
+                
                 verify_tensor_data = np.fromfile(verify_tensor_info, dtype)
                 verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
-
-                data = np.fromfile(tensor_info["bin_file"], dtype)
+                
+                data = np.fromfile(tensor_info["B>FILENAME"], dtype)
                 data = data.reshape(dump_tshape)
-
+                
                 slices = []
                 for dim in range(data.ndim):
                     stop = min(verify_tshape[dim], dump_tshape[dim])
                     slices.append(slice(0, stop))
+                
+                sliced_data = data[tuple(slices)]
+                sliced_verify = verify_tensor_data[tuple(slices)]
 
-                tensor_infos[i]["cmp_res"] = np.allclose(
-                    data[tuple(slices)],
-                    verify_tensor_data[tuple(slices)],
-                    1e-3, 1e-3
-                )
+                config = _get_compare_config(dtype)
+                tensor_a = torch.from_numpy(sliced_data.astype(np.float64)).to(torch.float64)
+                tensor_b = torch.from_numpy(sliced_verify.astype(np.float64)).to(torch.float64)
+                cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
+                for key, value in cmp_result.items():
+                    tensor_infos[i][key] = value
+                
             else:
-                tensor_infos[i]["cmp_res"] = "NO_CMP"
+                tensor_infos[i]["AB>RESULT"] = "NO_CMP"
+                tensor_infos[i]["result_reason"] = "verify file not exist or shape mismatch"
 
     def read_verify_result(self, verify_path):
         self.verify_path = verify_path
@@ -130,14 +174,15 @@ class VerifyRes:
 
 
     def get_verify_res_single(self, tensor_info, op_info_list):
-        raw_magic = tensor_info.get("rawMagic")
-        ioflag = tensor_info.get("ioflag")
-        callop_magic = tensor_info.get("callopMagic")
-        tensor_info_offset_str = '_'.join(str(item) for item in tensor_info.get("offset"))
+        raw_magic = tensor_info.get("ROOT_CALL:rawmagic")
+        ioflag = tensor_info.get("IO_FLAG")
+        callop_magic = tensor_info.get("ROOT_CALL:opmagic")
+        tensor_info_offset_str = '_'.join(str(item) for item in tensor_info.get("B>offset"))
 
         verify_dup_tensor = ""
         valid_shape = []
         loop_info = ""
+        dtype = ""
         op_info_list.sort(key=lambda x: x.get("NO."))      # 按序号排序,序号也是执行顺序
 
         for op_info in op_info_list:
@@ -153,6 +198,7 @@ class VerifyRes:
                     verify_dup_tensor = op_info.get("FILENAME")
                     valid_shape = json.loads(op_info.get(":validshape"))
                     loop_info = op_info.get("LOOP_INFO")
+                    dtype = op_info.get(":datatype")
                     break
             elif "output" in ioflag and op_info.get(":opcode") in ["COPY_OUT"]:
                 verify_op_offset = json.loads(op_info.get("OP_ATTR_SYM_OFFSET"))
@@ -161,12 +207,16 @@ class VerifyRes:
                     verify_dup_tensor = op_info.get("INPUT_FILENAMES")   # COPY_OUT的op只会有一个输入
                     valid_shape = json.loads(op_info.get(":inputValidShape"))
                     loop_info = op_info.get("LOOP_INFO")
+                    dtype = op_info.get(":datatype")
                     break
 
         if verify_dup_tensor:
             verify_dup_tensor = os.path.join(self.verify_path, op_info.get("PHASE_NAME"), verify_dup_tensor)
         tensor_info["verify_dup_tensor"] = verify_dup_tensor
-        tensor_info["valid_shape"], tensor_info["loop_info"] = valid_shape, loop_info
+        tensor_info["valid_shape"] = valid_shape
+        tensor_info["loop_info"] = loop_info
+        tensor_info["PHASE_NAME"] = op_info.get("PHASE_NAME")
+        tensor_info["A>datatype"] = dtype
 
     def process_single_task(self, tensor_infos, op_info_list_callop):
         tensor_infos_new = copy.deepcopy(tensor_infos)
@@ -209,7 +259,7 @@ class VerifyRes:
                 res_tensor_infos.extend(tensor_infos)
             return res_tensor_infos
 
-        callop_magic = callop_tensor_infos[0][0].get("callopMagic")   # callop
+        callop_magic = callop_tensor_infos[0][0].get("ROOT_CALL:opmagic")   # callop
         op_info_list_callop = self.verify_codegen_op_info_list.copy(deep=True)
         op_info_list_callop = op_info_list_callop[op_info_list_callop["ROOT_CALL:opmagic"] == callop_magic]
         for tensor_infos in callop_tensor_infos:
@@ -218,30 +268,34 @@ class VerifyRes:
         return res_tensor_infos
 
     def get_verify_tensor_graph_res(self, tensor_info):
-        raw_magic = tensor_info.get("rawMagic")
+        raw_magic = tensor_info.get("ROOT_CALL:rawmagic")
 
         verify_dup_tensor = ""
         valid_shape = []
+        phase_name = ""
+        dtype = ""
 
         # verify_tensorgraph_op_info_list
         if self.verify_tensorgraph_op_info_list is None or self.verify_tensorgraph_op_info_list.empty:
-            return verify_dup_tensor, valid_shape
+            return verify_dup_tensor, valid_shape, phase_name, dtype
 
         # 按rawTensorMagic过滤
         filtered_df = self.verify_tensorgraph_op_info_list[
             self.verify_tensorgraph_op_info_list[":rawmagic"] == raw_magic
         ]
         if filtered_df.empty:
-            return verify_dup_tensor, valid_shape
+            return verify_dup_tensor, valid_shape, phase_name, dtype
 
         sorted_df = filtered_df.sort_values(by="NO.", ascending=True)
         last_op_info = sorted_df.iloc[-1]
         verify_dup_tensor = last_op_info.get("FILENAME")
         valid_shape = json.loads(last_op_info.get(":validshape"))
+        phase_name = last_op_info.get("PHASE_NAME")
+        dtype = last_op_info.get(":datatype")
         if verify_dup_tensor:
             verify_dup_tensor = os.path.join(self.verify_path, last_op_info.get("PHASE_NAME"), verify_dup_tensor)
 
-        return verify_dup_tensor, valid_shape
+        return verify_dup_tensor, valid_shape, phase_name, dtype
 
 _verify_res = VerifyRes()
 
@@ -253,23 +307,23 @@ class CompactDumpTensorInfoParser:
         self.struct_compact_size = self._calc_compact_size()
         # 定义字段解析顺序和类型（严格匹配C/C++结构体）
         self.field_specs = [
-            ("headSize", "uint32_t"),
-            ("funcId", "uint32_t"),
-            ("taskId", "uint32_t"),
-            ("callopMagic", "uint32_t"),
+            ("B>headSize", "uint32_t"),
+            ("B>funcId", "uint32_t"),
+            ("B>taskId", "uint32_t"),
+            ("ROOT_CALL:opmagic", "uint32_t"),
             ("blockIdx", "int32_t"),
-            ("dataType", "int32_t"),
-            ("rawMagic", "int32_t"),
+            ("datatype", "int32_t"),
+            ("ROOT_CALL:rawmagic", "int32_t"),
             ("dims", "int32_t"),
-            ("execStart", "int64_t"),
-            ("execEnd", "int64_t"),
-            ("rootHash", "uint64_t"),
-            ("funcHash", "uint64_t"),
-            ("timeStamp", "uint64_t"),
-            ("shape", "uint64_t", DEV_SHAPE_DIM_MAX),  # 数组：类型 + 长度
-            ("offset", "uint64_t", DEV_SHAPE_DIM_MAX),
-            ("rawShape", "uint64_t", DEV_SHAPE_DIM_MAX),
-            ("tensorAddr", "uint64_t")
+            ("B>execStart", "int64_t"),
+            ("B>execEnd", "int64_t"),
+            ("ROOT_FUNC:hash", "uint64_t"),
+            ("FUNC:hash", "uint64_t"),
+            ("B>TIMESTAMP", "uint64_t"),
+            ("B>validshape", "uint64_t", DEV_SHAPE_DIM_MAX),  # 数组：类型 + 长度
+            ("B>offset", "uint64_t", DEV_SHAPE_DIM_MAX),
+            ("B>rawShape", "uint64_t", DEV_SHAPE_DIM_MAX),
+            ("B>tensorAddr", "uint64_t")
         ]
         self.raw_tensor_info = {}
         self.task_tensor_info = {}
@@ -322,27 +376,46 @@ class CompactDumpTensorInfoParser:
 
     @staticmethod
     def _verify_merged_tensor(merge_tensor_info, raw_data):
-        # 获取验证张量信息
-        verify_tensor_info, verify_tshape = _verify_res.get_verify_tensor_graph_res(merge_tensor_info)
-        dump_tshape = merge_tensor_info.get("rawShape")
+        verify_tensor_info, verify_tshape, phase_name, dtype =  \
+            _verify_res.get_verify_tensor_graph_res(merge_tensor_info)
+        dump_tshape = merge_tensor_info.get("B>rawShape")
 
-        # 验证张量存在且形状完全匹配时才进行比较
+        merge_tensor_info["A>validshape"] = verify_tshape
+        merge_tensor_info["A>FILENAME"] = verify_tensor_info
+        merge_tensor_info["A>PHASE_NAME"] = phase_name
+        merge_tensor_info["A>datatype"] = dtype
+
         if os.path.exists(verify_tensor_info) and len(verify_tshape) == len(dump_tshape) and \
                 all(vdim == ddim for vdim, ddim in zip(verify_tshape, dump_tshape)):
-
-            merge_tensor_info["verify_tensor_file"] = verify_tensor_info
-            dtype = _get_data_type(merge_tensor_info["dataType"])[1]
-
-            # 读取验证张量并进行比较
+            
+            dtype_result = _get_data_type(merge_tensor_info["datatype"])
+            dtype = dtype_result[1]
+            
+            # 不支持的类型，跳过对比
+            if dtype is None:
+                merge_tensor_info["AB>RESULT"] = "NO_CMP"
+                merge_tensor_info["result_reason"] = f"unsupported dtype: {dtype_result[0]}"
+                return merge_tensor_info
+            
             verify_tensor_data = np.fromfile(verify_tensor_info, dtype)
             verify_tensor_data = verify_tensor_data.reshape(verify_tshape)
-            merge_tensor_info["cmp_res"] = np.allclose(raw_data, verify_tensor_data, 1e-3, 1e-3)
+
+            config = _get_compare_config(dtype)
+            tensor_a = torch.from_numpy(raw_data.astype(np.float64)).to(torch.float64)
+            tensor_b = torch.from_numpy(verify_tensor_data.astype(np.float64)).to(torch.float64)
+            cmp_result = compare_tensors_result_dict(tensor_a, tensor_b, config=config)
+            for key, value in cmp_result.items():
+                merge_tensor_info[key] = value
+            
+        else:
+            merge_tensor_info["AB>RESULT"] = "NO_CMP"
+            merge_tensor_info["result_reason"] = "verify file not exist or shape mismatch"
 
         return merge_tensor_info
 
     def parse_single(self, bin_data: bytes, offset: int = 0) -> dict:
         """解析单个紧凑存储的DumpTensorInfo结构体"""
-        result = {}
+        result = {"B>PHASE_NAME": "task_dump"}
         current_offset = offset
 
         # 逐个解析字段（严格按顺序）
@@ -359,15 +432,15 @@ class CompactDumpTensorInfoParser:
             result[name] = value
             current_offset += bytes_used
 
-
         dims = result.get("dims")
+        del result["dims"]
         if dims > 0 and dims < DEV_SHAPE_DIM_MAX:
-            result["shape"] = result["shape"][:dims]
-            result["offset"] = result["offset"][:dims]
-            result["rawShape"] = result["rawShape"][:dims]
+            result["B>validshape"] = result["B>validshape"][:dims]
+            result["B>offset"] = result["B>offset"][:dims]
+            result["B>rawShape"] = result["B>rawShape"][:dims]
 
         # 衍生字段（可选）
-        result["dataTypeStr"] = _get_data_type(result.get("dataType", 17))[0]
+        result["B>datatype"] = _get_data_type(result.get("datatype", 17))[0]
 
         return result
 
@@ -380,22 +453,22 @@ class CompactDumpTensorInfoParser:
             bin_data = f.read()
 
         tensor_info = self.parse_single(bin_data, 0)
-        dtype = _get_data_type(tensor_info["dataType"])[1]
-        data = np.frombuffer(bin_data, dtype, offset=tensor_info["headSize"])
+        dtype = _get_data_type(tensor_info["datatype"])[1]
+        data = np.frombuffer(bin_data, dtype, offset=tensor_info["B>headSize"])
         bin_file = f"{file_path[:-6]}.data"
         data.tofile(bin_file)
 
-        tensor_info["ioflag"] = bin_file.split("_")[-1][:-5]
-        tensor_info["seqNo"] = int(os.path.basename(bin_file).split("_")[1])
+        tensor_info["IO_FLAG"] = bin_file.split("_")[-1][:-5]
+        tensor_info["B>seqNo"] = int(os.path.basename(bin_file).split("_")[1])
 
-        tensor_info["bin_file"] = bin_file
+        tensor_info["B>FILENAME"] = bin_file
 
-        if "output" in tensor_info["ioflag"]:
-            if tensor_info["rawMagic"] not in self.raw_tensor_info:
-                self.raw_tensor_info[tensor_info["rawMagic"]] = []
-            self.raw_tensor_info[tensor_info["rawMagic"]].append(tensor_info)
+        if "output" in tensor_info["IO_FLAG"]:
+            if tensor_info["ROOT_CALL:rawmagic"] not in self.raw_tensor_info:
+                self.raw_tensor_info[tensor_info["ROOT_CALL:rawmagic"]] = []
+            self.raw_tensor_info[tensor_info["ROOT_CALL:rawmagic"]].append(tensor_info)
 
-        key = (tensor_info["taskId"], tensor_info["callopMagic"], tensor_info["seqNo"])
+        key = (tensor_info["B>taskId"], tensor_info["ROOT_CALL:opmagic"], tensor_info["B>seqNo"])
         if key not in self.task_tensor_info:
             self.task_tensor_info[key] = []
         self.task_tensor_info[key].append(tensor_info)
@@ -423,15 +496,15 @@ class CompactDumpTensorInfoParser:
                 continue
                 
             block_idx = tensor_infos[0].get("blockIdx")
-            task_id = tensor_infos[0].get("taskId")
-            seq_no = tensor_infos[0].get("seqNo")
+            task_id = tensor_infos[0].get("B>taskId")
+            seq_no = tensor_infos[0].get("B>seqNo")
             key = (block_idx, task_id, seq_no)
             if key not in exec_time_index:
                 continue
             exec_time = exec_time_index[key]
             for tensor_info in tensor_infos:
-                tensor_info["execStart"] = exec_time["execStart"]
-                tensor_info["execEnd"] = exec_time["execEnd"]
+                tensor_info["B>execStart"] = exec_time["execStart"]
+                tensor_info["B>execEnd"] = exec_time["execEnd"]
 
     def tensor_compare(self):
         logging.info(f"Start compare tensors.")
@@ -449,15 +522,15 @@ class CompactDumpTensorInfoParser:
             callop_tasks = {}
             # 按callopMagic分组任务
             for _, tensor_infos in self.task_tensor_info.items():
-                callop_magic = tensor_infos[0].get("callopMagic")
+                callop_magic = tensor_infos[0].get("ROOT_CALL:opmagic")
                 if callop_magic not in callop_tasks:
                     callop_tasks[callop_magic] = []
                 # 将任务添加到对应callopMagic的组中
-                tensor_infos.sort(key=lambda x: x.get("timeStamp"))
+                tensor_infos.sort(key=lambda x: x.get("B>TIMESTAMP"))
                 callop_tasks[callop_magic].append(tensor_infos)
 
             for _, tensor_infos_list in callop_tasks.items():
-                tensor_infos_list.sort(key=lambda x: x[0].get("timeStamp"))
+                tensor_infos_list.sort(key=lambda x: x[0].get("B>TIMESTAMP"))
                 tasks.append(tensor_infos_list) # 按timeStamp排序
 
             try:
@@ -476,51 +549,51 @@ class CompactDumpTensorInfoParser:
     def merge_raw_tensor_data(self, raw_magic, tensor_infos):
         # 创建合并张量的基础信息
         merge_tensor_info = {}
-        merge_tensor_info["rawMagic"] = raw_magic
-        merge_tensor_info["dataTypeStr"] = tensor_infos[0]["dataTypeStr"]
-        merge_tensor_info["ioflag"] = tensor_infos[0]["ioflag"]
-        merge_tensor_info["rawShape"] = tensor_infos[0]["rawShape"]
-        merge_tensor_info["dataType"] = tensor_infos[0]["dataType"]
-        merge_tensor_info["rootHash"] = 0
-        merge_tensor_info["funcHash"] = 0
-        merge_tensor_info["execStart"] = 0
-        merge_tensor_info["execEnd"] = 0
+        merge_tensor_info["ROOT_CALL:rawmagic"] = raw_magic
+        merge_tensor_info["datatype"] = tensor_infos[0]["datatype"]
+        merge_tensor_info["IO_FLAG"] = tensor_infos[0]["IO_FLAG"]
+        merge_tensor_info["B>rawShape"] = tensor_infos[0]["B>rawShape"]
+        merge_tensor_info["B>datatype"] = tensor_infos[0]["B>datatype"]
+        merge_tensor_info["ROOT_FUNC:hash"] = 0
+        merge_tensor_info["FUNC:hash"] = 0
+        merge_tensor_info["B>execStart"] = 0
+        merge_tensor_info["B>execEnd"] = 0
 
         # 生成保存路径
         file_path = os.path.join(self.dump_tensor_path,
-                                f"raw_{raw_magic}_{tensor_infos[0]['dataTypeStr']}_{tensor_infos[0]['ioflag']}.data")
-        merge_tensor_info["bin_file"] = file_path
+                                f"raw_{raw_magic}_{tensor_infos[0]['B>datatype']}_{tensor_infos[0]['IO_FLAG']}.data")
+        merge_tensor_info["B>FILENAME"] = file_path
 
         # 按offset排序张量
-        tensor_infos_sorted = sorted(tensor_infos, key=lambda x: x["offset"])
+        tensor_infos_sorted = sorted(tensor_infos, key=lambda x: x["B>offset"])
         grouped_tensors = {}
-        for key, group in groupby(tensor_infos_sorted, key=lambda x: x["offset"]):
+        for key, group in groupby(tensor_infos_sorted, key=lambda x: x["B>offset"]):
             grouped_tensors[key] = list(group)
         if len(grouped_tensors) == 1:
             return merge_tensor_info, None
 
         # 执行合并操作
-        dtype = _get_data_type(merge_tensor_info["dataType"])[1]
-        raw_data = np.zeros(merge_tensor_info["rawShape"], dtype)
+        dtype = _get_data_type(merge_tensor_info["datatype"])[1]
+        raw_data = np.zeros(merge_tensor_info["B>rawShape"], dtype)
 
         for tensor_info in tensor_infos:
-            if tensor_info["shape"] == tensor_info["rawShape"]:
-                logging.info(f"Tensor {tensor_info['bin_file']} shape is equal to rawShape, skip merge.")
+            if tensor_info["B>validshape"] == tensor_info["B>rawShape"]:
+                logging.info(f"Tensor {tensor_info['B>FILENAME']} shape is equal to rawShape, skip merge.")
                 return merge_tensor_info, None
             is_tensor_valid = True
-            data = np.fromfile(tensor_info["bin_file"], dtype)
-            data = data.reshape(tensor_info.get("shape"))
+            data = np.fromfile(tensor_info["B>FILENAME"], dtype)
+            data = data.reshape(tensor_info.get("B>validshape"))
 
             # 计算切片范围
             raw_slices, data_slices = [], []
             for dim in range(data.ndim):
-                start = tensor_info["offset"][dim]
-                stop = min(merge_tensor_info["rawShape"][dim], start + data.shape[dim])
+                start = tensor_info["B>offset"][dim]
+                stop = min(merge_tensor_info["B>rawShape"][dim], start + data.shape[dim])
                 if start >= stop:
                     is_tensor_valid = False
 
                 raw_slices.append(slice(start, stop))
-                data_slices.append(slice(0, min(merge_tensor_info["rawShape"][dim] - start, data.shape[dim])))
+                data_slices.append(slice(0, min(merge_tensor_info["B>rawShape"][dim] - start, data.shape[dim])))
 
             # 合并有效张量
             if is_tensor_valid:
@@ -575,19 +648,30 @@ def main():
         parser.get_exec_time(prof_data_file)
 
     tensor_infos = parser.tensor_compare()
-    tensor_infos.sort(key=lambda x: x.get("timeStamp"))  # 输出前做一次排序
+    tensor_infos.sort(key=lambda x: x.get("B>TIMESTAMP"))  # 输出前做一次排序
     merge_tensor_infos = parser.merge_raw_tensor()
     tensor_infos.extend(merge_tensor_infos)
     df = pd.DataFrame(tensor_infos, dtype=object)
+    
+    # 处理 datatype 列：删除数值列，保留字符串列并重命名
+    if "datatype" in df.columns:
+        df.drop("datatype", axis=1, inplace=True)
+    
     # 转成字符串，防止用excel打开后显示为科学计算法，导致数据截断
-    df["rootHash"] = df["rootHash"].apply(lambda x: f'\t{x:.0f}')
-    df["funcHash"] = df["funcHash"].apply(lambda x: f'\t{x:.0f}')
-    df["execStart"] = df["execStart"].apply(lambda x: f'\t{x:.0f}')
-    df["execEnd"] = df["execEnd"].apply(lambda x: f'\t{x:.0f}')
+    df["ROOT_FUNC:hash"] = df["ROOT_FUNC:hash"].apply(lambda x: f"{x:.0f}'")
+    df["FUNC:hash"] = df["FUNC:hash"].apply(lambda x: f"{x:.0f}'")
+    df["B>execStart"] = df["B>execStart"].apply(lambda x: f"{x:.0f}'")
+    df["B>execEnd"] = df["B>execEnd"].apply(lambda x: f"{x:.0f}'")
+    df["B>TIMESTAMP"] = df["B>TIMESTAMP"].apply(lambda x: f"{x:.0f}'")
+
+    timestamp = int(time.time())
+    save_dir = os.path.dirname(os.path.dirname(args.dump_tensor_path.rstrip(os.sep)))
+    csv_path = os.path.join(save_dir, f"verify_task_result_cmp~{timestamp}.csv")
 
     logging.info(df)
 
-    df.to_csv(os.path.join(args.dump_tensor_path, "tensor_info.csv"), index=False, encoding="utf-8")
+    df.to_csv(csv_path, index=False, encoding="utf-8")
+    logging.info(f"Verify result saved to: {csv_path}")
 
 
 if __name__ == "__main__":

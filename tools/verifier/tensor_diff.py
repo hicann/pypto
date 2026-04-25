@@ -10,11 +10,14 @@
 # -----------------------------------------------------------------------------------------------------------
 """Tensor compare utilility."""
 import os
+import sys
 import logging
-from typing import NamedTuple, Optional, Tuple, Union
+from typing import NamedTuple, Optional, Tuple, Union, Dict, Any
 import torch
 import pandas as pd
 from tabulate import tabulate
+
+MAX_PRECISION = sys.float_info.dig + 1
 
 
 class IsCloseConfig(NamedTuple):
@@ -228,3 +231,74 @@ class TensorComparator:
 
         self.save_info_to_csv(d_detail_warn, path, topk, "firstk")
         self.save_info_to_csv(d_detail_infnan, path, topk, "firstk_infnan")
+
+
+def compare_tensors_result_dict(
+    tensor_a: torch.Tensor,
+    tensor_b: torch.Tensor,
+    config: Optional[IsCloseConfig] = None,
+    max_precision: int = None
+) -> Dict[str, Any]:
+    """
+    独立的 tensor 对比函数，返回详细统计 dict。
+    
+    Args:
+        tensor_a: 输入 tensor A (对应结果中的 B 字段，遵循 pass_compare 历史约定)
+        tensor_b: 输入 tensor B (对应结果中的 A 字段)
+        config: 对比配置对象，默认创建 rtol=1e-3, atol=1e-3 的配置
+        max_precision: 输出数值精度，默认使用 MAX_PRECISION
+    
+    Returns:
+        dict 包含对比结果和统计信息:
+        - AB>RESULT: 对比结果 (True/False)
+        - result_reason: 失败原因描述
+        - AB>rtol/atol: 容差参数
+        - AB>fail_cnt/warn_cnt/tol_cnt: 失败/警告/容忍计数
+        - AB>total_cnt/zero_cnt/infnan_cnt: 总数/零值/inf/nan计数
+        - AB>mae/mre 系列指标
+        - A/B>max/min/avg/aavg/zero/infnan: 各 tensor 统计值
+    """
+    if config is None:
+        config = IsCloseConfig(rtol=1e-3, atol=1e-3)
+    if max_precision is None:
+        max_precision = MAX_PRECISION
+    
+    comparator = TensorComparator()
+    result_is_close, result_reason, result_info = comparator.check_isclose(
+        tensor_a, tensor_b, config
+    )
+    
+    record = {}
+    record["AB>RESULT"] = result_is_close
+    record["result_reason"] = result_reason
+    record["AB>rtol/atol"] = f"{config.rtol:.{max_precision}g}/{config.atol:.{max_precision}g}"
+    
+    diff_conf = result_info[6] if len(result_info) > 6 else None
+    if diff_conf is not None:
+        brief_conf = diff_conf[0]
+        ab_conf = diff_conf[1]
+        a_conf = diff_conf[2]
+        b_conf = diff_conf[3]
+        
+        record["AB>fail_cnt/warn_cnt/tol_cnt"] = f"{brief_conf[4]}/{brief_conf[3]}/{brief_conf[2]}"
+        record["AB>total_cnt/zero_cnt/infnan_cnt"] = f"{brief_conf[0]}/{brief_conf[1]}/{brief_conf[5]}"
+        record["AB>mae"] = f"{ab_conf[0]:.{max_precision}g}"
+        record["AB>mae_top8"] = f"{ab_conf[1]:.{max_precision}g}"
+        record["AB>mae_top1permil"] = f"{ab_conf[2]:.{max_precision}g}"
+        record["AB>mre"] = f"{ab_conf[3]:.{max_precision}g}"
+        record["AB>mre_top8"] = f"{ab_conf[4]:.{max_precision}g}"
+        record["AB>mre_top1permil"] = f"{ab_conf[5]:.{max_precision}g}"
+        record["A>max"] = f"{b_conf[0]:.{max_precision}g}"
+        record["A>min"] = f"{b_conf[1]:.{max_precision}g}"
+        record["A>avg"] = f"{b_conf[2]:.{max_precision}g}"
+        record["A>aavg"] = f"{b_conf[3]:.{max_precision}g}"
+        record["A>zero"] = f"{b_conf[4]:.{max_precision}g}"
+        record["A>infnan"] = f"{b_conf[5]:.{max_precision}g}"
+        record["B>max"] = f"{a_conf[0]:.{max_precision}g}"
+        record["B>min"] = f"{a_conf[1]:.{max_precision}g}"
+        record["B>avg"] = f"{a_conf[2]:.{max_precision}g}"
+        record["B>aavg"] = f"{a_conf[3]:.{max_precision}g}"
+        record["B>zero"] = f"{a_conf[4]:.{max_precision}g}"
+        record["B>infnan"] = f"{a_conf[5]:.{max_precision}g}"
+    
+    return record
