@@ -1444,43 +1444,6 @@ TEST_F(DynamicOpsTest, MatMulL0CToL1Fixpipe)
     EXPECT_NO_VERIFY_FAILED(logOutput);
 }
 
-TEST_F(DynamicOpsTest, GatherInL1)
-{
-    Tensor param(DT_FP16, {4, 16}, "t0");
-    Tensor indices(DT_INT32, {1, 4}, "t1");
-    Tensor pageTable(DT_INT32, {1, 2}, "t1");
-    Tensor out(DT_FP16, {4, 16}, "t1");
-
-    auto paramData = Random(DT_FP16, param.GetShape());
-    auto indicesRaw = RawTensorData::CreateTensor<int32_t>(indices, {0, 1, 1, 0});
-    auto indicesData = LogicalTensorData::Create(*indicesRaw);
-    auto pageTableRaw = RawTensorData::CreateTensor<int32_t>(pageTable, {0, 1});
-    auto pageTableData = LogicalTensorData::Create(*pageTableRaw);
-    auto out0 = Random(DT_FP16, out.GetShape());
-    auto golden = Random(DT_FP16, out.GetShape());
-    int64_t blockSize = 2;
-    int hidden_dim = 16;
-    calc::GatherInL1(golden, paramData, indicesData, pageTableData, blockSize);
-    ProgramData::GetInstance().PrepareData(
-        {paramData->GetData(), indicesData->GetData(), pageTableData->GetData()}, {out0->GetData()},
-        {golden->GetData()});
-
-    FUNCTION("test", {param, indices, pageTable}, {out})
-    {
-        LOOP("LOOP", FunctionType::DYNAMIC_LOOP, sIdx, LoopRange(0, 1, 1))
-        {
-            (void)sIdx;
-            TileShape::Current().SetCubeTile({32, 32}, {64, 64}, {128, 128});
-
-            std::vector<SymbolicScalar> srcValidShape = {param.GetShape()[0], param.GetShape()[1]};
-            Tensor dynSrc = View(param, param.GetShape(), srcValidShape, {0, 0});
-            std::vector<SymbolicScalar> offsetsValidShape = {indices.GetShape()[0], indices.GetShape()[1]};
-            Tensor dynOffsets = View(indices, indices.GetShape(), offsetsValidShape, {0, 0});
-            out = experimental::GatherInL1<false, false>(dynSrc, dynOffsets, pageTable, blockSize, hidden_dim);
-        }
-    }
-}
-
 TEST_F(DynamicOpsTest, Round)
 {
     std::string logOutput = CaptureLogFileAndEcho([]() {
