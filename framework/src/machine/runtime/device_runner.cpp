@@ -359,12 +359,6 @@ void DeviceRunner::Dump()
         MACHINE_LOGI("aicore %d hello status %ld", i, arg->shakeBuffer[0]);
         MACHINE_LOGI("last_taskId %ld", arg->shakeBuffer[1]);
         MACHINE_LOGI("task status %ld", arg->shakeBuffer[2]);
-
-        for (int k = 0; k < static_cast<int>(sizeof(arg->taskStat) / sizeof(TaskStat)); k++) {
-            MACHINE_LOGI(
-                "task rsp index %d: taskId %d, subGraphID %d execStart %ld execEnd %ld\n", k, arg->taskStat[k].taskId,
-                arg->taskStat[k].subGraphId, arg->taskStat[k].execStart, arg->taskStat[k].execEnd);
-        }
     }
 }
 

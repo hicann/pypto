@@ -197,7 +197,7 @@ void TestCVSyncBody(Opcode syncOpcode)
         expect = R"!!!(wait_intra_block(PIPE_S, 0);
 )!!!";
     }
-    EXPECT_EQ(res, expect);
+    CheckStringExist(expect, res);
 }
 
 TEST_F(TestCodegenScalar, InjectSyncSet) { TestCVSyncBody(Opcode::OP_CV_SYNC_SRC); }

@@ -26,6 +26,7 @@
 #include "tilefwk/aikernel_define.h"
 #include "tilefwk/aikernel_data.h"
 #include "tilefwk/aikernel_runtime.h"
+#include "tilefwk/aicpu_common.h"
 
 namespace npu::tile_fwk::machine {
 
@@ -49,12 +50,13 @@ public:
     virtual uint64_t AicoreGetData() { return 0; }
 
     virtual void AicoreCallSubFuncTask(
-        uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext)
+        uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext, TaskStat* taskStat)
     {
         UNUSED(funcIdx);
         UNUSED(param);
         UNUSED(gmStackAddr);
         UNUSED(hcclContext);
+        UNUSED(taskStat);
     }
 };
 
@@ -240,10 +242,10 @@ static inline uint64_t GetDataMainBase()
 }
 
 static inline void CallSubFuncTask(
-    uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext)
+    uint64_t funcIdx, npu::tile_fwk::CoreFuncParam* param, int64_t gmStackAddr, __gm__ int64_t* hcclContext, TaskStat* taskStat)
 {
     npu::tile_fwk::machine::AicoreEmulationManager::GetInstance().GetEmulation()->AicoreCallSubFuncTask(
-        funcIdx, param, gmStackAddr, hcclContext);
+        funcIdx, param, gmStackAddr, hcclContext, taskStat);
 }
 
 #define __HAS_SUB_FUNC__

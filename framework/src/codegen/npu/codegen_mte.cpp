@@ -778,7 +778,7 @@ std::string CodeGenOpNPU::PrintMemCopyWithL1Static(const PrintMemCopyWithL1Param
     if (ret && nzValue == 1) {
         opName = "TileOp::L1CopyInNZ2NZ";
         std::string curAddrBuffer =
-            "((__gm__ GMTensorInfo*)(oriAddrParam) + " + std::to_string(paramLocation[gmIdx]) + ")->Addr";
+            "((__gm__ GMTensorInfo*)(param) + " + std::to_string(paramLocation[gmIdx]) + ")->Addr";
         printRet = sprintf_s(
             oriAddrBuffer, BUFFER_SIZE_1024, "(__gm__ %s*)%s", dataTypeExpr[ID1].c_str(), curAddrBuffer.c_str());
         ASSERT(GenCodeErr::PRINT_FAILED, printRet >= 0)

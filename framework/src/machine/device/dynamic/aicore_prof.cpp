@@ -146,22 +146,6 @@ void AiCoreProf::ProfStart()
     }
 }
 
-void AiCoreProf::ProfGet(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat* taskStat)
-{
-    DEV_DEBUG("Start to Get prof data.");
-    if (profLevel_ == PROF_LEVEL_OFF || profReportAdditionalInfoFunc_ == nullptr) {
-        return;
-    }
-
-    taskCnt_++;
-    if (profLevel_ == PROF_LEVEL_FUNC_LOG) {
-        ProfGetLog(coreIdx, taskStat);
-    } else if (profLevel_ == PROF_LEVEL_FUNC_LOG_PMU) {
-        ProfGetLog(coreIdx, taskStat);
-        ProfGetPmu(coreIdx, subGraphId, taskId, taskStat);
-    }
-}
-
 void AiCoreProf::ProfGetSwitch(int64_t& flag) const
 {
     if (profLevel_ == PROF_LEVEL_FUNC_LOG) {
@@ -230,13 +214,13 @@ inline void AiCoreProf::ProfStopLog()
     });
 }
 
-inline void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat)
+void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat)
 {
-    MsprofAicpuPyPtoLogHead* logHead = logHead_[coreIdx];
-    PyPtoMsprofAdditionalInfo& logMsg = logMsg_[coreIdx];
     if (!ProfCheckLevel(PROF_TASK_TIME_L2)) {
         return;
     }
+    MsprofAicpuPyPtoLogHead* logHead = logHead_[coreIdx];
+    PyPtoMsprofAdditionalInfo& logMsg = logMsg_[coreIdx];
     if (logHead->cnt < logDataMaxNum_ - 1) {
         memcpy_s(
             reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(logData_[coreIdx]) + logDataSize_ * logHead->cnt),
@@ -259,6 +243,7 @@ inline void AiCoreProf::ProfGetLog(int32_t coreIdx, const struct TaskStat* taskS
         logHead->cnt = 0;
         logMsg.dataLen = logHeadSize_;
     }
+    taskCnt_++;
 }
 
 void AiCoreProf::ProfInitPmu(int64_t* regAddrs, int64_t* pmuEventAddrs)
@@ -475,6 +460,7 @@ void AiCoreProf::ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskI
     if (!ProfCheckLevel(PROF_TASK_TIME_L2)) {
         return;
     }
+
     MsprofAicpuPyPtoPmuData data = {0};
     FillPmuData(data, coreIdx, subGraphId, taskId, taskStat);
     DEV_DEBUG(

@@ -29,11 +29,6 @@ namespace npu::tile_fwk {
 
 #define DEBUG_SWITCH 0
 
-/* The DFX swimlane performance statistics use host pre-allocated memory mode, which avoids data collection during
-   AICPU scheduling to minimize scheduling interference. However, each AICore only supports tracking up to
-   MAX_DFX_TASK_NUM_PER_CORE tasks, with excess tasks being discarded.
-*/
-#define PROF_DFX_HOST_PREPARE_MEMORY_MODE 1
 __gm__ static bool g_is_open_dump_perf_trace_data = false;
 } // namespace npu::tile_fwk
 // device switch head file end
@@ -206,26 +201,8 @@ INLINE void PerfTraceRecord(
     (void)args;
 }
 
-INLINE void SetTaskStatistic(
-    __gm__ KernelArgs* args, int32_t& dfxPose, int32_t taskId, int32_t subGraphId, int64_t tStart, uint16_t seqNo = 0)
-{
-    __gm__ volatile TaskStat* stat = &args->taskStat[dfxPose];
-    stat->subGraphId = subGraphId;
-    stat->taskId = taskId;
-    stat->execStart = tStart;
-    stat->execEnd = get_sys_cnt();
-    stat->seqNo = seqNo;
-    dcci(stat, SINGLE_CACHE_LINE, CACHELINE_OUT);
-}
-
 INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t taskId, int32_t subGraphId, int64_t t1)
 {
-    UNUSED(ctx);
-    UNUSED(seqNo);
-    UNUSED(taskId);
-    UNUSED(subGraphId);
-    UNUSED(t1);
-#if PROF_DFX_HOST_PREPARE_MEMORY_MODE
     auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
     if (m && m->taskCount < MAX_DFX_TASK_NUM_PER_CORE) {
         m->tasks[m->taskCount].subGraphId = subGraphId;
@@ -236,7 +213,6 @@ INLINE void AddMetricStatistic(ExecuteContext* ctx, uint32_t seqNo, uint32_t tas
         m->tasks[m->taskCount].execEnd = ctx->lastTaskFinishCycle;
         m->taskCount++;
     }
-#endif
 }
 
 INLINE void FlushMetricStatistic(__gm__ volatile KernelArgs* args)
@@ -392,10 +368,20 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
     int64_t gmStackAddr = funcData->stackWorkSpaceAddr + ctx->blockIdx * funcData->stackWorkSpaceSize;
 #endif
 
+    __gm__ TaskStat* taskStat = nullptr;
+#ifdef __DAV_V310
+    if (ctx->args->taskEntry.reserved[0] == PRO_LEVEL2 || ctx->args->taskEntry.reserved[0] == PRO_LEVEL1) {
+        auto m = (__gm__ Metrics*)(ctx->args->shakeBuffer[SHAK_BUF_DFX_DATA_INDEX]);
+        taskStat = &m->tasks[m->taskCount];
+        taskStat->waitEventIdx = 0;
+        taskStat->setEventIdx = 0;
+    }
+#endif
+
     CallSubFuncTask(
         opAttrs[0] + funcData->exprTbl[0], &param,
         gmStackAddr,
-        (__gm__ int64_t*)funcData->startArgs->commContexts);
+        (__gm__ int64_t*)funcData->startArgs->commContexts, taskStat);
     SetStatus(ctx->args, STAGE_FINISH_EXEC_COREFUNC_KERNEL);
     PipeSync();
     SetStatus(ctx->args, STAGE_FINISH_PIPE_SYNC);
@@ -405,11 +391,6 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
     if (unlikely(npu::tile_fwk::g_is_open_dump_perf_trace_data)) {
         ctx->lastTaskFinishCycle = get_sys_cnt();
     }
-
-#if PROF_DFX_HOST_PREPARE_MEMORY_MODE != 1
-    static int32_t taskDfxPos = REG_LOW_TASK_PING;
-    SetTaskStatistic(ctx->args, taskDfxPos, taskId, opAttrs[0], t1, ctx->SeqNo());
-#endif
 }
 #endif
 

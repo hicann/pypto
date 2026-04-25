@@ -59,18 +59,32 @@ std::string CodeGenOpNPU::GenSyncWaitOp() const
     return buffer;
 }
 
+void InsertSetSysCnt(std::ostringstream& oss){
+    oss << "#ifdef OPEN_MIX_PERF\n";
+    oss << "taskStat->setEventCycle[taskStat->setEventIdx++] = get_sys_cnt();\n";
+    oss << "#endif\n";
+}
+
 std::string CodeGenOpNPU::GenCVSyncSetOp() const
 {
     auto pipeId = GetPipeId(syncQueue.pipeId_);
     std::ostringstream oss;
+    InsertSetSysCnt(oss);
     oss << "set_intra_block(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ");\n";
     return oss.str();
+}
+
+void InsertWaitSysCnt(std::ostringstream& oss){
+    oss << "#ifdef OPEN_MIX_PERF\n";
+    oss << "taskStat->waitEventCycle[taskStat->waitEventIdx++] = get_sys_cnt();\n";
+    oss << "#endif\n";
 }
 
 std::string CodeGenOpNPU::GenCVSyncWaitOp() const
 {
     auto pipeId = GetPipeId(syncQueue.trigPipeId_);
     std::ostringstream oss;
+    InsertWaitSysCnt(oss);
     oss << "wait_intra_block(" << pipeId << ", " << std::to_string(syncQueue.eventId_) << ");\n";
     return oss.str();
 }

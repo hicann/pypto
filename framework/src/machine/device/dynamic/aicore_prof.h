@@ -283,7 +283,6 @@ public:
 #endif
     void ProfInit(DeviceArgs *deviceArgs);
     void ProfStart();
-    void ProfGet(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat* taskStat);
     void ProfGetSwitch(int64_t& flag) const;
     void ProfStop();
     void AsmCntvc(uint64_t& cntvct) const;
@@ -293,6 +292,7 @@ public:
     void ProfStartPmu();
     void ProfStopPmu();
     void ProfGetPmu(int32_t coreIdx, uint32_t subGraphId, uint32_t taskId, const struct TaskStat *taskStat);
+    void ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat);
 private:
     struct PmuCtrlAddrs {
         uint32_t* ctrl0Addr{nullptr};
@@ -304,7 +304,6 @@ private:
     };
     inline void ProfInitLog();
     inline void ProfStopLog();
-    inline void ProfGetLog(int32_t coreIdx, const struct TaskStat* taskStat);
     void ReadPmuCounters(const int32_t coreIdx) const;
     void SetPmuEvents(void* mapBase, const int32_t coreIdx) const;
     PmuCtrlAddrs InitPmuRegAddrsForCore(void* addr, void* mapBase, int coreIdx);
