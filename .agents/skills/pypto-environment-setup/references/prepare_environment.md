@@ -69,19 +69,22 @@ bash tools/prepare_env.sh --quiet --type=third_party
 
 ## pto-isa 获取
 
+### CANN 内置方式（默认）
 
-### .run 包方式（推荐）
+CANN toolkit 安装后自带 PTO-ISA，路径为 `$ASCEND_HOME_PATH/<arch>-linux`（如 `/usr/local/Ascend/cann-8.5.0/aarch64-linux`）。通过 `export PTO_TILE_LIB_CODE_PATH=$ASCEND_HOME_PATH/<arch>-linux` 即可使用。
 
-> 下载地址和安装命令见 `$PYPTO_REPO/docs/install/prepare_environment.md` § "获取 pto-isa 源码"
-> 如遇头文件版本不匹配，切换到源码方式。
+> ⚠️ CANN 内置 PTO-ISA 版本可能与 pypto 源码（master 分支）不兼容。运行时如果出现 `no member named 'XXX' in namespace 'pto'` 错误，说明内置版本过旧，需切换到源码方式。
 
-### 源码方式（备用）
+### 源码方式（CANN 内置版本过旧时使用）
+
 ```bash
 PTO_ISA_DIR=${PTO_ISA_DIR:-$PWD/pto-isa}
 git clone https://gitcode.com/cann/pto-isa.git "$PTO_ISA_DIR"
 export PTO_TILE_LIB_CODE_PATH="$PTO_ISA_DIR"
 test -d "$PTO_TILE_LIB_CODE_PATH/include/pto" && echo OK
 ```
+
+> 克隆后无需编译，直接设置 `PTO_TILE_LIB_CODE_PATH` 指向源码目录即可。切换后需重新运行 softmax 验证确认通过。
 
 ## PyPTO 编译安装
 
@@ -113,6 +116,6 @@ pip install pypto
 | 变量 | 设置方式 | 必须性 |
 |------|----------|--------|
 | CANN 环境 | `source set_env.sh`（见上方"CANN 环境加载"） | 每次新 shell |
-| `PTO_TILE_LIB_CODE_PATH` | 优先 `$ASCEND_HOME_PATH/aarch64-linux`，备用 pto-isa 源码目录 | 编译/运行 |
+| `PTO_TILE_LIB_CODE_PATH` | 默认 `$ASCEND_HOME_PATH/<arch>-linux`（CANN 内置），版本不匹配时使用 pto-isa 源码目录 | 编译/运行 |
 | `TILE_FWK_DEVICE_ID` | `export TILE_FWK_DEVICE_ID=1` | NPU 模式 |
 | `PYTHONPATH` | `export PYTHONPATH="${PYPTO_REPO}/python:$PYTHONPATH"` | 仅源码调试（不推荐日常使用） |

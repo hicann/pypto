@@ -115,18 +115,28 @@ source ${ASCEND_INSTALL_PATH:-/usr/local/Ascend}/ascend-toolkit/set_env.sh
 使用空闲卡检测脚本（来自 `pypto-op-develop` skill 的 `scripts/list_idle_chip_ids.sh`）。
 
 #### 步骤 4.3：设置环境变量
+
+**步骤 4.3.1：设置 NPU 设备 ID**
 ```bash
 # 设置 NPU 设备 ID（根据步骤 4.2 查找空闲 chip id）
 export TILE_FWK_DEVICE_ID=<空闲 chip id>
+```
 
+**步骤 4.3.2：设置 PTO-ISA 路径**
 
+> ⚠️ **重要**：PyPTO 有两层编译：Host 侧（pip install）和 Device 侧（运行时 kernel 编译）。Device 侧编译使用 `PTO_TILE_LIB_CODE_PATH` 下的 PTO-ISA 头文件。如果 CANN 内置的 PTO-ISA 版本与 pypto 源码不匹配（缺少 `pto::ExpAlgorithm` 等符号），运行时 kernel 编译会失败。此时需要从源码获取最新 PTO-ISA。
+
+```bash
 # 设置 PTO-ISA 路径
 arch=$(uname -m)   # 常见值：x86_64 或 aarch64
-
-# 3. 设置 PTO-ISA 库路径
 export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux
+```
 
-# 将环境变量写入当前目录文件
+**步骤 4.3.3：生成 env_setup.sh**
+
+将步骤 4.3.1 和 4.3.2 的结果写入 `env_setup.sh`：
+
+```bash
 cat > env_setup.sh << "EOF"
 #!/bin/bash
 # 自动生成的环境配置文件
@@ -141,7 +151,9 @@ export PTO_TILE_LIB_CODE_PATH=${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch
 echo "env_setup.sh 加载完成：TILE_FWK_DEVICE_ID=${TILE_FWK_DEVICE_ID}, PTO_TILE_LIB_CODE_PATH=${PTO_TILE_LIB_CODE_PATH}"
 EOF
 ```
+
 > - \$\{arch\}：CPU 架构，如 aarch64、x86_64.
+> - 如果运行 softmax 验证时出现 `no member named 'XXX' in namespace 'pto'` 错误，说明 CANN 内置 PTO-ISA 版本过旧，需要切换到源码方式（见步骤 4.6 失败排查）。
 
 #### 步骤 4.4：安装 torch 和 torch_npu
 ```bash
@@ -178,7 +190,15 @@ python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode npu
 
 **通过标准**：退出码 `0`，输出 `Softmax test passed`。
 
-**失败时**：重新运行步骤 1 诊断 → 对照 [🔧 troubleshooting.md](references/troubleshooting.md) 排查。
+**失败排查**（按错误类型对照）：
+
+| 错误信息 | 原因 | 修复 |
+|---------|------|------|
+| `no member named 'XXX' in namespace 'pto'`（如 `ExpAlgorithm`、`DivAlgorithm`） | PTO-ISA 版本过旧，CANN 内置头文件缺少枚举定义 | 按步骤 4.3.2 克隆 pto-isa 源码并设置 `PTO_TILE_LIB_CODE_PATH`，然后 `source env_setup.sh` 重跑 softmax |
+| `COMPILE_CODE_FAILED` / kernel 编译失败 | 多种可能，先看具体编译错误信息 | 检查上方具体错误类型 |
+| 其他错误 | 重新运行步骤 1 诊断 | 对照 [🔧 troubleshooting.md](references/troubleshooting.md) 排查 |
+
+> ⚠️ **注意**：`pip install pypto` 成功不代表运行时没问题。Host 侧编译和 Device 侧 kernel 编译使用不同的头文件来源，PTO-ISA 版本不匹配只会在 **运行时 kernel 编译** 阶段暴露。
 
 ### 步骤 5：完成报告
 
@@ -201,6 +221,7 @@ Python:     3.10.x
 torch:      2.6.x
 torch_npu:  2.6.0.post3
 pypto:      ✅ 已安装
+PTO-ISA:    CANN 内置 / pto-isa 源码 (gitcode.com/cann/pto-isa)
 =====================================
 
 验证结果:   Softmax（NPU 模式）✅ 通过

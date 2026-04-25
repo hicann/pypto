@@ -103,6 +103,44 @@ ls include/pto/comm/pto_comm_inst.hpp
 export PTO_TILE_LIB_CODE_PATH=/path/to/pto-isa
 ```
 
+### PTO-ISA 枚举缺失：`no member named 'XXX' in namespace 'pto'`
+
+**典型错误**：
+```
+error: no member named 'ExpAlgorithm' in namespace 'pto'
+error: no member named 'DivAlgorithm' in namespace 'pto'
+error: no member named 'SqrtAlgorithm' in namespace 'pto'
+error: no member named 'LogAlgorithm' in namespace 'pto'
+error: no member named 'RecipAlgorithm' in namespace 'pto'
+```
+
+**原因**：pypto 源码使用了 PTO-ISA 新增的高精度算法枚举（`ExpAlgorithm` 等，定义在 `pto/common/type.hpp` 中），但 CANN 内置的 PTO-ISA 头文件是旧版本，不包含这些定义。
+
+**为什么 pip install 成功但运行失败**：PyPTO 有两层编译：
+1. **Host 侧**（`pip install`）：编译 C++ binding 库 → 这些枚举只是模板默认参数，host 编译不展开模板，所以安装成功
+2. **Device 侧**（运行时 kernel 编译）：PyPTO 生成 kernel 源码 → CANN 编译器编译 kernel → 使用 `PTO_TILE_LIB_CODE_PATH` 下的 PTO-ISA 头文件 → **旧版本缺少枚举定义 → 编译失败**
+
+**判断方法**：
+```bash
+# 检查 CANN 内置 PTO-ISA 是否包含这些枚举
+arch=$(uname -m)
+grep -q "ExpAlgorithm" "${ASCEND_HOME_PATH:-/usr/local/Ascend/cann}/${arch}-linux/include/pto/common/type.hpp" 2>/dev/null && echo "✓ 包含" || echo "✗ 缺失，需使用源码方式"
+```
+
+**修复**：从源码获取最新 PTO-ISA：
+```bash
+cd ${PYPTO_REPO:-$PWD}
+git clone https://gitcode.com/cann/pto-isa.git pto-isa
+export PTO_TILE_LIB_CODE_PATH="$PWD/pto-isa"
+
+# 验证
+grep -q "ExpAlgorithm" "$PTO_TILE_LIB_CODE_PATH/include/pto/common/type.hpp" && echo "✓ OK" || echo "✗ 仍缺失"
+
+# 重新运行 softmax 验证
+source env_setup.sh
+python3 examples/02_intermediate/operators/softmax/softmax.py --run_mode npu
+```
+
 ### pto-isa 版本不匹配：缺少 pto::TROWEXPANDADD / pto::TROWEXPANDMAX
 
 原因：pto-isa 头文件过旧或与 PyPTO 分支不匹配。
