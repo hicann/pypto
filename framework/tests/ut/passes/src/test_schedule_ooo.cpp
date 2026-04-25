@@ -1891,9 +1891,18 @@ void SetInternalSubgraphIDAndAIVCore(Operation* op, int id) {
     }
 }
 
+void SetCopyOpAttr(Operation* copyOp)
+{
+    std::vector<int64_t> offset = {1, 1};
+    std::vector<int64_t> shape = {256, 512};
+    copyOp->SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset),
+        MemoryType::MEM_L1, OpImmediate::Specified(shape), OpImmediate::Specified(shape)));
+}
+
 void SetAttribute(ComputationalGraphBuilder &subGraph, OoOScheduler &oooSchedule, Operation* &ubCopyL1, Operation* &alloc3) {
     Operation* adds = subGraph.GetOp("ADDS");
     ubCopyL1 = subGraph.GetOp("UB_COPY_L1");
+    SetCopyOpAttr(ubCopyL1);
     Operation* copyin1 = subGraph.GetOp("COPY_IN1");
     Operation* copyin2 = subGraph.GetOp("COPY_IN2");
     Operation* copyin3 = subGraph.GetOp("COPY_IN3");
@@ -2008,8 +2017,8 @@ TEST_F(ScheduleOoOTest, TestL1SpillBuffer)
     EXPECT_EQ(oooSchedule.orderedOps[12]->GetInternalSubgraphID(), 1);
     EXPECT_EQ(oooSchedule.orderedOps[13]->GetAIVCore(), AIVCore::UNSPECIFIED);
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(oooSchedule.orderedOps[13]->GetOpAttribute());
-    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 0);
-    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[1].GetSpecifiedValue()), 0);
+    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 1);
+    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[1].GetSpecifiedValue()), 1);
     EXPECT_TRUE(CheckOpInSet(oooSchedule.depManager_.GetPredecessors(subGraph.GetOp("COPY_IN1")),
         oooSchedule.orderedOps[13]));
 }
@@ -2061,6 +2070,7 @@ TEST_F(ScheduleOoOTest, TestL1SpillBufferFailed)
 void SetAttributeReshape1(ComputationalGraphBuilder &subGraph, OoOScheduler &oooSchedule, Operation* &reshape, Operation* &alloc3) {
     Operation* adds = subGraph.GetOp("ADDS");
     Operation* ubCopyL1 = subGraph.GetOp("UB_COPY_L1");
+    SetCopyOpAttr(ubCopyL1);
     reshape = subGraph.GetOp("RESHAPE");
     Operation* copyin1 = subGraph.GetOp("COPY_IN1");
     Operation* copyin2 = subGraph.GetOp("COPY_IN2");
@@ -2169,8 +2179,8 @@ TEST_F(ScheduleOoOTest, TestL1ReshapeSpillBuffer1)
     EXPECT_EQ(ooOSchedule.orderedOps[15]->GetOpcodeStr(), "RESHAPE");
     EXPECT_EQ(ooOSchedule.orderedOps.size(), 20);
     auto attr = std::dynamic_pointer_cast<CopyOpAttribute>(ooOSchedule.orderedOps[14]->GetOpAttribute());
-    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 0);
-    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[1].GetSpecifiedValue()), 0);
+    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[0].GetSpecifiedValue()), 1);
+    EXPECT_EQ(static_cast<int>(attr->GetFromOffset()[1].GetSpecifiedValue()), 1);
 }
 
 void SetAttributeReshape2(ComputationalGraphBuilder &subGraph, OoOScheduler &oooSchedule, Operation* &reshape, Operation* &alloc3) {
@@ -2182,10 +2192,7 @@ void SetAttributeReshape2(ComputationalGraphBuilder &subGraph, OoOScheduler &ooo
     Operation* copyin2 = subGraph.GetOp("COPY_IN2");
     Operation* copyin3 = subGraph.GetOp("COPY_IN3");
     Operation* copyin4 = subGraph.GetOp("COPY_IN4");
-    std::vector<int64_t> offset = {1, 1};
-    std::vector<int64_t> shape = {256, 512};
-    copyin5->SetOpAttribute(std::make_shared<CopyOpAttribute>(OpImmediate::Specified(offset),
-        MemoryType::MEM_L1, OpImmediate::Specified(shape), OpImmediate::Specified(shape)));
+    SetCopyOpAttr(copyin5);
 
     Operation* alloc1 = subGraph.GetOp("L1_Alloc1");
     Operation* alloc2 = subGraph.GetOp("L1_Alloc2");

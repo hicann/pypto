@@ -215,6 +215,7 @@ private:
     bool IsBelongSpillBlackList(Operation* spillOp, Operation* op);
     void FindFilterLtags(Operation* allocOp, std::set<Operation*> &filterLtags);
     Status SpillAllBuffer(Operation* allocOp, size_t &pcIdx, bool isGenSpill, LocalBufferPtr allocBuffer);
+    bool IsPartialWrite(const Operation &op) const;
     Status SpillMultiBuffer(Operation* allocOp, std::vector<int> spillGroup, size_t &pcIdx,
         LocalBufferPtr allocBuffer, bool isGenSpill);
     Status GetSpillInfo(Operation* allocOp, int spillMemId, bool isGenSpill, SpillInfo &spillInfo);
@@ -233,7 +234,7 @@ private:
     LogicalTensorPtr CreateReshapeL1Tensor(LogicalTensorPtr iOperand, LogicalTensorPtr reshapeTensor);
     Status UpdateReshapeDependAndBuf(Operation* allocOp, SpillInfo &spillInfo, LogicalTensorPtr reshapeTensor);
     Status CreateSpillReloadIssue(LogicalTensorPtr spillOutTensor, LogicalTensorPtr spillTensor,
-        Operation* spillOp, std::pair<Operation*, Operation*> &reloadOps);
+        Operation* spillOp, std::pair<Operation*, Operation*> &reloadOps, bool isSpecialL1);
     Status UpdateReloadIssueInfo(Operation* reloadAlloc, Operation* reloadCopyin,
         Operation* spillOp, int spillMemId, Operation* allocOp);
     bool HasEnoughBuffer(Operation* allocOp, MemoryType memType);
@@ -267,8 +268,9 @@ private:
     void ReplaceTensorMemId(Operation* op, int oldMemId, int newMemId);
     void ReplaceViewOpChainMemId(LogicalTensorPtr startTensor, int oldMemId, int newMemId);
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
+    void GetActualSpillInfo(Operation* spillOp, std::pair<LogicalTensorPtr, Operation*>& actualInfo);
     void UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr spillTensor, std::vector<int64_t> offset,
-        Operation* spillOp, int64_t workspaceBaseOffset);
+        Operation* spillOp, int64_t workspaceBaseOffset, bool isSpecialL1);
     Status UpdateTensorAttr(LogicalTensorPtr tensor, MemoryType memType, LogicalTensorPtr spillTensor, int spillMemId);
     int GetBufNextUseOrder(Operation* op, int curMemId);
     int GetBufLastUseOrder(Operation* op, int curMemId);
