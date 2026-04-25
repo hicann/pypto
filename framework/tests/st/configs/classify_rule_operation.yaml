@@ -262,6 +262,8 @@ stest:
       - TestBitwiseAnds/BitwiseAndsOperationTest.TestBitwiseAnds/2
       - TestBitwiseOrs/BitwiseOrsOperationTest.TestBitwiseOrs/2
       - TestBitwiseXors/BitwiseXorsOperationTest.TestBitwiseXors/2
+      - TestSin/SinOperationTest.TestSin/1
+      - TestCos/CosOperationTest.TestCos/1
       - TestCopySign/CopySignOperationTest.TestCopySign/1
       - TestCopySign/CopySignOperationTest.TestCopySign/4
       - TestCopySign/CopySignOperationTest.TestCopySign/5

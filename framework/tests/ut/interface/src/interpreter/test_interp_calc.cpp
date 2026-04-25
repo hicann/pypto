@@ -157,6 +157,24 @@ TEST_F(TorchAdaptorTest, Exp2)
     ASSERT_ALLCLOSE(out, golden);
 }
 
+TEST_F(TorchAdaptorTest, Sin)
+{
+    auto self = makeTensorData(DT_FP32, {16, 16}, 0.0f);  // sin(0) = 0
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, std::sin(0.0f));
+    calc::Sin(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, Cos)
+{
+    auto self = makeTensorData(DT_FP32, {16, 16}, 0.0f);  // cos(0) = 1
+    auto out = makeTensorData(DT_FP32, {16, 16}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {16, 16}, std::cos(0.0f));  // cos(0) = 1
+    calc::Cos(out, self);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
 TEST_F(TorchAdaptorTest, Round)
 {
     auto self = makeTensorData(DT_FP32, {16, 16}, 1.1f);

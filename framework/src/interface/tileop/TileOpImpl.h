@@ -67,6 +67,7 @@
 #include "vector/uniform.h"
 #include "vector/triul.h"
 #include "vector/onehot.h"
+#include "vector/sincos.h"
 #include "vector/index_outcast.h"
 #include "vector/bitwise_shift.h"
 #include "vector/copysign.h"

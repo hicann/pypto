@@ -824,6 +824,38 @@ def gen_log_op_golden(case_name: str, output: Path, case_index: int = None) -> b
 
 @GoldenRegister.reg_golden_func(
     case_names=[
+        "TestSin/SinOperationTest.TestSin",
+    ]
+)
+def gen_sin_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        a = from_numpy(inputs[0])
+        c = torch.sin(a)
+        return [to_numpy(c)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Sin", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestCos/CosOperationTest.TestCos",
+    ]
+)
+def gen_cos_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    # golden开发者需要根据具体golden逻辑修改，不同注册函数内的generate_golden_files可重名
+    def golden_func(inputs: list, _config: dict):
+        a = from_numpy(inputs[0])
+        c = torch.cos(a)
+        return [to_numpy(c)]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("Cos", golden_func, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
         "TestRound/RoundOperationTest.TestRound",
     ]
 )

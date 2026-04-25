@@ -114,10 +114,12 @@ void bind_operation(py::module& m)
         py::arg("self"), py::arg("precision_type") = ExpAlgorithm::HIGH_PRECISION, "Tensor exp.");
     m.def(
         "Expm1", [](const Tensor& self) { return npu::tile_fwk::Expm1(self); }, "Tensor expm1.");
-
+    m.def(
+        "Sin", [](const Tensor& self) { return npu::tile_fwk::Sin(self); }, "Tensor sin.");
+    m.def(
+        "Cos", [](const Tensor& self) { return npu::tile_fwk::Cos(self); }, "Tensor cos.");
     m.def(
         "Exp2", [](const Tensor& self) { return npu::tile_fwk::Exp2(self); }, "Tensor exp2.");
-
     m.def(
         "Permute",
         [](const Tensor& self, const std::vector<int>& perm) { return npu::tile_fwk::Permute(self, perm); },

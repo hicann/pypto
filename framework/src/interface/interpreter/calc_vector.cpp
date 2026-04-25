@@ -380,6 +380,12 @@ void ExecuteOpUnary(ExecuteOperationContext* ctx)
         case Opcode::OP_ISFINITE:
             calc::IsFinite(ret, iop);
             break;
+        case Opcode::OP_SIN:
+            calc::Sin(ret, iop);
+            break;
+        case Opcode::OP_COS:
+            calc::Cos(ret, iop);
+            break;
         default:
             ASSERT(ExecuteOperationScene::UNSUPPORTED_OPCODE, false);
     }
@@ -397,6 +403,8 @@ REGISTER_CALC_OP(OP_ABS, Opcode::OP_ABS, ExecuteOpUnary<Opcode::OP_ABS>);
 REGISTER_CALC_OP(OP_BRCB, Opcode::OP_BRCB, ExecuteOpUnary<Opcode::OP_BRCB>);
 REGISTER_CALC_OP(OP_LN, Opcode::OP_LN, ExecuteOpUnary<Opcode::OP_LN>);
 REGISTER_CALC_OP(OP_ISFINITE, Opcode::OP_ISFINITE, ExecuteOpUnary<Opcode::OP_ISFINITE>);
+REGISTER_CALC_OP(OP_SIN, Opcode::OP_SIN, ExecuteOpUnary<Opcode::OP_SIN>);
+REGISTER_CALC_OP(OP_COS, Opcode::OP_COS, ExecuteOpUnary<Opcode::OP_COS>);
 
 void ExecuteOpCeil(ExecuteOperationContext* ctx)
 {

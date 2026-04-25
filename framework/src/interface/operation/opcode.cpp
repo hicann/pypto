@@ -391,6 +391,14 @@ void OpcodeManager::RegisterVectorUnary()
         Opcode::OP_SIGNBIT, OpCoreType::AIV, "SIGNBIT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tsignbit", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_SIN, OpCoreType::AIV, "SIN", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB,
+        MemoryType::MEM_UB}, {"TileOp::Tsin", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_COS, OpCoreType::AIV, "COS", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB,
+        MemoryType::MEM_UB}, {"TileOp::Tcos", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::inputCombineAxis, OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse}, TileShapeVerifier::Verify);
 }
 
 void OpcodeManager::RegisterVectorSort()
@@ -1216,6 +1224,8 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_TRANSPOSE_MOVEOUT, "TTransMoveOut"},
     {Opcode::OP_INDEX_PUT, "TIndexPut"},
     {Opcode::OP_GCD, "TGcd"},
+    {Opcode::OP_SIN, "TSin"},
+    {Opcode::OP_COS, "TCos"},
     {Opcode::OP_ADD, "TAdd"},
     {Opcode::OP_CUM_SUM, "TCumOperation"},
     {Opcode::OP_CUM_PROD, "TCumOperation"},
