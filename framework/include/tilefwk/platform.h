@@ -426,6 +426,27 @@ public:
 
 class Host {};
 
+class PlatformSocVersionManager {
+private:
+    PlatformSocVersionManager() = default;
+    ~PlatformSocVersionManager() = default;
+
+    std::string platformSocVersion_;
+
+public:
+    static PlatformSocVersionManager& Instance()
+    {
+        static PlatformSocVersionManager instance;
+        return instance;
+    }
+
+    PlatformSocVersionManager(const PlatformSocVersionManager&) = delete;
+    PlatformSocVersionManager& operator=(const PlatformSocVersionManager&) = delete;
+
+    std::string GetPlatformSocVersion() const { return platformSocVersion_; }
+    void SetPlatformSocVersion(const std::string& version) { platformSocVersion_ = version; }
+};
+
 class Platform {
 private:
     Platform();

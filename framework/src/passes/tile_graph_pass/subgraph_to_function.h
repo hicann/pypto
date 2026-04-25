@@ -82,6 +82,7 @@ private:
         Function& rootFunc, Operation& tileOp, SubfuncParam& pSgParamInfo, int& tParamLoc, int& oParamLoc) const;
     void ProcessCopyInOperand(Operation& tileOp, std::vector<int64_t>& offset, std::vector<int64_t>& shape) const;
     void ProcessCopyOutOperand(Operation& tileOp, std::vector<int64_t>& offset, std::vector<int64_t>& shape) const;
+    void ProcessSymbolOfReshape(Function& function, Operation& op) const;
     void SymbolizeEachFunction(Function& rootFunc, std::vector<Function*>& mergedFuncList1, size_t i) const;
     void SymbolizeFunction(Function& rootFunc, std::vector<Function*>& mergedFuncList1) const;
     std::string FindSymbolName(std::shared_ptr<LogicalTensor> op, int magic) const;

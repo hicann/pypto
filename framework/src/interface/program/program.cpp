@@ -233,6 +233,10 @@ bool Program::BeginFunction(
     const std::string& funcName, const FunctionType funcType, const GraphType graphType,
     const std::vector<std::reference_wrapper<const Tensor>>& explicitOpArgs, bool isHiddenFunction)
 {
+    // set soc version from python jit codegen_options
+    std::string socVersion = config::GetCodeGenOption<std::string>(PLATFORM_SOC_VERSION);
+    PlatformSocVersionManager::Instance().SetPlatformSocVersion(socVersion);
+
     if (currentFunctionPtr_->IsFlattening() &&
         (funcType == FunctionType::STATIC &&
          (graphType == GraphType::TENSOR_GRAPH || graphType == GraphType::TILE_GRAPH))) {

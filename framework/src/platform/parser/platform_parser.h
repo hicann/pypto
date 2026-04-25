@@ -30,10 +30,12 @@ namespace tile_fwk {
 class INIParser : public PlatformParser {
 public:
     INIParser();
+    INIParser(const std::string& socVersion);
     ~INIParser() = default;
     bool GetStringVal(const std::string& column, const std::string& key, std::string& val) const override;
 
 private:
+    void INIParserInit(const std::string& socVersion);
     bool ReadINIFile(const std::string& filepath);
     bool Initialize(const std::string& iniFilePath);
     std::map<std::string, std::map<std::string, std::string>> data_;

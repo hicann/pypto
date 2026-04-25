@@ -363,6 +363,13 @@
                         "zh": "（不建议使用，后续收编）动态Shape场景下，用户若能确认运行时所有切分数据均能对齐到Tile块大小，即不包含非对齐的尾块，则可启用该选项，提示PTO框架尝试优化",
                         "en": "(Deprecated)In Dynamic Shape scenarios, if the user can confirm that all data at runtime can be aligned to the tiled block size, this option can be enabled to prompt the PTO framework to attempt optimization"
                     }
+                },
+                "soc_version": {
+                    "type": "string",
+                    "label": {
+                        "zh": "用于指定芯片版本，用于编译和推理",
+                        "en": "Used to specify specific soc_version for kernel compile and runtime"
+                    }
                 }
             }
         },
@@ -790,6 +797,13 @@
                             "label": {
                                 "zh": "（不建议使用，后续收编）动态Shape场景下，用户若能确认运行时所有切分数据均能对齐到Tile块大小，即不包含非对齐的尾块，则可启用该选项，提示PTO框架尝试优化",
                                 "en": "(Deprecated)In Dynamic Shape scenarios, if the user can confirm that all data at runtime can be aligned to the tiled block size, this option can be enabled to prompt the PTO framework to attempt optimization"
+                            }
+                        },
+                        "soc_version": {
+                            "type": "string",
+                            "label": {
+                                "zh": "用于指定芯片版本，用于编译和推理",
+                                "en": "Used to specify specific soc_version for kernel compile and runtime"
                             }
                         },
                         "fixed_output_path": {

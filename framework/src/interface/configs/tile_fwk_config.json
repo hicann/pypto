@@ -31,7 +31,8 @@
         "compile_monitor_print_interval": 60
     },
     "codegen": {
-        "support_dynamic_aligned": false
+        "support_dynamic_aligned": false,
+        "soc_version": ""
     },
     "verify": {
         "enable_pass_verify": false,
@@ -87,6 +88,7 @@
         "codegen": {
             "parallel_compile" : 128,
             "support_dynamic_aligned": false,
+            "soc_version": "",
             "fixed_output_path": false,
             "force_overwrite": true,
             "codegen_support_tile_tensor": true

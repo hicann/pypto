@@ -241,7 +241,7 @@ function(PTO_Fwk_GTest_AddExe)
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/interface/configs/*.json"                         "${InstallConfigsDir}/"
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/passes/pass_config/tile_fwk_platform_info.json"   "${InstallConfigsDir}/"
             COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/platform/parser/platforminfo.ini"   "${InstallConfigsDir}/"
-            COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/platform/parser/simulation_platform/platform_config/A2A3.ini"   "${InstallConfigsDir}/"
+            COMMAND ln -sf "${PTO_FWK_SRC_ROOT}/framework/src/platform/parser/simulation_platform/platform_config/*.ini"   "${InstallConfigsDir}/"
             COMMENT "Soft link of configs(*.json) has been created at ${InstallConfigsDir}"
     )
     # 模拟脚本文件 Install 流程, 为便于调试, 使用创建软连接方式模拟安装

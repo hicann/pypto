@@ -350,7 +350,7 @@ protected:
     std::string PrintMemCopyWithUBDynamic(const PrintMemCopyWithUBParam& param) const;
     std::string PrintMemCopyWithUBDynamicSupportUnaligned(const PrintMemCopyWithUBParam& param) const;
     std::string PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBParam& param) const;
-    std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx) const;
+    virtual std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx) const;
 
     std::string PrintGather(const PrintGatherParam& param) const;
     std::string PrintGatherDynamicUnaligned(const PrintGatherParam& param) const;

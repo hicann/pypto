@@ -204,7 +204,7 @@ def get_host_options() -> Dict[str, Union[str, int, List[int], Dict[int, int]]]:
     return scope.get_host_options()
 
 
-def set_codegen_options(*, support_dynamic_aligned: Optional[bool] = None) -> None:
+def set_codegen_options(*, support_dynamic_aligned: Optional[bool] = None, soc_version: Optional[str] = None) -> None:
     """
     Set codegen options.
 
@@ -213,6 +213,8 @@ def set_codegen_options(*, support_dynamic_aligned: Optional[bool] = None) -> No
     support_dynamic_aligned : bool
         Whether to support dynamic shape which is aligned.
 
+    soc_version : str
+        User specified soc_version for compile, codegen and runtime.
     """
     options_dict = {k: v for k, v in locals().items() if v is not None}
     set_options(codegen_options=options_dict)

@@ -14,6 +14,7 @@
  */
 
 #include "codegen_op_litenpu.h"
+#include "codegen/npu/litenpu/codegen_litenpu.h"
 
 namespace npu::tile_fwk {
 
@@ -70,7 +71,7 @@ TileTensor CodeGenOpLiteNPU::BuildTileTensor(int paramIdx, const std::string& us
     tileTensor.bufType = operandType[paramIdx];
 
     if (tileTensor.bufType == OperandType::BUF_DDR) {
-        tileTensor.bufVar = isSpillToGm ? GenGMAddrExprWithOffset(GM_STACK_BASE) : GenGmParamVar(paramIdx);
+        tileTensor.bufVar = isSpillToGm ? GenGMAddrExprWithOffset(CODEGEN_LITENPU_WORKSPACE) : GenGmParamVar(paramIdx);
     } else {
         tileTensor.bufVar = sm->QueryVarNameByTensorMagic(tileTensor.magic, true);
     }
@@ -106,6 +107,17 @@ void CodeGenOpLiteNPU::UpdateTileTensorShapeAndStride(
         tileTensor.stride = BuildStride(newRawShape);
         return;
     }
+}
+
+std::vector<std::string> CodeGenOpLiteNPU::GetGmOffsetForTileTensor(unsigned gmIdx) const
+{
+    int dim = static_cast<int>(rawShape[gmIdx].size());
+
+    if (offsetFromAttr[gmIdx][ID0].IsValid()) {
+        return GenSymbolicArgument(offsetFromAttr[gmIdx]);
+    }
+
+    return GenGetParamMacroPacked(gmIdx, dim, PREFIX_STR_OFFSET);
 }
 
 } // namespace npu::tile_fwk
