@@ -94,7 +94,7 @@ def softmax_kernel(
 
     for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
         b_offset = idx * tile_b
-        b_offset_end = pypto.min((idx + 1) * tile_b, bs)
+        b_offset_end = min((idx + 1) * tile_b, bs)
         input_view = pypto.view(input_tensor,
                                 [tile_b, N1, N2, DIM],
                                 [b_offset, 0, 0, 0],

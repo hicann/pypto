@@ -220,7 +220,7 @@ def attention_with_projection_kernel(
 
     for idx in pypto.loop(0, b_loop, 1, name="LOOP_L0_bIdx", idx_name="idx"):
         b_offset = idx * tile_b
-        b_offset_end = pypto.min((idx + 1) * tile_b, BATCH_SIZE)
+        b_offset_end = min((idx + 1) * tile_b, BATCH_SIZE)
         view_shape = [tile_b, NUM_HEADS, SEQ_LEN, HEAD_DIM]
         valid_shape = [b_offset_end - b_offset, NUM_HEADS, SEQ_LEN, HEAD_DIM]
         q_view = pypto.view(q, view_shape, [b_offset, 0, 0, 0], valid_shape=valid_shape)

@@ -46,14 +46,14 @@ def add_constant_kernel(
 
     for m_idx, m_unroll_factor in pypto.loop_unroll(m_loop, unroll_list=[4, 2, 1]):
         m_offset = m_idx * tile_m
-        m_offset_end = pypto.min(m_offset + tile_m * m_unroll_factor, m_dyn)
+        m_offset_end = min(m_offset + tile_m * m_unroll_factor, m_dyn)
         valid_m = m_offset_end - m_offset
 
         n_loop = (n_dyn + tile_n - 1) // tile_n
 
         for n_idx, n_unroll_factor in pypto.loop_unroll(n_loop, unroll_list=[4, 2, 1]):
             n_offset = n_idx * tile_n
-            n_offset_end = pypto.min(n_offset + tile_n * n_unroll_factor, n_dyn)
+            n_offset_end = min(n_offset + tile_n * n_unroll_factor, n_dyn)
             valid_n = n_offset_end - n_offset
 
             actual_tile_m = tile_m * m_unroll_factor

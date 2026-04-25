@@ -205,7 +205,7 @@ def quant(
     else:
         max_value = pypto.amax(input_fp32, -1, keepdim=True)
         min_value = pypto.amin(input_fp32, -1, keepdim=True)
-        scale_de_quant = pypto.max(pypto.div(pypto.sub(max_value, min_value), 255.0), 1e-12)
+        scale_de_quant = max(pypto.div(pypto.sub(max_value, min_value), 255.0), 1e-12)
         offset = pypto.sub(127.0, pypto.div(max_value, scale_de_quant))
         scale_quant = scalar_div(max_value, 1.0, True)
         out_fp32 = pypto.mul(input_fp32, scale_quant)

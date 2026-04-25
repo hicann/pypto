@@ -91,7 +91,7 @@ def get_device_id():
 #   - Define dynamic dimension at MODULE LEVEL (outside any function)
 #   - Use pypto.view to slice tiles from the input along the dynamic axis
 #   - Use pypto.assemble to write computed tiles back to the output
-#   - Use pypto.min for boundary management on the last tile
+#   - Use min for boundary management on the last tile
 #
 # IMPORTANT: Dynamic dimensions MUST be defined at using pypto.DYNAMIC
 
@@ -109,7 +109,7 @@ def dynamic_mul_kernel(
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
         # Boundary management: clamp end offset to actual batch size
-        b_offset_end = pypto.min(b_offset + tile_b, batch_size_dyn)
+        b_offset_end = min(b_offset + tile_b, batch_size_dyn)
         valid_shape = [b_offset_end - b_offset, 128]
 
         # View a tile from the input
@@ -296,7 +296,7 @@ def attention_kernel(
 
     for bss_idx in pypto.loop(bs_loop):
         bs_offset = bss_idx * tile
-        bs_offset_end = pypto.min(bs_offset + tile, bs_dyn)
+        bs_offset_end = min(bs_offset + tile, bs_dyn)
 
         # View tiles along the dynamic batch axis
         q_view = pypto.view(
@@ -392,14 +392,14 @@ def dynamic_add_kernel(
 
     for b_idx in pypto.loop(b_loop):
         b_offset = b_idx * tile_b
-        b_offset_end = pypto.min(b_offset + tile_b, batch_dyn)
+        b_offset_end = min(b_offset + tile_b, batch_dyn)
         valid_b = b_offset_end - b_offset
 
         h_loop = (hidden_dyn + tile_h - 1) // tile_h
 
         for h_idx in pypto.loop(h_loop):
             h_offset = h_idx * tile_h
-            h_offset_end = pypto.min(h_offset + tile_h, hidden_dyn)
+            h_offset_end = min(h_offset + tile_h, hidden_dyn)
             valid_h = h_offset_end - h_offset
 
             x_view = pypto.view(

@@ -271,7 +271,7 @@ def add_scalar_loop_dynamic_axis_kernel(
 
     for idx in pypto.loop(b_loop):
         b_offset = idx * tile_b
-        b_offset_end = pypto.min((idx + 1) * tile_b, b)
+        b_offset_end = min((idx + 1) * tile_b, b)
 
         valid_shape = [b_offset_end - b_offset, w, n, c]
 

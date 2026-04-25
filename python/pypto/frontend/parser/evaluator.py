@@ -33,12 +33,36 @@ Example:
 """
 
 import ast
+import builtins
 from typing import Any
 
 import pypto
 
 from pypto.error import ParserError
 from .diagnostics import Diagnostics
+
+
+def _min(*args: Any, **kwargs: Any) -> Any:
+    if (
+        len(args) == 2
+        and not kwargs
+        and any(isinstance(arg, pypto.SymbolicScalar) for arg in args)
+    ):
+        return pypto.min(args[0], args[1])
+    return builtins.min(*args, **kwargs)
+
+
+def _max(*args: Any, **kwargs: Any) -> Any:
+    if (
+        len(args) == 2
+        and not kwargs
+        and any(isinstance(arg, pypto.SymbolicScalar) for arg in args)
+    ):
+        return pypto.max(args[0], args[1])
+    return builtins.max(*args, **kwargs)
+
+
+_EVAL_BUILTIN_OVERRIDES = {"min": _min, "max": _max}
 
 
 class ExprEvaluator:
@@ -135,6 +159,7 @@ class ExprEvaluator:
             for key, value in dict_locals.items():
                 if isinstance(value, pypto.SymbolicScalar) and value.is_concrete():
                     dict_locals[key] = value.concrete()
+            dict_locals.update(_EVAL_BUILTIN_OVERRIDES)
             try:
                 return eval(exe, {}, dict_locals)  # pylint: disable=eval-used
             except Exception as e:
@@ -148,6 +173,7 @@ class ExprEvaluator:
             for key, value in dict_locals.items():
                 if isinstance(value, pypto.SymbolicScalar) and value.is_concrete():
                     dict_locals[key] = value.concrete()
+            dict_locals.update(_EVAL_BUILTIN_OVERRIDES)
             try:
                 return exec(exe, {}, dict_locals)  # pylint: disable=exec-used
             except Exception as e:

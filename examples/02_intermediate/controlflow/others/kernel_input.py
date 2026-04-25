@@ -131,7 +131,7 @@ def scaled_dot_product_attention_kernel(
 
     for bs_idx in pypto.loop(b_loop):
         b_offset = bs_idx * tile
-        b_offset_end = pypto.min(b_offset + tile, bs)
+        b_offset_end = min(b_offset + tile, bs)
         q_view = pypto.view(q, [tile, head, q_len, dim], [b_offset, 0, 0, 0],
                             valid_shape=[b_offset_end - b_offset, head, q_len, dim]
         )
