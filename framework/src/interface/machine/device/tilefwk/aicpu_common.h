@@ -50,7 +50,7 @@ constexpr int FUNC_ID_BATCH = 0x7FF;
 const uint64_t SHARED_BUFFER_SIZE = 512;
 const uint64_t PMU_BUFFER_SIZE = 4096;
 const uint64_t DEVICE_QUEUE_SIZE = 512;
-const uint64_t PRINT_BUFFER_SIZE = 16384;
+const uint64_t PRINT_BUFFER_SIZE = 131072;  // 128KB
 
 constexpr const int DEV_SHAPE_DIM_NUM_2 = 2;
 constexpr const int DEV_SHAPE_DIM_NUM_3 = 3;

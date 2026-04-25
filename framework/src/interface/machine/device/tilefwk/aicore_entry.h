@@ -348,7 +348,7 @@ INLINE void ExecDynCoreFunctionKernel(ExecuteContext* ctx, uint32_t taskId)
     auto funcData = &ctx->cachedDevTasks[ctx->curLeafTaskParallelIdx].funcDataList[npu::tile_fwk::FuncID(taskId)];
     auto opAttrs = &funcData->opAttrs[funcData->opAtrrOffsets[npu::tile_fwk::TaskID(taskId)]];
 #if ENABLE_AICORE_PRINT
-    CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, ctx->logger.context()};
+    CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, ctx->logger.Context()};
 #else
     CoreFuncParam param = {funcData, opAttrs, funcData->exprTbl, taskId, nullptr};
 #endif
