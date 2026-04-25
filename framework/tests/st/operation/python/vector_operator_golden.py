@@ -3115,6 +3115,188 @@ def gen_floor_divs_golden(case_name: str, output: Path, case_index: int = None) 
     return gen_op_golden("FloorDivs", generate_wrapper, output, case_index)
 
 
+@TestCaseLoader.reg_params_handler(ops=["Quantize"])
+def quantize_params_func(params: dict):
+    """
+    Parameter handler for Quantize operation.
+    Converts parameter types from JSON strings to appropriate Python types.
+    """
+    params["dtype"] = int(params.get("dtype", "3"))  # Default to DT_INT8
+    params["axis"] = int(params.get("axis", "-1"))
+    # Convert use_zero_points from string to bool
+    use_zero_points_str = params.get("use_zero_points", "False")
+    if isinstance(use_zero_points_str, bool):
+        params["use_zero_points"] = use_zero_points_str
+    else:
+        params["use_zero_points"] = str_to_bool(use_zero_points_str)
+    return params
+
+
+@GoldenRegister.reg_golden_func(case_names=[
+    "TestQuantize/QuantizeOperationTest.TestQuantize",
+])
+def gen_quantize_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def quantize_golden_func(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],    # noqa
+    ) -> List[np.ndarray]:
+        """
+        Golden implementation for Quantize operation.
+
+        Supports:
+        - Symmetric quantization: q = round(x * scale)
+        - Asymmetric quantization: q = round(x * scale) + zero_points
+        """
+        def ascend_tcvt_int8(x: torch.Tensor) -> torch.Tensor:
+            """使用 torch.quantize 风格的实现"""
+            
+            # Step 1: FP32 -> S32 (round to nearest even)
+            s32 = torch.round(x).to(torch.int32)  # -0.528 -> 0
+            
+            # Step 2 & 3: S32 -> FP16 -> INT8 (saturation)
+            # 由于 S32 是整数，直接饱和到 INT8 范围即可
+            return torch.clamp(s32, -128, 127).to(torch.int8)
+        
+        def ascend_tcvt_uint8(src_fp32: torch.Tensor) -> torch.Tensor:
+            """
+            三段式转换，最终输出 uint8
+            """
+            
+            # Step 1: FP32 -> S32 (CAST_RINT)
+            src_s32 = torch.round(src_fp32).to(torch.int32)
+            # -0.528 -> 0
+            
+            # Step 2: S32 -> FP16 (CAST_RINT)
+            src_f16 = src_s32.to(torch.float16)
+            
+            # Step 3: FP16 -> uint8 (CAST_RINT, Saturation ON)
+            # uint8 范围: [0, 255]
+            dst_float = torch.round(src_f16.to(torch.float32))
+            dst_clamped = torch.clamp(dst_float, min=0, max=255)  # 关键：min=0
+            dst = dst_clamped.to(torch.uint8)
+            return dst
+        
+        params = config.get("params")
+        input_tensor = from_numpy(inputs[0])
+        scale = from_numpy(inputs[1])
+
+        # Get output dtype from config
+        output_dtype = config.get("output_tensors")[0].get("dtype")
+        axis = int(params.get("axis", "-1"))
+        use_zero_points = params.get("use_zero_points", False)
+
+        # Convert to target dtype
+        if output_dtype == "int8":
+            if axis == -1:
+                quantized = ascend_tcvt_int8(input_tensor * scale[..., None])
+            elif axis == -2: # axis = -2
+                quantized = ascend_tcvt_int8(input_tensor * scale[..., None, :])
+        elif output_dtype == "uint8":
+            zero_points = from_numpy(inputs[2])
+            if axis == -1:
+                quantized = ascend_tcvt_uint8(input_tensor * scale[..., None] + zero_points[..., None])
+            elif axis == -2: # axis = -2
+                quantized = ascend_tcvt_uint8(input_tensor * scale[..., None, :] + zero_points[..., None, :])
+        else:
+            raise ValueError(f"Unsupported output dtype for quantize: {output_dtype}")
+        return [to_numpy(quantized)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("Quantize", quantize_golden_func, output, case_index)
+
+
+@TestCaseLoader.reg_params_handler(ops=["Dequantize"])
+def dequantize_params_func(params: dict):
+    """
+    Parameter handler for Dequantize operation.
+    Converts parameter types from JSON strings to appropriate Python types.
+    """
+    params["otype"] = int(params.get("otype", "0"))  # Default to DT_FP32
+    params["axis"] = int(params.get("axis", "-1"))
+    # Convert use_zero_points from string to bool
+    use_zero_points_str = params.get("use_zero_points", "False")
+    if isinstance(use_zero_points_str, bool):
+        params["use_zero_points"] = use_zero_points_str
+    else:
+        params["use_zero_points"] = str_to_bool(use_zero_points_str)
+    return params
+
+
+@GoldenRegister.reg_golden_func(case_names=[
+    "TestDequantize/DequantizeOperationTest.TestDequantize",
+])
+def gen_dequantize_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def dequantize_golden_func(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],    # noqa
+    ) -> List[np.ndarray]:
+        """
+        Golden implementation for Dequantize operation.
+
+        Supports:
+        - INT8 -> FP32: symmetric/asymmetric
+        - INT16 -> FP32: symmetric/asymmetric
+
+        Formula:
+        - Symmetric: dst = src * scale
+        - Asymmetric: dst = (src - offset) * scale
+        """
+        params = config.get("params")
+        input_tensor = inputs[0]  # INT8 or INT16
+        scale = inputs[1]  # FP32
+
+        axis = int(params.get("axis", "-1"))
+        use_zero_points = params.get("use_zero_points", False)
+
+        # Convert input to float for computation
+        if input_tensor.dtype == np.int8:
+            input_float = input_tensor.astype(np.float32)
+        elif input_tensor.dtype == np.int16:
+            input_float = input_tensor.astype(np.float32)
+        else:
+            input_float = input_tensor.astype(np.float32)
+
+        # Broadcast scale based on axis
+        ndim = input_float.ndim
+        normalized_axis = axis if axis < 0 else axis - ndim
+
+        if use_zero_points and len(inputs) > 2:
+            zero_points = inputs[2].astype(np.float32)
+            # Broadcast scale and zero_points based on axis
+            if normalized_axis == -1:
+                # Broadcast along last dimension
+                if scale.ndim == ndim - 1:
+                    scale = np.expand_dims(scale, axis=-1)
+                if zero_points.ndim == ndim - 1:
+                    zero_points = np.expand_dims(zero_points, axis=-1)
+            elif normalized_axis == -2:
+                # Broadcast along second-to-last dimension
+                if scale.ndim == ndim - 1:
+                    scale = np.expand_dims(scale, axis=-2)
+                if zero_points.ndim == ndim - 1:
+                    zero_points = np.expand_dims(zero_points, axis=-2)
+            result = (input_float - zero_points) * scale
+        else:
+            # Broadcast scale based on axis
+            if normalized_axis == -1:
+                # Broadcast along last dimension
+                if scale.ndim == ndim - 1:
+                    scale = np.expand_dims(scale, axis=-1)
+            elif normalized_axis == -2:
+                # Broadcast along second-to-last dimension
+                if scale.ndim == ndim - 1:
+                    scale = np.expand_dims(scale, axis=-2)
+            result = input_float * scale
+
+        # Output is always FP32
+        return [result.astype(np.float32)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("Dequantize", dequantize_golden_func, output, case_index)
+
+
 def main() -> bool:
     # 用例名称
     case_name_list: List[str] = [

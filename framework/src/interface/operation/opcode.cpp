@@ -560,12 +560,27 @@ void OpcodeManager::RegisterVectorReduction()
         {OpAttributeKey::excludeBufferReuse});
 }
 
-void OpcodeManager::RegisterVector()
-{
+void OpcodeManager::RegisterVectorQuant() {
+    RegisterInfo(Opcode::OP_QUANTIZE_SYM, OpCoreType::AIV, "QUANTIZE_SYM", {MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TQuant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
+    RegisterInfo(Opcode::OP_QUANTIZE_ASYM, OpCoreType::AIV, "QUANTIZE_ASYM", {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TQuant",PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "dtype"}, TileShapeVerifier::Verify);
+    // Dequantization: INT8/INT16 -> FP32
+    // Always 4 params: dst, src, scale, offset (symmetric: offset=0)
+    RegisterInfo(Opcode::OP_DEQUANTIZE, OpCoreType::AIV, "DEQUANTIZE", 
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
+        {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OP_ATTR_PREFIX + "axis"}, TileShapeVerifier::Verify);
+}
+
+void OpcodeManager::RegisterVector() {
     RegisterVectorBinary();
     RegisterVectorUnary();
     RegisterVectorSort();
     RegisterVectorReduction();
+    RegisterVectorQuant();
     RegisterInfo(
         Opcode::OP_CAST, OpCoreType::AIV, "CAST", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::Tcast", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::CAST,
@@ -1309,6 +1324,9 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_COPYSIGN, "TCopysign"},
     {Opcode::OP_FLOORDIV, "TFloorDiv"},
     {Opcode::OP_FLOORDIVS, "TFloorDivS"},
+    {Opcode::OP_QUANTIZE_SYM, "TQuant"},
+    {Opcode::OP_QUANTIZE_ASYM, "TQuant"},
+    {Opcode::OP_DEQUANTIZE, "TDequant"},
     {Opcode::OP_L1_TO_L0A, "TExtract"},
     {Opcode::OP_L1_TO_L0B, "TExtract"},
     {Opcode::OP_L1_TO_L0_AT, "TExtract"},

@@ -1843,4 +1843,166 @@ TEST_F(TorchAdaptorTest, NDNZ)
         }
     }
 }
+
+TEST_F(TorchAdaptorTest, QuantizeSymmetricToInt8)
+{
+    // Symmetric quantization: FP32 -> INT8
+    // Formula: output = clamp(round(input * scale), -128, 127)
+    // Input: [2.0, 4.0, 6.0, 8.0], scale: 0.5
+    // Expected: round([1.0, 2.0, 3.0, 4.0]) = [1, 2, 3, 4]
+    std::vector<float> inputData = {2.0f, 4.0f, 6.0f, 8.0f};
+    std::vector<float> scaleData = {0.5f};
+    std::vector<int8_t> goldenData = {1, 2, 3, 4};
+
+    auto input = makeTensorData(DT_FP32, {2, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto out = makeTensorData(DT_INT8, {2, 2}, static_cast<int8_t>(0));
+    auto golden = makeTensorData(DT_INT8, {2, 2}, goldenData);
+
+    calc::Quantize(out, input, scale, nullptr);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, QuantizeAsymmetricToUInt8)
+{
+    // Asymmetric quantization: FP32 -> UINT8
+    // Formula: output = clamp(round(input * scale + zero_points), 0, 255)
+    // Input: [2.0, 4.0, 6.0, 8.0], scale: 0.5, zero_points: 128
+    // Expected: round([1.0, 2.0, 3.0, 4.0]) + 128 = [129, 130, 131, 132]
+    std::vector<float> inputData = {2.0f, 4.0f, 6.0f, 8.0f};
+    std::vector<float> scaleData = {0.5f};
+    std::vector<int32_t> zeroPointsData = {128};
+    std::vector<uint8_t> goldenData = {129, 130, 131, 132};
+
+    auto input = makeTensorData(DT_FP32, {2, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto zeroPoints = makeTensorData(DT_INT32, {1}, zeroPointsData);
+    auto out = makeTensorData(DT_UINT8, {2, 2}, static_cast<uint8_t>(0));
+    auto golden = makeTensorData(DT_UINT8, {2, 2}, goldenData);
+
+    calc::Quantize(out, input, scale, zeroPoints);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, QuantizeSymmetricClamp)
+{
+    // Test clamping for symmetric quantization (INT8 range: -128 to 127)
+    // Input: [300.0, -300.0], scale: 1.0
+    // Expected: clamp([300, -300], -128, 127) = [127, -128]
+    std::vector<float> inputData = {300.0f, -300.0f};
+    std::vector<float> scaleData = {1.0f};
+    std::vector<int8_t> goldenData = {127, -128};
+
+    auto input = makeTensorData(DT_FP32, {1, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto out = makeTensorData(DT_INT8, {1, 2}, static_cast<int8_t>(0));
+    auto golden = makeTensorData(DT_INT8, {1, 2}, goldenData);
+
+    calc::Quantize(out, input, scale, nullptr);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, QuantizeAsymmetricClamp)
+{
+    // Test clamping for asymmetric quantization (UINT8 range: 0 to 255)
+    // Input: [100.0, -100.0], scale: 2.0, zero_points: 128
+    // Expected: clamp([200, -200] + 128, 0, 255) = clamp([328, -72], 0, 255) = [255, 0]
+    std::vector<float> inputData = {100.0f, -100.0f};
+    std::vector<float> scaleData = {2.0f};
+    std::vector<int32_t> zeroPointsData = {128};
+    std::vector<uint8_t> goldenData = {255, 0};
+
+    auto input = makeTensorData(DT_FP32, {1, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto zeroPoints = makeTensorData(DT_INT32, {1}, zeroPointsData);
+    auto out = makeTensorData(DT_UINT8, {1, 2}, static_cast<uint8_t>(0));
+    auto golden = makeTensorData(DT_UINT8, {1, 2}, goldenData);
+
+    calc::Quantize(out, input, scale, zeroPoints);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, DequantizeInt8ToFP32)
+{
+    // Dequantize: INT8 -> FP32
+    // Formula: output = input * scale
+    // Input: [1, 2, 3, 4], scale: 2.0
+    // Expected: [2.0, 4.0, 6.0, 8.0]
+    std::vector<int8_t> inputData = {1, 2, 3, 4};
+    std::vector<float> scaleData = {2.0f};
+    std::vector<float> goldenData = {2.0f, 4.0f, 6.0f, 8.0f};
+
+    auto input = makeTensorData(DT_INT8, {2, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto zeroPoints = makeTensorData(DT_INT32, {1}, 0);
+    auto out = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {2, 2}, goldenData);
+
+    calc::Dequantize(out, input, scale, zeroPoints);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, DequantizeInt16ToFP32)
+{
+    // Dequantize: INT16 -> FP32
+    // Input: [10, 20, 30, 40], scale: 0.5
+    // Expected: [5.0, 10.0, 15.0, 20.0]
+    std::vector<int16_t> inputData = {10, 20, 30, 40};
+    std::vector<float> scaleData = {0.5f};
+    std::vector<float> goldenData = {5.0f, 10.0f, 15.0f, 20.0f};
+
+    auto input = makeTensorData(DT_INT16, {2, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto zeroPoints = makeTensorData(DT_INT32, {1}, 0);
+    auto out = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {2, 2}, goldenData);
+
+    calc::Dequantize(out, input, scale, zeroPoints);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, DequantizeAsymmetric)
+{
+    // Dequantize with zero_points: INT8 -> FP32
+    // Formula: output = input * scale - zero_points
+    // Input: [30, 31], scale: 0.5, zero_points: 128
+    // Expected: [30 * 0.5 - 128, 31 * 0.5 - 128] = [15 - 128, 15.5 - 128] = [-113.0, -112.5]
+    std::vector<int8_t> inputData = {30, 31};
+    std::vector<float> scaleData = {0.5f};
+    std::vector<int32_t> zeroPointsData = {128};
+    std::vector<float> goldenData = {-113.0f, -112.5f};
+
+    auto input = makeTensorData(DT_INT8, {1, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto zeroPoints = makeTensorData(DT_INT32, {1}, zeroPointsData);
+    auto out = makeTensorData(DT_FP32, {1, 2}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {1, 2}, goldenData);
+
+    calc::Dequantize(out, input, scale, zeroPoints);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
+TEST_F(TorchAdaptorTest, QuantizeDequantizeRoundTrip)
+{
+    // Quantize-Dequantize round trip test
+    // Input: [2.0, 4.0, 6.0, 8.0], scale: 1.0
+    // Quantize (symmetric): [2, 4, 6, 8]
+    // Dequantize: [2.0, 4.0, 6.0, 8.0]
+    std::vector<float> inputData = {2.0f, 4.0f, 6.0f, 8.0f};
+    std::vector<float> scaleData = {1.0f};
+    std::vector<float> goldenData = {2.0f, 4.0f, 6.0f, 8.0f};
+
+    auto input = makeTensorData(DT_FP32, {2, 2}, inputData);
+    auto scale = makeTensorData(DT_FP32, {1}, scaleData);
+    auto quantized = makeTensorData(DT_INT8, {2, 2}, static_cast<int8_t>(0));
+    auto out = makeTensorData(DT_FP32, {2, 2}, 0.0f);
+    auto golden = makeTensorData(DT_FP32, {2, 2}, goldenData);
+
+    auto zeroPoints = makeTensorData(DT_INT32, {1}, 0);
+
+    calc::Quantize(quantized, input, scale, nullptr);
+    calc::Dequantize(out, quantized, scale, zeroPoints);
+    ASSERT_ALLCLOSE(out, golden);
+}
+
 } // namespace npu::tile_fwk

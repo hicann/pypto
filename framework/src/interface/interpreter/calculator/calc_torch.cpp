@@ -1733,8 +1733,83 @@ void IndexAdd(
     ToOperand(tout.second, tout.first, out.dtype);
 }
 
-void TriU(const TensorData& out, const TensorData& in, int diagonal)
-{
+static void Quantize(const TensorData &out, const TensorData &input, const TensorData &scale, const TensorData &zeroPoints) {
+    auto tout = From(out);
+    auto tinput = From(input);
+    auto tscale = From(scale);
+
+    int inputRank = tinput.second.dim();
+    int normalizedAxis = inputRank - 1;
+
+    // Broadcast scale to match input shape based on axis
+    auto scaleTensor = tscale.second;
+    while (scaleTensor.dim() < inputRank) {
+        scaleTensor = scaleTensor.unsqueeze(normalizedAxis);
+    }
+    scaleTensor = scaleTensor.expand_as(tinput.second);
+
+    auto scaled = tinput.second * scaleTensor;
+
+    // Apply zero_points for asymmetric quantization
+    if (zeroPoints.dataPtr != nullptr) {
+        auto tzeroPoints = From(zeroPoints);
+        auto zeroPointsTensor = tzeroPoints.second;
+
+        // Broadcast zero_points based on axis (same as scale)
+        while (zeroPointsTensor.dim() < inputRank) {
+            zeroPointsTensor = zeroPointsTensor.unsqueeze(normalizedAxis);
+        }
+        zeroPointsTensor = zeroPointsTensor.expand_as(tinput.second);
+
+        scaled = scaled + zeroPointsTensor;
+    }
+
+    auto rounded = torch::round(scaled);
+
+    if (out.dtype == DT_UINT8) {
+        rounded = torch::clamp(rounded, 0, 255);
+    } else if (out.dtype == DT_INT8) {
+        rounded = torch::clamp(rounded, -128, 127);
+    }
+
+    ToOperand(rounded, tout.first, out.dtype);
+}
+
+static void Dequantize(const TensorData &out, const TensorData &input, const TensorData &scale, const TensorData &zeroPoints) {
+    auto tout = From(out);
+    auto tinput = From(input);
+    auto tscale = From(scale);
+
+    int inputRank = tinput.second.dim();
+    int normalizedAxis = inputRank - 1;
+
+    // Broadcast scale to match input shape based on axis
+    auto scaleTensor = tscale.second;
+    while (scaleTensor.dim() < inputRank) {
+        scaleTensor = scaleTensor.unsqueeze(normalizedAxis);
+    }
+    scaleTensor = scaleTensor.expand_as(tinput.second);
+
+    auto result = tinput.second * scaleTensor;
+
+    // Apply zero_points for asymmetric dequantization
+    if (zeroPoints.dataPtr != nullptr) {
+        auto tzeroPoints = From(zeroPoints);
+        auto zeroPointsTensor = tzeroPoints.second;
+
+        // Broadcast zero_points based on axis (same as scale)
+        while (zeroPointsTensor.dim() < inputRank) {
+            zeroPointsTensor = zeroPointsTensor.unsqueeze(normalizedAxis);
+        }
+        zeroPointsTensor = zeroPointsTensor.expand_as(tinput.second);
+
+        result = result - zeroPointsTensor;
+    }
+
+    ToOperand(result, tout.first, out.dtype);
+}
+
+void TriU(const TensorData &out, const TensorData &in, int diagonal) {
     auto output = From(out);
     auto input = From(in);
 
@@ -2626,6 +2701,8 @@ static struct CalcOps calcOps = {
     .FormatNZ2ND = FormatNZ2ND,
     .QuantPreCompute = QuantPreCompute,
     .MatMul = MatMul,
+    .Quantize = Quantize,
+    .Dequantize = Dequantize,
     .BitSort = BitSort,
     .TiledMrgSort = TiledMrgSort,
     .Extract = Extract,

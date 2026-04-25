@@ -20,6 +20,7 @@ from .matmul import *  # noqa
 from .conv import *  # noqa
 from .mutating import *  # noqa
 from .other import *  # noqa
+from .quantization import *  # noqa
 from .verify import *  # noqa
 from .reduction import *  # noqa
 from . import distributed # noqa

@@ -1910,4 +1910,100 @@ std::string CodeGenOpNPU::GenLogicalAndOp() const
 
     return os.str();
 }
+
+std::string CodeGenOpNPU::GenQuantizeOp() const {
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Quantize only support TileTensor mode";
+    return PrintQuantizeTileTensor();
+}
+
+std::string CodeGenOpNPU::PrintQuantizeTileTensor() const
+{
+    // Get tensor names
+    // For QUANTIZE_SYM: dst(ID0), src(ID1), scale(ID2)
+    // For QUANTIZE_ASYM: dst(ID0), src(ID1), scale(ID2), offset(ID3)
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::string srcTensor = QueryTileTensorNameByIdx(ID1);
+    std::string scaleTensor = QueryTileTensorNameByIdx(ID2);
+
+    // Note: axis parameter is handled at Operation layer via Transpose
+    // TileOp layer only supports axis=-1 (per-row quantization)
+
+    // Determine quantization type based on opcode
+    std::string quantType;
+    if (opCode == Opcode::OP_QUANTIZE_SYM) {
+        quantType = "pto::QuantType::INT8_SYM";
+    } else {
+        quantType = "pto::QuantType::INT8_ASYM";
+    }
+
+    std::ostringstream oss;
+    std::vector<std::string> templateParamList;
+    templateParamList.emplace_back(quantType);
+
+    std::vector<std::string> paramList;
+    paramList.emplace_back(dstTensor);
+    paramList.emplace_back(srcTensor);
+    paramList.emplace_back(scaleTensor);
+
+    // For asymmetric quantization, add offset tensor
+    if (opCode == Opcode::OP_QUANTIZE_ASYM) {
+        std::string offsetTensor = QueryTileTensorNameByIdx(ID3);
+        paramList.emplace_back(offsetTensor);
+    }
+
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets(templateParamList);
+    oss << WrapParamByParentheses(paramList);
+    oss << STMT_END;
+
+    return oss.str();
+}
+
+std::string CodeGenOpNPU::GenDequantizeOp() const {
+    ASSERT(GenCodeErr::PRINT_MODE_ERROR, isSupportLayout) << "Dequantize only support TileTensor mode";
+    return PrintDequantizeTileTensor();
+}
+
+std::string CodeGenOpNPU::PrintDequantizeTileTensor() const
+{
+    // TDequant always has 4 params: dst, src, scale, offset
+    // - INT8 -> FP32: uses TDequant<INT8>
+    // - INT16 -> FP32: uses TDequant<INT16>
+    // symmetric: offset is all zeros
+    // asymmetric: offset is actual zero_points
+
+    std::string dstTensor = QueryTileTensorNameByIdx(ID0);
+    std::string srcTensor = QueryTileTensorNameByIdx(ID1);
+    std::string scaleTensor = QueryTileTensorNameByIdx(ID2);
+    std::string offsetTensor = QueryTileTensorNameByIdx(ID3);
+
+    // Determine dequant type based on input tensor dtype
+    std::string dequantType;
+    auto srcDtype = operandDtype[ID1];
+    if (srcDtype == DataType::DT_INT8) {
+        dequantType = "pto::DequantType::INT8";
+    } else if (srcDtype == DataType::DT_INT16) {
+        dequantType = "pto::DequantType::INT16";
+    } else {
+        ASSERT(GenCodeErr::DATA_TYPE_UNSUPPORTED, false) << "PrintDequantizeTileTensor: unsupported input dtype "
+                    << static_cast<int>(srcDtype) << ", expected INT8 or INT16";
+    }
+
+    std::ostringstream oss;
+    std::vector<std::string> templateParamList;
+    templateParamList.emplace_back(dequantType);
+
+    std::vector<std::string> paramList;
+    paramList.emplace_back(dstTensor);
+    paramList.emplace_back(srcTensor);
+    paramList.emplace_back(scaleTensor);
+    paramList.emplace_back(offsetTensor);  // Always 4 params
+
+    oss << tileOpName;
+    oss << WrapParamByAngleBrackets(templateParamList);
+    oss << WrapParamByParentheses(paramList);
+    oss << STMT_END;
+
+    return oss.str();
+}
 } // namespace npu::tile_fwk

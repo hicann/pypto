@@ -276,6 +276,10 @@ stest:
       - TestSign/SignOperationTest.TestSign/18
       - TestPReLU/PReLUOperationTest.TestPReLU/4
       - TestPReLU/PReLUOperationTest.TestPReLU/16
+      - TestQuantize/QuantizeOperationTest.TestQuantize/0
+      - TestQuantize/QuantizeOperationTest.TestQuantize/4
+      - TestDequantize/DequantizeOperationTest.TestDequantize/0
+      - TestDequantize/DequantizeOperationTest.TestDequantize/4
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
       - GatherInUBTest.gather_in_a_

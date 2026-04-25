@@ -907,9 +907,35 @@ void ExecuteOpTopK(ExecuteOperationContext* ctx)
 }
 REGISTER_CALC_OP(OP_TOPK, Opcode::OP_TOPK, ExecuteOpTopK);
 
-void ExecuteOpBitSort(ExecuteOperationContext* ctx)
-{
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
+void ExecuteOpQuantizeSym(ExecuteOperationContext *ctx) {
+    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto &input = ctx->ioperandDataViewList->at(0);
+    auto &scale = ctx->ioperandDataViewList->at(1);
+    calc::Quantize(ret, input, scale, nullptr);
+}
+REGISTER_CALC_OP(OP_QUANTIZE_SYM, Opcode::OP_QUANTIZE_SYM, ExecuteOpQuantizeSym);
+
+void ExecuteOpQuantizeAsym(ExecuteOperationContext *ctx) {
+    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto &input = ctx->ioperandDataViewList->at(0);
+    auto &scale = ctx->ioperandDataViewList->at(1);
+    auto &zeropoints = ctx->ioperandDataViewList->at(2);
+    calc::Quantize(ret, input, scale, zeropoints);
+}
+REGISTER_CALC_OP(OP_QUANTIZE_ASYM, Opcode::OP_QUANTIZE_ASYM, ExecuteOpQuantizeAsym);
+
+void ExecuteOpDequantize(ExecuteOperationContext *ctx) {
+    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto &input = ctx->ioperandDataViewList->at(0);
+    auto &scale = ctx->ioperandDataViewList->at(1);
+    auto &zeropoints = ctx->ioperandDataViewList->at(2);
+    calc::Dequantize(ret, input, scale, zeropoints);
+}
+REGISTER_CALC_OP(OP_DEQUANTIZE, Opcode::OP_DEQUANTIZE, ExecuteOpDequantize);
+
+void ExecuteOpBitSort(ExecuteOperationContext *ctx) {
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH,
+           ctx->ioperandDataViewList->size() == 1);
     auto oop = ctx->ooperandInplaceDataViewList->at(0);
     auto src = ctx->ioperandDataViewList->at(0);
     auto topk_axis = ctx->op->GetIntAttribute("op_attr_axis");

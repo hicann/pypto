@@ -306,6 +306,13 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           // vector dup
           {Opcode::OP_VEC_DUP, [this]() { return GenDupOp(); }},
       }),
+      quantOps_({
+          // float -> int8/uint8
+          {Opcode::OP_QUANTIZE_SYM, [this]() { return GenQuantizeOp(); }},
+          {Opcode::OP_QUANTIZE_ASYM, [this]() { return GenQuantizeOp(); }},
+          // int8/int16 -> float
+          {Opcode::OP_DEQUANTIZE, [this]() { return GenDequantizeOp(); }},
+      }),
       perfOps_({
           // for performace optimization
           {Opcode::OP_PHASE1, []() { return "SUBKERNEL_PHASE1\n"; }},
@@ -341,6 +348,7 @@ void CodeGenOpNPU::InitVecOpsMap()
     opsGenMap_.insert(sortOps_.cbegin(), sortOps_.cend());
     opsGenMap_.insert(gatherScatterOps_.cbegin(), gatherScatterOps_.cend());
     opsGenMap_.insert(normalVecOps_.cbegin(), normalVecOps_.cend());
+    opsGenMap_.insert(quantOps_.cbegin(), quantOps_.cend());
 }
 
 void CodeGenOpNPU::InitCubeOpsMap() { opsGenMap_.insert(cubeOps_.cbegin(), cubeOps_.cend()); }
