@@ -358,7 +358,7 @@ TEST_F(TestCodegenDynBinary, TestAddTileTensor)
         CreateLogicalTensor({*function, DataType::DT_FP16, MemoryType::MEM_UB, addShape, dynValidShape});
 
     auto& op = function->AddOperation(Opcode::OP_ADD, {localTensorA, localTensorB}, {localOutTensor});
-    std::vector<int> initVec(addShape.size(), false);
+    std::vector<int64_t> initVec(addShape.size(), false);
     op.SetAttribute(OpAttributeKey::lastUse, initVec);
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();

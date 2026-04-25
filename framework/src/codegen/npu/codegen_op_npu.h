@@ -241,7 +241,7 @@ protected:
     }
 
     template <typename T>
-    bool GetAttr(const std::string& key, T& value) const
+    bool GetOpAttr(const std::string& key, T& value) const
     {
         return GetAttrFromMap(opAttrs, key, value);
     }
@@ -252,22 +252,6 @@ protected:
         ASSERT(GenCodeErr::PARAM_IDX_INVALID, idx >= 0 && idx < MAX_OPERANDS)
             << "idx " << idx << " is out of range [0, " << MAX_OPERANDS << ")";
         return GetAttrFromMap(tensorAttrs[idx], key, value);
-    }
-
-    template <typename T = int64_t>
-    std::vector<T> GetVectorIntAttribute(const std::string& key) const
-    {
-        ASSERT(GenCodeErr::DATA_TYPE_UNSUPPORTED, std::is_integral_v<T>) << "T must be integral type";
-        std::vector<int64_t> val;
-        GetAttr(key, val);
-        if constexpr (std::is_same_v<T, int64_t>) {
-            return val;
-        }
-        std::vector<T> ret;
-        for (auto& x : val) {
-            ret.emplace_back(static_cast<T>(x));
-        }
-        return ret;
     }
 
     std::string GetLastUse() const;
@@ -343,7 +327,7 @@ protected:
     std::string PrintCompact(const PrintUnaryTmpBuffParam& param) const;
     std::string PrintCompactStatic(const PrintUnaryTmpBuffParam& param) const;
 
-    std::vector<std::string> GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx, bool isSpillingToGM) const;
+    std::vector<std::string> GenTileOpParamForNormalCopyTileTensor(unsigned gmIdx) const;
     std::string PrintMemCopyWithL0C(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CStatic(const PrintMemCopyWithL0CParam& param) const;
     std::string PrintMemCopyWithL0CDynamic(const PrintMemCopyWithL0CParam& param) const;
@@ -366,7 +350,7 @@ protected:
     std::string PrintMemCopyWithUBDynamic(const PrintMemCopyWithUBParam& param) const;
     std::string PrintMemCopyWithUBDynamicSupportUnaligned(const PrintMemCopyWithUBParam& param) const;
     std::string PrintMemCopyWithUBTileTensor(const PrintMemCopyWithUBParam& param) const;
-    std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx, bool isSpillingToGM = false) const;
+    std::vector<std::string> GetGmOffsetForTileTensor(unsigned gmIdx) const;
 
     std::string PrintGather(const PrintGatherParam& param) const;
     std::string PrintGatherDynamicUnaligned(const PrintGatherParam& param) const;

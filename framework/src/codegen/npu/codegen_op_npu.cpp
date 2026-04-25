@@ -675,7 +675,7 @@ bool CodeGenOpNPU::ShouldSkipProcInLoop(int paramIdx)
 std::vector<SymbolicScalar> CodeGenOpNPU::GetLoopAxes()
 {
     std::vector<SymbolicScalar> loopAxes;
-    GetAttr(OpAttributeKey::loopAxes, loopAxes);
+    GetOpAttr(OpAttributeKey::loopAxes, loopAxes);
 
     if (!isMainBlock) {
         return loopAxes;
@@ -702,7 +702,7 @@ void CodeGenOpNPU::UpdateLoopInfo()
     }
 
     bool isLoopStart{false};
-    if (GetAttr(OpAttributeKey::loopGroupStart, isLoopStart) && isLoopStart) {
+    if (GetOpAttr(OpAttributeKey::loopGroupStart, isLoopStart) && isLoopStart) {
         forBlkMgr_->LoopStart();
         forBlkMgr_->UpdateAxesList(loopAxes);
     }
@@ -842,7 +842,7 @@ std::string CodeGenOpNPU::GenOpCode() const
     forBlkMgr_->AddOpInLoopBody(ret);
 
     bool isLoopEnd{false};
-    GetAttr(OpAttributeKey::loopGroupEnd, isLoopEnd);
+    GetOpAttr(OpAttributeKey::loopGroupEnd, isLoopEnd);
     if (!isLoopEnd) {
         return "";
     }
@@ -858,7 +858,8 @@ std::string CodeGenOpNPU::GetLastUse() const
     if (!opAttrs.count(OpAttributeKey::lastUse)) {
         return "";
     }
-    std::vector<int64_t> val = GetVectorIntAttribute(OpAttributeKey::lastUse);
+    std::vector<int64_t> val;
+    GetOpAttr(OpAttributeKey::lastUse, val);
     int valSize = val.size();
     ASSERT(OperErr::ATTRIBUTE_INVALID, valSize != 0) << "GetLastUse error!!!";
     std::ostringstream oss;

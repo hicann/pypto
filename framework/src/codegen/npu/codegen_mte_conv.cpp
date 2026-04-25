@@ -25,7 +25,7 @@ namespace npu::tile_fwk {
 std::string CodeGenOpNPU::GetConvCopyInMode() const
 {
     int64_t copyInMode = -1;
-    auto ret = GetAttr(Conv::LoadStoreConvOpAttributeKey::copyInMode, copyInMode);
+    auto ret = GetOpAttr(Conv::LoadStoreConvOpAttributeKey::copyInMode, copyInMode);
     ASSERT(ConvCodenGenError::CODEGEN_GET_ATTR_FAILED, ret) << "GenMemL1CopyInConv get CopyInMode failed.";
     bool isValidMode =
         copyInMode >= ToUnderlying(Matrix::CopyInMode::ND2NZ) && copyInMode <= ToUnderlying(Matrix::CopyInMode::DN2NZ);
@@ -43,8 +43,8 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
     bool isFmap = true, isConv3D = false;
     int64_t offsetN = 0, offsetC = 0, offsetD = 0, offsetH = 0, offsetW = 0;
     int64_t srcShapeN = 0, srcShapeC = 0, srcShapeD = 0, srcShapeH = 0, srcShapeW = 0;
-    GetAttr(Conv::LoadStoreConvOpAttributeKey::isFmap, isFmap);
-    GetAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isFmap, isFmap);
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
     auto dynOffset = offsetFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
     auto srcShape = shapeFromAttr[ToUnderlying(MISOIdx::SRC0_IDX)];
     if (isConv3D) {
@@ -100,7 +100,7 @@ std::string CodeGenOpNPU::GenMemL1CopyInConv() const
 std::string CodeGenOpNPU::GetConvCopyOutMode() const
 {
     int64_t copyOutMode = -1;
-    auto ret = GetAttr(Conv::LoadStoreConvOpAttributeKey::copyOutMode, copyOutMode);
+    auto ret = GetOpAttr(Conv::LoadStoreConvOpAttributeKey::copyOutMode, copyOutMode);
     ASSERT(ConvCodenGenError::CODEGEN_GET_ATTR_FAILED, ret) << "GenMemL1CopyOutConv get CopyOutMode failed.";
     bool isValidMode = copyOutMode == ToUnderlying(Matrix::CopyOutMode::NZ2ND) ||
                        copyOutMode == ToUnderlying(Matrix::CopyOutMode::NZ2NZ) ||
@@ -119,7 +119,7 @@ std::string CodeGenOpNPU::GenMemL1CopyOutConv() const
     bool isConv3D = false;
     int64_t realM = 0, realN = 0;
     int64_t offsetN = 0, offsetC = 0, offsetD = 0, offsetH = 0, offsetW = 0;
-    GetAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
     auto realShape = shapeFromAttr[ToUnderlying(MISOIdx::DST_IDX)];
     ASSERT(ConvCodenGenError::CODEGEN_CHECK_DIM_INVALID, realShape.size() == SHAPE_DIM2)
         << "GenMemL1CopyOutConv valid shape should be 2-dim!";
@@ -169,8 +169,8 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load3D() const
     paramList.emplace_back(srcVar);
 
     int64_t mPos = 0, kPos = 0;
-    GetAttr(Conv::L12L0ConvOpAttributeKey::postM, mPos);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::postK, kPos);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::postM, mPos);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::postK, kPos);
     paramList.emplace_back(mPos);
     paramList.emplace_back(kPos);
 
@@ -178,11 +178,11 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load3D() const
     CODEGEN_LOGI("GenMemL1ToL0Load3D %s, fmapL1Shape is %s", tileOpName.c_str(), IntVecToStr(fmapL1Shape).c_str());
 
     int64_t padLeft = 0, padRight = 0, padTop = 0, padBottom = 0, padValue = 0;
-    GetAttr(Conv::L12L0ConvOpAttributeKey::paddingLeft, padLeft);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::paddingRight, padRight);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::paddingTop, padTop);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::paddingBottom, padBottom);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::padValue, padValue);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingLeft, padLeft);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingRight, padRight);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingTop, padTop);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::paddingBottom, padBottom);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::padValue, padValue);
     paramList.emplace_back(padLeft);
     paramList.emplace_back(padRight);
     paramList.emplace_back(padTop);
@@ -190,20 +190,20 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load3D() const
     paramList.emplace_back(padValue);
 
     int64_t filterH = 0, filterW = 0;
-    GetAttr(Conv::L12L0ConvOpAttributeKey::filterH, filterH);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::filterW, filterW);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::filterH, filterH);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::filterW, filterW);
     paramList.emplace_back(filterH);
     paramList.emplace_back(filterW);
 
     int64_t dilationH = 0, dilationW = 0;
-    GetAttr(Conv::L12L0ConvOpAttributeKey::dilationH, dilationH);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::dilationW, dilationW);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::dilationH, dilationH);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::dilationW, dilationW);
     paramList.emplace_back(dilationH);
     paramList.emplace_back(dilationW);
 
     int64_t strideH = 0, strideW = 0;
-    GetAttr(Conv::L12L0ConvOpAttributeKey::strideH, strideH);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::strideW, strideW);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::strideH, strideH);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::strideW, strideW);
     paramList.emplace_back(strideH);
     paramList.emplace_back(strideW);
 
@@ -213,7 +213,7 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load3D() const
         << "GenMemL1ToL0Load3D L0 fmap only support 2-dim!";
 
     bool isConv3D = false;
-    GetAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
+    GetOpAttr(Conv::LoadStoreConvOpAttributeKey::isConv3D, isConv3D);
 
     std::ostringstream oss;
     oss << tileOpName.c_str() << WrapParamByAngleBrackets({std::to_string(isConv3D)});
@@ -231,8 +231,8 @@ std::string CodeGenOpNPU::GenMemL1ToL0Load2D() const
     paramList.emplace_back(srcVar);
 
     int64_t kPos = 0, nPos = 0;
-    GetAttr(Conv::L12L0ConvOpAttributeKey::postK, kPos);
-    GetAttr(Conv::L12L0ConvOpAttributeKey::postN, nPos);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::postK, kPos);
+    GetOpAttr(Conv::L12L0ConvOpAttributeKey::postN, nPos);
     paramList.emplace_back(kPos);
     paramList.emplace_back(nPos);
 

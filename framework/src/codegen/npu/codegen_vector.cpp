@@ -53,7 +53,7 @@ std::string CodeGenOpNPU::GenCastOp() const
         return PrintCastDynamicUnaligned({s0Var, dVar, srcDtypeStr, dstDtypeStr});
     }
     int64_t modeEnum = 0;
-    GetAttr(OP_ATTR_PREFIX + "mode", modeEnum);
+    GetOpAttr(OP_ATTR_PREFIX + "mode", modeEnum);
     ret = sprintf_s(
         buffer, sizeof(buffer),
         "%s_<%s, %s, %u, %u, %u, %u, %u, %u, %u, %u, %u, %u, %lld>((__ubuf__ %s *)%s,  (__ubuf__ %s *)%s);\n",
@@ -815,7 +815,8 @@ std::string CodeGenOpNPU::PrintRangeTileTensor(
     return oss.str();
 }
 
-std::string CodeGenOpNPU::GenUniformOp() const {
+std::string CodeGenOpNPU::GenUniformOp() const
+{
     auto scalarsAttr = opAttrs.at(OpAttributeKey::vectorScalar);
     auto counter0Attr = opAttrs.at(OpAttributeKey::dynScalar);
     auto shapeAttr = opAttrs.at(OP_ATTR_PREFIX + "SHAPE");
@@ -1782,7 +1783,7 @@ std::string CodeGenOpNPU::PrintPreluTileTensor() const
     std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
 
     int64_t axis = 1;
-    GetAttr(OP_ATTR_PREFIX + "axis", axis);
+    GetOpAttr(OP_ATTR_PREFIX + "axis", axis);
 
     std::vector<std::string> tileOpParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
 

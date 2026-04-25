@@ -98,7 +98,7 @@ std::string CodeGenOpNPU::PrintBinaryStatic(const PrintBinaryParam& param) const
         paramList.emplace_back(std::to_string(s1[i]));
     }
     int64_t brcOperandIdx = 0;
-    if (GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
+    if (GetOpAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
         paramList.emplace_back(GetBrcbOprandIdxStr(brcOperandIdx));
     }
     std::string templateParam = JoinString(paramList, CONN_COMMA);
@@ -151,7 +151,7 @@ std::string CodeGenOpNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& pa
         paramList.emplace_back(std::to_string(s1[i]));
     }
     int64_t brcOperandIdx = 0;
-    if (GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
+    if (GetOpAttr(OpAttributeKey::brcbIdx, brcOperandIdx)) {
         paramList.emplace_back(GetBrcbOprandIdxStr(brcOperandIdx));
     }
     std::string templateParam = JoinString(paramList, CONN_COMMA);
@@ -178,7 +178,7 @@ std::string CodeGenOpNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& pa
 void CodeGenOpNPU::AddDivPrecisionTypeParm(std::vector<std::string>& templateParamList) const
 {
     int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
-    (void)GetAttr(OpAttributeKey::precisionType, precisionType);
+    (void)GetOpAttr(OpAttributeKey::precisionType, precisionType);
     if (precisionType == static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION)) {
         templateParamList.emplace_back("pto::DivAlgorithm::HIGH_PRECISION");
     } else {
@@ -205,8 +205,8 @@ std::string CodeGenOpNPU::PrintBinaryTileTensor() const
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }
-    bool hasBrcb = GetAttr(OpAttributeKey::brcbIdx, brcOperandIdx);
-    bool hasPenu = GetAttr(OpAttributeKey::brcpIdx, penuBrcOperandIdx);
+    bool hasBrcb = GetOpAttr(OpAttributeKey::brcbIdx, brcOperandIdx);
+    bool hasPenu = GetOpAttr(OpAttributeKey::brcpIdx, penuBrcOperandIdx);
     // Must provide NONE for the last axis if only the 2nd last axis is specified
     // To match TileOp template
     if (hasBrcb || hasPenu) {

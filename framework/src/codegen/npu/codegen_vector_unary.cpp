@@ -44,7 +44,7 @@ std::string CodeGenOpNPU::PrintCastDynamicUnaligned(const PrintUnaryParam& param
         paramList.emplace_back(std::to_string(ss[i]));
     }
     int64_t mode = 0;
-    GetAttr(OP_ATTR_PREFIX + "mode", mode);
+    GetOpAttr(OP_ATTR_PREFIX + "mode", mode);
     paramList.emplace_back(std::to_string(mode));
     std::string templateParam = JoinString(paramList, CONN_COMMA);
     paramList.clear();
@@ -79,7 +79,7 @@ std::string CodeGenOpNPU::PrintCastTileTensor() const
         modeEnum = AnyCast<int64_t>(mode);
     }
     int64_t satModeEnum = 0;
-    GetAttr(OP_ATTR_PREFIX + "satmode", satModeEnum);
+    GetOpAttr(OP_ATTR_PREFIX + "satmode", satModeEnum);
     std::ostringstream oss;
     std::vector<std::string> templateParamList;
     std::string lastUse = GetLastUse();
@@ -309,7 +309,7 @@ std::string CodeGenOpNPU::PrintVcopy(const PrintUnaryParam& param) const { retur
 std::string CodeGenOpNPU::PrintExpandDynamicUnaligned(const PrintUnaryParam& param, std::vector<int> expandAxes) const
 {
     ASSERT(OperErr::ATTRIBUTE_INVALID, expandAxes.size() == 1)
-            << "Dynamic Expand only supports single axis expand, got " << expandAxes.size();
+        << "Dynamic Expand only supports single axis expand, got " << expandAxes.size();
     const std::string& dstDtypeStr = param.dstDtypeStr;
     const std::string& srcDtypeStr = param.srcDtypeStr;
     const std::string& dVar = param.dVar;
@@ -407,16 +407,13 @@ std::string CodeGenOpNPU::PrintExpand(
     }
 
     std::ostringstream oss;
-    oss << tileOpName << "_<" << dstDtypeStr
-        << ", " << dos[ID0] << ", " << dos[ID1] << ", " << dos[ID2] << ", " << dos[ID3]
-        << ", " << os[ID0] << ", " << os[ID1] << ", " << os[ID2] << ", " << os[ID3]
-        << ", /*DS*/" << ds[ID1] << ", " << ds[ID2] << ", " << ds[ID3]
-        << ", /*SS*/" << ss[ID1] << ", " << ss[ID2] << ", " << ss[ID3];
+    oss << tileOpName << "_<" << dstDtypeStr << ", " << dos[ID0] << ", " << dos[ID1] << ", " << dos[ID2] << ", "
+        << dos[ID3] << ", " << os[ID0] << ", " << os[ID1] << ", " << os[ID2] << ", " << os[ID3] << ", /*DS*/" << ds[ID1]
+        << ", " << ds[ID2] << ", " << ds[ID3] << ", /*SS*/" << ss[ID1] << ", " << ss[ID2] << ", " << ss[ID3];
     for (auto axis : normalized4DAxes) {
         oss << ", " << axis;
     }
-    oss << ">((__ubuf__ " << dstDtypeStr << "*)" << dVar
-        << ", (__ubuf__ " << srcDtypeStr << "*)" << s0Var << ");\n";
+    oss << ">((__ubuf__ " << dstDtypeStr << "*)" << dVar << ", (__ubuf__ " << srcDtypeStr << "*)" << s0Var << ");\n";
 
     return oss.str();
 }
@@ -571,7 +568,7 @@ void CodeGenOpNPU::AddUnaryPrecisionTypeParm(std::vector<std::string>& templateP
     if (opCode == Opcode::OP_EXP || opCode == Opcode::OP_SQRT || opCode == Opcode::OP_LN ||
         opCode == Opcode::OP_RECIPROCAL) {
         int64_t precisionType = 0;
-        (void)GetAttr(OpAttributeKey::precisionType, precisionType);
+        (void)GetOpAttr(OpAttributeKey::precisionType, precisionType);
         std::string enumName = "";
         if (opCode == Opcode::OP_EXP) {
             enumName = "ExpAlgorithm";

@@ -25,7 +25,7 @@ std::string CodeGenOpNPU::PrintMatmulTileTensor(
     std::ostringstream oss;
     bool hasBias = tensorWithMemType.count(OperandType::BUF_BT);
     int64_t transModeNum = 0;
-    GetAttr(OpAttributeKey::transMode, transModeNum);
+    GetOpAttr(OpAttributeKey::transMode, transModeNum);
     TransMode transMode = static_cast<TransMode>(transModeNum);
     std::string transModeStr = "TransMode::CAST_NONE";
     if (transMode == TransMode::CAST_RINT) {
