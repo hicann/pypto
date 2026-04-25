@@ -796,6 +796,8 @@ void PadLocalBuffer::DoBrcbOpPadding(
             AlignedRawTensorIfNeed(out, lastIdx, paddingValue);
             visitedRaw.emplace(out->tensor);
         }
+    } else {
+        AlignedRawTensorIfNeed(in, lastIdx, paddingValue);
     }
 }
 

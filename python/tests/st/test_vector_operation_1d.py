@@ -10,7 +10,6 @@
 # -----------------------------------------------------------------------------------------------------------
 """
 """
-import os
 import pypto
 import pytest
 import torch
@@ -21,8 +20,6 @@ import torch_npu
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_add():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -65,8 +62,6 @@ def test_vector_operation_1d_add():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_sub():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -109,8 +104,6 @@ def test_vector_operation_1d_sub():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_mul():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -153,8 +146,6 @@ def test_vector_operation_1d_mul():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_div():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -197,8 +188,6 @@ def test_vector_operation_1d_div():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_abs():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -233,8 +222,6 @@ def test_vector_operation_1d_abs():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_sqrt():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -269,8 +256,6 @@ def test_vector_operation_1d_sqrt():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_ceil():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -307,8 +292,6 @@ def test_vector_operation_1d_ceil():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_floor():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -345,8 +328,6 @@ def test_vector_operation_1d_floor():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_trunc():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -383,8 +364,6 @@ def test_vector_operation_1d_trunc():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_exp():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -419,8 +398,6 @@ def test_vector_operation_1d_exp():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_neg():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -455,8 +432,6 @@ def test_vector_operation_1d_neg():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_reciprocal():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -491,8 +466,6 @@ def test_vector_operation_1d_reciprocal():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_rsqrt():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -527,8 +500,6 @@ def test_vector_operation_1d_rsqrt():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_relu():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -563,8 +534,6 @@ def test_vector_operation_1d_relu():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_lrelu():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -599,8 +568,6 @@ def test_vector_operation_1d_lrelu():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_bitwise_not():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT16
     tiling = 32
     n = tiling * 4
@@ -635,8 +602,6 @@ def test_vector_operation_1d_bitwise_not():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_bitwise_and():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT16
     tiling = 32
     n = tiling * 4
@@ -679,8 +644,6 @@ def test_vector_operation_1d_bitwise_and():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_bitwise_or():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT16
     tiling = 32
     n = tiling * 4
@@ -723,8 +686,6 @@ def test_vector_operation_1d_bitwise_or():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_bitwise_xor():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT16
     tiling = 32
     n = tiling * 4
@@ -767,8 +728,6 @@ def test_vector_operation_1d_bitwise_xor():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_bitwise_left_shift():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT16
     tiling = 32
     n = tiling * 4
@@ -811,8 +770,6 @@ def test_vector_operation_1d_bitwise_left_shift():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_bitwise_right_shift():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT16
     tiling = 32
     n = tiling * 4
@@ -855,8 +812,6 @@ def test_vector_operation_1d_bitwise_right_shift():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_eq():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -899,8 +854,6 @@ def test_vector_operation_1d_eq():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_ne():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -943,8 +896,6 @@ def test_vector_operation_1d_ne():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_ge():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -987,8 +938,6 @@ def test_vector_operation_1d_ge():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_gt():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1031,8 +980,6 @@ def test_vector_operation_1d_gt():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_le():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1075,8 +1022,6 @@ def test_vector_operation_1d_le():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_lt():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1119,8 +1064,6 @@ def test_vector_operation_1d_lt():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_logical_and():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     tiling = 32
     n = tiling * 4
     shape = (n,)
@@ -1163,8 +1106,6 @@ def test_vector_operation_1d_logical_and():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_maximum():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1207,8 +1148,6 @@ def test_vector_operation_1d_maximum():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_minimum():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1251,8 +1190,6 @@ def test_vector_operation_1d_minimum():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_cbrt():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1287,8 +1224,6 @@ def test_vector_operation_1d_cbrt():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_clip():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1323,8 +1258,6 @@ def test_vector_operation_1d_clip():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_copysign():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1367,8 +1300,6 @@ def test_vector_operation_1d_copysign():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_fmod():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1411,8 +1342,6 @@ def test_vector_operation_1d_fmod():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_gcd():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT32
     tiling = 32
     n = tiling * 4
@@ -1455,8 +1384,6 @@ def test_vector_operation_1d_gcd():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_hypot():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1499,8 +1426,6 @@ def test_vector_operation_1d_hypot():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_floor_div():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT32
     tiling = 32
     n = tiling * 4
@@ -1543,17 +1468,16 @@ def test_vector_operation_1d_floor_div():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_expand_exp_dif():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
     shape = (n,)
+    b_shape = (1,)
     view_shape = (16,)
     tile_shape = (8,)
     pypto.runtime._device_init()
     a = pypto.tensor(shape, dtype, "EXPAND_EXP_DIF_1D_TENSOR_a")
-    b = pypto.tensor(shape, dtype, "EXPAND_EXP_DIF_1D_TENSOR_b")
+    b = pypto.tensor(b_shape, dtype, "EXPAND_EXP_DIF_1D_TENSOR_b")
     c = pypto.tensor(shape, dtype, "EXPAND_EXP_DIF_1D_TENSOR_c")
 
     with pypto.function("EXPAND_EXP_DIF_1D", a, b, c):
@@ -1562,16 +1486,12 @@ def test_vector_operation_1d_expand_exp_dif():
                 [i * view_shape[0]],
                 valid_shape=[(pypto.symbolic_scalar(n) -
                 i * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0]))])
-            tile_b = pypto.view(b, view_shape,
-                [i * view_shape[0]],
-                valid_shape=[(pypto.symbolic_scalar(n) -
-                i * view_shape[0]).min(pypto.symbolic_scalar(view_shape[0]))])
             pypto.set_vec_tile_shapes(tile_shape[0])
-            tile_a.move(pypto.expand_exp_dif(tile_a, tile_b))
+            tile_a.move(pypto.expand_exp_dif(tile_a, b))
             pypto.assemble(tile_a, [i * view_shape[0]], c)
 
     a_tensor = torch.rand(n, dtype=torch.float32) * 10
-    b_tensor = torch.rand(n, dtype=torch.float32) * 10
+    b_tensor = torch.rand(1, dtype=torch.float32) * 10
     c_tensor = torch.zeros(n, dtype=torch.float32)
 
     pto_a_tensor = pypto.from_torch(a_tensor, "a_tensor")
@@ -1586,8 +1506,6 @@ def test_vector_operation_1d_expand_exp_dif():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_ceil_div():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_INT32
     tiling = 32
     n = tiling * 4
@@ -1630,8 +1548,6 @@ def test_vector_operation_1d_ceil_div():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_argsort():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1672,8 +1588,6 @@ def test_vector_operation_1d_argsort():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_index_put():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1717,8 +1631,6 @@ def test_vector_operation_1d_index_put():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_where():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1767,8 +1679,6 @@ def test_vector_operation_1d_where():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_topk():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1810,8 +1720,6 @@ def test_vector_operation_1d_topk():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_expand():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1843,8 +1751,6 @@ def test_vector_operation_1d_expand():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_sum():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1879,8 +1785,6 @@ def test_vector_operation_1d_sum():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_max():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1915,8 +1819,6 @@ def test_vector_operation_1d_max():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_min():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1951,8 +1853,6 @@ def test_vector_operation_1d_min():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_prod():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -1987,8 +1887,6 @@ def test_vector_operation_1d_prod():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_argmax():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2023,8 +1921,6 @@ def test_vector_operation_1d_argmax():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_argmin():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2059,8 +1955,6 @@ def test_vector_operation_1d_argmin():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_logicnot():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2095,8 +1989,6 @@ def test_vector_operation_1d_logicnot():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_sign():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2131,8 +2023,6 @@ def test_vector_operation_1d_sign():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_signbit():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2167,8 +2057,6 @@ def test_vector_operation_1d_signbit():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_log1p():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2203,8 +2091,6 @@ def test_vector_operation_1d_log1p():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_var():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2239,8 +2125,6 @@ def test_vector_operation_1d_var():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_exp2():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2275,8 +2159,6 @@ def test_vector_operation_1d_exp2():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_round():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2311,8 +2193,6 @@ def test_vector_operation_1d_round():
 
 @pytest.mark.skip(reason="only local test")
 def test_vector_operation_1d_expm1():
-    device_id = int(os.environ.get('TILE_FWK_DEVICE_ID', 0))
-    torch.npu.set_device(device_id)
     dtype = pypto.DT_FP32
     tiling = 32
     n = tiling * 4
@@ -2343,6 +2223,7 @@ def test_vector_operation_1d_expm1():
     expected = torch.expm1(a_tensor)
     assert_allclose(result_tensor.flatten(), expected.flatten(), rtol=1e-3, atol=1e-3)
     pypto.runtime._device_fini()
+
 
 if __name__ == "__main__":
     test_vector_operation_1d_add()
