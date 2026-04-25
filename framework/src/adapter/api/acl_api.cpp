@@ -62,6 +62,31 @@ AclError AclRtMemcpy(void *dst, size_t destMax, const void *src, size_t count, A
     return StubRtMemcpy(dst, destMax, src, count, kind);
 }
 
+AclError AclRtMalloc(void **devPtr, size_t size, AclRtMemMallocPolicy policy)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtMalloc);
+    if (func != nullptr) {
+        aclError(*aclFunc)(void**, size_t, aclrtMemMallocPolicy) =
+            reinterpret_cast<aclError(*)(void **, size_t, aclrtMemMallocPolicy)>(func);
+        return aclFunc(devPtr, size, static_cast<aclrtMemMallocPolicy>(policy));
+    }
+#endif
+    return StubRtMalloc(devPtr, size, policy);
+}
+
+AclError AclRtFree(void *devPtr)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtFree);
+    if (func != nullptr) {
+        aclError(*aclFunc)(void*) = reinterpret_cast<aclError(*)(void*)>(func);
+        return aclFunc(devPtr);
+    }
+#endif
+    return StubRtFree(devPtr);
+}
+
 AclError AclRtSetDevice(int32_t deviceId)
 {
 #ifdef BUILD_WITH_CANN
@@ -184,6 +209,42 @@ AclError AclRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback)
     }
 #endif
     return StubRtSetExceptionInfoCallback(callback);
+}
+
+AclError AclRtCreateStream(AclRtStream *stream)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtCreateStream);
+    if (func != nullptr) {
+        aclError(*aclFunc)(aclrtStream*) = reinterpret_cast<aclError(*)(aclrtStream*)>(func);
+        return aclFunc(stream);
+    }
+#endif
+    return StubRtCreateStream(stream);
+}
+
+AclError AclRtSynchronizeStream(AclRtStream stream)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtSynchronizeStream);
+    if (func != nullptr) {
+        aclError(*aclFunc)(aclrtStream) = reinterpret_cast<aclError(*)(aclrtStream)>(func);
+        return aclFunc(stream);
+    }
+#endif
+    return StubRtSynchronizeStream(stream);
+}
+
+AclError AclRtDestroyStream(AclRtStream stream)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetAclAdapter().GetFunction(AclFunc::RtDestroyStream);
+    if (func != nullptr) {
+        aclError(*aclFunc)(aclrtStream) = reinterpret_cast<aclError(*)(aclrtStream)>(func);
+        return aclFunc(stream);
+    }
+#endif
+    return StubRtDestroyStream(stream);
 }
 
 AclError AclMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus *status, AclMdlRI *modelRI)

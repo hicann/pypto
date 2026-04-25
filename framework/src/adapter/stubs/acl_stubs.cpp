@@ -41,6 +41,22 @@ AclError StubRtMemcpy(void *dst, size_t destMax, const void *src, size_t count, 
     return ACLRT_SUCCESS;
 }
 
+AclError StubRtMalloc(void **devPtr, size_t size, AclRtMemMallocPolicy policy)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtMalloc.");
+    (void)devPtr;
+    (void)size;
+    (void)policy;
+    return ACLRT_SUCCESS;
+}
+
+AclError StubRtFree(void *devPtr)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtFree.");
+    (void)devPtr;
+    return ACLRT_SUCCESS;
+}
+
 AclError StubRtSetDevice(int32_t deviceId)
 {
     ADAPTER_LOGD("Enter stub function of AclRtSetDevice.");
@@ -120,6 +136,27 @@ AclError StubRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback)
 {
     ADAPTER_LOGD("Enter stub function of AclRtSetExceptionInfoCallback.");
     (void)callback;
+    return ACLRT_SUCCESS;
+}
+
+AclError StubRtCreateStream(AclRtStream *stream)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtCreateStream.");
+    (void)stream;
+    return ACLRT_SUCCESS;
+}
+
+AclError StubRtSynchronizeStream(AclRtStream stream)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtSynchronizeStream.");
+    (void)stream;
+    return ACLRT_SUCCESS;
+}
+
+AclError StubRtDestroyStream(AclRtStream stream)
+{
+    ADAPTER_LOGD("Enter stub function of AclRtDestroyStream.");
+    (void)stream;
     return ACLRT_SUCCESS;
 }
 

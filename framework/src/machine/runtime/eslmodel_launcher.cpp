@@ -11,6 +11,7 @@
 #include "machine/runtime/eslmodel_launcher.h"
 #include <thread>
 #include "adapter/api/acl_api.h"
+#include "adapter/api/runtime_api.h"
 #include "machine/runtime/device_launcher.h"
 #include "interface/utils/op_info_manager.h"
 
@@ -120,7 +121,7 @@ int EslModelLauncher::EslModelLaunchDeviceTensorData(Function *function,
     DeviceKernelArgs kArgs;
     DeviceLauncher::DeviceLauncherConfigFillDeviceInfo(config);
     EslModelMemoryUtils eslMemoryUtil;
- 	DeviceLauncher::DeviceInitDistributedContext(eslMemoryUtil, dynAttr->commGroupNames, kArgs);
+    DeviceLauncher::DeviceInitDistributedContext(eslMemoryUtil, dynAttr->commGroupNames, kArgs);
     DeviceLauncher::DeviceInitTilingData(eslMemoryUtil, kArgs, dynAttr->devProgBinary, nullptr, config, nullptr);
     DeviceLauncher::DeviceInitKernelInOuts(eslMemoryUtil, kArgs, inputList, outputList, dynAttr->disableL2List);
     ExchangeCaputerMode(isCapture);
@@ -143,11 +144,83 @@ int EslModelLauncher::EslModelRunOnce(void *kernel, const DeviceLauncherConfig &
     EslModelMemoryUtils devMemoryHugePage(true);
     EslModelMemoryUtils devMemoryNotHugePage(false);
     Function *function = Program::GetInstance().GetLastFunction();
- 	std::tie(inputDeviceDataList, outputDeviceDataList) = DeviceLauncher::BuildInputOutputFromHost(devMemoryHugePage, inputDataList, outputDataList);
+    std::tie(inputDeviceDataList, outputDeviceDataList) =
+        DeviceLauncher::BuildInputOutputFromHost(devMemoryHugePage, inputDataList, outputDataList);
     int rc = EslModelLaunchDeviceTensorData(function, inputDeviceDataList, outputDeviceDataList, aicpuStream, aicoreStream, kernel, config);
     if (HasInplaceArgs(function) || outputDataList.size() == 0) {
         DeviceLauncher::CopyFromDev(devMemoryNotHugePage, inputDataList);
     }
     return rc;
+}
+
+int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors)
+{
+    ProgramData::GetInstance().Reset();
+
+    // Allocate device memory and copy host to device
+    std::vector<uint8_t *> deviceAddrs;
+    for (size_t i = 0; i < tensors.size(); i++) {
+        uint8_t *deviceAddr = nullptr;
+        AclRtMalloc((void **)&deviceAddr, tensors[i].GetDataSize(), AclRtMemMallocPolicy::HUGE_FIRST);
+        AclRtMemcpy(deviceAddr, tensors[i].GetDataSize(), (uint8_t *)tensors[i].GetAddr(),
+            tensors[i].GetDataSize(), AclRtMemcpyKind::HOST_TO_DEVICE);
+        deviceAddrs.push_back(deviceAddr);
+    }
+
+    // Init ACL
+    (void)AclInit(nullptr);
+
+    // Set device
+    int32_t deviceId = 0;
+    AclRtSetDevice(deviceId);
+
+    // Create stream
+    AclRtStream stream = nullptr;
+    AclRtCreateStream(&stream);
+
+    // Prepare kernel args
+    RtArgsEx rtArgs = {};
+    rtArgs.args = deviceAddrs.data();
+    rtArgs.argsSize = deviceAddrs.size() * sizeof(void *);
+
+    // Register kernel binary
+    auto dynAttr = function->GetDyndevAttribute();
+    std::vector<uint8_t> &kernelBinary = dynAttr->kernelBinary;
+    RtDevBinary binary = {
+        .magic = RT_DEV_BINARY_MAGIC_ELF,
+        .version = 0,
+        .data = kernelBinary.data(),
+        .length = kernelBinary.size(),
+    };
+    void *hdl = nullptr;
+    int ret = RuntimeDevBinaryRegister(&binary, &hdl);
+    ASSERT(ret == RT_SUCCESS) << "register kernel failed: " << ret;
+
+    int stubFunc = 1;
+    std::string kernelName = "";
+    for (auto& devRoot : dynAttr->funcGroup.devRootList) {
+        kernelName = dynAttr->rootTileDict[devRoot]->GetMagicName() + "_main";
+    }
+    RuntimeFunctionRegister(hdl, &stubFunc, kernelName.c_str(), kernelName.c_str(), 0);
+
+    // Launch kernel
+    ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
+    ASSERT(ret == RT_SUCCESS) << "LiteKernelLaunch failed: " << ret;
+
+    // Synchronize stream
+    ret = AclRtSynchronizeStream(stream);
+    ASSERT(ret == RT_SUCCESS) << "Stream sync failed: " << ret;
+
+    // Copy device to host and free device memory
+    for (size_t i = 0; i < tensors.size(); i++) {
+        AclRtMemcpy((uint8_t *)tensors[i].GetAddr(), tensors[i].GetDataSize(), deviceAddrs[i],
+            tensors[i].GetDataSize(), AclRtMemcpyKind::DEVICE_TO_HOST);
+        AclRtFree(deviceAddrs[i]);
+    }
+
+    AclRtDestroyStream(stream);
+    AclRtResetDevice(deviceId);
+    AclFinalize();
+    return ret;
 }
 } 

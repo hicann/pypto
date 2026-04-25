@@ -30,6 +30,31 @@ from .enum import DataType
 from .symbolic_scalar import SymbolicScalar, SymInt
 
 
+_torch_npu = None
+_torch_npu_checked = False
+
+
+def get_torch_npu():
+    """Return the torch_npu module if available, otherwise None."""
+    global _torch_npu, _torch_npu_checked
+    if not _torch_npu_checked:
+        try:
+            import torch_npu
+            _torch_npu = torch_npu
+        except ImportError:
+            pass
+        _torch_npu_checked = True
+    return _torch_npu
+
+
+def get_npu_tensor_format(tensor):
+    """Return 'NZ' if tensor is in NPU NZ format (format code 29), else 'ND'."""
+    torch_npu = get_torch_npu()
+    if torch_npu is not None and torch_npu.get_npu_format(tensor) == 29:
+        return "NZ"
+    return "ND"
+
+
 def to_sym(value) -> pypto_impl.SymbolicScalar:
     if isinstance(value, int):
         return pypto_impl.SymbolicScalar(value)

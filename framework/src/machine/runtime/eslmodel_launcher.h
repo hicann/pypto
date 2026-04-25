@@ -189,5 +189,6 @@ public:
     static int DynamicKernelLaunchEsl(DeviceKernelArgs *kArgs, AclRtStream aicoreStream, void *kernel);
     static int EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs);
     static void CopyInputOutputData();
+    static int EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors);
 };
 }

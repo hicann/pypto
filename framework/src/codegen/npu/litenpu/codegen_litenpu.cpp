@@ -78,26 +78,17 @@ static std::string GetDtype(DataType dtype)
     }
 }
 
-static bool CompareStrings(const std::string& s1, const std::string& s2)
-{
-    std::string str1 = s1;
-    std::string str2 = s2;
-    transform(str1.begin(), str1.end(), str1.begin(), ::tolower);
-    transform(str2.begin(), str2.end(), str2.begin(), ::tolower);
-
-    return str1 < str2;
-}
-
-std::map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
+std::unordered_map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
     const SubfuncParam& subFuncParam, std::vector<std::string>& params, std::map<std::string, std::string>& dTypeMap)
 {
     auto& tensorInvokeArgs = subFuncParam.tensorsArgs_;
     auto& incastInvokeArgs = subFuncParam.inCastArgs_;
     auto& outcastInvokeArgs = subFuncParam.outCastArgs_;
 
-    std::map<int, std::string> symbolMap;
-    std::set<std::string> paramsSet;
-    auto f = [&paramsSet, &dTypeMap, &symbolMap](size_t offset, auto& invokeArgs) {
+    std::unordered_map<int, std::string> symbolMap;
+    std::vector<std::string> paramsInOrder;
+    std::unordered_set<std::string> seen;
+    auto f = [&paramsInOrder, &seen, &dTypeMap, &symbolMap](size_t offset, auto& invokeArgs) {
         CODEGEN_LOGI("start offset is %zu, arg size is %zu", offset, invokeArgs.size());
         for (size_t i = 0; i < invokeArgs.size(); i++) {
             size_t paramOff = (offset + i);
@@ -108,7 +99,10 @@ std::map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
                 paramLoc, paramOff, invokeArgs[i].symDDRId, invokeArgs[i].symName.c_str(), invokeArgs[i].symbol.c_str(),
                 static_cast<size_t>(invokeArgs[i].dataType));
             symbolMap.insert({paramLoc, invokeArgs[i].symbol});
-            paramsSet.insert(invokeArgs[i].symbol);
+            if (seen.find(invokeArgs[i].symbol) == seen.end()) {
+                paramsInOrder.push_back(invokeArgs[i].symbol);
+                seen.insert(invokeArgs[i].symbol);
+            }
             dTypeMap[invokeArgs[i].symbol] = GetDtype(invokeArgs[i].dataType);
         }
     };
@@ -119,10 +113,7 @@ std::map<int, std::string> CodeGenLiteNPU::GenParamsSymbolMap(
     f(tensorInvokeArgs.size(), incastInvokeArgs);
     CODEGEN_LOGI("---  start outcastInvokeArgs paramLoc map ---- ");
     f(tensorInvokeArgs.size() + incastInvokeArgs.size(), outcastInvokeArgs);
-    for (auto& t : paramsSet) {
-        params.push_back(t);
-    }
-    std::sort(params.begin(), params.end(), CompareStrings);
+    params = paramsInOrder;
     return symbolMap;
 }
 
@@ -210,9 +201,10 @@ void CodeGenLiteNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ostr
 
         std::string allocSourceCode = GenAllocForLocalBuffer(op, symbolMgr);
         floatSpecValMgr.UpdateByOp(op);
-
+        topFunc.SetFunctionType(FunctionType::STATIC);
+        topFunc.SetUnderDynamicFunction(false);
         CodeGenOpLiteNPU cop(
-            {symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock, ctx.isDynamicAligned, forBlkMgr});
+            {symbolMgr, topFunc, subFunc, op, locToOffsetMap, ctx.isMainBlock, false, forBlkMgr});
         std::string tileOpSourceCode = cop.GenOpCode();
         ASSERT(GenCodeErr::GEN_OP_CODE_FAILED, tileOpSourceCode.find("CG_ERROR") == tileOpSourceCode.npos)
             << "Generate code of op failed, op is " << op.Dump();

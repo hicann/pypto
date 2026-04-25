@@ -41,6 +41,20 @@ enum class AclRtMemcpyKind {
     INTER_DEVICE_TO_DEVICE,
 };
 
+enum class AclRtMemMallocPolicy {
+    HUGE_FIRST,
+    HUGE_ONLY,
+    NORMAL_ONLY,
+    HUGE_FIRST_P2P,
+    HUGE_ONLY_P2P,
+    NORMAL_ONLY_P2P,
+    HUGE1G_ONLY,
+    HUGE1G_ONLY_P2P,
+    LOW_BAND_WIDTH   = 0x0100,
+    HIGH_BAND_WIDTH  = 0x1000,
+    ACCESS_USER_SPACE_READONLY = 0x100000,
+};
+
 enum class AclRtStreamAttr {
     FAILURE_MODE         = 1,
     FLOAT_OVERFLOW_CHECK = 2,

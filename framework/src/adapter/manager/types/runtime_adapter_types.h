@@ -43,9 +43,16 @@ enum class RuntimeFunc {
     LaunchCpuKernel,
     KernelLaunchWithHandleV2,
     AicpuKernelLaunchExWithArgs,
+    DevBinaryRegister,
+    FunctionRegister,
+    KernelLaunch,
     Bottom
 };
+#if defined(BUILD_WITH_CANN_MOBILE)
+const std::string kRuntimeLibName = "libruntime_camodel.so";
+#else
 const std::string kRuntimeLibName = "libruntime.so";
+#endif
 const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap {
     {RuntimeFunc::Malloc, "rtMalloc"},
     {RuntimeFunc::Memset, "rtMemset"},
@@ -69,6 +76,9 @@ const std::map<RuntimeFunc, std::string> kRuntimeFuncStrMap {
     {RuntimeFunc::RegisterAllKernel, "rtRegisterAllKernel"},
     {RuntimeFunc::LaunchCpuKernel, "rtsLaunchCpuKernel"},
     {RuntimeFunc::KernelLaunchWithHandleV2, "rtKernelLaunchWithHandleV2"},
-    {RuntimeFunc::AicpuKernelLaunchExWithArgs, "rtAicpuKernelLaunchExWithArgs"}
+    {RuntimeFunc::AicpuKernelLaunchExWithArgs, "rtAicpuKernelLaunchExWithArgs"},
+    {RuntimeFunc::DevBinaryRegister, "rtDevBinaryRegister"},
+    {RuntimeFunc::FunctionRegister, "rtFunctionRegister"},
+    {RuntimeFunc::KernelLaunch, "rtKernelLaunch"}
 };
 }

@@ -279,6 +279,47 @@ RtError RuntimeRegisterAllKernel(const RtDevBinary *bin, void **hdl)
     return StubRegisterAllKernel(bin, hdl);
 }
 
+RtError RuntimeDevBinaryRegister(const RtDevBinary *bin, void **hdl)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::DevBinaryRegister);
+    if (func != nullptr) {
+        rtError_t(*runtimeFunc)(const rtDevBinary_t*, void**) =
+            reinterpret_cast<rtError_t(*)(const rtDevBinary_t*, void**)>(func);
+        return runtimeFunc(reinterpret_cast<const rtDevBinary_t*>(bin), hdl);
+    }
+#endif
+    return StubDevBinaryRegister(bin, hdl);
+}
+
+RtError RuntimeFunctionRegister(void *binHandle, const void *stubFunc, const char_t *stubName,
+                                const void *kernelInfoExt, uint32_t funcMode)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::FunctionRegister);
+    if (func != nullptr) {
+        rtError_t(*runtimeFunc)(void*, const void*, const char_t*, const void*, uint32_t) =
+            reinterpret_cast<rtError_t(*)(void*, const void*, const char_t*, const void*, uint32_t)>(func);
+        return runtimeFunc(binHandle, stubFunc, stubName, kernelInfoExt, funcMode);
+    }
+#endif
+    return StubFunctionRegister(binHandle, stubFunc, stubName, kernelInfoExt, funcMode);
+}
+
+RtError RuntimeKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args, uint32_t argsSize,
+                            RtSmDesc *smDesc, RtStream stm)
+{
+#ifdef BUILD_WITH_CANN
+    void *func = AdapterManager::Instance().GetRuntimeAdapter().GetFunction(RuntimeFunc::KernelLaunch);
+    if (func != nullptr) {
+        rtError_t(*runtimeFunc)(const void*, uint32_t, void*, uint32_t, rtSmDesc_t*, rtStream_t) =
+            reinterpret_cast<rtError_t(*)(const void*, uint32_t, void*, uint32_t, rtSmDesc_t*, rtStream_t)>(func);
+        return runtimeFunc(stubFunc, blockDim, args, argsSize, reinterpret_cast<rtSmDesc_t*>(smDesc), stm);
+    }
+#endif
+    return StubKernelLaunch(stubFunc, blockDim, args, argsSize, smDesc, stm);
+}
+
 RtError RuntimeLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
     const RtKernelLaunchCfg *cfg, RtCpuKernelArgs *argsInfo)
 {

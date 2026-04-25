@@ -33,4 +33,9 @@ AclError AclRtCacheLastTaskOpInfo(const void * const infoPtr, size_t infoSize);
 AclError AclRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback);
 AclError AclMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus *status, AclMdlRI *modelRI);
 AclError AclMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode *mode);
+AclError AclRtMalloc(void **devPtr, size_t size, AclRtMemMallocPolicy policy);
+AclError AclRtFree(void *devPtr);
+AclError AclRtCreateStream(AclRtStream *stream);
+AclError AclRtSynchronizeStream(AclRtStream stream);
+AclError AclRtDestroyStream(AclRtStream stream);
 }

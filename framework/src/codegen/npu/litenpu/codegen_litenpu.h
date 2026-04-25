@@ -57,7 +57,7 @@ private:
     std::string GenFuncGlobalCodeAfterReplace(
         const Function& func, std::pair<uint64_t, Function*> subFuncPair, const std::string& subProgramCode);
 
-    std::map<int, std::string> GenParamsSymbolMap(
+    std::unordered_map<int, std::string> GenParamsSymbolMap(
         const SubfuncParam& subFuncParam, std::vector<std::string>& params,
         std::map<std::string, std::string>& dTypeMap);
 

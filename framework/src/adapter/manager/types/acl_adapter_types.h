@@ -35,6 +35,11 @@ enum class AclFunc {
     RtSetExceptionInfoCallback,
     MdlRICaptureGetInfo,
     MdlRICaptureThreadExchangeMode,
+    RtMalloc,
+    RtCreateStream,
+    RtSynchronizeStream,
+    RtFree,
+    RtDestroyStream,
     Bottom
 };
 
@@ -54,6 +59,11 @@ const std::map<AclFunc, std::string> kAclFuncStrMap {
     {AclFunc::RtCacheLastTaskOpInfo, "aclrtCacheLastTaskOpInfo"},
     {AclFunc::RtSetExceptionInfoCallback, "aclrtSetExceptionInfoCallback"},
     {AclFunc::MdlRICaptureGetInfo, "aclmdlRICaptureGetInfo"},
-    {AclFunc::MdlRICaptureThreadExchangeMode, "aclmdlRICaptureThreadExchangeMode"}
+    {AclFunc::MdlRICaptureThreadExchangeMode, "aclmdlRICaptureThreadExchangeMode"},
+    {AclFunc::RtMalloc, "aclrtMalloc"},
+    {AclFunc::RtCreateStream, "aclrtCreateStream"},
+    {AclFunc::RtSynchronizeStream, "aclrtSynchronizeStream"},
+    {AclFunc::RtFree, "aclrtFree"},
+    {AclFunc::RtDestroyStream, "aclrtDestroyStream"}
 };
 }

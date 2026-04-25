@@ -13,6 +13,7 @@
 from typing import List, Optional
 from functools import wraps
 
+from ._utils import get_torch_npu
 from .enum import DataType, TileOpFormat
 from .tensor import Tensor
 
@@ -109,9 +110,9 @@ def from_torch(tensor, name: str = "", dynamic_axis: Optional[List[int]] = None,
     if tensor_format is None:
         tensor_format = TileOpFormat.TILEOP_ND
         if tensor.device.type == "npu":
-            import torch_npu
+            torch_npu = get_torch_npu()
 
-            if torch_npu.get_npu_format(tensor) == 29:
+            if torch_npu is not None and torch_npu.get_npu_format(tensor) == 29:
                 tensor_format = TileOpFormat.TILEOP_NZ
                 _check_inner_shape(tensor, dtype, is_nz=True)
             else:

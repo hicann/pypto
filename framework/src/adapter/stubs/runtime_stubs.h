@@ -44,6 +44,11 @@ RtError StubStreamSynchronize(RtStream stm);
 
 RtError StubDevBinaryUnRegister(void *handle);
 RtError StubRegisterAllKernel(const RtDevBinary *bin, void **hdl);
+RtError StubDevBinaryRegister(const RtDevBinary *bin, void **hdl);
+RtError StubFunctionRegister(void *binHandle, const void *stubFunc, const char_t *stubName,
+    const void *kernelInfoExt, uint32_t funcMode);
+RtError StubKernelLaunch(const void *stubFunc, uint32_t blockDim, void *args, uint32_t argsSize,
+    RtSmDesc *smDesc, RtStream stm);
 
 RtError StubLaunchCpuKernel(const RtFuncHandle funcHandle, uint32_t numBlocks, RtStream stm,
     const RtKernelLaunchCfg *cfg, RtCpuKernelArgs *argsInfo);

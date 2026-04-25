@@ -21,6 +21,8 @@ namespace npu::tile_fwk {
 AclError StubAclInit(const char *configPath);
 AclError StubAclFinalize();
 AclError StubRtMemcpy(void *dst, size_t destMax, const void *src, size_t count, AclRtMemcpyKind kind);
+AclError StubRtMalloc(void **devPtr, size_t size, AclRtMemMallocPolicy policy);
+AclError StubRtFree(void *devPtr);
 AclError StubRtSetDevice(int32_t deviceId);
 AclError StubRtResetDevice(int32_t deviceId);
 AclError StubRtCreateEvent(AclRtEvent *event);
@@ -31,6 +33,9 @@ AclError StubRtGetStreamResLimit(AclRtStream stream, AclRtDevResLimitType type, 
 AclError StubRtGetStreamAttribute(AclRtStream stream, AclRtStreamAttr stmAttrType, AclRtStreamAttrValue *value);
 AclError StubRtCacheLastTaskOpInfo(const void * const infoPtr, size_t infoSize);
 AclError StubRtSetExceptionInfoCallback(AclRtExceptionInfoCallback callback);
+AclError StubRtCreateStream(AclRtStream *stream);
+AclError StubRtSynchronizeStream(AclRtStream stream);
+AclError StubRtDestroyStream(AclRtStream stream);
 AclError StubMdlRICaptureGetInfo(AclRtStream stream, AclMdlRICaptureStatus *status, AclMdlRI *modelRI);
 AclError StubMdlRICaptureThreadExchangeMode(AclMdlRICaptureMode *mode);
 }
