@@ -24,14 +24,12 @@ void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
     for (auto& input : op.GetIOperands()) {
         if (input->GetProducers().size() == 0 && input->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
             // insert Copy_In before the op
-            input->isSubGraphBoundary = false;
             LogicalTensors operandGm;
             LogicalTensorPtr tensorGM =
                 std::make_shared<LogicalTensor>(function, input->Datatype(), input->shape, input->Format());
             GraphUtils::CopyDynStatus(tensorGM, input);
             tensorGM->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             tensorGM->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
-            tensorGM->isSubGraphBoundary = true;
             tensorGM->subGraphID = op.GetSubgraphID();
             operandGm.push_back(tensorGM);
             function.GetTensorMap().Insert(tensorGM);
@@ -85,50 +83,8 @@ void SetBoundary::SetTensorBoundary(Function& function) const
     for (auto& op : function.Operations()) {
         /* memory map size > 1 代表该tensor被多个子图使用，那么标记为boundary*/
         for (auto& input : op.GetIOperands()) {
-            if (IsTensorSubgraphBoundary(input)) {
-                input->isSubGraphBoundary = true;
-            }
             if (input->GetProducers().size() == 0) {
-                input->isSubGraphBoundary = true;
                 InsertTemporaryCopyIn(function, op);
-            }
-        }
-        for (auto& output : op.GetOOperands()) {
-            if (IsTensorSubgraphBoundary(output)) {
-                output->isSubGraphBoundary = true;
-            }
-        }
-        if (op.GetOpcode() == Opcode::OP_COPY_IN) {
-            /* Copy In 的输入*/
-            op.GetIOperands().front()->isSubGraphBoundary = true;
-            continue;
-        }
-        if (op.GetOpcode() == Opcode::OP_COPY_OUT) {
-            /* Copy Out 的输出*/
-            if (!op.HasAttribute(OpAttributeKey::inplaceIdx)) {
-                op.GetOOperands().front()->isSubGraphBoundary = true;
-            }
-            continue;
-        }
-        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
-            /* GM上的Assemble*/
-            auto assembleIn = op.GetIOperands().front();
-            auto assembleOut = op.GetOOperands().front();
-            bool isBoundary = (assembleOut->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR);
-            assembleOut->isSubGraphBoundary = isBoundary;
-            assembleIn->isSubGraphBoundary = isBoundary;
-            continue;
-        }
-        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-            /* reshape*/
-            auto reshapeIn = op.GetIOperands().front();
-            auto reshapeOut = op.GetOOperands().front();
-            bool isBoundary = (reshapeOut->isSubGraphBoundary || reshapeIn->isSubGraphBoundary);
-            reshapeIn->isSubGraphBoundary = isBoundary;
-            reshapeOut->isSubGraphBoundary = isBoundary;
-            if (reshapeIn->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
-                reshapeOut->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR) {
-                reshapeOut->isSubGraphBoundary = true;
             }
         }
     }

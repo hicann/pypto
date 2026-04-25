@@ -36,6 +36,7 @@
 #include "interface/operation/operation_impl.h"
 #include "interface/utils/serialization.h"
 #include "interface/interpreter/flow_verifier.h"
+#include "passes/pass_utils/subgraph_utils.h"
 
 using namespace npu::tile_fwk;
 
@@ -1270,7 +1271,7 @@ void Function::ProducerMagicLookup(
         }
         if (op->GetOpAttribute() != nullptr) {
             if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
-                if (!op->oOperand[0]->isSubGraphBoundary) {
+                if (!SubgraphUtils::IsBoundary(op->oOperand[0])) {
                     ss << " " << op->GetOpAttribute()->Dump();
                 }
             } else if (

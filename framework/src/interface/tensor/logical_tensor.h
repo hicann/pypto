@@ -50,7 +50,6 @@ public:
 
 class LogicalTensor : public AttrHolder {
 public:
-    bool isSubGraphBoundary;
     int subGraphID{NOT_IN_SUBGRAPH};
 
     std::shared_ptr<RawTensor> tensor;

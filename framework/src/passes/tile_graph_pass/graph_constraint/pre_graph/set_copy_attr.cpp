@@ -35,7 +35,6 @@ void SetCopyAttr::ProcessSpecialMTEOperation(Operation& op) const
         MemoryType::MEM_UB, OpImmediate::Specified(outputTensor->GetTensorOffset()),
         OpImmediate::Specified(outputTensor->GetShape()),
         OpImmediate::Specified(outputTensor->tensor->GetDynRawShape())));
-    op.oOperand[0]->isSubGraphBoundary = true;
 }
 
 void SetCopyAttr::ProcessMoveInOperation(Operation& op) const
@@ -57,7 +56,6 @@ void SetCopyAttr::ProcessMoveInOperation(Operation& op) const
                     MemoryType::MEM_UB, OpImmediate::Specified(inputTensor->GetShape()),
                     OpImmediate::Specified(inputTensor->tensor->GetDynRawShape()),
                     OpImmediate::Specified(inputTensor->GetDynValidShape())));
-                op.iOperand[0]->isSubGraphBoundary = true;
                 return;
             }
         }
@@ -68,6 +66,5 @@ void SetCopyAttr::ProcessMoveInOperation(Operation& op) const
             OpImmediate::Specified(inputTensor->tensor->GetDynRawShape()),
             OpImmediate::Specified(inputTensor->GetDynValidShape())));
     }
-    op.iOperand[0]->isSubGraphBoundary = true;
 }
 } // namespace npu::tile_fwk

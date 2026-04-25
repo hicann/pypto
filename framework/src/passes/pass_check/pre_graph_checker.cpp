@@ -15,6 +15,7 @@
 
 #include "pre_graph_checker.h"
 #include "passes/pass_log/pass_log.h"
+#include "passes/pass_utils/subgraph_utils.h"
 #include "tilefwk/error_code.h"
 
 #define MODULE_NAME "PreGraphProcess"
@@ -112,7 +113,7 @@ Status PreGraphProcessChecker::PostCheckHelpFunc(const LogicalTensor& singleTens
         return FAILED;
     }
     if (singleTensor.GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
-        singleTensor.isSubGraphBoundary == false) {
+        SubgraphUtils::IsBoundary(singleTensor) == false) {
         // gm tensor 是否被标记为boundary
         APASS_LOG_WARN_F(
             Elements::Tensor, "Tensor magic: %d, when memory type is DDR, this tensor should be subgraph boundary.",

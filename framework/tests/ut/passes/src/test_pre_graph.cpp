@@ -22,6 +22,7 @@
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "passes/pass_mgr/pass_manager.h"
+#include "passes/pass_utils/subgraph_utils.h"
 #include "interface/configs/config_manager.h"
 #include "passes/tile_graph_pass/graph_constraint/pre_graph/pre_graph.h"
 #include "ut_json/ut_json_tool.h"
@@ -1159,10 +1160,10 @@ void RunSetTensorBoundary(ComputationalGraphBuilder& G)
     auto copy_out = G.GetTensor("copy_out");
     auto reshape_out = G.GetTensor("reshape_out");
     auto vec_out = G.GetTensor("vec_out");
-    EXPECT_EQ(vec_in->isSubGraphBoundary, true);
-    EXPECT_EQ(copy_out->isSubGraphBoundary, true);
-    EXPECT_EQ(reshape_out->isSubGraphBoundary, true);
-    EXPECT_EQ(vec_out->isSubGraphBoundary, true);
+    EXPECT_TRUE(SubgraphUtils::IsBoundary(vec_in));
+ 	EXPECT_TRUE(SubgraphUtils::IsBoundary(copy_out));
+ 	EXPECT_TRUE(SubgraphUtils::IsBoundary(reshape_out));
+ 	EXPECT_TRUE(SubgraphUtils::IsBoundary(vec_out));
 }
 
 //        CopyIn[0] - copy_in1 - Exp[0] - e1 - CopyOut[0]

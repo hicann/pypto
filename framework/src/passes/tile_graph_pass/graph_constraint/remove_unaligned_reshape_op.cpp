@@ -77,7 +77,6 @@ LogicalTensorPtr RemoveUnalignedReshape::InsertIOTensor(
         function, rawIO[ioTensor->tensor->rawmagic], ioTensor->offset, ioTensor->oriShape);
     newReshapeIO->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     newReshapeIO->subGraphID = op.GetSubgraphID();
-    newReshapeIO->isSubGraphBoundary = true;
     function.GetTensorMap().Insert(newReshapeIO);
     return newReshapeIO;
 }
