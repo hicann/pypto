@@ -28,7 +28,7 @@ class TopoProgramUtils {
 public:
     static void TopoProgram(
         const std::vector<Operation*>& opList, const std::vector<std::vector<size_t>>& opInGraph,
-        const std::vector<std::vector<size_t>>& opOutGraph, bool isParamIndex);
+        const std::vector<std::vector<size_t>>& opOutGraph, bool isParamIndex = false);
 };
 } // namespace tile_fwk
 } // namespace npu
