@@ -112,8 +112,13 @@ export PTO_TILE_LIB_CODE_PATH=./pto_isa/pto-isa/
 
 **生成顺序**：
 1. 根据输入信息，先梳理 API 映射、tiling 策略、loop 结构，确认可行后再进入实现
-2. 基于约束清单和 impl 模板生成 `{op}_impl.py`
-3. `{op}_impl.py` 完成后，**并行生成** `test_{op}.py` 和 `README.md`（两者互不依赖）
+2. 【检查点】读取 execution-constraints.md并输出"本算子适用约束项"列表，格式如：
+    【本算子适用约束项】
+    - 本算子有 B、S、N 三个动态轴 → 第5节：必须采用 2D + loop 模式
+    - 本算子使用 pypto.concat → 第4.8节：仅支持 2-4D
+    - 本算子需要 cast → 第4.10节：显式指定 CastMode
+3. 基于约束清单和 impl 模板生成 `{op}_impl.py`
+4. `{op}_impl.py` 完成后，**并行生成** `test_{op}.py` 和 `README.md`（两者互不依赖）
 
 ⚠️ 实现代码与测试代码必须分离，禁止混写 golden / impl / test 到同一文件。
 

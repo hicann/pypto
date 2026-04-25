@@ -90,11 +90,11 @@ children = get_child_sessions(current_session_id)
 child_parts = [get_session_parts(c.id) for c in children]
 ```
 
-主 session 数据直接回顾当前对话历史即可。对每个会话执行核心分析步骤 1-7，然后汇总到步骤 5。
+主 session 数据直接回顾当前对话历史即可。对每个会话执行核心分析步骤 1-8，然后汇总到步骤 5。
 
 ---
 
-### 核心分析步骤（步骤 1-9）
+### 核心分析步骤（步骤 1-10）
 
 以下步骤为两种模式共用，用于分析单个 session：
 
@@ -156,15 +156,25 @@ child_parts = [get_session_parts(c.id) for c in children]
 
 **scope=full 模式**：合并所有 session（主 + 子）的断裂点，为每个断裂点标记来源 session（"主 Session" 或 "子 Session-{short_id}"）。
 
-#### 步骤 6：关联标记
+#### 步骤 6：二次校验（根因归属判定）
+
+> **目的**：排除因模型自身原因导致的误报，确保断裂点根因确实归属于框架或文档。
+
+对去重后的候选断裂点，**必须实际读取相关文档**后执行检查。具体检查项和判定规则见 `references/detection-rules.md` 中的"二次校验规则"章节。
+
+检查结果处理：
+- 根因归属 PyPTO框架/PyPTO文档/PyPTO样例/Agent框架 → 计入断裂点总数，输出到报告正文
+- 根因归属模型自身 → 标记为"模型能力"，在报告末尾单独列出，不计入断裂点总数
+
+#### 步骤 7：关联标记
 
 相同实体的不同断裂点自动标记为关联。例如 `pypto.reshape` 同时有 D1（文档缺失）和 C1（反复重试），它们互相关联。
 
-#### 步骤 7：置信度过滤
+#### 步骤 8：置信度过滤
 
 剔除所有低置信度的断裂点。只有中/高置信度的断裂点进入最终报告。
 
-#### 步骤 8：环境信息获取
+#### 步骤 9：环境信息获取
 
 执行以下命令获取环境信息，**任何命令失败则对应字段标记为"未知"**，不影响报告生成：
 
@@ -176,7 +186,7 @@ child_parts = [get_session_parts(c.id) for c in children]
 | Python 版本 | `python --version 2>/dev/null \|\| echo "Unknown"` |
 | 操作系统 | `cat /etc/os-release 2>/dev/null \| grep PRETTY_NAME \|\| echo "Unknown"` |
 
-#### 步骤 9：报告生成
+#### 步骤 10：报告生成
 
 根据检测结果生成报告：
 
@@ -201,3 +211,4 @@ child_parts = [get_session_parts(c.id) for c in children]
 - Session 级断裂点（C5、C6）不针对特定实体，单独列为一个章节
 - `scope=full` 模式使用"最近活跃推断策略"获取当前 session ID，在多 session 同时活跃时可能不准确，报告中需说明此限制
 - 分析子会话时，完整读取用户消息、助手回复、推理过程和工具调用链
+- **二次校验**：必须执行步骤 6 的两项检查，验证根因是否确实归属于框架或文档。断裂点分类包含：PyPTO框架、PyPTO文档、PyPTO样例、Agent框架、模型能力。前四个是问题，模型能力是非问题（不应计入断裂点总数）。
