@@ -151,10 +151,10 @@ TEST_F(TestMixInfo, DumpMixInfo_LeafFuncWithSyncOps)
     auto outCast = std::make_shared<LogicalTensor>(*leafFunc, DataType::DT_FP32, shape);
 
     auto& syncSrcOp = leafFunc->AddOperation(Opcode::OP_CV_SYNC_SRC, {}, {});
-    syncSrcOp.syncQueue_ = {PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 10, AIVCore::UNSPECIFIED};
+    syncSrcOp.syncQueue_ = OpSyncQueue(PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 10, AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED);
 
     auto& syncDstOp = leafFunc->AddOperation(Opcode::OP_CV_SYNC_DST, {}, {});
-    syncDstOp.syncQueue_ = {PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 20, AIVCore::UNSPECIFIED};
+    syncDstOp.syncQueue_ = OpSyncQueue(PipeType::PIPE_M, PipeType::PIPE_M, CoreType::AIV, CoreType::AIV, 20, AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED);
 
     Program::GetInstance().InsertFuncToFunctionMap(leafFunc->GetMagicName(), leafFunc);
 
