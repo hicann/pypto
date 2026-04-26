@@ -57,7 +57,8 @@ def {op}_kernel(
     - 输出写回使用 output_tensor[:] = result 或 pypto.assemble(result, offset, output_tensor)。
     """
     # TODO: 根据设计方案配置 tiling
-    # 示例: pypto.set_vec_tile_shapes(64, 128)
+    # vec 场景示例: pypto.set_vec_tile_shapes(64, 128)
+    # cube 场景示例（matmul）: pypto.set_cube_tile_shapes([128, 128], [128, 128], [128, 128])
 
     # TODO: 替换为实际 kernel 逻辑
     result = {op}_core(input_tensor)
