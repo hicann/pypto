@@ -39,8 +39,11 @@ void bind_operation(py::module& m)
         "Hypot", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Hypot(self, other); },
         "Tensor hypot.");
     m.def(
-        "Fmod", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Fmod(self, other); },
-        "Tensor fmod.");
+        "Fmod",
+        [](const Tensor& self, const Tensor& other, FmodAlgorithm precisionType) {
+            return npu::tile_fwk::Fmod(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = FmodAlgorithm::HIGH_PRECISION, "Tensor fmod.");
     m.def(
         "Gcd", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Gcd(self, other); }, "Tensor gcd.");
     m.def(

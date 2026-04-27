@@ -82,7 +82,7 @@ TILEOP constexpr BrcMode GetBrcMode()
     }
 
 template <
-    BinaryOp op, pto::DivAlgorithm PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
+    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
     typename T1, typename T2>
 TILEOP void BinaryRowExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 {
@@ -91,14 +91,17 @@ TILEOP void BinaryRowExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 }
 
 template <
-    BinaryOp op, pto::DivAlgorithm PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
+    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, typename LastUse, typename T0,
     typename T1, typename T2>
 TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 {
     EXTRACT_LAST_USE_3DIM(LastUse)
     BINARY_EXPAND_DISPATCH(COLEXPAND, PrecisionType)
     if constexpr (op == BinaryOp::MOD) {
-        pto::TROWEXPANDDIV<PrecisionType>(dst, src0, src1);
+        constexpr pto::DivAlgorithm divPrecisionType = (PrecisionType == pto::FmodAlgorithm::HIGH_PRECISION) ?
+                                                           pto::DivAlgorithm::HIGH_PRECISION :
+                                                           pto::DivAlgorithm::DEFAULT;
+        pto::TROWEXPANDDIV<divPrecisionType>(dst, src0, src1);
 #ifdef __DAV_V220
         pipe_barrier(PIPE_V);
 #endif
@@ -115,7 +118,7 @@ TILEOP void BinaryColExpandComputeImpl(T0 dst, T1 src0, T2 src1)
 }
 
 template <
-    BinaryOp op, pto::DivAlgorithm PrecisionType = pto::DivAlgorithm::DEFAULT, TileOp::BroadcastOperand WBrcSide,
+    BinaryOp op, auto PrecisionType = pto::DivAlgorithm::DEFAULT, TileOp::BroadcastOperand WBrcSide,
     TileOp::PenuBroadcastOperand HBrcSide, typename Src0TileInfo, typename Src1TileInfo, typename LastUse, typename T0, typename T1, typename T2>
 TILEOP void BinaryMixBrcCompute(T0 dst, T1 src0, T2 src1)
 {

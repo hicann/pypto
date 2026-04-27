@@ -33,7 +33,7 @@ TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1)
         auto src1Shape4 = src1Layout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
         // (m, n) & (m, n) -> (m, n) use SUB + EXP
         if ((src0Shape3 == src1Shape3) && (src0Shape4 == src1Shape4)) {
-            BinaryCompute<BinaryOp::SUB, pto::DivAlgorithm::DEFAULT, WBrcSide, HBrcSide, LastUse3Dim<0, 0, 0>>(
+            BinaryCompute<BinaryOp::SUB, 0, WBrcSide, HBrcSide, LastUse3Dim<0, 0, 0>>(
                 dst, src0, src1);
 #ifdef __DAV_V220
             pipe_barrier(PIPE_V);
@@ -42,7 +42,7 @@ TILEOP void TExpandExpDif(T0 dst, T1 src0, T2 src1)
             return;
         }
     }
-    BinaryCompute<BinaryOp::EXPANDEXPDIF, pto::DivAlgorithm::DEFAULT, WBrcSide, HBrcSide, LastUse3Dim<0, 0, 0>>(
+    BinaryCompute<BinaryOp::EXPANDEXPDIF, 0, WBrcSide, HBrcSide, LastUse3Dim<0, 0, 0>>(
         dst, src0, src1);
 }
 

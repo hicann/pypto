@@ -87,6 +87,12 @@ enum class RecipAlgorithm : uint8_t
     HIGH_PRECISION
 };
 
+enum class FmodAlgorithm : uint8_t
+{
+    DEFAULT,
+    HIGH_PRECISION
+};
+
 namespace experimental {
 struct PrintHelper {
     SymbolicScalar cond;
@@ -262,7 +268,7 @@ Tensor Sub(const Tensor& self, const Tensor& other);
 Tensor Div(const Tensor& self, const Tensor& other, DivAlgorithm precisionType = DivAlgorithm::DEFAULT);
 Tensor Mul(const Tensor& self, const Tensor& other);
 Tensor Hypot(const Tensor& self, const Tensor& other);
-Tensor Fmod(const Tensor& self, const Tensor& other);
+Tensor Fmod(const Tensor& self, const Tensor& other, FmodAlgorithm precisionType = FmodAlgorithm::DEFAULT);
 Tensor Maximum(const Tensor& operand1, const Tensor& operand2);
 Tensor Minimum(const Tensor& operand1, const Tensor& operand2);
 Tensor BitwiseAnd(const Tensor& self, const Tensor& other);
@@ -273,7 +279,7 @@ Tensor Add(const Tensor& self, const Element& other);
 Tensor Sub(const Tensor& self, const Element& other);
 Tensor Div(const Tensor& self, const Element& other, DivAlgorithm precisionType = DivAlgorithm::DEFAULT);
 Tensor Mul(const Tensor& self, const Element& other);
-Tensor Fmod(const Tensor& self, const Element& other);
+Tensor Fmod(const Tensor& self, const Element& other, FmodAlgorithm precisionType = FmodAlgorithm::DEFAULT);
 Tensor BitwiseAnd(const Tensor& self, const Element& other);
 Tensor BitwiseOr(const Tensor& self, const Element& other);
 Tensor BitwiseXor(const Tensor& self, const Element& other);
