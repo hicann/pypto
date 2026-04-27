@@ -385,8 +385,21 @@ bool ConvertInserter::FitL0C2L1(const LogicalTensorPtr& tensor)
 // 规避问题： L0C2L1的输入存在validShape时，即便输出同样存在validShape也会导致精度问题，此场景暂时走DDR规避。
 bool ConvertInserter::FitL0C2L1(const Operation& op)
 {
-    // pto-isa不支持TLOAD NZ格式的stride跳变，在此做场景规避
-    if (op.iOperand.front()->GetShape()[0] != op.oOperand.front()->GetShape()[0]) {
+    auto isSmallToLarge = [&op]() {
+        const auto& inShape = op.iOperand.front()->GetShape();
+        const auto& outShape = op.oOperand.front()->GetShape();
+        if (inShape.size() != outShape.size() || inShape.empty()) {
+            return false;
+        }
+        for (size_t i = 0; i < inShape.size(); ++i) {
+            if (!(inShape[i] <= outShape[i])) {
+                return false;
+            }
+        }
+        return true;
+    };
+    // pto-isa 不支持 TLOAD NZ 格式的 stride 跳变，在小搬大场景下做规避
+    if (isSmallToLarge() && op.iOperand.front()->GetShape()[0] != op.oOperand.front()->GetShape()[0]) {
         return false;
     }
     for (const auto &input : op.GetIOperands()) {

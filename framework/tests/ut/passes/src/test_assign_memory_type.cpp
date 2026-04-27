@@ -1058,7 +1058,7 @@ TEST_F(AssignMemoryTypeTest, TestL0C2L1LargeToSmall)
     std::vector<int64_t> shapeA1 = {NUM_64, NUM_32};
     std::vector<int64_t> shapeB1 = {NUM_32, NUM_32};
     std::vector<int64_t> shapeA2 = {NUM_128, NUM_64};
-    std::vector<int64_t> shapeC2 = {NUM_128, NUM_16};
+    std::vector<int64_t> shapeC2 = {NUM_128, NUM_32};
     PROGRAM("AssignMemoryTest")
     {
         Tensor inputA1(DataType::DT_FP16, shapeA1, "A1");
