@@ -190,7 +190,7 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
     do {                                                                      \
         if (!(expr)) {                                                        \
             DEV_ERROR(errCode, "Assertion failed (%s): " fmt, #expr, ##args); \
-            assert(0);                                                        \
+            abort();                                                          \
         }                                                                     \
     } while (0)
 
@@ -198,7 +198,7 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
     do {                                                        \
         if (!(expr)) {                                          \
             DEV_ERROR(errCode, "Assertion failed (%s)", #expr); \
-            assert(0);                                          \
+            abort();                                            \
         }                                                       \
     } while (0)
 
@@ -224,16 +224,16 @@ inline void DeviceLogSplitDebug(const char* func, const char* format, Args... ar
 #define DEV_ASSERT_MSG(errCode, expr, fmt, args...)           \
     do {                                                      \
         if (!(expr)) {                                        \
-            MACHINE_LOGE(errCode, "%s :" fmt, #expr, ##args); \
-            assert(0);                                        \
+            DEV_ERROR(errCode, "%s :" fmt, #expr, ##args);    \
+            abort();                                          \
         }                                                     \
     } while (0)
 
 #define DEV_ASSERT(errCode, expr)               \
     do {                                        \
         if (!(expr)) {                          \
-            MACHINE_LOGE(errCode, "%s", #expr); \
-            assert(0);                          \
+            DEV_ERROR(errCode, "%s", #expr);    \
+            abort();                            \
         }                                       \
     } while (0)
 

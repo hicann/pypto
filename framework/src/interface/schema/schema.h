@@ -19,6 +19,7 @@
 
 #include "schema_base.h"
 #include "schema_parser.h"
+#include "tilefwk/error_code.h"
 
 namespace npu::tile_fwk::schema {
 
@@ -59,10 +60,10 @@ static inline range Range(uint64_t begin, uint64_t end) { return range(begin, en
         using namespace npu::tile_fwk::schema;                           \
         DEV_WARN(DEV_TRACE_PREFIX " %s", DumpAttr(arg, ##args).c_str()); \
     } while (0)
-#define DEV_TRACE_ERROR(arg, args...)                                                           \
-    do {                                                                                        \
-        using namespace npu::tile_fwk::schema;                                                  \
-        DEV_ERROR(ERROR_CODE_UNDEFINED, DEV_TRACE_PREFIX " %s", DumpAttr(arg, ##args).c_str()); \
+#define DEV_TRACE_ERROR(arg, args...)                                                                       \
+    do {                                                                                                    \
+        using namespace npu::tile_fwk::schema;                                                              \
+        DEV_ERROR(DevCommonErr::PARAM_CHECK_FAILED, DEV_TRACE_PREFIX " %s", DumpAttr(arg, ##args).c_str()); \
     } while (0)
 #define DEV_TRACE_DEBUG_SPLIT(arg, args...)                                     \
     do {                                                                        \

@@ -476,7 +476,7 @@ public:
         EmulationMemoryUtils memUtils;
         int ret = EmulationLauncher::BuildControlFlowCache(dynFunc.get(), memUtils, inputs, {}, &ctrlCache, config);
         if (ret != 0) {
-            COMPILER_LOGE("control flow cache failed %d", ret);
+            COMPILER_LOGE(CtrlErr::DEVICE_TASK_BUILD_FAILED, "control flow cache failed %d", ret);
             return nullptr;
         }
 
@@ -488,7 +488,7 @@ public:
                 ss << x << " ";
             }
         }
-        COMPILER_LOGE("control flow cache: %p shape %s", devCache, ss.str().c_str());
+        COMPILER_LOGI("control flow cache: %p shape %s", devCache, ss.str().c_str());
 #endif
         if (isOriginShape) {
             originShapeCaches.emplace_back(inputs, devCache);
@@ -521,7 +521,7 @@ public:
             auto& t = tensors[i];
             auto addr = (uint64_t)t.GetAddr();
             if (unlikely(addr && disableL2List.size() && disableL2List[i])) {
-                COMPILER_LOGE("mismatch tensor addr");
+                COMPILER_LOGI("mismatch tensor addr");
                 addr += l2Offset;
             }
             tensorData->address = addr;
@@ -669,7 +669,7 @@ public:
                 ss << s << " ";
             }
         }
-        COMPILER_LOGE("find ctrlflow cache: %p shape %s", devCache, ss.str().c_str());
+        COMPILER_LOGI("find ctrlflow cache: %p shape %s", devCache, ss.str().c_str());
 #endif
         return devCache;
     }
@@ -696,7 +696,7 @@ public:
         kernels.push_back(kernel);
         if (inferCacheShape) {
 #if ENABALE_VERBOSE_LOG
-            COMPILER_LOGE("build default cache");
+            COMPILER_LOGI("build default cache");
 #endif
             BuildDefaultCache(kernel, module);
         }
@@ -751,7 +751,7 @@ public:
         bool debugEnable = !isCaptureMode && isDebugMode;
 
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
+        COMPILER_LOGI("Sequence %ld workspace %p cfgcache %p", sequence.load(), workspace, ctrlFlowCache);
 #endif
         int ret = DeviceLauncher::LaunchSyncTask(aicoreStream, isCaptureMode);
         ASSERT(ret == RT_SUCCESS) << "launch pre sync failed: " << ret;
@@ -874,7 +874,7 @@ private:
             }
         }
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE("infer_cache_shape: %d", inferCacheShape);
+        COMPILER_LOGI("infer_cache_shape: %d", inferCacheShape);
 #endif
     }
 
@@ -886,7 +886,7 @@ private:
         for (auto& pyshape : cfshapes) {
             auto inputShapes = pyshape.cast<std::vector<std::vector<int64_t>>>();
             if (inputShapes.size() != tensors.size()) {
-                COMPILER_LOGE("Invalid input size, expect: %zu, get: %zu.", tensors.size(), inputShapes.size());
+                COMPILER_LOGI("Invalid input size, expect: %zu, get: %zu.", tensors.size(), inputShapes.size());
                 continue;
             }
             std::vector<DeviceTensorData> inputs;
@@ -896,7 +896,7 @@ private:
             if (kernel->CheckArgs(inputs)) {
                 kernel->BuildControlFlowCache(inputs, false);
             } else {
-                COMPILER_LOGE("Invalid cache shape, skip it");
+                COMPILER_LOGI("Invalid cache shape, skip it");
             }
         }
     }
@@ -1028,7 +1028,7 @@ private:
         Program::GetInstance().Reset();
         AclModeGuard guard(AclMdlRICaptureMode::RELAXED);
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE("compile kernel");
+        COMPILER_LOGI("compile kernel");
 #endif
 
         return kmodule->Compile(module, torchTensors, tensorDefs);
@@ -1052,7 +1052,7 @@ private:
             wsAddr = (int64_t*)pyalloc(wsSize).cast<int64_t>();
         }
 #if ENABALE_VERBOSE_LOG
-        COMPILER_LOGE("alloc workspace %ld", wsSize);
+        COMPILER_LOGI("alloc workspace %ld", wsSize);
 #endif
         HOST_PERF_TRACE(TracePhase::LaunchAllocWorkSpace);
 
