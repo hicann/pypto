@@ -58,6 +58,7 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
             << "Generate code of op failed, op is " << op.Dump();
 
         allocSourceRegion.append(allocSourceCode);
+        tileOpSourceRegion.append(symbolMgr->GenNewTileTensorDefs());
         tileOpSourceRegion.append(tileOpSourceCode);
 
         if (!allocSourceCode.empty()) {
@@ -66,8 +67,7 @@ void CodeGenCloudNPU::GenFuncBody(Function& subFunc, Function& topFunc, std::ost
         CODEGEN_LOGI("------------------------ Op CodeGenNPU Finish -----------------------");
     }
     floatSpecValMgr.PrintFloatSpecVal(oss);
-    oss << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList()
-        << symbolMgr->GenTileTensorDefList() << tileOpSourceRegion;
+    oss << allocSourceRegion << GenDynParamForExpr(subFunc) << symbolMgr->GenUsingList() << tileOpSourceRegion;
 }
 
 } // namespace npu::tile_fwk

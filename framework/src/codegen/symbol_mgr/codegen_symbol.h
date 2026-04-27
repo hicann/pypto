@@ -290,6 +290,7 @@ public:
 
     std::string GenUsingList();
     std::string GenTileTensorDefList();
+    std::string GenNewTileTensorDefs();
 
     std::string GenTensorName(BufferType bufType)
     {
@@ -336,5 +337,6 @@ private:
     // <using type, TileTensorUsing>
     std::unordered_map<std::string, TileTensorUsing> tileTensorUsing_;
     SymbolIdGenMgr idGenMgr_;
+    size_t tileTensorOutputIdx_{0};
 };
 } // namespace npu::tile_fwk

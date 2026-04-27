@@ -241,4 +241,14 @@ std::string SymbolManager::GenTileTensorDefList()
     return oss.str();
 }
 
+std::string SymbolManager::GenNewTileTensorDefs()
+{
+    std::ostringstream oss;
+    for (size_t i = tileTensorOutputIdx_; i < tileTensorStorage_.size(); ++i) {
+        oss << tileTensorStorage_[i].ToString();
+    }
+    tileTensorOutputIdx_ = tileTensorStorage_.size();
+    return oss.str();
+}
+
 } // namespace npu::tile_fwk
