@@ -112,7 +112,7 @@ private:
         return instance;
     }
 
-    util::ThreadPool pool{0x2};
+    util::ThreadPool pool{0x3};
 };
 
 // LogTensorList 用於在執行 Operation 出錯時打印張量資訊

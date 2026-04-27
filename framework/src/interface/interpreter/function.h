@@ -23,6 +23,9 @@
 #include "calc.h"
 #include "tilefwk/error_code.h"
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 
 namespace npu::tile_fwk {
 
@@ -692,7 +695,7 @@ struct FunctionInterpreter {
     size_t pathFuncHash;
     std::vector<ElementDump> execDumpElementList;
     std::vector<std::shared_ptr<FunctionFrame>> execDumpStack;
-    int frameCount{0};
+    std::atomic<int> frameCount{0};
     int opInfoRowNum{0};
     int ProgrameRowNum{0};
 
@@ -704,6 +707,11 @@ struct FunctionInterpreter {
     VerifyType verifyType{VerifyType::INVALID};
     int captureIndex{0};
     int passIndex{-1};
+    std::mutex captureFrameListMutex_;
+    std::mutex mixGlobalTensorMutex_;
+    std::condition_variable mixGlobalTensorCv_;
+    static constexpr int64_t MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS = 60000; // 60s timeout to detect dead waits
+    std::mutex dumpStateMutex_;
 
     std::vector<std::shared_ptr<LogicalTensorData>>& GetInputDataViewList()
     {
@@ -847,6 +855,105 @@ struct FunctionInterpreter {
         ExecuteFunctionFrame(callee, ctx->op, inoutDataPair);
     }
 
+    int32_t GetCallOpWrapId(const Operation* op) const
+    {
+        if (op == nullptr || op->GetOpcode() != Opcode::OP_CALL) {
+            return -1;
+        }
+        auto callopAttr = std::dynamic_pointer_cast<CallOpAttribute>(op->GetOpAttribute());
+        if (callopAttr == nullptr) {
+            return -1;
+        }
+        return callopAttr->wrapId;
+    }
+
+    int32_t GetCallOpMixId(const Operation* op)
+    {
+        if (op == nullptr || op->GetOpcode() != Opcode::OP_CALL) {
+            return LeafFuncAttribute::INVALID_MIX_ID;
+        }
+        Function* callee = GetCallee(op);
+        if (callee == nullptr || callee->GetLeafFuncAttribute() == nullptr) {
+            return LeafFuncAttribute::INVALID_MIX_ID;
+        }
+        return callee->GetLeafFuncAttribute()->mixId;
+    }
+
+    bool IsMixSplitCallOp(const Operation* op)
+    {
+        return GetCallOpWrapId(op) != -1 && GetCallOpMixId(op) != LeafFuncAttribute::INVALID_MIX_ID;
+    }
+
+    struct MixSplitCallTask {
+        FunctionInterpreter* interpreter{nullptr};
+        Function* callee{nullptr};
+        Operation* callop{nullptr};
+        std::shared_ptr<FunctionIODataPair> inoutDataPair{nullptr};
+        static void Entry(void* ctx)
+        {
+            auto* task = static_cast<MixSplitCallTask*>(ctx);
+            if (task == nullptr || task->interpreter == nullptr || task->callee == nullptr || task->callop == nullptr ||
+                task->inoutDataPair == nullptr) {
+                return;
+            }
+            task->interpreter->ExecuteFunctionFrame(task->callee, task->callop, task->inoutDataPair);
+        }
+    };
+
+    std::shared_ptr<FunctionIODataPair> BuildCallInOutDataPair(FunctionFrame& frame, Operation* callop)
+    {
+        auto iOpDataList = frame.GetDataViewList(callop->GetIOperands());
+        for (size_t index = 0; index < iOpDataList.size(); index++) {
+            if (iOpDataList[index] == nullptr) {
+                auto iop = callop->GetIOperands()[index];
+                if (frame.callop != nullptr) {
+                    VERIFY_LOGI("BuildCallInOutDataPair: iop %zu is null, try to find in mixGlobalTensorDict.", index);
+                    iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop);
+                    if (iOpDataList[index] != nullptr) {
+                        continue;
+                    }
+                }
+                iOpDataList[index] = AllocateDataView(frame, iop);
+            }
+        }
+
+        std::vector<std::shared_ptr<LogicalTensorData>> oOpDataList;
+        for (size_t i = 0; i < callop->GetOOperands().size(); i++) {
+            auto oop = callop->GetOOperands()[i];
+            if (auto index = GetInplaceIndex(callop, i); index != -1) {
+                ExecuteInplaceOperation(frame, *callop, i, iOpDataList, oOpDataList);
+            } else {
+                oOpDataList.push_back(AllocateDataView(frame, oop));
+            }
+        }
+        return std::make_shared<FunctionIODataPair>(iOpDataList, oOpDataList);
+    }
+
+    void ExecuteMixSplitCallOpGroupParallel(FunctionFrame& frame, const std::vector<Operation*>& groupedCallOps)
+    {
+        constexpr size_t kMixSplitParallelLimit = 3;
+        ASSERT(ControlFlowScene::MIX_SPLIT_PARALLEL_LIMIT_EXCEEDED, groupedCallOps.size() <= kMixSplitParallelLimit)
+            << "MixSplit grouped callops exceeds parallel limit, groupedSize=" << groupedCallOps.size()
+            << ", limit=" << kMixSplitParallelLimit;
+        std::vector<std::shared_ptr<MixSplitCallTask>> taskList;
+        taskList.reserve(groupedCallOps.size());
+        for (auto* groupedCallOp : groupedCallOps) {
+            auto task = std::make_shared<MixSplitCallTask>();
+            task->interpreter = this;
+            task->callee = GetCallee(groupedCallOp);
+            task->callop = groupedCallOp;
+            task->inoutDataPair = BuildCallInOutDataPair(frame, groupedCallOp);
+            taskList.push_back(task);
+        }
+
+        auto& pool = operationInterpreter->GetPool();
+        for (size_t i = 0; i < taskList.size(); i++) {
+            pool.SubmitTask(taskList[i].get(), MixSplitCallTask::Entry);
+        }
+        pool.NotifyAll();
+        pool.WaitForAll();
+    }
+
     int GetInplaceIndex(Operation* op, int pos)
     {
         struct {
@@ -930,8 +1037,7 @@ struct FunctionInterpreter {
                 auto iop = op->GetIOperands()[index];
                 if (frame.callop != nullptr) {
                     VERIFY_LOGI("ExecuteOperation: iop %zu is null, try to find in mixGlobalTensorDict.", index);
-                    auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
-                    iOpDataList[index] = mixGlobalTensorDict[{iop, callopAttr->wrapId}];
+                    iOpDataList[index] = WaitAndGetMixGlobalTensorDataView(frame, iop);
                     if (iOpDataList[index] != nullptr) {
                         continue;
                     }
@@ -957,7 +1063,9 @@ struct FunctionInterpreter {
                     auto ret = AllocateDataView(frame, oop);
                     if (frame.callop != nullptr && MIX_PATH_OPS.count(op->GetOpcode()) > 0) {
                         auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+                        std::lock_guard<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
                         mixGlobalTensorDict[{oop, callopAttr->wrapId}] = ret;
+                        mixGlobalTensorCv_.notify_all();
                     }
 
                     oOpDataList.push_back(ret);
@@ -971,17 +1079,38 @@ struct FunctionInterpreter {
         } else {
             TimeStamp ts;
             operationInterpreter->ExecuteOperation(&ctx);
-            opUsage[op->GetOpcodeStr()] += ts.Duration();
-
-            auto* ooperandDumpList =
-                ctx.ooperandInplaceDataViewList ? ctx.ooperandInplaceDataViewList : ctx.ooperandDataViewList;
-            DumpOperationTensor(ctx.op, ctx.frame, ooperandDumpList, ctx.ioperandDataViewList);
-            dumpOperationUsage += ts.Duration();
+            {
+                std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
+                opUsage[op->GetOpcodeStr()] += ts.Duration();
+                auto* ooperandDumpList =
+                    ctx.ooperandInplaceDataViewList ? ctx.ooperandInplaceDataViewList : ctx.ooperandDataViewList;
+                DumpOperationTensor(ctx.op, ctx.frame, ooperandDumpList, ctx.ioperandDataViewList);
+                dumpOperationUsage += ts.Duration();
+            }
         }
+    }
+
+    std::shared_ptr<LogicalTensorData> WaitAndGetMixGlobalTensorDataView(
+        FunctionFrame& frame, const std::shared_ptr<LogicalTensor>& iop)
+    {
+        ASSERT(ControlFlowScene::INVALID_INPLACE_CHAIN, frame.callop != nullptr);
+        auto callopAttr = std::static_pointer_cast<CallOpAttribute>(frame.callop->GetOpAttribute());
+        std::unique_lock<std::mutex> mixTensorGuard(mixGlobalTensorMutex_);
+        const auto waitDeadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS);
+        const bool waitOk = mixGlobalTensorCv_.wait_until(mixTensorGuard, waitDeadline, [this, &iop, callopAttr] {
+            auto it = mixGlobalTensorDict.find({iop, callopAttr->wrapId});
+            return it != mixGlobalTensorDict.end() && it->second != nullptr;
+        });
+        ASSERT(ControlFlowScene::MIX_GLOBAL_TENSOR_WAIT_TIMEOUT, waitOk)
+            << "Timeout while waiting mixGlobalTensorDict in multithread execution, wrapId="
+            << callopAttr->wrapId << ", timeoutMs=" << MIX_GLOBAL_TENSOR_WAIT_TIMEOUT_MS;
+        return waitOk ? mixGlobalTensorDict[{iop, callopAttr->wrapId}] : nullptr;
     }
 
     void ExecuteHandleFunctionBegin(Function* func, std::shared_ptr<FunctionFrame> frame)
     {
+        std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
         TimeStamp ts;
         execDumpStack.push_back(frame);
         DumpFunctionHead(func);
@@ -995,15 +1124,52 @@ struct FunctionInterpreter {
         }
         dumpTensorUsage += ts.Duration();
     }
-    void ExecuteHandleFunctionEnd() { execDumpStack.pop_back(); }
+    void ExecuteHandleFunctionEnd()
+    {
+        std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
+        execDumpStack.pop_back();
+    }
     void ExecuteHandleOperationBegin(Operation* op)
     {
+        std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
         execDumpStack.back()->UpdateCurrentOperation(op);
         TimeStamp ts;
         DumpOperation(op);
         dumpOperationUsage += ts.Duration();
     }
     void ExecuteHandleOperationEnd() {}
+
+    bool TryExecuteMixSplitCallOps(
+        FunctionFrame& frame, const OperationsViewer& operations, size_t& opIdx, Operation& op)
+    {
+        if (!IsMixSplitCallOp(&op)) {
+            return false;
+        }
+        const int32_t wrapId = GetCallOpWrapId(&op);
+        std::vector<Operation*> groupedCallOps;
+        groupedCallOps.push_back(&op);
+        size_t nextIdx = opIdx + 1;
+        while (nextIdx < operations.size()) {
+            auto& nextOp = operations.at(nextIdx);
+            if (nextOp.GetOpcode() != Opcode::OP_CALL) {
+                break;
+            }
+            if (GetCallOpWrapId(&nextOp) != wrapId || !IsMixSplitCallOp(&nextOp)) {
+                break;
+            }
+            groupedCallOps.push_back(&nextOp);
+            nextIdx++;
+        }
+        if (groupedCallOps.size() > 1) {
+            ExecuteMixSplitCallOpGroupParallel(frame, groupedCallOps);
+        } else {
+            ExecuteHandleOperationBegin(&op);
+            ExecuteOperation(frame, &op);
+            ExecuteHandleOperationEnd();
+        }
+        opIdx = nextIdx;
+        return true;
+    }
 
     std::shared_ptr<FunctionFrame> ExecuteFunctionFrame(
         Function* func, Operation* callop, std::shared_ptr<FunctionIODataPair>& inoutDataPair)
@@ -1015,8 +1181,11 @@ struct FunctionInterpreter {
             linearArgList = callopAttr->GetLinearArgList();
         }
         std::shared_ptr<FunctionFrame> frame =
-            std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair, frameCount++);
-        captureFrameList->push_back(frame);
+            std::make_shared<FunctionFrame>(func, callop, callopAttr, inoutDataPair, frameCount.fetch_add(1));
+        if (captureFrameList != nullptr) {
+            std::lock_guard<std::mutex> captureGuard(captureFrameListMutex_);
+            captureFrameList->push_back(frame);
+        }
         frame->funcIndex = func->GetFuncMagic();
         frame->funcHash = func->GetFunctionHash().GetHash();
         frame->funcType = func->GetFunctionTypeStr();
@@ -1034,12 +1203,22 @@ struct FunctionInterpreter {
         EvaluateDynParam(dynParamTable, linearArgList);
 
         ExecuteHandleFunctionBegin(func, frame);
-        for (auto& op : func->Operations()) {
-            if (op.GetOpcode() == Opcode::OP_PRINT && verifyType != VerifyType::TENSOR_GRAPH)
+        auto operations = func->Operations();
+        for (size_t opIdx = 0; opIdx < operations.size();) {
+            auto& op = operations.at(opIdx);
+            if (op.GetOpcode() == Opcode::OP_PRINT && verifyType != VerifyType::TENSOR_GRAPH) {
+                opIdx++;
                 continue;
+            }
+
+            if (TryExecuteMixSplitCallOps(*frame, operations, opIdx, op)) {
+                continue;
+            }
+
             ExecuteHandleOperationBegin(&op);
             ExecuteOperation(*frame, &op);
             ExecuteHandleOperationEnd();
+            opIdx++;
         }
         ExecuteHandleFunctionEnd();
 
@@ -1415,6 +1594,7 @@ public:
 
     void DumpReset()
     {
+        std::lock_guard<std::mutex> dumpGuard(dumpStateMutex_);
         execDumpLevel = 0;
         opUsage.clear();
         totalTimeUsage = 0;
@@ -1465,6 +1645,8 @@ public:
 
     std::string DumpStatistics() const
     {
+        auto& nonConstSelf = const_cast<FunctionInterpreter&>(*this);
+        std::lock_guard<std::mutex> dumpGuard(nonConstSelf.dumpStateMutex_);
         std::stringstream ss;
         const int labelWidth = 24;
         uint64_t totalOpUsage = 0;
