@@ -297,7 +297,7 @@ python3 custom/operator_name/operator.py --run-mode npu
 
 ### 2.1 启用性能数据采集
 
-在算子实现文件中，修改 `@pypto.frontend.jit` 装饰器：
+在算子实现文件中，修改 `@pypto.frontend.jit` 装饰器，添加 `debug_options` 参数：
 
 ```python
 @pypto.frontend.jit(
@@ -308,7 +308,31 @@ def kernel_function(...):
     pass
 ```
 
-**⚠️ 重要提示**：性能调优任务结束时，将修改的开关还原。
+**`debug_options` 参数说明**：
+
+| 参数 | 作用 | 默认值 | 推荐值 |
+|------|------|--------|--------|
+| `runtime_debug_mode` | 启用运行时调试模式，生成泳道图、气泡分析等性能数据文件 | 不设置（不生成性能数据） | `1`（启用） |
+
+**影响范围**：
+- 会增加编译时间
+- 会增加输出文件大小（泳道图 JSON 可能有数十 MB）
+- 不影响算子计算精度
+
+**使用示例**：
+```python
+# 调优前：添加 debug_options
+@pypto.frontend.jit(
+    debug_options={"runtime_debug_mode": 1}
+)
+
+# 调优结束后：移除 debug_options（还原为原始状态）
+@pypto.frontend.jit(
+    # debug_options 已移除
+)
+```
+
+**⚠️ 重要提示**：性能调优任务结束时（S5_REPORT 阶段），必须将 `debug_options` 移除或置为空字典，避免影响正常使用性能。
 
 ### 2.2 重新运行（不需要编译）
 
@@ -319,8 +343,21 @@ python3 custom/operator_name/operator.py --run-mode npu
 
 ### 2.3 性能数据文件位置
 
-执行后会在 `output/output_*/` 目录下生成：
+**⚠️ 关键：output 目录的位置取决于执行算子命令时的工作目录（即 `python3 xxx.py --run-mode npu` 时所在的目录）。**
 
+输出目录格式为 `<执行命令时的工作目录>/output/output_<时间戳>/`，典型场景：
+
+| 执行场景 | 执行命令 | output 目录位置 |
+|---------|---------|----------------|
+| 在算子目录下执行 | `cd custom/op && python3 op.py --run-mode npu` | `custom/op/output/output_*/` |
+| 在项目根目录执行 | `python3 custom/op/op.py --run-mode npu` | `./output/output_*/` |
+
+**查找最新输出目录**（需在正确的工作目录下执行）：
+```bash
+ls -lt output/ | head -n 2
+```
+
+输出目录下包含以下文件：
 - `merged_swimlane.json` - 泳道图数据文件
 - `machine_runtime_operator_trace.json` - 性能追踪文件
 - `bubble_analysis.log` - 气泡分析报告

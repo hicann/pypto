@@ -18,7 +18,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -534,6 +534,24 @@ def generate_report(metrics: Dict, bottlenecks: List[Dict], suggestions: Dict, o
     return report
 
 
+def find_bubble_analysis_log(output_dir: str) -> Optional[str]:
+    """查找 bubble_analysis.log 文件，支持自动递归搜索"""
+    direct_path = os.path.join(output_dir, 'bubble_analysis.log')
+    if os.path.exists(direct_path):
+        return direct_path
+
+    candidates = []
+    for root, _, files in os.walk(output_dir):
+        if 'bubble_analysis.log' in files:
+            candidates.append(os.path.join(root, 'bubble_analysis.log'))
+
+    if candidates:
+        candidates.sort()
+        return candidates[0]
+
+    return None
+
+
 def main():
     """主函数"""
     logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -541,15 +559,41 @@ def main():
     if len(sys.argv) < 2:
         logging.info("Usage: python analyze_perf.py <output_dir>")
         logging.info("Example: python analyze_perf.py models/glm_v4_5/output/output_20260304_171658_543682_529508")
+        logging.info("")
+        logging.info("Note: output_dir should be the directory containing bubble_analysis.log")
+        logging.info("      If not found, the script will search subdirectories automatically.")
         sys.exit(1)
 
     output_dir = sys.argv[1]
-    bubble_log_path = os.path.join(output_dir, 'bubble_analysis.log')
 
-    if not os.path.exists(bubble_log_path):
-        logging.info(f"Error: bubble_analysis.log not found in {output_dir}")
+    if not os.path.exists(output_dir):
+        logging.info(f"Error: directory not found: {output_dir}")
+        logging.info("")
+        logging.info("Hint: output directory is relative to where you ran the operator command.")
+        logging.info("  If you ran 'python3 custom/op/op.py --run-mode npu' from project root:")
+        logging.info(f"    try: {os.path.abspath('output')}")
+        logging.info("  If you ran from the operator directory:")
+        logging.info(f"    try: <operator_dir>/output/<timestamp_dir>")
+        logging.info("")
+        logging.info("Quick find: run 'find . -name bubble_analysis.log' from project root")
         sys.exit(1)
 
+    bubble_log_path = find_bubble_analysis_log(output_dir)
+
+    if bubble_log_path is None:
+        logging.info(f"Error: bubble_analysis.log not found in {output_dir}")
+        logging.info("")
+        logging.info("Possible reasons:")
+        logging.info("  1. The operator has not been run with debug_options={'runtime_debug_mode': 1}")
+        logging.info("  2. The output directory is in a different location than expected")
+        logging.info("")
+        logging.info("Hint: output directory is relative to where you ran the operator command.")
+        logging.info("  If you ran from the operator directory (e.g. custom/op/):")
+        logging.info(f"    try: {output_dir}/output/  (if output_dir is the operator dir)")
+        logging.info("  Quick find: run 'find . -name bubble_analysis.log' from project root")
+        sys.exit(1)
+
+    real_output_dir = os.path.dirname(bubble_log_path)
     logging.info(f"正在分析性能数据: {bubble_log_path}")
 
     # 解析性能数据
@@ -566,10 +610,10 @@ def main():
     suggestions = generate_optimization_suggestions(metrics, bottlenecks)
 
     # 生成报告
-    report = generate_report(metrics, bottlenecks, suggestions, output_dir)
+    report = generate_report(metrics, bottlenecks, suggestions, real_output_dir)
 
     # 保存报告
-    report_path = os.path.join(output_dir, 'performance_analysis_report.md')
+    report_path = os.path.join(real_output_dir, 'performance_analysis_report.md')
     with open(report_path, 'w') as f:
         f.write(report)
 

@@ -135,7 +135,7 @@ e_score_bias_2d_cast = pypto.cast(e_score_bias_2d_tile, tile_logits_fp32.dtype)
 **🔥 P1 - L2 Cache + 依赖与搬运 [I-2~I-4]**：
 - [ ] [I-2] 只读一次的大型权重矩阵是否设置了 L2 Cache 策略（`NONE_CACHEABLE`）；融合算子中应对所有权重同时设置，避免 L2 争用失衡 → **🔥 案例**：[权重矩阵批量 NONE_CACHEABLE](cases/weight-none-l2-cacheable.md)（-19.1%）
 - [ ] [I-3] 是否存在一对多的子图依赖（可通过冗余计算消除）
-- [ ] [I-4] 尾轴是否过小（< 32B 对齐）
+- [ ] [I-4] 尾轴是否过小（< 32B 对齐）；尾轴 TileShape 是否已优先用满，必须切分时是否按 512B 对齐
 
 **P2 - 实现检查 [I-5]**：
 - [ ] [I-5] 单个 Operation 是否与 Ascend C 对比过性能

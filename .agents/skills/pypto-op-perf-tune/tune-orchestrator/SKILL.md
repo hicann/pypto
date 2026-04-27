@@ -125,12 +125,13 @@ S4_TUNE = PHASE_FRONTEND → PHASE_SUMMARY_F → PHASE_SWIMLANE → PHASE_SUMMAR
 │     └─ 运行算子用例，记录基准执行时间      │
 │                                            │
 │  2. 按清单逐项执行（子技能调优检查清单）   │
-│     ├─ P0 任务粒度：切块、合轴             │
-│     ├─ P1 Loop 写法：静态for/合并/unroll   │
-│     ├─ P2 TileShape：Cube/Vector推荐配置   │
-│     ├─ P3 常量配置：BLOCK_SIZE等           │
-│     └─ P4 数据操作：NZ格式/transpose/     │
-│        assemble/inplace reshape            │
+│     ├─ P0 任务粒度：切块                      │
+│     ├─ P1 Reshape 全局优化：外提+合轴          │
+│     ├─ P2 Loop 写法：静态for/合并/unroll       │
+│     ├─ P3 TileShape：Cube/Vector推荐配置       │
+│     ├─ P4 常量配置：BLOCK_SIZE等               │
+│     └─ P5 数据操作：NZ格式/transpose/         │
+│        assemble                               │
 │                                            │
 │  3. 每项优化后验证                         │
 │     ├─ 验证精度                            │
@@ -414,14 +415,26 @@ ls $PTO_TILE_LIB_CODE_PATH/include/pto/  # 路径必须存在
 
 ### S2_COLLECT
 
+**⚠️ output 目录位于执行算子命令时的工作目录下，非固定位置。** 需在正确的工作目录下执行验证命令。
+
 ```bash
+# 在执行算子命令时的工作目录下验证
 ls output/output_*/merged_swimlane.json   # 必须存在
+
+# 如果不确定位置，从项目根目录搜索
+find . -name "merged_swimlane.json" -type f
 ```
 
 ### S3_ANALYZE
 
+**⚠️ 同 S2_COLLECT，需在正确的工作目录下验证。**
+
 ```bash
+# 在执行算子命令时的工作目录下验证
 ls output/output_*/performance_analysis_report.md   # 必须存在
+
+# 如果不确定位置，从项目根目录搜索
+find . -name "performance_analysis_report.md" -type f
 ```
 
 ### S4_TUNE 各 PHASE
