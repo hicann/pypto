@@ -47,7 +47,7 @@ S2_TILE = 320
         "device_sched_mode": 0,
     },
     debug_options={
-        "runtime_debug_mode": 1
+        "runtime_debug_mode": 0
     }
 )
 def flash_attention_varlen_backward_kernel_small_seq(
