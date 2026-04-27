@@ -38,26 +38,41 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
     return ss.str();
 }
 
-Status InferParamIndex::ResetOutputDynValidShape(const Operation& op)
+bool InferParamIndex::HandleCopyOpShape(const Operation& op, Function &function, bool &isCopyIn)
 {
-    std::vector<SymbolicScalar> validShape;
-    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND,       Opcode::OP_RESHAPE,
-                                           Opcode::OP_GATHER,  Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
+    auto operands = isCopyIn ? op.GetIOperands() : op.GetOOperands();
+    auto &casts = isCopyIn ? function.inCasts_ : function.outCasts_;
+    auto operand = operands.front();
+    if (find(casts.begin(), casts.end(), operand) == casts.end()) {
+        std::vector<SymbolicScalar> validShape;
+        op.GetOOperands().front()->UpdateDynValidShape(validShape);
+        return true;
+    }
+    return false;
+}
+
+Status InferParamIndex::ResetOutputDynValidShape(const Operation& op, Function &function)
+{
+    const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
+                                           Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
                                            Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT};
+    bool isCopyIn = (op.GetOpcode() == Opcode::OP_COPY_IN);
+    bool isCopyOut = (op.GetOpcode() == Opcode::OP_COPY_OUT);
+    if ((isCopyIn || isCopyOut)) {
+        if (HandleCopyOpShape(op, function, isCopyIn)) {
+            return SUCCESS;
+        }
+    }
     for (auto outOperand : op.GetOOperands()) {
         if (op.GetOpcode() == Opcode::OP_INDEX_ADD &&
-            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand)) {
-            continue;
-        }
+            !Program::GetInstance().GetCurrentFunction()->IsFromOutCast(outOperand)) continue;
+        std::vector<SymbolicScalar> validShape;
         if (OpcodeManager::Inst().IsCopyInOrOut(op.GetOpcode()) || specifiedOps.count(op.GetOpcode())) {
             for (size_t dimIdx = 0U; dimIdx < outOperand->GetShape().size(); ++dimIdx) {
-                validShape.push_back(
-                    SymbolicScalar("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx)));
+                validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));
             }
         }
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) { // Assemble的oOperand保持validShape不变
-            outOperand->UpdateDynValidShape(validShape);
-        }
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) outOperand->UpdateDynValidShape(validShape);
     }
     return SUCCESS;
 }
@@ -96,7 +111,7 @@ Status InferParamIndex::ResetAssembleDynValidShape(const Operation& op)
 Status InferParamIndex::ResetDynValidShape(Function& function)
 {
     for (auto& op : function.Operations(false)) {
-        if (ResetOutputDynValidShape(op) != SUCCESS) {
+        if (ResetOutputDynValidShape(op, function) != SUCCESS) {
             APASS_LOG_ERROR_F(
                 Elements::Operation,
                 "Fail to reset the output operand shape of operation %d in function %s. Please check whether the shape "

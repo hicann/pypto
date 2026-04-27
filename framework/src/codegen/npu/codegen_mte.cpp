@@ -66,7 +66,8 @@ std::string CodeGenOpNPU::GenMemL0CCopyOut() const { return GenMemCopyCube(true,
 std::string CodeGenOpNPU::GenMemCopyCube(bool isLocalToGM, unsigned uf) const
 {
     unsigned gmIdx = isLocalToGM ? 0 : 1;
-    bool isSpillToGm = operand[gmIdx] == SYMBOL_STACK_BASE;
+    int64_t gmOffset{0};
+    bool isSpillToGm = GetTensorAttr(gmIdx, OpAttributeKey::workspaceBaseOffset, gmOffset);
     return GenMemCopyVar(isLocalToGM, isSpillToGm, uf);
 }
 
@@ -82,7 +83,7 @@ std::string CodeGenOpNPU::GenMemL1SpillToGM(bool isLocalToGM, unsigned uf) const
     addrTypeHead[l1Idx] = GetAddrTypeByOperandType(BUF_L1);
 
     std::vector<std::string> addrExpr(ID2);
-    addrExpr[gmIdx] = GenGMAddrExprWithOffset(GM_STACK_BASE);
+    addrExpr[gmIdx] = GenGMAddrExprWithOffset(gmIdx, GM_STACK_BASE);
     addrExpr[l1Idx] = sm->QueryVarNameByTensorMagic(operandWithMagic[l1Idx]);
     AppendLocalBufferVarOffset({{l1Idx, addrExpr[l1Idx]}});
 
@@ -289,7 +290,8 @@ std::string CodeGenOpNPU::GenMemL1ToBt() const
 std::string CodeGenOpNPU::GenMemUBTransfer(bool isCopyUBToGM) const
 {
     unsigned gmIdx = isCopyUBToGM ? 0 : 1;
-    bool isSpillToGm = operand[gmIdx] == SYMBOL_STACK_BASE;
+    int64_t gmOffset{0};
+    bool isSpillToGm = GetTensorAttr(gmIdx, OpAttributeKey::workspaceBaseOffset, gmOffset);
     return GenMemCopyVar(isCopyUBToGM, isSpillToGm);
 }
 
@@ -425,7 +427,7 @@ std::string CodeGenOpNPU::GenMemCopyVar(bool isCopyLocalToGM, bool isSpillToGm, 
 
     std::vector<std::string> addrExpr(ID2);
     addrExpr[localIdx] = sm->QueryVarNameByTensorMagic(operandWithMagic[localIdx]);
-    addrExpr[gmIdx] = isSpillToGm ? GenGMAddrExprWithOffset(GM_STACK_BASE) : GenGmParamVar(gmIdx);
+    addrExpr[gmIdx] = isSpillToGm ? GenGMAddrExprWithOffset(gmIdx, GM_STACK_BASE) : GenGmParamVar(gmIdx);
 
     std::vector<std::string> dataTypeExpr(ID2);
     dataTypeExpr[gmIdx] = DataType2CCEStr(operandDtype[gmIdx]);
@@ -1085,12 +1087,11 @@ std::string CodeGenOpNPU::GenMemL1ToFB() const
     return os.str();
 }
 
-std::string CodeGenOpNPU::GenGMAddrExprWithOffset(const std::string& addrExpr) const
+std::string CodeGenOpNPU::GenGMAddrExprWithOffset(unsigned gmParamIdx, const std::string& addrExpr) const
 {
-    // gm offset of spilling workspace is calculated by pass, the value is saved in dim 0.
-    int64_t gmOffset = 0;
-    // gmOffset Default to 0 when the attribute is not set
-    GetOpAttr(OpAttributeKey::workspaceBaseOffset, gmOffset);
+    // gm offset of spilling workspace is calculated by pass.
+    int64_t gmOffset{0};
+    GetTensorAttr(gmParamIdx, OpAttributeKey::workspaceBaseOffset, gmOffset);
     std::ostringstream oss;
     if (gmOffset == 0) {
         oss << addrExpr;

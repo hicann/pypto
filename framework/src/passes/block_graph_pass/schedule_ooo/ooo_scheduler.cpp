@@ -877,6 +877,7 @@ Status OoOScheduler::Schedule(
         APASS_LOG_ERROR_F(Elements::Operation, "Init failed!");
         return FAILED;
     }
+    AllocWorkspaceGM(opList);
     // 生成spill指令
     if (GenSpillSchedule() != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "GenSpillSchedule failed!");
@@ -905,6 +906,50 @@ Status OoOScheduler::Schedule(
     function_.pipeEndTime = pipeEndTime;
     NotifyScheduleEnd(true);
     return SUCCESS;
+}
+
+void OoOScheduler::AllocWorkspaceGM(const std::vector<Operation *> &opList) {
+    std::set<int> allocedRawmagic;
+    for (auto &inCast : function_.GetIncast()) {
+        allocedRawmagic.insert(inCast->tensor->GetRawMagic());
+    }
+    for (auto &outCast : function_.GetOutcast()) {
+        allocedRawmagic.insert(outCast->tensor->GetRawMagic());
+    }
+    std::map<int, TileRange> rawMagicRange;
+    std::map<int, int64_t> rawMagicOffset;
+    for (auto &op : opList) {
+        for (auto &iOperand : op->GetIOperands()) {
+            if (allocedRawmagic.count(iOperand->tensor->GetRawMagic()) && rawMagicRange.count(iOperand->tensor->GetRawMagic())) {
+                iOperand->memoryrange = rawMagicRange[iOperand->tensor->GetRawMagic()];
+                iOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, rawMagicOffset[iOperand->tensor->GetRawMagic()]);
+            } else if (iOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && 
+                !allocedRawmagic.count(iOperand->tensor->GetRawMagic())) {
+                allocedRawmagic.insert(iOperand->tensor->GetRawMagic());
+                iOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, workspaceOffset);
+                iOperand->memoryrange =
+                    TileRange(workspaceOffset, workspaceOffset + iOperand->tensor->GetRawDataSize(), iOperand->tensor->GetRawMagic());
+                rawMagicOffset[iOperand->tensor->GetRawMagic()] = workspaceOffset;
+                workspaceOffset += iOperand->tensor->GetRawDataSize();
+                rawMagicRange[iOperand->tensor->GetRawMagic()] = iOperand->memoryrange;
+            }
+        }
+        for (auto &oOperand : op->GetOOperands()) {
+            if (allocedRawmagic.count(oOperand->tensor->GetRawMagic()) && rawMagicRange.count(oOperand->tensor->GetRawMagic())) {
+                oOperand->memoryrange = rawMagicRange[oOperand->tensor->GetRawMagic()];
+                oOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, rawMagicOffset[oOperand->tensor->GetRawMagic()]);
+            } else if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR && 
+                !allocedRawmagic.count(oOperand->tensor->GetRawMagic())) {
+                allocedRawmagic.insert(oOperand->tensor->GetRawMagic());
+                oOperand->SetAttr(OpAttributeKey::workspaceBaseOffset, workspaceOffset);
+                oOperand->memoryrange =
+                    TileRange(workspaceOffset, workspaceOffset + oOperand->tensor->GetRawDataSize(), oOperand->tensor->GetRawMagic());
+                rawMagicOffset[oOperand->tensor->GetRawMagic()] = workspaceOffset;
+                workspaceOffset += oOperand->tensor->GetRawDataSize();
+                rawMagicRange[oOperand->tensor->GetRawMagic()] = oOperand->memoryrange;
+            }
+        }
+    }
 }
 
 } // namespace npu::tile_fwk

@@ -118,8 +118,6 @@ static std::vector<HubMergeType> MarkSubgraphType(Function &function)
             hasView[currSubgraphID] = true;
         } else if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
             hasAssemble[currSubgraphID] = true;
-        } else if (op.GetOpcode() != Opcode::OP_RESHAPE) {
-            hasOthers[currSubgraphID] = true;
         }
     }
     for (int subgraphId = 0; subgraphId < static_cast<int>(function.GetTotalSubGraphCount()); subgraphId++) {

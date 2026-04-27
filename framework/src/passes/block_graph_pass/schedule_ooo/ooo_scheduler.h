@@ -270,7 +270,7 @@ private:
     void UpdateOpInternalSubgraphID(Operation &op, Operation* srcOp);
     void GetActualSpillInfo(Operation* spillOp, std::pair<LogicalTensorPtr, Operation*>& actualInfo);
     void UpdateOpAttr(Operation &op, int opLatency, LogicalTensorPtr spillTensor, std::vector<int64_t> offset,
-        Operation* spillOp, int64_t workspaceBaseOffset, bool isSpecialL1);
+        Operation* spillOp, bool isSpecialL1);
     Status UpdateTensorAttr(LogicalTensorPtr tensor, MemoryType memType, LogicalTensorPtr spillTensor, int spillMemId);
     int GetBufNextUseOrder(Operation* op, int curMemId);
     int GetBufLastUseOrder(Operation* op, int curMemId);
@@ -282,9 +282,9 @@ private:
     Status UpdateAssembleBuffer(SpillInfo &spillInfo, LocalBufferPtr allocBuffer, LogicalTensorPtr assembleTensor);
     LogicalTensorPtr CreateAssemblePartTensor(
         LogicalTensorPtr iOperand, LogicalTensorPtr assembleTensor, const std::vector<int64_t> &toOffset);
-    void GetWorkspaceBaseOffset(LogicalTensorPtr ddrTensor, int64_t& base);
     Status UpdateCopyOutMode(Operation& copyOutOp);
     Status UpdateCopyInMode(Operation& copyInOp);
+    void AllocWorkspaceGM(const std::vector<Operation *> &opList);
 
     // buffer rearrange
     Status RearrangeBuffer(Operation* allocOp, MemoryType memType, CoreLocationType coreLocation, bool isGenSpill);

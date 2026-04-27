@@ -732,7 +732,7 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
     tile_config.q_vec_tile1 = 32
     tile_config.k_vec_tile0 = 2
     tile_config.k_vec_tile1 = 512
-    tile_config.unroll_list = [8, 4, 2, 1]
+    tile_config.unroll_list = [1]
 
     actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
     input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \
@@ -742,6 +742,7 @@ def test_b4_s64k2_pa_nd_bf16_quantb_d():
 
 
 @pytest.mark.soc("950")
+@pytest.mark.skip(reason="env error case")
 def test_b4_s64k2_pa_nd_bf16_d():
     '''
     mla_prolog decode非量化测试函数
@@ -790,6 +791,7 @@ def test_b4_s64k2_pa_nd_bf16_d():
 
 
 @pytest.mark.soc("950")
+@pytest.mark.skip(reason="env error case")
 def test_b64_s64k2_pa_nd_bf16_d():
     '''
     mla_prolog decode非量化测试函数

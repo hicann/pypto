@@ -1274,6 +1274,8 @@ void Function::ProducerMagicLookup(
                 if (!SubgraphUtils::IsBoundary(op->oOperand[0])) {
                     ss << " " << op->GetOpAttribute()->Dump();
                 }
+            } else if (function->GetGraphType() == GraphType::BLOCK_GRAPH) {
+                ss << " " << op->GetOpAttribute()->Dump();
             } else if (
                 (!IsCopyIn(op->GetOpcode()) && !IsCopyOut(op->GetOpcode())) ||
                 function->GetGraphType() != GraphType::BLOCK_GRAPH) {

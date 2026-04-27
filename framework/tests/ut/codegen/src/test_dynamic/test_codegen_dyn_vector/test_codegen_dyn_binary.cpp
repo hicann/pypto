@@ -271,7 +271,7 @@ TEST_F(TestCodegenDynBinary, AddUnalignTileTensor)
     std::string expect = R"!!!(#include "TileOpImpl.h"
 #include "tilefwk/aicpu_common.h"
 
-// funcHash: 849057961577091540
+// funcHash: 11297462011621740569
 
 extern "C" [aicore] void TENSOR_L0_TILETENSOR_Unroll1_PATH0_hiddenfunc0_7_0_4503599627370496(CoreFuncParam* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ TaskStat* taskStat) {
 float __ubuf__ *UB_S0_E16384 = (float __ubuf__ *)get_imm(0x0); // size: 0x4000

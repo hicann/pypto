@@ -117,7 +117,7 @@ TEST_F(TestCodegenBinary, TestCodegenAddMulDim4TileTensor)
     std::string expect = R"!!!(#include "TileOpImpl.h"
 #include "tilefwk/aicpu_common.h"
 
-// funcHash: 15129337852299427049
+// funcHash: 7529788009116668590
 
 extern "C" [aicore] void TENSOR_AddMulDim4_TILETENSOR_2_0_4503599627370496(__gm__ GMTensorInfo* param, int64_t GMStackBase, __gm__ int64_t *hcclContext, __gm__ TaskStat* taskStat) {
 float __ubuf__ *UB_S0_E1024 = (float __ubuf__ *)get_imm(0x0); // size: 0x400

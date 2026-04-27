@@ -72,7 +72,7 @@ TileTensor CodeGenOpLiteNPU::BuildTileTensor(
     tileTensor.bufType = operandType[paramIdx];
 
     if (tileTensor.bufType == OperandType::BUF_DDR) {
-        tileTensor.bufVar = isSpillToGm ? GenGMAddrExprWithOffset(CODEGEN_LITENPU_WORKSPACE) : GenGmParamVar(paramIdx);
+        tileTensor.bufVar = isSpillToGm ? GenGMAddrExprWithOffset(paramIdx, GM_STACK_BASE) : GenGmParamVar(paramIdx);
     } else {
         tileTensor.bufVar = sm->QueryVarNameByTensorMagic(tileTensor.magic, true);
     }

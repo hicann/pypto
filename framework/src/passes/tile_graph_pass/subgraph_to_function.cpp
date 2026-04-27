@@ -125,6 +125,22 @@ void SubgraphToFunction::RecordConnectionWithProducers(RecordInfo recordInfo, Su
     }
 }
 
+bool isFromCast(LogicalTensorPtr &operand) {
+    if (!(operand->GetConsumers().empty()) && !(operand->GetProducers().empty())) {
+        std::set<int> boundTensorIDs;
+        for (auto &outOp : operand->GetConsumers()) {
+            boundTensorIDs.insert(outOp->GetSubgraphID());
+        }
+        for (auto &inOp : operand->GetProducers()) {
+            boundTensorIDs.insert(inOp->GetSubgraphID());
+        }
+        if (boundTensorIDs.size() == 1) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void SubgraphToFunction::RecordIncastInfo(Function& function, RecordInfo recordInfo, SubfuncInvokeInfoTy& iter)
 {
     size_t i = recordInfo.i;
@@ -134,6 +150,11 @@ void SubgraphToFunction::RecordIncastInfo(Function& function, RecordInfo recordI
     Offset offset = recordInfo.offset;
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
+    if (!isFromCast(iOperand)) {
+        APASS_LOG_INFO_F(Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be incast.", 
+            iOperand->GetMagic());
+        return;
+    }
     // 这里逻辑可能有一些问题，期望是尽可能不要把inplace语义的COPY_OUT的输出变成leaf的incast
     if (op.HasAttribute(OpAttributeKey::inplaceIdx) && !iOperand->GetProducers().empty()) {
         if (!SubgraphUtils::IsBoundary(iOperand)) {
@@ -193,6 +214,11 @@ void SubgraphToFunction::RecordOutcastInfo(Function& function, RecordInfo record
     Offset offset = recordInfo.offset;
     Shape shape = recordInfo.shape;
     auto& op = *nLIST[i][j];
+    if (!isFromCast(oOperand)) {
+        APASS_LOG_INFO_F(Elements::Tensor, "Tensor %d has consumer in same subgraph, cannot be outcast.", 
+            oOperand->GetMagic());
+        return;
+    }
     if (op.HasAttribute(OpAttributeKey::inplaceIdx) &&
         (op.GetOpcode() != Opcode::OP_COPY_OUT && op.GetOpcode() != Opcode::OP_INDEX_PUT &&
          op.GetOpcode() != Opcode::OP_INDEX_ADD)) {

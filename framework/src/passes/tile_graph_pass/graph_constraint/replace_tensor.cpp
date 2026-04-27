@@ -294,23 +294,38 @@ Status ReplaceTensor::FindBaseTensor(
             }
         }
     }
-    if (baseTensor == nullptr) {
-        baseTensor = group.front();
-        int64_t baseShape = abs(baseTensor->tensor->GetRawDataSize());
-        for (auto& curTensor : group) {
-            int64_t curShape = abs(curTensor->tensor->GetRawDataSize());
-            if (curShape > baseShape) {
-                APASS_LOG_INFO_F(
-                    Elements::Tensor, "Replace curTensor %d size %ld to baseTensor %d size %ld.", curTensor->GetMagic(),
-                    curShape, baseTensor->GetMagic(), baseShape);
-                baseTensor = curTensor;
-                baseShape = curShape;
-            } else if (curShape == baseShape && tensorToOrderIndex.at(curTensor) < tensorToOrderIndex.at(baseTensor)) {
-                APASS_LOG_INFO_F(
-                    Elements::Tensor, "Replace curTensor %d idx %d to baseTensor %d idx %d.", curTensor->GetMagic(),
-                    tensorToOrderIndex.at(curTensor), baseTensor->GetMagic(), tensorToOrderIndex.at(baseTensor));
-                baseTensor = curTensor;
-            }
+    if (baseTensor != nullptr) {
+        return SUCCESS;
+    }
+    LogicalTensors boundTensors;
+    for (auto& curTensor : group) {
+        std::set<int> boundTensorIDs;
+        for (auto &inOp : curTensor->GetProducers()) {
+            boundTensorIDs.insert(inOp->GetSubgraphID());
+        }
+        for (auto &outOp : curTensor->GetConsumers()) {
+            boundTensorIDs.insert(outOp->GetSubgraphID());
+        }
+        if (boundTensorIDs.size() > 1) {
+            boundTensors.push_back(curTensor);
+        }
+    }
+    LogicalTensors baseGroup = boundTensors.empty() ? group : boundTensors;
+    baseTensor = baseGroup.front();
+    int64_t baseShape = abs(baseTensor->tensor->GetRawDataSize());
+    for (auto& curTensor : baseGroup) {
+        int64_t curShape = abs(curTensor->tensor->GetRawDataSize());
+        if (curShape > baseShape) {
+            APASS_LOG_INFO_F(
+                Elements::Tensor, "Replace curTensor %d size %ld to baseTensor %d size %ld.", curTensor->GetMagic(),
+                curShape, baseTensor->GetMagic(), baseShape);
+            baseTensor = curTensor;
+            baseShape = curShape;
+        } else if (curShape == baseShape && tensorToOrderIndex.at(curTensor) < tensorToOrderIndex.at(baseTensor)) {
+            APASS_LOG_INFO_F(
+                Elements::Tensor, "Replace curTensor %d idx %d to baseTensor %d idx %d.", curTensor->GetMagic(),
+                tensorToOrderIndex.at(curTensor), baseTensor->GetMagic(), tensorToOrderIndex.at(baseTensor));
+            baseTensor = curTensor;
         }
     }
     return SUCCESS;
@@ -946,8 +961,15 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     visitedAssOps.insert(op.GetOpMagic());
     auto assembleIn = op.GetIOperands()[0];
     auto producers = assembleIn->GetProducers();
+    auto &inOp = *(assembleIn)->GetProducers().begin();
     if ((!producers.empty()) && (*producers.begin())->GetOpcode() == Opcode::OP_TRANSPOSE_MOVEOUT) {
         return FAILED;
+    }
+    const int UB_SIZE_THRESHOLD = static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB));
+    if (inOp->GetOpcode() == Opcode::OP_RESHAPE &&
+        op.GetIOperands()[0]->tensor->GetRawDataSize() <= UB_SIZE_THRESHOLD) {
+        needInsertCopyAssOps.insert(&op);
+        return SUCCESS;
     }
     auto consumers = assembleIn->GetConsumers();
     bool sameAssembleOut = true;
@@ -968,6 +990,38 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
     return SUCCESS;
 }
 
+Status ReplaceTensor::FindNeedToCopyReshape(
+    std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedReshapeOps, Operation& op)
+{
+    visitedReshapeOps.insert(op.GetOpMagic());
+    if (op.GetIOperands()[0]->tensor->GetRawShapeSize() > 0 &&
+        op.GetOOperands()[0]->tensor->GetRawShapeSize() > 0 &&
+        op.GetIOperands()[0]->tensor->GetRawShapeSize() != op.GetOOperands()[0]->tensor->GetRawShapeSize()) {
+        needInsertCopyAssOps.insert(&op);
+        return SUCCESS;
+    }
+    auto producerOps = op.ProducerOps();
+    auto consumerOps = op.ConsumerOps();
+    bool flag = true;
+    for (auto consumerOp : consumerOps) {
+        if (consumerOp->GetOpcode() == Opcode::OP_COPY_IN) {
+            flag = false;
+            break;
+        }
+    }
+    for (auto producesOp : producerOps) {
+        if (producesOp->GetOpcode() == Opcode::OP_VIEW && flag) {
+            needInsertCopyAssOps.insert(&op);
+        }
+    }
+    for (auto consumerOp : consumerOps) {
+        if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE && consumerOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+            needInsertCopyAssOps.insert(consumerOp);
+        }
+    }
+    return SUCCESS;
+}
+
 /**
  * @brief 遍历所有 ASSEMBLE 操作，为需要拷贝的操作插入拷贝序列，避免多个 ASSEMBLE 操作共享同一个输入导致的内存冲突
  * Tensor1 ---> Assemble ---> Tensor2
@@ -981,31 +1035,14 @@ Status ReplaceTensor::FindNeedToCopyAssemble(
 Status ReplaceTensor::InsertNeedCopy(Function& function)
 {
     std::unordered_set<int> visitedAssOps;
+    std::unordered_set<int> visitedReshapeOps;
     std::unordered_set<Operation*> needInsertCopyAssOps;
     for (auto& op : function.Operations()) {
         if (op.GetOpcode() == Opcode::OP_ASSEMBLE && (!visitedAssOps.count(op.GetOpMagic()))) {
             FindNeedToCopyAssemble(needInsertCopyAssOps, visitedAssOps, op);
         }
-        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
-            auto producerOps = op.ProducerOps();
-            auto consumerOps = op.ConsumerOps();
-            bool flag = true;
-            for (auto consumerOp : consumerOps) {
-                if (consumerOp->GetOpcode() == Opcode::OP_COPY_IN) {
-                    flag = false;
-                    break;
-                }
-            }
-            for (auto producesOp : producerOps) {
-                if (producesOp->GetOpcode() == Opcode::OP_VIEW && flag) {
-                    needInsertCopyAssOps.insert(&op);
-                }
-            }
-            for (auto consumerOp : consumerOps) {
-                if (consumerOp->GetOpcode() == Opcode::OP_ASSEMBLE && consumerOp->GetIOperands()[0]->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
-                    needInsertCopyAssOps.insert(consumerOp);
-                }
-            }
+        if (op.GetOpcode() == Opcode::OP_RESHAPE && (!visitedReshapeOps.count(op.GetOpMagic()))) {
+            FindNeedToCopyReshape(needInsertCopyAssOps, visitedReshapeOps, op);
         }
     }
     std::vector<Operation*> sortedOps(needInsertCopyAssOps.begin(), needInsertCopyAssOps.end());

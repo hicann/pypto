@@ -179,6 +179,8 @@ private:
     Status InsertCopyDDROp(Function& function, Operation* needInsertCopyAssOp, LogicalTensorPtr& input);
     Status FindNeedToCopyAssemble(
         std::unordered_set<Operation*>& needInsertCopyAssOps, std::unordered_set<int>& visitedAssOps, Operation& op);
+    Status FindNeedToCopyReshape(std::unordered_set<Operation*>& needInsertCopyAssOps, 
+        std::unordered_set<int>& visitedReshapeOps, Operation& op);
     Status InsertNeedCopy(Function& function);
 
     std::unordered_map<DataType, int> viewTypeTable = {
