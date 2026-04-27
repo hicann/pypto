@@ -1138,5 +1138,30 @@ TEST_F(GraphPartitionTest, TestMatMulViewNonL0C)
     EXPECT_EQ(mulOp->GetSubgraphID(), viewL1Op->GetSubgraphID());
 }
 
+TEST_F(GraphPartitionTest, TestViewAssembleScopeId)
+{
+    ComputationalGraphBuilder G;
+    std::vector<std::string> tensorNames{"t1", "t2", "t3", "t4", "t5", "t6", "t7"};
+    std::vector<int64_t> tileShape{16, 16};
+    std::vector<MemoryType> tensorMemTypes{ MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB,
+        MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB};
+    std::vector<Opcode> opCodes{Opcode::OP_MULS, Opcode::OP_ASSEMBLE,
+        Opcode::OP_ASSEMBLE, Opcode::OP_VIEW, Opcode::OP_VIEW, Opcode::OP_MULS};
+    std::vector<std::vector<std::string>> ioperands{{"t1"}, {"t2"}, {"t3"}, {"t4"}, {"t5"}, {"t6"}};
+    std::vector<std::vector<std::string>> ooperands{{"t2"}, {"t3"}, {"t4"}, {"t5"}, {"t6"}, {"t7"}};
+    std::vector<std::string> opNames{"m1", "a1", "a2", "v1", "v2", "m2"};
+    EXPECT_EQ(G.AddTensors(DataType::DT_FP32, tileShape, tensorMemTypes, tensorNames, 0), true);
+    EXPECT_EQ(G.AddOps(opCodes, ioperands, ooperands, opNames, true), true);
+    G.GetOp("m1")->SetScopeId(0);
+    G.GetOp("m2")->SetScopeId(1);
+    Function* function = G.GetFunction();
+    GraphPartition gpp;
+    EXPECT_EQ(gpp.RunOnFunction(*function), SUCCESS);
+    EXPECT_EQ(G.GetOp("a1")->GetScopeId(), 0);
+    EXPECT_EQ(G.GetOp("a2")->GetScopeId(), 0);
+    EXPECT_EQ(G.GetOp("v1")->GetScopeId(), 1);
+    EXPECT_EQ(G.GetOp("v2")->GetScopeId(), 1);
+}
+
 } // namespace tile_fwk
 } // namespace npu
