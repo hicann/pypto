@@ -420,6 +420,60 @@ void TaskSpliter::BuildOpGraph()
     APASS_LOG_INFO_F(Elements::Operation, "Build op connection graph finished.");
 }
 
+// 记录成环的 Cluster 对
+void TaskSpliter::RecordCycledClusters(
+    const std::vector<ScheduleCoreType> &clusterCoreTypes,
+    const std::vector<std::vector<int>> &sccResult)
+{
+    cycledTaskNodePairs_.clear();
+    for (int sccId = 0; sccId < static_cast<int>(sccResult.size()); sccId++) {
+        if (sccResult[sccId].size() <= 1) {
+            continue;
+        }
+        // 这个 SCC 有成环。找出包含的 AIC 和 AIV cluster
+        bool hasAIC = false;
+        bool hasAIV = false;
+        for (int clusterId : sccResult[sccId]) {
+            if (clusterCoreTypes[clusterId] == ScheduleCoreType::AIC) {
+                hasAIC = true;
+            } else {
+                hasAIV = true;
+            }
+        }
+
+        // 输出日志：记录成环的 Cluster
+        std::string sccInfo = "SCC " + std::to_string(sccId) + " has cycle with "
+            + std::to_string(sccResult[sccId].size()) + " clusters: [";
+        for (size_t j = 0; j < sccResult[sccId].size(); j++) {
+            int cid = sccResult[sccId][j];
+            sccInfo += "(cluster=" + std::to_string(cid)
+                + ", core=" + ScheduleCoreTypeToString(clusterCoreTypes[cid]) + ")";
+            if (j + 1 < sccResult[sccId].size()) {
+                sccInfo += ", ";
+            }
+        }
+        sccInfo += "]";
+        APASS_LOG_WARN_F(Elements::Operation, "%s", sccInfo.c_str());
+
+        // 如果同时包含 AIC 和 AIV，FlattenSCC 后会拆成两个新 Cluster,CombineSCC 会消除 SCC 内部边,故记录下这对关系
+        if (hasAIC && hasAIV) {
+            APASS_LOG_WARN_F(Elements::Operation,
+                "SCC %d contains both AIC and AIV clusters, "
+                "potential cycle after FlattenSCC between the resulting AIC-group and AIV-group taskNodes.", sccId);
+            // 标记：这个 SCC 包含的所有 cluster ID，后续在 CombineSCC 映射后
+            // 会被映射到新的 taskNode ID。我们在 SplitGraph 结束后再进行映射。
+            cycledSCCClusters_.push_back(sccResult[sccId]);
+        }
+    }
+
+    if (cycledSCCClusters_.empty()) {
+        APASS_LOG_INFO_F(Elements::Operation, "No AIC-AIV mixed cycles detected in SCC results.");
+    } else {
+        APASS_LOG_WARN_F(Elements::Operation,
+            "Detected %zu SCC(s) with AIC-AIV mixed cycles, will record for post-schedule reorder.",
+            cycledSCCClusters_.size());
+    }
+}
 // mix子图切分主函数
 void TaskSpliter::SplitGraph(const std::vector<Operation*>& opList)
 {
@@ -437,6 +491,8 @@ void TaskSpliter::SplitGraph(const std::vector<Operation*>& opList)
     std::vector<std::vector<int>> sccResult;
     StrongConnectionComponentFinder sccFinder;
     sccFinder.Find(inGraph, outGraph, sccResult);
+    // 这两个新 Cluster 之间的"成环关系"
+    RecordCycledClusters(clusterCoreTypes, sccResult);
     CombineSCC(clusterIds, clusterCoreTypes, inGraph, outGraph, sccResult);
     APASS_LOG_INFO_F(Elements::Operation, "Find strongly connected components finished.");
     opIdxToTaskId_.swap(clusterIds);
@@ -503,6 +559,32 @@ inline int FlattenSCC(
     return currNewClusterIdx;
 }
 
+// 将 cycledSCCClusters_ 中记录的旧 Cluster ID 映射为新 TaskNode ID, 形成 cycledTaskNodePairs_
+void TaskSpliter::RecordIDMap(std::unordered_map<int, int>& oldClusterToNewCluster,
+    std::vector<ScheduleCoreType>& clusterCoreTypes)
+{
+    for (auto &oldClusters : cycledSCCClusters_) {
+        std::set<int> aicNewIds;
+        std::set<int> aivNewIds;
+        for (int oldCid : oldClusters) {
+            int newCid = oldClusterToNewCluster[oldCid];
+            if (clusterCoreTypes[oldCid] == ScheduleCoreType::AIC) {
+                aicNewIds.insert(newCid);
+            } else {
+                aivNewIds.insert(newCid);
+            }
+        }
+        // 每个 AIC 新 ID 和 AIV 新 ID 之间都是成环对
+        for (int aicId : aicNewIds) {
+            for (int aivId : aivNewIds) {
+                cycledTaskNodePairs_.push_back({aicId, aivId});
+                APASS_LOG_INFO_F(Elements::Operation,
+                    "Recorded cycled taskNode pair: taskNode %d (AIC) <-> taskNode %d (AIV).", aicId, aivId);
+            }
+        }
+    }
+}
+
 // 将强连通分量展开，并构建新的连接图
 void TaskSpliter::CombineSCC(
     std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes, std::vector<std::set<int>>& inGraph,
@@ -515,6 +597,7 @@ void TaskSpliter::CombineSCC(
         FlattenSCC(clusterCoreTypes, sccResult, oldClusterIdToSCCId, sccIdToNewClusters, oldClusterToNewCluster);
     APASS_LOG_INFO_F(
         Elements::Operation, "Cluster num after flatten strongly connected components is %d.", newClusterNum);
+    RecordIDMap(oldClusterToNewCluster, clusterCoreTypes);
     std::set<std::pair<int, int>> sccConnection;
     for (size_t oldIdx = 0; oldIdx < inGraph.size(); oldIdx++) {
         int currSCC = oldClusterIdToSCCId[oldIdx];

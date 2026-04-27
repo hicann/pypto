@@ -112,6 +112,8 @@ public:
         std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes,
         std::vector<std::set<int>>& inGraph, std::vector<std::set<int>>& outGraph,
         std::vector<std::vector<int>>& sccResult);
+    void RecordIDMap(std::unordered_map<int, int>& oldClusterToNewCluster,
+        std::vector<ScheduleCoreType>& clusterCoreTypes);
     TaskGraph& GetTaskGraph() { return taskGraph_; }
     std::vector<Operation*> GetMergedOperations();
     std::vector<Operation*> opList_;
@@ -126,6 +128,16 @@ public:
     std::vector<std::set<int>> outGraph_;
     std::unordered_map<int, int> opMagicToIdx_;
     TaskGraph taskGraph_;
+    // 在 Tarjan SCC 阶段检测到的、包含 AIC+AIV 混合的成环 SCC 中的原始 Cluster ID 列表
+    std::vector<std::vector<int>> cycledSCCClusters_;
+    // CombineSCC 之后，映射为新 TaskNode ID 的成环对
+    std::vector<std::pair<int, int>> cycledTaskNodePairs_;
+    void RecordCycledClusters(const std::vector<ScheduleCoreType> &clusterCoreTypes,
+        const std::vector<std::vector<int>> &sccResult);
+    const std::vector<std::pair<int, int>>& GetCycledTaskNodePairs() const
+    {
+        return cycledTaskNodePairs_;
+    }
 };
 
 // 使用TarJan算法寻找强连通分量
