@@ -39,10 +39,10 @@ CannHostRuntime::CannHostRuntime()
 #ifdef BUILD_WITH_CANN
     std::string LibPathDir = std::string(ASCEND_CANN_PACKAGE_PATH) + "/lib64/";
     std::string soDepPath = RealPath(LibPathDir + "libprofapi.so");
-    FUNCTION_LOGW("soDepPath = %s", soDepPath.c_str());
+    FE_LOGW("soDepPath = %s", soDepPath.c_str());
     handleDep_ = dlopen(soDepPath.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     std::string soPath = RealPath(LibPathDir + "libruntime.so");
-    FUNCTION_LOGW("soPath = %s", soPath.c_str());
+    FE_LOGW("soPath = %s", soPath.c_str());
     handle_ = dlopen(soPath.c_str(), RTLD_LAZY);
     if (handleDep_ != nullptr && handle_ != nullptr) {
         socVerFunc_ = (GetSocVerFunc)GetSymbol(socVerFuncName);
@@ -51,7 +51,7 @@ CannHostRuntime::CannHostRuntime()
     }
 #endif
     if (handleDep_ == nullptr || handle_ == nullptr) {
-        FUNCTION_LOGW("Cannot obtain so file through dlopen.");
+        FE_LOGW("Cannot obtain so file through dlopen.");
     }
 }
 

@@ -36,6 +36,8 @@ Example:
 import ast
 from typing import Optional
 
+from pypto.error import FeError
+
 
 class LivenessAnalyzer(ast.NodeVisitor):
     """Analyzes variable liveness in the AST.
@@ -161,7 +163,7 @@ class LivenessAnalyzer(ast.NodeVisitor):
 
     def visit_while(self, node: ast.While):
         """Visit while loop."""
-        raise NotImplementedError("While loop is not supported yet.")
+        raise FeError(NotImplementedError("While loop is not supported yet."))
 
     def visit_if(self, node: ast.If):
         """Visit if statement."""

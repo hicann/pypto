@@ -75,9 +75,9 @@ Status ConfigManager::Initialize()
 
     config::SetRunDataOption(KEY_PTO_CONFIG_FILE, jsonFilePath);
     config::SetRunDataOption(KEY_RUNTYPE, "npu");
-    FUNCTION_LOGI("Start to parse op_json_file %s", jsonFilePath.c_str());
+    FE_LOGI("Start to parse op_json_file %s", jsonFilePath.c_str());
     if (!ReadJsonFile(jsonFilePath, json_)) {
-        FUNCTION_LOGE_E(FError::INVALID_FILE, "ReadJsonFile failed.");
+        FE_LOGE(FeError::INVALID_FILE, "ReadJsonFile failed.");
         return FAILED;
     }
 
@@ -171,16 +171,16 @@ static std::string CreateLogTopFolder()
     if (envDir != nullptr) {
         std::string envStr(envDir);
         if (!envStr.empty()) {
-            FUNCTION_LOGD("Get env TILE_FWK_OUTPUT_DIR[%s] successfully.", envStr.c_str());
+            FE_LOGD("Get env TILE_FWK_OUTPUT_DIR[%s] successfully.", envStr.c_str());
             folderPath = std::move(envStr);
         }
     }
     bool ret = CreateDir(folderPath);
-    CHECK(ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
+    CHECK(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
 
     folderPath = folderPath + "/output_" + timestamp.str() + "_" + std::to_string(getpid()) + "_" + GetIpContext();
     ret = CreateDir(folderPath);
-    ASSERT(ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
+    FE_ASSERT(FeError::BAD_FD, ret) << "Failed to create dir: " << folderPath << ", ensure its parent dir exists.";
     config::SetRunDataOption(KEY_COMPUTE_GRAPH_PATH, RealPath(folderPath));
 
     return folderPath;
@@ -236,7 +236,7 @@ void ConfigManager::PassConfigsDebugInfo(const std::string& strategy, const std:
 {
     auto* node = GetJsonNode(json_, {"global", "pass_strategies", strategy});
     if (!node) {
-        FUNCTION_LOGI(
+        FE_LOGI(
             "[ConfigManager] Missing custom pass strategy < %s > configs. %s", strategy.c_str(),
             "You may add your own custom strategy configs in 'tile_fwk_config.json'.");
         return;
@@ -247,13 +247,13 @@ void ConfigManager::PassConfigsDebugInfo(const std::string& strategy, const std:
         maxLength = std::max(maxLength, identifier.size());
     }
 
-    FUNCTION_LOGI("[ConfigManager] Strategy < %s > is found. Custom pass strategy will be used.", strategy.c_str());
+    FE_LOGI("[ConfigManager] Strategy < %s > is found. Custom pass strategy will be used.", strategy.c_str());
     for (auto&& identifier : identifiers) {
         std::string spaces(maxLength - identifier.size(), ' ');
         if (node->find(identifier) != node->end()) {
-            FUNCTION_LOGI("[ConfigManager] Pass instance %s<%s> configs loaded.", spaces.c_str(), identifier.c_str());
+            FE_LOGI("[ConfigManager] Pass instance %s<%s> configs loaded.", spaces.c_str(), identifier.c_str());
         } else {
-            FUNCTION_LOGI(
+            FE_LOGI(
                 "[ConfigManager] Pass instance %s<%s> configs for pass strategy <%s> is missing. \
             You may add your own custom strategy configs in 'tile_fwk_config.json'.",
                 spaces.c_str(), identifier.c_str(), strategy.c_str());
@@ -376,7 +376,7 @@ void Reset()
 void SetBuildStatic(bool isStatic)
 {
     g_config.funcType = isStatic ? FunctionType::STATIC : FunctionType::DYNAMIC;
-    FUNCTION_LOGD("Set functionType[%s] successfully.", (isStatic ? "STATIC" : "DYNAMIC"));
+    FE_LOGD("Set functionType[%s] successfully.", (isStatic ? "STATIC" : "DYNAMIC"));
 }
 
 FunctionType GetFunctionType() { return g_config.funcType; }
@@ -384,7 +384,7 @@ FunctionType GetFunctionType() { return g_config.funcType; }
 void SetSemanticLabel(const std::string& label, const char* filename, int lineno)
 {
     g_config.semanticLabel = std::make_shared<SemanticLabel>(label, filename, lineno);
-    FUNCTION_LOGD("Set semanticLabel[%s] successfully.", label.c_str());
+    FE_LOGD("Set semanticLabel[%s] successfully.", label.c_str());
 }
 
 void SetSemanticLabel(std::shared_ptr<SemanticLabel> label) { g_config.semanticLabel = label; }
@@ -407,7 +407,7 @@ void CreateRunDataDir()
     timestamp << std::put_time(std::localtime(&time), "%Y%m%d%H%M%S");
     g_config.rundataDir.dName = PREFIX_RUNDATA + timestamp.str();
     bool res = CreateMultiLevelDir(g_config.rundataDir.montage());
-    ASSERT(res) << "Failed to create directory: " << g_config.rundataDir.montage();
+    FE_ASSERT(FeError::BAD_FD, res) << "Failed to create directory: " << g_config.rundataDir.montage();
 }
 
 void SetRunDataOption(const std::string& key, const std::string& value)
@@ -429,7 +429,7 @@ void SetPrintOptions(int edgeItems, int precision, int threshold, int linewidth)
     g_config.printOption.precision = precision;
     g_config.printOption.threshold = threshold;
     g_config.printOption.linewidth = linewidth;
-    FUNCTION_LOGD("Set print option [%d %d %d %d] successfully.", edgeItems, precision, threshold, linewidth);
+    FE_LOGD("Set print option [%d %d %d %d] successfully.", edgeItems, precision, threshold, linewidth);
 }
 
 PrintOptions& GetPrintOptions() { return g_config.printOption; }

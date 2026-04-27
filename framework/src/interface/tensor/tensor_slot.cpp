@@ -145,7 +145,7 @@ void TensorSlotScope::BuildSlotSet()
     }
     for (size_t idx = 0; idx < tensorFunc->GetIncast().size(); idx++) {
         auto& i = tensorFunc->GetIncast()[idx];
-        FUNCTION_ASSERT(FError::NOT_EXIST, incastToInArgumentDict.count(i))
+        FE_ASSERT(FeError::NOT_EXIST, incastToInArgumentDict.count(i))
             << "LogicalTensor[" << i->GetMagic() << "] not found in incastToInArgumentDict.";
         auto iarg = incastToInArgumentDict[i];
         auto slot = LookupIncastReadFrom(iarg);
@@ -153,7 +153,7 @@ void TensorSlotScope::BuildSlotSet()
     }
     for (size_t idx = 0; idx < tensorFunc->GetOutcast().size(); idx++) {
         auto& o = tensorFunc->GetOutcast()[idx];
-        FUNCTION_ASSERT(FError::NOT_EXIST, outcastToOutArgumentDict.count(o))
+        FE_ASSERT(FeError::NOT_EXIST, outcastToOutArgumentDict.count(o))
             << "LogicalTensor[" << o->GetMagic() << "] not found in outcastToOutArgumentDict.";
         auto oarg = outcastToOutArgumentDict[o];
         auto slot = LookupOutcastWriteTo(oarg);
@@ -166,7 +166,7 @@ void TensorSlotScope::BuildIncastOutcastSlot(const std::unordered_map<TensorSlot
     ioslot.incastSlot.resize(tensorFunc->GetIncast().size());
     for (size_t idx = 0; idx < tensorFunc->GetIncast().size(); idx++) {
         for (auto& h : incastReadSlotSet[idx]) {
-            FUNCTION_ASSERT(FError::NOT_EXIST, slotIndexDict.count(h) != 0)
+            FE_ASSERT(FeError::NOT_EXIST, slotIndexDict.count(h) != 0)
                 << "TensorSlot[" << h.GetSymbolName() << "] not found in slotIndexDict.";
             ioslot.incastSlot[idx].push_back(slotIndexDict.find(h)->second);
         }
@@ -176,7 +176,7 @@ void TensorSlotScope::BuildIncastOutcastSlot(const std::unordered_map<TensorSlot
     ioslot.outcastSlot.resize(tensorFunc->GetOutcast().size());
     for (size_t idx = 0; idx < tensorFunc->GetOutcast().size(); idx++) {
         for (auto& h : outcastWriteSlotSet[idx]) {
-            FUNCTION_ASSERT(FError::NOT_EXIST, slotIndexDict.count(h) != 0)
+            FE_ASSERT(FeError::NOT_EXIST, slotIndexDict.count(h) != 0)
                 << "TensorSlot[" << h.GetSymbolName() << "] not found in slotIndexDict.";
             ioslot.outcastSlot[idx].push_back(slotIndexDict.find(h)->second);
         }
@@ -270,10 +270,10 @@ static Function* GetCurrentNonHiddenFunction()
 {
     Function* currNonHiddenFunction = Program::GetInstance().GetCurrentFunction();
     while (currNonHiddenFunction && currNonHiddenFunction->IsHiddenFunction()) {
-        FUNCTION_ASSERT(currNonHiddenFunction->HasParent()) << "currNonHiddenFunction doesn't have parent func.";
+        FE_ASSERT(currNonHiddenFunction->HasParent()) << "currNonHiddenFunction doesn't have parent func.";
         currNonHiddenFunction = &currNonHiddenFunction->Parent();
     }
-    FUNCTION_ASSERT(currNonHiddenFunction != nullptr);
+    FE_ASSERT(currNonHiddenFunction != nullptr);
     return currNonHiddenFunction;
 }
 
@@ -343,7 +343,7 @@ static std::string Width(const std::string& suffix, int width)
 void TensorSlotManager::LogOperation(const TensorSlot& slot, const std::string& op)
 {
     std::string ops = Width(op, 10);
-    FUNCTION_LOGD("[slotManager] %zu op:%s %s", slotIndexDict.size(), ops.c_str(), slot.Dump().c_str());
+    FE_LOGD("[slotManager] %zu op:%s %s", slotIndexDict.size(), ops.c_str(), slot.Dump().c_str());
 }
 
 void TensorSlotManager::TensorRead(const Tensor& tensor)
@@ -365,7 +365,7 @@ void TensorSlotManager::TensorWrite(const Tensor& tensor, SlotProperty property)
     } else if (property == SlotProperty::SHMEM_TENSOR) {
         shmemTensorSlotSet.insert(slot);
     }
-    FUNCTION_ASSERT(tensor.GetStorage(false) != nullptr) << "Assigning uninitialized Tensor variable is forbidden";
+    FE_ASSERT(tensor.GetStorage(false) != nullptr) << "Assigning uninitialized Tensor variable is forbidden";
     LogOperation(slot, "write");
 }
 
@@ -444,7 +444,7 @@ std::vector<int> TensorSlotManager::LookupSlotIndexBySymbol(const std::vector<st
 void TensorSlotManager::MarkInput(const Tensor& tensor)
 {
     TensorSlot slot = TensorSlot::CreateTensor(tensor);
-    FUNCTION_ASSERT(inputSlotDict.count(slot) == 0)
+    FE_ASSERT(inputSlotDict.count(slot) == 0)
         << "TensorSlot[" << slot.GetSymbolName() << "] already exists in inputSlotDict.";
     inputSlotDict[slot] = inputSlotList.size();
     inputSlotList.push_back(slot);
@@ -453,7 +453,7 @@ void TensorSlotManager::MarkInput(const Tensor& tensor)
     std::string inputName = logicalTensor ? logicalTensor->tensor->symbol : "untitled";
     AddNameSuffix(inputName, nameDict);
     inputNameList.push_back(inputName);
-    FUNCTION_LOGD("MarkInput push input name[%s].", inputName.c_str());
+    FE_LOGD("MarkInput push input name[%s].", inputName.c_str());
 
     LogOperation(slot, "input");
 }
@@ -461,7 +461,7 @@ void TensorSlotManager::MarkInput(const Tensor& tensor)
 void TensorSlotManager::MarkOutput(const Tensor& tensor)
 {
     TensorSlot slot = TensorSlot::CreateTensor(tensor);
-    FUNCTION_ASSERT(outputSlotDict.count(slot) == 0)
+    FE_ASSERT(outputSlotDict.count(slot) == 0)
         << "TensorSlot[" << slot.GetSymbolName() << "] already exists in outputSlotDict.";
     outputSlotDict[slot] = outputSlotList.size();
     outputSlotList.push_back(slot);
@@ -470,7 +470,7 @@ void TensorSlotManager::MarkOutput(const Tensor& tensor)
     std::string outputName = logicalTensor ? logicalTensor->tensor->symbol : "untitled";
     AddNameSuffix(outputName, nameDict);
     outputNameList.push_back(outputName);
-    FUNCTION_LOGD("MarkOutput push output name[%s].", outputName.c_str());
+    FE_LOGD("MarkOutput push output name[%s].", outputName.c_str());
 
     LogOperation(slot, "output");
 }
@@ -480,10 +480,10 @@ void TensorSlotManager::MarkInplace(const Tensor& out, const Tensor& in)
     MarkOutput(out);
     TensorSlot outSlot = TensorSlot::CreateTensor(out);
     TensorSlot inSlot = TensorSlot::CreateTensor(in);
-    FUNCTION_ASSERT(inputSlotDict.count(inSlot) != 0)
+    FE_ASSERT(inputSlotDict.count(inSlot) != 0)
         << "TensorSlot[" << inSlot.GetSymbolName() << "] not found in inputSlotDict.";
     inplaceDict[outSlot] = inSlot;
-    FUNCTION_LOGD("Slot already inplace [%s, %s].", inSlot.GetSymbolName().c_str(), outSlot.GetSymbolName().c_str());
+    FE_LOGD("Slot already inplace [%s, %s].", inSlot.GetSymbolName().c_str(), outSlot.GetSymbolName().c_str());
 }
 
 int TensorSlotManager::GetInputIndex(const Tensor& tensor)
@@ -542,7 +542,7 @@ void TensorSlotManager::Checkpoint()
 
 void TensorSlotManager::Restore()
 {
-    FUNCTION_ASSERT(checkpointStack.size() != 0) << "checkpointStack.size(): " << checkpointStack.size();
+    FE_ASSERT(checkpointStack.size() != 0) << "checkpointStack.size(): " << checkpointStack.size();
     TensorSlotCheckpoint& checkpoint = checkpointStack.back();
     for (auto& [slot, value] : checkpoint.slotDict) {
         if (!liveSlotSet.count(slot)) {
@@ -611,9 +611,9 @@ std::string TensorSlotManager::Dump() const
 void TensorSlotManager::UpdateReshapeInplaceSlots(IncastOutcastLink& link)
 {
     for (auto& [slotIn, slotOut] : reshapeInplaceDict) {
-        FUNCTION_ASSERT(slotIndexDict.find(slotIn) != slotIndexDict.end())
+        FE_ASSERT(slotIndexDict.find(slotIn) != slotIndexDict.end())
             << "slotIn[" << slotIn.GetSymbolName() << "]is not in slotIndexDict";
-        FUNCTION_ASSERT(slotIndexDict.find(slotOut) != slotIndexDict.end())
+        FE_ASSERT(slotIndexDict.find(slotOut) != slotIndexDict.end())
             << "slotOut[" << slotOut.GetSymbolName() << "]is not in slotIndexDict";
 
         for (auto& iter : link.ioslotDict) {
@@ -622,7 +622,7 @@ void TensorSlotManager::UpdateReshapeInplaceSlots(IncastOutcastLink& link)
             for (std::vector<int>& slotsIdxIn : ioslot.incastSlot) {
                 for (auto& slotIdxIn : slotsIdxIn) {
                     if (slotIdxIn == slotIndexDict[slotIn]) {
-                        FUNCTION_LOGD("replace slot %d to %d.", slotIdxIn, slotIndexDict[slotOut]);
+                        FE_LOGD("replace slot %d to %d.", slotIdxIn, slotIndexDict[slotOut]);
                         slotIdxIn = slotIndexDict[slotOut];
                     }
                 }
@@ -631,7 +631,7 @@ void TensorSlotManager::UpdateReshapeInplaceSlots(IncastOutcastLink& link)
             for (std::vector<int>& slotsIdxOut : ioslot.outcastSlot) {
                 for (auto& slotIdxOut : slotsIdxOut) {
                     if (slotIdxOut == slotIndexDict[slotIn]) {
-                        FUNCTION_LOGD("replace slot %d to %d.", slotIdxOut, slotIndexDict[slotOut]);
+                        FE_LOGD("replace slot %d to %d.", slotIdxOut, slotIndexDict[slotOut]);
                         slotIdxOut = slotIndexDict[slotOut];
                     }
                 }
@@ -658,12 +658,12 @@ IncastOutcastLink TensorSlotManager::BuildIncastOutcastLink([[maybe_unused]] con
     }
 
     for (auto& input : inputSlotList) {
-        FUNCTION_ASSERT(slotIndexDict.count(input) != 0)
+        FE_ASSERT(slotIndexDict.count(input) != 0)
             << "TensorSlot[" << input.GetSymbolName() << "] not found in slotIndexDict.";
         link.inputSlotIndexList.push_back(slotIndexDict[input]);
     }
     for (auto& output : outputSlotList) {
-        FUNCTION_ASSERT(slotIndexDict.count(output) != 0)
+        FE_ASSERT(slotIndexDict.count(output) != 0)
             << "TensorSlot[" << output.GetSymbolName() << "] not found in slotIndexDict.";
         link.outputSlotIndexList.push_back(slotIndexDict[output]);
         auto iter = inplaceDict.find(output);
@@ -704,7 +704,7 @@ IncastOutcastLink TensorSlotManager::BuildIncastOutcastLink([[maybe_unused]] con
     for (auto& [func, ioslot] : link.ioslotDict) {
         for (size_t idx = 0; idx < func->GetIncast().size(); idx++) {
             if (ioslot.incastSlot[idx].empty()) {
-                FUNCTION_LOGW("!!! incast[%zu] slot not found, %s", idx, func->GetIncast()[idx]->Dump().c_str());
+                FE_LOGW("!!! incast[%zu] slot not found, %s", idx, func->GetIncast()[idx]->Dump().c_str());
             }
         }
     }
@@ -716,7 +716,7 @@ void TensorSlotManager::SetSameSlot(const Tensor& operand, const Tensor& dst)
 {
     TensorSlot slotIn = TensorSlot::CreateTensor(operand);
     TensorSlot slotOut = TensorSlot::CreateTensor(dst);
-    FUNCTION_ASSERT(outputSlotDict.count(slotOut) != 0)
+    FE_ASSERT(outputSlotDict.count(slotOut) != 0)
         << "TensorSlot[" << slotOut.GetSymbolName() << "] not found in outputSlotDict.";
     reshapeInplaceDict[slotIn] = slotOut;
 }

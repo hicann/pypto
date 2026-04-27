@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstdarg>
 #include <cstdio>
+#include <atomic>
 #define MAX_MSG_LEN 112
 
 inline std::string TraceInfo([[maybe_unused]]const char* fmt, ...) {

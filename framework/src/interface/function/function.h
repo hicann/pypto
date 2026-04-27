@@ -21,6 +21,7 @@
 #include <memory>
 #include <stack>
 
+#include "tilefwk/error.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/operation/operation.h"
 #include "interface/inner/pre_def.h"
@@ -97,7 +98,7 @@ public:
 
         void operator++()
         {
-            ASSERT(cur_ <= operations_.size())
+            FE_ASSERT(cur_ <= operations_.size())
                 << "operator(++) out of its size. cur_: " << cur_ << ", operations_.size(): " << operations_.size();
             cur_++;
         }
@@ -134,7 +135,7 @@ public:
     {
         auto it = opPosition_.find(&op);
         if (it == opPosition_.end()) {
-            ASSERT(false) << "Magic[" << op.opmagic << "] Op has not been found in opPosition.";
+            FE_ASSERT(FeError::NOT_EXIST, false) << "Magic[" << op.opmagic << "] Op has not been found in opPosition.";
             return 0;
         }
         return it->second;
@@ -146,7 +147,7 @@ public:
         if (it == opPosition_.end()) {
             return {0, false};
         }
-        ASSERT(operations_[it->second].get() == &op)
+        FE_ASSERT(operations_[it->second].get() == &op)
             << "operations_[it->second].get(): 0x" << reinterpret_cast<uintptr_t>(operations_[it->second].get())
             << "&op: " << reinterpret_cast<uintptr_t>(&op);
         return {it->second, true};
@@ -533,7 +534,7 @@ public:
     void AddOperationGroup(std::vector<Operation*> operationGroup);
     const auto& GetGroupByID(const size_t groupID) const
     {
-        ASSERT(groupID < operationGroups_.size())
+        FE_ASSERT(groupID < operationGroups_.size())
             << "groupID: " << groupID << ", operationGroups_.size(): " << operationGroups_.size();
         return operationGroups_[groupID];
     }
@@ -585,7 +586,7 @@ public:
 
     void DumpJsonFile(std::string fileName = "");
     Json DumpJson(bool useTable = true);
-    static std::shared_ptr<Function> LoadJson(Program& belongTo, const Json& funcDump);
+    static std::shared_ptr<Function> LoadJson(Program& belongTo, const Json& funcJson);
 
     std::vector<std::vector<SymbolicScalar>> NormalizeCoa(std::vector<int>& iOffset, std::vector<int>& oOffset);
     void NormalizeCoaForInCasts(
@@ -954,7 +955,7 @@ private:
         const std::set<Operation*, LogicalTensor::CompareOp>& producers, const int subGraphId, int& index,
         std::unordered_map<int, int>& magic2index, std::stringstream& ss);
     static void LoadTensorJson(
-        const std::shared_ptr<Function>& func, const Json& funcDump,
+        const std::shared_ptr<Function>& func, const Json& tensorJson,
         const std::unordered_map<int, std::shared_ptr<RawTensor>>& rawTensorDict,
         std::unordered_map<int, std::shared_ptr<LogicalTensor>>& tensorDict);
 

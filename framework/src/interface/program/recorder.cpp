@@ -32,7 +32,7 @@ void static MergeAllFuncDupIocast(Function* func)
         return;
     }
 
-    FUNCTION_LOGI("Merge Duplicated Iocast for function: %s", func->GetMagicName().c_str());
+    FE_LOGI("Merge Duplicated Iocast for function: %s", func->GetMagicName().c_str());
     auto calleeLists = func->GetCalleeFunctionList();
     // leaf function has no duplicated tensor
     if (calleeLists.size() == 0) {
@@ -59,7 +59,7 @@ void RecordFunc::RecordDynFuncInner(
     const std::vector<std::pair<std::reference_wrapper<const Tensor>, std::reference_wrapper<const Tensor>>>&
         inplaceArgs)
 {
-    CHECK(FError::INVALID_TYPE, config::GetFunctionType() == FunctionType::DYNAMIC)
+    CHECK(FeError::INVALID_TYPE, config::GetFunctionType() == FunctionType::DYNAMIC)
         << "Function graph type: " << GetFunctionTypeNameDict().Find(config::GetFunctionType());
 
 #if ENABLE_HIDDENLOOP
@@ -143,7 +143,7 @@ void RecordFunc::EndFunction()
     }
 
     if (IsVerifyEnable()) {
-        FUNCTION_LOGI("FlowVerify has been enable.");
+        FE_LOGI("FlowVerify has been enable.");
         config::SetRunDataOption(KEY_FLOW_VERIFY_PATH, config::GetAbsoluteTopFolder() + "/verify");
     }
 
@@ -208,7 +208,7 @@ bool RecordFunc::Iterator::operator!=(const IteratorEnd& rhs)
     if (!wrappedIter_.has_value()) {
         return cur_ != 1;
     }
-    FUNCTION_ASSERT(rhs.wrappedEnd.has_value()) << "Input param rhs has no value";
+    FE_ASSERT(rhs.wrappedEnd.has_value()) << "Input param rhs has no value";
     bool result = *wrappedIter_ != *rhs.wrappedEnd;
     return result;
 }
@@ -223,12 +223,12 @@ RecordLoopFunc::RecordLoopFunc(
       parallel_(parallel),
       funcType_(funcType)
 {
-    CHECK(FError::INVALID_TYPE, funcType == FunctionType::STATIC || funcType == FunctionType::DYNAMIC_LOOP)
+    CHECK(FeError::INVALID_TYPE, funcType == FunctionType::STATIC || funcType == FunctionType::DYNAMIC_LOOP)
         << "funcType: " << GetFunctionTypeNameDict().Find(funcType);
     if (parallel_) {
         for (auto& rlf : Program::GetInstance().GetLoopStack()) {
             if (rlf.get().Getparallel()) {
-                ASSERT(!rlf.get().Getparallel()) << "The parallel attribute value does not allow nesting";
+                FE_ASSERT(FeError::INVALID_OPERATION, !rlf.get().Getparallel()) << "The parallel attribute value does not allow nesting";
             }
         }
     }
@@ -259,7 +259,7 @@ void RecordLoopFunc::BeginLoopFunction()
     Program::GetInstance().BeginFunction(loopFuncName, FunctionType::DYNAMIC_LOOP);
     currentLoopFunc_ = Program::GetInstance().GetCurrentFunction();
 
-    CHECK(FError::IS_EXIST, currentLoopFunc_->InsertLoopIdxNameList(iterName_))
+    CHECK(FeError::IS_EXIST, currentLoopFunc_->InsertLoopIdxNameList(iterName_))
         << "Forbid duplicate name of loop idx. It names " << iterName_;
     auto currentStep = CurUnrollTimes() == 1 ? loopRange_->Step() : loopRange_->Step() * CurUnrollTimes();
     if (rangeOfEaceUnroll_.empty()) {
@@ -295,7 +295,7 @@ void RecordLoopFunc::EndLoopFunction()
 
 bool RecordLoopFunc::MatchUnrollTimes(int unrollTimes)
 {
-    CHECK(FError::INVALID_VAL, unrollTimes > 0) << "unrollTimes[" << unrollTimes << "] must larger than zero!";
+    CHECK(FeError::INVALID_VAL, unrollTimes > 0) << "unrollTimes[" << unrollTimes << "] must larger than zero!";
     auto& curRlf = Program::GetInstance().GetLoopStack().back().get();
     curRlf.customUnrollTimes_.emplace(unrollTimes);
     if (!curRlf.hasManualUnroll_) {
@@ -308,7 +308,7 @@ bool RecordLoopFunc::MatchUnrollTimes(int unrollTimes)
     if (!curRlf.VisitedUnroll(unrollTimes)) {
         curRlf.VisitUnroll(unrollTimes);
     }
-    FUNCTION_ASSERT(FError::EINTERNAL, curRlf.StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
+    FE_ASSERT(curRlf.StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
     if (curRlf.CurUnrollTimes() == unrollTimes) {
         return true;
     }
@@ -329,7 +329,7 @@ RecordLoopFunc::Iterator RecordLoopFunc::Iterator::operator++()
         scalar_ = scalar_ + rlf_.LoopStep();
         cur_++;
     } else {
-        FUNCTION_ASSERT(cur_ == 0) << "The cur_ = " << cur_;
+        FE_ASSERT(cur_ == 0) << "The cur_ = " << cur_;
         scalar_ = scalar_ + rlf_.LoopStep() * rlf_.CurUnrollTimes();
         cur_ += rlf_.CurUnrollTimes();
     }
@@ -343,13 +343,13 @@ bool RecordLoopFunc::Iterator::operator!=(const IteratorEnd& rhs)
     (void)rhs;
     if (rlf_.dryRun_) {
         rlf_.dryRun_ = false;
-        FUNCTION_ASSERT(cur_ == 0) << "The cur_ = " << cur_;
+        FE_ASSERT(cur_ == 0) << "The cur_ = " << cur_;
         if (rlf_.IsCustomUnrollTimes(rlf_.CurUnrollTimes())) {
             scalar_.AsLoopEnd(true);
         }
         return true;
     }
-    FUNCTION_ASSERT(FError::EINTERNAL, rlf_.StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
+    FE_ASSERT(rlf_.StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
     if (cur_ < rlf_.CurUnrollTimes()) {
         if (cur_ == 0) {
             scalar_.AsLoopBegin(true);
@@ -363,7 +363,7 @@ bool RecordLoopFunc::Iterator::operator!=(const IteratorEnd& rhs)
         }
         return true;
     }
-    FUNCTION_ASSERT(cur_ == rlf_.CurUnrollTimes())
+    FE_ASSERT(cur_ == rlf_.CurUnrollTimes())
         << " cur_ = " << cur_ << ", rlf_.CurUnrollTimes() = " << rlf_.CurUnrollTimes();
     if (rlf_.IterationEnd()) {
         rlf_.EndLoopFunction();
@@ -372,7 +372,7 @@ bool RecordLoopFunc::Iterator::operator!=(const IteratorEnd& rhs)
             return false;
         }
     }
-    FUNCTION_ASSERT(FError::EINTERNAL, rlf_.StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
+    FE_ASSERT(rlf_.StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
     cur_ = 0;
     scalar_ = originalScalar_;
     scalar_.AsLoopBegin(true);
@@ -402,14 +402,14 @@ void RecordLoopFunc::IterationBegin()
 
 void RecordLoopFunc::IterationNext()
 {
-    FUNCTION_ASSERT(FError::EINTERNAL, customUnrollTimes_.empty() || customUnrollTimes_.count(1) > 0)
+    FE_ASSERT(customUnrollTimes_.empty() || customUnrollTimes_.count(1) > 0)
         << "Must have unroll 1 if user defined custom unroll times.";
 }
 
 bool RecordLoopFunc::Condition(const SymbolicScalar& cond, const std::string& file, int line)
 {
     bool result = GetLoopAttr()->AppendCond(cond, file, line);
-    FUNCTION_LOGI("[%s:%d]: %s", file.c_str(), line, result ? "true" : "false");
+    FE_LOGI("[%s:%d]: %s", file.c_str(), line, result ? "true" : "false");
     return result;
 }
 
@@ -430,9 +430,9 @@ void RecordLoopFunc::GenDefaultUnrollTimes(const std::set<int>& unrollList)
 
 void RecordLoopFunc::VisitUnroll(int unrollTimes)
 {
-    FUNCTION_ASSERT(FError::IS_EXIST, visited_.count(unrollTimes) == 0)
+    FE_ASSERT(FeError::IS_EXIST, visited_.count(unrollTimes) == 0)
         << "unrollTimes[" << unrollTimes << "] already exists in visited.";
-    FUNCTION_ASSERT(FError::IS_EXIST, unrollTimes_.count(unrollTimes) == 0)
+    FE_ASSERT(FeError::IS_EXIST, unrollTimes_.count(unrollTimes) == 0)
         << "unrollTimes[" << unrollTimes << "] already exists..";
     visited_.emplace(unrollTimes);
     unrollTimes_.emplace(unrollTimes);
@@ -440,13 +440,13 @@ void RecordLoopFunc::VisitUnroll(int unrollTimes)
 
 int RecordLoopFunc::CurUnrollTimes() const
 {
-    FUNCTION_ASSERT(FError::EINTERNAL, StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
+    FE_ASSERT(StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
     return *unrollTimes_.begin();
 }
 
 void RecordLoopFunc::NextUnrollTimes()
 {
-    FUNCTION_ASSERT(FError::EINTERNAL, StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
+    FE_ASSERT(StillHaveUnrollTimes()) << "unrollTimes_ is empty.";
     unrollTimes_.erase(unrollTimes_.begin());
 }
 

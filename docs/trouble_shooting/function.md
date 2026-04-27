@@ -8,7 +8,7 @@
 
 相关错误码的枚举与码值统一定义在 `framework/include/tilefwk/error_code.h`。
 
-其中定义了以下错误码（`FError`）：
+其中定义了以下错误码（`FeError`）：
 
 ### 通用错误码（0x21001U - 0x21008U）
 
@@ -263,7 +263,7 @@ def kernel_with_dynamic(
 
 ```cpp
 // 错误示例 - Tensor 构造函数中 storage_ 为 nullptr
-Tensor tensor(nullptr);  // 触发 FError::INVALID_PTR 错误
+Tensor tensor(nullptr);  // 触发 FeError::INVALID_PTR 错误
 ```
 
 ---

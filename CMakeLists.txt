@@ -185,6 +185,7 @@ if (ENABLE_FEATURE_PYTHON_FRONT_END)
     install(FILES
                 framework/include/tilefwk/data_type.h
                 framework/include/tilefwk/error.h
+                framework/include/tilefwk/error_code.h
                 framework/include/tilefwk/lazy.h
                 framework/include/tilefwk/element.h
             DESTINATION ${PyPTO_WhlName}/lib/calculator/include/tilefwk

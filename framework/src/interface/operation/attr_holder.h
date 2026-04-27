@@ -280,7 +280,7 @@ public:
                 return;
             }
         } catch (...) {
-            FUNCTION_LOGE_E(FError::INVALID_FILE, "json parse error");
+            FE_LOGE(FeError::INVALID_FILE, "json parse error");
         }
     }
 };

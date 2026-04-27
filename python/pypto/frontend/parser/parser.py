@@ -19,7 +19,7 @@ from typing import Any, List, Optional, Union, Callable
 
 import pypto
 from pypto._utils import set_source_location, clear_source_location
-from pypto.error import ParserError, RenderedParserError
+from pypto.error import ParserError, RenderedParserError, FeError
 from pypto.symbolic_scalar import SymbolicScalar, SymInt
 from .context import Context
 from .diagnostics import DiagnosticLevel, Diagnostics, Source
@@ -57,8 +57,8 @@ class NestedFunctionMarker:
         """
         # Check the number of input tensors and input tensor definitions
         if len(param_specs) != len(call_args):
-            raise RuntimeError(f"There are {len(param_specs)} input param(s), \
-                but {len(call_args)} input arg(s).")
+            raise FeError(RuntimeError(f"There are {len(param_specs)} input param(s), \
+                but {len(call_args)} input arg(s)."))
 
         def ordinal(n):
             suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
@@ -89,27 +89,27 @@ class NestedFunctionMarker:
 
                 # Check the shape of input tensors and input tensor definitions
                 if is_diff_shape:
-                    raise ValueError(
+                    raise FeError(ValueError(
                         f"In nested function '{self._func_name}': "
                         f"The number of dimensions of {ordinal(idx)} parameter '{param_name}' "
                         f"({len(arg_value.shape)}) does not match "
                         f"number of dimensions of parameter definition ({len(input_tensor_def.shape)})."
-                    )
+                    ))
                 for i, dim in enumerate(input_tensor_def.shape):
                     if isinstance(dim, int) and arg_value.shape[i] != dim:
-                        raise ValueError(
+                        raise FeError(ValueError(
                             f"In nested function '{self._func_name}': "
                             f"The shape of {ordinal(idx)} parameter '{param_name}' {arg_value.shape} "
                             f"does not match the shape of parameter definition {input_tensor_def.shape}."
-                        )
+                    ))
 
             # Check the dtype of input tensors and input tensor definitions
             if input_tensor_def.explicit_dtype is not None and arg_value.dtype != input_tensor_def.dtype:
-                raise ValueError(
+                raise FeError(ValueError(
                     f"In nested function '{self._func_name}': "
                     f"The dtype of {ordinal(idx)} parameter '{param_name}' ({arg_value.dtype}) "
                     f"does not match the dtype of parameter definition ({input_tensor_def.dtype})."
-                )
+                ))
 
 
 DEFAULT_VISIT = {
@@ -263,9 +263,9 @@ class Parser(ast.NodeVisitor):
 
         def _assign_dim_value(dim: pypto.SymbolicScalar, actual_value: int) -> None:
             if dim_value_map.get(str(dim), actual_value) != actual_value:
-                raise ValueError(
+                raise FeError(ValueError(
                     f"Symbolic scalar {dim} has multiple concrete values: {dim_value_map[dim]} and {actual_value}"
-                )
+                ))
             dim_value_map[str(dim)] = actual_value
 
         # Iterate through both the actual inputs and their definitions
@@ -279,9 +279,9 @@ class Parser(ast.NodeVisitor):
                         if isinstance(actual_value, int):
                             _assign_dim_value(dim, actual_value)
             else:
-                raise TypeError(
+                raise FeError(TypeError(
                     f"Invalid input shape type: {type(actual_input_shape)}, expected list"
-                )
+                ))
         return dim_value_map
 
     def source_name(self):
@@ -480,7 +480,7 @@ class Parser(ast.NodeVisitor):
             If parse() was not called before execute().
         """
         if self._parsed_node is None:
-            raise RuntimeError("parse() must be called before execute()")
+            raise FeError(RuntimeError("parse() must be called before execute()"))
 
         # Return cached result if already executed
         if self._result is not None:

@@ -64,7 +64,8 @@ public: // public api for torch
     size_t FunctionMapSize() const { return functionmap_.size(); }
     void InsertFuncToFunctionMap(const std::string& magicName, std::shared_ptr<Function> func)
     {
-        ASSERT(functionmap_.count(magicName) == 0) << magicName << " already exists in functionmap.";
+        FE_ASSERT(FeError::IS_EXIST, functionmap_.count(magicName) == 0)
+            << magicName << " already exists in functionmap.";
         functionmap_.emplace(magicName, func);
     }
     std::shared_ptr<Function> GetFunctionByMagic(int funcMagic);
@@ -94,7 +95,7 @@ public: // public api for torch
     Function* GetCurrentDynamicFunction() const { return currentDynamicFunctionPtr_; }
     void SetCurrentDynamicFunction(Function* dynFunc)
     {
-        ASSERT(currentDynamicFunctionPtr_ != dynFunc)
+        FE_ASSERT(FeError::IS_EXIST, currentDynamicFunctionPtr_ != dynFunc)
             << "Under: " << currentDynamicFunctionPtr_->GetRawName() << " " << dynFunc->GetRawName();
         currentDynamicFunctionPtr_ = dynFunc;
     }

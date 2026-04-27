@@ -45,7 +45,7 @@ class PyptoError(Exception):
 
     Args:
         msg: Exception object or error message string.
-        err_code: Error code (int). Defaults to _ERROR_CODE_UNKNOWN.
+        err_code: Error code (int).
     """
 
     def __init__(self, err_code: int, msg: Union[str, Exception]):
@@ -55,6 +55,18 @@ class PyptoError(Exception):
             msg = f"ErrCode: {err_code:X}, {msg}"
         super().__init__(msg)
         self.node: Optional[ast.AST] = None
+
+
+class PyptoGeneralError(PyptoError):
+    """General exception class with automatic error code derivation.
+
+    Args:
+        msg: Exception object or error message string.
+    """
+
+    def __init__(self, msg: Union[str, Exception]):
+        err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
+        super().__init__(err_code, msg)
 
 
 class ParserError(PyptoError):
@@ -79,20 +91,13 @@ class RenderedParserError(ParserError):
     """Error class for diagnostics with rendered message."""
 
 
-class PyptoRtError(PyptoError):
-    """Runtime error class for all runtime errors.
-
-    Args:
-        msg: Exception object or error message string.
-    """
-
-    def __init__(self, msg: Union[str, Exception]):
-        err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
-        super().__init__(err_code, msg)
+class FeError(PyptoGeneralError):
+    """Error class for frontend errors."""
 
 
-class PassError(ParserError):
+class PyptoRtError(PyptoGeneralError):
+    """Runtime error class for all runtime errors. """
+
+
+class PassError(PyptoGeneralError):
     """Error class for Pass management and configuration errors."""
-    def __init__(self, msg: Union[str, Exception]):
-        err_code = _get_err_code(msg) if isinstance(msg, Exception) else _ERROR_CODE_UNKNOWN
-        super().__init__(err_code, msg)

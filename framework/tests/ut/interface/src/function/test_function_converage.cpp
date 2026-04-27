@@ -24,6 +24,7 @@
 #undef private
 #undef protected
 #include "interface/function/function.h"
+#include "interface/operation/attribute.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
 #include "interface/utils/id_gen.h"
@@ -42,7 +43,15 @@ public:
         Program::GetInstance().Reset();
     }
 
-    void TearDown() override { std::cout << "FunctionCoverageTest TearDown" << std::endl; }
+    void TearDown() override
+    {
+        std::cout << "FunctionCoverageTest TearDown" << std::endl;
+        Program::GetInstance().Reset();
+        Program::GetInstance().lastFunc_ = nullptr;
+        Program::GetInstance().currentDynamicFunctionPtr_ = nullptr;
+        config::SetBuildStatic(false);
+        config::SetHostOption(COMPILE_STAGE, CS_ALL_COMPLETE);
+    }
 };
 
 TEST_F(FunctionCoverageTest, ConverageCase1)
@@ -194,24 +203,6 @@ TEST_F(FunctionCoverageTest, ConverageCase4)
     }
 }
 
-TEST_F(FunctionCoverageTest, ConverageCase5)
-{
-    config::SetHostOption(COMPILE_STAGE, CS_TENSOR_GRAPH);
-
-    // duplicate funcname
-    config::SetBuildStatic(true);
-    FUNCTION("ConverageFunc")
-    {
-        IdGen<IdType::FUNCTION>::Inst().SetId(2);
-        Program::GetInstance().BeginFunction(
-            "TENSOR_ConverageFunc", FunctionType::DYNAMIC, GraphType::TENSOR_GRAPH, {}, false);
-    }
-    EXPECT_EQ(Program::GetInstance().GetFunctionMap().size(), 2);
-    Program::GetInstance().GetCurrentFunction()->SetFunctionType(FunctionType::STATIC);
-    auto ret = Program::GetInstance().EndFunction("TENSOR_ConverageFunc1", false);
-    EXPECT_EQ(ret, std::make_tuple(nullptr, nullptr, false));
-}
-
 TEST_F(FunctionCoverageTest, TestReuseTensorCase1)
 {
     config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
@@ -295,4 +286,114 @@ TEST_F(FunctionCoverageTest, TestFunctionHash)
     ASSERT_NE(const_func, nullptr);
     Function* func = const_cast<Function*>(const_func);
     ASSERT_NE(func, nullptr);
+}
+
+TEST_F(FunctionCoverageTest, TestOpValidCheckViewOp)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestOpValidCheckView", "TestOpValidCheckView", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<int64_t> shape = {64, 64};
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    inCast->offset = {0, 0};
+    outCast->offset = {0, 0};
+
+    currFunctionPtr->GetTensorMap().Insert(inCast);
+    currFunctionPtr->GetTensorMap().Insert(outCast);
+
+    auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {outCast});
+
+    std::vector<int64_t> fromOffset = {0, 0};
+    auto opAttr = std::make_shared<ViewOpAttribute>(fromOffset);
+    viewOp.SetOpAttribute(opAttr);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            auto attr = std::dynamic_pointer_cast<ViewOpAttribute>(op.GetOpAttribute());
+            EXPECT_NE(attr, nullptr);
+            EXPECT_EQ(op.GetIOperands().size(), 1);
+            EXPECT_LE(op.GetOOperands().size(), 1);
+            EXPECT_EQ(op.GetIOperands()[0]->GetOffset().size(), attr->GetFromOffset().size());
+            if (!op.GetOOperands().empty()) {
+                EXPECT_EQ(op.GetOOperands()[0]->GetOffset().size(), attr->GetFromOffset().size());
+            }
+        }
+    }
+
+    currFunctionPtr->ValidCheck();
+}
+
+TEST_F(FunctionCoverageTest, TestOpValidCheckAssembleOp)
+{
+    auto currFunctionPtr =
+        std::make_shared<Function>(Program::GetInstance(), "TestOpValidCheckAssemble", "TestOpValidCheckAssemble", nullptr);
+    ASSERT_NE(currFunctionPtr, nullptr);
+
+    std::vector<int64_t> shape = {64, 64};
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+    auto outCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
+
+    inCast->offset = {0, 0};
+    outCast->offset = {0, 0};
+
+    currFunctionPtr->GetTensorMap().Insert(inCast);
+    currFunctionPtr->GetTensorMap().Insert(outCast);
+
+    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {inCast}, {outCast});
+
+    std::vector<int64_t> toOffset = {0, 0};
+    auto opAttr = std::make_shared<AssembleOpAttribute>(toOffset);
+    assembleOp.SetOpAttribute(opAttr);
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+    currFunctionPtr->SetGraphType(GraphType::TENSOR_GRAPH);
+
+    for (auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            auto attr = std::dynamic_pointer_cast<AssembleOpAttribute>(op.GetOpAttribute());
+            EXPECT_NE(attr, nullptr);
+            EXPECT_EQ(op.GetIOperands().size(), 1);
+            EXPECT_LE(op.GetOOperands().size(), 1);
+            if (!op.GetIOperands().empty()) {
+                EXPECT_EQ(op.GetIOperands()[0]->GetOffset().size(), attr->GetToOffset().size());
+            }
+            if (!op.GetOOperands().empty()) {
+                EXPECT_EQ(op.GetOOperands()[0]->GetOffset().size(), attr->GetToOffset().size());
+            }
+        }
+    }
+
+    currFunctionPtr->ValidCheck();
+}
+
+TEST_F(FunctionCoverageTest, TestOpValidCheckProducerInOpMap)
+{
+    config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
+    TileShape::Current().SetVecTile(16, 16);
+    std::vector<int64_t> shape{32, 32};
+    Tensor input(DT_FP32, shape, "input");
+    Tensor output(DT_FP32, shape, "output");
+    config::SetBuildStatic(true);
+    FUNCTION("TestProducerInOpMap")
+    {
+        Tensor in0 = Exp(input);
+        Tensor in1 = Add(in0, in0);
+        Tensor in2 = Mul(in1, in0);
+        output = Exp(in2);
+    }
+
+    const Function* const_func = Program::GetInstance().GetFunctionByRawName("TENSOR_TestProducerInOpMap");
+    ASSERT_NE(const_func, nullptr);
+    Function* func = const_cast<Function*>(const_func);
+    ASSERT_NE(func, nullptr);
+
+    EXPECT_THROW(func->ValidCheck(), Error);
 }

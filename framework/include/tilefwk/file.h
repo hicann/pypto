@@ -29,7 +29,7 @@ inline std::string RealPath(const std::string& path)
         return res;
     }
     if (path.size() >= PATH_MAX) {
-        FUNCTION_LOGI("File path %s is too long.", path.c_str());
+        FE_LOGI("File path %s is too long.", path.c_str());
         return "";
     }
     char resolvedPath[PATH_MAX] = {0x00};

@@ -26,6 +26,8 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import Any, Optional
 
+from pypto.error import FeError
+
 
 class ContextFrame:
     """Represents a single scope frame for variable storage.
@@ -51,9 +53,9 @@ class ContextFrame:
         """
         if var in self.vars:
             if node is None:
-                raise NameError(f"Variable '{var}' already exists in the current scope")
+                raise FeError(NameError(f"Variable '{var}' already exists in the current scope"))
             else:
-                raise NameError(f"Variable '{var}' already exists in the current scope")
+                raise FeError(NameError(f"Variable '{var}' already exists in the current scope"))
         self.vars.add(var)
 
 
@@ -132,7 +134,7 @@ class Context:
         """
         frame = self.frames[-1]
         if var not in frame.vars:
-            raise NameError(f"Variable '{var}' is not defined in the current scope")
+            raise FeError(NameError(f"Variable '{var}' is not defined in the current scope"))
 
         frame.vars.discard(var)
         self.name2value[var].pop()

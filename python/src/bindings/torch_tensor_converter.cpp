@@ -85,7 +85,7 @@ py::object ConvertSingleTensor(
     ParseTensorData(torchTensor, tensorDef, toDlpack, dataPtr, shape, dtype);
 
     auto base = py::getattr(tensorDef, "_base", py::none());
-    FUNCTION_ASSERT(FError::INVALID_TYPE, py::isinstance<Tensor>(base))
+    FE_ASSERT(FeError::INVALID_TYPE, py::isinstance<Tensor>(base))
         << "the '_base' attribute must be a Tensor type";
     auto& t = base.cast<Tensor&>();
 
@@ -181,9 +181,9 @@ int TorchTensorConverter::Convert(
 size_t ValidateInputs(py::sequence& tensors, py::sequence& tensorDefs)
 {
     size_t n = static_cast<size_t>(py::len(tensors));
-    CHECK(n == static_cast<size_t>(py::len(tensorDefs)))
+    CHECK(FeError::INVALID_VAL, n == static_cast<size_t>(py::len(tensorDefs)))
         << "Input length mismatch: tensors(" << n << ") vs tensor_defs(" << py::len(tensorDefs) << ")";
-    CHECK(n != 0) << "Empty tensor list";
+    CHECK(FeError::INVALID_VAL, n != 0) << "Empty tensor list";
     return n;
 }
 

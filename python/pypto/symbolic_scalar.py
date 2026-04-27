@@ -12,6 +12,7 @@ import re
 from typing import Union
 
 from . import pypto_impl
+from .error import FeError
 
 
 class SymbolicScalar:
@@ -40,7 +41,7 @@ class SymbolicScalar:
         elif isinstance(arg0, SymbolicScalar):
             self._base = arg0._base
         else:
-            raise ValueError(f"Invalid arguments")
+            raise FeError(ValueError(f"Invalid arguments"))
 
     def __str__(self) -> str:
         return self._base.Dump()
@@ -139,7 +140,7 @@ class SymbolicScalar:
         if self.is_concrete():
             return self._base.Concrete()
         else:
-            raise ValueError("Not concrete value")
+            raise FeError(ValueError("Not concrete value"))
 
     def simplify(self) -> 'SymbolicScalar':
         return self.from_base(self._base.Simplify())

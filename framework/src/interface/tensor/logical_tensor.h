@@ -134,7 +134,7 @@ public:
     const Shape& GetShape() const { return shape; }
     void UpdateOffset(const Offset& newOffset)
     {
-        FUNCTION_ASSERT(FError::INVALID_VAL, newOffset.size() == shape.size())
+        FE_ASSERT(FeError::INVALID_VAL, newOffset.size() == shape.size())
             << "newOffset.size(): " << newOffset.size() << ", shape.size(): " << shape.size();
         offset = newOffset;
     }

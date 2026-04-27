@@ -38,12 +38,12 @@ std::string CompileSourceCode(const std::string& sourceFilePath, const std::stri
     std::string cmdGcc = LD_PRELOAD + gcc + " -fPIC -fno-stack-protector -O2 " + extraCflag + " " + macro + " " +
                          " -I" + includePath + " " + " -I" + GetCurrentSharedLibPath() + "/include/" + " -I" +
                          includePath + "/tilefwk " + " -S " + sourceFilePath + " -o " + assembleFilePath;
-    FUNCTION_LOGI("[RunCmd] %s", cmdGcc.c_str());
-    FUNCTION_ASSERT(system(cmdGcc.c_str()) == 0);
+    FE_LOGI("[RunCmd] %s", cmdGcc.c_str());
+    FE_ASSERT(system(cmdGcc.c_str()) == 0);
 
     std::string cmdAs = LD_PRELOAD + gcc + " -fno-stack-protector -O2 -c " + assembleFilePath + " -o " + objectFilePath;
-    FUNCTION_LOGI("[RunCmd] %s", cmdAs.c_str());
-    FUNCTION_ASSERT(system(cmdAs.c_str()) == 0);
+    FE_LOGI("[RunCmd] %s", cmdAs.c_str());
+    FE_ASSERT(system(cmdAs.c_str()) == 0);
     return objectFilePath;
 }
 
@@ -54,7 +54,7 @@ std::vector<std::string> ParallelCompile(
     std::vector<std::thread> threads;
     const size_t maxThreads = 8;
     size_t numThreads = std::min(maxThreads, sourceFiles.size());
-    FUNCTION_ASSERT(numThreads > 0);
+    FE_ASSERT(numThreads > 0);
     auto worker = [&sourceFiles, &objs, &gcc, &extraCflag](size_t startIdx, size_t endIdx) {
         for (size_t i = startIdx; i < endIdx; ++i) {
             objs[i] = CompileSourceCode(sourceFiles[i], gcc, extraCflag);
@@ -86,7 +86,7 @@ std::vector<uint8_t> CompileAndLoadSection(
     if (needDump) {
         FILE* fsrc = fopen(sourceFilePath.c_str(), "w");
         if (fsrc == nullptr) {
-            FUNCTION_LOGE_E(FError::BAD_FD, "Fail to open source file %s", sourceFilePath.c_str());
+            FE_LOGE(FeError::BAD_FD, "Fail to open source file %s", sourceFilePath.c_str());
             return {};
         }
         fprintf(fsrc, "%s", code.c_str());
@@ -104,17 +104,17 @@ std::vector<uint8_t> CompileAndLoadSection(
         cmdAs << " " << obj;
     }
     cmdAs << " -o " << objectFilePath << " -O2 -T " << aicpuPath << "/merge.link";
-    FUNCTION_LOGI("[RunCmd] %s", cmdAs.str().c_str());
-    FUNCTION_ASSERT(system(cmdAs.str().c_str()) == 0);
+    FE_LOGI("[RunCmd] %s", cmdAs.str().c_str());
+    FE_ASSERT(system(cmdAs.str().c_str()) == 0);
     std::string binaryFilePath = sourceFilePath + ".bin";
     std::string cmdObjcopy =
         LD_PRELOAD + objcopy + " --dump-section " + sectionName + "=" + binaryFilePath + " " + objectFilePath;
-    FUNCTION_LOGI("[RunCmd] %s", cmdObjcopy.c_str());
-    FUNCTION_ASSERT(system(cmdObjcopy.c_str()) == 0);
+    FE_LOGI("[RunCmd] %s", cmdObjcopy.c_str());
+    FE_ASSERT(system(cmdObjcopy.c_str()) == 0);
 
     FILE* fbin = fopen(binaryFilePath.c_str(), "rb");
     if (fbin == nullptr) {
-        FUNCTION_LOGE_E(FError::BAD_FD, "open binary file name failed");
+        FE_LOGE(FeError::BAD_FD, "open binary file name failed");
         return {};
     }
 
@@ -136,7 +136,7 @@ void SymbolicExpressionTable::SetElementKeyOnce(const std::string& key)
     if (elementKey_.size() == 0) {
         elementKey_ = key;
     } else {
-        FUNCTION_ASSERT(FError::INVALID_VAL, elementKey_ == key) << "elementKey_: " << elementKey_ << ", key: " << key;
+        FE_ASSERT(FeError::INVALID_VAL, elementKey_ == key) << "elementKey_: " << elementKey_ << ", key: " << key;
     }
 }
 
@@ -145,7 +145,7 @@ void SymbolicExpressionTable::SetTitleOnce(const std::string& title)
     if (title_.size() == 0) {
         title_ = title;
     } else {
-        FUNCTION_ASSERT(FError::INVALID_VAL, title_ == title) << "title_: " << title_ << ", title: " << title;
+        FE_ASSERT(FeError::INVALID_VAL, title_ == title) << "title_: " << title_ << ", title: " << title;
     }
 }
 
@@ -187,7 +187,7 @@ std::string SymbolicExpressionTable::BuildExpressionByRaw(
             return BuildExpressionCode(expr, exprDict);
         }
         default:
-            FUNCTION_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
+            FE_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
             return "";
     }
 }
@@ -197,7 +197,7 @@ void SymbolicExpressionTable::BuildExtremaExpressionCode(
     std::ostringstream& oss)
 {
     const auto& operands = expr->OperandList();
-    FUNCTION_ASSERT(FError::INVALID_VAL, operands.size() >= MIN_EXTREMA_OPERANDS)
+    FE_ASSERT(FeError::INVALID_VAL, operands.size() >= MIN_EXTREMA_OPERANDS)
         << "Extrema expression must have at least 2 operands";
     std::string funcName = (expr->Opcode() == SymbolicOpcode::T_MOP_MAX) ? "RUNTIME_Max" : "RUNTIME_Min";
     const size_t operandSize = operands.size();
@@ -330,9 +330,9 @@ bool SymbolicExpressionTable::CheckExprDependCore(
                 if (CallIsGetInputData(callee)) {
                     auto argExpr = operandList[1];
                     const std::string& argName = std::dynamic_pointer_cast<RawSymbolicSymbol>(argExpr)->Name();
-                    FUNCTION_LOGI("[RunCmd] Value depend tensor name:%s", argName.c_str());
+                    FE_LOGI("[RunCmd] Value depend tensor name:%s", argName.c_str());
                     auto it = tensorNameToDependCore.find(argName);
-                    FUNCTION_ASSERT(FError::NOT_EXIST, it != tensorNameToDependCore.end())
+                    FE_ASSERT(FeError::NOT_EXIST, it != tensorNameToDependCore.end())
                         << "Tensor " << argName << " not found in tensorNameToDependCore";
                     valDependMap[calleeExpr] = it->second;
                     return it->second;
@@ -374,27 +374,27 @@ void RawSymbolicScalar::FlattenOperands(
 
 ScalarImmediateType RawSymbolicScalar::GetImmediateValue() const
 {
-    FUNCTION_ASSERT(FError::INVALID_TYPE, IsImmediate())
+    FE_ASSERT(FeError::INVALID_TYPE, IsImmediate())
         << "Mismatch immediate type: " << SymbolicScalarKind2Name(Kind());
     auto immediate = static_cast<const RawSymbolicImmediate*>(this);
     return immediate->Immediate();
 }
 const std::string& RawSymbolicScalar::GetSymbolName() const
 {
-    FUNCTION_ASSERT(FError::INVALID_TYPE, IsSymbol()) << "Mismatch symbol type: " << SymbolicScalarKind2Name(Kind());
+    FE_ASSERT(FeError::INVALID_TYPE, IsSymbol()) << "Mismatch symbol type: " << SymbolicScalarKind2Name(Kind());
     auto symbol = static_cast<const RawSymbolicSymbol*>(this);
     return symbol->Name();
 }
 SymbolicOpcode RawSymbolicScalar::GetExpressionOpcode() const
 {
-    FUNCTION_ASSERT(FError::INVALID_TYPE, IsExpression())
+    FE_ASSERT(FeError::INVALID_TYPE, IsExpression())
         << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
     auto expression = static_cast<const RawSymbolicExpression*>(this);
     return expression->Opcode();
 }
 const std::vector<RawSymbolicScalarPtr>& RawSymbolicScalar::GetExpressionOperandList() const
 {
-    FUNCTION_ASSERT(FError::INVALID_TYPE, IsExpression())
+    FE_ASSERT(FeError::INVALID_TYPE, IsExpression())
         << "Mismatch expression type: " << SymbolicScalarKind2Name(Kind());
     auto expression = static_cast<const RawSymbolicExpression*>(this);
     return expression->OperandList();
@@ -451,7 +451,7 @@ static void DumpSymbolicScalar(const RawSymbolicScalarPtr& raw, Json& jarray)
             }
         } break;
         default:
-            FUNCTION_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
+            FE_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
             break;
     }
 }
@@ -702,7 +702,7 @@ static void LookupExpressionByOpcode(
             }
         } break;
         default:
-            FUNCTION_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
+            FE_ASSERT(false) << SymbolicScalarKind2Name(raw->Kind()) << " undefined behavior";
             break;
     }
 }
@@ -716,7 +716,7 @@ std::vector<RawSymbolicScalarPtr> LookupExpressionByOpcode(const RawSymbolicScal
 
 void RawSymbolicExpression::DumpRuntimeExtrema(std::ostream& out) const
 {
-    FUNCTION_ASSERT(FError::INVALID_VAL, operandList_.size() >= MIN_EXTREMA_OPERANDS)
+    FE_ASSERT(FeError::INVALID_VAL, operandList_.size() >= MIN_EXTREMA_OPERANDS)
         << "DumpRuntimeExtrema expects at least 2 operands, but got " << operandList_.size();
     const char* funcName = (opcode_ == SymbolicOpcode::T_MOP_MAX) ? "RUNTIME_Max" : "RUNTIME_Min";
 

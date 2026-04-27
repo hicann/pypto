@@ -54,7 +54,7 @@ bool CreateDir(const std::string& directoryPath)
 {
     int32_t ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); // 755
     if (ret != 0 && errno != EEXIST) {
-        FUNCTION_LOGW("Create dir[%s] failed, reason is %s", directoryPath.c_str(), strerror(errno));
+        PYPTO_LOGW("Create dir[%s] failed, reason is %s", directoryPath.c_str(), strerror(errno));
         return false;
     }
     return true;
@@ -67,7 +67,7 @@ bool JudgeEmptyAndCreateDir(char tmpDirPath[], const std::string& directoryPath)
         int32_t ret = 0;
         ret = mkdir(tmpDirPath, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); // 755
         if (ret != 0 && errno != EEXIST) {
-            FUNCTION_LOGW("Create dir[%s] failed, reason is %s", directoryPath.c_str(), strerror(errno));
+            PYPTO_LOGW("Create dir[%s] failed, reason is %s", directoryPath.c_str(), strerror(errno));
             return false;
         }
     }
@@ -78,7 +78,7 @@ bool CreateMultiLevelDir(const std::string& directoryPath)
 {
     auto dirPathLen = directoryPath.length();
     if (dirPathLen >= PATH_MAX) {
-        FUNCTION_LOGW("Path[%s] is too long, it must be less than %d", directoryPath.c_str(), PATH_MAX);
+        PYPTO_LOGW("Path[%s] is too long, it must be less than %d", directoryPath.c_str(), PATH_MAX);
         return false;
     }
     char tmpDirPath[PATH_MAX] = {0};
@@ -97,32 +97,32 @@ bool CreateMultiLevelDir(const std::string& directoryPath)
 
     ret = mkdir(directoryPath.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); // 755
     if (ret != 0 && errno != EEXIST) {
-        FUNCTION_LOGW("Create dir[%s] failed, reason is: %s", directoryPath.c_str(), strerror(errno));
+        PYPTO_LOGW("Create dir[%s] failed, reason is: %s", directoryPath.c_str(), strerror(errno));
         return false;
     }
 
-    FUNCTION_LOGD("Create multi level dir [%s] successfully.", directoryPath.c_str());
+    PYPTO_LOGD("Create multi level dir [%s] successfully.", directoryPath.c_str());
     return true;
 }
 
 void DeleteFile(const std::string& path)
 {
     if (path.empty()) {
-        FUNCTION_LOGW("File name is empty.");
+        PYPTO_LOGW("File name is empty.");
         return;
     }
     struct stat statBuf;
     if (lstat(path.c_str(), &statBuf) != 0) {
-        FUNCTION_LOGW("Stat file[%s] failed.", path.c_str());
+        PYPTO_LOGW("Stat file[%s] failed.", path.c_str());
         return;
     }
     if (S_ISREG(statBuf.st_mode) == 0) {
-        FUNCTION_LOGW("[%s] is not a file.", path.c_str());
+        PYPTO_LOGW("[%s] is not a file.", path.c_str());
         return;
     }
     int res = remove(path.c_str());
     if (res != 0) {
-        FUNCTION_LOGW("Delete file[%s] failed.", path.c_str());
+        PYPTO_LOGW("Delete file[%s] failed.", path.c_str());
     }
 }
 
@@ -130,20 +130,20 @@ bool ReadJsonFile(const std::string& file, nlohmann::json& jsonObj)
 {
     std::string path = RealPath(file);
     if (path.empty()) {
-        FUNCTION_LOGW("File path [%s] does not exist", file.c_str());
+        PYPTO_LOGW("File path [%s] does not exist", file.c_str());
         return false;
     }
     std::ifstream ifStream(path);
     try {
         if (!ifStream.is_open()) {
-            FUNCTION_LOGW("Open %s failed, file is already open", file.c_str());
+            PYPTO_LOGW("Open %s failed, file is already open", file.c_str());
             return false;
         }
 
         ifStream >> jsonObj;
         ifStream.close();
     } catch (const std::exception& e) {
-        FUNCTION_LOGW("Fail to convert file[%s] to Json. Exception message is .%s", path.c_str(), e.what());
+        PYPTO_LOGW("Fail to convert file[%s] to Json. Exception message is .%s", path.c_str(), e.what());
         ifStream.close();
         return false;
     }
@@ -155,20 +155,20 @@ bool ReadBytesFromFile(const std::string& fPath, std::vector<char>& buffer)
 {
     std::string realPath = RealPath(fPath);
     if (realPath.empty()) {
-        FUNCTION_LOGW("Bin file path[%s] is not valid.", fPath.c_str());
+        PYPTO_LOGW("Bin file path[%s] is not valid.", fPath.c_str());
         return false;
     }
 
     std::ifstream ifStream(realPath.c_str(), std::ios::binary | std::ios::ate);
     if (!ifStream.is_open()) {
-        FUNCTION_LOGW("read file %s failed.", fPath.c_str());
+        PYPTO_LOGW("read file %s failed.", fPath.c_str());
         return false;
     }
     try {
         std::streamsize size = ifStream.tellg();
         if (size <= 0 || size > INT_MAX) {
             ifStream.close();
-            FUNCTION_LOGW("File size %ld is not within the range: (0, %d].", size, INT_MAX);
+            PYPTO_LOGW("File size %ld is not within the range: (0, %d].", size, INT_MAX);
             return false;
         }
 
@@ -176,11 +176,11 @@ bool ReadBytesFromFile(const std::string& fPath, std::vector<char>& buffer)
 
         buffer.resize(size);
         ifStream.read(&buffer[0], size);
-        FUNCTION_LOGD("Release file(%s) handle.", realPath.c_str());
+        PYPTO_LOGD("Release file(%s) handle.", realPath.c_str());
         ifStream.close();
-        FUNCTION_LOGD("Read size: %ld.", size);
+        PYPTO_LOGD("Read size: %ld.", size);
     } catch (const std::ifstream::failure& e) {
-        FUNCTION_LOGW("Fail to read file %s. Exception: %s.", fPath.c_str(), e.what());
+        PYPTO_LOGW("Fail to read file %s. Exception: %s.", fPath.c_str(), e.what());
         ifStream.close();
         return false;
     }
@@ -192,7 +192,7 @@ std::vector<std::string> GetFiles(const std::string& path, const std::string& ex
     std::vector<std::string> files;
     DIR* dir = opendir(path.c_str());
     if (dir == nullptr) {
-        FUNCTION_LOGW("Open directory [%s] failed", path.c_str());
+        PYPTO_LOGW("Open directory [%s] failed", path.c_str());
         return files;
     }
 
@@ -231,7 +231,7 @@ void SaveFile(const std::string& fPath, const std::vector<uint8_t>& data)
 {
     FILE* file = fopen(fPath.c_str(), "wb");
     if (file == nullptr) {
-        FUNCTION_LOGW("Open file [%s] failed.", fPath.c_str());
+        PYPTO_LOGW("Open file [%s] failed.", fPath.c_str());
         return;
     }
     fwrite(data.data(), 1, data.size(), file);
@@ -242,7 +242,7 @@ bool SaveFile(const std::string& fPath, const uint8_t* data, size_t size)
 {
     FILE* file = fopen(fPath.c_str(), "wb");
     if (file == nullptr) {
-        FUNCTION_LOGW("Open file [%s] failed.", fPath.c_str());
+        PYPTO_LOGW("Open file [%s] failed.", fPath.c_str());
         return false;
     }
     fwrite(data, 1, size, file);
@@ -261,7 +261,7 @@ void SaveFileSafe(const std::string& fPath, const uint8_t* data, size_t size)
 void Rename(const std::string& oldPath, const std::string& newPath)
 {
     if (rename(oldPath.c_str(), newPath.c_str()) != 0) {
-        FUNCTION_LOGW("Rename file %s to %s failed.", oldPath.c_str(), newPath.c_str());
+        PYPTO_LOGW("Rename file %s to %s failed.", oldPath.c_str(), newPath.c_str());
     }
 }
 
@@ -270,12 +270,12 @@ bool DumpFile(const char* data, const size_t size, const std::string& fPath)
     // dump bin file
     std::ofstream outFile(fPath, std::ios::binary);
     if (!outFile) {
-        FUNCTION_LOGE_E(FError::BAD_FD, "Failed open file %s.", fPath.c_str());
+        PYPTO_LOGE("Failed open file %s.", fPath.c_str());
         return false;
     }
     outFile.write(data, size);
     outFile.close();
-    FUNCTION_LOGI("Bin file[%s] has been dumped.", fPath.c_str());
+    PYPTO_LOGI("Bin file[%s] has been dumped.", fPath.c_str());
     return true;
 }
 
@@ -291,7 +291,7 @@ std::vector<uint8_t> LoadFile(const std::string& fPath)
     std::vector<uint8_t> binary;
     std::string realPath = RealPath(fPath);
     if (realPath.empty()) {
-        FUNCTION_LOGW("Bin file path[%s] is not valid.", fPath.c_str());
+        PYPTO_LOGW("Bin file path[%s] is not valid.", fPath.c_str());
         return binary;
     }
 
@@ -327,7 +327,7 @@ bool DeleteDir(const std::string& directoryPath)
     constexpr int limit = 64;
     int ret = nftw(directoryPath.c_str(), RemoveFile, limit, FTW_DEPTH | FTW_PHYS);
     if (ret != 0) {
-        FUNCTION_LOGW("Delete dir[%s] failed, reason is %d", directoryPath.c_str(), ret);
+        PYPTO_LOGW("Delete dir[%s] failed, reason is %d", directoryPath.c_str(), ret);
         return false;
     }
     return true;
@@ -353,11 +353,11 @@ FILE* LockAndOpenFile(const std::string& lockFilePath)
     }
     (void)chmod(lockFilePath.c_str(), FILE_AUTHORITY);
     if (!FcntlLockFile(fileno(fp), F_WRLCK)) {
-        FUNCTION_LOGW("Fail to lock file: %s", lockFilePath.c_str());
+        PYPTO_LOGW("Fail to lock file: %s", lockFilePath.c_str());
         fclose(fp);
         return nullptr;
     }
-    FUNCTION_LOGI("Lock file successfully. %s", lockFilePath.c_str());
+    PYPTO_LOGI("Lock file successfully. %s", lockFilePath.c_str());
     return fp;
 }
 
@@ -377,7 +377,7 @@ bool CopyFile(const std::string& srcPath, const std::string& dstPath)
     std::ofstream dst(dstPath, std::ios::binary);
 
     if (!src.is_open() || !dst.is_open()) {
-        FUNCTION_LOGW("Fail to open file: %s, %s", srcPath.c_str(), dstPath.c_str());
+        PYPTO_LOGW("Fail to open file: %s, %s", srcPath.c_str(), dstPath.c_str());
         return false;
     }
 
@@ -411,7 +411,7 @@ std::string GetCurRunningPath()
     char buffer[size] = {};
     std::string cwd = getcwd(buffer, size);
     if (cwd.empty()) {
-        FUNCTION_LOGW("failed to call getcwd()");
+        PYPTO_LOGW("failed to call getcwd()");
         return "";
     }
     return cwd;
@@ -421,7 +421,7 @@ void RemoveOldestDirs(const std::string& path, const std::string& prefix, int le
 {
     DIR* dir = opendir(path.c_str());
     if (dir == nullptr) {
-        FUNCTION_LOGW("failed to opendir: %s", path.c_str());
+        PYPTO_LOGW("failed to opendir: %s", path.c_str());
         return;
     }
 

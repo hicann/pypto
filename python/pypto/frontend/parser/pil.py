@@ -92,6 +92,8 @@ import re
 from collections.abc import Mapping
 from typing import Any, Callable, Optional, Union
 
+from pypto.error import FeError
+
 PILExpr = Union[str, ast.Constant]
 PILSlice = Union[tuple[Optional[PILExpr], Optional[PILExpr], Optional[PILExpr]], PILExpr]
 PILExprOrNone = Optional[PILExpr]
@@ -174,7 +176,7 @@ class PILBuilder(ast.NodeVisitor):
             return value
         if isinstance(value, str):
             return self.create_pil_name(value, ctx)
-        raise TypeError(f"Expected ast.Constant or str, but got {type(value).__name__}")
+        raise FeError(TypeError(f"Expected ast.Constant or str, but got {type(value).__name__}"))
 
     def create_pil_maybe_starred(self,
          expr: PILExpr,
@@ -183,7 +185,7 @@ class PILBuilder(ast.NodeVisitor):
          node_attr: PILAttr = NOATTR) -> ast.expr:
         if starred:
             if not isinstance(expr, str):
-                raise TypeError(f"Expected str for starred expr, but got {type(expr).__name__}")
+                raise FeError(TypeError(f"Expected str for starred expr, but got {type(expr).__name__}"))
             return self.create_pil_starred(expr, ctx)
         return self.create_pil_expr(expr, ctx)
 
@@ -250,7 +252,7 @@ class PILBuilder(ast.NodeVisitor):
             target_name = source_expr
         """
         if not isinstance(target_name, str):
-            raise TypeError(f"Expected str for target_name, but got {type(target_name).__name__}")
+            raise FeError(TypeError(f"Expected str for target_name, but got {type(target_name).__name__}"))
         return ast.Assign(
             targets=[ast.Name(id=target_name, ctx=ast.Store())],
             value=self.create_pil_expr(source_expr),
@@ -398,7 +400,7 @@ class PILBuilder(ast.NodeVisitor):
                 orelse
         """
         if not isinstance(target_name, str):
-            raise TypeError(f"Expected str for target_name, but got {type(target_name).__name__}")
+            raise FeError(TypeError(f"Expected str for target_name, but got {type(target_name).__name__}"))
         return ast.For(target=ast.Name(id=target_name,
                  ctx=ast.Store()),
              iter=self.create_pil_expr(iter_expr),
@@ -898,7 +900,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
                     result_stmts.extend(self.visit_lhs(actual_elt, temp_name))
             return result_stmts
 
-        raise NotImplementedError(f"LHS target type {type(target).__name__} is not supported")
+        raise FeError(NotImplementedError(f"LHS target type {type(target).__name__} is not supported"))
 
     def visit_function_def(
         self,
@@ -959,7 +961,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          type_comment: Optional[str],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("AsyncFunctionDef is not supported")
+        raise FeError(NotImplementedError("AsyncFunctionDef is not supported"))
 
     def visit_class_def(self,
          name: str,
@@ -969,7 +971,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          decorator_list: list[ast.expr],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("ClassDef is not supported")
+        raise FeError(NotImplementedError("ClassDef is not supported"))
 
     def visit_return(self,
          value: Optional[ast.expr],
@@ -1062,7 +1064,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
                 nested_stmts, _ = self.visit_delete(target.elts, node_attr=node_attr)
                 result_stmts.extend(nested_stmts)
             else:
-                raise NotImplementedError(f"Delete target type {type(target).__name__} is not supported")
+                raise FeError(NotImplementedError(f"Delete target type {type(target).__name__} is not supported"))
         return result_stmts, None
 
     def visit_assign(self,
@@ -1159,7 +1161,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             store_stmt = self.create_pil_assign_subscript(target_expr, pil_slice_list, temp_name)
             return target_stmt_list + slice_stmt_list + [load_stmt] + value_stmt_list + [binop_stmt, store_stmt], None
 
-        raise NotImplementedError(f"AugAssign target type {type(target).__name__} is not supported")
+        raise FeError(NotImplementedError(f"AugAssign target type {type(target).__name__} is not supported"))
 
     def visit_ann_assign(self,
          target: ast.expr,
@@ -1237,7 +1239,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          type_comment: Optional[str],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("AsyncFor is not supported")
+        raise FeError(NotImplementedError("AsyncFor is not supported"))
 
     def visit_while(self,
          test: ast.expr,
@@ -1343,14 +1345,14 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          type_comment: Optional[str],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("AsyncWith is not supported")
+        raise FeError(NotImplementedError("AsyncWith is not supported"))
 
     def visit_match(self,
          subject: ast.expr,
          cases: list,
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("Match is not supported")
+        raise FeError(NotImplementedError("Match is not supported"))
 
     def visit_raise(self,
          exc: Optional[ast.expr],
@@ -1481,7 +1483,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          finalbody: list[ast.stmt],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("TryStar is not supported")
+        raise FeError(NotImplementedError("TryStar is not supported"))
 
     def visit_assert(self,
          test: ast.expr,
@@ -1615,7 +1617,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             result_stmt_list = first_stmt_list + [rest_stmt]
             return result_stmt_list, temp_name
 
-        raise NotImplementedError(f"BoolOp {type(op).__name__} is not supported")
+        raise FeError(NotImplementedError(f"BoolOp {type(op).__name__} is not supported"))
 
     def visit_named_expr(self,
          target: ast.expr,
@@ -1630,7 +1632,8 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             target = _tmp_0
         """
         if not isinstance(target, ast.Name):
-            raise TypeError('Python native ast parser should guarantee that the target of NamedExpr is always ast.Name')
+            raise FeError(
+                TypeError('Python native ast parser should guarantee that the target of NamedExpr is always ast.Name'))
         value_stmt_list, value_name = self.visit(value)
         assign_stmt = self.create_pil_assign_identifier(target.id, value_name)
         result_stmt_list = value_stmt_list + [assign_stmt]
@@ -1932,7 +1935,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
         value: ast.expr,
         node_attr: PILAttr = NOATTR,
     ) -> tuple[list[ast.stmt], PILExprOrNone]:
-        raise NotImplementedError("Await is not supported")
+        raise FeError(NotImplementedError("Await is not supported"))
 
     def visit_yield(
         self,
@@ -2133,7 +2136,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          format_spec: Optional[ast.expr],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("Interpolation is not supported")
+        raise FeError(NotImplementedError("Interpolation is not supported"))
 
     def visit_joined_str(self,
          values: list[ast.expr],
@@ -2184,7 +2187,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          values: list[ast.expr],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("TemplateStr is not supported")
+        raise FeError(NotImplementedError("TemplateStr is not supported"))
 
     def visit_constant(self,
          value: object,
@@ -2207,7 +2210,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             _tmp_1 = _tmp_0.attr
         """
         if not isinstance(ctx, ast.Load):
-            raise TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}")
+            raise FeError(TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}"))
         value_stmts, value_name = self.visit(value)
         temp_name = self.create_temp_identifier()
         result_expr = self.create_pil_attribute(value_name, attr)
@@ -2229,7 +2232,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             _tmp_2 = _tmp_0[_tmp_1]
         """
         if not isinstance(ctx, ast.Load):
-            raise TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}")
+            raise FeError(TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}"))
         value_stmts, value_name = self.visit(value)
 
         # Normalize slice into a list of ast.Slice nodes
@@ -2245,7 +2248,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          ctx: ast.expr_context,
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise Exception("Starred should not be directly accessed")
+        raise FeError(RuntimeError("Starred should not be directly accessed"))
 
     def visit_name(self,
          identifier: str,
@@ -2253,7 +2256,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
         if not isinstance(ctx, ast.Load):
-            raise TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}")
+            raise FeError(TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}"))
         return [], identifier
 
     def visit_list(self,
@@ -2271,7 +2274,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             _tmp_3 = [_tmp_0, *_tmp_1, _tmp_2]
         """
         if not isinstance(ctx, ast.Load):
-            raise TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}")
+            raise FeError(TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}"))
 
         return self._visit_sequence_literal(elts, self.create_pil_list)
 
@@ -2290,7 +2293,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
             _tmp_3 = (_tmp_0, *_tmp_1, _tmp_2)
         """
         if not isinstance(ctx, ast.Load):
-            raise TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}")
+            raise FeError(TypeError(f"Expected ast.Load for ctx, but got {type(ctx).__name__}"))
 
         return self._visit_sequence_literal(elts, self.create_pil_tuple)
 
@@ -2300,7 +2303,7 @@ class PythonParser(PILBuilder, ast.NodeVisitor):
          step: Optional[ast.expr],
          node_attr: PILAttr = NOATTR) -> tuple[list[ast.stmt],
          PILExprOrNone]:
-        raise NotImplementedError("Slice is not supported")
+        raise FeError(NotImplementedError("Slice is not supported"))
 
     def visit_stmts(self, stmts: list[ast.stmt]) -> tuple[list[ast.stmt], PILExprOrNone]:
         stmt_list = []

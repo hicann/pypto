@@ -190,7 +190,7 @@ std::shared_ptr<OpAttribute> ViewOpAttribute::Clone() const
 
 std::string AssembleOpAttribute::Dump() const
 {
-    FUNCTION_ASSERT(!toOffset_.empty());
+    FE_ASSERT(!toOffset_.empty());
     std::stringstream ss;
     ss << "from " << MemoryTypeToString(from_);
     if (!fromDynValidShape_.empty()) {
@@ -353,7 +353,7 @@ std::string CallOpAttribute::DumpAttr(int idx) const
         }
         ss << "]";
     } else {
-        FUNCTION_ASSERT(static_cast<size_t>(idx) < argList_.size())
+        FE_ASSERT(static_cast<size_t>(idx) < argList_.size())
             << "idx: " << static_cast<size_t>(idx) << "argList.size(): " << argList_.size();
         ss << "attr[" << idx << "][";
         for (size_t j = 0; j < argList_[idx].size(); j++) {
@@ -394,7 +394,7 @@ std::vector<int64_t> CallOpAttribute::GetLinearImmediateArgList(int begin, int e
             if (returnEmptyForSymbolic) {
                 return {};
             } else {
-                FUNCTION_ASSERT(false) << "Invalid Immediate in " << Dump() << " index " << i << " = "
+                FE_ASSERT(false) << "Invalid Immediate in " << Dump() << " index " << i << " = "
                                        << linearArgList[i].Dump();
             }
         }
@@ -627,7 +627,7 @@ std::shared_ptr<CopyOpAttribute> CopyOpAttribute::DeserializeFrom(
     if (attrJson.size() <= VALUE3) {
         std::vector<OpImmediate> vec;
         auto res = std::make_shared<CopyOpAttribute>(MemoryType::MEM_UNKNOWN, vec, vec, vec);
-        FUNCTION_LOGE_E(FError::INVALID_VAL, "CopyOpAttr json shape is illegal");
+        FE_LOGE(FeError::INVALID_VAL, "CopyOpAttr json shape is illegal");
         return res;
     }
     std::vector<OpImmediate> shape;

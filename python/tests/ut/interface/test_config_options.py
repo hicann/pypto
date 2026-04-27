@@ -100,14 +100,14 @@ def test_sg_set_scope_new_format():
     assert pass_option["sg_set_scope"] == (-1, False, False)
     try:
         pypto.set_pass_options(sg_set_scope=(1, True))  # 元素不足
-        assert False, "Should raise ValueError"
-    except ValueError as e:
+        assert False, "Should raise FeError"
+    except pypto.error.FeError as e:
         assert "Expected 3" in str(e)
 
     try:
         pypto.set_pass_options(sg_set_scope=(1, "True", True))  # 类型错误
-        assert False, "Should raise ValueError"
-    except ValueError as e:
+        assert False, "Should raise FeError"
+    except pypto.error.FeError as e:
         assert "Expected bool" in str(e)
 
 if __name__ == "__main__":

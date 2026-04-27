@@ -39,7 +39,7 @@ public:
     template <typename Tret, typename Tlhs, typename Trhs>
     static std::vector<Tret> AddRaw(const std::vector<Tlhs>& lhs, const std::vector<Trhs>& rhs)
     {
-        FUNCTION_ASSERT(FError::INVALID_VAL, lhs.size() == rhs.size())
+        FE_ASSERT(FeError::INVALID_VAL, lhs.size() == rhs.size())
             << "lhs.size():" << lhs.size() << ", rhs.size():" << rhs.size();
         std::vector<Tret> ret(lhs.size());
         for (size_t k = 0; k < lhs.size(); k++) {
@@ -73,7 +73,7 @@ public:
         const std::vector<int64_t>& lhs, const std::vector<SymbolicScalar>& lhsDyn, const std::vector<int64_t>& rhs,
         const std::vector<SymbolicScalar>& rhsDyn)
     {
-        FUNCTION_ASSERT(FError::INVALID_VAL, lhs.size() == rhs.size())
+        FE_ASSERT(FeError::INVALID_VAL, lhs.size() == rhs.size())
             << "lhs.size():" << lhs.size() << ", rhs.size():" << rhs.size();
         std::vector<int64_t> ret = Add(lhs, rhs);
 
@@ -91,7 +91,7 @@ public:
 
     static std::vector<int64_t> Sub(const std::vector<int64_t>& lhs, const std::vector<int64_t>& rhs)
     {
-        FUNCTION_ASSERT(FError::INVALID_VAL, lhs.size() == rhs.size())
+        FE_ASSERT(FeError::INVALID_VAL, lhs.size() == rhs.size())
             << "lhs.size():" << lhs.size() << ", rhs.size():" << rhs.size();
         std::vector<int64_t> result(lhs.size());
         std::transform(lhs.begin(), lhs.end(), rhs.begin(), result.begin(), [](int a, int b) { return a - b; });
@@ -103,7 +103,7 @@ public:
         if (lhs.size() == 0) {
             return {};
         }
-        FUNCTION_ASSERT(FError::INVALID_VAL, lhs.size() == rhs.size())
+        FE_ASSERT(FeError::INVALID_VAL, lhs.size() == rhs.size())
             << "lhs.size():" << lhs.size() << ", rhs.size():" << rhs.size();
         std::vector<SymbolicScalar> result(lhs.size());
         std::transform(

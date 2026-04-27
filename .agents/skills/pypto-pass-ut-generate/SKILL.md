@@ -237,7 +237,7 @@ python3 scripts/ut_coverage.py --diff pr.diff --report ut_cov.tar.gz --json
         const std::vector<std::shared_ptr<LogicalTensor>> &oOperand) {
         // Add the operation to the current function
         if (currentFunctionMagicName_ == PROGRAM_ENTRY_FUNCTION_NAME) {
-            FUNCTION_LOGE("Error: No active function to add operation.");
+            FE_LOGE("Error: No active function to add operation.");
             ASSERT(false) << "No active function to add operation.";
         }
         return currentFunctionPtr_->AddOperation(opCode, iOperand, oOperand);

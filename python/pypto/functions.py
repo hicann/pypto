@@ -18,6 +18,7 @@ compiled functions in the PTO framework.
 from typing import List, Optional
 
 from pypto import pypto_impl
+from pypto.error import FeError
 
 
 class Function:
@@ -78,7 +79,7 @@ class Function:
             The C++ Function object.
         """
         if self._base is None:
-            raise RuntimeError("Function base is None")
+            raise FeError(RuntimeError("Function base is None"))
         return self._base
 
     @property

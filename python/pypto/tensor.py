@@ -17,6 +17,7 @@ from .enum import *  # noqa
 from ._utils import to_syms, to_sym, source_location
 from .symbolic_scalar import SymbolicScalar, SymInt
 from ._element import Element
+from .error import FeError
 
 
 class TensorAnnotation:
@@ -67,7 +68,7 @@ class Tensor:
         else:
             nshape = to_syms(shape)
             if not isinstance(nshape, list):
-                raise TypeError("shape must be a list of int or SymbolicScalar")
+                raise FeError(TypeError("shape must be a list of int or SymbolicScalar"))
         self._base = pypto_impl.Tensor(ndtype, nshape, name, nformat)
         self.data_ptr = data_ptr
         self.device = device
@@ -190,7 +191,7 @@ class Tensor:
 
         if isinstance(key, slice) and isinstance(key.stop, Tensor):
             if not isinstance(key.start, int):
-                raise TypeError(f"scatter key.start must be int, got {type(key.start).__name__}")
+                raise FeError(TypeError(f"scatter key.start must be int, got {type(key.start).__name__}"))
             return pypto.scatter(self, key.start, key.stop, value)
 
         key = self._normalize_key(key)
@@ -210,10 +211,10 @@ class Tensor:
             offsets = self._get_assemble_offset(tuple(new_key), self.shape)
             return pypto.assemble(value_reshaped, offsets, self)
 
-        raise ValueError("tuple key must be int, SymbolicScalar or slice")
+        raise FeError(ValueError("tuple key must be int, SymbolicScalar or slice"))
 
     def __iter__(self):
-        raise TypeError("Tensor is not iterable.")
+        raise FeError(TypeError("Tensor is not iterable."))
 
     @source_location
     def __getitem__(self, key, *, valid_shape: Optional[List[Union[int, SymbolicScalar]]] = None):
@@ -292,7 +293,7 @@ class Tensor:
 
         if isinstance(key, slice) and isinstance(key.stop, Tensor):
             if not isinstance(key.start, int):
-                raise TypeError(f"gather key.start must be int, got {type(key.start).__name__}")
+                raise FeError(TypeError(f"gather key.start must be int, got {type(key.start).__name__}"))
             return pypto.gather(self, key.start, key.stop)
 
         key = self._normalize_key(key)
@@ -311,7 +312,7 @@ class Tensor:
             res_shape = [res.shape[d] for d in range(res.dim) if bool_shape[d]]
             return pypto.reshape(res, res_shape)
 
-        raise ValueError("tuple key must be int, SymbolicScalar or slice")
+        raise FeError(ValueError("tuple key must be int, SymbolicScalar or slice"))
 
     @source_location
     def __add__(self, other: 'Tensor | int | float') -> 'Tensor':
@@ -360,7 +361,7 @@ class Tensor:
         elif other.dtype == pypto.DT_INT8:
             out_dtype = pypto.DT_INT32
         else:
-            raise RuntimeError("unsupported dtype")
+            raise FeError(RuntimeError("unsupported dtype"))
         return pypto.matmul(self, other, out_dtype)
 
     @source_location
@@ -508,7 +509,7 @@ class Tensor:
         for axis, k in enumerate(key):
             start, stop, step = k.start, k.stop, k.step
             if step not in (1, None):
-                raise ValueError("step must be 1 or None")
+                raise FeError(ValueError("step must be 1 or None"))
             if start is None and stop is None:
                 offsets.append(0)
             elif isinstance(start, (int, SymbolicScalar)):
@@ -521,10 +522,10 @@ class Tensor:
     def _add_one_dim(key, value_shape):
         slices_count = sum(1 for k in key if isinstance(k, slice))
         if slices_count != len(value_shape):
-            raise ValueError(
+            raise FeError(ValueError(
                 f"The number of slice in key ({slices_count}) "
                 f"must match the length of input Tensor ({len(value_shape)}). "
-            )
+            ))
         new_shape = []
         idx = 0
         for k in key:
@@ -573,7 +574,7 @@ class Tensor:
         for axis, k in enumerate(key):
             start, stop, step = k.start, k.stop, k.step
             if step != 1 and step is not None:
-                raise ValueError("step must be 1 or None")
+                raise FeError(ValueError("step must be 1 or None"))
             if start is None:
                 start = 0
             if stop is None:
@@ -607,7 +608,7 @@ class Tensor:
         if isinstance(other, Tensor):
             self._base.Move(other._base)
         else:
-            raise TypeError(f"'{type(other).__name__}' type cannot be moved to Tensor")
+            raise FeError(TypeError(f"'{type(other).__name__}' type cannot be moved to Tensor"))
 
     def base(self) -> pypto_impl.Tensor:
         return self._base
@@ -953,12 +954,12 @@ class Tensor:
             key = (key,)
 
         if not isinstance(key, tuple):
-            raise RuntimeError("Invalid key type")
+            raise FeError(RuntimeError("Invalid key type"))
 
         if any(k is Ellipsis for k in key):
             ellipsis_count = sum(k is Ellipsis for k in key)
             if ellipsis_count > 1:
-                raise ValueError("Only one ... is supported")
+                raise FeError(ValueError("Only one ... is supported"))
 
             ellipsis_pos = next(i for i, k in enumerate(key) if k is Ellipsis)
             other_len = len(key) - 1

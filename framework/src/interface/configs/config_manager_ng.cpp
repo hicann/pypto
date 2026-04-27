@@ -69,7 +69,7 @@ struct TypeInfo {
     void LoadConf(const std::string& path)
     {
         std::ifstream infile(path);
-        FUNCTION_ASSERT(FError::BAD_FD, infile.is_open()) << "Open file " << path << " failed";
+        FE_ASSERT(FeError::BAD_FD, infile.is_open()) << "Open file " << path << " failed";
         nlohmann::json jData;
         infile >> jData;
 
@@ -100,11 +100,11 @@ struct TypeInfo {
             } else if (type == "object") {
                 parse_object_type(jData, prefix);
             } else {
-                FUNCTION_LOGE_E(FError::INVALID_TYPE, "invalid type: %s at %s", type.c_str(), prefix.c_str());
+                FE_LOGE(FeError::INVALID_TYPE, "invalid type: %s at %s", type.c_str(), prefix.c_str());
             }
         } else {
-            FUNCTION_LOGE_E(
-                FError::NOT_EXIST, "Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json",
+            FE_LOGE(
+                FeError::NOT_EXIST, "Label<%s> field['type', 'properties'] not found in tile_fwk_config_schema.json",
                 prefix.c_str());
         }
     }
@@ -176,7 +176,7 @@ bool ConfigScope::HasConfig(const std::string& key) const
 void ConfigScope::Clear()
 {
     values_.clear();
-    FUNCTION_LOGD("Clear config scope successfully.");
+    FE_LOGD("Clear config scope successfully.");
 }
 
 const std::type_info& ConfigScope::Type(const std::string& key) const
@@ -280,7 +280,7 @@ void ValidateConfigValueType(const std::string& key, const Any& value)
     std::stringstream os;
     os << "Option '" << key << "' has invalid type. Expected " << GetReadableTypeName(expectedType) << ", but got "
        << GetReadableTypeName(value.Type());
-    FUNCTION_ASSERT(FError::INVALID_TYPE, false) << os.str();
+    FE_ASSERT(FeError::INVALID_TYPE, false) << os.str();
 }
 
 std::string ConfigScope::ToString() const
@@ -325,11 +325,11 @@ void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
         os << ", its value doesn't within the value range.";
         DumpRange(os, value.Type(), key, ConfigManagerNg::GetInstance().Range());
         os << "\n";
-        FUNCTION_ASSERT(FError::INVALID_VAL, false) << os.str();
+        FE_ASSERT(FeError::INVALID_VAL, false) << os.str();
     }
     std::stringstream oss;
     DumpValue(oss, key, value, "");
-    FUNCTION_LOGD("Set option successfully: %s ", oss.str().c_str());
+    FE_LOGD("Set option successfully: %s ", oss.str().c_str());
     std::lock_guard<std::mutex> lock(mtx);
     values_[key] = value;
 }
@@ -355,7 +355,7 @@ struct ConfigManagerImpl {
     void PushScope(ConfigScopePtr scope)
     {
         // Ensure the provided scope is not null
-        FUNCTION_ASSERT(scope != nullptr) << "Cannot push a null scope.";
+        FE_ASSERT(scope != nullptr) << "Cannot push a null scope.";
         scopes.push(scope);
     }
 
@@ -395,7 +395,7 @@ struct ConfigManagerImpl {
     void EndScope(const char* file, int lino)
     {
         /* at least default and global two levels */
-        FUNCTION_ASSERT(scopes.size() >= 0x2) << "No scope to pop.";
+        FE_ASSERT(scopes.size() >= 0x2) << "No scope to pop.";
         auto& scope = scopes.top();
         scope->end_file_ = file;
         scope->end_lino_ = lino;
@@ -413,7 +413,7 @@ struct ConfigManagerImpl {
             scope = scopes.top();
         }
         for (auto& it : values) {
-            FUNCTION_ASSERT(FError::INVALID_VAL, scope->HasConfig(it.first))
+            FE_ASSERT(FeError::INVALID_VAL, scope->HasConfig(it.first))
                 << "key: " << it.first.c_str() << " does not exist.";
             scope->UpdateValueWithAny(it.first, it.second);
         }
@@ -422,16 +422,16 @@ struct ConfigManagerImpl {
     void SetGlobalConfig(std::map<std::string, Any>&& values, const char* file, int lino)
     {
         if (values.empty()) {
-            FUNCTION_LOGW("No values provided to set in global config. Locations: %s:%d", file, lino);
+            FE_LOGW("No values provided to set in global config. Locations: %s:%d", file, lino);
             return;
         }
         for (auto& it : values) {
             try {
                 root->AddValue(it.first, it.second);
-                FUNCTION_LOGD("Set option successfully, Key: %s", it.first.c_str());
+                FE_LOGD("Set option successfully, Key: %s", it.first.c_str());
             } catch (const std::exception& e) {
-                FUNCTION_LOGE_E(
-                    FError::INVALID_VAL, "Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
+                FE_LOGE(
+                    FeError::INVALID_VAL, "Failed to set option. Key: %s, Error: %s", it.first.c_str(), e.what());
             }
         }
     }
@@ -517,7 +517,7 @@ private:
             confPath = GetConfDir() + "tile_fwk_config.json";
         }
         std::ifstream ifs(confPath);
-        CHECK(ifs.is_open()) << "Open file: " << confPath << " failed";
+        CHECK(FeError::BAD_FD, ifs.is_open()) << "Open file: " << confPath << " failed";
         nlohmann::json jData;
         ifs >> jData;
         LoadConf(jData, "");
@@ -583,8 +583,8 @@ bool ConfigManagerNg::IsWithinRange(const std::string& properties, Any& value) c
             return impl_->IsWithinRange(properties, AnyCast<int64_t>(value));
         }
     } catch (const std::out_of_range& e) {
-        FUNCTION_LOGE_E(
-            FError::INVALID_VAL, "key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
+        FE_LOGE(
+            FeError::INVALID_VAL, "key[%s] has been not loaded form tile_fwk_config_schema.json.", properties.c_str());
         return false;
     }
     return true;

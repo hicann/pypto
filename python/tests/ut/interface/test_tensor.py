@@ -30,7 +30,7 @@ def test_init_tensor():
     assert b.dtype == dtype
     assert b.name == "b"
     assert b.format == pypto.TileOpFormat.TILEOP_NZ
-    with pytest.raises(ValueError):
+    with pytest.raises(pypto.error.FeError):
         # dynamic shape could not be compared
         assert b.shape == [-1, 32]
 
@@ -130,7 +130,7 @@ def test_tensor_starred():
     c1 = pypto.tensor(shape, dtype, "c1")
     c2 = pypto.tensor(shape, dtype, "c2")
 
-    with pytest.raises(TypeError):
+    with pytest.raises(pypto.error.FeError):
         with pypto.function("SUBS", a, c1, c2):
             pypto.set_vec_tile_shapes(32, 32)
             c = a - 3

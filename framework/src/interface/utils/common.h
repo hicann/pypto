@@ -510,34 +510,6 @@ inline OperandType BufferGetType(const std::string& name, OperandType defaultVal
 {
     return GetBufferNameDict().Find(name, defaultValue);
 }
-constexpr const int SHAPE_DIM_NUM_2 = 2;
-constexpr const int SHAPE_DIM_NUM_3 = 3;
-constexpr const int SHAPE_DIM_NUM_4 = 4;
-inline std::string ShapeStrCompact(const std::vector<int>& shape)
-{
-    char shapeBuffer[SHAPE_BUFFER_MAX_SIZE];
-    if (shape.size() == 0) {
-        shapeBuffer[0] = '\0';
-    } else if (shape.size() == SHAPE_DIM1) {
-        sprintf_s(shapeBuffer, SHAPE_BUFFER_MAX_SIZE, "[%d]", shape[0]);
-    } else if (shape.size() == SHAPE_DIM2) {
-        sprintf_s(shapeBuffer, SHAPE_BUFFER_MAX_SIZE, "[%d,%d]", shape[0], shape[1]);
-    } else if (shape.size() == SHAPE_DIM3) {
-        sprintf_s(shapeBuffer, SHAPE_BUFFER_MAX_SIZE, "[%d,%d,%d]", shape[0], shape[1], shape[SHAPE_DIM_NUM_2]);
-    } else if (shape.size() == SHAPE_DIM4) {
-        sprintf_s(
-            shapeBuffer, SHAPE_BUFFER_MAX_SIZE, "[%d,%d,%d,%d]", shape[0], shape[1], shape[SHAPE_DIM_NUM_2],
-            shape[SHAPE_DIM_NUM_3]);
-    } else if (shape.size() == SHAPE_DIM5) {
-        sprintf_s(
-            shapeBuffer, SHAPE_BUFFER_MAX_SIZE, "[%d,%d,%d,%d,%d]", shape[0], shape[1], shape[SHAPE_DIM_NUM_2],
-            shape[SHAPE_DIM_NUM_3], shape[SHAPE_DIM_NUM_4]);
-    } else {
-        ASSERT(0) << "cannot support tensor shape of more than 4 dims";
-    }
-
-    return std::string(shapeBuffer);
-}
 
 // 辅助函数：去除字符串两端空格
 inline std::string Trim(const std::string& str)

@@ -25,6 +25,7 @@
 #include <cassert>
 #include <iomanip>
 
+#include "error_code.h"
 #include "lazy.h"
 
 #ifndef ERROR_CODE_UNDEFINED
@@ -155,9 +156,10 @@ public:
 #define CHECK_WITH_ERR_CODE(errcode, cond) CHECK_WITH_CODE(errcode, cond)
 #define CHECK(...) CHECK_OVERLOAD_SELECT(__VA_ARGS__, CHECK_WITH_ERR_CODE, CHECK_WITHOUT_ERR_CODE)(__VA_ARGS__)
 
-#ifndef FUNCTION_ASSERT
-#define FUNCTION_ASSERT_SELECT(_1, _2, NAME, ...) NAME
-#define FUNCTION_ASSERT_WITH_UNKNOWN(cond) ASSERT(FError::UNKNOWN, cond)
-#define FUNCTION_ASSERT(...) FUNCTION_ASSERT_SELECT(__VA_ARGS__, ASSERT, FUNCTION_ASSERT_WITH_UNKNOWN)(__VA_ARGS__)
+#ifndef FE_ASSERT
+#define FE_ASSERT_SELECT(_1, _2, NAME, ...) NAME
+#define FE_ASSERT_WITHOUT_ERR_CODE(cond) ASSERT(FeError::EINTERNAL, cond)
+#define FE_ASSERT_WITH_ERR_CODE(errcode, cond) ASSERT(errcode, cond)
+#define FE_ASSERT(...) FE_ASSERT_SELECT(__VA_ARGS__, FE_ASSERT_WITH_ERR_CODE, FE_ASSERT_WITHOUT_ERR_CODE)(__VA_ARGS__)
 #endif
 } // namespace npu::tile_fwk

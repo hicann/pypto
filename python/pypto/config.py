@@ -16,6 +16,7 @@ from typing import List, Union, Dict, Optional
 from functools import wraps
 
 from . import pypto_impl
+from .error import FeError
 
 
 class CompStage(enum.Enum):
@@ -100,31 +101,31 @@ def set_pass_options(*,
         elif isinstance(sg_set_scope, (tuple, list)):
             # 新格式：解析元组
             if len(sg_set_scope) != 3:
-                raise ValueError(
+                raise FeError(ValueError(
                     f"Option 'pass.sg_set_scope' has invalid length. "
                     f"Expected 3, but got {len(sg_set_scope)}."
-                )
+                ))
             if not isinstance(sg_set_scope[0], int):
-                raise ValueError(
+                raise FeError(ValueError(
                     f"Option 'pass.sg_set_scope[0]' has invalid type. "
                     f"Expected int, but got {type(sg_set_scope[0]).__name__}."
-                )
+                ))
             if not isinstance(sg_set_scope[1], bool):
-                raise ValueError(
+                raise FeError(ValueError(
                     f"Option 'pass.sg_set_scope[1]' has invalid type. "
                     f"Expected bool, but got {type(sg_set_scope[1]).__name__}."
-                )
+                ))
             if not isinstance(sg_set_scope[2], bool):
-                raise ValueError(
+                raise FeError(ValueError(
                     f"Option 'pass.sg_set_scope[2]' has invalid type. "
                     f"Expected bool, but got {type(sg_set_scope[2]).__name__}."
-                )
+                ))
             processed_sg_set_scope = list(sg_set_scope)
         else:
-            raise TypeError(
+            raise FeError(TypeError(
                 f"Option 'pass.sg_set_scope' has invalid type. "
                 f"Expected int64 or tuple, but got {type(sg_set_scope).__name__}."
-            )
+            ))
 
         # 将处理后的值放入 options_dict
         locals_dict = {k: v for k, v in locals().items()
@@ -563,11 +564,11 @@ class CubeTile:
         """
 
         if len(m) != 2:
-            raise ValueError(f"m must have exactly 2 elements, got {len(m)}")
+            raise FeError(ValueError(f"m must have exactly 2 elements, got {len(m)}"))
         if len(n) != 2:
-            raise ValueError(f"n must have exactly 2 elements, got {len(n)}")
+            raise FeError(ValueError(f"n must have exactly 2 elements, got {len(n)}"))
         if len(k) not in [2, 3]:
-            raise ValueError(f"k must have 2 or 3 elements, got {len(k)}")
+            raise FeError(ValueError(f"k must have 2 or 3 elements, got {len(k)}"))
 
         k_padded = list(k)
         if len(k_padded) == 2:

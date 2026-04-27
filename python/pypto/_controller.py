@@ -22,6 +22,7 @@ from ._utils import to_sym, set_source_location, clear_source_location
 from .symbolic_scalar import SymbolicScalar, SymInt
 from .tensor import Tensor
 from .config import CubeTile, ConvTile, get_current_scope
+from .error import FeError
 from . import pypto_impl
 
 logging.basicConfig(level=logging.DEBUG)
@@ -56,7 +57,7 @@ class Controller:
     @classmethod
     def begin_function(cls):
         if cls.in_function:
-            raise RuntimeError("function nested is not allowed")
+            raise FeError(RuntimeError("function nested is not allowed"))
         cls.in_function = True
 
     @classmethod
@@ -348,7 +349,7 @@ def is_loop_begin(scalar: SymInt) -> SymbolicScalar:
                 ...
     """
     if not hasattr(scalar, "_loop_begin"):
-        raise ValueError("not loop index")
+        raise FeError(ValueError("not loop index"))
     # implementation
     return SymbolicScalar.from_base(
         pypto_impl.IsLoopBegin(to_sym(scalar), getattr(scalar, "_loop_begin")))
@@ -375,7 +376,7 @@ def is_loop_end(scalar: SymInt) -> SymbolicScalar:
                 ...
     """
     if not hasattr(scalar, "_loop_end"):
-        raise ValueError("not loop index")
+        raise FeError(ValueError("not loop index"))
     # implementation
     return SymbolicScalar.from_base(
         pypto_impl.IsLoopEnd(to_sym(scalar), getattr(scalar, "_loop_end")))
@@ -423,7 +424,7 @@ def function(name: str, *args) -> Iterator:
         first_exc = e
     finally:
         if func is None:
-            raise RuntimeError(f"function {name} recording failed")
+            raise FeError(RuntimeError(f"function {name} recording failed"))
         try:
             func.EndFunction()
         except Exception as e:
@@ -464,7 +465,7 @@ def cond(scalar: SymInt, file: Optional[str] = None, lineno: Optional[int] = Non
     """
     # allow caller to override source location; enforce both or none
     if (file is None) ^ (lineno is None):
-        raise ValueError("file and lineno must be provided together or omitted")
+        raise FeError(ValueError("file and lineno must be provided together or omitted"))
 
     if file is None:
         stack = inspect.stack()[1]
@@ -599,8 +600,8 @@ def _get_loop_range(*args):
     elif nargs == 3:
         start, stop, step = args
     else:
-        raise TypeError(
-            f"loop() takes 1 to 3 positional arguments but {nargs} were given")
+        raise FeError(TypeError(
+            f"loop() takes 1 to 3 positional arguments but {nargs} were given"))
     return start, stop, step
 
 

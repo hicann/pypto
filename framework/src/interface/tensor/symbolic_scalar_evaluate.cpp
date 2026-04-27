@@ -23,7 +23,7 @@ namespace {
 ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDimSize(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
 {
-    FUNCTION_ASSERT(dataList.size() == 1);
+    FE_ASSERT(dataList.size() == 1);
     auto inputIndex = dataList[0];
     auto input = evaluateSymbol->GetInputDataViewList()[inputIndex];
 
@@ -34,7 +34,7 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDimSize(
 ScalarImmediateType EvaluateSymbolicCallRuntimeGetInputShapeDim(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
 {
-    FUNCTION_ASSERT(dataList.size() == SIZE_TWO);
+    FE_ASSERT(dataList.size() == SIZE_TWO);
     auto inputIndex = dataList[0];
     auto input = evaluateSymbol->GetInputDataViewList()[inputIndex];
     auto n = dataList[1];
@@ -68,7 +68,7 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetTensorDataInt32(
     } else if (ioType == GET_TENSOR_DATA_OPERAND_IOTYPE_OUTCAST) {
         view = inoutDataPair->GetOutcastDataViewList()[ioTypeIndex];
     } else {
-        FUNCTION_ASSERT(false);
+        FE_ASSERT(false);
     }
     auto elt = view->GetElement(0);
     auto ret = static_cast<ScalarImmediateType>(elt.Cast<int64_t>());
@@ -120,7 +120,7 @@ ScalarImmediateType EvaluateSymbolicCallGetParaAddr(EvaluateSymbol*, const std::
 ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopBegin(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
 {
-    FUNCTION_ASSERT(dataList.size() == SIZE_TWO);
+    FE_ASSERT(dataList.size() == SIZE_TWO);
     auto ret = evaluateSymbol->RuntimeIsLoopBegin(dataList[0], dataList[1]);
     return ret;
 }
@@ -128,7 +128,7 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopBegin(
 ScalarImmediateType EvaluateSymbolicCallRuntimeIsLoopEnd(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
 {
-    FUNCTION_ASSERT(dataList.size() == SIZE_TWO);
+    FE_ASSERT(dataList.size() == SIZE_TWO);
     auto ret = evaluateSymbol->RuntimeIsLoopEnd(dataList[0], dataList[1]);
     return ret;
 }
@@ -137,7 +137,7 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeGetViewValidShapeDim(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList)
 {
     UNUSED(evaluateSymbol);
-    FUNCTION_ASSERT(dataList.size() == SIZE_THREE);
+    FE_ASSERT(dataList.size() == SIZE_THREE);
     auto validshape = dataList[0];
     auto viewOffset = dataList[1];
     auto viewshape = dataList[2];
@@ -153,7 +153,7 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetValidShape(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
     const std::vector<SymbolicScalar>& linearArgList)
 {
-    FUNCTION_ASSERT(linearArgList.size()) << "linearArgList is null";
+    FE_ASSERT(linearArgList.size()) << "linearArgList is null";
     auto coaIndex = dataList[1] + COA_INDEX_DIM_BASE + dataList[0] * 3 + dataList[2];
     return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
 }
@@ -162,7 +162,7 @@ ScalarImmediateType EvaluateSymbolicCallRuntimeCoaGetOffset(
     EvaluateSymbol* evaluateSymbol, const std::vector<ScalarImmediateType>& dataList,
     const std::vector<SymbolicScalar>& linearArgList)
 {
-    FUNCTION_ASSERT(linearArgList.size()) << "linearArgList is null";
+    FE_ASSERT(linearArgList.size()) << "linearArgList is null";
 
     auto coaIndex = dataList[1] + COA_INDEX_DIM_BASE + dataList[2];
     return evaluateSymbol->EvaluateSymbolicScalar(linearArgList[coaIndex]);
@@ -201,7 +201,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicCall(
         auto callEntry = CallWithLinerArgsEntryDict[name];
         ret = callEntry(this, dataList, linearArgList);
     } else {
-        FUNCTION_ASSERT(false) << "Symbolic call not found: " << name;
+        FE_ASSERT(false) << "Symbolic call not found: " << name;
     }
     return ret;
 }
@@ -228,7 +228,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicScalar(
             if (constSymbolDict_.count(sym->Name())) {
                 result = constSymbolDict_[sym->Name()];
             } else {
-                FUNCTION_ASSERT(symbolDict_.count(sym->Name()));
+                FE_ASSERT(symbolDict_.count(sym->Name()));
                 result = symbolDict_[sym->Name()];
             }
         } break;
@@ -260,7 +260,7 @@ ScalarImmediateType EvaluateSymbol::EvaluateSymbolicScalar(
             }
         } break;
         default:
-            FUNCTION_ASSERT(false);
+            FE_ASSERT(false);
             break;
     }
     return result;
