@@ -24,15 +24,72 @@
 #include "interface/tensor/logical_tensor.h"
 #include <vector>
 #include <set>
+#include <unordered_set>
+#include <queue>
 #include <utility>
 
 namespace npu::tile_fwk {
+struct EstimateInput {
+    std::vector<int> execTime;
+    std::vector<bool> isCube;
+    std::vector<std::set<int>> outGraph;
+    std::vector<std::set<int>> inGraph;
+    int betweenSubgraphScheduleTime{1500};  // estimated task issuance time
+};
+
+struct EstimateCoreState {
+    int aic;
+    int aiv0;
+    int aiv1;
+};
+
+struct MixScheduleContext {
+    std::vector<int> subgraphToMix;
+    std::unordered_set<int> candidateSet;
+    std::vector<std::set<int>> mixDeps;
+    std::vector<int> mixStartTime;
+    std::vector<int> mixFinishTime;
+    std::vector<int> mixInDegree;
+    std::queue<int> mixReadyQueue;
+    int numMix;
+    int numSubgraph;
+};
+
+struct SubgraphScheduleContext {
+    std::vector<int> finishTime;
+    std::vector<int> inDegree;
+    std::queue<int> readyQueue;
+    EstimateCoreState coreState;
+    int mixStartTime;
+    int mixId;
+    int numSubgraph;
+};
+
+class EstimateExecTime {
+public:
+    int Estimate(const EstimateInput& input, const std::vector<std::set<int>>& estimateCandidate);
+private:
+    void InitMixData(MixScheduleContext& ctx, const std::vector<std::set<int>>& estimateCandidate);
+    void BuildMixDeps(MixScheduleContext& ctx, const EstimateInput& input);
+    void InitMixTopology(MixScheduleContext& ctx);
+    int CalcMixStartTime(int mixId, const MixScheduleContext& ctx, int scheduleTime);
+    void InitSubgraphContext(SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
+        const EstimateInput& input);
+    void ScheduleOneSubgraph(int current, SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx,
+        const EstimateInput& input);
+    void ProcessSubgraphConsumers(int current, SubgraphScheduleContext& subCtx,
+        const MixScheduleContext& ctx, const EstimateInput& input);
+    int GetMixFinishTime(const SubgraphScheduleContext& subCtx, const MixScheduleContext& ctx);
+    void ProcessMixConsumers(int mixId, MixScheduleContext& ctx);
+};
+
 struct MergeInput {
     int numSubgraph;
     int maxLatency;
     std::pair<double, double> aivRatio;
     std::vector<int> subgraphAICLatency;
     std::vector<int> subgraphAIVLatency;
+    std::vector<std::set<int>> subGraphInGraph;
     std::vector<std::set<int>> subGraphOutGraph;
     std::vector<std::vector<int>> mergeGroup;
     std::vector<bool> isEnforceMergeGroup;
@@ -53,6 +110,7 @@ public:
 private:
     MergeInput mInput;
     MergeOutput mOutput;
+    EstimateInput estimateInput;
     std::vector<int> mParent;
     std::vector<int> mRank;
 
@@ -64,6 +122,7 @@ private:
     void PerformMerge(const std::vector<int>& actualGroup);
     void UpdateOutput();
     bool CheckLatencyConstraint(const std::vector<int>& actualGroup);
+    bool CheckMergeBenefit(const std::vector<int>& actualGroup);
     std::vector<int> GetActualGroup(const std::vector<int>& group);
     void BuildMergedGraph(std::vector<std::set<int>>& outGraph,
                           std::vector<std::set<int>>& inGraph);
@@ -82,10 +141,15 @@ private:
     Status BuildGraph(Function &function, MergeInput& mergeInput);
     Status BuildMergeGroup(Function &function, MergeInput& mergeInput);
     Status MarkNoMergeSubgraph(Function &function);
+    void UpdateConnectRecord(Function &function);
     bool IsEnforceMergeBoundary(LogicalTensorPtr &tensor);
     Status RunOnFunction(Function &function) override;
     Status PostCheck(Function &function) override;
     std::unordered_set<int> noMergeSubgraph;
+    std::map<std::vector<int>, int> mergeGroupToPriority;
+    std::set<std::vector<int>> enforceMergeGroup;
+    std::vector<int> subgraphInputSize;
+    std::vector<int> subgraphOutputSize;
 };
 
 }
