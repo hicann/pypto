@@ -69,7 +69,7 @@ set_pass_options(*,
    sij_scale = pypto.mul(sij, softmax_scale)
    pypto.set_semantic_label("") # 通过更改语义标签，来精确控制只有该mul OP的语义标签是"V1"
    ...
-   pypto.set_pass_options(vec_nbuffer_setting={-2: 1, -1: 2, "V1": 1})
+   pypto.set_pass_options(vec_nbuffer_setting={-1: 2, "V1": 1})
 
    # 纯语义标签 key 配置
    pypto.set_pass_options(cube_l1_reuse_setting={"MM1": 4})

@@ -84,22 +84,29 @@ protected:
      */
     Status ProcessScopeMerge();
 
+    struct ScopeCoreTypeInfo {
+        bool hasCube = false;
+        bool hasVector = false;
+    };
     struct ScopeCollectResult {
-        std::map<int32_t, std::unordered_set<OpCoreType>> scopeCoreTypes;
+        std::map<int32_t, ScopeCoreTypeInfo> scopeCoreTypes;
         std::map<int32_t, bool> scopeAllowParallel;
         std::map<int32_t, std::vector<int32_t>> scope2Nodes;
     };
     ScopeCollectResult CollectScopeInfo(int32_t numNodes);
     Status ValidateScopeCoreTypes(
-        int32_t scopeId, const std::unordered_set<OpCoreType>& coreTypes, bool isCVMix,
+        int32_t scopeId, const ScopeCoreTypeInfo& coreTypeInfo, bool isCVMix,
         std::map<int32_t, int32_t>& scopeToCvFuseId);
     Status CheckAndMergeScopes(const ScopeCollectResult& scopeInfo,
         std::vector<int32_t>& snParent,
         bool& needRebuild,
         std::map<int32_t, int32_t>& scopeToCvFuseId);
+    void MergeScopeNodesParallel(const std::vector<int32_t>& nodes, int32_t scopeId,
+        std::vector<int32_t>& snParent, bool& needRebuild);
+    void MergeScopeNodesSequential(const std::vector<int32_t>& nodes, int32_t scopeId,
+        std::vector<int32_t>& snParent, bool& needRebuild);
     void RebuildSuperNodes(std::vector<int32_t>& snParent, int32_t numNodes);
-    void ApplyCvFuseIds(
-        const std::map<int32_t, int32_t>& scopeToCvFuseId, const std::map<int32_t, std::vector<int32_t>>& scope2Nodes);
+    void ApplyCvFuseIds(const std::map<int32_t, int32_t>& scopeToCvFuseId);
 
     virtual Status BuildHashValues();
 

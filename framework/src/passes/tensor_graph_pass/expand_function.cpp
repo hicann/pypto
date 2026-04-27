@@ -127,9 +127,8 @@ Status ExpandFunction::VerifyScopeInfo(Function& function, std::ostringstream& o
                 return FAILED;
             }
             const auto& info = scopeInfoMap[scopeId];
-            if (info.allowParallelMerge || info.allowCrossScopeMerge) {
-                oss << "Op scopeId=" << scopeId
-                    << " on CV mix platform: allowParallelMerge and allowCrossScopeMerge must be false "
+            if (info.allowParallelMerge) {
+                oss << "Op scopeId=" << scopeId << " on CV mix platform: allowParallelMerge must be false "
                     << "when cube and vector ops are mixed in the same scope.";
                 return FAILED;
             }
