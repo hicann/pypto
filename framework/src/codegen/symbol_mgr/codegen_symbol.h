@@ -40,8 +40,8 @@ const std::string COORD = "Coord";
 using BufferType = enum OperandType;
 using AllocKey = std::tuple<BufferType, int64_t /*RangeStart*/, int64_t /*RangeEnd*/>;
 
-struct ShapeInLoop {
-    size_t loopDepth{0};
+struct TileTensorShape {
+    bool isInLoop{false};
     std::vector<int64_t> originShape;
     std::vector<int64_t> rawShape;
     std::vector<SymbolicScalar> dynamicValidShape;
@@ -60,6 +60,7 @@ inline std::string GetLayoutType(BufferType bufType, int dim, bool isConst = fal
 // Stride<int, int>(64, 1)));
 struct TileTensor {
     bool isConstant;
+    bool isInLoop{false};
     int magic; // tensor magic numbuer
     int dim;
     DataType dtype;
@@ -71,7 +72,6 @@ struct TileTensor {
     std::vector<std::string> stride;
     std::vector<int64_t> rawShape;
     std::vector<int64_t> localBufOffset;
-    ShapeInLoop shapeInLoop;
 
     /*  e.g.
         ((__ubuf__ float*)UB_S0_E16384,
@@ -90,7 +90,7 @@ struct TileTensor {
             // cast local buffer pointer to uint64_t to adapt TileTensor mode
             oss << "uint64_t)";
             int64_t linearOffset{0};
-            if (!localBufOffset.empty() && shapeInLoop.loopDepth == 0) {
+            if (!localBufOffset.empty() && !isInLoop) {
                 // only calc linear offset in the outermost loop, tensor in loop use base addr from tensor out of loop
                 linearOffset = CalcLinearOffset(rawShape, localBufOffset);
             }

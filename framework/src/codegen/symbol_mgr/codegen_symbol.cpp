@@ -161,7 +161,7 @@ std::string SymbolManager::AddTileTensor(int opMagic, const TileTensor& tileTens
 
     const TileTensor& storedTileTensor = tileTensorByKeyIter->second.get();
     TileTensorMagicKey key{tileTensor.magic, opMagic};
-    auto& tileTensorByMagic = tileTensor.shapeInLoop.loopDepth == 0 ? tileTensorByMagic_ : tileTensorByMagicInLoop_;
+    auto& tileTensorByMagic = tileTensor.isInLoop ? tileTensorByMagicInLoop_ : tileTensorByMagic_;
     auto [iter, inserted] = tileTensorByMagic.emplace(key, std::cref(storedTileTensor));
     ASSERT(GenCodeErr::TENSOR_MAGIC_CONFLICT, inserted || &iter->second.get() == &storedTileTensor)
         << "TileTensor conflict for tensor magic " << tileTensor.magic << ", op magic " << opMagic
