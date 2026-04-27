@@ -114,7 +114,6 @@ std::string TestLogicalBody(Opcode opcode)
     localOutTensor->UpdateDynValidShape(dynValidShape);
     std::vector<int64_t> offset = {0, 0};
     std::vector<SymbolicScalar> dynoffset = {0, 0};
-    logicalInTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
     auto& op = function->AddOperation(opcode, {logicalInTensor, logicalInTensor}, {localOutTensor, localOutTensor});
 

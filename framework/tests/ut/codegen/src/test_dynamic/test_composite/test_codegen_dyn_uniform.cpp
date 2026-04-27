@@ -56,7 +56,6 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP32)
     tempTensor->UpdateDynValidShape({256});
     std::vector<SymbolicScalar> dynoffset = {0};
     std::vector<int64_t> offset = {0};
-    localTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
     uint64_t key = 12345678901234;
     uint64_t counter1 = 0;
@@ -95,7 +94,6 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP16)
     tempTensor->UpdateDynValidShape({512});
     std::vector<SymbolicScalar> dynoffset = {0};
     std::vector<int64_t> offset = {0};
-    localTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
     uint64_t key = 12345678901234;
     uint64_t counter1 = 0;
@@ -134,7 +132,6 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorBF16)
     tempTensor->UpdateDynValidShape({512});
     std::vector<SymbolicScalar> dynoffset = {0};
     std::vector<int64_t> offset = {0};
-    localTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
     uint64_t key = 12345678901234;
     uint64_t counter1 = 0;

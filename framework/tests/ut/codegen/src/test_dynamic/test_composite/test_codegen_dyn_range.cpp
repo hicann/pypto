@@ -89,7 +89,6 @@ TEST_F(TestCodegenDynRange, RangeTileTensor)
     localTensor->UpdateDynValidShape(dynValidShape);
     std::vector<SymbolicScalar> dynoffset = {0, 0};
     std::vector<int64_t> offset = {0, 0};
-    localTensor->UpdateOffset(TensorOffset(offset, dynoffset));
 
     auto& op = function->AddOperation(Opcode::OP_RANGE, {localTensor}, {localOutTensor});
     Element start(DataType::DT_FP32, 1.0);
