@@ -263,12 +263,11 @@ def stateless_random_normal_v2(shape, key, counter, alg, dtype) -> Tensor:
               [ 0.86518306  0.01034508  0.2893259   0.01748212]]
     """
     def box_muller(input: Tensor) -> Tensor:
-        input = pypto.reshape(input, [-1])
         tensor_len = input.shape[0]
         u1_index = pypto.arange(0, tensor_len, 2)
         u2_index = pypto.add(u1_index, 1)
-        u1 = pypto.gather(input, 0, u1_index)
-        u2 = pypto.gather(input, 0, u2_index)
+        u1 = pypto.index_select(input, 0, u1_index)
+        u2 = pypto.index_select(input, 0, u2_index)
 
         eps = 1.0e-7
         m_pi = 3.14159265358979323846
@@ -280,23 +279,47 @@ def stateless_random_normal_v2(shape, key, counter, alg, dtype) -> Tensor:
         f2 = pypto.mul(f0, v2)
         f3 = pypto.mul(f1, v2)
         f4 = pypto.zeros([tensor_len], dtype=pypto.DT_FP32)
-
-        pypto.set_vec_tile_shapes(tensor_len)
-        pypto.scatter_(f4, 0, u1_index, f2, reduce='add')
-
-        if tensor_len <= 1:
-            return f4
-
-        if tensor_len % 2 != 0:
-            u2_index = pypto.arange(1, tensor_len, 2)
-        pypto.scatter_(f4, 0, u2_index, f3, reduce='add')
+        pypto.index_put_(f4, (u1_index,), f2)
+        pypto.index_put_(f4, (u2_index,), f3)
         return f4
 
+    if len(shape) < 1 or len(shape) > 4:
+        raise ValueError(f"output shape dim should be in [1, 4], but got {len(shape)}.")
+
+    if len(key) != 1:
+        raise ValueError(f"input key number should be 1, but got {len(key)}.")
+
+    if len(counter) != 2:
+        raise ValueError(f"input counter number should be 2, but got {len(counter)}.")
+
+    if len(alg) != 1:
+        raise ValueError(f"input alg number should be 1, but got {len(alg)}.")
+
+    alg = alg[0]
+    if alg != 1 and alg != 3:
+        raise ValueError(f"alg only support Philox.")
+
     tile_shapes = pypto.get_vec_tile_shapes()
-    uniform_res = pypto.stateless_random_uniform_v2(shape, key, counter, alg, dtype=pypto.DT_FP32)
+    tile_shape_one_dim = 1
+    for dim_num in tile_shapes:
+        tile_shape_one_dim *= dim_num
+    pypto.set_vec_tile_shapes(tile_shape_one_dim)
+
+    shape_one_dim = 1
+    for dim_num in shape:
+        shape_one_dim *= dim_num
+
+    counter0, counter1 = counter
+    uniform_res = pypto.uniform(key[0], counter0, counter1, [(shape_one_dim + 1) // 2 * 2], rounds=10,
+                                dtype=pypto.DT_FP32)
+
     normal_res = box_muller(uniform_res)
+    if shape_one_dim % 2 != 0:
+        normal_res = normal_res[:-1]
 
     if dtype != pypto.DT_FP32:
         normal_res = pypto.cast(normal_res, dtype)
+    else:
+        normal_res = pypto.add(normal_res, 0)
     pypto.set_vec_tile_shapes(*tile_shapes)
     return pypto.reshape(normal_res, shape)

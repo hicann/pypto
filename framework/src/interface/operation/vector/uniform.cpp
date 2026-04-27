@@ -18,6 +18,7 @@
 #include "interface/function/function.h"
 #include "interface/program/program.h"
 #include "tilefwk/error_code.h"
+#include "tilefwk/platform.h"
 #include "interface/operation/operation_common.h"
 
 namespace npu::tile_fwk {
@@ -118,6 +119,11 @@ Tensor Uniform(
     const Element& rounds, DataType dtype)
 {
     DECLARE_TRACER();
+    auto arch = Platform::Instance().GetSoc().GetNPUArch();
+    bool isA5Architecture = (arch == NPUArch::DAV_3510);
+    if (!isA5Architecture) {
+        ASSERT(VectorErrorCode::ERR_PARAM_INVALID, false) << "Uniform: this interface only supports A5 architecture";
+    }
     uint16_t roundsVal = rounds.Cast<uint16_t>();
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, shape.size() == 1) << "Uniform: shape must be 1-dimensional";
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, roundsVal == 7 || roundsVal == 10) << "Uniform: rounds must be 7 or 10";
