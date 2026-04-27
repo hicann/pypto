@@ -175,14 +175,23 @@ std::string CodeGenOpNPU::PrintBinaryDynamicUnaligned(const PrintBinaryParam& pa
     return os.str();
 }
 
-void CodeGenOpNPU::AddDivPrecisionTypeParm(std::vector<std::string>& templateParamList) const
+void CodeGenOpNPU::AddBinaryPrecisionTypeParm(std::vector<std::string>& templateParamList) const
 {
-    int64_t precisionType = static_cast<int64_t>(DivAlgorithm::DEFAULT);
-    (void)GetOpAttr(OpAttributeKey::precisionType, precisionType);
-    if (precisionType == static_cast<int64_t>(DivAlgorithm::HIGH_PRECISION)) {
-        templateParamList.emplace_back("pto::DivAlgorithm::HIGH_PRECISION");
-    } else {
-        templateParamList.emplace_back("pto::DivAlgorithm::DEFAULT");
+    if (opCode == Opcode::OP_DIV || opCode == Opcode::OP_DIVS ||
+        opCode == Opcode::OP_POW || opCode == Opcode::OP_POWS) {
+        int64_t precisionType = 0;
+        (void)GetOpAttr(OpAttributeKey::precisionType, precisionType);
+        std::string enumName = "";
+        if (opCode == Opcode::OP_DIV || opCode == Opcode::OP_DIVS) {
+            enumName = "DivAlgorithm";
+        } else if (opCode == Opcode::OP_POW || opCode == Opcode::OP_POWS) {
+            enumName = "PowAlgorithm";
+        }
+        std::string enumValue = "DEFAULT";
+        if (precisionType == 1) {
+            enumValue = "HIGH_PRECISION";
+        }
+        templateParamList.emplace_back("pto::" + enumName + "::" + enumValue);
     }
 }
 
@@ -194,14 +203,11 @@ std::string CodeGenOpNPU::PrintBinaryTileTensor() const
     std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor};
 
     std::vector<std::string> templateParamList;
+    AddBinaryPrecisionTypeParm(templateParamList);
+
     int64_t brcOperandIdx = 0;
     int64_t penuBrcOperandIdx = 0;
     std::string lastUse = GetLastUse();
-
-    if (opCode == Opcode::OP_DIV) {
-        AddDivPrecisionTypeParm(templateParamList);
-    }
-
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }
@@ -272,8 +278,13 @@ std::string CodeGenOpNPU::GenBinaryOpWithTmp() const
     std::string src0Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC0_IDX));
     std::string src1Tensor = QueryTileTensorNameByIdx(ToUnderlying(MIMOIdx::SRC1_IDX));
     std::vector<std::string> tileOpCallParamList = {dstTensor, src0Tensor, src1Tensor, tmpTensor};
+    std::vector<std::string> templateParamList;
+    AddBinaryPrecisionTypeParm(templateParamList);
     std::ostringstream oss;
     oss << tileOpName;
+    if (!templateParamList.empty()) {
+        oss << WrapParamByAngleBrackets(templateParamList);
+    }
     oss << WrapParamByParentheses(tileOpCallParamList) << STMT_END;
     return oss.str();
 }
@@ -291,9 +302,14 @@ std::string CodeGenOpNPU::GenVectorScalarOpWithTmp() const
             [](const auto& val) -> std::string { return std::to_string(val); }, extOperandVal.GetVariantData());
     }
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, srcScalar, tmpTensor};
-
+    std::vector<std::string> templateParamList;
+    AddBinaryPrecisionTypeParm(templateParamList);
     std::ostringstream oss;
-    oss << tileOpName << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    oss << tileOpName;
+    if (!templateParamList.empty()) {
+        oss << WrapParamByAngleBrackets(templateParamList);
+    }
+    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
     return oss.str();
 }
 
@@ -558,16 +574,13 @@ std::string CodeGenOpNPU::PrintVectorScalarTileTensor(const PrintUnaryParam& par
     std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
     std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC0_IDX));
     std::string scalarTmpBuffer = FormatFloat(extOperandVal.Cast<float>());
-
     std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, scalarTmpBuffer};
+
     std::vector<std::string> templateParamList;
+    AddBinaryPrecisionTypeParm(templateParamList);
+
     std::ostringstream oss;
     std::string lastUse = GetLastUse();
-
-    if (opCode == Opcode::OP_DIVS) {
-        AddDivPrecisionTypeParm(templateParamList);
-    }
-
     if (!lastUse.empty()) {
         templateParamList.emplace_back(lastUse);
     }

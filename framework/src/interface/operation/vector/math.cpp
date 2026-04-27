@@ -271,67 +271,6 @@ Tensor Log(const Tensor& self, LogBaseType base, LogAlgorithm precisionType)
     return resTensorBeforeCast;
 }
 
-DataType GetPowRealResultDataType(DataType selfType, DataType otherType)
-{
-    if (selfType == DT_INT32) {
-        return otherType;
-    }
-    if (otherType == DT_INT32) {
-        return selfType;
-    }
-    if (selfType == DT_BF16) {
-        return otherType == DT_FP16 ? DT_FP32 : otherType;
-    }
-    if (otherType == DT_BF16) {
-        return selfType == DT_FP16 ? DT_FP32 : selfType;
-    }
-    return selfType == DT_FP16 && otherType == DT_FP16 ? DT_FP16 : DT_FP32;
-}
-
-DataType GetPowCalcResultDataType(DataType selfType, DataType otherType)
-{
-    if (selfType == DT_INT32 && otherType == DT_INT32) {
-        return DT_INT32;
-    }
-    return DT_FP32;
-}
-
-LogicalTensorPtr CastToResultType(const LogicalTensorPtr& tensor, DataType originType, DataType resultType)
-{
-    if (originType == resultType) {
-        return tensor;
-    }
-    RETURN_CALL(
-        CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), tensor, resultType,
-        CastMode::CAST_NONE);
-}
-
-Tensor Pow(const Tensor& self, const Tensor& other)
-{
-    DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT32, DT_FP32};
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "POW");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "POW");
-    CheckTensorShapeSize(self.GetStorage(), "POW");
-    CheckTensorShapeSize(other.GetStorage(), "POW");
-    CheckTensorsDimConsistency({self.GetStorage(), other.GetStorage()}, "POW");
-    CheckTensorsShapeConsistencyOrBroadcast({self.GetStorage(), other.GetStorage()}, "POW");
-    CheckTensorsFormatConsistency(self.GetStorage(), other.GetStorage(), "POW");
-    DataType selfType = self.GetDataType();
-    DataType otherType = other.GetDataType();
-    DataType realResultType = GetPowRealResultDataType(selfType, otherType);
-    DataType calcResultType = GetPowCalcResultDataType(selfType, otherType);
-    auto selfSt = CastToResultType(self.GetStorage(), selfType, calcResultType);
-    auto otherSt = CastToResultType(other.GetStorage(), otherType, calcResultType);
-    auto result =
-        CALL(BinaryOperation<BinaryOpType::POW>, *Program::GetInstance().GetCurrentFunction(), selfSt, otherSt);
-    if (realResultType != calcResultType) {
-        RETURN_CALL(
-            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, realResultType,
-            CastMode::CAST_NONE);
-    }
-    return result;
-}
 Tensor Log1p(const Tensor& self)
 {
     DECLARE_TRACER();
@@ -384,113 +323,6 @@ Tensor Log1p(const Tensor& self)
             resTensorBeforeCast.GetStorage(), DataType::DT_BF16, CastMode::CAST_NONE);
     }
     return resTensorBeforeCast;
-}
-
-LogicalTensorPtr GenAllOneTensor(const Shape& shape, std::vector<SymbolicScalar> validShape, const DataType& dataType)
-{
-    auto result = CALL(
-        FullOperation, *Program::GetInstance().GetCurrentFunction(), Element(DataType::DT_FP32, 1.0), SymbolicScalar(),
-        DataType::DT_FP32, shape, validShape);
-    if (dataType != DataType::DT_FP32) {
-        RETURN_CALL(
-            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result.GetStorage(),
-            dataType, CastMode::CAST_NONE);
-    }
-    return result.GetStorage();
-}
-
-LogicalTensorPtr IntegerPow(const Tensor& self, int32_t intExponent)
-{
-    // 快速幂
-    auto result = GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
-    auto current = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), self, result);
-
-    while (intExponent != NUM_VALUE_0) {
-        if (intExponent % NUM_VALUE_2 != NUM_VALUE_0) {
-            result =
-                CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, current);
-        }
-        current =
-            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), current, current);
-        intExponent /= NUM_VALUE_2;
-    }
-    return result;
-}
-
-LogicalTensorPtr GeneralPow(const Tensor& self, double exponent)
-{
-    // 如果指数小于0，先计算a^(-b)，最后再取倒数
-    bool expLessThanZero = exponent < NUM_VALUE_0;
-    exponent = std::abs(exponent);
-
-    LogicalTensorPtr result;
-    int32_t intExponent = static_cast<int32_t>(std::floor(exponent));
-    if (exponent - intExponent < NUM_VALUE_EPS) {
-        result = IntegerPow(self, intExponent);
-    } else {
-        auto lnSelf =
-            CALL(UnaryOperation<UnaryOpType::LN>, *Program::GetInstance().GetCurrentFunction(), self.GetStorage());
-        auto exponentLnSelf = CALL(
-            BinaryOperationScalar<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), lnSelf,
-            Element(DataType::DT_FP32, exponent));
-        result = CALL(UnaryOperation<UnaryOpType::EXP>, *Program::GetInstance().GetCurrentFunction(), exponentLnSelf);
-    }
-
-    // 指数小于零，结果取倒数
-    if (expLessThanZero) {
-        auto oneTensor = GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
-        // 求倒数
-        RETURN_CALL(
-            BinaryOperation<BinaryOpType::DIV>, *Program::GetInstance().GetCurrentFunction(), oneTensor, result);
-    }
-    return result;
-}
-
-Tensor Pow(const Tensor& self, const Element& other)
-{
-    DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_BF16, DT_INT32, DT_FP32};
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "POW");
-    CheckTensorDimRange(self.GetStorage(), 1, 4, "POW");
-    CheckTensorShapeSize(self.GetStorage(), "POW");
-
-    LogicalTensorPtr castSelf = self.GetStorage();
-    if ((self.GetDataType() == DT_INT32) && other.GetDataType() != DT_INT32) {
-        castSelf = CALL(
-            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
-            CastMode::CAST_NONE);
-    }
-    double exponent = other.Cast<double>();
-    // 指数为0，输出全1
-    if (std::abs(exponent) < NUM_VALUE_EPS) {
-        return GenAllOneTensor(self.GetShape(), self.GetStorage()->GetDynValidShape(), self.GetDataType());
-    }
-    DataType dataType = castSelf->Datatype();
-    bool shouldUpToFp32 = dataType == DT_FP16 || dataType == DT_BF16;
-    if (shouldUpToFp32) {
-        castSelf = CALL(
-            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), castSelf, DataType::DT_FP32,
-            CastMode::CAST_NONE);
-    }
-    auto result = castSelf;
-    if (std::abs(exponent - NUM_VALUE_0_5) < NUM_VALUE_EPS) {
-        result = CALL(UnaryOperation<UnaryOpType::SQRT>, *Program::GetInstance().GetCurrentFunction(), result);
-    } else if (std::abs(exponent - NUM_VALUE_2) < NUM_VALUE_EPS) {
-        result = CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
-    } else if (std::abs(exponent - NUM_VALUE_3) < NUM_VALUE_EPS) {
-        auto doubleSelf =
-            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), result, result);
-        result =
-            CALL(BinaryOperation<BinaryOpType::MUL>, *Program::GetInstance().GetCurrentFunction(), doubleSelf, result);
-    } else {
-        result = GeneralPow(result, exponent);
-    }
-    if (shouldUpToFp32) {
-        RETURN_CALL(
-            CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(), result, dataType,
-            CastMode::CAST_NONE);
-    }
-    return result;
 }
 
 void TiledOneHot(
@@ -547,12 +379,14 @@ Tensor TensorOneHot(Function& function, const LogicalTensorPtr& self, int numCla
 Tensor OneHot(const Tensor& self, int numClasses)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_INT32, DT_INT64, DT_UINT32, DT_UINT64};
+    std::unordered_set<DataType> supportedTypes = {DT_INT8, DT_INT16, DT_INT32, DT_INT64};
     CheckTensorDataType(self.GetStorage(), supportedTypes, "ONEHOT");
     CheckTensorDimRange(self.GetStorage(), 1, 3, "ONEHOT");
     CheckTensorShapeSize(self.GetStorage(), "ONEHOT");
     ASSERT(VectorErrorCode::ERR_PARAM_INVALID, numClasses > 0) << "numClasses must be greater than 0";
-    RETURN_CALL(OneHot, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), numClasses);
+    auto res = CALL(OneHot, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), numClasses);
+    CheckTensorShapeSize(res.GetStorage(), "ONEHOT");
+    return res;
 }
 
 void TiledLogicalAndOperation(

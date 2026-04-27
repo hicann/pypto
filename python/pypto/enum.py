@@ -32,6 +32,7 @@ ScatterMode = pypto_impl.ScatterMode
 SaturationMode = pypto_impl.SaturationMode
 AtomicType = pypto_impl.AtomicType
 DivAlgorithm = pypto_impl.DivAlgorithm
+PowAlgorithm = pypto_impl.PowAlgorithm
 ExpAlgorithm = pypto_impl.ExpAlgorithm
 SqrtAlgorithm = pypto_impl.SqrtAlgorithm
 RsqrtAlgorithm = pypto_impl.RsqrtAlgorithm

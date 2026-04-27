@@ -1025,7 +1025,7 @@ template <Opcode opcode>
 void ExecuteOpBinaryScalar(ExecuteOperationContext* ctx)
 {
     if (opcode == Opcode::OP_BITWISEXOR || opcode == Opcode::OP_REMRS || opcode == Opcode::OP_FLOORDIVS ||
-        opcode == Opcode::OP_REMS) {
+        opcode == Opcode::OP_REMS || opcode == Opcode::OP_POWS) {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() <= SIZE_TWO);
     } else {
         ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
@@ -1061,6 +1061,9 @@ void ExecuteOpBinaryScalar(ExecuteOperationContext* ctx)
             break;
         case Opcode::OP_REMS:
             calc::RemainderS(ret, lhs, element, reverse);
+            break;
+        case Opcode::OP_POWS:
+            calc::PowS(ret, lhs, element);
             break;
         case Opcode::OP_REMRS:
             calc::RemainderRS(ret, lhs, element, reverse);
@@ -1104,6 +1107,7 @@ REGISTER_CALC_OP(OP_BITWISEXORS, Opcode::OP_BITWISEXORS, ExecuteOpBinaryScalar<O
 REGISTER_CALC_OP(OP_GCDS, Opcode::OP_GCDS, ExecuteOpBinaryScalar<Opcode::OP_GCDS>);
 REGISTER_CALC_OP(OP_REMS, Opcode::OP_REMS, ExecuteOpBinaryScalar<Opcode::OP_REMS>);
 REGISTER_CALC_OP(OP_REMRS, Opcode::OP_REMRS, ExecuteOpBinaryScalar<Opcode::OP_REMRS>);
+REGISTER_CALC_OP(OP_POWS, Opcode::OP_POWS, ExecuteOpBinaryScalar<Opcode::OP_POWS>);
 REGISTER_CALC_OP(OP_S_ADDS, Opcode::OP_S_ADDS, ExecuteOpBinaryScalar<Opcode::OP_ADDS>);
 REGISTER_CALC_OP(OP_S_SUBS, Opcode::OP_S_SUBS, ExecuteOpBinaryScalar<Opcode::OP_SUBS>);
 REGISTER_CALC_OP(OP_S_MULS, Opcode::OP_S_MULS, ExecuteOpBinaryScalar<Opcode::OP_MULS>);

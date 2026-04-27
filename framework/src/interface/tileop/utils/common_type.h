@@ -80,6 +80,7 @@ enum class BinaryScalarOp : uint8_t {
     MIN,
     MOD,
     REM,
+    POW,
     BITWISEAND,
     BITWISEOR,
     BITWISEXOR,

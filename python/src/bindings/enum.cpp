@@ -85,6 +85,11 @@ void bind_enum(py::module& m)
         .value("HIGH_PRECISION", DivAlgorithm::HIGH_PRECISION)
         .finalize();
 
+    py::native_enum<PowAlgorithm>(m, "PowAlgorithm", "enum.IntEnum")
+        .value("INTRINSIC", PowAlgorithm::DEFAULT)
+        .value("HIGH_PRECISION", PowAlgorithm::HIGH_PRECISION)
+        .finalize();
+
     py::native_enum<SqrtAlgorithm>(m, "SqrtAlgorithm", "enum.IntEnum")
         .value("INTRINSIC", SqrtAlgorithm::DEFAULT)
         .value("HIGH_PRECISION", SqrtAlgorithm::HIGH_PRECISION)

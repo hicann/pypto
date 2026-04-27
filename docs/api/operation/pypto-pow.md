@@ -15,7 +15,7 @@
 ## 函数原型
 
 ```python
-pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor
+pow(input: Tensor, other: Union[Tensor, int, float], precision_type: PowAlgorithm = PowAlgorithm.HIGH_PRECISION) -> Tensor
 ```
 
 ## 参数说明
@@ -25,10 +25,31 @@ pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor
 |---------|-----------|----------------------------------------------------------------------|
 | input   | 输入      | 源操作数。 <br> 支持的类型为：Tensor。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
 | other   | 输入      | 指数。 <br> 支持的类型为Tensor、int或float。 <br> Tensor支持的数据类型为：DT_FP16、DT_BF16、DT_FP32、DT_INT32。 <br> 不支持空Tensor；Shape仅支持1-4维；支持按照单个维度广播到相同形状；Shape Size不大于2147483647（即INT32_MAX）。 |
+| precision_type | 输入      | 精度模式枚举类型，用以控制指数计算的精度模式，具体定义为：[PowAlgorithm](../datatype/PowAlgorithm.md) 。<br> 默认为 HIGH_PRECISION（高精度模式）。 |
 
 ## 返回值说明
 
-返回一个与输入形状相同、数据类型一致的Tensor，其元素为输入Tensor对应元素的other次幂。
+返回一个与输入形状相同的Tensor，其元素为输入Tensor对应元素的other次幂。
+
+当other为int时，返回的Tensor的数据类型与输入相同。
+
+当other为float时，若输入Tensor类型为DT_INT32则返回DT_FP32，否则返回的Tensor的数据类型与输入相同。
+
+当other为Tensor时，返回的Tensor的数据类型见数据类型提升说明章节。
+
+## 数据类型提升说明
+
+我们约定float32>float16>bfloat16>int32。
+
+1. 当两个输入参数类型一个为float16而另一个bfloat16时输出的数据类型为float32。
+2. 其他情况下输出类型为输入参数类型的更大值，如输入float32和float16则输出为float32。
+
+| 参数类型    | float32    | float16    | bfloat16   | int32      |
+|-------------|------------|------------|------------|------------|
+| **float32**     | float32    | float32    | float32    | float32    |
+| **float16**     | float32    | float16    | **float32**    | float16    |
+| **bfloat16**    | float32    | **float32**    | bfloat16   | bfloat16   |
+| **int32**       | float32    | float16    | bfloat16   | int32      |
 
 ## 调用示例
 

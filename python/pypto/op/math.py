@@ -16,7 +16,10 @@ from .._element import Element
 from .._op_wrapper import op_wrapper
 from ..error import PyptoError
 from ..tensor import Tensor
-from ..enum import DataType, DivAlgorithm, ExpAlgorithm, SqrtAlgorithm, RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm
+from ..enum import (
+    DataType, DivAlgorithm, PowAlgorithm, ExpAlgorithm, SqrtAlgorithm,
+    RsqrtAlgorithm, LogAlgorithm, RecipAlgorithm
+)
 from ..symbolic_scalar import SymbolicScalar, SymInt
 
 
@@ -557,17 +560,22 @@ def bitwise_xor(first: Tensor, second: Union[Tensor, int]) -> Tensor:
 
 
 @op_wrapper
-def pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor:
-    """Computes the element-wise power of `input` raised to `other`.
+def pow(base: Tensor, other: Union[Tensor, int, float],
+    precision_type: PowAlgorithm = PowAlgorithm.HIGH_PRECISION) -> Tensor:
+    """Computes the element-wise power of `base` raised to `other`.
 
-    This function calculates the formula: `out = input ** other`.
+    This function calculates the formula: `out = base ** other`.
 
     Parameters
     ----------
-    input : Tensor
+    base : Tensor
         The base input tensor.
     other : Tensor or Number
-        The exponent to which each element in `input` will be raised.
+        The exponent to which each element in `base` will be raised.
+    precision_type : PowAlgorithm, optional
+        The precision algorithm for pow. Default is PowAlgorithm.HIGH_PRECISION.
+        HIGH_PRECISION uses higher precision calculation to reduce precision loss.
+        Use PowAlgorithm.INTRINSIC to directly use chip instructions.
 
     Returns
     -------
@@ -579,8 +587,8 @@ def pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor:
     x = pypto.tensor([2, 2], pypto.DT_FP32)
     a = 2
     b = pypto.tensor([2, 2], pypto.DT_FP32)
-    y = pypto.pow(x, a)
-    z = pypto.pow(x, b)
+    y = pypto.pow(x, a, PowAlgorithm.HIGH_PRECISION)
+    z = pypto.pow(x, b, PowAlgorithm.HIGH_PRECISION)
 
     Input x:[[ 1.0 2.0],
              [-3.0 4.0]]
@@ -596,10 +604,10 @@ def pow(input: Tensor, other: Union[Tensor, int, float]) -> Tensor:
             f"other must be Tensor, int or float but got {type(other)}."
             ))
     if isinstance(other, pypto_impl.Tensor):
-        return pypto_impl.Pow(input, other)
+        return pypto_impl.Pow(base, other, precision_type)
     if isinstance(other, int):
-        return pypto_impl.Pow(input, pypto_impl.Element(DataType.DT_INT32, other))
-    return pypto_impl.Pow(input, pypto_impl.Element(DataType.DT_FP32, other))
+        return pypto_impl.Pow(base, pypto_impl.Element(DataType.DT_INT32, other), PowAlgorithm.INTRINSIC)
+    return pypto_impl.Pow(base, pypto_impl.Element(DataType.DT_DOUBLE, other), precision_type)
 
 
 @op_wrapper

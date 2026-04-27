@@ -140,6 +140,7 @@ Opcode GetBinaryOpNameCode()
             CASE(MAX);
             CASE(MIN);
             CASE(MOD);
+            CASE(POW);
             CASE(REM);
             CASE(REMR);
             CASE(S_ADD);

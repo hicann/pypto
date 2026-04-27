@@ -448,4 +448,72 @@ TEST_F(TestCodegenDynBinary, TestDivIntrinsicPrecision)
     CheckStringExist(expect, res);
 }
 
+TEST_F(TestCodegenDynBinary, TestPowHighPrecision)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    std::vector<int64_t> shape = {64, 64};
+    TileShape::Current().SetVecTile({64, 64});
+    Tensor input_a(DataType::DT_FP32, shape, "A");
+    Tensor input_b(DataType::DT_FP32, shape, "B");
+    Tensor output(DataType::DT_FP32, shape, "C");
+
+    std::string funcName = "TestPowHighPrecision";
+    FUNCTION(funcName, {input_a, input_b, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Pow(input_a, input_b, PowAlgorithm::HIGH_PRECISION);
+        }
+    }
+
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TPow<pto::PowAlgorithm::HIGH_PRECISION>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
+TEST_F(TestCodegenDynBinary, TestPowIntrinsicPrecision)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+    std::vector<int64_t> shape = {64, 64};
+    TileShape::Current().SetVecTile({64, 64});
+    Tensor input_a(DataType::DT_FP32, shape, "A");
+    Tensor input_b(DataType::DT_FP32, shape, "B");
+    Tensor output(DataType::DT_FP32, shape, "C");
+
+    std::string funcName = "TestPowIntrinsicPrecision";
+    FUNCTION(funcName, {input_a, input_b, output})
+    {
+        LOOP(funcName, FunctionType::DYNAMIC_LOOP, i, LoopRange(1))
+        {
+            (void)i;
+            output = Pow(input_a, input_b, PowAlgorithm::DEFAULT);
+        }
+    }
+
+    auto function =
+        Program::GetInstance().GetFunctionByRawName(FUNCTION_PREFIX + funcName + SUB_FUNC_SUFFIX + HIDDEN_FUNC_SUFFIX);
+    function->SetUnderDynamicFunction(true);
+
+    npu::tile_fwk::CodeGenCtx ctx;
+    npu::tile_fwk::CodeGenCloudNPU codeGen(ctx);
+    codeGen.GenCode(*function, {});
+
+    const std::string res = GetResultFromCpp(*function);
+    std::string expect =
+        R"!!!(TPow<pto::PowAlgorithm::DEFAULT>(ubTensor_4, ubTensor_0, ubTensor_2, ubTensor_5);
+)!!!";
+    CheckStringExist(expect, res);
+}
+
 } // namespace npu::tile_fwk

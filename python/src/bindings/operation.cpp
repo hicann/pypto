@@ -193,9 +193,19 @@ void bind_operation(py::module& m)
     m.def(
         "Log1p", [](const Tensor& self) { return npu::tile_fwk::Log1p(self); }, "Tensor log1p.");
     m.def(
-        "Pow", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Pow(self, other); }, "Tensor pow.");
+        "Pow",
+        [](const Tensor& self, const Tensor& other, PowAlgorithm precisionType) {
+            return npu::tile_fwk::Pow(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PowAlgorithm::HIGH_PRECISION,
+        "Tensor pow.");
     m.def(
-        "Pow", [](const Tensor& self, const Element& other) { return npu::tile_fwk::Pow(self, other); }, "Tensor pow.");
+        "Pow",
+        [](const Tensor& self, const Element& other, PowAlgorithm precisionType) {
+            return npu::tile_fwk::Pow(self, other, precisionType);
+        },
+        py::arg("self"), py::arg("other"), py::arg("precision_type") = PowAlgorithm::HIGH_PRECISION,
+        "Tensor pow scalar.");
     m.def(
         "Cast",
         [](const Tensor& self, DataType dstDataType, CastMode mode, SaturationMode satmode) {

@@ -51,6 +51,12 @@ enum class DivAlgorithm : uint8_t
     HIGH_PRECISION
 };
 
+enum class PowAlgorithm : uint8_t
+{
+    DEFAULT,
+    HIGH_PRECISION
+};
+
 enum class SqrtAlgorithm : uint8_t
 {
     DEFAULT,
@@ -276,8 +282,8 @@ Tensor Maximum(const Tensor& operand1, const Element& operand2);
 Tensor Compare(const Tensor& self, const Tensor& other, OpType op, OutType mode);
 Tensor Compare(const Tensor& self, const Element& other, OpType op, OutType mode);
 Tensor Compare(const Element& self, const Tensor& other, OpType op, OutType mode);
-Tensor Pow(const Tensor& self, const Tensor& other);
-Tensor Pow(const Tensor& self, const Element& other);
+Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType = PowAlgorithm::DEFAULT);
+Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType = PowAlgorithm::DEFAULT);
 Tensor Remainder(const Tensor& self, const Tensor& other);
 Tensor Remainder(const Tensor& self, const Element& other);
 Tensor Remainder(const Element& self, const Tensor& other);

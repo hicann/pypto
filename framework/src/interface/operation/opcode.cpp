@@ -639,7 +639,12 @@ void OpcodeManager::RegisterVector() {
         Opcode::OP_POW, OpCoreType::AIV, "POW", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Tpow", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
         {OpAttributeKey::scalar, OP_ATTR_PREFIX + "reverseOperand", OpAttributeKey::inputCombineAxis,
-         OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse});
+         OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse, OpAttributeKey::precisionType});
+    RegisterInfo(
+        Opcode::OP_POWS, OpCoreType::AIV, "POWS", {MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB}, {"TileOp::Tpows", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::ELMWISE,
+        {OpAttributeKey::scalar, OP_ATTR_PREFIX + "reverseOperand", OpAttributeKey::inputCombineAxis,
+         OpAttributeKey::outputCombineAxis, OpAttributeKey::excludeBufferReuse, OpAttributeKey::precisionType});
     RegisterInfo(
         Opcode::OP_GATHER_FROM_UB, OpCoreType::AIV, "GATHER_FROM_UB", {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {MemoryType::MEM_UB}, {"TileOp::TgatherFromUB", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
@@ -1234,6 +1239,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_DIV, "TDiv"},
     {Opcode::OP_MOD, "TMod"},
     {Opcode::OP_POW, "TPow"},
+    {Opcode::OP_POWS, "TPowS"},
     {Opcode::OP_MUL, "TMul"},
     {Opcode::OP_REM, "TRemainder"},
     {Opcode::OP_REMS, "TRemainderS"},

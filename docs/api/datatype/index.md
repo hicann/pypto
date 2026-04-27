@@ -7,6 +7,7 @@ CachePolicy
 CastMode
 DataType
 DivAlgorithm
+PowAlgorithm
 ExpAlgorithm
 RsqrtAlgorithm
 LogAlgorithm

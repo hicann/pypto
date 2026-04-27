@@ -222,6 +222,10 @@ inline void RemainderRS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, con
 {
     GetCalcOps()->RemainderRS(Trans(out), Trans(self), scalar, reverse);
 }
+inline void PowS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element& scalar, bool reverse = false)
+{
+    GetCalcOps()->PowS(Trans(out), Trans(self), scalar, reverse);
+}
 inline void BitwiseAndS(
     LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element& scalar, bool reverse = false)
 {

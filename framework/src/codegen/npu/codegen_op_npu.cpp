@@ -188,6 +188,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_MODS, [this]() { return GenVectorScalarOp(); }},
           {Opcode::OP_REMRS, [this]() { return GenRemainderSOp(); }},
           {Opcode::OP_REMS, [this]() { return GenRemainderSOp(); }},
+          {Opcode::OP_POWS, [this]() { return GenVectorScalarOpWithTmp(); }},
           {Opcode::OP_SBITWISERIGHTSHIFT, [this]() { return GenVectorScalarOpWithTmp(); }},
           {Opcode::OP_SBITWISELEFTSHIFT, [this]() { return GenVectorScalarOpWithTmp(); }},
           {Opcode::OP_BITWISEXORS, [this]() { return GenVectorScalarOpWithTmp(); }},

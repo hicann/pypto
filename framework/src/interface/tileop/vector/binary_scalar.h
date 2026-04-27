@@ -229,7 +229,7 @@ TILEOP void TModS(T0 dst, T1 src0, Scalar src1)
     BinaryScalarCompute<BinaryScalarOp::MOD, pto::DivAlgorithm::DEFAULT, LastUse>(dst, src0, src1);
 }
 
-template <BinaryScalarOp op, typename T0, typename T1, typename Scalar, typename T2>
+template <BinaryScalarOp op, auto PrecisionType = 0, typename T0, typename T1, typename Scalar, typename T2>
 TILEOP void BinaryScalarTmpComputeImpl(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
     if constexpr (op == BinaryScalarOp::BITWISEXOR) {
@@ -240,9 +240,13 @@ TILEOP void BinaryScalarTmpComputeImpl(T0 dst, T1 src0, Scalar src1, T2 tmp)
         pto::TREMS(dst, src0, src1, tmp);
         return;
     }
+    if constexpr (op == BinaryScalarOp::POW) {
+        pto::TPOWS<PrecisionType>(dst, src0, src1, tmp);
+        return;
+    }
 }
 
-template <BinaryScalarOp op, typename T0, typename T1, typename Scalar, typename T2>
+template <BinaryScalarOp op, auto PrecisionType = 0, typename T0, typename T1, typename Scalar, typename T2>
 TILEOP void BinaryScalarTmpCompute(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
     const auto dstLayout = dst.GetLayout();
@@ -260,7 +264,7 @@ TILEOP void BinaryScalarTmpCompute(T0 dst, T1 src0, Scalar src1, T2 tmp)
                 dstTile.Assign(dst, tileOffsets);
                 src0Tile.Assign(src0, tileOffsets);
                 tmpTile.Assign(tmp, tileOffsets);
-                BinaryScalarTmpComputeImpl<op>(dstTile.Data(), src0Tile.Data(), src1, tmpTile.Data());
+                BinaryScalarTmpComputeImpl<op, PrecisionType>(dstTile.Data(), src0Tile.Data(), src1, tmpTile.Data());
             }
         }
     }
@@ -270,14 +274,21 @@ TILEOP void BinaryScalarTmpCompute(T0 dst, T1 src0, Scalar src1, T2 tmp)
 template <typename Scalar, typename T0, typename T1, typename T2>
 TILEOP void TBitwiseXorS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
-    BinaryScalarTmpCompute<BinaryScalarOp::BITWISEXOR>(dst, src0, src1, tmp);
+    BinaryScalarTmpCompute<BinaryScalarOp::BITWISEXOR, 0>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_REMS TRemainderS
 template <typename Scalar, typename T0, typename T1, typename T2>
 TILEOP void TRemainderS(T0 dst, T1 src0, Scalar src1, T2 tmp)
 {
-    BinaryScalarTmpCompute<BinaryScalarOp::REM>(dst, src0, src1, tmp);
+    BinaryScalarTmpCompute<BinaryScalarOp::REM, 0>(dst, src0, src1, tmp);
+}
+
+#define OP_TILE_OP_POWS TPowS
+template <auto PrecisionType = 0, typename Scalar, typename T0, typename T1, typename T2>
+TILEOP void TPowS(T0 dst, T1 src0, Scalar src1, T2 tmp)
+{
+    BinaryScalarTmpCompute<BinaryScalarOp::POW, PrecisionType>(dst, src0, src1, tmp);
 }
 
 #define OP_TILE_OP_REMRS TRemainderRS
