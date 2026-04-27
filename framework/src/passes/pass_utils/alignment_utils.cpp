@@ -68,7 +68,8 @@ inline int64_t AlignmentUtils::Pad(int64_t dim, int64_t padValue)
     return (dim + padValue - 1) / padValue * padValue;
 }
 
-void AlignmentUtils::ProcessLastDim32BAlignedOnUB(LogicalTensorPtr tensor) {
+void AlignmentUtils::ProcessLastDim32BAlignedOnUB(LogicalTensorPtr tensor)
+{
     if (tensor == nullptr || tensor->tensor == nullptr) {
         return;
     }
@@ -77,13 +78,13 @@ void AlignmentUtils::ProcessLastDim32BAlignedOnUB(LogicalTensorPtr tensor) {
         size_t lastIdx = tensor->shape.size() - 1;
         size_t paddingValue = GetLastDimAlignBase(tensor); // 根据数据类型，判断需要pad到几个元素
 
-        // 保存rawshape
+        // 保存原始值
         tensor->oriShape = tensor->shape;
-        tensor->tensor->oriRawshape = tensor->tensor->rawshape;
+        int64_t oriRawshapeValue = tensor->tensor->rawshape[lastIdx];
 
         // pad 32B
         tensor->shape[lastIdx] = Pad(tensor->shape[lastIdx], paddingValue);
-        tensor->tensor->rawshape[lastIdx] = Pad(tensor->tensor->oriRawshape[lastIdx], tensor->shape[lastIdx]);
+        tensor->tensor->rawshape[lastIdx] = Pad(oriRawshapeValue, tensor->shape[lastIdx]);
     }
 }
 

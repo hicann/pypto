@@ -451,14 +451,12 @@ TEST_F(TestPadLocalBuffer, no_reduce_last_dim_all_vec_last_dim_unpadded)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expOriShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == shape) {
                     EXPECT_EQ(out->shape, expOriShape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(out->tensor->oriRawshape, shape);
                 }
             }
         }
@@ -500,14 +498,12 @@ TEST_F(TestPadLocalBuffer, no_reduce_last_dim_all_vec_last_dim_padded)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expOriShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == shape) {
                     EXPECT_EQ(out->shape, expOriShape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(out->tensor->oriRawshape, shape);
                 }
             }
         }
@@ -551,19 +547,16 @@ TEST_F(TestPadLocalBuffer, no_reduce_last_dim_mm)
                 if (in->oriShape == AShape) {
                     EXPECT_EQ(in->shape, expOriShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, AShape);
                 }
                 if (in->oriShape == BShape) {
                     EXPECT_EQ(in->shape, expOriShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, BShape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == CShape) {
                     EXPECT_EQ(out->shape, expOriShape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(out->tensor->oriRawshape, CShape);
                 }
             }
         }
@@ -612,14 +605,12 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_padding)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expOriShape);
                     EXPECT_EQ(in->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == reduce_shape) {
                     EXPECT_EQ(out->shape, reduce_shape);
                     EXPECT_EQ(out->tensor->rawshape, reduce_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -669,14 +660,12 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_no_padding)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expInShape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == reduce_shape) {
                     EXPECT_EQ(out->shape, expOriShape);
                     EXPECT_EQ(out->tensor->rawshape, expOriShape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -734,14 +723,12 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_brc)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expInShape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == reduce_shape) {
                     EXPECT_EQ(out->shape, reduce_shape);
                     EXPECT_EQ(out->tensor->rawshape, reduce_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -750,7 +737,6 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_brc)
                 if (out->oriShape == expandShape) {
                     EXPECT_EQ(out->shape, expectExpandShape);
                     EXPECT_EQ(out->tensor->rawshape, expectExpandShape);
-                    EXPECT_EQ(out->tensor->oriRawshape, expandShape);
                 }
             }
         }
@@ -819,14 +805,12 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_elementwise)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expInShape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == reduce_shape) {
                     EXPECT_EQ(out->shape, reduce_shape);
                     EXPECT_EQ(out->tensor->rawshape, reduce_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -835,7 +819,6 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_elementwise)
                 if (out->oriShape == reduce_shape) {
                     EXPECT_EQ(out->shape, reduce_shape);
                     EXPECT_EQ(out->tensor->rawshape, reduce_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -906,14 +889,12 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_reshape)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expInShape);
                     EXPECT_EQ(in->tensor->rawshape, expInShape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             for (auto& out : op.oOperand) {
                 if (out->oriShape == reduce_shape) {
                     EXPECT_EQ(out->shape, reduce_shape);
                     EXPECT_EQ(out->tensor->rawshape, reduce_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -922,7 +903,6 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_copyout_copyin_reshape)
                 if (out->oriShape == reshape_shape) {
                     EXPECT_EQ(out->shape, expect_shape);
                     EXPECT_EQ(out->tensor->rawshape, reduce_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, reduce_shape);
                 }
             }
         }
@@ -978,14 +958,12 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_transpose)
                 if (in->oriShape == shape) {
                     EXPECT_EQ(in->shape, expect_shape);
                     EXPECT_EQ(in->tensor->rawshape, expect_shape);
-                    EXPECT_EQ(in->tensor->oriRawshape, shape);
                 }
             }
             auto& out = op.oOperand[0];
             if (out->oriShape == trans_shape) {
                 EXPECT_EQ(out->shape, expect_trans_shape);
                 EXPECT_EQ(out->tensor->rawshape, expect_trans_shape);
-                EXPECT_EQ(out->tensor->oriRawshape, trans_shape);
             }
         }
         if (op.GetOpcode() == Opcode::OP_EXP) {
@@ -993,7 +971,6 @@ TEST_F(TestPadLocalBuffer, reduce_last_dim_with_transpose)
                 if (out->oriShape == trans_shape) {
                     EXPECT_EQ(out->shape, trans_shape);
                     EXPECT_EQ(out->tensor->rawshape, trans_shape);
-                    EXPECT_EQ(out->tensor->oriRawshape, trans_shape);
                 }
             }
         }

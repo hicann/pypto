@@ -45,6 +45,8 @@ public:
 
 private:
     Status RunOnFunction(Function& function) override;
+    void PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex, bool padRawShape);
+    void PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum);
     void PadMatmul(Operation& op, LogicalTensorPtr& in);
     void PadVector(
         Operation& op, LogicalTensorPtr& in, std::unordered_set<std::shared_ptr<RawTensor>>& visitedRaw,
@@ -77,13 +79,20 @@ private:
     bool IsVector(const LogicalTensorPtr& tensor);
     void DoPadding(Function& function);
     void DoPadding256(Function& function);
+    void ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, size_t paddingValue);
+    int64_t AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base);
     bool IsInputDataType(
         const Operation& op, const LogicalTensorPtr& in, const std::unordered_set<DataType>& targetTypes) const;
+    // 设置原始 rawshape（替代 RawTensor::oriRawshape = rawshape）
+    Shape& SetOriRawshape(LogicalTensorPtr& in);
+    // 获取已保存的原始 rawshape
+    Shape& GetOriRawshape(LogicalTensorPtr& in);
     bool processTranspose_;
     std::unordered_map<int64_t, int64_t> broadcastLastAxis_;
     bool combineAxis{false};
     bool forceCombineAxis{false};
     AxisCombineMarker axisCombineMarker;
+    std::unordered_map<int, Shape> oriRawshapeMap_; // 存储原始 rawshape，替代 RawTensor::oriRawshape
 };
 } // namespace npu::tile_fwk
 #endif // PAD_LOCAL_BUFFER_H

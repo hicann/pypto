@@ -52,6 +52,27 @@ const std::unordered_set<OpCalcType> ELEMENTWISE_LIKE_TYPES{
     OpCalcType::CAST, OpCalcType::ELMWISE, OpCalcType::MOVE_IN, OpCalcType::MOVE_OUT};
 int64_t Pad(int64_t dim, int64_t padValue) { return (dim + padValue - 1) / padValue * padValue; }
 
+// 设置原始 rawshape（替代 RawTensor::oriRawshape = rawshape）
+// 原始代码中 oriRawshape 是每次进入函数时都设置为当前 rawshape 值
+Shape& PadLocalBuffer::SetOriRawshape(LogicalTensorPtr& in)
+{
+    int rawmagic = in->tensor->rawmagic;
+    oriRawshapeMap_[rawmagic] = in->tensor->rawshape;
+    return oriRawshapeMap_[rawmagic];
+}
+
+// 获取已保存的原始 rawshape，如果不存在则返回当前 rawshape
+Shape& PadLocalBuffer::GetOriRawshape(LogicalTensorPtr& in)
+{
+    int rawmagic = in->tensor->rawmagic;
+    if (oriRawshapeMap_.find(rawmagic) == oriRawshapeMap_.end()) {
+        APASS_LOG_WARN_F(
+            Elements::Tensor, "oriRawshape not set for tensor %d, fallback to current rawshape", in->tensor->rawmagic);
+        oriRawshapeMap_[rawmagic] = in->tensor->rawshape;
+    }
+    return oriRawshapeMap_[rawmagic];
+}
+
 bool PadLocalBuffer::IsInputDataType(
     const Operation& op, const LogicalTensorPtr& in, const std::unordered_set<DataType>& targetTypes) const
 {
@@ -93,12 +114,12 @@ bool PadLocalBuffer::IsInputDataType(
     return false;
 }
 
-void PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex, bool padRawShape)
+void PadLocalBuffer::PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowIndex, bool padRawShape)
 {
     const auto& producers = in->GetProducers();
     auto bytes = BytesOf(in->Datatype());
     auto& padShape = padRawShape ? in->tensor->rawshape : in->shape;
-    auto& padShapeBase = padRawShape ? in->tensor->oriRawshape : in->shape;
+    Shape& oriRawshape = GetOriRawshape(in);                        // 获取已保存的 oriRawshape
     if ((*producers.begin())->GetOpcode() == Opcode::OP_L1_TO_BT) { // Opcode::OP_L1_TO_BT input 和 output shape 一致
         auto preInput = (*producers.begin())->GetIOperands().front();
         padShape = padRawShape ? preInput->tensor->rawshape : preInput->shape;
@@ -111,17 +132,17 @@ void PadMatmulL1ConvertScene(Operation& op, LogicalTensorPtr& in, size_t lowInde
                 in->magic);
             return;
         }
-        padShape[lowIndex] = Pad(padShapeBase[lowIndex], BT_PAD_BASE / bytes);
+        padShape[lowIndex] = Pad(padRawShape ? oriRawshape[lowIndex] : in->shape[lowIndex], BT_PAD_BASE / bytes);
     } else { // Opcode::OP_L1_TO_FIX_QUANT_PRE
-        padShape[lowIndex] = Pad(padShapeBase[lowIndex], CUBE_PAD_VALUE);
+        padShape[lowIndex] = Pad(padRawShape ? oriRawshape[lowIndex] : in->shape[lowIndex], CUBE_PAD_VALUE);
     }
 }
 
-void PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum)
+void PadLocalBuffer::PadForMatMulMX(LogicalTensorPtr& in, const int64_t& axisNum)
 {
     in->shape[axisNum] = Pad(in->shape[axisNum], CUBE_PAD_B8_VALUE);
-    in->tensor->oriRawshape = in->tensor->rawshape;
-    in->tensor->rawshape[axisNum] = Pad(in->tensor->oriRawshape[axisNum], CUBE_PAD_B8_VALUE);
+    Shape& oriRawshape = SetOriRawshape(in); // 先设置，再使用
+    in->tensor->rawshape[axisNum] = Pad(oriRawshape[axisNum], CUBE_PAD_B8_VALUE);
 }
 
 void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
@@ -203,18 +224,18 @@ void PadLocalBuffer::PadMatmul(Operation& op, LogicalTensorPtr& in)
             op.opmagic, op.GetOpcodeStr().c_str(), in->magic);
         return;
     }
-    in->tensor->oriRawshape = in->tensor->rawshape;
+    Shape& oriRawshape = SetOriRawshape(in); // 先设置，再使用
     if (isL1ConvertScene) {
         PadMatmulL1ConvertScene(op, in, lowIndex, true);
     } else if (IsInputB8) {
-        in->tensor->rawshape[highIndex] = Pad(in->tensor->oriRawshape[highIndex], CUBE_PAD_B8_VALUE);
-        in->tensor->rawshape[lowIndex] = Pad(in->tensor->oriRawshape[lowIndex], CUBE_PAD_B8_VALUE);
+        in->tensor->rawshape[highIndex] = Pad(oriRawshape[highIndex], CUBE_PAD_B8_VALUE);
+        in->tensor->rawshape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_B8_VALUE);
     } else if (IsInputB4) {
-        in->tensor->rawshape[highIndex] = Pad(in->tensor->oriRawshape[highIndex], CUBE_PAD_B4_VALUE);
-        in->tensor->rawshape[lowIndex] = Pad(in->tensor->oriRawshape[lowIndex], CUBE_PAD_B4_VALUE);
+        in->tensor->rawshape[highIndex] = Pad(oriRawshape[highIndex], CUBE_PAD_B4_VALUE);
+        in->tensor->rawshape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_B4_VALUE);
     } else {
-        in->tensor->rawshape[highIndex] = Pad(in->tensor->oriRawshape[highIndex], CUBE_PAD_VALUE);
-        in->tensor->rawshape[lowIndex] = Pad(in->tensor->oriRawshape[lowIndex], CUBE_PAD_VALUE);
+        in->tensor->rawshape[highIndex] = Pad(oriRawshape[highIndex], CUBE_PAD_VALUE);
+        in->tensor->rawshape[lowIndex] = Pad(oriRawshape[lowIndex], CUBE_PAD_VALUE);
     }
     APASS_LOG_DEBUG_F(
         Elements::Tensor, "####### %d %d set rawshape as %s\n", in->tensor->rawmagic, in->magic,
@@ -277,7 +298,8 @@ void PadLocalBuffer::PadVector256(Operation& op, LogicalTensorPtr& in, bool need
         size_t lastIdx = in->shape.size() - 1;
         int64_t padValue = (8 + dim32Count - 1) / dim32Count;
         in->shape[lastIdx - 1] = PadRowDim(in->shape[lastIdx - 1], padValue);
-        in->tensor->rawshape[lastIdx - 1] = PadRowDim(in->tensor->oriRawshape[lastIdx - 1], padValue);
+        Shape& oriRawshape = GetOriRawshape(in); // 获取 DoPadding 中已设置的值
+        in->tensor->rawshape[lastIdx - 1] = PadRowDim(oriRawshape[lastIdx - 1], padValue);
         APASS_LOG_INFO_F(
             Elements::Operation, "Op %d %s input shape and rawshape has been changed\n", op.opmagic,
             op.GetOpcodeStr().c_str());
@@ -305,9 +327,12 @@ void PadLocalBuffer::PadVector(
     if (noPadding) {
         in->oriShape = in->shape;
         in->tensor->UpdateRawShape(in->shape);
-        in->tensor->oriRawshape = in->tensor->rawshape;
+        // noPadding 分支中，oriRawshapeMap_ 应保存 shape（与原始代码行为一致）
+        int rawmagic = in->tensor->rawmagic;
+        oriRawshapeMap_[rawmagic] = in->tensor->rawshape; // 此时 rawshape = shape
         // 开启了强制合轴，倒数第2轴不是对齐的
-        if (forceCombineAxis && paddingValue > 0 && in->tensor->rawshape[lastIdx - 1] % paddingValue != 0) {
+        if (forceCombineAxis && paddingValue > 0 && lastIdx > 0 &&
+            in->tensor->rawshape[lastIdx - 1] % paddingValue != 0) {
             int64_t shapeAfterPad = Pad(in->tensor->rawshape[lastIdx - 1], paddingValue);
             in->tensor->rawshape[lastIdx - 1] = shapeAfterPad;
         }
@@ -317,6 +342,8 @@ void PadLocalBuffer::PadVector(
         return;
     }
     in->oriShape = in->shape;
+    // 先设置 oriRawshape 为当前 rawshape 值，再使用
+    Shape& oriRawshape = SetOriRawshape(in);
     int64_t lastDim = static_cast<int64_t>(in->shape[lastIdx]);
     if (calcType == OpCalcType::BROADCAST && broadcastLastAxis_.find(op.opmagic) != broadcastLastAxis_.end()) {
         lastDim = broadcastLastAxis_[op.opmagic];
@@ -329,10 +356,9 @@ void PadLocalBuffer::PadVector(
     }
 
     if (visitedRaw.count(in->tensor) == 0) {
-        in->tensor->oriRawshape = in->tensor->rawshape;
         // shape已经对齐过，直接将rawShape对齐到shape；如果broadcast的输入是来自于view，那么整个链路上的非对齐shape都要按照
         // BROADCAST_LAST_AXIS来对齐，当前这样处理是有问题的
-        in->tensor->rawshape[lastIdx] = Pad(in->tensor->oriRawshape[lastIdx], in->shape[lastIdx]);
+        in->tensor->rawshape[lastIdx] = Pad(oriRawshape[lastIdx], shapeAfterPad);
         visitedRaw.emplace(in->tensor);
     }
 }
@@ -727,12 +753,12 @@ int64_t Gcd(int64_t a, int64_t b)
 
 int64_t Lcm(int64_t a, int64_t b) { return (a / Gcd(a, b)) * b; }
 
-int64_t AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base)
+int64_t PadLocalBuffer::AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t base)
 {
     if (in == nullptr || pos < 0 || pos >= static_cast<int64_t>(in->tensor->rawshape.size())) {
         return -1;
     }
-    int64_t padDim = Pad(in->tensor->rawshape[pos], base);
+    int64_t padDim = Pad(in->tensor->rawshape[pos], base); // 原始代码使用 rawshape，不是 oriRawshape
     int64_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in);
     if (paddingValue != 0 && padDim % paddingValue != 0) {
         padDim = Lcm(padDim, paddingValue);
@@ -741,7 +767,7 @@ int64_t AlignedRawTensorIfNeed(LogicalTensorPtr& in, int64_t pos, const int64_t 
     return padDim;
 }
 
-void ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, size_t paddingValue)
+void PadLocalBuffer::ProcessReduceForAxisCombine(Operation& op, LogicalTensorPtr& in, size_t paddingValue)
 {
     auto axis = op.GetIntAttribute(REDUCE_AXIS);
     int64_t shapeSize = static_cast<int64_t>(in->shape.size());
@@ -831,16 +857,19 @@ void PadLocalBuffer::PadVectorForAxisCombine(
             op.opmagic, op.GetOpcodeStr().c_str(), in->magic, GetFormatBacktrace(op).c_str());
         return;
     }
-    if (visitedRaw.count(in->tensor)) return;
+    if (visitedRaw.count(in->tensor))
+        return;
     visitedRaw.emplace(in->tensor);
     OpCalcType calcType = OpcodeManager::Inst().GetOpCalcType(op.GetOpcode());
     size_t paddingValue = AlignmentUtils::GetLastDimAlignBase(in);
     size_t lastIdx = in->shape.size() - 1;
     in->oriShape = in->shape;
-    in->tensor->oriRawshape = in->tensor->rawshape;
+    // 设置 oriRawshape（原始代码：in->tensor->oriRawshape = in->tensor->rawshape;）
+    SetOriRawshape(in);
     auto producerOp = *(in->GetProducers().begin());
     if (producerOp != nullptr && producerOp->GetOpcode() == Opcode::OP_BRCB) {
-        if (lastIdx == 0 && in->tensor->rawshape[lastIdx] != 1) return;
+        if (lastIdx == 0 && in->tensor->rawshape[lastIdx] != 1)
+            return;
         AlignedRawTensorIfNeed(in, lastIdx - 1, BRCB_SECOND_LAST_BASE);
     }
     if (calcType == OpCalcType::REDUCE) {
@@ -866,7 +895,8 @@ void PadLocalBuffer::PadVectorForAxisCombine(
         }
     }
     if (IsElementwiseLikeOp(calcType, op, producerOp)) {
-        if (DoElementwiseLikePadding(op, in, lastIdx, paddingValue)) return;
+        if (DoElementwiseLikePadding(op, in, lastIdx, paddingValue))
+            return;
     }
     AlignedRawTensorIfNeed(in, lastIdx, paddingValue);
 }
@@ -875,6 +905,7 @@ Status PadLocalBuffer::RunOnFunction(Function& function)
 {
     combineAxis = function.paramConfigs_.combineAxis;
     forceCombineAxis = function.paramConfigs_.forceCombineAxis;
+    oriRawshapeMap_.clear(); // 清空原始 rawshape 存储映射
     if (combineAxis) {
         axisCombineMarker.Run(function);
         APASS_LOG_INFO_F(Elements::Operation, "======> Start PadLocalBuffer in COMBINE_AXIS mode.");

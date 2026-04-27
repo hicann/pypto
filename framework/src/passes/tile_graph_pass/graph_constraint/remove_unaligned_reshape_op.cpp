@@ -37,9 +37,11 @@ Status RemoveUnalignedReshape::RunOnFunction(Function& function)
     for (auto& a : copyOuts) {
         GraphUtils::CopyDynStatus(a.output, a.input);
         auto& newCopyOut = function.AddRawOperation(Opcode::OP_COPY_OUT, {a.input}, {a.output});
-        newCopyOut.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            a.from, OpImmediate::Specified(a.toOffset), OpImmediate::Specified(newCopyOut.iOperand.front()->oriShape),
-            OpImmediate::Specified(newCopyOut.oOperand.front()->tensor->GetDynRawShape())));
+        newCopyOut.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(
+                a.from, OpImmediate::Specified(a.toOffset),
+                OpImmediate::Specified(newCopyOut.iOperand.front()->oriShape),
+                OpImmediate::Specified(newCopyOut.oOperand.front()->tensor->GetDynRawShape())));
         auto producerOp = *(a.input->GetProducers().begin());
         newCopyOut.UpdateSubgraphID(producerOp->GetSubgraphID());
         APASS_LOG_INFO_F(
@@ -49,10 +51,12 @@ Status RemoveUnalignedReshape::RunOnFunction(Function& function)
     for (auto& b : copyIns) {
         GraphUtils::CopyDynStatus(b.input, b.output);
         auto& newCopyIn = function.AddRawOperation(Opcode::OP_COPY_IN, {b.input}, {b.output});
-        newCopyIn.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified(b.fromOffset), b.to, OpImmediate::Specified(newCopyIn.oOperand.front()->oriShape),
-            OpImmediate::Specified(newCopyIn.iOperand.front()->tensor->GetDynRawShape()),
-            OpImmediate::Specified(newCopyIn.iOperand.front()->GetDynValidShape())));
+        newCopyIn.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(
+                OpImmediate::Specified(b.fromOffset), b.to,
+                OpImmediate::Specified(newCopyIn.oOperand.front()->oriShape),
+                OpImmediate::Specified(newCopyIn.iOperand.front()->tensor->GetDynRawShape()),
+                OpImmediate::Specified(newCopyIn.iOperand.front()->GetDynValidShape())));
         auto consumerOp = *(b.output->GetConsumers().begin());
         newCopyIn.UpdateSubgraphID(consumerOp->GetSubgraphID());
         APASS_LOG_INFO_F(
@@ -67,16 +71,15 @@ LogicalTensorPtr RemoveUnalignedReshape::InsertIOTensor(
     Function& function, Operation& op, std::unordered_map<OverlaprawMagic, std::shared_ptr<RawTensor>>& rawIO,
     LogicalTensorPtr& ioTensor)
 {
+    (void)op;
     if (rawIO.count(ioTensor->tensor->rawmagic) == 0) {
         auto reshapeRawTensor =
-            std::make_shared<RawTensor>(ioTensor->Datatype(), ioTensor->tensor->oriRawshape, ioTensor->Format());
-        reshapeRawTensor->oriRawshape = reshapeRawTensor->rawshape;
+            std::make_shared<RawTensor>(ioTensor->Datatype(), ioTensor->oriShape, ioTensor->Format());
         rawIO.insert({ioTensor->tensor->rawmagic, reshapeRawTensor});
     }
     auto newReshapeIO = std::make_shared<LogicalTensor>(
         function, rawIO[ioTensor->tensor->rawmagic], ioTensor->offset, ioTensor->oriShape);
     newReshapeIO->SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
-    newReshapeIO->subGraphID = op.GetSubgraphID();
     function.GetTensorMap().Insert(newReshapeIO);
     return newReshapeIO;
 }
@@ -87,9 +90,8 @@ bool RemoveUnalignedReshape::CheckUnaligned(Operation& op)
     for (const auto& input : op.GetIOperands()) {
         if (input != nullptr && input->tensor != nullptr) {
             lastIdx = input->shape.size() - 1;
-            if (input->shape.size() == input->tensor->oriRawshape.size() &&
-                input->shape.size() == input->tensor->rawshape.size() &&
-                input->tensor->oriRawshape[lastIdx] != input->tensor->rawshape[lastIdx]) {
+            if (input->oriShape.size() == input->tensor->rawshape.size() &&
+                input->oriShape[lastIdx] != input->tensor->rawshape[lastIdx]) {
                 return true;
             }
         }
@@ -97,9 +99,8 @@ bool RemoveUnalignedReshape::CheckUnaligned(Operation& op)
     for (const auto& output : op.GetOOperands()) {
         if (output != nullptr && output->tensor != nullptr) {
             lastIdx = output->shape.size() - 1;
-            if (output->shape.size() == output->tensor->oriRawshape.size() &&
-                output->shape.size() == output->tensor->rawshape.size() &&
-                output->tensor->oriRawshape[lastIdx] != output->tensor->rawshape[lastIdx]) {
+            if (output->oriShape.size() == output->tensor->rawshape.size() &&
+                output->oriShape[lastIdx] != output->tensor->rawshape[lastIdx]) {
                 return true;
             }
         }
@@ -194,16 +195,18 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForUB(Function& functi
             reshapeCopyInOp.UpdateSubgraphID(op.GetSubgraphID());
             reshapeOp.UpdateSubgraphID(op.GetSubgraphID());
 
-            reshapeCopyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-                MemoryType::MEM_UB, OpImmediate::Specified(std::vector<SymbolicScalar>(input->shape.size(), 0)),
-                OpImmediate::Specified(input->shape), OpImmediate::Specified(input->tensor->GetDynRawShape()),
-                OpImmediate::Specified(input->GetDynValidShape())));
+            reshapeCopyOutOp.SetOpAttribute(
+                std::make_shared<CopyOpAttribute>(
+                    MemoryType::MEM_UB, OpImmediate::Specified(std::vector<SymbolicScalar>(input->shape.size(), 0)),
+                    OpImmediate::Specified(input->shape), OpImmediate::Specified(input->tensor->GetDynRawShape()),
+                    OpImmediate::Specified(input->GetDynValidShape())));
 
-            reshapeCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-                OpImmediate::Specified(std::vector<SymbolicScalar>(output->shape.size(), 0)),
-                MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified(output->shape),
-                OpImmediate::Specified(output->tensor->GetDynRawShape()),
-                OpImmediate::Specified(output->GetDynValidShape())));
+            reshapeCopyInOp.SetOpAttribute(
+                std::make_shared<CopyOpAttribute>(
+                    OpImmediate::Specified(std::vector<SymbolicScalar>(output->shape.size(), 0)),
+                    MemoryType::MEM_DEVICE_DDR, OpImmediate::Specified(output->shape),
+                    OpImmediate::Specified(output->tensor->GetDynRawShape()),
+                    OpImmediate::Specified(output->GetDynValidShape())));
 
             APASS_LOG_INFO_F(
                 Elements::Operation, "Reshape op %d is replaceed by reshapeCopyOutOp %d and reshapeCopyInOp %d.",
@@ -215,7 +218,9 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForUB(Function& functi
     }
 }
 
-Operation* RemoveUnalignedReshape::CopyBranchBetweenCopyOut2Reshape(Function& function, std::vector<LogicalTensorPtr>& needToCopyTensors, const int& index) {
+Operation* RemoveUnalignedReshape::CopyBranchBetweenCopyOut2Reshape(
+    Function& function, std::vector<LogicalTensorPtr>& needToCopyTensors, const int& index)
+{
     bool canToCopy = false;
     Operation* branchOp = nullptr;
     LogicalTensorPtr curTensor = nullptr;
@@ -244,7 +249,7 @@ Operation* RemoveUnalignedReshape::CopyBranchBetweenCopyOut2Reshape(Function& fu
         preTensor = tensor;
         preCloneTensor = curTensor;
     }
-    //此时preOp 为 copyOutop preTensor为CopyOut的输出
+    // 此时preOp 为 copyOutop preTensor为CopyOut的输出
     Operation* newCopyOutOp = &(preOp->CloneOperation(function, preOp->GetIOperands(), preOp->GetOOperands()));
     newCopyOutOp->UpdateSubgraphID(preOp->GetSubgraphID());
     newCopyOutOp->ReplaceOutput(preCloneTensor, preTensor);
@@ -263,7 +268,9 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForDDR(Function& funct
     auto changedDims = FindChangedDims(output->shape, input->shape);
     for (const auto& dim : changedDims) {
         if ((size_t)dim >= outputValidShape.size()) {
-            APASS_LOG_WARN_F(Elements::Operation, "The dynValidShape of output[%d] of op[%d] has no [%ld] index.", output->GetMagic(), op.GetOpMagic(), static_cast<long>(dim));
+            APASS_LOG_WARN_F(
+                Elements::Operation, "The dynValidShape of output[%d] of op[%d] has no [%ld] index.",
+                output->GetMagic(), op.GetOpMagic(), static_cast<long>(dim));
             break;
         } else if (!outputValidShape[dim].IsImmediate()) {
             hasNonImmediate = true;
@@ -271,13 +278,14 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForDDR(Function& funct
         }
     }
     if (hasNonImmediate) {
-        //进行处理前判断，防止误修改
+        // 进行处理前判断，防止误修改
         std::vector<LogicalTensorPtr> needToCopyTensors;
         int index = -1;
-        //index表示copyout到reshape之间，有多个消费者的Tensor的第几个消费者是包含需要处理的reshape的
+        // index表示copyout到reshape之间，有多个消费者的Tensor的第几个消费者是包含需要处理的reshape的
         Operation* copyOutOp = FindAllProducerCopyOuts(input, op, needToCopyTensors, index, op.GetOpMagic());
         if (copyOutOp == nullptr) {
-            APASS_LOG_WARN_F(Elements::Operation, "Do not follow reshape[%d] on GM after multiple ops.", op.GetOpMagic());
+            APASS_LOG_WARN_F(
+                Elements::Operation, "Do not follow reshape[%d] on GM after multiple ops.", op.GetOpMagic());
             return;
         }
 
@@ -292,7 +300,7 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForDDR(Function& funct
             return;
         }
 
-        //进行处理
+        // 进行处理
         if (!checkOverUbSize && index != -1) {
             copyOutOp = CopyBranchBetweenCopyOut2Reshape(function, needToCopyTensors, index);
         }
@@ -303,7 +311,9 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForDDR(Function& funct
     }
 }
 
-void RemoveUnalignedReshape::HandleNoCopyInConsumer(Function& function, Operation& op, LogicalTensorPtr output, std::vector<Operation*>& copyInOps, bool& checkOverUbSize)
+void RemoveUnalignedReshape::HandleNoCopyInConsumer(
+    Function& function, Operation& op, LogicalTensorPtr output, std::vector<Operation*>& copyInOps,
+    bool& checkOverUbSize)
 {
     LogicalTensor newCopyinTensor(function, output->Datatype(), output->GetShape());
     newCopyinTensor.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
@@ -313,29 +323,31 @@ void RemoveUnalignedReshape::HandleNoCopyInConsumer(Function& function, Operatio
     // 要copy到UB的Tensor，进行32B对齐之后判断是否超UB
     const size_t UB_SIZE_THRESHOLD = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
     if (static_cast<size_t>(newCopyinTensorPtr->GetDataSize()) > UB_SIZE_THRESHOLD) {
-        APASS_LOG_WARN_F(Elements::Tensor, "The size[%ld] of copyTensor[%d] from output of reshape op[%d] should not exceed %zu after padding. Consider reducing its size.",
+        APASS_LOG_WARN_F(
+            Elements::Tensor,
+            "The size[%ld] of copyTensor[%d] from output of reshape op[%d] should not exceed %zu after padding. "
+            "Consider reducing its size.",
             newCopyinTensorPtr->GetDataSize(), newCopyinTensorPtr->GetMagic(), op.GetOpMagic(), UB_SIZE_THRESHOLD);
         checkOverUbSize = true;
         return;
     }
     auto& newCopyInOp = function.AddOperation(Opcode::OP_COPY_IN, {output}, {newCopyinTensorPtr});
     newCopyInOp.UpdateSubgraphID(op.GetSubgraphID());
-    newCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        OpImmediate::Specified(std::vector<SymbolicScalar>(output->GetShape().size(), 0)),
-        MemoryType::MEM_UB, OpImmediate::Specified(output->GetShape()),
-        OpImmediate::Specified(output->tensor->GetDynRawShape()),
-        OpImmediate::Specified(output->GetDynValidShape())));
+    newCopyInOp.SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(
+            OpImmediate::Specified(std::vector<SymbolicScalar>(output->GetShape().size(), 0)), MemoryType::MEM_UB,
+            OpImmediate::Specified(output->GetShape()), OpImmediate::Specified(output->tensor->GetDynRawShape()),
+            OpImmediate::Specified(output->GetDynValidShape())));
     LogicalTensor newCopyoutTensor(function, output->Datatype(), output->GetShape());
     newCopyoutTensor.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
     auto newCopyoutTensorPtr = std::make_shared<LogicalTensor>(std::move(newCopyoutTensor));
     auto& newCopyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {newCopyinTensorPtr}, {newCopyoutTensorPtr});
     newCopyOutOp.UpdateSubgraphID(op.GetSubgraphID());
-    newCopyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-        MemoryType::MEM_UB,
-        OpImmediate::Specified(std::vector<SymbolicScalar>(output->GetShape().size(), 0)),
-        OpImmediate::Specified(output->GetShape()),
-        OpImmediate::Specified(output->tensor->GetDynRawShape()),
-        OpImmediate::Specified(output->GetDynValidShape())));
+    newCopyOutOp.SetOpAttribute(
+        std::make_shared<CopyOpAttribute>(
+            MemoryType::MEM_UB, OpImmediate::Specified(std::vector<SymbolicScalar>(output->GetShape().size(), 0)),
+            OpImmediate::Specified(output->GetShape()), OpImmediate::Specified(output->tensor->GetDynRawShape()),
+            OpImmediate::Specified(output->GetDynValidShape())));
     auto consumers = output->GetConsumers();
     std::vector<Operation*> reshapeConsumers;
     for (auto& consumer : consumers) {
@@ -363,7 +375,8 @@ void RemoveUnalignedReshape::ProcessCopyOutOfDDRReshape(Function& function, Oper
         copyOutOp->SetOpCode(Opcode::OP_RESHAPE_COPY_OUT);
     } else if (copyOutInputMemType != MemoryType::MEM_UB && copyOutOutputMemType == MemoryType::MEM_DEVICE_DDR) {
         // copyOutInput(NOTUB) -- COPYOUT -- copyOutOutput(DDR) -- reshape
-        // copyOutInput(NOTUB) -- COPYOUT -- copyOutOutput(DDR) -- COPYIN -- newTensor(UB) -- RESHAPECOPYOUT -- newTensor2(DDR) -- reshape
+        // copyOutInput(NOTUB) -- COPYOUT -- copyOutOutput(DDR) -- COPYIN -- newTensor(UB) -- RESHAPECOPYOUT --
+        // newTensor2(DDR) -- reshape
         LogicalTensor newTensor(function, copyOutOutput->Datatype(), copyOutOutput->GetShape());
         newTensor.SetMemoryTypeBoth(MemoryType::MEM_UB, true);
         auto newTensorPtr = std::make_shared<LogicalTensor>(std::move(newTensor));
@@ -371,30 +384,35 @@ void RemoveUnalignedReshape::ProcessCopyOutOfDDRReshape(Function& function, Oper
         // 要copy到UB的Tensor，在copy之前，进行32B对齐之后判断超UB
         const size_t UB_SIZE_THRESHOLD = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
         if (static_cast<size_t>(newTensorPtr->GetDataSize()) > UB_SIZE_THRESHOLD) {
-            APASS_LOG_WARN_F(Elements::Tensor, "The size[%ld] of copyTensor[%d] from output of copyout op[%d] should not exceed %zu after padding. Consider reducing its size.",
+            APASS_LOG_WARN_F(
+                Elements::Tensor,
+                "The size[%ld] of copyTensor[%d] from output of copyout op[%d] should not exceed %zu after padding. "
+                "Consider reducing its size.",
                 newTensorPtr->GetDataSize(), newTensorPtr->GetMagic(), copyOutOp->GetOpMagic(), UB_SIZE_THRESHOLD);
             return;
         }
 
         auto& reshapeCopyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyOutOutput}, {newTensorPtr});
         reshapeCopyInOp.UpdateSubgraphID(op.GetSubgraphID());
-        reshapeCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            OpImmediate::Specified(std::vector<SymbolicScalar>(copyOutOutput->GetShape().size(), 0)),
-            MemoryType::MEM_UB, OpImmediate::Specified(copyOutOutput->GetShape()),
-            OpImmediate::Specified(copyOutOutput->tensor->GetDynRawShape()),
-            OpImmediate::Specified(copyOutOutput->GetDynValidShape())));
+        reshapeCopyInOp.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(
+                OpImmediate::Specified(std::vector<SymbolicScalar>(copyOutOutput->GetShape().size(), 0)),
+                MemoryType::MEM_UB, OpImmediate::Specified(copyOutOutput->GetShape()),
+                OpImmediate::Specified(copyOutOutput->tensor->GetDynRawShape()),
+                OpImmediate::Specified(copyOutOutput->GetDynValidShape())));
 
         LogicalTensor newTensor2(function, copyOutOutput->Datatype(), copyOutOutput->GetShape());
         newTensor2.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
         auto newTensor2Ptr = std::make_shared<LogicalTensor>(std::move(newTensor2));
         auto& newCopyOutOp = function.AddOperation(Opcode::OP_RESHAPE_COPY_OUT, {newTensorPtr}, {newTensor2Ptr});
         newCopyOutOp.UpdateSubgraphID(op.GetSubgraphID());
-        newCopyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-            MemoryType::MEM_UB,
-            OpImmediate::Specified(std::vector<SymbolicScalar>(copyOutOutput->GetShape().size(), 0)),
-            OpImmediate::Specified(copyOutOutput->GetShape()),
-            OpImmediate::Specified(copyOutOutput->tensor->GetDynRawShape()),
-            OpImmediate::Specified(copyOutOutput->GetDynValidShape())));
+        newCopyOutOp.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(
+                MemoryType::MEM_UB,
+                OpImmediate::Specified(std::vector<SymbolicScalar>(copyOutOutput->GetShape().size(), 0)),
+                OpImmediate::Specified(copyOutOutput->GetShape()),
+                OpImmediate::Specified(copyOutOutput->tensor->GetDynRawShape()),
+                OpImmediate::Specified(copyOutOutput->GetDynValidShape())));
 
         copyOutOutput->RemoveConsumer(&op);
         op.ReplaceInput(newTensor2Ptr, copyOutOutput);
@@ -406,7 +424,7 @@ void RemoveUnalignedReshape::ProcessCopyInOfDDRReshape(
 {
     for (auto* copyInOp : copyInOps) {
         auto copyInInput = copyInOp->GetIOperands().front();
-        auto copyInOutput = copyInOp->GetOOperands().front();	 
+        auto copyInOutput = copyInOp->GetOOperands().front();
         auto copyInOutputMemType = copyInOutput->GetMemoryTypeOriginal();
 
         bool copyInShapeSame = true;
@@ -436,26 +454,37 @@ void RemoveUnalignedReshape::ProcessCopyInOfDDRReshape(
                 // 要copy到UB的Tensor，在copy之前，进行32B对齐之后判断超UB
                 const size_t UB_SIZE_THRESHOLD = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
                 if (static_cast<size_t>(newTensorPtr->GetDataSize()) > UB_SIZE_THRESHOLD) {
-                    APASS_LOG_WARN_F(Elements::Tensor, "The size[%ld] of copyTensor[%d] from input of copyin op[%d] should not exceed %zu after padding. Consider reducing its size.",
-                        newTensorPtr->GetDataSize(), newTensorPtr->GetMagic(), copyInOp->GetOpMagic(), UB_SIZE_THRESHOLD);
+                    APASS_LOG_WARN_F(
+                        Elements::Tensor,
+                        "The size[%ld] of copyTensor[%d] from input of copyin op[%d] should not exceed %zu after "
+                        "padding. Consider reducing its size.",
+                        newTensorPtr->GetDataSize(), newTensorPtr->GetMagic(), copyInOp->GetOpMagic(),
+                        UB_SIZE_THRESHOLD);
                     return;
                 }
 
-                auto& reshapeCopyInOp = function.AddOperation(Opcode::OP_RESHAPE_COPY_IN, {copyInInput}, {newTensorPtr});
+                auto& reshapeCopyInOp =
+                    function.AddOperation(Opcode::OP_RESHAPE_COPY_IN, {copyInInput}, {newTensorPtr});
                 reshapeCopyInOp.UpdateSubgraphID(op.GetSubgraphID());
-                reshapeCopyInOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(
-                    OpImmediate::Specified(std::vector<SymbolicScalar>(copyInInput->GetShape().size(), 0)), MemoryType::MEM_UB, OpImmediate::Specified(copyInInput->GetShape()),
-                    OpImmediate::Specified(copyInInput->tensor->GetDynRawShape()), OpImmediate::Specified(copyInInput->GetDynValidShape())));
+                reshapeCopyInOp.SetOpAttribute(
+                    std::make_shared<CopyOpAttribute>(
+                        OpImmediate::Specified(std::vector<SymbolicScalar>(copyInInput->GetShape().size(), 0)),
+                        MemoryType::MEM_UB, OpImmediate::Specified(copyInInput->GetShape()),
+                        OpImmediate::Specified(copyInInput->tensor->GetDynRawShape()),
+                        OpImmediate::Specified(copyInInput->GetDynValidShape())));
 
                 LogicalTensor newTensor2(function, copyInInput->Datatype(), copyInInput->GetShape());
                 newTensor2.SetMemoryTypeBoth(MemoryType::MEM_DEVICE_DDR, true);
                 auto newTensor2Ptr = std::make_shared<LogicalTensor>(std::move(newTensor2));
                 auto& newCopyOutOp = function.AddOperation(Opcode::OP_COPY_OUT, {newTensorPtr}, {newTensor2Ptr});
                 newCopyOutOp.UpdateSubgraphID(op.GetSubgraphID());
-                newCopyOutOp.SetOpAttribute(std::make_shared<CopyOpAttribute>(MemoryType::MEM_UB,
-                    OpImmediate::Specified(std::vector<SymbolicScalar>(copyInInput->GetShape().size(), 0)),
-                    OpImmediate::Specified(copyInInput->GetShape()), OpImmediate::Specified(copyInInput->tensor->GetDynRawShape()),
-                    OpImmediate::Specified(copyInInput->GetDynValidShape())));
+                newCopyOutOp.SetOpAttribute(
+                    std::make_shared<CopyOpAttribute>(
+                        MemoryType::MEM_UB,
+                        OpImmediate::Specified(std::vector<SymbolicScalar>(copyInInput->GetShape().size(), 0)),
+                        OpImmediate::Specified(copyInInput->GetShape()),
+                        OpImmediate::Specified(copyInInput->tensor->GetDynRawShape()),
+                        OpImmediate::Specified(copyInInput->GetDynValidShape())));
 
                 copyInInput->RemoveConsumer(copyInOp);
                 copyInOp->ReplaceInput(newTensor2Ptr, copyInInput);
@@ -480,7 +509,8 @@ Operation* RemoveUnalignedReshape::FindAllProducerCopyOuts(
             APASS_LOG_WARN_F(
                 Elements::Operation,
                 "Reshape[%d] has multiple input ops, cannot convert copy_out to reshape_copy_out; Consider moving "
-                "reshape to UB to avoid possible precision issue.", reshapeMagic);
+                "reshape to UB to avoid possible precision issue.",
+                reshapeMagic);
         }
         return nullptr;
     }
@@ -506,8 +536,7 @@ Operation* RemoveUnalignedReshape::FindAllProducerCopyOuts(
     Operation* copyOutOp = nullptr;
     auto inputOperands = producerOp->GetIOperands();
     if (!inputOperands.empty()) {
-        copyOutOp = FindAllProducerCopyOuts(inputOperands.front(), *producerOp,
-            needToCopyTensors, index, reshapeMagic);
+        copyOutOp = FindAllProducerCopyOuts(inputOperands.front(), *producerOp, needToCopyTensors, index, reshapeMagic);
     }
     if (copyOutOp != nullptr && copyOutOp->GetOpcode() == Opcode::OP_COPY_OUT) {
         needToCopyTensors.push_back(tensor);
@@ -518,8 +547,7 @@ Operation* RemoveUnalignedReshape::FindAllProducerCopyOuts(
 /* 从tensor的消费者列表中查找OP_COPY_IN，如果未找到OP_COPY_IN，
  * 则标记hasViewOrAssemble为true，表示需要插入拷贝。
  */
-bool RemoveUnalignedReshape::checkNonCopyInConsumerExists(
-    LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps)
+bool RemoveUnalignedReshape::checkNonCopyInConsumerExists(LogicalTensorPtr tensor, std::vector<Operation*>& copyInOps)
 {
     bool hasNoCopyInConsumer = false;
     auto consumers = tensor->GetConsumers();

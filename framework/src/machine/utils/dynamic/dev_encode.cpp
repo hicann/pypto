@@ -293,7 +293,7 @@ static void EncodeRawShape(
         return;
     }
 
-    int64_t nelm = std::max(GetShapeSizeSafe(rawTensor->oriRawshape), GetShapeSizeSafe(rawTensor->rawshape));
+    int64_t nelm = GetShapeSizeSafe(rawTensor->rawshape);
     encoded->maxStaticMemReq = AlignUp(nelm * BytesOf(rawTensor->GetDataType()), TENSOR_ADDR_ALIGNMENT);
     if (nelm > MAX_SHAPE_WARN_THRESHOLE) {
         MACHINE_LOGW(

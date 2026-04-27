@@ -35,7 +35,6 @@ public:
     int memoryId{-1};
     int actualRawmagic = -1;
     Shape rawshape;
-    Shape oriRawshape;
     std::vector<SymbolicScalar> dynRawShape;
     DataType datatype;
     TileOpFormat format;

@@ -43,7 +43,6 @@ Json RawTensor::DumpJson() const
     result["datatype"] = datatype;
     result["format"] = format;
     result["rawshape"] = rawshape;
-    result["ori_rawshape"] = oriRawshape;
     result["rawmagic"] = rawmagic;
     if (actualRawmagic != -1) {
         result["actual_rawmagic"] = actualRawmagic;
@@ -71,7 +70,6 @@ std::shared_ptr<RawTensor> RawTensor::LoadJson(const Json& rawTensorDump)
     if (rawTensorDump.count("actual_rawmagic") != 0) {
         ret->actualRawmagic = rawTensorDump["actual_rawmagic"].get<int>();
     }
-    ret->oriRawshape = rawTensorDump["ori_rawshape"].get<std::vector<int64_t>>();
     return ret;
 }
 
