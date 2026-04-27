@@ -233,6 +233,7 @@ def matmul_allreduce_add_rmsnorm_worker(
 
 
 @pytest.mark.skip(reason="performance test case")
+@pytest.mark.world_size(4)
 def test_matmul_allreduce_add_rmsnorm_performance():
     logger.info("=" * 60)
     logger.info("开始运行matmul_allreduce_add_rmsnorm性能测试")
