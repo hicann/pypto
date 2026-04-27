@@ -1,12 +1,17 @@
-# 文件保存方法
+---
+name: precision-verify
+description: PyPTO 算子精精度工具对比法。使用 pypto.pass_verify_save 和 torch.save 保存中间结果到文件，然后使用对比工具分析。专注：插入检查点 → 运行测试 → 对比分析 → 定位首个失败点。
+---
+
+# 精度工具对比法（文件保存）
 
 使用 `pypto.pass_verify_save()` 和 `torch.save()` 保存中间结果到文件，然后使用对比工具分析。
 
 ## 核心原理
 
 1. **数据对齐**：golden 和 kernel 的计算逻辑、切块方式、数据维度必须完全一致，如果实现不一致，改写golden函数
-2. **kernel 保存**：使用 `pypto.pass_verify_save()` 保存中间结果（循环场景使用 `cond=(idx == 0)`）
-3. **golden 保存**：使用 `torch.save()` 保存中间结果（循环场景使用 `if idx == 0:`）
+2. **kernel 保存**：使用 `pypto.pass_verify_save()` 保存中间结果（循环场景使用 `cond=(idx == batch_size - 1)`，用最后一块数据对比）
+3. **golden 保存**：使用 `torch.save()` 保存中间结果（循环场景使用 `if idx == batch_size - 1:`）
 4. **数据对比**：使用对比工具检查 kernel 的 `.data` 文件和 golden 的 `.pt` 文件
 5. **全量对比**：一次性开启所有关键检查点，对比所有中间结果，定位第一个计算结果不同的 op
 6. **数据类型**：保存什么类型就读取什么类型，kernel 和 golden 的数据类型和 shape 必须完全一致，不一致则直接比对失败
@@ -20,7 +25,7 @@
 verify_options = {
     "enable_pass_verify": True,
     "pass_verify_save_tensor": True,
-    "pass_verify_pass_filter": []  # 空列表表示不进行 pass 校验，跳过所有pass校验过程
+    "pass_verify_pass_filter": []
 }
 
 @pypto.frontend.jit(verify_options=verify_options)
@@ -29,11 +34,12 @@ def kernel(inputs, outputs):
     temp1 = pypto.compute_op1(inputs[0])
     pypto.pass_verify_save(temp1, "1_after_op1")
 
-    # 循环场景：只保存 idx=0 的数据
-    # 多层循环使用 cond=((idx1 == 0) * (idx2 == 0))
+    # 循环场景：只保存最后一块数据，必须用cond = (idx == end)的条件保存
+    # 单层循环：cond=(idx == batch_size - 1)
+    # 多层循环：cond=((idx1 == end1) * (idx2 == end2))
     for idx in range(batch_size):
         temp = pypto.compute_op(inputs[idx])
-        pypto.pass_verify_save(temp, "2_loop_result", cond=(idx == 0))
+        pypto.pass_verify_save(temp, "2_loop_result", cond=(idx == batch_size - 1))
 ```
 
 ### 原则 2：保存 golden 中间结果
@@ -52,10 +58,10 @@ def golden(inputs, outputs):
     temp1 = compute_op1(inputs[0])
     torch.save(temp1, f"{output_dir}/golden_1_after_op1.pt")
 
-    # 循环场景：只保存 idx=0 的数据
+    # 循环场景：只保存最后一块数据（更能反映问题）
     for idx in range(batch_size):
         temp = compute_op(inputs[idx])
-        if idx == 0:
+        if idx == batch_size - 1:
             torch.save(temp, f"{output_dir}/golden_2_loop_result.pt")
 ```
 
@@ -76,7 +82,7 @@ def golden(inputs, outputs):
 
 **修正**：用 `-w` 参数指定工作目录
 ```bash
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /path/to/operator -v
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py -w /path/to/operator -v
 ```
 
 ### 2. 数据类型读取问题
@@ -87,7 +93,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /p
 - dtype=8: BF16 格式（2字节）
 - dtype=7: FP32 格式（4字节）
 
-### 3. FP8/BOOL 类型转换问题（重要）
+### 3. FP8/BOOL 类型转换问题
 
 **问题**：FP8 和 BOOL 类型无法直接进行算术运算比对
 - FP8 类型（dtype=5/17/18）：PyTorch CPU对 `torch.float8_e4m3fn/e5m2` 的算术运算支持有限
@@ -116,6 +122,14 @@ torch.save(temp.to(torch.float32), f"{output_dir}/golden_checkpoint_name_FP8.pt"
 - 如果 kernel 在 A→B→C 三个步骤后都插入检查点，golden 也需要在对应步骤保存
 - 保持两边计算逻辑和保存时机完全一致
 
+### 4.5. 计算逻辑不一致问题（高频易错）
+
+**问题**：kernel 分步计算有中间结果，golden 连乘缺少中间变量，导致对比错位
+
+**典型场景**：kernel 在 `matmul` 后乘 `scale` 并保存，golden 用连乘 `matmul * scale` 缺少中间变量
+
+**修正方案**：确保 kernel 和 golden 保存的是同一计算阶段的结果（如都保存乘 scale 后的结果）
+
 ### 5. 切块计算问题
 
 **原则**：保持保存的数据维度一致
@@ -142,7 +156,7 @@ torch.save(temp.to(torch.float32), f"{output_dir}/golden_checkpoint_name_FP8.pt"
 
 **修正**：使用 `--rtol` 和 `--atol` 参数指定自定义容差：
 ```bash
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py \
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py \
     --rtol 0.0078125 \
     --atol 0.001 \
     -v
@@ -163,7 +177,8 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py \
 在 jit 和 golden 函数中插入对应的检查点（参考原则 1 和 2）。
 
 **循环场景关键点**：
-- 使用 `cond=(idx == 0)` 只保存一批数据
+- 使用 `cond=(idx == batch_size - 1)` 只保存最后一块数据（更能反映问题）
+- 多层循环使用 `cond=((idx1 == end1) * (idx2 == end2))`
 - 确保 kernel 和 golden 保存相同的 idx 数据
 - 在检查点名称中包含 idx 信息
 
@@ -176,7 +191,7 @@ python3 test_operator.py
 ### 步骤 3：对比检查点
 
 ```bash
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -v
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py -v
 ```
 
 ### 步骤 4：分析对比结果
@@ -202,7 +217,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -v
 
 ```bash
 # 指定 operator_verify_result.log 文件路径（在 operator 目录下）
-python3 .agents/skills/pypto-precision-compare/scripts/plot_accuracy.py /path/to/operator/operator_verify_result.log
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/plot_accuracy.py /path/to/operator/operator_verify_result.log
 ```
 
 **功能说明**：
@@ -222,7 +237,8 @@ python3 .agents/skills/pypto-precision-compare/scripts/plot_accuracy.py /path/to
 
 ### 2. 循环场景处理
 
-- 使用 `cond=(idx == 0)` 确保只保存一批数据
+- 使用 `cond=(idx == batch_size - 1)` 确保只保存最后一块数据（最后一块比第一块更能反映问题）
+- 多层循环使用 `cond=((idx1 == end1) * (idx2 == end2))`
 - kernel 和 golden 必须保存相同的 idx 数据
 - 避免生成过多文件
 
@@ -270,19 +286,19 @@ rm -rf output/output_*
 
 ```bash
 # 自动检测并对比所有检查点
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py
 
 # 列出所有检查点
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py --list
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py --list
 
 # 显示详细对比
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py --verbose
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py --verbose
 
 # 指定工作目录
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /path/to/operator -v
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py -w /path/to/operator -v
 
 # 指定 golden 文件所在目录（推荐）
-python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /path/to/operator -g /path/to/operator/golden_data -v
+python3 <path-to-pypto-precision-compare>/precision-verify/scripts/compare_accuracy.py -w /path/to/operator -g /path/to/operator/golden_data -v
 ```
 
 **工具功能**：
@@ -303,7 +319,7 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /p
   - [ ] 设置 `verify_options={"enable_pass_verify": True, "pass_verify_save_tensor": True, "pass_verify_pass_filter": []}`
   - [ ] kernel 函数中使用 `pypto.pass_verify_save(tensor, fname)`
   - [ ] golden 函数中使用 `torch.save()` 保存中间结果
-  - [ ] 循环场景使用 `cond=(idx == 0)` 和 `if idx == 0:`
+  - [ ] 循环场景使用 `cond=(idx == batch_size - 1)` 和 `if idx == batch_size - 1:`（最后一块比第一块更能反映问题）
   - [ ] 文件命名遵循约定（添加数字前缀）
   - [ ] 检查点插入位置要一一对应
   - [ ] 切块计算要保持一致
@@ -324,4 +340,5 @@ python3 .agents/skills/pypto-precision-compare/scripts/compare_accuracy.py -w /p
   - [ ] 定位到具体的 op
   - [ ] 修复问题
   - [ ] 重新验证
+  - [ ] 用表格展示最后保存点的对比结果
   - [ ] 清理调试代码
