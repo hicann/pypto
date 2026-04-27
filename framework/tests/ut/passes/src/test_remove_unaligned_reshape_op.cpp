@@ -529,7 +529,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestCopyToReshapeBeforeMultCopyOutOnL1)
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curOpSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(currFunctionPtr->Operations().size(), curOpSize);
+    int expOpSize = curOpSize + 6;
+    EXPECT_EQ(currFunctionPtr->Operations().size(), expOpSize);
 }
 
 // in - COPYIN - COPYOUT - RESHAPE - COPYIN   - COPYOUT - out1
@@ -879,7 +880,8 @@ TEST_F(TestRemoveUnalignedReshapeOp, TestMutiProducerBetweenCopyOutReshape)
     RemoveUnalignedReshape removeUnalignedReshapeOpTest;
     int curSize = currFunctionPtr->Operations().size();
     EXPECT_EQ(removeUnalignedReshapeOpTest.RunOnFunction(*currFunctionPtr), SUCCESS);
-    EXPECT_EQ(currFunctionPtr->Operations().size(), curSize);
+    int expSize = curSize + 1;
+    EXPECT_EQ(currFunctionPtr->Operations().size(), expSize);
 }
 // in - COPYIN - COPYOUT - ASSEMBLE - RESHAPE - COPYIN - COPYOUT - out1
 //                                  - ASSEMBLE - out3
