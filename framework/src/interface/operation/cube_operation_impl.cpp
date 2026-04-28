@@ -1289,15 +1289,15 @@ static Tensor ConstructGmAccumulationTensorGraph(
         int64_t kValidshape = std::min(kSize - kL1Size * kIdx, kL1Size);
         Tensor tensorA;
         if (attrParam.transA) {
-            tensorA = View(aMatrix, {kL1Size, mSize}, {kValidshape, mValidShape}, {kL1Size * kIdx, 0});
+            tensorA = View(aMatrix, {kValidshape, mSize}, {kValidshape, mValidShape}, {kL1Size * kIdx, 0});
         } else {
-            tensorA = View(aMatrix, {mSize, kL1Size}, {mValidShape, kValidshape}, {0, kL1Size * kIdx});
+            tensorA = View(aMatrix, {mSize, kValidshape}, {mValidShape, kValidshape}, {0, kL1Size * kIdx});
         }
         Tensor tensorB;
         if (attrParam.transB) {
-            tensorB = View(bMatrix, {nSize, kL1Size}, {nValidShape, kValidshape}, {0, kL1Size * kIdx});
+            tensorB = View(bMatrix, {nSize, kValidshape}, {nValidShape, kValidshape}, {0, kL1Size * kIdx});
         } else {
-            tensorB = View(bMatrix, {kL1Size, nSize}, {kValidshape, nValidShape}, {kL1Size * kIdx, 0});
+            tensorB = View(bMatrix, {kValidshape, nSize}, {kValidshape, nValidShape}, {kL1Size * kIdx, 0});
         }
         MatmulGraphNodes tensorGraphNodes(
             tensorA.GetStorage(), tensorB.GetStorage(), gmAccumulationTensor.GetStorage());

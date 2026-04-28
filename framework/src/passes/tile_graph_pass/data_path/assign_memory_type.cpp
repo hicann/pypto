@@ -72,12 +72,18 @@ Status AssignMemoryType::RunOnFunction(Function& function)
         const size_t L1_SIZE_THRESHOLD =
             static_cast<size_t>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1) * L1_THRESHOLD);
         APASS_LOG_INFO_F(
-            Elements::Operation, "UB buffer size threshold %zu for assemble, UB buffer size threshold %zu for view, L1 buffer size threshold %zu.", 
+            Elements::Operation, "UB buffer size threshold %zu for assemble, UB buffer size threshold %zu for view, L1 buffer size threshold %zu.",
             UB_SIZE_THRESHOLD_ASSEMBLE, UB_SIZE_THRESHOLD_VIEW, L1_SIZE_THRESHOLD);
     }
     // 处理cube级联场景tile等大约束
     ProcesSmallTileToLargeTile(function);
     ProcessLargeTileToSamllTile(function);
+    if (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510) {
+        ProcessL0C2UBSmallToLarge(function);
+        ProcessL0C2UBLargeToSmall(function);
+        ProcessUB2L1SmallToLarge(function);
+        ProcessUB2L1LargeToSmall(function);
+    }
 
     // 插入convert op
     Status insertionStatus = inserter.DoInsertion(function);
@@ -202,6 +208,21 @@ void AssignMemoryType::ProcessViewwithSpecificMem(Operation& operation)
             inserter.UpdateTensorTobeMap(in, operation, MemoryType::MEM_DEVICE_DDR);
         }
     }
+    bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    if (isA5) {
+        if (in->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+            (out->GetMemoryTypeOriginal() == MemoryType::MEM_UB || attrToType == MemoryType::MEM_UB)) {
+            inserter.UpdateTensorTobeMap(in, operation, MemoryType::MEM_L0C);
+        }
+        if (in->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+            (out->GetMemoryTypeOriginal() == MemoryType::MEM_L1 || attrToType == MemoryType::MEM_L1)) {
+            if (inserter.FitUB2L1(in)) {
+                inserter.UpdateTensorTobeMap(in, operation, MemoryType::MEM_UB);
+            } else {
+                inserter.UpdateTensorTobeMap(in, operation, MemoryType::MEM_DEVICE_DDR);
+            }
+        }
+    }
     if (attrToType == MemoryType::MEM_UNKNOWN) {
         // 跳过前端没有指定mem类型的view
         return;
@@ -226,35 +247,97 @@ void AssignMemoryType::ProcessAssemblewithSpecificMem(Operation& operation)
 {
     auto input = operation.iOperand.front();
     auto output = operation.oOperand.front();
-    if (input->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
-        return;
-    }
-    if (!inserter.FitL0C2L1(operation)) {
-        return;
-    }
-    for (const auto& consumerOp : output->GetConsumers()) {
-        auto consumerOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
-        // 大包搬运场景：assemble后接view且view的toAttr为L1
-        if (consumerOpAttribute && consumerOpAttribute->GetTo() != MemoryType::MEM_UNKNOWN) {
-            if (consumerOpAttribute->GetTo() != MemoryType::MEM_L1) {
-                return;
-            }
-        } else {
-            const auto& inputsMemType = OpcodeManager::Inst().GetInputsMemType(consumerOp->GetOpcode());
-            if (!inputsMemType.empty() && inputsMemType[0] != MemoryType::MEM_L1) {
+    // 仅 A5 支持 L0C2UB 和 UB2L1
+    bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    if (input->GetMemoryTypeOriginal() == MemoryType::MEM_L0C) {
+        if (inserter.FitL0C2L1(operation)) {
+            if (CheckConsumerRequirements(output, MemoryType::MEM_L1)) {
+                SetupAssembleMapping(operation, input, output, MemoryType::MEM_L1);
                 return;
             }
         }
+        // 处理 L0C2UB 通路（小搬大）
+        if (isA5 && CheckConsumerRequirements(output, MemoryType::MEM_UB)) {
+            SetupAssembleMapping(operation, input, output, MemoryType::MEM_UB);
+            return;
+        }
+        return;
     }
-    output->SetMemoryTypeOriginal(MemoryType::MEM_L1, true);
-    inserter.UpdateTensorTobeMap(input, operation, MemoryType::MEM_L0C);
-    for (const auto& consumerOp : output->GetConsumers()) {
-        inserter.UpdateTensorTobeMap(output, *consumerOp, MemoryType::MEM_L1);
+    if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        if (isA5 && inserter.FitUB2L1(input) && CheckConsumerRequirements(output, MemoryType::MEM_L1)) {
+            SetupAssembleMapping(operation, input, output, MemoryType::MEM_L1);
+            return;
+        }
     }
-    APASS_LOG_DEBUG_F(
-        Elements::Operation,
-        "Set assemble Op[%d]'s input[%d] tobeMap as MEM_L0C and output[%d] origin and tobeMap as MEM_L1.",
-        operation.GetOpMagic(), input->magic, output->magic);
+}
+
+// 检查所有 consumer 是否都需要指定的内存类型
+bool AssignMemoryType::CheckConsumerRequirements(const LogicalTensorPtr &output,
+                                                   MemoryType targetMemType) const {
+    std::unordered_set<const LogicalTensor*> visited;
+    return CheckConsumerRequirements(output, targetMemType, visited);
+}
+
+bool AssignMemoryType::CheckConsumerRequirements(const LogicalTensorPtr &output,
+                                                   MemoryType targetMemType,
+                                                   std::unordered_set<const LogicalTensor*> &visited) const {
+    // 环路检测：如果该 tensor 已经在访问路径上，跳过以避免无限递归
+    if (!visited.insert(output.get()).second) {
+        APASS_LOG_INFO_F(Elements::Operation,
+            "  tensor[%d] already visited, skip to avoid infinite recursion", output->magic);
+        return true;
+    }
+
+    for (const auto &consumerOp : output->GetConsumers()) {
+        auto consumerOpAttribute = std::dynamic_pointer_cast<ViewOpAttribute>(consumerOp->GetOpAttribute());
+        // 大包搬运场景：assemble后接view且view的toAttr为目标类型
+        if (consumerOpAttribute && consumerOpAttribute->GetTo() != MemoryType::MEM_UNKNOWN) {
+            if (consumerOpAttribute->GetTo() != targetMemType) {
+                return false;
+            }
+        }
+        else if (consumerOp->GetOpcode() == Opcode::OP_VIEW) {
+            APASS_LOG_INFO_F(Elements::Operation,
+                "  consumer Op[%d] is VIEW, attrToType=MEM_UNKNOWN, recursively checking output tensor[%d]",
+                consumerOp->GetOpMagic(), consumerOp->GetOOperands().front()->magic);
+            auto viewOut = consumerOp->GetOOperands().front();
+            if (!CheckConsumerRequirements(viewOut, targetMemType, visited)) {
+                return false;
+            }
+        }
+        else {
+            const auto &inputsMemType = OpcodeManager::Inst().GetInputsMemType(consumerOp->GetOpcode());
+            if (inputsMemType.empty()) {
+                APASS_LOG_INFO_F(Elements::Operation,
+                    "  consumer Op[%d] (%s) inputsMemType is EMPTY, targetMemType=%s -> REJECT (cannot guarantee support for local memory)",
+                    consumerOp->GetOpMagic(), consumerOp->GetOpcodeStr().c_str(),
+                    BriefMemoryTypeToString(targetMemType).c_str());
+                return false;
+            }
+            if (inputsMemType[0] != targetMemType) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// 设置 Assemble 的内存映射
+void AssignMemoryType::SetupAssembleMapping(Operation &operation,
+                                             const LogicalTensorPtr &input,
+                                             const LogicalTensorPtr &output,
+                                             MemoryType targetMemType) {
+    output->SetMemoryTypeOriginal(targetMemType, true);
+    inserter.UpdateTensorTobeMap(input, operation, input->GetMemoryTypeOriginal());
+    for (const auto &consumerOp : output->GetConsumers()) {
+        inserter.UpdateTensorTobeMap(output, *consumerOp, targetMemType);
+    }
+    APASS_LOG_DEBUG_F(Elements::Operation,
+        "Set assemble Op[%d]'s input[%d] tobeMap as %s and output[%d] origin and tobeMap as %s.",
+        operation.GetOpMagic(), input->magic,
+        BriefMemoryTypeToString(input->GetMemoryTypeOriginal()).c_str(),
+        output->magic,
+        BriefMemoryTypeToString(targetMemType).c_str());
 }
 
 void AssignMemoryType::AssignMemtypeForSplitReshape(
@@ -374,7 +457,6 @@ void AssignMemoryType::AssignSpecialOpMemtype(Operation& op, bool& infoBufferSiz
         UpdateOverSizedLocalBufferForAssemble(op);
         infoBufferSize = true;
     }
-
     if (op.GetOpcode() == npu::tile_fwk::Opcode::OP_VIEW) {
         UpdateOverSizedLocalBufferForView(op);
         infoBufferSize = true;
@@ -382,7 +464,7 @@ void AssignMemoryType::AssignSpecialOpMemtype(Operation& op, bool& infoBufferSiz
 }
 
 void AssignMemoryType::UpdateOverSizedLocalBufferForAssemble(Operation& operation)
-{   
+{
     const int UB_SIZE_THRESHOLD =
         static_cast<int>(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_ASSEMBLE);
     const int L1_SIZE_THRESHOLD =
@@ -400,7 +482,7 @@ void AssignMemoryType::UpdateOverSizedLocalBufferForAssemble(Operation& operatio
 }
 
 void AssignMemoryType::UpdateOverSizedLocalBufferForView(Operation& operation)
-{   
+{
     const int UB_SIZE_THRESHOLD = static_cast<int>(
         Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB) * UB_THRESHOLD_NORMAL);
     auto output = operation.GetOOperands().front();
@@ -464,6 +546,27 @@ int64_t AssignMemoryType::CalcLineOffset(const Shape& shape, const Offset& offse
     return lineOffset;
 }
 
+// 辅助函数：检查是否需要跳过内存类型设置
+bool AssignMemoryType::ShouldSkipAssembleMemorySetting(const LogicalTensorPtr &input,
+                                                        const LogicalTensorPtr &output) const {
+    // L0C -> L1
+    if (input->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+        output->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+        return true;
+    }
+    // L0C -> UB
+    if (input->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+        output->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+        return true;
+    }
+    // UB -> L1
+    if (input->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+        output->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+        return true;
+    }
+    return false;
+}
+
 void AssignMemoryType::AssignMoveOpForAssemble(Operation& operation)
 {
     /*
@@ -484,7 +587,6 @@ void AssignMemoryType::AssignMoveOpForAssemble(Operation& operation)
             // 获取操作属性
             auto opAttr = std::dynamic_pointer_cast<AssembleOpAttribute>(outputProducer->GetOpAttribute());
             if (opAttr == nullptr) {
-                APASS_LOG_WARN_F(Elements::Operation, "Op[%d]'s OpAttribute is null.", outputProducer->GetOpMagic());
                 continue;
             }
             auto offset = opAttr->GetToOffset();
@@ -492,9 +594,6 @@ void AssignMemoryType::AssignMoveOpForAssemble(Operation& operation)
 
             int64_t lineOffset = CalcLineOffset(tensor->GetRawTensor()->rawshape, opAttr->GetToOffset());
             if (lineOffset == -1) {
-                APASS_LOG_WARN_F(
-                    Elements::Operation, "Op[%d]'s offset size and Tensor[%d]'s rawshape size is not equal.",
-                    outputProducer->GetOpMagic(), tensor->GetMagic());
                 continue;
             }
             int64_t tensorBytes = static_cast<int64_t>(BytesOf(tensor->Datatype()));
@@ -515,11 +614,8 @@ void AssignMemoryType::AssignMoveOpForAssemble(Operation& operation)
         if (hasDdr) {
             fromType = MEM_DEVICE_DDR;
         }
-        if (operation.iOperand.front()->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
-            tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
-            APASS_LOG_DEBUG_F(
-                Elements::Operation, "%s[%d] skip setting since input origin MEM_L0C and output origin MEM_L1",
-                operation.GetOpcodeStr().c_str(), operation.GetOpMagic());
+        // 检查是否需要跳过设置
+        if (ShouldSkipAssembleMemorySetting(operation.iOperand.front(), tensor)) {
             continue;
         }
         tensor->SetMemoryTypeOriginal(fromType, true);
@@ -557,34 +653,66 @@ void AssignMemoryType::AssignMoveOpForView(Operation& operation)
     for (size_t i = 0; i < operation.iOperand.size(); ++i) {
         auto& tensor = operation.iOperand[i];
         MemoryType toType = operation.oOperand.front()->GetMemoryTypeOriginal();
-        // 尝试在view的输出original未知而输入original已知时进行内存复用，将输出的original刷为与输入相同
-        // 当出现内存未对齐时，需要插搬运到DDR则不进行复用；当出现输入为L0C时，L0C到L0C无意义，也不进行复用，同时避免出现DDR->L0C
-        auto originalMemType = tensor->GetMemoryTypeOriginal();
-        auto memTypeSupportReuse = toType == MemoryType::MEM_UNKNOWN && originalMemType != MemoryType::MEM_UNKNOWN &&
-                                   originalMemType != MemoryType::MEM_L0C;
-        if (!unaligned && memTypeSupportReuse) {
-            // view输出的消费者是assemble或者reshape
-            operation.oOperand.front()->SetMemoryTypeOriginal(tensor->GetMemoryTypeOriginal());
-            viewOpAttribute->SetToType(tensor->GetMemoryTypeOriginal());
-            continue;
-        }
-        if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
-            outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1 && inserter.FitL0C2L1(operation)) {
-            inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0C);
-            viewOpAttribute->SetToType(outputTensor->GetMemoryTypeOriginal());
-            continue;
-        }
-        APASS_LOG_DEBUG_F(
-            Elements::Operation, "%s[%d] input %d mem original %s --> %s.", operation.GetOpcodeStr().c_str(),
-            operation.GetOpMagic(), tensor->magic, BriefMemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str(),
-            BriefMemoryTypeToString(toType).c_str());
-        inserter.UpdateTensorTobeMap(tensor, operation, toType);
-        viewOpAttribute->SetToType(toType);
+        ProcessSingleViewInput(operation, viewOpAttribute, tensor, toType, unaligned);
+
     }
     if (unaligned) {
         auto inputTensor = operation.GetIOperands().front();
         inserter.UpdateTensorTobeMap(inputTensor, operation, MemoryType::MEM_DEVICE_DDR);
     }
+}
+
+void AssignMemoryType::ProcessSingleViewInput(Operation& operation, ViewOpAttribute* viewOpAttribute,
+                                               const LogicalTensorPtr& tensor, MemoryType toType, bool unaligned)
+{
+    // 尝试在view的输出original未知而输入original已知时进行内存复用，将输出的original刷为与输入相同
+    // 当出现内存未对齐时，需要插搬运到DDR则不进行复用；当出现输入为L0C时，L0C到L0C无意义，也不进行复用，同时避免出现DDR->L0C
+    auto originalMemType = tensor->GetMemoryTypeOriginal();
+    auto memTypeSupportReuse = toType == MemoryType::MEM_UNKNOWN && originalMemType != MemoryType::MEM_UNKNOWN &&
+                                originalMemType != MemoryType::MEM_L0C;
+    if (!unaligned && memTypeSupportReuse) {
+        // view输出的消费者是assemble或者reshape
+        operation.oOperand.front()->SetMemoryTypeOriginal(tensor->GetMemoryTypeOriginal());
+        viewOpAttribute->SetToType(tensor->GetMemoryTypeOriginal());
+        return;
+    }
+    auto outputTensor = operation.GetOOperands().front();
+    // L0C -> L1
+    if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+        outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1 && inserter.FitL0C2L1(operation)) {
+        inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0C);
+        viewOpAttribute->SetToType(outputTensor->GetMemoryTypeOriginal());
+        return;
+    }
+    bool isA5 = (Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510);
+    if (isA5) {
+        // L0C -> UB
+        if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_L0C &&
+            outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+            inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_L0C);
+            viewOpAttribute->SetToType(MemoryType::MEM_UB);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "AssignMoveOpForView: View Op[%d] set L0C->UB",
+                operation.GetOpMagic());
+            return;
+        }
+        // UB -> L1
+        if (tensor->GetMemoryTypeOriginal() == MemoryType::MEM_UB &&
+            outputTensor->GetMemoryTypeOriginal() == MemoryType::MEM_L1) {
+            inserter.UpdateTensorTobeMap(tensor, operation, MemoryType::MEM_UB);
+            viewOpAttribute->SetToType(MemoryType::MEM_L1);
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "AssignMoveOpForView: View Op[%d] set UB->L1",
+                operation.GetOpMagic());
+            return;
+        }
+    }
+    APASS_LOG_DEBUG_F(
+        Elements::Operation, "%s[%d] input %d mem original %s --> %s.", operation.GetOpcodeStr().c_str(),
+        operation.GetOpMagic(), tensor->magic, BriefMemoryTypeToString(tensor->GetMemoryTypeOriginal()).c_str(),
+        BriefMemoryTypeToString(toType).c_str());
+    inserter.UpdateTensorTobeMap(tensor, operation, toType);
+    viewOpAttribute->SetToType(toType);
 }
 
 void AssignMemoryType::AssignMemUnknown(Function& function)
@@ -651,6 +779,12 @@ void AssignMemoryType::ProcesSmallTileToLargeTile(Function& function)
         }
         auto oOperand = op.GetOOperands().front();
         auto iOperand = op.GetIOperands().front();
+        if (oOperand->GetMemoryTypeOriginal() == MemoryType::MEM_UB) {
+            APASS_LOG_DEBUG_F(Elements::Operation,
+                "Skip ProcesSmallTileToLargeTile for Op[%d] since output is already UB",
+                op.GetOpMagic());
+            continue;
+        }
         if (iOperand->GetMemoryTypeOriginal() != MEM_L0C) {
             continue;
         }
@@ -663,14 +797,7 @@ void AssignMemoryType::ProcesSmallTileToLargeTile(Function& function)
                 break;
             }
         }
-        bool isConsumerOutputMultiple = true;
-        for (auto& consumerOp : oOperand->GetConsumers()) {
-            if (consumerOp->GetOpcode() == Opcode::OP_VIEW &&
-                !IsDimMultiple(consumerOp->GetOOperands().front()->GetShape(), iOperand->GetShape())) {
-                isConsumerOutputMultiple = false;
-                break;
-            }
-        }
+        bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
         if (!isToL1 || !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple) {
             oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             const auto& tensorToBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
@@ -705,13 +832,219 @@ void AssignMemoryType::ProcessLargeTileToSamllTile(Function& function)
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
-            if (iOperand->GetMemoryTypeOriginal() == MEM_UB && oOperand->shape != iOperand->shape) {
+            if (Platform::Instance().GetSoc().GetNPUArch() != NPUArch::DAV_3510) {
+                if (iOperand->GetMemoryTypeOriginal() == MEM_UB && oOperand->shape != iOperand->shape) {
+                    inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+                    continue;
+                }
+            }
+        }
+    }
+}
+
+bool AssignMemoryType::CheckConsumerViewShapeMultiple(const LogicalTensorPtr &output,
+                                                       const LogicalTensorPtr &input) {
+    for (auto &consumerOp : output->GetConsumers()) {
+        if (consumerOp->GetOpcode() == Opcode::OP_VIEW &&
+            !IsDimMultiple(consumerOp->GetOOperands().front()->GetShape(), input->GetShape())) {
+                return false;
+        }
+    }
+    return true;
+}
+
+// 处理L0C->UB小搬大场景（Cube到Vector）
+void AssignMemoryType::ProcessL0C2UBSmallToLarge(Function &function) {
+    for (auto &op : function.Operations()) {
+        auto opcode = op.GetOpcode();
+        if (opcode != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        auto oOperand = op.GetOOperands().front();
+        auto iOperand = op.GetIOperands().front();
+        // 检查输入是否为L0C
+        if (iOperand->GetMemoryTypeOriginal() != MEM_L0C) {
+            continue;
+        }
+        if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
+            continue;
+        }
+        // 检查所有consumer是否都需要UB
+        bool isToUB = true;
+        auto toBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
+        for (const auto &pair : toBeMap) {
+            const auto &toBeType = pair.second;
+            if (toBeType != MemoryType::MEM_UB) {
+                isToUB = false;
+                break;
+            }
+        }
+        // 检查shape倍数关系（小搬大）
+        bool isConsumerOutputMultiple = CheckConsumerViewShapeMultiple(oOperand, iOperand);
+        // 检查输出shape是否是输入shape的整数倍（小搬大）
+        if (!isToUB || !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !isConsumerOutputMultiple) {
+            // 不满足条件，降级为DDR
+            oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+            const auto &tensorToBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
+            for (const auto &[consumerOp, memoryType] : tensorToBeMap) {
+                if (memoryType == MemoryType::MEM_L0C) {
+                    inserter.UpdateTensorTobeMap(oOperand, *consumerOp, MemoryType::MEM_DEVICE_DDR);
+                }
+            }
+            APASS_LOG_DEBUG_F(Elements::Tensor,
+                "Set tensor %d original memory type to DDR since not towards UB or not multiple dimensions.",
+                oOperand->magic);
+        }
+    }
+}
+
+// 处理 L0C->UB 大搬小场景（Cube到Vector的切片）
+void AssignMemoryType::ProcessL0C2UBLargeToSmall(Function &function) {
+    for (auto &op : function.Operations()) {
+        auto opcode = op.GetOpcode();
+        if (opcode != Opcode::OP_VIEW) {
+            continue;
+        }
+        auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(op.GetOpAttribute().get());
+        MemoryType attrToType = viewOpAttribute->GetTo();
+        if (attrToType == MEM_UB) {
+            auto iOperand = op.GetIOperands().front();
+            auto oOperand = op.GetOOperands().front();
+            if (iOperand->GetMemoryTypeOriginal() == MEM_L0C && !IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
                 inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
                 continue;
             }
         }
     }
 }
+
+// 处理 UB->L1 小搬大场景（Vector到Cube）
+void AssignMemoryType::ProcessUB2L1SmallToLarge(Function &function) {
+    for (auto &op : function.Operations()) {
+        auto opcode = op.GetOpcode();
+        // 处理 Assemble 操作，UB 拼接到 L1
+        if (opcode != Opcode::OP_ASSEMBLE) {
+            continue;
+        }
+        auto oOperand = op.GetOOperands().front();
+        auto iOperand = op.GetIOperands().front();
+        // 检查输入是否为 UB，输出是否为 L1
+        if (iOperand->GetMemoryTypeOriginal() != MEM_UB || oOperand->GetMemoryTypeOriginal() != MEM_L1) {
+            continue;
+        }
+        // 约束：仅支持2维
+        if (iOperand->GetShape().size() != 2 || oOperand->GetShape().size() != 2) {
+            continue;
+        }
+        bool hasCopyInModeView = false;
+        for (auto &consumerOp : oOperand->GetConsumers()) {
+            if (consumerOp->GetOpcode() == Opcode::OP_VIEW) {
+                int64_t copyInModeValue = 0;
+                if (consumerOp->GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue) && copyInModeValue == 0) {
+                    hasCopyInModeView = true;
+                    break;
+                }
+            }
+        }
+        if (hasCopyInModeView || !CheckInnerAxisC0Size(iOperand, oOperand)) {
+            oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+            continue;
+        }
+        bool isToL1 = true;
+        auto toBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
+        for (const auto &pair : toBeMap) {
+            const auto &toBeType = pair.second;
+            if (toBeType != MemoryType::MEM_L1) {
+                isToL1 = false;
+                break;
+            }
+        }
+        // 检查 consumer 的 view 输出 shape 是否满足倍数关系
+        // 检查输出 shape 是否是输入 shape 的整数倍（小搬大）
+        if (!isToL1 || !IsDimMultiple(oOperand->GetShape(), iOperand->GetShape()) || !CheckConsumerViewShapeMultiple(oOperand, iOperand)) {
+            // 不满足条件，降级为 DDR
+            oOperand->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
+            const auto &tensorToBeMap = inserter.GetMemoryTypeFromTensorTobeMap(oOperand);
+            for (const auto &[consumerOp, memoryType] : tensorToBeMap) {
+                if (memoryType == MemoryType::MEM_UB) {
+                    inserter.UpdateTensorTobeMap(oOperand, *consumerOp, MemoryType::MEM_DEVICE_DDR);
+                }
+            }
+        }
+    }
+}
+
+// 处理 UB->L1 大搬小场景（Vector到Cube的切片）
+void AssignMemoryType::ProcessUB2L1LargeToSmall(Function &function) {
+    for (auto &op : function.Operations()) {
+        auto opcode = op.GetOpcode();
+        if (opcode != Opcode::OP_VIEW) {
+            continue;
+        }
+        auto viewOpAttribute = dynamic_cast<ViewOpAttribute *>(op.GetOpAttribute().get());
+        MemoryType attrToType = viewOpAttribute->GetTo();
+        // 只处理明确指定为 L1 的 view
+        if (attrToType == MEM_L1) {
+            auto iOperand = op.GetIOperands().front();
+            auto oOperand = op.GetOOperands().front();
+            int64_t copyInModeValue = 0;
+            bool hasCopyInModeAttr = op.GetAttr<int64_t>("op_attr_copy_in_mode", copyInModeValue);
+            if (hasCopyInModeAttr && copyInModeValue == 0) {
+                APASS_LOG_DEBUG_F(Elements::Operation,
+                    "UB2L1 large to small skip: bias/scale tensor (copy_in_mode=%ld), View Op[%d]",
+                    static_cast<long>(copyInModeValue), op.GetOpMagic());
+                inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+                continue;
+            }
+            // 内轴 C0 size 检查
+            if (!CheckInnerAxisC0Size(iOperand, oOperand)) {
+                inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+                continue;
+            }
+            // UB -> L1 大搬小：检查输入是否为 UB，且 shape 不满足倍数关系
+            if (iOperand->GetMemoryTypeOriginal() == MEM_UB && !IsDimMultiple(iOperand->GetShape(), oOperand->GetShape())) {
+                inserter.UpdateTensorTobeMap(iOperand, op, MEM_DEVICE_DDR);
+                continue;
+            }
+        }
+    }
+}
+
+bool AssignMemoryType::CheckInnerAxisC0Size(const LogicalTensorPtr &input,
+                                             const LogicalTensorPtr &output) const {
+    // 获取内轴（最后一维）的 size
+    size_t inputInnerAxis = input->GetShape().back();
+    size_t outputInnerAxis = output->GetShape().back();
+    // 获取数据类型大小（字节数）
+    int64_t inputDtypeBytes = BytesOf(input->Datatype());
+    int64_t outputDtypeBytes = BytesOf(output->Datatype());
+    // 检查数据类型字节数是否有效（避免除零）
+    int64_t inputC0Size = (inputDtypeBytes > 0) ? (32 / inputDtypeBytes) : 0;
+    int64_t outputC0Size = (outputDtypeBytes > 0) ? (32 / outputDtypeBytes) : 0;
+    if (inputC0Size <= 0 || outputC0Size <= 0) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+            "CheckInnerAxisC0Size: invalid C0 size, inputC0Size=%ld, outputC0Size=%ld",
+            static_cast<long>(inputC0Size), static_cast<long>(outputC0Size));
+        return false;
+    }
+    // 分别检查 input 和 output 的内轴是否满足各自的 C0 size 切分
+    if (inputInnerAxis % static_cast<size_t>(inputC0Size) != 0) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+            "CheckInnerAxisC0Size: input inner=%zu, dtypeBytes=%ld, c0Size=%ld, not aligned",
+            inputInnerAxis, static_cast<long>(inputDtypeBytes), static_cast<long>(inputC0Size));
+        return false;
+    }
+
+    if (outputInnerAxis % static_cast<size_t>(outputC0Size) != 0) {
+        APASS_LOG_DEBUG_F(Elements::Operation,
+            "CheckInnerAxisC0Size: output inner=%zu, dtypeBytes=%ld, c0Size=%ld, not aligned",
+            outputInnerAxis, static_cast<long>(outputDtypeBytes), static_cast<long>(outputC0Size));
+        return false;
+    }
+
+    return true;
+}
+
 /*
     @brief 检查第一个矩阵的所有维度是否为第二个矩阵的正整数倍
     @param shape1为第一个矩阵，shape2为第二个矩阵。

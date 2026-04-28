@@ -334,6 +334,24 @@ Status IntraSubgraphAdapter::AdapteTensorProducers(Function& function, LogicalTe
     return SUCCESS;
 }
 
+static bool IsIndirectView(Operation* op) {
+    if (op->GetOpcode() != Opcode::OP_VIEW) {
+        return false;
+    }
+    if (op->GetOOperands().size() == 0) {
+        return false;
+    }
+    MemoryType toType = op->GetOOperands()[0]->GetMemoryTypeOriginal();
+    std::vector<MemoryType> paths;
+    Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_DEVICE_DDR, toType, paths);
+    // DDR直达目标内存的路径包含2个节点（起点DDR + 终点），超过2表示需要经过中间层级（如DDR->UB->L1）
+    const size_t directPathLength = 2;
+    if (paths.size() > directPathLength) {
+        return true;
+    }
+    return false;
+}
+
 Status IntraSubgraphAdapter::AdapteTensorConsumers(Function& function, LogicalTensorPtr tensor)
 {
     std::unordered_map<int, std::vector<Operation*>> consumerColor2OpsMap;
@@ -349,7 +367,8 @@ Status IntraSubgraphAdapter::AdapteTensorConsumers(Function& function, LogicalTe
                 consumer->GetOpcodeStr().c_str(), consumer->GetOpMagic());
             return FAILED;
         }
-        if (consumer->GetOpcode() != Opcode::OP_VIEW && consumer->GetOpcode() != Opcode::OP_COPY_IN) {
+        if ((consumer->GetOpcode() != Opcode::OP_VIEW && consumer->GetOpcode() != Opcode::OP_COPY_IN) ||
+            IsIndirectView(consumer)) {
             consumerColor2OpsMap[consumer->GetSubgraphID()].push_back(consumer);
         }
     }

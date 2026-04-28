@@ -84,7 +84,7 @@ TILEOP void TMoveND2NZ(DstTileData& dst, SrcTileData& src)
 
 // Copy data from UB to L1 with NZ -> NZ format
 template <typename Coord, typename DstTileData, typename SrcTileData>
-TILEOP void TExtract(DstTileData& dst, SrcTileData& src, const Coord& coord)
+TILEOP void TExtract(DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord)
 {
     if (!CheckShapeValid(dst, src)) {
         return;
@@ -92,7 +92,7 @@ TILEOP void TExtract(DstTileData& dst, SrcTileData& src, const Coord& coord)
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
     static_assert(DstTileData::FORMAT == Hardware::L1 && SrcTileData::FORMAT == Hardware::UB);
-    TExtractUB2L1Impl<Coord, DstTileData, SrcTileData>(dst, src, coord);
+    TExtractUB2L1Impl<Coord, DstTileData, SrcTileData>(dst, src, dstCoord, srcCoord);
 }
 
 // Copy data from L1 to L0A_MX scale or L0B_MX scale
@@ -114,14 +114,16 @@ TILEOP void TExtractMX(DstTileData& dst, SrcTileData& src, const Coord& coord)
 
 // Copy data from L0C to UB
 template <CopyOutMode mode, typename Coord, typename DstTileData, typename SrcTileData>
-TILEOP void TExtract(DstTileData& dst, SrcTileData& src, const Coord& coord, int16_t subblockId)
+TILEOP void TExtract(
+    DstTileData& dst, SrcTileData& src, const Coord& dstCoord, const Coord& srcCoord, int16_t subblockId)
 {
     if (!CheckShapeValid(dst, src)) {
         return;
     }
     constexpr uint64_t shapeSize = Std::tuple_size<typename DstTileData::Shape>::value;
     static_assert(shapeSize == SHAPE_DIM2 && Std::tuple_size<Coord>::value == SHAPE_DIM2, "Shape Size should be 2 Dim");
-    TExtractL0C2UBImpl<mode, Coord, DstTileData, SrcTileData>(dst, src, coord, subblockId);
+    static_assert(DstTileData::FORMAT == Hardware::UB && SrcTileData::FORMAT == Hardware::L0C);
+    TExtractL0C2UBImpl<mode, Coord, DstTileData, SrcTileData>(dst, src, dstCoord, srcCoord, subblockId);
 }
 
 template <

@@ -55,7 +55,7 @@ Status InferParamIndex::ResetOutputDynValidShape(const Operation& op, Function &
 {
     const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
                                            Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
-                                           Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT};
+                                           Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};
     bool isCopyIn = (op.GetOpcode() == Opcode::OP_COPY_IN);
     bool isCopyOut = (op.GetOpcode() == Opcode::OP_COPY_OUT);
     if ((isCopyIn || isCopyOut)) {
@@ -72,7 +72,9 @@ Status InferParamIndex::ResetOutputDynValidShape(const Operation& op, Function &
                 validShape.emplace_back("sym_" + std::to_string(outOperand->GetMagic()) + "_dim_" + std::to_string(dimIdx));
             }
         }
-        if (op.GetOpcode() != Opcode::OP_ASSEMBLE) outOperand->UpdateDynValidShape(validShape);
+        if (op.GetOpcode() != Opcode::OP_ASSEMBLE && op.GetOpcode() != Opcode::OP_L0C_COPY_UB) {
+            outOperand->UpdateDynValidShape(validShape);
+        }
     }
     return SUCCESS;
 }

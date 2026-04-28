@@ -710,9 +710,7 @@ void Load2L1InferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
         outValidShapes.push_back(inputValidShapes[0]);
     }
 }
-REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_L1, Opcode::OP_UB_COPY_L1, Load2L1InferFunc);
 REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_ND2NZ, Opcode::OP_UB_COPY_ND2NZ, Load2L1InferFunc);
-REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_UB, Opcode::OP_L0C_COPY_UB, Load2L1InferFunc);
 
 void Load2L1MXScaleInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
 {
@@ -1065,6 +1063,8 @@ void CopyOutInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
     }
 }
 REGISTER_INFER_SHAPE_FUNC(OP_COPY_OUT, Opcode::OP_COPY_OUT, CopyOutInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_UB_COPY_L1, Opcode::OP_UB_COPY_L1, CopyOutInferFunc);
+REGISTER_INFER_SHAPE_FUNC(OP_L0C_COPY_UB, Opcode::OP_L0C_COPY_UB, CopyOutInferFunc);
 
 // MTE infer shape func
 void TransposeInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)

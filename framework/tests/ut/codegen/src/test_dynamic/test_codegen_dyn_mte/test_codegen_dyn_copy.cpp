@@ -289,13 +289,8 @@ TEST_F(TestCodegenDynCopy, L1ToBt)
     EXPECT_EQ(res, expect);
 }
 
-std::string TestMatmulMteBody(
-    const std::string& funcName, Opcode opcode, MemoryType inType, MemoryType outType, bool isTileTensor = false)
+std::string TestMatmulMteBody(const std::string& funcName, Opcode opcode, MemoryType inType, MemoryType outType)
 {
-    if (isTileTensor) {
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-    }
     std::vector<int64_t> shape = {64, 64};
     auto shapeImme = OpImmediate::Specified(shape);
     config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
@@ -332,6 +327,12 @@ std::string TestMatmulMteBody(
     } else if (opcode == Opcode::OP_L1_TO_L0A) {
         op.SetOpAttribute(
             std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_L0A, shapeImme, shapeImme));
+    } else if (opcode == Opcode::OP_L0C_COPY_UB) {
+        op.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(MEM_L0C, OpImmediate::Specified({0, 0}), shapeImme, shapeImme));
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+        copyAttr->SetToDynValidShape(OpImmediate::Specified(shape));
+        copyAttr->SetFromOffset(OpImmediate::Specified({0, 0}));
     }
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
@@ -356,7 +357,7 @@ TEST_F(TestCodegenDynCopy, L1CopyInTensor)
 TEST_F(TestCodegenDynCopy, L1CopyL0Tensor)
 {
     std::string res =
-        TestMatmulMteBody("L1CopyL0Tensor", Opcode::OP_L1_TO_L0A, MemoryType::MEM_L1, MemoryType::MEM_L0A, true);
+        TestMatmulMteBody("L1CopyL0Tensor", Opcode::OP_L1_TO_L0A, MemoryType::MEM_L1, MemoryType::MEM_L0A);
     std::string expect = R"!!!(TExtract<0>(l0aTensor_0, l1Tensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
@@ -373,38 +374,38 @@ TEST_F(TestCodegenDynCopy, L1CopyFBTensor)
 
 TEST_F(TestCodegenDynCopy, L1CopyBTTensor)
 {
-    std::string res =
-        TestMatmulMteBody("L1CopyBTTensor", Opcode::OP_L1_TO_BT, MemoryType::MEM_L1, MemoryType::MEM_BT, true);
+    std::string res = TestMatmulMteBody("L1CopyBTTensor", Opcode::OP_L1_TO_BT, MemoryType::MEM_L1, MemoryType::MEM_BT);
     std::string expect = R"!!!(TExtract<0>(btTensor_0, l1Tensor_1, Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }
 
-TEST_F(TestCodegenDynCopy, L0CopyOutTensor)
+TEST_F(TestCodegenDynCopy, L0CCopyOutTensor)
 {
     std::string res =
-        TestMatmulMteBody("L0CopyOutTensor", Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR);
+        TestMatmulMteBody("L0CCopyOutTensor", Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR);
     std::string expect =
         R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_0, l0cTensor_1, l0cTensor_1, Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
 
-TEST_F(TestCodegenDynCopy, L0CopyOutTensorTileTensor)
+TEST_F(TestCodegenDynCopy, L0CCopyOutTensorTileTensor)
 {
     std::string res = TestMatmulMteBody(
-        "L0CopyOutTensorTileTensor", Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR, true);
+        "L0CCopyOutTensorTileTensor", Opcode::OP_COPY_OUT, MemoryType::MEM_L0C, MemoryType::MEM_DEVICE_DDR);
     std::string expect =
         R"!!!(TStore<TStoreConfig<CopyOutMode::NZ2ND, 0, 0>>(gmTensor_0, l0cTensor_1, l0cTensor_1, Coord2Dim(0, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 0), GET_PARAM_RAWSHAPE_BY_IDX(param, 0, -1, 2, 1), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
 
-TEST_F(TestCodegenDynCopy, L0CopyUBTensor)
+TEST_F(TestCodegenDynCopy, L0CCopyUBTensor)
 {
     std::string res =
-        TestMatmulMteBody("L0CopyUBTensor", Opcode::OP_L0C_COPY_UB, MemoryType::MEM_L0C, MemoryType::MEM_UB);
-    std::string expect = R"!!!(TExtract<CopyOutMode::NZ2ND>(ubTensor_0, l0cTensor_1, Coord2Dim(0, 0), 0);
+        TestMatmulMteBody("L0CCopyUBTensor", Opcode::OP_L0C_COPY_UB, MemoryType::MEM_L0C, MemoryType::MEM_UB);
+    std::string expect =
+        R"!!!(TExtract<CopyOutMode::NZ2ND>(ubTensor_0, l0cTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0), 0);
 )!!!";
     EXPECT_EQ(res, expect);
 }
@@ -443,6 +444,13 @@ std::string TestCopyL1Body(Opcode opcode, MemoryType inputType, MemoryType outpu
         copyAttr->SetToDynValidShape(OpImmediate::Specified(shape));
         copyAttr->SetFromOffset(OpImmediate::Specified({0, 0}));
     }
+    if (opcode == Opcode::OP_UB_COPY_L1) {
+        auto shapeImme = OpImmediate::Specified(shape);
+        op.SetOpAttribute(
+            std::make_shared<CopyOpAttribute>(OpImmediate::Specified({0, 0}), MEM_L1, shapeImme, shapeImme));
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+        copyAttr->SetToOffset(OpImmediate::Specified({0, 0}));
+    }
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
     CodeGenCtx ctx;
@@ -457,7 +465,7 @@ std::string TestCopyL1Body(Opcode opcode, MemoryType inputType, MemoryType outpu
 TEST_F(TestCodegenDynCopy, UB2L1TileTensor)
 {
     std::string res = TestCopyL1Body(Opcode::OP_UB_COPY_L1, MemoryType::MEM_UB, MemoryType::MEM_L1);
-    std::string expect = R"!!!(TExtract(l1Tensor_0, ubTensor_1, Coord2Dim(0, 0));
+    std::string expect = R"!!!(TExtract(l1Tensor_0, ubTensor_1, Coord2Dim(0, 0), Coord2Dim(0, 0));
 )!!!";
     EXPECT_EQ(res, expect);
 }

@@ -1557,10 +1557,10 @@ TEST_F(TestPadLocalBuffer, UB2L1)
     auto* currFunctionPtr = graph.GetFunction();
     PadLocalBuffer padLocalBufferTest;
     padLocalBufferTest.RunOnFunction(*currFunctionPtr);
-    std::vector<int64_t> expectShape{32, 32};
-    auto t2 = graph.GetTensor("t3a");
-    EXPECT_EQ(t2->GetShape(), expectShape);
-    EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);
+    std::vector<int64_t> expectShape{33, 32};
+    auto t3a = graph.GetTensor("t3a");
+    EXPECT_EQ(t3a->GetShape(), expectShape);
+    EXPECT_EQ(t3a->tensor->GetRawShape(), expectShape);
 }
 
 TEST_F(TestPadLocalBuffer, UB2L1_WithAxisCombine)
@@ -1593,7 +1593,7 @@ TEST_F(TestPadLocalBuffer, UB2L1_WithAxisCombine)
     EXPECT_EQ(axisCombineTest.RunOnFunction(*currFunctionPtr), SUCCESS);
     PadLocalBuffer padLocalBufferTest;
     padLocalBufferTest.RunOnFunction(*currFunctionPtr);
-    std::vector<int64_t> expectShape{32, 32};
+    std::vector<int64_t> expectShape{33, 32};
     auto t2 = graph.GetTensor("t3a");
     EXPECT_EQ(t2->GetShape(), expectShape);
     EXPECT_EQ(t2->tensor->GetRawShape(), expectShape);

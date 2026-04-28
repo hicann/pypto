@@ -414,6 +414,15 @@ bool ConvertInserter::FitL0C2L1(const Operation& op)
     return FitL0C2L1(in);
 }
 
+// UB2L1 小搬大的格式检查
+bool ConvertInserter::FitUB2L1(const LogicalTensorPtr &tensor) const{
+    auto shape = tensor->GetShape();
+    if (shape.size() != MATMUL_DIM_NUM) {
+        return false;
+    }
+    return true;
+}
+
 // 构造转换路径
 Status ConvertInserter::ProcessConvertPath(
     const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, MemoryType requiredMemoryType,

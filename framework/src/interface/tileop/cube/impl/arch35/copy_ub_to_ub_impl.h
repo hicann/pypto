@@ -34,9 +34,11 @@ INLINE void TMoveND2NZImpl(DstTileData& dst, SrcTileData& src)
     using tileNDTensor = pto::Tile<
         pto::TileType::Vec, typename SrcTileData::Type, staticNDH, staticNDW, pto::BLayout::RowMajor, staticNDH,
         staticNDW>;
+    // staticNZH - 1 is for resolving bank conflicts
     using tileNZTensor = pto::Tile<
-        pto::TileType::Vec, typename DstTileData::Type, staticNZH, staticNZW, pto::BLayout::ColMajor, staticNZH,
-        staticNZW, pto::SLayout::RowMajor>;
+        pto::TileType::Vec, typename DstTileData::Type, staticNZH, staticNZW, pto::BLayout::ColMajor, staticNZH - 1,
+        staticNZW, pto::SLayout::RowMajor, pto::TileConfig::fractalABSize, pto::PadValue::Null,
+        pto::CompactMode::RowPlusOne>;
     tileNDTensor srcTile;
     tileNZTensor dstTile;
     pto::TASSIGN(srcTile, static_cast<uint64_t>(src.GetAddr()));

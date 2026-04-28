@@ -148,6 +148,9 @@ public:
     // l0c2l1场景规避条件检查，检查op输入是否满足无非立即数的validShape
     bool FitL0C2L1(const Operation &op);
 
+    // 检查是否适合 UB2L1 小搬大
+    bool FitUB2L1(const LogicalTensorPtr &tensor) const;
+    
     // 特殊场景处理：生成者均为Assemble或者消费者均为View/Assemble，且mem路径中经过DDR
     void ProcessSpecialProducersOrConsumers(
         const Operation& op, const std::shared_ptr<LogicalTensor>& oOperand, std::set<Operation*, OpMagicComparator>& consumers,

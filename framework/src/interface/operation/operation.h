@@ -435,6 +435,7 @@ public:
             Opcode::OP_L1_COPY_OUT,
             Opcode::OP_COPY_IN,
             Opcode::OP_L0C_TO_L1,
+            Opcode::OP_L0C_COPY_UB,
             Opcode::OP_L1_TO_BT,
             Opcode::OP_L1_TO_FIX_QUANT_PRE,
             Opcode::OP_L1_TO_L0A,

@@ -935,5 +935,54 @@ TEST_F(GenerateMoveOpPassTest, SetOpcodeByMemPath)
     Status ret = generateMoveOp.SetOpcodeByMemPath(testOp, MemoryType::MEM_L0AMX, MemoryType::MEM_L0BMX);
     EXPECT_EQ(ret, FAILED);
 }
+
+TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_L0C2UB)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "L0C2UB", "L0C2UB", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("L0C2UB", currFunctionPtr);
+
+    // 创建输入 tensor (L0C)
+    std::vector<int64_t> shape{32, 64};
+    auto inputTensor = CreateTestLogicalTensor(*currFunctionPtr, MEM_L0C, TileOpFormat::TILEOP_NZ, shape);
+    // 创建输出 tensor (UB)
+    auto outputTensor = CreateTestLogicalTensor(*currFunctionPtr, MEM_UB, TileOpFormat::TILEOP_ND, shape);
+
+    // 创建 Assemble 操作
+    auto& assembleOp = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp.SetOpAttribute(assembleAttr);
+
+    // 调用 CreateMoveOpForAssemble
+    GenerateMoveOp generateMoveOp;
+    generateMoveOp.CreateMoveOpForAssemble(*currFunctionPtr, assembleOp);
+
+    // 验证：Opcode 应变为 OP_L0C_COPY_UB
+    EXPECT_EQ(assembleOp.GetOpcode(), Opcode::OP_L0C_COPY_UB);
+    EXPECT_TRUE(assembleOp.HasAttribute(OpAttributeKey::isCube));
+}
+
+TEST_F(GenerateMoveOpPassTest, CreateMoveOpForAssemble_UB2L1)
+{
+    auto currFunctionPtr = std::make_shared<Function>(Program::GetInstance(), "UB2L1", "UB2L1", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+    Program::GetInstance().InsertFuncToFunctionMap("UB2L1", currFunctionPtr);
+    std::vector<int64_t> shape{32, 64};
+    auto inputTensor = CreateTestLogicalTensor(*currFunctionPtr, MEM_UB, TileOpFormat::TILEOP_ND, shape);
+    // 创建输出 tensor (L1)
+    auto outputTensor = CreateTestLogicalTensor(*currFunctionPtr, MEM_L1, TileOpFormat::TILEOP_NZ, shape);
+
+    // 创建 Assemble 操作
+    auto& assembleOp = currFunctionPtr->AddRawOperation(Opcode::OP_ASSEMBLE, {inputTensor}, {outputTensor});
+    auto assembleAttr = std::make_shared<AssembleOpAttribute>(std::vector<int64_t>{0, 0});
+    assembleOp.SetOpAttribute(assembleAttr);
+
+    // 调用 CreateMoveOpForAssemble
+    GenerateMoveOp generateMoveOp;
+    generateMoveOp.CreateMoveOpForAssemble(*currFunctionPtr, assembleOp);
+
+    // 验证：Opcode 应变为 OP_UB_COPY_L1
+    EXPECT_EQ(assembleOp.GetOpcode(), Opcode::OP_UB_COPY_L1);
+}
 } // namespace tile_fwk
 } // namespace npu
