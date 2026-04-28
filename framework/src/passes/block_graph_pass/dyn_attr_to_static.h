@@ -49,6 +49,7 @@ static const std::string MAYBE_CONST_POSTFIX = "MAYBE_CONST";
 static const SymbolicScalar MAYBE_CONST_COA_GetOffset = AddRuntimeCoaPrefix("GET_PARAM_OFFSET_MAYBE_CONST");
 static const SymbolicScalar MAYBE_CONST_COA_GetValidShape = AddRuntimeCoaPrefix("GET_PARAM_VALID_SHAPE_MAYBE_CONST");
 static const SymbolicScalar MAYBE_CONST_COA_GetParam = AddRuntimeCoaPrefix("GET_PARAM_MAYBE_CONST");
+static const SymbolicScalar GET_PARAM_ADDR_MAYBE_CONST = AddRuntimeCoaPrefix("GET_PARAM_ADDR_MAYBE_CONST");
 
 Status SToIWrapper(const std::string str, int& result);
 
@@ -263,6 +264,9 @@ private:
     Status GetTileFunction(Function* function, std::unordered_set<Function*>& tileFunctionSet);
     Status DumpFunctionJson(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
     Status PrintFunction(Function& function, const std::string& logFolder, bool beforeFunction = true) override;
+    void BuildParamAddr(Operation &op);
+    std::set<LogicalTensorPtr> visitedTensors_;
+    std::set<int> rootInOutCast_;
 };
 } // namespace tile_fwk
 } // namespace npu

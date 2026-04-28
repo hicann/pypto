@@ -436,7 +436,15 @@ Status DynAttrToStatic::TryRemoveDynAttr(Function* leafFunc, std::vector<Operati
         auto callop = std::static_pointer_cast<CallOpAttribute>(callList[i]->GetOpAttribute());
         callopArglistOneDim.push_back(callop->GetLinearArgList());
     }
-
+    for (auto& callop : callList) {
+        auto rootFunction = callop->BelongTo();
+        for (auto &inCast : rootFunction->GetIncast()) {
+            rootInOutCast_.insert(inCast->GetRawMagic());
+        }
+        for (auto &outCast : rootFunction->GetOutcast()) {
+            rootInOutCast_.insert(outCast->GetRawMagic());
+        }
+    }
     // 2. 依次为leafFunc的所有op拿到所有动态attr，为每个动态attr刷新coa宏
     auto operationViewer = leafFunc->Operations(false);
     for (size_t j = 0; j < operationViewer.size(); j++) {
@@ -450,6 +458,7 @@ Status DynAttrToStatic::TryRemoveDynAttr(Function* leafFunc, std::vector<Operati
                 return FAILED;
             }
         }
+        BuildParamAddr(op);
     }
 
     // 3. 为dynParam的赋值刷新coa宏
@@ -458,9 +467,73 @@ Status DynAttrToStatic::TryRemoveDynAttr(Function* leafFunc, std::vector<Operati
     return SUCCESS;
 }
 
+std::pair<int, int> ParseRuntimeGetParamAddr(const std::string& input) {
+    // 默认返回 {-1, -1} 表示不匹配
+    std::pair<int, int> paramArgs = {-1, -1};
+    // 正则：严格匹配 RUNTIME_GET_PARAM_ADDR(xxx, 数字, 数字)
+    std::regex pattern(R"(RUNTIME_GET_PARAM_ADDR\s*\(\s*[^,]+,\s*(\d+)\s*,\s*(\d+)\s*\))");
+    std::smatch matches;
+    if (std::regex_search(input, matches, pattern)) {
+        try {
+            paramArgs.first = std::stoi(matches[1].str());
+            paramArgs.second = std::stoi(matches[2].str());
+        } catch (...) {
+            // 解析失败也返回 {-1,-1}
+            return { -1, -1 };
+        }
+    }
+    return paramArgs;
+}
+
+// Helper function to set paramAddr attribute for a tensor
+void UpdateTensorParamAddr(std::shared_ptr<LogicalTensor> &tensor, const std::set<int>& inOutCast)
+{
+    std::map<int, SymbolicScalar> paramAddrMap;
+    tensor->GetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
+    for (auto &paramAddr : paramAddrMap) {
+        auto paramArgs = ParseRuntimeGetParamAddr(paramAddr.second.Dump());
+        int aiCpuFlag = inOutCast.count(tensor->GetRawMagic()) ? 3 : 2;
+        if (paramAddr.second.IsExpression() && paramArgs.first != -1 && paramArgs.second != -1) {
+            paramAddr.second = GET_PARAM_ADDR_MAYBE_CONST(
+                SymbolicScalar(static_cast<int64_t>(aiCpuFlag)),
+                SymbolicScalar(static_cast<int64_t>(0)),
+                SymbolicScalar(static_cast<int64_t>(paramArgs.first)),
+                SymbolicScalar(static_cast<int64_t>(paramArgs.second)));
+        }
+    }
+    tensor->SetAttr<std::map<int, SymbolicScalar>>(TensorAttributeKey::tensorAddr, paramAddrMap);
+}
+
+void DynAttrToStatic::BuildParamAddr(Operation &op) {
+    for (auto &iOperand : op.GetIOperands()) {
+        if (visitedTensors_.count(iOperand)) {
+            continue;
+        }
+        if (iOperand->HasAttr(TensorAttributeKey::tensorAddr)) {
+            UpdateTensorParamAddr(iOperand, rootInOutCast_);
+            visitedTensors_.insert(iOperand);
+        }
+    }
+    for (auto &oOperand : op.GetOOperands()) {
+        if (visitedTensors_.count(oOperand)) {
+            continue;
+        }
+        if (oOperand->HasAttr(TensorAttributeKey::tensorAddr)) {
+            UpdateTensorParamAddr(oOperand, rootInOutCast_);
+            visitedTensors_.insert(oOperand);
+        }
+    }
+}
+
 Status DynAttrToStatic::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(Elements::Operation, "==============> Start DynAttrToStatic.");
+    for (auto &inCast : function.GetIncast()) {
+        rootInOutCast_.insert(inCast->GetRawMagic());
+    }
+    for (auto &outCast : function.GetOutcast()) {
+        rootInOutCast_.insert(outCast->GetRawMagic());
+    }
     // 1. 遍历所有rootFunc，找到每个leaf的所有caller，生成leaf2Caller map
     if (BuildLeafToCaller(&function) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Operation, "Failed to call BuildLeafToCaller.");
