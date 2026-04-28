@@ -76,6 +76,7 @@ void ElewiseInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
             }
         }
     }
+    std::vector<int64_t> inputIdx(shapeDimNum, 0);
     std::vector<SymbolicScalar> inputValidShape;
     for (size_t i = 0; i < shapeDimNum; ++i) {
         size_t oneDimNum = 0;
@@ -89,6 +90,7 @@ void ElewiseInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
         }
         if (oneDimNum > 0 && oneDimNum < dimShape[i].size()) {
             inputValidShape.push_back(dimValidShape[i][noOneIndex]);
+            inputIdx[i] = noOneIndex;
             continue;
         }
 
@@ -116,7 +118,7 @@ void ElewiseInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& o
     }
 
     int64_t whereBitMode = 0;
-    if (op->GetAttr(OP_ATTR_PREFIX + "whereBitMode", whereBitMode) && whereBitMode == 1) {
+    if (op->GetAttr(OP_ATTR_PREFIX + "whereBitMode", whereBitMode) && whereBitMode == 1 && inputIdx.back() == 0) {
         inputValidShape[inputValidShape.size() - 1] = inputValidShape[inputValidShape.size() - 1] * 8;
     }
 
