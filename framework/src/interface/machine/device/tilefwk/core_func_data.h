@@ -22,7 +22,6 @@
 #include "tilefwk/aikernel_data.h"
 
 inline constexpr size_t MAX_STITCH_FUNC_NUM = 1024;      // stitch数量阈值
-inline constexpr size_t MAX_STITCH_FUNC_NUM_LOWER = 128; // stitch数量阈值下限
 inline constexpr size_t MAX_STITCH_LEAFFUNC_NUM = 20000;
 constexpr int MAX_DIMS = 8;
 constexpr uint32_t AICORE_TYPE_NUM = 2;
@@ -123,7 +122,7 @@ struct L2PreInfo {
 struct MixTaskData {
     uint64_t readyWrapCoreFunctionQue;              // 指针指向WrapInfoQueue 结构
     uint64_t wrapIdNum;                             // 包含的有效wrapId个数
-    uint64_t opWrapList[MAX_STITCH_FUNC_NUM_LOWER]; // 指针数组，指向每个function的callop对应的wrapId
+    uint64_t opWrapList[MAX_STITCH_FUNC_NUM]; // 指针数组，指向每个function的callop对应的wrapId
 };
 
 inline constexpr size_t DIE_NUM = 2UL;

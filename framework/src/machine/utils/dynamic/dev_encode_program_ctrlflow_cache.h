@@ -33,7 +33,7 @@ namespace npu::tile_fwk::dynamic {
 constexpr size_t READY_QUEUE_SIZE = 3UL;
 constexpr size_t DIE_READY_QUEUE_SIZE = 2UL;
 inline constexpr size_t MAX_STITCH_FUNC_NUM = 1024;
-inline constexpr size_t MAX_STITCH_FUNC_NUM_LOWER = 128;
+
 inline constexpr size_t DEFAULT_STITCH_CFGCACHE_SIZE = 100000000;
 
 struct ReadyQueueCache {
@@ -61,7 +61,7 @@ struct DieReadyQueueCache {
 struct MixTaskDataCache {
     WrapInfoQueue queue;
     uint64_t wrapIdNum;
-    uint64_t opWrapList[MAX_STITCH_FUNC_NUM_LOWER];
+    uint64_t opWrapList[MAX_STITCH_FUNC_NUM];
 };
 
 struct DynFuncDataCache {
@@ -524,8 +524,8 @@ struct DevControlFlowCache {
         memcpy_s(mixTaskDataBackup->queue.elem, wrapInfoBackupSize, wrapInfoQueue->elem, wrapInfoBackupSize);
 
         memcpy_s(
-            mixTaskDataBackup->opWrapList, MAX_STITCH_FUNC_NUM_LOWER, base->devTask.mixTaskData.opWrapList,
-            MAX_STITCH_FUNC_NUM_LOWER);
+            mixTaskDataBackup->opWrapList, MAX_STITCH_FUNC_NUM, base->devTask.mixTaskData.opWrapList,
+            MAX_STITCH_FUNC_NUM);
         base->mixTaskDataBackup = mixTaskDataBackup;
     }
 
@@ -547,8 +547,8 @@ struct DevControlFlowCache {
         memcpy_s(wrapInfoQueue->elem, wrapInfoBackupSize, mixTaskDataBackup->queue.elem, wrapInfoBackupSize);
 
         memcpy_s(
-            base->devTask.mixTaskData.opWrapList, MAX_STITCH_FUNC_NUM_LOWER, mixTaskDataBackup->opWrapList,
-            MAX_STITCH_FUNC_NUM_LOWER);
+            base->devTask.mixTaskData.opWrapList, MAX_STITCH_FUNC_NUM, mixTaskDataBackup->opWrapList,
+            MAX_STITCH_FUNC_NUM);
     }
 
     static void RelocBuildInputOutputDesc(
