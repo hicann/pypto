@@ -27,9 +27,7 @@ $$
 本文以每张卡上的数据类型为 bfloat16，每个输入左矩阵为 $BS \times D$，权重矩阵为 $H \times D$，首先给出整体的代码实现：
 
 ```python
-@pypto.frontend.jit(
-    runtime_options={"stitch_function_max_num": 128},
-)
+@pypto.frontend.jit()
 def matmul_allreduce_add_rmsnorm_kernel(
     in_tensor: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     matmul_weight: pypto.Tensor(),
@@ -57,71 +55,71 @@ def matmul_allreduce_add_rmsnorm_kernel(
         # 1. create shmem tesnor
         shmem_shape = [view_row_shape, hidden_size]
         shmem_tensor = pypto.distributed.create_shmem_tensor(
-            group_name, world_size, pypto.DT_FP32, shmem_shape)
+            group_name, world_size, pypto.DT_BF16, shmem_shape)
         shmem_barrier_signal = pypto.distributed.create_shmem_signal(group_name, world_size)
         my_pe = pypto.distributed.my_symbolic_pe(group_name)
-        for _ in pypto.loop(1, name="LOOP_MM_AR_ARMS_L0", idx_name="_"):
-            in_tensor_tile = pypto.view(
-                in_tensor, (view_row_shape, in_tensor.shape[1]), [bs_idx * view_row_shape, 0],
-                valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]])
+        in_tensor_tile = pypto.view(
+            in_tensor, (view_row_shape, in_tensor.shape[1]), [bs_idx * view_row_shape, 0],
+            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), in_tensor.shape[1]])
 
-            # 2. clear data
-            pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
-            data_clear_out = pypto.distributed.shmem_clear_data(
-                shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
-            signal_clear_out = pypto.distributed.shmem_clear_signal(
-                shmem_tensor, pred=[in_tensor_tile])
-            barrier_out = pypto.distributed.shmem_barrier_all(
-                shmem_barrier_signal, [data_clear_out, signal_clear_out])
+        # 2. clear data
+        pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
+        data_clear_out = pypto.distributed.shmem_clear_data(
+            shmem_tensor, shmem_shape, [0, 0], pred=[in_tensor_tile])
+        signal_clear_out = pypto.distributed.shmem_clear_signal(
+            shmem_tensor, pred=[in_tensor_tile])
+        barrier_out = pypto.distributed.shmem_barrier_all(
+            shmem_barrier_signal, [data_clear_out, signal_clear_out])
 
-            # 3. matmul
-            pypto.set_cube_tile_shapes([8, 8], [128, 256], [256, 512])
-            matmul_result = pypto.matmul(in_tensor_tile, matmul_weight, pypto.DT_FP32, b_trans=True)
+        # 3. matmul
+        pypto.set_cube_tile_shapes([8, 8], [128, 256], [256, 512])
+        matmul_result = pypto.matmul(in_tensor_tile, matmul_weight, pypto.DT_BF16, b_trans=True)
 
-            # 4. allreduce
-            pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
-            for dyn_idx in range(world_size):
-                put_out = pypto.distributed.shmem_put(matmul_result, [0, 0], shmem_tensor, dyn_idx,
-                    put_op=pypto.AtomicType.ADD, pred=[barrier_out])
-                pypto.distributed.shmem_signal(shmem_tensor, dyn_idx, 1, shmem_shape,
-                    [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out])
-            wait_until_out = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
-                shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
-            pypto.set_vec_tile_shapes(1, hidden_size)
-            all_reduce_out = pypto.experimental.shmem_load(
-                shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out], valid_shape=shmem_shape
-            )
+        # 4. allreduce
+        pypto.set_vec_tile_shapes(view_row_shape, hidden_size)
+        for dyn_idx in range(world_size):
+            put_out = pypto.distributed.shmem_put(matmul_result, [0, 0], shmem_tensor, dyn_idx,
+                put_op=pypto.AtomicType.ADD, pred=[barrier_out])
+            pypto.distributed.shmem_signal(shmem_tensor, dyn_idx, 1, shmem_shape,
+                [0, 0], target_pe=dyn_idx, sig_op=pypto.AtomicType.ADD, pred=[put_out])
+        wait_until_out = pypto.distributed.shmem_wait_until(shmem_tensor, my_pe, world_size,
+            shmem_shape, [0, 0], cmp=pypto.OpType.EQ, clear_signal=True, pred=[in_tensor_tile])
+        pypto.set_vec_tile_shapes(1, hidden_size)
+        all_reduce_out = pypto.experimental.shmem_load(
+            shmem_tensor, my_pe, shmem_shape, [0, 0], pred=[wait_until_out], valid_shape=shmem_shape
+        )
 
-            # 5. Add RmsNorm
-            residual_tile = pypto.view(
-                residual, (view_row_shape, hidden_size), [bs_idx * view_row_shape, 0],
-                valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size])
+        # 5. Add RmsNorm
+        residual_tile = pypto.view(
+            residual, (view_row_shape, hidden_size), [bs_idx * view_row_shape, 0],
+            valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size])
 
-            # add
-            residual_tile_fp32 = pypto.cast(residual_tile, pypto.DT_FP32)
-            add_out = pypto.add(all_reduce_out, residual_tile_fp32)
+        # add
+        all_reduce_out_fp32 = pypto.cast(all_reduce_out, pypto.DT_FP32)
+        residual_tile_fp32 = pypto.cast(residual_tile, pypto.DT_FP32)
+        add_out = pypto.add(all_reduce_out_fp32, residual_tile_fp32)
 
-            # rms norm
-            square = pypto.mul(add_out, add_out)
-            mean_res = pypto.mul(square, in_tensor_mean_coff)
-            reduce_asum = pypto.sum(mean_res, -1, True)
-            reduce_sum = pypto.add(reduce_asum, eps)
-            reduce_sqrt = pypto.sqrt(reduce_sum)
-            res_div = pypto.div(add_out, reduce_sqrt)
+        # rms norm
+        square = pypto.mul(add_out, add_out)
+        mean_res = pypto.mul(square, in_tensor_mean_coff)
+        reduce_asum = pypto.sum(mean_res, -1, True)
+        reduce_sum = pypto.add(reduce_asum, eps)
+        reduce_sqrt = pypto.sqrt(reduce_sum)
+        res_div = pypto.div(add_out, reduce_sqrt)
 
-            hidden_bf16 = pypto.tensor([view_row_shape, hidden_size], pypto.DT_BF16, "hidden_bf16")
-            residual_bf16_tmp = pypto.cast(add_out, in_tensor.dtype)
-            for tmp_idx in range(view_row_shape):
-                gamma_2d_fp32 = pypto.cast(gamma_2d, pypto.DT_FP32)
-                bias_2d_fp32 = pypto.cast(bias_2d, pypto.DT_FP32)
-                res_div_single = pypto.view(res_div, [1, hidden_size], [tmp_idx, 0])
-                res = pypto.mul(res_div_single, gamma_2d_fp32)
-                res_add = pypto.add(res, bias_2d_fp32)
-                in_tensor_norm = pypto.cast(res_add, in_tensor.dtype)
-                hidden_bf16[tmp_idx:tmp_idx + 1] = in_tensor_norm
+        hidden_bf16 = pypto.tensor([view_row_shape, hidden_size], pypto.DT_BF16, "hidden_bf16")
+        residual_bf16_tmp = pypto.cast(add_out, in_tensor.dtype)
+        for tmp_idx in range(view_row_shape):
+            gamma_2d_fp32 = pypto.cast(gamma_2d, pypto.DT_FP32)
+            bias_2d_fp32 = pypto.cast(bias_2d, pypto.DT_FP32)
+            res_div_single = pypto.view(res_div, [1, hidden_size], [tmp_idx, 0])
+            res = pypto.mul(res_div_single, gamma_2d_fp32)
+            res_add = pypto.add(res, bias_2d_fp32)
+            in_tensor_norm = pypto.cast(res_add, in_tensor.dtype)
+            hidden_bf16[tmp_idx:tmp_idx + 1] = in_tensor_norm
 
-            residual_out[bs_idx * pypto.symbolic_scalar(view_row_shape):] = residual_bf16_tmp
-            out_tensor[bs_idx * pypto.symbolic_scalar(view_row_shape):] = hidden_bf16
+        residual_out[bs_idx * pypto.symbolic_scalar(view_row_shape):] = residual_bf16_tmp
+        out_tensor[bs_idx * pypto.symbolic_scalar(view_row_shape):] = hidden_bf16
 ```
 
 在上述代码中，各个输入参数的含义如下：
@@ -167,11 +165,11 @@ shmem_tensor = pypto.distributed.create_shmem_tensor(
             group_name, world_size, pypto.DT_FP32, shmem_shape)
 ```
 
-上述代码创建了一个对应通信域名称为 `group_name`，通信域中进程数为 `world_size` 的通信域，通信域的数据缓冲区大小与 `shmem_shape` 一致，数据类型为 DT_FP32 即单精度浮点类型。需要注意，由于在每个进程上都会执行上述代码，因此每个进程都具备一片上述的数据缓冲区作为本进程对应通信域下的数据缓冲区作为共享内存。返回结果 `shmem_tensor` 中既包含了数据缓冲区，也绑定了该数据缓冲区对应的信号缓冲区。
+上述代码创建了一个对应通信域名称为 `group_name`，通信域中进程数为 `world_size` 的通信域，通信域的数据缓冲区大小与 `shmem_shape` 一致，数据类型为 DT_BF16。需要注意，由于在每个进程上都会执行上述代码，因此每个进程都具备一片上述的数据缓冲区作为本进程对应通信域下的数据缓冲区作为共享内存。返回结果 `shmem_tensor` 中既包含了数据缓冲区，也绑定了该数据缓冲区对应的信号缓冲区。
 
 为了保证每个切片间互不干扰，代码实现首先通过 `shmem_clear_data`/`shmem_clear_signal` 将当前切块对应的共享数据/信号缓冲区的内存数据置为 0，并通过 `shmem_barrier_all` 等待共享信号缓冲区以及信号区的置 0 操作全部完成。
 
-随后通过 matmul 算子将做切块矩阵域权重矩阵做矩阵乘法计算，由于权重矩阵的形状大小为 $D \times H$，而切块矩阵的形状大小为 $8 \times H$，因此权重矩阵需要进行转置变为 $H \times D$ 后进行计算，在代码实现中通过 `b_trans=True` 进行配置。并且在矩阵乘法中通过指定输出类型为 DT_FP32 保证其与数据缓冲区的大小一致。
+随后通过 matmul 算子将做切块矩阵域权重矩阵做矩阵乘法计算，由于权重矩阵的形状大小为 $D \times H$，而切块矩阵的形状大小为 $8 \times H$，因此权重矩阵需要进行转置变为 $H \times D$ 后进行计算，在代码实现中通过 `b_trans=True` 进行配置。并且在矩阵乘法中通过指定输出类型为 DT_BF16 保证其与数据缓冲区的大小一致。
 
 矩阵乘法完成后，代码实现通过广播的方式将矩阵乘法结果告知通信域中所有 rank 并写入其对应的数据缓冲区中。
 
@@ -199,15 +197,15 @@ all_reduce_out = pypto.experimental.shmem_load(
 
 ### 残差连接
 
-完成 MatmulAllReduce 后，其输出 `all_reduce_out` 被加载到 UB 中以供复用。由于 MatmulAllReduce 阶段通过行切分输入左矩阵，最终 `all_reduce_out` 的结果也对应输入左矩阵切片的行位置，再进行残差计算时 `residual` 也需要保持一致。因此通过 `view` 操作将切块对应后使用 `add` 操作完成残差连接的计算。同时由于矩阵输出的类型为 DT_FLOAT 而 `residual` 的类型为 DT_BF16(bloat16)，因此需要通过 `cast` 操作将类型统一。
+完成 MatmulAllReduce 后，其输出 `all_reduce_out` 被加载到 UB 中以供复用。由于 MatmulAllReduce 阶段通过行切分输入左矩阵，最终 `all_reduce_out` 的结果也对应输入左矩阵切片的行位置，再进行残差计算时 `residual` 也需要保持一致。因此通过 `view` 操作将切块对应，并将`all_reduce_out`和`residual`升精度为 DT_FP32， 使用 `add` 操作完成残差连接的计算。
 
 ```python
 residual_tile = pypto.view(
                 residual, (view_row_shape, hidden_size), [bs_idx * view_row_shape, 0],
                 valid_shape=[(batch_size - bs_idx * view_row_shape).min(view_row_shape), hidden_size])
-
+all_reduce_out_fp32 = pypto.cast(all_reduce_out, pypto.DT_FP32)
 residual_tile_fp32 = pypto.cast(residual_tile, pypto.DT_FP32)
-add_out = pypto.add(all_reduce_out, residual_tile_fp32)
+add_out = pypto.add(all_reduce_out_fp32, residual_tile_fp32)
 ```
 
 ### RMS Norm

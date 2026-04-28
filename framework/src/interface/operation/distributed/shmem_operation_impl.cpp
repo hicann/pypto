@@ -270,11 +270,11 @@ static Tensor ShmemPutImpl(
     ValidateShmemTensor(dst, true);
     std::unordered_set<DataType> allowedTypes = {DT_INT32, DT_FP32, DT_FP16, DT_BF16};
     ValidateTensor(src, "local tensor", {2}, allowedTypes, {TileOpFormat::TILEOP_ND});
-    auto shmemDataType =
-        ((putOp == AtomicType::ADD) && ((src.GetDataType() == DT_BF16) || (src.GetDataType() == DT_FP16))) ?
-            DT_FP32 :
-            src.GetDataType();
-    ValidateTensor(dst.data, "data of shmem tensor", {}, {shmemDataType}, {TileOpFormat::TILEOP_ND}, src.GetShape());
+    std::unordered_set<DataType> allowedShmemTypes = {src.GetDataType()};
+    if ((putOp == AtomicType::ADD) && ((src.GetDataType() == DT_BF16) || (src.GetDataType() == DT_FP16))) {
+        allowedShmemTypes.emplace(DT_FP32);
+    }
+    ValidateTensor(dst.data, "data of shmem tensor", {}, allowedShmemTypes, {TileOpFormat::TILEOP_ND}, src.GetShape());
     ValidateTensor(pred, "pred tensor", {2});
     ValidateTiling(isUb2Gm ? Opcode::OP_SHMEM_PUT_UB2GM : Opcode::OP_SHMEM_PUT, src, "src");
     auto& function = *Program::GetInstance().GetCurrentFunction();
