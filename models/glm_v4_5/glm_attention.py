@@ -446,8 +446,8 @@ def ifa_func_kernel(
     # 当子图大小达到上界不允许与其他子图合并
     pass_options={
     # Q常驻，0代表第一组mmad，4代表4次matmul合并
-    "cube_l1_reuse_setting": {0: 32},
-    "cube_nbuffer_setting": {1: 4}
+    "cube_l1_reuse_setting": {-1: 8},
+    "cube_nbuffer_setting": {-1: 4}
     },
     host_options={"compile_monitor_enable": True},
     debug_options={"runtime_debug_mode": 1, "compile_debug_mode": 0}
@@ -535,7 +535,7 @@ def ifa_func_kernel_for_950(
                         # c1
                         # 9. 下面是flash attention的计算逻辑  m 128  k=128  n=128
                         pypto.set_cube_tile_shapes(c1_tile[0], c1_tile[1], c1_tile[2])
-                        # 后续开启 pypto.set_pass_options(sg_set_scope=5001)
+                        pypto.set_pass_options(sg_set_scope=5001)
                         sij = pypto.matmul(qi, kj_assemble, pypto.DT_FP32, a_trans=False, b_trans=True)
                         # 后续开启 pypto.set_pass_options(sg_set_scope=-1)
                         sij = pypto.view(sij, [g_tile, s2_tile], [0, 0],
@@ -563,7 +563,7 @@ def ifa_func_kernel_for_950(
                         # 后续开启 pypto.set_pass_options(sg_set_scope=5001)
                         pypto.set_cube_tile_shapes(c2_tile[0], c2_tile[1], c2_tile[2])
                         mm2_res = pypto.matmul(vec1_res_fp16, vj_assemble, pypto.DT_FP32)
-                        # 后续开启 pypto.set_pass_options(sg_set_scope=-1)
+                        pypto.set_pass_options(sg_set_scope=-1)
 
                         # # v2
                         if pypto.is_loop_begin(s2_idx):
