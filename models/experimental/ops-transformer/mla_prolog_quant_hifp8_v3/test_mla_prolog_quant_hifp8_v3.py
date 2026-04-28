@@ -8,8 +8,18 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 # -----------------------------------------------------------------------------------------------------------
-'''
-'''
+"""
+MLA Prolog Quant HiFP8 Operator Test
+
+本测试文件用于验证 MLA (Multi-Head Attention) Prolog V3 量化算子的实现正确性，
+支持 HiFP8 数据格式的量化场景。
+
+主要测试内容:
+  - MLA Prolog decode 模式下的量化计算
+  - Q/KV 的量化精度验证
+  - KV Cache 和 KR Cache 的更新操作
+  - RoPE (Rotary Position Embedding) 位置编码应用
+"""
 import os
 import sys
 
@@ -26,7 +36,7 @@ import pytest
 import pypto
 
 from utils.compare import compare
-from mla_prolog_quant_hifp8_impl import mla_prolog_quant, MlaTileConfig, RopeTileShapeConfig
+from mla_prolog_quant_hifp8_v3_impl import mla_prolog_quant, MlaTileConfig, RopeTileShapeConfig
 
 
 def prep_env():
@@ -408,10 +418,10 @@ def gen_mla_prolog_quant_v32_data(params, dtypes, actual_seq, is_quant=(False, F
     inputs["kr_cache"] = kr_cache
     inputs["cache_index"] = kv_len
     if is_quant_a:
-        inputs["w_qa_scale"] = scale_data["w_dq"]
-        inputs["w_kva_scale"] = scale_data["w_dkvkr"]
+        inputs["w_dq_scale"] = scale_data["w_dq"]
+        inputs["w_dkvkr_scale"] = scale_data["w_dkvkr"]
     if is_quant_b:
-        inputs["w_qb_scale"] = scale_data["w_uqqr"]
+        inputs["w_uqqr_scale"] = scale_data["w_uqqr"]
         if has_smooth:
             inputs["smooth_cq"] = smooth_cq
 
@@ -430,7 +440,7 @@ def gen_mla_prolog_quant_v32_data(params, dtypes, actual_seq, is_quant=(False, F
 
 
 def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, is_quant_a, \
-                        is_quant_b, nz, tile_config, cache_mode):
+                        is_quant_b, nz, tile_config):
 
     b = params['b']
     s = params['s']
@@ -523,7 +533,7 @@ def mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, is_quant_a, 
     output_data = [output_q_nope_data, output_q_rope_data, output_kv_cache_data, output_kr_cache_data]
 
     rope_tile_shape = RopeTileShapeConfig(two_dim=[32, 64], three_dim=[32, 32, 128], four_dim=[16, 128, 128, 128])
-    mla_prolog_quant(*input_data, *output_data, 1e-5, 1e-5, cache_mode, tile_config, rope_tile_shape)
+    mla_prolog_quant(*input_data, *output_data, 1e-5, 1e-5, tile_config, rope_tile_shape)
 
     torch_npu.npu.synchronize()
 
@@ -580,9 +590,9 @@ def test_b4_s64k2_pa_nd_bf16_quant():
 
     actual_seq = torch.tensor([params["s2"]] * params["b"], dtype=torch.int32).unsqueeze(-1)
     input_tensors, golden_data = gen_mla_prolog_quant_v32_data(params, (torch.bfloat16, torch.bfloat16), actual_seq, \
-                    (is_quant_a, is_quant_b), False, 128, "PA_BSND")
+                    (is_quant_a, is_quant_b), False, 128, cache_mode)
     mla_prolog_quant_v32(params, input_tensors, golden_data, dtype, \
-                        is_quant_a, is_quant_b, is_nz, tile_config, cache_mode)
+                        is_quant_a, is_quant_b, is_nz, tile_config)
 
 
 if __name__ == "__main__":

@@ -33,7 +33,10 @@ import pypto
 from pypto import pypto_impl
 
 
-@dataclass
+HIFP8_MAX_VALUE = 32768.0
+HIFP8_ONE_VALUE = 1.0
+
+
 class MlaTileConfig:
     """Tile configuration for MLA prolog quantization operations.
     
@@ -174,14 +177,12 @@ def quant_hifp8(
     Note:
         The quantization uses scale = max(|input|) / 32768.0
     """
-    hif8_max_value = 32768.0
-    hif8_one_value = 1.0
     input_fp32 = pypto.cast(input_tensor, pypto.DT_FP32, pypto.CastMode.CAST_NONE)
 
     abs_res = pypto.abs(input_fp32)
     max_value = pypto.amax(abs_res, dim=-1, keepdim=True)
 
-    scale_dequant = max_value * (hif8_one_value / hif8_max_value)
+    scale_dequant = max_value * (HIFP8_ONE_VALUE / HIFP8_MAX_VALUE)
     out_fp32 = pypto.div(input_fp32, scale_dequant)
     out_hif8 = pypto.cast(out_fp32, pypto.DT_HF8)
     return (out_hif8, scale_dequant)
@@ -366,8 +367,6 @@ def pre_compute_2d(
         List containing:
             - q_b_proj: Query projection result, shape (bs, n*q_head_dim)
             - compressed_kv: Compressed key-value result, shape (bs, kv_lora_rank+rope_dim)
-            - q_norm or norm_res: Normalized query (quantized or not)
-            - q_norm_scale or None: Quantization scale (if quant_b) or None
 
     Note:
         The function supports three quantization modes:
@@ -488,7 +487,6 @@ def mla_prolog_quant_compute(
     kr_cache_out: pypto.Tensor,
     epsilon_cq: float,
     epsilon_ckv: float,
-    cache_mode: str,
     tile_config: MlaTileConfig,
     rope_cfg: RopeTileShapeConfig):
     """Compute MLA Prolog with quantization support.
@@ -677,7 +675,7 @@ def mla_prolog_quant(
     query_rope_out: pypto.Tensor([pypto.DYNAMIC, pypto.STATIC, pypto.STATIC]),
     kv_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
     kr_cache_out: pypto.Tensor([pypto.STATIC, pypto.STATIC, pypto.STATIC, pypto.STATIC]),
-    epsilon_cq, epsilon_ckv, cache_mode, tile_config, rope_cfg
+    epsilon_cq, epsilon_ckv, tile_config, rope_cfg
 ):
     """
     JIT-compiled MLA Prolog quantization for decode phase.
@@ -699,7 +697,7 @@ def mla_prolog_quant(
         cos: Cosine values for RoPE, BF16
         sin: Sine values for RoPE, BF16
         cache_index: Cache index for scatter update, INT64
-        kv_cache: Key-value cache input/output, INT8
+        kv_cache: Key-value cache input/output, BF16
         kr_cache: Key RoPE cache input/output, BF16
         query_nope_out: Output query without RoPE, BF16
         query_rope_out: Output query with RoPE, BF16
@@ -707,7 +705,6 @@ def mla_prolog_quant(
         kr_cache_out: Output key RoPE cache
         epsilon_cq: RMSNorm epsilon for query
         epsilon_ckv: RMSNorm epsilon for key-value
-        cache_mode: Cache mode ("PA_BSND" or "PA_NZ")
         tile_config: MlaTileConfig object
         rope_cfg: RopeTileShapeConfig object
 
@@ -720,5 +717,5 @@ def mla_prolog_quant(
                             sin, cache_index, kv_cache, kr_cache, query_nope_out,
                             query_rope_out, kv_cache_out,
                             kr_cache_out, epsilon_cq,
-                            epsilon_ckv, cache_mode, tile_config, rope_cfg
+                            epsilon_ckv, tile_config, rope_cfg
     )
