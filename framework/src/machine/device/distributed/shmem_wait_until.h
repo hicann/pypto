@@ -86,11 +86,13 @@ public:
     {
         uint32_t index = Hash(taskId);
         SignalTileOp* current = hashTable[index];
-        while (current != nullptr) {
+        uint32_t loopCount = 0;
+        while (current != nullptr && loopCount < AICPU_TASK_ARRAY_SIZE) {
             if (current->taskId_ == taskId) {
                 return current;
             }
             current = current->next;
+            loopCount++;
         }
         return nullptr;
     }
