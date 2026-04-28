@@ -156,7 +156,12 @@ void AutoCast::InsertCastOp(
 {
     Operation& newCast = function.AddRawOperation(Opcode::OP_CAST, {src}, {tgt});
     newCast.SetAttribute(OP_ATTR_PREFIX + "mode", CastMode::CAST_NONE);
-    newCast.UpdateTileShape(tileShape);
+    auto newTileShape = tileShape;
+    auto vecTile = newTileShape.GetVecTile();
+    int activeStart = std::max(0, static_cast<int>(vecTile.tile.size()) - static_cast<int>(tgt->GetShape().size()));
+    vecTile.tile = std::vector<int64_t>(vecTile.tile.begin() + activeStart, vecTile.tile.end());
+    newTileShape.SetVecTile(vecTile);
+    newCast.UpdateTileShape(newTileShape);
     newCast.SetScopeInfo(scopeInfo);
     addedCast_.insert(&newCast);
 }
