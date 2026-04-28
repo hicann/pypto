@@ -218,6 +218,8 @@ Tensor Ln(const Tensor& operand, LogAlgorithm precisionType = LogAlgorithm::DEFA
 Tensor Hub(const Tensor& operand);
 Tensor Sign(const Tensor& operand);
 Tensor Signbit(const Tensor& operand);
+Tensor Sinh(const Tensor& self);
+Tensor Cosh(const Tensor& self);
 
 Tensor Duplicate(const Tensor& operand);
 Tensor Gather(const Tensor& params, const Tensor& indices, int axis);

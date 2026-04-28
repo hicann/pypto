@@ -710,4 +710,175 @@ TILEOP void TRelu(T0 dst, T1 src)
 {
     UnaryCompute<UnaryOp::RELU, 0, LastUse>(dst, src);
 }
+
+#define OP_TILE_OP_SINH TSinh
+template <typename T0, typename T1, typename T2>
+TILEOP void TSinh(T0 dst, T1 src, T2 tmp)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+
+    constexpr float SCALAR_ZERO_0199 = 0.0001998459335617813754003f;
+    constexpr float SCALAR_ZERO_0833 = 0.00833308538698833f;
+    constexpr float SCALAR_ZERO_166 = 0.16666668254541f;
+    constexpr float SCALAR_ZERO_48 = 0.48f;
+    constexpr float SCALAR_ONE = 1.0f;
+    constexpr float SCALAR_ZERO_POINT_FIVE = 0.5f;
+    constexpr float SCALAR_NEGATIVE_15 = -1.5f;
+    constexpr float SCALAR_NEGATIVE_ONE = -1.0f;
+    constexpr float SCALAR_ZERO = 0.0f;
+
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; n3Index ++ ) {
+                    auto offset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2 + n3Index * dstStride3;
+
+                    using DataTileDefine =
+                        pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    using MaskTileDefine =
+                        pto::Tile<pto::TileType::Vec, uint8_t, 1, tileW * 4, pto::BLayout::RowMajor, -1, -1>;
+                    
+                    DataTileDefine dstTile(1, dstShape4);
+                    DataTileDefine srcTile(1, dstShape4);
+
+                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
+                    pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + offset * dstTypeSize));
+
+                    DataTileDefine tmp0Tile(1, dstShape4);
+                    DataTileDefine tmp1Tile(1, dstShape4);
+                    DataTileDefine tmp2Tile(1, dstShape4);
+                    DataTileDefine tmp3Tile(1, dstShape4);
+                    
+                    pto::TASSIGN(tmp0Tile, (uint64_t)(tmp.GetAddr()));
+                    pto::TASSIGN(tmp1Tile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
+                    pto::TASSIGN(tmp2Tile, (uint64_t)(tmp.GetAddr() + 2 * tileW * dstTypeSize));
+                    pto::TASSIGN(tmp3Tile, (uint64_t)(tmp.GetAddr() + 3 * tileW * dstTypeSize));
+
+                    MaskTileDefine tmp1MaskTile(1, dstShape4);
+                    pto::TASSIGN(tmp1MaskTile, (uint64_t)(tmp.GetAddr() + tileW * dstTypeSize));
+
+                    // sinh(x) = x + x^3 / 3! + x^5 / 5! + x^7 / 7! for small x
+                    pto::TABS(tmp0Tile, srcTile);
+                    SyncV();
+                    pto::TMUL(tmp1Tile, tmp0Tile, tmp0Tile);
+                    SyncV();
+                    pto::TMULS(tmp2Tile, tmp1Tile, SCALAR_ZERO_0199);
+                    SyncV();
+                    pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ZERO_0833);
+                    SyncV();
+                    pto::TMUL(tmp2Tile, tmp2Tile, tmp1Tile);
+                    SyncV();
+                    pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ZERO_166);
+                    SyncV();
+                    pto::TMUL(tmp2Tile, tmp2Tile, tmp1Tile);
+                    SyncV();
+                    pto::TADDS(tmp2Tile, tmp2Tile, SCALAR_ONE);
+                    SyncV();
+                    pto::TMUL(tmp2Tile, tmp2Tile, tmp0Tile);
+                    SyncV();
+
+                    // sinh(x) = 1/2 * (e^{x/2} - e^{-3x/2}) * e^{x/2} for large x
+                    pto::TMULS(tmp1Tile, tmp0Tile, SCALAR_ZERO_POINT_FIVE);
+                    SyncV();
+                    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmp1Tile, tmp1Tile);
+                    SyncV();
+                    pto::TMULS(tmp3Tile, tmp0Tile, SCALAR_NEGATIVE_15);
+                    SyncV();
+                    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(tmp3Tile, tmp3Tile);
+                    SyncV();
+                    pto::TSUB(tmp3Tile, tmp1Tile, tmp3Tile);
+                    SyncV();
+                    pto::TMULS(tmp3Tile, tmp3Tile, SCALAR_ZERO_POINT_FIVE);
+                    SyncV();
+                    pto::TMUL(tmp3Tile, tmp3Tile, tmp1Tile);
+                    SyncV();
+
+                    pto::TCMPS(tmp1MaskTile, tmp0Tile, SCALAR_ZERO_48, pto::CmpMode::LT);
+                    SyncV();
+                    pto::TSEL(dstTile, tmp1MaskTile, tmp2Tile, tmp3Tile, tmp0Tile);
+                    SyncV();
+
+                    pto::TMULS(tmp2Tile, dstTile, SCALAR_NEGATIVE_ONE);
+                    SyncV();
+                    pto::TCMPS(tmp1MaskTile, srcTile, SCALAR_ZERO, pto::CmpMode::GE);
+                    SyncV();
+                    pto::TSEL(dstTile, tmp1MaskTile, dstTile, tmp2Tile, tmp0Tile);
+                    SyncV();
+                }
+            }
+        }
+    }
+}
+
+#define OP_TILE_OP_COSH TCosh
+template <typename T0, typename T1>
+TILEOP void TCosh(T0 dst, T1 src)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto dstShape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto dstShape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto dstShape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto dstShape3 = dstLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto dstShape4 = dstLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+
+    constexpr float SCALAR_ZERO_POINT_FIVE = 0.5f;
+    constexpr float SCALAR_NEGATIVE_ONE_POINT_FIVE = -1.5f;
+    
+    constexpr auto tileW = TileOp::GetTensorTileShapeDim<T0, DIM_5TH, MAX_DIMS>();
+    constexpr auto dstTypeSize = sizeof(typename T0::Type);
+
+    auto dstStride0 = dstLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto dstStride1 = dstLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto dstStride2 = dstLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto dstStride3 = dstLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+
+    for (LoopVar n0Index = 0; n0Index < dstShape0; n0Index ++ ) {
+        for (LoopVar n1Index = 0; n1Index < dstShape1; n1Index ++ ) {
+            for (LoopVar n2Index = 0; n2Index < dstShape2; n2Index ++ ) {
+                for (LoopVar n3Index = 0; n3Index < dstShape3; n3Index ++ ) {
+                    auto offset = n0Index * dstStride0 + n1Index * dstStride1 + n2Index * dstStride2 + n3Index * dstStride3;
+
+                    using DataTileDefine =
+                        pto::Tile<pto::TileType::Vec, typename T0::Type, 1, tileW, pto::BLayout::RowMajor, -1, -1>;
+                    
+                    DataTileDefine dstTile(1, dstShape4);
+                    DataTileDefine srcTile(1, dstShape4);
+                    
+                    pto::TASSIGN(dstTile, (uint64_t)(dst.GetAddr() + offset * dstTypeSize));
+                    pto::TASSIGN(srcTile, (uint64_t)(src.GetAddr() + offset * dstTypeSize));
+
+                    // cosh(x) = 1/2 * (e^{x/2} + e^{-3x/2}) * e^{x/2}
+                    pto::TABS(srcTile, srcTile);
+                    SyncV();
+                    pto::TMULS(dstTile, srcTile, SCALAR_NEGATIVE_ONE_POINT_FIVE);
+                    SyncV();
+                    pto::TMULS(srcTile, srcTile, SCALAR_ZERO_POINT_FIVE);
+                    SyncV();
+                    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(srcTile, srcTile);
+                    SyncV();
+                    pto::TEXP<pto::ExpAlgorithm::HIGH_PRECISION>(dstTile, dstTile);
+                    SyncV();
+                    pto::TADD(dstTile, dstTile, srcTile);
+                    SyncV();
+                    pto::TMULS(dstTile, dstTile, SCALAR_ZERO_POINT_FIVE);
+                    SyncV();
+                    pto::TMUL(dstTile, dstTile, srcTile);
+                    SyncV();
+                }
+            }
+        }
+    }
+}
 #endif

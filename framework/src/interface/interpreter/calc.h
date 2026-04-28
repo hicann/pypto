@@ -84,6 +84,8 @@ inline void Cos(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOp
 inline void Exp(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Exp(Trans(out), Trans(self)); }
 inline void Exp2(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Exp2(Trans(out), Trans(self)); }
 inline void Expm1(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Expm1(Trans(out), Trans(self)); }
+inline void Sinh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Sinh(Trans(out), Trans(self)); }
+inline void Cosh(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Cosh(Trans(out), Trans(self)); }
 inline void Neg(LogicalTensorDataPtr out, LogicalTensorDataPtr self) { GetCalcOps()->Neg(Trans(out), Trans(self)); }
 inline void Round(LogicalTensorDataPtr out, LogicalTensorDataPtr self, int decimals)
 {

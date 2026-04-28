@@ -3329,6 +3329,42 @@ def gen_dequantize_op_golden(case_name: str, output: Path, case_index: int = Non
     return gen_op_golden("Dequantize", dequantize_golden_func, output, case_index)
 
 
+@GoldenRegister.reg_golden_func(case_names=[
+    "TestSinh/SinhOperationTest.TestSinh",
+])
+def gen_sinh_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0]).npu()
+        result = torch.sinh(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("Sinh", generate_wrapper, output, case_index)
+
+
+@GoldenRegister.reg_golden_func(case_names=[
+    "TestCosh/CoshOperationTest.TestCosh",
+])
+def gen_cosh_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+
+    def generate_wrapper(
+        inputs: List[np.ndarray],
+        config: Dict[str, Any],
+    ) -> List[np.ndarray]:
+        tensor0 = from_numpy(inputs[0]).npu()
+        result = torch.cosh(tensor0)
+        result = result.cpu()
+        return [to_numpy(result)]
+
+    logging.debug(f"Generating golden files of {case_name} ...")
+    return gen_op_golden("Cosh", generate_wrapper, output, case_index)
+
+
 def main() -> bool:
     # 用例名称
     case_name_list: List[str] = [

@@ -266,6 +266,36 @@ Tensor Duplicate(const Tensor& operand)
         UnaryOperation<UnaryOpType::DUPLICATE>, *Program::GetInstance().GetCurrentFunction(), operand.GetStorage());
 }
 
+Tensor Sinh(const Tensor& self)
+{
+    DECLARE_TRACER();
+    
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "SINH");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "SINH");
+    CheckTensorShapeSize(self.GetStorage(), "SINH");
+
+    auto castSelf = Cast(self, DataType::DT_FP32);
+    auto result = CALL(UnaryOperation<UnaryOpType::SINH>, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage());
+    auto castResult = Cast(result, self.GetDataType());
+    return castResult;
+}
+
+Tensor Cosh(const Tensor& self)
+{
+    DECLARE_TRACER();
+
+    std::unordered_set<DataType> supportedTypes = {DT_FP16, DT_FP32};
+    CheckTensorDataType(self.GetStorage(), supportedTypes, "COSH");
+    CheckTensorDimRange(self.GetStorage(), 1, 4, "COSH");
+    CheckTensorShapeSize(self.GetStorage(), "COSH");
+
+    auto castSelf = Cast(self, DataType::DT_FP32);
+    auto result = CALL(UnaryOperation<UnaryOpType::COSH>, *Program::GetInstance().GetCurrentFunction(), castSelf.GetStorage());
+    auto castResult = Cast(result, self.GetDataType());
+    return castResult;
+}
+
 void ExpOperationTileFunc(
     Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
     const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
@@ -392,6 +422,25 @@ void HubOperationTileFunc(
     return TiledUnaryOperation<UnaryOpType::HUB>(function, tileShape, iOperand[0], oOperand[0]);
 }
 
+void SinhOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    Shape& shape = TileShape::Current().GetVecTile().tile;
+    int dim = shape.size();
+    uint64_t intermediateBytes = static_cast<uint64_t>(((shape[dim - 1] + 7) / 8 * 8)) * BytesOf(DT_FP32) * 4;
+    return TiledUnaryOperation<UnaryOpType::SINH>(function, tileShape, iOperand[0], oOperand[0], intermediateBytes);
+}
+
+void CoshOperationTileFunc(
+    Function& function, const TileShape& tileShape, const std::vector<LogicalTensorPtr>& iOperand,
+    const std::vector<LogicalTensorPtr>& oOperand, [[maybe_unused]] const Operation& op)
+{
+    UnaryOperationOperandCheck(iOperand, oOperand);
+    return TiledUnaryOperation<UnaryOpType::COSH>(function, tileShape, iOperand[0], oOperand[0]);
+}
+
 REGISTER_OPERATION_TILED_FUNC(OP_EXP, Opcode::OP_EXP, ExpOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RSQRT, Opcode::OP_RSQRT, RsqrtOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_RELU, Opcode::OP_RELU, ReluOperationTileFunc);
@@ -405,5 +454,7 @@ REGISTER_OPERATION_TILED_FUNC(OP_ABS, Opcode::OP_ABS, AbsOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_LN, Opcode::OP_LN, LnOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_ISFINITE, Opcode::OP_ISFINITE, IsFiniteOperationTileFunc);
 REGISTER_OPERATION_TILED_FUNC(OP_HUB, Opcode::OP_HUB, HubOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_SINH, Opcode::OP_SINH, SinhOperationTileFunc);
+REGISTER_OPERATION_TILED_FUNC(OP_COSH, Opcode::OP_COSH, CoshOperationTileFunc);
 
 } // namespace npu::tile_fwk

@@ -282,6 +282,8 @@ stest:
       - TestQuantize/QuantizeOperationTest.TestQuantize/4
       - TestDequantize/DequantizeOperationTest.TestDequantize/0
       - TestDequantize/DequantizeOperationTest.TestDequantize/4
+      - TestSinh/SinhOperationTest.TestSinh/2
+      - TestCosh/CoshOperationTest.TestCosh/2
       # - GatherInL1Test.gather_in_a_unalign
       # - GatherInL1Test.gather_in_bt_with_valid_shape
       - GatherInUBTest.gather_in_a_

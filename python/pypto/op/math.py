@@ -785,6 +785,70 @@ def cos(self: Tensor) -> Tensor:
 
 
 @op_wrapper
+def sinh(input: Tensor) -> Tensor:
+    """Computes the element-wise hyperbolic sine of `input`.
+
+    This function calculates the formula: `out = (e ** input - e ** (-input)) / 2`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise hyperbolic sine results.
+
+    See Also
+    -------
+    cosh : Element-wise hyperbolic cosine function
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.sinh(x)
+
+    Input x: [0.0     1.0     2.0]
+    Output y:[0.0000  1.1752  3.6269]
+    """
+
+    return pypto_impl.Sinh(input)
+
+
+@op_wrapper
+def cosh(input: Tensor) -> Tensor:
+    """Computes the element-wise hyperbolic cosine of `input`.
+
+    This function calculates the formula: `out = (e ** input + e ** (-input)) / 2`.
+
+    Parameters
+    ----------
+    input : Tensor
+        The input tensor.
+
+    Returns
+    -------
+    Tensor
+        A new tensor containing the element-wise hyperbolic cosine results.
+
+    See Also
+    -------
+    sinh : Element-wise hyperbolic sine function
+
+    Examples
+    --------
+    x = pypto.tensor([3], pypto.DT_FP32)
+    y = pypto.cosh(x)
+
+    Input x: [0.0     1.0     2.0]
+    Output y:[1.0000  1.5431  3.7622]
+    """
+
+    return pypto_impl.Cosh(input)
+
+
+@op_wrapper
 def sign(a: Tensor) -> Tensor:
     """Computes the element-wise exponential of `input`.
 

@@ -344,6 +344,12 @@ void ExecuteOpUnary(ExecuteOperationContext* ctx)
         case Opcode::OP_EXP:
             calc::Exp(ret, iop);
             break;
+        case Opcode::OP_SINH:
+            calc::Sinh(ret, iop);
+            break;
+        case Opcode::OP_COSH:
+            calc::Cosh(ret, iop);
+            break;
         case Opcode::OP_NEG:
             calc::Neg(ret, iop);
             break;
@@ -391,6 +397,8 @@ void ExecuteOpUnary(ExecuteOperationContext* ctx)
     }
 }
 REGISTER_CALC_OP(OP_EXP, Opcode::OP_EXP, ExecuteOpUnary<Opcode::OP_EXP>);
+REGISTER_CALC_OP(OP_SINH, Opcode::OP_SINH, ExecuteOpUnary<Opcode::OP_SINH>);
+REGISTER_CALC_OP(OP_COSH, Opcode::OP_COSH, ExecuteOpUnary<Opcode::OP_COSH>);
 REGISTER_CALC_OP(OP_NEG, Opcode::OP_NEG, ExecuteOpUnary<Opcode::OP_NEG>);
 REGISTER_CALC_OP(OP_SIGN, Opcode::OP_SIGN, ExecuteOpUnary<Opcode::OP_SIGN>);
 REGISTER_CALC_OP(OP_SIGNBIT, Opcode::OP_SIGNBIT, ExecuteOpUnary<Opcode::OP_SIGNBIT>);
