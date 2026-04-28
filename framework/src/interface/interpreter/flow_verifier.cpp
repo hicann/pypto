@@ -255,7 +255,7 @@ bool FlowVerifier::VerifyResult(
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagic)] =
             std::to_string(functionInterpreter_->pathFuncMagic);
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] =
-            "'" + std::to_string(functionInterpreter_->pathFuncHash);
+            std::to_string(functionInterpreter_->pathFuncHash) + "'";
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputRawShape)] =
             functionInterpreter_->ShapeToString(tensorDataViewList[k]->GetData()->GetShape());
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputShape)] =
@@ -271,8 +271,8 @@ bool FlowVerifier::VerifyResult(
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputSymbol)] = tensorDatalist[k]->GetRawTensor()->GetSymbol();
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::outputTensor)] = fileName;
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "PASS";
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aTimeStamp)] = std::to_string(ts);
-        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bTimeStamp)] = std::to_string(ts);
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::aTimeStamp)] = std::to_string(ts) + "'";
+        ProgrameInfo[toIndex(ProgrameInfoCsvHeader::bTimeStamp)] = std::to_string(ts) + "'";
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
         ProgrameInfo[toIndex(ProgrameInfoCsvHeader::rtolAndAtol)] =
             functionInterpreter_->ToStrWithPrecision(rtol) + "/" + functionInterpreter_->ToStrWithPrecision(atol);
@@ -372,8 +372,8 @@ void FlowVerifier::WriteUserGolden(const std::vector<std::shared_ptr<LogicalTens
         OpInfo[toIndex(OpInfoCsvHeader::outputTensor)] = goldenFileName;
         OpInfo[toIndex(OpInfoCsvHeader::inputTensors)] = goldenFileName;
         OpInfo[toIndex(OpInfoCsvHeader::passName)] = "user_golden";
-        OpInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts);
-        OpInfo[toIndex(OpInfoCsvHeader::ioflag)] = std::to_string(k);
+        OpInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts) + "'";
+        OpInfo[toIndex(OpInfoCsvHeader::ioflag)] = "a" + std::to_string(k);
     }
     functionInterpreter_->WriteCsvRow(
         OpInfo, functionInterpreter_->opInfoRowNum, functionInterpreter_->execOpResultFile);
@@ -386,7 +386,7 @@ void FlowVerifier::WriteException()
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagicName)] = functionInterpreter_->execDumpFunPath;
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncMagic)] = std::to_string(functionInterpreter_->pathFuncMagic);
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::pathFuncHash)] =
-        "'" + std::to_string(functionInterpreter_->pathFuncHash);
+        std::to_string(functionInterpreter_->pathFuncHash) + "'";
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::loopInfo)] = functionInterpreter_->GetLoopSymbolString();
     ProgrameInfo[toIndex(ProgrameInfoCsvHeader::verifyResult)] = "EXCEPTION";
     if (functionInterpreter_->execDumpPassName == "tensor_graph") {

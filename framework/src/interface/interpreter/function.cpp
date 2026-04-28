@@ -313,17 +313,17 @@ void FunctionInterpreter::DumpTensorList(
 void FunctionInterpreter::FillOperationBasicInfo(Operation* op, FunctionFrame* frame, std::vector<std::string>& opInfo)
 {
     opInfo[toIndex(OpInfoCsvHeader::rootFuncID)] = std::to_string(frame->rootFuncIndex);
-    opInfo[toIndex(OpInfoCsvHeader::rootFuncHash)] = "'" + std::to_string(frame->rootFuncHash);
+    opInfo[toIndex(OpInfoCsvHeader::rootFuncHash)] = std::to_string(frame->rootFuncHash) + "'";
     opInfo[toIndex(OpInfoCsvHeader::rootFuncType)] = frame->rootFuncType;
     opInfo[toIndex(OpInfoCsvHeader::rootFuncGraphType)] = frame->rootFuncGraphType;
     opInfo[toIndex(OpInfoCsvHeader::funcID)] = std::to_string(frame->funcIndex);
-    opInfo[toIndex(OpInfoCsvHeader::funcHash)] = "'" + std::to_string(frame->funcHash);
+    opInfo[toIndex(OpInfoCsvHeader::funcHash)] = std::to_string(frame->funcHash) + "'";
     opInfo[toIndex(OpInfoCsvHeader::funcType)] = frame->funcType;
     opInfo[toIndex(OpInfoCsvHeader::funcGraphType)] = frame->funcGraphType;
     opInfo[toIndex(OpInfoCsvHeader::passName)] = execDumpPassName;
     opInfo[toIndex(OpInfoCsvHeader::pathFuncMagicName)] = execDumpFunPath;
     opInfo[toIndex(OpInfoCsvHeader::pathFuncMagic)] = std::to_string(pathFuncMagic);
-    opInfo[toIndex(OpInfoCsvHeader::pathFuncHash)] = "'" + std::to_string(pathFuncHash);
+    opInfo[toIndex(OpInfoCsvHeader::pathFuncHash)] = std::to_string(pathFuncHash) + "'";
     opInfo[toIndex(OpInfoCsvHeader::loopInfo)] = GetLoopSymbolString();
     opInfo[toIndex(OpInfoCsvHeader::opCode)] = op->GetOpcodeStr();
     opInfo[toIndex(OpInfoCsvHeader::opMagic)] = std::to_string(op->GetOpMagic());
@@ -418,11 +418,11 @@ void FunctionInterpreter::FillOperationOutputInfo(
             opInfo[toIndex(OpInfoCsvHeader::outputDtype)] = DataType2String(dataView->GetDataType(), true);
             opInfo[toIndex(OpInfoCsvHeader::tensorOffset)] = ShapeToString(dataView->GetOffset());
             opInfo[toIndex(OpInfoCsvHeader::outputTensor)] = dumpTensorFileName;
-            opInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts);
+            opInfo[toIndex(OpInfoCsvHeader::timeStamp)] = std::to_string(ts) + "'";
             opInfo[toIndex(OpInfoCsvHeader::outputSymbol)] = op->GetOOperands()[k]->GetRawTensor()->GetSymbol();
             opInfo[toIndex(OpInfoCsvHeader::outputFormat)] =
                 std::to_string(op->GetOOperands()[k]->GetRawTensor()->format);
-            opInfo[toIndex(OpInfoCsvHeader::ioflag)] = "output" + std::to_string(k);
+            opInfo[toIndex(OpInfoCsvHeader::ioflag)] = "o" + std::to_string(k);
 
             if (op->GetOpcode() == Opcode::OP_COPY_OUT) {
                 auto itTmp = frame->callopDataViewTensorDict.find(dataView);
