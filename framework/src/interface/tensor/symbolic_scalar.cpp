@@ -17,7 +17,9 @@
 #include <sys/mman.h>
 #include <thread>
 #include <sstream>
+#include <numeric>
 #include "interface/utils/file_utils.h"
+#include "interface/utils/common.h"
 #include "tilefwk/pypto_fwk_log.h"
 #include "symbolic_scalar_simplify.h"
 
@@ -28,22 +30,72 @@ constexpr int OPERAND_NUM = 2;
 constexpr size_t MIN_EXTREMA_OPERANDS = 2;
 namespace npu::tile_fwk {
 
+static std::vector<std::string> SplitExtraCflags(const std::string& extraCflag)
+{
+    std::vector<std::string> result;
+    std::string token;
+    char quoteChar = '\0';
+
+    for (size_t i = 0; i < extraCflag.size(); ++i) {
+        char c = extraCflag[i];
+
+        if (c == '\\' && i + 1 < extraCflag.size()) {
+            token += extraCflag[++i];
+            continue;
+        }
+
+        if (c == '"' || c == '\'') {
+            if (quoteChar == '\0') {
+                quoteChar = c;
+            } else if (quoteChar == c) {
+                quoteChar = '\0';
+            } else {
+                token += c;
+            }
+            continue;
+        }
+
+        if ((c == ' ' || c == '\t') && quoteChar == '\0') {
+            if (!token.empty()) {
+                result.push_back(token);
+                token.clear();
+            }
+            continue;
+        }
+
+        token += c;
+    }
+
+    if (!token.empty()) {
+        result.push_back(token);
+    }
+    return result;
+}
+
 std::string CompileSourceCode(const std::string& sourceFilePath, const std::string& gcc, const std::string& extraCflag)
 {
     std::string assembleFilePath = sourceFilePath + ".s";
     std::string objectFilePath = sourceFilePath + "_t.o";
-    std::string LD_PRELOAD = "LD_PRELOAD= ";
     std::string includePath = GetCurrentSharedLibPath() + "/../include/tile_fwk";
     std::string macro = extraCflag.empty() ? "-D__DEVICE__" : "";
-    std::string cmdGcc = LD_PRELOAD + gcc + " -fPIC -fno-stack-protector -O2 " + extraCflag + " " + macro + " " +
-                         " -I" + includePath + " " + " -I" + GetCurrentSharedLibPath() + "/include/" + " -I" +
-                         includePath + "/tilefwk " + " -S " + sourceFilePath + " -o " + assembleFilePath;
-    FE_LOGI("[RunCmd] %s", cmdGcc.c_str());
-    FE_ASSERT(system(cmdGcc.c_str()) == 0);
 
-    std::string cmdAs = LD_PRELOAD + gcc + " -fno-stack-protector -O2 -c " + assembleFilePath + " -o " + objectFilePath;
-    FE_LOGI("[RunCmd] %s", cmdAs.c_str());
-    FE_ASSERT(system(cmdAs.c_str()) == 0);
+    std::vector<std::string> argsGcc = {gcc, "-fPIC", "-fno-stack-protector", "-O2"};
+    auto extraFlags = SplitExtraCflags(extraCflag);
+    argsGcc.insert(argsGcc.end(), extraFlags.begin(), extraFlags.end());
+    if (!macro.empty()) {
+        argsGcc.push_back(macro);
+    }
+    argsGcc.insert(argsGcc.end(), {"-I" + includePath, "-I" + GetCurrentSharedLibPath() + "/include/",
+        "-I" + includePath + "/tilefwk", "-S", sourceFilePath, "-o", assembleFilePath});
+
+    FE_LOGI("[RunCmd] %s", std::accumulate(argsGcc.begin(), argsGcc.end(), std::string(),
+        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    FE_ASSERT(SafeExecCommand(argsGcc) == 0);
+
+    std::vector<std::string> argsAs = {gcc, "-fno-stack-protector", "-O2", "-c", assembleFilePath, "-o", objectFilePath};
+    FE_LOGI("[RunCmd] %s", std::accumulate(argsAs.begin(), argsAs.end(), std::string(),
+        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    FE_ASSERT(SafeExecCommand(argsAs) == 0);
     return objectFilePath;
 }
 
@@ -92,43 +144,38 @@ std::vector<uint8_t> CompileAndLoadSection(
         fprintf(fsrc, "%s", code.c_str());
         fclose(fsrc);
     }
-    std::string LD_PRELOAD = "LD_PRELOAD= ";
     std::string objectFilePath = sourceFilePath + ".o";
-    std::vector<std::string> allSourceFiles;
-    allSourceFiles.emplace_back(sourceFilePath);
+    std::vector<std::string> allSourceFiles = {sourceFilePath};
     allSourceFiles.insert(allSourceFiles.end(), exprSrcFiles.begin(), exprSrcFiles.end());
     std::vector<std::string> objs = ParallelCompile(allSourceFiles, gcc, extraCflag);
-    std::stringstream cmdAs;
-    cmdAs << LD_PRELOAD << ld;
+
+    std::vector<std::string> argsLd = {ld};
     for (const auto& obj : objs) {
-        cmdAs << " " << obj;
+        argsLd.push_back(obj);
     }
-    cmdAs << " -o " << objectFilePath << " -O2 -T " << aicpuPath << "/merge.link";
-    FE_LOGI("[RunCmd] %s", cmdAs.str().c_str());
-    FE_ASSERT(system(cmdAs.str().c_str()) == 0);
+    argsLd.insert(argsLd.end(), {"-o", objectFilePath, "-O2", "-T", aicpuPath + "/merge.link"});
+    FE_LOGI("[RunCmd] %s", std::accumulate(argsLd.begin(), argsLd.end(), std::string(),
+        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    FE_ASSERT(SafeExecCommand(argsLd) == 0);
+
     std::string binaryFilePath = sourceFilePath + ".bin";
-    std::string cmdObjcopy =
-        LD_PRELOAD + objcopy + " --dump-section " + sectionName + "=" + binaryFilePath + " " + objectFilePath;
-    FE_LOGI("[RunCmd] %s", cmdObjcopy.c_str());
-    FE_ASSERT(system(cmdObjcopy.c_str()) == 0);
+    std::vector<std::string> argsObjcopy = {objcopy, "--dump-section", sectionName + "=" + binaryFilePath, objectFilePath};
+    FE_LOGI("[RunCmd] %s", std::accumulate(argsObjcopy.begin(), argsObjcopy.end(), std::string(),
+        [](const std::string& a, const std::string& b) { return a.empty() ? b : a + " " + b; }).c_str());
+    FE_ASSERT(SafeExecCommand(argsObjcopy) == 0);
 
     FILE* fbin = fopen(binaryFilePath.c_str(), "rb");
     if (fbin == nullptr) {
         FE_LOGE(FeError::BAD_FD, "open binary file name failed");
         return {};
     }
-
     fseek(fbin, 0, SEEK_END);
     int size = static_cast<int>(ftell(fbin));
     fseek(fbin, 0, SEEK_SET);
     std::vector<uint8_t> binary(size);
     size_t readSize = fread(binary.data(), 1, size, fbin);
-    if (readSize != static_cast<size_t>(size)) {
-        fclose(fbin);
-        return {};
-    }
     fclose(fbin);
-    return binary;
+    return (readSize == static_cast<size_t>(size)) ? binary : std::vector<uint8_t>{};
 }
 
 void SymbolicExpressionTable::SetElementKeyOnce(const std::string& key)

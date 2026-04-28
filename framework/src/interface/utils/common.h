@@ -16,15 +16,13 @@
 #pragma once
 
 #include <sys/time.h>
+#include <cstring>
 #include <algorithm>
 #include <memory>
 #include <map>
 #include <vector>
 #include <string>
-#include <map>
-#include <string>
 #include <iostream>
-#include <vector>
 #include <sstream>
 #include <unordered_map>
 #include <functional>
@@ -151,20 +149,7 @@ enum OperandType {
     TOTAL_BUF_TYPE,
 };
 
-inline std::string OperandTypeToStr(OperandType t)
-{
-    static std::map<OperandType, std::string> strMap = {
-        {BUF_UB, "UB"},     {BUF_L1, "L1"},        {BUF_L0A, "L0A"},      {BUF_L0B, "L0B"},
-        {BUF_L0C, "L0C"},   {BUF_FIX, "FIX"},      {BUF_DDR, "DDR"},      {BUF_REG, "REG"},
-        {SCALAR, "SCALAR"}, {BUF_BT, "BiasTable"}, {BUF_L0AMX, "L0A_MX"}, {BUF_L0BMX, "L0B_MX"},
-    };
-
-    if (strMap.count(t)) {
-        return strMap[t];
-    }
-
-    return "INVALID";
-}
+std::string OperandTypeToStr(OperandType t);
 
 enum QueueType {
     QUEUE_INVALID = -1,
@@ -226,35 +211,14 @@ inline std::string IntVecToStr(const std::vector<T>& shape)
     return ss.str();
 }
 
-inline std::string SymbolicVecToStr(const std::vector<SymbolicScalar>& a)
-{
-    std::stringstream ss;
-    ss << "[";
-
-    if (!a.empty()) {
-        ss << a[0].Dump();
-        for (size_t i = 1; i < a.size(); ++i) {
-            ss << ", " << a[i].Dump();
-        }
-    }
-
-    ss << "]";
-    return ss.str();
-}
+std::string SymbolicVecToStr(const std::vector<SymbolicScalar>& a);
 
 constexpr int ParamLocOffset = 28;
 constexpr int ParamLocTensor = 0;
 constexpr int ParamLocIncast = 1;
 constexpr int ParamLocOutcast = 2;
 
-inline std::string ParamLocToStr(uint32_t loc)
-{
-    std::stringstream ss;
-    auto type = loc >> ParamLocOffset;
-    auto index = loc & ((1 << ParamLocOffset) - 1);
-    ss << type << ":" << index << "_" << loc;
-    return ss.str();
-}
+std::string ParamLocToStr(uint32_t loc);
 
 template <typename T>
 class BiMap {
@@ -506,30 +470,10 @@ inline OperandType BufferGetType(const std::string& name, OperandType defaultVal
 }
 
 // 辅助函数：去除字符串两端空格
-inline std::string Trim(const std::string& str)
-{
-    size_t start = str.find_first_not_of(" \t\n\r");
-    size_t end = str.find_last_not_of(" \t\n\r");
-    return (start == std::string::npos) ? "" : str.substr(start, end - start + 1);
-}
+std::string Trim(const std::string& str);
 
 // 通用环境变量获取函数
-inline std::string GetEnvVar(const std::string& varName, bool trim = true, bool toLower = false)
-{
-    const char* rawValue = std::getenv(varName.c_str());
-    const size_t envVarMaxSize = 1024UL * 1024UL;
-    if (rawValue == nullptr || (strnlen(rawValue, envVarMaxSize) >= envVarMaxSize)) {
-        return "";
-    }
-    std::string value = rawValue;
-    if (trim) {
-        value = Trim(value);
-    }
-    if (toLower && !value.empty()) {
-        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return std::tolower(c); });
-    }
-    return value;
-}
+std::string GetEnvVar(const std::string& varName, bool trim = true, bool toLower = false);
 
 // 判断环境变量 PTO_DATADUMP_ENABLE 是否为 true
 inline bool IsPtoDataDumpEnabled()
@@ -584,12 +528,7 @@ struct TimeStamp {
     uint64_t Duration() { return CurrentTime() - startTime; }
     void Reset() { startTime = CurrentTime(); }
 
-    static uint64_t CurrentTime()
-    {
-        struct timeval tv;
-        gettimeofday(&tv, nullptr);
-        return tv.tv_sec * 1000000 + tv.tv_usec; // 1000000 is us per sec
-    }
+    static uint64_t CurrentTime();
 
 private:
     uint64_t startTime;
@@ -613,4 +552,8 @@ enum class CopyOutMode : int64_t { NZ2ND = 0, NZ2NZ = 1, ND2ND = 2, NZ2DN = 3 };
 
 enum class PaddingMode : int64_t { NO_PADDING = 0, PADDING_OUTER = 1, PADDING_INNER = 2 };
 } // namespace Matrix
+
+std::string SafeExecCommandWithOutput(const std::vector<std::string>& args);
+
+int SafeExecCommand(const std::vector<std::string>& args);
 } // namespace npu::tile_fwk

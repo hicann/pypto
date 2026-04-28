@@ -9,6 +9,7 @@
  */
 
 #include "core/error.h"
+#include "interface/utils/common.h"
 
 #include <cxxabi.h>
 #include <cstring>
@@ -92,10 +93,106 @@ struct FileLocation {
 static std::mutex locMapMutex;
 static std::unordered_map<void*, FileLocation> locMap;
 
-// Get file and line information from address using addr2line
+static bool IsUnknownLocation(const std::string& location)
+{
+    return location == "??" || location.find("??:") == 0 || location.find("?? ??") == 0;
+}
+
+static int ParseLineNumber(const std::string& lineStr)
+{
+    try {
+        return std::stoi(lineStr);
+    } catch (...) {
+        return 0;
+    }
+}
+
+static FileLocation ParseLocationWithAt(const std::string& location)
+{
+    FileLocation loc{"", 0};
+    size_t colonPos = location.rfind(':');
+    if (colonPos == std::string::npos) {
+        return loc;
+    }
+
+    size_t prevColonPos = location.rfind(':', colonPos - 1);
+    if (prevColonPos != std::string::npos) {
+        loc.filename = location.substr(0, prevColonPos);
+        loc.lineno = ParseLineNumber(location.substr(prevColonPos + 1, colonPos - prevColonPos - 1));
+    } else {
+        loc.filename = location.substr(0, colonPos);
+        loc.lineno = ParseLineNumber(location.substr(colonPos + 1));
+    }
+
+    if (IsUnknownLocation(loc.filename) || loc.filename.empty()) {
+        return FileLocation{"", 0};
+    }
+
+    return loc;
+}
+
+static FileLocation ParseAlternateFormat(const std::string& output)
+{
+    FileLocation loc{"", 0};
+    size_t colonPos = output.rfind(':');
+    if (colonPos == std::string::npos) {
+        return loc;
+    }
+
+    loc.filename = output.substr(0, colonPos);
+    if (IsUnknownLocation(loc.filename)) {
+        return FileLocation{"", 0};
+    }
+
+    loc.lineno = ParseLineNumber(output.substr(colonPos + 1));
+    return loc;
+}
+
+static FileLocation ParseAddr2lineOutput(const std::string& output)
+{
+    if (output.empty()) {
+        return FileLocation{"", 0};
+    }
+
+    std::string trimmed = output;
+    if (trimmed.back() == '\n') {
+        trimmed.pop_back();
+    }
+
+    size_t atPos = trimmed.find(" at ");
+    if (atPos != std::string::npos) {
+        std::string location = trimmed.substr(atPos + 4);
+        if (IsUnknownLocation(location)) {
+            return FileLocation{"", 0};
+        }
+        return ParseLocationWithAt(location);
+    }
+
+    if (trimmed.find(":") != std::string::npos) {
+        if (IsUnknownLocation(trimmed)) {
+            return FileLocation{"", 0};
+        }
+        return ParseAlternateFormat(trimmed);
+    }
+
+    return FileLocation{"", 0};
+}
+
+static std::string ExecuteAddr2line(void* addr)
+{
+    Dl_info info;
+    if (dladdr(addr, &info) == 0 || info.dli_fname == nullptr) {
+        return "";
+    }
+
+    std::stringstream addrStr;
+    addrStr << addr;
+    std::vector<std::string> args = {"addr2line", "-e", info.dli_fname, "-f", "-C", "-p", addrStr.str()};
+    return npu::tile_fwk::SafeExecCommandWithOutput(args);
+}
+
 static FileLocation GetFileLineFromAddr2line(void* addr)
 {
-    // Check cache first
     {
         std::lock_guard<std::mutex> lock(locMapMutex);
         auto it = locMap.find(addr);
@@ -104,98 +201,9 @@ static FileLocation GetFileLineFromAddr2line(void* addr)
         }
     }
 
-    FileLocation loc{"", 0};
+    std::string output = ExecuteAddr2line(addr);
+    FileLocation loc = ParseAddr2lineOutput(output);
 
-    // Get library information
-    Dl_info info;
-    if (dladdr(addr, &info) == 0 || info.dli_fname == nullptr) {
-        return loc;
-    }
-
-    // Build addr2line command - use absolute address for executable
-    std::stringstream cmd;
-    cmd << "addr2line -e " << info.dli_fname << " -f -C -p " << addr << " 2>/dev/null";
-
-    FILE* fp = popen(cmd.str().c_str(), "r");
-    if (fp == nullptr) {
-        return loc;
-    }
-
-    char buffer[2048];
-    if (fgets(buffer, sizeof(buffer), fp) != nullptr) {
-        std::string output(buffer);
-
-        // Remove trailing newline
-        if (!output.empty() && output.back() == '\n') {
-            output.pop_back();
-        }
-
-        // Parse output format: "function at filename:lineno"
-        // or "function at filename:lineno:column"
-        size_t atPos = output.find(" at ");
-        if (atPos != std::string::npos) {
-            std::string location = output.substr(atPos + 4);
-
-            // Skip if location is "??" or "??:?" or "?? ??" (unknown location)
-            if (location == "??" || location.find("??:") == 0 || location.find("?? ??") == 0) {
-                return loc; // Return empty location
-            }
-
-            // Find the last colon for line number
-            size_t colonPos = location.rfind(':');
-            if (colonPos != std::string::npos) {
-                // Check if this is line:column format
-                size_t prevColonPos = location.rfind(':', colonPos - 1);
-                if (prevColonPos != std::string::npos) {
-                    // Has column number, use the previous colon
-                    loc.filename = location.substr(0, prevColonPos);
-                    try {
-                        std::string lineStr = location.substr(prevColonPos + 1, colonPos - prevColonPos - 1);
-                        loc.lineno = std::stoi(lineStr);
-                    } catch (...) {
-                        loc.lineno = 0;
-                    }
-                } else {
-                    // No column number
-                    loc.filename = location.substr(0, colonPos);
-                    try {
-                        loc.lineno = std::stoi(location.substr(colonPos + 1));
-                    } catch (...) {
-                        loc.lineno = 0;
-                    }
-                }
-            }
-
-            // Filter out "??" and "?? ??" filenames
-            if (loc.filename == "??" || loc.filename == "?? ??" || loc.filename.empty()) {
-                loc.filename = "";
-                loc.lineno = 0;
-            }
-        } else if (output.find(":") != std::string::npos) {
-            // Try alternate format: "filename:lineno" or "?? ??:0"
-            // Skip if output starts with "??" or "?? ??"
-            if (output == "??" || output.find("??:") == 0 || output.find("?? ??") == 0) {
-                return loc; // Return empty location
-            }
-
-            size_t colonPos = output.rfind(':');
-            if (colonPos != std::string::npos) {
-                loc.filename = output.substr(0, colonPos);
-                // Filter out "??" and "?? ??" filenames
-                if (loc.filename == "??" || loc.filename == "?? ??") {
-                    return loc; // Return empty location
-                }
-                try {
-                    loc.lineno = std::stoi(output.substr(colonPos + 1));
-                } catch (...) {
-                    loc.lineno = 0;
-                }
-            }
-        }
-    }
-    pclose(fp);
-
-    // Cache the result (even if empty, to avoid repeated failed lookups)
     {
         std::lock_guard<std::mutex> lock(locMapMutex);
         locMap[addr] = loc;
