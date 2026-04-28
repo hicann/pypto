@@ -52,13 +52,10 @@ flash_attention_varlen_forward_kernel(
     k,             # [total_kv, hidden_dim]    BF16  — K 输入
     v,             # [total_kv, hidden_dim]    BF16  — V 输入
     output,        # [total_q, hidden_dim]     BF16  — 输出 O
-    l_output,      # [total_q, 1]              FP32  — softmax 分母 L
-    m_output,      # [total_q, 1]              FP32  — softmax 最大值 M
+    l_output,      # [total_q, n]              FP32  — softmax 分母 L
+    m_output,      # [total_q, n]              FP32  — softmax 最大值 M
     cu_seqlens_q,  # [batch_size + 1]          INT32 — 累积 Q seqlen
     cu_seqlens_k,  # [batch_size + 1]          INT32 — 累积 KV seqlen
-    batch_size,    # int                       — 批次数量
-    q_tile,        # int                       — Q 分块大小 (默认 320)
-    k_tile,        # int                       — KV 分块大小 (默认 320)
 )
 ```
 
@@ -150,7 +147,6 @@ def test_07(device):
 | `s1_size` | Q 序列长度 | 320 |
 | `s2_size` | KV 序列长度 | = s1_size |
 | `dim` | 每个头维度 | HEAD_DIM (64) |
-| `tile_config` | TileConfig 分块配置 | Q_TILE=256, K_TILE=512 |
 
 ## 分块配置
 
@@ -160,29 +156,9 @@ Q_TILE = 320  # Kernel 内部默认 Q 序列分块大小
 K_TILE = 320  # Kernel 内部默认 KV 序列分块大小
 ```
 
-**测试文件配置** (`test_flash_attention_mha.py`):
-```python
-from dataclasses import dataclass
-
-Q_TILE = 256  # 测试默认 Q 序列分块大小
-K_TILE = 512  # 测试默认 KV 序列分块大小
-
-@dataclass
-class TileConfig:
-    q_tile: int = Q_TILE  # Q 序列分块大小
-    k_tile: int = K_TILE  # KV 序列分块大小
-```
-
 **说明**: 
-- Kernel 函数参数 `q_tile` 和 `k_tile` 可通过 `TileConfig` 传入
-- 测试用例使用 `Q_TILE=256, K_TILE=512` 覆盖实现文件的默认值 `320`
+- Kernel 函数参数 `q_tile` 和 `k_tile` 为320
 
-自定义配置：
-
-```python
-custom_config = TileConfig(q_tile=64, k_tile=128)
-run_test(device, batch_size=8, tile_config=custom_config)
-```
 
 ## 与反向传播配合
 
@@ -190,7 +166,7 @@ run_test(device, batch_size=8, tile_config=custom_config)
 
 ```python
 # 前向传播 (使用 cu_seqlens)
-flash_attention_varlen_forward_kernel(q, k, v, o, l, m, cu_seqlens_q, cu_seqlens_k, batch_size)
+flash_attention_varlen_forward_kernel(q, k, v, o, l, m, cu_seqlens_q, cu_seqlens_k)
 
 # 反向传播 (使用 actual_q/actual_kv)
 flash_attention_varlen_backward_kernel(q, k, v, o, do, l, m, dq, dk, dv, actual_q, actual_kv)
