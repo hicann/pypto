@@ -139,7 +139,6 @@ TEST_F(TestDeviceRunner, test_ini_proflevel)
     taskStat->taskId = 0;
     taskStat->execStart = 0;
     taskStat->execEnd = 1;
-    taskStat->waitStart = 1;
     taskStat->waitEventIdx = 0;
     taskStat->setEventIdx = 0;
     prof.ProfGetLog(aicoreId, taskStat);

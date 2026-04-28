@@ -175,6 +175,8 @@ public:
         devProg->devArgs.nrValidAic = config.blockdim;
         devProg->devArgs.archInfo = static_cast<ArchInfo>(Platform::Instance().GetSoc().GetNPUArch());
         devProg->devArgs.taskType = DEVICE_TASK_TYPE_DYN;
+        bool enableVFFusion = Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510 && config::GetPassGlobalConfig(KEY_ENABLE_VF, false);
+        devProg->devArgs.enableVFFusion = (config::GetRuntimeOption<int64_t>(CFG_VALID_SHAPE_OPTIMIZE) == 1 || enableVFFusion);
 
         uint32_t aiCpuNum = static_cast<uint32_t>(Platform::Instance().GetSoc().GetAICPUNum());
         devProg->devArgs.scheCpuNum = CalcSchAicpuNumByBlockDim(config.blockdim, aiCpuNum, devProg->devArgs.archInfo);

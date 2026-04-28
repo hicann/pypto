@@ -182,7 +182,7 @@ struct DeviceArgs {
 const uint64_t AICORE_REG_SAY_HELLO = 0xF000000080000000;
 constexpr uint32_t REG_HIGH_DTASKID_SHIFT = 32;
 enum class TASK_POS : size_t { LOW_REG = 0, HIGH_REG = 1, ALL_REG = 2, REG_POS_BUTT = 3 };
-constexpr uint32_t MAX_SYNC_EVENT_NUM = 32; // There can be a maximum of 32 sets of sync in a mix subgraph
+constexpr uint32_t MAX_SYNC_EVENT_NUM = 48; // the max set/wait insts in a mix subgraph leaffunction is 48, can set larger manually
 
 struct TaskStat {
     int16_t seqNo;
@@ -190,11 +190,10 @@ struct TaskStat {
     int32_t taskId;
     int64_t execStart;
     int64_t execEnd;
-    int64_t waitStart; // 2.0 dfx 当前未使用
     int64_t setEventCycle[MAX_SYNC_EVENT_NUM];
     int64_t waitEventCycle[MAX_SYNC_EVENT_NUM];
-    int waitEventIdx;
-    int setEventIdx;
+    int8_t waitEventIdx;
+    int8_t setEventIdx;
 };
 
 struct DevDfxArgs {

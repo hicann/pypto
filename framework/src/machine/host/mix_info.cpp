@@ -22,6 +22,7 @@ using json = nlohmann::json;
 namespace npu {
 namespace tile_fwk {
 namespace mix_info {
+constexpr uint32_t MAX_SYNC_EVENT_NUM = 48; // the max set/wait insts in a mix subgraph leaffunction is 48, can set larger manually
 void GetExecuteFunc(Function* func, std::map<int, std::set<Function*>>& leafFunctions)
 {
     auto funcType = func->GetGraphType();
@@ -112,6 +113,9 @@ int DumpMixInfo(Function* topFunc)
                 syncInfo.eventID = op->GetSyncQueue().eventId_;
                 leafFuncSyncInfo.syncMsg.push_back(syncInfo);
             }
+            ASSERT(DevCommonErr::PARAM_CHECK_FAILED, leafFuncSyncInfo.syncMsg.size() <= MAX_SYNC_EVENT_NUM)
+                << "leaffunction's syncEvent's size(" << leafFuncSyncInfo.syncMsg.size() << "is lager than MAX_SYNC_EVENT_NUM"
+                << MAX_SYNC_EVENT_NUM << "need to set MAX_SYNC_EVENT_NUM larger manually";
             wrapInfos[mixId][wrapID].coreTask.push_back(leafFuncSyncInfo);
         }
     }

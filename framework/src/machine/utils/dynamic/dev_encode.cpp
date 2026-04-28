@@ -395,6 +395,8 @@ void DevAscendFunction::InitRawTensorAndMemoryRequirement(
                 rawTensor->addrOffset = encoded.addrOffset;
                 rootInnerTensorWsMemoryRequirement += encoded.maxStaticMemReq;
 #else
+                ASSERT(DevCommonErr::NULLPTR, rawAttrs[idx].storage.get() != nullptr)
+                    << "rawTensor(rawmagic:" << rawTensor->GetRawMagic()  <<" )'s storage is null, should be incast or outcast tensor";
                 encoded.addrOffset = rawAttrs[idx].storage->start_ + rawAttrs[idx].storageOffset;
                 rawTensor->addrOffset = encoded.addrOffset;
                 rootInnerTensorWsMemoryRequirement = std::max(
