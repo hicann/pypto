@@ -270,6 +270,21 @@ void DumpRange(
     }
 }
 
+bool HasRangeConstraint(
+    const std::string& key, const std::type_info& type,
+    const std::map<std::string, std::pair<int64_t, int64_t>>& rangeInfos)
+{
+    if (rangeInfos.count(key) != 0) {
+        return true;
+    }
+
+    if (type == typeid(std::map<int64_t, int64_t>)) {
+        return rangeInfos.count(key + "_key") != 0 && rangeInfos.count(key + "_val") != 0;
+    }
+
+    return false;
+}
+
 void ValidateConfigValueType(const std::string& key, const Any& value)
 {
     const auto& expectedType = ConfigManagerNg::GetInstance().Type(key);
@@ -316,15 +331,15 @@ void ConfigScope::AddValue(const std::string& key, Any value)
 void ConfigScope::UpdateValueWithAny(const std::string& key, Any value)
 {
     ValidateConfigValueType(key, value);
-    if (ConfigManagerNg::GetInstance().Range().count(key) != 0 &&
+    const auto& rangeInfos = ConfigManagerNg::GetInstance().Range();
+    if (HasRangeConstraint(key, value.Type(), rangeInfos) &&
         !ConfigManagerNg::GetInstance().IsWithinRange(key, value)) {
         std::stringstream os("Option:");
         std::map<std::string, Any> node;
         node[key] = value;
         DumpValues(os, node, "");
-        os << ", its value doesn't within the value range.";
-        DumpRange(os, value.Type(), key, ConfigManagerNg::GetInstance().Range());
-        os << "\n";
+        os << "its value doesn't within the value range. ";
+        DumpRange(os, value.Type(), key, rangeInfos);
         FE_ASSERT(FeError::INVALID_VAL, false) << os.str();
     }
     std::stringstream oss;
@@ -372,7 +387,7 @@ struct ConfigManagerImpl {
 
     bool IsWithinRange(const std::string& properties, const std::map<int64_t, int64_t>& value) const
     {
-        auto ins = typeInfo.rangeInfos;
+        const auto& ins = typeInfo.rangeInfos;
         for (auto& [lf, rf] : value) {
             if (!IntervalJudge(lf, ins.at(properties + "_key").first, ins.at(properties + "_key").second) ||
                 !IntervalJudge(rf, ins.at(properties + "_val").first, ins.at(properties + "_val").second)) {

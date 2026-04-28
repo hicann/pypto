@@ -95,3 +95,11 @@ def test_set_options_type_mismatch_error(options_kwargs, pattern):
 def test_set_options_unknown_key_error():
     with pytest.raises(Exception, match="key: runtime.not_exist does not exist."):
         pypto.set_options(runtime_options={"not_exist": 1})
+
+
+def test_pass_option_range_error():
+    with pytest.raises(Exception, match=r"(?s)pass\.cube_l1_reuse_setting.*doesn't within the value range"):
+        pypto.set_pass_options(cube_l1_reuse_setting={-11: 2})
+
+    with pytest.raises(Exception, match=r"(?s)host\.compile_timeout.*doesn't within the value range"):
+        pypto.set_host_options(compile_timeout=-10)

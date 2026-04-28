@@ -170,6 +170,7 @@ class Expr:
 
 
 class TestParser:
+    __test__ = False
 
     target_list = []
 
