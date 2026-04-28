@@ -190,5 +190,10 @@ public:
     static int EslModelLaunchAicore(AclRtStream aicoreStream, void *kernel, DeviceKernelArgs *kernelArgs);
     static void CopyInputOutputData();
     static int EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors);
+
+private:
+    static void LiteAllocDeviceMemory(const std::vector<DeviceTensorData> &tensors,
+        std::vector<uint8_t *> &deviceAddrs, uint8_t *&workspaceAddr, Function *function);
+    static void LiteRegisterKernel(Function *function, void *&hdl, int &stubFunc);
 };
 }

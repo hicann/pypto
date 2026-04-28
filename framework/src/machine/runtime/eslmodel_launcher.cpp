@@ -153,12 +153,9 @@ int EslModelLauncher::EslModelRunOnce(void *kernel, const DeviceLauncherConfig &
     return rc;
 }
 
-int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors)
+void EslModelLauncher::LiteAllocDeviceMemory(const std::vector<DeviceTensorData> &tensors,
+    std::vector<uint8_t *> &deviceAddrs, uint8_t *&workspaceAddr, Function *function)
 {
-    ProgramData::GetInstance().Reset();
-
-    // Allocate device memory and copy host to device
-    std::vector<uint8_t *> deviceAddrs;
     for (size_t i = 0; i < tensors.size(); i++) {
         uint8_t *deviceAddr = nullptr;
         AclRtMalloc((void **)&deviceAddr, tensors[i].GetDataSize(), AclRtMemMallocPolicy::HUGE_FIRST);
@@ -167,23 +164,19 @@ int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<Device
         deviceAddrs.push_back(deviceAddr);
     }
 
-    // Init ACL
-    (void)AclInit(nullptr);
+    auto dynAttr = function->GetDyndevAttribute();
+    for (auto& devRoot : dynAttr->funcGroup.devRootList) {
+        int64_t workspaceSize = dynAttr->rootTileDict[devRoot]->GetStackWorkespaceSize();
+        if (workspaceSize > 0) {
+            AclRtMalloc((void **)&workspaceAddr, workspaceSize, AclRtMemMallocPolicy::HUGE_FIRST);
+            deviceAddrs.push_back(workspaceAddr);
+            break;
+        }
+    }
+}
 
-    // Set device
-    int32_t deviceId = 0;
-    AclRtSetDevice(deviceId);
-
-    // Create stream
-    AclRtStream stream = nullptr;
-    AclRtCreateStream(&stream);
-
-    // Prepare kernel args
-    RtArgsEx rtArgs = {};
-    rtArgs.args = deviceAddrs.data();
-    rtArgs.argsSize = deviceAddrs.size() * sizeof(void *);
-
-    // Register kernel binary
+void EslModelLauncher::LiteRegisterKernel(Function *function, void *&hdl, int &stubFunc)
+{
     auto dynAttr = function->GetDyndevAttribute();
     std::vector<uint8_t> &kernelBinary = dynAttr->kernelBinary;
     RtDevBinary binary = {
@@ -192,30 +185,53 @@ int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<Device
         .data = kernelBinary.data(),
         .length = kernelBinary.size(),
     };
-    void *hdl = nullptr;
     int ret = RuntimeDevBinaryRegister(&binary, &hdl);
     ASSERT(ret == RT_SUCCESS) << "register kernel failed: " << ret;
 
-    int stubFunc = 1;
+    stubFunc = 1;
     std::string kernelName = "";
     for (auto& devRoot : dynAttr->funcGroup.devRootList) {
         kernelName = dynAttr->rootTileDict[devRoot]->GetMagicName() + "_main";
     }
     RuntimeFunctionRegister(hdl, &stubFunc, kernelName.c_str(), kernelName.c_str(), 0);
+}
 
-    // Launch kernel
-    ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
+int EslModelLauncher::EslModelLiteRunOnce(Function *function, std::vector<DeviceTensorData> &tensors)
+{
+    ProgramData::GetInstance().Reset();
+
+    // Allocate device memory (I/O + workspace)
+    std::vector<uint8_t *> deviceAddrs;
+    uint8_t *workspaceAddr = nullptr;
+    LiteAllocDeviceMemory(tensors, deviceAddrs, workspaceAddr, function);
+
+    // Init ACL, device and stream
+    (void)AclInit(nullptr);
+    int32_t deviceId = 0;
+    AclRtSetDevice(deviceId);
+    AclRtStream stream = nullptr;
+    AclRtCreateStream(&stream);
+
+    // Register and launch kernel
+    void *hdl = nullptr;
+    int stubFunc = 1;
+    LiteRegisterKernel(function, hdl, stubFunc);
+    RtArgsEx rtArgs = {};
+    rtArgs.args = deviceAddrs.data();
+    rtArgs.argsSize = deviceAddrs.size() * sizeof(void *);
+    int ret = RuntimeKernelLaunch(&stubFunc, 1, rtArgs.args, rtArgs.argsSize, nullptr, stream);
     ASSERT(ret == RT_SUCCESS) << "LiteKernelLaunch failed: " << ret;
 
-    // Synchronize stream
+    // Synchronize and copy back
     ret = AclRtSynchronizeStream(stream);
     ASSERT(ret == RT_SUCCESS) << "Stream sync failed: " << ret;
-
-    // Copy device to host and free device memory
     for (size_t i = 0; i < tensors.size(); i++) {
         AclRtMemcpy((uint8_t *)tensors[i].GetAddr(), tensors[i].GetDataSize(), deviceAddrs[i],
             tensors[i].GetDataSize(), AclRtMemcpyKind::DEVICE_TO_HOST);
         AclRtFree(deviceAddrs[i]);
+    }
+    if (workspaceAddr != nullptr) {
+        AclRtFree(workspaceAddr);
     }
 
     AclRtDestroyStream(stream);
