@@ -60,6 +60,7 @@ private:
 
     bool operationUpdated;
     uint32_t iterTime;
+    std::vector<Operation*> newOps_;
 };
 } // namespace tile_fwk
 } // namespace npu

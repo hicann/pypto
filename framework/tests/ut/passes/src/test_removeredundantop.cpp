@@ -1397,5 +1397,156 @@ TEST_F(TestRemoveRedundantOpPass, RegCopyNoConsumer)
     Status ret = pass.PreCheck(*func);
     EXPECT_EQ(ret, FAILED);
 }
+
+/*
+TestDynValidShapeInference
+验证删除 assemble 时 DynValidShape 的正确推导：
+inCast{8,16}->exp->Tensor1{8,16}[exp_dim0, exp_dim1]->Reshape->Tensor2{16,8}[reshape_dim0,
+reshape_dim1]->assemble->outCast{16,8}
+
+验证逻辑：
+1. 初始 outCast 没有 DynValidShape
+2. 删除 assemble 后，验证 outCast 正确继承 Reshape 输出的 DynValidShape
+3. 验证 DynValidShape 推导的完整过程（从输入 tensor 继承到输出 tensor）
+*/
+TEST_F(TestRemoveRedundantOpPass, TestDynValidShapeInference)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestDynValidShapeInference", "TestDynValidShapeInference", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape8x16 = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape16x8 = {kNumExpFour, kNumEight};
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape8x16);
+    inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    auto expOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape8x16);
+    expOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    expOutput->UpdateDynValidShape({SymbolicScalar("exp_output_dim0"), SymbolicScalar("exp_output_dim1")});
+
+    auto reshapeOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape16x8);
+    reshapeOutput->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+    reshapeOutput->UpdateDynValidShape({SymbolicScalar("reshape_output_dim0"), SymbolicScalar("reshape_output_dim1")});
+
+    auto outCast = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape16x8, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {inCast}, {expOutput});
+    currFunctionPtr->AddOperation(Opcode::OP_RESHAPE, {expOutput}, {reshapeOutput});
+    currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {reshapeOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    auto outcastBeforePass = currFunctionPtr->GetOutcast()[0];
+    EXPECT_TRUE(outcastBeforePass->GetDynValidShape().empty());
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.PreCheck(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+    EXPECT_EQ(pass.PostCheck(*currFunctionPtr), SUCCESS);
+
+    uint32_t assembleNum = kNumZero;
+    uint32_t reshapeNum = kNumZero;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+        if (op.GetOpcode() == Opcode::OP_RESHAPE) {
+            ++reshapeNum;
+        }
+    }
+
+    auto outcastAfterPass = currFunctionPtr->GetOutcast()[0];
+    EXPECT_FALSE(outcastAfterPass->GetDynValidShape().empty());
+    EXPECT_EQ(outcastAfterPass->GetDynValidShape().size(), kNumTwo);
+    EXPECT_EQ(outcastAfterPass->GetDynValidShape()[0].Dump(), SymbolicScalar("reshape_output_dim0").Dump());
+    EXPECT_EQ(outcastAfterPass->GetDynValidShape()[1].Dump(), SymbolicScalar("reshape_output_dim1").Dump());
+    EXPECT_EQ(assembleNum, kNumZero);
+    EXPECT_EQ(reshapeNum, kNumOne);
+}
+
+/*
+TestNewViewDynValidShapeInference
+验证插入新 view 时 DynValidShape 的正确推导（Case2: GenerateNewView）：
+inCast{8,16}->view->Tensor1{4,16}[view_dim0, view_dim1]->assemble->Tensor2{4,16}->exp->outCast{4,16}
+                        (offset=[0,0])
+
+删除 assemble 后插入新 view：
+inCast{8,16}->view(Tensor2)->exp->outCast{4,16}
+
+验证逻辑：
+1. viewOutput和assembleOutput共享同一个RawTensor（这是正常情况）
+2. viewOutput设置了DynValidShape
+3. 删除assemble并插入新view后，验证：
+   - 新view的输出Tensor正确继承RawTensor的DynValidShape（即viewOutput的DynValidShape）
+   - 验证DynValidShape在RawTensor层面的正确传播
+*/
+TEST_F(TestRemoveRedundantOpPass, TestNewViewDynValidShapeInference)
+{
+    auto currFunctionPtr = std::make_shared<Function>(
+        Program::GetInstance(), "TestNewViewDynValidShape", "TestNewViewDynValidShape", nullptr);
+    EXPECT_TRUE(currFunctionPtr != nullptr);
+
+    std::vector<int64_t> shape8x16 = {kNumEight, kNumExpFour};
+    std::vector<int64_t> shape4x16 = {kNumFour, kNumExpFour};
+    std::vector<int64_t> offset = {kNumZero, kNumZero};
+
+    auto inCast = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape8x16);
+    inCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    auto viewOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4x16);
+    viewOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+    viewOutput->UpdateDynValidShape({SymbolicScalar("view_output_dim0"), SymbolicScalar("view_output_dim1")});
+
+    auto assembleOutput = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape4x16);
+    assembleOutput->SetMemoryTypeOriginal(MemoryType::MEM_UB, false);
+
+    auto outCast = std::make_shared<LogicalTensor>(
+        *currFunctionPtr, DT_FP32, shape4x16, TileOpFormat::TILEOP_ND, "outCast", NodeType::OUTCAST);
+    outCast->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, false);
+
+    auto& viewOp = currFunctionPtr->AddOperation(Opcode::OP_VIEW, {inCast}, {viewOutput});
+    viewOp.SetOpAttribute(std::make_shared<ViewOpAttribute>(offset));
+
+    auto& assembleOp = currFunctionPtr->AddOperation(Opcode::OP_ASSEMBLE, {viewOutput}, {assembleOutput});
+    assembleOp.SetOpAttribute(std::make_shared<AssembleOpAttribute>(offset));
+
+    currFunctionPtr->AddOperation(Opcode::OP_EXP, {assembleOutput}, {outCast});
+
+    currFunctionPtr->inCasts_.push_back(inCast);
+    currFunctionPtr->outCasts_.push_back(outCast);
+
+    RemoveRedundantOp pass;
+    EXPECT_EQ(pass.RunOnFunction(*currFunctionPtr), SUCCESS);
+
+    uint32_t viewNum = kNumZero;
+    uint32_t assembleNum = kNumZero;
+    const Operation* newViewOp = nullptr;
+    for (const auto& op : currFunctionPtr->Operations()) {
+        if (op.GetOpcode() == Opcode::OP_VIEW) {
+            ++viewNum;
+            newViewOp = &op;
+        }
+        if (op.GetOpcode() == Opcode::OP_ASSEMBLE) {
+            ++assembleNum;
+        }
+    }
+
+    EXPECT_EQ(viewNum, kNumOne);
+    EXPECT_EQ(assembleNum, kNumZero);
+
+    EXPECT_TRUE(newViewOp != nullptr);
+    auto viewAttribute = dynamic_cast<ViewOpAttribute*>(newViewOp->GetOpAttribute().get());
+    EXPECT_TRUE(viewAttribute != nullptr);
+
+    auto newViewOutput = newViewOp->GetOOperands()[0];
+    EXPECT_FALSE(newViewOutput->GetDynValidShape().empty());
+    EXPECT_EQ(newViewOutput->GetDynValidShape().size(), kNumTwo);
+    EXPECT_EQ(newViewOutput->GetDynValidShape()[0].Dump(), SymbolicScalar("view_output_dim0").Dump());
+    EXPECT_EQ(newViewOutput->GetDynValidShape()[1].Dump(), SymbolicScalar("view_output_dim1").Dump());
+}
 }
 }

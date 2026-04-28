@@ -31,10 +31,10 @@ private:
     Status PreCheck(Function& function) override;
     Status PostCheck(Function& function) override;
     Status RunOnFunction(Function& function) override;
-    Status ProcessOp(Function& function, Operation& operation) const;
-    Status Process(Function& function) const;
-    Status ProcessGatherIn(Function& function, Operation& operation) const;
-    Status ProcessView(Function& function, Operation& operation) const;
+    Status ProcessOp(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
+    Status Process(Function& function, std::vector<Operation*>& newOps) const;
+    Status ProcessGatherIn(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
+    Status ProcessView(Function& function, Operation& operation, std::vector<Operation*>& newOps) const;
 };
 
 } // namespace npu::tile_fwk

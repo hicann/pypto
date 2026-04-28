@@ -16,6 +16,7 @@
 #include "merge_view_assemble_utils.h"
 #include "interface/operation/attribute.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/pass_utils/infer_shape_utils.h"
 #include "passes/pass_log/pass_log.h"
 
 #define MODULE_NAME "MergeViewAssembleUtils"
@@ -46,6 +47,13 @@ Status MergeViewAssembleUtils::Process(Function& function)
         APASS_LOG_ERROR_F(Elements::Function, "Cleanup phase failed.");
         return status;
     }
+    if (!newOps_.empty()) {
+        status = InferShapeUtils::InferShape(function, newOps_);
+        if (status != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InferShape for new operations failed.");
+            return status;
+        }
+    }
     return SUCCESS;
 }
 
@@ -54,6 +62,7 @@ Status MergeViewAssembleUtils::Initialize()
     visitedOp_.clear();
     viewOpToAppend_.clear();
     assembleOpToAppend_.clear();
+    newOps_.clear();
     return SUCCESS;
 }
 
@@ -106,6 +115,7 @@ Status MergeViewAssembleUtils::AppendMergedViewOperations(Function& function)
             mergedViewOp.SetAttr("op_attr_copy_in_mode", viewOp.copyInModeValue);
         }
         viewOp.output->UpdateDynValidShape(viewOp.dynValidShape);
+        newOps_.push_back(&mergedViewOp);
     }
     return SUCCESS;
 }
@@ -120,6 +130,7 @@ Status MergeViewAssembleUtils::AppendMergedAssembleOperations(Function& function
         auto& mergedAssembleOp = function.AddRawOperation(Opcode::OP_ASSEMBLE, {assembleOp.input}, {assembleOp.output}, true, assembleOp.sourceLocation);
         mergedAssembleOp.SetScopeInfo(assembleOp.scopeInfo);
         mergedAssembleOp.SetOpAttribute(attr);
+        newOps_.push_back(&mergedAssembleOp);
     }
     return SUCCESS;
 }

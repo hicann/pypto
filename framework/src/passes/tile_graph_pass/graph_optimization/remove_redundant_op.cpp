@@ -16,6 +16,7 @@
 #include "remove_redundant_op.h"
 #include "passes/pass_check/remove_redundant_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/pass_utils/infer_shape_utils.h"
 #include "passes/pass_utils/merge_view_assemble_utils.h"
 #include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
@@ -126,6 +127,7 @@ Status RemoveRedundantOp::RunOnFunction(Function& function)
     APASS_LOG_INFO_F(Elements::Function, "===> Start RemoveRedundantOp");
     operationUpdated = true;
     iterTime = 0U;
+    newOps_.clear();
     while (operationUpdated) {
         operationUpdated = false;
         if (RemoveDummyOps(function) != SUCCESS) {
@@ -142,6 +144,13 @@ Status RemoveRedundantOp::RunOnFunction(Function& function)
     if (status != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Merge assemble and view failed.");
         return status;
+    }
+    if (!newOps_.empty()) {
+        status = InferShapeUtils::InferShape(function, newOps_);
+        if (status != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InferShape for new operations failed.");
+            return status;
+        }
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End RemoveRedundantOp");
     return SUCCESS;
@@ -441,6 +450,7 @@ void RemoveRedundantOp::GenerateNewView(
         std::make_shared<ViewOpAttribute>(newoffset, newDynoffset, newViewTensor->GetDynValidShape());
     viewAttribute->SetToType(endTensor->GetMemoryTypeToBe());
     newViewOp.SetOpAttribute(viewAttribute);
+    newOps_.push_back(&newViewOp);
     operationUpdated = true;
 }
 

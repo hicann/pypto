@@ -16,6 +16,7 @@
 #include "duplicate_op.h"
 #include "passes/pass_check/duplicate_op_checker.h"
 #include "passes/pass_utils/dead_operation_eliminate.h"
+#include "passes/pass_utils/infer_shape_utils.h"
 #include "interface/function/function.h"
 #include "interface/tensor/logical_tensor.h"
 #include "passes/pass_log/pass_log.h"
@@ -33,9 +34,16 @@ Status DuplicateOp::RunOnFunction(Function& function)
 {
     APASS_LOG_INFO_F(
         Elements::Function, "===> Start %s for function [%s].", MODULE_NAME, function.GetRawName().c_str());
-    if (Process(function) != SUCCESS) {
+    std::vector<Operation*> newOps;
+    if (Process(function, newOps) != SUCCESS) {
         APASS_LOG_ERROR_F(Elements::Function, "Process failed.");
         return FAILED;
+    }
+    if (!newOps.empty()) {
+        if (InferShapeUtils::InferShape(function, newOps) != SUCCESS) {
+            APASS_LOG_ERROR_F(Elements::Function, "InferShape for new operations failed.");
+            return FAILED;
+        }
     }
     APASS_LOG_INFO_F(Elements::Function, "===> End %s for function [%s].", MODULE_NAME, function.GetRawName().c_str());
     return SUCCESS;
@@ -47,7 +55,7 @@ Status DuplicateOp::PostCheck(Function& function)
     return checker.DoPostCheck(function);
 }
 
-Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation) const
+Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation, std::vector<Operation*>& newOps) const
 {
     for (const auto& oOperand : operation.GetOOperands()) {
         if (oOperand == nullptr) {
@@ -93,12 +101,13 @@ Status DuplicateOp::ProcessGatherIn(Function& function, Operation& operation) co
             auto& newOp = function.AddRawOperation(Opcode::OP_GATHER_IN_L1, operation.GetIOperands(), {dst}, true, operation.GetLocation());
             newOp.SetScopeInfo(operation.GetScopeInfo());
             newOp.SetAttribute(OpAttributeKey::startOffset, operation.GetIntAttribute(OpAttributeKey::startOffset));
+            newOps.push_back(&newOp);
         }
     }
     return SUCCESS;
 }
 
-Status DuplicateOp::ProcessView(Function& function, Operation& operation) const
+Status DuplicateOp::ProcessView(Function& function, Operation& operation, std::vector<Operation*>& newOps) const
 {
     auto viewAttr = dynamic_cast<ViewOpAttribute*>(operation.GetOpAttribute().get());
     if (viewAttr != nullptr &&
@@ -109,8 +118,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation) const
     for (const auto& oOperand : operation.oOperand) {
         if (oOperand == nullptr) {
             APASS_LOG_ERROR_F(
-                Elements::Operation,
-                "Null output operand detected while iterating over the output operands of the operation [%d].%s",
+                Elements::Operation, "Null output operand detected while iterating over the output operands of the operation [%d].%s",
                 operation.opmagic, GetFormatBacktrace(operation).c_str());
             return FAILED;
         }
@@ -121,8 +129,7 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation) const
         for (auto& consumer : consumers) {
             if (consumer == nullptr) {
                 APASS_LOG_ERROR_F(
-                    Elements::Tensor,
-                    "Null consumer detected while iterating over the consumers of the output operand [%d].",
+                    Elements::Tensor, "Null consumer detected while iterating over the consumers of the output operand [%d].",
                     oOperand->magic);
                 return FAILED;
             }
@@ -145,25 +152,26 @@ Status DuplicateOp::ProcessView(Function& function, Operation& operation) const
                 auto newViewAttr = std::make_shared<ViewOpAttribute>(newOffset, newDynOffset, newDynValidShape);
                 newOp.SetOpAttribute(newViewAttr);
             }
+            newOps.push_back(&newOp);
         }
     }
     return SUCCESS;
 }
 
-Status DuplicateOp::ProcessOp(Function& function, Operation& operation) const
+Status DuplicateOp::ProcessOp(Function& function, Operation& operation, std::vector<Operation*>& newOps) const
 {
     auto opcode = operation.GetOpcode();
     if (opcode != Opcode::OP_GATHER_IN_L1 && opcode != Opcode::OP_VIEW) {
         return SUCCESS;
     }
     if (opcode == Opcode::OP_GATHER_IN_L1) {
-        if (ProcessGatherIn(function, operation) != SUCCESS) {
+        if (ProcessGatherIn(function, operation, newOps) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "ProcessGatherIn failed.%s", GetFormatBacktrace(operation).c_str());
             return FAILED;
         }
     }
     if (opcode == Opcode::OP_VIEW) {
-        if (ProcessView(function, operation) != SUCCESS) {
+        if (ProcessView(function, operation, newOps) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "ProcessView failed.%s", GetFormatBacktrace(operation).c_str());
             return FAILED;
         }
@@ -171,7 +179,7 @@ Status DuplicateOp::ProcessOp(Function& function, Operation& operation) const
     return SUCCESS;
 }
 
-Status DuplicateOp::Process(Function& function) const
+Status DuplicateOp::Process(Function& function, std::vector<Operation*>& newOps) const
 {
     std::stack<Operation*> stack;
     std::unordered_set<Operation*> visited;
@@ -186,7 +194,7 @@ Status DuplicateOp::Process(Function& function) const
                 continue;
             }
             visited.insert(CurrentOp);
-            if (ProcessOp(function, *CurrentOp) != SUCCESS) {
+            if (ProcessOp(function, *CurrentOp, newOps) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Operation, "ProcessOp failed.");
                 return FAILED;
             }
