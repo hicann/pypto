@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from .. import pypto_impl
 from .._op_wrapper import op_wrapper
 from ..enum import DataType
+from ..error import PyptoError
 from ..symbolic_scalar import SymbolicScalar
 from ..tensor import Tensor
 
@@ -189,29 +190,29 @@ def conv(
             extend_params, params.groups
         )
     else:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Conv transpose true is not supported yet."
-        )
+        ))
 
 
 def __validate_type(value: Any, expect_type: Type, arg_name: str = "input") -> None:
     if value is None:
         return
     if not isinstance(value, expect_type):
-        raise TypeError(
+        raise PyptoError(0xF00001, TypeError(
             f"Argument '{arg_name}' must be of type {expect_type.__name__}, "
             f"but got {type(value).__name__}."
-        )
+        ))
 
 
 def __validate_shape(input_conv: Tensor, weight: Tensor, transposed: bool) -> None:
     input_dim = input_conv.Dim()
     weight_dim = weight.Dim()
     if input_dim != weight_dim or input_dim not in {3, 4, 5}:
-        raise RuntimeError(
+        raise PyptoError(0xF00003, RuntimeError(
             "Tensor dimension mismatch. Expect input_dim == weight_dim and both in [3, 4, 5], "
             f"got input_dim: {input_dim}, weight_dim: {weight_dim}."
-        )
+        ))
 
 
 def __validate_inputs(params: ConvParams) -> None:
@@ -233,40 +234,40 @@ def __validate_inputs(params: ConvParams) -> None:
             __validate_type(bias, pypto_impl.Tensor, "bias_tensor")
 
     if params.input_conv.GetDataType() not in _VALID_DATA_TYPES:
-        raise ValueError(
+        raise PyptoError(0xF00002, ValueError(
             "Input tensor data type must in [bf16, fp16, fp32],"
             f"but Input tensor got {params.input_conv.GetDataType()}"
-        )
+        ))
 
     if params.weight.GetDataType() not in _VALID_DATA_TYPES:
-        raise ValueError(
+        raise PyptoError(0xF00002, ValueError(
             "Weight tensor data type must in [bf16, fp16, fp32],"
             f"but Weight tensor got {params.weight.GetDataType()}"
-        )
+        ))
 
     __validate_data_type_consistency(params)
 
 
 def __validate_data_type_consistency(params: ConvParams) -> None:
     if params.input_conv.GetDataType() != params.weight.GetDataType():
-        raise ValueError(
+        raise PyptoError(0xF00002, ValueError(
             f"Input and weight data types must be consistent, "
             f"but got input: {params.input_conv.GetDataType()}, weight: {params.weight.GetDataType()}"
-        )
+        ))
 
     if params.out_dtype != params.input_conv.GetDataType():
-        raise ValueError(
+        raise PyptoError(0xF00002, ValueError(
             f"Output data type must be consistent with input, "
             f"but got out_dtype: {params.out_dtype}, input: {params.input_conv.GetDataType()}"
-        )
+        ))
 
     if params.extend_params is not None and 'bias_tensor' in params.extend_params:
         bias = params.extend_params['bias_tensor']
         if bias is not None and hasattr(bias, 'GetDataType') and bias.GetDataType() != params.input_conv.GetDataType():
-            raise ValueError(
+            raise PyptoError(0xF00002, ValueError(
                 f"Bias data type must be consistent with input, "
                 f"but got bias: {bias.GetDataType()}, input: {params.input_conv.GetDataType()}"
-            )
+            ))
 
 
 def __convert_conv_extend_params(extend_params) -> dict:
