@@ -748,6 +748,7 @@ def generate_single_golden(config: dict, output: Path):
         'TestDistributedOps/DistributedTest.TestOps',
     ],
     version=1,
+    timeout=1,
 )
 def generate_golden_case(case_name: str, output: Path, case_index: int = None) -> bool:
     case_files = get_case_files()

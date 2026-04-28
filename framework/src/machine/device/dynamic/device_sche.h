@@ -234,8 +234,6 @@ struct DynMachineManager {
 #endif
         if (devArgs->archInfo == ArchInfo::DAV_3510) {
             ret = AllocThreadIdxForDav3510(devArgs, cpu, curThreadIdx, threadIdx);
-        } else if (devArgs->archInfo == ArchInfo::DAV_2201) {
-            ret = AllocThreadIdxForDav2201(devArgs, cpu, curThreadIdx, threadIdx);
         } else {
             curThreadIdx = ++threadIdx;
         }
@@ -526,7 +524,7 @@ struct DynMachineManager {
             }
             PerfMtTrace(PERF_TRACE_EXIT, threadIdx);
         }
-        if (++exitNum_ == devArgs.nrAicpu) {
+        if (++exitNum_ == devArgs.scheCpuNum) {
             DeInit();
             DEV_INFO("All sche cpu exited.");
         }

@@ -747,7 +747,7 @@ int DeviceLauncher::LaunchAicpuKernel(rtAicpuArgsEx_t &rtArgs, bool tripleStream
             MACHINE_LOGI("sche num is 1, no need lauch more aicpu in tripleStream, nrAicpu changed to %u",
                 DeviceLauncher::GetDevProg(function)->devArgs.nrAicpu);
         }
-        ret = rtAicpuKernelLaunchExWithArgs(rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", nrAicpu, &rtArgs,
+        ret = rtAicpuKernelLaunchExWithArgs(rtKernelType_t::KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", scheCpuNum, &rtArgs,
             nullptr, schedStream, RT_KERNEL_USE_SPECIAL_TIMEOUT);
         devRunner.ReportHostProfInfo(startTime, scheCpuNum, MSPROF_GE_TASK_TYPE_AI_CPU, false);
         return ret;
