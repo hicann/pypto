@@ -69,7 +69,7 @@ public:
     Status Allocate(LocalBufferPtr tensor);
     std::map<uint64_t, uint64_t> GenFreeIntervals(const std::map<uint64_t, uint64_t>& occupiedSpace);
     std::map<uint64_t, std::map<uint64_t, uint64_t>> FindFreeIntervals();
-    bool IsFull(const LocalBufferPtr tensor);
+    bool IsFull(const LocalBufferPtr tensor, bool isMainLoop);
     bool IsFullWithoutRearrange(const size_t size);
     Status Free(const int tensorId);
     uint64_t GetMemSize();

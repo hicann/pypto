@@ -180,7 +180,16 @@ Status OoOScheduler::CheckAndUpdateLifecycle()
     return SUCCESS;
 }
 
-Status OoOScheduler::SpillOnCoreBlock(CoreLocationType coreLocation, bool& didSpill)
+Status OoOScheduler::SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> orderFirstPair)
+{
+    if (GenBufferSpill(allocIssueQueue[orderFirstPair.first][orderFirstPair.second].Front()) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
+        return FAILED;
+    }
+    return SUCCESS;
+}
+
+Status OoOScheduler::FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType &spillMemType)
 {
     bool anyNotEmpty = false;
     for (auto& kv : allocIssueQueue[coreLocation]) {
@@ -192,8 +201,6 @@ Status OoOScheduler::SpillOnCoreBlock(CoreLocationType coreLocation, bool& didSp
     if (!anyNotEmpty) {
         return FAILED;
     }
-
-    MemoryType spillMemType;
     if (!allocIssueQueue[coreLocation][MemoryType::MEM_UB].Empty()) {
         spillMemType = MemoryType::MEM_UB;
     } else if (!allocIssueQueue[coreLocation][MemoryType::MEM_L1].Empty()) {
@@ -211,26 +218,43 @@ Status OoOScheduler::SpillOnCoreBlock(CoreLocationType coreLocation, bool& didSp
             "Please check tile shape and OOO spill failed info.");
         return FAILED;
     }
-    if (GenBufferSpill(allocIssueQueue[coreLocation][spillMemType].Front()) != SUCCESS) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at GenBufferSpill.");
+    return SUCCESS;
+}
+
+Status OoOScheduler::FindFirstOrder(std::pair<CoreLocationType, MemoryType> &orderFirstPair)
+{
+    std::unordered_map<CoreLocationType, MemoryType> spillMemTypeMap;
+    std::vector<CoreLocationType> coreVec;
+    for (auto& coreLocation : CORE_INIT_CONFIGS) {
+        MemoryType spillMemType;
+        if (FindCoreLocationMemoryType(coreLocation, spillMemType) != SUCCESS) {
+            APASS_LOG_INFO_F(Elements::Operation, "FindCoreLocationMemoryType %s failed.", coreTypeToString(coreLocation).c_str());
+            continue;
+        }
+        spillMemTypeMap[coreLocation] = spillMemType;
+        coreVec.push_back(coreLocation);
+    }
+    if (spillMemTypeMap.empty() || coreVec.empty()) {
+        APASS_LOG_ERROR_F(Elements::Operation, "All coreLocation have no spillMemType.");
         return FAILED;
     }
-    didSpill = true;
+    std::sort(coreVec.begin(), coreVec.end(), [&spillMemTypeMap, this](const CoreLocationType& a, const CoreLocationType& b) {
+        return opExecOrderMap[allocIssueQueue[a][spillMemTypeMap[a]].Front()] < opExecOrderMap[allocIssueQueue[b][spillMemTypeMap[b]].Front()];
+    });
+    orderFirstPair = std::make_pair(coreVec[0], spillMemTypeMap[coreVec[0]]);
     return SUCCESS;
 }
 
 Status OoOScheduler::SpillOnBlock()
 {
-    bool didSpill = false;
-    for (auto coreLocation : CORE_INIT_CONFIGS) {
-        if (SpillOnCoreBlock(coreLocation, didSpill) != SUCCESS) {
-            APASS_LOG_WARN_F(
-                Elements::Operation, "SpillOnBlock failed/skipped at coreType: %s",
-                coreTypeToString(coreLocation).c_str());
-        }
+    std::pair<CoreLocationType, MemoryType> orderFirstPair;
+    if (FindFirstOrder(orderFirstPair) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "FindFirstOrder failed.");
+        return FAILED;
     }
-    if (!didSpill) {
-        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnBlock failed at all coreType.");
+    APASS_LOG_INFO_F(Elements::Operation, "Start to spillOnBlock at %s", coreTypeToString(orderFirstPair.first).c_str());
+    if (SpillOnCoreBlock(orderFirstPair) != SUCCESS) {
+        APASS_LOG_ERROR_F(Elements::Operation, "SpillOnCoreBlock failed.");
         return FAILED;
     }
     return SUCCESS;
@@ -344,7 +368,7 @@ Status OoOScheduler::ExecuteAllocIssue(uint64_t& commitCnt, MemoryType memType, 
         Operation* op = pipe.Front();
         auto& coreLocation = opCoreLocationMap[op];
         auto& reqMemIds = GetOpMemIds(op);
-        if (!bufferManagerMap[coreLocation][memType].IsFull(localBufferMap_[reqMemIds[0]])) {
+        if (!bufferManagerMap[coreLocation][memType].IsFull(localBufferMap_[reqMemIds[0]], true)) {
             APASS_LOG_DEBUG_F(Elements::Operation, "ALLOCATE: %s.", GetOpInfo(op).c_str());
             if (bufferManagerMap[coreLocation][memType].Allocate(localBufferMap_[reqMemIds[0]]) != SUCCESS) {
                 APASS_LOG_ERROR_F(Elements::Tensor, "Allocate Tensor[%d] failed.", reqMemIds[0]);
@@ -569,7 +593,7 @@ Status OoOScheduler::ExecuteAllocIssue(Operation* op, size_t &pcIdx)
     }
     LocalBufferPtr allocBuffer = localBufferMap_[GetOpMemIds(op)[0]];
     auto coreLocation = opCoreLocationMap[op];
-    if (bufferManagerMap[coreLocation][allocBuffer->memType].IsFull(allocBuffer)) {
+    if (bufferManagerMap[coreLocation][allocBuffer->memType].IsFull(allocBuffer, false)) {
         if (GenSpillOp(pcIdx) != SUCCESS) {
             APASS_LOG_ERROR_F(Elements::Operation, "GenSpillOp failed at ExecuteAllocIssue. %s",
                 GetFormatBacktrace(*orderedOps[pcIdx]).c_str());

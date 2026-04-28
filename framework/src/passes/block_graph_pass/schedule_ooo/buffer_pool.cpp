@@ -20,6 +20,7 @@
 
 namespace npu::tile_fwk {
 constexpr size_t START_ADDR_IDX = 2;
+constexpr double ONE_THIRD = 1.0 / 3.0;
 
 std::map<uint64_t, uint64_t> BufferPool::GenFreeIntervals(const std::map<uint64_t, uint64_t>& occupiedSpace)
 {
@@ -245,7 +246,7 @@ Status BufferPool::Free(const int tensorId)
     return SUCCESS;
 }
 
-bool BufferPool::IsFull(const LocalBufferPtr tensor)
+bool BufferPool::IsFull(const LocalBufferPtr tensor, bool isMainLoop)
 {
     if (tensor->memType == MemoryType::MEM_BT) {
         if (bufferSlices.size() >= 1) {
@@ -253,6 +254,12 @@ bool BufferPool::IsFull(const LocalBufferPtr tensor)
         }
     }
     auto freeSpace = FindFreeIntervals();
+     if (tensor->memType == MemoryType::MEM_L0C && tensor->size >= ONE_THIRD * memSize_ && isMainLoop) {
+         bool headFree = false;
+         bool tailFree = false;
+         SelectHeadAndTail(tensor, headFree, tailFree, freeSpace);
+         return !(headFree || tailFree);
+     }
     for (auto inter : freeSpace) {
         if (inter.first >= tensor->size) {
             return false;

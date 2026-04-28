@@ -259,7 +259,9 @@ private:
     Status ReplayPartialWriteProducers(SpillInfo &spillInfo, Operation* allocOp,
         LogicalTensorPtr assembleTensor, const std::vector<Operation*> &assembleOps, bool isGenSpill);
     Status SpillOnBlock() override;
-    Status SpillOnCoreBlock(CoreLocationType targetCore, bool &didSpill);
+    Status SpillOnCoreBlock(std::pair<CoreLocationType, MemoryType> orderFirstPair);
+    Status FindCoreLocationMemoryType(CoreLocationType coreLocation, MemoryType &spillMemType);
+    Status FindFirstOrder(std::pair<CoreLocationType, MemoryType> &orderFirstPair);
     Operation* SkipViewChain(Operation* start, bool followProducers);
 
     // 新增：插入Operation到orderedOps
