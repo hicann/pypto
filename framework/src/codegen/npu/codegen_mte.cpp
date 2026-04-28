@@ -48,10 +48,8 @@ DynamicParamPackMTE CodeGenOpNPU::PrepareDynamicShapeInfoForMTE(int dynShapeIdx,
     for (const auto& gs : pack.gmShapeExpr) {
         pack.paramList.emplace_back(gs);
     }
-    if (!isGmSpill) {
-        for (const auto& go : pack.gmOffsetExpr) {
-            pack.paramList.emplace_back(go);
-        }
+    for (const auto& go : pack.gmOffsetExpr) {
+        pack.paramList.emplace_back(go);
     }
 
     return pack;
