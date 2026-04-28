@@ -131,4 +131,23 @@ std::unordered_map<MemoryType, int64_t> CommonUtils::GetLocalMemorySize()
 
     return localMemorySize;
 }
+int CommonUtils::GetTensorSubgraphID(const LogicalTensorPtr& tensor) { return GetTensorSubgraphID(tensor.get()); }
+
+int CommonUtils::GetTensorSubgraphID(const LogicalTensor* tensor)
+{
+    if (tensor == nullptr) {
+        return NOT_IN_SUBGRAPH;
+    }
+    if (tensor->GetProducers().size() > 0) {
+        auto& producers = tensor->GetProducers();
+        return (*producers.begin())->GetSubgraphID();
+    }
+    if (tensor->GetConsumers().size() > 0) {
+        auto& consumers = tensor->GetConsumers();
+        return (*consumers.begin())->GetSubgraphID();
+    }
+    return NOT_IN_SUBGRAPH;
+}
+
+
 } // namespace npu::tile_fwk

@@ -38,7 +38,6 @@ std::shared_ptr<LogicalTensor> CreateLogicalTensor(const LogicalTensorInfo& info
 
     auto localTensor = std::make_shared<LogicalTensor>(
         info.function, info.dType, info.shape, TileOpFormat::TILEOP_ND, info.tensorName);
-    localTensor->UpdateSubgraphID(0);
     localTensor->SetMemoryTypeOriginal(info.memType);
     localTensor->SetMemoryTypeToBe(info.memType);
     localTensor->SetAttr(OpAttributeKey::needAlloc, true);
@@ -124,7 +123,6 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
             tensorPtr = std::make_shared<LogicalTensor>(
                 function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L1Tensor",
                 NodeType::LOCAL);
-            tensorPtr->UpdateSubgraphID(0);
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
             tensorPtr->memoryrange.start = 0;
@@ -139,7 +137,6 @@ std::shared_ptr<LogicalTensor> CreateConvTensor(
             tensorPtr = std::make_shared<LogicalTensor>(
                 function, dtype, shape, SymbolicScalar::FromConcrete(shape), TileOpFormat::TILEOP_NZ, "L0CTensor",
                 NodeType::LOCAL);
-            tensorPtr->UpdateSubgraphID(0);
             tensorPtr->SetAttr(OpAttributeKey::needAlloc, true);
             tensorPtr->memoryrange.memId = 0;
             tensorPtr->memoryrange.start = 0;

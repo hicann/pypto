@@ -50,7 +50,6 @@ public:
 
 class LogicalTensor : public AttrHolder {
 public:
-    int subGraphID{NOT_IN_SUBGRAPH};
 
     std::shared_ptr<RawTensor> tensor;
     Offset offset;
@@ -120,9 +119,6 @@ public:
     size_t MemorySize() const;
     bool IsDummy() const;
     void SetIsDummy(bool dummy = true);
-
-    int GetSubgraphID() const { return subGraphID; }
-    void UpdateSubgraphID(int subgraphID) { subGraphID = subgraphID; }
 
     bool Overlap(const std::shared_ptr<LogicalTensor>& other) const;
 

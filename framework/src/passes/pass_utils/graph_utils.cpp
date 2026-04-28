@@ -14,6 +14,7 @@
  */
 
 #include "graph_utils.h"
+#include "pass_utils.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -112,7 +113,7 @@ Operation& GraphUtils::AddCopyInOperation(
     auto& newOp = function.AddOperation(Opcode::OP_COPY_IN, {copy.input}, {copy.output});
     SetCopyInAttr(newOp, copy);
     SetDynShape(&newOp, outDynShape);
-    newOp.UpdateSubgraphID(copy.output->subGraphID);
+    newOp.UpdateSubgraphID(CommonUtils::GetTensorSubgraphID(copy.output));
     return newOp;
 }
 
@@ -122,7 +123,7 @@ Operation& GraphUtils::AddCopyOutOperation(
     auto& newOp = function.AddOperation(Opcode::OP_COPY_OUT, {copy.input}, {copy.output});
     SetCopyOutAttr(newOp, copy);
     SetDynShape(&newOp, outDynShape);
-    newOp.UpdateSubgraphID(copy.input->subGraphID);
+    newOp.UpdateSubgraphID(CommonUtils::GetTensorSubgraphID(copy.input));
     return newOp;
 }
 

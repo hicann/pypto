@@ -199,7 +199,7 @@ Status PreGraphProcess::RunOnFunction(Function& function)
     colorGraph.PreColorSort(function);
     auto opList = function.Operations();
     for (auto& op : opList) {
-        colorGraph.InitializeTensorColor(op);
+        colorGraph.InitializeTensorMem(op);
         UpdateCopyOpIsCube(op);
     }
     SetBoundary setBoundary;

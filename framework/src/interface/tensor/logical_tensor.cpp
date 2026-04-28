@@ -27,14 +27,14 @@
 #include "interface/function/function.h"
 #include "interface/utils/serialization.h"
 #include "passes/pass_utils/subgraph_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 #include <cstdint>
 
 using namespace npu::tile_fwk;
 
 LogicalTensor::LogicalTensor(
     Function& function, DataType t, Shape tshape, TileOpFormat format, std::string tname, NodeType tnodetype)
-    : subGraphID(NOT_IN_SUBGRAPH),
-      tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
+    : tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
       oriShape(tshape),
@@ -46,8 +46,7 @@ LogicalTensor::LogicalTensor(
 LogicalTensor::LogicalTensor(
     Function& function, DataType t, Shape tshape, std::vector<SymbolicScalar> tValidShape, TileOpFormat format,
     std::string tname, NodeType tnodetype)
-    : subGraphID(NOT_IN_SUBGRAPH),
-      tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
+    : tensor(std::make_shared<RawTensor>(t, tshape, format, std::move(tname))),
       offset(Offset(tshape.size(), 0)),
       shape(tshape),
       oriShape(tshape),
@@ -60,8 +59,7 @@ LogicalTensor::LogicalTensor(
 
 LogicalTensor::LogicalTensor(
     Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape, NodeType tnodetype)
-    : subGraphID(NOT_IN_SUBGRAPH),
-      tensor(rawTensor),
+    : tensor(rawTensor),
       offset(toffset),
       shape(tshape),
       oriShape(tshape),
@@ -77,8 +75,7 @@ LogicalTensor::LogicalTensor(
 LogicalTensor::LogicalTensor(
     Function& function, std::shared_ptr<RawTensor> rawTensor, Offset toffset, Shape tshape,
     std::vector<SymbolicScalar> tValidShape, NodeType tnodetype)
-    : subGraphID(NOT_IN_SUBGRAPH),
-      tensor(rawTensor),
+    : tensor(rawTensor),
       offset(toffset),
       shape(tshape),
       oriShape(tshape),
@@ -118,7 +115,6 @@ std::shared_ptr<LogicalTensor> LogicalTensor::Clone(Function& dstFunc, bool crea
 
     std::shared_ptr<LogicalTensor> newTensor =
         std::make_shared<LogicalTensor>(dstFunc, rawTensor, offset, shape, dynValidShape_, nodetype);
-    newTensor->subGraphID = subGraphID;
     if (!create) {
         newTensor->magic = magic;
     } else {
@@ -156,10 +152,6 @@ Json LogicalTensor::DumpJson(bool dumpRawTensor) const
         bool allocValue = false;
         GetAttr(OpAttributeKey::needAlloc, allocValue);
         result["need_alloc"] = allocValue;
-    }
-
-    if (subGraphID != NOT_IN_SUBGRAPH) {
-        result["subgraphid"] = subGraphID;
     }
 
     result["mem_range"] = Json(std::vector<std::size_t>({memoryrange.start, memoryrange.end}));
@@ -230,9 +222,6 @@ std::shared_ptr<LogicalTensor> LogicalTensor::LoadJson(
         tensorJson->SetAttr(OpAttributeKey::needAlloc, needAlloc);
     }
 
-    if (tensorDump.count("subgraphid")) {
-        tensorJson->subGraphID = tensorDump["subgraphid"].get<int>();
-    }
     if (tensorDump.count("mem_range")) {
         tensorJson->memoryrange =
             TileRange(tensorDump["mem_range"][0].get<int>(), tensorDump["mem_range"][1].get<int>());
@@ -328,7 +317,7 @@ std::string LogicalTensor::DumpSSA([[maybe_unused]] bool showFrom, bool showMem,
         oss << ")";
     }
     oss << "#"
-        << "(" << subGraphID << ")";
+        << "(" << CommonUtils::GetTensorSubgraphID(this) << ")";
     if (showMem) {
         oss << MemoryTypeToString(GetMemoryTypeOriginal()) << "::" << MemoryTypeToString(GetMemoryTypeToBe());
         if (IsDummy()) {

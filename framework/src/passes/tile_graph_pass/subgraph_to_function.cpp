@@ -24,6 +24,7 @@
 #include "passes/pass_check/subgraph_to_function_checker.h"
 #include "passes/pass_utils/graph_utils.h"
 #include "passes/pass_utils/subgraph_utils.h"
+#include "passes/pass_utils/pass_utils.h"
 #include "passes/pass_log/pass_log.h"
 #include "tilefwk/error_code.h"
 
@@ -244,7 +245,8 @@ void SubgraphToFunction::RecordOutcastInfo(Function& function, RecordInfo record
         }
         refCount++;
         int connectedTgtOperandIdx = oOperand->magic;
-        relatedIncastList.push_back(typename SubfuncInvokeInfoTy::SuccessorIncastRecTy(
+        relatedIncastList.push_back(
+            typename SubfuncInvokeInfoTy::SuccessorIncastRecTy(
             eSgId, connectedTgtOperandIdx, nullptr, consumer->GetOpMagic()));
     }
     iter.RecordOutcast(
@@ -717,8 +719,9 @@ static std::unordered_map<int, GetTensorDataOutcastDesc> GetTensorDataBuildOutca
     }
     for (auto& [index, desc] : getTensorDataOutcastDescDict) {
         (void)index;
-        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, desc.opListDict[Opcode::OP_ADDS].size() == 1) << "Expect the size is 1 for opListDict, but we get "
-                                                             << desc.opListDict[Opcode::OP_ADDS].size() << "OP_ADDS";
+        ASSERT(OperationErr::OP_SPECIAL_CONSTRAINT, desc.opListDict[Opcode::OP_ADDS].size() == 1)
+            << "Expect the size is 1 for opListDict, but we get " << desc.opListDict[Opcode::OP_ADDS].size() 
+            << "OP_ADDS";
         auto mark = desc.opListDict[Opcode::OP_ADDS][0];
 
         std::shared_ptr<LogicalTensor> addsOpOut = mark->GetOOperands()[0];
@@ -807,7 +810,7 @@ static std::vector<GetTensorDataUsageDesc> GetTensorDataBuildUsageDesc(Function&
             << "Expect operation[" << refOp.GetOpMagic()
             << "] has valid IOperand/OOperand, but we get nullptr. Please check the operation.";
         MemoryType subgraphMemoryType = subgraphTensor->GetMemoryTypeToBe();
-        int subgraphID = subgraphTensor->GetSubgraphID();
+        int subgraphID = CommonUtils::GetTensorSubgraphID(subgraphTensor);
         getTensorDataUsageDescList.emplace_back(&refOp, usageDict, subgraphMemoryType, subgraphID);
     }
     return getTensorDataUsageDescList;
@@ -878,7 +881,6 @@ Status SubgraphToFunction::GetTensorDataDependencyInsert(Function& function)
                 return FAILED;
             }
 
-            copyInTensor->UpdateSubgraphID(subgraphID);
             copyInTensor->SetMemoryTypeBoth(subgraphMemoryType);
             auto& copyInOp = function.AddOperation(Opcode::OP_COPY_IN, {copyInSourceTensor}, {copyInTensor}, false);
             copyInOp.UpdateSubgraphID(subgraphID);

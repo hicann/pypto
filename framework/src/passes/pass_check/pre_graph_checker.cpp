@@ -17,6 +17,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "tilefwk/error_code.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "PreGraphProcess"
 
@@ -32,7 +33,8 @@ Status PreGraphProcessChecker::DoPreCheck(Function& function)
     for (auto& op : function.Operations()) {
         // 校验是否切分
         if (op.GetSubgraphID() == NOT_IN_SUBGRAPH) {
-            APASS_LOG_ERROR_C(GraphErr::GRAPH_SUBGRAPH_ID_INVALID, Elements::Graph, "%s[%d] is not partitioned. %s", op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
+            APASS_LOG_ERROR_C(GraphErr::GRAPH_SUBGRAPH_ID_INVALID, Elements::Graph, "%s[%d] is not partitioned. %s", 
+            op.GetOpcodeStr().c_str(), op.GetOpMagic(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         if ((op.GetOpcode() != Opcode::OP_ASSEMBLE) && (op.GetOpcode() != Opcode::OP_VIEW) &&
@@ -41,7 +43,9 @@ Status PreGraphProcessChecker::DoPreCheck(Function& function)
         }
         if ((op.GetIOperands().size() != 1) || (op.GetOOperands().size() != 1)) {
             // 校验非空单输入单输出
-            APASS_LOG_ERROR_C(OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, "Invalid %s[%d], input num: %zu, output num: %zu .%s",
+            APASS_LOG_ERROR_C(
+                OperationErr::OP_INVALID_OPERAND_COUNT, Elements::Operation, 
+                "Invalid %s[%d], input num: %zu, output num: %zu .%s",
                 op.GetOpcodeStr().c_str(), op.opmagic, op.GetIOperands().size(), op.GetOOperands().size(), GetFormatBacktrace(op).c_str());
             return FAILED;
         }
@@ -49,16 +53,18 @@ Status PreGraphProcessChecker::DoPreCheck(Function& function)
         auto tensorOut = op.GetOOperands().front();
         if ((tensorIn == nullptr) || (tensorIn == nullptr)) {
             // 校验输入输出非空
-            APASS_LOG_ERROR_C(OperationErr::OP_NULL_POINTER, Elements::Operation, "Invalid %s[%d], has nullptr input/output. %s",
+            APASS_LOG_ERROR_C(
+                OperationErr::OP_NULL_POINTER, Elements::Operation, "Invalid %s[%d], has nullptr input/output. %s",
                 op.GetOpcodeStr().c_str(), op.opmagic, GetFormatBacktrace(op).c_str());
             return FAILED;
         }
         if (tensorIn->GetMemoryTypeOriginal() != tensorOut->GetMemoryTypeOriginal()) {
             // 校验输入输出mem类型相同
-            APASS_LOG_ERROR_C(TensorErr::TENSOR_INVALID_MEMORY_TYPE, Elements::Tensor, "Unmatched input output memory type for %s[%d], input mem type: "
-                         "%s, output mem type: %s",
-                op.GetOpcodeStr().c_str(), op.opmagic, MemoryTypeToString(tensorIn->GetMemoryTypeOriginal()).c_str(),
-                MemoryTypeToString(tensorOut->GetMemoryTypeOriginal()).c_str());
+            APASS_LOG_ERROR_C(TensorErr::TENSOR_INVALID_MEMORY_TYPE, Elements::Tensor, 
+            "Unmatched input output memory type for %s[%d], input mem type: "
+            "%s, output mem type: %s",
+            op.GetOpcodeStr().c_str(), op.opmagic, MemoryTypeToString(tensorIn->GetMemoryTypeOriginal()).c_str(),
+            MemoryTypeToString(tensorOut->GetMemoryTypeOriginal()).c_str());
             return FAILED;
         }
     }
@@ -105,13 +111,6 @@ Status PreGraphProcessChecker::DoPostCheck(Function& function)
 
 Status PreGraphProcessChecker::PostCheckHelpFunc(const LogicalTensor& singleTensor)
 {
-    if (singleTensor.subGraphID == NOT_IN_SUBGRAPH) {
-        // tensor 的子图编号是否被设置过
-        APASS_LOG_ERROR_F(
-            Elements::Graph, "Tensor magic: %d, its subgraph id should not be %d.", singleTensor.GetMagic(),
-            NOT_IN_SUBGRAPH);
-        return FAILED;
-    }
     if (singleTensor.GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
         SubgraphUtils::IsBoundary(singleTensor) == false) {
         // gm tensor 是否被标记为boundary
@@ -144,8 +143,8 @@ Status PreGraphProcessChecker::PostCheckReshape(const Operation& op)
     if (reshapeIn->GetMemoryTypeOriginal() != MemoryType::MEM_DEVICE_DDR) {
         APASS_LOG_DEBUG_F(Elements::Operation, "Reshape on local buffer, opmagic: %d.", op.opmagic);
         auto opSubgraphId = op.GetSubgraphID();
-        auto inputSubgraphId = reshapeIn->GetSubgraphID();
-        auto outSubgraphId = reshapeIn->GetSubgraphID();
+        auto inputSubgraphId = CommonUtils::GetTensorSubgraphID(reshapeIn);
+        auto outSubgraphId = CommonUtils::GetTensorSubgraphID(reshapeOut);
         if (opSubgraphId != inputSubgraphId || opSubgraphId != outSubgraphId) {
             // local buffer 上的reshape，输入/输出/op的子图编号相同
             APASS_LOG_ERROR_F(

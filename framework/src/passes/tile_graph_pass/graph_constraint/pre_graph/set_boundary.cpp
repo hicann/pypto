@@ -30,7 +30,6 @@ void SetBoundary::InsertTemporaryCopyIn(Function& function, Operation& op) const
             GraphUtils::CopyDynStatus(tensorGM, input);
             tensorGM->SetMemoryTypeOriginal(MemoryType::MEM_DEVICE_DDR, true);
             tensorGM->SetMemoryTypeToBe(MemoryType::MEM_DEVICE_DDR);
-            tensorGM->subGraphID = op.GetSubgraphID();
             operandGm.push_back(tensorGM);
             function.GetTensorMap().Insert(tensorGM);
 

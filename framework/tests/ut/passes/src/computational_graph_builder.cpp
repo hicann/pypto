@@ -42,7 +42,6 @@ bool ComputationalGraphBuilder::AddTensor(
     }
     auto tensor = GetTensor(name);
     tensor->SetMemoryTypeBoth(memType, true);
-    tensor->subGraphID = subGraphID;
     tensor->memoryrange.memId = tensor->GetMagic();
     tensors_[name] = tensor;
     return true;

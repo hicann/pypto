@@ -59,17 +59,11 @@ TEST_F(NBufferMergeTest, TestNBufferMerge)
     constexpr int subGraphID1 = 1;
     std::vector<int64_t> shape = {8, 16};
     auto incast1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    incast1->subGraphID = subGraphID0;
     auto incast2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    incast2->subGraphID = subGraphID1;
     auto tensor1 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor1->subGraphID = subGraphID0;
     auto tensor2 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor2->subGraphID = subGraphID0;
     auto tensor3 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor3->subGraphID = subGraphID1;
     auto tensor4 = std::make_shared<LogicalTensor>(*currFunctionPtr, DT_FP32, shape);
-    tensor4->subGraphID = subGraphID1;
 
     auto& copy_op1 = currFunctionPtr->AddOperation(Opcode::OP_COPY_IN, {incast1}, {tensor1});
     copy_op1.UpdateSubgraphID(subGraphID0);

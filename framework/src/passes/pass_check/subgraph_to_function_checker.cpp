@@ -17,6 +17,7 @@
 #include "passes/pass_log/pass_log.h"
 #include "passes/pass_utils/subgraph_utils.h"
 #include "tilefwk/error_code.h"
+#include "passes/pass_utils/pass_utils.h"
 
 #define MODULE_NAME "SubgraphToFunction"
 
@@ -138,9 +139,9 @@ Status SubGraphToFuncChecker::BuildInGraph(Function& function)
                 auto [parentSeqNo, found] = operationViewer.FindOpPosition(*parentOp);
                 if (EdgeIndexCheck(found, parentSeqNo, inGraph_.size()) != SUCCESS) {
                     APASS_LOG_ERROR_C(
-                        FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "error inserting op magic %d in function %d %s to inGraph. %s",
-                        parentOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
-                        GetFormatBacktrace(parentOp).c_str());
+                        FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, 
+                        "error inserting op magic %d in function %d %s to inGraph. %s", parentOp->GetOpMagic(), 
+                        function.GetFuncMagic(), function.GetRawName().c_str(), GetFormatBacktrace(parentOp).c_str());
                     return FAILED;
                 }
                 auto it = std::find(inGraph_[i].begin(), inGraph_[i].end(), parentSeqNo);
@@ -154,9 +155,9 @@ Status SubGraphToFuncChecker::BuildInGraph(Function& function)
             auto [parentSeqNo, found] = operationViewer.FindOpPosition(*inControlOp);
             if (EdgeIndexCheck(found, parentSeqNo, inGraph_.size()) != SUCCESS) {
                 APASS_LOG_ERROR_C(
-                    FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "Error inserting op magic %d in function %d %s to inGraph. %s",
-                    inControlOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
-                    GetFormatBacktrace(inControlOp).c_str());
+                    FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, 
+                    "Error inserting op magic %d in function %d %s to inGraph. %s", inControlOp->GetOpMagic(), 
+                    function.GetFuncMagic(), function.GetRawName().c_str(), GetFormatBacktrace(inControlOp).c_str());
                 return FAILED;
             }
             auto it = std::find(inGraph_[i].begin(), inGraph_[i].end(), parentSeqNo);
@@ -178,9 +179,9 @@ Status SubGraphToFuncChecker::BuildOutGraph(Function& function)
                 auto [childSeqNo, found] = operationViewer.FindOpPosition(*childOp);
                 if (EdgeIndexCheck(found, childSeqNo, inGraph_.size()) != SUCCESS) {
                     APASS_LOG_ERROR_C(
-                        FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "Error inserting op magic %d in function %d %s to outGraph_. %s",
-                        childOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
-                        GetFormatBacktrace(childOp).c_str());
+                        FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, 
+                        "Error inserting op magic %d in function %d %s to outGraph_. %s", childOp->GetOpMagic(), 
+                        function.GetFuncMagic(), function.GetRawName().c_str(), GetFormatBacktrace(childOp).c_str());
                     return FAILED;
                 }
                 auto it = std::find(outGraph_[i].begin(), outGraph_[i].end(), childSeqNo);
@@ -194,9 +195,9 @@ Status SubGraphToFuncChecker::BuildOutGraph(Function& function)
             auto [childSeqNo, found] = operationViewer.FindOpPosition(*outControlOp);
             if (EdgeIndexCheck(found, childSeqNo, inGraph_.size()) != SUCCESS) {
                 APASS_LOG_ERROR_C(
-                    FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, "Error inserting op magic %d in function %d %s to outGraph_. %s",
-                    outControlOp->GetOpMagic(), function.GetFuncMagic(), function.GetRawName().c_str(),
-                    GetFormatBacktrace(outControlOp).c_str());
+                    FunctionErr::FUNCTION_GRAPH_CONNECTION, Elements::Function, 
+                    "Error inserting op magic %d in function %d %s to outGraph_. %s", outControlOp->GetOpMagic(), 
+                    function.GetFuncMagic(), function.GetRawName().c_str(), GetFormatBacktrace(outControlOp).c_str());
                 return FAILED;
             }
             auto it = std::find(outGraph_[i].begin(), outGraph_[i].end(), childSeqNo);
@@ -244,8 +245,9 @@ Status SubGraphToFuncChecker::InAndOutGraphConsistencyCheck(
     for (size_t i = 0; i < outEdgeGraph.size(); i++) {
         if (outEdgeGraph[i].size() != nodeColIdx[i]) {
             APASS_LOG_ERROR_C(
-                GraphErr::GRAPH_EDGE_CONSISTENCY, Elements::Graph, "outEdgeGraph[%zu] has size %zu, but only %zu of them have been traversed", i,
-                outEdgeGraph[i].size(), nodeColIdx[i]);
+                GraphErr::GRAPH_EDGE_CONSISTENCY, Elements::Graph, 
+                "outEdgeGraph[%zu] has size %zu, but only %zu of them have been traversed", i, outEdgeGraph[i].size(), 
+                nodeColIdx[i]);
             return FAILED;
         }
     }
@@ -313,7 +315,7 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
                 return FAILED;
             }
             // Rule 2: Operands with consumer in a different subgraph must be marked as subgraph boundary
-            if (subGraphId != iOperand->subGraphID && !SubgraphUtils::IsBoundary(iOperand)) {
+            if (subGraphId != CommonUtils::GetTensorSubgraphID(iOperand) && !SubgraphUtils::IsBoundary(iOperand)) {
                 APASS_LOG_ERROR_C(
                     TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Input operand %zu of operation %zu (opdump: %s) has a consumer in a different subgraph but not "
@@ -346,7 +348,7 @@ Status SubGraphToFuncChecker::CheckSubGraphBoundary(Function& function)
                 return FAILED;
             }
             // Rule 2: Operands with producer in a different subgraph must be marked as subgraph boundary
-            if (subGraphId != oOperand->subGraphID && !SubgraphUtils::IsBoundary(oOperand)) {
+            if (subGraphId != CommonUtils::GetTensorSubgraphID(oOperand) && !SubgraphUtils::IsBoundary(oOperand)) {
                 APASS_LOG_ERROR_C(
                     TensorErr::TENSOR_SUBGRAPH_BOUNDARY, Elements::Tensor,
                     "Output operand %zu of operation %zu (opdump: %s) has a producer in a different subgraph but not "

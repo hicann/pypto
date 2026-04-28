@@ -29,7 +29,7 @@ public:
     ~ColorGraph() = default;
 
     Status PreColorSort(Function& function);
-    void InitializeTensorColor(Operation& op) const;
+    void InitializeTensorMem(Operation& op) const;
 };
 } // namespace npu::tile_fwk
 #endif // PASS_COLOR_GRAPH_H
