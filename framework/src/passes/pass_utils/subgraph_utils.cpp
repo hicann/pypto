@@ -49,6 +49,8 @@ bool HasCrossSubgraphEdges(const LogicalTensor& tensor)
 
 bool IsBoundaryAsInput(const LogicalTensor& tensor, const Operation& op)
 {
+    constexpr int kDistCopyInBoundaryIndex = 1;
+
     if (op.GetOpcode() == Opcode::OP_COPY_IN) {
         return !op.GetIOperands().empty() && op.GetIOperands().front().get() == &tensor;
     }
@@ -56,6 +58,13 @@ bool IsBoundaryAsInput(const LogicalTensor& tensor, const Operation& op)
         return !op.GetOOperands().empty() &&
                op.GetOOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
     }
+
+    bool isDistCopyOut = false;
+    if (op.GetAttr<bool>(OpAttributeKey::isDistCopyOut, isDistCopyOut) && !isDistCopyOut) {
+        return op.GetIOperands().size() > kDistCopyInBoundaryIndex &&
+               op.GetIOperands()[kDistCopyInBoundaryIndex].get() == &tensor;
+    }
+
     return false;
 }
 
@@ -73,6 +82,17 @@ bool IsBoundaryAsOutput(const LogicalTensor& tensor, const Operation& op)
                op.GetIOperands().front()->GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR &&
                tensor.GetMemoryTypeOriginal() == MemoryType::MEM_DEVICE_DDR;
     }
+
+    bool isDistCopyOut = false;
+    if (op.GetAttr<bool>(OpAttributeKey::isDistCopyOut, isDistCopyOut) && isDistCopyOut) {
+        return !op.GetOOperands().empty() && op.GetOOperands().front().get() == &tensor;
+    }
+
+    // 针对通信算子 OP_SHMEM_SIGNAL 处理，在图切分时，其输出 tensor 作为子图边界
+    if (op.GetOpcode() == Opcode::OP_SHMEM_SIGNAL) {
+        return !op.GetOOperands().empty() && op.GetOOperands().front().get() == &tensor;
+    }
+
     return false;
 }
 
