@@ -26,21 +26,9 @@
 #include "test_codegen_common.h"
 
 namespace npu::tile_fwk {
-class TestCodegenDynMM : public ::testing::Test {
+class TestCodegenDynMM : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynMM() : CodegenTestBase({.setIdGen = true}) {}
 };
 
 TEST_F(TestCodegenDynMM, TestDynMatmulTileTensor)

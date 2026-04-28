@@ -30,22 +30,9 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynPairProd : public ::testing::Test {
+class TestCodegenDynPairProd : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynPairProd() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
 };
 
 TEST_F(TestCodegenDynPairProd, PairProdLayout)

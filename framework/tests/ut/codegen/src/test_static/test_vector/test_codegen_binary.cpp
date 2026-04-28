@@ -28,23 +28,13 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenBinary : public ::testing::Test {
+class TestCodegenBinary : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
+    TestCodegenBinary()
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .buildStatic = true, .setTileTensor = true})
+    {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetBuildStatic(true);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-    }
-
-    void TearDown() override {}
 };
 
 void TestAddBody(std::vector<int64_t> shape, std::string name, bool withBrc = false)

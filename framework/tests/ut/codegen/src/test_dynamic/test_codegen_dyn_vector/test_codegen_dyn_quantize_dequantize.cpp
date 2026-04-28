@@ -30,21 +30,9 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynQuantize : public ::testing::Test {
+class TestCodegenDynQuantize : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynQuantize() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 
 protected:
     static void RunCodeGenAndCheck(const std::string& funcName, const std::string& expect)
@@ -58,12 +46,9 @@ protected:
     }
 
     static void RunQuantizeTestSymmetric(
-        const std::string& funcName, const std::string& expect,
-        DataType inputType, DataType outputType,
-        const std::vector<int64_t>& inputShape,
-        const std::vector<int64_t>& scaleShape,
-        const std::vector<int64_t>& outputShape,
-        const std::vector<int64_t>& vecTile, int axis)
+        const std::string& funcName, const std::string& expect, DataType inputType, DataType outputType,
+        const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
+        const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile, int axis)
     {
         TileShape::Current().SetVecTile(vecTile);
         Tensor input(inputType, inputShape, "input");
@@ -84,12 +69,9 @@ protected:
     }
 
     static void RunQuantizeTestAsymmetric(
-        const std::string& funcName, const std::string& expect,
-        DataType inputType, DataType outputType,
-        const std::vector<int64_t>& inputShape,
-        const std::vector<int64_t>& scaleShape,
-        const std::vector<int64_t>& zeroPointShape,
-        const std::vector<int64_t>& outputShape,
+        const std::string& funcName, const std::string& expect, DataType inputType, DataType outputType,
+        const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
+        const std::vector<int64_t>& zeroPointShape, const std::vector<int64_t>& outputShape,
         const std::vector<int64_t>& vecTile, int axis)
     {
         TileShape::Current().SetVecTile(vecTile);
@@ -111,12 +93,9 @@ protected:
     }
 
     static void RunDequantizeTest(
-        const std::string& funcName, const std::string& expect,
-        DataType inputType,
-        const std::vector<int64_t>& inputShape,
-        const std::vector<int64_t>& scaleShape,
-        const std::vector<int64_t>& outputShape,
-        const std::vector<int64_t>& vecTile, int axis)
+        const std::string& funcName, const std::string& expect, DataType inputType,
+        const std::vector<int64_t>& inputShape, const std::vector<int64_t>& scaleShape,
+        const std::vector<int64_t>& outputShape, const std::vector<int64_t>& vecTile, int axis)
     {
         TileShape::Current().SetVecTile(vecTile);
         Tensor input(inputType, inputShape, "input");
@@ -141,10 +120,8 @@ protected:
 TEST_F(TestCodegenDynQuantize, QuantizeSymmetricToInt8)
 {
     RunQuantizeTestSymmetric(
-        "QUANTIZE_SYMMETRIC_INT8",
-        R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_4, ubTensor_0, ubTensor_2);)!!!",
-        DataType::DT_FP32, DataType::DT_INT8,
-        {8, 128}, {8}, {8, 128}, {8, 128}, -1);
+        "QUANTIZE_SYMMETRIC_INT8", R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_4, ubTensor_0, ubTensor_2);)!!!",
+        DataType::DT_FP32, DataType::DT_INT8, {8, 128}, {8}, {8, 128}, {8, 128}, -1);
 }
 
 // Asymmetric quantization: FP32 -> UINT8, axis=-1 (per-row)
@@ -153,18 +130,15 @@ TEST_F(TestCodegenDynQuantize, QuantizeAsymmetricToUInt8)
     RunQuantizeTestAsymmetric(
         "QUANTIZE_ASYMMETRIC_UINT8",
         R"!!!(TQuant<pto::QuantType::INT8_ASYM>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!",
-        DataType::DT_FP32, DataType::DT_UINT8,
-        {16, 64}, {16}, {16}, {16, 64}, {16, 64}, -1);
+        DataType::DT_FP32, DataType::DT_UINT8, {16, 64}, {16}, {16}, {16, 64}, {16, 64}, -1);
 }
 
 // Symmetric quantization with axis=-2 (per-column)
 TEST_F(TestCodegenDynQuantize, QuantizeSymmetricAxisM2)
 {
     RunQuantizeTestSymmetric(
-        "QUANTIZE_SYMMETRIC_AXIS_M2",
-        R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_7, ubTensor_2, ubTensor_5);)!!!",
-        DataType::DT_FP32, DataType::DT_INT8,
-        {4, 256}, {256}, {4, 256}, {4, 128}, -2);
+        "QUANTIZE_SYMMETRIC_AXIS_M2", R"!!!(TQuant<pto::QuantType::INT8_SYM>(ubTensor_7, ubTensor_2, ubTensor_5);)!!!",
+        DataType::DT_FP32, DataType::DT_INT8, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
 // Asymmetric quantization with axis=-2 (per-column)
@@ -173,8 +147,7 @@ TEST_F(TestCodegenDynQuantize, QuantizeAsymmetricAxisM2)
     RunQuantizeTestAsymmetric(
         "QUANTIZE_ASYMMETRIC_AXIS_M2",
         R"!!!(TQuant<pto::QuantType::INT8_ASYM>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!",
-        DataType::DT_FP32, DataType::DT_UINT8,
-        {4, 256}, {256}, {256}, {4, 256}, {4, 128}, -2);
+        DataType::DT_FP32, DataType::DT_UINT8, {4, 256}, {256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
 // Dequantize: INT8 -> FP32, axis=-1 (per-row)
@@ -182,8 +155,7 @@ TEST_F(TestCodegenDynQuantize, DequantizeInt8ToFP32)
 {
     RunDequantizeTest(
         "DEQUANTIZE_INT8_FP32",
-        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!",
-        DataType::DT_INT8,
+        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!", DataType::DT_INT8,
         {8, 128}, {8}, {8, 128}, {8, 128}, -1);
 }
 
@@ -193,8 +165,7 @@ TEST_F(TestCodegenDynQuantize, DequantizeInt16ToFP32)
     RunDequantizeTest(
         "DEQUANTIZE_INT16_FP32",
         R"!!!(TDequant<pto::DequantType::INT16>(ubTensor_6, ubTensor_0, ubTensor_2, ubTensor_4);)!!!",
-        DataType::DT_INT16,
-        {16, 64}, {16}, {16, 64}, {16, 64}, -1);
+        DataType::DT_INT16, {16, 64}, {16}, {16, 64}, {16, 64}, -1);
 }
 
 // Dequantize INT8 with axis=-2 (per-column)
@@ -202,8 +173,7 @@ TEST_F(TestCodegenDynQuantize, DequantizeInt8AxisM2)
 {
     RunDequantizeTest(
         "DEQUANTIZE_INT8_AXIS_M2",
-        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!",
-        DataType::DT_INT8,
+        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!", DataType::DT_INT8,
         {4, 256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
@@ -213,8 +183,7 @@ TEST_F(TestCodegenDynQuantize, DequantizeInt16AxisM2)
     RunDequantizeTest(
         "DEQUANTIZE_INT16_AXIS_M2",
         R"!!!(TDequant<pto::DequantType::INT16>(ubTensor_9, ubTensor_2, ubTensor_5, ubTensor_7);)!!!",
-        DataType::DT_INT16,
-        {4, 256}, {256}, {4, 256}, {4, 128}, -2);
+        DataType::DT_INT16, {4, 256}, {256}, {4, 256}, {4, 128}, -2);
 }
 
 // Quantize-Dequantize chain (symmetric, axis=-1 per-row)
@@ -239,8 +208,8 @@ TEST_F(TestCodegenDynQuantize, QuantizeDequantizeSymmetricChain)
         }
     }
 
-    RunCodeGenAndCheck(funcName,
-        R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_9, ubTensor_4, ubTensor_2, ubTensor_7);)!!!");
+    RunCodeGenAndCheck(
+        funcName, R"!!!(TDequant<pto::DequantType::INT8>(ubTensor_9, ubTensor_4, ubTensor_2, ubTensor_7);)!!!");
 }
 
 } // namespace npu::tile_fwk

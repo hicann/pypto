@@ -34,22 +34,9 @@ constexpr int DIM4 = 4;
 constexpr int VALUE128 = 128;
 constexpr float F_127 = 127.0;
 
-class TestCodegenScalar : public ::testing::Test {
+class TestCodegenScalar : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetBuildStatic(true);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenScalar() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .buildStatic = true}) {}
 };
 
 void TestQuant(std::vector<int64_t>& inputShape)
@@ -136,7 +123,7 @@ TEST_F(TestCodegenScalar, TestPipeAll)
         CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_DEVICE_DDR, shape, dynValidShape});
     auto ubTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape});
     Operation& syncOp = function->AddOperation(npu::tile_fwk::Opcode::OP_BAR_ALL, {ddrTensor}, {ubTensor});
-    syncOp.syncQueue_ = {PipeType::PIPE_ALL,  PipeType::PIPE_ALL, CoreType::AIV, CoreType::AIV, -1,
+    syncOp.syncQueue_ = {PipeType::PIPE_ALL,   PipeType::PIPE_ALL,  CoreType::AIV, CoreType::AIV, -1,
                          AIVCore::UNSPECIFIED, AIVCore::UNSPECIFIED};
 
     std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();

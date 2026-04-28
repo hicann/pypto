@@ -29,21 +29,11 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynSpillOut : public ::testing::Test {
+class TestCodegenDynSpillOut : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
+    TestCodegenDynSpillOut()
+        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .resetTileTensorOnTearDown = true})
+    {}
 };
 
 TEST_F(TestCodegenDynSpillOut, UBSpillOut)

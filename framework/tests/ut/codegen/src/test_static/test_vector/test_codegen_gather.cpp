@@ -26,22 +26,13 @@ using std::string;
 
 namespace npu::tile_fwk {
 
-class TestCodegenGather : public ::testing::Test {
+class TestCodegenGather : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
+    TestCodegenGather()
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
+    {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-    }
-
-    void TearDown() override {}
 };
 
 constexpr const int GATHER_SHAPE0 = 16;

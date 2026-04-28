@@ -31,23 +31,13 @@
 #include "utils/host_log/log_manager.h"
 
 namespace npu::tile_fwk {
-class TestCodegenDynBinary : public ::testing::Test {
+class TestCodegenDynBinary : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
+    TestCodegenDynBinary()
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true, .setIdGen = true})
+    {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
-    }
-
-    void TearDown() override {}
 };
 
 void TestAddDynBody(const std::string& name, bool isNeedCalcMinForBinaryOperands = false)

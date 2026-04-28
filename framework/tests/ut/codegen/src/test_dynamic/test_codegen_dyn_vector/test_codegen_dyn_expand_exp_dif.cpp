@@ -25,22 +25,11 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynExpandExpDif : public ::testing::Test {
+class TestCodegenDynExpandExpDif : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynExpandExpDif()
+        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .setTileTensor = true, .tileTensorValue = true})
+    {}
 };
 
 void TestExpandExpDif(const Shape& shape_x, const Shape& shape_y, const std::string& expect)

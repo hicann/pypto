@@ -38,22 +38,13 @@ constexpr const unsigned TOPK_OP_X_IDX = 0;
 constexpr const unsigned TOPK_OP_Y_IDX = 1;
 constexpr const unsigned TOPK_OP_TMP_IDX = 2;
 
-class TestCodegenDynSort : public ::testing::Test {
+class TestCodegenDynSort : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
+    TestCodegenDynSort()
+        : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setTileTensor = true})
+    {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-    }
-
-    void TearDown() override {}
 };
 
 struct TestContext {

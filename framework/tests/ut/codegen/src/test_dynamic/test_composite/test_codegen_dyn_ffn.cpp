@@ -14,7 +14,7 @@
  */
 
 #include "gtest/gtest.h"
-
+#include "test_codegen_common.h"
 #include "codegen/codegen.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
@@ -23,21 +23,9 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynFFN : public ::testing::Test {
+class TestCodegenDynFFN : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynFFN() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 };
 
 void testffnquant()

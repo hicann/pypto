@@ -23,7 +23,6 @@
 #include "test_codegen_common.h"
 
 namespace npu::tile_fwk {
-const constexpr int DummyFuncMagic = 1;
 struct LogicalTensorInfo {
     LogicalTensorInfo(Function& func, DataType dataType, MemoryType memoryType, const std::vector<int64_t>& tShape)
         : function(func), dType(dataType), memType(memoryType), shape(tShape){};

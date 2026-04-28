@@ -31,7 +31,7 @@
 
 namespace npu::tile_fwk::Distributed {
 
-class TestDistributedShmemImpl : public ::testing::Test {
+class TestDistributedShmemImpl : public CodegenTestBase {
 private:
     DataType GetType(const Tensor& in)
     {
@@ -56,24 +56,17 @@ private:
     }
 
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
+    TestDistributedShmemImpl() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 
     void SetUp() override
     {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
+        CodegenTestBase::SetUp();
         std::string outputDir = "output";
         bool res = CreateDir(outputDir);
         CHECK(res) << "Failed to create directory: " << outputDir;
         std::string folderPath = outputDir + "/output_" + getTimeStamp() + "_" + std::to_string(getpid());
         setenv("TILE_FWK_OUTPUT_DIR", folderPath.c_str(), 0);
     }
-
-    void TearDown() override {}
 };
 
 std::string GetFunctionRawName(const std::string& functionName)

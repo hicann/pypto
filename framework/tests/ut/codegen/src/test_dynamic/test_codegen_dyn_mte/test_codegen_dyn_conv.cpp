@@ -32,23 +32,11 @@ namespace npu::tile_fwk {
 
 constexpr int64_t N0 = 16;
 
-class TestCodegenDynConv : public ::testing::Test {
+class TestCodegenDynConv : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
-    }
-
-    void TearDown() override { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
+    TestCodegenDynConv()
+        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .setTileTensor = true, .tileTensorValue = true, .setIdGen = true, .resetTileTensorOnTearDown = true})
+    {}
 };
 
 Function* GetFunctionConv(const std::string& funcName)

@@ -31,22 +31,13 @@
 #include "interface/utils/id_gen.h"
 
 namespace npu::tile_fwk {
-class TestCodegenDynIndexOutCast : public ::testing::Test {
+class TestCodegenDynIndexOutCast : public CodegenTestBase {
 public:
+    TestCodegenDynIndexOutCast() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
+
     static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
-    }
-
-    void TearDown() override {}
 };
 
 TEST_F(TestCodegenDynIndexOutCast, IndexOutCast)

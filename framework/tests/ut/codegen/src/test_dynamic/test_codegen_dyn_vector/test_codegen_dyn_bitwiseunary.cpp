@@ -30,22 +30,9 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynBitwiseUnary : public ::testing::Test {
+class TestCodegenDynBitwiseUnary : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        config::Reset();
-        Program::GetInstance().Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynBitwiseUnary() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
 };
 
 TEST_F(TestCodegenDynBitwiseUnary, BitwiseNotLayout)

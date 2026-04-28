@@ -30,22 +30,9 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenRowSumLine : public ::testing::Test {
+class TestCodegenRowSumLine : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetBuildStatic(true);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenRowSumLine() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .buildStatic = true}) {}
 };
 
 TEST_F(TestCodegenRowSumLine, TestOperationRowSumLineTileTensor)

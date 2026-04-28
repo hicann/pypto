@@ -31,24 +31,18 @@
 #include "passes/pass_mgr/pass_manager.cpp"
 
 namespace npu::tile_fwk {
-class TestCodegenForLoop : public ::testing::Test {
+class TestCodegenForLoop : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
+    TestCodegenForLoop() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .setIdGen = true}) {}
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
 
     void SetUp() override
     {
-        Program::GetInstance().Reset();
-        config::Reset();
+        CodegenTestBase::SetUp();
         config::SetPassGlobalConfig(KEY_VF_OPT_MARK_FOR, true);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
         config::SetHostConfig(KEY_STRATEGY, "LoopAxesPassTestStrategy");
-        IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
     }
-
-    void TearDown() override {}
 };
 
 TEST_F(TestCodegenForLoop, TestForLoop)

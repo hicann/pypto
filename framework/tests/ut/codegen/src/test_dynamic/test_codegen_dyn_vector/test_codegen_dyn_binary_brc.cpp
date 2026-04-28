@@ -28,21 +28,9 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynBinaryBrc : public ::testing::Test {
+class TestCodegenDynBinaryBrc : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynBinaryBrc() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 };
 
 // mul (32, 512), (32, 1)

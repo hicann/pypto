@@ -30,22 +30,11 @@
 
 namespace npu::tile_fwk {
 
-class TestCodegenDynTransposeDataMove : public ::testing::Test {
+class TestCodegenDynTransposeDataMove : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false);
-        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynTransposeDataMove()
+        : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION, .setTileTensor = true})
+    {}
 };
 
 void TestTransposeDataMoveBody(int dim = 3)
@@ -86,21 +75,9 @@ TEST_F(TestCodegenDynTransposeDataMove, TransposeDataMoveDim3) { TestTransposeDa
 
 TEST_F(TestCodegenDynTransposeDataMove, TransposeDataMoveDim4) { TestTransposeDataMoveBody(SHAPE_DIM4); }
 
-class TestCodegenLayoutTransposeDataMove : public ::testing::Test {
+class TestCodegenLayoutTransposeDataMove : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_CODEGEN_INSTRUCTION);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenLayoutTransposeDataMove() : CodegenTestBase({.compileStage = CS_CODEGEN_INSTRUCTION}) {}
 };
 
 TEST_F(TestCodegenLayoutTransposeDataMove, TransposeDataMoveLayout)

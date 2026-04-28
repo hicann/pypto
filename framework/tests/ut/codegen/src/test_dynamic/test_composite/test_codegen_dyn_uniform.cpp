@@ -28,21 +28,9 @@
 #include "test_codegen_common.h"
 
 namespace npu::tile_fwk {
-class TestCodegenDynUniform : public ::testing::Test {
+class TestCodegenDynUniform : public CodegenTestBase {
 public:
-    static void SetUpTestCase() {}
-
-    static void TearDownTestCase() {}
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
+    TestCodegenDynUniform() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH}) {}
 };
 
 TEST_F(TestCodegenDynUniform, UniformTileTensorFP32)
@@ -63,11 +51,8 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP32)
 
     auto& op = function->AddOperation(Opcode::OP_UNIFORM, {}, {localTensor, tempTensor});
     std::vector<Element> scalars = {
-        Element(DT_UINT64, key),
-        Element(DT_UINT64, counter1),
-        Element(DT_UINT16, rounds),
-        Element(DT_INT32, static_cast<int32_t>(DT_FP32))
-    };
+        Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
+        Element(DT_INT32, static_cast<int32_t>(DT_FP32))};
     op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
     SymbolicScalar tileIdx(0);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
@@ -101,11 +86,8 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorFP16)
 
     auto& op = function->AddOperation(Opcode::OP_UNIFORM, {}, {localTensor, tempTensor});
     std::vector<Element> scalars = {
-        Element(DT_UINT64, key),
-        Element(DT_UINT64, counter1),
-        Element(DT_UINT16, rounds),
-        Element(DT_INT32, static_cast<int32_t>(DT_FP16))
-    };
+        Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
+        Element(DT_INT32, static_cast<int32_t>(DT_FP16))};
     op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
     SymbolicScalar tileIdx(0);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
@@ -139,11 +121,8 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorBF16)
 
     auto& op = function->AddOperation(Opcode::OP_UNIFORM, {}, {localTensor, tempTensor});
     std::vector<Element> scalars = {
-        Element(DT_UINT64, key),
-        Element(DT_UINT64, counter1),
-        Element(DT_UINT16, rounds),
-        Element(DT_INT32, static_cast<int32_t>(DT_BF16))
-    };
+        Element(DT_UINT64, key), Element(DT_UINT64, counter1), Element(DT_UINT16, rounds),
+        Element(DT_INT32, static_cast<int32_t>(DT_BF16))};
     op.SetAttribute(OpAttributeKey::vectorScalar, scalars);
     SymbolicScalar tileIdx(0);
     op.SetAttribute(OpAttributeKey::dynScalar, tileIdx);
@@ -159,4 +138,4 @@ TEST_F(TestCodegenDynUniform, UniformTileTensorBF16)
     EXPECT_TRUE(res.find("TUniform") != std::string::npos);
 }
 
-}  // namespace npu::tile_fwk
+} // namespace npu::tile_fwk

@@ -28,22 +28,13 @@
 #include "test_codegen_utils.h"
 
 namespace npu::tile_fwk {
-class TestCodegenWhere : public ::testing::Test {
+class TestCodegenWhere : public CodegenTestBase {
 public:
+    TestCodegenWhere() : CodegenTestBase({.compileStage = CS_EXECUTE_GRAPH, .buildStatic = true}) {}
+
     static void SetUpTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, false); }
 
     static void TearDownTestCase() { config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true); }
-
-    void SetUp() override
-    {
-        Program::GetInstance().Reset();
-        config::Reset();
-        config::SetBuildStatic(true);
-        config::SetHostOption(COMPILE_STAGE, CS_EXECUTE_GRAPH);
-        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, false);
-    }
-
-    void TearDown() override {}
 };
 
 Operation& GetWhereOp(Function* function, Opcode opCode, const LogicalTensors& inputs)

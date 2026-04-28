@@ -17,10 +17,66 @@
 #define TEST_CODEGEN_COMMON_H
 
 #include <iostream>
+#include <string>
+
+#include "gtest/gtest.h"
+#include "tilefwk/tilefwk.h"
+#include "interface/program/program.h"
+#include "interface/configs/config_manager.h"
+#include "interface/utils/id_gen.h"
 
 namespace npu::tile_fwk {
 const std::string SUB_FUNC_SUFFIX = "_Unroll1_PATH0";
 const std::string HIDDEN_FUNC_SUFFIX = "_hiddenfunc0";
+const constexpr int DummyFuncMagic = 1;
+
+struct CodegenTestConfig {
+    bool enableCostModel = false;
+    int64_t compileStage = 0;
+    bool buildStatic = false;
+    bool setTileTensor = false;
+    bool tileTensorValue = false;
+    bool setIdGen = false;
+    bool resetTileTensorOnTearDown = false;
+};
+
+class CodegenTestBase : public ::testing::Test {
+public:
+    explicit CodegenTestBase(CodegenTestConfig config = {}) : config_(config) {}
+
+    static void SetUpTestCase() {}
+
+    static void TearDownTestCase() {}
+
+    void SetUp() override
+    {
+        Program::GetInstance().Reset();
+        config::Reset();
+        config::SetPlatformConfig(KEY_ENABLE_COST_MODEL, config_.enableCostModel);
+        if (config_.compileStage != 0) {
+            config::SetHostOption(COMPILE_STAGE, config_.compileStage);
+        }
+        if (config_.buildStatic) {
+            config::SetBuildStatic(true);
+        }
+        if (config_.setTileTensor) {
+            config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, config_.tileTensorValue);
+        }
+        if (config_.setIdGen) {
+            IdGen<IdType::FUNCTION>::Inst().SetId(DummyFuncMagic);
+        }
+    }
+
+    void TearDown() override
+    {
+        if (config_.resetTileTensorOnTearDown) {
+            config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+        }
+    }
+
+protected:
+    CodegenTestConfig config_;
+};
 
 } // namespace npu::tile_fwk
 
