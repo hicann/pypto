@@ -68,6 +68,19 @@ void TaskGraph::ApplyCandidate()
     APASS_LOG_INFO_F(Elements::Operation, "Found better schedule, update makespan to %d.", makespan);
 }
 
+// 无条件把 Candidate 字段拷贝为 final；makespan 仅作为字段完整性保留，不参与任何决策
+void TaskGraph::ApplyCandidateUnconditional()
+{
+    int currTime = -1;
+    for (auto& task : tasks) {
+        task.startTime = task.startTimeCandidate;
+        task.endTime = task.endTimeCandidate;
+        task.targetCoreType = task.targetCoreTypeCandidate;
+        currTime = currTime > task.endTime ? currTime : task.endTime;
+    }
+    makespan = currTime;
+}
+
 int TaskGraph::AddTask(const std::string& name, ScheduleCoreType coreType, int latency)
 {
     int newTaskIdx = static_cast<int>(tasks.size());
@@ -306,6 +319,229 @@ void CoreScheduler::BruteForceScheduleRecursiveStep(
     }
 }
 
+void CoreScheduler::SelectAIVCore(
+    std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+    int evalDepTimeStart, int maxCrossDepEnd, int latency,
+    TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval)
+{
+    int idxAIV0 = -1;
+    std::pair<int, int> intervalAIV0{-1, -1};
+    FindEarliestSlot(availTime[TargetCoreType::AIV0], evalDepTimeStart, latency, idxAIV0, intervalAIV0);
+    int idxAIV1 = -1;
+    std::pair<int, int> intervalAIV1{-1, -1};
+    FindEarliestSlot(availTime[TargetCoreType::AIV1], evalDepTimeStart, latency, idxAIV1, intervalAIV1);
+
+    auto calcGap = [&](const std::pair<int, int>& iv) -> int64_t {
+        if (iv.first < 0)
+            return INT64_MAX;
+        if (maxCrossDepEnd == INT32_MIN)
+            return 0;
+        return std::max<int64_t>(0, static_cast<int64_t>(iv.first) - maxCrossDepEnd);
+    };
+    int64_t gap0 = calcGap(intervalAIV0);
+    int64_t gap1 = calcGap(intervalAIV1);
+
+    auto getLastFinishBefore = [&](TargetCoreType core, std::pair<int, int> intervalAIV) -> int {
+        for (auto& slot : availTime[core]) {
+            if (slot.second >= intervalAIV.first) {
+                return slot.first;
+            }
+        }
+        return 0;
+    };
+
+    bool chooseAIV0 = false;
+    if (gap0 < gap1) {
+        chooseAIV0 = true;
+    } else if (gap0 == gap1) {
+        if (intervalAIV0.first < intervalAIV1.first) {
+            chooseAIV0 = true;
+        } else if (intervalAIV0.first == intervalAIV1.first) {
+            int lastFinish0 = getLastFinishBefore(TargetCoreType::AIV0, intervalAIV0);
+            int lastFinish1 = getLastFinishBefore(TargetCoreType::AIV1, intervalAIV1);
+            chooseAIV0 = (lastFinish0 <= lastFinish1);
+        }
+    }
+    if (chooseAIV0) {
+        evalCore = TargetCoreType::AIV0;
+        currentIdx = idxAIV0;
+        currentInterval = intervalAIV0;
+    } else {
+        evalCore = TargetCoreType::AIV1;
+        currentIdx = idxAIV1;
+        currentInterval = intervalAIV1;
+    }
+}
+
+// --------- GapMin: 启发式最小化跨核相邻依赖边的等待间隔 ---------
+// 紧耦合调度单个任务
+void CoreScheduler::ScheduleOneTask(
+    TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+    std::function<bool(TargetCoreType)> isAicCore)
+{
+    auto& task = taskGraph.tasks[taskId];
+    int evalDepTimeStart = 0;
+    int maxCrossDepEnd = INT32_MIN;
+    bool taskIsAic = (task.coreType == ScheduleCoreType::AIC);
+    for (int prevTaskId : task.inTasks) {
+        auto& prev = taskGraph.tasks[prevTaskId];
+        evalDepTimeStart = std::max(evalDepTimeStart, prev.endTimeCandidate);
+        bool prevIsAic = isAicCore(prev.targetCoreTypeCandidate);
+        if (taskIsAic != prevIsAic) {
+            maxCrossDepEnd = std::max(maxCrossDepEnd, prev.endTimeCandidate);
+        }
+    }
+
+    TargetCoreType evalCore = TargetCoreType::UNKNOWN;
+    int currentIdx = -1;
+    std::pair<int, int> currentInterval{-1, -1};
+
+    if (taskIsAic) {
+        evalCore = TargetCoreType::AIC;
+        FindEarliestSlot(availTime[evalCore], evalDepTimeStart, task.latency, currentIdx, currentInterval);
+    } else {
+        SelectAIVCore(availTime, evalDepTimeStart, maxCrossDepEnd, task.latency, evalCore, currentIdx, currentInterval);
+    }
+    task.targetCoreTypeCandidate = evalCore;
+    task.startTimeCandidate = currentInterval.first;
+    task.endTimeCandidate = currentInterval.second;
+    UpdateInterval(availTime[evalCore], currentIdx, currentInterval);
+}
+
+// 尝试调度跨核后继
+void CoreScheduler::TryScheduleCrossCoreSuccessors(
+    TaskGraph& taskGraph, int taskId, std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+    std::set<int>& scheduledTasks, std::function<bool(TargetCoreType)> isAicCore)
+{
+    auto& task = taskGraph.tasks[taskId];
+
+    for (int succId : task.outTasks) {
+        if (scheduledTasks.count(succId) > 0) {
+            continue;
+        }
+
+        auto& succ = taskGraph.tasks[succId];
+        bool isCrossCore = (task.coreType != succ.coreType);
+        if (!isCrossCore) {
+            continue;
+        }
+
+        bool allPredScheduled = true;
+        for (int predId : succ.inTasks) {
+            if (scheduledTasks.count(predId) == 0) {
+                allPredScheduled = false;
+                break;
+            }
+        }
+
+        if (allPredScheduled) {
+            ScheduleOneTask(taskGraph, succId, availTime, isAicCore);
+            scheduledTasks.insert(succId);
+            TryScheduleCrossCoreSuccessors(taskGraph, succId, availTime, scheduledTasks, isAicCore);
+        }
+    }
+}
+
+// 轮 1：gap-aware 前向排布，紧耦合调度：C完成后立即调度跨核V后继
+void CoreScheduler::GapMinForwardPass(TaskGraph& taskGraph, std::vector<int>& topoSeq)
+{
+    std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>> availTime;
+    availTime[TargetCoreType::AIC] = {{0, INT32_MAX}};
+    availTime[TargetCoreType::AIV0] = {{0, INT32_MAX}};
+    availTime[TargetCoreType::AIV1] = {{0, INT32_MAX}};
+    auto isAicCore = [](TargetCoreType c) { return c == TargetCoreType::AIC; };
+
+    std::set<int> scheduledTasks;
+
+    for (int taskId : topoSeq) {
+        if (scheduledTasks.count(taskId) > 0) {
+            continue;
+        }
+
+        ScheduleOneTask(taskGraph, taskId, availTime, isAicCore);
+        scheduledTasks.insert(taskId);
+
+        TryScheduleCrossCoreSuccessors(taskGraph, taskId, availTime, scheduledTasks, isAicCore);
+    }
+}
+
+// 轮 2.：按拓扑序反向 ALAP 位移 —— 把每个任务右移到 "同核右邻 start" 与 "所有后继最早 start" 的下界，收敛 outbound gap
+void CoreScheduler::GapMinBackwardShift(TaskGraph& taskGraph, std::vector<int>& topoSeq)
+{
+    // 1. 按核分组并按 startTimeCandidate 排序，建立同核右邻映射
+    std::unordered_map<TargetCoreType, std::vector<int>> coreGroups;
+    for (auto& t : taskGraph.tasks) {
+        coreGroups[t.targetCoreTypeCandidate].push_back(t.idx);
+    }
+    std::unordered_map<int, int> sameCoreNext; // taskId -> next taskId on same core (-1 if none)
+    for (auto& pr : coreGroups) {
+        auto& ids = pr.second;
+        std::sort(ids.begin(), ids.end(), [&](int i, int j) {
+            return taskGraph.tasks[i].startTimeCandidate < taskGraph.tasks[j].startTimeCandidate;
+        });
+        for (size_t i = 0; i + 1 < ids.size(); i++) {
+            sameCoreNext[ids[i]] = ids[i + 1];
+        }
+        if (!ids.empty()) {
+            sameCoreNext[ids.back()] = -1;
+        }
+    }
+
+    // 2. 按 topo 逆序 shift
+    for (auto it = topoSeq.rbegin(); it != topoSeq.rend(); ++it) {
+        int taskId = *it;
+        auto& t = taskGraph.tasks[taskId];
+        if (t.outTasks.empty()) {
+            continue;
+        }
+        int minSuccStart = INT32_MAX;
+        for (int s : t.outTasks) {
+            minSuccStart = std::min(minSuccStart, taskGraph.tasks[s].startTimeCandidate);
+        }
+        int sameCoreCap = INT32_MAX;
+        auto sit = sameCoreNext.find(taskId);
+        if (sit != sameCoreNext.end() && sit->second >= 0) {
+            sameCoreCap = taskGraph.tasks[sit->second].startTimeCandidate;
+        }
+        int newEnd = std::min(minSuccStart, sameCoreCap);
+        if (newEnd <= t.endTimeCandidate) {
+            continue;
+        }
+        int delta = newEnd - t.endTimeCandidate;
+        t.startTimeCandidate += delta;
+        t.endTimeCandidate = newEnd;
+    }
+}
+
+// 统计所有 AIC<->AIV 双向跨核边的等待间隔之和
+int64_t CoreScheduler::SumCrossCoreGap(const TaskGraph& g) const
+{
+    auto isAic = [](TargetCoreType c) { return c == TargetCoreType::AIC; };
+    int64_t sum = 0;
+    for (auto& u : g.tasks) {
+        for (int vId : u.outTasks) {
+            auto& v = g.tasks[vId];
+            bool cross = isAic(u.targetCoreType) != isAic(v.targetCoreType);
+            if (!cross) {
+                continue;
+            }
+            sum += std::max(0, v.startTime - u.endTime);
+        }
+    }
+    return sum;
+}
+
+// 顶层：两轮 + 无条件应用 + 统计日志
+void CoreScheduler::GapMinSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq)
+{
+    GapMinForwardPass(taskGraph, topoSeq);
+    GapMinBackwardShift(taskGraph, topoSeq);
+    taskGraph.ApplyCandidateUnconditional();
+    APASS_LOG_INFO_F(
+        Elements::Operation, "GapMinSchedule total cross-core gap=%lld, endTime(max)=%d.",
+        static_cast<long long>(SumCrossCoreGap(taskGraph)), taskGraph.makespan);
+}
+
 // 根据节点数量，判断是否遍历所有拓扑序进行任务排布
 void CoreScheduler::Schedule(TaskGraph& taskGraph, int bruteForceThreshold)
 {
@@ -313,7 +549,7 @@ void CoreScheduler::Schedule(TaskGraph& taskGraph, int bruteForceThreshold)
     APASS_LOG_INFO_F(Elements::Operation, "Start schedule with brute force threshold %d.", bruteForceThreshold);
     if (static_cast<int>(taskGraph.tasks.size()) > bruteForceThreshold) {
         std::vector<int> topoSeq = GetDFSTopoSeq(taskGraph);
-        EFTWithInsertSchedule(taskGraph, topoSeq);
+        GapMinSchedule(taskGraph, topoSeq);
     } else {
         std::vector<bool> visited(taskGraph.tasks.size(), false);
         std::vector<int> topoList;
@@ -763,27 +999,115 @@ inline bool IsFromAIVToAIC(Operation* op)
     return true;
 }
 
-// 根据op的CoreType构建连通集
-int TaskSpliter::BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes)
+// 反向DFS查找产出指定MemoryType tensor的前驱op
+void TaskSpliter::ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result, std::vector<bool>& visited)
 {
-    DSUWithOrder dsu(opList_.size());
+    if (visited[opIdx]) {
+        return;
+    }
+    visited[opIdx] = true;
+    for (auto& oop : opList_[opIdx]->GetOOperands()) {
+        if (oop->GetMemoryTypeToBe() == targetMemType) {
+            result.push_back(opIdx);
+            return;
+        }
+    }
+    for (auto& iop : opList_[opIdx]->GetIOperands()) {
+        for (auto& producerOp : iop->GetProducers()) {
+            if (opMagicToIdx_.count(producerOp->GetOpMagic()) == 0) {
+                continue;
+            }
+            int producerIdx = opMagicToIdx_[producerOp->GetOpMagic()];
+            ReverseDFSFindByOutputMemType(producerIdx, targetMemType, result, visited);
+        }
+    }
+}
+
+// Union 同核操作
+void TaskSpliter::UnionSameCoreOps(DSUWithOrder& dsu)
+{
     for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
+        // 判断后接 tensor 为 L1 且存在多个消费者时，不进行 union
+        bool skip = false;
+        if (opList_[idx]->GetOutputOperand(0)->GetMemoryTypeOriginal() == MemoryType::MEM_L1 &&
+            opOutGraph_[idx].size() > 1) {
+            skip = true;
+            APASS_LOG_DEBUG_F(Elements::Operation, "Skip union op: %s[%d]",
+                opList_[idx]->GetOpcodeStr().c_str(), opList_[idx]->GetOpMagic());
+        }
         for (int nextOpIdx : opOutGraph_[idx]) {
-            if (opCoreTypes_[idx] == opCoreTypes_[nextOpIdx]) {
+            if (opCoreTypes_[idx] == opCoreTypes_[nextOpIdx] && !skip &&
+                opList_[nextOpIdx]->GetOpcodeStr().find("L1_TO_L0") == std::string::npos) {
                 dsu.Union(idx, nextOpIdx);
             }
         }
     }
+}
+
+// Union 同层连接
+void TaskSpliter::UnionSameLayerConnections(DSUWithOrder& dsu)
+{
     for (auto pr : sameLayerConnection_) {
-        dsu.Union(pr.first, pr.second);
+        if (opCoreTypes_[pr.first] == opCoreTypes_[pr.second]) {
+            dsu.Union(pr.first, pr.second);
+        }
     }
+}
+
+// Union AIC->AIV 跨核操作
+void TaskSpliter::UnionCrossCoreAICToAIV(DSUWithOrder& dsu)
+{
     for (size_t idx = 0; idx < opOutGraph_.size(); idx++) {
-        if (IsFromAICToAIV(opList_[idx]) || IsFromAIVToAIC(opList_[idx])) {
+        if (IsFromAICToAIV(opList_[idx])) {
             for (int nextOpIdx : opOutGraph_[idx]) {
                 dsu.Union(nextOpIdx, *opOutGraph_[idx].begin());
             }
         }
     }
+}
+
+// Union L0C 输入到 L1_COPY_IN
+void TaskSpliter::UnionL0CToL1CopyIn(DSUWithOrder& dsu)
+{
+    // 对输入tensor为L0C的非alloc op，反向DFS找L1_COPY_IN，未与L1_TO_L0 union的则union到当前L0C集合
+    for (size_t idx = 0; idx < opList_.size(); idx++) {
+        if (opList_[idx]->GetIOperands().size() == 0 ||
+            opList_[idx]->GetInputOperand(0)->GetMemoryTypeOriginal() != MemoryType::MEM_L0C) {
+            continue;
+        }
+        std::vector<int> l1CopyInOps;
+        std::vector<bool> visited(opList_.size(), false);
+        ReverseDFSFindByOutputMemType(idx, MemoryType::MEM_L1, l1CopyInOps, visited);
+        for (auto& l1CopyInOpIdx : l1CopyInOps) {
+            bool alreadyUnionedWithL1ToL0 = false;
+            for (auto& consumer : opList_[l1CopyInOpIdx]->ConsumerOps()) {
+                if (consumer->GetOpcodeStr().find("L1_TO_L0") == std::string::npos) {
+                    continue;
+                }
+                if (opMagicToIdx_.count(consumer->GetOpMagic()) == 0) {
+                    continue;
+                }
+                int consumerIdx = opMagicToIdx_[consumer->GetOpMagic()];
+                if (dsu.Find(l1CopyInOpIdx) == dsu.Find(consumerIdx)) {
+                    alreadyUnionedWithL1ToL0 = true;
+                    break;
+                }
+            }
+            if (!alreadyUnionedWithL1ToL0 && opCoreTypes_[idx] == opCoreTypes_[l1CopyInOpIdx]) {
+                dsu.Union(l1CopyInOpIdx, idx);
+            }
+        }
+    }
+}
+
+// 根据op的CoreType构建连通集
+int TaskSpliter::BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes)
+{
+    DSUWithOrder dsu(opList_.size());
+    UnionSameCoreOps(dsu);
+    UnionSameLayerConnections(dsu);
+    UnionCrossCoreAICToAIV(dsu);
+    UnionL0CToL1CopyIn(dsu);
     clusterIds.resize(opOutGraph_.size());
     clusterCoreTypes.clear();
     int currIdx = 0;

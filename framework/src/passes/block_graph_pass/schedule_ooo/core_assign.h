@@ -60,6 +60,7 @@ public:
 class TaskGraph {
 public:
     void ApplyCandidate();
+    void ApplyCandidateUnconditional();
     int AddTask(const std::string& name, ScheduleCoreType coreType, int latency);
     void AddDependency(int src, int dst);
     void ClearSchedule();
@@ -81,6 +82,23 @@ public:
     void BruteForceScheduleRecursiveStep(
         std::vector<bool>& visited, int recursiveLevel, TaskGraph& taskGraph, std::vector<int>& topoList);
     void Schedule(TaskGraph& taskGraph, int bruteForceThreshold);
+
+    void GapMinSchedule(TaskGraph& taskGraph, std::vector<int>& topoSeq);
+    void GapMinForwardPass(TaskGraph& taskGraph, std::vector<int>& topoSeq);
+    void GapMinBackwardShift(TaskGraph& taskGraph, std::vector<int>& topoSeq);
+    int64_t SumCrossCoreGap(const TaskGraph& g) const;
+    void SelectAIVCore(
+        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+        int evalDepTimeStart, int maxCrossDepEnd, int latency,
+        TargetCoreType& evalCore, int& currentIdx, std::pair<int, int>& currentInterval);
+    void ScheduleOneTask(
+        TaskGraph& taskGraph, int taskId,
+        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime,
+        std::function<bool(TargetCoreType)> isAicCore);
+    void TryScheduleCrossCoreSuccessors(
+        TaskGraph& taskGraph, int taskId,
+        std::unordered_map<TargetCoreType, std::vector<std::pair<int, int>>>& availTime, std::set<int>& scheduledTasks,
+        std::function<bool(TargetCoreType)> isAicCore);
 };
 
 // 并查集
@@ -103,7 +121,13 @@ public:
     TaskGraph BuildTaskGraph();
     void BuildSameLayerConnectionWithBack();
     void BuildSameLayerConnectionWithFront();
+    void UnionSameCoreOps(DSUWithOrder& dsu);
+    void UnionSameLayerConnections(DSUWithOrder& dsu);
+    void UnionCrossCoreAICToAIV(DSUWithOrder& dsu);
+    void UnionL0CToL1CopyIn(DSUWithOrder& dsu);
     int BuildCluster(std::vector<int>& clusterIds, std::vector<ScheduleCoreType>& clusterCoreTypes);
+    void ReverseDFSFindByOutputMemType(int opIdx, MemoryType targetMemType, std::vector<int>& result,
+        std::vector<bool>& visited);
     std::vector<std::vector<int>> FindMergeableTaskNodes();
     void MergeTask();
     void MergeTaskByTargetCoreType();
