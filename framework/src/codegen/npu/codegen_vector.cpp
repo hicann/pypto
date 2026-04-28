@@ -869,7 +869,7 @@ std::string CodeGenOpNPU::GenRangeOp() const
             stepVal = std::to_string(AnyCast<Element>(step).Cast<int64_t>());
             break;
         default:
-            CODEGEN_LOGE_E(
+            CODEGEN_LOGE(
                 GenCodeErr::DATA_TYPE_UNSUPPORTED, "RangeOp from PASS occured unsupport DataType: %d",
                 operandDtype[ID0]);
             return "CG_ERROR";

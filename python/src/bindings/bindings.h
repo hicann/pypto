@@ -31,4 +31,5 @@ void bind_pass(py::module& m);
 void BindFunction(py::module& m);
 void BindDistributed(py::module& m);
 void BindPlatform(py::module& m);
+void BindUtils(py::module& m);
 } // namespace pypto

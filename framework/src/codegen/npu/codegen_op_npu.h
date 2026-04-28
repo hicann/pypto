@@ -239,7 +239,7 @@ protected:
             value = AnyCast<T>(it->second);
             return true;
         }
-        CODEGEN_LOGE_E(
+        CODEGEN_LOGE(
             GenCodeErr::DATA_TYPE_MISMATCHED, "Type of attribute %s from PASS is mismatch: %s != %s", key.c_str(),
             it->second.Type().name(), typeid(T).name());
         return false;

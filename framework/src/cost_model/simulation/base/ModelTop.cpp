@@ -442,7 +442,7 @@ bool SimSys::IsTerminate() const { return terminate; }
 void SimSys::ReportDeadlock(size_t machineId)
 {
     deadlock = true;
-    SIMULATION_LOGE_E(CostModel::ForwardSimErrorScene::DEAD_LOCK,
+    SIMULATION_LOGE(CostModel::ForwardSimErrorScene::DEAD_LOCK,
         "[ReportDeadlock] Machine %zu is deadlock at cycle %lu", machineId,
         static_cast<unsigned long>(globalCycles));
 }
@@ -589,7 +589,7 @@ void SimSys::OutputLogForPipeSwimLane(std::string prefix)
     std::string cmd = "python3 " + drawScriptPath + " " + pipeDetailPath;
     int ret = system(cmd.c_str());
     if (ret != 0) {
-        SIMULATION_LOGE_E(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
     }
 }
 
@@ -625,7 +625,7 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     std::string cmd = "python3 " + drawScriptPath + " " + outSwimPath + " -t";
     int result1 = system(cmd.c_str());
     if (result1 != 0) {
-        SIMULATION_LOGE_E(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
     }
 
     std::string mergeScriptPath = GetCurrentSharedLibPath() + "/scripts/draw_swim_lane.py";
@@ -659,7 +659,7 @@ void SimSys::OutputLogForSwimLane(std::string prefix)
     SIMULATION_LOGI("cmd: %s", cmd.c_str());
     int result2 = system(cmd.c_str());
     if (result2 != 0) {
-        SIMULATION_LOGE_E(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
+        SIMULATION_LOGE(CostModel::ExternalErrorScene::PYTHON_CMD_ERROR, "cmd error: %s", cmd.c_str());
     }
 }
 

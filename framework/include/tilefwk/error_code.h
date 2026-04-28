@@ -18,6 +18,11 @@
 #include <cstdint>
 
 namespace npu::tile_fwk {
+template <typename T, typename = std::enable_if_t<std::is_enum_v<T>>>
+inline constexpr std::underlying_type_t<T> ToUnderlying(T value)
+{
+    return static_cast<std::underlying_type_t<T>>(value);
+}
 
 // =============================================================================
 // F0-1XXXX: external limitation
@@ -345,6 +350,7 @@ enum class DistributedErrorCode : uint32_t {
     HCCL_ALLOC_RESOURCE_FAILED = 0xA4000,
     INVALID_HCCL_TOPO = 0xA4001,
     CONTEXT_CONFIGURE_FAILED = 0xA4002,
+    UNKNOW_ERROR = 0xAFFFF
 };
 
 // =============================================================================

@@ -35,6 +35,7 @@ PYBIND11_MODULE(pypto_impl, m)
     BindFunction(m);
     BindDistributed(m);
     BindPlatform(m);
+    BindUtils(m);
 
     BindIR(m);
     BindCore(m);

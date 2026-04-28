@@ -365,7 +365,7 @@ void CodeGenNPU::DumpCode(const std::string& fileName, std::ostringstream& code)
         codeFile.flush();
         codeFile.close();
     } catch (const std::ofstream::failure& e) {
-        CODEGEN_LOGE_E(
+        CODEGEN_LOGE(
             CmpCodeErr::FILE_IO_FAILED, "Code file operation failed: %s, error: %s, errno: %d", fileName.c_str(),
             e.what(), errno);
         codeFile.close();
@@ -379,7 +379,7 @@ std::optional<std::string> CodeGenNPU::GenExtraAlloc(
 {
     auto memType = tensor->GetMemoryTypeOriginal();
     if (OPERAND_TYPE_TO_MEMORY_TYPE.find(memType) == OPERAND_TYPE_TO_MEMORY_TYPE.end()) {
-        CODEGEN_LOGE_E(
+        CODEGEN_LOGE(
             OperErr::OPERAND_TYPE_UNSUPPORTED, " memory type(%u) of tensor from PASS is invalid, tensor is: %s",
             ToUnderlying(memType), tensor->Dump().c_str());
         return std::nullopt;
@@ -613,7 +613,7 @@ int CodeGenNPU::DoCompileCmd(const std::string& compileCmd) const
         ret = std::system(compileCmd.c_str());
     }
     if (ret != 0) {
-        CODEGEN_LOGE_E(
+        CODEGEN_LOGE(
             CmpCodeErr::COMPILE_CODE_FAILED, "kernel compilation failed, ret = %d\ncompile cmd is:\n %s", ret,
             compileCmd.c_str());
     }

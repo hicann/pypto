@@ -9,7 +9,8 @@
 # -----------------------------------------------------------------------------------------------------------
 
 file(GLOB_RECURSE _Utils_Srcs
-        host_log/*.cpp)
+        host_log/*.cpp
+        error_manager/*.cpp)
 
 add_library(tile_fwk_utils SHARED)
 target_sources(tile_fwk_utils PRIVATE ${_Utils_Srcs})

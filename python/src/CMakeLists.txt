@@ -24,6 +24,7 @@ pybind11_add_module(pypto_impl
             bindings/function.cpp
             bindings/distributed.cpp
             bindings/platform.cpp
+            bindings/utils.cpp
             bindings/ir/ir.cpp
             bindings/ir/builder.cpp
             bindings/ir/logging.cpp

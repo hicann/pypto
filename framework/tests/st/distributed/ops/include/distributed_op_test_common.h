@@ -44,7 +44,7 @@ std::array<DstT, N> GetParams(const std::string& filePath)
 inline DataType GetDataTypeNum(const int64_t typeNum)
 {
     if ((typeNum < 0) || (typeNum >= static_cast<int64_t>(DataType::DT_BOTTOM))) {
-        DISTRIBUTED_LOGE(
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR,
             "Invalid type code: %ld (Valid range: [0-%ld])", typeNum, static_cast<int64_t>(DataType::DT_BOTTOM));
         return DataType::DT_BOTTOM;
     }
@@ -111,7 +111,7 @@ bool CompareWithGolden(
             result = DoCompare<int32_t>(goldenFilename, outSize, dTypeSize, outPtrs, testParam, threshold);
             break;
         default:
-            DISTRIBUTED_LOGE("Unsupported dType: %lu", static_cast<uint64_t>(dType));
+            DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Unsupported dType: %lu", static_cast<uint64_t>(dType));
             break;
     }
     return result;

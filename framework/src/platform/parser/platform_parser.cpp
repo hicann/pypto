@@ -14,6 +14,7 @@
  */
 
 #include "platform_parser.h"
+#include "tilefwk/error_code.h"
 
 namespace npu {
 namespace tile_fwk {
@@ -99,7 +100,7 @@ bool INIParser::Initialize(const std::string& iniFilePath)
 {
     PLATFORM_LOGI("Start to parse ini_file %s.", iniFilePath.c_str());
     if (!ReadINIFile(iniFilePath)) {
-        PLATFORM_LOGE("ReadINIFile failed.");
+        PLATFORM_LOGE(FeError::NOT_EXIST, "ReadINIFile failed.");
         return false;
     }
     PLATFORM_LOGD("Parse ini_file %s successfully.", iniFilePath.c_str());
@@ -112,7 +113,7 @@ bool INIParser::ReadINIFile(const std::string& filepath)
     std::ifstream file(filepath);
     PLATFORM_LOGD("Try to open ini file: %s.", filepath.c_str());
     if (!file.is_open()) {
-        PLATFORM_LOGE("Failed to open ini file: %s.", filepath.c_str());
+        PLATFORM_LOGE(FeError::BAD_FD, "Failed to open ini file: %s.", filepath.c_str());
         return false;
     }
     std::string line;
@@ -154,13 +155,13 @@ bool INIParser::GetStringVal(const std::string& column, const std::string& key, 
     val.clear();
     auto iter = data_.find(column);
     if (iter == data_.end()) {
-        PLATFORM_LOGE("Cannot find attr '%s' from the ini file.", column.c_str());
+        PLATFORM_LOGE(FeError::INVALID_TYPE, "Cannot find attr '%s' from the ini file.", column.c_str());
         return false;
     }
     auto value = iter->second;
     auto iter2 = value.find(key);
     if (iter2 == value.end()) {
-        PLATFORM_LOGE("Cannot find attr '%s' from the [%s] tab.", key.c_str(), column.c_str());
+        PLATFORM_LOGE(FeError::INVALID_VAL, "Cannot find attr '%s' from the [%s] tab.", key.c_str(), column.c_str());
         return false;
     }
     val = iter2->second;
@@ -172,7 +173,7 @@ bool CmdParser::GetStringVal(const std::string& column, const std::string& key, 
 {
     val.clear();
     if (!CannHostRuntime::Instance().GetSocSpec(column, key, val)) {
-        PLATFORM_LOGE("Cannot find soc spec '%s' from the [%s] column.", key.c_str(), column.c_str());
+        PLATFORM_LOGE(FeError::UNKNOWN, "Cannot find soc spec '%s' from the [%s] column.", key.c_str(), column.c_str());
         return false;
     }
     return true;

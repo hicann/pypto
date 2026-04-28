@@ -110,12 +110,6 @@ inline int64_t AlignUp(int64_t value, int64_t alignment)
     return (value + alignment - 1) / alignment * alignment;
 }
 
-template <typename T, typename = std::enable_if_t<std::is_enum_v<T>>>
-inline constexpr std::underlying_type_t<T> ToUnderlying(T value)
-{
-    return static_cast<std::underlying_type_t<T>>(value);
-}
-
 template <typename T>
 inline void HashCombine(std::size_t& seed, const T& val) __NO_UBSAN
 {

@@ -24,8 +24,6 @@
  */
 
 #pragma once
-#ifndef DEVICE_TRACE_H
-#define DEVICE_TRACE_H
 
 #include <functional>
 #include <mutex>
@@ -221,4 +219,3 @@ public:
 };
 } // namespace npu::tile_fwk::dynamic
 #endif
-#endif // DEVICE_TRACE_H

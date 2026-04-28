@@ -345,7 +345,7 @@ static DataType GetDataType(const std::string& name)
         {"fp8e5m2", DataType::DT_FP8E5M2},
     };
     if (name_to_dtype.find(name) == name_to_dtype.end()) {
-        MATMUL_LOGE("Not support type %s yet, return fp32 as default.", name.c_str());
+        MATMUL_LOGW("Not support type %s yet, return fp32 as default.", name.c_str());
         return DataType::DT_FP32;
     }
     return name_to_dtype.at(name);

@@ -276,7 +276,7 @@ private:
             pv_ = CostModel::PvModelFactory::CreateDyn();
             pv_->InitPv();
         } catch (const std::runtime_error& e) {
-            SIMULATION_LOGE_E(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "pv init fail.");
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::NO_SO_EXISTS, "pv init fail.");
             return;
         }
 

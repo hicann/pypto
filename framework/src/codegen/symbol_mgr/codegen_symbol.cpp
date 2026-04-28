@@ -37,7 +37,7 @@ AllocKey SymbolManager::CreateAllocKey(int tensorMagicNum) const
 {
     std::shared_ptr<LogicalTensor> tensor = SymbolManager::GetTensorByMagic(tensorMagicNum);
     if (!tensor) {
-        CODEGEN_LOGE_E(
+        CODEGEN_LOGE(
             GenCodeErr::TENSOR_NOT_FOUND, "can not query tensor object from tensor magicnum: %d", tensorMagicNum);
         return {};
     }
@@ -97,7 +97,7 @@ std::string SymbolManager::QueryVariableNameTileTensor(const AllocKey& key)
         return iter->second;
     }
 
-    CODEGEN_LOGE_E(GenCodeErr::SYMBOL_NOT_FOUND, "failed to query by identifier: %s", FormatAllocKey(key).c_str());
+    CODEGEN_LOGE(GenCodeErr::SYMBOL_NOT_FOUND, "failed to query by identifier: %s", FormatAllocKey(key).c_str());
     ASSERT(GenCodeErr::SYMBOL_NOT_FOUND, false)
         << "QueryVariableNameTileTensor Failed: UNDEFINED_VAR !!! AllocKey: " << FormatAllocKey(key);
     return "UNDEFINED_VAR";

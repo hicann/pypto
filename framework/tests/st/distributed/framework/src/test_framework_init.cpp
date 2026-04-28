@@ -161,7 +161,7 @@ void* GetLibHandle()
             }
         }
 
-        DISTRIBUTED_LOGE("Failed to load MPI library from common candidate paths/names");
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Failed to load MPI library from common candidate paths/names");
         return static_cast<void*>(nullptr);
     }();
     return handle;
@@ -187,13 +187,13 @@ auto GetFunction(const std::string& funcName) -> FuncType
 {
     auto handle = GetLibHandle();
     if (!handle) {
-        DISTRIBUTED_LOGE("Failed to load MPI library");
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Failed to load MPI library");
         return nullptr;
     }
 
     auto func = dlsym(handle, funcName.c_str());
     if (!func) {
-        DISTRIBUTED_LOGE("Failed to find function %s: %s", funcName.c_str(), dlerror());
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "Failed to find function %s: %s", funcName.c_str(), dlerror());
         return nullptr;
     }
     return FunctionConverter<FuncType>::Convert(func);
@@ -277,7 +277,7 @@ void TestFrameworkDestroy(int32_t timeout)
         mpiFinalize();
     });
     if (finalizeTask.wait_for(std::chrono::seconds(timeout)) == std::future_status::timeout) {
-        DISTRIBUTED_LOGE("MPI_Finalize timeout, forcing exit");
+        DISTRIBUTED_LOGE(DistributedErrorCode::UNKNOW_ERROR, "MPI_Finalize timeout, forcing exit");
         mpiAbort(MPI_COMM_WORLD, 1);
     }
 }

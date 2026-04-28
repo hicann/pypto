@@ -438,12 +438,12 @@ public:
             cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s", objPath.c_str(),
             binPath.c_str());
         if (ret < 0 || ret >= static_cast<int>(sizeof(cmd))) {
-            SIMULATION_LOGE_E(CostModel::PrecisionSimErrorScene::CMD_ERROR, "snprintf_s: %s", cmd);
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "snprintf_s: %s", cmd);
         }
 
         ret = std::system(cmd);
         if (ret != 0) {
-            SIMULATION_LOGE_E(CostModel::PrecisionSimErrorScene::CMD_ERROR, "cmd error: %s", cmd);
+            SIMULATION_LOGE(CostModel::PrecisionSimErrorScene::CMD_ERROR, "cmd error: %s", cmd);
         }
 
         cceBin.emplace_back(

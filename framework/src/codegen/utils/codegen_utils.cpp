@@ -127,7 +127,7 @@ std::string PaddingModeToString(Matrix::PaddingMode paddingMode)
 int64_t CalcLinearOffset(const std::vector<int64_t>& shape, const std::vector<int64_t>& offset)
 {
     if (shape.empty() || offset.empty() || shape.size() != offset.size()) {
-        CODEGEN_LOGE_E(
+        CODEGEN_LOGE(
             GenCodeErr::TENSOR_SHAPE_INVALID, "Invalid Input! shape: %s, offset: %s", IntVecToStr(shape).c_str(),
             IntVecToStr(offset).c_str());
         return 0;

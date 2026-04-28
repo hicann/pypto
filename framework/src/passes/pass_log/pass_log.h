@@ -130,7 +130,7 @@ private:
 #define APASS_LOG_ERROR_F(opEnum, fmt, ...) \
     PYPTO_HOST_LOG(DLOG_ERROR, PASS, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_ERROR_C(errCode, opEnum, fmt, ...) \
-    PYPTO_HOST_LOGE(PASS, errCode, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
+    PYPTO_HOST_LOGE_WITH_ERRCODE(PASS, errCode, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 #define APASS_LOG_EVENT_F(opEnum, fmt, ...) \
     PYPTO_HOST_LOG_WITHOUT_LEVEL_CHECK(DLOG_INFO, PASS, "[%s.%s]:" fmt, MODULE_NAME, toString(opEnum), ##__VA_ARGS__)
 
