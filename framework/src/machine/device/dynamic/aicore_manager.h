@@ -611,19 +611,9 @@ private:
         AicoreStatus coreStatus[MAX_AICORE_NUM] = {AicoreStatus::CORE_TASK_WAIT_FINISH};
         bool aicAllStop = false;
         bool aivAllStop = false;
-        bool isLastDevTask = false;
+        bool isLastDevTask = forceStop;
         if (!forceStop) {
-            isLastDevTask = reinterpret_cast<DynDeviceTask *>(curDevTask_)->IsLastTask();
-            if (!isLastDevTask) {
-                if (PreFetchNextDevTask() && preFetchNextDevTaskCtrl_ == nullptr) {
-                    isLastDevTask = true;
-                }
-            } else {
-                preFetchNextDevTaskCtrl_ = nullptr;
-                preFetchSuccess_ = false;
-            }
-        } else {
-            isLastDevTask = true;
+            PreFetchNextDevTask();
         }
 
         if (isLastDevTask) {
