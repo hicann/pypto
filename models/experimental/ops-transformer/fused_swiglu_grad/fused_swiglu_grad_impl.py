@@ -45,8 +45,10 @@ def fused_swiglu_bwd_b_kernel(
     fc: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     dg: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
     dfc: pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_BF16),
-    db_g: pypto.Tensor([], pypto.DT_BF16),
-    db_fc: pypto.Tensor([], pypto.DT_BF16)
+    db_g_tmp: pypto.Tensor([], pypto.DT_FP32),
+    db_fc_tmp: pypto.Tensor([], pypto.DT_FP32),
+    db_g: pypto.Tensor([], pypto.DT_FP32),
+    db_fc: pypto.Tensor([], pypto.DT_FP32)
 ):
     """
     Fused SwiGLU backward kernel - Compute gradients for dg and dfc,
@@ -57,6 +59,8 @@ def fused_swiglu_bwd_b_kernel(
     n = dy.shape[1]
     tile_m = 1024
     loop_count = (m + tile_m - 1) // tile_m
+    pypto.set_vec_tile_shapes(32)
+    index = pypto.zeros((1), dtype=pypto.DT_INT32)
 
     for idx in pypto.loop(loop_count, name="LOOP_BWD_DG", idx_name="idx"):
         tile_offset = idx * tile_m
@@ -67,7 +71,7 @@ def fused_swiglu_bwd_b_kernel(
 
         pypto.set_vec_tile_shapes(128, 128)
         exp_g = pypto.exp(g_tile)
-        sigmoid_g = exp_g / (1.0 + exp_g)
+        sigmoid_g = pypto.div(exp_g, (1.0 + exp_g), precision_type=pypto.DivAlgorithm.INTRINSIC)
         silu_g = g_tile * sigmoid_g
         dy_mul_fc = dy_tile * fc_tile
         silu_bwd = sigmoid_g * (1.0 + g_tile * (1.0 - sigmoid_g))
@@ -76,10 +80,14 @@ def fused_swiglu_bwd_b_kernel(
         dg[tile_offset:, 0:] = dg_tile
         dfc[tile_offset:, 0:] = dfc_tile
 
-        db_g_local = pypto.sum(dg_tile, dim=0)
-        db_fc_local = pypto.sum(dfc_tile, dim=0)
-        db_g[:] = db_g + db_g_local
-        db_fc[:] = db_fc + db_fc_local
+        dg_sum = pypto.sum(dg_tile, dim=0, keepdim=True)
+        dfc_sum = pypto.sum(dfc_tile, dim=0, keepdim=True)
+        dg_sum_fp32 = pypto.cast(dg_sum, pypto.DT_FP32)
+        dfc_sum_fp32 = pypto.cast(dfc_sum, pypto.DT_FP32)
+        db_g_view = pypto.view(db_g_tmp, [1, n], [0, 0], valid_shape=[1, n])
+        db_fc_view = pypto.view(db_fc_tmp, [1, n], [0, 0], valid_shape=[1, n])
+        db_g[:] = pypto.index_add_(db_g_view, 0, index, dg_sum_fp32)
+        db_fc[:] = pypto.index_add_(db_fc_view, 0, index, dfc_sum_fp32)
 
 
 @pypto.frontend.jit(
