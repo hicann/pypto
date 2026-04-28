@@ -113,13 +113,16 @@ bool OoOScheduler::HasNZHorizontalSlice(const std::vector<Operation*> &assembleO
 }
 
 int OoOScheduler::GetBufNextUseOrder(Operation* op, int curMemId) {
-    int execOrder = opExecOrderMap[op];
-    auto it = std::find_if(orderedOps.begin(), orderedOps.end(), [this, execOrder, curMemId](Operation* a) {
-        if (!a || opExecOrderMap[a] <= execOrder) return false;
+    (void)op;
+    for (size_t i = 0; i < orderedOps.size(); ++i) {
+        auto& a = orderedOps[i];
+        if (opIsRetiredMap[a]) continue;
         auto& reqMemIds = GetOpMemIds(a);
-        return std::find(reqMemIds.begin(), reqMemIds.end(), curMemId) != reqMemIds.end();
-    });
-    return (it != orderedOps.end()) ? opExecOrderMap[*it] : -1;
+        if (std::find(reqMemIds.begin(), reqMemIds.end(), curMemId) != reqMemIds.end()) {
+            return opExecOrderMap[a];
+        }
+    }
+    return -1;
 }
 
 int OoOScheduler::GetBufLastUseOrder(Operation* op, int curMemId) {
@@ -658,6 +661,8 @@ Status OoOScheduler::SpillInBuffer(SpillInfo &spillInfo, Operation* allocOp, Mem
     }
     auto coreLocation = opCoreLocationMap[allocOp];
     if (!isGenSpill) {
+        opExecOrderMap[allocIssueQueue[coreLocation][bufferType].Front()] > opExecOrderMap[reloadAlloc] ?
+        allocIssueQueue[coreLocation][bufferType].ForceInsertAfterFirst(reloadAlloc) :
         allocIssueQueue[coreLocation][bufferType].Insert(reloadAlloc);
     }
     if (bufferManagerMap[coreLocation][bufferType].Free(spillInfo.spillMemId_) != SUCCESS) {
@@ -965,6 +970,8 @@ Operation* OoOScheduler::UpdateIssueAttr(Operation &newOp, std::vector<int> memI
     InsertOrdered(newOpPtr);
 
     if (opIsAllocMap[newOpPtr] && !isGenSpill) {
+        opExecOrderMap[allocIssueQueue[coreLocation][newOp.GetOutputOperand(0)->GetMemoryTypeOriginal()].Front()] > opExecOrderMap[newOpPtr] ?
+        allocIssueQueue[coreLocation][newOp.GetOutputOperand(0)->GetMemoryTypeOriginal()].ForceInsertAfterFirst(newOpPtr) :
         allocIssueQueue[coreLocation][newOp.GetOutputOperand(0)->GetMemoryTypeOriginal()].Insert(newOpPtr);
     }
     return newOpPtr;

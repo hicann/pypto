@@ -72,6 +72,12 @@ struct IssueQueue {
         }
     }
 
+    void ForceInsertAfterFirst(Operation* op) {
+        // 插入到第一个元素之后
+        auto insertPos = queue.begin() + 1;
+        queue.insert(insertPos, op);
+    }
+
     bool Empty() { return queue.size() == 0; }
 
     Operation* Front()
