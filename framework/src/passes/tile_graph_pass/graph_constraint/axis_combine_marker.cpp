@@ -16,7 +16,7 @@
 #include "axis_combine_marker.h"
 namespace npu {
 namespace tile_fwk {
-const std::unordered_set<Opcode> whiteList{Opcode::OP_RESHAPE, Opcode::OP_VEC_DUP, Opcode::OP_COPY_OUT};
+const std::unordered_set<Opcode> whiteList{Opcode::OP_RESHAPE, Opcode::OP_VEC_DUP};
 const std::unordered_set<OpCalcType> propagationCalcType{OpCalcType::ELMWISE, OpCalcType::BROADCAST, OpCalcType::CAST};
 
 void AxisCombineMarker::Run(Function& function)
@@ -48,10 +48,10 @@ void AxisCombineMarker::Init(Function& function)
     for (size_t opIdx = 0; opIdx < opList_.size(); opIdx++) {
         const auto& op = opList_[opIdx];
         for (const auto producer : op->ProducerOpsOrdered()) {
-            opInGraph_[opMagic2Idx[op->GetOpMagic()]].push_back(opMagic2Idx[producer->GetOpMagic()]);
+            opInGraph_[opMagic2Idx[op->GetOpMagic()]].insert(opMagic2Idx[producer->GetOpMagic()]);
         }
         for (const auto consumer : op->ConsumerOpsOrdered()) {
-            opOutGraph_[opMagic2Idx[op->GetOpMagic()]].push_back(opMagic2Idx[consumer->GetOpMagic()]);
+            opOutGraph_[opMagic2Idx[op->GetOpMagic()]].insert(opMagic2Idx[consumer->GetOpMagic()]);
         }
     }
 }
@@ -170,6 +170,12 @@ void UpdateReduceStatus(Operation* op, std::unordered_map<LogicalTensorPtr, Axis
         tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
         return;
     }
+    if (inputTensor->GetShape().back() == outputTensor->GetShape().back()) { 
+        // reduce tensor shape尾轴为1, 且语义为尾轴Reduce
+        tensorStatus[inputTensor] = AxisReorderStatus::DISABLE;
+        tensorStatus[outputTensor] = AxisReorderStatus::DISABLE;
+        return;
+    }
     // Reduce尾轴，默认可以
     tensorStatus[outputTensor] = AxisReorderStatus::ENABLE;
 }
@@ -212,7 +218,7 @@ void AxisCombineMarker::DisableNoneWhiteListTensor(Operation* op)
     }
 }
 
-void AxisCombineMarker::UpdateOpACEnableForward(uint16_t opIdx)
+void AxisCombineMarker::UpdateOpACEnableForward(size_t opIdx)
 {
     auto op = opList_[opIdx];
     auto outputTensor = op->GetOOperands()[0];
@@ -228,7 +234,7 @@ void AxisCombineMarker::UpdateOpACEnableForward(uint16_t opIdx)
         UpdateViewStatus(op, tensorStatus_);
         return;
     }
-    if (op->GetOpcode() == Opcode::OP_ASSEMBLE) {
+    if (op->GetOpcode() == Opcode::OP_ASSEMBLE || op->GetOpcode() == Opcode::OP_COPY_OUT) {
         UpdateAssembleStatus(op, tensorStatus_);
         return;
     }
@@ -251,7 +257,7 @@ void AxisCombineMarker::UpdateOpACEnableForward(uint16_t opIdx)
     tensorStatus_[outputTensor] = AxisReorderStatus::UNKNOWN;
 }
 
-void AxisCombineMarker::UpdateOpACEnableBackward(uint16_t opIdx)
+void AxisCombineMarker::UpdateOpACEnableBackward(size_t opIdx)
 {
     auto op = opList_[opIdx];
     auto outputTensor = op->GetOOperands()[0];
