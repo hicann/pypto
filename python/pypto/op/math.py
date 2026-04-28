@@ -614,7 +614,7 @@ def pow(base: Tensor, other: Union[Tensor, int, float],
     if isinstance(other, pypto_impl.Tensor):
         return pypto_impl.Pow(base, other, precision_type)
     if isinstance(other, int):
-        return pypto_impl.Pow(base, pypto_impl.Element(DataType.DT_INT32, other), PowAlgorithm.INTRINSIC)
+        return pypto_impl.Pow(base, pypto_impl.Element(DataType.DT_INT32, other), precision_type)
     return pypto_impl.Pow(base, pypto_impl.Element(DataType.DT_DOUBLE, other), precision_type)
 
 

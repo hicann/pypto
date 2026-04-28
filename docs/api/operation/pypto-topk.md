@@ -19,7 +19,7 @@
 ## 函数原型
 
 ```python
-topk(input: Tensor, k: int, dim: Optional[int]=None, largest: bool=True) -> Tuple[Tensor, Tensor]
+topk(input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, algo: TopKAlgo = TopKAlgo.MERGE_SORT) -> Tuple[Tensor, Tensor]
 ```
 
 ## 参数说明
@@ -27,10 +27,11 @@ topk(input: Tensor, k: int, dim: Optional[int]=None, largest: bool=True) -> Tupl
 
 | 参数名  | 输入/输出 | 说明                                                                 |
 |---------|-----------|----------------------------------------------------------------------|
-| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：DT_FP32。<br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
+| input   | 输入      | 源操作数。<br> 支持的类型为：Tensor。<br> Tensor支持的数据类型为：<br> - MERGE_SORT: DT_FP32。<br> - RADIX_SELECT: DT_BF16，DT_FP16，DT_FP32。 <br> 不支持空Tensor；Shape仅支持1-4维；Shape Size不大于2147483647（即INT32_MAX）。 |
 | k       | 输入      | 返回元素的数量。<br> k的大小应该满足：1 <= k <= input.shape[dim]。 |
 | dim     | 输入      | 指定排序的维度。<br> 目前仅支持按最后一个维度排序，即dim= -1或dim= input.shape.size() - 1。 |
 | largest | 输入      | 如果为True，返回最大元素。如果为False，返回最小元素。 |
+| algo    | 输入      | 算法枚举类型，用以控制TopK计算的流程，具体定义为：[TopKAlgo](../datatype/TopKAlgo.md) 。<br> 默认为 MERGE_SORT（归并排序算法）。 |
 
 ## 返回值说明
 
@@ -39,8 +40,11 @@ topk(input: Tensor, k: int, dim: Optional[int]=None, largest: bool=True) -> Tupl
 ## 约束说明
 
 1.  只支持对尾轴进行topk操作；
-2.  TileShape尾轴32bytes对齐\(TileShape\[-1\]\*4 % 32 == 0\)，且TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
-3.  k <= TileShape\[-1\] && k <= input.shape\[-1\]；
+2.  TileShape尾轴32bytes对齐\(TileShape\[-1\]\*4 % 32 == 0\)；
+3.  选用MERGE_SORT算法时，TileShape尾轴需要小于22KB\(TileShape\[-1\]\*4 < 22KB\)；
+4.  选用RADIX_SELECT算法时，记TileShape尾轴为tile，则需要临时空间2\*tile\*sizeof\(srcType\)+6\*tile+1024+max\(1024, 8\*tile\)，临时空间加上输入输出的tile块不能超过UB大小；
+5.  k <= TileShape\[-1\] && k <= input.shape\[-1\]；
+6.  RADIX_SELECT算法仅支持Ascend 950PR/Ascend 950DT；
 
 ## 调用示例
 
@@ -60,7 +64,7 @@ pypto.set_vec_tile_shapes(4, 16, 32)
 
 ```python
 x = pypto.tensor([2, 3], pypto.DT_FP32)
-y = pypto.topk(x, 2, -1, True)
+y = pypto.topk(x, 2, -1, True, pypto.TopKAlgo.MERGE_SORT)
 ```
 
 结果示例如下：

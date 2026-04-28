@@ -1238,6 +1238,7 @@ REGISTER_INFER_SHAPE_FUNC(OP_ASSEMBLE, Opcode::OP_ASSEMBLE, AssembleInferFunc);
 
 const std::string TOPK_AXIS = OP_ATTR_PREFIX + "axis";
 const std::string TOPK_ORDER = OP_ATTR_PREFIX + "order";
+const std::string TOPK_ALGO = OP_ATTR_PREFIX + "algo";
 const std::string TOPK_KVALUE = OP_ATTR_PREFIX + "kvalue";
 const std::string EXTRACT_MASKMODE = OP_ATTR_PREFIX + "makeMode";
 const std::string SORT_AXIS = OP_ATTR_PREFIX + "axis";
@@ -1325,6 +1326,27 @@ void ExtractFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outVal
 }
 
 REGISTER_INFER_SHAPE_FUNC(OP_EXTRACT, Opcode::OP_EXTRACT, ExtractFunc);
+
+void RadixSelectFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& outValidShapes)
+{
+    auto input = op->GetIOperands()[0];
+    std::vector<SymbolicScalar> res(input->GetDynValidShape());
+    res.back() = op->GetIntAttribute(TOPK_KVALUE);
+    outValidShapes.push_back(res);
+    outValidShapes.push_back(res);
+    std::vector<SymbolicScalar> tmpValidShape;
+    std::vector<int64_t> srcShape = input->GetShape();
+    auto lastDim = srcShape[srcShape.size() - 1];
+    tmpValidShape.emplace_back(
+        static_cast<int64_t>(NUM_VALUE_2 * lastDim * BytesOf(input->Datatype())) +
+        static_cast<int64_t>(NUM_VALUE_6 * lastDim) +
+        static_cast<int64_t>(NUM_VALUE_1024) +
+        static_cast<int64_t>(NUM_VALUE_1024 > NUM_VALUE_8 * lastDim ? NUM_VALUE_1024 : NUM_VALUE_8 * lastDim)
+    );
+    outValidShapes.push_back(tmpValidShape);
+}
+
+REGISTER_INFER_SHAPE_FUNC(OP_RADIX_SELECT, Opcode::OP_RADIX_SELECT, RadixSelectFunc);
 
 void VecDupInferFunc(Operation* op, std::vector<std::vector<SymbolicScalar>>& validShapes)
 {

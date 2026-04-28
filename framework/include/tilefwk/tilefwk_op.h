@@ -39,6 +39,10 @@ enum class OutType {
     BOOL,
     BIT,
 };
+enum class TopKAlgo {
+    MERGE_SORT,
+    RADIX_SELECT,
+};
 
 enum class SaturationMode : uint8_t {
     ON = 0,
@@ -341,7 +345,7 @@ Tensor Uniform(const Element &key, const SymbolicScalar& counter0, const Element
 Tensor Clip(const Tensor& self, const Tensor& min = {}, const Tensor& max = {});
 Tensor Clip(const Tensor& self, const Element& min = {}, const Element& max = {});
 
-std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis = -1, bool isLargest = true);
+std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis = -1, bool isLargest = true, TopKAlgo algo = TopKAlgo::MERGE_SORT);
 Tensor ArgSort(const Tensor& self, int axis = -1, bool descending = false);
 Tensor Sort32(const Tensor& self, int idxStart = 0);
 Tensor MrgSort(const Tensor& self, int mergeSize);

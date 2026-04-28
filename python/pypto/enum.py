@@ -26,6 +26,7 @@ ReduceMode = pypto_impl.ReduceMode
 CastMode = pypto_impl.CastMode
 OpType = pypto_impl.OpType
 OutType = pypto_impl.OutType
+TopKAlgo = pypto_impl.TopKAlgo
 ReLuType = pypto_impl.ReLuType
 TransMode = pypto_impl.TransMode
 ScatterMode = pypto_impl.ScatterMode
@@ -47,6 +48,7 @@ ReduceMode.__repr__ = _enum_repr
 CastMode.__repr__ = _enum_repr
 OpType.__repr__ = _enum_repr
 OutType.__repr__ = _enum_repr
+TopKAlgo.__repr__ = _enum_repr
 SaturationMode.__repr__ = _enum_repr
 
 DT_INT4 = DataType.DT_INT4

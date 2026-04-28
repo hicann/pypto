@@ -466,4 +466,353 @@ TILEOP void TTwoTileMrgSort(T0 dst, T1 src)
         }
     }
 }
+
+#ifndef __DAV_V220
+namespace RadixSelectUtil {
+template <uint32_t size = sizeof(uint8_t)> struct IntBySize {
+    using T = int8_t;
+};
+template <> struct IntBySize<sizeof(uint16_t)> {
+    using T = int16_t;
+};
+template <> struct IntBySize<sizeof(uint32_t)> {
+    using T = int32_t;
+};
+template <> struct IntBySize<sizeof(uint64_t)> {
+    using T = int64_t;
+};
+template <uint32_t size = sizeof(uint8_t)> struct UIntBySize {
+    using T = uint8_t;
+};
+template <> struct UIntBySize<sizeof(uint16_t)> {
+    using T = uint16_t;
+};
+template <> struct UIntBySize<sizeof(uint32_t)> {
+    using T = uint32_t;
+};
+template <> struct UIntBySize<sizeof(uint64_t)> {
+    using T = uint64_t;
+};
+}
+
+template <
+    size_t srcTypeSize,
+    typename KTHType, typename KTH, typename IDX_GT, typename IDX_EQ, typename SRC, typename USELESS>
+TILEOP void RadixSelectGatherIndex(KTHType kth, KTH kthTile, IDX_GT idxGT, IDX_EQ idxEQ, SRC src, USELESS useless)
+{
+    pto::TEXPANDS(kthTile, kth);
+    pto::TGATHER<IDX_GT, SRC, KTH, USELESS, USELESS, pto::CmpMode::GT>(idxGT, src, kthTile, useless, useless, 0);
+    pto::TGATHER<IDX_EQ, SRC, KTH, USELESS, USELESS, pto::CmpMode::EQ>(idxEQ, src, kthTile, useless, useless, 0);
+}
+
+template <
+    size_t srcTypeSize,
+    typename DST, typename SRC, typename TMP1, typename TMP2, typename MASK, typename USELESS>
+TILEOP void RadixSelectPrepareHistogramSource(uint16_t i, uint16_t last, DST dst, SRC src,
+    TMP1 tmp1, TMP2 tmp2, MASK mask, USELESS useless)
+{
+    uint16_t leftBits = (srcTypeSize - i) * 8;
+    uint16_t lastReverse = (~last) << 8;
+    pto::TEXPANDS(dst, last << 8);
+    pto::TSELS(dst, mask, dst, useless, lastReverse);
+    if constexpr (srcTypeSize == 2) {
+        pto::TSHLS(tmp2, src, leftBits);
+        pto::TSHRS(tmp2, tmp2, (srcTypeSize - 1) * 8);
+    } else if constexpr (srcTypeSize == 4) {
+        pto::TSHLS(tmp1, src, leftBits);
+        pto::TSHRS(tmp1, tmp1, (srcTypeSize - 1) * 8);
+        pto::TCVT(tmp2, tmp1, pto::RoundMode::CAST_TRUNC);
+    }
+    pto::TADD(dst, dst, tmp2);
+}
+
+TILEOP int32_t RadixSelectBinarySearch(int32_t exp, __ubuf__ int32_t *pHistogram)
+{
+    int16_t left = 0;
+    int16_t right = 255;
+    while (left <= right) {
+        int16_t mid = left + (right - left) / 2;
+        int32_t midValue = pHistogram[mid];
+        if (midValue > exp) {
+            right = mid - 1;
+        } else {
+            left = mid + 1;
+        }
+    }
+    return right;
+}
+
+template <typename IDX_GT, typename IDX_EQ, typename GT, typename EQ, typename IDX, typename SRC, typename DST, typename USELESS>
+TILEOP void RadixSelectGetResult(int32_t gtk, int32_t eqk,
+    IDX_GT idxGT, IDX_EQ idxEQ, GT countGT, EQ countEQ, IDX idx, SRC valueSrc, DST valueDst, USELESS useless)
+{
+    pto::TEXPANDS(countGT, gtk);
+    pto::TEXPANDS(countEQ, eqk);
+    pto::TCONCAT(idx, idxGT, idxEQ, countGT, countEQ);
+    pto::TGATHER(valueDst, valueSrc, idx, useless);
+}
+
+template <typename ValDType>
+TILEOP void RadixSelectExtractSortResult(uint64_t val, uint64_t idx, uint64_t k)
+{
+    set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+    __ubuf__ int32_t *pIdx = (__ubuf__ int32_t *)idx;   
+    __ubuf__ ValDType *pVal = (__ubuf__ ValDType *)val;
+    for (size_t i = 0; i < k - 1; ++i) {
+        for (size_t j = 0; j < k - 1 - i; ++j) {
+            if (pVal[j] < pVal[j + 1]) {
+                ValDType tmpVal = pVal[j];
+                pVal[j] = pVal[j + 1];
+                pVal[j + 1] = tmpVal;
+                int32_t tmpIdx = pIdx[j];
+                pIdx[j] = pIdx[j + 1];
+                pIdx[j + 1] = tmpIdx;
+            }
+        }
+    }
+    set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+    wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+}
+
+template <
+    bool isLargest, size_t srcTypeSize, bool in,
+    typename TWI, typename SRC, typename TMP, typename CMP, typename USELESS>
+TILEOP void RadixSelectTwiddle(TWI twi, SRC src, TMP tmp, CMP cmp, USELESS useless)
+{
+    if constexpr (!isLargest && !in) {
+        pto::TNOT(src, src);
+    }
+    if constexpr (in) {
+        pto::TCMPS(cmp, src, static_cast<int16_t>(0), pto::CmpMode::LT);
+    } else {
+        pto::TCMPS(cmp, src, static_cast<int16_t>(0), pto::CmpMode::GE);
+    }
+    if constexpr (srcTypeSize == 4) {
+        constexpr int32_t SIGN = 0x80000000;
+        pto::TXORS(tmp, src, SIGN, useless);
+    } else if constexpr (srcTypeSize == 2) {
+        constexpr int16_t SIGN = 0x8000;
+        pto::TXORS(tmp, src, SIGN, useless);
+    }
+    pto::TNOT(twi, src);
+    pto::TSEL(twi, cmp, twi, tmp, useless);
+    if constexpr (!isLargest && in) {
+        pto::TNOT(twi, twi);
+    }
+}
+
+/*
+Memory Usage:
+srcTwiddleInAddr  | srcTileW       srcType | sortResultAddr   | kAlignB4*2 uint32 |
+srcTmpAddr        | srcTileW       srcType | sortTempAddr     | kAlignB4   uint32 |
+srcMaskAddr       | srcTileWAlignB2 uint16 |
+srcMaskTmpAddr    | srcTileWAlignB2 uint16 |
+cmpAddr           | cmpAlign       uint8   |
+maskAddr          | cmpAlign       uint8   |
+highAddr          | 32             uint8   |
+selectCountGTAddr | 8              uint32  | kthValueAddr      | 8      uint32 |
+selectCountEQAddr | 8              uint32  |
+uselessAddr       | 8              uint32  |
+histogramAddr     | 256            uint32  | selectGTAddr      | kAlignB4 uint32 |
+                                             selectEQAddr      | kAlignB4 uint32 |
+*/
+#define OP_TILE_OP_RADIX_SELECT TRadixSelect
+template <int k, bool isLargest, typename VAL, typename IDX, typename TMP, typename SRC>
+TILEOP void TRadixSelect(VAL value, IDX index, TMP tmp, SRC src)
+{
+    constexpr int64_t NUM_256 = 256;
+    constexpr int64_t NUM_32 = 32;
+    constexpr int64_t NUM_16 = 16;
+    constexpr int64_t NUM_8 = 8;
+    constexpr int64_t NUM_2 = 2;
+    using SrcDType = typename SRC::Type;
+    using ValDType = typename VAL::Type;
+    using IdxDType = typename IDX::Type;
+    static_assert(std::is_same_v<SrcDType, bfloat16_t> || std::is_same_v<SrcDType, float16_t> || std::is_same_v<SrcDType, float>);
+    static_assert(std::is_same_v<SrcDType, ValDType>);
+    static_assert(std::is_same_v<IdxDType, int32_t>);
+    constexpr auto srcTypeSize = sizeof(SrcDType);
+    constexpr auto valTypeSize = sizeof(ValDType);
+    constexpr auto idxTypeSize = sizeof(IdxDType);
+    using ConvUIntType = typename RadixSelectUtil::UIntBySize<srcTypeSize>::T;
+    using ConvIntType = typename RadixSelectUtil::IntBySize<srcTypeSize>::T;
+    const auto srcLayout = src.GetLayout();
+    constexpr auto srcTileW = TileOp::GetTensorTileShapeDim<SRC, DIM_5TH, MAX_DIMS>();
+    constexpr auto srcTileWAlignB2 = (srcTileW + NUM_16 - 1) / NUM_16 * NUM_16;
+    auto srcStride0 = srcLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto srcStride1 = srcLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto srcStride2 = srcLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto srcStride3 = srcLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    auto srcShape0 = srcLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto srcShape1 = srcLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto srcShape2 = srcLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+    auto srcShape3 = srcLayout.template GetShapeDim<DIM_4TH, MAX_DIMS>();
+    auto srcShape4 = srcLayout.template GetShapeDim<DIM_5TH, MAX_DIMS>();
+    const auto valLayout = value.GetLayout();
+    auto valStride0 = valLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto valStride1 = valLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto valStride2 = valLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto valStride3 = valLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    const auto idxLayout = index.GetLayout();
+    constexpr auto idxTileW = TileOp::GetTensorTileShapeDim<IDX, DIM_5TH, MAX_DIMS>();
+    auto idxStride0 = idxLayout.template GetStrideDim<DIM_1ST, MAX_DIMS>();
+    auto idxStride1 = idxLayout.template GetStrideDim<DIM_2ND, MAX_DIMS>();
+    auto idxStride2 = idxLayout.template GetStrideDim<DIM_3RD, MAX_DIMS>();
+    auto idxStride3 = idxLayout.template GetStrideDim<DIM_4TH, MAX_DIMS>();
+    uint64_t find = srcShape4 - k + 1;
+    constexpr int64_t cmpSize = (srcTileW > NUM_256 ? srcTileW : NUM_256) / NUM_8;
+    constexpr int64_t cmpAlign = (cmpSize + NUM_32 - 1) / NUM_32 * NUM_32;
+    constexpr int64_t kAlignB4 = (k + NUM_8 - 1) / NUM_8 * NUM_8;
+    using SrcTileDefine =
+        pto::Tile<pto::TileType::Vec, SrcDType, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+    using IdxTileDefine =
+        pto::Tile<pto::TileType::Vec, IdxDType, 1, idxTileW, pto::BLayout::RowMajor, -1, -1>;
+    using SrcIntTileDefine =
+        pto::Tile<pto::TileType::Vec, ConvIntType, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+    using SrcUIntTileDefine =
+        pto::Tile<pto::TileType::Vec, ConvUIntType, 1, srcTileW, pto::BLayout::RowMajor, -1, -1>;
+    using HighTileDefine =
+        pto::Tile<pto::TileType::Vec, uint8_t, NUM_32, 1, pto::BLayout::ColMajor, -1, -1>;
+    using UInt16TileDefine =
+        pto::Tile<pto::TileType::Vec, uint16_t, 1, NUM_16, pto::BLayout::RowMajor, -1, -1>;
+    using Int32TileDefine =
+        pto::Tile<pto::TileType::Vec, int32_t, 1, NUM_8, pto::BLayout::RowMajor, -1, -1>;
+    using UInt32TileDefine =
+        pto::Tile<pto::TileType::Vec, uint32_t, 1, NUM_8, pto::BLayout::RowMajor, -1, -1>;
+    using CmpTileDefine =
+        pto::Tile<pto::TileType::Vec, uint8_t, 1, NUM_32, pto::BLayout::RowMajor, -1, -1>;
+    using UselessTileDefine =
+        pto::Tile<pto::TileType::Vec, uint32_t, 1, NUM_8, pto::BLayout::RowMajor>;
+    uint64_t srcTwiddleInAddr = tmp.GetAddr();                                 // srcTileW        srcType
+    uint64_t srcTmpAddr = srcTwiddleInAddr + srcTileW * srcTypeSize;           // srcTileW        srcType
+    uint64_t srcMaskAddr = srcTmpAddr + srcTileW * srcTypeSize;                // srcTileWAlignB2 uint16
+    uint64_t srcMaskTmpAddr = srcMaskAddr + srcTileWAlignB2 * sizeof(uint16_t);// srcTileWAlignB2 uint16
+    uint64_t cmpAddr = srcMaskTmpAddr + srcTileWAlignB2 * sizeof(uint16_t);    // cmpAlign        uint8
+    uint64_t maskAddr = cmpAddr + cmpAlign * sizeof(uint8_t);                  // cmpAlign        uint8
+    uint64_t highAddr = maskAddr + cmpAlign * sizeof(uint8_t);                 // 32              uint8
+    uint64_t selectCountGTAddr = highAddr + NUM_32 * sizeof(uint8_t);          // 8               uint32
+    uint64_t kthValueAddr = selectCountGTAddr;                                 // 8               uint32
+    uint64_t selectCountEQAddr = selectCountGTAddr + NUM_8 * sizeof(uint32_t); // 8               uint32
+    uint64_t uselessAddr = selectCountEQAddr + NUM_8 * sizeof(uint32_t);       // 8               uint32 dirty
+    uint64_t histogramAddr = uselessAddr + NUM_8 * sizeof(uint32_t);           // 256             uint32
+    uint64_t selectGTAddr = histogramAddr;                                     // kAlignB4        uint32
+    uint64_t selectEQAddr = selectGTAddr + kAlignB4 * sizeof(uint32_t);        // kAlignB4        uint32
+    uint64_t sortResultAddr = tmp.GetAddr();                                     // kAlignB4*2    uint32
+    uint64_t sortTempAddr = sortResultAddr + kAlignB4 * NUM_2 * sizeof(uint32_t);// kAlignB4      uint32
+    SrcIntTileDefine srcIntTile(1, srcShape4);
+    SrcIntTileDefine valIntTile(1, k);
+    SrcTileDefine sortResultTile(1, k);
+    SrcIntTileDefine sortResultIntTile(1, k * NUM_8 / srcTypeSize);
+    Int32TileDefine sortResultInt32Tile(1, k * NUM_8 / srcTypeSize);
+    SrcTileDefine sortTempTile(1, k);
+    SrcIntTileDefine twiddleIntTile(1, srcShape4);
+    SrcIntTileDefine twiddleIntKTile(1, k);
+    SrcUIntTileDefine twiddleUIntTile(1, srcShape4);
+    SrcIntTileDefine srcTempIntTile(1, srcShape4);
+    SrcIntTileDefine srcTempIntKTile(1, k);
+    SrcUIntTileDefine srcTempUIntTile(1, srcShape4);
+    UInt16TileDefine srcMaskUInt16Tile(1, srcShape4);
+    UInt16TileDefine srcMaskTmpUInt16Tile(1, srcShape4);
+    SrcTileDefine valTile(1, k);
+    IdxTileDefine idxTile(1, k);
+    UInt32TileDefine idxUInt32Tile(1, k);
+    CmpTileDefine cmpTile(1, cmpSize);
+    CmpTileDefine maskTile(1, cmpSize);
+    HighTileDefine highTile(1, 1);
+    UInt32TileDefine histogramUInt32Tile(1, NUM_256);
+    Int32TileDefine selectInt32GTTile(1, k);
+    Int32TileDefine selectInt32EQTile(1, k);
+    Int32TileDefine selectCountInt32GTTile(1, 1);
+    Int32TileDefine selectCountInt32EQTile(1, 1);
+    SrcUIntTileDefine kthValueTile(1, 1);
+    UselessTileDefine uselessTile;
+    pto::TASSIGN(sortResultTile, sortResultAddr);
+    pto::TASSIGN(sortResultIntTile, sortResultAddr);
+    pto::TASSIGN(sortResultInt32Tile, sortResultAddr);
+    pto::TASSIGN(sortTempTile, sortTempAddr);
+    pto::TASSIGN(twiddleIntTile, srcTwiddleInAddr);
+    pto::TASSIGN(twiddleIntKTile, srcTwiddleInAddr);
+    pto::TASSIGN(twiddleUIntTile, srcTwiddleInAddr);
+    pto::TASSIGN(srcTempIntTile, srcTmpAddr);
+    pto::TASSIGN(srcTempIntKTile, srcTmpAddr);
+    pto::TASSIGN(srcTempUIntTile, srcTmpAddr);
+    pto::TASSIGN(srcMaskUInt16Tile, srcMaskAddr);
+    pto::TASSIGN(srcMaskTmpUInt16Tile, srcMaskTmpAddr);
+    pto::TASSIGN(cmpTile, cmpAddr);
+    pto::TASSIGN(maskTile, maskAddr);
+    pto::TASSIGN(highTile, highAddr);
+    pto::TASSIGN(histogramUInt32Tile, histogramAddr);
+    pto::TASSIGN(selectInt32GTTile, selectGTAddr);
+    pto::TASSIGN(selectInt32EQTile, selectEQAddr);
+    pto::TASSIGN(selectCountInt32GTTile, selectCountGTAddr);
+    pto::TASSIGN(selectCountInt32EQTile, selectCountEQAddr);
+    pto::TASSIGN(kthValueTile, kthValueAddr);
+    pto::TASSIGN(uselessTile, uselessAddr);
+    for (LoopVar n0Index = 0; n0Index < srcShape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < srcShape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < srcShape2; ++n2Index) {
+                for (LoopVar n3Index = 0; n3Index < srcShape3; ++n3Index) {
+                    uint64_t srcAddr = src.GetAddr() + (n0Index * srcStride0 + n1Index * srcStride1 + n2Index * srcStride2 + n3Index * srcStride3) * srcTypeSize;
+                    uint64_t valAddr = value.GetAddr() + (n0Index * valStride0 + n1Index * valStride1 + n2Index * valStride2 + n3Index * valStride3) * valTypeSize;
+                    uint64_t idxAddr = index.GetAddr() + (n0Index * idxStride0 + n1Index * idxStride1 + n2Index * idxStride2 + n3Index * idxStride3) * idxTypeSize;
+                    pto::TASSIGN(srcIntTile, srcAddr);
+                    pto::TASSIGN(valTile, valAddr);
+                    pto::TASSIGN(valIntTile, valAddr);
+                    pto::TASSIGN(idxTile, idxAddr);
+                    pto::TASSIGN(idxUInt32Tile, idxAddr);
+                    RadixSelectTwiddle<isLargest, srcTypeSize, true>(twiddleIntTile, srcIntTile, srcTempIntTile, cmpTile, uselessTile);
+                    pto::TEXPANDS(maskTile, UINT8_MAX);
+                    pto::TEXPANDS(highTile, static_cast<uint8_t>(0));
+                    int remindK = srcShape4 - k + 1;
+                    int ltk = 0;
+                    int eqk = 0;
+                    uint16_t last = 0;
+                    ConvUIntType kthValue = 0;
+                    for (uint16_t i = srcTypeSize; i > 0 && remindK > 0; --i) {
+                        RadixSelectPrepareHistogramSource<srcTypeSize>(i, last, srcMaskUInt16Tile, twiddleUIntTile, srcTempUIntTile, srcMaskTmpUInt16Tile, maskTile, uselessTile);
+                        pto::THISTOGRAM<pto::HistByte::BYTE_0>(histogramUInt32Tile, srcMaskUInt16Tile, highTile);
+                        set_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        wait_flag(PIPE_V, PIPE_S, EVENT_ID7);
+                        __ubuf__ int32_t *pHistogram = (__ubuf__ int32_t *)histogramAddr;
+                        __ubuf__ uint8_t *pHigh = (__ubuf__ uint8_t *)highAddr;
+                        int32_t bit = RadixSelectBinarySearch(remindK - 1, pHistogram);
+                        last = bit + 1;
+                        if (bit >= 0) {
+                            pHigh[0] = static_cast<uint8_t>(bit + 1);
+                            kthValue |= static_cast<ConvUIntType>(bit + 1) << ((i - 1) * 8);
+                            int ltCount = pHistogram[bit];
+                            remindK -= ltCount;
+                            eqk = pHistogram[bit + 1] - ltCount;
+                            ltk += ltCount;
+                        } else {
+                            pHigh[0] = static_cast<uint8_t>(0);
+                            eqk = pHistogram[0];
+                        }
+                        set_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        wait_flag(PIPE_S, PIPE_V, EVENT_ID7);
+                        pto::TCMPS(cmpTile, srcMaskTmpUInt16Tile, last, pto::CmpMode::EQ);
+                        pto::TAND(maskTile, maskTile, cmpTile);
+                    }
+                    if constexpr (srcTypeSize == 2) {
+                        RadixSelectGatherIndex<srcTypeSize>(kthValue, kthValueTile, selectInt32GTTile, selectInt32EQTile, twiddleIntTile, uselessTile);
+                    } else if constexpr (srcTypeSize == 4) {
+                        RadixSelectGatherIndex<srcTypeSize>(kthValue, kthValueTile, selectInt32GTTile, selectInt32EQTile, twiddleUIntTile, uselessTile);
+                    }
+                    RadixSelectGetResult(srcShape4 - eqk - ltk, eqk, selectInt32GTTile, selectInt32EQTile, selectCountInt32GTTile, selectCountInt32EQTile, idxTile, twiddleIntTile, srcTempIntKTile, uselessTile);
+                    RadixSelectTwiddle<isLargest, srcTypeSize, false>(valIntTile, srcTempIntKTile, twiddleIntKTile, cmpTile, uselessTile);
+                    if constexpr (!isLargest) {
+                        pto::TMULS(valTile, valTile, -1.0);
+                    }
+                    RadixSelectExtractSortResult<ValDType>(valAddr, idxAddr, k);
+                    if constexpr (!isLargest) {
+                        pto::TMULS(valTile, valTile, -1.0);
+                    }
+                }
+            }
+        }
+    }
+}
+#endif
+
 #endif

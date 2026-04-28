@@ -141,6 +141,7 @@ public:
     std::string GenMrgSortOp() const;
     std::string GenExtractOp() const;
     std::string GenTiledMrgSortOp() const;
+    std::string GenRadixSelectOp() const;
     std::string GenSortOpWithParams(const std::set<int>& idx) const;
     std::string GenSortOp() const;
     std::string GenCompareAndSwapOp() const;

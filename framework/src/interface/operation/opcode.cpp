@@ -414,7 +414,7 @@ void OpcodeManager::RegisterVectorSort()
     RegisterInfo(
         Opcode::OP_TOPK, OpCoreType::ANY, "TOPK", {MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::MrgSort", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
-        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "order", OP_ATTR_PREFIX + "kvalue"}, TileShapeVerifier::Verify);
+        {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "order", OP_ATTR_PREFIX + "kvalue", OpAttributeKey::topkAlgo}, TileShapeVerifier::Verify);
     RegisterInfo(
         Opcode::OP_BITSORT, OpCoreType::ANY, "BITSORT", {MemoryType::MEM_UB}, {MemoryType::MEM_UB, MemoryType::MEM_UB},
         {"TileOp::BitSort", PIPE_S, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
@@ -448,6 +448,11 @@ void OpcodeManager::RegisterVectorSort()
         Opcode::OP_SORT_UB, OpCoreType::ANY, "SORTUB", {MemoryType::MEM_DEVICE_DDR},
         {MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_DEVICE_DDR}, {"TileOp::SortUB", PIPE_S, PIPE_V, CoreType::AIV},
         OpCalcType::OTHER, {OP_ATTR_PREFIX + "axis", OP_ATTR_PREFIX + "order"});
+    RegisterInfo(
+        Opcode::OP_RADIX_SELECT, OpCoreType::ANY, "RADIX_SELECT", {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::RadixSelect", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OP_ATTR_PREFIX + "order", OP_ATTR_PREFIX + "kvalue", OpAttributeKey::excludeBufferReuse});
 
     // parallel sort
     RegisterInfo(
@@ -1301,6 +1306,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_RSQRT, "TRsqrt"},
     {Opcode::OP_RELU, "TRelu"},
     {Opcode::OP_LOG1P, "TLog1p"},
+    {Opcode::OP_RADIX_SELECT, "TRadixSelect"},
     {Opcode::OP_PAD, "TPad"},
     {Opcode::OP_FILLPAD, "TFillPad"},
     {Opcode::OP_SQRT, "TSqrt"},

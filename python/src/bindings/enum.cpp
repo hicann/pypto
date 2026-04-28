@@ -141,6 +141,11 @@ void bind_enum(py::module& m)
         .value("BIT", OutType::BIT)
         .finalize();
 
+    py::native_enum<TopKAlgo>(m, "TopKAlgo", "enum.IntEnum")
+        .value("MERGE_SORT", TopKAlgo::MERGE_SORT)
+        .value("RADIX_SELECT", TopKAlgo::RADIX_SELECT)
+        .finalize();
+
     py::native_enum<Matrix::ReLuType>(m, "ReLuType", "enum.IntEnum")
         .value("NO_RELU", Matrix::ReLuType::NoReLu)
         .value("RELU", Matrix::ReLuType::ReLu)

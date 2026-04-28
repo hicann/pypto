@@ -550,6 +550,9 @@ Tensor Pow(const Tensor& self, const Tensor& other, PowAlgorithm precisionType)
     PowCheck(self, other);
     DataType selfType = self.GetDataType();
     DataType otherType = other.GetDataType();
+    if (selfType == DT_INT32 && otherType == DT_INT32) {
+        precisionType = PowAlgorithm::DEFAULT;
+    }
     DataType realResultType = GetPowRealResultDataType(selfType, otherType);
     DataType calcResultType = GetPowCalcResultDataType(selfType, otherType);
     auto selfSt = CastToResultType(self.GetStorage(), selfType, calcResultType);
@@ -581,6 +584,9 @@ Tensor Pow(const Tensor& self, const Element& other, PowAlgorithm precisionType)
     if (self.GetDataType() == DT_INT32 && other.GetDataType() != DT_INT32) {
         castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
             castSelf, DataType::DT_FP32, CastMode::CAST_NONE);
+    }
+    if (castSelf->Datatype() == DT_INT32) {
+        precisionType = PowAlgorithm::DEFAULT;
     }
     double exponent = other.Cast<double>();
     if (std::abs(exponent) < NUM_VALUE_EPS) {

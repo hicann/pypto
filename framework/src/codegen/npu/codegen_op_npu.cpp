@@ -250,6 +250,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_MRGSORT, [this]() { return GenMrgSortOp(); }},
           {Opcode::OP_EXTRACT, [this]() { return GenExtractOp(); }},
           {Opcode::OP_TILEDMRGSORT, [this]() { return GenTiledMrgSortOp(); }},
+          {Opcode::OP_RADIX_SELECT, [this]() { return GenRadixSelectOp(); }},
 
           {Opcode::OP_TOPK_SORT, [this]() { return GenTopKSortOp(); }},
           {Opcode::OP_TOPK_MERGE, [this]() { return GenTopKMergeOp(); }},

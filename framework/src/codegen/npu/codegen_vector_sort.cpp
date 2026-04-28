@@ -402,6 +402,27 @@ std::string CodeGenOpNPU::GenTiledMrgSortOp() const
     return PrintTiledMrgSortDynamicUnaligned(tiledSortParm);
 }
 
+std::string CodeGenOpNPU::GenRadixSelectOp() const
+{
+    std::string valueTensor = QueryTileTensorNameByIdx(ID0);
+    std::string indexTensor = QueryTileTensorNameByIdx(ID1);
+    std::string tempTensor = QueryTileTensorNameByIdx(ID2);
+    std::string srcTensor = QueryTileTensorNameByIdx(ID3);
+    std::vector<std::string> paramList = {valueTensor, indexTensor, tempTensor, srcTensor};
+    int64_t isLargest = -1;
+    bool hasLargest = GetOpAttr(OP_ATTR_PREFIX + "order", isLargest);
+    ASSERT(OperErr::ATTRIBUTE_INVALID, hasLargest) << "Radix Select has no isLargest attribute.";
+    int64_t k = -1;
+    bool hasK = GetOpAttr(OP_ATTR_PREFIX + "kvalue", k);
+    ASSERT(OperErr::ATTRIBUTE_INVALID, hasK) << "Radix Select has no k attribute.";
+    std::ostringstream oss;
+    oss << tileOpName
+        << WrapParamByAngleBrackets<int64_t>({k, isLargest})
+        << WrapParamByParentheses(paramList)
+        << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::GenSortOpWithParams(const std::set<int>& idx) const
 {
     std::string xDtypeStr = DataType2CCEStr(operandDtype[ID0]);

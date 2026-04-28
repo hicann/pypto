@@ -12,7 +12,7 @@
 from typing import Optional, Tuple, Union
 from .._element import Element
 from .. import pypto_impl
-from ..enum import OpType, OutType
+from ..enum import OpType, OutType, TopKAlgo
 from .._op_wrapper import op_wrapper
 from ..tensor import Tensor
 
@@ -299,7 +299,7 @@ def le(input: Tensor, other: Union[Tensor, float, Element]) -> Tensor:
 
 @op_wrapper
 def topk(
-    input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True
+    input: Tensor, k: int, dim: Optional[int] = None, largest: bool = True, algo: TopKAlgo = TopKAlgo.MERGE_SORT
 ) -> Tuple[Tensor, Tensor]:
     """Returns the k largest elements of the given input tensor along a given dimension.
 
@@ -339,7 +339,7 @@ def topk(
                   [2 1]]
     """
 
-    return pypto_impl.TopK(input, k, (-1 if dim is None else dim), largest)
+    return pypto_impl.TopK(input, k, (-1 if dim is None else dim), largest, algo)
 
 
 @op_wrapper

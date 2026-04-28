@@ -73,3 +73,8 @@ def test_op_type():
 def test_out_type():
     assert repr(pypto.OutType.BOOL) == "OutType.BOOL"
     assert repr(pypto.OutType.BIT) == "OutType.BIT"
+
+
+def test_topk_algo():
+    assert repr(pypto.TopKAlgo.MERGE_SORT) == "TopKAlgo.MERGE_SORT"
+    assert repr(pypto.TopKAlgo.RADIX_SELECT) == "TopKAlgo.RADIX_SELECT"

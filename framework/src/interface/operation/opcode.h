@@ -312,6 +312,7 @@ enum class Opcode {
     OP_TWOTILEMRGSORT,
     OP_EXTRACT_SINGLE,
     OP_SORT_UB,
+    OP_RADIX_SELECT,
     // End: add for TOPK and ArgSort
     // Begin: topk for DS3.2-Day0
     OP_TOPK_SORT,

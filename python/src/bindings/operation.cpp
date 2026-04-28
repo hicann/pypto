@@ -489,10 +489,10 @@ void bind_operation(py::module& m)
         "Tensor tril.");
     m.def(
         "TopK",
-        [](const Tensor& self, int k, int axis, bool islargest) {
-            return npu::tile_fwk::TopK(self, k, axis, islargest);
+        [](const Tensor& self, int k, int axis, bool islargest, TopKAlgo algo) {
+            return npu::tile_fwk::TopK(self, k, axis, islargest, algo);
         },
-        py::arg("operand"), py::arg("k"), py::arg("axis"), py::arg("islargest") = true, "Tensor topk.");
+        py::arg("operand"), py::arg("k"), py::arg("axis"), py::arg("islargest") = true, py::arg("algo") = TopKAlgo::MERGE_SORT, "Tensor topk.");
     m.def(
         "Sort32", [](const Tensor& self, int index) { return npu::tile_fwk::Sort32(self, index); }, py::arg("operand"),
         py::arg("index"), "Tensor sort32.");

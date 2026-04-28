@@ -466,15 +466,51 @@ void TiledTopK(
     }
 }
 
+void TiledTopKRadixSelect(
+    Function& function, const TileShape& tileShape, size_t cur, Input& input, const LogicalTensorPtr& valueResult,
+    const LogicalTensorPtr& indexResult, int k, int isLargest, int64_t ubSize)
+{
+    if (cur == input.tensor.GetShape().size() - 1) {
+        auto lastDim = input.tensor.GetShape()[cur];
+        input.tileInfo.shape[cur] = lastDim;
+        auto inputTile = input.tensor.GetStorage()->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        input.tileInfo.shape[cur] = valueResult->shape[cur];
+        auto valueTile = valueResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        auto indexTile = indexResult->View(function, input.tileInfo.shape, input.tileInfo.offset);
+        std::vector<int64_t> tmpShape = {
+            static_cast<int64_t>(NUM_VALUE_2 * lastDim * BytesOf(input.tensor.GetDataType())) +
+            static_cast<int64_t>(NUM_VALUE_6 * lastDim) +
+            static_cast<int64_t>(NUM_VALUE_1024) +
+            static_cast<int64_t>(NUM_VALUE_1024 > NUM_VALUE_8 * lastDim ? NUM_VALUE_1024 : NUM_VALUE_8 * lastDim)
+        };
+        auto tempTensor = std::make_shared<LogicalTensor>(function, DataType::DT_UINT8, tmpShape);
+        auto& newOp = function.AddOperation(Opcode::OP_RADIX_SELECT, {inputTile}, {valueTile, indexTile, tempTensor});
+        newOp.SetAttribute(TOPK_KVALUE, k);
+        newOp.SetAttribute(TOPK_ORDER, static_cast<int>(isLargest));
+        return;
+    }
+    auto& vecTile = tileShape.GetVecTile();
+    for (int i = 0; i < input.tensor.GetShape()[cur]; i += vecTile[cur]) {
+        input.tileInfo.shape[cur] = std::min(input.tensor.GetShape()[cur] - i, vecTile[cur]);
+        input.tileInfo.offset[cur] = i;
+        TiledTopKRadixSelect(function, tileShape, cur + 1, input, valueResult, indexResult, k, isLargest, ubSize);
+    }
+}
+
 void TiledTopK(
     Function& function, const TileShape& tileShape, const LogicalTensorPtr operand, const LogicalTensorPtr valueResult,
-    const LogicalTensorPtr indexResult, int axis, int k, int isLargest)
+    const LogicalTensorPtr indexResult, int axis, int k, int isLargest, TopKAlgo algo)
 {
     // Build Init tile info
     TileInfo tileInfo(operand->shape, operand->offset);
-    TileInfo resultTileInfo(valueResult->shape, valueResult->offset);
     auto input = Input{operand, tileInfo};
-    TiledTopK(function, tileShape, 0, input, valueResult, indexResult, resultTileInfo, axis, k, isLargest);
+    if (algo == TopKAlgo::MERGE_SORT) {
+        TileInfo resultTileInfo(valueResult->shape, valueResult->offset);
+        TiledTopK(function, tileShape, 0, input, valueResult, indexResult, resultTileInfo, axis, k, isLargest);
+    } else if (algo == TopKAlgo::RADIX_SELECT) {
+        int64_t ubSize = Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB);
+        TiledTopKRadixSelect(function, tileShape, 0, input, valueResult, indexResult, k, isLargest, ubSize);
+    }
 }
 
 void TiledArgSort(
@@ -519,7 +555,7 @@ void TiledArgSort(
 
 void TensorTopK(
     Function& function, const LogicalTensorPtr& self, LogicalTensorPtr& valueResult, LogicalTensorPtr& indexResult,
-    int k, int axis, bool isLargest)
+    int k, int axis, bool isLargest, TopKAlgo algo)
 {
     if (!self->GetDynValidShape().empty()) {
         std::vector<SymbolicScalar> outValidShape;
@@ -535,28 +571,49 @@ void TensorTopK(
     op.SetAttribute(TOPK_AXIS, axis);
     op.SetAttribute(TOPK_KVALUE, k);
     op.SetAttribute(TOPK_ORDER, static_cast<int>(isLargest));
-    return;
+    op.SetAttribute(OpAttributeKey::topkAlgo, static_cast<int>(algo));
 }
 
-std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLargest)
+std::tuple<Tensor, Tensor> TopK(const Tensor& self, int k, int axis, bool isLargest, TopKAlgo algo)
 {
     DECLARE_TRACER();
-    std::unordered_set<DataType> supportedTypes = {DT_FP32};
-    CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK");
+    if (algo == TopKAlgo::MERGE_SORT) {
+        std::unordered_set<DataType> supportedTypes = {DT_FP32};
+        CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Merge Sort)");
+    } else if (algo == TopKAlgo::RADIX_SELECT) {
+        std::unordered_set<DataType> supportedTypes = {DT_BF16, DT_FP16, DT_FP32};
+        CheckTensorDataType(self.GetStorage(), supportedTypes, "TOPK(Radix Select)");
+    }
     CheckTensorDimRange(self.GetStorage(), 1, 4, "TOPK");
     CheckTensorShapeSize(self.GetStorage(), "TOPK");
     const auto len = static_cast<int>(self.GetShape().size());
-    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis == (len - 1) || axis == -1) << "TopK only support last axis";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID, axis == len - 1 || axis == -1)
+        << "TopK only support last axis";
+    ASSERT(VectorErrorCode::ERR_PARAM_INVALID,
+        algo != TopKAlgo::RADIX_SELECT || Platform::Instance().GetSoc().GetNPUArch() == NPUArch::DAV_3510)
+        << "When TopK using radix select algo, only DAV_3510 architecture is supported.";
     axis = axis >= 0 ? axis : (axis + len);
 
     auto topkOutShape = self.GetShape();
     topkOutShape[axis] = k;
-    auto valueResult = Tensor(self.GetStorage()->tensor->datatype, topkOutShape);
     auto indexResult = Tensor(DataType::DT_INT32, topkOutShape);
-    CALL(
-        TopK, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), valueResult.GetStorage(),
-        indexResult.GetStorage(), k, axis, isLargest);
-    return std::tie(valueResult, indexResult);
+    if (algo == TopKAlgo::RADIX_SELECT && self.GetDataType() == DT_BF16) {
+        auto valueResultTmp = Tensor(DT_FP32, topkOutShape);
+        auto castSelf = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            self.GetStorage(), DataType::DT_FP32, CastMode::CAST_NONE);
+        CALL(
+            TopK, *Program::GetInstance().GetCurrentFunction(), castSelf, valueResultTmp.GetStorage(),
+            indexResult.GetStorage(), k, axis, isLargest, algo);
+        auto valueResult = CALL(CastOperation<CastOpType::CAST>, *Program::GetInstance().GetCurrentFunction(),
+            valueResultTmp.GetStorage(), DT_BF16, CastMode::CAST_NONE);
+        return std::tie(valueResult, indexResult);
+    } else {
+        auto valueResult = Tensor(self.GetStorage()->tensor->datatype, topkOutShape);
+        CALL(
+            TopK, *Program::GetInstance().GetCurrentFunction(), self.GetStorage(), valueResult.GetStorage(),
+            indexResult.GetStorage(), k, axis, isLargest, algo);
+        return std::tie(valueResult, indexResult);
+    }
 }
 
 bool checkIsExceedUB(
@@ -960,7 +1017,8 @@ void TopkOperationTileFunc(
     int axis = op.GetIntAttribute(TOPK_AXIS);
     int kValue = op.GetIntAttribute(TOPK_KVALUE);
     int isLargest = op.GetIntAttribute(TOPK_ORDER);
-    TiledTopK(function, tileShape, iOperand[0], oOperand[0], oOperand[1], axis, kValue, isLargest);
+    TopKAlgo algo = static_cast<TopKAlgo>(op.GetIntAttribute(OpAttributeKey::topkAlgo));
+    TiledTopK(function, tileShape, iOperand[0], oOperand[0], oOperand[1], axis, kValue, isLargest, algo);
 }
 
 void SortOperationTileFunc(
