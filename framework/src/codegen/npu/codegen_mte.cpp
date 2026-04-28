@@ -294,9 +294,9 @@ std::string CodeGenOpNPU::GenUBCopyIn() const { return GenMemUBTransfer(false); 
 
 std::string CodeGenOpNPU::GenUBCopyOut() const { return GenMemUBTransfer(true); }
 
-std::string CodeGenOpNPU::GenReshapeCopyIn() const { return GenMemCopyVar(false); }
+std::string CodeGenOpNPU::GenReshapeCopyIn() const { return GenMemUBTransfer(false); }
 
-std::string CodeGenOpNPU::GenReshapeCopyOut() const { return GenMemCopyVar(true); }
+std::string CodeGenOpNPU::GenReshapeCopyOut() const { return GenMemUBTransfer(true); }
 
 std::string CodeGenOpNPU::PrintL0CToL1TileTensor() const
 {

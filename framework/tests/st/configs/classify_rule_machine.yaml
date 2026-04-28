@@ -58,26 +58,26 @@ stest:
       #===========================================================================
       - DynamicReshapeTest.test_only_reshape
       - DynamicReshapeTest.test_only_reshape2
-      # - DynamicReshapeTest.test_dyn_reshape2
-      # - DynamicReshapeTest.test_assemble_diff_tile
-      # - DynamicReshapeTest.test_merge_and_split
-      # - DynamicReshapeTest.test_split_and_merge
-      # - DynamicReshapeTest.test_exchange_dim
-      # - DynamicReshapeTest.test_special_reshape
+      - DynamicReshapeTest.test_dyn_reshape2
+      - DynamicReshapeTest.test_assemble_diff_tile
+      - DynamicReshapeTest.test_merge_and_split
+      - DynamicReshapeTest.test_split_and_merge
+      - DynamicReshapeTest.test_exchange_dim
+      - DynamicReshapeTest.test_special_reshape
       #===========================================================================
       # 非对齐Reshape功能用例
       #===========================================================================
-      # - DynamicReshapeUnalignTest.test_add_dim
-      # - DynamicReshapeUnalignTest.test_merge_dim
-      # - DynamicReshapeUnalignTest.test_split_dim
+      - DynamicReshapeUnalignTest.test_add_dim
+      - DynamicReshapeUnalignTest.test_merge_dim
+      - DynamicReshapeUnalignTest.test_split_dim
       #===========================================================================
       # reshapeinplace非对齐场景功能用例
       #===========================================================================
-      # - DynamicReshapeUnalignImplaceTest.test_op_reshape_op
-      # - DynamicReshapeUnalignImplaceTest.merge_two_dynamic_dim
-      # - DynamicReshapeUnalignImplaceTest.test_exchange_dim
-      # - DynamicReshapeUnalignImplaceTest.test_reshape_special
-      # - DynamicReshapeUnalignImplaceTest.test_src_op_dst_op
+      - DynamicReshapeUnalignImplaceTest.test_op_reshape_op
+      - DynamicReshapeUnalignImplaceTest.merge_two_dynamic_dim
+      - DynamicReshapeUnalignImplaceTest.test_exchange_dim
+      - DynamicReshapeUnalignImplaceTest.test_reshape_special
+      - DynamicReshapeUnalignImplaceTest.test_src_op_dst_op
       #===========================================================================
       # ViewType功能用例
       #===========================================================================

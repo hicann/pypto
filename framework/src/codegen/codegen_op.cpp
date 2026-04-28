@@ -40,6 +40,8 @@ const std::unordered_set<Opcode> OP_SHAPE_FROM_ATTR{
     // conv Load
     Opcode::OP_L1_COPY_IN_CONV,
     Opcode::OP_L0C_COPY_OUT_CONV,
+    Opcode::OP_RESHAPE_COPY_IN,
+    Opcode::OP_RESHAPE_COPY_OUT,
 };
 bool IsOpShapeFromAttr(Opcode opcode) { return OP_SHAPE_FROM_ATTR.find(opcode) != OP_SHAPE_FROM_ATTR.end(); }
 } // namespace

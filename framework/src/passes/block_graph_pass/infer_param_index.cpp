@@ -56,8 +56,8 @@ Status InferParamIndex::ResetOutputDynValidShape(const Operation& op, Function &
     const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
                                            Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
                                            Opcode::OP_PERMUTE, Opcode::OP_PERMUTE_ELEMENT, Opcode::OP_UB_COPY_L1};
-    bool isCopyIn = (op.GetOpcode() == Opcode::OP_COPY_IN);
-    bool isCopyOut = (op.GetOpcode() == Opcode::OP_COPY_OUT);
+    bool isCopyIn = copyInOps_.find(op.GetOpcode()) != copyInOps_.end();
+    bool isCopyOut = copyOutOps_.find(op.GetOpcode()) != copyOutOps_.end();
     if ((isCopyIn || isCopyOut)) {
         if (HandleCopyOpShape(op, function, isCopyIn)) {
             return SUCCESS;

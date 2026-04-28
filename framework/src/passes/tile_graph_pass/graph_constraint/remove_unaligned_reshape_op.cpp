@@ -176,7 +176,6 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForUB(Function& functi
                 output->GetMagic(), op.GetOpMagic(), static_cast<long>(dim));
             break;
         } else if (!outDynValidShape[dim].IsImmediate()) {
-            op.SetAsDeleted();
             auto tmpWorkSpaceIn =
                 std::make_shared<LogicalTensor>(function, input->Datatype(), input->oriShape, input->Format());
             auto tmpWorkSpaceOut =
@@ -188,12 +187,12 @@ void RemoveUnalignedReshape::ReplaceDynUnalignedReshapeOpsForUB(Function& functi
             tmpWorkSpaceOut->UpdateDynValidShape(outDynValidShape);
 
             auto& reshapeCopyOutOp = function.AddOperation(Opcode::OP_RESHAPE_COPY_OUT, {input}, {tmpWorkSpaceIn});
-            auto& reshapeOp = function.AddOperation(Opcode::OP_RESHAPE, {tmpWorkSpaceIn}, {tmpWorkSpaceOut});
+            op.ReplaceInput(tmpWorkSpaceIn, op.GetIOperands().front());
+            op.ReplaceOutput(tmpWorkSpaceOut, op.GetOOperands().front());
             auto& reshapeCopyInOp = function.AddOperation(Opcode::OP_RESHAPE_COPY_IN, {tmpWorkSpaceOut}, {output});
 
             reshapeCopyOutOp.UpdateSubgraphID(op.GetSubgraphID());
             reshapeCopyInOp.UpdateSubgraphID(op.GetSubgraphID());
-            reshapeOp.UpdateSubgraphID(op.GetSubgraphID());
 
             reshapeCopyOutOp.SetOpAttribute(
                 std::make_shared<CopyOpAttribute>(

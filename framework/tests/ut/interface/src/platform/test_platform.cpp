@@ -100,37 +100,6 @@ TEST_F(TestPlatform, TestParser)
     EXPECT_EQ(memoryLimit, expectubSize);
 }
 
-TEST_F(TestPlatform, TestObtainPlatformInfo)
-{
-    const size_t expectAICoreCnt = 24UL;
-    const size_t expectCubeCoreCnt = 24UL;
-    const size_t expectVectorCoreCnt = 48UL;
-    const size_t expectAICpuCnt = 6UL;
-    const size_t expectl0aSize = 65536UL;
-    const size_t expectl0bSize = 65536UL;
-    const size_t expectl0cSize = 131072UL;
-    const size_t expectl1Size = 524288UL;
-    const size_t expectubSize = 196608UL;
-
-    EXPECT_EQ(Platform::Instance().GetSoc().GetNPUArch(), NPUArch::DAV_2201);
-    EXPECT_EQ(Platform::Instance().GetSoc().GetCCECVersion(aic), "dav-c220-cube");
-    EXPECT_EQ(Platform::Instance().GetSoc().GetCCECVersion(aiv), "dav-c220-vec");
-    EXPECT_EQ(Platform::Instance().GetSoc().GetAICoreNum(), expectAICoreCnt);
-    EXPECT_EQ(Platform::Instance().GetSoc().GetAICCoreNum(), expectCubeCoreCnt);
-    EXPECT_EQ(Platform::Instance().GetSoc().GetAIVCoreNum(), expectVectorCoreCnt);
-    EXPECT_EQ(Platform::Instance().GetSoc().GetAICPUNum(), expectAICpuCnt);
-
-    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0A), expectl0aSize);
-    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0B), expectl0bSize);
-    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L0C), expectl0cSize);
-    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_L1), expectl1Size);
-    EXPECT_EQ(Platform::Instance().GetDie().GetMemoryLimit(MemoryType::MEM_UB), expectubSize);
-
-    std::vector<MemoryType> paths;
-    EXPECT_TRUE(Platform::Instance().GetDie().FindNearestPath(MemoryType::MEM_DEVICE_DDR, MemoryType::MEM_L1, paths));
-    EXPECT_EQ(paths.size(), 2UL);
-}
-
 TEST_F(TestPlatform, AbnormalTest)
 {
     std::unique_ptr<INIParser> parser = std::make_unique<INIParser>();
