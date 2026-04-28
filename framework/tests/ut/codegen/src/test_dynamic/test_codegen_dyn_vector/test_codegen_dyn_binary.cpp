@@ -516,4 +516,33 @@ TEST_F(TestCodegenDynBinary, TestPowIntrinsicPrecision)
     CheckStringExist(expect, res);
 }
 
+TEST_F(TestCodegenDynBinary, TestAxpyTileTensor)
+{
+    config::SetCodeGenConfig(KEY_CODEGEN_SUPPORT_TILE_TENSOR, true);
+
+    auto function = GenMockFuncDyn("TestAxpyTileTensor");
+
+    std::vector<int64_t> shape = {64, 64};
+    std::vector<SymbolicScalar> dynValidShape = {64, 64};
+    auto localTensorA = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localTensorB = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+    auto localOutTensor = CreateLogicalTensor({*function, DataType::DT_FP32, MemoryType::MEM_UB, shape, dynValidShape});
+
+    auto& op = function->AddOperation(Opcode::OP_AXPY, {localTensorA, localTensorB}, {localOutTensor});
+    op.SetAttribute(OpAttributeKey::scalar, Element(DataType::DT_FP32, 2.0));
+    op.SetAttribute(OpAttributeKey::brcbIdx, static_cast<int64_t>(1));
+    op.SetAttribute(OpAttributeKey::brcpIdx, static_cast<int64_t>(1));
+
+    std::shared_ptr<SymbolManager> symbolManager = std::make_shared<SymbolManager>();
+    CodeGenCtx ctx;
+    CodeGenCloudNPU cga(ctx);
+    cga.GenAllocForLocalBuffer(op, symbolManager);
+    CodeGenOpCloudNPU cop({symbolManager, *function, *function->rootFunc_->programs_[0], op, {}});
+    std::string res = cop.GenOpCode();
+    std::string expect =
+        R"!!!(TAxpy<TileOp::BroadcastOperand::LEFT_OPERAND, TileOp::PenuBroadcastOperand::LEFT_OPERAND>(ubTensor_0, ubTensor_0, (float)2);
+)!!!";
+    EXPECT_EQ(res, expect);
+}
+
 } // namespace npu::tile_fwk

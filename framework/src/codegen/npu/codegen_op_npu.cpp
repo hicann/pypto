@@ -162,7 +162,8 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_COPYSIGN, [this]() { return GenBinaryOpWithTmp(); }},
           {Opcode::OP_PRELU, [this]() { return GenPreluOp(); }},
           {Opcode::OP_FLOORDIV, [this]() { return GenBinaryOpWithTmp(); }},
-
+          {Opcode::OP_AXPY, [this]() { return GenAxpyOp(); }},
+          
           // binary op: broadcast associated vector
           {Opcode::OP_ADD_BRC, [this]() { return GenBinaryWithBrc(); }},
           {Opcode::OP_SUB_BRC, [this]() { return GenBinaryWithBrc(); }},

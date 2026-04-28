@@ -85,6 +85,59 @@ def add(
 
 
 @op_wrapper
+def axpy(y: Tensor, x: Tensor, alpha: Union[int, float] = 1.0) -> Tensor:
+    """Computes the element-wise AXPY operation: y = alpha * x + y.
+
+    This function performs an in-place update on tensor y.
+    The formula is: `y = alpha * x + y`.
+    It supports broadcasting for tensor x (but y cannot broadcast).
+
+    Parameters
+    ----------
+    y : Tensor
+        The destination tensor that will be updated in-place.
+    x : Tensor
+        The source tensor. Can be broadcast to match y's shape.
+    alpha : float, optional
+        A scaling factor for the `x` tensor. Default is 1.0.
+
+    Returns
+    -------
+    Tensor
+        The updated y tensor (same as input y, modified in-place).
+
+    Raises
+    ------
+    RuntimeError
+        If y's shape cannot accommodate x's broadcast.
+        If dtype combination is not supported (only fp32+fp32, fp16+fp16, bf16+bf16, fp32+fp16).
+
+    Notes
+    -----
+    - This is an in-place operation. The y tensor is modified directly.
+    - Supported dtype combinations:
+      - fp32 + fp32
+      - fp16 + fp16  
+      - bf16 + bf16 (converted to fp32 internally)
+      - fp32 + fp16 (mixed precision)
+
+    Examples
+    --------
+    y = pypto.tensor([1, 3], pypto.DT_FP32)
+    x = pypto.tensor([1, 3], pypto.DT_FP32)
+    out = pypto.axpy(y, x, alpha=2.0)
+
+    Input y:    [[1.0 2.0 3.0]]
+    Input x:    [[2.0 3.0 4.0]]
+    alpha:      2.0
+    Output:     [[5.0 8.0 11.0]]  (y = 2.0 * x + y)
+    """
+    return pypto_impl.Axpy(y, x, float(alpha))
+
+
+
+
+@op_wrapper
 def sub(
     input: Tensor, other: Union[Tensor, float], *, alpha: Union[int, float] = 1
 ) -> Tensor:

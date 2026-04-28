@@ -68,6 +68,7 @@ public:
     std::string GenMemL0CToL1() const;
     std::string GenMemL1ToL0Load3D() const;
     std::string GenMemL1ToL0Load2D() const;
+    std::string GenAxpyOp() const;
 
     std::string GenMemL1ToL0() const;
 

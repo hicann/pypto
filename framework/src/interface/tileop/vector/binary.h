@@ -395,6 +395,42 @@ TILEOP void TRemainder(T0 dst, T1 src0, T2 src1, T3 tmp)
     BinaryTmpCompute<BinaryOp::REM, 0, WBrcSide, HBrcSide>(dst, src0, src1, tmp);
 }
 
+#define OP_TILE_OP_AXPY TAxpy
+template <
+    TileOp::BroadcastOperand WBrcSide = TileOp::BroadcastOperand::NONE,
+    TileOp::PenuBroadcastOperand HBrcSide = TileOp::PenuBroadcastOperand::NONE, typename T0, typename T1,
+    typename Scalar>
+TILEOP void TAxpy(T0 dst, T1 src0, Scalar alpha)
+{
+    const auto dstLayout = dst.GetLayout();
+    auto shape0 = dstLayout.template GetShapeDim<DIM_1ST, MAX_DIMS>();
+    auto shape1 = dstLayout.template GetShapeDim<DIM_2ND, MAX_DIMS>();
+    auto shape2 = dstLayout.template GetShapeDim<DIM_3RD, MAX_DIMS>();
+
+    using SrcTileInfo = TensorTileInfo<T1>;
+
+    using SrcPtoTile = typename std::conditional<
+        (SrcTileInfo::tileW == 1 && WBrcSide == TileOp::BroadcastOperand::RIGHT_OPERAND),
+        PtoTile<T1, pto::BLayout::ColMajor>, PtoTile<T1>>::type;
+
+    auto dstTile = PtoTile<T0>(dst);
+    auto src0Tile = SrcPtoTile(src0);
+
+    for (LoopVar n0Index = 0; n0Index < shape0; ++n0Index) {
+        for (LoopVar n1Index = 0; n1Index < shape1; ++n1Index) {
+            for (LoopVar n2Index = 0; n2Index < shape2; ++n2Index) {
+                auto dsttileOffsets = TileOffset(n0Index, n1Index, n2Index);
+                auto src0tileOffsets = TileOffset(
+                    SrcTileInfo::tile0 == 1 ? 0 : n0Index, SrcTileInfo::tile1 == 1 ? 0 : n1Index,
+                    SrcTileInfo::tile2 == 1 ? 0 : n2Index);
+                dstTile.Assign(dst, dsttileOffsets);
+                src0Tile.Assign(src0, src0tileOffsets);
+                pto::TAXPY(dstTile.Data(), src0Tile.Data(), static_cast<typename T1::Type>(alpha));
+            }
+        }
+    }
+}
+
 #define OP_TILE_OP_FLOORDIV TFloorDiv
 template <typename T0, typename T1, typename T2, typename T3>
 TILEOP void TFloorDiv(T0 dst, T1 src0, T2 src1, T3 tmp)

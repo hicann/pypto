@@ -331,6 +331,39 @@ std::string CodeGenOpNPU::GenRemainderSOp() const
     return oss.str();
 }
 
+std::string CodeGenOpNPU::GenAxpyOp() const
+{
+    std::string dstTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::DST_IDX));
+    std::string srcTensor = QueryTileTensorNameByIdx(ToUnderlying(MISOIdx::SRC1_IDX));
+    std::string scalarAlpha = FormatFloat(extOperandVal.Cast<float>());
+
+    std::vector<std::string> templateParamList;
+
+    int64_t brcOperandIdx = 0;
+    int64_t penuBrcOperandIdx = 0;
+
+    bool hasBrcb = GetOpAttr(OpAttributeKey::brcbIdx, brcOperandIdx);
+    bool hasPenu = GetOpAttr(OpAttributeKey::brcpIdx, penuBrcOperandIdx);
+    if (hasBrcb || hasPenu) {
+        templateParamList.emplace_back(GetBrcbOprandIdxStr(brcOperandIdx));
+    }
+    if (hasPenu) {
+        templateParamList.emplace_back(GetPenuBrcOprandIdxStr(penuBrcOperandIdx));
+    }
+
+    std::string dtypeStr = DataType2CCEStr(extOperandVal.GetDataType());
+    std::string scalarParam = "(" + dtypeStr + ")" + scalarAlpha;
+    std::vector<std::string> tileOpParamList = {dstTensor, srcTensor, scalarParam};
+
+    std::ostringstream oss;
+    oss << tileOpName;
+    if (!templateParamList.empty()) {
+        oss << WrapParamByAngleBrackets(templateParamList);
+    }
+    oss << WrapParamByParentheses(tileOpParamList) << STMT_END;
+    return oss.str();
+}
+
 std::string CodeGenOpNPU::PrintBinaryBrcStatic(const PrintBinaryBrcParam& param) const
 {
     const std::string& dstDtypeStr = param.dstDtypeStr;

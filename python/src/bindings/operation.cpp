@@ -26,6 +26,9 @@ void bind_operation(py::module& m)
     m.def(
         "Add", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Add(self, other); }, "Tensor add.");
     m.def(
+        "Axpy", [](const Tensor& y, const Tensor& x, float alpha) { return npu::tile_fwk::Axpy(y, x, alpha); },
+        py::arg("y"), py::arg("x"), py::arg("alpha") = 1.0f, "Tensor axpy: y = alpha * x + y.");        
+    m.def(
         "Sub", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Sub(self, other); }, "Tensor sub.");
     m.def(
         "Mul", [](const Tensor& self, const Tensor& other) { return npu::tile_fwk::Mul(self, other); }, "Tensor mul.");

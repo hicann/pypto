@@ -85,6 +85,11 @@ stest:
 
   operation_vector:
     cases:
+      - TestAxpy/AxpyOperationTest.TestAxpy/0
+      - TestAxpy/AxpyOperationTest.TestAxpy/4
+      - TestAxpy/AxpyOperationTest.TestAxpy/6
+      - TestAxpy/AxpyOperationTest.TestAxpy/12
+      - TestAxpy/AxpyOperationTest.TestAxpy/13   
       - TestRange/RangeOperationTest.TestRange/0
       - TestRange/RangeOperationTest.TestRange/1
       - TestAdd/AddOperationTest.TestAdd/10
