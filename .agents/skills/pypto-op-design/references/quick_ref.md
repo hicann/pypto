@@ -38,14 +38,24 @@
 4. 验证展开约束 `(shape / tile) × tensor_count ≤ 18000`
 5. 如果有 matmul，额外推导 cube tile：`[M, K], [K, N], [M, N]`
 
-### 2.4 多动态轴模式（Batch + SeqLen 同时动态）
+### 2.4 动态轴模式
 
-当有 2 个及以上动态轴时，不能在高维 tensor 上直接 matmul（会报 `dim = -1`），必须：
+**触发场景**：有Agent开发的PyPTO算子必须支持动态轴，但部分计算 API在编译期需要 concrete shape，不接受含 `DYNAMIC` 维度的 tensor（报错特征：`dim = -1`、`Cannot convert symbols to int`、`has invalid shape value: -1`）。
+
+**通用策略 —— "loop 切 tile，API 只吃静态"**：
+1. **选合适的轴做动态轴**：优先 batch / 序列长度等语义上天然变化的轴；所选轴**不能是 API 直接计算依赖的维度**（matmul 不选 K/N，归约不选归约 dim）。
+2. **所选轴标 `DYNAMIC`，其余标 `STATIC`**；多个动态轴对每个分别走 `pypto.loop` 嵌套处理。
+3. **`pypto.loop` 沿动态轴迭代**，trip count 取 `tensor.shape[i]` 或符号表达式。
+4. **`pypto.view` 切出固定整数 tile**（shape 参数全是 Python int）。
+5. **受限 API 只操作静态 tile**，永不看到动态维度。
+6. **`pypto.assemble` 写回**，offset 可用 SymbolicScalar，尾块用 `valid_shape`。
+
+**多动态轴特例**（Batch + SeqLen 同时动态，不能在高维 tensor 上直接调受限 API）：
 
 1. **wrapper 层 reshape 到 2D**：`[B, N, S, D]` → `[B*N*S, D]`
 2. **嵌套 loop 拆解各维度**：`loop(B) → loop(N) → loop(S // S_TILE)`
 3. **view 使用 concrete tile shapes**：`pypto.view(t, [S_TILE, D], [offset, 0], valid_shape=[actual_s, D])`
-4. **2D matmul**：`[S_TILE, D] × [D, S_TILE]`，编译期 shape 完全确定
+4. **API 操作静态 tile**：`[S_TILE, D]`，编译期 shape 完全确定
 5. **assemble 写回**：`pypto.assemble(result, [offset, 0], output_2d)`
 
 **参考实现**：`models/glm_v4_5/glm_attention.py`
@@ -115,7 +125,7 @@ for idx in pypto.loop(n, name="LOOP", idx_name="idx", unroll_list=[4, 2, 1]):
 |----------|------|------|
 | sum 要求 FP32 + 输入为 BF16 | dtype 不匹配 | sum 前 cast，sum 后 cast 回 |
 | matmul 两侧 dtype 不一致 | 编译失败 | 统一 cast 到相同 dtype |
-| 动态轴参与 matmul M/K/N | tile 无法确定 | loop 外层遍历，view 提取固定大小块 |
+| 动态轴参与受限 API（matmul/sum/amax/mean/prod 等） | `dim = -1`、`Cannot convert symbols to int` | 选语义合适的轴做 DYNAMIC + loop；受限 API 只操作静态 tile（见 §2.4）|
 | view + assemble 同一 tensor | DAG 环路 | 使用两个独立 tensor 或拆分 JIT 函数 |
 | TileShape 过小 | 表达式膨胀 > 编译超时 | 增大 tile，减少循环次数 |
 | TileShape 过大 | UB/L1 溢出 | 缩小 tile，增加循环次数 |

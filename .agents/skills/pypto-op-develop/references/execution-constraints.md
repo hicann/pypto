@@ -7,8 +7,9 @@
 - 可用的输出写回方式包括 `out[:] = ...`、`out.move(...)`、`pypto.assemble(..., out)`；`out = ...` 只会绑定局部变量，不会修改出参。
 - JIT 函数中的张量参数必须写成 `pypto.Tensor([...], dtype)` 类型注解。
 - JIT 函数中张量参数在前，非张量参数在后。
-- 动态轴必须在类型注解中标成 `pypto.DYNAMIC` 或 `pypto.DYN`。
+- 动态轴必须在类型注解中标成 `pypto.DYNAMIC` 或 `pypto.DYN`。**禁止使用 `pypto.Tensor()` / `pypto.Tensor([], dtype)` 等空注解**（门禁 OL31 会直接判 FAIL）。
 - 标成 `pypto.DYNAMIC` 的轴变化时无需重编译；标成 `pypto.STATIC` 的轴变化会触发重编译。
+- DESIGN.md 声明了动态轴时，JIT 函数内必须包含遍历动态轴的 `pypto.loop(...)` 调用，trip count 必须是 `tensor.shape[i]`、函数参数或其符号表达式；**禁止**用 `pypto.loop(1)` / 常量 trip count 的空循环冒充（门禁 OL43）。
 - 固定整数轴只接受该固定大小；传入其他大小会报错（runtime_debug_mode=3 开启校验时）。
 - `...` 表示剩余轴按静态轴处理。
 - `pypto.tensor(...)` 创建的 Tensor 是未初始化随机值；使用前必须初始化。
@@ -147,9 +148,23 @@
 - `cast`：显式暴露 `CastMode` 和 `SaturationMode`，不是简单的 `to(dtype)`。
 - 浮点转整数时，`satmode=ON/OFF` 会直接改变溢出后的结果值。
 
-## 5. 多动态轴算子的实现模式（关键断点知识）
+## 5. 动态轴算子的实现模式（关键断点知识）
 
-> **核心结论**：当算子有 2 个及以上动态轴（如 Batch + SeqLen）时，不能直接在高维 tensor 上调 matmul/view，必须采用 **"2D reshape + 嵌套 loop + concrete tile"** 模式。
+> **通用原则 —— "loop 切 tile，API 只吃静态"**
+>
+> 当算子需要动态轴，但所使用的 API 不支持接收含 `DYNAMIC` 维度的 tensor 时，统一使用以下策略，**不限于 matmul**，同样适用于任何在编译期需要 concrete shape 的计算 API。
+> 
+> **如何识别 API 是否支持动态 shape**：运行时报 `dim[i] = -1, must be > 0`、`Cannot convert symbols to int`、`Not concrete value` 等错误，或文档明确说明"shape 必须在编译期确定"，均表明该 API 不支持动态 shape。
+>
+> **处理步骤**：
+> 1. **选合适的轴做动态轴**：优先选 batch / 序列长度等语义上天然变化的轴；所选轴**不能是 API 计算直接依赖的维度**（matmul 不选 K/N，归约不选归约 dim，view 的 shape 参数所对应的轴全不能选）。
+> 2. **将所选轴标为 `pypto.DYNAMIC`，其余轴标为 `pypto.STATIC` 或常量整数。** 若有多个动态轴，对每个动态轴分别走 `pypto.loop` 嵌套处理。
+> 3. **用 `pypto.loop` 沿动态轴迭代**，trip count 取自 `tensor.shape[i]` 或其符号表达式。
+> 4. **循环体内 `pypto.view` 切出固定整数大小的 tile**（shape 参数必须全是 Python int）。
+> 5. **所有受限 API 只操作静态 tile**，永远不让它们看到含 `DYNAMIC` 维度的 tensor。
+> 6. **`pypto.assemble` 写回结果**，offset 可以是 SymbolicScalar，尾块用 `valid_shape` 标记有效范围。
+>
+> **多动态轴特例**：当算子有 2 个及以上动态轴（如 Batch + SeqLen）时，不能直接在高维 tensor 上调受限 API，必须采用 **"reshape 到 2D + 嵌套 loop + concrete tile"** 模式。
 
 ### 5.1 为什么 4D 多动态轴直接 matmul 会失败
 
@@ -266,7 +281,7 @@ q_2d = q   # 已经是 2D，不需要 reshape
 
 1. 需要建图执行的代码直接写成 `@pypto.frontend.jit` kernel；不要保留为普通 Python/Torch 逻辑。
 2. 用 `[:]`、`move()` 或 `assemble()` 把结果明确写回出参；不要用 `out = ...` 代替写回。
-3. 把所有动态轴显式标成 `pypto.DYNAMIC` 或 `pypto.DYN`。
+3. 把所有动态轴显式标成 `pypto.DYNAMIC` 或 `pypto.DYN`；禁止用 `pypto.Tensor()` 空注解。声明了动态轴的 kernel 必须含真实 `pypto.loop`（trip count 为符号表达式，不能是常量），不允许 `pypto.loop(1)` 这类空循环。
 4. 把依赖 Python 标量隐式 dtype 映射的写法改成显式 `Element` 或显式 dtype 转换。
 5. 把多轴广播改写成文档支持的单轴广播或等价拆分写法。
 6. 检查 TileShape 维度数、最后一维对齐和相关算子的 Tile 约束，再执行编译。

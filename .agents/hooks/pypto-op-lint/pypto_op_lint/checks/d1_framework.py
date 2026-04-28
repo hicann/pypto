@@ -244,11 +244,19 @@ def check_ol25(ctx: CheckContext) -> Finding:
             if not isinstance(ann, ast.Call):
                 continue
             if not ann.args:
-                return ctx.make_finding("OL25", "WARN",
-                    f"参数 `{arg.arg}` 使用 pypto.Tensor()（无参数形式），"
-                    "建议补全 shape 和 dtype",
+                return ctx.make_finding("OL25", "FAIL",
+                    f"参数 `{arg.arg}` 使用 pypto.Tensor()（无参数形式）；"
+                    "动态轴必须显式标 pypto.DYNAMIC，静态轴写常量整数，"
+                    "禁止使用空注解。例：pypto.Tensor([pypto.DYNAMIC, ...], pypto.DT_FP32)",
                     file=impl_file, line=ann.lineno)
             if len(ann.args) == 1:
+                # 第二种空注解形态：pypto.Tensor([], dtype) — 同样禁止。
+                shape_arg = ann.args[0]
+                if isinstance(shape_arg, ast.List) and not shape_arg.elts:
+                    return ctx.make_finding("OL25", "FAIL",
+                        f"参数 `{arg.arg}` 使用 pypto.Tensor([], dtype) 空 shape 注解；"
+                        "动态轴必须显式标 pypto.DYNAMIC，静态轴写常量整数。",
+                        file=impl_file, line=ann.lineno)
                 return ctx.make_finding("OL25", "WARN",
                     f"参数 `{arg.arg}` 只声明了 shape，缺少 dtype。"
                     "建议写成 pypto.Tensor([shape], dtype)",

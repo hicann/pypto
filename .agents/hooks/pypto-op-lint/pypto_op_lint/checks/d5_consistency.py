@@ -100,26 +100,20 @@ def check_ol31(ctx: CheckContext) -> Finding:
 
     dynamic_aliases = _extract_symbolic_dynamic_aliases(tree, aliases)
     has_dynamic_in_impl = False
-    has_unparameterized_tensor = False
     for func in jit_funcs:
         for arg in func.args.args:
             ann = arg.annotation
             if not isinstance(ann, ast.Call) or not _is_pypto_tensor_annotation(ann, aliases):
                 continue
-            # pypto.Tensor() 无参数 => 所有维度隐式动态，兼容任何 dynamic_axes 声明
+            # pypto.Tensor() / pypto.Tensor([]) 空注解由 OL25 统一拦截，此处不重复处理。
             if not ann.args:
-                has_unparameterized_tensor = True
-                break
+                continue
             if _shape_has_dynamic(ann.args[0], dynamic_aliases, aliases):
                 has_dynamic_in_impl = True
                 break
-        if has_dynamic_in_impl or has_unparameterized_tensor:
+        if has_dynamic_in_impl:
             break
 
-    if has_unparameterized_tensor:
-        return ctx.make_finding("OL31", "PASS",
-            "impl 使用 pypto.Tensor() 无参数注解，所有维度隐式动态，"
-            "与 design 动态轴声明兼容", file=impl_file)
     if not has_dynamic_in_impl:
         return ctx.make_finding("OL31", "FAIL",
             f"{DESIGN_FILE} front matter 声明了动态轴，但 impl 的 Tensor 注解中未使用 "
