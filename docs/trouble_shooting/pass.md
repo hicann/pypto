@@ -52,7 +52,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 ---
 
-### Tensor相关错误（F40000-F40006）
+### Tensor相关错误
 
 #### F40000 TENSOR_NULL_POINTER
 描述：Tensor或其关联的操作存在空指针引用\
@@ -106,7 +106,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 ---
 
-### Operation相关错误（F41000-F41006）
+### Operation相关错误
 
 #### F41000 OP_INVALID_OPERAND_COUNT
 描述：OP的输入输出数量不符合预期\
@@ -150,7 +150,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 ---
 
-### Function相关错误（F42000-F42006）
+### Function相关错误
 
 #### F42000 FUNCTION_GRAPH_STRUCTURE
 描述：Function的图结构不完整或不合法\
@@ -205,7 +205,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 ---
 
-### Graph相关错误（F43000-F43007）
+### Graph相关错误
 
 #### F43000 GRAPH_LOOP_DETECTION
 描述：图中存在循环依赖\
@@ -262,7 +262,7 @@ export ASCEND_GLOBAL_LOG_LEVEL=0
 
 ---
 
-### Config相关错误（F44000-F44002）
+### Config相关错误
 
 #### F44000 CONFIG_MEMORY_TYPE_REACHABLE
 描述：内存类型之间不存在可达的转换路径\
