@@ -431,9 +431,8 @@ public:
         binPath = srcPath.substr(0, srcPath.length() - Len3) + "bin";
         constexpr int cmdLen = 2048;
         char cmd[cmdLen];
-        CHECK(npu::tile_fwk::FileExist(objPath)) << "ErrCode: F" <<
-            static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH) 
-            << ", obj file does not exist. objPath: " << objPath;
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::INVALID_PATH), npu::tile_fwk::FileExist(objPath))
+            << "obj file does not exist. objPath: " << objPath;
         int ret = snprintf_s(
             cmd, sizeof(cmd), sizeof(cmd) - 1, "llvm-objcopy -O binary -j .text %s %s", objPath.c_str(),
             binPath.c_str());

@@ -118,8 +118,7 @@ void TileOp::GetPipeType()
 {
     auto coreTypeQuery = SCHED_CORE_PIPE_TYPE.find(opcode);
     if (coreTypeQuery == SCHED_CORE_PIPE_TYPE.end() && !IsCall() && opcode != "LOOP") {
-        ASSERT(false) << "ErrCode: F" << static_cast<unsigned>(CostModel::ForwardSimErrorScene::INVALID_PIPE_TYPE)
-                      << ",[SIMULATION]: "
+        ASSERT(static_cast<unsigned>(CostModel::ForwardSimErrorScene::INVALID_PIPE_TYPE), false) << ",[SIMULATION]: "
                       << "No pipe type corresponding to opcode is found. opcode=" << opcode;
     }
     if (IsCall()) {
@@ -138,8 +137,7 @@ uint64_t TileOp::GetAddress()
     } else if (IsWriteCache(pipeType)) {
         tile = oOperand[0];
     } else {
-        ASSERT(false) << "ErrCode: F" << static_cast<unsigned>(CostModel::ForwardSimErrorScene::INVALID_PIPE_TYPE)
-                      << ",[SIMULATION]: "
+        ASSERT(static_cast<unsigned>(CostModel::ForwardSimErrorScene::INVALID_PIPE_TYPE), false) << ",[SIMULATION]: "
                       << "PipeType Unrecognized." << Dump() << CorePipeName(pipeType);
     }
     addr = tile->rawMagic * RAW_MAGIC_MAX_SIZE;
@@ -159,8 +157,7 @@ uint64_t TileOp::GetSize()
     } else if (IsWriteCache(pipeType)) {
         tile = oOperand[0];
     } else {
-        ASSERT(false) << "ErrCode: F" << static_cast<unsigned>(CostModel::ForwardSimErrorScene::INVALID_PIPE_TYPE)
-                      << ",[SIMULATION]: "
+        ASSERT(static_cast<unsigned>(CostModel::ForwardSimErrorScene::INVALID_PIPE_TYPE), false) << ",[SIMULATION]: "
                       << "PipeType Unrecognized." << Dump() << CorePipeName(pipeType);
     }
     uint64_t shapeSize = 1;

@@ -237,15 +237,13 @@ void CostModelAgent::DebugSingleFunc(Function* func)
 void CostModelAgent::GetFunctionFromJson(const std::string& jsonPath)
 {
     std::ifstream file(jsonPath);
-    CHECK(file.good()) << "ErrCode: F" << static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED)
-                       << "[SIMULATION]: "
+    CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_OPEN_FAILED), file.good()) << "[SIMULATION]: "
                        << "Json file: " << jsonPath << " open failed!!!";
     Json jsonData;
     try {
         file >> jsonData;
     } catch (const std::exception& e) {
-        CHECK(false) << "ErrCode: F" << static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_FORMAT_ERROR)
-                     << "[SIMULATION]: "
+        CHECK(static_cast<unsigned>(CostModel::ExternalErrorScene::FILE_FORMAT_ERROR), false) << "[SIMULATION]: "
                      << "Json file: " << jsonPath << " parsing error: " << e.what();
     }
     Program::GetInstance().LoadJson(jsonData);
