@@ -19,9 +19,9 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 
-def stateless_random_uniform_v2_numpy_golden(shape, key, counter, alg, dtype):
+def uniform_numpy_golden(shape, key, counter, alg, dtype):
     """
-    Numpy implementation of stateless_random_uniform_v2 based on TensorFlow's Philox algorithm.
+    Numpy implementation of uniform based on TensorFlow's Philox algorithm.
     Replicates TensorFlow's behavior using the Philox 4x32_10 algorithm.
     
     Args:
@@ -166,14 +166,14 @@ def test_uniform_fp32():
             offset = idx * view_shape[0]
             valid_shape = pypto.min(pypto.symbolic_scalar(shape[0]) - offset, pypto.symbolic_scalar(view_shape[0]))
             pypto.set_vec_tile_shapes(tile_shape[0])
-            res = pypto.stateless_random_uniform_v2(shape, key, counter, alg, dtype)
+            res = pypto.uniform(shape, key, counter, alg, dtype)
             pypto.assemble(res, [offset], output)
 
     assert isinstance(output, pypto.tensor)
     out_data = np.zeros(shape, dtype=np.float32)
     pto_out = pypto.from_torch(torch.from_numpy(out_data), "PTO_TENSOR_output")
     pypto.runtime._device_run_once_data_from_host(pto_out)
-    golden = stateless_random_uniform_v2_numpy_golden(shape, key, counter, alg, dtype)
+    golden = uniform_numpy_golden(shape, key, counter, alg, dtype)
     assert_allclose(out_data.flatten(), golden.flatten(), rtol=1e-4, atol=1e-4)
 
     pypto.runtime._device_fini()
@@ -202,14 +202,14 @@ def test_uniform_fp16():
             offset = idx * view_shape[0]
             valid_shape = pypto.min(pypto.symbolic_scalar(shape[0]) - offset, pypto.symbolic_scalar(view_shape[0]))
             pypto.set_vec_tile_shapes(tile_shape[0])
-            res = pypto.stateless_random_uniform_v2(shape, key, counter, alg, dtype)
+            res = pypto.uniform(shape, key, counter, alg, dtype)
             pypto.assemble(res, [offset], output)
 
     assert isinstance(output, pypto.tensor)
     out_data = np.zeros(shape, dtype=np.float16)
     pto_out = pypto.from_torch(torch.from_numpy(out_data), "PTO_TENSOR_output")
     pypto.runtime._device_run_once_data_from_host(pto_out)
-    golden = stateless_random_uniform_v2_numpy_golden(shape, key, counter, alg, dtype)
+    golden = uniform_numpy_golden(shape, key, counter, alg, dtype)
     assert_allclose(out_data.flatten(), golden.flatten(), rtol=1e-3, atol=1e-3)
 
     pypto.runtime._device_fini()

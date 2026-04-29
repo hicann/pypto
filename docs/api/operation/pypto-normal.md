@@ -1,4 +1,4 @@
-# pypto.stateless_random_normal_v2
+# pypto.normal
 
 ## 产品支持情况
 
@@ -16,7 +16,7 @@ $$
 ## 函数原型
 
 ```python
-stateless_random_normal_v2(shape: List[int], key: List[int], counter: List[int], alg: List[int], dtype: DataType) -> Tensor
+normal(shape: List[int], key: List[int], counter: List[int], alg: List[int], dtype: DataType) -> Tensor
 ```
 
 ## 参数说明
@@ -62,7 +62,7 @@ counter = [0, 1]
 alg = [1]
 dtype = pypto.DT_FP32
 
-y = pypto.stateless_random_normal_v2(shape, key, counter, alg, dtype)
+y = pypto.normal(shape, key, counter, alg, dtype)
 ```
 
 结果示例如下：
