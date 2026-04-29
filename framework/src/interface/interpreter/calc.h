@@ -187,6 +187,12 @@ inline void LogicalAnd(LogicalTensorDataPtr out, LogicalTensorDataPtr self, Logi
 {
     GetCalcOps()->LogicalAnd(Trans(out), Trans(self), Trans(other));
 }
+inline void QuantMX(
+    LogicalTensorDataPtr out, LogicalTensorDataPtr exp, LogicalTensorDataPtr max, LogicalTensorDataPtr scaling,
+    LogicalTensorDataPtr self, bool performanceMode)
+{
+    GetCalcOps()->QuantMX(Trans(out), Trans(exp), Trans(max), Trans(scaling), Trans(self), performanceMode);
+}
 
 inline void AddS(LogicalTensorDataPtr out, LogicalTensorDataPtr self, const Element& scalar, bool reverse = false)
 {

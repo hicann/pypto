@@ -100,6 +100,11 @@ void bind_enum(py::module& m)
         .value("HIGH_PRECISION", RsqrtAlgorithm::HIGH_PRECISION)
         .finalize();
 
+    py::enum_<DequantScaleRoundingMode>(m, "DequantScaleRoundingMode")
+        .value("ROUND_UP", DequantScaleRoundingMode::ROUND_UP)
+        .value("ROUND_DOWN", DequantScaleRoundingMode::ROUND_DOWN)
+        .export_values();
+
     py::native_enum<ExpAlgorithm>(m, "ExpAlgorithm", "enum.IntEnum")
         .value("INTRINSIC", ExpAlgorithm::DEFAULT)
         .value("HIGH_PRECISION", ExpAlgorithm::HIGH_PRECISION)

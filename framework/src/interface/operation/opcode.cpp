@@ -599,6 +599,12 @@ void OpcodeManager::RegisterVectorQuant() {
         {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB}, {MemoryType::MEM_UB},
         {"TileOp::TDequant", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
         {OP_ATTR_PREFIX + "axis"}, TileShapeVerifier::Verify);
+    RegisterInfo(
+        Opcode::OP_QUANT_MX, OpCoreType::AIV, "QUANT_MX", {MemoryType::MEM_UB},
+        {MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB, MemoryType::MEM_UB},
+        {"TileOp::TQuantMX", PIPE_V, PIPE_V, CoreType::AIV}, OpCalcType::OTHER,
+        {OpAttributeKey::excludeBufferReuse, OpAttributeKey::mxQuantMode, OpAttributeKey::mxQuantAxis,
+         OpAttributeKey::mxQuantPerformanceMode});
 }
 
 void OpcodeManager::RegisterVector() {
@@ -1280,6 +1286,7 @@ std::unordered_map<Opcode, std::string> SUPPORT_TILETENSOR_OPS{
     {Opcode::OP_TWOTILEMRGSORT, "TTwoTileMrgSort"},
     {Opcode::OP_EXTRACT_SINGLE, "TExtractSingle"},
     {Opcode::OP_GATHER_MASK, "TGatherMask"},
+    {Opcode::OP_QUANT_MX, "TQuantMX"},
     {Opcode::OP_CAST, "TCast"},
     {Opcode::OP_ROWSUM_SINGLE, "TRowSumSingle"},
     {Opcode::OP_ROWARGMAX_SINGLE, "TRowArgMaxSingle"},

@@ -751,6 +751,16 @@ class Tensor:
         return pypto.topk(self, k, dim, largest)
 
     @source_location
+    def quant_mx(
+        self,
+        quant_dtype: DataType = DataType.DT_FP8E4M3,
+        mode: DequantScaleRoundingMode = DequantScaleRoundingMode.ROUND_DOWN,
+        axis: int = -1,
+        performance_mode: bool = True,
+    ) -> Tuple['Tensor', 'Tensor']:
+        return pypto.quant_mx(self, quant_dtype, mode, axis, performance_mode)
+
+    @source_location
     def sort32(self, index: Optional[int] = None) -> 'Tensor':
         return pypto.sort32(self, index)
 

@@ -109,6 +109,7 @@ CodeGenOpNPU::CodeGenOpNPU(const CodeGenOpNPUCtx& ctx)
           {Opcode::OP_ABS, [this]() { return GenUnaryOp(); }},
           {Opcode::OP_LN, [this]() { return GenUnaryOp(); }},
           {Opcode::OP_BRCB, [this]() { return GenUnaryOp(); }},
+          {Opcode::OP_QUANT_MX, [this]() { return GenQuantMXOp(); }},
           {Opcode::OP_COSH, [this]() { return GenUnaryOp(); }},
 
           // unary with temp buffer

@@ -87,6 +87,7 @@ public:
 
     std::string GenUnaryOp() const;
     std::string GenUnaryOpWithTmpBuff() const;
+    std::string GenQuantMXOp() const;
 
     std::string GenLogicalNotOp() const;
     std::string GenLogicalAndOp() const;

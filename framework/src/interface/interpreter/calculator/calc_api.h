@@ -197,6 +197,7 @@ struct CalcOps {
     void (*Extract)(const TensorData&, const TensorData&, int, bool);
     void (*MrgSort)(const TensorData&, const TensorData&, int64_t, int64_t);
     void (*TopK)(const TensorData&, const TensorData&, const TensorData&, int, int, bool);
+    void (*QuantMX)(const TensorData&, const TensorData&, const TensorData&, const TensorData&, const TensorData&, bool);
     void (*TopkSort)(const TensorData&, const TensorData&, const TensorData&, int);
     void (*TopkMerge)(const TensorData&, const TensorData&, int);
     void (*TopkExtract)(const TensorData&, const TensorData&, int, bool);

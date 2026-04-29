@@ -32,6 +32,7 @@ TransMode = pypto_impl.TransMode
 ScatterMode = pypto_impl.ScatterMode
 SaturationMode = pypto_impl.SaturationMode
 AtomicType = pypto_impl.AtomicType
+DequantScaleRoundingMode = pypto_impl.DequantScaleRoundingMode
 DivAlgorithm = pypto_impl.DivAlgorithm
 PowAlgorithm = pypto_impl.PowAlgorithm
 ExpAlgorithm = pypto_impl.ExpAlgorithm
@@ -50,6 +51,7 @@ OpType.__repr__ = _enum_repr
 OutType.__repr__ = _enum_repr
 TopKAlgo.__repr__ = _enum_repr
 SaturationMode.__repr__ = _enum_repr
+DequantScaleRoundingMode.__repr__ = _enum_repr
 
 DT_INT4 = DataType.DT_INT4
 DT_INT8 = DataType.DT_INT8
@@ -74,6 +76,8 @@ DT_UINT64 = DataType.DT_UINT64
 DT_BOOL = DataType.DT_BOOL
 DT_DOUBLE = DataType.DT_DOUBLE
 DT_BOTTOM = DataType.DT_BOTTOM
+ROUND_UP = DequantScaleRoundingMode.ROUND_UP
+ROUND_DOWN = DequantScaleRoundingMode.ROUND_DOWN
 
 
 class StatusType(enum.Enum):

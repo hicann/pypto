@@ -15,7 +15,9 @@
 #include "gtest/gtest.h"
 #include "tilefwk/tilefwk.h"
 #include "interface/inner/tilefwk.h"
+#include "interface/function/function.h"
 #include "interface/operation/operation.h"
+#include "interface/program/program.h"
 #include "tilefwk/data_type.h"
 
 using namespace npu::tile_fwk;
@@ -79,4 +81,18 @@ TEST_F(OperationOpsTest, LogicalNot_UnsupportedDataType)
     Tensor input(DT_INT32, shape);
 
     EXPECT_THROW(LogicalNot(input), std::exception);
+}
+
+TEST_F(OperationOpsTest, QuantMX_DefaultRoundDownFp8Output)
+{
+    TileShape::Current().SetVecTile(8, 64);
+    Tensor input(DT_FP32, {8, 64});
+
+    FUNCTION("QuantMXDefaultFp8", {input})
+    {
+        auto defaultRes = QuantMX(input);
+        EXPECT_EQ(std::get<0>(defaultRes).GetDataType(), DT_FP8E4M3);
+        EXPECT_EQ(std::get<1>(defaultRes).GetDataType(), DT_FP8E8M0);
+        EXPECT_EQ(std::get<1>(defaultRes).GetShape(), std::vector<int64_t>({8, 1, 2}));
+    }
 }

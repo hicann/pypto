@@ -17,6 +17,8 @@
 import sys
 import logging
 import json
+import math
+import struct
 from pathlib import Path
 from typing import List
 
@@ -110,6 +112,57 @@ def load_test_cases_from_json(json_file: str) -> list:
     return test_cases
 
 
+def _generate_golden_input_tensor(op: str, input_tensor: dict, config: dict, index: int, spec_value_map: dict):
+    min_value = input_tensor["data_range"]["min"]
+    max_value = input_tensor["data_range"]["max"]
+    dtype = get_dtype_by_name(input_tensor["dtype"])
+    if op == "QuantMX":
+        return _generate_quantmx_input(input_tensor, config)
+    if min_value != max_value:
+        assert not isinstance(min_value, str) and not isinstance(
+            max_value, str
+        ), "Data range must be number when the min and max are not same."
+        if op == "ScatterUpdate" and index == 1:
+            return np.random.choice(range(min_value, max_value), input_tensor["shape"], False).astype(dtype)
+        return np.random.uniform(min_value, max_value, input_tensor["shape"]).astype(dtype)
+    if isinstance(min_value, str):
+        assert min_value in spec_value_map.keys(), f"Data range of input tensor {input_tensor} has invalid value."
+        max_value = spec_value_map.get(max_value)
+    return np.full(input_tensor["shape"], max_value, dtype=dtype)
+
+
+def _build_golden_input_tensors(op: str, config: dict) -> list:
+    spec_value_map = {
+        "nan": np.nan,
+        "inf": np.inf,
+        "-inf": -np.inf,
+        "max": np.finfo(np.float32).max,
+        "min": np.finfo(np.float32).min,
+    }
+    return [
+        _generate_golden_input_tensor(op, input_tensor, config, index, spec_value_map)
+        for index, input_tensor in enumerate(config["input_tensors"])
+    ]
+
+
+def _write_golden_inputs(input_tensors: list, output_path: Path, config: dict) -> None:
+    cube_op_list = ["Matmul", "BatchMatmul", "MatmulVerify", "BatchMatmulVerify"]
+    for input_tensor, read_input in zip(input_tensors, config["input_tensors"]):
+        if config.get("operation") in cube_op_list and read_input.get("format") == "NZ":
+            input_tensor = trans_nd_to_fractal_nz(input_tensor)
+        input_tensor.tofile(Path(output_path, read_input["name"] + ".bin"))
+
+
+def _write_golden_outputs(res: list, output_path: Path, config: dict) -> None:
+    for idx in range(len(config["output_tensors"])):
+        output_dtype = config["output_tensors"][idx]["dtype"]
+        output_file = Path(output_path, config["output_tensors"][idx]["name"] + ".bin")
+        if output_dtype in ["fp8e4m3", "fp8e5m2", "fp8e8m0"] and res[idx].dtype == np.uint8:
+            res[idx].tofile(output_file)
+        else:
+            res[idx].astype(get_dtype_by_name(output_dtype)).tofile(output_file)
+
+
 def gen_op_golden(
     op: str, golden_func, output_path: Path, case_index: int = None
 ) -> bool:
@@ -117,58 +170,10 @@ def gen_op_golden(
         if config['operation'] in ["Matmul", "BatchMatmul", "MatmulVerify", "BatchMatmulVerify"]:
             return generate_matmul_golden_files(golden_func, output_path, config)
 
-        input_tensors = []
-        spec_value_map = {
-            "nan": np.nan,
-            "inf": np.inf,
-            "-inf": -np.inf,
-            "max": np.finfo(np.float32).max,
-            "min": np.finfo(np.float32).min,
-        }
-        index = 0
-        for input_tensor in config["input_tensors"]:
-            min = input_tensor["data_range"]["min"]
-            max = input_tensor["data_range"]["max"]
-            if min != max:
-                assert not isinstance(min, str) and not isinstance(
-                    min, str
-                ), "Data range must be number when the min and max are not same."
-                if op == "ScatterUpdate" and index == 1:
-                    tensor = np.random.choice(
-                        range(min, max), input_tensor["shape"], False
-                    ).astype(get_dtype_by_name(input_tensor["dtype"]))
-                else:
-                    tensor = np.random.uniform(min, max, input_tensor["shape"]).astype(
-                        get_dtype_by_name(input_tensor["dtype"])
-                    )
-            else:
-                if isinstance(min, str):
-                    assert (
-                        min in spec_value_map.keys()
-                    ), f"Data range of input tensor {input_tensor} has invalid value."
-                    max = spec_value_map.get(max)
-                tensor = np.full(
-                    input_tensor["shape"],
-                    max,
-                    dtype=get_dtype_by_name(input_tensor["dtype"]),
-                )
-            index += 1
-            input_tensors.append(tensor)
-
+        input_tensors = _build_golden_input_tensors(op, config)
         res = golden_func(input_tensors, config)
-        cube_op_list = ["Matmul", "BatchMatmul", "MatmulVerify", "BatchMatmulVerify"]
-        for input_tensor, read_input in zip(input_tensors, config["input_tensors"]):
-            if (
-                config.get("operation") in cube_op_list
-                and read_input.get("format") == "NZ"
-            ):
-                input_tensor = trans_nd_to_fractal_nz(input_tensor)
-            input_tensor.tofile(Path(output_path, read_input["name"] + ".bin"))
-
-        for idx in range(len(config["output_tensors"])):
-            res[idx].astype(
-                get_dtype_by_name(config["output_tensors"][idx]["dtype"])
-            ).tofile(Path(output_path, config["output_tensors"][idx]["name"] + ".bin"))
+        _write_golden_inputs(input_tensors, output_path, config)
+        _write_golden_outputs(res, output_path, config)
         return True
 
     case_path: Path = Path(Path(__file__).parent.parent, "test_case").resolve()
@@ -2934,6 +2939,387 @@ def gen_argsort_op_golden(case_name: str, output: Path, case_index: int = None) 
         return [idx.numpy()]
     logging.debug("Case(%s), Golden creating...", case_name)
     return gen_op_golden("ArgSort", golden_func, output, case_index)
+
+
+def _decode_e4m3_fn(code: int) -> float:
+    sign = -1 if (code & 0x80) != 0 else 1
+    exp = (code >> 3) & 0x0F
+    mant = code & 0x07
+    if exp == 0:
+        if mant == 0:
+            return -0.0 if sign < 0 else 0.0
+        return float(sign) * math.ldexp(float(mant), -9)
+    if exp == 0x0F and mant == 0x07:
+        return math.nan
+    significand = 1.0 + float(mant) / 8.0
+    return float(sign) * math.ldexp(significand, exp - 7)
+
+
+# MX quantization constants per target dtype (OCP Microscaling Formats MX v1.0).
+# Extensible for future fp4 support.
+_MX_DTYPE_PARAMS = {
+    "fp8_e4m3": {
+        "target_max_pow2": 8,
+        "max_pos": 448.0,
+        "min_normal": 2 ** (1 - 7),   # 2^-6 = 0.015625
+        "exp_bias": 7,
+        "mbits": 3,
+    },
+}
+
+_E8M0_EXPONENT_BIAS = 127
+_F32_EXP_BIAS = 127
+_F32_MBITS = 23
+
+
+def _compute_shared_exponents(max_abs: np.ndarray, target_max_pow2: int) -> np.ndarray:
+    """Vectorized OCP FLOOR-mode shared exponent computation.
+
+    Returns an ndarray of E8M0 biased bytes (uint8).
+    Reference: OCP MX Spec 1.0 — scale = 2^floor(log2(max_abs)) / 2^target_max_pow2
+    """
+    nan_mask = np.isnan(max_abs)
+    bits = max_abs.view(np.int32)
+    fp_exponent = ((bits >> _F32_MBITS) & 0xFF).astype(np.int32)
+    biased = np.clip(fp_exponent - target_max_pow2, 0, 254).astype(np.uint8)
+    biased[nan_mask] = 0xFF
+    return biased
+
+
+def _compute_scalings_from_exponents(e8m0: np.ndarray) -> np.ndarray:
+    """Vectorized reciprocal scaling factor from E8M0 biased exponents.
+
+    reciprocal_scale = 2^(E8M0_BIAS - e8m0) so that data * reciprocal_scale = data / scale.
+    """
+    e8m0_i32 = e8m0.astype(np.int32)
+    scale_exp = np.int32(254) - e8m0_i32
+    result = (scale_exp << _F32_MBITS).astype(np.int32).view(np.float32)
+    result[scale_exp == 0] = np.float32(math.ldexp(1.0, -_E8M0_EXPONENT_BIAS))
+    result[e8m0 == 0xFF] = np.float32(np.nan)
+    return result
+
+
+def _encode_e4m3_fn_vectorized(values: np.ndarray) -> np.ndarray:
+    """Vectorized FP8 E4M3 encoding using bit manipulation (round-to-nearest-even).
+
+    Reference: torchao _f32_to_floatx_unpacked (OCP MX Formats).
+    """
+    p = _MX_DTYPE_PARAMS["fp8_e4m3"]
+    shift = _F32_MBITS - p["mbits"]            # 23 - 3 = 20
+    magic_adder = np.int32((1 << (shift - 1)) - 1)
+    denorm_exp = (_F32_EXP_BIAS - p["exp_bias"]) + shift + 1  # 141
+    denorm_mask_int = np.int32(denorm_exp << _F32_MBITS)
+    denorm_mask_float = np.array(denorm_mask_int, dtype=np.int32).view(np.float32)
+    max_code = np.uint8(0x7E)
+    val_to_add = np.int32(((p["exp_bias"] - _F32_EXP_BIAS) << _F32_MBITS) + int(magic_adder))
+
+    values = np.asarray(values, dtype=np.float32)
+    bits = values.view(np.int32)
+    sign = ((bits >> 24) & np.int32(0x80)).astype(np.uint8)
+    abs_bits = (bits & np.int32(0x7FFFFFFF))
+    abs_val = abs_bits.view(np.float32).copy()
+
+    nan_mask = np.isnan(values)
+    saturate_mask = abs_val >= np.float32(p["max_pos"])
+    denormal_mask = (~saturate_mask) & (abs_val < np.float32(p["min_normal"])) & (~nan_mask)
+    normal_mask = (~saturate_mask) & (~denormal_mask) & (~nan_mask)
+
+    # Denormal path
+    denorm_result = (abs_val + denorm_mask_float).view(np.int32) - denorm_mask_int
+    denorm_result = denorm_result.astype(np.uint8)
+
+    # Normal path: adjust exponent and round-to-nearest-even
+    mant_odd = ((abs_bits >> np.int32(shift)) & np.int32(1)).astype(np.int32)
+    normal_result = abs_bits + val_to_add + mant_odd
+    normal_result = ((normal_result >> np.int32(shift)) & np.int32(0x7F)).astype(np.uint8)
+
+    # Combine branches
+    result = np.where(saturate_mask, max_code, np.uint8(0))
+    result = np.where(denormal_mask, denorm_result, result)
+    result = np.where(normal_mask, normal_result, result)
+    result = np.where(nan_mask, np.uint8(0x7F), result)
+    result = result | sign
+    return result.astype(np.uint8)
+
+
+def _float_to_bits(value: float) -> int:
+    return struct.unpack("<I", struct.pack("<f", np.float32(value)))[0]
+
+
+def _bits_to_float(bits: int) -> float:
+    return struct.unpack("<f", struct.pack("<I", bits))[0]
+
+
+def _quantmx_parse_int_list(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = parse_list_str(value)
+    return [int(v) for v in value]
+
+
+# Exponent ranges for values generated as mantissa in [1, 2) times 2^exp.
+# Bounds include subnormal and one overflow exponent so tests can explicitly cover
+# subnormal and Inf input generation through exp_range when requested.
+_QUANTMX_EXP_RANGE = {
+    "fp16": (-24, 16),
+    "bf16": (-133, 128),
+    "fp32": (-149, 128),
+}
+
+_QUANTMX_SUBNORMAL_EXP = {
+    "fp16": -24,
+    "bf16": -133,
+    "fp32": -149,
+}
+
+
+def _quantmx_validate_dtype(dtype_name: str):
+    assert dtype_name in _QUANTMX_EXP_RANGE, f"QuantMX golden does not support dtype {dtype_name}."
+
+
+def _quantmx_resolve_exp_range(dtype_name: str, params: dict) -> list:
+    _quantmx_validate_dtype(dtype_name)
+    valid_lo, valid_hi = _QUANTMX_EXP_RANGE[dtype_name]
+    exp_range = _quantmx_parse_int_list(params.get("exp_range"))
+    if exp_range is not None:
+        assert len(exp_range) == 2, "QuantMX exp_range must contain [min_exp, max_exp]."
+        assert exp_range[0] <= exp_range[1], "QuantMX exp_range min must be <= max."
+        assert valid_lo <= exp_range[0] <= valid_hi, (
+            f"QuantMX exp_range min {exp_range[0]} is out of valid range [{valid_lo}, {valid_hi}] for {dtype_name}."
+        )
+        assert valid_lo <= exp_range[1] <= valid_hi, (
+            f"QuantMX exp_range max {exp_range[1]} is out of valid range [{valid_lo}, {valid_hi}] for {dtype_name}."
+        )
+        return [int(exp_range[0]), int(exp_range[1])]
+
+    default_ranges = {
+        "fp32": [-40, 40],
+        "bf16": [-80, 80],
+        "fp16": [-20, 15],
+    }
+    default_range = default_ranges.get(dtype_name)
+    assert default_range is not None, f"QuantMX golden does not support dtype {dtype_name}."
+    default_lo, default_hi = default_range
+    return [max(valid_lo, default_lo), min(valid_hi, default_hi)]
+
+
+def _quantmx_has_exp_range_override(params: dict) -> bool:
+    return str_to_bool(params.get("use_exp_range")) and params.get("exp_range") is not None
+
+
+def _quantmx_resolve_data_range(input_tensor: dict) -> list:
+    data_range = input_tensor.get("data_range")
+    assert data_range is not None, "QuantMX golden requires input_datarange."
+    range_lo = float(data_range["min"])
+    range_hi = float(data_range["max"])
+    assert np.isfinite(range_lo) and np.isfinite(range_hi), "QuantMX input_datarange must be finite."
+    assert range_lo <= range_hi, "QuantMX input_datarange min must be <= max."
+    return [range_lo, range_hi]
+
+
+def _generate_quantmx_input_from_datarange(shape: tuple, data_range: list) -> np.ndarray:
+    range_lo, range_hi = data_range
+    if range_lo == range_hi:
+        return np.full(shape, np.float32(range_lo), dtype=np.float32)
+    return np.random.uniform(range_lo, range_hi, size=shape).astype(np.float32)
+
+
+def _quantmx_special_exponents(dtype_name: str, exp_range: list) -> list:
+    exp_lo, exp_hi = exp_range
+    if exp_hi - exp_lo <= 32:
+        return list(range(exp_lo, exp_hi + 1))
+
+    default_values = {
+        "fp32": [-120, -80, -32, -8, -1, 0, 1, 8, 32, 80, 120],
+        "bf16": [-120, -80, -60, -16, -8, -1, 0, 1, 8, 16, 60, 80, 120],
+        "fp16": [-24, -20, -14, -8, -1, 0, 1, 8, 12, 15],
+    }
+    values = default_values.get(dtype_name)
+    assert values is not None, f"QuantMX golden does not support dtype {dtype_name}."
+    candidates = values + [exp_lo, exp_hi, exp_lo + 1, exp_hi - 1, (exp_lo + exp_hi) // 2]
+    clipped = sorted({min(exp_hi, max(exp_lo, item)) for item in candidates})
+    return clipped
+
+
+def _quantmx_inject_special_values(base: np.ndarray, dtype_name: str, exp_range: list):
+    special_exponents = _quantmx_special_exponents(dtype_name, exp_range)
+    if not special_exponents:
+        return
+    special_values = [np.float32(0.0), np.float32(-0.0)]
+    for exp in special_exponents:
+        special_values.extend(
+            [
+                np.float32(math.ldexp(1.0, exp)),
+                np.float32(-math.ldexp(1.0, exp)),
+                np.float32(math.ldexp(1.5, exp)),
+                np.float32(-math.ldexp(1.25, exp)),
+            ]
+        )
+
+    flat = base.reshape(-1)
+    if flat.size == 0:
+        return
+
+    stride = max(1, flat.size // len(special_values))
+    for idx, value in enumerate(special_values):
+        pos = (idx * stride + idx * idx * 5) % flat.size
+        flat[pos] = value
+
+
+def _quantmx_special_value_count(size: int) -> int:
+    if size <= 0:
+        return 0
+    return max(1, math.ceil(size / 10000))
+
+
+def _quantmx_positions(size: int, count: int, offset: int, occupied: set) -> list:
+    if size <= 0 or count <= 0:
+        return []
+    stride = max(1, size // count)
+    positions = []
+    for idx in range(count):
+        pos = (offset + idx * stride + idx * idx * 17) % size
+        probe = 0
+        while pos in occupied and probe < size:
+            pos = (pos + 1) % size
+            probe += 1
+        if pos in occupied:
+            break
+        occupied.add(pos)
+        positions.append(pos)
+    return positions
+
+
+def _quantmx_inject_requested_values(casted: np.ndarray, dtype_name: str, params: dict):
+    enable_subnormal = str_to_bool(params.get("enable_subnormal"))
+    enable_inf = str_to_bool(params.get("enable_inf"))
+    enable_nan = str_to_bool(params.get("enable_nan"))
+    if not (enable_subnormal or enable_inf or enable_nan):
+        return casted
+
+    flat = casted.reshape(-1)
+    count = _quantmx_special_value_count(flat.size)
+    occupied = set()
+
+    if enable_subnormal:
+        positions = _quantmx_positions(flat.size, count, 0, occupied)
+        subnormal = np.float32(math.ldexp(1.0, _QUANTMX_SUBNORMAL_EXP[dtype_name]))
+        for idx, pos in enumerate(positions):
+            flat[pos] = subnormal if idx % 2 == 0 else -subnormal
+
+    if enable_inf:
+        positions = _quantmx_positions(flat.size, count, flat.size // 3, occupied)
+        for idx, pos in enumerate(positions):
+            flat[pos] = np.inf if idx % 2 == 0 else -np.inf
+
+    if enable_nan:
+        positions = _quantmx_positions(flat.size, count, (flat.size * 2) // 3, occupied)
+        for pos in positions:
+            flat[pos] = np.nan
+
+    return casted
+
+
+def _generate_quantmx_input(input_tensor: dict, config: dict) -> np.ndarray:
+    params = config.get("params", {}) or {}
+    dtype_name = input_tensor["dtype"]
+    shape = tuple(input_tensor["shape"])
+    np_dtype = get_dtype_by_name(dtype_name)
+    _quantmx_validate_dtype(dtype_name)
+
+    explicit_exp_range = _quantmx_has_exp_range_override(params)
+    data_range = _quantmx_resolve_data_range(input_tensor)
+
+    if not explicit_exp_range:
+        reshaped = _generate_quantmx_input_from_datarange(shape, data_range)
+        casted = reshaped.astype(np_dtype)
+        casted = _quantmx_inject_requested_values(casted, dtype_name, params)
+        return casted
+
+    exp_range = _quantmx_resolve_exp_range(dtype_name, params)
+    exp_lo, exp_hi = exp_range
+
+    exponents = np.random.randint(exp_lo, exp_hi + 1, size=shape)
+    mantissas = np.random.uniform(1.0, 2.0, size=shape).astype(np.float32)
+    signs = np.random.choice(np.array([-1.0, 1.0], dtype=np.float32), size=shape)
+    reshaped = np.ldexp(mantissas, exponents).astype(np.float32) * signs
+    casted = reshaped.astype(np_dtype)
+    casted = _quantmx_inject_requested_values(casted, dtype_name, params)
+    return casted
+
+
+@TestCaseLoader.reg_params_handler(ops=["QuantMX"])
+def params_quantmx_func(params: dict):
+    params["mode"] = params.get("mode") or "ROUND_DOWN"
+    assert params["mode"] in ("ROUND_UP", "ROUND_DOWN"), "mode must be ROUND_UP or ROUND_DOWN"
+    params["performance_mode"] = str_to_bool(params.get("performance_mode"))
+    params["use_exp_range"] = str_to_bool(params.get("use_exp_range"))
+    params["exp_range"] = _quantmx_parse_int_list(params.get("exp_range")) if params["use_exp_range"] else None
+    params["enable_subnormal"] = str_to_bool(params.get("enable_subnormal"))
+    params["enable_inf"] = str_to_bool(params.get("enable_inf"))
+    params["enable_nan"] = str_to_bool(params.get("enable_nan"))
+    return params
+
+
+@GoldenRegister.reg_golden_func(
+    case_names=[
+        "TestQuantMX/QuantMXOperationTest.TestQuantMX",
+    ]
+)
+def gen_quantmx_op_golden(case_name: str, output: Path, case_index: int = None) -> bool:
+    def golden_func(inputs: list, _config: dict):
+        params = _config.get("params", {}) or {}
+        mode = params.get("mode", "ROUND_DOWN")
+        if mode != "ROUND_DOWN":
+            raise ValueError("QuantMX golden currently only supports ROUND_DOWN (OCP standard) mode.")
+
+        quant_dtype = "fp8_e4m3"  # extensible for future fp4 support
+        dp = _MX_DTYPE_PARAMS[quant_dtype]
+        group_size = 32
+
+        x = inputs[0].astype(np.float32, copy=False)
+        if x.ndim < 1 or x.ndim > 4:
+            raise ValueError("QuantMX golden only supports 1D to 4D input.")
+
+        cols = x.shape[-1]
+        rows = x.size // cols
+        group_cols = (cols + group_size - 1) // group_size
+        scale_group_cols = (cols + 63) // 64
+
+        # Pad last dim to multiple of group_size, reshape to [rows, group_cols, group_size]
+        x_flat = x.reshape(rows, cols)
+        padded_cols = group_cols * group_size
+        x_padded = np.zeros((rows, padded_cols), dtype=np.float32)
+        x_padded[:, :cols] = x_flat
+        x_grouped = x_padded.reshape(rows, group_cols, group_size)
+
+        # Vectorized max-abs per group → shared exponent → reciprocal scale
+        max_abs = np.max(np.abs(x_grouped), axis=2).astype(np.float32)
+        e8m0 = _compute_shared_exponents(max_abs, dp["target_max_pow2"])
+        group_scaling = _compute_scalings_from_exponents(e8m0)
+
+        # Scale each element: broadcast [rows, group_cols, 1] over group dim
+        scaled = x_grouped * group_scaling[:, :, np.newaxis]
+
+        # Encode to target dtype (vectorized)
+        quant_grouped = _encode_e4m3_fn_vectorized(scaled)
+
+        # Unpad and reshape back
+        quant_flat = quant_grouped.reshape(rows, padded_cols)[:, :cols]
+        quant = quant_flat.reshape(x.shape)
+
+        # Build exp output: [*batch, scale_group_cols, 2]
+        exp_shape = list(x.shape[:-1]) + [scale_group_cols, 2]
+        exp = np.zeros(exp_shape, dtype=np.uint8)
+        exp_flat = exp.reshape(rows, scale_group_cols * 2)
+        e8m0_flat = e8m0.reshape(rows, group_cols)
+        exp_flat[:, :group_cols] = e8m0_flat
+
+        return [quant, exp]
+
+    logging.debug("Case(%s), Golden creating...", case_name)
+    return gen_op_golden("QuantMX", golden_func, output, case_index)
 
 
 @GoldenRegister.reg_golden_func(

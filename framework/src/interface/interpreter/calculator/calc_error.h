@@ -52,6 +52,9 @@ enum class CalculatorErrorScene : uint32_t {
     // MatMul 形状约束
     MATMUL_INPUT_SHAPE_MISMATCH = 0xBF00DU, // MatMul/MX MatMul 输入shape不符合预期
 
+    // QuantMX 相关
+    QUANTMX_RANK_INVALID = 0xBF010U, // QuantMX 仅支持 1D~4D 输入
+
     // Gather / GatherINUB 相关
     GATHER_AXIS_OUT_OF_RANGE = 0xBF00EU,             // Gather 中 axis 超出 params 维度范围
     GATHER_INUB_DEVICE_INVALID = 0xBF00FU,           // GatherINUB 要求 params/indices/pageTable/out 全部在 CPU 上

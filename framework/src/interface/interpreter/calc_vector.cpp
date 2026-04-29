@@ -701,15 +701,16 @@ void ExecuteOpRange(ExecuteOperationContext* ctx)
 }
 REGISTER_CALC_OP(OP_RANGE, Opcode::OP_RANGE, ExecuteOpRange);
 
-void ExecuteOpUniform(ExecuteOperationContext *ctx) {
+void ExecuteOpUniform(ExecuteOperationContext* ctx)
+{
     auto oop = ctx->ooperandInplaceDataViewList->at(0);
-    
+
     auto scalars = ctx->op->GetVectorElementAttribute(OpAttributeKey::vectorScalar);
     Element key = scalars[0];
     Element counter1 = scalars[1];
     Element rounds = scalars[2];
     DataType dtype = static_cast<DataType>(scalars[3].Cast<int32_t>());
-    
+
     Element counter0(DT_UINT64, static_cast<uint64_t>(0));
     if (ctx->op->HasAttr(OpAttributeKey::dynScalar)) {
         SymbolicScalar dynScalar = ctx->op->GetSymbolicScalarAttribute(OpAttributeKey::dynScalar);
@@ -717,11 +718,43 @@ void ExecuteOpUniform(ExecuteOperationContext *ctx) {
             counter0 = Element(DT_UINT64, static_cast<uint64_t>(dynScalar.Concrete()));
         }
     }
-    
+
     calc::Uniform(oop, key, counter0, counter1, rounds, dtype);
 }
 REGISTER_CALC_OP(OP_UNIFORM, Opcode::OP_UNIFORM, ExecuteOpUniform);
-
+void ExecuteOpQuantMX(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
+    ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 4);
+    int64_t mode = 0;
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ctx->op->GetAttr(OpAttributeKey::mxQuantMode, mode))
+        << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantMode;
+    constexpr int64_t kMxQuantModeRoundDown = 1;
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, mode == kMxQuantModeRoundDown)
+        << "QuantMX interpreter currently only supports ROUND_DOWN (OCP standard) mode.";
+    int64_t axis = 0;
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, ctx->op->GetAttr(OpAttributeKey::mxQuantAxis, axis))
+        << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantAxis;
+    int64_t performanceMode = 0;
+    ASSERT(
+        ExecuteOperationScene::RUNTIME_EXCEPTION,
+        ctx->op->GetAttr(OpAttributeKey::mxQuantPerformanceMode, performanceMode))
+        << "QuantMX missing required attribute: " << OpAttributeKey::mxQuantPerformanceMode;
+    auto out = ctx->ooperandInplaceDataViewList->at(0);
+    auto exp = ctx->ooperandInplaceDataViewList->at(1);
+    auto max = ctx->ooperandInplaceDataViewList->at(2);
+    auto scaling = ctx->ooperandInplaceDataViewList->at(3);
+    auto src = ctx->ioperandDataViewList->at(0);
+    const auto srcRank = static_cast<int64_t>(src->GetShape().size());
+    const auto normalizedAxis = axis < 0 ? axis + srcRank : axis;
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, normalizedAxis >= 0 && normalizedAxis < srcRank)
+        << "QuantMX axis is out of range. Current axis: " << axis << ", input rank: " << srcRank;
+    ASSERT(ExecuteOperationScene::RUNTIME_EXCEPTION, normalizedAxis == srcRank - 1)
+        << "QuantMX interpreter currently only supports the last axis. Current axis: " << axis
+        << ", input rank: " << srcRank;
+    calc::QuantMX(out, exp, max, scaling, src, performanceMode != 0);
+}
+REGISTER_CALC_OP(OP_QUANT_MX, Opcode::OP_QUANT_MX, ExecuteOpQuantMX);
 void ExecuteOpLog1p(ExecuteOperationContext* ctx)
 {
     ASSERT(ExecuteOperationScene::CTX_OUTPUT_COUNT_MISMATCH, ctx->ooperandInplaceDataViewList->size() == 1);
@@ -923,35 +956,38 @@ void ExecuteOpTopK(ExecuteOperationContext* ctx)
 }
 REGISTER_CALC_OP(OP_TOPK, Opcode::OP_TOPK, ExecuteOpTopK);
 
-void ExecuteOpQuantizeSym(ExecuteOperationContext *ctx) {
-    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
-    auto &input = ctx->ioperandDataViewList->at(0);
-    auto &scale = ctx->ioperandDataViewList->at(1);
+void ExecuteOpQuantizeSym(ExecuteOperationContext* ctx)
+{
+    auto& ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto& input = ctx->ioperandDataViewList->at(0);
+    auto& scale = ctx->ioperandDataViewList->at(1);
     calc::Quantize(ret, input, scale, nullptr);
 }
 REGISTER_CALC_OP(OP_QUANTIZE_SYM, Opcode::OP_QUANTIZE_SYM, ExecuteOpQuantizeSym);
 
-void ExecuteOpQuantizeAsym(ExecuteOperationContext *ctx) {
-    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
-    auto &input = ctx->ioperandDataViewList->at(0);
-    auto &scale = ctx->ioperandDataViewList->at(1);
-    auto &zeropoints = ctx->ioperandDataViewList->at(2);
+void ExecuteOpQuantizeAsym(ExecuteOperationContext* ctx)
+{
+    auto& ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto& input = ctx->ioperandDataViewList->at(0);
+    auto& scale = ctx->ioperandDataViewList->at(1);
+    auto& zeropoints = ctx->ioperandDataViewList->at(2);
     calc::Quantize(ret, input, scale, zeropoints);
 }
 REGISTER_CALC_OP(OP_QUANTIZE_ASYM, Opcode::OP_QUANTIZE_ASYM, ExecuteOpQuantizeAsym);
 
-void ExecuteOpDequantize(ExecuteOperationContext *ctx) {
-    auto &ret = ctx->ooperandInplaceDataViewList->at(0);
-    auto &input = ctx->ioperandDataViewList->at(0);
-    auto &scale = ctx->ioperandDataViewList->at(1);
-    auto &zeropoints = ctx->ioperandDataViewList->at(2);
+void ExecuteOpDequantize(ExecuteOperationContext* ctx)
+{
+    auto& ret = ctx->ooperandInplaceDataViewList->at(0);
+    auto& input = ctx->ioperandDataViewList->at(0);
+    auto& scale = ctx->ioperandDataViewList->at(1);
+    auto& zeropoints = ctx->ioperandDataViewList->at(2);
     calc::Dequantize(ret, input, scale, zeropoints);
 }
 REGISTER_CALC_OP(OP_DEQUANTIZE, Opcode::OP_DEQUANTIZE, ExecuteOpDequantize);
 
-void ExecuteOpBitSort(ExecuteOperationContext *ctx) {
-    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH,
-           ctx->ioperandDataViewList->size() == 1);
+void ExecuteOpBitSort(ExecuteOperationContext* ctx)
+{
+    ASSERT(ExecuteOperationScene::CTX_INPUT_COUNT_MISMATCH, ctx->ioperandDataViewList->size() == 1);
     auto oop = ctx->ooperandInplaceDataViewList->at(0);
     auto src = ctx->ioperandDataViewList->at(0);
     auto topk_axis = ctx->op->GetIntAttribute("op_attr_axis");

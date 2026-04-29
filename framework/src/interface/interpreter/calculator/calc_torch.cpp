@@ -13,6 +13,9 @@
  * \brief
  */
 
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <limits>
 #include <torch/torch.h>
 #include "calc_api.h"
@@ -90,6 +93,7 @@ static int64_t LastDimFloatCount(int64_t packedLast, DataType dtype)
 #define AXIS_TO_LAST -2
 #define NUM_VALUE_8 8
 #define BLOCK_SIZE 32
+#define MX_QUANT_TILE_BLOCK 32
 
 static torch::ScalarType FromDataType(DataType t)
 {
@@ -226,6 +230,124 @@ static std::pair<torch::Tensor, torch::Tensor> From(const TensorData& data)
     }
     // view == actualView if ScalarDataType != torch::kUInt8
     return {view, actualView};
+}
+
+static uint32_t FloatToBits(float value)
+{
+    union {
+        float floatValue;
+        uint32_t bits;
+    } converter = {value};
+    return converter.bits;
+}
+
+static float BitsToFloat(uint32_t bits)
+{
+    union {
+        uint32_t bits;
+        float floatValue;
+    } converter = {bits};
+    return converter.floatValue;
+}
+
+// MX quantization constants (OCP Microscaling Formats MX v1.0)
+// These are parameterized per target dtype for future fp4 extensibility.
+struct MXQuantDtypeParams {
+    int targetMaxPow2; // max representable power-of-2 exponent in the target format
+    float maxPos;      // max representable positive value
+    float minNormal;   // smallest normal value
+    int expBias;       // exponent bias of the target format
+    int mbits;         // number of mantissa bits
+};
+
+static constexpr MXQuantDtypeParams kFP8E4M3Params = {
+    .targetMaxPow2 = 8,
+    .maxPos = 448.0f,
+    .minNormal = 0.015625f, // 2^(1-7) = 2^-6
+    .expBias = 7,
+    .mbits = 3,
+};
+
+static constexpr int kE8M0ExponentBias = 127;
+static constexpr int kF32ExpBias = 127;
+static constexpr int kF32Mbits = 23;
+
+// Compute OCP FLOOR-mode shared exponent (E8M0 biased byte) for a group.
+// Reference: OCP MX Spec 1.0 — scale = 2^floor(log2(max_abs)) / 2^target_max_pow2
+static uint8_t ComputeSharedExponent(float maxAbsValue, int targetMaxPow2)
+{
+    if (std::isnan(maxAbsValue)) {
+        return 0xFFu; // NaN → E8M0 NaN; Inf goes through normal path (saturated by encoder)
+    }
+    const uint32_t bits = FloatToBits(maxAbsValue);
+    const uint32_t fpExponent = (bits & 0x7F800000u) >> kF32Mbits;
+    // scale_unbiased = (fpExponent - F32_EXP_BIAS) - targetMaxPow2
+    // scale_biased   = scale_unbiased + E8M0_EXPONENT_BIAS = fpExponent - targetMaxPow2
+    // Clamp to valid E8M0 range [0, 254] (255 reserved for NaN)
+    if (fpExponent <= static_cast<uint32_t>(targetMaxPow2)) {
+        return 0u;
+    }
+    const uint32_t biased = fpExponent - static_cast<uint32_t>(targetMaxPow2);
+    return static_cast<uint8_t>(std::min(biased, 254u));
+}
+
+// Compute the reciprocal scaling factor from an E8M0 biased exponent.
+// reciprocal_scale = 2^(E8M0_BIAS - e8m0) so that data * reciprocal_scale = data / scale.
+static float ComputeScalingFromExponent(uint8_t e8m0)
+{
+    if (e8m0 == 0xFFu) {
+        return std::numeric_limits<float>::quiet_NaN();
+    }
+    const uint32_t scaleExp = 254u - static_cast<uint32_t>(e8m0);
+    if (scaleExp == 0u) {
+        return std::ldexp(1.0f, -kE8M0ExponentBias);
+    }
+    return BitsToFloat(scaleExp << kF32Mbits);
+}
+
+// Encode a float32 value to FP8 E4M3 (round-to-nearest-even) via bit manipulation.
+// Reference: torchao _f32_to_floatx_unpacked (OCP MX Formats)
+static uint8_t EncodeE4M3Fn(float value)
+{
+    if (std::isnan(value)) {
+        return 0x7Fu;
+    }
+
+    constexpr auto& p = kFP8E4M3Params;
+    constexpr uint8_t kMaxCode = 0x7Eu; // max magnitude (not NaN)
+    constexpr uint8_t kSignMask = 0x80u;
+    constexpr int kShift = kF32Mbits - p.mbits; // 23 - 3 = 20
+    // magic_adder for RNE: (1 << (shift - 1)) - 1
+    constexpr uint32_t kMagicAdder = (1u << (kShift - 1)) - 1u;
+    // denorm_exp = (F32_EXP_BIAS - fp8_exp_bias) + (F32_MBITS - fp8_mbits) + 1
+    constexpr uint32_t kDenormExp = (kF32ExpBias - p.expBias) + kShift + 1u;
+    constexpr uint32_t kDenormMaskInt = kDenormExp << kF32Mbits;
+    static const float kDenormMaskFloat = BitsToFloat(kDenormMaskInt);
+
+    const uint32_t bits = FloatToBits(value);
+    const uint8_t sign = static_cast<uint8_t>((bits >> 24) & kSignMask);
+    const uint32_t absBits = bits & 0x7FFFFFFFu;
+    const float absVal = BitsToFloat(absBits);
+
+    // Branch 1: saturation
+    if (absVal >= p.maxPos) {
+        return sign | kMaxCode;
+    }
+    // Branch 2: denormal in fp8 (abs < min_normal)
+    if (absVal < p.minNormal) {
+        // Denormal trick: add a magic float then subtract the integer representation
+        const float temp = absVal + kDenormMaskFloat;
+        const uint32_t tempBits = FloatToBits(temp) - kDenormMaskInt;
+        return sign | static_cast<uint8_t>(tempBits);
+    }
+    // Branch 3: normal — adjust exponent and round-to-nearest-even
+    const uint32_t mantOdd = (absBits >> kShift) & 1u;
+    // Reinterpret as int32 for the exponent/rounding adjustment
+    const int32_t expBiasDelta = static_cast<int32_t>(p.expBias - kF32ExpBias);
+    const int32_t valToAdd =
+        expBiasDelta * static_cast<int32_t>(uint32_t{1} << kF32Mbits) + static_cast<int32_t>(kMagicAdder);
+    const uint32_t adjusted = absBits + static_cast<uint32_t>(valToAdd) + mantOdd;
+    return sign | static_cast<uint8_t>((adjusted >> kShift) & 0x7Fu);
 }
 
 static torch::Tensor View(
@@ -2616,6 +2738,97 @@ static void Scatter(
     }
 }
 
+static void FillQuantMXRows(
+    const float* inputPtr, uint8_t* quantPtr, uint8_t* expPtr, float* scalingPtr, float* maxPtr,
+    int64_t rows, int64_t cols, int64_t groupCols)
+{
+    for (int64_t row = 0; row < rows; ++row) {
+        for (int64_t group = 0; group < groupCols; ++group) {
+            float maxAbsValue = 0.0f;
+            bool hasNaN = false;
+            for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
+                const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
+                if (col >= cols) {
+                    continue;
+                }
+                const float val = std::fabs(inputPtr[row * cols + col]);
+                if (std::isnan(val)) {
+                    hasNaN = true;
+                } else {
+                    maxAbsValue = std::max(maxAbsValue, val);
+                }
+            }
+            if (hasNaN) {
+                maxAbsValue = std::numeric_limits<float>::quiet_NaN();
+            }
+            const uint8_t e8m0 = ComputeSharedExponent(maxAbsValue, kFP8E4M3Params.targetMaxPow2);
+            const float groupScaling = ComputeScalingFromExponent(e8m0);
+            expPtr[row * groupCols + group] = e8m0;
+            maxPtr[row * groupCols + group] = maxAbsValue;
+            for (int64_t inner = 0; inner < MX_QUANT_TILE_BLOCK; ++inner) {
+                const int64_t col = group * MX_QUANT_TILE_BLOCK + inner;
+                if (col >= cols) {
+                    continue;
+                }
+                scalingPtr[row * cols + col] = groupScaling;
+                quantPtr[row * cols + col] = EncodeE4M3Fn(inputPtr[row * cols + col] * groupScaling);
+            }
+        }
+    }
+}
+
+static void QuantMX(
+    const TensorData& out, const TensorData& exp, const TensorData& max, const TensorData& scaling,
+    const TensorData& self, bool performanceMode)
+{
+    auto tout = From(out);
+    auto texp = From(exp);
+    auto tmax = From(max);
+    auto tscaling = From(scaling);
+    auto tself = From(self);
+
+    auto input = tself.second.to(torch::kFloat32).contiguous();
+    ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, input.dim() >= 1 && input.dim() <= 4)
+        << "QuantMX interpreter only supports 1D to 4D input.";
+
+    auto quantRaw = torch::empty(input.sizes(), torch::TensorOptions().dtype(torch::kUInt8));
+    auto groupedShape = input.sizes().vec();
+    const int64_t cols = groupedShape.back();
+    ASSERT(CalculatorErrorScene::QUANTMX_RANK_INVALID, cols != 0) << "QuantMX input last dimension must not be zero.";
+    groupedShape.back() = (cols + MX_QUANT_TILE_BLOCK - 1) / MX_QUANT_TILE_BLOCK;
+    auto performanceGroupedShape = input.sizes().vec();
+    if (performanceGroupedShape.size() == 1) {
+        performanceGroupedShape.back() = groupedShape.back();
+    } else {
+        performanceGroupedShape.pop_back();
+        performanceGroupedShape.back() *= groupedShape.back();
+    }
+    auto expRaw = torch::empty(groupedShape, torch::TensorOptions().dtype(torch::kUInt8));
+    auto scalingTemp = torch::empty(input.sizes(), torch::TensorOptions().dtype(torch::kFloat32));
+    auto maxTemp = torch::zeros(groupedShape, torch::TensorOptions().dtype(torch::kFloat32));
+
+    const int64_t rows = input.numel() / cols;
+    const int64_t groupCols = groupedShape.back();
+    auto inputFlat = input.view({rows, cols});
+    auto quantFlat = quantRaw.view({rows, cols});
+    auto expFlat = expRaw.view({rows, groupCols});
+    auto scalingFlat = scalingTemp.view({rows, cols});
+    auto maxFlat = maxTemp.view({rows, groupCols});
+
+    const auto* inputPtr = inputFlat.data_ptr<float>();
+    auto* quantPtr = quantFlat.data_ptr<uint8_t>();
+    auto* expPtr = expFlat.data_ptr<uint8_t>();
+    auto* scalingPtr = scalingFlat.data_ptr<float>();
+    auto* maxPtr = maxFlat.data_ptr<float>();
+
+    FillQuantMXRows(inputPtr, quantPtr, expPtr, scalingPtr, maxPtr, rows, cols, groupCols);
+
+    tout.first.copy_(quantRaw);
+    texp.first.copy_(performanceMode ? expRaw.reshape(performanceGroupedShape) : expRaw);
+    tmax.second.copy_(performanceMode ? maxTemp.reshape(performanceGroupedShape) : maxTemp);
+    tscaling.second.copy_(scalingTemp);
+}
+
 static struct CalcOps calcOps = {
     .Random = Random,
     .AllClose = AllClose,
@@ -2738,6 +2951,7 @@ static struct CalcOps calcOps = {
     .Extract = Extract,
     .MrgSort = MrgSort,
     .TopK = TopK,
+    .QuantMX = QuantMX,
     .TopkSort = TopkSort,
     .TopkMerge = TopkMerge,
     .TopkExtract = TopkExtract,
