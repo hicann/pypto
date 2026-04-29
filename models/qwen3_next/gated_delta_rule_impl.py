@@ -350,8 +350,13 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
 
     @pypto.frontend.jit(
         runtime_options={
-            "stitch_function_max_num": 128,
+            "stitch_function_max_num": 2,
+            "device_sched_parallelism": 8
         },
+        pass_options={
+            "vec_nbuffer_setting": {8: 16, 1: 16, 28: 32, 6: 4, 25: 32, 26: 8,
+                2: 8, 3: 8, 10: 32, 5: 4, 7: 16, 9: 32, 0: 4, 4: 4, -2: 1}
+        }
     )
     def kernel(
             query: pypto.Tensor(query_shape, pypto.DT_FP32),
@@ -401,7 +406,7 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
         for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
             s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
             b_ofs = act_seq_len[b_idx]
-            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx"):
+            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx", parallel=True):
                 nqk_idx = nv_idx // group
                 pypto.set_vec_tile_shapes(16, 16, 128, 128)
                 last_state = states[b_idx, nv_idx]
@@ -419,11 +424,10 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
                     query_view_2d = pypto.reshape(query_view, [l, d], valid_shape=[actual_l, d])
                     key_view_2d = pypto.reshape(key_view, [l, d], valid_shape=[actual_l, d])
                     value_view_2d = pypto.reshape(value_view, [l, d], valid_shape=[actual_l, d])
-                    pypto.set_pass_options(sg_set_scope=1)
+
                     zeros_16 = pypto.full(size=[16, 16], fill_value=0.0, dtype=pypto.DT_FP32)
                     zeros_32 = pypto.full(size=[32, 32], fill_value=0.0, dtype=pypto.DT_FP32)
                     zeros_64 = pypto.full(size=[64, 64], fill_value=0.0, dtype=pypto.DT_FP32)
-                    pypto.set_pass_options(sg_set_scope=-1)
 
                     # compute
                     # qk_l2norm
@@ -447,7 +451,6 @@ def chunk_gated_delta_rule(b, nqk, nv, d, l):
                         decay_mask=decay_mask, tril=tril_mask)
 
                     # assemble
-                    pypto.set_vec_tile_shapes(16, 16, 128, 128)
                     last_state[:] = cur_state
                     core_attn_out[bs_ofs:bs_ofs + l, nv_idx] = chunk_attn_out
                     last_state_data[b_idx, nv_idx] = last_state
@@ -476,8 +479,13 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
 
     @pypto.frontend.jit(
         runtime_options={
-            "stitch_function_max_num": 128,
+            "stitch_function_max_num": 2,
+            "device_sched_parallelism": 8
         },
+        pass_options={
+            "vec_nbuffer_setting": {9: 16, 1: 16, 28: 32, 6: 4, 25: 32, 26: 8,
+                2: 8, 3: 8, 10: 32, 5: 4, 7: 16, 8: 32, 0: 4, 4: 4, 35: 8, 17: 8, 14: 30, 36: 16, -2: 1}
+        }
     )
     def kernel(
             query: pypto.Tensor(query_shape, pypto.DT_FP32),
@@ -527,11 +535,11 @@ def chunk_gated_delta_rule_unaligned(b, nqk, nv, d, l):
         for b_idx in pypto.loop(b, name="LOOP_B_TND", idx_name="b_idx"):
             s = act_seq_len[b_idx + 1] - act_seq_len[b_idx]
             b_ofs = act_seq_len[b_idx]
-            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx"):
+            for nv_idx in pypto.loop(nv, name="LOOP_Nv_TND", idx_name="nv_idx", parallel=True):
                 nqk_idx = nv_idx // group
                 pypto.set_vec_tile_shapes(16, 16, 128, 128)
                 last_state = states[b_idx, nv_idx]
-                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx", unroll_list=[16, 1]): # 2
+                for s_idx in pypto.loop(0, s, l, name="LOOP_S_TND", idx_name="s_idx", unroll_list=[16, 1]):
                     bs_ofs = b_ofs + s_idx
                     actual_l = (s - s_idx).min(l)
 
