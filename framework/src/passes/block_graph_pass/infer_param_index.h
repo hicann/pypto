@@ -32,8 +32,8 @@ public:
 
 private:
     std::string DumpParamIndex(const std::map<std::string, DynParamInfo>& dynParamTable);
-    bool HandleCopyOpShape(const Operation& op, Function &function, bool &isCopyIn);
-    Status ResetOutputDynValidShape(const Operation& op, Function &function);
+    bool HandleCopyOpShape(Operation& op, Function &function, bool &isCopyIn);
+    Status ResetOutputDynValidShape(Operation& op, Function &function);
     Status ResetViewDynValidShape(const Operation& op);
     Status ResetAssembleDynValidShape(const Operation& op);
     Status ResetDynValidShape(Function& function);

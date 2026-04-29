@@ -38,7 +38,7 @@ std::string InferParamIndex::DumpParamIndex(const std::map<std::string, DynParam
     return ss.str();
 }
 
-bool InferParamIndex::HandleCopyOpShape(const Operation& op, Function &function, bool &isCopyIn)
+bool InferParamIndex::HandleCopyOpShape(Operation& op, Function &function, bool &isCopyIn)
 {
     auto operands = isCopyIn ? op.GetIOperands() : op.GetOOperands();
     auto &casts = isCopyIn ? function.inCasts_ : function.outCasts_;
@@ -46,12 +46,24 @@ bool InferParamIndex::HandleCopyOpShape(const Operation& op, Function &function,
     if (find(casts.begin(), casts.end(), operand) == casts.end()) {
         std::vector<SymbolicScalar> validShape;
         op.GetOOperands().front()->UpdateDynValidShape(validShape);
+        bool* distCopyType = op.GetAttr<bool>(OpAttributeKey::isDistCopyOut);
+        int tensorBaseAddrCoaIndex = IsCopyIn(op.GetOpcode()) ? op.GetIOpAttrOffset(0) : op.GetOOpAttrOffset(0);
+        tensorBaseAddrCoaIndex = (distCopyType && !*distCopyType) ? op.GetIOpAttrOffset(1) : tensorBaseAddrCoaIndex;
+        if (tensorBaseAddrCoaIndex != -1) {
+            return true;
+        }
+        auto copyAttr = std::static_pointer_cast<CopyOpAttribute>(op.GetOpAttribute());
+        if (isCopyIn) {
+            copyAttr->SetToDynValidShape(OpImmediate::Specified(validShape));
+        } else {
+            copyAttr->SetFromDynValidShape(OpImmediate::Specified(validShape));
+        }
         return true;
     }
     return false;
 }
 
-Status InferParamIndex::ResetOutputDynValidShape(const Operation& op, Function &function)
+Status InferParamIndex::ResetOutputDynValidShape(Operation& op, Function &function)
 {
     const std::set<Opcode> specifiedOps = {Opcode::OP_VEC_DUP, Opcode::OP_EXPAND, Opcode::OP_RESHAPE,
                                            Opcode::OP_GATHER, Opcode::OP_GATHER_IN_UB, Opcode::OP_GATHER_IN_L1,
